@@ -25,6 +25,8 @@ import { statesNamedIn } from '../server/domain/jurisdiction.ts';
 import {
   GOAL_LENSES,
   MARKET_PREFERENCE_SENTENCE,
+  firstPrinciplesSeed,
+  fixedLenses,
   MAX_ORIGIN_LENSES,
   SEARCH_BUCKETS,
   openConstructedRound,
@@ -36,7 +38,7 @@ import {
   MAX_ROLE_LENSES,
   type SearchBucket,
 } from '../server/services/cash/discovery.ts';
-import { OPPORTUNITY_ORIGINS, type OpportunitySeed } from '../server/services/industry/construction/origins.ts';
+import { OPPORTUNITY_ORIGINS, seedsFromFirstPrinciples, type GoalRow, type OpportunitySeed } from '../server/services/industry/construction/origins.ts';
 
 const seedOf = (origin: OpportunitySeed['origin'], n: number, prompt = `explore ${origin} ${n}`, category: string | null = null): OpportunitySeed => ({
   key: `${origin}:x/${n}`,
@@ -173,6 +175,34 @@ describe('every round records the origin it was asked from', () => {
     const seeded = events.filter((one) => one.bucketId.includes('-org-'));
     expect(seeded.length).toBeGreaterThan(0);
     for (const one of seeded) expect(one.originSeeds).toHaveLength(1);
+  });
+
+  it('a goal’s first-principles rounds are seeded from the goal itself, the seed the probe reader counts', async () => {
+    const w = await goal();
+    const target = (await readGoalPlan({ goalId: w.id, evaluations: 200 }))!.target;
+    for (let i = 0; i < GOAL_LENSES.length + 1; i += 1) {
+      await openGoalDiscovery({ goal: w, target, bestReach: null, now: now.toISOString(), liveCap: 100 });
+    }
+    const backward = `FIRST_PRINCIPLES:workstreams/${w.id}`;
+    // The probe reader counts exactly this seed for this project.
+    expect(seedsFromFirstPrinciples([w]).map((one) => one.key)).toEqual([backward]);
+    const events = await openedOrigins();
+    const first = events.filter((one) => one.origins.includes('FIRST_PRINCIPLES'));
+    expect(first.length).toBeGreaterThanOrEqual(GOAL_LENSES.length);
+    // Every round labelled FIRST_PRINCIPLES names the goal's own seed — none carries the label alone.
+    for (const one of first) expect(one.originSeeds).toEqual([backward]);
+    // And a constructed round reasoned backward from the goal records the same seed.
+    expect(await openConstructedRound({ goal: w, projectId, key: 'k-fp', title: 'Constructed: fp', question: 'Which firms pay for fp?', liveCap: 100 })).not.toBeNull();
+    expect((await openedOrigins()).at(-1)).toMatchObject({ origins: ['FIRST_PRINCIPLES'], originSeeds: [backward] });
+  });
+
+  it('a goal with no first-principles seed gets no round labelled FIRST_PRINCIPLES', () => {
+    expect(fixedLenses(null)).toEqual([]);
+    const backward: OpportunitySeed = { key: 'FIRST_PRINCIPLES:workstreams/w1', origin: 'FIRST_PRINCIPLES', prompt: 'Backward from goal', category: null, sources: [{ table: 'workstreams', id: 'w1' }] };
+    const fixed = fixedLenses(backward);
+    expect(fixed).toHaveLength(GOAL_LENSES.length);
+    for (const lens of fixed) expect(lens).toMatchObject({ origin: 'FIRST_PRINCIPLES', seedKey: backward.key });
+    expect(firstPrinciplesSeed({ id: 'w2', title: 't', intent: null, outcome: null, archivedAt: null, cancelledAt: null, pausedAt: '2026-01-01T00:00:00Z', target: {} } as unknown as GoalRow)).toBeNull();
   });
 
   it('a goal round is asked from a recorded flow’s commercial role, in the role model’s own terms', async () => {

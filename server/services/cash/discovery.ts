@@ -94,7 +94,8 @@ import {
   openRoundsByCandidate,
 } from '../../repos/cashDiscovery.ts';
 import { listConstraintsForProject, listNodes, openIndustryRoundsByCandidate } from '../../repos/industry.ts';
-import { OPPORTUNITY_ORIGINS, opportunityField, type OpportunityOrigin, type OpportunitySeed } from '../industry/construction/origins.ts';
+import { OPPORTUNITY_ORIGINS, opportunityField, seedsFromFirstPrinciples, type GoalRow, type OpportunityOrigin, type OpportunitySeed } from '../industry/construction/origins.ts';
+import { getWorkstream } from '../../repos/register.ts';
 import { commercialRoles, roleLensSeeds, type RoleLensSeed } from '../industry/construction/roles.ts';
 import { discoveryYield, yieldGuidance } from './discoveryYield.ts';
 import { exclusionSentence, unionOf, type ExclusionClass } from './exclusions.ts';
@@ -718,6 +719,29 @@ export interface GoalLens {
 /** At most this many opportunity-field seeds are offered as a goal's search angles at once. */
 export const MAX_ORIGIN_LENSES = 40;
 
+/** The goal's own FIRST_PRINCIPLES seed, when it has one: live and targeted (OPP-03). Pure. */
+export function firstPrinciplesSeed(goal: GoalRow): OpportunitySeed | null {
+  return seedsFromFirstPrinciples([goal])[0] ?? null;
+}
+
+/**
+ * The fixed angles as lenses. Each one asks the goal's backward question —
+ * which transactions bring this amount within this time — from a different
+ * part of the economy, so each is a round seeded from the goal's
+ * FIRST_PRINCIPLES seed and records that seed's key. A goal with no such seed
+ * (paused, cancelled, archived or without a target) is not reasoned backward
+ * from, so it gets no fixed angle labelled as if it were. Pure.
+ */
+/** A field or role lens ranks as if asked once already; a fixed angle or an industry does not. */
+function fieldPenalty(lens: GoalLens): number {
+  return lens.seedKey && (lens.id.startsWith('org-') || lens.id.startsWith('role-')) ? 1 : 0;
+}
+
+export function fixedLenses(backward: OpportunitySeed | null): GoalLens[] {
+  if (!backward || backward.origin !== 'FIRST_PRINCIPLES') return [];
+  return GOAL_LENSES.map((one) => ({ ...one, origin: 'FIRST_PRINCIPLES' as const, seedKey: backward.key }));
+}
+
 function lensId(key: string): string {
   let h = 0x811c9dc5;
   for (let i = 0; i < key.length; i += 1) {
@@ -958,10 +982,19 @@ export async function openGoalDiscovery(input: {
    * the industries, interleaved so every origin is reached within a cycle.
    */
   const constraints = await listConstraintsForProject(t.projectId);
+  /*
+   * The goal itself is fed into the field, so its FIRST_PRINCIPLES seed — the
+   * goal reasoned backward into the transaction it needs — is a seed this
+   * round can actually be asked from, and the same seed the probe reader
+   * counts (`opportunityFieldHoldsOnRows`). Before, the field was given no
+   * goals and the fixed angles were merely labelled FIRST_PRINCIPLES.
+   */
+  const goalRow = await getWorkstream(input.goal.id);
+  const backward = goalRow ? firstPrinciplesSeed(goalRow) : null;
   const field = opportunityField({
     nodes,
     opportunities: await listOpportunities({ projectId: t.projectId }),
-    goals: [],
+    goals: goalRow ? [goalRow] : [],
     constraints,
   });
   /*
@@ -969,7 +1002,7 @@ export async function openGoalDiscovery(input: {
    * per position, asked in the role model's own terms, after the field lenses.
    */
   const roles = roleLenses(await roleLensSeedsFor(nodes, constraints));
-  const lenses: GoalLens[] = [...GOAL_LENSES.map((one) => ({ ...one, origin: 'FIRST_PRINCIPLES' as const })), ...industries, ...originLenses(field), ...roles];
+  const lenses: GoalLens[] = [...fixedLenses(backward), ...industries, ...originLenses(field), ...roles];
   const choices = lenses.map((lens, index) => {
     const id = `${prefix}-${lens.id}`;
     const history = mine.filter((one) => one.bucketId === id);
@@ -978,7 +1011,7 @@ export async function openGoalDiscovery(input: {
     .filter((one): one is typeof one & { next: number } => one.next !== null)
     // A field lens ranks as if asked once already: it is asked whenever the fixed angles and the
     // industries are cooling off, and never pushes ahead of re-asking one of them that is due.
-    .sort((a, b) => a.history.length + (a.lens.seedKey ? 1 : 0) - (b.history.length + (b.lens.seedKey ? 1 : 0)) || a.index - b.index);
+    .sort((a, b) => a.history.length + fieldPenalty(a.lens) - (b.history.length + fieldPenalty(b.lens)) || a.index - b.index);
   const choice = choices[0];
   if (!choice) return null;
   const { lens, id, history, next } = choice;
@@ -1133,10 +1166,23 @@ export async function openConstructedRound(input: {
     bucket,
     next,
     statement: questionFor(bucket, mode.objective, next, history, held, frame),
-    origins: input.origins && input.origins.length > 0 ? input.origins : ['FIRST_PRINCIPLES'],
-    seedKeys: input.seedKeys ?? [],
+    ...(await constructedOrigins(input)),
   });
   return round ? { bucketId: id, candidateId: round.candidateId, round: next } : null;
+}
+
+/**
+ * Where a constructed round came from. The construction's own origins when it
+ * names them; otherwise it was reasoned backward from the goal, and the round
+ * records the goal's FIRST_PRINCIPLES seed — the one the probe reader counts —
+ * rather than the label alone.
+ */
+async function constructedOrigins(input: { goal: { id: string }; origins?: readonly OpportunityOrigin[]; seedKeys?: readonly string[] }): Promise<{ origins: readonly OpportunityOrigin[]; seedKeys: readonly string[] }> {
+  if (input.origins && input.origins.length > 0) return { origins: input.origins, seedKeys: input.seedKeys ?? [] };
+  if (input.seedKeys && input.seedKeys.length > 0) return { origins: ['FIRST_PRINCIPLES'], seedKeys: input.seedKeys };
+  const goal = await getWorkstream(input.goal.id);
+  const backward = goal ? firstPrinciplesSeed(goal) : null;
+  return { origins: ['FIRST_PRINCIPLES'], seedKeys: backward ? [backward.key] : [] };
 }
 
 const TERMINAL_MISSION = new Set(['DONE', 'FAILED', 'CANCELLED']);

@@ -251,16 +251,22 @@ export async function opportunityFieldHoldsOnRows(): Promise<FieldReport> {
   const projects = await listProjects();
   const counts = countByOrigin([]);
   const categories = new Set<string>();
-  const goals = await listWorkstreams({ projectIds: projects.map((p) => p.id) });
-  const firstPrinciples = seedsFromFirstPrinciples(goals);
-  for (const s of firstPrinciples) counts[s.origin] += 1;
   for (const p of projects) {
-    const [nodes, opportunities, constraints] = await Promise.all([
+    /*
+     * The field is built exactly as a goal's discovery round builds it
+     * (`openGoalDiscovery`): the project's rows, with its goals fed in, so a
+     * FIRST_PRINCIPLES seed counted here is one a production round is asked
+     * from — not a count kept beside a field that never saw the goals.
+     */
+    const [nodes, opportunities, constraints, listed] = await Promise.all([
       listNodes(p.id),
       listOpportunities({ projectId: p.id }),
       listConstraintsForProject(p.id),
+      listWorkstreams({ projectIds: [p.id] }),
     ]);
-    const field = opportunityField({ nodes, opportunities, goals: [], constraints });
+    // A Brain-wide workstream is listed beside every project's own; it is no project's goal round.
+    const goals = listed.filter((g) => g.projectId === p.id);
+    const field = opportunityField({ nodes, opportunities, goals, constraints });
     for (const s of field) {
       counts[s.origin] += 1;
       if (s.category) categories.add(s.category);
