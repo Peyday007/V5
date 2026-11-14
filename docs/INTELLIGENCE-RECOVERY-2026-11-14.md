@@ -115,6 +115,40 @@ Status vocabulary as the owner gave it. Owner = the Surge B repair stream
 | Q2-11 | statistics | no small-k predictive interval, no vendor-figure bias discount, funnel stage not material, lineage only by URL, no model uncertainty | MAJOR | acceptance | REPAIRING (partial) |
 | Q2-12 | robustness | assurance sample regex-parses prose (`plan.ts:852`) | MINOR | acceptance | REPAIRING |
 
+### Economic knowledge baseline (production, 2026-11-14 19:53Z, Goals run 43634448117)
+
+| layer | population | count |
+|---|---|---|
+| stored | mapped industries (SECTOR nodes) | 52 |
+| stored | industry subcategories | 12 |
+| stored | economic nodes (all) / of which Brain discovered | 91 / 17 |
+| stored | buyer populations (BUYER_TYPE) | 11 |
+| stored | customer needs / bottlenecks (BOTTLENECK) | 7 |
+| stored | supplier categories (FULFILMENT_SOURCE) | 7 |
+| stored | transaction mechanisms (TRANSACTION_TYPE) | 2 |
+| stored | projects holding an industry map | 1 |
+| stored | labor roles | not stored (no vocabulary; text only) |
+| stored | commercial positions | not stored (closed in-code table) |
+| stored | openings held / distinct capture mechanisms on them | 498 / 6 |
+| evidenced | money flows (openings with payer and price) | 49 |
+| evidenced | research claims / SOURCED claims / distinct sources | 19,929 / 16,762 / 4,930 |
+| evidenced | construction facts (any status) | 0 |
+| evidenced | unresolved economic variables (as stored facts) | 0 stored — unknowns exist only in memory |
+| generated | constructed arrangements asked about (`-mx-` rounds) | 70 |
+| stored | constructed arrangements durably stored / unique / transfers | **0 — no store exists** (K-1) |
+| evaluated | plans constructed / evaluated (goal plan readings) | 100 / 100, on 1 goal |
+| evaluated | non-cash objective readings | 0 |
+| validated | plans accepted (RECOMMENDABLE) | 0 |
+| validated | plans verified by an outcome | 0 |
+| validated | commercially validated openings (settlement recorded) | 0 |
+
+Reading: Brain holds a large evidence base (16.8K sourced claims) but a very
+small structured world model (91 nodes, one project, 2 transaction types), no
+stored quantities (0 construction facts), and nothing it constructs. "400
+arrangements per pass" were 0 durable arrangements. 100 plan readings exist for
+one goal and none was ever accepted — consistent with Q2-1 (acceptance
+unreachable).
+
 ### Measurement
 
 `scripts/knowledge-census.ts` counts every population the owner listed from the
