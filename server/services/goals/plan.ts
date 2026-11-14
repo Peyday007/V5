@@ -1547,7 +1547,38 @@ export function reconstructionSummary(r: Reconstruction | null): Record<string, 
   };
 }
 
+/**
+ * The verdict a persisted reading may carry under the owner's acceptance rule
+ * (2026-11-09, GOAL-09): RECOMMENDABLE — "meets the objective" — only with an
+ * ACCEPTED acceptance. A candidate keeps its pursuit and its sale, never that
+ * word. Pure.
+ */
+export function persistableVerdict(verdict: PlanVerdict, acceptance: Pick<PlanAcceptance, 'status'>): PlanVerdict {
+  return verdict === 'RECOMMENDABLE' && acceptance.status !== 'ACCEPTED' ? 'NEEDS_EVIDENCE' : verdict;
+}
+
+/**
+ * Whether a stored reading's forecast carries the acceptance record. A row the
+ * Brain released before the acceptance writer wrote has none (production
+ * 2026-11-10, gpr_8c679e2aefba4625a30f): it is history and is never rewritten,
+ * but it must not stand as the goal's latest reading, so the next read writes
+ * a stamped one even when nothing else moved. Pure.
+ */
+export function forecastCarriesAcceptance(forecast: string | null): boolean {
+  if (!forecast) return false;
+  try {
+    const parsed = JSON.parse(forecast) as { acceptance?: { status?: unknown } } | null;
+    return !!parsed && typeof parsed === 'object' && typeof parsed.acceptance?.status === 'string';
+  } catch {
+    return false;
+  }
+}
+
 async function persistReading(goal: Workstream, reading: PlanReading, chosen: StrategyReading | null): Promise<void> {
+  // A candidate is never stored as an accepted plan: verdict, probability and accepted plan follow the acceptance.
+  if (reading.acceptance.status !== 'ACCEPTED') {
+    reading = { ...reading, verdict: persistableVerdict(reading.verdict, reading.acceptance), acceptance: { ...reading.acceptance, probability: null, accepted: null } };
+  }
   const summary = {
     verdict: reading.verdict,
     chosen: reading.chosen,
@@ -1565,7 +1596,7 @@ async function persistReading(goal: Workstream, reading: PlanReading, chosen: St
   };
   const digest = sha256(canonicalJson(summary));
   const last = await latestReading(goal.id);
-  if (last && last.digest === digest) return;
+  if (last && last.digest === digest && forecastCarriesAcceptance(last.forecast)) return;
   const forecast = {
     ...(chosen ? { conservativeSettled: chosen.conservativeSettled, sweep: chosen.sweep } : {}),
     acceptance: reading.acceptance,
