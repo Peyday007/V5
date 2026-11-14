@@ -400,6 +400,16 @@ export function validationStage(one: ModelledOpportunity, checks: LinkCheck[], t
   const capital = one.capital.value;
   const limit = target.capitalBeforeProofCents !== null ? target.capitalBeforeProofCents / 100 : null;
   const cost = one.directCost.value;
+  // A first step the owner allows before any money comes in. A published capital
+  // figure inside the limit is one; so is an unpublished one whose worst case —
+  // the top of the range the model sweeps — is still inside it (commission and
+  // referral openings almost never publish one). Nothing favourable is assumed:
+  // without a limit, or without a bounded worst case, unknown capital stays a
+  // question (invariant 39).
+  const firstStepAllowed =
+    capital !== null
+      ? limit === null || capital <= limit
+      : one.capital.high !== null && limit !== null && one.capital.high <= limit;
   if (
     ok('REACHABLE_BUYER') &&
     !!o.offerScope &&
@@ -407,9 +417,7 @@ export function validationStage(one: ModelledOpportunity, checks: LinkCheck[], t
     price > 0 &&
     // A test is a few offers at the card's price, so the price itself is what it measures.
     (cost === null || cost < price) &&
-    // A first step the owner allows before any money comes in; unknown capital is a question, not a yes (invariant 39).
-    capital !== null &&
-    (limit === null || capital <= limit) &&
+    firstStepAllowed &&
     !one.competitiveAward
   ) {
     return 'C_MARKET_TEST_READY';
