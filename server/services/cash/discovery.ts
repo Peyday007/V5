@@ -71,6 +71,7 @@ import { OPERATING_MODEL_SENTENCE } from '../../domain/operatingModel.ts';
 import { constructedCapFor, freeLaneOwnsResearch, routineFocus } from './researchRoom.ts';
 import { TRIGGER_BUCKETS, triggersEnabled } from './triggers.ts';
 import { FEED_SHORTLIST_BUCKET } from '../feeds/bucket.ts';
+import { INTERMEDIATION_BUCKETS, familyRank } from './intermediationBuckets.ts';
 import { getDb } from '../../db/database.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import {
@@ -474,6 +475,8 @@ export const SEARCH_BUCKETS: readonly SearchBucket[] = Object.freeze([
       'sources, what each side published, and what specifically one supplies to the other?',
   },
   ...BROAD_ECONOMY_BUCKETS,
+  // Commercial intermediation's buyer-first and supply-first entry points (RES-15-4, S-0149).
+  ...INTERMEDIATION_BUCKETS,
 ]);
 
 const OPENED = 'CASH_DISCOVERY_OPENED';
@@ -565,7 +568,7 @@ export async function openDiscovery(input: {
   const out: OpenedDiscovery[] = [];
   const limit = Math.max(1, input.limit ?? 1);
   let frame: ExecutionFrame | null | undefined;
-  for (const bucket of fairOrder([...SEARCH_BUCKETS, ...(triggersEnabled() ? TRIGGER_BUCKETS : [])], rounds)) {
+  for (const bucket of fairOrder([...SEARCH_BUCKETS, ...(triggersEnabled() ? TRIGGER_BUCKETS : [])], rounds, now)) {
     if (out.length >= limit) break;
     const history = byBucket.get(bucket.id) ?? [];
     const next = nextRoundFor(history, now);
@@ -1350,8 +1353,13 @@ export async function liveConstructedResearch(rounds: readonly CashDiscoveryRoun
  * bucket never asked comes before one asked again inside its mechanism, and
  * list order only breaks a tie. It changes which question is asked next and
  * nothing about whether any may be.
+ *
+ * A current priority family (`INTERMEDIATION_FAMILY`, RES-15-4) is ordered
+ * first inside each mechanism's turn while its dated declaration holds at
+ * `now`; it never takes another mechanism's turn, and when the declaration
+ * lapses its buckets fall back to their ordinary place.
  */
-export function fairOrder(buckets: readonly SearchBucket[], rounds: readonly CashDiscoveryRound[]): SearchBucket[] {
+export function fairOrder(buckets: readonly SearchBucket[], rounds: readonly CashDiscoveryRound[], now: Date | string = new Date()): SearchBucket[] {
   const byMechanism = new Map<string, number>();
   const byBucket = new Map<string, number>();
   for (const round of rounds) {
@@ -1360,7 +1368,20 @@ export function fairOrder(buckets: readonly SearchBucket[], rounds: readonly Cas
   }
   // Greedy, so one pass that opens several rounds interleaves mechanisms too:
   // each pick counts as an asking of its mechanism before the next is chosen.
-  const left = buckets.map((bucket, index) => ({ bucket, index }));
+  /*
+   * List position, except that a current priority family's bucket (RES-15-4) takes
+   * the place just before the first bucket of its own mechanism, so it is offered
+   * first inside that mechanism's turn and never in another's. One key, so the
+   * order stays total; when the family lapses every bucket is at its own index.
+   */
+  const firstOfMechanism = new Map<string, number>();
+  buckets.forEach((bucket, index) => {
+    if (!firstOfMechanism.has(bucket.mechanism)) firstOfMechanism.set(bucket.mechanism, index);
+  });
+  const left = buckets.map((bucket, index) => ({
+    bucket,
+    at: familyRank(bucket, now) === 0 ? firstOfMechanism.get(bucket.mechanism)! - 1 + (index + 1) / (buckets.length + 1) : index,
+  }));
   const out: SearchBucket[] = [];
   while (left.length > 0) {
     let best = 0;
@@ -1370,7 +1391,7 @@ export function fairOrder(buckets: readonly SearchBucket[], rounds: readonly Cas
       const order =
         (byMechanism.get(a.bucket.mechanism) ?? 0) - (byMechanism.get(b.bucket.mechanism) ?? 0) ||
         (byBucket.get(a.bucket.id) ?? 0) - (byBucket.get(b.bucket.id) ?? 0) ||
-        a.index - b.index;
+        a.at - b.at;
       if (order < 0) best = i;
     }
     const [picked] = left.splice(best, 1);
