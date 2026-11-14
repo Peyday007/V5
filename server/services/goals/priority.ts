@@ -23,6 +23,7 @@
  */
 import type { WorkstreamPurpose } from '../../domain/register.ts';
 import type { GoalCommitment, PriorityCriterion } from '../../domain/goals.ts';
+import type { RequirementStatus } from '../../domain/factoryProgram.ts';
 
 export interface PriorityFacts {
   id: string;
@@ -153,4 +154,335 @@ export function rankGoals(goals: PriorityFacts[]): RankedGoal[] {
     });
   }
   return out;
+}
+
+/* ------------------------------------------------------------------------- */
+/* Capabilities: readiness kept apart from urgency, promoted by measured need */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * Where a proposed capability stands is the program's own vocabulary, not a new
+ * one: `RequirementStatus` (domain/factoryProgram.ts, derived from rows) and the
+ * requirement's `prepared` flag (§97), which is what keeps it from consuming a
+ * worker until a live need depends on it. The spec's words read onto those:
+ *
+ *   specified     SPECIFIED, not prepared       live, ready, not yet assigned
+ *   prepositioned SPECIFIED, prepared           waiting; costs a row, no worker
+ *   needed now    SPECIFIED, promoted           what `promotionFromBlockers` decides
+ *   building      MAPPED / IMPLEMENTED / INTEGRATED
+ *   verified      PRODUCTION_VERIFIED
+ *   suspended     SPECIFIED, prepared again     what `demotionForVanishedNeed` decides
+ *
+ * Readiness (status and prepared) answers "may it be worked on now"; urgency is
+ * read separately from due date and blocked transactions, and neither is derived
+ * from the other. Promotion and demotion move only `prepared`, so no status is
+ * written here and the requirement is never removed from the specification.
+ * This ranks prepared requirements for promotion; it is unrelated to
+ * `design/priority.ts`, whose `rankCapabilities` ranks design capabilities.
+ */
+
+/** One transaction a missing capability is holding up, read from goal/cash rows. */
+export interface BlockedTransaction {
+  id: string;
+  /** Null when no row states the value. An unknown value counts for nothing. */
+  valueCents: number | null;
+  /** The business the transaction belongs to, or null when unstated. */
+  businessKey: string | null;
+}
+
+export interface CapabilityFacts {
+  id: string;
+  /** The requirement's derived status. Only a SPECIFIED one has not started. */
+  status: RequirementStatus;
+  /** The requirement's `prepared` flag: true waits, false is live. */
+  prepared: boolean;
+  /** True only when every prerequisite is recorded as met; null is unknown. */
+  prerequisitesMet: boolean | null;
+  /** False when the need disappeared; null is unknown and never demotes or promotes. */
+  needStillExists: boolean | null;
+  dueAt: string | null;
+  /** Measured from goal and cash rows. */
+  blocked: BlockedTransaction[];
+  /** What the current workaround costs over its horizon, or null if unmeasured. */
+  workaroundCostCents: number | null;
+  /** What building the reusable capability costs, or null if unestimated. */
+  buildCostCents: number | null;
+  /** A source, partner or interface changed so the old implementation fails. */
+  interfaceChanged: boolean;
+  /** Planned businesses, beyond those with blocked transactions, that would reuse it. */
+  otherBeneficiaries: number | null;
+  /** 0..1 chance the estimate is wrong; null is unknown and read as 1. */
+  uncertainty: number | null;
+  opportunityCostCents: number | null;
+}
+
+export type PromotionReason =
+  | 'SEVERAL_BLOCKED_TRANSACTIONS'
+  | 'WORKAROUND_COSTS_MORE'
+  | 'SHARED_BY_BUSINESSES'
+  | 'INTERFACE_CHANGED';
+
+export interface PromotionDecision {
+  /** Clear `prepared` on a SPECIFIED requirement: it becomes live. */
+  promote: boolean;
+  reasons: PromotionReason[];
+  /** The measured figures behind each reason, for the record. Never free text from a caller. */
+  evidence: string[];
+}
+
+/** Waiting: specified and prepared, so nothing is spending on it yet. */
+const isWaiting = (facts: { status: RequirementStatus; prepared: boolean }): boolean => facts.status === 'SPECIFIED' && facts.prepared;
+/** Live and unassigned: specified and not prepared. */
+const isLive = (facts: { status: RequirementStatus; prepared: boolean }): boolean => facts.status === 'SPECIFIED' && !facts.prepared;
+
+function valuedBlocked(facts: CapabilityFacts): BlockedTransaction[] {
+  return facts.blocked.filter((t) => typeof t.valueCents === 'number' && Number.isFinite(t.valueCents) && t.valueCents > 0);
+}
+
+function distinctBusinesses(facts: CapabilityFacts): number {
+  const keys = new Set(facts.blocked.map((t) => t.businessKey).filter((k): k is string => !!k));
+  const others = typeof facts.otherBeneficiaries === 'number' && facts.otherBeneficiaries > 0 ? facts.otherBeneficiaries : 0;
+  return keys.size + others;
+}
+
+/**
+ * Whether a prepared capability should be promoted, from what the rows measure.
+ * A declared dependency edge is not required and is not consulted here. Unknown
+ * inputs never produce a reason, and unmet or unknown prerequisites never promote.
+ */
+export function promotionFromBlockers(facts: CapabilityFacts): PromotionDecision {
+  const none: PromotionDecision = { promote: false, reasons: [], evidence: [] };
+  if (!isWaiting(facts)) return none;
+  if (facts.needStillExists === false) return none;
+  if (facts.prerequisitesMet !== true) return none;
+
+  const reasons: PromotionReason[] = [];
+  const evidence: string[] = [];
+
+  const valued = valuedBlocked(facts);
+  if (valued.length >= 2) {
+    const total = valued.reduce((sum, t) => sum + (t.valueCents ?? 0), 0);
+    reasons.push('SEVERAL_BLOCKED_TRANSACTIONS');
+    evidence.push(`${valued.length} valued transactions blocked, ${total} cents in all`);
+  }
+  if (
+    typeof facts.workaroundCostCents === 'number' &&
+    typeof facts.buildCostCents === 'number' &&
+    facts.workaroundCostCents > facts.buildCostCents
+  ) {
+    reasons.push('WORKAROUND_COSTS_MORE');
+    evidence.push(`workaround ${facts.workaroundCostCents} cents against ${facts.buildCostCents} to build`);
+  }
+  const businesses = distinctBusinesses(facts);
+  if (businesses >= 2) {
+    reasons.push('SHARED_BY_BUSINESSES');
+    evidence.push(`${businesses} businesses would use it`);
+  }
+  if (facts.interfaceChanged) {
+    reasons.push('INTERFACE_CHANGED');
+    evidence.push('an interface it depends on changed');
+  }
+  return { promote: reasons.length > 0, reasons, evidence };
+}
+
+/**
+ * Work whose need disappeared goes back to waiting: `prepared` is set again. The
+ * requirement is never removed from the specification (`requirementRetained` is
+ * always true), and nothing already assigned or finished is touched. Only an
+ * explicit false demotes; an unknown need leaves it alone.
+ */
+export function demotionForVanishedNeed(facts: CapabilityFacts): {
+  demote: boolean;
+  /** The value `prepared` should take. */
+  prepared: boolean;
+  requirementRetained: true;
+} {
+  const demote = facts.needStillExists === false && isLive(facts);
+  return { demote, prepared: demote ? true : facts.prepared, requirementRetained: true };
+}
+
+export interface RankedPreparedRequirement {
+  id: string;
+  status: RequirementStatus;
+  prepared: boolean;
+  /** Separate from readiness: how pressing, from what the rows say. */
+  urgency: { dueAt: string | null; blockedTransactions: number };
+  rank: number;
+  /** Net expected value after cost, opportunity cost and uncertainty. Unknowns add nothing. */
+  netValueCents: number;
+  reuse: number;
+  /** Within the available parallel workers, in rank order. Unknown workers fit none. */
+  startable: boolean;
+  promotion: PromotionDecision;
+}
+
+/**
+ * Rank prepared requirements that may be worked now, most worth doing first. Compares
+ * urgency, then net value (expected value less cost and opportunity cost,
+ * discounted by uncertainty), then reuse, then known cost. An unknown value or
+ * reuse counts as zero, an unknown cost sorts after a known one and an unknown
+ * uncertainty is the worst case, so no gap in the data raises a rank.
+ * Requirements that are not promoted and not already live sort last and are
+ * never startable. Only the promoted capability is ranked, not its program.
+ */
+export function rankPreparedRequirements(
+  capabilities: CapabilityFacts[],
+  options: { parallelWorkers: number | null },
+): RankedPreparedRequirement[] {
+  const rows = capabilities.map((c) => {
+    const promotion = promotionFromBlockers(c);
+    const valued = valuedBlocked(c);
+    const gross = valued.reduce((sum, t) => sum + (t.valueCents ?? 0), 0);
+    const uncertainty = typeof c.uncertainty === 'number' && c.uncertainty >= 0 && c.uncertainty <= 1 ? c.uncertainty : 1;
+    const cost = typeof c.buildCostCents === 'number' ? c.buildCostCents : null;
+    const opportunity = typeof c.opportunityCostCents === 'number' ? c.opportunityCostCents : 0;
+    const net = Math.round(gross * (1 - uncertainty)) - (cost ?? 0) - opportunity;
+    const eligible =
+      c.needStillExists !== false &&
+      c.prerequisitesMet === true &&
+      (isLive(c) || promotion.promote);
+    return {
+      c,
+      promotion,
+      eligible,
+      net,
+      cost,
+      reuse: distinctBusinesses(c),
+      blocked: c.blocked.length,
+    };
+  });
+
+  rows.sort((a, b) => {
+    if (a.eligible !== b.eligible) return a.eligible ? -1 : 1;
+    if (a.c.dueAt !== b.c.dueAt) {
+      if (a.c.dueAt === null) return 1;
+      if (b.c.dueAt === null) return -1;
+      return a.c.dueAt < b.c.dueAt ? -1 : 1;
+    }
+    if (a.net !== b.net) return b.net - a.net;
+    if (a.reuse !== b.reuse) return b.reuse - a.reuse;
+    if (a.cost !== b.cost) {
+      if (a.cost === null) return 1;
+      if (b.cost === null) return -1;
+      return a.cost - b.cost;
+    }
+    return a.c.id < b.c.id ? -1 : a.c.id > b.c.id ? 1 : 0;
+  });
+
+  const workers = typeof options.parallelWorkers === 'number' && options.parallelWorkers > 0 ? Math.floor(options.parallelWorkers) : 0;
+  let slots = workers;
+  return rows.map((r, index) => {
+    const startable = r.eligible && slots > 0;
+    if (startable) slots -= 1;
+    return {
+      id: r.c.id,
+      status: r.c.status,
+      prepared: r.c.prepared,
+      urgency: { dueAt: r.c.dueAt, blockedTransactions: r.blocked },
+      rank: index,
+      netValueCents: r.net,
+      reuse: r.reuse,
+      startable,
+      promotion: r.promotion,
+    };
+  });
+}
+
+/* ------------------------------------------------------------------------- */
+/* The consumer: facts built from goal and cash rows, then decided           */
+/* ------------------------------------------------------------------------- */
+
+/** A goal-side row that says a capability is holding a transaction up. */
+export interface BlockedTransactionRow {
+  transactionId: string;
+  capabilityId: string;
+  /** Cents from the cash row; null when no cash row states a value. */
+  valueCents: number | null;
+  businessKey: string | null;
+}
+
+/** What is recorded about a capability itself. Every figure is nullable: unknown stays unknown. */
+export interface CapabilityRecordRow {
+  id: string;
+  status: RequirementStatus;
+  prepared: boolean;
+  prerequisitesMet: boolean | null;
+  needStillExists: boolean | null;
+  dueAt: string | null;
+  workaroundCostCents: number | null;
+  buildCostCents: number | null;
+  interfaceChanged: boolean | null;
+  otherBeneficiaries: number | null;
+  uncertainty: number | null;
+  opportunityCostCents: number | null;
+}
+
+/**
+ * Build `CapabilityFacts` from rows. A blocked-transaction row naming a
+ * capability that has no record is dropped rather than inventing a capability,
+ * and a duplicate transaction id counts once. An unrecorded `interfaceChanged`
+ * is false, never true: an unknown is not a reason to promote.
+ */
+export function capabilityFactsFromRows(
+  capabilities: CapabilityRecordRow[],
+  blocked: BlockedTransactionRow[],
+): CapabilityFacts[] {
+  const byCapability = new Map<string, Map<string, BlockedTransaction>>();
+  for (const row of blocked) {
+    let txs = byCapability.get(row.capabilityId);
+    if (!txs) {
+      txs = new Map();
+      byCapability.set(row.capabilityId, txs);
+    }
+    if (!txs.has(row.transactionId)) {
+      txs.set(row.transactionId, {
+        id: row.transactionId,
+        valueCents: row.valueCents,
+        businessKey: row.businessKey,
+      });
+    }
+  }
+  return capabilities.map((c) => ({
+    id: c.id,
+    status: c.status,
+    prepared: c.prepared,
+    prerequisitesMet: c.prerequisitesMet,
+    needStillExists: c.needStillExists,
+    dueAt: c.dueAt,
+    blocked: [...(byCapability.get(c.id)?.values() ?? [])],
+    workaroundCostCents: c.workaroundCostCents,
+    buildCostCents: c.buildCostCents,
+    interfaceChanged: c.interfaceChanged === true,
+    otherBeneficiaries: c.otherBeneficiaries,
+    uncertainty: c.uncertainty,
+    opportunityCostCents: c.opportunityCostCents,
+  }));
+}
+
+export interface CapabilityReconciliation {
+  ranked: RankedPreparedRequirement[];
+  /** Requirements whose `prepared` flag to clear, with the measured reasons. */
+  promotions: { id: string; decision: PromotionDecision }[];
+  /** Requirements to set `prepared` on again because their need disappeared; never deleted. */
+  demotions: { id: string; prepared: true; requirementRetained: true }[];
+}
+
+/**
+ * One pass from rows to decisions: promote from measured blockers, demote
+ * vanished needs, and rank what may be worked within the parallel workers.
+ * Pure; the caller applies the transitions and records the events.
+ */
+export function reconcileCapabilities(
+  capabilities: CapabilityRecordRow[],
+  blocked: BlockedTransactionRow[],
+  options: { parallelWorkers: number | null },
+): CapabilityReconciliation {
+  const facts = capabilityFactsFromRows(capabilities, blocked);
+  const ranked = rankPreparedRequirements(facts, options);
+  const promotions = ranked.filter((r) => r.promotion.promote).map((r) => ({ id: r.id, decision: r.promotion }));
+  const demotions = facts
+    .map((f) => ({ id: f.id, ...demotionForVanishedNeed(f) }))
+    .filter((d) => d.demote)
+    .map(({ id, requirementRetained }) => ({ id, prepared: true as const, requirementRetained }));
+  return { ranked, promotions, demotions };
 }
