@@ -247,9 +247,21 @@ export async function answerUnaskedParks(input: { limit?: number; nowMs?: number
   for (const row of rows) {
     const orchestration = await getOrchestration(row.id);
     if (!orchestration || orchestration.status !== 'NEEDS_HUMAN') continue;
+    /*
+     * The packet's mission, when it has one — never null by default.
+     *
+     * A mission parked at NEEDS_HUMAN whose card was withdrawn (or that was
+     * parked before cards existed) is exactly the row this pass selects, and
+     * it is the only caller that can reach one: `decideAtPark` runs before a
+     * mission is parked, so the mission it names is never NEEDS_HUMAN. Passing
+     * null here filed the packet and left its mission parked, holding its
+     * grant slot and its idea behind a park nobody would ever answer.
+     */
+    const { getMissionByOrchestration } = await import('../../repos/russellMissions.ts');
+    const mission = await getMissionByOrchestration(orchestration.id);
     const filed = await fileWithGapsUnderStandingGrant({
       orchestration,
-      missionId: null,
+      missionId: mission?.id ?? null,
       nowMs,
       why:
         'the packet has accepted evidence and nothing left Brain may attempt, so its audited report is filed with the ' +

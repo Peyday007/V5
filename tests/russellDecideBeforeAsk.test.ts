@@ -46,12 +46,12 @@ import { getDb } from '../server/db/database.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { createGoal } from '../server/repos/russellAuthority.ts';
 import { listEvents } from '../server/repos/events.ts';
-import { getMission, listOpenRequests } from '../server/repos/russellMissions.ts';
+import { getMission, listOpenRequests, withdrawRequest } from '../server/repos/russellMissions.ts';
 import { createFragments, getOrchestration, insertClaims, updateOrchestration } from '../server/repos/research.ts';
 import { capture } from '../server/services/russell/judgment.ts';
 import { launch } from '../server/services/russell/launch.ts';
 import { parkStoppedMissions } from '../server/services/russell/needsHuman.ts';
-import { fileWithGapsUnderStandingGrant } from '../server/services/russell/routineDecisions.ts';
+import { answerUnaskedParks, fileWithGapsUnderStandingGrant, ROUTINE_DECISION_GRACE_MS } from '../server/services/russell/routineDecisions.ts';
 
 const ACCEPTS_A_REPORT = 'Deciding whether this project accepts a report with unresolved questions in it';
 const SPENT = 'The evidence bar was not met and the repair ladder is spent.';
@@ -248,6 +248,29 @@ describe('parkStoppedMissions decides before it asks', () => {
     // The shared step says what it did with an already-authorized packet.
     const again = await fileWithGapsUnderStandingGrant({ orchestration: (await getOrchestration(orchestrationId))!, missionId, why: 'test' });
     expect(again).toMatchObject({ decided: false, because: 'ALREADY_FILED_WITH_GAPS' });
+  });
+
+  it('moves a parked mission back to running when the unasked-park pass files its packet', async () => {
+    // Parked with a card while the project held no grant, then the card withdrawn: a NEEDS_HUMAN
+    // mission nobody is asked about — the only shape that reaches the mission branch of the filing step.
+    await grant();
+    const { missionId, orchestrationId } = await stoppedMission(['ACCEPTED', 'BLOCKED']);
+    await getDb().run(`UPDATE russell_goals SET state = 'REVOKED' WHERE project_id = ?`, [projectId]);
+    await parkStoppedMissions(10);
+    const card = (await cardFor(missionId))!;
+    expect(card).toBeDefined();
+    expect(await withdrawRequest({ requestId: card.id, reason: 'test: withdrawn' })).toBe(true);
+    expect((await getMission(missionId))!.state).toBe('NEEDS_HUMAN');
+    await getDb().run(`UPDATE russell_goals SET state = 'ACTIVE' WHERE project_id = ?`, [projectId]);
+
+    const decided = await answerUnaskedParks({ ignoreBootGrace: true, nowMs: Date.now() + 2 * ROUTINE_DECISION_GRACE_MS });
+
+    expect(decided.filter((d) => d.decided).map((d) => d.orchestrationId)).toContain(orchestrationId);
+    expect((await getOrchestration(orchestrationId))!.unresolvedGapPolicy).toBe('RECORD_GAPS');
+    expect((await getMission(missionId))!.state).toBe('RUNNING');
+    const filed = (await decisionsFor(missionId)).filter((p) => p['decidedBy'] === 'BRAIN_UNDER_STANDING_AUTHORITY');
+    expect(filed).toHaveLength(1);
+    expect(filed[0]).toMatchObject({ choice: 'RECORD_GAPS', orchestrationId, missionId });
   });
 
   it('has one decide-and-file step, used by the park and by answerUnaskedParks', async () => {
