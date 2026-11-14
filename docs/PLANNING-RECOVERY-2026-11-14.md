@@ -168,3 +168,98 @@ never the kept plan; an arithmetic impossibility reads impossible.
   same 136-file suite on one shared 4-CPU box (OOM kills, 35 min for two files);
   each now commits on focused tests and the integrator runs the impacted
   selection once on the integrated branch.
+
+## Causal map of the planning capability
+
+Each stage, what it is for, what it actually did before the recovery, the root
+cause that broke it, and the evidence of its behaviour now.
+
+| stage | owner (code) | supposed to | actually did (before) | broke by | evidence now |
+|---|---|---|---|---|---|
+| Objective received | `industry/construction/intent.ts` `readObjective`; `goals/decide.ts` `createGoal`; `POST /goals`; `brain_operator_create_goal` | take an objective in words | only a hand-typed CLI spec; misread capital as the amount | RC-5 | `tests/objectiveIntake.test.ts` |
+| Goal interpretation, constraints | `readObjective`; `goals/target.ts` | amount, deadline, capital, hours, limits | deadline unread; limit changes reset progress | RC-5 | same; G-5 progress-kept test |
+| Resources, capabilities | `goals/portfolio.ts` limits; Instantly capacity (§94) | money, hours, outreach capacity | capital fallback chain | RC-5 (minor, remains) | `planningAcceptance` constraint-change test |
+| Opportunity discovery, research | `cash/discovery.ts` harvest, `repos/research.ts`, Russell missions | real buyers, offers, prices, dates | claim sentences as openings; seller pages as demand; stale events | RC-6, RC-1 (DNS failures under stalls) | `tests/openingsFromClaims.test.ts` |
+| Evidence acquisition, validation | research gate, `packetRunner.ts`, `validationStage` | admit sourced, current evidence; climb the ladder | wrong block cause reported; ladder stuck at B | RC-6 | O-5, O-7 tests |
+| Strategy generation | `goals/pathways.ts`, `reconstruction.ts`, `reasoning/directions.ts`, `objectivePlan.ts` | many different strategies | cash only; short goals all IMPOSSIBLE | RC-5 | G-3 test; `objectivePlan.test.ts` (≥4 distinct mechanisms) |
+| Transformation, multistrategy | `reasoning/variables.ts`, `recombine`, `mutate` | change variables, combine | stacked moves without limit (×157.9 price) | RC-2 | `tests/goalPlanEconomics.test.ts` |
+| Economic evaluation | `quant/portfolio.ts`, `goals/portfolio.ts` | cash kept per world, inside limits | gross receipts; supplier cost vanished; market sold twice | RC-2 | `goalPlanEconomics`, `quantOffLoop` equivalence |
+| Uncertainty | `judgeAcceptance`, `confidence.basis` | probability only on evidence | simulated worlds counted as evidence | RC-3 | `goalPlanCoherence` C-7 |
+| Independent criticism | plausibility critic, challenge gate; objective critic call; review agent | catch faulty reasoning | none | RC-2, RC-3 | C-4, C-15 tests; objective critique test |
+| Revision | `reconstructPlan` → adopted plan; objective revise | a rejected plan becomes a better one | revision display-only | RC-3 | C-6 adoption test |
+| Acceptance, infeasibility | `judgeAcceptance`, `judgeFeasibility` | 90% defensible or say why not | no infeasible verdict | RC-3, RC-4 | C-7, C-10 tests; `planningAcceptance` infeasible case |
+| Actionable plan | `reading.steps`, plan-ready notice | dated, costed, owned, kill criteria | none | RC-3 | C-8 test |
+| Scheduling (goal tick) | `russell/loop.ts` `startGoalPlans`, `advanceGoalPlans`, `advanceObjectivePlans` | ≥2 plan reads an hour | 1 in 6 h; shed under load | RC-1, RC-7 | `databasePressure` throttle tests |
+| Event loop / DB | `evaluatorPool.ts`, quant engine | plan compute off the main loop | 8–31 s stalls; 503s; failed deploys | RC-1 | `quantOffLoop` loop-hold tests; evaluator 14.6 s → 1.6 s |
+| Goal records, state | `register/resolve.ts`, `goals/model.ts` | true state, true waiting | BLOCKED on a person for a research dead end | RC-7 | `goalParkedResearchState` |
+| Hermes (operator) | `operator/*`, `mcp/operatorTools.ts` | inspect, decide, commission, verify | read tools refused; interventions claimed work not started; 4B challenger | RC-8 | `operatorRepairs` |
+| Model lane / RunPod | `cheap/*`, `runpod*` | inference for research and the operator | 4B on 16 GB at <50% use | not a root cause of planning failure | survey 11-14 03:33Z (below) |
+| Factory, release | `factory/*`, `deploy.yml`, Postgres suite | engineering and release | unchanged; release gate red from RC-1 load | RC-1 | release of #884 |
+| Restart recovery | DB-backed cadence, keyed readings | survive restarts | in-memory plan state lost (minor) | H-7 (not a defect alone) | objective readings keyed and idempotent (test) |
+
+Coverage: 20 of 20 stages above examined; every critical path from objective
+to actionable plan has at least one test written in this operation; the
+production read after release is below.
+
+## Agents and compute
+
+| what | used | why |
+|---|---|---|
+| Discovery agents | 6 concurrent (quant, openings, intake, production history, Hermes/compute, critique) | independent lenses; two pairs independently confirmed the same defects |
+| Repair agents | 8 concurrent, one per root cause, isolated worktrees, disjoint files | parallel root-cause repair |
+| Adversarial reviewer | 1, after integration, no stake in the repairs | found F1–F11, including a blocking data leak |
+| Fixture triage | 1 | 41 integrated failures → all stale fixtures |
+| Model | this session's model for every agent | the strongest reasoning available without paid API |
+| Open-source agent frameworks (OpenHands, SWE-agent, Aider, OpenCode) | not installed | they need a strong model; the only self-hosted model is Qwen3-4B (bench 0.65, below a director's bar); paid APIs are excluded; existing Claude subagents plus Factory covered the work |
+| Hermes as director | not used to direct this operation | its runs on 11-13 failed tool calls (`capacity`, `continue_idle` timeouts) and its interventions did not execute; repaired here (RC-8) so it can direct the next improvements |
+| Factory | untouched: no campaign paused, no worker disabled; Factory released #882/#883 concurrently and this branch merged their work | owner's order: preserve Factory |
+
+**Allocation changes.** Discovery-heavy first (6 lenses) → repair-heavy (8)
+→ verification-heavy (1 reviewer, 1 triage, 1 integrator run). Mid-run the
+machine (4 CPU, 15 GB) OOM-killed test workers with 8 agents each running a
+136-file suite; the allocation changed to focused per-agent tests and one
+integrated run. Agents completed: 16 of 16 assignments; every completion was
+re-verified by the integrator, never accepted on the agent's word.
+
+**Would more agents help?** Not now: the bottleneck moved from engineering to
+production verification (one deploy at a time on one Fly app).
+
+## Finances
+
+| item | amount |
+|---|---|
+| Additional spending by this operation | **$0.00** |
+| Resources added | none |
+| Resources reused | RunPod pod `odsft6ptpi2reh` (RTX 2000 Ada 16 GB, Qwen3-4B-AWQ, $0.19/h, already running), Fly app, GitHub Actions |
+| Current active hourly cost (pre-existing) | RunPod $0.196/h |
+| Remaining of the $100 ceiling | $100.00 |
+| Temporary infrastructure to terminate | none created |
+| Cost per verified root-cause repair | $0 |
+
+Why nothing was bought: the pod ran 1.78 of 4 slots on average; no root cause
+was a lack of inference. RunPod balance on 11-14 03:33Z: $33.70, about 7 days
+of runway at $0.196/h (an owner top-up before about 11-20 keeps the pod).
+
+## Eight-hour checkpoint
+
+Scheduled into this same conversation with the session's own scheduled-message
+mechanism: scheduled task `trig_01KSy4xRxmNaWXLLeLhNsMxE`, fire time
+2026-11-14T16:11Z. No email or outreach channel is used.
+
+## Known limitations (non-blocking)
+
+- F10: `POST /goals` and `brain_operator_create_goal` are not idempotent on a
+  retried request; a retry after a timeout can create a duplicate non-cash goal
+  (cancellable). The live-target check is check-then-write without a unique
+  constraint.
+- The starting-capital fallback chain (`goals/portfolio.ts`) remains; an
+  owner-stated figure overrides it.
+- O-6: research rounds ending without a report — the true cause is now reported
+  (O-5); its dominant share (verifier vs unreachable sources) is to be read from
+  production rows after release.
+- H-8: GitHub drops scheduled runs of `cheap-lane.yml`; the RunPod runway check
+  depends on them.
+- The $10K goal is not an accepted plan: no plan has a defensible 90% probability
+  on evidence, and the recovery does not pretend otherwise. Its shortfall is
+  evidence (no measured conversion, no buyer-validated opening), not a software
+  defect.
