@@ -6,17 +6,18 @@ import {
   MIN_PURPOSE_SHARE,
   RESEARCH_PURPOSES,
   SYSTEM_HEALTH_FLOOR,
-  attributeJobCosts,
   decideCapacity,
   decideLaneActions,
   decideResearchAllocation,
   enforceFloors,
-  laneYieldForWindow,
   type AllocationInput,
   type BottleneckMeasurement,
   type PurposeMeasurement,
   type ResearchPurpose,
 } from '../server/services/goals/researchAllocation.ts';
+import * as allocation from '../server/services/goals/researchAllocation.ts';
+import * as yieldReader from '../server/services/goals/researchYield.ts';
+import { summarizeResearchYield, type YieldJob, type YieldOutput } from '../server/services/goals/researchYield.ts';
 
 const equal = Object.fromEntries(RESEARCH_PURPOSES.map((p) => [p, 0.2])) as Record<ResearchPurpose, number>;
 
@@ -198,29 +199,59 @@ describe('A02: actionability remedies before limits; capacity only for a measure
 });
 
 describe('cost counted once and per-lane yield per window', () => {
-  const jobs = [
-    { id: 'j1', lane: 'a', purposes: ['BROAD_DISCOVERY', 'TRANSACTION_ROUTES', 'FORWARD_EXPLORATION'] as ResearchPurpose[], cost: 9, submittedAt: '2026-11-01T00:00:00Z', completedAt: '2026-11-01T01:00:00Z', acceptedClaims: 4, actionableLinks: 1, usefulResults: 1 },
-    { id: 'j1', lane: 'a', purposes: ['BROAD_DISCOVERY'] as ResearchPurpose[], cost: 9, submittedAt: '2026-11-01T00:00:00Z' },
-    { id: 'j2', lane: 'b', purposes: ['SELF_IMPROVEMENT'] as ResearchPurpose[], cost: 3, submittedAt: '2026-11-02T00:00:00Z' },
-    { id: 'j3', lane: 'a', purposes: ['OPERATING_SUPPORT'] as ResearchPurpose[], cost: 5, submittedAt: '2026-11-09T00:00:00Z', completedAt: '2026-11-09T02:00:00Z', usefulResults: 2 },
+  // The one production reader, `summarizeResearchYield`; the allocation module keeps no second one.
+  const H = 3_600_000;
+  const job = (over: Partial<YieldJob> & Pick<YieldJob, 'id' | 'lane' | 'purposes' | 'startMs'>): YieldJob => ({
+    basis: [], durationMs: H, queueWaitMs: null, outcome: 'COMPLETED', failureCause: null, rateLimited: false, costMinor: null, ...over,
+  });
+  const week1 = { since: '2026-11-01T00:00:00Z', until: '2026-11-08T00:00:00Z' };
+  const week2 = { since: '2026-11-08T00:00:00Z', until: '2026-11-15T00:00:00Z' };
+  const t = (iso: string) => Date.parse(iso);
+  const week1Jobs: YieldJob[] = [
+    job({ id: 'j1', lane: 'a', purposes: ['BROAD_DISCOVERY', 'TRANSACTION_ROUTES', 'FORWARD_EXPLORATION'], startMs: t('2026-11-01T00:00:00Z'), costMinor: 9 }),
+    // The same job read twice is still one job.
+    job({ id: 'j1', lane: 'a', purposes: ['BROAD_DISCOVERY'], startMs: t('2026-11-01T00:00:00Z'), costMinor: 9 }),
+    job({ id: 'j2', lane: 'b', purposes: ['SELF_IMPROVEMENT'], startMs: t('2026-11-02T00:00:00Z'), outcome: 'IN_FLIGHT', costMinor: 3 }),
+  ];
+  const week1Outputs: YieldOutput[] = [
+    ...[1, 2, 3, 4].map((n) => ({ kind: 'ACCEPTED_CLAIM' as const, id: `c${n}`, lane: 'a', purposes: ['BROAD_DISCOVERY' as const], source: 'PRIMARY' as const })),
+    { kind: 'PACKET_FILED', id: 'p1', lane: 'a', purposes: ['TRANSACTION_ROUTES'] },
   ];
 
   it('a job serving several purposes has its cost counted once', () => {
-    const a = attributeJobCosts(jobs);
-    expect(a.totalCost).toBe(17);
-    const sum = RESEARCH_PURPOSES.reduce((s, p) => s + a.byPurpose[p], 0);
-    expect(sum).toBeCloseTo(17, 9);
-    expect(a.byPurpose.BROAD_DISCOVERY).toBeCloseTo(3, 9);
-    expect(a.jobsByPurpose.TRANSACTION_ROUTES).toBe(1);
+    const r = summarizeResearchYield({ ...week1, jobs: week1Jobs, outputs: week1Outputs });
+    expect(r.costCountedOnce.jobs).toBe(2);
+    expect(r.total.costMinor).toBe(12);
+    const sum = RESEARCH_PURPOSES.reduce((s, p) => s + (r.purposes[p].costMinor ?? 0), 0);
+    expect(sum).toBeCloseTo(12, 9);
+    expect(r.costCountedOnce.holds).toBe(true);
+    expect(r.purposes.BROAD_DISCOVERY.costMinor).toBeCloseTo(3, 9);
+    expect(r.purposes.TRANSACTION_ROUTES.submissions).toBe(1);
   });
 
   it('per-lane yield is read over a consistent window', () => {
-    const week = laneYieldForWindow(jobs, { from: '2026-11-01T00:00:00Z', to: '2026-11-08T00:00:00Z' });
-    expect(week).toEqual([
-      { lane: 'a', submissions: 1, completions: 1, acceptedClaims: 4, actionableLinks: 1, usefulResults: 1, cost: 9, costPerUsefulResult: 9 },
-      { lane: 'b', submissions: 1, completions: 0, acceptedClaims: 0, actionableLinks: 0, usefulResults: 0, cost: 3, costPerUsefulResult: null },
-    ]);
-    const next = laneYieldForWindow(jobs, { from: '2026-11-08T00:00:00Z', to: '2026-11-15T00:00:00Z' });
-    expect(next).toEqual([{ lane: 'a', submissions: 1, completions: 1, acceptedClaims: 0, actionableLinks: 0, usefulResults: 2, cost: 5, costPerUsefulResult: 2.5 }]);
+    const r1 = summarizeResearchYield({ ...week1, jobs: week1Jobs, outputs: week1Outputs });
+    expect(r1.window.ms).toBe(7 * 24 * H);
+    expect(Object.keys(r1.lanes).sort()).toEqual(['a', 'b']);
+    expect(r1.lanes.a).toMatchObject({ submissions: 1, completions: 1, acceptedClaims: 4, usefulResults: 1, costMinor: 9, costMinorPerUsefulResult: 9 });
+    expect(r1.lanes.b).toMatchObject({ submissions: 1, completions: 0, inFlight: 1, usefulResults: 0, costMinor: 3, costMinorPerUsefulResult: null });
+    const r2 = summarizeResearchYield({
+      ...week2,
+      jobs: [job({ id: 'j3', lane: 'a', purposes: ['OPERATING_SUPPORT'], startMs: t('2026-11-09T00:00:00Z'), durationMs: 2 * H, costMinor: 5 })],
+      outputs: [{ kind: 'EXECUTABLE_OFFER', id: 'o1', lane: 'a', purposes: ['OPERATING_SUPPORT'] }, { kind: 'PAID_TRANSACTION', id: 't1', lane: 'a', purposes: ['OPERATING_SUPPORT'] }],
+    });
+    expect(r2.window.ms).toBe(r1.window.ms);
+    expect(Object.keys(r2.lanes)).toEqual(['a']);
+    expect(r2.lanes.a).toMatchObject({ submissions: 1, completions: 1, acceptedClaims: 0, usefulResults: 2, costMinor: 5, costMinorPerUsefulResult: 3 });
+  });
+});
+
+describe('the purposes and the window measurement have one definition each', () => {
+  it('researchYield uses the allocation module\'s purposes, not a copy', () => {
+    expect(yieldReader.RESEARCH_PURPOSES).toBe(allocation.RESEARCH_PURPOSES);
+  });
+
+  it('the allocation module carries no second cost-attribution or per-lane window reader', () => {
+    for (const name of ['attributeJobCosts', 'laneYieldForWindow']) expect(Object.keys(allocation)).not.toContain(name);
   });
 });
