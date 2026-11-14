@@ -15,9 +15,11 @@
  *   R05 — across every shape the builder produces, no UNKNOWN fact states a value.
  *   R06 — review finding F1: a move's variant is published too, so `publishedFacts` lists its facts
  *         and the final pass holds them to the same rule (they were copied before it ran).
+ *   R07 — review finding F2: fit and contribution read the model's centre (price middle less cost
+ *         middle), not a middle re-derived from the swept net bounds, so ranking does not shift.
  */
 import { describe, expect, it } from 'vitest';
-import { pathwayOf, publishedFacts } from '../server/services/goals/pathways.ts';
+import { informationValue, netCentreOf, pathwayOf, publishedFacts } from '../server/services/goals/pathways.ts';
 import { pathwayProblem } from '../server/services/factory/program/release01/pathwaysProbe.ts';
 import type { ModelInput, ModelledOpportunity } from '../server/services/cash/goalScenario.ts';
 import type { CashOpportunity } from '../server/domain/types.ts';
@@ -139,5 +141,40 @@ describe('R06: move variants are held to the rule (review finding F1)', () => {
       const p = pathwayOf(one, null, ctx);
       for (const f of publishedFacts(p)) if (f.status === 'UNKNOWN') expect(f.value).toBeNull();
     }
+  });
+});
+
+describe('R07: an unknown net is ranked from the model centre, not the swept bounds (review finding F2)', () => {
+  // Price swept 100..10,000 (geometric middle 1,000), direct cost proven at 200: the model's centre
+  // is 800 per deal. The swept net bounds are -100..9,800, whose arithmetic middle (4,850) would
+  // make the pathway look six times richer and need a quarter of the deals.
+  const shape = () => opening({ price: unknown(100, 10_000), directCost: evidence(200) });
+
+  it('publishes no value but sizes the fit from the 800 centre', () => {
+    const p = pathwayOf(shape(), null, ctx);
+    expect(p.net.status).toBe('UNKNOWN');
+    expect(p.net.value).toBeNull();
+    expect(p.net.low).toBe(-100);
+    expect(p.net.high).toBe(9_800);
+    const centre = netCentreOf(p.revenuePerDeal, p.fulfilmentCost, p.acquisitionCost)!;
+    expect(centre).toBeCloseTo(800, 6);
+    expect(p.fit.dealsForGap).toBe(Math.ceil(ctx.remaining / centre));
+    expect(p.fit.dealsForGap).not.toBe(Math.ceil(ctx.remaining / 4_850));
+    expect(pathwayProblem(p)).toBeNull();
+  });
+
+  it('takes contribution p50 from the centre: equal to the same pathway with net pinned at 800', () => {
+    const unknownNet = pathwayOf(shape(), null, ctx);
+    // Same everything, but the price proven at the geometric middle: net is then a proven 800.
+    const proven = pathwayOf(opening({ price: evidence(1_000), directCost: evidence(200) }), null, ctx);
+    expect(proven.net.value).toBeCloseTo(800, 6);
+    expect(unknownNet.contribution.p50).toBeCloseTo(proven.contribution.p50, 6);
+  });
+
+  it('information value measures the swing around the same centre the pathway was ranked on', () => {
+    const p = pathwayOf(shape(), null, ctx);
+    const rows = informationValue([p], { remaining: ctx.remaining, daysLeft: ctx.daysLeft, outreachPerDay: ctx.outreachPerDay, leaders: new Set([p.opportunityId]), marginal: 0 });
+    for (const row of rows) expect(row.swing).toBeGreaterThanOrEqual(0);
+    expect(rows.some((r) => r.variable === 'price')).toBe(true);
   });
 });
