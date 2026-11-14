@@ -19,7 +19,7 @@ import { recordCardFact } from '../server/repos/cashCardFacts.ts';
 import { createWorkstream, getWorkstream } from '../server/repos/register.ts';
 import { setTerms } from '../server/services/goals/decide.ts';
 import { setTarget } from '../server/services/goals/target.ts';
-import { advanceGoalPlans, forgetGoalReadings, inputsTakenOver, planInputsFingerprint, PLAN_EVIDENCE_FLOOR_MS, PLAN_REFRESH_MS } from '../server/services/goals/plan.ts';
+import { advanceGoalPlans, forgetGoalReadings, inputsTakenOver, openingsFoundBy, planInputsFingerprint, withArrivals, PLAN_EVIDENCE_FLOOR_MS, PLAN_REFRESH_MS } from '../server/services/goals/plan.ts';
 import { CAPTURE_KEY } from '../server/services/cash/tier.ts';
 import type { CashOpportunity } from '../server/domain/types.ts';
 
@@ -165,7 +165,75 @@ describe('an opening filed while the plan is being read reaches the plan', () =>
   });
 });
 
+describe("openings the pass's own new rounds file are not new evidence", () => {
+  /** When the pass opens a round of its own, file an opening found by it (and optionally one from elsewhere) at once. */
+  function onOwnRound(alsoElsewhere: boolean): { own: () => number } {
+    const db = getDb();
+    const original = db.run.bind(db);
+    let filed = 0;
+    vi.spyOn(db, 'run').mockImplementation(async (sql: string, params?: Parameters<typeof db.run>[1]) => {
+      const result = await original(sql, params);
+      if (filed === 0 && /INSERT INTO cash_discovery_rounds/.test(sql)) {
+        filed += 1;
+        const candidateId = String((params as unknown[])[6]);
+        const o = await play({ title: 'Found by the goal\'s own round', priceCents: 30_000, days: 7, capitalCents: 0, hours: 3, costCents: 2_000 });
+        await getDb().run('UPDATE cash_opportunities SET discovered_by_candidate_id = ? WHERE id = ?', [candidateId, o.id]);
+        if (alsoElsewhere) await play({ title: 'Harvested from another round', priceCents: 30_000, days: 7, capitalCents: 0, hours: 3, costCents: 2_000 });
+      }
+      return result;
+    });
+    return { own: () => filed };
+  }
+
+  it('a goal that widens its search is not re-read for what its own rounds filed', async () => {
+    await play({ title: 'Monthly owner reports', priceCents: 50_000, days: 7, capitalCents: 0, hours: 3, costCents: 2_000 });
+    await goal(100_000_000);
+    const start = new Date();
+    const at = (minutes: number) => new Date(start.getTime() + minutes * 60_000);
+
+    const hook = onOwnRound(false);
+    const first = await advanceGoalPlans(start);
+    vi.restoreAllMocks();
+    expect(first.read).toBe(1);
+    expect(first.asked + first.constructed).toBeGreaterThan(0);
+    expect(hook.own()).toBe(1);
+
+    // Past the floor, inside the refresh: nothing arrived from elsewhere, so no evidence re-read.
+    expect((await advanceGoalPlans(at(10))).onEvidence).toBe(0);
+  });
+
+  it('an opening from elsewhere beside the pass\'s own still reads as new evidence', async () => {
+    await play({ title: 'Monthly owner reports', priceCents: 50_000, days: 7, capitalCents: 0, hours: 3, costCents: 2_000 });
+    await goal(100_000_000);
+    const start = new Date();
+    const at = (minutes: number) => new Date(start.getTime() + minutes * 60_000);
+
+    const hook = onOwnRound(true);
+    expect((await advanceGoalPlans(start)).read).toBe(1);
+    vi.restoreAllMocks();
+    expect(hook.own()).toBe(1);
+
+    expect(await advanceGoalPlans(at(10))).toMatchObject({ read: 1, onEvidence: 1 });
+  });
+
+  it('counts only the openings the named rounds found', async () => {
+    const o = await play({ title: 'Monthly owner reports', priceCents: 50_000, days: 7, capitalCents: 0, hours: 3, costCents: 2_000 });
+    expect(await openingsFoundBy(projectId, [])).toBe(0);
+    await getDb().run('UPDATE cash_opportunities SET discovered_by_candidate_id = ? WHERE id = ?', ['cand_mine', o.id]);
+    expect(await openingsFoundBy(projectId, ['cand_mine'])).toBe(1);
+    expect(await openingsFoundBy(projectId, ['cand_other'])).toBe(0);
+  });
+});
+
 describe('the inputs a reading was taken over (pure)', () => {
+  it("absorbs arrivals that are exactly the pass's own, and keeps before when anything else arrived", () => {
+    // One opening arrived, and it was the pass's own: nothing new.
+    expect(inputsTakenOver('1|u0|c0|2|v0|3|g0', '2|u1|c1|4|v1|5|g1', 1)).toBe('2|u1|c1|4|v1|5|g1');
+    // Two arrived, one the pass's own: the other is new evidence.
+    expect(inputsTakenOver('1|u0|c0|2|v0|3|g0', '3|u1|c1|4|v1|5|g1', 1)).toBe('1|u1|c0|4|v1|5|g1');
+    expect(withArrivals('1|u0|c0|2|v0|3|g0', '2|u1|c1|4|v1|5|g1')).toBe('2|u0|c1|2|v0|3|g0');
+  });
+
   it('takes what a new opening moves from before the read, and everything else from after', () => {
     expect(inputsTakenOver('1|u0|c0|2|v0|3|g0', '2|u1|c1|4|v1|5|g1')).toBe('1|u1|c0|4|v1|5|g1');
     expect(inputsTakenOver('1|u0|c0|2|v0|3|g0', '1|u1|c0|2|v1|3|g1')).toBe('1|u1|c0|2|v1|3|g1');
