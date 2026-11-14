@@ -718,6 +718,40 @@ export interface ChallengeSummary {
   /** `CHALLENGE_FAILED` when the challenge itself threw: recorded, never read as a pass. */
   verdict: ChallengeVerdict | 'CHALLENGE_FAILED';
   error?: string;
+  /**
+   * The plan as the separate commitments it is actually made of — each
+   * member's own start and each purchase made after proof — every one with
+   * the consequence derived from its own numbers, the tier that consequence
+   * earns, and whether it is cleared to proceed now. A small reversible first
+   * step is cleared on basic invariants even while the plan as a whole is
+   * under deep review; an irreversible purchase waits for the review its tier
+   * demands.
+   */
+  steps: StepClearance[];
+  /** Keys of the steps cleared to proceed now: what a caller may act on without waiting for the heavy review. */
+  proceedNow: string[];
+}
+
+/** One commitment the plan is made of. */
+export interface PlanStep {
+  /** The member key, or `gate:<id>` for a purchase made after proof. */
+  key: string;
+  kind: 'START' | 'GATE_PURCHASE';
+  /** Day the commitment is made (a member's start day, a gate's day). */
+  day: number;
+  /** True when it is taken only once some cash has settled (a gate, or a member requiring proof). */
+  afterProof: boolean;
+  /** The members whose findings bear on it: itself, or every member naming the gate. */
+  members: string[];
+  action: ScrutinyInput;
+}
+
+/** A step, the tier it earns, and whether that tier's review has cleared it. */
+export interface StepClearance extends PlanStep {
+  scrutiny: Scrutiny;
+  mayProceed: boolean;
+  /** Why it may not proceed yet, each naming what would clear it. Empty when it may. */
+  heldBy: string[];
 }
 
 /** What a caller of the optimizer may add to the challenge of its plan. Everything is optional; the plan alone decides the tier. */
@@ -772,9 +806,121 @@ export function actionOfPlan(problem: PortfolioProblem, result: PortfolioResult)
   };
 }
 
+/**
+ * How unsure the model is about one activity's own figure, from the evidence
+ * behind it: no stated or historical sample, an unjustified figure, or changed
+ * conditions is total uncertainty; otherwise the standard-error scale of the
+ * sample, 1/√n. A number, never a category.
+ */
+function activityUncertainty(one: Activity): number {
+  if (!one.justified || one.evidence?.conditionsChanged) return 1;
+  const size = effectiveSample(one).size;
+  return size !== undefined && size > 0 ? Math.min(1, 1 / Math.sqrt(size)) : 1;
+}
+
+/**
+ * The commitments a recommended plan is made of, each with its own
+ * consequence derived from the plan's numbers. A member's start puts its
+ * capital and its worst-world spend from the owner's money at stake, and can
+ * be stopped (reversible); a gate is a purchase made after proof, money sent,
+ * so it is irreversible and every member naming it rides on it. Correlated
+ * exposure is the share of the plan's members the step's widest shared
+ * dependency reaches, weighted by the step's share of the plan's money at
+ * stake; decision impact is the share of the target the step
+ * puts at stake. The reference is the target, as for the plan as a whole.
+ * Money already committed (`fixedCost`) is not a step: it has been taken.
+ */
+export function stepsOfPlan(problem: PortfolioProblem, result: PortfolioResult): PlanStep[] {
+  const keys = result.best?.keys ?? [];
+  if (keys.length === 0) return [];
+  const byKey = new Map(problem.activities.map((a) => [a.key, a]));
+  const members = keys.flatMap((k) => (byKey.has(k) ? [byKey.get(k)!] : []));
+  const counts = new Map<string, number>();
+  for (const a of members) for (const e of new Set(exposuresOf(a, undefined).map(exposureKey))) counts.set(e, (counts.get(e) ?? 0) + 1);
+  const shared = (a: Activity) => Math.max(0, ...exposuresOf(a, undefined).map((e) => counts.get(exposureKey(e)) ?? 0).filter((n) => n >= 2)) / members.length;
+  // The plan's money at stake, as `actionOfPlan` reads it: a step's correlated
+  // exposure is the part of it this step puts on a shared dependency, so a
+  // one-unit probe of a shared supplier is not reviewed as if it were the
+  // whole commitment riding on that supplier — the commitment is reviewed at
+  // its own step.
+  const planLoss = actionOfPlan(problem, result).potentialLoss;
+  const weight = (loss: number) => (planLoss > 0 && Number.isFinite(planLoss) ? Math.min(1, loss / planLoss) : 1);
+  const ref = problem.target;
+  const impact = (loss: number) => (ref > 0 && Number.isFinite(ref) ? Math.min(1, loss / ref) : 1);
+  const steps: PlanStep[] = members.map((a) => {
+    const worstSpend = a.ceilingExempt ? 0 : Math.max(0, ...(a.spend ?? []).filter(Number.isFinite));
+    const loss = Math.max(0, a.capital ?? 0) + worstSpend;
+    return {
+      key: a.key,
+      kind: 'START',
+      day: a.startDay ?? 0,
+      afterProof: a.requiresProof === true,
+      members: [a.key],
+      action: { potentialLoss: loss, reference: ref, irreversible: false, modelUncertainty: activityUncertainty(a), correlatedExposure: shared(a) * weight(loss), decisionImpact: impact(loss), portfolioWide: false },
+    };
+  });
+  const named = new Map<string, string[]>();
+  for (const a of members) if (a.gated) named.set(a.gated.gate, [...(named.get(a.gated.gate) ?? []), a.key]);
+  for (const g of problem.gates ?? []) {
+    const riding = named.get(g.id);
+    if (!riding) continue;
+    const cost = Math.max(0, g.cost);
+    steps.push({
+      key: `gate:${g.id}`,
+      kind: 'GATE_PURCHASE',
+      day: g.day,
+      afterProof: true,
+      members: riding,
+      action: {
+        potentialLoss: cost,
+        reference: ref,
+        irreversible: true,
+        modelUncertainty: Math.max(...riding.map((k) => activityUncertainty(byKey.get(k)!))),
+        correlatedExposure: riding.length >= 2 ? (riding.length / members.length) * weight(cost) : 0,
+        decisionImpact: impact(cost),
+        portfolioWide: riding.length === members.length && members.length > 1,
+      },
+    });
+  }
+  return steps.sort((x, y) => x.day - y.day || (x.kind === y.kind ? 0 : x.kind === 'START' ? -1 : 1));
+}
+
+/**
+ * Gate each step on the tier its own consequence earns, against the review
+ * that actually ran. Basic invariants clear a basic step; a standard step
+ * also needs the failure-mode and counterfactual checks to have run with no
+ * blocking finding on its members; a deep step also needs correlated stress,
+ * no blocking shared dependency among its members, and at least one counted
+ * independent check with none disagreeing. A challenge that failed clears
+ * nothing — not even a basic step, because its invariants were never read.
+ */
+export function clearSteps(steps: PlanStep[], summary: Pick<ChallengeSummary, 'ran' | 'findings' | 'exposures' | 'independentValidation' | 'verdict'>, thresholds?: ScrutinyThresholds): StepClearance[] {
+  const invariantFails = summary.findings.filter((f) => f.mode === 'INVARIANT' && f.severity === 'BLOCKING');
+  const exposureMembers = new Map(summary.exposures.map((e) => [`${e.kind}:${e.id}`, e.members]));
+  return steps.map((step) => {
+    const scrutiny = scrutinyFor(step.action, thresholds);
+    const heldBy: string[] = [];
+    const touches = (f: ChallengeFinding) =>
+      step.members.includes(f.subject) || f.subject.split('+').some((k) => step.members.includes(k)) || (exposureMembers.get(f.subject) ?? []).some((k) => step.members.includes(k));
+    if (summary.verdict === 'CHALLENGE_FAILED') heldBy.push('the challenge itself failed, so not even the basic invariants were read: rerun it');
+    for (const f of invariantFails) heldBy.push(`invariant: ${f.assumption} — ${f.saferStructure}`);
+    if (scrutiny.tier !== 'BASIC_INVARIANTS') {
+      if (!summary.ran.includes('STATISTICAL_TEST') || !summary.ran.includes('COUNTERFACTUAL')) heldBy.push(`a ${scrutiny.tier.toLowerCase()} review is due (${scrutiny.because.join('; ')}) and the failure-mode and counterfactual checks have not run`);
+      for (const f of summary.findings) if (f.severity === 'BLOCKING' && f.mode !== 'INVARIANT' && f.mode !== 'SHARED_DEPENDENCY' && touches(f)) heldBy.push(`${f.mode}: ${f.assumption} — test: ${f.test}; safer: ${f.saferStructure}`);
+    }
+    if (scrutiny.tier === 'DEEP') {
+      if (!summary.ran.includes('CORRELATED_STRESS')) heldBy.push(`a deep review is due (${scrutiny.because.join('; ')}) and correlated stress has not run`);
+      for (const f of summary.findings) if (f.severity === 'BLOCKING' && f.mode === 'SHARED_DEPENDENCY' && touches(f)) heldBy.push(`${f.mode}: ${f.assumption} — test: ${f.test}; safer: ${f.saferStructure}`);
+      if (summary.independentValidation.counted === 0) heldBy.push('no independent check has agreed: validate with a different model, held-out evidence or production history before committing');
+      if (summary.independentValidation.disagreeing > 0) heldBy.push(`${summary.independentValidation.disagreeing} independent check(s) disagree: reconcile them first`);
+    }
+    return { ...step, scrutiny, mayProceed: heldBy.length === 0, heldBy };
+  });
+}
+
 /** Reduce a report to what travels with the plan read. */
-export function summarizeChallenge(report: ChallengeReport, action: ScrutinyInput): ChallengeSummary {
-  return {
+export function summarizeChallenge(report: ChallengeReport, action: ScrutinyInput, steps: PlanStep[] = [], thresholds?: ScrutinyThresholds): ChallengeSummary {
+  const summary: Omit<ChallengeSummary, 'steps' | 'proceedNow'> = {
     scrutiny: report.scrutiny,
     action,
     ran: report.ran,
@@ -804,6 +950,8 @@ export function summarizeChallenge(report: ChallengeReport, action: ScrutinyInpu
     improvements: report.improvements,
     verdict: report.verdict,
   };
+  const cleared = clearSteps(steps, summary, thresholds);
+  return { ...summary, steps: cleared, proceedNow: cleared.filter((c) => c.mayProceed).map((c) => c.key) };
 }
 
 /**
@@ -814,7 +962,9 @@ export function summarizeChallenge(report: ChallengeReport, action: ScrutinyInpu
  */
 export function challengePlan(problem: PortfolioProblem, result: PortfolioResult, options: PlanChallengeOptions = {}): ChallengeSummary {
   const action = actionOfPlan(problem, result);
+  let steps: PlanStep[] = [];
   try {
+    steps = stepsOfPlan(problem, result);
     const report = challenge({
       problem,
       result,
@@ -827,10 +977,10 @@ export function challengePlan(problem: PortfolioProblem, result: PortfolioResult
       ...(options.actual ? { actual: options.actual } : {}),
       ...(options.now ? { now: options.now } : {}),
     });
-    return summarizeChallenge(report, action);
+    return summarizeChallenge(report, action, steps, options.thresholds);
   } catch (err) {
     const assurance = result.assurance ?? assess(problem, result.best);
-    return {
+    const failed: Omit<ChallengeSummary, 'steps' | 'proceedNow'> = {
       scrutiny: scrutinyFor(action, options.thresholds),
       action,
       ran: [],
@@ -850,5 +1000,6 @@ export function challengePlan(problem: PortfolioProblem, result: PortfolioResult
       verdict: 'CHALLENGE_FAILED',
       error: err instanceof Error ? err.message : String(err),
     };
+    return { ...failed, steps: clearSteps(steps, failed, options.thresholds), proceedNow: [] };
   }
 }

@@ -11,6 +11,7 @@ import {
   challengePlan,
   detectSharedExposure,
   scrutinyFor,
+  stepsOfPlan,
   type ActivityFacts,
   type ChallengeInput,
   type ScrutinyInput,
@@ -412,5 +413,104 @@ describe('the running Brain challenges its own plans: optimizePortfolio carries 
   it('a caller reading only the ranking may opt out, and nothing is attached', () => {
     const { planned } = multiWedge();
     expect(optimizePortfolio({ ...planned, challenge: false }).assurance!.challenge).toBeUndefined();
+  });
+});
+
+describe('the plan\'s own steps are derived and gated on the tier each one earns (no caller-built ScrutinyInput)', () => {
+  /** Three small reversible probes riding on one supplier, and an irreversible capacity purchase bought after proof. */
+  function gatedPlan(): PortfolioProblem {
+    const probes = ['p1', 'p2', 'p3'].map((k) =>
+      act(k, {
+        cash: [40], days: [2], capital: 1, needs: ['supplier-x'],
+        gated: { gate: 'capacity', cash: [120], days: [6] },
+      }),
+    );
+    return {
+      target: 1000, deadlineDays: 10, startingCapital: 2000, worlds: 500,
+      resourceFailure: { 'supplier-x': 0.2 },
+      gates: [{ id: 'capacity', day: 3, tranche: 100, cost: 800 }],
+      activities: probes,
+    };
+  }
+
+  it('derives one step per member start and per gate purchase, each from the plan\'s numbers', () => {
+    const r = optimizePortfolio(gatedPlan());
+    const c = r.assurance!.challenge!;
+    const keys = c.steps.map((s) => s.key);
+    expect(keys).toEqual(expect.arrayContaining(r.best!.keys));
+    const gate = c.steps.find((s) => s.key === 'gate:capacity')!;
+    expect(gate.kind).toBe('GATE_PURCHASE');
+    expect(gate.afterProof).toBe(true);
+    expect(gate.action.irreversible).toBe(true);
+    expect(gate.action.potentialLoss).toBe(800);
+    expect(gate.members.sort()).toEqual([...r.best!.keys].sort());
+    const probe = c.steps.find((s) => s.key === r.best!.keys[0])!;
+    expect(probe.kind).toBe('START');
+    expect(probe.action).toMatchObject({ potentialLoss: 1, reference: 1000, irreversible: false, portfolioWide: false });
+    expect(stepsOfPlan(gatedPlan(), r)).toEqual(c.steps.map(({ scrutiny: _s, mayProceed: _m, heldBy: _h, ...step }) => step));
+  });
+
+  it('the plan as a whole is under deep review, yet a small reversible probe proceeds while the irreversible purchase is held', () => {
+    const r = optimizePortfolio(gatedPlan());
+    const c = r.assurance!.challenge!;
+    expect(c.scrutiny.tier).toBe('DEEP');
+    const gate = c.steps.find((s) => s.key === 'gate:capacity')!;
+    expect(gate.scrutiny.tier).toBe('DEEP');
+    expect(gate.mayProceed).toBe(false);
+    expect(gate.heldBy.some((h) => h.includes('independent check'))).toBe(true);
+    expect(c.proceedNow).not.toContain('gate:capacity');
+    // Each probe shares supplier-x, but puts one unit of the plan's 803 at stake on it: basic invariants, and it proceeds.
+    for (const k of r.best!.keys) {
+      const s = c.steps.find((x) => x.key === k)!;
+      expect(s.action.correlatedExposure).toBeLessThan(DEFAULT_SCRUTINY.basicExposure);
+      expect(s.scrutiny.tier).toBe('BASIC_INVARIANTS');
+      expect(s.mayProceed).toBe(true);
+    }
+    expect(c.proceedNow.sort()).toEqual([...r.best!.keys].sort());
+  });
+
+  it('a minor reversible step with nothing shared is cleared on basic invariants inside a deep-reviewed plan', () => {
+    const big = act('big', { cash: [900], capital: 600, needs: ['supplier-y'], evidence: { sampleSize: 10_000 } });
+    const tiny = act('tiny', { cash: [150], capital: 1, evidence: { sampleSize: 10_000 } });
+    const r = optimizePortfolio({ target: 1000, deadlineDays: 10, startingCapital: 1000, worlds: 400, resourceFailure: { 'supplier-y': 0.05 }, activities: [big, tiny] });
+    const c = r.assurance!.challenge!;
+    expect(r.best!.keys.sort()).toEqual(['big', 'tiny']);
+    expect(c.scrutiny.tier).toBe('DEEP');
+    const t = c.steps.find((s) => s.key === 'tiny')!;
+    expect(t.scrutiny.tier).toBe('BASIC_INVARIANTS');
+    expect(t.mayProceed).toBe(true);
+    expect(c.proceedNow).toContain('tiny');
+    const b = c.steps.find((s) => s.key === 'big')!;
+    expect(b.scrutiny.tier).toBe('DEEP');
+    expect(b.mayProceed).toBe(false);
+  });
+
+  it('an independent agreeing check clears a deep step that has no blocking finding; a disagreeing one holds it', () => {
+    const big = act('big', { cash: [1500], capital: 600, evidence: { sampleSize: 10_000 } });
+    const tiny = act('tiny', { cash: [150], capital: 1, evidence: { sampleSize: 10_000 } });
+    const base: PortfolioProblem = { target: 1000, deadlineDays: 10, startingCapital: 1000, worlds: 400, activities: [big, tiny] };
+    const facts: Record<string, ActivityFacts> = Object.fromEntries(['big', 'tiny'].map((k) => [k, { priceObservedAt: '2026-11-10T00:00:00Z', priceKind: 'PAID', buyersReached: true, obligationsAccounted: true, conversion: { rate: 0.5, attempts: 100 }, payoutHoldDays: 0, refundRate: 0, counterpartyReviewed: true } as ActivityFacts]));
+    const agreeing = optimizePortfolio({ ...base, challenge: { facts, now: '2026-11-14T00:00:00Z', checks: [{ method: 'PRODUCTION_HISTORY', by: 'settlements', dataSource: 'ledger', agrees: true }] } });
+    const bOk = agreeing.assurance!.challenge!.steps.find((s) => s.key === 'big')!;
+    expect(bOk.scrutiny.tier).toBe('DEEP');
+    expect(bOk.heldBy).toEqual([]);
+    expect(bOk.mayProceed).toBe(true);
+    const disagreeing = optimizePortfolio({ ...base, challenge: { facts, now: '2026-11-14T00:00:00Z', checks: [{ method: 'PRODUCTION_HISTORY', by: 'settlements', dataSource: 'ledger', agrees: false }] } });
+    expect(disagreeing.assurance!.challenge!.steps.find((s) => s.key === 'big')!.mayProceed).toBe(false);
+  });
+
+  it('a failed invariant or a failed challenge holds every step, the basic ones included', () => {
+    const r = optimizePortfolio(gatedPlan());
+    const broken = challengePlan({ ...gatedPlan(), resourceFailure: {} }, r);
+    expect(broken.steps.length).toBeGreaterThan(0);
+    expect(broken.steps.every((s) => !s.mayProceed)).toBe(true);
+    expect(broken.proceedNow).toEqual([]);
+  });
+
+  it('a tier is a threshold over numbers: tightening the thresholds moves a step out of basic review', () => {
+    const r = optimizePortfolio({ target: 100, deadlineDays: 10, worlds: 300, activities: [act('only', { cash: [200], capital: 1, evidence: { sampleSize: 100_000 } })] });
+    expect(r.assurance!.challenge!.proceedNow).toEqual(['only']);
+    const strict = challengePlan({ target: 100, deadlineDays: 10, worlds: 300, activities: [act('only', { cash: [200], capital: 1, evidence: { sampleSize: 100_000 } })] }, r, { thresholds: { ...DEFAULT_SCRUTINY, basicLossShare: 0 } });
+    expect(strict.steps[0]!.scrutiny.tier).not.toBe('BASIC_INVARIANTS');
   });
 });
