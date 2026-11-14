@@ -12,6 +12,8 @@ import {
   SEED_ROLES,
   commercialRoles,
   commercialRolesHoldOnRows,
+  describeRole,
+  roleLensSeeds,
   roleSetDefect,
   rolesForFlow,
   type FlowRoles,
@@ -186,5 +188,43 @@ describe('commercialRolesHoldOnRows (r01.com-13-1)', () => {
     const held = await commercialRolesHoldOnRows();
     expect(held.ok).toBe(true);
     expect(held.detail).toMatch(/1 recorded flow\(s\)/);
+  });
+});
+
+describe('the role model reaches the running Brain (COM-13-1)', () => {
+  const mapped = (sets: FlowRoles[]): FlowRoles[] => sets.map((set) => ({ ...set, flow: { ...set.flow, source: { ...set.flow.source, kind: 'MAP' as const } } }));
+
+  it('describes a role with its position, controls, value, occupiability, duties and risks', () => {
+    const sets = commercialRoles(market([fact('broker_take_rate', 0.1, 0.2), fact('price_per_unit', 100, 200)]));
+    const set = sets[0]!;
+    const broker = set.roles.find((r) => r.roleId === 'broker_agent')!;
+    const text = describeRole('office cleaning', set, broker);
+    expect(text).toContain('the broker or agent position in office cleaning');
+    expect(text).toContain('it controls demand, supply, information');
+    expect(text).toMatch(/worth about USD 10–40 per unit by take rate × price/);
+    expect(text).toContain(`is ${broker.occupiable.answer.toLowerCase()} — ${broker.occupiable.because}`);
+    for (const duty of broker.duties) expect(text).toContain(duty);
+    for (const risk of broker.risks) expect(text).toContain(risk);
+  });
+
+  it('says a value nobody evidenced is not established, and states no number for it', () => {
+    const set = commercialRoles(market([]))[0]!;
+    const role = set.roles.find((r) => r.controlValue.status === 'UNKNOWN')!;
+    const text = describeRole('office cleaning', set, role);
+    expect(text).toContain('whose value is not established');
+    expect(text).not.toMatch(/USD \d/);
+  });
+
+  it('seeds one lens per role per subject from recorded flows only, and none for a refused role', () => {
+    const reference = commercialRoles(market([]));
+    expect(roleLensSeeds('office cleaning', reference)).toHaveLength(0);
+    const sets = mapped(reference);
+    const seeds = roleLensSeeds('office cleaning', sets);
+    const offered = new Set(sets.flatMap((set) => set.roles.filter((r) => r.occupiable.answer !== 'NO').map((r) => r.roleId)));
+    expect(new Set(seeds.map((one) => one.roleId))).toEqual(offered);
+    expect(new Set(seeds.map((one) => one.key)).size).toBe(seeds.length);
+    for (const one of seeds) expect(one.occupiable).not.toBe('NO');
+    const refused = mapped(reference).map((set) => ({ ...set, roles: set.roles.map((r) => ({ ...r, occupiable: { ...r.occupiable, answer: 'NO' as const } })) }));
+    expect(roleLensSeeds('office cleaning', refused)).toHaveLength(0);
   });
 });

@@ -95,6 +95,7 @@ import {
 } from '../../repos/cashDiscovery.ts';
 import { listConstraintsForProject, listNodes, openIndustryRoundsByCandidate } from '../../repos/industry.ts';
 import { OPPORTUNITY_ORIGINS, opportunityField, type OpportunityOrigin, type OpportunitySeed } from '../industry/construction/origins.ts';
+import { commercialRoles, roleLensSeeds, type RoleLensSeed } from '../industry/construction/roles.ts';
 import { discoveryYield, yieldGuidance } from './discoveryYield.ts';
 import { exclusionSentence, unionOf, type ExclusionClass } from './exclusions.ts';
 import { liveGoalLimits } from './worthResearching.ts';
@@ -116,6 +117,8 @@ import type {
   CashDiscoveryRound,
   CashMechanism,
   CashOpportunity,
+  IndustryNode,
+  OpportunityConstraint,
 } from '../../domain/types.ts';
 
 /**
@@ -751,6 +754,58 @@ export function originLenses(seeds: readonly OpportunitySeed[], max = MAX_ORIGIN
   return out;
 }
 
+/** At most this many commercial-role lenses are offered at once (COM-13-1). */
+export const MAX_ROLE_LENSES = 40;
+
+/**
+ * The commercial roles on Brain's recorded flows as goal lenses (COM-13-1).
+ *
+ * Each lens asks about one position a mapped subject's flows offer, in the
+ * words the role model computed: what the position controls, what that is
+ * worth or that nothing has established it, whether this operation may occupy
+ * it and why, and its duties and risks. That is how the role model is used by
+ * the running Brain — a goal's research is asked from it and the question is
+ * recorded on the round's candidate — rather than computed only by the probe.
+ * Interleaved across subjects so a bounded set reaches each one, and never
+ * ranked by role: which role is best is the flow's own evidence's to say.
+ * Remembered research is what the map is, so the origin is MEMORY. Pure.
+ */
+export function roleLenses(seeds: readonly RoleLensSeed[], max = MAX_ROLE_LENSES): GoalLens[] {
+  const bySubject = new Map<string, RoleLensSeed[]>();
+  for (const one of seeds) {
+    if (!safeExclusion(one.angle)) continue;
+    const list = bySubject.get(one.subject) ?? [];
+    list.push(one);
+    bySubject.set(one.subject, list);
+  }
+  const out: GoalLens[] = [];
+  for (let depth = 0; out.length < max; depth += 1) {
+    let added = false;
+    for (const list of bySubject.values()) {
+      const one = list[depth];
+      if (!one || out.length >= max) continue;
+      out.push({ id: `role-${lensId(one.key)}`, angle: one.angle.slice(0, 600), origin: 'MEMORY', seedKey: one.key });
+      added = true;
+    }
+    if (!added) break;
+  }
+  return out;
+}
+
+/** The role-lens seeds of every subject on a project's industry map. Reads nothing itself. */
+export async function roleLensSeedsFor(nodes: IndustryNode[], constraints: OpportunityConstraint[]): Promise<RoleLensSeed[]> {
+  // Imported when used: the construction service reaches the goal modules, which reach this one.
+  const { assembleEvidence, evidenceFromMap, subtreeFor } = await import('../industry/construction/service.ts');
+  const out: RoleLensSeed[] = [];
+  for (const root of nodes.filter((n) => n.parentId === null && !n.retiredAt)) {
+    const map = evidenceFromMap(subtreeFor(nodes, root.name), constraints);
+    if (map.flows.length === 0) continue;
+    const evidence = assembleEvidence({ text: root.name, industry: root.name, geography: null, map, recorded: [] });
+    out.push(...roleLensSeeds(root.name, commercialRoles(evidence)));
+  }
+  return out;
+}
+
 /**
  * Markets are preferred for their economics and for how far the work can be
  * run remotely, never for where the owner happens to be (OPP-03). In every
@@ -902,13 +957,19 @@ export async function openGoalDiscovery(input: {
    * own. No category list filters them; they come after the fixed angles and
    * the industries, interleaved so every origin is reached within a cycle.
    */
+  const constraints = await listConstraintsForProject(t.projectId);
   const field = opportunityField({
     nodes,
     opportunities: await listOpportunities({ projectId: t.projectId }),
     goals: [],
-    constraints: await listConstraintsForProject(t.projectId),
+    constraints,
   });
-  const lenses: GoalLens[] = [...GOAL_LENSES.map((one) => ({ ...one, origin: 'FIRST_PRINCIPLES' as const })), ...industries, ...originLenses(field)];
+  /*
+   * And the commercial roles on the flows that map records (COM-13-1): a lens
+   * per position, asked in the role model's own terms, after the field lenses.
+   */
+  const roles = roleLenses(await roleLensSeedsFor(nodes, constraints));
+  const lenses: GoalLens[] = [...GOAL_LENSES.map((one) => ({ ...one, origin: 'FIRST_PRINCIPLES' as const })), ...industries, ...originLenses(field), ...roles];
   const choices = lenses.map((lens, index) => {
     const id = `${prefix}-${lens.id}`;
     const history = mine.filter((one) => one.bucketId === id);

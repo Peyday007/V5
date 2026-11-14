@@ -437,6 +437,69 @@ export function commercialRoles(e: IndustryEvidence): FlowRoles[] {
   return e.flows.map((flow, i) => rolesForFlow(e, flow, i));
 }
 
+/* ------------------------------------------------- the role model at work */
+
+/**
+ * One role on one recorded flow, in words a research question can carry: the
+ * position, what it controls, what that control is worth (or that nothing has
+ * established it), whether Brain may occupy it and why, and the duties and
+ * risks that follow. This is how the role model reaches the running Brain —
+ * `cash/discovery.ts` asks a goal's research from it — rather than living only
+ * in the probe. A value nobody evidenced is said to be unestablished, never
+ * stated as a number (invariant 39). Pure.
+ */
+export function describeRole(subject: string, set: FlowRoles, role: CommercialRole): string {
+  const money = (x: number) => (Math.abs(x) >= 100 ? Math.round(x).toString() : (Math.round(x * 100) / 100).toString());
+  const v = role.controlValue;
+  const value =
+    v.status !== 'UNKNOWN' && v.lowUsdPerUnit !== null && v.highUsdPerUnit !== null
+      ? `worth about USD ${money(v.lowUsdPerUnit)}–${money(v.highUsdPerUnit)} per unit by ${v.basis} (${v.status.toLowerCase()})`
+      : `whose value is not established (${v.basis})`;
+  const controls = role.controls.map((c) => c.toLowerCase().replace(/_/g, ' ')).join(', ');
+  const terms = set.flow.terms ? ` (${set.flow.terms})` : '';
+  return (
+    `the ${role.label} position in ${subject}, on the flow from ${set.flow.from} to ${set.flow.to}${terms}: ` +
+    `it controls ${controls}, ${value}; ` +
+    `whether this operation may occupy it legally and contractually is ${role.occupiable.answer.toLowerCase()} — ${role.occupiable.because}; ` +
+    `its duties: ${role.duties.join('; ')}; its risks: ${role.risks.join('; ')}`
+  );
+}
+
+/** A role on a recorded flow, ready to be asked about. */
+export interface RoleLensSeed {
+  /** Subject and role: one per role per subject, as `unrepresentedRoleAsks` keys it. */
+  key: string;
+  subject: string;
+  roleId: string;
+  flowKey: string;
+  roleKey: string;
+  occupiable: Occupiable;
+  angle: string;
+}
+
+/**
+ * The roles a subject's recorded flows offer, one per role, in flow order.
+ * Only flows the map recorded count (a reference pack is not a record), and a
+ * role the record refuses (occupiable NO) is not asked about — the record
+ * already answered it. Nothing is ranked across markets: the order is the
+ * map's. Pure.
+ */
+export function roleLensSeeds(subject: string, sets: readonly FlowRoles[]): RoleLensSeed[] {
+  const out: RoleLensSeed[] = [];
+  const seen = new Set<string>();
+  for (const set of sets) {
+    if (set.flow.source.kind !== 'MAP') continue;
+    for (const role of set.roles) {
+      if (role.occupiable.answer === 'NO') continue;
+      const key = `role:${subject.toLowerCase()}:${role.roleId}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ key, subject, roleId: role.roleId, flowKey: set.flowKey, roleKey: role.key, occupiable: role.occupiable.answer, angle: describeRole(subject, set, role) });
+    }
+  }
+  return out;
+}
+
 /* ------------------------------------------------------------------ the probe */
 
 /** What a role set must carry for the requirement to hold. Null when it does. */
