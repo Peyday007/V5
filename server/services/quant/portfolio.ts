@@ -211,6 +211,12 @@ export interface PortfolioResult {
   assurance?: Assurance;
   /** Measured change to the downside from each safeguard, on the identical worlds. Present when safeguards were given. */
   safeguardEffects?: SafeguardEffect[];
+  /**
+   * How hard committing the best combination must be challenged, derived from
+   * the problem's own rows (CHAL-33): its tier, whether it is held for the
+   * heavy review, and each member's own step. Present whenever there is a best.
+   */
+  review?: ConsequenceReview;
 }
 
 export interface SafeguardEffect {
@@ -937,6 +943,209 @@ export function compareReadings(a: PortfolioReading, b: PortfolioReading): numbe
   return scoreOf(b, objective) - scoreOf(a, objective) || b.settledP50 - a.settledP50 || a.keys.length - b.keys.length;
 }
 
+// ─── Scrutiny ────────────────────────────────────────────────────────────────
+
+export type ScrutinyTier = 'BASIC_INVARIANTS' | 'STANDARD' | 'DEEP';
+
+/** What being wrong about an action would cost. Every field is a number or a flag, never a category. */
+export interface ScrutinyInput {
+  /** Money lost if the conclusion is wrong (major units). */
+  potentialLoss: number;
+  /** What the loss is measured against: capital available, the target, the account balance. */
+  reference: number;
+  /** True when the action cannot be undone once taken (an obligation signed, money sent). */
+  irreversible: boolean;
+  /** 0–1: how unsure the model behind the conclusion is (1 = no calibration at all). */
+  modelUncertainty: number;
+  /** 0–1: share of the plan's value exposed to one shared supplier, channel, marketplace or payment rail. */
+  correlatedExposure: number;
+  /** 0–1: how much the decision would change if the conclusion were wrong (e.g. EVPPI over the decision's value). */
+  decisionImpact: number;
+  /** True when the conclusion is an assumption every plan in the portfolio rests on. */
+  portfolioWide?: boolean;
+}
+
+/** The thresholds a tier is chosen by. Defaults are deliberate, and a caller may tighten them. */
+export interface ScrutinyThresholds {
+  /** At or under this share of the reference, a reversible action is small. */
+  basicLossShare: number;
+  /** At or over this share, the review is deep whether or not the action is reversible. */
+  deepLossShare: number;
+  /** An irreversible action at or over this share is deep. */
+  deepIrreversibleLossShare: number;
+  /** Above this, model uncertainty alone rules out basic invariants. */
+  basicUncertainty: number;
+  /** At or above this, model uncertainty alone makes the review deep when the loss is not small. */
+  deepUncertainty: number;
+  basicExposure: number;
+  deepExposure: number;
+  basicImpact: number;
+  deepImpact: number;
+}
+
+export const DEFAULT_SCRUTINY: ScrutinyThresholds = {
+  basicLossShare: 0.02,
+  deepLossShare: 0.25,
+  deepIrreversibleLossShare: 0.05,
+  basicUncertainty: 0.5,
+  deepUncertainty: 0.8,
+  basicExposure: 0.25,
+  deepExposure: 0.5,
+  basicImpact: 0.1,
+  deepImpact: 0.5,
+};
+
+export interface Scrutiny {
+  tier: ScrutinyTier;
+  /** Why this tier, one line per factor that decided it. */
+  because: string[];
+  lossShare: number;
+}
+
+const clamp01 = (x: number) => (Number.isFinite(x) ? Math.min(1, Math.max(0, x)) : 1);
+
+/**
+ * Choose how hard to look. A small reversible action with a confident model,
+ * little shared exposure and little bearing on the decision needs only basic
+ * invariants; a large or irreversible obligation, a portfolio-wide assumption,
+ * a heavily shared exposure or a decision that turns on the conclusion gets
+ * the deep review. Anything unknown is read as the worse case: a non-finite
+ * number is treated as maximal, never as zero.
+ */
+export function scrutinyFor(action: ScrutinyInput, thresholds: ScrutinyThresholds = DEFAULT_SCRUTINY): Scrutiny {
+  const t = thresholds;
+  const loss = Number.isFinite(action.potentialLoss) ? Math.max(0, action.potentialLoss) : Infinity;
+  const lossShare = action.reference > 0 && Number.isFinite(action.reference) ? loss / action.reference : loss > 0 ? Infinity : 0;
+  const uncertainty = clamp01(action.modelUncertainty);
+  const exposure = clamp01(action.correlatedExposure);
+  const impact = clamp01(action.decisionImpact);
+  const deep: string[] = [];
+  if (action.portfolioWide) deep.push('a portfolio-wide assumption: every plan rests on it');
+  if (lossShare >= t.deepLossShare) deep.push(`potential loss is ${pct(lossShare)} of the reference (deep at ${pct(t.deepLossShare)})`);
+  if (action.irreversible && lossShare >= t.deepIrreversibleLossShare) deep.push(`irreversible, and the loss is ${pct(lossShare)} of the reference`);
+  if (exposure >= t.deepExposure) deep.push(`${pct(exposure)} of the value shares one dependency`);
+  if (impact >= t.deepImpact) deep.push(`the decision turns on it (impact ${pct(impact)})`);
+  if (uncertainty >= t.deepUncertainty && lossShare > t.basicLossShare) deep.push(`model uncertainty ${pct(uncertainty)} on a loss that is not small`);
+  if (deep.length > 0) return { tier: 'DEEP', because: deep, lossShare };
+  const notBasic: string[] = [];
+  if (action.irreversible) notBasic.push('irreversible');
+  if (lossShare > t.basicLossShare) notBasic.push(`potential loss is ${pct(lossShare)} of the reference (basic at or under ${pct(t.basicLossShare)})`);
+  if (uncertainty > t.basicUncertainty) notBasic.push(`model uncertainty ${pct(uncertainty)}`);
+  if (exposure > t.basicExposure) notBasic.push(`${pct(exposure)} shared exposure`);
+  if (impact > t.basicImpact) notBasic.push(`decision impact ${pct(impact)}`);
+  if (notBasic.length > 0) return { tier: 'STANDARD', because: notBasic, lossShare };
+  return { tier: 'BASIC_INVARIANTS', because: ['small, reversible, confident, unshared and with little bearing on the decision: basic invariants only'], lossShare };
+}
+
+
+const pct = (x: number) => (Number.isFinite(x) ? `${Math.round(x * 1000) / 10}%` : 'unbounded');
+
+// ─── Consequence of a real action (CHAL-33) ──────────────────────────────────
+
+/** The heavy review's tiers: `STANDARD` and `DEEP` hold an action for challenge, `BASIC_INVARIANTS` does not. */
+export interface ConsequenceReview {
+  /** The consequence, derived from the problem's own rows: never typed in by a caller. */
+  action: ScrutinyInput;
+  scrutiny: Scrutiny;
+  /** True when the action must pass the challenge (`quant/challenge.ts`) before it is committed. */
+  heavyReviewRequired: boolean;
+  /**
+   * Each member as its own step, so a small reversible probe inside a heavy
+   * plan proceeds on basic invariants while the commitment waits for review.
+   */
+  steps: Array<{ key: string; action: ScrutinyInput; scrutiny: Scrutiny; heavyReviewRequired: boolean }>;
+}
+
+const mean = (xs: number[] | undefined) => (xs && xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : 0);
+
+/** Money a member puts beyond recall: owner-paid spend, a purchase made after proof, capital tied to a resource that may fail. */
+function moneyAtRisk(problem: PortfolioProblem, one: Activity): { loss: number; irreversible: boolean } {
+  const spend = one.ceilingExempt ? 0 : Math.max(0, mean(one.spend));
+  const gate = one.gated ? problem.gates?.find((g) => g.id === one.gated!.gate) : undefined;
+  const gateCost = gate ? Math.max(0, gate.cost) : 0;
+  const capital = Math.max(0, one.capital ?? 0);
+  // Capital comes back unless the activity needs a resource that can fail, in which case it does not (see `needs`).
+  const capitalLost = (one.needs?.length ?? 0) > 0 ? capital : 0;
+  const nonFinite = [one.capital, ...(one.spend ?? []), gate?.cost].some((x) => x !== undefined && !Number.isFinite(x));
+  const loss = nonFinite ? Infinity : capitalLost + spend + gateCost;
+  return { loss, irreversible: nonFinite || spend > 0 || gateCost > 0 || capitalLost > 0 };
+}
+
+/** Dependencies two or more members share: a needed resource, a risk group, a market. */
+function sharedDependencies(members: Activity[]): Array<{ id: string; keys: string[] }> {
+  const groups = new Map<string, string[]>();
+  for (const one of members) {
+    const ids = [...(one.needs ?? []).map((r) => `RESOURCE:${r}`), ...(one.riskGroup ? [`RISK_GROUP:${one.riskGroup}`] : []), ...(one.market ? [`MARKET:${one.market}`] : [])];
+    for (const id of new Set(ids)) groups.set(id, [...(groups.get(id) ?? []), one.key]);
+  }
+  return [...groups.entries()].filter(([, keys]) => keys.length >= 2).map(([id, keys]) => ({ id, keys }));
+}
+
+/** 0–1 width of the evidence behind a reading: 1 when calibration is unavailable, never 0 for an unknown. */
+function uncertaintyOf(assurance: Assurance | undefined): number {
+  if (!assurance || assurance.status === 'CALIBRATION_UNAVAILABLE' || !assurance.range) return 1;
+  const width = assurance.range.high - assurance.range.low;
+  return Number.isFinite(width) ? Math.min(1, Math.max(0, width)) : 1;
+}
+
+function referenceOf(problem: PortfolioProblem): number {
+  if (problem.startingCapital !== undefined && problem.startingCapital > 0) return problem.startingCapital;
+  if (problem.spendCeiling !== undefined && problem.spendCeiling > 0) return problem.spendCeiling;
+  return problem.target;
+}
+
+/**
+ * Derive what being wrong about committing `keys` would cost, from the
+ * problem's own rows: the money it puts beyond recall (owner-paid spend, gate
+ * purchases, capital tied to a resource that may fail, money already
+ * committed), against the capital available; how wide the evidence behind it
+ * is (`assess`); the share of its value riding on one shared dependency; and
+ * how much of the decision's value the loss is. An unknown is read as the
+ * worse case. Thresholds over these numbers decide the tier, never a category.
+ */
+export function scrutinyInputFor(problem: PortfolioProblem, keys: string[], assurance?: Assurance): ScrutinyInput {
+  const members = problem.activities.filter((one) => keys.includes(one.key));
+  const atRisk = members.map((one) => moneyAtRisk(problem, one));
+  const fixed = Math.max(0, problem.fixedCost ?? 0);
+  const potentialLoss = atRisk.reduce((s, r) => s + r.loss, 0) + fixed;
+  const value = new Map(members.map((one) => [one.key, Math.max(0, mean(one.cash)) + Math.max(0, mean(one.early?.cash))]));
+  const total = [...value.values()].reduce((s, v) => s + v, 0);
+  const shared = sharedDependencies(members);
+  const exposed = shared.reduce((most, g) => Math.max(most, g.keys.reduce((s, k) => s + (value.get(k) ?? 0), 0)), 0);
+  const correlatedExposure = shared.length === 0 ? 0 : total > 0 ? exposed / total : 1;
+  // The decision's value if right is what it would bring in; if wrong, the loss. Their ratio is how much the choice turns on it.
+  const decisionImpact = potentialLoss === 0 ? 0 : Number.isFinite(potentialLoss) ? potentialLoss / (potentialLoss + Math.max(0, total)) : 1;
+  return {
+    potentialLoss,
+    reference: referenceOf(problem),
+    irreversible: fixed > 0 || atRisk.some((r) => r.irreversible),
+    modelUncertainty: uncertaintyOf(assurance),
+    correlatedExposure,
+    decisionImpact,
+    // Every member rests on one dependency: the whole plan is that assumption.
+    portfolioWide: members.length >= 2 && shared.some((g) => g.keys.length === members.length),
+  };
+}
+
+/**
+ * The consequence review of a recommended combination and of each member as
+ * its own step. `heavyReviewRequired` is the gate: a basic-invariant step
+ * proceeds, anything heavier passes the challenge first.
+ */
+export function reviewOf(problem: PortfolioProblem, best: PortfolioReading, assurance?: Assurance, thresholds: ScrutinyThresholds = DEFAULT_SCRUTINY): ConsequenceReview {
+  const action = scrutinyInputFor(problem, best.keys, assurance);
+  const scrutiny = scrutinyFor(action, thresholds);
+  const steps = best.keys.map((key) => {
+    const one = problem.activities.find((a) => a.key === key)!;
+    // A step's own evidence: its sample alone, read through the same rule as the combination.
+    const own = assess({ ...problem, activities: [one] }, { ...best, keys: [key] });
+    const stepAction = { ...scrutinyInputFor({ ...problem, fixedCost: undefined }, [key], own), correlatedExposure: action.correlatedExposure > 0 && sharedDependencies(problem.activities.filter((a) => best.keys.includes(a.key))).some((g) => g.keys.includes(key)) ? action.correlatedExposure : 0, portfolioWide: false };
+    const s = scrutinyFor(stepAction, thresholds);
+    return { key, action: stepAction, scrutiny: s, heavyReviewRequired: s.tier !== 'BASIC_INVARIANTS' };
+  });
+  return { action, scrutiny, heavyReviewRequired: scrutiny.tier !== 'BASIC_INVARIANTS', steps };
+}
+
 const better = compareReadings;
 
 /** Find the combination most likely to reach the target, with every alternative ranked. */
@@ -986,7 +1195,8 @@ export function optimizePortfolio(problem: PortfolioProblem): PortfolioResult {
   }
   const ranked = [...readings].sort(better);
   const best = ranked.find((one) => one.feasible) ?? null;
-  const result: PortfolioResult = { best, ranked: ranked.slice(0, 8), singles, refused, searched: readings.length, assurance: assess(problem, best) };
+  const assurance = assess(problem, best);
+  const result: PortfolioResult = { best, ranked: ranked.slice(0, 8), singles, refused, searched: readings.length, assurance, ...(best ? { review: reviewOf(problem, best, assurance) } : {}) };
   if (best && problem.safeguards?.length) {
     const members = best.keys.map((k) => problem.activities.findIndex((a) => a.key === k));
     result.safeguardEffects = problem.safeguards.map((guard) => {
