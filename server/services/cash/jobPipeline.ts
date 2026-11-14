@@ -57,7 +57,7 @@ import { agreementsFor } from '../../repos/cashJourney.ts';
 import { cashEngineCard } from './engineCard.ts';
 import { evidenceCard } from './card.ts';
 import { cashTier, type TierReading } from './tier.ts';
-import { checkCommercialAuthority } from './authority.ts';
+import { BRAIN_PRINCIPAL, actionContext, checkCommercialAuthority } from './authority.ts';
 import { readAllCapabilities, type CapabilityReading } from './capabilities.ts';
 import { totalsByKind } from '../../repos/cashLedger.ts';
 import { dealPosition } from './journey/position.ts';
@@ -871,7 +871,7 @@ export async function pipelineReading(
   const capabilities = await readAllCapabilities();
   const authority = new Map<string, { ok: boolean; reason: string }>();
   for (const action of AUTHORITY_ACTIONS) {
-    const decision = await checkCommercialAuthority({ projectId, action });
+    const decision = await checkCommercialAuthority({ projectId, action, ...actionContext({ principal: viewer.userId ?? BRAIN_PRINCIPAL }) }, { record: false });
     authority.set(action, { ok: decision.ok, reason: decision.reason });
   }
 
