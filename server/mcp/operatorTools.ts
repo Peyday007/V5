@@ -330,11 +330,15 @@ const commissionTool: McpTool = {
     'established, owner files are named and it recurred; otherwise a model, strategy, evidence, capacity, person or ' +
     'watch — and acknowledges at once. Engineering goes to Factory now: an objective with the goal, evidence, expected ' +
     'benefit, acceptance, priority and evaluation, a campaign, a priority set from what the defect holds back, and a ' +
-    'worker class set from its complexity. The same defect again reaches the same campaign.',
+    'worker class set from its complexity. The same defect again reaches the same campaign. ' +
+    'Standalone research: pass research_question (intervention EVIDENCE, or omitted) with goal_id to ask that goal\'s ' +
+    'own search the question — allowed on a paused goal, research only, never outreach or spend — or without goal_id ' +
+    'for a method question about Brain, which opens method research. A paused goal refuses CAPACITY.',
   inputSchema: {
     type: 'object',
     properties: {
-      deficiency_id: { type: 'string', description: 'A dfx_… id from brain_operator_deficiencies; the rest may then be omitted.' },
+      deficiency_id: { type: 'string', description: 'A dfx_… id from brain_operator_deficiencies (dfx_inv_<id> for an inventory finding); the rest may then be omitted.' },
+      research_question: { type: 'string', description: 'Standalone research (intervention EVIDENCE): what to learn. With goal_id the goal\'s search is asked it (a paused goal too: research only); without, a method question about Brain. The diagnosis fields may then be omitted.' },
       decision_id: DECISION_ID_PROPERTY,
       goal_id: { type: 'string', description: 'The goal it holds back (wst_…).' },
       deficiency: { type: 'string', enum: ['ECONOMIC_REASONING', 'PLANNING_ASSUMPTION', 'REPEATED_STRATEGIC_MISTAKE', 'RESOURCE_ALLOCATION', 'MISSING_CAPABILITY', 'BROKEN_INTEGRATION', 'INEFFICIENT_ALGORITHM', 'RECURRING_OPERATIONAL_FAILURE'] },
@@ -358,7 +362,7 @@ const commissionTool: McpTool = {
   },
   annotations: { title: 'Operator: commission an intervention', ...MUTATING },
   run: async (args, { principal }) => {
-    requireOperator(principal);
+    const projects = requireOperator(principal);
     const gate = await decisionGate(args);
     if (!gate.ok) return { projectId: null, value: gate };
     const director = await import('../services/operator/director.ts');
@@ -367,7 +371,23 @@ const commissionTool: McpTool = {
     if (id) {
       const found = (await director.readDeficiencies()).find((one) => director.readingId(one) === id);
       if (!found) return { projectId: null, value: { ok: false, reason: `no current deficiency ${id}: read brain_operator_deficiencies again (it may already be fixed)` } };
-      return { projectId: null, value: { ...(await director.commission({ ...found.diagnosis, runId })), decisionId: gate.decisionId, next: AFTER_ACTING } };
+      return { projectId: null, value: { ...(await director.commissionReading(found, runId)), decisionId: gate.decisionId, next: AFTER_ACTING } };
+    }
+    const question = optionalString(args, 'research_question');
+    if (question !== null) {
+      const proposed = optionalString(args, 'intervention');
+      if (proposed !== null && proposed !== 'EVIDENCE') {
+        return { projectId: null, value: { ok: false, reason: `research_question is research (intervention EVIDENCE) only, not ${proposed}` } };
+      }
+      const goalId = optionalString(args, 'goal_id');
+      if (goalId) {
+        // The goal must be in a project this credential directs; absent and forbidden refuse alike.
+        const { getWorkstream } = await import('../repos/register.ts');
+        const goal = await getWorkstream(goalId);
+        if (!goal || !goal.projectId || !projects.includes(goal.projectId)) throw notFoundError();
+      }
+      const result = await director.commissionResearch({ goalId, question, evidence: optionalString(args, 'evidence'), runId });
+      return { projectId: null, value: { ...result, decisionId: gate.decisionId, next: AFTER_ACTING } };
     }
     const result = await director.commission({
       goalId: optionalString(args, 'goal_id'),
