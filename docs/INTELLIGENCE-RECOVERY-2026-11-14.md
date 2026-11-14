@@ -182,10 +182,12 @@ PERSIST — owned by in-flight streams).
 | world-expansion | 6862da0 | kernel runs under a standing research grant with no sprint (sprint wind-down stops only sprint rounds; revoking the grant stops standing rounds); scored selection (information + relevance + transfer + novelty) with a 1-in-4 exploration pick; root question re-asked after 90 d, breakdowns after 60 d; barren → WATCH with reopen conditions | `tests/industryKernelStanding.test.ts` 15/15; kernel 41/41; migrations + deploymentOwnership pass |
 | integration | this branch | `estimateInput` (one estimate→input conversion); Brain's measured close rate carries its counts | eval case O passes |
 
-**Independent evaluation now: 16 of 18 (baseline 11).** Remaining: G2 (transfer
-names differences in its text — S-12 lists unbridged dimensions structurally;
-the evaluator's check reads the label), PERSIST (arrangement-library stream, in
-flight). Decision recorded: three sized comparables *can* certify at 90% when
+**Independent evaluation now: 18 of 18 (baseline 11), on the integrated branch
+at 5e8ba32.** G2 closed by construction: a TRANSFER arrangement carries
+`differences` (legal context, payment terms, sales cycle, capital, buyer
+behaviour — `TRANSFER_MATERIAL`, now owned by `construct.ts`) and its research
+question asks for a source on each. PERSIST closed by the arrangement library
+(69 rows, 36 constructed keys found by key after caches cleared). Decision recorded: three sized comparables *can* certify at 90% when
 the margin is large (5th-percentile reach 98.75% at 2,100 contacts for 7 deals);
 unsized, single-source, assumed and contested evidence never certifies, and more
 simulated worlds never raise confidence.
