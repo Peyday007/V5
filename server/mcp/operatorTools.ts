@@ -718,6 +718,37 @@ const focusTool: McpTool = {
   },
 };
 
+const createGoalTool: McpTool = {
+  name: 'brain_operator_create_goal',
+  title: 'Operator: create a goal from an objective in words',
+  description:
+    'Create a goal from the owner\'s objective exactly as stated, e.g. "Generate $10,000 within 30 days using at most ' +
+    '$3,000 in starting capital." Brain reads the amount, currency, deadline and limits itself (the reading is ' +
+    'returned, with anything it could not read under unread). A cash objective gets its due date and its target on ' +
+    "the project's ledger; any other objective becomes a goal with its words as the intent. Refused when a cash " +
+    'objective names no currency or deadline, or when another live goal already counts that project\'s ledger.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      project_id: { type: 'string', description: 'The project (prj_…) the goal belongs to; its ledger is what a cash target counts.' },
+      text: { type: 'string', description: 'The objective, verbatim in the owner\'s words.' },
+    },
+    required: ['project_id', 'text'],
+    additionalProperties: false,
+  },
+  annotations: { title: 'Operator: create a goal', ...MUTATING, idempotentHint: false },
+  run: async (args, { principal }) => {
+    const projects = requireOperator(principal);
+    const projectId = requiredString(args, 'project_id');
+    if (!projects.includes(projectId)) throw notFoundError();
+    const { createGoal } = await import('../services/goals/decide.ts');
+    const runId = await currentRunId();
+    const result = await createGoal({ projectId, objective: requiredString(args, 'text'), actorRef: `operator:${runId ?? 'run'}`, userId: null });
+    if (!result.ok) return { projectId, value: { ok: false, refused: true, reason: result.reason, reading: result.reading } };
+    return { projectId, value: { ok: true, goalId: result.goal.id, title: result.goal.title, dueAt: result.goal.dueAt, target: result.target, reading: result.reading, consequence: result.consequence } };
+  },
+};
+
 export const OPERATOR_TOOLS: readonly McpTool[] = [
   goalsTool,
   goalTool,
@@ -733,6 +764,7 @@ export const OPERATOR_TOOLS: readonly McpTool[] = [
   decideTool,
   verifyTool,
   focusTool,
+  createGoalTool,
   deficienciesTool,
   commissionTool,
   engineeringTool,

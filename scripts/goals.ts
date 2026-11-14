@@ -23,6 +23,7 @@
  *   npm run goals -- objective <wst_…> [--intent "…"] [--outcome "…"] --admin a@b
  *   npm run goals -- undepend <wst_…> <wst_other…> --reason "…" --admin a@b
  *   npm run goals -- terms <wst_…> [--outcome "…"] [--due 2026-10-01] [--commitment CUSTOMER] --admin a@b
+ *   npm run goals -- create --objective "Generate $10,000 within 30 days using at most $3,000 in starting capital" --project prj_… --admin a@b
  *   npm run goals -- create --reason "Collect 10000 dollars in 30 days" --project prj_… --due 2026-11-27 SETTLED_CASH-1000000-USD-50000-120 --admin a@b
  *   npm run goals -- target <wst_…> SETTLED_CASH-1000000-USD-50000-120 --project prj_… --admin a@b
  *   npm run goals -- plan <wst_…>            (reads and prints; writes nothing)
@@ -46,7 +47,7 @@ import { GOAL_COMMITMENTS, type GoalCommitment } from '../server/domain/goals.ts
 import { assembleGoals, type GoalView } from '../server/services/goals/model.ts';
 import { briefFrom } from '../server/services/goals/briefing.ts';
 import { unfiledWork } from '../server/services/register/unfiled.ts';
-import { cancel, changeObjective, pause, reinstate, resume, setDependency, setTerms } from '../server/services/goals/decide.ts';
+import { cancel, changeObjective, createGoal, pause, reinstate, resume, setDependency, setTerms } from '../server/services/goals/decide.ts';
 import { spendingRuleSentence } from '../server/services/goals/spending.ts';
 import { listRounds } from '../server/repos/cashDiscovery.ts';
 import { harvest } from '../server/services/cash/discovery.ts';
@@ -59,7 +60,7 @@ import { shortlistFunnel } from '../server/services/feeds/run.ts';
 import { discoveryYield, type YieldRow } from '../server/services/cash/discoveryYield.ts';
 import { sharedFleetSnapshot } from '../server/services/dispatch/candidates.ts';
 import { researchGoalPaths } from '../server/services/goals/pathResearch.ts';
-import { setTarget } from '../server/services/goals/target.ts';
+import { setTarget, setTargetLimits } from '../server/services/goals/target.ts';
 import { methodYield, recentExplorations } from '../server/services/goals/reasoning/learning.ts';
 import { askConstructedArrangements, askPathwayConstructions, CHAIN_LABEL, goalArrangements, goalLimits, readGoalPlan, listReadings, type PlanReading } from '../server/services/goals/plan.ts';
 import { constructArrangements } from '../server/services/cash/construct.ts';
@@ -337,32 +338,71 @@ function parseSpec(spec: string | undefined): { metric: string; amountCents: num
   };
 }
 
+/**
+ * `create` and `target`. Creating goes through `createGoal`, the one writer the
+ * HTTP route and the operator also call: `--objective "<words>"` lets Brain read
+ * the amount, deadline and limits itself; `--reason … --due … SPEC` states them
+ * as figures. `target` on a goal whose figure, amount, currency and project are
+ * unchanged changes only its limits (`setTargetLimits`), so the count since the
+ * target was set is kept (G-5).
+ */
 async function targetCommand(command: 'create' | 'target'): Promise<void> {
   const adminId = await administrator();
-  const projectId = flag('project') ?? fail('A target needs --project: the project whose ledger counts.');
-  let goal;
-  let specWord: string | undefined;
+  const actorRef = `person:${adminId}`;
   if (command === 'create') {
-    const title = flag('reason') ?? fail('create needs --reason: the goal in plain words.');
-    const due = flag('due') ?? fail('create needs --due: a goal with no deadline has no window to count money in.');
-    if (!Number.isFinite(Date.parse(due))) fail('--due must be a date.');
-    [, specWord] = words();
-    const spec = parseSpec(specWord);
-    goal = await createWorkstream({ projectId, title: title.slice(0, 160), intent: title, purpose: 'REVENUE_DIRECT', createdByUserId: adminId });
-    await setTerms(goal.id, { outcome: `${spec.metric} of at least ${spec.amountCents / 100} ${spec.currency}, verified on the ledger`, dueAt: new Date(due).toISOString(), ownerUserId: adminId }, `person:${adminId}`);
-    await recordWorkstreamEvent({ workstreamId: goal.id, kind: 'WORKSTREAM_OPENED', summary: `Created as a targeted goal: ${title.slice(0, 200)}`, actorRef: `person:${adminId}` });
-  } else {
-    const [, goalId, word] = words();
-    specWord = word;
-    goal = goalId ? await getWorkstream(goalId) : null;
-    if (!goal) fail(`No goal ${goalId ?? '(none named)'}.`);
+    const projectId = flag('project') ?? fail('create needs --project: the project the goal belongs to.');
+    const objective = flag('objective');
+    let result;
+    if (objective !== undefined) {
+      const due = flag('due');
+      if (due && !Number.isFinite(Date.parse(due))) fail('--due must be a date.');
+      result = await createGoal({ projectId, objective, title: flag('title'), dueAt: due ? new Date(due).toISOString() : undefined, resources: flag('resources') ?? null, actorRef, userId: adminId });
+    } else {
+      const title = flag('reason') ?? fail('create needs --objective "<the goal in words>", or --reason with --due and a target spec.');
+      const due = flag('due') ?? fail('create needs --due: a goal with no deadline has no window to count money in.');
+      if (!Number.isFinite(Date.parse(due))) fail('--due must be a date.');
+      const spec = parseSpec(words()[1]);
+      result = await createGoal({
+        projectId,
+        objective: title,
+        dueAt: new Date(due).toISOString(),
+        target: { metric: spec.metric, amountCents: spec.amountCents, currency: spec.currency, capitalCeilingCents: spec.capital, hoursCeiling: spec.hours, capitalBeforeProofCents: cents(flag('before-proof')) ?? spec.beforeProof, capitalPerWeekCents: cents(flag('per-week')) ?? spec.perWeek },
+        resources: flag('resources') ?? null,
+        actorRef,
+        userId: adminId,
+      });
+    }
+    const r = result.reading;
+    console.log(`  read        ${r.kind}${r.amount !== null ? ` ${r.amount} ${r.currency ?? '(no currency)'}` : ''}${r.deadline ? ` by ${r.deadline}` : ''}${r.capitalCeiling !== null ? ` · capital at most ${r.capitalCeiling}` : ''}${r.hoursCeiling !== null ? ` · hours at most ${r.hoursCeiling}` : ''}`);
+    for (const c of r.constraints) console.log(`  constraint  ${c}`);
+    for (const u of r.unread) console.log(`  unread      ${u}`);
+    if (!result.ok) fail(`The goal was not created: ${result.reason}`);
+    const t = result.target;
+    console.log(`create ${result.goal.id}: ${t ? `target ${t.metric} ${t.amountCents / 100} ${t.currency} counted from ${t.setAt}` : 'no target — measured by its delivered work'}`);
+    console.log(`  ${result.consequence}`);
+    console.log('GOALS: OK');
+    return;
   }
+  const projectId = flag('project') ?? fail('A target needs --project: the project whose ledger counts.');
+  const [, goalId, specWord] = words();
+  const goal = goalId ? await getWorkstream(goalId) : null;
+  if (!goal) fail(`No goal ${goalId ?? '(none named)'}.`);
   const spec = parseSpec(specWord);
-  const fresh = (await getWorkstream(goal.id))!;
-  const result = await setTarget({ goal: fresh, metric: spec.metric, amountCents: spec.amountCents, currency: spec.currency, projectId, capitalCeilingCents: spec.capital, hoursCeiling: spec.hours, resources: flag('resources') ?? null, capitalBeforeProofCents: cents(flag('before-proof')) ?? spec.beforeProof, capitalPerWeekCents: cents(flag('per-week')) ?? spec.perWeek });
+  const limits = { capitalCeilingCents: spec.capital, hoursCeiling: spec.hours, resources: flag('resources') ?? null, capitalBeforeProofCents: cents(flag('before-proof')) ?? spec.beforeProof, capitalPerWeekCents: cents(flag('per-week')) ?? spec.perWeek };
+  const was = goal.target;
+  const onlyLimits = was !== null && was.metric === spec.metric && was.amountCents === spec.amountCents && was.currency === spec.currency && was.projectId === projectId;
+  const result = onlyLimits
+    ? await setTargetLimits({ goal, ...limits, resources: flag('resources') })
+    : await setTarget({ goal, metric: spec.metric, amountCents: spec.amountCents, currency: spec.currency, projectId, ...limits });
   if (!result.ok) fail(`The target was not set: ${result.reason}`);
-  await recordWorkstreamEvent({ workstreamId: goal.id, kind: 'GOAL_TARGET_SET', summary: `Target: ${spec.metric} ${spec.amountCents / 100} ${spec.currency}${spec.capital !== null ? `, at most ${spec.capital / 100} tied up` : ''}${spec.hours !== null ? `, at most ${spec.hours} hours` : ''}. Counted from now.`, actorRef: `person:${adminId}` });
-  console.log(`${command} ${goal.id}: target ${spec.metric} ${spec.amountCents / 100} ${spec.currency} counted from ${result.target.setAt}`);
+  await recordWorkstreamEvent({
+    workstreamId: goal.id,
+    kind: onlyLimits ? 'GOAL_TARGET_LIMITS_SET' : 'GOAL_TARGET_SET',
+    summary: `${onlyLimits ? 'Limits' : 'Target'}: ${spec.metric} ${spec.amountCents / 100} ${spec.currency}${spec.capital !== null ? `, at most ${spec.capital / 100} tied up` : ''}${spec.hours !== null ? `, at most ${spec.hours} hours` : ''}. ${onlyLimits ? `Still counted from ${result.target.setAt}.` : 'Counted from now.'}`,
+    detail: onlyLimits ? { before: was } : undefined,
+    actorRef,
+  });
+  console.log(`target ${goal.id}: ${onlyLimits ? 'limits changed; ' : ''}target ${spec.metric} ${spec.amountCents / 100} ${spec.currency} counted from ${result.target.setAt}`);
   console.log('GOALS: OK');
 }
 

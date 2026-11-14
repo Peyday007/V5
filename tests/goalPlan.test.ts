@@ -92,6 +92,8 @@ async function play(input: { title: string; priceCents: number; days?: number; c
 async function goal(amountCents: number, capitalCents: number | null = null, days = 30): Promise<string> {
   const g = await createWorkstream({ projectId, title: 'Collect cash fast', intent: 'Collect settled cash within the window.', purpose: 'REVENUE_DIRECT', createdByUserId: userId });
   await setTerms(g.id, { dueAt: inDays(days), ownerUserId: userId }, `person:${userId}`);
+  // One live target per project ledger (G-7): a test reading a second variant retires the first.
+  await getDb().run(`UPDATE workstreams SET cancelled_at = ? WHERE target_project_id = ? AND cancelled_at IS NULL AND id <> ?`, [now.toISOString(), projectId, g.id]);
   const set = await setTarget({ goal: (await getWorkstream(g.id))!, metric: 'SETTLED_CASH', amountCents, currency: 'USD', projectId, capitalCeilingCents: capitalCents, hoursCeiling: 200, now: new Date(now.getTime() - 60_000) });
   expect(set.ok).toBe(true);
   return g.id;

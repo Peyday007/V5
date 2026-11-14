@@ -31,7 +31,7 @@ import { listProjects } from '../repos/projects.ts';
 import { decideProjectAccess } from '../services/identity/policy.ts';
 import { goalBriefing } from '../services/goals/briefing.ts';
 import { assembleGoals } from '../services/goals/model.ts';
-import { cancel, changeObjective, pause, reinstate, resume, setDependency, setTerms } from '../services/goals/decide.ts';
+import { cancel, changeObjective, createGoal, pause, reinstate, resume, setDependency, setTerms } from '../services/goals/decide.ts';
 import { goalConstruction, seedGoalIndustry } from '../services/industry/construction/service.ts';
 import type { IntentOverrides } from '../services/industry/construction/intent.ts';
 import { CONTROL_TARGETS, FACT_KEY_LIST, FACT_STATUSES, isFactKey, type ControlTarget, type FactStatus } from '../domain/construction.ts';
@@ -91,6 +91,40 @@ goalsRouter.get(
       events: await listWorkstreamEvents(goal.id, 100),
       priorityHistory: await snapshotHistory(goal.id),
     };
+  }),
+);
+
+/**
+ * Create a goal from an objective in words (G-2): "Generate $10,000 within 30
+ * days using at most $3,000 in starting capital." A cash objective gets its
+ * due date and its target on the project's ledger; anything else becomes a goal
+ * with its words as the intent. The same writer as the terminal and the
+ * operator (`createGoal`). Writing into a project needs WRITE on it, and a
+ * project the caller may not write is the same 404 as one that is not there.
+ */
+goalsRouter.post(
+  '/goals',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const body = bodyOf(req);
+    const projectId = requiredString(body.projectId, 'projectId');
+    if (!decideProjectAccess(principal, projectId, 'WRITE').allowed) throw notFound('No such project.');
+    const dueAt = optionalString(body.dueAt, 'dueAt');
+    if (dueAt && !Number.isFinite(Date.parse(dueAt))) throw badRequest('"dueAt" must be a date.');
+    const created = await createGoal({
+      projectId,
+      objective: requiredString(body.objective, 'objective'),
+      title: optionalString(body.title, 'title'),
+      dueAt,
+      resources: optionalString(body.resources, 'resources') ?? null,
+      actorRef: actor(principal),
+      userId: principal.id,
+    });
+    if (!created.ok) {
+      if (created.reason === 'No project with that id.') throw notFound('No such project.');
+      throw badRequest(created.reason);
+    }
+    return created;
   }),
 );
 
