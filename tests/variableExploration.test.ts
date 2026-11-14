@@ -118,7 +118,11 @@ describe('§102 mechanics', () => {
     clearInterval(tick);
     expect(again.exploration?.sweep?.variations ?? 0).toBeGreaterThan(10_000);
     expect(performance.now() - started).toBeGreaterThan(200);
-    expect(worst).toBeLessThan(150);
+    // The longest hold is one direction evaluation, which the inline fallback cannot split (production runs
+    // these on a pool thread: the next test). Measured 122-134 ms locally and 155-161 ms on CI runners
+    // (2026-11-12, 2026-11-14), so 150 failed on runner speed, not on a sweep that stopped yielding: a sweep
+    // that holds the loop for its whole run is seconds, far past this bound.
+    expect(worst).toBeLessThan(200);
   });
 
   it('runs on a pool thread, not the server\'s loop, and reads the same as inline', async () => {
