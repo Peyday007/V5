@@ -149,7 +149,7 @@ describe('§102 mechanics', () => {
 
   it('a time bound is shared between stages: a slow machine still searches locally and moves the world', async () => {
     // Production, 2026-11-11 (Goals plan 43003547180): one bound let the factorial take all 49 s; local search and conditions read nothing.
-    const quick = await reconstructPlan({ openings: GOAL_10K_OPENINGS, portfolio: portfolioInput, baseline, required: 0.9, explore: { maxMs: 1, sweepMs: 600 } });
+    const quick = await reconstructPlan({ openings: GOAL_10K_OPENINGS, portfolio: portfolioInput, baseline, required: 0.9, explore: { maxMs: 1, sweepMs: 2_000 } }); // a budget a loaded CI runner can still split between stages (600 ms read 0 local moves on Deploy 43617963012)
     const s = quick.exploration!.sweep!;
     expect(s.stopped).toBe('TIME');
     expect(s.factorial).toBeGreaterThan(0);

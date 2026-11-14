@@ -191,7 +191,8 @@ describe('built from production rows, recorded once an hour, and read by the own
 
   it('records one report per hour as an owner notice, offers only the newest, and the conversation marks it delivered', async () => {
     const { recordHourlyReport, reportNoticeId } = await import('../server/services/operator/operationsReport.ts');
-    const t0 = Date.now();
+    // Five minutes into the current hour, so "a minute later" is always the same hour (this flaked when the run began in an hour's last minute).
+    const t0 = Math.floor(Date.now() / 3_600_000) * 3_600_000 + 5 * 60_000;
     const first = await recordHourlyReport(t0);
     expect(first?.created).toBe(true);
     expect((await recordHourlyReport(t0 + 60_000))?.created).toBe(false); // same hour: never twice
