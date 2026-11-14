@@ -323,6 +323,29 @@ define('r01.opp-03', async () => {
   if (empty.length > 0) return { ok: null, detail: `not every origin has seeded the field yet: ${r.detail}` };
   return { ok: true, detail: r.detail };
 });
+/*
+ * CP-31 (counterparties-d1-p1): the campaign's opportunity reader, judged for
+ * the chain the requirement names. A breach of the model's refusals is FAIL;
+ * the chain is demonstrated only when some opportunity's counterparty reached
+ * CONTRACTED or PERFORMED. Short of that it is UNKNOWN (§39) — including while
+ * no production producer drives the contractor side (its open finding).
+ */
+define('r01.cp-31', async () => {
+  const ops = await import('../../labor/counterparties/operations.ts');
+  const { listProjects } = await import('../../../repos/projects.ts');
+  const r = await ops.opportunityCounterpartyProbe({});
+  if (!r.ok) return r;
+  let reached = 0;
+  for (const p of await listProjects()) {
+    for (const o of (await ops.projectCounterparties(p.id)).opportunities) {
+      const stage = o.transaction.reading?.primary?.stage ?? null;
+      if (stage === 'CONTRACTED' || stage === 'PERFORMED') reached += 1;
+    }
+  }
+  return reached > 0
+    ? { ok: true, detail: `${reached} opportunity counterparties contracted or performed through the ladder, no breach; ${r.detail}`.slice(0, 900) }
+    : { ok: null, detail: `no opportunity's counterparty has reached CONTRACTED or PERFORMED yet; ${r.detail}`.slice(0, 900) };
+});
 /* CAUSAL-14-1..5, 14-7 and 15-2, for causal-model-d0-p1 (release01/causalProbe.ts). */
 define('r01.causal-14-1', async () => (await import('./release01/causalProbe.ts')).causalGraphOnRows());
 define('r01.causal-14-2', async () => (await import('./release01/causalProbe.ts')).causalLineageOnRows());

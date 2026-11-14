@@ -95,7 +95,8 @@ export function messagingConfig(env: NodeJS.ProcessEnv = process.env): ProviderC
   if (!provider) {
     return { provider: null, configured: false, problems: [MESSAGING_PROVIDER_ENV] };
   }
-  return messagingProviderConfig(provider, env);
+  const reading = messagingProviderConfig(provider, env);
+  return derived ? { ...reading, derived } : reading;
 }
 
 /** One named messaging provider's own settings, whichever role the deployment gave it. */
@@ -115,7 +116,7 @@ export function messagingProviderConfig(provider: string, env: NodeJS.ProcessEnv
     else if (key.length < 20 || /\s/.test(key)) problems.push(`${INSTANTLY_KEY_ENV} (not an Instantly API key)`);
     const campaign = read(INSTANTLY_CAMPAIGN_ENV, env);
     if (campaign && !/^[0-9a-f-]{36}$/i.test(campaign)) problems.push(`${INSTANTLY_CAMPAIGN_ENV} (not a campaign id)`);
-    return { provider, configured: problems.length === 0, problems, ...(derived ? { derived } : {}) };
+    return { provider, configured: problems.length === 0, problems };
   }
   const key = read(RESEND_KEY_ENV, env);
   if (!key) problems.push(RESEND_KEY_ENV);
@@ -134,7 +135,8 @@ export function billingConfig(env: NodeJS.ProcessEnv = process.env): ProviderCon
   if (!provider) {
     return { provider: null, configured: false, problems: [BILLING_PROVIDER_ENV], mode: null };
   }
-  return billingProviderConfig(provider, env);
+  const reading = billingProviderConfig(provider, env);
+  return derived ? { ...reading, derived } : reading;
 }
 
 /** One named billing provider's own settings, whichever role the deployment gave it. */
@@ -158,7 +160,7 @@ export function billingProviderConfig(provider: string, env: NodeJS.ProcessEnv =
       mode: null,
     };
   }
-  return { provider, configured: true, problems: [], mode, ...(derived ? { derived } : {}) };
+  return { provider, configured: true, problems: [], mode };
 }
 
 /**
