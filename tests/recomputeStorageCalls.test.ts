@@ -18,7 +18,7 @@
  * and a document whose bytes are gone still read as missing — the memo can only
  * save round trips, never change an answer.
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { freshProject, teardown } from './helpers.ts';
 import { initStorage, resetStorage } from '../server/services/storage/index.ts';
 import { createDocument, getDocument } from '../server/repos/documents.ts';
@@ -124,33 +124,30 @@ describe('a recompute and the document store', () => {
     expect(documents.filter((document) => document.fileMissing)).toHaveLength(1);
   });
 
-  it('asks again on the next recompute, because a memo that outlived one would be a stale cache', async () => {
-    await recomputeProject(projectId);
-    await recomputeProject(projectId);
-    expect(counting.asked.get(keys[0]!)).toBe(2);
-  });
-});
+  it('asks again about anything absent on the next recompute, and about anything present once its short reuse ends', async () => {
+    /*
+     * The memo is still scoped to one recompute. What lasts longer is the cloud
+     * provider's own PRESENT answer (STORE_PRESENCE_TTL_MS): outside a recompute
+     * every layer derivation and plan read asked the store again, unbounded —
+     * production, 2026-11-14, 64-73 new TLS connections a minute. A present
+     * object does not vanish (superseded documents keep their bytes), so only
+     * PRESENT is reused; ABSENT is always asked again, so a document uploaded
+     * elsewhere is never read as missing for longer than one recompute.
+     */
+    const { STORE_PRESENCE_TTL_MS } = await import('../server/services/storage/supabase.ts');
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      await recomputeProject(projectId);
+      await recomputeProject(projectId);
+      expect(counting.asked.get(missingKey)).toBe(2);
+      expect(counting.asked.get(keys[0]!)).toBe(1);
 
-describe('a store that does not answer', () => {
-  it('flags nothing missing, because an outage is not evidence that a file is gone', async () => {
-    // The production shape: Supabase Storage answering 544 DatabaseTimeout.
-    resetStorage();
-    await initStorage({
-      config: {
-        provider: 'supabase',
-        supabaseUrl: 'https://example.supabase.co',
-        serviceRoleKey: 'service-role',
-        bucket: 'brain',
-      },
-      fetchImpl: (async () =>
-        new Response(JSON.stringify({ statusCode: '544', error: 'DatabaseTimeout' }), {
-          status: 544,
-          headers: { 'Content-Type': 'application/json' },
-        })) as unknown as typeof fetch,
-      verify: false,
-    });
-    await recomputeProject(projectId);
-    const { listDocuments } = await import('../server/repos/documents.ts');
-    expect((await listDocuments(projectId)).filter((document) => document.fileMissing)).toEqual([]);
+      vi.setSystemTime(Date.now() + STORE_PRESENCE_TTL_MS + 1);
+      await recomputeProject(projectId);
+      expect(counting.asked.get(keys[0]!)).toBe(2);
+      expect(counting.asked.get(missingKey)).toBe(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

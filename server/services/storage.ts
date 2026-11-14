@@ -277,6 +277,22 @@ export async function withExistenceMemo<T>(work: () => Promise<T>): Promise<T> {
   return await existenceMemo.run(new Map(), work);
 }
 
+/** The calling context's memo, as an opaque handle, so work deferred out of it can re-enter it. */
+export type ExistenceMemoHandle = Map<string, Promise<'PRESENT' | 'ABSENT' | 'UNKNOWN'>> | undefined;
+
+export function currentExistenceMemo(): ExistenceMemoHandle {
+  return existenceMemo.getStore();
+}
+
+/**
+ * Run `work` inside a memo captured earlier — the one the work would have run
+ * in had it not been deferred (an effect's recompute, run after its commit).
+ * With no handle, `work` runs as it would anywhere else.
+ */
+export async function withExistenceMemoFrom<T>(memo: ExistenceMemoHandle, work: () => Promise<T>): Promise<T> {
+  return memo ? await existenceMemo.run(memo, work) : await work();
+}
+
 /** How many existence questions are in flight at once when a whole set is asked up front. */
 const PREFETCH_CONCURRENCY = 16;
 

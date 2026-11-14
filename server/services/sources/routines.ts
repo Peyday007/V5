@@ -78,13 +78,39 @@ const parse = <T>(raw: string | null): T | null => {
   }
 };
 
-/** Which bulk route has read the host most often, from its SOURCE_ACCESS rows. Pure. */
-function bulkRouteOf(host: string, access: readonly AccessRow[]): AccessMethod | null {
-  const ok = new Map<AccessMethod, number>();
+interface ParsedAccess {
+  host: string;
+  attempts: AccessAttempt[];
+  routine: { lead?: string; proposedAt?: string } | null;
+}
+
+/**
+ * Every SOURCE_ACCESS row parsed once and grouped by host.
+ *
+ * `routinesFrom` used to parse every access row's JSON again for every host
+ * with a proposal, twice (the bulk route and the led-read count): hosts ×
+ * rows × 2 `JSON.parse`s. Production, 2026-11-14 19:07Z: 16.5 s of one
+ * minute's CPU in this file, a 21 s event-loop stall. Same answers, one parse.
+ */
+function accessByHost(access: readonly AccessRow[]): Map<string, ParsedAccess[]> {
+  const byHost = new Map<string, ParsedAccess[]>();
   for (const row of access) {
-    const m = parse<{ host?: string; attempts?: AccessAttempt[] }>(row.measures);
-    if (m?.host?.toLowerCase() !== host) continue;
-    for (const a of m.attempts ?? []) {
+    const m = parse<{ host?: unknown; attempts?: AccessAttempt[]; routine?: { lead?: string; proposedAt?: string } }>(row.measures);
+    if (!m || typeof m.host !== 'string') continue;
+    const host = m.host.toLowerCase();
+    const parsed: ParsedAccess = { host, attempts: m.attempts ?? [], routine: m.routine ?? null };
+    const list = byHost.get(host);
+    if (list) list.push(parsed);
+    else byHost.set(host, [parsed]);
+  }
+  return byHost;
+}
+
+/** Which bulk route has read the host most often, from its parsed SOURCE_ACCESS rows. Pure. */
+function bulkRouteFrom(rows: readonly ParsedAccess[]): AccessMethod | null {
+  const ok = new Map<AccessMethod, number>();
+  for (const row of rows) {
+    for (const a of row.attempts) {
       if ((a.method === 'SITEMAP' || a.method === 'ARCHIVE') && a.readable) ok.set(a.method, (ok.get(a.method) ?? 0) + 1);
     }
   }
@@ -92,14 +118,23 @@ function bulkRouteOf(host: string, access: readonly AccessRow[]): AccessMethod |
   return best ? best[0] : null;
 }
 
+/** Which bulk route has read the host most often, from its SOURCE_ACCESS rows. Pure. */
+function bulkRouteOf(host: string, access: readonly AccessRow[]): AccessMethod | null {
+  return bulkRouteFrom(accessByHost(access).get(host) ?? []);
+}
+
 /** The read route a proposal's method class leads with on a host. Pure. */
 export function leadOfRoute(route: MethodClass, host: string, access: readonly AccessRow[]): AccessMethod | null {
+  return leadFrom(route, () => bulkRouteOf(host, access));
+}
+
+function leadFrom(route: MethodClass, bulk: () => AccessMethod | null): AccessMethod | null {
   switch (route) {
     case 'BROWSER':
     case 'MODEL_ASSISTED':
       return 'BROWSER';
     case 'BULK':
-      return bulkRouteOf(host, access);
+      return bulk();
     default:
       // NATIVE: a registered connector already leads; HTTP: DIRECT already leads; a handoff is never automated.
       return null;
@@ -123,15 +158,16 @@ export function routinesFrom(proposals: readonly ProposalRow[], access: readonly
     newest.set(host, { route: m.route as MethodClass, kind: m.kind === 'SCRIPT' ? 'SCRIPT' : 'CONNECTOR', at: row.at!, t });
   }
   const out = new Map<string, Routine>();
+  const byHost = newest.size > 0 ? accessByHost(access) : new Map<string, ParsedAccess[]>();
   for (const [host, p] of newest) {
-    const lead = leadOfRoute(p.route, host, access);
+    const rows = byHost.get(host) ?? [];
+    const lead = leadFrom(p.route, () => bulkRouteFrom(rows));
     let runs = 0;
     let ok = 0;
     if (lead) {
-      for (const row of access) {
-        const m = parse<{ host?: string; attempts?: AccessAttempt[]; routine?: { lead?: string; proposedAt?: string } }>(row.measures);
-        if (m?.host?.toLowerCase() !== host || m.routine?.lead !== lead || m.routine.proposedAt !== p.at) continue;
-        const led = (m.attempts ?? []).find((a) => a.method === lead);
+      for (const m of rows) {
+        if (m.routine?.lead !== lead || m.routine.proposedAt !== p.at) continue;
+        const led = m.attempts.find((a) => a.method === lead);
         if (!led) continue;
         runs += 1;
         if (led.readable) ok += 1;
