@@ -34,7 +34,7 @@ import { cardFactsFor } from '../../repos/cashCardFacts.ts';
 import { listLinks } from '../../repos/register.ts';
 import { getOpportunity } from '../../repos/cashPortfolio.ts';
 import { executionPolicyForProject } from './policy.ts';
-import { goalSpendingRefusal } from './spending.ts';
+import { goalSpendingRefusal, spendingReads, type SpendingReads } from './spending.ts';
 
 /** The external commercial actions a sale needs, each mapped to the grant that permits it. */
 export const EXTERNAL_ACTIONS = {
@@ -150,35 +150,108 @@ export function decideOfferReadiness(input: OfferReadinessInput): OfferReadiness
 
 /* ------------------------------------------------------------------ readers */
 
-/** Reads one opening's rows and decides. Writes nothing. */
-export async function offerReadinessFor(opportunity: CashOpportunity, now: Date = new Date()): Promise<OfferReadiness> {
+/**
+ * What one read shares across the openings it decides (finding F5).
+ *
+ * The commercial grant and the execution policy are facts about a *project* at
+ * one instant, not about an opening: five `checkCommercialAuthority` calls and
+ * a policy read per opening made a person's goals read cost goals × openings ×
+ * ten queries. A context reads each project's five grants and its policy once,
+ * and every opening of that project in the same read is decided against the
+ * same answer. It is scoped to one read at one `now` and is never kept beyond
+ * it, so a grant withdrawn a second ago is read again by the next read.
+ */
+export interface OfferReadingContext {
+  readonly at: string;
+  authorityFor(projectId: string): Promise<Record<ExternalAction, PermissionReading>>;
+  policyFor(projectId: string): Promise<GoalExecutionPolicy>;
+  /** The goal-spending rows, read once for every opening decided in this read. */
+  readonly spending: SpendingReads;
+}
 
-  const policy = await executionPolicyForProject(opportunity.projectId, now);
+/** One read's context; build one per read, never hold one across reads. */
+export function offerReadingContext(now: Date = new Date()): OfferReadingContext {
+  const at = now.toISOString();
+  const authorities = new Map<string, Promise<Record<ExternalAction, PermissionReading>>>();
+  const policies = new Map<string, Promise<GoalExecutionPolicy>>();
+  return {
+    at,
+    spending: spendingReads(now),
+    authorityFor(projectId) {
+      let found = authorities.get(projectId);
+      if (!found) {
+        found = (async () => {
+          const decisions = await Promise.all(
+            EXTERNAL_ACTION_LIST.map((action) => checkCommercialAuthority({ projectId, action: EXTERNAL_ACTIONS[action], at })),
+          );
+          const authority = {} as Record<ExternalAction, PermissionReading>;
+          EXTERNAL_ACTION_LIST.forEach((action, i) => {
+            const d = decisions[i]!;
+            authority[action] = { ok: d.ok, reason: d.reason };
+          });
+          return authority;
+        })();
+        authorities.set(projectId, found);
+      }
+      return found;
+    },
+    policyFor(projectId) {
+      let found = policies.get(projectId);
+      if (!found) {
+        found = executionPolicyForProject(projectId, now);
+        policies.set(projectId, found);
+      }
+      return found;
+    },
+  };
+}
+
+/** Reads one opening's rows and decides. Writes nothing. */
+export async function offerReadinessFor(
+  opportunity: CashOpportunity,
+  now: Date = new Date(),
+  context: OfferReadingContext = offerReadingContext(now),
+): Promise<OfferReadiness> {
+  const [policy, authority, facts, spendingRefusal] = await Promise.all([
+    context.policyFor(opportunity.projectId),
+    context.authorityFor(opportunity.projectId),
+    cardFactsFor(opportunity.id),
+    goalSpendingRefusal({ opportunity, neededCents: opportunity.peakFundingCents ?? 0, now, reads: context.spending }),
+  ]);
   const testFirstPlay = isTestFirstPlay(opportunity);
   const required = qualificationKeys(opportunity.opportunitySignal ?? null, policy === 'SQUEEZE' ? false : testFirstPlay, policy);
-  const card = cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id), now: now.toISOString() });
+  const card = cashEngineCard({ opportunity, facts, now: now.toISOString() });
   const answered = new Set(card.entries.filter((e) => e.value !== null).map((e) => e.key as string));
-
-  const authority = {} as Record<ExternalAction, PermissionReading>;
-  for (const action of EXTERNAL_ACTION_LIST) {
-    const d = await checkCommercialAuthority({ projectId: opportunity.projectId, action: EXTERNAL_ACTIONS[action], at: now.toISOString() });
-    authority[action] = { ok: d.ok, reason: d.reason };
-  }
   const recipient = recipientFromChannel(opportunity.reachableChannel);
   const channel: PermissionReading = recipient.ok ? { ok: true, reason: 'one published address' } : { ok: false, reason: recipient.reason };
-  const spendingRefusal = await goalSpendingRefusal({ opportunity, neededCents: opportunity.peakFundingCents ?? 0, now });
 
   return decideOfferReadiness({ policy, required, answered, testFirstPlay, authority, spendingRefusal, channel });
 }
 
-/** Every live opening a goal pursues, each decided independently. Writes nothing. */
-export async function offerReadinessForGoal(goalId: string, now: Date = new Date()): Promise<{ opportunityId: string; readiness: OfferReadiness }[]> {
-  const out: { opportunityId: string; readiness: OfferReadiness }[] = [];
-  for (const link of await listLinks(goalId)) {
-    if (link.kind !== 'OPPORTUNITY') continue;
-    const opportunity = await getOpportunity(link.ref);
-    if (!opportunity || opportunity.state === 'ARCHIVED' || opportunity.state === 'DECLINED' || opportunity.state === 'COLLECTED') continue;
-    out.push({ opportunityId: opportunity.id, readiness: await offerReadinessFor(opportunity, now) });
+/** Opening states whose offer is no longer a question. */
+export const SETTLED_OPENING_STATES: ReadonlySet<string> = new Set(['ARCHIVED', 'DECLINED', 'COLLECTED']);
+
+/**
+ * Every live opening a goal pursues, each decided independently. Writes
+ * nothing. A caller that already holds the openings (the goals read) passes
+ * them, with its context, so nothing is read twice.
+ */
+export async function offerReadinessForGoal(
+  goalId: string,
+  now: Date = new Date(),
+  options: { context?: OfferReadingContext; openings?: readonly CashOpportunity[] } = {},
+): Promise<{ opportunityId: string; readiness: OfferReadiness }[]> {
+  const context = options.context ?? offerReadingContext(now);
+  let openings = options.openings;
+  if (!openings) {
+    const found: CashOpportunity[] = [];
+    for (const link of await listLinks(goalId)) {
+      if (link.kind !== 'OPPORTUNITY') continue;
+      const opportunity = await getOpportunity(link.ref);
+      if (opportunity) found.push(opportunity);
+    }
+    openings = found;
   }
-  return out;
+  const live = openings.filter((one) => !SETTLED_OPENING_STATES.has(one.state));
+  return Promise.all(live.map(async (opportunity) => ({ opportunityId: opportunity.id, readiness: await offerReadinessFor(opportunity, now, context) })));
 }

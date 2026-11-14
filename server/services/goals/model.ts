@@ -64,7 +64,7 @@ import { listRoutines } from '../../repos/fleet.ts';
 import { sharedFleetSnapshot, type FleetSnapshot } from '../dispatch/candidates.ts';
 import { listMembershipsForProject } from '../../repos/identity.ts';
 import { readTarget, type TargetReading } from './target.ts';
-import { readPort05, type Port05Reading } from './port05.ts';
+import { readPort05ForGoals, type Port05Outcome, type Port05Reading } from './port05.ts';
 import { recordCapabilityCreditsIfDue, type CreditRecordingReport } from './capabilityCredit.ts';
 
 // ---------------------------------------------------------------------------
@@ -195,6 +195,11 @@ export interface GoalView {
    * null for the whole-Brain tick and for goals that are not live.
    */
   port05?: Port05Reading | null;
+  /**
+   * Why `port05` is null although it was asked for: the reading failed and
+   * says so here, rather than reading as a goal with nothing to show.
+   */
+  port05Unread?: string | null;
   pausedAt: string | null;
   pausedReason: string | null;
   cancelledAt: string | null;
@@ -782,6 +787,25 @@ export async function assembleGoals(options: {
 
   const goals: GoalView[] = [];
   const binsByGoal = new Map<string, Bin[]>();
+  /*
+   * PORT-05 for exactly the live goals this read returns, in one batched read
+   * (finding F5): one shared context reads each project's commercial grants
+   * and policy, the capability readings and each opening once, a bounded
+   * number of goals at a time, from the links already read above.
+   */
+  const live = (lifecycle: GoalLifecycle): boolean => lifecycle !== 'COMPLETE' && lifecycle !== 'CANCELLED' && lifecycle !== 'ARCHIVED';
+  const port05By: Map<string, Port05Outcome> = withPort05
+    ? await readPort05ForGoals(
+        [...base.values()]
+          .filter(({ goal, view, lifecycle }) => visible.has(goal.id) && view !== null && live(lifecycle))
+          .map(({ goal }) => ({
+            goalId: goal.id,
+            opportunityIds: (linksBy.get(goal.id) ?? []).filter((link) => link.kind === 'OPPORTUNITY').map((link) => link.ref),
+          })),
+        new Date(now),
+      )
+    : new Map();
+
   // The openings live goals pursue, for the whole-Brain tick's credit pass.
   const pursued: string[] = [];
   for (const { goal, view, lifecycle, reason, resolved } of base.values()) {
@@ -931,15 +955,11 @@ export async function assembleGoals(options: {
 
     const rank = ranked.get(goal.id);
     const snapshot = snapshots.get(goal.id);
-    let port05: Port05Reading | null = null;
-    if (withPort05 && lifecycle !== 'COMPLETE' && lifecycle !== 'CANCELLED' && lifecycle !== 'ARCHIVED') {
-      try {
-        port05 = await readPort05(goal.id, new Date(now));
-      } catch {
-        // A reading that cannot be taken is left out, never guessed; the rest of the goal still shows.
-        port05 = null;
-      }
-    }
+    // A reading that cannot be taken is never guessed: it is null and says why; the rest of the goal still shows.
+    const port05Outcome = port05By.get(goal.id);
+    const port05: Port05Reading | null = port05Outcome?.ok ? port05Outcome.reading : null;
+    const port05Unread: string | null = port05Outcome && !port05Outcome.ok ? port05Outcome.reason : null;
+    if (port05Unread) console.warn(`[goals] PORT-05 reading of ${goal.id} failed: ${port05Unread}`);
     goals.push({
       id: goal.id,
       title: goal.title,
@@ -984,6 +1004,7 @@ export async function assembleGoals(options: {
           }
         : null,
       port05,
+      port05Unread,
       pausedAt: goal.pausedAt,
       pausedReason: goal.pausedReason,
       cancelledAt: goal.cancelledAt,

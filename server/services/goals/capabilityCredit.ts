@@ -44,6 +44,7 @@
 import { createHash } from 'node:crypto';
 import type { CapabilityReading, CapabilityState } from '../cash/capabilities.ts';
 import type { FulfillmentKind } from '../../domain/cashFulfillment.ts';
+import type { CashOpportunity } from '../../domain/types.ts';
 
 /** The work Brain performs on any opening, whatever is delivered. Fulfilment is not in it. */
 export const AI_PERFORMABLE_WORK = [
@@ -347,12 +348,17 @@ export async function productionCreditPorts(): Promise<CreditRecordPorts> {
 }
 
 /** Read one opening's rows into a case. Null when the opening does not exist. */
-export async function readCreditCase(opportunityId: string, capabilityReadings?: ReadonlyMap<string, CapabilityReading>): Promise<CreditCase | null> {
+export async function readCreditCase(
+  opportunityId: string,
+  capabilityReadings?: ReadonlyMap<string, CapabilityReading>,
+  /** The opening's row when the caller already read it in this read, so it is not read twice. */
+  held?: CashOpportunity,
+): Promise<CreditCase | null> {
   const { getOpportunity } = await import('../../repos/cashPortfolio.ts');
   const { fulfillmentsForOpportunity, fulfillmentEvents } = await import('../../repos/cashFulfillment.ts');
   const { outcomesFor } = await import('../../repos/cashJourney.ts');
   const { readAllCapabilities, readingFrom } = await import('../cash/capabilities.ts');
-  const opportunity = await getOpportunity(opportunityId);
+  const opportunity = held && held.id === opportunityId ? held : await getOpportunity(opportunityId);
   if (!opportunity) return null;
   // Read now, never cached across judgments: a capability lost an hour ago must not still credit.
   const readings = capabilityReadings ?? (await readAllCapabilities());
@@ -361,9 +367,11 @@ export async function readCreditCase(opportunityId: string, capabilityReadings?:
     const key = id.trim();
     if (key) capabilityStates.set(key, readingFrom(readings, key).state);
   }
-  const fulfilments = await fulfillmentsForOpportunity(opportunity.projectId, opportunity.id);
+  const [fulfilments, outcomes] = await Promise.all([
+    fulfillmentsForOpportunity(opportunity.projectId, opportunity.id),
+    outcomesFor({ projectId: opportunity.projectId, opportunityId: opportunity.id }),
+  ]);
   const events = (await Promise.all(fulfilments.map((f) => fulfillmentEvents(f.id)))).flat();
-  const outcomes = await outcomesFor({ projectId: opportunity.projectId, opportunityId: opportunity.id });
   return {
     opportunityId: opportunity.id,
     projectId: opportunity.projectId,
