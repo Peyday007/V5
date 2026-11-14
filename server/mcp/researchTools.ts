@@ -2174,7 +2174,14 @@ const submitVerificationTool: McpTool = {
         },
       },
       sufficiency: { type: 'string', enum: ['SUFFICIENT', 'INSUFFICIENT'] },
-      missing_lanes: { type: 'array', items: { type: 'string' } },
+      missing_lanes: {
+        type: 'array',
+        items: { type: 'string' },
+        description:
+          'With INSUFFICIENT: the ids of the declared lanes still not answered. A lane the ' +
+          'fragment marks conditional or optional does not fail it; say what stays open in ' +
+          'unresolved_gaps.',
+      },
       unresolved_gaps: { type: 'array', items: { type: 'string' } },
       idempotency_key: { type: 'string' },
     },
