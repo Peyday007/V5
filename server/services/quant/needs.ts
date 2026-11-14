@@ -11,12 +11,18 @@
  *     same project, opens a `research_uncertainties` row on it through
  *     `openUncertainty` — the question the research director ranks and plans
  *     fragments for (§40). Consumed by a CALCULATION: the graph's figure.
- *   - A RESEARCH need with no orchestration named, and every AUTHORIZED_ACTION
- *     need, is raised through `raiseNeed` as a `cash_needs` row — the review a
- *     person already reads, carrying the recommended way forward, the next step
- *     and what would settle it. An action's need is keyed on the AUTHORITY it
- *     lacks, so one grant is found with one indexed read across every need it
- *     blocks.
+ *   - A RESEARCH need with no orchestration named still goes to research: it is
+ *     recorded through `raiseNeed` (keyed EVIDENCE:<key>, so its answer is found
+ *     by the need it settles) and opened as an idea through `createCandidate`,
+ *     pointed at by `setNeedCandidate` — the same research entrance
+ *     `requestMarketHistory` uses, which Russell judges and the research path
+ *     runs (§24). Research work is never left in a person's review queue
+ *     (§41, §44): a need without its idea is reported as not sent.
+ *   - Every AUTHORIZED_ACTION need is raised through `raiseNeed` as a
+ *     `cash_needs` row — the review a person already reads, carrying the
+ *     recommended way forward, the next step and what would settle it. An
+ *     action's need is keyed on the AUTHORITY it lacks, so one grant is found
+ *     with one indexed read across every need it blocks.
  *
  * Both writes are idempotent by a key built from the graph's own identity and
  * the need's subject — never from anything else the caller sent (invariant 27)
@@ -28,6 +34,8 @@ import { createHash } from 'node:crypto';
 import { getOrchestration } from '../../repos/research.ts';
 import { openUncertainty } from '../../repos/researchIntelligence.ts';
 import { raiseNeed } from '../cash/needs.ts';
+import { getNeed, setNeedCandidate } from '../../repos/cashPortfolio.ts';
+import { createCandidate } from '../../repos/russellCandidates.ts';
 
 export interface Need {
   /** What is missing, in the graph's own words. */
@@ -45,9 +53,11 @@ export type NeedDelivery =
       subject: string;
       sent: true;
       /** Which existing owner now holds it. */
-      to: 'RESEARCH_UNCERTAINTY' | 'REVIEW_NEED';
-      /** The row it is: an uncertainty id or a need id. */
+      to: 'RESEARCH_UNCERTAINTY' | 'RESEARCH_CANDIDATE' | 'REVIEW_NEED';
+      /** The row it is: an uncertainty id, a research idea (candidate) id, or a need id. */
       ref: string;
+      /** For a RESEARCH_CANDIDATE: the need the idea's answer settles. */
+      needId?: string;
       /** False when the same need was already sent and is still open: nothing new was written. */
       created: boolean;
     }
@@ -68,6 +78,8 @@ export interface SendNeedsDeps {
   getOrchestration?: typeof getOrchestration;
   openUncertainty?: typeof openUncertainty;
   raiseNeed?: typeof raiseNeed;
+  createCandidate?: typeof createCandidate;
+  setNeedCandidate?: typeof setNeedCandidate;
 }
 
 /** Thrown when a named orchestration is absent or another project's: the two are one refusal (invariant 23). */
@@ -75,6 +87,12 @@ export class UnknownOrchestrationError extends Error {
   constructor() {
     super('No such research orchestration.');
   }
+}
+
+/** The idea a need already points at, read back after another request attached it first. */
+async function readNeedCandidate(needId: string): Promise<string | null> {
+  const need = await getNeed(needId);
+  return need?.candidateId ?? null;
 }
 
 /** How `raiseNeed` says it read an open need back instead of writing one. */
@@ -107,6 +125,8 @@ export async function sendNeeds(input: SendNeedsInput, deps: SendNeedsDeps = {})
   const read = deps.getOrchestration ?? getOrchestration;
   const open = deps.openUncertainty ?? openUncertainty;
   const raise = deps.raiseNeed ?? raiseNeed;
+  const propose = deps.createCandidate ?? createCandidate;
+  const attach = deps.setNeedCandidate ?? setNeedCandidate;
 
   let orchestrationId: string | null = null;
   if (input.orchestrationId) {
@@ -157,7 +177,7 @@ export async function sendNeeds(input: SendNeedsInput, deps: SendNeedsDeps = {})
       setupEffort: action ? 'a decision by whoever holds the authority' : 'one targeted research question',
       nextStep: action
         ? `Decide whether to grant ${permissions.join(', ') || 'the permission'}, and record the grant or the refusal.`
-        : `Open research on: ${need.question}`,
+        : `Research is open on this question as an idea; its sourced answer settles the need: ${need.question}`,
       completionCondition: action
         ? `The actor holds ${permissions.join(', ') || 'the permission'}, or the action is removed from graph ${input.graphScope}.`
         : `A sourced figure for ${need.subject} replaces the unknown in graph ${input.graphScope}.`,
@@ -169,8 +189,33 @@ export async function sendNeeds(input: SendNeedsInput, deps: SendNeedsDeps = {})
       continue;
     }
     // `raiseNeed` reads an open need under the same key back rather than raising it again, and says so.
-    const created = !result.message.startsWith(ALREADY_RAISED);
-    out.push({ subject: need.subject, sent: true, to: 'REVIEW_NEED', ref: result.value.id, created });
+    const raisedNow = !result.message.startsWith(ALREADY_RAISED);
+    if (action) {
+      out.push({ subject: need.subject, sent: true, to: 'REVIEW_NEED', ref: result.value.id, created: raisedNow });
+      continue;
+    }
+    // Research is opened, not left for a person to open: the need is pointed at an idea the research path runs.
+    let candidateId = result.value.candidateId ?? null;
+    let opened = false;
+    if (!candidateId) {
+      const candidate = await propose({
+        projectId: input.projectId,
+        title: `Causal unknown: ${need.subject}`.slice(0, 200),
+        statement: `For causal graph ${input.graphScope}, establish from sourced evidence: ${need.question}`.slice(0, 2000),
+      });
+      if (await attach(result.value.id, candidate.id)) {
+        candidateId = candidate.id;
+        opened = true;
+      } else {
+        // Another request pointed the need first; its idea stands and this one is not attached.
+        candidateId = (await readNeedCandidate(result.value.id)) ?? null;
+      }
+    }
+    if (!candidateId) {
+      out.push({ subject: need.subject, sent: false, reason: `The research idea for ${need.subject} could not be attached to its need.` });
+      continue;
+    }
+    out.push({ subject: need.subject, sent: true, to: 'RESEARCH_CANDIDATE', ref: candidateId, needId: result.value.id, created: raisedNow || opened });
   }
   return out;
 }

@@ -10,7 +10,8 @@ import { freshProject } from './helpers.ts';
 import { createRun } from '../server/repos/runs.ts';
 import { createOrchestration } from '../server/repos/research.ts';
 import { listUncertainties } from '../server/repos/researchIntelligence.ts';
-import { listNeeds } from '../server/repos/cashPortfolio.ts';
+import { getNeed, listNeeds } from '../server/repos/cashPortfolio.ts';
+import { getCandidate } from '../server/repos/russellCandidates.ts';
 import { createProject } from '../server/repos/projects.ts';
 import { UnknownOrchestrationError, needKeyOf, sendNeeds, type Need } from '../server/services/quant/needs.ts';
 
@@ -48,7 +49,7 @@ describe('sending a causal graph’s needs', () => {
 
   it('raises an action’s need in the review, keyed on the authority it lacks, once', async () => {
     const sent = await sendNeeds({ projectId, actorRef: 'usr_test', graphScope: 'key:deal', needs: [ACTION, RESEARCH] });
-    expect(sent.map((one) => one.sent && one.to)).toEqual(['REVIEW_NEED', 'REVIEW_NEED']);
+    expect(sent.map((one) => one.sent && one.to)).toEqual(['REVIEW_NEED', 'RESEARCH_CANDIDATE']);
     const open = await listNeeds({ projectId, states: ['OPEN'] });
     expect(open).toHaveLength(2);
     expect(open.find((one) => one.blockerKey === 'AUTHORITY:billing:write')).toBeTruthy();
@@ -57,6 +58,23 @@ describe('sending a causal graph’s needs', () => {
     const again = await sendNeeds({ projectId, actorRef: 'usr_test', graphScope: 'key:deal', needs: [ACTION, RESEARCH] });
     expect(again.every((one) => one.sent && !one.created)).toBe(true);
     expect(await listNeeds({ projectId, states: ['OPEN'] })).toHaveLength(2);
+  });
+
+  it('opens research on a research need with no orchestration named, never leaving it for a person to open', async () => {
+    const [delivery] = await sendNeeds({ projectId, actorRef: 'usr_test', graphScope: 'key:deal', needs: [RESEARCH] });
+    expect(delivery).toMatchObject({ subject: 'claim conversion', sent: true, to: 'RESEARCH_CANDIDATE', created: true });
+    if (!delivery?.sent) throw new Error('not sent');
+    // The research entrance requestMarketHistory uses: an idea the research path runs, pointed at by the need.
+    const candidate = await getCandidate(delivery.ref);
+    expect(candidate).toMatchObject({ projectId, state: 'CAPTURED' });
+    expect(candidate?.statement).toContain('What is conversion?');
+    const need = await getNeed(delivery.needId!);
+    expect(need).toMatchObject({ candidateId: delivery.ref, blockerKey: `EVIDENCE:${needKeyOf('key:deal', RESEARCH)}` });
+    expect(need?.nextStep).not.toMatch(/^Open research on/);
+
+    // A second send reads the same need and idea back; no second idea is opened.
+    const [again] = await sendNeeds({ projectId, actorRef: 'usr_test', graphScope: 'key:deal', needs: [RESEARCH] });
+    expect(again).toMatchObject({ sent: true, to: 'RESEARCH_CANDIDATE', ref: delivery.ref, needId: delivery.needId, created: false });
   });
 
   it('refuses another project’s orchestration exactly as an absent one, and writes nothing', async () => {

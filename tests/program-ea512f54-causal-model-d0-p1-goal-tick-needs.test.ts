@@ -12,6 +12,7 @@ import { createUser } from '../server/repos/identity.ts';
 import { activate } from '../server/services/cash/lifecycle.ts';
 import { capture } from '../server/services/cash/opportunities.ts';
 import { getOpportunity, listNeeds } from '../server/repos/cashPortfolio.ts';
+import { getCandidate } from '../server/repos/russellCandidates.ts';
 import { forgetKnowledge, loadCashKnowledge } from '../server/services/quant/knowledge.ts';
 import { acquireMarketHistory } from '../server/services/quant/history.ts';
 import { needKeyOf } from '../server/services/quant/needs.ts';
@@ -79,6 +80,12 @@ describe('the goal tick sends its portfolio needs (review F2-2)', () => {
     for (const key of keys) expect(needs.filter((n) => n.requestKey === key)).toHaveLength(1);
     const action = needs.find((n) => n.requestKey === keys[0]);
     expect(action?.blockerKey).toBe(`AUTHORITY:${COUNTERPARTY_PERMISSION}`);
+    // The research unknown is researched, not parked for a person: its need points at an idea the research path runs.
+    const research = needs.find((n) => n.requestKey === keys[1]);
+    expect(research?.candidateId).toBeTruthy();
+    const idea = await getCandidate(research!.candidateId!);
+    expect(idea?.projectId).toBe(projectId);
+    expect(idea?.statement).toContain('the direct cost per deal');
     expect(needs.filter((n) => n.requestKey?.startsWith(`market-history:${opening.id}:`))).toHaveLength(3);
 
     // The next tick reads the open rows back; the review is not flooded.
