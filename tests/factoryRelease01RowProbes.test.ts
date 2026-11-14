@@ -26,7 +26,7 @@ const judgment = (capability: string, outcome: string, route: string | null, rea
 });
 
 describe('the probes are registered in the protected module', () => {
-  it.each(['r01.acq-21-1', 'r01.acq-21-2', 'r01.acq-21-5', 'r01.cont-35', 'r01.learn-15-1', 'r01.gov-11', 'r01.gov-22-1'])('%s, and its query runs: UNKNOWN on an empty Brain', async (name) => {
+  it.each(['r01.acq-21-1', 'r01.acq-21-2', 'r01.acq-21-5', 'r01.cont-35', 'r01.learn-15-1', 'r01.gov-11', 'r01.gov-22-1', 'r01.arch-01', 'r01.com-13-1', 'r01.opp-03'])('%s, and its query runs: UNKNOWN on an empty Brain', async (name) => {
     await freshProject();
     const probe = getProbe(name);
     expect(probe).not.toBeNull();

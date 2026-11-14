@@ -24,6 +24,30 @@
  * that decides what the economy looks like, and it is the reason the map can
  * be trusted to be about published reality rather than about what a model
  * expected an industry to contain.
+ *
+ * ---------------------------------------------------------------------------
+ * Where a finding came from, and roles nobody holds yet (OPP-03, COM-13-1)
+ * ---------------------------------------------------------------------------
+ *
+ * Every row `absorb` files is stamped with the origin `construction/origins.ts`
+ * names for it, inside the `INDUSTRY_FINDINGS_ABSORBED` payload that already
+ * records it: a constraint kind is CONSTRAINT, and everything else a gated
+ * claim established is WORLD — activity observed outside Brain's own database.
+ * The stamp is read off the declared finding kind, never off the sentence.
+ *
+ * `unrepresentedRoleAsks` turns a mapped flow's role set (`construction/
+ * roles.ts`) into asks about the positions on it that no record represents.
+ * They are ordinary SCAN asks whose bucket names the role, so they open
+ * through `openAsks` and `createCandidate` exactly like every other question:
+ * no second research pipeline, no new purpose, no migration.
+ *
+ * `openAsks` is what calls it in production: whatever slots the allocator's
+ * own asks leave free under `MAX_OPEN_KERNEL_ROUNDS`, it fills with
+ * `roleAsksFromSnapshot` — the role asks of every mapped subject that no round
+ * has asked yet — and, while no role question is open, it holds one slot for
+ * one, taken from the allocator's lowest-ranked ask, which is planned again
+ * next pass. The cap is the one the allocator works under, so role questions
+ * never raise what the kernel may have open.
  */
 import { getDb } from '../../db/database.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
@@ -60,7 +84,10 @@ import {
   scanQuestion,
   scanTitle,
 } from './questions.ts';
-import type { Ask } from './allocate.ts';
+import { sprintGoalLine } from '../../domain/operatingModel.ts';
+import type { OpportunityOrigin } from './construction/origins.ts';
+import { commercialRoles, SEED_ROLES, type FlowRoles } from './construction/roles.ts';
+import { MAX_OPEN_KERNEL_ROUNDS, type Ask } from './allocate.ts';
 import type { GraphSnapshot } from './graph.ts';
 import type {
   CapitalStructure,
@@ -72,6 +99,131 @@ import type {
 
 const OPENED = 'INDUSTRY_ROUND_OPENED';
 const ABSORBED = 'INDUSTRY_FINDINGS_ABSORBED';
+
+/**
+ * The origin of an absorbed finding, from its declared kind alone.
+ *
+ * A constraint the research established is the CONSTRAINT origin — a reason a
+ * different arrangement may exist. Every other kind came from a gated claim
+ * about a public source, which is what WORLD means: observed outside Brain's
+ * own database. Never read from the claim's sentence (§8).
+ */
+export function originOfFinding(finding: string): OpportunityOrigin {
+  return finding === 'HIDDEN_CONSTRAINT' ? 'CONSTRAINT' : 'WORLD';
+}
+
+/** A SCAN bucket that asks about one commercial role rather than one mechanism. */
+const ROLE_BUCKET = 'role:';
+
+export function roleBucketId(roleId: string): string {
+  return `${ROLE_BUCKET}${roleId}`;
+}
+
+export function roleIdOfBucket(bucketId: string | null): string | null {
+  return bucketId && bucketId.startsWith(ROLE_BUCKET) ? bucketId.slice(ROLE_BUCKET.length) || null : null;
+}
+
+/**
+ * Asks about the roles on a subject's mapped flows that no record represents.
+ *
+ * A role is represented when an actor in the evidence stands in it — then its
+ * sources carry that actor beside the flow — or when the evidence itself
+ * named it (an EVIDENCE role). A seed role whose only source is the flow is a
+ * position Brain can name but holds no record of, and that is exactly the
+ * question ARCH-01 says Brain must be able to ask. A role the evidence refuses
+ * (occupiable NO) is not asked about: the record already answered it.
+ *
+ * One ask per role per subject, because the round key is the subject and the
+ * bucket; which flows it was missing from travels in `why`. Only flows the
+ * map recorded count — a reference pack is not a record. Pure.
+ */
+export function unrepresentedRoleAsks(input: {
+  nodeId: string;
+  subject: string;
+  since: string;
+  sets: readonly FlowRoles[];
+  round?: number;
+  rank?: number;
+}): Ask[] {
+  const missing = new Map<string, { label: string; flows: string[] }>();
+  for (const set of input.sets) {
+    if (set.flow.source.kind !== 'MAP') continue;
+    for (const role of set.roles) {
+      if (role.origin !== 'SEED') continue;
+      if (role.occupiable.answer === 'NO') continue;
+      if (role.sources.length > 1) continue;
+      const entry = missing.get(role.roleId) ?? { label: role.label, flows: [] };
+      entry.flows.push(`${set.flowKey} (${set.flow.terms})`);
+      missing.set(role.roleId, entry);
+    }
+  }
+  return [...missing].map(([roleId, entry]) => ({
+    purpose: 'SCAN' as const,
+    nodeId: input.nodeId,
+    bucketId: roleBucketId(roleId),
+    opportunityId: null,
+    round: Math.max(1, Math.trunc(input.round ?? 1)),
+    rank: input.rank ?? 0,
+    subject: input.subject,
+    since: input.since,
+    why:
+      `No record represents a ${entry.label} on ${entry.flows.length} mapped flow` +
+      `${entry.flows.length === 1 ? '' : 's'} of ${input.subject}: ${entry.flows.join('; ')}.`,
+  }));
+}
+
+/**
+ * The role asks Brain has not opened yet, read from the snapshot it already holds.
+ *
+ * One pass per subject on the map (a root node): its recorded subtree and
+ * constraints become evidence exactly as the r01.com-13-1 probe reads them
+ * (`evidenceFromMap` → `assembleEvidence` → `commercialRoles`), and
+ * `unrepresentedRoleAsks` names the roles no record represents. A subject and
+ * role that already have a round of any state are skipped: the round key is
+ * the subject and the bucket, so it is asked once and its answer is absorbed
+ * like any other. Ordered by when Brain came to know the subject, then by
+ * role order. At most `limit`. Reads nothing beyond the snapshot.
+ */
+export async function roleAsksFromSnapshot(snapshot: GraphSnapshot, limit: number): Promise<Ask[]> {
+  const room = Math.max(0, Math.trunc(limit));
+  if (room === 0) return [];
+  const { assembleEvidence, evidenceFromMap, subtreeFor } = await import('./construction/service.ts');
+  const asked = new Set(snapshot.rounds.filter((one) => one.nodeId && one.bucketId).map((one) => `${one.nodeId}|${one.bucketId}`));
+  const roots = snapshot.nodes
+    .filter((one) => one.parentId === null && one.retiredAt === null)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+  const out: Ask[] = [];
+  for (const root of roots) {
+    const map = evidenceFromMap(subtreeFor(snapshot.nodes, root.name), snapshot.constraints);
+    if (map.flows.length === 0) continue;
+    const evidence = assembleEvidence({ text: root.name, industry: root.name, geography: null, map, recorded: [] });
+    const asks = unrepresentedRoleAsks({ nodeId: root.id, subject: root.name, since: root.createdAt, sets: commercialRoles(evidence) });
+    for (const ask of asks) {
+      if (asked.has(`${ask.nodeId}|${ask.bucketId}`)) continue;
+      out.push(ask);
+      if (out.length >= room) return out;
+    }
+  }
+  return out;
+}
+
+function roleTitle(label: string, path: readonly string[]): string {
+  return `Who could stand as ${label} — in ${path[path.length - 1] ?? 'this subject'}`;
+}
+
+function roleQuestion(input: { roleId: string; label: string; path: readonly string[]; objective: string }): string {
+  const seed = SEED_ROLES.find((one) => one.id === input.roleId);
+  const controls = seed ? seed.controls.map((one) => one.toLowerCase().replace(/_/g, ' ')).join(', ') : null;
+  return [
+    `Within ${input.path.join(' → ')}: does anyone stand as ${input.label} on the flows of money and work, ` +
+      (controls ? `controlling ${controls}, ` : '') +
+      'and could an operation occupy that position legally and contractually without doing the physical work itself? ' +
+      'Name who occupies it now, what the position is paid and on what terms, the duties and risks that follow from it, ' +
+      'and any licence, bond, registration or contract term that decides who may stand there. Where nobody occupies ' +
+      'it, say so plainly rather than naming a plausible occupant.',
+    sprintGoalLine(input.objective),
+  ].join(' ');
+}
 
 export interface OpenedRound {
   roundId: string;
@@ -120,7 +272,29 @@ export async function openAsks(input: {
   const coverageByNode = new Map(input.snapshot.coverage.map((one) => [one.node.id, one]));
   const out: OpenedRound[] = [];
 
-  for (const ask of input.asks) {
+  /*
+   * Roles no record represents (ARCH-01, COM-13-1), in the slots the
+   * allocator's own asks leave free. Without this nothing in production ever
+   * asked about them: `unrepresentedRoleAsks` existed and no path called it.
+   */
+  const open = input.snapshot.rounds.filter((one) => one.state === 'OPEN');
+  const free = MAX_OPEN_KERNEL_ROUNDS - open.length - input.asks.length;
+  /*
+   * The allocator fills every slot whenever its own queue is longer than the
+   * cap, which on a growing map is always, so free slots alone would starve
+   * this branch exactly as the missing call did. While no role question is
+   * open, one slot is held for one: the allocator's lowest-ranked ask (its
+   * last) yields it and is simply planned again next pass. Never the only ask
+   * the allocator gave, and never above the cap.
+   */
+  const roleOpen = open.some((one) => roleIdOfBucket(one.bucketId) !== null);
+  const reserve = !roleOpen && free <= 0 && input.asks.length >= 2 && open.length + 1 <= MAX_OPEN_KERNEL_ROUNDS;
+  const given = new Set(input.asks.map((one) => `${one.nodeId}|${one.bucketId}`));
+  const roleAsks = (await roleAsksFromSnapshot(input.snapshot, reserve ? 1 : free)).filter((one) => !given.has(`${one.nodeId}|${one.bucketId}`));
+  const allocated = reserve && roleAsks.length > 0 ? input.asks.slice(0, Math.max(0, MAX_OPEN_KERNEL_ROUNDS - open.length - 1)) : input.asks;
+  const asks = [...allocated, ...roleAsks];
+
+  for (const ask of asks) {
     const composed = await compose({ ask, mode, byId, coverage: coverageByNode });
     if (!composed) continue;
 
@@ -238,6 +412,15 @@ async function compose(input: {
     };
   }
 
+  const roleId = roleIdOfBucket(ask.bucketId);
+  if (roleId) {
+    const label = SEED_ROLES.find((one) => one.id === roleId)?.label ?? roleId.replace(/_/g, ' ');
+    return {
+      title: roleTitle(label, path),
+      question: roleQuestion({ roleId, label, path, objective: mode.objective }),
+    };
+  }
+
   const bucket = bucketById(ask.bucketId);
   if (!bucket) return null;
   return {
@@ -260,6 +443,11 @@ export interface Absorbed {
   settled: { roundId: string; found: number }[];
   /** Declarations that could not be filed, and why. Reported, never guessed. */
   refused: { claimId: string; why: string }[];
+  /**
+   * The origin of every row filed this pass (OPP-03), from its finding kind.
+   * Optional only so a caller's empty result stays valid; `absorb` always sets it.
+   */
+  origins?: { kind: 'NODE' | 'CONSTRAINT' | 'CAPITAL'; id: string; claimId: string; origin: OpportunityOrigin }[];
 }
 
 /**
@@ -274,7 +462,7 @@ export async function absorb(input: {
   projectId: string;
   limit?: number;
 }): Promise<Absorbed> {
-  const out: Absorbed = { nodes: [], constraints: [], capital: [], settled: [], refused: [] };
+  const out: Absorbed & { origins: NonNullable<Absorbed['origins']> } = { nodes: [], constraints: [], capital: [], settled: [], refused: [], origins: [] };
   const mode = await getCashMode(input.projectId);
   if (!mode) return out;
 
@@ -415,6 +603,7 @@ export async function absorb(input: {
         constraintIds: out.constraints.map((one) => one.id),
         capitalIds: out.capital.map((one) => one.id),
         refused: out.refused,
+        origins: out.origins,
       },
     });
   }
@@ -435,7 +624,7 @@ async function file(input: {
   claim: ResearchClaim;
   round: IndustryRound;
   byNodeId: Map<string, IndustryNode>;
-  out: Absorbed;
+  out: Absorbed & { origins: NonNullable<Absorbed['origins']> };
 }): Promise<boolean> {
   const { claim, round, out } = input;
   const finding = claim.structuralFinding;
@@ -464,6 +653,7 @@ async function file(input: {
     if (created.created) {
       input.byNodeId.set(created.node.id, created.node);
       out.nodes.push(created.node);
+      out.origins.push({ kind: 'NODE', id: created.node.id, claimId: claim.id, origin: originOfFinding(finding) });
       return true;
     }
     return false;
@@ -493,6 +683,7 @@ async function file(input: {
     });
     if (recorded) {
       out.constraints.push(recorded);
+      out.origins.push({ kind: 'CONSTRAINT', id: recorded.id, claimId: claim.id, origin: originOfFinding(finding) });
       return true;
     }
     return false;
@@ -527,6 +718,7 @@ async function file(input: {
     });
     if (recorded) {
       out.capital.push(recorded);
+      out.origins.push({ kind: 'CAPITAL', id: recorded.id, claimId: claim.id, origin: originOfFinding(finding) });
       return true;
     }
     return false;
@@ -584,6 +776,7 @@ async function file(input: {
   });
   if (recorded) {
     out.capital.push(recorded);
+    out.origins.push({ kind: 'CAPITAL', id: recorded.id, claimId: claim.id, origin: originOfFinding(finding) });
     return true;
   }
   return false;
