@@ -521,6 +521,40 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
       continue;
     }
 
+    /*
+     * Decide before asking (§80, rule 11).
+     *
+     * Production, seven days to 2026-11-14: 305 of 334 Needs-You cards were
+     * this stop — accepted evidence, repair ladder spent — in a project whose
+     * standing grant already authorizes filing it with the gaps named, and
+     * `answerRoutineParks` did exactly that once the card was ten minutes old.
+     * So every routine park reached a person first. The decision is made here
+     * instead, by the same step and under the same conditions; only what Brain
+     * may not decide becomes a card, with the condition that stopped it
+     * recorded beside it.
+     */
+    const resumeKey = `russell:needs-human:${mission.id}:${orchestration.id}`;
+    const { fileUnderStandingGrant } = await import('./routineDecisions.ts');
+    const decision = await fileUnderStandingGrant({
+      orchestration,
+      choiceKeys: choicesFor(shape).map((choice) => choice.key),
+      mission: { id: mission.id, state: mission.state },
+      why:
+        'the packet has accepted evidence and its repair ladder is spent, so its audited report is ' +
+        'filed with the unresolved questions named rather than held open',
+    });
+    if (decision.decided) continue;
+    if (decision.condition === 'ALREADY_AUTHORIZED' && !(await requestExists(resumeKey))) {
+      /*
+       * Brain already decided this packet and it stopped again. The decision
+       * is not asked a second time: the mission waits on the packet's own
+       * reason, and `refileDecidedParks` / `unparkResolvedMissions` carry it
+       * on from the rows.
+       */
+      await transitionMission({ missionId: mission.id, from: mission.state, to: 'NEEDS_HUMAN', waitingOn });
+      continue;
+    }
+
     const moved = await transitionMission({
       missionId: mission.id,
       from: mission.state,
@@ -528,6 +562,21 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
       waitingOn,
     });
     if (!moved) continue;
+    await recordEvent({
+      projectId: mission.projectId,
+      entityType: 'RUSSELL_MISSION',
+      entityId: mission.id,
+      // The same record a decision makes, saying Brain did not make it and why.
+      eventType: 'RUSSELL_ROUTINE_DECISION',
+      payload: {
+        orchestrationId: orchestration.id,
+        missionId: mission.id,
+        choice: null,
+        decidedBy: null,
+        declinedBecause: decision.condition,
+        reason: decision.reason,
+      },
+    });
 
     const { request, created } = await askHuman({
       projectId: mission.projectId,
@@ -559,7 +608,7 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
       urgency: 'BLOCKING',
       // Derived from the mission and the packet, so the same stop asked twice
       // is one request. Never from a clock, an attempt or a lease.
-      resumeKey: `russell:needs-human:${mission.id}:${orchestration.id}`,
+      resumeKey,
     });
 
     let reopened = false;
@@ -575,6 +624,10 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
     }
   }
   return parked;
+}
+
+async function requestExists(resumeKey: string): Promise<boolean> {
+  return (await getDb().get('SELECT 1 AS one FROM russell_human_requests WHERE resume_key = ?', [resumeKey])) != null;
 }
 
 /**

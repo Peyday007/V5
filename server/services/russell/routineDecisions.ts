@@ -37,9 +37,9 @@ import { getDb } from '../../db/database.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { getOrchestration } from '../../repos/research.ts';
 import { listGoals } from '../../repos/russellAuthority.ts';
-import { answerHumanRequest, getHumanRequest, getMission } from '../../repos/russellMissions.ts';
-import type { RussellHumanRequest, ResearchOrchestration } from '../../domain/types.ts';
-import { NEEDS_HUMAN_CHOICES } from './needsHuman.ts';
+import { answerHumanRequest, getHumanRequest, getMission, transitionMission } from '../../repos/russellMissions.ts';
+import type { MissionState, RussellHumanRequest, ResearchOrchestration } from '../../domain/types.ts';
+import { NEEDS_HUMAN_CHOICES, choicesFor, packetShape } from './needsHuman.ts';
 
 /** How long a card waits before Brain answers it, so repair passes go first. */
 export const ROUTINE_DECISION_GRACE_MS = 10 * 60_000;
@@ -198,6 +198,99 @@ async function decide(
 }
 
 /**
+ * The one step that files a stopped packet under the standing grant (§80, §88).
+ *
+ * Production, seven days to 2026-11-14: 305 of 334 Needs-You cards read
+ * "Deciding whether this project accepts a report with unresolved questions
+ * in it". `answerRoutineParks` answered that exact shape under the project's
+ * standing grant — but only after `ROUTINE_DECISION_GRACE_MS`, so every routine
+ * park was first raised to a person as a card. The grace exists so repair
+ * passes act first, and for this shape the only repair is a corrected judge
+ * round, which `assessJudgeRound` RESUME already detects. So the park pass asks
+ * here first, and `answerUnaskedParks` uses the same step: one mechanism.
+ *
+ * Brain decides only when every condition the card answerers already apply
+ * holds: RECORD_GAPS is among the honest answers (accepted evidence, research
+ * reached), the packet is not already authorized, no corrected judge round is
+ * about to run, the project holds a live STANDING grant, and its owner
+ * resolves. Otherwise it returns which condition failed, so the cards that
+ * remain are attributable by cause. Nothing is lowered: the gate decided what
+ * was accepted, and only that is filed.
+ */
+export type GrantDeclineCondition =
+  | 'RECORD_GAPS_NOT_OFFERED'
+  | 'ALREADY_AUTHORIZED'
+  | 'JUDGE_ROUND_RESUMING'
+  | 'NO_LIVE_STANDING_GRANT'
+  | 'GRANT_OWNER_UNRESOLVED';
+
+export type GrantDecision =
+  | { decided: true; grantId: string; reason: string; status: string }
+  | { decided: false; condition: GrantDeclineCondition; reason: string };
+
+export async function fileUnderStandingGrant(input: {
+  orchestration: ResearchOrchestration;
+  /** The answers an honest card for this packet would offer (`choicesFor`). */
+  choiceKeys: readonly string[];
+  /** The mission over the packet, returned to RUNNING before the packet advances. */
+  mission: { id: string; state: MissionState } | null;
+  why: string;
+  nowMs?: number;
+}): Promise<GrantDecision> {
+  const { orchestration } = input;
+  if (!input.choiceKeys.includes(NEEDS_HUMAN_CHOICES.RECORD_GAPS.key)) {
+    return { decided: false, condition: 'RECORD_GAPS_NOT_OFFERED', reason: 'filing with the gaps named is not an answer this packet can take' };
+  }
+  if (orchestration.unresolvedGapPolicy === 'RECORD_GAPS') {
+    return { decided: false, condition: 'ALREADY_AUTHORIZED', reason: 'filing with the gaps named is already authorized' };
+  }
+  const { assessJudgeRound } = await import('../research/judgeRound.ts');
+  if ((await assessJudgeRound(orchestration)).kind === 'RESUME') {
+    return { decided: false, condition: 'JUDGE_ROUND_RESUMING', reason: 'Brain is about to run a corrected round on it' };
+  }
+  const now = new Date(input.nowMs ?? Date.now()).toISOString();
+  const grant = (await listGoals(orchestration.projectId)).find(
+    (goal) => goal.state === 'ACTIVE' && (!goal.expiresAt || goal.expiresAt > now),
+  );
+  if (!grant) {
+    return { decided: false, condition: 'NO_LIVE_STANDING_GRANT', reason: 'the project has no live standing research grant' };
+  }
+  const { getUser } = await import('../../repos/identity.ts');
+  const owner = await getUser(grant.ownerUserId);
+  if (!owner) {
+    return { decided: false, condition: 'GRANT_OWNER_UNRESOLVED', reason: 'the grant owner cannot be resolved' };
+  }
+
+  const reason = `Decided by Brain under the standing research grant “${grant.name}” (${grant.id}): ${input.why}.`;
+  const { authorizeUnresolvedGaps } = await import('../research/gapPolicy.ts');
+  await authorizeUnresolvedGaps({ orchestrationId: orchestration.id, authorizedBy: { id: owner.id, email: owner.email } });
+  await recordEvent({
+    projectId: orchestration.projectId,
+    entityType: 'PROJECT',
+    entityId: orchestration.projectId,
+    eventType: 'RUSSELL_ROUTINE_DECISION',
+    payload: {
+      orchestrationId: orchestration.id,
+      missionId: input.mission?.id ?? null,
+      choice: 'RECORD_GAPS',
+      grantId: grant.id,
+      decidedBy: 'BRAIN_UNDER_STANDING_AUTHORITY',
+      reason,
+    },
+  });
+  // Running before the packet advances, as `recordGaps` does: the advance can
+  // carry the packet to terminal, and the writeback refuses a parked mission.
+  if (input.mission && input.mission.state !== 'RUNNING') {
+    await transitionMission({ missionId: input.mission.id, from: input.mission.state, to: 'RUNNING', waitingOn: null });
+  }
+  const { advancePacket } = await import('../research/packetRunner.ts');
+  const advanced = await advancePacket(orchestration.id).catch((error: unknown) => ({
+    status: `advance failed: ${String((error as Error)?.message ?? error).slice(0, 120)}`,
+  }));
+  return { decided: true, grantId: grant.id, reason, status: advanced.status };
+}
+
+/**
  * Parks with no card: the same decision, where nobody was ever asked (§80, §88).
  *
  * Production, 2026-11-05 (`packets judge-parks`): eight packets sat at
@@ -247,36 +340,21 @@ export async function answerUnaskedParks(input: { limit?: number; nowMs?: number
   for (const row of rows) {
     const orchestration = await getOrchestration(row.id);
     if (!orchestration || orchestration.status !== 'NEEDS_HUMAN') continue;
-    const { assessJudgeRound } = await import('../research/judgeRound.ts');
-    const assessment = await assessJudgeRound(orchestration);
-    if (assessment.kind === 'RESUME') {
-      out.push({ orchestrationId: row.id, decided: false, reason: 'Brain is about to run a corrected round on it' });
-      continue;
-    }
-    const grant = (await listGoals(row.project_id)).find((g) => g.state === 'ACTIVE' && (!g.expiresAt || g.expiresAt > now));
-    if (!grant) continue;
-    const { getUser } = await import('../../repos/identity.ts');
-    const owner = await getUser(grant.ownerUserId);
-    if (!owner) {
-      out.push({ orchestrationId: row.id, decided: false, reason: 'the grant owner cannot be resolved' });
-      continue;
-    }
-    const why =
-      'the packet has accepted evidence and nothing left Brain may attempt, so its audited report is filed with the ' +
-      'unresolved questions named rather than held for a person nobody asked';
-    const reason = `Decided by Brain under the standing research grant “${grant.name}” (${grant.id}): ${why}.`;
-    const { authorizeUnresolvedGaps } = await import('../research/gapPolicy.ts');
-    await authorizeUnresolvedGaps({ orchestrationId: row.id, authorizedBy: { id: owner.id, email: owner.email } });
-    await recordEvent({
-      projectId: row.project_id,
-      entityType: 'PROJECT',
-      entityId: row.project_id,
-      eventType: 'RUSSELL_ROUTINE_DECISION',
-      payload: { orchestrationId: row.id, missionId: null, choice: 'RECORD_GAPS', grantId: grant.id, decidedBy: 'BRAIN_UNDER_STANDING_AUTHORITY', reason },
+    const choiceKeys = choicesFor(await packetShape(row.id)).map((choice) => choice.key);
+    const decision = await fileUnderStandingGrant({
+      orchestration,
+      choiceKeys,
+      mission: null,
+      why:
+        'the packet has accepted evidence and nothing left Brain may attempt, so its audited report is filed with the ' +
+        'unresolved questions named rather than held for a person nobody asked',
+      nowMs,
     });
-    const { advancePacket } = await import('../research/packetRunner.ts');
-    const advanced = await advancePacket(row.id).catch((error: unknown) => ({ status: `advance failed: ${String((error as Error)?.message ?? error).slice(0, 120)}` }));
-    out.push({ orchestrationId: row.id, decided: true, reason: `filed with gaps named; the packet is now ${advanced.status}` });
+    if (decision.decided) {
+      out.push({ orchestrationId: row.id, decided: true, reason: `filed with gaps named; the packet is now ${decision.status}` });
+    } else if (decision.condition === 'JUDGE_ROUND_RESUMING' || decision.condition === 'GRANT_OWNER_UNRESOLVED') {
+      out.push({ orchestrationId: row.id, decided: false, reason: decision.reason });
+    }
   }
   return out;
 }
@@ -318,7 +396,7 @@ export async function refileDecidedParks(input: { limit?: number; nowMs?: number
     [before, input.limit ?? 5],
   );
   const { advancePacket, auditReopensSoFar, MAX_AUDIT_REOPENS } = await import('../research/packetRunner.ts');
-  const { getMissionByOrchestration, transitionMission } = await import('../../repos/russellMissions.ts');
+  const { getMissionByOrchestration } = await import('../../repos/russellMissions.ts');
   const out: { orchestrationId: string; status: string }[] = [];
   for (const row of rows) {
     if ((await auditReopensSoFar({ id: row.id, projectId: row.project_id })) >= MAX_AUDIT_REOPENS) continue;
