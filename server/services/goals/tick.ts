@@ -398,10 +398,94 @@ export interface ResearchAllocationPorts {
 
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
+/**
+ * What each purpose's research bears on, read from the live goals' own rows
+ * (finding F4). Two inputs the decision weighs and production never supplied:
+ *
+ *   - **deadlines** — every dated goal pulls on each purpose its research
+ *     serves, not only transaction routes: a goal is attributed the way
+ *     `researchYield.attributePurposes` attributes a job of that goal — a
+ *     target to TRANSACTION_ROUTES, a target with a verified customer payment
+ *     (a business already operating) to OPERATING_SUPPORT as well, no target
+ *     yet to FORWARD_EXPLORATION, and a CAPABILITY goal to SELF_IMPROVEMENT;
+ *   - **expected decision value** — the money the purpose's next research can
+ *     still move, on one scale for every purpose: the target still unreached
+ *     for TRANSACTION_ROUTES, and what an operating business already brings in
+ *     for OPERATING_SUPPORT. A purpose no row puts money on is left unstated,
+ *     never zero and never guessed (invariant 39), and goals in different
+ *     currencies are not added together (no rate is invented).
+ *
+ * Pure: the same goals and clock give the same stakes.
+ */
+export interface PurposeStakes {
+  deadlineDays: Partial<Record<ResearchPurpose, number>>;
+  decisionValue: Partial<Record<ResearchPurpose, number>>;
+  currency: string | null;
+  basis: string[];
+}
+
+export function purposeStakesFrom(goals: readonly GoalView[], untilMs: number): PurposeStakes {
+  const deadlineDays: Partial<Record<ResearchPurpose, number>> = {};
+  const value: Partial<Record<ResearchPurpose, number>> = {};
+  const currencies = new Set<string>();
+  const basis: string[] = [];
+  for (const goal of goals) {
+    const purposes: ResearchPurpose[] = [];
+    const t = goal.target;
+    if (t) {
+      if (!t.achieved && t.remainingCents > 0) purposes.push('TRANSACTION_ROUTES');
+      if (t.proven) purposes.push('OPERATING_SUPPORT');
+    } else {
+      purposes.push('FORWARD_EXPLORATION');
+    }
+    if (goal.purpose === 'CAPABILITY') purposes.push('SELF_IMPROVEMENT');
+    const due = goal.dueAt ? (Date.parse(goal.dueAt) - untilMs) / 86_400_000 : null;
+    if (due !== null && Number.isFinite(due) && due > 0) {
+      for (const p of purposes) {
+        if (deadlineDays[p] === undefined || due < deadlineDays[p]!) deadlineDays[p] = due;
+      }
+      if (purposes.length) basis.push(`goal ${goal.id} due in ${due.toFixed(1)} days pulls on ${purposes.join(', ')}`);
+    }
+    if (t) {
+      const stakes: [ResearchPurpose, number][] = [];
+      if (purposes.includes('TRANSACTION_ROUTES')) stakes.push(['TRANSACTION_ROUTES', t.remainingCents / 100]);
+      if (purposes.includes('OPERATING_SUPPORT') && t.achievedCents > 0) stakes.push(['OPERATING_SUPPORT', t.achievedCents / 100]);
+      if (stakes.length) {
+        currencies.add(t.currency);
+        for (const [p, v] of stakes) {
+          value[p] = (value[p] ?? 0) + v;
+          basis.push(`goal ${goal.id}: ${v.toFixed(2)} ${t.currency} ${p === 'TRANSACTION_ROUTES' ? 'still unreached' : 'already earned by an operating business'} rests on ${p}`);
+        }
+      }
+    }
+  }
+  if (currencies.size > 1) {
+    basis.push(`goals are in ${[...currencies].sort().join(', ')}; no rate between them is recorded, so no decision value is stated`);
+    return { deadlineDays, decisionValue: {}, currency: null, basis };
+  }
+  return { deadlineDays, decisionValue: value, currency: currencies.size === 1 ? [...currencies][0]! : null, basis };
+}
+
+function deadlineFor(
+  p: ResearchPurpose,
+  context: { nearestDeadlineDays: number | null; stakes?: PurposeStakes },
+): { nearestDeadlineDays?: number } {
+  const own = context.stakes?.deadlineDays[p];
+  if (own !== undefined) return { nearestDeadlineDays: own };
+  if (p === 'TRANSACTION_ROUTES' && context.nearestDeadlineDays !== null) return { nearestDeadlineDays: context.nearestDeadlineDays };
+  return {};
+}
+
 /** The measured inputs one window gives the decision. Pure. */
 export function allocationInputFrom(
   reading: ResearchYieldReading,
-  context: { urgentCommercialGoal: boolean; nearestDeadlineDays: number | null; triedRemedies: Map<string, LaneRemedy[]> },
+  context: {
+    urgentCommercialGoal: boolean;
+    nearestDeadlineDays: number | null;
+    triedRemedies: Map<string, LaneRemedy[]>;
+    /** Each purpose's own stakes from the live goals (`purposeStakesFrom`); wins over `nearestDeadlineDays`. */
+    stakes?: PurposeStakes;
+  },
 ): AllocationInput {
   // The shares in force are where the capacity actually went: each purpose's job time in the window.
   const currentShares: Partial<Record<ResearchPurpose, number>> = {};
@@ -414,7 +498,8 @@ export function allocationInputFrom(
       usefulResults: ran ? b!.usefulResults : null,
       // Job time is the cost every job records; it is split once across a job's purposes.
       cost: ran ? b!.jobMs : null,
-      ...(p === 'TRANSACTION_ROUTES' && context.nearestDeadlineDays !== null ? { nearestDeadlineDays: context.nearestDeadlineDays } : {}),
+      ...deadlineFor(p, context),
+      ...(context.stakes && context.stakes.decisionValue[p] !== undefined ? { decisionValue: context.stakes.decisionValue[p]! } : {}),
     };
   });
   const lanePurposes = new Map<string, Set<ResearchPurpose>>();
@@ -487,7 +572,8 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
   const previous = live.length > 0 ? await ports.lastDecision(live[0]!.id) : null;
   const tried = triedRemediesFrom(previous);
   const reading = await ports.readYield(window);
-  const allocationInput = allocationInputFrom(reading, { urgentCommercialGoal, nearestDeadlineDays: deadlines.length ? Math.min(...deadlines) : null, triedRemedies: tried });
+  const stakes = purposeStakesFrom(live, untilMs);
+  const allocationInput = allocationInputFrom(reading, { urgentCommercialGoal, nearestDeadlineDays: deadlines.length ? Math.min(...deadlines) : null, triedRemedies: tried, stakes });
   const decision = decideResearchAllocation(allocationInput);
   const observed = normalizeShares(allocationInput.currentShares);
   const fingerprint = allocationFingerprint(decision);
@@ -510,6 +596,12 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
     capacity: decision.capacity.map((c) => ({ ...c, recommendationOnly: true })),
     bottlenecks: decision.capacity.filter((c) => c.resource !== null).map((c) => ({ lane: c.lane, resource: c.resource })),
     costCountedOnce: reading.costCountedOnce,
+    stakes: {
+      deadlineDays: Object.fromEntries(Object.entries(stakes.deadlineDays).map(([p, d]) => [p, round3(d)])),
+      decisionValue: stakes.decisionValue,
+      currency: stakes.currency,
+      basis: stakes.basis.slice(0, 20),
+    },
     notes: [...decision.notes, ...reading.notes].slice(0, 20),
   };
   const recordedOn: string[] = [];

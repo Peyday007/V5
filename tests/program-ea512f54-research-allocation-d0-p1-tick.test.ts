@@ -14,13 +14,14 @@ import {
   RESEARCH_REALLOCATED_EVENT,
   advanceGoals,
   allocationInputFrom,
+  purposeStakesFrom,
   reallocateResearch,
   reallocateResearchIfDue,
   sharesInForceFrom,
   triedRemediesFrom,
   type ResearchAllocationPorts,
 } from '../server/services/goals/tick.ts';
-import { binPriorityShift, purposePriorityShifts, purposesBelowFloor, COMMERCIAL_FLOOR } from '../server/services/goals/researchAllocation.ts';
+import { binPriorityShift, purposePriorityShifts, purposesBelowFloor, COMMERCIAL_FLOOR, decideResearchAllocation } from '../server/services/goals/researchAllocation.ts';
 import { createWorkstream as createGoal, linkWorkstream, recordWorkstreamEvent } from '../server/repos/register.ts';
 import { createBin, getBin } from '../server/repos/bins.ts';
 import { launchMission, linkMission } from '../server/repos/russellMissions.ts';
@@ -324,5 +325,73 @@ describe('advanceGoals applies the newest recorded decision to live bins (review
     const report = await advanceGoals();
     expect(report.researchApplied).toBeNull();
     expect((await getBin(owned))!.priority).toBe(8);
+  });
+});
+
+/*
+ * Finding F4: expected decision value was never supplied to the decision, and
+ * deadlines reached only TRANSACTION_ROUTES (and only from goals with a
+ * target). Each purpose's deadline and decision value now come from the live
+ * goals' own rows.
+ */
+const NOW = Date.parse('2026-11-14T00:00:00.000Z');
+function targetOf(over: Partial<NonNullable<GoalView['target']>>): NonNullable<GoalView['target']> {
+  return { currency: 'USD', targetCents: 1_000_000, achievedCents: 0, remainingCents: 1_000_000, achieved: false, proven: false, ...over } as NonNullable<GoalView['target']>;
+}
+
+describe(`each purpose's deadline and decision value come from the live goals (F4)`, () => {
+  it(`attributes a dated goal's deadline to every purpose its research serves, and states money at stake on one scale`, () => {
+    const stakes = purposeStakesFrom(
+      [
+        goalView('wst_cash', { dueAt: '2026-11-20T00:00:00.000Z', target: targetOf({ remainingCents: 600_000 }) }),
+        goalView('wst_running', { dueAt: '2026-11-25T00:00:00.000Z', target: targetOf({ achievedCents: 250_000, remainingCents: 750_000, proven: true }) }),
+        goalView('wst_future', { dueAt: '2026-11-18T00:00:00.000Z', target: null }),
+        goalView('wst_repair', { dueAt: '2026-11-16T00:00:00.000Z', target: null, purpose: 'CAPABILITY' } as Partial<GoalView>),
+      ],
+      NOW,
+    );
+    expect(stakes.deadlineDays.TRANSACTION_ROUTES).toBeCloseTo(6);
+    expect(stakes.deadlineDays.OPERATING_SUPPORT).toBeCloseTo(11);
+    expect(stakes.deadlineDays.FORWARD_EXPLORATION).toBeCloseTo(2);
+    expect(stakes.deadlineDays.SELF_IMPROVEMENT).toBeCloseTo(2);
+    expect(stakes.deadlineDays.BROAD_DISCOVERY).toBeUndefined();
+    // Money still unreached for transaction routes; money an operating business already earns for operating support.
+    expect(stakes.decisionValue).toEqual({ TRANSACTION_ROUTES: 13_500, OPERATING_SUPPORT: 2_500 });
+    expect(stakes.currency).toBe('USD');
+    // No row puts money on discovery, exploration or repair, so none is stated (never zero).
+    expect(stakes.decisionValue.SELF_IMPROVEMENT).toBeUndefined();
+  });
+
+  it('states no decision value across currencies, and none for an achieved target', () => {
+    const mixed = purposeStakesFrom(
+      [goalView('a', { target: targetOf({ currency: 'USD' }) }), goalView('b', { target: targetOf({ currency: 'EUR' }) })],
+      NOW,
+    );
+    expect(mixed.decisionValue).toEqual({});
+    expect(mixed.basis.join(' ')).toMatch(/no rate between them is recorded/);
+    const done = purposeStakesFrom([goalView('c', { target: targetOf({ achieved: true, remainingCents: 0, achievedCents: 1_000_000 }) })], NOW);
+    expect(done.decisionValue.TRANSACTION_ROUTES).toBeUndefined();
+  });
+
+  it('reaches the decision: decision value and a non-commercial deadline both move shares, with their reasons', async () => {
+    const goals = [
+      goalView('wst_cash', { target: targetOf({ remainingCents: 600_000 }) }),
+      goalView('wst_future', { dueAt: '2026-11-15T00:00:00.000Z', target: null }),
+    ];
+    const stakes = purposeStakesFrom(goals, NOW);
+    const input = allocationInputFrom(reading(), { urgentCommercialGoal: false, nearestDeadlineDays: null, triedRemedies: new Map(), stakes });
+    const byPurpose = new Map(input.purposes.map((m) => [m.purpose, m]));
+    expect(byPurpose.get('TRANSACTION_ROUTES')!.decisionValue).toBe(6_000);
+    expect(byPurpose.get('FORWARD_EXPLORATION')!.nearestDeadlineDays).toBeCloseTo(1);
+    const decision = decideResearchAllocation(input);
+    const reasons = new Map(decision.changes.map((c) => [c.purpose, c.reasons.join('; ')]));
+    expect(reasons.get('TRANSACTION_ROUTES')).toMatch(/expected decision value 1\.00 of the highest/);
+    expect(reasons.get('FORWARD_EXPLORATION')).toMatch(/a deadline in 1 day/);
+
+    // Through the tick: the recorded decision carries the stakes it weighed.
+    const { ports, events } = memoryPorts(reading());
+    await reallocateResearch({ goals, now: '2026-11-14T00:00:00.000Z' }, ports);
+    const detail = events.get('wst_cash')!.at(-1)!;
+    expect(detail.stakes).toMatchObject({ decisionValue: { TRANSACTION_ROUTES: 6_000 }, currency: 'USD', deadlineDays: { FORWARD_EXPLORATION: 1 } });
   });
 });
