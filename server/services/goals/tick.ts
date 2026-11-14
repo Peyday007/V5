@@ -349,13 +349,15 @@ async function researchInForce(goals: GoalView[]): Promise<{ shares: SharesInFor
  *
  * What the pass does with the decision, and what it never does:
  *
- *   * It records one append-only `GOAL_RESEARCH_REALLOCATED` event on every live
- *     goal, carrying the five shares, the floors that held, every reason, the
- *     lane remedies and the capacity verdicts. That is the decision made
- *     visible on the surface that already shows a goal's history (the goal's
- *     events). The research purposes are Brain-wide, so every live goal carries
- *     the same decision; the closed project event vocabulary has no member for
- *     it, and this pass does not widen it.
+ *   * It records one append-only `GOAL_RESEARCH_REALLOCATED` event on each live
+ *     goal whose decision or own bearing changed: the five shares, the floors
+ *     that held, every reason, the lane remedies and the capacity verdicts,
+ *     plus `goalBearing` — what the decision means for that goal (its
+ *     deadline, whether the commercial floor is kept for it, the purposes its
+ *     own work serves and the step its bins take). The summary leads with that
+ *     bearing. The Brain-wide decision and capacity are shown once, on the
+ *     goals briefing (`briefing.ts`: `research` and its headline line, which
+ *     Home and the goals page render), read back from these rows.
  *   * A low-actionability lane is given its next remedy (question design, then
  *     evidence sources, then model routing) before any limit is raised for it,
  *     and a remedy already recorded for a lane is passed back as tried.
@@ -394,6 +396,95 @@ export interface ResearchAllocationPorts {
   /** The newest recorded decision's detail on a goal, or null. */
   lastDecision(goalId: string): Promise<Record<string, unknown> | null>;
   recordGoal(goalId: string, summary: string, detail: Record<string, unknown>): Promise<void>;
+  /**
+   * The research purposes each goal's own live work serves, read from its
+   * bins' rows. Absent, no goal is said to draw on any purpose — never guessed
+   * from the goal's label.
+   */
+  goalPurposes?(goals: GoalView[]): Promise<Map<string, ResearchPurpose[]>>;
+}
+
+/** What one Brain-wide decision means for one goal: its own deadline, floor and purposes. */
+export interface GoalResearchBearing {
+  /** Days until the goal's deadline, when it has a target and a future deadline. */
+  dueInDays: number | null;
+  /** The goal is one of the urgent commercial goals the commercial floor is kept for. */
+  holdsCommercialFloor: boolean;
+  /** Its deadline is the nearest, so it is the one pulling share toward transaction routes. */
+  nearestDeadline: boolean;
+  /** The purposes its own live work serves, what each was decided and given, and the step its bins take. */
+  purposes: { purpose: ResearchPurpose; share: number; observed: number; step: 'UP' | 'DOWN' | 'HOLD' }[];
+}
+
+/** One goal's bearing under a decision. Pure. */
+export function goalResearchBearing(
+  goal: GoalView,
+  context: {
+    nowMs: number;
+    nearestDeadlineDays: number | null;
+    shares: Record<ResearchPurpose, number>;
+    observed: Record<ResearchPurpose, number>;
+    held: boolean;
+    urgentCommercialGoal: boolean;
+    purposes: readonly ResearchPurpose[];
+  },
+): GoalResearchBearing {
+  const due = goal.target && goal.dueAt && Date.parse(goal.dueAt) > context.nowMs ? (Date.parse(goal.dueAt) - context.nowMs) / 86_400_000 : null;
+  const shifts = purposePriorityShifts({ shares: context.shares, observed: context.observed, held: context.held, urgentCommercialGoal: context.urgentCommercialGoal });
+  return {
+    dueInDays: due === null ? null : Math.round(due * 10) / 10,
+    holdsCommercialFloor: due !== null && context.urgentCommercialGoal,
+    nearestDeadline: due !== null && context.nearestDeadlineDays !== null && Math.abs(due - context.nearestDeadlineDays) < 1e-9,
+    purposes: RESEARCH_PURPOSES.filter((p) => context.purposes.includes(p)).map((p) => ({
+      purpose: p,
+      share: round3(context.shares[p]),
+      observed: round3(context.observed[p]),
+      step: shifts[p] > 0 ? 'UP' : shifts[p] < 0 ? 'DOWN' : 'HOLD',
+    })),
+  };
+}
+
+/** What makes a goal's bearing the same across passes: not the hours ticking toward its deadline. */
+export function bearingFingerprint(bearing: GoalResearchBearing): string {
+  return JSON.stringify({
+    floor: bearing.holdsCommercialFloor,
+    nearest: bearing.nearestDeadline,
+    purposes: bearing.purposes.map((p) => `${p.purpose}:${p.step}`),
+  });
+}
+
+const PURPOSE_WORDS: Record<ResearchPurpose, string> = {
+  BROAD_DISCOVERY: 'broad discovery',
+  TRANSACTION_ROUTES: 'transaction routes',
+  OPERATING_SUPPORT: 'operating support',
+  SELF_IMPROVEMENT: 'self-improvement',
+  FORWARD_EXPLORATION: 'forward exploration',
+};
+
+/** The line a goal's history shows: what the decision means for this goal first, then the Brain-wide decision. Pure. */
+export function goalResearchSummary(
+  bearing: GoalResearchBearing,
+  decision: { held: boolean; shares: Record<ResearchPurpose, number>; laneActions: AllocationDecision['laneActions']; capacity: AllocationDecision['capacity'] },
+): string {
+  const own: string[] = [];
+  if (bearing.purposes.length === 0) own.push('none of its live work is attributed to a research purpose yet');
+  else
+    own.push(
+      bearing.purposes
+        .map((p) => `${PURPOSE_WORDS[p.purpose]} ${(p.share * 100).toFixed(1)}% (got ${(p.observed * 100).toFixed(1)}%), its bins ${p.step === 'UP' ? 'step up' : p.step === 'DOWN' ? 'step down' : 'hold'}`)
+        .join('; '),
+    );
+  if (bearing.holdsCommercialFloor) {
+    own.push(`the ${(COMMERCIAL_FLOOR * 100).toFixed(0)}% commercial floor is kept for its deadline in ${bearing.dueInDays} day(s)${bearing.nearestDeadline ? ', the nearest' : ''}`);
+  }
+  const brain = decision.held
+    ? 'Brain-wide: held, nothing in the window was measured'
+    : `Brain-wide: ${RESEARCH_PURPOSES.map((p) => `${PURPOSE_WORDS[p]} ${(decision.shares[p] * 100).toFixed(1)}%`).join(', ')}`;
+  const lanes = decision.laneActions.map((a) => `${a.lane}: ${a.kind.toLowerCase().replace(/_/g, ' ')}`);
+  const capacity = decision.capacity.filter((c) => c.kind === 'ADD_CAPACITY').map((c) => `${c.lane} +${c.units} recommended (${c.resource})`);
+  return [`For this goal: ${own.join('; ')}.`, `${brain}.`, lanes.length ? `Lanes: ${lanes.join(', ')}.` : '', capacity.length ? `Capacity: ${capacity.join(', ')}.` : '']
+    .filter(Boolean)
+    .join(' ');
 }
 
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
@@ -512,14 +603,29 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
     costCountedOnce: reading.costCountedOnce,
     notes: [...decision.notes, ...reading.notes].slice(0, 20),
   };
+  // Each goal's row says what the Brain-wide decision means for that goal —
+  // its deadline, whether the commercial floor is kept for it, and the
+  // purposes its own work serves — so no two goals carry an identical row
+  // unless they genuinely stand in the same place. A goal is rewritten when
+  // the decision or its own bearing changes.
+  const goalPurposes = ports.goalPurposes ? await ports.goalPurposes(live) : new Map<string, ResearchPurpose[]>();
+  const nearestDeadlineDays = deadlines.length ? Math.min(...deadlines) : null;
   const recordedOn: string[] = [];
   for (const goal of live) {
     const last = goal.id === live[0]?.id ? previous : await ports.lastDecision(goal.id);
-    if (last && last.fingerprint === fingerprint) continue;
-    const summary = decision.held
-      ? 'Research allocation held: nothing in the window was measured.'
-      : `Research reallocated: ${RESEARCH_PURPOSES.map((p) => `${p} ${(decision.shares[p] * 100).toFixed(1)}%`).join(', ')}`;
-    await ports.recordGoal(goal.id, summary.slice(0, 400), detail);
+    const bearing = goalResearchBearing(goal, {
+      nowMs: untilMs,
+      nearestDeadlineDays,
+      shares: decision.shares,
+      observed,
+      held: decision.held,
+      urgentCommercialGoal,
+      purposes: goalPurposes.get(goal.id) ?? [],
+    });
+    const goalFingerprint = bearingFingerprint(bearing);
+    if (last && last.fingerprint === fingerprint && last.goalFingerprint === goalFingerprint) continue;
+    const summary = goalResearchSummary(bearing, decision);
+    await ports.recordGoal(goal.id, summary.slice(0, 600), { ...detail, goalBearing: bearing, goalFingerprint });
     recordedOn.push(goal.id);
   }
   return {
@@ -548,6 +654,19 @@ export async function productionResearchAllocationPorts(): Promise<ResearchAlloc
     },
     async recordGoal(goalId, summary, detail) {
       await recordWorkstreamEvent({ workstreamId: goalId, kind: RESEARCH_REALLOCATED_EVENT, summary, detail, actorRef: 'BRAIN' });
+    },
+    async goalPurposes(goals) {
+      const out = new Map<string, ResearchPurpose[]>();
+      const wanted = new Set(goals.flatMap((g) => (g.work ?? []).map((w) => w.binId)));
+      if (wanted.size === 0) return out;
+      const bins = (await liveBinRows()).filter((b) => wanted.has(b.id));
+      const byBin = await (await import('./researchYield.ts')).purposesOfBins(bins);
+      for (const goal of goals) {
+        const set = new Set<ResearchPurpose>();
+        for (const w of goal.work ?? []) for (const p of byBin.get(w.binId) ?? []) if ((RESEARCH_PURPOSES as readonly string[]).includes(p)) set.add(p as ResearchPurpose);
+        out.set(goal.id, [...set]);
+      }
+      return out;
     },
   };
 }

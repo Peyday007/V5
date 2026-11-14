@@ -28,6 +28,7 @@ import type { BinManifest } from '../server/domain/types.ts';
 import { RESEARCH_PURPOSES, EXPLORATION_FLOOR, SYSTEM_HEALTH_FLOOR, type ResearchPurpose } from '../server/services/goals/researchAllocation.ts';
 import type { ResearchYieldReading, YieldBucket } from '../server/services/goals/researchYield.ts';
 import type { GoalView } from '../server/services/goals/model.ts';
+import { briefFrom, goalBriefing, researchBriefingFrom } from '../server/services/goals/briefing.ts';
 
 function bucket(over: Partial<YieldBucket> = {}): YieldBucket {
   return {
@@ -324,5 +325,136 @@ describe('advanceGoals applies the newest recorded decision to live bins (review
     const report = await advanceGoals();
     expect(report.researchApplied).toBeNull();
     expect((await getBin(owned))!.priority).toBe(8);
+  });
+});
+
+/* ------------------------------------------------------------------------- */
+/* Each goal's row says what the decision means for it, and the product shows */
+/* research capacity and the decision once (review finding F6)                 */
+/* ------------------------------------------------------------------------- */
+
+describe('each goal carries its own bearing, not a Brain-wide copy (F6)', () => {
+  function portsWithPurposes(byGoal: Record<string, ResearchPurpose[]>, yieldReading: ResearchYieldReading = reading()) {
+    const base = memoryPorts(yieldReading);
+    const summaries = new Map<string, string[]>();
+    const ports: ResearchAllocationPorts = {
+      ...base.ports,
+      recordGoal: async (goalId, summary, detail) => {
+        summaries.set(goalId, [...(summaries.get(goalId) ?? []), summary]);
+        await base.ports.recordGoal(goalId, summary, detail);
+      },
+      goalPurposes: async () => new Map(Object.entries(byGoal)),
+    };
+    return { ports, events: base.events, summaries };
+  }
+
+  it('gives two goals in different places different rows: their own deadline, floor and purposes lead', async () => {
+    const { ports, events, summaries } = portsWithPurposes({ wst_cash: ['TRANSACTION_ROUTES'], wst_tool: ['SELF_IMPROVEMENT', 'BROAD_DISCOVERY'] });
+    const cash = goalView('wst_cash', { dueAt: '2026-11-20T00:00:00.000Z', target: {} as GoalView['target'] });
+    const tool = goalView('wst_tool');
+    await reallocateResearch({ goals: [cash, tool], now: '2026-11-14T00:00:00.000Z' }, ports);
+    const a = events.get('wst_cash')!.at(-1)!;
+    const b = events.get('wst_tool')!.at(-1)!;
+    // The Brain-wide decision is the same; what it means for each goal is not.
+    expect(a.fingerprint).toBe(b.fingerprint);
+    expect(a.goalBearing).not.toEqual(b.goalBearing);
+    const bearingA = a.goalBearing as { holdsCommercialFloor: boolean; nearestDeadline: boolean; dueInDays: number; purposes: { purpose: string }[] };
+    const bearingB = b.goalBearing as { holdsCommercialFloor: boolean; dueInDays: number | null; purposes: { purpose: string }[] };
+    expect(bearingA).toMatchObject({ holdsCommercialFloor: true, nearestDeadline: true, dueInDays: 6 });
+    expect(bearingA.purposes.map((p) => p.purpose)).toEqual(['TRANSACTION_ROUTES']);
+    expect(bearingB).toMatchObject({ holdsCommercialFloor: false, dueInDays: null });
+    expect(bearingB.purposes.map((p) => p.purpose).sort()).toEqual(['BROAD_DISCOVERY', 'SELF_IMPROVEMENT']);
+    const sa = summaries.get('wst_cash')!.at(-1)!;
+    const sb = summaries.get('wst_tool')!.at(-1)!;
+    expect(sa).not.toBe(sb);
+    expect(sa.startsWith('For this goal: transaction routes')).toBe(true);
+    expect(sa).toContain('commercial floor is kept for its deadline in 6 day(s), the nearest');
+    expect(sb.startsWith('For this goal: broad discovery')).toBe(true);
+    expect(sb).not.toContain('commercial floor');
+  });
+
+  it('rewrites only the goal whose own bearing changed, under an unchanged decision', async () => {
+    const byGoal: Record<string, ResearchPurpose[]> = { wst_a: ['TRANSACTION_ROUTES'], wst_b: ['SELF_IMPROVEMENT'] };
+    // No lane needs a remedy, so the Brain-wide decision is the same both times.
+    const steady = reading();
+    steady.lanes = {};
+    const { ports, events } = portsWithPurposes(byGoal, steady);
+    const goals = [goalView('wst_a'), goalView('wst_b')];
+    await reallocateResearch({ goals, now: '2026-11-14T00:00:00.000Z' }, ports);
+    byGoal.wst_b = ['OPERATING_SUPPORT'];
+    const second = await reallocateResearch({ goals, now: '2026-11-14T00:00:00.000Z' }, ports);
+    expect(second.recordedOn).toEqual(['wst_b']);
+    expect(events.get('wst_a')).toHaveLength(1);
+    expect(events.get('wst_b')).toHaveLength(2);
+  });
+
+  it('says plainly when none of a goal\'s work is attributed, instead of inventing a purpose from its label', async () => {
+    const { ports, summaries, events } = portsWithPurposes({});
+    await reallocateResearch({ goals: [goalView('wst_a', { purpose: 'REVENUE_DIRECT' } as Partial<GoalView>)], now: '2026-11-14T00:00:00.000Z' }, ports);
+    expect((events.get('wst_a')!.at(-1)!.goalBearing as { purposes: unknown[] }).purposes).toEqual([]);
+    expect(summaries.get('wst_a')!.at(-1)).toContain('none of its live work is attributed to a research purpose yet');
+  });
+});
+
+describe('the goals briefing shows research capacity and the decision (F6)', () => {
+  it('reads a recorded decision into the headline: shares, what each got, floors, capacity and lane remedies', async () => {
+    const { ports, events } = memoryPorts(reading());
+    await reallocateResearch({ goals: [goalView('wst_a')], now: '2026-11-14T00:00:00.000Z' }, ports);
+    const detail = events.get('wst_a')!.at(-1)!;
+    const research = researchBriefingFrom(detail, '2026-11-14T00:00:01.000Z')!;
+    expect(research).not.toBeNull();
+    expect(research.shares.map((s) => s.purpose).sort()).toEqual([...RESEARCH_PURPOSES].sort());
+    expect(research.floors.exploration).toBe(EXPLORATION_FLOOR);
+    expect(research.floors.systemHealth).toBe(SYSTEM_HEALTH_FLOOR);
+    expect(research.laneActions.map((a) => a.kind)).toContain('CHANGE_QUESTION_DESIGN');
+    expect(research.line.startsWith('Research: broad discovery')).toBe(true);
+    expect(research.line).toContain('(got ');
+    expect(research.line).toContain('lanes: free-lane change question design');
+    const brief = briefFrom([goalView('wst_a', {
+      title: 'G', evidence: [], decisions: [], blockers: [], obligations: [], commitment: 'NONE',
+      waiting: { kind: 'NOTHING', detail: 'nothing', since: null }, next: { action: 'Wait.', by: 'BRAIN', afterwards: null },
+    } as unknown as Partial<GoalView>)], '2026-11-14T00:00:02.000Z', research);
+    expect(brief.research).toBe(research);
+    expect(brief.headline).toContain(research.line);
+  });
+
+  it('names a recommended capacity addition and its measured constraint', () => {
+    const research = researchBriefingFrom(
+      {
+        shares: { BROAD_DISCOVERY: 0.2, TRANSACTION_ROUTES: 0.3, OPERATING_SUPPORT: 0.15, SELF_IMPROVEMENT: 0.15, FORWARD_EXPLORATION: 0.2 },
+        capacity: [{ lane: 'gpu-lane', kind: 'ADD_CAPACITY', resource: 'GPU', units: 2, incrementalCost: 1, reason: 'queue wait 40 min', recommendationOnly: true }],
+        bottlenecks: [{ lane: 'gpu-lane', resource: 'GPU' }],
+      },
+      null,
+    )!;
+    expect(research.capacity).toEqual([{ lane: 'gpu-lane', kind: 'ADD_CAPACITY', units: 2, resource: 'GPU', reason: 'queue wait 40 min' }]);
+    expect(research.line).toContain('capacity recommended: gpu-lane +2 (GPU)');
+  });
+
+  it('reads nothing into a row with no shares, and leaves the headline alone without a decision', () => {
+    expect(researchBriefingFrom(null, null)).toBeNull();
+    expect(researchBriefingFrom({ fingerprint: 'x' }, null)).toBeNull();
+    const brief = briefFrom([], '2026-11-14T00:00:00.000Z');
+    expect(brief.research).toBeNull();
+    expect(brief.headline.startsWith('No goals are set.')).toBe(true);
+  });
+
+  it('on production rows: the briefing the goals route serves carries the recorded decision once', async () => {
+    const projectId = (await freshProject()).project.id;
+    const ownerId = (await createUser({ email: `brief-${Math.random().toString(36).slice(2, 10)}@example.test`, displayName: 'Owner', password: 'correct horse battery staple' })).id;
+    const goal = await createWorkstream({ projectId, title: 'Research brief', intent: 'See the allocation.', purpose: 'CAPABILITY', createdByUserId: ownerId });
+    const before = await goalBriefing([projectId]);
+    expect(before.briefing.research).toBeNull();
+    const report = await reallocateResearchIfDue({ goals: before.goals }, undefined, { force: true });
+    expect(report && !('error' in report)).toBe(true);
+    const rows = (await listWorkstreamEvents(goal.id, 50)).filter((e) => e.kind === RESEARCH_REALLOCATED_EVENT);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.summary.startsWith('For this goal:')).toBe(true);
+    expect((rows[0]!.detail as Record<string, unknown>).goalBearing).toBeDefined();
+    const after = await goalBriefing([projectId]);
+    expect(after.briefing.research).not.toBeNull();
+    expect(after.briefing.research!.decidedAt).toBe(rows[0]!.createdAt);
+    expect(after.briefing.research!.held).toBe(true);
+    expect(after.briefing.headline).toContain('Research allocation held');
   });
 });
