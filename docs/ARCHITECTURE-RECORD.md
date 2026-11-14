@@ -16290,3 +16290,25 @@ The report's scaling call no longer says "research is not queueing" when items w
 nothing running.
 
 **2026-11-14 — the operator paused the owner's directed goal.** At 06:00Z a Hermes run committed PAUSE_GOAL on `wst_7b4fcbb5f2384f31b6c3` "to conserve capacity while infrastructure pools are congested" — four hours after the owner's order "THE PRIORITY IS THE PLAN. FOCUS RESOURCES THERE." A pause holds every bin the goal pursues, so the one goal the owner directed resources to stopped receiving any. `setGoalFocus` now refuses PAUSE on a goal in `OWNER_DIRECTED_GOALS` (a person still can), and the Russell pass `owner-directed-goals` resumes such a goal when its latest GOAL_PAUSED row was written by an `operator:` actor; a person's pause stands. Congestion is answered by removing what slows the goal, never by stopping it.
+
+**2026-11-14 — the operator directs a recovery (Surge B, findings H2-1/2/5/7/9).** A run could
+not be given a mission (the brief assumed the $10K goal was the whole objective), had no
+inventory of findings it could read or change, no door to the next attempt of a commission
+that failed, and no way to record that a fix made outside its commissions was verified. All
+four are rows of §87's register, not a new store: a standing mission is an `OPERATOR_MISSION`
+row (default key `SURGE:B`, set by `npm run operator -- run --mission <file-or-text>`,
+`operator mission set|close`, or `agents.yml operator-run` with a base64 `mission` input),
+read into the brief first on every run while open; a finding is an `OPERATOR_INVENTORY` row
+keyed `SURGE-B:<issue id>` with its fields in `evidence.inventory`, changed only through
+`brain_operator_inventory` (list on `project:read`; upsert and set_status on `operator:act`),
+each change an `INVENTORY_CHANGED` event naming the run. VERIFIED_FIXED is refused without
+verification criteria and a reference — a workflow run id, a Deploy run id or merge sha, or a
+measured outcome stating its number — and records whether the fix came from a commission.
+`isRecordOnly` keeps both kinds out of the loop's tick, its combination by owner and its
+alerts: a finding becomes Factory work only through `brain_operator_commission`.
+`brain_operator_reattempt` closes a failed (FAILED, NOT_RESOLVED, BLOCKED) or stalled (24 h
+without movement) commission HELD with the operator's reason and registers the next attempt
+through `registerNextAttempt` — the family's own rules, at most three, routed STRONGEST — and
+refuses a commission that is building and moving, being measured, resolved, or out of
+attempts. RunPod gained the 48 GB director recipe `qwen3-32b-awq-48`, and cheap-lane passes
+`RUNPOD_MAX_TOTAL_USD_PER_HOUR` beside `RUNPOD_MAX_USD_PER_HOUR`; the code's ceilings are unchanged.

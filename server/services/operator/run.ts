@@ -385,6 +385,8 @@ const OPERATOR_ACTION_TOOLS = [
   'brain_operator_create_goal',
   'brain_operator_commission',
   'brain_operator_prioritize_engineering',
+  'brain_operator_reattempt',
+  'brain_operator_inventory',
 ];
 
 async function performRun(runId: string, config: OperatorConfig, models: OperatorModel[]): Promise<void> {
@@ -407,9 +409,20 @@ async function performRun(runId: string, config: OperatorConfig, models: Operato
     const { previousRunGaps } = await import('./judge.ts');
     const previous = (await recentOperatorRuns(5)).find((r) => r.id !== runId && r.state !== 'RUNNING') ?? null;
     const gaps = await previousRunGaps(previous).catch(() => '');
+    // Surge B: a standing mission (§87 register row, e.g. SURGE:B) and its findings inventory, every run while open.
+    const { missionForBrief, inventoryBrief } = await import('./inventory.ts');
+    const mission = await missionForBrief().catch(() => '');
+    const inventory = await inventoryBrief().catch(() => '');
     const body = {
       runId,
-      prompt: operatorBrief({ nowIso: new Date().toISOString(), runId, goals: snapshotForBrief(snapshot), engineering: [gaps, engineering].filter(Boolean).join('\n\n') || undefined }),
+      prompt: operatorBrief({
+        nowIso: new Date().toISOString(),
+        runId,
+        goals: snapshotForBrief(snapshot),
+        engineering: [gaps, engineering].filter(Boolean).join('\n\n') || undefined,
+        mission: mission || undefined,
+        inventory: inventory || undefined,
+      }),
       models: models.map((m) => ({ baseUrl: m.baseUrl, model: m.model, apiKey: m.apiKey, ...(m.contextLength ? { contextLength: m.contextLength } : {}) })),
       mcp: { url: `${config.brainUrl}/mcp`, token: issued.plaintext, tools: [...OPERATOR_TOOL_NAMES] },
       toolsets: [...OPERATOR_HERMES_TOOLSETS],

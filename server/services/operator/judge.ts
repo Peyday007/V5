@@ -16,6 +16,7 @@ export const OPERATOR_ACTS = [
   'brain_operator_create_goal',
   'brain_operator_commission',
   'brain_operator_prioritize_engineering',
+  'brain_operator_reattempt',
 ];
 export const OPERATOR_READS = [
   'brain_operator_goal',

@@ -136,6 +136,9 @@ export const OPERATOR_TOOL_NAMES = [
   'brain_operator_commission',
   'brain_operator_engineering',
   'brain_operator_prioritize_engineering',
+  // Surge B: the findings register and the next attempt of a failed or stalled commission.
+  'brain_operator_inventory',
+  'brain_operator_reattempt',
 ] as const;
 
 /** Hermes' own toolsets the operator keeps: its memory, its skills and a task list. No shell, files, browser or web. */
@@ -145,12 +148,31 @@ export const OPERATOR_HERMES_TOOLSETS = ['memory', 'skills', 'todo'] as const;
 // The brief
 // ---------------------------------------------------------------------------
 
-export function operatorBrief(input: { nowIso: string; runId: string; goals?: string; engineering?: string }): string {
+/**
+ * The brief. A standing mission (Surge B: a register row read every run while it is open)
+ * comes first, with the inventory it directs; then the goals, then the engineering. The $10K
+ * cash goal is one goal among the goals listed, not the operator's only objective.
+ */
+export function operatorBrief(input: { nowIso: string; runId: string; goals?: string; engineering?: string; mission?: string; inventory?: string }): string {
+  const mission = input.mission?.trim();
   return [
+    ...(mission
+      ? [
+          `STANDING MISSION (read every run until it is closed; it ranks with the goals below, and its work is done through the same tools):`,
+          mission,
+          '',
+          'Keep the mission\'s findings in brain_operator_inventory: list them, upsert what you find, and set_status as each moves.',
+          'Commission a finding\'s repair with brain_operator_commission; a stalled or failed commission gets brain_operator_reattempt.',
+          'A finding is VERIFIED_FIXED only with a verification reference (a workflow run id, a deploy, or a measured outcome).',
+          '',
+        ]
+      : []),
+    ...(input.inventory ? [input.inventory, ''] : []),
     ...(input.goals ? [input.goals, ''] : []),
     ...(input.engineering ? [input.engineering, ''] : []),
     `You are Brain's operator (run ${input.runId}, ${input.nowIso}). Brain is a research-operations platform that`,
-    'pursues goals — the first is collecting $10,000 of settled cash. You direct its work through the brain_operator_*',
+    'pursues the goals listed above (a cash goal — such as collecting $10,000 of settled cash — is one goal among them)',
+    `${mission ? 'and the standing mission above' : 'and any standing mission it is given'}. You direct its work through the brain_operator_*`,
     'tools. They are your only hands: do not describe actions, take them.',
     '',
     'Revenue is settled cash only: leads, forecasts, invoices and unpaid sales are not revenue. Never claim a',
@@ -189,7 +211,10 @@ export function operatorBrief(input: { nowIso: string; runId: string; goals?: st
     '     owner the plan is ready; execution and improvement continue afterwards.',
     '   - brain_operator_engineering: what Factory did with what you commissioned — code changed, tests, merge, deploy,',
     '     the measured effect and the goal read again. A merged pull request is not the improvement; act on `next`',
-    '     (NEW_ATTEMPT, CHANGE_STRATEGY, UNBLOCK). brain_operator_prioritize_engineering when what matters changed.',
+    '     (NEW_ATTEMPT, CHANGE_STRATEGY, UNBLOCK). brain_operator_prioritize_engineering when what matters changed;',
+    '     brain_operator_reattempt {candidate_id, reason} when a commission failed or stalled (at most three attempts).',
+    '   - brain_operator_inventory: the findings register — list, upsert a finding, set_status as it moves. A fix made',
+    '     outside your commissions is verified there too, with its reference.',
     '6. After acting, ALWAYS brain_operator_goal again (and brain_operator_capacity) — observe the actual result. A run',
     '   that acts and does not look again has not finished. If nothing moved since your last run,',
     '   find the cause and change strategy rather than repeating it.',
@@ -289,4 +314,124 @@ export function operatorModels(input: {
 function withV1(url: string): string {
   const trimmed = url.replace(/\/+$/, '');
   return /\/v1$/.test(trimmed) ? trimmed : `${trimmed}/v1`;
+}
+
+// ---------------------------------------------------------------------------
+// A standing mission and the inventory it directs (Surge B, H2-1/H2-2/H2-7)
+// ---------------------------------------------------------------------------
+
+/** The mission a run carries while it is open; its row is keyed by this in §87's register. */
+export const DEFAULT_MISSION_KEY = 'SURGE:B';
+export const MISSION_MAX_CHARS = 8000;
+/** Inventory findings are keyed `SURGE-B:<issue id>` in the same register. */
+export const INVENTORY_KEY_PREFIX = 'SURGE-B:';
+
+export const INVENTORY_STATUSES = [
+  'DISCOVERED',
+  'UNDER_INVESTIGATION',
+  'ROOT_CAUSE_CONFIRMED',
+  'READY_FOR_REPAIR',
+  'REPAIRING',
+  'AWAITING_VERIFICATION',
+  'VERIFIED_FIXED',
+  'KNOWN_LIMITATION',
+  'EXTERNAL_CONSTRAINT',
+  'NOT_A_DEFECT',
+] as const;
+export type InventoryStatus = (typeof INVENTORY_STATUSES)[number];
+
+/** Statuses that close a finding: the brief stops listing it. */
+export const INVENTORY_CLOSED: readonly InventoryStatus[] = ['VERIFIED_FIXED', 'KNOWN_LIMITATION', 'EXTERNAL_CONSTRAINT', 'NOT_A_DEFECT'];
+
+export const INVENTORY_SEVERITIES = ['BLOCKING', 'MAJOR', 'MINOR'] as const;
+export type InventorySeverity = (typeof INVENTORY_SEVERITIES)[number];
+
+export const VERIFICATION_KINDS = ['WORKFLOW_RUN', 'DEPLOY', 'MEASUREMENT'] as const;
+export type VerificationKind = (typeof VERIFICATION_KINDS)[number];
+
+export interface InventoryVerification {
+  kind: VerificationKind;
+  /** A GitHub workflow run id, a deploy's run id or merge sha, or the measured metric's name. */
+  ref: string;
+  /** What was observed there, in production terms. */
+  detail: string;
+}
+
+export interface InventoryItem {
+  id: string;
+  status: InventoryStatus;
+  capability: string;
+  symptom: string;
+  evidence: string;
+  rootCause: string | null;
+  severity: InventorySeverity;
+  owner: string | null;
+  verificationCriteria: string | null;
+  result: string | null;
+  verification: InventoryVerification | null;
+  /** Register rows (imp_…) the operator commissioned for this finding, if any. */
+  linkedCandidates: string[];
+  note: string | null;
+}
+
+export function inventoryKey(id: string): string | null {
+  const trimmed = id.trim().replace(/^SURGE-B:/i, '');
+  return /^[A-Za-z0-9][A-Za-z0-9._-]{0,47}$/.test(trimmed) ? `${INVENTORY_KEY_PREFIX}${trimmed}` : null;
+}
+
+/**
+ * A verification is a reference somebody else can open, never a sentence: a workflow run id,
+ * a deploy (run id or merge sha), or a measured outcome that states its number. Pure; null when valid.
+ */
+export function verificationRefusal(v: Partial<InventoryVerification> | null | undefined): string | null {
+  if (!v || typeof v !== 'object') return 'VERIFIED_FIXED needs verification {kind, ref, detail}: a workflow run id, a deploy, or a measured outcome';
+  if (!v.kind || !(VERIFICATION_KINDS as readonly string[]).includes(v.kind)) return `verification.kind must be one of ${VERIFICATION_KINDS.join(', ')}`;
+  const ref = (v.ref ?? '').trim();
+  const detail = (v.detail ?? '').trim();
+  if (detail.length < 20) return 'verification.detail must say what was observed (20+ characters)';
+  if (v.kind === 'WORKFLOW_RUN' && !/^\d{6,}$/.test(ref)) return 'verification.ref for WORKFLOW_RUN is the numeric GitHub Actions run id';
+  if (v.kind === 'DEPLOY' && !/^(\d{6,}|[0-9a-f]{7,40})$/i.test(ref)) return 'verification.ref for DEPLOY is the Deploy run id or the released merge sha';
+  if (v.kind === 'MEASUREMENT') {
+    if (ref.length < 3) return 'verification.ref for MEASUREMENT names the metric or row it was read from';
+    if (!/\d/.test(detail)) return 'a MEASUREMENT states the measured number';
+  }
+  return null;
+}
+
+/**
+ * May a finding move to `status`? Pure: the refusal, or null. A fix is verified only with a
+ * reference (H2-7); a confirmed root cause names one; a finding closed without a fix says why.
+ */
+export function inventoryTransitionRefusal(
+  item: Pick<InventoryItem, 'rootCause' | 'verificationCriteria'>,
+  status: string,
+  input: { verification?: Partial<InventoryVerification> | null; note?: string | null },
+): string | null {
+  if (!(INVENTORY_STATUSES as readonly string[]).includes(status)) return `status must be one of ${INVENTORY_STATUSES.join(', ')}`;
+  const s = status as InventoryStatus;
+  if ((s === 'ROOT_CAUSE_CONFIRMED' || s === 'READY_FOR_REPAIR') && !(item.rootCause ?? '').trim()) return `${s} needs root_cause: what is confirmed to cause it`;
+  if (s === 'VERIFIED_FIXED') {
+    if (!(item.verificationCriteria ?? '').trim()) return "VERIFIED_FIXED needs the finding's verification_criteria first: what the verification must show";
+    return verificationRefusal(input.verification);
+  }
+  if ((s === 'KNOWN_LIMITATION' || s === 'EXTERNAL_CONSTRAINT' || s === 'NOT_A_DEFECT') && (input.note ?? '').trim().length < 15) return `${s} needs a note saying why (15+ characters)`;
+  return null;
+}
+
+/** The register's severity column for an inventory severity. */
+export function registerSeverity(severity: InventorySeverity): 'HIGH' | 'MEDIUM' | 'LOW' {
+  return severity === 'BLOCKING' ? 'HIGH' : severity === 'MAJOR' ? 'MEDIUM' : 'LOW';
+}
+
+/** The inventory as the brief states it: open findings, most severe first, bounded. */
+export function inventoryForBrief(items: InventoryItem[], max = 25): string {
+  if (items.length === 0) return '';
+  const order: Record<InventorySeverity, number> = { BLOCKING: 0, MAJOR: 1, MINOR: 2 };
+  const open = items.filter((i) => !INVENTORY_CLOSED.includes(i.status)).sort((a, b) => order[a.severity] - order[b.severity] || a.id.localeCompare(b.id));
+  const counts = INVENTORY_STATUSES.map((s) => [s, items.filter((i) => i.status === s).length] as const).filter(([, n]) => n > 0);
+  return [
+    `INVENTORY (${items.length} finding(s): ${counts.map(([s, n]) => `${n} ${s}`).join(', ')}). Open, most severe first:`,
+    ...open.slice(0, max).map((i) => `- ${i.id} [${i.status}, ${i.severity}] ${i.capability}: ${i.symptom.slice(0, 160)}${i.owner ? ` (owner ${i.owner})` : ''}`),
+    ...(open.length > max ? [`… and ${open.length - max} more (brain_operator_inventory {action: "list"}).`] : []),
+  ].join('\n');
 }
