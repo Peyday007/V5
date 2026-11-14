@@ -141,7 +141,7 @@ export interface ConstructedArrangement {
    */
   repeatBusiness?: { observations: number; statedValueCents: number };
   /**
-   * The arrangement's identity in the library (migration 151): its design and
+   * The arrangement's identity in the library (migration 152): its design and
    * its parts' paths, hashed — never a row id, never its wording. The same
    * structure composed by another goal, another process or after a restart is
    * one row (`monetization_paths.design_signature`).
@@ -360,7 +360,7 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
    * Keyed by the day, as the reconstructions' recency is.
    */
   /*
-   * What the library already holds about these structures (migration 151): a
+   * What the library already holds about these structures (migration 152): a
    * research verdict and a value rank candidates before the cap cuts, and an
    * arrangement stored under exactly this composition's inputs is reused
    * rather than recomposed — after a restart, a deploy or by another goal.
@@ -453,7 +453,7 @@ export interface ConstructionJob {
   targets: EconomicProperty[];
   exclusions: readonly ExclusionClass[];
   now: Date;
-  /** The library's verdict and value per signature, for ranking before the cap (migration 151). */
+  /** The library's verdict and value per signature, for ranking before the cap (migration 152). */
   known?: Array<[string, { verdict: 'CONFIRMED' | 'REFUTED' | null; p50: number }]>;
   /** Stored arrangements by the composition digest they were composed under: reused, not recomposed. */
   reuse?: Array<[string, ConstructedArrangement]>;

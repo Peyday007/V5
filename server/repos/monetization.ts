@@ -177,7 +177,7 @@ export async function listPaths(input: {
   projectId: string;
   opportunityId?: string;
 }): Promise<MonetizationPath[]> {
-  // A constructed arrangement (migration 151) is a hypothesis in the library,
+  // A constructed arrangement (migration 152) is a hypothesis in the library,
   // not a possibility the ledger ranks: it is read through
   // `listConstructedArrangements`, never through here.
   const where = ['project_id = ?', "origin <> 'CONSTRUCTED'"];
@@ -935,7 +935,7 @@ export async function contradictedPathAnswers(projectId: string): Promise<Set<st
 }
 
 /* --------------------------------------------------------------------------
- * Constructed arrangements (§81/§82, migration 151)
+ * Constructed arrangements (§81/§82, migration 152)
  *
  * The library of arrangements Brain composed itself. One row per structure per
  * project (`design_signature`), written by the plan after construction and

@@ -1,6 +1,6 @@
 /**
  * Constructed arrangements are a durable library, not a cache (Surge B,
- * K-1..K-8, migration 151 / pg 142).
+ * K-1..K-8, migration 152 / pg 143).
  *
  * What is proved here, each against real rows:
  *   * an arrangement composed by a goal's plan is a CONSTRUCTED ledger row that

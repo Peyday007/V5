@@ -10137,7 +10137,7 @@ export type PathJudgment = (typeof PATH_JUDGMENTS)[number];
  * arithmetic, reading no prose and claiming nothing beyond *this is a shape of
  * transaction that could apply here*. `EVIDENCED` is a worker that read a
  * source declaring one, and carries the claim. `CONSTRUCTED` is an
- * arrangement Brain composed itself (§81/§82, migration 151): a hypothesis with
+ * arrangement Brain composed itself (§81/§82, migration 152): a hypothesis with
  * its design and reconstruction in `design_json`, never read by the ledger's
  * ranking (`listPaths` leaves it out). `SEED` is a person, and it is
  * the one origin Brain may never write — §22's rule at a new table: a machine
@@ -10257,7 +10257,7 @@ export interface MonetizationPathRow {
 }
 
 /**
- * A constructed arrangement as the library holds it (§81/§82, migration 151).
+ * A constructed arrangement as the library holds it (§81/§82, migration 152).
  *
  * A hypothesis: `design` is Brain's composition and reconstruction, never an
  * observation. What research observed about it is an EVIDENCE fact on the
@@ -10287,7 +10287,7 @@ export interface ConstructedArrangementRecord {
   updatedAt: string;
 }
 
-/** One goal model's weighing of one constructed arrangement (migration 151). */
+/** One goal model's weighing of one constructed arrangement (migration 152). */
 export interface MonetizationPathEvaluationRow {
   id: string;
   project_id: string;

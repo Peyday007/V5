@@ -1,4 +1,4 @@
--- The Postgres half of SQLite migration 151. See that file for why a
+-- The Postgres half of SQLite migration 152. See that file for why a
 -- constructed arrangement is a CONSTRUCTED row of the §49 ledger, why its
 -- identity is a structural signature rather than text or a row id, and why a
 -- research verdict is stored with the inputs it was reached under.
