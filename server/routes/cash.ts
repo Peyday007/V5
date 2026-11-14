@@ -76,6 +76,7 @@ import {
   COMMERCIAL_ACTIONS,
   describeAuthority,
   isCommercialAction,
+  closeApprovalsAnsweredByGrant,
 } from '../services/cash/authority.ts';
 import { evidenceCard } from '../services/cash/card.ts';
 import {
@@ -689,6 +690,8 @@ cashRouter.post(
       currency: mode.currency,
       expiresAt: optionalString(body['expiresAt'], 'expiresAt') ?? null,
     });
+
+    await closeApprovalsAnsweredByGrant({ projectId: project.id, actions, actorUserId: principal.id });
 
     await recordCashEvent({
       projectId: project.id,
