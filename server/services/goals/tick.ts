@@ -50,7 +50,7 @@ import {
 } from '../../repos/goals.ts';
 import { assembleGoals, type GoalView } from './model.ts';
 import { rankGoals } from './priority.ts';
-import type { ResearchYieldReading } from './researchYield.ts';
+import type { LaneQueueMeasurement, ResearchYieldReading } from './researchYield.ts';
 import {
   COMMERCIAL_FLOOR,
   EXPLORATION_FLOOR,
@@ -391,6 +391,12 @@ export interface ResearchAllocationReport {
 
 export interface ResearchAllocationPorts {
   readYield(window: { since: string; until: string }): Promise<ResearchYieldReading>;
+  /**
+   * The qualified jobs waiting now in front of each lane and the slots its
+   * resource can still take (`researchQueueByLane`). Without it no lane has a
+   * measured queue, so no capacity is ever recommended.
+   */
+  readQueue?(at: string): Promise<Record<string, LaneQueueMeasurement>>;
   /** The newest recorded decision's detail on a goal, or null. */
   lastDecision(goalId: string): Promise<Record<string, unknown> | null>;
   recordGoal(goalId: string, summary: string, detail: Record<string, unknown>): Promise<void>;
@@ -401,7 +407,7 @@ const round3 = (n: number) => Math.round(n * 1000) / 1000;
 /** The measured inputs one window gives the decision. Pure. */
 export function allocationInputFrom(
   reading: ResearchYieldReading,
-  context: { urgentCommercialGoal: boolean; nearestDeadlineDays: number | null; triedRemedies: Map<string, LaneRemedy[]> },
+  context: { urgentCommercialGoal: boolean; nearestDeadlineDays: number | null; triedRemedies: Map<string, LaneRemedy[]>; queue?: Record<string, LaneQueueMeasurement> | null },
 ): AllocationInput {
   // The shares in force are where the capacity actually went: each purpose's job time in the window.
   const currentShares: Partial<Record<ResearchPurpose, number>> = {};
@@ -435,19 +441,26 @@ export function allocationInputFrom(
       actionableLinks: b.qualifiedPositions + b.executableOffers + b.paidTransactions,
       triedRemedies: context.triedRemedies.get(lane) ?? [],
     });
-    const attempts = b.completions + b.failures.total;
+  }
+  // Every lane with a window of yield or a measured queue now. The queue is what
+  // waits, not what already started: a lane with no queue reading has none measured.
+  const queue = context.queue ?? {};
+  for (const lane of [...new Set([...Object.keys(reading.lanes), ...Object.keys(queue)])]) {
+    const b = reading.lanes[lane];
+    const q = queue[lane];
+    const attempts = b ? b.completions + b.failures.total : 0;
+    const rateLimited = !!b && b.failures.rateLimited > 0;
     bottlenecks.push({
       lane,
-      purposes: served,
-      resource: b.failures.rateLimited > 0 ? 'MODEL_RATE_LIMIT' : null,
-      qualifiedQueued: b.inFlight,
-      queueWaitMs: b.queueWait.medianMs,
-      measuredMachineLimit: b.failures.rateLimited > 0,
-      // Nothing in the window measures quota headroom or the cost of another unit: unknown, never assumed.
-      quotaHeadroom: null,
-      reliability: attempts > 0 ? b.completions / attempts : null,
+      purposes: [...(lanePurposes.get(lane) ?? [])],
+      resource: rateLimited ? 'MODEL_RATE_LIMIT' : q?.saturated ? q.resource : null,
+      qualifiedQueued: q ? q.queued : null,
+      queueWaitMs: q ? q.queueWaitMs : null,
+      measuredMachineLimit: rateLimited || !!q?.saturated,
+      quotaHeadroom: q ? q.quotaHeadroom : null,
+      reliability: attempts > 0 ? b!.completions / attempts : null,
       ownedByAnotherWorker: false,
-      incrementalCostPerUnit: null,
+      incrementalCostPerUnit: q ? q.incrementalCostPerUnit : null,
     });
   }
   return { currentShares, purposes, lanes, bottlenecks, urgentCommercialGoal: context.urgentCommercialGoal };
@@ -487,7 +500,14 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
   const previous = live.length > 0 ? await ports.lastDecision(live[0]!.id) : null;
   const tried = triedRemediesFrom(previous);
   const reading = await ports.readYield(window);
-  const allocationInput = allocationInputFrom(reading, { urgentCommercialGoal, nearestDeadlineDays: deadlines.length ? Math.min(...deadlines) : null, triedRemedies: tried });
+  const queueNotes: string[] = [];
+  const queue = ports.readQueue
+    ? await ports.readQueue(window.until).catch((error: unknown) => {
+        queueNotes.push(`the lane queue could not be read (${error instanceof Error ? error.message.slice(0, 120) : String(error)}); no capacity is recommended without it`);
+        return null;
+      })
+    : null;
+  const allocationInput = allocationInputFrom(reading, { urgentCommercialGoal, nearestDeadlineDays: deadlines.length ? Math.min(...deadlines) : null, triedRemedies: tried, queue });
   const decision = decideResearchAllocation(allocationInput);
   const observed = normalizeShares(allocationInput.currentShares);
   const fingerprint = allocationFingerprint(decision);
@@ -509,8 +529,10 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
     laneActions: decision.laneActions.map((a) => ({ ...a, tried: tried.get(a.lane) ?? [] })),
     capacity: decision.capacity.map((c) => ({ ...c, recommendationOnly: true })),
     bottlenecks: decision.capacity.filter((c) => c.resource !== null).map((c) => ({ lane: c.lane, resource: c.resource })),
+    // The measured queue each capacity verdict read: what waits now, and the slots its resource can still take.
+    queue: Object.values(queue ?? {}).map((q) => ({ lane: q.lane, queued: q.queued, queueWaitMs: q.queueWaitMs, slots: `${q.slotsBusy ?? '?'}/${q.slotsTarget}`, limit: q.slotsLimit, headroom: q.quotaHeadroom, saturated: q.saturated })),
     costCountedOnce: reading.costCountedOnce,
-    notes: [...decision.notes, ...reading.notes].slice(0, 20),
+    notes: [...queueNotes, ...decision.notes, ...reading.notes].slice(0, 20),
   };
   const recordedOn: string[] = [];
   for (const goal of live) {
@@ -537,10 +559,11 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
 
 /** The production rows: the yield reader, the goal's own event history, and the project event log. */
 export async function productionResearchAllocationPorts(): Promise<ResearchAllocationPorts> {
-  const { researchYieldByPurpose } = await import('./researchYield.ts');
+  const { researchYieldByPurpose, researchQueueByLane } = await import('./researchYield.ts');
   const { listWorkstreamEvents } = await import('../../repos/register.ts');
   return {
     readYield: (window) => researchYieldByPurpose(window),
+    readQueue: (at) => researchQueueByLane(new Date(at)),
     async lastDecision(goalId) {
       const events = await listWorkstreamEvents(goalId, 200);
       const newest = events.find((e) => e.kind === RESEARCH_REALLOCATED_EVENT);

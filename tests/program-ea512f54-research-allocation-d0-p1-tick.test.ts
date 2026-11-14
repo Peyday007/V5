@@ -26,7 +26,9 @@ import { createBin, getBin } from '../server/repos/bins.ts';
 import { launchMission, linkMission } from '../server/repos/russellMissions.ts';
 import type { BinManifest } from '../server/domain/types.ts';
 import { RESEARCH_PURPOSES, EXPLORATION_FLOOR, SYSTEM_HEALTH_FLOOR, type ResearchPurpose } from '../server/services/goals/researchAllocation.ts';
-import type { ResearchYieldReading, YieldBucket } from '../server/services/goals/researchYield.ts';
+import { laneQueueFrom, researchQueueByLane, type LaneQueueMeasurement, type ResearchYieldReading, type YieldBucket } from '../server/services/goals/researchYield.ts';
+import { enqueueWork } from '../server/repos/workQueue.ts';
+import { workType } from '../server/services/queue/workTypes.ts';
 import type { GoalView } from '../server/services/goals/model.ts';
 
 function bucket(over: Partial<YieldBucket> = {}): YieldBucket {
@@ -324,5 +326,111 @@ describe('advanceGoals applies the newest recorded decision to live bins (review
     const report = await advanceGoals();
     expect(report.researchApplied).toBeNull();
     expect((await getBin(owned))!.priority).toBe(8);
+  });
+});
+
+describe('capacity is decided from the measured queue, not from jobs already running (review finding F3)', () => {
+  const NOW = '2026-11-14T00:00:00.000Z';
+  const LANE = 'free-lane:groq/llama';
+
+  /** A lane that is all links and no remedy, rate-limited now and then, and 90% reliable: only capacity can be in question. */
+  function busyLane(): ResearchYieldReading {
+    const r = reading();
+    r.lanes = {
+      [LANE]: bucket({ submissions: 20, completions: 18, acceptedClaims: 10, qualifiedPositions: 5, jobMs: 3_600_000, inFlight: 30,
+        failures: { total: 2, rateLimited: 2, other: 0, causes: [] }, queueWait: { measured: 18, medianMs: 90 * 60_000, p90Ms: 120 * 60_000 } }),
+    };
+    r.attributions = [{ jobId: 'job_1', lane: LANE, purposes: ['TRANSACTION_ROUTES'], basis: ['goal round'] }];
+    return r;
+  }
+
+  it('reads no queue from jobs that already started: without a queue reading nothing waits and nothing is added', () => {
+    const input = allocationInputFrom(busyLane(), { urgentCommercialGoal: false, nearestDeadlineDays: null, triedRemedies: new Map() });
+    const b = input.bottlenecks!.find((one) => one.lane === LANE)!;
+    // 30 in flight and a 90-minute median start delay are not 30 jobs waiting now.
+    expect(b.qualifiedQueued).toBeNull();
+    expect(b.queueWaitMs).toBeNull();
+  });
+
+  it('carries the measured queue, headroom and cost into the bottleneck, and a lane known only by its queue is still measured', () => {
+    const queue: Record<string, LaneQueueMeasurement> = laneQueueFrom({
+      nowMs: Date.parse(NOW),
+      waitingSince: ['2026-11-13T23:20:00.000Z', '2026-11-13T23:30:00.000Z', '2026-11-13T23:40:00.000Z'],
+      models: [
+        { model: 'groq/llama', target: 2, busy: 2, stableHigh: 6, gpu: false },
+        { model: 'runpod/Qwen', target: 8, busy: 3, stableHigh: 8, gpu: true },
+      ],
+      gpuCeiling: 32,
+    });
+    const input = allocationInputFrom(busyLane(), { urgentCommercialGoal: false, nearestDeadlineDays: null, triedRemedies: new Map(), queue });
+    const b = input.bottlenecks!.find((one) => one.lane === LANE)!;
+    expect(b).toMatchObject({ qualifiedQueued: 3, queueWaitMs: 30 * 60_000, quotaHeadroom: 4, incrementalCostPerUnit: 0, measuredMachineLimit: true });
+    const gpu = input.bottlenecks!.find((one) => one.lane === 'free-lane:runpod/Qwen')!;
+    // Not saturated (3 of 8 busy) and never past what it carried: no machine limit, no headroom.
+    expect(gpu).toMatchObject({ qualifiedQueued: 3, measuredMachineLimit: false, resource: null, quotaHeadroom: 0, reliability: null });
+  });
+
+  it('recommends capacity from real rows: qualified jobs waiting now, the controller\'s proven slots, and the window\'s reliability', async () => {
+    const projectId = (await freshProject()).project.id;
+    const manifest: BinManifest = {
+      objective: 'Answer a question.', why: 'Exercise the queue.', lineage: { projectId, layerId: null, goal: null, orchestrationId: null },
+      units: [{ key: 'unit-1', establishes: 'An answer', input: 'one', transform: 'sha256', dependsOn: [] }],
+      acceptableSources: [], excludedSources: [], evidence: ['a value'], outputs: ['one unit result'],
+      authorizedActions: ['submit unit results'], prohibitedActions: ['anything with an external effect'], budgetUnits: 1,
+      retry: { maxAttempts: 3, backoffSeconds: 30 }, stoppingConditions: ['every unit verified'],
+    };
+    const bin = await createBin({ projectId, kind: 'DETERMINISTIC_CHECK', title: 'Play research', objective: 'Answer a question.', manifest, completionContract: 'DETERMINISTIC_UNITS_V1', createdByType: 'SYSTEM', createdById: 'test', ready: true });
+    await getDb().run(`UPDATE bins SET purpose = 'PLAY_RESEARCH' WHERE id = ?`, [bin.id]);
+    const now = Date.now();
+    const waitingFor = [40, 50, 60];
+    for (const minutes of waitingFor) {
+      const item = await enqueueWork({ projectId, workType: 'RESEARCH_FRAGMENT', payload: workType('RESEARCH_FRAGMENT').validate({}), binId: bin.id, createdByType: 'SYSTEM', availableAt: new Date(now - minutes * 60_000).toISOString() });
+      expect(item.state).toBe('QUEUED');
+    }
+    // A job that already ran is not the queue.
+    const started = await enqueueWork({ projectId, workType: 'RESEARCH_FRAGMENT', payload: workType('RESEARCH_FRAGMENT').validate({}), binId: bin.id, createdByType: 'SYSTEM', availableAt: new Date(now - 300 * 60_000).toISOString() });
+    await getDb().run(`UPDATE work_items SET state = 'SUCCEEDED' WHERE id = ?`, [started.id]);
+    // The capacity controller's row: two slots in force, six held without overload before a rate-limit shrink.
+    await getDb().run(
+      `INSERT INTO free_lane_capacity (model, target, stable_high, updated_at, reason) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT (model) DO UPDATE SET target = excluded.target, stable_high = excluded.stable_high`,
+      ['groq/llama', 2, 6, new Date(now).toISOString(), 'halved on 429'],
+    );
+
+    const queue = await researchQueueByLane(new Date(now));
+    expect(queue[LANE]).toMatchObject({ queued: 3, queueWaitMs: 50 * 60_000, slotsTarget: 2, slotsLimit: 6, quotaHeadroom: 4, incrementalCostPerUnit: 0, resource: 'PROVIDER_QUOTA' });
+
+    const events = new Map<string, Record<string, unknown>[]>();
+    const ports: ResearchAllocationPorts = {
+      readYield: async () => busyLane(),
+      readQueue: (at) => researchQueueByLane(new Date(at)),
+      lastDecision: async (goalId) => events.get(goalId)?.at(-1) ?? null,
+      recordGoal: async (goalId, _summary, detail) => { events.set(goalId, [...(events.get(goalId) ?? []), detail]); },
+    };
+    const report = await reallocateResearch({ goals: [goalView('wst_q')], now: new Date(now).toISOString() }, ports);
+    const verdict = report.capacity.find((c) => c.lane === LANE)!;
+    expect(verdict).toMatchObject({ kind: 'ADD_CAPACITY', resource: 'MODEL_RATE_LIMIT', units: 3, incrementalCost: 0 });
+    expect(verdict.reason).toMatch(/3 qualified job\(s\) waited 50 min/);
+    const detail = events.get('wst_q')!.at(-1)!;
+    expect((detail.capacity as { lane: string; recommendationOnly: boolean }[]).find((c) => c.lane === LANE)!.recommendationOnly).toBe(true);
+    expect(detail.queue).toContainEqual(expect.objectContaining({ lane: LANE, queued: 3, headroom: 4 }));
+
+    // A provider that never carried more than it has now leaves no headroom: nothing is added.
+    await getDb().run(`UPDATE free_lane_capacity SET stable_high = 2 WHERE model = ?`, ['groq/llama']);
+    const tight = await reallocateResearch({ goals: [goalView('wst_q')], now: new Date(now).toISOString() }, ports);
+    expect(tight.capacity.find((c) => c.lane === LANE)).toMatchObject({ kind: 'NO_CAPACITY', reason: expect.stringMatching(/no measured quota headroom/) });
+  });
+
+  it('a queue that cannot be read is reported and recommends nothing', async () => {
+    const events = new Map<string, Record<string, unknown>[]>();
+    const ports: ResearchAllocationPorts = {
+      readYield: async () => busyLane(),
+      readQueue: async () => { throw new Error('database busy'); },
+      lastDecision: async () => null,
+      recordGoal: async (goalId, _summary, detail) => { events.set(goalId, [detail]); },
+    };
+    const report = await reallocateResearch({ goals: [goalView('wst_e')], now: NOW }, ports);
+    expect(report.capacity.every((c) => c.kind === 'NO_CAPACITY')).toBe(true);
+    expect((events.get('wst_e')![0]!.notes as string[])[0]).toMatch(/lane queue could not be read/);
   });
 });

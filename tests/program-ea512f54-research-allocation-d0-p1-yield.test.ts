@@ -28,6 +28,7 @@ import { recordMoney } from '../server/repos/cashLedger.ts';
 import {
   attributePurposes,
   isRateLimited,
+  laneQueueFrom,
   researchYieldByPurpose,
   researchYieldWindows,
   RESEARCH_PURPOSES,
@@ -242,5 +243,30 @@ describe('research yield read from production rows', () => {
     const windows = await researchYieldWindows(until);
     expect(Object.keys(windows)).toEqual(['1h', '6h', '24h']);
     expect(windows['1h'].total.submissions).toBe(4);
+  });
+});
+
+describe('the queue in front of each free-lane lane (pure, review finding F3)', () => {
+  it('measures what waits now, and headroom only up to what the resource carried without overload', () => {
+    const now = Date.parse('2026-11-14T01:00:00.000Z');
+    const out = laneQueueFrom({
+      nowMs: now,
+      waitingSince: ['2026-11-14T00:00:00.000Z', '2026-11-14T00:30:00.000Z', null],
+      models: [
+        { model: 'api', target: 4, busy: 4, stableHigh: 10, gpu: false },
+        { model: 'runpod/q', target: 4, busy: null, stableHigh: 100, gpu: true },
+        { model: 'tight', target: 6, busy: 6, stableHigh: 3, gpu: false },
+      ],
+      gpuCeiling: 16,
+    });
+    // Three jobs wait; two say since when, so the wait is the median of those two.
+    expect(out['free-lane:api']).toMatchObject({ queued: 3, queueWaitMs: 30 * 60_000, saturated: true, slotsLimit: 10, quotaHeadroom: 6, resource: 'PROVIDER_QUOTA', incrementalCostPerUnit: 0 });
+    // A GPU is capped by its ceiling, and busy slots nobody measured never read as saturated.
+    expect(out['free-lane:runpod/q']).toMatchObject({ saturated: false, slotsLimit: 16, quotaHeadroom: 12, resource: 'GPU' });
+    // Past what the provider has carried there is no headroom, never a negative one.
+    expect(out['free-lane:tight']!.quotaHeadroom).toBe(0);
+    // Nothing waiting: no queue wait and no saturation, whatever is busy.
+    const idle = laneQueueFrom({ nowMs: now, waitingSince: [], models: [{ model: 'api', target: 4, busy: 4, stableHigh: 10, gpu: false }], gpuCeiling: 16 });
+    expect(idle['free-lane:api']).toMatchObject({ queued: 0, queueWaitMs: null, saturated: false });
   });
 });

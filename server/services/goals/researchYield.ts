@@ -938,3 +938,114 @@ export async function researchYieldWindows(until = new Date().toISOString()): Pr
   for (const w of RESEARCH_YIELD_WINDOWS) out[w.key] = await researchYieldByPurpose({ since: new Date(end - w.ms).toISOString(), until });
   return out;
 }
+
+/* ------------------------------------------------------------------------- */
+/* The queue in front of each lane, measured now (RES-15-5 capacity clause)  */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * What a capacity decision needs and a window of finished jobs cannot give:
+ * the qualified jobs waiting *now* (claimable, not yet started), how long they
+ * have waited so far, and how much more of the lane's resource the measurements
+ * say it can take. Jobs that already started are not the queue, and the wait of
+ * a job that already started is not the wait of one still waiting.
+ *
+ * A free-lane lane is one model (`free-lane:<model>`). Its slots are the
+ * capacity controller's own rows (§86, `freeLane/capacity.ts`): the target in
+ * force, the slots busy at the last control step, and the highest target the
+ * provider held without overload (`stableHigh`). The headroom is measured, never
+ * assumed: for a model behind a provider's quota it is the slots the provider
+ * has already been seen to carry above the current target, and for a GPU slot
+ * the same, never above the pod's slot ceiling (`gpuCeiling`, a runaway guard
+ * and so only ever a cap). A slot is a concurrent call on
+ * capacity Brain already holds (a free-tier key or a pod billed by the hour, not
+ * by the call), so one more slot within that headroom has a measured money cost
+ * of zero; past the headroom nothing is known and nothing is recommended.
+ *
+ * A bin lane (`bin:<provider>`) has no row saying which provider a waiting bin
+ * will be dispatched to, so it gets no queue here: unknown, not zero.
+ */
+export interface LaneQueueMeasurement {
+  lane: string;
+  /** Qualified jobs claimable now and not started; the free-lane queue is shared by every model lane. */
+  queued: number;
+  /** Median of how long those jobs have waited so far, or null when none waits. */
+  queueWaitMs: number | null;
+  slotsTarget: number;
+  /** Slots busy at the controller's last step, or null when the pool is not running in this process. */
+  slotsBusy: number | null;
+  /** The measured limit: the slots the resource carried without overload (a GPU's capped by its ceiling). */
+  slotsLimit: number;
+  /** Every slot in force is busy while qualified work waits: the delay is the machine limit. */
+  saturated: boolean;
+  resource: 'GPU' | 'PROVIDER_QUOTA';
+  quotaHeadroom: number;
+  incrementalCostPerUnit: number;
+  basis: string[];
+}
+
+export interface QueueModelReading {
+  model: string;
+  target: number;
+  busy: number | null;
+  stableHigh: number;
+  gpu: boolean;
+}
+
+/** Fold the waiting jobs and the controller's model rows into one measurement per free-lane lane. Pure. */
+export function laneQueueFrom(input: { nowMs: number; waitingSince: readonly (string | null)[]; models: readonly QueueModelReading[]; gpuCeiling: number }): Record<string, LaneQueueMeasurement> {
+  const ages = input.waitingSince
+    .map((at) => (at ? input.nowMs - Date.parse(at) : Number.NaN))
+    .filter((ms) => Number.isFinite(ms))
+    .map((ms) => Math.max(0, ms));
+  const queued = input.waitingSince.length;
+  const queueWaitMs = percentile(ages, 50);
+  const out: Record<string, LaneQueueMeasurement> = {};
+  for (const m of input.models) {
+    const target = Math.max(0, Math.floor(m.target));
+    const limit = Math.max(0, Math.floor(m.gpu ? Math.min(input.gpuCeiling, m.stableHigh) : m.stableHigh));
+    const headroom = Math.max(0, limit - target);
+    const saturated = queued > 0 && m.busy !== null && target > 0 && m.busy >= target;
+    out[`free-lane:${m.model}`] = {
+      lane: `free-lane:${m.model}`,
+      queued,
+      queueWaitMs,
+      slotsTarget: target,
+      slotsBusy: m.busy,
+      slotsLimit: limit,
+      saturated,
+      resource: m.gpu ? 'GPU' : 'PROVIDER_QUOTA',
+      quotaHeadroom: headroom,
+      incrementalCostPerUnit: 0,
+      basis: [
+        `${queued} qualified job(s) claimable and not started${queueWaitMs !== null ? `, median wait so far ${Math.round(queueWaitMs / 60_000)} min` : ''}`,
+        m.busy === null ? `target ${target} slot(s); busy slots not measured in this process` : `${m.busy}/${target} slot(s) busy`,
+        `${m.gpu ? 'the GPU' : 'the provider'} held ${limit} slot(s) without overload`,
+        'a slot within that limit runs on capacity Brain already holds and is not billed by the call',
+      ],
+    };
+  }
+  return out;
+}
+
+/** The free-lane queue and every model lane's slots, read now from the rows the lane writes. Reads only. */
+export async function researchQueueByLane(now = new Date()): Promise<Record<string, LaneQueueMeasurement>> {
+  const at = now.toISOString();
+  // The same qualified, claimable set the capacity controller counts (`freeLane/capacity.ts` waitingNow).
+  const waiting = await getDb().all<{ since: string | null }>(
+    `SELECT COALESCE(w.available_at, w.created_at) AS since FROM work_items w
+      WHERE w.state = 'QUEUED' AND w.available_at <= ? AND w.attempt_count < w.max_attempts
+        AND w.work_type IN ('RESEARCH_PLAN', 'RESEARCH_FRAGMENT', 'RESEARCH_VERIFY', 'RESEARCH_SYNTHESIZE', 'RESEARCH_AUDIT')
+        AND EXISTS (SELECT 1 FROM bins b
+                     WHERE (b.id = w.bin_id OR (b.orchestration_id IS NOT NULL AND b.orchestration_id = w.orchestration_id))
+                       AND b.purpose IN ('PLAY_RESEARCH', 'GRUNT'))`,
+    [at],
+  );
+  const { adaptivePoolRunning, lastControlReading, readCapacity, gpuCeiling } = await import('../freeLane/capacity.ts');
+  const { isRunpodSlot } = await import('../cheap/runpod.ts');
+  const control = adaptivePoolRunning() ? lastControlReading() : null;
+  const models: QueueModelReading[] = control
+    ? control.models.map((m) => ({ model: m.model, target: m.target, busy: m.busy, stableHigh: m.stableHigh, gpu: isRunpodSlot(m.model) }))
+    : (await readCapacity()).map((r) => ({ model: r.model, target: r.target, busy: null, stableHigh: r.stableHigh, gpu: isRunpodSlot(r.model) }));
+  return laneQueueFrom({ nowMs: now.getTime(), waitingSince: waiting.map((w) => w.since), models, gpuCeiling: gpuCeiling() });
+}
