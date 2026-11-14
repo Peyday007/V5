@@ -13,7 +13,7 @@
  */
 import { getDb } from '../../../db/database.ts';
 import { newId, nowIso } from '../../../repos/util.ts';
-import { makeDirection, type Direction, type Exploration, type Origin, type Transform } from './directions.ts';
+import { abstractDirection, makeDirection, type Direction, type Exploration, type Origin, type Transform } from './directions.ts';
 import type { Strategy } from './variables.ts';
 
 /** What a plan read's variable sweep concluded, small enough for one row (§102). */
@@ -75,16 +75,35 @@ export async function loadLibrary(limit = LIBRARY_SIZE): Promise<Direction[]> {
     });
 }
 
+/**
+ * What one direction taught, as the library records it (lens S, S-7/S-8).
+ *
+ * Its lift is its challenged score — reach and the reach it holds with its
+ * conversion halved or its assumptions removed, weighed equally (`scoreOf`) —
+ * against §99's plan scored the same way, never its bare reach: a method that
+ * only stacks assumptions raises coverage, not what holds, and must not rise
+ * in the library for it. A reading the plausibility critic flagged teaches
+ * nothing and is not recorded. The method is keyed by its program in roles
+ * (`abstractDirection`), so what one goal learned applies to the next; a
+ * program naming an opening no role covers keeps its ids.
+ */
+export function lessonOf(x: Pick<Exploration, 'greedy' | 'winner' | 'roles'>, r: Exploration['all'][number]): { direction: Direction; lift: number; improved: 0 | 1; won: 0 | 1 } | null {
+  if (r.reading.implausible?.length) return null;
+  const lift = r.reading.feasible ? r.score - x.greedy.score : 0;
+  const won = x.winner && x.winner.direction.signature === r.direction.signature ? 1 : 0;
+  const direction = (x.roles && abstractDirection(r.direction, x.roles)) || r.direction;
+  return { direction, lift, improved: lift >= MATERIAL ? 1 : 0, won };
+}
+
 /** Record what an exploration learned: every direction tried, and one row for the exploration itself. */
 export async function recordExploration(goalId: string, x: Exploration): Promise<void> {
   const db = getDb();
   const now = nowIso();
   const base = x.baseline.reach;
   for (const r of x.all) {
-    const d = r.direction;
-    const lift = r.reading.feasible ? r.reading.reach - base : 0;
-    const improved = lift >= MATERIAL ? 1 : 0;
-    const won = x.winner && x.winner.direction.signature === d.signature ? 1 : 0;
+    const lesson = lessonOf(x, r);
+    if (!lesson) continue;
+    const { direction: d, lift, improved, won } = lesson;
     // A library method keeps the origin it was discovered with; only its record grows.
     const origin: Origin = d.origin === 'LIBRARY' ? 'ALGORITHM' : d.origin;
     await db.run(

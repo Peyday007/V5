@@ -46,12 +46,62 @@ export type AggregationMode = (typeof AGGREGATIONS)[number];
 export const INFORMATION_MODES = ['NONE', 'PLATFORM'] as const;
 export type InformationMode = (typeof INFORMATION_MODES)[number];
 
+/**
+ * How the position is paid: the revenue basis (W-7). Every position the four
+ * axes above describe already has a natural basis — an introduction or a
+ * placement earns a FEE, a prime contract earns a SERVICE margin — and a
+ * position states `revenue` only when it is paid some other way:
+ *
+ *   * FEE — a fee or commission on a transaction somebody else performs;
+ *   * SERVICE — the margin on work delivered under our contract;
+ *   * RESALE — the spread on units bought and resold, held as inventory;
+ *   * SUBSCRIPTION — a recurring charge for software or an information layer;
+ *   * RENT — rent on an asset we own and others operate;
+ *   * FINANCING — a financing margin (interest, a factoring discount) on
+ *     money advanced against the transaction;
+ *   * COMBINED — two transactions with one payer: the service margin and a
+ *     financing margin on extended terms.
+ *
+ * The vocabulary is open to evidence the way roles are: a role research names
+ * that nothing here lists is recorded on its fact (`roleId`) and read back as
+ * an evidence role, never dropped.
+ */
+export const REVENUE_BASES = ['FEE', 'SERVICE', 'RESALE', 'SUBSCRIPTION', 'RENT', 'FINANCING', 'COMBINED'] as const;
+export type RevenueBasis = (typeof REVENUE_BASES)[number];
+
+export const REVENUE_LABELS: Record<RevenueBasis, string> = {
+  FEE: 'a fee or commission',
+  SERVICE: 'the margin on work delivered under our contract',
+  RESALE: 'the spread on units bought, held and resold',
+  SUBSCRIPTION: 'a recurring subscription',
+  RENT: 'rent on an asset we own',
+  FINANCING: 'a financing margin on money advanced',
+  COMBINED: 'a service margin and a financing margin from the same payer',
+};
+
 export interface Position {
   contract: ContractHold;
   supply: SupplyMode;
   assets: AssetMode;
   aggregation: AggregationMode;
   information: InformationMode;
+  /** Absent: the position's natural basis (`naturalRevenue`). */
+  revenue?: RevenueBasis;
+}
+
+/** The basis a position earns on when it states none. */
+export function naturalRevenue(p: Pick<Position, 'contract'>): RevenueBasis {
+  return p.contract === 'PRIME' ? 'SERVICE' : 'FEE';
+}
+
+/** The basis a position is actually paid on. */
+export function revenueOf(p: Position): RevenueBasis {
+  return p.revenue ?? naturalRevenue(p);
+}
+
+/** True when a position is paid on something other than its natural basis. */
+export function hasOwnRevenue(p: Position): boolean {
+  return p.revenue !== undefined && p.revenue !== naturalRevenue(p);
 }
 
 /** The economic mechanisms the owner named (2026-11-07), read off a position rather than chosen. */
@@ -68,6 +118,11 @@ export const MECHANISMS = [
   'CONTRACT_CONTROL',
   'INFORMATION_ADVANTAGE',
   'ASSET_OWNERSHIP',
+  'RESALE',
+  'SUBSCRIPTION',
+  'ASSET_RENTAL',
+  'FINANCING',
+  'TRANSACTION_COMBINATION',
 ] as const;
 export type Mechanism = (typeof MECHANISMS)[number];
 
@@ -81,13 +136,16 @@ export const ASSETS = [
   'SUPPLY_NETWORK',
   'LABOR_PIPELINE',
   'OPERATING_CAPABILITY',
-  'FLEET',
-  'FLEET_EQUITY',
-  'ROUTE_DENSITY',
-  'DISPATCH_DATA',
+  'CAPACITY',
+  'CAPACITY_EQUITY',
+  'DENSITY',
+  'DATA',
   'INSURANCE_COVER',
   'OPERATING_AUTHORITY',
   'PROGRAM_SELECTION',
+  'INVENTORY',
+  'RECEIVABLES_BOOK',
+  'SUBSCRIBER_BASE',
 ] as const;
 export type Asset = (typeof ASSETS)[number];
 
@@ -98,13 +156,16 @@ export const ASSET_LABELS: Record<Asset, string> = {
   SUPPLY_NETWORK: 'a network of independent operators',
   LABOR_PIPELINE: 'a recruiting pipeline of workers',
   OPERATING_CAPABILITY: 'an operating team (dispatch, management, compliance)',
-  FLEET: 'operating equipment under our control',
-  FLEET_EQUITY: 'owned equipment',
-  ROUTE_DENSITY: 'density — several buyers’ volume on shared capacity',
-  DISPATCH_DATA: 'an information layer (dispatch, routing, pricing data)',
+  CAPACITY: 'operating capacity (equipment, premises, machines) under our control',
+  CAPACITY_EQUITY: 'owned capacity (equipment, premises, machines)',
+  DENSITY: 'density — several buyers’ volume on shared capacity',
+  DATA: 'an information layer (scheduling, matching, pricing data)',
   INSURANCE_COVER: 'the insurance buyers require',
   OPERATING_AUTHORITY: 'the licences or registrations the work requires',
   PROGRAM_SELECTION: 'selection into a buyer’s partner program',
+  INVENTORY: 'inventory held for resale',
+  RECEIVABLES_BOOK: 'a book of financed receivables and the repayment record behind it',
+  SUBSCRIBER_BASE: 'paying subscribers',
 };
 
 /** What controlling ambition the operator can state. */
@@ -115,11 +176,11 @@ export type ControlTarget = (typeof CONTROL_TARGETS)[number];
 export const CONTROL_ASSETS: Record<ControlTarget, Asset[]> = {
   DEMAND: ['CUSTOMER_CONTRACTS', 'BUYER_RELATIONSHIPS'],
   SUPPLY: ['SUPPLY_NETWORK', 'LABOR_PIPELINE'],
-  FULFILMENT: ['OPERATING_CAPABILITY', 'FLEET'],
-  ASSETS: ['FLEET_EQUITY', 'FLEET'],
+  FULFILMENT: ['OPERATING_CAPABILITY', 'CAPACITY'],
+  ASSETS: ['CAPACITY_EQUITY', 'CAPACITY'],
   CHOKEPOINTS: [],
   CONTRACTS: ['CUSTOMER_CONTRACTS'],
-  INFORMATION: ['DISPATCH_DATA'],
+  INFORMATION: ['DATA'],
 };
 
 /* ------------------------------------------------------------------- facts */
@@ -165,6 +226,22 @@ export const FACT_KEYS = {
    * it is simply not modelled until somebody measures it.
    */
   failure_rate: { label: 'Share of units that fail and are redone or refunded at our cost', unit: 'share', segment: false, kind: 'RATE' },
+  /* The revenue bases beyond a fee and a service margin (W-7). */
+  purchase_cost_per_unit: { label: 'What buying one unit for resale costs', unit: 'USD/unit', segment: false, kind: 'POSITIVE' },
+  inventory_days: { label: 'Days of sales held as inventory', unit: 'days', segment: false, kind: 'POSITIVE' },
+  subscription_price_per_month: { label: 'What one subscriber pays per month', unit: 'USD/month', segment: true, kind: 'POSITIVE' },
+  asset_rent_per_day: { label: 'Rent one owned capacity unit earns per rented day', unit: 'USD/day', segment: false, kind: 'POSITIVE' },
+  asset_utilisation: { label: 'Share of working days an owned unit is rented', unit: 'share', segment: false, kind: 'RATE' },
+  financing_margin: { label: 'Share of the face value earned per financing advance (interest, discount or fee)', unit: 'share', segment: true, kind: 'RATE' },
+  financing_term_days: { label: 'Days an advance is outstanding before it is repaid', unit: 'days', segment: true, kind: 'POSITIVE' },
+  default_rate: { label: 'Share of financed face value never repaid', unit: 'share', segment: true, kind: 'RATE' },
+  capital_cost_rate: { label: 'Annual cost of the capital advanced', unit: 'share', segment: false, kind: 'RATE' },
+  /*
+   * Who stands in a commercial role, as research recorded it (W-6). No formula
+   * reads it: it records that a role is occupied and by whom, and — when the
+   * fact names the paying buyer — that this buyer pays an intermediary.
+   */
+  role_occupants: { label: 'Parties recorded standing in a commercial role', unit: 'occupants', segment: true, kind: 'POSITIVE' },
 } as const satisfies Record<string, { label: string; unit: string; segment: boolean; kind: 'POSITIVE' | 'RATE' }>;
 export type FactKey = keyof typeof FACT_KEYS;
 export const FACT_KEY_LIST = Object.keys(FACT_KEYS) as FactKey[];
@@ -174,11 +251,92 @@ export function isFactKey(value: unknown): value is FactKey {
 }
 
 /**
- * How strongly a fact is known, strongest first. OBSERVED is this operation's
- * own result (a quoted price, a signed rate, a measured conversion); VERIFIED
- * is a primary source or a gated claim about this market; ESTIMATE is a
- * published figure about a comparable market; ASSUMPTION is a stated range
- * nobody has checked. Absent is UNKNOWN.
+ * How long a reading of each kind of quantity stays current (W-10). A fact
+ * carries the day it was observed and is current until `validUntil` — the
+ * observation day plus its class's window, unless the fact declares its own.
+ * Past it the fact is still evidence and is never dropped, but its range is
+ * widened (`STALE_WIDENING_PER_WINDOW`), because the world it measured has had
+ * time to move.
+ */
+export const FRESHNESS_CLASSES = {
+  /** Prices, rates and costs move with the market, wages and competition. */
+  PRICE: { days: 180, because: 'prices, rates and costs are re-set by the market within months' },
+  /** Volumes, conversion and selling effort drift with demand and with the seller. */
+  VOLUME: { days: 365, because: 'demand, conversion and selling effort drift over a year' },
+  /** Payment and contract terms are written into agreements that run for years. */
+  TERMS: { days: 730, because: 'payment and contract terms are fixed in agreements that run for years' },
+  /** Legal requirements and who stands in a role change slowly. */
+  STRUCTURE: { days: 1095, because: 'legal requirements and who occupies a role change over years, not months' },
+} as const;
+export type FreshnessClass = keyof typeof FRESHNESS_CLASSES;
+
+/** Each fact key's class. A Record over every key, so a new key is a compile error until classed. */
+export const FACT_FRESHNESS: Record<FactKey, FreshnessClass> = {
+  price_per_unit: 'PRICE',
+  units_per_capacity_day: 'VOLUME',
+  pooled_units_per_capacity_day: 'VOLUME',
+  contractor_rate_per_unit: 'PRICE',
+  contractor_day_rate: 'PRICE',
+  labor_cost_per_day: 'PRICE',
+  asset_lease_per_day: 'PRICE',
+  asset_lease_deposit: 'PRICE',
+  asset_purchase_cost: 'PRICE',
+  asset_ownership_cost_per_day: 'PRICE',
+  variable_cost_per_day: 'PRICE',
+  insurance_per_capacity_year: 'PRICE',
+  broker_take_rate: 'PRICE',
+  placement_fee: 'PRICE',
+  placements_per_month: 'VOLUME',
+  recruiting_cost_per_placement: 'PRICE',
+  buyer_payment_days: 'TERMS',
+  supplier_payment_days: 'TERMS',
+  account_units_per_month: 'VOLUME',
+  account_win_rate: 'VOLUME',
+  outreach_cost_per_account: 'PRICE',
+  sales_cycle_days: 'VOLUME',
+  accounts_reachable: 'VOLUME',
+  supply_available: 'VOLUME',
+  overhead_per_month: 'PRICE',
+  manager_cost_per_month: 'PRICE',
+  platform_cost_per_month: 'PRICE',
+  hiring_days: 'VOLUME',
+  failure_rate: 'VOLUME',
+  purchase_cost_per_unit: 'PRICE',
+  inventory_days: 'VOLUME',
+  subscription_price_per_month: 'PRICE',
+  asset_rent_per_day: 'PRICE',
+  asset_utilisation: 'VOLUME',
+  financing_margin: 'PRICE',
+  financing_term_days: 'TERMS',
+  default_rate: 'VOLUME',
+  capital_cost_rate: 'PRICE',
+  role_occupants: 'STRUCTURE',
+};
+
+/**
+ * How much an expired fact's range widens per elapsed window past its
+ * `validUntil`, as a share of its own value, up to `STALE_WIDENING_CAP`. A
+ * stated convention, not evidence: a reading one window out of date could
+ * have moved a quarter either way.
+ */
+export const STALE_WIDENING_PER_WINDOW = 0.25;
+export const STALE_WIDENING_CAP = 1;
+
+/** The day a fact of this key observed on `observedAt` stops being current. */
+export function validUntilFor(key: FactKey, observedAt: string): string {
+  const days = FRESHNESS_CLASSES[FACT_FRESHNESS[key]].days;
+  return new Date(Date.parse(observedAt) + days * 86_400_000).toISOString();
+}
+
+/**
+ * How strongly a fact is known, strongest first. OBSERVED is something seen
+ * rather than supposed: this operation's own result (a quoted price, a signed
+ * rate, a measured conversion) or a sourced claim that cleared the evidence
+ * gate (W-5), dated and carrying the claim as its lineage. VERIFIED is a
+ * person's attestation and is never written by a machine. ESTIMATE is a
+ * published figure about a comparable market. ASSUMPTION is a hypothesis: a
+ * stated range nobody has checked, or a claim that reasons rather than
+ * reports. Absent is UNKNOWN.
  */
 export const FACT_STATUSES = ['OBSERVED', 'VERIFIED', 'ESTIMATE', 'ASSUMPTION'] as const;
 export type FactStatus = (typeof FACT_STATUSES)[number];
@@ -203,6 +361,16 @@ export interface Fact {
   measures: string;
   /** The market the figure was measured in, when it differs from the target. */
   geography?: string | null;
+  /** When the figure was observed (the source's date, else when it was read). Absent: undated. */
+  observedAt?: string | null;
+  /** When it stops being current; from `FACT_FRESHNESS` unless the fact declared its own. */
+  validUntil?: string | null;
+  /** The commercial role the figure is about (W-6): a seed id, or a role research named that no seed lists. */
+  roleId?: string | null;
+  /** Who stands in that role, for a `role_occupants` fact. */
+  occupant?: string | null;
+  /** The industry-map node a project-level fact was established under. */
+  nodeId?: string | null;
 }
 
 /* ------------------------------------------------------------- industry model */
@@ -221,7 +389,7 @@ export interface Actor {
   source: FactSource;
 }
 
-export const FLOW_KINDS = ['MONEY', 'WORK', 'RISK', 'CAPACITY', 'AUTHORITY', 'DEMAND'] as const;
+export const FLOW_KINDS = ['MONEY', 'WORK', 'RISK', 'CAPACITY', 'AUTHORITY', 'DEMAND', 'INFORMATION', 'FINANCING', 'OBLIGATION'] as const;
 export type FlowKind = (typeof FLOW_KINDS)[number];
 
 export interface Flow {
@@ -231,6 +399,10 @@ export interface Flow {
   terms: string;
   status: EvidenceStatus;
   source: FactSource;
+  /** Who pays in this relationship, by name, as the evidence declares it (W-13). Null: not established. */
+  payer?: string | null;
+  /** Who supplies what is paid for, by name, as the evidence declares it. Null: not established. */
+  supplier?: string | null;
 }
 
 /** A buyer the operation could sell to, with what it demands first. */
@@ -258,6 +430,8 @@ export interface Applies {
   supply?: SupplyMode[];
   assets?: AssetMode[];
   aggregation?: AggregationMode[];
+  /** Applies only to positions paid on one of these bases (a lending licence applies to FINANCING). */
+  revenue?: RevenueBasis[];
   /** Applies only when selling to one of these segments. */
   segments?: string[];
 }

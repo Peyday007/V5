@@ -450,7 +450,11 @@ export async function launchableUnderCashMode(input: {
    * Every obligation already entered into — delivering, collecting, settling —
    * runs on, because none of those is a research launch.
    */
-  if (await industryRoundForCandidate(input.candidateId)) return false;
+  // Only the sprint's own rounds: one a standing research grant asked
+  // (`cash_mode_id` NULL) is not the sprint's to stop, and revoking that grant
+  // is what stops it (rule 40).
+  const kernelRound = await industryRoundForCandidate(input.candidateId);
+  if (kernelRound) return kernelRound.cashModeId === null;
 
   /*
    * And a dealflow question, for exactly the same reason and with the same

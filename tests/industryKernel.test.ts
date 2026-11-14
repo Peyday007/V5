@@ -583,7 +583,7 @@ describe('recursive expansion', () => {
 });
 
 describe('weak paths are killed, and killing one is not a delete', () => {
-  it('stops offering a subject whose searches found nothing and whose map found nothing', async () => {
+  it('watches a subject whose searches and map found nothing, and never closes it for good (W-4)', async () => {
     const snapshot = await graphSnapshot(projectId);
     const barren = standingOf(
       {
@@ -619,8 +619,11 @@ describe('weak paths are killed, and killing one is not a delete', () => {
       },
       [],
     );
-    expect(barren.verdict).toBe('DEAD_END');
+    // A watch with its reopen conditions, never a permanent verdict (§65).
+    expect(barren.verdict).toBe('WATCH');
     expect(barren.worthDeepening).toBe(false);
+    expect(barren.watch?.reopenedBy).toBeNull();
+    expect(barren.watch?.conditions.length).toBeGreaterThan(0);
     expect(snapshot.nodes).toHaveLength(0);
   });
 

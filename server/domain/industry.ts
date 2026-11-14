@@ -28,6 +28,7 @@ import {
   type IndustryNodeKind,
   type StructuralFinding,
 } from './types.ts';
+import { FACT_KEY_LIST } from './construction.ts';
 
 export { STRUCTURAL_FINDINGS };
 export type { StructuralFinding };
@@ -72,6 +73,9 @@ const CREATES: Readonly<Record<StructuralFinding, IndustryNodeKind | null>> = Ob
   HIDDEN_CONSTRAINT: null,
   CAPITAL_REQUIREMENT: null,
   CAPITAL_RESTRUCTURING: null,
+  UNIT_ECONOMIC: null,
+  ROLE_OCCUPANT: null,
+  ROLE_TERMS: null,
 });
 
 export function nodeKindForFinding(finding: StructuralFinding): IndustryNodeKind | null {
@@ -99,6 +103,7 @@ export function subjectVocabularyFor(finding: StructuralFinding): readonly strin
   if (finding === 'CAPITAL_REQUIREMENT') return CAPITAL_REQUIREMENTS;
   if (finding === 'CAPITAL_RESTRUCTURING') return CAPITAL_MECHANISMS;
   if (finding === 'HIDDEN_CONSTRAINT') return CONSTRAINT_KINDS;
+  if (finding === 'UNIT_ECONOMIC' || finding === 'ROLE_TERMS') return FACT_KEY_LIST;
   return null;
 }
 
@@ -112,7 +117,43 @@ export function subjectVocabularyFor(finding: StructuralFinding): readonly strin
  * something.
  */
 export function findingTakesQualifier(finding: StructuralFinding): boolean {
-  return finding === 'CAPITAL_RESTRUCTURING';
+  return (
+    finding === 'CAPITAL_RESTRUCTURING' ||
+    finding === 'TRANSACTION_TYPE' ||
+    finding === 'UNIT_ECONOMIC' ||
+    finding === 'ROLE_OCCUPANT' ||
+    finding === 'ROLE_TERMS'
+  );
+}
+
+/** Whether a finding cannot be filed without its qualifier. */
+export function findingNeedsQualifier(finding: StructuralFinding): boolean {
+  return finding === 'CAPITAL_RESTRUCTURING' || finding === 'ROLE_OCCUPANT' || finding === 'ROLE_TERMS';
+}
+
+/** Whether a finding cannot be filed without its figure: a unit economic with no number says nothing. */
+export function findingNeedsAmount(finding: StructuralFinding): boolean {
+  return finding === 'UNIT_ECONOMIC' || finding === 'ROLE_TERMS';
+}
+
+/**
+ * Who pays and who supplies, from a TRANSACTION_TYPE's qualifier (W-13):
+ * `payer -> supplier`. Either side may be left empty when the source names
+ * only one. A declared field split on its declared separator — never a
+ * reading of the claim's sentence.
+ */
+export function transactionParties(qualifier: string | null | undefined): { payer: string | null; supplier: string | null } {
+  if (!qualifier || !qualifier.includes('->')) return { payer: null, supplier: null };
+  const [payer, supplier] = qualifier.split('->', 2).map((one) => one.replace(/\s+/g, ' ').trim());
+  return { payer: payer || null, supplier: supplier || null };
+}
+
+/** The role and, when named, the paying buyer type, from a role finding's qualifier: `role` or `role @ buyer`. */
+export function roleQualifier(qualifier: string | null | undefined): { roleId: string | null; buyer: string | null } {
+  if (!qualifier) return { roleId: null, buyer: null };
+  const [role, buyer] = qualifier.split('@', 2).map((one) => one.replace(/\s+/g, ' ').trim());
+  const roleId = role ? role.toLowerCase().replace(/[^a-z0-9:]+/g, '_').replace(/^_+|_+$/g, '') || null : null;
+  return { roleId, buyer: buyer || null };
 }
 
 /**
@@ -124,7 +165,7 @@ export function findingTakesQualifier(finding: StructuralFinding): boolean {
  * meaningful — see `readCapital` — so it is never required, only permitted.
  */
 export function findingTakesAmount(finding: StructuralFinding): boolean {
-  return finding === 'CAPITAL_REQUIREMENT' || finding === 'CAPITAL_RESTRUCTURING';
+  return finding === 'CAPITAL_REQUIREMENT' || finding === 'CAPITAL_RESTRUCTURING' || findingNeedsAmount(finding);
 }
 
 /**
@@ -178,7 +219,8 @@ export const FINDING_GUIDE: Readonly<Record<StructuralFinding, string>> = Object
   FULFILMENT_SOURCE:
     'the source names who or what actually performs the work that gets paid for',
   TRANSACTION_TYPE:
-    'the source describes how money changes hands here: what is bought, on what terms',
+    'the source describes how money changes hands here: what is bought, on what terms — set ' +
+    'structural_qualifier to "<who pays> -> <who supplies>" as the source names them',
   BOTTLENECK:
     'the source documents a constraint on supply — a shortage, a queue, a chokepoint',
   ADJACENT_INDUSTRY:
@@ -190,6 +232,19 @@ export const FINDING_GUIDE: Readonly<Record<StructuralFinding, string>> = Object
     'the source states a specific thing that requires owner capital, ideally with a figure',
   CAPITAL_RESTRUCTURING:
     'the source documents a practice that removes, defers or shifts a capital requirement',
+  UNIT_ECONOMIC:
+    'the source states a figure for a price, rate, cost or payment term — structural_subject is ' +
+    'the fact key, structural_qualifier the paying buyer type when it is about one, and ' +
+    'structural_amount_cents the figure in hundredths of the key\'s unit (cents for dollars, ' +
+    '15 for a 15% share, 3000 for 30 days)',
+  ROLE_OCCUPANT:
+    'the source names who stands in a commercial role (broker, reseller, financier, lessor…) — ' +
+    'structural_subject is the occupant\'s name, structural_qualifier the role, optionally ' +
+    '"role @ buyer type" when that buyer pays the occupant',
+  ROLE_TERMS:
+    'the source states what a commercial role is paid — structural_subject is the fact key ' +
+    '(e.g. broker_take_rate, financing_margin), structural_qualifier the role (optionally ' +
+    '"role @ buyer type"), structural_amount_cents the figure in hundredths of the key\'s unit',
 });
 
 /**
@@ -353,10 +408,25 @@ export function validateStructural(input: {
       ok: false,
       error:
         `${where}: a ${finding} finding is about itself, so structural_qualifier must be ` +
-        'omitted. Only CAPITAL_RESTRUCTURING names another thing.',
+        'omitted. Only CAPITAL_RESTRUCTURING, TRANSACTION_TYPE, UNIT_ECONOMIC and the two ROLE ' +
+        'kinds name another thing.',
     };
   }
-  if (findingTakesQualifier(finding)) {
+  if (finding === 'TRANSACTION_TYPE' && qualifier && !qualifier.includes('->')) {
+    return {
+      ok: false,
+      error:
+        `${where}: a TRANSACTION_TYPE's structural_qualifier is "<who pays> -> <who supplies>". ` +
+        'Leave a side empty when the source names only one, or omit the qualifier.',
+    };
+  }
+  if (findingNeedsQualifier(finding) && finding !== 'CAPITAL_RESTRUCTURING' && !qualifier) {
+    return {
+      ok: false,
+      error: `${where}: a ${finding} finding must set structural_qualifier to the role it is about (optionally "role @ buyer type").`,
+    };
+  }
+  if (finding === 'CAPITAL_RESTRUCTURING') {
     if (!qualifier) {
       return {
         ok: false,
@@ -400,6 +470,14 @@ export function validateStructural(input: {
       };
     }
     amountCents = input.amountCents;
+  }
+  if (findingNeedsAmount(finding) && amountCents === null) {
+    return {
+      ok: false,
+      error:
+        `${where}: a ${finding} finding states a figure, so structural_amount_cents is required ` +
+        '(hundredths of the fact key\'s unit). A claim with no figure carries no finding.',
+    };
   }
 
   return {

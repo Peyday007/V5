@@ -41,11 +41,13 @@ import { SCENARIO_LIMITS, type ScenarioModelDefinition, type ScenarioVariable, t
 import type { Workstream } from '../../domain/register.ts';
 import type { TargetReading } from '../goals/target.ts';
 import { inferCashQuantity, loadCashKnowledge, type CashKnowledge, type CashQuantity } from '../quant/knowledge.ts';
-import { toScenarioInput } from '../quant/export.ts';
-import { evaluateGoalPortfolio, type GoalPortfolio } from '../goals/portfolio.ts';
+import { inputSample, toScenarioInput, type InputSample } from '../quant/export.ts';
+import { CONTACTS_PER_DAY_BOUNDS, evaluateGoalPortfolio, measuredRateInput, type GoalPortfolio, type PlannedOpening } from '../goals/portfolio.ts';
+import { SPREAD_FLOOR } from '../quant/pool.ts';
 import type { Estimate, EvidenceTier } from '../../domain/quant.ts';
 import type { VariableSpec } from '../../domain/scenario.ts';
-import type { ConstructedArrangement } from './construct.ts';
+import { TRANSFER_MATERIAL, type ConstructedArrangement } from './construct.ts';
+export { TRANSFER_MATERIAL };
 
 /**
  * Phase timings for a plan read, printed as they happen when BRAIN_PLAN_TRACE is
@@ -98,7 +100,8 @@ export interface ModelInput {
    * causal chain, it only replaces a blind sweep with an evidenced one.
    */
   distribution?: VariableSpec;
-  inferred?: { tier: EvidenceTier; justified: boolean; p10: number; p50: number; p90: number; observations: number };
+  /** `observations` counts studies; the evidence in events and populations is `InputSample` (Q2-2). */
+  inferred?: { tier: EvidenceTier; justified: boolean; p10: number; p50: number; p90: number; observations: number } & Partial<InputSample>;
 }
 
 export interface ModelledOpportunity {
@@ -167,7 +170,13 @@ export interface ModelledOpportunity {
    * it, so it can never make a plan recommendable; it competes only on what it
    * could contribute, which is what decides where research goes next.
    */
-  estimated?: { arrangementKey: string; tier: string; observations: number };
+  estimated?: {
+    arrangementKey: string;
+    tier: string;
+    observations: number;
+    /** A transferred design's material dimensions and which are bridged (S-12). */
+    transfer?: { precedent: string; material: string[]; bridged: string[]; unbridged: string[] };
+  };
 }
 
 /** The id an estimated arrangement takes in a goal model. Never a row. */
@@ -188,18 +197,27 @@ export const MAX_ESTIMATED_ARRANGEMENTS = 12;
  */
 export function estimatedFromArrangement(one: ConstructedArrangement, input: { projectId: string; currency: string; beforeProofCents: number | null }): ModelledOpportunity | null {
   const { p10, p50, p90 } = one.value;
-  if (one.value.tier === 'UNKNOWN' || !(p50 > 0) || !(p90 >= p10)) return null;
+  // A MECHANISM value is a pool of other buyers' prices, not these buyers': it
+  // is no price, and a cost or capital swept from its top would be borrowed too
+  // (PRICE-POOL, 2026-11-14). Like UNKNOWN, it stays a research target only.
+  if (one.value.tier === 'UNKNOWN' || one.value.tier === 'MECHANISM' || !(p50 > 0) || !(p90 >= p10)) return null;
   if (one.stress.exposure === 'EXCEEDS') return null;
   const ref: SourceRef = { kind: 'OTHER', ref: `arrangement:${one.key}`, note: `${one.value.tier} reconstruction from ${one.value.observations} observation(s)` };
-  const low = Math.max(0.01, p10);
-  const high = Math.max(low + 0.01, p90);
+  // A transfer carries a design to buyers who differ from the precedent's on every material dimension
+  // nobody has bridged: until a sourced adjustment bridges one, its price range is widened, never narrowed (S-12).
+  const transfer = transferOf(one);
+  const widen = transfer && transfer.unbridged.length > 0 ? Math.exp(SPREAD_FLOOR.COMPARABLE * Z90) : 1;
+  const low = Math.max(0.01, p10 / widen);
+  const high = Math.max(low + 0.01, p90 * widen);
   const price: ModelInput = {
     value: null,
     low,
     high,
     provenance: 'ASSUMPTION',
     source: ref,
-    note: `reconstructed (${one.value.tier}, ${one.value.observations} obs.), not shown paid: p10 ${p10} p50 ${p50} p90 ${p90}`,
+    note:
+      `reconstructed (${one.value.tier}, ${one.value.observations} obs.), not shown paid: p10 ${p10} p50 ${p50} p90 ${p90}` +
+      (transfer && transfer.unbridged.length ? `; transferred from "${transfer.precedent}" with ${transfer.unbridged.join(', ')} not bridged, so swept ${Math.round(low)}–${Math.round(high)}` : ''),
     // Swept over the reconstruction's range: an estimate carries no distribution (only evidence may).
     inferred: { tier: one.value.tier as EvidenceTier, justified: false, p10, p50, p90, observations: one.value.observations },
   };
@@ -254,47 +272,295 @@ export function estimatedFromArrangement(one: ConstructedArrangement, input: { p
     agreedDeals: 0,
     fulfilledBy: null,
     competitiveAward: false,
-    estimated: { arrangementKey: one.key, tier: one.value.tier, observations: one.value.observations },
+    estimated: { arrangementKey: one.key, tier: one.value.tier, observations: one.value.observations, ...(transfer ? { transfer } : {}) },
   };
 }
 
 /**
- * Which constructed arrangements enter the model: those with a reconstructed
- * value, inside the limits and the goal's exclusions, largest estimated
- * contribution first (the p50 price, times the deals a recurring design could
- * repeat inside the window, capped at what is still needed). Not by how easy
- * each is to research, and not by sector.
+ * What a transfer must bridge before its precedent's figures speak for its new
+ * buyers (S-12). A design shown working for one buyer is evidence about that
+ * buyer: the legal context, the payment terms buyers accept, how long they take
+ * to decide, the money the arrangement ties up and how the buyers behave can
+ * each differ for another population, and none of them is established for the
+ * new one by the precedent. A dimension is bridged only by a sourced
+ * adjustment; the constructor records none yet, so every one is unbridged and
+ * the estimate's range is widened by the COMPARABLE spread floor.
  */
-export function pickEstimatedArrangements(
+const Z90 = 1.2816;
+export function transferOf(one: Pick<ConstructedArrangement, 'origin' | 'precedent'> & { bridged?: readonly string[] }): { precedent: string; material: string[]; bridged: string[]; unbridged: string[] } | null {
+  if (one.origin !== 'TRANSFER' || !one.precedent) return null;
+  const bridged = TRANSFER_MATERIAL.filter((d) => one.bridged?.includes(d));
+  return { precedent: one.precedent.title, material: [...TRANSFER_MATERIAL], bridged, unbridged: TRANSFER_MATERIAL.filter((d) => !bridged.includes(d)) };
+}
+
+/**
+ * The cheap quantitative screen an arrangement is ranked by before it may take
+ * one of the model's slots (§102's closed form, on one arrangement alone):
+ * the cash it would settle by the deadline, from its reconstructed price, the
+ * strength of the evidence behind that price, and what it exposes.
+ *
+ *   * Price is read inside its reconstruction by evidence tier: DIRECT at its
+ *     p50, weaker tiers nearer its p10 (`TIER_PRICE_POSITION`). Weaker
+ *     evidence never ranks higher (invariant 39).
+ *   * Every link nobody has established (reply, close, the deals the market
+ *     takes) is read at a conservative quantile of its swept range
+ *     (`SCREEN_QUANTILE`), never its middle, so an unknown never ranks higher.
+ *     When the money arrives is integrated over its whole swept range.
+ *   * A one-off is one deal at the close rate. A repeatable design sells
+ *     through the shared outreach's low end over the days its money's delay
+ *     leaves, up to what its market takes. Nothing saturates at the remaining
+ *     amount before the final cap, so a $9,000 one-off and a $300 repeatable
+ *     design are compared on what each settles (lens S, S-1/S-14: the old
+ *     score read both as "the whole goal").
+ *   * A worst case nobody has bounded keeps `EXPOSURE_WEIGHT` of the reading.
+ *
+ * `upside` is the same reading at the reconstruction's p90 price, the unknown
+ * links still at their conservative quantile: what protects an unusual but
+ * promising design is its own reconstructed spread, never an unknown read
+ * high. It ranks; the engine decides. Pure.
+ */
+export const SCREEN_QUANTILE = 0.25;
+export const TIER_PRICE_POSITION: Record<string, number> = { DIRECT: 1, COMPARABLE: 0.75, COMPONENT: 0.5, MECHANISM: 0.25, ASSUMED: 0, UNKNOWN: 0 };
+export const EXPOSURE_WEIGHT: Record<string, number> = { SAFE: 1, BOUNDED: 0.9, UNKNOWN: 0.8, EXCEEDS: 0 };
+const TIER_RANK: Record<string, number> = { DIRECT: 0, COMPARABLE: 1, COMPONENT: 2, MECHANISM: 3, ASSUMED: 4, UNKNOWN: 5 };
+const EXPOSURE_RANK: Record<string, number> = { SAFE: 0, BOUNDED: 1, UNKNOWN: 2, EXCEEDS: 3 };
+/** Of the model's arrangement slots, this many are held for the largest reconstructed upside. */
+export const UPSIDE_SLOTS = 2;
+/** At most this many structurally different designs of one buyer population, sharing one market. */
+export const DESIGNS_PER_POPULATION = 3;
+/** The next-best arrangements the cut leaves out, kept for a reasoning move that brings one in (§101 INCLUDE). */
+export const RESERVE_ARRANGEMENTS = 6;
+/** Cut arrangements recorded on the model by name; `cutCount` counts them all. */
+export const CUT_RECORDED = 40;
+
+export interface ArrangementScreen {
+  /** Expected settled cash by the deadline at the conservative reading, capped at what is still needed. */
+  value: number;
+  /** The same at the reconstruction's p90 price. */
+  upside: number;
+  /** In one line, how the figure was read. */
+  basis: string;
+}
+
+/** An input at the unfavourable quantile of its range when nobody established it; a stated figure as stated. */
+function conservative(x: ModelInput): number {
+  const lo = x.low ?? x.value ?? 0;
+  const hi = x.high ?? x.value ?? lo;
+  if (x.value !== null && x.provenance !== 'UNKNOWN') return x.value;
+  return lo + SCREEN_QUANTILE * (hi - lo);
+}
+
+/** E[max(0, T − d)] and P(d ≤ T) for d uniform over the input's range: selling days left after the money's delay. */
+function sellingDays(daysToCash: ModelInput, daysLeft: number): { selling: number; inTime: number } {
+  const a = daysToCash.low ?? daysToCash.value ?? 0;
+  const b = Math.max(a, daysToCash.high ?? daysToCash.value ?? a);
+  if (b - a < 1e-9) return { selling: Math.max(0, daysLeft - a), inTime: daysLeft >= a ? 1 : 0 };
+  if (daysLeft <= a) return { selling: 0, inTime: 0 };
+  if (daysLeft >= b) return { selling: daysLeft - (a + b) / 2, inTime: 1 };
+  return { selling: (daysLeft - a) ** 2 / (2 * (b - a)), inTime: (daysLeft - a) / (b - a) };
+}
+
+export function screenArrangement(
+  one: ModelledOpportunity,
+  arrangement: Pick<ConstructedArrangement, 'value' | 'stress'>,
+  input: { remaining: number; daysLeft: number; contactsPerDay: number },
+): ArrangementScreen {
+  const { p10, p50, p90 } = arrangement.value;
+  const position = TIER_PRICE_POSITION[arrangement.value.tier] ?? 0;
+  // A transfer's widened range (S-12) is the price it is read on.
+  const low = Math.min(p10, one.price.low ?? p10);
+  const price = low + position * (p50 - low);
+  const close = conservative(one.close);
+  const respond = conservative(one.respond);
+  const { selling, inTime } = sellingDays(one.daysToCash, input.daysLeft);
+  const deals = one.repeatable ? Math.min(conservative(one.volume), input.contactsPerDay * selling * respond * close) : close * inTime;
+  const weight = EXPOSURE_WEIGHT[arrangement.stress.exposure] ?? 0;
+  const read = (unit: number) => Math.min(input.remaining, Math.max(0, deals * unit * weight));
+  return {
+    value: read(price),
+    upside: read(Math.max(price, p90)),
+    basis: `${deals.toFixed(2)} deal(s) × ${Math.round(price)} (${arrangement.value.tier}: ${Math.round(position * 100)}% of the way from p10 to p50) × ${weight} for ${arrangement.stress.exposure.toLowerCase()} exposure; unknown links at their ${Math.round(SCREEN_QUANTILE * 100)}th percentile`,
+  };
+}
+
+/** A constructed arrangement that did not take one of the model's slots, and why (S-17). */
+export interface ArrangementCut {
+  arrangementKey: string;
+  label: string;
+  population: string;
+  screen: number | null;
+  upside: number | null;
+  reason: string;
+}
+/** A constructed arrangement that did, and which slot it took. */
+export interface ArrangementPick {
+  arrangementKey: string;
+  label: string;
+  population: string;
+  screen: number;
+  upside: number;
+  /** `STRUCTURE:<base>` or `PAID:<funding>/<repeat>` (the strongest of its kind), `UPSIDE`, or `SCREEN`. */
+  slot: string;
+  basis: string;
+}
+export interface ArrangementSelection {
+  /** Constructed arrangements read. */
+  considered: number;
+  picked: ArrangementPick[];
+  /** The strongest cut ones first, at most `CUT_RECORDED`. */
+  cut: ArrangementCut[];
+  cutCount: number;
+}
+
+const designKey = (a: ConstructedArrangement) => `${a.design.base}/${a.design.funding}/${a.design.aggregation}/${a.design.repeat}`;
+const paidKey = (a: ConstructedArrangement) => `${a.design.funding}/${a.design.repeat}`;
+/** The market every design over one buyer population shares in the engine. */
+export const populationMarket = (population: string) => `${ARRANGEMENT_ID_PREFIX}market:${population}`;
+
+/**
+ * Which constructed arrangements enter the model, and why the rest do not.
+ *
+ * Production (lens S, 2026-11-14): every repeatable design scored exactly the
+ * remaining amount and the tie broke on the opportunity id — a sha256 of the
+ * key — so which 12 of up to 404 designs a plan could ever use was a coin
+ * flip, and a strong DIRECT design the engine preferred was routinely cut,
+ * after which no later stage could bring it back. Now:
+ *
+ *   1. every candidate is screened quantitatively (`screenArrangement`) and
+ *      ordered by that reading, then evidence tier, observations, exposure and
+ *      the constructor's own order — never by id;
+ *   2. each base structure, then each way of being paid (funding × repeat),
+ *      keeps its strongest design, so genuinely different strategies are not
+ *      crowded out by many variants of one;
+ *   3. `UPSIDE_SLOTS` go to the largest reconstructed upside not yet held;
+ *   4. the rest fill by the screen;
+ *
+ * and up to `DESIGNS_PER_POPULATION` structurally different designs of one
+ * buyer population may enter, all on one `marketKey`, so the engine chooses
+ * the design and never sums the same buyers twice. Every cut arrangement is
+ * recorded with its reading and its reason, and the next-best few are kept as
+ * a reserve a reasoning move may bring in (§101). Deterministic. Pure.
+ */
+export function selectEstimatedArrangements(
   arrangements: readonly ConstructedArrangement[],
-  input: { projectId: string; currency: string; beforeProofCents: number | null; remaining: number; exclusions: Parameters<typeof excludedBy>[1]; limit?: number },
-): ModelledOpportunity[] {
-  const scored: { one: ModelledOpportunity; score: number; population: string }[] = [];
-  for (const arrangement of arrangements) {
+  input: {
+    projectId: string;
+    currency: string;
+    beforeProofCents: number | null;
+    remaining: number;
+    exclusions: Parameters<typeof excludedBy>[1];
+    limit?: number;
+    daysLeft?: number | null;
+    contactsPerDay?: number;
+  },
+): { openings: PlannedOpening[]; reserve: PlannedOpening[]; selection: ArrangementSelection } {
+  const limit = input.limit ?? MAX_ESTIMATED_ARRANGEMENTS;
+  const daysLeft = input.daysLeft && input.daysLeft > 0 ? input.daysLeft : 30;
+  const contactsPerDay = input.contactsPerDay ?? CONTACTS_PER_DAY_BOUNDS.low;
+  const cut: ArrangementCut[] = [];
+  type Row = { arrangement: ConstructedArrangement; one: PlannedOpening; screen: ArrangementScreen; order: number; population: string };
+  const rows: Row[] = [];
+  arrangements.forEach((arrangement, order) => {
+    const population = arrangement.demand.ref;
+    const no = (reason: string) => cut.push({ arrangementKey: arrangement.key, label: arrangement.label, population, screen: null, upside: null, reason });
     // Judged on what the arrangement is — its label, sector and buyer — never on its research question,
     // which carries Brain's own instructions ("leave out government contracts", "the owner does no
     // physical work") and so matched every exclusion: production read 0 of 404 (2026-11-06).
     const what = `${arrangement.label} ${arrangement.sector ?? ''} ${arrangement.demand.name}`;
-    if (excludedBy(what, input.exclusions)) continue;
-    if (breaksOperatingModel(operatingFit({ title: arrangement.label, offerScope: arrangement.demand.name }))) continue;
+    if (excludedBy(what, input.exclusions)) return no("the goal's owner excluded what it is");
+    if (breaksOperatingModel(operatingFit({ title: arrangement.label, offerScope: arrangement.demand.name }))) return no('it breaks the operating model');
     const one = estimatedFromArrangement(arrangement, input);
-    if (!one) continue;
-    const p50 = arrangement.value.p50;
-    const deals = one.repeatable ? Math.min(MAX_BUYERS_OFFERED, Math.ceil(input.remaining / Math.max(1, p50))) : 1;
-    scored.push({ one, score: Math.min(input.remaining, p50 * deals), population: arrangement.demand.ref });
-  }
-  scored.sort((a, b) => b.score - a.score || a.one.opportunity.id.localeCompare(b.one.opportunity.id));
-  // One buyer population is one market, however many designs reach it: its value
-  // observations are keyed by the buyer, so every design over it carries the same
-  // estimate, and summing them counts the same buyers' money once per design.
-  // The highest-scoring arrangement stands for the population.
-  const seen = new Set<string>();
-  const distinct = scored.filter((entry) => {
-    if (seen.has(entry.population)) return false;
-    seen.add(entry.population);
-    return true;
+    if (!one) return no(arrangement.stress.exposure === 'EXCEEDS' ? 'its known worst case exceeds the limits' : 'nothing reconstructs its value');
+    // One buyer population is one market however many designs reach it: the engine caps their deals together.
+    const planned: PlannedOpening = { ...one, marketKey: populationMarket(population) };
+    rows.push({ arrangement, one: planned, screen: screenArrangement(one, arrangement, { remaining: input.remaining, daysLeft, contactsPerDay }), order, population });
   });
-  return distinct.slice(0, input.limit ?? MAX_ESTIMATED_ARRANGEMENTS).map((one) => one.one);
+  const byScreen = (a: Row, b: Row) =>
+    b.screen.value - a.screen.value ||
+    (TIER_RANK[a.arrangement.value.tier] ?? 9) - (TIER_RANK[b.arrangement.value.tier] ?? 9) ||
+    b.arrangement.value.observations - a.arrangement.value.observations ||
+    (EXPOSURE_RANK[a.arrangement.stress.exposure] ?? 9) - (EXPOSURE_RANK[b.arrangement.stress.exposure] ?? 9) ||
+    a.order - b.order;
+  rows.sort(byScreen);
+  // The same design over the same buyers is one estimate: only its strongest reading competes.
+  const designs = new Set<string>();
+  const candidates = rows.filter((r) => {
+    const key = `${r.population}|${designKey(r.arrangement)}`;
+    if (!designs.has(key)) {
+      designs.add(key);
+      return true;
+    }
+    cut.push({ arrangementKey: r.arrangement.key, label: r.arrangement.label, population: r.population, screen: r.screen.value, upside: r.screen.upside, reason: 'the same design over the same buyers is already read' });
+    return false;
+  });
+  const taken = new Map<Row, string>();
+  const perPopulation = new Map<string, number>();
+  const take = (r: Row, slot: string): boolean => {
+    if (taken.has(r) || taken.size >= limit) return false;
+    if ((perPopulation.get(r.population) ?? 0) >= DESIGNS_PER_POPULATION) return false;
+    taken.set(r, slot);
+    perPopulation.set(r.population, (perPopulation.get(r.population) ?? 0) + 1);
+    return true;
+  };
+  // 2. One design per kind first, leaving the upside slots free.
+  const diversityRoom = Math.max(0, limit - UPSIDE_SLOTS);
+  const kinds: Array<[string, (a: ConstructedArrangement) => string]> = [
+    ['STRUCTURE', (a) => a.design.base],
+    ['PAID', paidKey],
+  ];
+  for (const [name, keyOf] of kinds) {
+    const held = new Set([...taken.keys()].map((r) => keyOf(r.arrangement)));
+    for (const r of candidates) {
+      if (taken.size >= diversityRoom) break;
+      const k = keyOf(r.arrangement);
+      if (held.has(k) || r.screen.value <= 0) continue;
+      if (take(r, `${name}:${k}`)) held.add(k);
+    }
+  }
+  // 3. The largest reconstructed upside not yet held.
+  let upsideTaken = 0;
+  for (const r of candidates.filter((x) => !taken.has(x) && x.screen.upside > 0).sort((a, b) => b.screen.upside - a.screen.upside || byScreen(a, b))) {
+    if (upsideTaken >= UPSIDE_SLOTS) break;
+    if (take(r, 'UPSIDE')) upsideTaken++;
+  }
+  // 4. The rest by the screen.
+  for (const r of candidates) {
+    if (taken.size >= limit) break;
+    if (r.screen.value > 0) take(r, 'SCREEN');
+  }
+  const picked = candidates.filter((r) => taken.has(r));
+  const weakest = picked.length ? Math.min(...picked.map((r) => r.screen.value)) : 0;
+  const left = candidates.filter((r) => !taken.has(r));
+  for (const r of left)
+    cut.push({
+      arrangementKey: r.arrangement.key,
+      label: r.arrangement.label,
+      population: r.population,
+      screen: r.screen.value,
+      upside: r.screen.upside,
+      reason:
+        (perPopulation.get(r.population) ?? 0) >= DESIGNS_PER_POPULATION
+          ? `its buyers already have ${DESIGNS_PER_POPULATION} designs in the model`
+          : r.screen.value <= 0
+            ? 'it settles nothing by the deadline at the conservative reading'
+            : `below the cut: screens ${Math.round(r.screen.value)} against ${Math.round(weakest)} for the weakest of the ${picked.length} kept`,
+    });
+  cut.sort((a, b) => (b.screen ?? -1) - (a.screen ?? -1) || a.arrangementKey.localeCompare(b.arrangementKey));
+  return {
+    openings: picked.map((r) => r.one),
+    reserve: left.filter((r) => r.screen.value > 0).slice(0, RESERVE_ARRANGEMENTS).map((r) => r.one),
+    selection: {
+      considered: arrangements.length,
+      picked: picked.map((r) => ({ arrangementKey: r.arrangement.key, label: r.arrangement.label, population: r.population, screen: r.screen.value, upside: r.screen.upside, slot: taken.get(r)!, basis: r.screen.basis })),
+      cut: cut.slice(0, CUT_RECORDED),
+      cutCount: cut.length,
+    },
+  };
+}
+
+/** The arrangements `selectEstimatedArrangements` keeps, strongest screen first. */
+export function pickEstimatedArrangements(arrangements: readonly ConstructedArrangement[], input: Parameters<typeof selectEstimatedArrangements>[1]): PlannedOpening[] {
+  return selectEstimatedArrangements(arrangements, input).openings;
 }
 
 /**
@@ -321,6 +587,8 @@ export interface GoalModel {
   considered: ModelledOpportunity[];
   /** The constructed arrangements entered on their estimates (§82), for the reasoning loop (§93). */
   estimates?: ModelledOpportunity[];
+  /** Which constructed arrangements took the estimate slots, by what reading, and every one cut with its reason (S-17). */
+  arrangementSelection?: ArrangementSelection | null;
   /** Why nothing could be modelled, when nothing could. */
   refusal: string | null;
   /**
@@ -362,6 +630,15 @@ function inferOr(knowledge: CashKnowledge | null, quantity: CashQuantity, opport
     est = null;
   }
   if (!est) return fallback;
+  return estimateInput(est, scale, what);
+}
+
+/**
+ * A reconstructed estimate as a model input: the one conversion every caller
+ * uses, so the evidence it carries (tier, observations, and the sample the
+ * assurance redraws from, Q2-1/Q2-12) is never dropped by a hand-built copy.
+ */
+export function estimateInput(est: Estimate, scale = 1, what = ''): ModelInput {
   const scaled: Estimate = scale === 1 ? est : { ...est, p05: est.p05 * scale, p10: est.p10 * scale, p50: est.p50 * scale, p90: est.p90 * scale, p95: est.p95 * scale, samples: est.samples.map((x) => x * scale) };
   const exported = toScenarioInput(scaled);
   return {
@@ -372,7 +649,7 @@ function inferOr(knowledge: CashKnowledge | null, quantity: CashQuantity, opport
     source: exported.sources[0] ?? null,
     note: `inferred${what}: ${exported.note}`,
     distribution: exported.spec,
-    inferred: { tier: est.tier, justified: exported.provenance === 'EVIDENCE', p10: scaled.p10, p50: scaled.p50, p90: scaled.p90, observations: est.used.length },
+    inferred: { tier: est.tier, justified: exported.provenance === 'EVIDENCE', p10: scaled.p10, p50: scaled.p50, p90: scaled.p90, observations: est.used.length, ...inputSample(est) },
   };
 }
 
@@ -454,11 +731,10 @@ async function modelOpportunity(
   // rate the next buyer will match. More buyers need a measured rate of their own.
   let close: ModelInput;
   if (lesson) {
-    const bounds = wilson(lesson.agreements, lesson.contacts);
+    // Brain's own record carries its counts, so the assurance reads it as a
+    // sized sample (Surge B, Q2-4 follow-up), not as bounds without a size.
     close = {
-      value: null,
-      low: bounds.low,
-      high: bounds.high,
+      ...measuredRateInput({ trials: lesson.contacts, low: lesson.agreements, high: lesson.agreements }),
       provenance: 'HISTORICAL',
       source: { kind: 'OTHER', ref: `cash_outcomes:${opportunity.mechanism}`, note: `${lesson.agreements} agreements from ${lesson.contacts} contacts` },
       note: `measured on this Brain: ${lesson.agreements} of ${lesson.contacts} contacts agreed`,
@@ -702,16 +978,21 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
    * or be judged as an opening anybody found.
    */
   const estimates: ModelledOpportunity[] = [];
+  let arrangementSelection: ArrangementSelection | null = null;
+  let reserve: PlannedOpening[] = [];
   if (input.arrangements?.length) {
-    const estimated = pickEstimatedArrangements(input.arrangements, {
+    const selected = selectEstimatedArrangements(input.arrangements, {
       projectId: target.projectId,
       currency: target.currency,
       beforeProofCents: target.capitalBeforeProofCents,
       remaining: target.remainingCents / 100,
       exclusions,
+      daysLeft: target.daysLeft,
     });
-    estimates.push(...estimated);
-    trace(`estimated arrangements: ${estimated.length} of ${input.arrangements.length}`);
+    estimates.push(...selected.openings);
+    arrangementSelection = selected.selection;
+    reserve = selected.reserve;
+    trace(`estimated arrangements: ${selected.openings.length} of ${input.arrangements.length} (${selected.selection.cutCount} cut, ${reserve.length} in reserve)`);
   }
   /*
    * Which openings take the engine's few slots is decided by what each could
@@ -749,6 +1030,8 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
        * evidence could not be read, reported as a research need, never guessed.
        */
       knowledge,
+      // The next-best cut arrangements: never evaluated here, offered to the reasoning loop's INCLUDE move (§101, S-6).
+      ...(reserve.length ? { reserve } : {}),
     };
     /*
      * The baseline evaluation is the same synchronous engine §101 moved onto worker threads:
@@ -799,6 +1082,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       portfolio,
       portfolioInput,
       estimates,
+      arrangementSelection,
     };
   }
 
@@ -978,6 +1262,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     excluded,
     considered: candidates,
     estimates,
+    arrangementSelection,
     refusal: null,
     portfolio,
     portfolioInput,

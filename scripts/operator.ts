@@ -52,7 +52,9 @@ async function missionFromFlags(fallbackText: string | null = null): Promise<boo
 }
 
 async function show(): Promise<void> {
-  const runs = await recentOperatorRuns(Number(process.argv[3] ?? 5));
+  // `run --mission-b64 …` reaches here too: only a bare number is a limit.
+  const limit = /^\d+$/.test(process.argv[3] ?? '') ? Number(process.argv[3]) : 5;
+  const runs = await recentOperatorRuns(limit);
   console.log(`OPERATOR ${operatorConfig() ? 'connected' : 'not connected'} · models: ${(await modelsFor()).map((m) => m.label).join(' → ') || 'none'}`);
   for (const run of runs) {
     console.log(`RUN ${run.id} ${run.state} ${run.startedAt} → ${run.finishedAt ?? '…'} on ${run.model}`);

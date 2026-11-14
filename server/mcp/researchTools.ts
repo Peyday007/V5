@@ -1539,23 +1539,29 @@ const submitClaimsTool: McpTool = {
               description:
                 'Required whenever structural_finding is set: what the finding is about. For ' +
                 'the seven map kinds it is the subject\'s own name as the source calls it — ' +
-                'not a sentence about it. For the other three it is a value from that kind\'s ' +
+                'not a sentence about it. For the three capital and constraint kinds it is a value from that kind\'s ' +
                 'own set: ' +
                 CAPITAL_REQUIREMENTS_GUIDE +
-                '.',
+                '. For UNIT_ECONOMIC and ROLE_TERMS it is one of the fact keys: ' +
+                (subjectVocabularyFor('UNIT_ECONOMIC') ?? []).join(', ') +
+                '. For ROLE_OCCUPANT it is the occupant\'s own name.',
             },
             structural_qualifier: {
               type: 'string',
-              enum: [...(subjectVocabularyFor('CAPITAL_REQUIREMENT') ?? [])],
               description:
-                'Only for CAPITAL_RESTRUCTURING, where it is required: which requirement this ' +
-                'structure answers. A structure that does not say what it answers reduces ' +
-                'nothing. Omitted for every other kind.',
+                'For CAPITAL_RESTRUCTURING, required: which requirement this structure answers, ' +
+                `one of ${(subjectVocabularyFor('CAPITAL_REQUIREMENT') ?? []).join(', ')}. ` +
+                'For TRANSACTION_TYPE, optional: "<who pays> -> <who supplies>". For ' +
+                'UNIT_ECONOMIC, optional: the paying buyer type the figure is about. For ' +
+                'ROLE_OCCUPANT and ROLE_TERMS, required: the role, optionally "role @ buyer type". ' +
+                'Omitted for every other kind.',
             },
             structural_amount_cents: {
               type: 'integer',
               description:
-                'Only for the two capital kinds, and optional there: the figure a source ' +
+                'Required for UNIT_ECONOMIC and ROLE_TERMS: the figure in hundredths of the ' +
+                'fact key\'s unit (cents for dollars, 15 for a 15% share, 3000 for 30 days). ' +
+                'Optional for the two capital kinds: the figure a source ' +
                 'publishes, in minor units of the sprint currency — the gross for a ' +
                 'requirement, what the owner still funds for a restructuring. Leave it out ' +
                 'where no source publishes one. An unknown is recorded as unknown and ' +

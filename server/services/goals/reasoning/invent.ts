@@ -43,6 +43,12 @@ export function inventPrompt(brief: InventBrief, slot: number, avoid: string[]):
     '{"op":"PRICE","factor":<0.25-4>,"scope":"<scope>"}   (close rate moves the other way; it is an assumption)',
     '{"op":"FOCUS","count":<n>}   (concentrate on the n strongest openings, drop the rest)',
     '{"op":"DROP","scope":"<scope>"}',
+    ...(brief.reserve?.length
+      ? [
+          '{"op":"INCLUDE","key":"<arrangement id>"}   (bring in a constructed arrangement outside the plan, judged on its own estimates)',
+          `Arrangements outside the plan (id, title, price read low, repeatable?): ${brief.reserve.map((r) => `${r.id} | ${r.title} | ${r.price ?? '?'} | ${r.repeatable ? 'repeatable' : 'one-off'}`).join('; ')}`,
+        ]
+      : []),
     'scope: ALL, OUTREACH, SMALL_TICKET, LARGE_TICKET, FAST_CASH, SLOW_CASH, TOP, REST, or id:<opening id>.',
     '"from": "BASELINE" rebuilds the strategy from scratch; "GREEDY" modifies the best plan above.',
     '',

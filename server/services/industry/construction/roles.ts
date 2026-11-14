@@ -48,6 +48,7 @@ import {
   type Mechanism,
   type Position,
   type Segment,
+  revenueOf,
 } from '../../../domain/construction.ts';
 import { allPositions, appliesTo, mechanismsOf, positionKey } from './businesses.ts';
 import { resolveFact } from './model.ts';
@@ -59,7 +60,7 @@ export const CONTROL_DIMENSIONS = ['DEMAND', 'SUPPLY', 'DISTRIBUTION', 'INFORMAT
 export type ControlDimension = (typeof CONTROL_DIMENSIONS)[number];
 
 /** How a role's control turns into money per unit of work, read from the evidence's facts. */
-type ValueBasis = 'TAKE' | 'SPREAD' | 'PLACEMENT' | 'OPERATING' | 'NONE';
+type ValueBasis = 'TAKE' | 'SPREAD' | 'PLACEMENT' | 'OPERATING' | 'RESALE' | 'SUBSCRIPTION' | 'RENT' | 'FINANCING' | 'COMBINED' | 'NONE';
 
 interface SeedRole {
   id: string;
@@ -153,7 +154,7 @@ export const SEED_ROLES: readonly SeedRole[] = [
   },
   {
     id: 'technology_provider', label: 'technology provider', fits: (p) => p.information === 'PLATFORM',
-    controls: ['INFORMATION', 'COORDINATION'], value: 'NONE',
+    controls: ['INFORMATION', 'COORDINATION'], value: 'SUBSCRIPTION',
     duties: ['keep the system running and the data it holds secure'],
     risks: ['platform cost before any revenue', 'operators may not adopt it'],
     names: /\b(software|technology|saas|system provider)/i,
@@ -165,6 +166,27 @@ export const SEED_ROLES: readonly SeedRole[] = [
     risks: ['regulated activity: acting outside the permission is unlawful', 'paid only when the financing closes'],
     gatePermitted: /\b(financ|lend|loan|credit|capital|mortgage|factoring)/i,
     names: /\b(financ|lender|factor|capital)/i,
+  },
+  {
+    id: 'inventory_reseller', label: 'reseller holding inventory', fits: (p) => revenueOf(p) === 'RESALE',
+    controls: ['DISTRIBUTION', 'SUPPLY', 'PAYMENT'], value: 'RESALE',
+    duties: ['buy ahead of demand and hold the stock in saleable condition', 'answer to the buyer for what is sold'],
+    risks: ['stock that does not sell is sold off at a loss', 'cash is tied up from purchase until the buyer pays'],
+    names: /\b(stockist|wholesal|dealer|inventory)/i,
+  },
+  {
+    id: 'asset_lessor', label: 'owner renting out an asset', fits: (p) => revenueOf(p) === 'RENT',
+    controls: ['SUPPLY', 'FINANCING'], value: 'RENT',
+    duties: ['keep the owned asset maintained, insured and available', 'collect rent from the operators who use it'],
+    risks: ['the asset costs money every day whether or not it is rented', 'an asset sold early loses part of its price'],
+    names: /\b(rental|lessor|leasing|hire)\b/i,
+  },
+  {
+    id: 'transaction_financier', label: 'financier of the transaction', fits: (p) => revenueOf(p) === 'FINANCING' || revenueOf(p) === 'COMBINED',
+    controls: ['FINANCING', 'PAYMENT'], value: 'FINANCING',
+    duties: ['advance money against the transaction on disclosed terms', 'collect repayment, and hold any lending or factoring permission the jurisdiction requires'],
+    risks: ['some advances are never repaid', 'capital is committed for the whole term', 'regulated activity where a licence applies'],
+    names: /\b(factor|lender|financier|financ)/i,
   },
   {
     id: 'principal_delivery_risk', label: 'principal bearing delivery risk', fits: (p) => PRIME(p) && (p.supply === 'EMPLOY' || p.supply === 'NETWORK'),
@@ -181,7 +203,7 @@ const EVIDENCE_ROLE: Partial<Record<ActorRole, { fits: (p: Position) => boolean;
   PLATFORM: { fits: (p) => p.information === 'PLATFORM', controls: ['INFORMATION', 'COORDINATION', 'PAYMENT'], value: 'TAKE' },
   FINANCIER: { fits: INTRODUCES, controls: ['FINANCING', 'PAYMENT'], value: 'TAKE' },
   INSURER: { fits: INTRODUCES, controls: ['FINANCING', 'INFORMATION'], value: 'TAKE' },
-  ASSET_PROVIDER: { fits: (p) => PRIME(p) && (p.assets === 'OWNED' || p.assets === 'LEASED'), controls: ['SUPPLY', 'FULFILMENT_RIGHTS'], value: 'OPERATING' },
+  ASSET_PROVIDER: { fits: (p) => (PRIME(p) && (p.assets === 'OWNED' || p.assets === 'LEASED')) || revenueOf(p) === 'RENT', controls: ['SUPPLY', 'FULFILMENT_RIGHTS'], value: 'OPERATING' },
 };
 
 /* ---------------------------------------------------------------------- shape */
@@ -299,6 +321,49 @@ function valueOf(e: IndustryEvidence, basis: ValueBasis, segment: string | null)
     const rate = fact(e, 'contractor_rate_per_unit', null);
     if (!price || !rate) return unknownValue(`price per ${unit} − what independent supply accepts: ${!price ? 'the price' : 'the supply rate'} is not established`, keys);
     return { lowUsdPerUnit: price.low - rate.high, highUsdPerUnit: price.high - rate.low, status: weakest([price.status, rate.status]), basis: `price per ${unit} − independent supply’s rate per ${unit}`, facts: keys };
+  }
+  if (basis === 'RESALE') {
+    const keys: FactKey[] = ['price_per_unit', 'purchase_cost_per_unit'];
+    const price = fact(e, 'price_per_unit', segment);
+    const cost = fact(e, 'purchase_cost_per_unit', null);
+    if (!price || !cost) return unknownValue(`resale price per ${unit} − purchase cost per ${unit}: ${!price ? 'the price' : 'the purchase cost'} is not established`, keys);
+    return { lowUsdPerUnit: price.low - cost.high, highUsdPerUnit: price.high - cost.low, status: weakest([price.status, cost.status]), basis: `resale price per ${unit} − purchase cost per ${unit}`, facts: keys };
+  }
+  if (basis === 'SUBSCRIPTION') {
+    const keys: FactKey[] = ['subscription_price_per_month', 'account_units_per_month'];
+    const sub = fact(e, 'subscription_price_per_month', segment);
+    const units = fact(e, 'account_units_per_month', segment);
+    if (!sub || !units || units.low <= 0) return unknownValue(`subscription per month ÷ ${unit}s an account runs through it per month: ${!sub ? 'the subscription price' : 'the account volume'} is not established`, keys);
+    return { lowUsdPerUnit: sub.low / units.high, highUsdPerUnit: sub.high / units.low, status: weakest([sub.status, units.status]), basis: `subscription per month ÷ ${unit}s per account-month`, facts: keys };
+  }
+  if (basis === 'RENT') {
+    const keys: FactKey[] = ['asset_rent_per_day', 'asset_utilisation', 'asset_ownership_cost_per_day', 'units_per_capacity_day'];
+    const rent = fact(e, 'asset_rent_per_day', null);
+    const use = fact(e, 'asset_utilisation', null);
+    const own = fact(e, 'asset_ownership_cost_per_day', null);
+    const units = fact(e, 'units_per_capacity_day', segment);
+    if (!rent || !use || !own || !units || units.low <= 0) return unknownValue(`(rent × utilisation − ownership cost) per day ÷ ${unit}s per capacity-day: not every input is established`, keys);
+    return {
+      lowUsdPerUnit: (rent.low * use.low - own.high) / units.high,
+      highUsdPerUnit: (rent.high * use.high - own.low) / units.low,
+      status: weakest([rent.status, use.status, own.status, units.status]),
+      basis: `(rent × utilisation − ownership cost) per day ÷ ${unit}s per capacity-day`,
+      facts: keys,
+    };
+  }
+  if (basis === 'FINANCING' || basis === 'COMBINED') {
+    const keys: FactKey[] = ['price_per_unit', 'financing_margin', 'default_rate'];
+    const price = fact(e, 'price_per_unit', segment);
+    const margin = fact(e, 'financing_margin', segment);
+    const loss = fact(e, 'default_rate', segment);
+    if (!price || !margin || !loss) return unknownValue(`price per ${unit} × (financing margin − default rate): not every input is established`, keys);
+    return {
+      lowUsdPerUnit: price.low * (margin.low - loss.high),
+      highUsdPerUnit: price.high * (margin.high - loss.low),
+      status: weakest([price.status, margin.status, loss.status]),
+      basis: `price per ${unit} × (financing margin − default rate)`,
+      facts: keys,
+    };
   }
   if (basis === 'PLACEMENT') {
     const fee = fact(e, 'placement_fee', segment);

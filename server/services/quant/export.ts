@@ -32,7 +32,26 @@ export function justifiesDistribution(est: Pick<Estimate, 'tier' | 'distribution
 
 export function describeEstimate(est: Estimate): string {
   const round = (x: number) => (Math.abs(x) < 1 ? x.toFixed(3) : x < 100 ? x.toFixed(1) : String(Math.round(x)));
-  return `${est.tier.toLowerCase()} estimate, p10 ${round(est.p10)} · p50 ${round(est.p50)} · p90 ${round(est.p90)} ${est.unit} from ${est.used.length} observation(s)${est.collapsed.length ? `, ${est.collapsed.length} shared-data group(s) counted once` : ''}`;
+  return `${est.contested ? `CONTESTED (${est.contested.reason}) ` : ''}${est.tier.toLowerCase()} estimate, p10 ${round(est.p10)} · p50 ${round(est.p50)} · p90 ${round(est.p90)} ${est.unit} from ${est.used.length} observation(s)${est.collapsed.length ? `, ${est.collapsed.length} shared-data group(s) counted once` : ''}`;
+}
+
+/**
+ * What an inferred input carries forward about the evidence behind it (Q2-1,
+ * Q2-2): independent populations, those with a stated sample, and the events
+ * its predictive distribution is worth. One representation, read by the plan's
+ * chain links and by the assurance alike, so a link and a probability can
+ * never disagree about what the same estimate rests on.
+ */
+export interface InputSample {
+  events: number;
+  populations: number;
+  sizedPopulations: number;
+  /** Its sized sources contradict each other (L-1): never establishes, never verifies. */
+  contested?: string;
+}
+
+export function inputSample(est: Pick<Estimate, 'populations' | 'sizedPopulations' | 'events' | 'distributionJustified' | 'tier' | 'contested'>): InputSample {
+  return { events: justifiesDistribution(est) ? (est.events ?? 0) : 0, populations: est.populations ?? 0, sizedPopulations: est.sizedPopulations ?? 0, ...(est.contested ? { contested: est.contested.reason } : {}) };
 }
 
 /** The engine's input for an estimate. */

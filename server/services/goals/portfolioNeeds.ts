@@ -100,6 +100,30 @@ export async function sendPortfolioNeeds(
     }
   }
 
+  /*
+   * The inputs whose uncertainty most limits the plan's fifth-percentile reach
+   * (Q2-6, 2026-11-14), each a targeted research question naming the input,
+   * the evidence it has and what would narrow it — not generic bid/win
+   * history. Keyed by the opening and the input, never the figures, so a
+   * re-read raises nothing new.
+   */
+  for (const one of (portfolio.assurance?.limitingInputs ?? []).slice(0, 3)) {
+    const opportunityId = one.opportunityIds[0];
+    if (!opportunityId) continue;
+    const delivered = await send({
+      projectId: input.projectId,
+      actorRef,
+      graphScope: goalGraphScope(input.goalId, opportunityId),
+      needs: [{ subject: `the ${one.input} the plan rests on`, question: one.need.slice(0, 900), route: 'RESEARCH', permissions: [] }],
+    });
+    for (const d of delivered) {
+      if (d.sent) {
+        out.sent += 1;
+        if (d.created) out.created += 1;
+      } else out.refused.push(`${d.subject}: ${d.reason}`);
+    }
+  }
+
   // The history the best combination lacks is what assurance.researchNeeds names.
   const best = new Set(portfolio.best?.members.map((one) => one.opportunityId) ?? []);
   for (const history of portfolio.marketHistory ?? []) {

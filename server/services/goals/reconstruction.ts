@@ -46,6 +46,7 @@ import { createHash } from 'node:crypto';
 import { sharedEvaluator, type Evaluator } from './reasoning/evaluatorPool.ts';
 import { applyProgram, exploreDirections, programOf, renderExploration, repriceOpening, PRICE_ELASTICITY, type ExploreContext, type Exploration, type Transform } from './reasoning/directions.ts';
 import { sweepVariables, type VariableSweep } from './reasoning/variables.ts';
+import { valuePerInterested } from './reasoning/rank.ts';
 
 /** A change smaller than this, in reach and in median settled cash, is not an improvement. */
 export const MATERIAL_REACH = 0.02;
@@ -62,7 +63,8 @@ export const SCREEN_MIN_WORLDS = 150;
 /**
  * The plausibility critic (C-4). A reading is IMPLAUSIBLE — kept and shown,
  * never the plan Brain concludes with — when any of these is broken:
- *   RETURN: its median settled cash is more than RETURN_BOUND times the money
+ *   RETURN: its median kept cash (settled less what passes back to suppliers)
+ *     is more than RETURN_BOUND times the money
  *     behind it (what it commits plus the goal's capital ceiling). No record
  *     Brain holds turns a month's money twentyfold, and the production reading
  *     of 2026-11-14 read $34.5M on $3K.
@@ -244,9 +246,48 @@ function knownMid(input: ModelInput): number | null {
  * information (production test, 2026-11-09: 40 one-offs took a plan read from 5 s to 23 s).
  */
 export function movableOpenings(openings: ModelledOpportunity[], baseline: GoalPortfolio): ModelledOpportunity[] {
+  return partitionOpenings(openings, baseline).movable;
+}
+
+/**
+ * Repeatable openings outside every ranked combination that a reconstruction
+ * still moves, strongest by the cash its own demand settles in the baseline.
+ * Lens P, 2026-11-14: with ~500 held openings every one of a reconstruction's
+ * ~200 evaluations carried all of them (3 activities each) through the engine,
+ * whose greedy step is quadratic in activities, and a cold plan read took
+ * 26 min 41 s on production — yet the moves read only the members, the
+ * alternatives and the openings strong enough to join them. 24 is three times
+ * the eight the scenario model fits (`MAX_MODEL_OPPORTUNITIES`), so a move
+ * that frees capacity still finds three times as many unranked contenders as
+ * the plan could hold; the rest are not discarded but held in reserve, where
+ * an INCLUDE move brings any one of them in and the engine judges it (S-6).
+ */
+export const MOVABLE_UNRANKED = 24;
+
+/**
+ * Which openings a reconstruction evaluates, and which it holds in reserve.
+ * `movable` keeps the input's order: every member of a combination the engine
+ * ranked, and the `MOVABLE_UNRANKED` strongest repeatable openings it did not
+ * refuse. `held` is every other such opening, strongest first. A one-off the
+ * engine left out of every combination is in neither: capacity, reply rate,
+ * channel or financing cannot move it, so re-evaluating it on every variant is
+ * cost without information (production test, 2026-11-09: 40 one-offs took a
+ * plan read from 5 s to 23 s).
+ */
+export function partitionOpenings(openings: ModelledOpportunity[], baseline: GoalPortfolio): { movable: ModelledOpportunity[]; held: ModelledOpportunity[] } {
   const ranked = new Set([...(baseline.best?.members ?? []), ...baseline.alternatives.flatMap((a) => a.members)].map((m) => m.opportunityId));
   const refused = new Set(baseline.demand.filter((d) => d.refused).map((d) => d.opportunityId));
-  return openings.filter((o) => ranked.has(o.opportunity.id) || (o.repeatable && o.agreedValue === 0 && !refused.has(o.opportunity.id)));
+  const demand = new Map(baseline.demand.map((d) => [d.opportunityId, d.revenue]));
+  const order = new Map(openings.map((o, i) => [o.opportunity.id, i]));
+  const contenders = openings
+    .filter((o) => !ranked.has(o.opportunity.id) && o.repeatable && o.agreedValue === 0 && !refused.has(o.opportunity.id))
+    .sort((a, b) => {
+      const x = demand.get(a.opportunity.id);
+      const y = demand.get(b.opportunity.id);
+      return (y?.p50 ?? 0) - (x?.p50 ?? 0) || (y?.p90 ?? 0) - (x?.p90 ?? 0) || order.get(a.opportunity.id)! - order.get(b.opportunity.id)!;
+    });
+  const kept = new Set([...ranked, ...contenders.slice(0, MOVABLE_UNRANKED).map((o) => o.opportunity.id)]);
+  return { movable: openings.filter((o) => kept.has(o.opportunity.id)), held: contenders.slice(MOVABLE_UNRANKED) };
 }
 
 /**
@@ -266,7 +307,12 @@ export async function reconstructPlan(input: ReconstructionInput): Promise<Recon
 }
 
 async function reconstructPlanOn(input: ReconstructionInput, evaluator: Evaluator): Promise<Reconstruction> {
-  input = { ...input, openings: movableOpenings(input.openings, input.baseline) };
+  // Arrangements the compose's screen cut ride with the plan's inputs; only an INCLUDE move reads them, never the engine (S-6).
+  const { reserve: reserveIn, ...portfolioIn } = input.portfolio;
+  const { movable, held } = partitionOpenings(input.openings, input.baseline);
+  // The cut arrangements first (strongest first), then the held openings outside the bounded set, strongest first.
+  const reserve: PlannedOpening[] = [...(reserveIn ?? []).filter((r) => !input.openings.some((o) => o.opportunity.id === r.opportunity.id)), ...held];
+  input = { ...input, portfolio: portfolioIn, openings: movable };
   const levers = input.levers ?? ACQUISITION_LEVERS;
   const worlds = input.worlds ?? Math.max(SCREEN_MIN_WORLDS, Math.min(SCREEN_WORLDS, Math.round(SCREEN_WORK / Math.max(1, input.openings.length))));
   const seen = new Map<string, VariantReading>();
@@ -282,7 +328,11 @@ async function reconstructPlanOn(input: ReconstructionInput, evaluator: Evaluato
     if (!b) return [];
     const out: PlausibilityFlag[] = [];
     const behind = Math.max(1, Math.max(0, state.committed) + (limits.capitalCeiling ?? 0));
-    if (b.settledP50 / behind > RETURN_BOUND) out.push({ kind: 'RETURN', detail: `median settled ${money(b.settledP50)} is ${(b.settledP50 / behind).toFixed(0)}× the ${money(behind)} behind it (bound ×${RETURN_BOUND})` });
+    // Kept cash, not gross receipts: in resale or brokerage most revenue passes
+    // straight back to the supplier, so gross settled cash overstates the
+    // return on the money at risk (I-1, Surge B independent evaluation case I).
+    const kept = b.keptP50 ?? b.settledP50;
+    if (kept / behind > RETURN_BOUND) out.push({ kind: 'RETURN', detail: `median kept ${money(kept)} is ${(kept / behind).toFixed(0)}× the ${money(behind)} behind it (bound ×${RETURN_BOUND})` });
     const deals = b.dealsP50 ?? 0;
     if (measuredDeals !== null && deals > measuredDeals * DEAL_CAPACITY_MULTIPLE) out.push({ kind: 'DEALS', detail: `median ${Math.round(deals)} deals, over ${DEAL_CAPACITY_MULTIPLE}× the ${measuredDeals} opportunit${measuredDeals === 1 ? 'y' : 'ies'} Brain's measured record produced` });
     const ids = new Set(b.members.map((m) => m.opportunityId));
@@ -478,6 +528,8 @@ async function reconstructPlanOn(input: ReconstructionInput, evaluator: Evaluato
       baselineReading: baseline,
       operators,
       operatorsFor,
+      reserve,
+      heldOpenings: held.length,
       sweep,
       evaluate: (state, screen, tag = '') => evaluate(state, screen ? screenWorlds : worlds, false, tag),
       required: input.required,
@@ -511,7 +563,7 @@ async function reconstructPlanOn(input: ReconstructionInput, evaluator: Evaluato
   }
   // Robustness: the strongest plan if the new campaign does no better than the old record — rebuilt with every
   // assumed move taken away, then read on the measured record (Q-5).
-  const bare = applyProgram(base, programOf(current, operators), { operators, operatorsFor, remaining: limits.remaining }, true).state;
+  const bare = applyProgram(base, programOf(current, operators), { operators, operatorsFor, remaining: limits.remaining, reserve }, true).state;
   const floor = limits.measuredRates ? await evaluate(bare, worlds, true, ' @as-is-record') : null;
   // The conversion it needs: the lowest reply rate (shared by every outreach opening) at which it reaches the requirement.
   const replyAt = (rate: number) =>
@@ -733,10 +785,6 @@ export function sweepFor(job: SweepJob): Promise<VariableSweep> {
 
 function allowedFor(limits: ReconstructionInput['portfolio']) {
   return budgetsAllowed(limits);
-}
-
-function valuePerInterested(o: ModelledOpportunity): number {
-  return (knownMid(o.price) ?? 0) * (knownMid(o.close) ?? 0);
 }
 
 function currentContacts(limits: ReconstructionInput['portfolio'], baseline: GoalPortfolio): ModelInput {
@@ -988,7 +1036,8 @@ export function buildOperators(ctx: { input: ReconstructionInput; levers?: reado
 
 function pickTarget(sellable: ModelledOpportunity[], id?: string): ModelledOpportunity | undefined {
   if (id) return sellable.find((o) => o.opportunity.id === id);
-  return [...sellable].sort((a, b) => valuePerInterested(b) - valuePerInterested(a))[0];
+  // Ranked with unknowns at their low end (invariant 39, S-5): the least-known opening is never the default target.
+  return [...sellable].sort((a, b) => valuePerInterested(b) - valuePerInterested(a) || (a.opportunity.id < b.opportunity.id ? -1 : 1))[0];
 }
 
 export function wilsonLower(k: number, n: number, z = 1.645): number {

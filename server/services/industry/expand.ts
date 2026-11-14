@@ -72,19 +72,23 @@ import {
   isConstraintKind,
   nodeKindForFinding,
   pathOf,
+  roleQualifier,
+  transactionParties,
 } from '../../domain/industry.ts';
+import { recordClaimFact, type RecordedFact } from '../../repos/construction.ts';
+import { FACT_KEYS, isFactKey } from '../../domain/construction.ts';
 import {
   bootstrapQuestion,
   BOOTSTRAP_TITLE,
   bucketById,
   capitalQuestion,
+  contextLine,
   capitalTitle,
   mapQuestion,
   mapTitle,
   scanQuestion,
   scanTitle,
 } from './questions.ts';
-import { sprintGoalLine } from '../../domain/operatingModel.ts';
 import type { OpportunityOrigin } from './construction/origins.ts';
 import { commercialRoles, SEED_ROLES, type FlowRoles } from './construction/roles.ts';
 import { MAX_OPEN_KERNEL_ROUNDS, type Ask } from './allocate.ts';
@@ -211,7 +215,7 @@ function roleTitle(label: string, path: readonly string[]): string {
   return `Who could stand as ${label} — in ${path[path.length - 1] ?? 'this subject'}`;
 }
 
-function roleQuestion(input: { roleId: string; label: string; path: readonly string[]; objective: string }): string {
+function roleQuestion(input: { roleId: string; label: string; path: readonly string[]; objective: string | null }): string {
   const seed = SEED_ROLES.find((one) => one.id === input.roleId);
   const controls = seed ? seed.controls.map((one) => one.toLowerCase().replace(/_/g, ' ')).join(', ') : null;
   return [
@@ -221,7 +225,7 @@ function roleQuestion(input: { roleId: string; label: string; path: readonly str
       'Name who occupies it now, what the position is paid and on what terms, the duties and risks that follow from it, ' +
       'and any licence, bond, registration or contract term that decides who may stand there. Where nobody occupies ' +
       'it, say so plainly rather than naming a plausible occupant.',
-    sprintGoalLine(input.objective),
+    contextLine(input.objective),
   ].join(' ');
 }
 
@@ -264,9 +268,22 @@ export async function openAsks(input: {
   projectId: string;
   asks: readonly Ask[];
   snapshot: GraphSnapshot;
+  /**
+   * Who the rounds are filed under (W-1). The kernel passes it: an ACTIVE
+   * sprint's id and objective, or `cashModeId: null` and no objective when the
+   * standing research grant asked — then the question carries the neutral
+   * standing line and a sprint's wind-down does not stop it. Omitted, the
+   * project's sprint row is used as before.
+   */
+  filing?: { cashModeId: string | null; objective: string | null };
+  /** How many kernel rounds may be open at once; `MAX_OPEN_KERNEL_ROUNDS` when omitted. */
+  cap?: number;
 }): Promise<OpenedRound[]> {
-  const mode = await getCashMode(input.projectId);
-  if (!mode) return [];
+  const sprint = input.filing ? null : await getCashMode(input.projectId);
+  const filing = input.filing ?? (sprint ? { cashModeId: sprint.id, objective: sprint.objective } : null);
+  if (!filing) return [];
+  const mode = { objective: filing.objective };
+  const cap = Math.max(0, Math.trunc(input.cap ?? MAX_OPEN_KERNEL_ROUNDS));
 
   const byId = new Map(input.snapshot.nodes.map((one) => [one.id, one]));
   const coverageByNode = new Map(input.snapshot.coverage.map((one) => [one.node.id, one]));
@@ -278,7 +295,7 @@ export async function openAsks(input: {
    * asked about them: `unrepresentedRoleAsks` existed and no path called it.
    */
   const open = input.snapshot.rounds.filter((one) => one.state === 'OPEN');
-  const free = MAX_OPEN_KERNEL_ROUNDS - open.length - input.asks.length;
+  const free = cap - open.length - input.asks.length;
   /*
    * The allocator fills every slot whenever its own queue is longer than the
    * cap, which on a growing map is always, so free slots alone would starve
@@ -288,10 +305,10 @@ export async function openAsks(input: {
    * the allocator gave, and never above the cap.
    */
   const roleOpen = open.some((one) => roleIdOfBucket(one.bucketId) !== null);
-  const reserve = !roleOpen && free <= 0 && input.asks.length >= 2 && open.length + 1 <= MAX_OPEN_KERNEL_ROUNDS;
+  const reserve = !roleOpen && free <= 0 && input.asks.length >= 2 && open.length + 1 <= cap;
   const given = new Set(input.asks.map((one) => `${one.nodeId}|${one.bucketId}`));
   const roleAsks = (await roleAsksFromSnapshot(input.snapshot, reserve ? 1 : free)).filter((one) => !given.has(`${one.nodeId}|${one.bucketId}`));
-  const allocated = reserve && roleAsks.length > 0 ? input.asks.slice(0, Math.max(0, MAX_OPEN_KERNEL_ROUNDS - open.length - 1)) : input.asks;
+  const allocated = reserve && roleAsks.length > 0 ? input.asks.slice(0, Math.max(0, cap - open.length - 1)) : input.asks;
   const asks = [...allocated, ...roleAsks];
 
   for (const ask of asks) {
@@ -312,7 +329,7 @@ export async function openAsks(input: {
 
         const result = await openIndustryRound({
           projectId: input.projectId,
-          cashModeId: mode.id,
+          cashModeId: filing.cashModeId,
           nodeId: ask.nodeId,
           purpose: ask.purpose,
           bucketId: ask.bucketId,
@@ -375,7 +392,7 @@ export async function openAsks(input: {
 
 async function compose(input: {
   ask: Ask;
-  mode: { objective: string };
+  mode: { objective: string | null };
   byId: Map<string, IndustryNode>;
   coverage: Map<string, { children: number; scanFound: number }>;
 }): Promise<{ title: string; question: string } | null> {
@@ -447,7 +464,9 @@ export interface Absorbed {
    * The origin of every row filed this pass (OPP-03), from its finding kind.
    * Optional only so a caller's empty result stays valid; `absorb` always sets it.
    */
-  origins?: { kind: 'NODE' | 'CONSTRAINT' | 'CAPITAL'; id: string; claimId: string; origin: OpportunityOrigin }[];
+  origins?: { kind: 'NODE' | 'CONSTRAINT' | 'CAPITAL' | 'FACT'; id: string; claimId: string; origin: OpportunityOrigin }[];
+  /** Economic facts filed from claims that stated a figure or a role's occupant (W-5, W-6). */
+  facts?: RecordedFact[];
 }
 
 /**
@@ -463,8 +482,8 @@ export async function absorb(input: {
   limit?: number;
 }): Promise<Absorbed> {
   const out: Absorbed & { origins: NonNullable<Absorbed['origins']> } = { nodes: [], constraints: [], capital: [], settled: [], refused: [], origins: [] };
-  const mode = await getCashMode(input.projectId);
-  if (!mode) return out;
+  // No sprint row is needed: a round the standing research grant asked is
+  // filed with no sprint (W-1), and filing what ran is never new discovery.
 
   const limit = Math.max(1, input.limit ?? 60);
   const live = await openIndustryRoundsByCandidate(input.projectId);
@@ -649,6 +668,8 @@ async function file(input: {
       description: claim.claim,
       origin: round.purpose === 'BOOTSTRAP' ? 'BOOTSTRAP' : 'DISCOVERED',
       sourceClaimId: claim.id,
+      // Who pays and who supplies, as the finding declared them (W-13).
+      ...(finding === 'TRANSACTION_TYPE' ? transactionParties(claim.structuralQualifier) : {}),
     });
     if (created.created) {
       input.byNodeId.set(created.node.id, created.node);
@@ -687,6 +708,10 @@ async function file(input: {
       return true;
     }
     return false;
+  }
+
+  if (finding === 'UNIT_ECONOMIC' || finding === 'ROLE_TERMS' || finding === 'ROLE_OCCUPANT') {
+    return fileEconomicFact({ projectId: input.projectId, claim, round, byNodeId: input.byNodeId, out });
   }
 
   if (!round.opportunityId) {
@@ -781,3 +806,125 @@ async function file(input: {
   }
   return false;
 }
+
+/** Claim types that reason or recommend rather than report what a source shows: a hypothesis, never an observation. */
+const HYPOTHESIS_CLAIM_TYPES = new Set<ResearchClaim['claimType']>(['UNSUPPORTED_ASSERTION', 'INFERENCE', 'CALCULATION', 'FORECAST', 'RECOMMENDATION', 'DECISION', 'INSTRUCTION']);
+
+/**
+ * How strongly a gated claim's figure is known (W-5). A sourced, gated claim
+ * that reports what its source shows is OBSERVED — observed in the world,
+ * dated, with the claim as its lineage. A claim that reasons, forecasts or
+ * carries no source is a hypothesis: ASSUMPTION. Never VERIFIED: that is a
+ * person's attestation, and a machine does not make it.
+ */
+export function claimFactStatus(claim: Pick<ResearchClaim, 'sourceUrl' | 'sourced' | 'derived' | 'claimType' | 'accepted'>): 'OBSERVED' | 'ASSUMPTION' {
+  if (!claim.accepted || !claim.sourced || !claim.sourceUrl || claim.derived || HYPOTHESIS_CLAIM_TYPES.has(claim.claimType)) return 'ASSUMPTION';
+  return 'OBSERVED';
+}
+
+/** When a claim's figure was observed: the source's own date, else when it was read, else when it was filed. */
+export function claimObservedAt(claim: Pick<ResearchClaim, 'sourceDate' | 'retrievedAt' | 'createdAt'>): string {
+  for (const one of [claim.sourceDate, claim.retrievedAt, claim.createdAt]) {
+    if (one && Number.isFinite(Date.parse(one))) return new Date(Date.parse(one)).toISOString();
+  }
+  return new Date().toISOString();
+}
+
+/** The buyer subject a declared name means, preferring the subtree the round asked about. */
+function buyerNode(name: string, round: IndustryRound, byNodeId: Map<string, IndustryNode>): IndustryNode | null {
+  const want = name.replace(/\s+/g, ' ').trim().toLowerCase();
+  const rootOf = (id: string | null): string | null => {
+    let current = id ? (byNodeId.get(id) ?? null) : null;
+    const seen = new Set<string>();
+    while (current && current.parentId && !seen.has(current.id)) {
+      seen.add(current.id);
+      current = byNodeId.get(current.parentId) ?? null;
+    }
+    return current?.id ?? null;
+  };
+  const root = rootOf(round.nodeId);
+  const buyers = [...byNodeId.values()].filter((one) => one.kind === 'BUYER_TYPE' && !one.retiredAt && one.name.toLowerCase() === want);
+  return buyers.find((one) => root !== null && rootOf(one.id) === root) ?? buyers[0] ?? null;
+}
+
+/**
+ * A claim that states a unit economic, a role's terms or a role's occupant,
+ * filed as a project-level construction fact (W-5, W-6). The figure is
+ * hundredths of the fact key's unit — a declared field, never read from the
+ * sentence. A buyer the claim names that the map does not hold yet is refused
+ * and filed on a later pass, once it is: the restructuring rule.
+ */
+async function fileEconomicFact(input: {
+  projectId: string;
+  claim: ResearchClaim;
+  round: IndustryRound;
+  byNodeId: Map<string, IndustryNode>;
+  out: Absorbed & { origins: NonNullable<Absorbed['origins']> };
+}): Promise<boolean> {
+  const { claim, round, out } = input;
+  const finding = claim.structuralFinding!;
+  const subject = claim.structuralSubject!;
+  const occupantFinding = finding === 'ROLE_OCCUPANT';
+  const key = occupantFinding ? 'role_occupants' : subject;
+  if (!isFactKey(key)) {
+    out.refused.push({ claimId: claim.id, why: `"${subject}" is not a fact the construction prices.` });
+    return false;
+  }
+  const role = finding === 'UNIT_ECONOMIC' ? { roleId: null, buyer: claim.structuralQualifier } : roleQualifier(claim.structuralQualifier);
+  if (finding !== 'UNIT_ECONOMIC' && !role.roleId) {
+    out.refused.push({ claimId: claim.id, why: `A ${finding} that names no role says nothing about one.` });
+    return false;
+  }
+  let value = 1;
+  if (!occupantFinding) {
+    if (claim.structuralAmountCents === null || !Number.isFinite(claim.structuralAmountCents)) {
+      out.refused.push({ claimId: claim.id, why: `A ${finding} with no figure prices nothing. It stays as evidence on its claim.` });
+      return false;
+    }
+    value = claim.structuralAmountCents / 100;
+    if (FACT_KEYS[key].kind === 'RATE' && value > 1) {
+      out.refused.push({ claimId: claim.id, why: `${key} is a share, and ${value} is more than the whole.` });
+      return false;
+    }
+  }
+  let segment: string | null = null;
+  if (role.buyer && (FACT_KEYS[key].segment || occupantFinding)) {
+    const buyer = buyerNode(role.buyer, round, input.byNodeId);
+    if (!buyer) {
+      out.refused.push({ claimId: claim.id, why: `It is about "${role.buyer}", which is not a buyer type on the map yet. It is filed once that buyer is.` });
+      return false;
+    }
+    segment = `map_${buyer.id}`;
+  }
+  const recorded = await recordClaimFact({
+    projectId: input.projectId,
+    nodeId: round.nodeId,
+    claimId: claim.id,
+    key,
+    segment,
+    low: value,
+    high: value,
+    status: claimFactStatus(claim),
+    measures: claim.claim.slice(0, 500),
+    sourceTitle: claim.sourceTitle ?? claim.sourcePublisher ?? claim.sourceUrl ?? 'research claim',
+    sourceUrl: claim.sourceUrl,
+    sourceKind: claim.primarySource ? 'PRIMARY' : 'SECONDARY',
+    roleId: role.roleId,
+    occupant: occupantFinding ? subject : null,
+    observedAt: claimObservedAt(claim),
+  });
+  if (!recorded) return false;
+  (out.facts ??= []).push(recorded);
+  out.origins.push({ kind: 'FACT', id: recorded.id, claimId: claim.id, origin: originOfFinding(finding) });
+  await recordCashEvent({
+    projectId: input.projectId,
+    kind: 'INDUSTRY_FACT_ABSORBED',
+    actorRef: 'BRAIN',
+    summary: `${key}${segment ? ` for ${segment}` : ''} filed from research as ${recorded.status.toLowerCase()}${recorded.roleId ? ` (role ${recorded.roleId})` : ''}.`,
+    detail: { factId: recorded.id, claimId: claim.id, key, segment, status: recorded.status, nodeId: round.nodeId, roleId: recorded.roleId ?? null, observedAt: recorded.observedAt ?? null, validUntil: recorded.validUntil ?? null },
+  });
+  return true;
+}
+
+/** `file`, for the tests that drive one declared finding into its table without a mission. */
+export { file as fileFinding };

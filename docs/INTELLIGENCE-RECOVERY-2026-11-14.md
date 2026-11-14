@@ -54,10 +54,10 @@ Status vocabulary as the owner gave it. Owner = the Surge B repair stream
 
 | id | capability | symptom | sev | owner | status |
 |---|---|---|---|---|---|
-| W-1 | world expansion | kernel needs an ACTIVE sprint; questions worded as sprint work (`industry/kernel.ts:70,96`) | BLOCKING | world-expansion | REPAIRING |
-| W-2 | adaptive selection | six fixed-order rules, oldest-first, constant concurrency 4 (`allocate.ts:16-23,97,369`) | MAJOR | world-expansion | REPAIRING |
-| W-3 | expansion | root question and each breakdown asked once; repeat branch unreachable (`allocate.ts:152,260,313`) | MAJOR | world-expansion | REPAIRING |
-| W-4 | exploration | barren after 3 scans is permanent (`verdict.ts:123-136`) | MAJOR | world-expansion | REPAIRING |
+| W-1 | world expansion | kernel needs an ACTIVE sprint; questions worded as sprint work (`industry/kernel.ts:70,96`) | BLOCKING | world-expansion | REPAIRED, AWAITING VERIFICATION (6862da0, migrations 150/141) |
+| W-2 | adaptive selection | six fixed-order rules, oldest-first, constant concurrency 4 (`allocate.ts:16-23,97,369`) | MAJOR | world-expansion | REPAIRED, AWAITING VERIFICATION (6862da0, migrations 150/141) |
+| W-3 | expansion | root question and each breakdown asked once; repeat branch unreachable (`allocate.ts:152,260,313`) | MAJOR | world-expansion | REPAIRED, AWAITING VERIFICATION (6862da0, migrations 150/141) |
+| W-4 | exploration | barren after 3 scans is permanent (`verdict.ts:123-136`) | MAJOR | world-expansion | REPAIRED, AWAITING VERIFICATION (6862da0, migrations 150/141) |
 | W-5 | quantitative knowledge | construction facts written only by a person, per goal; map-built roles unpriced (`construction/service.ts:57-96`) | BLOCKING | construction-knowledge | REPAIRING |
 | W-6 | decomposition | role-occupant answer asked once, never read back (`expand.ts:196,214`) | MAJOR | construction-knowledge | REPAIRING |
 | W-7 | money-tree positions | closed logistics-shaped position vocabulary; 4 economics branches; no resale/subscription/finance/rent (`domain/construction.ts:31-224`) | MAJOR | construction-knowledge | REPAIRING |
@@ -86,34 +86,39 @@ Status vocabulary as the owner gave it. Owner = the Surge B repair stream
 | K-6 | persistent knowledge | §92 positions, roles, flows not stored | MAJOR | — | ROOT CAUSE CONFIRMED |
 | K-7 | identity | keys from row ids; recreated node loses history | MINOR | arrangement-library | REPAIRING |
 | K-8 | geography | arrangements carry no geography; constraints never read | MINOR | arrangement-library | REPAIRING |
-| S-1 | search narrowing | 12 picked by saturating score + sha256 tiebreak; experiment: strong DIRECT arrangement kept/dropped by its key string; swapping it in raised reach 1.55%→2.8% (`goalScenario.ts:283-297`) | BLOCKING | search-selection | REPAIRING |
-| S-2 | diversity | one arbitrary design per buyer population | MAJOR | search-selection | REPAIRING |
+| S-1 | search narrowing | 12 picked by saturating score + sha256 tiebreak; experiment: strong DIRECT arrangement kept/dropped by its key string; swapping it in raised reach 1.55%→2.8% (`goalScenario.ts:283-297`) | BLOCKING | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
+| S-2 | diversity | one arbitrary design per buyer population | MAJOR | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
 | S-3 | breadth | = K-2 | MAJOR | arrangement-library | REPAIRING |
-| S-4 | research routing | only the 12 get contribution; rest −1 → research self-reinforces the hash pick | MAJOR | (fixed by S-1) | REPAIRING |
-| S-5 | invariant 39 | unknown ranges ranked at midpoint (2–50% beats evidenced 5–25%) | MAJOR | search-selection | REPAIRING |
-| S-6 | reasoning | no move can add a constructed arrangement outside the 12 | MAJOR | search-selection | REPAIRING |
-| S-7 | method learning | learns from unchallenged and critic-flagged reach | MAJOR | search-selection | REPAIRING |
-| S-8 | transfer of methods | learned methods keyed by opening ids; don't transfer across goals | MAJOR | search-selection | REPAIRING |
+| S-4 | research routing | only the 12 get contribution; rest −1 → research self-reinforces the hash pick | MAJOR | (fixed by S-1) | REPAIRED via S-1, AWAITING VERIFICATION |
+| S-5 | invariant 39 | unknown ranges ranked at midpoint (2–50% beats evidenced 5–25%) | MAJOR | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
+| S-6 | reasoning | no move can add a constructed arrangement outside the 12 | MAJOR | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
+| S-7 | method learning | learns from unchallenged and critic-flagged reach | MAJOR | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
+| S-8 | transfer of methods | learned methods keyed by opening ids; don't transfer across goals | MAJOR | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
 | S-9 | learning stats | repeat reads of one goal counted as independent | MINOR | — | DISCOVERED |
-| S-10 | learning | stance yield computed, never fed back | MAJOR | search-selection | REPAIRING |
-| S-11 | invention | model-invented methods only retune 4 operations on held openings | MAJOR | search-selection | REPAIRING |
-| S-12 | transfer | transfers model no material differences; precedent bonus outranks gated evidence | MAJOR | search-selection | REPAIRING |
-| S-13 | correlation | = Q2-10 | MAJOR | acceptance | REPAIRING |
+| S-10 | learning | stance yield computed, never fed back | MAJOR | search-selection | DISCOVERED (not repaired; stance yield still unused) |
+| S-11 | invention | model-invented methods only retune 4 operations on held openings | MAJOR | search-selection | PARTIAL (INCLUDE move added; new-design invention not yet) |
+| S-12 | transfer | transfers model no material differences; precedent bonus outranks gated evidence | MAJOR | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
+| S-13 | correlation | = Q2-10 | MAJOR | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
 | S-15 | wiring | `bestReachCents` never reaches construction (10-min cache) | MINOR | arrangement-library | REPAIRING |
 | S-16 | screening | factorial screen drops levels that matter only in combination | MINOR | — | DISCOVERED |
-| S-17 | traceability | nothing records what was cut | MINOR | search-selection | REPAIRING |
-| Q2-1 | acceptance | chain link and assurance accept mutually exclusive input forms → EVIDENCED_PORTFOLIO unreachable (repro: 3 sized comparables → basis PROBABILITY, still CANDIDATE_ONLY) | BLOCKING | acceptance | REPAIRING |
-| Q2-2 | statistics | "sample" = number of studies ≥ 20; Wilson bound double-counts (`quant/portfolio.ts:1027,1061`) | BLOCKING | acceptance | REPAIRING |
-| Q2-3 | conversion | CONVERSION only from Brain's own sales (`plan.ts:549`) | MAJOR | acceptance | REPAIRING |
-| Q2-4 | evidence | Brain's own outreach record relabelled UNKNOWN (`portfolio.ts:440`) | MAJOR | acceptance | REPAIRING |
-| Q2-5 | evidence parsing | `readRate` never reads N; unsized ranges counted as ~57 trials | MAJOR | acceptance | REPAIRING |
-| Q2-6 | improvement loop | below threshold → empty or generic research needs; next test blocked on contact permission → loop | MAJOR | acceptance | REPAIRING |
-| Q2-7 | cash timing | inferred days-to-cash can only refuse, never establish | MAJOR | acceptance | REPAIRING |
-| Q2-8 | verdicts | CONSTRUCTED vs IMPROVEMENT_REQUIRED collapse to CANDIDATE_ONLY; Hermes challenge only after ACCEPTED (never fires) | MAJOR | acceptance | REPAIRING |
-| Q2-9 | calibration | MEASURED_RECORD deadlocked on RECOMMENDABLE readings | MAJOR | acceptance | REPAIRING |
-| Q2-10 | correlation | shared-comparable rates drawn independently → invented diversification | MAJOR | acceptance | REPAIRING |
-| Q2-11 | statistics | no small-k predictive interval, no vendor-figure bias discount, funnel stage not material, lineage only by URL, no model uncertainty | MAJOR | acceptance | REPAIRING (partial) |
-| Q2-12 | robustness | assurance sample regex-parses prose (`plan.ts:852`) | MINOR | acceptance | REPAIRING |
+| S-17 | traceability | nothing records what was cut | MINOR | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
+| Q2-1 | acceptance | chain link and assurance accept mutually exclusive input forms → EVIDENCED_PORTFOLIO unreachable (repro: 3 sized comparables → basis PROBABILITY, still CANDIDATE_ONLY) | BLOCKING | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
+| Q2-2 | statistics | "sample" = number of studies ≥ 20; Wilson bound double-counts (`quant/portfolio.ts:1027,1061`) | BLOCKING | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
+| Q2-3 | conversion | CONVERSION only from Brain's own sales (`plan.ts:549`) | MAJOR | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
+| Q2-4 | evidence | Brain's own outreach record relabelled UNKNOWN (`portfolio.ts:440`) | MAJOR | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
+| Q2-5 | evidence parsing | `readRate` never reads N; unsized ranges counted as ~57 trials | MAJOR | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
+| Q2-6 | improvement loop | below threshold → empty or generic research needs; next test blocked on contact permission → loop | MAJOR | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
+| Q2-7 | cash timing | inferred days-to-cash can only refuse, never establish | MAJOR | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
+| Q2-8 | verdicts | CONSTRUCTED vs IMPROVEMENT_REQUIRED collapse to CANDIDATE_ONLY; Hermes challenge only after ACCEPTED (never fires) | MAJOR | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
+| Q2-9 | calibration | MEASURED_RECORD deadlocked on RECOMMENDABLE readings | MAJOR | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
+| Q2-10 | correlation | shared-comparable rates drawn independently → invented diversification | MAJOR | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
+| Q2-11 | statistics | no small-k predictive interval, no vendor-figure bias discount, funnel stage not material, lineage only by URL, no model uncertainty | MAJOR | acceptance | PARTIAL (t-widening, vendor discount, funnel stage, study-level lineage done; model uncertainty not) |
+| E-1 | cash timing | a signed $20K contract paying a deposit + milestone ($14K) inside the window counts $0 toward the goal (independent evaluation case E) | MAJOR | follow-up (portfolio cash timing) | REPAIRED, AWAITING VERIFICATION (paymentSchedule; eval case E passes) |
+| L-1 | evidence interpretation | contradictory sources ($8K vs $45K for one quantity) pooled silently into a DIRECT-tier confident distribution; no contradiction surfaced (case L) | MAJOR | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
+| I-1 | capital restructuring | under a capital ceiling a presale design (reach 0.863) was refused as IMPLAUSIBLE: the plausibility critic compared gross settled cash ($50.6K, ~34×) to capital, though most passes back to the supplier; kept cash is ~12× (`reconstruction.ts:285`) | MAJOR | follow-up | REPAIRED, AWAITING VERIFICATION (critic reads kept cash; eval case I passes) |
+| P-SPEED | planning speed | production `goals plan` on the $10K goal (run 43635941750, e37e0ff): 26 min 41 s for one full read (target 1–5 min) | MAJOR | planning-speed (algorithmic); runtime half (thread copy, 384 MB heap) → Surge A | ROOT CAUSE CONFIRMED → REPAIRING: local 316 s cold read, reconstruction 88% (each of ~207 evaluations carries all 500 openings, `reconstruction.ts:248`); DB only ~8–17 s of the 26 min (lens-P) |
+| PRICE-POOL | economic model | production read: every constructed arrangement — anime production committees, HVAC firms, homeowners, contractors — shows the identical price E 281, fulfil 0–43,661, capital 0–72,769: arrangements are priced from one project-wide observation pool, not their own buyer's evidence (production instance of S-13) | MAJOR | arrangement-library | ROOT CAUSE CONFIRMED → REPAIRING: `construct.ts:545` hands every held price to every arrangement; `goalScenario.ts:198-261` derives cost and capital from the borrowed top price (lens-P) |
+| Q2-12 | robustness | assurance sample regex-parses prose (`plan.ts:852`) | MINOR | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
 
 ### Economic knowledge baseline (production, 2026-11-14 19:53Z, Goals run 43634448117)
 
@@ -148,6 +153,66 @@ stored quantities (0 construction facts), and nothing it constructs. "400
 arrangements per pass" were 0 durable arrangements. 100 plan readings exist for
 one goal and none was ever accepted — consistent with Q2-1 (acceptance
 unreachable).
+
+### Independent evaluation baseline (pre-repair code)
+
+`tests/intelligenceEvaluation.test.ts` (kept beside the record as
+`docs/intelligence-recovery/intelligenceEvaluation.test.ts.txt` until the
+repairs land, so the release gate is not run against known failures), written by
+an evaluator who did not read the repair branches: **18 cases, 11 pass, 7 fail;
+61/76 assertions**. Failing: E (deposit+milestone $0), G2 (transfer names no
+differences), I (no capital restructuring), L (contradiction pooled), O4/O5
+(no interval; strong comparables never certified), SEL (strong arrangement
+dropped by key string), PERSIST 0/3. Full table:
+`docs/intelligence-recovery/evaluation-baseline.md`.
+
+### Repairs integrated (branch `claude/brain-intelligence-recovery-s0dl4l`)
+
+| stream | commit | what changed | evidence |
+|---|---|---|---|
+| hermes-director | 0916bd8 (in PR #897, merged e37e0ff) | mission (`SURGE:B`), `brain_operator_inventory`, `brain_operator_reattempt`, outside verification, 48 GB recipe | operatorRepairs + runpodRestore tests; Deploy 1066 SQLite suite green |
+| search-selection | 695077a | quantitative screen + reserved diverse slots replace hash-order pick; unknowns ranked at low end; INCLUDE move; learning on challenged score, role-keyed; transfers list unbridged dimensions | `tests/arrangementSelection.test.ts` 12/12; experiment reach 1.80% → 3.50%, strong arrangement kept for every key |
+| E-1 / I-1 | this branch | `paymentSchedule` reads deposit/milestone terms into cash timing; plausibility critic reads kept cash | `tests/surgeBPaymentTerms.test.ts` 3/3; eval cases E and I pass |
+
+Independent evaluation after these: **13 → 14 of 18 cases pass** (E, I, SEL newly
+pass; remaining: G2 transfer differences, L contradiction, O interval/certify,
+PERSIST — owned by in-flight streams).
+
+| acceptance | 367b2f5 | one evidence representation for links and assurance; certification = 5th percentile of reach under parameter draws ≥ 90%; TRANSFERRED conversion; own outreach record HISTORICAL; sized `readRate`; contested sources (L-1); verdict classes QUANTITATIVELY_CONSTRUCTED / CONFIDENCE_VERIFIED / IMPROVEMENT_REQUIRED / NOT_SUPPORTED | `tests/planningConfidence.test.ts` 17/17; 10 acceptance/selection/economics files 106/106 |
+| world-expansion | 6862da0 | kernel runs under a standing research grant with no sprint (sprint wind-down stops only sprint rounds; revoking the grant stops standing rounds); scored selection (information + relevance + transfer + novelty) with a 1-in-4 exploration pick; root question re-asked after 90 d, breakdowns after 60 d; barren → WATCH with reopen conditions | `tests/industryKernelStanding.test.ts` 15/15; kernel 41/41; migrations + deploymentOwnership pass |
+| integration | this branch | `estimateInput` (one estimate→input conversion); Brain's measured close rate carries its counts | eval case O passes |
+
+**Independent evaluation now: 18 of 18 (baseline 11), on the integrated branch
+at 5e8ba32.** G2 closed by construction: a TRANSFER arrangement carries
+`differences` (legal context, payment terms, sales cycle, capital, buyer
+behaviour — `TRANSFER_MATERIAL`, now owned by `construct.ts`) and its research
+question asks for a source on each. PERSIST closed by the arrangement library
+(69 rows, 36 constructed keys found by key after caches cleared). Decision recorded: three sized comparables *can* certify at 90% when
+the margin is large (5th-percentile reach 98.75% at 2,100 contacts for 7 deals);
+unsized, single-source, assumed and contested evidence never certifies, and more
+simulated worlds never raise confidence.
+
+### Hermes as director — production record
+
+| when (Z) | run | model | what Hermes did | source |
+|---|---|---|---|---|
+| 21:12–21:28 | `opr_322701cdf14f411e9b6b` (Agents run 43641617727, mission `SURGE:B` set, 3,048 chars) | `auto/best-coding` (free switchboard) | RUN_DONE, 41 tool calls, 0 failed: 19 × `brain_operator_inventory` (populated the Surge B inventory from the mission), `brain_operator_decide` (opd_0943d48c45d6ea1d), `continue_idle`, `record_learning`; commissioned **no** duplicate engineering (every root cause was already REPAIRING by a stream) | `agents.yml operator-show` run 43643347745 |
+
+Limits observed honestly: the run's own decision and lessons still centre on
+the $10K goal and infrastructure congestion (Surge A's area); it tracked the
+Surge B inventory but did not yet reprioritise or re-attempt Surge B work —
+nothing in flight had stalled. The post-run `show` crashed on `LIMIT NaN`
+(argument parsing in `scripts/operator.ts`, fixed e45cb30).
+
+### Handed to Surge A
+
+- `tests/goalPlan.test.ts` "reads a large project in a bounded number of
+  statements": 153 reads against a bound of 140 **on unmodified
+  `origin/production` (aefd41f) locally**, identical with Surge B's changes, so
+  not caused here. It is Surge A's P-9 (statement budget). Deploy 1066's CI
+  shards passed it, so the count is environment-sensitive.
+- Local test timeouts (~30 s) under memory pressure from concurrent engineers:
+  `goalPlan.test.ts`/`openingsFromClaims.test.ts` pass 71/72 single-worker.
 
 ### Measurement
 

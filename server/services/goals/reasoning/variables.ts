@@ -46,6 +46,7 @@ import type { ModelInput, ModelledOpportunity } from '../../cash/goalScenario.ts
 import type { StrategyOperator, StrategyState } from '../reconstruction.ts';
 import type { PlannedOpening } from '../portfolio.ts';
 import { clampPrice, inScope, makeDirection, PRICE_ELASTICITY, type Direction, type Scope, type Transform } from './directions.ts';
+import { valuePerContact } from './rank.ts';
 
 /** No sweep evaluates more combinations than this. */
 export const MAX_VARIATIONS = 250_000;
@@ -453,7 +454,8 @@ const family = (key: string): Family => {
 function targets(state: StrategyState, n: number): string[] {
   return state.openings
     .filter((o) => o.repeatable && o.agreedValue === 0 && !o.channel && (mid(o.price) ?? 0) > 0)
-    .sort((a, b) => (mid(b.price) ?? 0) * (mid(b.close) ?? 0) * (mid(b.respond) ?? 0) - (mid(a.price) ?? 0) * (mid(a.close) ?? 0) * (mid(a.respond) ?? 0) || (a.opportunity.id < b.opportunity.id ? -1 : 1))
+    // Ranked with unknowns at their low end (invariant 39, S-5), never their middle.
+    .sort((a, b) => valuePerContact(b) - valuePerContact(a) || (a.opportunity.id < b.opportunity.id ? -1 : 1))
     .slice(0, n)
     .map((o) => o.opportunity.id);
 }

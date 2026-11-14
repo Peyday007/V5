@@ -36,7 +36,7 @@ function arrangement(over: Partial<ConstructedArrangement> & { key: string; p50:
     emergent: [],
     stress: { exposure: 'SAFE', worstCaseCents: 0, failures: [] },
     evidenced: 1,
-    value: { tier: 'MECHANISM', p10: p50 / 4, p50, p90: p50 * 3, observations: 12 },
+    value: { tier: 'COMPARABLE', p10: p50 / 4, p50, p90: p50 * 3, observations: 12 },
     unknownParts: ['buyers', 'conversion'],
     relatedOpenings: [],
     question: `Who buys brokered work for ${over.key}?`,
@@ -50,7 +50,7 @@ describe('a constructed arrangement as an estimate', () => {
   it('enters on its reconstruction, labelled, never as a supported price', () => {
     const one = estimatedFromArrangement(arrangement({ key: 'k1', p50: 400, repeat: 'SUBSCRIPTION' }), base)!;
     expect(isArrangementId(one.opportunity.id)).toBe(true);
-    expect(one.estimated).toMatchObject({ arrangementKey: 'k1', tier: 'MECHANISM', observations: 12 });
+    expect(one.estimated).toMatchObject({ arrangementKey: 'k1', tier: 'COMPARABLE', observations: 12 });
     expect(one.price).toMatchObject({ value: null, low: 100, high: 1200, provenance: 'ASSUMPTION' });
     expect(one.price.inferred?.justified).toBe(false);
     expect(priceSupported(one)).toBe(false);
@@ -65,6 +65,9 @@ describe('a constructed arrangement as an estimate', () => {
   it('is left out when nothing reconstructs its value or its known worst case breaks the limits', () => {
     expect(estimatedFromArrangement(arrangement({ key: 'u', p50: 0, value: { tier: 'UNKNOWN', p10: 0, p50: 0, p90: 0, observations: 0 } }), base)).toBeNull();
     expect(estimatedFromArrangement(arrangement({ key: 'x', p50: 300, stress: { exposure: 'EXCEEDS', worstCaseCents: 90_000, failures: [] } }), base)).toBeNull();
+    // A value pooled from other buyers' prices is no price for these buyers (PRICE-POOL): no
+    // price, and no cost or capital swept from a borrowed top price.
+    expect(estimatedFromArrangement(arrangement({ key: 'pooled', p50: 281, value: { tier: 'MECHANISM', p10: 10, p50: 281, p90: 72_769, observations: 31 } }), base)).toBeNull();
   });
 
   it('is picked by what it could put toward the whole goal, not by how small or easy it is', () => {
@@ -76,7 +79,10 @@ describe('a constructed arrangement as an estimate', () => {
       ],
       { ...base, remaining: 10_000, exclusions: [] },
     );
-    expect(picked.map((one) => one.estimated!.arrangementKey)).toEqual(['recurring', 'mid-oneoff', 'tiny-oneoff']);
+    // Ordered by what each settles by the deadline at the conservative reading (lens S): a $2,000 one-off closes
+    // at the low end of an unknown close rate and outranks a $300 cohort that reaches few buyers by the deadline;
+    // all three enter, and the engine decides how they combine.
+    expect(picked.map((one) => one.estimated!.arrangementKey)).toEqual(['mid-oneoff', 'recurring', 'tiny-oneoff']);
   });
 
   it('keeps the owner’s exclusions and the operating rule', () => {
