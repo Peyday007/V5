@@ -378,7 +378,28 @@ export interface EffectIntent {
    * agreement with room on it later may not be the one billed.
    */
   subjectRef: string | null;
+  /**
+   * The terms a payment taken with no agreement on record was taken under —
+   * the deliverable and acceptance condition the card stated at send time.
+   * Null when the payment was drawn against an existing agreement. Read back
+   * when the receipt is recorded, so the provider's record of the payment is
+   * the agreement's evidence and the terms are never re-chosen later (§39).
+   */
+  terms: PaymentTerms | null;
   at: string;
+}
+
+/** What a payment taken without a prior agreement was for. Either may be unstated. */
+export interface PaymentTerms {
+  deliverable: string | null;
+  acceptanceCondition: string | null;
+}
+
+function termsFrom(value: unknown): PaymentTerms | null {
+  if (value === null || typeof value !== 'object') return null;
+  const raw = value as Record<string, unknown>;
+  const text = (one: unknown) => (typeof one === 'string' && one.trim() ? one.trim() : null);
+  return { deliverable: text(raw.deliverable), acceptanceCondition: text(raw.acceptanceCondition) };
 }
 
 /**
@@ -416,6 +437,7 @@ export async function intentFor(
       amountCents: typeof detail.amountCents === 'number' ? detail.amountCents : null,
       stateAtSend: String(detail.stateAtSend ?? ''),
       subjectRef: typeof detail.subjectRef === 'string' ? detail.subjectRef : null,
+      terms: termsFrom(detail.terms),
       at: event.createdAt,
     };
   }
@@ -450,6 +472,8 @@ export interface CommercialEffectRequest {
    * decision, never something a caller chose.
    */
   via?: string | null;
+  /** See `EffectIntent.terms`. */
+  terms?: PaymentTerms | null;
 }
 
 /**
@@ -499,6 +523,7 @@ export async function sendCommercialEffect(input: CommercialEffectRequest): Prom
         stateAtSend: input.stateAtSend,
         subjectRef: input.subjectRef ?? null,
         via: input.via ?? null,
+        terms: input.terms ?? null,
       },
     });
   }
