@@ -240,7 +240,7 @@ export function checkRegister(
 
 export interface RegisterSources {
   /** The register's text at the revision production runs, or null when it is not there. */
-  readRegister: () => Promise<{ text: string | null; where: string }>;
+  readRegister: () => Promise<RegisterRead>;
   /**
    * The program's source items and its appended releases, from production rows,
    * or null when no program is filed. `releases` absent means the caller does not
@@ -249,15 +249,55 @@ export interface RegisterSources {
   loadItems: () => Promise<{ programId?: string; items: SourceItem[]; releases?: RegisterRelease[]; where: string } | null>;
 }
 
-/** The register at the revision production runs, read through the forge. */
-async function registerAtRevision(): Promise<{ text: string | null; where: string }> {
+/**
+ * The register as read at one revision. `unread` says the forge did not answer
+ * this time (a spent rate limit, a timeout, a 5xx): that is "not read this
+ * pass", never evidence about the register, so it is neither cached nor
+ * recorded as the register falling behind.
+ */
+export interface RegisterRead {
+  text: string | null;
+  where: string;
+  unread?: string;
+}
+
+/** One forge read of the register at a revision; `ok` with a null body is a definite 404. */
+export type RegisterReadAt = (revision: string) => Promise<{ ok: boolean; body: string | null; reason: string | null }>;
+
+const registerByRevision = new Map<string, RegisterRead>();
+
+/**
+ * The register at `revision`, read through the forge at most once per revision.
+ *
+ * A file at a fixed commit never changes, so a definite answer — the text, or
+ * a 404 — is kept for the life of the process: the five-minute pass would
+ * otherwise spend about twelve of the unauthenticated forge's sixty reads an
+ * hour that factory verification needs. A failed read is not kept, so the next
+ * pass asks again.
+ */
+export async function readRegisterOnce(
+  revision: string,
+  readAt: RegisterReadAt,
+  cache: Map<string, RegisterRead> = registerByRevision,
+): Promise<RegisterRead> {
+  const kept = cache.get(revision);
+  if (kept) return kept;
+  const where = `${REGISTER_PATH}@${revision.slice(0, 12)}`;
+  const reply = await readAt(revision);
+  if (!reply.ok) return { text: null, where, unread: reply.reason ?? 'the forge did not answer' };
+  const read: RegisterRead = { text: reply.body, where };
+  cache.set(revision, read);
+  return read;
+}
+
+/** The register at the revision production runs, read through the forge once per revision. */
+async function registerAtRevision(): Promise<RegisterRead> {
   const { BRAIN_REVISION } = await import('../../env.ts');
   const { parseRemote, readFile } = await import('../factory/forge.ts');
   if (!BRAIN_REVISION) return { text: null, where: 'this process carries no BRAIN_REVISION' };
   const repository = parseRemote('https://github.com/Peyday007/V5');
   if (!repository) return { text: null, where: 'the repository is not one the forge can read' };
-  const reply = await readFile(repository, REGISTER_PATH, BRAIN_REVISION);
-  return { text: reply.ok ? reply.body : null, where: `${REGISTER_PATH}@${BRAIN_REVISION.slice(0, 12)}` };
+  return readRegisterOnce(BRAIN_REVISION, (revision) => readFile(repository, REGISTER_PATH, revision));
 }
 
 /** The architecture program's source items, from production rows. */
@@ -287,13 +327,16 @@ async function architectureItems(): Promise<{ programId: string; items: SourceIt
  */
 export async function checkRegisterOnProduction(
   sources: Partial<RegisterSources> = {},
-): Promise<{ ok: boolean; detail: string; check: RegisterCheck | null; programId: string | null; releases: number | null; registerAt: string | null }> {
+): Promise<{ ok: boolean; detail: string; check: RegisterCheck | null; programId: string | null; releases: number | null; registerAt: string | null; unread?: boolean }> {
   const loadItems = sources.loadItems ?? architectureItems;
   const readRegister = sources.readRegister ?? registerAtRevision;
   const program = await loadItems();
   if (!program) return { ok: false, detail: 'no architecture program is filed on production', check: null, programId: null, releases: null, registerAt: null };
   const ids = { programId: program.programId ?? null, releases: program.releases ? program.releases.length : null };
   const register = await readRegister();
+  if (register.unread !== undefined) {
+    return { ok: false, detail: `the register was not read this pass: ${register.unread}`, check: null, ...ids, registerAt: register.where, unread: true };
+  }
   if (register.text === null) return { ok: false, detail: `the register is not readable: ${register.where}`, check: null, ...ids, registerAt: register.where };
   const check = checkRegister(register.text, program.items, program.releases ? { releases: program.releases } : {});
   if (!check.ok) {
@@ -351,6 +394,8 @@ export function registerFingerprint(outcome: { ok: boolean; programId: string | 
 /** One pass: check, and record the outcome when it differs from the last one recorded. */
 export async function reconcileRegister(ports: RegisterPassPorts): Promise<RegisterPassReport> {
   const outcome = await ports.check();
+  // A read the forge did not answer says nothing about the register: record nothing, so the record does not churn.
+  if (outcome.unread) return { ok: false, recorded: null, detail: outcome.detail };
   const fingerprint = registerFingerprint(outcome);
   const last = await ports.latest();
   if (last && last.detail.fingerprint === fingerprint) return { ok: outcome.ok, recorded: null, detail: outcome.detail };
