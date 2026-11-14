@@ -205,6 +205,9 @@ export function capabilityRowsFromProgram(input: CapabilityRowsInput): { capabil
     for (const id of suppliedCapabilities(requirement)) suppliers.set(id, [...(suppliers.get(id) ?? []), requirement.key]);
   }
   const blocked: BlockedTransactionRow[] = [];
+  // Every requirement an open need is blocked on, whether or not the need names a
+  // transaction: an unattached need is as much evidence the need exists as an attached one.
+  const needed = new Set<string>();
   const measures = new Map<string, NeedMeasure>();
   const measureOf = (key: string): NeedMeasure => {
     let m = measures.get(key);
@@ -220,6 +223,7 @@ export function capabilityRowsFromProgram(input: CapabilityRowsInput): { capabil
     const opportunity = need.opportunityId ? input.opportunities.get(need.opportunityId) : undefined;
     const business = opportunity?.projectId ?? need.projectId ?? null;
     for (const key of suppliers.get(capability) ?? []) {
+      needed.add(key);
       const m = measureOf(key);
       if (typeof need.expectedCostCents === 'number' && Number.isFinite(need.expectedCostCents) && need.expectedCostCents >= 0) {
         m.workaroundCostCents = (m.workaroundCostCents ?? 0) + need.expectedCostCents;
@@ -238,16 +242,16 @@ export function capabilityRowsFromProgram(input: CapabilityRowsInput): { capabil
     }
   }
   const workers = typeof input.parallelWorkers === 'number' && Number.isFinite(input.parallelWorkers) ? Math.max(0, Math.floor(input.parallelWorkers)) : null;
-  const blockedKeys = new Set(blocked.map((b) => b.capabilityId));
   const capabilities: CapabilityRecordRow[] = [];
   for (const requirement of input.map.requirements) {
     const current = status.get(requirement.key);
     if (!current || !notStarted(current)) continue;
     const edges = input.edgesOf(requirement);
     const prerequisitesMet = edges.every((key) => status.get(key) === 'PRODUCTION_VERIFIED');
-    // A blocker measured now says the need exists; its absence says the need vanished only
-    // for a requirement this module promoted. Otherwise nothing is known about the need.
-    const needStillExists = blockedKeys.has(requirement.key) ? true : input.promotedHere.has(requirement.key) ? false : null;
+    // An open need blocked on it now — with or without a transaction — says the need exists;
+    // its absence says the need vanished only for a requirement this module promoted.
+    // Otherwise nothing is known about the need.
+    const needStillExists = needed.has(requirement.key) ? true : input.promotedHere.has(requirement.key) ? false : null;
     const m = measures.get(requirement.key);
     const values = m ? [...m.transactions.values()] : [];
     const others = m ? [...m.unattachedBusinesses].filter((b) => !m.attachedBusinesses.has(b)).length : 0;
