@@ -204,6 +204,18 @@ Surge B inventory but did not yet reprioritise or re-attempt Surge B work —
 nothing in flight had stalled. The post-run `show` crashed on `LIMIT NaN`
 (argument parsing in `scripts/operator.ts`, fixed e45cb30).
 
+### Production after Deploy 1070 (census Goals run 43654436460, 23:42Z, revision 7a8b565)
+
+| population | baseline 19:53Z | 23:42Z | reading |
+|---|---|---|---|
+| constructed arrangements durably stored | 0 | **404** (404 unique design signatures) | K-1 persistence VERIFIED on production |
+| sourced economic observations | 16,762 | 16,786 | +24 |
+| plan readings | 100 | 101 | — |
+| construction facts | 0 | 0 | W-5/6/7 released; facts are written by the kernel pass on its next standing round — NOT YET VERIFIED |
+| arrangements researched / evaluated / picked / transferred | n/a | 0 / 0 / 0 / 0 | counters exist; no plan read or round has run since release — NOT YET VERIFIED |
+| sectors / nodes / buyer populations | 52 / 91 / 11 | 52 / 91 / 11 | no standing round has run since release |
+| commercial positions, labor roles | not stored | not stored | K-6 repair in flight |
+
 ### Received from Surge A (22:09Z scope adjustment)
 
 | id | finding | status |
