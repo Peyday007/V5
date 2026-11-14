@@ -50,6 +50,23 @@ import {
 } from '../../repos/goals.ts';
 import { assembleGoals, type GoalView } from './model.ts';
 import { rankGoals } from './priority.ts';
+import type { ResearchYieldReading } from './researchYield.ts';
+import {
+  COMMERCIAL_FLOOR,
+  EXPLORATION_FLOOR,
+  LANE_REMEDIES,
+  MIN_PURPOSE_SHARE,
+  RESEARCH_PURPOSES,
+  SYSTEM_HEALTH_FLOOR,
+  decideResearchAllocation,
+  type AllocationDecision,
+  type AllocationInput,
+  type BottleneckMeasurement,
+  type LaneMeasurement,
+  type LaneRemedy,
+  type PurposeMeasurement,
+  type ResearchPurpose,
+} from './researchAllocation.ts';
 
 export interface GoalTickReport {
   goals: number;
@@ -57,6 +74,12 @@ export interface GoalTickReport {
   released: { binId: string; goalId: string; why: string }[];
   reprioritized: { binId: string; goalId: string; priority: number }[];
   moved: { goalId: string; from: number | null; to: number; reason: string }[];
+  /**
+   * The research allocation across the five purposes (RES-07, RES-15-5), decided
+   * from the window's measured yield at most once an hour. Null when the pass was
+   * not due; an error is reported here, never thrown into the tick.
+   */
+  research?: ResearchAllocationReport | { error: string } | null;
 }
 
 const LIVE = new Set(['DRAFT', 'READY', 'LEASED', 'NEEDS_HUMAN']);
@@ -211,5 +234,236 @@ export async function advanceGoals(options?: { now?: string }): Promise<GoalTick
     report.moved.push({ goalId: rank.id, from: last ? last.rank : null, to: rank.rank, reason: why.reason });
   }
 
+  report.research = await reallocateResearchIfDue({ goals: snapshot.goals, now: options?.now });
   return report;
+}
+
+/* ------------------------------------------------------------------------- */
+/* Research allocation across the five purposes (RES-07, RES-15-5)            */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * The goals tick is the allocation owner, so the research allocation runs here
+ * rather than in a new scheduler (§10.3, §20.4). Each pass reads one window of
+ * measured yield (`researchYieldByPurpose`: per-lane and per-purpose jobs,
+ * claims, useful results and job time, each job's cost counted once), hands it
+ * to the pure decision (`decideResearchAllocation`: marginal useful outcome per
+ * unit of cost, deadlines and bottlenecks move the shares, floors keep
+ * exploration, system health and the urgent commercial goal), and records the
+ * decision when it changed.
+ *
+ * What the pass does with the decision, and what it never does:
+ *
+ *   * It records one append-only `GOAL_RESEARCH_REALLOCATED` event on every live
+ *     goal, carrying the five shares, the floors that held, every reason, the
+ *     lane remedies and the capacity verdicts. That is the decision made
+ *     visible on the surface that already shows a goal's history (the goal's
+ *     events). The research purposes are Brain-wide, so every live goal carries
+ *     the same decision; the closed project event vocabulary has no member for
+ *     it, and this pass does not widen it.
+ *   * A low-actionability lane is given its next remedy (question design, then
+ *     evidence sources, then model routing) before any limit is raised for it,
+ *     and a remedy already recorded for a lane is passed back as tried.
+ *   * A capacity change is only ever recorded as a recommendation naming the
+ *     measured constraint and its cost. The pass starts no work, spends
+ *     nothing, raises no limit and takes no worker's item. It does not write bin
+ *     priorities either: the allocation stage above is their one writer.
+ *
+ * An unchanged decision writes nothing, so a quiet hour leaves no rows.
+ */
+export const RESEARCH_ALLOCATION_EVERY_MS = 60 * 60_000;
+/** The consistent window each decision is measured over. */
+export const RESEARCH_ALLOCATION_WINDOW_MS = 24 * 60 * 60_000;
+export const RESEARCH_REALLOCATED_EVENT = 'GOAL_RESEARCH_REALLOCATED';
+
+export interface ResearchAllocationReport {
+  window: { since: string; until: string };
+  shares: Record<ResearchPurpose, number>;
+  floors: { exploration: number; systemHealth: number; commercial: number | null; perPurpose: number };
+  changed: boolean;
+  held: boolean;
+  laneActions: AllocationDecision['laneActions'];
+  /** Capacity verdicts; an ADD_CAPACITY is a recommendation only. */
+  capacity: AllocationDecision['capacity'];
+  recordedOn: string[];
+  fingerprint: string;
+}
+
+export interface ResearchAllocationPorts {
+  readYield(window: { since: string; until: string }): Promise<ResearchYieldReading>;
+  /** The newest recorded decision's detail on a goal, or null. */
+  lastDecision(goalId: string): Promise<Record<string, unknown> | null>;
+  recordGoal(goalId: string, summary: string, detail: Record<string, unknown>): Promise<void>;
+}
+
+const round3 = (n: number) => Math.round(n * 1000) / 1000;
+
+/** The measured inputs one window gives the decision. Pure. */
+export function allocationInputFrom(
+  reading: ResearchYieldReading,
+  context: { urgentCommercialGoal: boolean; nearestDeadlineDays: number | null; triedRemedies: Map<string, LaneRemedy[]> },
+): AllocationInput {
+  // The shares in force are where the capacity actually went: each purpose's job time in the window.
+  const currentShares: Partial<Record<ResearchPurpose, number>> = {};
+  for (const p of RESEARCH_PURPOSES) currentShares[p] = reading.purposes[p]?.jobMs ?? 0;
+  const purposes: PurposeMeasurement[] = RESEARCH_PURPOSES.map((p) => {
+    const b = reading.purposes[p];
+    const ran = !!b && b.submissions + b.completions > 0 && b.jobMs > 0;
+    return {
+      purpose: p,
+      usefulResults: ran ? b!.usefulResults : null,
+      // Job time is the cost every job records; it is split once across a job's purposes.
+      cost: ran ? b!.jobMs : null,
+      ...(p === 'TRANSACTION_ROUTES' && context.nearestDeadlineDays !== null ? { nearestDeadlineDays: context.nearestDeadlineDays } : {}),
+    };
+  });
+  const lanePurposes = new Map<string, Set<ResearchPurpose>>();
+  for (const a of reading.attributions) {
+    const set = lanePurposes.get(a.lane) ?? new Set<ResearchPurpose>();
+    for (const p of a.purposes) if (p !== 'UNATTRIBUTED') set.add(p);
+    lanePurposes.set(a.lane, set);
+  }
+  const lanes: LaneMeasurement[] = [];
+  const bottlenecks: BottleneckMeasurement[] = [];
+  for (const [lane, b] of Object.entries(reading.lanes)) {
+    const served = [...(lanePurposes.get(lane) ?? [])];
+    lanes.push({
+      lane,
+      purposes: served,
+      claims: b.acceptedClaims,
+      // An actionable link: a qualified position (buyer, price, fulfilment), an executable offer or a paid transaction.
+      actionableLinks: b.qualifiedPositions + b.executableOffers + b.paidTransactions,
+      triedRemedies: context.triedRemedies.get(lane) ?? [],
+    });
+    const attempts = b.completions + b.failures.total;
+    bottlenecks.push({
+      lane,
+      purposes: served,
+      resource: b.failures.rateLimited > 0 ? 'MODEL_RATE_LIMIT' : null,
+      qualifiedQueued: b.inFlight,
+      queueWaitMs: b.queueWait.medianMs,
+      measuredMachineLimit: b.failures.rateLimited > 0,
+      // Nothing in the window measures quota headroom or the cost of another unit: unknown, never assumed.
+      quotaHeadroom: null,
+      reliability: attempts > 0 ? b.completions / attempts : null,
+      ownedByAnotherWorker: false,
+      incrementalCostPerUnit: null,
+    });
+  }
+  return { currentShares, purposes, lanes, bottlenecks, urgentCommercialGoal: context.urgentCommercialGoal };
+}
+
+/** What makes two decisions the same: shares to a tenth of a percent, lane remedies and capacity verdicts. */
+export function allocationFingerprint(decision: AllocationDecision): string {
+  return JSON.stringify({
+    shares: RESEARCH_PURPOSES.map((p) => round3(decision.shares[p])),
+    lanes: decision.laneActions.map((a) => `${a.lane}:${a.kind}`).sort(),
+    capacity: decision.capacity.map((c) => `${c.lane}:${c.kind}:${c.units}`).sort(),
+  });
+}
+
+/** Remedies already recorded for each lane, from the newest decision: passed back so the next one is tried. */
+export function triedRemediesFrom(detail: Record<string, unknown> | null): Map<string, LaneRemedy[]> {
+  const out = new Map<string, LaneRemedy[]>();
+  const actions = Array.isArray(detail?.laneActions) ? (detail!.laneActions as { lane?: unknown; remedy?: unknown; tried?: unknown }[]) : [];
+  for (const a of actions) {
+    if (typeof a.lane !== 'string') continue;
+    const tried = Array.isArray(a.tried) ? a.tried.filter((r): r is LaneRemedy => (LANE_REMEDIES as readonly string[]).includes(String(r))) : [];
+    const now = typeof a.remedy === 'string' && (LANE_REMEDIES as readonly string[]).includes(a.remedy) ? [a.remedy as LaneRemedy] : [];
+    out.set(a.lane, [...new Set([...tried, ...now])]);
+  }
+  return out;
+}
+
+/** One allocation pass over the live goals. */
+export async function reallocateResearch(input: { goals: GoalView[]; now?: string }, ports: ResearchAllocationPorts): Promise<ResearchAllocationReport> {
+  const untilMs = input.now ? Date.parse(input.now) : Date.now();
+  const window = { since: new Date(untilMs - RESEARCH_ALLOCATION_WINDOW_MS).toISOString(), until: new Date(untilMs).toISOString() };
+  const live = input.goals.filter((g) => g.lifecycle === 'ACTIVE');
+  const deadlines = live
+    .filter((g) => g.target && g.dueAt && Date.parse(g.dueAt) > untilMs)
+    .map((g) => (Date.parse(g.dueAt!) - untilMs) / 86_400_000);
+  const urgentCommercialGoal = deadlines.length > 0;
+  const previous = live.length > 0 ? await ports.lastDecision(live[0]!.id) : null;
+  const tried = triedRemediesFrom(previous);
+  const reading = await ports.readYield(window);
+  const decision = decideResearchAllocation(
+    allocationInputFrom(reading, { urgentCommercialGoal, nearestDeadlineDays: deadlines.length ? Math.min(...deadlines) : null, triedRemedies: tried }),
+  );
+  const fingerprint = allocationFingerprint(decision);
+  const floors = {
+    exploration: EXPLORATION_FLOOR,
+    systemHealth: SYSTEM_HEALTH_FLOOR,
+    commercial: urgentCommercialGoal ? COMMERCIAL_FLOOR : null,
+    perPurpose: MIN_PURPOSE_SHARE,
+  };
+  const detail: Record<string, unknown> = {
+    fingerprint,
+    window,
+    shares: Object.fromEntries(RESEARCH_PURPOSES.map((p) => [p, round3(decision.shares[p])])),
+    floors,
+    held: decision.held,
+    changes: decision.changes.map((c) => ({ purpose: c.purpose, from: round3(c.from), to: round3(c.to), reasons: c.reasons })),
+    laneActions: decision.laneActions.map((a) => ({ ...a, tried: tried.get(a.lane) ?? [] })),
+    capacity: decision.capacity.map((c) => ({ ...c, recommendationOnly: true })),
+    bottlenecks: decision.capacity.filter((c) => c.resource !== null).map((c) => ({ lane: c.lane, resource: c.resource })),
+    costCountedOnce: reading.costCountedOnce,
+    notes: [...decision.notes, ...reading.notes].slice(0, 20),
+  };
+  const recordedOn: string[] = [];
+  for (const goal of live) {
+    const last = goal.id === live[0]?.id ? previous : await ports.lastDecision(goal.id);
+    if (last && last.fingerprint === fingerprint) continue;
+    const summary = decision.held
+      ? 'Research allocation held: nothing in the window was measured.'
+      : `Research reallocated: ${RESEARCH_PURPOSES.map((p) => `${p} ${(decision.shares[p] * 100).toFixed(1)}%`).join(', ')}`;
+    await ports.recordGoal(goal.id, summary.slice(0, 400), detail);
+    recordedOn.push(goal.id);
+  }
+  return {
+    window,
+    shares: decision.shares,
+    floors,
+    changed: recordedOn.length > 0,
+    held: decision.held,
+    laneActions: decision.laneActions,
+    capacity: decision.capacity,
+    recordedOn,
+    fingerprint,
+  };
+}
+
+/** The production rows: the yield reader, the goal's own event history, and the project event log. */
+export async function productionResearchAllocationPorts(): Promise<ResearchAllocationPorts> {
+  const { researchYieldByPurpose } = await import('./researchYield.ts');
+  const { listWorkstreamEvents } = await import('../../repos/register.ts');
+  return {
+    readYield: (window) => researchYieldByPurpose(window),
+    async lastDecision(goalId) {
+      const events = await listWorkstreamEvents(goalId, 200);
+      const newest = events.find((e) => e.kind === RESEARCH_REALLOCATED_EVENT);
+      return newest ? (newest.detail as Record<string, unknown>) : null;
+    },
+    async recordGoal(goalId, summary, detail) {
+      await recordWorkstreamEvent({ workstreamId: goalId, kind: RESEARCH_REALLOCATED_EVENT, summary, detail, actorRef: 'BRAIN' });
+    },
+  };
+}
+
+let lastResearchAllocation = 0;
+
+/** At most once an hour, from the goals tick. A failure is reported, never thrown into the tick. */
+export async function reallocateResearchIfDue(
+  input: { goals: GoalView[]; now?: string },
+  ports?: ResearchAllocationPorts,
+  clock: { nowMs?: number; force?: boolean } = {},
+): Promise<ResearchAllocationReport | { error: string } | null> {
+  const nowMs = clock.nowMs ?? Date.now();
+  if (!clock.force && nowMs - lastResearchAllocation < RESEARCH_ALLOCATION_EVERY_MS) return null;
+  lastResearchAllocation = nowMs;
+  try {
+    return await reallocateResearch(input, ports ?? (await productionResearchAllocationPorts()));
+  } catch (error) {
+    return { error: error instanceof Error ? error.message.slice(0, 300) : String(error) };
+  }
 }
