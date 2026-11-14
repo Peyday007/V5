@@ -686,3 +686,169 @@ export function challenge(input: ChallengeInput): ChallengeReport {
         : 'PASS';
   return { scrutiny, ran, findings, exposure, independentValidation: { counted, refusedAsSelfAgreement, disagreeing }, kinds, improvements, verdict };
 }
+
+// ─── The production entry point ─────────────────────────────────────────────
+
+/** What the optimizer carries on its assurance: the report, with every proposal's reading reduced to the numbers a reader needs. */
+export interface ChallengeSummary {
+  scrutiny: Scrutiny;
+  /** The consequence the tier was chosen from, derived from the plan itself. */
+  action: ScrutinyInput;
+  ran: ChallengeMethod[];
+  findings: ChallengeFinding[];
+  exposures: SharedExposure[];
+  proposals: Array<{
+    kind: ExposureProposal['kind'];
+    exposure: string;
+    description: string;
+    keys: string[];
+    reach: number;
+    reachIfItFails: number;
+    capitalBefore: number;
+    capitalAfter: number;
+    assurance: { status: Assurance['status']; range: { low: number; high: number } | null; claimsAtLeast90: boolean };
+    defensible: boolean;
+    requires: string[];
+  }>;
+  recommended: string | null;
+  researchNeeds: string[];
+  independentValidation: { counted: number; refusedAsSelfAgreement: number; disagreeing: number };
+  kinds: FourKinds;
+  improvements: string[];
+  /** `CHALLENGE_FAILED` when the challenge itself threw: recorded, never read as a pass. */
+  verdict: ChallengeVerdict | 'CHALLENGE_FAILED';
+  error?: string;
+}
+
+/** What a caller of the optimizer may add to the challenge of its plan. Everything is optional; the plan alone decides the tier. */
+export interface PlanChallengeOptions {
+  facts?: Record<string, ActivityFacts>;
+  checks?: IndependentCheck[];
+  accepted?: { by: string; at: string };
+  actual?: ActualResult;
+  producedBy?: { model: string; dataSource: string };
+  thresholds?: ScrutinyThresholds;
+  now?: string;
+}
+
+/** The model that produced an optimizer result: a check from it is self-agreement. */
+export const OPTIMIZER_PRODUCER = { model: 'quant/portfolio optimizePortfolio', dataSource: 'portfolio problem samples' };
+
+/**
+ * The consequence of acting on an optimizer's recommendation, read from the
+ * plan's own numbers. Potential loss is what the combination can take out of
+ * the account (its members' capital, money already committed, gates it may
+ * buy); the reference is the target; a fixed commitment makes it
+ * irreversible; model uncertainty is how far the defensible lower bound sits
+ * below certainty (all of it when calibration is unavailable); correlated
+ * exposure is the share of members that share a resource, risk group or
+ * market with another member; decision impact is how much reach the choice
+ * gains over the runner-up — or, when there is no other feasible choice and
+ * the decision is only whether to commit, the share of the target the
+ * commitment puts at stake. A combination of more than one member is a
+ * portfolio-wide assumption. No category or name enters any of it.
+ */
+export function actionOfPlan(problem: PortfolioProblem, result: PortfolioResult): ScrutinyInput {
+  const best = result.best;
+  const keys = best?.keys ?? [];
+  const byKey = new Map(problem.activities.map((a) => [a.key, a]));
+  const gateIds = new Set(keys.flatMap((k) => (byKey.get(k)?.gated ? [byKey.get(k)!.gated!.gate] : [])));
+  const gateCost = (problem.gates ?? []).filter((g) => gateIds.has(g.id)).reduce((sum, g) => sum + g.cost, 0);
+  const potentialLoss = capitalOf(problem, keys) + Math.max(0, problem.fixedCost ?? 0) + gateCost;
+  const assurance = result.assurance ?? assess(problem, best);
+  const modelUncertainty = assurance.range ? 1 - assurance.range.low : 1;
+  const counts = new Map<string, number>();
+  for (const k of keys) for (const e of new Set(exposuresOf(byKey.get(k)!, undefined).map(exposureKey))) counts.set(e, (counts.get(e) ?? 0) + 1);
+  const sharing = keys.filter((k) => exposuresOf(byKey.get(k)!, undefined).some((e) => (counts.get(exposureKey(e)) ?? 0) >= 2)).length;
+  const runnerUp = result.ranked.find((r) => r.feasible && r !== best);
+  return {
+    potentialLoss,
+    reference: problem.target,
+    irreversible: (problem.fixedCost ?? 0) > 0,
+    modelUncertainty,
+    correlatedExposure: keys.length ? sharing / keys.length : 0,
+    decisionImpact: !best ? 0 : runnerUp ? Math.max(0, best.reach - runnerUp.reach) : problem.target > 0 ? Math.min(1, potentialLoss / problem.target) : 1,
+    portfolioWide: keys.length > 1,
+  };
+}
+
+/** Reduce a report to what travels with the plan read. */
+export function summarizeChallenge(report: ChallengeReport, action: ScrutinyInput): ChallengeSummary {
+  return {
+    scrutiny: report.scrutiny,
+    action,
+    ran: report.ran,
+    findings: report.findings,
+    exposures: report.exposure?.exposures ?? [],
+    proposals: (report.exposure?.proposals ?? []).map((p) => ({
+      kind: p.kind,
+      exposure: p.exposure,
+      description: p.description,
+      keys: p.keys,
+      reach: p.reading.reach,
+      reachIfItFails: p.reachIfItFails,
+      capitalBefore: p.capitalBefore,
+      capitalAfter: p.capitalAfter,
+      assurance: { status: p.assurance.status, range: p.assurance.range, claimsAtLeast90: p.assurance.claimsAtLeast90 },
+      defensible: p.defensible,
+      requires: p.requires,
+    })),
+    recommended: report.exposure?.recommended?.description ?? null,
+    researchNeeds: report.exposure?.researchNeeds ?? [],
+    independentValidation: {
+      counted: report.independentValidation.counted.length,
+      refusedAsSelfAgreement: report.independentValidation.refusedAsSelfAgreement.length,
+      disagreeing: report.independentValidation.disagreeing.length,
+    },
+    kinds: report.kinds,
+    improvements: report.improvements,
+    verdict: report.verdict,
+  };
+}
+
+/**
+ * Challenge an optimizer's own recommendation at the depth its consequence
+ * earns — the entry point `optimizePortfolio` uses, so every plan Brain reads
+ * carries its challenge. A challenge that throws is recorded as
+ * `CHALLENGE_FAILED` with its reason; it never becomes a pass.
+ */
+export function challengePlan(problem: PortfolioProblem, result: PortfolioResult, options: PlanChallengeOptions = {}): ChallengeSummary {
+  const action = actionOfPlan(problem, result);
+  try {
+    const report = challenge({
+      problem,
+      result,
+      action,
+      producedBy: options.producedBy ?? OPTIMIZER_PRODUCER,
+      ...(options.thresholds ? { thresholds: options.thresholds } : {}),
+      ...(options.facts ? { facts: options.facts } : {}),
+      ...(options.checks ? { checks: options.checks } : {}),
+      ...(options.accepted ? { accepted: options.accepted } : {}),
+      ...(options.actual ? { actual: options.actual } : {}),
+      ...(options.now ? { now: options.now } : {}),
+    });
+    return summarizeChallenge(report, action);
+  } catch (err) {
+    const assurance = result.assurance ?? assess(problem, result.best);
+    return {
+      scrutiny: scrutinyFor(action, options.thresholds),
+      action,
+      ran: [],
+      findings: [],
+      exposures: [],
+      proposals: [],
+      recommended: null,
+      researchNeeds: [],
+      independentValidation: { counted: 0, refusedAsSelfAgreement: 0, disagreeing: 0 },
+      kinds: {
+        CALCULATED_SCENARIO: { coverage: result.best?.reach ?? null, worlds: problem.worlds ?? null },
+        CALIBRATED_PROBABILITY: assurance.status === 'CALIBRATION_UNAVAILABLE' ? null : { status: assurance.status, range: assurance.range, claimsAtLeast90: assurance.claimsAtLeast90 },
+        ACCEPTED_PLAN: null,
+        ACTUAL_RESULT: null,
+      },
+      improvements: [],
+      verdict: 'CHALLENGE_FAILED',
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
