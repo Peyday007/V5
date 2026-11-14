@@ -8,12 +8,18 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { freshProject, teardown } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { createNode } from '../server/repos/industry.ts';
+import { createUser } from '../server/repos/identity.ts';
+import { createWorkstream } from '../server/repos/register.ts';
+import { recordConstructionFact } from '../server/repos/construction.ts';
+import { assembleEvidence, evidenceFromMap } from '../server/services/industry/construction/service.ts';
 import { lastMileDelivery } from '../server/services/industry/construction/references.ts';
 import { constructBusinesses } from '../server/services/industry/construction/businesses.ts';
 import { commercialRoles } from '../server/services/industry/construction/roles.ts';
 import {
   OBSERVED_INPUTS,
   adaptation,
+  adaptationToRecorded,
+  observedInputOf,
   heldFromRows,
   openWorld,
   openWorldHoldsOnRows,
@@ -105,10 +111,42 @@ describe('no new mechanism', () => {
   });
 });
 
+describe('adaptation to recorded rows', () => {
+  const e = lastMileDelivery();
+  const map = { actors: e.actors, segments: e.segments, flows: e.flows, chokepoints: e.chokepoints, adjacencies: e.adjacencies, gates: e.gates, failures: e.failures, provenance: [] };
+  const fact = (key: 'price_per_unit' | 'buyer_payment_days', low: number, high: number) => ({ key, segment: null, low, high, status: 'OBSERVED' as const, measures: key, source: { title: 'buyer quote', url: null, kind: 'OUTCOME' as const } });
+
+  it('re-evaluates on recorded observed rows, and names the inputs they move', () => {
+    const reacted = adaptationToRecorded({ text: e.industry, industry: e.industry, map, recorded: [fact('price_per_unit', 2, 3), fact('buyer_payment_days', 90, 120)] }, assembleEvidence, NOTHING_HELD);
+    expect(reacted.observed).toHaveLength(2);
+    expect(reacted.inputs).toEqual(['FINANCING', 'PRICE']);
+    expect(reacted.changed).toBe(true);
+  });
+
+  it('invents nothing: with no observed row recorded there is no adaptation to show', () => {
+    const reacted = adaptationToRecorded({ text: e.industry, industry: e.industry, map, recorded: [] }, assembleEvidence, NOTHING_HELD);
+    expect(reacted.observed).toHaveLength(0);
+    expect(reacted.changed).toBe(false);
+    expect(reacted.after).toBe(reacted.before);
+    expect(reacted.detail).toMatch(/no observed/);
+  });
+
+  it('classifies every observed key into exactly one input', () => {
+    for (const [input, keys] of Object.entries(OBSERVED_INPUTS)) for (const k of keys) expect(observedInputOf(k)).toBe(input);
+  });
+
+  it('the probe reader overlays no invented figure', () => {
+    const source = readFileSync('server/services/industry/construction/openWorld.ts', 'utf8');
+    const probe = source.slice(source.indexOf('export async function openWorldHoldsOnRows'));
+    expect(probe).not.toMatch(/withObserved|set:\s*\{\s*low|factor:/);
+    expect(probe).toMatch(/listConstructionFacts/);
+  });
+});
+
 describe('openWorldHoldsOnRows (r01.arch-01)', () => {
   afterAll(teardown);
 
-  it('says so on an empty map, holds on rows once a flow is recorded, and writes nothing', async () => {
+  it('says so on an empty map, refuses without recorded observations, holds once a real row is recorded, and writes nothing', async () => {
     const { project } = await freshProject();
     expect((await openWorldHoldsOnRows()).ok).toBe(false);
 
@@ -116,12 +154,28 @@ describe('openWorldHoldsOnRows (r01.arch-01)', () => {
     const buyer = await createNode({ projectId: project.id, parentId: root.node.id, kind: 'BUYER_TYPE', name: 'property managers', origin: 'SEED' });
     await createNode({ projectId: project.id, parentId: buyer.node.id, kind: 'TRANSACTION_TYPE', name: 'monthly janitorial contract', description: 'paid monthly per building', origin: 'SEED' });
 
-    const tables = ['industry_nodes', 'cash_opportunities', 'opportunity_constraints', 'project_events'];
+    const tables = ['industry_nodes', 'cash_opportunities', 'opportunity_constraints', 'project_events', 'construction_facts'];
     const count = async () => Promise.all(tables.map(async (t) => (await getDb().all<{ n: number }>(`SELECT COUNT(*) AS n FROM ${t}`))[0]!.n));
+
+    // Arrangements exist, but no observation is recorded: adaptation is not claimed.
+    const unobserved = await openWorldHoldsOnRows();
+    expect(unobserved.ok).toBe(false);
+    expect(unobserved.detail).toMatch(/no cash, demand, price, capacity or financing fact is recorded/);
+
+    const user = await createUser({ email: `ow-${Math.random().toString(36).slice(2, 10)}@example.test`, displayName: 'Owner', password: 'correct horse battery staple' });
+    const goal = await createWorkstream({ projectId: project.id, title: 'Cleaning', intent: 'I want to enter commercial cleaning with 5000 dollars.', purpose: 'LONG_TERM', createdByUserId: user.id });
+    await recordConstructionFact({
+      projectId: project.id,
+      workstreamId: goal.id,
+      fact: { key: 'price_per_unit', segment: null, low: 40, high: 55, status: 'OBSERVED', measures: 'a property manager quoted per building visit', sourceTitle: 'buyer quote', sourceUrl: null },
+      recordedBy: `person:${user.id}`,
+    });
+
     const before = await count();
     const held = await openWorldHoldsOnRows();
     expect(await count()).toEqual(before);
     expect(held.ok, held.detail).toBe(true);
     expect(held.detail).toMatch(/roles no record represents/);
+    expect(held.detail).toMatch(/recorded price row/);
   });
 });
