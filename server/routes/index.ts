@@ -26,6 +26,7 @@ import { cashRouter } from './cash.ts';
 import { laborRouter } from './labor.ts';
 import { manufacturingRouter } from './manufacturing.ts';
 import { scenarioRouter } from './scenario.ts';
+import { causalRouter } from './causal.ts';
 import { invitationsRouter } from './invitations.ts';
 import { passkeyRouter } from './passkeys.ts';
 import { peopleRouter } from './people.ts';
@@ -141,6 +142,9 @@ export function createApiRouter(): Router {
   // The scenario engine (§60). Root-mounted, before the projects router, for
   // the labor kernel's reason: its routes carry their own prefix.
   router.use(scenarioRouter);
+  // The causal graph's door (CAUSAL-14-4). Root-mounted before the projects
+  // router for the same reason: its routes carry their own prefix.
+  router.use(causalRouter);
 
   router.use(apiNotFound);
   router.use(errorMiddleware);
