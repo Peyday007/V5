@@ -24,7 +24,7 @@
  *   winds the sprint down (`launchableUnderCashMode`).
  * - **STANDING** — no active sprint, and a live standing research grant other
  *   than the sprint's own (§80's grant shape). Its rounds are filed with no
- *   sprint (`cash_mode_id` NULL, migration 152), carry the neutral standing
+ *   sprint (`cash_mode_id` NULL, migration 149), carry the neutral standing
  *   context line, and ask only the structural questions (BOOTSTRAP and MAP):
  *   an opening search files openings into a sprint's portfolio, and there is
  *   none. Revoking or letting that grant expire is what stops it. The sprint's
