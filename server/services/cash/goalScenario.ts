@@ -41,7 +41,7 @@ import { SCENARIO_LIMITS, type ScenarioModelDefinition, type ScenarioVariable, t
 import type { Workstream } from '../../domain/register.ts';
 import type { TargetReading } from '../goals/target.ts';
 import { inferCashQuantity, loadCashKnowledge, type CashKnowledge, type CashQuantity } from '../quant/knowledge.ts';
-import { toScenarioInput } from '../quant/export.ts';
+import { inputSample, toScenarioInput, type InputSample } from '../quant/export.ts';
 import { evaluateGoalPortfolio, type GoalPortfolio } from '../goals/portfolio.ts';
 import type { Estimate, EvidenceTier } from '../../domain/quant.ts';
 import type { VariableSpec } from '../../domain/scenario.ts';
@@ -98,7 +98,8 @@ export interface ModelInput {
    * causal chain, it only replaces a blind sweep with an evidenced one.
    */
   distribution?: VariableSpec;
-  inferred?: { tier: EvidenceTier; justified: boolean; p10: number; p50: number; p90: number; observations: number };
+  /** `observations` counts studies; the evidence in events and populations is `InputSample` (Q2-2). */
+  inferred?: { tier: EvidenceTier; justified: boolean; p10: number; p50: number; p90: number; observations: number } & Partial<InputSample>;
 }
 
 export interface ModelledOpportunity {
@@ -372,7 +373,7 @@ function inferOr(knowledge: CashKnowledge | null, quantity: CashQuantity, opport
     source: exported.sources[0] ?? null,
     note: `inferred${what}: ${exported.note}`,
     distribution: exported.spec,
-    inferred: { tier: est.tier, justified: exported.provenance === 'EVIDENCE', p10: scaled.p10, p50: scaled.p50, p90: scaled.p90, observations: est.used.length },
+    inferred: { tier: est.tier, justified: exported.provenance === 'EVIDENCE', p10: scaled.p10, p50: scaled.p50, p90: scaled.p90, observations: est.used.length, ...inputSample(est) },
   };
 }
 

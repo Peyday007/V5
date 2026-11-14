@@ -34,8 +34,8 @@
  * evidence; otherwise it is coverage of the tested conditions and says so —
  * and says which inputs keep it from being one.
  */
-import { optimizePortfolio, type Activity, type Assurance, type PortfolioReading, type Safeguard, type SafeguardEffect } from '../quant/portfolio.ts';
-import { makeRng } from '../scenario/random.ts';
+import { evaluateCombination, MIN_EVIDENCE_SAMPLE, optimizePortfolio, type Activity, type Assurance, type LimitingInput, type ParameterReach, type PortfolioProblem, type PortfolioReading, type Safeguard, type SafeguardEffect } from '../quant/portfolio.ts';
+import { inverseNormal, makeRng } from '../scenario/random.ts';
 import { cachedCashKnowledge, type CashKnowledge } from '../quant/knowledge.ts';
 import { acquireMarketHistory, historyEvidence, type MarketHistory } from '../quant/history.ts';
 import type { ModelInput, ModelledOpportunity } from '../cash/goalScenario.ts';
@@ -144,6 +144,8 @@ export interface DemandEstimate {
   justified: boolean;
   /** Each input that does not, by name. */
   unestablished: string[];
+  /** What each input rests on, in the one representation links and assurance both read (Q2-1). */
+  inputs?: Array<{ name: string } & InputEvidence>;
   /** Why it cannot be part of any combination, when it cannot. */
   refused: string | null;
 }
@@ -236,15 +238,162 @@ export interface GoalPortfolio {
 }
 
 /**
- * The independent real observations behind one opening's samples, or
- * undefined when any input that is drawn states none (invariant 39: an
- * unstated sample is never read as a large one). An inferred input carries the
- * observations it was reconstructed from; a fixed term (a price, a cost, days
- * to cash) is a fact rather than a draw and does not bound the sample; a fixed
- * behavioural rate (reply, close, the deals a market takes) is a rate somebody
- * measured on a sample nobody stated, so it does.
+ * What one input of an opening rests on (Q2-1, 2026-11-14): the single
+ * representation the plan's chain links (`goals/plan.ts`) and the assurance
+ * both read, so an input can no longer pass its link in one shape and fail
+ * the probability in another.
+ *
+ *   FACT              a stated term or a sourced count (a price, a cost, a
+ *                     volume from a register): no parameter to redraw
+ *   HISTORICAL        this Brain's own measured outcomes
+ *   DIRECT            sized evidence about this exact population
+ *   COMPARABLE        sized evidence from other populations; it establishes
+ *                     a link only from two or more independent *sized* ones
+ *   COMPONENT         rebuilt from parts that are all evidence
+ *   SINGLE_COMPARABLE one other population: bounds only
+ *   UNSIZED           published figures nobody stated a sample for, or a
+ *                     fixed behavioural rate with no sample: bounds only
+ *   BOUNDS            a published range of a term, swept
+ *   MECHANISM, ASSUMED, UNKNOWN never establish anything
  */
-const BEHAVIOURAL: ReadonlySet<keyof ModelledOpportunity> = new Set(['respond', 'close', 'volume']);
+export type InputTier = 'CONTESTED' | 'FACT' | 'HISTORICAL' | 'DIRECT' | 'COMPARABLE' | 'COMPONENT' | 'SINGLE_COMPARABLE' | 'UNSIZED' | 'BOUNDS' | 'MECHANISM' | 'ASSUMED' | 'UNKNOWN';
+
+export interface InputEvidence {
+  tier: InputTier;
+  /** What its distribution is worth in events; null for a fact or when nothing states it. */
+  events: number | null;
+  populations: number;
+  sizedPopulations: number;
+  /** May it establish its link of the causal chain? */
+  establishes: boolean;
+  /** Does it carry an evidenced distribution the assurance can redraw from? */
+  drawable: boolean;
+  /** Why a probability resting on it cannot be verified, when it cannot. */
+  unverifiable: string | null;
+  /** The research that would make it establish (or narrow it), when it does not. */
+  need: string | null;
+}
+
+/** The behavioural rates: the inputs a probability claim's sample is counted on. */
+export const BEHAVIOURAL_RATES: ReadonlySet<keyof ModelledOpportunity> = new Set(['respond', 'close']);
+
+const LABEL: Partial<Record<keyof ModelledOpportunity, string>> = {
+  price: 'price',
+  daysToCash: 'days to usable cash',
+  respond: 'reply rate',
+  close: 'close rate',
+  directCost: 'direct cost',
+  volume: 'deals the market can take',
+  capital: 'money tied up',
+};
+
+export function inputEvidence(input: ModelInput, field: keyof ModelledOpportunity): InputEvidence {
+  const label = LABEL[field] ?? String(field);
+  const rate = BEHAVIOURAL_RATES.has(field);
+  const none = { events: null, populations: 0, sizedPopulations: 0, drawable: false } as const;
+  const evidenced = input.provenance === 'EVIDENCE' || input.provenance === 'HISTORICAL';
+  if (input.value !== null) {
+    if (!evidenced) return { tier: 'ASSUMED', ...none, establishes: false, unverifiable: `${label} is assumed (${input.provenance.toLowerCase()})`, need: `${label}: nobody has measured it — find a sized published figure or measure it` };
+    // Agreements per contact already include replying: an identity, not a rate.
+    if (field === 'respond' && input.value === 1 && input.provenance === 'HISTORICAL') return { tier: 'FACT', ...none, establishes: true, unverifiable: null, need: null };
+    if (rate) {
+      return {
+        tier: 'UNSIZED',
+        ...none,
+        establishes: input.provenance === 'HISTORICAL',
+        unverifiable: `${label} is a fixed figure with no stated sample, so its uncertainty is unknown`,
+        need: `${label}: state the sample behind the figure (how many were asked, how many agreed), or acquire the market's historical record of it (bid/win or transaction counts)`,
+      };
+    }
+    return { tier: 'FACT', ...none, establishes: true, unverifiable: null, need: null };
+  }
+  const inferred = input.inferred;
+  const d = input.distribution;
+  if (inferred?.contested) {
+    // Sources that contradict each other are a question for research, never a number to rest a link on (L-1).
+    return {
+      tier: 'CONTESTED',
+      events: 0,
+      populations: inferred.populations ?? inferred.observations,
+      sizedPopulations: inferred.sizedPopulations ?? 0,
+      drawable: false,
+      establishes: false,
+      unverifiable: `${label} is contested: ${inferred.contested}`,
+      need: `${label}: resolve the contradiction (${inferred.contested}) — find which definition or population each source measured, or a third independent sized source`,
+    };
+  }
+  if (input.provenance === 'HISTORICAL') {
+    if (d && d.kind === 'EMPIRICAL' && inferred) {
+      const events = inferred.events ?? null;
+      return { tier: 'HISTORICAL', events, populations: 1, sizedPopulations: 1, drawable: true, establishes: true, unverifiable: events === null ? `${label} states no sample in events` : null, need: null };
+    }
+    return {
+      tier: 'HISTORICAL',
+      ...none,
+      establishes: true,
+      unverifiable: `${label} is measured on this Brain but carried as bounds, without the counts it was measured on`,
+      need: `${label}: carry this Brain's measured count (successes out of trials) as a distribution`,
+    };
+  }
+  if (inferred && inferred.justified && d && d.kind !== 'RANGE') {
+    const events = inferred.events ?? null;
+    const populations = inferred.populations ?? inferred.observations;
+    const sized = inferred.sizedPopulations ?? 0;
+    const tier = inferred.tier as InputTier;
+    const enoughPopulations = tier === 'DIRECT' || tier === 'COMPONENT' || sized >= 2;
+    const enoughEvents = !rate || (events !== null && events >= MIN_EVIDENCE_SAMPLE);
+    const establishes = (tier === 'DIRECT' || tier === 'COMPARABLE' || tier === 'COMPONENT') && enoughPopulations && enoughEvents;
+    return {
+      tier,
+      events,
+      populations,
+      sizedPopulations: sized,
+      drawable: true,
+      establishes,
+      unverifiable: establishes ? null : !enoughPopulations ? `${label} rests on ${sized} independent sized population(s); two are needed before transferred evidence is a distribution` : `${label} is worth ${events ?? 'an unstated number of'} events, under ${MIN_EVIDENCE_SAMPLE}`,
+      need: establishes ? null : !enoughPopulations ? `${label}: find another independent population with a stated sample (how many were asked, how many agreed) for this mechanism, or measure it directly` : `${label}: a direct measurement or more independent sized populations (it is worth ${events ?? 0} events)`,
+    };
+  }
+  if (inferred) {
+    const populations = inferred.populations ?? inferred.observations;
+    const sized = inferred.sizedPopulations ?? 0;
+    const tier: InputTier =
+      inferred.tier === 'COMPARABLE' && populations <= 1 ? 'SINGLE_COMPARABLE' : (inferred.tier === 'COMPARABLE' || inferred.tier === 'DIRECT') && sized === 0 ? 'UNSIZED' : inferred.tier === 'COMPONENT' ? 'MECHANISM' : (inferred.tier as InputTier);
+    const need =
+      tier === 'SINGLE_COMPARABLE'
+        ? `${label}: one comparable population only — find a second independent population with a stated sample, or measure it directly`
+        : tier === 'UNSIZED'
+          ? `${label}: only published figures with no stated sample — find the sample behind them (x of N), or an independent sized study`
+          : tier === 'MECHANISM'
+            ? `${label}: only evidence from other transaction types or unevidenced parts — find a sized measurement for this mechanism`
+            : `${label}: nobody has measured it — find a sized published figure`;
+    return { tier, events: 0, populations, sizedPopulations: sized, drawable: false, establishes: false, unverifiable: `${label} is bounds only (${tier.toLowerCase().replace('_', ' ')})`, need };
+  }
+  if (input.provenance === 'EVIDENCE') return { tier: 'BOUNDS', ...none, establishes: false, unverifiable: `${label} is a published range, swept`, need: `${label}: one figure buyers are shown to pay or a sized distribution` };
+  return {
+    tier: input.provenance === 'ASSUMPTION' || input.provenance === 'HYPOTHETICAL' ? 'ASSUMED' : 'UNKNOWN',
+    ...none,
+    establishes: false,
+    unverifiable: `${label} is not established`,
+    need: `${label}: nobody has measured it — find a sized published figure or measure it`,
+  };
+}
+
+/** The inputs an opening's samples are drawn from. */
+function drawnFields(one: ModelledOpportunity): Array<keyof ModelledOpportunity> {
+  return one.repeatable ? INPUT_NAMES.map(([key]) => key) : ['price', 'daysToCash', 'close', 'directCost'];
+}
+
+/**
+ * The evidence behind one opening's samples, in events: the weakest
+ * behavioural rate it draws (Q2-2, 2026-11-14). Before, it was the number of
+ * studies an input was rebuilt from, so three comparables of 200 contacts
+ * each read as "3" and never passed. A fact (a stated term, a sourced count)
+ * is not drawn and does not bound it; a behavioural rate nobody sized states
+ * no sample, so the whole is unstated (invariant 39: never read as large).
+ * Magnitudes (days, costs) carry their uncertainty in their own redrawn
+ * parameters and in `unverifiableOf`, not in a count.
+ */
 export function sampleSizeOf(one: ModelledOpportunity): number | undefined {
   if (one.agreedValue > 0) {
     // Money a buyer already agreed still draws whether, and when, it settles:
@@ -254,16 +403,32 @@ export function sampleSizeOf(one: ModelledOpportunity): number | undefined {
     // days-to-cash term says when payment is due, not that it arrives, so it
     // calibrates nothing (invariant 39).
     const days = one.daysToCash;
-    return days.inferred ? days.inferred.observations : undefined;
+    // A record of collections is a magnitude: one event per collection it measured.
+    return days.inferred ? (days.inferred.events ?? days.inferred.observations) : undefined;
   }
-  const drawn: Array<keyof ModelledOpportunity> = one.repeatable ? INPUT_NAMES.map(([key]) => key) : ['price', 'daysToCash', 'close', 'directCost'];
   let n = Number.POSITIVE_INFINITY;
-  for (const key of drawn) {
+  for (const key of drawnFields(one)) {
     const input = one[key] as ModelInput;
-    if (input.inferred) n = Math.min(n, input.inferred.observations);
-    else if (input.value === null || BEHAVIOURAL.has(key)) return undefined;
+    const ev = inputEvidence(input, key);
+    if (ev.tier === 'FACT') continue;
+    if (BEHAVIOURAL_RATES.has(key)) {
+      if (ev.events === null) return undefined;
+      n = Math.min(n, ev.events);
+    } else if (!ev.drawable) return undefined;
   }
   return n;
+}
+
+/** The research that would make each unverifiable input verifiable, by name. */
+export function needsOf(one: ModelledOpportunity): string[] {
+  const fields = one.agreedValue > 0 ? (['daysToCash'] as Array<keyof ModelledOpportunity>) : drawnFields(one);
+  return fields.map((key) => inputEvidence(one[key] as ModelInput, key)).filter((ev) => ev.tier !== 'FACT' && (!ev.establishes || ev.unverifiable) && ev.need).map((ev) => ev.need!);
+}
+
+/** Why a probability resting on this opening's inputs cannot be verified, by name; empty when it can. */
+export function unverifiableOf(one: ModelledOpportunity): string[] {
+  const fields = one.agreedValue > 0 ? (['daysToCash'] as Array<keyof ModelledOpportunity>) : drawnFields(one);
+  return fields.map((key) => inputEvidence(one[key] as ModelInput, key)).filter((ev) => ev.tier !== 'FACT' && (!ev.establishes || ev.unverifiable)).map((ev) => ev.unverifiable ?? 'an input does not establish its link');
 }
 
 /**
@@ -438,16 +603,58 @@ function withMeasuredReply<T extends ModelledOpportunity>(one: T, rates: Pick<Me
     const high = Math.max(ownHigh ?? rates.high, rates.high);
     return { ...one, respond: { ...own, low: Math.min(rates.low, high), high, note: `${own.note}${own.note ? '; ' : ''}floor from a comparable measured record (${rates.replies} replies on ${rates.sent} sends)` } };
   }
+  /*
+   * A record whose authority is TRANSFERABLE (§99) is this Brain's own
+   * measurement of this outreach (Q2-4, 2026-11-14): HISTORICAL, drawn from
+   * its posterior. Before, it was relabelled UNKNOWN and swept, so the best
+   * evidence a plan can have read as no evidence at all.
+   */
   return {
     ...one,
     respond: {
-      value: null,
+      ...measuredRateInput({ trials: rates.sent, low: Math.min(rates.opportunities, rates.sent), high: Math.min(rates.replies, rates.sent) }),
       low: rates.low,
       high: rates.high,
-      provenance: 'UNKNOWN',
       source: { kind: 'OTHER', ref: 'instantly:analytics' },
-      note: `measured on the owner's own sends: ${rates.replies} unique replies and ${rates.opportunities} opportunities from ${rates.sent} emails (${rates.bounced} bounced); sampled from ${pct(rates.low)} to ${pct(rates.high)} at 90%`,
+      note: `measured on the owner's own sends: ${rates.replies} unique replies and ${rates.opportunities} opportunities from ${rates.sent} emails (${rates.bounced} bounced); drawn from the posterior between ${pct(rates.low)} and ${pct(rates.high)}`,
     },
+  };
+}
+
+/**
+ * A rate this Brain measured, as an input drawn from its posterior: an equal
+ * mixture of Beta(low + ½, trials − low + ½) and Beta(high + ½, trials − high
+ * + ½), so a definition that could count either (an opportunity or any reply)
+ * keeps both, read through the logit-normal approximation the pooling uses.
+ * Its sample is the trials it was measured on. Exported so every path that
+ * holds a measured count (the reply record, a lesson's agreements) gives it
+ * the same shape.
+ */
+export function measuredRateInput(count: { trials: number; low: number; high: number }): ModelInput {
+  const quantiles: number[] = [];
+  const GRID = 200;
+  for (const successes of [count.low, count.high]) {
+    const p = (successes + 0.5) / (count.trials + 1);
+    const y = Math.log(p / (1 - p));
+    const sd = Math.sqrt(1 / ((count.trials + 1) * p * (1 - p)));
+    for (let i = 0; i < GRID; i++) {
+      const z = inverseNormal((i + 0.5) / GRID);
+      quantiles.push(1 / (1 + Math.exp(-(y + sd * z))));
+    }
+  }
+  quantiles.sort((a, b) => a - b);
+  const values: number[] = [];
+  for (let i = 0; i < 101; i++) values.push(quantiles[Math.min(quantiles.length - 1, Math.floor(((i + 0.5) / 101) * quantiles.length))]!);
+  const at = (q: number) => values[Math.min(values.length - 1, Math.floor(q * values.length))]!;
+  return {
+    value: null,
+    low: at(0.05),
+    high: at(0.95),
+    provenance: 'HISTORICAL',
+    source: null,
+    note: `measured on this Brain: ${count.low}–${count.high} of ${count.trials}`,
+    distribution: { kind: 'EMPIRICAL', values },
+    inferred: { tier: 'DIRECT', justified: true, p10: at(0.1), p50: at(0.5), p90: at(0.9), observations: 1, events: count.trials, populations: 1, sizedPopulations: 1 },
   };
 }
 
@@ -626,10 +833,15 @@ export function evaluateGoalPortfolio(input: {
   const gates = input.gates ?? [];
   const histories = new Map<string, MarketHistory>();
   const activities: Activity[] = [];
+  const recipes = new Map<string, Recipe>();
   const memberOf = new Map<string, PortfolioMember>();
   const demand: DemandEstimate[] = [];
   for (const card of input.openings) {
-    const one = measuredRates && applied !== 'AS_IS_FLOOR_ONLY' ? withMeasuredReply(card, measuredRates, applied) : card;
+    const replied = measuredRates && applied !== 'AS_IS_FLOOR_ONLY' ? withMeasuredReply(card, measuredRates, applied) : card;
+    // The market's own historical record, acquired from the research and outcomes the project holds.
+    const knowledge = input.causal === false ? null : knowledgeFor(replied.opportunity.projectId);
+    const history = knowledge ? acquireMarketHistory(knowledge, replied.opportunity) : null;
+    const one = withHistoryClose(replied, history);
     const id = one.opportunity.id;
     const capital = capitalAtStart(one);
     const unestablished = INPUT_NAMES.filter(([key]) => !established(one[key] as ModelInput)).map(([, name]) => name);
@@ -678,6 +890,7 @@ export function evaluateGoalPortfolio(input: {
       capitalAtStart: capital.amount,
       justified: unestablished.length === 0,
       unestablished,
+      inputs: INPUT_NAMES.map(([key, name]) => ({ name, ...inputEvidence(one[key] as ModelInput, key) })),
       refused,
     });
     if (refused) continue;
@@ -685,45 +898,21 @@ export function evaluateGoalPortfolio(input: {
     // The outreach a day is drawn too: unless the owner stated it, it states no sample.
     const sampleSize = one.repeatable && one.agreedValue === 0 && stated === null ? undefined : sampleSizeOf(one);
     // The market's own historical record, acquired from the research and outcomes the project holds.
-    const knowledge = input.causal === false ? null : knowledgeFor(one.opportunity.projectId);
-    const history = knowledge ? acquireMarketHistory(knowledge, one.opportunity) : null;
     if (history) histories.set(id, history);
     const keys = shares.map((share) => `${id}@${share}`);
     // Bought sending capacity that arrives only after proof: the shared openings also read what they sell with it.
     const capacityGate = !one.channel && one.repeatable && one.agreedValue === 0 ? gates.find((g) => g.contactsPerDay) : undefined;
     const ownGate = one.gate ? gates.find((g) => g.id === one.gate) : undefined;
+    const unverifiable = unverifiableOf(one);
     for (const share of shares) {
-      const w = share === 1 ? full : demandWorlds(one, share, input.daysLeft, reach, worlds, seed);
       const key = `${id}@${share}`;
       memberOf.set(key, { opportunityId: id, title: one.opportunity.title, share: share > 0 ? share : null });
-      const samples = (x: Worlds) => ({ cash: x.cash, days: x.days, spend: x.spend, deals: x.deals, ...(x.early ? { early: x.early } : {}) });
-      const zero = w.cash.map(() => 0);
-      const gated = ownGate
-        ? // A channel bought after proof sells nothing in a world where it was not bought.
-          { gate: ownGate.id, ...samples(w) }
-        : capacityGate && share > 0
-          ? { gate: capacityGate.id, ...samples(demandWorlds(one, share, input.daysLeft, capacityGate.contactsPerDay!, worlds, seed)) }
-          : null;
-      const base = ownGate ? { cash: zero, days: w.days, spend: zero, deals: zero } : samples(w);
-      activities.push({
-        key,
-        label: one.opportunity.title.slice(0, 80),
-        ...base,
-        // A cost the buyer's prepayment funds still leaves the cash kept; it is exempt only from the owner's spending ceiling (§99).
-        ceilingExempt: !!one.fundedByBuyer,
-        market: one.marketKey ?? id,
-        marketVolume: w.volume,
-        ...(gated ? { gated } : {}),
-        justified: unestablished.length === 0,
-        evidence: { ...(sampleSize !== undefined ? { sampleSize } : {}), ...(history ? { history: historyEvidence(history) } : {}) },
-        capital: capital.amount,
-        startDay: 0,
-        ...(one.channel ? { uses: { [one.channel.resource]: 1 }, riskGroup: one.channel.riskGroup } : share > 0 ? { uses: { outreach: share }, riskGroup: 'shared-outreach' } : {}),
-        excludes: keys.filter((other) => other !== key),
-      });
+      const recipe: Recipe = { one, share, key, keys, reach, capacityGate, ownGate, capital: capital.amount, justified: unestablished.length === 0, sampleSize, history, unverifiable, needs: needsOf(one) };
+      recipes.set(key, recipe);
+      activities.push(activityOf(recipe, share === 1 ? full : demandWorlds(one, share, input.daysLeft, reach, worlds, seed), (r) => demandWorlds(one, share, input.daysLeft, r, worlds, seed)));
     }
   }
-  const result = optimizePortfolio({
+  const problem: PortfolioProblem = {
     activities,
     target: input.remaining,
     deadlineDays: input.daysLeft,
@@ -738,7 +927,21 @@ export function evaluateGoalPortfolio(input: {
     ...(gates.length ? { gates: gates.map(({ id, day, tranche, cost }) => ({ id, day, tranche, cost })) } : {}),
     worlds,
     seed,
-  });
+  };
+  /*
+   * The claim is read under parameter uncertainty (Q2-2): only on a reading
+   * that states its assurance (a strategy search reading reach alone passes
+   * causal false, and its candidate is judged on the reading that follows).
+   */
+  // Only where every member rests on evidence: a coverage reading cannot be certified, and its interval would be sensitivity to assumptions it already names.
+  const parameterReach =
+    input.causal === false
+      ? undefined
+      : (keys: string[]) => {
+          const members = keys.map((key) => recipes.get(key)!).filter(Boolean);
+          return members.length > 0 && members.every((r) => r.justified) ? parameterReachOf(problem, members, input.daysLeft, seed) : null;
+        };
+  const result = optimizePortfolio({ ...problem, ...(parameterReach ? { parameterReach } : {}) });
   const combination = (reading: PortfolioReading): PortfolioCombination => ({
     members: reading.keys.map((key) => memberOf.get(key)!).filter(Boolean),
     reach: reading.reach,
@@ -812,6 +1015,228 @@ export function evaluateGoalPortfolio(input: {
     searched: result.searched,
     measuredRates,
   };
+}
+
+/**
+ * A close rate stated as one figure with no sample, where the market's own
+ * bid/win record (CAUSAL-14-7) measured the rate it is: the record is the
+ * measurement, drawn from its posterior over the bids it counts. Only the
+ * close rate — a bid/win record says nothing about who replies.
+ */
+function withHistoryClose<T extends ModelledOpportunity>(one: T, history: MarketHistory | null): T {
+  const record = history?.winRate;
+  if (!record || !(record.bids > 0) || one.close.value === null || inputEvidence(one.close, 'close').tier !== 'UNSIZED') return one;
+  const measured = measuredRateInput({ trials: record.bids, low: record.wins, high: record.wins });
+  return {
+    ...one,
+    close: { ...measured, provenance: 'EVIDENCE', source: { kind: 'OTHER', ref: `market-history:${one.opportunity.id}` }, note: `the market's bid/win record: ${record.wins} of ${record.bids} bids won` },
+  };
+}
+
+/** How one activity of the portfolio is built from its opening, so it can be rebuilt under fixed parameters. */
+interface Recipe {
+  one: PlannedOpening;
+  share: number;
+  key: string;
+  keys: string[];
+  reach: ModelInput;
+  capacityGate: GateInput | undefined;
+  ownGate: GateInput | undefined;
+  capital: number;
+  justified: boolean;
+  sampleSize: number | undefined;
+  history: MarketHistory | null;
+  unverifiable: string[];
+  needs: string[];
+}
+
+/** The portfolio activity for one opening at one share, from its demand worlds. */
+function activityOf(r: Recipe, w: Worlds, withReach: (reach: ModelInput) => Worlds): Activity {
+  const { one, share, key, keys, capacityGate, ownGate } = r;
+  const samples = (x: Worlds) => ({ cash: x.cash, days: x.days, spend: x.spend, deals: x.deals, ...(x.early ? { early: x.early } : {}) });
+  const zero = w.cash.map(() => 0);
+  const gated = ownGate
+    ? // A channel bought after proof sells nothing in a world where it was not bought.
+      { gate: ownGate.id, ...samples(w) }
+    : capacityGate && share > 0
+      ? { gate: capacityGate.id, ...samples(withReach(capacityGate.contactsPerDay!)) }
+      : null;
+  const base = ownGate ? { cash: zero, days: w.days, spend: zero, deals: zero } : samples(w);
+  return {
+    key,
+    label: one.opportunity.title.slice(0, 80),
+    ...base,
+    // A cost the buyer's prepayment funds still leaves the cash kept; it is exempt only from the owner's spending ceiling (§99).
+    ceilingExempt: !!one.fundedByBuyer,
+    market: one.marketKey ?? one.opportunity.id,
+    marketVolume: w.volume,
+    ...(gated ? { gated } : {}),
+    justified: r.justified,
+    evidence: {
+      ...(r.sampleSize !== undefined ? { sampleSize: r.sampleSize } : {}),
+      ...(r.unverifiable.length ? { unverifiable: r.unverifiable, researchNeeds: r.needs } : {}),
+      ...(r.history ? { history: historyEvidence(r.history) } : {}),
+    },
+    capital: r.capital,
+    startDay: 0,
+    ...(one.channel ? { uses: { [one.channel.resource]: 1 }, riskGroup: one.channel.riskGroup } : share > 0 ? { uses: { outreach: share }, riskGroup: 'shared-outreach' } : {}),
+    excludes: keys.filter((other) => other !== key),
+  };
+}
+
+/** Outer draws of the parameters, and simulated worlds per draw, for the assurance (Q2-2). */
+export const PARAMETER_DRAWS = 100;
+export const PARAMETER_INNER_WORLDS = 400;
+const PARAMETER_FIELDS: Array<keyof ModelledOpportunity> = ['price', 'daysToCash', 'respond', 'close', 'directCost', 'volume'];
+
+/**
+ * Which estimate an input was drawn from. Two openings whose close rate came
+ * from the same comparables carry the same estimate (`knowledge.ts` caches it
+ * per context), so they share one identity and one draw per outer world — a
+ * common factor, never independent copies that invent diversification
+ * (Q2-10, S-13). Partly overlapping evidence is not merged: read as
+ * independent, it would overstate diversification, so only exact sharing is
+ * correlated and partial overlap is named here as the remaining gap.
+ */
+function identityOf(field: string, input: ModelInput): string {
+  const d = input.distribution;
+  const shape = d?.kind === 'EMPIRICAL' && d.values.length ? `${d.values[0]}|${d.values[Math.floor(d.values.length / 2)]}|${d.values[d.values.length - 1]}` : `${input.low}|${input.high}`;
+  return `${field}|${input.source ? `${input.source.kind}:${input.source.ref}` : input.note.slice(0, 80)}|${shape}`;
+}
+
+/** The input at quantile `u` of its own distribution, held fixed: one parameter draw. */
+function atQuantile(input: ModelInput, u: number): ModelInput {
+  if (input.value !== null) return input;
+  const d = input.distribution;
+  let value: number | null = null;
+  if (d) {
+    if (d.kind === 'FIXED') value = d.value;
+    else if (d.kind === 'EMPIRICAL' && d.values.length) value = d.values[Math.min(d.values.length - 1, Math.floor(u * d.values.length))]!;
+    else if (d.kind === 'RANGE') value = d.min + u * (d.max - d.min);
+    else if (d.kind === 'NORMAL') value = Math.min(d.max, Math.max(d.min, d.mean + d.sd * inverseNormal(Math.min(1 - 1e-9, Math.max(1e-9, u)))));
+    else if (d.kind === 'TRIANGULAR') {
+      const c = (d.mode - d.min) / Math.max(1e-12, d.max - d.min);
+      value = u < c ? d.min + Math.sqrt(u * (d.max - d.min) * (d.mode - d.min)) : d.max - Math.sqrt((1 - u) * (d.max - d.min) * (d.max - d.mode));
+    }
+  }
+  if (value === null) {
+    const low = input.low ?? input.high;
+    const high = input.high ?? low;
+    if (low === null || high === null) return input;
+    value = low + u * (high - low);
+  }
+  return { ...input, value };
+}
+
+/** Spearman's rank correlation between two equal-length series. */
+function spearman(a: readonly number[], b: readonly number[]): number {
+  const rank = (xs: readonly number[]) => {
+    const order = xs.map((x, i) => [x, i] as const).sort((p, q) => p[0] - q[0]);
+    const r = new Array<number>(xs.length);
+    for (let i = 0; i < order.length; ) {
+      let j = i;
+      while (j + 1 < order.length && order[j + 1]![0] === order[i]![0]) j++;
+      for (let k = i; k <= j; k++) r[order[k]![1]] = (i + j) / 2;
+      i = j + 1;
+    }
+    return r;
+  };
+  const ra = rank(a);
+  const rb = rank(b);
+  const n = a.length;
+  const mean = (n - 1) / 2;
+  let num = 0;
+  let da = 0;
+  let db = 0;
+  for (let i = 0; i < n; i++) {
+    num += (ra[i]! - mean) * (rb[i]! - mean);
+    da += (ra[i]! - mean) ** 2;
+    db += (rb[i]! - mean) ** 2;
+  }
+  return da > 0 && db > 0 ? num / Math.sqrt(da * db) : 0;
+}
+
+function seedOfText(text: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619) >>> 0;
+  return h >>> 0;
+}
+
+/**
+ * The best combination's reach under parameter uncertainty (Q2-2, Q2-6,
+ * Q2-10). Each outer draw holds every input at one quantile of its own
+ * distribution — the evidenced predictive (pooled mean's error on a t, plus
+ * the spread between populations), or a swept range's bounds — shared by
+ * every opening that drew it from the same estimate; the inner worlds then
+ * carry only the chance in who replies and who buys. Stratified over the
+ * quantiles so a hundred draws reach the tails. What limits the fifth
+ * percentile is read from the same draws: the inputs whose quantile moves
+ * reach most (|Spearman ρ|), each with the research that would narrow it.
+ */
+export function parameterReachOf(problem: PortfolioProblem, recipes: Recipe[], daysLeft: number, seed: number, draws = PARAMETER_DRAWS, inner = PARAMETER_INNER_WORLDS): ParameterReach | null {
+  if (recipes.length === 0) return null;
+  type Group = { field: string; label: string; openings: Set<string>; evidence: InputEvidence; us: number[] };
+  const groups = new Map<string, Group>();
+  const uniforms = (identity: string): number[] => {
+    const rng = makeRng(seed, seedOfText(`parameter:${identity}`));
+    const order = Array.from({ length: draws }, (_, i) => i);
+    for (let i = order.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [order[i], order[j]] = [order[j]!, order[i]!];
+    }
+    return order.map((k) => (k + rng()) / draws);
+  };
+  const groupOf = (field: string, label: string, input: ModelInput, opportunityId: string, evidence: InputEvidence): Group | null => {
+    if (input.value !== null) return null;
+    const id = identityOf(field, input);
+    let g = groups.get(id);
+    if (!g) {
+      g = { field, label, openings: new Set(), evidence, us: uniforms(id) };
+      groups.set(id, g);
+    }
+    g.openings.add(opportunityId);
+    return g;
+  };
+  // Which group each recipe's inputs draw from, resolved once.
+  const plans = recipes.map((r) => {
+    const inputs = PARAMETER_FIELDS.map((field) => ({ field, group: groupOf(field, LABEL[field] ?? field, r.one[field] as ModelInput, r.one.opportunity.id, inputEvidence(r.one[field] as ModelInput, field)) }));
+    const reachGroup = groupOf('contactsPerDay', r.one.channel ? `${r.one.channel.label} a day` : 'outreach a day', r.reach, r.one.opportunity.id, inputEvidence(r.reach, 'price'));
+    const gateReach = r.capacityGate?.contactsPerDay;
+    const gateGroup = gateReach ? groupOf('gateContactsPerDay', 'bought outreach a day', gateReach, r.one.opportunity.id, inputEvidence(gateReach, 'price')) : null;
+    return { r, inputs, reachGroup, gateGroup };
+  });
+  const reaches: number[] = [];
+  for (let j = 0; j < draws; j++) {
+    const activities = plans.map(({ r, inputs, reachGroup, gateGroup }) => {
+      let one: PlannedOpening = r.one;
+      for (const { field, group } of inputs) if (group) one = { ...one, [field]: atQuantile(one[field] as ModelInput, group.us[j]!) };
+      const reach = reachGroup ? atQuantile(r.reach, reachGroup.us[j]!) : r.reach;
+      const gateReach = r.capacityGate?.contactsPerDay && gateGroup ? atQuantile(r.capacityGate.contactsPerDay, gateGroup.us[j]!) : r.capacityGate?.contactsPerDay;
+      const innerSeed = seed + 7919 * (j + 1);
+      const w = demandWorlds(one, r.share, daysLeft, reach, inner, innerSeed);
+      return activityOf(r, w, (rr) => demandWorlds(one, r.share, daysLeft, rr === r.capacityGate?.contactsPerDay ? (gateReach ?? rr) : rr, inner, innerSeed));
+    });
+    const read = evaluateCombination({ ...problem, activities, safeguards: undefined, parameterReach: undefined, worlds: inner, seed: seed + 104729 * (j + 1) });
+    reaches.push('missing' in read ? 0 : read.reach);
+  }
+  const basis: ParameterReach['basis'] = recipes.every((r) => r.justified) ? 'EVIDENCE' : 'ASSUMED_RANGES';
+  const titles = new Map(recipes.map((r) => [r.one.opportunity.id, r.one.opportunity.title.slice(0, 60)]));
+  const limiting: LimitingInput[] = [...groups.values()]
+    .map((g) => ({ g, rho: Math.abs(spearman(g.us, reaches)) }))
+    .filter(({ rho }) => rho >= 0.1)
+    .sort((a, b) => b.rho - a.rho)
+    .map(({ g, rho }) => {
+      const where = [...g.openings].map((id) => `"${titles.get(id) ?? id}"`).join(', ');
+      const have = { tier: g.evidence.tier, events: g.evidence.events ?? 0, populations: g.evidence.populations, sizedPopulations: g.evidence.sizedPopulations };
+      const need =
+        g.field === 'contactsPerDay' || g.field === 'gateContactsPerDay'
+          ? `${g.label} for ${where}: state the outreach a day the operation can sustain; its range moves reach most (|ρ| ${rho.toFixed(2)})`
+          : g.evidence.need
+            ? `${g.evidence.need} (for ${where}; it moves reach most, |ρ| ${rho.toFixed(2)})`
+            : `${g.label} for ${where}: reach's 5th percentile is limited most by its uncertainty (${have.tier.toLowerCase()}, ${have.sizedPopulations} sized population(s), ${have.events} events, |ρ| ${rho.toFixed(2)}) — research more independent sized populations of it for this mechanism, or measure it directly`;
+      return { opportunityIds: [...g.openings], input: g.label, sensitivity: rho, have, need };
+    });
+  return { draws: reaches, basis, limiting, innerWorlds: inner };
 }
 
 /* ------------------------------------------------------------------------- */
