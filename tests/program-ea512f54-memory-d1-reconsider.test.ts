@@ -367,13 +367,15 @@ function systematic(cause: MissCause) {
 describe('the goals tick runs the decision-history passes', () => {
   it('a prediction error earns a specific method correction, recorded once, from the tick', async () => {
     const ledger = systematic('CAPACITY');
-    const written: { goalId: string; lesson: string; evidence: string }[] = [];
+    const written: { goalId: string | null; lesson: string; evidence: string }[] = [];
     const ports: CalibrationPorts = {
       goals: async () => [{ goalId: 'wst_cal', projectId: PROJECT }],
       ledger: async () => ({ predictions: ledger.predictions, exposures: [], outcomes: ledger.outcomes }),
       goalRows: async () => ({ readings: [], outcomes: [] }),
-      recordedKeys: async (goalId) => new Set(written.filter((w) => w.goalId === goalId).map((w) => w.evidence.slice('calibration-key='.length, 'calibration-key='.length + 32))),
+      recordedKeys: async (projectId) =>
+        new Set(written.filter((w) => w.evidence.includes(`; project=${projectId};`)).map((w) => w.evidence.slice('calibration-key='.length, 'calibration-key='.length + 32))),
       record: async (goalId, lesson, evidence) => void written.push({ goalId, lesson, evidence }),
+      toFactory: async () => ({ ok: true, reason: 'started' }),
     };
     let at = Date.now() + 10 * CALIBRATION_PASS_EVERY_MS;
     const calibration = () => reconcileCalibrationIfDue((at += 2 * CALIBRATION_PASS_EVERY_MS), ports);

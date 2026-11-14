@@ -34,14 +34,23 @@
  *     explains at least `MIN_CORRECTION_MISSES` misses becomes a lesson, so one
  *     unlucky result never becomes a rule. Each lesson names the misses that
  *     support it and the resolved predictions in the same buckets that do not,
- *     is recorded on the goal through the existing operator learning store
- *     (`operator_learnings`), and is keyed so a later pass never records it
- *     twice. A correction whose owner is software is labelled as Factory work
- *     and is not applied here.
+ *     is recorded through the existing operator learning store
+ *     (`operator_learnings`), and is keyed by its project so a later pass —
+ *     or another goal sharing the project — never records it twice. A
+ *     correction whose owner is software is handed to Factory through the
+ *     operator's own entrance (`submitOperatorFix`, §106), which is
+ *     idempotent per defect; it is not applied by this pass.
  *
- * Data boundaries: a goal's lessons are computed only from its own project's
- * ledger and its own project's goal readings. A row from another project is
- * dropped before judging, never pooled.
+ * The ledger is a project's, so it is judged once per project: every targeted
+ * goal sharing a project reads the same corrections, recorded once. A lesson
+ * is attached to a goal only when it belongs to one — every supporting
+ * prediction is that goal's own, or the project has exactly one targeted
+ * goal — and otherwise to the project alone (`goal_id` NULL, `project=` in its
+ * evidence).
+ *
+ * Data boundaries: a project's lessons are computed only from its own ledger
+ * and its own goal readings. A row from another project is dropped before
+ * judging, never pooled.
  */
 import { createHash } from 'node:crypto';
 import type { ModelLearningReading } from '../quant/learning.ts';
@@ -135,9 +144,10 @@ export function classifyMiss(d: MissDiagnosis): MissClassification {
 }
 
 export interface MethodCorrection {
-  /** Idempotency key: the goal, the cause and the exact misses that support it. */
+  /** Idempotency key: the project, the cause and the exact misses that support it. */
   key: string;
-  goalId: string;
+  /** The one goal the lesson belongs to, or null when it is the project's alone. */
+  goalId: string | null;
   projectId: string;
   cause: MissCause;
   missClass: MissClass;
@@ -160,7 +170,12 @@ export interface MethodCorrection {
  * or a run of them in a bucket below the minimum sample, which the calibrator
  * leaves UNJUDGED — never becomes a method change.
  */
-export function methodCorrections(reading: ModelLearningReading, scope: { goalId: string; projectId: string }): MethodCorrection[] {
+export function methodCorrections(
+  reading: ModelLearningReading,
+  scope: { projectId: string; goalIds?: readonly string[]; goalId?: string | null },
+): MethodCorrection[] {
+  const goalIds = [...new Set(scope.goalIds ?? (scope.goalId ? [scope.goalId] : []))];
+  const claimOf = new Map(reading.ledger.map((entry) => [entry.prediction.id, entry.prediction.claimId]));
   const bucketOf = new Map(reading.ledger.map((entry) => [entry.prediction.id, entry.prediction.comparableKey]));
   const out: MethodCorrection[] = [];
   for (const correction of reading.corrections) {
@@ -176,12 +191,12 @@ export function methodCorrections(reading: ModelLearningReading, scope: { goalId
       .sort((a, b) => a.predictionId.localeCompare(b.predictionId));
     const owner = CAUSE_OWNER[correction.cause];
     const key = createHash('sha256')
-      .update([scope.goalId, correction.cause, ...supporting.map((s) => `${s.predictionId}|${s.evidence ?? ''}`)].join('\u0000'))
+      .update([`project:${scope.projectId}`, correction.cause, ...supporting.map((s) => `${s.predictionId}|${s.evidence ?? ''}`)].join('\u0000'))
       .digest('hex')
       .slice(0, 32);
     out.push({
       key,
-      goalId: scope.goalId,
+      goalId: owningGoal(supporting.map((s) => claimOf.get(s.predictionId) ?? ''), scope.projectId, goalIds),
       projectId: scope.projectId,
       cause: correction.cause,
       missClass: CAUSE_CLASS[correction.cause],
@@ -194,6 +209,21 @@ export function methodCorrections(reading: ModelLearningReading, scope: { goalId
     });
   }
   return out;
+}
+
+/**
+ * The one goal a project-level correction belongs to: the goal whose own plan
+ * predictions are every supporting miss, or the project's only targeted goal.
+ * Otherwise null — the lesson is the project's, never copied onto each goal.
+ */
+export function owningGoal(supportingClaims: readonly string[], projectId: string, goalIds: readonly string[]): string | null {
+  const prefix = `goal:${projectId}:`;
+  const owners = new Set(supportingClaims.map((claim) => (claim.startsWith(prefix) ? claim.slice(prefix.length) : null)));
+  if (owners.size === 1) {
+    const [only] = [...owners];
+    if (only && goalIds.includes(only)) return only;
+  }
+  return goalIds.length === 1 ? goalIds[0]! : null;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -285,10 +315,13 @@ export function projectOfLedgerId(id: string): string | null {
 const KEY_MARK = 'calibration-key=';
 
 /** The lesson and evidence text a correction is recorded with. Both sides of the evidence are kept. */
-export function lessonOf(c: MethodCorrection): { lesson: string; evidence: string } {
-  const lesson =
-    `${c.needsFactory ? '[FACTORY] ' : ''}${c.missClass} (${c.cause}) in ${c.comparableKeys.join(', ')}: ${c.method}.` +
-    (c.needsFactory ? ' This is a software change: it is Factory work and is not applied by this pass.' : ` Owner: ${c.owner}.`);
+export function lessonOf(c: MethodCorrection, factory?: FactoryHandoff | null): { lesson: string; evidence: string } {
+  const handed = !c.needsFactory
+    ? ` Owner: ${c.owner}.`
+    : factory?.ok
+      ? ` This is a software change: handed to Factory${factory.changeRequestId ? ` (change request ${factory.changeRequestId}${factory.campaignId ? `, campaign ${factory.campaignId}` : ''})` : ''}; it is not applied by this pass.`
+      : ` This is a software change: it is Factory work and is not applied by this pass. Factory did not take it: ${factory?.reason ?? 'not submitted'}.`;
+  const lesson = `${c.needsFactory ? '[FACTORY] ' : ''}${c.missClass} (${c.cause}) in ${c.comparableKeys.join(', ')}: ${c.method}.` + handed;
   const evidence =
     `${KEY_MARK}${c.key}; project=${c.projectId}; supporting ${c.supporting.length}: ` +
     c.supporting.slice(0, 12).map((s) => s.evidence ?? s.predictionId).join(', ') +
@@ -299,6 +332,46 @@ export function lessonOf(c: MethodCorrection): { lesson: string; evidence: strin
   return { lesson, evidence };
 }
 
+/** The files that own the model a correction's buckets were predicted by. */
+export function factoryOwnerPaths(c: MethodCorrection): string[] {
+  const paths = new Set<string>();
+  for (const key of c.comparableKeys) {
+    if (key.startsWith('goal-plan:')) paths.add('server/services/goals/plan.ts');
+    else {
+      paths.add('server/services/quant/ledger.ts');
+      paths.add('server/services/quant/forecast.ts');
+    }
+  }
+  if (paths.size === 0) paths.add('server/services/quant/forecast.ts');
+  return [...paths].sort();
+}
+
+/**
+ * The defect a software correction hands Factory. Deterministic in the
+ * correction, so naming it again reaches the same change request.
+ */
+export function factoryFixOf(c: MethodCorrection): { title: string; problem: string; evidence: string; ownerPaths: string[]; acceptance: string } {
+  return {
+    title: `Calibration: ${c.cause} in ${c.comparableKeys.join(', ')}`.slice(0, 200),
+    problem:
+      `Calibration of project ${c.projectId} found ${c.supporting.length} systematic misses in ${c.comparableKeys.join(', ')} ` +
+      `caused by ${c.cause} (${c.missClass}): ${c.method}. Until the model is fixed its predictions in these buckets are miscalibrated ` +
+      `and plans that rely on them are ranked on wrong figures. calibration-key=${c.key}`,
+    evidence: lessonOf(c).evidence,
+    ownerPaths: factoryOwnerPaths(c),
+    acceptance:
+      `A test reproduces the predictions behind ${c.supporting.slice(0, 3).map((s) => s.evidence ?? s.predictionId).join(', ')} ` +
+      `and shows the model's stated figures agree with its own calculation from the same inputs.`,
+  };
+}
+
+export interface FactoryHandoff {
+  ok: boolean;
+  reason: string;
+  changeRequestId?: string;
+  campaignId?: string;
+}
+
 export interface CalibrationPorts {
   /** Targeted goals and the project each one's target is read from. */
   goals(): Promise<{ goalId: string; projectId: string }[]>;
@@ -306,25 +379,38 @@ export interface CalibrationPorts {
   ledger(projectId: string): Promise<{ predictions: PredictionRow[]; exposures: ExposureRow[]; outcomes: OutcomeRow[] }>;
   /** One project's goal plan readings and goal outcomes. */
   goalRows(projectId: string): Promise<{ readings: GoalReadingRow[]; outcomes: GoalOutcomeRow[] }>;
-  /** Keys already recorded on a goal. */
-  recordedKeys(goalId: string): Promise<Set<string>>;
-  record(goalId: string, lesson: string, evidence: string): Promise<void>;
+  /** Keys already recorded for a project, whichever goal (or none) they were attached to. */
+  recordedKeys(projectId: string): Promise<Set<string>>;
+  /** Record one lesson; `goalId` is null when the lesson is the project's alone. */
+  record(goalId: string | null, lesson: string, evidence: string): Promise<void>;
+  /** Hand a software correction to Factory. */
+  toFactory(c: MethodCorrection): Promise<FactoryHandoff>;
 }
 
 export interface CalibrationPassReport {
-  goalId: string;
   projectId: string;
+  /** The targeted goals sharing this project's ledger. */
+  goalIds: string[];
   resolved: number;
   classes: Partial<Record<MissClass, number>>;
   recorded: string[];
   alreadyRecorded: number;
+  /** Software corrections handed to Factory in this pass, by key. */
+  factory: { key: string; ok: boolean; reason: string; changeRequestId: string | null }[];
 }
 
-/** One pass over every targeted goal: judge its project's predictions, record the corrections it has earned. */
+/** One pass over every project a targeted goal reads: judge its ledger once, record the corrections it has earned once. */
 export async function reconcileCalibration(ports: CalibrationPorts): Promise<CalibrationPassReport[]> {
   const { assessModelLearning } = await import('../quant/learning.ts');
-  const out: CalibrationPassReport[] = [];
+  const goalsOf = new Map<string, string[]>();
   for (const { goalId, projectId } of await ports.goals()) {
+    const list = goalsOf.get(projectId) ?? [];
+    if (!list.includes(goalId)) list.push(goalId);
+    goalsOf.set(projectId, list);
+  }
+  const out: CalibrationPassReport[] = [];
+  for (const [projectId, goalIds] of [...goalsOf.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    goalIds.sort();
     const ledger = await ports.ledger(projectId);
     const goalRows = await ports.goalRows(projectId);
     const own = goalPredictionRows(
@@ -342,23 +428,33 @@ export async function reconcileCalibration(ports: CalibrationPorts): Promise<Cal
     for (const d of reading.diagnoses) {
       for (const c of classifyMiss(d).classes) classes[c] = (classes[c] ?? 0) + 1;
     }
-    const corrections = methodCorrections(reading, { goalId, projectId });
+    const corrections = methodCorrections(reading, { projectId, goalIds });
     const recorded: string[] = [];
+    const factory: CalibrationPassReport['factory'] = [];
     let alreadyRecorded = 0;
     if (corrections.length > 0) {
-      const have = await ports.recordedKeys(goalId);
+      const have = await ports.recordedKeys(projectId);
       for (const c of corrections) {
         if (have.has(c.key)) {
           alreadyRecorded += 1;
           continue;
         }
-        const { lesson, evidence } = lessonOf(c);
-        await ports.record(goalId, lesson, evidence);
+        let handoff: FactoryHandoff | null = null;
+        if (c.needsFactory) {
+          try {
+            handoff = await ports.toFactory(c);
+          } catch (error) {
+            handoff = { ok: false, reason: error instanceof Error ? error.message.slice(0, 300) : String(error) };
+          }
+          factory.push({ key: c.key, ok: handoff.ok, reason: handoff.reason, changeRequestId: handoff.changeRequestId ?? null });
+        }
+        const { lesson, evidence } = lessonOf(c, handoff);
+        await ports.record(c.goalId, lesson, evidence);
         have.add(c.key);
         recorded.push(c.key);
       }
     }
-    out.push({ goalId, projectId, resolved: reading.diagnoses.filter((d) => d.observedAt !== null).length, classes, recorded, alreadyRecorded });
+    out.push({ projectId, goalIds, resolved: reading.diagnoses.filter((d) => d.observedAt !== null).length, classes, recorded, alreadyRecorded, factory });
   }
   return out;
 }
@@ -367,7 +463,7 @@ export async function reconcileCalibration(ports: CalibrationPorts): Promise<Cal
 export async function productionCalibrationPorts(): Promise<CalibrationPorts> {
   const { getDb } = await import('../../db/database.ts');
   const { readLedger } = await import('../quant/ledger.ts');
-  const { listOperatorLearnings, recordOperatorLearning } = await import('../../repos/operator.ts');
+  const { recordOperatorLearning } = await import('../../repos/operator.ts');
   const parse = (text: string | null): Record<string, unknown> | null => {
     if (!text) return null;
     try {
@@ -407,16 +503,30 @@ export async function productionCalibrationPorts(): Promise<CalibrationPorts> {
           .map((o) => ({ id: o.id, readingId: o.reading_id, kind: o.kind as 'ACHIEVED' | 'MISSED', observedAt: o.observed_at })),
       };
     },
-    async recordedKeys(goalId) {
+    async recordedKeys(projectId) {
       const keys = new Set<string>();
-      for (const learning of await listOperatorLearnings({ goalId, limit: 1000 })) {
-        const at = learning.evidence.indexOf(KEY_MARK);
-        if (at >= 0) keys.add(learning.evidence.slice(at + KEY_MARK.length, at + KEY_MARK.length + 32));
+      const rows = await getDb().all<{ evidence: string }>(
+        `SELECT evidence FROM operator_learnings WHERE evidence LIKE ? ORDER BY recorded_at, id`,
+        [`${KEY_MARK}%; project=${projectId};%`],
+      );
+      for (const { evidence } of rows) {
+        if (!evidence.includes(`; project=${projectId};`)) continue;
+        keys.add(evidence.slice(KEY_MARK.length, KEY_MARK.length + 32));
       }
       return keys;
     },
     async record(goalId, lesson, evidence) {
       await recordOperatorLearning({ goalId, runId: null, lesson, evidence });
+    },
+    async toFactory(c) {
+      const { submitOperatorFix } = await import('../operator/factory.ts');
+      const result = await submitOperatorFix({ ...factoryFixOf(c), runId: null, goalId: c.goalId });
+      return {
+        ok: result.ok,
+        reason: result.reason,
+        ...(result.changeRequestId ? { changeRequestId: result.changeRequestId } : {}),
+        ...(result.campaignId ? { campaignId: result.campaignId } : {}),
+      };
     },
   };
 }
