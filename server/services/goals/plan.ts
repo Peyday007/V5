@@ -2573,6 +2573,39 @@ export async function planInputsFingerprint(projectId: string, goalId: string): 
 }
 
 /**
+ * The parts of `planInputsFingerprint` only a new opening moves: the project's
+ * opening count and the newest opening's `created_at` (positions 0 and 2).
+ */
+const ARRIVAL_PARTS = new Set([0, 2]);
+
+/**
+ * The inputs a reading was actually taken over. Pure.
+ *
+ * Reading a plan runs a scenario and is slow, and an opening harvested while it
+ * runs is not in the model the reading used. So what a new opening moves (its
+ * count and newest `created_at`) comes from `before`, taken before the read,
+ * and an opening filed during the read still reads as new evidence on the next
+ * pass instead of waiting out the half-hour. What the pass's own writes move
+ * (the openings' and value layers' `updated_at`, the money entries, the goal
+ * row) comes from `after`, taken once the pass is over, so the plan's own
+ * research on its openings never causes a perpetual re-read. Duplicate or late
+ * triggers stay bounded by the evidence floor and the one scenario slot.
+ */
+export function inputsTakenOver(before: string, after: string): string {
+  const b = before.split('|');
+  const a = after.split('|');
+  if (b.length !== a.length) return after;
+  /*
+   * There is one rule for what counts as an arrival, and no exception for the
+   * pass's own rounds: a round opened by `widenGoalSearch` files nothing during
+   * the pass (its openings are harvested fragment by fragment once research is
+   * gated, in a later tick), so every opening it finds arrives after the
+   * reading and is evidence that reading never saw.
+   */
+  return a.map((part, i) => (ARRIVAL_PARTS.has(i) ? b[i]! : part)).join('|');
+}
+
+/**
  * Whether a goal's plan is due now. Pure. Never read: due. Past the half-hour:
  * due. Inside it: due once the floor has passed and the inputs differ from the
  * ones the last reading was taken over (unknown after a restart counts as
@@ -2619,9 +2652,10 @@ export function forgetGoalReadings(): void {
  * round is linked to the goal, so the goal's rank reaches the bins it creates.
  * When work queues up the spare is zero and this is exactly the old behaviour.
  */
-async function widenGoalSearch(goalId: string, reading: PlanReading, now: Date, spare: number): Promise<{ asked: number; constructed: number; researched: number }> {
+async function widenGoalSearch(goalId: string, reading: PlanReading, now: Date, spare: number): Promise<{ asked: number; constructed: number; researched: number; opened: string[] }> {
   const goal = await getWorkstream(goalId);
-  if (!goal) return { asked: 0, constructed: 0, researched: 0 };
+  if (!goal) return { asked: 0, constructed: 0, researched: 0, opened: [] };
+  const opened: string[] = [];
   let asked = 0;
   const attempts = 1 + spare;
   /*
@@ -2635,10 +2669,11 @@ async function widenGoalSearch(goalId: string, reading: PlanReading, now: Date, 
   const fromPathways = await askPathwayConstructions(goal, reading, now, MAX_LIVE_GOAL_ROUNDS + spare);
   const constructed = [...fromPathways, ...(await askConstructedArrangements(goal, reading, now, Math.max(1, Math.ceil(attempts / 2)), MAX_LIVE_GOAL_ROUNDS + spare))];
   for (const candidateId of constructed) {
+    opened.push(candidateId);
     await linkWorkstream({ workstreamId: goal.id, kind: 'CANDIDATE', ref: candidateId, relation: 'PURSUES', recordedBy: 'BRAIN', recordedByUserId: null });
   }
   for (let i = 0; i < attempts; i += 1) {
-    const opened = await openGoalDiscovery({
+    const lens = await openGoalDiscovery({
       goal,
       target: reading.target,
       bestReach: reading.bestReach,
@@ -2648,12 +2683,13 @@ async function widenGoalSearch(goalId: string, reading: PlanReading, now: Date, 
       now: now.toISOString(),
       liveCap: MAX_LIVE_GOAL_ROUNDS + spare,
     });
-    if (!opened) break;
+    if (!lens) break;
     asked += 1;
+    opened.push(lens.candidateId);
     await linkWorkstream({
       workstreamId: goal.id,
       kind: 'CANDIDATE',
-      ref: opened.candidateId,
+      ref: lens.candidateId,
       relation: 'PURSUES',
       recordedBy: 'BRAIN',
       recordedByUserId: null,
@@ -2661,7 +2697,7 @@ async function widenGoalSearch(goalId: string, reading: PlanReading, now: Date, 
   }
   // And dig into the openings already held: the path to their money.
   const researched = (await researchGoalPaths({ reading, projectId: reading.target.projectId, now, spare })).length;
-  return { asked, constructed: constructed.length, researched };
+  return { asked, constructed: constructed.length, researched, opened };
 }
 
 /** At most this many pathway constructions open a round per pass; they share construction's half of the live cap. */
@@ -3019,6 +3055,8 @@ export async function advanceGoalPlans(
       }
       continue;
     }
+    // What a new opening moves, as it stood when this read began (`inputsTakenOver`).
+    const before = inputs ?? (await fingerprint());
     let reading: PlanReading | null;
     try {
       reading = await readGoalPlan({ goalId: id, now, persist: true });
@@ -3081,9 +3119,11 @@ export async function advanceGoalPlans(
       researched += more.researched;
     }
     // Taken after this pass's own writes (the research it started on openings
-    // touches their rows), so only what arrives from elsewhere reads as new.
+    // touches their rows), so only what arrives from elsewhere reads as new —
+    // and an opening filed while the plan was being read is not folded in
+    // (`inputsTakenOver`): the reading never saw it, so the next pass reads it.
     const after = await fingerprint();
-    if (after !== null) lastInputs.set(id, after);
+    if (after !== null) lastInputs.set(id, before !== null ? inputsTakenOver(before, after) : after);
   }
   return { read, outcomes, asked, constructed, researched, busy, onEvidence, resumed };
 }
