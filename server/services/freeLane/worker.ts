@@ -386,12 +386,65 @@ function workerFor(workers: FreeWorker[], item: Pick<WorkItemRow, 'work_type' | 
 /* The model                                                                  */
 /* ------------------------------------------------------------------------- */
 
-/** The first JSON object in a model's reply, or null. Fenced or bare. */
+/**
+ * Where the bracket opened at `open` closes, or -1: brackets are counted and
+ * strings skipped, so prose after the list ("… per [S1]") is not part of it.
+ */
+function closingBracket(text: string, open: number): number {
+  let depth = 0;
+  let inString = false;
+  for (let i = open; i < text.length; i += 1) {
+    const ch = text[i];
+    if (inString) {
+      if (ch === '\\') i += 1;
+      else if (ch === '"') inString = false;
+    } else if (ch === '"') inString = true;
+    else if (ch === '[' || ch === '{') depth += 1;
+    else if (ch === ']' || ch === '}') {
+      depth -= 1;
+      if (depth === 0) return ch === ']' ? i : -1;
+    }
+  }
+  return -1;
+}
+
+/**
+ * The first JSON object in a model's reply, or null. Fenced or bare.
+ *
+ * A reasoning model's `<think>…</think>` preamble is not the answer, so it is
+ * removed first: its braces or a fenced example in it were read as the reply.
+ * A reply that is a top-level array (production, 2026-11-14: Qwen3-4B answered
+ * `[{"claim":…}]`, read as one object with no `claims`, or as nothing) is that
+ * list, returned as `{claims:[…]}`. What a claim must prove is unchanged.
+ *
+ * Reasoning is not always closed. A reply cut off inside `<think>` (or one that
+ * opens it and never closes it) has no end to strip at, and stripping only a
+ * closed block read the reasoning's own braces as the reply — a draft
+ * `{"claims":[]}` turned a real answer after it into nothing. There the answer
+ * is the last whole JSON value. A reply whose template opened the block, so
+ * only `</think>` appears, starts after it.
+ */
 export function firstJson(text: string): Record<string, unknown> | null {
-  const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(text);
-  const body = fenced ? fenced[1]! : text;
+  let answer = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
+  // A chat template that opens the think block itself leaves only its close in the reply: what precedes it is reasoning.
+  const closed = answer.search(/<\/think>(?![\s\S]*<\/think>)/i);
+  if (closed >= 0) answer = answer.slice(closed + '</think>'.length);
+  // A think block never closed (reasoning cut off) has no boundary: the answer, if any, is its last whole JSON value.
+  const unclosed = answer.search(/<think>/i);
+  if (unclosed >= 0) return lastJsonValue(answer.slice(unclosed + '<think>'.length));
+  const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(answer);
+  const body = fenced ? fenced[1]! : answer;
   const start = body.indexOf('{');
   const end = body.lastIndexOf('}');
+  const open = body.indexOf('[');
+  if (open >= 0 && (start < 0 || open < start)) {
+    try {
+      const list = JSON.parse(body.slice(open, closingBracket(body, open) + 1)) as unknown;
+      if (Array.isArray(list) && list.length > 0 && list.every((one) => one && typeof one === 'object' && !Array.isArray(one))) return { claims: list };
+    } catch {
+      // Not a list after all ("[S1.2] says …"): read the object below.
+    }
+  }
   if (start < 0 || end <= start) return null;
   try {
     const parsed = JSON.parse(body.slice(start, end + 1)) as unknown;
@@ -399,6 +452,105 @@ export function firstJson(text: string): Record<string, unknown> | null {
   } catch {
     return null;
   }
+}
+
+/** An object, or a non-empty list of objects as `{claims:[…]}`; anything else is not an answer. */
+function asAnswer(value: unknown): Record<string, unknown> | null {
+  if (Array.isArray(value)) {
+    return value.length > 0 && value.every((one) => one && typeof one === 'object' && !Array.isArray(one)) ? { claims: value } : null;
+  }
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
+}
+
+/**
+ * The last top-level `{…}` or `[…]` in a text that parses as an answer, or
+ * null. Brackets inside JSON strings do not count, so a quote containing "}" or
+ * "[S1.2]" does not end or start a value. Used where reasoning was never closed:
+ * a draft or an example earlier in it is not the answer, the final value is.
+ */
+function lastJsonValue(text: string): Record<string, unknown> | null {
+  const spans: [number, number][] = [];
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i]!;
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') {
+      if (depth > 0) inString = true;
+    } else if (ch === '{' || ch === '[') {
+      if (depth === 0) start = i;
+      depth += 1;
+    } else if ((ch === '}' || ch === ']') && depth > 0) {
+      depth -= 1;
+      if (depth === 0) spans.push([start, i + 1]);
+    }
+  }
+  for (let k = spans.length - 1; k >= 0; k -= 1) {
+    const [from, to] = spans[k]!;
+    try {
+      const answer = asAnswer(JSON.parse(text.slice(from, to)) as unknown);
+      if (answer) return answer;
+    } catch {
+      // Prose in brackets ("[S1.2] says …"), or a value cut off: try the one before.
+    }
+  }
+  return null;
+}
+
+/**
+ * The claims an answer lists, wherever a model put the list: `claims` in any
+ * case, one claim object under `claims`, or an answer that is itself one claim.
+ * Production, 2026-11-14: "0 claim(s) offered, dropped {}" was most of the
+ * recorded drops. Every claim read here still meets every check after it.
+ */
+export function listedClaims(raw: Record<string, unknown>): Record<string, unknown>[] {
+  const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+  const key = 'claims' in raw ? 'claims' : Object.keys(raw).find((k) => k.trim().toLowerCase() === 'claims');
+  const value = key === undefined ? undefined : raw[key];
+  if (Array.isArray(value)) return value.filter(isObject);
+  if (isObject(value) && typeof value['claim'] === 'string') return [value];
+  if (value === undefined && typeof raw['claim'] === 'string') return [raw];
+  return [];
+}
+
+/**
+ * The declared lane a model's label names, or null. An exact id wins; then a
+ * label equal to an id or a description ignoring case; then a label whose
+ * whole text equals exactly one lane's id or description once case,
+ * punctuation and spacing are ignored. A label in two parts ("L1: primary
+ * sources", "primary sources (L2)") names a lane only through its first part:
+ * that part must name exactly one lane, and the second part, if it names a
+ * lane at all, must name the same one. The second part alone never decides,
+ * so "Lane 3 (primary sources)" — a lane nobody declared — names no lane
+ * rather than the lane whose description it happens to repeat. A label that
+ * fits two lanes, or none, names no lane.
+ */
+export function laneFor(label: unknown, lanes: { id: string; description: string }[]): string | null {
+  const given = String(label ?? '').trim();
+  if (given === '') return null;
+  if (lanes.some((l) => l.id === given)) return given;
+  const lower = given.toLowerCase();
+  const plain = lanes.filter((l) => l.description.toLowerCase() === lower || l.id.toLowerCase() === lower);
+  if (plain.length > 0) return plain[0]!.id;
+  const squash = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  /** The declared lanes a squashed piece of label names, by id or by description. */
+  const naming = (piece: string): Set<string> =>
+    new Set(piece === '' ? [] : lanes.filter((l) => squash(l.id) === piece || squash(l.description) === piece).map((l) => l.id));
+  const only = (ids: Set<string>): string | null => (ids.size === 1 ? [...ids][0]! : null);
+  const whole = naming(squash(given));
+  if (whole.size > 0) return only(whole);
+  const parts = given.split(/\s*(?::|\s[-\u2013\u2014]\s|\()\s*/);
+  const head = only(naming(squash(parts[0] ?? '')));
+  if (head === null) return null;
+  const tail = naming(squash(parts.slice(1).join(' ')));
+  return tail.size === 0 || (tail.size === 1 && tail.has(head)) ? head : null;
 }
 
 /** A tool's input schema with the lease fields and the long prose removed, for a model to fill. */
@@ -1044,8 +1196,8 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
     if (out['closes_on'] !== undefined && (out['opportunity_signal'] === undefined || out['opportunity_signal'] === null || out['opportunity_signal'] === '')) delete out['closes_on'];
     return out;
   };
-  const finalize =(raw: Record<string, unknown>): Record<string, unknown> | null => {
-    const listed = Array.isArray(raw['claims']) ? (raw['claims'] as Record<string, unknown>[]) : [];
+  const finalize = (raw: Record<string, unknown>): Record<string, unknown> | null => {
+    const listed = listedClaims(raw);
     const claims: Record<string, unknown>[] = [];
     const dropped: Record<string, number> = {};
     const drop = (why: string): void => {
@@ -1056,9 +1208,8 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
       // lane named by its description rather than its id is still that lane.
       if (onlyLane && !laneIds.has(String(c['evidence_lane']))) c['evidence_lane'] = onlyLane;
       if (!laneIds.has(String(c['evidence_lane']))) {
-        const named = String(c['evidence_lane'] ?? '').trim().toLowerCase();
-        const match = lanes.find((l) => named.length > 0 && (l.description.toLowerCase() === named || l.id.toLowerCase() === named));
-        if (match) c['evidence_lane'] = match.id;
+        const match = laneFor(c['evidence_lane'], lanes);
+        if (match) c['evidence_lane'] = match;
       }
       if (typeof c['claim'] !== 'string') {
         drop('no claim text');
