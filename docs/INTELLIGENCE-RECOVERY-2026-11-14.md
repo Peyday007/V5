@@ -176,6 +176,16 @@ Independent evaluation after these: **13 → 14 of 18 cases pass** (E, I, SEL ne
 pass; remaining: G2 transfer differences, L contradiction, O interval/certify,
 PERSIST — owned by in-flight streams).
 
+### Handed to Surge A
+
+- `tests/goalPlan.test.ts` "reads a large project in a bounded number of
+  statements": 153 reads against a bound of 140 **on unmodified
+  `origin/production` (aefd41f) locally**, identical with Surge B's changes, so
+  not caused here. It is Surge A's P-9 (statement budget). Deploy 1066's CI
+  shards passed it, so the count is environment-sensitive.
+- Local test timeouts (~30 s) under memory pressure from concurrent engineers:
+  `goalPlan.test.ts`/`openingsFromClaims.test.ts` pass 71/72 single-worker.
+
 ### Measurement
 
 `scripts/knowledge-census.ts` counts every population the owner listed from the
