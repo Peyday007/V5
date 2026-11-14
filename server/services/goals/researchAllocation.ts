@@ -47,14 +47,15 @@
  * is a whitelist here (R01-A1, §18.1).
  */
 
-export const RESEARCH_PURPOSES = [
-  'BROAD_DISCOVERY',
-  'TRANSACTION_ROUTES',
-  'OPERATING_SUPPORT',
-  'SELF_IMPROVEMENT',
-  'FORWARD_EXPLORATION',
-] as const;
-export type ResearchPurpose = (typeof RESEARCH_PURPOSES)[number];
+/*
+ * The five purposes have one definition, the production instrumentation's
+ * (`researchYield.ts`), which attributes every job to them and counts each
+ * job's cost once (`summarizeResearchYield`). The decision reads that reading;
+ * it does not keep a second attribution or a second per-lane window of its own.
+ */
+import { RESEARCH_PURPOSES, type ResearchPurpose } from './researchYield.ts';
+
+export { RESEARCH_PURPOSES, type ResearchPurpose };
 
 /** Exploration purposes; together they keep `EXPLORATION_FLOOR`. */
 export const EXPLORATION_PURPOSES: readonly ResearchPurpose[] = ['BROAD_DISCOVERY', 'FORWARD_EXPLORATION'];
@@ -418,89 +419,4 @@ export function decideCapacity(bottlenecks: BottleneckMeasurement[], lanes: Lane
     });
   }
   return out;
-}
-
-/** One research job as instrumentation records it. */
-export interface ResearchJobRecord {
-  id: string;
-  lane: string;
-  /** Every purpose the job contributes to; at least one. */
-  purposes: ResearchPurpose[];
-  /** The job's actual resource cost. */
-  cost: number;
-  submittedAt: string;
-  completedAt?: string | null;
-  acceptedClaims?: number;
-  actionableLinks?: number;
-  usefulResults?: number;
-}
-
-export interface CostAttribution {
-  /** Each job's cost, counted once. */
-  totalCost: number;
-  /** Per purpose: the share of each job's cost attributed to it. Sums to `totalCost`. */
-  byPurpose: Record<ResearchPurpose, number>;
-  /** Per purpose: jobs that contributed to it (a job counts toward every purpose it served). */
-  jobsByPurpose: Record<ResearchPurpose, number>;
-}
-
-/**
- * Attribute resource cost to purposes. A job may contribute to several, but
- * its cost is split between them, so the purposes sum to the jobs' actual cost.
- */
-export function attributeJobCosts(jobs: ResearchJobRecord[]): CostAttribution {
-  const byPurpose = zeroShares();
-  const jobsByPurpose = zeroShares();
-  const seen = new Set<string>();
-  let totalCost = 0;
-  for (const job of jobs) {
-    if (seen.has(job.id)) continue;
-    seen.add(job.id);
-    const cost = known(job.cost) && job.cost > 0 ? job.cost : 0;
-    const purposes = [...new Set(job.purposes)].filter((p) => (RESEARCH_PURPOSES as readonly string[]).includes(p));
-    if (purposes.length === 0) continue;
-    totalCost += cost;
-    for (const p of purposes) {
-      byPurpose[p] += cost / purposes.length;
-      jobsByPurpose[p] += 1;
-    }
-  }
-  return { totalCost, byPurpose, jobsByPurpose };
-}
-
-export interface LaneWindowYield {
-  lane: string;
-  submissions: number;
-  completions: number;
-  acceptedClaims: number;
-  actionableLinks: number;
-  usefulResults: number;
-  cost: number;
-  /** Null when nothing useful was produced: there is no cost per useful result to state. */
-  costPerUsefulResult: number | null;
-}
-
-/**
- * Per-lane yield over one window [from, to), each job counted once. Jobs
- * submitted outside the window are not in it, so successive windows are
- * consistent and comparable.
- */
-export function laneYieldForWindow(jobs: ResearchJobRecord[], window: { from: string; to: string }): LaneWindowYield[] {
-  const lanes = new Map<string, LaneWindowYield>();
-  const seen = new Set<string>();
-  for (const job of jobs) {
-    if (seen.has(job.id)) continue;
-    if (!(job.submittedAt >= window.from && job.submittedAt < window.to)) continue;
-    seen.add(job.id);
-    const row = lanes.get(job.lane) ?? { lane: job.lane, submissions: 0, completions: 0, acceptedClaims: 0, actionableLinks: 0, usefulResults: 0, cost: 0, costPerUsefulResult: null };
-    row.submissions += 1;
-    if (job.completedAt) row.completions += 1;
-    row.acceptedClaims += job.acceptedClaims ?? 0;
-    row.actionableLinks += job.actionableLinks ?? 0;
-    row.usefulResults += job.usefulResults ?? 0;
-    row.cost += known(job.cost) && job.cost > 0 ? job.cost : 0;
-    lanes.set(job.lane, row);
-  }
-  for (const row of lanes.values()) row.costPerUsefulResult = row.usefulResults > 0 ? row.cost / row.usefulResults : null;
-  return [...lanes.values()].sort((a, b) => a.lane.localeCompare(b.lane));
 }
