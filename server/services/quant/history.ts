@@ -226,6 +226,33 @@ const median = (values: number[]): number => {
  * the fields a card names, because a bid record researched as "buying
  * evidence" or a price researched as "competition" is history all the same.
  */
+/**
+ * What one fact's text states, read once. A fact's text says the same thing
+ * whichever opening is being assessed, but `acquireMarketHistory` runs per
+ * opening per portfolio evaluation, so every evaluation re-ran four regex
+ * readers over every evidence fact the project holds — O(openings × facts) of
+ * parsing per evaluation, ~0.5 s of each 63-opening one (§109). Keyed by the
+ * text (and the currency a price is read in); the readings are only read,
+ * never changed, by the caller.
+ */
+interface FactReading {
+  bidWin: ReturnType<typeof readBidWin>;
+  transactions: ReturnType<typeof readTransactionCounts>;
+  prices: ReturnType<typeof readPrices>;
+  spreads: ReturnType<typeof readSpreads>;
+}
+const FACT_READINGS_MAX = 20_000;
+const factReadings = new Map<string, FactReading>();
+function readFact(text: string, currency: string): FactReading {
+  const key = `${currency}\u0000${text}`;
+  const held = factReadings.get(key);
+  if (held) return held;
+  const reading: FactReading = { bidWin: readBidWin(text), transactions: readTransactionCounts(text), prices: readPrices(text, currency), spreads: readSpreads(text) };
+  if (factReadings.size >= FACT_READINGS_MAX) factReadings.clear();
+  factReadings.set(key, reading);
+  return reading;
+}
+
 export function acquireMarketHistory(knowledge: CashKnowledge, target: CashOpportunity): MarketHistory {
   const history: MarketHistory = {
     opportunityId: target.id,
@@ -250,14 +277,15 @@ export function acquireMarketHistory(knowledge: CashKnowledge, target: CashOppor
     const lineage = lineageOfFact(fact, knowledge);
     const source = fact.claimId ? { kind: 'CLAIM' as const, ref: fact.claimId } : { kind: 'CARD_FACT' as const, ref: fact.id };
     const base = { lineage, source, opportunityId: opportunity.id, broad };
-    for (const one of readBidWin(fact.value)) history.bidWin.push({ ...base, value: { wins: one.wins, bids: one.bids }, quote: one.quote });
-    for (const one of readTransactionCounts(fact.value)) history.transactions.push({ ...base, value: { count: one.count }, quote: one.quote });
-    for (const one of readPrices(fact.value, opportunity.currency)) {
+    const read = readFact(fact.value, opportunity.currency);
+    for (const one of read.bidWin) history.bidWin.push({ ...base, value: { wins: one.wins, bids: one.bids }, quote: one.quote });
+    for (const one of read.transactions) history.transactions.push({ ...base, value: { count: one.count }, quote: one.quote });
+    for (const one of read.prices) {
       // A price travels only within one currency; another currency is not converted by guess.
       if (opportunity.currency.toUpperCase() !== target.currency.toUpperCase()) continue;
       history.prices.push({ ...base, value: { cents: one.cents }, quote: one.quote });
     }
-    for (const one of readSpreads(fact.value)) history.spreads.push({ ...base, value: { share: one.share }, quote: one.quote });
+    for (const one of read.spreads) history.spreads.push({ ...base, value: { share: one.share }, quote: one.quote });
   }
   // This Brain's own outcomes are bid/win history measured first-hand.
   for (const lesson of knowledge.lessons) {

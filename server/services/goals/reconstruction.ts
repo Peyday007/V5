@@ -43,7 +43,7 @@ import { evaluateGoalPortfolio, type GateInput, type GoalPortfolio, type Planned
 import { ACQUISITION_LEVERS, DAYS_TO_FIRST_PROOF, PARTNER_TERMS, budgetsAllowed, purchaseCapacity, buyInbound, dailyVolumePlan, type AcquisitionLever, type VolumePlan } from './acquisitionLevers.ts';
 import { MATERIAL_SHARE, SHAPE_MULTIPLES } from './pathways.ts';
 import { createHash } from 'node:crypto';
-import { inlineEvaluator, type Evaluator } from './reasoning/evaluatorPool.ts';
+import { sharedEvaluator, type Evaluator } from './reasoning/evaluatorPool.ts';
 import { applyProgram, exploreDirections, programOf, renderExploration, repriceOpening, PRICE_ELASTICITY, type ExploreContext, type Exploration, type Transform } from './reasoning/directions.ts';
 import { sweepVariables, type VariableSweep } from './reasoning/variables.ts';
 
@@ -247,7 +247,23 @@ export function movableOpenings(openings: ModelledOpportunity[], baseline: GoalP
   return openings.filter((o) => ranked.has(o.opportunity.id) || (o.repeatable && o.agreedValue === 0 && !refused.has(o.opportunity.id)));
 }
 
+/**
+ * Reconstruct a plan. With no evaluator given it borrows the process's shared
+ * pool (§109): the inline default ran every engine evaluation on the caller's
+ * own loop, one unbroken slice each, which is the stall class the pool exists
+ * to remove.
+ */
 export async function reconstructPlan(input: ReconstructionInput): Promise<Reconstruction> {
+  if (input.evaluator) return reconstructPlanOn(input, input.evaluator);
+  const evaluator = sharedEvaluator();
+  try {
+    return await reconstructPlanOn(input, evaluator);
+  } finally {
+    await evaluator.close();
+  }
+}
+
+async function reconstructPlanOn(input: ReconstructionInput, evaluator: Evaluator): Promise<Reconstruction> {
   input = { ...input, openings: movableOpenings(input.openings, input.baseline) };
   const levers = input.levers ?? ACQUISITION_LEVERS;
   const worlds = input.worlds ?? Math.max(SCREEN_MIN_WORLDS, Math.min(SCREEN_WORLDS, Math.round(SCREEN_WORK / Math.max(1, input.openings.length))));
@@ -256,7 +272,6 @@ export async function reconstructPlan(input: ReconstructionInput): Promise<Recon
   const limits = input.portfolio;
   const daysLeft = limits.daysLeft;
 
-  const evaluator = input.evaluator ?? inlineEvaluator();
   /** Set once the headroom is read: a reading above it is a contradiction (Q-9). */
   let headroomReach: number | null = null;
   const measuredDeals = limits.measuredRates ? Math.max(1, limits.measuredRates.opportunities) : null;

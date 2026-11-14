@@ -105,6 +105,15 @@ describe('§102 mechanics', () => {
 
   it('never holds the event loop: requests are served between slices of the sweep', async () => {
     // Production, 2026-11-11 (Deploy 42998216834): a sweep that yielded every 2,000 reads coincided with a request timing out after the restart.
+    /*
+     * Measured on the evaluator the plan read uses (`plan.ts` passes the shared pool). This
+     * test once timed `reconstructPlan`'s inline default and started its clock before its own
+     * synchronous baseline evaluation, so the "stall" it read was the engine's one whole
+     * evaluation on the test's thread — 161 ms on both attempts of Deploy 43570660021, against
+     * the 150 ms bound — not a slice of the sweep.
+     */
+    const b = evaluateGoalPortfolio({ ...portfolioInput, openings: GOAL_10K_OPENINGS, worlds: 200 });
+    const pool = openEvaluator(1);
     let last = performance.now();
     let worst = 0;
     const tick = setInterval(() => {
@@ -112,10 +121,10 @@ describe('§102 mechanics', () => {
       worst = Math.max(worst, t - last);
       last = t;
     }, 1);
-    const b = evaluateGoalPortfolio({ ...portfolioInput, openings: GOAL_10K_OPENINGS, worlds: 200 });
     const started = performance.now();
-    const again = await reconstructPlan({ openings: GOAL_10K_OPENINGS, portfolio: { ...portfolioInput, worlds: 200 }, baseline: b, required: 0.9, explore: { maxMs: 1 } });
+    const again = await reconstructPlan({ openings: GOAL_10K_OPENINGS, portfolio: { ...portfolioInput, worlds: 200 }, baseline: b, required: 0.9, explore: { maxMs: 1 }, evaluator: pool });
     clearInterval(tick);
+    await pool.close();
     expect(again.exploration?.sweep?.variations ?? 0).toBeGreaterThan(10_000);
     expect(performance.now() - started).toBeGreaterThan(200);
     // The longest hold is one direction evaluation, which the inline fallback cannot split (production runs
@@ -124,6 +133,7 @@ describe('§102 mechanics', () => {
     // that holds the loop for its whole run is seconds, far past this bound.
     expect(worst).toBeLessThan(200);
   });
+
 
   it('runs on a pool thread, not the server\'s loop, and reads the same as inline', async () => {
     // Production, 2026-11-11: both releases whose boot ran the sweep on the main loop timed out a database-heavy request after the restart.

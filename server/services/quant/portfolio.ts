@@ -576,6 +576,318 @@ function evaluateWorlds(problem: PortfolioProblem, members: number[], drawn: Wor
   };
 }
 
+/*
+ * The greedy search's fast path (§109, 2026-11-14). The optimizer reads
+ * hundreds of combinations a plan read, each over every world, and the
+ * greedy reads exactly one shape: the current combination plus one candidate.
+ * Read from scratch, a 60-opening goal took ~30 s per evaluation, most of the
+ * ~20 s of CPU a minute that held the server's event loop in production.
+ *
+ * Every world's state after the current combination is held (`Prefix`), so a
+ * candidate that runs last in start order costs one member per world. It is
+ * used only where it cannot change a reading: no member is gated (a gate is an
+ * entry interleaved by its own day, decided by every member before it, and
+ * settled after the loop), and no two members share a market (a shared market
+ * rescales every member of it). Anything else is read by `evaluateWorlds`.
+ * `turn` and `readAfter` are `evaluateWorlds`'s member step and world tail,
+ * with the same arithmetic in the same order; `tests/quantOffLoop.test.ts`
+ * holds them equal to it.
+ */
+
+/** One member resolved for the world loop. */
+interface Plan {
+  act: Activity;
+  start: number;
+  need: number;
+  pick: number[];
+  downs: Uint8Array[];
+}
+
+function planOf(problem: PortfolioProblem, drawn: Worlds, m: number): Plan {
+  const act = problem.activities[m]!;
+  return { act, start: act.startDay ?? 0, need: act.capital ?? 0, pick: drawn.picks[m]!, downs: (act.needs ?? []).map((id) => drawn.down.get(id)!) };
+}
+
+/** Every world's state after some members have run in start order; pending cash kept `width` (day, cash, back) slots per world. */
+interface Prefix {
+  /** The members it ran, in start order. */
+  members: number[];
+  maxStart: number;
+  markets: Set<string>;
+  capital: Float64Array;
+  total: Float64Array;
+  spent: Float64Array;
+  ceilingSpent: Float64Array;
+  deals: Float64Array;
+  held: Float64Array;
+  lastDay: Float64Array;
+  proof: Float64Array;
+  short: Uint8Array;
+  up: Uint8Array;
+  pending: Int32Array;
+  width: number;
+  pendingDay: Float64Array;
+  pendingCash: Float64Array;
+  pendingBack: Float64Array;
+}
+
+function emptyPrefix(problem: PortfolioProblem, worlds: number): Prefix {
+  return {
+    members: [],
+    maxStart: -Infinity,
+    markets: new Set(),
+    capital: new Float64Array(worlds).fill(problem.startingCapital ?? Infinity),
+    total: new Float64Array(worlds),
+    spent: new Float64Array(worlds),
+    ceilingSpent: new Float64Array(worlds),
+    deals: new Float64Array(worlds),
+    held: new Float64Array(worlds),
+    lastDay: new Float64Array(worlds),
+    proof: new Float64Array(worlds),
+    short: new Uint8Array(worlds),
+    up: new Uint8Array(worlds).fill(1),
+    pending: new Int32Array(worlds),
+    width: 0,
+    pendingDay: new Float64Array(0),
+    pendingCash: new Float64Array(0),
+    pendingBack: new Float64Array(0),
+  };
+}
+
+/** Whether `act` may be read on the fast path at all. */
+function prefixable(act: Activity): boolean {
+  return !act.gated;
+}
+
+function anyDown(plan: Plan, i: number): boolean {
+  for (let r = 0; r < plan.downs.length; r++) if (plan.downs[r]![i] === 1) return true;
+  return false;
+}
+
+/** Append one member to every world of `prefix`, in place (`evaluateWorlds`'s member step, no gate, unscaled). */
+function turn(problem: PortfolioProblem, prefix: Prefix, plan: Plan, m: number, worlds: number): void {
+  const need2 = 2 * (prefix.members.length + 1);
+  if (need2 > prefix.width) {
+    const width = Math.max(8, prefix.width * 2, need2);
+    const day = new Float64Array(worlds * width);
+    const cash = new Float64Array(worlds * width);
+    const back = new Float64Array(worlds * width);
+    for (let i = 0; i < worlds; i++) {
+      for (let p = 0; p < prefix.pending[i]!; p++) {
+        day[i * width + p] = prefix.pendingDay[i * prefix.width + p]!;
+        cash[i * width + p] = prefix.pendingCash[i * prefix.width + p]!;
+        back[i * width + p] = prefix.pendingBack[i * prefix.width + p]!;
+      }
+    }
+    prefix.width = width;
+    prefix.pendingDay = day;
+    prefix.pendingCash = cash;
+    prefix.pendingBack = back;
+  }
+  const { act, start, need } = plan;
+  const a = act;
+  const f = 1;
+  const w = prefix.width;
+  const deadline = problem.deadlineDays;
+  for (let i = 0; i < worlds; i++) {
+    if (plan.downs.length > 0 && anyDown(plan, i)) prefix.up[i] = 0;
+    const base = i * w;
+    let capital = prefix.capital[i]!;
+    let proof = prefix.proof[i]!;
+    let pending = prefix.pending[i]!;
+    // Cash settled by this start day returns to the pool, once (newest first, as `evaluateWorlds` sums it).
+    let returned = false;
+    for (let p = pending - 1; p >= 0; p--) {
+      if (prefix.pendingDay[base + p]! <= start) {
+        capital += prefix.pendingCash[base + p]! + prefix.pendingBack[base + p]!;
+        proof += prefix.pendingCash[base + p]!;
+        returned = true;
+      }
+    }
+    if (returned) {
+      let kept = 0;
+      for (let p = 0; p < pending; p++) {
+        if (prefix.pendingDay[base + p]! <= start) continue;
+        prefix.pendingDay[base + kept] = prefix.pendingDay[base + p]!;
+        prefix.pendingCash[base + kept] = prefix.pendingCash[base + p]!;
+        prefix.pendingBack[base + kept] = prefix.pendingBack[base + p]!;
+        kept += 1;
+      }
+      pending = kept;
+    }
+    prefix.capital[i] = capital;
+    prefix.proof[i] = proof;
+    prefix.pending[i] = pending;
+    if (act.requiresProof && proof < 1) continue;
+    if (need > capital + 1e-9) {
+      prefix.short[i] = 1;
+      continue;
+    }
+    prefix.capital[i] = capital - need;
+    prefix.held[i] = prefix.held[i]! + need;
+    if (plan.downs.length > 0 && anyDown(plan, i)) continue;
+    const s = plan.pick[i]!;
+    const day = start + a.days[s]!;
+    const cash = a.cash[s]! * f;
+    if (day > prefix.lastDay[i]!) prefix.lastDay[i] = day;
+    const spend = a.spend ? a.spend[s]! * f : 0;
+    prefix.spent[i] = prefix.spent[i]! + spend;
+    if (!act.ceilingExempt) prefix.ceilingSpent[i] = prefix.ceilingSpent[i]! + spend;
+    if (a.deals) prefix.deals[i] = prefix.deals[i]! + a.deals[s]! * f;
+    prefix.pendingDay[base + pending] = day;
+    prefix.pendingCash[base + pending] = cash;
+    prefix.pendingBack[base + pending] = need;
+    pending += 1;
+    if (day <= deadline) prefix.total[i] = prefix.total[i]! + cash;
+    if (a.early) {
+      const earlyDay = start + a.early.days[s]!;
+      const earlyCash = a.early.cash[s]! * f;
+      prefix.pendingDay[base + pending] = earlyDay;
+      prefix.pendingCash[base + pending] = earlyCash;
+      prefix.pendingBack[base + pending] = 0;
+      pending += 1;
+      if (earlyDay <= deadline) prefix.total[i] = prefix.total[i]! + earlyCash;
+    }
+    prefix.pending[i] = pending;
+  }
+  prefix.members.push(m);
+  if (start > prefix.maxStart) prefix.maxStart = start;
+  if (act.market) prefix.markets.add(act.market);
+}
+
+/** Members in the order `evaluateWorlds` runs them when none is gated: by start day, ties in the order given. */
+function startOrder(problem: PortfolioProblem, members: number[]): number[] {
+  return [...members].sort((a, b) => (problem.activities[a]!.startDay ?? 0) - (problem.activities[b]!.startDay ?? 0));
+}
+
+/** The prefix of `current`, or null when `current` cannot be read on the fast path. */
+function prefixOf(problem: PortfolioProblem, current: number[], drawn: Worlds, worlds: number): Prefix | null {
+  const markets = new Set<string>();
+  for (const m of current) {
+    const act = problem.activities[m]!;
+    if (!prefixable(act)) return null;
+    if (act.market) {
+      if (markets.has(act.market)) return null;
+      markets.add(act.market);
+    }
+  }
+  const prefix = emptyPrefix(problem, worlds);
+  for (const m of startOrder(problem, current)) turn(problem, prefix, planOf(problem, drawn, m), m, worlds);
+  return prefix;
+}
+
+/** `evaluateWorlds`'s reading of `prefix`'s members followed by `last` (its member step, then its world tail). */
+function readAfter(problem: PortfolioProblem, members: number[], prefix: Prefix, last: Plan, worlds: number): PortfolioReading {
+  const keys = members.map((m) => problem.activities[m]!.key);
+  const justified = members.every((m) => problem.activities[m]!.justified);
+  const onKept = problem.reachOn === 'KEPT';
+  const fixedCost = onKept ? Math.max(0, problem.fixedCost ?? 0) : 0;
+  const anyDeals = members.some((m) => problem.activities[m]!.deals);
+  const deadline = problem.deadlineDays;
+  const { act, start, need } = last;
+  const a = act;
+  const f = 1;
+  const w = prefix.width;
+  const settled = new Float64Array(worlds);
+  const keptAt = new Float64Array(worlds);
+  const dealsAt = new Float64Array(worlds);
+  let allUp = 0;
+  let reached = 0;
+  let short = 0;
+  let over = 0;
+  let contributed = 0;
+  let tied = 0;
+  let cycled = 0;
+  for (let i = 0; i < worlds; i++) {
+    let total = prefix.total[i]!;
+    let spent = prefix.spent[i]!;
+    let ceilingSpent = prefix.ceilingSpent[i]!;
+    let deals = prefix.deals[i]!;
+    let held = prefix.held[i]!;
+    let lastDay = prefix.lastDay[i]!;
+    let wasShort = prefix.short[i] === 1;
+    const failed = last.downs.length > 0 && anyDown(last, i);
+    if (prefix.up[i] === 1 && !failed) allUp += 1;
+    let capital = prefix.capital[i]!;
+    let proof = prefix.proof[i]!;
+    const base = i * w;
+    for (let p = prefix.pending[i]! - 1; p >= 0; p--) {
+      if (prefix.pendingDay[base + p]! <= start) {
+        capital += prefix.pendingCash[base + p]! + prefix.pendingBack[base + p]!;
+        proof += prefix.pendingCash[base + p]!;
+      }
+    }
+    if (!(act.requiresProof && proof < 1)) {
+      if (need > capital + 1e-9) {
+        wasShort = true;
+      } else {
+        held += need;
+        if (!failed) {
+          const s = last.pick[i]!;
+          const day = start + a.days[s]!;
+          const cash = a.cash[s]! * f;
+          if (day > lastDay) lastDay = day;
+          const spend = a.spend ? a.spend[s]! * f : 0;
+          spent += spend;
+          if (!act.ceilingExempt) ceilingSpent += spend;
+          if (a.deals) deals += a.deals[s]! * f;
+          if (day <= deadline) total += cash;
+          if (a.early) {
+            const earlyDay = start + a.early.days[s]!;
+            const earlyCash = a.early.cash[s]! * f;
+            if (earlyDay <= deadline) total += earlyCash;
+          }
+        }
+      }
+    }
+    settled[i] = total;
+    const keep = total - spent - fixedCost;
+    keptAt[i] = keep;
+    dealsAt[i] = deals;
+    contributed += keep;
+    tied += held;
+    cycled += lastDay;
+    const overCeiling = problem.spendCeiling !== undefined && ceilingSpent > problem.spendCeiling + 1e-9;
+    if (overCeiling) over += 1;
+    if ((onKept ? keep : total) >= problem.target && !overCeiling) reached += 1;
+    if (wasShort) short += 1;
+  }
+  const sorted = settled.sort();
+  const q = (p: number) => sorted[Math.min(worlds - 1, Math.floor(p * worlds))]!;
+  const median = (xs: Float64Array) => xs.sort()[Math.min(worlds - 1, Math.floor(0.5 * worlds))]!;
+  const meanKept = contributed / worlds;
+  const turnover = capitalTurnover(meanKept, tied / worlds, cycled / worlds) ?? 0;
+  return {
+    keys,
+    reach: reached / worlds,
+    settledP10: q(0.1),
+    settledP50: q(0.5),
+    settledP90: q(0.9),
+    capitalShort: short / worlds,
+    overSpend: over / worlds,
+    keptP50: median(keptAt),
+    ...(anyDeals ? { dealsP50: median(dealsAt) } : {}),
+    contribution: meanKept,
+    capitalTurnover: turnover,
+    feasible: true,
+    infeasibleBecause: null,
+    basis: justified ? 'PROBABILITY' : 'COVERAGE',
+  };
+}
+
+/**
+ * `current` (in the order the search added it) plus `extra`: from the held
+ * prefix when that reads the same, otherwise by `evaluateWorlds`.
+ */
+function evaluateExtending(problem: PortfolioProblem, prefix: Prefix | null, current: number[], extra: number, drawn: Worlds, worlds: number): PortfolioReading {
+  const members = [...current, extra];
+  const act = problem.activities[extra]!;
+  if (!prefix || !prefixable(act) || (act.market !== undefined && prefix.markets.has(act.market)) || (act.startDay ?? 0) < prefix.maxStart || refuse(problem, members)) {
+    return evaluate(problem, members, drawn, worlds);
+  }
+  return readAfter(problem, members, prefix, planOf(problem, drawn, extra), worlds);
+}
+
 export interface CombinationReading extends PortfolioReading {
   /** Mean settled cash across worlds. */
   settledMean: number;
@@ -637,12 +949,12 @@ export function optimizePortfolio(problem: PortfolioProblem): PortfolioResult {
   const picks = drawWorlds(problem, worlds);
   const readings: PortfolioReading[] = [];
   const refused: PortfolioResult['refused'] = [];
-  const record = (members: number[]) => {
-    const reading = evaluate(problem, members, picks, worlds);
+  const keep = (reading: PortfolioReading) => {
     if (!reading.feasible) refused.push({ keys: reading.keys, reason: reading.infeasibleBecause! });
     readings.push(reading);
     return reading;
   };
+  const record = (members: number[]) => keep(evaluate(problem, members, picks, worlds));
   const singles = problem.activities.map((_, i) => record([i]));
   if (n <= EXHAUSTIVE_LIMIT) {
     for (let mask = 1; mask < 1 << n; mask++) {
@@ -654,17 +966,22 @@ export function optimizePortfolio(problem: PortfolioProblem): PortfolioResult {
     // Greedy: keep adding the activity that most improves the reading.
     let current: number[] = [];
     let currentReading: PortfolioReading | null = null;
+    // Every world's state after `current`, so a candidate costs one member per world (see `Prefix`); null when it cannot.
+    let prefix: Prefix | null = emptyPrefix(problem, worlds);
     for (;;) {
       let bestNext: { members: number[]; reading: PortfolioReading } | null = null;
       for (let i = 0; i < n; i++) {
         if (current.includes(i)) continue;
-        const members = [...current, i];
-        const reading = record(members);
-        if (!bestNext || better(reading, bestNext.reading) < 0) bestNext = { members, reading };
+        const reading = keep(evaluateExtending(problem, prefix, current, i, picks, worlds));
+        if (!bestNext || better(reading, bestNext.reading) < 0) bestNext = { members: [...current, i], reading };
       }
       if (!bestNext || (currentReading && better(bestNext.reading, currentReading) >= 0)) break;
       current = bestNext.members;
       currentReading = bestNext.reading;
+      const added = problem.activities[current[current.length - 1]!]!;
+      const appends = prefix !== null && prefixable(added) && !(added.market !== undefined && prefix.markets.has(added.market)) && (added.startDay ?? 0) >= prefix.maxStart;
+      if (appends) turn(problem, prefix!, planOf(problem, picks, current[current.length - 1]!), current[current.length - 1]!, worlds);
+      else prefix = prefixOf(problem, current, picks, worlds);
     }
   }
   const ranked = [...readings].sort(better);
