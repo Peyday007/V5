@@ -107,6 +107,8 @@ import { missionsForRounds, type RoundMissions } from '../russell/roundMissions.
 import { mechanismForSignal, observationExpiry, openingTitle } from '../../domain/opportunitySignals.ts';
 import { OPPORTUNITY_SIGNALS } from '../../domain/types.ts';
 import { discoveryAllowed } from './lifecycle.ts';
+import { noteConstructedRoundOpened, noteConstructedRoundOutcome } from './arrangementLibrary.ts';
+import { arrangementForLegacyKey } from '../../repos/monetization.ts';
 import { cashPosition } from './money.ts';
 import { proveCapabilities } from './deliverables/capabilities.ts';
 import { existingOpeningFor, markDuplicateOpenings, openingSourceKey } from './duplicates.ts';
@@ -1259,12 +1261,24 @@ export async function openConstructedRound(input: {
   const next = nextGoalRoundFor(history, now);
   if (next === null) return null;
   /*
+   * The arrangement's history across every goal in the project (K-5): a
+   * second goal asking about a structure the first already asked about waits
+   * out the same backoff and never researches it twice at once, and one
+   * research refuted is not asked again until its inputs change (K-4). The
+   * library row is current — the plan records each construction before it
+   * asks — so its `inputs_digest` is the arrangement's inputs now.
+   */
+  const everyGoal = (await listRounds(input.projectId)).filter((one) => one.bucketId.startsWith(GOAL_BUCKET_PREFIX) && one.bucketId.endsWith(`-${lens}`));
+  if (nextGoalRoundFor(asOneHistory(everyGoal), now) === null) return null;
+  const stored = await arrangementForLegacyKey(input.projectId, input.key);
+  if (stored?.verdict?.verdict === 'REFUTED' && stored.verdict.inputsDigest === stored.inputsDigest) return null;
+  /*
    * An earlier round of this design closed while its research ran on: asking
    * again now would research the same design twice. Production, 2026-11-02:
    * mx-7b4358e63f7c read ABANDONED over a RUNNING mission.
    */
-  if (history.length > 0) {
-    const missions = await missionsForRounds(history.map((one) => one.candidateId));
+  if (everyGoal.length > 0) {
+    const missions = await missionsForRounds(everyGoal.map((one) => one.candidateId));
     if ([...missions.values()].some((one) => one.latest && !TERMINAL_MISSION.has(one.latest.state))) return null;
   }
   const bucket = goalBucket(input.goal.id, input.goal.title, input.question, lens);
@@ -1279,7 +1293,19 @@ export async function openConstructedRound(input: {
     statement: questionFor(bucket, mode.objective, next, history, held, frame),
     ...(await constructedOrigins(input)),
   });
+  if (round) await noteConstructedRoundOpened(input.projectId, input.key, now).catch(() => false);
   return round ? { bucketId: id, candidateId: round.candidateId, round: next } : null;
+}
+
+/**
+ * Several goals' rounds about one arrangement, as one history: numbered by
+ * when they opened, so `nextGoalRoundFor`'s barren backoff counts every goal's
+ * finished askings rather than one bucket's.
+ */
+function asOneHistory(rounds: readonly CashDiscoveryRound[]): CashDiscoveryRound[] {
+  return [...rounds]
+    .sort((a, b) => a.openedAt.localeCompare(b.openedAt) || a.id.localeCompare(b.id))
+    .map((one, index) => ({ ...one, round: index + 1 }));
 }
 
 /**
@@ -1924,7 +1950,11 @@ export async function harvest(input: {
         'asked; it does not say who pays.',
     });
     if (!created) continue;
-    if (context && context.round.state !== 'OPEN') await countSettledRoundOpening(context.round.id);
+    if (context && context.round.state !== 'OPEN') {
+      await countSettledRoundOpening(context.round.id);
+      // A settled constructed round that still found an opening confirms its arrangement (K-4).
+      await noteConstructedRoundOutcome({ projectId: input.projectId, round: context.round, to: 'HARVESTED', found: 1 }).catch(() => null);
+    }
 
     /*
      * The signal, and only the signal.
@@ -2027,6 +2057,10 @@ async function closeEndedRounds(input: {
     const found = opportunities.filter((one) => one.discoveryRoundId === entry.round.id).length;
     if (!(await closeRound({ id: entry.round.id, to, found }))) continue;
     closed.push(entry.round.id);
+    // A constructed arrangement's round writes its outcome to the arrangement itself (K-4).
+    await noteConstructedRoundOutcome({ projectId: input.projectId, round: entry.round, to, found }).catch((error: unknown) =>
+      console.warn(`arrangement outcome for round ${entry.round.id} not recorded: ${String((error as Error)?.message ?? error)}`),
+    );
     if (to === 'HARVESTED') continue;
     const why = mission
       ? `its research is ${mission.state.toLowerCase()}`

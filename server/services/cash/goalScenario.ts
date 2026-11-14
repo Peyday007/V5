@@ -188,7 +188,10 @@ export const MAX_ESTIMATED_ARRANGEMENTS = 12;
  */
 export function estimatedFromArrangement(one: ConstructedArrangement, input: { projectId: string; currency: string; beforeProofCents: number | null }): ModelledOpportunity | null {
   const { p10, p50, p90 } = one.value;
-  if (one.value.tier === 'UNKNOWN' || !(p50 > 0) || !(p90 >= p10)) return null;
+  // A MECHANISM value is a pool of other buyers' prices, not these buyers': it
+  // is no price, and a cost or capital swept from its top would be borrowed too
+  // (PRICE-POOL, 2026-11-14). Like UNKNOWN, it stays a research target only.
+  if (one.value.tier === 'UNKNOWN' || one.value.tier === 'MECHANISM' || !(p50 > 0) || !(p90 >= p10)) return null;
   if (one.stress.exposure === 'EXCEEDS') return null;
   const ref: SourceRef = { kind: 'OTHER', ref: `arrangement:${one.key}`, note: `${one.value.tier} reconstruction from ${one.value.observations} observation(s)` };
   const low = Math.max(0.01, p10);

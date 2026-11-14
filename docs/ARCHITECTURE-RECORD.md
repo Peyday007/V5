@@ -13817,6 +13817,31 @@ What it does not do: decide that buyers exist, prepay or repeat. Those come back
 through the ordinary gate and harvest as openings, and the goal plan's chain
 gate judges them like any other.
 
+- **What it composes is a library, not a cache (Surge B, 2026-11-14,
+  migration 151 / pg 142).** Every arrangement lived in two process Maps and
+  was lost on a restart or a deploy. It is now a `CONSTRUCTED` row of the §49
+  ledger (`monetization_paths`), one per structure per project: the identity
+  is `design_signature`, a hash of the design key and each part's node kind
+  and normalised name path from the map root — never a row id or the label —
+  so two goals, a re-created node, a second process or a model change land on
+  one row, and another project's same structure is found by its signature.
+  `design_json` holds the hypothesis (design, properties, stress, value
+  p10/p50/p90, unknown parts, question, parts with their claims, geography of
+  those claims, constraint references, payment timing); what research
+  *observed* is an EVIDENCE fact on the path, resolving to a claim. The row
+  counts the rounds asked and the goal models that weighed it
+  (`monetization_path_evaluations`, one per stored reading, with whether the
+  best combination picked it). A finished round that filed openings CONFIRMS
+  it; one that established an absence (an accepted NEGATIVE_EXISTENCE claim)
+  REFUTES it under its `inputs_digest`, and it is not asked again until a part,
+  a precedent or a same-buyer price changes. A round's backoff is shared by
+  every goal in the project. The `MAX_CONSTRUCTIONS` cap ranks candidates
+  before it cuts (library verdict, target properties, precedent, gated parts,
+  same-buyer prices, stored value; dealt by population) and the cut is a
+  `construction cap` line in the reading's degraded list. `listPaths` leaves
+  constructed rows out, so the ledger's ranking never reads a hypothesis, and
+  an `arr_` estimate is never linked to a goal as an opening.
+
 ## 83. Focus keeps one search: an approved cash goal's constructed arrangements.
 
 Focus (`BRAIN_CASH_RESEARCH_MAX`, §78) stops Routines hunting openings, and

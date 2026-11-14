@@ -67,7 +67,9 @@ import { evidenceCard } from '../cash/card.ts';
 import { ARRANGEMENT_ID_PREFIX, isArrangementId, bestCaseReach, composeGoalModel, planTrace, dealsForGoal, OUTREACH_MULTIPLE, priceSupported, volumeEstablished, wilson, type ModelledOpportunity } from '../cash/goalScenario.ts';
 import { readTarget, type TargetReading } from './target.ts';
 import { executionFrame, MAX_LIVE_GOAL_ROUNDS, openConstructedRound, openGoalDiscovery, roundsStillResearching } from '../cash/discovery.ts';
-import { constructArrangements, type ConstructedArrangement } from '../cash/construct.ts';
+import { constructArrangements, lastConstructionReport, type ConstructedArrangement } from '../cash/construct.ts';
+import { arrangementKeyOfBucket, recordReadingEvaluations, refutedUnderSameInputs, rememberArrangements } from '../cash/arrangementLibrary.ts';
+import { arrangementVerdicts } from '../../repos/monetization.ts';
 import { exclusionSentence, goalExclusions } from '../cash/exclusions.ts';
 import { OPENING_SENTENCE } from '../cash/construct.ts';
 import { listRounds } from '../../repos/cashDiscovery.ts';
@@ -916,6 +918,11 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     return [] as ConstructedArrangement[];
   });
   trace(`constructed ${arrangements.length}`);
+  const constructionCut = lastConstructionReport(target.projectId);
+  // A cap that left candidates uncomposed is said, never silent (K-2): they stay in the space, ranked below the cut.
+  if (constructionCut && constructionCut.cut > 0) {
+    degraded.push(`construction cap: ${constructionCut.composed} of ${constructionCut.considered} candidate arrangements composed this pass; ${constructionCut.cut} ranked below the cap were not (${constructionCut.reused} reused from the library)`);
+  }
   const model = await composeGoalModel({ goal, target, now, arrangements });
   trace('composed');
   const measuredChance = await measuredPlanChance();
@@ -2457,11 +2464,12 @@ async function persistReading(goal: Workstream, reading: PlanReading, chosen: St
     infeasible: reading.infeasible,
     degraded: reading.degraded,
   };
+  const readingId = newId('gpr');
   await getDb().run(
     `INSERT INTO goal_plan_readings (id, workstream_id, digest, scenario_model_id, scenario_run_id, verdict, chosen_strategy, strategies, next_test, forecast, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      newId('gpr'),
+      readingId,
       goal.id,
       digest,
       reading.scenarioModelId,
@@ -2480,12 +2488,21 @@ async function persistReading(goal: Workstream, reading: PlanReading, chosen: St
     summary: reading.summary.slice(0, 400),
     actorRef: 'BRAIN',
   });
+  // Which constructed arrangements this model weighed, and which it picked, go on their library rows (K-3).
+  await recordReadingEvaluations({
+    projectId: reading.target.projectId,
+    goalId: goal.id,
+    readingId,
+    demand: reading.portfolio?.demand ?? [],
+    picked: new Set(reading.portfolio?.best?.members.map((one) => one.opportunityId) ?? []),
+    prefix: ARRANGEMENT_ID_PREFIX,
+  }).catch((error: unknown) => console.warn(`goal ${goal.id}: arrangement evaluations not recorded: ${errorText(error)}`));
   // A recommended plan's opportunities become work this goal pursues, so the
   // goal tick holds and prioritizes them. Execution itself stays with the
   // existing commercial authority and its effects.
   // A qualified candidate is pursued too: it is the strongest provisional plan, sold and improved while
   // nothing is accepted (owner, 2026-11-09). Only the verdict says whether it meets the objective.
-  const pursued = reading.acceptance.accepted?.opportunityIds.length ? reading.acceptance.accepted.opportunityIds : chosen?.chainComplete ? chosen.opportunityIds : [];
+  const pursued = openingsToPursue(reading, chosen);
   if (pursued.length > 0) {
     const links = await listLinks(goal.id);
     for (const opportunityId of pursued) {
@@ -2493,6 +2510,17 @@ async function persistReading(goal: Workstream, reading: PlanReading, chosen: St
       await linkWorkstream({ workstreamId: goal.id, kind: 'OPPORTUNITY', ref: opportunityId, relation: 'PURSUES', recordedBy: 'BRAIN', recordedByUserId: null });
     }
   }
+}
+
+/**
+ * The openings a stored reading makes this goal pursue: the accepted plan's,
+ * else a complete chosen chain's. An `arr_` id is a constructed arrangement
+ * — an estimate in the model, never a row — so it is recorded as an
+ * evaluation on its library row and never linked as an opening (K-3).
+ */
+export function openingsToPursue(reading: Pick<PlanReading, 'acceptance'>, chosen: Pick<StrategyReading, 'chainComplete' | 'opportunityIds'> | null): string[] {
+  const ids = reading.acceptance.accepted?.opportunityIds.length ? reading.acceptance.accepted.opportunityIds : chosen?.chainComplete ? chosen.opportunityIds : [];
+  return ids.filter((one) => !isArrangementId(one));
 }
 
 /**
@@ -2926,6 +2954,10 @@ export async function goalArrangements(goal: Workstream, target: TargetReading, 
     now,
   });
   lastArrangements.set(goal.id, { at: now.getTime(), arrangements });
+  // The library keeps what was composed: a restart, a deploy or another goal reads it back (K-1).
+  await rememberArrangements(target.projectId, goal.id, arrangements, now.toISOString()).catch((error: unknown) =>
+    console.warn(`goal ${goal.id}: constructed arrangements not stored: ${errorText(error)}`),
+  );
   return arrangements;
 }
 
@@ -2949,7 +2981,7 @@ export function arrangementContribution(reading: Pick<PlanReading, 'portfolio'>)
 export async function askConstructedArrangements(goal: Workstream, reading: PlanReading, now: Date, max: number, liveCap: number): Promise<string[]> {
   const t = reading.target;
   if (t.daysLeft === null || t.daysLeft <= 0 || t.remainingCents <= 0) return [];
-  const arrangements = (await goalArrangements(goal, t, now, goalLimits(reading).bestReachCents))
+  let arrangements = (await goalArrangements(goal, t, now, goalLimits(reading).bestReachCents))
     // A design whose known worst case is more money than the goal may tie up is rejected, not asked (§82).
     .filter((one) => one.stress.exposure !== 'EXCEEDS');
   const opened: string[] = [];
@@ -2968,7 +3000,11 @@ export async function askConstructedArrangements(goal: Workstream, reading: Plan
   const room = Math.max(1, Math.floor(liveCap / 2)) - (await roundsStillResearching(openMx));
   if (room <= 0) return [];
   max = Math.min(max, room);
-  const askedBefore = (await listRounds(t.projectId)).filter((r) => r.bucketId.startsWith(`goal-${goal.id}-mx-`));
+  // Every goal's askings about an arrangement count (K-5): the same structure asked by another goal is not new.
+  const askedBefore = (await listRounds(t.projectId)).filter((r) => arrangementKeyOfBucket(r.bucketId) !== null);
+  // Research already refuted these, under the inputs they still have (K-4): not asked again until a part changes.
+  const library = await arrangementVerdicts(t.projectId);
+  arrangements = arrangements.filter((one) => !refutedUnderSameInputs(one.signature ? library.get(one.signature) : undefined, one));
   // What each would contribute to the whole goal in the last model leads; the least-asked order breaks ties.
   const contribution = arrangementContribution(reading);
   const byContribution = [...byLeastAsked(arrangements, askedBefore)]

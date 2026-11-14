@@ -10131,11 +10131,14 @@ export type PathJudgment = (typeof PATH_JUDGMENTS)[number];
  * `ENUMERATED` is the method table applied to a subject's own recorded facts:
  * arithmetic, reading no prose and claiming nothing beyond *this is a shape of
  * transaction that could apply here*. `EVIDENCED` is a worker that read a
- * source declaring one, and carries the claim. `SEED` is a person, and it is
+ * source declaring one, and carries the claim. `CONSTRUCTED` is an
+ * arrangement Brain composed itself (§81/§82, migration 151): a hypothesis with
+ * its design and reconstruction in `design_json`, never read by the ledger's
+ * ranking (`listPaths` leaves it out). `SEED` is a person, and it is
  * the one origin Brain may never write — §22's rule at a new table: a machine
  * that could name its own possibilities would be deciding what the space is.
  */
-export const PATH_ORIGINS = ['SEED', 'ENUMERATED', 'EVIDENCED'] as const;
+export const PATH_ORIGINS = ['SEED', 'ENUMERATED', 'EVIDENCED', 'CONSTRUCTED'] as const;
 export type PathOrigin = (typeof PATH_ORIGINS)[number];
 
 /**
@@ -10226,6 +10229,70 @@ export interface MonetizationPathRow {
   last_evaluated_at: string | null;
   created_at: string;
   updated_at: string;
+  /* Migration 151: a constructed arrangement. All null / zero on every other origin. */
+  design_signature: string | null;
+  legacy_key: string | null;
+  design_json: string | null;
+  construction_origin: string | null;
+  precedent_opportunity_id: string | null;
+  first_goal_id: string | null;
+  inputs_digest: string | null;
+  last_composed_at: string | null;
+  asked_count: number;
+  last_asked_at: string | null;
+  evaluated_count: number;
+  last_evaluation_goal_id: string | null;
+  last_evaluation_reading_id: string | null;
+  last_evaluation_contribution_cents: number | null;
+  last_evaluation_picked: number | null;
+  research_verdict: string | null;
+  verdict_inputs_digest: string | null;
+  verdict_round_id: string | null;
+  verdict_at: string | null;
+}
+
+/**
+ * A constructed arrangement as the library holds it (§81/§82, migration 151).
+ *
+ * A hypothesis: `design` is Brain's composition and reconstruction, never an
+ * observation. What research observed about it is an EVIDENCE fact on the
+ * path; what research concluded is `verdict`, which holds only while the
+ * arrangement's `inputsDigest` is the one it was reached under.
+ */
+export interface ConstructedArrangementRecord {
+  pathId: string;
+  projectId: string;
+  signature: string;
+  legacyKey: string | null;
+  constructionOrigin: 'FORWARD' | 'TRANSFER' | 'REVERSE';
+  /** The parsed `design_json`: `{ arrangement, composedUnder, geography, constraints, paymentTiming }`. */
+  design: Record<string, unknown>;
+  inputsDigest: string;
+  precedentOpportunityId: string | null;
+  opportunityId: string | null;
+  industryNodeId: string | null;
+  firstGoalId: string | null;
+  lastComposedAt: string | null;
+  askedCount: number;
+  lastAskedAt: string | null;
+  evaluatedCount: number;
+  lastEvaluation: { goalId: string; readingId: string | null; contributionCents: number | null; picked: boolean } | null;
+  verdict: { verdict: 'CONFIRMED' | 'REFUTED'; inputsDigest: string; roundId: string | null; at: string | null } | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** One goal model's weighing of one constructed arrangement (migration 151). */
+export interface MonetizationPathEvaluationRow {
+  id: string;
+  project_id: string;
+  path_id: string;
+  goal_id: string;
+  reading_id: string;
+  picked: number;
+  refused: number;
+  contribution_cents: number | null;
+  evaluated_at: string;
 }
 
 /* ==========================================================================
