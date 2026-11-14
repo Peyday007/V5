@@ -408,12 +408,20 @@ describe('F01: the sandbox first-dollar journey', () => {
     await tick();
     expect(contact.sends).toHaveLength(1);
 
-    // An invoice is refused until something is agreed — and a bare amount in
-    // the ledger is not an agreement.
-    expect((await requestInvoice(piece.id)).status).toBe(422);
-
-    // The agreement: amount, deliverable, acceptance condition, evidence.
-    const agreement = await agree(piece.id, 120_000, reply.body.observation.id);
+    // The agreement: the tick turned the buyer's acceptance into one, on the
+    // terms of the offer the rows prove was sent — nobody re-typed them
+    // (LIFE-29-1). A manual agree for the same acceptance adds nothing.
+    const agreements = await agreementsFor(piece.id);
+    expect(agreements).toHaveLength(1);
+    expect(agreements[0]).toMatchObject({
+      amountCents: 120_000,
+      evidenceKind: 'WRITTEN_ACCEPTANCE',
+      observationId: reply.body.observation.id,
+    });
+    const agreement = agreements[0]!;
+    await tick();
+    expect(await agreementsFor(piece.id)).toHaveLength(1);
+    expect((await moneyCount(piece.id)).PIPELINE_AGREED).toBe(1);
 
     // The invoice: Brain's amount (the agreement's), the person's terms.
     const drafted = await requestInvoice(piece.id, { ...TERMS, amountCents: 1 });

@@ -7,6 +7,10 @@
  * between a receipt and its record, a restart mid-journey, and the deals
  * already stranded. Each step is idempotent by a row, never by a flag:
  *
+ *   0. a buyer's acceptance (or counter-offer) of an offer Brain sent becomes the
+ *      agreement it is evidence for, on the terms of that offer as the rows
+ *      prove it was sent (`acceptance.ts`) — or a need naming the term no row
+ *      states, never an invented one;
  *   1. an agreement's ledger entries exist (and its release, if released);
  *   2. (invoices are issued and read back by `invoicing.ts`, just before this);
  *   3. each agreement's obligation advances (`fulfillment.ts`): its work is
@@ -51,6 +55,7 @@ import { recordOutcomes } from './learning.ts';
 import { recordDetectedExceptions, rehearseCaseOnTick } from '../deliverables/exceptions.ts';
 import { recordRealization } from '../deliverables/realization.ts';
 import { recordRowDependencies } from '../deliverables/commitments.ts';
+import { agreeAcceptedOffers, type AcceptancePass } from './acceptance.ts';
 
 const BRAIN = 'BRAIN';
 
@@ -58,6 +63,8 @@ const BRAIN = 'BRAIN';
 export const RESPONSE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 export interface JourneyTickReport {
+  /** Acceptances turned into agreements, the needs raised for terms no row states, and refusals. */
+  acceptances: AcceptancePass;
   ledgerChecked: number;
   /** Agreements whose ledger entry could not be written, with why. Never silent. */
   ledgerRefused: { agreementId: string; reason: string }[];
@@ -77,6 +84,7 @@ export async function advanceJourney(
   now: Date = new Date(),
 ): Promise<JourneyTickReport> {
   const report: JourneyTickReport = {
+    acceptances: { agreed: [], needs: [], refused: [] },
     ledgerChecked: 0,
     ledgerRefused: [],
     fulfillment: { workCreated: [], needsRaised: [], needsSettled: [], refundsSettled: [] },
@@ -89,6 +97,10 @@ export async function advanceJourney(
   };
   const mode = await getCashMode(projectId);
   if (!mode) return report;
+
+  // 0. An acceptance of a sent offer is the agreement it evidences (LIFE-29-1):
+  // nobody re-types terms Brain already holds, and the commitment chain starts.
+  report.acceptances = await agreeAcceptedOffers(projectId, mode.currency);
 
   // 1. The ledger counts every agreement exactly once, and every release.
   for (const agreement of await agreementsInProject(projectId)) {
