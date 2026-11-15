@@ -389,3 +389,31 @@ describe('loop.ts keeps runPass documented', () => {
     expect(doc).toMatch(/Run one pass as its own failure domain/);
   });
 });
+
+describe('the tick report initializer keeps one indentation level', () => {
+  it('every field of tickOnce\'s report literal sits at its nesting depth', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const source = await readFile(new URL('../server/services/russell/loop.ts', import.meta.url), 'utf8');
+    const start = source.indexOf('  const report: TickReport = {\n');
+    expect(start).toBeGreaterThan(0);
+    const end = source.indexOf('\n  };\n', start);
+    expect(end).toBeGreaterThan(start);
+    const lines = source.slice(start, end).split('\n').slice(1);
+    let depth = 2; // inside `const report = {`, fields sit at 4 spaces
+    const misindented: string[] = [];
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed === '' || trimmed.startsWith('*') || trimmed.startsWith('/*')) continue;
+      const closes = /^[}\]]/.test(trimmed) ? 1 : 0;
+      const expected = (depth - closes) * 2;
+      const actual = line.length - line.trimStart().length;
+      if (actual !== expected) misindented.push(`${actual}≠${expected}: ${trimmed}`);
+      const opens = (trimmed.match(/[{[]/g) ?? []).length;
+      const shuts = (trimmed.match(/[}\]]/g) ?? []).length;
+      depth += opens - shuts;
+    }
+    // `withdrawnMootAnswers`, `routineDecisions` and `renewedReservations` once
+    // sat two spaces shallow of their neighbours.
+    expect(misindented).toEqual([]);
+  });
+});
