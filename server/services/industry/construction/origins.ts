@@ -275,8 +275,51 @@ export interface MarketCriteria {
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
 const finite = (n: number | null | undefined): n is number => typeof n === 'number' && Number.isFinite(n);
 
-/** The per-criterion reading of one market. An unknown is never a favourable assumption (invariant 39). Pure. */
-export function marketCriteria(m: MarketCandidate): MarketCriteria {
+/**
+ * What an unknown capital or failure rate is taken as when markets are
+ * compared. The fixed defaults alone are not enough: a market whose known
+ * capital is more than three months' contribution, or whose measured failure
+ * rate is above the default, would rank below an identical market nobody had
+ * researched — absence of research beating research that found a cost
+ * (invariant 39). So within a comparison an unknown takes the least favourable
+ * of the default and every known reading among the compared markets: it can
+ * tie the worst evidence it might be hiding, and never beat it.
+ */
+export interface UnknownFloor {
+  /** The capital factor an unknown capital takes: never above any known one. */
+  capitalFactor: number;
+  /** The failure rate an unknown failure rate takes: never below any measured one. */
+  failureRate: number;
+}
+
+/** The fixed defaults, used when a market is read with nothing to compare it against. */
+export const DEFAULT_UNKNOWN_FLOOR: UnknownFloor = { capitalFactor: UNKNOWN_CAPITAL_FACTOR, failureRate: UNKNOWN_FAILURE_RATE };
+
+/**
+ * The floor for one comparison: the worst known capital factor and the
+ * highest measured failure rate among `markets`, each no better than its
+ * default. A known capital factor is read only where the contribution is
+ * positive, because a zero contribution zeroes the factor without saying
+ * anything about capital. Pure.
+ */
+export function unknownFloor(markets: readonly MarketCandidate[]): UnknownFloor {
+  let capitalFactor = UNKNOWN_CAPITAL_FACTOR;
+  let failureRate = UNKNOWN_FAILURE_RATE;
+  for (const m of markets) {
+    const c = marketCriteria(m);
+    if (c.capitalUsd !== null && c.monthlyContributionUsd > 0) capitalFactor = Math.min(capitalFactor, c.capitalFactor);
+    if (!c.unknown.includes('failure rate')) failureRate = Math.max(failureRate, c.failureRate);
+  }
+  return { capitalFactor, failureRate };
+}
+
+/**
+ * The per-criterion reading of one market. An unknown is never a favourable
+ * assumption (invariant 39): an unknown capital or failure rate takes `floor`,
+ * which a comparison sets from `unknownFloor` so an unknown cannot outrank the
+ * adverse evidence it might hide. Pure.
+ */
+export function marketCriteria(m: MarketCandidate, floor: UnknownFloor = DEFAULT_UNKNOWN_FLOOR): MarketCriteria {
   const unknown: string[] = [];
   if (!finite(m.marginUsd)) unknown.push('margin');
   if (!finite(m.monthlyVolume)) unknown.push('volume');
@@ -286,11 +329,11 @@ export function marketCriteria(m: MarketCandidate): MarketCriteria {
   const timeFactor = 1 / Math.sqrt(days);
   const capital = finite(m.capitalUsd) ? Math.max(0, m.capitalUsd) : null;
   if (capital === null) unknown.push('capital');
-  const capitalFactor = capital === null ? UNKNOWN_CAPITAL_FACTOR : capital === 0 ? 1 : monthly > 0 ? monthly / (monthly + capital) : 0;
+  const capitalFactor = capital === null ? floor.capitalFactor : capital === 0 ? 1 : monthly > 0 ? monthly / (monthly + capital) : 0;
   if (!finite(m.feasibility)) unknown.push('feasibility');
   const feasibility = finite(m.feasibility) ? clamp01(m.feasibility) : UNKNOWN_FEASIBILITY;
   if (!finite(m.failureRate)) unknown.push('failure rate');
-  const failureRate = finite(m.failureRate) ? clamp01(m.failureRate) : UNKNOWN_FAILURE_RATE;
+  const failureRate = finite(m.failureRate) ? clamp01(m.failureRate) : floor.failureRate;
   const failureModes = finite(m.failureModes) ? Math.max(0, Math.floor(m.failureModes)) : 0;
   const riskFactor = (1 - failureRate) * FAILURE_MODE_DECAY ** failureModes;
   const remoteControl = clamp01(m.remoteControl);
@@ -304,8 +347,8 @@ export function marketCriteria(m: MarketCandidate): MarketCriteria {
  * weak on any one of them cannot hide it behind another. An unknown margin or
  * volume scores zero; every other unknown takes its unfavourable default.
  */
-export function marketScore(m: MarketCandidate): number {
-  return marketCriteria(m).score;
+export function marketScore(m: MarketCandidate, floor: UnknownFloor = DEFAULT_UNKNOWN_FLOOR): number {
+  return marketCriteria(m, floor).score;
 }
 
 /**
@@ -315,7 +358,9 @@ export function marketScore(m: MarketCandidate): number {
  * every familiar one (META-18-1).
  */
 export function rankMarkets(markets: MarketCandidate[], _context: RankingContext = {}): MarketCandidate[] {
-  return [...markets].sort((a, b) => marketScore(b) - marketScore(a) || a.key.localeCompare(b.key));
+  const floor = unknownFloor(markets);
+  const score = new Map(markets.map((m) => [m, marketScore(m, floor)] as const));
+  return [...markets].sort((a, b) => score.get(b)! - score.get(a)! || a.key.localeCompare(b.key));
 }
 
 /** The bound of a fact the evidence states for a segment (or market-wide), or null when nothing states it. */
@@ -358,7 +403,7 @@ function roleCapital(e: IndustryEvidence, role: CommercialRole, segment: string 
 /**
  * One subject of the map as a market, read from its evidence and the role sets
  * of its flows. Each flow is read at its own paying segment, and the subject is
- * its best flow by `marketScore`. Every figure takes its unfavourable bound and
+ * its best flow by `rankMarkets`. Every figure takes its unfavourable bound and
  * an unstated one is null (invariant 39): the margin is the best low per-unit
  * value a role Brain is not refused from can capture; the volume is units per
  * account per month times reachable accounts, both at their low bounds; the
@@ -374,7 +419,7 @@ function roleCapital(e: IndustryEvidence, role: CommercialRole, segment: string 
  */
 export function marketOfEvidence(key: string, evidence: IndustryEvidence, sets: readonly FlowRoles[]): MarketCandidate {
   const none: MarketCandidate = { key, geography: evidence.geography, marginUsd: null, monthlyVolume: null, daysToCash: null, remoteControl: 0, capitalUsd: null, feasibility: null, failureModes: null, failureRate: null };
-  let best = none;
+  const flows: MarketCandidate[] = [];
   const failureRate = bound(evidence, 'failure_rate', null, 'high');
   for (const set of sets) {
     const roles = set.roles.filter((role) => role.occupiable.answer !== 'NO');
@@ -401,9 +446,10 @@ export function marketOfEvidence(key: string, evidence: IndustryEvidence, sets: 
       failureModes,
       failureRate,
     };
-    if (best === none || marketScore(one) > marketScore(best)) best = one;
+    flows.push(one);
   }
-  return best;
+  // The best flow, compared as markets are: an unknown in one flow cannot beat a known cost in another. A tie keeps the first.
+  return rankMarkets(flows)[0] ?? none;
 }
 
 /** A node and everything recorded beneath it. Pure. */
@@ -446,7 +492,9 @@ export async function rankSubjectMarkets(nodes: readonly IndustryNode[], constra
     const key = `${String(index).padStart(width, '0')}:${node.id}`;
     byKey.set(key, { node, market: marketOfEvidence(key, evidence, commercialRoles(evidence)) });
   });
-  return rankMarkets([...byKey.values()].map((one) => one.market)).map((m) => ({ ...byKey.get(m.key)!, criteria: marketCriteria(m) }));
+  const markets = [...byKey.values()].map((one) => one.market);
+  const floor = unknownFloor(markets);
+  return rankMarkets(markets).map((m) => ({ ...byKey.get(m.key)!, criteria: marketCriteria(m, floor) }));
 }
 
 // ---------------------------------------------------------------------------
