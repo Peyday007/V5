@@ -307,6 +307,47 @@ export async function runpodChat(
 }
 
 /**
+ * Ask the GPU itself, with no fallback behind it: the health ping for the RunPod
+ * slot. A ping sent through `routeRunpod` would be answered by the free fallback
+ * whenever the GPU is down, so a dead GPU route would pass its own health check
+ * (CAP-16-3 review F5). The answer is the GPU's or the call throws; either way
+ * it counts toward the breaker and the call window like any GPU call, and a
+ * dead pod starts the same recovery path a failed item would.
+ */
+export async function pingRunpod(
+  runpod: RunpodConfig,
+  system: string,
+  prompt: string,
+  options: { maxTokens: number; timeoutMs: number },
+  deps: { fetchImpl?: Fetch; now?: () => number; restore?: PodRestorer; env?: NodeJS.ProcessEnv } = {},
+): Promise<string> {
+  const now = deps.now ?? Date.now;
+  try {
+    const text = await runpodChat(runpod, system, prompt, {
+      maxTokens: options.maxTokens,
+      timeoutMs: options.timeoutMs,
+      ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
+    });
+    recordSuccess();
+    noteCall(true, now());
+    return text;
+  } catch (error) {
+    recordFailure(now());
+    noteCall(false, now());
+    const message = error instanceof Error ? error.message : String(error);
+    const kind = classifyGpuFailure(error);
+    if (kind === 'dead pod') {
+      startPodRecovery(runpod, message, {
+        now: now(),
+        ...(deps.restore ? { restore: deps.restore } : {}),
+        ...(deps.env ? { env: deps.env } : {}),
+      });
+    }
+    throw new Error(kind === 'overload' ? message : `${kind}: ${message}`, { cause: error });
+  }
+}
+
+/**
  * Answer one call on the RunPod slot: the GPU first, the free model it displaced
  * second. `fallback` is the lane's ordinary HTTP call to OmniRoute.
  */

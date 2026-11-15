@@ -11,6 +11,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Completer, LaneConfig } from '../server/services/cheap/lane.ts';
+import { pingRunpod, resetRunpod, routeRunpod, runpodConfig, runpodCallWindow, setRunpodPaused, type Fetch } from '../server/services/cheap/runpod.ts';
 import {
   pingHeldRoutes,
   recordRouteOutcome,
@@ -142,3 +143,77 @@ describe('held route re-probe (worker.ts)', () => {
     expect(routeHold('m', now + 5 * MIN)).toMatch(/credentials/);
   });
 });
+
+describe('the GPU slot is pinged on the GPU, never through its fallback (review F5)', () => {
+  const runpod = runpodConfig({ BRAIN_RUNPOD_URL: 'https://pod1-8000.proxy.runpod.net', BRAIN_RUNPOD_KEY: 'k', BRAIN_RUNPOD_MODE: 'primary' })!;
+  const gpuConfig: LaneConfig = { ...config, models: [runpod.label, 'free'], runpod, fallbackModel: 'free' };
+  const gpu = runpod.label;
+
+  beforeEach(() => {
+    resetRouteHealth();
+    resetRunpod();
+  });
+  afterEach(() => {
+    resetRouteHealth();
+    resetRunpod();
+  });
+
+  it('a dead GPU whose fallback would answer fails its ping and stays held', async () => {
+    const now = 1_000_000;
+    hold(gpu, now);
+    // The completer stands for routeRunpod: the free fallback answers whatever the GPU does.
+    const c = completer(() => '{"ok":true}');
+    const asked: string[] = [];
+    const due = now + ROUTE_REPROBE_BACKOFF_MS[0]!;
+    const [ping] = await pingHeldRoutes([gpu], c.fn, gpuConfig, () => due, async () => {
+      asked.push('gpu');
+      throw new Error('dead pod: runpod HTTP 404 pod not found');
+    });
+    expect(asked).toEqual(['gpu']);
+    expect(c.calls).toEqual([]);
+    expect(ping?.ok).toBe(false);
+    expect(routeHold(gpu, due + 1)).not.toBeNull();
+  });
+
+  it('a GPU that answers its own ping is healthy again', async () => {
+    const now = 1_000_000;
+    hold(gpu, now);
+    const c = completer(() => '{"ok":true}');
+    const due = now + ROUTE_REPROBE_BACKOFF_MS[0]!;
+    const [ping] = await pingHeldRoutes([gpu], c.fn, gpuConfig, () => due, async () => '{"ok": true}');
+    expect(ping?.ok).toBe(true);
+    expect(c.calls).toEqual([]);
+    expect(routeHold(gpu, due + 1)).toBeNull();
+  });
+
+  it('a pod paused on purpose is served by its fallback, so the fallback is what is pinged', async () => {
+    const now = 1_000_000;
+    hold(gpu, now);
+    setRunpodPaused('stopped after idle');
+    const c = completer(() => '{"ok":true}');
+    const asked: string[] = [];
+    const due = now + ROUTE_REPROBE_BACKOFF_MS[0]!;
+    const [ping] = await pingHeldRoutes([gpu], c.fn, gpuConfig, () => due, async () => (asked.push('gpu'), '{}'));
+    expect(asked).toEqual([]);
+    expect(c.calls.map((call) => call.model)).toEqual([gpu]);
+    expect(ping?.ok).toBe(true);
+  });
+
+  it('pingRunpod has no fallback: where routeRunpod answers from the free model, it throws and counts the GPU failure', async () => {
+    const notFound = (async () => new Response('pod not found', { status: 404 })) as unknown as Fetch;
+    const warn = console.warn;
+    console.warn = () => undefined;
+    try {
+      const routed = await routeRunpod(gpuConfig, 's', 'p', { maxTokens: 10 }, async () => 'fallback answer', { fetchImpl: notFound, env: {} });
+      expect(routed).toBe('fallback answer');
+      resetRunpod();
+      const error = await pingRunpod(runpod, 's', 'p', { maxTokens: 10, timeoutMs: 1000 }, { fetchImpl: notFound, env: {} }).catch((e: Error) => e);
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toMatch(/^dead pod: runpod HTTP 404/);
+      expect(runpodCallWindow(60_000)).toEqual({ ok: 0, failed: 1 });
+    } finally {
+      console.warn = warn;
+    }
+  });
+});
+

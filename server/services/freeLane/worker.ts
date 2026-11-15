@@ -43,7 +43,7 @@ import { workerIdentity } from '../identity/authenticate.ts';
 import { auditAdmission } from '../research/auditAdmission.ts';
 import { webSearch } from '../sources/discover.ts';
 import { httpCompleter, laneConfig, type Completer, type LaneConfig } from '../cheap/lane.ts';
-import { isRunpodSlot, runpodBreakerOpen, runpodCallWindow, runpodPaused } from '../cheap/runpod.ts';
+import { isRunpodSlot, pingRunpod, runpodBreakerOpen, runpodCallWindow, runpodPaused, type RunpodConfig } from '../cheap/runpod.ts';
 import type { SourceFetch } from '../sources/fetchForWorker.ts';
 import { readSource } from '../sources/access.ts';
 
@@ -2028,11 +2028,15 @@ export interface RoutePing {
  * healthy, and its items flow on the next claim. While a ping is in flight the
  * route stays held, so no slot takes an item as the probe beside it.
  */
+/** How a GPU slot's health ping reaches the GPU itself, never its fallback. */
+export type GpuPing = (runpod: RunpodConfig, system: string, prompt: string, options: { maxTokens: number; timeoutMs: number }) => Promise<string>;
+
 export async function pingHeldRoutes(
   models: readonly string[],
   completer: Completer,
   config: LaneConfig,
   now: () => number = Date.now,
+  gpuPing: GpuPing = (runpod, system, prompt, options) => pingRunpod(runpod, system, prompt, options),
 ): Promise<RoutePing[]> {
   const due = models.filter((model) => {
     const state = routeHealth.get(model);
@@ -2042,7 +2046,14 @@ export async function pingHeldRoutes(
     due.map(async (model): Promise<RoutePing> => {
       pinging.add(model);
       try {
-        await completer({ ...config, timeoutMs: 30_000 }, model, PING_SYSTEM, PING_PROMPT, { maxTokens: 64, json: true });
+        // The GPU slot is pinged on the GPU alone: through the completer a dead
+        // GPU would be answered by its free fallback and pass. A pod paused on
+        // purpose is served by the fallback by design, so that is what is pinged.
+        if (config.runpod && isRunpodSlot(model) && !runpodPaused()) {
+          await gpuPing(config.runpod, PING_SYSTEM, PING_PROMPT, { maxTokens: 64, timeoutMs: 30_000 });
+        } else {
+          await completer({ ...config, timeoutMs: 30_000 }, model, PING_SYSTEM, PING_PROMPT, { maxTokens: 64, json: true });
+        }
         recordRouteOutcome(model, { ok: true }, now());
         clearRouteCooldowns(model);
         console.log(`[free-lane] route ${model} answered its health ping; items flow again`);
