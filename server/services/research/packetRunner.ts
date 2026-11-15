@@ -3075,6 +3075,17 @@ async function stampPacketsWorkedUnderLease(
  *     missing capacity, not the packet's failure (§53). The packet stays live
  *     with its work queued; the unclaimed age is the idle-capacity signal the
  *     §98 watchdog reads from the same rows.
+ *     A claim counts only when `claimWork` would have offered that same
+ *     worker this item first, so it proves this item was reached and passed
+ *     over rather than never offered: the same project (a worker sees only its
+ *     connected projects), the item's own target worker if it has one, the
+ *     same required scopes, a confinement (orchestration, bundle, bin) that
+ *     reached this item too, and a place behind this item in the claim order
+ *     (`priority DESC, available_at`). A higher-priority stream ahead of it, a
+ *     claim in another project, or an item pinned to a worker that is not
+ *     claiming is starvation or missing capacity, and concludes nothing
+ *     (RECOVERY.STALLS review finding: lane-served guard ignored claim
+ *     eligibility).
  * Nothing is synthesized, no gate or approval is consulted or skipped, and
  * every fragment, claim, attempt and cancelled item keeps its row.
  */
@@ -3102,7 +3113,15 @@ async function concludeUnclaimedPackets(
                                              JOIN work_items s ON s.id = l.work_item_id
                                             WHERE s.work_type = w.work_type
                                               AND s.id <> w.id
-                                              AND l.claimed_at >= ?))
+                                              AND l.claimed_at >= ?
+                                              AND s.project_id = w.project_id
+                                              AND (w.target_worker_id IS NULL OR l.worker_id = w.target_worker_id)
+                                              AND s.required_scopes = w.required_scopes
+                                              AND (s.orchestration_id IS NULL OR s.orchestration_id = w.orchestration_id)
+                                              AND (s.bundle_key IS NULL OR s.bundle_key = w.bundle_key)
+                                              AND ((s.bin_id IS NULL AND w.bin_id IS NULL) OR s.bin_id = w.bin_id)
+                                              AND (s.priority < w.priority
+                                                   OR (s.priority = w.priority AND s.available_at >= w.available_at))))
       ORDER BY o.updated_at, o.id
       LIMIT ?`,
     [...live, 'WORKER', deadlineCutoff, deadlineCutoff, deadlineCutoff, deadlineCutoff, deadlineCutoff, Math.max(1, limit)],

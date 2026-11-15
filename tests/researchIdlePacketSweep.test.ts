@@ -46,6 +46,7 @@ import {
 import { enqueueWork } from '../server/repos/workQueue.ts';
 import { launchMission, linkMission } from '../server/repos/russellMissions.ts';
 import { createWorker } from '../server/repos/identity.ts';
+import { createProject } from '../server/repos/projects.ts';
 import {
   advanceIdlePackets,
   concludeUnworkablePackets,
@@ -649,7 +650,9 @@ describe('a repair whose retry time has passed is due, not a wait', () => {
 describe('a packet whose queued work nobody claims', () => {
   const OVERDUE = PACKET_PROGRESS_DEADLINE_MS + 60_000;
 
-  async function overdueWithQueued(opts: { availableAgoMs?: number; leasedAgoMs?: number } = {}): Promise<{ id: string; itemId: string }> {
+  async function overdueWithQueued(
+    opts: { availableAgoMs?: number; leasedAgoMs?: number; targetWorkerId?: string } = {},
+  ): Promise<{ id: string; itemId: string }> {
     const id = await packet('RESEARCHING', OVERDUE);
     const item = await enqueueWork({
       projectId,
@@ -658,6 +661,7 @@ describe('a packet whose queued work nobody claims', () => {
       createdByType: 'SYSTEM',
       requiredScopes: ['queue:claim'],
       orchestrationId: id,
+      targetWorkerId: opts.targetWorkerId ?? null,
     });
     const created = new Date(Date.now() - OVERDUE).toISOString();
     const available = new Date(Date.now() - (opts.availableAgoMs ?? OVERDUE)).toISOString();
@@ -681,15 +685,24 @@ describe('a packet whose queued work nobody claims', () => {
    * `claimedAgoMs` ago, and finished it. That is the evidence that this
    * packet's item was passed over rather than that nobody was taking the work.
    */
-  async function laneServed(workType: string, claimedAgoMs: number): Promise<void> {
+  async function laneServed(
+    workType: string,
+    claimedAgoMs: number,
+    opts: { projectId?: string; priority?: number; workerId?: string; orchestrationId?: string } = {},
+  ): Promise<void> {
+    const inProject = opts.projectId ?? projectId;
     const other = await enqueueWork({
-      projectId,
+      projectId: inProject,
       workType,
       payload: {},
       createdByType: 'SYSTEM',
       requiredScopes: ['queue:claim'],
+      ...(opts.priority === undefined ? {} : { priority: opts.priority }),
+      ...(opts.orchestrationId === undefined ? {} : { orchestrationId: opts.orchestrationId }),
     });
-    const worker = await createWorker({ name: `lane-${other.id}`, createdByType: 'SYSTEM', createdById: 'test' });
+    const worker = opts.workerId
+      ? { id: opts.workerId }
+      : await createWorker({ name: `lane-${other.id}`, createdByType: 'SYSTEM', createdById: 'test' });
     const claimed = new Date(Date.now() - claimedAgoMs).toISOString();
     await getDb().run(
       `UPDATE work_items SET state = 'SUCCEEDED', attempt_count = 1, lease_generation = 1,
@@ -700,7 +713,7 @@ describe('a packet whose queued work nobody claims', () => {
       `INSERT INTO work_leases (id, work_item_id, project_id, attempt_number, lease_generation, worker_id,
                                 claimed_at, expires_at, ended_at, outcome)
        VALUES (?, ?, ?, 1, 1, ?, ?, ?, ?, 'SUCCEEDED')`,
-      [`wls_${other.id}`, other.id, projectId, worker.id, claimed, claimed, claimed],
+      [`wls_${other.id}`, other.id, inProject, worker.id, claimed, claimed, claimed],
     );
   }
 
@@ -764,6 +777,55 @@ describe('a packet whose queued work nobody claims', () => {
     await laneServed('RESEARCH_FRAGMENT', OVERDUE + 60 * 60_000);
     expect((await advanceIdlePackets(10)).map((e) => e.orchestrationId)).not.toContain(id);
     expect(await itemState(itemId)).toBe('QUEUED');
+  });
+
+  /*
+   * The recorded review finding (lane-served guard ignores claim eligibility):
+   * a same-type claim proves this item was passed over only when `claimWork`
+   * would have offered that worker this item first. Otherwise the item was
+   * starved or never offered, and that is missing capacity, not failure.
+   */
+  async function leftLive(id: string, itemId: string): Promise<void> {
+    expect((await advanceIdlePackets(10)).map((e) => e.orchestrationId)).not.toContain(id);
+    await concludeUnworkablePackets(10);
+    expect(await itemState(itemId)).toBe('QUEUED');
+    expect((await getOrchestration(id))!.status).toBe('RESEARCHING');
+  }
+
+  it('does not read a higher-priority claim ahead of it as the lane passing it over: that is starvation', async () => {
+    const { id, itemId } = await overdueWithQueued();
+    const own = (await getDb().get<{ priority: number }>('SELECT priority FROM work_items WHERE id = ?', [itemId]))!;
+    await laneServed('RESEARCH_FRAGMENT', 60 * 60_000, { priority: own.priority + 2 });
+    await leftLive(id, itemId);
+  });
+
+  it('does not read a claim in another project as the lane serving this one', async () => {
+    const { id, itemId } = await overdueWithQueued();
+    const elsewhere = (await createProject({ name: 'Elsewhere', slug: 'elsewhere-lane' })).id;
+    await laneServed('RESEARCH_FRAGMENT', 60 * 60_000, { projectId: elsewhere });
+    await leftLive(id, itemId);
+  });
+
+  it('does not read another worker\'s claim as passing over an item pinned to a worker that is not claiming', async () => {
+    const pinned = await createWorker({ name: 'pinned-offline', createdByType: 'SYSTEM', createdById: 'test' });
+    const { id, itemId } = await overdueWithQueued({ targetWorkerId: pinned.id });
+    await laneServed('RESEARCH_FRAGMENT', 60 * 60_000);
+    await leftLive(id, itemId);
+  });
+
+  it('does read the pinned worker\'s own claim as passing over its pinned item', async () => {
+    const pinned = await createWorker({ name: 'pinned-online', createdByType: 'SYSTEM', createdById: 'test' });
+    const { id, itemId } = await overdueWithQueued({ targetWorkerId: pinned.id });
+    await laneServed('RESEARCH_FRAGMENT', 60 * 60_000, { workerId: pinned.id });
+    expect(await advanceIdlePackets(10)).toContainEqual({ orchestrationId: id, from: 'RESEARCHING', to: 'FAILED' });
+    expect(await itemState(itemId)).toBe('CANCELLED');
+  });
+
+  it('does not read a claim confined to another packet as the lane serving this one', async () => {
+    const { id, itemId } = await overdueWithQueued();
+    const sibling = await packet('RESEARCHING', 0);
+    await laneServed('RESEARCH_FRAGMENT', 60 * 60_000, { orchestrationId: sibling });
+    await leftLive(id, itemId);
   });
 
   it('leaves an item in backoff alone: available only recently is not unclaimed', async () => {
