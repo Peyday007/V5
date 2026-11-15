@@ -1698,6 +1698,84 @@ async function waitingPackets(projectIds: string[], types: readonly string[]): P
   return rows.map((row) => row.orchestration_id);
 }
 
+/**
+ * The research allocation in force, as the priority step each purpose takes
+ * (RES-07, RES-15-5, review F1).
+ *
+ * The goals tick decides the five purposes' shares and steps live bins by them,
+ * but the free lane claims `work_items` by their own priority, which no decision
+ * changes — so the compute the yield reader counts in each purpose's observed
+ * share could not be moved by the decision that reads it, and decided and
+ * observed shares never converged. The lane now reads the same decision row
+ * (`productionResearchAllocationPorts().lastDecision()`, through the tick's own
+ * parser and `purposePriorityShifts`) and orders the packets it claims from by
+ * it. Read-only: nothing is written, so a step is never applied twice and the
+ * stored priority each owner set stays its own. Read at most once a minute; a
+ * held, absent or unreadable decision steps nothing.
+ */
+let shiftsRead: { at: number; shifts: Record<string, number> | null } | null = null;
+async function researchShiftsInForce(): Promise<Record<string, number> | null> {
+  if (shiftsRead && Date.now() - shiftsRead.at < 60_000) return shiftsRead.shifts;
+  let shifts: Record<string, number> | null = null;
+  try {
+    const tick = await import('../goals/tick.ts');
+    const { purposePriorityShifts } = await import('../goals/researchAllocation.ts');
+    const parsed = tick.sharesInForceFrom((await (await tick.productionResearchAllocationPorts()).lastDecision())?.detail ?? null);
+    if (parsed && !parsed.held) {
+      const stepped = purposePriorityShifts(parsed);
+      if (Object.values(stepped).some((step) => step !== 0)) shifts = stepped;
+    }
+  } catch (error) {
+    console.warn('[free-lane] research allocation unreadable; claiming by stored priority:', String((error as Error)?.message ?? error).slice(0, 200));
+  }
+  shiftsRead = { at: Date.now(), shifts };
+  return shifts;
+}
+
+/** Forget the decision read, so the next take re-reads it (tests, and a new decision). */
+export function resetResearchShifts(): void {
+  shiftsRead = null;
+}
+
+/**
+ * Packets in the order the decision in force says: each packet's best waiting
+ * priority plus the step of the purposes it serves (the highest step among
+ * them, as for a bin — `binPriorityShift`). Ties keep stored priority, then id.
+ * Pure.
+ */
+export function packetsByAllocation(packets: readonly { id: string; top: number; shift: number }[]): string[] {
+  return [...packets]
+    .sort((a, b) => b.top + b.shift - (a.top + a.shift) || b.top - a.top || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    .map((one) => one.id);
+}
+
+/** How many packets a take asks in decision order before the ordinary scan. */
+const ALLOCATED_PACKETS = 5;
+
+/** Packets holding claimable rows of these types, ordered by the decision in force, bounded. */
+async function allocatedPackets(projectIds: string[], types: readonly string[], shifts: Record<string, number>): Promise<string[]> {
+  const now = queueNow();
+  const rows = await getDb().all<{ orchestration_id: string; project_id: string; top: number | string }>(
+    `SELECT orchestration_id, MIN(project_id) AS project_id, MAX(priority) AS top FROM work_items
+      WHERE ${CLAIMABLE_SQL} AND orchestration_id IS NOT NULL
+        AND project_id IN (${projectIds.map(() => '?').join(', ')})
+        AND work_type IN (${types.map(() => '?').join(', ')})
+      GROUP BY orchestration_id ORDER BY MAX(priority) DESC, orchestration_id LIMIT 50`,
+    [now, now, ...projectIds, ...types],
+  );
+  if (rows.length === 0) return [];
+  const { purposesOfBins } = await import('../goals/researchYield.ts');
+  const { binPriorityShift } = await import('../goals/researchAllocation.ts');
+  const purposes = await purposesOfBins(rows.map((row) => ({ id: row.orchestration_id, orchestrationId: row.orchestration_id, projectId: row.project_id })));
+  return packetsByAllocation(
+    rows.map((row) => ({
+      id: row.orchestration_id,
+      top: Number(row.top),
+      shift: binPriorityShift(purposes.get(row.orchestration_id) ?? [], shifts as Parameters<typeof binPriorityShift>[1]),
+    })),
+  ).slice(0, ALLOCATED_PACKETS);
+}
+
 /** Memberships, read at most once a minute per worker rather than once per job. */
 const membershipCache = new Map<string, { at: number; projects: string[] }>();
 
@@ -1930,7 +2008,18 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
   };
   // Only types that have claimable rows are asked for: each ask is a bounded scan.
   const waiting = await waitingTypes(projectIds);
+  // Under a research allocation that steps a purpose, the packets are asked in
+  // the order it gives before the ordinary priority scan, so the decision moves
+  // the free lane's compute and not only bins (RES-07, review F1).
+  const shifts = await researchShiftsInForce();
   for (const types of asksByPriority(claimAsks(workers, index, input.spillover), waiting)) {
+    if (shifts) {
+      for (const id of await allocatedPackets(projectIds, types, shifts)) {
+        one = await ask(types, id);
+        if (one) break;
+      }
+      if (one) break;
+    }
     one = await ask(types, null);
     if (one) break;
   }

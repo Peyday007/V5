@@ -123,6 +123,12 @@ export async function researchGoalPaths(input: {
    * are a floor for a busy fleet, not a ceiling on an idle one.
    */
   spare?: number;
+  /**
+   * The applied lane remedies' instructions (`remedyInstructions`): a change
+   * the research allocation made to how this goal's questions are asked. Every
+   * question raised here carries it, so the change reaches the work.
+   */
+  remedyInstruction?: string;
 }): Promise<string[]> {
   const spare = Math.max(0, Math.trunc(input.spare ?? 0));
   const openingCap = PATH_RESEARCH_OPENINGS + spare;
@@ -321,6 +327,7 @@ export async function researchGoalPaths(input: {
         keys.delete(key);
         nextStep = differentMethod(ask, stale.occurrence + 1, ended.reason);
       }
+      if (input.remedyInstruction?.trim()) nextStep = `${nextStep} ${input.remedyInstruction.trim()}`;
       if (input.dryRun) {
         note(`${one.title.slice(0, 60)} ${field}: would ask`);
         actedHere = true;
