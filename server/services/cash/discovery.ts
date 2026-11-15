@@ -2129,8 +2129,9 @@ async function closeEndedRounds(input: {
       console.warn(`arrangement outcome for round ${entry.round.id} not recorded: ${String((error as Error)?.message ?? error)}`),
     );
     if (to === 'HARVESTED') continue;
+    const ending = abandonedRoundCause({ mission, expired });
     const why = mission
-      ? `its research is ${mission.state.toLowerCase()}`
+      ? `its research is ${mission.state.toLowerCase()}${ending.reason ? `: ${ending.reason}` : ''}`
       : expired
         ? `its idea never launched in ${UNLAUNCHED_GOAL_ROUND_MS / 3_600_000} hours, so it was retired to free the goal's slot`
         : 'the archive already answered it, so nothing launched';
@@ -2147,11 +2148,56 @@ async function closeEndedRounds(input: {
         bucketId: entry.bucket.id,
         missionId: mission?.id ?? null,
         missionState: mission?.state ?? null,
+        cause: ending.cause,
+        failureClass: ending.failureClass,
+        reason: ending.reason,
         found,
       },
     });
   }
   return closed;
+}
+
+/** Why an ABANDONED round ended, in the vocabulary of the abandoned-rounds diagnosis. */
+export type AbandonedRoundCause =
+  | 'MISSION_FAILED'
+  | 'MISSION_CANCELLED'
+  | 'MISSION_NEEDS_HUMAN'
+  | 'ROUND_CAP_UNLAUNCHED'
+  | 'ARCHIVE_ANSWERED';
+
+/**
+ * The cause an ABANDONED round's stop event records (dfx_2b21d109a13d).
+ *
+ * The diagnosis of the 119 abandoned rounds could not classify them, because
+ * the stop event kept only the mission's state: ABANDONED collapses five
+ * endings, and the mission's own `terminalReason` — where a timeout, a parser
+ * refusal or a gate rejection is written — was never copied onto the round's
+ * record. Who&When (arXiv 2505.00212) measures how badly a cause not recorded
+ * at the moment of failure is recovered from logs afterwards, so it is recorded
+ * here, as the round ends. Settlement-logic endings (round cap, archive answer,
+ * a parked mission) are classed apart from research failures so a count of
+ * abandoned rounds no longer mixes the two. A failure with no stated reason is
+ * `UNATTRIBUTED`, never a guessed class. Pure.
+ */
+export function abandonedRoundCause(input: {
+  mission: { state: string; terminalReason: string | null; waitingOn: string | null } | null;
+  expired: boolean;
+}): { cause: AbandonedRoundCause; failureClass: 'RESEARCH_FAILURE' | 'ROUND_SETTLEMENT' | 'ROUND_CAP_LOGIC' | 'UNATTRIBUTED'; reason: string | null } {
+  const { mission } = input;
+  if (!mission) {
+    return input.expired
+      ? { cause: 'ROUND_CAP_UNLAUNCHED', failureClass: 'ROUND_CAP_LOGIC', reason: null }
+      : { cause: 'ARCHIVE_ANSWERED', failureClass: 'ROUND_SETTLEMENT', reason: null };
+  }
+  if (mission.state === 'NEEDS_HUMAN') {
+    const said = mission.waitingOn ?? mission.terminalReason;
+    return { cause: 'MISSION_NEEDS_HUMAN', failureClass: 'ROUND_SETTLEMENT', reason: said ? clamp(said, 300) : null };
+  }
+  const cause: AbandonedRoundCause = mission.state === 'CANCELLED' ? 'MISSION_CANCELLED' : 'MISSION_FAILED';
+  const reason = mission.terminalReason?.trim() ? clamp(mission.terminalReason, 300) : null;
+  if (cause === 'MISSION_CANCELLED') return { cause, failureClass: 'ROUND_SETTLEMENT', reason };
+  return { cause, failureClass: reason ? 'RESEARCH_FAILURE' : 'UNATTRIBUTED', reason };
 }
 
 /**
