@@ -265,3 +265,57 @@ describe('the inputs a reading was taken over (pure)', () => {
     expect(f.split('|')).toHaveLength(7);
   });
 });
+
+/*
+ * Production, 2026-11-15 ($10K goal): the last stored reading was 03:47Z, and
+ * a fresh read at 16:29Z drew the identical conclusion, so `persistReading`
+ * rightly wrote no row (C-11). But that read's scenario run was on a newly
+ * saved model (the definition had moved), which no stored reading references,
+ * so `since` never advanced past 03:47Z and every pass after the half-hour
+ * read the plan again, holding the process's one scenario slot.
+ */
+describe('a read that writes no row still counts as the goal having been read', () => {
+  async function storedReadings(goalId: string): Promise<number> {
+    const row = await getDb().get<{ n: number | string }>('SELECT COUNT(*) AS n FROM goal_plan_readings WHERE workstream_id = ?', [goalId]);
+    return Number(row?.n ?? 0);
+  }
+  // The model's definition moves, as new evidence moves it in production: the next read saves a new model.
+  const moveModel = () => getDb().run(`UPDATE scenario_models SET definition_hash = 'moved' WHERE project_id = ?`, [projectId]);
+
+  it('re-reads once per half-hour, not on every pass, when the conclusion is unchanged under a moved model', async () => {
+    await play({ title: 'Monthly owner reports', priceCents: 50_000, days: 7, capitalCents: 0, hours: 3, costCents: 2_000 });
+    const id = await goal(100_000);
+    const start = new Date();
+    const at = (minutes: number) => new Date(start.getTime() + minutes * 60_000);
+
+    expect((await advanceGoalPlans(start)).read).toBe(1);
+    expect(await storedReadings(id)).toBe(1);
+    await moveModel();
+
+    // The half-hour backstop reads it; the conclusion is the same, so no row.
+    expect((await advanceGoalPlans(at(31))).read).toBe(1);
+    expect(await storedReadings(id)).toBe(1);
+    await moveModel();
+
+    // Nothing arrived since that read: no re-read on the next passes inside its half-hour.
+    expect((await advanceGoalPlans(at(34))).read).toBe(0);
+    expect((await advanceGoalPlans(at(45))).read).toBe(0);
+    // The backstop still holds, measured from the read that ran.
+    expect((await advanceGoalPlans(at(62))).read).toBe(1);
+  });
+
+  it('new evidence after an unstored read is still read at once', async () => {
+    await play({ title: 'Monthly owner reports', priceCents: 50_000, days: 7, capitalCents: 0, hours: 3, costCents: 2_000 });
+    const id = await goal(100_000);
+    const start = new Date();
+    const at = (minutes: number) => new Date(start.getTime() + minutes * 60_000);
+
+    expect((await advanceGoalPlans(start)).read).toBe(1);
+    await moveModel();
+    expect((await advanceGoalPlans(at(31))).read).toBe(1);
+
+    const filed = await play({ title: 'Quarterly tenant surveys', priceCents: 40_000, days: 7, capitalCents: 0, hours: 3, costCents: 2_000 });
+    expect(await advanceGoalPlans(at(34))).toMatchObject({ read: 1, onEvidence: 1 });
+    expect(await goalRunsSince(id, filed.createdAt)).toBeGreaterThan(0);
+  });
+});
