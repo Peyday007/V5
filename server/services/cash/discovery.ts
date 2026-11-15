@@ -70,6 +70,8 @@
 import { OPERATING_MODEL_SENTENCE } from '../../domain/operatingModel.ts';
 import { constructedCapFor, freeLaneOwnsResearch, routineFocus } from './researchRoom.ts';
 import { TRIGGER_BUCKETS, triggersEnabled } from './triggers.ts';
+import { INTERMEDIATION_BUCKETS, isIntermediationBucket } from './intermediationBuckets.ts';
+import { familyCurrent, INTERMEDIATION_FAMILY, type FamilyDeclaration } from './intermediationPositions.ts';
 import { FEED_SHORTLIST_BUCKET } from '../feeds/bucket.ts';
 import { getDb } from '../../db/database.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
@@ -474,6 +476,13 @@ export const SEARCH_BUCKETS: readonly SearchBucket[] = Object.freeze([
       'sources, what each side published, and what specifically one supplies to the other?',
   },
   ...BROAD_ECONOMY_BUCKETS,
+  /*
+   * Commercial intermediation (RES-15-4): one bucket per S-0149 entry point,
+   * buyer-first and supply-first, across buyer types and market structures.
+   * They sit last in list order, which is their ordinary place; while the
+   * family declaration is current `familyOrder` offers them first.
+   */
+  ...INTERMEDIATION_BUCKETS,
 ]);
 
 const OPENED = 'CASH_DISCOVERY_OPENED';
@@ -565,7 +574,7 @@ export async function openDiscovery(input: {
   const out: OpenedDiscovery[] = [];
   const limit = Math.max(1, input.limit ?? 1);
   let frame: ExecutionFrame | null | undefined;
-  for (const bucket of fairOrder([...SEARCH_BUCKETS, ...(triggersEnabled() ? TRIGGER_BUCKETS : [])], rounds)) {
+  for (const bucket of familyOrder([...SEARCH_BUCKETS, ...(triggersEnabled() ? TRIGGER_BUCKETS : [])], rounds, now)) {
     if (out.length >= limit) break;
     const history = byBucket.get(bucket.id) ?? [];
     const next = nextRoundFor(history, now);
@@ -1378,6 +1387,30 @@ export function fairOrder(buckets: readonly SearchBucket[], rounds: readonly Cas
     byMechanism.set(picked!.bucket.mechanism, (byMechanism.get(picked!.bucket.mechanism) ?? 0) + 1);
   }
   return out;
+}
+
+/**
+ * `fairOrder`, with a current high-priority family offered first.
+ *
+ * While the intermediation family's declaration is inside its window
+ * (S-0148: "a current high-priority research and construction family"), its
+ * buckets are offered before every other, fairly among themselves; the rest
+ * follow in their ordinary fair order, so a bucket on cool-off is skipped and
+ * the ordinary buckets are still asked. When the declaration lapses the
+ * family's buckets fall back to their place in the ordinary order — it is a
+ * priority with a review date, never a forever-only market. It changes which
+ * question is asked next and nothing about whether any may be.
+ */
+export function familyOrder(
+  buckets: readonly SearchBucket[],
+  rounds: readonly CashDiscoveryRound[],
+  now: Date | string,
+  declaration: FamilyDeclaration = INTERMEDIATION_FAMILY,
+): SearchBucket[] {
+  if (!familyCurrent(declaration, now)) return fairOrder(buckets, rounds);
+  const family = buckets.filter((one) => isIntermediationBucket(one));
+  const rest = buckets.filter((one) => !isIntermediationBucket(one));
+  return [...fairOrder(family, rounds), ...fairOrder(rest, rounds)];
 }
 
 /**
