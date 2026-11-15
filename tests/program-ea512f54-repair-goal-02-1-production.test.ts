@@ -64,7 +64,8 @@ describe('the recorded production cause of the r01.goal-02 failure', () => {
     await operatorPause(id);
 
     const before = await goalMetricsHoldOnRows();
-    expect(before.ok).toBe(false);
+    // No live goal is an absence, read UNKNOWN (§39) since #887; the detail is the recorded one.
+    expect(before.ok).toBeNull();
     expect(before.detail).toBe(RECORDED_FAILURE);
 
     await advanceGoals();
@@ -92,7 +93,7 @@ describe('the recorded production cause of the r01.goal-02 failure', () => {
       await drop(id);
       await advanceGoals();
       const r = await goalMetricsHoldOnRows();
-      expect({ label, ok: r.ok, detail: r.detail }).toEqual({ label, ok: false, detail: RECORDED_FAILURE });
+      expect({ label, ok: r.ok, detail: r.detail }).toEqual({ label, ok: null, detail: RECORDED_FAILURE });
       await getDb().run('UPDATE workstreams SET archived_at = ?, archived_reason = ? WHERE id = ?', [now.toISOString(), 'test', id]);
     }
   });

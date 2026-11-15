@@ -99,7 +99,7 @@ describe('advanceGoals restores a machine-paused targeted goal', () => {
     await legacyMachinePause(id, 'operator:x');
     await recordMoney({ projectId, kind: 'PIPELINE_AGREED', amountCents: 900_000, currency: 'USD', recordedBy: 'PERSON', idempotencyKey: `k${Math.random()}` });
     await recordMoney({ projectId, kind: 'SETTLEMENT', amountCents: 100_000, currency: 'USD', recordedBy: 'PERSON', idempotencyKey: `k${Math.random()}`, verifiedReference: 'po_r1' });
-    expect((await goalMetricsHoldOnRows()).ok).toBe(false);
+    expect((await goalMetricsHoldOnRows()).ok).toBeNull();
     await advanceGoals();
     const r = await goalMetricsHoldOnRows();
     expect(r.detail).toMatch(/1 live goal/);
