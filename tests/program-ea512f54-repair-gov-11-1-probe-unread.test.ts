@@ -11,8 +11,8 @@ import { registerVerdict, registerHoldsOnProduction, type RecordedRegisterOutcom
 
 const AT = 'docs/programs/brain-architecture/OPEN-QUESTIONS-REGISTER.md@e678e798786f';
 const OTHER = 'docs/programs/brain-architecture/OPEN-QUESTIONS-REGISTER.md@000000000000';
-const unread = { ok: false, unread: true, registerAt: AT, detail: "the register was not read this pass: The forge's read rate limit is spent until 2026-11-15T05:33:16.000Z" };
-const event = (kind: string, register: string): RecordedRegisterOutcome => ({ kind, at: '2026-11-15T04:00:00.000Z', detail: { register, detail: `${register} against program p: 7 decisions verbatim` } });
+const unread = { ok: false, unread: true, registerAt: AT, programId: 'p', releases: 0, detail: "the register was not read this pass: The forge's read rate limit is spent until 2026-11-15T05:33:16.000Z" };
+const event = (kind: string, register: string, appendedReleases = 0, programId = 'p'): RecordedRegisterOutcome => ({ kind, at: '2026-11-15T04:00:00.000Z', detail: { register, programId, appendedReleases, detail: `${register} against program ${programId}: 7 decisions verbatim` } });
 
 const check = vi.hoisted(() => ({ next: null as unknown }));
 vi.mock('../server/services/goals/openQuestions.ts', () => ({ checkRegisterOnProduction: async () => check.next }));
@@ -36,6 +36,22 @@ describe('registerVerdict (pure)', () => {
 
   it('unread with a BEHIND outcome recorded for the same revision fails from that record', () => {
     expect(registerVerdict(unread, event('PROGRAM_REGISTER_BEHIND', AT)).ok).toBe(false);
+  });
+
+  it('unread with a CURRENT outcome recorded before a release was appended is UNKNOWN, not PASS', () => {
+    // The owner answered: a release was appended (§97), so the unchanged register may now be BEHIND.
+    const r = registerVerdict({ ...unread, releases: 1 }, event('PROGRAM_REGISTER_CURRENT', AT, 0));
+    expect(r.ok).toBeNull();
+    expect(r.detail).toMatch(/1 appended release/);
+  });
+
+  it('unread with an outcome recorded against a different program is UNKNOWN', () => {
+    expect(registerVerdict(unread, event('PROGRAM_REGISTER_CURRENT', AT, 0, 'other')).ok).toBeNull();
+  });
+
+  it('unread with an outcome recorded at the same revision, program and releases still answers from it', () => {
+    expect(registerVerdict({ ...unread, releases: 2 }, event('PROGRAM_REGISTER_CURRENT', AT, 2)).ok).toBe(true);
+    expect(registerVerdict({ ...unread, releases: 2 }, event('PROGRAM_REGISTER_BEHIND', AT, 2)).ok).toBe(false);
   });
 
   it('unread with an unrelated event kind is UNKNOWN', () => {
