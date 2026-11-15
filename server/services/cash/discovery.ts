@@ -124,6 +124,7 @@ import type {
   CashOpportunity,
   IndustryNode,
   OpportunityConstraint,
+  RussellMission,
 } from '../../domain/types.ts';
 
 /**
@@ -2129,8 +2130,10 @@ async function closeEndedRounds(input: {
       console.warn(`arrangement outcome for round ${entry.round.id} not recorded: ${String((error as Error)?.message ?? error)}`),
     );
     if (to === 'HARVESTED') continue;
+    const cause = abandonedRoundCause({ mission, expired });
     const why = mission
-      ? `its research is ${mission.state.toLowerCase()}`
+      ? `its research is ${mission.state.toLowerCase()}` +
+        (mission.terminalReason || mission.waitingOn ? `: ${mission.waitingOn ?? mission.terminalReason}` : ', with no reason recorded')
       : expired
         ? `its idea never launched in ${UNLAUNCHED_GOAL_ROUND_MS / 3_600_000} hours, so it was retired to free the goal's slot`
         : 'the archive already answered it, so nothing launched';
@@ -2147,11 +2150,42 @@ async function closeEndedRounds(input: {
         bucketId: entry.bucket.id,
         missionId: mission?.id ?? null,
         missionState: mission?.state ?? null,
+        missionAttempt: mission?.attempt ?? null,
+        orchestrationId: mission?.orchestrationId ?? null,
+        binId: mission?.binId ?? null,
+        terminalReason: mission?.terminalReason ?? null,
+        waitingOn: mission?.waitingOn ?? null,
+        cause,
         found,
       },
     });
   }
   return closed;
+}
+
+/**
+ * The single failure point an ABANDONED round's own rows support, so a
+ * diagnosis of abandoned rounds is a query over `CASH_DISCOVERY_ROUND_STOPPED`
+ * rather than a guess (OPERATOR:MISSING_CAPABILITY:3009514ee01322e4).
+ *
+ * Each of the paths that close a round ABANDONED gets its own cause. The
+ * mission's `terminalReason` is carried verbatim, because that is where a
+ * timeout, a refused submission or a parser error is written; a mission that
+ * ended without one says `UNSTATED`. It never says nothing.
+ */
+export function abandonedRoundCause(input: {
+  mission: Pick<RussellMission, 'state' | 'terminalReason' | 'waitingOn'> | null;
+  expired: boolean;
+}): string {
+  const { mission } = input;
+  if (mission) {
+    if (mission.state === 'NEEDS_HUMAN') {
+      return `MISSION_NEEDS_HUMAN:${mission.waitingOn ?? mission.terminalReason ?? 'UNSTATED'}`;
+    }
+    return `MISSION_${mission.state}:${mission.terminalReason ?? 'UNSTATED'}`;
+  }
+  if (input.expired) return `ROUND_CAP_UNLAUNCHED_${UNLAUNCHED_GOAL_ROUND_MS / 3_600_000}H`;
+  return 'ARCHIVE_ANSWERED';
 }
 
 /**
