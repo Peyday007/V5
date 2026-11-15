@@ -16,7 +16,8 @@ import { createWorkstream, getWorkstream } from '../server/repos/register.ts';
 import { setTerms } from '../server/services/goals/decide.ts';
 import { setTarget } from '../server/services/goals/target.ts';
 import { askConstructedArrangements, byLeastAsked, forgetGoalReadings, readGoalPlan } from '../server/services/goals/plan.ts';
-import { openConstructedRound, openGoalDiscovery, SIGNAL_LANE } from '../server/services/cash/discovery.ts';
+import { constructedShare, liveConstructedResearch, MAX_LIVE_GOAL_ROUNDS, openConstructedRound, openGoalDiscovery, roundsStillResearching, SIGNAL_LANE } from '../server/services/cash/discovery.ts';
+import { arrangementForLegacyKey } from '../server/repos/monetization.ts';
 import { forgetKnowledge } from '../server/services/quant/knowledge.ts';
 import { getDb } from '../server/db/database.ts';
 import type { Layer } from '../server/domain/types.ts';
@@ -145,5 +146,58 @@ describe('a goal’s own round launches ahead of broad discovery', () => {
     const broadCriteria = profileFor('RUSSELL_CASH_DISCOVERY_V1')!.completionCriteria('any market');
     expect(goalCriteria.some((one) => one.includes('demand_pattern') && one.includes('RECURRING_OUTSOURCED_WORK'))).toBe(true);
     expect(broadCriteria.some((one) => one.includes('RECURRING_OUTSOURCED_WORK'))).toBe(false);
+  });
+});
+
+describe('constructed research has its own share of the goal’s live cap (2026-11-15)', () => {
+  it('reserves at least one slot and never more than half the cap', () => {
+    for (const cap of [3, 4, 5, 8, 13]) {
+      expect(constructedShare(cap)).toBeGreaterThanOrEqual(1);
+      expect(constructedShare(cap)).toBeLessThanOrEqual(cap / 2);
+    }
+  });
+
+  it('asks a constructed arrangement while five lens rounds still research against a cap of three, and counts the asking on the arrangement', async () => {
+    await sector('Animation', 'Production committees');
+    const id = await goal();
+    const w = (await getWorkstream(id))!;
+    const reading = (await readGoalPlan({ goalId: id, evaluations: 500 }))!;
+    // Production's shape: lens rounds opened while the fleet had spare, now all still researching.
+    for (let i = 0; i < 5; i += 1) {
+      expect(await openGoalDiscovery({ goal: w, target: reading.target, bestReach: reading.bestReach, liveCap: 10 })).not.toBeNull();
+    }
+    const prefix = `goal-${id}`;
+    const mine = (await listRounds(projectId)).filter((one) => one.bucketId.startsWith(`${prefix}-`));
+    expect(await roundsStillResearching(mine)).toBe(5);
+    expect(MAX_LIVE_GOAL_ROUNDS).toBe(3);
+    // The lenses are over their share: no sixth lens round.
+    expect(await openGoalDiscovery({ goal: w, target: reading.target, bestReach: reading.bestReach })).toBeNull();
+    // A constructed arrangement still opens in construction's reserved share.
+    const opened = await askConstructedArrangements(w, reading, now, 5, MAX_LIVE_GOAL_ROUNDS);
+    expect(opened).toHaveLength(constructedShare(MAX_LIVE_GOAL_ROUNDS));
+    const mx = (await listRounds(projectId)).filter((one) => one.bucketId.startsWith(`${prefix}-mx-`));
+    expect(mx).toHaveLength(1);
+    const key = mx[0]!.bucketId.slice(mx[0]!.bucketId.lastIndexOf('-mx-') + 4);
+    expect((await arrangementForLegacyKey(projectId, key))?.askedCount).toBe(1);
+    // And its share is bounded too: past the reservation, with the cap full, a second waits.
+    expect(await askConstructedArrangements(w, reading, now, 5, MAX_LIVE_GOAL_ROUNDS)).toHaveLength(0);
+  });
+
+  it('does not count research parked for a person against the focus cap', async () => {
+    process.env['BRAIN_CASH_RESEARCH_MAX'] = '1';
+    const id = await goal();
+    const w = (await getWorkstream(id))!;
+    const first = await openConstructedRound({ goal: w, projectId, key: 'p1', title: 't', question: 'Which buyers pay for this design?' });
+    expect(first).not.toBeNull();
+    const longAgo = new Date(Date.now() - 30 * 86_400_000).toISOString();
+    await getDb().run(`UPDATE cash_discovery_rounds SET state = 'ABANDONED', opened_at = ?, harvested_at = ? WHERE candidate_id = ?`, [longAgo, longAgo, first!.candidateId]);
+    const { mission } = await launchMission({ projectId, layerId: layer.id, visibility: 'SHARED', objective: 'q', whyNow: 'goal', idempotencyKey: `m:${first!.candidateId}`, candidateId: first!.candidateId });
+    await transitionMission({ missionId: mission.id, from: 'PLANNED', to: 'RUNNING' });
+    const mx = () => listRounds(projectId).then((all) => all.filter((one) => one.bucketId.startsWith(`goal-${id}-mx-`)));
+    expect(await liveConstructedResearch(await mx())).toBe(1);
+    // Parked at a decision: nobody researches it until a person answers, so it holds no slot.
+    await transitionMission({ missionId: mission.id, from: 'RUNNING', to: 'NEEDS_HUMAN', terminalReason: null, waitingOn: 'a person' });
+    expect(await liveConstructedResearch(await mx())).toBe(0);
+    expect(await openConstructedRound({ goal: w, projectId, key: 'p2', title: 't', question: 'Which buyers pay for that design?' })).not.toBeNull();
   });
 });

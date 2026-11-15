@@ -66,7 +66,7 @@ import { composeBuyerMessage } from '../cash/outreach.ts';
 import { evidenceCard } from '../cash/card.ts';
 import { ARRANGEMENT_ID_PREFIX, isArrangementId, bestCaseReach, composeGoalModel, inventedDesigner, planTrace, dealsForGoal, OUTREACH_MULTIPLE, priceSupported, volumeEstablished, wilson, type ModelInput, type ModelledOpportunity } from '../cash/goalScenario.ts';
 import { readTarget, type TargetReading } from './target.ts';
-import { executionFrame, MAX_LIVE_GOAL_ROUNDS, openConstructedRound, openGoalDiscovery, roundsStillResearching } from '../cash/discovery.ts';
+import { constructedShare, executionFrame, MAX_LIVE_GOAL_ROUNDS, openConstructedRound, openGoalDiscovery, roundsStillResearching } from '../cash/discovery.ts';
 import { constructArrangements, lastConstructionReport, type ConstructedArrangement } from '../cash/construct.ts';
 import { arrangementKeyOfBucket, recordReadingEvaluations, refutedUnderSameInputs, rememberArrangements } from '../cash/arrangementLibrary.ts';
 import { arrangementVerdicts } from '../../repos/monetization.ts';
@@ -3023,9 +3023,9 @@ export async function askPathwayConstructions(
   // Construction's half of the live cap, shared with the arrangements (§82).
   const openMx = rounds.filter((r) => r.state === 'OPEN' && r.bucketId.startsWith(`goal-${goal.id}-mx-`));
   const researching = await roundsStillResearching(openMx);
-  const room = Math.max(1, Math.floor(liveCap / 2)) - researching;
+  const room = constructedShare(liveCap) - researching;
   if (room <= 0) {
-    note(`its turn, but construction's share of the live cap is full: ${researching} constructed round(s) researching against ${Math.max(1, Math.floor(liveCap / 2))}`);
+    note(`its turn, but construction's share of the live cap is full: ${researching} constructed round(s) researching against ${constructedShare(liveCap)}`);
     return [];
   }
   const exclusions = await goalExclusions(goal);
@@ -3247,9 +3247,10 @@ export async function askConstructedArrangements(goal: Workstream, reading: Plan
    * Constructed rounds share the goal's live cap with the lenses that ask the
    * world from a new angle. Since reverse construction (§82) always has a
    * design to ask about, an unbounded share would take every slot and the
-   * lenses would never run, so construction holds at most half of it.
+   * lenses would never run, so construction holds at most half of it — and
+   * that half is reserved: lens rounds cannot take it (`constructedShare`).
    */
-  const room = Math.max(1, Math.floor(liveCap / 2)) - (await roundsStillResearching(openMx));
+  const room = constructedShare(liveCap) - (await roundsStillResearching(openMx));
   if (room <= 0) return [];
   max = Math.min(max, room);
   // Every goal's askings about an arrangement count (K-5): the same structure asked by another goal is not new.
