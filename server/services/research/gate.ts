@@ -691,11 +691,46 @@ export function applyGate(input: {
   const nonBlocking = new Set(
     coverage.filter((lane) => lane.necessity !== 'REQUIRED').map((lane) => lane.lane),
   );
+  /*
+   * The verifier's lanes, read as the ids they mean (O-6).
+   *
+   * The verifier is shown each lane as `describeLane` renders it —
+   * `demand_signal (conditional) — A specific…` — and `missing_lanes` is free
+   * text, so it hands back that rendering, the description, or the id in
+   * another case about as often as the bare id. Compared verbatim, every one
+   * of those read as "a lane this fragment does not declare" and blocked the
+   * fragment on a lane its own declaration calls non-blocking. A name that
+   * resolves to no declared lane is kept as written and still blocks.
+   */
+  const missingLanes = verification.missingLanes.map((named) =>
+    declaredLaneNamed(fragment.requiredEvidence, named),
+  );
   const verifierNamesOnlyNonBlocking =
-    verification.missingLanes.length > 0 &&
-    verification.missingLanes.every((lane) => nonBlocking.has(lane));
+    missingLanes.length > 0 && missingLanes.every((lane) => nonBlocking.has(lane));
+  /*
+   * A fragment that declares no REQUIRED lane has said, in advance, that no
+   * lane's absence fails it: whatever its lanes settle is its answer, and the
+   * rest is open. `GOAL_MECHANISM` — every research goal's own round — is
+   * exactly that (all six lanes CONDITIONAL), and so is `DEALFLOW_PARTIES`.
+   * On such a fragment a verifier's INSUFFICIENT can only be about a
+   * non-blocking lane or about something the fragment never declared, so it
+   * cannot be the thing that blocks it. Left blocking, it was: with no
+   * required lane, VERIFIER_INSUFFICIENT is the one cause that can stop a
+   * fragment whose claims passed integrity and whose sources met the floor,
+   * and a round of such fragments ended FAILED with no report at all — the
+   * accepted evidence uncited and the open question unrecorded (O-6).
+   *
+   * Integrity and the source floor still apply, unchanged. The verifier's
+   * judgement is not discarded: it is reported below and carried as an
+   * unresolved gap, so the report says what stayed open.
+   */
+  const declaresNoRequiredLane =
+    coverage.length > 0 && coverage.every((lane) => lane.necessity !== 'REQUIRED');
+  const verifierOpinionNonBlocking =
+    verification.sufficiency === 'INSUFFICIENT' &&
+    (verifierNamesOnlyNonBlocking || declaresNoRequiredLane);
   const verifierSatisfied =
-    verification.sufficiency === 'SUFFICIENT' || verifierNamesOnlyNonBlocking;
+    verification.sufficiency === 'SUFFICIENT' || verifierOpinionNonBlocking;
   const sufficiency: GateResult['sufficiency'] =
     uncoveredLanes.length === 0 && enoughSources && verifierSatisfied
       ? 'SUFFICIENT'
@@ -747,8 +782,15 @@ export function applyGate(input: {
   if (verification.sufficiency === 'INSUFFICIENT' && verifierNamesOnlyNonBlocking) {
     reasons.push(
       'Verification judged the answer incomplete, naming only lanes this fragment declared ' +
-        `non-blocking (${verification.missingLanes.join(', ')}); they are reported as open ` +
+        `non-blocking (${missingLanes.join(', ')}); they are reported as open ` +
         'above and do not fail the fragment.',
+    );
+  } else if (verifierOpinionNonBlocking) {
+    reasons.push(
+      'Verification judged the answer incomplete (' +
+        (missingLanes.join(', ') || 'naming no lane') +
+        '), and this fragment declares no required lane, so that judgement is recorded as ' +
+        'unresolved; lanes that are not required do not fail the fragment.',
     );
   } else if (verification.sufficiency === 'INSUFFICIENT' && uncoveredLanes.length === 0) {
     reasons.push(
@@ -774,8 +816,41 @@ export function applyGate(input: {
     coverage,
     failedConditions: [...failedConditions],
     reasons,
-    unresolvedGaps: verification.unresolvedGaps,
+    // The verifier's overruled judgement travels as an open question, unless
+    // it already wrote one: the report says what stayed open either way.
+    unresolvedGaps:
+      verifierOpinionNonBlocking && verification.unresolvedGaps.length === 0
+        ? [
+            'Verification judged this fragment\'s answer incomplete' +
+              (missingLanes.length > 0 ? ` (${missingLanes.join(', ')})` : '') +
+              '; what would complete it was not established.',
+          ]
+        : verification.unresolvedGaps,
   };
+}
+
+/**
+ * The declared lane id a verifier's free-text lane name means, or the name as
+ * written when it means none. Accepts the id in any case, the `describeLane`
+ * rendering (`id (conditional) — …`), and the description itself.
+ */
+export function declaredLaneNamed(lanes: EvidenceLane[], named: string): string {
+  const text = named.trim();
+  const lower = text.toLowerCase();
+  for (const lane of lanes) {
+    if (lane.id.toLowerCase() === lower) return lane.id;
+  }
+  const leading = /^([a-z][a-z0-9_]*)(?=\s*(?:\(|—|-|:|$))/i.exec(text)?.[1]?.toLowerCase();
+  if (leading) {
+    for (const lane of lanes) if (lane.id.toLowerCase() === leading) return lane.id;
+  }
+  for (const lane of lanes) {
+    const description = lane.description.trim().toLowerCase();
+    if (description.length > 0 && (lower === description || (lower.length >= 20 && description.startsWith(lower)))) {
+      return lane.id;
+    }
+  }
+  return text;
 }
 
 /**

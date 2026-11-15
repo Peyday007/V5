@@ -1,4 +1,5 @@
 import type { BinPurpose } from './binPurpose.ts';
+import type { Position } from './construction.ts';
 /**
  * Domain contract for Brain.
  *
@@ -2268,6 +2269,14 @@ export interface ResearchClaimRow {
   opportunity_signal: string | null;
   monetization_method: string | null;
   closes_on: string | null;
+  /** Migration 154 (W-11/W-12). Absent on a row read before it ran. */
+  measurement_method?: string | null;
+  sample_size?: number | null;
+  limitations?: string | null;
+  valid_until?: string | null;
+  invalidated_by?: string | null;
+  invalidation_met_at?: string | null;
+  invalidation_note?: string | null;
   structural_finding: string | null;
   structural_subject: string | null;
   structural_qualifier: string | null;
@@ -3458,6 +3467,23 @@ export interface ResearchClaim {
    * means the source stated none, which is never read as "open".
    */
   closesOn: string | null;
+  /**
+   * How the figure was measured (survey, audited accounts, platform export…),
+   * as the source states it, or null (W-11).
+   */
+  measurementMethod?: string | null;
+  /** How many cases the figure was measured on, where the source states it. */
+  sampleSize?: number | null;
+  /** What the source itself says limits the figure. */
+  limitations?: string | null;
+  /** Until when the source says the figure holds, YYYY-MM-DD, or null for the quantity's default. */
+  validUntil?: string | null;
+  /** The condition that would make the claim wrong, in words, or null. */
+  invalidatedBy?: string | null;
+  /** When that condition was recorded as met, or null while it has not been. */
+  invalidationMetAt?: string | null;
+  /** What met it. */
+  invalidationNote?: string | null;
   /**
    * The structural fact about an industry this claim establishes, if any.
    *
@@ -10291,6 +10317,9 @@ export interface MonetizationPathRow {
   verdict_inputs_digest: string | null;
   verdict_round_id: string | null;
   verdict_at: string | null;
+  /* Migration 155: the §92 position the arrangement's design occupies (K-6). */
+  position_json: string | null;
+  position_key: string | null;
 }
 
 /**
@@ -10320,6 +10349,9 @@ export interface ConstructedArrangementRecord {
   evaluatedCount: number;
   lastEvaluation: { goalId: string; readingId: string | null; contributionCents: number | null; picked: boolean } | null;
   verdict: { verdict: 'CONFIRMED' | 'REFUTED'; inputsDigest: string; roundId: string | null; at: string | null } | null;
+  /** The §92 position the design occupies (migration 155), and its key; null on a row not re-composed since. */
+  position: Position | null;
+  positionKey: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -11395,6 +11427,14 @@ export interface ReasoningExplorationRow {
   variables: number;
   /** The sweep's compact summary as JSON, or null. */
   sweep: string | null;
+  created_at: string;
+}
+
+/** One method credited for one goal on one set of inputs (migration 153 / pg 144, lens S, S-9). */
+export interface ReasoningMethodCreditRow {
+  signature: string;
+  goal_id: string;
+  inputs_key: string;
   created_at: string;
 }
 

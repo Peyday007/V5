@@ -40,6 +40,7 @@
  * coherence rules, and which are worth asking about by the goal.
  */
 import type { CashMechanism } from '../../domain/types.ts';
+import { MONEY_TIMINGS, RECURRENCES, type MoneyTiming, type Recurrence } from '../../domain/construction.ts';
 
 /** The ways an arranger is paid, and what each needs to exist first. */
 export const STRUCTURES = {
@@ -88,14 +89,14 @@ export type Structure = keyof typeof STRUCTURES;
 export const STRUCTURE_KEYS = Object.keys(STRUCTURES) as Structure[];
 
 /** When the buyer's money moves. */
-export const FUNDING = ['ON_DELIVERY', 'PREPAID', 'THRESHOLD_PRESALE'] as const;
-export type Funding = (typeof FUNDING)[number];
+export const FUNDING = MONEY_TIMINGS;
+export type Funding = MoneyTiming;
 /** Whether one buyer is served at a time or several share one fulfilment. */
 export const AGGREGATION = ['SINGLE', 'POOLED_BUYERS'] as const;
 export type Aggregation = (typeof AGGREGATION)[number];
 /** What makes the purchase happen again. */
-export const REPEAT = ['ONE_OFF', 'RECURRING_COHORT', 'SUBSCRIPTION'] as const;
-export type Repeat = (typeof REPEAT)[number];
+export const REPEAT = RECURRENCES;
+export type Repeat = Recurrence;
 
 export interface Design {
   base: Structure;

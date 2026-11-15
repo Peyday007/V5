@@ -26,6 +26,9 @@ import {
   type ArrangementToRecord,
 } from '../../repos/monetization.ts';
 import type { ConstructedArrangementRecord, MonetizationMethod } from '../../domain/types.ts';
+import { EQUIPMENT_WORDS } from '../../domain/construction.ts';
+import { designToPosition } from '../industry/construction/designs.ts';
+import { positionKey } from '../industry/construction/businesses.ts';
 import type { ConstructedArrangement, Structure } from './construct.ts';
 
 /**
@@ -98,6 +101,12 @@ export async function rememberArrangements(
       constraints: own.flatMap((p) => constraintsByRef.get(p.ref) ?? []),
       paymentTiming: { funding: one.design.funding, beforeDelivery: one.design.funding !== 'ON_DELIVERY', days: null },
     };
+    /*
+     * The §92 position this design occupies (K-6, W-8), so positions are rows:
+     * countable, and comparable with the arrangement's predecessor. Whose
+     * assets do the work is read from the parts' own words, as §92 reads it.
+     */
+    const position = designToPosition(one.design, EQUIPMENT_WORDS.test(own.map((p) => p.name).join(' ')));
     return {
       signature: one.signature!,
       legacyKey: one.key,
@@ -110,6 +119,8 @@ export async function rememberArrangements(
       precedentOpportunityId: one.precedent?.opportunityId ?? null,
       inputsDigest: one.inputsDigest!,
       designJson: JSON.stringify(design),
+      positionJson: JSON.stringify(position),
+      positionKey: positionKey(position),
     };
   });
   return recordConstructedArrangements(projectId, goalId, records, at);

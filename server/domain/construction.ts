@@ -79,6 +79,20 @@ export const REVENUE_LABELS: Record<RevenueBasis, string> = {
   COMBINED: 'a service margin and a financing margin from the same payer',
 };
 
+/**
+ * When the payer's money moves, and what makes the purchase happen again (W-8).
+ *
+ * The §82 transaction design (`cash/properties.ts`) and the §92 position are
+ * one vocabulary for these two dimensions: the design's `funding` and `repeat`
+ * are these sets, and a position states them only when they differ from the
+ * default (paid on delivery, once), so every key and stored position written
+ * before they existed reads exactly as it did.
+ */
+export const MONEY_TIMINGS = ['ON_DELIVERY', 'PREPAID', 'THRESHOLD_PRESALE'] as const;
+export type MoneyTiming = (typeof MONEY_TIMINGS)[number];
+export const RECURRENCES = ['ONE_OFF', 'RECURRING_COHORT', 'SUBSCRIPTION'] as const;
+export type Recurrence = (typeof RECURRENCES)[number];
+
 export interface Position {
   contract: ContractHold;
   supply: SupplyMode;
@@ -87,7 +101,14 @@ export interface Position {
   information: InformationMode;
   /** Absent: the position's natural basis (`naturalRevenue`). */
   revenue?: RevenueBasis;
+  /** Absent: paid on delivery. */
+  moneyTiming?: MoneyTiming;
+  /** Absent: a one-off purchase. */
+  recurrence?: Recurrence;
 }
+
+/** Work whose doing needs equipment someone must own or lease, read from its words. */
+export const EQUIPMENT_WORDS = /\b(truck|van|vehicle|fleet|trailer|equipment|machine|machinery|vessel|aircraft|warehouse|plant|crane|excavator)s?\b/i;
 
 /** The basis a position earns on when it states none. */
 export function naturalRevenue(p: Pick<Position, 'contract'>): RevenueBasis {

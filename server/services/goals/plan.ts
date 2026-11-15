@@ -64,7 +64,7 @@ function planAuthority(projectId: string, action: string): ReturnType<typeof che
 }
 import { composeBuyerMessage } from '../cash/outreach.ts';
 import { evidenceCard } from '../cash/card.ts';
-import { ARRANGEMENT_ID_PREFIX, isArrangementId, bestCaseReach, composeGoalModel, planTrace, dealsForGoal, OUTREACH_MULTIPLE, priceSupported, volumeEstablished, wilson, type ModelInput, type ModelledOpportunity } from '../cash/goalScenario.ts';
+import { ARRANGEMENT_ID_PREFIX, isArrangementId, bestCaseReach, composeGoalModel, inventedDesigner, planTrace, dealsForGoal, OUTREACH_MULTIPLE, priceSupported, volumeEstablished, wilson, type ModelInput, type ModelledOpportunity } from '../cash/goalScenario.ts';
 import { readTarget, type TargetReading } from './target.ts';
 import { executionFrame, MAX_LIVE_GOAL_ROUNDS, openConstructedRound, openGoalDiscovery, roundsStillResearching } from '../cash/discovery.ts';
 import { constructArrangements, lastConstructionReport, type ConstructedArrangement } from '../cash/construct.ts';
@@ -95,8 +95,9 @@ import { readPathways, requiredStructures, type BrainCapabilities, type GoalStru
 import { MATERIAL_P50, MATERIAL_REACH, reconstructPlan, type Reconstruction } from './reconstruction.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { sharedEvaluator } from './reasoning/evaluatorPool.ts';
-import { inventDirections } from './reasoning/invent.ts';
-import { loadLibrary, recordExploration } from './reasoning/learning.ts';
+import { inventDirections, inventEnabled } from './reasoning/invent.ts';
+import type { ExploreContext } from './reasoning/directions.ts';
+import { loadLibrary, loadStancePrior, recordExploration } from './reasoning/learning.ts';
 import { implementedFormats } from '../puzzle/formats/index.ts';
 
 export const PLAN_VERDICTS = ['RECOMMENDABLE', 'NEEDS_EVIDENCE', 'NOT_VIABLE'] as const;
@@ -1121,7 +1122,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   const base = { goalId: goal.id, target, excluded: model.excluded, measuredChance };
   const outcomeRecorded = await goalOutcomeRecorded(goal.id);
   if (model.refusal) {
-    const refusedReconstruction = target.achieved ? null : await reconstructionFor(model, RECOMMENDATION_POLICY.requiredProbability, { goalId: goal.id, persist: !!input.persist, degraded });
+    const refusedReconstruction = target.achieved ? null : await reconstructionFor(model, RECOMMENDATION_POLICY.requiredProbability, { goalId: goal.id, persist: !!input.persist, degraded, designer: goalDesigner(goal, target, now) });
     let refusedAcceptance = judgeAcceptance({ achieved: target.achieved, chosen: null, portfolio: model.portfolio, measuredChance, considered: [] });
     const refusedPlan = adoptReconstruction({ reconstruction: refusedReconstruction, baseline: model.portfolio, openings: planOpenings(model) });
     if (refusedPlan.candidate && refusedAcceptance.status !== 'ACCEPTED') {
@@ -1448,7 +1449,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     }
   }
   // A plan short of its requirement is reconstructed, not just re-read (§99).
-  const reconstruction = acceptance.status !== 'ACCEPTED' ? await reconstructionFor(model, acceptance.required, { goalId: goal.id, persist: !!input.persist, degraded }) : null;
+  const reconstruction = acceptance.status !== 'ACCEPTED' ? await reconstructionFor(model, acceptance.required, { goalId: goal.id, persist: !!input.persist, degraded, designer: goalDesigner(goal, target, now) }) : null;
   trace('reconstruction');
   /*
    * One plan (C-6). The reconstruction's strongest plan, when it beats the plan
@@ -1605,7 +1606,7 @@ export function inventDue(goalId: string | undefined, now = Date.now()): boolean
 export async function reconstructionFor(
   model: { portfolio: GoalPortfolio | null; portfolioInput?: Parameters<typeof reconstructPlan>[0]['portfolio'] & { openings: Parameters<typeof reconstructPlan>[0]['openings'] } | null },
   required: number,
-  context: { goalId?: string; persist?: boolean; degraded?: string[]; reconstruct?: typeof reconstructPlan; library?: typeof loadLibrary } = {},
+  context: { goalId?: string; persist?: boolean; degraded?: string[]; reconstruct?: typeof reconstructPlan; library?: typeof loadLibrary; stancePrior?: typeof loadStancePrior; designer?: () => Promise<NonNullable<ExploreContext['design']>> } = {},
 ): Promise<Reconstruction | null> {
   if (!model.portfolio || !model.portfolioInput || model.portfolioInput.openings.length === 0) return null;
   const degraded = context.degraded ?? [];
@@ -1621,6 +1622,20 @@ export async function reconstructionFor(
       degraded.push(`reasoning library: ${errorText(error)} (explored without the methods that worked before)`);
       return [];
     });
+    // What each stance has yielded across goals allocates the seed budget (lens S, S-10); without it every stance is even.
+    const stancePrior = await (context.stancePrior ?? loadStancePrior)().catch((error: unknown) => {
+      degraded.push(`reasoning stance record: ${errorText(error)} (seeds allocated evenly across stances)`);
+      return {};
+    });
+    const due = inventDue(context.goalId);
+    const design =
+      // Construction's rows are read only when a model will actually be asked: a read with no lane pays nothing for it.
+      due && context.designer && inventEnabled()
+        ? await context.designer().catch((error: unknown) => {
+            degraded.push(`invented designs: ${errorText(error)} (the model was asked without a construction path for new designs)`);
+            return null;
+          })
+        : null;
     const r = await reconstruct({
       openings,
       portfolio,
@@ -1628,11 +1643,13 @@ export async function reconstructionFor(
       required,
       evaluator,
       // The model is asked at most every INVENT_EVERY_MS per goal; between, the library carries what it invented.
-      explore: { library, ...(inventDue(context.goalId) ? { invent: (brief) => inventDirections(brief) } : {}) },
+      // When it is asked, it may also invent designs for new buyers, composed by construction (S-11).
+      explore: { library, stancePrior, ...(due ? { invent: (brief) => inventDirections(brief), ...(design ? { design } : {}) } : {}) },
     });
     if (context.goalId) explored.set(context.goalId, { key: inputsKey, at: Date.now(), reconstruction: r });
     if (context.persist && context.goalId && r.exploration) {
-      await recordExploration(context.goalId, r.exploration).catch((error: unknown) => {
+      // Credited once per (goal, inputs): a re-read of unchanged inputs is the same trial (lens S, S-9).
+      await recordExploration(context.goalId, r.exploration, inputsKey).catch((error: unknown) => {
         degraded.push(`reasoning record: ${errorText(error)} (this exploration is not in the library)`);
       });
     }
@@ -3135,22 +3152,33 @@ export function byLeastAsked<T extends { key: string; structure: string; demand:
 const lastArrangements = new Map<string, { at: number; arrangements: ConstructedArrangement[] }>();
 const ARRANGEMENTS_FRESH_MS = 10 * 60_000;
 
+/** What construction reads for a goal: its process's proved deliverables, its limits and its owner's exclusions. */
+async function constructionInputFor(goal: Workstream, target: TargetReading, now: Date, bestReachCents: number | null = null): Promise<Parameters<typeof constructArrangements>[0]> {
+  const frame = await executionFrame(target.projectId, target.currency);
+  const daysLeft = target.daysLeft ?? 0;
+  return {
+    projectId: target.projectId,
+    currency: target.currency,
+    delivers: frame?.delivers ?? [],
+    capitalCeilingCents: target.capitalCeilingCents,
+    daysLeft,
+    limits: { daysLeft, remainingCents: target.remainingCents, capitalCeilingCents: target.capitalCeilingCents, capitalBeforeProofCents: target.capitalBeforeProofCents, bestReachCents },
+    exclusions: await goalExclusions(goal),
+    now,
+  };
+}
+
+/** The composer for designs the reasoning model invents on this goal (S-11): built only when the model is asked. */
+function goalDesigner(goal: Workstream, target: TargetReading, now: Date): () => Promise<NonNullable<ExploreContext['design']>> {
+  return async () => inventedDesigner(await constructionInputFor(goal, target, now));
+}
+
 /** The goal's constructed arrangements, composed at most once per ten minutes. */
 export async function goalArrangements(goal: Workstream, target: TargetReading, now: Date, bestReachCents: number | null = null): Promise<ConstructedArrangement[]> {
   if (target.daysLeft === null || target.daysLeft <= 0 || target.remainingCents <= 0) return [];
   const held = lastArrangements.get(goal.id);
   if (held && now.getTime() - held.at >= 0 && now.getTime() - held.at < ARRANGEMENTS_FRESH_MS) return held.arrangements;
-  const frame = await executionFrame(target.projectId, target.currency);
-  const arrangements = await constructArrangements({
-    projectId: target.projectId,
-    currency: target.currency,
-    delivers: frame?.delivers ?? [],
-    capitalCeilingCents: target.capitalCeilingCents,
-    daysLeft: target.daysLeft,
-    limits: { daysLeft: target.daysLeft, remainingCents: target.remainingCents, capitalCeilingCents: target.capitalCeilingCents, capitalBeforeProofCents: target.capitalBeforeProofCents, bestReachCents },
-    exclusions: await goalExclusions(goal),
-    now,
-  });
+  const arrangements = await constructArrangements(await constructionInputFor(goal, target, now, bestReachCents));
   lastArrangements.set(goal.id, { at: now.getTime(), arrangements });
   // The library keeps what was composed: a restart, a deploy or another goal reads it back (K-1).
   await rememberArrangements(target.projectId, goal.id, arrangements, now.toISOString()).catch((error: unknown) =>

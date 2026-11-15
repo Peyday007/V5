@@ -40,8 +40,7 @@ import type { Workstream } from '../../../domain/register.ts';
 import { constructIndustry, type Construction, type ConstructionGoal } from './construction.ts';
 import { interpretIntent, type IntentOverrides } from './intent.ts';
 import { referenceFor } from './references.ts';
-
-const EQUIPMENT_WORDS = /\b(truck|van|vehicle|fleet|trailer|equipment|machine|machinery|vessel|aircraft|warehouse|plant|crane|excavator)s?\b/i;
+import { EQUIPMENT_WORDS } from '../../../domain/construction.ts';
 
 function words(text: string): Set<string> {
   return new Set(text.toLowerCase().split(/[^a-z]+/).filter((w) => w.length >= 4));
@@ -132,9 +131,18 @@ export function evidenceFromMap(nodes: IndustryNode[], constraints: OpportunityC
   return { actors, segments, flows, chokepoints, adjacencies, gates, failures, provenance: nodes.length ? [`industry map: ${nodes.length} subject(s) established by research`] : [] };
 }
 
-/** Merge the layers: reference first, then the map, then recorded facts. Pure. */
-export function assembleEvidence(input: { text: string; industry: string | null; geography: string | null; map: ReturnType<typeof evidenceFromMap>; recorded: IndustryEvidence['facts'] }): IndustryEvidence {
-  const pack = referenceFor(`${input.industry ?? ''} ${input.text}`);
+/**
+ * Merge the layers: reference first, then the map, then recorded facts. Pure.
+ *
+ * A reference pack is applied only when `operatorNamed` is set — goal
+ * construction, where an operator named the industry in their own words
+ * (W-9). A map root is a subject research established about the whole
+ * economy, and a pack measured in one market (the last-mile pack is Metro
+ * Detroit, with undated estimates) would hand a world-level subject that
+ * market's actors and figures. Every map-root caller leaves it unset.
+ */
+export function assembleEvidence(input: { text: string; industry: string | null; geography: string | null; map: ReturnType<typeof evidenceFromMap>; recorded: IndustryEvidence['facts']; operatorNamed?: boolean }): IndustryEvidence {
+  const pack = input.operatorNamed ? referenceFor(`${input.industry ?? ''} ${input.text}`) : null;
   const base: IndustryEvidence = pack
     ? pack.build()
     : {
@@ -276,7 +284,7 @@ export async function goalConstruction(goalId: string, options: GoalConstruction
   // The goal's own facts, and research's facts about this industry's subtree only: a price in another industry is not this one's.
   const inTree = new Set(tree.map((n) => n.id));
   const recorded = (await listConstructionFacts(goal.id, goal.projectId ?? null)).filter((f) => f.workstreamId === goal.id || (f.nodeId != null && inTree.has(f.nodeId)));
-  const evidence = assembleEvidence({ text, industry: intent.industry, geography: intent.geography, map, recorded });
+  const evidence = assembleEvidence({ text, industry: intent.industry, geography: intent.geography, map, recorded, operatorNamed: true });
   const others = (await listWorkstreams({ projectIds: null }))
     .filter((g) => g.id !== goal.id && activeMoneyGoal(g))
     .map((g) => ({ id: g.id, title: g.title, policy: goalExecutionPolicy({ daysLeft: g.dueAt ? Math.ceil((Date.parse(g.dueAt) - now.getTime()) / 86_400_000) : null, remainingCents: g.target?.amountCents ?? 0 }) }));

@@ -61,18 +61,18 @@ Status vocabulary as the owner gave it. Owner = the Surge B repair stream
 | W-5 | quantitative knowledge | construction facts written only by a person, per goal; map-built roles unpriced (`construction/service.ts:57-96`) | BLOCKING | construction-knowledge | REPAIRING |
 | W-6 | decomposition | role-occupant answer asked once, never read back (`expand.ts:196,214`) | MAJOR | construction-knowledge | REPAIRING |
 | W-7 | money-tree positions | closed logistics-shaped position vocabulary; 4 economics branches; no resale/subscription/finance/rent (`domain/construction.ts:31-224`) | MAJOR | construction-knowledge | REPAIRING |
-| W-8 | transfer | two construction vocabularies; transfer goal-only | MAJOR | — | ROOT CAUSE CONFIRMED |
-| W-9 | generality | one Metro Detroit last-mile reference pack applied to any "logistics" subject | MINOR | — | DISCOVERED |
+| W-8 | transfer | two construction vocabularies; transfer goal-only | MAJOR | transfer-positions | REPAIRED on branch (5426902): Position↔Design adapter; kernel asks precedent transfers with no live goal, naming TRANSFER_MATERIAL; surgeBMechanismTransfer 6/6 |
+| W-9 | generality | one Metro Detroit last-mile reference pack applied to any "logistics" subject | MINOR | transfer-positions | REPAIRED on branch (5426902): reference packs apply only where an operator named the industry; residual: map roots carry no economics until research facts (W-5) feed them |
 | W-10 | freshness | construction facts undated; old OBSERVED beats new VERIFIED | MAJOR | construction-knowledge | REPAIRING |
-| W-11 | evidence lifecycle | claims lack method, sample size, transaction type, limitations, validity, invalidation | MAJOR | — | ROOT CAUSE CONFIRMED |
-| W-12 | freshness | constant staleness windows cut evidence off rather than widen uncertainty; map nodes undated | MAJOR | — | ROOT CAUSE CONFIRMED |
+| W-11 | evidence lifecycle | claims lack method, sample size, transaction type, limitations, validity, invalidation | MAJOR | evidence-lifecycle | REPAIRED on branch (a66b80a): claims carry method, sample size, limitations, valid_until, invalidated_by (migrations 154/145) into quant observations; surgeBEvidenceLifecycle passes |
+| W-12 | freshness | constant staleness windows cut evidence off rather than widen uncertainty; map nodes undated | MAJOR | evidence-lifecycle | REPAIRED on branch (a66b80a): past its window an observation decays (half-weight per half-life, wider spread) instead of being dropped; met invalidation excludes with reason; staleRefreshPriority ranks by plan sensitivity (not yet wired into dispatch) |
 | W-13 | who pays | map flows point at "operators", no payer/supplier resolved (`service.ts:74-76`) | MAJOR | construction-knowledge | REPAIRING |
 | H2-1 | Hermes direction | no way to give a run a mission (`domain/operator.ts:148`) | BLOCKING | hermes-director | REPAIRING |
 | H2-2 | Hermes direction | no inventory tool | MAJOR | hermes-director | REPAIRING |
-| H2-3 | Hermes diagnosis | deficiencies from three hard-coded detectors (`director.ts:883`) | MAJOR | — | DISCOVERED |
+| H2-3 | Hermes diagnosis | deficiencies from three hard-coded detectors (`director.ts:883`) | MAJOR | hermes-direction | REPAIRED on branch (b5198b8): + inventory, stuck-plan and unreported-round detectors; surgeBHermesDirection 10/10 |
 | H2-4 | Hermes honesty | lesson-only interventions reported as queued (= Surge A H-4, merged, unverified) | MAJOR | Surge A | AWAITING VERIFICATION |
 | H2-5 | Hermes direction | no reassign/re-attempt of stalled Factory work | MAJOR | hermes-director | REPAIRING |
-| H2-6 | Hermes research | research only via a commission | MINOR | — | DISCOVERED |
+| H2-6 | Hermes research | research only via a commission | MINOR | hermes-direction | REPAIRED on branch (b5198b8): EVIDENCE commission on a goal (incl. paused) or as method research; spend/outreach still refused |
 | H2-7 | Hermes verification | cannot verify a repair it did not commission | MINOR | hermes-director | REPAIRING |
 | H2-8 | runtime | operator reads >20 s; DB contention | MAJOR | **Surge A** (RC-1) | handed off |
 | H2-9 | compute | RunPod ceilings block any 48 GB pod; no 48 GB recipe | MAJOR | hermes-director | REPAIRING |
@@ -83,7 +83,7 @@ Status vocabulary as the owner gave it. Owner = the Surge B repair stream
 | K-3 | traceability | which 12 reach a model is not recorded; `arr_` ids may be linked as openings (`plan.ts:2489`) | MAJOR | arrangement-library | REPAIRING |
 | K-4 | learning | research answers never attach to the arrangement; refuted ones re-asked | MAJOR | arrangement-library | REPAIRING |
 | K-5 | reuse | rounds per goal, keys are project-local hashes; no cross-goal/project reuse | MAJOR | arrangement-library | REPAIRING |
-| K-6 | persistent knowledge | §92 positions, roles, flows not stored | MAJOR | — | ROOT CAUSE CONFIRMED |
+| K-6 | persistent knowledge | §92 positions, roles, flows not stored | MAJOR | transfer-positions | REPAIRED on branch (5426902): arrangement rows carry position_json/position_key (155/146); census counts positions and money flows |
 | K-7 | identity | keys from row ids; recreated node loses history | MINOR | arrangement-library | REPAIRING |
 | K-8 | geography | arrangements carry no geography; constraints never read | MINOR | arrangement-library | REPAIRING |
 | S-1 | search narrowing | 12 picked by saturating score + sha256 tiebreak; experiment: strong DIRECT arrangement kept/dropped by its key string; swapping it in raised reach 1.55%→2.8% (`goalScenario.ts:283-297`) | BLOCKING | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
@@ -94,13 +94,13 @@ Status vocabulary as the owner gave it. Owner = the Surge B repair stream
 | S-6 | reasoning | no move can add a constructed arrangement outside the 12 | MAJOR | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
 | S-7 | method learning | learns from unchallenged and critic-flagged reach | MAJOR | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
 | S-8 | transfer of methods | learned methods keyed by opening ids; don't transfer across goals | MAJOR | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
-| S-9 | learning stats | repeat reads of one goal counted as independent | MINOR | — | DISCOVERED |
-| S-10 | learning | stance yield computed, never fed back | MAJOR | search-selection | DISCOVERED (not repaired; stance yield still unused) |
-| S-11 | invention | model-invented methods only retune 4 operations on held openings | MAJOR | search-selection | PARTIAL (INCLUDE move added; new-design invention not yet) |
+| S-9 | learning stats | repeat reads of one goal counted as independent | MINOR | adaptive-search | REPAIRED on branch (91030b6), AWAITING RELEASE |
+| S-10 | learning | stance yield computed, never fed back | MAJOR | adaptive-search | REPAIRED on branch (91030b6): stance seed budget by posterior with floor; surgeBAdaptiveSearch 7/7 |
+| S-11 | invention | model-invented methods only retune 4 operations on held openings | MAJOR | search-selection | REPAIRED on branch (9f4f908): a model-invented design + buyer population is composed by construction and enters as a MECHANISM-tier, never-certifiable candidate; refusals carry reasons. surgeBInventedDesign 4/4 |
 | S-12 | transfer | transfers model no material differences; precedent bonus outranks gated evidence | MAJOR | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
 | S-13 | correlation | = Q2-10 | MAJOR | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
 | S-15 | wiring | `bestReachCents` never reaches construction (10-min cache) | MINOR | arrangement-library | REPAIRING |
-| S-16 | screening | factorial screen drops levels that matter only in combination | MINOR | — | DISCOVERED |
+| S-16 | screening | factorial screen drops levels that matter only in combination | MINOR | adaptive-search | REPAIRED on branch (91030b6), AWAITING RELEASE |
 | S-17 | traceability | nothing records what was cut | MINOR | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
 | Q2-1 | acceptance | chain link and assurance accept mutually exclusive input forms → EVIDENCED_PORTFOLIO unreachable (repro: 3 sized comparables → basis PROBABILITY, still CANDIDATE_ONLY) | BLOCKING | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
 | Q2-2 | statistics | "sample" = number of studies ≥ 20; Wilson bound double-counts (`quant/portfolio.ts:1027,1061`) | BLOCKING | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
@@ -166,7 +166,7 @@ differences), I (no capital restructuring), L (contradiction pooled), O4/O5
 dropped by key string), PERSIST 0/3. Full table:
 `docs/intelligence-recovery/evaluation-baseline.md`.
 
-### Repairs integrated (branch `claude/brain-intelligence-recovery-s0dl4l`)
+### Repairs integrated (branch `claude/brain-intelligence-recovery-s0dl4l`; released in PR #901, merge 7a8b565, Deploy 1070)
 
 | stream | commit | what changed | evidence |
 |---|---|---|---|
@@ -197,12 +197,39 @@ simulated worlds never raise confidence.
 | when (Z) | run | model | what Hermes did | source |
 |---|---|---|---|---|
 | 21:12–21:28 | `opr_322701cdf14f411e9b6b` (Agents run 43641617727, mission `SURGE:B` set, 3,048 chars) | `auto/best-coding` (free switchboard) | RUN_DONE, 41 tool calls, 0 failed: 19 × `brain_operator_inventory` (populated the Surge B inventory from the mission), `brain_operator_decide` (opd_0943d48c45d6ea1d), `continue_idle`, `record_learning`; commissioned **no** duplicate engineering (every root cause was already REPAIRING by a stream) | `agents.yml operator-show` run 43643347745 |
+| 23:59–00:04 | opr_a1f757372a4d439b8564 (Agents run 43654508964) | auto/best-coding | mission refreshed (SURGE:B, part-2 release state); 29 tool calls: 13 inventory reads/upserts, 3 `brain_operator_decide` (incl. RESUME_GOAL deciding to re-attempt stalled commission imp_02321af4d6e9433782cd on a different path), goal plan read, record_learning. One inventory call failed `POOL_CHECKOUT_TIMEOUT` (Surge A runtime). | agents.yml operator-run log |
 
 Limits observed honestly: the run's own decision and lessons still centre on
 the $10K goal and infrastructure congestion (Surge A's area); it tracked the
 Surge B inventory but did not yet reprioritise or re-attempt Surge B work —
 nothing in flight had stalled. The post-run `show` crashed on `LIMIT NaN`
 (argument parsing in `scripts/operator.ts`, fixed e45cb30).
+
+### Production after Deploy 1070 (census Goals run 43654436460, 23:42Z, revision 7a8b565)
+
+| population | baseline 19:53Z | 23:42Z | reading |
+|---|---|---|---|
+| constructed arrangements durably stored | 0 | **404** (404 unique design signatures) | K-1 persistence VERIFIED on production |
+| sourced economic observations | 16,762 | 16,786 | +24 |
+| plan readings | 100 | 101 | — |
+| construction facts | 0 | 0 | W-5/6/7 released; facts are written by the kernel pass on its next standing round — NOT YET VERIFIED |
+| arrangements researched / evaluated / picked / transferred | n/a | 0 / 0 / 0 / 0 | counters exist; no plan read or round has run since release — NOT YET VERIFIED |
+| sectors / nodes / buyer populations | 52 / 91 / 11 | 52 / 91 / 11 | no standing round has run since release |
+| commercial positions, labor roles | not stored | not stored | K-6 repair in flight |
+
+### Production plan read after Deploy 1070 (Goals run 43654511789, 23:43→00:08Z)
+
+Total ≈ 25 min (baseline 26 min 41 s): construct 247 s, shared frontier (979 openings) 210 s, quant portfolio 189 s, scenario 34 s, reconstruction 346 s.
+**Critical finding P-ADMIT (REPAIRED on branch 09a1c27: unpriced arrangements enter on comparable published prices at MECHANISM tier, never certifiable; with no price anywhere they stay out with a reason; surgeBArrangementAdmission passes):** `estimated arrangements: 0 of 404 (404 cut, 0 in reserve)` — every stored arrangement is cut before the goal model on production; the plan compares 11 found openings + 0 constructed estimates and reaches 0.0% (pool reaches at most $265 of $10,000). Owner: Surge B (admission engineer, REPAIRING).
+**P-SPEED-2:** the planning read is still ~25 min on production; phases above. Owner: Surge B (performance engineer, REPAIRING); DB-bound portions handed to Surge A when measured.
+
+### Received from Surge A (22:09Z scope adjustment)
+
+| id | finding | status |
+|---|---|---|
+| A-O6 | research rounds end without a report (`research/gate.ts`, `packetRunner.ts`) — verifier on all-conditional lanes vs unreachable sources | REPAIRED on branch (540ea63): verifier lane names resolved to declared ids; an all-conditional fragment is not failed by INSUFFICIENT, which is carried as an unresolved gap. Unreachable-source blocks stay with RC-1 (Surge A). evidenceLanes 24/24 |
+| A-10K | the $10K plan has no buyer-validated or market-test-ready opening, and conversion is unmeasured | ROOT CAUSE CONFIRMED — evidence gap, not a code defect: it closes only by measurement (outreach replies through Instantly, §94) or sourced comparables; acceptance now certifies on sized comparables with margin (case O), never on assumption. Directed to Hermes. |
+| A-CAP | starting-capital fallback chain `perWeek ?? beforeProof ?? capitalCeiling` (`goals/portfolio.ts` ~905) | REVIEWED — NOT A DEFECT: every link is a limit the goal itself states; with no weekly or before-proof limit the ceiling is the most that may be tied up, and the reconstruction's CAPITAL factor sweeps it. No owner figure is hard-coded. |
 
 ### Handed to Surge A
 

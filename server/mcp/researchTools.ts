@@ -147,6 +147,7 @@ import {
   SCOPE_MATCH_SUBMISSION_VALUES,
   declaredScopeOf,
   scopeAnswerRefusal,
+  validateMeasurement,
   type ClaimScopeBasis,
   type ClaimScopeMatch,
 } from '../services/research/schema.ts';
@@ -1168,6 +1169,20 @@ function optionalClosesOn(
   return checked.value;
 }
 
+/** How a claim was measured and how long it holds (W-11): `validateMeasurement`, which the provider path calls too. */
+function optionalMeasurement(row: Record<string, unknown>, where: string) {
+  const checked = validateMeasurement({
+    where,
+    method: row['method'],
+    sampleSize: row['sample_size'],
+    limitations: row['limitations'],
+    validUntil: row['valid_until'],
+    invalidatedBy: row['invalidated_by'],
+  });
+  if (!checked.ok) throw invalidInput(checked.error);
+  return checked.value;
+}
+
 function optionalMethod(
   row: Record<string, unknown>,
   signal: OpportunitySignal | null,
@@ -1490,6 +1505,37 @@ const submitClaimsTool: McpTool = {
                 'close), the date as YYYY-MM-DD exactly as the source states it. Brain stops ' +
                 'researching an opening once that date has passed. Omit it when the source ' +
                 'states none; never estimate one.',
+            },
+            method: {
+              type: 'string',
+              description:
+                'Optional. How the source measured the figure the claim states (a survey of N firms, ' +
+                'audited accounts, a platform\'s own export, one vendor case study), as the source says it.',
+            },
+            sample_size: {
+              type: 'integer',
+              minimum: 1,
+              description:
+                'Optional. How many cases the figure was measured on, only where the source states it. ' +
+                'A sized rate is weighed by its sample; never estimate one.',
+            },
+            limitations: {
+              type: 'string',
+              description: 'Optional. What the source itself says limits the figure (self-selected sample, one region, one year).',
+            },
+            valid_until: {
+              type: 'string',
+              pattern: '^\\d{4}-\\d{2}-\\d{2}$',
+              description:
+                'Optional. YYYY-MM-DD until which the source says the figure holds (a price list\'s ' +
+                'expiry, a rate valid for a season). Omit it otherwise: Brain then ages the figure by the ' +
+                'quantity\'s own half-life, and never drops it for age alone.',
+            },
+            invalidated_by: {
+              type: 'string',
+              description:
+                'Optional. The condition that would make this claim wrong (a regulation repealed, a ' +
+                'platform changing its fee). When it is later recorded as met, the figure stops counting.',
             },
             monetization_method: {
               type: 'string',
@@ -1950,6 +1996,7 @@ const submitClaimsTool: McpTool = {
          */
         monetizationMethod: optionalMethod(row, optionalSignal(row, where), where),
         closesOn: optionalClosesOn(row, optionalSignal(row, where), where),
+        ...optionalMeasurement(row, where),
         /*
          * And what it establishes about how the industry is put together.
          *
@@ -2174,7 +2221,14 @@ const submitVerificationTool: McpTool = {
         },
       },
       sufficiency: { type: 'string', enum: ['SUFFICIENT', 'INSUFFICIENT'] },
-      missing_lanes: { type: 'array', items: { type: 'string' } },
+      missing_lanes: {
+        type: 'array',
+        items: { type: 'string' },
+        description:
+          'With INSUFFICIENT: the ids of the declared lanes still not answered. A lane the ' +
+          'fragment marks conditional or optional does not fail it; say what stays open in ' +
+          'unresolved_gaps.',
+      },
       unresolved_gaps: { type: 'array', items: { type: 'string' } },
       idempotency_key: { type: 'string' },
     },

@@ -1311,7 +1311,7 @@ export function parameterReachOf(problem: PortfolioProblem, recipes: Recipe[], d
           : g.evidence.need
             ? `${g.evidence.need} (for ${where}; it moves reach most, |ρ| ${rho.toFixed(2)})`
             : `${g.label} for ${where}: reach's 5th percentile is limited most by its uncertainty (${have.tier.toLowerCase()}, ${have.sizedPopulations} sized population(s), ${have.events} events, |ρ| ${rho.toFixed(2)}) — research more independent sized populations of it for this mechanism, or measure it directly`;
-      return { opportunityIds: [...g.openings], input: g.label, sensitivity: rho, have, need };
+      return { opportunityIds: [...g.openings], input: g.label, field: g.field, sensitivity: rho, have, need };
     });
   return { draws: reaches, basis, limiting, innerWorlds: inner };
 }

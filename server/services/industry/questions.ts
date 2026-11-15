@@ -195,6 +195,38 @@ export function capitalQuestion(input: {
   return parts.join(' ');
 }
 
+export function transferTitle(precedent: CashOpportunity, path: readonly string[]): string {
+  return `Would ${clip(path[path.length - 1] ?? 'these buyers', 60)} pay the way "${clip(precedent.title, 60)}" does`;
+}
+
+/**
+ * The §82 transfer, as a question (W-8): a design a held opening shows working,
+ * carried to a different buyer population on the map.
+ *
+ * It is a hypothesis Brain constructed, never a fact, and the question says so:
+ * the precedent establishes the design for its own buyers only, and every
+ * material difference between them and these is named as something research
+ * must bridge with a source or report as unbridged.
+ */
+export function transferQuestion(input: {
+  precedent: CashOpportunity;
+  design: string;
+  position: string;
+  differences: readonly string[];
+  path: readonly string[];
+  objective: string | null;
+}): string {
+  const payer = input.precedent.payer ? `"${clip(input.precedent.payer, 80)}"` : 'its buyers';
+  return [
+    `Brain holds a published precedent: "${clip(input.precedent.title, 200)}", where ${payer} pay for an arrangement designed as: ${clip(input.design, 300)} (as a commercial position: ${input.position}).`,
+    `It is a hypothesis, not an established fact, that the same design works for a different buyer population: ${input.path.join(' → ')}.`,
+    'Establish whether these buyers actually pay for something arranged this way, who would supply it, and on what terms.',
+    `The precedent establishes nothing about these buyers on these material differences, each of which must be bridged: ${input.differences.join(', ')} — for each, report a source on how these buyers differ from the precedent's, or say plainly that none was found.`,
+    contextLine(input.objective),
+    'Where no source shows these buyers pay for it, say so plainly — that refutes the transfer and is a useful answer.',
+  ].join(' ');
+}
+
 /** The bucket a scan round names, or null where the round names none. */
 export function bucketById(bucketId: string | null): SearchBucket | null {
   if (!bucketId) return null;

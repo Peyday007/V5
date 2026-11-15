@@ -85,6 +85,8 @@ export interface KernelPass {
   basis?: KernelBasis | null;
   /** The asks chosen, with their score parts, before they were opened. */
   asks?: Ask[];
+  /** §82 transfer asks chosen this pass (W-8): a held precedent's design carried to another population. */
+  transfers?: Ask[];
   /** What failed this pass, in words. A failure in one step no longer stops the others. */
   failures?: string[];
 }
@@ -265,11 +267,33 @@ export async function runIndustryKernel(projectId: string): Promise<KernelPass> 
 
   const cap = kernelConcurrency({ spare: await spareSurfaces(projectId), grantCap: authority.grantCap });
   const plan = await planFrom(snapshot, { cap, purposes: authority.purposes });
+  /*
+   * The §82 transfer (W-8), under either authority and with no live goal: a
+   * design a held opening shows working, carried to a buyer population on the
+   * map that is not its own, asked as a hypothesis. In the slots the plan
+   * leaves free; while none is open, one slot is held for one, taken from the
+   * plan's lowest-ranked ask — the same reservation role questions get.
+   */
+  let planned = plan.asks;
+  let transfers: Ask[] = [];
+  try {
+    const { precedentsIn, transferAsks, transferOfBucket } = await import('./transfer.ts');
+    const precedents = await precedentsIn(snapshot);
+    if (precedents.length > 0) {
+      const free = cap - counts.openRounds - planned.length;
+      const transferOpen = snapshot.rounds.some((one) => one.state === 'OPEN' && transferOfBucket(one.bucketId) !== null);
+      const reserve = !transferOpen && free <= 0 && planned.length >= 2 && counts.openRounds + 1 <= cap;
+      transfers = transferAsks({ snapshot, precedents, limit: reserve ? 1 : free });
+      if (reserve && transfers.length > 0) planned = planned.slice(0, Math.max(0, cap - counts.openRounds - 1));
+    }
+  } catch (error) {
+    failures.push(`transfer: ${error instanceof Error ? error.message : String(error)}`);
+  }
   let opened: OpenedRound[] = [];
   try {
     opened = await openAsks({
       projectId,
-      asks: plan.asks,
+      asks: [...transfers, ...planned],
       snapshot,
       filing: { cashModeId: authority.cashModeId, objective: authority.objective },
       cap,
@@ -284,7 +308,8 @@ export async function runIndustryKernel(projectId: string): Promise<KernelPass> 
     declined: plan.declined,
     ...counts,
     basis: authority.basis,
-    asks: plan.asks,
+    asks: planned,
+    transfers,
     failures,
   };
 }

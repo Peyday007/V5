@@ -19,6 +19,7 @@ import { getDb } from '../db/database.ts';
 import { mayAnswer } from '../domain/monetization.ts';
 import { mayReplace } from './cashCardFacts.ts';
 import { newId, nowIso } from './util.ts';
+import type { Position } from '../domain/construction.ts';
 import type {
   ConstructedArrangementRecord,
   FactKind,
@@ -955,6 +956,17 @@ function parseDesign(text: string | null): Record<string, unknown> {
   }
 }
 
+/** A stored §92 position, or null when absent or unreadable — never a guessed one. */
+function parsePosition(text: string | null | undefined): Position | null {
+  if (!text) return null;
+  try {
+    const parsed = JSON.parse(text) as Partial<Position> | null;
+    return parsed && typeof parsed.contract === 'string' && typeof parsed.supply === 'string' ? (parsed as Position) : null;
+  } catch {
+    return null;
+  }
+}
+
 function mapArrangement(row: MonetizationPathRow): ConstructedArrangementRecord {
   return {
     pathId: row.id,
@@ -984,6 +996,8 @@ function mapArrangement(row: MonetizationPathRow): ConstructedArrangementRecord 
       row.research_verdict === 'CONFIRMED' || row.research_verdict === 'REFUTED'
         ? { verdict: row.research_verdict, inputsDigest: row.verdict_inputs_digest ?? '', roundId: row.verdict_round_id, at: row.verdict_at }
         : null,
+    position: parsePosition(row.position_json),
+    positionKey: row.position_key ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -1003,6 +1017,9 @@ export interface ArrangementToRecord {
   precedentOpportunityId: string | null;
   inputsDigest: string;
   designJson: string;
+  /** The §92 position the design occupies, as JSON, and its key (K-6); null where the adapter has none. */
+  positionJson: string | null;
+  positionKey: string | null;
 }
 
 /**
@@ -1026,9 +1043,9 @@ export async function recordConstructedArrangements(
 ): Promise<{ created: number; updated: number; unchanged: number }> {
   const report = { created: 0, updated: 0, unchanged: 0 };
   if (arrangements.length === 0) return report;
-  const held = new Map<string, { design_json: string | null; inputs_digest: string | null; legacy_key: string | null }>();
-  for (const row of await getDb().all<{ design_signature: string; design_json: string | null; inputs_digest: string | null; legacy_key: string | null }>(
-    `SELECT design_signature, design_json, inputs_digest, legacy_key FROM monetization_paths
+  const held = new Map<string, { design_json: string | null; inputs_digest: string | null; legacy_key: string | null; position_json: string | null }>();
+  for (const row of await getDb().all<{ design_signature: string; design_json: string | null; inputs_digest: string | null; legacy_key: string | null; position_json: string | null }>(
+    `SELECT design_signature, design_json, inputs_digest, legacy_key, position_json FROM monetization_paths
       WHERE project_id = ? AND design_signature IS NOT NULL`,
     [projectId],
   )) {
@@ -1040,7 +1057,7 @@ export async function recordConstructedArrangements(
     if (seen.has(one.signature)) continue;
     seen.add(one.signature);
     const prior = held.get(one.signature);
-    if (prior && prior.design_json === one.designJson && prior.inputs_digest === one.inputsDigest && prior.legacy_key === one.legacyKey) {
+    if (prior && prior.design_json === one.designJson && prior.inputs_digest === one.inputsDigest && prior.legacy_key === one.legacyKey && (prior.position_json ?? null) === one.positionJson) {
       report.unchanged += 1;
       continue;
     }
@@ -1058,8 +1075,8 @@ export async function recordConstructedArrangements(
          (id, project_id, opportunity_id, industry_node_id, method, title, thesis, origin,
           source_claim_id, merged_into_id, split_from_id, last_evaluated_at, created_at, updated_at,
           design_signature, legacy_key, design_json, construction_origin, precedent_opportunity_id,
-          first_goal_id, inputs_digest, last_composed_at)
-       VALUES ${chunk.map(() => "(?, ?, ?, ?, ?, ?, ?, 'CONSTRUCTED', NULL, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(', ')}
+          first_goal_id, inputs_digest, last_composed_at, position_json, position_key)
+       VALUES ${chunk.map(() => "(?, ?, ?, ?, ?, ?, ?, 'CONSTRUCTED', NULL, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(', ')}
        ON CONFLICT (project_id, design_signature) DO UPDATE SET
          opportunity_id = excluded.opportunity_id,
          industry_node_id = excluded.industry_node_id,
@@ -1072,6 +1089,8 @@ export async function recordConstructedArrangements(
          precedent_opportunity_id = excluded.precedent_opportunity_id,
          inputs_digest = excluded.inputs_digest,
          last_composed_at = excluded.last_composed_at,
+         position_json = excluded.position_json,
+         position_key = excluded.position_key,
          updated_at = excluded.updated_at`,
       chunk.flatMap((one) => [
         newId('mpx'),
@@ -1091,13 +1110,15 @@ export async function recordConstructedArrangements(
         goalId,
         one.inputsDigest,
         at,
+        one.positionJson,
+        one.positionKey,
       ]),
     );
   }
   return report;
 }
 
-/** Arrangements written per statement: 17 parameters each, far inside both drivers' limits. */
+/** Arrangements written per statement: 19 parameters each, far inside both drivers' limits. */
 const ARRANGEMENT_WRITE_BATCH = 100;
 
 /** Every constructed arrangement one project holds, oldest first. */

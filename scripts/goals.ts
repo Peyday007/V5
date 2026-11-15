@@ -774,7 +774,7 @@ async function industry(): Promise<void> {
   } else {
     if (!text) fail('industry needs a goal id or --reason "the operator\'s ambition".');
     const intent = interpretIntent(text);
-    const evidence = assembleEvidence({ text, industry: intent.industry, geography: intent.geography, map: evidenceFromMap([], []), recorded: [] });
+    const evidence = assembleEvidence({ text, industry: intent.industry, geography: intent.geography, map: evidenceFromMap([], []), recorded: [], operatorNamed: true });
     console.log(`industry construction for: ${text}`);
     console.log(`  evidence: ${evidence.provenance.join('; ') || 'none'}`);
     console.log(renderConstruction(constructIndustry({ intentText: text, evidence })));
