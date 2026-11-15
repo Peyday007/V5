@@ -74,3 +74,14 @@ Also seen in this reading:
 **Follow-up (same root cause).** `informationValue` still said research on an unfunded deal would "bring it into the leading combination". It also centred the varied cost geometrically.
 - Now only a cost answer that makes the deal fundable can change the plan.
 - Both cost readers use `costCentre`.
+
+## R-SLOW-RESTART: root cause found, taken back from Surge A (closed)
+
+- **Symptom.** On Deploys 1092, 1094 and 1103, the pass after the restart was "stopped before its verdict (the live Brain answered too slowly)". In each case the release was serving and the pass before the restart had passed.
+- **Evidence.** In the Deploy 1103 job log (43760437288), every post-restart check passed up to "discovery, the portfolio, the roadmap and the counts all crossed — 979 opportunit(ies)". Then the log shows `FATAL ERROR: Reached heap limit … JavaScript heap out of memory` (Mark-Compact 400 MB) and `ssh shell: Process exited`.
+- **Root cause.** The **verifier process** ran out of memory, not the live Brain. `scripts/verify-hosted.sh` caps its heap at 384 MB, a figure set for the 1 GB machine. The shared frontier it reads and serializes has grown (979 opportunities, partly Surge B's knowledge growth), and the verifier died after the response arrived. The gate then misnamed the death as slowness.
+- **Owner.** Surge A closed at 02:45Z, so the handoff had no live owner. This session takes it as part of its down-curve reserve.
+- **Repair.**
+  - The verifier heap is raised to 768 MB. The machine is 4 GB and the Brain's heap is capped at 2,560 MB.
+  - `hosted-verify.sh` now names a verifier heap exhaustion as such.
+- **Verification on production.** The next Deploy's pass after the restart must reach a verdict.

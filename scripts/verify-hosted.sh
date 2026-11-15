@@ -17,4 +17,11 @@ cd "$(dirname "$0")/.."
 # 2026-10-30 that machine was OOM-killed during a pass. Its heap is capped so a
 # runaway verifier fails itself rather than taking the Brain's memory; it needs
 # well under this (the whole import graph is under 100 MB).
-exec node --max-old-space-size=384 --import tsx scripts/verify-hosted.ts "$@"
+#
+# 768 MB since 2026-11-15 (R-SLOW-RESTART). The machine is 4 GB and the Brain's
+# heap is capped at 2,560 MB (Dockerfile), so 384 MB was the 1 GB machine's
+# figure. The verifier itself died with "JavaScript heap out of memory" at ~400 MB
+# right after reading the shared frontier (979 opportunities, Deploy
+# 43760437288), and the gate reported it as "the live Brain answered too
+# slowly" — on three Deploys (1092, 1094, 1103) whose releases were serving.
+exec node --max-old-space-size=768 --import tsx scripts/verify-hosted.ts "$@"
