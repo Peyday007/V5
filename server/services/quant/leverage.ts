@@ -182,6 +182,17 @@ export interface TraceOptions {
 
 /** Trace every combination of the levers an arrangement carries through the seven dimensions. */
 export function traceLeverage(a: Arrangement, constraints: LeverageConstraints = {}, options: TraceOptions = {}): LeverageTrace {
+  const steps = traceSteps(a, constraints, options);
+  for (let step = steps.next(); ; step = steps.next()) if (step.done) return step.value;
+}
+
+/**
+ * The trace one combination at a time: it yields after each, so a caller on
+ * the server's only event loop can hand the loop back between them. Up to
+ * 128 combinations of several reconstructions each are seconds of work, and
+ * one stretch that long is the stall `composeConstruction` yields to avoid.
+ */
+function* traceSteps(a: Arrangement, constraints: LeverageConstraints, options: TraceOptions): Generator<void, LeverageTrace, void> {
   const now = options.now ?? new Date();
   const levers = leversOf(a);
   const all = combinationsOf(levers);
@@ -201,6 +212,7 @@ export function traceLeverage(a: Arrangement, constraints: LeverageConstraints =
       constraint: enforceConstraints({ deliveryCapacity: dimensions.deliveryCapacity, cashExposure }, constraints),
       prepaymentCredited: r.credited,
     });
+    yield;
   }
   const combinations: CombinationTrace[] = chosen.map((set) => {
     const here = byName.get(name(set))!;
@@ -357,11 +369,42 @@ export interface ArrangementLeverage {
 /** Trace, enforce and verify one arrangement's leverage, in one pass. */
 export function leverageOf(a: Arrangement, constraints: LeverageConstraints, options: TraceOptions = {}): ArrangementLeverage {
   const now = options.now ?? new Date();
-  const trace = traceLeverage(a, constraints, { now, maxCombinations: options.maxCombinations ?? 16 });
+  return leverageFrom(a, constraints, traceLeverage(a, constraints, { now, maxCombinations: options.maxCombinations ?? ALL_COMBINATIONS }), now);
+}
+
+/** Every combination of every lever an arrangement can carry: 2^7 = 128. */
+const ALL_COMBINATIONS = 1 << LEVER_KEYS.length;
+
+/**
+ * `leverageOf`, handing the event loop back through `breathe` between
+ * combinations: what construction calls, because it may run inline on the
+ * server's loop when no evaluator thread can start. The same result.
+ */
+export async function leverageOfYielding(a: Arrangement, constraints: LeverageConstraints, breathe: () => Promise<void>, options: TraceOptions = {}): Promise<ArrangementLeverage> {
+  const now = options.now ?? new Date();
+  const steps = traceSteps(a, constraints, { now, maxCombinations: options.maxCombinations ?? ALL_COMBINATIONS });
+  for (let step = steps.next(); ; step = steps.next()) {
+    if (step.done) return leverageFrom(a, constraints, step.value, now);
+    await breathe();
+  }
+}
+
+function leverageFrom(a: Arrangement, constraints: LeverageConstraints, trace: LeverageTrace, now: Date): ArrangementLeverage {
   const prepayment = verifyPrepayment(a, now);
   const full = trace.combinations.find((c) => c.levers.length === trace.levers.length) ?? null;
+  /*
+   * Refused only when evidence shows no way of running it: some combination's
+   * cash exposure is established, and every established one lets a real limit
+   * allow less than one transaction. A combination whose exposure nobody
+   * established refuses nothing and permits nothing (invariant 39), so a lever
+   * with unstated costs neither rescues the arrangement nor sinks it.
+   */
+  const judged = trace.combinations.filter((c) => c.cashExposure.established && c.constraint.allowed !== null);
   let refused: string | null = null;
-  if (full && full.cashExposure.established && full.constraint.allowed !== null && full.constraint.allowed < 1) refused = `${full.constraint.binding} allows ${full.constraint.allowed.toFixed(2)} transaction(s): ${full.constraint.detail}`;
+  if (judged.length > 0 && judged.every((c) => c.constraint.allowed! < 1)) {
+    const best = judged.reduce((x, y) => (y.constraint.allowed! > x.constraint.allowed! || (y.constraint.allowed === x.constraint.allowed && y.levers.length > x.levers.length) ? y : x));
+    refused = `${best.constraint.binding} allows ${best.constraint.allowed!.toFixed(2)} transaction(s) on the best-fitting evidenced combination (${best.levers.join('+') || 'no lever'}): ${best.constraint.detail}`;
+  }
   const unknownDims = full ? DIMENSIONS.filter((d) => !full.dimensions[d].established) : [];
   const tasks = [
     ...prepayment.flatMap((v) => v.tasks),
