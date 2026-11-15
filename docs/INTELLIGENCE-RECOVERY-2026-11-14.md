@@ -197,6 +197,7 @@ simulated worlds never raise confidence.
 | when (Z) | run | model | what Hermes did | source |
 |---|---|---|---|---|
 | 21:12–21:28 | `opr_322701cdf14f411e9b6b` (Agents run 43641617727, mission `SURGE:B` set, 3,048 chars) | `auto/best-coding` (free switchboard) | RUN_DONE, 41 tool calls, 0 failed: 19 × `brain_operator_inventory` (populated the Surge B inventory from the mission), `brain_operator_decide` (opd_0943d48c45d6ea1d), `continue_idle`, `record_learning`; commissioned **no** duplicate engineering (every root cause was already REPAIRING by a stream) | `agents.yml operator-show` run 43643347745 |
+| 23:59–00:04 | opr_a1f757372a4d439b8564 (Agents run 43654508964) | auto/best-coding | mission refreshed (SURGE:B, part-2 release state); 29 tool calls: 13 inventory reads/upserts, 3 `brain_operator_decide` (incl. RESUME_GOAL deciding to re-attempt stalled commission imp_02321af4d6e9433782cd on a different path), goal plan read, record_learning. One inventory call failed `POOL_CHECKOUT_TIMEOUT` (Surge A runtime). | agents.yml operator-run log |
 
 Limits observed honestly: the run's own decision and lessons still centre on
 the $10K goal and infrastructure congestion (Surge A's area); it tracked the
@@ -215,6 +216,12 @@ nothing in flight had stalled. The post-run `show` crashed on `LIMIT NaN`
 | arrangements researched / evaluated / picked / transferred | n/a | 0 / 0 / 0 / 0 | counters exist; no plan read or round has run since release — NOT YET VERIFIED |
 | sectors / nodes / buyer populations | 52 / 91 / 11 | 52 / 91 / 11 | no standing round has run since release |
 | commercial positions, labor roles | not stored | not stored | K-6 repair in flight |
+
+### Production plan read after Deploy 1070 (Goals run 43654511789, 23:43→00:08Z)
+
+Total ≈ 25 min (baseline 26 min 41 s): construct 247 s, shared frontier (979 openings) 210 s, quant portfolio 189 s, scenario 34 s, reconstruction 346 s.
+**New critical finding P-ADMIT:** `estimated arrangements: 0 of 404 (404 cut, 0 in reserve)` — every stored arrangement is cut before the goal model on production; the plan compares 11 found openings + 0 constructed estimates and reaches 0.0% (pool reaches at most $265 of $10,000). Owner: Surge B (admission engineer, REPAIRING).
+**P-SPEED-2:** the planning read is still ~25 min on production; phases above. Owner: Surge B (performance engineer, REPAIRING); DB-bound portions handed to Surge A when measured.
 
 ### Received from Surge A (22:09Z scope adjustment)
 
