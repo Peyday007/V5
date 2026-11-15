@@ -244,7 +244,7 @@ Total ≈ 25 min (baseline 26 min 41 s): construct 247 s, shared frontier (979 o
 
 ### Production after Deploy 1079 (part 5 live; census Goals run 43674356399, plan read 43674354479, 03:53Z)
 
-| check | before part 5 | after part 5 | reading |
+| check | before part 5 | after part 5 (03:53Z; 04:17Z) | reading |
 |---|---|---|---|
 | best-combination p90 settled cash | $101,384,753 | **$15,000** | F4 VERIFIED: inflated pooled prices gone |
 | reconstruction best | 44.6% coverage, p50 $30M | 23.1% coverage, p50 $0, p90 $15,000 | honest; CANDIDATE_ONLY |
@@ -254,6 +254,8 @@ Total ≈ 25 min (baseline 26 min 41 s): construct 247 s, shared frontier (979 o
 | construction facts / arrangements researched | 0 / 0 | 0 / 0 (20 min after release) | F2/F3/F7 NOT YET VERIFIED: watch the standing pass |
 | model lane | 16/16 off-shape | 0 proposed; 2× "not JSON", 2× timeout | F9.2 NOT FIXED → F9.2b (engineer assigned) |
 | plan read time | 71 s | 64 s | |
+| stored arrangements (04:17Z) | 404 | 639 (377 transfers), 14 positions, 249 flows | F5 evidence-only openings feed construction — VERIFIED |
+| construction facts / arrangements researched (04:17Z, 40 min after release) | 0 / 0 | 0 / 0 | NOT VERIFIED — production diagnostic being added to the census (part 6) |
 
 ### Surge A closed (02:45Z; its closeout in docs/PLANNING-RECOVERY-2026-11-14.md)
 
