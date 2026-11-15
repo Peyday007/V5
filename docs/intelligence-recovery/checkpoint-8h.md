@@ -5,8 +5,8 @@ Production evidence: Goals runs 43634448117 (baseline census), 43654436460 / 436
 releases), 43654511789 / 43667546686 (plan reads), Agents runs 43654508964 / 43670283980 (Hermes).
 
 ## A. Is the operation complete?
-No. Five releases have shipped: PR #897, #901, #905, #906 and #909, deployed as 1066, 1070, 1075 and 1078. Part 5 was
-deploying at the checkpoint. Several capabilities work on production, measured below. Others are released
+No. Five releases have shipped: PR #897, #901, #905, #906 and #909, deployed as 1066, 1070 and 1075. Part 5
+(PR #909) is deploying in Deploy 1079: 1078 stood down when PR #910 superseded it. Several capabilities work on production, measured below. Others are released
 but not yet seen working on production's data.
 
 ## B. What materially improved (measured on production)
@@ -105,7 +105,7 @@ The Postgres suite gate passed on every deploy.
 - The bottleneck was verification on production, not compute.
 
 ## K. Remaining work, critical path, forecast
-- Critical path: Deploy 1078 → production census and plan read → confirm:
+- Critical path: Deploy 1079 (carries part 5) → production census and plan read → confirm:
   - facts are back-filed;
   - transfers fire;
   - arrangements are researched;
