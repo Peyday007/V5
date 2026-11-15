@@ -965,6 +965,29 @@ export function planCalibration(acceptance: PlanAcceptance): Calibration {
 }
 
 /**
+ * Days until a combination's modelled cash has settled: the slowest member's
+ * own settlement, read from its transaction pathway (S-0199 cash velocity).
+ *
+ * The goal's days left is not a combination's settlement — feeding it to every
+ * combination made cash velocity differ only by expected value, so a
+ * fast-settling plan was never preferred for speed. A member whose settlement
+ * is unknown, or that has no pathway, leaves the combination's settlement
+ * unknown (null): velocity is then not read rather than invented. Pure.
+ */
+export function combinationDaysToCash(memberIds: readonly string[], pathways: readonly { opportunityId: string; daysToCash: { value: number | string | null; low: number | null; high: number | null; status: string } }[]): number | null {
+  if (memberIds.length === 0) return null;
+  let slowest = 0;
+  for (const id of new Set(memberIds)) {
+    const f = pathways.find((p) => p.opportunityId === id)?.daysToCash;
+    if (!f || f.status === 'UNKNOWN' || f.status === 'DENIED') return null;
+    const days = typeof f.value === 'number' ? f.value : f.low !== null && f.high !== null ? (f.low + f.high) / 2 : null;
+    if (days === null || !Number.isFinite(days) || days < 0) return null;
+    slowest = Math.max(slowest, days);
+  }
+  return slowest;
+}
+
+/**
  * The three readings the plan carries (GOAL-13-6, GOAL-18-4, GOAL-23), from
  * what the plan pass already composed. Pure: it reads, it decides nothing the
  * plan's own acceptance decides, and it owns no store, scheduler or authority.
@@ -1030,7 +1053,7 @@ export function composeGoalReadings(input: {
       return {
         key: keyOf(c),
         reading: r,
-        daysToCash: target.daysLeft,
+        daysToCash: combinationDaysToCash(c.members.map((m) => m.opportunityId), input.pathways?.pathways ?? []),
         sharedDependencies: [...new Set(c.members.map((m) => m.opportunityId))].filter((id) => (counts.get(id) ?? 0) > 1),
         forgoneAlternative: others.length > 0 ? Math.max(...others) : null,
       };
