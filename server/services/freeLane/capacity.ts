@@ -41,6 +41,7 @@ import {
   takeOne,
   discoverCandidates,
   freeLaneSkips,
+  pingHeldRoutes,
   type FreeWorker,
 } from './worker.ts';
 
@@ -380,6 +381,13 @@ async function slot(pool: ModelPool, k: number, config: LaneConfig): Promise<voi
         config,
       };
       samplePools();
+      // A held route due its re-probe is pinged here, before any claim, so the
+      // probe is a health ping and never a work item (CAP-16-3 repair).
+      try {
+        await pingHeldRoutes([pool.worker.model], base.completer, config);
+      } catch (error) {
+        console.warn('[free-lane] route health ping failed:', (error as Error).message);
+      }
       pool.busy += 1;
       pool.peakBusy = Math.max(pool.peakBusy, pool.busy);
       let result: Awaited<ReturnType<typeof takeOne>> = { claimed: null, ok: false, ms: 0 };
