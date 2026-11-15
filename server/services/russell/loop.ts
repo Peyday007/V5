@@ -3591,9 +3591,16 @@ export function bootGraceRemainingMs(nowMs = Date.now()): number {
 /**
  * Run `work` once the boot grace has passed: now, if it already has. The timer
  * is unref'd, so it never holds a shutting-down process open.
+ *
+ * `staggerMs` puts one piece of deferred work that much after the grace, so
+ * the boot's re-derivations do not all start in the same instant (Deploy
+ * 1070: all three were due within fifteen seconds of +10 min).
  */
-export function afterBootGrace(name: string, work: () => void): void {
-  const wait = bootGraceRemainingMs();
+export const BOOT_GRACE_STAGGER_MS = 2 * 60_000;
+
+export function afterBootGrace(name: string, work: () => void, staggerMs = 0): void {
+  const remaining = bootGraceRemainingMs();
+  const wait = remaining > 0 ? remaining + staggerMs : 0;
   if (wait <= 0) {
     work();
     return;
