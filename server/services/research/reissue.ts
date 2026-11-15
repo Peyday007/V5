@@ -34,6 +34,7 @@
 import type {
   ActorType,
   RepairPlan,
+  ResearchClaim,
   ResearchFragment,
   ResearchOrchestration,
   WorkItem,
@@ -53,7 +54,10 @@ import { recordEvent } from '../../repos/events.ts';
 import { workType } from '../queue/workTypes.ts';
 import { runIdempotent, type OperationNamespace } from '../effects/engine.ts';
 import { buildRepairPlan } from './repair.ts';
-import { blockCauseOf, type GateResult } from './gate.ts';
+import { blockCauseOf, exampleIdentity, laneFloor } from './gate.ts';
+import type { ClaimJudgement, GateCondition, GateResult, LaneCoverage } from './gate.ts';
+import { countIndependentSources, duplicateGroups } from './standards.ts';
+import { getApprovalEnvelope } from './approvalEnvelope.ts';
 import { advancePacket, researchItemRecorded, type AdvanceResult } from './packetRunner.ts';
 
 /**
@@ -583,7 +587,7 @@ export async function retryFragment(input: {
    * on the path that skipped it.
    */
   const repairPlan =
-    input.repairPlan ?? (await planForRetry(previous, orchestration.id, attempt));
+    input.repairPlan ?? (await planForRetry(previous, orchestration));
   const outcome = await runIdempotent<{ fragmentId: string }>(
     {
       namespace: RETRY_NAMESPACE,
@@ -747,20 +751,98 @@ export async function retryFragment(input: {
 /**
  * The plan for a retry nobody planned, from the failed attempt's own rows.
  *
- * The gate is not re-run (§12: acceptance is decided once). The planner gets
- * the recorded counts and the stored block cause; the conditions are left to
- * the default ladder, which proposes more places to look rather than fewer.
+ * The gate is not re-run (§12: acceptance is decided once). The plan is made
+ * from the same reading of the failed attempt the packet runner makes
+ * (`packetRunner.ts` `gateShapeFor` / `mintRepairs`), because the two paths
+ * plan the *same next attempt* and must not disagree about it.
+ *
+ * They did, three ways, and each one cost a recovery (recorded failure class
+ * CAPABILITY:RESEARCH.RECOVERY.RETRY — "repeated failure", "retry repeating
+ * the same strategy"):
+ *
+ *  - The budget was computed from the *new* attempt number, one less than the
+ *    runner's for the identical situation. A fragment with two repairs left
+ *    was told it had one, so `buildRepairPlan` answered MARK_UNRESOLVED and the
+ *    retry was spent being told to give up.
+ *  - No failed condition was passed, so the condition-keyed ladder was never
+ *    consulted and every unplanned retry walked the same short default ladder
+ *    until it ran out.
+ *  - No envelope was passed, so unreadable-ladder rungs the packet does not
+ *    admit were offered and then refused.
+ *
+ * `maxRepairs`, the gate and every bar are unchanged: a fragment at its last
+ * permitted attempt is still told so.
  */
 async function planForRetry(
   previous: ResearchFragment,
-  orchestrationId: string,
-  attempt: number,
+  orchestration: ResearchOrchestration,
 ): Promise<RepairPlan> {
   const claims = await listClaimsForFragment(previous.id);
+  const history = (await listFragments(orchestration.id)).filter(
+    (entry) => entry.fragmentKey === previous.fragmentKey,
+  );
+  return buildRepairPlan({
+    fragment: previous,
+    gate: recordedGate(previous, claims),
+    history,
+    claims,
+    splitRequired: false,
+    // The runner's figure for the same next attempt: attempts left counted
+    // from the one that failed.
+    remainingBudget: Math.max(0, previous.maxRepairs - previous.attempt + 1),
+    blockCause: blockCauseOf(previous),
+    envelope: orchestration.approvalEnvelopeId
+      ? getApprovalEnvelope(orchestration.approvalEnvelopeId)
+      : null,
+  });
+}
+
+/** The failed attempt's gate, as its stored rows record it. Mirrors the runner's reading. */
+function recordedGate(fragment: ResearchFragment, claims: ResearchClaim[]): GateResult {
+  const results: ClaimJudgement[] = claims.map((claim) => ({
+    claimId: claim.id,
+    accepted: claim.accepted,
+    failedCondition: claim.accepted ? null : conditionOf(claim),
+    reason: claim.accepted ? null : (claim.rejectionReason ?? claim.validationDetail),
+  }));
   const accepted = claims.filter((claim) => claim.accepted);
-  const gate: GateResult = {
-    integrity: previous.integrityVerdict === 'PASS' ? 'PASS' : 'FAIL',
-    sufficiency: previous.sufficiencyVerdict === 'SUFFICIENT' ? 'SUFFICIENT' : 'INSUFFICIENT',
+
+  const coverage: LaneCoverage[] = fragment.requiredEvidence.map((lane) => {
+    const inLane = accepted.filter((claim) => claim.evidenceLane === lane.id);
+    const floor = laneFloor(lane);
+    const examples = new Set(
+      inLane.map((claim) => exampleIdentity(claim)).filter((id): id is string => id !== null),
+    );
+    const sources = countIndependentSources(inLane);
+    return {
+      lane: lane.id,
+      description: lane.description,
+      necessity: lane.necessity,
+      evidenceKind: floor.kind,
+      acceptedClaims: inLane.length,
+      distinctExamples: examples.size,
+      independentSources: sources,
+      requiredExamples: floor.examples,
+      requiredIndependentSources: floor.independentSources,
+      meetsThreshold:
+        inLane.length > 0 && examples.size >= floor.examples && sources >= floor.independentSources,
+    };
+  });
+
+  const independentSources = countIndependentSources(accepted);
+  const failedConditions = new Set<GateCondition>();
+  for (const result of results) {
+    if (result.failedCondition) failedConditions.add(result.failedCondition);
+  }
+  if (coverage.some((lane) => !lane.meetsThreshold && lane.necessity === 'REQUIRED')) {
+    failedConditions.add('COVERAGE');
+  }
+  if (independentSources < fragment.minIndependentSources) failedConditions.add('COVERAGE');
+
+  const reason = fragment.blockedReason ?? fragment.missingEvidence ?? '';
+  return {
+    integrity: fragment.integrityVerdict === 'PASS' ? 'PASS' : 'FAIL',
+    sufficiency: fragment.sufficiencyVerdict === 'SUFFICIENT' ? 'SUFFICIENT' : 'INSUFFICIENT',
     unresolvedRetrieval: claims
       .filter((claim) => claim.retrievalState !== 'RETRIEVED')
       .map((claim) => ({
@@ -769,26 +851,45 @@ async function planForRetry(
         sourceUrl: claim.sourceUrl,
         state: claim.retrievalState,
       })),
-    claims: [],
+    claims: results,
     acceptedClaims: accepted.length,
-    rejectedClaims: claims.length - accepted.length,
-    independentSources: new Set(accepted.map((claim) => claim.sourceUrl ?? claim.id)).size,
-    coverage: [],
-    duplicateSourceGroups: [],
-    failedConditions: [],
-    reasons: previous.blockedReason ? [previous.blockedReason] : [],
-    unresolvedGaps: [],
+    rejectedClaims: results.filter((result) => !result.accepted).length,
+    independentSources,
+    coverage,
+    duplicateSourceGroups: duplicateGroups(accepted),
+    failedConditions: [...failedConditions],
+    reasons: reason ? [reason] : [],
+    unresolvedGaps: fragment.missingEvidence ? [fragment.missingEvidence] : [],
   };
-  const history = (await listFragments(orchestrationId)).filter(
-    (entry) => entry.fragmentKey === previous.fragmentKey,
-  );
-  return buildRepairPlan({
-    fragment: previous,
-    gate,
-    history,
-    claims,
-    splitRequired: false,
-    remainingBudget: Math.max(0, previous.maxRepairs - attempt + 1),
-    blockCause: blockCauseOf(previous),
-  });
 }
+
+/**
+ * Which gate condition a rejected claim failed, from what its row records —
+ * the same recovery the runner applies, falling through to SOURCE_SUPPORTS.
+ */
+function conditionOf(claim: ResearchClaim): GateCondition {
+  if (claim.validationState === 'NO_EVIDENCE') return 'LOCATOR';
+  if (!claim.sourced) return 'SOURCE_URL';
+  if (claim.derived) return 'DERIVATIONS';
+  if (claim.contradictionState === 'CONTESTED' || claim.contradictionState === 'REFUTED') {
+    return 'CONTRADICTIONS';
+  }
+  const reason = (claim.rejectionReason ?? '').toLowerCase();
+  for (const [condition, needle] of CONDITION_HINTS) {
+    if (reason.includes(needle)) return condition;
+  }
+  return 'SOURCE_SUPPORTS';
+}
+
+const CONDITION_HINTS: [GateCondition, string][] = [
+  ['SOURCE_URL', 'no usable source'],
+  ['SOURCE_SUPPORTS', 'directly support'],
+  ['SOURCE_SUPPORTS', 'nothing confirms'],
+  ['LOCATOR', 'passage'],
+  ['SCOPE_MATCH', 'scope'],
+  ['SCOPE_MATCH', 'geography'],
+  ['SCOPE_MATCH', 'timeframe'],
+  ['CONTRADICTIONS', 'contradiction'],
+  ['COVERAGE', 'lane'],
+  ['DERIVATIONS', 'calculation'],
+];
