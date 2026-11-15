@@ -287,9 +287,24 @@ jobs:
               if echo "$state" | grep -qw primary && echo "$state" | grep -qw "$gpu_fp"; then
                 # A pod Brain stopped for idleness fails the probe by design; the report
                 # still runs, so stopped time and the money it saved are measured too.
-                if probe; then :
-                else echo "::notice title=runpod::The GPU did not answer its probe (stopped while idle, or down); the Brain answers on the free providers meanwhile and starts the pod when research arrives."; fi
+                # A stopped pod's proxy answers 404 on every route, /v1/models included: that is the
+                # pod's power state, not vLLM refusing a key, so the probe is not run against it
+                # (2026-11-15: "auth: no-key request got HTTP 404 (want 401)" for eight hours).
+                pod_state=$(grep '^POD ' restore.txt 2>/dev/null | head -1 | cut -d' ' -f3 || true)
+                if [ -n "$pod_state" ] && [ "$pod_state" != "RUNNING" ]; then
+                  echo "::notice title=runpod::Pod $pod_id is $pod_state; its proxy answers 404 until it runs. Brain starts it, or moves it to another host, when research waits."
+                elif probe; then :
+                else echo "::warning title=runpod::The pod is RUNNING but vLLM did not pass the probe; the lines above say which check."; fi
                 gpu_report
+                # Refused starts with nothing started or moved since are an outage, not a notice:
+                # the run goes red so it cannot sit unnoticed (2026-11-15: 109 refusals, every run green).
+                counts=$(grep '^POD stopped' report.txt | head -1 || true)
+                failed=$(printf '%s' "$counts" | sed -n 's/.*failed \([0-9]*\).*/\1/p'); started=$(printf '%s' "$counts" | sed -n 's/.*started \([0-9]*\).*/\1/p')
+                moved=$(printf '%s' "$counts" | sed -n 's/.*moved \([0-9]*\).*/\1/p')
+                if [ "${failed:-0}" -ge 3 ] && [ "${started:-0}" -eq 0 ] && [ "${moved:-0}" -eq 0 ]; then
+                  echo "::error title=runpod outage::RunPod refused ${failed} start(s) in the last ${HOURS:-6}h and none succeeded or moved the pod; research is on the free fallback. The refusals are above."
+                  exit 1
+                fi
               elif echo "$state" | grep -qw off; then
                 echo "::notice title=runpod::The GPU was disconnected on purpose (mode off); run runpod-connect to bring it back."
               else

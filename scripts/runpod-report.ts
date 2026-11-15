@@ -99,7 +99,7 @@ async function main(): Promise<void> {
     }
   })();
   if (pod.length > 0) {
-    console.log(`POD stopped ${podCount('STOPPED')} · started ${podCount('STARTED')} · failed ${podCount('STOP_FAILED') + podCount('START_FAILED')} · running ~${Math.round(runningMs / 60_000)} min sampled · stopped ~${Math.round(Number(pod.find((r) => r.outcome === 'SAMPLE_EXITED')?.ms ?? 0) / 60_000)} min sampled`);
+    console.log(`POD stopped ${podCount('STOPPED')} · started ${podCount('STARTED')} · moved ${podCount('MIGRATED')} · failed ${podCount('STOP_FAILED') + podCount('START_FAILED') + podCount('MIGRATE_FAILED')} · running ~${Math.round(runningMs / 60_000)} min sampled · stopped ~${Math.round(Number(pod.find((r) => r.outcome === 'SAMPLE_EXITED')?.ms ?? 0) / 60_000)} min sampled`);
     // What Brain last did to the pod, and RunPod's own words when it refused.
     const recent = await getDb().all<{ at: string; outcome: string; reason: string | null }>(
       `SELECT at, outcome, reason FROM bin_events WHERE event_type = 'RUNPOD_POD' AND outcome NOT LIKE 'SAMPLE_%'
