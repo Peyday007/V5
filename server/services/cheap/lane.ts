@@ -273,7 +273,8 @@ export type Completer = (
   model: string,
   system: string,
   prompt: string,
-  options?: { maxTokens?: number },
+  /** `json`: ask for a JSON object (`response_format`); a provider that refuses the field is asked once without it. */
+  options?: { maxTokens?: number; json?: boolean },
 ) => Promise<string>;
 
 export const httpCompleter: Completer = async (config, model, system, prompt, options) => {
@@ -318,7 +319,8 @@ function windowTokens(): number {
 
 /** The plain OpenAI-compatible call to OmniRoute (or anything like it). */
 const openAiCompleter: Completer = async (config, model, system, prompt, options) => {
-  const response = await fetch(`${config.url}/chat/completions`, {
+  const started = Date.now();
+  const request = (json: boolean) => fetch(`${config.url}/chat/completions`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -331,13 +333,20 @@ const openAiCompleter: Completer = async (config, model, system, prompt, options
       // a small budget left them with no answer at all. Low effort, more room.
       max_tokens: fitMaxTokens(system, prompt, options?.maxTokens ?? 2000, windowTokens()),
       reasoning_effort: 'low',
+      ...(json ? { response_format: { type: 'json_object' } } : {}),
       messages: [
         { role: 'system', content: system },
         { role: 'user', content: prompt },
       ],
     }),
-    signal: AbortSignal.timeout(config.timeoutMs),
+    signal: AbortSignal.timeout(Math.max(1, config.timeoutMs - (Date.now() - started))),
   });
+  let response = await request(!!options?.json);
+  // Not every model behind an OpenAI-compatible router takes `response_format`; one that refuses it is asked plainly.
+  if (options?.json && (response.status === 400 || response.status === 422)) {
+    await response.body?.cancel().catch(() => undefined);
+    response = await request(false);
+  }
   if (!response.ok) throw new Error(`cheap lane HTTP ${response.status}`);
   const body = (await response.json()) as { choices?: { message?: { content?: string } }[] };
   return body.choices?.[0]?.message?.content ?? '';

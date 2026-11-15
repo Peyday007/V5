@@ -20,7 +20,14 @@ import { httpCompleter, laneConfig, type Completer, type LaneConfig } from '../.
 import { parseInvented, type Direction, type InventBrief } from './directions.ts';
 
 export const INVENT_CALLS_MAX = 4;
-export const INVENT_TIMEOUT_MS = 45_000;
+/**
+ * The lane's whole budget: every strategist is asked at once, and a call's rate-refusal retry spends what is left of
+ * the same deadline, so this is also the most the lane adds to a plan read. Production 2026-11-15 03:53Z lost 2 of 4
+ * calls to "The operation was aborted due to timeout" at 45 s: the free switchboard's reasoning models (thinking,
+ * then a 5-to-8-method answer) ran past it. The answer asked for is smaller now and the budget is 90 s, still well
+ * inside the exploration's own clock (`DEFAULT_MAX_MS`), which also stops waiting for the lane when it runs out.
+ */
+export const INVENT_TIMEOUT_MS = 90_000;
 /** The pause before a rate-refused call is asked once more, and the least budget worth asking with. */
 export const INVENT_BACKOFF_MS = 4_000;
 export const INVENT_RETRY_MIN_MS = 10_000;
@@ -31,7 +38,7 @@ const SYSTEM =
   'not answers, not more of the same — and express each as a short program the engine can simulate. ' +
   'Be inventive about the angle (who else could pay, what could be sold instead, what to stop doing, what order, ' +
   'what to combine, what assumption is wrong), but every step must use only the program vocabulary given. ' +
-  'Answer ONLY with a JSON object.';
+  'Answer with ONE JSON object and nothing else: no markdown fences, no prose before or after it, no comments.';
 
 export function inventPrompt(brief: InventBrief, slot: number, avoid: string[]): string {
   return [
@@ -67,9 +74,10 @@ export function inventPrompt(brief: InventBrief, slot: number, avoid: string[]):
     `Stances already covered — invent OTHER ways of reasoning: ${[...new Set([...brief.stancesTried, ...avoid])].join(', ')}.`,
     brief.bestKnown.length ? `Methods that worked before on other plans: ${brief.bestKnown.map((m) => `${m.stance}: ${m.thinking}`).join(' / ')}` : '',
     `You are strategist ${slot + 1}; others are answering too, so take an angle they are unlikely to take.`,
-    'Give 5 to 8 methods. For each, name the assumption of the current plan it challenges, and if it needs a fact the openings do not show, put the question in "ask".',
+    'Give 4 to 6 methods. For each, name the assumption of the current plan it challenges, and if it needs a fact the openings do not show, put the question in "ask".',
     'An opening id is written bare in "target" and "key" (cop_123), and as id:cop_123 only in "scope". Every program step is one of the objects above, with its "op" spelled exactly.',
     brief.designs ? 'Leave "design" out of a method that brings in no new arrangement; never write it empty.' : '',
+    'Your whole reply is one JSON object: the first character is the opening brace and the last is the closing brace, with no markdown fence and no words around it.',
     `Reply exactly: {"methods":[{"name":"short name","stance":"ONE_OR_TWO_WORDS","thinking":"one or two sentences: how this way of reasoning sees the problem","challenges":"the assumption it attacks","from":"BASELINE or GREEDY","program":[{"op":"FOCUS","count":3}],${brief.designs ? '"design":{"structure":"<structure>","population":"<who pays>"},' : ''}"ask":"optional question"}]}${brief.designs ? ' — "design" only on a method that brings in a new arrangement.' : ''}`,
   ]
     .filter(Boolean)
@@ -108,7 +116,7 @@ export async function inventDirections(brief: InventBrief, options: InventOption
     const deadline = Date.now() + INVENT_TIMEOUT_MS;
     const once = (slot: number, timeoutMs: number) =>
       Promise.race([
-        complete({ ...config, timeoutMs }, model(slot), SYSTEM, inventPrompt(brief, i, []), { maxTokens: 3000 }),
+        complete({ ...config, timeoutMs }, model(slot), SYSTEM, inventPrompt(brief, i, []), { maxTokens: 3000, json: true }),
         new Promise<string>((_, reject) => setTimeout(() => reject(new Error('timed out')), timeoutMs + 2_000).unref()),
       ]);
     try {
