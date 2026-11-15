@@ -11,9 +11,12 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Completer, LaneConfig } from '../server/services/cheap/lane.ts';
+import { laneHttpError } from '../server/services/cheap/lane.ts';
 import {
   pingHeldRoutes,
+  providerRetryAfterMs,
   recordRouteOutcome,
+  ROUTE_RETRY_AFTER_FLOOR_MS,
   resetRouteHealth,
   ROUTE_FAILURE_LIMIT,
   ROUTE_REPROBE_BACKOFF_MS,
@@ -140,5 +143,57 @@ describe('held route re-probe (worker.ts)', () => {
     const [ping] = await pingHeldRoutes(['m'], c.fn, config, () => now + 5 * MIN);
     expect(ping?.cause).toBe('credentials');
     expect(routeHold('m', now + 5 * MIN)).toMatch(/credentials/);
+  });
+});
+
+describe("a provider's Retry-After sets the route's hold (lane.ts → worker.ts)", () => {
+  beforeEach(() => resetRouteHealth());
+  afterEach(() => resetRouteHealth());
+
+  it('reads the delay laneHttpError writes, end to end from a real 429 response', async () => {
+    const response = new Response('slow down', { status: 429, headers: { 'retry-after': '120' } });
+    const message = await laneHttpError(response, 'https://omni.test/v1', 'fast');
+    expect(providerRetryAfterMs(`model call failed [provider availability]: ${message}`)).toBe(120_000);
+    expect(providerRetryAfterMs('model call failed [provider availability]: cheap lane HTTP 503')).toBeNull();
+  });
+
+  it('holds the route for the provider\'s delay instead of the ladder\'s first step', () => {
+    const now = 1_000_000;
+    const why = 'model call failed [provider availability]: cheap lane HTTP 429 from omni.test model m retry-after 120s';
+    for (let i = 0; i < ROUTE_FAILURE_LIMIT; i += 1) recordRouteOutcome('m', { ok: false, why }, now);
+    expect(routeHold('m', now + 119_000)).not.toBeNull();
+    expect(routeHold('m', now + 120_000)).toBeNull();
+  });
+
+  it('a long provider delay holds longer than the ladder would, up to its last step', () => {
+    const now = 1_000_000;
+    const why = 'model call failed [provider availability]: cheap lane HTTP 429 from omni.test model m retry-after 1800s';
+    for (let i = 0; i < ROUTE_FAILURE_LIMIT; i += 1) recordRouteOutcome('m', { ok: false, why }, now);
+    expect(routeHold('m', now + ROUTE_REPROBE_BACKOFF_MS[0]!)).not.toBeNull();
+    expect(routeHold('m', now + 1_800_000)).toBeNull();
+    resetRouteHealth();
+    const huge = 'model call failed [provider availability]: cheap lane HTTP 429 from omni.test model m retry-after 86400s';
+    for (let i = 0; i < ROUTE_FAILURE_LIMIT; i += 1) recordRouteOutcome('m', { ok: false, why: huge }, now);
+    expect(routeHold('m', now + ROUTE_REPROBE_BACKOFF_MS.at(-1)!)).toBeNull();
+  });
+
+  it('a tiny provider delay is floored so the route is not pinged every control step', () => {
+    const now = 1_000_000;
+    const why = 'model call failed [provider availability]: cheap lane HTTP 429 from omni.test model m retry-after 1s';
+    for (let i = 0; i < ROUTE_FAILURE_LIMIT; i += 1) recordRouteOutcome('m', { ok: false, why }, now);
+    expect(routeHold('m', now + ROUTE_RETRY_AFTER_FLOOR_MS - 1)).not.toBeNull();
+    expect(routeHold('m', now + ROUTE_RETRY_AFTER_FLOOR_MS)).toBeNull();
+  });
+
+  it('a failed health ping that carries Retry-After sets the next probe from it', async () => {
+    const now = 1_000_000;
+    hold('m', now);
+    const failing: Completer = async () => {
+      throw new Error('cheap lane HTTP 429 from omni.test model m retry-after 300s');
+    };
+    const due = now + ROUTE_REPROBE_BACKOFF_MS[0]!;
+    const [ping] = await pingHeldRoutes(['m'], failing, config, () => due);
+    expect(ping?.ok).toBe(false);
+    expect(ping?.nextProbeAt).toBe(due + 300_000);
   });
 });
