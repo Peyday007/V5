@@ -9,7 +9,8 @@ import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { recordMoney } from '../server/repos/cashLedger.ts';
-import { createWorkstream, getWorkstream } from '../server/repos/register.ts';
+import { createWorkstream, getWorkstream, recordWorkstreamEvent } from '../server/repos/register.ts';
+import { pauseGoal } from '../server/repos/goals.ts';
 import { pause, setTerms } from '../server/services/goals/decide.ts';
 import { setTarget } from '../server/services/goals/target.ts';
 import { advanceGoals } from '../server/services/goals/tick.ts';
@@ -36,6 +37,16 @@ async function goal(opts: { targeted: boolean; days: number }): Promise<string> 
   return g.id;
 }
 
+/**
+ * A machine pause made before decide.ts refused one: pause() now refuses an operator on a
+ * targeted, future-deadline goal, so the legacy production state is written as it was then
+ * written — the paused row and its GOAL_PAUSED event by the operator.
+ */
+async function legacyMachinePause(id: string, actorRef: string): Promise<void> {
+  expect(await pauseGoal(id, 'capacity')).toBe(true);
+  await recordWorkstreamEvent({ workstreamId: id, kind: 'GOAL_PAUSED', summary: 'capacity', actorRef });
+}
+
 async function events(id: string, kind: string) {
   return getDb().all<{ actor_ref: string; summary: string }>(
     'SELECT actor_ref, summary FROM workstream_events WHERE workstream_id = ? AND kind = ?',
@@ -46,7 +57,7 @@ async function events(id: string, kind: string) {
 describe('advanceGoals restores a machine-paused targeted goal', () => {
   it('unpauses a targeted, future-deadline goal an operator paused, and records why', async () => {
     const id = await goal({ targeted: true, days: 30 });
-    expect((await pause(id, 'capacity', 'operator:x')).ok).toBe(true);
+    await legacyMachinePause(id, 'operator:x');
     await advanceGoals();
     expect((await getWorkstream(id))!.pausedAt).toBeNull();
     const resumed = await events(id, 'GOAL_RESUMED');
@@ -57,6 +68,12 @@ describe('advanceGoals restores a machine-paused targeted goal', () => {
     // Idempotent by rows: a second pass changes nothing.
     await advanceGoals();
     expect(await events(id, 'GOAL_RESUMED')).toHaveLength(1);
+  });
+
+  it('a new operator pause of that goal is refused outright', async () => {
+    const id = await goal({ targeted: true, days: 30 });
+    expect((await pause(id, 'capacity', 'operator:x')).ok).toBe(false);
+    expect((await getWorkstream(id))!.pausedAt).toBeNull();
   });
 
   it('leaves a person\'s pause alone', async () => {
@@ -79,7 +96,7 @@ describe('advanceGoals restores a machine-paused targeted goal', () => {
 
   it('after the pass the settled-cash goal is live and the metric check passes on rows', async () => {
     const id = await goal({ targeted: true, days: 30 });
-    expect((await pause(id, 'capacity', 'operator:x')).ok).toBe(true);
+    await legacyMachinePause(id, 'operator:x');
     await recordMoney({ projectId, kind: 'PIPELINE_AGREED', amountCents: 900_000, currency: 'USD', recordedBy: 'PERSON', idempotencyKey: `k${Math.random()}` });
     await recordMoney({ projectId, kind: 'SETTLEMENT', amountCents: 100_000, currency: 'USD', recordedBy: 'PERSON', idempotencyKey: `k${Math.random()}`, verifiedReference: 'po_r1' });
     expect((await goalMetricsHoldOnRows()).ok).toBe(false);
