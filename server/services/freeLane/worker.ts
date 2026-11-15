@@ -1476,9 +1476,35 @@ export function coolingForEveryModel(models: string[], now: number = Date.now())
   return n;
 }
 
+/**
+ * Cooldowns set because the model's route (its provider, or Brain's own
+ * database) was unavailable — not because of anything in the item. They say
+ * the route was down, so they end the moment the same route answers again
+ * (`clearRouteCooldowns`), rather than running out a clock of up to an hour.
+ *
+ * Production, 2026-11-15 07:46Z: brain-a held 4 of its 12 slots busy while 11
+ * items waited. Its provider answered most calls ("errors acceptable") but each
+ * intermittent 503 cooled that item for brain-a for 5–60 minutes, so its idle
+ * slots declined every one of them ("cooling down after a provider failure")
+ * and only the RunPod slot — held at 2 — could take them (rule 9).
+ */
+const routeCooled = new Set<string>();
+
+/** The route answered: its outage cooldowns end, so its idle slots may take those items again. */
+export function clearRouteCooldowns(model: string): number {
+  let cleared = 0;
+  for (const key of routeCooled) {
+    if (!key.startsWith(`${model}\n`)) continue;
+    routeCooled.delete(key);
+    if (cooldown.delete(key)) cleared += 1;
+  }
+  return cleared;
+}
+
 /** Tests: end every cooldown now, as if its time had passed. Strike counts are kept. */
 export function endFreeLaneCooldowns(): void {
   cooldown.clear();
+  routeCooled.clear();
 }
 const transientStrikes = new Map<string, number>();
 
@@ -2072,6 +2098,7 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
   const strikes = transient || brainUnavailable ? (transientStrikes.get(one.workItemId) ?? 0) + 1 : 0;
   if (ok) {
     transientStrikes.delete(one.workItemId);
+    clearRouteCooldowns(worker.model);
   } else if ((transient || brainUnavailable) && (strikes < 3 || providerFailure)) {
     /*
      * The model or its provider failed, not the work: hand the item back with
@@ -2082,7 +2109,11 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
     // Brain's own database being full clears in seconds, not the hour a provider
     // outage can last: the item is offered again after a minute.
     const coolMs = brainUnavailable && !/^model call failed/.test(ctx.why) ? 60_000 : Math.min(60, 5 * strikes) * 60_000;
-    cooldown.set(cooldownKey(worker.model, one.workItemId), Date.now() + coolMs);
+    const key = cooldownKey(worker.model, one.workItemId);
+    cooldown.set(key, Date.now() + coolMs);
+    // A route outage, not the item's own answer: ended by the route's next success.
+    if (providerFailure) routeCooled.add(key);
+    else routeCooled.delete(key);
     try {
       await call(ctx, 'brain_release_work', { ...proof(ctx), detail: `free lane: ${ctx.why}`.slice(0, 300) });
     } catch {

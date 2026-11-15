@@ -496,6 +496,63 @@ describe('the free research lane', () => {
     expect(other.ok).toBe(true);
   });
 
+  it('ends a route-outage cooldown when the same route answers, so its idle slots take the waiting items (production 2026-11-15: brain-a 4/12 busy, 11 waiting)', async () => {
+    const { takeOne, coolingForEveryModel } = await import('../server/services/freeLane/worker.ts');
+    // 22 items; brain-a's provider answers most calls but drops one in two with a 503.
+    for (let i = 0; i < 22; i += 1) {
+      const { orchestration, fragment } = await packet(play.project.id, `intermittent ${i}`);
+      await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);
+    }
+    const workers = await ensureFreeWorkers(CONFIG);
+    const working = model().completer;
+    let fail = false;
+    const completer: Completer = async (config, name, system, prompt, options) => {
+      if (fail) throw new Error('cheap lane HTTP 503');
+      return working(config, name, system, prompt, options);
+    };
+    const base = { workers, completer, fetchSource, search: async () => [], config: CONFIG, worker: workers[0]!, index: 0 };
+    const cooled = new Set<string>();
+    for (let i = 0; i < 11; i += 1) {
+      fail = true;
+      const failed = await takeOne(base);
+      expect(failed.ok).toBe(false);
+      cooled.add(failed.claimed!.workItemId);
+      fail = false;
+      const answered = await takeOne(base);
+      expect(answered.ok).toBe(true);
+      expect(cooled.has(answered.claimed!.workItemId)).toBe(false);
+    }
+    // 11 items wait, every one handed back after a 503 on a route that has answered since.
+    const waiting = await getDb().get<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM work_items WHERE project_id = ? AND state = 'QUEUED' AND work_type = 'RESEARCH_FRAGMENT'",
+      [play.project.id],
+    );
+    expect(Number(waiting?.n)).toBe(11);
+    expect(coolingForEveryModel(['brain-a'])).toBe(0);
+    // brain-a's slots take all of them (beside the follow-on work the answers queued);
+    // none sits idle beside them waiting out a clock.
+    const taken = new Set<string>();
+    for (let i = 0; i < 60 && taken.size < cooled.size; i += 1) {
+      const next = await takeOne(base);
+      expect(next.claimed).not.toBeNull();
+      if (cooled.has(next.claimed!.workItemId)) taken.add(next.claimed!.workItemId);
+    }
+    expect(taken).toEqual(cooled);
+  });
+
+  it('keeps the cooldown while the route itself is still failing', async () => {
+    const { takeOne } = await import('../server/services/freeLane/worker.ts');
+    const { orchestration, fragment } = await packet(play.project.id);
+    await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);
+    const workers = await ensureFreeWorkers(CONFIG);
+    const down: Completer = async () => {
+      throw new Error('cheap lane HTTP 503');
+    };
+    const base = { workers, completer: down, fetchSource, search: async () => [], config: CONFIG, worker: workers[0]!, index: 0 };
+    expect((await takeOne(base)).claimed).not.toBeNull();
+    expect((await takeOne(base)).claimed).toBeNull();
+  });
+
   it('asks for the most important waiting work first, so a revenue goal\u2019s research does not wait behind unrelated later stages', () => {
     const asks = claimAsks([{ model: 'a' }], 0);
     // A goal fragment boosted to 7 outranks an ordinary synthesis at 5.
