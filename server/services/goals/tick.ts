@@ -367,9 +367,14 @@ async function researchInForce(): Promise<{ shares: SharesInForce; fingerprint: 
  *   * A low-actionability lane is given its next remedy (question design, then
  *     evidence sources, then model routing) before any limit is raised for it,
  *     and a remedy already recorded for a lane is passed back as tried.
- *   * A capacity change is only ever recorded as a recommendation naming the
- *     measured constraint and its cost. The pass starts no work, spends
- *     nothing, raises no limit and takes no worker's item. It does not write bin
+ *   * A capacity change is recorded naming the measured constraint and its
+ *     cost. A free-lane lane's ADD_CAPACITY (`free-lane:<model>`, bounded by
+ *     the headroom that controller measured) is applied by the §86 free-lane
+ *     controller, the one owner of that lane's targets, which reads the newest
+ *     decision and raises the model's target once per decision, never past
+ *     its own caps (S-0153); any other lane's verdict is a recommendation. The
+ *     pass itself starts no work, spends nothing, raises no limit and takes
+ *     no worker's item. It does not write bin
  *     priorities itself: the allocation stage is their one writer, and on every
  *     pass it applies the newest recorded decision (`sharesInForceFrom`,
  *     `purposePriorityShifts`) — a goal bin serving an under-served purpose is
@@ -389,6 +394,10 @@ export const RESEARCH_ALLOCATION_WINDOW_MS = 24 * 60 * 60_000;
 export const RESEARCH_REALLOCATED_EVENT = 'GOAL_RESEARCH_REALLOCATED';
 /** The one Brain-wide decision row, in `improvement_events` with no candidate. */
 export const RESEARCH_ALLOCATION_DECIDED = 'RESEARCH_ALLOCATION_DECIDED';
+/** The lanes whose ADD_CAPACITY verdict the §86 free-lane controller applies (`free-lane:<model>`). */
+export const FREE_LANE_PREFIX = 'free-lane:';
+/** Who applies a free-lane capacity verdict, as the decision row names it. */
+export const FREE_LANE_CONTROLLER = 'free-lane controller (§86)';
 
 export interface ResearchAllocationReport {
   window: { since: string; until: string };
@@ -397,7 +406,7 @@ export interface ResearchAllocationReport {
   changed: boolean;
   held: boolean;
   laneActions: AllocationDecision['laneActions'];
-  /** Capacity verdicts; an ADD_CAPACITY is a recommendation only. */
+  /** Capacity verdicts; a free-lane ADD_CAPACITY is applied by that lane's controller, any other is a recommendation. */
   capacity: AllocationDecision['capacity'];
   /** Whether this pass wrote the Brain-wide decision row (once, never per goal). */
   recorded: boolean;
@@ -707,7 +716,12 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
       tried: tried.get(a.lane) ?? [],
       applied: applied.filter((one) => one.lane === a.lane).map((one) => ({ remedy: one.remedy, appliedAt: one.appliedAt, ref: one.ref })),
     })),
-    capacity: decision.capacity.map((c) => ({ ...c, recommendationOnly: true })),
+    // A free-lane ADD_CAPACITY is applied by the lane's own controller (`freeLane/capacity.ts`
+    // `grantsFromDecision`), the one owner of its targets; any other lane's verdict is a recommendation.
+    capacity: decision.capacity.map((c) => {
+      const applied = c.kind === 'ADD_CAPACITY' && c.lane.startsWith(FREE_LANE_PREFIX);
+      return { ...c, recommendationOnly: !applied, ...(applied ? { appliedBy: FREE_LANE_CONTROLLER } : {}) };
+    }),
     bottlenecks: decision.capacity.filter((c) => c.resource !== null).map((c) => ({ lane: c.lane, resource: c.resource })),
     // The research capacity each lane was measured at in the window: what the capacity verdicts read.
     laneCapacity: Object.entries(reading.lanes).map(([lane, b]) => ({

@@ -95,9 +95,10 @@ describe('capacity is decided from work waiting now, not from jobs already runni
     const p = ports([{ lane: LANE, queued: 7, queueWaitMs: QUEUE_WAIT_CONSTRAINT_MS + 60_000, quotaHeadroom: 3, incrementalCostPerUnit: 0, basis: ['test'] }]);
     const report = await reallocateResearch({ goals: [goal], now: NOW }, p);
     expect(report.capacity.find((c) => c.lane === LANE)).toMatchObject({ kind: 'ADD_CAPACITY', resource: 'MODEL_RATE_LIMIT', units: 3, incrementalCost: 0 });
-    // Still a recommendation, and the record shows what it read.
+    // Applied by the free lane's own controller (R2-F2), and the record shows what it read.
     const detail = p.decisions[0]!;
-    expect((detail.capacity as { recommendationOnly: boolean }[]).every((c) => c.recommendationOnly)).toBe(true);
+    const verdict = (detail.capacity as { lane: string; kind: string; recommendationOnly: boolean; appliedBy?: string }[]).find((c) => c.lane === LANE)!;
+    expect(verdict).toMatchObject({ kind: 'ADD_CAPACITY', recommendationOnly: false, appliedBy: 'free-lane controller (§86)' });
     expect((detail.laneCapacity as { lane: string; queuedNow: number | null; quotaHeadroom: number | null }[]).find((l) => l.lane === LANE)).toMatchObject({ queuedNow: 7, quotaHeadroom: 3 });
   });
 
