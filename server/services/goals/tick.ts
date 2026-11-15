@@ -102,6 +102,19 @@ function isUndoableMachinePause(actorRef: string | null | undefined): actorRef i
  * written by a named actor that is not a person, is resumed (`resumeGoal`, guarded in its own
  * statement) and the resumption recorded. A person's pause stands; an
  * untargeted or past-deadline goal is not touched. No goal is ever created.
+ *
+ * The production row this answers (docs/ARCHITECTURE-RECORD.md, 2026-11-14): at
+ * 06:00Z an operator run committed PAUSE_GOAL on `wst_7b4fcbb5f2384f31b6c3`, the
+ * $10K COLLECTED_CASH goal due 2026-12-09, "to conserve capacity while
+ * infrastructure pools are congested". It was the only live targeted goal, so at
+ * 07:00:30Z r01.goal-02 found none ("no live goal carries a target and a
+ * deadline"). Its deadline had not passed and it was neither archived nor
+ * untargeted, so the pause was the whole cause. `restoreOwnerDirectedGoals`
+ * undoes it for that one listed id only. This pass undoes the same pause for
+ * any targeted goal, and decide.ts refuses the next one. A goal that is not
+ * live because its deadline passed, it was archived or cancelled, it has no
+ * target, or a person paused it stays not live. The probe still fails on it,
+ * which is correct (tests/program-ea512f54-repair-goal-02-1-production.test.ts).
  */
 export async function resumeMachinePausedTargetedGoals(now: string): Promise<string[]> {
   const db = getDb();
