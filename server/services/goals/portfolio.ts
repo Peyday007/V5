@@ -40,6 +40,7 @@ import { inverseNormal, makeRng } from '../scenario/random.ts';
 import { cachedCashKnowledge, type CashKnowledge } from '../quant/knowledge.ts';
 import { acquireMarketHistory, historyEvidence, type MarketHistory } from '../quant/history.ts';
 import type { ModelInput, ModelledOpportunity } from '../cash/goalScenario.ts';
+import { AFTER_DELIVERY_TERMS, PREPAID_TERMS } from '../cash/paymentTiming.ts';
 import { assessOutreachRecord, type EvidenceAssessment, type OutreachCampaignRecord } from './evidenceAuthority.ts';
 import {
   addAction,
@@ -1519,9 +1520,9 @@ function isoDay(value: string | null | undefined): string | null {
 }
 const plusDays = (day: string, days: number): string => new Date(Date.parse(day) + Math.round(days) * DAY_MS).toISOString().slice(0, 10);
 /** The whole price is paid before the work is delivered. A deposit is not: its share is unstated. */
-const PREPAID = /\b(pre-?paid|prepay(?:ment)?|up-?front|in advance|paid (?:at|on) (?:order|booking|checkout)|before (?:work|delivery|fulfil+ment) (?:starts|begins)?)/i;
+const PREPAID = PREPAID_TERMS;
 /** Payment falls due only once the work is delivered or accepted. */
-const AFTER_DELIVERY = /\b(net\s*\d{1,3}|(?:on|upon|after) (?:delivery|completion|acceptance|receipt of (?:the )?(?:goods|work|deliverable))|in arrears|due on receipt)\b/i;
+const AFTER_DELIVERY = AFTER_DELIVERY_TERMS;
 const NET_DAYS = /\bnet\s*(\d{1,3})\b/i;
 
 export interface Settlement {

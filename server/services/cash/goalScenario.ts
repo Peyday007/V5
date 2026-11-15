@@ -38,6 +38,7 @@ import { readVolume } from './volume.ts';
 import { frontierTiers } from './shared.ts';
 import type { CashMechanism, CashOpportunity, CashCardFact } from '../../domain/types.ts';
 import { STRUCTURES } from './properties.ts';
+import { COMPETITIVE_AWARD } from './paymentTiming.ts';
 import { SCENARIO_LIMITS, type ScenarioModelDefinition, type ScenarioVariable, type SourceRef, type StrategySpec, type VariableProvenance } from '../../domain/scenario.ts';
 import type { Workstream } from '../../domain/register.ts';
 import type { TargetReading } from '../goals/target.ts';
@@ -231,6 +232,19 @@ export function estimatedFromArrangement(one: ConstructedArrangement, input: { p
 }
 
 /**
+ * The payment terms a constructed arrangement inherits from its buyers'
+ * evidence, as a terms sentence the settlement and financing readers parse;
+ * null when nothing stated them (unknown, never prepaid — invariant 39). Pure.
+ */
+export function inheritedTerms(one: Pick<ConstructedArrangement, 'buyerTerms'>): string | null {
+  const t = one.buyerTerms;
+  if (!t || t.timing === 'UNKNOWN') return null;
+  // The basis is carried on the arrangement; the sentence holds only the words the readers parse, so a basis
+  // quoting other terms can never flip it.
+  return t.timing === 'ARREARS' ? 'paid in arrears, after delivery, as these buyers\' evidence states' : 'paid in advance, as these buyers\' evidence states';
+}
+
+/**
  * A constructed arrangement as a model candidate on a price already read: the
  * links nobody has established swept exactly as for an opening with nothing on
  * its card. Shared by the estimated and the invented conversions. Pure.
@@ -267,6 +281,9 @@ function arrangementOpening(one: ConstructedArrangement, input: { projectId: str
     requiredCapabilities: [],
     state: 'DISCOVERED',
     createdAt: new Date(0).toISOString(),
+    // The terms its buyers' evidence states (an RFP population pays in arrears), so the plan and the
+    // reconstruction's financing lever read them as they read a found opening's; none stated stays unknown.
+    paymentTerms: inheritedTerms(one),
   } as unknown as CashOpportunity;
   return {
     opportunity,
@@ -775,7 +792,7 @@ export function pickEstimatedArrangements(arrangements: readonly ConstructedArra
  * deliberately narrow: a missed one is treated like any other opening, and a
  * wrong one only ranks lower and keeps Brain looking.
  */
-export const COMPETITIVE_AWARD = /\b(rfp|rfq|rfi|rfx|tender|solicitation|bids?|bidding|grants?|cooperative agreements?|procurement|sam\.gov|notice of funding|funding opportunity|nofo)\b/i;
+export { COMPETITIVE_AWARD };
 
 export function isCompetitiveAward(o: { title: string; source: string | null; buyingSignal: string | null; offerScope?: string | null }): boolean {
   return COMPETITIVE_AWARD.test([o.title, o.source, o.buyingSignal].filter(Boolean).join(' '));
