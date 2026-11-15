@@ -237,6 +237,8 @@ Total ≈ 25 min (baseline 26 min 41 s): construct 247 s, shared frontier (979 o
 | construction facts | 0 | 0 | F2/F3 back-fill repaired on branch, awaiting release |
 | arrangements researched / transferred | 0 / 0 | 0 / 0 | F1 and F7 repaired on branch, awaiting release |
 
+**Production plan read after Deploy 1075 (Goals run 43667546686, 02:23Z):** total **71 s** (baseline 26 min 41 s; 25 min after part 2): construct 6.1 s (was 247 s), shared frontier 0.25 s (was 210 s), quant portfolio 7.0 s (was 189 s), scenario 1.0 s, reconstruction 55 s (was 346 s). Planning speed VERIFIED on production inside the 1–5 min target. `estimated arrangements: 12 of 404 (392 cut, 6 in reserve)`; `compared 11 found + 12 constructed estimates; 1 in the best combination`. The F4 defect is visible: best-combination p90 $101M and reconstruction p50 $30M from uniform pooled prices; acceptance stays CANDIDATE_ONLY (correctly not certified). F4 repair ships in part 5.
+
 ### Adversarial pass: capabilities that pass on fixtures but are inert on production (01:49Z, `docs/intelligence-recovery/adversarial-production-gaps.md`)
 
 New failure categories the inventory did not cover: gates on a fact kind production never writes; a writer whose only reader is off the failing path; uniform sampling over pooled prices spanning orders of magnitude; capabilities that only run on worker threads; model output refused for shape.
