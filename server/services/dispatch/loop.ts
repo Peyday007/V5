@@ -268,12 +268,39 @@ export function forgetBrainOnlyPass(): void {
  * and writes inside the dispatch tick. The controller has one clock, and it is
  * the pool's. No new scheduler, and it runs only when work is stranded.
  */
-export async function continueDisplacedWork(stranded: boolean): Promise<'STARTED' | 'RUNNING' | null> {
+export async function continueDisplacedWork(stranded: boolean): Promise<'STARTED' | 'RUNNING' | 'DEFERRED' | null> {
   if (!stranded) return null;
   const { adaptivePoolRunning, startAdaptivePool } = await import('../freeLane/capacity.ts');
   if (adaptivePoolRunning()) return 'RUNNING';
+  /*
+   * The free lane waits out its boot delay on purpose (`startFreeLaneLoop`:
+   * model-driven slots competing with the boot passes made Deploy's restart
+   * verification too slow to finish, Deploy 41601470270). The first dispatch
+   * tick after a restart runs this pass, and a backlog stranded before the
+   * restart is still stranded, so starting the pool here would skip that delay
+   * entirely. Inside it, the lane's own timer is the one that starts the pool;
+   * this pass resumes continuing once it has elapsed.
+   */
+  if (Date.now() < continuationHeldUntil) return 'DEFERRED';
   startAdaptivePool();
   return 'STARTED';
+}
+
+/**
+ * Until when `continueDisplacedWork` must not start the free-lane pool: the end
+ * of the lane's boot delay, armed by `startDispatcher` at boot. Zero (a tick
+ * driven without the dispatcher's boot, as tests do) holds nothing.
+ */
+let continuationHeldUntil = 0;
+
+/** The instant until which displaced-work continuation defers to the lane's own boot delay. */
+export function displacedContinuationHeldUntil(): number {
+  return continuationHeldUntil;
+}
+
+/** Arm (or, with 0, clear) the boot hold on displaced-work continuation. */
+export function holdDisplacedContinuation(delayMs: number): void {
+  continuationHeldUntil = delayMs > 0 ? Date.now() + delayMs : 0;
 }
 
 export async function dispatchTick(
@@ -1163,8 +1190,13 @@ let running = false;
  * dispatcher is a background convenience, not a reason for the Brain to stay
  * alive.
  */
-export function startDispatcher(intervalMs = DISPATCH_TICK_MS): void {
+export function startDispatcher(
+  intervalMs = DISPATCH_TICK_MS,
+  options: { freeLaneStartDelayMs?: number } = {},
+): void {
   if (timer) return;
+  // The free lane's boot delay binds the dispatcher's continuation too (see `continueDisplacedWork`).
+  if (options.freeLaneStartDelayMs !== undefined) holdDisplacedContinuation(options.freeLaneStartDelayMs);
   timer = setInterval(() => {
     if (running) return;
     running = true;
