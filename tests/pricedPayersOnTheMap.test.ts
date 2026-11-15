@@ -189,10 +189,11 @@ describe('a priced payer the map does not name becomes a buyer population', () =
         .filter((one) => one.payer && one.priceCents !== null && one.priceCents > 0)
         .map((one) => ({ value: one.priceCents! / 100, industry: one.industry, mechanism: one.mechanism, payer: one.payer })),
     });
-    // The two agriculture departments' published prices are their own sector's comparable prices.
+    // The two agriculture departments are priced from their own facts (the claims filed against their node), not swept over comparables.
     const admitted = selected.openings.filter((one) => one.marketKey?.includes(departments.id));
     expect(admitted.length).toBeGreaterThan(0);
-    expect(admitted[0]!.price.note).toMatch(/same sector \(Agricultural grants\)/);
+    expect(admitted[0]!.estimated?.tier).not.toBe('MECHANISM');
+    expect(admitted[0]!.price.note).toMatch(/2 obs\. of these buyers: claim:/);
     expect(selected.selection.cut.some((one) => one.population === departments.id && one.reason.includes('no comparable price'))).toBe(false);
     expect((await getOpportunity(openings[0]!))?.payer).toBe('Pennsylvania Department of Agriculture');
   });
