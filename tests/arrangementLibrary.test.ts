@@ -276,7 +276,10 @@ describe('research written to the arrangement', () => {
     await recordCardFact({ projectId, opportunityId: o.id, field: CAPTURE_KEY, kind: 'EVIDENCE', value: 'Sell it.', claimId: `clm_c_${o.id}`, decidedBy: 'BRAIN' });
     await updateOpportunity(o.id, { payer: VET.buyer, price_cents: 45_000 });
     restart();
-    await readGoalPlan({ goalId: id, now, evaluations: 500 });
+    // Read at the time the new evidence exists, as production always does: the file's `now` is fixed
+    // when it loads, and on a slow shard (737 s, Postgres 2026-11-15) rows written minutes later are
+    // after it, so a read at that instant can predate the price it is meant to see.
+    await readGoalPlan({ goalId: id, now: new Date(Date.now() + 1_000), evaluations: 500 });
     const changed = (await arrangementForLegacyKey(projectId, key))!;
     expect(changed.inputsDigest).not.toBe(refuted.inputsDigest);
     expect(changed.verdict?.verdict).toBe('REFUTED');
