@@ -1222,6 +1222,15 @@ function namedPaths(...texts: (string | null)[]): string[] {
  * repair in flight (no linked register row, or every linked row already decided). Each becomes a
  * deficiency with the id `dfx_inv_<finding id>`, so Hermes commissions the finding by its id; the
  * commission links its register row to the finding, which then reads as in flight.
+ *
+ * A finding that states no cause (not ROOT_CAUSE_CONFIRMED) and whose repair was already decided is
+ * offered again only once the finding itself has changed since that decision — new evidence, a
+ * confirmed cause, a new status, severity, symptom or acceptance (invariant 16: no repair that
+ * repeats a strategy an earlier attempt already tried). Without a cause the only intervention it
+ * can earn is the same EVIDENCE round, so re-offering it on unchanged rows repeats that round: an
+ * evidence gap like A-10K, whose repair was rejected because the rows state no cause, was
+ * re-commissioned on the very same rows, attempt after attempt. A finding with a confirmed cause
+ * is still offered again once its repair is decided, for a different engineering attempt.
  */
 export async function inventoryDeficiencies(max = 4): Promise<DeficiencyReading[]> {
   const { listInventory } = await import('./inventory.ts');
@@ -1236,8 +1245,10 @@ export async function inventoryDeficiencies(max = 4): Promise<DeficiencyReading[
     return !c.decision;
   };
   const order = { BLOCKING: 0, MAJOR: 1, MINOR: 2 } as const;
-  return items
-    .filter((i) => !i.linkedCandidates.some(inFlight))
+  const open = items.filter((i) => !i.linkedCandidates.some(inFlight));
+  const fresh = await Promise.all(open.map((i) => (i.status === 'ROOT_CAUSE_CONFIRMED' ? true : changedSinceDecided(i, byId))));
+  return open
+    .filter((_, n) => fresh[n])
     .sort((a, b) => order[a.severity] - order[b.severity] || a.id.localeCompare(b.id))
     .slice(0, max)
     .map((i) => {
@@ -1263,6 +1274,32 @@ export async function inventoryDeficiencies(max = 4): Promise<DeficiencyReading[
       });
       return { ...one, source: { kind: 'INVENTORY' as const, ref: i.id } };
     });
+}
+
+/** The fields whose change is new substance on a finding; linking a repair or naming a note is not. */
+const SUBSTANTIVE_INVENTORY_FIELDS = ['status', 'capability', 'symptom', 'evidence', 'rootCause', 'severity', 'verificationCriteria'] as const;
+
+/**
+ * Whether an unclaimed finding may be offered: it has no decided repair, or it changed in substance
+ * at or after its latest repair was decided. A decided row's `updatedAt` is when it was decided (or
+ * later), so reading changes from there never re-offers a finding on rows a repair already judged.
+ */
+async function changedSinceDecided(
+  item: { candidateId: string; linkedCandidates: string[] },
+  byId: Map<string, ImprovementCandidate>,
+): Promise<boolean> {
+  const decidedAt = item.linkedCandidates
+    .map((id) => byId.get(id))
+    .filter((c): c is ImprovementCandidate => Boolean(c?.decision))
+    .map((c) => c.updatedAt)
+    .sort()
+    .pop();
+  if (!decidedAt) return true;
+  const changes = await listImprovementEvents({ candidateId: item.candidateId, kinds: ['INVENTORY_CHANGED'], since: decidedAt, limit: 50 });
+  return changes.some((e) => {
+    const fields = Array.isArray(e.detail['fields']) ? (e.detail['fields'] as unknown[]) : [];
+    return fields.some((f) => (SUBSTANTIVE_INVENTORY_FIELDS as readonly unknown[]).includes(f));
+  });
 }
 
 /** Readings of one goal's plan that must name the same missing evidence before the plan reads as stuck. */

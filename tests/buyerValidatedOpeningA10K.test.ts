@@ -10,8 +10,10 @@
  *          with margin do.
  *   class  An unowned, unrepaired BLOCKING finding is read by `inventoryDeficiencies` as
  *          a MISSING_CAPABILITY deficiency, commissionable by its id. It is not offered
- *          again while its repair is in flight. Once that repair is decided, it is offered
- *          again, which is how attempt 2 of this weakness came to exist. (1) pins it.
+ *          again while its repair is in flight. Once that repair is decided it used to be
+ *          offered again on the same rows, which is how attempt 2 of this weakness came to
+ *          exist; now it is offered again only when the finding itself changed since the
+ *          decision (invariant 16). (1) pins it.
  *
  * Nothing here lowers a bar: the cases in (2) that must not certify still must not.
  */
@@ -74,8 +76,17 @@ describe('(1) an unowned BLOCKING finding like A-10K is a commissionable MISSING
     expect((await a10k(id, { linkedCandidateId: repair.id })).ok).toBe(true);
     expect((await inventoryDeficiencies()).map((one) => one.source?.ref)).not.toContain(id);
 
-    // That repair is rejected (attempt 1's outcome): the finding is unclaimed again and offered again.
+    // That repair is rejected (attempt 1's outcome). Reproduces the recorded loop: nothing about the
+    // finding changed, so offering it again would re-commission the same rows a repair already judged.
     await decideCandidate(repair.id, 'REJECTED', 'Method research ended FAILED with no accepted claim');
+    expect((await inventoryDeficiencies()).map((one) => one.source?.ref)).not.toContain(id);
+
+    // Linking another row or annotating it is not new substance either.
+    expect((await a10k(id, { note: 'looked at again, nothing new' })).ok).toBe(true);
+    expect((await inventoryDeficiencies()).map((one) => one.source?.ref)).not.toContain(id);
+
+    // New evidence on the finding is: it is offered again, for a repair that can use it.
+    expect((await a10k(id, { evidence: 'Outreach measured: 0 of 200 replies converted; conversion now measured, opening still unvalidated.' })).ok).toBe(true);
     expect((await inventoryDeficiencies()).map((one) => one.source?.ref)).toContain(id);
 
     // Owning it stops the offer: a person or session that took it is the repair.
