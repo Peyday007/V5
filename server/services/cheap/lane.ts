@@ -59,6 +59,11 @@ export function laneConfig(env: NodeJS.ProcessEnv = process.env): LaneConfig | n
   const free = configured.length > 0 ? configured : ['auto'];
   const budget = Number(env['BRAIN_CHEAP_LLM_DAILY_BUDGET'] ?? 20000);
   const models = runpod ? [runpod.label, ...(url ? [free[0]!] : [])] : free;
+  // Slot B and the GPU's fallback on one free model is one point of failure:
+  // when that provider rate-limits, both slots fail together and nothing
+  // answers (CAP-16-3, 2026-11-15: 80% provider failures). The fallback is the
+  // other configured free model, else OmniRoute's own `auto` switchboard.
+  const fallback = free.find((one) => one !== free[0]) ?? 'auto';
   return {
     url: (url ?? runpod!.url).replace(/\/+$/, ''),
     key: (url ? env['BRAIN_CHEAP_LLM_KEY']?.trim() : runpod!.key) || null,
@@ -66,7 +71,7 @@ export function laneConfig(env: NodeJS.ProcessEnv = process.env): LaneConfig | n
     dailyBudget: Number.isFinite(budget) && budget > 0 ? Math.trunc(budget) : 20000,
     timeoutMs: 30_000,
     runpod,
-    fallbackModel: runpod && url ? free[0]! : null,
+    fallbackModel: runpod && url ? fallback : null,
   };
 }
 
@@ -317,6 +322,56 @@ function windowTokens(): number {
   return Number.isFinite(raw) && raw >= 2_000 ? raw : FREE_WINDOW_TOKENS;
 }
 
+/**
+ * A provider's `Retry-After`, in whole seconds: delta-seconds or an HTTP date.
+ * Null when absent or unreadable.
+ */
+export function retryAfterSeconds(header: string | null, now: number = Date.now()): number | null {
+  const raw = header?.trim();
+  if (!raw) return null;
+  if (/^\d+(?:\.\d+)?$/.test(raw)) return Math.max(0, Math.ceil(Number(raw)));
+  const at = Date.parse(raw);
+  return Number.isFinite(at) ? Math.max(0, Math.ceil((at - now) / 1000)) : null;
+}
+
+/** Strip anything credential-shaped from provider text before it is recorded. */
+function scrub(text: string): string {
+  return text
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redacted]')
+    .replace(/\b(?:sk|rpa|ghp|gho|ghs|gsk|nvapi|csk)[-_][A-Za-z0-9_-]{8,}/g, '[redacted]')
+    .replace(/([?&](?:api[_-]?key|key|token|access_token)=)[^&\s]+/gi, '$1[redacted]');
+}
+
+/**
+ * The text a failed provider call throws. It keeps the HTTP status (which
+ * `classifyRouteFailure` reads: 401/403 credentials, 404 task routing,
+ * 429/5xx provider availability), names the provider host and model, and on a
+ * 429/503 carries `retry-after Ns` so the route's hold can use the provider's
+ * own delay instead of guessing.
+ */
+export async function laneHttpError(response: Response, baseUrl: string, model: string): Promise<string> {
+  let host = 'provider';
+  try {
+    host = new URL(baseUrl).host;
+  } catch {
+    /* keep the generic name */
+  }
+  const parts = [`cheap lane HTTP ${response.status}`, `from ${host} model ${model}`];
+  if (response.status === 401 || response.status === 403) parts.push('(credentials refused)');
+  if (response.status === 429 || response.status === 503) {
+    const wait = retryAfterSeconds(response.headers.get('retry-after'));
+    if (wait !== null) parts.push(`retry-after ${wait}s`);
+  }
+  // A busy provider's body adds nothing the status does not say, and words in
+  // it ("model … not available") would misname the cause; other refusals keep
+  // the provider's own words, which say which credential or route it refused.
+  const busy = response.status === 408 || response.status === 409 || response.status === 425 || response.status === 429 || response.status >= 500;
+  const detail = busy ? '' : scrub((await response.text().catch(() => '')).replace(/\s+/g, ' ').trim()).slice(0, 160);
+  if (busy) await response.body?.cancel().catch(() => undefined);
+  if (detail) parts.push(`: ${detail}`);
+  return parts.join(' ');
+}
+
 /** The plain OpenAI-compatible call to OmniRoute (or anything like it). */
 const openAiCompleter: Completer = async (config, model, system, prompt, options) => {
   const started = Date.now();
@@ -347,7 +402,7 @@ const openAiCompleter: Completer = async (config, model, system, prompt, options
     await response.body?.cancel().catch(() => undefined);
     response = await request(false);
   }
-  if (!response.ok) throw new Error(`cheap lane HTTP ${response.status}`);
+  if (!response.ok) throw new Error(await laneHttpError(response, config.url, model));
   const body = (await response.json()) as { choices?: { message?: { content?: string } }[] };
   return body.choices?.[0]?.message?.content ?? '';
 };

@@ -43,8 +43,11 @@ export function runpodConfig(env: NodeJS.ProcessEnv = process.env): RunpodConfig
   const mode = (env['BRAIN_RUNPOD_MODE'] ?? 'off').trim().toLowerCase();
   if (!url || mode !== 'primary') return null;
   const model = env['BRAIN_RUNPOD_MODEL']?.trim() || 'Qwen/Qwen3-8B-AWQ';
+  const configured = normalizeRunpodUrl(url);
+  // A pod recovery replaced the pod the secret names; a changed secret wins again.
+  const address = recovered && recovered.from === configured ? recovered.to : configured;
   return {
-    url: normalizeRunpodUrl(url),
+    url: address,
     key: env['BRAIN_RUNPOD_KEY']?.trim() || null,
     model,
     label: `${RUNPOD_PREFIX}${model}`,
@@ -122,7 +125,121 @@ export function runpodReading(): { served: number; fellBack: number; skipped: nu
   return { ...counts, breakerOpen: runpodBreakerOpen() };
 }
 
+/* ------------------------------------------------------------------------- */
+/* Dead pod                                                                   */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * How a GPU call failed. A dead pod — RunPod's proxy answering 404 for a pod
+ * that no longer exists, or nothing listening at the address — is not an
+ * overloaded one: falling back silently forever is what left the GPU route
+ * dead on 2026-11-09 (run 42577770227) and 2026-11-10. 401/403 is a
+ * credential the pod refused; everything else (5xx, 429, timeouts, empty
+ * answers) is overload, which the breaker already handles.
+ */
+export type GpuFailure = 'dead pod' | 'credentials' | 'overload';
+
+export function classifyGpuFailure(error: unknown): GpuFailure {
+  const message = error instanceof Error ? error.message : String(error);
+  const code = (error as { cause?: { code?: unknown } } | null)?.cause?.code;
+  if (/\brunpod HTTP 404\b/.test(message)) return 'dead pod';
+  if (/\brunpod HTTP (?:401|403)\b/.test(message)) return 'credentials';
+  if (code === 'ECONNREFUSED' || code === 'ENOTFOUND' || /\b(?:ECONNREFUSED|ENOTFOUND|connection refused)\b/i.test(message)) return 'dead pod';
+  return 'overload';
+}
+
+/** One recovery attempt per this window, whatever the calls keep saying. */
+export const RECOVERY_GAP_MS = 30 * 60_000;
+
+export interface RecoveryResult {
+  url: string;
+  created: boolean;
+  log: string[];
+}
+
+/**
+ * The existing recovery path, `runpodRestore.ensurePod`: it finds Brain's pod,
+ * or creates one and deletes it at once if RunPod prices it above the ceiling.
+ * Loaded lazily so the lane does not pull the RunPod account API in until a
+ * pod is actually gone.
+ */
+export type PodRestorer = (input: { apiKey: string; vllmKey: string; oldUrl: string; maxUsdPerHour?: number }) => Promise<RecoveryResult>;
+
+const defaultRestorer: PodRestorer = async (input) => {
+  const { ensurePod } = await import('./runpodRestore.ts');
+  return ensurePod(input);
+};
+
+let recovered: { from: string; to: string } | null = null;
+const recovery: { lastAt: number; attempts: number; last: string | null; pending: Promise<void> | null } = {
+  lastAt: 0,
+  attempts: 0,
+  last: null,
+  pending: null,
+};
+
+/** What the dead-pod path did since boot: for the capacity reading and tests. */
+export function runpodRecoveryReading(): { attempts: number; last: string | null; recoveredUrl: string | null; pending: Promise<void> | null } {
+  return { attempts: recovery.attempts, last: recovery.last, recoveredUrl: recovered?.to ?? null, pending: recovery.pending };
+}
+
+/**
+ * A dead pod starts the recovery path once per `RECOVERY_GAP_MS`, in the
+ * background so the call itself still falls back at once. It needs the RunPod
+ * account key (`BRAIN_RUNPOD_API_KEY`, the same one `runpodPod.ts` uses) and the
+ * pod's vLLM key; without them it records why and spends nothing. The price
+ * ceiling is the existing one: `RUNPOD_MAX_USD_PER_HOUR` when set, else
+ * `ensurePod`'s own default.
+ */
+export function startPodRecovery(
+  runpod: RunpodConfig,
+  why: string,
+  deps: { restore?: PodRestorer; env?: NodeJS.ProcessEnv; now?: number } = {},
+): boolean {
+  const now = deps.now ?? Date.now();
+  if (recovery.pending || (recovery.lastAt > 0 && now - recovery.lastAt < RECOVERY_GAP_MS)) return false;
+  const env = deps.env ?? process.env;
+  const apiKey = env['BRAIN_RUNPOD_API_KEY']?.trim();
+  recovery.lastAt = now;
+  if (!apiKey || !runpod.key) {
+    recovery.last = `dead pod (${why.slice(0, 120)}); recovery needs BRAIN_RUNPOD_API_KEY and the vLLM key, not both set`;
+    console.warn(`[runpod] ${recovery.last}`);
+    return false;
+  }
+  const ceiling = Number(env['RUNPOD_MAX_USD_PER_HOUR']);
+  recovery.attempts += 1;
+  const from = normalizeRunpodUrl(env['BRAIN_RUNPOD_URL']?.trim() || runpod.url);
+  recovery.pending = (deps.restore ?? defaultRestorer)({
+    apiKey,
+    vllmKey: runpod.key,
+    oldUrl: runpod.url,
+    ...(Number.isFinite(ceiling) && ceiling > 0 ? { maxUsdPerHour: ceiling } : {}),
+  })
+    .then((pod) => {
+      const to = normalizeRunpodUrl(pod.url);
+      if (to !== runpod.url) recovered = { from, to };
+      // The new or found pod gets a clean slate: its first calls are its own.
+      breaker.failures = 0;
+      breaker.openUntil = 0;
+      recovery.last = `dead pod (${why.slice(0, 120)}); ${pod.created ? 'created' : 'found'} ${to}`;
+      console.warn(`[runpod] ${recovery.last}`);
+    })
+    .catch((error: unknown) => {
+      recovery.last = `dead pod (${why.slice(0, 120)}); recovery failed: ${(error instanceof Error ? error.message : String(error)).slice(0, 200)}`;
+      console.warn(`[runpod] ${recovery.last}`);
+    })
+    .finally(() => {
+      recovery.pending = null;
+    });
+  return true;
+}
+
 export function resetRunpod(): void {
+  recovered = null;
+  recovery.lastAt = 0;
+  recovery.attempts = 0;
+  recovery.last = null;
+  recovery.pending = null;
   breaker.failures = 0;
   breaker.openUntil = 0;
   counts.served = 0;
@@ -193,7 +310,7 @@ export async function routeRunpod(
   prompt: string,
   options: { maxTokens: number },
   fallback: (model: string) => Promise<string>,
-  deps: { fetchImpl?: Fetch; now?: () => number } = {},
+  deps: { fetchImpl?: Fetch; now?: () => number; restore?: PodRestorer; env?: NodeJS.ProcessEnv } = {},
 ): Promise<string> {
   const runpod = config.runpod;
   const now = deps.now ?? Date.now;
@@ -230,6 +347,15 @@ export async function routeRunpod(
   } catch (error) {
     recordFailure(now());
     noteCall(false, now());
-    return fallBack(error instanceof Error ? error.message : String(error));
+    const message = error instanceof Error ? error.message : String(error);
+    const kind = classifyGpuFailure(error);
+    if (kind === 'dead pod') {
+      startPodRecovery(runpod, message, {
+        now: now(),
+        ...(deps.restore ? { restore: deps.restore } : {}),
+        ...(deps.env ? { env: deps.env } : {}),
+      });
+    }
+    return fallBack(kind === 'overload' ? message : `${kind}: ${message}`);
   }
 }
