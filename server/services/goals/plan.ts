@@ -96,6 +96,9 @@ import { sharedEvaluator } from './reasoning/evaluatorPool.ts';
 import { inventDirections } from './reasoning/invent.ts';
 import { loadLibrary, recordExploration } from './reasoning/learning.ts';
 import { implementedFormats } from '../puzzle/formats/index.ts';
+import { readTimelines, type TimelineReading } from './timelines.ts';
+import { goalObjective, readOutcome, tradeOffs, type EnforceableCommitment, type GoalObjective, type OutcomeReading, type PlanTradeOff } from './objective.ts';
+import { buildPlanSet, candidateFromArrangement, candidateFromPathway, candidateFromStrategy, rebuildAfter, type AcceptanceCondition, type Calibration, type PlanCandidate, type PlanChange, type PlanSet, type Rebuild } from './planSet.ts';
 
 export const PLAN_VERDICTS = ['RECOMMENDABLE', 'NEEDS_EVIDENCE', 'NOT_VIABLE'] as const;
 export type PlanVerdict = (typeof PLAN_VERDICTS)[number];
@@ -325,6 +328,52 @@ export interface PlanReading {
   infeasible: InfeasibleConclusion | null;
   /** What failed while this reading was composed, so a thinner reading is never mistaken for a complete one (C-13). */
   degraded: string[];
+  /**
+   * GOAL-13-6: the 30/60/90-day, deadline and derived horizons, each solved
+   * backward for the deal economics and distribution it needs, with settlement
+   * confirmed per pathway and independent combinations compared. Reach is
+   * coverage unless calibrated; a horizon is ACCEPTED only by `acceptance`.
+   */
+  timelines?: TimelineReading | null;
+  /**
+   * GOAL-18-4: the goal's configured objective (its required confidence and
+   * targets), and expected, upper and adverse outcomes read against it. The
+   * threshold is a minimum, never a stop; a floor comes only from enforceable
+   * commitments, never from the model.
+   */
+  objective?: ObjectiveReading | null;
+  /**
+   * GOAL-23: the goal's candidate plans proven distinct, each with a complete
+   * model and ACCEPTED/PROVISIONAL status, the alternatives rebuilt after the
+   * most important shared failure, and confidence withheld unless calibrated.
+   */
+  planSet?: GoalPlanSet | null;
+  /** Whether the goal's productive work continues, and why — reaching or accepting the target never stops it by itself (S-0199). */
+  continuation?: Continuation;
+}
+
+/** The objective reading the plan carries (GOAL-18-4). */
+export interface ObjectiveReading {
+  goal: GoalObjective;
+  /** Outcomes of the strongest combination, total collections against the threshold; null when nothing is modelled. */
+  outcome: OutcomeReading | null;
+  /** Cash velocity, uncertainty, shared dependencies, opportunity cost and upside of each combination, explicitly. */
+  tradeOffs: PlanTradeOff[];
+  /** What the outcome was read from, and what it does not model. */
+  basis: string;
+}
+
+/** The plan set the plan carries (GOAL-23), with the rebuild after the most important change. */
+export interface GoalPlanSet extends PlanSet {
+  /** The change the rebuild answers, and why that one. Null when no candidate depends on anything that can fail. */
+  rebuild: (Rebuild & { why: string }) | null;
+}
+
+export interface Continuation {
+  continues: boolean;
+  reason: string;
+  /** Modelled surplus over the threshold, in dollars, that can finance successors; never a reason to stop. */
+  surplusForSuccessors: number;
 }
 
 export interface PlanAdoption {
@@ -728,8 +777,10 @@ export function judgeAcceptance(input: {
   considered: Pick<ConsideredOpening, 'opportunityId' | 'missing'>[];
   pathways?: Pick<PathwayReading, 'portfolio'> | null;
   required?: number;
+  /** The goal's configured objective (GOAL-18-4): its required confidence governs, stated or recorded default. */
+  objective?: Pick<GoalObjective, 'requiredConfidence'> | null;
 }): PlanAcceptance {
-  const required = input.required ?? RECOMMENDATION_POLICY.requiredProbability;
+  const required = input.required ?? input.objective?.requiredConfidence.value ?? RECOMMENDATION_POLICY.requiredProbability;
   const pct = (x: number) => `${Math.round(x * 1000) / 10}%`;
   const best = input.portfolio?.best ?? null;
   const bestIds = best ? [...new Set(best.members.map((m) => m.opportunityId))] : [];
@@ -775,7 +826,7 @@ export function judgeAcceptance(input: {
       );
     } else if (missingLinks.length > 0) {
       shortfalls.push(`the evidenced combination's chain is incomplete: ${missingLinks.slice(0, 4).join('; ')}`);
-    } else if (!assurance || !assurance.claimsAtLeast90 || !assurance.range) {
+    } else if (!assurance || !assurance.range || (required >= RECOMMENDATION_POLICY.requiredProbability && !assurance.claimsAtLeast90)) {
       shortfalls.push(
         `the evidenced combination reaches the target in ${pct(best.reach)} of ${worlds} simulated worlds, but simulated worlds are not evidence: ` +
           (assurance
@@ -885,6 +936,214 @@ async function brainCapabilities(projectId: string, currency: string): Promise<B
   return { delivers: frame.delivers, puzzleFormats: implementedFormats().filter((one) => one.authoring === 'GENERATED').map((one) => one.key) };
 }
 
+/**
+ * The quantile of a combination's settled distribution at `q`, read only from
+ * the engine's own p10/p50/p90: linear between them, and held at p10 and p90
+ * beyond — the tails outside them are not modelled, so they are never invented.
+ */
+export function settledQuantile(m: { p10: number; p50: number; p90: number }, q: number): number {
+  if (q <= 0.1) return m.p10;
+  if (q >= 0.9) return m.p90;
+  if (q <= 0.5) return m.p10 + (m.p50 - m.p10) * ((q - 0.1) / 0.4);
+  return m.p50 + (m.p90 - m.p50) * ((q - 0.5) / 0.4);
+}
+
+const OUTCOME_POINTS = 200;
+
+/** Total collections per evenly spaced quantile: what is already held plus the combination's settled money. */
+function settledWorlds(held: number, m: { p10: number; p50: number; p90: number }): number[] {
+  return Array.from({ length: OUTCOME_POINTS }, (_, i) => held + settledQuantile(m, (i + 0.5) / OUTCOME_POINTS));
+}
+
+/** Whether the plan's probabilities rest on a calibrated source: an evidenced portfolio's assurance or this Brain's own record. */
+export function planCalibration(acceptance: PlanAcceptance): Calibration {
+  const p = acceptance.probability;
+  if (p && (p.basis === 'EVIDENCED_PORTFOLIO' || p.basis === 'MEASURED_RECORD')) return { calibrated: true, observations: p.sample, basis: `${p.basis}: ${p.note}` };
+  return { calibrated: false, observations: p?.sample ?? 0, basis: p?.basis === 'TARGET_MET' ? 'the ledger holds the target, which calibrates no model' : 'no calibrated source: coverage of assumed inputs is not a probability' };
+}
+
+/**
+ * The three readings the plan carries (GOAL-13-6, GOAL-18-4, GOAL-23), from
+ * what the plan pass already composed. Pure: it reads, it decides nothing the
+ * plan's own acceptance decides, and it owns no store, scheduler or authority.
+ */
+export function composeGoalReadings(input: {
+  objective: GoalObjective;
+  target: TargetReading;
+  portfolio: GoalPortfolio | null;
+  pathways: PathwayReading | null;
+  arrangements: readonly ConstructedArrangement[];
+  reconstruction: Reconstruction | null;
+  acceptance: PlanAcceptance;
+  /** The model's openings, for the agreements recorded on them: the only receivables a floor may count. */
+  modelled: readonly Pick<ModelledOpportunity, 'opportunity' | 'agreedValue' | 'daysToCash'>[];
+}): { timelines: TimelineReading; objective: ObjectiveReading; planSet: GoalPlanSet } {
+  const { objective, target, portfolio, acceptance } = input;
+  const calibration = planCalibration(acceptance);
+  const remaining = Math.max(0, target.remainingCents / 100);
+  const held = target.achievedCents / 100;
+
+  const timelines = readTimelines({ target, pathways: input.pathways?.pathways ?? [], portfolio, acceptance });
+
+  // Expected, upper and adverse outcomes of the strongest combination and each alternative (S-0199/S-0200).
+  const commitments: EnforceableCommitment[] = input.modelled
+    .filter((one) => one.agreedValue > 0)
+    .map((one) => ({
+      kind: 'COMMITTED_RECEIVABLE' as const,
+      amount: one.agreedValue,
+      counterparty: one.opportunity.title.slice(0, 80),
+      sourceRowId: one.opportunity.id,
+      settlesInHorizon: target.daysLeft === null || (one.daysToCash.value !== null && one.daysToCash.value <= target.daysLeft),
+    }));
+  const combos = portfolio ? [portfolio.best, ...portfolio.alternatives].filter((c): c is NonNullable<GoalPortfolio['best']> => c !== null) : [];
+  const keyOf = (c: (typeof combos)[number]) => c.members.map((m) => m.opportunityId).join('+');
+  const readingOf = (c: (typeof combos)[number]): OutcomeReading => {
+    const r = readOutcome(objective, settledWorlds(held, { p10: c.settledP10, p50: c.settledP50, p90: c.settledP90 }), {
+      calibrated: calibration.calibrated,
+      commitments,
+      cashOnHand: held,
+      uncalibratedReason: `withheld: ${calibration.basis}; the plan stays a candidate`,
+    });
+    // Only the plan's own acceptance accepts: the outcome reading never promotes a candidate by itself.
+    return acceptance.status === 'ACCEPTED' && r.status === 'ACCEPTED' ? r : { ...r, status: 'CANDIDATE' };
+  };
+  const outcome = portfolio?.best ? readingOf(portfolio.best) : null;
+  const counts = new Map<string, number>();
+  for (const c of combos) for (const id of new Set(c.members.map((m) => m.opportunityId))) counts.set(id, (counts.get(id) ?? 0) + 1);
+  const readings = combos.map((c) => ({ c, r: readingOf(c) }));
+  const trade = tradeOffs(
+    objective,
+    readings.map(({ c, r }) => {
+      const others = readings.filter((o) => o.c !== c).map((o) => o.r.expected);
+      return {
+        key: keyOf(c),
+        reading: r,
+        daysToCash: target.daysLeft,
+        sharedDependencies: [...new Set(c.members.map((m) => m.opportunityId))].filter((id) => (counts.get(id) ?? 0) > 1),
+        forgoneAlternative: others.length > 0 ? Math.max(...others) : null,
+      };
+    }),
+  );
+  const objectiveReading: ObjectiveReading = {
+    goal: objective,
+    outcome,
+    tradeOffs: trade,
+    basis: outcome
+      ? `the quant engine's strongest combination over ${portfolio!.worlds} worlds (${portfolio!.basis.toLowerCase()}), read at its p10/p50/p90 and added to the ${held} already held; tails beyond p10 and p90 are not modelled, so an adverse quantile below 10% reads at p10 and says less than it would on a calibrated tail`
+      : 'no combination of the openings held is modelled, so no outcome is read; the threshold still binds as a minimum',
+  };
+
+  // The candidate plans, proven distinct (GOAL-23).
+  const fromPathways = (input.pathways?.pathways ?? []).map((p) => candidateFromPathway(p));
+  const byId = new Map(fromPathways.map((c) => [c.id, c]));
+  const variants = input.reconstruction ? [input.reconstruction.baseline, input.reconstruction.best, ...input.reconstruction.rounds.flatMap((r) => r.tried)] : [];
+  const seen = new Set<string>();
+  const fromStrategies: PlanCandidate[] = [];
+  for (const v of variants) {
+    if (seen.has(v.key)) continue;
+    seen.add(v.key);
+    const c = candidateFromStrategy(v, byId);
+    if (c) fromStrategies.push(c);
+  }
+  const candidates = [...fromPathways, ...input.arrangements.map((a) => candidateFromArrangement(a)), ...fromStrategies];
+  const condition: AcceptanceCondition = {
+    amount: remaining,
+    daysLeft: target.daysLeft,
+    confidence: objective.requiredConfidence.value,
+    capitalCeiling: target.capitalCeilingCents === null ? null : target.capitalCeilingCents / 100,
+    breadth: null,
+    objective: {
+      expected: 1,
+      upside: objective.targets.upside.source === 'STATED' ? 1 : 0.25,
+      downside: objective.targets.downsideProtection.source === 'STATED' ? 1 : 0.25,
+      velocity: target.daysLeft !== null ? 0.25 : 0,
+      independence: 0.25,
+    },
+  };
+  const set = buildPlanSet(candidates, condition, calibration);
+  // The most important change is the shared channel or supplier the most plans fail with.
+  const shared = [...set.resilience].sort((a, b) => b.fails.length - a.fails.length)[0] ?? null;
+  const lead = set.plans[0] ?? null;
+  const change: PlanChange | null = shared
+    ? shared.kind === 'CHANNEL' ? { kind: 'CHANNEL_FAILED', channel: shared.shared } : { kind: 'SUPPLIER_FAILED', supplier: shared.shared }
+    : lead?.channels[0]
+      ? { kind: 'CHANNEL_FAILED', channel: lead.channels[0] }
+      : lead?.suppliers[0]
+        ? { kind: 'SUPPLIER_FAILED', supplier: lead.suppliers[0] }
+        : null;
+  const rebuild = change
+    ? {
+        ...rebuildAfter(candidates, change, condition, calibration),
+        why: shared
+          ? `${shared.fails.length} plan(s) share the ${shared.kind.toLowerCase()} “${shared.shared}”: it is the failure that takes the most alternatives with it`
+          : `the leading plan's own ${change.kind === 'CHANNEL_FAILED' ? 'channel' : 'supplier'} “${change.kind === 'CHANNEL_FAILED' ? change.channel : change.supplier}” is its single point of failure`,
+      }
+    : null;
+  return { timelines, objective: objectiveReading, planSet: { ...set, rebuild } };
+}
+
+/** Compact readings stored on a persisted reading's forecast, so the production record shows them (GOAL-13-6, GOAL-18-4, GOAL-23). */
+export function readingsSummary(reading: Pick<PlanReading, 'timelines' | 'objective' | 'planSet' | 'continuation'>): Record<string, unknown> {
+  const o = reading.objective;
+  const s = reading.planSet;
+  return {
+    timelines: reading.timelines
+      ? {
+          shortestCovered: reading.timelines.shortestCovered,
+          horizons: reading.timelines.horizons.map((h) => ({
+            days: h.days,
+            origins: h.origins,
+            status: h.status,
+            reach: h.reach.value,
+            reachBasis: h.reach.basis,
+            eligible: h.eligible.length,
+            excluded: h.excluded.length,
+            wedgesNeeded: h.economics.wedgesNeeded,
+            wedgesAvailable: h.economics.wedgesAvailable,
+            easiest: h.economics.easiest ? { label: h.economics.easiest.label, deals: h.economics.easiest.deals, netPerDeal: h.economics.easiest.netPerDeal } : null,
+          })),
+        }
+      : null,
+    objective: o
+      ? {
+          requiredConfidence: o.goal.requiredConfidence,
+          meaning: o.goal.meaning,
+          threshold: o.goal.threshold,
+          continueBeyondThreshold: o.goal.continueBeyondThreshold,
+          outcome: o.outcome
+            ? {
+                expected: o.outcome.expected,
+                upper: o.outcome.upper,
+                adverse: o.outcome.adverse,
+                adverseQuantile: o.outcome.adverseQuantile,
+                status: o.outcome.status,
+                confidenceWithheld: o.outcome.confidenceWithheld,
+                floor: o.outcome.floor,
+                protection: o.outcome.protection,
+                surplusForSuccessors: o.outcome.surplusForSuccessors,
+              }
+            : null,
+        }
+      : null,
+    planSet: s
+      ? {
+          candidates: s.candidates,
+          distinct: s.distinct,
+          accepted: s.accepted,
+          provisional: s.provisional,
+          collapses: s.collapses.length,
+          doubleCounted: s.doubleCounted.length,
+          attempts: s.attempts,
+          collections: s.collections,
+          confidence: s.confidence,
+          plans: s.plans.slice(0, 12).map((p) => ({ id: p.id, source: p.source, signature: p.signature, acceptance: p.acceptance, gaps: p.gaps.map((g) => g.field) })),
+          rebuild: s.rebuild ? { change: s.rebuild.change, why: s.rebuild.why, removed: s.rebuild.removed.length, reconstructed: s.rebuild.reconstructed.length, surviving: s.rebuild.surviving.length } : null,
+        }
+      : null,
+    continuation: reading.continuation ?? null,
+  };
+}
+
 /** Two diagnoses as one, first wins on a repeated cause. */
 export function mergeDiagnosis(first: ResearchDiagnosis[], second: ResearchDiagnosis[]): ResearchDiagnosis[] {
   const seen = new Set<string>();
@@ -919,11 +1178,14 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   const model = await composeGoalModel({ goal, target, now, arrangements });
   trace('composed');
   const measuredChance = await measuredPlanChance();
+  // The goal's configured objective (GOAL-18-4): its own required confidence, or the recorded default, governs acceptance.
+  const objective = goalObjective({ ...goal, target: { amountCents: target.targetCents } }, now, RECOMMENDATION_POLICY.requiredProbability);
+  const required = objective.requiredConfidence.value;
   const base = { goalId: goal.id, target, excluded: model.excluded, measuredChance };
   const outcomeRecorded = await goalOutcomeRecorded(goal.id);
   if (model.refusal) {
-    const refusedReconstruction = target.achieved ? null : await reconstructionFor(model, RECOMMENDATION_POLICY.requiredProbability, { goalId: goal.id, persist: !!input.persist, degraded });
-    let refusedAcceptance = judgeAcceptance({ achieved: target.achieved, chosen: null, portfolio: model.portfolio, measuredChance, considered: [] });
+    const refusedReconstruction = target.achieved ? null : await reconstructionFor(model, required, { goalId: goal.id, persist: !!input.persist, degraded });
+    let refusedAcceptance = judgeAcceptance({ achieved: target.achieved, chosen: null, portfolio: model.portfolio, measuredChance, considered: [], objective });
     const refusedPlan = adoptReconstruction({ reconstruction: refusedReconstruction, baseline: model.portfolio, openings: planOpenings(model) });
     if (refusedPlan.candidate && refusedAcceptance.status !== 'ACCEPTED') {
       refusedAcceptance = { ...refusedAcceptance, status: 'CANDIDATE_ONLY', candidate: refusedPlan.candidate, sentence: candidateSentence(refusedPlan.candidate, refusedAcceptance.required) };
@@ -934,6 +1196,16 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     const permissions = target.achieved ? [] : await missingPermissions(target.projectId);
     const qualify: NextTest = { link: 'OFFER_AND_PRICE', test: 'Qualify at least one opening: establish who pays, an offer and a price, so there is a plan to judge.', by: 'BRAIN', blocker: null };
     const refusedSteps = target.achieved || refusedInfeasible ? [] : planSteps({ adoption: refusedPlan.adoption, reconstruction: refusedReconstruction, sales: [], nextTest: qualify, permissionsMissing: permissions });
+    const refusedReadings = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways: null, arrangements, reconstruction: refusedReconstruction, acceptance: refusedAcceptance, modelled: model.considered });
+    const refusedContinuation = continuationOf({
+      achieved: target.achieved,
+      daysLeft: target.daysLeft,
+      outcomeRecorded,
+      policy: goalExecutionPolicy(target),
+      acceptance: refusedAcceptance.status,
+      instantOnly: refusedInfeasible?.instantOnly,
+      surplus: refusedReadings.objective.outcome?.surplusForSuccessors ?? Math.max(0, (target.achievedCents - target.targetCents) / 100),
+    });
     const reading: PlanReading = {
       ...base,
       verdict: target.achieved ? 'RECOMMENDABLE' : refusedInfeasible ? 'NOT_VIABLE' : 'NEEDS_EVIDENCE',
@@ -954,7 +1226,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       considered: [],
       // No accepted plan: keep constructing while there is time (a goal without a deadline always has),
       // never past its deadline or outcome, and never on a goal arithmetic rules out (C-10).
-      needsMoreOpenings: continueSearch({ achieved: target.achieved, daysLeft: target.daysLeft, outcomeRecorded, policy: goalExecutionPolicy(target), acceptance: refusedAcceptance.status, instantOnly: refusedInfeasible?.instantOnly }),
+      needsMoreOpenings: refusedContinuation.continues,
       inferred: inferredInputs(model.considered),
       researchPriority: planResearchPriority({
         reconstruction: refusedReconstruction,
@@ -985,6 +1257,8 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       steps: refusedSteps,
       infeasible: refusedInfeasible,
       degraded,
+      ...refusedReadings,
+      continuation: refusedContinuation,
     };
     if (input.persist) {
       await recordDegraded(goal.id, target.projectId, degraded);
@@ -1233,7 +1507,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
    * one. Until then the candidate keeps its sale and its pursuit, and its next
    * step is to raise that probability.
    */
-  let acceptance = judgeAcceptance({ achieved: target.achieved, chosen, portfolio: model.portfolio, measuredChance, considered, pathways });
+  let acceptance = judgeAcceptance({ achieved: target.achieved, chosen, portfolio: model.portfolio, measuredChance, considered, pathways, objective });
   if (acceptance.status !== 'ACCEPTED') {
     for (const s of strategies) {
       if (s.verdict !== 'RECOMMENDABLE') continue;
@@ -1310,6 +1584,16 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
           currency: target.currency,
         });
   const pool = poolConclusion(bestReach, target, considered.filter((one) => !isArrangementId(one.opportunityId)).length);
+  const readings = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways, arrangements, reconstruction, acceptance, modelled: model.considered });
+  const continuation = continuationOf({
+    achieved: target.achieved,
+    daysLeft: target.daysLeft,
+    outcomeRecorded,
+    policy,
+    acceptance: acceptance.status,
+    instantOnly: infeasible?.instantOnly,
+    surplus: readings.objective.outcome?.surplusForSuccessors ?? Math.max(0, (target.achievedCents - target.targetCents) / 100),
+  });
   const reading: PlanReading = {
     ...base,
     verdict,
@@ -1332,7 +1616,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     // until the target is met (owner, 2026-11-06): a recommendation is no reason to stop looking.
     // No accepted plan means keep constructing, modifying, combining and comparing (owner, 2026-11-09) —
     // but never past the deadline or a recorded outcome, nor on a goal arithmetic rules out (C-10).
-    needsMoreOpenings: continueSearch({ achieved: target.achieved, daysLeft: target.daysLeft, outcomeRecorded, policy, acceptance: acceptance.status, instantOnly: infeasible?.instantOnly }),
+    needsMoreOpenings: continuation.continues,
     inferred: inferredInputs(model.considered),
     // The questions the plan Brain holds needs answered, then the run's own (C-9).
     researchPriority: planResearchPriority({
@@ -1366,6 +1650,8 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     steps,
     infeasible,
     degraded,
+    ...readings,
+    continuation,
   };
   if (input.persist) {
     await recordDegraded(goal.id, target.projectId, degraded);
@@ -1694,11 +1980,36 @@ export function notSupported(acceptance: PlanAcceptance, infeasible: InfeasibleC
 
 /** Whether the goal's search keeps widening (C-10): not after the deadline, an outcome, or arithmetic infeasibility. Pure. */
 export function continueSearch(input: { achieved: boolean; daysLeft: number | null; outcomeRecorded: boolean; policy: string; acceptance: PlanAcceptance['status']; instantOnly?: boolean }): boolean {
-  if (input.achieved || input.outcomeRecorded) return false;
-  if (input.daysLeft !== null && input.daysLeft <= 0) return false;
-  if (input.acceptance === 'NOT_SUPPORTED') return input.instantOnly === true;
-  // A SQUEEZE goal keeps discovering while it sells; no accepted plan means keep constructing (owner, 2026-11-06, 2026-11-09).
-  return input.policy === 'SQUEEZE' || input.acceptance !== 'ACCEPTED';
+  return continuationOf(input).continues;
+}
+
+/**
+ * Whether the goal's productive work continues, and why (S-0199). The
+ * threshold is a minimum: reaching it, or accepting a plan for it, never ends
+ * discovery, constructed rounds or portfolio needs while the goal's window is
+ * open — surplus over it finances successors. What ends the search is the
+ * window closing, a missed outcome on the record, or arithmetic ruling the
+ * goal out (C-10). Pure.
+ */
+export function continuationOf(input: { achieved: boolean; daysLeft: number | null; outcomeRecorded: boolean; policy: string; acceptance: PlanAcceptance['status']; instantOnly?: boolean; surplus?: number }): Continuation {
+  const surplusForSuccessors = Math.max(0, input.surplus ?? 0);
+  const open = input.daysLeft === null || input.daysLeft > 0;
+  if (input.achieved) {
+    return open
+      ? { continues: true, reason: 'the target is collected, and it is a minimum, not a stop: discovery, constructed rounds and portfolio needs continue while the window is open, and what is collected above it finances successors', surplusForSuccessors }
+      : { continues: false, reason: 'the target is collected and the goal\'s window has closed; surplus finances successor goals', surplusForSuccessors };
+  }
+  if (input.outcomeRecorded) return { continues: false, reason: 'the goal\'s outcome is already on the record', surplusForSuccessors };
+  if (!open) return { continues: false, reason: 'the goal\'s deadline has passed', surplusForSuccessors };
+  if (input.acceptance === 'NOT_SUPPORTED') {
+    return input.instantOnly === true
+      ? { continues: true, reason: 'only an instantly settling opening could still reach the goal, so the search for one continues', surplusForSuccessors }
+      : { continues: false, reason: 'the goal as stated is not supported by arithmetic; the search resumes when its terms or inputs change', surplusForSuccessors };
+  }
+  if (input.acceptance === 'ACCEPTED') {
+    return { continues: true, reason: 'a plan is accepted, but the threshold is a minimum: Brain keeps exploring for plans whose expected and upper outcomes exceed it and whose adverse case stays defensible', surplusForSuccessors };
+  }
+  return { continues: true, reason: input.policy === 'SQUEEZE' ? 'a SQUEEZE goal keeps discovering while it sells, and no plan is accepted yet' : 'no plan is accepted yet: keep constructing, combining and comparing', surplusForSuccessors };
 }
 
 const CHANGE_LINK: Record<string, ChainLink> = {
@@ -2378,6 +2689,8 @@ export function readingDigest(reading: PlanReading): string {
     },
     adoption: reading.adoption?.source ?? null,
     reconstruction: reconstructionDigest(reading.reconstruction ?? null),
+    // Whether the goal's work continues is a conclusion: a change in it is recorded as a new reading.
+    ...(reading.continuation ? { continues: reading.continuation.continues } : {}),
   };
   return sha256(canonicalJson(summary));
 }
@@ -2456,6 +2769,8 @@ async function persistReading(goal: Workstream, reading: PlanReading, chosen: St
     steps: reading.steps,
     infeasible: reading.infeasible,
     degraded: reading.degraded,
+    // GOAL-13-6, GOAL-18-4, GOAL-23 and the continuation rule (S-0199), compact, on the production record.
+    ...readingsSummary(reading),
   };
   await getDb().run(
     `INSERT INTO goal_plan_readings (id, workstream_id, digest, scenario_model_id, scenario_run_id, verdict, chosen_strategy, strategies, next_test, forecast, created_at)
@@ -2480,6 +2795,16 @@ async function persistReading(goal: Workstream, reading: PlanReading, chosen: St
     summary: reading.summary.slice(0, 400),
     actorRef: 'BRAIN',
   });
+  // A target reached or a plan accepted does not stop the goal's productive work; that it continues, and why, is recorded.
+  if (reading.continuation?.continues && (reading.target.achieved || reading.acceptance.status === 'ACCEPTED')) {
+    await recordWorkstreamEvent({
+      workstreamId: goal.id,
+      kind: 'GOAL_CONTINUES_BEYOND_TARGET',
+      summary: `Work continues: ${reading.continuation.reason}.`.slice(0, 400),
+      detail: { reason: reading.continuation.reason, surplusForSuccessors: reading.continuation.surplusForSuccessors, achieved: reading.target.achieved, acceptance: reading.acceptance.status },
+      actorRef: 'BRAIN',
+    });
+  }
   // A recommended plan's opportunities become work this goal pursues, so the
   // goal tick holds and prioritizes them. Execution itself stays with the
   // existing commercial authority and its effects.
@@ -2979,7 +3304,8 @@ export async function advanceGoalPlans(
   for (const { id, target_project_id: projectId, paused_at: pausedAt, due_at: dueAt } of goals) {
     if (await recordGoalOutcome(id, now)) {
       outcomes += 1;
-      // An outcome on the record ends the search: a held reading must not keep topping it up (C-10).
+      // A new outcome invalidates the held reading: the next read decides by the continuation rule whether the
+      // search continues — a missed goal stops (C-10); an achieved one with its window open keeps working (S-0199).
       lastReadings.delete(id);
     }
     // A paused goal keeps its outcome on the record and spends nothing: no
@@ -3054,7 +3380,8 @@ export async function advanceGoalPlans(
     // What the portfolio could not establish is sent, not only listed (review F2-2):
     // decision unknowns to research or an authorized action, missing history to research.
     // Keyed per goal, opening and unknown, so a re-read raises nothing new.
-    if (reading?.portfolio && !reading.target.achieved) {
+    // Reaching the target does not end this: the threshold is a minimum, and the continuation rule decides (S-0199).
+    if (reading?.portfolio && reading.needsMoreOpenings) {
       try {
         await sendPortfolioNeeds({ goalId: id, projectId: reading.target.projectId, portfolio: reading.portfolio });
       } catch (error) {
