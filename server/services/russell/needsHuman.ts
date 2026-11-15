@@ -43,6 +43,7 @@ import {
 import { getUser } from '../../repos/identity.ts';
 import { answerAuthorityGap } from '../realize/authority.ts';
 import { getDb } from '../../db/database.ts';
+import { moot } from '../../domain/operator.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { nowIso } from '../../repos/util.ts';
 import { authorizeUnresolvedGaps } from '../research/gapPolicy.ts';
@@ -781,46 +782,70 @@ export async function unparkResolvedMissions(limit: number): Promise<string[]> {
    * sit `OPEN` and nothing would reach them again. Swept here because this
    * pass is the loop's existing "Needs You no longer applies" step.
    */
-  await withdrawMootBacklog(limit);
+  await withdrawMootBacklog(limit, 'ANY');
   return out;
 }
 
 /**
- * Withdraw the `OPEN` cards that were re-asked on "the mission moved out of
- * Needs You" and whose mission still is not waiting on them.
+ * Withdraw the `OPEN` cards about a mission that is no longer waiting on them.
  *
  * Production, 2026-11-12: 31 such cards held goal wst_7b4fcbb5f2384f31b6c3 on
- * "PERSON" after the re-ask itself was fixed, because they were reopened
- * before it. A card whose `recommendation` is that sentence was put there by
- * `reopenAnswered` from exactly this failure; if its mission has since come
- * back to `NEEDS_HUMAN` the card is live again and is left alone.
+ * "PERSON", and the operator kept withdrawing them by hand (30
+ * OPERATOR_WITHDREW_MOOT_REQUEST events from 2026-11-06). The first version of
+ * this sweep matched one recommendation sentence — the re-ask on "the mission
+ * moved out of Needs You" — but a card goes moot by other routes too: its
+ * mission advances, is unparked, stopped or recovered while the card stays
+ * OPEN, with whatever recommendation it carries. So the loop's sweep (`ANY`)
+ * selects by the mission's state and lets the operator's own predicate
+ * (`moot`, domain/operator.ts) decide each card: one definition, so the loop
+ * and the operator cannot disagree about which card is moot. The narrow scope
+ * remains for a caller that wants only the old re-asks.
  *
  * The same guarded transition and the same event as `withdrawMootAnswer`:
- * `OPEN -> WITHDRAWN` (a person who answers first wins), the row is kept, and
- * one `RUSSELL_ROUTINE_DECISION` is recorded by whichever writer moved it.
+ * `OPEN -> WITHDRAWN` (a person who answers first wins — an ANSWERED card is
+ * never selected), the row is kept, and one `RUSSELL_ROUTINE_DECISION` is
+ * recorded by whichever writer moved it.
  */
-export async function withdrawMootBacklog(limit: number): Promise<string[]> {
+export async function withdrawMootBacklog(limit: number, scope: 'ANY' | 'REASKED_MOVED_OUT' = 'REASKED_MOVED_OUT'): Promise<string[]> {
+  const narrow = scope === 'REASKED_MOVED_OUT';
   const rows = await getDb().all<{ id: string }>(
     `SELECT r.id FROM russell_human_requests r
        JOIN russell_missions m ON m.id = r.mission_id
       WHERE r.state = 'OPEN'
-        AND r.recommendation = ?
         AND m.state <> 'NEEDS_HUMAN'
+        ${narrow ? 'AND r.recommendation = ?' : ''}
       ORDER BY r.updated_at, r.id
       LIMIT ?`,
-    [MOVED_OUT_OF_NEEDS_YOU, Math.max(1, limit)],
+    narrow ? [MOVED_OUT_OF_NEEDS_YOU, Math.max(1, limit)] : [Math.max(1, limit)],
   );
   const out: string[] = [];
   for (const row of rows) {
     const request = await getHumanRequest(row.id);
     if (!request || request.state !== 'OPEN' || !request.missionId) continue;
     const mission = await getMission(request.missionId);
-    if (mission && mission.state === 'NEEDS_HUMAN') continue;
-    if (!(await withdrawRequest({ requestId: request.id, reason: mootWhy(mission, MOVED_OUT_OF_NEEDS_YOU) }))) continue;
-    await recordMootWithdrawal(request, mission, MOVED_OUT_OF_NEEDS_YOU);
+    if (!mission || !(await mootByState(request, mission))) continue;
+    const reason = request.recommendation ?? 'the mission is no longer waiting on this card';
+    if (!(await withdrawRequest({ requestId: request.id, reason: mootWhy(mission, reason) }))) continue;
+    await recordMootWithdrawal(request, mission, reason);
     out.push(request.id);
   }
   return out;
+}
+
+/**
+ * Whether a card can no longer be answered, by the operator's predicate
+ * (`moot`): it names a mission, it is not one of the kinds that are not about
+ * a mission, and that mission is in any state but NEEDS_HUMAN. Read from the
+ * rows at the moment it is asked.
+ */
+async function mootByState(request: RussellHumanRequest, mission: RussellMission): Promise<boolean> {
+  const packet = mission.orchestrationId ? await getOrchestration(mission.orchestrationId) : null;
+  return moot({
+    resumeKey: request.resumeKey,
+    missionId: request.missionId,
+    missionState: mission.state,
+    packetStatus: packet?.status ?? null,
+  }).moot;
 }
 
 export interface ResumeResult {
@@ -1097,8 +1122,9 @@ export async function reopenAnswered(
    * A mission that is gone, or one the resume found had already left Needs
    * You and still has not come back, cannot take this answer, and no later
    * answer can change that: `resumeAnsweredRequest` only ever applies a
-   * decision through a transition guarded on `NEEDS_HUMAN`. An answer that
-   * failed for any other reason is still re-asked below, exactly as before. Putting the card
+   * decision through a transition guarded on `NEEDS_HUMAN`. That holds whatever
+   * the resume said: an answer whose mission is still NEEDS_HUMAN is re-asked
+   * below, exactly as before. Putting the card
    * back in front of the person would ask them for a decision nobody can carry
    * out — the operator measured 31 such cards holding a goal on "PERSON".
    *
@@ -1108,7 +1134,8 @@ export async function reopenAnswered(
    * either step, and nothing it wrote is clobbered. The row is kept (history is
    * never destroyed) and the event records the answer that could not apply.
    */
-  if (!mission || (mission.state !== 'NEEDS_HUMAN' && reason === MOVED_OUT_OF_NEEDS_YOU)) {
+  // Decided by the mission's state through the operator's predicate, whatever the failure's words.
+  if (!mission || (await mootByState(request, mission))) {
     return withdrawMootAnswer(request, mission, reason);
   }
   const orchestrationId = mission.orchestrationId;
