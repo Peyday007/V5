@@ -16443,3 +16443,78 @@ each bought domain once its mailboxes reach Instantly.
 **Doors.** `npm run admin -- inboxes status | fund | quote | buy | sync`, and on
 production the `Inboxes` workflow (`.github/workflows/inboxes.yml`), narrow like
 `Routing`: `status` and `quote` change nothing; `fund` and `buy` need `--admin`.
+
+## 111. Brain improves itself by comparing alternatives, and an evaluator it cannot see decides.
+
+**Owner's order, 2026-11-15.** Brain must not improve itself by building the
+first idea it has and measuring it after release; it must build materially
+different alternatives, score them independently, and adopt only the one that
+beats production. Design: `docs/evolution/DESIGN.md` (branch `evo/design`).
+
+**What was wrong.** §87's register held one approach per deficiency
+(`weakness_key` UNIQUE, one live objective per owner component), and the only
+comparison was its single before/after test after release. Of the operator's
+first nine commissions none was RESOLVED: nothing chose between ways of fixing
+a defect, nothing retired a method that kept losing, and nothing scored the loop
+itself.
+
+**The shape** (`domain/evolution.ts` pure, `services/evolution/experiments.ts`,
+rows in migration 156 / pg 147). It extends §87 and §109; it adds no second
+register, scheduler, Factory or release path:
+
+- **Approaches are alternatives or they are refused.** `brain_operator_commission`
+  takes `approaches[]` and a registered `suite`. `validateApproaches` signs each
+  by approach type (a fixed taxonomy), its mechanism words and its owner paths,
+  and refuses fewer than two, more than four, and a near-duplicate — the same
+  type sharing half its mechanism words, or one idea relabelled on the same
+  files. An approach type retired for the capability class is refused, naming
+  the types still open.
+- **One deficiency, one parent row; one approach, one variant row.** The parent
+  is the deficiency's row in §87's register, marked as the experiment's, so the
+  loop never builds it as a single objective (`experimentMemberOf`). Each
+  variant is its own register row `<key>~v<n>` (the UNIQUE key holds), never
+  combined with its siblings, and its own Factory objective through the loop's
+  `submitExperimentVariant` — the same objective, baseline and standing-order
+  approval as `engineer`, with no release grant, so it ends at a pull request.
+  The objective says: build this approach only, do not merge, the suite and
+  its public cases are named, hidden cases exist and are not available.
+- **The evaluator is outside the implementing agents.** `evolution-eval.yml`
+  asks `npm run evolution -- pending --json` over ssh, checks out the baseline
+  SHA and every variant's head, runs the suite's runner (`npm run bench`) on the
+  public cases and on the hidden cases it fetched with `hidden --suite S` —
+  cases kept only in `evolution_hidden_cases`, never in the repository and never
+  in any read an agent can reach — and records each result with `record`.
+  Results are append-only. Hidden-case scores decide when every subject has one.
+- **Selection is code.** `selectVariant`: the best variant that beats the
+  baseline beyond the suite's noise bound on its primary metric with no guard
+  regressed past tolerance; variants within noise of the best are tied, and a
+  tie goes to the smaller diff. None qualifying is REJECTED_ALL and the parent
+  closes REJECTED, so the next attempt changes method (invariant 16). Fewer than
+  two scored is INSUFFICIENT and waits; a build window (72 h) without two pull
+  requests, or an evaluation window without a decision, HOLDs the experiment.
+- **Adoption is the existing release.** `decide` moves the experiment once
+  (compare-and-set), grants the winner's change request the loop's own LOW-risk
+  standing-order release (`grantStandingRelease`), rejects every other variant
+  with its score and names their pull requests for the evaluator to close, and
+  closes the parent COMBINED into the winner. §87 then measures the winner after
+  release exactly as any change.
+- **Learning.** `evolution_approach_stats` credits each scored variant's type in
+  its capability class with a trial, a win and its lift; `approachScore` is the
+  UCB shape of `reasoning/learning.ts`, and a type with five or more trials
+  winning under 15% retires. `experimentYield` is the loop's own metric —
+  adoptions per decided experiment and hours from identification to adoption.
+- **A generic detector.** Every registered suite (`domain/evolutionSuites.ts`:
+  `feasibility` and `planSpeed` so far) whose latest production baseline misses
+  its declared target is a `CAPABILITY_BELOW_TARGET` deficiency naming the suite
+  and metric, EVIDENCE until the results state a cause and its files. Nothing
+  names a specific problem for Hermes.
+- **Proof.** `verifiedCycle` gains `ALTERNATIVES_COMPARED`: at least two
+  variants scored, an ADOPT verdict, and the merged change is the selected
+  variant's own campaign. A single unexamined approach is no longer a verified
+  self-improvement.
+
+**Doors.** `brain_operator_experiments` (every experiment, variant, score,
+verdict, approach-type ranking and the yield — never a hidden case) and
+`brain_operator_add_hidden_case`. From a terminal, `npm run evolution --
+pending | hidden | record | decide | show`. Tests: `tests/evolution.test.ts`,
+`tests/evolutionExperiments.test.ts`.

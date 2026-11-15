@@ -206,14 +206,25 @@ async function family(baseKey: string): Promise<ImprovementCandidate[]> {
 }
 
 /** Record what was seen: a new candidate, a refreshed one, a new attempt, or a combination. */
-async function register(weakness: Weakness, now: Date, report: ImprovementTickReport): Promise<void> {
+/**
+ * How a caller may register outside the detector's defaults: an experiment (§111) writes its
+ * marker with the row, and its members are never combined into another candidate — siblings of
+ * one experiment share an owner on purpose.
+ */
+export interface RegisterOptions {
+  evidence?: Record<string, unknown>;
+  noCombine?: boolean;
+}
+
+async function register(weakness: Weakness, now: Date, report: ImprovementTickReport, options: RegisterOptions = {}): Promise<void> {
   const members = await family(weakness.key);
   const latest = members.at(-1);
   let attempt = 1;
   let parentId: string | null = null;
   if (latest) {
     if (!latest.decision) {
-      await upsertCandidate(toInput(weakness, latest.attempt, latest.parentId, latest.weaknessKey));
+      const refreshed = toInput(weakness, latest.attempt, latest.parentId, latest.weaknessKey);
+      await upsertCandidate({ ...refreshed, evidence: { ...refreshed.evidence, ...(options.evidence ?? {}) } });
       return;
     }
     // Decided: the weakness persisting is a new attempt only after the record has had time to show it —
@@ -230,7 +241,7 @@ async function register(weakness: Weakness, now: Date, report: ImprovementTickRe
   }
   const key = attempt === 1 ? weakness.key : `${weakness.key}#${attempt}`;
   const input = toInput(weakness, attempt, parentId, key);
-  const evidence: Record<string, unknown> = { ...input.evidence };
+  const evidence: Record<string, unknown> = { ...input.evidence, ...(options.evidence ?? {}) };
   // §87 (AUTO-20-1): a weakness that persists after an attempt that was kept without effect, or reverted,
   // is evidence that the method was inadequate, not that it needs running again. The judgment is
   // made from the earlier attempts' own recorded decisions and stored on the candidate, so the
@@ -278,7 +289,7 @@ async function register(weakness: Weakness, now: Date, report: ImprovementTickRe
   // has not yet been sent to Factory joins it rather than racing it.
   // A gap handed to a non-software owner carries its own rows (needs, openings) to that owner: folding it
   // into another candidate would leave those rows with nobody (S-0249).
-  const open = executionRouteOf(candidate)
+  const open = executionRouteOf(candidate) || options.noCombine
     ? []
     : (await listCandidates({ open: true })).filter(
         (c) => c.id !== candidate.id && !isRecordOnly(c) && c.ownerComponent === candidate.ownerComponent && !c.changeRequestId && !executionRouteOf(c) && c.createdAt <= candidate.createdAt,
@@ -306,6 +317,13 @@ function originationOf(weakness: Weakness): Record<string, unknown> | null {
  * recorded: a connector, a commercial interaction, information, a watched fact or a person.
  * Null for every gap the Factory or method research may own.
  */
+/** The experiment a register row belongs to (§111), if any: its parent row or one of its variants. */
+export function experimentMemberOf(candidate: Pick<ImprovementCandidate, 'evidence'>): { experimentId: string; role: 'PARENT' | 'VARIANT'; variantId: string | null; adopted: boolean } | null {
+  const value = candidate.evidence['experiment'] as { id?: unknown; role?: unknown; variantId?: unknown; adopted?: unknown } | undefined;
+  if (!value || typeof value.id !== 'string' || (value.role !== 'PARENT' && value.role !== 'VARIANT')) return null;
+  return { experimentId: value.id, role: value.role, variantId: typeof value.variantId === 'string' ? value.variantId : null, adopted: value.adopted === true };
+}
+
 export function executionRouteOf(candidate: Pick<ImprovementCandidate, 'evidence'>): {
   kind: 'INTEGRATION' | 'COMMERCIAL' | 'RESEARCH' | 'WATCH' | 'PERSON';
   owner: string;
@@ -629,9 +647,13 @@ function directiveAcceptance(candidate: ImprovementCandidate): { statement: stri
  * Register a weakness the operator diagnosed (§109) — the same register, the same family rules,
  * the same combination by owner as a detector's — and return its live candidate.
  */
-export async function registerDirected(weakness: Weakness, now = new Date()): Promise<{ candidate: ImprovementCandidate; created: boolean; report: ImprovementTickReport }> {
+export async function registerDirected(
+  weakness: Weakness,
+  now = new Date(),
+  options: RegisterOptions = {},
+): Promise<{ candidate: ImprovementCandidate; created: boolean; report: ImprovementTickReport }> {
   const report: ImprovementTickReport = { ran: true, reason: 'directed', detected: 1, opened: [], advanced: [], decided: [], alerts: [], errors: [] };
-  await register(weakness, now, report);
+  await register(weakness, now, report, options);
   const members = await family(weakness.key);
   const latest = members.at(-1);
   if (!latest) throw new Error('The directed candidate was not registered.');
@@ -731,6 +753,58 @@ export async function brainFactoryProject(): Promise<string | null> {
 
 /** Send the engineering to Factory: submit, approve on the standing order, start, and grant a LOW-risk release. */
 async function engineer(candidate: ImprovementCandidate, link: Linked, now: Date, existing: readonly ExistingMatch[]): Promise<string> {
+  return submitEngineering(candidate, link, now, existing, { release: true });
+}
+
+/**
+ * One variant of an experiment (§111) to Factory: the same objective, baseline, dependency
+ * check, approval on the standing order and campaign as `engineer` — and no release grant, so
+ * the variant ends at a pull request and the evaluator decides which one is released.
+ */
+export async function submitExperimentVariant(
+  candidateId: string,
+  preamble: string,
+  now = new Date(),
+): Promise<{ ok: boolean; did: string; changeRequestId: string | null; campaignId: string | null }> {
+  const candidate = await getCandidate(candidateId);
+  if (!candidate || candidate.decision) return { ok: false, did: 'no live register row', changeRequestId: null, campaignId: null };
+  if (candidate.changeRequestId) {
+    return { ok: Boolean(candidate.campaignId), did: 'already submitted', changeRequestId: candidate.changeRequestId, campaignId: candidate.campaignId };
+  }
+  const state = await improvementSwitch();
+  if (!state.enabled) return { ok: false, did: 'not submitted: the improvement order is switched off', changeRequestId: null, campaignId: null };
+  const link: Linked = { research: null, factory: null, archive: [] };
+  const did = await submitEngineering(candidate, link, now, [], { release: false, preamble });
+  const fresh = (await getCandidate(candidateId))!;
+  return { ok: Boolean(fresh.campaignId), did, changeRequestId: fresh.changeRequestId, campaignId: fresh.campaignId };
+}
+
+/**
+ * The LOW-risk release grant on the owner's standing improvement order, exactly as the loop
+ * gives it: only LOW risk, and only when a person last set the switch.
+ */
+export async function grantStandingRelease(changeRequestId: string, riskClass: string, executedByRef = 'improvement-loop'): Promise<{ granted: boolean; detail: string }> {
+  const person = await improvementPerson();
+  if (riskClass !== 'LOW' || !person?.setByPerson) return { granted: false, detail: `released by a person (risk ${riskClass})` };
+  const { authorizeAutomaticRelease } = await import('../factory/release/grant.ts');
+  await authorizeAutomaticRelease({
+    changeRequestId,
+    userId: person.userId,
+    channel: 'SHELL',
+    executedByRef,
+    reason: `Owner's standing improvement order (set by ${person.email}): Factory merges, deploys and verifies LOW-risk Brain improvements.`,
+    liveChecks: [{ kind: 'HTTP', path: '/healthz', expectStatus: 200 }],
+  });
+  return { granted: true, detail: 'automatic release granted (LOW risk)' };
+}
+
+async function submitEngineering(
+  candidate: ImprovementCandidate,
+  link: Linked,
+  now: Date,
+  existing: readonly ExistingMatch[],
+  options: { release: boolean; preamble?: string },
+): Promise<string> {
   const projectId = await brainFactoryProject();
   if (!projectId) throw new Error('No project holds the Brain repository grant for Factory.');
   const baseline = await readMetric(candidate.metric, new Date(now.getTime() - BASELINE_HOURS * HOUR).toISOString(), now.toISOString());
@@ -746,7 +820,8 @@ async function engineer(candidate: ImprovementCandidate, link: Linked, now: Date
   const verdict = checkDependencies(dependency);
   if (!verdict.complete) throw new Error(`The dependency check is incomplete: ${verdict.missing.join(' ')}`);
   const history = await family(candidate.weaknessKey.split('#')[0]!);
-  const spec = composeObjective(candidate, link, history, baseline, existing);
+  const composed = composeObjective(candidate, link, history, baseline, existing);
+  const spec = options.preamble ? { ...composed, objective: `${options.preamble} ${composed.objective}`.slice(0, 7900) } : composed;
   const { submitObjective } = await import('../factory/contract.ts');
   const submitted = await submitObjective({
     projectId,
@@ -773,20 +848,9 @@ async function engineer(candidate: ImprovementCandidate, link: Linked, now: Date
     return `submitted ${submitted.changeRequest.id}, not started: ${started.reason}`;
   }
   await patchCandidate(candidate.id, { campaignId: started.campaign.id });
-  let release = 'released by a person (risk ' + started.changeRequest.riskClass + ')';
-  const person = await improvementPerson();
-  if (started.changeRequest.riskClass === 'LOW' && person?.setByPerson) {
-    const { authorizeAutomaticRelease } = await import('../factory/release/grant.ts');
-    await authorizeAutomaticRelease({
-      changeRequestId: started.changeRequest.id,
-      userId: person.userId,
-      channel: 'SHELL',
-      executedByRef: 'improvement-loop',
-      reason: `Owner's standing improvement order (set by ${person.email}): Factory merges, deploys and verifies LOW-risk Brain improvements.`,
-      liveChecks: [{ kind: 'HTTP', path: '/healthz', expectStatus: 200 }],
-    });
-    release = 'automatic release granted (LOW risk)';
-  }
+  const release = options.release
+    ? (await grantStandingRelease(started.changeRequest.id, started.changeRequest.riskClass)).detail
+    : 'no release grant: an experiment variant ends at a pull request and the evaluator decides (§111)';
   await recordImprovementEvent({
     candidateId: candidate.id,
     kind: 'ENGINEERING_SUBMITTED',
@@ -1083,6 +1147,10 @@ async function advance(candidate: ImprovementCandidate, busyOwners: Set<string>,
   if (!last || last.detail['stage'] !== stage) {
     await recordImprovementEvent({ candidateId: candidate.id, kind: 'STAGE', detail: { stage, from: last?.detail['stage'] ?? null } });
   }
+  // An experiment's members are admitted and decided by the experiment (§111): its parent is never
+  // engineered as one objective, and a variant is released only once the evaluator adopted it.
+  const member = experimentMemberOf(candidate);
+  if (member && !member.adopted && stage !== 'CLOSED') return null;
   switch (stage as Stage) {
     case 'DIAGNOSE':
     case 'ENGINEER': {

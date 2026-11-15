@@ -387,6 +387,7 @@ const OPERATOR_ACTION_TOOLS = [
   'brain_operator_prioritize_engineering',
   'brain_operator_reattempt',
   'brain_operator_inventory',
+  'brain_operator_add_hidden_case',
 ];
 
 async function performRun(runId: string, config: OperatorConfig, models: OperatorModel[]): Promise<void> {

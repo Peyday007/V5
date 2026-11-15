@@ -30,6 +30,7 @@ import { briefOrder, operatorSnapshot } from '../services/operator/snapshot.ts';
 import { invalidInput, notFoundError } from './errors.ts';
 import { MUTATING, READ_ONLY, authorize, optionalString, requiredString, type McpTool } from './toolkit.ts';
 import type { Principal } from '../domain/types.ts';
+import { APPROACH_TYPES, type Approach, type ApproachType } from '../domain/evolution.ts';
 
 async function readableProjects(principal: Principal): Promise<string[]> {
   const all = (await listProjects()).map((project) => project.id);
@@ -341,7 +342,26 @@ const commissionTool: McpTool = {
       research_question: { type: 'string', description: 'Standalone research (intervention EVIDENCE): what to learn. With goal_id the goal\'s search is asked it (a paused goal too: research only); without, a method question about Brain. The diagnosis fields may then be omitted.' },
       decision_id: DECISION_ID_PROPERTY,
       goal_id: { type: 'string', description: 'The goal it holds back (wst_…).' },
-      deficiency: { type: 'string', enum: ['ECONOMIC_REASONING', 'PLANNING_ASSUMPTION', 'REPEATED_STRATEGIC_MISTAKE', 'RESOURCE_ALLOCATION', 'MISSING_CAPABILITY', 'BROKEN_INTEGRATION', 'INEFFICIENT_ALGORITHM', 'RECURRING_OPERATIONAL_FAILURE'] },
+      deficiency: { type: 'string', enum: ['ECONOMIC_REASONING', 'PLANNING_ASSUMPTION', 'REPEATED_STRATEGIC_MISTAKE', 'RESOURCE_ALLOCATION', 'MISSING_CAPABILITY', 'BROKEN_INTEGRATION', 'INEFFICIENT_ALGORITHM', 'RECURRING_OPERATIONAL_FAILURE', 'CAPABILITY_BELOW_TARGET'] },
+      approaches: {
+        type: 'array',
+        description:
+          'Two or more materially different ways to fix it (different approach types or mechanisms, not one idea twice). With a ' +
+          'registered suite, ENGINEERING opens an experiment: each approach is built to its own pull request, an evaluator scores ' +
+          'them against production, and only the winner is released.',
+        items: {
+          type: 'object',
+          properties: {
+            label: { type: 'string', description: 'A short name, unique in this experiment.' },
+            approach_type: { type: 'string', enum: [...APPROACH_TYPES] },
+            approach: { type: 'string', description: 'The mechanism: what this variant changes and why it should work (40+ characters).' },
+            owner_paths: { type: 'array', items: { type: 'string' }, description: 'Files this approach changes (its mutation scope).' },
+          },
+          required: ['label', 'approach_type', 'approach'],
+          additionalProperties: false,
+        },
+      },
+      suite: { type: 'string', description: 'The registered benchmark suite that judges the approaches (brain_operator_experiments lists them). A capability deficiency names its own.' },
       title: { type: 'string' },
       observed: { type: 'string', description: 'What is wrong and what it costs the goal, in production terms.' },
       evidence: { type: 'string', description: 'Row ids and verbatim reasons from Brain.' },
@@ -367,11 +387,13 @@ const commissionTool: McpTool = {
     if (!gate.ok) return { projectId: null, value: gate };
     const director = await import('../services/operator/director.ts');
     const runId = await currentRunId();
+    const approaches = approachesArg(args);
+    const suite = optionalString(args, 'suite');
     const id = optionalString(args, 'deficiency_id');
     if (id) {
       const found = (await director.readDeficiencies()).find((one) => director.readingId(one) === id);
       if (!found) return { projectId: null, value: { ok: false, reason: `no current deficiency ${id}: read brain_operator_deficiencies again (it may already be fixed)` } };
-      return { projectId: null, value: { ...(await director.commissionReading(found, runId)), decisionId: gate.decisionId, next: AFTER_ACTING } };
+      return { projectId: null, value: { ...(await director.commissionReading(found, runId, { approaches, suite })), decisionId: gate.decisionId, next: AFTER_ACTING } };
     }
     const question = optionalString(args, 'research_question');
     if (question !== null) {
@@ -408,8 +430,75 @@ const commissionTool: McpTool = {
       personOnly: optionalBoolean(args, 'person_only'),
       capacityIdle: optionalBoolean(args, 'capacity_idle'),
       runId,
+      approaches,
+      suite,
     });
     return { projectId: null, value: { ...result, decisionId: gate.decisionId, next: AFTER_ACTING } };
+  },
+};
+
+/** The `approaches` argument in Brain's shape; refused whole when one entry is malformed. */
+function approachesArg(args: Record<string, unknown>): Approach[] | null {
+  const value = args['approaches'];
+  if (value === undefined || value === null) return null;
+  if (!Array.isArray(value)) throw invalidInput('approaches must be an array.');
+  return value.map((raw, i) => {
+    const one = (raw ?? {}) as Record<string, unknown>;
+    const label = one['label'];
+    const type = one['approach_type'];
+    const text = one['approach'];
+    const paths = one['owner_paths'] ?? [];
+    if (typeof label !== 'string' || typeof type !== 'string' || typeof text !== 'string') throw invalidInput(`approaches[${i}] needs label, approach_type and approach as strings.`);
+    if (!Array.isArray(paths) || !paths.every((p) => typeof p === 'string')) throw invalidInput(`approaches[${i}].owner_paths must be an array of strings.`);
+    if (!(APPROACH_TYPES as readonly string[]).includes(type)) throw invalidInput(`approaches[${i}].approach_type must be one of ${APPROACH_TYPES.join(', ')}.`);
+    if (paths.some((p) => !/^[A-Za-z0-9_./*-]{1,200}$/.test(p) || p.includes('..') || p.startsWith('/'))) throw invalidInput(`approaches[${i}].owner_paths must be repository-relative paths.`);
+    return { label, approachType: type as ApproachType, approach: text, ownerPaths: paths as string[] };
+  });
+}
+
+const experimentsTool: McpTool = {
+  name: 'brain_operator_experiments',
+  title: 'Operator: experiments',
+  description:
+    'Every experiment Brain ran to compare alternative fixes (§111): its deficiency, suite and baseline, each variant ' +
+    '(approach type, pull request, state, score), the evaluator\'s results (metrics only — hidden cases are never shown), ' +
+    'the verdict and its rationale; which approach types have won per capability class (ranked, retired ones last); ' +
+    'the loop\'s yield (adoptions per experiment, hours from identification to adoption); and the registered suites.',
+  inputSchema: { type: 'object', properties: { limit: { type: 'number', description: 'How many experiments, newest first (default 20).' } }, additionalProperties: false },
+  annotations: { title: 'Operator: experiments', ...READ_ONLY },
+  run: async (args, { principal }) => {
+    requireOperator(principal);
+    const { readExperiments } = await import('../services/evolution/experiments.ts');
+    const limit = optionalNumber(args, 'limit');
+    return { projectId: null, value: await readExperiments({ limit: limit === null ? 20 : Math.min(100, Math.max(1, Math.trunc(limit))) }) };
+  },
+};
+
+const hiddenCaseTool: McpTool = {
+  name: 'brain_operator_add_hidden_case',
+  title: 'Operator: add a hidden benchmark case',
+  description:
+    'Add a case to a registered suite that only the evaluator reads: stored in Brain\'s database, never in the repository, ' +
+    'and never shown to an implementing agent, so a variant cannot be fitted to it. Use it when the public cases miss a kind ' +
+    'of failure you have seen in production. The case is the suite\'s own case shape, as JSON.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      suite: { type: 'string', description: 'A registered suite name (brain_operator_experiments lists them).' },
+      case: { type: 'object', description: "The case, in the suite's case shape (an id and its inputs and expected judgment)." },
+      reason: { type: 'string', description: 'What production failure this case represents.' },
+    },
+    required: ['suite', 'case'],
+    additionalProperties: false,
+  },
+  annotations: { title: 'Operator: add a hidden benchmark case', ...MUTATING, idempotentHint: false },
+  run: async (args, { principal }) => {
+    requireOperator(principal);
+    const { addHiddenCase } = await import('../services/evolution/experiments.ts');
+    const value = args['case'];
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw invalidInput('case must be an object.');
+    const runId = await currentRunId();
+    return { projectId: null, value: await addHiddenCase({ suite: requiredString(args, 'suite'), testCase: value as Record<string, unknown>, reason: optionalString(args, 'reason'), createdBy: `operator:${runId ?? 'run'}` }) };
   },
 };
 
@@ -925,4 +1014,6 @@ export const OPERATOR_TOOLS: readonly McpTool[] = [
   prioritizeTool,
   inventoryTool,
   reattemptTool,
+  experimentsTool,
+  hiddenCaseTool,
 ];

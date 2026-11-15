@@ -139,6 +139,9 @@ export const OPERATOR_TOOL_NAMES = [
   // Surge B: the findings register and the next attempt of a failed or stalled commission.
   'brain_operator_inventory',
   'brain_operator_reattempt',
+  // §111: experiments that compare alternative fixes, and the evaluator's hidden cases.
+  'brain_operator_experiments',
+  'brain_operator_add_hidden_case',
 ] as const;
 
 /** Hermes' own toolsets the operator keeps: its memory, its skills and a task list. No shell, files, browser or web. */
@@ -205,6 +208,11 @@ export function operatorBrief(input: { nowIso: string; runId: string; goals?: st
     '     one — engineering goes to Factory at once with a priority and a worker class; the rest is a model, strategy,',
     '     evidence, capacity or person remedy, not code. You may also describe your own diagnosis to the same tool.',
     '     An open inventory finding nobody owns is listed there as dfx_inv_<finding id>; commissioning it links the repair.',
+    '     For ENGINEERING, propose at least two materially different approaches with a registered suite —',
+    '     brain_operator_commission {deficiency_id, suite, approaches:[{label, approach_type, approach, owner_paths}]} — each',
+    '     is built to its own pull request and an evaluator you cannot see releases only the winner.',
+    '     brain_operator_experiments shows every verdict and which approach types have worked; brain_operator_add_hidden_case',
+    '     adds a case only the evaluator reads, when production shows a failure the public cases miss.',
     '   - research you need answered: brain_operator_commission {research_question, goal_id?} (intervention EVIDENCE).',
     "     With goal_id it asks that goal's own search — a paused goal too, research only, never outreach or spend;",
     '     without, it opens method research about Brain. A paused goal refuses CAPACITY.',
