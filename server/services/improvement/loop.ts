@@ -188,7 +188,6 @@ async function detectAll(now: Date): Promise<{ weaknesses: Weakness[]; originate
   return { ...cached(), errors: origination.errors };
 }
 
-/** The candidates of one weakness family (`KEY`, `KEY#2`, …), newest attempt last. */
 /**
  * Whether an attempt's decision says its method was tried and did not work (§87, invariant 16):
  * kept without effect, or reverted. HELD waited on a person or a Factory stop, REJECTED was
@@ -200,6 +199,7 @@ export function isFailedMethod(decision: string | null | undefined): boolean {
   return decision === 'KEPT_NO_EFFECT' || decision === 'REVERTED';
 }
 
+/** The candidates of one weakness family (`KEY`, `KEY#2`, …), newest attempt last. */
 async function family(baseKey: string): Promise<ImprovementCandidate[]> {
   return (await listCandidates()).filter((c) => c.weaknessKey === baseKey || c.weaknessKey.startsWith(`${baseKey}#`)).sort((a, b) => a.attempt - b.attempt);
 }
@@ -875,7 +875,7 @@ async function valueNextStep(
     // An attempt that was a hand-off to a non-software owner says nothing about how a Factory change or
     // research would fare; its failure is recorded as the route set aside (recordRouteSetAside).
     failedAttempts: earlier
-      .filter((m) => (m.decision === 'KEPT_NO_EFFECT' || m.decision === 'REVERTED') && !m.deliveredRef?.startsWith(OWNER_HANDOFF_PREFIX))
+      .filter((m) => isFailedMethod(m.decision) && !m.deliveredRef?.startsWith(OWNER_HANDOFF_PREFIX))
       .map((m) => ({ attempt: m.attempt, researched: Boolean(m.researchGoalId) })),
     history: await readRouteHistory(),
   });
@@ -1047,7 +1047,7 @@ export async function failedHandOffs(
 ): Promise<ImprovementCandidate[]> {
   const ref = ownerHandoffRef(route);
   return (await family(candidate.weaknessKey.split('#')[0]!)).filter(
-    (m) => m.attempt < candidate.attempt && m.deliveredRef === ref && (m.decision === 'KEPT_NO_EFFECT' || m.decision === 'REVERTED'),
+    (m) => m.attempt < candidate.attempt && m.deliveredRef === ref && isFailedMethod(m.decision),
   );
 }
 
