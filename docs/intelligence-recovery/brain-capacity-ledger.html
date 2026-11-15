@@ -1,0 +1,187 @@
+<title>Brain Capacity Ledger</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+/* Layout: one reading column; a summary strip, then one ledger table per resource class, then decisions. */
+:root{
+  --bg:#f6f7f5; --panel:#ffffff; --fg:#1b1f1d; --muted:#5d6762; --line:#d9ddd9;
+  --accent:#1f6f5c; --ok:#2b7a3d; --warn:#a46200; --bad:#b3261e; --unk:#6b6f8a;
+  --ok-bg:#e3f1e5; --warn-bg:#fbefd9; --bad-bg:#f8e1df; --unk-bg:#e9eaf3;
+  --display:"Space Grotesk",system-ui,sans-serif; --body:"IBM Plex Sans",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#121614; --panel:#1a201d; --fg:#e4e9e6; --muted:#9aa49f; --line:#2c3531;
+  --accent:#5fc3a6; --ok:#7fd08f; --warn:#f0b35a; --bad:#f28b82; --unk:#aab0d6;
+  --ok-bg:#1d3324; --warn-bg:#3a2c12; --bad-bg:#3d1f1c; --unk-bg:#262a3d; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#121614; --panel:#1a201d; --fg:#e4e9e6; --muted:#9aa49f; --line:#2c3531;
+  --accent:#5fc3a6; --ok:#7fd08f; --warn:#f0b35a; --bad:#f28b82; --unk:#aab0d6;
+  --ok-bg:#1d3324; --warn-bg:#3a2c12; --bad-bg:#3d1f1c; --unk-bg:#262a3d; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font:15px/1.55 var(--body)}
+.wrap{max-width:1080px;margin:0 auto;padding-block:28px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:28px}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0}
+h1{font-size:30px;letter-spacing:-.01em}
+h2{font-size:20px;margin-bottom:10px}
+h3{font-size:15px}
+p{margin:0;max-width:72ch}
+.meta{color:var(--muted);font-size:13px;font-family:var(--mono)}
+.eyebrow{font:500 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px;display:grid;gap:4px;min-width:0}
+.tile b{font:600 22px var(--display)}
+.tile.bad{border-left:4px solid var(--bad)} .tile.warn{border-left:4px solid var(--warn)} .tile.ok{border-left:4px solid var(--ok)}
+section{display:grid;gap:12px}
+.scroll{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font:500 11px var(--mono);letter-spacing:.05em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+td.n{text-align:right;font-family:var(--mono);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+.pill{display:inline-block;font:500 11px var(--mono);padding:2px 7px;border-radius:99px;white-space:nowrap}
+.p-bad{background:var(--bad-bg);color:var(--bad)} .p-warn{background:var(--warn-bg);color:var(--warn)} .p-ok{background:var(--ok-bg);color:var(--ok)} .p-unk{background:var(--unk-bg);color:var(--unk)}
+.bar{display:flex;height:10px;border-radius:3px;overflow:hidden;background:var(--line);min-width:120px}
+.bar span{display:block;height:100%}
+.s-up{background:var(--accent)} .s-down{background:var(--warn)} .s-norm{background:#4f7fbf} .s-idle{background:transparent} .s-un{background:var(--unk)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+ul{margin:0;padding-left:20px;display:grid;gap:6px}
+li{max-width:80ch}
+code{font-family:var(--mono);font-size:12.5px}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px;display:grid;gap:8px;min-width:0}
+</style>
+
+<div class="wrap">
+<header style="display:grid;gap:8px">
+  <span class="eyebrow">Brain resource audit · production · measured, not configured</span>
+  <h1>Brain Capacity Ledger</h1>
+  <p class="meta">Window: 2026-11-15 14:06Z → 22:16Z (8 h). Live samples 22:05Z, 22:07Z, 22:15Z. Revision 6fdb3ec serving (Deploy 1105 for f7c6bc2 in flight).</p>
+  <p>Every figure below comes from a production read: the connection report (runs 43767404016, 43768266235), the productivity report (43767409816), the RunPod report (43767406968), <code>brain_operator_capacity</code>, the Deploy history and the session list. Resource classes are separate pools and are never added together. When a figure was not measured, the table says <span class="pill p-unk">not measured</span>.</p>
+</header>
+
+<section>
+  <h2>Where the power went in the last 8 hours</h2>
+  <div class="strip">
+    <div class="tile bad"><span class="eyebrow">Model inference (free lane)</span><b>~0% productive</b><span>GPU stopped ~440 of 480 min (109 refused starts). brain-a: 0 of 104 items accepted.</span></div>
+    <div class="tile bad"><span class="eyebrow">Dispatch loop</span><b>~1 tick/min, should be 6</b><span>A report-only query (48–82 s per read) blocked the 10 s tick once a minute.</span></div>
+    <div class="tile warn"><span class="eyebrow">Database host</span><b>70% CPU</b><span>2 vCPU, 8.9 min between reads; that query is about 0.86 of a core of it.</span></div>
+    <div class="tile ok"><span class="eyebrow">App server CPU</span><b>~10% steady</b><span>2 dedicated vCPU; 40–60% only for 2–3 min after a restart.</span></div>
+    <div class="tile warn"><span class="eyebrow">Release pipeline</span><b>~70% busy, 50% failing</b><span>12 Deploys finished in 8 h, 6 succeeded; one at a time, about 28 min each.</span></div>
+    <div class="tile warn"><span class="eyebrow">Research output</span><b>2 claims/h</b><span>Previous 8 h: 25.1 claims/h. Plan evaluations fell from 13.3/h to 5.5/h.</span></div>
+  </div>
+</section>
+
+<section>
+  <h2>Dashboard, per resource class</h2>
+  <div class="legend"><span><i class="s-up"></i>Up curve (Capability Evolution Engine)</span><span><i class="s-down"></i>Down curve (reliability)</span><span><i class="s-norm"></i>Normal Brain operations</span><span><i class="s-un"></i>Unattributed</span><span><i style="background:var(--line)"></i>Idle / reserved</span></div>
+  <div class="scroll"><table>
+    <thead><tr><th>Resource</th><th>Total capacity</th><th class="n">Util.</th><th>Split</th><th class="n">Up</th><th class="n">Down</th><th class="n">Normal</th><th class="n">Idle / res.</th><th class="n">Unattr.</th><th>Current bottleneck</th><th>Source · samples</th></tr></thead>
+    <tbody>
+    <tr><td>App server CPU</td><td>2 dedicated vCPU (Fly performance-2x)</td><td class="n">10%</td>
+      <td><div class="bar"><span class="s-norm" style="width:7%"></span><span class="s-un" style="width:3%"></span></div></td>
+      <td class="n">—</td><td class="n">—</td><td class="n">≈7%</td><td class="n">90%</td><td class="n">≈3%</td>
+      <td><span class="pill p-ok">headroom</span> Event-loop stalls of 2–4 s from planning code (<code>planSet.canonical</code>, <code>quant/reconstruct</code>)</td>
+      <td class="meta">liveness readings, 7 processes, 53–79 s windows</td></tr>
+    <tr><td>App server memory</td><td>4 GB machine; V8 heap limit 2,608 MB</td><td class="n">29–53%</td>
+      <td><div class="bar"><span class="s-un" style="width:41%"></span></div></td>
+      <td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">47–71%</td><td class="n">all used</td>
+      <td><span class="pill p-ok">headroom</span> RSS 1,207–2,157 MB; peak just after restarts. GC 11–20% of on-CPU time.</td>
+      <td class="meta">7 readings</td></tr>
+    <tr><td>App DB connection pool</td><td>8 workload + 2 control</td><td class="n">25–75%</td>
+      <td><div class="bar"><span class="s-norm" style="width:25%"></span><span class="s-un" style="width:25%"></span></div></td>
+      <td class="n">—</td><td class="n">—</td><td class="n">≈11% (one stuck count)</td><td class="n">25–75%</td><td class="n">rest</td>
+      <td><span class="pill p-ok">no waits</span> 0 waiters; checkout p95 0–2 ms</td>
+      <td class="meta">7 readings · 2,000-statement p90 20–44 ms</td></tr>
+    <tr><td>Database host (Supabase)</td><td>2 vCPU, 2 GB RAM, max 90 connections</td><td class="n">70% CPU</td>
+      <td><div class="bar"><span class="s-norm" style="width:43%"></span><span class="s-un" style="width:27%"></span></div></td>
+      <td class="n">—</td><td class="n">—</td><td class="n">≈43% (the count query)</td><td class="n">30%</td><td class="n">≈27%</td>
+      <td><span class="pill p-warn">hot</span> memory 65% used, root disk 84% full, 24 of 90 connections, iowait 1.3%, steal 0.1%</td>
+      <td class="meta">2 host reads, 531 s apart; 1.37 TB temp spills since stats reset</td></tr>
+    <tr><td>GPU (RunPod)</td><td>1 pod, RTX 2000 Ada 16 GB, Qwen3-4B-AWQ, 2 slots, $0.19–0.24/h</td><td class="n">0%</td>
+      <td><div class="bar"></div></td>
+      <td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">—</td>
+      <td><span class="pill p-bad">unavailable 92%</span> pod stopped about 440 of 480 min; every start refused: "not enough free GPUs on the host machine"</td>
+      <td class="meta">pod supervision rows; 109 failed starts; 2 jobs</td></tr>
+    <tr><td>Free model lane (brain-a: OmniRoute free providers)</td><td>12 slots (controller target)</td><td class="n">0% productive</td>
+      <td><div class="bar"></div></td>
+      <td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">—</td><td class="n">—</td>
+      <td><span class="pill p-bad">failing</span> 0 of 104 items accepted; provider failures 97% (1 h), 91% (6 h); quota errors 0%</td>
+      <td class="meta">bin_events FREE_LANE_ITEM, 8 h</td></tr>
+    <tr><td>Claude Code sessions</td><td>Not metered; 2 running now</td><td class="n">2 working</td>
+      <td><div class="bar"><span class="s-up" style="width:100%"></span></div></td>
+      <td class="n">1 (Evolution Engine)</td><td class="n">0</td><td class="n">—</td><td class="n">—</td><td class="n">1 (this audit)</td>
+      <td><span class="pill p-unk">plan limit not measured</span> 9 other sessions are waiting on a person</td>
+      <td class="meta">session list, 22:06Z</td></tr>
+    <tr><td>Claude Routines (Brain's dispatched sessions)</td><td>12 target, 13 eligible surfaces</td><td class="n">0–8%</td>
+      <td><div class="bar"><span class="s-up" style="width:4%"></span></div></td>
+      <td class="n">0–1</td><td class="n">0</td><td class="n">0</td><td class="n">92–100%</td><td class="n">—</td>
+      <td><span class="pill p-warn">idle beside work</span> 1 executable item, 0 active. Research routines last checked in at 12:57Z.</td>
+      <td class="meta">3 capacity reads; ROUTINES table</td></tr>
+    <tr><td>Factory line</td><td>3 surfaces registered, 1 usable (2 quarantined: cannot authorize)</td><td class="n">0–100%</td>
+      <td><div class="bar"><span class="s-up" style="width:50%"></span></div></td>
+      <td class="n">all of its work</td><td class="n">0</td><td class="n">0</td><td class="n">—</td><td class="n">—</td>
+      <td><span class="pill p-warn">1 surface</span> 86 accepted / 90 assigned in 8 h (10.8/h); 22:15Z "1 executable, 1 free surface, nothing running: a fault"</td>
+      <td class="meta">WORK rows, 8 h; 3 capacity reads</td></tr>
+    <tr><td>Research slots (grant missions)</td><td>13 (sum of grant ceilings)</td><td class="n">100%</td>
+      <td><div class="bar"><span class="s-norm" style="width:100%"></span></div></td>
+      <td class="n">0</td><td class="n">0</td><td class="n">100%</td><td class="n">0</td><td class="n">—</td>
+      <td><span class="pill p-warn">gated</span> 538 waiting, 537 held by grant at-once ceilings; their fragments run on the free lane, which is down</td>
+      <td class="meta">3 capacity reads</td></tr>
+    <tr><td>Release pipeline (Deploy)</td><td>1 at a time, about 28 min each</td><td class="n">≈70%</td>
+      <td><div class="bar"><span class="s-up" style="width:58%"></span><span class="s-down" style="width:12%"></span></div></td>
+      <td class="n">≈58%</td><td class="n">≈12%</td><td class="n">—</td><td class="n">≈30%</td><td class="n">—</td>
+      <td><span class="pill p-warn">50% failed</span> 6 of 12 failed (tests over budget, pre-restart checks)</td>
+      <td class="meta">Deploy runs 1093–1104</td></tr>
+    </tbody></table></div>
+  <p class="meta">Up/down/normal splits on the server and database cannot be read from process identity: Brain is one Node process. The CPU profiles name planning code (normal operations), and the database split names the one query measured. Everything else is shown as unattributed rather than guessed.</p>
+</section>
+
+<section>
+  <h2>Allocation versus utilisation</h2>
+  <div class="two">
+    <div class="card"><h3>Engineering (active work)</h3><p>Of the active engineering in the window, about <b>90% was up curve</b>: the Evolution Engine session's 9 merged PRs, plus 3 Factory releases from the improvement loop. About <b>10% was down curve</b>: R-SLOW-RESTART (#947) and the verification repairs. Engineering capacity itself was mostly idle: Routines ran at 0–8%, and Factory had one usable surface.</p></div>
+    <div class="card"><h3>Inference</h3><p>All inference capacity is allocated to normal Brain operations: research for the $10K goal, and Hermes' calls. Measured productive use in the window was effectively <b>zero</b>, because both routes were unavailable (GPU host full; free providers failing).</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>Throughput, measured</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Measure</th><th class="n">Last 8 h</th><th class="n">8 h before</th><th>Source</th></tr></thead>
+    <tbody>
+      <tr><td>Merged PRs into production</td><td class="n">12 (1.5/h)</td><td class="n">—</td><td class="meta">git log origin/production</td></tr>
+      <tr><td>Deploys released, both verification passes</td><td class="n">6 of 12 (0.75/h)</td><td class="n">—</td><td class="meta">Deploy 1093–1104</td></tr>
+      <tr><td>Factory units accepted</td><td class="n">86 (10.8/h)</td><td class="n">—</td><td class="meta">connection report WORK</td></tr>
+      <tr><td>Research claims accepted</td><td class="n">2/h</td><td class="n">25.1/h</td><td class="meta">RunPod report SPEED</td></tr>
+      <tr><td>Plan evaluations</td><td class="n">5.5/h</td><td class="n">13.3/h</td><td class="meta">RunPod report SPEED</td></tr>
+      <tr><td>Free-lane jobs at once (average)</td><td class="n">0.3</td><td class="n">1.1</td><td class="meta">RunPod report SPEED</td></tr>
+      <tr><td>Hermes-directed improvement outcomes kept</td><td class="n">0 of 2 (6 h)</td><td class="n">0 of 4 (24 h)</td><td class="meta">productivity telemetry</td></tr>
+    </tbody></table></div>
+</section>
+
+<section id="actions">
+  <h2>What was changed</h2>
+  <ul>
+    <li><b>Dispatch unblocked</b> (PR #949): the per-minute coverage watch no longer runs the 48–82 s count only the admin terminal prints. Expected: dispatch ticks go from about 1/min to 6/min, the database host loses about 0.86 of a core, and Factory and Routine handoffs stop declining.</li>
+    <li><b>GPU moved off its full host</b> (Cheap lane run 43768013494, 22:24Z): new pod 8hkqnboqyv6kad, RTX 2000 Ada at $0.19/h, served after 595 s. All probes passed: auth, model, task, 4 in parallel, a ~10k-token prompt, tool calls, 64K context. It is connected as slot A and the stranded pod is retired. RunPod balance $26.95 (about 140 h at this rate).</li>
+    <li><b>Strandings now fix themselves</b> (the Evolution Engine's #950, merged in parallel): the server moves the pod after 3 host refusals while research waits. This audit's own workflow-level mover was dropped as a duplicate.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Would more money help?</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Option</th><th class="n">Extra $/h</th><th>Bottleneck it removes</th><th>Expected effect</th><th>Confidence</th><th>Releasable</th></tr></thead>
+    <tbody>
+      <tr><td>Move the GPU to a host with stock (done)</td><td class="n">0 (same pod price)</td><td>GPU unavailable</td><td>Restores the 25 claims/h class of research throughput</td><td><span class="pill p-ok">high</span></td><td>yes; auto-stops when idle</td></tr>
+      <tr><td>Fix dispatch starvation (done)</td><td class="n">0</td><td>Dispatch and database CPU</td><td>6× dispatch cadence; database CPU from 70% toward 25–35%</td><td><span class="pill p-ok">high</span></td><td>—</td></tr>
+      <tr><td>Second GPU pod</td><td class="n">+0.19–0.24</td><td>None now: before the outage the GPU averaged 1.18 of 2 slots busy</td><td>Little until research waits on inference</td><td><span class="pill p-warn">medium</span></td><td>yes</td></tr>
+      <tr><td>Stronger model on the same pod (8B AWQ)</td><td class="n">≈0</td><td>Claim quality (44.8% accepted over 6 h)</td><td>Unknown; needs a bench run on Brain's own tasks</td><td><span class="pill p-unk">low</span></td><td>yes</td></tr>
+      <tr><td>Larger app server</td><td class="n">not priced</td><td>None: about 10% steady CPU, at most 53% memory</td><td>None measurable</td><td><span class="pill p-ok">high</span></td><td>—</td></tr>
+      <tr><td>Larger database</td><td class="n">not priced</td><td>The database host was 70% busy, mostly from one query now removed; memory 65% used, disk 84% full</td><td>Re-read after the fix ships; buy only if CPU stays above 60% without that query</td><td><span class="pill p-warn">medium</span></td><td>plan change</td></tr>
+      <tr><td>More coding agents or Routines</td><td class="n">0 (subscription)</td><td>Routines sat at 0–8% beside work; Factory has 2 quarantined surfaces</td><td>None until dispatch and surface authorization are fixed</td><td><span class="pill p-ok">high</span></td><td>—</td></tr>
+    </tbody></table></div>
+  <p><b>Best value and fastest justified:</b> the two $0 fixes above. Neither touches the shared $100 ceiling. Spending more now would buy capacity beside pools that are already idle.</p>
+</section>
+</div>
