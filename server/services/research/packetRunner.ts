@@ -2888,7 +2888,9 @@ export function resetIdlePacketAttempts(): void {
  * would not create itself, so no gate, approval or budget check is touched.
  * When the advance changed nothing the packet is left as it was — an honest
  * idle reading — and when it moved the packet is stamped, so it drops out of
- * the selection and a second call advances zero.
+ * the selection and a second call advances zero. A packet *with* outstanding
+ * work whose worker is demonstrably moving it is stamped by
+ * `stampPacketsWorkedUnderLease` below, so the probe stops reading it as idle.
  */
 export async function advanceIdlePackets(
   limit: number,
@@ -2952,6 +2954,58 @@ export async function advanceIdlePackets(
     }
     if (after.updatedAt === before.updatedAt) await beat(row.id);
     out.push({ orchestrationId: row.id, from: before.status, to: result.status });
+  }
+  out.push(...(await stampPacketsWorkedUnderLease(live, nowMs, cutoff, limit)));
+  return out;
+}
+
+/**
+ * The '+work' half of "packet idle holding a slot" (RECOVERY.STALLS, attempt 3).
+ *
+ * The selection above deliberately skips a packet with outstanding work: the
+ * queue or a worker owns its movement. But a worker's movement is recorded on
+ * the work item — `heartbeat_at` and `lease_expires_at` — and never on the
+ * packet, so a fragment that takes longer than the stall window to research
+ * left its packet's `updated_at` ageing past the six hours `PACKETS_MOVING`
+ * reads, and the probe counted a packet being worked as idle ("+work").
+ *
+ * A packet is stamped here only when its rows prove it is moving: an item of it
+ * is LEASED under a lease that has not expired, and that lease was taken or
+ * heartbeated inside the stall window. That heartbeat *is* the packet's
+ * progress (the Temporal heartbeat-timeout reading), so recording it on the
+ * packet reports movement that happened rather than inventing any. A packet
+ * whose work shows no such progress — a QUEUED item nobody claimed, a lease
+ * nobody renewed — is left exactly as it is: it stays idle by its rows, and
+ * lease expiry and reclaim keep owning the item (invariants 24-26). Nothing is
+ * advanced, cancelled, failed, re-leased or concluded here, and the stamp is
+ * `beat`, the same write a live advance makes. Stamped packets drop out of the
+ * selection, so a second call stamps zero. Its own `limit`, oldest first, so it
+ * never competes with the advances above for a slot.
+ */
+async function stampPacketsWorkedUnderLease(
+  live: string[],
+  nowMs: number,
+  cutoff: string,
+  limit: number,
+): Promise<{ orchestrationId: string; from: string; to: string }[]> {
+  const now = new Date(nowMs).toISOString();
+  const rows = await getDb().all<{ id: string; status: string }>(
+    `SELECT o.id AS id, o.status AS status
+       FROM research_orchestrations o
+      WHERE (o.status IN (${live.map(() => '?').join(', ')}) OR (o.status = 'QUEUED' AND o.provider = ?))
+        AND o.updated_at < ?
+        AND EXISTS (SELECT 1 FROM work_items w
+                     WHERE w.orchestration_id = o.id AND w.state = 'LEASED'
+                       AND w.lease_expires_at > ?
+                       AND (w.heartbeat_at >= ? OR w.leased_at >= ?))
+      ORDER BY o.updated_at, o.id
+      LIMIT ?`,
+    [...live, 'WORKER', cutoff, now, cutoff, cutoff, Math.max(1, limit)],
+  );
+  const out: { orchestrationId: string; from: string; to: string }[] = [];
+  for (const row of rows) {
+    await beat(row.id);
+    out.push({ orchestrationId: row.id, from: row.status, to: row.status });
   }
   return out;
 }
