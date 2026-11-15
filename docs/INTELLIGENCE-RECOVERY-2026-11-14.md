@@ -342,3 +342,35 @@ NOT_STORED with where a computed population lives. Production:
 Still open:
 - **P-ROUNDS:** constructedGate shows researching=5 against a live cap of 3, so constructed (mx) rounds get no capacity; mx24h=0. An engineer is assigned.
 - **P-BACKFILL:** the back-fill read 99 rows, produced 0 candidates and rejected 99. In 77 of those, a payer written in prose was matched to the buyer map without being normalised first. An engineer is assigned.
+
+### Census after parts 8 and 9 (Goals run 43702805705, 10:11Z, revision b37b9ce)
+
+| measure | 08:10Z | 10:11Z |
+|---|---|---|
+| industries | 53 | 53 |
+| economic nodes (discovered) | 102 (28) | 116 (42) |
+| buyer populations | 21 | 35 |
+| construction facts (observed) | 19 (19) | 39 (39) |
+| sourced claims | 17,010 | 20,304 |
+| constructed arrangements (unique) | 667 | 893 (893) |
+| cross-industry transfers | 405 | 631 |
+| commercial positions | 14 | 14 |
+| evaluated / picked | 12 / 1 | 12 / 1 |
+| plan readings | 101 | 104 |
+| researched arrangements | 0 | 0 |
+
+**P-BACKFILL VERIFIED on production.**
+- The back-fill read 79 rows this time, down from 99. The 20 it no longer reads are the 20 new construction facts, all OBSERVED.
+- The 79 still rejected are:
+  - 39 where the payer names no buyer population. Most are honest: market reports, or an RFP re-listing. A few are phrasings that are still missed, such as "A homeowner (the payer)…" and "the client who posted the request, describing themselves as…", and an engineer is assigned to them.
+  - 24 whose claim states no positive USD figure.
+  - 16 where the opening names no payer.
+
+**P-ROUNDS PARTLY VERIFIED.**
+- liveConstructed went from 9 to 0: research parked on a person no longer holds the focus cap.
+- mx24h is still 0. The census ran 6 minutes after the restart, before any discovery pass. A second census after a pass decides it.
+
+**R-VERIFY (deploy verification, regression from part 8).**
+- What failed: Deploys 1088 and 1090 failed one check before the restart, "a real 50,000-evaluation run completes". The run was refused with a busy, retryable answer (429) within 251 ms.
+- Cause: goal plan reads share the process's single scenario slot. Part 8's back-fill files new evidence at boot, and new evidence starts plan reads, so the slot is often busy when the check runs.
+- Fix: PR #932. The verifier now waits up to 120 s for the slot. Every assertion is unchanged.
