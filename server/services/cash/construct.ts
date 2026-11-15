@@ -50,6 +50,8 @@ import { describesOwnAction } from '../research/actorScope.ts';
 import { composeArrangement, type Arrangement, type Levers, type Part } from '../quant/mechanism.ts';
 import { leverageOfYielding, type ArrangementLeverage, type LeverageConstraints } from '../quant/leverage.ts';
 import { reconstruct } from '../quant/reconstruct.ts';
+import { emptyLeverEvidence, leverEvidenceFrom, type LeverEvidence, type LeverPart } from '../quant/leverEvidence.ts';
+import { claimSources } from '../../repos/research.ts';
 import type { CashOpportunity, IndustryNode } from '../../domain/types.ts';
 import type { Estimate, Observation } from '../../domain/quant.ts';
 import { repeatBusinessObservations } from './deliverables/realization.ts';
@@ -319,6 +321,26 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
       source: one.sourceClaimId ? { kind: 'CLAIM', ref: one.sourceClaimId } : { kind: 'CASH_OPPORTUNITY', ref: one.id },
       measures: `money tied up on "${one.title.slice(0, 60)}"`,
     }));
+  /*
+   * What the project's rows say about each lever's own parts (S-0103): buyer
+   * prepayment willingness, refund obligations, when funds are usable, a
+   * supplier's capacity, failures and payment terms, AI labor's cost and
+   * throughput, and when buyers settle — read from the EVIDENCE card facts
+   * research filed and the openings' published payment terms, so an answer to
+   * the prepayment question construction asks changes the next reading.
+   */
+  const leverFacts = facts.filter((one) => one.kind === 'EVIDENCE');
+  const leverSources = await claimSources([
+    ...leverFacts.map((one) => one.claimId),
+    ...opportunities.map((one) => one.sourceClaimId),
+  ].filter((one): one is string => !!one));
+  const leverEvidence = leverEvidenceFrom({
+    opportunities: opportunities.filter((one) => allowed(one.title)),
+    facts: leverFacts,
+    sources: leverSources,
+    currency: input.currency,
+    periodDays: input.daysLeft,
+  });
   const capability: Primitive | null = input.delivers.length > 0 ? { name: input.delivers.join(', '), claimId: null, from: 'CAPABILITY', ref: 'deliverables' } : null;
   /*
    * The same inputs construct the same arrangements, so a plan re-read whose map, openings,
@@ -329,11 +351,11 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
    */
   const constraints = await leverageConstraints(input, limits);
   const memoKey = createHash('sha256')
-    .update(JSON.stringify({ day: now.toISOString().slice(0, 10), input: { ...input, now: undefined, limits: undefined }, limits, targets, exclusions, sectors: [...sectors.values()], precedent: [...precedentByBase.entries()].map(([k, o]) => [k, o.id]), priced, tiedUp, constraints, openings: opportunities.map((o) => [o.id, o.payer, o.mechanism, o.state, o.updatedAt]) }))
+    .update(JSON.stringify({ day: now.toISOString().slice(0, 10), input: { ...input, now: undefined, limits: undefined }, limits, targets, exclusions, sectors: [...sectors.values()], precedent: [...precedentByBase.entries()].map(([k, o]) => [k, o.id]), priced, tiedUp, leverEvidence, constraints, openings: opportunities.map((o) => [o.id, o.payer, o.mechanism, o.state, o.updatedAt]) }))
     .digest('hex');
   const held = constructionMemo.get(memoKey);
   if (held && Date.now() - held.at < CONSTRUCTION_MEMO_MS) return structuredClone(held.result);
-  const job: ConstructionJob = { sectors: [...sectors.values()], opportunities, precedent: [...precedentByBase.entries()], capability, priced, tiedUp, input, limits, targets, exclusions, now, constraints };
+  const job: ConstructionJob = { sectors: [...sectors.values()], opportunities, precedent: [...precedentByBase.entries()], capability, priced, tiedUp, leverEvidence, input, limits, targets, exclusions, now, constraints };
   /*
    * Composing is synchronous quantitative work — several reconstructions per
    * design, up to `MAX_CONSTRUCTIONS` designs. Run in one stretch it held
@@ -400,6 +422,8 @@ export interface ConstructionJob {
   capability: Primitive | null;
   priced: Observation[];
   tiedUp: Observation[];
+  /** What the rows state about each lever's own parts; absent reads as nothing stated. */
+  leverEvidence?: LeverEvidence;
   input: ConstructionInput;
   limits: GoalLimits;
   targets: EconomicProperty[];
@@ -418,7 +442,7 @@ export async function composeConstruction(job: ConstructionJob, yieldEveryMs: nu
   const { opportunities, capability, priced, tiedUp, input, limits, targets, exclusions, now } = job;
   const precedentByBase = new Map(job.precedent);
   const designs = allDesigns(STRUCTURE_KEYS);
-  const ctx = { priced, tiedUp, input, limits, targets, exclusions, now };
+  const ctx = { priced, tiedUp, leverEvidence: job.leverEvidence ?? emptyLeverEvidence(), input, limits, targets, exclusions, now };
   const out: ConstructedArrangement[] = [];
   const levered = new Map<ConstructedArrangement, Arrangement>();
   const keep = (built: { arrangement: ConstructedArrangement; levered: Arrangement }) => {
@@ -526,21 +550,53 @@ async function traceLeverageOnTop(
  * own work — selling, coordinating, and producing where it fulfils — is AI
  * labor whoever else delivers.
  */
-export function designLevers(design: Design, fulfiller: 'BRAIN' | 'SUPPLIER'): Levers {
+export function designLevers(
+  design: Design,
+  fulfiller: 'BRAIN' | 'SUPPLIER',
+  evidence: (part: LeverPart) => Pick<Part, 'context' | 'material' | 'observations'> = () => ({}),
+): Levers {
   const share: Part = { min: 0, max: 1 };
   const count = (min: number, max: number): Part => ({ min, max });
   const money: Part = { min: 0, max: 100_000 };
+  // A part the rows can speak to: its bounds, plus whatever they state.
+  const read = (part: LeverPart, bounds: Part): Part => ({ ...bounds, ...evidence(part) });
   const levers: Levers = {
-    settlementDays: count(0, 365),
-    aiLabor: { costPerTransaction: money, throughput: count(0, 10_000_000) },
+    settlementDays: read('settlementDays', count(0, 365)),
+    aiLabor: { costPerTransaction: read('aiLabor.costPerTransaction', money), throughput: read('aiLabor.throughput', count(0, 10_000_000)) },
     channel: { share, fee: money },
     marketing: { reachUplift: count(0, 10), acquisitionCost: money, daysToAcquire: count(1, 365) },
     financing: { rate: share, termDays: count(0, 365), advanceShare: share },
     sharedInfrastructure: { costPerTransaction: money },
   };
-  if (fulfiller === 'SUPPLIER') levers.fulfilment = { capacity: count(0, 10_000_000), failureRate: share, paymentDays: count(0, 365) };
-  if (design.funding !== 'ON_DELIVERY') levers.prepayment = { willingness: share, refundShare: share, usableDays: count(0, 365) };
+  if (fulfiller === 'SUPPLIER') {
+    levers.fulfilment = {
+      capacity: read('fulfilment.capacity', count(0, 10_000_000)),
+      failureRate: read('fulfilment.failureRate', share),
+      paymentDays: read('fulfilment.paymentDays', count(0, 365)),
+    };
+  }
+  if (design.funding !== 'ON_DELIVERY') {
+    levers.prepayment = {
+      willingness: read('prepayment.willingness', share),
+      refundShare: read('prepayment.refundShare', share),
+      usableDays: read('prepayment.usableDays', count(0, 365)),
+    };
+  }
   return levers;
+}
+
+/**
+ * What the rows state about each lever part, for one buyer population: the
+ * part's population is the payer, so that payer's own observations are
+ * direct and every other payer's are broad — bounds, never a probability.
+ */
+export function leverPartsFor(evidence: LeverEvidence, payer: string): (part: LeverPart) => Pick<Part, 'context' | 'material' | 'observations'> {
+  const who = norm(payer);
+  return (part) => ({
+    context: { payer: who },
+    material: [],
+    observations: evidence[part].map((one) => ({ ...one, broad: one.context['payer'] !== who })),
+  });
 }
 
 /** How long an unchanged construction is reused, and how many distinct ones are held. */
@@ -563,6 +619,7 @@ function reverseArrangements(ctx: {
   capability: Primitive | null;
   priced: Observation[];
   tiedUp: Observation[];
+  leverEvidence: LeverEvidence;
   input: ConstructionInput;
   limits: GoalLimits;
   targets: EconomicProperty[];
@@ -664,6 +721,7 @@ function compose(args: {
   related: CashOpportunity[];
   priced: Observation[];
   tiedUp: Observation[];
+  leverEvidence: LeverEvidence;
   input: ConstructionInput;
   limits: GoalLimits;
   targets: EconomicProperty[];
@@ -715,10 +773,18 @@ function compose(args: {
    * and their evidence are construction's own — the value's published prices,
    * what supply is paid, a shared run's fixed cost — so the leverage trace
    * reads what construction established and nothing it did not. Each lever's
-   * own parts start as bounds: questions, never assumptions.
+   * own parts start as bounds and take what the rows state about them: the
+   * arrangement's own payer is direct evidence, any other payer only bounds,
+   * as for published prices. What nothing states stays a question.
    */
   const facts = designFacts(design);
-  const levers = designLevers(design, facts.fulfiller);
+  /*
+   * A lever part asks about these buyers — what share of them prepay, what
+   * their refunds and settlement terms are — so its population is the payer,
+   * not this new arrangement: the payer's own published terms are direct
+   * evidence about it, and any other payer's are broad, bounds only.
+   */
+  const levers = designLevers(design, facts.fulfiller, leverPartsFor(args.leverEvidence, demand.name));
   const levered: Arrangement = { ...base, levers };
   let estimates: Record<string, Estimate> = {};
   try {
