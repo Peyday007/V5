@@ -573,7 +573,7 @@ export async function openDiscovery(input: {
   const out: OpenedDiscovery[] = [];
   const limit = Math.max(1, input.limit ?? 1);
   let frame: ExecutionFrame | null | undefined;
-  for (const bucket of orderForFamily(fairOrder([...SEARCH_BUCKETS, ...(triggersEnabled() ? TRIGGER_BUCKETS : [])], rounds), now)) {
+  for (const bucket of orderForFamily([...SEARCH_BUCKETS, ...(triggersEnabled() ? TRIGGER_BUCKETS : [])], rounds, now, fairOrder)) {
     if (out.length >= limit) break;
     const history = byBucket.get(bucket.id) ?? [];
     const next = nextRoundFor(history, now);

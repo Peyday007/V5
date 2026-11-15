@@ -69,26 +69,38 @@ describe('intermediation entry buckets', () => {
   });
 
   it('orders intermediation first while the family is current, and reverts to the fair order when it lapses', () => {
+    type Round = Parameters<typeof fairOrder>[1][number];
     // A history where intermediation mechanisms were asked a lot, so fair order puts others first.
     const rounds = INTERMEDIATION_BUCKETS.flatMap((one) =>
-      [1, 2, 3].map((round) => ({ bucketId: one.id, mechanism: one.mechanism, round }) as unknown as Parameters<typeof fairOrder>[1][number]),
+      [1, 2, 3].map((round) => ({ bucketId: one.id, mechanism: one.mechanism, round }) as unknown as Round),
     );
     const fair = fairOrder(SEARCH_BUCKETS, rounds);
     expect(isIntermediationBucket(fair[0]!)).toBe(false);
 
-    const current = orderForFamily(fair, '2026-12-01T00:00:00Z');
+    const current = orderForFamily(SEARCH_BUCKETS, rounds, '2026-12-01T00:00:00Z', fairOrder);
     const n = INTERMEDIATION_BUCKETS.length;
     expect(current.slice(0, n).every(isIntermediationBucket)).toBe(true);
     expect(current.slice(n).some(isIntermediationBucket)).toBe(false);
-    // Relative order inside each part is the fair order's.
-    expect(current.slice(0, n).map((one) => one.id)).toEqual(fair.filter(isIntermediationBucket).map((one) => one.id));
+    // The ordinary buckets keep exactly the turns they would have had without the family.
+    const ordinary = SEARCH_BUCKETS.filter((one) => !isIntermediationBucket(one));
+    expect(current.slice(n).map((one) => one.id)).toEqual(fairOrder(ordinary, []).map((one) => one.id));
 
-    const lapsed = orderForFamily(fair, '2027-03-01T00:00:00Z');
+    const lapsed = orderForFamily(SEARCH_BUCKETS, rounds, '2027-03-01T00:00:00Z', fairOrder);
     expect(lapsed.map((one) => one.id)).toEqual(fair.map((one) => one.id));
     expect(lapsed.filter(isIntermediationBucket)).toHaveLength(n);
 
     // Renewing the declaration makes it current again.
     const renewed = renewFamily(INTERMEDIATION_FAMILY, '2027-06-01');
-    expect(isIntermediationBucket(orderForFamily(fair, '2027-03-01T00:00:00Z', renewed)[0]!)).toBe(true);
+    expect(isIntermediationBucket(orderForFamily(SEARCH_BUCKETS, rounds, '2027-03-01T00:00:00Z', fairOrder, renewed)[0]!)).toBe(true);
+  });
+
+  it('every question is a question, and none reads as an action Brain takes', async () => {
+    const { APPROVAL_ENVELOPES } = await import('../server/services/research/approvalEnvelope.ts');
+    const { describesOwnAction } = await import('../server/services/research/actorScope.ts');
+    const cash = Object.values(APPROVAL_ENVELOPES).filter((one) => one.id.startsWith('RUSSELL_CASH_'));
+    for (const bucket of INTERMEDIATION_BUCKETS) {
+      expect(bucket.question.trimEnd().endsWith('?')).toBe(true);
+      for (const envelope of cash) expect(describesOwnAction(bucket.question, envelope.forbiddenActions), `${bucket.id}/${envelope.id}`).toBe(false);
+    }
   });
 });

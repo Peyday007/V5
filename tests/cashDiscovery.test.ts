@@ -1101,12 +1101,17 @@ describe('plays: a kind of business that pays for something Brain can make', () 
     const { DELIVERABLE_KINDS } = await import('../server/services/cash/deliverables/spec.ts');
     const { QUICK_PLAY_BUCKETS } = await import('../server/services/cash/discovery.ts');
     expect(PLAY_BUCKETS.map((one) => one.deliverable)).toEqual([...DELIVERABLE_KINDS]);
-    // The owner (2026-10-22): quick, short-window plays come first, then plays.
-    expect(SEARCH_BUCKETS.slice(0, QUICK_PLAY_BUCKETS.length).map((one) => one.id)).toEqual(
+    // RES-15-4: commercial intermediation's entry points lead while that family is a
+    // current high-priority one; then the owner's order (2026-10-22): quick,
+    // short-window plays, then plays.
+    const { INTERMEDIATION_BUCKETS } = await import('../server/services/cash/intermediationBuckets.ts');
+    const lead = INTERMEDIATION_BUCKETS.length;
+    expect(SEARCH_BUCKETS.slice(0, lead).map((one) => one.id)).toEqual(INTERMEDIATION_BUCKETS.map((one) => one.id));
+    expect(SEARCH_BUCKETS.slice(lead, lead + QUICK_PLAY_BUCKETS.length).map((one) => one.id)).toEqual(
       QUICK_PLAY_BUCKETS.map((one) => one.id),
     );
     expect(
-      SEARCH_BUCKETS.slice(QUICK_PLAY_BUCKETS.length, QUICK_PLAY_BUCKETS.length + PLAY_BUCKETS.length).map(
+      SEARCH_BUCKETS.slice(lead + QUICK_PLAY_BUCKETS.length, lead + QUICK_PLAY_BUCKETS.length + PLAY_BUCKETS.length).map(
         (one) => one.id,
       ),
     ).toEqual(PLAY_BUCKETS.map((one) => one.id));
@@ -1121,7 +1126,8 @@ describe('plays: a kind of business that pays for something Brain can make', () 
   it('an opening from a play round requires producing that deliverable, which Brain proves it can', async () => {
     await activated();
     const { QUICK_PLAY_BUCKETS } = await import('../server/services/cash/discovery.ts');
-    const opened = await openDiscovery({ projectId, limit: QUICK_PLAY_BUCKETS.length + 1 });
+    const { INTERMEDIATION_BUCKETS } = await import('../server/services/cash/intermediationBuckets.ts');
+    const opened = await openDiscovery({ projectId, limit: INTERMEDIATION_BUCKETS.length + QUICK_PLAY_BUCKETS.length + 1 });
     const first = opened.find((one) => PLAY_BUCKETS.some((play) => play.id === one.bucketId));
     const bucket = PLAY_BUCKETS.find((one) => one.id === first!.bucketId)!;
     expect(bucket).toBeDefined();
@@ -1197,10 +1203,13 @@ describe('the wider economy (2026-10-28)', () => {
     const productized = fresh.filter((one) => one.mechanism === 'PRODUCTIZED_SERVICE');
     expect(productized).toHaveLength(1);
 
-    // On a real sprint, one round a tick: a week of ticks reaches the wider buckets.
+    // On a real sprint, one round a tick: a week of ticks reaches the wider buckets,
+    // once the intermediation family's entry points (RES-15-4), which lead while it is
+    // current, have each been asked.
+    const { INTERMEDIATION_BUCKETS } = await import('../server/services/cash/intermediationBuckets.ts');
     await activated();
     const opened: string[] = [];
-    for (let pass = 0; pass < 14; pass += 1) {
+    for (let pass = 0; pass < 14 + INTERMEDIATION_BUCKETS.length; pass += 1) {
       for (const one of await openDiscovery({ projectId })) opened.push(one.bucketId);
     }
     expect(opened.filter((id) => id.startsWith('play-')).length).toBeLessThanOrEqual(2);

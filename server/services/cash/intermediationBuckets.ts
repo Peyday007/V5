@@ -20,7 +20,6 @@ import type { SearchBucket } from './discovery.ts';
 import type { CashMechanism } from '../../domain/types.ts';
 import {
   ENTRY_POINTS,
-  EVIDENCE_FIELDS,
   INTERMEDIATION_FAMILY,
   POSITIONS,
   familyCurrent,
@@ -58,15 +57,22 @@ const EXAMPLES_SENTENCE =
   `Look in any industry; ${INTERMEDIATION_FAMILY.examples.join(', ')} are examples of where this ` +
   'happens, not limits on where to look.';
 
-/** The S-0148 position comparison and the S-0150 per-position evidence, asked of every bucket. */
+/**
+ * The S-0148 position comparison and the S-0150 per-position evidence, asked of every
+ * bucket. Phrased as a question so it reads as subject matter, never as an action Brain
+ * takes (`describesOwnAction`); it asks for every field `EVIDENCE_FIELDS` names.
+ */
 const POSITION_EVIDENCE_SENTENCE =
-  `For each transaction found, compare the lawful positions it could be held from — ${POSITION_LABELS}, ` +
-  'or any other position the evidence shows — and at the position that fits best, name: ' +
-  Object.values(EVIDENCE_FIELDS).join('; ') +
-  ', and the contracts, rights, liabilities, restrictions and counterparty expectations at exactly ' +
-  'that position. Where a source establishes only a public asking price or a total market size, ' +
-  'say so, and name separately what is still unknown about reaching that buyer and about whether ' +
-  'they convert.';
+  `For each transaction found, which lawful position could it be held from — ${POSITION_LABELS}, ` +
+  'or any other position the evidence shows — and, at the position that fits best, what are: the ' +
+  'exact payer and the reachable channel to them; the observed demand (a dated request, inquiry or ' +
+  'repeat order, not an estimate); the contractual or proposed offer; the supplier or capacity ' +
+  'source; the price and the spread kept; acquisition costs and throughput; fulfilment obligations; ' +
+  'margin and timing to cash; the buyer-funded cash structure where defensible; capital exposure; ' +
+  'transaction rights and limits; the contracts, liabilities, restrictions and counterparty ' +
+  'expectations at exactly that position; the uncertainties; and the fastest meaningful next ' +
+  'action — and where a source establishes only a public asking price or a total market size, ' +
+  'what is still unknown about reaching that buyer and about whether they convert?';
 
 interface Spec {
   key: string;
@@ -89,8 +95,8 @@ const SPECS: readonly Spec[] = [
     mechanism: 'EXPLICIT_PAID_REQUEST',
     title: 'Published purchase requests a third party could fill by arranging supply',
     ask:
-      'Which buyers — public bodies, institutions or companies — have published a request to purchase ' +
-      'goods or services (a tender, RFQ, bid notice or buying-group call) that the buyer will award to ' +
+      'Which buyers — public bodies, institutions or companies — have published a tender, RFQ, bid ' +
+      'notice or buying-group call for goods or services that the buyer will award to ' +
       'whoever arranges qualifying supply, rather than only to the maker?',
   },
   {
@@ -206,8 +212,8 @@ const SPECS: readonly Spec[] = [
     mechanism: 'CAPABILITY_ARBITRAGE',
     title: 'The same supply sold at two published prices to different buyers',
     ask:
-      'Where does one supplier, or one class of supplier, publish a trade, bulk or off-peak price that ' +
-      'is materially below what consumers are published as paying for the same thing, and what does ' +
+      'Where does one supplier, or one class of supplier, list a trade, bulk or off-peak price that ' +
+      'is materially below what consumers are shown paying for the same thing, and what does ' +
       'the source say about who may buy at the lower price and pass it on?',
   },
   {
@@ -344,15 +350,24 @@ export function forbiddenDefaultsIn(question: string): string[] {
 // ── ordering ─────────────────────────────────────────────────────────────────
 
 /**
- * Pure: put intermediation buckets first while the family declaration is current, keeping
- * the relative order `ordered` already gave each part. When it lapses, `ordered` is
- * returned as it is, so the buckets keep their place in the ordinary fair order.
+ * Pure: the order discovery opens buckets in. While the family declaration is current the
+ * intermediation buckets come first, and each part is fair-ordered against its own rounds
+ * only — so promoting the family neither changes the ordinary buckets' turns nor lets the
+ * intermediation rounds use up their mechanisms' share. When it lapses the whole set is
+ * fair-ordered together, and the buckets keep their place in the ordinary order.
  */
-export function orderForFamily<T extends Pick<SearchBucket, 'id'>>(
-  ordered: readonly T[],
+export function orderForFamily<B extends Pick<SearchBucket, 'id'>, R extends { bucketId: string }>(
+  buckets: readonly B[],
+  rounds: readonly R[],
   now: Date | string,
+  order: (buckets: readonly B[], rounds: readonly R[]) => B[],
   declaration: FamilyDeclaration = INTERMEDIATION_FAMILY,
-): T[] {
-  if (!familyCurrent(declaration, now)) return [...ordered];
-  return [...ordered.filter(isIntermediationBucket), ...ordered.filter((one) => !isIntermediationBucket(one))];
+): B[] {
+  if (!familyCurrent(declaration, now)) return order(buckets, rounds);
+  const mine = (one: { id: string }): boolean => isIntermediationBucket(one);
+  const ofMine = (round: R): boolean => round.bucketId.startsWith(INTERMEDIATION_BUCKET_PREFIX);
+  return [
+    ...order(buckets.filter(mine), rounds.filter(ofMine)),
+    ...order(buckets.filter((one) => !mine(one)), rounds.filter((round) => !ofMine(round))),
+  ];
 }
