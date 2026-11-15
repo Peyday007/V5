@@ -357,11 +357,23 @@ export interface ArrangementLeverage {
 /** Trace, enforce and verify one arrangement's leverage, in one pass. */
 export function leverageOf(a: Arrangement, constraints: LeverageConstraints, options: TraceOptions = {}): ArrangementLeverage {
   const now = options.now ?? new Date();
-  const trace = traceLeverage(a, constraints, { now, maxCombinations: options.maxCombinations ?? 16 });
+  // Every combination of every lever the arrangement carries: 2^7 = 128 at most.
+  const trace = traceLeverage(a, constraints, { now, maxCombinations: options.maxCombinations ?? 1 << LEVER_KEYS.length });
   const prepayment = verifyPrepayment(a, now);
   const full = trace.combinations.find((c) => c.levers.length === trace.levers.length) ?? null;
+  /*
+   * Refused only when evidence shows no way of running it: some combination's
+   * cash exposure is established, and every established one lets a real limit
+   * allow less than one transaction. A combination whose exposure nobody
+   * established refuses nothing and permits nothing (invariant 39), so a lever
+   * with unstated costs neither rescues the arrangement nor sinks it.
+   */
+  const judged = trace.combinations.filter((c) => c.cashExposure.established && c.constraint.allowed !== null);
   let refused: string | null = null;
-  if (full && full.cashExposure.established && full.constraint.allowed !== null && full.constraint.allowed < 1) refused = `${full.constraint.binding} allows ${full.constraint.allowed.toFixed(2)} transaction(s): ${full.constraint.detail}`;
+  if (judged.length > 0 && judged.every((c) => c.constraint.allowed! < 1)) {
+    const best = judged.reduce((x, y) => (y.constraint.allowed! > x.constraint.allowed! || (y.constraint.allowed === x.constraint.allowed && y.levers.length > x.levers.length) ? y : x));
+    refused = `${best.constraint.binding} allows ${best.constraint.allowed!.toFixed(2)} transaction(s) on the best-fitting evidenced combination (${best.levers.join('+') || 'no lever'}): ${best.constraint.detail}`;
+  }
   const unknownDims = full ? DIMENSIONS.filter((d) => !full.dimensions[d].established) : [];
   const tasks = [
     ...prepayment.flatMap((v) => v.tasks),

@@ -153,8 +153,12 @@ export const MAX_CONSTRUCTIONS = 400;
  * Tracing resolves every lever combination, several reconstructions each, so
  * it is paid where a plan reads and research asks — the top of the ranking —
  * rather than on all `MAX_CONSTRUCTIONS`, which was already the hot path.
+ * Every design composes all the levers it can use (`designLevers`), up to
+ * 2^7 = 128 combinations each, so the top four are traced in full rather than
+ * twelve in part: measured on the wired test, twelve full traces were about
+ * five times the construction pass, four about twice.
  */
-export const LEVERAGE_TRACED = 12;
+export const LEVERAGE_TRACED = 4;
 /** Reverse arrangements composed per pass: one per design that best fits the goal. */
 export const MAX_REVERSE = 4;
 /** Longest stretch construction holds the event loop before handing it back (2026-11-05 11.6 s stalls). */
@@ -505,6 +509,40 @@ async function traceLeverageOnTop(
   return changed ? rank(ranked, limits, targets) : ranked;
 }
 
+/**
+ * The commercial levers a constructed arrangement may combine (S-0103): every
+ * one of the seven a candidate "may simultaneously use", composed together on
+ * every design, so the trace compares each combination — AI labor beside a
+ * supplier, an existing channel, marketing reach, financing, shared
+ * infrastructure and, where the design takes money early, prepayment —
+ * against the same combination without it.
+ *
+ * None is a category and none is assumed to help: each lever's parts are
+ * bounds, a question rather than a reading (invariant 39), so a lever moves a
+ * traced dimension only once evidence states its parts. Supplier fulfilment
+ * is composed only where a supplier fulfils, because a design Brain fulfils
+ * itself has no supplier to pay; prepayment only where the design's funding
+ * takes money before delivery. AI labor is composed on every design: Brain's
+ * own work — selling, coordinating, and producing where it fulfils — is AI
+ * labor whoever else delivers.
+ */
+export function designLevers(design: Design, fulfiller: 'BRAIN' | 'SUPPLIER'): Levers {
+  const share: Part = { min: 0, max: 1 };
+  const count = (min: number, max: number): Part => ({ min, max });
+  const money: Part = { min: 0, max: 100_000 };
+  const levers: Levers = {
+    settlementDays: count(0, 365),
+    aiLabor: { costPerTransaction: money, throughput: count(0, 10_000_000) },
+    channel: { share, fee: money },
+    marketing: { reachUplift: count(0, 10), acquisitionCost: money, daysToAcquire: count(1, 365) },
+    financing: { rate: share, termDays: count(0, 365), advanceShare: share },
+    sharedInfrastructure: { costPerTransaction: money },
+  };
+  if (fulfiller === 'SUPPLIER') levers.fulfilment = { capacity: count(0, 10_000_000), failureRate: share, paymentDays: count(0, 365) };
+  if (design.funding !== 'ON_DELIVERY') levers.prepayment = { willingness: share, refundShare: share, usableDays: count(0, 365) };
+  return levers;
+}
+
 /** How long an unchanged construction is reused, and how many distinct ones are held. */
 export const CONSTRUCTION_MEMO_MS = 30 * 60_000;
 const CONSTRUCTION_MEMO_MAX = 8;
@@ -680,10 +718,7 @@ function compose(args: {
    * own parts start as bounds: questions, never assumptions.
    */
   const facts = designFacts(design);
-  const levers: Levers = { settlementDays: unknownCount(0, 365) };
-  if (facts.fulfiller === 'SUPPLIER') levers.fulfilment = { capacity: unknownCount(0, 10_000_000), failureRate: unknownShare, paymentDays: unknownCount(0, 365) };
-  else levers.aiLabor = { costPerTransaction: { min: 0, max: 100_000 }, throughput: unknownCount(0, 10_000_000) };
-  if (design.funding !== 'ON_DELIVERY') levers.prepayment = { willingness: unknownShare, refundShare: unknownShare, usableDays: unknownCount(0, 365) };
+  const levers = designLevers(design, facts.fulfiller);
   const levered: Arrangement = { ...base, levers };
   let estimates: Record<string, Estimate> = {};
   try {
