@@ -176,6 +176,34 @@ describe('diagnoseThroughput / recordStageCapacity (stageCapacity.ts)', () => {
     expect(diagnosis.primary).toMatchObject({ route: GPU, cause: 'credentials' });
   });
 
+  it('lets failures decay out of the recent window, so 100 old failures do not name a route that is answering (production 2026-11-15)', async () => {
+    // Five hours ago: an outage, 100 provider failures on brain-a.
+    for (let i = 0; i < 100; i += 1) await item(t(i % 30), 'RELEASED_TRANSIENT', `model ${FREE}: model call failed: cheap lane HTTP 503`);
+    // The last half hour: mostly accepted, with an intermittent 503 as the newest row.
+    for (let m = 300; m < 328; m += 2) await item(t(m), 'SUBMITTED', `model ${FREE}`);
+    await item(t(329), 'RELEASED_TRANSIENT', `model ${FREE}: model call failed: cheap lane HTTP 503`);
+    const now = Date.parse(t(330));
+    const diagnosis = await diagnoseThroughput(t(-1), now);
+    const route = diagnosis.routes.find((r) => r.route === FREE)!;
+    expect(route.providerFailures).toBe(101);
+    expect(route.recentFailures).toBe(1);
+    expect(route.recentSubmitted).toBe(14);
+    expect(route.restored).toBe(true);
+    expect(diagnosis.primary).toBeNull();
+    // The six-hour reading the growth gate consults names no route to restore.
+    const report = await stageCapacity({ hours: 6, now });
+    expect(report.diagnosis.primary).toBeNull();
+  });
+
+  it('still names a route that is failing now, and clears it once the route answers', async () => {
+    for (let m = 0; m < 10; m += 1) await item(t(300 + m), 'RELEASED_TRANSIENT', `model ${FREE}: model call failed: cheap lane HTTP 503`);
+    expect((await diagnoseThroughput(t(-1), Date.parse(t(311)))).primary).toMatchObject({ route: FREE, cause: 'provider availability' });
+    await item(t(312), 'SUBMITTED', `model ${FREE}`);
+    expect((await diagnoseThroughput(t(-1), Date.parse(t(313)))).primary).toBeNull();
+    // A route quiet for longer than the recent window is no longer named either.
+    expect((await diagnoseThroughput(t(-1), Date.parse(t(400)))).primary).toBeNull();
+  });
+
   it('records the cause, then the restoration and the queue advancing, as production rows', async () => {
     await failingWindow();
     await recordStageCapacity({ hours: 1, now: Date.parse(t(30)) });

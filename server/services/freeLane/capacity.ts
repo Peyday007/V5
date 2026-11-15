@@ -74,6 +74,17 @@ export interface Decision {
   stable: boolean;
 }
 
+/**
+ * Whether a model's live window shows its route answering: work accepted and at
+ * most one in five calls failing on the provider. Pure. The growth gate reads
+ * it so a route restored since the hourly stage-capacity reading is not held
+ * by that reading's failure count.
+ */
+export function answering(window: Window): boolean {
+  const samples = window.ok + window.content + window.transient;
+  return window.ok > 0 && window.transient * 5 <= samples;
+}
+
 /** One model's next target. Pure, so every decision can be replayed from its inputs. */
 export function decideTarget(input: {
   target: number;
@@ -483,7 +494,7 @@ export async function controlStep(): Promise<ControlReading | null> {
      * (`gateGrowth`). Regaining proven capacity is restoring, never held.
      */
     if (decision.target > pool.target) {
-      const verdict = gateGrowth({ model: pool.worker.model, gpu: !!gpu, current: pool.target, proposed: decision.target, stableHigh: pool.stableHigh, recorded: stages });
+      const verdict = gateGrowth({ model: pool.worker.model, gpu: !!gpu, current: pool.target, proposed: decision.target, stableHigh: pool.stableHigh, recorded: stages, answering: answering(window) });
       if (verdict.held) decision = { ...decision, target: verdict.target, reason: verdict.reason!, stable: false };
       else if (verdict.reason) decision = { ...decision, reason: `${decision.reason}; ${verdict.reason}` };
     }
