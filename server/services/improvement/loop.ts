@@ -1348,17 +1348,21 @@ export async function improvementTick(now = new Date()): Promise<ImprovementTick
   } catch (error) {
     report.errors.push(`activation: ${String((error as Error).message ?? error).slice(0, 200)}`);
   }
+  // A stored judgment that misnames a HELD attempt as a failed method is a false record, not new
+  // work: it is corrected on every pass, switch on or off, so the improvement order being off never
+  // leaves a mislabel standing in the rows (AUTO-20-1 repair F3). It originates nothing, opens no
+  // candidate and spends nothing; the correction keeps the original value in an append-only event.
+  try {
+    for (const key of await correctMisjudgedMethods()) report.advanced.push(`${key}: method judgment corrected`);
+  } catch (error) {
+    report.errors.push(`method judgments: ${String((error as Error).message ?? error).slice(0, 200)}`);
+  }
   const state = await improvementSwitch();
   if (!state.enabled) {
     report.reason = 'switched off';
     return report;
   }
   report.ran = true;
-  try {
-    for (const key of await correctMisjudgedMethods()) report.advanced.push(`${key}: method judgment corrected`);
-  } catch (error) {
-    report.errors.push(`method judgments: ${String((error as Error).message ?? error).slice(0, 200)}`);
-  }
   const detection = await detectAll(now);
   const weaknesses = detection.weaknesses;
   report.detected = weaknesses.length;

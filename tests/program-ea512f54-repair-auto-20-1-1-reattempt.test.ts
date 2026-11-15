@@ -116,3 +116,33 @@ describe('a stored judgment that names a HELD attempt is corrected on the tick',
     expect((await originationHoldsOnRows()).ok).not.toBe(false);
   });
 });
+
+describe('the correction does not wait for the improvement order (repair F3)', () => {
+  it('corrects a stored mislabel on a tick while the improvement switch is off, and originates nothing', async () => {
+    const { IMPROVEMENT_SWITCH } = await import('../server/services/improvement/authority.ts');
+    await getDb().run(
+      `INSERT INTO brain_switches (name, enabled, updated_at, updated_by, reason) VALUES (?, 0, ?, ?, ?)
+       ON CONFLICT (name) DO UPDATE SET enabled = 0`,
+      [IMPROVEMENT_SWITCH, new Date().toISOString(), 'test', 'off for this test'],
+    );
+    const one = await member(BASE, 1, { decision: 'KEPT_NO_EFFECT' });
+    const two = await member(`${BASE}#2`, 2, { decision: 'HELD', parentId: one });
+    const three = await member(`${BASE}#3`, 3, {
+      parentId: two,
+      evidence: { methodInadequacy: { judgment: 'Attempt(s) 1, 2 ended KEPT_NO_EFFECT, HELD; …', failedAttempts: [1, 2] } },
+    });
+    expect((await originationHoldsOnRows()).ok).toBe(false);
+    const before = (await getDb().get<{ n: number | string }>('SELECT COUNT(*) AS n FROM improvement_candidates'))!.n;
+
+    const report = await improvementTick(new Date(Date.now() + 1000));
+    expect(report.ran).toBe(false);
+    expect(report.reason).toBe('switched off');
+    expect(report.advanced).toEqual([`${BASE}#3: method judgment corrected`]);
+    expect(report.opened).toEqual([]);
+
+    expect(((await getCandidate(three))!.evidence['methodInadequacy'] as { failedAttempts: number[] }).failedAttempts).toEqual([1]);
+    expect(await listImprovementEvents({ candidateId: three, kinds: ['METHOD_JUDGMENT_CORRECTED'] })).toHaveLength(1);
+    expect((await getDb().get<{ n: number | string }>('SELECT COUNT(*) AS n FROM improvement_candidates'))!.n).toBe(before);
+    expect((await originationHoldsOnRows()).ok).not.toBe(false);
+  });
+});
