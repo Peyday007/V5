@@ -116,6 +116,8 @@ export interface DiagProject {
   /** Constructed-arrangement rounds (`goal-…-mx-…`, the F7 path) opened in the last 24 h, by state. */
   constructedRounds24h: Record<string, number>;
   knowledgeResearch: { allowed: boolean; basis: string | null; reason: string };
+  /** The constructed-round gate (`openConstructedRound`) per goal: rounds still researching against the live cap, and the focus cap. */
+  constructedGate: { goalId: string; goalRounds: number; stillResearching: number; liveCap: number; focusCap: number | null; liveConstructed: number; recentMx: number }[];
   backfill: {
     hasBuyerTypes: boolean;
     unitEconomicRead: number;
@@ -199,6 +201,31 @@ export async function diagProject(projectId: string, now = new Date()): Promise<
     {},
   );
 
+  const constructedGate = await attempt('constructedGate', async () => {
+    const { roundsStillResearching, liveConstructedResearch, MAX_LIVE_GOAL_ROUNDS } = await import('../server/services/cash/discovery.ts');
+    const { listRounds } = await import('../server/repos/cashDiscovery.ts');
+    const { constructedCapFor } = await import('../server/services/cash/researchRoom.ts');
+    const rounds = await listRounds(projectId);
+    const goalIds = [...new Set(rounds.map((one) => /^goal-(wst_[A-Za-z0-9]+)/.exec(one.bucketId)?.[1]).filter((id): id is string => !!id))].slice(0, 5);
+    const focusCap = await constructedCapFor(projectId);
+    const out: DiagProject['constructedGate'] = [];
+    for (const goalId of goalIds) {
+      const prefix = `goal-${goalId}`;
+      const mine = rounds.filter((one) => one.bucketId === prefix || one.bucketId.startsWith(`${prefix}-`));
+      const mx = mine.filter((one) => one.bucketId.startsWith(`${prefix}-mx-`));
+      out.push({
+        goalId,
+        goalRounds: mine.length,
+        stillResearching: await roundsStillResearching(mine),
+        liveCap: MAX_LIVE_GOAL_ROUNDS,
+        focusCap,
+        liveConstructed: await liveConstructedResearch(mx),
+        recentMx: mx.filter((one) => one.openedAt >= since).length,
+      });
+    }
+    return out;
+  }, []);
+
   let backfill: DiagProject['backfill'];
   try {
     const pool = await backfillCandidates(projectId);
@@ -246,6 +273,7 @@ export async function diagProject(projectId: string, now = new Date()): Promise<
     },
     kernelRounds24h,
     constructedRounds24h,
+    constructedGate,
     knowledgeResearch: knowledge,
     backfill,
     errors,
@@ -269,6 +297,7 @@ export function diagLines(one: DiagProject): string[] {
     `${p} kernelAuthority ${one.kernelAuthority.allowed ? `ALLOWED ${one.kernelAuthority.basis}` : 'REFUSED'} — ${one.kernelAuthority.reason}`,
     `${p} kernelRounds24h ${kv(one.kernelRounds24h)}`,
     `${p} constructedRounds24h ${kv(one.constructedRounds24h)}`,
+    ...one.constructedGate.map((g) => `${p} constructedGate ${g.goalId} researching=${g.stillResearching}/${g.liveCap} (of ${g.goalRounds} goal rounds) focusCap=${g.focusCap ?? 'none'} liveConstructed=${g.liveConstructed} mx24h=${g.recentMx}`),
     `${p} knowledgeResearch ${one.knowledgeResearch.allowed ? `ALLOWED ${one.knowledgeResearch.basis}` : 'REFUSED'} — ${one.knowledgeResearch.reason}`,
   ];
   const b = one.backfill;
