@@ -1,7 +1,24 @@
 {
   "deficiency": "dfx_2b21d109a13d",
   "pinnedCommit": "51011306081ebe365c1fe57eb74d2e60efa631c2",
-  "method": "Code-path attribution at the pinned commit, classified against the TRAIL (arXiv 2505.08638) and MAST (arXiv 2503.13657) taxonomies. Production round rows were not readable from this worker; every repository claim is about what the code records and decides, not about counts in production.",
+  "method": "Code-path attribution at the pinned commit, classified against the TRAIL (arXiv 2505.08638) and MAST (arXiv 2503.13657) taxonomies. Production round rows were not readable from this worker; every repository claim is about what the code records and decides, not about counts in production. That is a limit on this answer: Q1 is answered from code paths, not from the 119 rounds themselves. It is closed in production rather than here: every CASH_DISCOVERY_ROUND_STOPPED event now records the round's cause and failureClass, and diagnoseAbandonedRounds (server/services/cash/discovery.ts) classifies every ABANDONED round of a project into these classes from Brain's own rows, reconstructing the cause of a round closed before causes were recorded from its idea's latest mission and the round's own times.",
+  "limits": [
+    "Production round rows were not read by the worker that wrote this report; no claim states a count of the 119 abandoned rounds by class.",
+    "The count by class is the output of diagnoseAbandonedRounds over production rows, not a figure in this report."
+  ],
+  "classifiedBy": {
+    "query": "diagnoseAbandonedRounds",
+    "classifier": "abandonedFailureClass",
+    "classes": "ABANDONED_FAILURE_CLASSES",
+    "module": "server/services/cash/discovery.ts",
+    "event": "CASH_DISCOVERY_ROUND_STOPPED",
+    "eventFields": [
+      "cause",
+      "failureClass",
+      "terminalReason",
+      "waitingOn"
+    ]
+  },
   "failureClasses": [
     "TRAIL_API_ERROR",
     "TRAIL_TIMEOUT",
@@ -20,7 +37,7 @@
     {
       "id": "Q1_FAILURE_POINT",
       "question": "Do the abandoned research rounds fail at an API timeout, parser error, context window overflow, source unreachability or round-cap logic?",
-      "answer": "None of those can be named from the round record, because the record does not keep it. ABANDONED is a settlement bucket, not a failure point: closeEndedRounds collapses four different endings into it (the research mission FAILED or CANCELLED, a mission parked at NEEDS_HUMAN, a goal idea retired after 6 hours unlaunched, and an idea the archive already answered), and the stop event stores only the mission state, never the underlying error. Of the candidate causes, the code shows two concrete ones that end a round without any research error at all (round-settlement logic: the 6-hour unlaunched expiry and NEEDS_HUMAN collapse) and two that end the research itself (claims refused by the evidence gate, and sources refused by the fetcher as timeout, network, DNS or HTTP errors). No code path records a context-window overflow or a parser error against a round, so neither is supported. The decisive failure point is therefore a missing measurement: the ABANDONED round loses its cause, which is TRAIL's and Who&When's precondition for attribution.",
+      "answer": "None of those can be named from the round record, because the record does not keep it. ABANDONED is a settlement bucket, not a failure point: closeEndedRounds collapses four different endings into it (the research mission FAILED or CANCELLED, a mission parked at NEEDS_HUMAN, a goal idea retired after 6 hours unlaunched, and an idea the archive already answered), and the stop event stores only the mission state, never the underlying error. Of the candidate causes, the code shows two concrete ones that end a round without any research error at all (round-settlement logic: the 6-hour unlaunched expiry and NEEDS_HUMAN collapse) and two that end the research itself (claims refused by the evidence gate, and sources refused by the fetcher as timeout, network, DNS or HTTP errors). No code path records a context-window overflow or a parser error against a round, so neither is supported. The decisive failure point is therefore a missing measurement: the ABANDONED round loses its cause, which is TRAIL's and Who&When's precondition for attribution. Since this report the record keeps it: the stop event carries the cause verbatim and its failure class, and diagnoseAbandonedRounds turns the rounds themselves, including those closed earlier, into a count by class — so the operator's Q1 is now a query over production rows rather than this code-path reading.",
       "claimIds": [
         "C1",
         "C2",
