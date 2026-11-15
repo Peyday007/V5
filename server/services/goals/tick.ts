@@ -72,9 +72,24 @@ function holdReasonFor(goal: GoalView): HoldReason | null {
   return null;
 }
 
-/** A pause a person made. Inline rather than shared with decide.ts on purpose. */
-function isPersonActor(actorRef: string | null | undefined): boolean {
-  return typeof actorRef === 'string' && actorRef.startsWith('person:');
+/**
+ * Whether a recorded pause is one `pause()` (decide.ts) would refuse today on a
+ * targeted goal with its deadline ahead — the only pause this tick may undo.
+ *
+ * It is the exact complement of the test `pause()` applies, so the two can never
+ * disagree about who counts as a person: `pause()` accepts an actor whose ref
+ * starts with `person:` and refuses every other named actor; this undoes a pause
+ * only when it was recorded by a named actor that does not start with `person:`.
+ * A pause recorded with no actor at all (NULL or blank `actor_ref`) names nobody,
+ * so nothing can say it was a machine's, and it is left alone exactly like a
+ * goal with no pause event. Any surface `pause()` accepts therefore has its
+ * pauses kept here; one it refuses could not have written a pause to undo.
+ * Inline rather than imported because decide.ts does not export its predicate;
+ * keep the `person:` prefix identical to `machinePauseRefusal` there.
+ */
+function isUndoableMachinePause(actorRef: string | null | undefined): actorRef is string {
+  if (typeof actorRef !== 'string' || actorRef.trim() === '') return false;
+  return !actorRef.startsWith('person:');
 }
 
 /**
@@ -84,7 +99,7 @@ function isPersonActor(actorRef: string | null | undefined): boolean {
  * Preventing new machine pauses does not restore one already made, so this
  * reads the rows on every pass: a goal with a target and a future deadline,
  * paused, neither cancelled nor archived, whose latest GOAL_PAUSED event was
- * not written by a person, is resumed (`resumeGoal`, guarded in its own
+ * written by a named actor that is not a person, is resumed (`resumeGoal`, guarded in its own
  * statement) and the resumption recorded. A person's pause stands; an
  * untargeted or past-deadline goal is not touched. No goal is ever created.
  */
@@ -104,13 +119,14 @@ export async function resumeMachinePausedTargetedGoals(now: string): Promise<str
       `SELECT actor_ref FROM workstream_events WHERE workstream_id = ? AND kind = 'GOAL_PAUSED' ORDER BY created_at DESC LIMIT 1`,
       [id],
     );
-    // No pause event at all: nobody can say who paused it, so it is left alone.
-    if (!last || isPersonActor(last.actor_ref)) continue;
+    // No pause event, or one that names no actor: nobody can say a machine
+    // paused it, so it is left alone. A person's pause stands.
+    if (!last || !isUndoableMachinePause(last.actor_ref)) continue;
     if (!(await resumeGoal(id))) continue;
     await recordWorkstreamEvent({
       workstreamId: id,
       kind: 'GOAL_RESUMED',
-      summary: `Resumed: paused by ${last.actor_ref ?? 'an unnamed actor'}, which is not a person, and a machine may only reduce a targeted goal's allocation, never stop it.`,
+      summary: `Resumed: paused by ${last.actor_ref}, which is not a person, and a machine may only reduce a targeted goal's allocation, never stop it.`,
       detail: { pausedBy: last.actor_ref },
       actorRef: 'brain:goal-tick',
     });
