@@ -168,6 +168,10 @@ export interface PositionResearchQuestion {
   /** The S-0150 fields already established for this arrangement, which are not asked again. */
   established: EvidenceField[];
   question: string;
+  /** For a POSITION question, what to investigate contractually at exactly that position. */
+  investigate?: string;
+  /** For a BUYER_ACCESS or CONVERSION question, the gap itself. */
+  ask?: string;
 }
 
 /** At most this many arrangements are composed per goal pass (they are ranked and few are asked). */
@@ -671,6 +675,17 @@ function compose(args: {
         `For each part, find a published source: ${asks}.${established}${reliesText}${failureText}${exclusionSentence(args.exclusions)} ` +
         OPENING_SENTENCE +
         'Where no source shows buyers pay for this, say so plainly — that refutes the arrangement and is a useful answer.';
+  /*
+   * The positions are asked in the round itself (RES-15-4; S-0148, S-0150).
+   * `askConstructedArrangements` (goals/plan.ts) opens one constructed round
+   * per arrangement from `question`, and that round is what research works on,
+   * so a position question kept only beside the arrangement was never asked.
+   * The same questions `positionQuestions` carries are appended to it as a
+   * decomposition — one sub-question per position, and the buyer-access and
+   * conversion gaps as separate ones — so the gaps decide the fragments.
+   */
+  const positionQuestions = def.needsSupply ? positionResearchQuestions({ demand, need, supply, estimates, exclusions: args.exclusions }) : null;
+  const asked = positionQuestions ? `${question} ${positionDecomposition(positionQuestions)}` : question;
   return {
     key,
     structure,
@@ -690,9 +705,9 @@ function compose(args: {
     value: value ? { tier: value.tier, p10: value.p10, p50: value.p50, p90: value.p90, observations: value.used.length } : { tier: 'UNKNOWN', p10: 0, p50: 0, p90: 0, observations: 0 },
     unknownParts,
     relatedOpenings: args.related.map((one) => one.id),
-    question,
+    question: asked,
     repeatBusiness,
-    ...(def.needsSupply ? { positionQuestions: positionResearchQuestions({ demand, need, supply, estimates, exclusions: args.exclusions }) } : {}),
+    ...(positionQuestions ? { positionQuestions } : {}),
   };
 }
 
@@ -784,6 +799,7 @@ export function positionResearchQuestions(args: {
         `${fieldText}${knownText}${investigate}${scope}${exclusionSentence(args.exclusions)} ` +
         OPENING_SENTENCE +
         'Where this position is unlawful or uneconomic for these buyers, say so plainly — that rules the position out and is a useful answer.',
+      investigate: investigate.trim(),
     });
     for (const gap of gaps) {
       if (gap.kind === 'FIELD') continue;
@@ -793,15 +809,76 @@ export function positionResearchQuestions(args: {
         catalogued: position.catalogued,
         asks: [],
         established,
+        investigate: '',
         question:
           `Brain is examining one potential transaction — ${subject} — held from the ${label} position. ` +
           `What is established is only ${facts.bases?.includes('PUBLIC_ASKING_PRICE') ? 'a public asking price' : ''}${facts.bases?.includes('PUBLIC_ASKING_PRICE') && facts.bases?.includes('TOTAL_MARKET_SIZE') ? ' and ' : ''}${facts.bases?.includes('TOTAL_MARKET_SIZE') ? 'a total market size' : ''}, ` +
           `which does not answer this on its own, so investigate it separately: ${gap.ask}.${exclusionSentence(args.exclusions)} ` +
           'Where no source shows it, say so plainly.',
+        ask: gap.ask,
       });
     }
   }
   return out;
+}
+
+/**
+ * Words the catalogues use that read, to a research envelope, as an
+ * instruction to act ("purchase"), restated as what research reads about. The
+ * catalogue's meaning is unchanged: a buyer's purchase request is still a
+ * buying request a source shows, and a distributor's minimum purchase is still
+ * a minimum order volume in its agreement.
+ */
+export function researchWording(text: string): string {
+  return text
+    .replace(/\brepeat purchases?\b/gi, 'repeat orders')
+    .replace(/\bminimum purchases?\b/gi, 'minimum order volume')
+    .replace(/\bpurchase price\b/gi, 'price paid')
+    .replace(/\bpurchase requests?\b/gi, (m) => (m.endsWith('s') ? 'buying requests' : 'buying request'))
+    .replace(/\blead-purchase\b/gi, 'lead-sale')
+    .replace(/\bpurchas(?:e|es|ed|ing)\b/gi, 'buying');
+}
+
+/**
+ * The position questions as one decomposition the constructed round asks:
+ * each position its own numbered sub-question with only what is missing there
+ * and what holds there contractually, and each buyer-access or conversion gap
+ * as a separate one. What is shared — the transaction, where to look, what an
+ * opening is — is already in the round's question and is not repeated.
+ */
+export function positionDecomposition(questions: readonly PositionResearchQuestion[]): string {
+  const positions = questions.filter((q) => q.kind === 'POSITION');
+  if (positions.length === 0) return '';
+  const established = positions[0]!.established;
+  const lines = positions.map((q, i) => {
+    const asks = q.asks.length ? ` Find a source for: ${q.asks.join(', ')}.` : '';
+    return `(${i + 1}) The ${q.position} position.${asks}${q.investigate ? ` ${q.investigate}` : ''}`;
+  });
+  /*
+   * A buyer-access or conversion gap is the same gap at every position it
+   * arises at, so it is one separate sub-question naming those positions —
+   * still investigated apart from the position's own fields, as S-0150 asks.
+   */
+  const gapLines: string[] = [];
+  for (const kind of ['BUYER_ACCESS', 'CONVERSION'] as const) {
+    const at = questions.filter((q) => q.kind === kind);
+    if (at.length === 0) continue;
+    const what =
+      kind === 'BUYER_ACCESS'
+        ? 'a public asking price or market size does not show the payer can be reached: establish a reachable channel to a named payer'
+        : 'a public asking price or market size does not show anyone buys through this route: establish observed conversion from that channel';
+    gapLines.push(`(${positions.length + gapLines.length + 1}) Separately, ${kind === 'BUYER_ACCESS' ? 'buyer access' : 'conversion'} — ${what}, at each of these positions: ${at.map((q) => q.position).join(', ')}.`);
+  }
+  const legend = [...new Set(positions.flatMap((q) => q.asks))].map((field) => `${field} = ${EVIDENCE_FIELDS[field]}`).join('; ');
+  return researchWording(
+    'Research this transaction position by position: each numbered item below is its own sub-question, researched separately, ' +
+      'and the same transaction may be lawful and economic from one position and not another — return commercially usable evidence for each exact position, never industry facts. ' +
+      (established.length ? `Already established, so do not research again: ${established.join(', ')}. ` : '') +
+      (legend ? `Where an item asks for a field, it means: ${legend}. ` : '') +
+      ` Look from both ends: buyer-first (${list(ENTRY_POINTS.BUYER_FIRST)}) and supply-first (${list(ENTRY_POINTS.SUPPLY_FIRST)}) — examples of where to look, not limits, as are industries such as ${INTERMEDIATION_FAMILY.examples.join(', ')}; do not default to ${INTERMEDIATION_FAMILY.notDefaults.join(', ')}. ` +
+      [...lines, ...gapLines].join(' ') +
+      ' Where a position is unlawful or uneconomic for these buyers, say so plainly — that rules it out and is a useful answer.',
+  );
 }
 
 /**
