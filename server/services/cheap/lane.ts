@@ -37,6 +37,13 @@ export interface LaneConfig {
   runpod?: RunpodConfig | null;
   /** The free model a failed RunPod call is answered by; null when OmniRoute is not set. */
   fallbackModel?: string | null;
+  /**
+   * Further models on the same OmniRoute address that a call refused by its own
+   * route (rate limit, overload, timeout) is answered by (`BRAIN_CHEAP_LLM_FALLBACK_MODELS`).
+   * Never one of `models`: a slot is never answered by the other slot, or a claim
+   * would be verified by the model that found it (§85).
+   */
+  fallbacks?: string[];
 }
 
 /**
@@ -59,6 +66,11 @@ export function laneConfig(env: NodeJS.ProcessEnv = process.env): LaneConfig | n
   const free = configured.length > 0 ? configured : ['auto'];
   const budget = Number(env['BRAIN_CHEAP_LLM_DAILY_BUDGET'] ?? 20000);
   const models = runpod ? [runpod.label, ...(url ? [free[0]!] : [])] : free;
+  const fallbacks = url
+    ? [...new Set((env['BRAIN_CHEAP_LLM_FALLBACK_MODELS'] ?? '').split(',').map((one) => one.trim()).filter(Boolean))]
+        .filter((one) => !configured.includes(one) && !models.includes(one))
+        .slice(0, 4)
+    : [];
   return {
     url: (url ?? runpod!.url).replace(/\/+$/, ''),
     key: (url ? env['BRAIN_CHEAP_LLM_KEY']?.trim() : runpod!.key) || null,
@@ -67,6 +79,7 @@ export function laneConfig(env: NodeJS.ProcessEnv = process.env): LaneConfig | n
     timeoutMs: 30_000,
     runpod,
     fallbackModel: runpod && url ? free[0]! : null,
+    ...(fallbacks.length > 0 ? { fallbacks } : {}),
   };
 }
 
@@ -278,13 +291,159 @@ export type Completer = (
 ) => Promise<string>;
 
 export const httpCompleter: Completer = async (config, model, system, prompt, options) => {
+  const started = Date.now();
+  // Every route the call may be answered by after its own refuses it: never another slot (§85).
+  const chain = (first: string): string[] => [first, ...(config.fallbacks ?? []).filter((one) => one !== first && !config.models.includes(one))];
+  const free = { ...config, runpod: null };
   if (config.runpod && isRunpodSlot(model)) {
     return routeRunpod(config, system, prompt, { maxTokens: options?.maxTokens ?? 2000 }, (backup) =>
-      openAiCompleter({ ...config, runpod: null }, backup, system, prompt, options),
+      failover(free, chain(backup), system, prompt, options, started),
     );
   }
-  return openAiCompleter(config, model, system, prompt, options);
+  return failover(free, chain(model), system, prompt, options, started);
 };
+
+/* ------------------------------------------------------------------------- */
+/* Route backoff and failover (CAP-16-3)                                      */
+/* ------------------------------------------------------------------------- */
+
+/*
+ * Production, 2026-11-15 20:00–23:00Z: 64–98% of the free lane's outcomes over
+ * six hours were "model call failed", nearly all a provider refusing (HTTP 429 /
+ * 5xx / timeouts), and every concurrent slot kept sending to the provider that
+ * was refusing — which keeps a rate limit from ever clearing. So a route that
+ * refuses is backed off for every caller in this process (for as long as its
+ * Retry-After says, else growing from 15 s to 10 min); a caller that meets a
+ * backed-off route waits for it when the wait fits its own time budget, and is
+ * otherwise answered by the next route of its chain; and only when every route
+ * refused does the call fail, naming each route's own refusal.
+ */
+export const ROUTE_BACKOFF_BASE_MS = 15_000;
+export const ROUTE_BACKOFF_MAX_MS = 10 * 60_000;
+/** The longest a call waits on a backed-off route rather than moving on. */
+export const ROUTE_WAIT_MAX_MS = 60_000;
+/** A call keeps this much of its budget for the request itself after a wait. */
+const WAIT_RESERVE_MS = 5_000;
+
+/** A refusal that says the provider is busy, not that the request or credential is wrong. */
+const BUSY_TEXT = /\b(?:timed? ?out|timeout|aborted|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|socket hang up|fetch failed|overloaded|rate.?limit)/i;
+export function busyStatus(status: number): boolean {
+  return status === 408 || status === 409 || status === 413 || status === 425 || status === 429 || status >= 500;
+}
+
+/** A route's refusal, with what the provider said about when to come back. */
+export class RouteRefusal extends Error {
+  constructor(
+    message: string,
+    readonly busy: boolean,
+    readonly retryAfterMs: number | null = null,
+  ) {
+    super(message);
+    this.name = 'RouteRefusal';
+  }
+}
+
+/** Retry-After as milliseconds from now: delta-seconds or an HTTP date. Null when absent or unreadable. */
+export function parseRetryAfter(header: string | null | undefined, now = Date.now()): number | null {
+  const raw = header?.trim();
+  if (!raw) return null;
+  if (/^\d+(?:\.\d+)?$/.test(raw)) return Math.min(ROUTE_BACKOFF_MAX_MS, Math.round(Number(raw) * 1000));
+  const at = Date.parse(raw);
+  return Number.isFinite(at) ? Math.min(ROUTE_BACKOFF_MAX_MS, Math.max(0, at - now)) : null;
+}
+
+const backoff = new Map<string, { until: number; strikes: number; why: string }>();
+const routeKey = (config: LaneConfig, model: string): string => `${config.url}|${model}`;
+
+/** Tests: forget every route's backoff. */
+export function resetRouteBackoff(): void {
+  backoff.clear();
+}
+
+/** When a route may next be called, and why it is waiting; null when it may be called now. */
+export function routeBackoff(config: LaneConfig, model: string, now = Date.now()): { until: number; why: string } | null {
+  const state = backoff.get(routeKey(config, model));
+  return state && state.until > now ? { until: state.until, why: state.why } : null;
+}
+
+function noteRefusal(config: LaneConfig, model: string, refusal: RouteRefusal, now: number): void {
+  const key = routeKey(config, model);
+  const strikes = (backoff.get(key)?.strikes ?? 0) + 1;
+  const grown = Math.min(ROUTE_BACKOFF_MAX_MS, ROUTE_BACKOFF_BASE_MS * 2 ** (strikes - 1));
+  const wait = refusal.retryAfterMs ?? grown;
+  // Never shorten a backoff another caller already set.
+  const until = Math.max(backoff.get(key)?.until ?? 0, now + wait);
+  backoff.set(key, { until, strikes, why: refusal.message.replace(/^cheap lane /, '') });
+}
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** One route, honouring its backoff: waits when the wait fits the call's budget, else refuses without sending. */
+async function callRoute(
+  config: LaneConfig,
+  model: string,
+  system: string,
+  prompt: string,
+  options: { maxTokens?: number; json?: boolean } | undefined,
+  started: number,
+): Promise<string> {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const now = Date.now();
+    const held = routeBackoff(config, model, now);
+    if (held) {
+      const left = config.timeoutMs - (now - started) - WAIT_RESERVE_MS;
+      const wait = held.until - now;
+      if (wait > Math.min(ROUTE_WAIT_MAX_MS, left)) {
+        throw new RouteRefusal(`cheap lane ${held.why}; backing off ${Math.ceil(wait / 1000)} s`, true);
+      }
+      await sleep(wait);
+    }
+    try {
+      const text = await openAiCompleter(config, model, system, prompt, options, started);
+      backoff.delete(routeKey(config, model));
+      return text;
+    } catch (error) {
+      const refusal =
+        error instanceof RouteRefusal
+          ? error
+          : new RouteRefusal(String((error as Error)?.message ?? error).slice(0, 200), BUSY_TEXT.test(String((error as Error)?.message ?? error)));
+      if (!refusal.busy) throw refusal;
+      noteRefusal(config, model, refusal, Date.now());
+      // A Retry-After this call can wait out is tried once more; anything else moves on.
+      if (attempt === 0 && refusal.retryAfterMs !== null) continue;
+      throw refusal;
+    }
+  }
+  throw new RouteRefusal('cheap lane route still refusing', true);
+}
+
+/** A call answered by the first route of its chain that answers; a busy refusal moves to the next. */
+async function failover(
+  config: LaneConfig,
+  chain: string[],
+  system: string,
+  prompt: string,
+  options: { maxTokens?: number; json?: boolean } | undefined,
+  started: number,
+): Promise<string> {
+  const refused: string[] = [];
+  let only: unknown = null;
+  for (const model of chain) {
+    try {
+      return await callRoute(config, model, system, prompt, options, started);
+    } catch (error) {
+      if (!(error instanceof RouteRefusal) || !error.busy) {
+        if (refused.length === 0) throw error;
+        refused.push(`${model}: ${String((error as Error)?.message ?? error).slice(0, 160)}`);
+        break;
+      }
+      only = error;
+      refused.push(`${model}: ${error.message.slice(0, 160)}`);
+    }
+  }
+  if (chain.length === 1 && only) throw only;
+  throw new Error(`cheap lane: every route refused — ${refused.join('; ')}`);
+}
 
 /**
  * The answer budget a request can carry and still fit the smallest free window.
@@ -317,9 +476,15 @@ function windowTokens(): number {
   return Number.isFinite(raw) && raw >= 2_000 ? raw : FREE_WINDOW_TOKENS;
 }
 
-/** The plain OpenAI-compatible call to OmniRoute (or anything like it). */
-const openAiCompleter: Completer = async (config, model, system, prompt, options) => {
-  const started = Date.now();
+/** The plain OpenAI-compatible call to OmniRoute (or anything like it). Throws a `RouteRefusal` on a non-2xx. */
+async function openAiCompleter(
+  config: LaneConfig,
+  model: string,
+  system: string,
+  prompt: string,
+  options: { maxTokens?: number; json?: boolean } | undefined,
+  started = Date.now(),
+): Promise<string> {
   const request = (json: boolean) => fetch(`${config.url}/chat/completions`, {
     method: 'POST',
     headers: {
@@ -347,10 +512,13 @@ const openAiCompleter: Completer = async (config, model, system, prompt, options
     await response.body?.cancel().catch(() => undefined);
     response = await request(false);
   }
-  if (!response.ok) throw new Error(`cheap lane HTTP ${response.status}`);
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new RouteRefusal(`cheap lane HTTP ${response.status}`, busyStatus(response.status), parseRetryAfter(response.headers.get('retry-after')));
+  }
   const body = (await response.json()) as { choices?: { message?: { content?: string } }[] };
   return body.choices?.[0]?.message?.content ?? '';
-};
+}
 
 interface ResultRow {
   model: string;
