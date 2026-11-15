@@ -52,3 +52,18 @@ source of truth.
 
 Result JSON shared by A and B:
 `{ suite, sha, ref, cases:[{id, pass:boolean, score:number, ms:number}], metrics:{ <name>: number }, ranAt }`.
+
+## Readings and decisions after the start
+
+- **Hermes' model (workstream C report, 22:00Z).**
+  - Bench runs 43285247214 and 43289119187:
+    - Qwen3-4B on RunPod scored 0.60–0.65 and failed both tool tasks.
+    - `auto/best-coding` scored 0.65 one run and 0.98 the next. It is a router, so its underlying model varies.
+    - brain-a scored 0, with HTTP 429 on every call.
+  - The bench scores answers by keyword regex and has no director-grade task, so it cannot separate a 4B model from a frontier model.
+  - No paid provider is configured. `operator.ts:290` forbids a paid frontier API for Hermes.
+  - RunPod answers 404, most likely an empty balance (owner top-up).
+  - **Decision:** add five code-scored director tasks with reworded variants and repetitions (workstream D). Then, once RunPod is funded, bench the 26–32B recipes (`qwen3.8-27b-awq`, `gemma-4-26b-a4b-awq`, a new `qwen3-32b-awq` on a 48 GB card at about $0.33/h). The bench costs about $1–2; the winner costs about $0.33/h and replaces the 4B pod.
+- **Deploy 1104 (6fdb3ec, PR #946).**
+  - RELEASED. The pass after the restart **passed**.
+  - Before the restart, one check failed: "a second run while one holds the slot is refused as busy". The second run got 200 and both rows were written. This is a race: the first run takes about 1 s on dedicated CPUs. It passed on 1103 and after this restart. Recorded, and fixed if it recurs (Surge A domain).
