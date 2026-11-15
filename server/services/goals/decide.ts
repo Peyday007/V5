@@ -52,7 +52,32 @@ async function uncertainEffectsFor(projectId: string | null): Promise<number> {
   return Number(row?.n ?? 0);
 }
 
+/**
+ * A goal that carries its own metric and a deadline still ahead is a condition
+ * Brain is bound to, not a load it may shed (GOAL-02). Only a person pauses
+ * one; a machine actor — an operator run, a congestion heuristic — changes how
+ * much capacity it gets through allocation and priority, never by stopping it.
+ */
+function bindingTargetRefusal(
+  goal: { target: unknown; dueAt: string | null; archivedAt: string | null; cancelledAt: string | null } | null,
+  actorRef: string,
+  now: number,
+): DecisionResult | null {
+  if (actorRef.startsWith('person:') || !goal) return null;
+  if (!goal.target || !goal.dueAt || goal.archivedAt || goal.cancelledAt) return null;
+  const due = Date.parse(goal.dueAt);
+  if (!Number.isFinite(due) || due <= now) return null;
+  return {
+    ok: false,
+    reason:
+      "The goal's own metric and deadline still bind, so only a person pauses it; Brain reduces the capacity it gets through allocation and priority rather than a pause.",
+    consequence: 'Nothing changed.',
+  };
+}
+
 export async function pause(goalId: string, reason: string, actorRef: string): Promise<DecisionResult> {
+  const refused = bindingTargetRefusal(await getWorkstream(goalId), actorRef, Date.now());
+  if (refused) return refused;
   const moved = await pauseGoal(goalId, reason);
   if (!moved) {
     return { ok: false, reason: 'It is already paused, cancelled or archived.', consequence: 'Nothing changed.' };
