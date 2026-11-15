@@ -63,13 +63,26 @@ const production: ConstructedArrangement[] = mix.flatMap(([base, count]) =>
     return n % 50 === 0 ? arrangement(n, base, { value: { tier: 'MECHANISM', p10: 10, p50: 281, p90: 72_769, observations: 31 } }) : arrangement(n, base);
   }),
 );
-/** Priced openings held elsewhere in the project — other buyers, not these. */
+/**
+ * Priced openings held elsewhere in the project — other buyers, not these. The
+ * project-wide pool spans 15–15 000, three orders of magnitude, so it is no
+ * comparable price (F4); each structure has openings of its own mechanism
+ * within one order of magnitude, and home improvement has its sector's.
+ */
 const held: ComparablePrice[] = [
   { value: 15, industry: 'education' },
   { value: 100, industry: 'grants' },
   { value: 250, industry: 'home improvement' },
   { value: 1_800, industry: 'home improvement' },
   { value: 15_000, industry: 'agriculture' },
+  { value: 400, industry: 'marketing', mechanism: 'PRODUCTIZED_SERVICE' },
+  { value: 1_500, industry: 'bookkeeping', mechanism: 'PRODUCTIZED_SERVICE' },
+  { value: 600, industry: 'staffing', mechanism: 'SUPPLY_DEMAND_MISMATCH' },
+  { value: 2_000, industry: 'equipment', mechanism: 'INFORMATION_ASYMMETRY' },
+  { value: 1_000, industry: 'cleaning', mechanism: 'SUBCONTRACTED_FULFILMENT' },
+  { value: 3_000, industry: 'landscaping', mechanism: 'SUBCONTRACTED_FULFILMENT' },
+  { value: 800, industry: 'supplies', mechanism: 'JIGSAW_COMBINATION' },
+  { value: 2_500, industry: 'printing', mechanism: 'JIGSAW_COMBINATION' },
 ];
 const input = { projectId: 'prj_prod', currency: 'USD', beforeProofCents: 37_500, remaining: 10_000, exclusions: [], daysLeft: 25 };
 
@@ -95,15 +108,21 @@ describe('Surge B: constructed arrangements with no price of their own are admit
       expect(one.estimated?.tier).toBe('MECHANISM');
       expect(one.estimated?.invented).toBeUndefined();
       expect(one.price).toMatchObject({ value: null, provenance: 'UNKNOWN' });
-      expect(one.price.distribution).toBeUndefined();
+      // Swept log-uniformly between the comparables' p10 and p90 (F4): a sweep's shape, never evidence.
+      expect(one.price.distribution?.kind).toBe('EMPIRICAL');
       // Never certifiable on assumption: no input establishes its link.
       for (const field of ['price', 'close', 'respond', 'volume', 'daysToCash', 'directCost', 'capital'] as const) expect(inputEvidence(one[field], field).establishes, field).toBe(false);
     }
     // A home-improvement arrangement is swept over its own sector's prices; others over the project's.
     const home = got.openings.find((o) => /home improvement/.test(o.price.note));
-    if (home) expect(home.price).toMatchObject({ low: 250, high: 1_800 });
-    expect(comparablePricesFor({ sector: 'home improvement' }, held).prices).toEqual([250, 1_800]);
-    expect(comparablePricesFor({ sector: 'professional services' }, held).prices).toHaveLength(5);
+    if (home) {
+      expect(home.price.low!).toBeGreaterThanOrEqual(250);
+      expect(home.price.high!).toBeLessThanOrEqual(1_800);
+    }
+    expect(comparablePricesFor({ sector: 'home improvement' }, held)).toMatchObject({ prices: [250, 1_800] });
+    expect(comparablePricesFor({ sector: 'professional services', structure: 'SUBCONTRACT' }, held)).toMatchObject({ prices: [1_000, 3_000] });
+    // With no sector, structure or buyer in common, a pool spanning 15–15 000 is no comparable price.
+    expect(comparablePricesFor({ sector: 'professional services' }, held)).toMatchObject({ refused: expect.stringMatching(/^no comparable price: published prices for other buyers span \$15–\$15,000/) });
 
     // The plan's `compared` line: N > 0 constructed estimates reach the quant engine, and a combination holding one is coverage only.
     const p = evaluateGoalPortfolio({ ...GOAL_10K_LIMITS, daysLeft: 25, openings: got.openings as PlannedOpening[], worlds: 120, seed: 3 });

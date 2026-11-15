@@ -820,6 +820,16 @@ export function paymentSchedule(terms: string | null, signingDay: number): { sha
   return share > 0 && share <= 1 ? { share, day } : null;
 }
 
+/**
+ * Whether the opening's own evidence states the money it ties up: a figure on
+ * its card, or an inference from its own facts alone (DIRECT). An inference
+ * pooled from other openings — even of its own mechanism — is not (F6). Pure.
+ */
+export function capitalOwnEvidence(one: ModelledOpportunity): boolean {
+  if (one.capital.value !== null) return true;
+  return one.capital.inferred?.justified === true && one.capital.inferred.tier === 'DIRECT';
+}
+
 /** The money an opening ties up when it starts: established, or the top of its range (invariant 39). */
 export function capitalAtStart(one: ModelledOpportunity): { amount: number; established: boolean } {
   if (one.capital.value !== null) return { amount: one.capital.value, established: true };
@@ -952,8 +962,17 @@ export function evaluateGoalPortfolio(input: {
      * still held to the limits by the commercial authority (`spending.ts`).
      */
     if (input.beforeProof !== null && capital.amount > input.beforeProof + 1e-9) {
-      const floor = one.capital.low ?? one.capital.inferred?.p10 ?? 0;
-      if (capital.established) {
+      /*
+       * F6, production 2026-11-15: three of 11 openings were refused on an
+       * outlay inferred from *other* openings (a 15 000 grant "tying up"
+       * 14 985). Only the opening's own evidence refuses it; an inference from
+       * other openings is not this opening's outlay, so it neither refuses nor
+       * sets a floor, and "money tied up" is unestablished.
+       */
+      const own = capitalOwnEvidence(one);
+      const floor = one.capital.inferred && !own ? 0 : (one.capital.low ?? one.capital.inferred?.p10 ?? 0);
+      if (capital.established && !own && !unestablished.includes('money tied up')) unestablished.push('money tied up');
+      if (capital.established && own) {
         refused = `ties up ${Math.round(capital.amount)} at its start, more than the ${Math.round(input.beforeProof)} one arrangement may before it proves itself`;
       } else if (floor > input.beforeProof + 1e-9) {
         refused = `the money it ties up is not established and is at least ${Math.round(floor)}, more than the ${Math.round(input.beforeProof)} one arrangement may before it proves itself`;

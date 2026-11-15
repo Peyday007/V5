@@ -36,7 +36,8 @@ import { cashOutcomeLessons, LESSON_MIN_SAMPLE } from './journey/learning.ts';
 import { isTestFirstPlay } from './tier.ts';
 import { readVolume } from './volume.ts';
 import { frontierTiers } from './shared.ts';
-import type { CashOpportunity, CashCardFact } from '../../domain/types.ts';
+import type { CashMechanism, CashOpportunity, CashCardFact } from '../../domain/types.ts';
+import { STRUCTURES } from './properties.ts';
 import { SCENARIO_LIMITS, type ScenarioModelDefinition, type ScenarioVariable, type SourceRef, type StrategySpec, type VariableProvenance } from '../../domain/scenario.ts';
 import type { Workstream } from '../../domain/register.ts';
 import type { TargetReading } from '../goals/target.ts';
@@ -294,9 +295,10 @@ function arrangementOpening(one: ConstructedArrangement, input: { projectId: str
  *
  * Where its reconstruction holds what *these* buyers paid, it enters exactly
  * as an estimated arrangement does. Otherwise nothing establishes its price,
- * and it is not given one: it is swept across the prices other buyers in this
- * project are published as paying — MECHANISM bounds, provenance UNKNOWN,
- * never a distribution — so the engine can say what the design would
+ * and it is not given one: it is swept log-uniformly across the prices other
+ * buyers in this project are published as paying, only while they lie within
+ * one order of magnitude (`comparablePricesFor`) — MECHANISM bounds,
+ * provenance UNKNOWN — so the engine can say what the design would
  * contribute if research found these buyers pay like those, and nothing it
  * contributes can certify a plan (every link is unestablished, `inputEvidence`).
  * With no published price in the project at all, nothing bounds it, and it
@@ -311,15 +313,22 @@ export function inventedFromArrangement(
   const estimated = estimatedFromArrangement(one, input);
   if (estimated)
     return { ...estimated, marketKey, opportunity: { ...estimated.opportunity, title: `Invented: ${one.label}`.slice(0, 200) }, estimated: { ...estimated.estimated!, invented: true } };
-  return sweptOverOtherPrices(one, input, input.otherPrices, true);
+  const comparable = comparablePricesFor(one, input.otherPrices.map((value) => ({ value, industry: null })), input.currency);
+  if ('refused' in comparable) return { refused: `${comparable.refused}, so the design stays a research question` };
+  return sweptOverOtherPrices(one, input, comparable.prices, true, comparable.scope);
 }
 
+/** Points on the log-uniform grid a swept price is drawn from. */
+const LOG_GRID_POINTS = 41;
+
 /**
- * A design nothing prices for its own buyers, swept across the prices other
- * buyers in this project are published as paying: MECHANISM bounds, provenance
- * UNKNOWN, no distribution, so it competes on what it would contribute *if*
- * research found these buyers pay like those, and can never certify a plan.
- * With no published price at all, it is refused with that reason. Pure.
+ * A design nothing prices for its own buyers, swept across the prices
+ * comparable buyers are published as paying: log-uniform between their p10 and
+ * p90 (a price is a magnitude, and uniform over a band spanning orders of
+ * magnitude is a draw from its top — F4, 2026-11-15), provenance UNKNOWN, tier
+ * MECHANISM, so it competes on what it would contribute *if* research found
+ * these buyers pay like those, and can never certify a plan. With no published
+ * price at all, it is refused with that reason. Pure.
  */
 function sweptOverOtherPrices(
   one: ConstructedArrangement,
@@ -331,41 +340,90 @@ function sweptOverOtherPrices(
   const prices = otherPrices.filter((x) => Number.isFinite(x) && x > 0).sort((a, b) => a - b);
   const what = invented ? 'the design' : 'the arrangement';
   if (prices.length === 0) return { refused: `nothing bounds what these buyers pay: the project holds no published price, so ${what} stays a research question` };
-  const low = prices[0]!;
-  const high = Math.max(low + 0.01, prices[prices.length - 1]!);
-  const p50 = prices[Math.floor(prices.length / 2)]!;
+  const low = logQuantile(prices, 0.1);
+  const high = Math.max(low + 0.01, logQuantile(prices, 0.9));
+  const p50 = Math.sqrt(low * high);
+  // Log-uniform between p10 and p90: an even grid on the log scale, resampled by the engine (`sampler`, `atQuantile`).
+  const a = Math.log(low);
+  const b = Math.log(high);
+  const values = Array.from({ length: LOG_GRID_POINTS }, (_, i) => Math.exp(a + ((i + 0.5) / LOG_GRID_POINTS) * (b - a)));
   const price: ModelInput = {
     value: null,
     low,
     high,
     provenance: 'UNKNOWN',
     source: { kind: 'OTHER', ref: `arrangement:${one.key}`, note: `${invented ? 'an invented design' : 'a constructed arrangement'}: no figure from these buyers` },
-    note: `${invented ? 'invented design' : 'constructed arrangement'}: nothing establishes what these buyers pay; swept ${Math.round(low)}–${Math.round(high)} across the ${prices.length} price(s) other buyers ${scope} are published as paying (mechanism bounds, not these buyers')`,
+    note: `${invented ? 'invented design' : 'constructed arrangement'}: nothing establishes what these buyers pay; swept log-uniformly ${Math.round(low)}–${Math.round(high)} (p10–p90 of the ${prices.length} price(s) other buyers ${scope} are published as paying; mechanism bounds, not these buyers')`,
+    // A sweep's shape, not evidence: provenance UNKNOWN and `justified: false` keep it from establishing anything.
+    distribution: { kind: 'EMPIRICAL', values },
     inferred: { tier: 'MECHANISM', justified: false, p10: low, p50, p90: high, observations: prices.length },
   };
   return { ...arrangementOpening(one, input, price, high, null, invented), marketKey: populationMarket(one.demand.ref) };
 }
 
-/** A price another buyer in the project is published as paying, and the sector it was paid in. */
+/** The `q` quantile of sorted positive values, interpolated on the log scale. Pure. */
+function logQuantile(sorted: readonly number[], q: number): number {
+  if (sorted.length === 1) return sorted[0]!;
+  const at = q * (sorted.length - 1);
+  const i = Math.floor(at);
+  const lo = sorted[i]!;
+  const hi = sorted[Math.min(sorted.length - 1, i + 1)]!;
+  return Math.exp(Math.log(lo) + (at - i) * (Math.log(hi) - Math.log(lo)));
+}
+
+/** A price another buyer in the project is published as paying: the sector, mechanism and payer it was paid in. */
 export interface ComparablePrice {
   value: number;
   industry: string | null;
+  mechanism?: CashMechanism | null;
+  payer?: string | null;
 }
 const normSector = (text: string | null | undefined) => (text ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-/** Same-sector prices when at least this many exist; otherwise every published price in the project bounds the sweep. */
+/** A comparable set needs at least this many prices of the same kind. */
 export const SECTOR_PRICES_MIN = 2;
+/**
+ * The widest p90/p10 a set of other buyers' prices may span and still be read
+ * as one comparable price: one order of magnitude. Production, 2026-11-15: the
+ * project-wide fallback spanned $15–$325K, uniform over it, and a dog-groomer
+ * arrangement averaged ~$160K a deal and led reach and research priority (F4).
+ */
+export const COMPARABLE_SPREAD_MAX = 10;
 
 /**
  * The prices a constructed arrangement with no price of its own is swept
- * across (Surge B, production 2026-11-15): its own sector's published prices
- * when the project holds at least `SECTOR_PRICES_MIN`, else every published
- * price in the project. Never a price for these buyers — a bound. Pure.
+ * across, or why there are none (Surge B, F4). Comparable means comparable:
+ * the same sector; else the same structure (openings of a mechanism the
+ * arrangement's structure is already held as); else the same kind of buyer;
+ * else the project's prices — and outside the sector, only a set within one
+ * order of magnitude (`COMPARABLE_SPREAD_MAX`). A wider pool is no comparable
+ * price, and the arrangement stays out with that reason. With no published
+ * price at all the set is empty, and the sweep refuses. Never a price for
+ * these buyers — a bound. Pure.
  */
-export function comparablePricesFor(one: Pick<ConstructedArrangement, 'sector'>, prices: readonly ComparablePrice[]): { prices: number[]; scope: string } {
+export function comparablePricesFor(
+  one: Pick<ConstructedArrangement, 'sector'> & Partial<Pick<ConstructedArrangement, 'structure' | 'demand'>>,
+  prices: readonly ComparablePrice[],
+  currency = 'USD',
+): { prices: number[]; scope: string } | { refused: string } {
+  const valid = prices.filter((p) => Number.isFinite(p.value) && p.value > 0);
+  const tight = (xs: readonly number[]) => {
+    const sorted = [...xs].sort((a, b) => a - b);
+    return logQuantile(sorted, 0.9) / logQuantile(sorted, 0.1) <= COMPARABLE_SPREAD_MAX;
+  };
   const sector = normSector(one.sector);
-  const same = sector ? prices.filter((p) => normSector(p.industry) === sector).map((p) => p.value) : [];
+  const same = sector ? valid.filter((p) => normSector(p.industry) === sector).map((p) => p.value) : [];
   if (same.length >= SECTOR_PRICES_MIN) return { prices: same, scope: `in the same sector (${one.sector})` };
-  return { prices: prices.map((p) => p.value), scope: 'in this project' };
+  const held: readonly string[] = one.structure ? (STRUCTURES[one.structure]?.alreadyHeldAs ?? []) : [];
+  const structure = held.length ? valid.filter((p) => p.mechanism && held.includes(p.mechanism)).map((p) => p.value) : [];
+  if (structure.length >= SECTOR_PRICES_MIN && tight(structure)) return { prices: structure, scope: `with the same structure (${one.structure})` };
+  const buyer = normSector(one.demand?.name);
+  const buyers = buyer ? valid.filter((p) => normSector(p.payer) === buyer).map((p) => p.value) : [];
+  if (buyers.length >= SECTOR_PRICES_MIN && tight(buyers)) return { prices: buyers, scope: `paid by the same kind of buyer (${one.demand!.name})` };
+  const all = valid.map((p) => p.value);
+  if (all.length === 0 || tight(all)) return { prices: all, scope: 'in this project' };
+  const sorted = [...all].sort((a, b) => a - b);
+  const money = (x: number) => `${currency === 'USD' ? '$' : `${currency} `}${Math.round(x).toLocaleString('en-US')}`;
+  return { refused: `no comparable price: published prices for other buyers span ${money(sorted[0]!)}–${money(sorted[sorted.length - 1]!)}` };
 }
 
 /**
@@ -587,6 +645,7 @@ export function selectEstimatedArrangements(
     if (arrangement.stress.exposure === 'EXCEEDS') return no('its known worst case exceeds the limits');
     let one: ModelledOpportunity | null = estimatedFromArrangement(arrangement, input);
     let value: Value = arrangement.value;
+    let screenValue: Value | null = null;
     if (!one) {
       /*
        * Nothing prices it for its own buyers (UNKNOWN, or a MECHANISM pool
@@ -600,16 +659,21 @@ export function selectEstimatedArrangements(
        * `inputEvidence` never lets certify a plan — the path S-11 built for
        * invented designs. With no published price anywhere, it stays out.
        */
-      const comparable = comparablePricesFor(arrangement, input.otherPrices ?? []);
+      const comparable = comparablePricesFor(arrangement, input.otherPrices ?? [], input.currency);
+      if ('refused' in comparable) return no(`nothing reconstructs its value, and ${comparable.refused}`);
       const swept = sweptOverOtherPrices(arrangement, input, comparable.prices, false, comparable.scope);
       if ('refused' in swept) return no(`nothing reconstructs its value, and ${swept.refused}`);
       one = swept;
       const inf = swept.price.inferred!;
       value = { tier: 'MECHANISM', p10: inf.p10, p50: inf.p50, p90: inf.p90, observations: inf.observations };
+      // Nothing prices these buyers: the screen reads them at the lowest comparable price, never
+      // at a point inside other buyers' range, so a sweep never outranks an evidenced price (invariant 39).
+      const floor = Math.min(...comparable.prices);
+      screenValue = { ...value, p10: floor, p50: floor };
     }
     // One buyer population is one market however many designs reach it: the engine caps their deals together.
     const planned: PlannedOpening = { ...one, marketKey: populationMarket(population) };
-    rows.push({ arrangement, one: planned, screen: screenArrangement(one, { value, stress: arrangement.stress }, { remaining: input.remaining, daysLeft, contactsPerDay }), order, population, value });
+    rows.push({ arrangement, one: planned, screen: screenArrangement(one, { value: screenValue ?? value, stress: arrangement.stress }, { remaining: input.remaining, daysLeft, contactsPerDay }), order, population, value });
   });
   const byScreen = (a: Row, b: Row) =>
     b.screen.value - a.screen.value ||
@@ -770,6 +834,18 @@ function inferOr(knowledge: CashKnowledge | null, quantity: CashQuantity, opport
 }
 
 /**
+ * The money an opening ties up, inferred only where its own mechanism speaks
+ * (F6, 2026-11-15). An inference resting on other mechanisms' openings (tier
+ * MECHANISM: a grant's outlay read off resale and auction openings) says
+ * nothing about this one: it is UNKNOWN and swept from nothing to the price,
+ * never a floor that refuses the opening. Pure.
+ */
+export function ownMechanismCapital(inferred: ModelInput, top: number): ModelInput {
+  if (inferred.inferred?.tier !== 'MECHANISM') return inferred;
+  return unknown(0, top, 'only openings of other mechanisms state the money tied up, which is no evidence about this one; swept from nothing to the whole price');
+}
+
+/**
  * A reconstructed estimate as a model input: the one conversion every caller
  * uses, so the evidence it carries (tier, observations, and the sample the
  * assurance redraws from, Q2-1/Q2-12) is never dropped by a hand-built copy.
@@ -839,7 +915,7 @@ async function modelOpportunity(
       ? known(opportunity.peakFundingCents / 100, kindToProvenance(exposure).provenance === 'UNKNOWN' ? 'ASSUMPTION' : kindToProvenance(exposure).provenance, kindToProvenance(exposure).source ?? ref, 'money tied up before it pays')
       : capitalFigures.length > 0
         ? known(Math.max(...capitalFigures.map((one) => one.cents)) / 100, kindToProvenance(capitalFact).provenance, kindToProvenance(capitalFact).source, 'the most that goes out before any comes back')
-        : inferOr(knowledge, 'capitalShare', opportunity, now, unknown(0, top, 'nobody has established the money tied up; swept from nothing to the whole price'), top, ' as a share of the top price');
+        : ownMechanismCapital(inferOr(knowledge, 'capitalShare', opportunity, now, unknown(0, top, 'nobody has established the money tied up; swept from nothing to the whole price'), top, ' as a share of the top price'), top);
 
   const hoursFact = fact('hours');
   const hours =
@@ -1133,7 +1209,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       // What construction reads as held prices (`heldEvidence`), from the openings already loaded: no new query.
       otherPrices: live
         .filter((one) => one.payer && one.priceCents !== null && one.priceCents > 0 && !excludedBy(`${one.title} ${one.payer ?? ''} ${one.industry ?? ''}`, exclusions))
-        .map((one) => ({ value: one.priceCents! / 100, industry: one.industry })),
+        .map((one) => ({ value: one.priceCents! / 100, industry: one.industry, mechanism: one.mechanism, payer: one.payer })),
     });
     estimates.push(...selected.openings);
     arrangementSelection = selected.selection;
