@@ -21,7 +21,7 @@ import { recordMoney } from '../server/repos/cashLedger.ts';
 import { createWorkstream, getWorkstream, listWorkstreamEvents } from '../server/repos/register.ts';
 import { setTerms } from '../server/services/goals/decide.ts';
 import { setTarget } from '../server/services/goals/target.ts';
-import { continuationOf, continueSearch, judgeAcceptance, listReadings, readGoalPlan, settledQuantile, RECOMMENDATION_POLICY, type StrategyReading } from '../server/services/goals/plan.ts';
+import { continuationOf, continueSearch, judgeAcceptance, listReadings, openingLedgerFrom, readGoalPlan, settledQuantile, RECOMMENDATION_POLICY, type StrategyReading } from '../server/services/goals/plan.ts';
 import { DEFAULT_REQUIRED_CONFIDENCE } from '../server/services/goals/objective.ts';
 import { STANDARD_HORIZONS } from '../server/services/goals/timelines.ts';
 import { MODEL_FIELDS } from '../server/services/goals/planSet.ts';
@@ -231,5 +231,58 @@ describe('the goal plan pass carries the three readings, from rows', () => {
     expect(reading.planSet).toBeTruthy();
     const events = await listWorkstreamEvents(id);
     expect(events.find((e) => e.kind === 'GOAL_CONTINUES_BEYOND_TARGET')?.summary).toMatch(/minimum, not a stop/);
+  });
+});
+
+describe('observed collections and executed sales come from each opening’s own ledger rows (review F4-1)', () => {
+  it('reads an opening’s rows by the goal’s own metric, and an agreed, paid or settled sale as executed (pure)', () => {
+    const l = openingLedgerFrom('SETTLED_CASH', [
+      { opportunityId: 'paid', kind: 'CUSTOMER_PAYMENT', cents: 60_000 },
+      { opportunityId: 'paid', kind: 'SETTLEMENT', cents: 58_000 },
+      { opportunityId: 'paid', kind: 'REFUND', cents: 8_000 },
+      { opportunityId: 'agreed', kind: 'PIPELINE_AGREED', cents: 90_000 },
+      { opportunityId: 'cost', kind: 'COST', cents: 2_000 },
+    ]);
+    expect(l.get('paid')).toEqual({ observed: 500, executed: true });
+    // An agreement is an executed sale but not observed money.
+    expect(l.get('agreed')).toEqual({ observed: 0, executed: true });
+    expect(l.get('cost')).toEqual({ observed: 0, executed: false });
+    // The same rows read under another metric count what that metric counts.
+    expect(openingLedgerFrom('COLLECTED_CASH', [{ opportunityId: 'paid', kind: 'CUSTOMER_PAYMENT', cents: 60_000 }]).get('paid')!.observed).toBe(600);
+  });
+
+  it('a goal with a collected sale on an opening reports it observed and executed, apart from modelled money, on the production record', async () => {
+    await proveCapabilities();
+    const sold = await play('Monthly owner reports', 90_000, 7);
+    await play('Quarterly audit packs', 250_000, 20);
+    const id = await goal(1_000_000);
+    const key = () => `k${Math.random().toString(36).slice(2, 10)}`;
+    expect((await recordMoney({ projectId, opportunityId: sold.id, kind: 'CUSTOMER_PAYMENT', amountCents: 90_000, currency: 'USD', recordedBy: 'PERSON', idempotencyKey: key(), verifiedReference: 'pi_f41' })).ok).toBe(true);
+    expect((await recordMoney({ projectId, opportunityId: sold.id, kind: 'SETTLEMENT', amountCents: 60_000, currency: 'USD', recordedBy: 'PERSON', idempotencyKey: key(), verifiedReference: 'po_f41' })).ok).toBe(true);
+    // Money no opening names counts toward the target and is credited to no plan.
+    expect((await recordMoney({ projectId, kind: 'SETTLEMENT', amountCents: 20_000, currency: 'USD', recordedBy: 'PERSON', idempotencyKey: key(), verifiedReference: 'po_f41u' })).ok).toBe(true);
+
+    const reading = (await readGoalPlan({ goalId: id, evaluations: 1_000, persist: true }))!;
+    expect(reading.target.achievedCents).toBe(80_000);
+    expect(reading.target.achieved).toBe(false);
+    const s = reading.planSet!;
+    const plan = s.plans.find((p) => p.members.includes(sold.id));
+    expect(plan).toBeDefined();
+    expect(plan!.observedCollections).toBe(600);
+    expect(plan!.attempts).toMatchObject({ authorized: true, executed: true });
+    expect(s.attempts.executed).toBeGreaterThanOrEqual(1);
+    expect(s.collections.observed).toBe(600);
+    expect(s.unattributedObserved).toBe(200);
+    // One answer about observed money for one goal: plans plus unattributed is what the target holds.
+    expect(s.collections.observed + s.unattributedObserved).toBe(reading.target.achievedCents / 100);
+    // Researched and executed stay apart: the plan nobody sold is not executed.
+    const unsold = s.plans.filter((p) => !p.members.includes(sold.id) && p.source === 'PATHWAY');
+    for (const p of unsold) expect(p.attempts.executed).toBe(false);
+
+    const [row] = await listReadings(id);
+    const forecast = JSON.parse(row!.forecast ?? '{}') as Record<string, any>;
+    expect(forecast.planSet.attempts.executed).toBeGreaterThanOrEqual(1);
+    expect(forecast.planSet.collections.observed).toBe(600);
+    expect(forecast.planSet.unattributedObserved).toBe(200);
   });
 });

@@ -65,7 +65,7 @@ function planAuthority(projectId: string, action: string): ReturnType<typeof che
 import { composeBuyerMessage } from '../cash/outreach.ts';
 import { evidenceCard } from '../cash/card.ts';
 import { ARRANGEMENT_ID_PREFIX, isArrangementId, bestCaseReach, composeGoalModel, planTrace, dealsForGoal, OUTREACH_MULTIPLE, priceSupported, volumeEstablished, wilson, type ModelledOpportunity } from '../cash/goalScenario.ts';
-import { readTarget, type TargetReading } from './target.ts';
+import { achievedFrom, readTarget, type TargetReading } from './target.ts';
 import { executionFrame, MAX_LIVE_GOAL_ROUNDS, openConstructedRound, openGoalDiscovery, roundsStillResearching } from '../cash/discovery.ts';
 import { constructArrangements, type ConstructedArrangement } from '../cash/construct.ts';
 import { exclusionSentence, goalExclusions } from '../cash/exclusions.ts';
@@ -367,6 +367,60 @@ export interface ObjectiveReading {
 export interface GoalPlanSet extends PlanSet {
   /** The change the rebuild answers, and why that one. Null when no candidate depends on anything that can fail. */
   rebuild: (Rebuild & { why: string }) | null;
+  /**
+   * Observed money the goal holds that no opening's ledger rows name, major
+   * units: counted toward the target, never credited to a plan. With
+   * `collections.observed` it adds up to the cash the objective reads as held,
+   * so the two readings agree about observed money for one goal.
+   */
+  unattributedObserved: number;
+}
+
+/** What one opening's own ledger rows show since the goal's target was set: observed money and whether a sale was executed. */
+export interface OpeningLedger {
+  /** The goal's own metric over this opening's rows, major units, never below zero. Observed, not modelled. */
+  observed: number;
+  /** A buyer agreed, paid or settled on a row naming this opening: the attempt was carried out, not only researched. */
+  executed: boolean;
+}
+
+/** Ledger kinds that show a sale was carried out on an opening, whatever the goal's metric counts. */
+const EXECUTED_KINDS = ['PIPELINE_AGREED', 'CUSTOMER_PAYMENT', 'SETTLEMENT'] as const;
+
+/** Per-opening ledger readings from grouped totals (rows of opportunity, kind, cents), by the goal's own metric. Pure. */
+export function openingLedgerFrom(metric: TargetReading['metric'], rows: readonly { opportunityId: string; kind: string; cents: number }[]): Map<string, OpeningLedger> {
+  const totals = new Map<string, Record<string, number>>();
+  for (const r of rows) {
+    const t = totals.get(r.opportunityId) ?? {};
+    t[r.kind] = (t[r.kind] ?? 0) + r.cents;
+    totals.set(r.opportunityId, t);
+  }
+  const out = new Map<string, OpeningLedger>();
+  for (const [id, t] of totals) {
+    out.set(id, {
+      observed: Math.max(0, achievedFrom(metric, t)) / 100,
+      executed: EXECUTED_KINDS.some((k) => (t[k] ?? 0) > 0),
+    });
+  }
+  return out;
+}
+
+/**
+ * Each opening's own ledger since the target was set, in one grouped
+ * statement (the goal plan has a statement budget: one per opening is what
+ * got #758 reverted). Counted exactly as the target counts its figure, so a
+ * plan's observed collections are the same money the target reads as held.
+ */
+export async function readOpeningLedger(target: Pick<TargetReading, 'projectId' | 'currency' | 'since' | 'metric'>): Promise<Map<string, OpeningLedger>> {
+  const rows = await getDb().all<{ opportunity_id: string; kind: string; total: number | string }>(
+    `SELECT opportunity_id, kind, COALESCE(SUM(amount_cents), 0) AS total
+       FROM cash_money_entries
+      WHERE project_id = ? AND currency = ? AND occurred_at >= ? AND opportunity_id IS NOT NULL
+      GROUP BY opportunity_id, kind
+      ORDER BY opportunity_id ASC, kind ASC`,
+    [target.projectId, target.currency, target.since],
+  );
+  return openingLedgerFrom(target.metric, rows.map((r) => ({ opportunityId: r.opportunity_id, kind: r.kind, cents: Number(r.total ?? 0) })));
 }
 
 export interface Continuation {
@@ -1000,6 +1054,8 @@ export function composeGoalReadings(input: {
   arrangements: readonly ConstructedArrangement[];
   reconstruction: Reconstruction | null;
   acceptance: PlanAcceptance;
+  /** Each opening's own ledger rows (`readOpeningLedger`): observed collections and executed sales, never modelled ones. */
+  ledger?: ReadonlyMap<string, OpeningLedger> | null;
 }): { timelines: TimelineReading; objective: ObjectiveReading; planSet: GoalPlanSet } {
   const { objective, target, portfolio, acceptance } = input;
   const calibration = planCalibration(acceptance);
@@ -1069,9 +1125,16 @@ export function composeGoalReadings(input: {
   };
 
   // The candidate plans, proven distinct (GOAL-23).
-  const fromPathways = (input.pathways?.pathways ?? []).map((p) =>
-    candidateFromPathway(p, { enforceableCommitments: committedTo([p.opportunityId]) }),
-  );
+  // Observed money and executed sales come from the opening's own ledger rows, never from its model (GOAL-23 clause 5).
+  const fromPathways = (input.pathways?.pathways ?? []).map((p) => {
+    const own = input.ledger?.get(p.opportunityId) ?? null;
+    return candidateFromPathway(p, {
+      enforceableCommitments: committedTo([p.opportunityId]),
+      observedCollections: own?.observed ?? 0,
+      // A sale a buyer agreed, paid or settled was carried out, so it was authorized; otherwise the pathway's own permissions decide.
+      ...(own?.executed ? { attempts: { researched: true, authorized: true, executed: true } } : {}),
+    });
+  });
   const byId = new Map(fromPathways.map((c) => [c.id, c]));
   const variants = input.reconstruction ? [input.reconstruction.baseline, input.reconstruction.best, ...input.reconstruction.rounds.flatMap((r) => r.tried)] : [];
   const seen = new Set<string>();
@@ -1116,7 +1179,8 @@ export function composeGoalReadings(input: {
           : `the leading plan's own ${change.kind === 'CHANNEL_FAILED' ? 'channel' : 'supplier'} “${change.kind === 'CHANNEL_FAILED' ? change.channel : change.supplier}” is its single point of failure`,
       }
     : null;
-  return { timelines, objective: objectiveReading, planSet: { ...set, rebuild } };
+  const unattributedObserved = Math.max(0, Math.round((held - set.collections.observed) * 100) / 100);
+  return { timelines, objective: objectiveReading, planSet: { ...set, rebuild, unattributedObserved } };
 }
 
 /** Compact readings stored on a persisted reading's forecast, so the production record shows them (GOAL-13-6, GOAL-18-4, GOAL-23). */
@@ -1172,6 +1236,7 @@ export function readingsSummary(reading: Pick<PlanReading, 'timelines' | 'object
           doubleCounted: s.doubleCounted.length,
           attempts: s.attempts,
           collections: s.collections,
+          unattributedObserved: s.unattributedObserved,
           confidence: s.confidence,
           plans: s.plans.slice(0, 12).map((p) => ({ id: p.id, source: p.source, signature: p.signature, acceptance: p.acceptance, gaps: p.gaps.map((g) => g.field) })),
           rebuild: s.rebuild ? { change: s.rebuild.change, why: s.rebuild.why, removed: s.rebuild.removed.length, reconstructed: s.rebuild.reconstructed.length, surviving: s.rebuild.surviving.length } : null,
@@ -1621,7 +1686,13 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
           currency: target.currency,
         });
   const pool = poolConclusion(bestReach, target, considered.filter((one) => !isArrangementId(one.opportunityId)).length);
-  const readings = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways, arrangements, reconstruction, acceptance });
+  let ledger: Map<string, OpeningLedger> | null = null;
+  try {
+    ledger = await readOpeningLedger(target);
+  } catch (error) {
+    degraded.push(`opening ledger: ${errorText(error)} (the plan set reads no observed collections or executed sales)`);
+  }
+  const readings = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways, arrangements, reconstruction, acceptance, ledger });
   const continuation = continuationOf({
     achieved: target.achieved,
     daysLeft: target.daysLeft,
