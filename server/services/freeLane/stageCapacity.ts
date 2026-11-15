@@ -87,6 +87,14 @@ export interface StageReading {
   incrementalDollars: Measured<number>;
   /** The stage's own CPU / RAM / DB / network use, where its items recorded it. */
   resources: Measured<StageResources>;
+  /**
+   * Model-call failures split by the cause each reason's `[cause]` tag names
+   * (`causeOfReason`), lane stages only. `providerFailures` is the sum of every
+   * cause but `database` — Brain itself being unavailable is not a provider
+   * failing, as `diagnoseThroughput` already reads it — so the split shows the
+   * whole and the measure shows the provider's part.
+   */
+  providerFailuresByCause?: Partial<Record<RouteFailureCause, number>>;
   accepted: number;
   acceptedPerHour: number;
   /** The tables the reading came from. */
@@ -297,20 +305,23 @@ async function readStage(def: StageDefinition, since: string, hours: number, now
 
   const db = getDb();
   const types = [...def.workTypes];
+  const until = new Date(nowMs).toISOString();
   const queued = await db.get<{ n: number | string; oldest: string | null }>(
     `SELECT COUNT(*) AS n, MIN(w.available_at) AS oldest FROM work_items w
       WHERE w.state = 'QUEUED' AND w.available_at <= ? AND w.attempt_count < w.max_attempts
         AND w.work_type IN (${placeholders(types)})`,
     [new Date(nowMs).toISOString(), ...types],
   );
-  const events = await db.all<{ outcome: string | null; failed: number | string; k: number | string; ms: number | string | null }>(
+  // Grouped by reason only where the reason is a model-call failure, so each
+  // failure's `[cause]` tag can be read; every other outcome collapses to one row.
+  const events = await db.all<{ outcome: string | null; failure: string | null; k: number | string; ms: number | string | null }>(
     `SELECT outcome,
-            CASE WHEN reason LIKE '%model call failed%' THEN 1 ELSE 0 END AS failed,
+            CASE WHEN reason LIKE '%model call failed%' THEN reason ELSE NULL END AS failure,
             COUNT(*) AS k, SUM(duration_ms) AS ms
        FROM bin_events
-      WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND workload_class IN (${placeholders(types)})
-      GROUP BY outcome, CASE WHEN reason LIKE '%model call failed%' THEN 1 ELSE 0 END`,
-    [since, ...types],
+      WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND at <= ? AND workload_class IN (${placeholders(types)})
+      GROUP BY outcome, CASE WHEN reason LIKE '%model call failed%' THEN reason ELSE NULL END`,
+    [since, until, ...types],
   );
   // A fact belongs to the one job that produced it: the claims a submitted item
   // wrote are the ones on the pass its submission returned as `result_ref`
@@ -327,15 +338,15 @@ async function readStage(def: StageDefinition, since: string, hours: number, now
       WHERE c.accepted = 1
         AND c.pass_id IN (
           SELECT w.result_ref FROM bin_events e JOIN work_items w ON w.id = e.work_item_id
-           WHERE e.event_type = 'FREE_LANE_ITEM' AND e.outcome = 'SUBMITTED' AND e.at >= ?
+           WHERE e.event_type = 'FREE_LANE_ITEM' AND e.outcome = 'SUBMITTED' AND e.at >= ? AND e.at <= ?
              AND w.result_ref IS NOT NULL AND e.workload_class IN (${placeholders(types)}))`,
-    [since, ...types],
+    [since, until, ...types],
   );
   const metered = await db.all<{ measures: string | Record<string, unknown> | null }>(
     `SELECT measures FROM bin_events
-      WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND workload_class IN (${placeholders(types)})
+      WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND at <= ? AND workload_class IN (${placeholders(types)})
         AND measures LIKE '%"usage"%'`,
-    [since, ...types],
+    [since, until, ...types],
   );
 
   let total = 0;
@@ -343,13 +354,18 @@ async function readStage(def: StageDefinition, since: string, hours: number, now
   let providerFailures = 0;
   let dropped = 0;
   let ms = 0;
+  const byCause: Partial<Record<RouteFailureCause, number>> = {};
   for (const row of events) {
     total += n(row.k);
     ms += n(row.ms);
-    const providerFailed = n(row.failed) === 1;
+    const cause = causeOfReason(row.failure);
+    const modelCallFailed = cause !== null;
     if (row.outcome === 'SUBMITTED') accepted += n(row.k);
-    if (providerFailed) providerFailures += n(row.k);
-    if (isDroppedOutcome(row.outcome, providerFailed)) dropped += n(row.k);
+    if (cause) byCause[cause] = (byCause[cause] ?? 0) + n(row.k);
+    if (cause && cause !== 'database') providerFailures += n(row.k);
+    // A model call that failed is never a dropped record, whatever its cause:
+    // it is counted under its cause, not here.
+    if (isDroppedOutcome(row.outcome, modelCallFailed)) dropped += n(row.k);
   }
   const oldest = queued?.oldest ? Math.max(0, Math.round((nowMs - Date.parse(queued.oldest)) / 60_000)) : null;
   const usage = sumUsage(metered.map((row) => usageOf(row.measures)), total);
@@ -367,6 +383,7 @@ async function readStage(def: StageDefinition, since: string, hours: number, now
       ? ok(usage.avoided)
       : NOT('no lane item in the window recorded its model calls (items record them since the item meter was added)'),
     providerFailures: ok(providerFailures),
+    providerFailuresByCause: byCause,
     elapsedMs: ok(ms),
     incrementalDollars: NOT('the lane records no dollar cost per job'),
     resources: usage.measured
@@ -622,35 +639,40 @@ const ROW_STAGES: Record<string, RowStageReader> = {
 /**
  * Each productive (SUBMITTED) job is attributed to exactly one purpose: the
  * purpose of the bin the item is queued on. Joining on the item's own bin, never
- * on an orchestration, is what makes a job unable to match twice.
+ * on an orchestration, is what makes a job unable to match twice. Pure: it is
+ * fed the same job rows the S-0170 categories are, so the purposes, the
+ * categories and the productive total are one snapshot and cannot disagree.
  */
-async function readPurposes(since: string): Promise<PurposeAttribution[]> {
-  const rows = await getDb().all<{ purpose: string | null; k: number | string }>(
-    `SELECT b.purpose AS purpose, COUNT(*) AS k
-       FROM bin_events e LEFT JOIN bins b ON b.id = e.bin_id
-      WHERE e.event_type = 'FREE_LANE_ITEM' AND e.outcome = 'SUBMITTED' AND e.at >= ?
-      GROUP BY b.purpose`,
-    [since],
-  );
-  return rows
-    .map((r) => ({ purpose: r.purpose ?? 'UNATTRIBUTED', productiveJobs: n(r.k) }))
+export function purposesOf(jobs: readonly { bin_purpose: string | null }[]): PurposeAttribution[] {
+  const counts = new Map<string, number>();
+  for (const job of jobs) {
+    const purpose = job.bin_purpose ?? 'UNATTRIBUTED';
+    counts.set(purpose, (counts.get(purpose) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([purpose, productiveJobs]) => ({ purpose, productiveJobs }))
     .sort((a, b) => b.productiveJobs - a.productiveJobs || a.purpose.localeCompare(b.purpose));
 }
 
 const DISCOVERY_DEAL_ROUNDS = "('SEED_EQUIPMENT', 'ADJACENT')";
 
+interface ProductiveJobRow {
+  bin_purpose: string | null; brain_project: number | string | null; validates_opening: number | string;
+  deal_round: number | string; future_goal: number | string; commercial: number | string;
+}
+
 /**
- * Each productive (SUBMITTED) job, with the row facts `attributeJob` decides
- * on. The job's orchestration is the one its event row names, else its bin's,
- * else its work item's; every fact is
- * an EXISTS over the rows that consume that orchestration, so a job is one row
- * here however many consumers match, and is attributed once.
+ * Each productive (SUBMITTED) job in [since, until], with the row facts
+ * `attributeJob` decides on. The job's orchestration is the one its event row
+ * names, else its bin's, else its work item's; every fact is an EXISTS over the
+ * rows that consume that orchestration, so a job is one row here however many
+ * consumers match, and is attributed once. The window is closed at the
+ * reading's own time: the lane keeps writing while the reading is taken, and an
+ * open window let a job land between two queries and be in one count and not
+ * the other.
  */
-async function readCategories(since: string): Promise<CategoryAttribution[]> {
-  const rows = await getDb().all<{
-    bin_purpose: string | null; brain_project: number | string | null; validates_opening: number | string;
-    deal_round: number | string; future_goal: number | string; commercial: number | string;
-  }>(
+async function readProductiveJobs(since: string, until: string): Promise<ProductiveJobRow[]> {
+  return getDb().all<ProductiveJobRow>(
     `SELECT j.bin_purpose,
             CASE WHEN p.slug = 'brain-architecture' OR p.purpose = 'TECHNICAL' THEN 1 ELSE 0 END AS brain_project,
             CASE WHEN j.orch IS NOT NULL AND EXISTS (
@@ -678,10 +700,14 @@ async function readCategories(since: string): Promise<CategoryAttribution[]> {
                FROM bin_events e
                LEFT JOIN bins b ON b.id = e.bin_id
                LEFT JOIN work_items w ON w.id = e.work_item_id
-              WHERE e.event_type = 'FREE_LANE_ITEM' AND e.outcome = 'SUBMITTED' AND e.at >= ?) j
+              WHERE e.event_type = 'FREE_LANE_ITEM' AND e.outcome = 'SUBMITTED' AND e.at >= ? AND e.at <= ?) j
        LEFT JOIN projects p ON p.id = j.project_id`,
-    [since],
+    [since, until],
   );
+}
+
+/** Each productive job in exactly one S-0170 category. Pure; exported for tests. */
+export function categoriesOf(rows: readonly ProductiveJobRow[]): CategoryAttribution[] {
   const byCategory = new Map<AttributionCategory, CategoryAttribution>(
     ATTRIBUTION_CATEGORIES.map((category) => [category, { category, productiveJobs: 0, bases: {} }]),
   );
@@ -1064,13 +1090,14 @@ export async function stageCapacity(options: { hours?: number; now?: number } = 
     : spend.unpricedRunningSamples > 0
       ? NOT(`RunPod returned no price for ${spend.unpricedRunningSamples} running sample(s) in the window`)
       : ok(spend);
-  const purposes = await readPurposes(since);
-  const totalProductiveJobs = purposes.reduce((sum, p) => sum + p.productiveJobs, 0);
-  const total = await getDb().get<{ k: number | string }>(
-    "SELECT COUNT(*) AS k FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND outcome = 'SUBMITTED' AND at >= ?",
-    [since],
-  );
-  const attribution = await readCategories(since);
+  // One read of the productive jobs feeds the purposes, the categories and the
+  // total, so a job the lane submits while the reading runs is in all three or
+  // in none (production: a reading whose purposes and total came from separate
+  // queries over an open window could disagree by the jobs written between them).
+  const jobs = await readProductiveJobs(since, new Date(nowMs).toISOString());
+  const purposes = purposesOf(jobs);
+  const attribution = categoriesOf(jobs);
+  const totalProductiveJobs = jobs.length;
   const diagnosis = await diagnoseThroughput(since, nowMs);
   return {
     windowHours: hours,
@@ -1078,9 +1105,9 @@ export async function stageCapacity(options: { hours?: number; now?: number } = 
     stages,
     purposes,
     totalProductiveJobs,
-    purposesSumToTotal: totalProductiveJobs === n(total?.k),
+    purposesSumToTotal: purposes.reduce((sum, p) => sum + p.productiveJobs, 0) === totalProductiveJobs,
     attribution,
-    attributionSumsToTotal: attribution.reduce((sum, c) => sum + c.productiveJobs, 0) === n(total?.k),
+    attributionSumsToTotal: attribution.reduce((sum, c) => sum + c.productiveJobs, 0) === totalProductiveJobs,
     process: readProcess(),
     gpuSpend,
     diagnosis,
@@ -1230,6 +1257,9 @@ export function stageCapacityLines(recorded: RecordedStageCapacity | null): stri
       `  stage ${s.stage} queue=${shown(s.queueSize)} oldest=${shown(s.oldestUsefulItemMinutes, (v) => (v === null ? '—' : `${v}min`))}` +
         ` processed/h=${shown(s.itemsProcessedPerHour)} accepted/h=${s.acceptedPerHour} facts=${shown(s.uniqueUsableFacts)}` +
         ` dropped=${shown(s.droppedOrDuplicate)} avoided=${shown(s.modelCallsAvoided)} providerFailures=${shown(s.providerFailures)}` +
+        (s.providerFailuresByCause && Object.keys(s.providerFailuresByCause).length > 0
+          ? ` (${Object.entries(s.providerFailuresByCause).map(([cause, k]) => `${cause} ${k}`).join(', ')})`
+          : '') +
         ` $=${shown(s.incrementalDollars)}`,
     );
   }
