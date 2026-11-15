@@ -65,17 +65,22 @@ export const INTERMEDIATION_BUCKET_PREFIX = 'intermediation-';
  * asking price or a market size leaves buyer access and conversion open.
  */
 export const POSITION_EVIDENCE_ASK =
-  ' For each one, say which lawful position the transaction could be held from — introducer, ' +
+  ' and, for each one, which lawful position could the transaction be held from — introducer, ' +
   'referrer, representative, lead supplier, broker, coordinator, distributor, reseller, ' +
   'subcontracting principal, marketplace, control-right holder or another position the ' +
-  'sources show — and name the exact payer and the channel through which that payer is ' +
+  'sources show — naming the exact payer and the channel through which that payer is ' +
   'reachable, the observed demand, the offer made or proposed, the supplier or capacity ' +
   'source, the published price and spread, acquisition costs and throughput, fulfilment ' +
   'obligations, margin and timing, whether the buyer funds fulfilment, the capital exposed, ' +
   'the contracts, rights, liabilities and restrictions at that exact position, what remains ' +
-  'uncertain, and the fastest meaningful next action. Where a source establishes only a ' +
-  'public asking price or a total market size, say so and name the buyer-access and ' +
-  'conversion gaps that remain open.';
+  'uncertain, the fastest meaningful next action, and — where a source establishes only a ' +
+  'public asking price or a total market size — which buyer-access and conversion gaps ' +
+  'remain open?';
+
+/** The bucket's own ask joined to the shared evidence request, as one question. */
+export function composeQuestion(ask: string): string {
+  return `${ask.trimEnd().replace(/\?$/, ',')}${POSITION_EVIDENCE_ASK}`;
+}
 
 type Draft = Omit<IntermediationBucket, 'question'>;
 
@@ -241,7 +246,7 @@ const DRAFTS: readonly Draft[] = [
 ];
 
 export const INTERMEDIATION_BUCKETS: readonly IntermediationBucket[] = Object.freeze(
-  DRAFTS.map((draft): IntermediationBucket => ({ ...draft, question: `${draft.ask}${POSITION_EVIDENCE_ASK}` })),
+  DRAFTS.map((draft): IntermediationBucket => ({ ...draft, question: composeQuestion(draft.ask) })),
 );
 
 /** Whether a bucket belongs to the intermediation family. */

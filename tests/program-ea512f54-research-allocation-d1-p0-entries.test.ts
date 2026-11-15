@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   INTERMEDIATION_BUCKETS,
-  POSITION_EVIDENCE_ASK,
+  composeQuestion,
   isIntermediationBucket,
   namedDefaults,
   nearDuplicateBuckets,
@@ -46,7 +46,7 @@ describe('RES-15-4 intermediation entry buckets', () => {
       buyerType: 'CONSUMER',
       ask: base.ask.replace('manufacturing, logistics or concrete', 'cleaning, roofing or plumbing'),
     };
-    swapped.question = `${swapped.ask}${POSITION_EVIDENCE_ASK}`;
+    swapped.question = composeQuestion(swapped.ask);
     const found = nearDuplicateBuckets([base, swapped]);
     expect(found).toHaveLength(1);
     expect(found[0]!.reason).toBe('SAME_QUESTION_BUT_INDUSTRY');
@@ -84,6 +84,8 @@ describe('RES-15-4 intermediation entry buckets', () => {
 
   it('asks for S-0150 per-position evidence rather than industry facts', () => {
     for (const bucket of INTERMEDIATION_BUCKETS) {
+      expect(bucket.question.trimEnd().endsWith('?'), bucket.id).toBe(true);
+      expect(bucket.question.match(/\?/g), bucket.id).toHaveLength(1);
       for (const phrase of [
         'introducer',
         'control-right holder',
