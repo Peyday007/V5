@@ -224,6 +224,23 @@ Total ≈ 25 min (baseline 26 min 41 s): construct 247 s, shared frontier (979 o
 **P-SPEED-2:** the planning read is still ~25 min on production. REPAIRED on branch (df6ef39 + tie-break): on a production-shape fixture (979 openings, 404 of 2,474 arrangements) the read went 565 s → ~160 s on 2 contended cores and 25 s → 18.7 s on free cores; a warm re-read is 0.44 s. Changes: construction runs ≤24 compositions inline (no idle pool wait); the plan reads frontier tiers only (67 queries / 6.6 MB → 2); baseline portfolio held by input digest; drawn world order and quantiles cached per sample; exactly tied strategies break on key so re-reads are identical.
 **Handed to Surge A (runtime, measured):** (1) evaluator pool threads run at nice 19 (`evaluatorWorker.ts:13`) and on a 2-vCPU host each job waits its 60–120 s timeout before running inline — construction 127 s and quant 63 s under contention vs 0.4 s and 1.6 s free; (2) production's 210 s frontier was ~2,700 serial queries at ~76 ms from `readStandingRows` → `whyNotDiving` (`validation.ts:388`) — the plan no longer calls it, cash views still do; (3) one plan read calls `listOpportunities` 8× (1.5 MB each) and `cardFactsForProject` 5×.
 
+### Adversarial pass: capabilities that pass on fixtures but are inert on production (01:49Z, `docs/intelligence-recovery/adversarial-production-gaps.md`)
+
+New failure categories the inventory did not cover: gates on a fact kind production never writes; a writer whose only reader is off the failing path; uniform sampling over pooled prices spanning orders of magnitude; capabilities that only run on worker threads; model output refused for shape.
+
+| id | finding | severity | owner | status |
+|---|---|---|---|---|
+| F1 | TRANSFER precedent requires a `captureMechanism` EVIDENCE fact production never writes (only RECOMMENDATION) — W-8/G2 pass only on fixtures | CRITICAL | transfer-facts engineer | REPAIRING |
+| F2 | construction facts are read only by goalConstruction; arrangement value and the goal model never read them | CRITICAL | transfer-facts engineer | REPAIRING |
+| F3 | facts rarely written: no UNIT_ECONOMIC question, exact buyer-name match, 16.8K claims never back-filed | MAJOR | transfer-facts engineer | REPAIRING |
+| F4 | P-ADMIT fallback pools every project price ($15–$325K) sampled uniformly: unpriced arrangements inflate reach (cannot certify) | CRITICAL (regression in parts 3+4) | admission engineer | REPAIRING |
+| F5 | 282 of 418 live openings (no payer) feed no construction/transfer | MAJOR | discovery engineer | REPAIRING |
+| F6 | capital tied up inferred across mechanisms treated as established; 3 of 11 openings hard-refused | MAJOR | admission engineer | REPAIRING |
+| F7 | arrangement research rounds and library counters still gated on Cash Mode ACTIVE | MAJOR (CRITICAL when the sprint winds down) | discovery engineer | REPAIRING |
+| F8 | stuck-plan detector needs identical shortfall text; unreported-round detector ignores kernel rounds | MAJOR | discovery engineer | REPAIRING |
+| F9.1 | variable sweep (§102) abandoned on production: "no evaluation thread is running" (`evaluatorPool.ts:173,198`) | CRITICAL | **Surge A** (evaluator pool runtime) | HANDED OFF |
+| F9.2 | 16/16 model-proposed methods refused as off-shape; 2/4 calls HTTP 429 | MAJOR | discovery engineer | REPAIRING |
+
 ### Received from Surge A (22:09Z scope adjustment)
 
 | id | finding | status |
