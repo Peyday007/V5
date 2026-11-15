@@ -115,7 +115,7 @@ Models are idle while engineering assignments wait, so the fault is in routing a
 ## Defects found and changed
 
 1. **Dispatch starvation (PR #949).** `laneCoverage()` always ran `consumedLastDay`, a correlated count over `work_items` × `bin_events` that took 48–82 s a read (30 reads, 1,652 s of database time in 32 min). Only `admin free-lane show` prints it. `watchDisplacedWork()` awaits it inside `dispatchTick` once a minute, so the 10 s dispatch loop ran about once a minute, `dispatchTickIfIdle` (the Factory stage handoff) declined, and roughly 0.86 of a database core was spent on it. Now it runs only on the admin readout's request.
-2. **GPU stranded on a full host.** A stopped pod stays on its host, and nothing moved it when that host's GPUs were taken. Moved by hand once (cheap lane 43768013494, `runpod-upgrade`, active recipe, same price ceiling). From now on the hourly `runpod-auto` moves it itself when its last three starts were refused for that reason (PR #949, `POD_STRANDED`).
+2. **GPU stranded on a full host.** A stopped pod stays on its host, and nothing moved it when that host's GPUs were taken. This audit moved it once by hand (cheap lane 43768013494, `runpod-upgrade`, active recipe, same price ceiling). The permanent fix is the Evolution Engine's #950, merged in parallel: the server moves the pod after 3 host refusals while research waits. This audit's own workflow-level mover was dropped as a duplicate mechanism (rule 6).
 
 ## Scaling options, priced
 

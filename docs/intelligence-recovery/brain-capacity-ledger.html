@@ -165,7 +165,7 @@ code{font-family:var(--mono);font-size:12.5px}
   <ul>
     <li><b>Dispatch unblocked</b> (PR #949): the per-minute coverage watch no longer runs the 48–82 s count only the admin terminal prints. Expected: dispatch ticks go from about 1/min to 6/min, the database host loses about 0.86 of a core, and Factory and Routine handoffs stop declining.</li>
     <li><b>GPU moved off its full host</b> (Cheap lane run 43768013494, <code>runpod-upgrade</code>, same recipe, same price ceiling): a new pod is created, probed, connected, and the old one retired.</li>
-    <li><b>Strandings now fix themselves</b> (PR #949): the hourly <code>runpod-auto</code> moves the pod when its last three starts were refused for host capacity.</li>
+    <li><b>Strandings now fix themselves</b> (the Evolution Engine's #950, merged in parallel): the server moves the pod after 3 host refusals while research waits. This audit's own workflow-level mover was dropped as a duplicate.</li>
   </ul>
 </section>
 
