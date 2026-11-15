@@ -19,22 +19,24 @@
  * constant holding the example categories, or named as an allow-list,
  * shortlist or quota. None may narrow the search.
  *
- * Why the label is replaced in the evidence and not on the node: a subject's
- * name is how its reference evidence is found (`assembleEvidence` looks a
- * measured pack up by it), so renaming the row would change what is known, not
- * what is preferred. Replacing the label after the evidence is assembled
- * isolates the question the requirement asks — does the score read the name.
+ * Each subject's evidence is its subtree on the map and the facts research
+ * filed under that subtree (`subjectEvidence`, the read `rankSubjectMarkets`
+ * makes); since W-9 no reference pack is looked up by a map subject's name.
+ * The label is still replaced in the assembled evidence rather than on the
+ * node, so the demonstration asks exactly the requirement's question — does
+ * the score read the name — whatever the evidence was assembled from.
  *
- * No table, scheduler, store or authority path: it reads rows the industry and
- * project repositories already serve and writes nothing.
+ * No table, scheduler, store or authority path: it reads rows the industry,
+ * construction-fact and project repositories already serve and writes nothing.
  */
 import { readdir, readFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { listConstraintsForProject, listNodes } from '../../../repos/industry.ts';
+import { listProjectConstructionFacts } from '../../../repos/construction.ts';
 import { listProjects } from '../../../repos/projects.ts';
 import type { IndustryNode, OpportunityConstraint } from '../../../domain/types.ts';
-import type { IndustryEvidence } from '../../../domain/construction.ts';
-import { marketCriteria, marketOfEvidence, rankMarkets, rankSubjectMarkets, type MarketCandidate, type MarketCriteria, type RankedSubject } from './origins.ts';
+import type { Fact, IndustryEvidence } from '../../../domain/construction.ts';
+import { marketOfEvidence, rankMarkets, rankSubjectMarkets, subjectEvidence, type MarketCandidate, type MarketCriteria, type RankedSubject } from './origins.ts';
 
 /** The criteria a place in the ranking rests on, and the reading of each (META-18-1). */
 export const RANKING_CRITERIA = {
@@ -100,24 +102,15 @@ export interface AnchoringReport {
 }
 
 /** The ranker under test; production passes `rankSubjectMarkets`, a test may pass one that misbehaves. */
-export type SubjectRanker = (nodes: readonly IndustryNode[], constraints: readonly OpportunityConstraint[]) => Promise<RankedSubject[]>;
+export type SubjectRanker = (nodes: readonly IndustryNode[], constraints: readonly OpportunityConstraint[], recorded: readonly Fact[]) => Promise<RankedSubject[]>;
 /** How one subject's evidence becomes a market; production uses `marketOfEvidence` over its commercial roles. */
 export type EvidenceScorer = (key: string, evidence: IndustryEvidence) => MarketCandidate;
 
 export interface CheckOptions {
   rank?: SubjectRanker;
   score?: EvidenceScorer;
-}
-
-/** A node and everything recorded beneath it, as `rankSubjectMarkets` assembles a subject. Pure. */
-function subtreeOf(nodes: readonly IndustryNode[], rootId: string): IndustryNode[] {
-  const keep = new Set([rootId]);
-  let grew = true;
-  while (grew) {
-    grew = false;
-    for (const n of nodes) if (n.parentId && keep.has(n.parentId) && !keep.has(n.id)) { keep.add(n.id); grew = true; }
-  }
-  return nodes.filter((n) => keep.has(n.id));
+  /** The project's recorded construction facts; each subject reads those filed under its own subtree. */
+  recorded?: readonly Fact[];
 }
 
 const orderOf = (ranked: readonly RankedSubject[]) => ranked.map((r) => r.node.id);
@@ -140,10 +133,11 @@ export async function checkSubjects(
 ): Promise<SubjectCheck> {
   const rank = options.rank ?? rankSubjectMarkets;
   const score = options.score ?? (await defaultScorer());
+  const recorded = options.recorded ?? [];
   const violations: AnchoringViolation[] = [];
   const live = nodes.filter((n) => !n.retiredAt);
   if (live.length === 0) return { live: 0, ranked: 0, scored: 0, discriminating: false, violations };
-  const ranked = await rank(nodes, constraints);
+  const ranked = await rank(nodes, constraints, recorded);
   const order = orderOf(ranked);
 
   // (1) Every live subject ranked, once: no shortlist, fixed count or quota.
@@ -156,21 +150,19 @@ export async function checkSubjects(
   }
 
   // (2) Label-invariance: the order each subject's evidence earns does not move when its label is a neutral token.
-  const { assembleEvidence, evidenceFromMap } = await import('./service.ts');
   const width = String(live.length).length;
   const labelled: MarketCandidate[] = [];
   const neutral: MarketCandidate[] = [];
   const idOfKey = new Map<string, string>();
-  live.forEach((node, index) => {
-    const map = evidenceFromMap(subtreeOf(live, node.id), [...constraints]);
-    const evidence = assembleEvidence({ text: node.name, industry: node.name, geography: null, map, recorded: [] });
+  for (const [index, node] of live.entries()) {
+    const evidence = await subjectEvidence(live, node, constraints, recorded);
     const key = `${String(index).padStart(width, '0')}:${node.id}`;
     idOfKey.set(key, node.id);
     labelled.push(score(key, evidence));
     const renamed = JSON.parse(JSON.stringify(evidence)) as IndustryEvidence;
     renamed.industry = `subject-${String(index).padStart(width, '0')}`;
     neutral.push(score(key, renamed));
-  });
+  }
   const earned = rankMarkets(labelled).map((m) => idOfKey.get(m.key)!);
   const unlabelled = rankMarkets(neutral).map((m) => idOfKey.get(m.key)!);
   if (!same(earned, unlabelled)) {
@@ -184,7 +176,7 @@ export async function checkSubjects(
 
   // (3) Seed origin confers no advantage: every origin set to SEED, then to DISCOVERED, ranks the same.
   for (const origin of ['SEED', 'DISCOVERED'] as const) {
-    const flipped = await rank(nodes.map((n) => ({ ...n, origin })), constraints);
+    const flipped = await rank(nodes.map((n) => ({ ...n, origin })), constraints, recorded);
     const scores = ranked.map((r) => r.criteria.score);
     const flippedScores = flipped.map((r) => r.criteria.score);
     if (!same(orderOf(flipped), order) || !same(flippedScores.map(String), scores.map(String))) {
@@ -257,9 +249,9 @@ export async function noAnchoringHoldsOnRows(): Promise<AnchoringReport> {
   let discovered = 0;
   const score = await defaultScorer();
   for (const p of projects) {
-    const [nodes, constraints] = await Promise.all([listNodes(p.id), listConstraintsForProject(p.id)]);
+    const [nodes, constraints, recorded] = await Promise.all([listNodes(p.id), listConstraintsForProject(p.id), listProjectConstructionFacts(p.id)]);
     for (const n of nodes) if (!n.retiredAt) { if (n.origin === 'SEED') seeded += 1; else discovered += 1; }
-    const check = await checkSubjects(p.id, nodes, constraints, { score });
+    const check = await checkSubjects(p.id, nodes, constraints, { score, recorded });
     live += check.live;
     ranked += check.ranked;
     scored += check.scored;

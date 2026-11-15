@@ -16,14 +16,16 @@ import {
   marketScore,
   rankMarkets,
   rankSubjectMarkets,
+  unknownFloor,
   type MarketCandidate,
 } from '../server/services/industry/construction/origins.ts';
 import { assembleEvidence, evidenceFromMap } from '../server/services/industry/construction/service.ts';
 import { commercialRoles } from '../server/services/industry/construction/roles.ts';
-import type { IndustryEvidence } from '../server/domain/construction.ts';
+import type { Fact, FactKey, IndustryEvidence } from '../server/domain/construction.ts';
 import type { IndustryNode } from '../server/domain/types.ts';
 
-const evidenceOf = (name: string): IndustryEvidence => assembleEvidence({ text: name, industry: name, geography: null, map: evidenceFromMap([], []), recorded: [] });
+// The figures under test come from the reference pack, which applies only where an operator named the industry (W-9).
+const evidenceOf = (name: string): IndustryEvidence => assembleEvidence({ text: name, industry: name, geography: null, map: evidenceFromMap([], []), recorded: [], operatorNamed: true });
 const clone = (e: IndustryEvidence): IndustryEvidence => JSON.parse(JSON.stringify(e)) as IndustryEvidence;
 const market = (key: string, e: IndustryEvidence) => marketOfEvidence(key, e, commercialRoles(e));
 
@@ -109,18 +111,57 @@ describe('no anchoring to a label (S-0191)', () => {
 });
 
 describe('rankSubjectMarkets: every live subject, no shortlist or quota', () => {
-  const subject = (id: string, name: string, origin: 'SEED' | 'DISCOVERED' = 'SEED', retiredAt: string | null = null): IndustryNode =>
-    ({ id, projectId: 'prj_x', parentId: null, kind: 'SECTOR', name, description: '', origin, sourceClaimId: null, retiredAt, createdAt: '2026-11-01T00:00:00.000Z', updatedAt: '2026-11-01T00:00:00.000Z' }) as IndustryNode;
+  const subject = (id: string, name: string, origin: 'SEED' | 'DISCOVERED' = 'SEED', retiredAt: string | null = null, extra: Partial<IndustryNode> = {}): IndustryNode =>
+    ({ id, projectId: 'prj_x', parentId: null, kind: 'SECTOR', name, description: '', origin, sourceClaimId: null, retiredAt, createdAt: '2026-11-01T00:00:00.000Z', updatedAt: '2026-11-01T00:00:00.000Z', ...extra }) as IndustryNode;
+
+  /*
+   * Economics research filed under a subject. A map subject inherits no
+   * reference pack by its name (W-9): what it has recorded is what it competes on.
+   */
+  const ECONOMICS: ReadonlyArray<[FactKey, number, number]> = [
+    ['price_per_unit', 20, 30],
+    ['contractor_rate_per_unit', 10, 12],
+    ['broker_take_rate', 0.1, 0.2],
+    ['account_units_per_month', 50, 100],
+    ['accounts_reachable', 100, 200],
+    ['sales_cycle_days', 10, 20],
+    ['buyer_payment_days', 15, 30],
+  ];
+  const factsUnder = (nodeId: string): Fact[] =>
+    ECONOMICS.map(([key, low, high]) => ({
+      key, segment: null, low, high, status: 'ESTIMATE', measures: key, geography: null, nodeId,
+      source: { title: 'research', url: 'https://example.org/source', kind: 'SECONDARY', claimId: `clm_${nodeId}_${key}` },
+      observedAt: '2026-11-01T00:00:00.000Z', validUntil: null,
+    }) as Fact);
 
   it('returns every live subject with its per-criterion reading', async () => {
     const rows = Array.from({ length: 40 }, (_, i) => subject(`ind_${String(i).padStart(2, '0')}`, i % 5 === 0 ? 'Last-mile delivery' : `Category ${i}`));
     rows.push(subject('ind_retired', 'Courier work', 'SEED', '2026-11-02T00:00:00.000Z'));
-    const ranked = await rankSubjectMarkets(rows, []);
-    expect(ranked).toHaveLength(40);
-    expect(new Set(ranked.map((r) => r.node.id)).size).toBe(40);
-    for (const r of ranked) expect(r.criteria.score).toBe(marketScore(r.market));
-    // Several subjects of one category are all kept: no quota per category.
+    // Eight subjects of one category hold recorded economics, filed under the transaction each maps.
+    const recorded: Fact[] = [];
+    for (let i = 0; i < 40; i += 5) {
+      const parent = `ind_${String(i).padStart(2, '0')}`;
+      rows.push(subject(`${parent}_t`, 'Parcel delivery jobs', 'SEED', null, { parentId: parent, kind: 'TRANSACTION_TYPE', payer: 'Online retailers', supplier: 'Independent couriers' } as Partial<IndustryNode>));
+      recorded.push(...factsUnder(`${parent}_t`));
+    }
+    const ranked = await rankSubjectMarkets(rows, [], recorded);
+    expect(ranked).toHaveLength(48);
+    expect(new Set(ranked.map((r) => r.node.id)).size).toBe(48);
+    const floor = unknownFloor(ranked.map((r) => r.market));
+    for (const r of ranked) expect(r.criteria.score).toBe(marketScore(r.market, floor));
+    // Several subjects of one category are all kept and all lead on their evidence: no quota per category.
     expect(ranked.slice(0, 8).filter((r) => r.node.name === 'Last-mile delivery')).toHaveLength(8);
+    for (const r of ranked.slice(0, 16)) expect(r.criteria.score).toBeGreaterThan(0);
+  });
+
+  it('reads only the facts filed under a subject’s own subtree', async () => {
+    const rows = [subject('ind_a', 'Category A'), subject('ind_b', 'Category B'), subject('ind_b_t', 'Jobs', 'SEED', null, { parentId: 'ind_b', kind: 'TRANSACTION_TYPE', payer: 'Buyers', supplier: 'Suppliers' } as Partial<IndustryNode>)];
+    const ranked = await rankSubjectMarkets(rows, [], factsUnder('ind_b_t'));
+    expect(ranked.map((r) => r.node.id)).toEqual(['ind_b', 'ind_b_t', 'ind_a']);
+    expect(ranked.find((r) => r.node.id === 'ind_a')!.criteria.score).toBe(0);
+    // A fact filed under no subject is about none of them.
+    const unfiled = factsUnder('ind_b_t').map((f) => ({ ...f, nodeId: null }));
+    for (const r of await rankSubjectMarkets(rows, [], unfiled)) expect(r.criteria.score).toBe(0);
   });
 
   it('a discovered subject and a seeded one with the same evidence score the same', async () => {

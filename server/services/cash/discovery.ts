@@ -109,6 +109,7 @@ import { OPPORTUNITY_SIGNALS } from '../../domain/types.ts';
 import { discoveryAllowed, knowledgeResearchAllowed } from './lifecycle.ts';
 import { ARRANGEMENT_BUCKET_MARK, noteConstructedRoundOpened, noteConstructedRoundOutcome } from './arrangementLibrary.ts';
 import { arrangementForLegacyKey } from '../../repos/monetization.ts';
+import { listProjectConstructionFacts } from '../../repos/construction.ts';
 import { cashPosition } from './money.ts';
 import { proveCapabilities } from './deliverables/capabilities.ts';
 import { existingOpeningFor, markDuplicateOpenings, openingSourceKey } from './duplicates.ts';
@@ -1120,7 +1121,9 @@ export async function openGoalDiscovery(input: {
    * Which industries, in which order, is a market preference (OPP-03): by each
    * subject's own economics and how much of its work can be run remotely
    * (`rankSubjectMarkets`), never by where the owner is and never by the order
-   * rows happen to come back in. That order decides which of two equally-asked
+   * rows happen to come back in. The economics are the facts research filed
+   * under each subject (`facts`): a map subject inherits no reference pack
+   * (W-9), so without them every subject scores 0. That order decides which of two equally-asked
    * subjects makes the MAX_INDUSTRY_LENSES cut and which of two equally-asked
    * angles goes first; how often each was asked decides before it does.
    */
@@ -1134,7 +1137,7 @@ export async function openGoalDiscovery(input: {
   const askedById = new Map<string, number>();
   for (const one of mine) askedById.set(one.bucketId, (askedById.get(one.bucketId) ?? 0) + 1);
   const industries: GoalLens[] = industryLensSelection(
-    await rankSubjectMarkets(nodes, constraints),
+    await rankSubjectMarkets(nodes, constraints, await listProjectConstructionFacts(t.projectId)),
     (nodeId) => askedById.get(`${prefix}-ind-${nodeId}`) ?? 0,
   ).map(({ node }) => ({ id: `ind-${node.id}`, angle: `the ${node.name} industry, and the businesses that supply, serve or buy from it`, origin: 'MEMORY' as const }));
   /*

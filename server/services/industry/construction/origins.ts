@@ -46,7 +46,7 @@ import { listWorkstreams } from '../../../repos/register.ts';
 import { listProjects } from '../../../repos/projects.ts';
 import type { CashOpportunity, IndustryNode, OpportunityConstraint } from '../../../domain/types.ts';
 import type { Workstream } from '../../../domain/register.ts';
-import type { FactKey, IndustryEvidence } from '../../../domain/construction.ts';
+import type { Fact, FactKey, IndustryEvidence } from '../../../domain/construction.ts';
 import { resolveFact } from './model.ts';
 import type { CommercialRole, FlowRoles } from './roles.ts';
 
@@ -305,8 +305,14 @@ export function unknownFloor(markets: readonly MarketCandidate[]): UnknownFloor 
   let capitalFactor = UNKNOWN_CAPITAL_FACTOR;
   let failureRate = UNKNOWN_FAILURE_RATE;
   for (const m of markets) {
-    if (finite(m.capitalUsd)) {
-      const monthly = Math.max(0, m.marginUsd ?? 0) * Math.max(0, m.monthlyVolume ?? 0);
+    /*
+     * A capital factor is a reading only against a known contribution: with no
+     * margin or volume the factor is 0 for want of a denominator, not because
+     * the capital was found adverse, and taking it as the floor would score
+     * every unread capital at 0 and leave nothing for the evidence to order.
+     */
+    const monthly = Math.max(0, m.marginUsd ?? 0) * Math.max(0, m.monthlyVolume ?? 0);
+    if (finite(m.capitalUsd) && monthly > 0) {
       capitalFactor = Math.min(capitalFactor, capitalFactorOf(Math.max(0, m.capitalUsd), monthly));
     }
     if (finite(m.failureRate)) failureRate = Math.max(failureRate, clamp01(m.failureRate));
@@ -482,26 +488,53 @@ export interface RankedSubject {
 /**
  * The map's live subjects in market order: each node with its subtree is
  * assembled into evidence exactly as the construction engine reads a subject
- * (`evidenceFromMap` → `assembleEvidence` → `commercialRoles`), scored by
- * `marketOfEvidence`, and ordered by `rankMarkets`. Subjects that score the
- * same keep the order the rows gave them. No owner location is read or
- * accepted. Reads nothing beyond its arguments.
+ * (`subjectEvidence`), scored by `marketOfEvidence`, and ordered as
+ * `rankMarkets` orders. Subjects that score the same keep the order the rows
+ * gave them. No owner location is read or accepted. Reads nothing beyond its
+ * arguments.
+ *
+ * `recorded` is the project's construction facts. A subject's economics come
+ * only from the facts research filed under its own subtree: since W-9 a map
+ * root inherits no reference pack, so without them every subject would score
+ * 0 and the order would be row order — markets would compete on nothing.
  */
-export async function rankSubjectMarkets(nodes: readonly IndustryNode[], constraints: readonly OpportunityConstraint[]): Promise<RankedSubject[]> {
-  const { assembleEvidence, evidenceFromMap } = await import('./service.ts');
+export async function rankSubjectMarkets(
+  nodes: readonly IndustryNode[],
+  constraints: readonly OpportunityConstraint[],
+  recorded: readonly Fact[] = [],
+): Promise<RankedSubject[]> {
   const { commercialRoles } = await import('./roles.ts');
   const live = nodes.filter((n) => !n.retiredAt);
   const width = String(live.length).length;
   const byKey = new Map<string, { node: IndustryNode; market: MarketCandidate }>();
   // Every live subject is ranked and returned: no shortlist, fixed count or quota per category.
-  live.forEach((node, index) => {
-    const map = evidenceFromMap(subtreeOf(live, node.id), [...constraints]);
-    const evidence = assembleEvidence({ text: node.name, industry: node.name, geography: null, map, recorded: [] });
+  for (const [index, node] of live.entries()) {
+    const evidence = await subjectEvidence(live, node, constraints, recorded);
     // The key carries the row order, so a tie keeps it rather than falling back to an id.
     const key = `${String(index).padStart(width, '0')}:${node.id}`;
     byKey.set(key, { node, market: marketOfEvidence(key, evidence, commercialRoles(evidence)) });
-  });
+  }
   return rankWithCriteria([...byKey.values()].map((one) => one.market)).map(({ market, criteria }) => ({ ...byKey.get(market.key)!, criteria }));
+}
+
+/**
+ * One map subject's evidence: its subtree's map evidence and the constraints
+ * on it, merged with the recorded facts research filed under that subtree —
+ * the same rule `goalConstruction` reads ("a price in another industry is not
+ * this one's"). A fact filed under no subject is about none of them. No
+ * reference pack applies: the subject's name is not evidence (W-9). Pure.
+ */
+export async function subjectEvidence(
+  live: readonly IndustryNode[],
+  node: IndustryNode,
+  constraints: readonly OpportunityConstraint[],
+  recorded: readonly Fact[],
+): Promise<IndustryEvidence> {
+  const { assembleEvidence, evidenceFromMap } = await import('./service.ts');
+  const tree = subtreeOf(live, node.id);
+  const inTree = new Set(tree.map((n) => n.id));
+  const facts = recorded.filter((f) => f.nodeId != null && inTree.has(f.nodeId));
+  return assembleEvidence({ text: node.name, industry: node.name, geography: null, map: evidenceFromMap(tree, [...constraints]), recorded: facts });
 }
 
 // ---------------------------------------------------------------------------
