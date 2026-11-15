@@ -53,8 +53,7 @@ import { recordEvent } from '../../repos/events.ts';
 import { workType } from '../queue/workTypes.ts';
 import { runIdempotent, type OperationNamespace } from '../effects/engine.ts';
 import { buildRepairPlan } from './repair.ts';
-import { blockCauseOf, type GateResult } from './gate.ts';
-import { advancePacket, researchItemRecorded, type AdvanceResult } from './packetRunner.ts';
+import { advancePacket, repairPlanInputFor, researchItemRecorded, type AdvanceResult } from './packetRunner.ts';
 
 /**
  * One intent per failed item, whoever asks.
@@ -583,7 +582,21 @@ export async function retryFragment(input: {
    * on the path that skipped it.
    */
   const repairPlan =
-    input.repairPlan ?? (await planForRetry(previous, orchestration.id, attempt));
+    input.repairPlan ?? (await planForRetry(previous, orchestration));
+  /*
+   * A plan that is only MARK_UNRESOLVED is an instruction to stop, not a search.
+   *
+   * `planForRetry` plans with the budget the person is spending, so here that
+   * answer means the ladder itself is exhausted: every strategy this failure
+   * suggests has already been tried. The packet runner refuses to mint an
+   * attempt carrying that plan ("another attempt would repeat a search",
+   * invariant 16) and leaves the fragment for the gap pass. This path minted
+   * one anyway, spending a retry on a fragment whose assignment was "do not
+   * attempt this". Refused here in the runner's words, through the refusal
+   * every caller already handles. No bar moves: the fragment stays BLOCKED.
+   */
+  const exhausted = ladderExhaustedReason(previous, repairPlan);
+  if (exhausted) throw new FragmentNotRetryable(exhausted);
   const outcome = await runIdempotent<{ fragmentId: string }>(
     {
       namespace: RETRY_NAMESPACE,
@@ -745,50 +758,76 @@ export async function retryFragment(input: {
 }
 
 /**
+ * Why a planned next attempt must not be minted, or null when it may be.
+ *
+ * A plan that is only MARK_UNRESOLVED is an instruction to stop, not a search:
+ * every strategy the failure suggests has already been tried. Exported so a
+ * caller that changes state before retrying (surface recovery raises the
+ * ceiling) can ask first and refuse in its own terms, instead of learning it
+ * from a throw after its own write.
+ */
+export function ladderExhaustedReason(fragment: ResearchFragment, plan: RepairPlan): string | null {
+  if (plan.strategies.length === 0 || !plan.strategies.every((strategy) => strategy === 'MARK_UNRESOLVED')) {
+    return null;
+  }
+  return (
+    `Every search strategy ${fragment.fragmentKey}'s failure suggests has already been tried, ` +
+    'so another attempt would repeat a search. The honest outcome now is unresolved, recorded as such.'
+  );
+}
+
+/**
  * The plan for a retry nobody planned, from the failed attempt's own rows.
  *
- * The gate is not re-run (§12: acceptance is decided once). The planner gets
- * the recorded counts and the stored block cause; the conditions are left to
- * the default ladder, which proposes more places to look rather than fewer.
+ * The gate is not re-run (§12: acceptance is decided once). The plan is made
+ * from the same reading of the failed attempt the packet runner makes
+ * (`packetRunner.ts` `gateShapeFor` / `mintRepairs`), because the two paths
+ * plan the *same next attempt* and must not disagree about it.
+ *
+ * They did, three ways, and each one cost a recovery (recorded failure class
+ * CAPABILITY:RESEARCH.RECOVERY.RETRY — "repeated failure", "retry repeating
+ * the same strategy"):
+ *
+ *  - The budget was computed from the *new* attempt number, one less than the
+ *    runner's for the identical situation. A fragment with two repairs left
+ *    was told it had one, so `buildRepairPlan` answered MARK_UNRESOLVED and the
+ *    retry was spent being told to give up.
+ *  - No failed condition was passed, so the condition-keyed ladder was never
+ *    consulted and every unplanned retry walked the same short default ladder
+ *    until it ran out.
+ *  - No envelope was passed, so unreadable-ladder rungs the packet does not
+ *    admit were offered and then refused.
+ *
+ * `maxRepairs`, the gate and every bar are unchanged: a fragment at its last
+ * permitted attempt is still told so.
  */
-async function planForRetry(
+export async function planForRetry(
   previous: ResearchFragment,
-  orchestrationId: string,
-  attempt: number,
+  orchestration: ResearchOrchestration,
 ): Promise<RepairPlan> {
   const claims = await listClaimsForFragment(previous.id);
-  const accepted = claims.filter((claim) => claim.accepted);
-  const gate: GateResult = {
-    integrity: previous.integrityVerdict === 'PASS' ? 'PASS' : 'FAIL',
-    sufficiency: previous.sufficiencyVerdict === 'SUFFICIENT' ? 'SUFFICIENT' : 'INSUFFICIENT',
-    unresolvedRetrieval: claims
-      .filter((claim) => claim.retrievalState !== 'RETRIEVED')
-      .map((claim) => ({
-        claimId: claim.id,
-        claim: claim.claim,
-        sourceUrl: claim.sourceUrl,
-        state: claim.retrievalState,
-      })),
-    claims: [],
-    acceptedClaims: accepted.length,
-    rejectedClaims: claims.length - accepted.length,
-    independentSources: new Set(accepted.map((claim) => claim.sourceUrl ?? claim.id)).size,
-    coverage: [],
-    duplicateSourceGroups: [],
-    failedConditions: [],
-    reasons: previous.blockedReason ? [previous.blockedReason] : [],
-    unresolvedGaps: [],
-  };
-  const history = (await listFragments(orchestrationId)).filter(
+  const history = (await listFragments(orchestration.id)).filter(
     (entry) => entry.fragmentKey === previous.fragmentKey,
   );
-  return buildRepairPlan({
-    fragment: previous,
-    gate,
-    history,
-    claims,
-    splitRequired: false,
-    remainingBudget: Math.max(0, previous.maxRepairs - attempt + 1),
-    blockCause: blockCauseOf(previous),
+  // The runner's own reading of the failed attempt — its gate, budget, cause
+  // and envelope — so the two paths cannot disagree about the same next attempt.
+  const input = repairPlanInputFor(orchestration, previous, claims, history);
+  const { remainingBudget } = input;
+  const plan = buildRepairPlan({
+    ...input,
+    /*
+     * Strategies are chosen as for an attempt the budget still pays for.
+     *
+     * `buildRepairPlan` answers MARK_UNRESOLVED at a budget of 1 because the
+     * runner must not spend the final attempt on a timer. That final attempt is
+     * the one this path exists for — it belongs to a person (or to surface
+     * recovery, which raised the ceiling first) and `retryFragment` has already
+     * checked it is inside `maxRepairs`. Planning it at the runner's budget told
+     * the person's attempt "do not attempt this". It gets the ladder's next
+     * fresh rungs instead, and the true budget is put back on the plan so the
+     * worker is still told it is the last attempt.
+     */
+    remainingBudget: Math.max(2, remainingBudget),
   });
+  return { ...plan, remainingBudget };
 }
