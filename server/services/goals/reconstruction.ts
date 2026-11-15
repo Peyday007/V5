@@ -463,7 +463,7 @@ async function reconstructPlanOn(input: ReconstructionInput, evaluator: Evaluato
     firstTried.push(r);
     singles.push({ op, reading: r });
   }
-  const useful = singles.filter((one) => improves(one.reading, baseline)).sort((a, b) => b.reading.reach - a.reading.reach || b.reading.settledP50 - a.reading.settledP50);
+  const useful = singles.filter((one) => improves(one.reading, baseline)).sort((a, b) => b.reading.reach - a.reading.reach || b.reading.settledP50 - a.reading.settledP50 || (a.reading.key < b.reading.key ? -1 : a.reading.key > b.reading.key ? 1 : 0));
   let current: StrategyState = base;
   let currentReading = baseline;
   const path: StrategyState[] = [];
@@ -702,7 +702,8 @@ function flagged(readings: Iterable<VariantReading>, exploration: Exploration | 
   };
   for (const r of readings) add(r);
   for (const d of exploration?.all ?? []) add(d.reading);
-  return [...rows.values()].sort((a, b) => b.settledP50 - a.settledP50).slice(0, 20);
+  // Ties break on the key, so the list does not depend on which variant finished first.
+  return [...rows.values()].sort((a, b) => b.settledP50 - a.settledP50 || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0)).slice(0, 20);
 }
 
 /** The day spending past the before-proof limit may start: first cash has to have arrived. */
@@ -1056,7 +1057,7 @@ export function renderReconstruction(r: Reconstruction, limit = 8): string[] {
   lines.push(`    headroom  every factor favourable at once → reach ${pct(r.headroom.reach)}, p50 ${money(r.headroom.settledP50)}${r.structural ? ' · STRUCTURAL: the openings held cannot reach the requirement' : ''}`);
   for (const c of r.challenges) lines.push(`    challenge [${c.status}] ${c.assumption} — ${c.finding.slice(0, 300)}`);
   for (const round of r.rounds) {
-    const sorted = [...round.tried].sort((a, b) => b.reach - a.reach || b.settledP50 - a.settledP50).slice(0, limit);
+    const sorted = [...round.tried].sort((a, b) => b.reach - a.reach || b.settledP50 - a.settledP50 || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0)).slice(0, limit);
     for (const t of sorted) lines.push(`    round ${round.round}   ${t.key === round.kept ? '*' : ' '} ${t.key.slice(0, 70).padEnd(70)} ${t.feasible ? v(t) : `refused: ${t.why}`}`);
   }
   for (const p of r.volumePlans) lines.push(`    volume    ${p.sentence}`);

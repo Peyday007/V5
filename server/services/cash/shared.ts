@@ -734,6 +734,36 @@ export async function sharedCashView(input: { projectId: string }): Promise<Shar
   return { scope: 'SHARED', ...(await sharedFrontier(input)) };
 }
 
+/** One opening's tier, from its row and its recorded facts: the one derivation `sharedFrontier` and `frontierTiers` share. */
+function tierFrom(
+  opportunity: CashOpportunity,
+  facts: Awaited<ReturnType<typeof cardFactsForProject>>,
+  card: ReturnType<typeof evidenceCard> = evidenceCard(opportunity),
+): TierReading {
+  return cashTier({ opportunity, card: cashEngineCard({ opportunity, facts }), readiness: card.readiness });
+}
+
+/**
+ * Every opening's tier, exactly as `sharedFrontier` derives it, without the
+ * rest of the frontier.
+ *
+ * A goal's plan reads the tier and nothing else of the frontier. Production,
+ * 2026-11-15 (revision 7a8b565, 979 openings): building the whole frontier
+ * for it took 210 s of a 25-minute plan read, because its standings ask the
+ * dive record of every opening under evaluation one statement at a time
+ * (`readStandingRows` → `whyNotDiving`), and it composes the monetization
+ * ledger, the roadmap and the fresh openings besides. The tier is a pure
+ * function of the row and its facts (`tier.ts`), so this reads exactly those.
+ */
+export async function frontierTiers(projectId: string): Promise<Map<string, TierReading>> {
+  const opportunities = await listOpportunities({ projectId });
+  const facts = new Map<string, Awaited<ReturnType<typeof cardFactsForProject>>>();
+  for (const fact of await cardFactsForProject(projectId)) {
+    facts.set(fact.opportunityId, [...(facts.get(fact.opportunityId) ?? []), fact]);
+  }
+  return new Map(opportunities.map((opportunity) => [opportunity.id, tierFrom(opportunity, facts.get(opportunity.id) ?? [])]));
+}
+
 /** sharedFrontier, with goal limits read once for the whole read (see `withGoalLimitsMemo`). */
 export function sharedFrontier(input: Parameters<typeof sharedFrontierUnmemoized>[0]): ReturnType<typeof sharedFrontierUnmemoized> {
   return withReadScope(() => withGoalLimitsMemo(() => sharedFrontierUnmemoized(input)));
@@ -795,11 +825,7 @@ async function sharedFrontierUnmemoized(input: {
    */
   const shared: SharedOpportunity[] = rank(opportunities).map((opportunity: CashOpportunity) => {
     const card = evidenceCard(opportunity);
-    const tier = cashTier({
-      opportunity,
-      card: cashEngineCard({ opportunity, facts: facts.get(opportunity.id) ?? [] }),
-      readiness: card.readiness,
-    });
+    const tier = tierFrom(opportunity, facts.get(opportunity.id) ?? [], card);
     return {
       id: opportunity.id,
       title: opportunity.title,
