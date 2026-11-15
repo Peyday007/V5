@@ -1941,6 +1941,32 @@ export const ROUTE_FAILURE_LIMIT = 3;
  */
 export const ROUTE_REPROBE_BACKOFF_MS: readonly number[] = [5, 10, 20, 40, 60].map((m) => m * 60_000);
 const reprobeDelay = (level: number): number => ROUTE_REPROBE_BACKOFF_MS[Math.min(Math.max(0, level), ROUTE_REPROBE_BACKOFF_MS.length - 1)]!;
+
+/** The shortest hold a provider's `Retry-After` can set, so a route is never pinged every control step. */
+export const ROUTE_RETRY_AFTER_FLOOR_MS = 60_000;
+
+/**
+ * The provider's own delay, read from the `retry-after Ns` that
+ * `laneHttpError` writes into a 429/503's failure text. Null when the failure
+ * carried none.
+ */
+export function providerRetryAfterMs(why: string | null | undefined): number | null {
+  const match = /\bretry-after (\d+)s\b/.exec(why ?? '');
+  return match ? Number(match[1]) * 1000 : null;
+}
+
+/**
+ * How long a held route waits before its next re-probe. When the provider said
+ * how long to wait, that is the answer — bounded below by
+ * `ROUTE_RETRY_AFTER_FLOOR_MS` and above by the ladder's last step — instead
+ * of the ladder's guess; otherwise the ladder decides.
+ */
+function holdDelay(level: number, why: string): number {
+  const told = providerRetryAfterMs(why);
+  if (told === null) return reprobeDelay(level);
+  const ceiling = ROUTE_REPROBE_BACKOFF_MS[ROUTE_REPROBE_BACKOFF_MS.length - 1]!;
+  return Math.min(ceiling, Math.max(ROUTE_RETRY_AFTER_FLOOR_MS, told));
+}
 interface RouteState {
   failures: number;
   cause: RouteFailureCause;
@@ -1998,11 +2024,12 @@ export function recordRouteOutcome(model: string, outcome: { ok: boolean; why?: 
   state.cause = cause;
   if (state.failures === ROUTE_FAILURE_LIMIT) {
     state.level = 0;
-    state.nextProbeAt = now + reprobeDelay(0);
+    state.nextProbeAt = now + holdDelay(0, why);
   } else if (state.failures > ROUTE_FAILURE_LIMIT) {
-    // Already held, and its re-probe failed too: wait longer before the next one.
+    // Already held, and its re-probe failed too: wait longer before the next
+    // one — or exactly as long as the provider said, when it said.
     state.level += 1;
-    state.nextProbeAt = now + reprobeDelay(state.level);
+    state.nextProbeAt = now + holdDelay(state.level, why);
   }
   routeHealth.set(model, state);
 }
