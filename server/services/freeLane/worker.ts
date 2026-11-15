@@ -1927,12 +1927,35 @@ export function causeOfReason(reason: string | null): RouteFailureCause | null {
 
 /** Consecutive provider failures after which a route stops being offered items. */
 export const ROUTE_FAILURE_LIMIT = 3;
-const ROUTE_REPROBE_MS = 5 * 60_000;
-const routeHealth = new Map<string, { failures: number; cause: RouteFailureCause; nextProbeAt: number }>();
+/**
+ * How long a held route waits before its next re-probe, by how many re-probes
+ * in a row it has already failed: 5, 10, 20, 40, then 60 minutes.
+ *
+ * Production, 2026-11-15 18:58Z (r01.cap-16-3: 15 accepted of 137 lane
+ * outcomes, 80% provider failures; brain_operator_capacity 19:06Z: both routes
+ * "100% of 4 calls failed"): a held route was re-probed every five minutes with
+ * a real claimed item, however long it stayed down, so each dead route spent up
+ * to twelve items an hour on failures and wrote each one as a lane outcome.
+ * The interval now grows while the route keeps failing, and the re-probe is a
+ * health ping (`pingHeldRoutes`), not an item.
+ */
+export const ROUTE_REPROBE_BACKOFF_MS: readonly number[] = [5, 10, 20, 40, 60].map((m) => m * 60_000);
+const reprobeDelay = (level: number): number => ROUTE_REPROBE_BACKOFF_MS[Math.min(Math.max(0, level), ROUTE_REPROBE_BACKOFF_MS.length - 1)]!;
+interface RouteState {
+  failures: number;
+  cause: RouteFailureCause;
+  nextProbeAt: number;
+  /** Re-probes failed in a row since the route was held: indexes `ROUTE_REPROBE_BACKOFF_MS`. */
+  level: number;
+}
+const routeHealth = new Map<string, RouteState>();
+/** Routes whose health ping is in flight, so two control steps never ping one route at once. */
+const pinging = new Set<string>();
 
 /** Tests: forget every route's health. */
 export function resetRouteHealth(): void {
   routeHealth.clear();
+  pinging.clear();
 }
 
 /**
@@ -1945,7 +1968,7 @@ export function resetRouteHealth(): void {
 export function routeHold(model: string, now = Date.now()): string | null {
   const state = routeHealth.get(model);
   if (!state || state.failures < ROUTE_FAILURE_LIMIT) return null;
-  if (now >= state.nextProbeAt) return null;
+  if (now >= state.nextProbeAt && !pinging.has(model)) return null;
   return `model route failing (${state.cause}); another model takes the work until it is re-probed`;
 }
 
@@ -1956,7 +1979,7 @@ export function routeHold(model: string, now = Date.now()): string | null {
 export function takeRouteProbe(model: string, now = Date.now()): void {
   const state = routeHealth.get(model);
   if (!state || state.failures < ROUTE_FAILURE_LIMIT) return;
-  if (now >= state.nextProbeAt) state.nextProbeAt = now + ROUTE_REPROBE_MS;
+  if (now >= state.nextProbeAt) state.nextProbeAt = now + reprobeDelay(state.level);
 }
 
 /** A route that answered is healthy again; a route that did not is counted, with its cause. */
@@ -1970,11 +1993,72 @@ export function recordRouteOutcome(model: string, outcome: { ok: boolean; why?: 
   const cause = causeOfReason(why) ?? classifyRouteFailure(why);
   // Brain's own database being busy says nothing about the model route.
   if (cause === 'database') return;
-  const state = routeHealth.get(model) ?? { failures: 0, cause, nextProbeAt: now + ROUTE_REPROBE_MS };
+  const state = routeHealth.get(model) ?? { failures: 0, cause, nextProbeAt: now + reprobeDelay(0), level: 0 };
   state.failures += 1;
   state.cause = cause;
-  if (state.failures === ROUTE_FAILURE_LIMIT) state.nextProbeAt = now + ROUTE_REPROBE_MS;
+  if (state.failures === ROUTE_FAILURE_LIMIT) {
+    state.level = 0;
+    state.nextProbeAt = now + reprobeDelay(0);
+  } else if (state.failures > ROUTE_FAILURE_LIMIT) {
+    // Already held, and its re-probe failed too: wait longer before the next one.
+    state.level += 1;
+    state.nextProbeAt = now + reprobeDelay(state.level);
+  }
   routeHealth.set(model, state);
+}
+
+/** The prompt a health ping sends: the smallest request that proves the route answers at all. */
+const PING_SYSTEM = 'Answer with one JSON object and nothing else.';
+const PING_PROMPT = 'Reply with {"ok": true}.';
+
+export interface RoutePing {
+  model: string;
+  ok: boolean;
+  cause: RouteFailureCause | null;
+  /** When the route may next be probed (an item, or the next ping); null once it is healthy. */
+  nextProbeAt: number | null;
+}
+
+/**
+ * Re-probe every held route that is due, with a health ping through the same
+ * Completer the route's items use, instead of with a claimed work item. A ping
+ * claims nothing, spends no item's attempt and writes no FREE_LANE_ITEM row: a
+ * route that is still down is held again for the next, longer interval while
+ * the work stays queued for a route that answers; a route that answers is
+ * healthy, and its items flow on the next claim. While a ping is in flight the
+ * route stays held, so no slot takes an item as the probe beside it.
+ */
+export async function pingHeldRoutes(
+  models: readonly string[],
+  completer: Completer,
+  config: LaneConfig,
+  now: () => number = Date.now,
+): Promise<RoutePing[]> {
+  const due = models.filter((model) => {
+    const state = routeHealth.get(model);
+    return !!state && state.failures >= ROUTE_FAILURE_LIMIT && now() >= state.nextProbeAt && !pinging.has(model);
+  });
+  return Promise.all(
+    due.map(async (model): Promise<RoutePing> => {
+      pinging.add(model);
+      try {
+        await completer({ ...config, timeoutMs: 30_000 }, model, PING_SYSTEM, PING_PROMPT, { maxTokens: 64, json: true });
+        recordRouteOutcome(model, { ok: true }, now());
+        clearRouteCooldowns(model);
+        console.log(`[free-lane] route ${model} answered its health ping; items flow again`);
+        return { model, ok: true, cause: null, nextProbeAt: null };
+      } catch (error) {
+        const message = String((error as Error)?.message ?? error);
+        const cause = classifyRouteFailure(message, { gpuDown: gpuDown(model) });
+        recordRouteOutcome(model, { ok: false, why: `model call failed [${cause}]: health ping: ${redactSecrets(message).slice(0, 200)}` }, now());
+        const next = routeHealth.get(model)?.nextProbeAt ?? null;
+        console.warn(`[free-lane] route ${model} still failing its health ping (${cause}); next probe in ${next === null ? '?' : Math.round((next - now()) / 60_000)} min`);
+        return { model, ok: false, cause, nextProbeAt: next };
+      } finally {
+        pinging.delete(model);
+      }
+    }),
+  );
 }
 
 export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork | null; ok: boolean; ms: number }> {
@@ -2170,6 +2254,8 @@ export async function freeLaneTick(options: FreeLaneOptions = {}): Promise<FreeL
     const completer = options.completer ?? httpCompleter;
     const fetchSource = options.fetchSource ?? ((url: string) => readSource(url, { caller: 'free-lane' }));
     const perWorker = Math.max(1, options.perWorker ?? 2);
+    // A held route due its re-probe is pinged, not handed an item (CAP-16-3 repair).
+    await pingHeldRoutes(all.map((w) => w.model), completer, config);
 
     const slots = Math.max(1, Math.min(64, options.slots ?? 2));
     await Promise.all(
