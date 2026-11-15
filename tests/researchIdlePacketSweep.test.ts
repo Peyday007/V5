@@ -676,8 +676,37 @@ describe('a packet whose queued work nobody claims', () => {
     return (await getDb().get<{ state: string }>('SELECT state FROM work_items WHERE id = ?', [itemId]))!.state;
   }
 
+  /**
+   * The lane was serving: some worker claimed another item of `workType`
+   * `claimedAgoMs` ago, and finished it. That is the evidence that this
+   * packet's item was passed over rather than that nobody was taking the work.
+   */
+  async function laneServed(workType: string, claimedAgoMs: number): Promise<void> {
+    const other = await enqueueWork({
+      projectId,
+      workType,
+      payload: {},
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+    });
+    const worker = await createWorker({ name: `lane-${other.id}`, createdByType: 'SYSTEM', createdById: 'test' });
+    const claimed = new Date(Date.now() - claimedAgoMs).toISOString();
+    await getDb().run(
+      `UPDATE work_items SET state = 'SUCCEEDED', attempt_count = 1, lease_generation = 1,
+              leased_at = ?, completed_at = ? WHERE id = ?`,
+      [claimed, claimed, other.id],
+    );
+    await getDb().run(
+      `INSERT INTO work_leases (id, work_item_id, project_id, attempt_number, lease_generation, worker_id,
+                                claimed_at, expires_at, ended_at, outcome)
+       VALUES (?, ?, ?, 1, 1, ?, ?, ?, ?, 'SUCCEEDED')`,
+      [`wls_${other.id}`, other.id, projectId, worker.id, claimed, claimed, claimed],
+    );
+  }
+
   it('reproduces the failure class: claimable, never claimed past the deadline, and the tick concludes it', async () => {
     const { id, itemId } = await overdueWithQueued();
+    await laneServed('RESEARCH_FRAGMENT', 60 * 60_000);
     vi.mocked(recomputeProject).mockClear();
 
     const swept = await advanceIdlePackets(10);
@@ -700,8 +729,41 @@ describe('a packet whose queued work nobody claims', () => {
 
   it('is reached through the existing tick sweep', async () => {
     const { id } = await overdueWithQueued();
+    await laneServed('RESEARCH_FRAGMENT', 60 * 60_000);
     await concludeUnworkablePackets(10);
     expect((await getOrchestration(id))!.status).toBe('FAILED');
+  });
+
+  /*
+   * The recorded review finding: with no worker taking this work type at all in
+   * the window (a lane outage, a quota, the §86 controller holding, contention
+   * ahead of it), "nobody claimed it" is Brain's missing capacity, not the
+   * packet's failure (§53). The packet stays live and its work stays queued.
+   */
+  it('never concludes a packet when no worker took that work type in the window: that is missing capacity', async () => {
+    const { id, itemId } = await overdueWithQueued();
+    const before = (await getOrchestration(id))!;
+
+    expect((await advanceIdlePackets(10)).map((e) => e.orchestrationId)).not.toContain(id);
+    await concludeUnworkablePackets(10);
+
+    expect((await getOrchestration(id))!).toEqual(before);
+    expect(await itemState(itemId)).toBe('QUEUED');
+  });
+
+  it('does not read claims of a different work type as the lane serving this one', async () => {
+    const { id, itemId } = await overdueWithQueued();
+    await laneServed('RESEARCH_PLAN', 60 * 60_000);
+    expect((await advanceIdlePackets(10)).map((e) => e.orchestrationId)).not.toContain(id);
+    expect(await itemState(itemId)).toBe('QUEUED');
+    expect((await getOrchestration(id))!.status).toBe('RESEARCHING');
+  });
+
+  it('does not read a claim from before the window as the lane serving it now', async () => {
+    const { id, itemId } = await overdueWithQueued();
+    await laneServed('RESEARCH_FRAGMENT', OVERDUE + 60 * 60_000);
+    expect((await advanceIdlePackets(10)).map((e) => e.orchestrationId)).not.toContain(id);
+    expect(await itemState(itemId)).toBe('QUEUED');
   });
 
   it('leaves an item in backoff alone: available only recently is not unclaimed', async () => {

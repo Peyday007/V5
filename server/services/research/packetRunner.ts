@@ -3066,7 +3066,15 @@ async function stampPacketsWorkedUnderLease(
  *   - no QUEUED item was leased inside the window (a reclaimed item that a
  *     worker took recently is being worked, if slowly);
  *   - every QUEUED item still has attempts left — one past its ceiling belongs
- *     to `concludeUnworkablePackets`, which runs first in the same tick.
+ *     to `concludeUnworkablePackets`, which runs first in the same tick;
+ *   - the lane was serving every QUEUED item's work type and passed it over:
+ *     some worker claimed another item of that same work type inside the
+ *     window (a `work_leases` row). Without that, nobody was taking that kind
+ *     of work at all — a free-lane outage, a provider quota, the §86
+ *     controller holding, or contention ahead of it — and that is Brain's
+ *     missing capacity, not the packet's failure (§53). The packet stays live
+ *     with its work queued; the unclaimed age is the idle-capacity signal the
+ *     §98 watchdog reads from the same rows.
  * Nothing is synthesized, no gate or approval is consulted or skipped, and
  * every fragment, claim, attempt and cancelled item keeps its row.
  */
@@ -3088,9 +3096,16 @@ async function concludeUnclaimedPackets(
                            AND (w.created_at >= ? OR w.available_at >= ?
                                 OR (w.leased_at IS NOT NULL AND w.leased_at >= ?)
                                 OR w.attempt_count >= w.max_attempts))
+        AND NOT EXISTS (SELECT 1 FROM work_items w
+                         WHERE w.orchestration_id = o.id AND w.state = 'QUEUED'
+                           AND NOT EXISTS (SELECT 1 FROM work_leases l
+                                             JOIN work_items s ON s.id = l.work_item_id
+                                            WHERE s.work_type = w.work_type
+                                              AND s.id <> w.id
+                                              AND l.claimed_at >= ?))
       ORDER BY o.updated_at, o.id
       LIMIT ?`,
-    [...live, 'WORKER', deadlineCutoff, deadlineCutoff, deadlineCutoff, deadlineCutoff, Math.max(1, limit)],
+    [...live, 'WORKER', deadlineCutoff, deadlineCutoff, deadlineCutoff, deadlineCutoff, deadlineCutoff, Math.max(1, limit)],
   );
   const out: { orchestrationId: string; from: string; to: string }[] = [];
   for (const row of rows) {
