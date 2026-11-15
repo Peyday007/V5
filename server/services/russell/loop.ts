@@ -126,7 +126,7 @@ import {
   reconcileCompletedMission,
 } from './completionLinks.ts';
 import { outcomeOf, writeBack } from './writeback.ts';
-import { launch, repairLaunches, type LaunchInput } from './launch.ts';
+import { launch, repairLaunches, researchMissionSlots, type LaunchInput } from './launch.ts';
 import { applyTurn } from './turn.ts';
 import {
   applyDeclaredLaunchOrdinals,
@@ -2492,9 +2492,12 @@ async function tickOnce(owner: string): Promise<TickReport> {
        * 138 launchable ideas beside 88 free grant slots at one launch a tick.
        * Fresh ideas may now take up to SLOT_FILL_PER_TICK of the free slots;
        * `reserve` still refuses any launch over a grant's at-once ceiling.
+       *
+       * The free slots are counted from this window itself — the ideas it put
+       * first because they fit their own grant's free slots — which is the
+       * number the capacity reader reports, so the two cannot disagree.
        */
-      const { researchSlotsFree } = await import('../engineering/watchdog.ts');
-      const fill = Math.min(SLOT_FILL_PER_TICK, await researchSlotsFree().catch(() => 0));
+      const fill = Math.min(SLOT_FILL_PER_TICK, launchable.filter((entry) => entry.fitsFreeSlot).length);
       const limit = Math.max(cycle.maxLaunchesPerCycle, fill);
       let started = 0;
       let followOns = 0;
@@ -2693,6 +2696,80 @@ async function missionsAwaitingWriteback(limit: number): Promise<RussellMission[
   return missions;
 }
 
+/*
+ * Only rows that could launch, filtered before the window rather than after.
+ *
+ * `LIMIT` used to apply to every QUEUED candidate in the Brain, and the loop
+ * then dropped the ones it could not act on. Two kinds stay QUEUED for ever and
+ * can never launch from here, so once fifty of them sat at the front of the
+ * order nothing behind them was ever looked at:
+ *
+ *   - one with no compiled `missionSpec`, skipped without a word;
+ *   - one whose idea already has a mission that is live, parked or DONE — a
+ *     launch only replays that row (or refuses a DONE one with no state
+ *     change), and a launched candidate stays QUEUED by design. Live missions
+ *     are repaired by `repairLaunches`, which selects on the mission rather
+ *     than on this window, so nothing that pass needs is taken away.
+ *
+ * Production, 2026-10-01: a hundred QUEUED ideas in one sprint, and every deep
+ * dive's candidate sat QUEUED with no mission until the six-hour stall
+ * backstop closed it. A FAILED or CANCELLED mission still leaves the idea
+ * eligible, because a new specification may launch and an old one is answered
+ * by the `ALREADY_RESEARCHED` transition in the launch pass.
+ *
+ * Shared by `nextLaunchable` and the capacity reader (`launchableByProject`),
+ * so "waiting" means the same rows to both.
+ */
+const LAUNCHABLE_CANDIDATES = `russell_candidates c
+      WHERE c.state = 'QUEUED' AND c.project_id IS NOT NULL
+        AND c.judgment LIKE '%"missionSpec"%'
+        AND NOT EXISTS (
+          -- The idea's latest mission, as launch() itself reads it
+          -- (latestMissionForCandidate: highest attempt, then newest).
+          SELECT 1 FROM russell_missions m
+           WHERE m.candidate_id = c.id
+             AND m.state NOT IN ('FAILED','CANCELLED')
+             AND NOT EXISTS (
+               SELECT 1 FROM russell_missions n
+                WHERE n.candidate_id = c.id
+                  AND (n.attempt > m.attempt
+                       OR (n.attempt = m.attempt AND n.created_at > m.created_at))
+             )
+        )`;
+
+/** One project's launchable ideas beside its research grant's slots, as `launch()` resolves and `reserve` enforces them. */
+export interface ProjectLaunchSlots {
+  projectId: string;
+  /** Ideas that could launch from here, by `nextLaunchable`'s own predicate. */
+  waiting: number;
+  /** The research grant's at-once ceiling and live holds; null when no grant governs research in this project. */
+  slots: { goalId: string; cap: number; live: number } | null;
+  /** Slots free now; 0 when there is no grant. */
+  free: number;
+}
+
+/**
+ * Every project with a launchable idea, and how many of its grant's slots are
+ * free. The one reading both the launch window and the capacity reader
+ * (`engineering/watchdog.ts`) are built on.
+ */
+export async function launchableByProject(): Promise<ProjectLaunchSlots[]> {
+  const rows = await getDb().all<{ project_id: string; n: number | string }>(
+    `SELECT c.project_id, COUNT(*) AS n FROM ${LAUNCHABLE_CANDIDATES} GROUP BY c.project_id`,
+  );
+  const out: ProjectLaunchSlots[] = [];
+  for (const row of rows) {
+    const slots = await researchMissionSlots(row.project_id).catch(() => null);
+    out.push({
+      projectId: row.project_id,
+      waiting: Number(row.n),
+      slots,
+      free: slots ? Math.max(0, slots.cap - slots.live) : 0,
+    });
+  }
+  return out;
+}
+
 /**
  * The next candidates that could become missions, best first.
  *
@@ -2713,68 +2790,81 @@ export async function nextLaunchable(limit: number): Promise<
     candidateId: string;
     /** The mission this idea follows on from, when it is a follow-on. */
     followOnOfMissionId: string | null;
+    /**
+     * Whether this idea is one of its project's best ideas that fit the free
+     * slots of the project's research grant now — the ones `launch()` will not
+     * refuse `AT_ONCE`. The capacity reader counts exactly these.
+     */
+    fitsFreeSlot: boolean;
     spec: Omit<LaunchInput, 'candidateId'>;
   }[]
 > {
+  /*
+   * Ideas that fit a free slot come first, whatever their rank Brain-wide.
+   *
+   * The window used to be the best `limit` ideas in the whole Brain, and a
+   * grant's slots serve only its own project. So once more ideas than the
+   * window sat in projects whose grants were full, every tick filled the
+   * window with ideas `launch()` refused `AT_ONCE`, and the ideas in projects
+   * with free slots — further down the Brain-wide order — were never looked
+   * at. Production, 2026-11-15 07:46Z-07:49Z: 504 waiting, 11 of 16 slots
+   * running, and the capacity reader saying "3->5 launchable idea(s) have a
+   * free slot" sample after sample while none launched.
+   *
+   * The slots are the ones `launch()` resolves and `reserve` enforces
+   * (`launchableByProject`), so this is one predicate with the reader rather
+   * than a second opinion. Each project's best ideas up to its free slots are
+   * marked and put first; everything else keeps its old order behind them, so
+   * an idea refused for another reason (already researched, a spent ceiling)
+   * is still reached and answered. `reserve` remains the guarantee.
+   */
+  const projects = await launchableByProject();
+  const budgets = projects.filter((one) => one.free > 0);
+  const budgetSql = budgets.length
+    ? `CASE c.project_id ${budgets.map(() => 'WHEN ? THEN ?').join(' ')} ELSE 0 END`
+    : '0';
+  const budgetParams = budgets.flatMap((one) => [one.projectId, one.free]);
   const rows = await getDb().all<{
     id: string;
     judgment: string;
     project_id: string | null;
     follow_on_of_mission_id: string | null;
+    fits: number | string;
   }>(
-    /*
-     * Only rows that could launch, filtered before the window rather than after.
-     *
-     * `LIMIT` used to apply to every QUEUED candidate in the Brain, and the
-     * loop below then dropped the ones it could not act on. Two kinds stay
-     * QUEUED for ever and can never launch from here, so once fifty of them sat
-     * at the front of the order nothing behind them was ever looked at:
-     *
-     *   - one with no compiled `missionSpec`, skipped below without a word;
-     *   - one whose idea already has a mission that is live, parked or DONE —
-     *     a launch only replays that row (or refuses a DONE one with no state
-     *     change), and a launched candidate stays QUEUED by design. Live
-     *     missions are repaired by `repairLaunches`, which selects on the
-     *     mission rather than on this window, so nothing that pass needs is
-     *     taken away.
-     *
-     * Production, 2026-10-01: a hundred QUEUED ideas in one sprint, and every
-     * deep dive's candidate sat QUEUED with no mission until the six-hour stall
-     * backstop closed it — thirty-two of forty openings were BLOCKED that way,
-     * each reading `passes 0/0`. A FAILED or CANCELLED mission still leaves the
-     * idea eligible, because a new specification may launch and an old one is
-     * answered by the `ALREADY_RESEARCHED` transition below.
-     */
-    `SELECT id, judgment, project_id, follow_on_of_mission_id FROM russell_candidates c
-      WHERE c.state = 'QUEUED' AND c.project_id IS NOT NULL
-        AND c.judgment LIKE '%"missionSpec"%'
-        AND NOT EXISTS (
-          -- The idea's latest mission, as launch() itself reads it
-          -- (latestMissionForCandidate: highest attempt, then newest).
-          SELECT 1 FROM russell_missions m
-           WHERE m.candidate_id = c.id
-             AND m.state NOT IN ('FAILED','CANCELLED')
-             AND NOT EXISTS (
-               SELECT 1 FROM russell_missions n
-                WHERE n.candidate_id = c.id
-                  AND (n.attempt > m.attempt
-                       OR (n.attempt = m.attempt AND n.created_at > m.created_at))
-             )
-        )
-      ORDER BY
-        ${goalFirstSql('c')},
-        CASE priority
-          WHEN 'MUST_DO' THEN 0 WHEN 'BIG_MOVE' THEN 1 WHEN 'WORTH_DOING' THEN 2
-          WHEN 'EXPLORE' THEN 3 ELSE 4 END,
-        COALESCE(ordinal, 999),
-        created_at, rowid
+    `SELECT w.id, w.judgment, w.project_id, w.follow_on_of_mission_id,
+            CASE WHEN w.rn <= w.budget THEN 1 ELSE 0 END AS fits
+       FROM (
+         SELECT c.id, c.judgment, c.project_id, c.follow_on_of_mission_id,
+                ${goalFirstSql('c')} AS k_goal,
+                CASE c.priority
+                  WHEN 'MUST_DO' THEN 0 WHEN 'BIG_MOVE' THEN 1 WHEN 'WORTH_DOING' THEN 2
+                  WHEN 'EXPLORE' THEN 3 ELSE 4 END AS k_priority,
+                COALESCE(c.ordinal, 999) AS k_ordinal,
+                c.created_at AS k_created,
+                c.rowid AS k_seq,
+                ${budgetSql} AS budget,
+                ROW_NUMBER() OVER (
+                  PARTITION BY c.project_id
+                  ORDER BY
+                    ${goalFirstSql('c')},
+                    CASE c.priority
+                      WHEN 'MUST_DO' THEN 0 WHEN 'BIG_MOVE' THEN 1 WHEN 'WORTH_DOING' THEN 2
+                      WHEN 'EXPLORE' THEN 3 ELSE 4 END,
+                    COALESCE(c.ordinal, 999),
+                    c.created_at, c.rowid
+                ) AS rn
+           FROM ${LAUNCHABLE_CANDIDATES}
+       ) w
+      ORDER BY CASE WHEN w.rn <= w.budget THEN 0 ELSE 1 END,
+               w.k_goal, w.k_priority, w.k_ordinal, w.k_created, w.k_seq
       LIMIT ?`,
-    [Math.max(1, limit)],
+    [...budgetParams, Math.max(1, limit)],
   );
 
   const out: {
     candidateId: string;
     followOnOfMissionId: string | null;
+    fitsFreeSlot: boolean;
     spec: Omit<LaunchInput, 'candidateId'>;
   }[] = [];
   /*
@@ -2814,6 +2904,7 @@ export async function nextLaunchable(limit: number): Promise<
     out.push({
       candidateId: row.id,
       followOnOfMissionId: row.follow_on_of_mission_id,
+      fitsFreeSlot: Number(row.fits) === 1,
       spec: spec as Omit<LaunchInput, 'candidateId'>,
     });
   }

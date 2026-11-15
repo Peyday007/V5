@@ -257,6 +257,20 @@ Total ≈ 25 min (baseline 26 min 41 s): construct 247 s, shared frontier (979 o
 | stored arrangements (04:17Z) | 404 | 639 (377 transfers), 14 positions, 249 flows | F5 evidence-only openings feed construction — VERIFIED |
 | construction facts / arrangements researched (04:17Z, 40 min after release) | 0 / 0 | 0 / 0 | NOT VERIFIED — production diagnostic being added to the census (part 6) |
 
+### Production DIAG after part 6 (census Goals run 43680544935, 05:19Z)
+
+Cash Mode is ACTIVE and the kernel back-fills: `kernelSkips no`, authority SPRINT, 5 kernel SCAN rounds open. The back-fill read 118 candidates and found 0: **102 rejected "opening payer matches no mapped buyer type"** and 16 "opening names no payer". The unmatched payers are research prose ("GitHub, Inc. is the payer: …", "Market: City of St. Louis, MO. The payer/buyer is …").
+- Root cause **P-FACTS:** the map's 11 buyer types never meet the payers of priced openings.
+- Repair (part 7, PR #916): priced payers become DISCOVERED buyer nodes; the payer is read out of the prose (`payerNamedIn`).
+
+Arrangement research is allowed (SPRINT), yet 0 constructed rounds opened in 24 h. The gate is now reported by DIAG `constructedGate` (part 7); finding **P-ROUNDS**, under investigation.
+
+### CHAL-33 and comparables-only certification (06:30Z)
+
+PR #915/#918 (another program, CHAL-33) holds any plan whose value rests on one dependency for a DEEP review. Certification at 90% then needs an independent check (another model, held-out evidence or production history) or the independent model challenge's answer. Evaluation case O5 (comparables only, no Brain history) now fails in the offline evaluator, which runs no model.
+
+**DECIDED:** keep CHAL-33 as is. A held-out-fold check was built (worktree c7f925b) and rejected. Its folds kept the full evidence's spread, so they were not independent, and it let that check stand in for the outstanding model challenge. Both would weaken another program's acceptance rule. On production a comparables-only plan certifies once Brain's independent model challenger agrees. That is a real independent check, not an artificial barrier. O5 is recorded as an expected change under a stricter rule, not a regression. Verification on production waits for a goal whose comparables reach the margin.
+
 ### Surge A closed (02:45Z; its closeout in docs/PLANNING-RECOVERY-2026-11-14.md)
 
 Its handoffs return to Surge B, which now owns them:
@@ -307,3 +321,24 @@ New failure categories the inventory did not cover: gates on a fact kind product
 rows, prints UNMEASURED with the reason when a table does not exist, and
 NOT_STORED with where a computed population lives. Production:
 `Goals` workflow, command `census` (read-only, no administrator needed).
+
+## Census after part 7 (Goals run 43693218817, 08:10Z, revision b62298f)
+
+| measure | 02:25Z | 08:10Z |
+|---|---|---|
+| industries | 52 | 53 |
+| nodes (discovered) | 91 (17) | 102 (28) |
+| buyer populations | 11 | **21** |
+| construction facts (observed) | 0 | **19 (19)** |
+| sourced claims | 16,817 | 17,010 |
+| stored constructed arrangements | 404 | 667 |
+| cross-industry transfers | 0 | 405 |
+| positions / position money flows | 14 / 247 | 14 / 249 |
+| arrangements researched | 0 | 0 |
+| arrangements evaluated / picked | 12 / 1 | 12 / 1 |
+
+**P-FACTS is verified on production:** construction facts went from 0 to 19, all observed.
+
+Still open:
+- **P-ROUNDS:** constructedGate shows researching=5 against a live cap of 3, so constructed (mx) rounds get no capacity; mx24h=0. An engineer is assigned.
+- **P-BACKFILL:** the back-fill read 99 rows, produced 0 candidates and rejected 99. In 77 of those, a payer written in prose was matched to the buyer map without being normalised first. An engineer is assigned.

@@ -74,6 +74,17 @@ export interface Decision {
   stable: boolean;
 }
 
+/**
+ * Whether a model's live window shows its route answering: work accepted and at
+ * most one in five calls failing on the provider. Pure. The growth gate reads
+ * it so a route restored since the hourly stage-capacity reading is not held
+ * by that reading's failure count.
+ */
+export function answering(window: Window): boolean {
+  const samples = window.ok + window.content + window.transient;
+  return window.ok > 0 && window.transient * 5 <= samples;
+}
+
 /** One model's next target. Pure, so every decision can be replayed from its inputs. */
 export function decideTarget(input: {
   target: number;
@@ -114,6 +125,77 @@ export function decideTarget(input: {
   if (target >= ceiling) return { target: ceiling, reason: 'at the safety ceiling', stable };
   const grown = Math.min(ceiling, target * 2, Math.max(target + 1, active + waiting));
   return { target: grown, reason: `useful research waiting (${waiting}), errors acceptable`, stable };
+}
+
+/* ------------------------------------------------------------------------- */
+/* The research allocation's capacity verdict (RES-15-5, S-0153)               */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * The goals tick decides, once an hour, whether queued qualified research is
+ * delayed by a measured machine limit, and records an `ADD_CAPACITY` verdict
+ * for the lane when it is (`goals/researchAllocation.ts` `decideCapacity`,
+ * recorded as `RESEARCH_ALLOCATION_DECIDED`). A free-lane lane is
+ * `free-lane:<model>`, and its units never exceed the headroom the controller
+ * itself measured (`stable_high − target`): concurrency the same provider has
+ * already sustained without overload. This controller is the one owner of a
+ * model's target, so it is the one place the verdict is applied — nowhere else
+ * adds slots, and no second scheduler exists to do it.
+ *
+ * A grant raises a target the controller would grow or hold; it never
+ * overrides a shrink (pressure, provider overload) or the decay when nothing
+ * waits, so the controller's own measurements still bind. The safety ceiling,
+ * the boot grace and the database-pool share are applied after it, unchanged.
+ * Each decision is applied at most once per model (its fingerprint), and a
+ * decision older than `GRANT_MAX_AGE_MS` is not applied: by then the hourly
+ * tick has measured again.
+ */
+export const FREE_LANE_PREFIX = 'free-lane:';
+export const GRANT_MAX_AGE_MS = 2 * 60 * 60_000;
+
+export interface CapacityGrant {
+  model: string;
+  units: number;
+  fingerprint: string;
+  reason: string;
+  decidedAt: string;
+}
+
+/** The free-lane ADD_CAPACITY verdicts in a recorded allocation decision. Pure. */
+export function grantsFromDecision(decision: { detail: Record<string, unknown>; at: string } | null, nowMs = Date.now()): CapacityGrant[] {
+  if (!decision) return [];
+  const at = Date.parse(decision.at);
+  if (!Number.isFinite(at) || nowMs - at > GRANT_MAX_AGE_MS || at > nowMs + 60_000) return [];
+  const fingerprint = typeof decision.detail['fingerprint'] === 'string' ? (decision.detail['fingerprint'] as string) : null;
+  if (!fingerprint) return [];
+  const capacity = Array.isArray(decision.detail['capacity']) ? (decision.detail['capacity'] as unknown[]) : [];
+  const out: CapacityGrant[] = [];
+  for (const one of capacity) {
+    const c = one as { lane?: unknown; kind?: unknown; units?: unknown; reason?: unknown };
+    if (c.kind !== 'ADD_CAPACITY' || typeof c.lane !== 'string' || !c.lane.startsWith(FREE_LANE_PREFIX)) continue;
+    const units = Number(c.units);
+    if (!Number.isFinite(units) || units < 1) continue;
+    out.push({ model: c.lane.slice(FREE_LANE_PREFIX.length), units: Math.floor(units), fingerprint, reason: typeof c.reason === 'string' ? c.reason : '', decidedAt: decision.at });
+  }
+  return out;
+}
+
+/**
+ * One model's target with a grant applied. Pure. Applied only to a decision
+ * that does not lower the target, raised to at most `target + units`, and
+ * never above the measured sustainable concurrency, the ceiling, or — when the
+ * grant is already met — changed at all.
+ */
+export function applyGrant(input: { target: number; stableHigh: number; decision: Decision; grant: CapacityGrant | null; ceiling?: number }): { decision: Decision; applied: boolean } {
+  const { target, decision, grant } = input;
+  if (!grant || decision.target < target) return { decision, applied: false };
+  const ceiling = input.ceiling ?? SAFETY_CEILING;
+  const bound = Math.min(ceiling, Math.max(target, input.stableHigh), target + grant.units);
+  if (bound <= decision.target) return { decision, applied: false };
+  return {
+    decision: { target: bound, reason: `research allocation added ${bound - target} slot(s) for queued qualified research held by a measured limit (allocation ${grant.fingerprint}): ${grant.reason}`.slice(0, 400), stable: decision.stable },
+    applied: true,
+  };
 }
 
 /* ------------------------------------------------------------------------- */
@@ -272,6 +354,8 @@ export interface PoolOptions {
   pressure?: () => Pressure;
   /** Test seam: the recorded stage-capacity reading the growth gate consults, instead of the latest row. */
   stageReading?: () => Promise<RecordedStageCapacity | null>;
+  /** Test seam: the research allocation's grants, instead of the newest recorded decision. */
+  grants?: () => Promise<CapacityGrant[]>;
 }
 let poolOptions: PoolOptions = {};
 
@@ -334,6 +418,30 @@ export function slotShare(models: number, poolMax: number | null = databasePoolR
   return Math.max(MIN_TARGET, Math.floor((poolMax * SLOTS_PER_DB_CONNECTION) / models));
 }
 
+/** Allocation fingerprints already applied, per model; backed by the FREE_LANE_CAPACITY rows across a restart. */
+const appliedGrants = new Map<string, string>();
+
+async function grantAlreadyApplied(model: string, fingerprint: string): Promise<boolean> {
+  if (appliedGrants.get(model) === fingerprint) return true;
+  const row = await getDb().get<{ n: number | string }>(
+    `SELECT COUNT(*) AS n FROM bin_events WHERE event_type = 'FREE_LANE_CAPACITY' AND workload_class = ? AND reason LIKE ?`,
+    [model, `%(allocation ${fingerprint})%`],
+  );
+  const seen = Number(row?.n ?? 0) > 0;
+  if (seen) appliedGrants.set(model, fingerprint);
+  return seen;
+}
+
+/** The newest allocation decision's free-lane grants; an unreadable decision grants nothing. */
+async function pendingGrants(): Promise<CapacityGrant[]> {
+  try {
+    const { latestResearchDecision } = await import('../goals/tick.ts');
+    return grantsFromDecision(await latestResearchDecision());
+  } catch {
+    return [];
+  }
+}
+
 let lastReading: ControlReading | null = null;
 const IDLE_RECORD_MS = 10 * 60_000;
 const BOOT_GRACE_MS = 10 * 60_000;
@@ -363,11 +471,16 @@ export async function controlStep(): Promise<ControlReading | null> {
   // One read of the recorded measurement per step, shared by every model's growth gate.
   const { gateGrowth, readStageCapacity } = await import('./stageCapacity.ts');
   const stages = await (poolOptions.stageReading ?? (() => readStageCapacity()))().catch(() => null);
+  const grants = poolOptions.grants ? await poolOptions.grants() : await pendingGrants();
   for (const pool of pools.values()) {
     const gpu = config.runpod && isRunpodSlot(pool.worker.model);
     const window = gpu ? gpuWindow(await windowFor(pool.worker.model)) : await windowFor(pool.worker.model);
     const peak = Math.max(pool.peakBusy, pool.busy);
     let decision = decideTarget({ target: pool.target, active: peak, waiting, window, pressure, ...(gpu ? { ceiling: gpuCeiling() } : {}) });
+    const offered = grants.find((g) => g.model === pool.worker.model) ?? null;
+    const grant = offered && !(await grantAlreadyApplied(pool.worker.model, offered.fingerprint)) ? offered : null;
+    const granted = applyGrant({ target: pool.target, stableHigh: pool.stableHigh, decision, grant, ...(gpu ? { ceiling: gpuCeiling() } : {}) });
+    decision = granted.decision;
     // Just after a restart the database is busiest (boot passes, a deploy's verification):
     // the lane stays at its starting size until it has been up BOOT_GRACE_MS.
     if (Date.now() - poolStartedAt < BOOT_GRACE_MS && decision.target > START_TARGET) {
@@ -381,7 +494,7 @@ export async function controlStep(): Promise<ControlReading | null> {
      * (`gateGrowth`). Regaining proven capacity is restoring, never held.
      */
     if (decision.target > pool.target) {
-      const verdict = gateGrowth({ model: pool.worker.model, gpu: !!gpu, current: pool.target, proposed: decision.target, stableHigh: pool.stableHigh, recorded: stages });
+      const verdict = gateGrowth({ model: pool.worker.model, gpu: !!gpu, current: pool.target, proposed: decision.target, stableHigh: pool.stableHigh, recorded: stages, answering: answering(window) });
       if (verdict.held) decision = { ...decision, target: verdict.target, reason: verdict.reason!, stable: false };
       else if (verdict.reason) decision = { ...decision, reason: `${decision.reason}; ${verdict.reason}` };
     }
@@ -396,13 +509,26 @@ export async function controlStep(): Promise<ControlReading | null> {
     }
     if (decision.stable) pool.stableHigh = Math.max(pool.stableHigh, peak);
     pool.peakBusy = pool.busy;
+    // An applied verdict is consumed once, whatever the caps below left of it; one the
+    // controller's own measurements refused (a shrink, nothing waiting) is offered again next step.
+    if (grant && granted.applied) appliedGrants.set(pool.worker.model, grant.fingerprint);
+    if (granted.applied && decision.target === pool.target) {
+      await recordBinEvent({
+        eventType: 'FREE_LANE_CAPACITY',
+        workloadClass: pool.worker.model,
+        outcome: 'HOLD',
+        reason: `${pool.target} -> ${pool.target}: grant held by the controller's caps (allocation ${grant!.fingerprint}): ${decision.reason}`.slice(0, 400),
+        measures: { waiting, busy: pool.busy, peakBusy: peak, granted: grant!.units },
+        evidenceClass: 'MEASURED',
+      });
+    }
     if (decision.target !== pool.target) {
       await recordBinEvent({
         eventType: 'FREE_LANE_CAPACITY',
         workloadClass: pool.worker.model,
         outcome: decision.target > pool.target ? 'GROW' : 'SHRINK',
-        reason: `${pool.target} -> ${decision.target}: ${decision.reason}`,
-        measures: { waiting, busy: pool.busy, peakBusy: peak, ...window, lagMs: Math.round(pressure.lagMs), cpu: Number(pressure.cpu.toFixed(2)), db: pressure.db, dbContended: pressure.dbContended ?? false },
+        reason: `${pool.target} -> ${decision.target}: ${decision.reason}`.slice(0, 340) + (granted.applied && !decision.reason.includes(`(allocation ${grant!.fingerprint})`) ? ` (allocation ${grant!.fingerprint})` : ''),
+        measures: { waiting, busy: pool.busy, peakBusy: peak, ...(granted.applied ? { granted: grant!.units } : {}), ...window, lagMs: Math.round(pressure.lagMs), cpu: Number(pressure.cpu.toFixed(2)), db: pressure.db, dbContended: pressure.dbContended ?? false },
         evidenceClass: 'MEASURED',
       });
     }
@@ -482,6 +608,7 @@ export function stopAdaptivePool(): void {
   controlTimer = null;
   pools.clear();
   workersCache = [];
+  appliedGrants.clear();
 }
 
 /**

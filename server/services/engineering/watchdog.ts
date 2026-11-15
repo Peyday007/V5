@@ -166,44 +166,73 @@ async function freeLanePool(now: Date): Promise<PoolReading | null> {
  * own grants were full. `startable` is what could actually launch now: for
  * each project, the lesser of its launchable ideas and its grants' free slots.
  */
-async function researchSlotRows(now: Date): Promise<{ waiting: number; running: number; capacity: number; startable: number }> {
+async function researchSlotRows(now: Date): Promise<{
+  waiting: number;
+  running: number;
+  capacity: number;
+  startable: number;
+  /** Waiting ideas in projects whose research grant is at its at-once ceiling. */
+  atCeiling: number;
+  /** Waiting ideas in projects no research grant governs. */
+  ungoverned: number;
+}> {
   void now;
-  const waitingRows = await getDb().all<{ project_id: string; n: number | string }>(
-    `SELECT c.project_id, COUNT(*) AS n FROM russell_candidates c
-      WHERE c.state = 'QUEUED' AND c.project_id IS NOT NULL AND c.judgment LIKE '%"missionSpec"%'
-        AND NOT EXISTS (SELECT 1 FROM russell_missions m WHERE m.candidate_id = c.id AND m.state NOT IN ('FAILED','CANCELLED'))
-      GROUP BY c.project_id`,
-  );
   /*
    * The slots a waiting idea can take are its project's research grant's — the
    * one grant `launch()` resolves and `reserve` enforces — and no other. Summing
    * every active grant in a project counted cash and other grants' slots that no
    * research launch can use (production 2026-11-10: "26 startable" for two
    * readings while every launch was refused AT_ONCE).
+   *
+   * And `startable` is read from the launch window itself — the ideas
+   * `nextLaunchable` puts first because they fit a free slot — never computed
+   * beside it. Production, 2026-11-15 07:46Z-07:49Z: this reader said "3->5
+   * launchable idea(s) have a free slot" across samples while the launch pass,
+   * whose window was the best fifty ideas Brain-wide and all of them in full
+   * projects, never reached one. One predicate, so the two cannot disagree.
    */
-  const { researchMissionSlots } = await import('../russell/launch.ts');
+  const { launchableByProject, nextLaunchable } = await import('../russell/loop.ts');
+  const projects = await launchableByProject();
   const seen = new Set<string>();
   let waiting = 0;
-  let startable = 0;
   let running = 0;
   let capacity = 0;
-  for (const row of waitingRows) {
-    const n = Number(row.n);
-    waiting += n;
-    const slots = await researchMissionSlots(row.project_id).catch(() => null);
-    if (!slots) continue;
-    startable += Math.min(n, Math.max(0, slots.cap - slots.live));
-    if (seen.has(slots.goalId)) continue;
-    seen.add(slots.goalId);
-    running += slots.live;
-    capacity += slots.cap;
+  let free = 0;
+  let atCeiling = 0;
+  let ungoverned = 0;
+  for (const one of projects) {
+    waiting += one.waiting;
+    if (!one.slots) {
+      ungoverned += one.waiting;
+      continue;
+    }
+    if (one.free === 0) atCeiling += one.waiting;
+    free += Math.min(one.waiting, one.free);
+    if (seen.has(one.slots.goalId)) continue;
+    seen.add(one.slots.goalId);
+    running += one.slots.live;
+    capacity += one.slots.cap;
   }
-  return { waiting, running, capacity, startable };
+  const startable =
+    free > 0 ? (await nextLaunchable(free)).filter((entry) => entry.fitsFreeSlot).length : 0;
+  return { waiting, running, capacity, startable, atCeiling, ungoverned };
 }
 
 async function researchSlotPool(now: Date): Promise<PoolReading> {
-  const { waiting, running, capacity, startable } = await researchSlotRows(now);
+  const { waiting, running, capacity, startable, atCeiling, ungoverned } = await researchSlotRows(now);
   const idle = startable > 0;
+  /*
+   * When nothing can start, the reading names what holds the waiting ideas
+   * rather than calling them launchable: a full grant, no grant at all, or a
+   * free slot whose project's ideas the launch pass skips (a wound-down cash
+   * sprint, `launchableUnderCashMode`).
+   */
+  const held = waiting - atCeiling - ungoverned;
+  const gates = [
+    atCeiling > 0 ? `${atCeiling} in projects whose grant is at its at-once ceiling` : '',
+    ungoverned > 0 ? `${ungoverned} in projects no research grant governs` : '',
+    held > 0 ? `${held} held by their project's wound-down cash sprint` : '',
+  ].filter(Boolean);
   return {
     pool: 'RESEARCH_SLOTS',
     waiting,
@@ -214,11 +243,11 @@ async function researchSlotPool(now: Date): Promise<PoolReading> {
       ? `${startable} launchable idea(s) have a free slot in their own project's grant: the launch pass takes the most important first`
       : waiting === 0
         ? 'nothing launchable is waiting'
-        : `${waiting} launchable idea(s), and every one of their projects' grants is at its at-once ceiling`,
+        : `${waiting} waiting idea(s) and none can start now: ${gates.join('; ')}`,
   };
 }
 
-/** Ideas that could launch now: per project, waiting ideas matched to that project's free grant slots. */
+/** Ideas that could launch now: the launch window's ideas that fit a free slot in their own project's grant. */
 export async function researchSlotsFree(now = new Date()): Promise<number> {
   return (await researchSlotRows(now)).startable;
 }

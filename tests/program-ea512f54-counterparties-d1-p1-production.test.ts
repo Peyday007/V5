@@ -86,10 +86,14 @@ describe('a real send writes the counterparty rows', () => {
     expect(recorded.outcome).toBe('PERFORMED');
 
     const rows = await cashEventsOfKind(counterpartyLedger(ID), RESERVATION_EVENT_KIND);
-    expect(rows.map((r) => (r.detail.event as { kind: string }).kind)).toEqual(['RESERVED', 'PERFORMED']);
+    // Both events carry the same clock reading, so their row order is the
+    // random id's; the fold (holdsFrom) reads RESERVED first whatever the order.
+    const kindOf = (r: (typeof rows)[number]): string => (r.detail.event as { kind: string }).kind;
+    expect(rows.map(kindOf).sort()).toEqual(['PERFORMED', 'RESERVED']);
     const [hold] = holdsFrom(await recordedReservationEvents([ID]));
     expect(hold).toMatchObject({ state: 'PERFORMED', commitmentId: `cash:${opportunityId}:CONTACT_BUYER:1` });
-    expect((rows[0]!.detail.event as { authorityHeld: string[] }).authorityHeld).toEqual(['CONTACT_BUYER']);
+    const reserved = rows.find((r) => kindOf(r) === 'RESERVED')!;
+    expect((reserved.detail.event as { authorityHeld: string[] }).authorityHeld).toEqual(['CONTACT_BUYER']);
 
     const party = (await recordedCounterparty(ID))!;
     for (const dimension of ['listing', 'willingness', 'availability', 'scope']) {

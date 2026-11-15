@@ -15,7 +15,7 @@ import { createFragments, createOrchestration } from '../server/repos/research.t
 import { enqueueWork } from '../server/repos/workQueue.ts';
 import { workType } from '../server/services/queue/workTypes.ts';
 import { setBrainOnlyMode } from '../server/services/bins/brainOnly.ts';
-import { controlStep, readCapacity, startAdaptivePool, stopAdaptivePool } from '../server/services/freeLane/capacity.ts';
+import { answering, controlStep, decideTarget, readCapacity, startAdaptivePool, stopAdaptivePool } from '../server/services/freeLane/capacity.ts';
 import {
   chooseConstraint,
   gateGrowth,
@@ -90,6 +90,35 @@ describe('gateGrowth: restore first, then scale only the measured constraint', (
     expect(v.held).toBe(true);
     expect(v.target).toBe(8);
     expect(v.reason).toMatch(/restore model route brain-a first/);
+  });
+
+  it('holds only the failing route: another route that serves the work grows (production 2026-11-15: RunPod held at 2 by brain-a)', () => {
+    const reading = recorded(CONSTRAINED_AT_MODEL, { primary: { ...FAILING, cause: 'provider availability' as never, failures: 100 } });
+    // A free provider beside the failing one grows on its own measured gain.
+    const other = gateGrowth({ ...base, model: 'brain-b', proposed: 16, recorded: reading });
+    expect(other.held).toBe(false);
+    expect(other.target).toBe(16);
+    // The GPU slot is gated by its priced gain, never by brain-a's failures.
+    const gpu = gateGrowth({ model: 'runpod/Qwen/Qwen3-4B-AWQ', gpu: true, current: 2, stableHigh: 2, proposed: 4, recorded: recorded([stage('model-interpretation', 120, 20, 10, 6, { facts: 120, replicas: 2 })], { primary: { ...FAILING, failures: 100 } }) });
+    expect(gpu.reason ?? '').not.toMatch(/restore model route brain-a/);
+    expect(gpu.held).toBe(false);
+  });
+
+  it('does not hold a failing route that its own live window shows answering since the reading', () => {
+    const reading = recorded(CONSTRAINED_AT_MODEL, { primary: FAILING });
+    expect(gateGrowth({ ...base, proposed: 16, recorded: reading, answering: false }).held).toBe(true);
+    const restored = gateGrowth({ ...base, proposed: 16, recorded: reading, answering: true });
+    expect(restored.held).toBe(false);
+    expect(restored.target).toBe(16);
+  });
+
+  it('reads a route as answering only while its live window accepts work with few provider failures, and still halves an erroring route', () => {
+    expect(answering({ ok: 10, content: 1, transient: 1 })).toBe(true);
+    expect(answering({ ok: 5, content: 0, transient: 3 })).toBe(false);
+    expect(answering({ ok: 0, content: 0, transient: 0 })).toBe(false);
+    // Backpressure is the controller's own and is untouched: an overloaded route halves.
+    const calm = { db: false, lagMs: 5, cpu: 0.1 };
+    expect(decideTarget({ target: 8, active: 8, waiting: 11, window: { ok: 5, content: 0, transient: 5 }, pressure: calm }).target).toBe(4);
   });
 
   it('holds when the measured constraint is a stage model slots do not serve', () => {
@@ -170,7 +199,10 @@ let play: TestProject;
 let inFlight = 0;
 let peak = 0;
 
-const completer: Completer = async (_c, _m, _s, prompt) => {
+/** A route whose provider answers every call with a 503, or null. */
+let failRoute: string | null = null;
+const completer: Completer = async (_c, name, _s, prompt) => {
+  if (name === failRoute) throw new Error('cheap lane HTTP 503');
   inFlight += 1;
   peak = Math.max(peak, inFlight);
   await new Promise((r) => setTimeout(r, 40));
@@ -229,16 +261,18 @@ describe('the adaptive pool consults the measured constraint before it scales', 
     await getDb().run('DELETE FROM free_lane_capacity', []);
     inFlight = 0;
     peak = 0;
+    failRoute = null;
   });
   afterEach(() => stopAdaptivePool());
 
-  it('does not grow past its starting size while the reading names a failing route', async () => {
+  it('does not grow the failing route past its starting size, and grows the route that serves its work', async () => {
+    failRoute = 'brain-a';
     const reasons = await drive(recorded(CONSTRAINED_AT_MODEL, { primary: FAILING }), 12);
     const rows = await readCapacity();
     expect(rows.length).toBe(2);
-    for (const row of rows) expect(row.target).toBeLessThanOrEqual(2);
-    expect(reasons.some((r) => /restore model route brain-a first/.test(r))).toBe(true);
-    expect(peak).toBeLessThanOrEqual(4);
+    expect(rows.find((r) => r.model === 'brain-a')!.target).toBeLessThanOrEqual(2);
+    expect(rows.find((r) => r.model === 'brain-b')!.target).toBeGreaterThan(2);
+    expect(reasons.some((r) => /restore model route brain-b/.test(r))).toBe(false);
   }, 60_000);
 
   it('grows past its starting size when the reading names a lane-stage constraint with a measured gain', async () => {

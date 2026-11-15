@@ -107,7 +107,7 @@ import { missionsForRounds, type RoundMissions } from '../russell/roundMissions.
 import { mechanismForSignal, observationExpiry, openingTitle } from '../../domain/opportunitySignals.ts';
 import { OPPORTUNITY_SIGNALS } from '../../domain/types.ts';
 import { discoveryAllowed, knowledgeResearchAllowed } from './lifecycle.ts';
-import { noteConstructedRoundOpened, noteConstructedRoundOutcome } from './arrangementLibrary.ts';
+import { ARRANGEMENT_BUCKET_MARK, noteConstructedRoundOpened, noteConstructedRoundOutcome } from './arrangementLibrary.ts';
 import { arrangementForLegacyKey } from '../../repos/monetization.ts';
 import { cashPosition } from './money.ts';
 import { proveCapabilities } from './deliverables/capabilities.ts';
@@ -920,6 +920,30 @@ export const MARKET_PREFERENCE_SENTENCE =
 export const MAX_LIVE_GOAL_ROUNDS = 3;
 
 /**
+ * The part of a goal's live cap reserved for its constructed (`-mx-`) rounds
+ * (§81, §83). A reservation, not a partition: lens rounds may use the whole cap
+ * while no constructed research claims its part, and a constructed round may
+ * always open inside its reserved part, however many lens rounds hold the rest.
+ *
+ * Until 2026-11-15 both classes were gated on one count of every goal round
+ * still researching. Lens rounds open every pass and wait in the queue while
+ * capacity is short, so they held the whole cap (production: 5 researching
+ * against a cap of 3) and `openConstructedRound` refused every constructed
+ * arrangement — 0 of 667 stored arrangements ever asked, though they are the
+ * plan's own candidates. The bound stays: a lens round never opens while the
+ * goal's research is at the cap, so a reservation taken over lens rounds
+ * (at most this many above the cap) drains as they finish.
+ */
+export function constructedShare(liveCap: number): number {
+  return Math.max(1, Math.floor(liveCap / 2));
+}
+
+/** Whether a round of the goal whose bucket prefix is `prefix` asks about a constructed arrangement. */
+function isConstructedRound(one: Pick<CashDiscoveryRound, 'bucketId'>, prefix: string): boolean {
+  return one.bucketId.startsWith(`${prefix}${ARRANGEMENT_BUCKET_MARK}`);
+}
+
+/**
  * What a goal round looks for first (owner, 2026-11-05): work run remotely and
  * fulfilled mostly by AI, sold to buyers who can be named, at prices buyers are
  * shown paying, collected fast. A preference in the question, not a filter:
@@ -1248,7 +1272,8 @@ export async function openGoalDiscovery(input: {
  * gate, the same frame, the same candidate-and-round transaction and the same
  * harvest every goal lens uses. The bucket id carries the arrangement's key,
  * so each arrangement keeps its own history and backoff, and its rounds count
- * against the goal's live cap like any lens. It opens inside an ACTIVE sprint
+ * against construction's reserved share of the goal's live cap
+ * (`constructedShare`), which lens rounds cannot occupy. It opens inside an ACTIVE sprint
  * or under the live standing research grant (`knowledgeResearchAllowed`), so
  * the arrangement library's counters and verdicts keep moving with no sprint.
  */
@@ -1281,7 +1306,14 @@ export async function openConstructedRound(input: {
   const prefix = `${GOAL_BUCKET_PREFIX}${input.goal.id}`;
   const mine = (await listRounds(input.projectId)).filter((one) => one.bucketId === prefix || one.bucketId.startsWith(`${prefix}-`));
   const liveCap = Math.max(MAX_LIVE_GOAL_ROUNDS, Math.trunc(input.liveCap ?? MAX_LIVE_GOAL_ROUNDS));
-  if ((await roundsStillResearching(mine)) >= liveCap) return null;
+  const mx = mine.filter((one) => isConstructedRound(one, prefix));
+  /*
+   * Inside its reserved share of the goal's live cap a constructed round opens
+   * whatever the lens rounds hold; past it, only while the whole cap has room.
+   * Counted together alone, queued lens rounds held every slot and no
+   * arrangement was ever asked (2026-11-15, `constructedShare`).
+   */
+  if ((await roundsStillResearching(mx)) >= constructedShare(liveCap) && (await roundsStillResearching(mine)) >= liveCap) return null;
   /*
    * Focus keeps exactly this search (§83): an approved goal's constructed
    * arrangements, inside an ACTIVE sprint or the standing grant (the gate above), at most
@@ -1290,7 +1322,6 @@ export async function openConstructedRound(input: {
    * research that could add an opening the held ones cannot reach.
    */
   const focusCap = await constructedCapFor(input.projectId);
-  const mx = mine.filter((one) => one.bucketId.startsWith(`${prefix}-mx-`));
   /*
    * Under focus the cap counts constructed research still running under a
    * round already closed, not only OPEN rounds (§83): a park closes a round
@@ -1382,29 +1413,57 @@ const TERMINAL_MISSION = new Set(['DONE', 'FAILED', 'CANCELLED']);
 export async function roundsStillResearching(rounds: readonly CashDiscoveryRound[]): Promise<number> {
   const open = rounds.filter((one) => one.state === 'OPEN');
   if (open.length === 0) return 0;
-  const ids = open.map((one) => one.candidateId);
+  const finished = await researchFinished(open.map((one) => one.candidateId));
+  return open.filter((one) => !finished.has(one.candidateId)).length;
+}
+
+/**
+ * Fragment states that hold no research slot. Terminal ones, and a fragment
+ * parked for a person (`NEEDS_HUMAN`): it waits for somebody's answer, no
+ * worker researches it, and counting it kept a round "still researching" for
+ * as long as nobody answered — a slot held for ever by research that was not
+ * running (§53, §83). The round still closes, and the fragment still waits.
+ */
+const SLOTLESS_FRAGMENT_STATES = ['ACCEPTED', 'BLOCKED', 'REJECTED', 'CANCELLED', 'NEEDS_HUMAN'] as const;
+
+/** Candidates whose launched research has nothing left to run: every fragment of every mission is slotless. */
+async function researchFinished(candidateIds: readonly string[]): Promise<Set<string>> {
+  const ids = [...new Set(candidateIds)];
+  if (ids.length === 0) return new Set();
   const finished = await getDb().all<{ candidate_id: string }>(
     `SELECT DISTINCT m.candidate_id FROM russell_missions m
       WHERE m.candidate_id IN (${ids.map(() => '?').join(', ')}) AND m.orchestration_id IS NOT NULL
         AND EXISTS (SELECT 1 FROM research_fragments f WHERE f.orchestration_id = m.orchestration_id)
         AND NOT EXISTS (
           SELECT 1 FROM russell_missions m2 JOIN research_fragments f2 ON f2.orchestration_id = m2.orchestration_id
-           WHERE m2.candidate_id = m.candidate_id AND f2.status NOT IN ('ACCEPTED', 'BLOCKED', 'REJECTED', 'CANCELLED'))`,
-    ids,
+           WHERE m2.candidate_id = m.candidate_id AND f2.status NOT IN (${SLOTLESS_FRAGMENT_STATES.map(() => '?').join(', ')}))`,
+    [...ids, ...SLOTLESS_FRAGMENT_STATES],
   );
-  return open.length - finished.length;
+  return new Set(finished.map((one) => one.candidate_id));
 }
 
+/** Mission states in which research may still be running. NEEDS_HUMAN is parked for a person, not researching. */
+const RESEARCHING_MISSION = new Set(['PLANNED', 'LAUNCHING', 'RUNNING', 'WAITING']);
+
 /**
- * Constructed research live among these rounds: OPEN ones, plus closed ones
- * whose idea's latest mission has not ended.
+ * Constructed research live among these rounds: OPEN ones still researching,
+ * plus closed ones whose idea's latest mission is still researching.
+ *
+ * Both halves read the same rule as `roundsStillResearching`. A closed round
+ * whose mission parked at a decision (NEEDS_HUMAN), or whose fragments have
+ * all ended while its synthesis runs on, used to count as live for ever —
+ * production, 2026-11-15: 9 "live" constructed rounds against a focus cap of
+ * 5, none asked in the last day — so the focus cap was held by research that
+ * was not running.
  */
 export async function liveConstructedResearch(rounds: readonly CashDiscoveryRound[]): Promise<number> {
-  const open = rounds.filter((one) => one.state === 'OPEN').length;
+  const open = await roundsStillResearching(rounds);
   const closed = rounds.filter((one) => one.state !== 'OPEN');
   if (closed.length === 0) return open;
   const missions = await missionsForRounds(closed.map((one) => one.candidateId));
-  return open + [...missions.values()].filter((one) => one.latest && !TERMINAL_MISSION.has(one.latest.state)).length;
+  const running = [...missions.values()].filter((one) => one.latest && RESEARCHING_MISSION.has(one.latest.state)).map((one) => one.candidateId);
+  const finished = await researchFinished(running);
+  return open + running.filter((id) => !finished.has(id)).length;
 }
 
 /**

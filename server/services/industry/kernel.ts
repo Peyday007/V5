@@ -66,7 +66,7 @@ import {
   type Ask,
   type SubjectSignals,
 } from './allocate.ts';
-import { absorb, backfillClaimFacts, openAsks, type Absorbed, type OpenedRound } from './expand.ts';
+import { absorb, backfillClaimFacts, mapPricedPayers, openAsks, type Absorbed, type OpenedRound } from './expand.ts';
 import { graphSnapshot, type GraphSnapshot } from './graph.ts';
 import type { CashMode, IndustryRoundPurpose, RussellGoal } from '../../domain/types.ts';
 import type { Workstream } from '../../domain/register.ts';
@@ -91,6 +91,8 @@ export interface KernelPass {
   failures?: string[];
   /** Facts for the construction filed this pass from claims research already held (F3). */
   backfilled?: number;
+  /** Buyer populations put on the map this pass from priced openings' payers (`mapPricedPayers`). */
+  payersMapped?: number;
 }
 
 export type KernelBasis = 'SPRINT' | 'STANDING';
@@ -252,11 +254,24 @@ export async function runIndustryKernel(projectId: string): Promise<KernelPass> 
    * nothing left to file does not reread its cards every tick.
    */
   let backfilled = 0;
+  let payersMapped = 0;
   const lastEmpty = backfillIdleAt.get(projectId);
   if (databasePressure().state !== 'SHEDDING' && (lastEmpty === undefined || Date.now() - lastEmpty >= BACKFILL_EVERY_MS)) {
+    /*
+     * First, a priced opening whose payer no buyer type names becomes one, so
+     * the back-fill below can file its price this very pass (2026-11-15:
+     * production's 49 priced payers matched none of its 11 buyer types).
+     */
+    try {
+      const mapped = await mapPricedPayers(projectId);
+      payersMapped = mapped.created.length;
+      failures.push(...mapped.failures.map((one) => `map payer: ${one}`));
+    } catch (error) {
+      failures.push(`map payers: ${error instanceof Error ? error.message : String(error)}`);
+    }
     try {
       backfilled = (await backfillClaimFacts(projectId)).filed.length;
-      if (backfilled === 0) backfillIdleAt.set(projectId, Date.now());
+      if (backfilled === 0 && payersMapped === 0) backfillIdleAt.set(projectId, Date.now());
       else backfillIdleAt.delete(projectId);
     } catch (error) {
       failures.push(`backfill: ${error instanceof Error ? error.message : String(error)}`);
@@ -278,11 +293,12 @@ export async function runIndustryKernel(projectId: string): Promise<KernelPass> 
       basis: null,
       failures,
       backfilled,
+      payersMapped,
     };
   }
   if (authority.basis === 'STANDING') {
     if (!mode && counts.nodes === 0 && !(await holdsMoneyGoal(projectId))) {
-      return { ...EMPTY, absorbed, ...counts, failures, backfilled };
+      return { ...EMPTY, absorbed, ...counts, failures, backfilled, payersMapped };
     }
     if (databasePressure().state === 'SHEDDING') {
       return {
@@ -300,6 +316,7 @@ export async function runIndustryKernel(projectId: string): Promise<KernelPass> 
         basis: 'STANDING',
         failures,
         backfilled,
+        payersMapped,
       };
     }
   }
@@ -351,6 +368,7 @@ export async function runIndustryKernel(projectId: string): Promise<KernelPass> 
     transfers,
     failures,
     backfilled,
+    payersMapped,
   };
 }
 
