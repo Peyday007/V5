@@ -3229,6 +3229,19 @@ export const GOAL_TOP_UP_MS = 5 * 60_000;
  */
 export const PLAN_EVIDENCE_FLOOR_MS = 2 * 60_000;
 const lastInputs = new Map<string, string>();
+/**
+ * When the goal tick last read each goal's plan, in this process, whether or
+ * not the reading wrote a row. A reading whose conclusion equals the stored
+ * one writes no row (`persistReading`, C-11), and the scenario run it made is
+ * on a newly saved model when the model's definition moved, which no stored
+ * reading references, so neither query `advanceGoalPlans` takes its `since`
+ * from saw that read: production's $10K goal stored its last row at 03:47Z
+ * while a fresh read at 16:29Z drew the identical conclusion, so every pass
+ * after the half-hour read it again, holding the one scenario slot the
+ * deploy verifier and user runs also need. Lost on restart, which costs one
+ * early read, as `lastInputs` already does.
+ */
+const lastReadAt = new Map<string, number>();
 
 /**
  * What a goal's plan is composed from, as one cheap reading: the project's
@@ -3338,6 +3351,7 @@ export function forgetGoalReadings(): void {
   lastReadings.clear();
   lastTopUp.clear();
   lastInputs.clear();
+  lastReadAt.clear();
   repairedGoals.clear();
 }
 
@@ -3779,7 +3793,10 @@ export async function advanceGoalPlans(
       `SELECT MAX(r.started_at) AS at FROM scenario_runs r JOIN goal_plan_readings g ON g.scenario_model_id = r.model_id WHERE g.workstream_id = ?`,
       [id],
     );
-    const since = [last?.at, lastRun?.at].filter((one): one is string => !!one).reduce((max, at) => Math.max(max, Date.parse(at)), 0);
+    const since = Math.max(
+      [last?.at, lastRun?.at].filter((one): one is string => !!one).reduce((max, at) => Math.max(max, Date.parse(at)), 0),
+      lastReadAt.get(id) ?? 0,
+    );
     const fingerprint = async (): Promise<string | null> => (projectId ? planInputsFingerprint(projectId, id) : null);
     const inputs = since && now.getTime() - since >= PLAN_EVIDENCE_FLOOR_MS && now.getTime() - since < PLAN_REFRESH_MS ? await fingerprint() : null;
     const repaired = repairedGoals.get(id);
@@ -3824,6 +3841,7 @@ export async function advanceGoalPlans(
     try {
       reading = await readGoalPlan({ goalId: id, now, persist: true });
       read += 1;
+      lastReadAt.set(id, now.getTime());
       if (due === 'EVIDENCE') onEvidence += 1;
       if (due === 'REPAIRED') {
         repairedGoals.delete(id);
