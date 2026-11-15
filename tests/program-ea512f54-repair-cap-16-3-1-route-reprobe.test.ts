@@ -20,10 +20,16 @@ import {
   ROUTE_RETRY_AFTER_FLOOR_MS,
   resetRouteHealth,
   ROUTE_FAILURE_LIMIT,
+  ROUTE_PING_FAILED,
+  ROUTE_PING_WORKLOAD,
   ROUTE_REPROBE_BACKOFF_MS,
   routeHold,
   takeRouteProbe,
 } from '../server/services/freeLane/worker.ts';
+import { freshProject, teardown } from './helpers.ts';
+import { getDb } from '../server/db/database.ts';
+import { diagnoseThroughput, stageCapacity } from '../server/services/freeLane/stageCapacity.ts';
+import { getProbe } from '../server/services/factory/program/probes.ts';
 
 const MIN = 60_000;
 const config: LaneConfig = { url: 'http://free.invalid/v1', key: null, models: ['m', 'other'], dailyBudget: 100, timeoutMs: 1000 };
@@ -272,3 +278,90 @@ describe('the GPU slot is pinged on the GPU, never through its fallback (review 
   });
 });
 
+/**
+ * CAP-16-3 repair, finding F1: a failed health ping is a failed model call, and
+ * S-0170 requires model/provider failures to be collected per stage.
+ *
+ * Production, 2026-11-15 19:06Z (brain_operator_capacity): both routes "100% of
+ * 4 calls failed". Once a held route was re-probed with a health ping instead of
+ * an item, `pingHeldRoutes` recorded a failed ping only in the in-memory route
+ * map and on console.warn, so the failures dropped out of the per-stage
+ * `providerFailures`, out of the per-route diagnosis and out of r01.cap-16-3's
+ * provider-failure share while the route stayed down — the share fell below 50%
+ * with nothing restored.
+ */
+const failing: Completer = async () => {
+  throw new Error('cheap lane HTTP 503 Service Unavailable');
+};
+const answering: Completer = async () => '{"ok":true}';
+
+describe('failed health pings are durable (worker.ts pingHeldRoutes)', () => {
+  beforeEach(async () => {
+    await freshProject();
+    resetRouteHealth();
+  });
+  afterEach(async () => {
+    resetRouteHealth();
+    await teardown();
+  });
+
+  it('writes each failed ping as a lane row with its cause, and no work item', async () => {
+    const start = Date.now() - 30 * MIN;
+    hold('m', start);
+    const [ping] = await pingHeldRoutes(['m'], failing, config, () => start + 5 * MIN);
+    expect(ping).toMatchObject({ ok: false, cause: 'provider availability' });
+
+    const rows = await getDb().all<{ work_item_id: string | null; workload_class: string; outcome: string; reason: string }>(
+      `SELECT work_item_id, workload_class, outcome, reason FROM bin_events WHERE event_type = 'FREE_LANE_ITEM'`,
+      [],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ work_item_id: null, workload_class: ROUTE_PING_WORKLOAD, outcome: ROUTE_PING_FAILED });
+    expect(rows[0]!.reason).toMatch(/^model m: model call failed \[provider availability\]: health ping: /);
+  });
+
+  it('a ping that answers writes nothing', async () => {
+    const start = Date.now() - 30 * MIN;
+    hold('m', start);
+    const [ping] = await pingHeldRoutes(['m'], answering, config, () => start + 5 * MIN);
+    expect(ping).toMatchObject({ ok: true });
+    const row = await getDb().get<{ n: number | string }>(`SELECT COUNT(*) AS n FROM bin_events WHERE event_type = 'FREE_LANE_ITEM'`, []);
+    expect(Number(row?.n)).toBe(0);
+  });
+
+  it('counts ping failures under one stage’s providerFailures, never as items processed', async () => {
+    const start = Date.now() - 2 * 60 * MIN;
+    hold('m', start);
+    let now = start + 5 * MIN;
+    for (let i = 0; i < 3; i += 1) {
+      const [ping] = await pingHeldRoutes(['m'], failing, config, () => now);
+      now = ping!.nextProbeAt!;
+    }
+    const report = await stageCapacity({ hours: 3 });
+    const interp = report.stages.find((s) => s.stage === 'model-interpretation')!;
+    const verif = report.stages.find((s) => s.stage === 'evidence-verification')!;
+    expect(interp.providerFailures).toEqual({ measured: true, value: 3 });
+    expect(interp.providerFailuresByCause).toEqual({ 'provider availability': 3 });
+    expect(interp.itemsProcessedPerHour).toEqual({ measured: true, value: 0 });
+    expect(interp.droppedOrDuplicate).toEqual({ measured: true, value: 0 });
+    // Counted once: the verification stage does not count the same calls again.
+    expect(verif.providerFailures).toEqual({ measured: true, value: 0 });
+    const total = report.stages.reduce((s, st) => s + (st.providerFailures.measured ? st.providerFailures.value : 0), 0);
+    expect(total).toBe(3);
+  });
+
+  it('keeps a dead route in the per-route diagnosis and in the probe’s provider-failure share', async () => {
+    const start = Date.now() - 60 * MIN;
+    hold('m', start);
+    await pingHeldRoutes(['m'], failing, config, () => start + 5 * MIN);
+    await pingHeldRoutes(['m'], failing, config, () => start + 20 * MIN);
+
+    const diagnosis = await diagnoseThroughput(new Date(start - MIN).toISOString(), Date.now());
+    expect(diagnosis.routes.find((r) => r.route === 'm')).toMatchObject({ providerFailures: 2, submitted: 0 });
+
+    const probe = getProbe('r01.cap-16-3')!;
+    const result = await probe({});
+    expect(result.ok).toBe(false);
+    expect(result.detail).toMatch(/0 accepted of 2 lane outcomes; 100% provider failures/);
+  });
+});

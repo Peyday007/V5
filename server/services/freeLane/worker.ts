@@ -2034,6 +2034,29 @@ export function recordRouteOutcome(model: string, outcome: { ok: boolean; why?: 
   routeHealth.set(model, state);
 }
 
+/** The workload class of a health-ping row: no stage's work types include it, so no stage counts it as an item. */
+export const ROUTE_PING_WORKLOAD = 'ROUTE_PING';
+/** The outcome of a failed health ping's row: neither accepted, nor handed back, nor a dropped record. */
+export const ROUTE_PING_FAILED = 'ROUTE_PING_FAILED';
+
+/** Durably record one failed health ping. A write failure never stops the lane. */
+async function recordRoutePingFailure(model: string, cause: RouteFailureCause, message: string): Promise<void> {
+  try {
+    await recordBinEvent({
+      eventType: 'FREE_LANE_ITEM',
+      binId: null,
+      workItemId: null,
+      workloadClass: ROUTE_PING_WORKLOAD,
+      outcome: ROUTE_PING_FAILED,
+      reason: `model ${model}: model call failed [${cause}]: health ping: ${redactSecrets(message).slice(0, 200)}`.slice(0, 480),
+      evidenceClass: 'MEASURED',
+      measures: { routePing: { model, cause } },
+    });
+  } catch (error) {
+    console.warn('[free-lane] could not record a failed health ping:', (error as Error)?.message);
+  }
+}
+
 /** The prompt a health ping sends: the smallest request that proves the route answers at all. */
 const PING_SYSTEM = 'Answer with one JSON object and nothing else.';
 const PING_PROMPT = 'Reply with {"ok": true}.';
@@ -2049,11 +2072,24 @@ export interface RoutePing {
 /**
  * Re-probe every held route that is due, with a health ping through the same
  * Completer the route's items use, instead of with a claimed work item. A ping
- * claims nothing, spends no item's attempt and writes no FREE_LANE_ITEM row: a
- * route that is still down is held again for the next, longer interval while
- * the work stays queued for a route that answers; a route that answers is
- * healthy, and its items flow on the next claim. While a ping is in flight the
- * route stays held, so no slot takes an item as the probe beside it.
+ * claims nothing and spends no item's attempt: a route that is still down is
+ * held again for the next, longer interval while the work stays queued for a
+ * route that answers; a route that answers is healthy, and its items flow on the
+ * next claim. While a ping is in flight the route stays held, so no slot takes
+ * an item as the probe beside it.
+ *
+ * A ping that fails is a failed model call, and S-0170 counts model/provider
+ * failures: it is written durably as a `FREE_LANE_ITEM` row with no work item,
+ * workload class `ROUTE_PING_WORKLOAD` and outcome `ROUTE_PING_FAILED`, its
+ * reason in the same `model <route>: model call failed [cause]: …` shape an
+ * item's failure has. Every reader of model failures (the per-stage
+ * `providerFailures`, the per-route failure reading, the CAP-16-3 probe's
+ * provider-failure share, `failingModels`) therefore still sees a dead route
+ * once its items stop being spent on it; no stage counts it as an item it
+ * processed, because no stage's work types include the ping class. Holding
+ * this only in memory (`routeHealth`, a console line) let the failures vanish
+ * from the record while the route stayed down. A ping that answers writes
+ * nothing: it is not an accepted item.
  */
 /** How a GPU slot's health ping reaches the GPU itself, never its fallback. */
 export type GpuPing = (runpod: RunpodConfig, system: string, prompt: string, options: { maxTokens: number; timeoutMs: number }) => Promise<string>;
@@ -2090,6 +2126,7 @@ export async function pingHeldRoutes(
         const cause = classifyRouteFailure(message, { gpuDown: gpuDown(model) });
         recordRouteOutcome(model, { ok: false, why: `model call failed [${cause}]: health ping: ${redactSecrets(message).slice(0, 200)}` }, now());
         const next = routeHealth.get(model)?.nextProbeAt ?? null;
+        await recordRoutePingFailure(model, cause, message);
         console.warn(`[free-lane] route ${model} still failing its health ping (${cause}); next probe in ${next === null ? '?' : Math.round((next - now()) / 60_000)} min`);
         return { model, ok: false, cause, nextProbeAt: next };
       } finally {

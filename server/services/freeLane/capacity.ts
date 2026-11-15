@@ -42,6 +42,7 @@ import {
   discoverCandidates,
   freeLaneSkips,
   pingHeldRoutes,
+  ROUTE_PING_WORKLOAD,
   type FreeWorker,
 } from './worker.ts';
 
@@ -657,8 +658,12 @@ export async function freeLaneSpareSurfaces(now = Date.now()): Promise<number> {
     [new Date(now).toISOString()],
   );
   const recent = await db.all<{ outcome: string; n: number | string }>(
-    "SELECT outcome, COUNT(*) AS n FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? GROUP BY outcome",
-    [new Date(now - 30 * 60_000).toISOString()],
+    // Items only: a held route's failed health pings (workload ROUTE_PING) are
+    // that route's record, not a verdict on the lane's spare room.
+    `SELECT outcome, COUNT(*) AS n FROM bin_events
+      WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND (workload_class IS NULL OR workload_class <> ?)
+      GROUP BY outcome`,
+    [new Date(now - 30 * 60_000).toISOString(), ROUTE_PING_WORKLOAD],
   );
   const ok = Number(recent.find((r) => r.outcome === 'SUBMITTED')?.n ?? 0);
   const all = recent.reduce((sum, r) => sum + Number(r.n), 0);
