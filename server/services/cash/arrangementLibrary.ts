@@ -94,9 +94,12 @@ export async function rememberArrangements(
   }
   const records: ArrangementToRecord[] = stored.map((one) => {
     const own = parts(one);
+    // What a pass derives — its leverage trace against that pass's limits, and the per-position
+    // research questions — is recomposed each pass and is not part of the design the library keeps.
+    const { leverage: _leverage, positionQuestions: _positions, ...kept } = one;
     const design = {
       version: 1,
-      arrangement: one,
+      arrangement: kept,
       geography: [...new Set(own.map((p) => (p.claimId ? geography.get(p.claimId) : undefined)).filter((g): g is string => !!g))].sort(),
       constraints: own.flatMap((p) => constraintsByRef.get(p.ref) ?? []),
       paymentTiming: { funding: one.design.funding, beforeDelivery: one.design.funding !== 'ON_DELIVERY', days: null },
