@@ -61,7 +61,7 @@
  * `cashCurrencyHttp`, driven against a booted server, and the deterministic
  * two-connection concurrency test is `cashConcurrency`.
  */
-import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { proveCapabilities } from '../server/services/cash/deliverables/capabilities.ts';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -104,7 +104,7 @@ import {
   ALWAYS_PROHIBITED_COMMERCIAL,
   COMMERCIAL_ACTIONS,
 } from '../server/services/cash/authority.ts';
-import { SEARCH_BUCKETS, openDiscovery } from '../server/services/cash/discovery.ts';
+import { discoveryOrder, SEARCH_BUCKETS, openDiscovery } from '../server/services/cash/discovery.ts';
 import { advanceWithinAuthority, runNeedContinuations } from '../server/services/cash/operate.ts';
 import { readCapability } from '../server/services/cash/capabilities.ts';
 import { cashView } from '../server/services/cash/view.ts';
@@ -586,7 +586,19 @@ const CARD_LANES = [
 ];
 
 describe('one sprint, from activation to money in and winding down', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('walks the whole journey through the entrances production uses', async () => {
+    /*
+     * This journey is a play round's (§73): its first bucket must carry a
+     * deliverable. While the commercial-intermediation family declaration is
+     * current, discovery asks intermediation's entry buckets first (RES-15-4),
+     * so the journey runs on a clock past that declaration's review date, where
+     * the ordinary order applies. Only `Date` is faked; timers stay real.
+     */
+    vi.useFakeTimers({ toFake: ['Date'], shouldAdvanceTime: true, now: new Date('2027-03-01T00:00:00.000Z') });
     /* ------------------------------------------------------------------ *
      * 1. A person activates the sprint, and the tick starts discovery.
      *
@@ -619,7 +631,7 @@ describe('one sprint, from activation to money in and winding down', () => {
      * open beside it.
      */
     const candidates = await listCandidates({ projectId });
-    const bucket = candidates.find((one) => one.title === SEARCH_BUCKETS[0]!.title)!;
+    const bucket = candidates.find((one) => one.title === discoveryOrder(SEARCH_BUCKETS, [])[0]!.title)!;
     expect(bucket).toBeDefined();
     // Captured, so the archive is asked first and the judgment decides — this
     // is a new entrance to the existing path, not a second pipeline.

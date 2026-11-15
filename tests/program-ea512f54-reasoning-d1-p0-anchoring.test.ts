@@ -1,0 +1,194 @@
+/**
+ * META-18-1 (S-0191, S-0192): the probe reader `noAnchoringHoldsOnRows` —
+ * every live subject ranked, the order label-invariant, seed origin conferring
+ * no advantage, every place resting on economics, scale, time to cash, capital,
+ * feasibility and risk, and no category whitelist in source. Each violation the
+ * reader detects is produced here by a ranker or scorer that misbehaves.
+ */
+import { afterAll, describe, expect, it } from 'vitest';
+import { freshProject, teardown } from './helpers.ts';
+import { getDb } from '../server/db/database.ts';
+import { createNode } from '../server/repos/industry.ts';
+import { commercialRoles } from '../server/services/industry/construction/roles.ts';
+import { marketOfEvidence, rankSubjectMarkets, type RankedSubject } from '../server/services/industry/construction/origins.ts';
+import {
+  RANKING_CRITERIA,
+  checkSubjects,
+  findCategoryWhitelists,
+  noAnchoringHoldsOnRows,
+  type EvidenceScorer,
+  type SubjectRanker,
+} from '../server/services/industry/construction/anchoring.ts';
+import { recordClaimFact } from '../server/repos/construction.ts';
+import type { Fact, FactKey } from '../server/domain/construction.ts';
+import type { IndustryNode } from '../server/domain/types.ts';
+
+const subject = (id: string, name: string, origin: 'SEED' | 'DISCOVERED' = 'SEED', retiredAt: string | null = null, extra: Partial<IndustryNode> = {}): IndustryNode =>
+  ({ id, projectId: 'prj_x', parentId: null, kind: 'SECTOR', name, description: '', origin, sourceClaimId: origin === 'SEED' ? null : 'clm_x', retiredAt, retiredReason: null, createdAt: '2026-11-01T00:00:00.000Z', updatedAt: '2026-11-01T00:00:00.000Z', ...extra }) as IndustryNode;
+
+/*
+ * Economics research filed under one subject (W-5's back-fill writes these).
+ * Since W-9 a map subject inherits no reference pack by its name, so these
+ * recorded facts are the only economics any subject on the map has.
+ */
+const ECONOMICS: ReadonlyArray<[FactKey, number, number]> = [
+  ['price_per_unit', 20, 30],
+  ['contractor_rate_per_unit', 10, 12],
+  ['broker_take_rate', 0.1, 0.2],
+  ['account_units_per_month', 50, 100],
+  ['accounts_reachable', 100, 200],
+  ['sales_cycle_days', 10, 20],
+  ['buyer_payment_days', 15, 30],
+];
+const factsUnder = (nodeId: string): Fact[] =>
+  ECONOMICS.map(([key, low, high]) => ({
+    key, segment: null, low, high, status: 'ESTIMATE', measures: key, geography: null, nodeId,
+    source: { title: 'research', url: 'https://example.org/source', kind: 'SECONDARY', claimId: `clm_${nodeId}_${key}` },
+    observedAt: '2026-11-01T00:00:00.000Z', validUntil: null,
+  }) as Fact);
+const RECORDED = factsUnder('ind_a1');
+
+const ROWS = [
+  subject('ind_a', 'Last-mile delivery', 'SEED'),
+  subject('ind_a1', 'Parcel delivery jobs', 'DISCOVERED', null, { parentId: 'ind_a', kind: 'TRANSACTION_TYPE', payer: 'Online retailers', supplier: 'Independent couriers' } as Partial<IndustryNode>),
+  subject('ind_b', 'Qorvian lattice tuning', 'DISCOVERED'),
+  subject('ind_c', 'Insurance', 'SEED'),
+  subject('ind_d', 'Dog grooming', 'DISCOVERED'),
+  subject('ind_e', 'Manufacturing', 'SEED'),
+  subject('ind_r', 'Distribution', 'SEED', '2026-11-02T00:00:00.000Z'),
+];
+
+const kinds = (vs: { kind: string }[]) => vs.map((v) => v.kind);
+
+describe('checkSubjects: the demonstrations on one project’s rows', () => {
+  it('holds for the production ranker and scorer', async () => {
+    const check = await checkSubjects('prj_x', ROWS, [], { recorded: RECORDED });
+    expect(check.live).toBe(6);
+    expect(check.ranked).toBe(6);
+    expect(check.violations).toEqual([]);
+    // Last-mile delivery's subtree has recorded economics and the rest do not: the evidence decides the order.
+    expect(check.scored).toBeGreaterThanOrEqual(1);
+    expect(check.discriminating).toBe(true);
+  });
+
+  it('a project with no live subject has nothing to violate', async () => {
+    expect(await checkSubjects('prj_x', [ROWS[6]!], [])).toEqual({ live: 0, ranked: 0, scored: 0, discriminating: false, violations: [] });
+  });
+
+  it('marks a map whose evidence separates no subject as not discriminating', async () => {
+    const unevidenced = [subject('ind_q', 'Qorvian lattice tuning', 'DISCOVERED'), subject('ind_t', 'Thrund swaps', 'SEED'), subject('ind_o', 'Ovatic mesh', 'SEED')];
+    const check = await checkSubjects('prj_x', unevidenced, []);
+    expect(check.violations).toEqual([]);
+    expect(check.scored).toBe(0);
+    expect(check.discriminating).toBe(false);
+  });
+
+  it('detects a shortlist (UNRANKED)', async () => {
+    const top3: SubjectRanker = async (n, c, r) => (await rankSubjectMarkets(n, c, r)).slice(0, 3);
+    const check = await checkSubjects('prj_x', ROWS, [], { rank: top3, recorded: RECORDED });
+    expect(kinds(check.violations)).toContain('UNRANKED');
+    expect(check.violations.find((v) => v.kind === 'UNRANKED')!.detail).toMatch(/3 left out/);
+  });
+
+  it('detects a score that reads the label (LABEL_ANCHORED)', async () => {
+    // A scorer that boosts the owner’s example categories by name.
+    const anchored: EvidenceScorer = (key, e) => {
+      const m = marketOfEvidence(key, e, commercialRoles(e));
+      return /insurance|manufactur/i.test(e.industry)
+        ? { ...m, marginUsd: 1e6, monthlyVolume: 1e3, daysToCash: 1, remoteControl: 1, capitalUsd: 0, feasibility: 1, failureModes: 0, failureRate: 0 }
+        : m;
+    };
+    const check = await checkSubjects('prj_x', ROWS, [], { score: anchored, recorded: RECORDED });
+    expect(kinds(check.violations)).toContain('LABEL_ANCHORED');
+  });
+
+  it('detects a ranker whose order is not the one the evidence earns (RANKER_DIVERGED)', async () => {
+    const reversed: SubjectRanker = async (n, c, r) => [...(await rankSubjectMarkets(n, c, r))].reverse();
+    const check = await checkSubjects('prj_x', ROWS, [], { rank: reversed, recorded: RECORDED });
+    expect(kinds(check.violations)).toContain('RANKER_DIVERGED');
+  });
+
+  it('detects a seed advantage (ORIGIN_ADVANTAGE)', async () => {
+    const seedsFirst: SubjectRanker = async (n, c, r) => {
+      const ranked = await rankSubjectMarkets(n, c, r);
+      const boost = (r: RankedSubject) => ({ ...r, criteria: { ...r.criteria, score: r.criteria.score + (r.node.origin === 'SEED' ? 1e9 : 0) } });
+      return ranked.map(boost).sort((a, b) => b.criteria.score - a.criteria.score);
+    };
+    const check = await checkSubjects('prj_x', ROWS, [], { rank: seedsFirst, recorded: RECORDED });
+    expect(kinds(check.violations)).toContain('ORIGIN_ADVANTAGE');
+  });
+
+  it('detects a place resting on no reading of a criterion (CRITERIA_MISSING)', async () => {
+    const noRisk: SubjectRanker = async (n, c, r) =>
+      (await rankSubjectMarkets(n, c, r)).map((r) => ({ ...r, criteria: { ...r.criteria, riskFactor: Number.NaN } }));
+    const check = await checkSubjects('prj_x', ROWS, [], { rank: noRisk, recorded: RECORDED });
+    const v = check.violations.find((x) => x.kind === 'CRITERIA_MISSING');
+    expect(v?.detail).toMatch(/risk/);
+  });
+
+  it('names economics, scale, time to cash, capital, feasibility and risk', () => {
+    expect(Object.keys(RANKING_CRITERIA).sort()).toEqual(['capital', 'economics', 'feasibility', 'risk', 'scale', 'time to cash']);
+  });
+});
+
+describe('findCategoryWhitelists', () => {
+  it('finds a constant of example categories or one named as an allow-list', () => {
+    const found = findCategoryWhitelists([
+      { path: 'a.ts', text: "const FOCUS = ['Brokerage', 'Insurance', 'Plumbing'];\nif (FOCUS.includes(x)) go();" },
+      { path: 'b.ts', text: "export const ALLOWED_INDUSTRIES = new Set<string>(['Plumbing']);" },
+      { path: 'c.ts', text: "const DIMENSIONS = ['DEMAND', 'DISTRIBUTION', 'PAYMENT'] as const;" },
+    ]);
+    expect(found.map((f) => `${f.file}:${f.constant}`)).toEqual(['a.ts:FOCUS', 'b.ts:ALLOWED_INDUSTRIES']);
+  });
+});
+
+describe('noAnchoringHoldsOnRows', () => {
+  afterAll(teardown);
+
+  it('holds on real rows, writes nothing, and finds no whitelist in source', async () => {
+    const { project } = await freshProject();
+    const { node: delivery } = await createNode({ projectId: project.id, parentId: null, kind: 'SECTOR', name: 'Last-mile delivery', origin: 'SEED' });
+    const { node: jobs } = await createNode({ projectId: project.id, parentId: delivery.id, kind: 'TRANSACTION_TYPE', name: 'Parcel delivery jobs', origin: 'SEED', payer: 'Online retailers', supplier: 'Independent couriers' });
+    await createNode({ projectId: project.id, parentId: null, kind: 'SECTOR', name: 'Qorvian lattice tuning', origin: 'SEED' });
+    await createNode({ projectId: project.id, parentId: null, kind: 'SECTOR', name: 'Insurance', origin: 'SEED' });
+    // Research's economics, filed under the subject they were asked about.
+    for (const f of factsUnder(jobs.id)) {
+      await recordClaimFact({ projectId: project.id, nodeId: jobs.id, claimId: `${f.source.claimId}_${project.id}`, key: f.key, segment: null, low: f.low, high: f.high, status: 'ESTIMATE', measures: f.measures, sourceTitle: f.source.title, sourceUrl: f.source.url, sourceKind: 'SECONDARY', observedAt: new Date().toISOString() });
+    }
+    const tables = ['industry_nodes', 'opportunity_constraints', 'project_events', 'construction_facts'];
+    const count = async () => Promise.all(tables.map(async (t) => (await getDb().all<{ n: number }>(`SELECT COUNT(*) AS n FROM ${t}`))[0]!.n));
+    const before = await count();
+    const report = await noAnchoringHoldsOnRows();
+    expect(await count()).toEqual(before);
+    expect(report.violations).toEqual([]);
+    expect(report.ok).toBe(true);
+    expect(report.live).toBeGreaterThanOrEqual(3);
+    expect(report.ranked).toBe(report.live);
+    expect(report.filesScanned).toBeGreaterThan(5);
+    expect(report.whitelists).toEqual([]);
+    expect(report.scored).toBeGreaterThanOrEqual(1);
+    expect(report.discriminating).toBeGreaterThanOrEqual(1);
+    expect(report.detail).toMatch(/label-invariant and origin-neutral/);
+  });
+
+  it('does not hold when no subject\u2019s evidence separates it from another: the invariance would demonstrate nothing', async () => {
+    const { project } = await freshProject();
+    await createNode({ projectId: project.id, parentId: null, kind: 'SECTOR', name: 'Qorvian lattice tuning', origin: 'SEED' });
+    await createNode({ projectId: project.id, parentId: null, kind: 'SECTOR', name: 'Thrund swaps', origin: 'SEED' });
+    const report = await noAnchoringHoldsOnRows();
+    expect(report.live).toBe(2);
+    expect(report.violations).toEqual([]);
+    expect(report.scored).toBe(0);
+    expect(report.discriminating).toBe(0);
+    expect(report.ok).toBe(false);
+    expect(report.detail).toMatch(/vacuous/);
+  });
+
+  it('does not hold when there is nothing to demonstrate on', async () => {
+    await freshProject();
+    const report = await noAnchoringHoldsOnRows();
+    expect(report.live).toBe(0);
+    expect(report.ok).toBe(false);
+    expect(report.detail).toMatch(/no live subject/);
+  });
+});

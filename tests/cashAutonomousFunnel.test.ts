@@ -70,7 +70,7 @@ import { getOpportunity, listNeeds, listOpportunities } from '../server/repos/ca
 import { cardFactsFor } from '../server/repos/cashCardFacts.ts';
 import { tick } from '../server/services/russell/loop.ts';
 import { activate } from '../server/services/cash/lifecycle.ts';
-import { SEARCH_BUCKETS } from '../server/services/cash/discovery.ts';
+import { discoveryOrder, SEARCH_BUCKETS } from '../server/services/cash/discovery.ts';
 import { evidenceCard } from '../server/services/cash/card.ts';
 import { cashEngineCard } from '../server/services/cash/engineCard.ts';
 import {
@@ -475,7 +475,7 @@ async function drive(variation: Variation = {}): Promise<Journey> {
 
   await tick('autonomous');
   const bucket = (await listCandidates({ projectId })).find(
-    (one) => one.title === SEARCH_BUCKETS[0]!.title,
+    (one) => one.title === discoveryOrder(SEARCH_BUCKETS, [])[0]!.title,
   );
   expect(bucket, 'discovery opened a bucket round on its own').toBeDefined();
 
@@ -1115,7 +1115,7 @@ describe('a deep dive Brain compiles is approved by its own envelope, with no pe
     expect(activated.ok).toBe(true);
     await tick('autonomous');
     const bucket = (await listCandidates({ projectId })).find(
-      (one) => one.title === SEARCH_BUCKETS[0]!.title,
+      (one) => one.title === discoveryOrder(SEARCH_BUCKETS, [])[0]!.title,
     )!;
     await answer(bucket.id, bucket.statement, [
       {
