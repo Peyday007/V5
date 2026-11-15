@@ -259,21 +259,21 @@ export function forgetBrainOnlyPass(): void {
 /**
  * Continue stranded displaced research through the free lane's own owner
  * (§85, §98, rule 9). `watchDisplacedWork` records the fault and promises "a
- * free-lane tick"; this is that tick. A stopped pool is started (which runs a
- * control step at once); a running one is given one control step now, so the
- * controller re-reads the waiting work instead of the next interval. No new
- * scheduler: it is the same continuation `watchUtilization` and the
- * improvement activation already use, and it runs only when work is stranded.
+ * free-lane tick"; this is that tick. A stopped pool is started — which arms
+ * the pool's own control timer and runs its first step off this tick, not
+ * awaited here. A running pool is left to that timer: it steps every 30s,
+ * more often than this pass runs, so an extra step from here could only
+ * overlap one of its own (two steps resizing the same pools and writing the
+ * same capacity rows at once) and would put the controller's database reads
+ * and writes inside the dispatch tick. The controller has one clock, and it is
+ * the pool's. No new scheduler, and it runs only when work is stranded.
  */
-export async function continueDisplacedWork(stranded: boolean): Promise<'STARTED' | 'STEPPED' | null> {
+export async function continueDisplacedWork(stranded: boolean): Promise<'STARTED' | 'RUNNING' | null> {
   if (!stranded) return null;
-  const { adaptivePoolRunning, startAdaptivePool, controlStep } = await import('../freeLane/capacity.ts');
-  if (!adaptivePoolRunning()) {
-    startAdaptivePool();
-    return 'STARTED';
-  }
-  await controlStep();
-  return 'STEPPED';
+  const { adaptivePoolRunning, startAdaptivePool } = await import('../freeLane/capacity.ts');
+  if (adaptivePoolRunning()) return 'RUNNING';
+  startAdaptivePool();
+  return 'STARTED';
 }
 
 export async function dispatchTick(
@@ -320,7 +320,7 @@ export async function dispatchTick(
       // ...and when it is not, the promised free-lane tick runs here rather than nowhere.
       try {
         const continued = await continueDisplacedWork(displaced.stranded);
-        if (continued) console.log(`[dispatch] displaced research continued (free-lane pool ${continued === 'STARTED' ? 'started' : 'stepped'}): ${displaced.reason}`);
+        if (continued === 'STARTED') console.log(`[dispatch] displaced research continued (free-lane pool started): ${displaced.reason}`);
       } catch (error) {
         console.warn('[dispatch] displaced research continuation failed:', (error as Error).message);
       }

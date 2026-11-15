@@ -8,8 +8,10 @@
  * replacement "free-lane tick", and then threw the result away — so nothing
  * ran, and the same fault recurred in 6 of 144 ten-minute windows. The pass now
  * continues the work through the free lane's own controller: it starts a
- * stopped pool, or gives a running one a control step. A healthy lane is not
- * prodded.
+ * stopped pool. A running pool is left to its own 30s control timer — a second
+ * control step from the dispatch tick could overlap the timer's and would put
+ * the controller's database work inside the tick (review finding F4). A
+ * healthy lane is not prodded.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -123,13 +125,25 @@ describe('the dispatch pass continues stranded displaced research through the fr
     expect(pool.started).toBe(1);
   });
 
-  it('gives a running pool a control step instead of starting a second one', async () => {
+  it('leaves a running pool to its own control timer: no second pool, and no overlapping control step from the tick', async () => {
     pool.running = true;
     await displaced(60 * 60_000);
     await dispatchTick({});
     expect(await coverageInterventions()).toBe(1);
     expect(pool.started).toBe(0);
-    expect(pool.steps).toBe(1);
+    expect(pool.steps).toBe(0);
+    expect(await continueDisplacedWork(true)).toBe('RUNNING');
+    expect(pool.steps).toBe(0);
+  });
+
+  it('never runs a control step inside the dispatch tick, however often the pass fires', async () => {
+    await displaced(60 * 60_000);
+    await dispatchTick({});
+    expect(pool.started).toBe(1);
+    forgetBrainOnlyPass();
+    await dispatchTick({});
+    expect(pool.started).toBe(1);
+    expect(pool.steps).toBe(0);
   });
 
   it('does not prod the lane when nothing is displaced', async () => {
