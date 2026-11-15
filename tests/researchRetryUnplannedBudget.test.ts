@@ -14,13 +14,23 @@ import { createRun } from '../server/repos/runs.ts';
 import {
   createFragments,
   createOrchestration,
+  currentFragments,
   getFragment,
   insertClaims,
   listFragments,
   updateFragment,
+  updateOrchestration,
 } from '../server/repos/research.ts';
 import { FragmentNotRetryable, retryFragment } from '../server/services/research/reissue.ts';
-import type { Layer, Project, RepairStrategy, ResearchFragment } from '../server/domain/types.ts';
+import { recoverReachableFragments } from '../server/services/research/surfaceRecovery.ts';
+import { UNREADABLE_LADDER } from '../server/services/research/repair.ts';
+import { assignNextBin, createBin, putBinUnitResult } from '../server/repos/bins.ts';
+import { requestCompletion } from '../server/services/bins/service.ts';
+import { hashUnitValue } from '../server/services/bins/contracts.ts';
+import { createWorker } from '../server/repos/identity.ts';
+import { listEvents } from '../server/repos/events.ts';
+import { getDb } from '../server/db/database.ts';
+import type { BinManifest, Layer, Project, RepairStrategy, ResearchFragment } from '../server/domain/types.ts';
 
 let project: Project;
 let layer: Layer;
@@ -152,5 +162,122 @@ describe('a retry nobody planned', () => {
     const next = (await getFragment(two.newFragmentId!))!.repairPlan!.strategies;
     expect(next).not.toContain('MARK_UNRESOLVED');
     for (const strategy of next) expect(first).not.toContain(strategy);
+  });
+});
+
+/**
+ * Surface recovery is an unplanned retry too, and the exhausted-ladder refusal
+ * has to reach it as a refusal it handles.
+ *
+ * Review finding F1 against 5a854b7: `retryFragment` refused an exhausted
+ * ladder with `FragmentNotRetryable`, after surface recovery had already
+ * raised the ceiling, and the automatic pass caught only
+ * `SurfaceRecoveryRefused` — so one exhausted fragment aborted the pass for
+ * every other candidate, wrote no refusal, and threw again on every pass.
+ */
+describe('surface recovery of a fragment whose ladder is exhausted', () => {
+  const HOST_URL = 'https://www.legislature.mi.gov/';
+  const SURFACE_BLOCK =
+    'This is not a search-strategy failure; it is an access-refused condition in this ' +
+    "worker's execution environment. EGRESS_BLOCKED on legislature.mi.gov.";
+
+  async function surfaceBlocked(key: string, triedRungs: RepairStrategy[]): Promise<ResearchFragment> {
+    const run = await createRun({
+      projectId: project.id, layerId: layer.id, runType: 'FOUNDATION',
+      status: 'PLANNED', provider: 'WORKER', prompt: 'x',
+    });
+    const orchestration = await createOrchestration({
+      projectId: project.id, layerId: layer.id, runId: run.id,
+      title: key, assignment: 'Which states.', provider: 'WORKER', autoApprove: false,
+    });
+    await updateOrchestration(orchestration.id, { status: 'NEEDS_HUMAN' });
+    await createFragments([{
+      orchestrationId: orchestration.id, projectId: project.id, layerId: layer.id,
+      fragmentIndex: 0, fragmentKey: key,
+      question: 'What conduct triggers the licence?', geography: 'Michigan', timeframe: '2026',
+      population: null, definitions: null,
+      requiredEvidence: [{ id: 'statute', description: 'statute', necessity: 'REQUIRED' }],
+      acceptableSourceTypes: ['statute'], excludedSourceTypes: [],
+      completionCriteria: ['One section.'], dependsOn: [], minIndependentSources: 1,
+      maxRepairs: 3, attempt: 3, status: 'BLOCKED',
+    }] as unknown as Parameters<typeof createFragments>[0]);
+    const [fragment] = await currentFragments(orchestration.id);
+    await updateFragment(fragment!.id, {
+      status: 'BLOCKED',
+      blockedReason: SURFACE_BLOCK,
+      completedAt: new Date(Date.now() - 60_000).toISOString(),
+    });
+    if (triedRungs.length > 0) {
+      // The rungs earlier attempts already ran, as the stored plan records them.
+      await getDb().run('UPDATE research_fragments SET repair_plan = ? WHERE id = ?', [
+        JSON.stringify({ strategies: triedRungs, remainingBudget: 1 }),
+        fragment!.id,
+      ]);
+    }
+    const stored = (await getFragment(fragment!.id))!;
+    expect(stored.blockCause).toBe('SOURCE_ACCESS');
+    return stored;
+  }
+
+  async function probeReaches(url: string): Promise<void> {
+    const workerId = (await createWorker({ name: 'w', createdByType: 'SYSTEM', createdById: 't' })).id;
+    const manifest: BinManifest = {
+      objective: 'Establish what this surface reaches.', why: 'test',
+      lineage: { projectId: project.id, layerId: null, goal: null, orchestrationId: null },
+      units: [{ key: 'h1', establishes: `Whether ${url} is reachable.`, input: url, transform: 'probe', dependsOn: [] }],
+      acceptableSources: ['the declared URL'], excludedSources: ['a cached copy'],
+      evidence: ['one reading per host'], outputs: ['readings'],
+      authorizedActions: ['read the declared hosts'], prohibitedActions: ['any spend'],
+      budgetUnits: 1, retry: { maxAttempts: 3, backoffSeconds: 30 }, stoppingConditions: ['every host has a reading'],
+    };
+    const bin = await createBin({
+      projectId: project.id, kind: 'SURFACE_PROBE', title: 'probe', objective: manifest.objective,
+      manifest, completionContract: 'SURFACE_PROBE_V1', createdByType: 'SYSTEM', createdById: 'test', ready: true,
+    });
+    const assigned = (await assignNextBin({ workerId, projectIds: [project.id] }))!;
+    const value = 'RETRIEVED 200 51200 bytes';
+    await putBinUnitResult({
+      binId: bin.id, unitKey: 'h1', value, contentHash: hashUnitValue(value),
+      leaseId: assigned.leaseId, leaseGeneration: assigned.leaseGeneration, submittedBy: workerId,
+    });
+    const outcome = await requestCompletion({
+      workerId,
+      proof: { binId: bin.id, leaseId: assigned.leaseId, leaseGeneration: assigned.leaseGeneration, workerId },
+    });
+    expect(outcome.state).toBe('COMPLETE');
+  }
+
+  it('refuses the exhausted fragment with nothing changed, and still recovers the others', async () => {
+    const allRungs = UNREADABLE_LADDER.filter((rung) => rung !== 'MARK_UNRESOLVED');
+    const exhausted = await surfaceBlocked('exhausted', [...allRungs]);
+    const fresh = await surfaceBlocked('fresh', []);
+    await probeReaches(HOST_URL);
+
+    // The pass completes: it does not throw out of the exhausted candidate.
+    const pass = await recoverReachableFragments(10, { force: true });
+    const byFragment = new Map(pass.map((entry) => [entry.fragmentId, entry]));
+    expect(byFragment.get(exhausted.id)?.outcome).toBe('REFUSED');
+    expect(byFragment.get(exhausted.id)!.reasons.join(' ')).toMatch(/already been tried/);
+    expect(byFragment.get(fresh.id)?.outcome).toBe('RECOVERED');
+
+    // Refused before anything was written: the ceiling is where it was, no
+    // attempt was minted, and the fragment is still BLOCKED.
+    const after = (await getFragment(exhausted.id))!;
+    expect(after.maxRepairs).toBe(exhausted.maxRepairs);
+    expect(after.status).toBe('BLOCKED');
+    expect(await listFragments(exhausted.orchestrationId)).toHaveLength(1);
+
+    // The recovered attempt carries the plan that was checked: a search, not a stop.
+    const recovered = (await currentFragments(fresh.orchestrationId))[0]!;
+    expect(recovered.attempt).toBe(fresh.attempt + 1);
+    expect(recovered.repairPlan!.strategies.length).toBeGreaterThan(0);
+    expect(recovered.repairPlan!.strategies).not.toContain('MARK_UNRESOLVED');
+
+    // The refusal is recorded once, and the next pass does not retry it.
+    const refusals = (await listEvents(project.id)).filter(
+      (event) => event.eventType === 'RESEARCH_SURFACE_RECOVERY_REFUSED',
+    );
+    expect(refusals).toHaveLength(1);
+    expect(await recoverReachableFragments(10, { force: true })).toEqual([]);
   });
 });

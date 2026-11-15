@@ -595,12 +595,8 @@ export async function retryFragment(input: {
    * attempt this". Refused here in the runner's words, through the refusal
    * every caller already handles. No bar moves: the fragment stays BLOCKED.
    */
-  if (repairPlan.strategies.length > 0 && repairPlan.strategies.every((strategy) => strategy === 'MARK_UNRESOLVED')) {
-    throw new FragmentNotRetryable(
-      `Every search strategy ${previous.fragmentKey}'s failure suggests has already been tried, ` +
-        'so another attempt would repeat a search. The honest outcome now is unresolved, recorded as such.',
-    );
-  }
+  const exhausted = ladderExhaustedReason(previous, repairPlan);
+  if (exhausted) throw new FragmentNotRetryable(exhausted);
   const outcome = await runIdempotent<{ fragmentId: string }>(
     {
       namespace: RETRY_NAMESPACE,
@@ -762,6 +758,25 @@ export async function retryFragment(input: {
 }
 
 /**
+ * Why a planned next attempt must not be minted, or null when it may be.
+ *
+ * A plan that is only MARK_UNRESOLVED is an instruction to stop, not a search:
+ * every strategy the failure suggests has already been tried. Exported so a
+ * caller that changes state before retrying (surface recovery raises the
+ * ceiling) can ask first and refuse in its own terms, instead of learning it
+ * from a throw after its own write.
+ */
+export function ladderExhaustedReason(fragment: ResearchFragment, plan: RepairPlan): string | null {
+  if (plan.strategies.length === 0 || !plan.strategies.every((strategy) => strategy === 'MARK_UNRESOLVED')) {
+    return null;
+  }
+  return (
+    `Every search strategy ${fragment.fragmentKey}'s failure suggests has already been tried, ` +
+    'so another attempt would repeat a search. The honest outcome now is unresolved, recorded as such.'
+  );
+}
+
+/**
  * The plan for a retry nobody planned, from the failed attempt's own rows.
  *
  * The gate is not re-run (§12: acceptance is decided once). The plan is made
@@ -786,7 +801,7 @@ export async function retryFragment(input: {
  * `maxRepairs`, the gate and every bar are unchanged: a fragment at its last
  * permitted attempt is still told so.
  */
-async function planForRetry(
+export async function planForRetry(
   previous: ResearchFragment,
   orchestration: ResearchOrchestration,
 ): Promise<RepairPlan> {
