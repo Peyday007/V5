@@ -393,21 +393,22 @@ describe('route hold through takeOne (worker.ts)', () => {
   });
 
   it('an item released after a route failure on brain-a is admitted by healthy brain-b while brain-a is held', async () => {
-    const itemId = await fragmentItem('spill');
+    const ids = [await fragmentItem('spill 1'), await fragmentItem('spill 2')];
     const workers = await ensureFreeWorkers(CONFIG);
     const completer: Completer = async (config, name, system, prompt, options) => {
       if (name === 'brain-a') throw new Error('cheap lane HTTP 503');
       return answers(config, name, system, prompt, options);
     };
     const base = { workers, completer, fetchSource, search: async () => [], config: CONFIG };
-    const failed = await takeOne({ ...base, worker: workers[0]!, index: 0 });
-    expect(failed.claimed?.workItemId).toBe(itemId);
-    // Hold brain-a on the clock as well, as a failed probe would.
-    recordRouteOutcome('brain-a', { ok: false, why: 'model call failed: cheap lane HTTP 503' }, Date.now());
-    // brain-b's own (non-spillover) pass takes it: brain-a's role is adopted.
+    const failed = await takeOne({ ...base, worker: workers[0]!, index: 0 }); // engages the hold
+    const probe = await takeOne({ ...base, worker: workers[0]!, index: 0 }); // the probe fails too
+    expect(new Set([failed.claimed?.workItemId, probe.claimed?.workItemId])).toEqual(new Set(ids));
+    expect(routeHold('brain-a')).not.toBeNull();
+    // brain-b's own (non-spillover) pass takes the released items: brain-a's role is adopted.
     const taken = await takeOne({ ...base, worker: workers[1]!, index: 1 });
-    expect(taken.claimed?.workItemId).toBe(itemId);
+    expect(ids).toContain(taken.claimed?.workItemId);
     expect(taken.ok).toBe(true);
+    expect(routeHold('brain-a')).not.toBeNull(); // brain-b's success says nothing about brain-a
   });
 
   it('without a route failure, the other model still leaves brain-a’s role alone on its own pass', async () => {

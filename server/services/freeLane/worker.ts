@@ -2061,25 +2061,17 @@ export function recordRouteOutcome(
   // A straggler admitted before the hold engaged: the hold already stands, unchanged.
 }
 
-/** Whether `model` has items handed back after a route failure that are still cooling for it. */
-function hasRouteCooled(model: string, now = Date.now()): boolean {
-  for (const key of routeCooled) {
-    if (key.startsWith(`${model}\n`) && (cooldown.get(key) ?? 0) > now) return true;
-  }
-  return false;
-}
-
 /**
- * The workers whose roles this slot also takes because their route is failing:
- * a held route, or one that handed items back after a route failure. Their
- * items go to a healthy model before the failing route can take them again.
+ * The workers whose roles this slot also takes because their route is held:
+ * the items it handed back, and the ones still waiting for it, go to a healthy
+ * model rather than waiting out the failing route's backoff.
  */
 export function adoptedRoles(workers: readonly { model: string }[], index: number, now = Date.now()): number[] {
   const own = workers[index]?.model;
   const adopted: number[] = [];
   workers.forEach((w, i) => {
     if (i === index || w.model === own) return;
-    if (routeHold(w.model, now) !== null || hasRouteCooled(w.model, now)) adopted.push(i);
+    if (routeHold(w.model, now) !== null) adopted.push(i);
   });
   return adopted;
 }
@@ -2098,12 +2090,9 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
     if (!input.spillover) {
       const roleOwner = workerFor(workers, item);
       const ownerModel = workers[roleOwner]?.model;
-      // The role's own model is refusing calls, or handed this very item back after
-      // a route failure: a healthy model takes it before the failing route can again.
-      const ownerFailing =
-        ownerModel !== undefined &&
-        ownerModel !== worker.model &&
-        (routeHold(ownerModel) !== null || routeCooled.has(cooldownKey(ownerModel, item.id)));
+      // The role's own model is held for refusing calls: a healthy model takes the
+      // item (including one that route handed back) rather than waiting out its backoff.
+      const ownerFailing = ownerModel !== undefined && ownerModel !== worker.model && routeHold(ownerModel) !== null;
       if (roleOwner !== index && !ownerFailing) {
         return { ok: false, reason: 'the other free worker takes this role' };
       }
