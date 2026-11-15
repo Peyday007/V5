@@ -209,6 +209,9 @@ export interface RouteDiagnosis {
   causeCounts: Partial<Record<RouteFailureCause, number>>;
   lastFailureAt: string | null;
   lastSubmittedAt: string | null;
+  /** Provider failures and accepted items in the last `ROUTE_RECENT_MS` of the window: what decides whether the route is failing now. */
+  recentFailures: number;
+  recentSubmitted: number;
   restored: boolean;
   evidence: string;
 }
@@ -921,12 +924,44 @@ export function gpuPodReading(rows: readonly { outcome: string; at: string }[], 
  * what most of its failures name; on a GPU slot whose supervisor samples never
  * saw the pod running, it is the GPU, whatever the fallback's error said.
  */
-export async function diagnoseThroughput(since: string): Promise<ThroughputDiagnosis> {
-  const rows = await getDb().all<{ outcome: string | null; reason: string | null; k: number | string; last: string | null }>(
-    `SELECT outcome, reason, COUNT(*) AS k, MAX(at) AS last FROM bin_events
+/**
+ * How far back a route's failures decide whether it is failing now. The
+ * reading's window is hours long (six by default) so its per-stage rates are
+ * stable, but a failure count over that window never decays: production,
+ * 2026-11-15 07:46Z, brain-a's "100 failure(s)" in six hours — intermittent
+ * 503s beside mostly accepted answers — named it the route to restore first,
+ * and held the RunPod slot at its proven 2 while 11 items waited. A route is
+ * failing when it failed within this window and fewer than one in five of its
+ * items there were accepted (`isFailing`'s bar, as `failingModels` reads it).
+ */
+export const ROUTE_RECENT_MS = 30 * 60_000;
+
+/** Whether a route's recent record says it is failing now. Pure. */
+export function routeFailingNow(route: { recentFailures: number; recentSubmitted: number; lastSubmittedAt: string | null; lastFailureAt: string | null }): boolean {
+  if (route.recentFailures <= 0) return false;
+  if (route.lastSubmittedAt !== null && route.lastFailureAt !== null && route.lastSubmittedAt > route.lastFailureAt) return false;
+  return route.recentSubmitted * 5 < route.recentSubmitted + route.recentFailures;
+}
+
+export async function diagnoseThroughput(since: string, now: number | null = null): Promise<ThroughputDiagnosis> {
+  /*
+   * The recent window ends at `now` (the reading's own time); a caller without
+   * one gets it anchored at the window's newest item row, so a replayed window
+   * reads the same as it did when it was recorded.
+   */
+  const newest = now === null
+    ? (await getDb().get<{ last: string | null }>(
+        `SELECT MAX(at) AS last FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND reason LIKE 'model %'`,
+        [since],
+      ))?.last ?? null
+    : null;
+  const anchor = now ?? (newest ? Date.parse(newest) : Date.now());
+  const recentSince = new Date(anchor - ROUTE_RECENT_MS).toISOString();
+  const rows = await getDb().all<{ outcome: string | null; reason: string | null; k: number | string; recent: number | string | null; last: string | null }>(
+    `SELECT outcome, reason, COUNT(*) AS k, SUM(CASE WHEN at >= ? THEN 1 ELSE 0 END) AS recent, MAX(at) AS last FROM bin_events
       WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND reason LIKE 'model %'
       GROUP BY outcome, reason`,
-    [since],
+    [recentSince, since],
   );
   const podRows = await readPodRows(since);
   const gpu = gpuPodReading(podRows);
@@ -935,15 +970,17 @@ export async function diagnoseThroughput(since: string): Promise<ThroughputDiagn
     const route = routeOfReason(row.reason);
     if (!route) continue;
     const entry = byRoute.get(route) ?? {
-      route, submitted: 0, providerFailures: 0, cause: null, causeCounts: {}, lastFailureAt: null, lastSubmittedAt: null, restored: false, evidence: '',
+      route, submitted: 0, providerFailures: 0, cause: null, causeCounts: {}, lastFailureAt: null, lastSubmittedAt: null, recentFailures: 0, recentSubmitted: 0, restored: false, evidence: '',
     };
     if (row.outcome === 'SUBMITTED') {
       entry.submitted += n(row.k);
+      entry.recentSubmitted += n(row.recent);
       if (row.last && (!entry.lastSubmittedAt || row.last > entry.lastSubmittedAt)) entry.lastSubmittedAt = row.last;
     }
     const cause = causeOfReason(row.reason);
     if (cause && cause !== 'database') {
       entry.providerFailures += n(row.k);
+      entry.recentFailures += n(row.recent);
       entry.causeCounts[cause] = (entry.causeCounts[cause] ?? 0) + n(row.k);
       if (row.last && (!entry.lastFailureAt || row.last > entry.lastFailureAt)) entry.lastFailureAt = row.last;
     }
@@ -966,10 +1003,12 @@ export async function diagnoseThroughput(since: string): Promise<ThroughputDiagn
       route.cause = top[0];
       route.evidence = ranked.map(([cause, k]) => `${cause} ×${k}`).join(', ');
     }
-    route.restored = route.lastSubmittedAt !== null && route.lastFailureAt !== null && route.lastSubmittedAt > route.lastFailureAt;
+    // Answering again — after its last failure, or for most of its recent items — clears it.
+    route.restored = route.lastSubmittedAt !== null && !routeFailingNow(route);
   }
   routes.sort((a, b) => b.providerFailures - a.providerFailures || a.route.localeCompare(b.route));
-  const open = routes.find((r) => !r.restored);
+  // Only a route failing now is what to restore; failures that aged out of the recent window are history.
+  const open = routes.find((r) => routeFailingNow(r));
   return {
     routes,
     gpu,
@@ -1032,7 +1071,7 @@ export async function stageCapacity(options: { hours?: number; now?: number } = 
     [since],
   );
   const attribution = await readCategories(since);
-  const diagnosis = await diagnoseThroughput(since);
+  const diagnosis = await diagnoseThroughput(since, nowMs);
   return {
     windowHours: hours,
     since,
@@ -1252,6 +1291,13 @@ export function gateGrowth(input: {
   proposed: number;
   stableHigh: number;
   recorded: RecordedStageCapacity | null;
+  /**
+   * The controller's own live window for this model shows it answering (work
+   * accepted, at most one in five calls failing). The recorded reading is up to
+   * an hour old; a route it names as failing that has answered since is restored,
+   * and does not hold its own growth until the next reading says so.
+   */
+  answering?: boolean;
 }): ScalingVerdict {
   const { current, proposed, recorded } = input;
   const proven = Math.max(current, input.stableHigh);
@@ -1268,8 +1314,17 @@ export function gateGrowth(input: {
   if (!recorded.report) return hold(`the latest stage-capacity reading could not measure (${recorded.reason.slice(0, 120)})`);
   if (recorded.stale) return hold(`the latest stage-capacity reading is ${recorded.ageMinutes} min old`);
   const report = recorded.report;
+  /*
+   * Restore first binds the failing route itself. Another route's failure is no
+   * reason to hold a healthy one: it is the route that serves the work the
+   * failing one cannot (production, 2026-11-15 07:46Z: RunPod held at 2 for
+   * brain-a's failures while 11 items waited). The healthy route's own window
+   * still halves it when it overloads (`decideTarget`).
+   */
   const failing = report.diagnosis.primary;
-  if (failing) return hold(`restore model route ${failing.route} first (${failing.cause}, ${failing.failures} failure(s))`);
+  if (failing && failing.route === input.model && !input.answering) {
+    return hold(`restore model route ${failing.route} first (${failing.cause}, ${failing.failures} failure(s))`);
+  }
   const constrained = report.constrained;
   const laneIds = LANE_STAGES().map((s) => s.id);
   if (!constrained.stage) return hold('no measured stage has work waiting');
