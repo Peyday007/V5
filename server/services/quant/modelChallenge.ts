@@ -40,8 +40,27 @@
  * thread asks once per plan, with the same in-flight, retry and memo bounds,
  * and broadcasts the answer, which every thread binds on its next read of the
  * same plan. An answer about one plan still never validates another.
+ *
+ * The answer outlives the thread that asked (CHAL-33 repair F1, pool): the
+ * pool terminates an idle thread after `SHARED_IDLE_MS` (60 s) and a plan pass
+ * reads less often than that, so the next read of a plan almost always lands
+ * on a fresh thread whose memo is empty — a broadcast it was not alive to hear
+ * cannot reach it, and the plan stayed `due` for ever. The main thread is the
+ * one owner of the answers: every answer it records is also written, whole and
+ * atomically, to `PLAN_CHALLENGE_ANSWERS_FILE`, a per-process runtime file a
+ * thread reads synchronously when its own memo does not know the plan. A
+ * thread spawned after the answer arrived therefore binds it on its very first
+ * read. A thread reads from the file only answers recorded before it was
+ * loaded — the ones it was not alive to hear; an answer that arrives while it
+ * lives reaches it by the broadcast, as before, and binds on its next read.
+ * The file is a cache of this process's memo, never authoritative: it is
+ * named by the process id, written only by the main thread, and a missing or
+ * unreadable file is no answer — never a pass.
  */
 import { createHash } from 'node:crypto';
+import { readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { BroadcastChannel, isMainThread } from 'node:worker_threads';
 import { reviewDecision, type DecisionInput } from '../../domain/decision.ts';
 import type { OperatorModel } from '../../domain/operator.ts';
@@ -173,6 +192,59 @@ function remember(key: string, answer: ModelChallenge | null, at = Date.now()): 
     if (oldest === undefined) break;
     answers.delete(oldest);
   }
+  if (isMainThread) persistAnswers();
+}
+
+/*
+ * The process's answers, readable by a thread that was not alive when they
+ * arrived (CHAL-33 repair F1). Threads share `process.pid`, so the name is the
+ * process's own; a later process starts with nothing, exactly as its memo does.
+ */
+
+/** The runtime file the main thread keeps this process's challenger answers in, for pool threads to read synchronously. */
+export const PLAN_CHALLENGE_ANSWERS_FILE = join(tmpdir(), `brain-plan-challenge-${process.pid}.json`);
+
+type StoredAnswers = Array<[string, { answer: ModelChallenge | null; at: number }]>;
+
+/** When this thread's copy of the module was loaded: the file supplies only what was recorded before it. */
+const LOADED_AT = Date.now();
+
+/** Main thread: write the whole memo, atomically, so a reader never sees half of it. A failed write leaves threads asking again. */
+function persistAnswers(): void {
+  const temporary = `${PLAN_CHALLENGE_ANSWERS_FILE}.${Date.now()}.tmp`;
+  try {
+    writeFileSync(temporary, JSON.stringify([...answers.entries()] satisfies StoredAnswers));
+    renameSync(temporary, PLAN_CHALLENGE_ANSWERS_FILE);
+  } catch {
+    try {
+      rmSync(temporary, { force: true });
+    } catch {
+      // Nothing to clean up.
+    }
+  }
+}
+
+/**
+ * Pool thread: what the main thread recorded about one plan before this
+ * thread was loaded, read from the process's answers file into this thread's
+ * memo; undefined when the file does not know it (or cannot be read).
+ * Synchronous, for the optimizer.
+ */
+function storedAnswer(key: string): { answer: ModelChallenge | null; at: number } | undefined {
+  let stored: StoredAnswers;
+  try {
+    stored = JSON.parse(readFileSync(PLAN_CHALLENGE_ANSWERS_FILE, 'utf8')) as StoredAnswers;
+  } catch {
+    return undefined;
+  }
+  if (!Array.isArray(stored)) return undefined;
+  const found = stored.find((entry) => Array.isArray(entry) && entry[0] === key)?.[1];
+  if (!found || typeof found.at !== 'number' || !Number.isFinite(found.at)) return undefined;
+  // Recorded while this thread lives: the broadcast delivers it (or the next forward is re-announced).
+  if (found.at > LOADED_AT) return undefined;
+  const answer = found.answer && typeof found.answer === 'object' && typeof found.answer.verdict === 'string' ? found.answer : null;
+  remember(key, answer, found.at);
+  return { answer, at: found.at };
 }
 
 /**
@@ -207,7 +279,8 @@ export function modelChallengeFor(problem: PortfolioProblem, result: PortfolioRe
     return undefined;
   }
   const key = planChallengeKey(input);
-  const known = answers.get(key);
+  // A thread's memo dies with the thread; the main thread's answers do not (CHAL-33 repair F1).
+  const known = answers.get(key)?.answer ? answers.get(key) : isMainThread ? answers.get(key) : (storedAnswer(key) ?? answers.get(key));
   if (known?.answer) return known.answer;
   if (known && now - known.at < MODEL_CHALLENGE_RETRY_MS) return undefined;
   if (!isMainThread) {
@@ -317,4 +390,11 @@ export function forgetPlanChallenges(): void {
   answers.clear();
   inFlight.clear();
   forwarded.clear();
+  if (isMainThread) {
+    try {
+      rmSync(PLAN_CHALLENGE_ANSWERS_FILE, { force: true });
+    } catch {
+      // Already gone.
+    }
+  }
 }
