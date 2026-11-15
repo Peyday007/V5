@@ -9,6 +9,12 @@
  * NOT_STORED with where it lives, so "400 arrangements per pass" is never read
  * as "400 businesses known".
  *
+ * Then a DIAG section per project holding a map or a cash row: why the F3
+ * back-fill files no construction fact and the F7 arrangement rounds open none,
+ * read from the functions the tick runs (`kernelSkips`, `kernelAuthority`,
+ * `knowledgeResearchAllowed`) and the back-fill's own selection as a dry run
+ * (`backfillCandidates`). Nothing is written.
+ *
  *   node --import tsx scripts/knowledge-census.ts            # human lines
  *   node --import tsx scripts/knowledge-census.ts --json     # one JSON line too
  */
@@ -91,6 +97,191 @@ export async function census(): Promise<CensusLine[]> {
   return out;
 }
 
+/* ------------------------------------------------------------------ DIAG */
+
+/** Projects the diagnosis reads, at most. */
+const DIAG_PROJECTS = 50;
+/** Rejection reasons and unmatched buyer wordings printed per project, at most. */
+const DIAG_TOP = 8;
+
+export interface DiagProject {
+  projectId: string;
+  cashMode: { exists: boolean; state: string | null };
+  /** Why `runIndustryKernel` returns before absorbing and back-filling; null when it goes on. */
+  kernelSkips: string | null;
+  kernelAuthority: { allowed: boolean; basis: string | null; reason: string };
+  standingGrant: { live: boolean; id: string | null; name: string | null; standingGoals: { name: string; state: string; expiresAt: string | null; research: boolean }[] };
+  /** industry_rounds opened in the last 24 h, by `purpose:state`. */
+  kernelRounds24h: Record<string, number>;
+  /** Constructed-arrangement rounds (`goal-…-mx-…`, the F7 path) opened in the last 24 h, by state. */
+  constructedRounds24h: Record<string, number>;
+  knowledgeResearch: { allowed: boolean; basis: string | null; reason: string };
+  backfill: {
+    hasBuyerTypes: boolean;
+    unitEconomicRead: number;
+    read: number;
+    candidates: number;
+    candidatesBySource: Record<string, number>;
+    rejected: number;
+    topReasons: { reason: string; n: number }[];
+    topUnmatchedBuyers: { buyer: string; n: number }[];
+  } | { error: string };
+  errors: string[];
+}
+
+function top(counts: Map<string, number>, limit = DIAG_TOP): { key: string; n: number }[] {
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, limit).map(([key, n]) => ({ key, n }));
+}
+
+function message(error: unknown): string {
+  return error instanceof Error ? (error.message.split('\n')[0] ?? '') : String(error);
+}
+
+/** The projects holding an industry map or a cash mode row, bounded. */
+export async function diagProjectIds(limit = DIAG_PROJECTS): Promise<string[]> {
+  const rows = (await getDb().all(
+    `SELECT project_id FROM (SELECT DISTINCT project_id FROM industry_nodes UNION SELECT project_id FROM cash_modes) p ORDER BY project_id LIMIT ?`,
+    [limit],
+  )) as { project_id: string }[];
+  return rows.map((row) => row.project_id);
+}
+
+async function countBy(sql: string, params: string[]): Promise<Record<string, number>> {
+  const rows = (await getDb().all(sql, params)) as { k: string; n: number | string }[];
+  return Object.fromEntries(rows.map((row) => [row.k, Number(row.n)]));
+}
+
+/**
+ * Why construction facts and arrangement research are (not) happening in one
+ * project, read from the same functions the tick runs. Strictly read-only: the
+ * back-fill is the dry-run selection (`backfillCandidates`), nothing is filed.
+ */
+export async function diagProject(projectId: string, now = new Date()): Promise<DiagProject> {
+  const { getCashMode } = await import('../server/repos/cashMode.ts');
+  const { listGoals } = await import('../server/repos/russellAuthority.ts');
+  const { kernelAuthority, kernelSkips, standingWorldGrant } = await import('../server/services/industry/kernel.ts');
+  const { backfillCandidates } = await import('../server/services/industry/expand.ts');
+  const { knowledgeResearchAllowed } = await import('../server/services/cash/lifecycle.ts');
+  const { RESEARCH_WORK_CLASS } = await import('../server/services/russell/launch.ts');
+
+  const iso = now.toISOString();
+  const since = new Date(now.getTime() - 24 * 3600_000).toISOString();
+  const errors: string[] = [];
+  const attempt = async <T>(label: string, run: () => Promise<T>, fallback: T): Promise<T> => {
+    try {
+      return await run();
+    } catch (error) {
+      errors.push(`${label}: ${message(error)}`);
+      return fallback;
+    }
+  };
+
+  const mode = await attempt('cashMode', () => getCashMode(projectId), null);
+  const goals = await attempt('listGoals', () => listGoals(projectId), []);
+  const grant = standingWorldGrant(goals, iso);
+  const skips = await attempt('kernelSkips', () => kernelSkips(projectId, mode), `unreadable`);
+  const authority = await attempt('kernelAuthority', async () => {
+    const one = await kernelAuthority(projectId, { mode, now: iso });
+    return { allowed: one.allowed, basis: one.basis, reason: one.reason };
+  }, { allowed: false, basis: null, reason: 'unreadable' });
+  const knowledge = await attempt('knowledgeResearchAllowed', async () => {
+    const one = await knowledgeResearchAllowed(projectId, iso);
+    return { allowed: one.allowed, basis: one.basis, reason: one.reason };
+  }, { allowed: false, basis: null, reason: 'unreadable' });
+  const kernelRounds24h = await attempt(
+    'industryRounds',
+    () => countBy(`SELECT purpose || ':' || state AS k, COUNT(*) AS n FROM industry_rounds WHERE project_id = ? AND opened_at >= ? GROUP BY purpose, state ORDER BY k LIMIT 40`, [projectId, since]),
+    {},
+  );
+  const constructedRounds24h = await attempt(
+    'constructedRounds',
+    () => countBy(`SELECT state AS k, COUNT(*) AS n FROM cash_discovery_rounds WHERE project_id = ? AND opened_at >= ? AND bucket_id LIKE 'goal-%-mx-%' GROUP BY state ORDER BY k LIMIT 10`, [projectId, since]),
+    {},
+  );
+
+  let backfill: DiagProject['backfill'];
+  try {
+    const pool = await backfillCandidates(projectId);
+    const reasons = new Map<string, number>();
+    const unmatched = new Map<string, number>();
+    const bySource: Record<string, number> = {};
+    let candidates = 0;
+    for (const one of pool.decisions) {
+      if (one.candidate) {
+        candidates += 1;
+        bySource[one.source] = (bySource[one.source] ?? 0) + 1;
+        continue;
+      }
+      const reason = `${one.source}: ${one.reason ?? 'unknown'}`;
+      reasons.set(reason, (reasons.get(reason) ?? 0) + 1);
+      if (one.unmatchedBuyer) {
+        const buyer = one.unmatchedBuyer.slice(0, 80);
+        unmatched.set(buyer, (unmatched.get(buyer) ?? 0) + 1);
+      }
+    }
+    backfill = {
+      hasBuyerTypes: pool.hasBuyerTypes,
+      unitEconomicRead: pool.unitEconomicRead,
+      read: pool.decisions.length,
+      candidates,
+      candidatesBySource: bySource,
+      rejected: pool.decisions.length - candidates,
+      topReasons: top(reasons).map(({ key, n }) => ({ reason: key, n })),
+      topUnmatchedBuyers: top(unmatched).map(({ key, n }) => ({ buyer: key, n })),
+    };
+  } catch (error) {
+    backfill = { error: message(error) };
+  }
+
+  return {
+    projectId,
+    cashMode: { exists: !!mode, state: mode?.state ?? null },
+    kernelSkips: skips,
+    kernelAuthority: authority,
+    standingGrant: {
+      live: !!grant,
+      id: grant?.id ?? null,
+      name: grant?.name ?? null,
+      standingGoals: goals.slice(0, 5).map((goal) => ({ name: goal.name, state: goal.state, expiresAt: goal.expiresAt ?? null, research: goal.allowedWork.includes(RESEARCH_WORK_CLASS) })),
+    },
+    kernelRounds24h,
+    constructedRounds24h,
+    knowledgeResearch: knowledge,
+    backfill,
+    errors,
+  };
+}
+
+export async function diagnose(now = new Date()): Promise<DiagProject[]> {
+  const out: DiagProject[] = [];
+  for (const projectId of await diagProjectIds()) out.push(await diagProject(projectId, now));
+  return out;
+}
+
+/** The lines `main` prints for one project's diagnosis. */
+export function diagLines(one: DiagProject): string[] {
+  const p = `DIAG ${one.projectId}`;
+  const kv = (record: Record<string, number>) => Object.entries(record).map(([k, n]) => `${k}=${n}`).join(' ') || 'none';
+  const lines = [
+    `${p} cashMode ${one.cashMode.exists ? one.cashMode.state : 'NO_ROW'}`,
+    `${p} standingGrant ${one.standingGrant.live ? `LIVE ${one.standingGrant.name} (${one.standingGrant.id})` : 'NONE'}; standing goals: ${one.standingGrant.standingGoals.map((g) => `${g.name}[${g.state}${g.research ? ',RESEARCH' : ''}${g.expiresAt ? `,exp ${g.expiresAt}` : ''}]`).join(' ') || 'none'}`,
+    `${p} kernelSkips ${one.kernelSkips ?? 'no (the pass absorbs and back-fills)'}`,
+    `${p} kernelAuthority ${one.kernelAuthority.allowed ? `ALLOWED ${one.kernelAuthority.basis}` : 'REFUSED'} — ${one.kernelAuthority.reason}`,
+    `${p} kernelRounds24h ${kv(one.kernelRounds24h)}`,
+    `${p} constructedRounds24h ${kv(one.constructedRounds24h)}`,
+    `${p} knowledgeResearch ${one.knowledgeResearch.allowed ? `ALLOWED ${one.knowledgeResearch.basis}` : 'REFUSED'} — ${one.knowledgeResearch.reason}`,
+  ];
+  const b = one.backfill;
+  if ('error' in b) lines.push(`${p} backfill UNMEASURED — ${b.error}`);
+  else {
+    lines.push(`${p} backfill buyerTypes=${b.hasBuyerTypes ? 'yes' : 'NONE'} unitEconomicRead=${b.unitEconomicRead} read=${b.read} candidates=${b.candidates} (${kv(b.candidatesBySource)}) rejected=${b.rejected}`);
+    for (const r of b.topReasons) lines.push(`${p} backfillRejected ${String(r.n).padStart(5)}  ${r.reason}`);
+    for (const u of b.topUnmatchedBuyers) lines.push(`${p} backfillUnmatchedBuyer ${String(u.n).padStart(5)}  ${u.buyer}`);
+  }
+  for (const e of one.errors) lines.push(`${p} error ${e}`);
+  return lines;
+}
+
 async function main(): Promise<void> {
   await initDatabase();
   try {
@@ -98,6 +289,17 @@ async function main(): Promise<void> {
     console.log(`CENSUS at ${new Date().toISOString()} revision ${process.env.BRAIN_REVISION ?? '<unstamped>'}`);
     for (const one of lines) console.log(`CENSUS ${one.layer.padEnd(9)} ${one.key.padEnd(28)} ${one.value === null ? '-' : String(one.value).padStart(8)}  ${one.label}${one.note ? ` — ${one.note}` : ''}`);
     if (process.argv.includes('--json')) console.log(`CENSUS_JSON ${JSON.stringify(lines)}`);
+    try {
+      const diag = await diagnose();
+      for (const one of diag) for (const line of diagLines(one)) console.log(line);
+      // This process's own reading, not the server's: the server keeps its pressure in memory only.
+      const { databasePressure } = await import('../server/db/pressure.ts');
+      const pressure = databasePressure();
+      console.log(`DIAG pressure (census process only) ${pressure.state} — ${pressure.reason}`);
+      if (process.argv.includes('--json')) console.log(`DIAG_JSON ${JSON.stringify(diag)}`);
+    } catch (error) {
+      console.log(`DIAG UNMEASURED — ${message(error)}`);
+    }
     console.log('GOALS: OK');
   } finally {
     await closeDatabase();
