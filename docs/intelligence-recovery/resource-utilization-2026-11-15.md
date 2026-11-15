@@ -26,14 +26,95 @@ Sources: connection report runs 43767404016 (22:06Z) and 43768266235 (22:15Z), p
 
 **Throughput.** Merged PRs: 12 (1.5/h). Deploys fully released: 6 (0.75/h). Factory units accepted: 10.8/h. Accepted research claims: **2/h**, against 25.1/h in the 8 h before. Plan evaluations: 5.5/h, against 13.3/h. Kept improvement outcomes: 0 of 2 (6 h).
 
+## Inference and model endpoints (8 h)
+
+| measure | GPU route (runpod/Qwen3-4B-AWQ) | brain-a (OmniRoute free providers) |
+|---|---|---|
+| available endpoints | 1 pod, 2 slots; GPU memory 16 GB (RTX 2000 Ada) | 1 switchboard, controller target 12 |
+| actual requests | 116 items attempted, 2 submitted | 104 items attempted, 0 submitted |
+| requests per minute | 0.24/min attempted | 0.22/min attempted |
+| tokens per second | not measured (vLLM metrics not scraped) | not measured |
+| rate limits | none hit (providerQuota 0/209 over 6 h) | none hit |
+| error rate | 98% not accepted; pod unavailable | 100% not accepted; provider failure 91% (6 h) |
+| average latency | ~80 s per accepted research item | not measured (no accepted item) |
+| concurrency | at most 2; average 0.3 jobs at once across the lane (8 h before: 1.1, peak 7) | — |
+| pending requests | 29–31 research items waiting | same queue |
+| cost per hour | $0.19–0.24 while running (recipe ceiling); ~0 while stopped; `BRAIN_RUNPOD_USD_PER_HOUR` unset, so the report could not price it | $0 (free providers) |
+
+## Engineering and research detail
+
+- **Claude Code sessions.** Plan concurrency limit: not measured. Running: 2 (Evolution Engine "the end?", productive; this audit). 9 sessions are idle on a person's action; 0 are blocked on capacity.
+- **Factory.** Registered surfaces: 3. Active: 1 (surface 2, last check-in 22:05Z). Quarantined: 2 (surfaces 1 and 3: "3 consecutive fired sessions never checked in"). Free slots at 22:15Z: 1, beside 1 executable item. Completed: 86 accepted units in 8 h (10.8/h). 9 completions refused: 4 malformed `conflicts`, 2 missing PR number, 2 forge rate limit, 1 bad kind. 5 released: scope conflict, cause outside `tests/**`. Average productive task duration: not measured (no per-unit duration row).
+- **Engineering agents.** Running: the Evolution Engine's worktree engineers (count not visible from here) and this session. Queued: 1 Factory item, 1 Routine item. Blocked: the 5 scope-conflict releases above.
+- **Tasks completed per hour.** Merged PRs 1.5/h. Fully released deploys 0.75/h. Factory units 10.8/h.
+- **Research.** Surfaces available: 13 grant slots, plus the free lane. Occupied: 13/13. Queue: 538 ideas, plus 29–31 free-lane items. Completion: 3 of 39 jobs in the last hour (7.7%), 57/250 over 6 h (22.8%), 1,274/2,471 over 24 h (51.6%). Evidence validation (claims accepted): 13/29 over 6 h (44.8%), 365/528 over 24 h (69.1%). Useful to planning: the $10K plan accepted buyer and price for 2 of 11 openings; 0 new openings in 8 h; 7 of the goal's last 7 rounds ended without a report.
+- **Active vs queued vs blocked vs rate-limited vs idle (research).** Active: 13 grant missions, plus 4 free-lane items in flight at 22:15Z. Queued: 538 ideas and 31 lane items. Blocked: 537 ideas at grant ceilings, plus the lane's failing routes. Rate-limited: 0. Idle: Routines (0 of 12) beside 1 executable item.
+- **Disk and network.** Database disks were busy 0.7% and 5.8% of the window. Root disk is 84% full (1.71 GB free of 10.46 GB); /data is 47% full. The app opened 466 client sockets in 32 min, 235 of them to the database pooler (7.3/min).
+
+## Safe operating limits (from the readings, per resource)
+
+| resource | measured | operating limit | why this limit |
+|---|---|---|---|
+| App CPU | ~10% steady; 60% for 2–3 min after a restart | sustain ≤60% machine; event-loop p99 ≤100 ms | stalls of 2–4 s already occur at 10% average, so they come from single CPU-bound passes, not load; more concurrency on this CPU buys little |
+| App memory | peak RSS 2,157 MB of 4 GB | ≤3 GB RSS, heap ≤2 GB of 2,608 | #947 measured an OOM in the verifier at 4 GB; restart peaks sit near 2.2 GB |
+| App DB pool | 0 waiters, 8 workload | keep `waiting` at 0 and checkout p95 <50 ms; the free lane keeps its share of 3 of 6 (#922) | pool exhaustion recorded twice on 11-15 (00:03Z, 01:12Z) |
+| DB host CPU | 70% (with the 55 s query) | ≤60% sustained; `db/pressure.ts` sheds optional work above its p90 | 2 vCPU are shared by every Brain path (§61) |
+| DB host memory and disk | 65% memory; root disk 84% | memory ≤80%; root disk ≤85%. It is at 84%, managed by Supabase, and re-read in the end reading | 1.37 TB of temp spills since stats began |
+| GPU | 2 slots | the controller's measured ceiling (2 on 4B AWQ) | grows only on measured acceptance (stageCapacity) |
+| Release pipeline | ~70% busy | one Deploy at a time; merge only between Deploys | a merge during a Deploy supersedes it (P-12) |
+
+The controllers that already raise and lower concurrency stay in charge: free-lane `stageCapacity` grows on acceptance and halves on errors, `db/pressure.ts` defers optional work, and the §98 watchdog records idle-beside-work. This audit adds no second controller. Hermes runs on the same switchboard as research, and no separate engineering-inference compute is needed while that lane is idle.
+
+## Down-curve reserve (minimum, measured)
+
+Surge A (reliability) holds no dedicated agents. Its open items: R-SLOW-RESTART, shipped in #947 and in Deploy 1105; the 50% Deploy failure rate; and the 2 quarantined Factory surfaces. The minimum reserve is process-level, and all of it is kept: Deploy's two verification passes, the hourly report routine, Hermes' self-scheduled runs, and incident response by the session that holds the incident. Everything else is up curve. On an incident (Deploy fails after restart, `/healthz` above 5 s, or the pool exhausted), the owning session redirects its engineers to it first and releases them after recovery. That is the protocol already in `resource-allocation.md`, kept unchanged.
+
+## What limits engineering
+
+| candidate constraint | reading | binding? |
+|---|---|---|
+| Number of coding agents | Routines 0–8% busy, Factory 1 surface with a free slot | no |
+| Claude subscription capacity | no quota refusal recorded; Routines idle | no (limit not measured) |
+| Factory registration or routing | 2 of 3 surfaces quarantined; dispatch starved (fixed) | **yes** |
+| Model inference throughput | GPU and brain-a both down | **yes, for research** |
+| CPU or GPU resources | app CPU ~10%; GPU unavailable | GPU yes, CPU no |
+| Task dependencies | the $10K plan waits on buyer evidence that research did not produce | yes |
+| Code ownership conflicts | 5 Factory releases: cause outside `mutationScope` | minor |
+| Integration and verification | Deploy ~70% busy, 50% failing | **yes** |
+| Research evidence availability | 2 claims/h | **yes** (because inference is down) |
+
+Models are idle while engineering assignments wait, so the fault is in routing and registration, not missing capacity: dispatch starvation (fixed) and the quarantined surfaces (they need the surface owner's connector re-authorized). Adding agents removes none of these constraints.
+
+## Throughput estimates (with uncertainty)
+
+- **Now (measured):** verified engineering improvements 0.75 released deploys/h; Factory units 10.8/h; research claims accepted 2/h; plan evaluations 5.5/h; Hermes-directed improvement outcomes kept 0/h (0 of 2 in 6 h).
+- **Sustainable with existing resources:** the 8 h before the outage measured 25.1 accepted claims/h and 13.3 plan evaluations/h on the same pool. That is the evidence-backed sustainable rate.
+- **After reallocation (the two fixes):** research back to roughly 25 claims/h if the GPU serves again (one reading, so medium confidence). Dispatch cadence ×6. The database host should lose about 0.86 of a core. The Factory and Routine effect is not estimated until it is measured: one reading would be a guess.
+- **After more spending:** no measured constraint is removed by money, so no forecast is made.
+
 ## Defects found and changed
 
 1. **Dispatch starvation (PR #949).** `laneCoverage()` always ran `consumedLastDay`, a correlated count over `work_items` × `bin_events` that took 48–82 s a read (30 reads, 1,652 s of database time in 32 min). Only `admin free-lane show` prints it. `watchDisplacedWork()` awaits it inside `dispatchTick` once a minute, so the 10 s dispatch loop ran about once a minute, `dispatchTickIfIdle` (the Factory stage handoff) declined, and roughly 0.86 of a database core was spent on it. Now it runs only on the admin readout's request.
 2. **GPU stranded on a full host.** A stopped pod stays on its host, and nothing moved it when that host's GPUs were taken. Moved by hand once (cheap lane 43768013494, `runpod-upgrade`, active recipe, same price ceiling). From now on the hourly `runpod-auto` moves it itself when its last three starts were refused for that reason (PR #949, `POD_STRANDED`).
 
-## Scaling decision
+## Scaling options, priced
 
-No new spending. The $0 fixes above remove the measured bottlenecks; a second GPU, a larger app server or more agents would add capacity next to pools that were idle. A larger database is re-judged on the post-fix reading. The shared $100 ceiling is untouched.
+Prices are the RunPod recipe ceilings in `cheap/runpodRestore.ts` (measured $0.19–0.24/h for this pod) and the community prices from runpod-survey 43281884981. Fly and Supabase plan prices were not read in this session, so they are marked unpriced and no figure is invented for them.
+
+| option | extra $/h | total expected (8 h) | bottleneck removed | expected productivity | completion time | confidence | release at once |
+|---|---|---|---|---|---|---|---|
+| Move the GPU to a host with stock (**done**) | 0 (same pod) | ≤ $1.92 of pod time, as before | GPU unavailable | research back toward 25 claims/h from 2 | the $10K plan reads again at the pre-outage rate | high | yes (idle auto-stop at 15 min) |
+| Unblock dispatch (**done**) | 0 | 0 | dispatch cadence; DB CPU | dispatch ×6; DB host −0.86 core | Factory and Routine handoffs on time | high | — |
+| Second GPU pod | +0.19–0.24 | +$1.52–1.92 | none: before the outage the GPU averaged 1.18 of 2 slots busy | ~0 until research waits on inference | none | medium | yes |
+| Stronger model on the GPU (qwen3-8b-awq, 16 GB) | ~0 | ~0 | claim quality (44.8% accepted over 6 h) | unknown until `runpod-bench` on Brain's tasks | unknown | low | yes (`runpod-upgrade` back) |
+| Additional isolated agent compute | unpriced | — | none: Routines 0–8% busy | ~0 | none | high | — |
+| More concurrent coding agents | 0 (subscription) | 0 | none until surfaces are authorized and dispatch runs | ~0 | none | high | — |
+| Additional research capacity (raise grant ceilings) | 0 money | 0 | grant ceilings (§16/§52; a person's ceiling, never raised by Brain) | ~0 while the lane is down; re-judge after | — | medium | yes |
+| Larger app CPU or memory | unpriced | — | none: CPU ~10%, memory ≤53% | 0 | 0 | high | — |
+| Larger database | unpriced | — | DB CPU 70%, mostly the removed query | re-judge on the post-fix reading | — | medium | plan change |
+| Better model routing | 0 | 0 | routing a failing provider's role to the other model (already done by stageCapacity) | covered by the GPU move | — | — | — |
+
+**Best value:** the dispatch fix ($0). **Fastest justified:** the GPU move (at most $0.24/h, existing infrastructure). **Spending more accomplishes little** while idle pools sit beside waiting work. No consolidated funding request is made. The shared $100 ceiling is untouched ($0 committed by this audit) and is counted once.
 
 ## End reading (due ~2026-11-16 06:15Z)
 
