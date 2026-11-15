@@ -33,6 +33,13 @@ Why that is enough: none of the backlog blocks Surge B or production. The one re
 | 07:49 | 2/12 (0) | 8/14 (8) | 11/16 (504) | 2/3 (1) | FREE_LANE: brain-a 6/12, held at its database-pool share of 12/24 (a deliberate safety margin). RESEARCH: "5 launchable ideas have a free slot" but the launch pass is not taking them, so a second engineer is on it. ROUTINES no longer idle. |
 | 08:10 (cached, 273 s old) | 2/12 (1) | 3/4 (3) | 13/16 (503) | 0/1 (1) | Read right after the restart for Deploy 1087 (Factory #923). FREE_LANE is held at its starting size. ROUTINES and FACTORY each show 1 executable item idle beside free capacity; both are re-read after warm-up before any fix is assigned. RESEARCH: 3 launchable ideas are not launching, which is fixed in part 8 (PR #925). |
 | 09:12 (cached, 141 s old) | 4/12 (1) | 2/19 (13) | 15/16 (468) | 2/3 (1) | Read right after the restart for Deploy 1088, which released part 8. FREE_LANE capacity grew from 4 to 19 now that one failing route no longer holds the others. It is held because of real backpressure: database connections contended, event loop lagging 3.9 s. That is admission control working, not idle routing. RESEARCH running rose from 13 to 15 of 16, and the waiting queue fell from 503 to 468. ROUTINES shows 1 executable item beside free capacity, flagged "unexplained"; it is re-read after warm-up. Deploy 1088's verification failed only one check before the restart: the 50,000-evaluation simulation got HTTP 429 (slot busy). It passed 280/280 after the restart. |
+| 16:22 (live) | 3/12 (1) | 8/14 (17) | 18/13 (509) | 0/0 (1) | FREE_LANE: RunPod 2/2 is held because the bottleneck is commercial execution, which more model slots do not serve (a correct hold). brain-a 6/12 is held for two reasons: 45 provider-availability failures, and its share of the database pool (12 of 24). RESEARCH: 18 running against a computed capacity of 13. 508 of the 509 waiting ideas sit in projects already at their grant's at-once ceiling. That is a budget gate (§16), not idle routing. FACTORY: 0 surfaces free, 1 executable item. ROUTINES: "1 executable item, unexplainedly idle" is reported in every sample since 07:46, so it is a standing finding. |
+
+## Gap 10:58Z–16:22Z
+
+This session's worker process was restarted. No samples were taken in that window, and the eight-hour report fell due (15:46Z) during it. Nothing that ran in production depended on this session. During the gap:
+- Factory released twice: Deploy 1093 (14:42Z, fully verified) and Deploy 1094 (15:40Z).
+- Hermes' self-scheduled runs continued.
 
 ## Other classes (07:46Z)
 

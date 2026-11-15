@@ -374,3 +374,12 @@ Still open:
 - What failed: Deploys 1088 and 1090 failed one check before the restart, "a real 50,000-evaluation run completes". The run was refused with a busy, retryable answer (429) within 251 ms.
 - Cause: goal plan reads share the process's single scenario slot. Part 8's back-fill files new evidence at boot, and new evidence starts plan reads, so the slot is often busy when the check runs.
 - Fix: PR #932. The verifier now waits up to 120 s for the slot. Every assertion is unchanged.
+
+### Releases since part 9 (read 16:25Z)
+
+- **Deploy 1092 (PR #932):** released. The pass before the restart was 261/261. The 50,000-evaluation run completed: R-VERIFY's repair is **VERIFIED on production**. The pass after the restart did not finish because the live Brain answered too slowly.
+- **Deploy 1093 (14:42Z, aecdd0b):** a Factory release that contains every Surge B part through #932. It was fully verified both before and after the restart.
+- **Deploy 1094 (15:40Z):** same pattern as 1092. The pass before the restart was 261/261; the pass after it was stopped as too slow.
+- **R-SLOW-RESTART:** in 2 of the last 3 deploys, the pass after the restart was stopped as too slow (Brain answered too slowly right after restarting).
+  - Owner: Surge A (production restart verification, server performance). Handed over through this record.
+  - Not a Surge B defect: 1093 passed on the same Surge B code.
