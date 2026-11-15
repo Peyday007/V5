@@ -41,6 +41,7 @@ import {
   withdrawRequest,
 } from '../../repos/russellMissions.ts';
 import { getUser } from '../../repos/identity.ts';
+import { moot } from '../../domain/operator.ts';
 import { answerAuthorityGap } from '../realize/authority.ts';
 import { getDb } from '../../db/database.ts';
 import { recordEvent } from '../../repos/events.ts';
@@ -782,6 +783,58 @@ export async function unparkResolvedMissions(limit: number): Promise<string[]> {
    * pass is the loop's existing "Needs You no longer applies" step.
    */
   await withdrawMootBacklog(limit);
+  /*
+   * Every other card nobody can answer any more, by the rule rather than by
+   * its wording. A mission leaves NEEDS_HUMAN by many doors — advanced,
+   * unparked, stopped, recovered, cancelled — and its card can stay OPEN with
+   * any recommendation on it; the operator then withdrew them by hand
+   * (OPERATOR_WITHDREW_MOOT_REQUEST, 30 in a week) because nothing here
+   * reached a card that was not re-asked on one exact sentence.
+   */
+  await withdrawMootOpenRequests(limit);
+  return out;
+}
+
+/**
+ * Withdraw every `OPEN` card the shared moot rule (`domain/operator.ts`
+ * `moot`) says no answer can apply to: it names a mission, it is not a
+ * capability-authority or reconsider card, and its mission is no longer
+ * `NEEDS_HUMAN` (or no longer exists). The operator decides moot with the same
+ * function, so the loop and the operator cannot disagree about a card.
+ *
+ * Each row is re-read before it is moved, and the move is the guarded
+ * `OPEN -> WITHDRAWN` transition, so a person who answers first wins and a
+ * mission that came back to `NEEDS_HUMAN` keeps its card. The row is kept and
+ * one `RUSSELL_ROUTINE_DECISION` records why.
+ */
+export async function withdrawMootOpenRequests(limit: number): Promise<string[]> {
+  const rows = await getDb().all<{ id: string }>(
+    `SELECT r.id FROM russell_human_requests r
+       LEFT JOIN russell_missions m ON m.id = r.mission_id
+      WHERE r.state = 'OPEN'
+        AND r.mission_id IS NOT NULL
+        AND (m.id IS NULL OR m.state <> 'NEEDS_HUMAN')
+      ORDER BY r.updated_at, r.id
+      LIMIT ?`,
+    [Math.max(1, limit)],
+  );
+  const out: string[] = [];
+  for (const row of rows) {
+    const request = await getHumanRequest(row.id);
+    if (!request || request.state !== 'OPEN' || !request.missionId) continue;
+    const mission = await getMission(request.missionId);
+    const reading = moot({
+      resumeKey: request.resumeKey,
+      missionId: request.missionId,
+      // A mission that no longer exists cannot be waiting on this card either.
+      missionState: mission ? mission.state : 'GONE',
+      packetStatus: null,
+    });
+    if (!reading.moot) continue;
+    if (!(await withdrawRequest({ requestId: request.id, reason: mootWhy(mission, reading.why) }))) continue;
+    await recordMootWithdrawal(request, mission, reading.why);
+    out.push(request.id);
+  }
   return out;
 }
 
@@ -1108,7 +1161,13 @@ export async function reopenAnswered(
    * either step, and nothing it wrote is clobbered. The row is kept (history is
    * never destroyed) and the event records the answer that could not apply.
    */
-  if (!mission || (mission.state !== 'NEEDS_HUMAN' && reason === MOVED_OUT_OF_NEEDS_YOU)) {
+  /*
+   * Decided by the mission's state, not by the failure's wording: whatever
+   * failed, a mission no longer in NEEDS_HUMAN cannot take this or any later
+   * answer — the shared moot rule (`domain/operator.ts`) — so the card is
+   * withdrawn. A mission still waiting is re-asked below, as before.
+   */
+  if (!mission || mission.state !== 'NEEDS_HUMAN') {
     return withdrawMootAnswer(request, mission, reason);
   }
   const orchestrationId = mission.orchestrationId;
