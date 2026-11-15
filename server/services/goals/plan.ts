@@ -1765,8 +1765,31 @@ export function requestGoalPlanPass(goalId: string, why: string): void {
   repairedGoals.set(goalId, why);
 }
 
+/**
+ * Goals whose search the research allocation asked to widen because a
+ * protected floor (exploration, or the urgent commercial goal's transaction
+ * routes) sits below its share and no live work serves it (RES-07, review F2).
+ * Raising a priority reaches only work that exists; this is how the floor
+ * causes the work to exist. The next goal pass widens the goal's search once,
+ * through the same openers every round uses, under their own caps and gates.
+ */
+const floorRequests = new Map<string, string>();
+
+export function requestFloorResearch(goalId: string, why: string): void {
+  floorRequests.set(goalId, why);
+}
+
+/** Whether a floor request is waiting for this goal's next pass, and why. */
+export function floorResearchRequested(goalId: string): string | undefined {
+  return floorRequests.get(goalId);
+}
+
+/** The workstream event a floor-requested widening writes on its goal. */
+export const GOAL_FLOOR_RESEARCH_OPENED = 'GOAL_FLOOR_RESEARCH_OPENED';
+
 /** Tests. */
 export function forgetGoalReadings(): void {
+  floorRequests.clear();
   lastArrangements.clear();
   explored.clear();
   lastReadings.clear();
@@ -2124,6 +2147,16 @@ export async function askConstructedArrangements(goal: Workstream, reading: Plan
   return opened;
 }
 
+async function recordFloorWidening(goalId: string, why: string, more: { asked: number; constructed: number; researched: number }): Promise<void> {
+  await recordWorkstreamEvent({
+    workstreamId: goalId,
+    kind: GOAL_FLOOR_RESEARCH_OPENED,
+    summary: `Search widened because ${why}: ${more.asked} round(s) asked, ${more.constructed} constructed, ${more.researched} opening(s) researched.`.slice(0, 400),
+    detail: { why, ...more },
+    actorRef: 'BRAIN',
+  });
+}
+
 export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: number; outcomes: number; asked: number; constructed: number; researched: number; busy: boolean; onEvidence: number; resumed: number }> {
   const goals = await getDb().all<{ id: string; target_project_id: string | null }>(
     `SELECT id, target_project_id FROM workstreams WHERE target_metric IS NOT NULL AND archived_at IS NULL AND cancelled_at IS NULL`,
@@ -2150,10 +2183,25 @@ export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: 
     const fingerprint = async (): Promise<string | null> => (projectId ? planInputsFingerprint(projectId, id) : null);
     const inputs = since && now.getTime() - since >= PLAN_EVIDENCE_FLOOR_MS && now.getTime() - since < PLAN_REFRESH_MS ? await fingerprint() : null;
     const repaired = repairedGoals.get(id);
-    const due = busy ? null : repaired !== undefined ? 'REPAIRED' : planDue({ now: now.getTime(), since, inputs, lastInputs: lastInputs.get(id) });
+    const floor = floorRequests.get(id);
+    const due = busy
+      ? null
+      : repaired !== undefined
+        ? 'REPAIRED'
+        : (planDue({ now: now.getTime(), since, inputs, lastInputs: lastInputs.get(id) }) ?? (floor !== undefined && !lastReadings.has(id) ? 'FLOOR' : null));
     if (!due) {
       // Not due for a re-read; top the search up if the fleet has room for it.
       const held = lastReadings.get(id);
+      // A protected research floor nothing serves: widen once from the reading held, whatever the top-up cadence says.
+      if (floor !== undefined && held) {
+        floorRequests.delete(id);
+        const more = await widenGoalSearch(id, held, now, Math.max(0, await cashSpareSurfaces(held.target.projectId)));
+        asked += more.asked;
+        constructed += more.constructed;
+        researched += more.researched;
+        await recordFloorWidening(id, floor, more);
+        continue;
+      }
       const toppedUp = lastTopUp.get(id) ?? 0;
       if (held?.needsMoreOpenings && now.getTime() - toppedUp >= GOAL_TOP_UP_MS) {
         lastTopUp.set(id, now.getTime());
@@ -2197,12 +2245,16 @@ export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: 
     // What Brain holds cannot reach the goal however it is combined: look for
     // more, through the same discovery every bucket uses, instead of reading
     // the same openings again in thirty minutes.
-    if (reading?.needsMoreOpenings) {
+    if (reading && (reading.needsMoreOpenings || floor !== undefined)) {
       const spare = await cashSpareSurfaces(reading.target.projectId);
-      const more = await widenGoalSearch(id, reading, now, spare);
+      const more = await widenGoalSearch(id, reading, now, Math.max(0, spare));
       asked += more.asked;
       constructed += more.constructed;
       researched += more.researched;
+      if (floor !== undefined) {
+        floorRequests.delete(id);
+        await recordFloorWidening(id, floor, more);
+      }
     }
     // Taken after this pass's own writes (the research it started on openings
     // touches their rows), so only what arrives from elsewhere reads as new.

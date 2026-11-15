@@ -106,6 +106,66 @@ export interface ResearchApplication {
   goalBins: { binId: string; purposes: string[]; shift: PriorityShift }[];
   /** Bins no goal pursues, raised because a purpose they serve is below a protected floor. */
   floorRaised: { binId: string; purposes: string[]; from: number; to: number }[];
+  /**
+   * Queued research items (the free lane's work among them) raised because a
+   * purpose they serve is below a protected floor: the claim order is
+   * `priority DESC`, so this reserves the next free slots for the floor.
+   */
+  floorReserved?: { workItemId: string; purposes: string[]; from: number; to: number }[];
+  /** Below-floor purposes no live bin and no queued item serves: nothing exists to raise. */
+  floorUnserved?: ResearchPurpose[];
+  /** What the floor caused to be opened for an unserved purpose, through the owner that opens that purpose's work. */
+  floorOpened?: { purpose: ResearchPurpose; via: string; refs: string[] }[];
+}
+
+/**
+ * What opens work for a purpose below its floor when none exists. Each is an
+ * existing owner's entrance, used under its own caps and gates (§10.3): the
+ * goal plan pass widens a goal's search (exploration, transaction routes), and
+ * the improvement loop detects weaknesses and opens their repair (system
+ * health). The tick asks; it opens nothing itself.
+ */
+export interface FloorOpeners {
+  /** Ask the goal plan pass to widen these goals' search on its next pass. Returns the goals asked. */
+  widenGoalSearch: (goalIds: string[], why: string) => Promise<string[]>;
+  /** Run the improvement loop's detection now. Returns what it opened. */
+  openSystemHealth: (why: string) => Promise<string[]>;
+}
+
+export const productionFloorOpeners: FloorOpeners = {
+  async widenGoalSearch(goalIds, why) {
+    const { requestFloorResearch } = await import('./plan.ts');
+    for (const id of goalIds) requestFloorResearch(id, why);
+    return goalIds;
+  },
+  async openSystemHealth() {
+    const { improvementTick } = await import('../improvement/loop.ts');
+    const report = await improvementTick(new Date());
+    return report.ran ? report.opened.map((one) => String(one)) : [`not run: ${report.reason}`];
+  },
+};
+
+/** Which (decision, purpose) pairs this process already asked an opener for, so one decision opens once. */
+const floorAsked = new Set<string>();
+/** Tests. */
+export function forgetFloorOpenings(): void {
+  floorAsked.clear();
+}
+
+/** Research work types whose queued items a floor reservation may raise. */
+const FLOOR_ITEM_TYPES = ['RESEARCH_PLAN', 'RESEARCH_FRAGMENT', 'RESEARCH_VERIFY', 'RESEARCH_SYNTHESIZE', 'RESEARCH_AUDIT'] as const;
+
+/**
+ * Below-floor purposes no live bin or queued item serves, split by the opener
+ * that can create their work. Pure.
+ */
+export function floorOpenPlan(belowFloor: readonly ResearchPurpose[], served: ReadonlySet<string>): { unserved: ResearchPurpose[]; goalSearch: ResearchPurpose[]; systemHealth: boolean } {
+  const unserved = belowFloor.filter((p) => !served.has(p));
+  return {
+    unserved,
+    goalSearch: unserved.filter((p) => p === 'BROAD_DISCOVERY' || p === 'FORWARD_EXPLORATION' || p === 'TRANSACTION_ROUTES'),
+    systemHealth: unserved.includes('SELF_IMPROVEMENT'),
+  };
 }
 
 const LIVE = new Set(['DRAFT', 'READY', 'LEASED', 'NEEDS_HUMAN']);
@@ -119,7 +179,7 @@ function holdReasonFor(goal: GoalView): HoldReason | null {
   return null;
 }
 
-export async function advanceGoals(options?: { now?: string }): Promise<GoalTickReport> {
+export async function advanceGoals(options?: { now?: string; floorOpeners?: FloorOpeners }): Promise<GoalTickReport> {
   // Archived goals are not derived here: they hold nothing and rank nowhere,
   // and there are more of them after every deploy. A hold one left behind is
   // released below, and its owner read directly (tests/goalTickCost.test.ts).
@@ -247,6 +307,13 @@ export async function advanceGoals(options?: { now?: string }): Promise<GoalTick
       if (!purposes.some((p) => (application.belowFloor as readonly string[]).includes(p))) continue;
       if (await setLiveBinPriority(bin.id, floorPriority)) application.floorRaised.push({ binId: bin.id, purposes, from: bin.priority, to: floorPriority });
     }
+    await holdFloors(application, {
+      liveBins,
+      binPurposes,
+      floorPriority,
+      activeGoalIds: snapshot.goals.filter((g) => g.lifecycle === 'ACTIVE').map((g) => g.id),
+      openers: options?.floorOpeners ?? productionFloorOpeners,
+    });
   }
   report.researchApplied = application;
   const changedPerGoal = new Map<string, string[]>();
@@ -291,6 +358,84 @@ export async function advanceGoals(options?: { now?: string }): Promise<GoalTick
   }
 
   return report;
+}
+
+/**
+ * Make a protected floor hold in the running Brain, not only in the recorded
+ * shares (RES-07, review F2). Raising bins reaches only bins; this reaches the
+ * rest:
+ *
+ *   1. Queued research items serving a below-floor purpose — the free lane's
+ *      work among them — are raised to the floor priority, so the next slot
+ *      that claims (`priority DESC`) takes floor work first. Guarded on the
+ *      item still being QUEUED and below that priority, in the statement that
+ *      changes it; a leased item is never touched (invariant 24).
+ *   2. A below-floor purpose that no live bin and no queued item serves has
+ *      nothing to raise, so its work is caused to exist: the goal plan pass is
+ *      asked to widen the active goals' search (exploration, transaction
+ *      routes) and the improvement loop to detect and open system-health
+ *      repair. Once per decision and purpose, so a quiet tick does not ask again.
+ */
+async function holdFloors(
+  application: ResearchApplication,
+  input: {
+    liveBins: { id: string }[];
+    binPurposes: Map<string, string[]>;
+    floorPriority: number;
+    activeGoalIds: string[];
+    openers: FloorOpeners;
+  },
+): Promise<void> {
+  const below = application.belowFloor as readonly string[];
+  const served = new Set<string>();
+  for (const bin of input.liveBins) for (const p of input.binPurposes.get(bin.id) ?? []) if (below.includes(p)) served.add(p);
+
+  application.floorReserved = [];
+  const items = await queuedResearchItems();
+  const itemPurposes = items.length > 0 ? await (await import('./researchYield.ts')).purposesOfBins(items) : new Map<string, string[]>();
+  for (const item of items) {
+    const purposes = itemPurposes.get(item.id) ?? [];
+    if (!purposes.some((p) => below.includes(p))) continue;
+    for (const p of purposes) if (below.includes(p)) served.add(p);
+    if (item.priority >= input.floorPriority) continue;
+    const changed = await getDb().run(`UPDATE work_items SET priority = ? WHERE id = ? AND state = 'QUEUED' AND priority < ?`, [input.floorPriority, item.id, input.floorPriority]);
+    if (Number(changed.changes) > 0) {
+      application.floorReserved.push({ workItemId: item.id, purposes, from: item.priority, to: input.floorPriority });
+    }
+  }
+
+  const plan = floorOpenPlan(application.belowFloor, served);
+  application.floorUnserved = plan.unserved;
+  application.floorOpened = [];
+  const key = (p: string) => `${application.fingerprint ?? 'none'}|${p}`;
+  const goalSearch = plan.goalSearch.filter((p) => !floorAsked.has(key(p)));
+  if (goalSearch.length > 0 && input.activeGoalIds.length > 0) {
+    const why = `${goalSearch.join(', ')} below the protected floor with no live work serving it`;
+    const refs = await input.openers.widenGoalSearch(input.activeGoalIds, why);
+    for (const p of goalSearch) {
+      floorAsked.add(key(p));
+      application.floorOpened.push({ purpose: p, via: 'goal plan pass: widen search', refs });
+    }
+  }
+  if (plan.systemHealth && !floorAsked.has(key('SELF_IMPROVEMENT'))) {
+    floorAsked.add(key('SELF_IMPROVEMENT'));
+    try {
+      const refs = await input.openers.openSystemHealth('SELF_IMPROVEMENT below the system-health floor with no live work serving it');
+      application.floorOpened.push({ purpose: 'SELF_IMPROVEMENT', via: 'improvement loop: detect and open repair', refs });
+    } catch (error) {
+      application.floorOpened.push({ purpose: 'SELF_IMPROVEMENT', via: 'improvement loop: detect and open repair', refs: [`error: ${String((error as Error).message ?? error).slice(0, 200)}`] });
+    }
+  }
+}
+
+/** Queued research items, with what attribution needs. */
+async function queuedResearchItems(): Promise<{ id: string; projectId: string; orchestrationId: string | null; purpose: string | null; priority: number }[]> {
+  const rows = await getDb().all<{ id: string; project_id: string; orchestration_id: string | null; purpose: string | null; priority: number | string }>(
+    `SELECT w.id, w.project_id, w.orchestration_id, b.purpose, w.priority FROM work_items w LEFT JOIN bins b ON b.id = w.bin_id
+      WHERE w.state = 'QUEUED' AND w.work_type IN (${FLOOR_ITEM_TYPES.map(() => '?').join(', ')}) ORDER BY w.id LIMIT 5000`,
+    [...FLOOR_ITEM_TYPES],
+  );
+  return rows.map((r) => ({ id: r.id, projectId: r.project_id, orchestrationId: r.orchestration_id, purpose: r.purpose, priority: Number(r.priority) }));
 }
 
 /** The live bins, with what attribution needs. */
