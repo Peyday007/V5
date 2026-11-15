@@ -23,7 +23,7 @@ import { reviewDecision, type DecisionInput } from '../../domain/decision.ts';
 import type { OperatorModel } from '../../domain/operator.ts';
 import { challengeDecision } from '../operator/decisions.ts';
 import { challengePlan, type ChallengeSummary, type ModelChallenge, type PlanChallengeOptions } from './challenge.ts';
-import type { PortfolioProblem, PortfolioResult } from './portfolio.ts';
+import { applyChallengeToAssurance, assess, type PortfolioProblem, type PortfolioResult } from './portfolio.ts';
 
 const pct = (x: number) => `${Math.round(x * 1000) / 10}%`;
 
@@ -87,5 +87,18 @@ export async function challengePlanWithModel(
   const input = planDecision(problem, result, first, goalId ?? null);
   const answer = await challenger(input, reviewDecision(input), models, fetchImpl ?? fetch, bounds ?? {});
   if (!answer) return { summary: first, asked: true, challenge: null };
-  return { summary: challengePlan(problem, result, { ...planOptions, modelChallenge: answer }), asked: true, challenge: answer };
+  const summary = challengePlan(problem, result, { ...planOptions, modelChallenge: answer });
+  /*
+   * The answer binds what a reader acts on (CHAL-33 F3): the assurance the
+   * optimizer held while the challenge was due is re-derived from the plan's
+   * own evidence and re-held by this summary, so a PROCEED lifts only the hold
+   * the missing challenge caused and a REVISE keeps it, as a disagreeing
+   * independent check. Nothing is raised above what `assess` itself allows,
+   * and an assurance the caller kept unchallenged (`challenge: false`) is left so.
+   */
+  if (result.assurance?.challenge && result.best) {
+    result.assurance = assess(problem, result.best);
+    applyChallengeToAssurance(result.assurance, summary, result.adoption);
+  }
+  return { summary, asked: true, challenge: answer };
 }
