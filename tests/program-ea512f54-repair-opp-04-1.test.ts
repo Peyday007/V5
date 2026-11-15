@@ -178,3 +178,17 @@ describe('R07: an unknown net is ranked from the model centre, not the swept bou
     expect(rows.some((r) => r.variable === 'price')).toBe(true);
   });
 });
+
+describe('R-PORTFOLIO-COST: an unknown cost that may be zero is not centred at its floor', () => {
+  it('centres a $0–$881,310 fulfilment cost arithmetically, so a $600K price does not net ~$600K', () => {
+    const p = pathwayOf(opening({ price: evidence(600_000), directCost: unknown(0, 881_310) }), null, ctx);
+    const centre = netCentreOf(p.revenuePerDeal, p.fulfilmentCost, p.acquisitionCost)!;
+    expect(centre).toBeCloseTo(600_000 - 440_655, 0);
+    expect(centre).toBeLessThan(200_000);
+  });
+
+  it('leaves a cost range with a positive floor on its geometric centre', () => {
+    const p = pathwayOf(opening({ price: evidence(1_000), directCost: unknown(100, 400) }), null, ctx);
+    expect(netCentreOf(p.revenuePerDeal, p.fulfilmentCost, p.acquisitionCost)!).toBeCloseTo(800, 6);
+  });
+});

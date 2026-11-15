@@ -89,7 +89,9 @@ const sudoku = modelled(
     offerScope: 'one original variant-Sudoku puzzle',
     fulfillmentOwner: 'Brain (puzzle solver)',
   }),
-  { price: assumed(50, 'its submission page'), daysToCash: unknown(1, 30) },
+  // Brain writes the puzzle itself: its direct cost is small next to the $50, not the generic $0–$100 sweep,
+  // whose arithmetic centre (R-PORTFOLIO-COST) would net it nothing.
+  { price: assumed(50, 'its submission page'), daysToCash: unknown(1, 30), directCost: unknown(0, 10) },
 );
 const constructed = modelled(opening({ id: 'arr_db8ca023bf0a', title: 'Constructed: Reverse: pool several buyers’ purchases with one supplier' }), {
   repeatable: true,
@@ -347,5 +349,23 @@ describe('the buyer is never its own fulfiller', () => {
     expect(p.gaps).toContain('NO_SUPPLIER');
     expect(p.moves.some((m) => m.action === 'SELL')).toBe(false);
     expect(p.moves.find((m) => m.gap === 'NO_SUPPLIER')!.construct).toMatch(/Factory/);
+  });
+});
+
+describe('R-PORTFOLIO-COST: the portfolio does not lead with a deal only someone else\'s money could carry', () => {
+  it('keeps a $600K estimated deal with an unknown $0–$881K cost out of the combination under a $3,000 ceiling', () => {
+    const utility = modelled(opening({ id: 'arr_utility', title: 'Constructed: state technical utility services bureaus: Brain produces it' }), {
+      repeatable: true,
+      price: { value: null, low: 600_000, high: 600_000, provenance: 'ASSUMPTION', source: null, note: 'reconstructed', inferred: { tier: 'COMPARABLE', justified: false, p10: 600_000, p50: 600_000, p90: 600_000, observations: 2 } },
+      directCost: unknown(0, 881_310),
+      volume: unknown(1, 200),
+      estimated: { arrangementKey: 'utility', tier: 'COMPARABLE', observations: 2 },
+    });
+    const pathways = [pathwayOf(utility, null, ctx), pathwayOf(constructed, null, ctx), pathwayOf(sudoku, null, ctx)];
+    const p = livingPortfolio(pathways, { remaining: 10_000, capitalCeiling: 3000 });
+    expect(p.unfunded).toEqual(['arr_utility']);
+    expect(p.leading?.members ?? []).not.toContain('arr_utility');
+    // With no ceiling stated nothing is judged against it.
+    expect(livingPortfolio(pathways, { remaining: 10_000, capitalCeiling: null }).unfunded).toEqual([]);
   });
 });
