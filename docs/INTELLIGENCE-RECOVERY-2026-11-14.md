@@ -166,7 +166,7 @@ differences), I (no capital restructuring), L (contradiction pooled), O4/O5
 dropped by key string), PERSIST 0/3. Full table:
 `docs/intelligence-recovery/evaluation-baseline.md`.
 
-### Repairs integrated (branch `claude/brain-intelligence-recovery-s0dl4l`; released in PR #901, merge 7a8b565, Deploy 1070)
+### Repairs integrated (branch `claude/brain-intelligence-recovery-s0dl4l`; part 2 released in PR #901 / Deploy 1070; part 3 in PR #905, merge 0fd9e61, Deploy 1074)
 
 | stream | commit | what changed | evidence |
 |---|---|---|---|
