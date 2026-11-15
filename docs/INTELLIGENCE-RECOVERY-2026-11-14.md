@@ -61,8 +61,8 @@ Status vocabulary as the owner gave it. Owner = the Surge B repair stream
 | W-5 | quantitative knowledge | construction facts written only by a person, per goal; map-built roles unpriced (`construction/service.ts:57-96`) | BLOCKING | construction-knowledge | REPAIRING |
 | W-6 | decomposition | role-occupant answer asked once, never read back (`expand.ts:196,214`) | MAJOR | construction-knowledge | REPAIRING |
 | W-7 | money-tree positions | closed logistics-shaped position vocabulary; 4 economics branches; no resale/subscription/finance/rent (`domain/construction.ts:31-224`) | MAJOR | construction-knowledge | REPAIRING |
-| W-8 | transfer | two construction vocabularies; transfer goal-only | MAJOR | transfer-positions | REPAIRING |
-| W-9 | generality | one Metro Detroit last-mile reference pack applied to any "logistics" subject | MINOR | transfer-positions | REPAIRING |
+| W-8 | transfer | two construction vocabularies; transfer goal-only | MAJOR | transfer-positions | REPAIRED on branch (5426902): Position↔Design adapter; kernel asks precedent transfers with no live goal, naming TRANSFER_MATERIAL; surgeBMechanismTransfer 6/6 |
+| W-9 | generality | one Metro Detroit last-mile reference pack applied to any "logistics" subject | MINOR | transfer-positions | REPAIRED on branch (5426902): reference packs apply only where an operator named the industry; residual: map roots carry no economics until research facts (W-5) feed them |
 | W-10 | freshness | construction facts undated; old OBSERVED beats new VERIFIED | MAJOR | construction-knowledge | REPAIRING |
 | W-11 | evidence lifecycle | claims lack method, sample size, transaction type, limitations, validity, invalidation | MAJOR | evidence-lifecycle | REPAIRED on branch (a66b80a): claims carry method, sample size, limitations, valid_until, invalidated_by (migrations 154/145) into quant observations; surgeBEvidenceLifecycle passes |
 | W-12 | freshness | constant staleness windows cut evidence off rather than widen uncertainty; map nodes undated | MAJOR | evidence-lifecycle | REPAIRED on branch (a66b80a): past its window an observation decays (half-weight per half-life, wider spread) instead of being dropped; met invalidation excludes with reason; staleRefreshPriority ranks by plan sensitivity (not yet wired into dispatch) |
@@ -83,7 +83,7 @@ Status vocabulary as the owner gave it. Owner = the Surge B repair stream
 | K-3 | traceability | which 12 reach a model is not recorded; `arr_` ids may be linked as openings (`plan.ts:2489`) | MAJOR | arrangement-library | REPAIRING |
 | K-4 | learning | research answers never attach to the arrangement; refuted ones re-asked | MAJOR | arrangement-library | REPAIRING |
 | K-5 | reuse | rounds per goal, keys are project-local hashes; no cross-goal/project reuse | MAJOR | arrangement-library | REPAIRING |
-| K-6 | persistent knowledge | §92 positions, roles, flows not stored | MAJOR | transfer-positions | REPAIRING |
+| K-6 | persistent knowledge | §92 positions, roles, flows not stored | MAJOR | transfer-positions | REPAIRED on branch (5426902): arrangement rows carry position_json/position_key (155/146); census counts positions and money flows |
 | K-7 | identity | keys from row ids; recreated node loses history | MINOR | arrangement-library | REPAIRING |
 | K-8 | geography | arrangements carry no geography; constraints never read | MINOR | arrangement-library | REPAIRING |
 | S-1 | search narrowing | 12 picked by saturating score + sha256 tiebreak; experiment: strong DIRECT arrangement kept/dropped by its key string; swapping it in raised reach 1.55%→2.8% (`goalScenario.ts:283-297`) | BLOCKING | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
