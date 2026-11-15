@@ -105,12 +105,13 @@ export function combinationsOf(levers: readonly LeverKey[]): LeverKey[][] {
   return out.sort((a, b) => a.length - b.length);
 }
 
-/** The arrangement with only the given levers; settlement terms and real limits are kept on every combination. */
+/** The arrangement with only the given levers; settlement and acquisition days and real limits are facts about the buyers, kept on every combination. */
 function withLevers(a: Arrangement, keep: readonly LeverKey[]): Arrangement {
   const all = a.levers ?? {};
   const levers: Levers = {};
   for (const key of keep) (levers as Record<string, unknown>)[key] = all[key];
   if (all.settlementDays) levers.settlementDays = all.settlementDays;
+  if (all.acquisitionDays) levers.acquisitionDays = all.acquisitionDays;
   if (all.limits) levers.limits = all.limits;
   return { ...a, levers };
 }
@@ -383,7 +384,19 @@ export function leverageOf(a: Arrangement, constraints: LeverageConstraints, opt
 /** One project's constructed arrangements as construction ranked and traced them. */
 async function constructedFor(projectId: string): Promise<Array<{ key: string; leverage?: ArrangementLeverage; refusedByLeverage?: boolean }>> {
   const { constructArrangements } = await import('../cash/construct.ts');
-  return constructArrangements({ projectId, currency: 'USD', delivers: [], capitalCeilingCents: null, daysLeft: 30 });
+  /*
+   * What the project delivers, as goal plans construct with it: with an empty
+   * list only reverse arrangements ("buyers to be found") were composed, so
+   * the reader never saw an arrangement about buyers the evidence names.
+   */
+  let delivers: string[] = [];
+  try {
+    const { executionFrame } = await import('../cash/discovery.ts');
+    delivers = (await executionFrame(projectId, 'USD'))?.delivers ?? [];
+  } catch {
+    delivers = [];
+  }
+  return constructArrangements({ projectId, currency: 'USD', delivers, capitalCeilingCents: null, daysLeft: 30 });
 }
 
 /**

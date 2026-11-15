@@ -49,6 +49,7 @@ import { APPROVAL_ENVELOPES } from '../research/approvalEnvelope.ts';
 import { describesOwnAction } from '../research/actorScope.ts';
 import { composeArrangement, type Arrangement, type Levers, type Part } from '../quant/mechanism.ts';
 import { leverageOf, type ArrangementLeverage, type LeverageConstraints } from '../quant/leverage.ts';
+import { leverObservations, leverPart, emptyLeverEvidence, type LeverEvidence, type LeverPart, type LeverStatement } from '../quant/leverEvidence.ts';
 import { reconstruct } from '../quant/reconstruct.ts';
 import type { CashOpportunity, IndustryNode } from '../../domain/types.ts';
 import type { Estimate, Observation } from '../../domain/quant.ts';
@@ -315,6 +316,8 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
       source: one.sourceClaimId ? { kind: 'CLAIM', ref: one.sourceClaimId } : { kind: 'CASH_OPPORTUNITY', ref: one.id },
       measures: `money tied up on "${one.title.slice(0, 60)}"`,
     }));
+  // What research established about the levers: buyers' payment terms, refunds, payout and supplier timing, capacity, repeat (S-0103).
+  const leverEvidence = await leverEvidenceFor(input, opportunities, facts, allowed);
   const capability: Primitive | null = input.delivers.length > 0 ? { name: input.delivers.join(', '), claimId: null, from: 'CAPABILITY', ref: 'deliverables' } : null;
   /*
    * The same inputs construct the same arrangements, so a plan re-read whose map, openings,
@@ -325,11 +328,11 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
    */
   const constraints = await leverageConstraints(input, limits);
   const memoKey = createHash('sha256')
-    .update(JSON.stringify({ day: now.toISOString().slice(0, 10), input: { ...input, now: undefined, limits: undefined }, limits, targets, exclusions, sectors: [...sectors.values()], precedent: [...precedentByBase.entries()].map(([k, o]) => [k, o.id]), priced, tiedUp, constraints, openings: opportunities.map((o) => [o.id, o.payer, o.mechanism, o.state, o.updatedAt]) }))
+    .update(JSON.stringify({ day: now.toISOString().slice(0, 10), input: { ...input, now: undefined, limits: undefined }, limits, targets, exclusions, sectors: [...sectors.values()], precedent: [...precedentByBase.entries()].map(([k, o]) => [k, o.id]), priced, tiedUp, leverEvidence, constraints, openings: opportunities.map((o) => [o.id, o.payer, o.mechanism, o.state, o.updatedAt]) }))
     .digest('hex');
   const held = constructionMemo.get(memoKey);
   if (held && Date.now() - held.at < CONSTRUCTION_MEMO_MS) return structuredClone(held.result);
-  const job: ConstructionJob = { sectors: [...sectors.values()], opportunities, precedent: [...precedentByBase.entries()], capability, priced, tiedUp, input, limits, targets, exclusions, now, constraints };
+  const job: ConstructionJob = { sectors: [...sectors.values()], opportunities, precedent: [...precedentByBase.entries()], capability, priced, tiedUp, leverEvidence, input, limits, targets, exclusions, now, constraints };
   /*
    * Composing is synchronous quantitative work — several reconstructions per
    * design, up to `MAX_CONSTRUCTIONS` designs. Run in one stretch it held
@@ -352,6 +355,67 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
   constructionMemo.set(memoKey, { at: Date.now(), result: structuredClone(ranked) });
   while (constructionMemo.size > CONSTRUCTION_MEMO_MAX) constructionMemo.delete(constructionMemo.keys().next().value!);
   return ranked;
+}
+
+/**
+ * The researched statements that bear on an arrangement's levers, read from
+ * the rows that hold them (S-0103): every gated card fact (EVIDENCE, resting
+ * on a claim) and a researched opening's own payment terms — each about that
+ * opening's payer — and every accepted, sourced research claim of the
+ * project, where a constructed round's answer to "establish what share of
+ * these buyers will prepay…" lands. Without this, every lever part was bare
+ * bounds and that answer could never change the reading.
+ */
+async function leverEvidenceFor(
+  input: ConstructionInput,
+  opportunities: CashOpportunity[],
+  facts: Awaited<ReturnType<typeof cardFactsForProject>>,
+  allowed: (text: string | null | undefined) => boolean,
+): Promise<LeverEvidence> {
+  const statements: LeverStatement[] = [];
+  const byId = new Map(opportunities.map((o) => [o.id, o]));
+  const evidenced = facts.filter((f) => f.kind === 'EVIDENCE' && f.claimId && byId.has(f.opportunityId));
+  let sources = new Map<string, { sourceUrl: string | null; sourcePublisher: string | null; sourceDate: string | null }>();
+  try {
+    const { claimSources } = await import('../../repos/research.ts');
+    sources = await claimSources([...new Set(evidenced.map((f) => f.claimId!))]);
+  } catch {
+    // Unreadable sources leave each fact its own lineage.
+  }
+  const lineageOf = (claimId: string | null, fallback: string) => {
+    const url = claimId ? sources.get(claimId)?.sourceUrl : null;
+    return [url ? `url:${url.replace(/^https?:\/\/(www\.)?/, '').replace(/[?#].*$/, '').replace(/\/+$/, '')}` : fallback];
+  };
+  const dated = (text: string | null | undefined) => (text && !Number.isNaN(Date.parse(text)) ? new Date(Date.parse(text)).toISOString() : null);
+  for (const f of evidenced) {
+    const o = byId.get(f.opportunityId)!;
+    if (!o.payer || o.currency !== input.currency || !allowed(o.title)) continue;
+    statements.push({
+      id: `fact:${f.id}`, text: f.value, payer: norm(o.payer), industry: o.industry, opportunityId: o.id,
+      lineage: lineageOf(f.claimId, `fact:${f.id}`), source: { kind: 'CLAIM', ref: f.claimId! }, observedAt: dated(sources.get(f.claimId!)?.sourceDate) ?? f.createdAt,
+    });
+  }
+  for (const o of opportunities) {
+    if (!o.payer || !o.paymentTerms || !o.sourceClaimId || o.currency !== input.currency || !allowed(o.title)) continue;
+    statements.push({
+      id: `terms:${o.id}`, text: o.paymentTerms, payer: norm(o.payer), industry: o.industry, opportunityId: o.id,
+      lineage: lineageOf(o.sourceClaimId, `terms:${o.id}`), source: { kind: 'CLAIM', ref: o.sourceClaimId }, observedAt: o.updatedAt,
+    });
+  }
+  try {
+    const { ownCitableAsExisting } = await import('../../repos/research.ts');
+    for (const c of await ownCitableAsExisting(input.projectId)) {
+      if (!allowed(c.claim)) continue;
+      statements.push({
+        id: `claim:${c.id}`, text: c.claim, payer: null, industry: null, opportunityId: null,
+        lineage: lineageOf(null, c.sourceUrl ? `url:${c.sourceUrl.replace(/^https?:\/\/(www\.)?/, '').replace(/[?#].*$/, '').replace(/\/+$/, '')}` : `claim:${c.id}`),
+        source: { kind: 'CLAIM', ref: c.id, note: c.sourcePublisher ?? undefined }, observedAt: dated(c.sourceDate) ?? c.createdAt,
+      });
+    }
+  } catch {
+    // No research rows readable: the openings' own statements still count.
+  }
+  return leverObservations(statements, { periodDays: input.daysLeft, currency: input.currency });
 }
 
 /**
@@ -396,6 +460,8 @@ export interface ConstructionJob {
   capability: Primitive | null;
   priced: Observation[];
   tiedUp: Observation[];
+  /** What research established about each lever part; absent is none (every part keeps its bounds). */
+  leverEvidence?: LeverEvidence;
   input: ConstructionInput;
   limits: GoalLimits;
   targets: EconomicProperty[];
@@ -414,7 +480,7 @@ export async function composeConstruction(job: ConstructionJob, yieldEveryMs: nu
   const { opportunities, capability, priced, tiedUp, input, limits, targets, exclusions, now } = job;
   const precedentByBase = new Map(job.precedent);
   const designs = allDesigns(STRUCTURE_KEYS);
-  const ctx = { priced, tiedUp, input, limits, targets, exclusions, now };
+  const ctx = { priced, tiedUp, leverEvidence: job.leverEvidence ?? emptyLeverEvidence(), input, limits, targets, exclusions, now };
   const out: ConstructedArrangement[] = [];
   const levered = new Map<ConstructedArrangement, Arrangement>();
   const keep = (built: { arrangement: ConstructedArrangement; levered: Arrangement }) => {
@@ -525,6 +591,7 @@ function reverseArrangements(ctx: {
   capability: Primitive | null;
   priced: Observation[];
   tiedUp: Observation[];
+  leverEvidence: LeverEvidence;
   input: ConstructionInput;
   limits: GoalLimits;
   targets: EconomicProperty[];
@@ -626,6 +693,7 @@ function compose(args: {
   related: CashOpportunity[];
   priced: Observation[];
   tiedUp: Observation[];
+  leverEvidence?: LeverEvidence;
   input: ConstructionInput;
   limits: GoalLimits;
   targets: EconomicProperty[];
@@ -650,6 +718,8 @@ function compose(args: {
   const valueObs = args.priced.map((one) => ({ ...one, broad: one.context['payer'] !== norm(demand.name) }));
   const riskObs = args.tiedUp.map((one) => ({ ...one, broad: one.context['payer'] !== norm(demand.name) }));
   const context = { payer: norm(demand.name), industry: norm(args.sector), arrangement: key };
+  // A lever quantity: its bounds, and whatever research established about it for these buyers (S-0103).
+  const lever = (part: LeverPart, min: number, max: number): Part => leverPart(args.leverEvidence?.[part], { payer: demand.name, industry: args.sector, arrangement: key }, { min, max });
   const captureFor = (): Parameters<typeof composeArrangement>[0]['capture'] =>
     def.capture === 'COMMISSION'
       ? { kind: 'COMMISSION', rate: unknownShare }
@@ -669,7 +739,7 @@ function compose(args: {
     cost: { min: 0, max: 100_000 },
     pooling: pooled ? { fixedCost: { min: 0, max: 1_000_000, context, material: [], observations: riskObs }, minParticipants: unknownCount(1, 10_000), threshold: design.funding === 'THRESHOLD_PRESALE' } : undefined,
     funding: design.funding !== 'ON_DELIVERY' ? { prepayShare: unknownShare } : undefined,
-    repeat: design.repeat !== 'ONE_OFF' ? { rate: unknownShare } : undefined,
+    repeat: design.repeat !== 'ONE_OFF' ? { rate: lever('repeatRate', 0, 1) } : undefined,
   };
   const composed = composeArrangement(base);
   /*
@@ -677,13 +747,21 @@ function compose(args: {
    * and their evidence are construction's own — the value's published prices,
    * what supply is paid, a shared run's fixed cost — so the leverage trace
    * reads what construction established and nothing it did not. Each lever's
-   * own parts start as bounds: questions, never assumptions.
+   * own parts are their bounds plus what research established about them
+   * (`leverEvidenceFor`): payment terms, refunds, payout and supplier timing,
+   * capacity, failure, AI-labor cost and throughput, acquisition days and the
+   * repeat rate. A part nothing speaks to stays bounds — a question, never an
+   * assumption — and a statement about other buyers only bounds it.
    */
   const facts = designFacts(design);
-  const levers: Levers = { settlementDays: unknownCount(0, 365) };
-  if (facts.fulfiller === 'SUPPLIER') levers.fulfilment = { capacity: unknownCount(0, 10_000_000), failureRate: unknownShare, paymentDays: unknownCount(0, 365) };
-  else levers.aiLabor = { costPerTransaction: { min: 0, max: 100_000 }, throughput: unknownCount(0, 10_000_000) };
-  if (design.funding !== 'ON_DELIVERY') levers.prepayment = { willingness: unknownShare, refundShare: unknownShare, usableDays: unknownCount(0, 365) };
+  const levers: Levers = { settlementDays: lever('settlementDays', 0, 365), acquisitionDays: lever('daysToAcquire', 0, 3650) };
+  if (facts.fulfiller === 'SUPPLIER') levers.fulfilment = { capacity: lever('supplierCapacity', 0, 10_000_000), failureRate: lever('supplierFailureRate', 0, 1), paymentDays: lever('supplierPaymentDays', 0, 365) };
+  else levers.aiLabor = { costPerTransaction: lever('aiCost', 0, 100_000), throughput: lever('aiThroughput', 0, 10_000_000) };
+  if (design.funding !== 'ON_DELIVERY') {
+    levers.prepayment = { willingness: lever('prepayWillingness', 0, 1), refundShare: lever('refundShare', 0, 1), usableDays: lever('usableDays', 0, 365) };
+    // A supplier's terms stated without the fulfilment lever still date when it must be paid.
+    if (facts.fulfiller !== 'SUPPLIER' && (def.needsSupply || base.capture.kind === 'MARGIN')) levers.prepayment.supplierPaymentDays = lever('supplierPaymentDays', 0, 365);
+  }
   const levered: Arrangement = { ...base, levers };
   let estimates: Record<string, Estimate> = {};
   try {

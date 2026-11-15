@@ -104,6 +104,8 @@ export interface Levers {
   sharedInfrastructure?: { costPerTransaction: Part };
   /** Days after delivery until a buyer who did not prepay has paid in usable money. */
   settlementDays?: Part;
+  /** Days to acquire a period's buyers without a marketing lever: what research says buying takes for them. Marketing's own figure wins where both are stated. */
+  acquisitionDays?: Part;
   /**
    * Real limits on how many transactions may run: money available to tie up,
    * the money a person authorised to commit (invariant 38), and a contract's
@@ -387,7 +389,7 @@ function composeLevers(a: Arrangement, L: Levers, k: (n: string) => string, part
   const owed = [willingness && refund ? `${k('value')} * ${willingness} * ${refund}` : null, failure ? `${k('value')} * ${failure}` : null].filter((one): one is string => !!one);
   const liability = node('liability', `Refund obligations plus supplier-default exposure per ${a.period}`, c, 'POSITIVE', owed.length ? `${t} * (${owed.join(' + ')})` : '0', { min: 0 });
 
-  const days = L.marketing ? part('days_to_acquire', `Days to acquire a ${a.period}'s buyers`, 'days', 'POSITIVE', L.marketing.daysToAcquire, { min: 0 }) : part('days_to_acquire', `Days to acquire a ${a.period}'s buyers`, 'days', 'POSITIVE', {}, { min: 0 });
+  const days = part('days_to_acquire', `Days to acquire a ${a.period}'s buyers`, 'days', 'POSITIVE', L.marketing?.daysToAcquire ?? L.acquisitionDays ?? {}, { min: 0 });
   const acquisitionSpeed = node('acquisition_speed', 'Transactions acquired per day', 'transactions/day', 'POSITIVE', `${t} / ${days}`, { min: 0 });
 
   const repeat = once(nodes, k('repeat_rate'), () => part('repeat_rate', 'Share of buyers who buy again', 'share', 'RATE', {}));
