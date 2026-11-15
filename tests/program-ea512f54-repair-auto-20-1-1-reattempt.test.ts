@@ -7,6 +7,7 @@
  * method to an outcome. These pin that only KEPT_NO_EFFECT and REVERTED are named,
  * and that the already-stored mislabel is corrected by the improvement tick.
  */
+import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { freshProject, teardown } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
@@ -114,5 +115,25 @@ describe('a stored judgment that names a HELD attempt is corrected on the tick',
     expect(await correctMisjudgedMethods()).toEqual([]);
     expect(await listImprovementEvents({ candidateId: three, kinds: ['METHOD_JUDGMENT_CORRECTED'] })).toHaveLength(1);
     expect((await originationHoldsOnRows()).ok).not.toBe(false);
+  });
+});
+
+describe('isFailedMethod is the one failed-method predicate in the loop', () => {
+  const source = readFileSync(new URL('../server/services/improvement/loop.ts', import.meta.url), 'utf8');
+
+  it('leaves no inline KEPT_NO_EFFECT/REVERTED decision test outside isFailedMethod itself', () => {
+    const code = source
+      .split('\n')
+      .filter((line) => !/^\s*(\*|\/\/|\/\*)/.test(line))
+      .join('\n');
+    const inline = code.match(/===\s*'(KEPT_NO_EFFECT|REVERTED)'/g) ?? [];
+    // Exactly the two comparisons inside isFailedMethod's own body.
+    expect(inline).toHaveLength(2);
+    const body = /export function isFailedMethod\([^)]*\): boolean \{\n([^}]*)\}/.exec(source)?.[1] ?? '';
+    expect(body.match(/===\s*'(KEPT_NO_EFFECT|REVERTED)'/g)).toHaveLength(2);
+  });
+
+  it("keeps family()'s doc comment directly above family()", () => {
+    expect(source).toMatch(/\/\*\* The candidates of one weakness family[^\n]*\*\/\nasync function family\(/);
   });
 });
