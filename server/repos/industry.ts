@@ -245,6 +245,21 @@ export async function listIndustryRounds(projectId: string): Promise<IndustryRou
   return rows.map(mapRound);
 }
 
+/**
+ * Kernel rounds of a project that ended ABANDONED at or after `since` — the rounds that asked and
+ * brought back no report (Hermes' unreported-rounds reading, F8). Newest first, bounded.
+ */
+export async function abandonedIndustryRoundsSince(projectId: string, since: string, limit = 200): Promise<IndustryRound[]> {
+  const rows = await getDb().all<IndustryRoundRow>(
+    `SELECT * FROM industry_rounds
+      WHERE project_id = ? AND state = 'ABANDONED' AND COALESCE(harvested_at, updated_at) >= ?
+      ORDER BY COALESCE(harvested_at, updated_at) DESC, id DESC
+      LIMIT ?`,
+    [projectId, since, Math.max(1, Math.trunc(limit))],
+  );
+  return rows.map(mapRound);
+}
+
 /** The kernel round one Russell idea is asking, if it is asking one. */
 export async function industryRoundForCandidate(
   candidateId: string,

@@ -1171,6 +1171,28 @@ export async function sourceUrlsForProject(projectId: string): Promise<Map<strin
   return new Map(rows.map((row) => [row.id, row.source_url]));
 }
 
+/**
+ * Gated UNIT_ECONOMIC claims of a project with a declared figure that no
+ * construction fact names yet, by id after `afterId`, at most `limit` (F3
+ * back-fill). Any orchestration, not only a kernel round's: what research
+ * already established is filed, never re-asked.
+ */
+export async function unfiledUnitEconomicClaims(projectId: string, afterId: string, limit: number): Promise<ResearchClaim[]> {
+  const rows = await getDb().all<ResearchClaimRow>(
+    `SELECT c.* FROM research_claims c
+       JOIN research_orchestrations o ON o.id = c.orchestration_id
+      WHERE o.project_id = ? AND c.accepted = 1
+        AND c.structural_finding = 'UNIT_ECONOMIC'
+        AND c.structural_amount_cents IS NOT NULL
+        AND c.id > ?
+        AND NOT EXISTS (SELECT 1 FROM construction_facts f WHERE f.source_claim_id = c.id)
+      ORDER BY c.id
+      LIMIT ?`,
+    [projectId, afterId, Math.max(1, Math.trunc(limit))],
+  );
+  return rows.map(mapClaim);
+}
+
 export async function getClaim(id: string): Promise<ResearchClaim | null> {
   const row = await getDb().get<ResearchClaimRow>('SELECT * FROM research_claims WHERE id = ?', [id]);
   return row ? mapClaim(row) : null;

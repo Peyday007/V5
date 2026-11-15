@@ -98,6 +98,12 @@ export function mapQuestion(input: {
   objective: string | null;
   round: number;
   childrenSoFar: number;
+  /**
+   * The buyer types under this subject no observed unit economic prices yet
+   * (F3): named, the question asks what they pay; empty, it asks for whichever
+   * buyers research finds; absent, every buyer here is priced and it asks nothing.
+   */
+  unpricedBuyers?: readonly string[] | null;
 }): string {
   const subject = input.path.join(' → ');
   const parts = [
@@ -109,6 +115,7 @@ export function mapQuestion(input: {
     'Declare every level you establish on its claim: structural_finding set to the kind it is ' +
       "and structural_subject set to that subject's own name.",
   ];
+  if (input.unpricedBuyers) parts.push(unitEconomicsAsk(input.unpricedBuyers));
   if (input.round > 1 || input.childrenSoFar > 0) {
     parts.push(
       `Brain already holds ${input.childrenSoFar} subject` +
@@ -117,6 +124,27 @@ export function mapQuestion(input: {
     );
   }
   return parts.join(' ');
+}
+
+/**
+ * The unit-economics request a question carries where a subject's buyers are
+ * unpriced (F3, 2026-11-15). The vocabulary lived only in the tool
+ * description, so no kernel question ever asked for it and no construction
+ * fact was filed on production. It names the fact keys a construction prices
+ * from, asks for the figure as a declared field, and says an unpublished
+ * figure is reported as unknown — never estimated.
+ */
+export function unitEconomicsAsk(buyers: readonly string[]): string {
+  const named = buyers.slice(0, 6).map((one) => `"${clip(one, 60)}"`);
+  const who = named.length > 0 ? `each of ${named.join(', ')}` : 'each kind of organisation you find paying here';
+  return (
+    `Brain holds no observed price for ${who}. Where a source publishes what such a buyer pays per unit ` +
+    'of work, what an independent operator accepts per unit, or how many units one account buys a month, ' +
+    'declare it on its claim: structural_finding UNIT_ECONOMIC, structural_subject the fact key ' +
+    '(price_per_unit, contractor_rate_per_unit or account_units_per_month), structural_qualifier the ' +
+    "buyer type's name, and structural_amount_cents the figure in hundredths of its unit. Where no " +
+    'source publishes one, say so — an unpublished figure stays unknown, never estimated.'
+  );
 }
 
 export function scanTitle(bucket: SearchBucket, path: readonly string[]): string {

@@ -134,6 +134,8 @@ async function opening(input: { title: string; priceCents: number; mechanism?: C
   const fact = (field: string, value: string) => recordCardFact({ projectId, opportunityId: o.id, field, kind: 'EVIDENCE', value, claimId: `clm_${field}_${o.id}`, decidedBy: 'BRAIN' });
   await fact(CAPTURE_KEY, 'Own the buyer and pay a supplier.');
   await fact('payer', input.payer);
+  // A precedent is a design shown working: a gated payer AND a gated price (F1), as production writes them.
+  await fact('price', `$${(input.priceCents / 100).toFixed(0)} per job`);
   await updateOpportunity(o.id, { payer: input.payer, industry: input.industry ?? null, price_cents: input.priceCents, peak_funding_cents: input.peakCents ?? null, offer_scope: 'One job' });
   return o;
 }

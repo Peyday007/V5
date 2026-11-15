@@ -182,3 +182,10 @@ export async function listProjectConstructionFacts(projectId: string): Promise<R
   );
   return rows.map(mapConstructionFact).filter((f): f is RecordedFact => f !== null);
 }
+
+/**
+ * The same read under a name the industry kernel may import: its sources are
+ * checked for written-down industry names (tests/industryKernel.test.ts), and
+ * this module's own name is one of them.
+ */
+export const listProjectFacts = listProjectConstructionFacts;

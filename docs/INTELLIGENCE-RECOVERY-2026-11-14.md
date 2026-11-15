@@ -224,6 +224,37 @@ Total ≈ 25 min (baseline 26 min 41 s): construct 247 s, shared frontier (979 o
 **P-SPEED-2:** the planning read is still ~25 min on production. REPAIRED on branch (df6ef39 + tie-break): on a production-shape fixture (979 openings, 404 of 2,474 arrangements) the read went 565 s → ~160 s on 2 contended cores and 25 s → 18.7 s on free cores; a warm re-read is 0.44 s. Changes: construction runs ≤24 compositions inline (no idle pool wait); the plan reads frontier tiers only (67 queries / 6.6 MB → 2); baseline portfolio held by input digest; drawn world order and quantiles cached per sample; exactly tied strategies break on key so re-reads are identical.
 **Handed to Surge A (runtime, measured):** (1) evaluator pool threads run at nice 19 (`evaluatorWorker.ts:13`) and on a 2-vCPU host each job waits its 60–120 s timeout before running inline — construction 127 s and quant 63 s under contention vs 0.4 s and 1.6 s free; (2) production's 210 s frontier was ~2,700 serial queries at ~76 ms from `readStandingRows` → `whyNotDiving` (`validation.ts:388`) — the plan no longer calls it, cash views still do; (3) one plan read calls `listOpportunities` 8× (1.5 MB each) and `cardFactsForProject` 5×.
 
+### Production after Deploy 1075 (parts 3+4; census Goals run 43667549093, 02:25Z)
+
+| population | 23:42Z | 02:25Z | reading |
+|---|---|---|---|
+| stored arrangements quantitatively evaluated in a goal model | 0 | **12** | P-ADMIT VERIFIED on production |
+| stored arrangements picked by a best combination | 0 | **1** | constructed knowledge now reaches the plan |
+| commercial positions (distinct §92 position_key) | not stored | **14** | K-6 VERIFIED on production |
+| constructed money flows (payer population × position) | not stored | **247** | K-6 |
+| arrangements carrying a position | — | 404 | |
+| sourced observations | 16,786 | 16,817 | +31 |
+| construction facts | 0 | 0 | F2/F3 back-fill repaired on branch, awaiting release |
+| arrangements researched / transferred | 0 / 0 | 0 / 0 | F1 and F7 repaired on branch, awaiting release |
+
+**Production plan read after Deploy 1075 (Goals run 43667546686, 02:23Z):** total **71 s** (baseline 26 min 41 s; 25 min after part 2): construct 6.1 s (was 247 s), shared frontier 0.25 s (was 210 s), quant portfolio 7.0 s (was 189 s), scenario 1.0 s, reconstruction 55 s (was 346 s). Planning speed VERIFIED on production inside the 1–5 min target. `estimated arrangements: 12 of 404 (392 cut, 6 in reserve)`; `compared 11 found + 12 constructed estimates; 1 in the best combination`. The F4 defect is visible: best-combination p90 $101M and reconstruction p50 $30M from uniform pooled prices; acceptance stays CANDIDATE_ONLY (correctly not certified). F4 repair ships in part 5.
+
+### Adversarial pass: capabilities that pass on fixtures but are inert on production (01:49Z, `docs/intelligence-recovery/adversarial-production-gaps.md`)
+
+New failure categories the inventory did not cover: gates on a fact kind production never writes; a writer whose only reader is off the failing path; uniform sampling over pooled prices spanning orders of magnitude; capabilities that only run on worker threads; model output refused for shape.
+
+| id | finding | severity | owner | status |
+|---|---|---|---|---|
+| F1 | TRANSFER precedent requires a `captureMechanism` EVIDENCE fact production never writes (only RECOMMENDATION) — W-8/G2 pass only on fixtures | CRITICAL | transfer-facts engineer | REPAIRED on branch (a988208) |
+| F2 | construction facts are read only by goalConstruction; arrangement value and the goal model never read them | CRITICAL | transfer-facts engineer | REPAIRED on branch (a988208) |
+| F3 | facts rarely written: no UNIT_ECONOMIC question, exact buyer-name match, 16.8K claims never back-filed | MAJOR | transfer-facts engineer | REPAIRED on branch (a988208): back-fill ≤20/pass from held claims, normalised buyer matching, unit-economics questions |
+| F4 | P-ADMIT fallback pools every project price ($15–$325K) sampled uniformly: unpriced arrangements inflate reach (cannot certify) | CRITICAL (regression in parts 3+4) | admission engineer | REPAIRED on branch (b86f2ed): comparables must be comparable (sector → structure → buyer kind; p90/p10 > 10 refused); log-uniform between comparable p10–p90 |
+| F5 | 282 of 418 live openings (no payer) feed no construction/transfer | MAJOR | discovery engineer | REPAIRED on branch (7c7b22f) |
+| F6 | capital tied up inferred across mechanisms treated as established; 3 of 11 openings hard-refused | MAJOR | admission engineer | REPAIRED on branch (b86f2ed): only own evidence refuses; pooled inference swept UNKNOWN |
+| F7 | arrangement research rounds and library counters still gated on Cash Mode ACTIVE | MAJOR (CRITICAL when the sprint winds down) | discovery engineer | REPAIRED on branch (7c7b22f): arrangement rounds open under the standing grant |
+| F8 | stuck-plan detector needs identical shortfall text; unreported-round detector ignores kernel rounds | MAJOR | discovery engineer | REPAIRED on branch (7c7b22f) |
+| F9.1 | variable sweep (§102) abandoned on production: "no evaluation thread is running" (`evaluatorPool.ts:173,198`) | CRITICAL | **Surge A** (evaluator pool runtime) | HANDED OFF |
+| F9.2 | 16/16 model-proposed methods refused as off-shape; 2/4 calls HTTP 429 | MAJOR | discovery engineer | REPAIRED on branch (7c7b22f): empty design = no design; tolerant parse; refusal reasons recorded; 429 retried once |
 ### Received from Surge A (22:09Z scope adjustment)
 
 | id | finding | status |

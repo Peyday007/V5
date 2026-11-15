@@ -65,9 +65,11 @@ describe('S-11: an invented design is composed by construction, on honest inputs
     expect('refused' in opening).toBe(false);
     expect(opening.estimated).toMatchObject({ invented: true, tier: 'MECHANISM' });
     expect(opening.opportunity.title).toMatch(/^Invented: independent veterinary clinics/);
-    // Its price is other buyers' published prices, swept as bounds: provenance UNKNOWN, no distribution.
-    expect(opening.price).toMatchObject({ value: null, low: 400, high: 1200, provenance: 'UNKNOWN' });
-    expect(opening.price.distribution).toBeUndefined();
+    // Its price is other buyers' published prices, swept log-uniformly between their p10 and p90 (F4): provenance UNKNOWN.
+    expect(opening.price).toMatchObject({ value: null, provenance: 'UNKNOWN' });
+    expect(opening.price.low).toBeCloseTo(Math.exp(Math.log(400) + 0.1 * Math.log(3)), 6);
+    expect(opening.price.high).toBeCloseTo(Math.exp(Math.log(400) + 0.9 * Math.log(3)), 6);
+    expect(opening.price.distribution?.kind).toBe('EMPIRICAL');
     for (const field of ['price', 'close', 'respond', 'volume', 'daysToCash', 'directCost', 'capital'] as const) {
       const ev = inputEvidence(opening[field], field);
       expect(ev.establishes, field).toBe(false);
@@ -149,7 +151,9 @@ describe('S-11: the invented design reaches the plan’s candidate set through I
     const invented = row!.state!.openings.find((o) => o.estimated?.invented);
     expect(invented).toBeDefined();
     // The figure the model put on its design is ignored: the price is bounds from published prices only.
-    expect(invented!.price).toMatchObject({ low: 400, high: 1200, provenance: 'UNKNOWN' });
+    expect(invented!.price).toMatchObject({ provenance: 'UNKNOWN' });
+    expect(invented!.price.low!).toBeGreaterThan(400);
+    expect(invented!.price.high!).toBeLessThan(1200);
     expect(invented!.marketKey).toMatch(/^arr_market:invented:/);
     // Brought in as an assumption: the plan without it is what holds on no assumption, and its reading is coverage.
     expect(row!.state!.changes.at(-1)).toMatchObject({ basis: 'ASSUMPTION' });
