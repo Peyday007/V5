@@ -1103,10 +1103,20 @@ async function traceLeverageOnTop(
     if (!a) continue;
     await breathe();
     let leverage: ArrangementLeverage;
-    try {
-      leverage = await leverageOfYielding(a, constraintsFor(constraints, contractLimits, one.demand.name), breathe, { now });
-    } catch {
-      continue;
+    const bound = constraintsFor(constraints, contractLimits, one.demand.name);
+    // The same levered arrangement judged against the same limits on the same day traces the same: a re-read reuses it (~0.65 s a trace).
+    const traceKey = digestOf(['trace/v2', a, bound, now.toISOString().slice(0, 10)]);
+    const held = traceMemo.get(traceKey);
+    if (held && Date.now() - held.at < CONSTRUCTION_MEMO_MS) {
+      leverage = structuredClone(held.leverage);
+    } else {
+      try {
+        leverage = await leverageOfYielding(a, bound, breathe, { now });
+      } catch {
+        continue;
+      }
+      traceMemo.set(traceKey, { at: Date.now(), leverage: structuredClone(leverage) });
+      while (traceMemo.size > TRACE_MEMO_MAX) traceMemo.delete(traceMemo.keys().next().value!);
     }
     one.leverage = leverage;
     if (leverage.refused && one.stress.exposure !== 'EXCEEDS') {
@@ -1360,9 +1370,13 @@ export const INLINE_COMPOSITIONS = 24;
 export const CONSTRUCTION_MEMO_MS = 30 * 60_000;
 const CONSTRUCTION_MEMO_MAX = 8;
 const constructionMemo = new Map<string, { at: number; result: ConstructedArrangement[] }>();
+/** Leverage traces by levered arrangement, the limits it was judged against and the day (S-0103): the trace is pure in all three. */
+const TRACE_MEMO_MAX = 256;
+const traceMemo = new Map<string, { at: number; leverage: ArrangementLeverage }>();
 /** For tests: forget held constructions. */
 export function clearConstructionMemo(): void {
   constructionMemo.clear();
+  traceMemo.clear();
 }
 
 /**

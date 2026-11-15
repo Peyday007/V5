@@ -292,6 +292,8 @@ describe('forward construction and transfer', () => {
     }
   });
 
+  // Measured 2026-11-15: about 25 s on Postgres since the leverage trace (COM-13-2, ~0.65 s per traced arrangement,
+  // re-traced each simulated day as the period moves); the suite default of 30 s left no margin on CI.
   it('rejects a design whose known worst case exceeds the money the goal may tie up, and keeps its presold revision', async () => {
     // Two deals for these buyers each tied up thousands before money came in.
     for (const [i, peak] of [400_000, 600_000].entries()) {
@@ -311,7 +313,7 @@ describe('forward construction and transfer', () => {
     const opened = await askConstructedArrangements((await getWorkstream(id))!, reading, now, 20, 20);
     const statements = await Promise.all(opened.map(async (c) => (await getCandidate(c))!.statement));
     expect(statements.some((s) => s.includes('Wedding planners') && /own the buyer, pay a supplier to deliver, and keep the margin\. /.test(s))).toBe(false);
-  });
+  }, 60_000);
 
   it('writes every question in words the research envelopes accept as research rather than action', async () => {
     await sector('Commercial kitchens', { buyer: 'Independent restaurants', bottleneck: 'Hood and duct cleaning compliance', supply: 'Certified hood cleaning crews' });

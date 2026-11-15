@@ -1017,6 +1017,8 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
     expect(open.some((one) => one.requestKey === `question:${o.id}:timeToFirstCash`)).toBe(true);
   });
 
+  // Measured 2026-11-15: about 25 s on Postgres since the leverage trace (COM-13-2, ~0.65 s per traced arrangement,
+  // re-traced each simulated day as the period moves); the suite default of 30 s left no margin on CI.
   it('asks a path question again when its research ended without an answer, at most three times', async () => {
     const o = await oneOff({ title: 'Freight loads with unknown payment timing', priceCents: 2_000_000, days: null });
     await goal(1_000_000);
@@ -1048,7 +1050,7 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
     expect(byAsking[1]).toMatch(/Do not repeat that approach/);
     expect(byAsking[2]).toMatch(/comparable published cases/);
     expect(byAsking[1]).toMatch(/earlier attempt ended without an answer/);
-  });
+  }, 60_000);
 
   it('keeps a barren goal lens searching later, from elsewhere, instead of retiring it', async () => {
     const { nextGoalRoundFor, nextRoundFor } = await import('../server/services/cash/discovery.ts');
