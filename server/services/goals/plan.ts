@@ -2906,14 +2906,29 @@ export function byLeastAsked<T extends { key: string; structure: string; demand:
 
 /** Open rounds for the best-ranked arrangements Brain constructed, at most `max` this pass. */
 /** The last construction per goal, so one goal pass composes its arrangements once for the plan and the search. */
-const lastArrangements = new Map<string, { at: number; arrangements: ConstructedArrangement[] }>();
+const lastArrangements = new Map<string, { at: number; composedAt: number; arrangements: ConstructedArrangement[] }>();
 const ARRANGEMENTS_FRESH_MS = 10 * 60_000;
+
+/**
+ * Whether a held construction still answers a read at `now`: composed less
+ * than ten minutes ago by the wall clock, for a reading time within ten
+ * minutes of the one it was composed for, in either direction. The reading
+ * time alone is not an age: a plan read on the default clock and a pass that
+ * carries its own slightly earlier `now` are the same pass, and refusing the
+ * held construction because the caller's clock is behind it re-composed and
+ * re-traced every arrangement's leverage a second time (COM-13-2 repair: the
+ * plan read and the goal tick's asking each paid the full trace).
+ */
+export function arrangementsFresh(held: { at: number; composedAt: number }, now: Date, wallNow: number = Date.now()): boolean {
+  const age = wallNow - held.composedAt;
+  return age >= 0 && age < ARRANGEMENTS_FRESH_MS && Math.abs(now.getTime() - held.at) < ARRANGEMENTS_FRESH_MS;
+}
 
 /** The goal's constructed arrangements, composed at most once per ten minutes. */
 export async function goalArrangements(goal: Workstream, target: TargetReading, now: Date, bestReachCents: number | null = null): Promise<ConstructedArrangement[]> {
   if (target.daysLeft === null || target.daysLeft <= 0 || target.remainingCents <= 0) return [];
   const held = lastArrangements.get(goal.id);
-  if (held && now.getTime() - held.at >= 0 && now.getTime() - held.at < ARRANGEMENTS_FRESH_MS) return held.arrangements;
+  if (held && arrangementsFresh(held, now)) return held.arrangements;
   const frame = await executionFrame(target.projectId, target.currency);
   const arrangements = await constructArrangements({
     projectId: target.projectId,
@@ -2925,7 +2940,7 @@ export async function goalArrangements(goal: Workstream, target: TargetReading, 
     exclusions: await goalExclusions(goal),
     now,
   });
-  lastArrangements.set(goal.id, { at: now.getTime(), arrangements });
+  lastArrangements.set(goal.id, { at: now.getTime(), composedAt: Date.now(), arrangements });
   return arrangements;
 }
 
