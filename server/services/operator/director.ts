@@ -1219,7 +1219,8 @@ function namedPaths(...texts: (string | null)[]): string[] {
 
 /**
  * (a) Open inventory findings — DISCOVERED or ROOT_CAUSE_CONFIRMED — that name no owner and have no
- * repair in flight (no linked register row, or every linked row already decided). Each becomes a
+ * repair in flight (no linked register row, or every linked row already decided), except a finding that
+ * still states no cause after a linked repair was REJECTED. Each becomes a
  * deficiency with the id `dfx_inv_<finding id>`, so Hermes commissions the finding by its id; the
  * commission links its register row to the finding, which then reads as in flight.
  */
@@ -1235,9 +1236,15 @@ export async function inventoryDeficiencies(max = 4): Promise<DeficiencyReading[
     if (c.decision === 'COMBINED' && c.combinedIntoId) return !byId.get(c.combinedIntoId)?.decision;
     return !c.decision;
   };
+  // A repair was REJECTED and the finding still states no cause: nothing an earlier attempt lacked has
+  // arrived, so commissioning attempt N+1 would hand the Factory the same unfixable question (A-10K:
+  // an evidence gap re-offered as an engineering repair). It is offered again once its cause is
+  // confirmed (ROOT_CAUSE_CONFIRMED), which gives the next attempt something to act on.
+  const rejectedWithoutCause = (i: (typeof items)[number]): boolean =>
+    i.status === 'DISCOVERED' && !(i.rootCause ?? '').trim() && i.linkedCandidates.some((id) => byId.get(id)?.decision === 'REJECTED');
   const order = { BLOCKING: 0, MAJOR: 1, MINOR: 2 } as const;
   return items
-    .filter((i) => !i.linkedCandidates.some(inFlight))
+    .filter((i) => !i.linkedCandidates.some(inFlight) && !rejectedWithoutCause(i))
     .sort((a, b) => order[a.severity] - order[b.severity] || a.id.localeCompare(b.id))
     .slice(0, max)
     .map((i) => {

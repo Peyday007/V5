@@ -10,8 +10,9 @@
  *          with margin do.
  *   class  An unowned, unrepaired BLOCKING finding is read by `inventoryDeficiencies` as
  *          a MISSING_CAPABILITY deficiency, commissionable by its id. It is not offered
- *          again while its repair is in flight. Once that repair is decided, it is offered
- *          again, which is how attempt 2 of this weakness came to exist. (1) pins it.
+ *          again while its repair is in flight, nor after that repair is REJECTED while the
+ *          finding still states no cause (attempt 2 of this weakness came from that re-offer).
+ *          Once its cause is confirmed it is offered again, with the cause. (1) pins it.
  *
  * Nothing here lowers a bar: the cases in (2) that must not certify still must not.
  */
@@ -50,7 +51,7 @@ describe('(1) an unowned BLOCKING finding like A-10K is a commissionable MISSING
       ctx,
     );
 
-  it('is offered with its id, blocks the goal and carries the finding\'s own acceptance; silent while repaired, offered again once the repair is decided', async () => {
+  it('is offered with its id, blocks the goal and carries the finding\'s own acceptance; silent while repaired, silent after a rejected repair until its cause is confirmed', async () => {
     const id = `A-10K-${uid()}`;
     expect((await a10k(id)).ok).toBe(true);
     expect((await getInventoryItem(id))!.status).toBe('DISCOVERED');
@@ -74,9 +75,18 @@ describe('(1) an unowned BLOCKING finding like A-10K is a commissionable MISSING
     expect((await a10k(id, { linkedCandidateId: repair.id })).ok).toBe(true);
     expect((await inventoryDeficiencies()).map((one) => one.source?.ref)).not.toContain(id);
 
-    // That repair is rejected (attempt 1's outcome): the finding is unclaimed again and offered again.
+    // That repair is rejected (attempt 1's outcome) and the finding still states no cause. Offering it
+    // again would commission attempt N+1 on the same unanswerable question, which is how A-10K kept
+    // returning to the Factory as an engineering repair. It is not offered again.
     await decideCandidate(repair.id, 'REJECTED', 'Method research ended FAILED with no accepted claim');
-    expect((await inventoryDeficiencies()).map((one) => one.source?.ref)).toContain(id);
+    expect((await inventoryDeficiencies()).map((one) => one.source?.ref)).not.toContain(id);
+
+    // Once its cause is confirmed, the next attempt has something to act on: offered again, carrying the cause.
+    const cause = 'Evidence gap: no measured buyer conversion and no sized comparables; closes by §94 outreach replies.';
+    expect((await a10k(id, { rootCause: cause, status: 'ROOT_CAUSE_CONFIRMED' })).ok).toBe(true);
+    const reoffered = (await inventoryDeficiencies()).find((one) => one.source?.ref === id);
+    expect(reoffered).toBeDefined();
+    expect(reoffered!.diagnosis.cause).toBe(cause);
 
     // Owning it stops the offer: a person or session that took it is the repair.
     expect((await a10k(id, { owner: 'session A' })).ok).toBe(true);
