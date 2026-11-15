@@ -257,6 +257,14 @@ Total ≈ 25 min (baseline 26 min 41 s): construct 247 s, shared frontier (979 o
 | stored arrangements (04:17Z) | 404 | 639 (377 transfers), 14 positions, 249 flows | F5 evidence-only openings feed construction — VERIFIED |
 | construction facts / arrangements researched (04:17Z, 40 min after release) | 0 / 0 | 0 / 0 | NOT VERIFIED — production diagnostic being added to the census (part 6) |
 
+### Production DIAG after part 6 (census Goals run 43680544935, 05:19Z)
+
+Cash Mode is ACTIVE and the kernel back-fills: `kernelSkips no`, authority SPRINT, 5 kernel SCAN rounds open. The back-fill read 118 candidates and found 0: **102 rejected "opening payer matches no mapped buyer type"** and 16 "opening names no payer". The unmatched payers are research prose ("GitHub, Inc. is the payer: …", "Market: City of St. Louis, MO. The payer/buyer is …").
+- Root cause **P-FACTS:** the map's 11 buyer types never meet the payers of priced openings.
+- Repair (part 7, PR #916): priced payers become DISCOVERED buyer nodes; the payer is read out of the prose (`payerNamedIn`).
+
+Arrangement research is allowed (SPRINT), yet 0 constructed rounds opened in 24 h. The gate is now reported by DIAG `constructedGate` (part 7); finding **P-ROUNDS**, under investigation.
+
 ### Surge A closed (02:45Z; its closeout in docs/PLANNING-RECOVERY-2026-11-14.md)
 
 Its handoffs return to Surge B, which now owns them:
