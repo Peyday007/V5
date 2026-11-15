@@ -1008,10 +1008,24 @@ export type BackfillSource = 'UNIT_ECONOMIC' | 'CARD_EVIDENCE';
 export interface BackfillCandidate {
   source: BackfillSource;
   claim: ResearchClaim;
-  buyer: IndustryNode;
+  /** The live buyer type the fact files against; null when `newBuyer` must be put on the map first. */
+  buyer: IndustryNode | null;
+  /**
+   * The buyer population an opening's payer extracts to that the map does not
+   * hold yet: the back-fill adds it exactly as `mapPricedPayers` does (from the
+   * opening's gated payer claim), then files against it.
+   */
+  newBuyer?: { population: string; opening: PricedOpening; payerClaimId: string };
   key: FactKey;
   amount: number;
   measures: string;
+}
+
+/** What mapping a priced opening's payer reads from the opening. */
+interface PricedOpening {
+  id: string;
+  payer: string;
+  industry: string | null;
 }
 
 /** One claim (or card fact) the back-fill read, with what it would file or why it would not. */
@@ -1072,11 +1086,13 @@ export function payerBuyerType(payer: string, nodes: readonly IndustryNode[]): I
 
 /** Source 2's verdicts: every EVIDENCE card fact for a price or a direct cost not yet filed, in card order. */
 async function cardEvidenceDecisions(projectId: string, nodes: readonly IndustryNode[]): Promise<BackfillDecision[]> {
-  const facts = (await cardFactsForProject(projectId)).filter((one) => one.kind === 'EVIDENCE' && one.claimId && BACKFILL_FIELDS[one.field]);
+  const evidence = (await cardFactsForProject(projectId)).filter((one) => one.kind === 'EVIDENCE' && one.claimId);
+  const facts = evidence.filter((one) => BACKFILL_FIELDS[one.field]);
   if (facts.length === 0) return [];
   const filed = new Set((await listProjectFacts(projectId)).map((one) => one.sourceClaimId).filter((id): id is string => !!id));
   const pending = facts.filter((one) => !filed.has(one.claimId!));
   if (pending.length === 0) return [];
+  const payerClaim = new Map(evidence.filter((one) => one.field === 'payer').map((one) => [one.opportunityId, one.claimId!]));
   const openings = new Map((await listOpportunities({ projectId })).map((one) => [one.id, one]));
   const out: BackfillDecision[] = [];
   const early = (claimId: string, reason: string, unmatchedBuyer?: string): BackfillDecision => ({
@@ -1087,7 +1103,7 @@ async function cardEvidenceDecisions(projectId: string, nodes: readonly Industry
     countsAsSkipped: false,
     ...(unmatchedBuyer ? { unmatchedBuyer } : {}),
   });
-  const matched: { fact: (typeof pending)[number]; buyer: IndustryNode }[] = [];
+  const matched: { fact: (typeof pending)[number]; buyer: IndustryNode | null; newBuyer?: { population: string; opening: PricedOpening; payerClaimId: string | null } }[] = [];
   for (const fact of pending) {
     const opening = openings.get(fact.opportunityId);
     if (!opening) out.push(early(fact.claimId!, 'card opening not found'));
@@ -1095,21 +1111,36 @@ async function cardEvidenceDecisions(projectId: string, nodes: readonly Industry
     else if (opening.duplicateOfId) out.push(early(fact.claimId!, 'opening is a duplicate'));
     else if ((opening.currency ?? '').toUpperCase() !== 'USD') out.push(early(fact.claimId!, `opening currency is ${opening.currency ?? 'unset'}, not USD`));
     else {
+      // The payer is read out of the stored prose and generalised exactly as a buyer node is named (`buyerPopulationName`).
       const buyer = payerBuyerType(opening.payer, nodes);
+      const population = buyer ? null : buyerPopulationName(opening.payer);
       if (buyer) matched.push({ fact, buyer });
-      else out.push(early(fact.claimId!, 'opening payer matches no mapped buyer type', opening.payer));
+      else if (population) {
+        matched.push({ fact, buyer: null, newBuyer: { population, opening: { id: opening.id, payer: opening.payer, industry: opening.industry }, payerClaimId: payerClaim.get(opening.id) ?? null } });
+      } else out.push(early(fact.claimId!, 'opening payer names no buyer population', opening.payer));
     }
   }
   if (matched.length === 0) return out;
-  const claims = new Map((await claimsByIds([...new Set(matched.map((one) => one.fact.claimId!))])).map((one) => [one.id, one]));
+  const claimIds = matched.flatMap((one) => [one.fact.claimId!, ...(one.newBuyer?.payerClaimId ? [one.newBuyer.payerClaimId] : [])]);
+  const claims = new Map((await claimsByIds([...new Set(claimIds)])).map((one) => [one.id, one]));
   const used = new Set<string>();
-  for (const { fact, buyer } of matched) {
+  for (const { fact, buyer, newBuyer } of matched) {
     const claim = claims.get(fact.claimId!);
     const spec = BACKFILL_FIELDS[fact.field]!;
-    const refuse = (reason: string): BackfillDecision => ({ source: 'CARD_EVIDENCE', claimId: fact.claimId!, candidate: null, reason, countsAsSkipped: true });
+    const refuse = (reason: string, unmatchedBuyer?: string): BackfillDecision => ({
+      source: 'CARD_EVIDENCE',
+      claimId: fact.claimId!,
+      candidate: null,
+      reason,
+      countsAsSkipped: true,
+      ...(unmatchedBuyer ? { unmatchedBuyer } : {}),
+    });
+    // A population is put on the map only from a payer research established: the opening's gated, sourced payer claim.
+    const payer = newBuyer?.payerClaimId ? claims.get(newBuyer.payerClaimId) : undefined;
     if (!claim) out.push(refuse('claim not found'));
     else if (!claim.accepted) out.push(refuse('claim is not gated (accepted)'));
     else if (!claim.sourceUrl) out.push(refuse('claim has no source URL'));
+    else if (newBuyer && !(payer && payer.accepted && payer.sourceUrl)) out.push(refuse('opening payer is not sourced evidence, so its population is not mapped', newBuyer.population));
     else if (used.has(claim.id)) out.push(refuse('claim already used by another card field'));
     else {
       used.add(claim.id);
@@ -1120,7 +1151,15 @@ async function cardEvidenceDecisions(projectId: string, nodes: readonly Industry
         out.push({
           source: 'CARD_EVIDENCE',
           claimId: claim.id,
-          candidate: { source: 'CARD_EVIDENCE', claim, buyer, key: spec.key, amount: cents / 100, measures: `${spec.measures}: ${claim.claim}` },
+          candidate: {
+            source: 'CARD_EVIDENCE',
+            claim,
+            buyer,
+            ...(newBuyer && payer ? { newBuyer: { population: newBuyer.population, opening: newBuyer.opening, payerClaimId: payer.id } } : {}),
+            key: spec.key,
+            amount: cents / 100,
+            measures: `${spec.measures}: ${claim.claim}`,
+          },
           reason: null,
           countsAsSkipped: true,
         });
@@ -1183,7 +1222,13 @@ export async function backfillClaimFacts(projectId: string, batch = BACKFILL_BAT
   if (!nodes.some((one) => one.kind === 'BUYER_TYPE' && !one.retiredAt)) return out;
 
   const fileOne = async (input: BackfillCandidate): Promise<void> => {
-    const { claim, buyer } = input;
+    const { claim } = input;
+    let buyer = input.buyer;
+    if (!buyer && input.newBuyer) {
+      // An earlier candidate this pass may already have mapped this population.
+      buyer = payerBuyerType(input.newBuyer.opening.payer, nodes) ?? (await mapPayerPopulation(projectId, input.newBuyer.opening, input.newBuyer.population, input.newBuyer.payerClaimId, claim.id, nodes)).node;
+    }
+    if (!buyer) return;
     const recorded = await recordClaimFact({
       projectId,
       nodeId: buyer.id,
@@ -1312,32 +1357,53 @@ export async function mapPricedPayers(projectId: string, limit = PAYER_NODES_PER
         .map(gated)
         .find((claim) => claim && readMoneyFigures(claim.claim, 'USD').some((one) => one.cents > 0));
       if (!payer || !price) continue;
-      const parent = await sectorFor(projectId, opening.industry, nodes, payer.id);
-      const made = await createNode({
-        projectId,
-        parentId: parent.id,
-        kind: 'BUYER_TYPE',
-        name: population,
-        description: `Payer of priced opening ${opening.id} ("${opening.payer!.slice(0, 120)}"), established by claim ${payer.id}; priced by claim ${price.id}.`,
-        origin: 'DISCOVERED',
-        sourceClaimId: payer.id,
-      });
-      if (!nodes.some((one) => one.id === made.node.id)) nodes.push(made.node);
-      if (!made.created) continue;
-      out.created.push(made.node);
-      await recordCashEvent({
-        projectId,
-        opportunityId: opening.id,
-        kind: 'INDUSTRY_BUYER_MAPPED',
-        actorRef: 'BRAIN',
-        summary: `Buyer population "${population}" added to the map under "${parent.name}" from the priced payer "${opening.payer!.slice(0, 120)}".`,
-        detail: { nodeId: made.node.id, parentId: parent.id, payer: opening.payer, payerClaimId: payer.id, priceClaimId: price.id, opportunityId: opening.id },
-      });
+      const made = await mapPayerPopulation(projectId, { id: opening.id, payer: opening.payer!, industry: opening.industry }, population, payer.id, price.id, nodes);
+      if (made.created) out.created.push(made.node);
     } catch (error) {
       out.failures.push(`${opening.id}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
   return out;
+}
+
+/**
+ * Put one priced opening's payer population on the map: a DISCOVERED
+ * `BUYER_TYPE` under the sector its industry names, established by the payer
+ * claim, with an `INDUSTRY_BUYER_MAPPED` event when it is new. The one way a
+ * payer becomes a buyer node — `mapPricedPayers` and the back-fill both call
+ * it. Unique by parent and name, so a replay creates nothing; `nodes` is
+ * extended in place.
+ */
+async function mapPayerPopulation(
+  projectId: string,
+  opening: PricedOpening,
+  population: string,
+  payerClaimId: string,
+  priceClaimId: string,
+  nodes: IndustryNode[],
+): Promise<{ node: IndustryNode; created: boolean }> {
+  const parent = await sectorFor(projectId, opening.industry, nodes, payerClaimId);
+  const made = await createNode({
+    projectId,
+    parentId: parent.id,
+    kind: 'BUYER_TYPE',
+    name: population,
+    description: `Payer of priced opening ${opening.id} ("${opening.payer.slice(0, 120)}"), established by claim ${payerClaimId}; priced by claim ${priceClaimId}.`,
+    origin: 'DISCOVERED',
+    sourceClaimId: payerClaimId,
+  });
+  if (!nodes.some((one) => one.id === made.node.id)) nodes.push(made.node);
+  if (made.created) {
+    await recordCashEvent({
+      projectId,
+      opportunityId: opening.id,
+      kind: 'INDUSTRY_BUYER_MAPPED',
+      actorRef: 'BRAIN',
+      summary: `Buyer population "${population}" added to the map under "${parent.name}" from the priced payer "${opening.payer.slice(0, 120)}".`,
+      detail: { nodeId: made.node.id, parentId: parent.id, payer: opening.payer, payerClaimId, priceClaimId, opportunityId: opening.id },
+    });
+  }
+  return { node: made.node, created: made.created };
 }
 
 /** The live sector node an opening's industry names, else a root SECTOR of that name (or `UNCLASSIFIED_SECTOR`), created once. */

@@ -364,18 +364,36 @@ export function payerNamedIn(payer: string | null | undefined): string | null {
     .replace(/\([^)]*\)/g, ' ')
     // An abbreviation's full stop does not end a name ("St. Louis", "GitHub, Inc.").
     .replace(/\b(St|Mt|Ft|Inc|Co|Corp|Ltd|LLC|Dept|Univ|Assn|Bros|No|U\.S|Dr|Jr|Sr)\./g, '$1')
+    // Nor does one inside a word ("Freelancer.com"): held aside while the sentence is split, restored in the name.
+    .replace(/(\w)\.(?=\w)/g, `$1${INNER_DOT}`)
     .replace(/\s+/g, ' ')
     .trim();
   if (!text) return null;
-  const clean = (one: string | undefined) => {
-    const name = (one ?? '').replace(/^(?:market:\s*[^.]*\.\s*)/i, '').replace(/^(?:the|a|an)\s+/i, '').split(/[;:]| — | - |, which\b|, who\b/)[0]!.replace(/[.,]+$/, '').trim();
-    return name && name.split(/\s+/).length <= 8 ? name : null;
+  const words = (one: string): number => one.split(/\s+/).filter(Boolean).length;
+  const restore = (one: string): string => one.split(INNER_DOT).join('.');
+  const clean = (one: string | undefined): string | null => {
+    let name = (one ?? '')
+      .replace(/^(?:market:\s*[^.]*\.\s*)/i, '')
+      .replace(/^(?:the|a|an)\s+/i, '')
+      // A clause after the name says what the payer does, not who it is ("the employer who posts the project").
+      .split(/[;:]| — | - |,\s*(?:which|who|whose|where|that)\b|\s+(?:who|which|whose|that|where|when|because|through|via|in exchange)\s+/i)[0]!
+      .replace(/[.,]+$/, '')
+      .trim();
+    // A list too long to be one name is read by its first member ("universities, research institutions, …").
+    if (words(name) > 8) name = name.split(/,|\s+(?:such as|including|like)\s+/i)[0]!.trim();
+    name = restore(name);
+    return name && words(name) <= 8 && !NOT_A_PAYER.test(name) && !GENERIC_PAYER.has(buyerNameKey(name)) ? name : null;
   };
   const patterns: RegExp[] = [
-    /(?:^|[.;:]\s*)(?:the\s+)?(?:payer(?:\s*\/\s*buyer)?|buyer(?:\s*\/\s*payer)?|purchaser|client)\s+(?:is|are|was)\s+(?:the\s+)?([^.;:]+)/i,
+    /\b(?:the\s+)?(?:payer(?:\s*\/\s*buyer)?|buyer(?:\s*\/\s*payer)?|purchaser|client)\s+(?:is|are|was|would be|will be)\s+(?:the\s+)?([^.;:]+)/i,
     /^([^.;:]+?)\s+(?:is|are)\s+the\s+(?:payer|buyer|purchaser)s?\b/i,
-    /\b(?:buyers|payers|customers|clients)\s+(?:who\s+pay\s+[^.]*?\s+)?(?:are|include)\s+(?:primarily|mainly|mostly|typically)?\s*([^.;:]+)/i,
+    /\b(?:buyers|payers|customers|clients)\s+(?:who\s+pay\s+[^.]*?\s+)?(?:are|include|tend to be|consist of)\s+(?:primarily|mainly|mostly|typically)?\s*([^.;:]+)/i,
     /\bname[sd]?\s+([^.;:]+?)\s+as\s+(?:the\s+)?(?:payer|buyer)s?\b/i,
+    /\bpaid\s+(?:for\s+)?by\s+(?:the\s+)?([^.;:]+)/i,
+    // A source that names who pays ("GoTranscript's Billing Terms name universities, …").
+    /\b(?:terms|pricing|price list|page|contract|notice|solicitation|rfp|rfq|policy|agreement|listing|filing|documentation|faq)s?\s+(?:name|names|named|list|lists|listed|identify|identifies|identified)\s+([^.;:]+)/i,
+    // "<Who> pays $2,500 per …", "Homeowners pay …".
+    /^([^.;:]+?)\s+(?:pays|pay|paid)\b/i,
   ];
   for (const re of patterns) {
     const hit = re.exec(text);
@@ -383,9 +401,19 @@ export function payerNamedIn(payer: string | null | undefined): string | null {
     if (name) return name;
   }
   // A short noun phrase with no verb of reporting is itself a name.
-  if (text.split(/\s+/).length <= 8 && !/\b(?:is|are|was|were|reports?|says?|pays?|book|receive|tested|runs?|name)\b/i.test(text)) return text.replace(/[.,;:]+$/, '');
+  if (words(text) <= 8 && !/\b(?:is|are|was|were|reports?|says?|pays?|book|receive|tested|runs?|name)\b/i.test(text)) {
+    const name = restore(text.replace(/[.,;:]+$/, ''));
+    return NOT_A_PAYER.test(name) ? null : name;
+  }
   return null;
 }
+
+/** Holds a full stop inside a word while a sentence is split at its full stops. */
+const INNER_DOT = '․';
+/** A reading that names nobody: a pronoun, or a statement that the payer is not known. */
+const NOT_A_PAYER = /^(?:it|its|they|them|this|that|these|those|he|she|we|you|someone|anyone|whoever|unknown|unclear|unspecified|not|none|no|n\/a)\b/i;
+/** A role word alone says there is a payer, not who it is (as `buyerNameKey` writes it). */
+const GENERIC_PAYER: ReadonlySet<string> = new Set(['buyer', 'payer', 'customer', 'client', 'purchaser', 'user', 'end user']);
 
 export function buyerPopulationName(payer: string | null | undefined): string | null {
   const named = payerNamedIn(payer);
@@ -394,10 +422,12 @@ export function buyerPopulationName(payer: string | null | undefined): string | 
   // "…, Mechanicsburg, PA" or "…, Harrisburg, Pennsylvania 17110": a place, not who pays.
   const comma = text.indexOf(',');
   if (comma > 0 && statesNamedIn(text.slice(comma)).length > 0) text = text.slice(0, comma).trim();
+  // "small business operators, freelancers and educators": a list of populations is filed under the first, the one named as primary.
+  else if (comma > 0 && !/^,\s*(?:inc|llc|ltd|co|corp|plc|lp|llp|pllc|pc|na)\b/i.test(text.slice(comma))) text = text.slice(0, comma).trim();
   text = text.replace(/^the\s+/i, '').replace(/[.,;:]+$/, '').trim();
   if (!text) return null;
   if (/\b(?:school district|public schools|school board|board of education|unified school)\b/i.test(text)) return 'school districts';
-  if (/\b(?:university|college)\b/i.test(text)) return 'universities and colleges';
+  if (/\b(?:universit(?:y|ies)|colleges?)\b/i.test(text)) return 'universities and colleges';
   if (/^(?:city|town|village|borough|township) of\b/i.test(text) || /\b(?:city|town|borough|township) (?:council|government)\b/i.test(text)) return 'municipal governments';
   if (/^county of\b/i.test(text) || /\bcounty(?: government| commissioners)?$/i.test(text)) return 'county governments';
   if (statesNamedIn(text).length > 0) {
