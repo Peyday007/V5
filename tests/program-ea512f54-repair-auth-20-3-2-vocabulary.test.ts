@@ -116,6 +116,48 @@ describe('AUTH-20-3: the authority ledger writer and its probe share one vocabul
     expect(result.ok, result.detail).toBe(true);
   });
 
+  /** The consequential row the probe reads, in the writer's own shape, with only the fields under test varied. */
+  async function recordDecision(disposition: string, cause: string): Promise<void> {
+    await recordCashEvent({
+      projectId: t.project.id,
+      kind: 'AUTHORITY_DECISION',
+      actorRef: 'BRAIN',
+      summary: `FACTORY_DEPLOY: ${disposition} (${cause})`,
+      detail: {
+        action: 'FACTORY_DEPLOY',
+        consequenceClass: 'STANDING_GRANT_ENGINEERING',
+        path: 'API',
+        principal: 'usr_owner',
+        scope: { projectId: t.project.id, accountRef: null },
+        disposition,
+        cause,
+        ok: true,
+        approvalNeedId: null,
+        neededApproval: null,
+      },
+    });
+  }
+
+  it('reads a legacy PERFORMED decision as AUTHORIZED, so rows written before #903 still count', async () => {
+    await recordDecision('PERFORMED', 'OWNER_APPROVED');
+    const result = await graduatedAuthorityHoldsOnRows();
+    expect(result.ok, result.detail).toBe(true);
+  });
+
+  it.each(['AUTHORIZED', 'PERFORMED'])(
+    'still refuses a %s decision that went ahead without an authorizing cause',
+    async (disposition) => {
+      // Accepting AUTHORIZED must not have opened a gap: an allowed decision under a non-authorizing
+      // cause is exactly the silent self-grant of authority S-0256 forbids.
+      await recordDecision(disposition, 'NO_AUTHORITY');
+      const result = await graduatedAuthorityHoldsOnRows();
+      expect(result.ok).toBe(false);
+      expect(result.detail).toMatch(/performed FACTORY_DEPLOY under NO_AUTHORITY/);
+      const registered = await getProbe('r01.auth-20-3')!({});
+      expect(registered.ok).toBe(false);
+    },
+  );
+
   it('still refuses a decision whose disposition is outside the vocabulary', async () => {
     await decideAction({ projectId: t.project.id, action: 'FACTORY_DEPLOY', path: 'API', principal: 'usr_owner', releaseEnvelopeAllows: true });
     await recordCashEvent({
