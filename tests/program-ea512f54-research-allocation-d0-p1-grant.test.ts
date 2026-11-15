@@ -25,6 +25,7 @@ import {
   controlStep,
   grantsFromDecision,
   readCapacity,
+  slotShare,
   startAdaptivePool,
   stopAdaptivePool,
   type CapacityGrant,
@@ -182,14 +183,17 @@ describe('a recorded ADD_CAPACITY reaches the running pool', () => {
     await new Promise((r) => setTimeout(r, 50));
     await controlStep();
     const targets = async () => new Map((await readCapacity()).map((r) => [r.model, r.target]));
-    expect((await targets()).get('brain-a')).toBe(7);
-    expect((await targets()).get('brain-b')).toBe(4);
+    // The lane's share of the database pool still bounds the step (Postgres has one; SQLite has none).
+    const share = slotShare(2);
+    const capped = (n: number): number => (share === null ? n : Math.min(n, share));
+    expect((await targets()).get('brain-a')).toBe(capped(7));
+    expect((await targets()).get('brain-b')).toBe(capped(4));
     const applied = async () => Number((await getDb().get<{ n: number | string }>(
       "SELECT COUNT(*) AS n FROM bin_events WHERE event_type = 'FREE_LANE_CAPACITY' AND workload_class = 'brain-a' AND reason LIKE '%(allocation fp-grant)%'", []))?.n ?? 0);
     expect(await applied()).toBe(1);
     // Applied once: the next step holds at what the controller now runs.
     await controlStep();
-    expect((await targets()).get('brain-a')).toBe(7);
+    expect((await targets()).get('brain-a')).toBe(capped(7));
     expect(await applied()).toBe(1);
     // A restart forgets nothing: the row says the decision was already applied.
     stopAdaptivePool();
