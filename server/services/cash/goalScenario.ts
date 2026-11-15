@@ -311,8 +311,26 @@ export function inventedFromArrangement(
   const estimated = estimatedFromArrangement(one, input);
   if (estimated)
     return { ...estimated, marketKey, opportunity: { ...estimated.opportunity, title: `Invented: ${one.label}`.slice(0, 200) }, estimated: { ...estimated.estimated!, invented: true } };
-  const prices = input.otherPrices.filter((x) => Number.isFinite(x) && x > 0).sort((a, b) => a - b);
-  if (prices.length === 0) return { refused: 'nothing bounds what these buyers pay: the project holds no published price, so the design stays a research question' };
+  return sweptOverOtherPrices(one, input, input.otherPrices, true);
+}
+
+/**
+ * A design nothing prices for its own buyers, swept across the prices other
+ * buyers in this project are published as paying: MECHANISM bounds, provenance
+ * UNKNOWN, no distribution, so it competes on what it would contribute *if*
+ * research found these buyers pay like those, and can never certify a plan.
+ * With no published price at all, it is refused with that reason. Pure.
+ */
+function sweptOverOtherPrices(
+  one: ConstructedArrangement,
+  input: { projectId: string; currency: string },
+  otherPrices: readonly number[],
+  invented: boolean,
+  scope = 'in this project',
+): PlannedOpening | { refused: string } {
+  const prices = otherPrices.filter((x) => Number.isFinite(x) && x > 0).sort((a, b) => a - b);
+  const what = invented ? 'the design' : 'the arrangement';
+  if (prices.length === 0) return { refused: `nothing bounds what these buyers pay: the project holds no published price, so ${what} stays a research question` };
   const low = prices[0]!;
   const high = Math.max(low + 0.01, prices[prices.length - 1]!);
   const p50 = prices[Math.floor(prices.length / 2)]!;
@@ -321,11 +339,33 @@ export function inventedFromArrangement(
     low,
     high,
     provenance: 'UNKNOWN',
-    source: { kind: 'OTHER', ref: `arrangement:${one.key}`, note: 'an invented design: no figure from these buyers' },
-    note: `invented design: nothing establishes what these buyers pay; swept ${Math.round(low)}–${Math.round(high)} across the ${prices.length} price(s) other buyers in this project are published as paying (mechanism bounds, not these buyers')`,
+    source: { kind: 'OTHER', ref: `arrangement:${one.key}`, note: `${invented ? 'an invented design' : 'a constructed arrangement'}: no figure from these buyers` },
+    note: `${invented ? 'invented design' : 'constructed arrangement'}: nothing establishes what these buyers pay; swept ${Math.round(low)}–${Math.round(high)} across the ${prices.length} price(s) other buyers ${scope} are published as paying (mechanism bounds, not these buyers')`,
     inferred: { tier: 'MECHANISM', justified: false, p10: low, p50, p90: high, observations: prices.length },
   };
-  return { ...arrangementOpening(one, input, price, high, null, true), marketKey };
+  return { ...arrangementOpening(one, input, price, high, null, invented), marketKey: populationMarket(one.demand.ref) };
+}
+
+/** A price another buyer in the project is published as paying, and the sector it was paid in. */
+export interface ComparablePrice {
+  value: number;
+  industry: string | null;
+}
+const normSector = (text: string | null | undefined) => (text ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+/** Same-sector prices when at least this many exist; otherwise every published price in the project bounds the sweep. */
+export const SECTOR_PRICES_MIN = 2;
+
+/**
+ * The prices a constructed arrangement with no price of its own is swept
+ * across (Surge B, production 2026-11-15): its own sector's published prices
+ * when the project holds at least `SECTOR_PRICES_MIN`, else every published
+ * price in the project. Never a price for these buyers — a bound. Pure.
+ */
+export function comparablePricesFor(one: Pick<ConstructedArrangement, 'sector'>, prices: readonly ComparablePrice[]): { prices: number[]; scope: string } {
+  const sector = normSector(one.sector);
+  const same = sector ? prices.filter((p) => normSector(p.industry) === sector).map((p) => p.value) : [];
+  if (same.length >= SECTOR_PRICES_MIN) return { prices: same, scope: `in the same sector (${one.sector})` };
+  return { prices: prices.map((p) => p.value), scope: 'in this project' };
 }
 
 /**
@@ -519,13 +559,21 @@ export function selectEstimatedArrangements(
     limit?: number;
     daysLeft?: number | null;
     contactsPerDay?: number;
+    /**
+     * Prices other buyers in the project are published as paying. An
+     * arrangement nothing prices for its own buyers is swept across them
+     * (MECHANISM bounds, never certifiable) instead of being cut; without
+     * any, it stays out with that reason.
+     */
+    otherPrices?: readonly ComparablePrice[];
   },
 ): { openings: PlannedOpening[]; reserve: PlannedOpening[]; selection: ArrangementSelection } {
   const limit = input.limit ?? MAX_ESTIMATED_ARRANGEMENTS;
   const daysLeft = input.daysLeft && input.daysLeft > 0 ? input.daysLeft : 30;
   const contactsPerDay = input.contactsPerDay ?? CONTACTS_PER_DAY_BOUNDS.low;
   const cut: ArrangementCut[] = [];
-  type Row = { arrangement: ConstructedArrangement; one: PlannedOpening; screen: ArrangementScreen; order: number; population: string };
+  type Value = ConstructedArrangement['value'];
+  type Row = { arrangement: ConstructedArrangement; one: PlannedOpening; screen: ArrangementScreen; order: number; population: string; value: Value };
   const rows: Row[] = [];
   arrangements.forEach((arrangement, order) => {
     const population = arrangement.demand.ref;
@@ -536,16 +584,37 @@ export function selectEstimatedArrangements(
     const what = `${arrangement.label} ${arrangement.sector ?? ''} ${arrangement.demand.name}`;
     if (excludedBy(what, input.exclusions)) return no("the goal's owner excluded what it is");
     if (breaksOperatingModel(operatingFit({ title: arrangement.label, offerScope: arrangement.demand.name }))) return no('it breaks the operating model');
-    const one = estimatedFromArrangement(arrangement, input);
-    if (!one) return no(arrangement.stress.exposure === 'EXCEEDS' ? 'its known worst case exceeds the limits' : 'nothing reconstructs its value');
+    if (arrangement.stress.exposure === 'EXCEEDS') return no('its known worst case exceeds the limits');
+    let one: ModelledOpportunity | null = estimatedFromArrangement(arrangement, input);
+    let value: Value = arrangement.value;
+    if (!one) {
+      /*
+       * Nothing prices it for its own buyers (UNKNOWN, or a MECHANISM pool
+       * PRICE-POOL refused as their price). Production, 2026-11-15: after
+       * PRICE-POOL kept other payers' prices out of each arrangement's own
+       * reconstruction, almost no arrangement's buyers had a price of their
+       * own, so all 404 were cut here as "nothing reconstructs its value" and
+       * the plan compared 11 found openings and 0 constructed estimates. It
+       * enters instead swept across the prices comparable buyers are published
+       * as paying — honest MECHANISM bounds, provenance UNKNOWN, which
+       * `inputEvidence` never lets certify a plan — the path S-11 built for
+       * invented designs. With no published price anywhere, it stays out.
+       */
+      const comparable = comparablePricesFor(arrangement, input.otherPrices ?? []);
+      const swept = sweptOverOtherPrices(arrangement, input, comparable.prices, false, comparable.scope);
+      if ('refused' in swept) return no(`nothing reconstructs its value, and ${swept.refused}`);
+      one = swept;
+      const inf = swept.price.inferred!;
+      value = { tier: 'MECHANISM', p10: inf.p10, p50: inf.p50, p90: inf.p90, observations: inf.observations };
+    }
     // One buyer population is one market however many designs reach it: the engine caps their deals together.
     const planned: PlannedOpening = { ...one, marketKey: populationMarket(population) };
-    rows.push({ arrangement, one: planned, screen: screenArrangement(one, arrangement, { remaining: input.remaining, daysLeft, contactsPerDay }), order, population });
+    rows.push({ arrangement, one: planned, screen: screenArrangement(one, { value, stress: arrangement.stress }, { remaining: input.remaining, daysLeft, contactsPerDay }), order, population, value });
   });
   const byScreen = (a: Row, b: Row) =>
     b.screen.value - a.screen.value ||
-    (TIER_RANK[a.arrangement.value.tier] ?? 9) - (TIER_RANK[b.arrangement.value.tier] ?? 9) ||
-    b.arrangement.value.observations - a.arrangement.value.observations ||
+    (TIER_RANK[a.value.tier] ?? 9) - (TIER_RANK[b.value.tier] ?? 9) ||
+    b.value.observations - a.value.observations ||
     (EXPOSURE_RANK[a.arrangement.stress.exposure] ?? 9) - (EXPOSURE_RANK[b.arrangement.stress.exposure] ?? 9) ||
     a.order - b.order;
   rows.sort(byScreen);
@@ -1055,11 +1124,23 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       remaining: target.remainingCents / 100,
       exclusions,
       daysLeft: target.daysLeft,
+      // What construction reads as held prices (`heldEvidence`), from the openings already loaded: no new query.
+      otherPrices: live
+        .filter((one) => one.payer && one.priceCents !== null && one.priceCents > 0 && !excludedBy(`${one.title} ${one.payer ?? ''} ${one.industry ?? ''}`, exclusions))
+        .map((one) => ({ value: one.priceCents! / 100, industry: one.industry })),
     });
     estimates.push(...selected.openings);
     arrangementSelection = selected.selection;
     reserve = selected.reserve;
-    trace(`estimated arrangements: ${selected.openings.length} of ${input.arrangements.length} (${selected.selection.cutCount} cut, ${reserve.length} in reserve)`);
+    const why = new Map<string, number>();
+    for (const c of selected.selection.cut) {
+      const reason = c.reason.replace(/\d[\d,.]*/g, 'N');
+      why.set(reason, (why.get(reason) ?? 0) + 1);
+    }
+    trace(
+      `estimated arrangements: ${selected.openings.length} of ${input.arrangements.length} (${selected.selection.cutCount} cut, ${reserve.length} in reserve)` +
+        (why.size ? `; recorded cuts: ${[...why].map(([r, n]) => `${n}× ${r}`).join(' · ')}` : ''),
+    );
   }
   /*
    * Which openings take the engine's few slots is decided by what each could
