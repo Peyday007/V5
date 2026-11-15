@@ -83,6 +83,13 @@ export interface StageReading {
   droppedOrDuplicate: Measured<number>;
   modelCallsAvoided: Measured<number>;
   providerFailures: Measured<number>;
+  /**
+   * On the lane's stages: `providerFailures` split by the cause each failure's
+   * recorded reason names (the `[cause]` tag `ask` wrote, else its text), so a
+   * reading says whether provider availability, credentials, task routing or a
+   * broken GPU is what stopped the work. The causes sum to `providerFailures`.
+   */
+  providerFailuresByCause?: Partial<Record<RouteFailureCause, number>>;
   elapsedMs: Measured<number>;
   incrementalDollars: Measured<number>;
   /** The stage's own CPU / RAM / DB / network use, where its items recorded it. */
@@ -331,6 +338,13 @@ async function readStage(def: StageDefinition, since: string, hours: number, now
              AND w.result_ref IS NOT NULL AND e.workload_class IN (${placeholders(types)}))`,
     [since, ...types],
   );
+  const failedReasons = await db.all<{ reason: string | null; k: number | string }>(
+    `SELECT reason, COUNT(*) AS k FROM bin_events
+      WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND workload_class IN (${placeholders(types)})
+        AND reason LIKE '%model call failed%'
+      GROUP BY reason`,
+    [since, ...types],
+  );
   const metered = await db.all<{ measures: string | Record<string, unknown> | null }>(
     `SELECT measures FROM bin_events
       WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND workload_class IN (${placeholders(types)})
@@ -351,7 +365,17 @@ async function readStage(def: StageDefinition, since: string, hours: number, now
     if (providerFailed) providerFailures += n(row.k);
     if (isDroppedOutcome(row.outcome, providerFailed)) dropped += n(row.k);
   }
-  const oldest = queued?.oldest ? Math.max(0, Math.round((nowMs - Date.parse(queued.oldest)) / 60_000)) : null;
+  const byCause: Partial<Record<RouteFailureCause, number>> = {};
+  for (const row of failedReasons) {
+    // Every row here matched 'model call failed', so causeOfReason always names one.
+    const cause = causeOfReason(row.reason) ?? 'unclassified';
+    byCause[cause] = (byCause[cause] ?? 0) + n(row.k);
+  }
+  // Queued work always has an age: an unreadable available_at is read as just queued, never as no item.
+  const oldestAt = queued?.oldest ? Date.parse(queued.oldest) : Number.NaN;
+  const oldest = n(queued?.n) > 0
+    ? (Number.isFinite(oldestAt) ? Math.max(0, Math.round((nowMs - oldestAt) / 60_000)) : 0)
+    : null;
   const usage = sumUsage(metered.map((row) => usageOf(row.measures)), total);
   return {
     stage: def.id,
@@ -367,6 +391,7 @@ async function readStage(def: StageDefinition, since: string, hours: number, now
       ? ok(usage.avoided)
       : NOT('no lane item in the window recorded its model calls (items record them since the item meter was added)'),
     providerFailures: ok(providerFailures),
+    providerFailuresByCause: byCause,
     elapsedMs: ok(ms),
     incrementalDollars: NOT('the lane records no dollar cost per job'),
     resources: usage.measured
@@ -1230,6 +1255,9 @@ export function stageCapacityLines(recorded: RecordedStageCapacity | null): stri
       `  stage ${s.stage} queue=${shown(s.queueSize)} oldest=${shown(s.oldestUsefulItemMinutes, (v) => (v === null ? '—' : `${v}min`))}` +
         ` processed/h=${shown(s.itemsProcessedPerHour)} accepted/h=${s.acceptedPerHour} facts=${shown(s.uniqueUsableFacts)}` +
         ` dropped=${shown(s.droppedOrDuplicate)} avoided=${shown(s.modelCallsAvoided)} providerFailures=${shown(s.providerFailures)}` +
+        `${s.providerFailuresByCause && Object.keys(s.providerFailuresByCause).length > 0
+          ? ` (${Object.entries(s.providerFailuresByCause).map(([cause, k]) => `${cause} ${k}`).join(', ')})`
+          : ''}` +
         ` $=${shown(s.incrementalDollars)}`,
     );
   }
