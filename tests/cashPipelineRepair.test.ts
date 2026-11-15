@@ -1149,7 +1149,7 @@ describe('where a deep dive sits in the launch queue', () => {
       new URL('../server/services/russell/loop.ts', import.meta.url),
       'utf8',
     );
-    expect(source).toContain('COALESCE(ordinal, 999)');
+    expect(source).toMatch(/COALESCE\((c\.)?ordinal, 999\)/);
 
     // And the compiler forwards the profile's value into the judgment, which
     // is the only thing that puts a number in that column.
