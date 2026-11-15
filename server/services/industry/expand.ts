@@ -53,7 +53,9 @@ import { getDb } from '../../db/database.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { createCandidate } from '../../repos/russellCandidates.ts';
 import { byClaimTime, everyPage, missionsForRounds } from '../russell/roundMissions.ts';
-import { structuralClaims } from '../../repos/research.ts';
+import { claimsByIds, structuralClaims, unfiledUnitEconomicClaims } from '../../repos/research.ts';
+import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
+import { readMoneyFigures } from '../cash/figures.ts';
 import {
   closeIndustryRound,
   countFiledFromOrchestration,
@@ -70,13 +72,14 @@ import {
   isCapitalMechanism,
   isCapitalRequirement,
   isConstraintKind,
+  matchBuyerType,
   nodeKindForFinding,
   pathOf,
   roleQualifier,
   transactionParties,
 } from '../../domain/industry.ts';
-import { recordClaimFact, type RecordedFact } from '../../repos/construction.ts';
-import { FACT_KEYS, isFactKey } from '../../domain/construction.ts';
+import { listProjectFacts, recordClaimFact, type RecordedFact } from '../../repos/construction.ts';
+import { FACT_KEYS, isFactKey, type FactKey } from '../../domain/construction.ts';
 import {
   bootstrapQuestion,
   BOOTSTRAP_TITLE,
@@ -312,9 +315,11 @@ export async function openAsks(input: {
   const roleAsks = (await roleAsksFromSnapshot(input.snapshot, reserve ? 1 : free)).filter((one) => !given.has(`${one.nodeId}|${one.bucketId}`));
   const allocated = reserve && roleAsks.length > 0 ? input.asks.slice(0, Math.max(0, cap - open.length - 1)) : input.asks;
   const asks = [...allocated, ...roleAsks];
+  // Which map buyers an observed unit economic already prices (F3): read once, only when a MAP ask needs it.
+  const priced = asks.some((one) => one.purpose === 'MAP') ? await pricedBuyerIds(input.projectId) : new Set<string>();
 
   for (const ask of asks) {
-    const composed = await compose({ ask, mode, byId, coverage: coverageByNode });
+    const composed = await compose({ ask, mode, byId, coverage: coverageByNode, priced });
     if (!composed) continue;
 
     let round: IndustryRound;
@@ -392,11 +397,37 @@ export async function openAsks(input: {
   return out;
 }
 
+/** The map buyers an OBSERVED or VERIFIED project-level price, unit cost or volume fact is segmented to. */
+async function pricedBuyerIds(projectId: string): Promise<Set<string>> {
+  const facts = await listProjectFacts(projectId);
+  return new Set(
+    facts
+      .filter((one) => (one.status === 'OBSERVED' || one.status === 'VERIFIED') && FACT_KEYS[one.key].kind === 'POSITIVE' && FACT_KEYS[one.key].unit.startsWith('USD') && one.segment?.startsWith('map_'))
+      .map((one) => one.segment!.slice('map_'.length)),
+  );
+}
+
+/**
+ * The buyer types at or directly under a subject that no observed fact prices:
+ * their names, an empty list when the subject holds no buyer type yet (the
+ * question then asks for whichever buyers research finds), or null when every
+ * buyer here is priced and the question asks nothing more. Pure.
+ */
+export function unpricedBuyersUnder(nodeId: string, byId: ReadonlyMap<string, IndustryNode>, priced: ReadonlySet<string>): string[] | null {
+  const node = byId.get(nodeId);
+  if (!node) return null;
+  const buyers = node.kind === 'BUYER_TYPE' ? [node] : [...byId.values()].filter((one) => one.parentId === nodeId && one.kind === 'BUYER_TYPE' && !one.retiredAt);
+  if (buyers.length === 0) return [];
+  const unpriced = buyers.filter((one) => !priced.has(one.id)).map((one) => one.name);
+  return unpriced.length > 0 ? unpriced : null;
+}
+
 async function compose(input: {
   ask: Ask;
   mode: { objective: string | null };
   byId: Map<string, IndustryNode>;
   coverage: Map<string, { children: number; scanFound: number }>;
+  priced?: ReadonlySet<string>;
 }): Promise<{ title: string; question: string } | null> {
   const { ask, mode } = input;
   if (ask.purpose === 'BOOTSTRAP') {
@@ -427,6 +458,7 @@ async function compose(input: {
         objective: mode.objective,
         round: ask.round,
         childrenSoFar: coverage?.children ?? 0,
+        unpricedBuyers: unpricedBuyersUnder(ask.nodeId, input.byId, input.priced ?? new Set()),
       }),
     };
   }
@@ -860,9 +892,8 @@ function buyerNode(name: string, round: IndustryRound, byNodeId: Map<string, Ind
     }
     return current?.id ?? null;
   };
-  const root = rootOf(round.nodeId);
-  const buyers = [...byNodeId.values()].filter((one) => one.kind === 'BUYER_TYPE' && !one.retiredAt && one.name.toLowerCase() === want);
-  return buyers.find((one) => root !== null && rootOf(one.id) === root) ?? buyers[0] ?? null;
+  // Exact first, then the normalised name (F3): "Independent Restaurants" is the map's "independent restaurant".
+  return matchBuyerType(want, byNodeId.values(), rootOf(round.nodeId));
 }
 
 /**
@@ -946,3 +977,132 @@ async function fileEconomicFact(input: {
 
 /** `file`, for the tests that drive one declared finding into its table without a mission. */
 export { file as fileFinding };
+
+/* ------------------------------------------------------------ back-fill (F3) */
+
+/** Facts the back-fill files per pass, at most: small enough never to hold a tick. */
+export const BACKFILL_BATCH = 20;
+/** UNIT_ECONOMIC claims one pass reads, at most, before it stops for the tick. */
+const BACKFILL_SCAN = 200;
+/** Card fields whose gated claim states what the payer pays, and what serving them costs. */
+const BACKFILL_FIELDS: Readonly<Record<string, { key: FactKey; end: 'LOW' | 'HIGH'; measures: string }>> = {
+  revenueRange: { key: 'price_per_unit', end: 'LOW', measures: 'what this buyer pays per unit of work, as published' },
+  price: { key: 'price_per_unit', end: 'LOW', measures: 'what this buyer pays per unit of work, as published' },
+  directCosts: { key: 'contractor_rate_per_unit', end: 'HIGH', measures: 'the direct cost of supplying one unit of this buyer’s work, as published' },
+};
+/** Where each project's UNIT_ECONOMIC scan stopped, so a pass that filed nothing moves on rather than rereading it. */
+const unitEconomicCursor = new Map<string, string>();
+
+export interface Backfilled {
+  filed: RecordedFact[];
+  /** Claims read and left unfiled: a buyer the map does not hold, no figure, not gated. */
+  skipped: number;
+}
+
+/**
+ * File construction facts from gated claims research already holds (F3,
+ * 2026-11-15): production held 16 786 sourced claims and no construction fact,
+ * because only a claim from an open kernel round's mission was ever read.
+ *
+ * Two sources, each a claim that already states a figure for a buyer the map
+ * holds:
+ *   1. a UNIT_ECONOMIC claim with a declared amount, from any orchestration,
+ *      whose buyer qualifier names a map buyer type — filed by the kernel's
+ *      own rules (`fileEconomicFact`);
+ *   2. a claim a card holds as EVIDENCE for its price or direct costs, on an
+ *      opening whose payer names a map buyer type — the figure read by the
+ *      money reader the card uses (`readMoneyFigures`), at the unfavourable
+ *      end (the lowest price, the highest cost), in USD only.
+ *
+ * Bounded (`BACKFILL_BATCH` writes, `BACKFILL_SCAN` reads) and idempotent: a
+ * fact is unique by its claim, so a replay files nothing twice. Provenance is
+ * the claim; the status is the claim's (`claimFactStatus`), never VERIFIED.
+ */
+export async function backfillClaimFacts(projectId: string, batch = BACKFILL_BATCH): Promise<Backfilled> {
+  const out: Backfilled = { filed: [], skipped: 0 };
+  const room = () => batch - out.filed.length;
+  const nodes = await listNodes(projectId);
+  if (!nodes.some((one) => one.kind === 'BUYER_TYPE' && !one.retiredAt)) return out;
+
+  const fileOne = async (input: { claim: ResearchClaim; buyer: IndustryNode; key: FactKey; amount: number; measures: string }): Promise<void> => {
+    const { claim, buyer } = input;
+    const recorded = await recordClaimFact({
+      projectId,
+      nodeId: buyer.id,
+      claimId: claim.id,
+      key: input.key,
+      segment: `map_${buyer.id}`,
+      low: input.amount,
+      high: input.amount,
+      status: claimFactStatus(claim),
+      measures: input.measures.slice(0, 500),
+      sourceTitle: claim.sourceTitle ?? claim.sourcePublisher ?? claim.sourceUrl ?? 'research claim',
+      sourceUrl: claim.sourceUrl,
+      sourceKind: claim.primarySource ? 'PRIMARY' : 'SECONDARY',
+      observedAt: claimObservedAt(claim),
+    });
+    if (!recorded) return;
+    out.filed.push(recorded);
+    await recordCashEvent({
+      projectId,
+      kind: 'INDUSTRY_FACT_ABSORBED',
+      actorRef: 'BRAIN',
+      summary: `${input.key} for ${buyer.name} back-filed from an existing claim as ${recorded.status.toLowerCase()}.`,
+      detail: { factId: recorded.id, claimId: claim.id, key: input.key, segment: recorded.segment, status: recorded.status, nodeId: buyer.id, backfill: true, observedAt: recorded.observedAt ?? null, validUntil: recorded.validUntil ?? null },
+    });
+  };
+
+  // 1. Declared unit economics outside any open round, from where the last pass stopped.
+  const declared = await unfiledUnitEconomicClaims(projectId, unitEconomicCursor.get(projectId) ?? '', BACKFILL_SCAN);
+  let reached = '';
+  for (const claim of declared) {
+    if (room() <= 0) break;
+    reached = claim.id;
+    const key = claim.structuralSubject;
+    const buyer = claim.structuralQualifier ? matchBuyerType(claim.structuralQualifier, nodes) : null;
+    const amount = (claim.structuralAmountCents ?? NaN) / 100;
+    if (!isFactKey(key) || !FACT_KEYS[key].segment || !buyer || !Number.isFinite(amount) || (FACT_KEYS[key].kind === 'RATE' && amount > 1)) {
+      out.skipped += 1;
+      continue;
+    }
+    await fileOne({ claim, buyer, key, amount, measures: claim.claim });
+  }
+  // Everything read: start over next pass (a buyer added since may now match). Otherwise resume after the last one read.
+  unitEconomicCursor.set(projectId, reached === declared[declared.length - 1]?.id && declared.length < BACKFILL_SCAN ? '' : reached);
+  if (room() <= 0) return out;
+
+  // 2. Prices and costs cards hold as evidence, for payers the map names.
+  const facts = (await cardFactsForProject(projectId)).filter((one) => one.kind === 'EVIDENCE' && one.claimId && BACKFILL_FIELDS[one.field]);
+  if (facts.length === 0) return out;
+  const filed = new Set((await listProjectFacts(projectId)).map((one) => one.sourceClaimId).filter((id): id is string => !!id));
+  const pending = facts.filter((one) => !filed.has(one.claimId!));
+  if (pending.length === 0) return out;
+  const openings = new Map((await listOpportunities({ projectId })).map((one) => [one.id, one]));
+  const candidates: { fact: (typeof pending)[number]; buyer: IndustryNode }[] = [];
+  for (const fact of pending) {
+    const opening = openings.get(fact.opportunityId);
+    if (!opening?.payer || opening.duplicateOfId || (opening.currency ?? '').toUpperCase() !== 'USD') continue;
+    const buyer = matchBuyerType(opening.payer, nodes);
+    if (buyer) candidates.push({ fact, buyer });
+  }
+  if (candidates.length === 0) return out;
+  const claims = new Map((await claimsByIds([...new Set(candidates.map((one) => one.fact.claimId!))])).map((one) => [one.id, one]));
+  for (const { fact, buyer } of candidates) {
+    if (room() <= 0) break;
+    const claim = claims.get(fact.claimId!);
+    const spec = BACKFILL_FIELDS[fact.field]!;
+    if (!claim || !claim.accepted || !claim.sourceUrl || filed.has(claim.id)) {
+      out.skipped += 1;
+      continue;
+    }
+    filed.add(claim.id);
+    const figures = readMoneyFigures(claim.claim, 'USD').filter((one) => one.cents > 0);
+    if (figures.length === 0) {
+      out.skipped += 1;
+      continue;
+    }
+    const cents = spec.end === 'LOW' ? Math.min(...figures.map((one) => one.cents)) : Math.max(...figures.map((one) => one.cents));
+    await fileOne({ claim, buyer, key: spec.key, amount: cents / 100, measures: `${spec.measures}: ${claim.claim}` });
+  }
+  return out;
+}

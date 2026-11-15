@@ -66,7 +66,7 @@ import {
   type Ask,
   type SubjectSignals,
 } from './allocate.ts';
-import { absorb, openAsks, type Absorbed, type OpenedRound } from './expand.ts';
+import { absorb, backfillClaimFacts, openAsks, type Absorbed, type OpenedRound } from './expand.ts';
 import { graphSnapshot, type GraphSnapshot } from './graph.ts';
 import type { CashMode, IndustryRoundPurpose, RussellGoal } from '../../domain/types.ts';
 import type { Workstream } from '../../domain/register.ts';
@@ -89,6 +89,8 @@ export interface KernelPass {
   transfers?: Ask[];
   /** What failed this pass, in words. A failure in one step no longer stops the others. */
   failures?: string[];
+  /** Facts for the construction filed this pass from claims research already held (F3). */
+  backfilled?: number;
 }
 
 export type KernelBasis = 'SPRINT' | 'STANDING';
@@ -195,6 +197,14 @@ export async function kernelAuthority(
   };
 }
 
+/** How long a project whose back-fill filed nothing waits before it is read again (F3). */
+export const BACKFILL_EVERY_MS = 15 * 60_000;
+const backfillIdleAt = new Map<string, number>();
+/** For tests: forget when each project's back-fill last found nothing. */
+export function resetBackfillIdle(): void {
+  backfillIdleAt.clear();
+}
+
 export async function runIndustryKernel(projectId: string): Promise<KernelPass> {
   const mode = await getCashMode(projectId);
   /*
@@ -226,6 +236,26 @@ export async function runIndustryKernel(projectId: string): Promise<KernelPass> 
     absorbed = NOTHING_ABSORBED;
   }
 
+  /*
+   * File construction facts from claims research already holds (F3), in a
+   * small batch, under either authority or none: it is absorbing, not new
+   * discovery. Optional work, so it yields to database pressure (§63), and a
+   * failure is reported and never stops the pass. At most once per
+   * `BACKFILL_EVERY_MS` per project while it files nothing, so a project with
+   * nothing left to file does not reread its cards every tick.
+   */
+  let backfilled = 0;
+  const lastEmpty = backfillIdleAt.get(projectId);
+  if (databasePressure().state !== 'SHEDDING' && (lastEmpty === undefined || Date.now() - lastEmpty >= BACKFILL_EVERY_MS)) {
+    try {
+      backfilled = (await backfillClaimFacts(projectId)).filed.length;
+      if (backfilled === 0) backfillIdleAt.set(projectId, Date.now());
+      else backfillIdleAt.delete(projectId);
+    } catch (error) {
+      failures.push(`backfill: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
   const snapshot = await graphSnapshot(projectId);
   const counts = {
     nodes: snapshot.nodes.filter((one) => one.retiredAt === null).length,
@@ -240,11 +270,12 @@ export async function runIndustryKernel(projectId: string): Promise<KernelPass> 
       ...counts,
       basis: null,
       failures,
+      backfilled,
     };
   }
   if (authority.basis === 'STANDING') {
     if (!mode && counts.nodes === 0 && !(await holdsMoneyGoal(projectId))) {
-      return { ...EMPTY, absorbed, ...counts, failures };
+      return { ...EMPTY, absorbed, ...counts, failures, backfilled };
     }
     if (databasePressure().state === 'SHEDDING') {
       return {
@@ -261,6 +292,7 @@ export async function runIndustryKernel(projectId: string): Promise<KernelPass> 
         ...counts,
         basis: 'STANDING',
         failures,
+        backfilled,
       };
     }
   }
@@ -311,6 +343,7 @@ export async function runIndustryKernel(projectId: string): Promise<KernelPass> 
     asks: planned,
     transfers,
     failures,
+    backfilled,
   };
 }
 
