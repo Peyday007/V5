@@ -72,6 +72,45 @@ export interface Decision {
   target: number;
   reason: string;
   stable: boolean;
+  /**
+   * Held at `MIN_TARGET` because at least half of the model's measured window
+   * failed on the provider (S-0171: restore the route before scaling it). While
+   * set, neither an `ADD_CAPACITY` grant nor any fill may raise the target; it
+   * clears only when a window with provider failures below half is measured.
+   */
+  providerHeld?: boolean;
+}
+
+/** Marks a provider-failure hold in a decision's reason, so a restart resumes the hold from the persisted row. */
+export const PROVIDER_HOLD_MARK = 'provider-failure hold';
+
+/**
+ * Whether a window holds a model at its minimum for provider failures: at
+ * least four outcomes, half or more of them failed on the provider. Pure.
+ */
+export function providerFailing(window: Window): boolean {
+  const samples = window.ok + window.content + window.transient;
+  return samples >= 4 && window.transient * 2 >= samples;
+}
+
+/** Whether a window measures the provider answering again: any outcome, fewer than half failed on the provider. Pure. */
+export function providerRecovered(window: Window): boolean {
+  const samples = window.ok + window.content + window.transient;
+  return samples > 0 && window.transient * 2 < samples;
+}
+
+function providerHold(window: Window, held: boolean): Decision {
+  const samples = window.ok + window.content + window.transient;
+  const share = samples > 0 ? Math.round((window.transient / samples) * 100) : 0;
+  const why = samples > 0
+    ? `${share}% of ${samples} outcomes failed on the provider`
+    : 'no outcome measured since the provider failed';
+  return {
+    target: MIN_TARGET,
+    reason: `${PROVIDER_HOLD_MARK}: ${why}; held at ${MIN_TARGET} until a window below half provider failures is measured${held ? ' (hold continues)' : ''}`,
+    stable: false,
+    providerHeld: true,
+  };
 }
 
 /**
@@ -93,6 +132,8 @@ export function decideTarget(input: {
   window: Window;
   pressure: Pressure;
   ceiling?: number;
+  /** The previous step held this model for provider failures (`Decision.providerHeld`). */
+  providerHeld?: boolean;
 }): Decision {
   const ceiling = input.ceiling ?? SAFETY_CEILING;
   const { target, active, waiting, window, pressure } = input;
@@ -100,12 +141,23 @@ export function decideTarget(input: {
   const transientRate = samples > 0 ? window.transient / samples : 0;
   const okRate = samples > 0 ? window.ok / samples : 1;
   const half = Math.max(MIN_TARGET, Math.floor(target / 2));
-  if (pressure.db) return { target: half, reason: 'Brain database saturated', stable: false };
+  const held = providerFailing(window) || (!!input.providerHeld && !providerRecovered(window));
+  // Brain's own pressure is read first and names the decision; a provider hold it meets is kept, not dropped.
+  const shrink = (reason: string): Decision => (held ? { target: MIN_TARGET, reason: `${reason}; ${PROVIDER_HOLD_MARK} kept at ${MIN_TARGET}`, stable: false, providerHeld: true } : { target: half, reason, stable: false });
+  if (pressure.db) return shrink('Brain database saturated');
   // The lane's slots wait on HTTP; the mean lag that should shrink them is Brain's own stall,
   // not a busy loop. At 300 ms the lane sat at one slot through ordinary bursts (production
   // 2026-11-14: halved at 474–974 ms with highest stable targets of 19–26).
-  if (pressure.lagMs > LAG_SHRINK_MS) return { target: half, reason: `Brain event loop lagging ${Math.round(pressure.lagMs)} ms`, stable: false };
-  if (pressure.cpu > 0.85) return { target: half, reason: `Brain CPU at ${Math.round(pressure.cpu * 100)}%`, stable: false };
+  if (pressure.lagMs > LAG_SHRINK_MS) return shrink(`Brain event loop lagging ${Math.round(pressure.lagMs)} ms`);
+  if (pressure.cpu > 0.85) return shrink(`Brain CPU at ${Math.round(pressure.cpu * 100)}%`);
+  /*
+   * Restore first (S-0171). Halving at 30% let the grant and the grow branch
+   * raise a model whose calls mostly fail (production 2026-11-15: 97-98% of
+   * 145-187 lane outcomes were provider failures over six hours). At half or
+   * more the model drops to its minimum and stays there until a window below
+   * half is measured; an empty window is not a measurement.
+   */
+  if (held) return providerHold(window, !!input.providerHeld);
   if (samples >= 4 && transientRate >= 0.3) {
     return { target: half, reason: `provider overloaded: ${Math.round(transientRate * 100)}% of ${samples} calls failed`, stable: false };
   }
@@ -188,7 +240,7 @@ export function grantsFromDecision(decision: { detail: Record<string, unknown>; 
  */
 export function applyGrant(input: { target: number; stableHigh: number; decision: Decision; grant: CapacityGrant | null; ceiling?: number }): { decision: Decision; applied: boolean } {
   const { target, decision, grant } = input;
-  if (!grant || decision.target < target) return { decision, applied: false };
+  if (!grant || decision.target < target || decision.providerHeld) return { decision, applied: false };
   const ceiling = input.ceiling ?? SAFETY_CEILING;
   const bound = Math.min(ceiling, Math.max(target, input.stableHigh), target + grant.units);
   if (bound <= decision.target) return { decision, applied: false };
@@ -338,6 +390,8 @@ interface ModelPool {
   busy: number;
   /** The most slots busy at once since the last control step: simultaneous jobs, measured. */
   peakBusy: number;
+  /** Held at its minimum for provider failures until a window below half is measured. */
+  providerHeld: boolean;
 }
 
 const pools = new Map<string, ModelPool>();
@@ -461,8 +515,10 @@ export async function controlStep(): Promise<ControlReading | null> {
     if (!pools.has(worker.model)) {
       const saved = persisted.get(worker.model);
       // After a restart, resume at half of what was learned: fast to regain, gentle on a cold machine.
-      const target = saved ? Math.max(START_TARGET, Math.floor(saved.target / 2)) : START_TARGET;
-      pools.set(worker.model, { worker, index, target, stableHigh: saved?.stableHigh ?? 1, running: 0, busy: 0, peakBusy: 0 });
+      // A provider-failure hold survives the restart: the route is restored before it is regrown.
+      const providerHeld = !!saved && saved.reason.includes(PROVIDER_HOLD_MARK);
+      const target = providerHeld ? MIN_TARGET : saved ? Math.max(START_TARGET, Math.floor(saved.target / 2)) : START_TARGET;
+      pools.set(worker.model, { worker, index, target, stableHigh: saved?.stableHigh ?? 1, running: 0, busy: 0, peakBusy: 0, providerHeld });
     }
   }
   const waiting = await waitingNow();
@@ -476,7 +532,7 @@ export async function controlStep(): Promise<ControlReading | null> {
     const gpu = config.runpod && isRunpodSlot(pool.worker.model);
     const window = gpu ? gpuWindow(await windowFor(pool.worker.model)) : await windowFor(pool.worker.model);
     const peak = Math.max(pool.peakBusy, pool.busy);
-    let decision = decideTarget({ target: pool.target, active: peak, waiting, window, pressure, ...(gpu ? { ceiling: gpuCeiling() } : {}) });
+    let decision = decideTarget({ target: pool.target, active: peak, waiting, window, pressure, providerHeld: pool.providerHeld, ...(gpu ? { ceiling: gpuCeiling() } : {}) });
     const offered = grants.find((g) => g.model === pool.worker.model) ?? null;
     const grant = offered && !(await grantAlreadyApplied(pool.worker.model, offered.fingerprint)) ? offered : null;
     const granted = applyGrant({ target: pool.target, stableHigh: pool.stableHigh, decision, grant, ...(gpu ? { ceiling: gpuCeiling() } : {}) });
@@ -507,6 +563,9 @@ export async function controlStep(): Promise<ControlReading | null> {
       // measured constraint stays on the record beside it).
       decision = { ...decision, target: share, reason: `${decision.reason}; held to its share of the database pool (${share} of ${share * pools.size} slots)`, stable: false };
     }
+    // The hold binds after every other adjustment: nothing raises a provider-held model.
+    if (decision.providerHeld && decision.target > MIN_TARGET) decision = { ...decision, target: MIN_TARGET };
+    pool.providerHeld = !!decision.providerHeld;
     if (decision.stable) pool.stableHigh = Math.max(pool.stableHigh, peak);
     pool.peakBusy = pool.busy;
     // An applied verdict is consumed once, whatever the caps below left of it; one the
