@@ -286,6 +286,65 @@ export function pathOf(
   return out;
 }
 
+/**
+ * The key two names of one buyer population share (F3, 2026-11-15): case,
+ * punctuation, "&"/"and", a leading article and plural endings are noise, so
+ * "Independent Restaurants", "independent restaurant" and "The independent
+ * restaurants" are one buyer. It is the map's own normalisation (`norm` in
+ * `cash/construct.ts` and `industry/transfer.ts`) with plurals folded, and it
+ * folds nothing else: a qualifier ("chain restaurants") is a different
+ * population, never a near-match.
+ */
+export function buyerNameKey(name: string | null | undefined): string {
+  const words = (name ?? '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter(Boolean);
+  if (words[0] === 'the' && words.length > 1) words.shift();
+  return words
+    .map((word) => {
+      if (word.length > 4 && word.endsWith('ies')) return `${word.slice(0, -3)}y`;
+      if (word.length > 4 && /(ches|shes|sses|xes|zes)$/.test(word)) return word.slice(0, -2);
+      if (word.length > 3 && word.endsWith('s') && !word.endsWith('ss') && !word.endsWith('us') && !word.endsWith('is')) return word.slice(0, -1);
+      return word;
+    })
+    .join(' ');
+}
+
+/**
+ * The live BUYER_TYPE node a declared buyer name means, or null. An exact
+ * (case-insensitive) name wins; otherwise `buyerNameKey` decides. Among
+ * several, the one under `preferRoot` (the subtree a question asked about)
+ * wins, then the oldest.
+ */
+export function matchBuyerType<N extends { id: string; parentId: string | null; kind: string; name: string; retiredAt: string | null; createdAt: string }>(
+  name: string,
+  nodes: Iterable<N>,
+  preferRoot: string | null = null,
+): N | null {
+  const all = [...nodes];
+  const byId = new Map(all.map((one) => [one.id, one]));
+  const rootOf = (id: string): string => {
+    let current = byId.get(id);
+    const seen = new Set<string>();
+    while (current && current.parentId && byId.has(current.parentId) && !seen.has(current.id)) {
+      seen.add(current.id);
+      current = byId.get(current.parentId);
+    }
+    return current?.id ?? id;
+  };
+  const live = all.filter((one) => one.kind === 'BUYER_TYPE' && !one.retiredAt).sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+  const want = name.replace(/\s+/g, ' ').trim().toLowerCase();
+  const key = buyerNameKey(name);
+  if (!key) return null;
+  const exact = live.filter((one) => one.name.toLowerCase() === want);
+  const pool = exact.length > 0 ? exact : live.filter((one) => buyerNameKey(one.name) === key);
+  return pool.find((one) => preferRoot !== null && rootOf(one.id) === preferRoot) ?? pool[0] ?? null;
+}
+
 export function depthOf(
   nodeId: string,
   byId: ReadonlyMap<string, { id: string; parentId: string | null; name: string }>,

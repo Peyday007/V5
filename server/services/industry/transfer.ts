@@ -18,8 +18,7 @@
  * One ask per (population, design, precedent), ever: the round key is the
  * subject and the bucket.
  */
-import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
-import { heldPrecedents, TRANSFER_MATERIAL } from '../cash/construct.ts';
+import { heldPrecedents, shownWorkingIn, TRANSFER_MATERIAL } from '../cash/construct.ts';
 import { defaultDesign, describeDesign, designKey, FUNDING, AGGREGATION, REPEAT, STRUCTURE_KEYS, type Design } from '../cash/properties.ts';
 import { designToPosition } from './construction/designs.ts';
 import { positionKey } from './construction/businesses.ts';
@@ -64,9 +63,7 @@ function norm(text: string | null | undefined): string {
 export async function precedentsIn(snapshot: GraphSnapshot): Promise<HeldPrecedent[]> {
   const held = snapshot.opportunities.filter((one) => !one.duplicateOfId && one.state !== 'DECLINED' && one.state !== 'ARCHIVED');
   if (held.length === 0) return [];
-  const facts = await cardFactsForProject(snapshot.projectId);
-  const evidenced = (field: string) => new Set(facts.filter((one) => one.field === field && one.kind === 'EVIDENCE').map((one) => one.opportunityId));
-  const byBase = heldPrecedents(held, evidenced('payer'), evidenced('captureMechanism'));
+  const byBase = heldPrecedents(held, await shownWorkingIn(snapshot.projectId));
   return [...byBase.entries()].map(([base, opportunity]) => ({ opportunity, design: defaultDesign(base) }));
 }
 

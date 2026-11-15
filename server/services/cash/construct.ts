@@ -42,14 +42,17 @@
 import { breaksOperatingModel, operatingFit } from '../../domain/operatingModel.ts';
 import { createHash } from 'node:crypto';
 import { listNodes } from '../../repos/industry.ts';
+import { listProjectConstructionFacts } from '../../repos/construction.ts';
+import type { FactKey, FactStatus } from '../../domain/construction.ts';
 import { listOpportunities } from '../../repos/cashPortfolio.ts';
 import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
+import { paidOpportunityIds } from '../../repos/cashLedger.ts';
 import { statesNamedIn } from '../../domain/jurisdiction.ts';
 import { APPROVAL_ENVELOPES } from '../research/approvalEnvelope.ts';
 import { describesOwnAction } from '../research/actorScope.ts';
 import { composeArrangement, type Part } from '../quant/mechanism.ts';
 import { reconstruct } from '../quant/reconstruct.ts';
-import type { CashOpportunity, IndustryNode } from '../../domain/types.ts';
+import type { CashCardFact, CashOpportunity, IndustryNode } from '../../domain/types.ts';
 import type { Estimate, Observation } from '../../domain/quant.ts';
 import { repeatBusinessObservations } from './deliverables/realization.ts';
 
@@ -111,20 +114,60 @@ export type ConstructionOrigin = 'FORWARD' | 'TRANSFER' | 'REVERSE';
 export const TRANSFER_MATERIAL = ['legal context', 'payment terms', 'sales cycle', 'capital', 'buyer behaviour'] as const;
 
 /**
- * The designs held openings show working, by structure: an opening whose payer
- * and way of being paid a gated claim established (EVIDENCE card facts) is a
- * published precedent for its structure's design. The first per structure, in
- * the order given. Shared by goal construction and the standing kernel's
- * transfer asks (W-8), so both read one definition of a precedent.
+ * Card fields whose gated answer says what buyers pay: the price lane
+ * (`revenueRange`), the short card's price, and published buying evidence.
+ */
+export const PRICE_SHOWN_FIELDS: readonly string[] = ['revenueRange', 'price', 'buyingEvidence'];
+
+/**
+ * The openings whose design is shown working, by evidence production actually
+ * writes (F1, 2026-11-15). Either a buyer has paid on it (a customer payment,
+ * net of refunds), or a gated claim established who pays *and* a gated claim
+ * established that they pay for it at a price — EVIDENCE card facts, which the
+ * deep dive's payer and price lanes and research answers write.
+ *
+ * The capture thesis is not read here, and that is deliberate: production only
+ * ever writes it as Brain's RECOMMENDATION (`proposeEngineTerms`, composed from
+ * the evidenced payer), so requiring it as EVIDENCE made every precedent
+ * unreachable, and accepting the recommendation would let Brain's own proposal
+ * stand as proof. A recommendation alone is never a precedent; neither is a
+ * payer with no price, nor a price nobody is shown paying.
+ */
+export function shownWorking(
+  facts: readonly Pick<CashCardFact, 'opportunityId' | 'field' | 'kind'>[],
+  paid: ReadonlySet<string> = new Set(),
+): Set<string> {
+  const payer = new Set<string>();
+  const price = new Set<string>();
+  for (const one of facts) {
+    if (one.kind !== 'EVIDENCE') continue;
+    if (one.field === 'payer') payer.add(one.opportunityId);
+    else if (PRICE_SHOWN_FIELDS.includes(one.field)) price.add(one.opportunityId);
+  }
+  const out = new Set(paid);
+  for (const id of payer) if (price.has(id)) out.add(id);
+  return out;
+}
+
+/** `shownWorking` over a project's rows: its card facts and its ledger. */
+export async function shownWorkingIn(projectId: string, facts?: readonly CashCardFact[]): Promise<Set<string>> {
+  return shownWorking(facts ?? (await cardFactsForProject(projectId)), await paidOpportunityIds(projectId));
+}
+
+/**
+ * The designs held openings show working, by structure: an opening
+ * `shownWorking` admits is a published precedent for its structure's design.
+ * The first per structure, in the order given. Shared by goal construction and
+ * the standing kernel's transfer asks (W-8), so both read one definition of a
+ * precedent.
  */
 export function heldPrecedents(
   opportunities: readonly CashOpportunity[],
-  evidencedPayer: ReadonlySet<string>,
-  evidencedCapture: ReadonlySet<string>,
+  shown: ReadonlySet<string>,
 ): Map<Structure, CashOpportunity> {
   const out = new Map<Structure, CashOpportunity>();
   for (const o of opportunities) {
-    if (!evidencedPayer.has(o.id) || !evidencedCapture.has(o.id)) continue;
+    if (!shown.has(o.id)) continue;
     for (const base of STRUCTURE_KEYS) {
       if ((STRUCTURES[base].alreadyHeldAs as readonly string[]).includes(o.mechanism) && !out.has(base)) out.set(base, o);
     }
@@ -310,7 +353,7 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
   const opportunities = (await listOpportunities({ projectId: input.projectId })).filter((one) => !one.duplicateOfId && one.state !== 'DECLINED' && one.state !== 'ARCHIVED');
   const facts = await cardFactsForProject(input.projectId);
   const evidencedPayer = new Set(facts.filter((one) => one.field === 'payer' && one.kind === 'EVIDENCE').map((one) => one.opportunityId));
-  const evidencedCapture = new Set(facts.filter((one) => one.field === 'captureMechanism' && one.kind === 'EVIDENCE').map((one) => one.opportunityId));
+  const shown = await shownWorkingIn(input.projectId, facts);
   const allowed = (text: string | null | undefined) => !excludedBy(text, exclusions);
 
   // Parts, grouped by the part of the economy they belong to.
@@ -347,14 +390,14 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
   }
 
   /*
-   * Designs held openings show working, by structure: an opening whose payer
-   * and way of being paid a gated claim established is a published precedent
-   * for that design. Carried to a different buyer it is a transfer — the
+   * Designs held openings show working, by structure: an opening a buyer paid
+   * on, or whose payer and price gated claims established (`shownWorking`), is
+   * a published precedent for that design. Carried to a different buyer it is a transfer — the
    * causal economics, not the business.
    */
-  const precedentByBase = heldPrecedents(opportunities.filter((o) => allowed(o.title)), evidencedPayer, evidencedCapture);
+  const precedentByBase = heldPrecedents(opportunities.filter((o) => allowed(o.title)), shown);
 
-  const { priced, tiedUp, capability } = await heldEvidence(input, opportunities, allowed);
+  const { priced, tiedUp, facts: factObs, capability } = await heldEvidence(input, opportunities, allowed);
   /*
    * The same inputs construct the same arrangements, so a plan re-read whose map, openings,
    * facts and limits did not move reuses the last construction instead of composing up to
@@ -370,11 +413,11 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
    */
   const { known, reuse } = await libraryFor(input.projectId);
   const memoKey = createHash('sha256')
-    .update(JSON.stringify({ day: now.toISOString().slice(0, 10), input: { ...input, now: undefined, limits: undefined }, limits, targets, exclusions, sectors: [...sectors.values()], precedent: [...precedentByBase.entries()].map(([k, o]) => [k, o.id]), priced, tiedUp, openings: opportunities.map((o) => [o.id, o.payer, o.mechanism, o.state, o.updatedAt]), known }))
+    .update(JSON.stringify({ day: now.toISOString().slice(0, 10), input: { ...input, now: undefined, limits: undefined }, limits, targets, exclusions, sectors: [...sectors.values()], precedent: [...precedentByBase.entries()].map(([k, o]) => [k, o.id]), priced, tiedUp, factObs, openings: opportunities.map((o) => [o.id, o.payer, o.mechanism, o.state, o.updatedAt]), known }))
     .digest('hex');
   const held = constructionMemo.get(memoKey);
   if (held && Date.now() - held.at < CONSTRUCTION_MEMO_MS) return structuredClone(held.result);
-  const job: ConstructionJob = { sectors: [...sectors.values()], opportunities, precedent: [...precedentByBase.entries()], capability, priced, tiedUp, input, limits, targets, exclusions, now, known, reuse };
+  const job: ConstructionJob = { sectors: [...sectors.values()], opportunities, precedent: [...precedentByBase.entries()], capability, priced, tiedUp, facts: factObs, input, limits, targets, exclusions, now, known, reuse };
   // How many candidates the parts support, against how many are composed: the cut is reported, never silent (K-2).
   const considered = forEachCandidate(job, () => undefined);
   /*
@@ -415,7 +458,7 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
 }
 
 /** The published prices, money tied up and proved capability every composition reads. */
-async function heldEvidence(input: ConstructionInput, opportunities: CashOpportunity[], allowed: (text: string | null | undefined) => boolean): Promise<{ priced: Observation[]; tiedUp: Observation[]; capability: Primitive | null }> {
+async function heldEvidence(input: ConstructionInput, opportunities: CashOpportunity[], allowed: (text: string | null | undefined) => boolean): Promise<{ priced: Observation[]; tiedUp: Observation[]; facts: FactObservations; capability: Primitive | null }> {
   // Published prices the project holds, as observations about the buyers who paid them.
   const priced = opportunities
     .filter((one) => one.payer && one.priceCents && one.priceCents > 0 && one.currency === input.currency && allowed(one.title))
@@ -430,6 +473,9 @@ async function heldEvidence(input: ConstructionInput, opportunities: CashOpportu
   // Repeat business a delivered, accepted deal's buyer gave afterwards: new economic evidence about what that payer pays (LIFE-29-2).
   const repeat = await repeatBusinessObservations(input.projectId, input.currency);
   priced.push(...repeat);
+  // What research observed these buyers pay, filed as construction facts (F2): the same priced path.
+  const facts = await constructionObservations(input, allowed);
+  priced.push(...facts.priced);
   // What deals for these buyers tied up before money came in: evidence for a run's or a deal's exposure.
   const tiedUp = opportunities
     .filter((one) => one.payer && one.peakFundingCents !== null && one.peakFundingCents > 0 && one.currency === input.currency && allowed(one.title))
@@ -442,7 +488,75 @@ async function heldEvidence(input: ConstructionInput, opportunities: CashOpportu
       measures: `money tied up on "${one.title.slice(0, 60)}"`,
     }));
   const capability: Primitive | null = input.delivers.length > 0 ? { name: input.delivers.join(', '), claimId: null, from: 'CAPABILITY', ref: 'deliverables', path: `CAPABILITY:${input.delivers.map(norm).sort().join('>')}` } : null;
-  return { priced, tiedUp, capability };
+  return { priced, tiedUp, facts: { unitCost: facts.unitCost, volume: facts.volume }, capability };
+}
+
+/** Construction facts that bear on a composition beyond its price: what supply costs per unit, and how much one buyer buys. */
+export interface FactObservations {
+  /** What supply is paid per unit for these buyers' work: a margin design's supply cost. */
+  unitCost: Observation[];
+  /** Units one of these buyers buys in the goal window: the demand side's need rate. */
+  volume: Observation[];
+}
+
+/** Fact keys read as a price these buyers pay, a unit cost of serving them, and a volume they buy. */
+const FACT_PRICE_KEYS: readonly FactKey[] = ['price_per_unit'];
+const FACT_COST_KEYS: readonly FactKey[] = ['contractor_rate_per_unit'];
+const FACT_VOLUME_KEYS: readonly FactKey[] = ['account_units_per_month'];
+/** Only what was seen: a sourced claim that reports its source (OBSERVED) or a person's attestation (VERIFIED). */
+const FACT_EVIDENCE_STATUSES: readonly FactStatus[] = ['OBSERVED', 'VERIFIED'];
+
+/**
+ * Project-level construction facts (W-5) about a buyer type on the map, as
+ * observations about the buyers that node names (F2, 2026-11-15). Before this
+ * the arrangement builder priced from opening columns alone, and a figure
+ * research filed for "Independent restaurants" never reached an arrangement
+ * whose buyers are exactly those.
+ *
+ * Only a fact segmented to one map buyer (`map_<node id>`) is read, so a
+ * figure about one population is never handed to another (PRICE-POOL), and
+ * only an OBSERVED or VERIFIED one: an estimate or an assumption is not
+ * evidence of what these buyers pay. Each carries its observation date and
+ * validity (W-10), so the reconstruction ages it as it ages any other. Money
+ * facts are recorded in USD (`FACT_KEYS` units) and are read only for a USD
+ * goal: a figure is never converted at a rate nobody chose. The lineage is the
+ * claim, so a fact and the opening priced from the same claim count once.
+ */
+export async function constructionObservations(
+  input: Pick<ConstructionInput, 'projectId' | 'currency' | 'daysLeft'>,
+  allowed: (text: string | null | undefined) => boolean = () => true,
+): Promise<{ priced: Observation[]; unitCost: Observation[]; volume: Observation[] }> {
+  const out = { priced: [] as Observation[], unitCost: [] as Observation[], volume: [] as Observation[] };
+  const facts = (await listProjectConstructionFacts(input.projectId)).filter((one) => FACT_EVIDENCE_STATUSES.includes(one.status) && one.segment?.startsWith('map_'));
+  if (facts.length === 0) return out;
+  const all = await listNodes(input.projectId);
+  const byId = new Map(all.map((one) => [one.id, one]));
+  const usd = input.currency.toUpperCase() === 'USD';
+  const windowMonths = Math.max(1, input.daysLeft) / 30;
+  for (const fact of facts) {
+    const node = byId.get(fact.segment!.slice('map_'.length));
+    if (!node || node.retiredAt || node.kind !== 'BUYER_TYPE' || !safeName(node.name) || !allowed(node.name)) continue;
+    const root = rootOf(node, byId);
+    if (!allowed(root.name)) continue;
+    const kind = FACT_PRICE_KEYS.includes(fact.key) ? 'priced' : FACT_COST_KEYS.includes(fact.key) ? 'unitCost' : FACT_VOLUME_KEYS.includes(fact.key) ? 'volume' : null;
+    if (!kind) continue;
+    if (kind !== 'volume' && !usd) continue;
+    const scale = kind === 'volume' ? windowMonths : 1;
+    const low = Math.min(fact.low, fact.high) * scale;
+    const high = Math.max(fact.low, fact.high) * scale;
+    if (!(high > 0)) continue;
+    out[kind].push({
+      id: `fact:${fact.id}`,
+      value: low === high ? { kind: 'POINT', value: low } : { kind: 'RANGE', low, high },
+      context: { payer: norm(node.name), industry: norm(root.name), arrangement: 'held' },
+      lineage: [fact.sourceClaimId ? `claim:${fact.sourceClaimId}` : `fact:${fact.id}`],
+      source: fact.sourceClaimId ? { kind: 'CLAIM', ref: fact.sourceClaimId } : { kind: 'OTHER', ref: `construction_fact:${fact.id}` },
+      observedAt: fact.observedAt ?? null,
+      validUntil: fact.validUntil ?? null,
+      measures: `${fact.key}${kind === 'volume' ? ` over ${Math.round(windowMonths * 10) / 10} month(s)` : ''}: ${fact.measures.slice(0, 120)}`,
+    });
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------- designs a model invents (lens S, S-11)
@@ -466,6 +580,7 @@ export interface InventionContext {
   opportunities: CashOpportunity[];
   priced: Observation[];
   tiedUp: Observation[];
+  facts?: FactObservations;
   capability: Primitive | null;
   input: ConstructionInput;
   limits: GoalLimits;
@@ -481,8 +596,8 @@ export async function inventionContext(input: ConstructionInput): Promise<Invent
   const limits: GoalLimits = input.limits ?? { daysLeft: input.daysLeft, remainingCents: Number.MAX_SAFE_INTEGER, capitalCeilingCents: input.capitalCeilingCents, capitalBeforeProofCents: null, bestReachCents: null };
   const allowed = (text: string | null | undefined) => !excludedBy(text, exclusions);
   const opportunities = (await listOpportunities({ projectId: input.projectId })).filter((one) => !one.duplicateOfId && one.state !== 'DECLINED' && one.state !== 'ARCHIVED');
-  const { priced, tiedUp, capability } = await heldEvidence(input, opportunities, allowed);
-  return { opportunities, priced, tiedUp, capability, input, limits, targets: targetProperties(limits).map((one) => one.property), exclusions, now };
+  const { priced, tiedUp, facts, capability } = await heldEvidence(input, opportunities, allowed);
+  return { opportunities, priced, tiedUp, facts, capability, input, limits, targets: targetProperties(limits).map((one) => one.property), exclusions, now };
 }
 
 /**
@@ -556,6 +671,8 @@ export interface ConstructionJob {
   capability: Primitive | null;
   priced: Observation[];
   tiedUp: Observation[];
+  /** Construction facts about map buyers beyond their price (F2). */
+  facts?: FactObservations;
   input: ConstructionInput;
   limits: GoalLimits;
   targets: EconomicProperty[];
@@ -717,9 +834,9 @@ export function selectCandidates(job: ConstructionJob): { selected: Candidate[];
  * on the server's own thread.
  */
 export async function composeConstruction(job: ConstructionJob, yieldEveryMs: number | null = null, plan: CompositionStep[] = compositionPlan(job)): Promise<ConstructedArrangement[]> {
-  const { capability, priced, tiedUp, input, limits, targets, exclusions, now } = job;
+  const { capability, priced, tiedUp, facts, input, limits, targets, exclusions, now } = job;
   const designs = allDesigns(STRUCTURE_KEYS);
-  const ctx = { priced, tiedUp, input, limits, targets, exclusions, now };
+  const ctx = { priced, tiedUp, facts, input, limits, targets, exclusions, now };
   const out: ConstructedArrangement[] = [];
   let lastYield = Date.now();
   const breathe = async (): Promise<void> => {
@@ -752,8 +869,10 @@ export interface CompositionStep {
 export function compositionPlan(job: ConstructionJob): CompositionStep[] {
   const { priced, tiedUp, input, limits, targets, exclusions, now } = job;
   const reuse = new Map(job.reuse ?? []);
-  // Everything a composition reads besides its own parts, once per pass.
-  const context = digestOf({ day: now.toISOString().slice(0, 10), currency: input.currency, daysLeft: input.daysLeft, limits, targets, exclusions, priced, tiedUp });
+  // Everything a composition reads besides its own parts, once per pass. Fact observations only when
+  // there are any, so a digest stored before they existed is still the same composition's.
+  const facts = job.facts && (job.facts.unitCost.length > 0 || job.facts.volume.length > 0) ? job.facts : undefined;
+  const context = digestOf({ day: now.toISOString().slice(0, 10), currency: input.currency, daysLeft: input.daysLeft, limits, targets, exclusions, priced, tiedUp, ...(facts ? { facts } : {}) });
   return selectCandidates(job).selected.map((one) => {
     const under = digestOf([context, designKey(one.design), one.transfer?.id ?? '-', one.sector ?? '-', one.demand, one.need, one.supply, one.related.map((o) => o.id)]);
     return { one, under, stored: reuse.get(under) };
@@ -791,6 +910,7 @@ function reverseArrangements(ctx: {
   capability: Primitive | null;
   priced: Observation[];
   tiedUp: Observation[];
+  facts?: FactObservations;
   input: ConstructionInput;
   limits: GoalLimits;
   targets: EconomicProperty[];
@@ -892,6 +1012,7 @@ function compose(args: {
   related: CashOpportunity[];
   priced: Observation[];
   tiedUp: Observation[];
+  facts?: FactObservations;
   input: ConstructionInput;
   limits: GoalLimits;
   targets: EconomicProperty[];
@@ -922,19 +1043,22 @@ function compose(args: {
   const ownBuyer = (one: Observation) => one.context['payer'] === norm(demand.name);
   const valueObs = args.priced.filter(ownBuyer).map((one) => ({ ...one, broad: false }));
   const riskObs = args.tiedUp.filter(ownBuyer).map((one) => ({ ...one, broad: false }));
+  // What research observed supply is paid per unit for these buyers' work, and how much one of them buys (F2).
+  const unitCostObs = (args.facts?.unitCost ?? []).filter(ownBuyer).map((one) => ({ ...one, broad: false }));
+  const volumeObs = (args.facts?.volume ?? []).filter(ownBuyer).map((one) => ({ ...one, broad: false }));
   const context = { payer: norm(demand.name), industry: norm(args.sector), arrangement: key };
   const captureFor = (): Parameters<typeof composeArrangement>[0]['capture'] =>
     def.capture === 'COMMISSION'
       ? { kind: 'COMMISSION', rate: unknownShare }
       : def.capture === 'FEE'
         ? { kind: 'FEE', fee: { min: 0, max: 100_000 } }
-        : { kind: 'MARGIN', supplyCost: { min: 0, max: 100_000, context, material: [], observations: pooled ? [] : riskObs } };
+        : { kind: 'MARGIN', supplyCost: { min: 0, max: 100_000, context, material: [], observations: pooled ? [] : [...riskObs, ...unitCostObs] } };
   const composed = composeArrangement({
     key: 'a',
     label: demand.name,
     period: `${input.daysLeft} days`,
     currency: input.currency,
-    demand: { buyers: unknownCount(0, 10_000_000), needRate: unknownCount(0, 400), reach: unknownShare, conversion: unknownShare },
+    demand: { buyers: unknownCount(0, 10_000_000), needRate: volumeObs.length > 0 ? { min: 0, max: 400, context, material: [], observations: volumeObs } : unknownCount(0, 400), reach: unknownShare, conversion: unknownShare },
     supply: def.needsSupply ? { units: unknownCount(0, 10_000_000), acceptance: unknownShare } : undefined,
     // The arrangement itself is new, so even the same payer's price is comparable rather than direct.
     value: { min: 0, max: 1_000_000, context, material: [], observations: valueObs },

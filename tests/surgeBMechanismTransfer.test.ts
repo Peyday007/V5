@@ -79,8 +79,10 @@ describe('W-8: one adapter between a design and a position', () => {
       mechanism: 'SUBCONTRACTED_FULFILMENT', sourceClaimId: 'clm_precedent', source: 'A publisher',
     });
     await updateOpportunity(precedent.id, { payer: 'Dental practices', industry: 'Dentistry' });
-    for (const field of ['payer', 'captureMechanism']) {
-      await recordCardFact({ projectId, opportunityId: precedent.id, field, kind: 'EVIDENCE', value: field === 'payer' ? 'Dental practices' : 'Own the buyer and pay a contractor.', claimId: `clm_${field}`, decidedBy: 'BRAIN' });
+    // Payer and price as gated claims established them (F1: the shape the deep dive writes;
+    // tests/productionPrecedentAndFacts.test.ts writes it through applyValidationAnswers itself).
+    for (const field of ['payer', 'revenueRange']) {
+      await recordCardFact({ projectId, opportunityId: precedent.id, field, kind: 'EVIDENCE', value: field === 'payer' ? 'Dental practices' : 'Practices pay $350 per audit.', claimId: `clm_${field}`, decidedBy: 'BRAIN' });
     }
     // The sprint ends; only a standing research grant remains, and no goal is live.
     await setLifecycle({ projectId, to: 'WINDING_DOWN', actorUserId: userId, reason: 'the sprint is over' });
