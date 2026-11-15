@@ -71,6 +71,13 @@ export interface PlanCandidate {
   id: string;
   title: string;
   source: CandidateSource;
+  /**
+   * The openings whose economics this plan's model is read from. A calibration
+   * speaks for a plan only when it was measured on exactly this set
+   * (`calibrationFor`); a plan with none — a constructed arrangement, or an
+   * alternative rebuilt on a part nobody measured — is covered by none.
+   */
+  opportunityIds: string[];
   /** The economic shape: what makes this plan a different plan. */
   dimensions: Record<DistinctnessDimension, string>;
   /** The customer pools it sells to; two plans selling to one pool count its customers once. */
@@ -133,6 +140,32 @@ export interface Calibration {
   /** Resolved predictions the calibration was measured on. */
   observations: number;
   basis: string;
+  /**
+   * The openings of the one plan this calibration was measured on: the quant
+   * engine's assurance covers its best combination, and this Brain's record
+   * covers the chosen strategy — never every candidate beside them. Null: it
+   * speaks for no plan.
+   */
+  covers: readonly string[] | null;
+}
+
+/**
+ * The calibration that speaks for this candidate's own model, or an
+ * uncalibrated one saying whose it is. One plan's assurance is never lent to
+ * another: a pathway, arrangement or strategy is calibrated only when it is
+ * the very set of openings the calibration was measured on.
+ */
+export function calibrationFor(c: Pick<PlanCandidate, 'opportunityIds'>, calibration: Calibration | null): Calibration | null {
+  if (!calibration || !calibration.calibrated) return calibration;
+  const covers = new Set(calibration.covers ?? []);
+  const own = new Set(c.opportunityIds);
+  if (own.size > 0 && own.size === covers.size && [...own].every((id) => covers.has(id))) return calibration;
+  return {
+    calibrated: false,
+    observations: 0,
+    basis: calibration.covers && calibration.covers.length > 0 ? `the calibration covers ${calibration.covers.join(' + ')} only, not this plan's own model` : 'the calibration names no plan it was measured on',
+    covers: calibration.covers,
+  };
 }
 
 export interface PublishedConfidence {
@@ -261,6 +294,7 @@ export function candidateFromPathway(p: TransactionPathway, extra: Partial<Pick<
     id: p.opportunityId,
     title: p.title,
     source: 'PATHWAY',
+    opportunityIds: [p.opportunityId],
     dimensions: {
       mechanism: textOf(p.offer) ?? p.title,
       channel: `${p.acquisition.method} ${channel}`,
@@ -310,6 +344,8 @@ export function candidateFromArrangement(a: ConstructedArrangement): PlanCandida
     id: a.key,
     title: a.label,
     source: 'ARRANGEMENT',
+    // A construction is not an opening any calibration was measured on.
+    opportunityIds: [],
     dimensions: {
       mechanism: `${a.design.base} ${a.design.funding}`,
       channel: a.design.aggregation,
@@ -369,6 +405,7 @@ export function candidateFromStrategy(r: VariantReading, pathways: ReadonlyMap<s
     id: `strategy:${r.key}`,
     title: `Strategy ${r.key}`,
     source: 'STRATEGY',
+    opportunityIds: union((c) => c.opportunityIds),
     dimensions: dims,
     customers: union((c) => c.customers),
     cashSources: union((c) => c.cashSources),
@@ -538,7 +575,8 @@ export function buildPlanSet(candidates: readonly PlanCandidate[], condition: Ac
   }
 
   const plans: Plan[] = groups.map(({ lead, members }) => {
-    const acc = acceptanceOf(lead, condition, calibration);
+    const own = calibrationFor(lead, calibration);
+    const acc = acceptanceOf(lead, condition, own);
     const union = (pick: (c: PlanCandidate) => string[]): string[] => [...new Set(members.flatMap(pick))];
     return {
       id: lead.id,
@@ -555,7 +593,7 @@ export function buildPlanSet(candidates: readonly PlanCandidate[], condition: Ac
       gaps: acc.gaps,
       acceptance: acc.status,
       acceptanceReasons: acc.reasons,
-      confidence: publishedConfidence(lead.modelled, condition.amount, calibration),
+      confidence: publishedConfidence(lead.modelled, condition.amount, own),
       downside: downsideOf(lead, condition.amount),
       modelled: lead.modelled,
       // Cash and customers are counted once per plan: the lead's figures, never a sum of folded members.
@@ -687,6 +725,8 @@ export function rebuildAfter(candidates: readonly PlanCandidate[], change: PlanC
         id: `${c.id}~${canonical(replacement).replace(/\s+/g, '-')}`,
         title: `${c.title} — rebuilt on ${replacement}`,
         source: 'RECONSTRUCTED',
+        // Its swapped part was never measured, so no calibration of the original reaches it.
+        opportunityIds: [],
         dimensions: { ...c.dimensions, [isChannel ? 'channel' : 'fulfilment']: replacement },
         channels: isChannel ? swap(c.channels) : c.channels,
         suppliers: isChannel ? c.suppliers : swap(c.suppliers),

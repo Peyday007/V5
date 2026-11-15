@@ -98,7 +98,7 @@ import { loadLibrary, recordExploration } from './reasoning/learning.ts';
 import { implementedFormats } from '../puzzle/formats/index.ts';
 import { readTimelines, type TimelineReading } from './timelines.ts';
 import { goalObjective, readOutcome, tradeOffs, type EnforceableCommitment, type GoalObjective, type OutcomeReading, type PlanTradeOff } from './objective.ts';
-import { buildPlanSet, candidateFromArrangement, candidateFromPathway, candidateFromStrategy, rebuildAfter, type AcceptanceCondition, type Calibration, type PlanCandidate, type PlanChange, type PlanSet, type Rebuild } from './planSet.ts';
+import { buildPlanSet, calibrationFor, candidateFromArrangement, candidateFromPathway, candidateFromStrategy, rebuildAfter, type AcceptanceCondition, type Calibration, type PlanCandidate, type PlanChange, type PlanSet, type Rebuild } from './planSet.ts';
 
 export const PLAN_VERDICTS = ['RECOMMENDABLE', 'NEEDS_EVIDENCE', 'NOT_VIABLE'] as const;
 export type PlanVerdict = (typeof PLAN_VERDICTS)[number];
@@ -958,8 +958,10 @@ function settledWorlds(held: number, m: { p10: number; p50: number; p90: number 
 /** Whether the plan's probabilities rest on a calibrated source: an evidenced portfolio's assurance or this Brain's own record. */
 export function planCalibration(acceptance: PlanAcceptance): Calibration {
   const p = acceptance.probability;
-  if (p && (p.basis === 'EVIDENCED_PORTFOLIO' || p.basis === 'MEASURED_RECORD')) return { calibrated: true, observations: p.sample, basis: `${p.basis}: ${p.note}` };
-  return { calibrated: false, observations: p?.sample ?? 0, basis: p?.basis === 'TARGET_MET' ? 'the ledger holds the target, which calibrates no model' : 'no calibrated source: coverage of assumed inputs is not a probability' };
+  // It covers the accepted plan's openings and no others (planSet.ts `calibrationFor`).
+  const covers = acceptance.accepted ? [...acceptance.accepted.opportunityIds] : null;
+  if (p && (p.basis === 'EVIDENCED_PORTFOLIO' || p.basis === 'MEASURED_RECORD')) return { calibrated: true, observations: p.sample, basis: `${p.basis}: ${p.note}`, covers };
+  return { calibrated: false, observations: p?.sample ?? 0, basis: p?.basis === 'TARGET_MET' ? 'the ledger holds the target, which calibrates no model' : 'no calibrated source: coverage of assumed inputs is not a probability', covers };
 }
 
 /**
@@ -1006,11 +1008,13 @@ export function composeGoalReadings(input: {
   const combos = portfolio ? [portfolio.best, ...portfolio.alternatives].filter((c): c is NonNullable<GoalPortfolio['best']> => c !== null) : [];
   const keyOf = (c: (typeof combos)[number]) => c.members.map((m) => m.opportunityId).join('+');
   const readingOf = (c: (typeof combos)[number]): OutcomeReading => {
+    // The accepted combination's calibration is its own; an alternative beside it is not calibrated by it.
+    const own = calibrationFor({ opportunityIds: [...new Set(c.members.map((m) => m.opportunityId))] }, calibration) ?? calibration;
     const r = readOutcome(objective, settledWorlds(held, { p10: c.settledP10, p50: c.settledP50, p90: c.settledP90 }), {
-      calibrated: calibration.calibrated,
+      calibrated: own.calibrated,
       commitments,
       cashOnHand: held,
-      uncalibratedReason: `withheld: ${calibration.basis}; the plan stays a candidate`,
+      uncalibratedReason: `withheld: ${own.basis}; the plan stays a candidate`,
     });
     // Only the plan's own acceptance accepts: the outcome reading never promotes a candidate by itself.
     return acceptance.status === 'ACCEPTED' && r.status === 'ACCEPTED' ? r : { ...r, status: 'CANDIDATE' };

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildPlanSet,
+  calibrationFor,
   candidateFromStrategy,
   canonical,
   differingDimensions,
@@ -15,6 +16,7 @@ import {
   type PlanModel,
 } from '../server/services/goals/planSet.ts';
 import type { VariantReading } from '../server/services/goals/reconstruction.ts';
+import { judgeAcceptance, planCalibration, type StrategyReading } from '../server/services/goals/plan.ts';
 
 const field = (status: ModelField['status'], value: string | number | null = 'x'): ModelField => ({ value, low: null, high: null, status, basis: `test ${status}` });
 const model = (status: ModelField['status'] = 'ESTIMATED', over: Partial<PlanModel> = {}): PlanModel => {
@@ -28,6 +30,7 @@ function candidate(id: string, over: Partial<PlanCandidate> = {}): PlanCandidate
     id,
     title: `Plan ${id}`,
     source: 'PATHWAY',
+    opportunityIds: [id],
     dimensions: { mechanism: `mechanism ${id}`, channel: `channel ${id}`, fulfilment: `fulfiller ${id}`, risk: `risk ${id}`, revenue: 'one-off' },
     customers: [`buyers ${id}`],
     cashSources: [`payer ${id}`],
@@ -49,7 +52,8 @@ function candidate(id: string, over: Partial<PlanCandidate> = {}): PlanCandidate
 
 /** A goal whose amount, window and confidence are this test's choice — the module holds none of them. */
 const condition = (over: Partial<AcceptanceCondition> = {}): AcceptanceCondition => ({ amount: 10_000, daysLeft: 60, confidence: null, capitalCeiling: 2_000, ...over });
-const calibrated = { calibrated: true, observations: 40, basis: 'resolved goal predictions' };
+/** Calibrated on plan `a` — the only plan it speaks for. */
+const calibrated = { calibrated: true, observations: 40, basis: 'resolved goal predictions', covers: ['a'] };
 
 describe('distinct plan set (GOAL-23)', () => {
   it('collapses two plans that differ only in wording into one', () => {
@@ -161,7 +165,7 @@ describe('distinct plan set (GOAL-23)', () => {
   it('withholds confidence without calibration and publishes it only when calibrated', () => {
     const m = { p10: 12_000, p50: 18_000, p90: 30_000 };
     expect(publishedConfidence(m, 10_000, null)).toMatchObject({ value: null, withheld: true });
-    expect(publishedConfidence(m, 10_000, { calibrated: false, observations: 3, basis: 'too few' })).toMatchObject({ value: null, withheld: true });
+    expect(publishedConfidence(m, 10_000, { calibrated: false, observations: 3, basis: 'too few', covers: null })).toMatchObject({ value: null, withheld: true });
     expect(publishedConfidence(m, 10_000, calibrated)).toMatchObject({ value: 0.9, withheld: false });
     const set = buildPlanSet([candidate('a')], condition({ confidence: 0.9 }));
     expect(set.plans[0]?.confidence.withheld).toBe(true);
@@ -220,5 +224,44 @@ describe('distinct plan set (GOAL-23)', () => {
     expect(canonical('The Agencies, offering SEO')).toBe(canonical('seo agency'));
     const lines = renderPlanSet(buildPlanSet([candidate('a'), candidate('b')], condition()));
     expect(lines[0]).toContain('2 distinct plan(s) from 2 candidate(s)');
+  });
+
+  it('never lends one plan’s calibration to another candidate', () => {
+    const condition90 = condition({ confidence: 0.9 });
+    // Every one of these has p10 above the amount, so a lent calibration would publish 90% and accept it.
+    const own = candidate('a');
+    const other = candidate('b');
+    const arrangement = candidate('arr', { source: 'ARRANGEMENT', opportunityIds: [] });
+    const both = candidate('strategy:ab', { source: 'STRATEGY', opportunityIds: ['a', 'b'] });
+    const set = buildPlanSet([own, other, arrangement, both], condition90, calibrated);
+    const by = (id: string) => set.plans.find((p) => p.id === id);
+    expect(by('a')?.acceptance).toBe('ACCEPTED');
+    expect(by('a')?.confidence).toMatchObject({ value: 0.9, withheld: false });
+    for (const id of ['b', 'arr', 'strategy:ab']) {
+      expect(by(id)?.acceptance).toBe('PROVISIONAL');
+      expect(by(id)?.confidence).toMatchObject({ value: null, withheld: true });
+      expect(by(id)?.confidence.reason).toContain('covers a only');
+    }
+    expect(set.accepted).toBe(1);
+    expect(calibrationFor({ opportunityIds: ['a'] }, { ...calibrated, covers: null })?.calibrated).toBe(false);
+  });
+
+  it('gives a plan rebuilt after a change no calibration of the plan it replaced', () => {
+    const a = candidate('a', { channels: ['marketplace'], model: model('ESTIMATED') });
+    const b = candidate('b', { channels: ['partner referrals'] });
+    const r = rebuildAfter([a, b], { kind: 'CHANNEL_FAILED', channel: 'marketplace' }, condition({ confidence: 0.9 }), calibrated);
+    expect(r.reconstructed[0]?.confidence.withheld).toBe(true);
+    expect(r.reconstructed[0]?.acceptance).toBe('PROVISIONAL');
+  });
+
+  it('covers, through the plan pass’s own acceptance, only the plan that acceptance accepted', () => {
+    const chosen = { key: 's1', label: 'Monthly reports', verdict: 'RECOMMENDABLE', opportunityIds: ['a'], links: [], constraintsFailed: [], sweep: { goalMetShare: null, settledP50: null, settledP90: null, infeasibleShare: null, probabilistic: false }, conservativeSettled: 100, chainComplete: true, nextTest: null } as StrategyReading;
+    const acceptance = judgeAcceptance({ achieved: false, chosen, portfolio: null, measuredChance: { estimate: 0.95, lowerBound: 0.92, upperBound: 0.98, sampleSize: 30, cohort: 'earlier plans' }, considered: [] });
+    expect(acceptance.probability?.basis).toBe('MEASURED_RECORD');
+    const calibration = planCalibration(acceptance);
+    expect(calibration).toMatchObject({ calibrated: true, covers: ['a'] });
+    const set = buildPlanSet([candidate('a'), candidate('b'), candidate('arr', { source: 'ARRANGEMENT', opportunityIds: [] })], condition({ confidence: 0.9 }), calibration);
+    expect(set.plans.filter((p) => p.acceptance === 'ACCEPTED').map((p) => p.id)).toEqual(['a']);
+    expect(set.plans.filter((p) => !p.confidence.withheld).map((p) => p.id)).toEqual(['a']);
   });
 });
