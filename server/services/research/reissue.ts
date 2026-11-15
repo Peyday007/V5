@@ -34,7 +34,6 @@
 import type {
   ActorType,
   RepairPlan,
-  ResearchClaim,
   ResearchFragment,
   ResearchOrchestration,
   WorkItem,
@@ -54,11 +53,7 @@ import { recordEvent } from '../../repos/events.ts';
 import { workType } from '../queue/workTypes.ts';
 import { runIdempotent, type OperationNamespace } from '../effects/engine.ts';
 import { buildRepairPlan } from './repair.ts';
-import { blockCauseOf, exampleIdentity, laneFloor } from './gate.ts';
-import type { ClaimJudgement, GateCondition, GateResult, LaneCoverage } from './gate.ts';
-import { countIndependentSources, duplicateGroups } from './standards.ts';
-import { getApprovalEnvelope } from './approvalEnvelope.ts';
-import { advancePacket, researchItemRecorded, type AdvanceResult } from './packetRunner.ts';
+import { advancePacket, repairPlanInputFor, researchItemRecorded, type AdvanceResult } from './packetRunner.ts';
 
 /**
  * One intent per failed item, whoever asks.
@@ -799,15 +794,12 @@ async function planForRetry(
   const history = (await listFragments(orchestration.id)).filter(
     (entry) => entry.fragmentKey === previous.fragmentKey,
   );
-  // The runner's figure for the same next attempt: attempts left counted from
-  // the one that failed.
-  const remainingBudget = Math.max(0, previous.maxRepairs - previous.attempt + 1);
+  // The runner's own reading of the failed attempt — its gate, budget, cause
+  // and envelope — so the two paths cannot disagree about the same next attempt.
+  const input = repairPlanInputFor(orchestration, previous, claims, history);
+  const { remainingBudget } = input;
   const plan = buildRepairPlan({
-    fragment: previous,
-    gate: recordedGate(previous, claims),
-    history,
-    claims,
-    splitRequired: false,
+    ...input,
     /*
      * Strategies are chosen as for an attempt the budget still pays for.
      *
@@ -821,107 +813,6 @@ async function planForRetry(
      * worker is still told it is the last attempt.
      */
     remainingBudget: Math.max(2, remainingBudget),
-    blockCause: blockCauseOf(previous),
-    envelope: orchestration.approvalEnvelopeId
-      ? getApprovalEnvelope(orchestration.approvalEnvelopeId)
-      : null,
   });
   return { ...plan, remainingBudget };
 }
-
-/** The failed attempt's gate, as its stored rows record it. Mirrors the runner's reading. */
-function recordedGate(fragment: ResearchFragment, claims: ResearchClaim[]): GateResult {
-  const results: ClaimJudgement[] = claims.map((claim) => ({
-    claimId: claim.id,
-    accepted: claim.accepted,
-    failedCondition: claim.accepted ? null : conditionOf(claim),
-    reason: claim.accepted ? null : (claim.rejectionReason ?? claim.validationDetail),
-  }));
-  const accepted = claims.filter((claim) => claim.accepted);
-
-  const coverage: LaneCoverage[] = fragment.requiredEvidence.map((lane) => {
-    const inLane = accepted.filter((claim) => claim.evidenceLane === lane.id);
-    const floor = laneFloor(lane);
-    const examples = new Set(
-      inLane.map((claim) => exampleIdentity(claim)).filter((id): id is string => id !== null),
-    );
-    const sources = countIndependentSources(inLane);
-    return {
-      lane: lane.id,
-      description: lane.description,
-      necessity: lane.necessity,
-      evidenceKind: floor.kind,
-      acceptedClaims: inLane.length,
-      distinctExamples: examples.size,
-      independentSources: sources,
-      requiredExamples: floor.examples,
-      requiredIndependentSources: floor.independentSources,
-      meetsThreshold:
-        inLane.length > 0 && examples.size >= floor.examples && sources >= floor.independentSources,
-    };
-  });
-
-  const independentSources = countIndependentSources(accepted);
-  const failedConditions = new Set<GateCondition>();
-  for (const result of results) {
-    if (result.failedCondition) failedConditions.add(result.failedCondition);
-  }
-  if (coverage.some((lane) => !lane.meetsThreshold && lane.necessity === 'REQUIRED')) {
-    failedConditions.add('COVERAGE');
-  }
-  if (independentSources < fragment.minIndependentSources) failedConditions.add('COVERAGE');
-
-  const reason = fragment.blockedReason ?? fragment.missingEvidence ?? '';
-  return {
-    integrity: fragment.integrityVerdict === 'PASS' ? 'PASS' : 'FAIL',
-    sufficiency: fragment.sufficiencyVerdict === 'SUFFICIENT' ? 'SUFFICIENT' : 'INSUFFICIENT',
-    unresolvedRetrieval: claims
-      .filter((claim) => claim.retrievalState !== 'RETRIEVED')
-      .map((claim) => ({
-        claimId: claim.id,
-        claim: claim.claim,
-        sourceUrl: claim.sourceUrl,
-        state: claim.retrievalState,
-      })),
-    claims: results,
-    acceptedClaims: accepted.length,
-    rejectedClaims: results.filter((result) => !result.accepted).length,
-    independentSources,
-    coverage,
-    duplicateSourceGroups: duplicateGroups(accepted),
-    failedConditions: [...failedConditions],
-    reasons: reason ? [reason] : [],
-    unresolvedGaps: fragment.missingEvidence ? [fragment.missingEvidence] : [],
-  };
-}
-
-/**
- * Which gate condition a rejected claim failed, from what its row records —
- * the same recovery the runner applies, falling through to SOURCE_SUPPORTS.
- */
-function conditionOf(claim: ResearchClaim): GateCondition {
-  if (claim.validationState === 'NO_EVIDENCE') return 'LOCATOR';
-  if (!claim.sourced) return 'SOURCE_URL';
-  if (claim.derived) return 'DERIVATIONS';
-  if (claim.contradictionState === 'CONTESTED' || claim.contradictionState === 'REFUTED') {
-    return 'CONTRADICTIONS';
-  }
-  const reason = (claim.rejectionReason ?? '').toLowerCase();
-  for (const [condition, needle] of CONDITION_HINTS) {
-    if (reason.includes(needle)) return condition;
-  }
-  return 'SOURCE_SUPPORTS';
-}
-
-const CONDITION_HINTS: [GateCondition, string][] = [
-  ['SOURCE_URL', 'no usable source'],
-  ['SOURCE_SUPPORTS', 'directly support'],
-  ['SOURCE_SUPPORTS', 'nothing confirms'],
-  ['LOCATOR', 'passage'],
-  ['SCOPE_MATCH', 'scope'],
-  ['SCOPE_MATCH', 'geography'],
-  ['SCOPE_MATCH', 'timeframe'],
-  ['CONTRADICTIONS', 'contradiction'],
-  ['COVERAGE', 'lane'],
-  ['DERIVATIONS', 'calculation'],
-];
