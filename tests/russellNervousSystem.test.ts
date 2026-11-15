@@ -163,8 +163,10 @@ function membership(id: string, role: ProjectMembership['role'] = 'MEMBER'): Pro
 
 /**
  * A failed resume on a mission that has left NEEDS_HUMAN is moot by the
- * operator's own predicate (`moot`, domain/operator.ts): no answer can apply,
- * so Brain withdraws the card itself — the reason kept, one routine decision
+ * operator's own predicate (`moot`, domain/operator.ts): no answer but STOP
+ * can apply (the rest are guarded on NEEDS_HUMAN), and a STOP would only cancel
+ * a mission that already ended or is running on its own, so Brain withdraws the
+ * card itself — the reason kept, one routine decision
  * recorded — rather than putting it back in front of a person (production,
  * 2026-11-12: 31 such cards held a goal on "PERSON"). Never marked resumed.
  */
@@ -2405,11 +2407,12 @@ describe('the loop keeps going without anybody watching', () => {
      * And the decision is not left answered, and not marked resumed.
      *
      * An answer that disappeared from Needs You with nothing done was the
-     * original defect. The mission has now FAILED, so no answer to this card
-     * can apply — every answer begins with a transition guarded on
-     * NEEDS_HUMAN — and putting it back in front of the person would ask for
-     * a decision nobody can carry out. It is withdrawn as moot, with Brain's
-     * own sentence about the refusal kept on it.
+     * original defect. The mission has now FAILED, so the card is moot: every
+     * answer but STOP is applied through a transition guarded on NEEDS_HUMAN
+     * and cannot apply, and the STOP that would be left to offer would only
+     * cancel a mission that has already ended — not a decision anybody needs
+     * to make. It is withdrawn as moot, with Brain's own sentence about the
+     * refusal kept on it.
      */
     await expectWithdrawnAsMoot(request.id, 'FAILED', /no fragments/i);
     expect((await listOpenRequests(projectId)).map((entry) => entry.id)).not.toContain(request.id);
@@ -2570,7 +2573,8 @@ describe('the loop keeps going without anybody watching', () => {
      * does not select, so the card vanished when a person clicked it and
      * nothing recorded why. The property is that an answer nothing carried out
      * is never silently lost and never marked resumed. This mission is
-     * RUNNING — it is not waiting on the card — so no answer can apply: it is
+     * RUNNING — it is not waiting on the card — so only a STOP could still
+     * apply, and that would cancel work that is running on its own: it is
      * withdrawn as moot, with the refusal on the card and one routine decision
      * recorded, rather than re-asked.
      */

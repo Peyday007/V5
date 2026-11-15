@@ -20,7 +20,7 @@ import { createOrchestration } from '../server/repos/research.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { listEvents, listEventsByEntity } from '../server/repos/events.ts';
 import { answerHumanRequest, askHuman, getHumanRequest, getMission, listOpenRequests, transitionMission } from '../server/repos/russellMissions.ts';
-import { NEEDS_HUMAN_CHOICES, reopenAnswered, unparkResolvedMissions } from '../server/services/russell/needsHuman.ts';
+import { NEEDS_HUMAN_CHOICES, reopenAnswered, resumeAnsweredRequest, unparkResolvedMissions } from '../server/services/russell/needsHuman.ts';
 import { moot } from '../server/domain/operator.ts';
 
 let fixture: TestProject;
@@ -161,5 +161,40 @@ describe('what is still asked', () => {
     expect(after.state).toBe('ANSWERED');
     expect(after.answeredChoice).toBe(NEEDS_HUMAN_CHOICES.STOP.key);
     expect(await decisions(request.id)).toHaveLength(0);
+  });
+});
+
+/**
+ * Why a card on a mission that left NEEDS_HUMAN is moot, pinned as behaviour
+ * rather than left to a comment. A reviewer found the stated reason, "every
+ * answer begins with a transition guarded on NEEDS_HUMAN", untrue: STOP is
+ * applied from whatever state the mission is in. The true reason has two halves,
+ * and each is asserted here.
+ */
+describe('the reason a departed mission\'s card is moot', () => {
+  it('a non-STOP answer is guarded on NEEDS_HUMAN, so on a FAILED mission it cannot apply and is withdrawn', async () => {
+    const missionId = await parkedMission();
+    const request = await answered(missionId);
+    expect(await transitionMission({ missionId, from: 'NEEDS_HUMAN', to: 'FAILED', terminalReason: 'nothing to research' })).toBe(true);
+    const outcome = await resumeAnsweredRequest(request);
+    expect(outcome.settled).toBe(false);
+    expect((await getMission(missionId))!.state).toBe('FAILED');
+    expect(await reopenAnswered(request, outcome.reason)).toBe(true);
+    expect((await getHumanRequest(request.id))!.state).toBe('WITHDRAWN');
+    expect(await decisions(request.id)).toHaveLength(1);
+  });
+
+  it('STOP is not guarded on NEEDS_HUMAN: it applies from any state and settles, so it never reaches the moot rule', async () => {
+    for (const from of ['RUNNING', 'FAILED'] as const) {
+      const missionId = await parkedMission();
+      const request = await card(missionId);
+      const out = await answerHumanRequest({ requestId: request.id, actorUserId: userId, choice: NEEDS_HUMAN_CHOICES.STOP.key });
+      expect(out.ok, out.reason).toBe(true);
+      expect(await transitionMission({ missionId, from: 'NEEDS_HUMAN', to: from, terminalReason: 'moved on' })).toBe(true);
+      const outcome = await resumeAnsweredRequest((await getHumanRequest(request.id))!);
+      expect(outcome).toMatchObject({ ok: true, settled: true });
+      expect((await getMission(missionId))!.state).toBe('CANCELLED');
+      expect(await decisions(request.id)).toHaveLength(0);
+    }
   });
 });

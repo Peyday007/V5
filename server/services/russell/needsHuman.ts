@@ -1119,14 +1119,19 @@ export async function reopenAnswered(
 
   const mission = await getMission(request.missionId);
   /*
-   * A mission that is gone, or one the resume found had already left Needs
-   * You and still has not come back, cannot take this answer, and no later
-   * answer can change that: `resumeAnsweredRequest` only ever applies a
-   * decision through a transition guarded on `NEEDS_HUMAN`. That holds whatever
-   * the resume said: an answer whose mission is still NEEDS_HUMAN is re-asked
-   * below, exactly as before. Putting the card
-   * back in front of the person would ask them for a decision nobody can carry
-   * out — the operator measured 31 such cards holding a goal on "PERSON".
+   * A mission that is gone, or one that is in any state but `NEEDS_HUMAN`,
+   * is not waiting on this card. Every answer except STOP is applied through a
+   * transition guarded on `NEEDS_HUMAN` (`authorizePlan`, `recordGaps`), so
+   * none of them can apply now, and no later answer changes that. STOP is
+   * the exception — `stop()` moves the mission from whatever state it is in —
+   * but a STOP answer always settles, so it never reaches this function, and
+   * re-offering STOP here would only ask a person to cancel a mission that
+   * has already ended or is running again on its own: not a decision the
+   * work needs from anybody. This holds whatever the resume said; an answer
+   * whose mission is still NEEDS_HUMAN is re-asked below, exactly as before.
+   * Putting the card back in front of the person would ask them for a
+   * decision nobody needs — the operator measured 31 such cards holding a
+   * goal on "PERSON".
    *
    * So the card is withdrawn instead, through the same two guarded
    * transitions a reopen and a withdrawal already use: `ANSWERED -> OPEN`,
