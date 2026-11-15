@@ -91,7 +91,9 @@ import { cashPosition } from './money.ts';
 import { CAPTURE_INPUTS, type QualificationKey, type TierReading, type CashTier } from './tier.ts';
 import { DIVE_STARTED_EVENT, diveEpochStart, diveStarts, type DiveStage, type DiveStart } from './diveStage.ts';
 export { diveEpochStart } from './diveStage.ts';
-import { freeLaneOwnsResearch, researchCapacity, researchRoom, type ResearchRoom, type RoomLimit } from './researchRoom.ts';
+import { freeLaneOwnsResearch, offerToFamily, researchCapacity, researchRoom, type ResearchRoom, type RoomLimit } from './researchRoom.ts';
+import { isIntermediationBucket } from './intermediationBuckets.ts';
+import { INTERMEDIATION_FAMILY } from './intermediationPositions.ts';
 import { recordReopenCondition, reopenConditionsFor } from '../../repos/cashReconsideration.ts';
 import { formatBlockerKey } from '../../domain/types.ts';
 import type { CashCardFact, CashOpportunity, OpportunityValidationState } from '../../domain/types.ts';
@@ -528,6 +530,49 @@ export async function diveRoom(projectId: string, opportunities?: readonly CashO
   // A PENDING dive has not launched, so it has not reserved its grant slot yet.
   const unlaunched = all.filter((one) => one.validationState === 'PENDING').length;
   return researchRoom({ projectId, inFlight, unlaunched });
+}
+
+/**
+ * Whether an opening is the current priority family's work (RES-15-4): it was
+ * found by a round of one of the commercial-intermediation entry buckets. Read
+ * from the opening's own `discoveryRoundId` and that round's `bucketId`, so the
+ * answer is a row, never a guess about the opening's title or industry.
+ */
+export function intermediationOpening(
+  opportunity: Pick<CashOpportunity, 'discoveryRoundId'>,
+  bucketByRound: ReadonlyMap<string, string>,
+): boolean {
+  const bucketId = opportunity.discoveryRoundId ? bucketByRound.get(opportunity.discoveryRoundId) : undefined;
+  return !!bucketId && isIntermediationBucket({ id: bucketId });
+}
+
+/** Each discovery round's bucket, for `intermediationOpening`. */
+export async function discoveryBucketsByRound(projectId: string): Promise<Map<string, string>> {
+  const { listRounds } = await import('../../repos/cashDiscovery.ts');
+  return new Map((await listRounds(projectId)).map((round) => [round.id, round.bucketId]));
+}
+
+/**
+ * Put the current priority family's openings first (RES-15-4), without moving
+ * anything across the bands that already decide: an approved goal's own
+ * openings stay ahead of everything and a screened-out opening stays last.
+ * Stable, so the decision-value order stands inside each group.
+ */
+export function familyFirst<T>(
+  items: readonly T[],
+  read: { dropped: (item: T) => boolean; forGoal: (item: T) => boolean; family: (item: T) => boolean },
+): T[] {
+  const goal: T[] = [];
+  const family: T[] = [];
+  const rest: T[] = [];
+  const last: T[] = [];
+  for (const item of items) {
+    if (read.dropped(item)) last.push(item);
+    else if (read.forGoal(item)) goal.push(item);
+    else if (read.family(item)) family.push(item);
+    else rest.push(item);
+  }
+  return [...goal, ...family, ...rest, ...last];
 }
 
 /**
@@ -1129,7 +1174,10 @@ export async function startValidations(input: {
    * the grant's own free slots, and only openings a goal round found.
    */
   const { listRounds } = await import('../../repos/cashDiscovery.ts');
-  const goalRounds = new Set((await listRounds(input.projectId)).filter((r) => r.bucketId.startsWith('goal-')).map((r) => r.id));
+  const rounds = await listRounds(input.projectId);
+  const goalRounds = new Set(rounds.filter((r) => r.bucketId.startsWith('goal-')).map((r) => r.id));
+  const bucketByRound = new Map(rounds.map((r) => [r.id, r.bucketId]));
+  const forFamily = (opportunity: CashOpportunity) => intermediationOpening(opportunity, bucketByRound);
   const forGoal = (opportunity: CashOpportunity) => !!opportunity.discoveryRoundId && goalRounds.has(opportunity.discoveryRoundId);
   let goalExtra = 0;
   if ((derived.limitedBy === 'OPERATOR' || derived.limitedBy === 'SURFACES' || derived.limitedBy === 'GRANT') && input.limit === undefined && (await freeLaneOwnsResearch(input.projectId))) {
@@ -1256,10 +1304,40 @@ export async function startValidations(input: {
     shortWindow: (opportunity) => screens.get(opportunity.id)?.window === 'SHORT',
   });
   valued.sort((a, b) => order(a.opportunity, b.opportunity));
+  /*
+   * The current priority family is offered the room first (RES-15-4, S-0148):
+   * its openings dive before other optional work, and other optional work is
+   * offered only what the family's eligible waiting openings leave —
+   * `offerToFamily` decides that, from the room already derived, and never
+   * raises it. When the family declaration lapses `offerToFamily` returns the
+   * room untouched and this is the ordinary order.
+   */
+  const ordered = familyFirst(valued, {
+    dropped: ({ opportunity }) => dropped(opportunity.id),
+    forGoal: ({ opportunity }) => forGoal(opportunity),
+    family: ({ opportunity }) => forFamily(opportunity),
+  });
+  let familyWaiting = 0;
+  for (const { opportunity } of ordered) {
+    if (!forFamily(opportunity) || dropped(opportunity.id) || forGoal(opportunity)) continue;
+    if (familyWaiting >= room) break;
+    if ((await whyNotDiving(opportunity)).kind === 'ELIGIBLE') familyWaiting += 1;
+  }
+  const otherRoom = offerToFamily(
+    { ...derived, room },
+    { kind: null, familyWaiting, declaration: INTERMEDIATION_FAMILY, now },
+  ).room;
+  let otherStarted = 0;
 
   const out: StartedValidation[] = [];
   let slotsRanOut = false;
-  for (const { opportunity, value } of valued) {
+  for (const { opportunity, value } of ordered) {
+    const otherOptional = !forFamily(opportunity) && !forGoal(opportunity);
+    if (out.length < room && otherOptional && otherStarted >= otherRoom) {
+      // The room left is held for the priority family's waiting openings.
+      slotsRanOut = true;
+      continue;
+    }
     if (out.length >= room) {
       slotsRanOut = true;
       // Beyond the ceiling, only an approved goal's own openings, and only a few.
@@ -1358,6 +1436,7 @@ export async function startValidations(input: {
       });
     });
     if (!moved) continue;
+    if (otherOptional) otherStarted += 1;
     out.push({ opportunityId: opportunity.id, candidateId: candidate.id, stage });
   }
   if (slotsRanOut || out.length >= room) await deferWaiting(new Set(out.map((one) => one.opportunityId)));
