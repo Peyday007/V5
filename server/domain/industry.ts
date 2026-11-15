@@ -350,8 +350,47 @@ const withoutStates = (text: string): string =>
  * federal office, "US residential homeowners" — is kept as the named
  * population it already is. Null when nothing is left. Pure.
  */
+/**
+ * The payer a research sentence names, or null when the sentence names none.
+ * Production stores an opening's payer as the claim's prose ("GitHub, Inc. is
+ * the payer: it runs…", "The payer/buyer is St. Louis Development
+ * Corporation", "Buyers who pay for … are primarily small business
+ * operators, …"), so a name is read out of the known phrasings before it is
+ * generalised; a sentence that names nobody yields null rather than a buyer
+ * type made of prose.
+ */
+export function payerNamedIn(payer: string | null | undefined): string | null {
+  const text = (payer ?? '')
+    .replace(/\([^)]*\)/g, ' ')
+    // An abbreviation's full stop does not end a name ("St. Louis", "GitHub, Inc.").
+    .replace(/\b(St|Mt|Ft|Inc|Co|Corp|Ltd|LLC|Dept|Univ|Assn|Bros|No|U\.S|Dr|Jr|Sr)\./g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!text) return null;
+  const clean = (one: string | undefined) => {
+    const name = (one ?? '').replace(/^(?:market:\s*[^.]*\.\s*)/i, '').replace(/^(?:the|a|an)\s+/i, '').split(/[;:]| — | - |, which\b|, who\b/)[0]!.replace(/[.,]+$/, '').trim();
+    return name && name.split(/\s+/).length <= 8 ? name : null;
+  };
+  const patterns: RegExp[] = [
+    /(?:^|[.;:]\s*)(?:the\s+)?(?:payer(?:\s*\/\s*buyer)?|buyer(?:\s*\/\s*payer)?|purchaser|client)\s+(?:is|are|was)\s+(?:the\s+)?([^.;:]+)/i,
+    /^([^.;:]+?)\s+(?:is|are)\s+the\s+(?:payer|buyer|purchaser)s?\b/i,
+    /\b(?:buyers|payers|customers|clients)\s+(?:who\s+pay\s+[^.]*?\s+)?(?:are|include)\s+(?:primarily|mainly|mostly|typically)?\s*([^.;:]+)/i,
+    /\bname[sd]?\s+([^.;:]+?)\s+as\s+(?:the\s+)?(?:payer|buyer)s?\b/i,
+  ];
+  for (const re of patterns) {
+    const hit = re.exec(text);
+    const name = hit ? clean(hit[1]) : null;
+    if (name) return name;
+  }
+  // A short noun phrase with no verb of reporting is itself a name.
+  if (text.split(/\s+/).length <= 8 && !/\b(?:is|are|was|were|reports?|says?|pays?|book|receive|tested|runs?|name)\b/i.test(text)) return text.replace(/[.,;:]+$/, '');
+  return null;
+}
+
 export function buyerPopulationName(payer: string | null | undefined): string | null {
-  let text = (payer ?? '').replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
+  const named = payerNamedIn(payer);
+  if (!named) return null;
+  let text = named.replace(/\s+/g, ' ').trim();
   // "…, Mechanicsburg, PA" or "…, Harrisburg, Pennsylvania 17110": a place, not who pays.
   const comma = text.indexOf(',');
   if (comma > 0 && statesNamedIn(text.slice(comma)).length > 0) text = text.slice(0, comma).trim();

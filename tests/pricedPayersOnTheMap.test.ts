@@ -206,3 +206,19 @@ describe('a priced payer the map does not name becomes a buyer population', () =
     expect((await mapPricedPayers(projectId, 1)).created).toHaveLength(0);
   });
 });
+
+import { payerNamedIn, buyerPopulationName as populationOf } from '../server/domain/industry.ts';
+
+describe('a payer is read out of the research sentence production stores', () => {
+  it('names the payer a sentence names, and none where it names nobody', () => {
+    expect(payerNamedIn('GitHub, Inc. is the payer: it runs the bug bounty program and says it pays researchers')).toBe('GitHub, Inc');
+    expect(payerNamedIn('GitHub is the payer; its bug bounty is run through HackerOne (hackerone.com/github)')).toBe('GitHub');
+    expect(payerNamedIn('Market: City of St. Louis, MO. The payer/buyer is St. Louis Development Corporation')).toBe('St Louis Development Corporation');
+    expect(payerNamedIn('Buyers who pay for spreadsheet templates are primarily small business operators, freelancers and educators')).toBe('small business operators, freelancers and educators');
+    expect(payerNamedIn('Domain Name Wire reports that VJN.com was tested in Appraise.net: range $55k-$85k')).toBeNull();
+    expect(payerNamedIn("Dropcurb's customers book pickups through Dropcurb; haulers receive the address")).toBeNull();
+    // A plain name stays a name, and still generalises.
+    expect(populationOf('Pennsylvania Department of Agriculture')).toBe('state agriculture departments');
+    expect(populationOf('Domain Name Wire reports that VJN.com was tested in Appraise.net')).toBeNull();
+  });
+});
