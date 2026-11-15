@@ -17,118 +17,138 @@
  *   5. no mission, the idea never launched         → roundOutcome null; the
  *      discovery pass retires it after UNLAUNCHED_GOAL_ROUND_MS (round cap)
  *
- * This test pins each path, read through the same `missionsForRounds` the
- * discovery pass reads, and requires that the rows it reads carry enough to
- * name a distinct cause for every path — including the mission's own
- * `terminalReason`, which is where a timeout or parser error is written — so a
- * classification of the abandoned rounds is a query, not a guess.
+ * Before the repair the CASH_DISCOVERY_ROUND_STOPPED event the operator reads
+ * carried only the mission's state, so a timeout, a parser refusal and an
+ * operator cancel all recorded as "failed" and no audit could tell them apart.
+ * This test drives the real discovery pass (`harvest` → `closeEndedRounds`)
+ * over one round per path and requires each recorded stop event to carry a
+ * distinct `cause` — the mission's own `terminalReason` (or `waitingOn`)
+ * verbatim, `ARCHIVE_ANSWERED`, or the unlaunched round cap — so a
+ * classification of the abandoned rounds is a query over Brain's own events,
+ * not a guess. It fails on the base commit, whose events have no `cause`.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
-import { createCandidate } from '../server/repos/russellCandidates.ts';
-import { launchMission } from '../server/repos/russellMissions.ts';
-import { missionsForRounds, roundOutcome, type RoundMissions } from '../server/services/russell/roundMissions.ts';
-import { UNLAUNCHED_GOAL_ROUND_MS } from '../server/services/cash/discovery.ts';
-import type { MissionState } from '../server/domain/types.ts';
+import { createUser } from '../server/repos/identity.ts';
+import { listCashEvents } from '../server/repos/cashMode.ts';
+import { listRounds } from '../server/repos/cashDiscovery.ts';
+import { launchMission, transitionMission } from '../server/repos/russellMissions.ts';
+import { roundOutcome } from '../server/services/russell/roundMissions.ts';
+import { activate } from '../server/services/cash/lifecycle.ts';
+import {
+  abandonedRoundCause,
+  harvest,
+  openDiscovery,
+  UNLAUNCHED_GOAL_ROUND_MS,
+} from '../server/services/cash/discovery.ts';
 
 let projectId = '';
+let userId = '';
 let seq = 0;
 
 beforeEach(async () => {
   const fixture = await freshProject();
   projectId = fixture.project.id;
+  const user = await createUser({
+    email: `abandoned-${Math.random().toString(36).slice(2, 10)}@example.test`,
+    displayName: 'Owner',
+    password: 'correct horse battery staple',
+  });
+  userId = user.id;
+  const outcome = await activate({
+    projectId,
+    ownerUserId: userId,
+    actorUserId: userId,
+    objective: 'Maximize additional usable cash over the next few weeks.',
+  });
+  expect(outcome.ok).toBe(true);
 });
 
-async function idea(state?: string): Promise<string> {
+/** A mission for one round's idea, ended the way production ended it. */
+async function ended(
+  candidateId: string,
+  to: 'FAILED' | 'CANCELLED' | 'NEEDS_HUMAN',
+  terminalReason: string | null,
+  waitingOn: string | null = null,
+): Promise<void> {
   seq += 1;
-  const candidate = await createCandidate({
+  const { mission } = await launchMission({
     projectId,
     visibility: 'SHARED',
-    conversationId: null,
-    sourceMessageId: null,
-    title: `Abandoned round attribution ${seq}`,
-    statement: `Abandoned round attribution ${seq}: what do the published sources say?`,
-  });
-  if (state) await getDb().run('UPDATE russell_candidates SET state = ? WHERE id = ?', [state, candidate.id]);
-  return candidate.id;
-}
-
-async function mission(candidateId: string, state: MissionState, terminalReason: string | null, waitingOn: string | null = null): Promise<string> {
-  seq += 1;
-  const { mission: row } = await launchMission({
-    projectId,
-    visibility: 'SHARED',
-    objective: 'o',
-    whyNow: 'w',
+    objective: 'a discovery bucket',
+    whyNow: 'the sprint is active',
     idempotencyKey: `abandoned-attribution-${candidateId}-${seq}`,
     candidateId,
-    attempt: 1,
   });
-  await getDb().run('UPDATE russell_missions SET state = ?, terminal_reason = ?, waiting_on = ? WHERE id = ?', [state, terminalReason, waitingOn, row.id]);
-  return row.id;
+  await transitionMission({ missionId: mission.id, from: 'PLANNED', to: 'RUNNING' });
+  await transitionMission({ missionId: mission.id, from: 'RUNNING', to, terminalReason, waitingOn });
 }
 
-/**
- * The failure point the rows support, in the vocabulary of the operator's
- * question. Reads only what `closeEndedRounds` reads plus the mission's own
- * terminal reason; never the round's prose.
- */
-function attribute(read: RoundMissions, candidateState: string | null, expired: boolean): string | null {
-  const latest = read.latest;
-  if (latest) {
-    if (read.outcome === 'ABANDONED') return `MISSION_${latest.state}:${latest.terminalReason ?? 'UNSTATED'}`;
-    if (latest.state === 'NEEDS_HUMAN') return `MISSION_NEEDS_HUMAN:${latest.waitingOn ?? latest.terminalReason ?? 'UNSTATED'}`;
-    return null;
+async function stopEvents(): Promise<Map<string, Record<string, unknown>>> {
+  const events = await listCashEvents(projectId, 500);
+  const byRound = new Map<string, Record<string, unknown>>();
+  for (const event of events) {
+    if (event.kind !== 'CASH_DISCOVERY_ROUND_STOPPED') continue;
+    const detail = event.detail as Record<string, unknown>;
+    byRound.set(String(detail.roundId), detail);
   }
-  if (read.outcome === 'ABANDONED' && candidateState === 'REJECTED') return 'ARCHIVE_ANSWERED';
-  if (expired) return `ROUND_CAP_UNLAUNCHED_${UNLAUNCHED_GOAL_ROUND_MS / 3_600_000}H`;
-  return null;
+  return byRound;
 }
 
-describe('OPERATOR:MISSING_CAPABILITY:3009514ee01322e4 — every abandoned round names one failure point', () => {
-  it('reads each ABANDONED path through missionsForRounds and attributes it distinctly', async () => {
-    const timedOut = await idea();
-    await mission(timedOut, 'FAILED', 'worker lease expired: API timeout after 20000 ms');
-    const parseFailed = await idea();
-    await mission(parseFailed, 'FAILED', 'submission refused: claims JSON did not parse');
-    const cancelled = await idea();
-    await mission(cancelled, 'CANCELLED', 'cancelled by operator');
-    const needsHuman = await idea();
-    await mission(needsHuman, 'NEEDS_HUMAN', null, 'a login only the owner holds');
-    const rejected = await idea('REJECTED');
-    const unlaunched = await idea();
-
-    const ids = [timedOut, parseFailed, cancelled, needsHuman, rejected, unlaunched];
-    const read = await missionsForRounds(ids);
-    expect([...read.keys()].sort()).toEqual([...ids].sort());
-
-    // The outcome rule the discovery pass consumes.
-    expect(read.get(timedOut)!.outcome).toBe('ABANDONED');
-    expect(read.get(parseFailed)!.outcome).toBe('ABANDONED');
-    expect(read.get(cancelled)!.outcome).toBe('ABANDONED');
-    expect(read.get(rejected)!.outcome).toBe('ABANDONED');
-    // Not settled by the rule; the discovery pass closes these itself.
-    expect(read.get(needsHuman)!.outcome).toBeNull();
-    expect(read.get(needsHuman)!.latest!.state).toBe('NEEDS_HUMAN');
-    expect(read.get(unlaunched)!.outcome).toBeNull();
-    expect(read.get(unlaunched)!.latest).toBeNull();
-
-    // The mission's own terminal reason survives the read — the technical failure point.
-    expect(read.get(timedOut)!.latest!.terminalReason).toMatch(/timeout/i);
-    expect(read.get(parseFailed)!.latest!.terminalReason).toMatch(/parse/i);
-
-    const causes = [
-      attribute(read.get(timedOut)!, null, false),
-      attribute(read.get(parseFailed)!, null, false),
-      attribute(read.get(cancelled)!, null, false),
-      attribute(read.get(needsHuman)!, null, false),
-      attribute(read.get(rejected)!, 'REJECTED', false),
-      attribute(read.get(unlaunched)!, null, true),
+describe('OPERATOR:MISSING_CAPABILITY:3009514ee01322e4 — every abandoned round records one failure point', () => {
+  it('the discovery pass records a distinct, verbatim cause on each ABANDONED round it closes', async () => {
+    const opened = await openDiscovery({ projectId, limit: 6 });
+    expect(opened.length).toBeGreaterThanOrEqual(6);
+    const [timedOut, parseFailed, cancelled, needsHuman, silent, rejected] = opened as [
+      (typeof opened)[number], (typeof opened)[number], (typeof opened)[number],
+      (typeof opened)[number], (typeof opened)[number], (typeof opened)[number],
     ];
-    for (const cause of causes) expect(cause).not.toBeNull();
+    await ended(timedOut.candidateId, 'FAILED', 'worker lease expired: API timeout after 20000 ms');
+    await ended(parseFailed.candidateId, 'FAILED', 'submission refused: claims JSON did not parse');
+    await ended(cancelled.candidateId, 'CANCELLED', 'cancelled by operator');
+    await ended(needsHuman.candidateId, 'NEEDS_HUMAN', 'No fragment cleared its evidence gate.', 'a login only the owner holds');
+    await ended(silent.candidateId, 'FAILED', null);
+    await getDb().run('UPDATE russell_candidates SET state = ? WHERE id = ?', ['REJECTED', rejected.candidateId]);
+
+    await harvest({ projectId, limit: 50 });
+
+    const rounds = await listRounds(projectId);
+    const roundOf = (bucketId: string) => rounds.find((one) => one.bucketId === bucketId)!;
+    const events = await stopEvents();
+    const causeOf = (one: { bucketId: string }) => {
+      const round = roundOf(one.bucketId);
+      expect(round.state).toBe('ABANDONED');
+      const detail = events.get(round.id);
+      expect(detail, `no stop event for round ${round.id}`).toBeDefined();
+      return detail!.cause;
+    };
+
+    expect(causeOf(timedOut)).toBe('MISSION_FAILED:worker lease expired: API timeout after 20000 ms');
+    expect(causeOf(parseFailed)).toBe('MISSION_FAILED:submission refused: claims JSON did not parse');
+    expect(causeOf(cancelled)).toBe('MISSION_CANCELLED:cancelled by operator');
+    // Parked at a person: what it waits on is the failure point, not the gate prose.
+    expect(causeOf(needsHuman)).toBe('MISSION_NEEDS_HUMAN:a login only the owner holds');
+    // An unstated reason is recorded as unstated, never as a guessed cause.
+    expect(causeOf(silent)).toBe('MISSION_FAILED:UNSTATED');
+    expect(causeOf(rejected)).toBe('ARCHIVE_ANSWERED');
+
+    const causes = [timedOut, parseFailed, cancelled, needsHuman, silent, rejected].map(causeOf);
     expect(new Set(causes).size).toBe(causes.length);
-    expect(causes[5]).toBe('ROUND_CAP_UNLAUNCHED_6H');
+
+    // The verbatim reason is in the event's own columns too, for a query that groups by it.
+    const timedOutDetail = events.get(roundOf(timedOut.bucketId).id)!;
+    expect(timedOutDetail.terminalReason).toBe('worker lease expired: API timeout after 20000 ms');
+    expect(events.get(roundOf(needsHuman.bucketId).id)!.waitingOn).toBe('a login only the owner holds');
+  });
+
+  it('names the unlaunched round cap distinctly from an archive answer', () => {
+    expect(UNLAUNCHED_GOAL_ROUND_MS).toBe(6 * 60 * 60 * 1000);
+    expect(abandonedRoundCause({ mission: null, expired: true })).toBe('ROUND_CAP_UNLAUNCHED_6H');
+    expect(abandonedRoundCause({ mission: null, expired: false })).toBe('ARCHIVE_ANSWERED');
+    expect(
+      abandonedRoundCause({ mission: { state: 'FAILED', terminalReason: '   ', waitingOn: null }, expired: false }),
+    ).toBe('MISSION_FAILED:UNSTATED');
   });
 
   it('the pure rule never reads an unlaunched or person-waiting round as abandoned on its own', () => {
@@ -138,12 +158,5 @@ describe('OPERATOR:MISSING_CAPABILITY:3009514ee01322e4 — every abandoned round
       expect(roundOutcome({ latest: { state } as never, candidateState: 'QUEUED' })).toBe('ABANDONED');
     }
     expect(roundOutcome({ latest: { state: 'NEEDS_HUMAN' } as never, candidateState: 'QUEUED' })).toBeNull();
-  });
-
-  it('an unstated terminal reason is attributed as UNSTATED, never as a guessed cause', async () => {
-    const silent = await idea();
-    await mission(silent, 'FAILED', null);
-    const read = await missionsForRounds([silent]);
-    expect(attribute(read.get(silent)!, null, false)).toBe('MISSION_FAILED:UNSTATED');
   });
 });
