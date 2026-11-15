@@ -6,9 +6,10 @@
  * handed every unsettled resume to `reopenAnswered`, including "the mission
  * moved out of Needs You before the answer could be applied" — e.g.
  * rhr_2036cc5ee76b4b939e9e, whose mission rms_da903e70d2f3416d9b16 was
- * CANCELLED. That failure can never succeed, because every answer is applied
- * through a transition guarded on `NEEDS_HUMAN`, so the card went back in
- * front of the person for a decision nobody can carry out.
+ * CANCELLED. That failure can never succeed, because every answer but STOP
+ * is applied through a transition guarded on `NEEDS_HUMAN` (and a STOP always
+ * settles), so the card went back in front of the person for a decision
+ * nobody can carry out.
  *
  * Pinned here: the moot card is WITHDRAWN with the mission's state named and
  * a RUSSELL_ROUTINE_DECISION event recorded, once; a live mission's card and a missionless card are
@@ -223,19 +224,34 @@ describe('the moot cards an earlier version already re-opened', () => {
     expect(await decisions(requestId)).toHaveLength(1);
   });
 
-  it('leaves the card OPEN when its mission came back to NEEDS_HUMAN, or when it was re-asked for another reason', async () => {
+  it('leaves the card OPEN when its mission came back to NEEDS_HUMAN, and withdraws one re-asked for another reason', async () => {
     const back = await reopenedMootCard('RUNNING');
     expect(await transitionMission({ missionId: back.missionId, from: 'RUNNING', to: 'NEEDS_HUMAN', waitingOn: 'a person to authorize the plan' })).toBe(true);
     const other = await reopenedMootCard('CANCELLED', 'the person who answered cannot be resolved');
 
     // The sweep alone: the unpark pass around it separately resumes a live
     // packet's NEEDS_HUMAN mission, which is not what this pins.
-    expect(await withdrawMootBacklog(50)).toEqual([]);
+    expect(await withdrawMootBacklog(50)).toEqual([other.requestId]);
 
+    // Live again: its mission is waiting on it, so it stays in front of a person.
     expect((await getHumanRequest(back.requestId))!.state).toBe('OPEN');
-    expect((await getHumanRequest(other.requestId))!.state).toBe('OPEN');
     expect(await decisions(back.requestId)).toHaveLength(0);
-    expect(await decisions(other.requestId)).toHaveLength(0);
+    /*
+     * This once asserted OPEN: the sweep keyed on the one "moved out" sentence,
+     * so a card re-asked in other words on a CANCELLED mission stayed in Needs
+     * You — the moot card the operator kept withdrawing by hand. Moot is the
+     * mission's state (the operator's `moot()`), so it is withdrawn, with its
+     * own reason kept and one routine decision recorded.
+     */
+    const withdrawn = (await getHumanRequest(other.requestId))!;
+    expect(withdrawn.state).toBe('WITHDRAWN');
+    expect(withdrawn.whyNotRussell).toMatch(/CANCELLED/);
+    expect(withdrawn.whyNotRussell).toContain('the person who answered cannot be resolved');
+    const events = await decisions(other.requestId);
+    expect(events).toHaveLength(1);
+    expect(events[0]!.payload).toMatchObject({
+      choice: 'WITHDRAW_MOOT_ANSWER', missionState: 'CANCELLED', reason: 'the person who answered cannot be resolved',
+    });
   });
 });
 

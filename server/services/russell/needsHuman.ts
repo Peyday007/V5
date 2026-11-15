@@ -1116,16 +1116,19 @@ export async function reopenAnswered(
 
   const mission = await getMission(request.missionId);
   /*
-   * A mission that is gone, or one that is not at `NEEDS_HUMAN` now, cannot
-   * take this answer, and no later answer can change that:
-   * `resumeAnsweredRequest` only ever applies a decision through a transition
-   * guarded on `NEEDS_HUMAN`. The test is the mission's state, read through
-   * the operator's own `moot()`, not the wording of the failure — keying it on
-   * one sentence left every other failure on a departed mission re-asked, and
-   * the operator withdrawing those cards by hand. A mission still waiting is
-   * re-asked below, exactly as before. Putting the card
-   * back in front of the person would ask them for a decision nobody can carry
-   * out — the operator measured 31 such cards holding a goal on "PERSON".
+   * A mission that is gone, or one that is not at `NEEDS_HUMAN` now, is not
+   * waiting on this card. Every answer except STOP is applied through a
+   * transition guarded on `NEEDS_HUMAN` (`authorizePlan`, `recordGaps`), so
+   * none of them can apply, and no later answer changes that. STOP is the
+   * exception — `stop()` moves the mission from whatever state it is in — but
+   * a STOP answer always settles, so it never reaches this function, and
+   * re-offering STOP here would only ask a person to cancel a mission that has
+   * already ended or is running again on its own. The test is the mission's
+   * state, read through the operator's own `moot()`, not the wording of the
+   * failure — keying it on one sentence left every other failure on a departed
+   * mission re-asked, and the operator withdrawing those cards by hand. A
+   * mission still waiting is re-asked below, exactly as before. The operator
+   * measured 31 such cards holding a goal on "PERSON".
    *
    * So the card is withdrawn instead, through the same two guarded
    * transitions a reopen and a withdrawal already use: `ANSWERED -> OPEN`,
