@@ -12,7 +12,7 @@
  * for, and a rate-refused call backs off and is asked once more.
  */
 import { describe, expect, it } from 'vitest';
-import { parseInvented, type InventBrief } from '../server/services/goals/reasoning/directions.ts';
+import { extractJsonPayload, parseInvented, type InventBrief } from '../server/services/goals/reasoning/directions.ts';
 import { inventDirections, inventPrompt } from '../server/services/goals/reasoning/invent.ts';
 import type { LaneConfig } from '../server/services/cheap/lane.ts';
 
@@ -130,5 +130,60 @@ describe('a rate refusal from the free lane', () => {
     const failed = await inventDirections(brief, { config: lane, completer: failing, calls: 1, env: {}, backoffMs: 5 });
     expect(asked).toEqual(['a']);
     expect(failed.error).toMatch(/HTTP 500/);
+  });
+});
+
+describe('an answer that is JSON inside something else (production 2026-11-15: "the answer is not JSON" x2)', () => {
+  const answer = JSON.stringify({ methods: [method({ name: 'one' }), method({ name: 'two', program: [{ op: 'DROP', scope: 'REST' }] })] });
+  const names = (text: string) => parseInvented(text, brief).directions.map((d) => d.name);
+
+  it('reads a fenced ```json block, with or without prose around it', () => {
+    expect(names('```json\n' + answer + '\n```')).toEqual(['one', 'two']);
+    expect(names('Here are my methods:\n\n```json\n' + answer + '\n```\n\nLet me know {if} you need more.')).toEqual(['one', 'two']);
+    expect(names('```\n' + answer + '\n```')).toEqual(['one', 'two']);
+  });
+
+  it('reads the object out of prose, even when the prose holds braces of its own', () => {
+    expect(names('Sure! ' + answer + ' I hope these {ideas} help.')).toEqual(['one', 'two']);
+    expect(names('<think>maybe {"methods": []} is too few</think>' + answer)).toEqual(['one', 'two']);
+  });
+
+  it('reads an array wrapper: the list itself, or the object wrapped in one', () => {
+    expect(names(JSON.stringify([method({ name: 'one' }), method({ name: 'two' })]))).toEqual(['one', 'two']);
+    expect(names('[' + answer + ']')).toEqual(['one', 'two']);
+    expect(names('Answer:\n' + JSON.stringify([method({ name: 'solo' })]))).toEqual(['solo']);
+  });
+
+  it('tolerates commas that close nothing, and keeps the complete methods of an answer cut off mid-list', () => {
+    expect(names('{"methods":[' + JSON.stringify(method({ name: 'one' })) + ',],}')).toEqual(['one']);
+    const cut = '{"methods":[' + JSON.stringify(method({ name: 'one' })) + ',' + JSON.stringify(method({ name: 'two' })) + ',{"name":"thr';
+    expect(names(cut)).toEqual(['one', 'two']);
+  });
+
+  it('refuses what holds no JSON at all, quoting the first 80 characters of it', () => {
+    const prose = 'I cannot produce methods for this goal because the openings do not show enough about the buyers to reason with.';
+    const parsed = parseInvented(prose, brief);
+    expect(parsed.refused).toBe(1);
+    expect(parsed.rejections).toEqual([`the answer is not JSON (begins: "${prose.slice(0, 80)}")`]);
+    expect(parseInvented('   ', brief).rejections).toEqual(['the answer is empty']);
+    expect(extractJsonPayload('no braces here')).toBeUndefined();
+  });
+
+  it('asks the lane for a JSON object, and says so in the prompt', async () => {
+    const seen: (boolean | undefined)[] = [];
+    const lane: LaneConfig = { url: 'http://lane.invalid', key: null, models: ['a'], dailyBudget: 100, timeoutMs: 1000 };
+    const got = await inventDirections(brief, {
+      config: lane,
+      completer: async (_c, _m, system, _p, options) => {
+        seen.push(options?.json);
+        expect(system).toMatch(/no markdown fences/);
+        return '```json\n' + answer + '\n```';
+      },
+      calls: 1,
+      env: {},
+    });
+    expect(seen).toEqual([true]);
+    expect(got.directions.map((d) => d.name)).toEqual(['one', 'two']);
+    expect(inventPrompt(brief, 0, [])).toMatch(/no markdown fence and no words around it/);
   });
 });

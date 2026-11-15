@@ -41,13 +41,13 @@ Status vocabulary as the owner gave it. Owner = the Surge B repair stream
 
 | RC | root cause | findings | repair stream | status |
 |---|---|---|---|---|
-| IB-1 | **Knowledge grows only inside a cash sprint.** The industry kernel runs only under an ACTIVE Cash Mode, selects by fixed-order rules, asks each question once, and declares a subject permanently barren | W-1, W-2, W-3, W-4 | world-expansion | REPAIRING |
-| IB-2 | **Economic facts are hand-entered, undated and logistics-shaped.** Construction facts come only from a person per goal, carry no date, resolve by status alone; positions are a closed logistics vocabulary; flows name no payer/supplier | W-5, W-6, W-7, W-10, W-13, W-9 | construction-knowledge | REPAIRING (W-9 DISCOVERED) |
-| IB-3 | **Hermes cannot be given a mission or directly track/reattempt work.** Fixed $10K brief; no inventory, re-attempt or outside-verification tool; RunPod ceilings forbid a 48 GB director pod | H2-1, H2-2, H2-3, H2-5, H2-7, H2-9, H2-11 | hermes-director | REPAIRING |
+| IB-1 | **Knowledge grows only inside a cash sprint.** The industry kernel runs only under an ACTIVE Cash Mode, selects by fixed-order rules, asks each question once, and declares a subject permanently barren | W-1, W-2, W-3, W-4 | world-expansion | RELEASED (Deploy 1070; standing rounds, F7 in 1078) — production growth NOT YET VERIFIED (nodes 91→91 at 02:25Z) |
+| IB-2 | **Economic facts are hand-entered, undated and logistics-shaped.** Construction facts come only from a person per goal, carry no date, resolve by status alone; positions are a closed logistics vocabulary; flows name no payer/supplier | W-5, W-6, W-7, W-10, W-13, W-9 | construction-knowledge | RELEASED (1070) + F2/F3 (1078) — production construction facts 0 at 02:25Z; NOT YET VERIFIED |
+| IB-3 | **Hermes cannot be given a mission or directly track/reattempt work.** Fixed $10K brief; no inventory, re-attempt or outside-verification tool; RunPod ceilings forbid a 48 GB director pod | H2-1, H2-2, H2-3, H2-5, H2-7, H2-9, H2-11 | hermes-director | VERIFIED on production: Hermes runs with the SURGE:B mission, keeps the inventory, decides, commissions, re-attempts (opr_a1f7…, opr_1981…) |
 | IB-4 | **Evidence lifecycle is thin.** Claims lack method, sample size, transaction type, limitations, validity window, invalidation; staleness windows are constants that cut off rather than widen | W-11, W-12 | (after IB-2) | ROOT CAUSE CONFIRMED |
-| IB-6 | **Nothing Brain constructs is kept.** Arrangements live in process memory (10-min / 30-min caches), lost every restart; the only trace is a hash in a round's bucket id; research answers never attach back; no reuse across goals or projects | K-1…K-8 | arrangement-library | REPAIRING |
-| IB-7 | **Selection is arbitrary where it matters most.** 400 cap cuts by enumeration order; 12 enter the model by a saturating score with a sha256-id tiebreak; unknowns ranked at their midpoint; learning rewards unchallenged reach and is keyed to one goal | S-1…S-12, S-14…S-17 | search-selection | REPAIRING |
-| IB-8 | **The acceptance gates are mutually exclusive.** Chain links accept conversion only from Brain's own sales and fixed values; assurance counts *studies* (≥20) and puts a Wilson bound over them. Every input passes one gate only in the form the other refuses, so only TARGET_MET (cash already collected) can be ACCEPTED | Q2-1…Q2-12, S-13 | acceptance | REPAIRING |
+| IB-6 | **Nothing Brain constructs is kept.** Arrangements live in process memory (10-min / 30-min caches), lost every restart; the only trace is a hash in a round's bucket id; research answers never attach back; no reuse across goals or projects | K-1…K-8 | arrangement-library | VERIFIED on production: 404 constructed arrangements stored, 404 unique design signatures (census 23:42Z, 02:25Z) |
+| IB-7 | **Selection is arbitrary where it matters most.** 400 cap cuts by enumeration order; 12 enter the model by a saturating score with a sha256-id tiebreak; unknowns ranked at their midpoint; learning rewards unchallenged reach and is keyed to one goal | S-1…S-12, S-14…S-17 | search-selection | VERIFIED on production: 12 of 404 arrangements evaluated in the goal model, 1 picked (02:25Z) — screen/diversity live |
+| IB-8 | **The acceptance gates are mutually exclusive.** Chain links accept conversion only from Brain's own sales and fixed values; assurance counts *studies* (≥20) and puts a Wilson bound over them. Every input passes one gate only in the form the other refuses, so only TARGET_MET (cash already collected) can be ACCEPTED | Q2-1…Q2-12, S-13 | acceptance | RELEASED (1070): production plan CANDIDATE_ONLY with stated coverage, never certified on assumption (02:23Z read); certification path verified by evaluation case O |
 | IB-5 | **Two construction vocabularies** (§82 designs vs §92 positions); transfer runs only under a goal | W-8 | (after IB-2, IB-6) | ROOT CAUSE CONFIRMED |
 
 ### Findings
@@ -58,49 +58,49 @@ Status vocabulary as the owner gave it. Owner = the Surge B repair stream
 | W-2 | adaptive selection | six fixed-order rules, oldest-first, constant concurrency 4 (`allocate.ts:16-23,97,369`) | MAJOR | world-expansion | REPAIRED, AWAITING VERIFICATION (6862da0, migrations 150/141) |
 | W-3 | expansion | root question and each breakdown asked once; repeat branch unreachable (`allocate.ts:152,260,313`) | MAJOR | world-expansion | REPAIRED, AWAITING VERIFICATION (6862da0, migrations 150/141) |
 | W-4 | exploration | barren after 3 scans is permanent (`verdict.ts:123-136`) | MAJOR | world-expansion | REPAIRED, AWAITING VERIFICATION (6862da0, migrations 150/141) |
-| W-5 | quantitative knowledge | construction facts written only by a person, per goal; map-built roles unpriced (`construction/service.ts:57-96`) | BLOCKING | construction-knowledge | REPAIRING |
-| W-6 | decomposition | role-occupant answer asked once, never read back (`expand.ts:196,214`) | MAJOR | construction-knowledge | REPAIRING |
-| W-7 | money-tree positions | closed logistics-shaped position vocabulary; 4 economics branches; no resale/subscription/finance/rent (`domain/construction.ts:31-224`) | MAJOR | construction-knowledge | REPAIRING |
-| W-8 | transfer | two construction vocabularies; transfer goal-only | MAJOR | transfer-positions | REPAIRED on branch (5426902): Position↔Design adapter; kernel asks precedent transfers with no live goal, naming TRANSFER_MATERIAL; surgeBMechanismTransfer 6/6 |
-| W-9 | generality | one Metro Detroit last-mile reference pack applied to any "logistics" subject | MINOR | transfer-positions | REPAIRED on branch (5426902): reference packs apply only where an operator named the industry; residual: map roots carry no economics until research facts (W-5) feed them |
-| W-10 | freshness | construction facts undated; old OBSERVED beats new VERIFIED | MAJOR | construction-knowledge | REPAIRING |
-| W-11 | evidence lifecycle | claims lack method, sample size, transaction type, limitations, validity, invalidation | MAJOR | evidence-lifecycle | REPAIRED on branch (a66b80a): claims carry method, sample size, limitations, valid_until, invalidated_by (migrations 154/145) into quant observations; surgeBEvidenceLifecycle passes |
-| W-12 | freshness | constant staleness windows cut evidence off rather than widen uncertainty; map nodes undated | MAJOR | evidence-lifecycle | REPAIRED on branch (a66b80a): past its window an observation decays (half-weight per half-life, wider spread) instead of being dropped; met invalidation excludes with reason; staleRefreshPriority ranks by plan sensitivity (not yet wired into dispatch) |
-| W-13 | who pays | map flows point at "operators", no payer/supplier resolved (`service.ts:74-76`) | MAJOR | construction-knowledge | REPAIRING |
-| H2-1 | Hermes direction | no way to give a run a mission (`domain/operator.ts:148`) | BLOCKING | hermes-director | REPAIRING |
-| H2-2 | Hermes direction | no inventory tool | MAJOR | hermes-director | REPAIRING |
-| H2-3 | Hermes diagnosis | deficiencies from three hard-coded detectors (`director.ts:883`) | MAJOR | hermes-direction | REPAIRED on branch (b5198b8): + inventory, stuck-plan and unreported-round detectors; surgeBHermesDirection 10/10 |
+| W-5 | quantitative knowledge | construction facts written only by a person, per goal; map-built roles unpriced (`construction/service.ts:57-96`) | BLOCKING | construction-knowledge | RELEASED (1070) + F3 back-fill (1078); NOT YET VERIFIED (facts 0) |
+| W-6 | decomposition | role-occupant answer asked once, never read back (`expand.ts:196,214`) | MAJOR | construction-knowledge | RELEASED (1070); NOT YET VERIFIED |
+| W-7 | money-tree positions | closed logistics-shaped position vocabulary; 4 economics branches; no resale/subscription/finance/rent (`domain/construction.ts:31-224`) | MAJOR | construction-knowledge | RELEASED (1070); NOT YET VERIFIED |
+| W-8 | transfer | two construction vocabularies; transfer goal-only | MAJOR | transfer-positions | RELEASED in Deploy 1075 (parts 3+4) — repaired (5426902): Position↔Design adapter; kernel asks precedent transfers with no live goal, naming TRANSFER_MATERIAL; surgeBMechanismTransfer 6/6 |
+| W-9 | generality | one Metro Detroit last-mile reference pack applied to any "logistics" subject | MINOR | transfer-positions | RELEASED in Deploy 1075 (parts 3+4) — repaired (5426902): reference packs apply only where an operator named the industry; residual: map roots carry no economics until research facts (W-5) feed them |
+| W-10 | freshness | construction facts undated; old OBSERVED beats new VERIFIED | MAJOR | construction-knowledge | RELEASED (1070): dated facts, newest within top status; NOT YET VERIFIED (no facts yet) |
+| W-11 | evidence lifecycle | claims lack method, sample size, transaction type, limitations, validity, invalidation | MAJOR | evidence-lifecycle | RELEASED in Deploy 1075 (parts 3+4) — repaired (a66b80a): claims carry method, sample size, limitations, valid_until, invalidated_by (migrations 154/145) into quant observations; surgeBEvidenceLifecycle passes |
+| W-12 | freshness | constant staleness windows cut evidence off rather than widen uncertainty; map nodes undated | MAJOR | evidence-lifecycle | RELEASED in Deploy 1075 (parts 3+4) — repaired (a66b80a): past its window an observation decays (half-weight per half-life, wider spread) instead of being dropped; met invalidation excludes with reason; staleRefreshPriority ranks by plan sensitivity (not yet wired into dispatch) |
+| W-13 | who pays | map flows point at "operators", no payer/supplier resolved (`service.ts:74-76`) | MAJOR | construction-knowledge | RELEASED (1070); NOT YET VERIFIED |
+| H2-1 | Hermes direction | no way to give a run a mission (`domain/operator.ts:148`) | BLOCKING | hermes-director | VERIFIED on production (mission set, opr runs) |
+| H2-2 | Hermes direction | no inventory tool | MAJOR | hermes-director | VERIFIED on production (inventory upserts by Hermes) |
+| H2-3 | Hermes diagnosis | deficiencies from three hard-coded detectors (`director.ts:883`) | MAJOR | hermes-direction | RELEASED in Deploy 1075 (parts 3+4) — repaired (b5198b8): + inventory, stuck-plan and unreported-round detectors; surgeBHermesDirection 10/10 |
 | H2-4 | Hermes honesty | lesson-only interventions reported as queued (= Surge A H-4, merged, unverified) | MAJOR | Surge A | AWAITING VERIFICATION |
-| H2-5 | Hermes direction | no reassign/re-attempt of stalled Factory work | MAJOR | hermes-director | REPAIRING |
-| H2-6 | Hermes research | research only via a commission | MINOR | hermes-direction | REPAIRED on branch (b5198b8): EVIDENCE commission on a goal (incl. paused) or as method research; spend/outreach still refused |
-| H2-7 | Hermes verification | cannot verify a repair it did not commission | MINOR | hermes-director | REPAIRING |
+| H2-5 | Hermes direction | no reassign/re-attempt of stalled Factory work | MAJOR | hermes-director | VERIFIED on production (reattempt used 02:35Z) |
+| H2-6 | Hermes research | research only via a commission | MINOR | hermes-direction | RELEASED in Deploy 1075 (parts 3+4) — repaired (b5198b8): EVIDENCE commission on a goal (incl. paused) or as method research; spend/outreach still refused |
+| H2-7 | Hermes verification | cannot verify a repair it did not commission | MINOR | hermes-director | VERIFIED on production (decide used) |
 | H2-8 | runtime | operator reads >20 s; DB contention | MAJOR | **Surge A** (RC-1) | handed off |
-| H2-9 | compute | RunPod ceilings block any 48 GB pod; no 48 GB recipe | MAJOR | hermes-director | REPAIRING |
+| H2-9 | compute | RunPod ceilings block any 48 GB pod; no 48 GB recipe | MAJOR | hermes-director | VERIFIED on production |
 | H2-10 | verification | no operator proof since recovery merges | MAJOR | this operation, after release | DISCOVERED |
-| H2-11 | generality | brief is $10K-specific | MINOR | hermes-director | REPAIRING |
-| K-1 | persistent knowledge | constructed arrangements never persisted (`construct.ts:206`, `plan.ts:2909`) | BLOCKING | arrangement-library | REPAIRING |
-| K-2 | search breadth | 400 cap cuts by enumeration order, unreported (`construct.ts:138,391`) | MAJOR | arrangement-library | REPAIRING |
-| K-3 | traceability | which 12 reach a model is not recorded; `arr_` ids may be linked as openings (`plan.ts:2489`) | MAJOR | arrangement-library | REPAIRING |
-| K-4 | learning | research answers never attach to the arrangement; refuted ones re-asked | MAJOR | arrangement-library | REPAIRING |
-| K-5 | reuse | rounds per goal, keys are project-local hashes; no cross-goal/project reuse | MAJOR | arrangement-library | REPAIRING |
-| K-6 | persistent knowledge | §92 positions, roles, flows not stored | MAJOR | transfer-positions | REPAIRED on branch (5426902): arrangement rows carry position_json/position_key (155/146); census counts positions and money flows |
-| K-7 | identity | keys from row ids; recreated node loses history | MINOR | arrangement-library | REPAIRING |
-| K-8 | geography | arrangements carry no geography; constraints never read | MINOR | arrangement-library | REPAIRING |
+| H2-11 | generality | brief is $10K-specific | MINOR | hermes-director | VERIFIED on production |
+| K-1 | persistent knowledge | constructed arrangements never persisted (`construct.ts:206`, `plan.ts:2909`) | BLOCKING | arrangement-library | VERIFIED on production (404 stored rows survive restarts/redeploys 1070→1075) |
+| K-2 | search breadth | 400 cap cuts by enumeration order, unreported (`construct.ts:138,391`) | MAJOR | arrangement-library | RELEASED (1070) |
+| K-3 | traceability | which 12 reach a model is not recorded; `arr_` ids may be linked as openings (`plan.ts:2489`) | MAJOR | arrangement-library | RELEASED (1070) |
+| K-4 | learning | research answers never attach to the arrangement; refuted ones re-asked | MAJOR | arrangement-library | RELEASED (1070) |
+| K-5 | reuse | rounds per goal, keys are project-local hashes; no cross-goal/project reuse | MAJOR | arrangement-library | RELEASED (1070) |
+| K-6 | persistent knowledge | §92 positions, roles, flows not stored | MAJOR | transfer-positions | RELEASED in Deploy 1075 (parts 3+4) — repaired (5426902): arrangement rows carry position_json/position_key (155/146); census counts positions and money flows |
+| K-7 | identity | keys from row ids; recreated node loses history | MINOR | arrangement-library | VERIFIED on production (404 distinct design signatures for 404 rows) |
+| K-8 | geography | arrangements carry no geography; constraints never read | MINOR | arrangement-library | RELEASED (1070) |
 | S-1 | search narrowing | 12 picked by saturating score + sha256 tiebreak; experiment: strong DIRECT arrangement kept/dropped by its key string; swapping it in raised reach 1.55%→2.8% (`goalScenario.ts:283-297`) | BLOCKING | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
 | S-2 | diversity | one arbitrary design per buyer population | MAJOR | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
-| S-3 | breadth | = K-2 | MAJOR | arrangement-library | REPAIRING |
+| S-3 | breadth | = K-2 | MAJOR | arrangement-library | RELEASED (1070) |
 | S-4 | research routing | only the 12 get contribution; rest −1 → research self-reinforces the hash pick | MAJOR | (fixed by S-1) | REPAIRED via S-1, AWAITING VERIFICATION |
 | S-5 | invariant 39 | unknown ranges ranked at midpoint (2–50% beats evidenced 5–25%) | MAJOR | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
 | S-6 | reasoning | no move can add a constructed arrangement outside the 12 | MAJOR | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
 | S-7 | method learning | learns from unchallenged and critic-flagged reach | MAJOR | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
 | S-8 | transfer of methods | learned methods keyed by opening ids; don't transfer across goals | MAJOR | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
-| S-9 | learning stats | repeat reads of one goal counted as independent | MINOR | adaptive-search | REPAIRED on branch (91030b6), AWAITING RELEASE |
-| S-10 | learning | stance yield computed, never fed back | MAJOR | adaptive-search | REPAIRED on branch (91030b6): stance seed budget by posterior with floor; surgeBAdaptiveSearch 7/7 |
-| S-11 | invention | model-invented methods only retune 4 operations on held openings | MAJOR | search-selection | REPAIRED on branch (9f4f908): a model-invented design + buyer population is composed by construction and enters as a MECHANISM-tier, never-certifiable candidate; refusals carry reasons. surgeBInventedDesign 4/4 |
+| S-9 | learning stats | repeat reads of one goal counted as independent | MINOR | adaptive-search | RELEASED in Deploy 1075 (parts 3+4) — repaired (91030b6), AWAITING RELEASE |
+| S-10 | learning | stance yield computed, never fed back | MAJOR | adaptive-search | RELEASED in Deploy 1075 (parts 3+4) — repaired (91030b6): stance seed budget by posterior with floor; surgeBAdaptiveSearch 7/7 |
+| S-11 | invention | model-invented methods only retune 4 operations on held openings | MAJOR | search-selection | RELEASED in Deploy 1075 (parts 3+4) — repaired (9f4f908): a model-invented design + buyer population is composed by construction and enters as a MECHANISM-tier, never-certifiable candidate; refusals carry reasons. surgeBInventedDesign 4/4 |
 | S-12 | transfer | transfers model no material differences; precedent bonus outranks gated evidence | MAJOR | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
 | S-13 | correlation | = Q2-10 | MAJOR | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
-| S-15 | wiring | `bestReachCents` never reaches construction (10-min cache) | MINOR | arrangement-library | REPAIRING |
-| S-16 | screening | factorial screen drops levels that matter only in combination | MINOR | adaptive-search | REPAIRED on branch (91030b6), AWAITING RELEASE |
+| S-15 | wiring | `bestReachCents` never reaches construction (10-min cache) | MINOR | arrangement-library | RELEASED (1070) |
+| S-16 | screening | factorial screen drops levels that matter only in combination | MINOR | adaptive-search | RELEASED in Deploy 1075 (parts 3+4) — repaired (91030b6), AWAITING RELEASE |
 | S-17 | traceability | nothing records what was cut | MINOR | search-selection | REPAIRED, AWAITING VERIFICATION (695077a) |
 | Q2-1 | acceptance | chain link and assurance accept mutually exclusive input forms → EVIDENCED_PORTFOLIO unreachable (repro: 3 sized comparables → basis PROBABILITY, still CANDIDATE_ONLY) | BLOCKING | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
 | Q2-2 | statistics | "sample" = number of studies ≥ 20; Wilson bound double-counts (`quant/portfolio.ts:1027,1061`) | BLOCKING | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
@@ -116,8 +116,8 @@ Status vocabulary as the owner gave it. Owner = the Surge B repair stream
 | E-1 | cash timing | a signed $20K contract paying a deposit + milestone ($14K) inside the window counts $0 toward the goal (independent evaluation case E) | MAJOR | follow-up (portfolio cash timing) | REPAIRED, AWAITING VERIFICATION (paymentSchedule; eval case E passes) |
 | L-1 | evidence interpretation | contradictory sources ($8K vs $45K for one quantity) pooled silently into a DIRECT-tier confident distribution; no contradiction surfaced (case L) | MAJOR | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
 | I-1 | capital restructuring | under a capital ceiling a presale design (reach 0.863) was refused as IMPLAUSIBLE: the plausibility critic compared gross settled cash ($50.6K, ~34×) to capital, though most passes back to the supplier; kept cash is ~12× (`reconstruction.ts:285`) | MAJOR | follow-up | REPAIRED, AWAITING VERIFICATION (critic reads kept cash; eval case I passes) |
-| P-SPEED | planning speed | production `goals plan` on the $10K goal (run 43635941750, e37e0ff): 26 min 41 s for one full read (target 1–5 min) | MAJOR | planning-speed (algorithmic); runtime half (thread copy, 384 MB heap) → Surge A | ROOT CAUSE CONFIRMED → REPAIRING: local 316 s cold read, reconstruction 88% (each of ~207 evaluations carries all 500 openings, `reconstruction.ts:248`); DB only ~8–17 s of the 26 min (lens-P) |
-| PRICE-POOL | economic model | production read: every constructed arrangement — anime production committees, HVAC firms, homeowners, contractors — shows the identical price E 281, fulfil 0–43,661, capital 0–72,769: arrangements are priced from one project-wide observation pool, not their own buyer's evidence (production instance of S-13) | MAJOR | arrangement-library | ROOT CAUSE CONFIRMED → REPAIRING: `construct.ts:545` hands every held price to every arrangement; `goalScenario.ts:198-261` derives cost and capital from the borrowed top price (lens-P) |
+| P-SPEED | planning speed | production `goals plan` on the $10K goal (run 43635941750, e37e0ff): 26 min 41 s for one full read (target 1–5 min) | MAJOR | planning-speed (algorithmic); runtime half (thread copy, 384 MB heap) → Surge A | VERIFIED on production: plan read 71 s after Deploy 1075 (baseline 26 min 41 s) |
+| PRICE-POOL | economic model | production read: every constructed arrangement — anime production committees, HVAC firms, homeowners, contractors — shows the identical price E 281, fulfil 0–43,661, capital 0–72,769: arrangements are priced from one project-wide observation pool, not their own buyer's evidence (production instance of S-13) | MAJOR | arrangement-library | RELEASED (1070); its fallback regressed as F4, repaired in 1078 — NOT YET VERIFIED |
 | Q2-12 | robustness | assurance sample regex-parses prose (`plan.ts:852`) | MINOR | acceptance | REPAIRED, AWAITING VERIFICATION (367b2f5) |
 
 ### Economic knowledge baseline (production, 2026-11-14 19:53Z, Goals run 43634448117)
@@ -198,6 +198,9 @@ simulated worlds never raise confidence.
 |---|---|---|---|---|
 | 21:12–21:28 | `opr_322701cdf14f411e9b6b` (Agents run 43641617727, mission `SURGE:B` set, 3,048 chars) | `auto/best-coding` (free switchboard) | RUN_DONE, 41 tool calls, 0 failed: 19 × `brain_operator_inventory` (populated the Surge B inventory from the mission), `brain_operator_decide` (opd_0943d48c45d6ea1d), `continue_idle`, `record_learning`; commissioned **no** duplicate engineering (every root cause was already REPAIRING by a stream) | `agents.yml operator-show` run 43643347745 |
 | 23:59–00:04 | opr_a1f757372a4d439b8564 (Agents run 43654508964) | auto/best-coding | mission refreshed (SURGE:B, part-2 release state); 29 tool calls: 13 inventory reads/upserts, 3 `brain_operator_decide` (incl. RESUME_GOAL deciding to re-attempt stalled commission imp_02321af4d6e9433782cd on a different path), goal plan read, record_learning. One inventory call failed `POOL_CHECKOUT_TIMEOUT` (Surge A runtime). | agents.yml operator-run log |
+| 01:12 | opr_f08f44610451473b8ee4 | auto/best-coding | RUN_FAILED: database pool 8/8 in use, 7 waiting (Surge A runtime) | operator-show 02:59Z |
+| 01:59–02:01 | opr_7842591db1544e3f9cc8 (self-scheduled) | auto/best-coding | 22 tool calls; engineering read, record_learning, allocation | operator-show |
+| 02:33–02:51 | opr_198160824b9a460a9966 (self-scheduled; my dispatch at 02:33 was refused "an operator run is already in progress") | auto/best-coding | 23 tool calls: goal plan read ×2, inventory, verify, history, 3× `brain_operator_decide`, continue_idle, **2× `brain_operator_commission`**, **`brain_operator_reattempt`**, `brain_operator_submit_fix`, record_learning, engineering ×3 — directing without a Claude prompt | operator-show (Agents run 43670283980) |
 
 Limits observed honestly: the run's own decision and lessons still centre on
 the $10K goal and infrastructure congestion (Surge A's area); it tracked the
@@ -239,27 +242,52 @@ Total ≈ 25 min (baseline 26 min 41 s): construct 247 s, shared frontier (979 o
 
 **Production plan read after Deploy 1075 (Goals run 43667546686, 02:23Z):** total **71 s** (baseline 26 min 41 s; 25 min after part 2): construct 6.1 s (was 247 s), shared frontier 0.25 s (was 210 s), quant portfolio 7.0 s (was 189 s), scenario 1.0 s, reconstruction 55 s (was 346 s). Planning speed VERIFIED on production inside the 1–5 min target. `estimated arrangements: 12 of 404 (392 cut, 6 in reserve)`; `compared 11 found + 12 constructed estimates; 1 in the best combination`. The F4 defect is visible: best-combination p90 $101M and reconstruction p50 $30M from uniform pooled prices; acceptance stays CANDIDATE_ONLY (correctly not certified). F4 repair ships in part 5.
 
+### Production after Deploy 1079 (part 5 live; census Goals run 43674356399, plan read 43674354479, 03:53Z)
+
+| check | before part 5 | after part 5 (03:53Z; 04:17Z) | reading |
+|---|---|---|---|
+| best-combination p90 settled cash | $101,384,753 | **$15,000** | F4 VERIFIED: inflated pooled prices gone |
+| reconstruction best | 44.6% coverage, p50 $30M | 23.1% coverage, p50 $0, p90 $15,000 | honest; CANDIDATE_ONLY |
+| cross-industry TRANSFER arrangements | 0 | **377** | F1/W-8 VERIFIED on production |
+| variable sweep | "abandoned: no evaluation thread" | 46,070 variations read, 7 strategies to the engine; 11 stances | F9.1 VERIFIED resolved (P-10 dedicated vCPUs) |
+| constructed estimates admitted | 12 (on pooled prices) | 0: "no comparable price: published prices for other buyers span …" ×40 | correct refusal; the gap is price evidence per buyer population, which F2/F3 back-fill and F7 rounds must supply |
+| construction facts / arrangements researched | 0 / 0 | 0 / 0 (20 min after release) | F2/F3/F7 NOT YET VERIFIED: watch the standing pass |
+| model lane | 16/16 off-shape | 0 proposed; 2× "not JSON", 2× timeout | F9.2 NOT FIXED → F9.2b (engineer assigned) |
+| plan read time | 71 s | 64 s | |
+| stored arrangements (04:17Z) | 404 | 639 (377 transfers), 14 positions, 249 flows | F5 evidence-only openings feed construction — VERIFIED |
+| construction facts / arrangements researched (04:17Z, 40 min after release) | 0 / 0 | 0 / 0 | NOT VERIFIED — production diagnostic being added to the census (part 6) |
+
+### Surge A closed (02:45Z; its closeout in docs/PLANNING-RECOVERY-2026-11-14.md)
+
+Its handoffs return to Surge B, which now owns them:
+- **F9.1** (variable sweep abandoned, "no evaluation thread is running"). Likely resolved by P-10: Deploy 1075 moved Brain to dedicated vCPUs, and the engine ran in 1.05 s instead of 37.8 s. To verify on the first plan read after Deploy 1079 by the absence of the "sweep abandoned" line.
+- **Evaluator threads at nice 19:** moot on dedicated vCPUs unless the plan read shows otherwise.
+- **`whyNotDiving` serial queries and repeated `listOpportunities`:** noncritical; the plan no longer calls `whyNotDiving`.
+
+Release discipline (P-12): a merge supersedes a Deploy in flight, and the gate takes about 45 min. Surge B releases in batches no closer than one per completed Deploy.
+External: the RunPod balance needs a top-up before about 11-20 (owner; it does not block this operation).
+
 ### Adversarial pass: capabilities that pass on fixtures but are inert on production (01:49Z, `docs/intelligence-recovery/adversarial-production-gaps.md`)
 
 New failure categories the inventory did not cover: gates on a fact kind production never writes; a writer whose only reader is off the failing path; uniform sampling over pooled prices spanning orders of magnitude; capabilities that only run on worker threads; model output refused for shape.
 
 | id | finding | severity | owner | status |
 |---|---|---|---|---|
-| F1 | TRANSFER precedent requires a `captureMechanism` EVIDENCE fact production never writes (only RECOMMENDATION) — W-8/G2 pass only on fixtures | CRITICAL | transfer-facts engineer | REPAIRED on branch (a988208) |
-| F2 | construction facts are read only by goalConstruction; arrangement value and the goal model never read them | CRITICAL | transfer-facts engineer | REPAIRED on branch (a988208) |
-| F3 | facts rarely written: no UNIT_ECONOMIC question, exact buyer-name match, 16.8K claims never back-filed | MAJOR | transfer-facts engineer | REPAIRED on branch (a988208): back-fill ≤20/pass from held claims, normalised buyer matching, unit-economics questions |
-| F4 | P-ADMIT fallback pools every project price ($15–$325K) sampled uniformly: unpriced arrangements inflate reach (cannot certify) | CRITICAL (regression in parts 3+4) | admission engineer | REPAIRED on branch (b86f2ed): comparables must be comparable (sector → structure → buyer kind; p90/p10 > 10 refused); log-uniform between comparable p10–p90 |
-| F5 | 282 of 418 live openings (no payer) feed no construction/transfer | MAJOR | discovery engineer | REPAIRED on branch (7c7b22f) |
-| F6 | capital tied up inferred across mechanisms treated as established; 3 of 11 openings hard-refused | MAJOR | admission engineer | REPAIRED on branch (b86f2ed): only own evidence refuses; pooled inference swept UNKNOWN |
-| F7 | arrangement research rounds and library counters still gated on Cash Mode ACTIVE | MAJOR (CRITICAL when the sprint winds down) | discovery engineer | REPAIRED on branch (7c7b22f): arrangement rounds open under the standing grant |
-| F8 | stuck-plan detector needs identical shortfall text; unreported-round detector ignores kernel rounds | MAJOR | discovery engineer | REPAIRED on branch (7c7b22f) |
-| F9.1 | variable sweep (§102) abandoned on production: "no evaluation thread is running" (`evaluatorPool.ts:173,198`) | CRITICAL | **Surge A** (evaluator pool runtime) | HANDED OFF |
-| F9.2 | 16/16 model-proposed methods refused as off-shape; 2/4 calls HTTP 429 | MAJOR | discovery engineer | REPAIRED on branch (7c7b22f): empty design = no design; tolerant parse; refusal reasons recorded; 429 retried once |
+| F1 | TRANSFER precedent requires a `captureMechanism` EVIDENCE fact production never writes (only RECOMMENDATION) — W-8/G2 pass only on fixtures | CRITICAL | transfer-facts engineer | VERIFIED on production: 377 TRANSFER arrangements (census 03:55Z) |
+| F2 | construction facts are read only by goalConstruction; arrangement value and the goal model never read them | CRITICAL | transfer-facts engineer | RELEASED in PR #909 (part 5; deploying in 1079, 1078 superseded) — repaired (a988208) |
+| F3 | facts rarely written: no UNIT_ECONOMIC question, exact buyer-name match, 16.8K claims never back-filed | MAJOR | transfer-facts engineer | RELEASED in PR #909 (part 5; deploying in 1079, 1078 superseded) — repaired (a988208): back-fill ≤20/pass from held claims, normalised buyer matching, unit-economics questions |
+| F4 | P-ADMIT fallback pools every project price ($15–$325K) sampled uniformly: unpriced arrangements inflate reach (cannot certify) | CRITICAL (regression in parts 3+4) | admission engineer | VERIFIED on production: best p90 $101M → $15,000 (plan 03:53Z) |
+| F5 | 282 of 418 live openings (no payer) feed no construction/transfer | MAJOR | discovery engineer | RELEASED in PR #909 (part 5; deploying in 1079, 1078 superseded) — repaired (7c7b22f) |
+| F6 | capital tied up inferred across mechanisms treated as established; 3 of 11 openings hard-refused | MAJOR | admission engineer | RELEASED in PR #909 (part 5; deploying in 1079, 1078 superseded) — repaired (b86f2ed): only own evidence refuses; pooled inference swept UNKNOWN |
+| F7 | arrangement research rounds and library counters still gated on Cash Mode ACTIVE | MAJOR (CRITICAL when the sprint winds down) | discovery engineer | RELEASED in PR #909 (part 5; deploying in 1079, 1078 superseded) — repaired (7c7b22f): arrangement rounds open under the standing grant |
+| F8 | stuck-plan detector needs identical shortfall text; unreported-round detector ignores kernel rounds | MAJOR | discovery engineer | RELEASED in PR #909 (part 5; deploying in 1079, 1078 superseded) — repaired (7c7b22f) |
+| F9.1 | variable sweep (§102) abandoned on production: "no evaluation thread is running" (`evaluatorPool.ts:173,198`) | CRITICAL | Surge B (returned when Surge A closed) | VERIFIED resolved on production: sweep read 46,070 variations (plan 03:53Z) |
+| F9.2 | 16/16 model-proposed methods refused as off-shape; 2/4 calls HTTP 429 | MAJOR | discovery engineer | RELEASED in PR #909 (part 5; deploying in 1079, 1078 superseded) — repaired (7c7b22f): empty design = no design; tolerant parse; refusal reasons recorded; 429 retried once |
 ### Received from Surge A (22:09Z scope adjustment)
 
 | id | finding | status |
 |---|---|---|
-| A-O6 | research rounds end without a report (`research/gate.ts`, `packetRunner.ts`) — verifier on all-conditional lanes vs unreachable sources | REPAIRED on branch (540ea63): verifier lane names resolved to declared ids; an all-conditional fragment is not failed by INSUFFICIENT, which is carried as an unresolved gap. Unreachable-source blocks stay with RC-1 (Surge A). evidenceLanes 24/24 |
+| A-O6 | research rounds end without a report (`research/gate.ts`, `packetRunner.ts`) — verifier on all-conditional lanes vs unreachable sources | RELEASED in Deploy 1075 (parts 3+4) — repaired (540ea63): verifier lane names resolved to declared ids; an all-conditional fragment is not failed by INSUFFICIENT, which is carried as an unresolved gap. Unreachable-source blocks stay with RC-1 (Surge A). evidenceLanes 24/24 |
 | A-10K | the $10K plan has no buyer-validated or market-test-ready opening, and conversion is unmeasured | ROOT CAUSE CONFIRMED — evidence gap, not a code defect: it closes only by measurement (outreach replies through Instantly, §94) or sourced comparables; acceptance now certifies on sized comparables with margin (case O), never on assumption. Directed to Hermes. |
 | A-CAP | starting-capital fallback chain `perWeek ?? beforeProof ?? capitalCeiling` (`goals/portfolio.ts` ~905) | REVIEWED — NOT A DEFECT: every link is a limit the goal itself states; with no weekly or before-proof limit the ceiling is the most that may be tied up, and the reconstruction's CAPITAL factor sweeps it. No owner figure is hard-coded. |
 

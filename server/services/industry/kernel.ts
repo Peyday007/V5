@@ -205,22 +205,29 @@ export function resetBackfillIdle(): void {
   backfillIdleAt.clear();
 }
 
+/**
+ * Why a pass returns at once for this project — before absorbing and before
+ * the back-fill — or null when it goes on. Read-only; the census reports it.
+ *
+ * Cheap for the many projects with no economic work at all: no sprint row,
+ * no map, no round still to absorb, and no standing grant over a money goal.
+ */
+export async function kernelSkips(projectId: string, mode: CashMode | null): Promise<string | null> {
+  if (mode) return null;
+  const grant = standingWorldGrant(await listGoals(projectId), new Date().toISOString());
+  const nothingToAbsorb = async () => (await openIndustryRoundsByCandidate(projectId)).size === 0;
+  if (!grant) {
+    // Two reads for the ordinary project: no sprint, no grant, nothing still running.
+    if (await nothingToAbsorb()) return 'no cash mode row, no standing world grant, and no open industry round to absorb';
+  } else if ((await countLiveNodes(projectId)) === 0 && !(await holdsMoneyGoal(projectId)) && (await nothingToAbsorb())) {
+    return 'no cash mode row; a standing grant is live but the project has no map, no money goal and no open round';
+  }
+  return null;
+}
+
 export async function runIndustryKernel(projectId: string): Promise<KernelPass> {
   const mode = await getCashMode(projectId);
-  /*
-   * Cheap for the many projects with no economic work at all: no sprint row,
-   * no map, no round still to absorb, and no standing grant over a money goal.
-   */
-  if (!mode) {
-    const grant = standingWorldGrant(await listGoals(projectId), new Date().toISOString());
-    const nothingToAbsorb = async () => (await openIndustryRoundsByCandidate(projectId)).size === 0;
-    if (!grant) {
-      // Two reads for the ordinary project: no sprint, no grant, nothing still running.
-      if (await nothingToAbsorb()) return EMPTY;
-    } else if ((await countLiveNodes(projectId)) === 0 && !(await holdsMoneyGoal(projectId)) && (await nothingToAbsorb())) {
-      return EMPTY;
-    }
-  }
+  if ((await kernelSkips(projectId, mode)) !== null) return EMPTY;
 
   /*
    * Absorb first, deliberately: what a settled round filed changes what the

@@ -814,6 +814,7 @@ export function scoreOf(reading: VariantReading, challenged: VariantReading | nu
 export async function exploreDirections(ctx: ExploreContext): Promise<Exploration> {
   const now = ctx.now ?? Date.now;
   const started = now();
+  const wallStarted = Date.now();
   // Depth is bounded by evaluations, so the same inputs explore the same way on a busy or an idle machine,
   // and by the clock, because an evaluation on production's data costs about a second (Goals plan
   // 42938331961, 2026-11-11: an exploration bounded only between generations ran past 20 minutes).
@@ -931,7 +932,16 @@ export async function exploreDirections(ctx: ExploreContext): Promise<Exploratio
   // The model's directions join as soon as they arrive.
   const rejections: string[] = [];
   if (invented && budget > 0) {
-    const got = await invented;
+    // Best-effort: the lane never holds the read past the exploration's own clock (wall time, whatever `now` says).
+    const wait = Math.max(1, maxMs - (Date.now() - wallStarted));
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const got = await Promise.race([
+      invented,
+      new Promise<{ directions: Direction[]; calls: number; proposed: number; refused: number; error: string }>((resolve) => {
+        timer = setTimeout(() => resolve({ directions: [], calls: 0, proposed: 0, refused: 0, error: `the model lane did not answer within the exploration's ${Math.round(maxMs / 1000)} s clock` }), wait);
+        timer.unref?.();
+      }),
+    ]).finally(() => clearTimeout(timer));
     model.calls = got.calls;
     model.proposed = got.proposed;
     model.refused = got.refused;
@@ -1193,16 +1203,151 @@ function noDesign(raw: unknown): boolean {
  * written as a string, an id with or without its `id:`, an empty optional
  * design — because none of that changes what the method means.
  */
-export function parseInvented(text: string, brief: Pick<InventBrief, 'operators' | 'openings' | 'reserve' | 'designs'>): { directions: Direction[]; proposed: number; refused: number; rejections: string[] } {
-  const match = /\{[\s\S]*\}/.exec(text);
-  if (!match) return { directions: [], proposed: 0, refused: 0, rejections: [] };
-  let body: unknown;
-  try {
-    body = JSON.parse(match[0]);
-  } catch {
-    return { directions: [], proposed: 0, refused: 1, rejections: ['the answer is not JSON'] };
+/** Remove commas that close nothing (`[1,2,]`, `{"a":1,}`), outside strings. */
+function stripTrailingCommas(text: string): string {
+  let out = '';
+  let inString = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]!;
+    if (inString) {
+      out += c;
+      if (c === '\\') out += text[++i] ?? '';
+      else if (c === '"') inString = false;
+      continue;
+    }
+    if (c === '"') inString = true;
+    else if (c === ',') {
+      let j = i + 1;
+      while (j < text.length && /\s/.test(text[j]!)) j++;
+      if (text[j] === '}' || text[j] === ']') continue;
+    }
+    out += c;
   }
-  const methods = (body as { methods?: unknown }).methods;
+  return out;
+}
+
+/** The end (exclusive) of the balanced `{…}` or `[…]` opening at `start`, strings respected; null when it never closes. */
+function balancedEnd(text: string, start: number): number | null {
+  const stack: string[] = [];
+  let inString = false;
+  for (let i = start; i < text.length; i++) {
+    const c = text[i]!;
+    if (inString) {
+      if (c === '\\') i++;
+      else if (c === '"') inString = false;
+      continue;
+    }
+    if (c === '"') inString = true;
+    else if (c === '{' || c === '[') stack.push(c === '{' ? '}' : ']');
+    else if (c === '}' || c === ']') {
+      if (stack.pop() !== c) return null;
+      if (stack.length === 0) return i + 1;
+    }
+  }
+  return null;
+}
+
+function tryJson(text: string): { ok: true; value: unknown } | { ok: false } {
+  for (const t of [text, stripTrailingCommas(text)]) {
+    try {
+      return { ok: true, value: JSON.parse(t) };
+    } catch {
+      /* next form */
+    }
+  }
+  return { ok: false };
+}
+
+/**
+ * The JSON payload inside a model's answer (F9.2, production 2026-11-15: the
+ * free switchboard answered half the reasoning calls with something other than
+ * bare JSON). Reasoning blocks (`<think>…</think>`) are dropped; a fenced
+ * ```json block is read first; otherwise the outermost balanced `{…}` or `[…]`
+ * that parses, with commas that close nothing tolerated. When the answer was
+ * cut off mid-list, the complete method objects before the cut are kept.
+ * `undefined` when nothing in it is JSON.
+ */
+export function extractJsonPayload(text: string): unknown {
+  const cleaned = text.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/^[\s\S]*<\/think>/i, '');
+  const candidates: string[] = [];
+  for (const m of cleaned.matchAll(/```[a-zA-Z0-9_-]*[ \t]*\r?\n?([\s\S]*?)```/g)) candidates.push(m[1]!.trim());
+  candidates.push(cleaned.trim());
+  for (const c of candidates) {
+    const whole = tryJson(c);
+    if (whole.ok) return whole.value;
+  }
+  // The outermost balanced span that parses, earliest first; a span that does not parse is stepped into.
+  let span: unknown;
+  for (const c of candidates) {
+    for (let i = 0, tries = 0; i < c.length && tries < 200 && span === undefined; i++) {
+      if (c[i] !== '{' && c[i] !== '[') continue;
+      tries++;
+      const end = balancedEnd(c, i);
+      if (end === null) continue;
+      const got = tryJson(c.slice(i, end));
+      if (got.ok && got.value && typeof got.value === 'object') span = got.value;
+    }
+    if (span !== undefined) break;
+  }
+  if (span !== undefined && (Array.isArray(span) || 'methods' in (span as object))) return span;
+  // Cut off before the list closed: keep each complete method object that came before the cut
+  // (the span above is then only the first of them).
+  const salvaged = salvageMethods(cleaned);
+  return salvaged ?? span;
+}
+
+function salvageMethods(cleaned: string): { methods: unknown[] } | undefined {
+  const list = /"methods"\s*:\s*\[/.exec(cleaned);
+  if (list) {
+    const methods: unknown[] = [];
+    let i = list.index + list[0].length;
+    while (i < cleaned.length) {
+      while (i < cleaned.length && /[\s,]/.test(cleaned[i]!)) i++;
+      if (cleaned[i] !== '{') break;
+      const end = balancedEnd(cleaned, i);
+      if (end === null) break;
+      const got = tryJson(cleaned.slice(i, end));
+      if (!got.ok) break;
+      methods.push(got.value);
+      i = end;
+    }
+    if (methods.length) return { methods };
+  }
+  return undefined;
+}
+
+/** What a model wrote instead of `{"methods":[…]}`, read as that list when its shape says it is one. */
+function methodsOf(body: unknown): unknown {
+  const isMethod = (x: unknown) => !!x && typeof x === 'object' && !Array.isArray(x) && ('program' in x || 'stance' in x || 'thinking' in x);
+  if (Array.isArray(body)) {
+    // `[{"methods":[…]}]` is the object wrapped; `[{name, stance, …}, …]` is the list itself.
+    if (body.length === 1 && body[0] && typeof body[0] === 'object' && Array.isArray((body[0] as { methods?: unknown }).methods)) return (body[0] as { methods: unknown }).methods;
+    return body;
+  }
+  if (body && typeof body === 'object') {
+    const r = body as Record<string, unknown>;
+    if ('methods' in r) return r['methods'];
+    if (isMethod(r)) return [r];
+    // One list under another name (`strategies`, `answer`), or the object one level down (`{"result":{"methods":[…]}}`).
+    const values = Object.values(r);
+    const lists = values.filter((v) => Array.isArray(v) && v.length > 0 && v.every(isMethod));
+    if (lists.length === 1) return lists[0];
+    const nested = values.filter((v) => v && typeof v === 'object' && !Array.isArray(v) && Array.isArray((v as { methods?: unknown }).methods));
+    if (nested.length === 1) return (nested[0] as { methods: unknown }).methods;
+  }
+  return undefined;
+}
+
+/** The first 80 characters of an answer, on one line, for a refusal that says what was received. */
+function answerHead(text: string): string {
+  return text.replace(/\s+/g, ' ').trim().slice(0, 80);
+}
+
+export function parseInvented(text: string, brief: Pick<InventBrief, 'operators' | 'openings' | 'reserve' | 'designs'>): { directions: Direction[]; proposed: number; refused: number; rejections: string[] } {
+  if (!text.trim()) return { directions: [], proposed: 0, refused: 1, rejections: ['the answer is empty'] };
+  const body = extractJsonPayload(text);
+  if (body === undefined) return { directions: [], proposed: 0, refused: 1, rejections: [`the answer is not JSON (begins: "${answerHead(text)}")`] };
+  const methods = methodsOf(body);
   if (!Array.isArray(methods)) return { directions: [], proposed: 0, refused: 1, rejections: ['the answer holds no "methods" list'] };
   const rejections: string[] = [];
   const ops = new Set(brief.operators.map((o) => o.key));

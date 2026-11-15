@@ -999,6 +999,148 @@ export interface Backfilled {
   skipped: number;
 }
 
+/** Which of the back-fill's two sources a candidate came from. */
+export type BackfillSource = 'UNIT_ECONOMIC' | 'CARD_EVIDENCE';
+
+/** A claim the back-fill would file, and as what. */
+export interface BackfillCandidate {
+  source: BackfillSource;
+  claim: ResearchClaim;
+  buyer: IndustryNode;
+  key: FactKey;
+  amount: number;
+  measures: string;
+}
+
+/** One claim (or card fact) the back-fill read, with what it would file or why it would not. */
+export interface BackfillDecision {
+  source: BackfillSource;
+  claimId: string | null;
+  candidate: BackfillCandidate | null;
+  /** Why it is not filed; null for a candidate. */
+  reason: string | null;
+  /** The buyer wording that matched no mapped buyer type, when that is the reason. */
+  unmatchedBuyer?: string;
+  /**
+   * False for a card fact refused before its claim is read (no payer, not
+   * USD, no mapped buyer): the writer never counted those as skipped.
+   */
+  countsAsSkipped: boolean;
+}
+
+/** Source 1's verdict on one declared UNIT_ECONOMIC claim, by the kernel's own rules. */
+function judgeUnitEconomic(claim: ResearchClaim, nodes: readonly IndustryNode[]): BackfillDecision {
+  const refuse = (reason: string, unmatchedBuyer?: string): BackfillDecision => ({
+    source: 'UNIT_ECONOMIC',
+    claimId: claim.id,
+    candidate: null,
+    reason,
+    countsAsSkipped: true,
+    ...(unmatchedBuyer ? { unmatchedBuyer } : {}),
+  });
+  const key = claim.structuralSubject;
+  if (!isFactKey(key)) return refuse('subject is not a construction fact key');
+  if (!FACT_KEYS[key].segment) return refuse('fact key is not per buyer segment');
+  if (!claim.structuralQualifier) return refuse('claim names no buyer qualifier');
+  const buyer = matchBuyerType(claim.structuralQualifier, nodes);
+  if (!buyer) return refuse('buyer qualifier matches no mapped buyer type', claim.structuralQualifier);
+  const amount = (claim.structuralAmountCents ?? NaN) / 100;
+  if (!Number.isFinite(amount)) return refuse('declared amount is not a number');
+  if (FACT_KEYS[key].kind === 'RATE' && amount > 1) return refuse('rate is more than the whole');
+  return {
+    source: 'UNIT_ECONOMIC',
+    claimId: claim.id,
+    candidate: { source: 'UNIT_ECONOMIC', claim, buyer, key, amount, measures: claim.claim },
+    reason: null,
+    countsAsSkipped: true,
+  };
+}
+
+/** Source 2's verdicts: every EVIDENCE card fact for a price or a direct cost not yet filed, in card order. */
+async function cardEvidenceDecisions(projectId: string, nodes: readonly IndustryNode[]): Promise<BackfillDecision[]> {
+  const facts = (await cardFactsForProject(projectId)).filter((one) => one.kind === 'EVIDENCE' && one.claimId && BACKFILL_FIELDS[one.field]);
+  if (facts.length === 0) return [];
+  const filed = new Set((await listProjectFacts(projectId)).map((one) => one.sourceClaimId).filter((id): id is string => !!id));
+  const pending = facts.filter((one) => !filed.has(one.claimId!));
+  if (pending.length === 0) return [];
+  const openings = new Map((await listOpportunities({ projectId })).map((one) => [one.id, one]));
+  const out: BackfillDecision[] = [];
+  const early = (claimId: string, reason: string, unmatchedBuyer?: string): BackfillDecision => ({
+    source: 'CARD_EVIDENCE',
+    claimId,
+    candidate: null,
+    reason,
+    countsAsSkipped: false,
+    ...(unmatchedBuyer ? { unmatchedBuyer } : {}),
+  });
+  const matched: { fact: (typeof pending)[number]; buyer: IndustryNode }[] = [];
+  for (const fact of pending) {
+    const opening = openings.get(fact.opportunityId);
+    if (!opening) out.push(early(fact.claimId!, 'card opening not found'));
+    else if (!opening.payer) out.push(early(fact.claimId!, 'opening names no payer'));
+    else if (opening.duplicateOfId) out.push(early(fact.claimId!, 'opening is a duplicate'));
+    else if ((opening.currency ?? '').toUpperCase() !== 'USD') out.push(early(fact.claimId!, `opening currency is ${opening.currency ?? 'unset'}, not USD`));
+    else {
+      const buyer = matchBuyerType(opening.payer, nodes);
+      if (buyer) matched.push({ fact, buyer });
+      else out.push(early(fact.claimId!, 'opening payer matches no mapped buyer type', opening.payer));
+    }
+  }
+  if (matched.length === 0) return out;
+  const claims = new Map((await claimsByIds([...new Set(matched.map((one) => one.fact.claimId!))])).map((one) => [one.id, one]));
+  const used = new Set<string>();
+  for (const { fact, buyer } of matched) {
+    const claim = claims.get(fact.claimId!);
+    const spec = BACKFILL_FIELDS[fact.field]!;
+    const refuse = (reason: string): BackfillDecision => ({ source: 'CARD_EVIDENCE', claimId: fact.claimId!, candidate: null, reason, countsAsSkipped: true });
+    if (!claim) out.push(refuse('claim not found'));
+    else if (!claim.accepted) out.push(refuse('claim is not gated (accepted)'));
+    else if (!claim.sourceUrl) out.push(refuse('claim has no source URL'));
+    else if (used.has(claim.id)) out.push(refuse('claim already used by another card field'));
+    else {
+      used.add(claim.id);
+      const figures = readMoneyFigures(claim.claim, 'USD').filter((one) => one.cents > 0);
+      if (figures.length === 0) out.push(refuse('claim states no positive USD figure'));
+      else {
+        const cents = spec.end === 'LOW' ? Math.min(...figures.map((one) => one.cents)) : Math.max(...figures.map((one) => one.cents));
+        out.push({
+          source: 'CARD_EVIDENCE',
+          claimId: claim.id,
+          candidate: { source: 'CARD_EVIDENCE', claim, buyer, key: spec.key, amount: cents / 100, measures: `${spec.measures}: ${claim.claim}` },
+          reason: null,
+          countsAsSkipped: true,
+        });
+      }
+    }
+  }
+  return out;
+}
+
+/** What a dry run of the back-fill found: its pool, as the writer computes it, and nothing written. */
+export interface BackfillPool {
+  /** False when the map holds no live buyer type, and the back-fill reads nothing. */
+  hasBuyerTypes: boolean;
+  /** UNIT_ECONOMIC claims read (at most `BACKFILL_SCAN`; from `afterId`, since the writer's cursor lives in the server's memory). */
+  unitEconomicRead: number;
+  decisions: BackfillDecision[];
+}
+
+/**
+ * The back-fill's candidate selection with no write (a DRY RUN, for the
+ * census): both sources, every decision with its reason. `backfillClaimFacts`
+ * files from exactly these judgements.
+ */
+export async function backfillCandidates(projectId: string, afterId = ''): Promise<BackfillPool> {
+  const nodes = await listNodes(projectId);
+  if (!nodes.some((one) => one.kind === 'BUYER_TYPE' && !one.retiredAt)) return { hasBuyerTypes: false, unitEconomicRead: 0, decisions: [] };
+  const declared = await unfiledUnitEconomicClaims(projectId, afterId, BACKFILL_SCAN);
+  return {
+    hasBuyerTypes: true,
+    unitEconomicRead: declared.length,
+    decisions: [...declared.map((claim) => judgeUnitEconomic(claim, nodes)), ...(await cardEvidenceDecisions(projectId, nodes))],
+  };
+}
+
 /**
  * File construction facts from gated claims research already holds (F3,
  * 2026-11-15): production held 16 786 sourced claims and no construction fact,
@@ -1017,6 +1159,8 @@ export interface Backfilled {
  * Bounded (`BACKFILL_BATCH` writes, `BACKFILL_SCAN` reads) and idempotent: a
  * fact is unique by its claim, so a replay files nothing twice. Provenance is
  * the claim; the status is the claim's (`claimFactStatus`), never VERIFIED.
+ * Which claims qualify is decided by the same judgements `backfillCandidates`
+ * reports, so the census's dry run is this selection.
  */
 export async function backfillClaimFacts(projectId: string, batch = BACKFILL_BATCH): Promise<Backfilled> {
   const out: Backfilled = { filed: [], skipped: 0 };
@@ -1024,7 +1168,7 @@ export async function backfillClaimFacts(projectId: string, batch = BACKFILL_BAT
   const nodes = await listNodes(projectId);
   if (!nodes.some((one) => one.kind === 'BUYER_TYPE' && !one.retiredAt)) return out;
 
-  const fileOne = async (input: { claim: ResearchClaim; buyer: IndustryNode; key: FactKey; amount: number; measures: string }): Promise<void> => {
+  const fileOne = async (input: BackfillCandidate): Promise<void> => {
     const { claim, buyer } = input;
     const recorded = await recordClaimFact({
       projectId,
@@ -1051,6 +1195,10 @@ export async function backfillClaimFacts(projectId: string, batch = BACKFILL_BAT
       detail: { factId: recorded.id, claimId: claim.id, key: input.key, segment: recorded.segment, status: recorded.status, nodeId: buyer.id, backfill: true, observedAt: recorded.observedAt ?? null, validUntil: recorded.validUntil ?? null },
     });
   };
+  const consume = async (decision: BackfillDecision): Promise<void> => {
+    if (decision.candidate) await fileOne(decision.candidate);
+    else if (decision.countsAsSkipped) out.skipped += 1;
+  };
 
   // 1. Declared unit economics outside any open round, from where the last pass stopped.
   const declared = await unfiledUnitEconomicClaims(projectId, unitEconomicCursor.get(projectId) ?? '', BACKFILL_SCAN);
@@ -1058,51 +1206,16 @@ export async function backfillClaimFacts(projectId: string, batch = BACKFILL_BAT
   for (const claim of declared) {
     if (room() <= 0) break;
     reached = claim.id;
-    const key = claim.structuralSubject;
-    const buyer = claim.structuralQualifier ? matchBuyerType(claim.structuralQualifier, nodes) : null;
-    const amount = (claim.structuralAmountCents ?? NaN) / 100;
-    if (!isFactKey(key) || !FACT_KEYS[key].segment || !buyer || !Number.isFinite(amount) || (FACT_KEYS[key].kind === 'RATE' && amount > 1)) {
-      out.skipped += 1;
-      continue;
-    }
-    await fileOne({ claim, buyer, key, amount, measures: claim.claim });
+    await consume(judgeUnitEconomic(claim, nodes));
   }
   // Everything read: start over next pass (a buyer added since may now match). Otherwise resume after the last one read.
   unitEconomicCursor.set(projectId, reached === declared[declared.length - 1]?.id && declared.length < BACKFILL_SCAN ? '' : reached);
   if (room() <= 0) return out;
 
   // 2. Prices and costs cards hold as evidence, for payers the map names.
-  const facts = (await cardFactsForProject(projectId)).filter((one) => one.kind === 'EVIDENCE' && one.claimId && BACKFILL_FIELDS[one.field]);
-  if (facts.length === 0) return out;
-  const filed = new Set((await listProjectFacts(projectId)).map((one) => one.sourceClaimId).filter((id): id is string => !!id));
-  const pending = facts.filter((one) => !filed.has(one.claimId!));
-  if (pending.length === 0) return out;
-  const openings = new Map((await listOpportunities({ projectId })).map((one) => [one.id, one]));
-  const candidates: { fact: (typeof pending)[number]; buyer: IndustryNode }[] = [];
-  for (const fact of pending) {
-    const opening = openings.get(fact.opportunityId);
-    if (!opening?.payer || opening.duplicateOfId || (opening.currency ?? '').toUpperCase() !== 'USD') continue;
-    const buyer = matchBuyerType(opening.payer, nodes);
-    if (buyer) candidates.push({ fact, buyer });
-  }
-  if (candidates.length === 0) return out;
-  const claims = new Map((await claimsByIds([...new Set(candidates.map((one) => one.fact.claimId!))])).map((one) => [one.id, one]));
-  for (const { fact, buyer } of candidates) {
+  for (const decision of await cardEvidenceDecisions(projectId, nodes)) {
     if (room() <= 0) break;
-    const claim = claims.get(fact.claimId!);
-    const spec = BACKFILL_FIELDS[fact.field]!;
-    if (!claim || !claim.accepted || !claim.sourceUrl || filed.has(claim.id)) {
-      out.skipped += 1;
-      continue;
-    }
-    filed.add(claim.id);
-    const figures = readMoneyFigures(claim.claim, 'USD').filter((one) => one.cents > 0);
-    if (figures.length === 0) {
-      out.skipped += 1;
-      continue;
-    }
-    const cents = spec.end === 'LOW' ? Math.min(...figures.map((one) => one.cents)) : Math.max(...figures.map((one) => one.cents));
-    await fileOne({ claim, buyer, key: spec.key, amount: cents / 100, measures: `${spec.measures}: ${claim.claim}` });
+    await consume(decision);
   }
   return out;
 }
