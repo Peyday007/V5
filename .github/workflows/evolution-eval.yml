@@ -1,0 +1,182 @@
+# The Capability Evolution Engine's independent evaluator
+# (docs/evolution/DESIGN.md, step 5).
+#
+# Asks Brain over ssh which experiments are awaiting evaluation, checks out the
+# baseline (the production SHA the experiment names) and every variant's pull
+# request head, runs the experiment's declared benchmark suite on each with the
+# hidden cases only this workflow fetches, records each result back over ssh,
+# and asks Brain to decide. Scores are computed by code (`scripts/bench.ts`);
+# Brain's `selectVariant` decides on them. It never merges, deploys or closes a
+# pull request: adoption goes through the existing release grant.
+#
+# Trust boundaries, because a variant is code an agent wrote:
+#   * The harness is this workflow's own: `bench/` and `scripts/bench.ts` from
+#     the canonical checkout are copied over each tree before it runs, so a
+#     variant cannot change how it is scored (and a baseline that predates the
+#     harness is still measured by it).
+#   * Variant code — its `npm ci` and its bench run — executes only inside a
+#     throwaway container, never on the runner: no Fly token, no GitHub token,
+#     and no process of it survives into the steps that hold one. The bench
+#     container has no network, so hidden cases cannot leave except as the
+#     result JSON recorded to Brain.
+#   * Hidden cases are written outside every worktree, mounted read-only, and
+#     never printed: the bench's output goes to a file and only its summary
+#     lines reach the log.
+#   * Every identifier Brain returns is held to a narrow alphabet
+#     (`bench/evaluator.mjs`) before it reaches a shell.
+name: Evolution eval
+
+on:
+  # Every 30 minutes, off the hour and off the other workflows' minutes.
+  schedule:
+    - cron: '13,43 * * * *'
+  workflow_dispatch:
+    inputs:
+      experiment:
+        description: 'Evaluate only this experiment id (letters, digits, . _ -). Empty evaluates every pending experiment.'
+        required: false
+        default: ''
+
+# Its own group: one evaluation at a time, never evicting or evicted by a console command.
+concurrency:
+  group: evolution-eval
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  evaluate:
+    name: Evaluate pending experiments
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: ./.github/actions/await-release
+
+      - name: Ask Brain what to evaluate
+        id: ask
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          EXPERIMENT: ${{ inputs.experiment }}
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/evolution"
+          mkdir -p "$work/hidden" "$work/results"
+          chmod 700 "$work" "$work/hidden"
+          if [ -n "${EXPERIMENT:-}" ] && ! printf '%s' "$EXPERIMENT" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$'; then
+            echo "::error::experiment must be letters, digits, '.', '_' or '-'"; exit 1
+          fi
+          brain=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          on_brain() {
+            flyctl ssh console --app "$brain" -C "sh -c 'cd /app && env BRAIN_DATABASE_POOL_SIZE=1 node --import tsx scripts/evolution.ts $1'"
+          }
+          on_brain "pending --json" > "$work/pending.txt" 2>&1 || { echo "::error::Brain did not answer pending"; tail -20 "$work/pending.txt"; exit 1; }
+          node bench/evaluator.mjs plan "$work/pending.txt" "${EXPERIMENT:-}" > "$work/plan.tsv"
+          if [ ! -s "$work/plan.tsv" ]; then
+            echo "Nothing is awaiting evaluation."
+            echo "runs=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "runs=$(wc -l < "$work/plan.tsv")" >> "$GITHUB_OUTPUT"
+          # Fetch every commit a run needs now, while a token is in reach and no variant code is.
+          auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          : > "$work/targets.tsv"
+          while IFS=$'\t' read -r experiment suite kind variant label pr ref sha; do
+            if [ "$kind" = variant ] && [ "$sha" = - ]; then
+              if [ "$pr" != - ]; then
+                git -c http.extraheader="$auth" fetch --quiet --no-tags origin "refs/pull/$pr/head"
+              else
+                git -c http.extraheader="$auth" fetch --quiet --no-tags origin "refs/heads/$ref"
+              fi
+              sha=$(git rev-parse FETCH_HEAD)
+            else
+              git cat-file -e "$sha^{commit}" 2>/dev/null || git -c http.extraheader="$auth" fetch --quiet --no-tags origin "$sha"
+              sha=$(git rev-parse "$sha^{commit}")
+            fi
+            printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$experiment" "$suite" "$kind" "$variant" "$label" "$sha" >> "$work/targets.tsv"
+          done < "$work/plan.tsv"
+          # The hidden cases of each suite, once, outside every worktree. Never echoed.
+          for suite in $(cut -f2 "$work/targets.tsv" | sort -u); do
+            on_brain "hidden --suite $suite --json" > "$work/hidden/$suite.txt" 2>&1 || { echo "::error::Brain did not answer hidden cases for $suite"; exit 1; }
+            node bench/evaluator.mjs extract "$work/hidden/$suite.txt" > "$work/hidden/$suite.json"
+            rm -f "$work/hidden/$suite.txt"
+            echo "$suite: $(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).length)' "$work/hidden/$suite.json") hidden case(s)"
+          done
+          chmod 644 "$work"/hidden/*.json
+          cut -f1,3,5,6 "$work/targets.tsv"
+
+      - name: Run the benchmarks (no secrets; variant code only in containers)
+        if: steps.ask.outputs.runs != '0'
+        run: |
+          set -uo pipefail
+          work="$RUNNER_TEMP/evolution"
+          image=node:22-bookworm
+          docker pull --quiet "$image" >/dev/null
+          n=0
+          while IFS=$'\t' read -r experiment suite kind variant label sha; do
+            n=$((n + 1))
+            wt="$work/tree-$n"
+            out="$work/results/$n"
+            mkdir -p "$out"
+            printf '%s\t%s\t%s\t%s\n' "$experiment" "$kind" "$variant" "$suite" > "$out/target.tsv"
+            git worktree add --quiet --detach "$wt" "$sha"
+            # The canonical harness scores every tree, the baseline's included.
+            rm -rf "$wt/bench" && cp -R bench "$wt/bench" && cp scripts/bench.ts "$wt/scripts/bench.ts"
+            ok=1
+            timeout 900 docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm \
+              -v "$wt:/w" -w /w "$image" npm ci --no-audit --no-fund > "$out/install.log" 2>&1 || ok=0
+            if [ "$ok" = 1 ]; then
+              timeout 1800 docker run --rm --network none --user "$(id -u):$(id -g)" -e HOME=/tmp \
+                -v "$wt:/w" -v "$work/hidden:/cases:ro" -v "$out:/out" -w /w "$image" \
+                node --import tsx scripts/bench.ts --suite "$suite" --cases "/cases/$suite.json" --out /out/result.json --ref "$experiment:$label" --quiet \
+                > "$out/bench.log" 2>&1 || ok=0
+            fi
+            # Only the harness's summary lines reach the log; a hidden case's content never does.
+            grep -E '^(feasibility|planSpeed): |^metrics ' "$out/bench.log" 2>/dev/null | cut -c1-2000 || true
+            if [ "$ok" != 1 ] || [ ! -s "$out/result.json" ]; then
+              echo "::warning::$experiment $kind ${variant} did not complete its $suite bench; recorded as a run with no metrics"
+              tail -5 "$out/install.log" 2>/dev/null | cut -c1-300 || true
+              node -e 'const [suite, sha, ref] = process.argv.slice(1); console.log(JSON.stringify({ suite, sha, ref, cases: [], metrics: {}, ranAt: new Date().toISOString() }))' \
+                "$suite" "$sha" "$experiment:$label" > "$out/result.json"
+            fi
+            echo "$experiment $kind ${variant} ($label @ ${sha:0:12}): done"
+            git worktree remove --force "$wt" || rm -rf "$wt"
+          done < "$work/targets.tsv"
+          # Nothing a variant started outlives this step.
+          docker ps -q | xargs -r docker kill >/dev/null 2>&1 || true
+
+      - name: Record results and decide
+        if: steps.ask.outputs.runs != '0'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/evolution"
+          brain=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          failed=0
+          for out in "$work"/results/*/; do
+            IFS=$'\t' read -r experiment kind variant suite < "$out/target.tsv"
+            flag=""
+            [ "$kind" = variant ] && flag="--variant $variant"
+            # The result travels as base64 and reaches the CLI on its stdin: no character of it is parsed by a shell.
+            b64=$(base64 -w0 "$out/result.json")
+            if flyctl ssh console --app "$brain" -C "sh -c 'cd /app && echo $b64 | base64 -d | env BRAIN_DATABASE_POOL_SIZE=1 node --import tsx scripts/evolution.ts record --experiment $experiment $flag'" > "$out/record.txt" 2>&1; then
+              echo "recorded $experiment $kind $variant"
+            else
+              echo "::error::recording $experiment $kind $variant failed"; tail -5 "$out/record.txt" | cut -c1-300; failed=1
+            fi
+          done
+          for experiment in $(cut -f1 "$work/targets.tsv" | sort -u); do
+            flyctl ssh console --app "$brain" -C "sh -c 'cd /app && env BRAIN_DATABASE_POOL_SIZE=1 node --import tsx scripts/evolution.ts decide --experiment $experiment'" 2>&1 | tail -40 || failed=1
+          done
+          exit $failed
