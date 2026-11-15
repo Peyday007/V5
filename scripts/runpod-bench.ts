@@ -1,6 +1,10 @@
 /**
- * `npx tsx scripts/runpod-bench.ts --recipes a,b [--baseline] [--reps N]` —
+ * `npx tsx scripts/runpod-bench.ts --recipes a,b [--baseline] [--reps N] [--tasks director|a,b]` —
  * measure candidate models on Brain's own tasks (§108).
+ *
+ * `--reps N` (1-5, default 1) runs every task N times — a director task runs
+ * each of its variants every time — and scores each task as the mean of its
+ * runs. `--tasks director` runs only the five director tasks.
  *
  * For each recipe: a temporary pod named `brain-bench-<recipe>` is created
  * within the price ceiling, waited on, benchmarked (`modelBench.ts`) and
@@ -16,7 +20,7 @@
  */
 import { randomBytes } from 'node:crypto';
 import { BENCH_PREFIX, DEFAULT_MAX_USD_PER_HOUR, POD_NAME, createPod, deletePod, listPods, podUrl, recipeFor, sweepBenchPods } from '../server/services/cheap/runpodRestore.ts';
-import { chooseModel, runBench, type BenchEndpoint, type BenchSummary } from '../server/services/cheap/modelBench.ts';
+import { chooseModel, repsFromArgs, runBench, tasksFromArgs, type BenchEndpoint, type BenchSummary } from '../server/services/cheap/modelBench.ts';
 import { accountReading } from '../server/services/cheap/runpodAccount.ts';
 
 const arg = (name: string): string | null => {
@@ -26,12 +30,13 @@ const arg = (name: string): string | null => {
 const apiKey = process.env['RUNPOD_API_KEY']?.trim() ?? '';
 const ceiling = Number(process.env['RUNPOD_MAX_USD_PER_HOUR']) > 0 ? Number(process.env['RUNPOD_MAX_USD_PER_HOUR']) : DEFAULT_MAX_USD_PER_HOUR;
 const totalCeiling = Number(process.env['RUNPOD_MAX_TOTAL_USD_PER_HOUR']) > 0 ? Number(process.env['RUNPOD_MAX_TOTAL_USD_PER_HOUR']) : 0.45;
-const reps = Math.max(1, Math.min(3, Number(arg('reps') ?? 1) || 1));
+const repetitions = repsFromArgs(process.argv);
+const only = tasksFromArgs(process.argv);
 
 function print(summary: BenchSummary): void {
-  console.log(`BENCH ${summary.label} quality ${summary.quality.toFixed(2)} tool ${summary.toolSuccess === null ? '-' : summary.toolSuccess.toFixed(2)} median ${Math.round(summary.medianMs / 1000)}s parallel ${summary.parallel ? `${summary.parallel.ok}/${summary.parallel.requests} in ${Math.round(summary.parallel.wallMs / 1000)}s` : '-'} $/task ${summary.usdPerTask === null ? 'free' : summary.usdPerTask.toFixed(4)}`);
+  console.log(`BENCH ${summary.label} quality ${summary.quality.toFixed(2)} director ${summary.director === null ? '-' : summary.director.toFixed(2)} reps ${repetitions} tool ${summary.toolSuccess === null ? '-' : summary.toolSuccess.toFixed(2)} median ${Math.round(summary.medianMs / 1000)}s parallel ${summary.parallel ? `${summary.parallel.ok}/${summary.parallel.requests} in ${Math.round(summary.parallel.wallMs / 1000)}s` : '-'} $/task ${summary.usdPerTask === null ? 'free' : summary.usdPerTask.toFixed(4)}`);
   for (const t of summary.tasks) {
-    console.log(`  ${t.task.padEnd(14)} ${t.score.toFixed(2)} ${String(Math.round(t.ms / 1000)).padStart(4)}s tools ${t.toolOk}/${t.toolCalls}${t.error ? ` ERROR ${t.error.slice(0, 120)}` : ''}`);
+    console.log(`  ${t.task.padEnd(22)} ${t.score.toFixed(2)}${t.runs && t.runs > 1 ? ` (mean of ${t.runs})` : ''} ${String(Math.round(t.ms / 1000)).padStart(4)}s tools ${t.toolOk}/${t.toolCalls}${t.error ? ` ERROR ${t.error.slice(0, 120)}` : ''}`);
     for (const n of t.notes.slice(0, 8)) console.log(`      ${n.slice(0, 200)}`);
   }
   console.log(`BENCH-JSON ${JSON.stringify({ ...summary, tasks: summary.tasks.map((t) => ({ ...t, notes: t.notes.slice(0, 6).map((n) => n.slice(0, 160)) })) })}`);
@@ -86,7 +91,7 @@ async function benchRecipe(key: string): Promise<BenchSummary | null> {
     console.log(`${ready ? 'READY' : 'NOT READY'} ${key} after ${Math.round((Date.now() - started) / 1000)}s`);
     if (!ready) return null;
     const endpoint: BenchEndpoint = { label: `gpu:${key}`, url: pod.url, key: vllmKey, model: recipe.served, usdPerHour: pod.costPerHr };
-    const summary = await runBench(endpoint, { reps, parallel: 6 });
+    const summary = await runBench(endpoint, { repetitions, only, parallel: 6 });
     print(summary);
     return summary;
   } catch (error) {
@@ -115,7 +120,7 @@ async function main(): Promise<void> {
       const listed = await fetch(`${base}/models`, { headers: podKey ? { authorization: `Bearer ${podKey}` } : {}, signal: AbortSignal.timeout(30_000) }).then((r) => r.json()).catch(() => ({}));
       const model = (listed as { data?: { id: string }[] }).data?.[0]?.id ?? 'unknown';
       const cost = Number(prod.adjustedCostPerHr ?? prod.costPerHr);
-      const summary = await runBench({ label: `gpu:production(${model})`, url: base, key: podKey, model, usdPerHour: Number.isFinite(cost) && cost > 0 ? cost : 0.19 }, { reps, parallel: 6 });
+      const summary = await runBench({ label: `gpu:production(${model})`, url: base, key: podKey, model, usdPerHour: Number.isFinite(cost) && cost > 0 ? cost : 0.19 }, { repetitions, only, parallel: 6 });
       print(summary);
       results.push(summary);
     }
@@ -124,7 +129,7 @@ async function main(): Promise<void> {
     if (freeUrl && freeKey) {
       // Production's operator combo (BRAIN_CHEAP_LLM_MODELS, not listed by /models) and the switchboard's own tool-capable route.
       for (const model of ['brain-a', 'auto/best-coding']) {
-        const summary = await runBench({ label: `free:${model}`, url: freeUrl, key: freeKey, model, usdPerHour: null }, { reps, parallel: 3 });
+        const summary = await runBench({ label: `free:${model}`, url: freeUrl, key: freeKey, model, usdPerHour: null }, { repetitions, only, parallel: 3 });
         print(summary);
         results.push(summary);
       }
