@@ -1,0 +1,1245 @@
+/**
+ * Independent challenge, scaled by consequence (CHAL-33).
+ *
+ * Brain seeks the ways its own important conclusions could be wrong, and how
+ * hard it looks depends on what being wrong would cost. A small reversible
+ * action is checked against basic invariants and passes; a large obligation or
+ * a portfolio-wide assumption gets the deep review: failure-mode checks,
+ * counterfactual sensitivity, correlated-scenario stress, shared-exposure
+ * detection and a demand for validation that is actually independent.
+ *
+ * This module adds no store, queue, scheduler or authority path. It reads the
+ * portfolio the quant owner (`portfolio.ts`) already optimizes, recomputes
+ * every counterfactual through that same evaluator on the same drawn worlds
+ * (an activity's samples and a resource's outages are seeded by their own key,
+ * so a sub-problem sees exactly the worlds the full one did), and measures a
+ * proposed safeguard with `readWithSafeguard` instead of asserting it.
+ *
+ * Three rules hold everywhere:
+ *
+ *   * A finding names the assumption that matters, the observation or method
+ *     that would test it, and a concrete safer structure. "Insufficient
+ *     confidence" alone is never emitted.
+ *   * A model agreeing with itself is not independent validation: a check by
+ *     the producing model, or over the producing data source, is refused.
+ *   * A calculated scenario, a calibrated probability, an accepted plan and an
+ *     actual result are four different things and stay four different fields.
+ *     The probability comes only from `assess()`'s evidence rule, and scenario
+ *     coverage never stands in for a 90% claim (§77, §95).
+ *
+ * Tiers are thresholds over numbers. No category, industry or example list
+ * decides anything here (R01-A1, §18.1).
+ */
+import {
+  CLAIM_THRESHOLD,
+  MIN_EVIDENCE_SAMPLE,
+  assess,
+  compareReadings,
+  effectiveSample,
+  evaluateCombination,
+  readWithSafeguard,
+  type Activity,
+  type Assurance,
+  type PortfolioProblem,
+  type PortfolioReading,
+  type PortfolioResult,
+  type Safeguard,
+} from './portfolio.ts';
+
+// ─── Scrutiny ────────────────────────────────────────────────────────────────
+
+export type ScrutinyTier = 'BASIC_INVARIANTS' | 'STANDARD' | 'DEEP';
+
+/** What being wrong about an action would cost. Every field is a number or a flag, never a category. */
+export interface ScrutinyInput {
+  /** Money lost if the conclusion is wrong (major units). */
+  potentialLoss: number;
+  /** What the loss is measured against: capital available, the target, the account balance. */
+  reference: number;
+  /** True when the action cannot be undone once taken (an obligation signed, money sent). */
+  irreversible: boolean;
+  /** 0–1: how unsure the model behind the conclusion is (1 = no calibration at all). */
+  modelUncertainty: number;
+  /** 0–1: share of the plan's value exposed to one shared supplier, channel, marketplace or payment rail. */
+  correlatedExposure: number;
+  /** 0–1: how much the decision would change if the conclusion were wrong (e.g. EVPPI over the decision's value). */
+  decisionImpact: number;
+  /** True when the conclusion is an assumption every plan in the portfolio rests on. */
+  portfolioWide?: boolean;
+}
+
+/** The thresholds a tier is chosen by. Defaults are deliberate, and a caller may tighten them. */
+export interface ScrutinyThresholds {
+  /** At or under this share of the reference, a reversible action is small. */
+  basicLossShare: number;
+  /** At or over this share, the review is deep whether or not the action is reversible. */
+  deepLossShare: number;
+  /** An irreversible action at or over this share is deep. */
+  deepIrreversibleLossShare: number;
+  /** Above this, model uncertainty alone rules out basic invariants. */
+  basicUncertainty: number;
+  /** At or above this, model uncertainty alone makes the review deep when the loss is not small. */
+  deepUncertainty: number;
+  basicExposure: number;
+  deepExposure: number;
+  basicImpact: number;
+  deepImpact: number;
+}
+
+export const DEFAULT_SCRUTINY: ScrutinyThresholds = {
+  basicLossShare: 0.02,
+  deepLossShare: 0.25,
+  deepIrreversibleLossShare: 0.05,
+  basicUncertainty: 0.5,
+  deepUncertainty: 0.8,
+  basicExposure: 0.25,
+  deepExposure: 0.5,
+  basicImpact: 0.1,
+  deepImpact: 0.5,
+};
+
+export interface Scrutiny {
+  tier: ScrutinyTier;
+  /** Why this tier, one line per factor that decided it. */
+  because: string[];
+  lossShare: number;
+}
+
+const clamp01 = (x: number) => (Number.isFinite(x) ? Math.min(1, Math.max(0, x)) : 1);
+
+/**
+ * Choose how hard to look. A small reversible action with a confident model,
+ * little shared exposure and little bearing on the decision needs only basic
+ * invariants; a large or irreversible obligation, a portfolio-wide assumption,
+ * a heavily shared exposure or a decision that turns on the conclusion gets
+ * the deep review. Anything unknown is read as the worse case: a non-finite
+ * number is treated as maximal, never as zero.
+ */
+export function scrutinyFor(action: ScrutinyInput, thresholds: ScrutinyThresholds = DEFAULT_SCRUTINY): Scrutiny {
+  const t = thresholds;
+  const loss = Number.isFinite(action.potentialLoss) ? Math.max(0, action.potentialLoss) : Infinity;
+  const lossShare = action.reference > 0 && Number.isFinite(action.reference) ? loss / action.reference : loss > 0 ? Infinity : 0;
+  const uncertainty = clamp01(action.modelUncertainty);
+  const exposure = clamp01(action.correlatedExposure);
+  const impact = clamp01(action.decisionImpact);
+  const deep: string[] = [];
+  if (action.portfolioWide) deep.push('a portfolio-wide assumption: every plan rests on it');
+  if (lossShare >= t.deepLossShare) deep.push(`potential loss is ${pct(lossShare)} of the reference (deep at ${pct(t.deepLossShare)})`);
+  if (action.irreversible && lossShare >= t.deepIrreversibleLossShare) deep.push(`irreversible, and the loss is ${pct(lossShare)} of the reference`);
+  if (exposure >= t.deepExposure) deep.push(`${pct(exposure)} of the value shares one dependency`);
+  if (impact >= t.deepImpact) deep.push(`the decision turns on it (impact ${pct(impact)})`);
+  if (uncertainty >= t.deepUncertainty && lossShare > t.basicLossShare) deep.push(`model uncertainty ${pct(uncertainty)} on a loss that is not small`);
+  if (deep.length > 0) return { tier: 'DEEP', because: deep, lossShare };
+  const notBasic: string[] = [];
+  if (action.irreversible) notBasic.push('irreversible');
+  if (lossShare > t.basicLossShare) notBasic.push(`potential loss is ${pct(lossShare)} of the reference (basic at or under ${pct(t.basicLossShare)})`);
+  if (uncertainty > t.basicUncertainty) notBasic.push(`model uncertainty ${pct(uncertainty)}`);
+  if (exposure > t.basicExposure) notBasic.push(`${pct(exposure)} shared exposure`);
+  if (impact > t.basicImpact) notBasic.push(`decision impact ${pct(impact)}`);
+  if (notBasic.length > 0) return { tier: 'STANDARD', because: notBasic, lossShare };
+  return { tier: 'BASIC_INVARIANTS', because: ['small, reversible, confident, unshared and with little bearing on the decision: basic invariants only'], lossShare };
+}
+
+// ─── Findings ────────────────────────────────────────────────────────────────
+
+/** The ways a commercial conclusion is commonly wrong (S-0476). A mode is a kind of check, not a whitelist of businesses. */
+export type FailureMode =
+  | 'INVARIANT'
+  | 'UNREPRESENTATIVE_DATA'
+  | 'SURVIVORSHIP_BIAS'
+  | 'STALE_PRICES'
+  | 'REGIME_CHANGE'
+  | 'POSTED_VS_PAID_PRICE'
+  | 'UNREACHABLE_BUYERS'
+  | 'SUPPLIER_CONSTRAINT'
+  | 'UNACCOUNTED_OBLIGATIONS'
+  | 'FAVOURABLE_CONVERSION'
+  | 'SHARED_DEPENDENCY'
+  | 'CASH_TIMING'
+  | 'REFUNDS'
+  | 'LEGAL_COUNTERPARTY'
+  | 'SENSITIVITY'
+  | 'SELF_AGREEMENT'
+  | 'UNCALIBRATED_TARGET';
+
+export type ChallengeMethod =
+  | 'INVARIANT_CHECK'
+  | 'INDEPENDENT_MODEL'
+  | 'MATHEMATICAL_CHECK'
+  | 'COUNTERFACTUAL'
+  | 'HELD_OUT_EVIDENCE'
+  | 'ADVERSARIAL_SEARCH'
+  | 'STATISTICAL_TEST'
+  | 'PRODUCTION_HISTORY'
+  | 'CORRELATED_STRESS';
+
+export interface ChallengeFinding {
+  mode: FailureMode;
+  /** The activity, resource or plan the finding is about. */
+  subject: string;
+  /** The assumption that matters. */
+  assumption: string;
+  /** The observation or method that would test it. */
+  test: string;
+  /** A concrete alternative structure or safeguard that makes the plan more robust. */
+  saferStructure: string;
+  severity: 'BLOCKING' | 'MATERIAL' | 'MINOR';
+  /** How the finding was established: by the data's own shape, or by recomputing outcomes. */
+  method: ChallengeMethod;
+  /** The measured effect, when one was recomputed (share of worlds reaching the target). */
+  measured?: { reachBefore: number; reachAfter: number };
+}
+
+/**
+ * Facts about an activity the portfolio's samples do not carry. Every field is
+ * optional, and an absent fact is never read as the favourable answer: it is
+ * a finding naming the observation that would supply it (invariant 39).
+ */
+export interface ActivityFacts {
+  /** When the prices behind the cash samples were observed (ISO-8601). */
+  priceObservedAt?: string;
+  /** Whether the prices are what buyers actually paid, or only what was posted. */
+  priceKind?: 'PAID' | 'POSTED';
+  /** Whether the buyers the plan counts on have been reached at least once (a reply, a call, a sale). */
+  buyersReached?: boolean;
+  /** Units a supplier can deliver in the period, against the units the plan needs. */
+  supplierCapacity?: { available: number; needed: number };
+  /** Whether every obligation (fees, taxes, fulfilment, guarantees) is inside the samples. */
+  obligationsAccounted?: boolean;
+  /** The conversion rate the samples assume, and how many real attempts it rests on. */
+  conversion?: { rate: number; attempts: number };
+  /** Days between "settled" and cash the owner can actually spend (payout holds, reserves). */
+  payoutHoldDays?: number;
+  /** Share of settled cash refunded or charged back. */
+  refundRate?: number;
+  /** Whether the counterparty's legal exposure (contract, licence, liability) has been reviewed. */
+  counterpartyReviewed?: boolean;
+  /** Dependencies the samples do not name as `needs`, `riskGroup` or `market`. */
+  supplier?: string;
+  channel?: string;
+  marketplace?: string;
+  paymentProvider?: string;
+}
+
+/** A check run by something other than the model that produced the conclusion. */
+export interface IndependentCheck {
+  method: ChallengeMethod;
+  /** Who ran it: a model, a person, a solver. */
+  by: string;
+  /** The data it was run over. */
+  dataSource: string;
+  /** Whether it agreed with the conclusion. */
+  agrees: boolean;
+  /** What it read, when it read the same quantity (share of worlds reaching the target). */
+  reach?: number;
+  /** The assumptions it named as hidden (an independent model's challenge). */
+  assumptions?: string[];
+  /** The stronger alternative it raised, when it raised one. */
+  alternative?: string | null;
+  /** Its own reasons, as it gave them. */
+  reasons?: string;
+}
+
+// ─── The existing model challenger, as an independent check ─────────────────
+
+/**
+ * What Brain's existing independent-model challenger answers
+ * (`operator/decisions.ts` `challengeDecision`, `domain/decision.ts`
+ * `Challenge`) — and what `domain/planReady.ts` reads back as
+ * `hermes.challenge`. Structural, so either shape is accepted as it stands.
+ */
+export interface ModelChallenge {
+  verdict: string;
+  model: string;
+  hiddenAssumptions: string[];
+  missingVariables?: string[];
+  strongerAlternative: string | null;
+  reasons: string;
+}
+
+/**
+ * The data the model challenger reads: a fresh prompt over the decision
+ * record, with none of the producing conversation and none of the
+ * optimizer's samples — so it is a different model over different data from
+ * {@link OPTIMIZER_PRODUCER}.
+ */
+export const MODEL_CHALLENGE_SOURCE = 'operator challenger prompt over the decision record';
+
+/**
+ * The existing challenger's verdict as an independent check (method
+ * `INDEPENDENT_MODEL`): PROCEED agrees, REVISE disagrees and carries the
+ * assumptions and the alternative it named. Any other verdict was not read,
+ * and an unread challenge is no check at all — never a passing one.
+ */
+export function checkFromModelChallenge(c: ModelChallenge | null | undefined): IndependentCheck | null {
+  if (!c) return null;
+  const verdict = String(c.verdict ?? '').toUpperCase();
+  if (verdict !== 'PROCEED' && verdict !== 'REVISE') return null;
+  const named = [...(c.hiddenAssumptions ?? []), ...(c.missingVariables ?? []).map((v) => `${v} does not change the choice`)].map(String).filter((x) => x.trim());
+  return {
+    method: 'INDEPENDENT_MODEL',
+    by: String(c.model || 'unnamed challenger model'),
+    dataSource: MODEL_CHALLENGE_SOURCE,
+    agrees: verdict === 'PROCEED',
+    ...(named.length ? { assumptions: named.slice(0, 8) } : {}),
+    alternative: c.strongerAlternative && c.strongerAlternative.trim() ? c.strongerAlternative : null,
+    ...(c.reasons ? { reasons: String(c.reasons).slice(0, 800) } : {}),
+  };
+}
+
+/** An outcome that actually happened (`quant/ledger.ts`), kept apart from every forecast. */
+export interface ActualResult {
+  settled: number;
+  at: string;
+  source: string;
+}
+
+export interface ChallengeInput {
+  problem: PortfolioProblem;
+  /** The optimizer's own answer for that problem. */
+  result: PortfolioResult;
+  action: ScrutinyInput;
+  thresholds?: ScrutinyThresholds;
+  /** Who produced the conclusion, so a check by the same model or over the same data is not counted. */
+  producedBy: { model: string; dataSource: string };
+  facts?: Record<string, ActivityFacts>;
+  checks?: IndependentCheck[];
+  /** True once a person or rule has accepted the plan. */
+  accepted?: { by: string; at: string };
+  actual?: ActualResult;
+  /** "Now", for staleness. Defaults to the current time. */
+  now?: string;
+  /** Prices older than this many days are stale. */
+  staleAfterDays?: number;
+}
+
+// ─── Shared exposure ─────────────────────────────────────────────────────────
+
+export type ExposureKind = 'RESOURCE' | 'RISK_GROUP' | 'MARKET' | 'SUPPLIER' | 'CHANNEL' | 'MARKETPLACE' | 'PAYMENT_PROVIDER';
+
+export interface SharedExposure {
+  kind: ExposureKind;
+  id: string;
+  /** Members of the recommended combination that share it. */
+  members: string[];
+  /** Probability, for the period, that it fails — only when the problem states one. */
+  failureProbability: number | null;
+  /** Share of worlds reaching the target if it fails (every member that shares it settles nothing). */
+  reachIfItFails: number;
+  /** Share of worlds reaching the target as planned. */
+  reachAsPlanned: number;
+}
+
+export interface ExposureProposal {
+  kind: 'INDEPENDENT_SUBSTITUTE' | 'REDUCED_COMMITMENT' | 'DECORRELATING_SAFEGUARD';
+  exposure: string;
+  description: string;
+  keys: string[];
+  /** Recomputed on the same worlds. */
+  reading: PortfolioReading;
+  /** Share of worlds reaching the target if the exposure fails, after the change. */
+  reachIfItFails: number;
+  /** Capital and spend tied up, before and after, so a reduction's economics are visible. */
+  capitalBefore: number;
+  capitalAfter: number;
+  /** The probability the evidence supports for the changed plan: `assess()`, never coverage. */
+  assurance: Assurance;
+  /** True when it is economically defensible: it does not lower contribution below zero and it makes the plan survive the exposure better, or ties up less for no loss of reach. */
+  defensible: boolean;
+  /** What must still be true for it to work (a second supplier must exist, its failure rate must be stated). */
+  requires: string[];
+}
+
+export interface ExposureReport {
+  exposures: SharedExposure[];
+  proposals: ExposureProposal[];
+  /** The best defensible proposal, if any. */
+  recommended: ExposureProposal | null;
+  /** Dependencies shared through facts alone, with no stated failure probability: research, not an assumption. */
+  researchNeeds: string[];
+}
+
+function exposuresOf(one: Activity, facts: ActivityFacts | undefined): Array<{ kind: ExposureKind; id: string }> {
+  const out: Array<{ kind: ExposureKind; id: string }> = [];
+  for (const r of one.needs ?? []) out.push({ kind: 'RESOURCE', id: r });
+  if (one.riskGroup) out.push({ kind: 'RISK_GROUP', id: one.riskGroup });
+  if (one.market) out.push({ kind: 'MARKET', id: one.market });
+  if (facts?.supplier) out.push({ kind: 'SUPPLIER', id: facts.supplier });
+  if (facts?.channel) out.push({ kind: 'CHANNEL', id: facts.channel });
+  if (facts?.marketplace) out.push({ kind: 'MARKETPLACE', id: facts.marketplace });
+  if (facts?.paymentProvider) out.push({ kind: 'PAYMENT_PROVIDER', id: facts.paymentProvider });
+  return out;
+}
+
+const exposureKey = (e: { kind: ExposureKind; id: string }) => `${e.kind}:${e.id}`;
+
+function subProblem(problem: PortfolioProblem, keys: string[]): PortfolioProblem {
+  const keep = new Set(keys);
+  return { ...problem, activities: problem.activities.filter((a) => keep.has(a.key)), safeguards: undefined };
+}
+
+/** Reads `keys` running together, on the same worlds the optimizer drew (samples and outages are seeded by key). */
+function readKeys(problem: PortfolioProblem, keys: string[]): PortfolioReading | null {
+  if (keys.length === 0) return null;
+  const read = evaluateCombination(subProblem(problem, keys));
+  return 'missing' in read ? null : read;
+}
+
+/** The same combination in the worlds where `exposure` has failed: every member sharing it settles nothing. */
+function readIfFails(problem: PortfolioProblem, keys: string[], exposure: { kind: ExposureKind; id: string }, facts: Record<string, ActivityFacts>): number {
+  if (exposure.kind === 'RESOURCE') {
+    const read = readKeys({ ...problem, resourceFailure: { ...(problem.resourceFailure ?? {}), [exposure.id]: 1 } }, keys);
+    return read?.reach ?? 0;
+  }
+  const byKey = new Map(problem.activities.map((a) => [a.key, a]));
+  const survivors = keys.filter((k) => !exposuresOf(byKey.get(k)!, facts[k]).some((e) => exposureKey(e) === exposureKey(exposure)));
+  return readKeys(problem, survivors)?.reach ?? 0;
+}
+
+const capitalOf = (problem: PortfolioProblem, keys: string[]) =>
+  problem.activities.filter((a) => keys.includes(a.key)).reduce((sum, a) => sum + (a.capital ?? 0), 0);
+
+/**
+ * Find what members of the recommended combination share — a resource they
+ * need, a risk group, a market, or a supplier, channel, marketplace or payment
+ * provider named in their facts — quantify the joint failure on the same
+ * worlds, and propose independent substitutes, reduced commitment or a
+ * decorrelating safeguard, each recomputed through the portfolio evaluator.
+ * The probability attached to every proposal is `assess()`'s; a proposal
+ * never raises a figure above what the evidence supports.
+ */
+export function detectSharedExposure(problem: PortfolioProblem, best: PortfolioReading, facts: Record<string, ActivityFacts> = {}): ExposureReport {
+  const byKey = new Map(problem.activities.map((a) => [a.key, a]));
+  const members = best.keys.filter((k) => byKey.has(k));
+  const groups = new Map<string, { kind: ExposureKind; id: string; members: string[] }>();
+  for (const k of members) {
+    for (const e of exposuresOf(byKey.get(k)!, facts[k])) {
+      const g = groups.get(exposureKey(e)) ?? { ...e, members: [] };
+      if (!g.members.includes(k)) g.members.push(k);
+      groups.set(exposureKey(e), g);
+    }
+  }
+  const shared = [...groups.values()].filter((g) => g.members.length >= 2).sort((a, b) => exposureKey(a).localeCompare(exposureKey(b)));
+  const exposures: SharedExposure[] = shared.map((g) => ({
+    kind: g.kind,
+    id: g.id,
+    members: g.members,
+    failureProbability: g.kind === 'RESOURCE' ? (problem.resourceFailure?.[g.id] ?? null) : null,
+    reachIfItFails: readIfFails(problem, members, g, facts),
+    reachAsPlanned: best.reach,
+  }));
+  const researchNeeds = exposures
+    .filter((e) => e.kind !== 'RESOURCE' && e.kind !== 'RISK_GROUP')
+    .map((e) => `state how often ${e.kind.toLowerCase().replace('_', ' ')} "${e.id}" fails or cuts off ${e.members.join(', ')} (no failure probability is recorded)`);
+
+  const proposals: ExposureProposal[] = [];
+  const capitalBefore = capitalOf(problem, members);
+  const consider = (kind: ExposureProposal['kind'], exposure: SharedExposure, description: string, keys: string[], reading: PortfolioReading | null, reachIfItFails: number, requires: string[], judgedOn: PortfolioProblem = problem) => {
+    if (!reading || !reading.feasible) return;
+    const capitalAfter = capitalOf(problem, keys);
+    const survives = reachIfItFails > exposure.reachIfItFails + 1e-9;
+    const cheaperNoWorse = capitalAfter < capitalBefore && reading.reach >= best.reach - 1e-9;
+    proposals.push({
+      kind,
+      exposure: `${exposure.kind}:${exposure.id}`,
+      description,
+      keys,
+      reading,
+      reachIfItFails,
+      capitalBefore,
+      capitalAfter,
+      assurance: assess(judgedOn, reading),
+      defensible: reading.contribution >= 0 && (survives || cheaperNoWorse),
+      requires,
+    });
+  };
+
+  for (const exposure of exposures) {
+    const e = { kind: exposure.kind, id: exposure.id };
+    // Independent substitutes: activities outside the combination that do not share this exposure, swapped for each sharing member.
+    const outside = problem.activities.filter((a) => !members.includes(a.key) && !exposuresOf(a, facts[a.key]).some((x) => exposureKey(x) === exposureKey(e)));
+    for (const sharing of exposure.members) {
+      for (const sub of outside) {
+        const keys = [...members.filter((k) => k !== sharing), sub.key];
+        consider('INDEPENDENT_SUBSTITUTE', exposure, `replace "${sharing}" with "${sub.key}", which does not depend on ${exposure.kind.toLowerCase()} "${exposure.id}"`, keys, readKeys(problem, keys), readIfFails(problem, keys, e, facts), []);
+      }
+    }
+    // Reduced commitment: keep the strongest sharing member, drop one other at a time.
+    for (const sharing of exposure.members) {
+      const keys = members.filter((k) => k !== sharing);
+      if (keys.length === 0) continue;
+      consider('REDUCED_COMMITMENT', exposure, `drop "${sharing}" so less of the plan rides on ${exposure.kind.toLowerCase()} "${exposure.id}"`, keys, readKeys(problem, keys), readIfFails(problem, keys, e, facts), []);
+    }
+    // A shared risk group can be broken by an independent channel or counterparty: measured, and it requires that one to exist.
+    if (exposure.kind === 'RISK_GROUP') {
+      const guard: Safeguard = { key: `decorrelate:${exposure.id}`, kind: 'INDEPENDENT_CHANNEL', decorrelate: exposure.members.slice(1) };
+      const { after } = readWithSafeguard(subProblem(problem, members), members, guard);
+      // After the move only the first member still rides on the group; if the group's shock hits, the rest keep running.
+      const moved: PortfolioProblem = { ...problem, activities: problem.activities.map((a) => (guard.decorrelate!.includes(a.key) ? { ...a, riskGroup: undefined } : a)) };
+      const ifFails = readKeys(moved, members.filter((k) => k !== exposure.members[0]))?.reach ?? 0;
+      consider('DECORRELATING_SAFEGUARD', exposure, `move ${exposure.members.slice(1).join(', ')} onto a channel or counterparty independent of risk group "${exposure.id}"`, members, after, ifFails, [`an independent channel or counterparty for ${exposure.members.slice(1).join(', ')} must exist and be recorded`]);
+    }
+  }
+  const defensible = proposals.filter((p) => p.defensible);
+  // Robustness first: the proposal that survives the exposure best, then the optimizer's own ordering.
+  defensible.sort((a, b) => b.reachIfItFails - a.reachIfItFails || compareReadings(a.reading, b.reading) || a.capitalAfter - b.capitalAfter);
+  return { exposures, proposals, recommended: defensible[0] ?? null, researchNeeds };
+}
+
+// ─── The challenge ───────────────────────────────────────────────────────────
+
+/** The four things a figure can be. They are never merged. */
+export interface FourKinds {
+  /** Share of simulated worlds reaching the target. A calculation over scenarios, not a probability. */
+  CALCULATED_SCENARIO: { coverage: number | null; worlds: number | null };
+  /** Only what `assess()` supports from evidence. Null when calibration is unavailable. */
+  CALIBRATED_PROBABILITY: { status: Assurance['status']; range: { low: number; high: number } | null; claimsAtLeast90: boolean } | null;
+  /** A plan a person or rule accepted. Null until one did. */
+  ACCEPTED_PLAN: { keys: string[]; by: string; at: string } | null;
+  /** What actually happened. Null until it happened. */
+  ACTUAL_RESULT: ActualResult | null;
+}
+
+export type ChallengeVerdict =
+  /** Nothing material: proceed. */
+  | 'PASS'
+  /** Proceed, carrying the findings. */
+  | 'PASS_WITH_FINDINGS'
+  /** The evidence cannot justify the claim: improve the plan and the evidence, do not declare the target proven. */
+  | 'IMPROVE_PLAN_AND_EVIDENCE'
+  /** An invariant fails: the conclusion cannot stand as computed. */
+  | 'REFUSE';
+
+export interface ChallengeReport {
+  scrutiny: Scrutiny;
+  /** The checks that ran, in order. A basic review runs only invariants. */
+  ran: ChallengeMethod[];
+  findings: ChallengeFinding[];
+  exposure: ExposureReport | null;
+  independentValidation: { counted: IndependentCheck[]; refusedAsSelfAgreement: IndependentCheck[]; disagreeing: IndependentCheck[] };
+  kinds: FourKinds;
+  /** When the evidence cannot justify 90%: the concrete improvements to the plan and its evidence. */
+  improvements: string[];
+  verdict: ChallengeVerdict;
+}
+
+const pct = (x: number) => (Number.isFinite(x) ? `${Math.round(x * 1000) / 10}%` : 'unbounded');
+
+function invariants(problem: PortfolioProblem, result: PortfolioResult): ChallengeFinding[] {
+  const out: ChallengeFinding[] = [];
+  const add = (subject: string, assumption: string, test: string, saferStructure: string) =>
+    out.push({ mode: 'INVARIANT', subject, assumption, test, saferStructure, severity: 'BLOCKING', method: 'INVARIANT_CHECK' });
+  if (!(problem.target > 0)) add('plan', `the target ${problem.target} is a positive amount`, 'read the goal row the target came from', 'restate the target from the goal record before acting');
+  if (!(problem.deadlineDays > 0)) add('plan', `the deadline ${problem.deadlineDays} is a positive number of days`, 'read the goal row the deadline came from', 'restate the deadline from the goal record before acting');
+  for (const a of problem.activities) {
+    if (a.cash.length === 0 || a.cash.length !== a.days.length) add(a.key, 'cash and days samples are paired', `count the samples behind "${a.key}"`, `rebuild "${a.key}" from its observations with one day figure per cash figure`);
+    if (a.days.some((d) => !(d >= 0)) || a.cash.some((c) => !Number.isFinite(c))) add(a.key, 'every sample is a finite amount at a non-negative day', `inspect "${a.key}"'s samples for negative days or non-finite cash`, `drop or correct the malformed samples of "${a.key}" and recompute`);
+  }
+  const needed = [...new Set(problem.activities.flatMap((a) => a.needs ?? []))];
+  for (const r of needed) {
+    const p = problem.resourceFailure?.[r];
+    if (p === undefined || !(p >= 0 && p <= 1)) add(r, `resource "${r}" is reliable`, `measure how often "${r}" fails over the period`, `state a failure probability for "${r}" or plan without it`);
+  }
+  if (result.best && !result.best.feasible) add(result.best.keys.join('+'), 'the recommended combination can run', 'check capacity, exclusions and capital for the combination', 'choose a feasible combination');
+  return out;
+}
+
+function failureModes(problem: PortfolioProblem, best: PortfolioReading, facts: Record<string, ActivityFacts>, now: Date, staleAfterDays: number): ChallengeFinding[] {
+  const out: ChallengeFinding[] = [];
+  const members = problem.activities.filter((a) => best.keys.includes(a.key));
+  for (const a of members) {
+    const f = facts[a.key] ?? {};
+    const sample = effectiveSample(a);
+    const add = (mode: FailureMode, assumption: string, test: string, saferStructure: string, severity: ChallengeFinding['severity'] = 'MATERIAL') =>
+      out.push({ mode, subject: a.key, assumption, test, saferStructure, severity, method: 'STATISTICAL_TEST' });
+    if (!a.justified || sample.size === undefined || sample.size < MIN_EVIDENCE_SAMPLE) {
+      add('UNREPRESENTATIVE_DATA', `the samples behind "${a.key}" represent the market it will meet (${sample.size === undefined ? 'no sample size stated' : `${sample.size} observation(s)`})`, `collect at least ${MIN_EVIDENCE_SAMPLE} independent observations of "${a.key}"'s outcome, or hold out part of the record and compare`, `run "${a.key}" as a small reversible probe first and commit capital only once its outcomes are observed`);
+    }
+    if (a.cash.every((c) => c > 0) && !a.evidence?.history?.winRate) {
+      add('SURVIVORSHIP_BIAS', `every attempt at "${a.key}" pays something (no sample settles zero, and no bid/win record shows the losers)`, `acquire the bid/win record — attempts that failed as well as those that sold`, `add zero-outcome worlds at the observed loss rate, or size "${a.key}" so a run of losses is survivable`);
+    }
+    if (f.priceObservedAt === undefined) {
+      add('STALE_PRICES', `the prices behind "${a.key}" are current (no observation date recorded)`, `record when each price was observed and re-observe any older than ${staleAfterDays} days`, `quote from a fresh observation, or carry a price haircut until one is taken`);
+    } else {
+      const ageDays = (now.getTime() - Date.parse(f.priceObservedAt)) / 86_400_000;
+      if (!(ageDays <= staleAfterDays)) add('STALE_PRICES', `prices observed ${Number.isFinite(ageDays) ? `${Math.round(ageDays)} days ago` : 'at an unreadable date'} still hold for "${a.key}"`, `re-observe the price at its source now`, `refresh the price before committing, and cap commitment until it is refreshed`);
+    }
+    if (a.evidence?.conditionsChanged) {
+      add('REGIME_CHANGE', `the regime "${a.key}"'s observations came from still holds`, `compare recent outcomes against the older record (a split-sample test)`, `weight recent observations, shorten the commitment and re-check at the first settlement`);
+    }
+    if (f.priceKind !== 'PAID') {
+      add('POSTED_VS_PAID_PRICE', `${f.priceKind === 'POSTED' ? 'posted prices are' : 'the prices are'} what buyers of "${a.key}" actually pay`, `obtain completed-transaction prices (sold listings, invoices, settlement records)`, `model from paid prices, or apply the observed posted-to-paid discount`);
+    }
+    if (f.buyersReached !== true) {
+      add('UNREACHABLE_BUYERS', `the buyers "${a.key}" counts on can be reached through the planned route`, `send the first contacts and measure replies before relying on volume`, `secure one reply or order before buying capacity; keep a second route to the same buyers`);
+    }
+    if ((a.needs?.length ?? 0) > 0 && f.supplierCapacity === undefined) {
+      add('SUPPLIER_CONSTRAINT', `the supplier behind "${a.key}" can deliver the volume the plan needs`, `ask the supplier for committed capacity and lead time`, `name a second supplier or cap the plan at the confirmed volume`);
+    } else if (f.supplierCapacity && f.supplierCapacity.available < f.supplierCapacity.needed) {
+      add('SUPPLIER_CONSTRAINT', `the supplier delivers ${f.supplierCapacity.needed} although ${f.supplierCapacity.available} is confirmed`, `confirm the shortfall with the supplier`, `cut "${a.key}" to the confirmed ${f.supplierCapacity.available} or add a second supplier`, 'BLOCKING');
+    }
+    if (problem.reachOn !== 'KEPT' && f.obligationsAccounted !== true) {
+      add('UNACCOUNTED_OBLIGATIONS', `"${a.key}"'s settled cash is free of fees, taxes, fulfilment and guarantees`, `list every obligation the activity creates and subtract it in each world`, `judge the plan on cash kept (reachOn KEPT) with every obligation as spend`);
+    }
+    if (!a.evidence?.history?.winRate && (f.conversion === undefined || f.conversion.attempts < MIN_EVIDENCE_SAMPLE)) {
+      add('FAVOURABLE_CONVERSION', `the conversion rate behind "${a.key}"${f.conversion ? ` (${pct(f.conversion.rate)} over ${f.conversion.attempts} attempt(s))` : ''} will hold`, `measure conversion over at least ${MIN_EVIDENCE_SAMPLE} real attempts`, `size the plan at the lower bound of the observed conversion, not its point estimate`);
+    }
+    if (f.payoutHoldDays === undefined) {
+      add('CASH_TIMING', `cash from "${a.key}" is usable the day it settles`, `read the payment provider's payout schedule and reserve terms`, `count cash only from the day it can be spent, and hold a reserve against payout holds`);
+    }
+    if (f.refundRate === undefined) {
+      add('REFUNDS', `none of "${a.key}"'s settled cash comes back as refunds or chargebacks`, `read the refund and chargeback record for this kind of sale`, `hold back the observed refund share until the refund window closes`);
+    }
+    if (f.counterpartyReviewed !== true) {
+      add('LEGAL_COUNTERPARTY', `the counterparty behind "${a.key}" carries no legal exposure the plan has not priced`, `review the contract, licence and liability terms with the counterparty`, `use written terms with a liability cap, or keep the deal small until reviewed`);
+    }
+  }
+  return out;
+}
+
+/** Counterfactuals measured on the same worlds: a price haircut, slower cash, refunds and payout holds where stated. */
+function sensitivity(problem: PortfolioProblem, best: PortfolioReading, facts: Record<string, ActivityFacts>): ChallengeFinding[] {
+  const out: ChallengeFinding[] = [];
+  const members = best.keys;
+  const variant = (label: string, change: (a: Activity) => Activity) => {
+    const changed: PortfolioProblem = { ...problem, activities: problem.activities.map((a) => (members.includes(a.key) ? change(a) : a)) };
+    const read = readKeys(changed, members);
+    return { label, reach: read?.reach ?? 0 };
+  };
+  const haircut = variant('a 20% lower price', (a) => ({ ...a, cash: a.cash.map((c) => c * 0.8) }));
+  const slower = variant('cash 50% slower to arrive', (a) => ({ ...a, days: a.days.map((d) => d * 1.5) }));
+  const stated = variant('the stated refunds and payout holds', (a) => {
+    const f = facts[a.key] ?? {};
+    const keep = 1 - clamp01(f.refundRate ?? 0);
+    const hold = Math.max(0, f.payoutHoldDays ?? 0);
+    return { ...a, cash: a.cash.map((c) => c * keep), days: a.days.map((d) => d + hold) };
+  });
+  for (const v of [haircut, slower, stated]) {
+    const drop = best.reach - v.reach;
+    if (drop <= 0.05) continue;
+    out.push({
+      mode: v === stated ? 'CASH_TIMING' : 'SENSITIVITY',
+      subject: members.join('+'),
+      assumption: `the plan's reach survives ${v.label}`,
+      test: `recompute on the same worlds with ${v.label} (done: reach falls from ${pct(best.reach)} to ${pct(v.reach)})`,
+      saferStructure: v === haircut ? 'add a member whose cash does not move with this price, or lower the target commitment to what survives the haircut' : 'shorten the cash cycle (deposits, faster payout) or start earlier so slow cash still lands by the deadline',
+      severity: drop > 0.25 ? 'BLOCKING' : 'MATERIAL',
+      method: 'COUNTERFACTUAL',
+      measured: { reachBefore: best.reach, reachAfter: v.reach },
+    });
+  }
+  return out;
+}
+
+/**
+ * Challenge a conclusion at the depth its consequence earns. A basic review
+ * runs invariants only, so a minor reversible action is not held up by the
+ * heavy review; a standard one adds the failure-mode checks and counterfactual
+ * sensitivity; a deep one adds shared-exposure detection, correlated stress,
+ * and requires validation that did not come from the producing model or data.
+ */
+export function challenge(input: ChallengeInput): ChallengeReport {
+  const { problem, result } = input;
+  const facts = input.facts ?? {};
+  const scrutiny = scrutinyFor(input.action, input.thresholds);
+  const ran: ChallengeMethod[] = ['INVARIANT_CHECK'];
+  const findings = invariants(problem, result);
+  const best = result.best;
+
+  const checks = input.checks ?? [];
+  const self = (c: IndependentCheck) => c.by === input.producedBy.model || c.dataSource === input.producedBy.dataSource;
+  const refusedAsSelfAgreement = checks.filter(self);
+  const counted = checks.filter((c) => !self(c));
+  const disagreeing = counted.filter((c) => !c.agrees);
+
+  let exposure: ExposureReport | null = null;
+  if (best && scrutiny.tier !== 'BASIC_INVARIANTS') {
+    ran.push('STATISTICAL_TEST', 'COUNTERFACTUAL');
+    findings.push(...failureModes(problem, best, facts, input.now ? new Date(input.now) : new Date(), input.staleAfterDays ?? 30));
+    findings.push(...sensitivity(problem, best, facts));
+  }
+  if (best && scrutiny.tier === 'DEEP') {
+    ran.push('CORRELATED_STRESS', 'ADVERSARIAL_SEARCH');
+    exposure = detectSharedExposure(problem, best, facts);
+    for (const e of exposure.exposures) {
+      const fix = exposure.recommended?.exposure === `${e.kind}:${e.id}` ? exposure.recommended : exposure.proposals.find((p) => p.exposure === `${e.kind}:${e.id}` && p.defensible);
+      findings.push({
+        mode: 'SHARED_DEPENDENCY',
+        subject: `${e.kind}:${e.id}`,
+        assumption: `${e.members.join(', ')} fail independently, although they all depend on ${e.kind.toLowerCase().replace('_', ' ')} "${e.id}"`,
+        test: e.failureProbability === null ? `measure how often "${e.id}" fails; meanwhile stress it: if it fails, reach falls from ${pct(e.reachAsPlanned)} to ${pct(e.reachIfItFails)}` : `stress it on the same worlds (done: if "${e.id}" fails, reach falls from ${pct(e.reachAsPlanned)} to ${pct(e.reachIfItFails)})`,
+        saferStructure: fix ? `${fix.description}: reach ${pct(fix.reading.reach)}, ${pct(fix.reachIfItFails)} even if "${e.id}" fails${fix.requires.length ? `; requires ${fix.requires.join('; ')}` : ''}` : `find an activity that does not depend on "${e.id}", or reduce the commitment riding on it`,
+        severity: e.reachAsPlanned - e.reachIfItFails > 0.25 ? 'BLOCKING' : 'MATERIAL',
+        method: 'CORRELATED_STRESS',
+        measured: { reachBefore: e.reachAsPlanned, reachAfter: e.reachIfItFails },
+      });
+    }
+    if (counted.length === 0) {
+      findings.push({
+        mode: 'SELF_AGREEMENT',
+        subject: best.keys.join('+'),
+        assumption: 'the conclusion is right because the model that produced it says so',
+        test: refusedAsSelfAgreement.length ? `the ${refusedAsSelfAgreement.length} offered check(s) came from "${input.producedBy.model}" or "${input.producedBy.dataSource}" and are not independent; check with a different model, held-out evidence or production history` : 'check with a different model, held-out evidence or production history',
+        saferStructure: 'commit only the reversible first step until an independent check agrees',
+        severity: 'MATERIAL',
+        method: 'INDEPENDENT_MODEL',
+      });
+    }
+  }
+  for (const c of disagreeing) {
+    const named = c.assumptions?.length ? `; it names: ${c.assumptions.slice(0, 4).join('; ')}` : '';
+    findings.push({
+      mode: 'SELF_AGREEMENT',
+      subject: best?.keys.join('+') ?? 'plan',
+      assumption: `the conclusion holds although an independent ${c.method.toLowerCase().replace('_', ' ')} by "${c.by}" disagrees${c.reach !== undefined ? ` (it reads ${pct(c.reach)})` : ''}${named}`,
+      test: c.assumptions?.length
+        ? `observe each assumption it named (${c.assumptions.slice(0, 4).join('; ')}) on real records, or reconcile the two readings on the same inputs`
+        : `reconcile the two readings on the same inputs and find the input they differ on`,
+      saferStructure: c.alternative ? `${c.alternative} — or plan on the lower of the two readings until the difference is explained` : 'plan on the lower of the two readings until the difference is explained',
+      severity: 'MATERIAL',
+      method: c.method,
+    });
+  }
+  // `ran` reports methods that actually ran and were counted. A check refused as
+  // self-agreement did not run as independent validation, so it adds nothing;
+  // each counted check adds its own method, once.
+  for (const c of counted) if (!ran.includes(c.method)) ran.push(c.method);
+
+  const assurance = result.assurance ?? assess(problem, best);
+  const improvements: string[] = [];
+  if (scrutiny.tier !== 'BASIC_INVARIANTS' && best && !assurance.claimsAtLeast90) {
+    findings.push({
+      mode: 'UNCALIBRATED_TARGET',
+      subject: best.keys.join('+'),
+      assumption: `the target is met at ${pct(CLAIM_THRESHOLD)}, read from ${pct(best.reach)} of simulated worlds`,
+      test: assurance.status === 'RANGE' ? `the evidence supports ${pct(assurance.range!.low)}–${pct(assurance.range!.high)}; enlarge the smallest sample behind any member` : `calibrate the inputs: ${assurance.validationProblems.join('; ')}`,
+      saferStructure: exposure?.recommended ? exposure.recommended.description : 'improve the plan and its evidence (below) rather than reading scenario coverage as the target met',
+      severity: 'MATERIAL',
+      method: 'MATHEMATICAL_CHECK',
+    });
+    improvements.push(...assurance.validationProblems.map((p) => `evidence: ${p}`));
+    improvements.push(...(assurance.researchNeeds ?? []).map((n) => `research: ${n}`));
+    if (exposure?.recommended) improvements.push(`plan: ${exposure.recommended.description}`);
+    improvements.push(...(exposure?.researchNeeds ?? []).map((n) => `research: ${n}`));
+    for (const f of findings) if (f.severity === 'BLOCKING' && f.mode !== 'INVARIANT') improvements.push(`plan: ${f.saferStructure}`);
+    if (improvements.length === 0) improvements.push(`evidence: enlarge the sample behind the weakest member until the lower bound clears ${pct(CLAIM_THRESHOLD)}`);
+  }
+
+  const kinds: FourKinds = {
+    CALCULATED_SCENARIO: { coverage: best?.reach ?? null, worlds: problem.worlds ?? null },
+    CALIBRATED_PROBABILITY: assurance.status === 'CALIBRATION_UNAVAILABLE' ? null : { status: assurance.status, range: assurance.range, claimsAtLeast90: assurance.claimsAtLeast90 },
+    ACCEPTED_PLAN: input.accepted && best ? { keys: best.keys, by: input.accepted.by, at: input.accepted.at } : null,
+    ACTUAL_RESULT: input.actual ?? null,
+  };
+
+  const blocking = findings.some((f) => f.severity === 'BLOCKING' && f.mode === 'INVARIANT');
+  const verdict: ChallengeVerdict = blocking
+    ? 'REFUSE'
+    : improvements.length > 0
+      ? 'IMPROVE_PLAN_AND_EVIDENCE'
+      : findings.some((f) => f.severity !== 'MINOR')
+        ? 'PASS_WITH_FINDINGS'
+        : 'PASS';
+  return { scrutiny, ran, findings, exposure, independentValidation: { counted, refusedAsSelfAgreement, disagreeing }, kinds, improvements, verdict };
+}
+
+// ─── The production entry point ─────────────────────────────────────────────
+
+/** What the optimizer carries on its assurance: the report, with every proposal's reading reduced to the numbers a reader needs. */
+export interface ChallengeSummary {
+  scrutiny: Scrutiny;
+  /** The consequence the tier was chosen from, derived from the plan itself. */
+  action: ScrutinyInput;
+  ran: ChallengeMethod[];
+  findings: ChallengeFinding[];
+  exposures: SharedExposure[];
+  proposals: Array<{
+    kind: ExposureProposal['kind'];
+    exposure: string;
+    description: string;
+    keys: string[];
+    reach: number;
+    reachIfItFails: number;
+    capitalBefore: number;
+    capitalAfter: number;
+    assurance: { status: Assurance['status']; range: { low: number; high: number } | null; claimsAtLeast90: boolean };
+    defensible: boolean;
+    requires: string[];
+  }>;
+  recommended: string | null;
+  researchNeeds: string[];
+  independentValidation: { counted: number; refusedAsSelfAgreement: number; disagreeing: number };
+  kinds: FourKinds;
+  improvements: string[];
+  /** `CHALLENGE_FAILED` when the challenge itself threw: recorded, never read as a pass. */
+  verdict: ChallengeVerdict | 'CHALLENGE_FAILED';
+  error?: string;
+  /**
+   * The plan as the separate commitments it is actually made of — each
+   * member's own start and each purchase made after proof — every one with
+   * the consequence derived from its own numbers, the tier that consequence
+   * earns, and whether it is cleared to proceed now. A small reversible first
+   * step is cleared on basic invariants even while the plan as a whole is
+   * under deep review; an irreversible purchase waits for the review its tier
+   * demands.
+   */
+  steps: StepClearance[];
+  /** Keys of the steps cleared to proceed now: what a caller may act on without waiting for the heavy review. */
+  proceedNow: string[];
+  /**
+   * Whether this plan's consequence requires the heavier independent-model
+   * challenge (`operator/decisions.ts` `challengeDecision`), routed by the
+   * tier: required when the plan or any of its steps earns a deep review,
+   * never for a plan whose every step is basic or standard — so a minor
+   * reversible action is not sent to a second model. `verdict` is what that
+   * challenger answered, when its answer was supplied; `due` is required and
+   * not yet answered.
+   */
+  modelChallenge: ModelChallengeRouting;
+}
+
+export interface ModelChallengeRouting {
+  required: boolean;
+  because: string[];
+  verdict: 'PROCEED' | 'REVISE' | null;
+  by: string | null;
+  due: boolean;
+}
+
+/**
+ * Route the consequence tier to the model challenger: deep for the plan, or
+ * for any one step, requires it; anything lighter does not.
+ */
+export function modelChallengeRouting(scrutiny: Scrutiny, steps: Array<Pick<StepClearance, 'key' | 'scrutiny'>>, supplied: IndependentCheck | null): ModelChallengeRouting {
+  const because: string[] = [];
+  if (scrutiny.tier === 'DEEP') because.push(`the plan earns a deep review: ${scrutiny.because.join('; ')}`);
+  for (const s of steps) if (s.scrutiny.tier === 'DEEP') because.push(`step ${s.key} earns a deep review: ${s.scrutiny.because.join('; ')}`);
+  const required = because.length > 0;
+  const verdict = supplied ? (supplied.agrees ? 'PROCEED' : 'REVISE') : null;
+  return { required, because, verdict, by: supplied?.by ?? null, due: required && verdict === null };
+}
+
+/** One commitment the plan is made of. */
+export interface PlanStep {
+  /** The member key, or `gate:<id>` for a purchase made after proof. */
+  key: string;
+  kind: 'START' | 'GATE_PURCHASE';
+  /** Day the commitment is made (a member's start day, a gate's day). */
+  day: number;
+  /** True when it is taken only once some cash has settled (a gate, or a member requiring proof). */
+  afterProof: boolean;
+  /** The members whose findings bear on it: itself, or every member naming the gate. */
+  members: string[];
+  action: ScrutinyInput;
+}
+
+/** A step, the tier it earns, and whether that tier's review has cleared it. */
+export interface StepClearance extends PlanStep {
+  scrutiny: Scrutiny;
+  mayProceed: boolean;
+  /** Why it may not proceed yet, each naming what would clear it. Empty when it may. */
+  heldBy: string[];
+}
+
+/** What a caller of the optimizer may add to the challenge of its plan. Everything is optional; the plan alone decides the tier. */
+export interface PlanChallengeOptions {
+  facts?: Record<string, ActivityFacts>;
+  checks?: IndependentCheck[];
+  accepted?: { by: string; at: string };
+  actual?: ActualResult;
+  producedBy?: { model: string; dataSource: string };
+  thresholds?: ScrutinyThresholds;
+  now?: string;
+  /** The existing model challenger's answer on this plan (`challengeDecision`, or `hermes.challenge` as planReady reads it). */
+  modelChallenge?: ModelChallenge | null;
+}
+
+/** The model that produced an optimizer result: a check from it is self-agreement. */
+export const OPTIMIZER_PRODUCER = { model: 'quant/portfolio optimizePortfolio', dataSource: 'portfolio problem samples' };
+
+/**
+ * The consequence of acting on an optimizer's recommendation, read from the
+ * plan's own numbers. Potential loss is what the combination can take out of
+ * the account (its members' capital, money already committed, gates it may
+ * buy); the reference is the target; a fixed commitment makes it
+ * irreversible; model uncertainty is how far the defensible lower bound sits
+ * below certainty (all of it when calibration is unavailable); correlated
+ * exposure is the share of members that share a resource, risk group or
+ * market with another member; decision impact is how much reach the choice
+ * gains over the runner-up — or, when there is no other feasible choice and
+ * the decision is only whether to commit, the share of the target the
+ * commitment puts at stake. A combination of more than one member is a
+ * portfolio-wide assumption. No category or name enters any of it.
+ */
+export function actionOfPlan(problem: PortfolioProblem, result: PortfolioResult): ScrutinyInput {
+  const best = result.best;
+  const keys = best?.keys ?? [];
+  const byKey = new Map(problem.activities.map((a) => [a.key, a]));
+  const gateIds = new Set(keys.flatMap((k) => (byKey.get(k)?.gated ? [byKey.get(k)!.gated!.gate] : [])));
+  const gateCost = (problem.gates ?? []).filter((g) => gateIds.has(g.id)).reduce((sum, g) => sum + g.cost, 0);
+  const potentialLoss = capitalOf(problem, keys) + Math.max(0, problem.fixedCost ?? 0) + gateCost;
+  const assurance = result.assurance ?? assess(problem, best);
+  const modelUncertainty = assurance.range ? 1 - assurance.range.low : 1;
+  const counts = new Map<string, number>();
+  for (const k of keys) for (const e of new Set(exposuresOf(byKey.get(k)!, undefined).map(exposureKey))) counts.set(e, (counts.get(e) ?? 0) + 1);
+  const sharing = keys.filter((k) => exposuresOf(byKey.get(k)!, undefined).some((e) => (counts.get(exposureKey(e)) ?? 0) >= 2)).length;
+  const runnerUp = result.ranked.find((r) => r.feasible && r !== best);
+  return {
+    potentialLoss,
+    reference: problem.target,
+    irreversible: (problem.fixedCost ?? 0) > 0,
+    modelUncertainty,
+    correlatedExposure: keys.length ? sharing / keys.length : 0,
+    decisionImpact: !best ? 0 : runnerUp ? Math.max(0, best.reach - runnerUp.reach) : problem.target > 0 ? Math.min(1, potentialLoss / problem.target) : 1,
+    portfolioWide: keys.length > 1,
+  };
+}
+
+/**
+ * How unsure the model is about one activity's own figure, from the evidence
+ * behind it: no stated or historical sample, an unjustified figure, or changed
+ * conditions is total uncertainty; otherwise the standard-error scale of the
+ * sample, 1/√n. A number, never a category.
+ */
+function activityUncertainty(one: Activity): number {
+  if (!one.justified || one.evidence?.conditionsChanged) return 1;
+  const size = effectiveSample(one).size;
+  return size !== undefined && size > 0 ? Math.min(1, 1 / Math.sqrt(size)) : 1;
+}
+
+/**
+ * The commitments a recommended plan is made of, each with its own
+ * consequence derived from the plan's numbers. A member's start puts its
+ * capital and its worst-world spend from the owner's money at stake, and can
+ * be stopped (reversible); a gate is a purchase made after proof, money sent,
+ * so it is irreversible and every member naming it rides on it. Correlated
+ * exposure is the share of the plan's members the step's widest shared
+ * dependency reaches, weighted by the step's share of the plan's money at
+ * stake; decision impact is the share of the target the step
+ * puts at stake. The reference is the target, as for the plan as a whole.
+ * Money already committed (`fixedCost`) is not a step: it has been taken.
+ */
+export function stepsOfPlan(problem: PortfolioProblem, result: PortfolioResult): PlanStep[] {
+  const keys = result.best?.keys ?? [];
+  if (keys.length === 0) return [];
+  const byKey = new Map(problem.activities.map((a) => [a.key, a]));
+  const members = keys.flatMap((k) => (byKey.has(k) ? [byKey.get(k)!] : []));
+  const counts = new Map<string, number>();
+  for (const a of members) for (const e of new Set(exposuresOf(a, undefined).map(exposureKey))) counts.set(e, (counts.get(e) ?? 0) + 1);
+  const shared = (a: Activity) => Math.max(0, ...exposuresOf(a, undefined).map((e) => counts.get(exposureKey(e)) ?? 0).filter((n) => n >= 2)) / members.length;
+  // The plan's money at stake, as `actionOfPlan` reads it: a step's correlated
+  // exposure is the part of it this step puts on a shared dependency, so a
+  // one-unit probe of a shared supplier is not reviewed as if it were the
+  // whole commitment riding on that supplier — the commitment is reviewed at
+  // its own step.
+  const planLoss = actionOfPlan(problem, result).potentialLoss;
+  const weight = (loss: number) => (planLoss > 0 && Number.isFinite(planLoss) ? Math.min(1, loss / planLoss) : 1);
+  const ref = problem.target;
+  const impact = (loss: number) => (ref > 0 && Number.isFinite(ref) ? Math.min(1, loss / ref) : 1);
+  const steps: PlanStep[] = members.map((a) => {
+    const worstSpend = a.ceilingExempt ? 0 : Math.max(0, ...(a.spend ?? []).filter(Number.isFinite));
+    const loss = Math.max(0, a.capital ?? 0) + worstSpend;
+    return {
+      key: a.key,
+      kind: 'START',
+      day: a.startDay ?? 0,
+      afterProof: a.requiresProof === true,
+      members: [a.key],
+      action: { potentialLoss: loss, reference: ref, irreversible: false, modelUncertainty: activityUncertainty(a), correlatedExposure: shared(a) * weight(loss), decisionImpact: impact(loss), portfolioWide: false },
+    };
+  });
+  const named = new Map<string, string[]>();
+  for (const a of members) if (a.gated) named.set(a.gated.gate, [...(named.get(a.gated.gate) ?? []), a.key]);
+  for (const g of problem.gates ?? []) {
+    const riding = named.get(g.id);
+    if (!riding) continue;
+    const cost = Math.max(0, g.cost);
+    steps.push({
+      key: `gate:${g.id}`,
+      kind: 'GATE_PURCHASE',
+      day: g.day,
+      afterProof: true,
+      members: riding,
+      action: {
+        potentialLoss: cost,
+        reference: ref,
+        irreversible: true,
+        modelUncertainty: Math.max(...riding.map((k) => activityUncertainty(byKey.get(k)!))),
+        correlatedExposure: riding.length >= 2 ? (riding.length / members.length) * weight(cost) : 0,
+        decisionImpact: impact(cost),
+        portfolioWide: riding.length === members.length && members.length > 1,
+      },
+    });
+  }
+  return steps.sort((x, y) => x.day - y.day || (x.kind === y.kind ? 0 : x.kind === 'START' ? -1 : 1));
+}
+
+/**
+ * Gate each step on the tier its own consequence earns, against the review
+ * that actually ran. Basic invariants clear a basic step; a standard step
+ * also needs the failure-mode and counterfactual checks to have run with no
+ * blocking finding on its members; a deep step also needs correlated stress,
+ * no blocking shared dependency among its members, and at least one counted
+ * independent check with none disagreeing. A challenge that failed clears
+ * nothing — not even a basic step, because its invariants were never read.
+ */
+export function clearSteps(steps: PlanStep[], summary: Pick<ChallengeSummary, 'ran' | 'findings' | 'exposures' | 'independentValidation' | 'verdict'>, thresholds?: ScrutinyThresholds): StepClearance[] {
+  const invariantFails = summary.findings.filter((f) => f.mode === 'INVARIANT' && f.severity === 'BLOCKING');
+  const exposureMembers = new Map(summary.exposures.map((e) => [`${e.kind}:${e.id}`, e.members]));
+  return steps.map((step) => {
+    const scrutiny = scrutinyFor(step.action, thresholds);
+    const heldBy: string[] = [];
+    const touches = (f: ChallengeFinding) =>
+      step.members.includes(f.subject) || f.subject.split('+').some((k) => step.members.includes(k)) || (exposureMembers.get(f.subject) ?? []).some((k) => step.members.includes(k));
+    if (summary.verdict === 'CHALLENGE_FAILED') heldBy.push('the challenge itself failed, so not even the basic invariants were read: rerun it');
+    for (const f of invariantFails) heldBy.push(`invariant: ${f.assumption} — ${f.saferStructure}`);
+    if (scrutiny.tier !== 'BASIC_INVARIANTS') {
+      if (!summary.ran.includes('STATISTICAL_TEST') || !summary.ran.includes('COUNTERFACTUAL')) heldBy.push(`a ${scrutiny.tier.toLowerCase()} review is due (${scrutiny.because.join('; ')}) and the failure-mode and counterfactual checks have not run`);
+      for (const f of summary.findings) if (f.severity === 'BLOCKING' && f.mode !== 'INVARIANT' && f.mode !== 'SHARED_DEPENDENCY' && touches(f)) heldBy.push(`${f.mode}: ${f.assumption} — test: ${f.test}; safer: ${f.saferStructure}`);
+    }
+    if (scrutiny.tier === 'DEEP') {
+      if (!summary.ran.includes('CORRELATED_STRESS')) heldBy.push(`a deep review is due (${scrutiny.because.join('; ')}) and correlated stress has not run`);
+      for (const f of summary.findings) if (f.severity === 'BLOCKING' && f.mode === 'SHARED_DEPENDENCY' && touches(f)) heldBy.push(`${f.mode}: ${f.assumption} — test: ${f.test}; safer: ${f.saferStructure}`);
+      if (summary.independentValidation.counted === 0) heldBy.push('no independent check has agreed: validate with a different model, held-out evidence or production history before committing');
+      if (summary.independentValidation.disagreeing > 0) heldBy.push(`${summary.independentValidation.disagreeing} independent check(s) disagree: reconcile them first`);
+    }
+    return { ...step, scrutiny, mayProceed: heldBy.length === 0, heldBy };
+  });
+}
+
+/** Reduce a report to what travels with the plan read. */
+export function summarizeChallenge(report: ChallengeReport, action: ScrutinyInput, steps: PlanStep[] = [], thresholds?: ScrutinyThresholds): ChallengeSummary {
+  const summary: Omit<ChallengeSummary, 'steps' | 'proceedNow' | 'modelChallenge'> = {
+    scrutiny: report.scrutiny,
+    action,
+    ran: report.ran,
+    findings: report.findings,
+    exposures: report.exposure?.exposures ?? [],
+    proposals: (report.exposure?.proposals ?? []).map((p) => ({
+      kind: p.kind,
+      exposure: p.exposure,
+      description: p.description,
+      keys: p.keys,
+      reach: p.reading.reach,
+      reachIfItFails: p.reachIfItFails,
+      capitalBefore: p.capitalBefore,
+      capitalAfter: p.capitalAfter,
+      assurance: { status: p.assurance.status, range: p.assurance.range, claimsAtLeast90: p.assurance.claimsAtLeast90 },
+      defensible: p.defensible,
+      requires: p.requires,
+    })),
+    recommended: report.exposure?.recommended?.description ?? null,
+    researchNeeds: report.exposure?.researchNeeds ?? [],
+    independentValidation: {
+      counted: report.independentValidation.counted.length,
+      refusedAsSelfAgreement: report.independentValidation.refusedAsSelfAgreement.length,
+      disagreeing: report.independentValidation.disagreeing.length,
+    },
+    kinds: report.kinds,
+    improvements: report.improvements,
+    verdict: report.verdict,
+  };
+  const cleared = clearSteps(steps, summary, thresholds);
+  const supplied = report.independentValidation.counted.find((c) => c.method === 'INDEPENDENT_MODEL' && c.dataSource === MODEL_CHALLENGE_SOURCE) ?? null;
+  return { ...summary, steps: cleared, proceedNow: cleared.filter((c) => c.mayProceed).map((c) => c.key), modelChallenge: modelChallengeRouting(report.scrutiny, cleared, supplied) };
+}
+
+// ─── What the running Brain supplies itself ──────────────────────────────────
+
+/**
+ * The facts a plan's own activities already carry, read into the challenge's
+ * terms so a production plan is judged on them rather than on "fact absent".
+ * Only what the record states is read: an acquired history with actual paid
+ * prices makes the price kind `PAID`; a same-mechanism bid/win record is the
+ * conversion and the attempts it rests on. Nothing is inferred from a missing
+ * record, and nothing favourable is assumed (invariant 39) — a fact the
+ * activities do not carry stays absent and its failure mode still fires.
+ */
+export function factsFromProblem(problem: PortfolioProblem): Record<string, ActivityFacts> {
+  const out: Record<string, ActivityFacts> = {};
+  for (const a of problem.activities) {
+    const history = a.evidence?.history;
+    if (!history) continue;
+    const f: ActivityFacts = {};
+    // `priceBand` is built from actual prices paid (quant/history.ts), never posted ones.
+    if (history.priceObservations > 0) f.priceKind = 'PAID';
+    if (history.winRate && history.winRate.bids > 0) {
+      f.conversion = { rate: history.winRate.wins / history.winRate.bids, attempts: history.winRate.bids };
+    }
+    if (Object.keys(f).length) out[a.key] = f;
+  }
+  return out;
+}
+
+/** The production-history check's identity: a different model over different data from the optimizer's. */
+export const PRODUCTION_HISTORY_PRODUCER = { model: 'quant/challenge production-history recheck', dataSource: 'market history bid/win outcomes' };
+
+/** Upper end of the Wilson score interval for wins out of bids (z = 1.96). */
+function wilsonUpper(wins: number, bids: number, z = 1.96): number {
+  if (bids <= 0) return 1;
+  const p = wins / bids;
+  const denom = 1 + (z * z) / bids;
+  const centre = p + (z * z) / (2 * bids);
+  const margin = z * Math.sqrt((p * (1 - p)) / bids + (z * z) / (4 * bids * bids));
+  return Math.min(1, (centre + margin) / denom);
+}
+
+/** Every paired sample array repeated `k` times per index, so the distribution is unchanged and a share can be thinned finely. */
+function expandSamples(a: Activity, k: number): Activity {
+  if (k <= 1) return a;
+  const rep = (xs: number[] | undefined) => xs?.flatMap((x) => Array.from({ length: k }, () => x));
+  return {
+    ...a,
+    cash: rep(a.cash)!,
+    days: rep(a.days)!,
+    ...(a.spend ? { spend: rep(a.spend)! } : {}),
+    ...(a.deals ? { deals: rep(a.deals)! } : {}),
+    ...(a.marketVolume ? { marketVolume: rep(a.marketVolume)! } : {}),
+    ...(a.early ? { early: { cash: rep(a.early.cash)!, days: rep(a.early.days)! } } : {}),
+    ...(a.gated
+      ? {
+          gated: {
+            ...a.gated,
+            cash: rep(a.gated.cash)!,
+            days: rep(a.gated.days)!,
+            ...(a.gated.spend ? { spend: rep(a.gated.spend)! } : {}),
+            ...(a.gated.deals ? { deals: rep(a.gated.deals)! } : {}),
+            ...(a.gated.early ? { early: { cash: rep(a.gated.early.cash)!, days: rep(a.gated.early.days)! } } : {}),
+          },
+        }
+      : {}),
+  };
+}
+
+/** The listed sample indices settle nothing but a `keep` share of them, spread evenly; every cash-bearing sample is zeroed together. */
+function thinWorlds(a: Activity, successful: number[], keep: number): Activity {
+  const drop = new Set<number>();
+  successful.forEach((index, i) => {
+    if (Math.floor((i + 1) * keep) === Math.floor(i * keep)) drop.add(index);
+  });
+  const zero = (xs: number[] | undefined) => xs?.map((x, i) => (drop.has(i) ? 0 : x));
+  return {
+    ...a,
+    cash: zero(a.cash)!,
+    ...(a.deals ? { deals: zero(a.deals)! } : {}),
+    ...(a.early ? { early: { ...a.early, cash: zero(a.early.cash)! } } : {}),
+    ...(a.gated ? { gated: { ...a.gated, cash: zero(a.gated.cash)!, ...(a.gated.deals ? { deals: zero(a.gated.deals)! } : {}), ...(a.gated.early ? { early: { ...a.gated.early, cash: zero(a.gated.early.cash)! } } : {}) } } : {}),
+  };
+}
+
+/** Sample indices a member is resolved to before thinning, so a short sample list is not thinned in whole steps. */
+const HISTORY_RESOLUTION = 1000;
+
+/** How far the history-bounded reach may sit below the plan's own before the check disagrees. */
+export const PRODUCTION_HISTORY_TOLERANCE = 0.05;
+
+/**
+ * An independent check of the recommendation from production-derived
+ * history: the market's own bid/win record, which the optimizer's samples are
+ * not built from. Each member's share of worlds that settle anything is held
+ * to the upper end of what its historical win rate allows; where the samples
+ * are more optimistic, their successful worlds are thinned on the same worlds
+ * to that bound, and the combination is re-read. The check agrees when the
+ * history-bounded reach stays within {@link PRODUCTION_HISTORY_TOLERANCE} of
+ * the plan's own.
+ *
+ * It speaks only where it can: every member of the recommended combination
+ * must carry a same-mechanism bid/win record, and no member may close more
+ * than one deal in a world (a per-world share is then not a per-bid rate).
+ * Otherwise there is no check — never a passing one — and a deep step stays
+ * held for want of independent validation.
+ */
+export function productionHistoryCheck(problem: PortfolioProblem, result: PortfolioResult): IndependentCheck | null {
+  const best = result.best;
+  if (!best || best.keys.length === 0) return null;
+  const byKey = new Map(problem.activities.map((a) => [a.key, a]));
+  const members = best.keys.map((k) => byKey.get(k));
+  if (members.some((a) => !a || !a.evidence?.history?.winRate || a.evidence.history.winRate.bids <= 0)) return null;
+  if (members.some((a) => [...(a!.deals ?? []), ...(a!.gated?.deals ?? [])].some((d) => d > 1))) return null;
+  const expanded = new Map<string, Activity>();
+  const thinned = new Map<string, Activity>();
+  for (const a of members as Activity[]) {
+    const { wins, bids } = a.evidence!.history!.winRate!;
+    const successfulOf = (x: Activity) => x.cash.flatMap((c, i) => (c > 0 || (x.gated?.cash[i] ?? 0) > 0 || (x.early?.cash[i] ?? 0) > 0 ? [i] : []));
+    const share = a.cash.length ? successfulOf(a).length / a.cash.length : 0;
+    const bound = wilsonUpper(wins, bids);
+    if (!(share > bound)) continue;
+    const wide = expandSamples(a, Math.ceil(HISTORY_RESOLUTION / Math.max(1, a.cash.length)));
+    expanded.set(a.key, wide);
+    thinned.set(a.key, thinWorlds(wide, successfulOf(wide), bound / share));
+  }
+  // Baseline and recheck are read on the same expanded samples, so the only difference between them is the history bound.
+  const baseline = expanded.size === 0 ? best : readKeys({ ...problem, activities: problem.activities.map((a) => expanded.get(a.key) ?? a) }, best.keys);
+  const reread = thinned.size === 0 ? best : readKeys({ ...problem, activities: problem.activities.map((a) => thinned.get(a.key) ?? a) }, best.keys);
+  if (!baseline || !reread) return null;
+  return {
+    method: 'PRODUCTION_HISTORY',
+    by: PRODUCTION_HISTORY_PRODUCER.model,
+    dataSource: PRODUCTION_HISTORY_PRODUCER.dataSource,
+    agrees: reread.reach >= baseline.reach - PRODUCTION_HISTORY_TOLERANCE,
+    reach: reread.reach,
+  };
+}
+
+/**
+ * Challenge an optimizer's own recommendation at the depth its consequence
+ * earns — the entry point `optimizePortfolio` uses, so every plan Brain reads
+ * carries its challenge. A challenge that throws is recorded as
+ * `CHALLENGE_FAILED` with its reason; it never becomes a pass.
+ */
+export function challengePlan(problem: PortfolioProblem, result: PortfolioResult, options: PlanChallengeOptions = {}): ChallengeSummary {
+  const action = actionOfPlan(problem, result);
+  let steps: PlanStep[] = [];
+  try {
+    steps = stepsOfPlan(problem, result);
+    /*
+     * The running Brain supplies its own facts and its own independent check,
+     * from what the plan's activities carry; a caller's facts refine them field
+     * by field and a caller's checks are added. Without this, every production
+     * plan was read with no facts and no checks at all.
+     */
+    const derived = factsFromProblem(problem);
+    const facts: Record<string, ActivityFacts> = { ...derived };
+    for (const [key, f] of Object.entries(options.facts ?? {})) facts[key] = { ...(derived[key] ?? {}), ...f };
+    const history = productionHistoryCheck(problem, result);
+    const model = checkFromModelChallenge(options.modelChallenge);
+    const checks = [...(history ? [history] : []), ...(model ? [model] : []), ...(options.checks ?? [])];
+    const report = challenge({
+      problem,
+      result,
+      action,
+      producedBy: options.producedBy ?? OPTIMIZER_PRODUCER,
+      ...(options.thresholds ? { thresholds: options.thresholds } : {}),
+      ...(Object.keys(facts).length ? { facts } : {}),
+      ...(checks.length ? { checks } : {}),
+      ...(options.accepted ? { accepted: options.accepted } : {}),
+      ...(options.actual ? { actual: options.actual } : {}),
+      ...(options.now ? { now: options.now } : {}),
+    });
+    return summarizeChallenge(report, action, steps, options.thresholds);
+  } catch (err) {
+    const assurance = result.assurance ?? assess(problem, result.best);
+    const failed: Omit<ChallengeSummary, 'steps' | 'proceedNow' | 'modelChallenge'> = {
+      scrutiny: scrutinyFor(action, options.thresholds),
+      action,
+      ran: [],
+      findings: [],
+      exposures: [],
+      proposals: [],
+      recommended: null,
+      researchNeeds: [],
+      independentValidation: { counted: 0, refusedAsSelfAgreement: 0, disagreeing: 0 },
+      kinds: {
+        CALCULATED_SCENARIO: { coverage: result.best?.reach ?? null, worlds: problem.worlds ?? null },
+        CALIBRATED_PROBABILITY: assurance.status === 'CALIBRATION_UNAVAILABLE' ? null : { status: assurance.status, range: assurance.range, claimsAtLeast90: assurance.claimsAtLeast90 },
+        ACCEPTED_PLAN: null,
+        ACTUAL_RESULT: null,
+      },
+      improvements: [],
+      verdict: 'CHALLENGE_FAILED',
+      error: err instanceof Error ? err.message : String(err),
+    };
+    const cleared = clearSteps(steps, failed, options.thresholds);
+    return { ...failed, steps: cleared, proceedNow: [], modelChallenge: modelChallengeRouting(failed.scrutiny, cleared, null) };
+  }
+}
