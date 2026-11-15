@@ -24,6 +24,7 @@
  * `MAX_ATTEMPTS`, so a failing improvement cannot loop.
  */
 import { getDb } from '../../db/database.ts';
+import { toJson } from '../../repos/util.ts';
 import {
   alertsDue,
   ARCHIVE_OVERLAP_SHARE,
@@ -1299,6 +1300,28 @@ async function recordGapLoops(rankedIds: readonly string[], report: ImprovementT
  * none moves to `reattempt` — while the original value is kept in an append-only event. Idempotent:
  * a corrected row names no such attempt, so a later pass changes nothing.
  */
+/**
+ * Write a corrected method judgment onto the row it was read from. A live candidate is patched as
+ * any refresh is. A decided one cannot be (`patchCandidate` refuses a decided row, so the record it
+ * was decided on stays), yet a decided row is exactly where a mislabel is left standing when the
+ * director decides an attempt HELD before re-attempting it (production, 2026-11-15: AUTO-20-1
+ * episode 2). For it only the evidence is rewritten — never the decision, its reason or
+ * `updated_at`, so the recurrence wait `register` reads from the decision is unchanged — guarded
+ * on the decision it was read with. Returns whether a row changed, so an event is appended only
+ * for a correction that happened and a second pass records nothing.
+ */
+async function writeCorrectedEvidence(candidate: ImprovementCandidate, evidence: Record<string, unknown>): Promise<boolean> {
+  if (!candidate.decision && (await patchCandidate(candidate.id, { evidence }))) return true;
+  const current = await getCandidate(candidate.id);
+  if (!current?.decision) return false;
+  const result = await getDb().run('UPDATE improvement_candidates SET evidence = ? WHERE id = ? AND decision = ?', [
+    toJson(evidence),
+    candidate.id,
+    current.decision,
+  ]);
+  return Number(result.changes ?? 0) > 0;
+}
+
 export async function correctMisjudgedMethods(): Promise<string[]> {
   const all = await listCandidates();
   const corrected: string[] = [];
@@ -1325,7 +1348,7 @@ export async function correctMisjudgedMethods(): Promise<string[]> {
     } else {
       delete evidence['methodInadequacy'];
     }
-    await patchCandidate(candidate.id, { evidence });
+    if (!(await writeCorrectedEvidence(candidate, evidence))) continue;
     await recordImprovementEvent({
       candidateId: candidate.id,
       kind: 'METHOD_JUDGMENT_CORRECTED',
