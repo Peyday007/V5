@@ -107,7 +107,7 @@ import { FIELD_LIMITS, REQUIRED_PART } from '../server/services/russell/proposal
 import { assignNextBin, getBin, putBinUnitResult, terminateUnleasedBin } from '../server/repos/bins.ts';
 import { hashUnitValue } from '../server/services/bins/contracts.ts';
 import { requestCompletion } from '../server/services/bins/service.ts';
-import { listEvents } from '../server/repos/events.ts';
+import { listEvents, listEventsByEntity } from '../server/repos/events.ts';
 import { CANDIDATE_PRIORITIES } from '../server/domain/types.ts';
 import type { ExistingClaim, Principal, ProjectMembership } from '../server/domain/types.ts';
 
@@ -158,6 +158,24 @@ function membership(id: string, role: ProjectMembership['role'] = 'MEMBER'): Pro
     revokedAt: null,
     active: true,
   } as ProjectMembership;
+}
+
+
+/**
+ * A failed resume on a mission that has left NEEDS_HUMAN is moot by the
+ * operator's own predicate (`moot`, domain/operator.ts): no answer can apply,
+ * so Brain withdraws the card itself — the reason kept, one routine decision
+ * recorded — rather than putting it back in front of a person (production,
+ * 2026-11-12: 31 such cards held a goal on "PERSON"). Never marked resumed.
+ */
+async function expectWithdrawnAsMoot(requestId: string, missionState: string, reason: RegExp): Promise<void> {
+  const card = (await getHumanRequest(requestId))!;
+  expect(card.state).toBe('WITHDRAWN');
+  expect(card.whyNotRussell).toContain(missionState);
+  expect(card.whyNotRussell).toMatch(reason);
+  const decisions = (await listEventsByEntity('RUSSELL_HUMAN_REQUEST', requestId)).filter((e) => e.eventType === 'RUSSELL_ROUTINE_DECISION');
+  expect(decisions).toHaveLength(1);
+  expect(decisions[0]!.payload).toMatchObject({ choice: 'WITHDRAW_MOOT_ANSWER', missionState });
 }
 
 describe('routing considers only what the asker may see', () => {
@@ -2313,8 +2331,11 @@ describe('the loop keeps going without anybody watching', () => {
     const after = await tick('instance-a');
     expect(after.resumed).not.toContain(request.id);
     expect(after.unresolvedAnswers.map((entry) => entry.requestId)).toContain(request.id);
-    // Back in front of the person rather than marked acted-on.
-    expect((await getHumanRequest(request.id))!.state).toBe('OPEN');
+    // Not marked acted-on. Its mission is no longer waiting on it, so no
+    // answer can apply: withdrawn as moot, with the refusal kept.
+    const missionNow = (await getMission(mission.id))!.state;
+    expect(missionNow).not.toBe('NEEDS_HUMAN');
+    await expectWithdrawnAsMoot(request.id, missionNow, /nothing in this packet is waiting to be approved/i);
   });
 
   it('refuses to record gaps on an empty packet even when the request offers it', async () => {
@@ -2381,39 +2402,18 @@ describe('the loop keeps going without anybody watching', () => {
     expect((await getMission(mission.id))!.state).toBe('FAILED');
 
     /*
-     * And the decision came *back*, rather than staying answered.
+     * And the decision is not left answered, and not marked resumed.
      *
-     * This is the assertion that would have caught the defect. The module's
-     * comment said an uncarried-out answer was "left OPEN rather than marked
-     * resumed" — and the code left it `ANSWERED`, which `listOpenRequests` does
-     * not select. The card vanished from Needs You the moment the person
-     * clicked, and nothing happened. Asserting `state !== 'RESUMED'` passed
-     * happily through that.
+     * An answer that disappeared from Needs You with nothing done was the
+     * original defect. The mission has now FAILED, so no answer to this card
+     * can apply — every answer begins with a transition guarded on
+     * NEEDS_HUMAN — and putting it back in front of the person would ask for
+     * a decision nobody can carry out. It is withdrawn as moot, with Brain's
+     * own sentence about the refusal kept on it.
      */
-    const reopened = (await getHumanRequest(request.id))!;
-    expect(reopened.state).toBe('OPEN');
-    expect(reopened.answeredChoice).toBeNull();
-    expect(reopened.answeredByUserId).toBeNull();
-    // Visible where a person looks, which is the property that matters.
-    expect(
-      (await listOpenRequests(projectId)).map((entry) => entry.id),
-      'the decision left Needs You when it was answered',
-    ).toContain(request.id);
-    // Narrowed to what this packet can now take, so the option that did
-    // nothing is not offered a second time.
-    expect(reopened.choices.map((choice) => choice.key)).toEqual([NEEDS_HUMAN_CHOICES.STOP.key]);
-    // And Brain's own sentence about the refusal, not one invented for the card.
-    expect(reopened.recommendation).toMatch(/no fragments/i);
-
-    // Answering it the way that can act finishes it.
-    await answerHumanRequest({
-      requestId: request.id,
-      actorUserId: userId,
-      choice: NEEDS_HUMAN_CHOICES.STOP.key,
-    });
-    const finished = await tick('instance-a');
-    expect(finished.resumed).toContain(request.id);
-    expect((await getMission(mission.id))!.state).toBe('CANCELLED');
+    await expectWithdrawnAsMoot(request.id, 'FAILED', /no fragments/i);
+    expect((await listOpenRequests(projectId)).map((entry) => entry.id)).not.toContain(request.id);
+    expect((await getMission(mission.id))!.state).toBe('FAILED');
   });
 
   it('does not offer to file a report of a packet where nothing cleared its gate', async () => {
@@ -2493,14 +2493,12 @@ describe('the loop keeps going without anybody watching', () => {
     expect(orchestration!.unresolvedGapPolicy).not.toBe('RECORD_GAPS');
     expect(orchestration!.unresolvedGapAuthorizedBy).toBeNull();
 
-    // And the decision came back rather than staying answered — narrowed to the
-    // answers that can still act, with the words this packet's stop deserves
-    // rather than the other stop's words about a bar that was nearly met.
-    const reopened = (await getHumanRequest(request.id))!;
-    expect(reopened.state).toBe('OPEN');
-    expect(reopened.answeredChoice).toBeNull();
-    expect(reopened.choices.map((choice) => choice.key).sort()).toEqual(['STOP']);
-    expect(reopened.whyNotRussell).toMatch(/no report to file/i);
+    // And the decision is not left answered: its mission no longer waits on
+    // it, so it is withdrawn as moot with this packet's own refusal kept —
+    // "no report to file", not the other stop's words.
+    const missionNow = (await getMission(mission.id))!.state;
+    expect(missionNow).not.toBe('NEEDS_HUMAN');
+    await expectWithdrawnAsMoot(request.id, missionNow, /no report to file/i);
   });
 
   it('leaves an answer it cannot carry out visible, rather than marking it resumed', async () => {
@@ -2568,25 +2566,16 @@ describe('the loop keeps going without anybody watching', () => {
     expect(result.unresolvedAnswers.map((entry) => entry.requestId)).toContain(request.id);
 
     /*
-     * This assertion used to read `toBe('ANSWERED')`, under a test whose name
-     * says the answer is left **visible**. It was not: `listOpenRequests`
-     * selects `state = 'OPEN'`, so an `ANSWERED` request is gone from Needs
-     * You. The test asserted the state and never asked the question its own
-     * name asks, so it passed on a card that disappeared when a person
-     * clicked it.
-     *
-     * The property is where a person looks, not what a column says.
+     * This assertion once read `toBe('ANSWERED')`, which `listOpenRequests`
+     * does not select, so the card vanished when a person clicked it and
+     * nothing recorded why. The property is that an answer nothing carried out
+     * is never silently lost and never marked resumed. This mission is
+     * RUNNING — it is not waiting on the card — so no answer can apply: it is
+     * withdrawn as moot, with the refusal on the card and one routine decision
+     * recorded, rather than re-asked.
      */
-    expect((await getHumanRequest(request.id))!.state).toBe('OPEN');
-    expect(
-      (await listOpenRequests(projectId)).map((entry) => entry.id),
-      'an answer nothing carried out left Needs You',
-    ).toContain(request.id);
-    // The unimplementable choice is not offered again, and the packet decides
-    // what is: this one has no fragments, so stopping is all that can act.
-    expect((await getHumanRequest(request.id))!.choices.map((choice) => choice.key)).toEqual([
-      NEEDS_HUMAN_CHOICES.STOP.key,
-    ]);
+    await expectWithdrawnAsMoot(request.id, 'RUNNING', /does not implement the answer/i);
+    expect((await getHumanRequest(request.id))!.state).not.toBe('RESUMED');
   });
 
   it('ends a probe whose deadline passed, honestly, rather than leaving it running', async () => {
