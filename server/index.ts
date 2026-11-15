@@ -61,7 +61,7 @@ import { recoverInterruptedResearch } from './services/research/queue.ts';
 import { recoverDispatchAtBoot, startDispatcher } from './services/dispatch/loop.ts';
 import { recordProcessStart, startInfraIncidentRecorder } from './services/infra/incidents.ts';
 import { settleTokenTouches } from './services/identity/tokenTouch.ts';
-import { afterBootGrace, startRussell } from './services/russell/loop.ts';
+import { afterBootGrace, BOOT_GRACE_STAGGER_MS, startRussell } from './services/russell/loop.ts';
 import { startConnectRefresh } from './services/connect/loop.ts';
 import { startIntegrationsLoop } from './services/integrations/loop.ts';
 import { startFactoryRemoteLoop } from './services/factory/remoteLoop.ts';
@@ -883,7 +883,7 @@ async function continueBoot(migrations: MigrationReport): Promise<void> {
             }`,
           );
         });
-    });
+    }, 2 * BOOT_GRACE_STAGGER_MS);
 
     /*
      * Russell's loop, beside the dispatcher and after recovery.
@@ -950,7 +950,7 @@ async function continueBoot(migrations: MigrationReport): Promise<void> {
         const primary = await getDefaultProject();
         if (primary && writesRuntimeSnapshot()) await writeProjectState(primary.id);
       });
-    });
+    }, BOOT_GRACE_STAGGER_MS);
   })().catch((error: unknown) => {
     console.error('[brain] the after-listen recovery could not run; serving on:', error);
   });

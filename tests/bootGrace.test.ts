@@ -10,8 +10,10 @@
  */
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cpuReading } from '../server/db/infra.ts';
 import {
   afterBootGrace,
+  BOOT_GRACE_STAGGER_MS,
   bootGraceRemainingMs,
   DEFERRABLE_UNDER_PRESSURE,
   runPass,
@@ -72,6 +74,34 @@ describe('the optional-work boot grace', () => {
     log.mockRestore();
   });
 
+  it('staggers deferred work after the grace, so the boot re-derivations do not start together', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'Date'] });
+    setOptionalBootGraceMs(TEN_MINUTES);
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const first = vi.fn();
+    const second = vi.fn();
+    afterBootGrace('first', first);
+    afterBootGrace('second', second, BOOT_GRACE_STAGGER_MS);
+    vi.advanceTimersByTime(bootGraceRemainingMs());
+    expect(first).toHaveBeenCalledOnce();
+    expect(second).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(BOOT_GRACE_STAGGER_MS);
+    expect(second).toHaveBeenCalledOnce();
+
+    // Once the grace has passed there is nothing to stagger against: it runs now.
+    setOptionalBootGraceMs(0);
+    const late = vi.fn();
+    afterBootGrace('late', late, BOOT_GRACE_STAGGER_MS);
+    expect(late).toHaveBeenCalledOnce();
+    log.mockRestore();
+  });
+
+  it('gives each boot re-derivation its own start: resume, then recompute, then the self-model scan', () => {
+    const source = readFileSync(new URL('../server/index.ts', import.meta.url), 'utf8');
+    expect(source).toMatch(/\}, BOOT_GRACE_STAGGER_MS\);\n  \}\)\(\)\.catch/);
+    expect(source).toMatch(/\}, 2 \* BOOT_GRACE_STAGGER_MS\);/);
+  });
+
   it('is how the boot starts its packet resume, its recompute and its self-model scan', () => {
     const source = readFileSync(new URL('../server/index.ts', import.meta.url), 'utf8').replace(
       /\/\*[\s\S]*?\*\/|\/\/.*$/gm,
@@ -88,6 +118,26 @@ describe('the optional-work boot grace', () => {
       expect({ label, graced: grace > 0 && at > grace }).toEqual({ label, graced: true });
       // And nothing calls it outside the grace.
       expect({ label, before: boot.slice(0, grace).includes(call) }).toEqual({ label, before: false });
+    }
+  });
+});
+
+describe('the CPU reading', () => {
+  it('reports process CPU as a share of one core, and steal and idle as shares of the machine (or null)', () => {
+    cpuReading();
+    const spinUntil = Date.now() + 60;
+    while (Date.now() < spinUntil) {
+      /* burn a little CPU so the window has some */
+    }
+    const reading = cpuReading();
+    expect(reading).not.toBeNull();
+    expect(reading!.windowMs).toBeGreaterThan(0);
+    expect(reading!.processPctOfCore).toBeGreaterThan(0);
+    for (const share of [reading!.stealPct, reading!.idlePct]) {
+      if (share !== null) {
+        expect(share).toBeGreaterThanOrEqual(0);
+        expect(share).toBeLessThanOrEqual(100);
+      }
     }
   });
 });
