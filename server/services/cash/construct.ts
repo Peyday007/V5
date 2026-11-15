@@ -110,6 +110,28 @@ export type ConstructionOrigin = 'FORWARD' | 'TRANSFER' | 'REVERSE';
  */
 export const TRANSFER_MATERIAL = ['legal context', 'payment terms', 'sales cycle', 'capital', 'buyer behaviour'] as const;
 
+/**
+ * The designs held openings show working, by structure: an opening whose payer
+ * and way of being paid a gated claim established (EVIDENCE card facts) is a
+ * published precedent for its structure's design. The first per structure, in
+ * the order given. Shared by goal construction and the standing kernel's
+ * transfer asks (W-8), so both read one definition of a precedent.
+ */
+export function heldPrecedents(
+  opportunities: readonly CashOpportunity[],
+  evidencedPayer: ReadonlySet<string>,
+  evidencedCapture: ReadonlySet<string>,
+): Map<Structure, CashOpportunity> {
+  const out = new Map<Structure, CashOpportunity>();
+  for (const o of opportunities) {
+    if (!evidencedPayer.has(o.id) || !evidencedCapture.has(o.id)) continue;
+    for (const base of STRUCTURE_KEYS) {
+      if ((STRUCTURES[base].alreadyHeldAs as readonly string[]).includes(o.mechanism) && !out.has(base)) out.set(base, o);
+    }
+  }
+  return out;
+}
+
 export interface ConstructedArrangement {
   key: string;
   structure: Structure;
@@ -330,13 +352,7 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
    * for that design. Carried to a different buyer it is a transfer — the
    * causal economics, not the business.
    */
-  const precedentByBase = new Map<Structure, CashOpportunity>();
-  for (const o of opportunities) {
-    if (!evidencedPayer.has(o.id) || !evidencedCapture.has(o.id) || !allowed(o.title)) continue;
-    for (const base of STRUCTURE_KEYS) {
-      if ((STRUCTURES[base].alreadyHeldAs as readonly string[]).includes(o.mechanism) && !precedentByBase.has(base)) precedentByBase.set(base, o);
-    }
-  }
+  const precedentByBase = heldPrecedents(opportunities.filter((o) => allowed(o.title)), evidencedPayer, evidencedCapture);
 
   const { priced, tiedUp, capability } = await heldEvidence(input, opportunities, allowed);
   /*
