@@ -66,7 +66,7 @@ import { cardFactsFor } from '../server/repos/cashCardFacts.ts';
 import { tick } from '../server/services/russell/loop.ts';
 import { activate } from '../server/services/cash/lifecycle.ts';
 import { fillCard } from '../server/services/cash/opportunities.ts';
-import { SEARCH_BUCKETS } from '../server/services/cash/discovery.ts';
+import { discoveryOrder, SEARCH_BUCKETS } from '../server/services/cash/discovery.ts';
 import { evidenceCard } from '../server/services/cash/card.ts';
 import { cashEngineCard } from '../server/services/cash/engineCard.ts';
 import { cashTier, type TierReading } from '../server/services/cash/tier.ts';
@@ -469,7 +469,7 @@ async function drive(): Promise<CashOpportunity> {
 
   await tick('autonomy');
   const bucket = (await listCandidates({ projectId })).find(
-    (one) => one.title === SEARCH_BUCKETS[0]!.title,
+    (one) => one.title === discoveryOrder(SEARCH_BUCKETS, [])[0]!.title,
   );
   expect(bucket, 'discovery opened a bucket round on its own').toBeDefined();
   await answer(bucket!.id, bucket!.statement, [
