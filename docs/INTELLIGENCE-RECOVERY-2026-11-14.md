@@ -242,6 +242,19 @@ Total ≈ 25 min (baseline 26 min 41 s): construct 247 s, shared frontier (979 o
 
 **Production plan read after Deploy 1075 (Goals run 43667546686, 02:23Z):** total **71 s** (baseline 26 min 41 s; 25 min after part 2): construct 6.1 s (was 247 s), shared frontier 0.25 s (was 210 s), quant portfolio 7.0 s (was 189 s), scenario 1.0 s, reconstruction 55 s (was 346 s). Planning speed VERIFIED on production inside the 1–5 min target. `estimated arrangements: 12 of 404 (392 cut, 6 in reserve)`; `compared 11 found + 12 constructed estimates; 1 in the best combination`. The F4 defect is visible: best-combination p90 $101M and reconstruction p50 $30M from uniform pooled prices; acceptance stays CANDIDATE_ONLY (correctly not certified). F4 repair ships in part 5.
 
+### Production after Deploy 1079 (part 5 live; census Goals run 43674356399, plan read 43674354479, 03:53Z)
+
+| check | before part 5 | after part 5 | reading |
+|---|---|---|---|
+| best-combination p90 settled cash | $101,384,753 | **$15,000** | F4 VERIFIED: inflated pooled prices gone |
+| reconstruction best | 44.6% coverage, p50 $30M | 23.1% coverage, p50 $0, p90 $15,000 | honest; CANDIDATE_ONLY |
+| cross-industry TRANSFER arrangements | 0 | **377** | F1/W-8 VERIFIED on production |
+| variable sweep | "abandoned: no evaluation thread" | 46,070 variations read, 7 strategies to the engine; 11 stances | F9.1 VERIFIED resolved (P-10 dedicated vCPUs) |
+| constructed estimates admitted | 12 (on pooled prices) | 0: "no comparable price: published prices for other buyers span …" ×40 | correct refusal; the gap is price evidence per buyer population, which F2/F3 back-fill and F7 rounds must supply |
+| construction facts / arrangements researched | 0 / 0 | 0 / 0 (20 min after release) | F2/F3/F7 NOT YET VERIFIED: watch the standing pass |
+| model lane | 16/16 off-shape | 0 proposed; 2× "not JSON", 2× timeout | F9.2 NOT FIXED → F9.2b (engineer assigned) |
+| plan read time | 71 s | 64 s | |
+
 ### Surge A closed (02:45Z; its closeout in docs/PLANNING-RECOVERY-2026-11-14.md)
 
 Its handoffs return to Surge B, which now owns them:
@@ -258,15 +271,15 @@ New failure categories the inventory did not cover: gates on a fact kind product
 
 | id | finding | severity | owner | status |
 |---|---|---|---|---|
-| F1 | TRANSFER precedent requires a `captureMechanism` EVIDENCE fact production never writes (only RECOMMENDATION) — W-8/G2 pass only on fixtures | CRITICAL | transfer-facts engineer | RELEASED in PR #909 (part 5; deploying in 1079, 1078 superseded) — repaired (a988208) |
+| F1 | TRANSFER precedent requires a `captureMechanism` EVIDENCE fact production never writes (only RECOMMENDATION) — W-8/G2 pass only on fixtures | CRITICAL | transfer-facts engineer | VERIFIED on production: 377 TRANSFER arrangements (census 03:55Z) |
 | F2 | construction facts are read only by goalConstruction; arrangement value and the goal model never read them | CRITICAL | transfer-facts engineer | RELEASED in PR #909 (part 5; deploying in 1079, 1078 superseded) — repaired (a988208) |
 | F3 | facts rarely written: no UNIT_ECONOMIC question, exact buyer-name match, 16.8K claims never back-filed | MAJOR | transfer-facts engineer | RELEASED in PR #909 (part 5; deploying in 1079, 1078 superseded) — repaired (a988208): back-fill ≤20/pass from held claims, normalised buyer matching, unit-economics questions |
-| F4 | P-ADMIT fallback pools every project price ($15–$325K) sampled uniformly: unpriced arrangements inflate reach (cannot certify) | CRITICAL (regression in parts 3+4) | admission engineer | RELEASED in PR #909 (part 5; deploying in 1079, 1078 superseded) — repaired (b86f2ed): comparables must be comparable (sector → structure → buyer kind; p90/p10 > 10 refused); log-uniform between comparable p10–p90 |
+| F4 | P-ADMIT fallback pools every project price ($15–$325K) sampled uniformly: unpriced arrangements inflate reach (cannot certify) | CRITICAL (regression in parts 3+4) | admission engineer | VERIFIED on production: best p90 $101M → $15,000 (plan 03:53Z) |
 | F5 | 282 of 418 live openings (no payer) feed no construction/transfer | MAJOR | discovery engineer | RELEASED in PR #909 (part 5; deploying in 1079, 1078 superseded) — repaired (7c7b22f) |
 | F6 | capital tied up inferred across mechanisms treated as established; 3 of 11 openings hard-refused | MAJOR | admission engineer | RELEASED in PR #909 (part 5; deploying in 1079, 1078 superseded) — repaired (b86f2ed): only own evidence refuses; pooled inference swept UNKNOWN |
 | F7 | arrangement research rounds and library counters still gated on Cash Mode ACTIVE | MAJOR (CRITICAL when the sprint winds down) | discovery engineer | RELEASED in PR #909 (part 5; deploying in 1079, 1078 superseded) — repaired (7c7b22f): arrangement rounds open under the standing grant |
 | F8 | stuck-plan detector needs identical shortfall text; unreported-round detector ignores kernel rounds | MAJOR | discovery engineer | RELEASED in PR #909 (part 5; deploying in 1079, 1078 superseded) — repaired (7c7b22f) |
-| F9.1 | variable sweep (§102) abandoned on production: "no evaluation thread is running" (`evaluatorPool.ts:173,198`) | CRITICAL | Surge B (returned when Surge A closed) | LIKELY RESOLVED by P-10 dedicated vCPUs (Deploy 1075); verify on next plan read |
+| F9.1 | variable sweep (§102) abandoned on production: "no evaluation thread is running" (`evaluatorPool.ts:173,198`) | CRITICAL | Surge B (returned when Surge A closed) | VERIFIED resolved on production: sweep read 46,070 variations (plan 03:53Z) |
 | F9.2 | 16/16 model-proposed methods refused as off-shape; 2/4 calls HTTP 429 | MAJOR | discovery engineer | RELEASED in PR #909 (part 5; deploying in 1079, 1078 superseded) — repaired (7c7b22f): empty design = no design; tolerant parse; refusal reasons recorded; 429 retried once |
 ### Received from Surge A (22:09Z scope adjustment)
 
