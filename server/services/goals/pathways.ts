@@ -483,7 +483,20 @@ const mid = (f: PathFact): number | null =>
  */
 export function netCentreOf(revenuePerDeal: PathFact, fulfilmentCost: PathFact, acquisitionCost: PathFact): number | null {
   const price = mid(revenuePerDeal);
-  return price !== null ? price - (mid(fulfilmentCost) ?? 0) - (typeof acquisitionCost.value === 'number' ? acquisitionCost.value : 0) : null;
+  return price !== null ? price - (costCentre(fulfilmentCost) ?? 0) - (typeof acquisitionCost.value === 'number' ? acquisitionCost.value : 0) : null;
+}
+/**
+ * The centre of a cost. A geometric middle of a range that starts at zero is the
+ * floor's square root — an unknown $0–$881,310 fulfilment cost became $0.94, and
+ * a $2.77M arrangement nobody can fulfil led the portfolio at 100% of the gap
+ * (R-PORTFOLIO-COST, 2026-11-15). A cost is subtracted, so collapsing it is the
+ * optimistic error: a range touching zero is centred arithmetically, as the
+ * quantitative model already does.
+ */
+function costCentre(f: PathFact): number | null {
+  if (typeof f.value === 'number') return f.value;
+  if (f.low !== null && f.high !== null && f.low <= 0) return (f.low + f.high) / 2;
+  return mid(f);
 }
 const lowOf = (f: PathFact): number | null => (typeof f.value === 'number' && f.status === 'PROVEN' ? f.value : f.low);
 const highOf = (f: PathFact): number | null => (typeof f.value === 'number' && f.status === 'PROVEN' ? f.value : f.high);
@@ -1215,14 +1228,30 @@ export interface LivingPortfolio {
   gaps: { gap: GapKind; label: string; pathways: number }[];
   /** Permissions every sale still needs. */
   permissions: string[];
+  /** Pathways kept out of every combination: one deal costs more than the money behind the plan, on a price no buyer is shown paying. */
+  unfunded: string[];
   note: string;
 }
 
 const MAX_MEMBERS = 6;
 
+/**
+ * One deal whose direct cost alone is more than the money behind the plan, on a
+ * price no buyer is shown paying, can only be carried by someone else's money —
+ * the quantitative model's SCALE critic (reconstruction.ts) refuses the same
+ * thing, so the portfolio does not lead with what the model calls implausible
+ * (R-PORTFOLIO-COST, production 2026-11-15: a $2.77M utility arrangement nobody
+ * can fulfil led at 100% of the gap).
+ */
+export function unfundedDeal(p: TransactionPathway, capitalCeiling: number | null): boolean {
+  if (capitalCeiling === null || p.revenuePerDeal.status === 'PROVEN') return false;
+  const cost = costCentre(p.fulfilmentCost) ?? 0;
+  return cost > Math.max(1, capitalCeiling);
+}
+
 export function combine(pathways: TransactionPathway[], input: { remaining: number; capitalCeiling: number | null; exclude?: Set<string> }): PathwayCombination | null {
   const pool = pathways
-    .filter((p) => !input.exclude?.has(p.correlationGroup) && p.contribution.p90 > 0 && !p.gaps.includes('CLOSED') && !p.gaps.includes('NO_MARGIN'))
+    .filter((p) => !input.exclude?.has(p.correlationGroup) && p.contribution.p90 > 0 && !p.gaps.includes('CLOSED') && !p.gaps.includes('NO_MARGIN') && !unfundedDeal(p, input.capitalCeiling))
     .sort((a, b) => b.contribution.p50 - a.contribution.p50 || b.contribution.p90 - a.contribution.p90);
   if (pool.length === 0) return null;
   const members: TransactionPathway[] = [];
@@ -1282,6 +1311,7 @@ export function livingPortfolio(pathways: TransactionPathway[], input: { remaini
     fallback,
     gaps: [...counts.entries()].map(([gap, n]) => ({ gap, label: GAP_LABEL[gap], pathways: n })).sort((a, b) => b.pathways - a.pathways),
     permissions,
+    unfunded: pathways.filter((p) => unfundedDeal(p, input.capitalCeiling)).map((p) => p.opportunityId),
     note: 'A provisional portfolio over each pathway\'s own bounds — never a probability. Executable means every commercial link is established or estimated with a basis; a missing permission blocks only the send.',
   };
 }
@@ -1528,6 +1558,7 @@ export function renderPathways(reading: PathwayReading, limit = 12): string[] {
   } else out.push('      leading none: no pathway has a positive contribution yet');
   const fb = reading.portfolio.fallback;
   if (fb) out.push(`      fallback ${fb.members.join(' + ')} · net p50 ${money(fb.net.p50)} · without the leader's group`);
+  if (reading.portfolio.unfunded.length) out.push(`      unfunded ${reading.portfolio.unfunded.join(' + ')} · one deal costs more than the money behind the plan, on a price no buyer is shown paying: kept out of every combination`);
   out.push(`      gaps    ${reading.portfolio.gaps.map((g) => `${g.label} ×${g.pathways}`).join('; ') || 'none'}${reading.portfolio.permissions.length ? ` · still to grant: ${reading.portfolio.permissions.join(', ')}` : ''}`);
   for (const v of reading.informationValue.slice(0, 6)) out.push(`    unknown   ${v.changesPlan ? 'CHANGES PLAN' : 'swing'} ${money(v.swing)} · ${v.variable} → ${v.field ?? 'learned by selling'} · ${v.title.slice(0, 50)} · ${v.reason.slice(0, 140)}`);
   for (const f of reading.failures) out.push(`    method    ${f.cause}: ${f.evidence}`);
