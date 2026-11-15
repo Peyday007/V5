@@ -12,8 +12,14 @@
  *   * silence or a failure is no answer, never a pass, and is not re-asked
  *     until the retry interval has passed;
  *   * an answer the caller supplied is used as given, and no second ask is made.
+ *   * the goal plan path itself (CHAL-33 F2): a goal plan read through
+ *     `evaluateGoalPortfolio` asks once and binds on the next read, and the
+ *     same holds when the reads run on the evaluation pool's threads — the
+ *     process's challenger is asked once however many threads read the plan,
+ *     and a second read on a thread binds its answer. This is exercised, not
+ *     read from source text, so it fails while the pool's threads keep their
+ *     own unanswered ask (F1).
  */
-import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Challenge, DecisionInput } from '../server/domain/decision.ts';
 import { optimizePortfolio, type Activity, type PortfolioProblem } from '../server/services/quant/portfolio.ts';
@@ -25,10 +31,47 @@ import {
   settlePlanChallenges,
 } from '../server/services/quant/modelChallenge.ts';
 import { challengePlan } from '../server/services/quant/challenge.ts';
+import { evaluateGoalPortfolio } from '../server/services/goals/portfolio.ts';
+import { openEvaluator } from '../server/services/goals/reasoning/evaluatorPool.ts';
+import type { ModelInput, ModelledOpportunity } from '../server/services/cash/goalScenario.ts';
 
 const act = (key: string, over: Partial<Activity> = {}): Activity => ({
   key, label: key, cash: [60], days: [2], justified: true, capital: 10, evidence: { sampleSize: 30 }, ...over,
 });
+
+const fixed = (value: number): ModelInput => ({ value, low: value, high: value, provenance: 'EVIDENCE', source: null, note: '' });
+
+function opening(id: string, index: number, over: Partial<ModelledOpportunity> = {}): ModelledOpportunity {
+  return {
+    opportunity: { id, title: `Opening ${id}`, projectId: 'prj_challenge_wired' } as ModelledOpportunity['opportunity'],
+    index,
+    tier: 'QUALIFIED',
+    repeatable: true,
+    price: fixed(1500),
+    capital: fixed(60),
+    hours: fixed(2),
+    daysToCash: fixed(3),
+    close: fixed(0.2),
+    respond: fixed(0.02),
+    directCost: fixed(100),
+    volume: fixed(500),
+    agreed: false,
+    agreedValue: 0,
+    agreedDeals: 0,
+    fulfilledBy: null,
+    competitiveAward: false,
+    ...over,
+  };
+}
+
+/** A goal plan as the goal compose reads it: several openings sharing one outreach, so the plan earns the deep review. */
+function goalPlan(): Parameters<typeof evaluateGoalPortfolio>[0] {
+  return {
+    openings: [opening('a', 1), opening('b', 2, { price: fixed(900) }), opening('c', 3, { price: fixed(2400), capital: fixed(200) })],
+    remaining: 10_000, daysLeft: 24, capitalCeiling: 3000, beforeProof: 375, perWeek: 750,
+    resources: '40 emails a day from two warmed mailboxes', knowledge: null, causal: false, worlds: 400, seed: 7,
+  };
+}
 
 function deepPlan(): PortfolioProblem {
   return {
@@ -124,12 +167,57 @@ describe('the optimizer asks the existing challenger when a plan earns it', () =
     expect(asker).not.toHaveBeenCalled();
   });
 
-  it('the goal plan path reaches it: goals/portfolio.ts reads its plan through optimizePortfolio with the challenge on', () => {
-    const source = readFileSync('server/services/goals/portfolio.ts', 'utf8');
-    const call = source.slice(source.indexOf('const result = optimizePortfolio({'), source.indexOf('const combination ='));
-    expect(call.length).toBeGreaterThan(0);
-    expect(call).not.toMatch(/challenge:\s*false/);
-    const optimizer = readFileSync('server/services/quant/portfolio.ts', 'utf8');
-    expect(optimizer).toMatch(/modelChallengeFor\(problem, result, plain\)/);
+  it('the goal plan path reaches it: a goal plan read through evaluateGoalPortfolio asks once, and the next read binds the answer', async () => {
+    const asker = vi.fn(async (_input: DecisionInput) => proceed);
+    setPlanChallengeAsker(asker);
+    const first = evaluateGoalPortfolio(goalPlan());
+    expect(first.assurance!.challenge!.modelChallenge).toMatchObject({ required: true, due: true, verdict: null });
+    expect(first.assurance!.claimsAtLeast90).toBe(false);
+    expect(asker).toHaveBeenCalledTimes(1);
+    expect(asker.mock.calls[0]![0].kind).toBe('ADOPT_PLAN');
+
+    await settlePlanChallenges();
+    const second = evaluateGoalPortfolio(goalPlan());
+    const summary = second.assurance!.challenge!;
+    expect(summary.modelChallenge).toMatchObject({ required: true, due: false, verdict: 'PROCEED', by: proceed.model });
+    expect(summary.ran).toContain('INDEPENDENT_MODEL');
+    expect(asker).toHaveBeenCalledTimes(1);
   });
+
+  it('the goal plan path reaches it across the evaluation pool: the process asks once, and a second plan read on a thread binds the answer', async () => {
+    const asker = vi.fn(async (_input: DecisionInput) => revise);
+    setPlanChallengeAsker(asker);
+    const pool = openEvaluator(2);
+    try {
+      // Two reads at once land on two different threads; each is the same plan.
+      const [a, b] = await Promise.all([pool.evaluate(goalPlan()), pool.evaluate(goalPlan())]);
+      for (const first of [a, b]) {
+        expect(first.assurance!.challenge!.modelChallenge).toMatchObject({ required: true, due: true, verdict: null });
+        expect(first.assurance!.claimsAtLeast90).toBe(false);
+      }
+      // A thread forwards its ask to this (the main) thread over a channel, so it arrives asynchronously.
+      await vi.waitFor(() => expect(asker).toHaveBeenCalled(), { timeout: 10_000, interval: 20 });
+      await settlePlanChallenges();
+      // The process's own challenger was asked about the plan, once, however many threads read it.
+      expect(asker).toHaveBeenCalledTimes(1);
+      expect(asker.mock.calls[0]![0].kind).toBe('ADOPT_PLAN');
+
+      // The answer is broadcast back to the threads; a later read on each thread binds it. Reads run on the
+      // plan pass's own cadence, so the test reads again until both concurrent reads see it (bounded).
+      await vi.waitFor(async () => {
+        const [c, d] = await Promise.all([pool.evaluate(goalPlan()), pool.evaluate(goalPlan())]);
+        for (const second of [c, d]) {
+          const summary = second.assurance!.challenge!;
+          expect(summary.modelChallenge).toMatchObject({ required: true, due: false, verdict: 'REVISE', by: revise.model });
+          expect(summary.ran).toContain('INDEPENDENT_MODEL');
+          expect(summary.independentValidation.disagreeing).toBe(1);
+          expect(second.assurance!.claimsAtLeast90).toBe(false);
+        }
+      }, { timeout: 30_000, interval: 50 });
+      await settlePlanChallenges();
+      expect(asker).toHaveBeenCalledTimes(1);
+    } finally {
+      await pool.close();
+    }
+  }, 120_000);
 });

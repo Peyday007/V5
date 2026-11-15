@@ -30,8 +30,19 @@
  * cadence — finds the answer and binds it. A plan whose figures changed is a
  * different plan and is asked again: an answer about one plan never validates
  * another.
+ *
+ * One challenger per process (CHAL-33 F1/F2): a goal plan is read on the
+ * evaluation pool's threads (`goals/reasoning/evaluatorPool.ts`), and each
+ * thread has its own copy of this module. A thread does not ask a model of its
+ * own — it would hold an unanswered ask no later read on another thread could
+ * find. It forwards the ask over `PLAN_CHALLENGE_CHANNEL` to the main thread,
+ * whose asker (the operator's models) is the process's one challenger; the main
+ * thread asks once per plan, with the same in-flight, retry and memo bounds,
+ * and broadcasts the answer, which every thread binds on its next read of the
+ * same plan. An answer about one plan still never validates another.
  */
 import { createHash } from 'node:crypto';
+import { BroadcastChannel, isMainThread } from 'node:worker_threads';
 import { reviewDecision, type DecisionInput } from '../../domain/decision.ts';
 import type { OperatorModel } from '../../domain/operator.ts';
 import { challengeDecision } from '../operator/decisions.ts';
@@ -199,7 +210,17 @@ export function modelChallengeFor(problem: PortfolioProblem, result: PortfolioRe
   const known = answers.get(key);
   if (known?.answer) return known.answer;
   if (known && now - known.at < MODEL_CHALLENGE_RETRY_MS) return undefined;
-  if (inFlight.has(key) || inFlight.size >= MODEL_CHALLENGE_MAX_IN_FLIGHT) return undefined;
+  if (!isMainThread) {
+    forward(key, input, now);
+    return undefined;
+  }
+  startAsk(key, input);
+  return undefined;
+}
+
+/** Main thread: ask the process's challenger about one plan, unless it is already being asked or the process is at its bound. */
+function startAsk(key: string, input: DecisionInput): void {
+  if (inFlight.has(key) || inFlight.size >= MODEL_CHALLENGE_MAX_IN_FLIGHT) return;
   const ask = (async () => {
     let answer: ModelChallenge | null = null;
     try {
@@ -208,10 +229,78 @@ export function modelChallengeFor(problem: PortfolioProblem, result: PortfolioRe
       answer = null;
     }
     remember(key, answer);
+    announce(key);
   })().finally(() => inFlight.delete(key));
   inFlight.set(key, ask);
-  return undefined;
 }
+
+/* ---------------------------------------------------------------------------
+ * Across the evaluation pool's threads (CHAL-33 F1/F2).
+ * ------------------------------------------------------------------------- */
+
+/** The process-wide channel a pool thread forwards its asks on, and the main thread answers on. */
+export const PLAN_CHALLENGE_CHANNEL = 'brain:plan-challenge';
+/** A thread that forwarded an ask and heard nothing forwards it again after this long; the main thread de-duplicates. */
+export const MODEL_CHALLENGE_FORWARD_MS = 60_000;
+
+type ChannelMessage =
+  | { type: 'ask'; key: string; input: DecisionInput }
+  | { type: 'answer'; key: string; answer: ModelChallenge | null; at: number };
+
+const forwarded = new Map<string, number>();
+let channel: BroadcastChannel | null = null;
+
+function openChannel(): BroadcastChannel | null {
+  if (channel) return channel;
+  try {
+    channel = new BroadcastChannel(PLAN_CHALLENGE_CHANNEL);
+    channel.unref();
+    channel.onmessage = (event: unknown) => {
+      const message = (event as { data?: ChannelMessage }).data;
+      if (!message || typeof message.key !== 'string') return;
+      if (isMainThread && message.type === 'ask') {
+        const known = answers.get(message.key);
+        // Already answered, or unanswered within the retry interval: tell the threads, do not ask again.
+        if (known && (known.answer || Date.now() - known.at < MODEL_CHALLENGE_RETRY_MS)) announce(message.key);
+        else startAsk(message.key, message.input);
+      } else if (!isMainThread && message.type === 'answer') {
+        forwarded.delete(message.key);
+        remember(message.key, message.answer, message.at);
+      }
+    };
+  } catch {
+    channel = null;
+  }
+  return channel;
+}
+
+/** Main thread: tell every pool thread what the challenger said about one plan. */
+function announce(key: string): void {
+  const known = answers.get(key);
+  if (!known) return;
+  try {
+    openChannel()?.postMessage({ type: 'answer', key, answer: known.answer, at: known.at } satisfies ChannelMessage);
+  } catch {
+    // A thread that misses an answer forwards its ask again; the main thread re-announces it.
+  }
+}
+
+/** Pool thread: hand the ask to the main thread's challenger, at most once per forward interval. */
+function forward(key: string, input: DecisionInput, now: number): void {
+  const last = forwarded.get(key);
+  if (last !== undefined && now - last < MODEL_CHALLENGE_FORWARD_MS) return;
+  const open = openChannel();
+  if (!open) return;
+  try {
+    open.postMessage({ type: 'ask', key, input } satisfies ChannelMessage);
+    forwarded.set(key, now);
+  } catch {
+    // Not forwarded is not asked: the plan stays due, and the next read forwards it again.
+  }
+}
+
+// Listen from load, so an ask a pool thread forwards before this thread's first plan read is not lost.
+openChannel();
 
 /** Tests: replace the production asker; null restores it. */
 export function setPlanChallengeAsker(next: PlanChallengeAsker | null): void {
@@ -227,4 +316,5 @@ export async function settlePlanChallenges(): Promise<void> {
 export function forgetPlanChallenges(): void {
   answers.clear();
   inFlight.clear();
+  forwarded.clear();
 }
