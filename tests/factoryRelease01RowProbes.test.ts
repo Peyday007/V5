@@ -27,7 +27,7 @@ const judgment = (capability: string, outcome: string, route: string | null, rea
 });
 
 describe('the probes are registered in the protected module', () => {
-  it.each(['r01.acq-21-1', 'r01.acq-21-2', 'r01.acq-21-5', 'r01.cont-35', 'r01.learn-15-1', 'r01.gov-11', 'r01.gov-22-1', 'r01.arch-01', 'r01.com-13-1', 'r01.opp-03', 'r01.cp-31', 'r01.mem-32'])('%s, and its query runs: UNKNOWN on an empty Brain', async (name) => {
+  it.each(['r01.acq-21-1', 'r01.acq-21-2', 'r01.acq-21-5', 'r01.cont-35', 'r01.learn-15-1', 'r01.gov-11', 'r01.gov-22-1', 'r01.arch-01', 'r01.com-13-1', 'r01.opp-03', 'r01.cp-31', 'r01.mem-32', 'r01.chal-33'])('%s, and its query runs: UNKNOWN on an empty Brain', async (name) => {
     await freshProject();
     const probe = getProbe(name);
     expect(probe).not.toBeNull();
@@ -221,5 +221,25 @@ describe('MEM-32: the probe accepts what the writer actually writes', () => {
     const verdict = decisionMemoryHolds([event], new Map([[reading.id, { id: reading.id, workstream_id: 'wst_w', created_at: at }]]));
     expect(verdict.detail).toMatch(/1 decision record/);
     expect(verdict.ok).toBe(true);
+  });
+});
+
+describe('CHAL-33: a recommendation challenged at the depth its consequence earns', () => {
+  it('is UNKNOWN with nothing challenged, PASS on what the optimizer attaches, FAIL on a contradiction', async () => {
+    const { challengeHolds } = await import('../server/services/factory/program/release01/challengeProbe.ts');
+    const { optimizePortfolio } = await import('../server/services/quant/portfolio.ts');
+    expect(challengeHolds([]).ok).toBeNull();
+    const act = (key: string, cash: number, capital: number) => ({ key, label: key, cash: [cash], days: [2], justified: true, capital, evidence: { sampleSize: 10_000 } });
+    const result = optimizePortfolio({ target: 1000, deadlineDays: 10, startingCapital: 1000, worlds: 200, activities: [act('big', 1500, 600), act('tiny', 150, 1)] });
+    expect(result.assurance?.challenge).toBeTruthy();
+    const of = (assurance: unknown) => [{ goalId: 'ws_1', portfolio: { assurance } as never }];
+    const real = challengeHolds(of(result.assurance));
+    expect(real.detail).toMatch(/challenged recommendation/);
+    expect(real.ok).toBe(true);
+    const c = result.assurance!.challenge!;
+    expect(challengeHolds(of({ ...result.assurance, challenge: { ...c, verdict: 'CHALLENGE_FAILED', error: 'boom' } })).ok).toBe(false);
+    expect(challengeHolds(of({ ...result.assurance, challenge: { ...c, scrutiny: { ...c.scrutiny, tier: 'NONE' } } })).ok).toBe(false);
+    expect(challengeHolds(of({ ...result.assurance, challenge: { ...c, steps: [{ key: 's', scrutiny: { tier: 'DEEP' }, mayProceed: false, heldBy: [] }] } })).detail).toMatch(/held without/);
+    expect(challengeHolds(of({ ...result.assurance, challenge: { ...c, independentValidation: null } })).detail).toMatch(/self-agreement/);
   });
 });
