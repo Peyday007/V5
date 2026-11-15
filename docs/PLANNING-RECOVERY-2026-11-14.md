@@ -408,3 +408,60 @@ transaction; ~680 MB baseline heap unprofiled; CPU hotspots in
 idempotent on retry); the starting-capital fallback chain; release-gate livelock
 (merges arrive faster than verification); RunPod balance needs a top-up before
 about 11-20 (owner).
+
+## Down-curve closeout (2026-11-15 02:45Z)
+
+**Status: COMPLETE.** Every stopping condition in the owner's 22:09Z message is
+met. The production release `20da60e` (Deploy 43663717082) passed its hosted
+verification 280/280 both before and after a real restart, and `/healthz`
+answered every 30 s probe in 0.3–0.5 s for the next 30 minutes.
+
+### The production layer after the scope change
+
+| id | symptom | root cause | repair | verified by |
+|---|---|---|---|---|
+| P-10 | After every restart the process was SHEDDING, `/healthz` took 5–41 s or returned 503, and the 50,000-evaluation run was 15–38x slower than before the restart | The Fly shared-CPU class is throttled to its baseline once its burst balance is spent. The first boot and the first verification pass spend that balance. The slowdown was ≈16x on both 1 and 2 shared vCPUs, and the scenario runs in its own worker thread | #902: `performance-2x` (dedicated vCPUs). The Connection report now reads machine steal time | Deploy 1075 after restart: engine 1,050 ms (was 37,754 ms on Deploy 1070), `/healthz` max 26 ms (was 93,923 ms), 280/280 |
+| P-11 | Boot re-derivations ran inside the after-restart verification window (packet resume over 90 s, recompute 88 s, about 1,100 self-model row updates) | All boot work started at once | #900 and #902: the work waits out the 10-minute boot grace and is then staggered; optional passes are deferred during the grace | Deploy 1075: the after-restart pass took 2 min 13 s (was 15 min or never finished) |
+| P-12 | Deploys 1069 and 1071–1074 never reached Fly | Merges reached `production` faster than the roughly 45-minute gate could verify them; each newer tip supersedes the run in progress, as invariant 36 requires | None in code: the rule is correct. Coordinated with the merging sessions; 1075 released | Deploy 1075 released `20da60e` |
+
+### The reliability surge as a whole
+
+- **Operational root causes confirmed: 4.** In order of discovery:
+  - Computation on the main thread (RC-1).
+  - Memory and GC starvation, with effect transactions holding pool connections (RC-9).
+  - Boot re-derivations inside the verification window (P-11).
+  - Shared-CPU throttling (P-10).
+- **Verified fixed on production: all 4.** The evidence is the Deploy 1075 numbers above.
+- **Planning-side root causes:** RC-2 to RC-8 from the morning are released and verified by the acceptance suite. Their capability follow-ups now belong to the second surge.
+- **Issues in the inventory:** 61 rows above, plus P-10 to P-12.
+
+### Remaining work after closeout
+
+**Noncritical, on the operational backlog.** None of these blocks the second surge:
+- F10: goal creation is not idempotent on a retried request.
+- Filing's own upload still runs inside its effect transaction.
+- The factory MCP path reads `factory_work_units` by campaign about 1,500 times in 23 minutes.
+- `brain_check_in` has a median of about 25 s right after a restart.
+- `resumePulledPackets` retries packet `orc_aefa9509` on every boot, stuck behind an effect operation that never started.
+- The pg warning "client.query() when the client is already executing a query".
+- `retrospective.ts` and `composeLedger` are CPU hotspots.
+- H-8: GitHub drops scheduled `cheap-lane.yml` runs.
+- P-12, the release-gate contention, recurs whenever merges arrive faster than one every 45 minutes.
+
+**Transferred to the second surge:**
+- The $10K plan's evidence gap.
+- O-6: why research rounds end without a report.
+- The starting-capital fallback chain.
+
+**External dependencies:**
+- The RunPod balance needs a top-up before about 11-20 (owner).
+
+### Elapsed time and spend
+
+- **Elapsed:** 18 h 40 min, from 08:07Z on 11-14 to 02:45Z on 11-15.
+- **Additional spending, all on the Fly VM.** These prices come from memory of Fly's published rates, not from a bill:
+  - 2 GB to 4 GB from 18:15Z on 11-14: about $0.30/day.
+  - Shared-CPU to `performance-2x` from 02:09Z on 11-15: about $1.40/day more.
+- **Accrued so far:** under $0.50.
+- **Ongoing:** about $1.70/day, roughly $50/month, until someone changes the class back. That is a one-line revert in `fly.toml`, which would bring the throttling (P-10) back.
+- **Other:** no temporary infrastructure was created, so there is nothing to terminate. Factory, Brain, Claude Code and the second surge were not stopped.
