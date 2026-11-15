@@ -10,8 +10,8 @@
  *          with margin do.
  *   class  An unowned, unrepaired BLOCKING finding is read by `inventoryDeficiencies` as
  *          a MISSING_CAPABILITY deficiency, commissionable by its id. It is not offered
- *          again while its repair is in flight, nor after that repair is REJECTED while the
- *          finding still states no cause (attempt 2 of this weakness came from that re-offer).
+ *          again while its repair is in flight, nor after that repair is REJECTED, REVERTED or
+ *          KEPT_NO_EFFECT (directly or through a combined host) while the finding still states no cause (attempt 2 of this weakness came from that re-offer).
  *          Once its cause is confirmed it is offered again, with the cause. (1) pins it.
  *
  * Nothing here lowers a bar: the cases in (2) that must not certify still must not.
@@ -91,6 +91,50 @@ describe('(1) an unowned BLOCKING finding like A-10K is a commissionable MISSING
     // Owning it stops the offer: a person or session that took it is the repair.
     expect((await a10k(id, { owner: 'session A' })).ok).toBe(true);
     expect((await inventoryDeficiencies()).map((one) => one.source?.ref)).not.toContain(id);
+  });
+
+  // Every decision that says a repair did not fix it holds a causeless finding back, not only REJECTED:
+  // a repair the improvement loop REVERTED or KEPT_NO_EFFECT, or one COMBINED into a host that was
+  // rejected, would otherwise commission attempt N+1 on the same rows — the loop that kept A-10K
+  // coming back as engineering work.
+  const repairRow = async () =>
+    (await upsertCandidate({
+      weaknessKey: `OPERATOR:MISSING_CAPABILITY:${uid()}`, kind: 'OPERATOR:MISSING_CAPABILITY', title: 'repair A-10K', problem: 'p', metric: 'RESEARCH_JOB_SUCCESS_RATE', downstreamMetric: null,
+      ownerComponent: `operator:MISSING_CAPABILITY:${uid()}`, frequency: 1, denominator: 1, scope: 'GENERAL', severity: 'MEDIUM', evidence: {},
+    })).candidate;
+
+  for (const decision of ['REVERTED', 'KEPT_NO_EFFECT'] as const) {
+    it(`is not re-offered after a repair decided ${decision} while it still states no cause; a confirmed cause re-offers it`, async () => {
+      const id = `A-10K-${uid()}`;
+      const repair = await repairRow();
+      expect((await a10k(id, { linkedCandidateId: repair.id })).ok).toBe(true);
+      expect(await decideCandidate(repair.id, decision, `measured: ${decision}`)).toBe(true);
+      expect((await inventoryDeficiencies()).map((one) => one.source?.ref)).not.toContain(id);
+
+      const cause = 'Evidence gap: no measured buyer conversion; closes by §94 outreach replies.';
+      expect((await a10k(id, { rootCause: cause, status: 'ROOT_CAUSE_CONFIRMED' })).ok).toBe(true);
+      expect((await inventoryDeficiencies()).find((one) => one.source?.ref === id)?.diagnosis.cause).toBe(cause);
+    });
+  }
+
+  it('is not re-offered when its repair was COMBINED into a host that was then rejected', async () => {
+    const id = `A-10K-${uid()}`;
+    const host = await repairRow();
+    const repair = await repairRow();
+    expect((await a10k(id, { linkedCandidateId: repair.id })).ok).toBe(true);
+    expect(await decideCandidate(repair.id, 'COMBINED', 'same owner', { combinedIntoId: host.id })).toBe(true);
+    // The host is still undecided: in flight, not offered.
+    expect((await inventoryDeficiencies()).map((one) => one.source?.ref)).not.toContain(id);
+    expect(await decideCandidate(host.id, 'REJECTED', 'no cause stated')).toBe(true);
+    expect((await inventoryDeficiencies()).map((one) => one.source?.ref)).not.toContain(id);
+  });
+
+  it('a causeless finding whose repair was only HELD is not held back by this rule (HELD is not a verdict on the fix)', async () => {
+    const id = `A-10K-${uid()}`;
+    const repair = await repairRow();
+    expect((await a10k(id, { linkedCandidateId: repair.id })).ok).toBe(true);
+    expect(await decideCandidate(repair.id, 'HELD', 'closed unmerged', { heldOn: 'dependency' })).toBe(true);
+    expect((await inventoryDeficiencies()).map((one) => one.source?.ref)).toContain(id);
   });
 });
 
