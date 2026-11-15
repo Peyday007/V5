@@ -1,0 +1,113 @@
+{
+  "deficiency": "dfx_2b21d109a13d",
+  "pinnedCommit": "51011306081ebe365c1fe57eb74d2e60efa631c2",
+  "method": "Code-path attribution at the pinned commit, classified against the TRAIL (arXiv 2505.08638) and MAST (arXiv 2503.13657) taxonomies. Production round rows were not readable from this worker; every repository claim is about what the code records and decides, not about counts in production.",
+  "failureClasses": [
+    "TRAIL_API_ERROR",
+    "TRAIL_TIMEOUT",
+    "TRAIL_RESOURCE_EXHAUSTION",
+    "TRAIL_CONFIGURATION",
+    "TRAIL_FORMATTING",
+    "TRAIL_CONTEXT_HANDLING",
+    "MAST_SYSTEM_DESIGN",
+    "MAST_TASK_VERIFICATION",
+    "SOURCE_UNREACHABLE",
+    "ROUND_CAP_LOGIC",
+    "UNATTRIBUTED"
+  ],
+  "questions": [
+    {
+      "id": "Q1_FAILURE_POINT",
+      "question": "Do the abandoned research rounds fail at an API timeout, parser error, context window overflow, source unreachability or round-cap logic?",
+      "answer": "None of those can be named from the round record, because the record does not keep it. ABANDONED is a settlement bucket, not a failure point: closeEndedRounds collapses four different endings into it (the research mission FAILED or CANCELLED, a mission parked at NEEDS_HUMAN, a goal idea retired after 6 hours unlaunched, and an idea the archive already answered), and the stop event stores only the mission state, never the underlying error. Of the candidate causes, the code shows two concrete ones that end a round without any research error at all (round-settlement logic: the 6-hour unlaunched expiry and NEEDS_HUMAN collapse) and two that end the research itself (claims refused by the evidence gate, and sources refused by the fetcher as timeout, network, DNS or HTTP errors). No code path records a context-window overflow or a parser error against a round, so neither is supported. The decisive failure point is therefore a missing measurement: the ABANDONED round loses its cause, which is TRAIL's and Who&When's precondition for attribution.",
+      "claimIds": ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C10", "C11"]
+    },
+    {
+      "id": "Q2_METHOD_RESEARCH_BYPASS",
+      "question": "Does standalone method research bypass these blockers?",
+      "answer": "Partly, and not the ones that end the research itself. Method research opens a research goal in the brain-architecture project, worked by Claude routines (and the free lane once active) through the same research pipeline, so it is not subject to cash discovery's round settlement: it escapes the 6-hour unlaunched-goal expiry, the archive-answered REJECTED ending and the NEEDS_HUMAN collapse into ABANDONED. It still passes the same evidence gate and the same source fetcher, so a round that failed because its claims were refused or its sources were unreachable would fail the same way as method research. It is not a bypass for those classes and should not be adopted as one.",
+      "claimIds": ["C8", "C9", "C3", "C6", "C7"]
+    }
+  ],
+  "claims": [
+    {
+      "id": "C1",
+      "text": "A live round settles ABANDONED when its latest mission is FAILED or CANCELLED, when the mission is parked at NEEDS_HUMAN, or when an unlaunched goal round expires; HARVESTED is reached only through a DONE mission.",
+      "sourceUrl": "https://github.com/Peyday007/V5/blob/51011306081ebe365c1fe57eb74d2e60efa631c2/server/services/cash/discovery.ts#L2116-L2122",
+      "failureClass": "MAST_SYSTEM_DESIGN"
+    },
+    {
+      "id": "C2",
+      "text": "roundOutcome maps a mission in FAILED or CANCELLED to ABANDONED, and a round with no mission whose idea is REJECTED (the archive already answered it) to ABANDONED as well.",
+      "sourceUrl": "https://github.com/Peyday007/V5/blob/51011306081ebe365c1fe57eb74d2e60efa631c2/server/services/russell/roundMissions.ts#L52-L65",
+      "failureClass": "MAST_SYSTEM_DESIGN"
+    },
+    {
+      "id": "C3",
+      "text": "The CASH_DISCOVERY_ROUND_STOPPED event records roundId, bucketId, missionId, missionState and found, and nothing about the error that ended the mission, so the technical failure point of an ABANDONED round cannot be read from the round's own record.",
+      "sourceUrl": "https://github.com/Peyday007/V5/blob/51011306081ebe365c1fe57eb74d2e60efa631c2/server/services/cash/discovery.ts#L2132-L2154",
+      "failureClass": "UNATTRIBUTED"
+    },
+    {
+      "id": "C4",
+      "text": "A goal round whose idea has not launched 6 hours after opening is retired: the idea is moved to REJECTED and the round closes ABANDONED, without any research having run. This is round-settlement logic, not a research failure.",
+      "sourceUrl": "https://github.com/Peyday007/V5/blob/51011306081ebe365c1fe57eb74d2e60efa631c2/server/services/cash/discovery.ts#L2166-L2187",
+      "failureClass": "ROUND_CAP_LOGIC"
+    },
+    {
+      "id": "C5",
+      "text": "The operator's unreported-round deficiency counts every ABANDONED round in its window as 'missions failed, were cancelled, expired unlaunched or parked' in one figure, so its count mixes research failures with settlement-logic endings.",
+      "sourceUrl": "https://github.com/Peyday007/V5/blob/51011306081ebe365c1fe57eb74d2e60efa631c2/server/services/operator/director.ts#L1410-L1450",
+      "failureClass": "UNATTRIBUTED"
+    },
+    {
+      "id": "C6",
+      "text": "Brain's own goal-research diagnosis names the cause of rounds ending without a report as claims not surviving the evidence check, and instructs the next round to cite pages that open without a login or bot wall.",
+      "sourceUrl": "https://github.com/Peyday007/V5/blob/51011306081ebe365c1fe57eb74d2e60efa631c2/server/services/goals/researchYield.ts#L63-L64",
+      "failureClass": "MAST_TASK_VERIFICATION"
+    },
+    {
+      "id": "C7",
+      "text": "The worker source fetcher refuses a source with a typed reason: DNS_FAILED, TIMEOUT, NETWORK_ERROR, HTTP_ERROR (including 401/403/429/5xx answers), NOT_TEXT, EMPTY and destination checks, with a timeout distinguished from other network errors.",
+      "sourceUrl": "https://github.com/Peyday007/V5/blob/51011306081ebe365c1fe57eb74d2e60efa631c2/server/services/sources/fetchForWorker.ts#L52-L64",
+      "failureClass": "SOURCE_UNREACHABLE"
+    },
+    {
+      "id": "C8",
+      "text": "Method research is opened as a research goal in the brain-architecture project, worked by Claude routines and by the free lane once the activation gate is active, rather than as a cash discovery round.",
+      "sourceUrl": "https://github.com/Peyday007/V5/blob/51011306081ebe365c1fe57eb74d2e60efa631c2/server/services/improvement/loop.ts#L460-L500",
+      "failureClass": "MAST_SYSTEM_DESIGN"
+    },
+    {
+      "id": "C9",
+      "text": "The 6-hour unlaunched expiry applies only to rounds under the goal bucket prefix, so research opened outside cash discovery (method research) is not retired by it.",
+      "sourceUrl": "https://github.com/Peyday007/V5/blob/51011306081ebe365c1fe57eb74d2e60efa631c2/server/services/cash/discovery.ts#L2177-L2178",
+      "failureClass": "ROUND_CAP_LOGIC"
+    },
+    {
+      "id": "C10",
+      "text": "TRAIL separates system execution errors (API 429/401/403/500/404, resource exhaustion, timeouts, configuration) from formatting errors and context-handling failures; attributing a failed run requires the trace to say which, and LLM judges locate errors poorly even with the full trace (best 18% joint accuracy on GAIA).",
+      "sourceUrl": "https://arxiv.org/abs/2505.08638",
+      "failureClass": "TRAIL_API_ERROR"
+    },
+    {
+      "id": "C11",
+      "text": "Who&When shows failure-step attribution from logs reaches only 14.2% at best and degrades toward 0% as logs lengthen, so a cause not recorded at the moment of failure is unlikely to be recovered afterwards by reading logs.",
+      "sourceUrl": "https://arxiv.org/abs/2505.00212",
+      "failureClass": "UNATTRIBUTED"
+    },
+    {
+      "id": "C12",
+      "text": "MAST classifies failures under system design, inter-agent misalignment and task verification; a run whose output is refused by its verifier is a task-verification failure, distinct from an execution error.",
+      "sourceUrl": "https://arxiv.org/abs/2503.13657",
+      "failureClass": "MAST_TASK_VERIFICATION"
+    },
+    {
+      "id": "C13",
+      "text": "Barnett et al. list 'not in context' (consolidation limits) as a distinct RAG failure point; no code path at the pinned commit records a context-window overflow against a research round, so that class is unsupported for these rounds.",
+      "sourceUrl": "https://arxiv.org/abs/2401.05856",
+      "failureClass": "TRAIL_CONTEXT_HANDLING"
+    }
+  ],
+  "recommendation": "Record the ending's cause on the round (mission failure reason, gate rejection, fetch refusal reason, unlaunched expiry, archive answer, parked) instead of the bare ABANDONED bucket, and count settlement-logic endings separately from research failures in the unreported-round deficiency. Do not route these rounds to method research as a bypass: it shares the evidence gate and the fetcher."
+}
