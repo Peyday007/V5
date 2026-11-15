@@ -265,6 +265,12 @@ Cash Mode is ACTIVE and the kernel back-fills: `kernelSkips no`, authority SPRIN
 
 Arrangement research is allowed (SPRINT), yet 0 constructed rounds opened in 24 h. The gate is now reported by DIAG `constructedGate` (part 7); finding **P-ROUNDS**, under investigation.
 
+### CHAL-33 and comparables-only certification (06:30Z)
+
+PR #915/#918 (another program, CHAL-33) holds any plan whose value rests on one dependency for a DEEP review. Certification at 90% then needs an independent check (another model, held-out evidence or production history) or the independent model challenge's answer. Evaluation case O5 (comparables only, no Brain history) now fails in the offline evaluator, which runs no model.
+
+**DECIDED:** keep CHAL-33 as is. A held-out-fold check was built (worktree c7f925b) and rejected. Its folds kept the full evidence's spread, so they were not independent, and it let that check stand in for the outstanding model challenge. Both would weaken another program's acceptance rule. On production a comparables-only plan certifies once Brain's independent model challenger agrees. That is a real independent check, not an artificial barrier. O5 is recorded as an expected change under a stricter rule, not a regression. Verification on production waits for a goal whose comparables reach the margin.
+
 ### Surge A closed (02:45Z; its closeout in docs/PLANNING-RECOVERY-2026-11-14.md)
 
 Its handoffs return to Surge B, which now owns them:
