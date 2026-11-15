@@ -31,6 +31,7 @@ Why that is enough: none of the backlog blocks Surge B or production. The one re
 |---|---|---|---|---|---|
 | 07:46 | 3/12 (1) | 6/14 (11) | 14/16 (503) | 2/3 (1) | FREE_LANE: RunPod Qwen3-4B 2/2 held at proven capacity, and brain-a 4/12 "slots not filled" beside 11 waiting, so idle capacity sits beside waiting work: a defect, engineer assigned. RESEARCH: the 2 free slots are held by per-project grants. ROUTINES: 9 idle, 1 executable item. |
 | 07:49 | 2/12 (0) | 8/14 (8) | 11/16 (504) | 2/3 (1) | FREE_LANE: brain-a 6/12, held at its database-pool share of 12/24 (a deliberate safety margin). RESEARCH: "5 launchable ideas have a free slot" but the launch pass is not taking them, so a second engineer is on it. ROUTINES no longer idle. |
+| 08:10 (cached, 273 s old) | 2/12 (1) | 3/4 (3) | 13/16 (503) | 0/1 (1) | Read right after the restart for Deploy 1087 (Factory #923). FREE_LANE is held at its starting size. ROUTINES and FACTORY each show 1 executable item idle beside free capacity; both are re-read after warm-up before any fix is assigned. RESEARCH: 3 launchable ideas are not launching, which is fixed in part 8 (PR #925). |
 
 ## Other classes (07:46Z)
 

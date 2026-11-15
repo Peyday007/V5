@@ -321,3 +321,24 @@ New failure categories the inventory did not cover: gates on a fact kind product
 rows, prints UNMEASURED with the reason when a table does not exist, and
 NOT_STORED with where a computed population lives. Production:
 `Goals` workflow, command `census` (read-only, no administrator needed).
+
+## Census after part 7 (Goals run 43693218817, 08:10Z, revision b62298f)
+
+| measure | 02:25Z | 08:10Z |
+|---|---|---|
+| industries | 52 | 53 |
+| nodes (discovered) | 91 (17) | 102 (28) |
+| buyer populations | 11 | **21** |
+| construction facts (observed) | 0 | **19 (19)** |
+| sourced claims | 16,817 | 17,010 |
+| stored constructed arrangements | 404 | 667 |
+| cross-industry transfers | 0 | 405 |
+| positions / position money flows | 14 / 247 | 14 / 249 |
+| arrangements researched | 0 | 0 |
+| arrangements evaluated / picked | 12 / 1 | 12 / 1 |
+
+**P-FACTS is verified on production:** construction facts went from 0 to 19, all observed.
+
+Still open:
+- **P-ROUNDS:** constructedGate shows researching=5 against a live cap of 3, so constructed (mx) rounds get no capacity; mx24h=0. An engineer is assigned.
+- **P-BACKFILL:** the back-fill read 99 rows, produced 0 candidates and rejected 99. In 77 of those, a payer written in prose was matched to the buyer map without being normalised first. An engineer is assigned.
