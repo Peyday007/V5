@@ -1473,13 +1473,34 @@ async function scenarioChecks(fixtures: Fixtures, cookie: string): Promise<void>
 
     // The run, with /healthz asked every 100 ms while it is in flight and a
     // second run sent while it holds the slot.
-    const t0 = Date.now();
+    // The process has one scenario slot, and Brain's own goal plan reads use
+    // it too. A refusal as busy and retryable (429) before this run starts is
+    // production work holding the slot, not the engine failing: Deploys 1088
+    // and 1090 met it within 251 ms of a boot whose new evidence set plan
+    // reads going. Wait for the slot — a refused run writes no row — and say
+    // how long it took; past 120 s the 429 stands and the check fails.
+    let t0 = Date.now();
     let settled = false;
-    const first = call(`${root}/${demoId}/runs`, {
-      method: 'POST', cookie, origin: base, body: { options: { evaluations: 50_000 }, label: 'hosted verification' },
-    });
-    void first.finally(() => { settled = true; });
-    await new Promise((r) => setTimeout(r, 250));
+    let first!: ReturnType<typeof call>;
+    let slotWaits = 0;
+    const waitStarted = Date.now();
+    for (;;) {
+      t0 = Date.now();
+      settled = false;
+      const attempt = call(`${root}/${demoId}/runs`, {
+        method: 'POST', cookie, origin: base, body: { options: { evaluations: 50_000 }, label: 'hosted verification' },
+      });
+      first = attempt;
+      void attempt.finally(() => { settled = true; });
+      await new Promise((r) => setTimeout(r, 250));
+      if (!settled) break;
+      const early = await attempt;
+      const retryable = ((early.json ?? {}) as { detail?: { retryable?: unknown } }).detail?.retryable === true;
+      if (early.status !== 429 || !retryable || Date.now() - waitStarted > 120_000) break;
+      slotWaits++;
+      await new Promise((r) => setTimeout(r, 3_000));
+    }
+    if (slotWaits > 0) console.log(`  (the scenario slot was held by Brain's own work: waited ${Math.round((Date.now() - waitStarted) / 1000)} s over ${slotWaits} refusal(s) before the run started)`);
     const second = settled ? null : call(`${root}/${demoId}/runs`, { method: 'POST', cookie, origin: base, body: { options: { evaluations: 1_000 } } });
     const health: number[] = [];
     let healthFailures = 0;
