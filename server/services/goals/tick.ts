@@ -38,9 +38,11 @@
  */
 import type { Bin } from '../../domain/types.ts';
 import { binPriorityForRank, type HoldReason } from '../../domain/goals.ts';
+import { getDb } from '../../db/database.ts';
 import { getWorkstream, recordWorkstreamEvent } from '../../repos/register.ts';
 import {
   allHeldBins,
+  resumeGoal,
   holdBinForGoal,
   latestSnapshots,
   recordSnapshot,
@@ -81,7 +83,6 @@ import {
   type ResearchPurpose,
   type SharesInForce,
 } from './researchAllocation.ts';
-import { getDb } from '../../db/database.ts';
 
 export interface GoalTickReport {
   goals: number;
@@ -262,7 +263,84 @@ function holdReasonFor(goal: GoalView): HoldReason | null {
   return null;
 }
 
+/**
+ * Whether a recorded pause is one `pause()` (decide.ts) would refuse today on a
+ * targeted goal with its deadline ahead — the only pause this tick may undo.
+ *
+ * It is the exact complement of the test `pause()` applies, so the two can never
+ * disagree about who counts as a person: `pause()` accepts an actor whose ref
+ * starts with `person:` and refuses every other named actor; this undoes a pause
+ * only when it was recorded by a named actor that does not start with `person:`.
+ * A pause recorded with no actor at all (NULL or blank `actor_ref`) names nobody,
+ * so nothing can say it was a machine's, and it is left alone exactly like a
+ * goal with no pause event. Any surface `pause()` accepts therefore has its
+ * pauses kept here; one it refuses could not have written a pause to undo.
+ * Inline rather than imported because decide.ts does not export its predicate;
+ * keep the `person:` prefix identical to `machinePauseRefusal` there.
+ */
+function isUndoableMachinePause(actorRef: string | null | undefined): actorRef is string {
+  if (typeof actorRef !== 'string' || actorRef.trim() === '') return false;
+  return !actorRef.startsWith('person:');
+}
+
+/**
+ * Undo a machine's pause of a targeted goal whose deadline is still ahead.
+ *
+ * A machine may reduce a targeted goal's allocation; it may not stop the goal.
+ * Preventing new machine pauses does not restore one already made, so this
+ * reads the rows on every pass: a goal with a target and a future deadline,
+ * paused, neither cancelled nor archived, whose latest GOAL_PAUSED event was
+ * written by a named actor that is not a person, is resumed (`resumeGoal`, guarded in its own
+ * statement) and the resumption recorded. A person's pause stands; an
+ * untargeted or past-deadline goal is not touched. No goal is ever created.
+ *
+ * The production row this answers (docs/ARCHITECTURE-RECORD.md, 2026-11-14): at
+ * 06:00Z an operator run committed PAUSE_GOAL on `wst_7b4fcbb5f2384f31b6c3`, the
+ * $10K COLLECTED_CASH goal due 2026-12-09, "to conserve capacity while
+ * infrastructure pools are congested". It was the only live targeted goal, so at
+ * 07:00:30Z r01.goal-02 found none ("no live goal carries a target and a
+ * deadline"). Its deadline had not passed and it was neither archived nor
+ * untargeted, so the pause was the whole cause. `restoreOwnerDirectedGoals`
+ * undoes it for that one listed id only. This pass undoes the same pause for
+ * any targeted goal, and decide.ts refuses the next one. A goal that is not
+ * live because its deadline passed, it was archived or cancelled, it has no
+ * target, or a person paused it stays not live. The probe still fails on it,
+ * which is correct (tests/program-ea512f54-repair-goal-02-1-production.test.ts).
+ */
+export async function resumeMachinePausedTargetedGoals(now: string): Promise<string[]> {
+  const db = getDb();
+  const candidates = await db.all<{ id: string }>(
+    `SELECT id FROM workstreams
+      WHERE target_metric IS NOT NULL AND target_amount_cents IS NOT NULL
+        AND due_at IS NOT NULL AND due_at > ?
+        AND paused_at IS NOT NULL AND cancelled_at IS NULL AND archived_at IS NULL
+      ORDER BY id`,
+    [now],
+  );
+  const resumed: string[] = [];
+  for (const { id } of candidates) {
+    const last = await db.get<{ actor_ref: string | null }>(
+      `SELECT actor_ref FROM workstream_events WHERE workstream_id = ? AND kind = 'GOAL_PAUSED' ORDER BY created_at DESC LIMIT 1`,
+      [id],
+    );
+    // No pause event, or one that names no actor: nobody can say a machine
+    // paused it, so it is left alone. A person's pause stands.
+    if (!last || !isUndoableMachinePause(last.actor_ref)) continue;
+    if (!(await resumeGoal(id))) continue;
+    await recordWorkstreamEvent({
+      workstreamId: id,
+      kind: 'GOAL_RESUMED',
+      summary: `Resumed: paused by ${last.actor_ref}, which is not a person, and a machine may only reduce a targeted goal's allocation, never stop it.`,
+      detail: { pausedBy: last.actor_ref },
+      actorRef: 'brain:goal-tick',
+    });
+    resumed.push(id);
+  }
+  return resumed;
+}
+
 export async function advanceGoals(options?: { now?: string; memory?: Partial<MemoryPasses>; floorOpeners?: FloorOpeners }): Promise<GoalTickReport> {
+  await resumeMachinePausedTargetedGoals(options?.now ?? new Date().toISOString());
   // Archived goals are not derived here: they hold nothing and rank nowhere,
   // and there are more of them after every deploy. A hold one left behind is
   // released below, and its owner read directly (tests/goalTickCost.test.ts).

@@ -198,7 +198,25 @@ async function uncertainEffectsFor(projectId: string | null): Promise<number> {
   return Number(row?.n ?? 0);
 }
 
-export async function pause(goalId: string, reason: string, actorRef: string): Promise<DecisionResult> {
+/**
+ * A goal with its own target and a deadline still ahead binds Brain to that
+ * metric and that date (GOAL-02). A machine actor — the operator weighing
+ * congestion or marginal value — changes how much capacity the goal gets
+ * through allocation and priority; it does not stop the goal's condition. Only
+ * a person pauses such a goal.
+ */
+function machinePauseRefusal(goal: Awaited<ReturnType<typeof getWorkstream>>, actorRef: string, now: Date): string | null {
+  if (actorRef.startsWith('person:')) return null;
+  if (!goal || !goal.target || !goal.dueAt) return null;
+  if (goal.archivedAt || goal.cancelledAt) return null;
+  const due = Date.parse(goal.dueAt);
+  if (!Number.isFinite(due) || due <= now.getTime()) return null;
+  return `This goal carries its own target and a deadline still ahead (${goal.dueAt}); that metric and deadline still bind, so only a person may pause it. A machine reduces its capacity through allocation and priority rather than a pause.`;
+}
+
+export async function pause(goalId: string, reason: string, actorRef: string, now: Date = new Date()): Promise<DecisionResult> {
+  const refusal = machinePauseRefusal(await getWorkstream(goalId), actorRef, now);
+  if (refusal) return { ok: false, reason: refusal, consequence: 'Nothing changed.' };
   const moved = await pauseGoal(goalId, reason);
   if (!moved) {
     return { ok: false, reason: 'It is already paused, cancelled or archived.', consequence: 'Nothing changed.' };
