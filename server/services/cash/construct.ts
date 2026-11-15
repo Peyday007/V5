@@ -52,7 +52,7 @@ import { leverageOfYielding, type ArrangementLeverage, type LeverageConstraints 
 import { reconstruct } from '../quant/reconstruct.ts';
 import { emptyLeverEvidence, leverEvidenceFrom, type LeverEvidence, type LeverPart } from '../quant/leverEvidence.ts';
 import { claimSources } from '../../repos/research.ts';
-import type { CashOpportunity, IndustryNode } from '../../domain/types.ts';
+import type { CashCardFact, CashOpportunity, IndustryNode } from '../../domain/types.ts';
 import type { Estimate, Observation } from '../../domain/quant.ts';
 import { repeatBusinessObservations } from './deliverables/realization.ts';
 
@@ -341,6 +341,18 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
     currency: input.currency,
     periodDays: input.daysLeft,
   });
+  /*
+   * A contract's transaction limit (S-0103: "enforce actual … contract
+   * constraints"), per payer, read from the same rows the lever evidence is:
+   * the terms an opening states and the evidence facts beside it. A payer whose
+   * rows state no maximum has an unknown contract limit — a question, never
+   * unlimited.
+   */
+  const contractLimits = contractLimitsFrom({
+    opportunities: opportunities.filter((one) => allowed(one.title)),
+    facts: leverFacts,
+    periodDays: input.daysLeft,
+  });
   const capability: Primitive | null = input.delivers.length > 0 ? { name: input.delivers.join(', '), claimId: null, from: 'CAPABILITY', ref: 'deliverables' } : null;
   /*
    * The same inputs construct the same arrangements, so a plan re-read whose map, openings,
@@ -351,11 +363,11 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
    */
   const constraints = await leverageConstraints(input, limits);
   const memoKey = createHash('sha256')
-    .update(JSON.stringify({ day: now.toISOString().slice(0, 10), input: { ...input, now: undefined, limits: undefined }, limits, targets, exclusions, sectors: [...sectors.values()], precedent: [...precedentByBase.entries()].map(([k, o]) => [k, o.id]), priced, tiedUp, leverEvidence, constraints, openings: opportunities.map((o) => [o.id, o.payer, o.mechanism, o.state, o.updatedAt]) }))
+    .update(JSON.stringify({ day: now.toISOString().slice(0, 10), input: { ...input, now: undefined, limits: undefined }, limits, targets, exclusions, sectors: [...sectors.values()], precedent: [...precedentByBase.entries()].map(([k, o]) => [k, o.id]), priced, tiedUp, leverEvidence, contractLimits, constraints, openings: opportunities.map((o) => [o.id, o.payer, o.mechanism, o.state, o.updatedAt]) }))
     .digest('hex');
   const held = constructionMemo.get(memoKey);
   if (held && Date.now() - held.at < CONSTRUCTION_MEMO_MS) return structuredClone(held.result);
-  const job: ConstructionJob = { sectors: [...sectors.values()], opportunities, precedent: [...precedentByBase.entries()], capability, priced, tiedUp, leverEvidence, input, limits, targets, exclusions, now, constraints };
+  const job: ConstructionJob = { sectors: [...sectors.values()], opportunities, precedent: [...precedentByBase.entries()], capability, priced, tiedUp, leverEvidence, contractLimits, input, limits, targets, exclusions, now, constraints };
   /*
    * Composing is synchronous quantitative work — several reconstructions per
    * design, up to `MAX_CONSTRUCTIONS` designs. Run in one stretch it held
@@ -385,9 +397,10 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
  * (S-0103), in the goal's currency: the cash the ledger says may be deployed
  * now (`cashPosition`, invariant 37), and the money a person authorised —
  * what the live cash authority leaves uncommitted, or the goal's capital
- * ceiling, whichever is smaller. A contract limit is null: a constructed
- * arrangement has no contract yet. Whatever cannot be read is null — unknown,
- * never unlimited — and nothing here is a revenue ceiling.
+ * ceiling, whichever is smaller. A contract limit belongs to one payer's
+ * contract, not to the project, so it is null here and read per arrangement
+ * from `contractLimitsFrom` (see `constraintsFor`). Whatever cannot be read is
+ * null — unknown, never unlimited — and nothing here is a revenue ceiling.
  */
 async function leverageConstraints(input: ConstructionInput, limits: GoalLimits): Promise<LeverageConstraints> {
   let cashAvailable: number | null = null;
@@ -424,6 +437,8 @@ export interface ConstructionJob {
   tiedUp: Observation[];
   /** What the rows state about each lever's own parts; absent reads as nothing stated. */
   leverEvidence?: LeverEvidence;
+  /** Per payer, the transaction limit a contract or stated terms impose; absent reads as nothing stated. */
+  contractLimits?: ContractLimits;
   input: ConstructionInput;
   limits: GoalLimits;
   targets: EconomicProperty[];
@@ -442,7 +457,8 @@ export async function composeConstruction(job: ConstructionJob, yieldEveryMs: nu
   const { opportunities, capability, priced, tiedUp, input, limits, targets, exclusions, now } = job;
   const precedentByBase = new Map(job.precedent);
   const designs = allDesigns(STRUCTURE_KEYS);
-  const ctx = { priced, tiedUp, leverEvidence: job.leverEvidence ?? emptyLeverEvidence(), input, limits, targets, exclusions, now };
+  const contractLimits = job.contractLimits ?? [];
+  const ctx = { priced, tiedUp, leverEvidence: job.leverEvidence ?? emptyLeverEvidence(), contractLimits, input, limits, targets, exclusions, now };
   const out: ConstructedArrangement[] = [];
   const levered = new Map<ConstructedArrangement, Arrangement>();
   const keep = (built: { arrangement: ConstructedArrangement; levered: Arrangement }) => {
@@ -485,7 +501,7 @@ export async function composeConstruction(job: ConstructionJob, yieldEveryMs: nu
   }
   out.push(...reverseArrangements({ ...ctx, designs, capability }).map(keep));
   const ranked = rank(out, limits, targets);
-  return traceLeverageOnTop(ranked, levered, job.constraints ?? {}, limits, targets, now, breathe);
+  return traceLeverageOnTop(ranked, levered, job.constraints ?? {}, contractLimits, limits, targets, now, breathe);
 }
 
 /**
@@ -501,6 +517,7 @@ async function traceLeverageOnTop(
   ranked: ConstructedArrangement[],
   levered: Map<ConstructedArrangement, Arrangement>,
   constraints: LeverageConstraints,
+  contractLimits: ContractLimits,
   limits: GoalLimits,
   targets: EconomicProperty[],
   now: Date,
@@ -513,7 +530,7 @@ async function traceLeverageOnTop(
     await breathe();
     let leverage: ArrangementLeverage;
     try {
-      leverage = await leverageOfYielding(a, constraints, breathe, { now });
+      leverage = await leverageOfYielding(a, constraintsFor(constraints, contractLimits, one.demand.name), breathe, { now });
     } catch {
       continue;
     }
@@ -521,6 +538,10 @@ async function traceLeverageOnTop(
     if (leverage.refused && one.stress.exposure !== 'EXCEEDS') {
       one.stress = { ...one.stress, exposure: 'EXCEEDS' };
       changed = true;
+    }
+    if (leverage.constraints.contractMax === null) {
+      // The question that answers the CONTRACT task: what its answer files is what `contractLimitsFrom` reads.
+      one.question += ` ${CONTRACT_LIMIT_ASK}`;
     }
     const verify = leverage.prepayment.flatMap((v) => v.tasks);
     if (verify.length) {
@@ -599,6 +620,126 @@ export function leverPartsFor(evidence: LeverEvidence, payer: string): (part: Le
   });
 }
 
+// ── a contract's transaction limit ──────────────────────────────────────────
+
+/**
+ * One payer's contract limit as the rows state it: the most binding maximum
+ * number of transactions any of its terms allows over the goal's period, with
+ * where it was read. Plain data, so it crosses the evaluator pool's thread.
+ */
+export interface ContractLimit {
+  /** Normalised payer name. */
+  payer: string;
+  /** Transactions allowed over the period. */
+  max: number;
+  /** The row it was read from: `opportunity:<id>:<field>` or `fact:<id>`. */
+  ref: string;
+  /** The claim behind it, when a fact carried one. */
+  claimId: string | null;
+  /** The sentence the limit was read from, for a reader to check. */
+  text: string;
+  observedAt: string | null;
+}
+
+export type ContractLimits = ContractLimit[];
+
+/** What a constructed arrangement's research question asks so that the CONTRACT limit becomes readable. */
+export const CONTRACT_LIMIT_ASK =
+  'State the most transactions (orders, jobs, units, loads, bookings) the buyer’s contract, framework agreement, tender award or published terms allow in the period — "up to N", "no more than N", "a maximum of N" — with its source, or say plainly that no source states one.';
+
+// The fields of an opening that are terms: a maximum stated in them is a contract's.
+const TERMS_FIELDS = ['paymentTerms', 'acceptanceCondition', 'offerScope'] as const;
+// Elsewhere a maximum is a contract's only when the sentence says it is.
+const OTHER_FIELDS = ['requiredInputs', 'economicsNote', 'buyingSignal'] as const;
+const CONTRACT_WORD = /\b(?:contract(?:s|ed|ual)?|agreements?|framework|purchase orders?|PO|tender|award(?:ed)?|allocation|allotment|quota|terms|licen[cs]e[sd]?|permit(?:s|ted)?|allow(?:s|ed)?|caps?|capped)\b/i;
+const CAP = /\b(?:up to|no more than|not more than|not to exceed|maximum(?: of)?|max\.?|at most|capped at|a cap of|cap of|limited to|limit(?:ed)? of)\s+(\d[\d,]*)\s+(?:[a-z-]+\s+){0,2}?(orders?|jobs?|units?|transactions?|bookings?|deliveries|delivery|loads?|shipments?|projects?|placements?|referrals?|leads?|sales?|contracts?|visits?|cases?|appointments?|tickets?|seats?|licen[cs]es?|pallets?|containers?|tons?|tonnes?|calls?|installs?|installations?|services?)\b(?:\s+(?:per|a|an|each|every)\s+(day|week|month|quarter|year))?/i;
+const PERIOD_DAYS: Record<string, number> = { day: 1, week: 7, month: 30, quarter: 91, year: 365 };
+
+function contractSentences(text: string): string[] {
+  return text.split(/(?<=[.;!?])\s+|\n+/).map((one) => one.trim()).filter(Boolean);
+}
+
+/** The maximum a sentence states, over `periodDays`; null when it states none. */
+export function statedContractMax(sentence: string, periodDays: number, needsContractWord: boolean): number | null {
+  if (needsContractWord && !CONTRACT_WORD.test(sentence)) return null;
+  const m = CAP.exec(sentence);
+  if (!m) return null;
+  const n = Number(m[1]!.replace(/,/g, ''));
+  if (!Number.isFinite(n) || n < 0) return null;
+  const per = m[3] ? PERIOD_DAYS[m[3].toLowerCase()] : undefined;
+  // A rate cap ("up to 40 jobs a month") allows that rate over the period; a bare count is the whole allowance.
+  return per ? Math.floor((n * Math.max(1, periodDays)) / per) : n;
+}
+
+/**
+ * Every payer's contract limit, from the openings' own terms and the evidence
+ * facts filed on them. The smallest stated maximum binds: two terms that both
+ * apply allow only what both allow. A payer whose rows state no maximum is
+ * absent, and its CONTRACT limit stays unknown.
+ */
+export function contractLimitsFrom(input: { opportunities: readonly CashOpportunity[]; facts: readonly CashCardFact[]; periodDays: number }): ContractLimits {
+  const byPayer = new Map<string, ContractLimit>();
+  const byId = new Map(input.opportunities.map((one) => [one.id, one]));
+  const offer = (payer: string | null, text: string | null, ref: string, claimId: string | null, observedAt: string | null, needsContractWord: boolean) => {
+    const who = norm(payer);
+    if (!who || !text) return;
+    for (const sentence of contractSentences(text)) {
+      const max = statedContractMax(sentence, input.periodDays, needsContractWord);
+      if (max === null) continue;
+      const held = byPayer.get(who);
+      if (!held || max < held.max) byPayer.set(who, { payer: who, max, ref, claimId, text: sentence.slice(0, 300), observedAt });
+    }
+  };
+  for (const one of input.opportunities) {
+    if (one.duplicateOfId) continue;
+    for (const field of TERMS_FIELDS) offer(one.payer, one[field], `opportunity:${one.id}:${field}`, one.sourceClaimId, one.updatedAt, false);
+    for (const field of OTHER_FIELDS) offer(one.payer, one[field], `opportunity:${one.id}:${field}`, one.sourceClaimId, one.updatedAt, true);
+  }
+  for (const fact of input.facts) {
+    if (fact.kind !== 'EVIDENCE') continue;
+    const one = byId.get(fact.opportunityId);
+    if (!one || one.duplicateOfId) continue;
+    offer(one.payer, fact.value, `fact:${fact.id}`, fact.claimId, fact.createdAt, !(TERMS_FIELDS as readonly string[]).includes(fact.field));
+  }
+  return [...byPayer.values()].sort((a, b) => a.payer.localeCompare(b.payer));
+}
+
+/** The stated contract limit for one payer, or null when its rows state none. */
+export function contractLimitFor(limits: ContractLimits, payer: string | null | undefined): ContractLimit | null {
+  const who = norm(payer);
+  return (who && limits.find((one) => one.payer === who)) || null;
+}
+
+/**
+ * The limit as a graph part: a stated maximum is one figure from a row, read
+ * with the reading error every published figure carries — and, being a
+ * maximum, it is also the part's hard upper bound.
+ */
+function contractPart(limit: ContractLimit): Part {
+  return {
+    min: 0,
+    max: limit.max,
+    context: { payer: limit.payer },
+    material: [],
+    observations: [
+      {
+        id: `${limit.ref}:contract_max`,
+        value: { kind: 'POINT', value: limit.max, exact: true },
+        context: { payer: limit.payer },
+        lineage: [limit.ref],
+        source: limit.claimId ? { kind: 'CLAIM', ref: limit.claimId } : { kind: 'CARD_FACT', ref: limit.ref },
+        observedAt: limit.observedAt,
+        measures: `the maximum transactions stated: "${limit.text}"`,
+      },
+    ],
+  };
+}
+
+/** The project's real limits, with this arrangement's payer's contract limit when its rows state one. */
+export function constraintsFor(base: LeverageConstraints, limits: ContractLimits, payer: string | null | undefined): LeverageConstraints {
+  return { ...base, contractMax: contractLimitFor(limits, payer)?.max ?? base.contractMax ?? null };
+}
+
 /** How long an unchanged construction is reused, and how many distinct ones are held. */
 export const CONSTRUCTION_MEMO_MS = 30 * 60_000;
 const CONSTRUCTION_MEMO_MAX = 8;
@@ -620,6 +761,7 @@ function reverseArrangements(ctx: {
   priced: Observation[];
   tiedUp: Observation[];
   leverEvidence: LeverEvidence;
+  contractLimits?: ContractLimits;
   input: ConstructionInput;
   limits: GoalLimits;
   targets: EconomicProperty[];
@@ -722,6 +864,7 @@ function compose(args: {
   priced: Observation[];
   tiedUp: Observation[];
   leverEvidence: LeverEvidence;
+  contractLimits?: ContractLimits;
   input: ConstructionInput;
   limits: GoalLimits;
   targets: EconomicProperty[];
@@ -785,6 +928,9 @@ function compose(args: {
    * evidence about it, and any other payer's are broad, bounds only.
    */
   const levers = designLevers(design, facts.fulfiller, leverPartsFor(args.leverEvidence, demand.name));
+  // The payer's contract limit, when its rows state one, bounds delivery capacity in the graph itself.
+  const contract = contractLimitFor(args.contractLimits ?? [], demand.name);
+  if (contract) levers.limits = { ...levers.limits, contractMax: contractPart(contract) };
   const levered: Arrangement = { ...base, levers };
   let estimates: Record<string, Estimate> = {};
   try {
