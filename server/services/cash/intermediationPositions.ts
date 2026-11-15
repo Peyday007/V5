@@ -301,6 +301,15 @@ function present(value: string | number | null | undefined): boolean {
 }
 
 /**
+ * Whether the only thing the sources established is a public asking price or a total
+ * market size — neither says the payer can be reached or that anyone buys this way.
+ */
+export function narrowEvidence(facts: PositionFacts): boolean {
+  const bases = facts.bases ?? [];
+  return bases.length > 0 && bases.every((basis) => NARROW_BASES.has(basis));
+}
+
+/**
  * Every S-0150 field missing at one position, each asked at that exact position. When the
  * only evidence is a public asking price or a total market size, buyer access and conversion
  * are named as separate gaps to investigate — whatever else the fields claim.
@@ -312,10 +321,16 @@ export function positionEvidenceGaps(position: ResolvedPosition | string, facts:
   for (const field of EVIDENCE_FIELD_KEYS) {
     if (!present(facts.fields[field])) gaps.push({ kind: 'FIELD', field, ask: EVIDENCE_FIELDS[field] + at });
   }
-  const bases = facts.bases ?? [];
-  if (bases.length > 0 && bases.every((basis) => NARROW_BASES.has(basis))) {
-    gaps.push({ kind: 'BUYER_ACCESS', ask: `a public asking price or market size does not show the payer can be reached: establish a reachable channel to a named payer${at}` });
-    gaps.push({ kind: 'CONVERSION', ask: `a public asking price or market size does not show anyone buys through this route: establish observed conversion from that channel${at}` });
+  if (narrowEvidence(facts)) {
+    // The remaining gaps only: once later research names a payer and a channel to
+    // them, access is no longer what is missing — but conversion still is until a
+    // demand observation stands beside it.
+    if (!(present(facts.fields.payer) && present(facts.fields.channel))) {
+      gaps.push({ kind: 'BUYER_ACCESS', ask: `a public asking price or market size does not show the payer can be reached: establish a reachable channel to a named payer${at}` });
+    }
+    if (!present(facts.fields.demand)) {
+      gaps.push({ kind: 'CONVERSION', ask: `a public asking price or market size does not show anyone buys through this route: establish observed conversion from that channel${at}` });
+    }
   }
   return gaps;
 }

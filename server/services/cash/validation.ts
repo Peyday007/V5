@@ -94,6 +94,7 @@ export { diveEpochStart } from './diveStage.ts';
 import { freeLaneOwnsResearch, offerToFamily, researchCapacity, researchRoom, type ResearchRoom, type RoomLimit } from './researchRoom.ts';
 import { isIntermediationBucket } from './intermediationBuckets.ts';
 import { INTERMEDIATION_FAMILY } from './intermediationPositions.ts';
+import { latestReadingFor, refreshPositionEvidence, separateInvestigationsSentence } from './positionEvidence.ts';
 import { recordReopenCondition, reopenConditionsFor } from '../../repos/cashReconsideration.ts';
 import { formatBlockerKey } from '../../domain/types.ts';
 import type { CashCardFact, CashOpportunity, OpportunityValidationState } from '../../domain/types.ts';
@@ -1370,11 +1371,15 @@ export async function startValidations(input: {
       projectId: input.projectId,
       visibility: 'SHARED',
       title: `${stage === 'SCREEN' ? 'Screen' : 'Qualify'}: ${opportunity.title}`,
-      statement: validationQuestion(
-        opportunity,
-        stage,
-        askedBefore ? fieldsWorthResearching(opportunity, tierById.get(opportunity.id)!) : undefined,
-      ),
+      statement:
+        validationQuestion(
+          opportunity,
+          stage,
+          askedBefore ? fieldsWorthResearching(opportunity, tierById.get(opportunity.id)!) : undefined,
+        ) +
+        // S-0150: an asking price or market size alone leaves access and conversion
+        // to be investigated separately, and the full dive is where that happens.
+        (stage === 'FULL' ? separateInvestigationsSentence(await latestReadingFor(opportunity.id)) : ''),
     });
     /*
      * The first dive after a distinct change is round one of its epoch, so the
@@ -2238,6 +2243,7 @@ export async function applyValidationAnswers(projectId: string): Promise<Applied
   };
 
   for (const opportunity of await listOpportunities({ projectId })) {
+    const appliedBefore = out.length;
     let card: ((field: string) => CashCardFact | null) | null = null;
     for (const orchestrationId of await finishedDivePackets(opportunity)) {
       const claims = await citableClaims(orchestrationId);
@@ -2344,6 +2350,15 @@ export async function applyValidationAnswers(projectId: string): Promise<Applied
       }
     }
     await withdrawAbsencesWrittenAsAnswers(projectId, opportunity);
+    /*
+     * The opening's evidence moved, so its per-position reading is taken again
+     * (RES-15-4, S-0150) — appended, never edited, and only for an opening that
+     * already owes one. Read from the row as it now stands.
+     */
+    if (out.length > appliedBefore) {
+      const fresh = await getOpportunity(opportunity.id);
+      if (fresh) await refreshPositionEvidence(projectId, fresh);
+    }
   }
   return out;
 }

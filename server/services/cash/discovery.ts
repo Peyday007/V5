@@ -72,6 +72,7 @@ import { constructedCapFor, freeLaneOwnsResearch, routineFocus } from './researc
 import { TRIGGER_BUCKETS, triggersEnabled } from './triggers.ts';
 import { INTERMEDIATION_BUCKETS, isIntermediationBucket } from './intermediationBuckets.ts';
 import { familyCurrent, INTERMEDIATION_FAMILY, type FamilyDeclaration } from './intermediationPositions.ts';
+import { owesPositionEvidence, recordPositionEvidence } from './positionEvidence.ts';
 import { FEED_SHORTLIST_BUCKET } from '../feeds/bucket.ts';
 import { getDb } from '../../db/database.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
@@ -1995,6 +1996,23 @@ export async function harvest(input: {
         sourceUrl: claim.sourceUrl,
       },
     });
+
+    /*
+     * Per-position evidence, as a row (RES-15-4, S-0150). An opening found by an
+     * intermediation entry bucket or a goal's constructed arrangement owes it: which
+     * positions it is examined from, what each S-0150 field already rests on, and —
+     * where the claim shows only an asking price or a market size — buyer access and
+     * conversion named as separate open investigations. Read from the rows just
+     * written; nothing is estimated.
+     */
+    if (owesPositionEvidence(context?.bucket.id)) {
+      await recordPositionEvidence({
+        projectId: input.projectId,
+        opportunity: withSignal ?? created,
+        bucketId: context!.bucket.id,
+        claim: { id: claim.id, claim: claim.claim, signal },
+      });
+    }
 
     out.push({ opportunity: withSignal ?? created, claimId: claim.id, missionId });
   }
