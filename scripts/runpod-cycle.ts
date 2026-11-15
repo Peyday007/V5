@@ -19,7 +19,7 @@
  */
 import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
 import { recordBinEvent } from '../server/repos/bins.ts';
-import { podConfig, powerPod, readPod, vllmReady } from '../server/services/cheap/runpodPod.ts';
+import { loadMovedPod, podConfig, powerPod, readPod, vllmReady } from '../server/services/cheap/runpodPod.ts';
 import { waitingNow } from '../server/services/freeLane/capacity.ts';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -46,6 +46,8 @@ function fail(why: string): void {
 
 async function main(): Promise<void> {
   await initDatabase();
+  // The pod Brain moved to, if it moved one: the deploy secret may still name the old one.
+  await loadMovedPod();
   const config = podConfig();
   if (!config) return fail('automatic power is off: BRAIN_RUNPOD_API_KEY, the GPU in primary mode, or a pod id is missing');
   console.log(`POD ${config.podId} · stopped after ${Math.round(config.idleStopMs / 60_000)} idle min`);

@@ -276,3 +276,20 @@ describe('moving a pod whose host has no GPU left (production 2026-11-15: 109 re
     expect(runpodUrlOverride()).toBeNull();
   });
 });
+
+describe('host refusals are this pod\'s own (production 2026-11-15 23:07Z: a hand-moved pod inherited 20 refusals)', () => {
+  it('counts only the current pod, and only since its last stop, start or move', async () => {
+    const { hostRefusalsOf } = await import('../server/services/cheap/runpodPod.ts');
+    const full = 'RunPod answered HTTP 500: {"error":"start pod: There are not enough free GPUs on the host machine to start this pod."}';
+    const rows = [
+      { outcome: 'STOPPED', reason: 'runpod-cycle', podId: 'newpod' },
+      { outcome: 'START_FAILED', reason: full, podId: 'oldpod' },
+      { outcome: 'START_FAILED', reason: full, podId: 'oldpod' },
+      { outcome: 'START_FAILED', reason: full, podId: 'oldpod' },
+    ];
+    expect(hostRefusalsOf('newpod', rows)).toBe(0);
+    expect(hostRefusalsOf('oldpod', rows)).toBe(3);
+    expect(hostRefusalsOf('newpod', [{ outcome: 'START_FAILED', reason: full, podId: 'newpod' }, { outcome: 'START_FAILED', reason: full, podId: 'newpod' }, { outcome: 'STOPPED', reason: '', podId: 'newpod' }, { outcome: 'START_FAILED', reason: full, podId: 'newpod' }])).toBe(2);
+    expect(hostRefusalsOf('newpod', [{ outcome: 'START_FAILED', reason: 'pod not found', podId: 'newpod' }])).toBe(0);
+  });
+});
