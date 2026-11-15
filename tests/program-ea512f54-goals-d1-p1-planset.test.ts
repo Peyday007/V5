@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildPlanSet,
   calibrationFor,
+  candidateFromPathway,
   candidateFromStrategy,
   canonical,
   differingDimensions,
@@ -16,6 +17,7 @@ import {
   type PlanModel,
 } from '../server/services/goals/planSet.ts';
 import type { VariantReading } from '../server/services/goals/reconstruction.ts';
+import type { PathFact, TransactionPathway } from '../server/services/goals/pathways.ts';
 import { judgeAcceptance, planCalibration, type StrategyReading } from '../server/services/goals/plan.ts';
 
 const field = (status: ModelField['status'], value: string | number | null = 'x'): ModelField => ({ value, low: null, high: null, status, basis: `test ${status}` });
@@ -263,5 +265,88 @@ describe('distinct plan set (GOAL-23)', () => {
     const set = buildPlanSet([candidate('a'), candidate('b'), candidate('arr', { source: 'ARRANGEMENT', opportunityIds: [] })], condition({ confidence: 0.9 }), calibration);
     expect(set.plans.filter((p) => p.acceptance === 'ACCEPTED').map((p) => p.id)).toEqual(['a']);
     expect(set.plans.filter((p) => !p.confidence.withheld).map((p) => p.id)).toEqual(['a']);
+  });
+});
+
+/* A transaction pathway as pathways.ts publishes it; every prose field is the caller's. */
+const fact = (value: string | number | null, status: PathFact['status'] = 'ESTIMATED'): PathFact => ({ value, low: null, high: null, status: value === null ? 'UNKNOWN' : status, basis: 'test' });
+function pathway(id: string, over: Partial<TransactionPathway> = {}): TransactionPathway {
+  return {
+    opportunityId: id,
+    title: `Opening ${id}`,
+    origin: 'FOUND',
+    buyer: fact('Small accounting firms'),
+    motivation: fact('hiring freeze'),
+    channel: fact('contact form on the firm website'),
+    offer: fact('Monthly bookkeeping for small firms'),
+    fulfiller: fact('Brain produces it: bookkeeping'),
+    revenuePerDeal: fact(1_500),
+    acquisitionCost: fact(0),
+    fulfilmentCost: fact(100),
+    net: fact(1_400),
+    conversion: fact(0.05),
+    volume: fact(40),
+    frequency: fact('repeats'),
+    daysToCash: fact(14),
+    capital: fact(0),
+    rights: fact('every permission this transaction depends on is granted', 'PROVEN'),
+    capacity: fact(null),
+    acquisition: { method: 'COLD_OUTREACH', basis: 'a published contact route' },
+    producedBy: 'bookkeeping',
+    dependencies: [],
+    permissionsMissing: [],
+    failurePoints: [],
+    gaps: [],
+    moves: [],
+    fit: { dealsForGap: 7, dealsForShare: 1, dealsAvailable: 40, prospectsPerDay: 2, verdict: 'CARRIES_GAP', lever: { variable: null, change: '' } },
+    contribution: { p10: 6_000, p50: 12_000, p90: 20_000 },
+    gross: { p10: 7_000, p50: 13_000, p90: 22_000 },
+    executable: true,
+    notExecutable: [],
+    correlationGroup: 'small accounting',
+    counts: { proven: 2, estimated: 10, unknown: 2 },
+    ...over,
+  };
+}
+
+describe('pathway distinctness is read from structure, never from prose (review F1-2)', () => {
+  it('a genuinely reworded duplicate pathway is one plan, not two', () => {
+    const a = candidateFromPathway(pathway('a'));
+    const b = candidateFromPathway(
+      pathway('b', {
+        title: 'Bookkeeping outsourcing for accountants',
+        offer: fact('Small-business bookkeeping, monthly'),
+        channel: fact('the enquiry form on each practice site'),
+        buyer: fact('Accounting practices with few staff'),
+        motivation: fact('cannot hire a bookkeeper this quarter'),
+      }),
+    );
+    // Word-set canonicalisation alone tells these offers apart — that was the defect.
+    expect(canonical('Monthly bookkeeping for small firms')).not.toBe(canonical('Small-business bookkeeping, monthly'));
+    expect(differingDimensions(a.dimensions, b.dimensions)).toEqual([]);
+    const set = buildPlanSet([a, b], condition());
+    expect(set.distinct).toBe(1);
+    expect(set.collapses.some((c) => c.why === 'PARAPHRASE')).toBe(true);
+  });
+
+  it('a pathway with a different structure is a different plan on exactly that dimension', () => {
+    const base = candidateFromPathway(pathway('a'));
+    const cases: [Partial<TransactionPathway>, string][] = [
+      [{ producedBy: 'web design', fulfiller: fact('Brain produces it: web design') }, 'mechanism'],
+      [{ acquisition: { method: 'MARKETPLACE', basis: 'a listing' } }, 'channel'],
+      [{ correlationGroup: 'dental clinics' }, 'risk'],
+      [{ frequency: fact('one-off', 'PROVEN') }, 'revenue'],
+    ];
+    for (const [over, dim] of cases) {
+      const other = candidateFromPathway(pathway('x', over));
+      expect(differingDimensions(base.dimensions, other.dimensions)).toContain(dim);
+    }
+    const brokered = candidateFromPathway(pathway('y', { producedBy: null, fulfiller: fact('a freelance bookkeeper') }));
+    expect(differingDimensions(base.dimensions, brokered.dimensions)).toEqual(expect.arrayContaining(['mechanism', 'fulfilment']));
+  });
+
+  it('a repeating pathway is recurring revenue (frequency carries the word, not a number)', () => {
+    expect(candidateFromPathway(pathway('a')).dimensions.revenue).toBe('recurring');
+    expect(candidateFromPathway(pathway('b', { frequency: fact('one-off', 'PROVEN') })).dimensions.revenue).toBe('one-off');
   });
 });

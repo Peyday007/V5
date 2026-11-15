@@ -278,6 +278,41 @@ function weakest(...statuses: FieldStatus[]): FieldStatus {
   return 'PROVEN';
 }
 
+/**
+ * A pathway's distinctness dimensions, read only from fields Brain computes —
+ * never from the card's prose. A paraphrased offer or channel ("Monthly
+ * bookkeeping for small firms" against "Small-business bookkeeping, monthly")
+ * is one plan, and word-set comparison of free text could not tell it from a
+ * different one: any changed word would count as a new mechanism. So:
+ *
+ *   * mechanism — who makes what is sold: Brain producing it with a named
+ *     capability, an outside fulfiller Brain brokers, or nobody established yet;
+ *   * channel — the acquisition method (`acquisitionOf`), an enumeration;
+ *   * fulfilment — Brain's capability, or the kind of outside fulfiller;
+ *   * risk — the correlation group the pathway already fails together with;
+ *   * revenue — whether the deal repeats (`frequency`), not a sentence about it.
+ *
+ * Coarser than prose, deliberately: two plans that differ only in what the card
+ * calls them are one plan, and the count can only be raised by a different
+ * economic shape.
+ */
+export function pathwayDimensions(p: TransactionPathway): Record<DistinctnessDimension, string> {
+  const fulfillerKind = p.producedBy ? `brain:${p.producedBy}` : p.fulfiller.value !== null && p.fulfiller.status !== 'UNKNOWN' ? 'external' : 'unestablished';
+  const mechanism = p.producedBy ? `produce ${p.producedBy}` : fulfillerKind === 'external' ? 'broker' : 'unfulfilled';
+  return {
+    mechanism: `${p.origin.toLowerCase()} ${mechanism}`,
+    channel: p.acquisition.method.toLowerCase(),
+    fulfilment: fulfillerKind,
+    risk: p.correlationGroup,
+    revenue: isRecurring(p) ? 'recurring' : 'one-off',
+  };
+}
+
+function isRecurring(p: TransactionPathway): boolean {
+  const v = p.frequency.value;
+  return v === 'repeats' || (typeof v === 'number' && v > 1);
+}
+
 /** A transaction pathway as a candidate plan. */
 export function candidateFromPathway(p: TransactionPathway, extra: Partial<Pick<PlanCandidate, 'observedCollections' | 'enforceableCommitments' | 'attempts'>> = {}): PlanCandidate {
   const channel = textOf(p.channel) ?? p.acquisition.method;
@@ -289,19 +324,12 @@ export function candidateFromPathway(p: TransactionPathway, extra: Partial<Pick<
     p.permissionsMissing.length > 0
       ? { value: p.permissionsMissing.join('; '), low: null, high: null, status: 'UNKNOWN', basis: 'permissions not yet granted' }
       : fieldOf(p.rights, 'rights');
-  const recurring = p.frequency.value !== null && typeof p.frequency.value === 'number' && p.frequency.value > 1;
   return {
     id: p.opportunityId,
     title: p.title,
     source: 'PATHWAY',
     opportunityIds: [p.opportunityId],
-    dimensions: {
-      mechanism: textOf(p.offer) ?? p.title,
-      channel: `${p.acquisition.method} ${channel}`,
-      fulfilment: fulfiller,
-      risk: p.correlationGroup,
-      revenue: recurring ? 'recurring' : 'one-off',
-    },
+    dimensions: pathwayDimensions(p),
     customers: [buyer],
     cashSources: [buyer],
     channels: [channel],
