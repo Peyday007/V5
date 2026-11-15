@@ -148,10 +148,19 @@ describe('(2) evidence strong enough for its margin is CONFIDENCE_VERIFIED', () 
     expect(acceptance.probability!.sample).toBeGreaterThanOrEqual(20);
   });
 
-  it('the lens fixture itself at the repro limits (2,100 contacts for 7 deals, a 12× margin) is verified, and says over what', () => {
-    const { acceptance } = verdict(opening({ close: lensClose, respond: lensRespond }), generous);
-    expect(acceptance.verdict).toBe('CONFIDENCE_VERIFIED');
-    expect(acceptance.probability!.note).toMatch(/5th percentile of reach over 100 draws/);
+  it('the lens fixture at the repro limits (2,100 contacts for 7 deals, a 12× margin) is quantitatively constructed, and certifies only once an independent check agrees (CHAL-33)', () => {
+    /*
+     * One opening carries every dollar, so the plan earns a deep review
+     * (CHAL-33, `quant/challenge.ts`): three sized comparables make a strong
+     * construction, but a 90% claim resting on one dependency is held until
+     * an independent check — another model, held-out evidence or Brain's own
+     * history — agrees. Stricter than the margin alone, never weaker: the
+     * history-backed case above still certifies.
+     */
+    const { portfolio, acceptance } = verdict(opening({ close: lensClose, respond: lensRespond }), generous);
+    expect(acceptance.verdict).toBe('QUANTITATIVELY_CONSTRUCTED');
+    expect(acceptance.status).not.toBe('ACCEPTED');
+    expect(JSON.stringify(portfolio)).toMatch(/independent check|deep review/);
   });
 });
 
