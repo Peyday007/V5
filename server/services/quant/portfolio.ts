@@ -97,8 +97,20 @@ export interface Activity {
    * as favourable: a probability claim needs a stated sample size.
    */
   evidence?: {
-    /** Independent real observations behind the samples (not the number of simulated draws). */
+    /**
+     * Independent real observations behind the samples (not the number of
+     * simulated draws). A goal's portfolio states it in events — the weakest
+     * evidenced input's worth (Q2-2) — never in studies.
+     */
     sampleSize?: number;
+    /**
+     * Why this activity's figure cannot be verified whatever its sample: an
+     * input that rests on one comparable, on unsized rates only, or on a fixed
+     * behavioural rate nobody sized. Each is a validation problem, by name.
+     */
+    unverifiable?: string[];
+    /** The research that would make each unverifiable input verifiable, by name (Q2-6). */
+    researchNeeds?: string[];
     /** True when conditions have changed since the observations, so they may not transfer. */
     conditionsChanged?: boolean;
     /**
@@ -164,8 +176,42 @@ export interface PortfolioProblem {
    * their `gated` samples. A gate no member names is never bought.
    */
   gates?: Array<{ id: string; day: number; tranche: number; cost: number }>;
+  /**
+   * Reach of a combination under parameter uncertainty (Q2-2): the caller, who
+   * knows what each activity's samples were built from, redraws the evidenced
+   * parameters in an outer loop and returns the reach of each draw. When
+   * given, `assess` reads its claim from the fifth percentile of those reaches
+   * rather than from a binomial interval on one reach.
+   */
+  parameterReach?: (keys: string[]) => ParameterReach | null;
   worlds?: number;
   seed?: number;
+}
+
+/** One input whose uncertainty limits the fifth-percentile reach, and what would settle it (Q2-6). */
+export interface LimitingInput {
+  /** The opening(s) it belongs to. */
+  opportunityIds: string[];
+  /** The input, by name ("close rate"). */
+  input: string;
+  /** The planned-opening field it is (`close`, `respond`, `daysToCash`…), so evidence behind it can be found (W-12). */
+  field?: string;
+  /** |Spearman ρ| between the input's draw and the reach of that draw: its share of the uncertainty that matters. */
+  sensitivity: number;
+  have: { tier: string; events: number; populations: number; sizedPopulations: number };
+  /** The research that would narrow it, in words a researcher can act on. */
+  need: string;
+}
+
+export interface ParameterReach {
+  /** Reach of the combination at each outer draw of the parameters. */
+  draws: number[];
+  /** EVIDENCE when every drawn parameter rests on evidence; ASSUMED_RANGES when some are swept bounds. */
+  basis: 'EVIDENCE' | 'ASSUMED_RANGES';
+  /** Inputs ranked by how much their uncertainty moves reach. */
+  limiting: LimitingInput[];
+  /** Simulated worlds per draw: stated so nobody reads them as evidence. */
+  innerWorlds: number;
 }
 
 export interface PortfolioReading {
@@ -255,6 +301,20 @@ export interface Assurance {
   }>;
   /** Historical data a member still needs before its figure is calibrated: targeted research, not an assumption. */
   researchNeeds?: string[];
+  /**
+   * The smallest evidence behind any member, in events, and where it came
+   * from: what `range` is read over. Structured, so no reader parses `reason`.
+   */
+  sample?: { events: number | null; from: 'STATED' | 'HISTORY' | 'NONE' };
+  /**
+   * The reach of the best combination under parameter uncertainty, always
+   * stated when it was computed: its 5th, 50th and 95th percentiles over the
+   * outer draws. With basis ASSUMED_RANGES it is sensitivity to assumptions,
+   * never a probability. Present even when calibration is unavailable.
+   */
+  parameterInterval?: { low: number; p50: number; high: number; draws: number; basis: ParameterReach['basis'] } | null;
+  /** The inputs that most limit the fifth-percentile reach (Q2-6). */
+  limitingInputs?: LimitingInput[];
   reason: string;
 }
 
@@ -274,7 +334,15 @@ export function effectiveSample(one: Activity): { size: number | undefined; from
   return { size: undefined, from: 'NONE' };
 }
 
+/**
+ * The least evidence a member's figure may rest on. On a goal's portfolio it
+ * is counted in events (Q2-2, 2026-11-14), not in studies: three comparables
+ * of 200 contacts each are worth what their spread allows (~40 events), where
+ * read as "3 studies" they could never pass however large each was.
+ */
 export const MIN_EVIDENCE_SAMPLE = 20;
+/** The fifth percentile of reach over parameter draws is what a ≥90% claim is read at. */
+export const CLAIM_PERCENTILE = 0.05;
 /** One-sided 95% normal quantile, used for the lower bound of a claim. */
 const Z95 = 1.6449;
 export const CLAIM_THRESHOLD = 0.9;
@@ -327,6 +395,18 @@ function drawWorlds(problem: PortfolioProblem, worlds: number): Worlds {
   return { picks: drawPicks(problem, worlds), down: drawOutages(problem, worlds) };
 }
 
+/**
+ * Each activity's drawn world order, keyed by its cash samples (the array
+ * itself) and everything else the draw reads: the seed, the worlds, its key
+ * (its random stream) and its shared-risk group and correlation. A
+ * reconstruction evaluates hundreds of variants that differ in the few
+ * openings a move touched, and their samples are the same arrays from the
+ * demand cache (`demandWorlds`), so each untouched activity's order is drawn
+ * once instead of sorted again on every evaluation (lens P: drawPicks and its
+ * sort were about a tenth of a plan read). The arrays are only read.
+ */
+const pickCache = new WeakMap<readonly number[], Map<string, number[]>>();
+
 function drawPicks(problem: PortfolioProblem, worlds: number): number[][] {
   const seed = problem.seed ?? 20261031;
   const groups = new Map<string, Float64Array>();
@@ -347,10 +427,14 @@ function drawPicks(problem: PortfolioProblem, worlds: number): number[][] {
     for (const [name, xs] of [['early', activity.early?.cash], ['deals', activity.deals], ['market volume', activity.marketVolume], ['gated', activity.gated?.cash]] as const) {
       if (xs && xs.length !== n) throw new Error(`Activity "${activity.key}" needs ${name} samples paired with its cash samples.`);
     }
+    const rho = activity.riskGroup ? Math.min(0.95, Math.max(0, problem.riskCorrelation?.[activity.riskGroup] ?? 0.5)) : 0;
+    const memoKey = `${seed}|${worlds}|${activity.key}|${activity.riskGroup ?? ''}|${rho}`;
+    let held = pickCache.get(activity.cash);
+    const hit = held?.get(memoKey);
+    if (hit) return hit;
     // Rank worlds by cash so a bad shared shock means low cash for every member.
     const order = Array.from({ length: n }, (_, i) => i).sort((a, b) => activity.cash[a]! - activity.cash[b]!);
     const rng = makeRng(seed, seedOf(`activity:${activity.key}`));
-    const rho = activity.riskGroup ? Math.min(0.95, Math.max(0, problem.riskCorrelation?.[activity.riskGroup] ?? 0.5)) : 0;
     const g = activity.riskGroup ? factor(activity.riskGroup) : null;
     const out = new Array<number>(worlds);
     for (let i = 0; i < worlds; i++) {
@@ -358,6 +442,11 @@ function drawPicks(problem: PortfolioProblem, worlds: number): number[][] {
       const z = g ? Math.sqrt(rho) * g[i]! + Math.sqrt(1 - rho) * e : e;
       out[i] = order[Math.min(n - 1, Math.floor(normalCdf(z) * n))]!;
     }
+    if (!held) {
+      held = new Map();
+      pickCache.set(activity.cash, held);
+    }
+    held.set(memoKey, out);
     return out;
   });
 }
@@ -986,7 +1075,7 @@ export function optimizePortfolio(problem: PortfolioProblem): PortfolioResult {
   }
   const ranked = [...readings].sort(better);
   const best = ranked.find((one) => one.feasible) ?? null;
-  const result: PortfolioResult = { best, ranked: ranked.slice(0, 8), singles, refused, searched: readings.length, assurance: assess(problem, best) };
+  const result: PortfolioResult = { best, ranked: ranked.slice(0, 8), singles, refused, searched: readings.length, assurance: assess(problem, best, best && problem.parameterReach ? problem.parameterReach(best.keys) : null) };
   if (best && problem.safeguards?.length) {
     const members = best.keys.map((k) => problem.activities.findIndex((a) => a.key === k));
     result.safeguardEffects = problem.safeguards.map((guard) => {
@@ -1014,7 +1103,8 @@ export function optimizePortfolio(problem: PortfolioProblem): PortfolioResult {
  * calibration is unavailable. An input without evidence is a validation problem
  * and is never read as favourable.
  */
-export function assess(problem: PortfolioProblem, best: PortfolioReading | null): Assurance {
+export function assess(problem: PortfolioProblem, best: PortfolioReading | null, parameterReach: ParameterReach | null = null): Assurance {
+  if (parameterReach && best) return assessUnderParameters(problem, best, parameterReach);
   if (!best) {
     return { status: 'CALIBRATION_UNAVAILABLE', range: null, claimsAtLeast90: false, coverage: null, validationProblems: ['no feasible combination'], tailSettledP10: null, history: [], researchNeeds: [], reason: 'no feasible combination exists, so there is nothing to calibrate' };
   }
@@ -1053,7 +1143,9 @@ export function assess(problem: PortfolioProblem, best: PortfolioReading | null)
       }),
     ),
   ];
-  const base = { coverage: best.reach, tailSettledP10: best.settledP10, validationProblems: problems, history, researchNeeds };
+  const sizes = members.map((one) => samples.get(one.key)!.size).filter((n): n is number => n !== undefined);
+  const sample = { events: sizes.length === members.length && sizes.length > 0 ? Math.min(...sizes) : null, from: members.every((one) => samples.get(one.key)!.from === 'STATED') ? ('STATED' as const) : sizes.length > 0 ? ('HISTORY' as const) : ('NONE' as const) };
+  const base = { coverage: best.reach, tailSettledP10: best.settledP10, validationProblems: problems, history, researchNeeds, sample };
   if (problems.length > 0) {
     return { ...base, status: 'CALIBRATION_UNAVAILABLE', range: null, claimsAtLeast90: false, reason: `calibration is unavailable: ${problems.length} input(s) fail validation; the ${round(best.reach * 100)}% is share of scenarios covered, not a probability` };
   }
@@ -1073,6 +1165,89 @@ export function assess(problem: PortfolioProblem, best: PortfolioReading | null)
     reason: claims
       ? `calibrated evidence (smallest sample ${nMin}) puts the lower bound at ${round(low * 100)}%, above ${CLAIM_THRESHOLD * 100}%`
       : `strongest defensible range is ${round(low * 100)}%–${round(high * 100)}% (smallest sample ${nMin}); the lower bound does not reach ${CLAIM_THRESHOLD * 100}%`,
+  };
+}
+
+/** The p-th order statistic of `sorted`, conservatively (the lower one). */
+function lowerQuantile(sorted: readonly number[], p: number): number {
+  return sorted[Math.max(0, Math.min(sorted.length - 1, Math.floor(p * (sorted.length - 1))))]!;
+}
+
+/**
+ * The claim read under parameter uncertainty (Q2-2, 2026-11-14).
+ *
+ * The share of simulated worlds reaching the target already averages over
+ * the predictive distribution of each input, so putting a binomial interval on
+ * it over "the smallest sample" counted the same uncertainty twice and in the
+ * wrong unit (studies). Here the caller has redrawn each evidenced parameter
+ * from its own sampling and between-population distribution in an outer loop,
+ * held it for a block of inner worlds, and read reach per draw; at least 90%
+ * is claimed only when the fifth percentile of those reaches clears it. More
+ * inner worlds narrow nothing that matters: the spread across draws is the
+ * evidence's, and an input with no parameter uncertainty stated (a behavioural
+ * rate nobody sized, one comparable, unsized rates) is a validation problem,
+ * never a certainty.
+ */
+function assessUnderParameters(problem: PortfolioProblem, best: PortfolioReading, parameterReach: ParameterReach): Assurance {
+  const members = problem.activities.filter((one) => best.keys.includes(one.key));
+  const problems: string[] = [];
+  const samples = new Map(members.map((one) => [one.key, effectiveSample(one)]));
+  for (const one of members) {
+    const sample = samples.get(one.key)!;
+    if (!one.justified) problems.push(`"${one.key}": samples are not evidence-backed (invented or unvalidated inputs)`);
+    else if (sample.size === undefined || !(sample.size >= MIN_EVIDENCE_SAMPLE)) {
+      problems.push(`"${one.key}": ${sample.size === undefined ? 'a drawn input states no sample' : `its weakest evidenced input is worth ${Math.round(sample.size)} events, under ${MIN_EVIDENCE_SAMPLE}`}`);
+    }
+    for (const why of one.evidence?.unverifiable ?? []) problems.push(`"${one.key}": ${why}`);
+    if (one.evidence?.conditionsChanged) problems.push(`"${one.key}": conditions changed since its observations, so they may not transfer`);
+  }
+  const sorted = [...parameterReach.draws].sort((a, b) => a - b);
+  const interval = sorted.length
+    ? { low: lowerQuantile(sorted, CLAIM_PERCENTILE), p50: lowerQuantile(sorted, 0.5), high: lowerQuantile(sorted, 1 - CLAIM_PERCENTILE), draws: sorted.length, basis: parameterReach.basis }
+    : null;
+  const sizes = members.map((one) => samples.get(one.key)!.size).filter((n): n is number => n !== undefined);
+  const sample = { events: sizes.length === members.length && sizes.length > 0 ? Math.min(...sizes) : null, from: sizes.length === members.length && sizes.length > 0 ? ('STATED' as const) : ('NONE' as const) };
+  const pct = (x: number) => `${round(x * 100)}%`;
+  const limitingNeeds = parameterReach.limiting.slice(0, 3).map((one) => one.need);
+  const history = members
+    .filter((one) => one.evidence?.history)
+    .map((one) => {
+      const h = one.evidence!.history!;
+      const own = samples.get(one.key)!;
+      return {
+        key: one.key,
+        sampleFrom: own.from,
+        sampleSize: own.size ?? null,
+        winRate: h.winRate && h.winRate.bids > 0 ? { ...h.winRate, rate: h.winRate.wins / h.winRate.bids } : null,
+        marketTransactions: h.marketTransactions ?? null,
+        priceObservations: h.priceObservations,
+        sources: h.sources,
+      };
+    });
+  const base = { coverage: best.reach, tailSettledP10: best.settledP10, history, sample, parameterInterval: interval, limitingInputs: parameterReach.limiting };
+  if (problems.length > 0 || !interval || parameterReach.basis !== 'EVIDENCE') {
+    const all = problems.length > 0 ? problems : ['a drawn parameter rests on an assumed range, not evidence'];
+    return {
+      ...base,
+      validationProblems: all,
+      researchNeeds: [...new Set([...members.flatMap((one) => one.evidence?.researchNeeds ?? []), ...limitingNeeds])],
+      status: 'CALIBRATION_UNAVAILABLE',
+      range: null,
+      claimsAtLeast90: false,
+      reason: `calibration is unavailable: ${all.length} input(s) fail validation; the ${round(best.reach * 100)}% is share of scenarios covered, not a probability${interval ? ` (under the parameters' stated ranges it runs ${pct(interval.low)}–${pct(interval.high)})` : ''}`,
+    };
+  }
+  const claims = interval.low >= CLAIM_THRESHOLD;
+  return {
+    ...base,
+    validationProblems: [],
+    researchNeeds: claims ? [] : limitingNeeds,
+    status: claims ? 'CLAIMS_AT_LEAST_90' : 'RANGE',
+    range: { low: interval.low, high: interval.high },
+    claimsAtLeast90: claims,
+    reason: claims
+      ? `under the uncertainty of its evidenced inputs (weakest ${sample.events} events; ${interval.draws} parameter draws), the 5th percentile of reach is ${pct(interval.low)}, above ${CLAIM_THRESHOLD * 100}%`
+      : `under the uncertainty of its evidenced inputs (weakest ${sample.events} events; ${interval.draws} parameter draws), reach runs ${pct(interval.low)}–${pct(interval.high)} (5th–95th percentile); the 5th percentile does not reach ${CLAIM_THRESHOLD * 100}%${parameterReach.limiting[0] ? `, limited most by ${parameterReach.limiting[0].input}` : ''}`,
   };
 }
 

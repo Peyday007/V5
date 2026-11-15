@@ -19,6 +19,7 @@
  * target. Never because work reported itself done.
  */
 import { getDb } from '../../db/database.ts';
+import { newId } from '../../repos/util.ts';
 import { totalsByKind } from '../../repos/cashLedger.ts';
 import { getProject } from '../../repos/projects.ts';
 import { getWorkstream } from '../../repos/register.ts';
@@ -213,6 +214,8 @@ export async function setTarget(input: {
   /** At most this much newly tied up in any seven days. */
   capitalPerWeekCents?: number | null;
   now?: Date;
+  /** Who set it. The terminal is the only caller today, and reaching the shell is the authentication (§26). */
+  actorRef?: string;
 }): Promise<SetTargetResult> {
   if (!(GOAL_METRICS as readonly string[]).includes(input.metric)) {
     return { ok: false, reason: `The figure must be one of ${GOAL_METRICS.join(', ')}.` };
@@ -230,27 +233,45 @@ export async function setTarget(input: {
   const before = (await getWorkstream(input.goal.id))?.target ?? null;
   const same = before !== null && before.metric === input.metric && before.amountCents === input.amountCents && before.currency === input.currency && before.projectId === input.projectId;
   const at = same ? before.setAt : now;
-  await getDb().run(
+  const db = getDb();
+  await db.run(
     `UPDATE workstreams SET target_metric = ?, target_amount_cents = ?, target_currency = ?, target_project_id = ?,
             capital_ceiling_cents = ?, hours_ceiling = ?, target_resources = ?,
             target_capital_before_proof_cents = ?, target_capital_per_week_cents = ?, target_set_at = ?, updated_at = ? WHERE id = ?`,
     [input.metric, input.amountCents, input.currency, input.projectId, input.capitalCeilingCents ?? null, input.hoursCeiling ?? null, resources, input.capitalBeforeProofCents ?? null, input.capitalPerWeekCents ?? null, at, now, input.goal.id],
   );
-  return {
-    ok: true,
-    target: {
-      metric: input.metric as GoalMetric,
-      amountCents: input.amountCents,
-      currency: input.currency,
-      projectId: input.projectId,
-      capitalCeilingCents: input.capitalCeilingCents ?? null,
-      hoursCeiling: input.hoursCeiling ?? null,
-      resources,
-      capitalBeforeProofCents: input.capitalBeforeProofCents ?? null,
-      capitalPerWeekCents: input.capitalPerWeekCents ?? null,
-      setAt: at,
-    },
+  const target: GoalTarget = {
+    metric: input.metric as GoalMetric,
+    amountCents: input.amountCents,
+    currency: input.currency,
+    projectId: input.projectId,
+    capitalCeilingCents: input.capitalCeilingCents ?? null,
+    hoursCeiling: input.hoursCeiling ?? null,
+    resources,
+    capitalBeforeProofCents: input.capitalBeforeProofCents ?? null,
+    capitalPerWeekCents: input.capitalPerWeekCents ?? null,
+    setAt: at,
   };
+  /*
+   * A target, and the capital and hours a plan may use, are an owner
+   * instruction. The event is the policy version `ownerPolicy.ts` numbers, so a
+   * plan reading made before it cannot stay in force over it (S-0470, S-0471).
+   * It is stamped with the moment the target counts from, and keeps what it
+   * replaced so moving the target is visible rather than silent.
+   */
+  await db.run(
+    `INSERT INTO workstream_events (id, workstream_id, kind, summary, detail, actor_ref, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      newId('wse'),
+      input.goal.id,
+      'GOAL_TARGET_SET',
+      before ? 'A person re-set this goal\'s target or the capital and hours a plan may use.' : 'A person set this goal\'s target and the capital and hours a plan may use.',
+      JSON.stringify({ before, after: target }),
+      input.actorRef ?? 'terminal',
+      at,
+    ],
+  );
+  return { ok: true, target };
 }
 
 /**

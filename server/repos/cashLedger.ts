@@ -424,6 +424,22 @@ export async function invoiceOverpaymentCents(opportunityId: string, currency: s
   return Number(row?.n ?? 0);
 }
 
+/**
+ * The openings a buyer has actually paid on: a customer payment entry, net of
+ * refunds, in any currency. An outcome, not a figure — whether the design was
+ * shown working is the question, and a refunded payment did not show it.
+ */
+export async function paidOpportunityIds(projectId: string): Promise<Set<string>> {
+  const rows = await getDb().all<{ opportunity_id: string }>(
+    `SELECT opportunity_id FROM cash_money_entries
+      WHERE project_id = ? AND opportunity_id IS NOT NULL AND kind IN ('CUSTOMER_PAYMENT', 'REFUND')
+      GROUP BY opportunity_id
+     HAVING SUM(CASE WHEN kind = 'CUSTOMER_PAYMENT' THEN amount_cents ELSE -amount_cents END) > 0`,
+    [projectId],
+  );
+  return new Set(rows.map((one) => one.opportunity_id));
+}
+
 /** Every entry of these kinds on one piece in one currency, unlimited, oldest first. */
 export async function entriesOfKinds(input: {
   projectId: string;

@@ -11,9 +11,14 @@ import { describe, expect, it } from 'vitest';
 import { constructIndustry, renderConstruction, type Construction } from '../server/services/industry/construction/construction.ts';
 import { interpretIntent } from '../server/services/industry/construction/intent.ts';
 import { lastMileDelivery } from '../server/services/industry/construction/references.ts';
-import { constructBusinesses } from '../server/services/industry/construction/businesses.ts';
+import { allPositions, coherentPosition, constructBusinesses, positionKey } from '../server/services/industry/construction/businesses.ts';
 import { solveEconomics } from '../server/services/industry/construction/economics.ts';
-import { MODEL_DIMENSIONS, type Fact, type IndustryEvidence } from '../server/domain/construction.ts';
+import { resolveFact } from '../server/services/industry/construction/model.ts';
+import { commercialRoles } from '../server/services/industry/construction/roles.ts';
+import { assembleEvidence, evidenceFromMap } from '../server/services/industry/construction/service.ts';
+import { roleQualifier, transactionParties, validateStructural } from '../server/domain/industry.ts';
+import type { IndustryNode } from '../server/domain/types.ts';
+import { ASSETS, FACT_FRESHNESS, FLOW_KINDS, FRESHNESS_CLASSES, MODEL_DIMENSIONS, STALE_WIDENING_PER_WINDOW, revenueOf, type Fact, type IndustryEvidence } from '../server/domain/construction.ts';
 
 const DETROIT =
   'I want to enter last-mile logistics in Metro Detroit. I have $10,000-$30,000 available. I want to start generating revenue quickly, ' +
@@ -334,7 +339,7 @@ function equipmentRental(): IndustryEvidence {
     flows: [{ from: 'contractors', to: 'owners', kind: 'MONEY', terms: 'day or week rate with operator', status: 'ESTIMATE', source: op }],
     segments: [{ actorId: 'contractors', buys: 'WORK', requires: [], acceptsIntermediary: true, channel: 'estimators at site-work contractors', firstTransaction: 'one operated machine-week on a site', status: 'ESTIMATE', source: op }],
     gates: [],
-    chokepoints: [{ id: 'fleet', name: 'machines available on short notice', why: 'contractors pay a premium for same-week availability', controlledBy: ['FLEET', 'DISPATCH_DATA'], status: 'ESTIMATE', source: op }],
+    chokepoints: [{ id: 'fleet', name: 'machines available on short notice', why: 'contractors pay a premium for same-week availability', controlledBy: ['CAPACITY', 'DATA'], status: 'ESTIMATE', source: op }],
     scale: [],
     failures: [],
     adjacencies: [],
@@ -420,5 +425,160 @@ describe('the same engine, other industries', () => {
     // Break-even: contractor rate plus the fixed costs spread over the account's volume.
     expect(t.breakEven!).toBeGreaterThan(70);
     expect(t.breakEven!).toBeLessThan(120);
+  });
+});
+
+/* ------------------------------------------------------- Surge B repairs (W-7, W-10, W-13) */
+
+describe('W-10: a fact has a time, and an aged one widens rather than vanishes', () => {
+  const dated = (low: number, high: number, observedAt: string, status: Fact['status'] = 'OBSERVED', validUntil: string | null = null): Fact => ({
+    key: 'price_per_unit', segment: null, low, high, status, source: op, measures: `read ${observedAt}`, observedAt, validUntil,
+  });
+
+  it('takes the newest reading within the strongest status, and keeps the older one as history', () => {
+    const r = resolveFact([dated(10, 11, '2026-03-01T00:00:00Z'), dated(14, 15, '2026-10-01T00:00:00Z'), dated(5, 30, '2026-11-01T00:00:00Z', 'ESTIMATE')], 'price_per_unit', null, NOW);
+    expect([r.low, r.high]).toEqual([14, 15]);
+    expect(r.status).toBe('OBSERVED');
+    expect(r.stale).toBeNull();
+    expect(r.superseded.map((f) => f.low).sort()).toEqual([10, 5].sort());
+  });
+
+  it('a fresher weaker reading never beats a stronger one, and an expired strongest reading is widened, not dropped', () => {
+    // Observed 2025-11-01: a price's window is 180 days, so it expired 2026-04-30 and is two windows stale by 2026-11-07.
+    const old = dated(10, 10, '2025-11-01T00:00:00Z');
+    const r = resolveFact([old, dated(20, 20, '2026-11-01T00:00:00Z', 'ESTIMATE')], 'price_per_unit', null, NOW);
+    expect(r.status).toBe('OBSERVED');
+    expect(r.stale).not.toBeNull();
+    expect(r.stale!.widenedBy).toBeCloseTo(2 * STALE_WIDENING_PER_WINDOW);
+    expect(r.low).toBeCloseTo(10 * (1 - 2 * STALE_WIDENING_PER_WINDOW));
+    expect(r.high).toBeCloseTo(10 * (1 + 2 * STALE_WIDENING_PER_WINDOW));
+    expect(r.superseded).toHaveLength(1);
+  });
+
+  it('freshness depends on the quantity: payment terms outlive a price, and a declared validity wins', () => {
+    expect(FRESHNESS_CLASSES[FACT_FRESHNESS.price_per_unit].days).toBeLessThan(FRESHNESS_CLASSES[FACT_FRESHNESS.buyer_payment_days].days);
+    expect(FRESHNESS_CLASSES[FACT_FRESHNESS.buyer_payment_days].days).toBeLessThan(FRESHNESS_CLASSES[FACT_FRESHNESS.role_occupants].days);
+    const terms: Fact = { ...dated(30, 30, '2025-11-01T00:00:00Z'), key: 'buyer_payment_days' };
+    expect(resolveFact([terms], 'buyer_payment_days', null, NOW).stale).toBeNull();
+    const declared = dated(10, 10, '2026-10-01T00:00:00Z', 'OBSERVED', '2026-10-15T00:00:00Z');
+    expect(resolveFact([declared], 'price_per_unit', null, NOW).stale?.expiredOn).toBe('2026-10-15T00:00:00Z');
+  });
+
+  it('undated reference figures resolve exactly as before: one reading, ranges joined', () => {
+    const r = resolveFact([fact('price_per_unit', 8, 10), fact('price_per_unit', 9, 12)], 'price_per_unit', null, NOW);
+    expect([r.low, r.high, r.stale]).toEqual([8, 12, null]);
+  });
+});
+
+describe('W-7: positions are paid on a revenue basis, and the asset names are generic', () => {
+  it('constructs resale, subscription, rent, financing and combined positions from rules, keeping old keys stable', () => {
+    const withEquipment = allPositions(true);
+    const bases = new Set(withEquipment.map(revenueOf));
+    expect([...bases].sort()).toEqual(['COMBINED', 'FEE', 'FINANCING', 'RENT', 'RESALE', 'SERVICE', 'SUBSCRIPTION']);
+    // A position on its natural basis keeps the five-axis key it always had.
+    expect(withEquipment.some((p) => positionKey(p) === 'PRIME/NETWORK/CONTRACTOR/SINGLE/NONE')).toBe(true);
+    expect(positionKey({ contract: 'PRIME', supply: 'NETWORK', assets: 'NONE', aggregation: 'SINGLE', information: 'NONE', revenue: 'SERVICE' })).toBe('PRIME/NETWORK/NONE/SINGLE/NONE');
+    // Renting out an owned asset needs an asset to own.
+    expect(allPositions(false).some((p) => revenueOf(p) === 'RENT')).toBe(false);
+    expect(coherentPosition({ contract: 'INTRODUCE', supply: 'NETWORK', assets: 'NONE', aggregation: 'SINGLE', information: 'NONE', revenue: 'RESALE' }, false)).toBe(false);
+    // Nothing here is named after logistics.
+    expect(ASSETS.some((a) => /FLEET|ROUTE|DISPATCH/.test(a))).toBe(false);
+    expect(FLOW_KINDS).toEqual(expect.arrayContaining(['INFORMATION', 'FINANCING', 'OBLIGATION']));
+  });
+
+  it('prices each basis with its own formula, and reads its mechanisms off the position', () => {
+    const ev = equipmentRental();
+    ev.facts.push(
+      fact('purchase_cost_per_unit', 500, 600),
+      fact('inventory_days', 10, 20),
+      fact('subscription_price_per_month', 300, 500, 'contractors'),
+      fact('asset_rent_per_day', 400, 600),
+      fact('asset_utilisation', 0.5, 0.7),
+      fact('financing_margin', 0.03, 0.05, 'contractors'),
+      fact('financing_term_days', 30, 60, 'contractors'),
+      fact('default_rate', 0.005, 0.02, 'contractors'),
+      fact('capital_cost_rate', 0.08, 0.12),
+    );
+    const all = constructBusinesses(ev);
+    const of = (basis: string) => all.find((b) => revenueOf(b.position) === basis)!;
+    for (const [basis, mechanism, key] of [
+      ['RESALE', 'RESALE', 'purchase_cost_per_unit'],
+      ['SUBSCRIPTION', 'SUBSCRIPTION', 'subscription_price_per_month'],
+      ['RENT', 'ASSET_RENTAL', 'asset_rent_per_day'],
+      ['FINANCING', 'FINANCING', 'financing_margin'],
+      ['COMBINED', 'TRANSACTION_COMBINATION', 'financing_margin'],
+    ] as const) {
+      const b = of(basis);
+      expect(b.mechanisms).toContain(mechanism);
+      const e = solveEconomics(b, ev, { accounts: 3, now: NOW });
+      expect(e.unpriced).toEqual([]);
+      expect(e.inputs.map((i) => i.key)).toContain(key);
+      expect(Number.isFinite(e.mid!.contribution)).toBe(true);
+    }
+    // Resale carries its stock as working capital; financing carries the outstanding balance.
+    expect(solveEconomics(of('RESALE'), ev, { accounts: 3, now: NOW }).mid!.workingCapital).toBeGreaterThan(0);
+    const fin = solveEconomics(of('FINANCING'), ev, { accounts: 3, now: NOW });
+    expect(fin.formulas.workingCapital).toMatch(/financing_term_days/);
+    expect(of('FINANCING').accumulates).toContain('RECEIVABLES_BOOK');
+    expect(of('RENT').accumulates).toContain('CAPACITY_EQUITY');
+  });
+
+  it('a role nobody listed is recorded from research and constructed as an evidence role, not dropped', () => {
+    const recorded: Fact = { key: 'role_occupants', segment: 'contractors', low: 1, high: 1, status: 'OBSERVED', source: { title: 'trade survey', url: 'https://example.test/s', kind: 'SECONDARY', claimId: 'rcl_occ' }, measures: 'Acme Equipment Exchange runs a machine-swap club', roleId: 'machine_swap_club', occupant: 'Acme Equipment Exchange', observedAt: '2026-10-01T00:00:00Z' };
+    const base = equipmentRental();
+    base.segments[0]!.acceptsIntermediary = null;
+    const ev = assembleEvidence({ text: 'construction equipment rental', industry: 'construction equipment rental', geography: null, map: { actors: base.actors, segments: base.segments, flows: base.flows, chokepoints: [], adjacencies: [], gates: [], failures: [], provenance: [] }, recorded: [recorded] });
+    expect(ev.provenance.join(' ')).toMatch(/machine_swap_club.*named by no seed/);
+    expect(ev.segments.find((s) => s.actorId === 'contractors')!.acceptsIntermediary).toBe(true);
+    const roles = commercialRoles(ev).flatMap((set) => set.roles);
+    expect(roles.some((r) => r.origin === 'EVIDENCE' && r.label === 'Acme Equipment Exchange')).toBe(true);
+  });
+});
+
+describe('W-13: each flow on the map says who pays and who supplies', () => {
+  const at = '2026-11-01T00:00:00.000Z';
+  const n = (id: string, kind: IndustryNode['kind'], name: string, parentId: string | null, extra: Partial<IndustryNode> = {}): IndustryNode =>
+    ({ id, projectId: 'prj', parentId, kind, name, description: name, origin: 'DISCOVERED', sourceClaimId: `rcl_${id}`, retiredAt: null, retiredReason: null, createdAt: at, updatedAt: at, ...extra }) as IndustryNode;
+
+  it('resolves the declared payer and supplier to the buyer and fulfilment subjects, with a work flow back', () => {
+    const map = evidenceFromMap(
+      [
+        n('root', 'SECTOR', 'veterinary diagnostics', null),
+        n('sub', 'SUB_INDUSTRY', 'reference laboratories', 'root'),
+        n('clinics', 'BUYER_TYPE', 'Independent veterinary clinics', 'root'),
+        n('labs', 'FULFILMENT_SOURCE', 'Regional reference labs', 'root'),
+        n('tx', 'TRANSACTION_TYPE', 'per-test send-out fee', 'sub', { payer: 'independent veterinary clinics', supplier: 'regional reference labs' }),
+      ],
+      [],
+    );
+    const money = map.flows.find((f) => f.kind === 'MONEY')!;
+    expect(money).toMatchObject({ from: 'map_clinics', to: 'map_labs', payer: 'independent veterinary clinics', supplier: 'regional reference labs' });
+    expect(map.flows.find((f) => f.kind === 'WORK')).toMatchObject({ from: 'map_labs', to: 'map_clinics' });
+    const ev = assembleEvidence({ text: 'veterinary diagnostics', industry: 'veterinary diagnostics', geography: null, map, recorded: [] });
+    const set = commercialRoles(ev).find((s) => s.flow.kind === 'MONEY')!;
+    expect(set.segmentId).toBe('map_clinics');
+    expect(set.physicalByOthers).toBe(true);
+  });
+
+  it('a payer the map does not hold yet becomes a buyer of its own; an undeclared transaction keeps the old reading', () => {
+    const map = evidenceFromMap([n('root', 'SECTOR', 'x', null), n('tx', 'TRANSACTION_TYPE', 'deposit', 'root', { payer: 'Pet owners', supplier: null })], []);
+    expect(map.segments.map((s) => s.actorId)).toEqual(['map_tx_payer']);
+    expect(map.flows[0]).toMatchObject({ from: 'map_tx_payer', to: 'operators', payer: 'Pet owners', supplier: null });
+    const legacy = evidenceFromMap([n('root', 'SECTOR', 'x', null), n('tx', 'TRANSACTION_TYPE', 'deposit', 'root')], []);
+    expect(legacy.flows[0]).toMatchObject({ from: 'map_root', to: 'operators' });
+  });
+
+  it('the submission declares them in a checked form', () => {
+    const check = (finding: string, qualifier: string | null, amountCents: number | null, subject = 'price_per_unit') => validateStructural({ where: 'c', finding, subject, qualifier, amountCents });
+    expect(check('TRANSACTION_TYPE', 'clinics -> labs', null, 'send-out fee').ok).toBe(true);
+    expect(check('TRANSACTION_TYPE', 'clinics pay labs', null, 'send-out fee').ok).toBe(false);
+    expect(check('UNIT_ECONOMIC', null, 4500).ok).toBe(true);
+    expect(check('UNIT_ECONOMIC', null, null).ok).toBe(false);
+    expect(check('UNIT_ECONOMIC', null, 4500, 'a price').ok).toBe(false);
+    expect(check('ROLE_TERMS', null, 15, 'broker_take_rate').ok).toBe(false);
+    expect(check('ROLE_TERMS', 'broker_agent @ clinics', 15, 'broker_take_rate').ok).toBe(true);
+    expect(check('ROLE_OCCUPANT', 'machine_swap_club', null, 'Acme').ok).toBe(true);
+    expect(transactionParties('clinics -> ')).toEqual({ payer: 'clinics', supplier: null });
+    expect(roleQualifier('Broker Agent @ Clinics')).toEqual({ roleId: 'broker_agent', buyer: 'Clinics' });
   });
 });

@@ -146,7 +146,8 @@ describe('market preference', () => {
 describe('markets in production: a subject is scored from its own evidence', () => {
   const subject = (id: string, name: string, at: string, retiredAt: string | null = null): IndustryNode =>
     ({ id, projectId: 'prj_x', parentId: null, kind: 'SECTOR', name, description: '', origin: 'SEED', sourceClaimId: null, retiredAt, createdAt: at, updatedAt: at }) as IndustryNode;
-  const evidenceOf = (name: string) => assembleEvidence({ text: name, industry: name, geography: null, map: evidenceFromMap([], []), recorded: [] });
+  // The figures under test come from the reference pack, which applies only where an operator named the industry (W-9).
+  const evidenceOf = (name: string) => assembleEvidence({ text: name, industry: name, geography: null, map: evidenceFromMap([], []), recorded: [], operatorNamed: true });
 
   it('reads each figure at its unfavourable bound, and an unstated figure as unknown', () => {
     const delivery = evidenceOf('Last-mile delivery');
@@ -172,7 +173,13 @@ describe('markets in production: a subject is scored from its own evidence', () 
     expect(marketScore(there)).toBe(marketScore(here));
   });
 
-  it('orders the map by economics and remote control, not by row order, and keeps row order for ties', async () => {
+  /*
+   * W-9: a map root no longer inherits a reference pack, so "Last-mile
+   * delivery" on the map is not priced from Metro Detroit figures; with no
+   * economics on any subject, every score ties and row order holds. Ordering
+   * by economics is held above, on evidence an operator's words brought in.
+   */
+  it('prices no map root from a reference pack, and keeps row order for ties', async () => {
     const rows = [
       subject('ind_a', 'Commercial cleaning', '2026-11-01T00:00:00.000Z'),
       subject('ind_b', 'Dog grooming', '2026-11-02T00:00:00.000Z'),
@@ -180,8 +187,8 @@ describe('markets in production: a subject is scored from its own evidence', () 
       subject('ind_r', 'Retired courier work', '2026-11-04T00:00:00.000Z', '2026-11-05T00:00:00.000Z'),
     ];
     const ranked = await rankSubjectMarkets(rows, []);
-    expect(ranked.map((one) => one.node.id)).toEqual(['ind_c', 'ind_a', 'ind_b']);
-    expect(marketScore(ranked[0]!.market)).toBeGreaterThan(0);
+    expect(ranked.map((one) => one.node.id)).toEqual(['ind_a', 'ind_b', 'ind_c']);
+    for (const one of ranked) expect(marketScore(one.market)).toBe(0);
   });
 
   it('takes no owner location at all', () => {

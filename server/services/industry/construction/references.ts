@@ -90,7 +90,7 @@ export function lastMileDelivery(): IndustryEvidence {
       {
         actorId: 'regional_carriers',
         buys: 'WORK',
-        requires: ['INSURANCE_COVER', 'FLEET'],
+        requires: ['INSURANCE_COVER', 'CAPACITY'],
         acceptsIntermediary: false,
         channel: 'carrier contractor-onboarding desks and station managers',
         firstTransaction: 'one dedicated cargo-van route for a regional carrier station, paid per stop',
@@ -127,14 +127,14 @@ export function lastMileDelivery(): IndustryEvidence {
     ],
     chokepoints: [
       { id: 'shipper_contracts', name: 'the shipper contract and its end customer', why: 'whoever holds the merchant’s contract sets the price and chooses who carries it; carriers below are paid per stop', controlledBy: ['CUSTOMER_CONTRACTS', 'DELIVERY_RECORD'], status: 'ESTIMATE', source: S.ontrac },
-      { id: 'program_routes', name: 'route allocation inside national carrier partner programs', why: 'programs allocate dense, recurring route volume to a few selected operators', controlledBy: ['PROGRAM_SELECTION', 'FLEET', 'OPERATING_CAPABILITY'], status: 'ESTIMATE', source: S.geekwire },
+      { id: 'program_routes', name: 'route allocation inside national carrier partner programs', why: 'programs allocate dense, recurring route volume to a few selected operators', controlledBy: ['PROGRAM_SELECTION', 'CAPACITY', 'OPERATING_CAPABILITY'], status: 'ESTIMATE', source: S.geekwire },
       { id: 'driver_supply', name: 'reliable driver and owner-operator supply', why: 'every operator’s growth is limited by hiring and keeping drivers', controlledBy: ['SUPPLY_NETWORK', 'LABOR_PIPELINE'], status: 'ASSUMPTION', source: A },
-      { id: 'zone_density', name: 'stop density in a delivery zone', why: 'cost per stop falls as stops per route rise, so the densest operator in a zone undercuts the rest', controlledBy: ['ROUTE_DENSITY', 'DISPATCH_DATA'], status: 'ESTIMATE', source: S.costPerStop },
+      { id: 'zone_density', name: 'stop density in a delivery zone', why: 'cost per stop falls as stops per route rise, so the densest operator in a zone undercuts the rest', controlledBy: ['DENSITY', 'DATA'], status: 'ESTIMATE', source: S.costPerStop },
     ],
     scale: [
-      { id: 'density', kind: 'DENSITY', rewards: 'ROUTE_DENSITY', statement: 'cost per stop falls with stops per route; pooling several merchants on one van raises stops per van-day', status: 'ESTIMATE', source: S.costPerStop },
+      { id: 'density', kind: 'DENSITY', rewards: 'DENSITY', statement: 'cost per stop falls with stops per route; pooling several merchants on one van raises stops per van-day', status: 'ESTIMATE', source: S.costPerStop },
       { id: 'scope', kind: 'SCOPE', rewards: 'CUSTOMER_CONTRACTS', statement: 'the same van and driver can carry parcels, pharmacy and auto-parts work for different buyers', status: 'ASSUMPTION', source: A },
-      { id: 'scale', kind: 'SCALE', rewards: 'FLEET', statement: 'insurance, dispatch and management overhead spread across more vans', status: 'ASSUMPTION', source: A },
+      { id: 'scale', kind: 'SCALE', rewards: 'CAPACITY', statement: 'insurance, dispatch and management overhead spread across more vans', status: 'ASSUMPTION', source: A },
     ],
     failures: [
       { id: 'accident', statement: 'a van accident or cargo claim costs the deductible and can raise every premium', applies: { supply: ['EMPLOY'] }, costLow: 1_000, costHigh: 2_500, status: 'ASSUMPTION', source: A },
@@ -145,9 +145,9 @@ export function lastMileDelivery(): IndustryEvidence {
     ],
     adjacencies: [
       { id: 'medical', name: 'medical and pharmacy courier', via: ['DELIVERY_RECORD', 'INSURANCE_COVER'], statement: 'higher-value scheduled runs for buyers who require a clean record', status: 'ASSUMPTION', source: A },
-      { id: 'auto_parts', name: 'automotive parts hot-shot runs for Detroit suppliers and dealers', via: ['CUSTOMER_CONTRACTS', 'FLEET'], statement: 'time-critical B2B runs in the region’s auto supply chain', status: 'ASSUMPTION', source: A },
-      { id: 'cross_dock', name: 'cross-dock and micro-fulfilment', via: ['ROUTE_DENSITY', 'CUSTOMER_CONTRACTS'], statement: 'once dense volume runs through one operator, holding it overnight is the next service', status: 'ASSUMPTION', source: A },
-      { id: 'program_routes', name: 'national carrier partner programs (Amazon DSP, FedEx Ground ISP)', via: ['OPERATING_CAPABILITY', 'FLEET', 'DELIVERY_RECORD'], statement: 'dense recurring routes for an operator that already runs a fleet', status: 'ESTIMATE', source: S.geekwire },
+      { id: 'auto_parts', name: 'automotive parts hot-shot runs for Detroit suppliers and dealers', via: ['CUSTOMER_CONTRACTS', 'CAPACITY'], statement: 'time-critical B2B runs in the region’s auto supply chain', status: 'ASSUMPTION', source: A },
+      { id: 'cross_dock', name: 'cross-dock and micro-fulfilment', via: ['DENSITY', 'CUSTOMER_CONTRACTS'], statement: 'once dense volume runs through one operator, holding it overnight is the next service', status: 'ASSUMPTION', source: A },
+      { id: 'program_routes', name: 'national carrier partner programs (Amazon DSP, FedEx Ground ISP)', via: ['OPERATING_CAPABILITY', 'CAPACITY', 'DELIVERY_RECORD'], statement: 'dense recurring routes for an operator that already runs a fleet', status: 'ESTIMATE', source: S.geekwire },
     ],
     competition: [
       { id: 'nationals', statement: 'national carriers and Amazon Logistics hold most parcel volume; app-based courier platforms compete for on-demand local work', status: 'ASSUMPTION', source: A },

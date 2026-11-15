@@ -19,6 +19,7 @@ import { withActivity } from '../../db/infra.ts';
 import { countIntegrationUsage, latestIntegrationEvent, recordIntegrationEvent } from '../../repos/integrationEvents.ts';
 import { defaultAgents, defaultDeps, runNeighborCard } from '../cash/neighborCard.ts';
 import { personalDesk, runSalesDesk } from '../sales/desk.ts';
+import { inboxesUnsettled, syncInboxes } from '../inboxes/procure.ts';
 import { runDueBrowserCapabilities } from '../sources/browser/schedule.ts';
 import { checkAndRecord } from './health.ts';
 import { signingKey } from './keys.ts';
@@ -45,6 +46,9 @@ export const WARMUP_MS = 20 * 60_000;
 
 const PASS_STATE = 'NEIGHBOR_CARD_PASS';
 const DESK_STATE = 'SALES_DESK_PASS';
+const INBOX_STATE = 'INBOX_SYNC_PASS';
+/** Bought inboxes (§110): an unknown order is reconciled and new mailboxes get warmup, hourly while any is unsettled. */
+export const INBOX_SYNC_PERIOD_MS = 60 * 60_000;
 
 async function due(integrationId: string, kind: 'CHECK' | 'USAGE', state: string | null, periodMs: number, now: number): Promise<boolean> {
   const last = await latestIntegrationEvent(integrationId, kind, state);
@@ -93,6 +97,15 @@ export async function integrationsTick(now = Date.now(), env: NodeJS.ProcessEnv 
     deps.log = () => undefined;
     await runSalesDesk(deps);
     done.push('sales-desk');
+  }
+  if ((env.INSTANTLY_API_KEY ?? '').trim() && (await inboxesUnsettled()) && (await due('instantly', 'USAGE', INBOX_STATE, INBOX_SYNC_PERIOD_MS, now))) {
+    await recordIntegrationEvent({ integrationId: 'instantly', kind: 'USAGE', state: INBOX_STATE, detail: 'inbox procurement sync started', source: 'brain tick' });
+    const result = await syncInboxes({ env });
+    await recordIntegrationEvent({
+      integrationId: 'instantly', kind: 'USAGE', state: 'INBOX_SYNC_RESULT', source: 'brain tick',
+      detail: `reconciled ${result.reconciled.length}, warmup on ${result.warmupEnabled.length} domain(s), waiting ${result.waiting.length}`,
+    });
+    done.push('inbox-sync');
   }
   // Approved, input-free browser reads whose last result went stale. Each run is
   // its own BROWSER_WORKFLOW_RUN row; freshness, backoff and the request budget

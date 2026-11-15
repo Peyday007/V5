@@ -214,6 +214,13 @@ function mapClaim(row: ResearchClaimRow): ResearchClaim {
       ? row.monetization_method
       : null,
     closesOn: row.closes_on ?? null,
+    measurementMethod: row.measurement_method ?? null,
+    sampleSize: row.sample_size === null || row.sample_size === undefined ? null : Number(row.sample_size),
+    limitations: row.limitations ?? null,
+    validUntil: row.valid_until ?? null,
+    invalidatedBy: row.invalidated_by ?? null,
+    invalidationMetAt: row.invalidation_met_at ?? null,
+    invalidationNote: row.invalidation_note ?? null,
     structuralFinding: isStructuralFinding(row.structural_finding)
       ? row.structural_finding
       : null,
@@ -975,6 +982,12 @@ export interface InsertClaimInput {
   /** How the claim says money would be made from that opening, or null. */
   monetizationMethod?: MonetizationMethod | null;
   closesOn?: string | null;
+  /** How the figure was measured, its sample, its limits, its window and what would void it (W-11). */
+  measurementMethod?: string | null;
+  sampleSize?: number | null;
+  limitations?: string | null;
+  validUntil?: string | null;
+  invalidatedBy?: string | null;
   /** The structural fact about an industry it establishes, or null. */
   structuralFinding?: StructuralFinding | null;
   /** What the finding is about: a name, or a value from that kind's own set. */
@@ -1079,10 +1092,12 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
            contradiction_note, validation_state, validation_detail, sourced, derived, derived_from,
            accepted, rejection_reason, scope_match, claim_type, source_group, primary_source,
            geography, timeframe, population, definition, requirement_ids, job_id,
-           content_hash, retrieval_state, created_at)
+           content_hash, retrieval_state, created_at,
+           measurement_method, sample_size, limitations, valid_until, invalidated_by)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                 ?, ?, ?, ?, ?)`,
         [id, input.orchestrationId, input.fragmentId, input.passId, input.passKey, input.claim,
           input.sourceUrl, input.sourceTitle, input.sourcePublisher, input.sourceDate,
           input.evidenceExcerpt, input.evidenceLocator, input.evidenceLane,
@@ -1115,7 +1130,9 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
           input.claimType ?? 'SOURCED_FACT', input.sourceGroup ?? null,
           fromBool(input.primarySource ?? false), input.geography ?? null, input.timeframe ?? null,
           input.population ?? null, input.definition ?? null, toJson(input.requirementIds ?? []),
-          input.jobId ?? null, input.contentHash, input.retrievalState ?? 'RETRIEVED', ts],
+          input.jobId ?? null, input.contentHash, input.retrievalState ?? 'RETRIEVED', ts,
+          input.measurementMethod ?? null, input.sampleSize ?? null, input.limitations ?? null,
+          input.validUntil ?? null, input.invalidatedBy ?? null],
       );
     }
   });
@@ -1154,6 +1171,28 @@ export async function sourceUrlsForProject(projectId: string): Promise<Map<strin
   return new Map(rows.map((row) => [row.id, row.source_url]));
 }
 
+/**
+ * Gated UNIT_ECONOMIC claims of a project with a declared figure that no
+ * construction fact names yet, by id after `afterId`, at most `limit` (F3
+ * back-fill). Any orchestration, not only a kernel round's: what research
+ * already established is filed, never re-asked.
+ */
+export async function unfiledUnitEconomicClaims(projectId: string, afterId: string, limit: number): Promise<ResearchClaim[]> {
+  const rows = await getDb().all<ResearchClaimRow>(
+    `SELECT c.* FROM research_claims c
+       JOIN research_orchestrations o ON o.id = c.orchestration_id
+      WHERE o.project_id = ? AND c.accepted = 1
+        AND c.structural_finding = 'UNIT_ECONOMIC'
+        AND c.structural_amount_cents IS NOT NULL
+        AND c.id > ?
+        AND NOT EXISTS (SELECT 1 FROM construction_facts f WHERE f.source_claim_id = c.id)
+      ORDER BY c.id
+      LIMIT ?`,
+    [projectId, afterId, Math.max(1, Math.trunc(limit))],
+  );
+  return rows.map(mapClaim);
+}
+
 export async function getClaim(id: string): Promise<ResearchClaim | null> {
   const row = await getDb().get<ResearchClaimRow>('SELECT * FROM research_claims WHERE id = ?', [id]);
   return row ? mapClaim(row) : null;
@@ -1165,18 +1204,67 @@ export async function getClaim(id: string): Promise<ResearchClaim | null> {
  * two observations share data (§79), so it reads them in a batch rather than
  * one claim at a time.
  */
-export async function claimSources(ids: string[]): Promise<Map<string, { sourceUrl: string | null; sourcePublisher: string | null; sourceDate: string | null }>> {
-  const out = new Map<string, { sourceUrl: string | null; sourcePublisher: string | null; sourceDate: string | null }>();
+/** What the quant layer reads about a claim's source and how long it holds (W-11/W-12). */
+export interface ClaimSource {
+  sourceUrl: string | null;
+  sourcePublisher: string | null;
+  sourceDate: string | null;
+  measurementMethod?: string | null;
+  sampleSize?: number | null;
+  validUntil?: string | null;
+  invalidatedBy?: string | null;
+  invalidationMetAt?: string | null;
+  invalidationNote?: string | null;
+}
+
+export async function claimSources(ids: string[]): Promise<Map<string, ClaimSource>> {
+  const out = new Map<string, ClaimSource>();
   const unique = [...new Set(ids)];
   for (let i = 0; i < unique.length; i += 200) {
     const batch = unique.slice(i, i + 200);
-    const rows = await getDb().all<{ id: string; source_url: string | null; source_publisher: string | null; source_date: string | null }>(
-      `SELECT id, source_url, source_publisher, source_date FROM research_claims WHERE id IN (${batch.map(() => '?').join(', ')})`,
+    const rows = await getDb().all<{
+      id: string; source_url: string | null; source_publisher: string | null; source_date: string | null;
+      measurement_method: string | null; sample_size: number | null; valid_until: string | null;
+      invalidated_by: string | null; invalidation_met_at: string | null; invalidation_note: string | null;
+    }>(
+      `SELECT id, source_url, source_publisher, source_date, measurement_method, sample_size, valid_until,
+              invalidated_by, invalidation_met_at, invalidation_note
+         FROM research_claims WHERE id IN (${batch.map(() => '?').join(', ')})`,
       batch,
     );
-    for (const row of rows) out.set(row.id, { sourceUrl: row.source_url, sourcePublisher: row.source_publisher, sourceDate: row.source_date });
+    for (const row of rows) {
+      out.set(row.id, {
+        sourceUrl: row.source_url,
+        sourcePublisher: row.source_publisher,
+        sourceDate: row.source_date,
+        measurementMethod: row.measurement_method,
+        sampleSize: row.sample_size === null ? null : Number(row.sample_size),
+        validUntil: row.valid_until,
+        invalidatedBy: row.invalidated_by,
+        invalidationMetAt: row.invalidation_met_at,
+        invalidationNote: row.invalidation_note,
+      });
+    }
   }
   return out;
+}
+
+/**
+ * Record that a claim's declared `invalidated_by` condition has been met (W-12).
+ *
+ * Only the two invalidation columns move. The claim, its figure and its source
+ * stay exactly as first recorded — historical evidence is retained with its
+ * time context and never deleted; the pooler excludes it with this reason.
+ * Refused (null) for a claim that declared no condition, because "met" has
+ * nothing to be about there.
+ */
+export async function recordClaimInvalidationMet(id: string, note: string, at: string = nowIso()): Promise<ResearchClaim | null> {
+  const result = await getDb().run(
+    'UPDATE research_claims SET invalidation_met_at = ?, invalidation_note = ? WHERE id = ? AND invalidated_by IS NOT NULL',
+    [at, note, id],
+  );
+  if (result.changes === 0) return null;
+  return getClaim(id);
 }
 
 export async function listClaimsForFragment(fragmentId: string): Promise<ResearchClaim[]> {

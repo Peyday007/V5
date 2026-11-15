@@ -39,6 +39,8 @@ function mapNode(row: IndustryNodeRow): IndustryNode {
     retiredReason: row.retired_reason,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    payer: row.payer ?? null,
+    supplier: row.supplier ?? null,
   };
 }
 
@@ -64,6 +66,9 @@ export async function createNode(input: {
   description?: string | null;
   origin: IndustryNodeOrigin;
   sourceClaimId?: string | null;
+  /** For a TRANSACTION_TYPE: who pays and who supplies, as the finding declared them (W-13). */
+  payer?: string | null;
+  supplier?: string | null;
 }): Promise<{ node: IndustryNode; created: boolean }> {
   const name = input.name.replace(/\s+/g, ' ').trim();
   if (!name) throw new Error('An industry node must have a name.');
@@ -75,8 +80,8 @@ export async function createNode(input: {
   await getDb().run(
     `INSERT INTO industry_nodes
        (id, project_id, parent_id, kind, name, description, origin, source_claim_id,
-        retired_at, retired_reason, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
+        retired_at, retired_reason, created_at, updated_at, payer, supplier)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?)
      ON CONFLICT DO NOTHING`,
     [
       id,
@@ -89,6 +94,8 @@ export async function createNode(input: {
       input.sourceClaimId ?? null,
       at,
       at,
+      input.payer ?? null,
+      input.supplier ?? null,
     ],
   );
   const rows = input.parentId
@@ -112,6 +119,15 @@ export async function listNodes(projectId: string): Promise<IndustryNode[]> {
     [projectId],
   );
   return rows.map(mapNode);
+}
+
+/** How many live subjects the map holds: one indexed read, for the tick's early exit. */
+export async function countLiveNodes(projectId: string): Promise<number> {
+  const row = await getDb().get<{ n: number | string }>(
+    'SELECT COUNT(*) AS n FROM industry_nodes WHERE project_id = ? AND retired_at IS NULL',
+    [projectId],
+  );
+  return Number(row?.n ?? 0);
 }
 
 export async function getNode(id: string): Promise<IndustryNode | null> {
@@ -165,7 +181,8 @@ function mapRound(row: IndustryRoundRow): IndustryRound {
 
 export async function openIndustryRound(input: {
   projectId: string;
-  cashModeId: string;
+  /** Null when the standing research grant, not a sprint, asked it. */
+  cashModeId: string | null;
   nodeId: string | null;
   purpose: IndustryRoundPurpose;
   bucketId?: string | null;
@@ -224,6 +241,21 @@ export async function listIndustryRounds(projectId: string): Promise<IndustryRou
       WHERE project_id = ?
       ORDER BY opened_at DESC, id DESC`,
     [projectId],
+  );
+  return rows.map(mapRound);
+}
+
+/**
+ * Kernel rounds of a project that ended ABANDONED at or after `since` — the rounds that asked and
+ * brought back no report (Hermes' unreported-rounds reading, F8). Newest first, bounded.
+ */
+export async function abandonedIndustryRoundsSince(projectId: string, since: string, limit = 200): Promise<IndustryRound[]> {
+  const rows = await getDb().all<IndustryRoundRow>(
+    `SELECT * FROM industry_rounds
+      WHERE project_id = ? AND state = 'ABANDONED' AND COALESCE(harvested_at, updated_at) >= ?
+      ORDER BY COALESCE(harvested_at, updated_at) DESC, id DESC
+      LIMIT ?`,
+    [projectId, since, Math.max(1, Math.trunc(limit))],
   );
   return rows.map(mapRound);
 }

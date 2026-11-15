@@ -330,11 +330,15 @@ const commissionTool: McpTool = {
     'established, owner files are named and it recurred; otherwise a model, strategy, evidence, capacity, person or ' +
     'watch — and acknowledges at once. Engineering goes to Factory now: an objective with the goal, evidence, expected ' +
     'benefit, acceptance, priority and evaluation, a campaign, a priority set from what the defect holds back, and a ' +
-    'worker class set from its complexity. The same defect again reaches the same campaign.',
+    'worker class set from its complexity. The same defect again reaches the same campaign. ' +
+    'Standalone research: pass research_question (intervention EVIDENCE, or omitted) with goal_id to ask that goal\'s ' +
+    'own search the question — allowed on a paused goal, research only, never outreach or spend — or without goal_id ' +
+    'for a method question about Brain, which opens method research. A paused goal refuses CAPACITY.',
   inputSchema: {
     type: 'object',
     properties: {
-      deficiency_id: { type: 'string', description: 'A dfx_… id from brain_operator_deficiencies; the rest may then be omitted.' },
+      deficiency_id: { type: 'string', description: 'A dfx_… id from brain_operator_deficiencies (dfx_inv_<id> for an inventory finding); the rest may then be omitted.' },
+      research_question: { type: 'string', description: 'Standalone research (intervention EVIDENCE): what to learn. With goal_id the goal\'s search is asked it (a paused goal too: research only); without, a method question about Brain. The diagnosis fields may then be omitted.' },
       decision_id: DECISION_ID_PROPERTY,
       goal_id: { type: 'string', description: 'The goal it holds back (wst_…).' },
       deficiency: { type: 'string', enum: ['ECONOMIC_REASONING', 'PLANNING_ASSUMPTION', 'REPEATED_STRATEGIC_MISTAKE', 'RESOURCE_ALLOCATION', 'MISSING_CAPABILITY', 'BROKEN_INTEGRATION', 'INEFFICIENT_ALGORITHM', 'RECURRING_OPERATIONAL_FAILURE'] },
@@ -358,7 +362,7 @@ const commissionTool: McpTool = {
   },
   annotations: { title: 'Operator: commission an intervention', ...MUTATING },
   run: async (args, { principal }) => {
-    requireOperator(principal);
+    const projects = requireOperator(principal);
     const gate = await decisionGate(args);
     if (!gate.ok) return { projectId: null, value: gate };
     const director = await import('../services/operator/director.ts');
@@ -367,7 +371,23 @@ const commissionTool: McpTool = {
     if (id) {
       const found = (await director.readDeficiencies()).find((one) => director.readingId(one) === id);
       if (!found) return { projectId: null, value: { ok: false, reason: `no current deficiency ${id}: read brain_operator_deficiencies again (it may already be fixed)` } };
-      return { projectId: null, value: { ...(await director.commission({ ...found.diagnosis, runId })), decisionId: gate.decisionId, next: AFTER_ACTING } };
+      return { projectId: null, value: { ...(await director.commissionReading(found, runId)), decisionId: gate.decisionId, next: AFTER_ACTING } };
+    }
+    const question = optionalString(args, 'research_question');
+    if (question !== null) {
+      const proposed = optionalString(args, 'intervention');
+      if (proposed !== null && proposed !== 'EVIDENCE') {
+        return { projectId: null, value: { ok: false, reason: `research_question is research (intervention EVIDENCE) only, not ${proposed}` } };
+      }
+      const goalId = optionalString(args, 'goal_id');
+      if (goalId) {
+        // The goal must be in a project this credential directs; absent and forbidden refuse alike.
+        const { getWorkstream } = await import('../repos/register.ts');
+        const goal = await getWorkstream(goalId);
+        if (!goal || !goal.projectId || !projects.includes(goal.projectId)) throw notFoundError();
+      }
+      const result = await director.commissionResearch({ goalId, question, evidence: optionalString(args, 'evidence'), runId });
+      return { projectId: null, value: { ...result, decisionId: gate.decisionId, next: AFTER_ACTING } };
     }
     const result = await director.commission({
       goalId: optionalString(args, 'goal_id'),
@@ -441,6 +461,138 @@ const prioritizeTool: McpTool = {
       projectId: null,
       value: await reprioritize({ candidateId: requiredString(args, 'candidate_id'), priority, reason: requiredString(args, 'reason'), runId: await currentRunId() }),
     };
+  },
+};
+
+const reattemptTool: McpTool = {
+  name: 'brain_operator_reattempt',
+  title: 'Operator: re-attempt failed or stalled engineering',
+  description:
+    'Start the next attempt (at most three in all) of engineering you commissioned that failed (Factory FAILED or ' +
+    'CANCELLED; decided KEPT_NO_EFFECT, REVERTED, REJECTED or HELD; Factory BLOCKED) or stalled (no movement for 24 h). ' +
+    'The open attempt is closed HELD with your reason, and the next goes to Factory now with a different method and the ' +
+    'strongest workers. Refused, with why, while it is building and moving, while a delivered change is being measured, ' +
+    'once it is resolved, and after the third attempt.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      candidate_id: { type: 'string', description: 'The candidateId from brain_operator_engineering (imp_…).' },
+      reason: { type: 'string', description: 'Why it failed or stalled, from what you read (15+ characters).' },
+    },
+    required: ['candidate_id', 'reason'],
+    additionalProperties: false,
+  },
+  annotations: { title: 'Operator: re-attempt engineering', ...MUTATING, idempotentHint: false },
+  run: async (args, { principal }) => {
+    requireOperator(principal);
+    const { reattempt } = await import('../services/operator/director.ts');
+    return {
+      projectId: null,
+      value: { ...(await reattempt({ candidateId: requiredString(args, 'candidate_id'), reason: requiredString(args, 'reason'), runId: await currentRunId() })), next: AFTER_ACTING },
+    };
+  },
+};
+
+const INVENTORY_FIELDS = {
+  capability: { type: 'string', description: 'The capability affected (e.g. "operator mission input").' },
+  symptom: { type: 'string', description: 'What is observed to go wrong, in production terms.' },
+  evidence: { type: 'string', description: 'Row ids, run ids, file:line and verbatim reasons.' },
+  root_cause: { type: 'string' },
+  severity: { type: 'string', enum: ['BLOCKING', 'MAJOR', 'MINOR'] },
+  owner: { type: 'string', description: 'The owner component or files.' },
+  verification_criteria: { type: 'string', description: 'What a verification must show for it to count as fixed.' },
+  result: { type: 'string', description: 'What was done and what came of it.' },
+  linked_candidate_id: { type: 'string', description: 'A register row (imp_…) commissioned for this finding.' },
+} as const;
+
+/**
+ * The findings inventory (Surge B H2-2/H2-7) over §87's register. Listing needs project:read, as
+ * reading goals does; recording or changing a finding needs operator:act. The refusal is the same
+ * not-found shape either way (invariants 23, 30).
+ */
+const inventoryTool: McpTool = {
+  name: 'brain_operator_inventory',
+  title: 'Operator: findings inventory',
+  description:
+    'The mission\'s findings register, keyed SURGE-B:<issue id>. action "list" (optionally status, or id for one ' +
+    'finding with its history); "upsert" records a finding or updates the fields given (a new one needs capability, ' +
+    'symptom, evidence, severity); "set_status" moves one: DISCOVERED, UNDER_INVESTIGATION, ROOT_CAUSE_CONFIRMED, ' +
+    'READY_FOR_REPAIR, REPAIRING, AWAITING_VERIFICATION, VERIFIED_FIXED, KNOWN_LIMITATION, EXTERNAL_CONSTRAINT, ' +
+    'NOT_A_DEFECT. VERIFIED_FIXED is refused without verification {kind: WORKFLOW_RUN | DEPLOY | MEASUREMENT, ref, ' +
+    'detail} — a workflow run id, a deploy run id or merge sha, or a measured outcome with its number — and works for ' +
+    'a fix made outside your own commissions too.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      action: { type: 'string', enum: ['list', 'upsert', 'set_status'] },
+      id: { type: 'string', description: 'The issue id, e.g. H2-1 (the key is SURGE-B:H2-1).' },
+      status: { type: 'string', enum: ['DISCOVERED', 'UNDER_INVESTIGATION', 'ROOT_CAUSE_CONFIRMED', 'READY_FOR_REPAIR', 'REPAIRING', 'AWAITING_VERIFICATION', 'VERIFIED_FIXED', 'KNOWN_LIMITATION', 'EXTERNAL_CONSTRAINT', 'NOT_A_DEFECT'] },
+      note: { type: 'string', description: 'Why the status changed (required to close a finding without a fix).' },
+      verification: {
+        type: 'object',
+        properties: {
+          kind: { type: 'string', enum: ['WORKFLOW_RUN', 'DEPLOY', 'MEASUREMENT'] },
+          ref: { type: 'string' },
+          detail: { type: 'string' },
+        },
+        additionalProperties: false,
+      },
+      ...INVENTORY_FIELDS,
+    },
+    required: ['action'],
+    additionalProperties: false,
+  },
+  annotations: { title: 'Operator: findings inventory', ...MUTATING },
+  run: async (args, { principal }) => {
+    const action = requiredString(args, 'action');
+    const inventory = await import('../services/operator/inventory.ts');
+    if (action === 'list') {
+      await requireReader(principal);
+      const id = optionalString(args, 'id');
+      if (id) {
+        const item = await inventory.getInventoryItem(id);
+        if (!item) return { projectId: null, value: { ok: false, reason: `no inventory finding ${id}` } };
+        return { projectId: null, value: { ok: true, item, history: await inventory.inventoryHistory(id) } };
+      }
+      const items = await inventory.listInventory({ status: optionalString(args, 'status') ?? undefined });
+      return { projectId: null, value: { ok: true, total: items.length, items: items.slice(0, 80) } };
+    }
+    requireOperator(principal);
+    const runId = await currentRunId();
+    const ctx = { runId, actor: `operator:${runId ?? 'run'}` };
+    const raw = args['verification'];
+    if (raw !== undefined && (raw === null || typeof raw !== 'object')) throw invalidInput('verification must be an object {kind, ref, detail}.');
+    const verification = raw as { kind?: string; ref?: string; detail?: string } | undefined;
+    const typed = verification ? { kind: verification.kind as 'WORKFLOW_RUN' | 'DEPLOY' | 'MEASUREMENT' | undefined, ref: verification.ref, detail: verification.detail } : null;
+    if (action === 'upsert') {
+      const result = await inventory.upsertInventory(
+        {
+          id: requiredString(args, 'id'),
+          capability: optionalString(args, 'capability'),
+          symptom: optionalString(args, 'symptom'),
+          evidence: optionalString(args, 'evidence'),
+          rootCause: optionalString(args, 'root_cause'),
+          severity: optionalString(args, 'severity'),
+          owner: optionalString(args, 'owner'),
+          verificationCriteria: optionalString(args, 'verification_criteria'),
+          result: optionalString(args, 'result'),
+          status: optionalString(args, 'status'),
+          note: optionalString(args, 'note'),
+          verification: typed,
+          linkedCandidateId: optionalString(args, 'linked_candidate_id'),
+        },
+        ctx,
+      );
+      return { projectId: null, value: result };
+    }
+    if (action === 'set_status') {
+      const result = await inventory.setInventoryStatus(
+        { id: requiredString(args, 'id'), status: requiredString(args, 'status'), note: optionalString(args, 'note'), result: optionalString(args, 'result'), verification: typed },
+        ctx,
+      );
+      return { projectId: null, value: result };
+    }
+    throw invalidInput('action must be list, upsert or set_status.');
   },
 };
 
@@ -771,4 +923,6 @@ export const OPERATOR_TOOLS: readonly McpTool[] = [
   commissionTool,
   engineeringTool,
   prioritizeTool,
+  inventoryTool,
+  reattemptTool,
 ];

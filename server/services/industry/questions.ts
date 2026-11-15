@@ -37,6 +37,31 @@ import { sprintGoalLine } from '../../domain/operatingModel.ts';
 import { SEARCH_BUCKETS, type SearchBucket } from '../cash/discovery.ts';
 import type { CashOpportunity } from '../../domain/types.ts';
 
+/**
+ * The context line a kernel question carries when no sprint asked it.
+ *
+ * W-1 (docs/INTELLIGENCE-RECOVERY-2026-11-14.md): every question used to say
+ * "this is for a short cash sprint", so a map grown under the standing research
+ * grant was still biased toward thirty-day cash. Understanding the economy is
+ * not executing in it (§39), so this line names no operating constraint, no
+ * industry and no geography: the subject and the classification systems decide
+ * those, never a default here.
+ */
+export const STANDING_CONTEXT_LINE =
+  "This is for Brain's standing map of the economy, asked with no cash sprint or goal behind " +
+  'it: report what is true of the subject in every country and region where it differs, ' +
+  'including what does not pay quickly, and say plainly what no source establishes.';
+
+/**
+ * The context a question carries: the sprint's goal while a sprint asked it,
+ * the neutral standing line when the standing research grant did.
+ */
+export function contextLine(objective: string | null | undefined, lead?: string): string {
+  const goal = (objective ?? '').trim();
+  if (!goal) return STANDING_CONTEXT_LINE;
+  return lead === undefined ? sprintGoalLine(goal) : sprintGoalLine(goal, lead);
+}
+
 export const BOOTSTRAP_TITLE = 'Which industries the economy is actually divided into';
 
 export const BOOTSTRAP_QUESTION =
@@ -46,10 +71,10 @@ export const BOOTSTRAP_QUESTION =
   'declares it, and reporting where two systems divide the same activity differently rather ' +
   'than reconciling them?';
 
-export function bootstrapQuestion(objective: string, round: number): string {
+export function bootstrapQuestion(objective: string | null, round: number): string {
   const parts = [
     BOOTSTRAP_QUESTION,
-    sprintGoalLine(objective, 'This is the starting map for'),
+    contextLine(objective, 'This is the starting map for'),
     'Declare every sector you establish with structural_finding set to SUB_INDUSTRY and ' +
       "structural_subject set to that sector's own name. A sector described in prose and not " +
       'declared does not reach the map.',
@@ -70,9 +95,15 @@ export function mapTitle(path: readonly string[]): string {
 
 export function mapQuestion(input: {
   path: readonly string[];
-  objective: string;
+  objective: string | null;
   round: number;
   childrenSoFar: number;
+  /**
+   * The buyer types under this subject no observed unit economic prices yet
+   * (F3): named, the question asks what they pay; empty, it asks for whichever
+   * buyers research finds; absent, every buyer here is priced and it asks nothing.
+   */
+  unpricedBuyers?: readonly string[] | null;
 }): string {
   const subject = input.path.join(' → ');
   const parts = [
@@ -80,10 +111,11 @@ export function mapQuestion(input: {
       'what are the stages of producing and delivering in it, which kinds of organisation pay ' +
       'for work in it, who or what actually performs that work, how does money change hands ' +
       'and on what cycle, and where is supply constrained?',
-    sprintGoalLine(input.objective),
+    contextLine(input.objective),
     'Declare every level you establish on its claim: structural_finding set to the kind it is ' +
       "and structural_subject set to that subject's own name.",
   ];
+  if (input.unpricedBuyers) parts.push(unitEconomicsAsk(input.unpricedBuyers));
   if (input.round > 1 || input.childrenSoFar > 0) {
     parts.push(
       `Brain already holds ${input.childrenSoFar} subject` +
@@ -92,6 +124,27 @@ export function mapQuestion(input: {
     );
   }
   return parts.join(' ');
+}
+
+/**
+ * The unit-economics request a question carries where a subject's buyers are
+ * unpriced (F3, 2026-11-15). The vocabulary lived only in the tool
+ * description, so no kernel question ever asked for it and no construction
+ * fact was filed on production. It names the fact keys a construction prices
+ * from, asks for the figure as a declared field, and says an unpublished
+ * figure is reported as unknown — never estimated.
+ */
+export function unitEconomicsAsk(buyers: readonly string[]): string {
+  const named = buyers.slice(0, 6).map((one) => `"${clip(one, 60)}"`);
+  const who = named.length > 0 ? `each of ${named.join(', ')}` : 'each kind of organisation you find paying here';
+  return (
+    `Brain holds no observed price for ${who}. Where a source publishes what such a buyer pays per unit ` +
+    'of work, what an independent operator accepts per unit, or how many units one account buys a month, ' +
+    'declare it on its claim: structural_finding UNIT_ECONOMIC, structural_subject the fact key ' +
+    '(price_per_unit, contractor_rate_per_unit or account_units_per_month), structural_qualifier the ' +
+    "buyer type's name, and structural_amount_cents the figure in hundredths of its unit. Where no " +
+    'source publishes one, say so — an unpublished figure stays unknown, never estimated.'
+  );
 }
 
 export function scanTitle(bucket: SearchBucket, path: readonly string[]): string {
@@ -111,14 +164,14 @@ export function scanTitle(bucket: SearchBucket, path: readonly string[]): string
 export function scanQuestion(input: {
   bucket: SearchBucket;
   path: readonly string[];
-  objective: string;
+  objective: string | null;
   round: number;
   foundSoFar: number;
 }): string {
   const subject = input.path.join(' → ');
   const parts = [
     `Within ${subject}: ${input.bucket.question}`,
-    sprintGoalLine(input.objective),
+    contextLine(input.objective),
   ];
   if (input.round > 1) {
     parts.push(
@@ -148,7 +201,7 @@ export function capitalTitle(opportunity: CashOpportunity): string {
 export function capitalQuestion(input: {
   opportunity: CashOpportunity;
   path: readonly string[];
-  objective: string;
+  objective: string | null;
 }): string {
   const where = input.path.length > 0 ? input.path.join(' → ') : (input.opportunity.industry ?? '');
   const parts = [
@@ -161,13 +214,45 @@ export function capitalQuestion(input: {
   }
   if (where) parts.push(`It sits in ${where}.`);
   parts.push(
-    sprintGoalLine(input.objective),
+    contextLine(input.objective),
     'Take the requirements apart rather than reporting a headline startup cost. Declare each ' +
       'requirement with structural_finding set to CAPITAL_REQUIREMENT and each structure with ' +
       'CAPITAL_RESTRUCTURING naming the requirement it answers. Where no source publishes an ' +
       'amount, say so — an unknown amount is recorded as unknown, never as a small one.',
   );
   return parts.join(' ');
+}
+
+export function transferTitle(precedent: CashOpportunity, path: readonly string[]): string {
+  return `Would ${clip(path[path.length - 1] ?? 'these buyers', 60)} pay the way "${clip(precedent.title, 60)}" does`;
+}
+
+/**
+ * The §82 transfer, as a question (W-8): a design a held opening shows working,
+ * carried to a different buyer population on the map.
+ *
+ * It is a hypothesis Brain constructed, never a fact, and the question says so:
+ * the precedent establishes the design for its own buyers only, and every
+ * material difference between them and these is named as something research
+ * must bridge with a source or report as unbridged.
+ */
+export function transferQuestion(input: {
+  precedent: CashOpportunity;
+  design: string;
+  position: string;
+  differences: readonly string[];
+  path: readonly string[];
+  objective: string | null;
+}): string {
+  const payer = input.precedent.payer ? `"${clip(input.precedent.payer, 80)}"` : 'its buyers';
+  return [
+    `Brain holds a published precedent: "${clip(input.precedent.title, 200)}", where ${payer} pay for an arrangement designed as: ${clip(input.design, 300)} (as a commercial position: ${input.position}).`,
+    `It is a hypothesis, not an established fact, that the same design works for a different buyer population: ${input.path.join(' → ')}.`,
+    'Establish whether these buyers actually pay for something arranged this way, who would supply it, and on what terms.',
+    `The precedent establishes nothing about these buyers on these material differences, each of which must be bridged: ${input.differences.join(', ')} — for each, report a source on how these buyers differ from the precedent's, or say plainly that none was found.`,
+    contextLine(input.objective),
+    'Where no source shows these buyers pay for it, say so plainly — that refutes the transfer and is a useful answer.',
+  ].join(' ');
 }
 
 /** The bucket a scan round names, or null where the round names none. */

@@ -36,7 +36,7 @@ import { recordCardFact } from '../server/repos/cashCardFacts.ts';
 import { CAPTURE_KEY } from '../server/services/cash/tier.ts';
 import { createNode } from '../server/repos/industry.ts';
 import { constructArrangements } from '../server/services/cash/construct.ts';
-import { pickEstimatedArrangements } from '../server/services/cash/goalScenario.ts';
+import { DESIGNS_PER_POPULATION, pickEstimatedArrangements } from '../server/services/cash/goalScenario.ts';
 import { noFragmentClearedDetail } from '../server/services/research/packetRunner.ts';
 import { RECOMMENDATION_POLICY, readGoalPlan, validationStage } from '../server/services/goals/plan.ts';
 import { observationExpiry, openingTitle, sellersOwnPage } from '../server/domain/opportunitySignals.ts';
@@ -250,8 +250,15 @@ describe('O-3: one buyer population is one market', () => {
 
     const estimated = buyer.map((one) => ({ ...one, value: { tier: 'COMPARABLE', p10: 100, p50: 500, p90: 900, observations: 2 }, stress: { ...one.stress, exposure: 'SAFE' as const } }));
     const picked = pickEstimatedArrangements(estimated as never, { projectId, currency: 'USD', beforeProofCents: null, remaining: 10_000, exclusions: [] });
-    // The repro picked every design over this one population; now one stands for it.
-    expect(picked).toHaveLength(1);
+    // The repro picked every design over this one population and summed them. Lens S (S-2): up to
+    // DESIGNS_PER_POPULATION structurally different designs compete on one shared market, so the engine
+    // chooses the design and never counts these buyers twice; the same design for another need is one estimate.
+    expect(picked.length).toBeGreaterThanOrEqual(1);
+    expect(picked.length).toBeLessThanOrEqual(DESIGNS_PER_POPULATION);
+    expect(new Set(picked.map((one) => one.marketKey)).size).toBe(1);
+    const byKey = new Map(estimated.map((one) => [one.key, one]));
+    const designs = picked.map((one) => JSON.stringify(byKey.get(one.estimated!.arrangementKey)!.design));
+    expect(new Set(designs).size).toBe(picked.length);
   });
 });
 

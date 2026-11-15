@@ -15,8 +15,14 @@
  * (invariant 17: new evidence never silently overwrites old).
  */
 import {
+  FACT_FRESHNESS,
+  FACT_KEYS,
   FACT_STATUSES,
+  FRESHNESS_CLASSES,
   MODEL_DIMENSIONS,
+  STALE_WIDENING_CAP,
+  STALE_WIDENING_PER_WINDOW,
+  validUntilFor,
   type Fact,
   type FactKey,
   type FactStatus,
@@ -33,8 +39,12 @@ export interface ResolvedFact {
   status: KnownStatus;
   sources: Fact['source'][];
   measures: string[];
-  /** Weaker facts about the same quantity, kept as history. */
+  /** Weaker facts, and older readings of the same status, kept as history. */
   superseded: Fact[];
+  /** Set when the answering reading is past its validity: when it expired and how far its range was widened. */
+  stale: { expiredOn: string; widenedBy: number } | null;
+  /** The day the answering reading was observed; absent or null when undated. */
+  observedAt?: string | null;
 }
 
 export interface DimensionCoverage {
@@ -57,23 +67,62 @@ export interface IndustryModel {
 
 const RANK: Record<FactStatus, number> = Object.fromEntries(FACT_STATUSES.map((s, i) => [s, i])) as Record<FactStatus, number>;
 
-/** The answer for one quantity, for one segment (falling back to the industry-wide figure). */
-export function resolveFact(facts: readonly Fact[], key: FactKey, segment: string | null = null): ResolvedFact {
+/** When a dated fact stops being current: its own declaration, else its key's freshness class. Null for an undated fact. */
+export function expiryOf(fact: Fact): string | null {
+  if (fact.validUntil) return fact.validUntil;
+  if (!fact.observedAt || !Number.isFinite(Date.parse(fact.observedAt))) return null;
+  return validUntilFor(fact.key, fact.observedAt);
+}
+
+/**
+ * The answer for one quantity, for one segment (falling back to the
+ * industry-wide figure).
+ *
+ * The strongest status answers (W-10), and within it the newest reading:
+ * facts observed on the same day — or all undated, as a reference pack's are —
+ * are one reading and their ranges are joined; an older reading of the same
+ * status is kept as `superseded`, beside every weaker one (invariant 17). A
+ * reading past its `validUntil` still answers — an aged fact is evidence, not
+ * nothing — but its range is widened by `STALE_WIDENING_PER_WINDOW` for every
+ * freshness window elapsed past expiry, and `stale` says so.
+ */
+export function resolveFact(facts: readonly Fact[], key: FactKey, segment: string | null = null, now: Date = new Date()): ResolvedFact {
   const pick = (seg: string | null) => facts.filter((f) => f.key === key && (f.segment ?? null) === seg);
   let pool = segment ? pick(segment) : [];
   if (pool.length === 0) pool = pick(null);
-  if (pool.length === 0) return { key, segment, low: NaN, high: NaN, status: 'UNKNOWN', sources: [], measures: [], superseded: [] };
+  if (pool.length === 0) return { key, segment, low: NaN, high: NaN, status: 'UNKNOWN', sources: [], measures: [], superseded: [], stale: null };
   const best = Math.min(...pool.map((f) => RANK[f.status]));
-  const top = pool.filter((f) => RANK[f.status] === best);
+  const strongest = pool.filter((f) => RANK[f.status] === best);
+  const day = (f: Fact) => (f.observedAt && Number.isFinite(Date.parse(f.observedAt)) ? f.observedAt.slice(0, 10) : '');
+  const newestDay = strongest.map(day).reduce((a, b) => (b > a ? b : a), '');
+  const top = strongest.filter((f) => day(f) === newestDay);
+  let low = Math.min(...top.map((f) => Math.min(f.low, f.high)));
+  let high = Math.max(...top.map((f) => Math.max(f.low, f.high)));
+  let stale: ResolvedFact['stale'] = null;
+  const expiries = top.map(expiryOf).filter((x): x is string => x !== null);
+  if (expiries.length === top.length && expiries.length > 0) {
+    const expiry = expiries.reduce((a, b) => (b > a ? b : a));
+    const pastMs = now.getTime() - Date.parse(expiry);
+    if (pastMs > 0) {
+      const window = FRESHNESS_CLASSES[FACT_FRESHNESS[key]].days * 86_400_000;
+      const widenedBy = Math.min(STALE_WIDENING_CAP, STALE_WIDENING_PER_WINDOW * Math.ceil(pastMs / window));
+      low = Math.max(0, low * (1 - widenedBy));
+      high = high * (1 + widenedBy);
+      if (FACT_KEYS[key].kind === 'RATE') high = Math.min(1, high);
+      stale = { expiredOn: expiry, widenedBy };
+    }
+  }
   return {
     key,
     segment: top[0]!.segment ?? null,
-    low: Math.min(...top.map((f) => Math.min(f.low, f.high))),
-    high: Math.max(...top.map((f) => Math.max(f.low, f.high))),
+    low,
+    high,
     status: top[0]!.status,
     sources: top.map((f) => f.source),
     measures: top.map((f) => f.measures),
-    superseded: pool.filter((f) => RANK[f.status] > best),
+    superseded: pool.filter((f) => !top.includes(f)),
+    stale,
+    observedAt: newestDay || null,
   };
 }
 
@@ -96,7 +145,7 @@ export function buildIndustryModel(evidence: IndustryEvidence): IndustryModel {
   const roles = new Set(e.actors.map((a) => a.role));
   const coverage: DimensionCoverage[] = [
     cover('PARTICIPANTS', e.actors, 4, `${roles.size} kinds of participant: ${[...roles].join(', ').toLowerCase() || 'none recorded'}`),
-    cover('PAYMENT_AND_CONTRACTS', flows('MONEY', 'AUTHORITY'), 2, `${flows('MONEY').length} money flow(s), ${flows('AUTHORITY').length} contract flow(s)`),
+    cover('PAYMENT_AND_CONTRACTS', flows('MONEY', 'AUTHORITY', 'FINANCING', 'OBLIGATION'), 2, `${flows('MONEY').length} money flow(s), ${flows('AUTHORITY').length} contract flow(s)`),
     cover('DEMAND_AND_SUPPLY', [...e.segments, ...facts('account_units_per_month', 'accounts_reachable', 'supply_available')], 3, `${e.segments.length} buyer segment(s); volume and supply ${facts('accounts_reachable', 'supply_available').length ? 'partly sized' : 'not sized'}`),
     cover('PRICING', facts('price_per_unit', 'contractor_rate_per_unit', 'contractor_day_rate', 'broker_take_rate', 'placement_fee'), 2, 'what buyers pay, what supply accepts and what an intermediary keeps'),
     cover('CUSTOMER_OWNERSHIP', [...flows('DEMAND'), ...e.segments.filter((s) => s.acceptsIntermediary !== null)], 2, 'who holds the end customer and whether a buyer pays an intermediary'),
@@ -115,7 +164,7 @@ export function buildIndustryModel(evidence: IndustryEvidence): IndustryModel {
   coverage.sort((a, b) => MODEL_DIMENSIONS.indexOf(a.dimension) - MODEL_DIMENSIONS.indexOf(b.dimension));
 
   const name = (id: string) => e.actors.find((a) => a.id === id)?.name ?? id;
-  const valueChain = ['DEMAND', 'MONEY', 'WORK', 'CAPACITY', 'RISK', 'AUTHORITY'].map((kind) => ({
+  const valueChain = ['DEMAND', 'MONEY', 'WORK', 'CAPACITY', 'RISK', 'AUTHORITY', 'INFORMATION', 'FINANCING', 'OBLIGATION'].map((kind) => ({
     kind,
     lines: flows(kind).map((f) => `${name(f.from)} → ${name(f.to)}: ${f.terms} [${f.status.toLowerCase()}]`),
   }));

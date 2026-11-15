@@ -22,7 +22,7 @@
  *     money goal is listed and left exactly as it is.
  */
 import { goalExecutionPolicy, SQUEEZE_QUALIFICATION, type GoalExecutionPolicy } from '../../../domain/goalPolicy.ts';
-import { ASSET_LABELS, FACT_KEYS, type Asset, type Fact, type FactKey, type IndustryEvidence, type KnownStatus } from '../../../domain/construction.ts';
+import { ASSET_LABELS, FACT_KEYS, hasOwnRevenue, revenueOf, type Asset, type Fact, type FactKey, type IndustryEvidence, type KnownStatus } from '../../../domain/construction.ts';
 import type { CashMechanism } from '../../../domain/types.ts';
 import { STRUCTURES, type Design, type Structure } from '../../cash/properties.ts';
 import { constructBusinesses, type Business } from './businesses.ts';
@@ -90,6 +90,14 @@ export interface FamilyReading {
 }
 
 export function familyOf(b: Business['position']): { key: string; name: string } {
+  if (hasOwnRevenue(b)) {
+    const basis = revenueOf(b);
+    if (basis === 'RESALE') return { key: 'RESALE', name: 'resale from held inventory' };
+    if (basis === 'SUBSCRIPTION') return { key: 'SUBSCRIPTION', name: 'software subscription' };
+    if (basis === 'RENT') return { key: 'RENT', name: 'renting out owned equipment' };
+    if (basis === 'FINANCING') return { key: 'FINANCING', name: 'financing the transaction' };
+    if (basis === 'COMBINED') return { key: 'COMBINED', name: 'subcontracting combined with financing' };
+  }
   if (b.supply === 'SELF') return { key: 'SELF', name: 'doing the work yourself' };
   if (b.supply === 'RECRUIT') return { key: 'RECRUIT', name: 'worker / driver recruitment' };
   if (b.contract === 'INTRODUCE') return { key: 'INTRODUCE', name: 'brokerage' };

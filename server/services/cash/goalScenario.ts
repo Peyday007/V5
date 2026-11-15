@@ -35,17 +35,20 @@ import { readDays } from './monetization/commissionPass.ts';
 import { cashOutcomeLessons, LESSON_MIN_SAMPLE } from './journey/learning.ts';
 import { isTestFirstPlay } from './tier.ts';
 import { readVolume } from './volume.ts';
-import { sharedFrontier } from './shared.ts';
-import type { CashOpportunity, CashCardFact } from '../../domain/types.ts';
+import { frontierTiers } from './shared.ts';
+import type { CashMechanism, CashOpportunity, CashCardFact } from '../../domain/types.ts';
+import { STRUCTURES } from './properties.ts';
 import { SCENARIO_LIMITS, type ScenarioModelDefinition, type ScenarioVariable, type SourceRef, type StrategySpec, type VariableProvenance } from '../../domain/scenario.ts';
 import type { Workstream } from '../../domain/register.ts';
 import type { TargetReading } from '../goals/target.ts';
 import { inferCashQuantity, loadCashKnowledge, type CashKnowledge, type CashQuantity } from '../quant/knowledge.ts';
-import { toScenarioInput } from '../quant/export.ts';
-import { evaluateGoalPortfolio, type GoalPortfolio } from '../goals/portfolio.ts';
+import { inputSample, toScenarioInput, type InputSample } from '../quant/export.ts';
+import { CONTACTS_PER_DAY_BOUNDS, evaluateGoalPortfolio, heldEvaluation, measuredRateInput, type GoalPortfolio, type PlannedOpening } from '../goals/portfolio.ts';
+import { SPREAD_FLOOR } from '../quant/pool.ts';
 import type { Estimate, EvidenceTier } from '../../domain/quant.ts';
 import type { VariableSpec } from '../../domain/scenario.ts';
-import type { ConstructedArrangement } from './construct.ts';
+import { composeInvented, inventionContext, TRANSFER_MATERIAL, type ConstructedArrangement, type InventedDesign } from './construct.ts';
+export { TRANSFER_MATERIAL };
 
 /**
  * Phase timings for a plan read, printed as they happen when BRAIN_PLAN_TRACE is
@@ -98,7 +101,8 @@ export interface ModelInput {
    * causal chain, it only replaces a blind sweep with an evidenced one.
    */
   distribution?: VariableSpec;
-  inferred?: { tier: EvidenceTier; justified: boolean; p10: number; p50: number; p90: number; observations: number };
+  /** `observations` counts studies; the evidence in events and populations is `InputSample` (Q2-2). */
+  inferred?: { tier: EvidenceTier; justified: boolean; p10: number; p50: number; p90: number; observations: number } & Partial<InputSample>;
 }
 
 export interface ModelledOpportunity {
@@ -167,7 +171,15 @@ export interface ModelledOpportunity {
    * it, so it can never make a plan recommendable; it competes only on what it
    * could contribute, which is what decides where research goes next.
    */
-  estimated?: { arrangementKey: string; tier: string; observations: number };
+  estimated?: {
+    arrangementKey: string;
+    tier: string;
+    observations: number;
+    /** A transferred design's material dimensions and which are bridged (S-12). */
+    transfer?: { precedent: string; material: string[]; bridged: string[]; unbridged: string[] };
+    /** A design Brain's reasoning model invented (S-11): a hypothesis about structure, every input of it unestablished. */
+    invented?: boolean;
+  };
 }
 
 /** The id an estimated arrangement takes in a goal model. Never a row. */
@@ -188,21 +200,40 @@ export const MAX_ESTIMATED_ARRANGEMENTS = 12;
  */
 export function estimatedFromArrangement(one: ConstructedArrangement, input: { projectId: string; currency: string; beforeProofCents: number | null }): ModelledOpportunity | null {
   const { p10, p50, p90 } = one.value;
-  if (one.value.tier === 'UNKNOWN' || !(p50 > 0) || !(p90 >= p10)) return null;
+  // A MECHANISM value is a pool of other buyers' prices, not these buyers': it
+  // is no price, and a cost or capital swept from its top would be borrowed too
+  // (PRICE-POOL, 2026-11-14). Like UNKNOWN, it stays a research target only.
+  if (one.value.tier === 'UNKNOWN' || one.value.tier === 'MECHANISM' || !(p50 > 0) || !(p90 >= p10)) return null;
   if (one.stress.exposure === 'EXCEEDS') return null;
   const ref: SourceRef = { kind: 'OTHER', ref: `arrangement:${one.key}`, note: `${one.value.tier} reconstruction from ${one.value.observations} observation(s)` };
-  const low = Math.max(0.01, p10);
-  const high = Math.max(low + 0.01, p90);
+  // A transfer carries a design to buyers who differ from the precedent's on every material dimension
+  // nobody has bridged: until a sourced adjustment bridges one, its price range is widened, never narrowed (S-12).
+  const transfer = transferOf(one);
+  const widen = transfer && transfer.unbridged.length > 0 ? Math.exp(SPREAD_FLOOR.COMPARABLE * Z90) : 1;
+  const low = Math.max(0.01, p10 / widen);
+  const high = Math.max(low + 0.01, p90 * widen);
   const price: ModelInput = {
     value: null,
     low,
     high,
     provenance: 'ASSUMPTION',
     source: ref,
-    note: `reconstructed (${one.value.tier}, ${one.value.observations} obs.), not shown paid: p10 ${p10} p50 ${p50} p90 ${p90}`,
+    note:
+      `reconstructed (${one.value.tier}, ${one.value.observations} obs.), not shown paid: p10 ${p10} p50 ${p50} p90 ${p90}` +
+      (transfer && transfer.unbridged.length ? `; transferred from "${transfer.precedent}" with ${transfer.unbridged.join(', ')} not bridged, so swept ${Math.round(low)}–${Math.round(high)}` : ''),
     // Swept over the reconstruction's range: an estimate carries no distribution (only evidence may).
     inferred: { tier: one.value.tier as EvidenceTier, justified: false, p10, p50, p90, observations: one.value.observations },
   };
+  return arrangementOpening(one, input, price, high, transfer);
+}
+
+/**
+ * A constructed arrangement as a model candidate on a price already read: the
+ * links nobody has established swept exactly as for an opening with nothing on
+ * its card. Shared by the estimated and the invented conversions. Pure.
+ */
+function arrangementOpening(one: ConstructedArrangement, input: { projectId: string; currency: string }, price: ModelInput, high: number, transfer: ReturnType<typeof transferOf>, invented = false): ModelledOpportunity {
+  const ref: SourceRef = price.source ?? { kind: 'OTHER', ref: `arrangement:${one.key}` };
   const worst = one.stress.worstCaseCents === null ? null : one.stress.worstCaseCents / 100;
   const capital: ModelInput =
     one.stress.exposure === 'SAFE'
@@ -214,7 +245,7 @@ export function estimatedFromArrangement(one: ConstructedArrangement, input: { p
   const opportunity = {
     id: `${ARRANGEMENT_ID_PREFIX}${one.key}`,
     projectId: input.projectId,
-    title: `Constructed: ${one.label}`.slice(0, 200),
+    title: `${invented ? 'Invented' : 'Constructed'}: ${one.label}`.slice(0, 200),
     mechanism: 'OTHER',
     industry: one.sector,
     source: null,
@@ -254,47 +285,482 @@ export function estimatedFromArrangement(one: ConstructedArrangement, input: { p
     agreedDeals: 0,
     fulfilledBy: null,
     competitiveAward: false,
-    estimated: { arrangementKey: one.key, tier: one.value.tier, observations: one.value.observations },
+    estimated: { arrangementKey: one.key, tier: price.inferred?.tier ?? one.value.tier, observations: price.inferred?.observations ?? one.value.observations, ...(transfer ? { transfer } : {}), ...(invented ? { invented: true } : {}) },
   };
 }
 
 /**
- * Which constructed arrangements enter the model: those with a reconstructed
- * value, inside the limits and the goal's exclusions, largest estimated
- * contribution first (the p50 price, times the deals a recurring design could
- * repeat inside the window, capped at what is still needed). Not by how easy
- * each is to research, and not by sector.
+ * A design Brain's reasoning model invented (S-11), composed by the one
+ * construction path, as a model candidate — or the reason it cannot be one.
+ *
+ * Where its reconstruction holds what *these* buyers paid, it enters exactly
+ * as an estimated arrangement does. Otherwise nothing establishes its price,
+ * and it is not given one: it is swept log-uniformly across the prices other
+ * buyers in this project are published as paying, only while they lie within
+ * one order of magnitude (`comparablePricesFor`) — MECHANISM bounds,
+ * provenance UNKNOWN — so the engine can say what the design would
+ * contribute if research found these buyers pay like those, and nothing it
+ * contributes can certify a plan (every link is unestablished, `inputEvidence`).
+ * With no published price in the project at all, nothing bounds it, and it
+ * stays a research question. Nothing the model said is a number here. Pure.
  */
-export function pickEstimatedArrangements(
+export function inventedFromArrangement(
+  one: ConstructedArrangement,
+  input: { projectId: string; currency: string; beforeProofCents: number | null; otherPrices: readonly number[] },
+): PlannedOpening | { refused: string } {
+  if (one.stress.exposure === 'EXCEEDS') return { refused: "its known worst case exceeds the goal's limits" };
+  const marketKey = populationMarket(one.demand.ref);
+  const estimated = estimatedFromArrangement(one, input);
+  if (estimated)
+    return { ...estimated, marketKey, opportunity: { ...estimated.opportunity, title: `Invented: ${one.label}`.slice(0, 200) }, estimated: { ...estimated.estimated!, invented: true } };
+  const comparable = comparablePricesFor(one, input.otherPrices.map((value) => ({ value, industry: null })), input.currency);
+  if ('refused' in comparable) return { refused: `${comparable.refused}, so the design stays a research question` };
+  return sweptOverOtherPrices(one, input, comparable.prices, true, comparable.scope);
+}
+
+/** Points on the log-uniform grid a swept price is drawn from. */
+const LOG_GRID_POINTS = 41;
+
+/**
+ * A design nothing prices for its own buyers, swept across the prices
+ * comparable buyers are published as paying: log-uniform between their p10 and
+ * p90 (a price is a magnitude, and uniform over a band spanning orders of
+ * magnitude is a draw from its top — F4, 2026-11-15), provenance UNKNOWN, tier
+ * MECHANISM, so it competes on what it would contribute *if* research found
+ * these buyers pay like those, and can never certify a plan. With no published
+ * price at all, it is refused with that reason. Pure.
+ */
+function sweptOverOtherPrices(
+  one: ConstructedArrangement,
+  input: { projectId: string; currency: string },
+  otherPrices: readonly number[],
+  invented: boolean,
+  scope = 'in this project',
+): PlannedOpening | { refused: string } {
+  const prices = otherPrices.filter((x) => Number.isFinite(x) && x > 0).sort((a, b) => a - b);
+  const what = invented ? 'the design' : 'the arrangement';
+  if (prices.length === 0) return { refused: `nothing bounds what these buyers pay: the project holds no published price, so ${what} stays a research question` };
+  const low = logQuantile(prices, 0.1);
+  const high = Math.max(low + 0.01, logQuantile(prices, 0.9));
+  const p50 = Math.sqrt(low * high);
+  // Log-uniform between p10 and p90: an even grid on the log scale, resampled by the engine (`sampler`, `atQuantile`).
+  const a = Math.log(low);
+  const b = Math.log(high);
+  const values = Array.from({ length: LOG_GRID_POINTS }, (_, i) => Math.exp(a + ((i + 0.5) / LOG_GRID_POINTS) * (b - a)));
+  const price: ModelInput = {
+    value: null,
+    low,
+    high,
+    provenance: 'UNKNOWN',
+    source: { kind: 'OTHER', ref: `arrangement:${one.key}`, note: `${invented ? 'an invented design' : 'a constructed arrangement'}: no figure from these buyers` },
+    note: `${invented ? 'invented design' : 'constructed arrangement'}: nothing establishes what these buyers pay; swept log-uniformly ${Math.round(low)}–${Math.round(high)} (p10–p90 of the ${prices.length} price(s) other buyers ${scope} are published as paying; mechanism bounds, not these buyers')`,
+    // A sweep's shape, not evidence: provenance UNKNOWN and `justified: false` keep it from establishing anything.
+    distribution: { kind: 'EMPIRICAL', values },
+    inferred: { tier: 'MECHANISM', justified: false, p10: low, p50, p90: high, observations: prices.length },
+  };
+  return { ...arrangementOpening(one, input, price, high, null, invented), marketKey: populationMarket(one.demand.ref) };
+}
+
+/** The `q` quantile of sorted positive values, interpolated on the log scale. Pure. */
+function logQuantile(sorted: readonly number[], q: number): number {
+  if (sorted.length === 1) return sorted[0]!;
+  const at = q * (sorted.length - 1);
+  const i = Math.floor(at);
+  const lo = sorted[i]!;
+  const hi = sorted[Math.min(sorted.length - 1, i + 1)]!;
+  return Math.exp(Math.log(lo) + (at - i) * (Math.log(hi) - Math.log(lo)));
+}
+
+/** A price another buyer in the project is published as paying: the sector, mechanism and payer it was paid in. */
+export interface ComparablePrice {
+  value: number;
+  industry: string | null;
+  mechanism?: CashMechanism | null;
+  payer?: string | null;
+}
+const normSector = (text: string | null | undefined) => (text ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+/** A comparable set needs at least this many prices of the same kind. */
+export const SECTOR_PRICES_MIN = 2;
+/**
+ * The widest p90/p10 a set of other buyers' prices may span and still be read
+ * as one comparable price: one order of magnitude. Production, 2026-11-15: the
+ * project-wide fallback spanned $15–$325K, uniform over it, and a dog-groomer
+ * arrangement averaged ~$160K a deal and led reach and research priority (F4).
+ */
+export const COMPARABLE_SPREAD_MAX = 10;
+
+/**
+ * The prices a constructed arrangement with no price of its own is swept
+ * across, or why there are none (Surge B, F4). Comparable means comparable:
+ * the same sector; else the same structure (openings of a mechanism the
+ * arrangement's structure is already held as); else the same kind of buyer;
+ * else the project's prices — and outside the sector, only a set within one
+ * order of magnitude (`COMPARABLE_SPREAD_MAX`). A wider pool is no comparable
+ * price, and the arrangement stays out with that reason. With no published
+ * price at all the set is empty, and the sweep refuses. Never a price for
+ * these buyers — a bound. Pure.
+ */
+export function comparablePricesFor(
+  one: Pick<ConstructedArrangement, 'sector'> & Partial<Pick<ConstructedArrangement, 'structure' | 'demand'>>,
+  prices: readonly ComparablePrice[],
+  currency = 'USD',
+): { prices: number[]; scope: string } | { refused: string } {
+  const valid = prices.filter((p) => Number.isFinite(p.value) && p.value > 0);
+  const tight = (xs: readonly number[]) => {
+    const sorted = [...xs].sort((a, b) => a - b);
+    return logQuantile(sorted, 0.9) / logQuantile(sorted, 0.1) <= COMPARABLE_SPREAD_MAX;
+  };
+  const sector = normSector(one.sector);
+  const same = sector ? valid.filter((p) => normSector(p.industry) === sector).map((p) => p.value) : [];
+  if (same.length >= SECTOR_PRICES_MIN) return { prices: same, scope: `in the same sector (${one.sector})` };
+  const held: readonly string[] = one.structure ? (STRUCTURES[one.structure]?.alreadyHeldAs ?? []) : [];
+  const structure = held.length ? valid.filter((p) => p.mechanism && held.includes(p.mechanism)).map((p) => p.value) : [];
+  if (structure.length >= SECTOR_PRICES_MIN && tight(structure)) return { prices: structure, scope: `with the same structure (${one.structure})` };
+  const buyer = normSector(one.demand?.name);
+  const buyers = buyer ? valid.filter((p) => normSector(p.payer) === buyer).map((p) => p.value) : [];
+  if (buyers.length >= SECTOR_PRICES_MIN && tight(buyers)) return { prices: buyers, scope: `paid by the same kind of buyer (${one.demand!.name})` };
+  const all = valid.map((p) => p.value);
+  if (all.length === 0 || tight(all)) return { prices: all, scope: 'in this project' };
+  const sorted = [...all].sort((a, b) => a - b);
+  const money = (x: number) => `${currency === 'USD' ? '$' : `${currency} `}${Math.round(x).toLocaleString('en-US')}`;
+  return { refused: `no comparable price: published prices for other buyers span ${money(sorted[0]!)}–${money(sorted[sorted.length - 1]!)}` };
+}
+
+/**
+ * The composer an exploration hands invented designs to (§101, S-11): reads
+ * the construction context once, then composes each design through
+ * `composeInvented` and converts it with `inventedFromArrangement`.
+ */
+export async function inventedDesigner(input: Parameters<typeof inventionContext>[0]): Promise<(spec: InventedDesign) => PlannedOpening | { refused: string }> {
+  const ctx = await inventionContext(input);
+  const otherPrices = ctx.priced.filter((o) => o.value.kind === 'POINT').map((o) => (o.value as { value: number }).value);
+  return (spec) => {
+    const made = composeInvented(spec, ctx);
+    if ('refused' in made) return made;
+    return inventedFromArrangement(made, { projectId: input.projectId, currency: input.currency, beforeProofCents: ctx.limits.capitalBeforeProofCents, otherPrices });
+  };
+}
+
+/**
+ * What a transfer must bridge before its precedent's figures speak for its new
+ * buyers (S-12). A design shown working for one buyer is evidence about that
+ * buyer: the legal context, the payment terms buyers accept, how long they take
+ * to decide, the money the arrangement ties up and how the buyers behave can
+ * each differ for another population, and none of them is established for the
+ * new one by the precedent. A dimension is bridged only by a sourced
+ * adjustment; the constructor records none yet, so every one is unbridged and
+ * the estimate's range is widened by the COMPARABLE spread floor.
+ */
+const Z90 = 1.2816;
+export function transferOf(one: Pick<ConstructedArrangement, 'origin' | 'precedent'> & { bridged?: readonly string[] }): { precedent: string; material: string[]; bridged: string[]; unbridged: string[] } | null {
+  if (one.origin !== 'TRANSFER' || !one.precedent) return null;
+  const bridged = TRANSFER_MATERIAL.filter((d) => one.bridged?.includes(d));
+  return { precedent: one.precedent.title, material: [...TRANSFER_MATERIAL], bridged, unbridged: TRANSFER_MATERIAL.filter((d) => !bridged.includes(d)) };
+}
+
+/**
+ * The cheap quantitative screen an arrangement is ranked by before it may take
+ * one of the model's slots (§102's closed form, on one arrangement alone):
+ * the cash it would settle by the deadline, from its reconstructed price, the
+ * strength of the evidence behind that price, and what it exposes.
+ *
+ *   * Price is read inside its reconstruction by evidence tier: DIRECT at its
+ *     p50, weaker tiers nearer its p10 (`TIER_PRICE_POSITION`). Weaker
+ *     evidence never ranks higher (invariant 39).
+ *   * Every link nobody has established (reply, close, the deals the market
+ *     takes) is read at a conservative quantile of its swept range
+ *     (`SCREEN_QUANTILE`), never its middle, so an unknown never ranks higher.
+ *     When the money arrives is integrated over its whole swept range.
+ *   * A one-off is one deal at the close rate. A repeatable design sells
+ *     through the shared outreach's low end over the days its money's delay
+ *     leaves, up to what its market takes. Nothing saturates at the remaining
+ *     amount before the final cap, so a $9,000 one-off and a $300 repeatable
+ *     design are compared on what each settles (lens S, S-1/S-14: the old
+ *     score read both as "the whole goal").
+ *   * A worst case nobody has bounded keeps `EXPOSURE_WEIGHT` of the reading.
+ *
+ * `upside` is the same reading at the reconstruction's p90 price, the unknown
+ * links still at their conservative quantile: what protects an unusual but
+ * promising design is its own reconstructed spread, never an unknown read
+ * high. It ranks; the engine decides. Pure.
+ */
+export const SCREEN_QUANTILE = 0.25;
+export const TIER_PRICE_POSITION: Record<string, number> = { DIRECT: 1, COMPARABLE: 0.75, COMPONENT: 0.5, MECHANISM: 0.25, ASSUMED: 0, UNKNOWN: 0 };
+export const EXPOSURE_WEIGHT: Record<string, number> = { SAFE: 1, BOUNDED: 0.9, UNKNOWN: 0.8, EXCEEDS: 0 };
+const TIER_RANK: Record<string, number> = { DIRECT: 0, COMPARABLE: 1, COMPONENT: 2, MECHANISM: 3, ASSUMED: 4, UNKNOWN: 5 };
+const EXPOSURE_RANK: Record<string, number> = { SAFE: 0, BOUNDED: 1, UNKNOWN: 2, EXCEEDS: 3 };
+/** Of the model's arrangement slots, this many are held for the largest reconstructed upside. */
+export const UPSIDE_SLOTS = 2;
+/** At most this many structurally different designs of one buyer population, sharing one market. */
+export const DESIGNS_PER_POPULATION = 3;
+/** The next-best arrangements the cut leaves out, kept for a reasoning move that brings one in (§101 INCLUDE). */
+export const RESERVE_ARRANGEMENTS = 6;
+/** Cut arrangements recorded on the model by name; `cutCount` counts them all. */
+export const CUT_RECORDED = 40;
+
+export interface ArrangementScreen {
+  /** Expected settled cash by the deadline at the conservative reading, capped at what is still needed. */
+  value: number;
+  /** The same at the reconstruction's p90 price. */
+  upside: number;
+  /** In one line, how the figure was read. */
+  basis: string;
+}
+
+/** An input at the unfavourable quantile of its range when nobody established it; a stated figure as stated. */
+function conservative(x: ModelInput): number {
+  const lo = x.low ?? x.value ?? 0;
+  const hi = x.high ?? x.value ?? lo;
+  if (x.value !== null && x.provenance !== 'UNKNOWN') return x.value;
+  return lo + SCREEN_QUANTILE * (hi - lo);
+}
+
+/** E[max(0, T − d)] and P(d ≤ T) for d uniform over the input's range: selling days left after the money's delay. */
+function sellingDays(daysToCash: ModelInput, daysLeft: number): { selling: number; inTime: number } {
+  const a = daysToCash.low ?? daysToCash.value ?? 0;
+  const b = Math.max(a, daysToCash.high ?? daysToCash.value ?? a);
+  if (b - a < 1e-9) return { selling: Math.max(0, daysLeft - a), inTime: daysLeft >= a ? 1 : 0 };
+  if (daysLeft <= a) return { selling: 0, inTime: 0 };
+  if (daysLeft >= b) return { selling: daysLeft - (a + b) / 2, inTime: 1 };
+  return { selling: (daysLeft - a) ** 2 / (2 * (b - a)), inTime: (daysLeft - a) / (b - a) };
+}
+
+export function screenArrangement(
+  one: ModelledOpportunity,
+  arrangement: Pick<ConstructedArrangement, 'value' | 'stress'>,
+  input: { remaining: number; daysLeft: number; contactsPerDay: number },
+): ArrangementScreen {
+  const { p10, p50, p90 } = arrangement.value;
+  const position = TIER_PRICE_POSITION[arrangement.value.tier] ?? 0;
+  // A transfer's widened range (S-12) is the price it is read on.
+  const low = Math.min(p10, one.price.low ?? p10);
+  const price = low + position * (p50 - low);
+  const close = conservative(one.close);
+  const respond = conservative(one.respond);
+  const { selling, inTime } = sellingDays(one.daysToCash, input.daysLeft);
+  const deals = one.repeatable ? Math.min(conservative(one.volume), input.contactsPerDay * selling * respond * close) : close * inTime;
+  const weight = EXPOSURE_WEIGHT[arrangement.stress.exposure] ?? 0;
+  const read = (unit: number) => Math.min(input.remaining, Math.max(0, deals * unit * weight));
+  return {
+    value: read(price),
+    upside: read(Math.max(price, p90)),
+    basis: `${deals.toFixed(2)} deal(s) × ${Math.round(price)} (${arrangement.value.tier}: ${Math.round(position * 100)}% of the way from p10 to p50) × ${weight} for ${arrangement.stress.exposure.toLowerCase()} exposure; unknown links at their ${Math.round(SCREEN_QUANTILE * 100)}th percentile`,
+  };
+}
+
+/** A constructed arrangement that did not take one of the model's slots, and why (S-17). */
+export interface ArrangementCut {
+  arrangementKey: string;
+  label: string;
+  population: string;
+  screen: number | null;
+  upside: number | null;
+  reason: string;
+}
+/** A constructed arrangement that did, and which slot it took. */
+export interface ArrangementPick {
+  arrangementKey: string;
+  label: string;
+  population: string;
+  screen: number;
+  upside: number;
+  /** `STRUCTURE:<base>` or `PAID:<funding>/<repeat>` (the strongest of its kind), `UPSIDE`, or `SCREEN`. */
+  slot: string;
+  basis: string;
+}
+export interface ArrangementSelection {
+  /** Constructed arrangements read. */
+  considered: number;
+  picked: ArrangementPick[];
+  /** The strongest cut ones first, at most `CUT_RECORDED`. */
+  cut: ArrangementCut[];
+  cutCount: number;
+}
+
+const designKey = (a: ConstructedArrangement) => `${a.design.base}/${a.design.funding}/${a.design.aggregation}/${a.design.repeat}`;
+const paidKey = (a: ConstructedArrangement) => `${a.design.funding}/${a.design.repeat}`;
+/** The market every design over one buyer population shares in the engine. */
+export const populationMarket = (population: string) => `${ARRANGEMENT_ID_PREFIX}market:${population}`;
+
+/**
+ * Which constructed arrangements enter the model, and why the rest do not.
+ *
+ * Production (lens S, 2026-11-14): every repeatable design scored exactly the
+ * remaining amount and the tie broke on the opportunity id — a sha256 of the
+ * key — so which 12 of up to 404 designs a plan could ever use was a coin
+ * flip, and a strong DIRECT design the engine preferred was routinely cut,
+ * after which no later stage could bring it back. Now:
+ *
+ *   1. every candidate is screened quantitatively (`screenArrangement`) and
+ *      ordered by that reading, then evidence tier, observations, exposure and
+ *      the constructor's own order — never by id;
+ *   2. each base structure, then each way of being paid (funding × repeat),
+ *      keeps its strongest design, so genuinely different strategies are not
+ *      crowded out by many variants of one;
+ *   3. `UPSIDE_SLOTS` go to the largest reconstructed upside not yet held;
+ *   4. the rest fill by the screen;
+ *
+ * and up to `DESIGNS_PER_POPULATION` structurally different designs of one
+ * buyer population may enter, all on one `marketKey`, so the engine chooses
+ * the design and never sums the same buyers twice. Every cut arrangement is
+ * recorded with its reading and its reason, and the next-best few are kept as
+ * a reserve a reasoning move may bring in (§101). Deterministic. Pure.
+ */
+export function selectEstimatedArrangements(
   arrangements: readonly ConstructedArrangement[],
-  input: { projectId: string; currency: string; beforeProofCents: number | null; remaining: number; exclusions: Parameters<typeof excludedBy>[1]; limit?: number },
-): ModelledOpportunity[] {
-  const scored: { one: ModelledOpportunity; score: number; population: string }[] = [];
-  for (const arrangement of arrangements) {
+  input: {
+    projectId: string;
+    currency: string;
+    beforeProofCents: number | null;
+    remaining: number;
+    exclusions: Parameters<typeof excludedBy>[1];
+    limit?: number;
+    daysLeft?: number | null;
+    contactsPerDay?: number;
+    /**
+     * Prices other buyers in the project are published as paying. An
+     * arrangement nothing prices for its own buyers is swept across them
+     * (MECHANISM bounds, never certifiable) instead of being cut; without
+     * any, it stays out with that reason.
+     */
+    otherPrices?: readonly ComparablePrice[];
+  },
+): { openings: PlannedOpening[]; reserve: PlannedOpening[]; selection: ArrangementSelection } {
+  const limit = input.limit ?? MAX_ESTIMATED_ARRANGEMENTS;
+  const daysLeft = input.daysLeft && input.daysLeft > 0 ? input.daysLeft : 30;
+  const contactsPerDay = input.contactsPerDay ?? CONTACTS_PER_DAY_BOUNDS.low;
+  const cut: ArrangementCut[] = [];
+  type Value = ConstructedArrangement['value'];
+  type Row = { arrangement: ConstructedArrangement; one: PlannedOpening; screen: ArrangementScreen; order: number; population: string; value: Value };
+  const rows: Row[] = [];
+  arrangements.forEach((arrangement, order) => {
+    const population = arrangement.demand.ref;
+    const no = (reason: string) => cut.push({ arrangementKey: arrangement.key, label: arrangement.label, population, screen: null, upside: null, reason });
     // Judged on what the arrangement is — its label, sector and buyer — never on its research question,
     // which carries Brain's own instructions ("leave out government contracts", "the owner does no
     // physical work") and so matched every exclusion: production read 0 of 404 (2026-11-06).
     const what = `${arrangement.label} ${arrangement.sector ?? ''} ${arrangement.demand.name}`;
-    if (excludedBy(what, input.exclusions)) continue;
-    if (breaksOperatingModel(operatingFit({ title: arrangement.label, offerScope: arrangement.demand.name }))) continue;
-    const one = estimatedFromArrangement(arrangement, input);
-    if (!one) continue;
-    const p50 = arrangement.value.p50;
-    const deals = one.repeatable ? Math.min(MAX_BUYERS_OFFERED, Math.ceil(input.remaining / Math.max(1, p50))) : 1;
-    scored.push({ one, score: Math.min(input.remaining, p50 * deals), population: arrangement.demand.ref });
-  }
-  scored.sort((a, b) => b.score - a.score || a.one.opportunity.id.localeCompare(b.one.opportunity.id));
-  // One buyer population is one market, however many designs reach it: its value
-  // observations are keyed by the buyer, so every design over it carries the same
-  // estimate, and summing them counts the same buyers' money once per design.
-  // The highest-scoring arrangement stands for the population.
-  const seen = new Set<string>();
-  const distinct = scored.filter((entry) => {
-    if (seen.has(entry.population)) return false;
-    seen.add(entry.population);
-    return true;
+    if (excludedBy(what, input.exclusions)) return no("the goal's owner excluded what it is");
+    if (breaksOperatingModel(operatingFit({ title: arrangement.label, offerScope: arrangement.demand.name }))) return no('it breaks the operating model');
+    if (arrangement.stress.exposure === 'EXCEEDS') return no('its known worst case exceeds the limits');
+    let one: ModelledOpportunity | null = estimatedFromArrangement(arrangement, input);
+    let value: Value = arrangement.value;
+    let screenValue: Value | null = null;
+    if (!one) {
+      /*
+       * Nothing prices it for its own buyers (UNKNOWN, or a MECHANISM pool
+       * PRICE-POOL refused as their price). Production, 2026-11-15: after
+       * PRICE-POOL kept other payers' prices out of each arrangement's own
+       * reconstruction, almost no arrangement's buyers had a price of their
+       * own, so all 404 were cut here as "nothing reconstructs its value" and
+       * the plan compared 11 found openings and 0 constructed estimates. It
+       * enters instead swept across the prices comparable buyers are published
+       * as paying — honest MECHANISM bounds, provenance UNKNOWN, which
+       * `inputEvidence` never lets certify a plan — the path S-11 built for
+       * invented designs. With no published price anywhere, it stays out.
+       */
+      const comparable = comparablePricesFor(arrangement, input.otherPrices ?? [], input.currency);
+      if ('refused' in comparable) return no(`nothing reconstructs its value, and ${comparable.refused}`);
+      const swept = sweptOverOtherPrices(arrangement, input, comparable.prices, false, comparable.scope);
+      if ('refused' in swept) return no(`nothing reconstructs its value, and ${swept.refused}`);
+      one = swept;
+      const inf = swept.price.inferred!;
+      value = { tier: 'MECHANISM', p10: inf.p10, p50: inf.p50, p90: inf.p90, observations: inf.observations };
+      // Nothing prices these buyers: the screen reads them at the lowest comparable price, never
+      // at a point inside other buyers' range, so a sweep never outranks an evidenced price (invariant 39).
+      const floor = Math.min(...comparable.prices);
+      screenValue = { ...value, p10: floor, p50: floor };
+    }
+    // One buyer population is one market however many designs reach it: the engine caps their deals together.
+    const planned: PlannedOpening = { ...one, marketKey: populationMarket(population) };
+    rows.push({ arrangement, one: planned, screen: screenArrangement(one, { value: screenValue ?? value, stress: arrangement.stress }, { remaining: input.remaining, daysLeft, contactsPerDay }), order, population, value });
   });
-  return distinct.slice(0, input.limit ?? MAX_ESTIMATED_ARRANGEMENTS).map((one) => one.one);
+  const byScreen = (a: Row, b: Row) =>
+    b.screen.value - a.screen.value ||
+    (TIER_RANK[a.value.tier] ?? 9) - (TIER_RANK[b.value.tier] ?? 9) ||
+    b.value.observations - a.value.observations ||
+    (EXPOSURE_RANK[a.arrangement.stress.exposure] ?? 9) - (EXPOSURE_RANK[b.arrangement.stress.exposure] ?? 9) ||
+    a.order - b.order;
+  rows.sort(byScreen);
+  // The same design over the same buyers is one estimate: only its strongest reading competes.
+  const designs = new Set<string>();
+  const candidates = rows.filter((r) => {
+    const key = `${r.population}|${designKey(r.arrangement)}`;
+    if (!designs.has(key)) {
+      designs.add(key);
+      return true;
+    }
+    cut.push({ arrangementKey: r.arrangement.key, label: r.arrangement.label, population: r.population, screen: r.screen.value, upside: r.screen.upside, reason: 'the same design over the same buyers is already read' });
+    return false;
+  });
+  const taken = new Map<Row, string>();
+  const perPopulation = new Map<string, number>();
+  const take = (r: Row, slot: string): boolean => {
+    if (taken.has(r) || taken.size >= limit) return false;
+    if ((perPopulation.get(r.population) ?? 0) >= DESIGNS_PER_POPULATION) return false;
+    taken.set(r, slot);
+    perPopulation.set(r.population, (perPopulation.get(r.population) ?? 0) + 1);
+    return true;
+  };
+  // 2. One design per kind first, leaving the upside slots free.
+  const diversityRoom = Math.max(0, limit - UPSIDE_SLOTS);
+  const kinds: Array<[string, (a: ConstructedArrangement) => string]> = [
+    ['STRUCTURE', (a) => a.design.base],
+    ['PAID', paidKey],
+  ];
+  for (const [name, keyOf] of kinds) {
+    const held = new Set([...taken.keys()].map((r) => keyOf(r.arrangement)));
+    for (const r of candidates) {
+      if (taken.size >= diversityRoom) break;
+      const k = keyOf(r.arrangement);
+      if (held.has(k) || r.screen.value <= 0) continue;
+      if (take(r, `${name}:${k}`)) held.add(k);
+    }
+  }
+  // 3. The largest reconstructed upside not yet held.
+  let upsideTaken = 0;
+  for (const r of candidates.filter((x) => !taken.has(x) && x.screen.upside > 0).sort((a, b) => b.screen.upside - a.screen.upside || byScreen(a, b))) {
+    if (upsideTaken >= UPSIDE_SLOTS) break;
+    if (take(r, 'UPSIDE')) upsideTaken++;
+  }
+  // 4. The rest by the screen.
+  for (const r of candidates) {
+    if (taken.size >= limit) break;
+    if (r.screen.value > 0) take(r, 'SCREEN');
+  }
+  const picked = candidates.filter((r) => taken.has(r));
+  const weakest = picked.length ? Math.min(...picked.map((r) => r.screen.value)) : 0;
+  const left = candidates.filter((r) => !taken.has(r));
+  for (const r of left)
+    cut.push({
+      arrangementKey: r.arrangement.key,
+      label: r.arrangement.label,
+      population: r.population,
+      screen: r.screen.value,
+      upside: r.screen.upside,
+      reason:
+        (perPopulation.get(r.population) ?? 0) >= DESIGNS_PER_POPULATION
+          ? `its buyers already have ${DESIGNS_PER_POPULATION} designs in the model`
+          : r.screen.value <= 0
+            ? 'it settles nothing by the deadline at the conservative reading'
+            : `below the cut: screens ${Math.round(r.screen.value)} against ${Math.round(weakest)} for the weakest of the ${picked.length} kept`,
+    });
+  cut.sort((a, b) => (b.screen ?? -1) - (a.screen ?? -1) || a.arrangementKey.localeCompare(b.arrangementKey));
+  return {
+    openings: picked.map((r) => r.one),
+    reserve: left.filter((r) => r.screen.value > 0).slice(0, RESERVE_ARRANGEMENTS).map((r) => r.one),
+    selection: {
+      considered: arrangements.length,
+      picked: picked.map((r) => ({ arrangementKey: r.arrangement.key, label: r.arrangement.label, population: r.population, screen: r.screen.value, upside: r.screen.upside, slot: taken.get(r)!, basis: r.screen.basis })),
+      cut: cut.slice(0, CUT_RECORDED),
+      cutCount: cut.length,
+    },
+  };
+}
+
+/** The arrangements `selectEstimatedArrangements` keeps, strongest screen first. */
+export function pickEstimatedArrangements(arrangements: readonly ConstructedArrangement[], input: Parameters<typeof selectEstimatedArrangements>[1]): PlannedOpening[] {
+  return selectEstimatedArrangements(arrangements, input).openings;
 }
 
 /**
@@ -321,6 +787,8 @@ export interface GoalModel {
   considered: ModelledOpportunity[];
   /** The constructed arrangements entered on their estimates (§82), for the reasoning loop (§93). */
   estimates?: ModelledOpportunity[];
+  /** Which constructed arrangements took the estimate slots, by what reading, and every one cut with its reason (S-17). */
+  arrangementSelection?: ArrangementSelection | null;
   /** Why nothing could be modelled, when nothing could. */
   refusal: string | null;
   /**
@@ -362,6 +830,27 @@ function inferOr(knowledge: CashKnowledge | null, quantity: CashQuantity, opport
     est = null;
   }
   if (!est) return fallback;
+  return estimateInput(est, scale, what);
+}
+
+/**
+ * The money an opening ties up, inferred only where its own mechanism speaks
+ * (F6, 2026-11-15). An inference resting on other mechanisms' openings (tier
+ * MECHANISM: a grant's outlay read off resale and auction openings) says
+ * nothing about this one: it is UNKNOWN and swept from nothing to the price,
+ * never a floor that refuses the opening. Pure.
+ */
+export function ownMechanismCapital(inferred: ModelInput, top: number): ModelInput {
+  if (inferred.inferred?.tier !== 'MECHANISM') return inferred;
+  return unknown(0, top, 'only openings of other mechanisms state the money tied up, which is no evidence about this one; swept from nothing to the whole price');
+}
+
+/**
+ * A reconstructed estimate as a model input: the one conversion every caller
+ * uses, so the evidence it carries (tier, observations, and the sample the
+ * assurance redraws from, Q2-1/Q2-12) is never dropped by a hand-built copy.
+ */
+export function estimateInput(est: Estimate, scale = 1, what = ''): ModelInput {
   const scaled: Estimate = scale === 1 ? est : { ...est, p05: est.p05 * scale, p10: est.p10 * scale, p50: est.p50 * scale, p90: est.p90 * scale, p95: est.p95 * scale, samples: est.samples.map((x) => x * scale) };
   const exported = toScenarioInput(scaled);
   return {
@@ -372,7 +861,7 @@ function inferOr(knowledge: CashKnowledge | null, quantity: CashQuantity, opport
     source: exported.sources[0] ?? null,
     note: `inferred${what}: ${exported.note}`,
     distribution: exported.spec,
-    inferred: { tier: est.tier, justified: exported.provenance === 'EVIDENCE', p10: scaled.p10, p50: scaled.p50, p90: scaled.p90, observations: est.used.length },
+    inferred: { tier: est.tier, justified: exported.provenance === 'EVIDENCE', p10: scaled.p10, p50: scaled.p50, p90: scaled.p90, observations: est.used.length, ...inputSample(est) },
   };
 }
 
@@ -426,7 +915,7 @@ async function modelOpportunity(
       ? known(opportunity.peakFundingCents / 100, kindToProvenance(exposure).provenance === 'UNKNOWN' ? 'ASSUMPTION' : kindToProvenance(exposure).provenance, kindToProvenance(exposure).source ?? ref, 'money tied up before it pays')
       : capitalFigures.length > 0
         ? known(Math.max(...capitalFigures.map((one) => one.cents)) / 100, kindToProvenance(capitalFact).provenance, kindToProvenance(capitalFact).source, 'the most that goes out before any comes back')
-        : inferOr(knowledge, 'capitalShare', opportunity, now, unknown(0, top, 'nobody has established the money tied up; swept from nothing to the whole price'), top, ' as a share of the top price');
+        : ownMechanismCapital(inferOr(knowledge, 'capitalShare', opportunity, now, unknown(0, top, 'nobody has established the money tied up; swept from nothing to the whole price'), top, ' as a share of the top price'), top);
 
   const hoursFact = fact('hours');
   const hours =
@@ -454,11 +943,10 @@ async function modelOpportunity(
   // rate the next buyer will match. More buyers need a measured rate of their own.
   let close: ModelInput;
   if (lesson) {
-    const bounds = wilson(lesson.agreements, lesson.contacts);
+    // Brain's own record carries its counts, so the assurance reads it as a
+    // sized sample (Surge B, Q2-4 follow-up), not as bounds without a size.
     close = {
-      value: null,
-      low: bounds.low,
-      high: bounds.high,
+      ...measuredRateInput({ trials: lesson.contacts, low: lesson.agreements, high: lesson.agreements }),
       provenance: 'HISTORICAL',
       source: { kind: 'OTHER', ref: `cash_outcomes:${opportunity.mechanism}`, note: `${lesson.agreements} agreements from ${lesson.contacts} contacts` },
       note: `measured on this Brain: ${lesson.agreements} of ${lesson.contacts} contacts agreed`,
@@ -604,11 +1092,17 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
   if (target.achieved) return refuse('The target is already met.');
 
   const trace = planTrace('compose');
+  /*
+   * The messaging provider's capacity and measured rates are two network reads the portfolio
+   * needs only at its end; asked now, they answer while the rows below are read instead of after.
+   */
+  const instantly = Promise.all([instantlyCapacity().catch(() => null), instantlyMeasuredRates().catch(() => null)]);
   // The goal plan owns the freshness bar; read lazily, because the plan imports this module.
   const freshDays = (await import('../goals/plan.ts')).RECOMMENDATION_POLICY.demandFreshDays;
-  const frontier = await sharedFrontier({ projectId: target.projectId });
-  trace(`shared frontier: ${frontier.opportunities.length} opening(s)`);
-  const tierOf = new Map(frontier.opportunities.map((one) => [one.id, one.tier.tier as string]));
+  // The tier is all the plan reads of the frontier (`frontierTiers`: the same derivation, without the rest of it).
+  const tiers = await frontierTiers(target.projectId);
+  trace(`shared frontier: ${tiers.size} opening(s)`);
+  const tierOf = new Map([...tiers].map(([id, one]) => [id, one.tier as string]));
   const live = (await listOpportunities({ projectId: target.projectId })).filter(
     (one) => LIVE.has(one.state) && !one.duplicateOfId && one.currency === target.currency,
   );
@@ -702,16 +1196,33 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
    * or be judged as an opening anybody found.
    */
   const estimates: ModelledOpportunity[] = [];
+  let arrangementSelection: ArrangementSelection | null = null;
+  let reserve: PlannedOpening[] = [];
   if (input.arrangements?.length) {
-    const estimated = pickEstimatedArrangements(input.arrangements, {
+    const selected = selectEstimatedArrangements(input.arrangements, {
       projectId: target.projectId,
       currency: target.currency,
       beforeProofCents: target.capitalBeforeProofCents,
       remaining: target.remainingCents / 100,
       exclusions,
+      daysLeft: target.daysLeft,
+      // What construction reads as held prices (`heldEvidence`), from the openings already loaded: no new query.
+      otherPrices: live
+        .filter((one) => one.payer && one.priceCents !== null && one.priceCents > 0 && !excludedBy(`${one.title} ${one.payer ?? ''} ${one.industry ?? ''}`, exclusions))
+        .map((one) => ({ value: one.priceCents! / 100, industry: one.industry, mechanism: one.mechanism, payer: one.payer })),
     });
-    estimates.push(...estimated);
-    trace(`estimated arrangements: ${estimated.length} of ${input.arrangements.length}`);
+    estimates.push(...selected.openings);
+    arrangementSelection = selected.selection;
+    reserve = selected.reserve;
+    const why = new Map<string, number>();
+    for (const c of selected.selection.cut) {
+      const reason = c.reason.replace(/\d[\d,.]*/g, 'N');
+      why.set(reason, (why.get(reason) ?? 0) + 1);
+    }
+    trace(
+      `estimated arrangements: ${selected.openings.length} of ${input.arrangements.length} (${selected.selection.cutCount} cut, ${reserve.length} in reserve)` +
+        (why.size ? `; recorded cuts: ${[...why].map(([r, n]) => `${n}× ${r}`).join(' · ')}` : ''),
+    );
   }
   /*
    * Which openings take the engine's few slots is decided by what each could
@@ -739,8 +1250,8 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       beforeProof: target.capitalBeforeProofCents === null ? null : target.capitalBeforeProofCents / 100,
       perWeek: target.capitalPerWeekCents === null ? null : target.capitalPerWeekCents / 100,
       resources: target.resources,
-      measuredCapacity: await instantlyCapacity().catch(() => null),
-      measuredRates: await instantlyMeasuredRates().catch(() => null),
+      measuredCapacity: (await instantly)[0],
+      measuredRates: (await instantly)[1],
       /*
        * The knowledge this compose already read for the project, passed
        * explicitly (CAUSAL-14-7, review F4-2): left out, the portfolio fell back
@@ -749,6 +1260,8 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
        * evidence could not be read, reported as a research need, never guessed.
        */
       knowledge,
+      // The next-best cut arrangements: never evaluated here, offered to the reasoning loop's INCLUDE move (§101, S-6).
+      ...(reserve.length ? { reserve } : {}),
     };
     /*
      * The baseline evaluation is the same synchronous engine §101 moved onto worker threads:
@@ -758,12 +1271,15 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
      * the pool falls back to inline, yielding first, when it has no thread.
      */
     const { sharedEvaluator } = await import('../goals/reasoning/evaluatorPool.ts');
-    const evaluator = sharedEvaluator();
-    try {
-      portfolio = await evaluator.evaluate(portfolioInput);
-    } finally {
-      await evaluator.close();
-    }
+    // Unchanged inputs read the same portfolio: evaluated once, not on every re-read (`heldEvaluation`).
+    portfolio = await heldEvaluation(portfolioInput, async (one) => {
+      const evaluator = sharedEvaluator();
+      try {
+        return await evaluator.evaluate(one);
+      } finally {
+        await evaluator.close();
+      }
+    });
     trace('quant portfolio');
   }
   const inBest = new Set(portfolio?.best?.members.map((one) => one.opportunityId) ?? []);
@@ -799,6 +1315,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       portfolio,
       portfolioInput,
       estimates,
+      arrangementSelection,
     };
   }
 
@@ -978,6 +1495,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     excluded,
     considered: candidates,
     estimates,
+    arrangementSelection,
     refusal: null,
     portfolio,
     portfolioInput,

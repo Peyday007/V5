@@ -52,6 +52,70 @@ export interface SubjectStanding {
   because: string;
   /** Whether more spending here is currently justified by what it produced. */
   worthDeepening: boolean;
+  /**
+   * For a barren subject: what would reopen it, and which condition has fired.
+   * Absent on every other verdict. A barren subject is a watch (W-4, §65), so
+   * this is never empty.
+   */
+  watch?: { conditions: string[]; reopenedBy: string | null };
+}
+
+/**
+ * How long a barren subject is watched before age alone reopens it.
+ *
+ * Ninety days, because what made it barren is a reading of one moment: the
+ * scans asked mechanisms against published requests that turn over within
+ * weeks, and a quarter is the shortest period over which industry structure,
+ * regulation and price lists are reliably republished (quarterly filings,
+ * statistical releases). Shorter re-spends the allowance on the same answer;
+ * longer lets "nothing here" harden into the permanent verdict §65 forbids.
+ */
+export const BARREN_WATCH_MS = 90 * 24 * 60 * 60 * 1000;
+
+/**
+ * What a barren subject's watch reads to decide whether it has reopened.
+ *
+ * Every field is derived from rows the snapshot already holds, which is the
+ * "or equivalent" of `cash_reopen_conditions`: that table is keyed to an
+ * opportunity, a subject is not one, and a condition read from rows cannot go
+ * stale the way a stored one can (§43). Absent fields fire nothing.
+ */
+export interface WatchContext {
+  /** The time the reading is about. Without it, age reopens nothing. */
+  now?: string;
+  /** The newest live goal that reaches this subject: when it was set. */
+  goalReachedAt?: string | null;
+  /** The newest opening filed on a neighbouring subject (parent, sibling or child). */
+  adjacentOpeningAt?: string | null;
+  /** Mechanisms that produced openings elsewhere and were never asked here. */
+  productiveUnasked?: readonly string[];
+}
+
+/** The reopen conditions of a barren subject, and the first that has fired. */
+export function barrenWatch(
+  coverage: NodeCoverage,
+  context: WatchContext = {},
+): { conditions: string[]; reopenedBy: string | null } {
+  const settled = coverage.lastSettledAt;
+  const conditions = [
+    `${Math.round(BARREN_WATCH_MS / 86_400_000)} days pass since its last round settled`,
+    'a live goal that reaches it is set after its last round',
+    'a neighbouring subject produces an opening after its last round',
+    'a mechanism that produced openings elsewhere has never been asked of it',
+  ];
+  let reopenedBy: string | null = null;
+  const after = (at: string | null | undefined) =>
+    !!at && (settled === null || at > settled);
+  if (context.now && settled && Date.parse(context.now) - Date.parse(settled) >= BARREN_WATCH_MS) {
+    reopenedBy = conditions[0]!;
+  } else if (after(context.goalReachedAt)) {
+    reopenedBy = conditions[1]!;
+  } else if (after(context.adjacentOpeningAt)) {
+    reopenedBy = conditions[2]!;
+  } else if ((context.productiveUnasked ?? []).length > 0) {
+    reopenedBy = `${conditions[3]!} (${context.productiveUnasked!.join(', ')})`;
+  }
+  return { conditions, reopenedBy };
 }
 
 /**
@@ -59,14 +123,19 @@ export interface SubjectStanding {
  *
  * Ordered strongest evidence first: something that has already been paid for
  * outranks something that has been tested, which outranks something that has
- * been found. A subject only reaches `DEAD_END` by exhausting the same barren
- * rule `nextRoundFor` already applies — Brain has documented that there is
- * nothing here, so re-asking spends the allowance to learn it again — or by a
- * person retiring it, which is the one verdict no derivation could reach.
+ * been found. A subject reaches `DEAD_END` only when a person retires it, which
+ * is the one verdict no derivation could reach.
+ *
+ * **Barren is a watch, never a verdict (W-4, §65, §105).** A subject searched
+ * `BARREN_ROUNDS` times for nothing was once `DEAD_END` for ever, under any
+ * later goal — which made three sprint-framed searches a permanent finding
+ * about the world. It now reads `WATCH` with its reopen conditions
+ * (`barrenWatch`), and the allocator offers it again the moment one fires.
  */
 export function standingOf(
   coverage: NodeCoverage,
   opportunities: readonly CashOpportunity[],
+  context: WatchContext = {},
 ): SubjectStanding {
   const mine = opportunities.filter((one) => one.industryNodeId === coverage.node.id);
   const inState = (states: readonly string[]) =>
@@ -123,15 +192,20 @@ export function standingOf(
   const scannedOut = coverage.scanRounds >= BARREN_ROUNDS && coverage.scanFound === 0;
   const mappedOut = !coverage.recurses || (coverage.mapRounds >= 1 && coverage.mapFound === 0);
   if (scannedOut && mappedOut && !coverage.scanOpen && !coverage.mapOpen) {
+    const watch = barrenWatch(coverage, context);
     return {
       nodeId: coverage.node.id,
-      verdict: 'DEAD_END',
+      verdict: 'WATCH',
       because:
         `${coverage.scanRounds} searches found no openings and ` +
         (coverage.recurses
-          ? 'decomposing it found nothing underneath.'
-          : 'nothing narrower sits underneath this kind of subject.'),
-      worthDeepening: false,
+          ? 'decomposing it found nothing underneath. '
+          : 'nothing narrower sits underneath this kind of subject. ') +
+        (watch.reopenedBy
+          ? `Reopened: ${watch.reopenedBy}.`
+          : `Watched, not closed: it reopens when ${watch.conditions.join('; or ')}.`),
+      worthDeepening: watch.reopenedBy !== null,
+      watch,
     };
   }
 

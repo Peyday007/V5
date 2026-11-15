@@ -4,6 +4,10 @@
  *   show   recent runs (state, model, tools called, report), the memory the
  *          operator keeps, its lessons, and the actions it took — read from rows.
  *   run    start one run now and wait for it (the tick starts them hourly).
+ *          `run --mission <file-or-text>` (or `--mission-b64 <base64>`, `--mission-key KEY`)
+ *          first sets or refreshes the standing mission (default key SURGE:B), which every
+ *          later run's brief carries until `mission close [KEY]`.
+ *   mission show | set <file-or-text> [--mission-key KEY] | close [KEY]  — the standing missions.
  *   probe  is the operator app reachable and is a model configured; changes nothing.
  *   prove  one run now, then the proof from rows (§108): it inspected a real goal and its
  *          plan, committed a decision, took an action through Brain, observed the result
@@ -18,8 +22,39 @@ import { modelsFor, operatorConfig, runOperatorNow } from '../server/services/op
 
 const command = process.argv[2] ?? 'show';
 
+/** The value after `--name`, if given. */
+function flag(name: string): string | null {
+  const i = process.argv.indexOf(`--${name}`);
+  return i >= 0 ? (process.argv[i + 1] ?? null) : null;
+}
+
+/** A mission given as a path to a readable file is that file's text; anything else is the text itself. */
+async function missionText(value: string): Promise<string> {
+  const { readFile, stat } = await import('node:fs/promises');
+  const isFile = await stat(value).then((s) => s.isFile(), () => false);
+  return isFile ? readFile(value, 'utf8') : value;
+}
+
+/** Set the mission from `--mission` / `--mission-b64` when given; returns false after printing a refusal. */
+async function missionFromFlags(fallbackText: string | null = null): Promise<boolean> {
+  const b64 = flag('mission-b64');
+  const raw = b64 !== null ? Buffer.from(b64, 'base64').toString('utf8') : (flag('mission') ?? fallbackText);
+  if (raw === null || !raw.trim()) return true;
+  const { setMission } = await import('../server/services/operator/inventory.ts');
+  const result = await setMission({ key: flag('mission-key') ?? undefined, text: await missionText(raw.trim()) }, { runId: null, actor: 'terminal' });
+  if (!result.ok) {
+    console.log(`OPERATOR-MISSION: REFUSED ${result.reason}`);
+    process.exitCode = 1;
+    return false;
+  }
+  console.log(`OPERATOR-MISSION: ${result.created ? 'SET' : 'REFRESHED'} ${result.mission.key} (${result.mission.text.length} chars)`);
+  return true;
+}
+
 async function show(): Promise<void> {
-  const runs = await recentOperatorRuns(Number(process.argv[3] ?? 5));
+  // `run --mission-b64 …` reaches here too: only a bare number is a limit.
+  const limit = /^\d+$/.test(process.argv[3] ?? '') ? Number(process.argv[3]) : 5;
+  const runs = await recentOperatorRuns(limit);
   console.log(`OPERATOR ${operatorConfig() ? 'connected' : 'not connected'} · models: ${(await modelsFor()).map((m) => m.label).join(' → ') || 'none'}`);
   for (const run of runs) {
     console.log(`RUN ${run.id} ${run.state} ${run.startedAt} → ${run.finishedAt ?? '…'} on ${run.model}`);
@@ -108,7 +143,23 @@ await initDatabase();
 try {
   if (command === 'show') await show();
   else if (command === 'probe') await probe();
-  else if (command === 'run') {
+  else if (command === 'mission') {
+    const sub = process.argv[3] ?? 'show';
+    const inventory = await import('../server/services/operator/inventory.ts');
+    if (sub === 'set') {
+      const text = process.argv[4] && !process.argv[4].startsWith('--') ? process.argv[4] : null;
+      await missionFromFlags(text);
+    } else if (sub === 'close') {
+      const key = process.argv[4] && !process.argv[4].startsWith('--') ? process.argv[4] : 'SURGE:B';
+      const closed = await inventory.closeMission(key, { runId: null, actor: 'terminal' });
+      console.log(`OPERATOR-MISSION: ${closed.ok ? 'CLOSED' : 'REFUSED'} ${closed.reason}`);
+      if (!closed.ok) process.exitCode = 1;
+    } else {
+      for (const m of await inventory.openMissions()) console.log(`MISSION ${m.key} set ${m.setAt} by ${m.setBy}\n  ${m.text.replace(/\n/g, '\n  ')}`);
+      for (const i of await inventory.listInventory()) console.log(`FINDING ${i.id} [${i.status}, ${i.severity}] ${i.capability}: ${i.symptom.slice(0, 200)}${i.verification ? ` · verified ${i.verification.kind} ${i.verification.ref}` : ''}`);
+    }
+  } else if (command === 'run') {
+    if (!(await missionFromFlags())) throw new Error('the mission was refused; no run started');
     const id = await runOperatorNow();
     console.log(`OPERATOR-RUN ${id}`);
     await show();
@@ -145,7 +196,7 @@ try {
   } else if (command === 'prove') {
     await prove();
   } else {
-    console.error('usage: operator show [n] | run | probe | prove | engineering | commission <dfx_id>');
+    console.error('usage: operator show [n] | run [--mission <file-or-text> | --mission-b64 <b64>] [--mission-key KEY] | mission show|set|close | probe | prove | engineering | commission <dfx_id>');
     process.exitCode = 2;
   }
 } finally {

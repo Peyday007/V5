@@ -662,6 +662,15 @@ async function main(): Promise<void> {
     } else {
       console.log('    memory       (not measured by this revision)');
     }
+    const cpu = r['cpu'] as { windowMs: number; processPctOfCore: number; stealPct: number | null; idlePct: number | null; vcpus: number | null } | null | undefined;
+    if (cpu) {
+      console.log(
+        `    cpu          last ${Math.round(cpu.windowMs / 1000)}s: process ${cpu.processPctOfCore}% of one core; ` +
+          `machine steal ${cpu.stealPct ?? '?'}% idle ${cpu.idlePct ?? '?'}% across ${cpu.vcpus ?? '?'} vCPU(s)`,
+      );
+    } else {
+      console.log('    cpu          (not measured by this revision)');
+    }
     // Requests that reached /mcp with no credential: a Routine's connector that
     // lost its token shows here, where a Routine that never called shows nothing.
     const bare = r['credentialless'] as { byClient: Array<{ key: string; count: number; first: string; last: string }>; recent: Array<{ at: string; key: string }> } | undefined;

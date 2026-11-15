@@ -39,6 +39,7 @@ import {
   stallReading,
   outboundReading,
   memoryReading,
+  cpuReading,
   databaseFailureCounts,
   infraFailureCounts,
   latencySummary,
@@ -480,6 +481,8 @@ export function processReadings(): Record<string, unknown> {
     // Client sockets opened, by host: who is paying for new TLS handshakes.
     outbound: outboundReading(),
     memory: memoryReading(),
+    // Process CPU and the machine's steal time: a throttled shared-CPU machine, read rather than inferred.
+    cpu: cpuReading(),
     // Whether optional work is being deferred because the database is not
     // answering well enough (`db/pressure.ts`), and why.
     pressure: databasePressure(),

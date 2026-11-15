@@ -273,6 +273,81 @@ describe('coverage', () => {
       expect(gateWith(['some_other_lane']).sufficiency).toBe('INSUFFICIENT');
       expect(gateWith([]).sufficiency).toBe('INSUFFICIENT');
     });
+
+    /*
+     * O-6: the verifier is shown `describeLane`'s rendering and hands it back.
+     * Compared verbatim, "regulator_guidance (conditional)" read as an
+     * undeclared lane and blocked the fragment.
+     */
+    it('reads a lane named by its rendering, its description or another case as that lane', () => {
+      expect(gateWith(['regulator_guidance (conditional)']).sufficiency).toBe('SUFFICIENT');
+      expect(gateWith(['Regulator_Guidance']).sufficiency).toBe('SUFFICIENT');
+      expect(gateWith(['Secondary commentary.']).sufficiency).toBe('SUFFICIENT');
+      expect(gateWith(['operative_authority — the statute']).sufficiency).toBe('INSUFFICIENT');
+    });
+  });
+
+  /*
+   * O-6: a fragment that declares no REQUIRED lane — every research goal's own
+   * round (GOAL_MECHANISM) — could only be blocked, once its claims passed,
+   * by the verifier's opinion, and a round of them ended with no report.
+   */
+  describe('a fragment that declares no required lane', () => {
+    const allConditional = [
+      lane({ id: 'demand_signal', description: 'A specific open request.', necessity: 'CONDITIONAL' }),
+      lane({ id: 'economics', description: 'What one sale earns.', necessity: 'CONDITIONAL' }),
+    ];
+    const gateWith = (
+      claims: ResearchClaim[],
+      verification: Partial<Parameters<typeof applyGate>[0]['verification']> = {},
+    ) =>
+      applyGate({
+        fragment: fragment({ requiredEvidence: allConditional }),
+        claims,
+        verification: { ...verdictsFor(claims), ...verification },
+      });
+
+    it('is not blocked by a verifier that names no lane, and records its judgement as unresolved', () => {
+      const result = gateWith([claim({ evidenceLane: 'economics' })], {
+        sufficiency: 'INSUFFICIENT',
+        missingLanes: [],
+      });
+      expect(result.integrity).toBe('PASS');
+      expect(result.sufficiency).toBe('SUFFICIENT');
+      expect(result.reasons.join(' ')).toContain('declares no required lane');
+      expect(result.reasons.join(' ')).toContain('demand_signal');
+      expect(result.unresolvedGaps.join(' ')).toContain('Verification judged');
+    });
+
+    it("keeps the verifier's own gaps when it wrote them", () => {
+      const result = gateWith([claim({ evidenceLane: 'economics' })], {
+        sufficiency: 'INSUFFICIENT',
+        missingLanes: ['some_undeclared_lane'],
+        unresolvedGaps: ['No buyer was found paying for it.'],
+      });
+      expect(result.sufficiency).toBe('SUFFICIENT');
+      expect(result.unresolvedGaps).toEqual(['No buyer was found paying for it.']);
+    });
+
+    it('is still blocked when nothing survived or every source was unreadable', () => {
+      const unread = gateWith([claim({ evidenceLane: 'economics', retrievalState: 'NOT_REACHABLE' })], {
+        sufficiency: 'INSUFFICIENT',
+      });
+      expect(unread.integrity).toBe('FAIL');
+      expect(unread.unresolvedRetrieval).toHaveLength(1);
+      expect(gateWith([], { sufficiency: 'INSUFFICIENT' }).integrity).toBe('FAIL');
+    });
+
+    it('is still held to its independent-source floor', () => {
+      const claims = [claim({ evidenceLane: 'economics' })];
+      const result = applyGate({
+        fragment: fragment({ requiredEvidence: allConditional, minIndependentSources: 2 }),
+        claims,
+        verification: { ...verdictsFor(claims), sufficiency: 'INSUFFICIENT' },
+      });
+      expect(result.integrity).toBe('PASS');
+      expect(result.sufficiency).toBe('INSUFFICIENT');
+    });
   });
 });
 

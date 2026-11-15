@@ -76,10 +76,30 @@ export interface Observation {
   source: SourceRef;
   /** When it was observed (ISO), for staleness. */
   observedAt?: string | null;
+  /**
+   * Until when its source says it holds (YYYY-MM-DD or ISO), W-12. When set it
+   * replaces the quantity's default window; past it the observation ages
+   * exactly as one past the default does — down-weighted, never dropped.
+   */
+  validUntil?: string | null;
+  /** How the source measured it, as the source states it (W-11). */
+  method?: string | null;
+  /**
+   * The condition its source said would make it wrong, and when that was
+   * recorded as met (W-12). An observation whose condition is met is excluded
+   * with this as the reason; while `metAt` is null it counts as usual.
+   */
+  invalidation?: { condition: string; metAt: string | null; note?: string | null } | null;
   /** True when this observation is about broad economics rather than any activity. */
   broad?: boolean;
   /** A note a reader can check: what exactly the figure measures. */
   measures?: string;
+  /**
+   * A demand rate somebody chose to publish (a vendor's case study, a
+   * benchmark page) rather than one this Brain measured: read through the
+   * selection discount (`pool.ts` `PUBLISHED_RATE_SELECTION`).
+   */
+  published?: boolean;
 }
 
 /**
@@ -123,7 +143,12 @@ export interface QuantityNode {
    * a positive quantity, the absolute width p90 − p10 for a rate or a real.
    */
   sufficientWidth?: number;
-  /** Observations older than this many days are stale and not used. */
+  /**
+   * How many days an observation counts at full weight, and the half-life it
+   * ages by afterwards (W-12): past the window its information halves every
+   * `freshDays`, widening the interval, but it is never excluded for age. An
+   * observation's own `validUntil` replaces the window.
+   */
   freshDays?: number;
   /** A person's stated value, used only when nothing else answers. Never a distribution. */
   assumed?: { low: number; high: number; source: SourceRef };
@@ -174,6 +199,23 @@ export interface Estimate {
   trace: string[];
   /** Natural-scale samples of the predictive distribution, for propagation. Not serialized by readers. */
   samples: number[];
+  /**
+   * The evidence behind it in units a plan compares (Q2-1/Q2-2, 2026-11-14):
+   * independent populations kept after lineage collapse, those whose source
+   * stated a sample, and the predictive distribution's worth in events
+   * (p(1−p)/Var(p) for a rate; one per measured case for a magnitude; the
+   * weakest part for a rebuilt quantity; 0 when no distribution is justified).
+   */
+  populations?: number;
+  sizedPopulations?: number;
+  events?: number;
+  /**
+   * Sized observations of it disagree beyond what their own sampling explains
+   * (L-1, 2026-11-14): the two furthest apart, and why. A contested estimate
+   * is widened to the spread between them, is bounds only, and never
+   * establishes a link or supports a verified probability.
+   */
+  contested?: { ids: string[]; reason: string };
 }
 
 export interface Reconstruction {

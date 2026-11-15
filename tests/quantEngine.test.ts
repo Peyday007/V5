@@ -306,11 +306,14 @@ describe('N. a numerically consistent model that rests on invalid transfers', ()
     expect(est.distributionJustified).toBe(false);
   });
 
-  it('marks stale evidence and does not use it', () => {
+  it('keeps stale evidence with its age, down-weighted rather than excluded (W-12)', () => {
     const node: QuantityNode = { key: 'price', label: 'p', unit: 'USD', kind: 'POSITIVE', freshDays: 365, observations: [point('old_quote', 100, {}, ['q'], { observedAt: '2021-01-01T00:00:00Z' })] };
     const est = reconstruct({ nodes: [node] }, 'price', now).estimates.price!;
-    expect(est.excluded[0]!.reason).toMatch(/stale/);
-    expect(est.tier).toBe('UNKNOWN');
+    expect(est.excluded).toEqual([]);
+    expect(est.used).toEqual(['old_quote']);
+    const freshNode: QuantityNode = { ...node, observations: [point('new_quote', 100, {}, ['q'], { observedAt: now.toISOString() })] };
+    const fresh = reconstruct({ nodes: [freshNode] }, 'price', now).estimates.price!;
+    expect(est.p95 / est.p05).toBeGreaterThan(fresh.p95 / fresh.p05);
   });
 });
 

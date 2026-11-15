@@ -760,6 +760,21 @@ export const MEASURE_MAX_HOURS = 7 * 24;
 /** A failed change is reverted once; a weakness is engineered at most this many times. */
 export const MAX_ATTEMPTS = 3;
 
+/**
+ * Register rows the operator keeps as a record, never as work for the loop to advance:
+ * a standing mission (`OPERATOR_MISSION`, keyed e.g. `SURGE:B`) and an inventory finding
+ * (`OPERATOR_INVENTORY`, keyed `SURGE-B:<issue id>`). They live in §87's register because
+ * that is where the operator's directives, attempts and verdicts already live (§109), so
+ * a finding and the campaign commissioned for it are one table and one event log. The
+ * tick never researches, engineers or combines them: an inventory row becomes Factory
+ * work only when the operator commissions it, which registers its own directed row.
+ */
+export const RECORD_ONLY_KINDS = ['OPERATOR_MISSION', 'OPERATOR_INVENTORY'] as const;
+
+export function isRecordOnly(candidate: { kind: string }): boolean {
+  return (RECORD_ONLY_KINDS as readonly string[]).includes(candidate.kind);
+}
+
 export type Decision = 'KEPT' | 'KEPT_NO_EFFECT' | 'REVERTED' | 'REJECTED' | 'COMBINED' | 'HELD';
 
 export function decideAfterMeasurement(input: {

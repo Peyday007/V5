@@ -129,6 +129,12 @@ export async function recordFragmentClaims(input: {
         // And the opening's published deadline, for the same reason: declared at
         // both doors and dropped here, it would land NULL and nothing would stop.
         closesOn: claim.closesOn ?? null,
+        // And how it was measured and how long it holds (W-11): declared at both doors, carried here.
+        measurementMethod: claim.measurementMethod ?? null,
+        sampleSize: claim.sampleSize ?? null,
+        limitations: claim.limitations ?? null,
+        validUntil: claim.validUntil ?? null,
+        invalidatedBy: claim.invalidatedBy ?? null,
         /*
          * The structural declaration travels whole or not at all.
          *

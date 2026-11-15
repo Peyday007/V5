@@ -64,10 +64,12 @@ function planAuthority(projectId: string, action: string): ReturnType<typeof che
 }
 import { composeBuyerMessage } from '../cash/outreach.ts';
 import { evidenceCard } from '../cash/card.ts';
-import { ARRANGEMENT_ID_PREFIX, isArrangementId, bestCaseReach, composeGoalModel, planTrace, dealsForGoal, OUTREACH_MULTIPLE, priceSupported, volumeEstablished, wilson, type ModelledOpportunity } from '../cash/goalScenario.ts';
+import { ARRANGEMENT_ID_PREFIX, isArrangementId, bestCaseReach, composeGoalModel, inventedDesigner, planTrace, dealsForGoal, OUTREACH_MULTIPLE, priceSupported, volumeEstablished, wilson, type ModelInput, type ModelledOpportunity } from '../cash/goalScenario.ts';
 import { readTarget, type TargetReading } from './target.ts';
 import { executionFrame, MAX_LIVE_GOAL_ROUNDS, openConstructedRound, openGoalDiscovery, roundsStillResearching } from '../cash/discovery.ts';
-import { constructArrangements, type ConstructedArrangement } from '../cash/construct.ts';
+import { constructArrangements, lastConstructionReport, type ConstructedArrangement } from '../cash/construct.ts';
+import { arrangementKeyOfBucket, recordReadingEvaluations, refutedUnderSameInputs, rememberArrangements } from '../cash/arrangementLibrary.ts';
+import { arrangementVerdicts } from '../../repos/monetization.ts';
 import { exclusionSentence, goalExclusions } from '../cash/exclusions.ts';
 import { OPENING_SENTENCE } from '../cash/construct.ts';
 import { listRounds } from '../../repos/cashDiscovery.ts';
@@ -85,7 +87,7 @@ import type { ScenarioResult } from '../../domain/scenario.ts';
 import type { Workstream } from '../../domain/register.ts';
 import { decideResearch, type ResearchDecision } from '../quant/deadline.ts';
 import { goalExecutionPolicy, MAX_CONCURRENT_SALES, type GoalExecutionPolicy } from '../../domain/goalPolicy.ts';
-import type { GoalPortfolio } from './portfolio.ts';
+import { inputEvidence, type GoalPortfolio, type InputEvidence } from './portfolio.ts';
 import { sendPlanQuestions, sendPortfolioNeeds } from './portfolioNeeds.ts';
 import { diagnoseGoalResearch, diagnosisInstructions, recentGoalRounds, type ResearchDiagnosis } from './researchYield.ts';
 import type { EvidenceTier } from '../../domain/quant.ts';
@@ -93,8 +95,9 @@ import { readPathways, requiredStructures, type BrainCapabilities, type GoalStru
 import { MATERIAL_P50, MATERIAL_REACH, reconstructPlan, type Reconstruction } from './reconstruction.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { sharedEvaluator } from './reasoning/evaluatorPool.ts';
-import { inventDirections } from './reasoning/invent.ts';
-import { loadLibrary, recordExploration } from './reasoning/learning.ts';
+import { inventDirections, inventEnabled } from './reasoning/invent.ts';
+import type { ExploreContext } from './reasoning/directions.ts';
+import { loadLibrary, loadStancePrior, recordExploration } from './reasoning/learning.ts';
 import { implementedFormats } from '../puzzle/formats/index.ts';
 
 export const PLAN_VERDICTS = ['RECOMMENDABLE', 'NEEDS_EVIDENCE', 'NOT_VIABLE'] as const;
@@ -108,7 +111,7 @@ export const CHAIN_LABEL: Record<ChainLink, string> = {
   REACHABLE_BUYER: 'a buyer we can actually reach',
   CURRENT_DEMAND: 'a dated sign they need it now',
   OFFER_AND_PRICE: 'an offer and a price',
-  CONVERSION: 'buyers who have actually agreed to it',
+  CONVERSION: 'buyers who have actually agreed to it, or a sized measure of how many agree',
   MARKET_VOLUME: 'enough buyers, buying often enough, for the deals the plan needs',
   FULFILMENT: 'proof it can be delivered — by Brain or by whoever is named to do it',
   ECONOMICS: 'known costs and money tied up, inside the limits',
@@ -208,6 +211,47 @@ export interface PlanAcceptance {
   /** Why the candidate is not accepted, each a thing work can change. */
   shortfalls: string[];
   sentence: string;
+  /**
+   * The verdict, as the owner names them (Q2-8, 2026-11-14). Kept beside
+   * `status`, which every existing reader uses: CONFIDENCE_VERIFIED iff
+   * ACCEPTED (and so iff the reading is RECOMMENDABLE);
+   * QUANTITATIVELY_CONSTRUCTED — every input of the candidate rests on
+   * evidence or this Brain's measurements, every link is established, and
+   * its reach is stated as an interval under parameter uncertainty whose 5th
+   * percentile is under the requirement; IMPROVEMENT_REQUIRED — a candidate
+   * (or none) whose inputs or links are not yet evidenced, with what to
+   * improve named; NOT_SUPPORTED — arithmetic rules the goal out as stated.
+   */
+  verdict?: AcceptanceVerdict;
+  /**
+   * Result A (owner, 2026-11-14): the quantitatively constructed plan, always
+   * present when any candidate exists, whatever the verdict — its reach with
+   * an interval, the evidence each input rests on, what is assumed, and what
+   * would raise it. Certification (result B) is `verdict` and `probability`.
+   */
+  construction?: PlanConstruction | null;
+}
+
+export const ACCEPTANCE_VERDICTS = ['CONFIDENCE_VERIFIED', 'QUANTITATIVELY_CONSTRUCTED', 'IMPROVEMENT_REQUIRED', 'NOT_SUPPORTED'] as const;
+export type AcceptanceVerdict = (typeof ACCEPTANCE_VERDICTS)[number];
+
+export interface PlanConstruction {
+  label: string;
+  opportunityIds: string[];
+  /** Share of worlds reaching the target (the predictive probability when `basis` is PROBABILITY). */
+  reach: number | null;
+  basis: 'PROBABILITY' | 'COVERAGE' | null;
+  /**
+   * Reach under parameter uncertainty: 5th, 50th and 95th percentile over the
+   * outer draws. With basis ASSUMED_RANGES it is sensitivity to assumptions.
+   */
+  interval: { low: number; p50: number; high: number; draws: number; basis: 'EVIDENCE' | 'ASSUMED_RANGES' } | null;
+  /** Each member input and what it rests on. */
+  evidence: Array<{ opportunityId: string; input: string; tier: string; events: number | null; populations: number; sizedPopulations: number; establishes: boolean }>;
+  /** What the reading assumes rather than knows. */
+  assumptions: string[];
+  /** The inputs whose uncertainty most limits the lower end, with the research that would narrow each (Q2-6). */
+  improve: string[];
 }
 
 export interface PlanReading {
@@ -527,6 +571,9 @@ function linkChecks(one: ModelledOpportunity, deals: number, target: TargetReadi
   const caps = o.requiredCapabilities;
   const allPresent = caps.length > 0 && caps.every((id) => capabilities.get(id) === 'PRESENT');
   const established = (input: { provenance: string }) => input.provenance === 'EVIDENCE' || input.provenance === 'HISTORICAL';
+  const conversion = conversionState(one);
+  const economics = economicsState(one, target);
+  const settles = settlesState(one, target);
   return [
     { link: 'REACHABLE_BUYER', ok: !!o.reachableChannel && !!o.payer, basis: o.reachableChannel ? `reach: ${o.reachableChannel.slice(0, 80)}` : 'nobody has established how to reach the buyer' },
     { link: 'CURRENT_DEMAND', ok: !!(o.buyingSignal && fresh), basis: o.buyingSignal ? (fresh ? `signal dated ${o.signalObservedAt!.slice(0, 10)}` : 'the buying signal is undated or older than the policy allows') : 'no buying signal recorded' },
@@ -546,32 +593,89 @@ function linkChecks(one: ModelledOpportunity, deals: number, target: TargetReadi
     },
     {
       link: 'CONVERSION',
-      ok: deals === 0 ? one.agreed : one.close.provenance === 'HISTORICAL',
+      ok: deals === 0 ? one.agreed : conversion.state !== 'NONE',
       basis:
         deals === 0
           ? one.agreed ? `buyers have agreed to ${one.agreedValue} ${target.currency}` : 'nothing agreed and no buyers offered'
-          : one.close.provenance === 'HISTORICAL'
+          : conversion.state === 'HISTORICAL'
             ? one.close.note
-            : `${deals} new buyer(s) would be offered and nobody knows how many would agree${one.agreed ? ` (one agreement of ${one.agreedValue} is recorded)` : ''}`,
+            : conversion.state === 'TRANSFERRED'
+              ? `TRANSFERRED: ${conversion.basis}`
+              : `${deals} new buyer(s) would be offered and nobody knows how many would agree${one.agreed ? ` (one agreement of ${one.agreedValue} is recorded)` : ''}${conversion.basis ? ` (${conversion.basis})` : ''}`,
     },
     volumeCheck(one, deals),
     fulfilmentCheck(one, caps, allPresent, capabilities),
     {
       link: 'ECONOMICS',
-      ok: one.directCost.value !== null && one.capital.value !== null && established(one.directCost) && one.capital.value !== null,
-      basis: one.directCost.value !== null && one.capital.value !== null ? `cost ${one.directCost.value}, tied up ${one.capital.value}` : 'costs or money tied up are not established',
+      ok: economics.ok,
+      basis: economics.basis,
     },
     {
       link: 'SETTLES_IN_TIME',
-      ok: one.daysToCash.value !== null && target.daysLeft !== null && one.daysToCash.value <= target.daysLeft && established(one.daysToCash),
+      ok: settles.ok,
       basis:
         one.competitiveAward && !established(one.daysToCash)
           ? 'money comes only after winning an award, then doing the work, then the buyer paying on its terms — nobody has established when that would be'
-          : one.daysToCash.value !== null
-            ? `${one.daysToCash.value} days to usable cash against ${target.daysLeft} left`
-            : 'nobody has established when the money would settle',
+          : settles.basis,
     },
   ];
+}
+
+/**
+ * How the close rate is evidenced (Q2-3, 2026-11-14). HISTORICAL — this
+ * Brain's own buyers agreed. TRANSFERRED — reconstructed from sized evidence:
+ * DIRECT, COMPARABLE over two or more independent sized populations, or a
+ * COMPONENT whose parts are all evidence, worth at least the minimum events.
+ * Weaker than HISTORICAL and said so on the link, but it establishes the link:
+ * before, "buyers who have actually agreed" meant only this Brain's own sales,
+ * so no new buyer, however well evidenced, could ever complete a chain.
+ * Unsized, single-comparable, mechanism, assumed and unknown never do.
+ */
+export function conversionState(one: Pick<ModelledOpportunity, 'close'>): { state: 'HISTORICAL' | 'TRANSFERRED' | 'NONE'; basis: string; evidence: InputEvidence } {
+  const ev = inputEvidence(one.close, 'close');
+  if (one.close.provenance === 'HISTORICAL' && ev.establishes) return { state: 'HISTORICAL', basis: one.close.note, evidence: ev };
+  if (ev.establishes && ev.drawable) {
+    return { state: 'TRANSFERRED', basis: `close rate ${ev.tier.toLowerCase()} from ${ev.sizedPopulations} independent sized population(s), worth ${ev.events} events (p10 ${fmtRate(one.close.inferred?.p10)}, p90 ${fmtRate(one.close.inferred?.p90)})`, evidence: ev };
+  }
+  return { state: 'NONE', basis: ev.unverifiable ?? '', evidence: ev };
+}
+
+const fmtRate = (x: number | undefined) => (x === undefined ? '?' : `${Math.round(x * 1000) / 10}%`);
+
+/**
+ * Costs and money tied up (Q2-7): a stated figure on evidence, or an evidenced
+ * reconstruction judged at its cautious end — direct cost at p90 under the
+ * price, money tied up at p90 inside the per-arrangement limit — exactly as a
+ * reconstruction is used to refuse.
+ */
+function economicsState(one: ModelledOpportunity, target: TargetReading): { ok: boolean; basis: string } {
+  const evidenced = (input: ModelInput) => input.provenance === 'EVIDENCE' || input.provenance === 'HISTORICAL';
+  const cost = one.directCost;
+  const capital = one.capital;
+  if (cost.value !== null && capital.value !== null) return { ok: evidenced(cost), basis: `cost ${cost.value}, tied up ${capital.value}` };
+  const price = one.price.value ?? one.price.low;
+  const costEv = inputEvidence(cost, 'directCost');
+  const capitalEv = inputEvidence(capital, 'capital');
+  const costHigh = cost.value ?? (costEv.establishes ? cost.inferred?.p90 ?? null : null);
+  const capitalHigh = capital.value ?? (capitalEv.establishes ? capital.inferred?.p90 ?? null : null);
+  const limit = target.capitalBeforeProofCents !== null ? target.capitalBeforeProofCents / 100 : null;
+  const costOk = costHigh !== null && (cost.value !== null ? evidenced(cost) : price !== null && costHigh < price);
+  const capitalOk = capitalHigh !== null && (capital.value !== null || limit === null || capitalHigh <= limit);
+  if (costOk && capitalOk) return { ok: true, basis: `cost ${cost.value ?? `≤ ${Math.round(costHigh!)} at p90 (transferred)`}, tied up ${capital.value ?? `≤ ${Math.round(capitalHigh!)} at p90 (transferred)`}` };
+  return { ok: false, basis: costHigh === null || capitalHigh === null ? 'costs or money tied up are not established' : `the cautious cost (${Math.round(costHigh)}) or money tied up (${Math.round(capitalHigh)}) breaks the price or the limit` };
+}
+
+/** When the cash settles (Q2-7): a stated term on evidence, or an evidenced reconstruction whose p90 is inside the time left. */
+function settlesState(one: ModelledOpportunity, target: TargetReading): { ok: boolean; basis: string } {
+  const days = one.daysToCash;
+  const evidenced = days.provenance === 'EVIDENCE' || days.provenance === 'HISTORICAL';
+  if (days.value !== null) return { ok: target.daysLeft !== null && days.value <= target.daysLeft && evidenced, basis: `${days.value} days to usable cash against ${target.daysLeft} left` };
+  const ev = inputEvidence(days, 'daysToCash');
+  if (ev.establishes && days.inferred) {
+    const ok = target.daysLeft !== null && days.inferred.p90 <= target.daysLeft;
+    return { ok, basis: `TRANSFERRED: ${Math.round(days.inferred.p90)} days to usable cash at p90 (${ev.tier.toLowerCase()}, ${ev.sizedPopulations} sized population(s)) against ${target.daysLeft} left` };
+  }
+  return { ok: false, basis: 'nobody has established when the money would settle' };
 }
 
 /**
@@ -609,7 +713,15 @@ function fulfilmentCheck(one: ModelledOpportunity, caps: string[], allPresent: b
 function volumeCheck(one: ModelledOpportunity, deals: number): LinkCheck {
   const needed = one.repeatable ? Math.ceil(deals / OUTREACH_MULTIPLE) : Math.min(deals, 1);
   if (!one.repeatable || needed === 0) return { link: 'MARKET_VOLUME', ok: true, basis: one.repeatable ? 'no new deals needed' : 'a one-off needs its one buyer' };
-  if (!volumeEstablished(one)) return { link: 'MARKET_VOLUME', ok: false, basis: `${needed} deal(s) needed and nobody has established how many buyers exist or how often they buy` };
+  if (!volumeEstablished(one)) {
+    // An evidenced reconstruction of the volume establishes it at its cautious end (Q2-1).
+    const ev = inputEvidence(one.volume, 'volume');
+    if (ev.establishes && one.volume.inferred) {
+      const p10 = Math.floor(one.volume.inferred.p10);
+      return { link: 'MARKET_VOLUME', ok: p10 >= needed, basis: `TRANSFERRED: ${needed} deal(s) needed, ${p10} available at p10 (${ev.tier.toLowerCase()})` };
+    }
+    return { link: 'MARKET_VOLUME', ok: false, basis: `${needed} deal(s) needed and nobody has established how many buyers exist or how often they buy` };
+  }
   const available = one.volume.value ?? 0;
   return {
     link: 'MARKET_VOLUME',
@@ -627,6 +739,9 @@ async function nextTestFor(link: ChainLink, one: ModelledOpportunity, projectId:
   const title = one.opportunity.title.slice(0, 80);
   switch (link) {
     case 'CONVERSION': {
+      // Evidence reconstruction was meant to supply is asked for first, by Brain (Q2-6).
+      const need = conversionState(one).evidence.need;
+      if (need) return { link, test: `Research for "${title}": ${need}. A bounded offer test — a few reachable buyers, counting who agrees — would measure it directly.`, by: 'BRAIN', blocker: null };
       const contact = await planAuthority(projectId, 'CONTACT_BUYER');
       const message = (await readCapabilities(['SEND_A_MESSAGE']))[0];
       const test = `A bounded offer test for "${title}": send the offer to a few reachable buyers and count who agrees. Fewer agreements than the plan needs downgrades it.`;
@@ -659,13 +774,16 @@ function conservative(members: { one: ModelledOpportunity; deals: number }[], ta
   let exposure = 0;
   let labour = 0;
   for (const { one, deals } of members) {
-    const close = deals === 0 ? 0 : one.close.provenance === 'HISTORICAL' ? one.close.low : null;
+    const conversion = conversionState(one);
+    // The cautious end of each input: a measured low, or an evidenced reconstruction's p10 (p90 for what costs).
+    const close = deals === 0 ? 0 : conversion.state === 'HISTORICAL' ? one.close.low : conversion.state === 'TRANSFERRED' ? (one.close.inferred?.p10 ?? null) : null;
     const price = one.price.value ?? one.price.low;
-    const days = one.daysToCash.value;
-    const cost = one.directCost.value;
-    const capital = one.capital.value;
+    const cautious = (input: ModelInput, key: 'daysToCash' | 'directCost' | 'capital') => input.value ?? (inputEvidence(input, key).establishes ? (input.inferred?.p90 ?? null) : null);
+    const days = cautious(one.daysToCash, 'daysToCash');
+    const cost = cautious(one.directCost, 'directCost');
+    const capital = cautious(one.capital, 'capital');
     const hours = one.hours.value;
-    const volume = volumeEstablished(one) ? one.volume.value : null;
+    const volume = volumeEstablished(one) ? one.volume.value : inputEvidence(one.volume, 'volume').establishes ? Math.floor(one.volume.inferred?.p10 ?? 0) : null;
     if (volume === null ||
       close === null || price === null || days === null || cost === null || capital === null || hours === null) return { settled: null, exposure: null, labour: null };
     const won = Math.min(deals * close, volume);
@@ -690,13 +808,22 @@ function sweepOf(result: ScenarioResult | null, key: string): StrategyReading['s
 
 /** This Brain's record of earlier recommended goal plans: achieved in time, out of all that ended. */
 export async function measuredPlanChance(): Promise<PlanReading['measuredChance']> {
+  /*
+   * The record counts every plan Brain adopted on evidence and judged at its
+   * end (Q2-9, 2026-11-14): RECOMMENDABLE readings, and readings whose
+   * acceptance was QUANTITATIVELY_CONSTRUCTED. Counting only RECOMMENDABLE
+   * ones was a deadlock — they exist only after an accepted plan, and this
+   * record is one of the ways a plan is accepted.
+   */
   const rows = await getDb().all<{ kind: string }>(
-    `SELECT o.kind FROM goal_outcomes o JOIN goal_plan_readings r ON r.id = o.reading_id WHERE r.verdict = 'RECOMMENDABLE'`,
+    `SELECT o.kind FROM goal_outcomes o JOIN goal_plan_readings r ON r.id = o.reading_id
+      WHERE r.verdict = 'RECOMMENDABLE' OR r.forecast LIKE ?`,
+    ['%"verdict":"QUANTITATIVELY_CONSTRUCTED"%'],
   );
   if (rows.length < RECOMMENDATION_POLICY.minPlanOutcomes) return null;
   const achieved = rows.filter((one) => one.kind === 'ACHIEVED').length;
   const bounds = wilson(achieved, rows.length);
-  return { estimate: achieved / rows.length, lowerBound: bounds.low, upperBound: bounds.high, sampleSize: rows.length, cohort: 'goal plans this Brain recommended, and how they ended' };
+  return { estimate: achieved / rows.length, lowerBound: bounds.low, upperBound: bounds.high, sampleSize: rows.length, cohort: 'goal plans this Brain recommended or adopted on evidence, and how they ended' };
 }
 
 /**
@@ -750,8 +877,11 @@ export function judgeAcceptance(input: {
       candidate,
       shortfalls: [],
       sentence: 'The target is collected: the ledger holds it.',
+      verdict: 'CONFIDENCE_VERIFIED',
+      construction: constructionOf(candidate, input.portfolio ?? null, bestIds),
     };
   }
+  const construction = constructionOf(candidate, input.portfolio ?? null, bestIds);
   const shortfalls: string[] = [];
   // 2. The evidenced portfolio.
   if (best && input.portfolio) {
@@ -765,6 +895,7 @@ export function judgeAcceptance(input: {
     const assurance = input.portfolio.assurance ?? null;
     const sample = assuranceSample(assurance);
     const bounds = { low: assurance?.range?.low ?? 0 };
+    const interval = assurance?.parameterInterval ?? null;
     const missingLinks = bestIds.flatMap((id) => {
       const c = input.considered.find((one) => one.opportunityId === id);
       return c ? c.missing.map((link) => `${id}: ${CHAIN_LABEL[link]}`) : [`${id}: not judged on its chain`];
@@ -777,10 +908,13 @@ export function judgeAcceptance(input: {
       shortfalls.push(`the evidenced combination's chain is incomplete: ${missingLinks.slice(0, 4).join('; ')}`);
     } else if (!assurance || !assurance.claimsAtLeast90 || !assurance.range) {
       shortfalls.push(
-        `the evidenced combination reaches the target in ${pct(best.reach)} of ${worlds} simulated worlds, but simulated worlds are not evidence: ` +
-          (assurance
-            ? `the engine's assurance does not claim ${pct(required)} (${assurance.reason ?? assurance.status})`
-            : 'the engine stated no assurance over the samples behind its inputs'),
+        interval && interval.basis === 'EVIDENCE' && assurance?.status === 'RANGE'
+          ? `the evidenced combination reaches the target with a 5th–95th percentile of ${pct(interval.low)}–${pct(interval.high)} under the uncertainty of its evidenced inputs; the 5th percentile is under ${pct(required)}` +
+              (assurance.limitingInputs?.[0] ? `, limited most by ${assurance.limitingInputs[0].input}` : '')
+          : `the evidenced combination reaches the target in ${pct(best.reach)} of ${worlds} simulated worlds, but simulated worlds are not evidence: ` +
+              (assurance
+                ? `the engine's assurance does not claim ${pct(required)} (${assurance.reason ?? assurance.status})`
+                : 'the engine stated no assurance over the samples behind its inputs'),
       );
     } else if (bounds.low < required) {
       shortfalls.push(`the evidenced combination's defensible lower bound is ${pct(bounds.low)} over its smallest sample${sample ? ` (${sample})` : ''}, under the required ${pct(required)}`);
@@ -793,12 +927,16 @@ export function judgeAcceptance(input: {
           lowerBound: bounds.low,
           basis: 'EVIDENCED_PORTFOLIO',
           sample,
-          note: `the lower bound is read over the smallest evidence sample behind any member (${sample}), not over the ${worlds} simulated worlds; openings sharing outreach fail together at correlation ${input.portfolio.limits.correlation}`,
+          note: interval
+            ? `the lower bound is the 5th percentile of reach over ${interval.draws} draws of the evidenced inputs' parameters (weakest ${sample} events), not the share of ${worlds} simulated worlds; openings sharing outreach fail together at correlation ${input.portfolio.limits.correlation}, and openings drawing one estimate share its draw`
+            : `the lower bound is read over the smallest evidence sample behind any member (${sample}), not over the ${worlds} simulated worlds; openings sharing outreach fail together at correlation ${input.portfolio.limits.correlation}`,
         },
         accepted: { label: candidate!.label, opportunityIds: bestIds },
         candidate,
         shortfalls: [],
-        sentence: `Accepted: the evidenced combination collects the target before the deadline with a defensible lower bound of ${pct(bounds.low)} ≥ ${pct(required)} over its smallest evidence sample (${sample}).`,
+        sentence: `Accepted: the evidenced combination collects the target before the deadline with a defensible lower bound of ${pct(bounds.low)} ≥ ${pct(required)} ${interval ? `(5th percentile under parameter uncertainty, weakest input ${sample} events)` : `over its smallest evidence sample (${sample})`}.`,
+        verdict: 'CONFIDENCE_VERIFIED',
+        construction,
       };
     }
   } else {
@@ -815,6 +953,8 @@ export function judgeAcceptance(input: {
       candidate,
       shortfalls: [],
       sentence: `Accepted: "${input.chosen.label}" has every link established, and ${m.sampleSize} accepted plans like it ended with a success rate whose lower bound is ${pct(m.lowerBound)} ≥ ${pct(required)}.`,
+      verdict: 'CONFIDENCE_VERIFIED',
+      construction,
     };
   }
   shortfalls.push(
@@ -823,7 +963,16 @@ export function judgeAcceptance(input: {
       : `this Brain has too few finished accepted plans (under ${RECOMMENDATION_POLICY.minPlanOutcomes}) to calibrate a success rate`,
   );
   if (input.chosen?.chainComplete) shortfalls.push(`"${input.chosen.label}" has every link established and its cautious numbers reach the target — a qualified candidate, but that is a point reading, not a ${pct(required)} probability`);
-  return {
+  /*
+   * Constructed, or improvement required (Q2-8). Constructed: the portfolio's
+   * inputs are all evidence, every member's chain is complete, and its reach
+   * is stated as an interval under parameter uncertainty. Anything else names
+   * what to improve: the inputs, the links, or — with no candidate — openings.
+   */
+  const missingAny = bestIds.some((id) => (input.considered.find((one) => one.opportunityId === id)?.missing.length ?? 1) > 0);
+  const evidencedInterval = !!construction?.interval && construction.interval.basis === 'EVIDENCE';
+  const constructed = !!candidate && candidate.source === 'QUANT_PORTFOLIO' && input.portfolio?.basis === 'PROBABILITY' && !missingAny && evidencedInterval;
+  const out: PlanAcceptance = {
     status: candidate ? 'CANDIDATE_ONLY' : 'NO_CANDIDATE',
     required,
     probability: null,
@@ -831,7 +980,49 @@ export function judgeAcceptance(input: {
     candidate,
     shortfalls,
     sentence: candidateSentence(candidate, required),
+    verdict: constructed ? 'QUANTITATIVELY_CONSTRUCTED' : 'IMPROVEMENT_REQUIRED',
+    construction,
   };
+  if (constructed && construction?.interval) {
+    out.sentence = `QUANTITATIVELY CONSTRUCTED, not yet confidence-verified: "${candidate!.label.slice(0, 160)}" rests on evidence at every input and link and reaches the target with a 5th–95th percentile of ${pct(construction.interval.low)}–${pct(construction.interval.high)} (median ${pct(construction.interval.p50)}) under the uncertainty of that evidence; ${pct(required)} needs the 5th percentile there.${construction.improve[0] ? ` What would raise it most: ${construction.improve[0].slice(0, 300)}.` : ''}`;
+  }
+  return out;
+}
+
+/**
+ * Result A (owner, 2026-11-14): the plan as constructed — reach, its
+ * interval, what each member input rests on, what is assumed, what would
+ * raise it. Present whenever a candidate is, whatever the verdict.
+ */
+export function constructionOf(candidate: PlanAcceptance['candidate'], portfolio: GoalPortfolio | null, bestIds: string[]): PlanConstruction | null {
+  if (!candidate) return null;
+  const fromPortfolio = candidate.source === 'QUANT_PORTFOLIO' && portfolio;
+  const members = fromPortfolio ? (portfolio.demand ?? []).filter((d) => bestIds.includes(d.opportunityId)) : [];
+  const assurance = fromPortfolio ? (portfolio.assurance ?? null) : null;
+  return {
+    label: candidate.label,
+    opportunityIds: candidate.opportunityIds,
+    reach: candidate.reach,
+    basis: candidate.reachBasis,
+    interval: assurance?.parameterInterval ?? null,
+    evidence: members.flatMap((d) =>
+      (d.inputs ?? []).map((one) => ({ opportunityId: d.opportunityId, input: one.name, tier: one.tier, events: one.events, populations: one.populations, sizedPopulations: one.sizedPopulations, establishes: one.establishes })),
+    ),
+    assumptions: [
+      ...members.flatMap((d) => d.unestablished.map((u) => `${d.title.slice(0, 60)}: ${u} is not established`)),
+      ...(fromPortfolio ? [`openings sharing outreach move together at an assumed correlation of ${portfolio.limits?.correlation ?? 'the stated value'}`, 'replies and agreements are drawn as Poisson and binomial chance around the drawn rates'] : []),
+    ],
+    improve: [...new Set([...(assurance?.limitingInputs ?? []).map((one) => one.need), ...(assurance?.researchNeeds ?? [])])].slice(0, 6),
+  };
+}
+
+/** The verdict a stored or adjusted acceptance carries, from its status and construction (Q2-8). Pure. */
+export function verdictOf(acceptance: PlanAcceptance): AcceptanceVerdict {
+  if (acceptance.status === 'ACCEPTED') return 'CONFIDENCE_VERIFIED';
+  if (acceptance.status === 'NOT_SUPPORTED') return 'NOT_SUPPORTED';
+  if (acceptance.status === 'NO_CANDIDATE') return 'IMPROVEMENT_REQUIRED';
+  if (acceptance.candidate?.source === 'RECONSTRUCTED') return acceptance.candidate.reachBasis === 'PROBABILITY' ? 'QUANTITATIVELY_CONSTRUCTED' : 'IMPROVEMENT_REQUIRED';
+  return acceptance.verdict === 'QUANTITATIVELY_CONSTRUCTED' ? 'QUANTITATIVELY_CONSTRUCTED' : 'IMPROVEMENT_REQUIRED';
 }
 
 /** The sentence a reading that holds no accepted plan says about its strongest candidate. */
@@ -846,11 +1037,15 @@ export function candidateSentence(candidate: PlanAcceptance['candidate'], requir
   );
 }
 
-/** The smallest evidence sample the engine's assurance read its bound over, or 0 when it states none. */
+/**
+ * The smallest evidence sample the engine's assurance read its bound over, or
+ * 0 when it states none. Read from the assurance's structured sample (Q2-12),
+ * never parsed out of its prose.
+ */
 export function assuranceSample(assurance: GoalPortfolio['assurance']): number {
   if (!assurance) return 0;
-  const stated = /smallest sample (\d+)/.exec(assurance.reason ?? '');
-  if (stated) return Number(stated[1]);
+  const events = assurance.sample?.events;
+  if (typeof events === 'number' && Number.isFinite(events) && events > 0) return Math.round(events);
   const sizes = (assurance.history ?? []).map((one) => one.sampleSize).filter((n): n is number => typeof n === 'number' && n > 0);
   return sizes.length > 0 ? Math.min(...sizes) : 0;
 }
@@ -916,13 +1111,18 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     return [] as ConstructedArrangement[];
   });
   trace(`constructed ${arrangements.length}`);
+  const constructionCut = lastConstructionReport(target.projectId);
+  // A cap that left candidates uncomposed is said, never silent (K-2): they stay in the space, ranked below the cut.
+  if (constructionCut && constructionCut.cut > 0) {
+    degraded.push(`construction cap: ${constructionCut.composed} of ${constructionCut.considered} candidate arrangements composed this pass; ${constructionCut.cut} ranked below the cap were not (${constructionCut.reused} reused from the library)`);
+  }
   const model = await composeGoalModel({ goal, target, now, arrangements });
   trace('composed');
   const measuredChance = await measuredPlanChance();
   const base = { goalId: goal.id, target, excluded: model.excluded, measuredChance };
   const outcomeRecorded = await goalOutcomeRecorded(goal.id);
   if (model.refusal) {
-    const refusedReconstruction = target.achieved ? null : await reconstructionFor(model, RECOMMENDATION_POLICY.requiredProbability, { goalId: goal.id, persist: !!input.persist, degraded });
+    const refusedReconstruction = target.achieved ? null : await reconstructionFor(model, RECOMMENDATION_POLICY.requiredProbability, { goalId: goal.id, persist: !!input.persist, degraded, designer: goalDesigner(goal, target, now) });
     let refusedAcceptance = judgeAcceptance({ achieved: target.achieved, chosen: null, portfolio: model.portfolio, measuredChance, considered: [] });
     const refusedPlan = adoptReconstruction({ reconstruction: refusedReconstruction, baseline: model.portfolio, openings: planOpenings(model) });
     if (refusedPlan.candidate && refusedAcceptance.status !== 'ACCEPTED') {
@@ -1249,7 +1449,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     }
   }
   // A plan short of its requirement is reconstructed, not just re-read (§99).
-  const reconstruction = acceptance.status !== 'ACCEPTED' ? await reconstructionFor(model, acceptance.required, { goalId: goal.id, persist: !!input.persist, degraded }) : null;
+  const reconstruction = acceptance.status !== 'ACCEPTED' ? await reconstructionFor(model, acceptance.required, { goalId: goal.id, persist: !!input.persist, degraded, designer: goalDesigner(goal, target, now) }) : null;
   trace('reconstruction');
   /*
    * One plan (C-6). The reconstruction's strongest plan, when it beats the plan
@@ -1264,6 +1464,12 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   // The goal as stated, judged on arithmetic rather than on the openings found (C-10, §65).
   const infeasible = acceptance.status === 'ACCEPTED' ? null : judgeFeasibility(feasibilityInput(reconstruction, pathways.structures, model.portfolio, target, acceptance.required));
   if (infeasible) acceptance = notSupported(acceptance, infeasible);
+  // The verdict follows the plan adopted: a reconstructed candidate is constructed from its own reading, not the baseline's.
+  acceptance = {
+    ...acceptance,
+    verdict: verdictOf(acceptance),
+    construction: acceptance.candidate?.source === 'RECONSTRUCTED' ? constructionOf(acceptance.candidate, null, []) : (acceptance.construction ?? constructionOf(acceptance.candidate, null, [])),
+  };
   const adopted = plan.adoption.source === 'RECONSTRUCTED' ? new Set(acceptance.candidate?.opportunityIds ?? []) : null;
   const sales = policy === 'SQUEEZE' && !infeasible ? await salesFor(considered, model.portfolio, byIdOf(model), target, adopted) : [];
   exemptSales(goal.id, sales.map((one) => one.opportunityId));
@@ -1400,7 +1606,7 @@ export function inventDue(goalId: string | undefined, now = Date.now()): boolean
 export async function reconstructionFor(
   model: { portfolio: GoalPortfolio | null; portfolioInput?: Parameters<typeof reconstructPlan>[0]['portfolio'] & { openings: Parameters<typeof reconstructPlan>[0]['openings'] } | null },
   required: number,
-  context: { goalId?: string; persist?: boolean; degraded?: string[]; reconstruct?: typeof reconstructPlan; library?: typeof loadLibrary } = {},
+  context: { goalId?: string; persist?: boolean; degraded?: string[]; reconstruct?: typeof reconstructPlan; library?: typeof loadLibrary; stancePrior?: typeof loadStancePrior; designer?: () => Promise<NonNullable<ExploreContext['design']>> } = {},
 ): Promise<Reconstruction | null> {
   if (!model.portfolio || !model.portfolioInput || model.portfolioInput.openings.length === 0) return null;
   const degraded = context.degraded ?? [];
@@ -1416,6 +1622,20 @@ export async function reconstructionFor(
       degraded.push(`reasoning library: ${errorText(error)} (explored without the methods that worked before)`);
       return [];
     });
+    // What each stance has yielded across goals allocates the seed budget (lens S, S-10); without it every stance is even.
+    const stancePrior = await (context.stancePrior ?? loadStancePrior)().catch((error: unknown) => {
+      degraded.push(`reasoning stance record: ${errorText(error)} (seeds allocated evenly across stances)`);
+      return {};
+    });
+    const due = inventDue(context.goalId);
+    const design =
+      // Construction's rows are read only when a model will actually be asked: a read with no lane pays nothing for it.
+      due && context.designer && inventEnabled()
+        ? await context.designer().catch((error: unknown) => {
+            degraded.push(`invented designs: ${errorText(error)} (the model was asked without a construction path for new designs)`);
+            return null;
+          })
+        : null;
     const r = await reconstruct({
       openings,
       portfolio,
@@ -1423,11 +1643,13 @@ export async function reconstructionFor(
       required,
       evaluator,
       // The model is asked at most every INVENT_EVERY_MS per goal; between, the library carries what it invented.
-      explore: { library, ...(inventDue(context.goalId) ? { invent: (brief) => inventDirections(brief) } : {}) },
+      // When it is asked, it may also invent designs for new buyers, composed by construction (S-11).
+      explore: { library, stancePrior, ...(due ? { invent: (brief) => inventDirections(brief), ...(design ? { design } : {}) } : {}) },
     });
     if (context.goalId) explored.set(context.goalId, { key: inputsKey, at: Date.now(), reconstruction: r });
     if (context.persist && context.goalId && r.exploration) {
-      await recordExploration(context.goalId, r.exploration).catch((error: unknown) => {
+      // Credited once per (goal, inputs): a re-read of unchanged inputs is the same trial (lens S, S-9).
+      await recordExploration(context.goalId, r.exploration, inputsKey).catch((error: unknown) => {
         degraded.push(`reasoning record: ${errorText(error)} (this exploration is not in the library)`);
       });
     }
@@ -2457,11 +2679,12 @@ async function persistReading(goal: Workstream, reading: PlanReading, chosen: St
     infeasible: reading.infeasible,
     degraded: reading.degraded,
   };
+  const readingId = newId('gpr');
   await getDb().run(
     `INSERT INTO goal_plan_readings (id, workstream_id, digest, scenario_model_id, scenario_run_id, verdict, chosen_strategy, strategies, next_test, forecast, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      newId('gpr'),
+      readingId,
       goal.id,
       digest,
       reading.scenarioModelId,
@@ -2480,12 +2703,21 @@ async function persistReading(goal: Workstream, reading: PlanReading, chosen: St
     summary: reading.summary.slice(0, 400),
     actorRef: 'BRAIN',
   });
+  // Which constructed arrangements this model weighed, and which it picked, go on their library rows (K-3).
+  await recordReadingEvaluations({
+    projectId: reading.target.projectId,
+    goalId: goal.id,
+    readingId,
+    demand: reading.portfolio?.demand ?? [],
+    picked: new Set(reading.portfolio?.best?.members.map((one) => one.opportunityId) ?? []),
+    prefix: ARRANGEMENT_ID_PREFIX,
+  }).catch((error: unknown) => console.warn(`goal ${goal.id}: arrangement evaluations not recorded: ${errorText(error)}`));
   // A recommended plan's opportunities become work this goal pursues, so the
   // goal tick holds and prioritizes them. Execution itself stays with the
   // existing commercial authority and its effects.
   // A qualified candidate is pursued too: it is the strongest provisional plan, sold and improved while
   // nothing is accepted (owner, 2026-11-09). Only the verdict says whether it meets the objective.
-  const pursued = reading.acceptance.accepted?.opportunityIds.length ? reading.acceptance.accepted.opportunityIds : chosen?.chainComplete ? chosen.opportunityIds : [];
+  const pursued = openingsToPursue(reading, chosen);
   if (pursued.length > 0) {
     const links = await listLinks(goal.id);
     for (const opportunityId of pursued) {
@@ -2493,6 +2725,17 @@ async function persistReading(goal: Workstream, reading: PlanReading, chosen: St
       await linkWorkstream({ workstreamId: goal.id, kind: 'OPPORTUNITY', ref: opportunityId, relation: 'PURSUES', recordedBy: 'BRAIN', recordedByUserId: null });
     }
   }
+}
+
+/**
+ * The openings a stored reading makes this goal pursue: the accepted plan's,
+ * else a complete chosen chain's. An `arr_` id is a constructed arrangement
+ * — an estimate in the model, never a row — so it is recorded as an
+ * evaluation on its library row and never linked as an opening (K-3).
+ */
+export function openingsToPursue(reading: Pick<PlanReading, 'acceptance'>, chosen: Pick<StrategyReading, 'chainComplete' | 'opportunityIds'> | null): string[] {
+  const ids = reading.acceptance.accepted?.opportunityIds.length ? reading.acceptance.accepted.opportunityIds : chosen?.chainComplete ? chosen.opportunityIds : [];
+  return ids.filter((one) => !isArrangementId(one));
 }
 
 /**
@@ -2909,23 +3152,38 @@ export function byLeastAsked<T extends { key: string; structure: string; demand:
 const lastArrangements = new Map<string, { at: number; arrangements: ConstructedArrangement[] }>();
 const ARRANGEMENTS_FRESH_MS = 10 * 60_000;
 
+/** What construction reads for a goal: its process's proved deliverables, its limits and its owner's exclusions. */
+async function constructionInputFor(goal: Workstream, target: TargetReading, now: Date, bestReachCents: number | null = null): Promise<Parameters<typeof constructArrangements>[0]> {
+  const frame = await executionFrame(target.projectId, target.currency);
+  const daysLeft = target.daysLeft ?? 0;
+  return {
+    projectId: target.projectId,
+    currency: target.currency,
+    delivers: frame?.delivers ?? [],
+    capitalCeilingCents: target.capitalCeilingCents,
+    daysLeft,
+    limits: { daysLeft, remainingCents: target.remainingCents, capitalCeilingCents: target.capitalCeilingCents, capitalBeforeProofCents: target.capitalBeforeProofCents, bestReachCents },
+    exclusions: await goalExclusions(goal),
+    now,
+  };
+}
+
+/** The composer for designs the reasoning model invents on this goal (S-11): built only when the model is asked. */
+function goalDesigner(goal: Workstream, target: TargetReading, now: Date): () => Promise<NonNullable<ExploreContext['design']>> {
+  return async () => inventedDesigner(await constructionInputFor(goal, target, now));
+}
+
 /** The goal's constructed arrangements, composed at most once per ten minutes. */
 export async function goalArrangements(goal: Workstream, target: TargetReading, now: Date, bestReachCents: number | null = null): Promise<ConstructedArrangement[]> {
   if (target.daysLeft === null || target.daysLeft <= 0 || target.remainingCents <= 0) return [];
   const held = lastArrangements.get(goal.id);
   if (held && now.getTime() - held.at >= 0 && now.getTime() - held.at < ARRANGEMENTS_FRESH_MS) return held.arrangements;
-  const frame = await executionFrame(target.projectId, target.currency);
-  const arrangements = await constructArrangements({
-    projectId: target.projectId,
-    currency: target.currency,
-    delivers: frame?.delivers ?? [],
-    capitalCeilingCents: target.capitalCeilingCents,
-    daysLeft: target.daysLeft,
-    limits: { daysLeft: target.daysLeft, remainingCents: target.remainingCents, capitalCeilingCents: target.capitalCeilingCents, capitalBeforeProofCents: target.capitalBeforeProofCents, bestReachCents },
-    exclusions: await goalExclusions(goal),
-    now,
-  });
+  const arrangements = await constructArrangements(await constructionInputFor(goal, target, now, bestReachCents));
   lastArrangements.set(goal.id, { at: now.getTime(), arrangements });
+  // The library keeps what was composed: a restart, a deploy or another goal reads it back (K-1).
+  await rememberArrangements(target.projectId, goal.id, arrangements, now.toISOString()).catch((error: unknown) =>
+    console.warn(`goal ${goal.id}: constructed arrangements not stored: ${errorText(error)}`),
+  );
   return arrangements;
 }
 
@@ -2949,7 +3207,7 @@ export function arrangementContribution(reading: Pick<PlanReading, 'portfolio'>)
 export async function askConstructedArrangements(goal: Workstream, reading: PlanReading, now: Date, max: number, liveCap: number): Promise<string[]> {
   const t = reading.target;
   if (t.daysLeft === null || t.daysLeft <= 0 || t.remainingCents <= 0) return [];
-  const arrangements = (await goalArrangements(goal, t, now, goalLimits(reading).bestReachCents))
+  let arrangements = (await goalArrangements(goal, t, now, goalLimits(reading).bestReachCents))
     // A design whose known worst case is more money than the goal may tie up is rejected, not asked (§82).
     .filter((one) => one.stress.exposure !== 'EXCEEDS');
   const opened: string[] = [];
@@ -2968,7 +3226,11 @@ export async function askConstructedArrangements(goal: Workstream, reading: Plan
   const room = Math.max(1, Math.floor(liveCap / 2)) - (await roundsStillResearching(openMx));
   if (room <= 0) return [];
   max = Math.min(max, room);
-  const askedBefore = (await listRounds(t.projectId)).filter((r) => r.bucketId.startsWith(`goal-${goal.id}-mx-`));
+  // Every goal's askings about an arrangement count (K-5): the same structure asked by another goal is not new.
+  const askedBefore = (await listRounds(t.projectId)).filter((r) => arrangementKeyOfBucket(r.bucketId) !== null);
+  // Research already refuted these, under the inputs they still have (K-4): not asked again until a part changes.
+  const library = await arrangementVerdicts(t.projectId);
+  arrangements = arrangements.filter((one) => !refutedUnderSameInputs(one.signature ? library.get(one.signature) : undefined, one));
   // What each would contribute to the whole goal in the last model leads; the least-asked order breaks ties.
   const contribution = arrangementContribution(reading);
   const byContribution = [...byLeastAsked(arrangements, askedBefore)]

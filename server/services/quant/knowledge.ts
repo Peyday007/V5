@@ -29,11 +29,13 @@
  */
 import { listOpportunities } from '../../repos/cashPortfolio.ts';
 import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
-import { claimSources } from '../../repos/research.ts';
+import { claimSources, type ClaimSource } from '../../repos/research.ts';
 import { cashOutcomeLessons, type CashLesson } from '../cash/journey/learning.ts';
 import { readMoneyFigures } from '../cash/figures.ts';
 import type { CashCardFact, CashOpportunity } from '../../domain/types.ts';
 import type { Estimate, Observation, QuantityNode } from '../../domain/quant.ts';
+import { ageOf } from './pool.ts';
+import type { LimitingInput } from './portfolio.ts';
 import { reconstruct } from './reconstruct.ts';
 import { rankRoutesFromLedger, routeMoneyStatement, type RouteMoneyVelocity, type RouteScore } from './deadline.ts';
 import { keepCashLedger, readLedger } from './ledger.ts';
@@ -61,7 +63,13 @@ export const CASH_QUANTITIES = {
    * comparable, discounted for every way its population differs.
    */
   respond: { label: 'Share of prospects contacted who reply with interest', unit: 'share', kind: 'RATE', fields: ['conversionRates', 'buyingEvidence'], material: ['mechanism'], freshDays: 1095 },
-  close: { label: 'Share of interested buyers who agree', unit: 'share', kind: 'RATE', fields: ['conversionRates', 'buyingEvidence'], material: ['mechanism'], freshDays: 1095 },
+  /*
+   * The funnel stage is material for a close rate (Q2-11, 2026-11-14): a
+   * visitor-to-purchase "conversion" on a shop is a different quantity from
+   * the share of interested buyers who agree, and §79 excludes a different
+   * definition rather than averaging it in.
+   */
+  close: { label: 'Share of interested buyers who agree', unit: 'share', kind: 'RATE', fields: ['conversionRates', 'buyingEvidence'], material: ['mechanism', 'funnelStage'], freshDays: 1095 },
 } as const;
 export type CashQuantity = keyof typeof CASH_QUANTITIES;
 
@@ -72,7 +80,7 @@ export interface CashKnowledge {
   opportunities: Map<string, CashOpportunity>;
   facts: CashCardFact[];
   lessons: CashLesson[];
-  sources: Map<string, { sourceUrl: string | null; sourcePublisher: string | null; sourceDate: string | null }>;
+  sources: Map<string, ClaimSource>;
   watermark: string;
   /**
    * What the project's own money ledger measured on each route (MONEY-13-4),
@@ -744,34 +752,90 @@ const RATE_WORDS: Record<'respond' | 'close', RegExp> = {
 };
 const PERCENT = /(\d{1,2}(?:\.\d+)?)\s*%?\s*(?:-|–|to)\s*(\d{1,3}(?:\.\d+)?)\s*(?:%|percent)|(\d{1,3}(?:\.\d+)?)\s*(?:%|percent)/gi;
 
+/** A count of people a rate was measured on, named beside it ("200 qualified leads"). */
+const SAMPLE_NOUN = /\b(\d{1,3}(?:,\d{3})+|\d{2,7})\s+(?:[a-z-]+\s+){0,2}?(?:leads|contacts|calls|prospects|emails|customers|buyers|companies|deals|opportunities|visitors|users|respondents|recipients|accounts|businesses|firms|clients|merchants|sellers|owners|practices|agencies|shops|stores)\b/i;
+/** "n=200", "n = 1,200". */
+const SAMPLE_N = /\bn\s*=\s*(\d{1,3}(?:,\d{3})+|\d{1,7})\b/i;
+/** "40 of 200", "40 out of the 200": successes out of trials. */
+const OUT_OF = /\b(\d{1,3}(?:,\d{3})+|\d{1,7})\s+(?:out\s+)?of\s+(?:the\s+|these\s+|those\s+)?(\d{1,3}(?:,\d{3})+|\d{1,7})\b/i;
+const toInt = (text: string) => Number.parseInt(text.replace(/,/g, ''), 10);
+
 /**
  * A published rate of one kind, read from a researched sentence: a single
- * figure ("a 3.4% reply rate") or a range ("closes 10–25%"). Only a sentence
- * that names the rate's own words counts, so a reply rate is never read as a
- * close rate; a figure over 100% is not a rate. Several figures in the
- * sentences that qualify become one range spanning them — the reader never
- * picks the convenient one.
+ * figure ("a 3.4% reply rate"), a range ("closes 10–25%"), or a count ("40 of
+ * 200 agreed"). Only a sentence that names the rate's own words counts, so a
+ * reply rate is never read as a close rate; a figure over 100% is not a rate.
+ * Several figures in the sentences that qualify become one range spanning
+ * them — the reader never picks the convenient one.
+ *
+ * The sample a source states is kept (Q2-5, 2026-11-14): "20% of 200 qualified
+ * leads (n=200)" is a sized rate worth its 200 trials, and "40 of 200" is a
+ * count. Before, every figure was read unsized and worth four events. A range
+ * with no stated sample stays unsized: `pool.ts` reads its width as spread
+ * between populations, never as precision.
  */
 export function readRate(text: string, kind: 'respond' | 'close'): Observation['value'] | null {
   const words = RATE_WORDS[kind];
   const other = RATE_WORDS[kind === 'respond' ? 'close' : 'respond'];
-  const figures: number[] = [];
+  const figures: Array<{ value: number; sample: number | null }> = [];
+  const counts: Array<{ successes: number; trials: number }> = [];
   for (const sentence of text.split(/(?<=[.;!?])\s+|\n+/)) {
     if (!words.test(sentence)) continue;
     // A sentence naming both rates: each figure belongs to whichever rate's words stand nearest it.
     const both = other.test(sentence);
     const distance = (re: RegExp, at: number, end: number) =>
       Math.min(...[...sentence.matchAll(new RegExp(re.source, 'gi'))].map((m) => (m.index! >= end ? m.index! - end : Math.max(0, at - (m.index! + m[0].length)))));
+    const n = SAMPLE_N.exec(sentence) ?? SAMPLE_NOUN.exec(sentence);
+    const sample = n ? toInt(n[1]!) : null;
+    // A count is read only where it cannot belong to the other rate.
+    const outOf = both ? null : OUT_OF.exec(sentence);
+    if (outOf) {
+      const successes = toInt(outOf[1]!);
+      const trials = toInt(outOf[2]!);
+      if (trials > 0 && successes >= 0 && successes <= trials) counts.push({ successes, trials });
+    }
     for (const match of sentence.matchAll(PERCENT)) {
       if (both && distance(other, match.index!, match.index! + match[0].length) < distance(words, match.index!, match.index! + match[0].length)) continue;
-      const values = match[3] !== undefined ? [Number(match[3])] : [Number(match[1]), Number(match[2])];
-      for (const v of values) if (Number.isFinite(v) && v > 0 && v <= 100) figures.push(Math.round(v * 1e4) / 1e6);
+      const single = match[3] !== undefined;
+      const values = single ? [Number(match[3])] : [Number(match[1]), Number(match[2])];
+      for (const v of values) if (Number.isFinite(v) && v > 0 && v <= 100) figures.push({ value: Math.round(v * 1e4) / 1e6, sample: single && !both && sample !== null && sample >= 2 ? sample : null });
     }
   }
-  if (figures.length === 0) return null;
-  const low = Math.min(...figures);
-  const high = Math.max(...figures);
-  return low === high ? { kind: 'POINT', value: low } : { kind: 'RANGE', low, high };
+  if (figures.length === 0) {
+    // Only a count was stated: that is the measurement.
+    return counts.length === 1 ? { kind: 'COUNT', successes: counts[0]!.successes, trials: counts[0]!.trials } : null;
+  }
+  const low = Math.min(...figures.map((f) => f.value));
+  const high = Math.max(...figures.map((f) => f.value));
+  if (low !== high) return { kind: 'RANGE', low, high };
+  // One figure: a count that states it, else the sample stated beside it, else unsized.
+  const count = counts.find((c) => Math.abs(c.successes / c.trials - low) <= 0.01);
+  if (count) return { kind: 'COUNT', successes: count.successes, trials: count.trials };
+  const sized = figures.map((f) => f.sample).filter((x): x is number => x !== null);
+  return sized.length > 0 ? { kind: 'POINT', value: low, sampleSize: Math.min(...sized) } : { kind: 'POINT', value: low };
+}
+
+/**
+ * Which funnel stage a published conversion figure measures. A figure about
+ * visitors, traffic, a website or a checkout is visit-to-purchase; anything
+ * else stated as a rate of the sale is read as lead-to-close.
+ */
+export function funnelStageOf(text: string): 'VISIT_TO_PURCHASE' | 'LEAD_TO_CLOSE' {
+  return /\b(?:visitors?|traffic|website|web\s?site|landing pages?|checkouts?|store visits?|sessions?|clicks?|impressions?|add[- ]to[- ]cart|e-?commerce)\b/i.test(text) ? 'VISIT_TO_PURCHASE' : 'LEAD_TO_CLOSE';
+}
+
+/**
+ * The upstream study a researched sentence cites ("HubSpot's 2024 State of
+ * Sales report", "the Gong benchmark"), as a lineage id, so two pages
+ * restating one study collapse even when their URLs differ (Q2-11). A reading
+ * convention: a capitalised name immediately before study, report, survey,
+ * benchmark or index. Null when the sentence names none.
+ */
+export function citedStudyOf(text: string): string | null {
+  const match = /\b([A-Z][A-Za-z0-9&.'-]+(?:\s+(?:of|on|for|the|[A-Z][A-Za-z0-9&.'-]+|\d{4})){0,5})\s+(?:study|report|survey|benchmark|index)\b/.exec(text);
+  if (!match) return null;
+  const name = match[1]!.replace(/'s\b/g, '').replace(/\b\d{4}\b/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+  return name.length >= 4 && !/^(?:the|a|an|this|that|our|their|its|in a|in the)$/.test(name) ? `cites:${name}` : null;
 }
 
 function lineageOf(fact: CashCardFact, knowledge: CashKnowledge): string[] {
@@ -798,7 +862,8 @@ export function observationsFor(knowledge: CashKnowledge, quantity: CashQuantity
       out.push({
         id: `lesson:${lesson.mechanism ?? '-'}:${lesson.channel ?? '-'}`,
         value: { kind: 'COUNT', successes: lesson.agreements, trials: lesson.contacts },
-        context: { mechanism: lesson.mechanism ?? 'unstated', channel: lesson.channel ?? 'unstated' },
+        // Agreements per contact on this Brain's own offers: the stage a close rate measures.
+        context: { mechanism: lesson.mechanism ?? 'unstated', channel: lesson.channel ?? 'unstated', funnelStage: 'LEAD_TO_CLOSE' },
         lineage: [`cash_outcomes:${knowledge.projectId}:${lesson.mechanism ?? '-'}:${lesson.channel ?? '-'}`],
         source: { kind: 'OTHER', ref: `cash_outcomes:${lesson.mechanism ?? '-'}`, note: `${lesson.agreements} of ${lesson.contacts} contacts agreed` },
         broad: !same,
@@ -830,13 +895,25 @@ export function observationsFor(knowledge: CashKnowledge, quantity: CashQuantity
     }
     if (!value) continue;
     const src = fact.claimId ? knowledge.sources.get(fact.claimId) : null;
+    // A sample the worker declared on the claim sizes a point the prose left unsized (W-11).
+    if (value.kind === 'POINT' && !value.exact && value.sampleSize === undefined && src?.sampleSize && src.sampleSize > 0) {
+      value = { ...value, sampleSize: src.sampleSize };
+    }
+    const rate = quantity === 'respond' || quantity === 'close';
+    const cites = rate ? citedStudyOf(fact.value) : null;
     out.push({
       id: `fact:${fact.id}`,
       value,
-      context: contextOf(opportunity),
-      lineage: lineageOf(fact, knowledge),
+      context: quantity === 'close' ? { ...contextOf(opportunity), funnelStage: funnelStageOf(fact.value) } : contextOf(opportunity),
+      lineage: [...lineageOf(fact, knowledge), ...(cites ? [cites] : [])],
+      // A demand rate somebody chose to publish is read through the selection discount (`pool.ts`).
+      ...(rate ? { published: true } : {}),
       source: fact.claimId ? { kind: 'CLAIM', ref: fact.claimId, note: src?.sourcePublisher ?? undefined } : { kind: 'CARD_FACT', ref: fact.id },
       observedAt: src?.sourceDate && !Number.isNaN(Date.parse(src.sourceDate)) ? new Date(Date.parse(src.sourceDate)).toISOString() : fact.createdAt,
+      // How it was measured and how long it holds, from the claim itself (W-11/W-12).
+      ...(src?.validUntil ? { validUntil: src.validUntil } : {}),
+      ...(src?.measurementMethod ? { method: src.measurementMethod } : {}),
+      ...(src?.invalidatedBy ? { invalidation: { condition: src.invalidatedBy, metAt: src.invalidationMetAt ?? null, note: src.invalidationNote ?? null } } : {}),
       broad: opportunity.mechanism !== target.mechanism,
       measures: `${fact.field} on "${opportunity.title.slice(0, 60)}"`,
     });
@@ -854,7 +931,8 @@ export function nodeFor(knowledge: CashKnowledge, quantity: CashQuantity, target
     kind: spec.kind,
     min: 0,
     max: spec.kind === 'RATE' ? 1 : 3650,
-    context: contextOf(target),
+    // A close rate is the share of interested buyers who agree: lead-to-close.
+    context: quantity === 'close' ? { ...contextOf(target), funnelStage: 'LEAD_TO_CLOSE' } : contextOf(target),
     material: [...spec.material],
     freshDays: spec.freshDays,
     observations: observationsFor(knowledge, quantity, target),
@@ -880,4 +958,89 @@ export function inferCashQuantity(knowledge: CashKnowledge, quantity: CashQuanti
   const out = est.tier === 'UNKNOWN' ? null : est;
   if (key) knowledge.estimates.set(key, out);
   return out;
+}
+
+/** Which cash quantity a planned opening's field is inferred as (`goals/portfolio.ts` PARAMETER_FIELDS). */
+const QUANTITY_OF_FIELD: Record<string, CashQuantity> = {
+  daysToCash: 'daysToCash',
+  directCost: 'costShare',
+  capital: 'capitalShare',
+  respond: 'respond',
+  close: 'close',
+};
+
+/** One aged observation, and how much refreshing it could move the strongest plan (W-12). */
+export interface StaleRefresh {
+  observationId: string;
+  /** The claim behind it, when it came from research: what a refresh re-asks. */
+  claimId: string | null;
+  quantity: CashQuantity;
+  /** The plan's openings whose input it feeds (empty when the plan does not rest on it). */
+  opportunityIds: string[];
+  /** The plan input's |Spearman rho| with reach (`LimitingInput.sensitivity`), 0 when the plan does not rest on it. */
+  sensitivity: number;
+  pastDays: number;
+  /** Share of its information it still carries. */
+  weight: number;
+  windowFrom: 'VALID_UNTIL' | 'DEFAULT';
+  reason: string;
+}
+
+/**
+ * Which aged evidence to refresh first: the observations past their validity
+ * window, ranked by how much the strongest plan's reach moves with the input
+ * they feed (W-12).
+ *
+ * It does not measure plan impact itself. The plan already did: the outer
+ * parameter loop in `goals/portfolio.ts` ranks each input by its |Spearman rho|
+ * with reach (`LimitingInput`, the same list `assess` names as "limited most
+ * by"). This reads that list, finds the observations each input's estimate
+ * actually pooled, and orders the stale ones by the input's sensitivity, so
+ * research re-asks what could change the plan
+ * before what could not. Aged evidence the plan does not rest on is still
+ * listed, after it, by how far it has aged; nothing is dropped.
+ */
+export function staleRefreshPriority(knowledge: CashKnowledge, limiting: readonly LimitingInput[], now: Date = new Date()): StaleRefresh[] {
+  const found = new Map<string, StaleRefresh>();
+  const consider = (quantity: CashQuantity, target: CashOpportunity, sensitivity: number, opportunityIds: readonly string[]) => {
+    const spec = CASH_QUANTITIES[quantity];
+    // Only what the plan's estimate actually pooled can move it: the rest of the evidence was set aside for a closer tier.
+    const used = sensitivity > 0 ? new Set(inferCashQuantity(knowledge, quantity, target, now)?.used ?? []) : null;
+    for (const obs of observationsFor(knowledge, quantity, target)) {
+      if (obs.invalidation?.metAt) continue;
+      if (used && !used.has(obs.id)) continue;
+      const aging = ageOf(obs, spec.freshDays, now);
+      if (!(aging.pastDays > 0) || aging.windowFrom === null) continue;
+      const key = `${quantity}|${obs.id}`;
+      const seen = found.get(key);
+      if (seen) {
+        seen.opportunityIds = [...new Set([...seen.opportunityIds, ...opportunityIds])];
+        if (sensitivity > seen.sensitivity) seen.sensitivity = sensitivity;
+        continue;
+      }
+      found.set(key, {
+        observationId: obs.id,
+        claimId: obs.source.kind === 'CLAIM' ? obs.source.ref : null,
+        quantity,
+        opportunityIds: [...opportunityIds],
+        sensitivity,
+        pastDays: Math.round(aging.pastDays),
+        weight: aging.weight,
+        windowFrom: aging.windowFrom,
+        reason: aging.note,
+      });
+    }
+  };
+  for (const input of limiting) {
+    const quantity = input.field ? QUANTITY_OF_FIELD[input.field] : undefined;
+    if (!quantity) continue;
+    for (const id of input.opportunityIds) {
+      const target = knowledge.opportunities.get(id);
+      if (target) consider(quantity, target, input.sensitivity, input.opportunityIds);
+    }
+  }
+  // Everything else aged: staleness does not depend on the target, so any opening enumerates it, at no plan weight.
+  const any = [...knowledge.opportunities.values()].find((one) => !one.duplicateOfId);
+  if (any) for (const quantity of Object.keys(CASH_QUANTITIES) as CashQuantity[]) consider(quantity, any, 0, []);
+  return [...found.values()].sort((a, b) => b.sensitivity - a.sensitivity || b.pastDays - a.pastDays || a.observationId.localeCompare(b.observationId));
 }

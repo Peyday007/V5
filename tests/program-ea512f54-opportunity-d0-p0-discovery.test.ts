@@ -17,7 +17,7 @@ import { freshProject } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { activate } from '../server/services/cash/lifecycle.ts';
 import { capture, decline } from '../server/services/cash/opportunities.ts';
-import { createNode } from '../server/repos/industry.ts';
+import { createNode, listNodes } from '../server/repos/industry.ts';
 import { createWorkstream, getWorkstream } from '../server/repos/register.ts';
 import { setTerms } from '../server/services/goals/decide.ts';
 import { setTarget } from '../server/services/goals/target.ts';
@@ -46,7 +46,7 @@ import {
   MAX_OPEN_WORLD_LENSES,
   type SearchBucket,
 } from '../server/services/cash/discovery.ts';
-import { OPPORTUNITY_ORIGINS, seedsFromFirstPrinciples, type GoalRow, type OpportunitySeed } from '../server/services/industry/construction/origins.ts';
+import { OPPORTUNITY_ORIGINS, rankSubjectMarkets, seedsFromFirstPrinciples, type GoalRow, type OpportunitySeed } from '../server/services/industry/construction/origins.ts';
 
 const seedOf = (origin: OpportunitySeed['origin'], n: number, prompt = `explore ${origin} ${n}`, category: string | null = null): OpportunitySeed => ({
   key: `${origin}:x/${n}`,
@@ -356,7 +356,14 @@ describe('a goal searches industries in market order (review finding)', () => {
     expect((await activate({ projectId, ownerUserId: userId, actorUserId: userId, objective: 'Maximize usable cash over the next few weeks.' })).ok).toBe(true);
   });
 
-  it('asks first about the subject with evidenced economics, though it was recorded last', async () => {
+  /*
+   * W-9 (docs/intelligence-recovery/lens-W.md): this test used to pass only
+   * because the Metro Detroit last-mile reference pack priced a world-level
+   * "Last-mile delivery" map root. A map root no longer inherits a pack — no
+   * operator named that industry — so neither subject has evidenced economics,
+   * and neither is ranked on a Detroit figure.
+   */
+  it('prices no map subject from a reference pack, and still asks industry angles', async () => {
     const g = await createWorkstream({ projectId, title: 'Collect cash fast', intent: 'Collect settled cash.', purpose: 'REVENUE_DIRECT', createdByUserId: userId });
     await setTerms(g.id, { dueAt: inDays(25), ownerUserId: userId }, `person:${userId}`);
     expect(
@@ -368,7 +375,7 @@ describe('a goal searches industries in market order (review finding)', () => {
     const w = (await getWorkstream(g.id))!;
     // Recorded first, and nothing evidences its economics.
     const first = await createNode({ projectId, parentId: null, kind: 'SECTOR', name: 'Dog grooming', origin: 'SEED' });
-    // Recorded second, and the construction engine's evidence prices it.
+    // Recorded second; nothing on the map prices it either (the pack no longer does).
     const second = await createNode({ projectId, parentId: null, kind: 'SECTOR', name: 'Last-mile delivery', origin: 'SEED' });
     const firstId = first.node.id;
     const secondId = second.node.id;
@@ -382,8 +389,12 @@ describe('a goal searches industries in market order (review finding)', () => {
     const buckets = rows.map((row) => (JSON.parse(row.detail) as { bucketId: string }).bucketId);
     const industry = buckets.filter((one) => one.includes('-ind-'));
     expect(industry.length).toBeGreaterThan(0);
-    expect(industry[0]).toContain(secondId);
-    expect(industry[0]).not.toContain(firstId);
+    expect(industry.some((one) => one.includes(firstId) || one.includes(secondId))).toBe(true);
+    const ranked = await rankSubjectMarkets(await listNodes(projectId), []);
+    for (const one of ranked) {
+      expect(one.market.marginUsd).toBeNull();
+      expect(one.market.geography).toBeNull();
+    }
   });
 });
 

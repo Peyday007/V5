@@ -13830,6 +13830,31 @@ What it does not do: decide that buyers exist, prepay or repeat. Those come back
 through the ordinary gate and harvest as openings, and the goal plan's chain
 gate judges them like any other.
 
+- **What it composes is a library, not a cache (Surge B, 2026-11-14,
+  migration 152 / pg 143).** Every arrangement lived in two process Maps and
+  was lost on a restart or a deploy. It is now a `CONSTRUCTED` row of the §49
+  ledger (`monetization_paths`), one per structure per project: the identity
+  is `design_signature`, a hash of the design key and each part's node kind
+  and normalised name path from the map root — never a row id or the label —
+  so two goals, a re-created node, a second process or a model change land on
+  one row, and another project's same structure is found by its signature.
+  `design_json` holds the hypothesis (design, properties, stress, value
+  p10/p50/p90, unknown parts, question, parts with their claims, geography of
+  those claims, constraint references, payment timing); what research
+  *observed* is an EVIDENCE fact on the path, resolving to a claim. The row
+  counts the rounds asked and the goal models that weighed it
+  (`monetization_path_evaluations`, one per stored reading, with whether the
+  best combination picked it). A finished round that filed openings CONFIRMS
+  it; one that established an absence (an accepted NEGATIVE_EXISTENCE claim)
+  REFUTES it under its `inputs_digest`, and it is not asked again until a part,
+  a precedent or a same-buyer price changes. A round's backoff is shared by
+  every goal in the project. The `MAX_CONSTRUCTIONS` cap ranks candidates
+  before it cuts (library verdict, target properties, precedent, gated parts,
+  same-buyer prices, stored value; dealt by population) and the cut is a
+  `construction cap` line in the reading's degraded list. `listPaths` leaves
+  constructed rows out, so the ledger's ranking never reads a hypothesis, and
+  an `arr_` estimate is never linked to a goal as an opening.
+
 ## 83. Focus keeps one search: an approved cash goal's constructed arrangements.
 
 Focus (`BRAIN_CASH_RESEARCH_MAX`, §78) stops Routines hunting openings, and
@@ -14963,6 +14988,41 @@ monthly retainer and implementation engagement on cash collectible before
 the deadline (`transactionShapes`; a retainer's months after the deadline
 count for nothing), and asks the world what buyers pay at each size.
 
+**The gate could not pass, and how it can now (Surge B, lens Q, 2026-11-14).**
+As first built, EVIDENCED_PORTFOLIO was unreachable by construction: each
+input passed its chain link only in a shape the basis or the assurance then
+refused (a HISTORICAL close range passed CONVERSION but was not a
+distribution; an inferred EVIDENCE close was a distribution but failed
+CONVERSION), the "smallest sample" was the number of *studies* an input was
+rebuilt from, and a Wilson bound over that count put ≥90% out of reach of
+anything under 25 independent studies. Now:
+
+* One representation, `inputEvidence` (`goals/portfolio.ts`), is read by the
+  chain links and the assurance alike: tier, independent and sized
+  populations, and the events the predictive distribution is worth
+  (p(1−p)/Var(p) by the delta method on the logit spread). DIRECT, COMPARABLE
+  over ≥2 sized populations, and COMPONENT of evidence establish links;
+  SINGLE_COMPARABLE, UNSIZED, CONTESTED, MECHANISM, ASSUMED and UNKNOWN never do.
+* CONVERSION has a TRANSFERRED state beside HISTORICAL; ECONOMICS,
+  SETTLES_IN_TIME and MARKET_VOLUME accept an evidenced reconstruction at its
+  cautious end (p90 cost, days and capital; p10 volume) — the same estimate
+  that can refuse a strategy can establish its link.
+* The claim is read under parameter uncertainty: an outer loop holds every
+  input at one quantile of its distribution (the pooled mean's error on a t
+  with k−1 degrees of freedom plus τ), shared by every opening drawing the same
+  estimate, and the inner worlds carry only who replies and buys. At least 90%
+  is claimed only when the 5th percentile of reach over the draws clears it.
+  More inner worlds narrow nothing that matters.
+* `PlanAcceptance.verdict` names CONFIDENCE_VERIFIED (iff ACCEPTED),
+  QUANTITATIVELY_CONSTRUCTED (all evidence, all links, interval below 90%),
+  IMPROVEMENT_REQUIRED and NOT_SUPPORTED; `construction` (result A) always
+  states the candidate's reach, interval, evidence, assumptions and what would
+  raise it. A failed threshold sends the inputs that limit the 5th percentile
+  as targeted research (`sendPortfolioNeeds`), not generic bid/win history.
+* Sized observations that contradict each other beyond their sampling error by
+  a factor of two (L-1) are CONTESTED: widened to their spread, bounds only,
+  both sources named.
+
 ## 96. A specification is the authority, and a program is DONE only when every requirement it states is verified on production.
 
 **The gap.** Every safeguard the Factory had was per campaign: one change
@@ -15440,6 +15500,8 @@ stays coverage, never a probability.
 **First production reading (Goals plan 43003547180, 2026-11-11, serving 2396516).** 21 openings, 8 modelled. The sweep read 27,086 distinct variations of 8 decision variables (space 1,251,264) and 41 conditions (33 discovered on openings), with 10,932 equivalent combinations not re-read, in 49 s. A sweep strategy (VARIABLE:BACKWARD: pre-warmed capacity, marketplace leads and a referral partner on one constructed arrangement, a retainer, prepaid fulfilment) replaced §99's plan at 99.5% coverage against 75.0%, with 4.5% when its conversion is halved, against 4.5%. The engine read 14 sweep strategies, with medians from $30,663 to $658,741 against $649 for the plan as held. No commercially supported variation beat the plan as held (fast reading $217). Every gain rests on an assumed move, and no single condition up to ×20 carries the requirement inside evidence, so acceptance stays CANDIDATE_ONLY. Two defects: one bound for the whole sweep let the factorial take all 49 s (local search 0 reads, conditions 82), and the sweep yielded by read count. Both are fixed above.
 
 **Off the server's loop.** The next two releases (Deploys 42998216834 and 43007394331) passed hosted verification 261/261 before the restart. After it, `brain_propose_fragments` timed out, which no earlier release did. At boot the goal tick reads plans, and the sweep then ran on the main loop in 8 ms slices. A request that awaits hundreds of queries in sequence waits up to one slice per query. The sweep now runs on the evaluator pool's niced threads (`Evaluator.sweep`, `reconstruction.ts:sweepFor` rebuilds the operators from plain data), and inline only when no pool can start. Test: the threaded and inline sweeps read identically.
+
+**The first cut is quantitative, and it keeps different strategies (Surge B, lens S, 2026-11-14).** Before any of this ran, `pickEstimatedArrangements` chose which 12 constructed arrangements the goal model holds by `min(remaining, p50 × deals)`, which reads every repeatable design over remaining/200 as "the whole goal", with the tie broken by `arr_<sha256>`. A strong DIRECT design survived only when its hash sorted first, a $9,000 DIRECT one-off lost to every $300 repeatable design, and nothing downstream could add a candidate back. `selectEstimatedArrangements` (`cash/goalScenario.ts`) now screens each arrangement by a closed form of what it settles by the deadline — price read inside its reconstruction by evidence tier, every unestablished link at its 25th percentile, exposure discounted — orders by that, tier, observations, exposure and the constructor's order (never an id), keeps the strongest design of each base structure and each way of being paid, holds two slots for the largest reconstructed upside, and lets up to three structurally different designs of one buyer population in on one shared `marketKey`, so the engine picks the design without counting the buyers twice. What was cut is on the model (`arrangementSelection`, with each reason), and the next six ride with the plan's inputs as `reserve`, which §101's `INCLUDE` move — seeded as the INCLUSION stance, and in the model's vocabulary — brings in for the engine to judge. Rankers read an unknown at its low end, never its middle (`reasoning/rank.ts`, invariant 39). The library credits a method by its challenged score against §99's plan, skips readings the critic flagged, and keys methods by roles (`@RANK:k`, `@RESERVE:k`) so they transfer between goals. A TRANSFER arrangement names the five material dimensions it has not bridged and its price range is widened by the COMPARABLE spread floor until one is. Regression: `tests/arrangementSelection.test.ts` (lens S's experiment: best reach 1.8% on the old pick, 3.5% on the new, the strong design in the best combination).
 
 ## 103. An integration is declared once, and Brain supplies its credentials itself wherever it is authorized.
 
@@ -16303,3 +16365,81 @@ The report's scaling call no longer says "research is not queueing" when items w
 nothing running.
 
 **2026-11-14 — the operator paused the owner's directed goal.** At 06:00Z a Hermes run committed PAUSE_GOAL on `wst_7b4fcbb5f2384f31b6c3` "to conserve capacity while infrastructure pools are congested" — four hours after the owner's order "THE PRIORITY IS THE PLAN. FOCUS RESOURCES THERE." A pause holds every bin the goal pursues, so the one goal the owner directed resources to stopped receiving any. `setGoalFocus` now refuses PAUSE on a goal in `OWNER_DIRECTED_GOALS` (a person still can), and the Russell pass `owner-directed-goals` resumes such a goal when its latest GOAL_PAUSED row was written by an `operator:` actor; a person's pause stands. Congestion is answered by removing what slows the goal, never by stopping it.
+
+**2026-11-14 — the operator directs a recovery (Surge B, findings H2-1/2/5/7/9).** A run could
+not be given a mission (the brief assumed the $10K goal was the whole objective), had no
+inventory of findings it could read or change, no door to the next attempt of a commission
+that failed, and no way to record that a fix made outside its commissions was verified. All
+four are rows of §87's register, not a new store: a standing mission is an `OPERATOR_MISSION`
+row (default key `SURGE:B`, set by `npm run operator -- run --mission <file-or-text>`,
+`operator mission set|close`, or `agents.yml operator-run` with a base64 `mission` input),
+read into the brief first on every run while open; a finding is an `OPERATOR_INVENTORY` row
+keyed `SURGE-B:<issue id>` with its fields in `evidence.inventory`, changed only through
+`brain_operator_inventory` (list on `project:read`; upsert and set_status on `operator:act`),
+each change an `INVENTORY_CHANGED` event naming the run. VERIFIED_FIXED is refused without
+verification criteria and a reference — a workflow run id, a Deploy run id or merge sha, or a
+measured outcome stating its number — and records whether the fix came from a commission.
+`isRecordOnly` keeps both kinds out of the loop's tick, its combination by owner and its
+alerts: a finding becomes Factory work only through `brain_operator_commission`.
+`brain_operator_reattempt` closes a failed (FAILED, NOT_RESOLVED, BLOCKED) or stalled (24 h
+without movement) commission HELD with the operator's reason and registers the next attempt
+through `registerNextAttempt` — the family's own rules, at most three, routed STRONGEST — and
+refuses a commission that is building and moving, being measured, resolved, or out of
+attempts. RunPod gained the 48 GB director recipe `qwen3-32b-awq-48`, and cheap-lane passes
+`RUNPOD_MAX_TOTAL_USD_PER_HOUR` beside `RUNPOD_MAX_USD_PER_HOUR`; the code's ceilings are unchanged.
+
+## 110. Sending inboxes are bought with money the owner put in, priced by the seller first, and never bought twice.
+
+**Owner's order, 2026-11-14.** "Make a system where I give you money and you go
+buy pre warmed emails and emails that need to be warmed up … no resellers … legit
+pre-warmed accounts for the best price you can find … for the ones we make
+ourselves, set up the whole thing where I can just put in money and then they
+buy the domains and do everything needed."
+
+**Who sells what (researched 2026-11-14; prices quoted live where an API allowed).**
+
+| seller | new inbox | pre-warmed | ordered by a program? |
+|---|---|---|---|
+| Instantly DFY (owner's workspace) | $5/mo Google (AirMail $4) + $15/yr domain | $10/mo, sold as a domain of 5: $65 now, $50/mo | yes, with a no-charge `simulation` quote |
+| InboxKit | $3/mo Google or Microsoft (monthly billing; $2.50 annual) | $6–9/mo by warmup age | new: yes (one call: domain, DNS, mailboxes, export to Instantly); pre-warmed: dashboard only |
+| Zapmail | $3.90–2.50/mo, bundles from $39 | ~$6–8/mo | API on the $299/mo Pro plan only |
+| Mailforge / Infraforge | $2–4/mo (shared / dedicated IP) | vendor-claimed no surcharge / $14 per domain add-on | not verified |
+
+Aged or "warmed" consumer Gmail accounts from resellers are refused outright:
+they are someone else's identity, against Google's terms, and get the owner's
+real domains blocklisted. Every inbox here is a Workspace mailbox on a domain the
+owner holds.
+
+**The decision.** Pre-warmed: Instantly (the one seller whose pre-warmed stock a
+program can buy, quoted in simulation before every order). New, built by Brain:
+InboxKit when connected — 40% under Instantly's own new inboxes, and its single
+order call registers the domain, sets SPF/DKIM/DMARC, creates five Google
+mailboxes and exports them into Instantly, whose warmup is free (InboxKit's paid
+warmup add-on is never turned on). Until InboxKit is connected, new inboxes come
+from Instantly DFY. Domains are found near the owner's main domain and redirect
+to it; the sender is the name the owner already mails as.
+
+**The money** (`server/services/inboxes/`, `repos/inboxes.ts`, migration 149/140):
+
+- The owner puts money in with `inboxes fund --add <usd> --monthly <usd>`: an
+  append-only one-off pot and a ceiling on the recurring total. Nothing else
+  can be spent; with neither set, nothing is bought (invariants 18, 38).
+- Every order is one domain, priced by its seller first, and goes only if both
+  the pot and the monthly ceiling still cover it with every recorded purchase
+  counted — re-read after the purchase row is written, so two buyers at once
+  each see the other.
+- The purchase row is written before the order with a unique key (seller, kind,
+  domain): the same order can never be attempted twice (20, 27).
+- A lost answer is UNKNOWN, counted as spent, never retried (26); `sync`
+  appends PLACED when the domain appears on the seller's order list.
+- No balance is stored (37): `inboxBudget` derives it from the rows.
+- InboxKit's prepaid wallet is a second, seller-held ceiling: an order it does
+  not cover is refused whole (402) and spends nothing.
+
+**After the order.** The integrations tick runs `syncInboxes` hourly while any
+purchase is unsettled: reconcile lost answers, and turn on Instantly warmup for
+each bought domain once its mailboxes reach Instantly.
+
+**Doors.** `npm run admin -- inboxes status | fund | quote | buy | sync`, and on
+production the `Inboxes` workflow (`.github/workflows/inboxes.yml`), narrow like
+`Routing`: `status` and `quote` change nothing; `fund` and `buy` need `--admin`.

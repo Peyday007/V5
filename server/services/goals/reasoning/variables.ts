@@ -46,6 +46,7 @@ import type { ModelInput, ModelledOpportunity } from '../../cash/goalScenario.ts
 import type { StrategyOperator, StrategyState } from '../reconstruction.ts';
 import type { PlannedOpening } from '../portfolio.ts';
 import { clampPrice, inScope, makeDirection, PRICE_ELASTICITY, type Direction, type Scope, type Transform } from './directions.ts';
+import { valuePerContact } from './rank.ts';
 
 /** No sweep evaluates more combinations than this. */
 export const MAX_VARIATIONS = 250_000;
@@ -106,6 +107,100 @@ export interface Variable {
   /** Best main-effect lift of any level over the first, measured by the screen. */
   effect: number;
   fixed: boolean;
+}
+
+/** One screened combination: the level of each variable, and its score. */
+export interface ScreenRow {
+  levels: number[];
+  score: number;
+}
+
+/** How many of the screen's strongest pairwise interactions protect their levels from narrowing (S-16). */
+export const TOP_INTERACTIONS = 6;
+/** Screened combinations a pair of levels needs before its interaction is believed. */
+const MIN_INTERACTION_CELL = 3;
+
+/**
+ * The screen's strongest pairwise interactions between two non-"as held"
+ * levels of different variables: how much more the pair scored together than
+ * its two main effects predict. Strongest first, ties by position.
+ */
+export function topInteractions(
+  variables: Array<Pick<Variable, 'levels'>>,
+  rows: ScreenRow[],
+  meanOf: (j: number, l: number) => number,
+  n = TOP_INTERACTIONS,
+): Array<{ a: [number, number]; b: [number, number]; lift: number }> {
+  if (rows.length === 0) return [];
+  const overall = rows.reduce((t, r) => t + r.score, 0) / rows.length;
+  const cells = new Map<string, { a: [number, number]; b: [number, number]; n: number; s: number }>();
+  for (const r of rows)
+    for (let j = 0; j < variables.length; j++) {
+      const l = r.levels[j] ?? 0;
+      if (l === 0) continue;
+      for (let k = j + 1; k < variables.length; k++) {
+        const m = r.levels[k] ?? 0;
+        if (m === 0) continue;
+        const key = `${j}:${l}|${k}:${m}`;
+        const c = cells.get(key) ?? { a: [j, l] as [number, number], b: [k, m] as [number, number], n: 0, s: 0 };
+        c.n++;
+        c.s += r.score;
+        cells.set(key, c);
+      }
+    }
+  const out: Array<{ a: [number, number]; b: [number, number]; lift: number }> = [];
+  for (const c of cells.values()) {
+    if (c.n < MIN_INTERACTION_CELL) continue;
+    const lift = c.s / c.n - meanOf(c.a[0], c.a[1]) - meanOf(c.b[0], c.b[1]) + overall;
+    if (Number.isFinite(lift) && lift > MIN_EFFECT) out.push({ a: c.a, b: c.b, lift });
+  }
+  return out.sort((x, y) => y.lift - x.lift || x.a[0] - y.a[0] || x.a[1] - y.a[1] || x.b[0] - y.b[0] || x.b[1] - y.b[1]).slice(0, n);
+}
+
+/**
+ * The levels the factorial keeps, per variable. While the product is over
+ * `budget`, the level that screened weakest against its own variable's "as
+ * held" goes — except the best level per family that appears in one of the
+ * screen's top interactions (S-16): a level that only pays beside another
+ * (bought capacity with prepaid buyers) screens weak on its own and was the
+ * first dropped. Protection yields only when nothing else is left to drop.
+ */
+export function narrowLevels(variables: Array<Pick<Variable, 'family' | 'levels'>>, rows: ScreenRow[], meanOf: (j: number, l: number) => number, budget: number): number[][] {
+  const live = variables.map((v) => v.levels.map((_, j) => j));
+  const size = () => live.reduce((n, l) => n * l.length, 1);
+  const protectedLevels = new Set<string>();
+  const families = new Set<string>();
+  for (const x of topInteractions(variables, rows, meanOf))
+    for (const [j, l] of [x.a, x.b]) {
+      const family = variables[j]!.family;
+      if (families.has(family)) continue;
+      families.add(family);
+      protectedLevels.add(`${j}:${l}`);
+    }
+  while (size() > budget) {
+    let pickJ = -1;
+    let pickL = -1;
+    let pickV = Infinity;
+    live.forEach((ls, j) => {
+      const base0 = meanOf(j, 0);
+      for (const l of ls) {
+        if (l === 0 || protectedLevels.has(`${j}:${l}`)) continue;
+        const v = meanOf(j, l) - (base0 > -Infinity ? base0 : 0);
+        if (v < pickV || (v === pickV && (j > pickJ || (j === pickJ && l > pickL)))) {
+          pickV = v;
+          pickJ = j;
+          pickL = l;
+        }
+      }
+    });
+    if (pickJ < 0) {
+      if (protectedLevels.size === 0) break;
+      protectedLevels.clear();
+      continue;
+    }
+    live[pickJ] = live[pickJ]!.filter((x) => x !== pickL);
+  }
+  return live;
 }
 
 export interface Condition {
@@ -453,7 +548,8 @@ const family = (key: string): Family => {
 function targets(state: StrategyState, n: number): string[] {
   return state.openings
     .filter((o) => o.repeatable && o.agreedValue === 0 && !o.channel && (mid(o.price) ?? 0) > 0)
-    .sort((a, b) => (mid(b.price) ?? 0) * (mid(b.close) ?? 0) * (mid(b.respond) ?? 0) - (mid(a.price) ?? 0) * (mid(a.close) ?? 0) * (mid(a.respond) ?? 0) || (a.opportunity.id < b.opportunity.id ? -1 : 1))
+    // Ranked with unknowns at their low end (invariant 39, S-5), never their middle.
+    .sort((a, b) => valuePerContact(b) - valuePerContact(a) || (a.opportunity.id < b.opportunity.id ? -1 : 1))
     .slice(0, n)
     .map((o) => o.opportunity.id);
 }
@@ -808,6 +904,7 @@ export async function sweepVariables(ctx: SweepContext): Promise<VariableSweep> 
   };
   const sums = variables.map((v) => v.levels.map(() => ({ n: 0, s: 0 })));
   const sample = Math.min(SCREEN_SAMPLE, space);
+  const screenRows: ScreenRow[] = [];
   let screened = 0;
   for (let i = 0; i < sample * 3 && screened < sample && !late(); i++) {
     await breathe();
@@ -815,6 +912,7 @@ export async function sweepVariables(ctx: SweepContext): Promise<VariableSweep> 
     const st = read(levels, 'SCREEN');
     if (!st) continue;
     screened++;
+    screenRows.push({ levels, score: st.score });
     levels.forEach((l, j) => {
       sums[j]![l]!.n++;
       sums[j]![l]!.s += st.score;
@@ -831,28 +929,9 @@ export async function sweepVariables(ctx: SweepContext): Promise<VariableSweep> 
   stageEnd = STAGE_SHARES.factorial;
   // 3. The factorial over what matters. While it is larger than the budget, the level that screened weakest against its
   // own variable's "as held" goes, across all variables; a variable left with only "as held" is fixed (it changed nothing).
-  const live = variables.map((v) => v.levels.map((_, j) => j));
+  // A level that matters only beside another family's (capacity with prepaid) is protected from the screen's interactions (S-16).
+  const live = narrowLevels(variables, screenRows, meanOf, Math.max(1, Math.floor((maxVar - variations) * 0.6)));
   const size = () => live.reduce((n, l) => n * l.length, 1);
-  const budgetFactorial = Math.max(1, Math.floor((maxVar - variations) * 0.6));
-  while (size() > budgetFactorial) {
-    let pickJ = -1;
-    let pickL = -1;
-    let pickV = Infinity;
-    live.forEach((ls, j) => {
-      const base0 = meanOf(j, 0);
-      for (const l of ls) {
-        if (l === 0) continue;
-        const v = meanOf(j, l) - (base0 > -Infinity ? base0 : 0);
-        if (v < pickV || (v === pickV && (j > pickJ || (j === pickJ && l > pickL)))) {
-          pickV = v;
-          pickJ = j;
-          pickL = l;
-        }
-      }
-    });
-    if (pickJ < 0) break;
-    live[pickJ] = live[pickJ]!.filter((x) => x !== pickL);
-  }
   variables.forEach((v, j) => (v.fixed = live[j]!.length === 1 && v.levels.length > 1));
   let factorial = 0;
   const idx = live.map(() => 0);

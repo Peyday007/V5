@@ -160,6 +160,19 @@ switches from the baseline strategy only when the paired gain is more than two
 standard errors above zero. Without that check, taking the largest bin mean
 rewards noise, and an irrelevant input reads as worth knowing.
 
+## Evidence in events, and contradictions
+
+An estimate states the evidence behind it as independent populations, sized
+populations and events (`Estimate.populations/sizedPopulations/events`). Two or
+more pooled populations draw the mean's error on Student's t with k − 1 degrees
+of freedom (Hartung–Knapp style) plus the between-population spread τ. An
+unsized published range of a rate is read as that spread, never as precision.
+A published demand rate is read through `PUBLISHED_RATE_SELECTION` (0.7–1.0 of
+itself) for selection; a close rate's funnel stage is material; a cited study
+joins an observation's lineage. Sized observations that disagree beyond their
+own sampling error by at least a factor of two make the estimate CONTESTED:
+widened to their spread, bounds only, both sources named (§95).
+
 ## What it does not do
 
 * It does not invent a distribution for an assumption, or a probability from

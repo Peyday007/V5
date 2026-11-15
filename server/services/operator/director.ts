@@ -51,10 +51,11 @@ import {
   type EngineeringStatus,
   type GoalMark,
   type Intervention,
+  type Urgency,
 } from '../../domain/engineeringDirector.ts';
 import { METRIC_KEYS, riskForScope, type MetricKey, type Weakness } from '../../domain/improvement.ts';
 import { RELEASE_EXCLUDED_PATHS } from '../../domain/factoryRelease.ts';
-import { getCandidate, listCandidates, listImprovementEvents, patchCandidate, recordImprovementEvent, type ImprovementCandidate } from '../../repos/improvement.ts';
+import { decideCandidate, getCandidate, listCandidates, listImprovementEvents, patchCandidate, recordImprovementEvent, type ImprovementCandidate } from '../../repos/improvement.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { listProjects } from '../../repos/projects.ts';
 import { getDb } from '../../db/database.ts';
@@ -258,6 +259,14 @@ export async function commission(input: DiagnosisRequest, now = new Date()): Pro
     capacityTried: input.capacityIdle === true ? await capacityAlreadyTried(input.goalId) : false,
   };
   const decision = decideIntervention(diagnosis);
+  // A paused goal takes research only (Surge B H2-6): EVIDENCE opens research, and the record-only
+  // remedies write a lesson; an intervention that moves the goal's waiting work — capacity, which
+  // dispatches its queued sends and paid work — is refused before anything is recorded or started.
+  const paused = await pausedGoal(input.goalId);
+  if (paused && PAUSED_GOAL_REFUSED.includes(decision.intervention)) {
+    const why = `goal ${input.goalId} is paused: a paused goal takes research only (intervention EVIDENCE), never ${decision.intervention}, which would move its waiting outreach or spend`;
+    return { ok: false, reason: why, intervention: decision.intervention, why, overruled: decision.overruled, started: [], recordedOnly: [] };
+  }
   const projectId = await anchorProject(await goalProject(input.goalId));
   if (projectId) {
     await recordEvent({
@@ -364,7 +373,9 @@ async function openGoalResearchRound(
   const { getWorkstream, linkWorkstream } = await import('../../repos/register.ts');
   const goal = await getWorkstream(d.goalId);
   if (!goal) return none(`none opened — no goal ${d.goalId}.`);
-  if (goal.pausedAt) return none('none opened — the goal is paused, and a paused goal spends nothing on research.');
+  // A paused goal is researched only when research is what was asked (EVIDENCE, H2-6); a strategy
+  // change waits for the goal to resume.
+  if (goal.pausedAt && intervention !== 'EVIDENCE') return none('none opened — the goal is paused; it takes research (EVIDENCE) only, not a strategy round.');
   const { readTarget } = await import('../goals/target.ts');
   const target = await readTarget(goal, now);
   if (!target) return none('none opened — the goal has no money target for a goal round to search toward.');
@@ -413,7 +424,113 @@ async function goalProject(goalId: string | null): Promise<string | null> {
   if (!goalId) return null;
   const { operatorSnapshot } = await import('./snapshot.ts');
   const snapshot = await operatorSnapshot((await listProjects()).map((p) => p.id)).catch(() => null);
-  return snapshot?.summaries.find((one) => one.id === goalId)?.projectId ?? null;
+  const found = snapshot?.summaries.find((one) => one.id === goalId)?.projectId ?? null;
+  if (found) return found;
+  // A goal the cached snapshot does not hold yet (created, resumed or paused since) is read from the register.
+  const { getWorkstream } = await import('../../repos/register.ts');
+  return (await getWorkstream(goalId).catch(() => null))?.projectId ?? null;
+}
+
+/** Interventions a paused goal refuses: each moves the goal's own waiting work (sends, paid work). */
+export const PAUSED_GOAL_REFUSED: readonly Intervention[] = ['CAPACITY'];
+
+async function pausedGoal(goalId: string | null): Promise<boolean> {
+  if (!goalId) return false;
+  const { getWorkstream } = await import('../../repos/register.ts');
+  return Boolean((await getWorkstream(goalId).catch(() => null))?.pausedAt);
+}
+
+/**
+ * Standalone research the operator commissions (Surge B H2-6): a question, with or without a goal.
+ *
+ * With a goal — paused or not — the goal's own search is asked the question through the same door
+ * every goal round uses (`openGoalResearchRound`, intervention EVIDENCE): research only, never an
+ * outreach or spend effect, and the door's gates (discovery gate, live-round cap, cool-offs, focus)
+ * still decide whether a round opens. Without a goal it is a method question about Brain: the
+ * EVIDENCE path of `commission`, which registers it in §87's register and opens method research.
+ * The caller has already been authorized exactly as for any commission (operator:act, a committed
+ * decision, and the goal in a project the credential directs).
+ */
+export async function commissionResearch(
+  input: { goalId: string | null; question: string; evidence: string | null; runId: string | null },
+  now = new Date(),
+): Promise<CommissionResult> {
+  const question = input.question.trim().replace(/\s+/g, ' ');
+  const refused = (reason: string): CommissionResult => ({ ok: false, reason, intervention: 'EVIDENCE', why: reason, overruled: null, started: [], recordedOnly: [] });
+  if (question.length < 20) return refused('research_question must state what to learn (20+ characters)');
+  const asked = `Asked by Brain's operator${input.runId ? ` in run ${input.runId}` : ''}: ${question}`;
+  const evidence = (input.evidence?.trim() || asked).slice(0, 2000);
+  if (!input.goalId) {
+    return commission(
+      {
+        goalId: null,
+        deficiency: 'MISSING_CAPABILITY',
+        title: `Research: ${question}`.slice(0, 200),
+        observed: `${asked} Brain holds no answer to it, and a decision of the operator's waits on one.`.slice(0, 2000),
+        evidence,
+        cause: null,
+        ownerPaths: [],
+        recurrence: 1,
+        expectedBenefit: 'An answer the operator can decide on, from research rather than a guess.',
+        acceptance: 'A research report answers the question with sourced claims the operator can cite.',
+        metric: 'RESEARCH_JOB_SUCCESS_RATE',
+        blocksGoal: false,
+        share: 0.05,
+        proposed: 'EVIDENCE',
+        runId: input.runId,
+      },
+      now,
+    );
+  }
+  const { getWorkstream } = await import('../../repos/register.ts');
+  const goal = await getWorkstream(input.goalId);
+  if (!goal || goal.cancelledAt || goal.archivedAt) return refused(`no live goal ${input.goalId}`);
+  const d: Diagnosis = {
+    goalId: goal.id,
+    deficiency: 'PLANNING_ASSUMPTION',
+    title: `Research: ${question}`.slice(0, 200),
+    observed: asked.slice(0, 2000),
+    evidence,
+    cause: null,
+    ownerPaths: [],
+    recurrence: 1,
+    expectedBenefit: 'An answer the goal\'s plan can use.',
+    acceptance: 'A goal research round reports on the question.',
+    metric: 'READY_OPPORTUNITIES_PER_DAY',
+    blocksGoal: false,
+    share: 0.05,
+    proposed: 'EVIDENCE',
+    modelLimited: false,
+    personOnly: false,
+    capacityIdle: false,
+    capacityTried: false,
+  };
+  const why = goal.pausedAt
+    ? 'research the operator asked for on a paused goal: research only, no outreach or spend'
+    : 'research the operator asked for on this goal';
+  const projectId = goal.projectId ?? (await anchorProject(null));
+  if (projectId) {
+    await recordEvent({
+      projectId,
+      entityType: 'PROJECT',
+      entityId: projectId,
+      eventType: ENGINEERING_EVENTS.decided,
+      payload: { runId: input.runId, goalId: goal.id, deficiency: d.deficiency, title: d.title, intervention: 'EVIDENCE', why, overruled: null, research: true, paused: Boolean(goal.pausedAt) },
+    });
+  }
+  const round = await openGoalResearchRound(d, 'EVIDENCE', input.runId, now);
+  const learning = await learn(d, input.runId, `EVIDENCE (research question): ${round.line}`);
+  return {
+    ok: true,
+    reason: `Research on goal ${goal.id}${goal.pausedAt ? ' (paused: research only)' : ''}: ${round.line} Lesson ${learning} recorded.`,
+    intervention: 'EVIDENCE',
+    why,
+    overruled: null,
+    action: round.opened ? `goal research round ${round.opened.candidateId}` : `lesson ${learning}`,
+    started: round.started,
+    recordedOnly: [...round.recordedOnly, `lesson ${learning}`],
+    ...(round.opened ? { roundCandidateId: round.opened.candidateId } : {}),
+  };
 }
 
 /**
@@ -641,6 +758,86 @@ export async function reprioritize(input: { candidateId: string; priority: numbe
     await recordEvent({ projectId, entityType: 'PROJECT', entityId: projectId, eventType: ENGINEERING_EVENTS.prioritized, payload: { candidateId: candidate.id, priority: input.priority, reason: input.reason, runId: input.runId, bins: applied } });
   }
   return { ok: true, reason: `priority ${input.priority}; ${applied} waiting bin(s) reordered, leased work untouched`, binsReprioritized: applied };
+}
+
+/** A commission with no Factory or register movement for this long is stalled, and may be re-attempted. */
+export const STALLED_HOURS = 24;
+
+/**
+ * Start §87's next attempt (at most three) of a commission that failed or stalled (Surge B H2-5).
+ *
+ * Eligible: Factory ended FAILED or CANCELLED; §87 decided it did not fix what it was for
+ * (KEPT_NO_EFFECT, REVERTED, REJECTED) or HELD it; Factory is BLOCKED; or nothing has moved on
+ * it for `STALLED_HOURS`. Refused while it is building and moving, while a delivered change
+ * waits for its measurement, once it is resolved, and after the third attempt. An open attempt
+ * is closed HELD with the operator's reason (the same word §87 uses for a cancelled or blocked
+ * objective), so the register keeps one live attempt per weakness; the new attempt carries the
+ * directive, is routed to the strongest workers (a second attempt is ARCHITECTURAL), and is
+ * advanced now exactly as a commission is.
+ */
+export async function reattempt(input: { candidateId: string; reason: string; runId: string | null }, now = new Date()): Promise<{ ok: boolean; reason: string; candidateId?: string; weaknessKey?: string; attempt?: number; started?: string[] }> {
+  const candidate = await getCandidate(input.candidateId);
+  const directive = candidate?.evidence['directive'] as Record<string, unknown> | undefined;
+  if (!candidate || !directive) return { ok: false, reason: 'no engineering the operator commissioned has that id (brain_operator_engineering lists them)' };
+  if (input.reason.trim().length < 15) return { ok: false, reason: 'reason must say why the attempt failed or stalled (15+ characters)' };
+  const outcome = (await engineeringOutcomes({ candidateIds: [candidate.id], limit: 1 }))[0];
+  if (!outcome) return { ok: false, reason: 'its outcome could not be read' };
+  const lastMoved = (await listImprovementEvents({ candidateId: candidate.id, limit: 1 }))[0]?.at ?? candidate.updatedAt;
+  const quietHours = (now.getTime() - Date.parse(lastMoved > candidate.updatedAt ? lastMoved : candidate.updatedAt)) / 3_600_000;
+  const failed = outcome.status === 'FAILED' || outcome.status === 'NOT_RESOLVED' || outcome.status === 'BLOCKED';
+  const stalled = (outcome.status === 'BUILDING' || outcome.status === 'NOT_STARTED') && quietHours >= STALLED_HOURS && candidate.decision !== 'COMBINED';
+  if (!failed && !stalled) {
+    const why =
+      outcome.status === 'RESOLVED'
+        ? 'it is resolved: KEPT on an improved measurement'
+        : outcome.status === 'DELIVERED_UNMEASURED'
+          ? 'it was delivered and §87 is measuring it; a new attempt now would not know whether this one worked'
+          : outcome.status === 'BUILDING' || outcome.status === 'NOT_STARTED'
+            ? `it is ${outcome.status} and moved ${quietHours.toFixed(1)} h ago; it is stalled only after ${STALLED_HOURS} h without movement`
+            : `its status is ${outcome.status}`;
+    return { ok: false, reason: `Not re-attempted: ${why}.` };
+  }
+  const { MAX_ATTEMPTS } = await import('../../domain/improvement.ts');
+  if (candidate.attempt >= MAX_ATTEMPTS) return { ok: false, reason: `Not re-attempted: attempt ${candidate.attempt} of ${MAX_ATTEMPTS} was the last; a failing improvement cannot loop. Change strategy or record it as a known limitation.` };
+  const reason = input.reason.trim().slice(0, 600);
+  if (!candidate.decision) {
+    await decideCandidate(candidate.id, 'HELD', `Operator re-attempt (${outcome.status}${stalled ? `, ${quietHours.toFixed(0)} h without movement` : ''}): ${reason}`, { heldOn: `superseded by the next attempt: ${reason}`.slice(0, 300) });
+    await recordImprovementEvent({ candidateId: candidate.id, kind: 'DECIDED', detail: { decision: 'HELD', by: 'operator re-attempt', runId: input.runId, status: outcome.status } });
+  }
+  const route = routeEngineering({
+    deficiency: String(directive['deficiency'] ?? 'RECURRING_OPERATIONAL_FAILURE') as DeficiencyClass,
+    ownerPaths: (candidate.evidence['ownerPaths'] as string[] | undefined) ?? [],
+    risk: riskForScope((candidate.evidence['mutationScope'] as string[] | undefined) ?? ['tests/**'], RELEASE_EXCLUDED_PATHS),
+    failedAttempts: candidate.attempt,
+    urgency: (directive['urgency'] as Urgency | undefined) ?? 'NORMAL',
+  });
+  const { registerNextAttempt, advanceNow } = await import('../improvement/loop.ts');
+  const next = await registerNextAttempt(candidate.id, {
+    reason,
+    evidence: {
+      ...candidate.evidence,
+      directive: { ...directive, runId: input.runId, complexity: route.complexity, minimumModelClass: route.minimumModelClass, routeWhy: route.why, reattemptOf: candidate.id, reattemptReason: reason },
+      goalBaseline: (await goalMark((directive['goalId'] as string | null) ?? null)).mark,
+    },
+  });
+  if (!next.ok) return { ok: false, reason: `Not re-attempted: ${next.reason}.` };
+  const { did } = await advanceNow(next.candidate.id, now);
+  const fresh = (await getCandidate(next.candidate.id))!;
+  if (fresh.campaignId && typeof directive['priority'] === 'number') await applyPriority(fresh.campaignId, directive['priority'] as number);
+  await recordImprovementEvent({ candidateId: fresh.id, kind: 'OPERATOR_REATTEMPTED', detail: { runId: input.runId, from: candidate.id, reason, advanced: did } });
+  const projectId = await anchorProject(await goalProject((directive['goalId'] as string | null) ?? null));
+  if (projectId) {
+    await recordEvent({ projectId, entityType: 'PROJECT', entityId: projectId, eventType: ENGINEERING_EVENTS.commissioned, payload: { runId: input.runId, goalId: directive['goalId'] ?? null, candidateId: fresh.id, weaknessKey: fresh.weaknessKey, reattemptOf: candidate.id, reason, changeRequestId: fresh.changeRequestId, campaignId: fresh.campaignId, researchGoalId: fresh.researchGoalId, advanced: did } });
+  }
+  const running = fresh.campaignId ? `Factory campaign ${fresh.campaignId}` : fresh.researchGoalId ? `method research goal ${fresh.researchGoalId}` : null;
+  return {
+    ok: true,
+    reason: `Attempt ${fresh.attempt} registered as ${fresh.weaknessKey}; ${running ?? did ?? 'it waits for its owner component to free (one live objective per owner)'}. Routed ${route.complexity} → ${route.minimumModelClass}.`,
+    candidateId: fresh.id,
+    weaknessKey: fresh.weaknessKey,
+    attempt: fresh.attempt,
+    started: running ? [running] : [],
+  };
 }
 
 /* ------------------------------------------------------------------------- */
@@ -871,6 +1068,12 @@ export interface DeficiencyReading {
   diagnosis: Omit<DiagnosisRequest, 'runId'>;
   intervention: Intervention;
   why: string;
+  /**
+   * The rows it was read from, when one row names it (Surge B H2-3): an inventory finding, a goal
+   * whose plan is stuck, or a goal whose research rounds ended without a report. Commissioning an
+   * INVENTORY reading links the register row it starts to that finding, so it is in flight.
+   */
+  source?: { kind: 'INVENTORY' | 'STUCK_PLAN' | 'UNREPORTED_ROUNDS'; ref: string };
 }
 
 /**
@@ -987,7 +1190,317 @@ export async function readDeficiencies(): Promise<DeficiencyReading[]> {
       }),
     );
   }
-  return out.slice(0, 6);
+  // 4–6. Data Brain already holds about its own capability (Surge B H2-3): open findings nobody is
+  // repairing, goal plans that stopped moving, and goal research that ended without a report.
+  // Each detector is bounded and fails alone: one unreadable source never hides the others.
+  const more = await Promise.all([
+    inventoryDeficiencies().catch(() => [] as DeficiencyReading[]),
+    stuckPlanDeficiencies().catch(() => [] as DeficiencyReading[]),
+    unreportedRoundDeficiencies().catch(() => [] as DeficiencyReading[]),
+  ]);
+  return [...out.slice(0, 6), ...more.flat()].slice(0, 14);
+}
+
+/** Inventory statuses a finding is open and unclaimed in: found, or its cause confirmed, and nothing more. */
+const UNCLAIMED_INVENTORY = ['DISCOVERED', 'ROOT_CAUSE_CONFIRMED'] as const;
+/** Repository paths a finding's text names, as the owner paths of its diagnosis. */
+const NAMED_PATH = /(?:^|[\s(`'"[])((?:server|tests|scripts|operator|client|agents|\.github|\.claude)\/[A-Za-z0-9_./-]+\.[A-Za-z]{1,5})/g;
+
+function namedPaths(...texts: (string | null)[]): string[] {
+  const out = new Set<string>();
+  for (const text of texts) {
+    for (const match of (text ?? '').matchAll(NAMED_PATH)) {
+      const path = match[1]!;
+      if (PATH.test(path) && !path.includes('..')) out.add(path);
+    }
+  }
+  return [...out].slice(0, 6);
+}
+
+/**
+ * (a) Open inventory findings — DISCOVERED or ROOT_CAUSE_CONFIRMED — that name no owner and have no
+ * repair in flight (no linked register row, or every linked row already decided). Each becomes a
+ * deficiency with the id `dfx_inv_<finding id>`, so Hermes commissions the finding by its id; the
+ * commission links its register row to the finding, which then reads as in flight.
+ */
+export async function inventoryDeficiencies(max = 4): Promise<DeficiencyReading[]> {
+  const { listInventory } = await import('./inventory.ts');
+  const items = (await listInventory()).filter((i) => (UNCLAIMED_INVENTORY as readonly string[]).includes(i.status) && !i.owner);
+  if (items.length === 0) return [];
+  const byId = new Map((await listCandidates()).map((c) => [c.id, c]));
+  // A linked row is in flight while it is undecided, or combined into a host that is.
+  const inFlight = (id: string): boolean => {
+    const c = byId.get(id);
+    if (!c) return false;
+    if (c.decision === 'COMBINED' && c.combinedIntoId) return !byId.get(c.combinedIntoId)?.decision;
+    return !c.decision;
+  };
+  const order = { BLOCKING: 0, MAJOR: 1, MINOR: 2 } as const;
+  return items
+    .filter((i) => !i.linkedCandidates.some(inFlight))
+    .sort((a, b) => order[a.severity] - order[b.severity] || a.id.localeCompare(b.id))
+    .slice(0, max)
+    .map((i) => {
+      const ownerPaths = namedPaths(i.rootCause, i.evidence, i.symptom);
+      const recurrence = i.severity === 'BLOCKING' ? 3 : i.severity === 'MAJOR' ? 2 : 1;
+      const one = reading({
+        goalId: null,
+        deficiency: 'MISSING_CAPABILITY',
+        title: `Inventory ${i.id} has no owner and no repair: ${i.capability}`.slice(0, 200),
+        observed:
+          `Finding ${i.id} (${i.severity}, ${i.status}) in "${i.capability}": ${i.symptom}`.slice(0, 1600) +
+          ' Nobody owns it and no repair is in flight, so it stays broken until it is commissioned.',
+        evidence: `operator inventory ${i.id} (register row ${i.candidateId}, updated ${i.updatedAt}): ${i.evidence}`.slice(0, 2000),
+        cause: i.status === 'ROOT_CAUSE_CONFIRMED' ? i.rootCause : null,
+        ownerPaths,
+        recurrence,
+        expectedBenefit: `The ${i.capability} capability works again; finding ${i.id} can be verified fixed.`.slice(0, 600),
+        acceptance: ((i.verificationCriteria ?? '').trim().length >= 20 ? i.verificationCriteria! : `A test reproduces finding ${i.id} (${i.symptom.slice(0, 200)}) and shows it no longer happens.`).slice(0, 600),
+        metric: null,
+        blocksGoal: i.severity === 'BLOCKING',
+        share: i.severity === 'BLOCKING' ? 0.3 : i.severity === 'MAJOR' ? 0.1 : 0.03,
+        proposed: null,
+      });
+      return { ...one, source: { kind: 'INVENTORY' as const, ref: i.id } };
+    });
+}
+
+/** Readings of one goal's plan that must name the same missing evidence before the plan reads as stuck. */
+export const STUCK_PLAN_READINGS = 3;
+/**
+ * Days a not-accepted plan may go without a new reading before it reads as stuck on time alone. A
+ * reading is stored only when the plan's conclusion changes (`persistReading`), so a plan that is
+ * truly stuck writes nothing new: its latest reading simply ages.
+ */
+export const STUCK_PLAN_STALE_DAYS = 3;
+
+function shortfallsOf(forecast: string | null): string[] | null {
+  try {
+    const parsed = forecast ? (JSON.parse(forecast) as { acceptance?: { status?: string; shortfalls?: unknown } }) : null;
+    const acceptance = parsed?.acceptance;
+    if (!acceptance || typeof acceptance.status !== 'string') return null;
+    if (acceptance.status === 'ACCEPTED') return null;
+    const list = Array.isArray(acceptance.shortfalls) ? acceptance.shortfalls.filter((s): s is string => typeof s === 'string') : [];
+    return [...new Set(list.map((s) => s.trim()).filter(Boolean))].sort();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The inputs a shortfall sentence can name as not established, each read as one kind. The sentence
+ * itself carries a reach percentage and the candidate's title, which move every time anything is
+ * re-read; the kinds of evidence it says are missing do not.
+ */
+const SHORTFALL_KINDS: ReadonlyArray<[RegExp, string]> = [
+  [/\bprice\b/i, 'PRICE'],
+  [/days to (usable )?cash|settle/i, 'SETTLEMENT'],
+  [/reply rate|respon/i, 'REPLY_RATE'],
+  [/close rate|win rate|bid\/win|were won/i, 'CLOSE_RATE'],
+  [/direct cost|cost of/i, 'DIRECT_COST'],
+  [/deals the market can take|volume|market can take/i, 'VOLUME'],
+  [/money tied up|capital/i, 'CAPITAL'],
+  [/calibrat|finished accepted plans/i, 'CALIBRATION'],
+  [/buyer/i, 'BUYER'],
+  [/fulfil/i, 'FULFILMENT'],
+];
+
+/**
+ * What a stored plan reading says is missing, as kinds rather than words (F8): the evidence links
+ * its strategies fail (`CONVERSION`, `FULFILMENT`, …, from the stored `strategies` rows — the chosen
+ * strategy's when one is named), the link its next test is for, and the kinds its shortfall
+ * sentences name. A sentence that names no known kind is kept with its figures removed, so two
+ * readings that differ only in a percentage or a count still compare equal.
+ */
+export function missingKindsOf(row: { chosen_strategy: string | null; strategies: string | null; next_test: string | null; forecast: string | null }): string[] | null {
+  const shortfalls = shortfallsOf(row.forecast);
+  if (shortfalls === null) return null;
+  const kinds = new Set<string>();
+  try {
+    const strategies = row.strategies ? (JSON.parse(row.strategies) as Array<{ key?: string; links?: Array<{ link?: string; ok?: boolean }> }>) : [];
+    const list = Array.isArray(strategies) ? strategies : [];
+    const chosen = list.filter((one) => one && one.key === row.chosen_strategy);
+    for (const one of chosen.length ? chosen : list) for (const link of one?.links ?? []) if (link && link.ok === false && typeof link.link === 'string') kinds.add(`LINK:${link.link}`);
+  } catch {
+    /* an unreadable strategies column names no link */
+  }
+  try {
+    const next = row.next_test ? (JSON.parse(row.next_test) as { link?: unknown }) : null;
+    if (next && typeof next.link === 'string') kinds.add(`NEXT:${next.link}`);
+  } catch {
+    /* an unreadable next test names no link */
+  }
+  for (const text of shortfalls) {
+    const named = SHORTFALL_KINDS.filter(([pattern]) => pattern.test(text)).map(([, kind]) => kind);
+    if (named.length) for (const kind of named) kinds.add(kind);
+    else kinds.add(`TEXT:${text.toLowerCase().replace(/[\d.,%$]+/g, '#').replace(/\s+/g, ' ').trim()}`);
+  }
+  return [...kinds].sort();
+}
+
+const kindLabel = (kind: string) => kind.replace(/^(LINK|NEXT|TEXT):/, '').toLowerCase().replace(/_/g, ' ');
+
+/** Live goals: not cancelled, not paused, in a project. Archived goals are not listed at all. */
+async function liveGoals(limit = 25): Promise<{ id: string; title: string; projectId: string }[]> {
+  const { listWorkstreams } = await import('../../repos/register.ts');
+  return (await listWorkstreams({ projectIds: null }))
+    .filter((w) => !w.cancelledAt && !w.pausedAt && w.projectId)
+    .slice(0, limit)
+    .map((w) => ({ id: w.id, title: w.title, projectId: w.projectId! }));
+}
+
+/**
+ * (b) A goal whose latest plan reading is not ACCEPTED and whose missing evidence does not move:
+ * either its last `STUCK_PLAN_READINGS` readings name the same kinds of missing evidence
+ * (`missingKindsOf` — the kinds, not the sentences, which carry changing figures and titles), or its
+ * latest reading is older than `STUCK_PLAN_STALE_DAYS`: readings are written only when the conclusion
+ * changes, so a plan nothing moves writes none and its last one ages. One bounded indexed read per
+ * live goal.
+ */
+export async function stuckPlanDeficiencies(readings = STUCK_PLAN_READINGS, now = new Date()): Promise<DeficiencyReading[]> {
+  const out: DeficiencyReading[] = [];
+  const staleBefore = new Date(now.getTime() - STUCK_PLAN_STALE_DAYS * 86_400_000).toISOString();
+  for (const goal of await liveGoals()) {
+    const rows = await getDb().all<{ id: string; verdict: string; chosen_strategy: string | null; strategies: string | null; next_test: string | null; forecast: string | null; created_at: string }>(
+      'SELECT id, verdict, chosen_strategy, strategies, next_test, forecast, created_at FROM goal_plan_readings WHERE workstream_id = ? ORDER BY created_at DESC, id DESC LIMIT ?',
+      [goal.id, readings],
+    );
+    if (!rows.length) continue;
+    const latest = missingKindsOf(rows[0]!);
+    if (latest === null) continue;
+    const signature = JSON.stringify(latest);
+    const repeated = rows.length >= readings && rows.every((r) => JSON.stringify(missingKindsOf(r)) === signature);
+    const stale = rows[0]!.created_at < staleBefore;
+    if (!repeated && !stale) continue;
+    const missing = latest.map(kindLabel);
+    const first = repeated ? rows[rows.length - 1]! : rows[0]!;
+    const sentences = shortfallsOf(rows[0]!.forecast) ?? [];
+    const one = reading({
+      goalId: goal.id,
+      deficiency: 'PLANNING_ASSUMPTION',
+      title: repeated ? `Goal plan is stuck: the same evidence stays missing across its last ${readings} readings` : `Goal plan is stuck: no reading has changed in ${STUCK_PLAN_STALE_DAYS} days`,
+      observed:
+        (repeated
+          ? `Goal ${goal.id} ("${goal.title.slice(0, 120)}") was re-read ${readings} times since ${first.created_at} and is still not accepted `
+          : `Goal ${goal.id} ("${goal.title.slice(0, 120)}") has not reached a different conclusion since ${first.created_at} and is still not accepted `) +
+        `(latest verdict ${rows[0]!.verdict}); the same kinds of evidence stay missing: ${missing.length ? missing.slice(0, 8).join(', ') : '(none named — the plan cannot say what it lacks)'}` +
+        `${sentences.length ? ` — ${sentences.slice(0, 3).map((m) => m.slice(0, 160)).join('; ')}` : ''}. ` +
+        'The search is not producing what the plan needs.',
+      evidence: rows.map((r) => `${r.id} ${r.created_at} ${r.verdict}`).join('; '),
+      cause: null,
+      ownerPaths: [],
+      recurrence: repeated ? readings : rows.length,
+      expectedBenefit: 'Research aimed at the evidence the plan lacks, so the plan can move toward acceptance.',
+      acceptance: 'The next plan reading names a different, shorter set of missing evidence kinds, or the plan is accepted.',
+      metric: 'READY_OPPORTUNITIES_PER_DAY',
+      blocksGoal: true,
+      share: 0.3,
+      proposed: null,
+    });
+    out.push({ ...one, source: { kind: 'STUCK_PLAN', ref: goal.id } });
+  }
+  return out.slice(0, 4);
+}
+
+/** Goal research rounds that ended without a report, within this window, before it reads as a deficiency. */
+export const UNREPORTED_ROUND_WINDOW_DAYS = 7;
+export const UNREPORTED_ROUND_MIN = 2;
+
+/**
+ * (c) Research rounds that ended without a report: ABANDONED rounds (the mission failed, was
+ * cancelled, expired unlaunched or parked) in the last `UNREPORTED_ROUND_WINDOW_DAYS`. A HARVESTED
+ * round that found nothing did report — it is a finding about where Brain looked — and is not
+ * counted. Two kinds are read:
+ *
+ *  - a live goal's own discovery rounds (`cash_discovery_rounds` under its goal bucket), and
+ *  - its project's standing rounds (F8): the industry kernel's (`industry_rounds`, which run under
+ *    the standing research grant with or without a sprint) and the project's discovery rounds that
+ *    belong to no goal. Without a sprint a goal opens no rounds of its own, and these are the
+ *    research that feeds its plan; one reading per project, attributed to its first live goal.
+ */
+export async function unreportedRoundDeficiencies(now = new Date()): Promise<DeficiencyReading[]> {
+  const { listRounds } = await import('../../repos/cashDiscovery.ts');
+  const { abandonedIndustryRoundsSince } = await import('../../repos/industry.ts');
+  const { GOAL_BUCKET_PREFIX } = await import('../cash/discovery.ts');
+  const since = new Date(now.getTime() - UNREPORTED_ROUND_WINDOW_DAYS * 86_400_000).toISOString();
+  const goals = await liveGoals();
+  const roundsBy = new Map<string, Awaited<ReturnType<typeof listRounds>>>();
+  const out: DeficiencyReading[] = [];
+  const recent = (r: { state: string; harvestedAt: string | null; updatedAt: string }) => r.state === 'ABANDONED' && (r.harvestedAt ?? r.updatedAt) >= since;
+  for (const goal of goals) {
+    if (!roundsBy.has(goal.projectId)) roundsBy.set(goal.projectId, await listRounds(goal.projectId));
+    const prefix = `${GOAL_BUCKET_PREFIX}${goal.id}`;
+    const ended = roundsBy.get(goal.projectId)!.filter((r) => (r.bucketId === prefix || r.bucketId.startsWith(`${prefix}-`)) && recent(r));
+    if (ended.length < UNREPORTED_ROUND_MIN) continue;
+    const one = reading({
+      goalId: goal.id,
+      deficiency: 'RECURRING_OPERATIONAL_FAILURE',
+      title: 'Goal research rounds end without a report',
+      observed:
+        `${ended.length} research round(s) for goal ${goal.id} ("${goal.title.slice(0, 120)}") ended ABANDONED in ${UNREPORTED_ROUND_WINDOW_DAYS} days — ` +
+        'their missions failed, were cancelled, expired unlaunched or parked — so the goal paid for searches that returned nothing it can read.',
+      evidence: ended.slice(0, 6).map((r) => `${r.id} ${r.bucketId} round ${r.round}, idea ${r.candidateId}, ABANDONED ${r.harvestedAt ?? r.updatedAt}`).join('; '),
+      cause: null,
+      ownerPaths: [],
+      recurrence: ended.length,
+      expectedBenefit: "The goal's research rounds finish with a report the plan can use.",
+      acceptance: 'The next goal research rounds end HARVESTED with a report, not ABANDONED.',
+      metric: 'RESEARCH_JOB_SUCCESS_RATE',
+      blocksGoal: false,
+      share: 0.1,
+      proposed: null,
+    });
+    out.push({ ...one, source: { kind: 'UNREPORTED_ROUNDS', ref: goal.id } });
+  }
+  // The standing research every goal of a project plans from: once per project.
+  const seen = new Set<string>();
+  for (const goal of goals) {
+    if (seen.has(goal.projectId)) continue;
+    seen.add(goal.projectId);
+    const discovery = (roundsBy.get(goal.projectId) ?? []).filter((r) => !r.bucketId.startsWith(GOAL_BUCKET_PREFIX) && recent(r));
+    const kernel = await abandonedIndustryRoundsSince(goal.projectId, since);
+    const ended = [
+      ...kernel.map((r) => ({ at: r.harvestedAt ?? r.updatedAt, line: `${r.id} kernel ${r.purpose}${r.nodeId ? ` ${r.nodeId}` : ''}${r.cashModeId ? '' : ' (standing grant)'} round ${r.round}, idea ${r.candidateId}, ABANDONED ${r.harvestedAt ?? r.updatedAt}` })),
+      ...discovery.map((r) => ({ at: r.harvestedAt ?? r.updatedAt, line: `${r.id} ${r.bucketId} round ${r.round}, idea ${r.candidateId}, ABANDONED ${r.harvestedAt ?? r.updatedAt}` })),
+    ].sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));
+    if (ended.length < UNREPORTED_ROUND_MIN) continue;
+    const one = reading({
+      goalId: goal.id,
+      deficiency: 'RECURRING_OPERATIONAL_FAILURE',
+      title: 'Standing research rounds end without a report',
+      observed:
+        `${ended.length} standing research round(s) in the project of goal ${goal.id} ("${goal.title.slice(0, 120)}") ended ABANDONED in ${UNREPORTED_ROUND_WINDOW_DAYS} days ` +
+        `(${kernel.length} industry-kernel, ${discovery.length} discovery) — their missions failed, were cancelled, expired unlaunched or parked — ` +
+        "so the knowledge the project's goals plan from did not grow from them.",
+      evidence: ended.slice(0, 6).map((r) => r.line).join('; '),
+      cause: null,
+      ownerPaths: [],
+      recurrence: ended.length,
+      expectedBenefit: 'Standing research rounds finish with a report that expands what the project knows.',
+      acceptance: 'The next standing research rounds end HARVESTED with a report, not ABANDONED.',
+      metric: 'RESEARCH_JOB_SUCCESS_RATE',
+      blocksGoal: false,
+      share: 0.1,
+      proposed: null,
+    });
+    out.push({ ...one, source: { kind: 'UNREPORTED_ROUNDS', ref: `project:${goal.projectId}` } });
+  }
+  return out.slice(0, 4);
+}
+
+/**
+ * Commission a ready-made reading as it stands. An INVENTORY reading links the register row the
+ * commission produced to its finding (the inventory's own `linkedCandidateId`), so the finding reads
+ * as in flight and is not offered again while that repair runs.
+ */
+export async function commissionReading(one: DeficiencyReading, runId: string | null, options: { standing?: boolean; now?: Date } = {}): Promise<CommissionResult & { linkedFinding?: string }> {
+  const result = await commission({ ...one.diagnosis, runId, ...(options.standing ? { standing: true } : {}) }, options.now ?? new Date());
+  if (one.source?.kind === 'INVENTORY' && result.ok && result.candidateId) {
+    const { upsertInventory } = await import('./inventory.ts');
+    const linked = await upsertInventory({ id: one.source.ref, linkedCandidateId: result.candidateId }, { runId, actor: options.standing ? 'standing-director' : `operator:${runId ?? '-'}` });
+    if (linked.ok) return { ...result, linkedFinding: one.source.ref };
+  }
+  return result;
 }
 
 function reading(diagnosis: Omit<DiagnosisRequest, 'runId'>): DeficiencyReading {
@@ -1015,6 +1528,8 @@ function reading(diagnosis: Omit<DiagnosisRequest, 'runId'>): DeficiencyReading 
 
 /** The stable id the brief and the tool use for a ready-made diagnosis. */
 export function readingId(one: DeficiencyReading): string {
+  // An inventory finding is commissioned by its own id (Surge B H2-3).
+  if (one.source?.kind === 'INVENTORY') return `dfx_inv_${one.source.ref}`;
   return `dfx_${sha(`${one.diagnosis.deficiency}|${one.diagnosis.goalId ?? '-'}|${one.diagnosis.title}`).slice(0, 12)}`;
 }
 
@@ -1087,7 +1602,7 @@ export async function standingCommission(now = new Date()): Promise<string[]> {
           [...(c.evidence['ownerPaths'] as string[])].sort().join(',') === owners),
     );
     if (existing) continue;
-    const result = await commission({ ...one.diagnosis, runId: runs[0]?.id ?? null, standing: true }, now);
+    const result = await commissionReading(one, runs[0]?.id ?? null, { standing: true, now });
     done.push(`${readingId(one)}: ${result.reason}`);
     if (runs[0]) {
       await recordOperatorLearning({

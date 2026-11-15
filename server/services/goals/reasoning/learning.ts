@@ -11,9 +11,10 @@
  * them. Each exploration is also one append-only `reasoning_explorations` row:
  * what ran, what won, and whether the strategy was replaced.
  */
+import { createHash } from 'node:crypto';
 import { getDb } from '../../../db/database.ts';
 import { newId, nowIso } from '../../../repos/util.ts';
-import { makeDirection, type Direction, type Exploration, type Origin, type Transform } from './directions.ts';
+import { abstractDirection, makeDirection, type Direction, type Exploration, type Origin, type StancePrior, type Transform } from './directions.ts';
 import type { Strategy } from './variables.ts';
 
 /** What a plan read's variable sweep concluded, small enough for one row (§102). */
@@ -55,11 +56,19 @@ export function ucb(row: Pick<ReasoningMethodRow, 'tries' | 'total_lift' | 'impr
   return mean + 0.25 * hit + 0.5 * won + 0.15 * Math.sqrt(Math.log(Math.max(2, totalTries)) / tries);
 }
 
-/** The methods to start the next exploration from: those that worked best, as directions. */
+/**
+ * The methods to start the next exploration from: those that worked best, as directions.
+ *
+ * Every method that ever improved or won is scored, and the exploration term
+ * counts every try in the library (lens S, S-9): a pre-cut by wins before the
+ * bound was computed kept a method lucky once over one that improved every
+ * time it ran, and left the bound counting only the rows that survived it.
+ */
 export async function loadLibrary(limit = LIBRARY_SIZE): Promise<Direction[]> {
-  const rows = await getDb().all<ReasoningMethodRow>('SELECT * FROM reasoning_methods WHERE improvements > 0 OR wins > 0 ORDER BY wins DESC, best_lift DESC, signature LIMIT 400', []);
+  const db = getDb();
+  const rows = await db.all<ReasoningMethodRow>('SELECT * FROM reasoning_methods WHERE improvements > 0 OR wins > 0', []);
   if (rows.length === 0) return [];
-  const total = rows.reduce((n, r) => n + Number(r.tries), 0);
+  const total = Number((await db.get<{ n: number | string | null }>('SELECT SUM(tries) AS n FROM reasoning_methods', []))?.n ?? 0);
   return rows
     .map((r) => ({ r, score: ucb(r, total) }))
     // Ties broken by signature: Postgres returns tied rows in any order, and the library's order steers the exploration.
@@ -75,16 +84,78 @@ export async function loadLibrary(limit = LIBRARY_SIZE): Promise<Direction[]> {
     });
 }
 
-/** Record what an exploration learned: every direction tried, and one row for the exploration itself. */
-export async function recordExploration(goalId: string, x: Exploration): Promise<void> {
+/**
+ * What each stance has yielded across every goal (lens S, S-10): its methods'
+ * credited tries, improvements and wins, a recombined stance (`A+B`) counted
+ * for each of its parts. The exploration allocates its seed budget by it
+ * (`allocateSeeds`), so a way of reasoning that keeps improving plans gets
+ * more of the next read and one that never has still keeps a floor.
+ */
+export async function loadStancePrior(): Promise<StancePrior> {
+  const rows = await getDb().all<{ stance: string; tries: number | string | null; improvements: number | string | null; wins: number | string | null }>(
+    'SELECT stance, SUM(tries) AS tries, SUM(improvements) AS improvements, SUM(wins) AS wins FROM reasoning_methods GROUP BY stance',
+    [],
+  );
+  const prior: StancePrior = {};
+  for (const r of rows)
+    for (const s of r.stance.split('+')) {
+      const p = (prior[s] ??= { tries: 0, improvements: 0, wins: 0 });
+      p.tries += Number(r.tries ?? 0);
+      p.improvements += Number(r.improvements ?? 0);
+      p.wins += Number(r.wins ?? 0);
+    }
+  return prior;
+}
+
+/**
+ * What one direction taught, as the library records it (lens S, S-7/S-8).
+ *
+ * Its lift is its challenged score — reach and the reach it holds with its
+ * conversion halved or its assumptions removed, weighed equally (`scoreOf`) —
+ * against §99's plan scored the same way, never its bare reach: a method that
+ * only stacks assumptions raises coverage, not what holds, and must not rise
+ * in the library for it. A reading the plausibility critic flagged teaches
+ * nothing and is not recorded. The method is keyed by its program in roles
+ * (`abstractDirection`), so what one goal learned applies to the next; a
+ * program naming an opening no role covers keeps its ids.
+ */
+export function lessonOf(x: Pick<Exploration, 'greedy' | 'winner' | 'roles'>, r: Exploration['all'][number]): { direction: Direction; lift: number; improved: 0 | 1; won: 0 | 1 } | null {
+  if (r.reading.implausible?.length) return null;
+  const lift = r.reading.feasible ? r.score - x.greedy.score : 0;
+  const won = x.winner && x.winner.direction.signature === r.direction.signature ? 1 : 0;
+  const direction = (x.roles && abstractDirection(r.direction, x.roles)) || r.direction;
+  return { direction, lift, improved: lift >= MATERIAL ? 1 : 0, won };
+}
+
+/**
+ * The inputs an exploration ran on, when the caller does not name them: the
+ * plan as held and §99's plan, which read the same on the same inputs.
+ */
+export function explorationInputsKey(x: Pick<Exploration, 'baseline' | 'greedy' | 'roles'>): string {
+  return createHash('sha256').update(JSON.stringify({ baseline: x.baseline, greedy: x.greedy, roles: x.roles ?? null })).digest('hex');
+}
+
+/**
+ * Record what an exploration learned: every direction tried, and one row for the exploration itself.
+ *
+ * A method is credited once per (goal, inputs) (lens S, S-9): re-reading one
+ * goal on unchanged inputs is the same trial again, not another one, so the
+ * exploration's own row is appended but no method's tries, improvements or
+ * wins grow. `inputsKey` is the plan read's own key; without one it is derived.
+ */
+export async function recordExploration(goalId: string, x: Exploration, inputsKey: string = explorationInputsKey(x)): Promise<void> {
   const db = getDb();
   const now = nowIso();
   const base = x.baseline.reach;
   for (const r of x.all) {
-    const d = r.direction;
-    const lift = r.reading.feasible ? r.reading.reach - base : 0;
-    const improved = lift >= MATERIAL ? 1 : 0;
-    const won = x.winner && x.winner.direction.signature === d.signature ? 1 : 0;
+    const lesson = lessonOf(x, r);
+    if (!lesson) continue;
+    const { direction: d, lift, improved, won } = lesson;
+    const credit = await db.run(
+      'INSERT INTO reasoning_method_credits (signature, goal_id, inputs_key, created_at) VALUES (?, ?, ?, ?) ON CONFLICT (signature, goal_id, inputs_key) DO NOTHING',
+      [d.signature, goalId, inputsKey, now],
+    );
+    if (credit.changes === 0) continue;
     // A library method keeps the origin it was discovered with; only its record grows.
     const origin: Origin = d.origin === 'LIBRARY' ? 'ALGORITHM' : d.origin;
     await db.run(

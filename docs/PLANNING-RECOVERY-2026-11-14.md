@@ -317,3 +317,151 @@ What still limits it is evidence, not software: 11 openings, 0 market-test-ready
 0 buyer-validated; the openings research produced are mostly award-paid public
 programmes that pay in one lump after the deadline. That is an evidence gap the
 plan now states, not a defect that hides it.
+
+## Scope adjustment (owner, 2026-11-14 22:09Z)
+
+This surge is now the **down curve**: making the existing systems operational,
+stable and verified. A second, concurrent surge owns intelligence and
+capability (economic knowledge, money-tree construction, cross-industry
+knowledge, quantitative inference policy, strategic reasoning, plan-acceptance
+philosophy, Hermes' higher reasoning). The two surges share one $100 ceiling;
+this surge has committed about $0.30/day (the Fly VM 4 GB). The clock runs from
+08:07Z on 11-14, so the 48-hour mark is 08:07Z on 11-16.
+
+The stopping rule is the five conditions in the owner's message. The only known
+critical blocker within scope is the **post-restart `/healthz` stall**. At 22:11Z
+production answered in 0.6–32 s, during Deploy 1068. Its owner is the stability
+agent.
+
+Transferred to the second surge (capability, not reliability):
+- The $10K plan's evidence gap: no buyer-validated or market-test-ready
+  opening, and unmeasured conversion.
+- O-6: the dominant cause of research rounds ending without a report
+  (verifier versus unreachable sources).
+- The starting-capital fallback chain.
+
+These stay on the operational backlog as noncritical:
+- F10: goal creation is not idempotent on a retried request.
+- Filing's own upload still runs inside its effect transaction.
+- The baseline heap has not been profiled.
+- `retrospective.ts` and `composeLedger` are CPU hotspots.
+- H-8: GitHub drops scheduled `cheap-lane.yml` runs.
+- The release gate livelocks when merges arrive faster than verification.
+- The RunPod balance needs a top-up before about 11-20 (owner).
+
+## Final report
+
+**Status at 2026-11-14 21:10Z (13 h after the order).** Every recovery repair is
+merged into `production` and released by **Deploy 43635818969 (e37e0ff), verified
+by the hosted verification before and after a real restart** — the first fully
+verified release since the morning. `/healthz` answers in 0.2–0.7 s (it answered
+503 after 35 s at 18:17 and 20:24 before the stability layers shipped).
+
+**What was wrong with Brain.** Fifty-nine issues under eight root causes, plus a
+second production layer found after release:
+1. Plan computation ran on the server's main thread (minutes per read).
+2. Nothing checked a plan's economics: stacked price moves, vanishing supplier
+   cost, a market sold twice — a $34.5M median for a $10K goal.
+3. Three different "plans" per reading; revision never reached the plan; the
+   90% gate counted simulated worlds as evidence.
+4. No "infeasible" verdict; impossible goals searched past their deadline.
+5. Planning existed only for a hand-typed cash target.
+6. Research sentences and expired events became openings.
+7. A goal's state was read from its worst link (BLOCKED on a person for a
+   research dead end).
+8. The operator acted on what it could not see or do.
+9. (Production, after release) memory starvation and an effect transaction
+   holding its connection across storage HTTP — GC 16–31 s/min, pool 8/8.
+
+**Repairs:** PRs #884 (the eight causes, F1–F11 review fixes), #892 (boot grace,
+record), #893 (two clock/load-dependent tests), #894 (4 GB VM, 2560 MB heap,
+run reads without text), #896 (effects release their connection before the
+recompute; bounded, cached storage checks; goals workflow files an objective in
+words).
+
+**Verified planning capability.** Independent acceptance suite
+(`tests/planningAcceptance.test.ts`): 6 of 7 fail on the pre-recovery code, 7 of
+7 pass — $100/48h, $100K/90d, $1M/1y, infeasible $1M/48h, the $10K case and a
+changed constraint. Non-cash objectives (`tests/objectivePlan.test.ts`): ≥4
+distinct strategies, independent critique, revision, code verdict (PLAN_READY
+only on recorded evidence; NOT_SUPPORTED names the failed constraint). Objective
+in words (`tests/objectiveIntake.test.ts`). On production the $10K plan reads one
+coherent candidate (39.3% coverage, p50 $51K, committed $0), CANDIDATE_ONLY, with
+dated steps and kill criteria.
+
+**$10K case.** Not an accepted plan, correctly: no opening is market-test-ready
+or buyer-validated, conversion is unmeasured, and the openings research found are
+mostly award-paid public programmes. That is an evidence gap, not a software
+defect.
+
+**Agents and models.** 18 Claude subagents on this session's model (6 discovery,
+8 repair, 1 adversarial review, 1 fixture triage, 2 production stability), up to
+8 concurrently; no open-source agent framework (no self-hosted model strong
+enough; no paid API). Hermes repaired, not used as director.
+
+**Money.** Additional spend: the Fly VM 2 → 4 GB, about $9/month (~$0.30/day)
+from 18:15Z. Nothing else; no temporary infrastructure to terminate.
+
+**Remaining, non-blocking.** Filing's own upload still inside its effect
+transaction; ~680 MB baseline heap unprofiled; CPU hotspots in
+`retrospective.ts`/`composeLedger` (1–3 s/min); F10 (goal creation not
+idempotent on retry); the starting-capital fallback chain; release-gate livelock
+(merges arrive faster than verification); RunPod balance needs a top-up before
+about 11-20 (owner).
+
+## Down-curve closeout (2026-11-15 02:45Z)
+
+**Status: COMPLETE.** Every stopping condition in the owner's 22:09Z message is
+met. The production release `20da60e` (Deploy 43663717082) passed its hosted
+verification 280/280 both before and after a real restart, and `/healthz`
+answered every 30 s probe in 0.3–0.5 s for the next 30 minutes.
+
+### The production layer after the scope change
+
+| id | symptom | root cause | repair | verified by |
+|---|---|---|---|---|
+| P-10 | After every restart the process was SHEDDING, `/healthz` took 5–41 s or returned 503, and the 50,000-evaluation run was 15–38x slower than before the restart | The Fly shared-CPU class is throttled to its baseline once its burst balance is spent. The first boot and the first verification pass spend that balance. The slowdown was ≈16x on both 1 and 2 shared vCPUs, and the scenario runs in its own worker thread | #902: `performance-2x` (dedicated vCPUs). The Connection report now reads machine steal time | Deploy 1075 after restart: engine 1,050 ms (was 37,754 ms on Deploy 1070), `/healthz` max 26 ms (was 93,923 ms), 280/280 |
+| P-11 | Boot re-derivations ran inside the after-restart verification window (packet resume over 90 s, recompute 88 s, about 1,100 self-model row updates) | All boot work started at once | #900 and #902: the work waits out the 10-minute boot grace and is then staggered; optional passes are deferred during the grace | Deploy 1075: the after-restart pass took 2 min 13 s (was 15 min or never finished) |
+| P-12 | Deploys 1069 and 1071–1074 never reached Fly | Merges reached `production` faster than the roughly 45-minute gate could verify them; each newer tip supersedes the run in progress, as invariant 36 requires | None in code: the rule is correct. Coordinated with the merging sessions; 1075 released | Deploy 1075 released `20da60e` |
+
+### The reliability surge as a whole
+
+- **Operational root causes confirmed: 4.** In order of discovery:
+  - Computation on the main thread (RC-1).
+  - Memory and GC starvation, with effect transactions holding pool connections (RC-9).
+  - Boot re-derivations inside the verification window (P-11).
+  - Shared-CPU throttling (P-10).
+- **Verified fixed on production: all 4.** The evidence is the Deploy 1075 numbers above.
+- **Planning-side root causes:** RC-2 to RC-8 from the morning are released and verified by the acceptance suite. Their capability follow-ups now belong to the second surge.
+- **Issues in the inventory:** 61 rows above, plus P-10 to P-12.
+
+### Remaining work after closeout
+
+**Noncritical, on the operational backlog.** None of these blocks the second surge:
+- F10: goal creation is not idempotent on a retried request.
+- Filing's own upload still runs inside its effect transaction.
+- The factory MCP path reads `factory_work_units` by campaign about 1,500 times in 23 minutes.
+- `brain_check_in` has a median of about 25 s right after a restart.
+- `resumePulledPackets` retries packet `orc_aefa9509` on every boot, stuck behind an effect operation that never started.
+- The pg warning "client.query() when the client is already executing a query".
+- `retrospective.ts` and `composeLedger` are CPU hotspots.
+- H-8: GitHub drops scheduled `cheap-lane.yml` runs.
+- P-12, the release-gate contention, recurs whenever merges arrive faster than one every 45 minutes.
+
+**Transferred to the second surge:**
+- The $10K plan's evidence gap.
+- O-6: why research rounds end without a report.
+- The starting-capital fallback chain.
+
+**External dependencies:**
+- The RunPod balance needs a top-up before about 11-20 (owner).
+
+### Elapsed time and spend
+
+- **Elapsed:** 18 h 40 min, from 08:07Z on 11-14 to 02:45Z on 11-15.
+- **Additional spending, all on the Fly VM.** These prices come from memory of Fly's published rates, not from a bill:
+  - 2 GB to 4 GB from 18:15Z on 11-14: about $0.30/day.
+  - Shared-CPU to `performance-2x` from 02:09Z on 11-15: about $1.40/day more.
+- **Accrued so far:** under $0.50.
+- **Ongoing:** about $1.70/day, roughly $50/month, until someone changes the class back. That is a one-line revert in `fly.toml`, which would bring the throttling (P-10) back.
+- **Other:** no temporary infrastructure was created, so there is nothing to terminate. Factory, Brain, Claude Code and the second surge were not stopped.

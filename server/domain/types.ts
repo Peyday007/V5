@@ -1,4 +1,5 @@
 import type { BinPurpose } from './binPurpose.ts';
+import type { Position } from './construction.ts';
 /**
  * Domain contract for Brain.
  *
@@ -901,6 +902,25 @@ export const STRUCTURAL_FINDINGS = [
   'CAPITAL_REQUIREMENT',
   /** A published practice that removes, defers or shifts a requirement. */
   'CAPITAL_RESTRUCTURING',
+  /**
+   * A published figure for one of the construction's unit economics — a
+   * price, a rate, a cost, a payment term (W-5). Subject: the fact key;
+   * qualifier: the paying buyer type it is about, when it is about one;
+   * amount: the figure in hundredths of the key's unit.
+   */
+  'UNIT_ECONOMIC',
+  /**
+   * Who stands in a commercial role here (W-6). Subject: the occupant's name;
+   * qualifier: the role, optionally `role @ buyer type`. A role no seed lists
+   * is recorded as given.
+   */
+  'ROLE_OCCUPANT',
+  /**
+   * What a commercial role is paid, and on what terms (W-6). Subject: the fact
+   * key (a take rate, a placement fee, a financing margin…); qualifier: the
+   * role, optionally `role @ buyer type`; amount: hundredths of the key's unit.
+   */
+  'ROLE_TERMS',
 ] as const;
 export type StructuralFinding = (typeof STRUCTURAL_FINDINGS)[number];
 
@@ -933,7 +953,8 @@ export type IndustryNodeOrigin = (typeof INDUSTRY_NODE_ORIGINS)[number];
 export interface ConstructionFactRow {
   id: string;
   project_id: string | null;
-  workstream_id: string;
+  /** Null for a project-level fact absorbed from a gated research claim (W-5). */
+  workstream_id: string | null;
   fact_key: string;
   segment: string | null;
   low: number;
@@ -944,6 +965,17 @@ export interface ConstructionFactRow {
   source_url: string | null;
   recorded_by: string;
   created_at: string;
+  /** The industry-map subject a claim-derived fact was established under. */
+  node_id: string | null;
+  /** The research claim the fact came from: its lineage, unique per fact. */
+  source_claim_id: string | null;
+  source_kind: string | null;
+  /** The commercial role a role finding is about (W-6), as given. */
+  role_id: string | null;
+  occupant: string | null;
+  /** When the figure was observed, and when it stops being current (W-10). */
+  observed_at: string | null;
+  valid_until: string | null;
 }
 
 export interface IndustryNodeRow {
@@ -959,6 +991,9 @@ export interface IndustryNodeRow {
   retired_reason: string | null;
   created_at: string;
   updated_at: string;
+  /** For a TRANSACTION_TYPE: who pays and who supplies, as the finding declared them (W-13). */
+  payer?: string | null;
+  supplier?: string | null;
 }
 
 export interface IndustryNode {
@@ -974,6 +1009,9 @@ export interface IndustryNode {
   retiredReason: string | null;
   createdAt: string;
   updatedAt: string;
+  /** For a TRANSACTION_TYPE: who pays and who supplies, by name (W-13). Absent or null: not declared. */
+  payer?: string | null;
+  supplier?: string | null;
 }
 
 export const INDUSTRY_ROUND_PURPOSES = ['BOOTSTRAP', 'MAP', 'SCAN', 'CAPITAL'] as const;
@@ -982,7 +1020,8 @@ export type IndustryRoundPurpose = (typeof INDUSTRY_ROUND_PURPOSES)[number];
 export interface IndustryRoundRow {
   id: string;
   project_id: string;
-  cash_mode_id: string;
+  /** Null for a round asked under a standing research grant rather than a sprint (152). */
+  cash_mode_id: string | null;
   node_id: string | null;
   purpose: string;
   bucket_id: string | null;
@@ -1000,7 +1039,11 @@ export interface IndustryRoundRow {
 export interface IndustryRound {
   id: string;
   projectId: string;
-  cashModeId: string;
+  /**
+   * The sprint this round was asked under, or null when a standing research
+   * grant asked it. A sprint's wind-down stops only its own rounds.
+   */
+  cashModeId: string | null;
   nodeId: string | null;
   purpose: IndustryRoundPurpose;
   bucketId: string | null;
@@ -2226,6 +2269,14 @@ export interface ResearchClaimRow {
   opportunity_signal: string | null;
   monetization_method: string | null;
   closes_on: string | null;
+  /** Migration 154 (W-11/W-12). Absent on a row read before it ran. */
+  measurement_method?: string | null;
+  sample_size?: number | null;
+  limitations?: string | null;
+  valid_until?: string | null;
+  invalidated_by?: string | null;
+  invalidation_met_at?: string | null;
+  invalidation_note?: string | null;
   structural_finding: string | null;
   structural_subject: string | null;
   structural_qualifier: string | null;
@@ -3416,6 +3467,23 @@ export interface ResearchClaim {
    * means the source stated none, which is never read as "open".
    */
   closesOn: string | null;
+  /**
+   * How the figure was measured (survey, audited accounts, platform export…),
+   * as the source states it, or null (W-11).
+   */
+  measurementMethod?: string | null;
+  /** How many cases the figure was measured on, where the source states it. */
+  sampleSize?: number | null;
+  /** What the source itself says limits the figure. */
+  limitations?: string | null;
+  /** Until when the source says the figure holds, YYYY-MM-DD, or null for the quantity's default. */
+  validUntil?: string | null;
+  /** The condition that would make the claim wrong, in words, or null. */
+  invalidatedBy?: string | null;
+  /** When that condition was recorded as met, or null while it has not been. */
+  invalidationMetAt?: string | null;
+  /** What met it. */
+  invalidationNote?: string | null;
   /**
    * The structural fact about an industry this claim establishes, if any.
    *
@@ -10131,11 +10199,14 @@ export type PathJudgment = (typeof PATH_JUDGMENTS)[number];
  * `ENUMERATED` is the method table applied to a subject's own recorded facts:
  * arithmetic, reading no prose and claiming nothing beyond *this is a shape of
  * transaction that could apply here*. `EVIDENCED` is a worker that read a
- * source declaring one, and carries the claim. `SEED` is a person, and it is
+ * source declaring one, and carries the claim. `CONSTRUCTED` is an
+ * arrangement Brain composed itself (§81/§82, migration 152): a hypothesis with
+ * its design and reconstruction in `design_json`, never read by the ledger's
+ * ranking (`listPaths` leaves it out). `SEED` is a person, and it is
  * the one origin Brain may never write — §22's rule at a new table: a machine
  * that could name its own possibilities would be deciding what the space is.
  */
-export const PATH_ORIGINS = ['SEED', 'ENUMERATED', 'EVIDENCED'] as const;
+export const PATH_ORIGINS = ['SEED', 'ENUMERATED', 'EVIDENCED', 'CONSTRUCTED'] as const;
 export type PathOrigin = (typeof PATH_ORIGINS)[number];
 
 /**
@@ -10226,6 +10297,76 @@ export interface MonetizationPathRow {
   last_evaluated_at: string | null;
   created_at: string;
   updated_at: string;
+  /* Migration 151: a constructed arrangement. All null / zero on every other origin. */
+  design_signature: string | null;
+  legacy_key: string | null;
+  design_json: string | null;
+  construction_origin: string | null;
+  precedent_opportunity_id: string | null;
+  first_goal_id: string | null;
+  inputs_digest: string | null;
+  last_composed_at: string | null;
+  asked_count: number;
+  last_asked_at: string | null;
+  evaluated_count: number;
+  last_evaluation_goal_id: string | null;
+  last_evaluation_reading_id: string | null;
+  last_evaluation_contribution_cents: number | null;
+  last_evaluation_picked: number | null;
+  research_verdict: string | null;
+  verdict_inputs_digest: string | null;
+  verdict_round_id: string | null;
+  verdict_at: string | null;
+  /* Migration 155: the §92 position the arrangement's design occupies (K-6). */
+  position_json: string | null;
+  position_key: string | null;
+}
+
+/**
+ * A constructed arrangement as the library holds it (§81/§82, migration 152).
+ *
+ * A hypothesis: `design` is Brain's composition and reconstruction, never an
+ * observation. What research observed about it is an EVIDENCE fact on the
+ * path; what research concluded is `verdict`, which holds only while the
+ * arrangement's `inputsDigest` is the one it was reached under.
+ */
+export interface ConstructedArrangementRecord {
+  pathId: string;
+  projectId: string;
+  signature: string;
+  legacyKey: string | null;
+  constructionOrigin: 'FORWARD' | 'TRANSFER' | 'REVERSE';
+  /** The parsed `design_json`: `{ arrangement, composedUnder, geography, constraints, paymentTiming }`. */
+  design: Record<string, unknown>;
+  inputsDigest: string;
+  precedentOpportunityId: string | null;
+  opportunityId: string | null;
+  industryNodeId: string | null;
+  firstGoalId: string | null;
+  lastComposedAt: string | null;
+  askedCount: number;
+  lastAskedAt: string | null;
+  evaluatedCount: number;
+  lastEvaluation: { goalId: string; readingId: string | null; contributionCents: number | null; picked: boolean } | null;
+  verdict: { verdict: 'CONFIRMED' | 'REFUTED'; inputsDigest: string; roundId: string | null; at: string | null } | null;
+  /** The §92 position the design occupies (migration 155), and its key; null on a row not re-composed since. */
+  position: Position | null;
+  positionKey: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** One goal model's weighing of one constructed arrangement (migration 152). */
+export interface MonetizationPathEvaluationRow {
+  id: string;
+  project_id: string;
+  path_id: string;
+  goal_id: string;
+  reading_id: string;
+  picked: number;
+  refused: number;
+  contribution_cents: number | null;
+  evaluated_at: string;
 }
 
 /* ==========================================================================
@@ -11289,6 +11430,14 @@ export interface ReasoningExplorationRow {
   created_at: string;
 }
 
+/** One method credited for one goal on one set of inputs (migration 153 / pg 144, lens S, S-9). */
+export interface ReasoningMethodCreditRow {
+  signature: string;
+  goal_id: string;
+  inputs_key: string;
+  created_at: string;
+}
+
 /** One reading, repair or metered call of a connected service (migration 145 / pg 136, §103). */
 export interface IntegrationEventRow {
   id: string;
@@ -11395,5 +11544,40 @@ export interface GoalObjectiveReadingRow {
   decision: string;
   calls: string;
   error: string | null;
+  created_at: string;
+}
+
+/** One owner money entry for inbox procurement (`repos/inboxes.ts`, migration 149, §110). */
+export interface InboxFundRow {
+  id: string;
+  kind: string;
+  amount_cents: number;
+  actor: string;
+  note: string | null;
+  created_at: string;
+}
+
+/** One inbox order attempt, its quote recorded before it was placed (migration 149, §110). */
+export interface InboxPurchaseRow {
+  id: string;
+  purchase_key: string;
+  provider: string;
+  kind: string;
+  domain: string;
+  mailboxes: number;
+  upfront_cents: number;
+  monthly_cents: number;
+  quote: string;
+  actor: string;
+  created_at: string;
+}
+
+/** What a provider said about one inbox order, appended (migration 149, §110). */
+export interface InboxPurchaseOutcomeRow {
+  id: string;
+  purchase_id: string;
+  outcome: string;
+  detail: string;
+  receipt: string;
   created_at: string;
 }

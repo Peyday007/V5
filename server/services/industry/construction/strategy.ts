@@ -22,7 +22,7 @@
  * assets and the money reaches it, and the operator's own preferred sequence
  * is evaluated beside the best one and challenged when it is worse.
  */
-import { ASSET_LABELS, CONTROL_ASSETS, type Asset, type IndustryEvidence } from '../../../domain/construction.ts';
+import { ASSET_LABELS, CONTROL_ASSETS, hasOwnRevenue, type Asset, type IndustryEvidence } from '../../../domain/construction.ts';
 import type { Business } from './businesses.ts';
 import { solveEconomics, type BusinessEconomics } from './economics.ts';
 import type { OperatorIntent, SequenceStep } from './intent.ts';
@@ -106,7 +106,7 @@ export function ambitionAssets(intent: OperatorIntent, evidence: IndustryEvidenc
 export function heldFromIntent(intent: OperatorIntent): Asset[] {
   const out = new Set<Asset>();
   for (const a of intent.assets) {
-    if (/\b(van|truck|vehicle|fleet|trailer|equipment|machine)s?\b/i.test(a)) out.add('FLEET');
+    if (/\b(van|truck|vehicle|fleet|trailer|equipment|machine)s?\b/i.test(a)) out.add('CAPACITY');
     if (/\binsurance\b/i.test(a)) out.add('INSURANCE_COVER');
     if (/\b(licen[cs]e|authority|permit)\b/i.test(a)) out.add('OPERATING_AUTHORITY');
     if (/\b(customers?|clients?|accounts?|relationships?|contacts?)\b/i.test(a)) out.add('BUYER_RELATIONSHIPS');
@@ -128,6 +128,8 @@ function canStart(b: Business, held: ReadonlySet<Asset>): boolean {
 
 function matchesStep(b: Business, step: SequenceStep): boolean {
   const p = b.position;
+  // The operator's named steps describe the natural bases; a resale, rent or financing position is none of them.
+  if (hasOwnRevenue(p)) return false;
   switch (step) {
     case 'BROKER':
       return p.contract === 'INTRODUCE' || p.contract === 'REPRESENT';

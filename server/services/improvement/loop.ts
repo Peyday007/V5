@@ -34,6 +34,7 @@ import {
   dependencyCheckFor,
   deriveStage,
   freeLaneWeaknesses,
+  isRecordOnly,
   MAX_ATTEMPTS,
   BEFORE_WINDOW_HOURS,
   RECENT_WINDOW_HOURS,
@@ -268,7 +269,7 @@ async function register(weakness: Weakness, now: Date, report: ImprovementTickRe
   const open = executionRouteOf(candidate)
     ? []
     : (await listCandidates({ open: true })).filter(
-        (c) => c.id !== candidate.id && c.ownerComponent === candidate.ownerComponent && !c.changeRequestId && !executionRouteOf(c) && c.createdAt <= candidate.createdAt,
+        (c) => c.id !== candidate.id && !isRecordOnly(c) && c.ownerComponent === candidate.ownerComponent && !c.changeRequestId && !executionRouteOf(c) && c.createdAt <= candidate.createdAt,
       );
   const host = open[0];
   if (host) {
@@ -635,12 +636,60 @@ export async function advanceNow(candidateId: string, now = new Date()): Promise
   const state = await improvementSwitch();
   if (!state.enabled) return { did: 'not advanced: the improvement order is switched off', report };
   const candidate = await getCandidate(candidateId);
-  if (!candidate || candidate.decision) return { did: null, report };
+  if (!candidate || candidate.decision || isRecordOnly(candidate)) return { did: null, report };
   const open = await listCandidates({ open: true });
   const busyOwners = new Set(open.filter((c) => c.id !== candidate.id && c.changeRequestId && !c.deliveredAt).map((c) => c.ownerComponent));
   const did = await advance(candidate, busyOwners, now, report);
   if (did) report.advanced.push(`${candidate.weaknessKey}: ${did}`);
   return { did, report };
+}
+
+/**
+ * The operator's re-attempt (§109, Surge B H2-5): the next attempt of a weakness family now,
+ * rather than after `RECUR_AFTER_HOURS`, because the operator read that its campaign stalled or
+ * failed. The same family rules as `register` — at most `MAX_ATTEMPTS`, keyed `KEY#n`, the parent
+ * named, the earlier attempts' failure stated so the objective asks for a different method
+ * (invariant 16) — and the latest attempt must already be decided. Returns the new row, or why not.
+ */
+export async function registerNextAttempt(
+  latestId: string,
+  input: { reason: string; evidence: Record<string, unknown> },
+): Promise<{ ok: true; candidate: ImprovementCandidate } | { ok: false; reason: string }> {
+  const latest = await getCandidate(latestId);
+  if (!latest) return { ok: false, reason: 'no register row has that id' };
+  const base = latest.weaknessKey.split('#')[0]!;
+  const members = await family(base);
+  const newest = members.at(-1)!;
+  if (newest.id !== latest.id) return { ok: false, reason: `a later attempt already exists: ${newest.weaknessKey} (${newest.id})` };
+  if (!latest.decision) return { ok: false, reason: 'the latest attempt is not decided; it must be closed before the next one starts' };
+  if (latest.attempt >= MAX_ATTEMPTS) return { ok: false, reason: `attempt ${latest.attempt} of ${MAX_ATTEMPTS} was the last: a failing improvement cannot loop` };
+  const attempt = latest.attempt + 1;
+  const failed = members.filter((m) => m.decision && m.decision !== 'KEPT' && m.decision !== 'COMBINED');
+  const methodInadequacy = {
+    judgment:
+      `Attempt(s) ${failed.map((m) => m.attempt).join(', ')} ended ${failed.map((m) => m.decision).join(', ')}; the operator started this attempt: ` +
+      `${input.reason.slice(0, 400)} Change the method (the approach, the owner of the behaviour, or the measure), do not re-run it.`,
+    failedAttempts: failed.map((m) => m.attempt),
+  };
+  const { candidate, created } = await upsertCandidate({
+    weaknessKey: `${base}#${attempt}`,
+    kind: latest.kind,
+    title: latest.title,
+    problem: latest.problem,
+    metric: latest.metric,
+    downstreamMetric: latest.downstreamMetric,
+    ownerComponent: latest.ownerComponent,
+    frequency: latest.frequency,
+    denominator: latest.denominator,
+    scope: latest.scope,
+    severity: latest.severity,
+    evidence: { ...input.evidence, methodInadequacy, observedAt: new Date().toISOString() },
+    attempt,
+    parentId: latest.id,
+  });
+  if (!created) return { ok: false, reason: `${candidate.weaknessKey} was registered by another caller first` };
+  await recordImprovementEvent({ candidateId: candidate.id, kind: 'WEAKNESS_DETECTED', detail: { key: candidate.weaknessKey, attempt, parentId: latest.id, methodInadequacy, by: 'operator re-attempt' } });
+  return { ok: true, candidate };
 }
 
 export async function brainFactoryProject(): Promise<string | null> {
@@ -1258,7 +1307,8 @@ export async function improvementTick(now = new Date()): Promise<ImprovementTick
       report.errors.push(`${weakness.key}: ${String((error as Error).message ?? error).slice(0, 200)}`);
     }
   }
-  const open = await listCandidates({ open: true });
+  // A mission or an inventory finding is the operator's record, not the loop's work (RECORD_ONLY_KINDS).
+  const open = (await listCandidates({ open: true })).filter((c) => !isRecordOnly(c));
   const decided = await listCandidates();
   const ranked = rankCandidates(
     open.map((c) => ({
@@ -1289,7 +1339,7 @@ export async function improvementTick(now = new Date()): Promise<ImprovementTick
   }
   await recordGapLoops(ranked.map((c) => c.id), report);
   try {
-    await raiseAlerts(now, await listCandidates({ open: true }), actionable, report);
+    await raiseAlerts(now, (await listCandidates({ open: true })).filter((c) => !isRecordOnly(c)), actionable, report);
   } catch (error) {
     report.errors.push(`alerts: ${String((error as Error).message ?? error).slice(0, 200)}`);
   }

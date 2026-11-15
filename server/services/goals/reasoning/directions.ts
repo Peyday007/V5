@@ -43,9 +43,12 @@
  * requirement is not explored.
  */
 import type { ModelledOpportunity } from '../../cash/goalScenario.ts';
+import type { InventedDesign } from '../../cash/construct.ts';
+import { AGGREGATION, coherent, FUNDING, REPEAT, STRUCTURE_KEYS, STRUCTURES, type Design } from '../../cash/properties.ts';
 import type { PlannedOpening } from '../portfolio.ts';
 import type { Dimension, StrategyChange, StrategyOperator, StrategyState, VariantReading } from '../reconstruction.ts';
 import { renderSweep, type VariableSweep } from './variables.ts';
+import { rankValue, valuePerInterested } from './rank.ts';
 
 export const MAX_DIRECTIONS = 120;
 export const MIN_DIRECTIONS = 12;
@@ -70,6 +73,14 @@ export const EVALUATIONS_PER_DIRECTION = 4;
 export const MAX_EVALUATIONS = 400;
 /** Nor more time than this (production evaluations cost about a second each). */
 export const DEFAULT_MAX_MS = 3 * 60_000;
+/**
+ * Reserve entries a model's brief lists, strongest first. The reserve now also
+ * holds every opening a reconstruction does not move (hundreds on production,
+ * `MOVABLE_UNRANKED`); a brief listing them all is a prompt of hundreds of lines
+ * for moves the strongest few already represent. Every entry stays reachable
+ * by the seeded and mutated INCLUDE moves.
+ */
+export const BRIEF_RESERVE = 16;
 
 export type Field = 'price' | 'close' | 'respond' | 'volume' | 'daysToCash' | 'directCost';
 /** Which openings a transform touches. `id:<opportunityId>` names one. */
@@ -85,7 +96,14 @@ export type Transform =
   /** Leave openings out, freeing the capacity and money they used. */
   | { op: 'DROP'; scope: Scope }
   /** A stress: move a field against the plan. Used to challenge, never to win. */
-  | { op: 'STRESS'; field: Field; factor: number; scope: Scope };
+  | { op: 'STRESS'; field: Field; factor: number; scope: Scope }
+  /**
+   * Bring in a constructed arrangement the compose's screen cut (lens S, S-6):
+   * `key` is its opening id in `ExploreContext.reserve`. It enters on its own
+   * reconstructed estimates, sharing its population's market, and the engine
+   * judges the plan with it like any other.
+   */
+  | { op: 'INCLUDE'; key: string };
 
 export type Origin = 'ALGORITHM' | 'MODEL' | 'LIBRARY' | 'RECOMBINED' | 'MUTATED';
 
@@ -106,6 +124,12 @@ export interface Direction {
   parents?: string[];
   /** A question the openings held cannot answer, which this direction needs answered. */
   ask?: string;
+  /**
+   * A transaction design for a buyer population the model proposed (S-11):
+   * composed by the construction path when the model's methods arrive, and
+   * brought into the plan by an INCLUDE of the arrangement it composes to.
+   */
+  design?: InventedDesign;
 }
 
 export interface DirectionReading {
@@ -151,8 +175,14 @@ export interface Exploration {
   discoveries: DirectionReading[];
   /** Questions directions raised that the openings held cannot answer. */
   asks: string[];
-  /** The model's part: calls made, methods proposed, methods refused as off-shape or unexecutable. */
-  model: { calls: number; proposed: number; refused: number; error: string | null };
+  /**
+   * The role each opening and reserve arrangement played in this problem
+   * (`@RANK:k` by value per interested buyer, `@RESERVE:k`), so a learned
+   * method is recorded without this goal's ids and transfers to another (S-8).
+   */
+  roles?: Record<string, string>;
+  /** The model's part: calls made, methods proposed, methods refused as off-shape or unexecutable, and why each invented design was refused. */
+  model: { calls: number; proposed: number; refused: number; error: string | null; rejections?: string[] };
   /** The variable sweep (§102) whose strategies entered this exploration, when one ran. */
   sweep?: VariableSweep | null;
   sentence: string;
@@ -177,8 +207,16 @@ export interface ExploreContext {
   threads: number;
   /** What worked before, best first (`learning.ts`). */
   library?: Direction[];
+  /** What each stance has yielded across goals (`loadStancePrior`): the seed budget is allocated by it (S-10). */
+  stancePrior?: StancePrior;
   /** The model's methods, already parsed; generated concurrently with the screen. */
-  invent?: (brief: InventBrief) => Promise<{ directions: Direction[]; calls: number; proposed: number; refused: number; error: string | null }>;
+  invent?: (brief: InventBrief) => Promise<{ directions: Direction[]; calls: number; proposed: number; refused: number; error: string | null; rejections?: string[] }>;
+  /**
+   * Composes a design the model invented through the construction path into
+   * an estimated opening, or says why it cannot be one (S-11). Absent, the
+   * model is not offered designs.
+   */
+  design?: (spec: InventedDesign) => PlannedOpening | { refused: string };
   /** Wall-clock budget for the whole exploration. */
   maxMs?: number;
   now?: () => number;
@@ -188,6 +226,15 @@ export interface ExploreContext {
    * any other.
    */
   sweep?: VariableSweep | null;
+  /** Constructed arrangements the compose's screen cut, strongest first: what an INCLUDE move may bring in (S-6). */
+  reserve?: PlannedOpening[];
+  /**
+   * Openings the reconstruction holds in the reserve instead of moving them
+   * (`MOVABLE_UNRANKED`). They are still the problem's openings, so the budget
+   * counts them as it did when every one was moved: bounding what each
+   * evaluation carries must not also shrink how widely the plan is explored.
+   */
+  heldOpenings?: number;
 }
 
 /** What the model is told about the problem. */
@@ -201,6 +248,10 @@ export interface InventBrief {
   structural: boolean;
   openings: Array<{ id: string; title: string; price: number | null; close: number | null; respond: number | null; volume: number | null; daysToCash: number | null; outreach: boolean; agreed: boolean }>;
   operators: Array<{ key: string; dimension: string }>;
+  /** Constructed arrangements outside the plan that an INCLUDE step may bring in. */
+  reserve?: Array<{ id: string; title: string; price: number | null; repeatable: boolean }>;
+  /** Present when a method may carry a new transaction design: the vocabulary it is written in (S-11). */
+  designs?: { structures: Array<{ key: string; label: string }>; funding: readonly string[]; aggregation: readonly string[]; repeat: readonly string[] };
   /** Stances already covered, so the model is asked for ones that are not. */
   stancesTried: string[];
   /** Methods that worked best before. */
@@ -222,9 +273,6 @@ function outreach(o: ModelledOpportunity): boolean {
   return o.repeatable && o.agreedValue === 0 && !o.channel;
 }
 
-function valuePerInterested(o: ModelledOpportunity): number {
-  return (mid(o.price) ?? 0) * (mid(o.close) ?? 0);
-}
 
 function scaleInput(input: ModelledOpportunity['price'], k: number, cap = Infinity): ModelledOpportunity['price'] {
   const f = (x: number | null) => (x === null ? null : Math.min(cap, x * k));
@@ -320,6 +368,8 @@ export function familyOf(t: Transform): string | null {
       return `drop:${t.scope}`;
     case 'STRESS':
       return null;
+    case 'INCLUDE':
+      return `include:${t.key}`;
   }
 }
 
@@ -337,6 +387,8 @@ function token(t: Transform): string {
       return `drop:${t.scope}`;
     case 'STRESS':
       return `stress:${t.field}:${bucket(t.factor)}@${t.scope}`;
+    case 'INCLUDE':
+      return `include:${t.key}`;
   }
 }
 
@@ -391,7 +443,7 @@ export interface Applied {
 export function applyProgram(
   start: StrategyState,
   program: Transform[],
-  ctx: Pick<ExploreContext, 'operators' | 'operatorsFor' | 'remaining'>,
+  ctx: Pick<ExploreContext, 'operators' | 'operatorsFor' | 'remaining' | 'reserve'>,
   /** Leave out every transform whose change is an assumption: the plan as it stands on estimates alone. */
   skipAssumed = false,
 ): Applied {
@@ -464,6 +516,25 @@ export function applyProgram(
       );
       continue;
     }
+    if (t.op === 'INCLUDE') {
+      const one = ctx.reserve?.find((o) => o.opportunity.id === t.key);
+      if (!one || s.openings.some((o) => o.opportunity.id === t.key)) {
+        skipped++;
+        continue;
+      }
+      // A design the model invented is a hypothesis about structure: the plan without it is what holds on no assumption (S-11).
+      const invented = !!one.estimated?.invented;
+      if (skipAssumed && invented) continue;
+      s = record(
+        {
+          ...s,
+          openings: [...s.openings, one],
+          changes: [...s.changes, change('PORTFOLIO', `include:${t.key}`, `bring in "${one.opportunity.title.slice(0, 80)}", ${invented ? "a design Brain's model invented, composed by construction, every input of it unestablished" : one.estimated ? 'a constructed arrangement the first cut left out, on its reconstructed estimates' : 'an opening the reconstruction held outside the openings it moves, on its own estimates'}`, invented ? 'ASSUMPTION' : 'ESTIMATE')],
+        },
+        t,
+      );
+      continue;
+    }
     if (t.op === 'DROP') {
       const ids = inScope(s.openings, t.scope, ctx.remaining);
       if (ids.size === 0 || ids.size >= s.openings.filter((o) => o.agreedValue === 0).length) {
@@ -513,7 +584,7 @@ export function challengeProgram(): Transform[] {
  * is set by the problem (one per opening, per binding factor, per lever) —
  * not by a list of prompts.
  */
-export function seedDirections(ctx: Pick<ExploreContext, 'base' | 'greedy' | 'operators' | 'binding' | 'remaining' | 'structural'>): Direction[] {
+export function seedDirections(ctx: Pick<ExploreContext, 'base' | 'greedy' | 'operators' | 'binding' | 'remaining' | 'structural' | 'reserve'>): Direction[] {
   const out: Direction[] = [];
   const add = (d: Omit<Direction, 'signature' | 'origin'>) => out.push(makeDirection({ ...d, origin: 'ALGORITHM' }));
   const openings = ctx.base.openings.filter((o) => o.agreedValue === 0);
@@ -578,7 +649,89 @@ export function seedDirections(ctx: Pick<ExploreContext, 'base' | 'greedy' | 'op
 
   // PORTFOLIO: concentrate or spread.
   for (const n of [2, 3, 5]) if (openings.length > n) add({ name: `Portfolio: concentrate on ${n}`, stance: 'PORTFOLIO', thinking: 'Shared capacity spread thin may reach nothing; concentrate it.', from: 'GREEDY', program: [{ op: 'FOCUS', count: n }] });
+
+  // INCLUSION: a constructed arrangement the first cut left out, added — or in place of the weakest estimate held (S-6).
+  const weakestEstimate = [...openings].filter((o) => o.estimated).sort((a, b) => valuePerInterested(a) - valuePerInterested(b) || (a.opportunity.id < b.opportunity.id ? -1 : 1))[0];
+  for (const r of ctx.reserve ?? []) {
+    add({ name: `Inclusion: bring in "${title(r)}"`, stance: 'INCLUSION', thinking: 'The first cut ranked arrangements cheaply; let the engine judge one it left out beside the strongest plan.', from: 'GREEDY', program: [{ op: 'INCLUDE', key: r.opportunity.id }] });
+    if (weakestEstimate) add({ name: `Inclusion: "${title(r)}" in place of "${title(weakestEstimate)}"`, stance: 'INCLUSION', thinking: 'A cut arrangement may beat the weakest one admitted; swap them and let the engine decide.', from: 'GREEDY', program: [{ op: 'INCLUDE', key: r.opportunity.id }, { op: 'DROP', scope: `id:${weakestEstimate.opportunity.id}` }] });
+  }
   return out;
+}
+
+// ---------------------------------------------------------------- seed budget by stance (lens S, S-10)
+
+/** A stance's record across every goal, as the learning store holds it. */
+export interface StanceRecord {
+  tries: number;
+  improvements: number;
+  wins: number;
+}
+export type StancePrior = Record<string, StanceRecord>;
+
+/** Each stance keeps at least this share of an even split of the seed budget, however poorly it has done. */
+export const STANCE_FLOOR = 0.5;
+
+/** The posterior mean of a stance's chance to improve the plan: Beta(1, 1) updated by its credited tries. */
+export function stancePosterior(r: StanceRecord | undefined): number {
+  const tries = Math.max(0, r?.tries ?? 0);
+  return (1 + Math.min(tries, Math.max(0, r?.improvements ?? 0))) / (2 + tries);
+}
+
+/**
+ * How many of `slots` seeds each stance gets. Every stance first receives its
+ * floor — `STANCE_FLOOR` of an even share, at least one, never more than it
+ * has seeds — strongest posterior first, so a budget smaller than the number
+ * of stances still goes to the best; the rest is split in proportion to each
+ * stance's posterior. With no record every stance is even.
+ */
+export function stanceQuotas(available: Map<string, number>, slots: number, prior: StancePrior = {}): Map<string, number> {
+  const post = new Map([...available.keys()].map((s) => [s, stancePosterior(prior[s])]));
+  const order = [...available.keys()].sort((a, b) => post.get(b)! - post.get(a)! || (a < b ? -1 : a > b ? 1 : 0));
+  const quota = new Map(order.map((s) => [s, 0]));
+  if (order.length === 0 || slots <= 0) return quota;
+  let left = slots;
+  const floor = Math.max(1, Math.floor((STANCE_FLOOR * slots) / order.length));
+  for (const s of order) {
+    const give = Math.min(floor, available.get(s)!, left);
+    quota.set(s, give);
+    left -= give;
+  }
+  while (left > 0) {
+    const open = order.filter((s) => quota.get(s)! < available.get(s)!);
+    if (open.length === 0) break;
+    const weight = open.reduce((n, s) => n + post.get(s)!, 0);
+    let given = 0;
+    for (const s of open) {
+      const g = Math.min(Math.floor((left * post.get(s)!) / weight), available.get(s)! - quota.get(s)!);
+      quota.set(s, quota.get(s)! + g);
+      given += g;
+    }
+    // Shares below one seed each: the strongest stance with room takes the next.
+    if (given === 0) {
+      quota.set(open[0]!, quota.get(open[0]!)! + 1);
+      given = 1;
+    }
+    left -= given;
+  }
+  return quota;
+}
+
+/**
+ * The seeds in the order the pool takes them: each stance's quota for `slots`
+ * interleaved strongest stance first, then every seed left over in the order
+ * it was generated, for slots near-copies free up. Without this the pool took
+ * the seeds in generation order, so the same stances filled it every read.
+ */
+export function allocateSeeds(seeds: Direction[], slots: number, prior: StancePrior = {}): Direction[] {
+  const byStance = new Map<string, Direction[]>();
+  for (const d of seeds) byStance.set(d.stance, [...(byStance.get(d.stance) ?? []), d]);
+  const quota = stanceQuotas(new Map([...byStance].map(([s, ds]) => [s, ds.length])), slots, prior);
+  const first: Direction[] = [];
+  const most = Math.max(0, ...quota.values());
+  for (let r = 0; r < most; r++) for (const [s, q] of quota) if (r < q) first.push(byStance.get(s)![r]!);
+  const taken = new Set(first);
+  return [...first, ...seeds.filter((d) => !taken.has(d))];
 }
 
 function opKeyOf(c: StrategyChange, ops: StrategyOperator[]): string {
@@ -614,10 +767,15 @@ export function recombine(a: Direction, b: Direction): Direction {
 }
 
 /** Modify a direction: re-point an operator at another opening, take a step back, or start it from scratch. */
-export function mutate(d: Direction, ctx: Pick<ExploreContext, 'base' | 'operators'>, salt: number): Direction[] {
+export function mutate(d: Direction, ctx: Pick<ExploreContext, 'base' | 'operators' | 'reserve'>, salt: number): Direction[] {
   const out: Direction[] = [];
   const ids = ctx.base.openings.filter(outreach).map((o) => o.opportunity.id);
+  const reserveIds = (ctx.reserve ?? []).map((o) => o.opportunity.id);
   d.program.forEach((t, i) => {
+    if (t.op === 'INCLUDE' && reserveIds.length > 1) {
+      const other = reserveIds[(reserveIds.indexOf(t.key) + 1 + salt) % reserveIds.length]!;
+      if (other !== t.key && !d.program.some((x) => x.op === 'INCLUDE' && x.key === other)) out.push(makeDirection({ ...d, origin: 'MUTATED', name: `${d.name} (another cut arrangement)`, program: d.program.map((x, j) => (j === i ? { ...t, key: other } : x)), parents: [d.signature] }));
+    }
     if (t.op === 'OPERATOR' && t.target && ids.length > 1) {
       const other = ids[(ids.indexOf(t.target) + 1 + salt) % ids.length]!;
       if (other !== t.target) out.push(makeDirection({ ...d, origin: 'MUTATED', name: `${d.name} (re-pointed)`, program: d.program.map((x, j) => (j === i ? { ...t, target: other } : x)), parents: [d.signature] }));
@@ -656,6 +814,7 @@ export function scoreOf(reading: VariantReading, challenged: VariantReading | nu
 export async function exploreDirections(ctx: ExploreContext): Promise<Exploration> {
   const now = ctx.now ?? Date.now;
   const started = now();
+  const wallStarted = Date.now();
   // Depth is bounded by evaluations, so the same inputs explore the same way on a busy or an idle machine,
   // and by the clock, because an evaluation on production's data costs about a second (Goals plan
   // 42938331961, 2026-11-11: an exploration bounded only between generations ran past 20 minutes).
@@ -674,6 +833,10 @@ export async function exploreDirections(ctx: ExploreContext): Promise<Exploratio
   const all: DirectionReading[] = [];
   let evaluations = 0;
   const model = { calls: 0, proposed: 0, refused: 0, error: null as string | null };
+
+  // The role each opening plays here, for learning that transfers across goals (S-8).
+  const roles = rolesOf(ctx);
+  const roleIds = new Map([...Object.entries(roles)].map(([id, role]) => [role, id]));
 
   // The model invents while the cheap seeds are screened: the two run at the same time.
   const brief = inventBrief(ctx);
@@ -753,24 +916,44 @@ export async function exploreDirections(ctx: ExploreContext): Promise<Exploratio
   greedyRow.challenged = greedyChallenge.weaker;
   greedyRow.bare = greedyChallenge.bare;
   greedyRow.score = scoreOf(ctx.greedyReading, greedyRow.challenged);
-  const budget = explorationBudget({ openings: ctx.base.openings.length, operators: ctx.operators.length, binding: ctx.binding.filter((b) => b.liftReach > 0).length, reach: Math.min(ctx.greedyReading.reach, greedyRow.challenged?.reach ?? 0), required: ctx.required, structural: ctx.structural });
+  const budget = explorationBudget({ openings: ctx.base.openings.length + (ctx.heldOpenings ?? 0), operators: ctx.operators.length, binding: ctx.binding.filter((b) => b.liftReach > 0).length, reach: Math.min(ctx.greedyReading.reach, greedyRow.challenged?.reach ?? 0), required: ctx.required, structural: ctx.structural });
   evaluationCap = Math.min(MAX_EVALUATIONS, evaluations + EVALUATIONS_PER_DIRECTION * budget);
 
   // 1–2. Generate and screen: the library first (what worked), then the cheap seeds, kept distinct.
   // The sweep's strategies first: each is the best of tens of thousands of combinations by its own objective (§102).
   const swept = ctx.sweep?.directions ?? [];
-  const pool = budget > 0 ? distinct([...swept, ...(ctx.library ?? []), ...seedDirections(ctx)], budget + swept.length) : [];
+  // A learned method names roles, not this goal's ids (S-8): resolved here, and one that names what this problem lacks is dropped, never given a slot.
+  const library = (ctx.library ?? []).map((d) => resolveRoles(d, roleIds)).filter((d): d is Direction => !!d);
+  // The seeds' share of the budget is allocated by stance, by what each stance has yielded across goals (S-10).
+  const seeds = allocateSeeds(seedDirections(ctx), Math.max(0, budget - library.length), ctx.stancePrior);
+  const pool = budget > 0 ? distinct([...swept, ...library, ...seeds], budget + swept.length) : [];
   await run(pool, 1);
 
   // The model's directions join as soon as they arrive.
+  const rejections: string[] = [];
   if (invented && budget > 0) {
-    const got = await invented;
+    // Best-effort: the lane never holds the read past the exploration's own clock (wall time, whatever `now` says).
+    const wait = Math.max(1, maxMs - (Date.now() - wallStarted));
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const got = await Promise.race([
+      invented,
+      new Promise<{ directions: Direction[]; calls: number; proposed: number; refused: number; error: string }>((resolve) => {
+        timer = setTimeout(() => resolve({ directions: [], calls: 0, proposed: 0, refused: 0, error: `the model lane did not answer within the exploration's ${Math.round(maxMs / 1000)} s clock` }), wait);
+        timer.unref?.();
+      }),
+    ]).finally(() => clearTimeout(timer));
     model.calls = got.calls;
     model.proposed = got.proposed;
     model.refused = got.refused;
     model.error = got.error;
+    rejections.push(...(('rejections' in got ? got.rejections : undefined) ?? []));
+    // A method carrying a new design is composed first: its arrangement joins the reserve its INCLUDE reads (S-11).
+    const composed = composeInventedDesigns(got.directions, ctx);
+    model.refused += composed.rejections.length;
+    rejections.push(...composed.rejections);
+    if (composed.reserve.length) ctx = { ...ctx, reserve: [...(ctx.reserve ?? []), ...composed.reserve] };
     const room = Math.max(0, budget - all.length) + Math.ceil(budget / 4);
-    await run(distinct(got.directions, room, all.map((r) => r.direction)), 1);
+    await run(distinct(composed.directions, room, all.map((r) => r.direction)), 1);
   }
 
   // 3. Evolve: the leaders challenge, combine, modify and replace one another.
@@ -853,7 +1036,8 @@ export async function exploreDirections(ctx: ExploreContext): Promise<Exploratio
     stanceYield,
     discoveries,
     asks,
-    model,
+    model: rejections.length ? { ...model, rejections: rejections.slice(0, 20) } : model,
+    roles,
     sweep: ctx.sweep ?? null,
     sentence: ctx.sweep ? `${sentence} Variable sweep: ${ctx.sweep.variations.toLocaleString('en-US')} variation(s) read, ${swept.length} strategy(ies) handed to the engine.` : sentence,
   };
@@ -892,6 +1076,71 @@ export function distinct(candidates: Direction[], max: number, held: Direction[]
   return kept;
 }
 
+// ---------------------------------------------------------------- roles: methods that transfer across goals (S-8)
+
+const ROLE = '@';
+
+/**
+ * The role each opening plays in this problem: `@RANK:k` for the k-th open
+ * opening by value per interested buyer (unknowns at their low end), and
+ * `@RESERVE:k` for the k-th constructed arrangement in reserve. A method
+ * recorded in roles ("a partner on the strongest opening") applies to any
+ * goal; one recorded with ids applied only to the goal that found it.
+ */
+export function rolesOf(ctx: Pick<ExploreContext, 'base' | 'reserve'>): Record<string, string> {
+  const roles: Record<string, string> = {};
+  [...ctx.base.openings]
+    .filter((o) => o.agreedValue === 0)
+    .sort((a, b) => valuePerInterested(b) - valuePerInterested(a) || (a.opportunity.id < b.opportunity.id ? -1 : 1))
+    .forEach((o, i) => (roles[o.opportunity.id] = `${ROLE}RANK:${i + 1}`));
+  (ctx.reserve ?? []).forEach((o, i) => (roles[o.opportunity.id] = `${ROLE}RESERVE:${i + 1}`));
+  return roles;
+}
+
+/** Map every opening a program names through `map`; null when one cannot be mapped. A clone (`id~suffix`) keeps its suffix. */
+function mapIds(program: Transform[], map: (id: string) => string | undefined): Transform[] | null {
+  const one = (id: string): string | undefined => {
+    const [head, ...rest] = id.split('~');
+    const mapped = map(head!);
+    return mapped === undefined ? undefined : [mapped, ...rest].join('~');
+  };
+  const out: Transform[] = [];
+  for (const t of program) {
+    if (t.op === 'OPERATOR' && t.target) {
+      const target = one(t.target);
+      if (target === undefined) return null;
+      out.push({ ...t, target });
+    } else if ((t.op === 'PRICE' || t.op === 'DROP' || t.op === 'STRESS') && t.scope.startsWith('id:')) {
+      const id = one(t.scope.slice(3));
+      if (id === undefined) return null;
+      out.push({ ...t, scope: `id:${id}` });
+    } else if (t.op === 'INCLUDE') {
+      const key = one(t.key);
+      if (key === undefined) return null;
+      out.push({ ...t, key });
+    } else out.push(t);
+  }
+  return out;
+}
+
+/** A direction with its ids replaced by the roles they played; null when it names an opening no role covers. */
+export function abstractDirection(d: Direction, roles: Record<string, string>): Direction | null {
+  const program = mapIds(d.program, (id) => (id.startsWith(ROLE) ? id : roles[id]));
+  return program ? makeDirection({ ...d, program }) : null;
+}
+
+/**
+ * A learned direction resolved onto this problem: each role to the opening
+ * playing it here. An older method recorded with ids resolves only where those
+ * ids exist. Null when it names a role or an opening this problem lacks.
+ */
+export function resolveRoles(d: Direction, roleIds: Map<string, string>): Direction | null {
+  const ids = new Set(roleIds.values());
+  const program = mapIds(d.program, (id) => (id.startsWith(ROLE) ? roleIds.get(id) : ids.has(id) ? id : undefined));
+  if (!program) return null;
+  return program === d.program ? d : makeDirection({ ...d, program });
+}
+
 export function inventBrief(ctx: ExploreContext): InventBrief {
   const n = (x: number | null) => (x === null ? null : Math.round(x * 1000) / 1000);
   return {
@@ -907,7 +1156,9 @@ export function inventBrief(ctx: ExploreContext): InventBrief {
       .slice(0, 14)
       .map((o) => ({ id: o.opportunity.id, title: o.opportunity.title.slice(0, 80), price: n(mid(o.price)), close: n(mid(o.close)), respond: n(mid(o.respond)), volume: n(mid(o.volume)), daysToCash: n(mid(o.daysToCash)), outreach: outreach(o), agreed: o.agreedValue > 0 })),
     operators: ctx.operators.map((o) => ({ key: o.key, dimension: o.dimension })),
-    stancesTried: ['BACKWARD', 'FORWARD', 'MIDDLE_OUT', 'CONSTRAINT', 'RESOURCE', 'RELATIONSHIP', 'INVERSION', 'OPPORTUNITY', 'TRANSACTION', 'PORTFOLIO', ...new Set((ctx.library ?? []).map((d) => d.stance))],
+    ...(ctx.reserve?.length ? { reserve: ctx.reserve.slice(0, BRIEF_RESERVE).map((o) => ({ id: o.opportunity.id, title: o.opportunity.title.slice(0, 80), price: n(rankValue(o.price)), repeatable: o.repeatable })) } : {}),
+    ...(ctx.design ? { designs: { structures: STRUCTURE_KEYS.map((key) => ({ key, label: STRUCTURES[key].label })), funding: FUNDING, aggregation: AGGREGATION, repeat: REPEAT } } : {}),
+    stancesTried: ['BACKWARD', 'FORWARD', 'MIDDLE_OUT', 'CONSTRAINT', 'RESOURCE', 'RELATIONSHIP', 'INVERSION', 'OPPORTUNITY', 'TRANSACTION', 'PORTFOLIO', 'INCLUSION', ...new Set((ctx.library ?? []).map((d) => d.stance))],
     bestKnown: (ctx.library ?? []).slice(0, 6).map((d) => ({ name: d.name, stance: d.stance, thinking: d.thinking })),
   };
 }
@@ -917,63 +1168,360 @@ export function inventBrief(ctx: ExploreContext): InventBrief {
 const FIELDS: readonly Field[] = ['price', 'close', 'respond', 'volume', 'daysToCash', 'directCost'];
 const SCOPES = ['ALL', 'OUTREACH', 'SMALL_TICKET', 'LARGE_TICKET', 'FAST_CASH', 'SLOW_CASH', 'TOP', 'REST'];
 
+/** A closed-vocabulary word as a model writes it: case, spaces and hyphens are form, not meaning. */
+const word = (x: unknown): string | null => (typeof x === 'string' && x.trim() ? x.trim().toUpperCase().replace(/[\s-]+/g, '_') : null);
+/** A number a model wrote as a number or as a numeric string. */
+const numberOf = (x: unknown): number | null => (typeof x === 'number' && Number.isFinite(x) ? x : typeof x === 'string' && x.trim() !== '' && Number.isFinite(Number(x)) ? Number(x) : null);
+/** An opening or arrangement id as a model writes it: bare, or with the `id:` a scope uses. */
+const idOf = (x: unknown): string | null => (typeof x === 'string' && x.trim() ? x.trim().replace(/^id:/i, '') : null);
+
+/**
+ * Whether a model's `design` field says "no design". The prompt marked the
+ * design optional, and models answer an optional object with `null`, `{}`,
+ * `""` or a placeholder rather than leaving the key out. Production,
+ * 2026-11-14 (plan-0008): 4 calls, 16 methods proposed, 16 refused as
+ * off-shape — a method carrying such an empty design was refused as a
+ * malformed design although it proposed none, and every other refusal was
+ * silent, so nothing recorded why. An object that names a structure or a
+ * buyer population is an attempt at a design and is judged as one; anything
+ * else is the absence of one.
+ */
+function noDesign(raw: unknown): boolean {
+  if (raw === undefined || raw === null || raw === false) return true;
+  if (typeof raw === 'string') return !raw.trim() || /^(none|null|n\/a|optional|\.\.\.|\{\.\.\.optional\})$/i.test(raw.trim());
+  if (typeof raw !== 'object' || Array.isArray(raw)) return false;
+  const x = raw as Record<string, unknown>;
+  const said = (k: string) => typeof x[k] === 'string' && (x[k] as string).trim().length > 0;
+  return !said('structure') && !said('base') && !said('population');
+}
+
 /**
  * Validate a model's answer into directions. Off-shape methods are refused,
- * never repaired; a transform naming an operator or opening that does not
- * exist is refused with it. A model may name any stance.
+ * never repaired, and every refusal says why; a transform naming an operator
+ * or opening that does not exist is refused with it. A model may name any
+ * stance. Form is read leniently — the case of a vocabulary word, a number
+ * written as a string, an id with or without its `id:`, an empty optional
+ * design — because none of that changes what the method means.
  */
-export function parseInvented(text: string, brief: Pick<InventBrief, 'operators' | 'openings'>): { directions: Direction[]; proposed: number; refused: number } {
-  const match = /\{[\s\S]*\}/.exec(text);
-  if (!match) return { directions: [], proposed: 0, refused: 0 };
-  let body: unknown;
-  try {
-    body = JSON.parse(match[0]);
-  } catch {
-    return { directions: [], proposed: 0, refused: 1 };
+/** Remove commas that close nothing (`[1,2,]`, `{"a":1,}`), outside strings. */
+function stripTrailingCommas(text: string): string {
+  let out = '';
+  let inString = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]!;
+    if (inString) {
+      out += c;
+      if (c === '\\') out += text[++i] ?? '';
+      else if (c === '"') inString = false;
+      continue;
+    }
+    if (c === '"') inString = true;
+    else if (c === ',') {
+      let j = i + 1;
+      while (j < text.length && /\s/.test(text[j]!)) j++;
+      if (text[j] === '}' || text[j] === ']') continue;
+    }
+    out += c;
   }
-  const methods = (body as { methods?: unknown }).methods;
-  if (!Array.isArray(methods)) return { directions: [], proposed: 0, refused: 1 };
+  return out;
+}
+
+/** The end (exclusive) of the balanced `{…}` or `[…]` opening at `start`, strings respected; null when it never closes. */
+function balancedEnd(text: string, start: number): number | null {
+  const stack: string[] = [];
+  let inString = false;
+  for (let i = start; i < text.length; i++) {
+    const c = text[i]!;
+    if (inString) {
+      if (c === '\\') i++;
+      else if (c === '"') inString = false;
+      continue;
+    }
+    if (c === '"') inString = true;
+    else if (c === '{' || c === '[') stack.push(c === '{' ? '}' : ']');
+    else if (c === '}' || c === ']') {
+      if (stack.pop() !== c) return null;
+      if (stack.length === 0) return i + 1;
+    }
+  }
+  return null;
+}
+
+function tryJson(text: string): { ok: true; value: unknown } | { ok: false } {
+  for (const t of [text, stripTrailingCommas(text)]) {
+    try {
+      return { ok: true, value: JSON.parse(t) };
+    } catch {
+      /* next form */
+    }
+  }
+  return { ok: false };
+}
+
+/**
+ * The JSON payload inside a model's answer (F9.2, production 2026-11-15: the
+ * free switchboard answered half the reasoning calls with something other than
+ * bare JSON). Reasoning blocks (`<think>…</think>`) are dropped; a fenced
+ * ```json block is read first; otherwise the outermost balanced `{…}` or `[…]`
+ * that parses, with commas that close nothing tolerated. When the answer was
+ * cut off mid-list, the complete method objects before the cut are kept.
+ * `undefined` when nothing in it is JSON.
+ */
+export function extractJsonPayload(text: string): unknown {
+  const cleaned = text.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/^[\s\S]*<\/think>/i, '');
+  const candidates: string[] = [];
+  for (const m of cleaned.matchAll(/```[a-zA-Z0-9_-]*[ \t]*\r?\n?([\s\S]*?)```/g)) candidates.push(m[1]!.trim());
+  candidates.push(cleaned.trim());
+  for (const c of candidates) {
+    const whole = tryJson(c);
+    if (whole.ok) return whole.value;
+  }
+  // The outermost balanced span that parses, earliest first; a span that does not parse is stepped into.
+  let span: unknown;
+  for (const c of candidates) {
+    for (let i = 0, tries = 0; i < c.length && tries < 200 && span === undefined; i++) {
+      if (c[i] !== '{' && c[i] !== '[') continue;
+      tries++;
+      const end = balancedEnd(c, i);
+      if (end === null) continue;
+      const got = tryJson(c.slice(i, end));
+      if (got.ok && got.value && typeof got.value === 'object') span = got.value;
+    }
+    if (span !== undefined) break;
+  }
+  if (span !== undefined && (Array.isArray(span) || 'methods' in (span as object))) return span;
+  // Cut off before the list closed: keep each complete method object that came before the cut
+  // (the span above is then only the first of them).
+  const salvaged = salvageMethods(cleaned);
+  return salvaged ?? span;
+}
+
+function salvageMethods(cleaned: string): { methods: unknown[] } | undefined {
+  const list = /"methods"\s*:\s*\[/.exec(cleaned);
+  if (list) {
+    const methods: unknown[] = [];
+    let i = list.index + list[0].length;
+    while (i < cleaned.length) {
+      while (i < cleaned.length && /[\s,]/.test(cleaned[i]!)) i++;
+      if (cleaned[i] !== '{') break;
+      const end = balancedEnd(cleaned, i);
+      if (end === null) break;
+      const got = tryJson(cleaned.slice(i, end));
+      if (!got.ok) break;
+      methods.push(got.value);
+      i = end;
+    }
+    if (methods.length) return { methods };
+  }
+  return undefined;
+}
+
+/** What a model wrote instead of `{"methods":[…]}`, read as that list when its shape says it is one. */
+function methodsOf(body: unknown): unknown {
+  const isMethod = (x: unknown) => !!x && typeof x === 'object' && !Array.isArray(x) && ('program' in x || 'stance' in x || 'thinking' in x);
+  if (Array.isArray(body)) {
+    // `[{"methods":[…]}]` is the object wrapped; `[{name, stance, …}, …]` is the list itself.
+    if (body.length === 1 && body[0] && typeof body[0] === 'object' && Array.isArray((body[0] as { methods?: unknown }).methods)) return (body[0] as { methods: unknown }).methods;
+    return body;
+  }
+  if (body && typeof body === 'object') {
+    const r = body as Record<string, unknown>;
+    if ('methods' in r) return r['methods'];
+    if (isMethod(r)) return [r];
+    // One list under another name (`strategies`, `answer`), or the object one level down (`{"result":{"methods":[…]}}`).
+    const values = Object.values(r);
+    const lists = values.filter((v) => Array.isArray(v) && v.length > 0 && v.every(isMethod));
+    if (lists.length === 1) return lists[0];
+    const nested = values.filter((v) => v && typeof v === 'object' && !Array.isArray(v) && Array.isArray((v as { methods?: unknown }).methods));
+    if (nested.length === 1) return (nested[0] as { methods: unknown }).methods;
+  }
+  return undefined;
+}
+
+/** The first 80 characters of an answer, on one line, for a refusal that says what was received. */
+function answerHead(text: string): string {
+  return text.replace(/\s+/g, ' ').trim().slice(0, 80);
+}
+
+export function parseInvented(text: string, brief: Pick<InventBrief, 'operators' | 'openings' | 'reserve' | 'designs'>): { directions: Direction[]; proposed: number; refused: number; rejections: string[] } {
+  if (!text.trim()) return { directions: [], proposed: 0, refused: 1, rejections: ['the answer is empty'] };
+  const body = extractJsonPayload(text);
+  if (body === undefined) return { directions: [], proposed: 0, refused: 1, rejections: [`the answer is not JSON (begins: "${answerHead(text)}")`] };
+  const methods = methodsOf(body);
+  if (!Array.isArray(methods)) return { directions: [], proposed: 0, refused: 1, rejections: ['the answer holds no "methods" list'] };
+  const rejections: string[] = [];
   const ops = new Set(brief.operators.map((o) => o.key));
-  const opPrefix = (k: string) => ops.has(k) || [...ops].some((o) => o.startsWith(k) && k.length >= 4);
+  const opKey = (raw: unknown): string | null => {
+    if (typeof raw !== 'string') return null;
+    const k = raw.trim();
+    for (const c of [k, k.toLowerCase()]) if (ops.has(c) || (c.length >= 4 && [...ops].some((o) => o.startsWith(c)))) return c;
+    return null;
+  };
   const ids = new Set(brief.openings.map((o) => o.id));
+  const reserve = new Set((brief.reserve ?? []).map((o) => o.id));
+  const scopeOf = (raw: unknown): Scope | null => {
+    if (raw === undefined || raw === null || raw === '') return 'ALL';
+    const id = idOf(raw);
+    if (id && ids.has(id)) return `id:${id}` as Scope;
+    const w = word(raw);
+    return w && SCOPES.includes(w) ? (w as Scope) : null;
+  };
   const directions: Direction[] = [];
   let refused = 0;
+  const refuse = (name: string, why: string) => {
+    refused++;
+    rejections.push(`"${name || 'unnamed'}": ${why}`);
+  };
   for (const m of methods.slice(0, 16)) {
-    const r = m as Record<string, unknown>;
+    const r = (m && typeof m === 'object' ? m : {}) as Record<string, unknown>;
     const name = typeof r['name'] === 'string' ? r['name'].trim().slice(0, 120) : '';
     const stance = typeof r['stance'] === 'string' ? r['stance'].trim().toUpperCase().replace(/[^A-Z0-9_+-]+/g, '_').slice(0, 40) : '';
     const thinking = typeof r['thinking'] === 'string' ? r['thinking'].trim().slice(0, 400) : '';
-    const program = Array.isArray(r['program']) ? r['program'] : null;
-    if (!name || !stance || !thinking || !program || program.length === 0 || program.length > 6) {
-      refused++;
+    // A method may carry a new transaction design for a buyer population (S-11), when the brief offered the vocabulary.
+    const designed = noDesign(r['design']) ? null : brief.designs ? parseDesign(r['design']) : { refused: 'designs are not offered in this read' };
+    if (designed && 'refused' in designed) {
+      refuse(name, designed.refused);
+      continue;
+    }
+    const program = Array.isArray(r['program']) ? r['program'] : r['program'] === undefined || r['program'] === null ? [] : null;
+    if (!name || !stance || !thinking) {
+      refuse(name, `it has no ${[!name && 'name', !stance && 'stance', !thinking && 'thinking'].filter(Boolean).join(', ')}`);
+      continue;
+    }
+    if (!program) {
+      refuse(name, 'its program is not a list of steps');
+      continue;
+    }
+    if (program.length === 0 && !designed) {
+      refuse(name, 'its program is empty and it carries no design');
+      continue;
+    }
+    if (program.length > 6) {
+      refuse(name, `its program has ${program.length} steps; at most 6 are read`);
       continue;
     }
     const transforms: Transform[] = [];
-    let bad = false;
+    let bad: string | null = null;
     for (const t of program) {
-      const x = t as Record<string, unknown>;
-      const scope = typeof x['scope'] === 'string' ? x['scope'] : 'ALL';
-      const scopeOk = SCOPES.includes(scope) || (scope.startsWith('id:') && ids.has(scope.slice(3)));
-      if (x['op'] === 'OPERATOR' && typeof x['key'] === 'string' && opPrefix(x['key']) && (x['target'] === undefined || (typeof x['target'] === 'string' && ids.has(x['target'])))) {
-        transforms.push({ op: 'OPERATOR', key: x['key'], ...(typeof x['target'] === 'string' ? { target: x['target'] } : {}) });
-      } else if (x['op'] === 'PRICE' && typeof x['factor'] === 'number' && x['factor'] > 0.2 && x['factor'] <= 5 && scopeOk) {
-        transforms.push({ op: 'PRICE', factor: x['factor'], scope: scope as Scope });
-      } else if (x['op'] === 'FOCUS' && typeof x['count'] === 'number' && x['count'] >= 1) {
-        transforms.push({ op: 'FOCUS', count: Math.round(x['count']) });
-      } else if (x['op'] === 'DROP' && scopeOk) {
-        transforms.push({ op: 'DROP', scope: scope as Scope });
-      } else bad = true;
+      const x = (t && typeof t === 'object' ? t : {}) as Record<string, unknown>;
+      const op = word(x['op']);
+      if (op === 'OPERATOR') {
+        const key = opKey(x['key']);
+        const target = x['target'] === undefined || x['target'] === null || x['target'] === '' ? null : idOf(x['target']);
+        if (!key) bad = `its step names operator "${String(x['key']).slice(0, 60)}", which is not one of the operators offered`;
+        else if (target !== null && !ids.has(target)) bad = `its step points operator ${key} at "${String(x['target']).slice(0, 60)}", which is not an opening held`;
+        else transforms.push({ op: 'OPERATOR', key, ...(target !== null ? { target } : {}) });
+      } else if (op === 'PRICE') {
+        const factor = numberOf(x['factor']);
+        const scope = scopeOf(x['scope']);
+        if (factor === null || factor <= 0.2 || factor > 5) bad = `its PRICE factor ${String(x['factor']).slice(0, 20)} is outside 0.25-4`;
+        else if (!scope) bad = `its PRICE scope "${String(x['scope']).slice(0, 60)}" is not a scope or an opening held`;
+        else transforms.push({ op: 'PRICE', factor, scope });
+      } else if (op === 'FOCUS') {
+        const count = numberOf(x['count']);
+        if (count === null || count < 1) bad = 'its FOCUS step names no count of at least 1';
+        else transforms.push({ op: 'FOCUS', count: Math.round(count) });
+      } else if (op === 'DROP') {
+        const scope = scopeOf(x['scope']);
+        if (!scope) bad = `its DROP scope "${String(x['scope']).slice(0, 60)}" is not a scope or an opening held`;
+        else transforms.push({ op: 'DROP', scope });
+      } else if (op === 'INCLUDE') {
+        const key = idOf(x['key']);
+        if (!key || !reserve.has(key)) bad = `its INCLUDE names "${String(x['key']).slice(0, 60)}", which is not an arrangement outside the plan`;
+        else transforms.push({ op: 'INCLUDE', key });
+      } else bad = `its step "${String(x['op']).slice(0, 30)}" is outside the vocabulary (OPERATOR, PRICE, FOCUS, DROP, INCLUDE)`;
+      if (bad) break;
     }
-    if (bad || transforms.length === 0) {
-      refused++;
+    if (bad) {
+      refuse(name, bad);
       continue;
     }
-    const from = r['from'] === 'BASELINE' ? 'BASELINE' : 'GREEDY';
+    if (transforms.length === 0 && !designed) {
+      refuse(name, 'its program holds no step');
+      continue;
+    }
+    const from = word(r['from']) === 'BASELINE' ? 'BASELINE' : 'GREEDY';
     const ask = typeof r['ask'] === 'string' && r['ask'].trim().length > 10 ? r['ask'].trim().slice(0, 300) : undefined;
     const challenges = typeof r['challenges'] === 'string' ? r['challenges'].trim().slice(0, 200) : undefined;
-    directions.push(makeDirection({ name, stance, origin: 'MODEL', thinking, from, program: transforms, ...(ask ? { ask } : {}), ...(challenges ? { challenges } : {}) }));
+    directions.push(makeDirection({ name, stance, origin: 'MODEL', thinking, from, program: transforms, ...(ask ? { ask } : {}), ...(challenges ? { challenges } : {}), ...(designed ? { design: designed } : {}) }));
   }
-  return { directions, proposed: methods.length, refused };
+  return { directions, proposed: methods.length, refused, rejections };
+}
+
+/** A closed-vocabulary value, read by its key in any case, or by its label. */
+const oneOf = <T extends string>(xs: readonly T[], x: unknown, labels?: Readonly<Record<string, { label: string }>>): T | null => {
+  const w = word(x);
+  if (w && (xs as readonly string[]).includes(w)) return w as T;
+  if (labels && typeof x === 'string') {
+    const t = x.trim().toLowerCase();
+    const hit = xs.find((k) => labels[k]?.label.toLowerCase() === t);
+    if (hit) return hit;
+  }
+  return null;
+};
+
+/**
+ * A model's design, checked for shape only: the four parts of the design
+ * tuple from their closed vocabularies, a coherent combination, and a buyer
+ * population in words. Any number it carries is ignored — a design is
+ * structure, never a figure. Refused with the reason, never repaired.
+ */
+export function parseDesign(raw: unknown): InventedDesign | { refused: string } {
+  if (!raw || typeof raw !== 'object') return { refused: 'its design is not an object' };
+  const x = raw as Record<string, unknown>;
+  const base = oneOf(STRUCTURE_KEYS, x['structure'] ?? x['base'], STRUCTURES);
+  if (!base) return { refused: `its design names no structure of ${STRUCTURE_KEYS.join(', ')}` };
+  const funding = oneOf(FUNDING, x['funding'] ?? 'ON_DELIVERY');
+  const aggregation = oneOf(AGGREGATION, x['aggregation'] ?? (base === 'POOL' ? 'POOLED_BUYERS' : 'SINGLE'));
+  const repeat = oneOf(REPEAT, x['repeat'] ?? 'ONE_OFF');
+  if (!funding || !aggregation || !repeat) return { refused: 'its design uses a funding, aggregation or repeat outside the vocabulary' };
+  const design: Design = { base, funding, aggregation, repeat };
+  if (!coherent(design)) return { refused: `its design ${base}/${funding}/${aggregation}/${repeat} cannot exist (incoherent)` };
+  const population = typeof x['population'] === 'string' ? x['population'].trim().slice(0, 120) : '';
+  if (population.length < 3) return { refused: 'its design names no buyer population' };
+  const need = typeof x['need'] === 'string' && x['need'].trim().length >= 3 ? x['need'].trim().slice(0, 120) : null;
+  return { design, population, need };
+}
+
+/**
+ * Compose every invented design through the construction path (S-11): a
+ * design that composes becomes a reserve opening, and its method gains the
+ * INCLUDE that brings it in; one that does not is dropped with the reason.
+ * Methods without a design pass through. The same design over the same buyers
+ * composes once.
+ */
+export function composeInventedDesigns(directions: Direction[], ctx: Pick<ExploreContext, 'design' | 'reserve'>): { directions: Direction[]; reserve: PlannedOpening[]; rejections: string[] } {
+  const out: Direction[] = [];
+  const reserve: PlannedOpening[] = [];
+  const rejections: string[] = [];
+  const held = new Set((ctx.reserve ?? []).map((o) => o.opportunity.id));
+  for (const d of directions) {
+    if (!d.design) {
+      out.push(d);
+      continue;
+    }
+    if (!ctx.design) {
+      rejections.push(`"${d.name}": no construction path is offered in this read`);
+      continue;
+    }
+    let made: PlannedOpening | { refused: string };
+    try {
+      made = ctx.design(d.design);
+    } catch (error) {
+      made = { refused: `construction failed: ${String((error as Error)?.message ?? error).slice(0, 120)}` };
+    }
+    if ('refused' in made) {
+      rejections.push(`"${d.name}": ${made.refused}`);
+      continue;
+    }
+    const id = made.opportunity.id;
+    if (!held.has(id)) {
+      held.add(id);
+      reserve.push(made);
+    }
+    out.push(makeDirection({ ...d, program: [...d.program.filter((t) => !(t.op === 'INCLUDE' && t.key === id)), { op: 'INCLUDE', key: id }] }));
+  }
+  return { directions: out, reserve, rejections };
 }
 
 void FIELDS;
@@ -985,6 +1533,8 @@ export function renderExploration(x: Exploration, limit = 10): string[] {
   lines.push(`  explore   ${x.sentence}`);
   lines.push(`    budget  ${x.budget} direction(s) justified by the problem · ${x.evaluations} evaluation(s) on ${x.threads} thread(s) · origin ${Object.entries(x.byOrigin).map(([k, n]) => `${k.toLowerCase()} ${n}`).join(', ')}`);
   lines.push(`    model   ${x.model.calls} call(s), ${x.model.proposed} method(s) proposed, ${x.model.refused} refused as off-shape${x.model.error ? ` · ${x.model.error.slice(0, 120)}` : ''}`);
+  // Why, so a refusal rate is read from the plan rather than guessed (F9.2).
+  for (const why of (x.model.rejections ?? []).slice(0, 3)) lines.push(`    refused ${why.slice(0, 160)}`);
   for (const s of x.stanceYield.slice(0, 14)) lines.push(`    stance  ${s.stance.padEnd(22)} ${String(s.directions).padStart(3)} direction(s), ${s.improved} improved the plan as held, best lift ${pct(s.bestLift)}`);
   for (const l of x.leaders.slice(0, limit)) lines.push(`    leader  ${(l === x.winner ? '*' : ' ')} [${l.direction.origin.toLowerCase()} · ${l.direction.stance}] ${l.direction.name.slice(0, 80)} → reach ${v(l.reading)}, challenged ${v(l.challenged)}`);
   for (const d of x.discoveries.slice(0, 5)) lines.push(`    found   [model] ${d.direction.name.slice(0, 80)} — ${d.direction.thinking.slice(0, 160)} → reach ${v(d.reading)}`);
