@@ -14,6 +14,7 @@
  * second pass changes nothing; and no later path — an operator re-attempt, a re-registration
  * of the weakness, or a route set aside — names a HELD attempt as a failed method again.
  */
+import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { freshProject, teardown } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
@@ -332,5 +333,30 @@ describe('no later path re-introduces a HELD attempt as a failed method', () => 
 
     await releasedPass();
     expect(await listImprovementEvents({ candidateId: ids.three, kinds: ['METHOD_JUDGMENT_CORRECTED'] })).toHaveLength(1);
+  });
+});
+
+describe('AUTO-20-1 episode 2: each function carries its own description', () => {
+  // Review finding F1: the helper's docblock was inserted between correctMisjudgedMethods' docblock
+  // and its function, leaving the correction's description on top of the helper.
+  const source = readFileSync(new URL('../server/services/improvement/loop.ts', import.meta.url), 'utf8');
+  const docblockAbove = (signature: string): string => {
+    const at = source.indexOf(signature);
+    expect(at).toBeGreaterThan(0);
+    const before = source.slice(0, at);
+    expect(before.trimEnd().endsWith('*/')).toBe(true);
+    return before.slice(before.lastIndexOf('/**'));
+  };
+
+  it('correctMisjudgedMethods is directly preceded by the description of the correction', () => {
+    expect(docblockAbove('export async function correctMisjudgedMethods(')).toMatch(/^\/\*\*\n \* Correct a stored method-inadequacy judgment/);
+  });
+
+  it('writeCorrectedEvidence is directly preceded by its own description, and only one', () => {
+    const block = docblockAbove('async function writeCorrectedEvidence(');
+    expect(block).toMatch(/^\/\*\*\n \* Write a corrected method judgment/);
+    // The comment immediately above it, if any, is a section rule and never a second docblock.
+    const before = source.slice(0, source.indexOf(block)).trimEnd();
+    if (before.endsWith('*/')) expect(before.slice(before.lastIndexOf('/*')).startsWith('/**')).toBe(false);
   });
 });

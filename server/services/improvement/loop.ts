@@ -1294,13 +1294,6 @@ async function recordGapLoops(rankedIds: readonly string[], report: ImprovementT
 /* ------------------------------------------------------------------------- */
 
 /**
- * Correct a stored method-inadequacy judgment that names an attempt its own family did not decide as a
- * failed method (an operator re-attempt once counted HELD as failed). The current evidence is made
- * truthful — only the attempts decided KEPT_NO_EFFECT or REVERTED stay named, and a judgment left with
- * none moves to `reattempt` — while the original value is kept in an append-only event. Idempotent:
- * a corrected row names no such attempt, so a later pass changes nothing.
- */
-/**
  * Write a corrected method judgment onto the row it was read from. A live candidate is patched as
  * any refresh is. A decided one cannot be (`patchCandidate` refuses a decided row, so the record it
  * was decided on stays), yet a decided row is exactly where a mislabel is left standing when the
@@ -1322,6 +1315,13 @@ async function writeCorrectedEvidence(candidate: ImprovementCandidate, evidence:
   return Number(result.changes ?? 0) > 0;
 }
 
+/**
+ * Correct a stored method-inadequacy judgment that names an attempt its own family did not decide as a
+ * failed method (an operator re-attempt once counted HELD as failed). The current evidence is made
+ * truthful — only the attempts decided KEPT_NO_EFFECT or REVERTED stay named, and a judgment left with
+ * none moves to `reattempt` — while the original value is kept in an append-only event. Idempotent:
+ * a corrected row names no such attempt, so a later pass changes nothing.
+ */
 export async function correctMisjudgedMethods(): Promise<string[]> {
   const all = await listCandidates();
   const corrected: string[] = [];
