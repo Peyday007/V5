@@ -76,19 +76,80 @@ function textOf(goal: GoalWords): string {
   return [goal.title, goal.intent, goal.outcome].filter((one): one is string => !!one && !!one.trim()).join('. ').replace(/\s+/g, ' ').trim();
 }
 
-/** The confidence the goal's words require, as a fraction, or null when they state none. */
-export function statedConfidence(text: string): { value: number; statement: string } | null {
-  const patterns = [
-    /\b(\d{1,3}(?:\.\d+)?)\s?%\s*(?:chance|confidence|probability|likelihood|likely|certain(?:ty)?|sure)\b/i,
-    /\b(?:confidence|probability|likelihood|chance)\s+(?:of\s+|at\s+)?(?:at\s+least\s+)?(\d{1,3}(?:\.\d+)?)\s?%/i,
-  ];
-  for (const p of patterns) {
-    const m = p.exec(text);
-    if (!m) continue;
-    const v = Number(m[1]) / 100;
-    if (v > 0 && v < 1) return { value: v, statement: m[0] };
+/**
+ * What a goal's words say about the confidence it requires.
+ *
+ *  - `REACH`: a percentage tied to reaching the target ("with a 90% chance",
+ *    "80% likely to hit $10K", "with 80% probability in 90 days").
+ *  - `SHORTFALL`: a percentage of missing it ("no more than a 10% chance of
+ *    falling short", "at most 20% probability of missing"). S-0200 defines a
+ *    90% goal as at most a 10% modelled chance below target, so the required
+ *    confidence is 1 − p.
+ *  - `AMBIGUOUS`: a probability phrase that is about something else ("50%
+ *    likely we need a partner"), or a bound in the wrong direction ("at least
+ *    10% chance of missing"), or two readings that disagree. That reading never
+ *    sets the bar. The recorded default applies, and the objective says so.
+ *  - `NONE`: no probability phrase at all.
+ */
+export type ConfidenceReading =
+  | { kind: 'REACH' | 'SHORTFALL'; value: number; statement: string }
+  | { kind: 'AMBIGUOUS'; statement: string }
+  | { kind: 'NONE' };
+
+const PCT = String.raw`(\d{1,3}(?:\.\d+)?)\s?%`;
+const CONFIDENCE_PHRASES = [
+  // "90% chance", "10% probability", "80% likely", "90% confident", "10% risk"
+  new RegExp(PCT + String.raw`\s*(?:chance|confiden(?:ce|t)|probability|likelihood|likely|odds|certain(?:ty)?|sure|risk)\b`, 'gi'),
+  // "probability of 90%", "confidence of at least 80%"
+  new RegExp(String.raw`\b(?:confidence|probability|likelihood|chance|odds)\s+(?:of\s+|at\s+)?(?:at\s+least\s+)?` + PCT, 'gi'),
+];
+/** Words that make a percentage the chance of missing the target. */
+const SHORTFALL_CUE = /\b(?:miss(?:es|ed|ing)?|fall(?:s|ing)?\s+short|shortfall|short\s+of|(?:finish(?:es|ing)?|end(?:s|ing)?|land(?:s|ing)?|com(?:e|es|ing)\s+in)\s+(?:below|under)|below\s+(?:the\s+)?(?:target|goal|\$)|under\s+(?:the\s+)?(?:target|goal|\$)|fail(?:s|ed|ing|ure)?|not\s+(?:reach|hit|mak|get|meet|achiev)\w*)/i;
+/** What may follow a percentage for it to be the chance of reaching the target. */
+const REACH_AFTER = /^(?:$|,|\(|(?:in|by|within|before|over|during|this|next)\b|(?:of|to|for)\s+(?:(?:at\s+least|reaching|hitting|making|earning|collecting|getting|achieving|meeting|clearing|exceeding|success|succeeding|it|that|this|the\s+(?:target|goal))\b|\$)|(?:to\s+)?(?:reach|hit|make|earn|collect|get|achieve|meet|clear|exceed|succeed)\b|(?:that\s+)?(?:we|i|brain|it|the\s+goal)\s+(?:will\s+|can\s+|would\s+)?(?:reach|hit|make|earn|collect|get|achieve|meet|clear|exceed|succeed)\w*\b)/i;
+/** A bound phrased in the direction that makes it no requirement at all. */
+const WRONG_WAY_BEFORE = (kind: 'REACH' | 'SHORTFALL') =>
+  kind === 'SHORTFALL' ? /\b(?:at\s+least|(?<!\bno\s)(?<!\bnot\s)more\s+than|over|above|minimum(?:\s+of)?)\s+(?:an?\s+)?$/i : /\b(?:at\s+most|no\s+more\s+than|less\s+than|under|below|maximum(?:\s+of)?)\s+(?:an?\s+)?$/i;
+
+/** Read the confidence the goal's words state, and which way they state it. Pure. */
+export function readConfidence(text: string): ConfidenceReading {
+  const readings: Array<{ kind: 'REACH' | 'SHORTFALL'; value: number; statement: string }> = [];
+  let ambiguous: string | null = null;
+  for (const clause of text.split(/[.;!?](?=\s|$)/)) {
+    for (const pattern of CONFIDENCE_PHRASES) {
+      pattern.lastIndex = 0;
+      for (let m = pattern.exec(clause); m; m = pattern.exec(clause)) {
+        const p = Number(m[1]) / 100;
+        if (!(p > 0 && p < 1)) continue;
+        const before = clause.slice(0, m.index);
+        // What follows, up to the next conjunction or percentage: a second phrase is its own reading.
+        const after = clause.slice(m.index + m[0].length).split(/\b(?:and|but|or|while|whereas)\b|,|\d+(?:\.\d+)?\s?%/i)[0]!.trim();
+        const near = `${before.slice(-30).split(/\d+(?:\.\d+)?\s?%/).pop() ?? ''} ${m[0]} ${after.slice(0, 40)}`;
+        const isRisk = /\brisk\b/i.test(m[0]);
+        const kind: 'REACH' | 'SHORTFALL' | null = SHORTFALL_CUE.test(near) ? 'SHORTFALL' : !isRisk && REACH_AFTER.test(after) ? 'REACH' : null;
+        if (!kind || WRONG_WAY_BEFORE(kind).test(before)) {
+          ambiguous ??= m[0];
+          continue;
+        }
+        const value = kind === 'SHORTFALL' ? Math.round((1 - p) * 10_000) / 10_000 : p;
+        if (!readings.some((r) => r.statement === m![0] && r.value === value)) readings.push({ kind, value, statement: m[0] });
+      }
+    }
   }
-  return null;
+  const values = new Set(readings.map((r) => r.value));
+  if (values.size > 1) return { kind: 'AMBIGUOUS', statement: readings.map((r) => r.statement).join(' / ') };
+  if (readings[0]) return readings[0];
+  return ambiguous ? { kind: 'AMBIGUOUS', statement: ambiguous } : { kind: 'NONE' };
+}
+
+/**
+ * The confidence of REACHING the target the goal's words require, as a
+ * fraction, or null when they state none or state it ambiguously. A shortfall
+ * phrasing is converted to 1 − p; an ambiguous one never lowers the bar.
+ */
+export function statedConfidence(text: string): { value: number; statement: string } | null {
+  const r = readConfidence(text);
+  return r.kind === 'REACH' || r.kind === 'SHORTFALL' ? { value: r.value, statement: r.statement } : null;
 }
 
 function statedMoney(text: string, cue: RegExp): { value: number; statement: string } | null {
@@ -117,10 +178,22 @@ function target(text: string, money: RegExp | null, aim: RegExp | null, unstated
 export function goalObjective(goal: GoalWords, now: Date = new Date(), defaultConfidence: number = DEFAULT_REQUIRED_CONFIDENCE): GoalObjective {
   const interp = interpretObjective(goal, now);
   const text = textOf(goal);
-  const stated = statedConfidence(text);
-  const requiredConfidence = stated
-    ? { value: stated.value, source: 'STATED' as const, statement: stated.statement }
-    : { value: defaultConfidence, source: 'DEFAULT' as const, statement: `no confidence stated; Brain's recorded default ${DEFAULT_CONFIDENCE_SOURCE} = ${defaultConfidence}` };
+  const reading = readConfidence(text);
+  const requiredConfidence =
+    reading.kind === 'REACH' || reading.kind === 'SHORTFALL'
+      ? {
+          value: reading.value,
+          source: 'STATED' as const,
+          statement: reading.kind === 'SHORTFALL' ? `"${reading.statement}" is the chance of falling short; read as a ${Math.round(reading.value * 1000) / 10}% required chance of reaching the target` : reading.statement,
+        }
+      : {
+          value: defaultConfidence,
+          source: 'DEFAULT' as const,
+          statement:
+            reading.kind === 'AMBIGUOUS'
+              ? `"${reading.statement}" is not clearly the chance of reaching the target, so it does not set the bar; Brain's recorded default ${DEFAULT_CONFIDENCE_SOURCE} = ${defaultConfidence}`
+              : `no confidence stated; Brain's recorded default ${DEFAULT_CONFIDENCE_SOURCE} = ${defaultConfidence}`,
+        };
   const threshold = goal.target ? goal.target.amountCents / 100 : null;
   const deadline = interp.constraints.find((c) => c.kind === 'DEADLINE');
   const pct = Math.round(requiredConfidence.value * 1000) / 10;

@@ -14,6 +14,7 @@ import {
   DEFAULT_REQUIRED_CONFIDENCE,
   goalObjective,
   readOutcome,
+  readConfidence,
   statedConfidence,
   tradeOffs,
   type EnforceableCommitment,
@@ -138,5 +139,39 @@ describe('trade-offs are explicit', () => {
     expect(b!.upside!).toBeGreaterThan(a!.upside!);
     expect(b!.cashVelocity).toBeNull();
     expect(b!.status).toBe('CANDIDATE');
+  });
+});
+
+describe('a stated confidence is read in the direction the words state it (S-0200)', () => {
+  it('reads a chance of falling short as 1 − p of reaching the target, never as the bar itself', () => {
+    const o = goalObjective(goal('Make $10K in 60 days with no more than a 10% chance of falling short'), NOW);
+    expect(o.requiredConfidence).toMatchObject({ value: 0.9, source: 'STATED' });
+    expect(o.requiredConfidence.statement).toMatch(/chance of falling short; read as a 90% required chance/);
+    expect(o.meaning).toMatch(/^a 90% chance of at least \$10,000: at most a 10% modelled probability of finishing below/);
+    expect(statedConfidence('Reach $10k with at most 20% probability of missing')?.value).toBe(0.8);
+    expect(statedConfidence('a 15% probability of finishing below $10K')?.value).toBe(0.85);
+    expect(readConfidence('Collect $10K with a 10% chance of not reaching it')).toMatchObject({ kind: 'SHORTFALL', value: 0.9 });
+  });
+
+  it('still reads a chance of reaching the target as stated', () => {
+    expect(readConfidence('Collect $10K with a 90% chance')).toMatchObject({ kind: 'REACH', value: 0.9 });
+    expect(readConfidence('Earn $10K, 90% confident we hit it')).toMatchObject({ kind: 'REACH', value: 0.9 });
+    expect(readConfidence('Collect $10K with a 90% chance of at least $10K')).toMatchObject({ kind: 'REACH', value: 0.9 });
+    expect(readConfidence('with a 90% chance of reaching $10K and a 10% risk of missing')).toMatchObject({ kind: 'REACH', value: 0.9 });
+  });
+
+  it('never lets an unrelated or ambiguous percentage set the bar: the recorded default applies and says why', () => {
+    for (const words of [
+      'Earn $5k; 50% likely we need a partner',
+      'Collect $10K; at least 10% chance of missing',
+      'Collect $10K with a 10% risk',
+      'Collect $10K with a 90% chance and an 80% chance',
+    ]) {
+      expect(statedConfidence(words)).toBeNull();
+      const o = goalObjective(goal(words), NOW);
+      expect({ words, value: o.requiredConfidence.value, source: o.requiredConfidence.source }).toEqual({ words, value: DEFAULT_REQUIRED_CONFIDENCE, source: 'DEFAULT' });
+      expect(o.requiredConfidence.statement).toMatch(/is not clearly the chance of reaching the target, so it does not set the bar/);
+    }
+    expect(readConfidence('reach at least 40% margin')).toEqual({ kind: 'NONE' });
   });
 });
