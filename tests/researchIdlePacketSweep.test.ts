@@ -189,6 +189,107 @@ describe('advanceIdlePackets', () => {
 });
 
 /**
+ * RECOVERY.STALLS attempt 3 — the '+work' class. A packet whose fragment is
+ * being worked under a live, heartbeated lease never had its own `updated_at`
+ * touched, so `PACKETS_MOVING` (updated within six hours) read it as idle.
+ */
+describe('a packet whose work is being done under a live lease', () => {
+  const SIX_HOURS = 6 * 60 * 60 * 1000;
+
+  async function leasedItem(
+    orchestrationId: string,
+    lease: { heartbeatAgoMs: number | null; expiresInMs: number },
+  ): Promise<string> {
+    const item = await enqueueWork({
+      projectId,
+      workType: 'RESEARCH_FRAGMENT',
+      payload: {},
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId,
+    });
+    const worker = await createWorker({ name: `w-${item.id}`, createdByType: 'SYSTEM', createdById: 'test' });
+    const heartbeat = lease.heartbeatAgoMs === null ? null : new Date(Date.now() - lease.heartbeatAgoMs).toISOString();
+    await getDb().run(
+      `UPDATE work_items SET state = 'LEASED', lease_id = ?, worker_id = ?, lease_generation = 1,
+              leased_at = ?, heartbeat_at = ?, lease_expires_at = ? WHERE id = ?`,
+      [
+        `lse_${item.id}`,
+        worker.id,
+        heartbeat,
+        heartbeat,
+        new Date(Date.now() + lease.expiresInMs).toISOString(),
+        item.id,
+      ],
+    );
+    return item.id;
+  }
+
+  async function itemRow(id: string): Promise<Record<string, unknown>> {
+    return (await getDb().get<Record<string, unknown>>(
+      'SELECT state, lease_generation, lease_id, worker_id, leased_at, heartbeat_at, lease_expires_at FROM work_items WHERE id = ?',
+      [id],
+    ))!;
+  }
+
+  it('reproduces the failure class and is stamped so PACKETS_MOVING reads it as moving', async () => {
+    // Past six hours by its own row, while a worker heartbeated a minute ago.
+    const id = await packet('RESEARCHING', SIX_HOURS + 60_000);
+    const item = await leasedItem(id, { heartbeatAgoMs: 60_000, expiresInMs: 600_000 });
+    const itemBefore = await itemRow(item);
+
+    const swept = await advanceIdlePackets(10);
+    expect(swept).toContainEqual({ orchestrationId: id, from: 'RESEARCHING', to: 'RESEARCHING' });
+
+    const after = (await getOrchestration(id))!;
+    expect(after.status).toBe('RESEARCHING');
+    // The probe's own predicate: updated within six hours.
+    expect(Date.parse(after.updatedAt)).toBeGreaterThan(Date.now() - SIX_HOURS);
+    // The worker's item is untouched: the queue still owns it.
+    expect(await itemRow(item)).toEqual(itemBefore);
+
+    // Stamped, so it drops out of the selection.
+    expect((await advanceIdlePackets(10)).map((e) => e.orchestrationId)).not.toContain(id);
+  });
+
+  it('leaves work that shows no progress exactly as it is: no stamp, no conclusion, no item change', async () => {
+    const queued = await packet('RESEARCHING', PACKET_PROGRESS_DEADLINE_MS + 60_000);
+    const queuedItem = (await enqueueWork({
+      projectId,
+      workType: 'RESEARCH_FRAGMENT',
+      payload: {},
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId: queued,
+    })).id;
+    const staleHeartbeat = await packet('RESEARCHING', PACKET_PROGRESS_DEADLINE_MS + 60_000);
+    const staleItem = await leasedItem(staleHeartbeat, {
+      heartbeatAgoMs: PACKET_STALL_WINDOW_MS + 60_000,
+      expiresInMs: 600_000,
+    });
+    const expired = await packet('RESEARCHING', PACKET_PROGRESS_DEADLINE_MS + 60_000);
+    const expiredItem = await leasedItem(expired, { heartbeatAgoMs: 60_000, expiresInMs: -60_000 });
+    const ids = [queued, staleHeartbeat, expired];
+    const items = [queuedItem, staleItem, expiredItem];
+    const before = await Promise.all(ids.map(async (id) => (await getOrchestration(id))!));
+    const itemsBefore = await Promise.all(items.map(itemRow));
+
+    const swept = (await advanceIdlePackets(10)).map((e) => e.orchestrationId);
+    for (const id of ids) expect(swept).not.toContain(id);
+    expect(await Promise.all(ids.map(async (id) => (await getOrchestration(id))!))).toEqual(before);
+    expect(await Promise.all(items.map(itemRow))).toEqual(itemsBefore);
+  });
+
+  it('leaves a recently updated packet under a live lease alone', async () => {
+    const id = await packet('RESEARCHING', 60_000);
+    await leasedItem(id, { heartbeatAgoMs: 1_000, expiresInMs: 600_000 });
+    const before = (await getOrchestration(id))!;
+    expect((await advanceIdlePackets(10)).map((e) => e.orchestrationId)).not.toContain(id);
+    expect((await getOrchestration(id))!.updatedAt).toBe(before.updatedAt);
+  });
+});
+
+/**
  * The bound action. Detection alone left a packet whose advance changes nothing
  * live, unstamped and re-tried every hour for ever. Past the progress deadline,
  * judged from its own rows, it is concluded once.
