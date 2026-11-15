@@ -71,6 +71,7 @@ import { OPERATING_MODEL_SENTENCE } from '../../domain/operatingModel.ts';
 import { constructedCapFor, freeLaneOwnsResearch, routineFocus } from './researchRoom.ts';
 import { TRIGGER_BUCKETS, triggersEnabled } from './triggers.ts';
 import { FEED_SHORTLIST_BUCKET } from '../feeds/bucket.ts';
+import { familyOrder, INTERMEDIATION_BUCKETS } from './intermediationBuckets.ts';
 import { getDb } from '../../db/database.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import {
@@ -474,6 +475,13 @@ export const SEARCH_BUCKETS: readonly SearchBucket[] = Object.freeze([
       'sources, what each side published, and what specifically one supplies to the other?',
   },
   ...BROAD_ECONOMY_BUCKETS,
+  /*
+   * Commercial intermediation's entry points (RES-15-4, S-0149): buyer-first and
+   * supply-first, across buyer types and market structures. Their ordinary place is
+   * here, last; while the family declaration is current `openDiscovery` asks them
+   * first (`familyOrder`), and when it lapses they fall back to this place.
+   */
+  ...INTERMEDIATION_BUCKETS,
 ]);
 
 const OPENED = 'CASH_DISCOVERY_OPENED';
