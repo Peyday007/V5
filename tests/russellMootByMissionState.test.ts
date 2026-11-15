@@ -11,6 +11,7 @@
  * `reopenAnswered` and `withdrawMootBacklog`, the operator's own predicate
  * reads zero moot open requests, and Brain — not the operator — withdrew them.
  */
+import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject, type TestProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
@@ -174,5 +175,37 @@ describe('moot is decided by the mission state, as the operator decides it', () 
       expect((await getHumanRequest(missionless.id))!.state).toBe('OPEN');
       expect(await eventsOf(missionless.id, 'RUSSELL_ROUTINE_DECISION')).toHaveLength(0);
     }
+  });
+});
+
+/**
+ * The helper that pins these withdrawals is documented where it is defined.
+ *
+ * Its JSDoc was once inserted between `parkedMission`'s doc comment and
+ * `parkedMission` itself, so the nervous-system suite read two consecutive
+ * doc blocks above `expectWithdrawnByBrain` and none above the function the
+ * first one describes. This reads the source and holds each comment to its
+ * own function.
+ */
+describe('the moot-withdrawal helper keeps its own doc comment', () => {
+  const source = readFileSync(new URL('./russellNervousSystem.test.ts', import.meta.url), 'utf8');
+
+  function docAbove(name: string): string {
+    const at = source.indexOf(`async function ${name}(`);
+    expect(at).toBeGreaterThan(0);
+    const before = source.slice(0, at);
+    expect(before.trimEnd().endsWith('*/')).toBe(true);
+    return before.slice(before.lastIndexOf('/**'));
+  }
+
+  it('documents expectWithdrawnByBrain with its own comment, and only that one', () => {
+    const doc = docAbove('expectWithdrawnByBrain');
+    expect(doc).toContain('A card Brain withdrew');
+    const preceding = source.slice(0, source.indexOf(doc)).trimEnd();
+    expect(preceding.endsWith('*/')).toBe(false);
+  });
+
+  it('leaves parkedMission directly under the comment that describes it', () => {
+    expect(docAbove('parkedMission')).toContain('A launched mission, ready to be parked by the loop.');
   });
 });

@@ -3291,6 +3291,23 @@ async function looseConversation(title = 'A loose thread') {
 }
 
 /**
+ * A card Brain withdrew because its mission is no longer waiting on it: the
+ * row is kept, the withdrawal names the mission's state, and exactly one
+ * RUSSELL_ROUTINE_DECISION (never the operator's withdrawal) records it.
+ */
+async function expectWithdrawnByBrain(requestId: string, missionState: string) {
+  const request = (await getHumanRequest(requestId))!;
+  expect(request.state).toBe('WITHDRAWN');
+  expect(request.whyNotRussell).toContain(missionState);
+  const events = await listEventsByEntity('RUSSELL_HUMAN_REQUEST', requestId);
+  const decisions = events.filter((event) => event.eventType === 'RUSSELL_ROUTINE_DECISION');
+  expect(decisions).toHaveLength(1);
+  expect(decisions[0]!.payload).toMatchObject({ choice: 'WITHDRAW_MOOT_ANSWER', missionState });
+  expect(events.filter((event) => event.eventType === 'OPERATOR_WITHDREW_MOOT_REQUEST')).toHaveLength(0);
+  return request;
+}
+
+/**
  * The research a "the evidence bar was not met" stop presupposes.
  *
  * Both park tests used to set a packet to NEEDS_HUMAN with **no fragments at
@@ -3308,23 +3325,6 @@ async function looseConversation(title = 'A loose thread') {
  * the fact a person is being asked about. Lifted out when a third and fourth
  * park test needed the same twenty lines.
  */
-/**
- * A card Brain withdrew because its mission is no longer waiting on it: the
- * row is kept, the withdrawal names the mission's state, and exactly one
- * RUSSELL_ROUTINE_DECISION (never the operator's withdrawal) records it.
- */
-async function expectWithdrawnByBrain(requestId: string, missionState: string) {
-  const request = (await getHumanRequest(requestId))!;
-  expect(request.state).toBe('WITHDRAWN');
-  expect(request.whyNotRussell).toContain(missionState);
-  const events = await listEventsByEntity('RUSSELL_HUMAN_REQUEST', requestId);
-  const decisions = events.filter((event) => event.eventType === 'RUSSELL_ROUTINE_DECISION');
-  expect(decisions).toHaveLength(1);
-  expect(decisions[0]!.payload).toMatchObject({ choice: 'WITHDRAW_MOOT_ANSWER', missionState });
-  expect(events.filter((event) => event.eventType === 'OPERATOR_WITHDREW_MOOT_REQUEST')).toHaveLength(0);
-  return request;
-}
-
 async function parkedMission(
   conversationId: string,
   name = 'acceptance',
