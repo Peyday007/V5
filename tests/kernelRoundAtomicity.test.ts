@@ -515,7 +515,9 @@ describe('labor: openAsks commits a candidate and its round together', () => {
 describe('cash discovery: openDiscovery commits a candidate and its round together', () => {
   it('A01+A02: two concurrent calls produce one round and one candidate for the first bucket', async () => {
     await activated();
-    const { openDiscovery, SEARCH_BUCKETS } = await import('../server/services/cash/discovery.ts');
+    const { openDiscovery, SEARCH_BUCKETS, discoveryOrder } = await import('../server/services/cash/discovery.ts');
+    // The bucket discovery asks first (intermediation's while its declaration is current).
+    const firstBucket = discoveryOrder(SEARCH_BUCKETS, [])[0]!;
     const { listRounds } = await import('../server/repos/cashDiscovery.ts');
 
     /*
@@ -542,10 +544,10 @@ describe('cash discovery: openDiscovery commits a candidate and its round togeth
     ]);
 
     const opened = [...a, ...b];
-    expect(opened.some((one) => one.bucketId === SEARCH_BUCKETS[0]!.id)).toBe(true);
+    expect(opened.some((one) => one.bucketId === firstBucket.id)).toBe(true);
 
     const contested = (await listRounds(projectId)).filter(
-      (one) => one.bucketId === SEARCH_BUCKETS[0]!.id,
+      (one) => one.bucketId === firstBucket.id,
     );
     expect(contested).toHaveLength(1); // the race at the exact key produced one round, never two
 

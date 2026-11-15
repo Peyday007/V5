@@ -37,3 +37,23 @@ export async function executionPolicyForProject(projectId: string, now: Date = n
 export function forgetExecutionPolicies(): void {
   cache.clear();
 }
+
+/**
+ * The goal's configurable optimization objective (GOAL-18-4), read from that
+ * goal's own words by `objective.ts`: its required confidence (stated, or the
+ * recorded default `RECOMMENDATION_POLICY.requiredProbability`), and its
+ * targets for expected collections, upside, downside protection, capability
+ * growth and reusable capital. The threshold is a minimum, never a stop.
+ * Resolved per goal row, like the execution policy above; null for no goal.
+ * Loaded lazily so the execution-policy readers do not load the plan graph.
+ */
+export async function objectiveForGoal(goalId: string, now: Date = new Date()): Promise<import('./objective.ts').GoalObjective | null> {
+  const [{ getWorkstream }, { goalObjective }, { RECOMMENDATION_POLICY }] = await Promise.all([
+    import('../../repos/register.ts'),
+    import('./objective.ts'),
+    import('./plan.ts'),
+  ]);
+  const goal = await getWorkstream(goalId);
+  if (!goal) return null;
+  return goalObjective(goal, now, RECOMMENDATION_POLICY.requiredProbability);
+}

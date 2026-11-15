@@ -50,8 +50,11 @@ import { paidOpportunityIds } from '../../repos/cashLedger.ts';
 import { statesNamedIn } from '../../domain/jurisdiction.ts';
 import { APPROVAL_ENVELOPES } from '../research/approvalEnvelope.ts';
 import { describesOwnAction } from '../research/actorScope.ts';
-import { composeArrangement, type Part } from '../quant/mechanism.ts';
+import { composeArrangement, type Arrangement, type Levers, type Part } from '../quant/mechanism.ts';
+import { leverageOfYielding, type ArrangementLeverage, type LeverageConstraints } from '../quant/leverage.ts';
 import { reconstruct } from '../quant/reconstruct.ts';
+import { emptyLeverEvidence, leverEvidenceFrom, type LeverEvidence, type LeverPart } from '../quant/leverEvidence.ts';
+import { claimSources } from '../../repos/research.ts';
 import type { CashCardFact, CashOpportunity, IndustryNode } from '../../domain/types.ts';
 import type { Estimate, Observation } from '../../domain/quant.ts';
 import { repeatBusinessObservations } from './deliverables/realization.ts';
@@ -78,6 +81,17 @@ import {
   type Structure,
 } from './properties.ts';
 import { excludedBy, exclusionSentence, type ExclusionClass } from './exclusions.ts';
+import {
+  ENTRY_POINTS,
+  EVIDENCE_FIELDS,
+  INTERMEDIATION_FAMILY,
+  positionEvidenceGaps,
+  positionsToExamine,
+  type EvidenceBasis,
+  type EvidenceField,
+  type PositionFacts,
+  type ResolvedPosition,
+} from './intermediationPositions.ts';
 
 export { STRUCTURES, STRUCTURE_KEYS, type Structure } from './properties.ts';
 
@@ -232,10 +246,61 @@ export interface ConstructedArrangement {
   inputsDigest?: string;
   /** Everything its composition read, hashed: a stored arrangement composed under the same is reused rather than recomposed. */
   composedUnder?: string;
+  /**
+   * Commercial leverage (S-0103, COM-13-2), on the `LEVERAGE_TRACED`
+   * best-ranked arrangements: the levers the design uses — AI labor or a
+   * supplier fulfilling, buyer prepayment where the design takes money early —
+   * composed on the same parts and evidence as the decomposition above, every
+   * combination traced through cash conversion, margin, supplier risk,
+   * delivery capacity, liability, acquisition speed and repeatability, judged
+   * against the cash the ledger says is deployable and the authority a person
+   * granted, and its prepayment conditions verified. Never a revenue ceiling.
+   */
+  leverage?: ArrangementLeverage;
+  /**
+   * For an arrangement that needs supply, the alternative positions the same
+   * transaction can be held from, each with its own research question
+   * (RES-15-4; S-0148, S-0150). Absent for a structure Brain fulfils itself.
+   */
+  positionQuestions?: PositionResearchQuestion[];
+}
+
+/**
+ * One decomposed research question at one exact position of an intermediated
+ * transaction. `POSITION` asks the S-0150 fields still missing there plus the
+ * position's contracts, rights, liabilities, restrictions and counterparty
+ * expectations; `BUYER_ACCESS` and `CONVERSION` are asked separately when what
+ * is established is only an asking price or a market size.
+ */
+export interface PositionResearchQuestion {
+  kind: 'POSITION' | 'BUYER_ACCESS' | 'CONVERSION';
+  /** The position as research holds it: its catalogue label, or the name Brain discovered. */
+  position: string;
+  catalogued: string | null;
+  /** The S-0150 fields this question asks; empty for the separate access and conversion questions. */
+  asks: EvidenceField[];
+  /** The S-0150 fields already established for this arrangement, which are not asked again. */
+  established: EvidenceField[];
+  question: string;
+  /** For a POSITION question, what to investigate contractually at exactly that position. */
+  investigate?: string;
+  /** For a BUYER_ACCESS or CONVERSION question, the gap itself. */
+  ask?: string;
 }
 
 /** At most this many arrangements are composed per goal pass (they are ranked and few are asked). */
 export const MAX_CONSTRUCTIONS = 400;
+/**
+ * How many of the best-ranked arrangements carry a traced leverage reading.
+ * Tracing resolves every lever combination, several reconstructions each, so
+ * it is paid where a plan reads and research asks — the top of the ranking —
+ * rather than on all `MAX_CONSTRUCTIONS`, which was already the hot path.
+ * Every design composes all the levers it can use (`designLevers`), up to
+ * 2^7 = 128 combinations each, so the top four are traced in full rather than
+ * twelve in part: measured on the wired test, twelve full traces were about
+ * five times the construction pass, four about twice.
+ */
+export const LEVERAGE_TRACED = 4;
 /** Reverse arrangements composed per pass: one per design that best fits the goal. */
 export const MAX_REVERSE = 4;
 /** Longest stretch construction holds the event loop before handing it back (2026-11-05 11.6 s stalls). */
@@ -468,12 +533,15 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
    * rather than recomposed — after a restart, a deploy or by another goal.
    */
   const { known, reuse } = await libraryFor(input.projectId);
+  // What the rows state about each lever's parts, each payer's contract limit, and the real limits leverage is judged against (S-0103).
+  const { leverEvidence, contractLimits } = await leverInputs(input, opportunities, facts, allowed);
+  const constraints = await leverageConstraints(input, limits);
   const memoKey = createHash('sha256')
-    .update(JSON.stringify({ day: now.toISOString().slice(0, 10), input: { ...input, now: undefined, limits: undefined }, limits, targets, exclusions, sectors: [...sectors.values()], precedent: [...precedentByBase.entries()].map(([k, o]) => [k, o.id]), priced, tiedUp, factObs, openings: opportunities.map((o) => [o.id, o.payer, o.mechanism, o.state, o.updatedAt]), known }))
+    .update(JSON.stringify({ day: now.toISOString().slice(0, 10), input: { ...input, now: undefined, limits: undefined }, limits, targets, exclusions, sectors: [...sectors.values()], precedent: [...precedentByBase.entries()].map(([k, o]) => [k, o.id]), priced, tiedUp, factObs, leverEvidence, contractLimits, constraints, openings: opportunities.map((o) => [o.id, o.payer, o.mechanism, o.state, o.updatedAt]), known }))
     .digest('hex');
   const held = constructionMemo.get(memoKey);
   if (held && Date.now() - held.at < CONSTRUCTION_MEMO_MS) return structuredClone(held.result);
-  const job: ConstructionJob = { sectors: [...sectors.values()], opportunities, precedent: [...precedentByBase.entries()], capability, priced, tiedUp, facts: factObs, input, limits, targets, exclusions, now, known, reuse };
+  const job: ConstructionJob = { sectors: [...sectors.values()], opportunities, precedent: [...precedentByBase.entries()], capability, priced, tiedUp, facts: factObs, leverEvidence, contractLimits, input, limits, targets, exclusions, now, constraints, known, reuse };
   // How many candidates the parts support, against how many are composed: the cut is reported, never silent (K-2).
   const considered = forEachCandidate(job, () => undefined);
   /*
@@ -545,6 +613,33 @@ async function heldEvidence(input: ConstructionInput, opportunities: CashOpportu
     }));
   const capability: Primitive | null = input.delivers.length > 0 ? { name: input.delivers.join(', '), claimId: null, from: 'CAPABILITY', ref: 'deliverables', path: `CAPABILITY:${input.delivers.map(norm).sort().join('>')}` } : null;
   return { priced, tiedUp, facts: { unitCost: facts.unitCost, volume: facts.volume }, capability };
+}
+
+/**
+ * What the project's rows say about each lever's own parts (S-0103): buyer
+ * prepayment willingness, refund obligations, when funds are usable, a
+ * supplier's capacity, failures and payment terms, AI labor's cost and
+ * throughput, and when buyers settle — read from the EVIDENCE card facts
+ * research filed and the openings' published payment terms, so an answer to
+ * the prepayment question construction asks changes the next reading.
+ *
+ * And a contract's transaction limit ("enforce actual … contract
+ * constraints"), per payer, read from the same rows: the terms an opening
+ * states and the evidence facts beside it. A payer whose rows state no
+ * maximum has an unknown contract limit — a question, never unlimited.
+ */
+async function leverInputs(
+  input: Pick<ConstructionInput, 'currency' | 'daysLeft'>,
+  opportunities: readonly CashOpportunity[],
+  cardFacts: readonly CashCardFact[],
+  allowed: (text: string | null | undefined) => boolean,
+): Promise<{ leverEvidence: LeverEvidence; contractLimits: ContractLimits }> {
+  const leverFacts = cardFacts.filter((one) => one.kind === 'EVIDENCE');
+  const openings = opportunities.filter((one) => allowed(one.title));
+  const leverSources = await claimSources([...leverFacts.map((one) => one.claimId), ...opportunities.map((one) => one.sourceClaimId)].filter((one): one is string => !!one));
+  const leverEvidence = leverEvidenceFrom({ opportunities: openings, facts: leverFacts, sources: leverSources, currency: input.currency, periodDays: input.daysLeft });
+  const contractLimits = contractLimitsFrom({ opportunities: openings, facts: leverFacts, periodDays: input.daysLeft });
+  return { leverEvidence, contractLimits };
 }
 
 /** Construction facts that bear on a composition beyond its price: what supply costs per unit, and how much one buyer buys. */
@@ -637,6 +732,10 @@ export interface InventionContext {
   priced: Observation[];
   tiedUp: Observation[];
   facts?: FactObservations;
+  /** What the rows state about each lever's own parts (S-0103); absent reads as nothing stated. */
+  leverEvidence?: LeverEvidence;
+  /** Per payer, the transaction limit stated terms impose; absent reads as nothing stated. */
+  contractLimits?: ContractLimits;
   capability: Primitive | null;
   input: ConstructionInput;
   limits: GoalLimits;
@@ -653,7 +752,8 @@ export async function inventionContext(input: ConstructionInput): Promise<Invent
   const allowed = (text: string | null | undefined) => !excludedBy(text, exclusions);
   const opportunities = (await listOpportunities({ projectId: input.projectId })).filter((one) => !one.duplicateOfId && one.state !== 'DECLINED' && one.state !== 'ARCHIVED');
   const { priced, tiedUp, facts, capability } = await heldEvidence(input, opportunities, allowed);
-  return { opportunities, priced, tiedUp, facts, capability, input, limits, targets: targetProperties(limits).map((one) => one.property), exclusions, now };
+  const { leverEvidence, contractLimits } = await leverInputs(input, opportunities, await cardFactsForProject(input.projectId), allowed);
+  return { opportunities, priced, tiedUp, facts, leverEvidence, contractLimits, capability, input, limits, targets: targetProperties(limits).map((one) => one.property), exclusions, now };
 }
 
 /**
@@ -682,7 +782,7 @@ export function composeInvented(spec: InventedDesign, ctx: InventionContext): Co
   const demand: Primitive = { name: population, claimId: null, from: 'REVERSE', ref: `invented:${norm(population)}`, path: `INVENTED_BUYER:${norm(population)}` };
   const needPart: Primitive | null = need ? { name: need, claimId: null, from: 'REVERSE', ref: `invented-need:${norm(need)}`, path: `INVENTED_NEED:${norm(need)}` } : null;
   const supply = def.needsSupply ? null : ctx.capability;
-  return compose({ ...ctx, design, origin: 'FORWARD', precedent: null, sector: null, demand, need: needPart, supply, related });
+  return compose({ ...ctx, design, origin: 'FORWARD', precedent: null, sector: null, demand, need: needPart, supply, related }).arrangement;
 }
 
 /** What the last construction for a project considered, composed, cut and reused. */
@@ -717,6 +817,39 @@ async function libraryFor(projectId: string): Promise<{ known: NonNullable<Const
   return { known, reuse };
 }
 
+/**
+ * The real limits a constructed arrangement's leverage is judged against
+ * (S-0103), in the goal's currency: the cash the ledger says may be deployed
+ * now (`cashPosition`, invariant 37), and the money a person authorised —
+ * what the live cash authority leaves uncommitted, or the goal's capital
+ * ceiling, whichever is smaller. A contract limit belongs to one payer's
+ * contract, not to the project, so it is null here and read per arrangement
+ * from `contractLimitsFrom` (see `constraintsFor`). Whatever cannot be read is
+ * null — unknown, never unlimited — and nothing here is a revenue ceiling.
+ */
+async function leverageConstraints(input: ConstructionInput, limits: GoalLimits): Promise<LeverageConstraints> {
+  let cashAvailable: number | null = null;
+  let authorityCeiling: number | null = limits.capitalCeilingCents !== null ? limits.capitalCeilingCents / 100 : null;
+  try {
+    const { cashPosition } = await import('./money.ts');
+    const position = await cashPosition({ projectId: input.projectId, currency: input.currency });
+    cashAvailable = Math.max(0, position.deployableCents) / 100;
+  } catch {
+    cashAvailable = null;
+  }
+  try {
+    const { liveAuthority, heldCentsForProject } = await import('../../repos/cashAuthority.ts');
+    const grant = await liveAuthority(input.projectId);
+    if (grant && grant.currency === input.currency) {
+      const left = Math.max(0, grant.maxCommittedCents - (await heldCentsForProject(input.projectId, input.currency))) / 100;
+      authorityCeiling = authorityCeiling === null ? left : Math.min(authorityCeiling, left);
+    }
+  } catch {
+    // An unreadable grant leaves the goal's own ceiling, or unknown.
+  }
+  return { cashAvailable, authorityCeiling, contractMax: null };
+}
+
 /** Everything composition reads, as plain data, so it can run on a pool thread (§109). */
 export interface ConstructionJob {
   sectors: Array<{ name: string | null; demand: Primitive[]; needs: Primitive[]; supply: Primitive[] }>;
@@ -729,6 +862,10 @@ export interface ConstructionJob {
   tiedUp: Observation[];
   /** Construction facts about map buyers beyond their price (F2). */
   facts?: FactObservations;
+  /** What the rows state about each lever's own parts; absent reads as nothing stated. */
+  leverEvidence?: LeverEvidence;
+  /** Per payer, the transaction limit a contract or stated terms impose; absent reads as nothing stated. */
+  contractLimits?: ContractLimits;
   input: ConstructionInput;
   limits: GoalLimits;
   targets: EconomicProperty[];
@@ -738,6 +875,8 @@ export interface ConstructionJob {
   known?: Array<[string, { verdict: 'CONFIRMED' | 'REFUTED' | null; p50: number }]>;
   /** Stored arrangements by the composition digest they were composed under: reused, not recomposed. */
   reuse?: Array<[string, ConstructedArrangement]>;
+  /** The real limits leverage is judged against, read from the ledger and the live authority; absent is unknown. */
+  constraints?: LeverageConstraints;
 }
 
 /** One forward or transfer arrangement the parts support, before it is composed. */
@@ -892,26 +1031,287 @@ export function selectCandidates(job: ConstructionJob): { selected: Candidate[];
 export async function composeConstruction(job: ConstructionJob, yieldEveryMs: number | null = null, plan: CompositionStep[] = compositionPlan(job)): Promise<ConstructedArrangement[]> {
   const { capability, priced, tiedUp, facts, input, limits, targets, exclusions, now } = job;
   const designs = allDesigns(STRUCTURE_KEYS);
-  const ctx = { priced, tiedUp, facts, input, limits, targets, exclusions, now };
+  const contractLimits = job.contractLimits ?? [];
+  const ctx = { priced, tiedUp, facts, leverEvidence: job.leverEvidence ?? emptyLeverEvidence(), contractLimits, input, limits, targets, exclusions, now };
   const out: ConstructedArrangement[] = [];
+  // Each freshly composed arrangement's levered form (S-0103), for the leverage trace on the best-ranked.
+  const levered = new Map<ConstructedArrangement, Arrangement>();
+  const keep = (built: { arrangement: ConstructedArrangement; levered: Arrangement }) => {
+    levered.set(built.arrangement, built.levered);
+    return built.arrangement;
+  };
+  // A library arrangement is reused untraced; its step is kept so it is recomposed if it ranks among the traced.
+  const reusedFrom = new Map<ConstructedArrangement, CompositionStep>();
   let lastYield = Date.now();
   const breathe = async (): Promise<void> => {
     if (yieldEveryMs === null || Date.now() - lastYield < yieldEveryMs) return;
     await new Promise<void>((resolve) => setImmediate(resolve));
     lastYield = Date.now();
   };
-  for (const { one, under, stored } of plan) {
-    if (stored) {
-      out.push(stored);
+  const composeStep = ({ one, under }: CompositionStep): ConstructedArrangement => {
+    const made = keep(compose({ ...ctx, design: one.design, origin: one.transfer ? 'TRANSFER' : 'FORWARD', precedent: one.transfer, sector: one.sector, demand: one.demand, need: one.need, supply: one.supply, related: one.related }));
+    made.composedUnder = under;
+    return made;
+  };
+  for (const step of plan) {
+    if (step.stored) {
+      out.push(step.stored);
+      reusedFrom.set(step.stored, step);
       continue;
     }
     await breathe();
-    const made = compose({ ...ctx, design: one.design, origin: one.transfer ? 'TRANSFER' : 'FORWARD', precedent: one.transfer, sector: one.sector, demand: one.demand, need: one.need, supply: one.supply, related: one.related });
-    made.composedUnder = under;
-    out.push(made);
+    out.push(composeStep(step));
   }
-  out.push(...reverseArrangements({ ...ctx, designs, capability }));
-  return rank(out, limits, targets);
+  out.push(...reverseArrangements({ ...ctx, designs, capability }).map(keep));
+  const ranked = rank(out, limits, targets);
+  /*
+   * A reused arrangement carries no levered form (the library stores the
+   * arrangement, not its lever graph), so one that ranks among the traced is
+   * recomposed under the same digest: the same arrangement, now traceable.
+   */
+  for (let i = 0; i < Math.min(LEVERAGE_TRACED, ranked.length); i += 1) {
+    const step = reusedFrom.get(ranked[i]!);
+    if (!step) continue;
+    await breathe();
+    ranked[i] = composeStep(step);
+  }
+  return traceLeverageOnTop(ranked, levered, job.constraints ?? {}, contractLimits, limits, targets, now, breathe);
+}
+
+/**
+ * Trace the leverage of the best-ranked arrangements and enforce what it
+ * finds (S-0103): an arrangement whose evidenced cash exposure a real limit
+ * cannot fit even once is EXCEEDS — the goal's plan rejects it rather than
+ * asking about it — and what the trace could not establish (prepayment
+ * willingness, refund obligations, when funds are usable against when the
+ * supplier is paid) is asked in its research question. Re-ranked after, so a
+ * refused arrangement falls below the ones that fit.
+ */
+async function traceLeverageOnTop(
+  ranked: ConstructedArrangement[],
+  levered: Map<ConstructedArrangement, Arrangement>,
+  constraints: LeverageConstraints,
+  contractLimits: ContractLimits,
+  limits: GoalLimits,
+  targets: EconomicProperty[],
+  now: Date,
+  breathe: () => Promise<void>,
+): Promise<ConstructedArrangement[]> {
+  let changed = false;
+  for (const one of ranked.slice(0, LEVERAGE_TRACED)) {
+    const a = levered.get(one);
+    if (!a) continue;
+    await breathe();
+    let leverage: ArrangementLeverage;
+    try {
+      leverage = await leverageOfYielding(a, constraintsFor(constraints, contractLimits, one.demand.name), breathe, { now });
+    } catch {
+      continue;
+    }
+    one.leverage = leverage;
+    if (leverage.refused && one.stress.exposure !== 'EXCEEDS') {
+      one.stress = { ...one.stress, exposure: 'EXCEEDS' };
+      changed = true;
+    }
+    if (leverage.constraints.contractMax === null) {
+      // The question that answers the CONTRACT task: what its answer files is what `contractLimitsFrom` reads.
+      one.question += ` ${CONTRACT_LIMIT_ASK}`;
+    }
+    const verify = leverage.prepayment.flatMap((v) => v.tasks);
+    if (verify.length) {
+      one.question +=
+        ' Prepayment is a design possibility here, not a presumption: ' +
+        verify.join('; ') +
+        ' — report what a source shows for these buyers, and say plainly where none does.';
+    }
+  }
+  return changed ? rank(ranked, limits, targets) : ranked;
+}
+
+/**
+ * The commercial levers a constructed arrangement may combine (S-0103): every
+ * one of the seven a candidate "may simultaneously use", composed together on
+ * every design, so the trace compares each combination — AI labor beside a
+ * supplier, an existing channel, marketing reach, financing, shared
+ * infrastructure and, where the design takes money early, prepayment —
+ * against the same combination without it.
+ *
+ * None is a category and none is assumed to help: each lever's parts are
+ * bounds, a question rather than a reading (invariant 39), so a lever moves a
+ * traced dimension only once evidence states its parts. Supplier fulfilment
+ * is composed only where a supplier fulfils, because a design Brain fulfils
+ * itself has no supplier to pay; prepayment only where the design's funding
+ * takes money before delivery. AI labor is composed on every design: Brain's
+ * own work — selling, coordinating, and producing where it fulfils — is AI
+ * labor whoever else delivers.
+ */
+export function designLevers(
+  design: Design,
+  fulfiller: 'BRAIN' | 'SUPPLIER',
+  evidence: (part: LeverPart) => Pick<Part, 'context' | 'material' | 'observations'> = () => ({}),
+): Levers {
+  const share: Part = { min: 0, max: 1 };
+  const count = (min: number, max: number): Part => ({ min, max });
+  const money: Part = { min: 0, max: 100_000 };
+  // A part the rows can speak to: its bounds, plus whatever they state.
+  const read = (part: LeverPart, bounds: Part): Part => ({ ...bounds, ...evidence(part) });
+  const levers: Levers = {
+    settlementDays: read('settlementDays', count(0, 365)),
+    aiLabor: { costPerTransaction: read('aiLabor.costPerTransaction', money), throughput: read('aiLabor.throughput', count(0, 10_000_000)) },
+    channel: { share, fee: money },
+    marketing: { reachUplift: count(0, 10), acquisitionCost: money, daysToAcquire: count(1, 365) },
+    financing: { rate: share, termDays: count(0, 365), advanceShare: share },
+    sharedInfrastructure: { costPerTransaction: money },
+  };
+  if (fulfiller === 'SUPPLIER') {
+    levers.fulfilment = {
+      capacity: read('fulfilment.capacity', count(0, 10_000_000)),
+      failureRate: read('fulfilment.failureRate', share),
+      paymentDays: read('fulfilment.paymentDays', count(0, 365)),
+    };
+  }
+  if (design.funding !== 'ON_DELIVERY') {
+    levers.prepayment = {
+      willingness: read('prepayment.willingness', share),
+      refundShare: read('prepayment.refundShare', share),
+      usableDays: read('prepayment.usableDays', count(0, 365)),
+    };
+  }
+  return levers;
+}
+
+/**
+ * What the rows state about each lever part, for one buyer population: the
+ * part's population is the payer, so that payer's own observations are
+ * direct and every other payer's are broad — bounds, never a probability.
+ */
+export function leverPartsFor(evidence: LeverEvidence, payer: string): (part: LeverPart) => Pick<Part, 'context' | 'material' | 'observations'> {
+  const who = norm(payer);
+  return (part) => ({
+    context: { payer: who },
+    material: [],
+    observations: evidence[part].map((one) => ({ ...one, broad: one.context['payer'] !== who })),
+  });
+}
+
+// ── a contract's transaction limit ──────────────────────────────────────────
+
+/**
+ * One payer's contract limit as the rows state it: the most binding maximum
+ * number of transactions any of its terms allows over the goal's period, with
+ * where it was read. Plain data, so it crosses the evaluator pool's thread.
+ */
+export interface ContractLimit {
+  /** Normalised payer name. */
+  payer: string;
+  /** Transactions allowed over the period. */
+  max: number;
+  /** The row it was read from: `opportunity:<id>:<field>` or `fact:<id>`. */
+  ref: string;
+  /** The claim behind it, when a fact carried one. */
+  claimId: string | null;
+  /** The sentence the limit was read from, for a reader to check. */
+  text: string;
+  observedAt: string | null;
+}
+
+export type ContractLimits = ContractLimit[];
+
+/** What a constructed arrangement's research question asks so that the CONTRACT limit becomes readable. */
+export const CONTRACT_LIMIT_ASK =
+  'State the most transactions (orders, jobs, units, loads, bookings) the buyer’s contract, framework agreement, tender award or published terms allow in the period — "up to N", "no more than N", "a maximum of N" — with its source, or say plainly that no source states one.';
+
+// The fields of an opening that are terms: a maximum stated in them is a contract's.
+const TERMS_FIELDS = ['paymentTerms', 'acceptanceCondition', 'offerScope'] as const;
+// Elsewhere a maximum is a contract's only when the sentence says it is.
+const OTHER_FIELDS = ['requiredInputs', 'economicsNote', 'buyingSignal'] as const;
+const CONTRACT_WORD = /\b(?:contract(?:s|ed|ual)?|agreements?|framework|purchase orders?|PO|tender|award(?:ed)?|allocation|allotment|quota|terms|licen[cs]e[sd]?|permit(?:s|ted)?|allow(?:s|ed)?|caps?|capped)\b/i;
+const CAP = /\b(?:up to|no more than|not more than|not to exceed|maximum(?: of)?|max\.?|at most|capped at|a cap of|cap of|limited to|limit(?:ed)? of)\s+(\d[\d,]*)\s+(?:[a-z-]+\s+){0,2}?(orders?|jobs?|units?|transactions?|bookings?|deliveries|delivery|loads?|shipments?|projects?|placements?|referrals?|leads?|sales?|contracts?|visits?|cases?|appointments?|tickets?|seats?|licen[cs]es?|pallets?|containers?|tons?|tonnes?|calls?|installs?|installations?|services?)\b(?:\s+(?:per|a|an|each|every)\s+(day|week|month|quarter|year))?/i;
+const PERIOD_DAYS: Record<string, number> = { day: 1, week: 7, month: 30, quarter: 91, year: 365 };
+
+function contractSentences(text: string): string[] {
+  return text.split(/(?<=[.;!?])\s+|\n+/).map((one) => one.trim()).filter(Boolean);
+}
+
+/** The maximum a sentence states, over `periodDays`; null when it states none. */
+export function statedContractMax(sentence: string, periodDays: number, needsContractWord: boolean): number | null {
+  if (needsContractWord && !CONTRACT_WORD.test(sentence)) return null;
+  const m = CAP.exec(sentence);
+  if (!m) return null;
+  const n = Number(m[1]!.replace(/,/g, ''));
+  if (!Number.isFinite(n) || n < 0) return null;
+  const per = m[3] ? PERIOD_DAYS[m[3].toLowerCase()] : undefined;
+  // A rate cap ("up to 40 jobs a month") allows that rate over the period; a bare count is the whole allowance.
+  return per ? Math.floor((n * Math.max(1, periodDays)) / per) : n;
+}
+
+/**
+ * Every payer's contract limit, from the openings' own terms and the evidence
+ * facts filed on them. The smallest stated maximum binds: two terms that both
+ * apply allow only what both allow. A payer whose rows state no maximum is
+ * absent, and its CONTRACT limit stays unknown.
+ */
+export function contractLimitsFrom(input: { opportunities: readonly CashOpportunity[]; facts: readonly CashCardFact[]; periodDays: number }): ContractLimits {
+  const byPayer = new Map<string, ContractLimit>();
+  const byId = new Map(input.opportunities.map((one) => [one.id, one]));
+  const offer = (payer: string | null, text: string | null, ref: string, claimId: string | null, observedAt: string | null, needsContractWord: boolean) => {
+    const who = norm(payer);
+    if (!who || !text) return;
+    for (const sentence of contractSentences(text)) {
+      const max = statedContractMax(sentence, input.periodDays, needsContractWord);
+      if (max === null) continue;
+      const held = byPayer.get(who);
+      if (!held || max < held.max) byPayer.set(who, { payer: who, max, ref, claimId, text: sentence.slice(0, 300), observedAt });
+    }
+  };
+  for (const one of input.opportunities) {
+    if (one.duplicateOfId) continue;
+    for (const field of TERMS_FIELDS) offer(one.payer, one[field], `opportunity:${one.id}:${field}`, one.sourceClaimId, one.updatedAt, false);
+    for (const field of OTHER_FIELDS) offer(one.payer, one[field], `opportunity:${one.id}:${field}`, one.sourceClaimId, one.updatedAt, true);
+  }
+  for (const fact of input.facts) {
+    if (fact.kind !== 'EVIDENCE') continue;
+    const one = byId.get(fact.opportunityId);
+    if (!one || one.duplicateOfId) continue;
+    offer(one.payer, fact.value, `fact:${fact.id}`, fact.claimId, fact.createdAt, !(TERMS_FIELDS as readonly string[]).includes(fact.field));
+  }
+  return [...byPayer.values()].sort((a, b) => a.payer.localeCompare(b.payer));
+}
+
+/** The stated contract limit for one payer, or null when its rows state none. */
+export function contractLimitFor(limits: ContractLimits, payer: string | null | undefined): ContractLimit | null {
+  const who = norm(payer);
+  return (who && limits.find((one) => one.payer === who)) || null;
+}
+
+/**
+ * The limit as a graph part: a stated maximum is one figure from a row, read
+ * with the reading error every published figure carries — and, being a
+ * maximum, it is also the part's hard upper bound.
+ */
+function contractPart(limit: ContractLimit): Part {
+  return {
+    min: 0,
+    max: limit.max,
+    context: { payer: limit.payer },
+    material: [],
+    observations: [
+      {
+        id: `${limit.ref}:contract_max`,
+        value: { kind: 'POINT', value: limit.max, exact: true },
+        context: { payer: limit.payer },
+        lineage: [limit.ref],
+        source: limit.claimId ? { kind: 'CLAIM', ref: limit.claimId } : { kind: 'CARD_FACT', ref: limit.ref },
+        observedAt: limit.observedAt,
+        measures: `the maximum transactions stated: "${limit.text}"`,
+      },
+    ],
+  };
+}
+
+/** The project's real limits, with this arrangement's payer's contract limit when its rows state one. */
+export function constraintsFor(base: LeverageConstraints, limits: ContractLimits, payer: string | null | undefined): LeverageConstraints {
+  return { ...base, contractMax: contractLimitFor(limits, payer)?.max ?? base.contractMax ?? null };
 }
 
 /** One selected candidate, the digest of everything its composition reads, and the library's arrangement composed under it. */
@@ -928,10 +1328,20 @@ export function compositionPlan(job: ConstructionJob): CompositionStep[] {
   // Everything a composition reads besides its own parts, once per pass. Fact observations only when
   // there are any, so a digest stored before they existed is still the same composition's.
   const facts = job.facts && (job.facts.unitCost.length > 0 || job.facts.volume.length > 0) ? job.facts : undefined;
-  const context = digestOf({ day: now.toISOString().slice(0, 10), currency: input.currency, daysLeft: input.daysLeft, limits, targets, exclusions, priced, tiedUp, ...(facts ? { facts } : {}) });
+  // The lever evidence and contract limits a composition reads (S-0103), likewise only when the rows state any.
+  const leverEvidence = job.leverEvidence && Object.values(job.leverEvidence).some((one) => one.length > 0) ? job.leverEvidence : undefined;
+  const contractLimits = job.contractLimits && job.contractLimits.length > 0 ? job.contractLimits : undefined;
+  const context = digestOf({ day: now.toISOString().slice(0, 10), currency: input.currency, daysLeft: input.daysLeft, limits, targets, exclusions, priced, tiedUp, ...(facts ? { facts } : {}), ...(leverEvidence ? { leverEvidence } : {}), ...(contractLimits ? { contractLimits } : {}) });
   return selectCandidates(job).selected.map((one) => {
     const under = digestOf([context, designKey(one.design), one.transfer?.id ?? '-', one.sector ?? '-', one.demand, one.need, one.supply, one.related.map((o) => o.id)]);
-    return { one, under, stored: reuse.get(under) };
+    const stored = reuse.get(under);
+    /*
+     * A stored arrangement that was traced carries what its trace added — its
+     * leverage, the questions it appended, an exposure a real limit refused —
+     * all judged against that pass's ledger and authority. It is recomposed
+     * rather than reused, so a trace is never read back as composition.
+     */
+    return { one, under, stored: stored && !stored.leverage ? stored : undefined };
   });
 }
 
@@ -967,12 +1377,14 @@ function reverseArrangements(ctx: {
   priced: Observation[];
   tiedUp: Observation[];
   facts?: FactObservations;
+  leverEvidence: LeverEvidence;
+  contractLimits?: ContractLimits;
   input: ConstructionInput;
   limits: GoalLimits;
   targets: EconomicProperty[];
   exclusions: readonly ExclusionClass[];
   now: Date;
-}): ConstructedArrangement[] {
+}): Array<{ arrangement: ConstructedArrangement; levered: Arrangement }> {
   if (ctx.targets.length === 0) return [];
   const scored = ctx.designs
     .filter((d) => !STRUCTURES[d.base].needsDeliverable || ctx.capability)
@@ -1069,12 +1481,15 @@ function compose(args: {
   priced: Observation[];
   tiedUp: Observation[];
   facts?: FactObservations;
+  /** What the rows state about each lever's own parts; absent reads as nothing stated. */
+  leverEvidence?: LeverEvidence;
+  contractLimits?: ContractLimits;
   input: ConstructionInput;
   limits: GoalLimits;
   targets: EconomicProperty[];
   exclusions: readonly ExclusionClass[];
   now: Date;
-}): ConstructedArrangement {
+}): { arrangement: ConstructedArrangement; levered: Arrangement } {
   const { design, demand, need, supply, input } = args;
   const structure = design.base;
   const def = STRUCTURES[structure];
@@ -1109,7 +1524,7 @@ function compose(args: {
       : def.capture === 'FEE'
         ? { kind: 'FEE', fee: { min: 0, max: 100_000 } }
         : { kind: 'MARGIN', supplyCost: { min: 0, max: 100_000, context, material: [], observations: pooled ? [] : [...riskObs, ...unitCostObs] } };
-  const composed = composeArrangement({
+  const base: Arrangement = {
     key: 'a',
     label: demand.name,
     period: `${input.daysLeft} days`,
@@ -1123,7 +1538,29 @@ function compose(args: {
     pooling: pooled ? { fixedCost: { min: 0, max: 1_000_000, context, material: [], observations: riskObs }, minParticipants: unknownCount(1, 10_000), threshold: design.funding === 'THRESHOLD_PRESALE' } : undefined,
     funding: design.funding !== 'ON_DELIVERY' ? { prepayShare: unknownShare } : undefined,
     repeat: design.repeat !== 'ONE_OFF' ? { rate: unknownShare } : undefined,
-  });
+  };
+  const composed = composeArrangement(base);
+  /*
+   * The same arrangement with the levers its design uses (S-0103): the parts
+   * and their evidence are construction's own — the value's published prices,
+   * what supply is paid, a shared run's fixed cost — so the leverage trace
+   * reads what construction established and nothing it did not. Each lever's
+   * own parts start as bounds and take what the rows state about them: the
+   * arrangement's own payer is direct evidence, any other payer only bounds,
+   * as for published prices. What nothing states stays a question.
+   */
+  const facts = designFacts(design);
+  /*
+   * A lever part asks about these buyers — what share of them prepay, what
+   * their refunds and settlement terms are — so its population is the payer,
+   * not this new arrangement: the payer's own published terms are direct
+   * evidence about it, and any other payer's are broad, bounds only.
+   */
+  const levers = designLevers(design, facts.fulfiller, leverPartsFor(args.leverEvidence ?? emptyLeverEvidence(), demand.name));
+  // The payer's contract limit, when its rows state one, bounds delivery capacity in the graph itself.
+  const contract = contractLimitFor(args.contractLimits ?? [], demand.name);
+  if (contract) levers.limits = { ...levers.limits, contractMax: contractPart(contract) };
+  const levered: Arrangement = { ...base, levers };
   let estimates: Record<string, Estimate> = {};
   try {
     estimates = reconstruct(composed.graph, composed.contribution, args.now).estimates;
@@ -1154,7 +1591,6 @@ function compose(args: {
     observations: repeatObs.length,
     statedValueCents: repeatObs.reduce((t, one) => t + (one.value.kind === 'POINT' ? Math.round(one.value.value * 100) : 0), 0),
   };
-  const facts = designFacts(design);
   const shape = describeDesign(design);
   // The need comes before the design description: the label is cut to 160
   // characters, and two needs of one buyer under one long design description
@@ -1193,7 +1629,18 @@ function compose(args: {
         `For each part, find a published source: ${asks}.${established}${reliesText}${failureText}${exclusionSentence(args.exclusions)} ` +
         OPENING_SENTENCE +
         'Where no source shows buyers pay for this, say so plainly — that refutes the arrangement and is a useful answer.';
-  return {
+  /*
+   * The positions are asked in the round itself (RES-15-4; S-0148, S-0150).
+   * `askConstructedArrangements` (goals/plan.ts) opens one constructed round
+   * per arrangement from `question`, and that round is what research works on,
+   * so a position question kept only beside the arrangement was never asked.
+   * The same questions `positionQuestions` carries are appended to it as a
+   * decomposition — one sub-question per position, and the buyer-access and
+   * conversion gaps as separate ones — so the gaps decide the fragments.
+   */
+  const positionQuestions = def.needsSupply ? positionResearchQuestions({ demand, need, supply, estimates, exclusions: args.exclusions }) : null;
+  const asked = positionQuestions ? `${question} ${positionDecomposition(positionQuestions)}` : question;
+  const arrangement: ConstructedArrangement = {
     key,
     structure,
     design,
@@ -1213,7 +1660,7 @@ function compose(args: {
     value: value ? { tier: value.tier, p10: value.p10, p50: value.p50, p90: value.p90, observations: value.used.length } : { tier: 'UNKNOWN', p10: 0, p50: 0, p90: 0, observations: 0 },
     unknownParts,
     relatedOpenings: args.related.map((one) => one.id),
-    question,
+    question: asked,
     repeatBusiness,
     signature: arrangementSignature(design, demand, need, supply),
     inputsDigest: digestOf([
@@ -1223,7 +1670,179 @@ function compose(args: {
       args.precedent?.id ?? null,
       [...valueObs, ...riskObs].filter((one) => !one.broad).map((one) => one.id).sort(),
     ]),
+    ...(positionQuestions ? { positionQuestions } : {}),
   };
+  return { arrangement, levered };
+}
+
+const justified = (estimates: Record<string, Estimate>, part: string): string | null => {
+  const est = estimates[`a_${part}`];
+  return est && est.distributionJustified ? `${Math.round(est.p10)}–${Math.round(est.p90)}` : null;
+};
+
+/**
+ * What an arrangement already establishes, in S-0150's terms. Only a part
+ * resting on a gated claim or a justified reconstruction counts; everything
+ * else is missing. The bases say what kind of source established it: a
+ * published price on an opening is an asking price and a buyer count is a
+ * market size, and neither says anybody can be reached or will buy.
+ */
+export function arrangementPositionFacts(args: {
+  demand: Primitive;
+  need: Primitive | null;
+  supply: Primitive | null;
+  estimates: Record<string, Estimate>;
+}): PositionFacts {
+  const { demand, need, supply, estimates } = args;
+  const fields: PositionFacts['fields'] = {
+    payer: demand.claimId && demand.from !== 'REVERSE' ? demand.name : null,
+    demand: need?.claimId && need.from === 'OPENING' ? need.name : null,
+    supply: supply?.claimId && supply.from !== 'CAPABILITY' && supply.from !== 'REVERSE' ? supply.name : null,
+    price: justified(estimates, 'value'),
+    spread: justified(estimates, 'commission') ?? justified(estimates, 'fee'),
+    throughput: justified(estimates, 'supply_units'),
+    cashStructure: justified(estimates, 'prepay_share'),
+  };
+  const bases: EvidenceBasis[] = [];
+  if (fields.price) bases.push('PUBLIC_ASKING_PRICE');
+  if (justified(estimates, 'buyers')) bases.push('TOTAL_MARKET_SIZE');
+  if (justified(estimates, 'conversion')) bases.push('OBSERVED_TRANSACTION');
+  if (fields.demand) bases.push('BUYER_INQUIRY');
+  return { fields, bases };
+}
+
+const list = (items: readonly string[]) => items.join('; ');
+
+/**
+ * Expand a supply-needing arrangement into one research question per lawful,
+ * economically distinct position the transaction can be held from, each
+ * asking only what is missing at that position plus what holds there
+ * contractually. Pure; ranking is untouched.
+ */
+export function positionResearchQuestions(args: {
+  demand: Primitive;
+  need: Primitive | null;
+  supply: Primitive | null;
+  estimates: Record<string, Estimate>;
+  exclusions: readonly ExclusionClass[];
+  positions?: ResolvedPosition[];
+}): PositionResearchQuestion[] {
+  const facts = arrangementPositionFacts(args);
+  const established = (Object.keys(EVIDENCE_FIELDS) as EvidenceField[]).filter((field) => {
+    const v = facts.fields[field];
+    return v !== null && v !== undefined && String(v).trim().length > 0;
+  });
+  const { demand, need, supply } = args;
+  const buyers = demand.from === 'REVERSE' ? 'buyers still to be found, of any type and in any market structure' : `buyers described as "${demand.name}"`;
+  const subject =
+    `${buyers}${need ? `, paying to deal with "${need.name}"` : ''}, fulfilled by ${supply && supply.from !== 'CAPABILITY' ? `"${supply.name}"` : 'a supplier or capacity source still to be found'}`;
+  const scope =
+    ` Look from both ends: buyer-first (${list(ENTRY_POINTS.BUYER_FIRST)}) and supply-first (${list(ENTRY_POINTS.SUPPLY_FIRST)}); these are examples of where to look, not limits, and so are industries such as ${INTERMEDIATION_FAMILY.examples.join(', ')}.` +
+    ` Do not default to ${INTERMEDIATION_FAMILY.notDefaults.join(', ')}.`;
+  const knownText = established.length ? ` Already established, so do not research again: ${established.join(', ')}.` : '';
+  const out: PositionResearchQuestion[] = [];
+  for (const position of args.positions ?? positionsToExamine()) {
+    const label = position.definition?.label ?? position.name;
+    const gaps = positionEvidenceGaps(position, facts);
+    const asks = gaps.flatMap((gap) => (gap.kind === 'FIELD' ? [gap.field] : []));
+    const inv = position.definition?.investigate;
+    const investigate = inv
+      ? ` At exactly this position, investigate: contracts (${list(inv.contracts)}); rights (${list(inv.rights)}); liabilities (${list(inv.liabilities)}); restrictions (${list(inv.restrictions)}); counterparty expectations (${list(inv.counterpartyExpectations)}).`
+      : ' At exactly this position, investigate the contracts, rights, liabilities, restrictions and counterparty expectations that hold there.';
+    const holds = position.definition ? ` — one that ${position.definition.holds}` : '';
+    const fieldText = asks.length ? ` For this position, find a source for each of: ${asks.map((field) => `${field}: ${EVIDENCE_FIELDS[field]}`).join('; ')}.` : '';
+    out.push({
+      kind: 'POSITION',
+      position: label,
+      catalogued: position.catalogued,
+      asks,
+      established,
+      question:
+        `Brain is examining one potential transaction — ${subject} — held from the ${label} position${holds}. ` +
+        'Return commercially usable evidence for this exact position, never industry facts or market overviews.' +
+        `${fieldText}${knownText}${investigate}${scope}${exclusionSentence(args.exclusions)} ` +
+        OPENING_SENTENCE +
+        'Where this position is unlawful or uneconomic for these buyers, say so plainly — that rules the position out and is a useful answer.',
+      investigate: investigate.trim(),
+    });
+    for (const gap of gaps) {
+      if (gap.kind === 'FIELD') continue;
+      out.push({
+        kind: gap.kind,
+        position: label,
+        catalogued: position.catalogued,
+        asks: [],
+        established,
+        investigate: '',
+        question:
+          `Brain is examining one potential transaction — ${subject} — held from the ${label} position. ` +
+          `What is established is only ${facts.bases?.includes('PUBLIC_ASKING_PRICE') ? 'a public asking price' : ''}${facts.bases?.includes('PUBLIC_ASKING_PRICE') && facts.bases?.includes('TOTAL_MARKET_SIZE') ? ' and ' : ''}${facts.bases?.includes('TOTAL_MARKET_SIZE') ? 'a total market size' : ''}, ` +
+          `which does not answer this on its own, so investigate it separately: ${gap.ask}.${exclusionSentence(args.exclusions)} ` +
+          'Where no source shows it, say so plainly.',
+        ask: gap.ask,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Words the catalogues use that read, to a research envelope, as an
+ * instruction to act ("purchase"), restated as what research reads about. The
+ * catalogue's meaning is unchanged: a buyer's purchase request is still a
+ * buying request a source shows, and a distributor's minimum purchase is still
+ * a minimum order volume in its agreement.
+ */
+export function researchWording(text: string): string {
+  return text
+    .replace(/\brepeat purchases?\b/gi, 'repeat orders')
+    .replace(/\bminimum purchases?\b/gi, 'minimum order volume')
+    .replace(/\bpurchase price\b/gi, 'price paid')
+    .replace(/\bpurchase requests?\b/gi, (m) => (m.endsWith('s') ? 'buying requests' : 'buying request'))
+    .replace(/\blead-purchase\b/gi, 'lead-sale')
+    .replace(/\bpurchas(?:e|es|ed|ing)\b/gi, 'buying');
+}
+
+/**
+ * The position questions as one decomposition the constructed round asks:
+ * each position its own numbered sub-question with only what is missing there
+ * and what holds there contractually, and each buyer-access or conversion gap
+ * as a separate one. What is shared — the transaction, where to look, what an
+ * opening is — is already in the round's question and is not repeated.
+ */
+export function positionDecomposition(questions: readonly PositionResearchQuestion[]): string {
+  const positions = questions.filter((q) => q.kind === 'POSITION');
+  if (positions.length === 0) return '';
+  const established = positions[0]!.established;
+  const lines = positions.map((q, i) => {
+    const asks = q.asks.length ? ` Find a source for: ${q.asks.join(', ')}.` : '';
+    return `(${i + 1}) The ${q.position} position.${asks}${q.investigate ? ` ${q.investigate}` : ''}`;
+  });
+  /*
+   * A buyer-access or conversion gap is the same gap at every position it
+   * arises at, so it is one separate sub-question naming those positions —
+   * still investigated apart from the position's own fields, as S-0150 asks.
+   */
+  const gapLines: string[] = [];
+  for (const kind of ['BUYER_ACCESS', 'CONVERSION'] as const) {
+    const at = questions.filter((q) => q.kind === kind);
+    if (at.length === 0) continue;
+    const what =
+      kind === 'BUYER_ACCESS'
+        ? 'a public asking price or market size does not show the payer can be reached: establish a reachable channel to a named payer'
+        : 'a public asking price or market size does not show anyone buys through this route: establish observed conversion from that channel';
+    gapLines.push(`(${positions.length + gapLines.length + 1}) Separately, ${kind === 'BUYER_ACCESS' ? 'buyer access' : 'conversion'} — ${what}, at each of these positions: ${at.map((q) => q.position).join(', ')}.`);
+  }
+  const legend = [...new Set(positions.flatMap((q) => q.asks))].map((field) => `${field} = ${EVIDENCE_FIELDS[field]}`).join('; ');
+  return researchWording(
+    'Research this transaction position by position: each numbered item below is its own sub-question, researched separately, ' +
+      'and the same transaction may be lawful and economic from one position and not another — return commercially usable evidence for each exact position, never industry facts. ' +
+      (established.length ? `Already established, so do not research again: ${established.join(', ')}. ` : '') +
+      (legend ? `Where an item asks for a field, it means: ${legend}. ` : '') +
+      ` Look from both ends: buyer-first (${list(ENTRY_POINTS.BUYER_FIRST)}) and supply-first (${list(ENTRY_POINTS.SUPPLY_FIRST)}) — examples of where to look, not limits, as are industries such as ${INTERMEDIATION_FAMILY.examples.join(', ')}; do not default to ${INTERMEDIATION_FAMILY.notDefaults.join(', ')}. ` +
+      [...lines, ...gapLines].join(' ') +
+      ' Where a position is unlawful or uneconomic for these buyers, say so plainly — that rules it out and is a useful answer.',
+  );
 }
 
 /**
