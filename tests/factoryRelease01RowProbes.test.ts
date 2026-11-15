@@ -27,7 +27,7 @@ const judgment = (capability: string, outcome: string, route: string | null, rea
 });
 
 describe('the probes are registered in the protected module', () => {
-  it.each(['r01.acq-21-1', 'r01.acq-21-2', 'r01.acq-21-5', 'r01.cont-35', 'r01.learn-15-1', 'r01.gov-11', 'r01.gov-22-1', 'r01.arch-01', 'r01.com-13-1', 'r01.opp-03', 'r01.cp-31', 'r01.mem-32', 'r01.chal-33'])('%s, and its query runs: UNKNOWN on an empty Brain', async (name) => {
+  it.each(['r01.acq-21-1', 'r01.acq-21-2', 'r01.acq-21-5', 'r01.cont-35', 'r01.learn-15-1', 'r01.gov-11', 'r01.gov-22-1', 'r01.arch-01', 'r01.com-13-1', 'r01.opp-03', 'r01.cp-31', 'r01.mem-32', 'r01.chal-33', 'r01.res-07', 'r01.res-15-5', 'r01.goal-13-6', 'r01.goal-18-4', 'r01.goal-23', 'r01.meta-18-1'])('%s, and its query runs: UNKNOWN on an empty Brain', async (name) => {
     await freshProject();
     const probe = getProbe(name);
     expect(probe).not.toBeNull();
@@ -241,5 +241,76 @@ describe('CHAL-33: a recommendation challenged at the depth its consequence earn
     expect(challengeHolds(of({ ...result.assurance, challenge: { ...c, scrutiny: { ...c.scrutiny, tier: 'NONE' } } })).ok).toBe(false);
     expect(challengeHolds(of({ ...result.assurance, challenge: { ...c, steps: [{ key: 's', scrutiny: { tier: 'DEEP' }, mayProceed: false, heldBy: [] }] } })).detail).toMatch(/held without/);
     expect(challengeHolds(of({ ...result.assurance, challenge: { ...c, independentValidation: null } })).detail).toMatch(/self-agreement/);
+  });
+});
+
+describe('the construction-reading probes run on a fresh Brain', () => {
+  // Construction composes arrangements from the seeded map even on a fresh project, so these read real
+  // compositions there: registered, runnable, and never FAIL on what the running code builds.
+  it.each(['r01.res-15-4', 'r01.com-13-2'])('%s', async (name) => {
+    await freshProject();
+    const probe = getProbe(name);
+    expect(probe).not.toBeNull();
+    const r = await probe!({});
+    expect(r.ok, r.detail).not.toBe(false);
+  }, 60_000);
+});
+
+describe('RES-07, RES-15-5, RES-15-4, GOAL-13-6, GOAL-18-4, GOAL-23, COM-13-2, META-18-1 judged on rows', () => {
+  const shares = { BROAD_DISCOVERY: 0.2, TRANSACTION_ROUTES: 0.3, OPERATING_SUPPORT: 0.2, SELF_IMPROVEMENT: 0.15, FORWARD_EXPLORATION: 0.15 };
+  const floors = { exploration: 0.15, systemHealth: 0.1, commercial: 0.2, perPurpose: 0.03 };
+  const decision = (over: Record<string, unknown> = {}) => ({ fingerprint: 'fp', held: false, shares, floors, changes: [{ purpose: 'TRANSACTION_ROUTES', from: 0.2, to: 0.3, reasons: ['yield'] }], costCountedOnce: { holds: true }, ...over });
+
+  it('RES-07: UNKNOWN when held or unchanged, PASS on a reallocation within floors, FAIL under a floor', async () => {
+    const m = await import('../server/services/factory/program/release01/researchGoalProbe.ts');
+    expect(m.continuousResearchHolds([]).ok).toBeNull();
+    expect(m.continuousResearchHolds([decision({ held: true })]).ok).toBeNull();
+    expect(m.continuousResearchHolds([decision({ changes: [] })]).ok).toBeNull();
+    expect(m.continuousResearchHolds([decision()]).ok).toBe(true);
+    expect(m.continuousResearchHolds([decision({ shares: { ...shares, BROAD_DISCOVERY: 0.05, FORWARD_EXPLORATION: 0.05, OPERATING_SUPPORT: 0.45 } })]).detail).toMatch(/exploration/);
+    expect(m.continuousResearchHolds([decision({ shares: { ...shares, OPERATING_SUPPORT: undefined } })]).ok).toBe(false);
+  });
+
+  it('RES-15-5: cost counted once and every move reasoned', async () => {
+    const m = await import('../server/services/factory/program/release01/researchGoalProbe.ts');
+    expect(m.yieldAllocationHolds([decision()]).ok).toBe(true);
+    expect(m.yieldAllocationHolds([decision({ costCountedOnce: { holds: false } })]).ok).toBe(false);
+    expect(m.yieldAllocationHolds([decision({ changes: [{ purpose: 'X', reasons: [] }] })]).ok).toBe(false);
+  });
+
+  it('RES-15-4: one question per position, never re-asking what is established', async () => {
+    const m = await import('../server/services/factory/program/release01/researchGoalProbe.ts');
+    expect(m.positionResearchHolds([{ key: 'a' }]).ok).toBeNull();
+    const q = (over: Record<string, unknown> = {}) => ({ kind: 'POSITION', position: 'broker', asks: ['price'], established: ['payer'], question: 'q', ...over });
+    expect(m.positionResearchHolds([{ key: 'a', positionQuestions: [q(), q({ position: 'reseller' })] }]).ok).toBe(true);
+    expect(m.positionResearchHolds([{ key: 'a', positionQuestions: [q({ asks: ['payer'] })] }]).detail).toMatch(/asks again/);
+    expect(m.positionResearchHolds([{ key: 'a', positionQuestions: [q({ kind: 'CONVERSION' })] }]).ok).toBe(false);
+  });
+
+  it('GOAL-13-6, GOAL-18-4, GOAL-23 on recorded readings', async () => {
+    const m = await import('../server/services/factory/program/release01/researchGoalProbe.ts');
+    const tl = (hs: unknown[]) => ({ timelines: { horizons: hs } });
+    expect(m.compressedTimelinesHold([]).ok).toBeNull();
+    expect(m.compressedTimelinesHold([tl([{ days: 7, reach: 0.4, reachBasis: 'COVERAGE' }, { days: 30, reach: null, reachBasis: null }])]).ok).toBe(true);
+    expect(m.compressedTimelinesHold([tl([{ days: 7, reach: 0.4, reachBasis: null }, { days: 30, reach: 0.9, reachBasis: 'COVERAGE' }])]).ok).toBe(false);
+    const obj = (outcome: unknown) => ({ objective: { requiredConfidence: 0.9, outcome } });
+    expect(m.overperformanceHolds([obj({ expected: 10, upper: 20, adverse: 5, status: 'CANDIDATE' })]).ok).toBe(true);
+    expect(m.overperformanceHolds([obj({ expected: 10, upper: 8, adverse: 5, status: 'CANDIDATE' })]).ok).toBe(false);
+    expect(m.overperformanceHolds([obj(null)]).ok).toBeNull();
+    const set = (over: Record<string, unknown>) => ({ planSet: { candidates: 4, distinct: 2, accepted: 1, plans: [{ signature: 'a' }, { signature: 'b' }], ...over } });
+    expect(m.distinctPlansHold([set({})]).ok).toBe(true);
+    expect(m.distinctPlansHold([set({ plans: [{ signature: 'a' }, { signature: 'a' }] })]).ok).toBe(false);
+    expect(m.distinctPlansHold([set({ distinct: 5 })]).ok).toBe(false);
+    expect(m.distinctPlansHold([set({ distinct: 1, accepted: 0, plans: [{ signature: 'a' }] })]).ok).toBeNull();
+  });
+
+  it('COM-13-2 and META-18-1: absence is UNKNOWN, a contradiction FAIL', async () => {
+    const m = await import('../server/services/factory/program/release01/researchGoalProbe.ts');
+    expect(m.leverageVerdict({ ok: false, detail: 'none', combinations: 0, revenueCeilingViolations: [] }).ok).toBeNull();
+    expect(m.leverageVerdict({ ok: false, detail: 'x', combinations: 3, revenueCeilingViolations: ['p:a'] }).ok).toBe(false);
+    expect(m.leverageVerdict({ ok: true, detail: 'x', combinations: 3, revenueCeilingViolations: [] }).ok).toBe(true);
+    expect(m.anchoringVerdict({ ok: false, detail: 'vacuous', live: 3, discriminating: 0, violations: [] }).ok).toBeNull();
+    expect(m.anchoringVerdict({ ok: false, detail: 'w', live: 3, discriminating: 1, violations: [{}] }).ok).toBe(false);
+    expect(m.anchoringVerdict({ ok: true, detail: 'ok', live: 3, discriminating: 1, violations: [] }).ok).toBe(true);
   });
 });
