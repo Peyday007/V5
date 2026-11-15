@@ -18,14 +18,18 @@
  *     and the timing of usable funds against supplier payment are each
  *     established by evidence. What is not is UNKNOWN — a task, never an
  *     assumption (invariant 39);
- *   * `leverageHoldsOnRows` is the read-only probe reader: it traces the
- *     arrangements Brain constructs on production rows and reports what it
- *     found. It writes nothing.
+ *   * `leverageOf` does all three for one arrangement; construction
+ *     (`cash/construct.ts`) calls it on the arrangements it ranks best, with
+ *     the evidence its parts hold and the limits the ledger and the live cash
+ *     authority set, refuses one a real limit cannot fit, and asks research
+ *     for what is not established;
+ *   * `leverageHoldsOnRows` is the read-only probe reader: it reads what
+ *     construction traced on production rows and reports it. It writes nothing.
  *
  * No store, scheduler or authority path of its own: it composes through the
  * existing composer and resolves through the existing `reconstruct`.
  */
-import { composeArrangement, establishedEstimate, type Arrangement, type Levers, type Part, type TracedDimensions } from './mechanism.ts';
+import { composeArrangement, establishedEstimate, type Arrangement, type Levers, type TracedDimensions } from './mechanism.ts';
 import { reconstruct } from './reconstruct.ts';
 import type { Estimate, EvidenceTier } from '../../domain/quant.ts';
 
@@ -280,13 +284,15 @@ export interface LeverageRowsReport {
   established: Record<Dimension, number>;
   unknown: Record<Dimension, number>;
   prepayment: { levers: number; credited: number; established: number };
+  /** How many traced arrangements had each real limit readable, and how many a real limit refused. */
+  limits: { cashAvailable: number; authorityCeiling: number; contractMax: number; refused: number };
   /** Arrangements whose transactions rest on a revenue ceiling or owned capital: each is a violation. */
   revenueCeilingViolations: string[];
 }
 
 export interface LeverageRowsDeps {
   projects?: () => Promise<Array<{ id: string }>>;
-  /** The arrangements to trace for one project; defaults to Brain's own construction, mapped to levers. */
+  /** Arrangements to trace for one project instead of reading what Brain's own construction traced. */
   arrangementsFor?: (projectId: string) => Promise<Arrangement[]>;
   /** At most this many arrangements per project. */
   perProject?: number;
@@ -322,44 +328,62 @@ export function revenueCeilingIn(a: Arrangement): boolean {
 }
 
 /**
- * Brain's constructed arrangement, carried onto the composer with the levers
- * its design implies: a supplier fulfils (fulfilment), Brain fulfils (AI
- * labor), buyers pay before delivery (prepayment). Every part is bounds only
- * unless evidence exists — what construction itself holds — so nothing here
- * is read as established that construction did not establish.
+ * What construction attaches to an arrangement it ranks highly: every lever
+ * combination traced through the seven dimensions, judged against the real
+ * limits it was given, and the prepayment conditions verified. Plain data, so
+ * it crosses the evaluator pool's thread boundary and the construction memo.
  */
-async function constructedFor(projectId: string, limit: number, now: Date): Promise<Arrangement[]> {
+export interface ArrangementLeverage {
+  levers: LeverKey[];
+  combinations: CombinationTrace[];
+  truncated: number;
+  /** The real limits the combinations were judged against; null is unknown. */
+  constraints: { cashAvailable: number | null; authorityCeiling: number | null; contractMax: number | null };
+  prepayment: PrepaymentVerification[];
+  /**
+   * Set when, on the combination with every lever, an exposure established by
+   * evidence lets a real limit allow less than one transaction: the
+   * arrangement cannot run inside the cash, authority or contract it has.
+   * Null otherwise — an exposure nobody established refuses nothing and
+   * permits nothing (invariant 39).
+   */
+  refused: string | null;
+  /** Whether its transactions rest on a revenue ceiling or owned capital anywhere beneath them: a violation. */
+  revenueCeiling: boolean;
+  /** What remains to be established before the leverage can be relied on: research tasks. */
+  tasks: string[];
+}
+
+/** Trace, enforce and verify one arrangement's leverage, in one pass. */
+export function leverageOf(a: Arrangement, constraints: LeverageConstraints, options: TraceOptions = {}): ArrangementLeverage {
+  const now = options.now ?? new Date();
+  const trace = traceLeverage(a, constraints, { now, maxCombinations: options.maxCombinations ?? 16 });
+  const prepayment = verifyPrepayment(a, now);
+  const full = trace.combinations.find((c) => c.levers.length === trace.levers.length) ?? null;
+  let refused: string | null = null;
+  if (full && full.cashExposure.established && full.constraint.allowed !== null && full.constraint.allowed < 1) refused = `${full.constraint.binding} allows ${full.constraint.allowed.toFixed(2)} transaction(s): ${full.constraint.detail}`;
+  const unknownDims = full ? DIMENSIONS.filter((d) => !full.dimensions[d].established) : [];
+  const tasks = [
+    ...prepayment.flatMap((v) => v.tasks),
+    ...(full && full.constraint.unknown.length ? [`establish the real limits not yet readable: ${full.constraint.unknown.join(', ')}`] : []),
+    ...(unknownDims.length ? [`establish from a source what drives ${unknownDims.join(', ')}`] : []),
+  ];
+  return {
+    levers: trace.levers,
+    combinations: trace.combinations,
+    truncated: trace.truncated,
+    constraints: { cashAvailable: constraints.cashAvailable ?? null, authorityCeiling: constraints.authorityCeiling ?? null, contractMax: constraints.contractMax ?? null },
+    prepayment,
+    refused,
+    revenueCeiling: revenueCeilingIn(a),
+    tasks,
+  };
+}
+
+/** One project's constructed arrangements as construction ranked and traced them. */
+async function constructedFor(projectId: string): Promise<Array<{ key: string; leverage?: ArrangementLeverage; refusedByLeverage?: boolean }>> {
   const { constructArrangements } = await import('../cash/construct.ts');
-  const { designFacts } = await import('../cash/properties.ts');
-  const { STRUCTURES } = await import('../cash/properties.ts');
-  const built = await constructArrangements({ projectId, currency: 'USD', delivers: [], capitalCeilingCents: null, daysLeft: 30, now });
-  const share: Part = { min: 0, max: 1 };
-  const count = (max: number): Part => ({ min: 0, max });
-  const money = (max: number): Part => ({ min: 0, max });
-  return built.slice(0, limit).map((one, index) => {
-    const def = STRUCTURES[one.structure];
-    const facts = designFacts(one.design);
-    const levers: Levers = {};
-    if (facts.fulfiller === 'SUPPLIER') levers.fulfilment = { capacity: count(10_000_000), failureRate: share, paymentDays: count(365) };
-    else levers.aiLabor = { costPerTransaction: money(100_000), throughput: count(10_000_000) };
-    if (one.design.funding !== 'ON_DELIVERY') levers.prepayment = { willingness: share, refundShare: share, usableDays: count(365) };
-    levers.settlementDays = count(365);
-    const capture: Arrangement['capture'] =
-      def.capture === 'COMMISSION' ? { kind: 'COMMISSION', rate: share } : def.capture === 'FEE' ? { kind: 'FEE', fee: money(100_000) } : { kind: 'MARGIN', supplyCost: money(100_000) };
-    return {
-      key: `p${index}`,
-      label: one.label,
-      period: '30 days',
-      currency: 'USD',
-      demand: { buyers: count(10_000_000), needRate: count(400), reach: share, conversion: share },
-      supply: def.needsSupply ? { units: count(10_000_000), acceptance: share } : undefined,
-      value: money(1_000_000),
-      capture,
-      cost: money(100_000),
-      repeat: one.design.repeat !== 'ONE_OFF' ? { rate: share } : undefined,
-      levers,
-    } satisfies Arrangement;
-  });
+  return constructArrangements({ projectId, currency: 'USD', delivers: [], capitalCeilingCents: null, daysLeft: 30 });
 }
 
 /**
@@ -374,28 +398,45 @@ export async function leverageHoldsOnRows(deps: LeverageRowsDeps = {}): Promise<
   const now = deps.now ?? new Date();
   const perProject = deps.perProject ?? 10;
   const projects = deps.projects ? await deps.projects() : await (await import('../../repos/projects.ts')).listProjects();
-  const arrangementsFor = deps.arrangementsFor ?? ((id: string) => constructedFor(id, perProject, now));
   const zero = () => Object.fromEntries(DIMENSIONS.map((d) => [d, 0])) as Record<Dimension, number>;
   const established = zero();
   const unknown = zero();
   const prepayment = { levers: 0, credited: 0, established: 0 };
+  const limits = { cashAvailable: 0, authorityCeiling: 0, contractMax: 0, refused: 0 };
   const violations: string[] = [];
   let arrangements = 0;
   let combinations = 0;
+  const count = (leverage: ArrangementLeverage) => {
+    for (const c of leverage.combinations) {
+      combinations += 1;
+      for (const d of DIMENSIONS) (c.dimensions[d].established ? established : unknown)[d] += 1;
+    }
+    for (const v of leverage.prepayment) {
+      prepayment.levers += 1;
+      if (v.credited) prepayment.credited += 1;
+      if (v.willingness === 'ESTABLISHED' && v.refundObligations === 'ESTABLISHED' && v.timing === 'ESTABLISHED') prepayment.established += 1;
+    }
+    if (leverage.constraints.cashAvailable !== null) limits.cashAvailable += 1;
+    if (leverage.constraints.authorityCeiling !== null) limits.authorityCeiling += 1;
+    if (leverage.constraints.contractMax !== null) limits.contractMax += 1;
+    if (leverage.refused) limits.refused += 1;
+  };
   for (const p of projects) {
-    for (const a of (await arrangementsFor(p.id)).slice(0, perProject)) {
+    if (deps.arrangementsFor) {
+      // An injected arrangement set is traced here, against no limits.
+      for (const a of (await deps.arrangementsFor(p.id)).slice(0, perProject)) {
+        arrangements += 1;
+        const leverage = leverageOf(a, {}, { now });
+        if (leverage.revenueCeiling) violations.push(`${p.id}:${a.key}`);
+        count(leverage);
+      }
+      continue;
+    }
+    // The running Brain's own reading: what construction traced, with the evidence and limits it holds.
+    for (const one of (await constructedFor(p.id)).filter((x) => x.leverage).slice(0, perProject)) {
       arrangements += 1;
-      if (revenueCeilingIn(a)) violations.push(`${p.id}:${a.key}`);
-      const trace = traceLeverage(a, {}, { now, maxCombinations: 16 });
-      for (const c of trace.combinations) {
-        combinations += 1;
-        for (const d of DIMENSIONS) (c.dimensions[d].established ? established : unknown)[d] += 1;
-      }
-      for (const v of verifyPrepayment(a, now)) {
-        prepayment.levers += 1;
-        if (v.credited) prepayment.credited += 1;
-        if (v.willingness === 'ESTABLISHED' && v.refundObligations === 'ESTABLISHED' && v.timing === 'ESTABLISHED') prepayment.established += 1;
-      }
+      if (one.leverage!.revenueCeiling) violations.push(`${p.id}:${one.key}`);
+      count(one.leverage!);
     }
   }
   const detail =
@@ -404,6 +445,7 @@ export async function leverageHoldsOnRows(deps: LeverageRowsDeps = {}): Promise<
       : `${combinations} lever combination(s) traced over ${arrangements} arrangement(s) in ${projects.length} project(s); established: ` +
         DIMENSIONS.map((d) => `${d}=${established[d]}/${established[d] + unknown[d]}`).join(', ') +
         `; prepayment levers ${prepayment.levers}, verified ${prepayment.established}, credited ${prepayment.credited}` +
+        `; limits read: cash ${limits.cashAvailable}, authority ${limits.authorityCeiling}, contract ${limits.contractMax}; refused by a real limit ${limits.refused}` +
         (violations.length ? `; REVENUE CEILING on ${violations.join(', ')}` : '; no transaction limited by a revenue ceiling');
-  return { ok: combinations > 0 && violations.length === 0, detail, projects: projects.length, arrangements, combinations, established, unknown, prepayment, revenueCeilingViolations: violations };
+  return { ok: combinations > 0 && violations.length === 0, detail, projects: projects.length, arrangements, combinations, established, unknown, prepayment, limits, revenueCeilingViolations: violations };
 }

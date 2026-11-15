@@ -47,7 +47,8 @@ import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
 import { statesNamedIn } from '../../domain/jurisdiction.ts';
 import { APPROVAL_ENVELOPES } from '../research/approvalEnvelope.ts';
 import { describesOwnAction } from '../research/actorScope.ts';
-import { composeArrangement, type Part } from '../quant/mechanism.ts';
+import { composeArrangement, type Arrangement, type Levers, type Part } from '../quant/mechanism.ts';
+import { leverageOf, type ArrangementLeverage, type LeverageConstraints } from '../quant/leverage.ts';
 import { reconstruct } from '../quant/reconstruct.ts';
 import type { CashOpportunity, IndustryNode } from '../../domain/types.ts';
 import type { Estimate, Observation } from '../../domain/quant.ts';
@@ -132,10 +133,28 @@ export interface ConstructedArrangement {
    * and their sum. Absent or zero is unknown, never "will not return" (LIFE-29-2).
    */
   repeatBusiness?: { observations: number; statedValueCents: number };
+  /**
+   * Commercial leverage (S-0103, COM-13-2), on the `LEVERAGE_TRACED`
+   * best-ranked arrangements: the levers the design uses — AI labor or a
+   * supplier fulfilling, buyer prepayment where the design takes money early —
+   * composed on the same parts and evidence as the decomposition above, every
+   * combination traced through cash conversion, margin, supplier risk,
+   * delivery capacity, liability, acquisition speed and repeatability, judged
+   * against the cash the ledger says is deployable and the authority a person
+   * granted, and its prepayment conditions verified. Never a revenue ceiling.
+   */
+  leverage?: ArrangementLeverage;
 }
 
 /** At most this many arrangements are composed per goal pass (they are ranked and few are asked). */
 export const MAX_CONSTRUCTIONS = 400;
+/**
+ * How many of the best-ranked arrangements carry a traced leverage reading.
+ * Tracing resolves every lever combination, several reconstructions each, so
+ * it is paid where a plan reads and research asks — the top of the ranking —
+ * rather than on all `MAX_CONSTRUCTIONS`, which was already the hot path.
+ */
+export const LEVERAGE_TRACED = 12;
 /** Reverse arrangements composed per pass: one per design that best fits the goal. */
 export const MAX_REVERSE = 4;
 /** Longest stretch construction holds the event loop before handing it back (2026-11-05 11.6 s stalls). */
@@ -304,12 +323,13 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
    * the main thread, most of it identical re-construction, and the garbage it left behind).
    * Keyed by the day, as the reconstructions' recency is.
    */
+  const constraints = await leverageConstraints(input, limits);
   const memoKey = createHash('sha256')
-    .update(JSON.stringify({ day: now.toISOString().slice(0, 10), input: { ...input, now: undefined, limits: undefined }, limits, targets, exclusions, sectors: [...sectors.values()], precedent: [...precedentByBase.entries()].map(([k, o]) => [k, o.id]), priced, tiedUp, openings: opportunities.map((o) => [o.id, o.payer, o.mechanism, o.state, o.updatedAt]) }))
+    .update(JSON.stringify({ day: now.toISOString().slice(0, 10), input: { ...input, now: undefined, limits: undefined }, limits, targets, exclusions, sectors: [...sectors.values()], precedent: [...precedentByBase.entries()].map(([k, o]) => [k, o.id]), priced, tiedUp, constraints, openings: opportunities.map((o) => [o.id, o.payer, o.mechanism, o.state, o.updatedAt]) }))
     .digest('hex');
   const held = constructionMemo.get(memoKey);
   if (held && Date.now() - held.at < CONSTRUCTION_MEMO_MS) return structuredClone(held.result);
-  const job: ConstructionJob = { sectors: [...sectors.values()], opportunities, precedent: [...precedentByBase.entries()], capability, priced, tiedUp, input, limits, targets, exclusions, now };
+  const job: ConstructionJob = { sectors: [...sectors.values()], opportunities, precedent: [...precedentByBase.entries()], capability, priced, tiedUp, input, limits, targets, exclusions, now, constraints };
   /*
    * Composing is synchronous quantitative work — several reconstructions per
    * design, up to `MAX_CONSTRUCTIONS` designs. Run in one stretch it held
@@ -334,6 +354,38 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
   return ranked;
 }
 
+/**
+ * The real limits a constructed arrangement's leverage is judged against
+ * (S-0103), in the goal's currency: the cash the ledger says may be deployed
+ * now (`cashPosition`, invariant 37), and the money a person authorised —
+ * what the live cash authority leaves uncommitted, or the goal's capital
+ * ceiling, whichever is smaller. A contract limit is null: a constructed
+ * arrangement has no contract yet. Whatever cannot be read is null — unknown,
+ * never unlimited — and nothing here is a revenue ceiling.
+ */
+async function leverageConstraints(input: ConstructionInput, limits: GoalLimits): Promise<LeverageConstraints> {
+  let cashAvailable: number | null = null;
+  let authorityCeiling: number | null = limits.capitalCeilingCents !== null ? limits.capitalCeilingCents / 100 : null;
+  try {
+    const { cashPosition } = await import('./money.ts');
+    const position = await cashPosition({ projectId: input.projectId, currency: input.currency });
+    cashAvailable = Math.max(0, position.deployableCents) / 100;
+  } catch {
+    cashAvailable = null;
+  }
+  try {
+    const { liveAuthority, heldCentsForProject } = await import('../../repos/cashAuthority.ts');
+    const grant = await liveAuthority(input.projectId);
+    if (grant && grant.currency === input.currency) {
+      const left = Math.max(0, grant.maxCommittedCents - (await heldCentsForProject(input.projectId, input.currency))) / 100;
+      authorityCeiling = authorityCeiling === null ? left : Math.min(authorityCeiling, left);
+    }
+  } catch {
+    // An unreadable grant leaves the goal's own ceiling, or unknown.
+  }
+  return { cashAvailable, authorityCeiling, contractMax: null };
+}
+
 /** Everything composition reads, as plain data, so it can run on a pool thread (§109). */
 export interface ConstructionJob {
   sectors: Array<{ name: string | null; demand: Primitive[]; needs: Primitive[]; supply: Primitive[] }>;
@@ -349,6 +401,8 @@ export interface ConstructionJob {
   targets: EconomicProperty[];
   exclusions: readonly ExclusionClass[];
   now: Date;
+  /** The real limits leverage is judged against, read from the ledger and the live authority; absent is unknown. */
+  constraints?: LeverageConstraints;
 }
 
 /**
@@ -362,6 +416,11 @@ export async function composeConstruction(job: ConstructionJob, yieldEveryMs: nu
   const designs = allDesigns(STRUCTURE_KEYS);
   const ctx = { priced, tiedUp, input, limits, targets, exclusions, now };
   const out: ConstructedArrangement[] = [];
+  const levered = new Map<ConstructedArrangement, Arrangement>();
+  const keep = (built: { arrangement: ConstructedArrangement; levered: Arrangement }) => {
+    levered.set(built.arrangement, built.levered);
+    return built.arrangement;
+  };
   let lastYield = Date.now();
   const breathe = async (): Promise<void> => {
     if (yieldEveryMs === null || Date.now() - lastYield < yieldEveryMs) return;
@@ -390,14 +449,60 @@ export async function composeConstruction(job: ConstructionJob, yieldEveryMs: nu
           for (const supply of supplies) {
             if (out.length >= MAX_CONSTRUCTIONS) break outer;
             await breathe();
-            out.push(compose({ ...ctx, design, origin: transfer ? 'TRANSFER' : 'FORWARD', precedent: transfer, sector: s.name, demand, need, supply, related }));
+            out.push(keep(compose({ ...ctx, design, origin: transfer ? 'TRANSFER' : 'FORWARD', precedent: transfer, sector: s.name, demand, need, supply, related })));
           }
         }
       }
     }
   }
-  out.push(...reverseArrangements({ ...ctx, designs, capability }));
-  return rank(out, limits, targets);
+  out.push(...reverseArrangements({ ...ctx, designs, capability }).map(keep));
+  const ranked = rank(out, limits, targets);
+  return traceLeverageOnTop(ranked, levered, job.constraints ?? {}, limits, targets, now, breathe);
+}
+
+/**
+ * Trace the leverage of the best-ranked arrangements and enforce what it
+ * finds (S-0103): an arrangement whose evidenced cash exposure a real limit
+ * cannot fit even once is EXCEEDS — the goal's plan rejects it rather than
+ * asking about it — and what the trace could not establish (prepayment
+ * willingness, refund obligations, when funds are usable against when the
+ * supplier is paid) is asked in its research question. Re-ranked after, so a
+ * refused arrangement falls below the ones that fit.
+ */
+async function traceLeverageOnTop(
+  ranked: ConstructedArrangement[],
+  levered: Map<ConstructedArrangement, Arrangement>,
+  constraints: LeverageConstraints,
+  limits: GoalLimits,
+  targets: EconomicProperty[],
+  now: Date,
+  breathe: () => Promise<void>,
+): Promise<ConstructedArrangement[]> {
+  let changed = false;
+  for (const one of ranked.slice(0, LEVERAGE_TRACED)) {
+    const a = levered.get(one);
+    if (!a) continue;
+    await breathe();
+    let leverage: ArrangementLeverage;
+    try {
+      leverage = leverageOf(a, constraints, { now });
+    } catch {
+      continue;
+    }
+    one.leverage = leverage;
+    if (leverage.refused && one.stress.exposure !== 'EXCEEDS') {
+      one.stress = { ...one.stress, exposure: 'EXCEEDS' };
+      changed = true;
+    }
+    const verify = leverage.prepayment.flatMap((v) => v.tasks);
+    if (verify.length) {
+      one.question +=
+        ' Prepayment is a design possibility here, not a presumption: ' +
+        verify.join('; ') +
+        ' — report what a source shows for these buyers, and say plainly where none does.';
+    }
+  }
+  return changed ? rank(ranked, limits, targets) : ranked;
 }
 
 /** How long an unchanged construction is reused, and how many distinct ones are held. */
@@ -425,7 +530,7 @@ function reverseArrangements(ctx: {
   targets: EconomicProperty[];
   exclusions: readonly ExclusionClass[];
   now: Date;
-}): ConstructedArrangement[] {
+}): Array<{ arrangement: ConstructedArrangement; levered: Arrangement }> {
   if (ctx.targets.length === 0) return [];
   const scored = ctx.designs
     .filter((d) => !STRUCTURES[d.base].needsDeliverable || ctx.capability)
@@ -526,7 +631,7 @@ function compose(args: {
   targets: EconomicProperty[];
   exclusions: readonly ExclusionClass[];
   now: Date;
-}): ConstructedArrangement {
+}): { arrangement: ConstructedArrangement; levered: Arrangement } {
   const { design, demand, need, supply, input } = args;
   const structure = design.base;
   const def = STRUCTURES[structure];
@@ -551,7 +656,7 @@ function compose(args: {
       : def.capture === 'FEE'
         ? { kind: 'FEE', fee: { min: 0, max: 100_000 } }
         : { kind: 'MARGIN', supplyCost: { min: 0, max: 100_000, context, material: [], observations: pooled ? [] : riskObs } };
-  const composed = composeArrangement({
+  const base: Arrangement = {
     key: 'a',
     label: demand.name,
     period: `${input.daysLeft} days`,
@@ -565,7 +670,21 @@ function compose(args: {
     pooling: pooled ? { fixedCost: { min: 0, max: 1_000_000, context, material: [], observations: riskObs }, minParticipants: unknownCount(1, 10_000), threshold: design.funding === 'THRESHOLD_PRESALE' } : undefined,
     funding: design.funding !== 'ON_DELIVERY' ? { prepayShare: unknownShare } : undefined,
     repeat: design.repeat !== 'ONE_OFF' ? { rate: unknownShare } : undefined,
-  });
+  };
+  const composed = composeArrangement(base);
+  /*
+   * The same arrangement with the levers its design uses (S-0103): the parts
+   * and their evidence are construction's own — the value's published prices,
+   * what supply is paid, a shared run's fixed cost — so the leverage trace
+   * reads what construction established and nothing it did not. Each lever's
+   * own parts start as bounds: questions, never assumptions.
+   */
+  const facts = designFacts(design);
+  const levers: Levers = { settlementDays: unknownCount(0, 365) };
+  if (facts.fulfiller === 'SUPPLIER') levers.fulfilment = { capacity: unknownCount(0, 10_000_000), failureRate: unknownShare, paymentDays: unknownCount(0, 365) };
+  else levers.aiLabor = { costPerTransaction: { min: 0, max: 100_000 }, throughput: unknownCount(0, 10_000_000) };
+  if (design.funding !== 'ON_DELIVERY') levers.prepayment = { willingness: unknownShare, refundShare: unknownShare, usableDays: unknownCount(0, 365) };
+  const levered: Arrangement = { ...base, levers };
   let estimates: Record<string, Estimate> = {};
   try {
     estimates = reconstruct(composed.graph, composed.contribution, args.now).estimates;
@@ -596,7 +715,6 @@ function compose(args: {
     observations: repeatObs.length,
     statedValueCents: repeatObs.reduce((t, one) => t + (one.value.kind === 'POINT' ? Math.round(one.value.value * 100) : 0), 0),
   };
-  const facts = designFacts(design);
   const shape = describeDesign(design);
   // The need comes before the design description: the label is cut to 160
   // characters, and two needs of one buyer under one long design description
@@ -635,7 +753,7 @@ function compose(args: {
         `For each part, find a published source: ${asks}.${established}${reliesText}${failureText}${exclusionSentence(args.exclusions)} ` +
         OPENING_SENTENCE +
         'Where no source shows buyers pay for this, say so plainly — that refutes the arrangement and is a useful answer.';
-  return {
+  const arrangement: ConstructedArrangement = {
     key,
     structure,
     design,
@@ -657,6 +775,7 @@ function compose(args: {
     question,
     repeatBusiness,
   };
+  return { arrangement, levered };
 }
 
 /**

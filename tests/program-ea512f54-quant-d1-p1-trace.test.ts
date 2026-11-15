@@ -191,5 +191,7 @@ describe('leverageHoldsOnRows on a real database, through the production entry p
     // Nothing on these rows establishes prepayment, so nothing is credited or verified.
     expect(r.prepayment.credited).toBe(0);
     expect(r.prepayment.established).toBe(0);
+    // What it read is construction's own trace, judged against the cash the ledger reads (none here).
+    expect(r.limits.cashAvailable).toBe(r.arrangements);
   }, 120_000);
 });
