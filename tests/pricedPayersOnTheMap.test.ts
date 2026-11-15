@@ -288,4 +288,38 @@ describe('a payer is read out of the research sentence production stores', () =>
     expect(populationOf('Pennsylvania Department of Agriculture')).toBe('state agriculture departments');
     expect(populationOf('Domain Name Wire reports that VJN.com was tested in Appraise.net')).toBeNull();
   });
+
+  /*
+   * Production census 2026-11-15 10:11Z: 39 held openings still read as "opening
+   * payer names no buyer population". These are the phrasings among them that do
+   * name one, beside the ones that honestly do not.
+   */
+  it('reads a bracketed payer, a self-description, a contracting party and an issuing agency', () => {
+    const THUMBTACK = 'A homeowner (the payer) can hire a professional Christmas decorator through Thumbtack for $300-$800 per install.';
+    expect(payerNamedIn(THUMBTACK)).toBe('homeowner');
+    expect(populationOf(THUMBTACK)).toBe('homeowner');
+
+    const SELF = 'The payer is the client who posted the request, describing themselves as the owner of a small bakery in Harrisburg.';
+    expect(payerNamedIn(SELF)).toBe('owner of a small bakery in Harrisburg');
+    expect(populationOf(SELF)).toBe('small bakery owners');
+    // A request whose poster describes nobody stays unnamed.
+    expect(payerNamedIn('The payer is the client who posted the request on Thumbtack.')).toBeNull();
+
+    const CONTRACTING = "Payer/contracting party for the Mechanicsburg, PA opening: the listing 'Window and gutter cleaning' was posted by a homeowner on Thumbtack.";
+    expect(payerNamedIn(CONTRACTING)).toBe('homeowner');
+    expect(payerNamedIn('Payer/contracting party for the Harrisburg, PA opening: Cumberland County Housing Authority.')).toBe('Cumberland County Housing Authority');
+    // The listing alone names what was posted, not who posted it.
+    expect(payerNamedIn("Payer/contracting party for the Mechanicsburg, PA opening: the listing 'Window and gutter cleaning'")).toBeNull();
+
+    const RFP = 'Pennsylvania market: PA PUC Bureau of Technical Utility Services issued RFP 2026-TUS-04 for meter testing support.';
+    expect(payerNamedIn(RFP)).toBe('PA PUC Bureau of Technical Utility Services');
+    expect(populationOf(RFP)).toBe('state technical utility services bureaus');
+    expect(populationOf('The City of Pittsburgh has issued an RFP for snow removal.')).toBe('municipal governments');
+  });
+
+  it('keeps the honest refusals: market size, a news report, a price page', () => {
+    expect(payerNamedIn('The shared services market is expected to grow at 8.2% CAGR through 2030.')).toBeNull();
+    expect(payerNamedIn('Domain Name Wire reports that VJN.com was tested in Appraise.net: range $55k-$85k')).toBeNull();
+    expect(payerNamedIn("StockX's own Fragment brand page lists resale prices from $180 to $2,400.")).toBeNull();
+  });
 });
