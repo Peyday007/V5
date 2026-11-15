@@ -2300,6 +2300,48 @@ export async function diagnoseAbandonedRounds(projectId: string): Promise<Abando
   return { total: abandoned.length, byClass, rounds };
 }
 
+export const ABANDONED_DIAGNOSIS_EVENT = 'CASH_DISCOVERY_ABANDONED_DIAGNOSIS';
+
+/**
+ * Record the abandoned-round diagnosis as a cash event, once per change.
+ *
+ * `diagnoseAbandonedRounds` is a read; on its own nothing in production ran
+ * it, so the rounds closed before stop events carried a cause — the 119 that
+ * dfx_2b21d109a13d asked about — could not be counted by class anywhere the
+ * operator reads. The discovery tick calls this after its harvest. It writes
+ * one `CASH_DISCOVERY_ABANDONED_DIAGNOSIS` event holding the total, the count
+ * by class, how many were reconstructed, and each reconstructed round's cause
+ * (those have no stop event that says it), and only when the total or the
+ * count by class differs from the latest such event, so a quiet tick writes
+ * nothing and history is appended, never rewritten. Returns the event written,
+ * or null when nothing changed or there is nothing abandoned.
+ */
+export async function recordAbandonedRoundDiagnosis(projectId: string): Promise<AbandonedRoundDiagnosis | null> {
+  const diagnosis = await diagnoseAbandonedRounds(projectId);
+  if (diagnosis.total === 0) return null;
+  const previous = (await cashEventsOfKindInProject(projectId, ABANDONED_DIAGNOSIS_EVENT)).at(-1);
+  const prior = (previous?.detail ?? {}) as Record<string, unknown>;
+  if (prior.total === diagnosis.total && JSON.stringify(prior.byClass) === JSON.stringify(diagnosis.byClass)) return null;
+  const reconstructed = diagnosis.rounds.filter((one) => one.source === 'RECONSTRUCTED');
+  const ranked = Object.entries(diagnosis.byClass)
+    .filter(([, count]) => count > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, count]) => `${name} ${count}`);
+  await recordCashEvent({
+    projectId,
+    kind: ABANDONED_DIAGNOSIS_EVENT,
+    actorRef: 'BRAIN',
+    summary: clamp(`${diagnosis.total} abandoned discovery round(s) by failure class: ${ranked.join(', ')}.`, 500),
+    detail: {
+      total: diagnosis.total,
+      byClass: diagnosis.byClass,
+      reconstructed: reconstructed.length,
+      reconstructedRounds: reconstructed.map(({ roundId, cause, failureClass }) => ({ roundId, cause, failureClass })),
+    },
+  });
+  return diagnosis;
+}
+
 /**
  * How long a goal's own round may wait for its idea to become a mission (§83).
  *
@@ -2429,9 +2471,17 @@ export async function runDiscovery(
   // And the second records of one opening written before this existed.
   if (sweep) await reconcile('duplicates', () => markDuplicateOpenings(projectId), undefined);
 
+  const opened = await openDiscovery({ projectId, limit: 1 });
+  const harvested = await harvest({ projectId, limit: 10 });
+
+  // And the count of abandoned rounds by failure class, after this tick closed what it closed,
+  // so the diagnosis of dfx_2b21d109a13d is a row the operator reads rather than a function
+  // nothing calls (OPERATOR:MISSING_CAPABILITY:3009514ee01322e4).
+  if (sweep) await reconcile('abandoned-diagnosis', () => recordAbandonedRoundDiagnosis(projectId), null);
+
   return {
-    opened: await openDiscovery({ projectId, limit: 1 }),
-    harvested: await harvest({ projectId, limit: 10 }),
+    opened,
+    harvested,
     authorized: authorized?.created ?? false,
     resumed: resumed.map((one) => one.candidateId),
     signalled,

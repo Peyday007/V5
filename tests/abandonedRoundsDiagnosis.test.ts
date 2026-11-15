@@ -27,9 +27,11 @@ import * as discovery from '../server/services/cash/discovery.ts';
 import {
   ABANDONED_FAILURE_CLASSES,
   abandonedFailureClass,
+  ABANDONED_DIAGNOSIS_EVENT,
   diagnoseAbandonedRounds,
   harvest,
   openDiscovery,
+  runDiscovery,
 } from '../server/services/cash/discovery.ts';
 
 const FAILURE_CLASSES = [
@@ -321,6 +323,55 @@ describe('the abandoned rounds are classified by Brain, not only by the report',
       expect(byRound.get(roundOf(archive).id)!.failureClass).toBe('ROUND_SETTLEMENT');
       expect(Object.values(diagnosis.byClass).reduce((a, b) => a + b, 0)).toBe(diagnosis.total);
       expect(diagnosis.byClass.TRAIL_TIMEOUT).toBeGreaterThanOrEqual(1);
+    });
+
+    it('the discovery tick records the count by class as a cash event, including a round closed before causes were recorded, once per change', async () => {
+      const opened = await openDiscovery({ projectId, limit: 2 });
+      expect(opened.length).toBeGreaterThanOrEqual(2);
+      const [timeout, parse] = opened as [(typeof opened)[number], (typeof opened)[number]];
+      await failed(timeout.candidateId, 'worker lease expired: API timeout after 20000 ms');
+      await failed(parse.candidateId, 'submission refused: claims JSON did not parse');
+      await harvest({ projectId, limit: 50 });
+
+      // The parse round is one of the historical rounds: its stop event carries no cause.
+      const rounds = await listRounds(projectId);
+      const parseRound = rounds.find((r) => r.bucketId === parse.bucketId)!;
+      const legacy = (await cashEventsOfKindInProject(projectId, 'CASH_DISCOVERY_ROUND_STOPPED')).find(
+        (e) => (e.detail as Record<string, unknown>).roundId === parseRound.id,
+      )!;
+      const stripped = { ...(legacy.detail as Record<string, unknown>) };
+      delete stripped.cause;
+      delete stripped.failureClass;
+      await getDb().run('UPDATE cash_events SET detail = ? WHERE id = ?', [JSON.stringify(stripped), legacy.id]);
+
+      // Nothing had written the diagnosis before the production tick ran.
+      expect(await cashEventsOfKindInProject(projectId, ABANDONED_DIAGNOSIS_EVENT)).toHaveLength(0);
+      const tick = await runDiscovery(projectId);
+      expect(tick.failures).toEqual([]);
+
+      const written = await cashEventsOfKindInProject(projectId, ABANDONED_DIAGNOSIS_EVENT);
+      expect(written).toHaveLength(1);
+      const detail = written[0]!.detail as {
+        total: number;
+        byClass: Record<string, number>;
+        reconstructed: number;
+        reconstructedRounds: { roundId: string; cause: string; failureClass: string }[];
+      };
+      const expected = await diagnoseAbandonedRounds(projectId);
+      expect(detail.total).toBe(expected.total);
+      expect(detail.byClass).toEqual(expected.byClass);
+      expect(detail.byClass.TRAIL_TIMEOUT).toBeGreaterThanOrEqual(1);
+      expect(detail.byClass.TRAIL_FORMATTING).toBeGreaterThanOrEqual(1);
+      expect(detail.reconstructedRounds).toContainEqual({
+        roundId: parseRound.id,
+        cause: 'MISSION_FAILED:submission refused: claims JSON did not parse',
+        failureClass: 'TRAIL_FORMATTING',
+      });
+      expect(written[0]!.summary).toContain('TRAIL_TIMEOUT');
+
+      // A tick that closes nothing new writes no second diagnosis.
+      await runDiscovery(projectId);
+      expect(await cashEventsOfKindInProject(projectId, ABANDONED_DIAGNOSIS_EVENT)).toHaveLength(1);
     });
   });
 });
