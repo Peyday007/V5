@@ -14,6 +14,7 @@
  * a RUSSELL_ROUTINE_DECISION event recorded, once; a live mission's card and a missionless card are
  * still reopened exactly as before.
  */
+import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject, type TestProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
@@ -21,6 +22,7 @@ import { newId, nowIso } from '../server/repos/util.ts';
 import { createRun } from '../server/repos/runs.ts';
 import { createFragments, createOrchestration } from '../server/repos/research.ts';
 import { createUser } from '../server/repos/identity.ts';
+import { createGoal } from '../server/repos/russellAuthority.ts';
 import { listEventsByEntity } from '../server/repos/events.ts';
 import {
   answerHumanRequest,
@@ -38,6 +40,7 @@ import {
   unparkResolvedMissions,
   withdrawMootBacklog,
 } from '../server/services/russell/needsHuman.ts';
+import { tick } from '../server/services/russell/loop.ts';
 
 const MOVED_OUT = 'the mission moved out of Needs You before the answer could be applied';
 
@@ -180,6 +183,117 @@ describe('reopenAnswered and a mission that left Needs You', () => {
 });
 
 /**
+ * The same failure class, driven through the loop's own `answered-requests`
+ * pass (OPERATOR:RECURRING_OPERATIONAL_FAILURE:40f485f2e4ef250f): the pass used
+ * to hand every unsettled resume back as an unresolved answer to re-ask,
+ * including an answer whose mission had already left NEEDS_HUMAN, so the
+ * operator withdrew 43 such cards by hand in a week. The pass now decides that
+ * answer itself, before any resume — withdrawn with the mission's state named,
+ * reported as a moot withdrawal, and never put back in front of the person.
+ */
+describe('the answered-requests pass and a mission that left Needs You', () => {
+  it('A01: withdraws an answer whose mission was cancelled, reports it as moot, and never reopens it', async () => {
+    const missionId = await parkedMission();
+    const request = await answeredRequest(missionId, NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key);
+    expect(
+      await transitionMission({ missionId, from: 'NEEDS_HUMAN', to: 'CANCELLED', terminalReason: 'cancelled elsewhere' }),
+    ).toBe(true);
+
+    const report = await tick('moot-answer');
+    const after = (await getHumanRequest(request.id))!;
+    expect(after.state).toBe('WITHDRAWN');
+    expect(after.whyNotRussell).toMatch(/CANCELLED/);
+    expect((await listOpenRequests(fixture.project.id)).map((r) => r.id)).not.toContain(request.id);
+    // Not carried out (so still an unresolved answer of this cycle), and finished as moot rather than re-asked.
+    expect(report.unresolvedAnswers.map((entry) => entry.requestId)).toContain(request.id);
+    expect(report.withdrawnMootAnswers).toContainEqual({
+      requestId: request.id,
+      missionState: 'CANCELLED',
+      reason: MOVED_OUT,
+    });
+    expect((await getMission(missionId))!.state).toBe('CANCELLED');
+
+    // A second cycle neither reopens it nor records anything more.
+    const again = await tick('moot-answer');
+    expect((await getHumanRequest(request.id))!.state).toBe('WITHDRAWN');
+    expect(again.withdrawnMootAnswers.map((entry) => entry.requestId)).not.toContain(request.id);
+    expect(again.unresolvedAnswers.map((entry) => entry.requestId)).not.toContain(request.id);
+    expect(
+      (await listEventsByEntity('RUSSELL_HUMAN_REQUEST', request.id)).filter(
+        (event) => event.eventType === 'RUSSELL_ROUTINE_DECISION',
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('A01: withdraws an answer deferred for a research slot once its mission is running again', async () => {
+    /*
+     * The loop the operator kept breaking: an answer that needs a research
+     * slot is deferred while none is free, and that used to be a wait for
+     * ever once the mission had left NEEDS_HUMAN, because no slot can make an
+     * answer guarded on NEEDS_HUMAN apply. One live hold fills the goal's only
+     * slot; the mission's own hold has lapsed, so its resume is refused a slot.
+     */
+    const missionId = await parkedMission();
+    const request = await answeredRequest(missionId, NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key);
+    const goal = await createGoal({
+      projectId: fixture.project.id, ownerUserId: userId, createdByUserId: userId, name: 'One slot',
+      allowedWork: ['RESEARCH'], maxMissions: 5, maxFragments: 20, maxConcurrent: 1, maxProbes: 5,
+    });
+    const past = new Date(Date.now() - 3_600_000).toISOString();
+    const future = new Date(Date.now() + 3_600_000).toISOString();
+    const lapsed = newId('rsv');
+    for (const [id, expires] of [[newId('rsv'), future], [lapsed, past]] as const) {
+      await getDb().run(
+        `INSERT INTO russell_budget_reservations (id, goal_id, kind, amount, idempotency_key, state, expires_at, created_at)
+         VALUES (?, ?, 'MISSION', 1, ?, 'HELD', ?, ?)`,
+        [id, goal.id, `moot-slot-${id}`, expires, nowIso()],
+      );
+    }
+    await getDb().run(`UPDATE russell_missions SET reservation_id = ? WHERE id = ?`, [lapsed, missionId]);
+    expect(
+      // Running again on its own (a terminal move would release the hold, and the resume would not defer).
+      await transitionMission({ missionId, from: 'NEEDS_HUMAN', to: 'RUNNING' }),
+    ).toBe(true);
+    // The resume alone defers it: that is the state the pass used to keep for ever.
+    expect((await resumeAnsweredRequest(request)).deferred).toBe(true);
+
+    const report = await tick('moot-deferred');
+    const after = (await getHumanRequest(request.id))!;
+    expect(after.state).toBe('WITHDRAWN');
+    expect(after.whyNotRussell).toMatch(/RUNNING/);
+    expect(report.withdrawnMootAnswers.map((entry) => entry.requestId)).toContain(request.id);
+    expect((await listOpenRequests(fixture.project.id)).map((r) => r.id)).not.toContain(request.id);
+
+    const again = await tick('moot-deferred');
+    expect((await getHumanRequest(request.id))!.state).toBe('WITHDRAWN');
+    expect(again.unresolvedAnswers.map((entry) => entry.requestId)).not.toContain(request.id);
+  });
+
+  it('A03: reopens an answer whose mission still waits at NEEDS_HUMAN and failed for another reason, as before', async () => {
+    const missionId = await parkedMission();
+    const request = await answeredRequest(missionId, NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key);
+    // A choice this Brain does not implement: a failure a person can still act on.
+    await getDb().run(`UPDATE russell_human_requests SET answered_choice = ? WHERE id = ?`, ['NOT_A_CHOICE', request.id]);
+    // The packet is genuinely parked on its plan, so no later pass unparks the mission on its own.
+    await getDb().run(
+      `UPDATE research_orchestrations SET status = 'AWAITING_APPROVAL'
+        WHERE id = (SELECT orchestration_id FROM russell_missions WHERE id = ?)`,
+      [missionId],
+    );
+
+    const report = await tick('live-answer');
+    expect((await getMission(missionId))!.state).toBe('NEEDS_HUMAN');
+    const after = (await getHumanRequest(request.id))!;
+    expect(after.state).toBe('OPEN');
+    expect(after.recommendation).toMatch(/does not implement the answer "NOT_A_CHOICE"/);
+    expect(after.choices.map((choice) => choice.key)).toContain(NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key);
+    expect(report.unresolvedAnswers.map((entry) => entry.requestId)).toContain(request.id);
+    expect(report.withdrawnMootAnswers.map((entry) => entry.requestId)).not.toContain(request.id);
+    expect((await listOpenRequests(fixture.project.id)).map((r) => r.id)).toContain(request.id);
+  });
+});
+
+/**
  * The backlog the fix above cannot reach: cards an earlier `reopenAnswered`
  * already put back OPEN on "the mission moved out of Needs You". They are not
  * ANSWERED, so the `answered-requests` pass never sees them again; the loop's
@@ -255,5 +369,51 @@ describe('the source keeps each doc comment on what it documents', () => {
     const constDoc = source.slice(0, constAt).trimEnd();
     expect(constDoc.endsWith('*/')).toBe(true);
     expect(constDoc.slice(constDoc.lastIndexOf('/**'))).toContain('What a resume says when the mission left');
+  });
+});
+
+/**
+ * The pass-level fix above added a helper to `loop.ts` and first placed it
+ * between `runPass`'s doc comment and `runPass`, which left the doc comment
+ * describing the new constant and `runPass` with none. Pinned here: the block
+ * comment directly above `export async function runPass` is still `runPass`'s.
+ */
+describe('loop.ts keeps runPass documented', () => {
+  it('the doc comment immediately above runPass is the one that describes it', () => {
+    const source = readFileSync(new URL('../server/services/russell/loop.ts', import.meta.url), 'utf8');
+    const at = source.indexOf('export async function runPass(');
+    expect(at).toBeGreaterThan(0);
+    const before = source.slice(0, at).trimEnd();
+    expect(before.endsWith('*/')).toBe(true);
+    const doc = before.slice(before.lastIndexOf('/**'));
+    expect(doc).toMatch(/Run one pass as its own failure domain/);
+  });
+});
+
+describe('the tick report initializer keeps one indentation level', () => {
+  it('every field of tickOnce\'s report literal sits at its nesting depth', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const source = await readFile(new URL('../server/services/russell/loop.ts', import.meta.url), 'utf8');
+    const start = source.indexOf('  const report: TickReport = {\n');
+    expect(start).toBeGreaterThan(0);
+    const end = source.indexOf('\n  };\n', start);
+    expect(end).toBeGreaterThan(start);
+    const lines = source.slice(start, end).split('\n').slice(1);
+    let depth = 2; // inside `const report = {`, fields sit at 4 spaces
+    const misindented: string[] = [];
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed === '' || trimmed.startsWith('*') || trimmed.startsWith('/*')) continue;
+      const closes = /^[}\]]/.test(trimmed) ? 1 : 0;
+      const expected = (depth - closes) * 2;
+      const actual = line.length - line.trimStart().length;
+      if (actual !== expected) misindented.push(`${actual}≠${expected}: ${trimmed}`);
+      const opens = (trimmed.match(/[{[]/g) ?? []).length;
+      const shuts = (trimmed.match(/[}\]]/g) ?? []).length;
+      depth += opens - shuts;
+    }
+    // `withdrawnMootAnswers`, `routineDecisions` and `renewedReservations` once
+    // sat two spaces shallow of their neighbours.
+    expect(misindented).toEqual([]);
   });
 });

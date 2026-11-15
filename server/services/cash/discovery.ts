@@ -72,7 +72,7 @@ import { constructedCapFor, freeLaneOwnsResearch, routineFocus } from './researc
 import { TRIGGER_BUCKETS, triggersEnabled } from './triggers.ts';
 import { FEED_SHORTLIST_BUCKET } from '../feeds/bucket.ts';
 import { getDb } from '../../db/database.ts';
-import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
+import { cashEventsOfKindInProject, getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import {
   createOpportunity,
   fillOpportunitySignal,
@@ -124,6 +124,7 @@ import type {
   CashOpportunity,
   IndustryNode,
   OpportunityConstraint,
+  RussellMission,
 } from '../../domain/types.ts';
 
 /**
@@ -2129,8 +2130,11 @@ async function closeEndedRounds(input: {
       console.warn(`arrangement outcome for round ${entry.round.id} not recorded: ${String((error as Error)?.message ?? error)}`),
     );
     if (to === 'HARVESTED') continue;
+    const cause = abandonedRoundCause({ mission, expired });
+    const failureClass = abandonedFailureClass(cause);
     const why = mission
-      ? `its research is ${mission.state.toLowerCase()}`
+      ? `its research is ${mission.state.toLowerCase()}` +
+        (mission.terminalReason || mission.waitingOn ? `: ${mission.waitingOn ?? mission.terminalReason}` : ', with no reason recorded')
       : expired
         ? `its idea never launched in ${UNLAUNCHED_GOAL_ROUND_MS / 3_600_000} hours, so it was retired to free the goal's slot`
         : 'the archive already answered it, so nothing launched';
@@ -2147,11 +2151,195 @@ async function closeEndedRounds(input: {
         bucketId: entry.bucket.id,
         missionId: mission?.id ?? null,
         missionState: mission?.state ?? null,
+        missionAttempt: mission?.attempt ?? null,
+        orchestrationId: mission?.orchestrationId ?? null,
+        binId: mission?.binId ?? null,
+        terminalReason: mission?.terminalReason ?? null,
+        waitingOn: mission?.waitingOn ?? null,
+        cause,
+        failureClass,
         found,
       },
     });
   }
   return closed;
+}
+
+/**
+ * The single failure point an ABANDONED round's own rows support, so a
+ * diagnosis of abandoned rounds is a query over `CASH_DISCOVERY_ROUND_STOPPED`
+ * rather than a guess (OPERATOR:MISSING_CAPABILITY:3009514ee01322e4).
+ *
+ * Each of the paths that close a round ABANDONED gets its own cause. The
+ * mission's `terminalReason` is carried verbatim, because that is where a
+ * timeout, a refused submission or a parser error is written; a mission that
+ * ended without one says `UNSTATED`. It never says nothing.
+ */
+export function abandonedRoundCause(input: {
+  mission: Pick<RussellMission, 'state' | 'terminalReason' | 'waitingOn'> | null;
+  expired: boolean;
+}): string {
+  const { mission } = input;
+  if (mission) {
+    // A blank reason states nothing, so it is UNSTATED rather than an empty cause,
+    // and a long one is bounded so the event stays one readable line.
+    const stated = (text: string | null): string | null => (text && text.trim() ? clamp(text, 240) : null);
+    const reason =
+      mission.state === 'NEEDS_HUMAN'
+        ? (stated(mission.waitingOn) ?? stated(mission.terminalReason))
+        : stated(mission.terminalReason);
+    return `MISSION_${mission.state}:${reason ?? 'UNSTATED'}`;
+  }
+  if (input.expired) return `ROUND_CAP_UNLAUNCHED_${UNLAUNCHED_GOAL_ROUND_MS / 3_600_000}H`;
+  return 'ARCHIVE_ANSWERED';
+}
+
+/**
+ * The fixed failure classes an ABANDONED round is sorted into (dfx_2b21d109a13d).
+ *
+ * The operator asked whether abandoned research rounds die of an API error, a
+ * timeout, a context overflow, a parser error, an unreachable source or the
+ * round-cap logic. The classes are TRAIL's system-execution and output branches
+ * (arXiv 2505.08638) and MAST's design/verification categories (arXiv
+ * 2503.13657), plus the three endings that are Brain's own settlement rules
+ * rather than research failures. The research report in
+ * tests/fixtures/research/abandonedRoundsDiagnosis.json is held to this list.
+ */
+export const ABANDONED_FAILURE_CLASSES = [
+  'TRAIL_API_ERROR',
+  'TRAIL_TIMEOUT',
+  'TRAIL_RESOURCE_EXHAUSTION',
+  'TRAIL_CONFIGURATION',
+  'TRAIL_FORMATTING',
+  'TRAIL_CONTEXT_HANDLING',
+  'MAST_SYSTEM_DESIGN',
+  'MAST_TASK_VERIFICATION',
+  'SOURCE_UNREACHABLE',
+  'ROUND_SETTLEMENT',
+  'ROUND_CAP_LOGIC',
+  'UNATTRIBUTED',
+] as const;
+export type AbandonedFailureClass = (typeof ABANDONED_FAILURE_CLASSES)[number];
+
+/**
+ * The class one recorded cause belongs to. Pure, and read only from the cause
+ * `abandonedRoundCause` wrote: a reason nobody stated is UNATTRIBUTED, never
+ * a guessed class. Order matters — the most specific reading wins.
+ */
+export function abandonedFailureClass(cause: string): AbandonedFailureClass {
+  if (cause === 'ARCHIVE_ANSWERED') return 'ROUND_SETTLEMENT';
+  if (cause.startsWith('ROUND_CAP_UNLAUNCHED_')) return 'ROUND_CAP_LOGIC';
+  const split = cause.indexOf(':');
+  const state = split < 0 ? cause : cause.slice(0, split);
+  const reason = split < 0 ? '' : cause.slice(split + 1).toLowerCase();
+  if (state === 'MISSION_NEEDS_HUMAN' || state === 'MISSION_CANCELLED') return 'ROUND_SETTLEMENT';
+  if (!reason || reason === 'unstated') return 'UNATTRIBUTED';
+  if (/context (window|length)|too many tokens|token limit|maximum context|prompt is too long/.test(reason)) return 'TRAIL_CONTEXT_HANDLING';
+  if (/timed? ?out|timeout|deadline exceeded|lease expired/.test(reason)) return 'TRAIL_TIMEOUT';
+  if (/\b429\b|rate.?limit|\b40[13]\b|unauthori[sz]ed|forbidden|\b5\d\d\b|service unavailable|api error/.test(reason)) return 'TRAIL_API_ERROR';
+  if (/out of memory|memory|quota|exhaust|allowance|budget/.test(reason)) return 'TRAIL_RESOURCE_EXHAUSTION';
+  if (/unreachable|dns|enotfound|econnrefused|fetch (failed|refused)|robots|paywall|could not (be )?(read|retriev)|404|not found/.test(reason)) return 'SOURCE_UNREACHABLE';
+  if (/pars(e|ing)|json|schema|malformed|did not match the shape|invalid (output|submission)|format/.test(reason)) return 'TRAIL_FORMATTING';
+  if (/evidence gate|gate|rejected|no fragment cleared|unsourced|verification|audit/.test(reason)) return 'MAST_TASK_VERIFICATION';
+  if (/config|not configured|missing (key|credential|setting)|disabled/.test(reason)) return 'TRAIL_CONFIGURATION';
+  return 'MAST_SYSTEM_DESIGN';
+}
+
+export interface AbandonedRoundDiagnosis {
+  total: number;
+  byClass: Record<AbandonedFailureClass, number>;
+  rounds: {
+    roundId: string;
+    cause: string;
+    failureClass: AbandonedFailureClass;
+    /** EVENT: the stop event recorded the cause; RECONSTRUCTED: read back from the mission and idea rows. */
+    source: 'EVENT' | 'RECONSTRUCTED';
+  }[];
+}
+
+/**
+ * Classify every ABANDONED round of a project from Brain's own rows.
+ *
+ * The cause a stop event recorded is used where there is one. A round closed
+ * before causes were recorded is reconstructed from the same rows the
+ * discovery pass decided on — its idea's latest mission (`terminalReason`,
+ * `waitingOn`). A round with no mission ended either at the archive or, for a
+ * goal round only, at the unlaunched cap; both leave the idea REJECTED, so the
+ * cap is read from the round's own times — a goal round that stayed open at
+ * least UNLAUNCHED_GOAL_ROUND_MS before it closed — and anything else is the
+ * archive's answer. Nothing here writes; it is the query the diagnosis of
+ * dfx_2b21d109a13d needed and could not run.
+ */
+export async function diagnoseAbandonedRounds(projectId: string): Promise<AbandonedRoundDiagnosis> {
+  const abandoned = (await listRounds(projectId)).filter((one) => one.state === 'ABANDONED');
+  const recorded = new Map<string, string>();
+  for (const event of await cashEventsOfKindInProject(projectId, 'CASH_DISCOVERY_ROUND_STOPPED')) {
+    const detail = (event.detail ?? {}) as Record<string, unknown>;
+    if (typeof detail.roundId === 'string' && typeof detail.cause === 'string' && detail.cause) {
+      recorded.set(detail.roundId, detail.cause);
+    }
+  }
+  const missing = abandoned.filter((one) => !recorded.has(one.id));
+  const missions = missing.length ? await missionsForRounds(missing.map((one) => one.candidateId)) : new Map<string, RoundMissions>();
+  const byClass = Object.fromEntries(ABANDONED_FAILURE_CLASSES.map((one) => [one, 0])) as Record<AbandonedFailureClass, number>;
+  const rounds: AbandonedRoundDiagnosis['rounds'] = [];
+  for (const round of abandoned) {
+    let cause = recorded.get(round.id);
+    let source: 'EVENT' | 'RECONSTRUCTED' = 'EVENT';
+    if (!cause) {
+      source = 'RECONSTRUCTED';
+      const mission = missions.get(round.candidateId)?.latest ?? null;
+      const openFor = round.harvestedAt ? Date.parse(round.harvestedAt) - Date.parse(round.openedAt) : 0;
+      const expired = !mission && round.bucketId.startsWith(GOAL_BUCKET_PREFIX) && openFor >= UNLAUNCHED_GOAL_ROUND_MS;
+      cause = abandonedRoundCause({ mission, expired });
+    }
+    const failureClass = abandonedFailureClass(cause);
+    byClass[failureClass] += 1;
+    rounds.push({ roundId: round.id, cause, failureClass, source });
+  }
+  return { total: abandoned.length, byClass, rounds };
+}
+
+export const ABANDONED_DIAGNOSIS_EVENT = 'CASH_DISCOVERY_ABANDONED_DIAGNOSIS';
+
+/**
+ * Record the abandoned-round diagnosis as a cash event, once per change.
+ *
+ * `diagnoseAbandonedRounds` is a read; on its own nothing in production ran
+ * it, so the rounds closed before stop events carried a cause — the 119 that
+ * dfx_2b21d109a13d asked about — could not be counted by class anywhere the
+ * operator reads. The discovery tick calls this after its harvest. It writes
+ * one `CASH_DISCOVERY_ABANDONED_DIAGNOSIS` event holding the total, the count
+ * by class, how many were reconstructed, and each reconstructed round's cause
+ * (those have no stop event that says it), and only when the total or the
+ * count by class differs from the latest such event, so a quiet tick writes
+ * nothing and history is appended, never rewritten. Returns the event written,
+ * or null when nothing changed or there is nothing abandoned.
+ */
+export async function recordAbandonedRoundDiagnosis(projectId: string): Promise<AbandonedRoundDiagnosis | null> {
+  const diagnosis = await diagnoseAbandonedRounds(projectId);
+  if (diagnosis.total === 0) return null;
+  const previous = (await cashEventsOfKindInProject(projectId, ABANDONED_DIAGNOSIS_EVENT)).at(-1);
+  const prior = (previous?.detail ?? {}) as Record<string, unknown>;
+  if (prior.total === diagnosis.total && JSON.stringify(prior.byClass) === JSON.stringify(diagnosis.byClass)) return null;
+  const reconstructed = diagnosis.rounds.filter((one) => one.source === 'RECONSTRUCTED');
+  const ranked = Object.entries(diagnosis.byClass)
+    .filter(([, count]) => count > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, count]) => `${name} ${count}`);
+  await recordCashEvent({
+    projectId,
+    kind: ABANDONED_DIAGNOSIS_EVENT,
+    actorRef: 'BRAIN',
+    summary: clamp(`${diagnosis.total} abandoned discovery round(s) by failure class: ${ranked.join(', ')}.`, 500),
+    detail: {
+      total: diagnosis.total,
+      byClass: diagnosis.byClass,
+      reconstructed: reconstructed.length,
+      reconstructedRounds: reconstructed.map(({ roundId, cause, failureClass }) => ({ roundId, cause, failureClass })),
+    },
+  });
+  return diagnosis;
 }
 
 /**
@@ -2283,9 +2471,17 @@ export async function runDiscovery(
   // And the second records of one opening written before this existed.
   if (sweep) await reconcile('duplicates', () => markDuplicateOpenings(projectId), undefined);
 
+  const opened = await openDiscovery({ projectId, limit: 1 });
+  const harvested = await harvest({ projectId, limit: 10 });
+
+  // And the count of abandoned rounds by failure class, after this tick closed what it closed,
+  // so the diagnosis of dfx_2b21d109a13d is a row the operator reads rather than a function
+  // nothing calls (OPERATOR:MISSING_CAPABILITY:3009514ee01322e4).
+  if (sweep) await reconcile('abandoned-diagnosis', () => recordAbandonedRoundDiagnosis(projectId), null);
+
   return {
-    opened: await openDiscovery({ projectId, limit: 1 }),
-    harvested: await harvest({ projectId, limit: 10 }),
+    opened,
+    harvested,
     authorized: authorized?.created ?? false,
     resumed: resumed.map((one) => one.candidateId),
     signalled,
