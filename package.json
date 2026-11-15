@@ -31,6 +31,7 @@
     "goal-budget-proof": "tsx scripts/goal-budget-proof.ts",
     "engineering": "tsx scripts/engineering.ts",
     "operator": "tsx scripts/operator.ts",
+    "evolution": "tsx scripts/evolution.ts",
     "finish": "node .claude/hooks/finish-job.mjs",
     "goals": "tsx scripts/goals.ts",
     "report:packet": "tsx scripts/packet-report.ts",

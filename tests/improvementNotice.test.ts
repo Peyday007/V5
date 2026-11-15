@@ -60,6 +60,8 @@ function facts(over: Partial<CycleFacts> = {}): CycleFacts {
     status: 'RESOLVED',
     goal: { effect: 'IMPROVED', reasons: ['no longer waiting on a person (BRAIN)'] },
     evaluation: { runId: 'opr_2', recordedAt: '2026-11-12T11:00:00.000Z', lesson: 'Withdrawing moot cards put the goal back on Brain work.' },
+    // §111: the change won an experiment against an alternative.
+    alternatives: { experimentId: 'evx_1', variantsEvaluated: 2, verdict: 'ADOPT', winnerCandidateId: 'imp_1', winnerCampaignId: 'fcp_1', winnerHeadSha: 'head1' },
     ...over,
   };
 }
@@ -170,7 +172,22 @@ describe('the owner is notified once per verified improvement, the moment Hermes
       evidence: { directive: { origin, runId: run.id, goalId: null, goalTitle: null, deficiency: 'RECURRING_OPERATIONAL_FAILURE', intervention: 'ENGINEERING' } },
     });
     await patchCandidate(candidate.id, { changeRequestId: `fcr_${key}`, campaignId: `fcp_${key}`, deliveredAt: new Date(Date.now() - 60_000).toISOString() });
+    await wonExperiment(candidate.id, `fcp_${key}`);
     return candidate.id;
+  }
+
+  /** §111: the change was the variant an evaluator adopted over an alternative. */
+  async function wonExperiment(candidateId: string, campaignId: string): Promise<void> {
+    const evo = await import('../server/repos/evolution.ts');
+    const experiment = await evo.insertExperiment({ candidateId, deficiency: 'RECURRING_OPERATIONAL_FAILURE', capabilityClass: 'REASONING', suite: 'feasibility', baselineSha: 'base', origin: 'OPERATOR', runId: null, cause: null });
+    const winner = await evo.insertVariant({ experimentId: experiment.id, label: 'a', approachType: 'REMOVE_WORK', approachText: 'withdraw moot cards', signature: 'a', ownerPaths: [] });
+    const loser = await evo.insertVariant({ experimentId: experiment.id, label: 'b', approachType: 'FEEDBACK_LOOP', approachText: 'ask again later', signature: 'b', ownerPaths: [] });
+    await evo.linkVariant(winner.id, { candidateId, campaignId, headSha: 'head1' });
+    await evo.transitionExperiment(experiment.id, 'BUILDING', 'EVALUATING');
+    for (const v of [null, winner.id, loser.id]) {
+      await evo.insertResult({ experimentId: experiment.id, variantId: v, sha: 's', ref: null, suite: 'feasibility', metrics: { accuracy: v === winner.id ? 0.99 : 0.8 }, cases: [], hidden: false, cause: null, ownerPaths: [], ranAt: new Date().toISOString() });
+    }
+    await evo.transitionExperiment(experiment.id, 'EVALUATING', 'DECIDED', { verdict: 'ADOPT', winnerVariantId: winner.id, rationale: 'a won', decidedAt: new Date().toISOString() });
   }
 
   async function measuredAndKept(id: string): Promise<void> {

@@ -27,6 +27,8 @@ export const DEFICIENCY_CLASSES = [
   'BROKEN_INTEGRATION',
   'INEFFICIENT_ALGORITHM',
   'RECURRING_OPERATIONAL_FAILURE',
+  // §111: a registered capability benchmark whose production baseline misses its declared target.
+  'CAPABILITY_BELOW_TARGET',
 ] as const;
 export type DeficiencyClass = (typeof DEFICIENCY_CLASSES)[number];
 
@@ -218,6 +220,7 @@ const REASONING_DEFICIENCIES: ReadonlySet<DeficiencyClass> = new Set([
   'REPEATED_STRATEGIC_MISTAKE',
   'RESOURCE_ALLOCATION',
   'INEFFICIENT_ALGORITHM',
+  'CAPABILITY_BELOW_TARGET',
 ]);
 
 /**
@@ -436,12 +439,26 @@ export interface CycleFacts {
   goal: { effect: GoalEffect; reasons: string[] };
   /** The operator's evaluation of this result, recorded by one of its runs after the decision. */
   evaluation: { runId: string; recordedAt: string; lesson: string } | null;
+  /**
+   * The experiment this change won (§111), read from its rows: how many variants the
+   * evaluator scored, its verdict, the variant it selected, and that variant's campaign and
+   * pull-request head. Null when the change was never compared with an alternative.
+   */
+  alternatives?: {
+    experimentId: string;
+    variantsEvaluated: number;
+    verdict: string | null;
+    winnerCandidateId: string | null;
+    winnerCampaignId: string | null;
+    winnerHeadSha: string | null;
+  } | null;
 }
 
-/** The five steps the owner named (2026-11-12), in order, each read from a row. */
+/** The five steps the owner named (2026-11-12), in order, each read from a row — and §111's comparison. */
 export const CYCLE_STEPS = [
   'IDENTIFIED_BY_HERMES',
   'COMMISSIONED_FACTORY',
+  'ALTERNATIVES_COMPARED',
   'RELEASED_AND_VERIFIED',
   'RESULT_RECEIVED',
   'GOAL_EVALUATED',
@@ -474,6 +491,7 @@ export function verifiedCycle(f: CycleFacts): { verified: boolean; steps: Record
             : 'the operator run named in the directive did not make the commission call itself',
     COMMISSIONED_FACTORY:
       f.intervention !== 'ENGINEERING' ? `the intervention was ${f.intervention}, not engineering` : f.campaignId ? null : 'no Factory campaign',
+    ALTERNATIVES_COMPARED: alternativesCompared(f),
     RELEASED_AND_VERIFIED: !f.factory
       ? 'no Factory outcome'
       : !f.factory.mergeSha
@@ -496,6 +514,22 @@ export function verifiedCycle(f: CycleFacts): { verified: boolean; steps: Record
         : null,
   };
   return { verified: Object.values(steps).every((s) => s === null), steps };
+}
+
+/**
+ * §111: the change was one of at least two alternatives an evaluator scored, the verdict
+ * adopted it, and what was merged is that variant — its own campaign, merged from its
+ * pull-request head — not a sibling and not a single unexamined approach.
+ */
+function alternativesCompared(f: CycleFacts): string | null {
+  const a = f.alternatives ?? null;
+  if (!a) return 'never compared with an alternative: no experiment';
+  if (a.variantsEvaluated < 2) return `the evaluator scored ${a.variantsEvaluated} variant(s); a comparison needs at least two`;
+  if (a.verdict !== 'ADOPT') return `the experiment's verdict is ${a.verdict ?? 'not yet given'}, not ADOPT`;
+  if (!a.winnerCandidateId || a.winnerCandidateId !== f.candidateId) return 'the merged change is not the variant the evaluator selected';
+  if (!a.winnerCampaignId || a.winnerCampaignId !== f.campaignId) return "the merged campaign is not the selected variant's";
+  if (f.factory?.mergeSha && !a.winnerHeadSha) return "the selected variant's pull-request head is not recorded";
+  return null;
 }
 
 const ordinalWord = (n: number): string =>
