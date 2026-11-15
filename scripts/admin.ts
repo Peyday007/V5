@@ -144,7 +144,8 @@ import { workerIdentity } from '../server/services/identity/authenticate.ts';
 import { resolveWorkerRef } from '../server/services/identity/workerRef.ts';
 import { refuseAddressAsName } from '../server/domain/personName.ts';
 import { adoptSurface } from '../server/services/capacity/adopt.ts';
-import { issueFactoryInvitation, repositoryOnboarding } from '../server/services/factory/onboard.ts';
+import { issueFactoryInvitation, repositoryOnboarding, withdrawFactoryInvitation } from '../server/services/factory/onboard.ts';
+import { liveInvitationsForMember } from '../server/repos/invitations.ts';
 import { listConnections } from '../server/repos/capacityConnections.ts';
 
 function flag(name: string): string | null {
@@ -1071,19 +1072,47 @@ async function main(): Promise<void> {
       const grantId = onboarded[0]!.grantId;
       const person = (await listUsers()).find((one) => one.id === who || one.email === who);
       if (!person) fail(`No user with id or address ${who}.`);
+      /*
+       * `--seal-to <base64 SPKI RSA public key>`: the link itself, sealed.
+       *
+       * An administrator who asked for "a link" asked for something to send.
+       * The plaintext still never reaches this output (§17): it is encrypted
+       * with RSA-OAEP-SHA256 to a key whose private half only the requester
+       * holds, so the workflow log carries ciphertext nobody else can open.
+       */
+      const sealTo = flag('seal-to');
       const outcome = await issueFactoryInvitation({
         projectId: project.id,
         grantId,
         intendedUserId: person.id,
         actor,
-        origin: 'https://invalid.local',
+        origin: process.env['BRAIN_PUBLIC_ORIGIN'] ?? 'https://northline-brain.fly.dev',
       });
       if (!outcome.ok) fail(outcome.reason);
       const view = outcome.result.invitation;
       console.log(`  issued ${view.id} for ${person.displayName} (${person.id})`);
-      console.log(`  expires ${view.expiresAt}. The link itself is not printed.`);
-      console.log('  To spend it: sign in to this Brain in the browser Claude uses, then');
-      console.log('  reconnect the connector from Claude. Consent finds this invitation.');
+      // Consent honours a bound invitation only when exactly one is live for the
+      // member, so an earlier unspent link for this same worker is withdrawn.
+      const workerId = onboarded[0]!.workerId!;
+      for (const old of await liveInvitationsForMember(person.id)) {
+        if (old.id === view.id || old.workerId !== workerId) continue;
+        if (await withdrawFactoryInvitation({ projectId: project.id, grantId, invitationId: old.id, actor })) {
+          console.log(`  withdrew the earlier unspent ${old.id}`);
+        }
+      }
+      console.log(`  expires ${view.expiresAt}.`);
+      if (sealTo) {
+        const { publicEncrypt, createPublicKey, constants } = await import('node:crypto');
+        const key = createPublicKey({ key: Buffer.from(sealTo, 'base64'), format: 'der', type: 'spki' });
+        const sealed = publicEncrypt(
+          { key, padding: constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' },
+          Buffer.from(outcome.result.invitationUrl, 'utf8'),
+        );
+        console.log(`  SEALED ${sealed.toString('base64')}`);
+      } else {
+        console.log('  The link itself is not printed. To spend it: sign in to this Brain in the');
+        console.log('  browser Claude uses, then reconnect the connector from Claude.');
+      }
       break;
     }
     /*
