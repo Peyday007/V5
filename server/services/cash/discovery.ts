@@ -2179,10 +2179,14 @@ export function abandonedRoundCause(input: {
 }): string {
   const { mission } = input;
   if (mission) {
-    if (mission.state === 'NEEDS_HUMAN') {
-      return `MISSION_NEEDS_HUMAN:${mission.waitingOn ?? mission.terminalReason ?? 'UNSTATED'}`;
-    }
-    return `MISSION_${mission.state}:${mission.terminalReason ?? 'UNSTATED'}`;
+    // A blank reason states nothing, so it is UNSTATED rather than an empty cause,
+    // and a long one is bounded so the event stays one readable line.
+    const stated = (text: string | null): string | null => (text && text.trim() ? clamp(text, 240) : null);
+    const reason =
+      mission.state === 'NEEDS_HUMAN'
+        ? (stated(mission.waitingOn) ?? stated(mission.terminalReason))
+        : stated(mission.terminalReason);
+    return `MISSION_${mission.state}:${reason ?? 'UNSTATED'}`;
   }
   if (input.expired) return `ROUND_CAP_UNLAUNCHED_${UNLAUNCHED_GOAL_ROUND_MS / 3_600_000}H`;
   return 'ARCHIVE_ANSWERED';
