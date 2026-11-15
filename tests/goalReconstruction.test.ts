@@ -33,7 +33,10 @@ describe('§99 regression: the $10K plan', () => {
   });
 
   it('explores materially different strategies across dimensions, not percentages of the same one', () => {
-    for (const d of ['CAPACITY', 'ACQUISITION', 'PARTNER', 'TRANSACTION', 'CAPITAL', 'CASH_TIMING'] as const) expect(dims.has(d)).toBe(true);
+    for (const d of ['CAPACITY', 'ACQUISITION', 'PARTNER', 'TRANSACTION', 'CASH_TIMING'] as const) expect(dims.has(d)).toBe(true);
+    // Financing is challenged, but no opening here states how its buyers pay, so prepayment is not assumed (invariant 39).
+    expect(dims.has('CAPITAL')).toBe(false);
+    expect(r.challenges.find((c) => c.testedBy === 'CAPITAL')!.finding).toMatch(/terms nobody stated, not tried/);
     // The kept plan changes how the business works, not an estimate.
     expect(r.best.changes.length).toBeGreaterThanOrEqual(2);
     expect(r.best.changes.every((c) => !c.label.startsWith('test:'))).toBe(true);
@@ -63,8 +66,9 @@ describe('§99 regression: the $10K plan', () => {
   it('can change the acquisition method and the financing structure of the business', () => {
     const bought = tried.find((t) => t.changes.some((c) => c.dimension === 'ACQUISITION'));
     expect(bought?.changes[0]!.detail).toMatch(/leads at/);
-    const prepaid = tried.find((t) => t.key.includes('prepaid-fulfilment'));
-    expect(prepaid).toBeTruthy();
+    // Prepaid fulfilment is tried only for buyers shown paying before delivery (2026-11-15): none is in this fixture,
+    // and it is tried as soon as one is (tests/prepaidFulfilmentEvidence.test.ts).
+    expect(tried.find((t) => t.key.includes('prepaid-fulfilment'))).toBeUndefined();
     // Suppliers and partners: sell through someone who already holds the buyers, commission sourced, volume assumed.
     const partner = tried.find((t) => t.changes.some((c) => c.dimension === 'PARTNER'))!;
     expect(partner.changes[0]!.detail).toMatch(/10–30%/);

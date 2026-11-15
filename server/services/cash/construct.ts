@@ -55,10 +55,11 @@ import { composeArrangement, type Arrangement, type Levers, type Part } from '..
 import { leverageOfYielding, type ArrangementLeverage, type LeverageConstraints } from '../quant/leverage.ts';
 import { reconstruct } from '../quant/reconstruct.ts';
 import { emptyLeverEvidence, leverEvidenceFrom, type LeverEvidence, type LeverPart } from '../quant/leverEvidence.ts';
-import { claimSources } from '../../repos/research.ts';
+import { claimSources, claimsByIds } from '../../repos/research.ts';
 import type { CashCardFact, CashOpportunity, IndustryNode } from '../../domain/types.ts';
 import type { Estimate, Observation } from '../../domain/quant.ts';
 import { repeatBusinessObservations } from './deliverables/realization.ts';
+import { combineTimings, openingTiming, timingOfText, type PaymentTimingReading } from './paymentTiming.ts';
 
 import {
   allDesigns,
@@ -111,6 +112,13 @@ export interface Primitive {
    * one path, so the arrangement built from them has one signature.
    */
   path?: string;
+  /**
+   * When the buyers this part names pay relative to delivery, where its own
+   * source states it: a map node's description and the claim it was filed
+   * from, or an opening's terms and whether it is won by award. Absent when
+   * nothing stated decides it — unknown, never prepaid (invariant 39).
+   */
+  terms?: PaymentTimingReading;
 }
 
 /**
@@ -230,6 +238,14 @@ export interface ConstructedArrangement {
   /** Openings sharing this buyer, for the novelty check and the value evidence. */
   relatedOpenings: string[];
   question: string;
+  /**
+   * When these buyers pay relative to delivery, inherited from the evidence
+   * the arrangement was composed from: its parts' sources and the openings
+   * sharing its buyer. An RFP or award population pays in arrears; absent
+   * means nothing stated it, and the plan reads it as unknown, never prepaid
+   * (production 2026-11-15, goal wst_7b4fcbb5f2384f31b6c3).
+   */
+  buyerTerms?: PaymentTimingReading;
   /**
    * Repeat business this buyer population has already given Brain, read from
    * aftercare records (`deliverables/realization.ts`): how many stated values,
@@ -452,12 +468,12 @@ function addSignalDemand(
     const s = sector(o.industry);
     const payer = (o.payer && o.payer.trim()) || payerFact.get(o.id) || null;
     if (payer && safeName(payer) && allowed(payer) && count.demand < SIGNAL_PARTS_PER_SECTOR && !s.demand.some((one) => norm(one.name) === norm(payer))) {
-      s.demand.push({ name: clean(payer), claimId: o.sourceClaimId, from: 'OPENING', ref: o.id, path: `OPENING_PAYER:${norm(o.industry)}>${norm(payer)}` });
+      s.demand.push({ name: clean(payer), claimId: o.sourceClaimId, from: 'OPENING', ref: o.id, path: `OPENING_PAYER:${norm(o.industry)}>${norm(payer)}`, ...termsOfOpening(o) });
       count.demand += 1;
     }
     const need = o.offerScope ?? o.title;
     if (safeName(need) && count.needs < SIGNAL_PARTS_PER_SECTOR && !s.needs.some((one) => norm(one.name) === norm(need))) {
-      s.needs.push({ name: clean(need), claimId: o.sourceClaimId, from: 'OPENING', ref: o.id, path: `OPENING_NEED:${norm(o.industry)}>${norm(need)}` });
+      s.needs.push({ name: clean(need), claimId: o.sourceClaimId, from: 'OPENING', ref: o.id, path: `OPENING_NEED:${norm(o.industry)}>${norm(need)}`, ...termsOfOpening(o) });
       count.needs += 1;
     }
     added.set(key, count);
@@ -497,11 +513,18 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
     if (!sectors.has(key)) sectors.set(key, { name, demand: [], needs: [], supply: [] });
     return sectors.get(key)!;
   };
+  // The claims the map's nodes were filed from: what they state about how these buyers pay (an RFP, a deposit, net terms).
+  const nodeClaims = new Map((await claimsByIds(nodes.map((one) => one.sourceClaimId).filter((one): one is string => !!one))).map((one) => [one.id, one]));
   for (const node of nodes) {
     if (!safeName(node.name) || !allowed(node.name)) continue;
     const root = rootOf(node, byId);
     if (!allowed(root.name)) continue;
-    const p: Primitive = { name: clean(node.name), claimId: node.sourceClaimId, from: 'INDUSTRY_MAP', ref: node.id, path: nodePath(node, byId) };
+    const claim = node.sourceClaimId ? nodeClaims.get(node.sourceClaimId) : undefined;
+    const terms = combineTimings([
+      timingOfText(node.description, `map node "${node.name.slice(0, 60)}"`),
+      timingOfText(claim ? [claim.claim, claim.evidenceExcerpt].filter(Boolean).join(' ') : null, `claim ${claim?.id ?? ''}`.trim()),
+    ]);
+    const p: Primitive = { name: clean(node.name), claimId: node.sourceClaimId, from: 'INDUSTRY_MAP', ref: node.id, path: nodePath(node, byId), ...(terms.timing !== 'UNKNOWN' ? { terms } : {}) };
     if (node.kind === 'BUYER_TYPE') sector(root.name).demand.push(p);
     else if (node.kind === 'BOTTLENECK') sector(root.name).needs.push(p);
     else if (node.kind === 'FULFILMENT_SOURCE') sector(root.name).supply.push(p);
@@ -517,9 +540,9 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
   for (const group of byPayer.values()) {
     const first = group[0]!;
     const s = sector(first.industry);
-    if (!s.demand.some((one) => norm(one.name) === norm(first.payer))) s.demand.push({ name: clean(first.payer!), claimId: first.sourceClaimId, from: 'OPENING', ref: first.id, path: `OPENING_PAYER:${norm(first.industry)}>${norm(first.payer)}` });
+    if (!s.demand.some((one) => norm(one.name) === norm(first.payer))) s.demand.push({ name: clean(first.payer!), claimId: first.sourceClaimId, from: 'OPENING', ref: first.id, path: `OPENING_PAYER:${norm(first.industry)}>${norm(first.payer)}`, ...termsOfGroup(group) });
     const need = first.offerScope ?? first.title;
-    if (safeName(need)) s.needs.push({ name: clean(need), claimId: first.sourceClaimId, from: 'OPENING', ref: first.id, path: `OPENING_NEED:${norm(first.industry)}>${norm(need)}` });
+    if (safeName(need)) s.needs.push({ name: clean(need), claimId: first.sourceClaimId, from: 'OPENING', ref: first.id, path: `OPENING_NEED:${norm(first.industry)}>${norm(need)}`, ...termsOfGroup(group) });
   }
   addSignalDemand(opportunities, facts, evidencedPayer, allowed, sector);
 
@@ -1510,6 +1533,29 @@ function valueSources(value: Estimate, observations: readonly Observation[]): st
   return [...new Set(value.used.flatMap((id) => byId.get(id)?.lineage ?? [id]))].sort();
 }
 
+/** An opening's stated timing as a part's `terms`, or nothing when it states none. */
+function termsOfOpening(o: CashOpportunity): { terms?: PaymentTimingReading } {
+  const terms = openingTiming(o, `opening ${o.id}`);
+  return terms.timing === 'UNKNOWN' ? {} : { terms };
+}
+function termsOfGroup(group: readonly CashOpportunity[]): { terms?: PaymentTimingReading } {
+  const terms = combineTimings(group.map((o) => openingTiming(o, `opening ${o.id}`)));
+  return terms.timing === 'UNKNOWN' ? {} : { terms };
+}
+
+/**
+ * When an arrangement's buyers pay, inherited from what its evidence states
+ * (production 2026-11-15): the buyer part's own source, and every held
+ * opening sold to the same buyer. The need part's source is not read: it may
+ * describe what a different buyer pays for, and its terms are that buyer's. ARREARS if any says so; PREPAID
+ * only if one does and none says otherwise; nothing when none states it. Pure.
+ */
+export function buyerTermsOf(demand: Primitive, related: readonly CashOpportunity[]): { buyerTerms?: PaymentTimingReading } {
+  const readings = [demand.terms, ...related.map((o) => openingTiming(o, `opening ${o.id}`))].filter((one): one is PaymentTimingReading => !!one);
+  const terms = combineTimings(readings);
+  return terms.timing === 'UNKNOWN' ? {} : { buyerTerms: terms };
+}
+
 function compose(args: {
   design: Design;
   origin: ConstructionOrigin;
@@ -1713,6 +1759,7 @@ function compose(args: {
     unknownParts,
     relatedOpenings: args.related.map((one) => one.id),
     question: asked,
+    ...buyerTermsOf(demand, args.related),
     repeatBusiness,
     signature: arrangementSignature(design, demand, need, supply),
     inputsDigest: digestOf([
