@@ -346,6 +346,7 @@ export interface Assurance {
   parameterInterval?: { low: number; p50: number; high: number; draws: number; basis: ParameterReach['basis'] } | null;
   /** The inputs that most limit the fifth-percentile reach (Q2-6). */
   limitingInputs?: LimitingInput[];
+  /**
    * The independent challenge of the recommendation, at the depth its
    * consequence earns (CHAL-33, `quant/challenge.ts` `challengePlan`): the
    * assumptions that matter, the test of each and a safer structure, shared
