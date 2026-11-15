@@ -15,7 +15,22 @@
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { freshProject } from './helpers.ts';
+import { getDb } from '../server/db/database.ts';
+import { createUser } from '../server/repos/identity.ts';
+import { cashEventsOfKindInProject } from '../server/repos/cashMode.ts';
+import { listRounds } from '../server/repos/cashDiscovery.ts';
+import { launchMission, transitionMission } from '../server/repos/russellMissions.ts';
+import { activate } from '../server/services/cash/lifecycle.ts';
+import * as discovery from '../server/services/cash/discovery.ts';
+import {
+  ABANDONED_FAILURE_CLASSES,
+  abandonedFailureClass,
+  diagnoseAbandonedRounds,
+  harvest,
+  openDiscovery,
+} from '../server/services/cash/discovery.ts';
 
 const FAILURE_CLASSES = [
   'TRAIL_API_ERROR',
@@ -54,6 +69,9 @@ interface Question {
 interface Report {
   deficiency: string;
   pinnedCommit: string;
+  method?: string;
+  limits?: string[];
+  classifiedBy?: { query: string; classifier: string; classes: string; module: string; event: string; eventFields: string[] };
   failureClasses: string[];
   questions: Question[];
   claims: Claim[];
@@ -177,5 +195,132 @@ describe('abandoned research rounds diagnosis', () => {
       const broken: Report = { ...fixture, questions: fixture.questions.map((one) => (one.id === q ? { ...one, answer: '  ' } : one)) };
       expect(problems(broken)).toContain(`${q}: no answer`);
     }
+  });
+});
+
+/*
+ * The report above was answered from code paths, and the reviewer's finding was
+ * that nothing in Brain could classify the abandoned rounds themselves: the
+ * report's taxonomy lived only in a fixture, and the operator had no query to
+ * run over production rows. These pin the production side — the report's
+ * classes are the code's, its stated limit is kept, and the rounds of a real
+ * project are classified from their own rows, including a round closed before
+ * causes were recorded.
+ */
+describe('the abandoned rounds are classified by Brain, not only by the report', () => {
+  it("holds the report to production's classes and names the production query that closes its limit", () => {
+    expect([...fixture.failureClasses].sort()).toEqual([...ABANDONED_FAILURE_CLASSES].sort());
+    expect([...FAILURE_CLASSES].sort()).toEqual([...ABANDONED_FAILURE_CLASSES].sort());
+    const by = fixture.classifiedBy!;
+    expect(by).toBeDefined();
+    const exported = discovery as unknown as Record<string, unknown>;
+    expect(typeof exported[by.query]).toBe('function');
+    expect(typeof exported[by.classifier]).toBe('function');
+    expect(exported[by.classes]).toEqual(ABANDONED_FAILURE_CLASSES);
+    expect(by.eventFields).toEqual(expect.arrayContaining(['cause', 'failureClass']));
+    // The limit stays stated: the report never read the rounds, so it claims no count.
+    expect(fixture.method).toMatch(/not readable/);
+    expect(fixture.limits?.length).toBeGreaterThan(0);
+  });
+
+  it('sorts each cause the operator named into its own class, and an unstated one into none', () => {
+    expect(abandonedFailureClass('MISSION_FAILED:worker lease expired: API timeout after 20000 ms')).toBe('TRAIL_TIMEOUT');
+    expect(abandonedFailureClass('MISSION_FAILED:submission refused: claims JSON did not parse')).toBe('TRAIL_FORMATTING');
+    expect(abandonedFailureClass('MISSION_FAILED:prompt is too long: maximum context length exceeded')).toBe('TRAIL_CONTEXT_HANDLING');
+    expect(abandonedFailureClass('MISSION_FAILED:provider returned 429 rate limit')).toBe('TRAIL_API_ERROR');
+    expect(abandonedFailureClass('MISSION_FAILED:source unreachable: ENOTFOUND example.test')).toBe('SOURCE_UNREACHABLE');
+    expect(abandonedFailureClass('MISSION_FAILED:No fragment cleared its evidence gate.')).toBe('MAST_TASK_VERIFICATION');
+    expect(abandonedFailureClass('ROUND_CAP_UNLAUNCHED_6H')).toBe('ROUND_CAP_LOGIC');
+    expect(abandonedFailureClass('ARCHIVE_ANSWERED')).toBe('ROUND_SETTLEMENT');
+    expect(abandonedFailureClass('MISSION_NEEDS_HUMAN:a login only the owner holds')).toBe('ROUND_SETTLEMENT');
+    expect(abandonedFailureClass('MISSION_CANCELLED:cancelled by operator')).toBe('ROUND_SETTLEMENT');
+    expect(abandonedFailureClass('MISSION_FAILED:UNSTATED')).toBe('UNATTRIBUTED');
+    for (const cause of ['MISSION_FAILED:anything at all', 'ARCHIVE_ANSWERED', 'MISSION_FAILED:UNSTATED']) {
+      expect(ABANDONED_FAILURE_CLASSES).toContain(abandonedFailureClass(cause));
+    }
+  });
+
+  describe('over a real project', () => {
+    let projectId = '';
+    let seq = 0;
+
+    beforeEach(async () => {
+      const fixtureProject = await freshProject();
+      projectId = fixtureProject.project.id;
+      const user = await createUser({
+        email: `diagnosis-${Math.random().toString(36).slice(2, 10)}@example.test`,
+        displayName: 'Owner',
+        password: 'correct horse battery staple',
+      });
+      const outcome = await activate({
+        projectId,
+        ownerUserId: user.id,
+        actorUserId: user.id,
+        objective: 'Maximize additional usable cash over the next few weeks.',
+      });
+      expect(outcome.ok).toBe(true);
+    });
+
+    async function failed(candidateId: string, terminalReason: string | null): Promise<void> {
+      seq += 1;
+      const { mission } = await launchMission({
+        projectId,
+        visibility: 'SHARED',
+        objective: 'a discovery bucket',
+        whyNow: 'the sprint is active',
+        idempotencyKey: `diagnosis-${candidateId}-${seq}`,
+        candidateId,
+      });
+      await transitionMission({ missionId: mission.id, from: 'PLANNED', to: 'RUNNING' });
+      await transitionMission({ missionId: mission.id, from: 'RUNNING', to: 'FAILED', terminalReason });
+    }
+
+    it('classifies every ABANDONED round from its rows, recording the class on the stop event and reconstructing an older one', async () => {
+      const opened = await openDiscovery({ projectId, limit: 5 });
+      expect(opened.length).toBeGreaterThanOrEqual(5);
+      const [timeout, parse, gate, silent, archive] = opened as [
+        (typeof opened)[number], (typeof opened)[number], (typeof opened)[number], (typeof opened)[number], (typeof opened)[number],
+      ];
+      await failed(timeout.candidateId, 'worker lease expired: API timeout after 20000 ms');
+      await failed(parse.candidateId, 'submission refused: claims JSON did not parse');
+      await failed(gate.candidateId, 'No fragment cleared its evidence gate.');
+      await failed(silent.candidateId, null);
+      await getDb().run('UPDATE russell_candidates SET state = ? WHERE id = ?', ['REJECTED', archive.candidateId]);
+
+      await harvest({ projectId, limit: 50 });
+
+      const rounds = await listRounds(projectId);
+      const roundOf = (one: { bucketId: string }) => rounds.find((r) => r.bucketId === one.bucketId)!;
+      for (const one of [timeout, parse, gate, silent, archive]) expect(roundOf(one).state).toBe('ABANDONED');
+
+      // The stop event the operator reads carries the class, not only the cause.
+      const events = await cashEventsOfKindInProject(projectId, 'CASH_DISCOVERY_ROUND_STOPPED');
+      const detailOf = (one: { bucketId: string }) =>
+        events.map((e) => e.detail as Record<string, unknown>).find((d) => d.roundId === roundOf(one).id)!;
+      expect(detailOf(timeout).failureClass).toBe('TRAIL_TIMEOUT');
+      expect(detailOf(archive).failureClass).toBe('ROUND_SETTLEMENT');
+
+      // A round closed before causes were recorded: its event carries neither.
+      const legacy = events.find((e) => (e.detail as Record<string, unknown>).roundId === roundOf(parse).id)!;
+      const stripped = { ...(legacy.detail as Record<string, unknown>) };
+      delete stripped.cause;
+      delete stripped.failureClass;
+      await getDb().run('UPDATE cash_events SET detail = ? WHERE id = ?', [JSON.stringify(stripped), legacy.id]);
+
+      const diagnosis = await diagnoseAbandonedRounds(projectId);
+      expect(diagnosis.total).toBe(rounds.filter((r) => r.state === 'ABANDONED').length);
+      const byRound = new Map(diagnosis.rounds.map((r) => [r.roundId, r]));
+      expect(byRound.get(roundOf(timeout).id)).toMatchObject({ failureClass: 'TRAIL_TIMEOUT', source: 'EVENT' });
+      expect(byRound.get(roundOf(parse).id)).toMatchObject({
+        failureClass: 'TRAIL_FORMATTING',
+        source: 'RECONSTRUCTED',
+        cause: 'MISSION_FAILED:submission refused: claims JSON did not parse',
+      });
+      expect(byRound.get(roundOf(gate).id)!.failureClass).toBe('MAST_TASK_VERIFICATION');
+      expect(byRound.get(roundOf(silent).id)!.failureClass).toBe('UNATTRIBUTED');
+      expect(byRound.get(roundOf(archive).id)!.failureClass).toBe('ROUND_SETTLEMENT');
+      expect(Object.values(diagnosis.byClass).reduce((a, b) => a + b, 0)).toBe(diagnosis.total);
+      expect(diagnosis.byClass.TRAIL_TIMEOUT).toBeGreaterThanOrEqual(1);
+    });
   });
 });
