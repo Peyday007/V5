@@ -75,6 +75,24 @@ describe('a failed method is an attempt kept without effect or reverted', () => 
     expect(next.candidate.evidence['reattempt']).toMatchObject({ reason: 'held on a person who has since answered', priorDecisions: [{ attempt: 1, decision: 'HELD' }] });
   });
 
+  it('re-judges rather than inherits a method judgment carried in the caller\'s evidence', async () => {
+    // The director passes the previous attempt's whole evidence, judgment included.
+    const one = await member(BASE, 1, { decision: 'HELD' });
+    const inherited = { methodInadequacy: { judgment: 'Attempt(s) 1 ended HELD; …', failedAttempts: [1] }, directive: 'keep me', goalBaseline: 3 };
+    const next = await registerNextAttempt(one, { reason: 'the person answered', evidence: inherited });
+    expect(next.ok).toBe(true);
+    if (!next.ok) return;
+    expect(next.candidate.evidence['methodInadequacy']).toBeUndefined();
+    expect(next.candidate.evidence).toMatchObject({ directive: 'keep me', goalBaseline: 3 });
+    expect((await originationHoldsOnRows()).ok).not.toBe(false);
+
+    // With a real failure in the family, the new judgment replaces the inherited one.
+    const two = await member('OPERATOR:INHERIT', 1, { decision: 'REVERTED' });
+    const three = await member('OPERATOR:INHERIT#2', 2, { decision: 'HELD', parentId: two });
+    const again = await registerNextAttempt(three, { reason: 'stalled', evidence: { methodInadequacy: { judgment: 'stale', failedAttempts: [1, 2] } } });
+    expect(again.ok && (again.candidate.evidence['methodInadequacy'] as { failedAttempts: number[] }).failedAttempts).toEqual([1]);
+  });
+
   it('still names a reverted attempt as a failed method', async () => {
     const one = await member(BASE, 1, { decision: 'REVERTED' });
     const next = await registerNextAttempt(one, { reason: 'reverted', evidence: {} });
