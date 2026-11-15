@@ -18,7 +18,20 @@
  *     check, so a deep step is validated by a different model over different
  *     data, and a REVISE holds it with the assumption and the alternative the
  *     challenger named.
+ *
+ * The running Brain reaches it from the optimizer itself (CHAL-33 F3,
+ * unreachable): every plan read goes through `optimizePortfolio`, whose
+ * `bindChallenge` asks `modelChallengeFor` when — and only when — the plan's
+ * challenge says the model challenge is due and the caller supplied no answer.
+ * The optimizer is synchronous and a second model is not, so the first read of
+ * a plan starts the ask (once per plan, bounded in flight, never retried
+ * sooner than `MODEL_CHALLENGE_RETRY_MS` after a silence) and stays held as
+ * `due`; the next read of the same plan — the plan pass runs on its own
+ * cadence — finds the answer and binds it. A plan whose figures changed is a
+ * different plan and is asked again: an answer about one plan never validates
+ * another.
  */
+import { createHash } from 'node:crypto';
 import { reviewDecision, type DecisionInput } from '../../domain/decision.ts';
 import type { OperatorModel } from '../../domain/operator.ts';
 import { challengeDecision } from '../operator/decisions.ts';
@@ -61,6 +74,17 @@ export function planDecision(problem: PortfolioProblem, result: PortfolioResult,
   };
 }
 
+/** Ask Brain's existing challenger about a plan stated as a decision. Shared by both entrances, so there is one path. */
+export async function askPlanChallenger(
+  input: DecisionInput,
+  models: OperatorModel[],
+  fetchImpl: typeof fetch = fetch,
+  bounds: Parameters<typeof challengeDecision>[4] = {},
+  challenger: typeof challengeDecision = challengeDecision,
+): Promise<ModelChallenge | null> {
+  return challenger(input, reviewDecision(input), models, fetchImpl, bounds);
+}
+
 export interface ModelChallengedPlan {
   summary: ChallengeSummary;
   /** Whether the existing challenger was asked: only when the tier required it. */
@@ -85,7 +109,8 @@ export async function challengePlanWithModel(
   const first = challengePlan(problem, result, planOptions);
   if (!first.modelChallenge.due) return { summary: first, asked: false, challenge: null };
   const input = planDecision(problem, result, first, goalId ?? null);
-  const answer = await challenger(input, reviewDecision(input), models, fetchImpl ?? fetch, bounds ?? {});
+  const answer = await askPlanChallenger(input, models, fetchImpl ?? fetch, bounds ?? {}, challenger);
+  remember(planChallengeKey(input), answer);
   if (!answer) return { summary: first, asked: true, challenge: null };
   const summary = challengePlan(problem, result, { ...planOptions, modelChallenge: answer });
   /*
@@ -101,4 +126,105 @@ export async function challengePlanWithModel(
     applyChallengeToAssurance(result.assurance, summary, result.adoption);
   }
   return { summary, asked: true, challenge: answer };
+}
+
+/* ---------------------------------------------------------------------------
+ * The optimizer's entrance (CHAL-33 F3, unreachable).
+ * ------------------------------------------------------------------------- */
+
+/** How long a challenger that did not answer is left before the same plan is asked again. */
+export const MODEL_CHALLENGE_RETRY_MS = 30 * 60_000;
+/** Answers kept, newest last; the oldest is forgotten first. */
+export const MODEL_CHALLENGE_MEMO_LIMIT = 256;
+/** Plans being asked at once, across the process. */
+export const MODEL_CHALLENGE_MAX_IN_FLIGHT = 2;
+
+/** What asks the challenger about one plan. Production: the operator's own models, through `askPlanChallenger`. */
+export type PlanChallengeAsker = (input: DecisionInput) => Promise<ModelChallenge | null>;
+
+async function operatorAsker(input: DecisionInput): Promise<ModelChallenge | null> {
+  const { modelsFor } = await import('../operator/run.ts');
+  const models = await modelsFor();
+  // No model configured is no answer — never a pass.
+  if (models.length === 0) return null;
+  return askPlanChallenger(input, models);
+}
+
+let asker: PlanChallengeAsker = operatorAsker;
+const answers = new Map<string, { answer: ModelChallenge | null; at: number }>();
+const inFlight = new Map<string, Promise<void>>();
+
+function remember(key: string, answer: ModelChallenge | null, at = Date.now()): void {
+  answers.delete(key);
+  answers.set(key, { answer, at });
+  while (answers.size > MODEL_CHALLENGE_MEMO_LIMIT) {
+    const oldest = answers.keys().next().value;
+    if (oldest === undefined) break;
+    answers.delete(oldest);
+  }
+}
+
+/**
+ * The identity of a plan as the challenger is asked about it: the question, the
+ * options with their figures, and the assumptions. Pure. A plan whose figures
+ * moved is a different plan.
+ */
+export function planChallengeKey(input: DecisionInput): string {
+  const stated = {
+    question: input.question,
+    options: input.options.map((o) => [o.action, o.probability, o.valueUsd, o.costUsd, o.evidence]),
+    chosen: input.chosen,
+    assumptions: input.assumptions,
+    irreversible: input.irreversible ?? null,
+  };
+  return createHash('sha256').update(JSON.stringify(stated)).digest('hex');
+}
+
+/**
+ * The existing challenger's answer on exactly this plan, when it has given one;
+ * otherwise undefined, after starting the ask when the challenge is due and the
+ * plan is not already being asked or recently unanswered. Synchronous, so the
+ * optimizer can call it; never throws, and an ask that fails is remembered as
+ * no answer.
+ */
+export function modelChallengeFor(problem: PortfolioProblem, result: PortfolioResult, summary: ChallengeSummary, now = Date.now()): ModelChallenge | undefined {
+  if (!summary.modelChallenge.due || !result.best) return undefined;
+  let input: DecisionInput;
+  try {
+    input = planDecision(problem, result, summary, null);
+  } catch {
+    return undefined;
+  }
+  const key = planChallengeKey(input);
+  const known = answers.get(key);
+  if (known?.answer) return known.answer;
+  if (known && now - known.at < MODEL_CHALLENGE_RETRY_MS) return undefined;
+  if (inFlight.has(key) || inFlight.size >= MODEL_CHALLENGE_MAX_IN_FLIGHT) return undefined;
+  const ask = (async () => {
+    let answer: ModelChallenge | null = null;
+    try {
+      answer = await asker(input);
+    } catch {
+      answer = null;
+    }
+    remember(key, answer);
+  })().finally(() => inFlight.delete(key));
+  inFlight.set(key, ask);
+  return undefined;
+}
+
+/** Tests: replace the production asker; null restores it. */
+export function setPlanChallengeAsker(next: PlanChallengeAsker | null): void {
+  asker = next ?? operatorAsker;
+}
+
+/** Tests: wait for every ask in flight to settle. */
+export async function settlePlanChallenges(): Promise<void> {
+  await Promise.all([...inFlight.values()]);
+}
+
+/** Tests: forget every answer and every ask in flight. */
+export function forgetPlanChallenges(): void {
+  answers.clear();
+  inFlight.clear();
 }

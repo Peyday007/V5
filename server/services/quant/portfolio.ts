@@ -31,6 +31,7 @@
 import { inverseNormal, makeRng, normalCdf } from '../scenario/random.ts';
 import { capitalTurnover, objectiveScore, type RouteObjective } from './deadline.ts';
 import { challengePlan, type ChallengeSummary, type PlanChallengeOptions } from './challenge.ts';
+import { modelChallengeFor } from './modelChallenge.ts';
 
 export interface Activity {
   key: string;
@@ -1093,7 +1094,19 @@ function bindChallenge(
   readKeys: (keys: string[]) => PortfolioReading | null,
   effectsOf: (one: PortfolioReading) => SafeguardEffect[] | undefined,
 ): void {
-  const first = challengePlan(problem, result, options);
+  /*
+   * A deep plan's required model challenge is asked through Brain's existing
+   * challenger (`modelChallenge.ts`, CHAL-33 F3) unless the caller supplied
+   * the answer itself; its verdict enters as an INDEPENDENT_MODEL check. An
+   * answer not yet given leaves the challenge due, which holds the claim.
+   */
+  const challenged = (): ChallengeSummary => {
+    const plain = challengePlan(problem, result, options);
+    if (options.modelChallenge !== undefined || !plain.modelChallenge.due) return plain;
+    const answer = modelChallengeFor(problem, result, plain);
+    return answer ? challengePlan(problem, result, { ...options, modelChallenge: answer }) : plain;
+  };
+  const first = challenged();
   const adopted = adoptionFrom(first, result.best!, readKeys);
   if (adopted) {
     const original = result.best!;
@@ -1113,7 +1126,7 @@ function bindChallenge(
       original: first,
     };
   }
-  const summary = adopted ? challengePlan(problem, result, options) : first;
+  const summary = adopted ? challenged() : first;
   applyChallengeToAssurance(result.assurance!, summary, result.adoption);
 }
 
