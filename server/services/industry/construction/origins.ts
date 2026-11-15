@@ -359,8 +359,15 @@ export function marketScore(m: MarketCandidate, floor: UnknownFloor = DEFAULT_UN
  */
 export function rankMarkets(markets: MarketCandidate[], _context: RankingContext = {}): MarketCandidate[] {
   const floor = unknownFloor(markets);
-  const score = new Map(markets.map((m) => [m, marketScore(m, floor)] as const));
-  return [...markets].sort((a, b) => score.get(b)! - score.get(a)! || a.key.localeCompare(b.key));
+  const read = new Map(markets.map((m) => [m, marketCriteria(m, floor)] as const));
+  // At the floor an unknown can only tie the worst known reading; on a tie the market
+  // with fewer unknowns comes first, so an absence of research never ranks above a
+  // reading that found a cost — whatever the keys (invariant 39).
+  return [...markets].sort((a, b) => {
+    const ra = read.get(a)!;
+    const rb = read.get(b)!;
+    return rb.score - ra.score || ra.unknown.length - rb.unknown.length || a.key.localeCompare(b.key);
+  });
 }
 
 /** The bound of a fact the evidence states for a segment (or market-wide), or null when nothing states it. */

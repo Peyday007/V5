@@ -185,3 +185,28 @@ describe('an unknown never outranks adverse evidence (invariant 39)', () => {
     for (const r of ranked) expect(r.criteria.score).toBe(marketScore(r.market, floor));
   });
 });
+
+describe('an unknown never ranks above adverse evidence, even on a tie (invariant 39)', () => {
+  const twin = (key: string, extra: Partial<MarketCandidate>): MarketCandidate => ({
+    key, geography: null, marginUsd: 100, monthlyVolume: 100, daysToCash: 30, remoteControl: 1, feasibility: 1, capitalUsd: 0, failureRate: 0, ...extra,
+  });
+
+  it('heavy known capital is not beaten by an unknown whose key sorts first', () => {
+    const known = twin('a-known', { capitalUsd: 100_000 });
+    const unknown = twin('0-unknown', { capitalUsd: null });
+    expect(rankMarkets([unknown, known]).map((m) => m.key)).toEqual(['a-known', '0-unknown']);
+    expect(rankMarkets([known, unknown]).map((m) => m.key)).toEqual(['a-known', '0-unknown']);
+  });
+
+  it('a measured high failure rate is not beaten by an unmeasured one whose key sorts first', () => {
+    const known = twin('a-known', { failureRate: 0.5 });
+    const unknown = twin('0-unknown', { failureRate: null });
+    expect(rankMarkets([unknown, known])[0]!.key).toBe('a-known');
+  });
+
+  it('a favourable known reading still beats an unknown', () => {
+    const cheap = twin('z-cheap', { capitalUsd: 1_000, failureRate: 0.1 });
+    const unknown = twin('a-unknown', { capitalUsd: null, failureRate: null });
+    expect(rankMarkets([unknown, cheap])[0]!.key).toBe('z-cheap');
+  });
+});
