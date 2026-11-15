@@ -331,6 +331,61 @@ export interface ConstructionInput {
 const TIER_ORDER = ['DIRECT', 'COMPARABLE', 'COMPONENT', 'MECHANISM', 'ASSUMED', 'UNKNOWN'];
 const EXPOSURE_ORDER: StressReading['exposure'][] = ['SAFE', 'BOUNDED', 'UNKNOWN', 'EXCEEDS'];
 
+/** At most this many buyer populations, and needs, one sector takes from openings held only as evidence (F5). */
+export const SIGNAL_PARTS_PER_SECTOR = 12;
+
+/**
+ * Openings held only as evidence feed construction as demand evidence (F5).
+ *
+ * An opening whose payer no gated claim established — most of them tier
+ * SIGNAL, with no way of being paid worked out — is rightly not a found
+ * opening (invariant 39), and is never one here. But the claim it was
+ * harvested from still says a buyer of some kind has a need in some part of
+ * the economy, which is exactly what a BUYER_TYPE or BOTTLENECK node on the
+ * industry map says. Production, 2026-11-14: 282 of 418 live openings were
+ * evidence only and fed neither construction nor transfer, so two thirds of
+ * what Brain held was inert in planning.
+ *
+ * So its buyer (the opening's payer, or a payer card fact a source or a person gave) becomes
+ * a buyer population and its offer or title a need, in its sector, under the
+ * same part paths an evidenced payer uses (K-7) — the same population read
+ * twice is one part, and evidencing its payer later keeps its signature. Each
+ * part carries the opening's source claim as its evidence. Nothing about the
+ * opening itself changes, and a part already present is not added twice.
+ * Bounded per sector, most recently updated first, so one noisy sector cannot
+ * flood the candidate count.
+ */
+function addSignalDemand(
+  opportunities: readonly CashOpportunity[],
+  facts: readonly { opportunityId: string; field: string; kind: string; value: unknown }[],
+  evidencedPayer: ReadonlySet<string>,
+  allowed: (text: string | null | undefined) => boolean,
+  sector: (name: string | null) => { demand: Primitive[]; needs: Primitive[] },
+): void {
+  const payerFact = new Map<string, string>();
+  // Brain's own proposal of a payer is not evidence of one; a person's answer or a source's is.
+  for (const f of facts) if (f.field === 'payer' && f.kind !== 'RECOMMENDATION' && typeof f.value === 'string' && f.value.trim() && !payerFact.has(f.opportunityId)) payerFact.set(f.opportunityId, f.value.trim());
+  const added = new Map<string, { demand: number; needs: number }>();
+  const ordered = [...opportunities].filter((o) => !evidencedPayer.has(o.id)).sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : a.id < b.id ? -1 : 1));
+  for (const o of ordered) {
+    if (!allowed(o.title) || !allowed(o.industry)) continue;
+    const key = norm(o.industry) || '-';
+    const count = added.get(key) ?? { demand: 0, needs: 0 };
+    const s = sector(o.industry);
+    const payer = (o.payer && o.payer.trim()) || payerFact.get(o.id) || null;
+    if (payer && safeName(payer) && allowed(payer) && count.demand < SIGNAL_PARTS_PER_SECTOR && !s.demand.some((one) => norm(one.name) === norm(payer))) {
+      s.demand.push({ name: clean(payer), claimId: o.sourceClaimId, from: 'OPENING', ref: o.id, path: `OPENING_PAYER:${norm(o.industry)}>${norm(payer)}` });
+      count.demand += 1;
+    }
+    const need = o.offerScope ?? o.title;
+    if (safeName(need) && count.needs < SIGNAL_PARTS_PER_SECTOR && !s.needs.some((one) => norm(one.name) === norm(need))) {
+      s.needs.push({ name: clean(need), claimId: o.sourceClaimId, from: 'OPENING', ref: o.id, path: `OPENING_NEED:${norm(o.industry)}>${norm(need)}` });
+      count.needs += 1;
+    }
+    added.set(key, count);
+  }
+}
+
 /**
  * Compose every arrangement the project's own rows support — forward from its
  * parts, transferred from designs held openings show working, and in reverse
@@ -388,6 +443,7 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
     const need = first.offerScope ?? first.title;
     if (safeName(need)) s.needs.push({ name: clean(need), claimId: first.sourceClaimId, from: 'OPENING', ref: first.id, path: `OPENING_NEED:${norm(first.industry)}>${norm(need)}` });
   }
+  addSignalDemand(opportunities, facts, evidencedPayer, allowed, sector);
 
   /*
    * Designs held openings show working, by structure: an opening a buyer paid

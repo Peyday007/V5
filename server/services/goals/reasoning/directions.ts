@@ -1158,10 +1158,40 @@ export function inventBrief(ctx: ExploreContext): InventBrief {
 const FIELDS: readonly Field[] = ['price', 'close', 'respond', 'volume', 'daysToCash', 'directCost'];
 const SCOPES = ['ALL', 'OUTREACH', 'SMALL_TICKET', 'LARGE_TICKET', 'FAST_CASH', 'SLOW_CASH', 'TOP', 'REST'];
 
+/** A closed-vocabulary word as a model writes it: case, spaces and hyphens are form, not meaning. */
+const word = (x: unknown): string | null => (typeof x === 'string' && x.trim() ? x.trim().toUpperCase().replace(/[\s-]+/g, '_') : null);
+/** A number a model wrote as a number or as a numeric string. */
+const numberOf = (x: unknown): number | null => (typeof x === 'number' && Number.isFinite(x) ? x : typeof x === 'string' && x.trim() !== '' && Number.isFinite(Number(x)) ? Number(x) : null);
+/** An opening or arrangement id as a model writes it: bare, or with the `id:` a scope uses. */
+const idOf = (x: unknown): string | null => (typeof x === 'string' && x.trim() ? x.trim().replace(/^id:/i, '') : null);
+
+/**
+ * Whether a model's `design` field says "no design". The prompt marked the
+ * design optional, and models answer an optional object with `null`, `{}`,
+ * `""` or a placeholder rather than leaving the key out. Production,
+ * 2026-11-14 (plan-0008): 4 calls, 16 methods proposed, 16 refused as
+ * off-shape — a method carrying such an empty design was refused as a
+ * malformed design although it proposed none, and every other refusal was
+ * silent, so nothing recorded why. An object that names a structure or a
+ * buyer population is an attempt at a design and is judged as one; anything
+ * else is the absence of one.
+ */
+function noDesign(raw: unknown): boolean {
+  if (raw === undefined || raw === null || raw === false) return true;
+  if (typeof raw === 'string') return !raw.trim() || /^(none|null|n\/a|optional|\.\.\.|\{\.\.\.optional\})$/i.test(raw.trim());
+  if (typeof raw !== 'object' || Array.isArray(raw)) return false;
+  const x = raw as Record<string, unknown>;
+  const said = (k: string) => typeof x[k] === 'string' && (x[k] as string).trim().length > 0;
+  return !said('structure') && !said('base') && !said('population');
+}
+
 /**
  * Validate a model's answer into directions. Off-shape methods are refused,
- * never repaired; a transform naming an operator or opening that does not
- * exist is refused with it. A model may name any stance.
+ * never repaired, and every refusal says why; a transform naming an operator
+ * or opening that does not exist is refused with it. A model may name any
+ * stance. Form is read leniently — the case of a vocabulary word, a number
+ * written as a string, an id with or without its `id:`, an empty optional
+ * design — because none of that changes what the method means.
  */
 export function parseInvented(text: string, brief: Pick<InventBrief, 'operators' | 'openings' | 'reserve' | 'designs'>): { directions: Direction[]; proposed: number; refused: number; rejections: string[] } {
   const match = /\{[\s\S]*\}/.exec(text);
@@ -1176,52 +1206,96 @@ export function parseInvented(text: string, brief: Pick<InventBrief, 'operators'
   if (!Array.isArray(methods)) return { directions: [], proposed: 0, refused: 1, rejections: ['the answer holds no "methods" list'] };
   const rejections: string[] = [];
   const ops = new Set(brief.operators.map((o) => o.key));
-  const opPrefix = (k: string) => ops.has(k) || [...ops].some((o) => o.startsWith(k) && k.length >= 4);
+  const opKey = (raw: unknown): string | null => {
+    if (typeof raw !== 'string') return null;
+    const k = raw.trim();
+    for (const c of [k, k.toLowerCase()]) if (ops.has(c) || (c.length >= 4 && [...ops].some((o) => o.startsWith(c)))) return c;
+    return null;
+  };
   const ids = new Set(brief.openings.map((o) => o.id));
   const reserve = new Set((brief.reserve ?? []).map((o) => o.id));
+  const scopeOf = (raw: unknown): Scope | null => {
+    if (raw === undefined || raw === null || raw === '') return 'ALL';
+    const id = idOf(raw);
+    if (id && ids.has(id)) return `id:${id}` as Scope;
+    const w = word(raw);
+    return w && SCOPES.includes(w) ? (w as Scope) : null;
+  };
   const directions: Direction[] = [];
   let refused = 0;
+  const refuse = (name: string, why: string) => {
+    refused++;
+    rejections.push(`"${name || 'unnamed'}": ${why}`);
+  };
   for (const m of methods.slice(0, 16)) {
-    const r = m as Record<string, unknown>;
+    const r = (m && typeof m === 'object' ? m : {}) as Record<string, unknown>;
     const name = typeof r['name'] === 'string' ? r['name'].trim().slice(0, 120) : '';
     const stance = typeof r['stance'] === 'string' ? r['stance'].trim().toUpperCase().replace(/[^A-Z0-9_+-]+/g, '_').slice(0, 40) : '';
     const thinking = typeof r['thinking'] === 'string' ? r['thinking'].trim().slice(0, 400) : '';
     // A method may carry a new transaction design for a buyer population (S-11), when the brief offered the vocabulary.
-    const designed = r['design'] === undefined ? null : brief.designs ? parseDesign(r['design']) : { refused: 'designs are not offered in this read' };
+    const designed = noDesign(r['design']) ? null : brief.designs ? parseDesign(r['design']) : { refused: 'designs are not offered in this read' };
     if (designed && 'refused' in designed) {
-      refused++;
-      rejections.push(`"${name || 'unnamed'}": ${designed.refused}`);
+      refuse(name, designed.refused);
       continue;
     }
-    const program = Array.isArray(r['program']) ? r['program'] : designed ? [] : null;
-    if (!name || !stance || !thinking || !program || (program.length === 0 && !designed) || program.length > 6) {
-      refused++;
+    const program = Array.isArray(r['program']) ? r['program'] : r['program'] === undefined || r['program'] === null ? [] : null;
+    if (!name || !stance || !thinking) {
+      refuse(name, `it has no ${[!name && 'name', !stance && 'stance', !thinking && 'thinking'].filter(Boolean).join(', ')}`);
+      continue;
+    }
+    if (!program) {
+      refuse(name, 'its program is not a list of steps');
+      continue;
+    }
+    if (program.length === 0 && !designed) {
+      refuse(name, 'its program is empty and it carries no design');
+      continue;
+    }
+    if (program.length > 6) {
+      refuse(name, `its program has ${program.length} steps; at most 6 are read`);
       continue;
     }
     const transforms: Transform[] = [];
-    let bad = false;
+    let bad: string | null = null;
     for (const t of program) {
-      const x = t as Record<string, unknown>;
-      const scope = typeof x['scope'] === 'string' ? x['scope'] : 'ALL';
-      const scopeOk = SCOPES.includes(scope) || (scope.startsWith('id:') && ids.has(scope.slice(3)));
-      if (x['op'] === 'OPERATOR' && typeof x['key'] === 'string' && opPrefix(x['key']) && (x['target'] === undefined || (typeof x['target'] === 'string' && ids.has(x['target'])))) {
-        transforms.push({ op: 'OPERATOR', key: x['key'], ...(typeof x['target'] === 'string' ? { target: x['target'] } : {}) });
-      } else if (x['op'] === 'PRICE' && typeof x['factor'] === 'number' && x['factor'] > 0.2 && x['factor'] <= 5 && scopeOk) {
-        transforms.push({ op: 'PRICE', factor: x['factor'], scope: scope as Scope });
-      } else if (x['op'] === 'FOCUS' && typeof x['count'] === 'number' && x['count'] >= 1) {
-        transforms.push({ op: 'FOCUS', count: Math.round(x['count']) });
-      } else if (x['op'] === 'DROP' && scopeOk) {
-        transforms.push({ op: 'DROP', scope: scope as Scope });
-      } else if (x['op'] === 'INCLUDE' && typeof x['key'] === 'string' && reserve.has(x['key'])) {
-        transforms.push({ op: 'INCLUDE', key: x['key'] });
-      } else bad = true;
+      const x = (t && typeof t === 'object' ? t : {}) as Record<string, unknown>;
+      const op = word(x['op']);
+      if (op === 'OPERATOR') {
+        const key = opKey(x['key']);
+        const target = x['target'] === undefined || x['target'] === null || x['target'] === '' ? null : idOf(x['target']);
+        if (!key) bad = `its step names operator "${String(x['key']).slice(0, 60)}", which is not one of the operators offered`;
+        else if (target !== null && !ids.has(target)) bad = `its step points operator ${key} at "${String(x['target']).slice(0, 60)}", which is not an opening held`;
+        else transforms.push({ op: 'OPERATOR', key, ...(target !== null ? { target } : {}) });
+      } else if (op === 'PRICE') {
+        const factor = numberOf(x['factor']);
+        const scope = scopeOf(x['scope']);
+        if (factor === null || factor <= 0.2 || factor > 5) bad = `its PRICE factor ${String(x['factor']).slice(0, 20)} is outside 0.25-4`;
+        else if (!scope) bad = `its PRICE scope "${String(x['scope']).slice(0, 60)}" is not a scope or an opening held`;
+        else transforms.push({ op: 'PRICE', factor, scope });
+      } else if (op === 'FOCUS') {
+        const count = numberOf(x['count']);
+        if (count === null || count < 1) bad = 'its FOCUS step names no count of at least 1';
+        else transforms.push({ op: 'FOCUS', count: Math.round(count) });
+      } else if (op === 'DROP') {
+        const scope = scopeOf(x['scope']);
+        if (!scope) bad = `its DROP scope "${String(x['scope']).slice(0, 60)}" is not a scope or an opening held`;
+        else transforms.push({ op: 'DROP', scope });
+      } else if (op === 'INCLUDE') {
+        const key = idOf(x['key']);
+        if (!key || !reserve.has(key)) bad = `its INCLUDE names "${String(x['key']).slice(0, 60)}", which is not an arrangement outside the plan`;
+        else transforms.push({ op: 'INCLUDE', key });
+      } else bad = `its step "${String(x['op']).slice(0, 30)}" is outside the vocabulary (OPERATOR, PRICE, FOCUS, DROP, INCLUDE)`;
+      if (bad) break;
     }
-    if (bad || (transforms.length === 0 && !designed)) {
-      refused++;
-      if (designed) rejections.push(`"${name}": its program uses a step outside the vocabulary`);
+    if (bad) {
+      refuse(name, bad);
       continue;
     }
-    const from = r['from'] === 'BASELINE' ? 'BASELINE' : 'GREEDY';
+    if (transforms.length === 0 && !designed) {
+      refuse(name, 'its program holds no step');
+      continue;
+    }
+    const from = word(r['from']) === 'BASELINE' ? 'BASELINE' : 'GREEDY';
     const ask = typeof r['ask'] === 'string' && r['ask'].trim().length > 10 ? r['ask'].trim().slice(0, 300) : undefined;
     const challenges = typeof r['challenges'] === 'string' ? r['challenges'].trim().slice(0, 200) : undefined;
     directions.push(makeDirection({ name, stance, origin: 'MODEL', thinking, from, program: transforms, ...(ask ? { ask } : {}), ...(challenges ? { challenges } : {}), ...(designed ? { design: designed } : {}) }));
@@ -1229,7 +1303,17 @@ export function parseInvented(text: string, brief: Pick<InventBrief, 'operators'
   return { directions, proposed: methods.length, refused, rejections };
 }
 
-const oneOf = <T extends string>(xs: readonly T[], x: unknown): T | null => (typeof x === 'string' && (xs as readonly string[]).includes(x) ? (x as T) : null);
+/** A closed-vocabulary value, read by its key in any case, or by its label. */
+const oneOf = <T extends string>(xs: readonly T[], x: unknown, labels?: Readonly<Record<string, { label: string }>>): T | null => {
+  const w = word(x);
+  if (w && (xs as readonly string[]).includes(w)) return w as T;
+  if (labels && typeof x === 'string') {
+    const t = x.trim().toLowerCase();
+    const hit = xs.find((k) => labels[k]?.label.toLowerCase() === t);
+    if (hit) return hit;
+  }
+  return null;
+};
 
 /**
  * A model's design, checked for shape only: the four parts of the design
@@ -1240,7 +1324,7 @@ const oneOf = <T extends string>(xs: readonly T[], x: unknown): T | null => (typ
 export function parseDesign(raw: unknown): InventedDesign | { refused: string } {
   if (!raw || typeof raw !== 'object') return { refused: 'its design is not an object' };
   const x = raw as Record<string, unknown>;
-  const base = oneOf(STRUCTURE_KEYS, x['structure'] ?? x['base']);
+  const base = oneOf(STRUCTURE_KEYS, x['structure'] ?? x['base'], STRUCTURES);
   if (!base) return { refused: `its design names no structure of ${STRUCTURE_KEYS.join(', ')}` };
   const funding = oneOf(FUNDING, x['funding'] ?? 'ON_DELIVERY');
   const aggregation = oneOf(AGGREGATION, x['aggregation'] ?? (base === 'POOL' ? 'POOLED_BUYERS' : 'SINGLE'));
@@ -1304,6 +1388,8 @@ export function renderExploration(x: Exploration, limit = 10): string[] {
   lines.push(`  explore   ${x.sentence}`);
   lines.push(`    budget  ${x.budget} direction(s) justified by the problem · ${x.evaluations} evaluation(s) on ${x.threads} thread(s) · origin ${Object.entries(x.byOrigin).map(([k, n]) => `${k.toLowerCase()} ${n}`).join(', ')}`);
   lines.push(`    model   ${x.model.calls} call(s), ${x.model.proposed} method(s) proposed, ${x.model.refused} refused as off-shape${x.model.error ? ` · ${x.model.error.slice(0, 120)}` : ''}`);
+  // Why, so a refusal rate is read from the plan rather than guessed (F9.2).
+  for (const why of (x.model.rejections ?? []).slice(0, 3)) lines.push(`    refused ${why.slice(0, 160)}`);
   for (const s of x.stanceYield.slice(0, 14)) lines.push(`    stance  ${s.stance.padEnd(22)} ${String(s.directions).padStart(3)} direction(s), ${s.improved} improved the plan as held, best lift ${pct(s.bestLift)}`);
   for (const l of x.leaders.slice(0, limit)) lines.push(`    leader  ${(l === x.winner ? '*' : ' ')} [${l.direction.origin.toLowerCase()} · ${l.direction.stance}] ${l.direction.name.slice(0, 80)} → reach ${v(l.reading)}, challenged ${v(l.challenged)}`);
   for (const d of x.discoveries.slice(0, 5)) lines.push(`    found   [model] ${d.direction.name.slice(0, 80)} — ${d.direction.thinking.slice(0, 160)} → reach ${v(d.reading)}`);

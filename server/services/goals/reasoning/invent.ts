@@ -21,6 +21,10 @@ import { parseInvented, type Direction, type InventBrief } from './directions.ts
 
 export const INVENT_CALLS_MAX = 4;
 export const INVENT_TIMEOUT_MS = 45_000;
+/** The pause before a rate-refused call is asked once more, and the least budget worth asking with. */
+export const INVENT_BACKOFF_MS = 4_000;
+export const INVENT_RETRY_MIN_MS = 10_000;
+const RATE_LIMITED = /\bHTTP 429\b|rate.?limit|too many requests/i;
 
 const SYSTEM =
   'You are the strategist inside a planning engine. You invent DIFFERENT WAYS OF REASONING about a goal — ' +
@@ -64,7 +68,9 @@ export function inventPrompt(brief: InventBrief, slot: number, avoid: string[]):
     brief.bestKnown.length ? `Methods that worked before on other plans: ${brief.bestKnown.map((m) => `${m.stance}: ${m.thinking}`).join(' / ')}` : '',
     `You are strategist ${slot + 1}; others are answering too, so take an angle they are unlikely to take.`,
     'Give 5 to 8 methods. For each, name the assumption of the current plan it challenges, and if it needs a fact the openings do not show, put the question in "ask".',
-    `Reply exactly: {"methods":[{"name":"short name","stance":"ONE_OR_TWO_WORDS","thinking":"one or two sentences: how this way of reasoning sees the problem","challenges":"the assumption it attacks","from":"BASELINE|GREEDY","program":[...],${brief.designs ? '"design":{...optional},' : ''}"ask":"optional question"}]}`,
+    'An opening id is written bare in "target" and "key" (cop_123), and as id:cop_123 only in "scope". Every program step is one of the objects above, with its "op" spelled exactly.',
+    brief.designs ? 'Leave "design" out of a method that brings in no new arrangement; never write it empty.' : '',
+    `Reply exactly: {"methods":[{"name":"short name","stance":"ONE_OR_TWO_WORDS","thinking":"one or two sentences: how this way of reasoning sees the problem","challenges":"the assumption it attacks","from":"BASELINE or GREEDY","program":[{"op":"FOCUS","count":3}],${brief.designs ? '"design":{"structure":"<structure>","population":"<who pays>"},' : ''}"ask":"optional question"}]}${brief.designs ? ' — "design" only on a method that brings in a new arrangement.' : ''}`,
   ]
     .filter(Boolean)
     .join('\n');
@@ -76,6 +82,8 @@ export interface InventOptions {
   /** Concurrent calls: the spare model capacity the caller measured. */
   calls?: number;
   env?: NodeJS.ProcessEnv;
+  /** The pause before a rate-refused call is retried; tests shorten it. */
+  backoffMs?: number;
 }
 
 /** Whether the model would be asked at all: off on purpose, or no lane configured. */
@@ -91,15 +99,32 @@ export async function inventDirections(brief: InventBrief, options: InventOption
   const complete = options.completer ?? httpCompleter;
   const calls = Math.max(1, Math.min(INVENT_CALLS_MAX, options.calls ?? config.models.length * 2));
   const model = (i: number) => config.models[i % config.models.length]!;
-  // Concurrent: each strategist is asked at the same time, and told to take an angle the others will not.
-  const answers = await Promise.allSettled(
-    Array.from({ length: calls }, (_, i) =>
+  const backoffMs = options.backoffMs ?? INVENT_BACKOFF_MS;
+  let retried = 0;
+  // One strategist's call, inside one INVENT_TIMEOUT_MS budget. A free provider refusing for rate (HTTP 429) is
+  // capacity, not an answer: production 2026-11-14 lost 2 of 4 calls to it and the lane with them. The call
+  // backs off and is asked once more — on the next model slot when there is one — with whatever budget is left.
+  const ask = async (i: number): Promise<string> => {
+    const deadline = Date.now() + INVENT_TIMEOUT_MS;
+    const once = (slot: number, timeoutMs: number) =>
       Promise.race([
-        complete({ ...config, timeoutMs: INVENT_TIMEOUT_MS }, model(i), SYSTEM, inventPrompt(brief, i, []), { maxTokens: 3000 }),
-        new Promise<string>((_, reject) => setTimeout(() => reject(new Error('timed out')), INVENT_TIMEOUT_MS + 2_000).unref()),
-      ]),
-    ),
-  );
+        complete({ ...config, timeoutMs }, model(slot), SYSTEM, inventPrompt(brief, i, []), { maxTokens: 3000 }),
+        new Promise<string>((_, reject) => setTimeout(() => reject(new Error('timed out')), timeoutMs + 2_000).unref()),
+      ]);
+    try {
+      return await once(i, INVENT_TIMEOUT_MS);
+    } catch (error) {
+      if (!RATE_LIMITED.test(String((error as Error)?.message ?? error))) throw error;
+      const wait = Math.min(backoffMs, Math.max(0, deadline - Date.now() - INVENT_RETRY_MIN_MS));
+      if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+      const left = deadline - Date.now();
+      if (left < INVENT_RETRY_MIN_MS) throw error;
+      retried++;
+      return await once(i + 1, left);
+    }
+  };
+  // Concurrent: each strategist is asked at the same time, and told to take an angle the others will not.
+  const answers = await Promise.allSettled(Array.from({ length: calls }, (_, i) => ask(i)));
   const directions: Direction[] = [];
   let proposed = 0;
   let refused = 0;
@@ -116,5 +141,5 @@ export async function inventDirections(brief: InventBrief, options: InventOption
     rejections.push(...parsed.rejections);
     directions.push(...parsed.directions);
   }
-  return { directions, calls, proposed, refused, error: errors.length ? `${errors.length} of ${calls} call(s) failed: ${errors[0]}` : null, rejections };
+  return { directions, calls, proposed, refused, error: errors.length ? `${errors.length} of ${calls} call(s) failed${retried ? ` (${retried} retried after a rate refusal)` : ''}: ${errors[0]}` : null, rejections };
 }
