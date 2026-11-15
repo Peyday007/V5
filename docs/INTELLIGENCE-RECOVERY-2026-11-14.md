@@ -242,6 +242,16 @@ Total ≈ 25 min (baseline 26 min 41 s): construct 247 s, shared frontier (979 o
 
 **Production plan read after Deploy 1075 (Goals run 43667546686, 02:23Z):** total **71 s** (baseline 26 min 41 s; 25 min after part 2): construct 6.1 s (was 247 s), shared frontier 0.25 s (was 210 s), quant portfolio 7.0 s (was 189 s), scenario 1.0 s, reconstruction 55 s (was 346 s). Planning speed VERIFIED on production inside the 1–5 min target. `estimated arrangements: 12 of 404 (392 cut, 6 in reserve)`; `compared 11 found + 12 constructed estimates; 1 in the best combination`. The F4 defect is visible: best-combination p90 $101M and reconstruction p50 $30M from uniform pooled prices; acceptance stays CANDIDATE_ONLY (correctly not certified). F4 repair ships in part 5.
 
+### Surge A closed (02:45Z; its closeout in docs/PLANNING-RECOVERY-2026-11-14.md)
+
+Its handoffs return to Surge B, which now owns them:
+- **F9.1** (variable sweep abandoned, "no evaluation thread is running"). Likely resolved by P-10: Deploy 1075 moved Brain to dedicated vCPUs, and the engine ran in 1.05 s instead of 37.8 s. To verify on the first plan read after Deploy 1079 by the absence of the "sweep abandoned" line.
+- **Evaluator threads at nice 19:** moot on dedicated vCPUs unless the plan read shows otherwise.
+- **`whyNotDiving` serial queries and repeated `listOpportunities`:** noncritical; the plan no longer calls `whyNotDiving`.
+
+Release discipline (P-12): a merge supersedes a Deploy in flight, and the gate takes about 45 min. Surge B releases in batches no closer than one per completed Deploy.
+External: the RunPod balance needs a top-up before about 11-20 (owner; it does not block this operation).
+
 ### Adversarial pass: capabilities that pass on fixtures but are inert on production (01:49Z, `docs/intelligence-recovery/adversarial-production-gaps.md`)
 
 New failure categories the inventory did not cover: gates on a fact kind production never writes; a writer whose only reader is off the failing path; uniform sampling over pooled prices spanning orders of magnitude; capabilities that only run on worker threads; model output refused for shape.
@@ -256,7 +266,7 @@ New failure categories the inventory did not cover: gates on a fact kind product
 | F6 | capital tied up inferred across mechanisms treated as established; 3 of 11 openings hard-refused | MAJOR | admission engineer | RELEASED in PR #909 (part 5; deploying in 1079, 1078 superseded) — repaired (b86f2ed): only own evidence refuses; pooled inference swept UNKNOWN |
 | F7 | arrangement research rounds and library counters still gated on Cash Mode ACTIVE | MAJOR (CRITICAL when the sprint winds down) | discovery engineer | RELEASED in PR #909 (part 5; deploying in 1079, 1078 superseded) — repaired (7c7b22f): arrangement rounds open under the standing grant |
 | F8 | stuck-plan detector needs identical shortfall text; unreported-round detector ignores kernel rounds | MAJOR | discovery engineer | RELEASED in PR #909 (part 5; deploying in 1079, 1078 superseded) — repaired (7c7b22f) |
-| F9.1 | variable sweep (§102) abandoned on production: "no evaluation thread is running" (`evaluatorPool.ts:173,198`) | CRITICAL | **Surge A** (evaluator pool runtime) | HANDED OFF |
+| F9.1 | variable sweep (§102) abandoned on production: "no evaluation thread is running" (`evaluatorPool.ts:173,198`) | CRITICAL | Surge B (returned when Surge A closed) | LIKELY RESOLVED by P-10 dedicated vCPUs (Deploy 1075); verify on next plan read |
 | F9.2 | 16/16 model-proposed methods refused as off-shape; 2/4 calls HTTP 429 | MAJOR | discovery engineer | RELEASED in PR #909 (part 5; deploying in 1079, 1078 superseded) — repaired (7c7b22f): empty design = no design; tolerant parse; refusal reasons recorded; 429 retried once |
 ### Received from Surge A (22:09Z scope adjustment)
 
