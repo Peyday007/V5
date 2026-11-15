@@ -51,6 +51,10 @@ on:
         description: '--admin <email>: the administrator this is recorded against. Required by every mutating command.'
         required: false
         default: ''
+      seal:
+        description: 'factory invite only: --seal-to, a base64 SPKI RSA public key. The link is printed encrypted to it, never in plaintext.'
+        required: false
+        default: ''
 
 # Never at the same time as a deploy: the machine is being replaced during one.
 concurrency:
@@ -88,6 +92,7 @@ jobs:
           ADMIN_OBJECT: ${{ inputs.object }}
           ADMIN_ADMIN: ${{ inputs.admin }}
           ADMIN_TEXT: ${{ inputs.text }}
+          ADMIN_SEAL: ${{ inputs.seal }}
         run: |
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
 
@@ -145,6 +150,13 @@ jobs:
             b64=$(printf '%s' "$ADMIN_TEXT" | base64 -w0)
             case "$b64" in *[!A-Za-z0-9+/=]*) echo "::error::Refusing the text."; exit 1 ;; esac
             args="$args --text-b64 $b64"
+          fi
+
+          # A public key is base64 and nothing else; it is not secret, so it may be echoed.
+          if [ -n "$ADMIN_SEAL" ]; then
+            case "$ADMIN_COMMAND" in 'factory invite') ;; *) echo "::error::--seal-to is for factory invite only."; exit 1 ;; esac
+            case "$ADMIN_SEAL" in *[!A-Za-z0-9+/=]*) echo "::error::Refusing the seal key."; exit 1 ;; esac
+            args="$args --seal-to $ADMIN_SEAL"
           fi
 
           echo "admin $args"
