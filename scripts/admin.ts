@@ -1451,7 +1451,7 @@ async function main(): Promise<void> {
       );
       if (idle) console.log(`  idle with work    ${idle.at} ${idle.reason} ${idle.measures}`);
       console.log(`  last hour         submitted=${c.submittedLastHour} failed=${c.failedLastHour}  last=${c.lastSubmittedAt ?? '—'}`);
-      console.log(`  runner consumed   ${c.consumedLastDay} next-stage item(s) queued after free-lane work (24h)`);
+      console.log(`  runner consumed   ${c.consumedLastDay ?? '—'} next-stage item(s) queued after free-lane work (24h)`);
       console.log(`  outcomes (24h)    ${JSON.stringify(reading.outcomesLastDay)}`);
       console.log(`  packets resumed   ${reading.packetsTouched}`);
       console.log(`  claims            ${reading.claimsAccepted} accepted of ${reading.claimsSubmitted} submitted by free workers`);

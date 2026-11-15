@@ -31,8 +31,14 @@ export interface LaneCoverage {
   submittedLastHour: number;
   failedLastHour: number;
   lastSubmittedAt: string | null;
-  /** Items the packet runner queued after a free-lane submission, in the last day. */
-  consumedLastDay: number;
+  /**
+   * Items the packet runner queued after a free-lane submission, in the last
+   * day. Null unless the caller asked for it (`{ consumption: true }`): only
+   * `admin free-lane show` prints it, and on production the count took 48-82 s
+   * a read (2026-11-15) while the dispatch tick's per-minute coverage watch
+   * awaited it, so every tick that minute was skipped.
+   */
+  consumedLastDay: number | null;
   ready: boolean;
   reason: string;
 }
@@ -41,7 +47,10 @@ const OWNED_BY_FREE_LANE_BIN = `EXISTS (SELECT 1 FROM bins b
    WHERE (b.id = w.bin_id OR (b.orchestration_id IS NOT NULL AND b.orchestration_id = w.orchestration_id))
      AND b.purpose IN ('PLAY_RESEARCH', 'GRUNT'))`;
 
-export async function laneCoverage(now = new Date()): Promise<LaneCoverage> {
+export async function laneCoverage(
+  now = new Date(),
+  options: { consumption?: boolean } = {},
+): Promise<LaneCoverage> {
   const db = getDb();
   const config = laneConfig();
   const displacedRows = await db.all<{ work_type: string; n: number | string }>(
@@ -70,7 +79,7 @@ export async function laneCoverage(now = new Date()): Promise<LaneCoverage> {
     [],
   );
   // Consumption: research items the runner queued for a packet after the free lane submitted in it.
-  const consumed = await db.get<{ n: number | string }>(
+  const consumed = !options.consumption ? null : await db.get<{ n: number | string }>(
     `SELECT COUNT(*) AS n FROM work_items w
       WHERE w.created_at >= ? AND w.orchestration_id IN (
         SELECT DISTINCT wi.orchestration_id FROM work_items wi
@@ -90,7 +99,7 @@ export async function laneCoverage(now = new Date()): Promise<LaneCoverage> {
     submittedLastHour: Number(submitted?.n ?? 0),
     failedLastHour: Number(failed?.n ?? 0),
     lastSubmittedAt: last?.last ?? null,
-    consumedLastDay: Number(consumed?.n ?? 0),
+    consumedLastDay: options.consumption ? Number(consumed?.n ?? 0) : null,
     ready: false,
     reason: '',
   };
@@ -202,7 +211,7 @@ export async function freeLaneReading(): Promise<{
     stageCapacity,
     stageCapacityLines: stageCapacityLines(stageCapacity),
     recentFailures: failures.map((f) => `${f.at} ${f.workload_class ?? '?'} ${f.reason ?? ''}`),
-    coverage: await laneCoverage(),
+    coverage: await laneCoverage(new Date(), { consumption: true }),
     outcomesLastDay: Object.fromEntries(outcomes.map((o) => [o.k, Number(o.n)])),
     packetsTouched: Number(packets?.n ?? 0),
     claimsAccepted: Number(claims?.accepted ?? 0),
