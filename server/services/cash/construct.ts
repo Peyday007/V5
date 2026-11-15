@@ -645,7 +645,7 @@ export type ContractLimits = ContractLimit[];
 
 /** What a constructed arrangement's research question asks so that the CONTRACT limit becomes readable. */
 export const CONTRACT_LIMIT_ASK =
-  'State the most transactions (orders, jobs, units, loads, bookings) the buyer’s contract, framework, purchase order or published terms allow in the period — "up to N", "no more than N", "a maximum of N" — with its source, or say plainly that no source states one.';
+  'State the most transactions (orders, jobs, units, loads, bookings) the buyer’s contract, framework agreement, tender award or published terms allow in the period — "up to N", "no more than N", "a maximum of N" — with its source, or say plainly that no source states one.';
 
 // The fields of an opening that are terms: a maximum stated in them is a contract's.
 const TERMS_FIELDS = ['paymentTerms', 'acceptanceCondition', 'offerScope'] as const;
