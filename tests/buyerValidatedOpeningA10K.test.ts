@@ -12,15 +12,37 @@
  *          a MISSING_CAPABILITY deficiency, commissionable by its id. It is not offered
  *          again while its repair is in flight. Once that repair is decided, it is offered
  *          again, which is how attempt 2 of this weakness came to exist. (1) pins it.
+ *   cause  Commissioned with no goal, that EVIDENCE finding opened no goal research round, so
+ *          production never gained the measurement (2) requires, and every merged repair left
+ *          A-10K standing. (3) pins the fix: the finding is attributed to the live goal whose
+ *          plan lacks the same evidence, and its commission asks that goal's own search for it.
  *
  * Nothing here lowers a bar: the cases in (2) that must not certify still must not.
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const discovery = vi.hoisted(() => ({ calls: [] as Record<string, unknown>[], answer: null as null | { bucketId: string; candidateId: string; round: number } }));
+vi.mock('../server/services/cash/discovery.ts', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../server/services/cash/discovery.ts')>();
+  return {
+    ...original,
+    openGoalDiscovery: vi.fn(async (input: Record<string, unknown>) => {
+      discovery.calls.push(input);
+      return discovery.answer;
+    }),
+  };
+});
 import { freshProject } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { decideCandidate, upsertCandidate } from '../server/repos/improvement.ts';
 import { getInventoryItem, upsertInventory } from '../server/services/operator/inventory.ts';
-import { inventoryDeficiencies, readingId } from '../server/services/operator/director.ts';
+import { commissionReading, evidenceGapGoal, findingEvidenceKinds, inventoryDeficiencies, readingId } from '../server/services/operator/director.ts';
+import { getDb } from '../server/db/database.ts';
+import { createWorkstream, getWorkstream, listLinks } from '../server/repos/register.ts';
+import { setTerms } from '../server/services/goals/decide.ts';
+import { setTarget } from '../server/services/goals/target.ts';
+import { activate } from '../server/services/cash/lifecycle.ts';
+import { setImprovementSwitch } from '../server/services/improvement/authority.ts';
 import { reconstruct } from '../server/services/quant/reconstruct.ts';
 import { inputSample, toScenarioInput } from '../server/services/quant/export.ts';
 import { evaluateGoalPortfolio, inputEvidence, measuredRateInput } from '../server/services/goals/portfolio.ts';
@@ -31,9 +53,14 @@ import type { Observation, QuantityNode } from '../server/domain/quant.ts';
 const uid = () => Math.random().toString(36).slice(2, 8);
 const ctx = { runId: 'opr_a10k', actor: 'test' };
 
+let projectId = '';
+let userId = '';
+
 beforeEach(async () => {
-  await freshProject();
-  await createUser({ email: `own-${uid()}@example.test`, displayName: 'Owner', password: 'correct horse battery staple' });
+  discovery.calls.length = 0;
+  discovery.answer = null;
+  projectId = (await freshProject()).project.id;
+  userId = (await createUser({ email: `own-${uid()}@example.test`, displayName: 'Owner', password: 'correct horse battery staple' })).id;
 });
 
 describe('(1) an unowned BLOCKING finding like A-10K is a commissionable MISSING_CAPABILITY deficiency until a repair is in flight', () => {
@@ -177,7 +204,9 @@ describe('(2) A-10K: a $10k opening is buyer-validated only on measured or sized
     });
   }
 
-  it('no longer happens on measured replies and independent sized comparables with margin: conversion is established and the plan is CONFIDENCE_VERIFIED', () => {
+  // The bar, not production: this evidence is built here to show what certifies. Production gains it
+  // only through the goal's own search, which (3) shows the finding's commission now asks.
+  it('certifies only on measured replies and independent sized comparables with margin: conversion is established and the plan is CONFIDENCE_VERIFIED', () => {
     const respond = measuredRateInput({ trials: 1200, low: 216, high: 252 });
     const close = counts('close', [[40, 200], [46, 200], [36, 200], [42, 210], [39, 190]]);
     expect(inputEvidence(respond, 'respond')).toMatchObject({ tier: 'HISTORICAL', establishes: true });
@@ -188,5 +217,94 @@ describe('(2) A-10K: a $10k opening is buyer-validated only on measured or sized
     expect(acceptance.status).toBe('ACCEPTED');
     expect(acceptance.verdict).toBe('CONFIDENCE_VERIFIED');
     expect(acceptance.probability!.lowerBound).toBeGreaterThanOrEqual(0.9);
+  });
+});
+
+/* ------------------------------------------------------------------------- */
+/* (3) The finding reaches the goal whose plan lacks the evidence             */
+/* ------------------------------------------------------------------------- */
+
+describe('(3) A-10K is commissioned against the live goal whose plan lacks conversion evidence, so that goal\'s search measures it', () => {
+  const symptom = 'No buyer-validated opening for $10k plan; conversion unmeasured';
+  const finding = (id: string) =>
+    upsertInventory(
+      { id, capability: 'buyer-validated opening', symptom, evidence: 'Production plan read: best candidate reaches the target in 9.2% of worlds, coverage not a probability, no buyer-validated opening.', severity: 'BLOCKING' },
+      ctx,
+    );
+
+  async function cashGoal(title: string): Promise<string> {
+    const g = await createWorkstream({ projectId, title, intent: 'Collect settled cash within the window.', purpose: 'REVENUE_DIRECT', createdByUserId: userId });
+    await setTerms(g.id, { dueAt: new Date(Date.now() + 24 * 86_400_000).toISOString(), ownerUserId: userId }, `person:${userId}`);
+    expect((await setTarget({ goal: (await getWorkstream(g.id))!, metric: 'SETTLED_CASH', amountCents: 1_000_000, currency: 'USD', projectId })).ok).toBe(true);
+    return g.id;
+  }
+
+  /** A not-accepted plan reading, stored the way the plan pass stores one: failed chain links and shortfall sentences. */
+  async function planReading(goalId: string, failedLinks: string[], shortfalls: string[]): Promise<void> {
+    await getDb().run(
+      `INSERT INTO goal_plan_readings (id, workstream_id, digest, scenario_model_id, scenario_run_id, verdict, chosen_strategy, strategies, next_test, forecast, created_at)
+       VALUES (?, ?, ?, NULL, NULL, 'IMPROVEMENT_REQUIRED', NULL, ?, NULL, ?, ?)`,
+      [
+        `gpr_${uid()}${uid()}`,
+        goalId,
+        `d${uid()}`,
+        JSON.stringify([{ key: 's1', links: failedLinks.map((link) => ({ link, ok: false })) }]),
+        JSON.stringify({ acceptance: { status: 'NOT_ACCEPTED', shortfalls, required: 0.9 } }),
+        new Date().toISOString(),
+      ],
+    );
+  }
+
+  beforeEach(async () => {
+    expect((await activate({ projectId, ownerUserId: userId, actorUserId: userId, objective: 'Maximize usable cash over the next few weeks.' })).ok).toBe(true);
+    const admin = `admin-${uid()}@example.com`;
+    await createUser({ email: admin, displayName: 'Admin', password: 'correct horse battery staple 1', isBrainAdmin: true });
+    await setImprovementSwitch(false, admin, 'test: no Factory submission from this test');
+  });
+
+  it('reads the evidence the finding names in the plan\'s own vocabulary', () => {
+    expect(findingEvidenceKinds(symptom)).toEqual(expect.arrayContaining(['CONVERSION', 'BUYER']));
+    expect(evidenceGapGoal([{ goalId: 'g_price', kinds: ['PRICE'] }, { goalId: 'g_conv', kinds: ['CONVERSION', 'PRICE'] }], symptom)).toEqual({ goalId: 'g_conv', kinds: ['CONVERSION'] });
+    expect(evidenceGapGoal([{ goalId: 'g_price', kinds: ['PRICE'] }], symptom)).toBeNull();
+  });
+
+  it('reproduces the cause: with no goal whose plan lacks it, the finding names no goal and its commission opens no goal round', async () => {
+    const other = await cashGoal('a plan short only on price');
+    await planReading(other, ['OFFER_AND_PRICE'], ['The price is not established.']);
+    const id = `A-10K-${uid()}`;
+    expect((await finding(id)).ok).toBe(true);
+    const offered = (await inventoryDeficiencies()).find((one) => one.source?.ref === id)!;
+    expect(offered.diagnosis.goalId).toBeNull();
+    expect(offered.intervention).toBe('EVIDENCE');
+    const result = await commissionReading(offered, 'opr_a10k');
+    expect(result.reason).toContain('the diagnosis names no goal');
+    expect(discovery.calls).toHaveLength(0);
+  });
+
+  it('no longer happens: the finding is attributed to the goal whose plan lacks conversion, and its commission asks that goal\'s search to measure it', async () => {
+    const tenK = await cashGoal('$10k plan');
+    await planReading(tenK, ['CONVERSION'], ['Conversion is not established for the best candidate: no buyer has said yes at a measured rate.']);
+    const id = `A-10K-${uid()}`;
+    expect((await finding(id)).ok).toBe(true);
+
+    const offered = (await inventoryDeficiencies()).find((one) => one.source?.ref === id)!;
+    expect(offered.diagnosis.goalId).toBe(tenK);
+    expect(offered.diagnosis.observed).toContain(`Goal ${tenK}'s latest plan reading lacks the same evidence (buyer, conversion)`);
+    expect(offered.diagnosis.observed).toContain('replies from its outreach (§94) or independent sized comparables');
+    // Still evidence, never a guess sent to Factory: no cause is invented and no bar is lowered.
+    expect(offered.diagnosis.cause).toBeNull();
+    expect(offered.intervention).toBe('EVIDENCE');
+    expect(readingId(offered)).toBe(`dfx_inv_${id}`);
+
+    discovery.answer = { bucketId: `goal-${tenK}-x`, candidateId: 'rcd_a10k', round: 1 };
+    const result = await commissionReading(offered, 'opr_a10k');
+    expect(result).toMatchObject({ ok: true, intervention: 'EVIDENCE', roundCandidateId: 'rcd_a10k', linkedFinding: id });
+    expect(result.started).toContain('goal research round rcd_a10k');
+    expect(discovery.calls).toHaveLength(1);
+    expect((discovery.calls[0]!['goal'] as { id: string }).id).toBe(tenK);
+    expect(String(discovery.calls[0]!['diagnosis'])).toContain('conversion unmeasured');
+    expect((await listLinks(tenK)).some((l) => l.ref === 'rcd_a10k' && l.relation === 'PURSUES')).toBe(true);
+    // The repair is in flight now, so the finding is not offered a second time.
+    expect((await inventoryDeficiencies()).map((one) => one.source?.ref)).not.toContain(id);
   });
 });
