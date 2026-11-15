@@ -1159,7 +1159,7 @@ export interface InformationValue {
  * variable not PROVEN is moved from its low to its high with the others at
  * their middle, and the change in the pathway's contribution is its value.
  */
-export function informationValue(pathways: TransactionPathway[], input: { remaining: number; daysLeft: number; outreachPerDay: number; leaders: Set<string>; marginal: number }): InformationValue[] {
+export function informationValue(pathways: TransactionPathway[], input: { remaining: number; daysLeft: number; outreachPerDay: number; leaders: Set<string>; marginal: number; capitalCeiling?: number | null }): InformationValue[] {
   const out: InformationValue[] = [];
   const FIELD: Record<InformationValue['variable'], InformationValue['field']> = { price: 'revenueRange', directCost: 'directCosts', conversion: 'conversionRates', volume: 'buyerVolume', daysToCash: 'timeToFirstCash' };
   for (const p of pathways) {
@@ -1167,8 +1167,8 @@ export function informationValue(pathways: TransactionPathway[], input: { remain
     const base = { net: { ...p.net, value: netCentreOf(p.revenuePerDeal, p.fulfilmentCost, p.acquisitionCost) }, conversion: p.conversion, volume: p.volume, repeatable: p.frequency.value === 'repeats', daysToCash: p.daysToCash, daysLeft: input.daysLeft, outreachPerDay: input.outreachPerDay, closed: false };
     const pin = (f: PathFact, v: number | null): PathFact => ({ ...f, value: v, low: v, high: v, status: 'PROVEN' });
     const vary: [InformationValue['variable'], PathFact, (f: PathFact) => Partial<typeof base>][] = [
-      ['price', p.revenuePerDeal, (f) => ({ net: { ...p.net, value: mid(f) === null ? null : mid(f)! - (mid(p.fulfilmentCost) ?? 0), low: null, high: null } })],
-      ['directCost', p.fulfilmentCost, (f) => ({ net: { ...p.net, value: mid(p.revenuePerDeal) === null ? null : mid(p.revenuePerDeal)! - (mid(f) ?? 0), low: null, high: null } })],
+      ['price', p.revenuePerDeal, (f) => ({ net: { ...p.net, value: mid(f) === null ? null : mid(f)! - (costCentre(p.fulfilmentCost) ?? 0), low: null, high: null } })],
+      ['directCost', p.fulfilmentCost, (f) => ({ net: { ...p.net, value: mid(p.revenuePerDeal) === null ? null : mid(p.revenuePerDeal)! - (costCentre(f) ?? 0), low: null, high: null } })],
       ['conversion', p.conversion, (f) => ({ conversion: f })],
       ['volume', p.volume, (f) => ({ volume: f })],
       ['daysToCash', p.daysToCash, (f) => ({ daysToCash: f })],
@@ -1187,7 +1187,11 @@ export function informationValue(pathways: TransactionPathway[], input: { remain
       const swing = Math.min(input.remaining, Math.max(0, good - bad));
       if (swing <= 0) continue;
       const leader = input.leaders.has(p.opportunityId);
-      const changesPlan = leader ? bad < input.marginal : good > input.marginal;
+      // An unfunded deal is kept out of every combination (unfundedDeal), so only an answer that
+      // makes it fundable — its cost at the good end — can bring it in (R-PORTFOLIO-COST).
+      const ceiling = input.capitalCeiling ?? null;
+      const fundable = !unfundedDeal(variable === 'directCost' ? { ...p, fulfilmentCost: pin(fact, goodEnd) } : p, ceiling);
+      const changesPlan = leader ? bad < input.marginal : fundable && good > input.marginal;
       out.push({
         opportunityId: p.opportunityId,
         title: p.title,
@@ -1471,7 +1475,7 @@ export function readPathways(input: {
   const leaders = new Set(portfolio.leading?.members ?? []);
   const byId = new Map(pathways.map((p) => [p.opportunityId, p]));
   const marginal = Math.min(...[...leaders].map((id) => byId.get(id)?.contribution.p50 ?? 0), Infinity);
-  const information = informationValue(pathways, { remaining, daysLeft, outreachPerDay: outreach.high, leaders, marginal: Number.isFinite(marginal) ? marginal : 0 });
+  const information = informationValue(pathways, { remaining, daysLeft, outreachPerDay: outreach.high, leaders, marginal: Number.isFinite(marginal) ? marginal : 0, capitalCeiling: ceiling });
   const failures = reasoningFailures(pathways, input.rounds);
   // Next actions: sales first, then the construction moves on the pathways the plan rests on, then the information value.
   const order = [...pathways].sort((a, b) => Number(leaders.has(b.opportunityId)) - Number(leaders.has(a.opportunityId)) || b.contribution.p90 - a.contribution.p90);
