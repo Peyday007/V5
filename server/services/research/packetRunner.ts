@@ -57,6 +57,7 @@ import type {
 } from '../../domain/types.ts';
 import { blockCauseOf, exampleIdentity, laneFloor, type BlockCause } from './gate.ts';
 import type { ClaimJudgement, GateCondition, GateResult, LaneCoverage } from './gate.ts';
+import type { BuildRepairPlanInput } from './repair.ts';
 import { countIndependentSources, duplicateGroups } from './standards.ts';
 import {
   acceptedClaims,
@@ -1112,26 +1113,14 @@ async function assessRepairs(input: {
     }
     history ??= await listFragments(orchestration.id);
     const claims = await listClaimsForFragment(fragment.id);
-    const plan = buildRepairPlan({
-      fragment,
-      gate: gateShapeFor(fragment, claims),
-      history: history.filter((entry) => entry.fragmentKey === fragment.fragmentKey),
-      claims,
-      // Splitting is decided on the in-process path by `shouldSplit`, which
-      // reads the failed attempt's own passes. This path has the claims but not
-      // that analysis, so it does not claim to know: a repair that should have
-      // been a split is still a repair, and the next attempt's failure will say
-      // so more clearly than a guess here would.
-      splitRequired: false,
-      remainingBudget: Math.max(0, fragment.maxRepairs - fragment.attempt + 1),
-      // The stored cause chooses the ladder (the classifier for a legacy row),
-      // and the packet's own envelope narrows the unreadable rungs to source
-      // classes it already admits.
-      blockCause: blockCauseOf(fragment),
-      envelope: orchestration.approvalEnvelopeId
-        ? getApprovalEnvelope(orchestration.approvalEnvelopeId)
-        : null,
-    });
+    const plan = buildRepairPlan(
+      repairPlanInputFor(
+        orchestration,
+        fragment,
+        claims,
+        history.filter((entry) => entry.fragmentKey === fragment.fragmentKey),
+      ),
+    );
     /**
      * The ladder is exhausted, so there is no repair to make.
      *
@@ -1229,6 +1218,44 @@ async function mintRepairs(input: {
 }
 
 /**
+ * What `buildRepairPlan` is given for the next attempt of a failed fragment,
+ * read from that attempt's own rows.
+ *
+ * This is the one reading of a failed attempt. The runner's minted repair and
+ * an unplanned retry (`reissue.ts` `planForRetry`) plan the *same next
+ * attempt*, so both take their input from here; when two copies of it drifted
+ * apart, each disagreement cost a recovery (CAPABILITY:RESEARCH.RECOVERY.RETRY).
+ */
+export function repairPlanInputFor(
+  orchestration: Pick<ResearchOrchestration, 'approvalEnvelopeId'>,
+  fragment: ResearchFragment,
+  claims: ResearchClaim[],
+  history: ResearchFragment[],
+): BuildRepairPlanInput {
+  return {
+    fragment,
+    gate: gateShapeFor(fragment, claims),
+    history,
+    claims,
+    // Splitting is decided on the in-process path by `shouldSplit`, which
+    // reads the failed attempt's own passes. This path has the claims but not
+    // that analysis, so it does not claim to know: a repair that should have
+    // been a split is still a repair, and the next attempt's failure will say
+    // so more clearly than a guess here would.
+    splitRequired: false,
+    // Attempts left, counted from the attempt that failed.
+    remainingBudget: Math.max(0, fragment.maxRepairs - fragment.attempt + 1),
+    // The stored cause chooses the ladder (the classifier for a legacy row),
+    // and the packet's own envelope narrows the unreadable rungs to source
+    // classes it already admits.
+    blockCause: blockCauseOf(fragment),
+    envelope: orchestration.approvalEnvelopeId
+      ? getApprovalEnvelope(orchestration.approvalEnvelopeId)
+      : null,
+  };
+}
+
+/**
  * The gate result this fragment already received, rebuilt from its own rows.
  *
  * `buildRepairPlan` needs the whole `GateResult` — which conditions failed,
@@ -1248,7 +1275,7 @@ async function mintRepairs(input: {
  * Counting is delegated to `standards.ts`, the same module the gate itself
  * used, so "how many independent sources" means one thing in both places.
  */
-function gateShapeFor(fragment: ResearchFragment, claims: ResearchClaim[]): GateResult {
+export function gateShapeFor(fragment: ResearchFragment, claims: ResearchClaim[]): GateResult {
   const results: ClaimJudgement[] = claims.map((claim) => ({
     claimId: claim.id,
     accepted: claim.accepted,
