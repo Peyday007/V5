@@ -189,19 +189,40 @@ const eventMeasures = (raw: unknown): Record<string, unknown> => {
   }
 };
 
-/** Consecutive host refusals since the last start or move, newest first, read from the rows. */
-async function hostRefusalsSinceStart(): Promise<number> {
+/**
+ * Pure: consecutive host refusals of THIS pod since it last stopped, started or moved,
+ * newest first. Scoped to the pod: on 2026-11-15 a pod moved by hand inherited another
+ * pod's 20 refusals, and the first stop of the new pod (a production test, 23:06Z) moved
+ * it at once — deleting a pod that would have started.
+ */
+export function hostRefusalsOf(podId: string, rows: readonly { outcome: string; reason: string | null; podId: string | null }[]): number {
+  let n = 0;
+  for (const row of rows) {
+    if (row.podId !== podId) continue;
+    if (row.outcome !== 'START_FAILED') break;
+    if (!HOST_FULL.test(row.reason ?? '')) break;
+    n++;
+  }
+  return n;
+}
+
+/** Consecutive host refusals of the pod, read from the rows. */
+async function hostRefusalsSinceStart(podId: string): Promise<number> {
   try {
-    const rows = await getDb().all<{ outcome: string; reason: string | null }>(
-      `SELECT outcome, reason FROM bin_events WHERE event_type = 'RUNPOD_POD' AND outcome IN ('STARTED', 'START_FAILED', 'MIGRATED')
-        ORDER BY at DESC LIMIT 20`,
+    const rows = await getDb().all<{ outcome: string; reason: string | null; measures: unknown }>(
+      `SELECT outcome, reason, measures FROM bin_events WHERE event_type = 'RUNPOD_POD'
+          AND outcome IN ('STARTED', 'START_FAILED', 'STOPPED', 'MIGRATED')
+        ORDER BY at DESC LIMIT 40`,
     );
-    let n = 0;
-    for (const row of rows) {
-      if (row.outcome !== 'START_FAILED' || !HOST_FULL.test(row.reason ?? '')) break;
-      n++;
-    }
-    return n;
+    return hostRefusalsOf(
+      podId,
+      rows.map((r) => {
+        const m = eventMeasures(r.measures);
+        // A MIGRATED row belongs to the pod it moved from.
+        const id = r.outcome === 'MIGRATED' ? m['from'] : m['podId'];
+        return { outcome: r.outcome, reason: r.reason, podId: typeof id === 'string' ? id : null };
+      }),
+    );
   } catch {
     return 0;
   }
@@ -327,7 +348,7 @@ export async function superviseRunpodPod(
     config?: PodConfig | null;
     force?: boolean;
     lastStartFailed?: (now: number) => Promise<boolean>;
-    hostRefusals?: () => Promise<number>;
+    hostRefusals?: (podId: string) => Promise<number>;
     migrate?: MigrateDeps;
   } = {},
 ): Promise<SuperviseResult | null> {
@@ -351,7 +372,7 @@ export async function superviseRunpodPod(
     const startFailedRecently = pod.status === 'RUNNING' && (await (deps.lastStartFailed ?? lastStartFailed)(now));
     const decision = decidePod({ status: pod.status, waiting: input.waiting, inFlight: input.inFlight, idleSince: state.idleSince, lastActionAt: state.lastActionAt, now, idleStopMs: config.idleStopMs, startFailedRecently });
     let acted = false;
-    const refusals = decision.action === 'START' ? await (deps.hostRefusals ?? hostRefusalsSinceStart)() : 0;
+    const refusals = decision.action === 'START' ? await (deps.hostRefusals ?? hostRefusalsSinceStart)(config.podId) : 0;
     if (decision.action === 'START' && shouldMigrate({ status: pod.status, waiting: input.waiting, hostRefusals: refusals })) {
       const moved = await migratePod(config, `${refusals} start(s) refused for a full host with ${input.waiting} research item(s) waiting`, {
         ...(deps.migrate ?? {}),
