@@ -35,6 +35,7 @@
  * and says which inputs keep it from being one.
  */
 import { evaluateCombination, MIN_EVIDENCE_SAMPLE, optimizePortfolio, type Activity, type Assurance, type LimitingInput, type ParameterReach, type PortfolioProblem, type PortfolioReading, type Safeguard, type SafeguardEffect } from '../quant/portfolio.ts';
+import { createHash } from 'node:crypto';
 import { inverseNormal, makeRng } from '../scenario/random.ts';
 import { cachedCashKnowledge, type CashKnowledge } from '../quant/knowledge.ts';
 import { acquireMarketHistory, historyEvidence, type MarketHistory } from '../quant/history.ts';
@@ -524,10 +525,22 @@ function binomial(n: number, p: number, rng: () => number): number {
   return Math.min(n, Math.max(0, Math.round(n * p + Math.sqrt(n * p * (1 - p)) * z)));
 }
 
+/**
+ * Quantiles of a sample array, held per array: an opening's demand arrays are
+ * the demand cache's own (`demandWorlds`), so across a reconstruction's
+ * evaluations each is sorted once rather than once an evaluation. The arrays
+ * are only read; each reader gets its own copy of the quantiles.
+ */
+const spreadCache = new WeakMap<readonly number[], Spread>();
 function spread(values: number[]): Spread {
-  const sorted = [...values].sort((a, b) => a - b);
-  const q = (p: number) => sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))] ?? 0;
-  return { p10: q(0.1), p50: q(0.5), p90: q(0.9) };
+  let held = spreadCache.get(values);
+  if (!held) {
+    const sorted = [...values].sort((a, b) => a - b);
+    const q = (p: number) => sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))] ?? 0;
+    held = { p10: q(0.1), p50: q(0.5), p90: q(0.9) };
+    spreadCache.set(values, held);
+  }
+  return { ...held };
 }
 
 /**
@@ -1092,6 +1105,47 @@ export function evaluateGoalPortfolio(input: {
     searched: result.searched,
     measuredRates,
   };
+}
+
+/** How long an evaluation of unchanged inputs is reused, and how many distinct ones are held. */
+export const HELD_EVALUATION_MS = 30 * 60_000;
+const HELD_EVALUATIONS_MAX = 8;
+const heldEvaluations = new Map<string, { at: number; result: Promise<GoalPortfolio> }>();
+
+/** Every input the engine reads, Maps included (a knowledge's maps are rows), as one digest. */
+export function evaluationKey(input: Parameters<typeof evaluateGoalPortfolio>[0]): string {
+  return createHash('sha256')
+    .update(JSON.stringify(input, (_key, value: unknown) => (value instanceof Map ? { map: [...value.entries()] } : value instanceof Set ? { set: [...value] } : value)))
+    .digest('hex');
+}
+
+/**
+ * The plan's own portfolio evaluation, reused while its inputs are unchanged.
+ *
+ * The engine is pure in its input (its worlds are seeded), so a plan re-read
+ * whose openings, limits, measured rates and knowledge did not move reads the
+ * same portfolio; it is evaluated once rather than on every read (lens P: the
+ * baseline was the one stage of a warm re-read with no memo). Each caller gets
+ * its own copy. A failed evaluation is not held.
+ */
+export async function heldEvaluation(input: Parameters<typeof evaluateGoalPortfolio>[0], run: (input: Parameters<typeof evaluateGoalPortfolio>[0]) => Promise<GoalPortfolio>, now = Date.now()): Promise<GoalPortfolio> {
+  const key = evaluationKey(input);
+  const held = heldEvaluations.get(key);
+  if (held && now - held.at < HELD_EVALUATION_MS) return structuredClone(await held.result);
+  const result = run(input);
+  heldEvaluations.set(key, { at: now, result });
+  while (heldEvaluations.size > HELD_EVALUATIONS_MAX) heldEvaluations.delete(heldEvaluations.keys().next().value!);
+  try {
+    return structuredClone(await result);
+  } catch (error) {
+    if (heldEvaluations.get(key)?.result === result) heldEvaluations.delete(key);
+    throw error;
+  }
+}
+
+/** For tests: forget held evaluations. */
+export function forgetHeldEvaluations(): void {
+  heldEvaluations.clear();
 }
 
 /**

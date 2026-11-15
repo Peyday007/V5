@@ -395,6 +395,18 @@ function drawWorlds(problem: PortfolioProblem, worlds: number): Worlds {
   return { picks: drawPicks(problem, worlds), down: drawOutages(problem, worlds) };
 }
 
+/**
+ * Each activity's drawn world order, keyed by its cash samples (the array
+ * itself) and everything else the draw reads: the seed, the worlds, its key
+ * (its random stream) and its shared-risk group and correlation. A
+ * reconstruction evaluates hundreds of variants that differ in the few
+ * openings a move touched, and their samples are the same arrays from the
+ * demand cache (`demandWorlds`), so each untouched activity's order is drawn
+ * once instead of sorted again on every evaluation (lens P: drawPicks and its
+ * sort were about a tenth of a plan read). The arrays are only read.
+ */
+const pickCache = new WeakMap<readonly number[], Map<string, number[]>>();
+
 function drawPicks(problem: PortfolioProblem, worlds: number): number[][] {
   const seed = problem.seed ?? 20261031;
   const groups = new Map<string, Float64Array>();
@@ -415,10 +427,14 @@ function drawPicks(problem: PortfolioProblem, worlds: number): number[][] {
     for (const [name, xs] of [['early', activity.early?.cash], ['deals', activity.deals], ['market volume', activity.marketVolume], ['gated', activity.gated?.cash]] as const) {
       if (xs && xs.length !== n) throw new Error(`Activity "${activity.key}" needs ${name} samples paired with its cash samples.`);
     }
+    const rho = activity.riskGroup ? Math.min(0.95, Math.max(0, problem.riskCorrelation?.[activity.riskGroup] ?? 0.5)) : 0;
+    const memoKey = `${seed}|${worlds}|${activity.key}|${activity.riskGroup ?? ''}|${rho}`;
+    let held = pickCache.get(activity.cash);
+    const hit = held?.get(memoKey);
+    if (hit) return hit;
     // Rank worlds by cash so a bad shared shock means low cash for every member.
     const order = Array.from({ length: n }, (_, i) => i).sort((a, b) => activity.cash[a]! - activity.cash[b]!);
     const rng = makeRng(seed, seedOf(`activity:${activity.key}`));
-    const rho = activity.riskGroup ? Math.min(0.95, Math.max(0, problem.riskCorrelation?.[activity.riskGroup] ?? 0.5)) : 0;
     const g = activity.riskGroup ? factor(activity.riskGroup) : null;
     const out = new Array<number>(worlds);
     for (let i = 0; i < worlds; i++) {
@@ -426,6 +442,11 @@ function drawPicks(problem: PortfolioProblem, worlds: number): number[][] {
       const z = g ? Math.sqrt(rho) * g[i]! + Math.sqrt(1 - rho) * e : e;
       out[i] = order[Math.min(n - 1, Math.floor(normalCdf(z) * n))]!;
     }
+    if (!held) {
+      held = new Map();
+      pickCache.set(activity.cash, held);
+    }
+    held.set(memoKey, out);
     return out;
   });
 }

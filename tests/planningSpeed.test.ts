@@ -111,3 +111,97 @@ describe('the per-opening draw cache changes nothing it returns', () => {
     expect(moved.demand.find((d) => d.opportunityId === 'arr_gifts')).toEqual(cold.demand.find((d) => d.opportunityId === 'arr_gifts'));
   });
 });
+
+/*
+ * A plan read on production's shape (Surge B speed, 2026-11-15). The live $10K
+ * goal's read took ~25 minutes after Deploy 1070 (revision 7a8b565): its trace
+ * read construction 247 s, the shared frontier 210 s, the quant portfolio 189 s,
+ * the scenario 34 s and the reconstruction 346 s, over 979 openings, 418 live,
+ * ~80 modelled and 404 constructed arrangements. Production is a 2-vCPU VM whose
+ * server process competes for both CPUs; reproduced here by pinning the read
+ * and two busy processes to two cores, construction's niced pool thread got no
+ * CPU, so the pass waited out its 120 s timeout before composing inline
+ * (`CONSTRUCTION_TIMEOUT_MS`), though the library already held what it needed.
+ *
+ * The repairs change no reading — the fixture's plan is compared below — only
+ * what is computed, read and waited for:
+ *  - the frontier: only the tier is read (`frontierTiers`), not standings that
+ *    ask every evaluated opening's dive record one statement at a time;
+ *  - construction: a pass the library already holds composes its few reverse
+ *    designs on its own thread rather than shipping 400 stored arrangements to
+ *    a pool thread (`INLINE_COMPOSITIONS`);
+ *  - the plan's own portfolio is held by its inputs (`heldEvaluation`);
+ *  - each opening's world order and quantiles are drawn once per demand sample
+ *    rather than once per evaluation (`drawPicks`, `spread`);
+ *  - the messaging provider is read while the rows are, not after.
+ */
+describe('a plan read on production\'s shape', () => {
+  it('reads tiers, constructs, evaluates and reconstructs within budget, and a re-read reads the same plan', async () => {
+    const { freshProject } = await import('./helpers.ts');
+    const { getDb } = await import('../server/db/database.ts');
+    const { createUser } = await import('../server/repos/identity.ts');
+    const { activate } = await import('../server/services/cash/lifecycle.ts');
+    const { getCashMode } = await import('../server/repos/cashMode.ts');
+    const { createWorkstream, getWorkstream } = await import('../server/repos/register.ts');
+    const { setTerms } = await import('../server/services/goals/decide.ts');
+    const { setTarget } = await import('../server/services/goals/target.ts');
+    const { forgetGoalReadings, readGoalPlan } = await import('../server/services/goals/plan.ts');
+    const { clearConstructionMemo, lastConstructionReport } = await import('../server/services/cash/construct.ts');
+    const { forgetHeldEvaluations } = await import('../server/services/goals/portfolio.ts');
+    const { frontierTiers, sharedFrontier } = await import('../server/services/cash/shared.ts');
+    const { PRODUCTION_SHAPE, seedProductionShape } = await import('./fixtures/goalProductionShape.ts');
+
+    const now = new Date();
+    const projectId = (await freshProject()).project.id;
+    const userId = (await createUser({ email: 'shape@example.test', displayName: 'Owner', password: 'correct horse battery staple' })).id;
+    expect((await activate({ projectId, ownerUserId: userId, actorUserId: userId, objective: 'Maximize usable cash over the next few weeks.' })).ok).toBe(true);
+    await seedProductionShape({ projectId, cashModeId: (await getCashMode(projectId))!.id, ownerUserId: userId, now });
+    const g = await createWorkstream({ projectId, title: 'Collect cash fast', intent: 'Collect settled cash.', purpose: 'REVENUE_DIRECT', createdByUserId: userId });
+    await setTerms(g.id, { dueAt: new Date(now.getTime() + 30 * 86_400_000).toISOString(), ownerUserId: userId }, `person:${userId}`);
+    expect((await setTarget({ goal: (await getWorkstream(g.id))!, metric: 'SETTLED_CASH', amountCents: 1_000_000, currency: 'USD', projectId, capitalCeilingCents: 300_000, hoursCeiling: 200, now: new Date(now.getTime() - 60_000) })).ok).toBe(true);
+
+    // The tier the plan reads is the frontier's, opening for opening, in two statements.
+    const db = getDb();
+    const counted = { n: 0 };
+    const all = db.all.bind(db);
+    db.all = ((...args: Parameters<typeof db.all>) => {
+      counted.n += 1;
+      return all(...args);
+    }) as typeof db.all;
+    const tiers = await frontierTiers(projectId);
+    expect(counted.n).toBe(2);
+    db.all = all;
+    const frontier = await sharedFrontier({ projectId });
+    expect(tiers.size).toBe(PRODUCTION_SHAPE.archived + PRODUCTION_SHAPE.signals + PRODUCTION_SHAPE.plays);
+    expect(Object.fromEntries([...tiers].map(([id, one]) => [id, one]))).toEqual(Object.fromEntries(frontier.opportunities.map((one) => [one.id, one.tier])));
+
+    const read = async () => {
+      const t = performance.now();
+      const reading = (await readGoalPlan({ goalId: g.id, now }))!;
+      return { ms: performance.now() - t, reading };
+    };
+    const plan = (r: Awaited<ReturnType<typeof read>>['reading']) => ({
+      portfolio: r.portfolio,
+      // How long exploring took, and whether the model lane was due this read, are the clock's, not the plan's.
+      reconstruction: { ...r.reconstruction, exploration: r.reconstruction?.exploration ? { ...r.reconstruction.exploration, elapsedMs: 0, sentence: '', model: null, sweep: r.reconstruction.exploration.sweep ? { ...r.reconstruction.exploration.sweep, elapsedMs: 0 } : null } : null },
+      acceptance: r.acceptance,
+      chosen: r.chosen,
+    });
+    const cold = await read();
+    expect(lastConstructionReport(projectId)).toMatchObject({ composed: 400, reused: 0 });
+    // A fresh process: nothing held in memory, the library holds what the cold read composed.
+    forgetGoalReadings();
+    clearConstructionMemo();
+    forgetHeldEvaluations();
+    const fresh = await read();
+    expect(lastConstructionReport(projectId)!.reused).toBeGreaterThan(0);
+    const warm = await read();
+    console.info(`production shape: cold ${Math.round(cold.ms)} ms, fresh process ${Math.round(fresh.ms)} ms, warm ${Math.round(warm.ms)} ms`);
+    // The same plan however it was reached: composed, reused from the library, or held.
+    expect(plan(fresh.reading)).toEqual(plan(cold.reading));
+    expect(plan(warm.reading)).toEqual(plan(cold.reading));
+    // Budgets with room for a slower runner: 25 s cold and 1.8 s warm on a 4-core machine.
+    expect(cold.ms).toBeLessThan(90_000);
+    expect(warm.ms).toBeLessThan(10_000);
+  }, 600_000);
+});

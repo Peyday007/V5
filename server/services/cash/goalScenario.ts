@@ -35,14 +35,14 @@ import { readDays } from './monetization/commissionPass.ts';
 import { cashOutcomeLessons, LESSON_MIN_SAMPLE } from './journey/learning.ts';
 import { isTestFirstPlay } from './tier.ts';
 import { readVolume } from './volume.ts';
-import { sharedFrontier } from './shared.ts';
+import { frontierTiers } from './shared.ts';
 import type { CashOpportunity, CashCardFact } from '../../domain/types.ts';
 import { SCENARIO_LIMITS, type ScenarioModelDefinition, type ScenarioVariable, type SourceRef, type StrategySpec, type VariableProvenance } from '../../domain/scenario.ts';
 import type { Workstream } from '../../domain/register.ts';
 import type { TargetReading } from '../goals/target.ts';
 import { inferCashQuantity, loadCashKnowledge, type CashKnowledge, type CashQuantity } from '../quant/knowledge.ts';
 import { inputSample, toScenarioInput, type InputSample } from '../quant/export.ts';
-import { CONTACTS_PER_DAY_BOUNDS, evaluateGoalPortfolio, measuredRateInput, type GoalPortfolio, type PlannedOpening } from '../goals/portfolio.ts';
+import { CONTACTS_PER_DAY_BOUNDS, evaluateGoalPortfolio, heldEvaluation, measuredRateInput, type GoalPortfolio, type PlannedOpening } from '../goals/portfolio.ts';
 import { SPREAD_FLOOR } from '../quant/pool.ts';
 import type { Estimate, EvidenceTier } from '../../domain/quant.ts';
 import type { VariableSpec } from '../../domain/scenario.ts';
@@ -947,11 +947,17 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
   if (target.achieved) return refuse('The target is already met.');
 
   const trace = planTrace('compose');
+  /*
+   * The messaging provider's capacity and measured rates are two network reads the portfolio
+   * needs only at its end; asked now, they answer while the rows below are read instead of after.
+   */
+  const instantly = Promise.all([instantlyCapacity().catch(() => null), instantlyMeasuredRates().catch(() => null)]);
   // The goal plan owns the freshness bar; read lazily, because the plan imports this module.
   const freshDays = (await import('../goals/plan.ts')).RECOMMENDATION_POLICY.demandFreshDays;
-  const frontier = await sharedFrontier({ projectId: target.projectId });
-  trace(`shared frontier: ${frontier.opportunities.length} opening(s)`);
-  const tierOf = new Map(frontier.opportunities.map((one) => [one.id, one.tier.tier as string]));
+  // The tier is all the plan reads of the frontier (`frontierTiers`: the same derivation, without the rest of it).
+  const tiers = await frontierTiers(target.projectId);
+  trace(`shared frontier: ${tiers.size} opening(s)`);
+  const tierOf = new Map([...tiers].map(([id, one]) => [id, one.tier as string]));
   const live = (await listOpportunities({ projectId: target.projectId })).filter(
     (one) => LIVE.has(one.state) && !one.duplicateOfId && one.currency === target.currency,
   );
@@ -1087,8 +1093,8 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       beforeProof: target.capitalBeforeProofCents === null ? null : target.capitalBeforeProofCents / 100,
       perWeek: target.capitalPerWeekCents === null ? null : target.capitalPerWeekCents / 100,
       resources: target.resources,
-      measuredCapacity: await instantlyCapacity().catch(() => null),
-      measuredRates: await instantlyMeasuredRates().catch(() => null),
+      measuredCapacity: (await instantly)[0],
+      measuredRates: (await instantly)[1],
       /*
        * The knowledge this compose already read for the project, passed
        * explicitly (CAUSAL-14-7, review F4-2): left out, the portfolio fell back
@@ -1108,12 +1114,15 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
      * the pool falls back to inline, yielding first, when it has no thread.
      */
     const { sharedEvaluator } = await import('../goals/reasoning/evaluatorPool.ts');
-    const evaluator = sharedEvaluator();
-    try {
-      portfolio = await evaluator.evaluate(portfolioInput);
-    } finally {
-      await evaluator.close();
-    }
+    // Unchanged inputs read the same portfolio: evaluated once, not on every re-read (`heldEvaluation`).
+    portfolio = await heldEvaluation(portfolioInput, async (one) => {
+      const evaluator = sharedEvaluator();
+      try {
+        return await evaluator.evaluate(one);
+      } finally {
+        await evaluator.close();
+      }
+    });
     trace('quant portfolio');
   }
   const inBest = new Set(portfolio?.best?.members.map((one) => one.opportunityId) ?? []);
