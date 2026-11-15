@@ -1220,7 +1220,9 @@ function namedPaths(...texts: (string | null)[]): string[] {
 /**
  * (a) Open inventory findings — DISCOVERED or ROOT_CAUSE_CONFIRMED — that name no owner and have no
  * repair in flight (no linked register row, or every linked row already decided), except a finding that
- * still states no cause after a linked repair was REJECTED. Each becomes a
+ * still states no cause after a linked repair was REJECTED (unless that gap is a live goal's missing
+ * evidence and no rejected attempt was put to that goal yet). A causeless evidence-gap finding is
+ * attributed to the goal whose plan lacks it, so its commission opens that goal's research. Each becomes a
  * deficiency with the id `dfx_inv_<finding id>`, so Hermes commissions the finding by its id; the
  * commission links its register row to the finding, which then reads as in flight.
  */
@@ -1228,6 +1230,8 @@ export async function inventoryDeficiencies(max = 4): Promise<DeficiencyReading[
   const { listInventory } = await import('./inventory.ts');
   const items = (await listInventory()).filter((i) => (UNCLAIMED_INVENTORY as readonly string[]).includes(i.status) && !i.owner);
   if (items.length === 0) return [];
+  // Read once, and only when a finding states no cause: what each live goal's plan says it lacks.
+  const gaps = items.some((i) => i.status !== 'ROOT_CAUSE_CONFIRMED') ? await goalEvidenceGaps() : [];
   const byId = new Map((await listCandidates()).map((c) => [c.id, c]));
   // A linked row is in flight while it is undecided, or combined into a host that is.
   const inFlight = (id: string): boolean => {
@@ -1236,27 +1240,46 @@ export async function inventoryDeficiencies(max = 4): Promise<DeficiencyReading[
     if (c.decision === 'COMBINED' && c.combinedIntoId) return !byId.get(c.combinedIntoId)?.decision;
     return !c.decision;
   };
+  // The live goal whose plan lacks the evidence a causeless finding names: its own search is the only
+  // thing that can measure it (an EVIDENCE commission with no goal opens no goal round).
+  const gapOf = (i: (typeof items)[number]) => (i.status === 'ROOT_CAUSE_CONFIRMED' ? null : evidenceGapGoal(gaps, `${i.capability} ${i.symptom} ${i.evidence}`));
+  const directedGoal = (id: string): string | null => {
+    const directive = byId.get(id)?.evidence['directive'] as { goalId?: unknown } | undefined;
+    return typeof directive?.goalId === 'string' ? directive.goalId : null;
+  };
   // A repair was REJECTED and the finding still states no cause: nothing an earlier attempt lacked has
-  // arrived, so commissioning attempt N+1 would hand the Factory the same unfixable question (A-10K:
-  // an evidence gap re-offered as an engineering repair). It is offered again once its cause is
-  // confirmed (ROOT_CAUSE_CONFIRMED), which gives the next attempt something to act on.
-  const rejectedWithoutCause = (i: (typeof items)[number]): boolean =>
-    i.status === 'DISCOVERED' && !(i.rootCause ?? '').trim() && i.linkedCandidates.some((id) => byId.get(id)?.decision === 'REJECTED');
+  // arrived, so commissioning attempt N+1 on the same terms would hand the Factory the same unfixable
+  // question (A-10K: an evidence gap re-offered as an engineering repair). It is offered again once its
+  // cause is confirmed (ROOT_CAUSE_CONFIRMED), which gives the next attempt something to act on — or,
+  // once, when its gap is the evidence a live goal's plan lacks and no rejected attempt was yet put to
+  // that goal: asking the goal's own search to measure it is a different method (invariant 16), and the
+  // only one that can make production hold the evidence.
+  const heldWithoutCause = (i: (typeof items)[number], gap: { goalId: string } | null): boolean => {
+    if (i.status !== 'DISCOVERED' || (i.rootCause ?? '').trim()) return false;
+    const rejected = i.linkedCandidates.filter((id) => byId.get(id)?.decision === 'REJECTED');
+    if (rejected.length === 0) return false;
+    return !gap || rejected.some((id) => directedGoal(id) === gap.goalId);
+  };
   const order = { BLOCKING: 0, MAJOR: 1, MINOR: 2 } as const;
   return items
-    .filter((i) => !i.linkedCandidates.some(inFlight) && !rejectedWithoutCause(i))
-    .sort((a, b) => order[a.severity] - order[b.severity] || a.id.localeCompare(b.id))
+    .map((i) => ({ i, gap: gapOf(i) }))
+    .filter(({ i, gap }) => !i.linkedCandidates.some(inFlight) && !heldWithoutCause(i, gap))
+    .sort((a, b) => order[a.i.severity] - order[b.i.severity] || a.i.id.localeCompare(b.i.id))
     .slice(0, max)
-    .map((i) => {
+    .map(({ i, gap }) => {
       const ownerPaths = namedPaths(i.rootCause, i.evidence, i.symptom);
       const recurrence = i.severity === 'BLOCKING' ? 3 : i.severity === 'MAJOR' ? 2 : 1;
       const one = reading({
-        goalId: null,
+        goalId: gap?.goalId ?? null,
         deficiency: 'MISSING_CAPABILITY',
         title: `Inventory ${i.id} has no owner and no repair: ${i.capability}`.slice(0, 200),
         observed:
-          `Finding ${i.id} (${i.severity}, ${i.status}) in "${i.capability}": ${i.symptom}`.slice(0, 1600) +
-          ' Nobody owns it and no repair is in flight, so it stays broken until it is commissioned.',
+          `Finding ${i.id} (${i.severity}, ${i.status}) in "${i.capability}": ${i.symptom}`.slice(0, 1400) +
+          ' Nobody owns it and no repair is in flight, so it stays broken until it is commissioned.' +
+          (gap
+            ? ` Goal ${gap.goalId}'s latest plan reading lacks the same evidence (${gap.kinds.map(kindLabel).join(', ')}): ` +
+              'it closes only when that goal\'s own search measures it — replies from its outreach (§94) or independent sized comparables — never by a code change or a test.'
+            : ''),
         evidence: `operator inventory ${i.id} (register row ${i.candidateId}, updated ${i.updatedAt}): ${i.evidence}`.slice(0, 2000),
         cause: i.status === 'ROOT_CAUSE_CONFIRMED' ? i.rootCause : null,
         ownerPaths,
@@ -1270,6 +1293,60 @@ export async function inventoryDeficiencies(max = 4): Promise<DeficiencyReading[
       });
       return { ...one, source: { kind: 'INVENTORY' as const, ref: i.id } };
     });
+}
+
+/**
+ * The evidence kinds a finding's own words name, in the vocabulary `missingKindsOf` reads a plan in:
+ * the shortfall kinds, plus the chain links (`CHAIN_LINKS`) a finding names in prose. "No
+ * buyer-validated opening; conversion unmeasured" names CONVERSION and BUYER.
+ */
+const FINDING_LINKS: ReadonlyArray<[RegExp, string]> = [
+  [/conver|buyer[- ]validated/i, 'CONVERSION'],
+  [/reachable buyer/i, 'REACHABLE_BUYER'],
+  [/\bdemand\b/i, 'CURRENT_DEMAND'],
+  [/market volume|\bvolume\b/i, 'MARKET_VOLUME'],
+  [/fulfil/i, 'FULFILMENT'],
+  [/settles? in time|days to (usable )?cash/i, 'SETTLES_IN_TIME'],
+];
+
+export function findingEvidenceKinds(text: string): string[] {
+  const kinds = new Set<string>();
+  for (const [pattern, kind] of [...SHORTFALL_KINDS, ...FINDING_LINKS]) if (pattern.test(text)) kinds.add(kind);
+  return [...kinds].sort();
+}
+
+/** Each live goal whose latest plan reading is not accepted, with the evidence kinds it says it lacks. */
+async function goalEvidenceGaps(): Promise<{ goalId: string; kinds: string[] }[]> {
+  const out: { goalId: string; kinds: string[] }[] = [];
+  for (const goal of await liveGoals().catch(() => [])) {
+    const row = await getDb()
+      .get<{ chosen_strategy: string | null; strategies: string | null; next_test: string | null; forecast: string | null }>(
+        'SELECT chosen_strategy, strategies, next_test, forecast FROM goal_plan_readings WHERE workstream_id = ? ORDER BY created_at DESC, id DESC LIMIT 1',
+        [goal.id],
+      )
+      .catch(() => undefined);
+    const kinds = row ? missingKindsOf(row) : null;
+    if (kinds?.length) out.push({ goalId: goal.id, kinds: [...new Set(kinds.map((k) => k.replace(/^(LINK|NEXT):/, '')))].sort() });
+  }
+  return out;
+}
+
+/**
+ * The goal an evidence finding belongs to: the live goal whose plan lacks the most of the evidence the
+ * finding names (ties to the first listed). A finding with no stated cause that is an evidence gap in
+ * a goal's plan — A-10K, "conversion unmeasured" — is closed only by that goal's search measuring it;
+ * commissioned with no goal, it opens no goal round (`openGoalResearchRound`) and production never
+ * gains the evidence, however many repairs are merged. Null when no plan lacks what it names.
+ */
+export function evidenceGapGoal(gaps: { goalId: string; kinds: string[] }[], text: string): { goalId: string; kinds: string[] } | null {
+  const named = findingEvidenceKinds(text);
+  if (!named.length) return null;
+  let best: { goalId: string; kinds: string[] } | null = null;
+  for (const gap of gaps) {
+    const shared = gap.kinds.filter((k) => named.includes(k));
+    if (shared.length && (!best || shared.length > best.kinds.length)) best = { goalId: gap.goalId, kinds: shared };
+  }
+  return best;
 }
 
 /** Readings of one goal's plan that must name the same missing evidence before the plan reads as stuck. */
