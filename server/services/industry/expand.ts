@@ -69,6 +69,8 @@ import {
 } from '../../repos/industry.ts';
 import { getOpportunity, listOpportunities } from '../../repos/cashPortfolio.ts';
 import {
+  buyerNameKey,
+  buyerPopulationName,
   isCapitalMechanism,
   isCapitalRequirement,
   isConstraintKind,
@@ -1056,6 +1058,18 @@ function judgeUnitEconomic(claim: ResearchClaim, nodes: readonly IndustryNode[])
   };
 }
 
+/**
+ * The live buyer type an opening's payer belongs to: the payer by name, else
+ * the population `buyerPopulationName` puts it in — so one state's named
+ * department files under the population of such state departments.
+ */
+export function payerBuyerType(payer: string, nodes: readonly IndustryNode[]): IndustryNode | null {
+  const direct = matchBuyerType(payer, nodes);
+  if (direct) return direct;
+  const population = buyerPopulationName(payer);
+  return population ? matchBuyerType(population, nodes) : null;
+}
+
 /** Source 2's verdicts: every EVIDENCE card fact for a price or a direct cost not yet filed, in card order. */
 async function cardEvidenceDecisions(projectId: string, nodes: readonly IndustryNode[]): Promise<BackfillDecision[]> {
   const facts = (await cardFactsForProject(projectId)).filter((one) => one.kind === 'EVIDENCE' && one.claimId && BACKFILL_FIELDS[one.field]);
@@ -1081,7 +1095,7 @@ async function cardEvidenceDecisions(projectId: string, nodes: readonly Industry
     else if (opening.duplicateOfId) out.push(early(fact.claimId!, 'opening is a duplicate'));
     else if ((opening.currency ?? '').toUpperCase() !== 'USD') out.push(early(fact.claimId!, `opening currency is ${opening.currency ?? 'unset'}, not USD`));
     else {
-      const buyer = matchBuyerType(opening.payer, nodes);
+      const buyer = payerBuyerType(opening.payer, nodes);
       if (buyer) matched.push({ fact, buyer });
       else out.push(early(fact.claimId!, 'opening payer matches no mapped buyer type', opening.payer));
     }
@@ -1218,4 +1232,123 @@ export async function backfillClaimFacts(projectId: string, batch = BACKFILL_BAT
     await consume(decision);
   }
   return out;
+}
+
+/* ------------------------------------------------- priced payers on the map */
+
+/** Buyer populations one pass adds to the map from priced openings, at most. */
+export const PAYER_NODES_PER_PASS = 10;
+/** The sector a priced payer is filed under when its opening names no industry. */
+export const UNCLASSIFIED_SECTOR = 'Unclassified';
+/** Node kinds an opening's industry may name as the part of the economy a buyer sits in. */
+const SECTOR_KINDS: ReadonlySet<string> = new Set(['SECTOR', 'SUB_INDUSTRY', 'ADJACENT_INDUSTRY', 'VALUE_CHAIN_LAYER']);
+
+export interface MappedPayers {
+  /** Buyer-type nodes this pass created, in order. */
+  created: IndustryNode[];
+  /** Openings whose mapping failed, with why; one never stops the others. */
+  failures: string[];
+}
+
+/**
+ * Put the payers of priced openings on the map as buyer populations
+ * (2026-11-15). Production: construction_facts stayed 0 after the F3
+ * back-fill, because it files a card's price only against a payer the map
+ * already names, and the map held 11 buyer types while 49 priced openings
+ * named organisations none of them were.
+ *
+ * An opening qualifies when it is in USD, its payer is EVIDENCE (a gated,
+ * sourced claim), its price or direct cost is EVIDENCE with a positive USD
+ * figure not yet filed as a fact, and its payer — by name or by the population
+ * `buyerPopulationName` puts it in — matches no live buyer type. It becomes a
+ * DISCOVERED `BUYER_TYPE` under the sector node its industry names (an
+ * existing one first, else a root SECTOR of that name, else
+ * `UNCLASSIFIED_SECTOR`), established by the payer claim; repeated payers of
+ * one population are one node. `backfillClaimFacts` then files the price
+ * against it, on the same pass or the next.
+ *
+ * Absorbing, not discovery: no research is opened. Bounded
+ * (`PAYER_NODES_PER_PASS`), idempotent (a mapped payer matches next time, and
+ * `createNode` is unique by parent and name), and one opening that fails is
+ * recorded and never stops the others.
+ */
+export async function mapPricedPayers(projectId: string, limit = PAYER_NODES_PER_PASS): Promise<MappedPayers> {
+  const out: MappedPayers = { created: [], failures: [] };
+  const facts = (await cardFactsForProject(projectId)).filter((one) => one.kind === 'EVIDENCE' && one.claimId);
+  const priceFacts = facts.filter((one) => BACKFILL_FIELDS[one.field]);
+  if (priceFacts.length === 0) return out;
+  const filed = new Set((await listProjectFacts(projectId)).map((one) => one.sourceClaimId).filter((id): id is string => !!id));
+  const payerClaim = new Map(facts.filter((one) => one.field === 'payer').map((one) => [one.opportunityId, one.claimId!]));
+  const unfiledPrice = new Map<string, string[]>();
+  for (const fact of priceFacts) {
+    if (filed.has(fact.claimId!) || !payerClaim.has(fact.opportunityId)) continue;
+    unfiledPrice.set(fact.opportunityId, [...(unfiledPrice.get(fact.opportunityId) ?? []), fact.claimId!]);
+  }
+  if (unfiledPrice.size === 0) return out;
+  const openings = (await listOpportunities({ projectId }))
+    .filter((one) => unfiledPrice.has(one.id) && one.payer && !one.duplicateOfId && (one.currency ?? '').toUpperCase() === 'USD')
+    .sort((a, b) => a.id.localeCompare(b.id));
+  if (openings.length === 0) return out;
+  const nodes = await listNodes(projectId);
+  const pending = openings.filter((one) => !payerBuyerType(one.payer!, nodes) && buyerPopulationName(one.payer));
+  if (pending.length === 0) return out;
+  const claims = new Map(
+    (await claimsByIds([...new Set(pending.flatMap((one) => [payerClaim.get(one.id)!, ...unfiledPrice.get(one.id)!]))])).map((one) => [one.id, one]),
+  );
+  const gated = (id: string | undefined): ResearchClaim | null => {
+    const claim = id ? claims.get(id) : undefined;
+    return claim && claim.accepted && claim.sourceUrl ? claim : null;
+  };
+
+  for (const opening of pending) {
+    if (out.created.length >= limit) break;
+    try {
+      // An earlier payer this pass may already have mapped this one's population.
+      if (payerBuyerType(opening.payer!, nodes)) continue;
+      const population = buyerPopulationName(opening.payer)!;
+      const payer = gated(payerClaim.get(opening.id));
+      const price = unfiledPrice
+        .get(opening.id)!
+        .map(gated)
+        .find((claim) => claim && readMoneyFigures(claim.claim, 'USD').some((one) => one.cents > 0));
+      if (!payer || !price) continue;
+      const parent = await sectorFor(projectId, opening.industry, nodes, payer.id);
+      const made = await createNode({
+        projectId,
+        parentId: parent.id,
+        kind: 'BUYER_TYPE',
+        name: population,
+        description: `Payer of priced opening ${opening.id} ("${opening.payer!.slice(0, 120)}"), established by claim ${payer.id}; priced by claim ${price.id}.`,
+        origin: 'DISCOVERED',
+        sourceClaimId: payer.id,
+      });
+      if (!nodes.some((one) => one.id === made.node.id)) nodes.push(made.node);
+      if (!made.created) continue;
+      out.created.push(made.node);
+      await recordCashEvent({
+        projectId,
+        opportunityId: opening.id,
+        kind: 'INDUSTRY_BUYER_MAPPED',
+        actorRef: 'BRAIN',
+        summary: `Buyer population "${population}" added to the map under "${parent.name}" from the priced payer "${opening.payer!.slice(0, 120)}".`,
+        detail: { nodeId: made.node.id, parentId: parent.id, payer: opening.payer, payerClaimId: payer.id, priceClaimId: price.id, opportunityId: opening.id },
+      });
+    } catch (error) {
+      out.failures.push(`${opening.id}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  return out;
+}
+
+/** The live sector node an opening's industry names, else a root SECTOR of that name (or `UNCLASSIFIED_SECTOR`), created once. */
+async function sectorFor(projectId: string, industry: string | null, nodes: IndustryNode[], claimId: string): Promise<IndustryNode> {
+  const name = (industry ?? '').replace(/\s+/g, ' ').trim().slice(0, 120) || UNCLASSIFIED_SECTOR;
+  const key = buyerNameKey(name);
+  const named = nodes
+    .filter((one) => !one.retiredAt && SECTOR_KINDS.has(one.kind) && buyerNameKey(one.name) === key)
+    .sort((a, b) => Number(a.parentId !== null) - Number(b.parentId !== null) || a.createdAt.localeCompare(b.createdAt));
+  if (named[0]) return named[0];
+  const made = await createNode({ projectId, parentId: null, kind: 'SECTOR', name, origin: 'DISCOVERED', sourceClaimId: claimId });
+  if (!nodes.some((one) => one.id === made.node.id)) nodes.push(made.node);
+  return made.node;
 }

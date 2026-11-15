@@ -29,6 +29,7 @@ import {
   type StructuralFinding,
 } from './types.ts';
 import { FACT_KEY_LIST } from './construction.ts';
+import { statesNamedIn, US_STATES } from './jurisdiction.ts';
 
 export { STRUCTURAL_FINDINGS };
 export type { StructuralFinding };
@@ -312,6 +313,67 @@ export function buyerNameKey(name: string | null | undefined): string {
       return word;
     })
     .join(' ');
+}
+
+/** The organisation nouns a state's agencies are named by, singular to plural. */
+const AGENCY_NOUNS: Readonly<Record<string, string>> = {
+  department: 'departments',
+  division: 'divisions',
+  office: 'offices',
+  bureau: 'bureaus',
+  agency: 'agencies',
+  commission: 'commissions',
+  board: 'boards',
+  authority: 'authorities',
+  administration: 'administrations',
+};
+const AGENCY = Object.keys(AGENCY_NOUNS).join('|');
+const STATES_LONGEST_FIRST = [...US_STATES].sort((a, b) => b.length - a.length);
+const withoutStates = (text: string): string =>
+  STATES_LONGEST_FIRST.reduce((rest, state) => rest.replace(new RegExp(`\\b${state}\\b`, 'gi'), ' '), text)
+    .replace(/\b(?:state|commonwealth)(?: of)?\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+/**
+ * The buyer population one named payer belongs to, as a map name (2026-11-15):
+ * production held 49 priced openings whose payers are single organisations
+ * (one state's named department, "School District of Philadelphia") beside
+ * 11 unrelated buyer types, so no payer was a population the map held and no
+ * published price reached construction.
+ *
+ * A closed set of rules, never a reading (§8): a place in brackets or after a
+ * comma is dropped; a school district, a university, a city, a county and a
+ * state's own agency become the population of their kind ("state <x>
+ * departments"); any other state name is removed, because a buyer name that
+ * names a jurisdiction is one construction refuses; anything else — a named
+ * federal office, "US residential homeowners" — is kept as the named
+ * population it already is. Null when nothing is left. Pure.
+ */
+export function buyerPopulationName(payer: string | null | undefined): string | null {
+  let text = (payer ?? '').replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
+  // "…, Mechanicsburg, PA" or "…, Harrisburg, Pennsylvania 17110": a place, not who pays.
+  const comma = text.indexOf(',');
+  if (comma > 0 && statesNamedIn(text.slice(comma)).length > 0) text = text.slice(0, comma).trim();
+  text = text.replace(/^the\s+/i, '').replace(/[.,;:]+$/, '').trim();
+  if (!text) return null;
+  if (/\b(?:school district|public schools|school board|board of education|unified school)\b/i.test(text)) return 'school districts';
+  if (/\b(?:university|college)\b/i.test(text)) return 'universities and colleges';
+  if (/^(?:city|town|village|borough|township) of\b/i.test(text) || /\b(?:city|town|borough|township) (?:council|government)\b/i.test(text)) return 'municipal governments';
+  if (/^county of\b/i.test(text) || /\bcounty(?: government| commissioners)?$/i.test(text)) return 'county governments';
+  if (statesNamedIn(text).length > 0) {
+    if (/^(?:state|commonwealth) of [a-z ]+$/i.test(text)) return 'state governments';
+    // "<State> Department of <X>" -> "state <x> departments".
+    const of = new RegExp(`^(.*?)\\b(${AGENCY}) of (?:the )?(.+)$`, 'i').exec(text);
+    if (of && statesNamedIn(of[1]!).length > 0 && statesNamedIn(of[3]!).length === 0) return `state ${of[3]!.toLowerCase()} ${AGENCY_NOUNS[of[2]!.toLowerCase()]}`.slice(0, 90);
+    // "<State> Environmental Protection Department" -> "state environmental protection departments".
+    const after = new RegExp(`^(.+?)\\s+(${AGENCY})$`, 'i').exec(text);
+    const rest = after && statesNamedIn(after[1]!).length > 0 ? withoutStates(after[1]!) : '';
+    if (after && rest) return `state ${rest.toLowerCase()} ${AGENCY_NOUNS[after[2]!.toLowerCase()]}`.slice(0, 90);
+    text = withoutStates(text).replace(/^(?:the|of|in)\s+/i, '').trim();
+  }
+  if (!/[a-z]/i.test(text) || statesNamedIn(text).length > 0) return null;
+  return text.slice(0, 90);
 }
 
 /**
