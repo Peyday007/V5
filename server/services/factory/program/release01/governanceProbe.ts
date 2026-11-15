@@ -20,6 +20,10 @@ export interface RegisterCheckOutcome {
   unread?: boolean;
   /** The register revision the check tried to read (`<path>@<revision>`). */
   registerAt?: string | null;
+  /** The program the register is checked against, read from Brain's own rows even when the forge did not answer. */
+  programId?: string | null;
+  /** How many releases are appended to that program now (§97 amendments): the owner's answers arrive as releases. */
+  releases?: number | null;
 }
 
 /** A recorded register outcome: the register pass writes one only from a definite read. */
@@ -47,14 +51,29 @@ export function registerVerdict(r: RegisterCheckOutcome, recorded: RecordedRegis
   if (!r.ok && /no architecture program is filed/.test(r.detail)) return { ok: null, detail: r.detail };
   if (!r.unread) return { ok: r.ok, detail: r.detail };
   const revision = r.registerAt ?? null;
-  if (recorded && revision && recorded.detail.register === revision && (recorded.kind === REGISTER_CURRENT || recorded.kind === REGISTER_BEHIND)) {
+  /*
+   * The same outcome the register pass would fingerprint: the same register
+   * revision, against the same program, with the same appended releases. A
+   * release appended since the record (the owner answering, §97) can put an
+   * unchanged register BEHIND, so a record made before it answers nothing now.
+   */
+  const sameSubject =
+    recorded !== null &&
+    revision !== null &&
+    recorded.detail.register === revision &&
+    (recorded.detail.programId ?? null) === (r.programId ?? null) &&
+    (recorded.detail.appendedReleases ?? null) === (r.releases ?? null);
+  if (recorded && sameSubject && (recorded.kind === REGISTER_CURRENT || recorded.kind === REGISTER_BEHIND)) {
     const said = typeof recorded.detail.detail === 'string' ? recorded.detail.detail : recorded.kind;
     return {
       ok: recorded.kind === REGISTER_CURRENT,
       detail: `${r.detail}; answered from the register outcome recorded at ${recorded.at} from a definite read of ${revision}: ${said}`,
     };
   }
-  return { ok: null, detail: `${r.detail} (no definite read of ${revision ?? 'this revision'} is recorded, so this pass answers nothing)` };
+  return {
+    ok: null,
+    detail: `${r.detail} (no definite read of ${revision ?? 'this revision'} against program ${r.programId ?? '-'} with ${r.releases ?? '-'} appended release(s) is recorded, so this pass answers nothing)`,
+  };
 }
 
 /** GOV-11: the open-questions register, checked against the program's stored source on production. */
