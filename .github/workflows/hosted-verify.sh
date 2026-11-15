@@ -44,6 +44,14 @@ if grep -q '^HOSTED-VERIFICATION: PASS' "$out"; then
   exit 0
 fi
 
+# The verifier's own heap is capped (scripts/verify-hosted.sh); when it is the
+# verifier that ran out, say so — that is not the live Brain being slow, and
+# not the machine being OOM-killed (R-SLOW-RESTART, 2026-11-15).
+if grep -q 'JavaScript heap out of memory' "$out"; then
+  echo "HOSTED-VERIFY-GUARD: the verifier process itself ran out of its capped heap (scripts/verify-hosted.sh); the live Brain was not the cause." | tee -a "$out"
+  echo "::error::The hosted verifier ran out of its own capped heap during this pass. The Brain did not; raise or trim the verifier, not the machine."
+fi
+
 # Why it stopped, from the machine rather than from the pass.
 events=$(for id in $(flyctl status --app "$app" --json 2>/dev/null | jq -r '.Machines[]?.id' 2>/dev/null); do
   flyctl machine status "$id" --app "$app" --display-config=false 2>/dev/null
