@@ -99,7 +99,12 @@ Surge A (reliability) holds no dedicated agents. Its open items: R-SLOW-RESTART,
 | Integration and verification | Deploy ~70% busy, 50% failing | **yes** |
 | Research evidence availability | 2 claims/h | **yes** (because inference is down) |
 
-Models are idle while engineering assignments wait, so the fault is in routing and registration, not missing capacity: dispatch starvation (fixed) and the quarantined surfaces (they need the surface owner's connector re-authorized). Adding agents removes none of these constraints. Inference is not saturated (it is unavailable), and no suitable worker class is fully occupied, so no extra capacity is justified by occupancy.
+Models are idle while engineering assignments wait, so the fault is in routing and registration, not missing capacity: dispatch starvation (fixed) and the quarantined surfaces (they need the surface owner's connector re-authorized). Dispatch diagnosis (run 43771922118, 22:56Z) names the waiting items:
+- Factory's "1 executable item, 1 free surface" is a pair of `FACTORY_SURFACE_PROBE` bins pinned to the quarantined surfaces (`ALL_SURFACES_INELIGIBLE`, 34 tries each).
+- The Routines item is a bin in prj_ede218e7… that no surface serves (`NO_SURFACE_SERVES_THIS_PROJECT`, 34 tries).
+- Factory units 18:20–20:12Z waited on `ACCOUNT_TARGETS_REACHED`, a per-account cap that worked as intended.
+
+None of these is idle capacity that could be reassigned. The watchdog's "unexplainedly idle" and "a fault" wording counts a pinned probe as executable work. Adding agents removes none of these constraints. Inference is not saturated (it is unavailable), and no suitable worker class is fully occupied, so no extra capacity is justified by occupancy.
 
 **Bottleneck resource:** model inference for research (GPU and free providers down), then integration and verification (one Deploy at a time, 50% failing).
 
