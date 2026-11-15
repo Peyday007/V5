@@ -1722,7 +1722,7 @@ function compose(args: {
       args.precedent?.id ?? null,
       [...valueObs, ...riskObs].filter((one) => !one.broad).map((one) => one.id).sort(),
     ]),
-    ...(positionQuestions ? { positionQuestions } : {}),
+    ...(positionQuestions ? { positionQuestions: positionQuestions.map(carriedPositionQuestion) } : {}),
   };
   return { arrangement, levered };
 }
@@ -1862,6 +1862,25 @@ export function researchWording(text: string): string {
  * as a separate one. What is shared — the transaction, where to look, what an
  * opening is — is already in the round's question and is not repeated.
  */
+/**
+ * A position question as an arrangement carries it. What research is asked is the
+ * arrangement's own question, with the positions decomposed into it
+ * (`positionDecomposition`); the full per-position text, ~3.4 kB each and eleven
+ * per arrangement, is read by nothing past composition. Carried whole on every
+ * arrangement it made a construction pass 16 MB (2026-11-15), stalling the
+ * server's loop when the pool handed it back and filling the library's rows. The
+ * arrangement keeps the question's opening — the transaction, the position and
+ * what evidence to return — and its structured fields; what to investigate there
+ * is in the arrangement's question already.
+ */
+const POSITION_OPENING_END = 'never industry facts or market overviews.';
+function carriedPositionQuestion(q: PositionResearchQuestion): PositionResearchQuestion {
+  const end = q.question.indexOf(POSITION_OPENING_END);
+  // `investigate` is in the arrangement's own question already, through the decomposition.
+  const { investigate: _investigate, ...rest } = q;
+  return end < 0 ? rest : { ...rest, question: q.question.slice(0, end + POSITION_OPENING_END.length) };
+}
+
 export function positionDecomposition(questions: readonly PositionResearchQuestion[]): string {
   const positions = questions.filter((q) => q.kind === 'POSITION');
   if (positions.length === 0) return '';
