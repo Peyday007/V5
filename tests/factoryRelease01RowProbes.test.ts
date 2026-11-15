@@ -15,6 +15,7 @@ import {
 import { continuityHolds, ledgerHolds, type AttemptRow } from '../server/services/factory/program/release01/continuityProbe.ts';
 import { getProbe } from '../server/services/factory/program/probes.ts';
 import { promotionHolds } from '../server/services/factory/program/release01/governanceProbe.ts';
+import { decisionMemoryHolds, type ReadingRow } from '../server/services/factory/program/release01/memoryProbe.ts';
 
 const at = '2026-11-13T00:00:00.000Z';
 const judgment = (capability: string, outcome: string, route: string | null, reason = 'why'): JudgmentRow => ({
@@ -26,7 +27,7 @@ const judgment = (capability: string, outcome: string, route: string | null, rea
 });
 
 describe('the probes are registered in the protected module', () => {
-  it.each(['r01.acq-21-1', 'r01.acq-21-2', 'r01.acq-21-5', 'r01.cont-35', 'r01.learn-15-1', 'r01.gov-11', 'r01.gov-22-1', 'r01.arch-01', 'r01.com-13-1', 'r01.opp-03', 'r01.cp-31'])('%s, and its query runs: UNKNOWN on an empty Brain', async (name) => {
+  it.each(['r01.acq-21-1', 'r01.acq-21-2', 'r01.acq-21-5', 'r01.cont-35', 'r01.learn-15-1', 'r01.gov-11', 'r01.gov-22-1', 'r01.arch-01', 'r01.com-13-1', 'r01.opp-03', 'r01.cp-31', 'r01.mem-32'])('%s, and its query runs: UNKNOWN on an empty Brain', async (name) => {
     await freshProject();
     const probe = getProbe(name);
     expect(probe).not.toBeNull();
@@ -170,5 +171,55 @@ describe('CAUSAL-14-1..15-2: judged on the portfolios live goals compose', async
     expect(c.assuranceHolds(ps([member()], { assurance: { claimsAtLeast90: true, validationProblems: ['an assumed rate'] } })).ok).toBe(false);
     expect(c.calibrationHolds(ps([member()], { assurance: { claimsAtLeast90: true, validationProblems: [] } })).ok).toBe(false);
     expect(c.decompositionHolds(ps([member({ decomposition: [{ id: 's', question: 'q', observable: ' ', dependsOn: [], origin: 'starting', status: 'UNKNOWN' }] })])).ok).toBe(false);
+  });
+});
+
+describe('MEM-32: each plan reading kept as one complete, linked decision record', () => {
+  const reading: ReadingRow = { id: 'gpr_1', workstream_id: 'ws_1', created_at: at };
+  const record = (over: Record<string, unknown> = {}) => ({
+    id: 'wse_gdr_gpr_1',
+    workstream_id: 'ws_1',
+    detail: JSON.stringify({
+      schema: 1, readingId: 'gpr_1', goalId: 'ws_1', decision: 'Which plan?', chosen: 'A', verdict: 'ON_TRACK',
+      alternatives: [{ key: 'A', chosen: true }], evidence: [{ kind: 'GOAL_TARGET', sourceRowId: 'ws_1', fingerprint: 'f' }],
+      conditions: [], predicted: null, authority: { actor: 'BRAIN', verdict: 'IN_FORCE', reason: 'r' }, decidedAt: at, reason: 'because',
+      chain: { evidence: ['GOAL_TARGET:ws_1'], actions: [], results: { by: 'goal_outcomes.reading_id', readingId: 'gpr_1' } },
+      ...over,
+    }),
+  });
+  const readings = new Map([[reading.id, reading]]);
+
+  it('is UNKNOWN with no record, PASS with a complete one', () => {
+    expect(decisionMemoryHolds([], readings).ok).toBeNull();
+    expect(decisionMemoryHolds([record()], readings).ok).toBe(true);
+  });
+
+  it('fails a record that contradicts the requirement', () => {
+    expect(decisionMemoryHolds([record()], new Map()).detail).toMatch(/does not exist/);
+    expect(decisionMemoryHolds([{ ...record(), id: 'wse_gdr_other' }], readings).detail).toMatch(/not keyed/);
+    expect(decisionMemoryHolds([record({ alternatives: undefined })], readings).ok).toBe(false);
+    expect(decisionMemoryHolds([record({ evidence: [{ kind: 'GOAL_TARGET', sourceRowId: 'ws_1' }] })], readings).detail).toMatch(/fingerprint/);
+    expect(decisionMemoryHolds([record({ reason: '' })], readings).detail).toMatch(/no reason/);
+    expect(decisionMemoryHolds([record({ decidedAt: '2020-01-01T00:00:00.000Z' })], readings).detail).toMatch(/not dated/);
+    expect(decisionMemoryHolds([record({ chain: { evidence: [], actions: [], results: { readingId: 'x' } } })], readings).detail).toMatch(/link evidence/);
+    expect(decisionMemoryHolds([{ ...record(), detail: '{' }], readings).detail).toMatch(/not readable/);
+  });
+});
+
+describe('MEM-32: the probe accepts what the writer actually writes', () => {
+  it('passes a record built by decisionRecord.ts from a reading', async () => {
+    const { buildDecisionRecord } = await import('../server/services/goals/decisionRecord.ts');
+    const { governingFrom, policyVersions } = await import('../server/services/goals/ownerPolicy.ts');
+    const reading = {
+      id: 'gpr_w', workstream_id: 'wst_w', digest: 'd', scenario_model_id: null, scenario_run_id: null, verdict: 'CANDIDATE', chosen_strategy: 'S1',
+      strategies: JSON.stringify([{ key: 'S1', label: 'Sell', verdict: 'CANDIDATE', opportunityIds: ['cop_w'], links: [{ link: 'PRICE', ok: false, basis: 'none' }], constraintsFailed: [] }]),
+      next_test: null, forecast: null, created_at: at,
+    } as Parameters<typeof buildDecisionRecord>[0]['reading'];
+    const policy = governingFrom('wst_w', policyVersions('wst_w', [{ id: 'wse_p0', workstreamId: 'wst_w', kind: 'GOAL_TERMS_SET', summary: '', detail: {}, actorRef: 'person:usr_o', createdAt: '2026-11-01T00:00:00.000Z' }]));
+    const record = buildDecisionRecord({ reading, facts: { opportunities: [{ id: 'cop_w', price_cents: 100, currency: 'USD', deadline: null }], cashNeeds: [] }, policy, pursued: [] });
+    const event = { id: `wse_gdr_${reading.id}`, workstream_id: 'wst_w', detail: JSON.stringify(record) };
+    const verdict = decisionMemoryHolds([event], new Map([[reading.id, { id: reading.id, workstream_id: 'wst_w', created_at: at }]]));
+    expect(verdict.detail).toMatch(/1 decision record/);
+    expect(verdict.ok).toBe(true);
   });
 });
