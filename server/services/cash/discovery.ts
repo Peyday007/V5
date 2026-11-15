@@ -106,7 +106,7 @@ import { getMissionByOrchestration } from '../../repos/russellMissions.ts';
 import { missionsForRounds, type RoundMissions } from '../russell/roundMissions.ts';
 import { mechanismForSignal, observationExpiry, openingTitle } from '../../domain/opportunitySignals.ts';
 import { OPPORTUNITY_SIGNALS } from '../../domain/types.ts';
-import { discoveryAllowed } from './lifecycle.ts';
+import { discoveryAllowed, knowledgeResearchAllowed } from './lifecycle.ts';
 import { noteConstructedRoundOpened, noteConstructedRoundOutcome } from './arrangementLibrary.ts';
 import { arrangementForLegacyKey } from '../../repos/monetization.ts';
 import { cashPosition } from './money.ts';
@@ -1214,7 +1214,9 @@ export async function openGoalDiscovery(input: {
  * gate, the same frame, the same candidate-and-round transaction and the same
  * harvest every goal lens uses. The bucket id carries the arrangement's key,
  * so each arrangement keeps its own history and backoff, and its rounds count
- * against the goal's live cap like any lens.
+ * against the goal's live cap like any lens. It opens inside an ACTIVE sprint
+ * or under the live standing research grant (`knowledgeResearchAllowed`), so
+ * the arrangement library's counters and verdicts keep moving with no sprint.
  */
 export async function openConstructedRound(input: {
   goal: { id: string; title: string };
@@ -1232,17 +1234,23 @@ export async function openConstructedRound(input: {
   origins?: readonly OpportunityOrigin[];
   seedKeys?: readonly string[];
 }): Promise<OpenedDiscovery | null> {
-  const gate = await discoveryAllowed(input.projectId);
-  if (!gate.allowed || !gate.mode) return null;
-  const mode = gate.mode;
   const now = input.now ?? new Date().toISOString();
+  /*
+   * Knowledge work (F7): an ACTIVE sprint, or the standing research grant the
+   * industry kernel maps under (§40, §52). Winding a sprint down ends the
+   * sprint's own discovery — its lenses, buckets and lift — not this.
+   */
+  const gate = await knowledgeResearchAllowed(input.projectId);
+  if (!gate.allowed || !gate.mode) return null;
+  // Under the standing grant the question is framed by the goal it serves, not the wound-down sprint's objective.
+  const mode = gate.basis === 'STANDING' ? { ...gate.mode, objective: input.goal.title } : gate.mode;
   const prefix = `${GOAL_BUCKET_PREFIX}${input.goal.id}`;
   const mine = (await listRounds(input.projectId)).filter((one) => one.bucketId === prefix || one.bucketId.startsWith(`${prefix}-`));
   const liveCap = Math.max(MAX_LIVE_GOAL_ROUNDS, Math.trunc(input.liveCap ?? MAX_LIVE_GOAL_ROUNDS));
   if ((await roundsStillResearching(mine)) >= liveCap) return null;
   /*
    * Focus keeps exactly this search (§83): an approved goal's constructed
-   * arrangements, inside an ACTIVE sprint (the gate above), at most
+   * arrangements, inside an ACTIVE sprint or the standing grant (the gate above), at most
    * `focusConstructedCap` open at once. Lens rounds, bulk discovery and the
    * idle-fill lift stay stopped. #389 stopped this too, and with it the only
    * research that could add an opening the held ones cannot reach.

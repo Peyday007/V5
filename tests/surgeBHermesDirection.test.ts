@@ -37,6 +37,7 @@ import { createLayer } from '../server/repos/layers.ts';
 import { setImprovementSwitch } from '../server/services/improvement/authority.ts';
 import { recordEvent } from '../server/repos/events.ts';
 import { closeRound, openRound } from '../server/repos/cashDiscovery.ts';
+import { closeIndustryRound, openIndustryRound } from '../server/repos/industry.ts';
 import { decideCandidate, upsertCandidate } from '../server/repos/improvement.ts';
 import { upsertInventory, getInventoryItem } from '../server/services/operator/inventory.ts';
 import {
@@ -44,6 +45,8 @@ import {
   inventoryDeficiencies,
   readDeficiencies,
   readingId,
+  missingKindsOf,
+  STUCK_PLAN_STALE_DAYS,
   stuckPlanDeficiencies,
   unreportedRoundDeficiencies,
 } from '../server/services/operator/director.ts';
@@ -193,6 +196,79 @@ describe('H2-3 (b): a goal plan whose missing evidence does not change across re
     for (let i = 0; i < 3; i += 1) await planReading(paused, 'CANDIDATE_ONLY', ['a']);
     expect((await pause(paused, 'test', `person:${userId}`)).ok).toBe(true);
     expect(await stuckPlanDeficiencies()).toEqual([]);
+  });
+});
+
+describe('F8: a stuck plan is read by the kinds of evidence it lacks, and by time', () => {
+  async function storedReading(goalId: string, input: { at: string; shortfalls: string[]; links?: Array<{ link: string; ok: boolean }>; next?: string }): Promise<void> {
+    readingSeq += 1;
+    await getDb().run(
+      `INSERT INTO goal_plan_readings (id, workstream_id, digest, scenario_model_id, scenario_run_id, verdict, chosen_strategy, strategies, next_test, forecast, created_at)
+       VALUES (?, ?, ?, NULL, NULL, 'NOT_VIABLE', 'only_o1', ?, ?, ?, ?)`,
+      [
+        `gpr_f${readingSeq}${uid()}`, goalId, `f${readingSeq}`,
+        JSON.stringify([{ key: 'only_o1', links: input.links ?? [] }]),
+        input.next ? JSON.stringify({ link: input.next }) : null,
+        JSON.stringify({ acceptance: { status: 'CANDIDATE_ONLY', shortfalls: input.shortfalls, required: 0.9 } }),
+        input.at,
+      ],
+    );
+  }
+  // Production's shortfall sentences (plan-0008): a reach percentage and the candidate's title move every re-read.
+  const sentence = (pct: number, title: string) =>
+    `the best combination reaches the target in ${pct}% of worlds, which is coverage of assumed inputs, not a probability: ${title}: price, reply rate, close rate not established`;
+  const links = [{ link: 'CONVERSION', ok: false }, { link: 'FULFILMENT', ok: false }, { link: 'CURRENT_DEMAND', ok: true }];
+
+  it('fires when three readings differ only in figures and titles but lack the same kinds', async () => {
+    const goalId = await cashGoal();
+    const at = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
+    await storedReading(goalId, { at: at(30), shortfalls: [sentence(3, 'Market: Pennsylvania (Philadelphia)')], links, next: 'OFFER_AND_PRICE' });
+    await storedReading(goalId, { at: at(20), shortfalls: [sentence(5, 'Market: US residential home improvement')], links, next: 'OFFER_AND_PRICE' });
+    await storedReading(goalId, { at: at(10), shortfalls: [sentence(0, 'A Washington DC government authority')], links, next: 'OFFER_AND_PRICE' });
+    const found = (await stuckPlanDeficiencies()).filter((one) => one.diagnosis.goalId === goalId);
+    expect(found).toHaveLength(1);
+    expect(found[0]!.diagnosis.title).toMatch(/last 3 readings/);
+    expect(found[0]!.diagnosis.observed).toMatch(/conversion/);
+    expect(found[0]!.diagnosis.observed).toMatch(/fulfilment/);
+  });
+
+  it('stays silent when the kinds lacked change', async () => {
+    const goalId = await cashGoal();
+    const at = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
+    await storedReading(goalId, { at: at(30), shortfalls: [sentence(3, 'A')], links });
+    await storedReading(goalId, { at: at(20), shortfalls: [sentence(5, 'B')], links: [{ link: 'CONVERSION', ok: false }] });
+    await storedReading(goalId, { at: at(10), shortfalls: [sentence(0, 'C')], links });
+    expect((await stuckPlanDeficiencies()).filter((one) => one.diagnosis.goalId === goalId)).toEqual([]);
+  });
+
+  it('fires on time alone: a plan nothing moves stores no new reading, and its last one ages', async () => {
+    const goalId = await cashGoal();
+    await storedReading(goalId, { at: new Date(Date.now() - (STUCK_PLAN_STALE_DAYS + 1) * 86_400_000).toISOString(), shortfalls: [sentence(0, 'A')], links });
+    const found = (await stuckPlanDeficiencies()).filter((one) => one.diagnosis.goalId === goalId);
+    expect(found).toHaveLength(1);
+    expect(found[0]!.diagnosis.title).toMatch(/no reading has changed/);
+  });
+
+  it('reads kinds, not words', () => {
+    const row = (pct: number, title: string) => ({ chosen_strategy: 'only_o1', strategies: JSON.stringify([{ key: 'only_o1', links }]), next_test: null, forecast: JSON.stringify({ acceptance: { status: 'CANDIDATE_ONLY', shortfalls: [sentence(pct, title), 'this Brain has too few finished accepted plans (under 10) to calibrate a success rate'] } }) });
+    expect(missingKindsOf(row(3, 'A'))).toEqual(missingKindsOf(row(97, 'Something else entirely')));
+    expect(missingKindsOf(row(3, 'A'))).toEqual(expect.arrayContaining(['LINK:CONVERSION', 'LINK:FULFILMENT', 'PRICE', 'REPLY_RATE', 'CLOSE_RATE', 'CALIBRATION']));
+  });
+});
+
+describe('F8: standing research rounds that ended without a report', () => {
+  it("fires on the project's kernel rounds under the standing grant, which no goal bucket names", async () => {
+    const goalId = await cashGoal();
+    for (let n = 1; n <= 2; n += 1) {
+      const r = await openIndustryRound({ projectId, cashModeId: null, nodeId: null, purpose: 'BOOTSTRAP', round: n, candidateId: `rcd_${uid()}${uid()}` });
+      await closeIndustryRound({ id: r.round.id, to: 'ABANDONED', found: 0 });
+    }
+    const found = (await unreportedRoundDeficiencies()).filter((one) => one.source?.ref === `project:${projectId}`);
+    expect(found).toHaveLength(1);
+    expect(found[0]!.diagnosis.goalId).toBe(goalId);
+    expect(found[0]!.diagnosis.title).toBe('Standing research rounds end without a report');
+    expect(found[0]!.diagnosis.recurrence).toBe(2);
+    expect(found[0]!.diagnosis.evidence).toContain('standing grant');
   });
 });
 

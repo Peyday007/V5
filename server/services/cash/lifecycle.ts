@@ -49,6 +49,8 @@ import { roundForCandidate } from '../../repos/cashDiscovery.ts';
 import { industryRoundForCandidate } from '../../repos/industry.ts';
 import { commissionForCandidate } from '../../repos/monetization.ts';
 import { dealRoundForCandidate } from '../../repos/dealflow.ts';
+import { listGoals } from '../../repos/russellAuthority.ts';
+import { databasePressure } from '../../db/pressure.ts';
 import type {
   CashMode,
   CashModeState,
@@ -431,7 +433,14 @@ export async function launchableUnderCashMode(input: {
    * **Inferring a classification from the absence of a different table's row is
    * what made that possible.** `cash_discovery_rounds` is the statement.
    */
-  if (await roundForCandidate(input.candidateId)) return false;
+  /*
+   * Except knowledge work (F7): a constructed arrangement's round is research
+   * the standing grant authorizes as well as the sprint, so it launches while
+   * that grant is live — revoking the grant, not winding the sprint down, is
+   * what stops it (rule 40), exactly as for the kernel's standing rounds below.
+   */
+  const discoveryRound = await roundForCandidate(input.candidateId);
+  if (discoveryRound) return isConstructedBucket(discoveryRound.bucketId) && (await liveStandingGrant(discoveryRound.projectId)) !== null;
 
   /*
    * And a kernel question is discovery work for the same reason.
@@ -529,6 +538,62 @@ export async function discoveryAllowed(projectId: string): Promise<DiscoveryDeci
     };
   }
   return { allowed: true, mode, reason: 'Cash Mode is active.' };
+}
+
+/** A constructed arrangement's round (§81): `openConstructedRound` names its bucket `goal-<goalId>-mx-<key>`. */
+export function isConstructedBucket(bucketId: string): boolean {
+  return /^goal-.+-mx-./.test(bucketId);
+}
+
+/**
+ * The live standing research grant (§40, §52) — the authority the industry
+ * kernel maps the economy under with no sprint — or null. Read through the
+ * kernel's own rule, so the two cannot disagree about what a standing grant is.
+ */
+export async function liveStandingGrant(projectId: string, now = new Date().toISOString()): Promise<{ id: string; name: string } | null> {
+  const { standingWorldGrant } = await import('../industry/kernel.ts');
+  return standingWorldGrant(await listGoals(projectId), now);
+}
+
+/**
+ * May constructed-arrangement research — knowledge work — start now (F7)?
+ *
+ * Knowledge expands as a normal capability, not only inside a sprint (owner,
+ * 2026-11-14): winding a sprint down ends the sprint's new discovery, and
+ * never the standing knowledge work a person granted separately (rule 40).
+ * So a constructed round may open under an ACTIVE sprint, exactly as before,
+ * or — with no active sprint — under the live standing research grant the
+ * industry kernel uses, and then only at NORMAL database pressure, because
+ * standing work is optional (§63). Revoking that grant is what stops it.
+ *
+ * Only research: the grant authorizes reading published sources, and nothing
+ * here touches spending, contact or outreach, which stay gated as before.
+ * The round is filed under the project's cash row, because a discovery round
+ * belongs to one; a project that never had a sprint has none, and says so.
+ */
+export async function knowledgeResearchAllowed(projectId: string, now = new Date().toISOString()): Promise<DiscoveryDecision & { basis: 'SPRINT' | 'STANDING' | null }> {
+  const sprint = await discoveryAllowed(projectId);
+  if (sprint.allowed) return { ...sprint, basis: 'SPRINT' };
+  const grant = await liveStandingGrant(projectId, now);
+  if (!grant) {
+    return {
+      ...sprint,
+      basis: null,
+      reason: `${sprint.reason} No standing research grant other than the sprint's own is live, so no constructed arrangement is researched; a person granting one resumes it.`,
+    };
+  }
+  if (!sprint.mode) {
+    return { ...sprint, basis: null, reason: `${sprint.reason} The standing research grant "${grant.name}" is live, but a discovery round is filed under the project's cash row and there is none.` };
+  }
+  if (databasePressure().state === 'SHEDDING') {
+    return { ...sprint, basis: null, reason: 'The database is shedding optional work (§63), and standing knowledge work is optional: it resumes on the first tick at NORMAL.' };
+  }
+  return {
+    allowed: true,
+    mode: sprint.mode,
+    basis: 'STANDING',
+    reason: `The standing research grant "${grant.name}" (${grant.id}) authorizes researching constructed arrangements with no active sprint.`,
+  };
 }
 
 /** The event a change to the operator's additions is recorded under. */

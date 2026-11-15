@@ -1267,6 +1267,12 @@ export async function inventoryDeficiencies(max = 4): Promise<DeficiencyReading[
 
 /** Readings of one goal's plan that must name the same missing evidence before the plan reads as stuck. */
 export const STUCK_PLAN_READINGS = 3;
+/**
+ * Days a not-accepted plan may go without a new reading before it reads as stuck on time alone. A
+ * reading is stored only when the plan's conclusion changes (`persistReading`), so a plan that is
+ * truly stuck writes nothing new: its latest reading simply ages.
+ */
+export const STUCK_PLAN_STALE_DAYS = 3;
 
 function shortfallsOf(forecast: string | null): string[] | null {
   try {
@@ -1281,6 +1287,59 @@ function shortfallsOf(forecast: string | null): string[] | null {
   }
 }
 
+/**
+ * The inputs a shortfall sentence can name as not established, each read as one kind. The sentence
+ * itself carries a reach percentage and the candidate's title, which move every time anything is
+ * re-read; the kinds of evidence it says are missing do not.
+ */
+const SHORTFALL_KINDS: ReadonlyArray<[RegExp, string]> = [
+  [/\bprice\b/i, 'PRICE'],
+  [/days to (usable )?cash|settle/i, 'SETTLEMENT'],
+  [/reply rate|respon/i, 'REPLY_RATE'],
+  [/close rate|win rate|bid\/win|were won/i, 'CLOSE_RATE'],
+  [/direct cost|cost of/i, 'DIRECT_COST'],
+  [/deals the market can take|volume|market can take/i, 'VOLUME'],
+  [/money tied up|capital/i, 'CAPITAL'],
+  [/calibrat|finished accepted plans/i, 'CALIBRATION'],
+  [/buyer/i, 'BUYER'],
+  [/fulfil/i, 'FULFILMENT'],
+];
+
+/**
+ * What a stored plan reading says is missing, as kinds rather than words (F8): the evidence links
+ * its strategies fail (`CONVERSION`, `FULFILMENT`, …, from the stored `strategies` rows — the chosen
+ * strategy's when one is named), the link its next test is for, and the kinds its shortfall
+ * sentences name. A sentence that names no known kind is kept with its figures removed, so two
+ * readings that differ only in a percentage or a count still compare equal.
+ */
+export function missingKindsOf(row: { chosen_strategy: string | null; strategies: string | null; next_test: string | null; forecast: string | null }): string[] | null {
+  const shortfalls = shortfallsOf(row.forecast);
+  if (shortfalls === null) return null;
+  const kinds = new Set<string>();
+  try {
+    const strategies = row.strategies ? (JSON.parse(row.strategies) as Array<{ key?: string; links?: Array<{ link?: string; ok?: boolean }> }>) : [];
+    const list = Array.isArray(strategies) ? strategies : [];
+    const chosen = list.filter((one) => one && one.key === row.chosen_strategy);
+    for (const one of chosen.length ? chosen : list) for (const link of one?.links ?? []) if (link && link.ok === false && typeof link.link === 'string') kinds.add(`LINK:${link.link}`);
+  } catch {
+    /* an unreadable strategies column names no link */
+  }
+  try {
+    const next = row.next_test ? (JSON.parse(row.next_test) as { link?: unknown }) : null;
+    if (next && typeof next.link === 'string') kinds.add(`NEXT:${next.link}`);
+  } catch {
+    /* an unreadable next test names no link */
+  }
+  for (const text of shortfalls) {
+    const named = SHORTFALL_KINDS.filter(([pattern]) => pattern.test(text)).map(([, kind]) => kind);
+    if (named.length) for (const kind of named) kinds.add(kind);
+    else kinds.add(`TEXT:${text.toLowerCase().replace(/[\d.,%$]+/g, '#').replace(/\s+/g, ' ').trim()}`);
+  }
+  return [...kinds].sort();
+}
+
+const kindLabel = (kind: string) => kind.replace(/^(LINK|NEXT|TEXT):/, '').toLowerCase().replace(/_/g, ' ');
+
 /** Live goals: not cancelled, not paused, in a project. Archived goals are not listed at all. */
 async function liveGoals(limit = 25): Promise<{ id: string; title: string; projectId: string }[]> {
   const { listWorkstreams } = await import('../../repos/register.ts');
@@ -1291,39 +1350,48 @@ async function liveGoals(limit = 25): Promise<{ id: string; title: string; proje
 }
 
 /**
- * (b) A goal whose latest plan reading is not ACCEPTED and whose missing-evidence list
- * (`forecast.acceptance.shortfalls`) is the same across its last `STUCK_PLAN_READINGS` readings:
- * readings are only written when the conclusion changed, so the plan keeps being re-read while
- * nothing the search finds reaches what it lacks. One bounded indexed read per live goal.
+ * (b) A goal whose latest plan reading is not ACCEPTED and whose missing evidence does not move:
+ * either its last `STUCK_PLAN_READINGS` readings name the same kinds of missing evidence
+ * (`missingKindsOf` — the kinds, not the sentences, which carry changing figures and titles), or its
+ * latest reading is older than `STUCK_PLAN_STALE_DAYS`: readings are written only when the conclusion
+ * changes, so a plan nothing moves writes none and its last one ages. One bounded indexed read per
+ * live goal.
  */
-export async function stuckPlanDeficiencies(readings = STUCK_PLAN_READINGS): Promise<DeficiencyReading[]> {
+export async function stuckPlanDeficiencies(readings = STUCK_PLAN_READINGS, now = new Date()): Promise<DeficiencyReading[]> {
   const out: DeficiencyReading[] = [];
+  const staleBefore = new Date(now.getTime() - STUCK_PLAN_STALE_DAYS * 86_400_000).toISOString();
   for (const goal of await liveGoals()) {
-    const rows = await getDb().all<{ id: string; verdict: string; forecast: string | null; created_at: string }>(
-      'SELECT id, verdict, forecast, created_at FROM goal_plan_readings WHERE workstream_id = ? ORDER BY created_at DESC, id DESC LIMIT ?',
+    const rows = await getDb().all<{ id: string; verdict: string; chosen_strategy: string | null; strategies: string | null; next_test: string | null; forecast: string | null; created_at: string }>(
+      'SELECT id, verdict, chosen_strategy, strategies, next_test, forecast, created_at FROM goal_plan_readings WHERE workstream_id = ? ORDER BY created_at DESC, id DESC LIMIT ?',
       [goal.id, readings],
     );
-    if (rows.length < readings) continue;
-    const lists = rows.map((r) => shortfallsOf(r.forecast));
-    if (lists.some((l) => l === null)) continue;
-    const signature = JSON.stringify(lists[0]);
-    if (!lists.every((l) => JSON.stringify(l) === signature)) continue;
-    const missing = lists[0]!;
-    const first = rows[rows.length - 1]!;
+    if (!rows.length) continue;
+    const latest = missingKindsOf(rows[0]!);
+    if (latest === null) continue;
+    const signature = JSON.stringify(latest);
+    const repeated = rows.length >= readings && rows.every((r) => JSON.stringify(missingKindsOf(r)) === signature);
+    const stale = rows[0]!.created_at < staleBefore;
+    if (!repeated && !stale) continue;
+    const missing = latest.map(kindLabel);
+    const first = repeated ? rows[rows.length - 1]! : rows[0]!;
+    const sentences = shortfallsOf(rows[0]!.forecast) ?? [];
     const one = reading({
       goalId: goal.id,
       deficiency: 'PLANNING_ASSUMPTION',
-      title: `Goal plan is stuck: the same evidence stays missing across its last ${readings} readings`,
+      title: repeated ? `Goal plan is stuck: the same evidence stays missing across its last ${readings} readings` : `Goal plan is stuck: no reading has changed in ${STUCK_PLAN_STALE_DAYS} days`,
       observed:
-        `Goal ${goal.id} ("${goal.title.slice(0, 120)}") was re-read ${readings} times since ${first.created_at} and is still not accepted ` +
-        `(latest verdict ${rows[0]!.verdict}); every reading names the same missing evidence: ${missing.length ? missing.slice(0, 4).map((m) => m.slice(0, 160)).join('; ') : '(none named — the plan cannot say what it lacks)'}. ` +
+        (repeated
+          ? `Goal ${goal.id} ("${goal.title.slice(0, 120)}") was re-read ${readings} times since ${first.created_at} and is still not accepted `
+          : `Goal ${goal.id} ("${goal.title.slice(0, 120)}") has not reached a different conclusion since ${first.created_at} and is still not accepted `) +
+        `(latest verdict ${rows[0]!.verdict}); the same kinds of evidence stay missing: ${missing.length ? missing.slice(0, 8).join(', ') : '(none named — the plan cannot say what it lacks)'}` +
+        `${sentences.length ? ` — ${sentences.slice(0, 3).map((m) => m.slice(0, 160)).join('; ')}` : ''}. ` +
         'The search is not producing what the plan needs.',
       evidence: rows.map((r) => `${r.id} ${r.created_at} ${r.verdict}`).join('; '),
       cause: null,
       ownerPaths: [],
-      recurrence: readings,
+      recurrence: repeated ? readings : rows.length,
       expectedBenefit: 'Research aimed at the evidence the plan lacks, so the plan can move toward acceptance.',
-      acceptance: 'The next plan reading names a different, shorter missing-evidence list, or the plan is accepted.',
+      acceptance: 'The next plan reading names a different, shorter set of missing evidence kinds, or the plan is accepted.',
       metric: 'READY_OPPORTUNITIES_PER_DAY',
       blocksGoal: true,
       share: 0.3,
@@ -1339,24 +1407,30 @@ export const UNREPORTED_ROUND_WINDOW_DAYS = 7;
 export const UNREPORTED_ROUND_MIN = 2;
 
 /**
- * (c) A live goal whose research rounds ended without a report: ABANDONED goal rounds (the mission
- * failed, was cancelled, expired unlaunched or parked) in the last `UNREPORTED_ROUND_WINDOW_DAYS`.
- * A HARVESTED round that found nothing did report — it is a finding about where Brain looked — and
- * is not counted. Read from `cash_discovery_rounds` through its repository, one read per project.
+ * (c) Research rounds that ended without a report: ABANDONED rounds (the mission failed, was
+ * cancelled, expired unlaunched or parked) in the last `UNREPORTED_ROUND_WINDOW_DAYS`. A HARVESTED
+ * round that found nothing did report — it is a finding about where Brain looked — and is not
+ * counted. Two kinds are read:
+ *
+ *  - a live goal's own discovery rounds (`cash_discovery_rounds` under its goal bucket), and
+ *  - its project's standing rounds (F8): the industry kernel's (`industry_rounds`, which run under
+ *    the standing research grant with or without a sprint) and the project's discovery rounds that
+ *    belong to no goal. Without a sprint a goal opens no rounds of its own, and these are the
+ *    research that feeds its plan; one reading per project, attributed to its first live goal.
  */
 export async function unreportedRoundDeficiencies(now = new Date()): Promise<DeficiencyReading[]> {
   const { listRounds } = await import('../../repos/cashDiscovery.ts');
+  const { abandonedIndustryRoundsSince } = await import('../../repos/industry.ts');
   const { GOAL_BUCKET_PREFIX } = await import('../cash/discovery.ts');
   const since = new Date(now.getTime() - UNREPORTED_ROUND_WINDOW_DAYS * 86_400_000).toISOString();
   const goals = await liveGoals();
   const roundsBy = new Map<string, Awaited<ReturnType<typeof listRounds>>>();
   const out: DeficiencyReading[] = [];
+  const recent = (r: { state: string; harvestedAt: string | null; updatedAt: string }) => r.state === 'ABANDONED' && (r.harvestedAt ?? r.updatedAt) >= since;
   for (const goal of goals) {
     if (!roundsBy.has(goal.projectId)) roundsBy.set(goal.projectId, await listRounds(goal.projectId));
     const prefix = `${GOAL_BUCKET_PREFIX}${goal.id}`;
-    const ended = roundsBy
-      .get(goal.projectId)!
-      .filter((r) => (r.bucketId === prefix || r.bucketId.startsWith(`${prefix}-`)) && r.state === 'ABANDONED' && (r.harvestedAt ?? r.updatedAt) >= since);
+    const ended = roundsBy.get(goal.projectId)!.filter((r) => (r.bucketId === prefix || r.bucketId.startsWith(`${prefix}-`)) && recent(r));
     if (ended.length < UNREPORTED_ROUND_MIN) continue;
     const one = reading({
       goalId: goal.id,
@@ -1377,6 +1451,39 @@ export async function unreportedRoundDeficiencies(now = new Date()): Promise<Def
       proposed: null,
     });
     out.push({ ...one, source: { kind: 'UNREPORTED_ROUNDS', ref: goal.id } });
+  }
+  // The standing research every goal of a project plans from: once per project.
+  const seen = new Set<string>();
+  for (const goal of goals) {
+    if (seen.has(goal.projectId)) continue;
+    seen.add(goal.projectId);
+    const discovery = (roundsBy.get(goal.projectId) ?? []).filter((r) => !r.bucketId.startsWith(GOAL_BUCKET_PREFIX) && recent(r));
+    const kernel = await abandonedIndustryRoundsSince(goal.projectId, since);
+    const ended = [
+      ...kernel.map((r) => ({ at: r.harvestedAt ?? r.updatedAt, line: `${r.id} kernel ${r.purpose}${r.nodeId ? ` ${r.nodeId}` : ''}${r.cashModeId ? '' : ' (standing grant)'} round ${r.round}, idea ${r.candidateId}, ABANDONED ${r.harvestedAt ?? r.updatedAt}` })),
+      ...discovery.map((r) => ({ at: r.harvestedAt ?? r.updatedAt, line: `${r.id} ${r.bucketId} round ${r.round}, idea ${r.candidateId}, ABANDONED ${r.harvestedAt ?? r.updatedAt}` })),
+    ].sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));
+    if (ended.length < UNREPORTED_ROUND_MIN) continue;
+    const one = reading({
+      goalId: goal.id,
+      deficiency: 'RECURRING_OPERATIONAL_FAILURE',
+      title: 'Standing research rounds end without a report',
+      observed:
+        `${ended.length} standing research round(s) in the project of goal ${goal.id} ("${goal.title.slice(0, 120)}") ended ABANDONED in ${UNREPORTED_ROUND_WINDOW_DAYS} days ` +
+        `(${kernel.length} industry-kernel, ${discovery.length} discovery) — their missions failed, were cancelled, expired unlaunched or parked — ` +
+        "so the knowledge the project's goals plan from did not grow from them.",
+      evidence: ended.slice(0, 6).map((r) => r.line).join('; '),
+      cause: null,
+      ownerPaths: [],
+      recurrence: ended.length,
+      expectedBenefit: 'Standing research rounds finish with a report that expands what the project knows.',
+      acceptance: 'The next standing research rounds end HARVESTED with a report, not ABANDONED.',
+      metric: 'RESEARCH_JOB_SUCCESS_RATE',
+      blocksGoal: false,
+      share: 0.1,
+      proposed: null,
+    });
+    out.push({ ...one, source: { kind: 'UNREPORTED_ROUNDS', ref: `project:${goal.projectId}` } });
   }
   return out.slice(0, 4);
 }
