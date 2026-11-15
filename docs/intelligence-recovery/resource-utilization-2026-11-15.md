@@ -24,6 +24,22 @@ Sources: connection report runs 43767404016 (22:06Z) and 43768266235 (22:15Z), p
 
 **Attribution.** Engineering work in the window was ~90% up curve (9 Evolution Engine PRs, 3 Factory releases) and ~10% down curve (#947 R-SLOW-RESTART, verification repairs). Inference and research slots are all normal Brain operations (the $10K goal). Server and database CPU cannot be attributed by process identity (one Node process); profiles name planning code, and the database's one large consumer is named below. The rest is UNATTRIBUTED.
 
+**Split of each class's measured capacity (each row sums to 100%).** These figures are utilization, not allocation.
+
+| class | up curve | down curve | normal ops | idle / reserved | unavailable | unattributed |
+|---|---|---|---|---|---|---|
+| App CPU (2 vCPU) | 0 | 0 | 7 | 90 | 0 | 3 |
+| App DB pool (8) | 0 | 0 | 11 | 50 | 0 | 39 |
+| DB host CPU (2 vCPU) | 0 | 0 | 43 | 30 | 0 | 27 |
+| GPU (2 slots) | 0 | 0 | 0 | 8 | 92 | 0 |
+| brain-a (12 slots) | 0 | 0 | 0 | 0 | 100 | 0 |
+| Routines (12) | 4 | 0 | 0 | 96 | 0 | 0 |
+| Factory (1 usable of 3 surfaces) | 33 | 0 | 0 | 0 | 67 | 0 |
+| Research slots (13) | 0 | 0 | 100 | 0 | 0 | 0 |
+| Release pipeline | 58 | 12 | 0 | 30 | 0 | 0 |
+
+**Allocation versus utilization.** Of the active engineering work, ~90% was up curve. Engineering capacity itself was mostly idle (Routines 4%, Factory 1 of 3 surfaces). Utilization is read from leases, running items, process CPU and database time, never from queue length. Waiting work is not counted as capacity: 538 waiting ideas are reported as waiting, and the slots are only the 13 that exist. Running is not productive either: the lane "ran" 220 items in 8 h and 2 were accepted.
+
 **Throughput.** Merged PRs: 12 (1.5/h). Deploys fully released: 6 (0.75/h). Factory units accepted: 10.8/h. Accepted research claims: **2/h**, against 25.1/h in the 8 h before. Plan evaluations: 5.5/h, against 13.3/h. Kept improvement outcomes: 0 of 2 (6 h).
 
 ## Inference and model endpoints (8 h)
@@ -67,7 +83,7 @@ The controllers that already raise and lower concurrency stay in charge: free-la
 
 ## Down-curve reserve (minimum, measured)
 
-Surge A (reliability) holds no dedicated agents. Its open items: R-SLOW-RESTART, shipped in #947 and in Deploy 1105; the 50% Deploy failure rate; and the 2 quarantined Factory surfaces. The minimum reserve is process-level, and all of it is kept: Deploy's two verification passes, the hourly report routine, Hermes' self-scheduled runs, and incident response by the session that holds the incident. Everything else is up curve. On an incident (Deploy fails after restart, `/healthz` above 5 s, or the pool exhausted), the owning session redirects its engineers to it first and releases them after recovery. That is the protocol already in `resource-allocation.md`, kept unchanged.
+Surge A (reliability) holds no dedicated agents. Its open items: R-SLOW-RESTART, shipped in #947 and in Deploy 1105; the 50% Deploy failure rate; and the 2 quarantined Factory surfaces. The minimum reserve is process-level, and all of it is kept: Deploy's two verification passes, the hourly report routine, Hermes' self-scheduled runs, and incident response by the session that holds the incident. Everything else is up curve. On an incident (Deploy fails after restart, `/healthz` above 5 s, or the pool exhausted), the owning session redirects its engineers to it first and releases them after recovery. That is the protocol already in `resource-allocation.md`, kept unchanged. Regressions are caught by the Postgres suite on every canonical push and by Deploy's full SQLite suite. No worker was taken from unfinished cleanup: #947 was left to release, and this audit's merge waited for its Deploy. Freed capacity returns to the up curve automatically, because Factory and Routines are dispatched by rank, never by a surge label.
 
 ## What limits engineering
 
@@ -83,7 +99,11 @@ Surge A (reliability) holds no dedicated agents. Its open items: R-SLOW-RESTART,
 | Integration and verification | Deploy ~70% busy, 50% failing | **yes** |
 | Research evidence availability | 2 claims/h | **yes** (because inference is down) |
 
-Models are idle while engineering assignments wait, so the fault is in routing and registration, not missing capacity: dispatch starvation (fixed) and the quarantined surfaces (they need the surface owner's connector re-authorized). Adding agents removes none of these constraints.
+Models are idle while engineering assignments wait, so the fault is in routing and registration, not missing capacity: dispatch starvation (fixed) and the quarantined surfaces (they need the surface owner's connector re-authorized). Adding agents removes none of these constraints. Inference is not saturated (it is unavailable), and no suitable worker class is fully occupied, so no extra capacity is justified by occupancy.
+
+**Bottleneck resource:** model inference for research (GPU and free providers down), then integration and verification (one Deploy at a time, 50% failing).
+
+**Duplicate work.** The productivity report counts 937 fragments in 30 days that re-asked an accepted question. 531 of them are `hosted-verification-fragment`, which each Deploy re-asks on purpose. The market-signal re-asks stopped on 11-11 (0 in the last 24 h). No live duplicate was found to consolidate.
 
 ## Throughput estimates (with uncertainty)
 
