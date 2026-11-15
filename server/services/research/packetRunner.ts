@@ -2978,10 +2978,24 @@ export async function advanceIdlePackets(
  * whose work shows no such progress — a QUEUED item nobody claimed, a lease
  * nobody renewed — is left exactly as it is: it stays idle by its rows, and
  * lease expiry and reclaim keep owning the item (invariants 24-26). Nothing is
- * advanced, cancelled, failed, re-leased or concluded here, and the stamp is
- * `beat`, the same write a live advance makes. Stamped packets drop out of the
- * selection, so a second call stamps zero. Its own `limit`, oldest first, so it
- * never competes with the advances above for a slot.
+ * advanced, cancelled, failed, re-leased or concluded here. Its own `limit`,
+ * oldest first, so it never competes with the advances above for a slot.
+ *
+ * A heartbeat is liveness, not progress (review finding, attempt 3). Stamping
+ * the packet *now* on every fresh heartbeat let a worker that heartbeats an
+ * item for ever without completing it keep its packet reading as moving
+ * indefinitely, and pushed back the `updated_at` the progress deadline reads
+ * once the lease ends. So the heartbeat only proves the lease is alive; the
+ * packet is stamped with the time of the progress event its rows record — the
+ * claim, `leased_at`, which a heartbeat never changes — and only when that
+ * claim is newer than the packet's own `updated_at`. One claim therefore moves
+ * the packet once: it reads as moving for six hours from the claim and no
+ * longer, however long the worker keeps heartbeating, and the deadline is
+ * measured from that claim, never from the last heartbeat. A new claim (a
+ * reclaim after expiry) is a new progress event, bounded by the item's own
+ * attempt ceiling. The write is guarded on `updated_at` being older, so it can
+ * only move the reading forward to a moment that really happened, and a second
+ * call stamps zero.
  */
 async function stampPacketsWorkedUnderLease(
   live: string[],
@@ -2990,23 +3004,33 @@ async function stampPacketsWorkedUnderLease(
   limit: number,
 ): Promise<{ orchestrationId: string; from: string; to: string }[]> {
   const now = new Date(nowMs).toISOString();
-  const rows = await getDb().all<{ id: string; status: string }>(
-    `SELECT o.id AS id, o.status AS status
+  const rows = await getDb().all<{ id: string; status: string; claimedAt: string | null }>(
+    `SELECT o.id AS id, o.status AS status,
+            (SELECT MAX(w.leased_at) FROM work_items w
+              WHERE w.orchestration_id = o.id AND w.state = 'LEASED'
+                AND w.lease_expires_at > ?
+                AND (w.heartbeat_at >= ? OR w.leased_at >= ?)
+                AND w.leased_at > o.updated_at) AS claimedAt
        FROM research_orchestrations o
       WHERE (o.status IN (${live.map(() => '?').join(', ')}) OR (o.status = 'QUEUED' AND o.provider = ?))
         AND o.updated_at < ?
         AND EXISTS (SELECT 1 FROM work_items w
                      WHERE w.orchestration_id = o.id AND w.state = 'LEASED'
                        AND w.lease_expires_at > ?
-                       AND (w.heartbeat_at >= ? OR w.leased_at >= ?))
+                       AND (w.heartbeat_at >= ? OR w.leased_at >= ?)
+                       AND w.leased_at > o.updated_at)
       ORDER BY o.updated_at, o.id
       LIMIT ?`,
-    [...live, 'WORKER', cutoff, now, cutoff, cutoff, Math.max(1, limit)],
+    [now, cutoff, cutoff, ...live, 'WORKER', cutoff, now, cutoff, cutoff, Math.max(1, limit)],
   );
   const out: { orchestrationId: string; from: string; to: string }[] = [];
   for (const row of rows) {
-    await beat(row.id);
-    out.push({ orchestrationId: row.id, from: row.status, to: row.status });
+    if (!row.claimedAt) continue;
+    const stamped = await getDb().run(
+      'UPDATE research_orchestrations SET updated_at = ? WHERE id = ? AND updated_at < ?',
+      [row.claimedAt, row.id, row.claimedAt],
+    );
+    if (stamped.changes === 1) out.push({ orchestrationId: row.id, from: row.status, to: row.status });
   }
   return out;
 }

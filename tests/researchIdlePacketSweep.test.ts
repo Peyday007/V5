@@ -198,7 +198,7 @@ describe('a packet whose work is being done under a live lease', () => {
 
   async function leasedItem(
     orchestrationId: string,
-    lease: { heartbeatAgoMs: number | null; expiresInMs: number },
+    lease: { heartbeatAgoMs: number | null; expiresInMs: number; claimedAgoMs?: number },
   ): Promise<string> {
     const item = await enqueueWork({
       projectId,
@@ -210,13 +210,14 @@ describe('a packet whose work is being done under a live lease', () => {
     });
     const worker = await createWorker({ name: `w-${item.id}`, createdByType: 'SYSTEM', createdById: 'test' });
     const heartbeat = lease.heartbeatAgoMs === null ? null : new Date(Date.now() - lease.heartbeatAgoMs).toISOString();
+    const claimed = lease.claimedAgoMs === undefined ? heartbeat : new Date(Date.now() - lease.claimedAgoMs).toISOString();
     await getDb().run(
       `UPDATE work_items SET state = 'LEASED', lease_id = ?, worker_id = ?, lease_generation = 1,
               leased_at = ?, heartbeat_at = ?, lease_expires_at = ? WHERE id = ?`,
       [
         `lse_${item.id}`,
         worker.id,
-        heartbeat,
+        claimed,
         heartbeat,
         new Date(Date.now() + lease.expiresInMs).toISOString(),
         item.id,
@@ -278,6 +279,55 @@ describe('a packet whose work is being done under a live lease', () => {
     for (const id of ids) expect(swept).not.toContain(id);
     expect(await Promise.all(ids.map(async (id) => (await getOrchestration(id))!))).toEqual(before);
     expect(await Promise.all(items.map(itemRow))).toEqual(itemsBefore);
+  });
+
+  it('reads a heartbeat as liveness, not progress: one claim moves the packet once, however long it is heartbeated', async () => {
+    // Review finding: a worker that heartbeats an item for ever without
+    // completing it kept its packet reading as moving indefinitely, and every
+    // stamp pushed back the updated_at the progress deadline reads.
+    const claimedAgo = 5 * 60 * 60 * 1000;
+    const id = await packet('RESEARCHING', SIX_HOURS + 60_000);
+    const item = await leasedItem(id, { claimedAgoMs: claimedAgo, heartbeatAgoMs: 60_000, expiresInMs: 600_000 });
+    const claimedAt = (await itemRow(item)).leased_at as string;
+
+    // The claim is real progress newer than the packet's row: stamped to it, not to now.
+    expect((await advanceIdlePackets(10)).map((e) => e.orchestrationId)).toContain(id);
+    expect((await getOrchestration(id))!.updatedAt).toBe(claimedAt);
+
+    // The worker keeps heartbeating; nothing it does moves the packet again.
+    for (let beatNo = 0; beatNo < 3; beatNo += 1) {
+      await getDb().run('UPDATE work_items SET heartbeat_at = ?, lease_expires_at = ? WHERE id = ?', [
+        new Date().toISOString(),
+        new Date(Date.now() + 600_000).toISOString(),
+        item,
+      ]);
+      expect((await advanceIdlePackets(10)).map((e) => e.orchestrationId)).not.toContain(id);
+      expect((await getOrchestration(id))!.updatedAt).toBe(claimedAt);
+    }
+
+    // So once six hours pass from the claim it reads idle, and when the lease
+    // ends the deadline is measured from the claim, never from the last heartbeat.
+    expect(Date.now() - Date.parse((await getOrchestration(id))!.updatedAt)).toBeGreaterThanOrEqual(claimedAgo);
+  });
+
+  it('a reclaim is a new progress event and moves the packet to that claim', async () => {
+    const id = await packet('RESEARCHING', SIX_HOURS + 60_000);
+    const item = await leasedItem(id, { claimedAgoMs: 5 * 60 * 60 * 1000, heartbeatAgoMs: 60_000, expiresInMs: 600_000 });
+    await advanceIdlePackets(10);
+    const reclaimed = new Date(Date.now() - 30_000).toISOString();
+    await getDb().run('UPDATE work_items SET leased_at = ?, heartbeat_at = ?, lease_generation = 2 WHERE id = ?', [
+      reclaimed,
+      reclaimed,
+      item,
+    ]);
+    // Within the stall window now, so it is out of the selection — and was moved by a real claim.
+    expect((await getOrchestration(id))!.updatedAt < reclaimed).toBe(true);
+    await getDb().run('UPDATE research_orchestrations SET updated_at = ? WHERE id = ?', [
+      new Date(Date.now() - SIX_HOURS).toISOString(),
+      id,
+    ]);
+    expect((await advanceIdlePackets(10)).map((e) => e.orchestrationId)).toContain(id);
+    expect((await getOrchestration(id))!.updatedAt).toBe(reclaimed);
   });
 
   it('leaves a recently updated packet under a live lease alone', async () => {
