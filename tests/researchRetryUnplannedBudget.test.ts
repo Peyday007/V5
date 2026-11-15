@@ -92,26 +92,51 @@ describe('a retry nobody planned', () => {
 
     // The repaired attempt fails too; the next retry repeats none of its rungs.
     await block(second, orchestrationId);
-    // Attempt 3 would be the last permitted one (maxRepairs 2), so the plan is
-    // MARK_UNRESOLVED — an instruction to stop. The packet runner refuses to mint
-    // that attempt, and so does this path: no attempt is spent on "do not attempt
-    // this", and the fragment stays BLOCKED for the gap pass, bar unchanged.
-    await expect(
-      retryFragment({ fragmentId: second.id, reason: 'again', actor: ADMIN, advance: false }),
-    ).rejects.toThrow(FragmentNotRetryable);
-    const after = await listFragments(orchestrationId);
-    expect(after.filter((entry) => entry.fragmentKey === second.fragmentKey)).toHaveLength(2);
-    expect((await getFragment(second.id))!.status).toBe('BLOCKED');
+    const two = await retryFragment({ fragmentId: second.id, reason: 'again', actor: ADMIN, advance: false });
+    const third = (await getFragment(two.newFragmentId!))!;
+    // Attempt 3 is the last permitted one (maxRepairs 2), the one that belongs to a
+    // person. It is told it is the last, bar unchanged, and it is given a search —
+    // never the instruction "do not attempt this".
+    expect(third.repairPlan!.remainingBudget).toBe(1);
+    expect(third.repairPlan!.strategies).not.toContain('MARK_UNRESOLVED');
+    expect(third.repairPlan!.strategies.length).toBeGreaterThan(0);
+    for (const strategy of third.repairPlan!.strategies) {
+      expect(second.repairPlan!.strategies).not.toContain(strategy);
+    }
   });
 
-  it('refuses to mint an attempt whose only plan is MARK_UNRESOLVED, as the runner does', async () => {
-    const { fragment, orchestrationId } = await blockedFragment(1);
-    // maxRepairs 1: the first retry is already the last permitted attempt.
-    await expect(
-      retryFragment({ fragmentId: fragment.id, reason: 'again', actor: ADMIN, advance: false }),
-    ).rejects.toThrow(/already been tried/);
-    expect(await listFragments(orchestrationId)).toHaveLength(1);
-    expect((await getFragment(fragment.id))!.status).toBe('BLOCKED');
+  it('refuses to mint an attempt once the ladder is exhausted, as the runner does', async () => {
+    const { fragment, orchestrationId } = await blockedFragment(20);
+    // Walk the ladder: each retry gets searches no earlier attempt ran, until
+    // there are none left. The budget (20) is far from spent when that happens.
+    const tried = new Set<RepairStrategy>();
+    let current = fragment;
+    let refusal: unknown = null;
+    for (let round = 0; round < 15 && !refusal; round += 1) {
+      try {
+        const retried = await retryFragment({ fragmentId: current.id, reason: 'again', actor: ADMIN, advance: false });
+        current = (await getFragment(retried.newFragmentId!))!;
+      } catch (error) {
+        refusal = error;
+        break;
+      }
+      const strategies = current.repairPlan!.strategies.filter((s) => s !== 'MARK_UNRESOLVED');
+      expect(strategies.length).toBeGreaterThan(0);
+      for (const strategy of strategies) {
+        expect(tried.has(strategy)).toBe(false);
+        tried.add(strategy);
+      }
+      await block(current, orchestrationId);
+      current = (await getFragment(current.id))!;
+    }
+    // Every search this failure suggests has been tried: another attempt would
+    // repeat one, so none is minted and the fragment stays BLOCKED.
+    expect(refusal).toBeInstanceOf(FragmentNotRetryable);
+    expect(String((refusal as Error).message)).toMatch(/already been tried/);
+    expect(current.attempt).toBeLessThan(current.maxRepairs);
+    const attempts = (await listFragments(orchestrationId)).filter((f) => f.fragmentKey === fragment.fragmentKey);
+    expect(attempts).toHaveLength(current.attempt);
+    expect((await getFragment(current.id))!.status).toBe('BLOCKED');
   });
 
   it('never re-offers a rung an earlier attempt recorded', async () => {

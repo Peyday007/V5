@@ -591,15 +591,14 @@ export async function retryFragment(input: {
   /*
    * A plan that is only MARK_UNRESOLVED is an instruction to stop, not a search.
    *
-   * `buildRepairPlan` answers MARK_UNRESOLVED when every strategy this failure
-   * suggests has already been tried, or when the budget is down to its last
-   * attempt. The packet runner refuses to mint an attempt carrying that plan
-   * (`assessRepairs`: "another attempt would repeat a search") and leaves the
-   * fragment for the gap pass. This path minted one anyway, so an operator's or
-   * surface recovery's retry at the end of the ladder spent an attempt on a
-   * fragment whose assignment was "do not attempt this". Refused here in the
-   * runner's words, through the refusal every caller already handles. No bar
-   * moves: the fragment stays BLOCKED, as the runner would leave it.
+   * `planForRetry` plans with the budget the person is spending, so here that
+   * answer means the ladder itself is exhausted: every strategy this failure
+   * suggests has already been tried. The packet runner refuses to mint an
+   * attempt carrying that plan ("another attempt would repeat a search",
+   * invariant 16) and leaves the fragment for the gap pass. This path minted
+   * one anyway, spending a retry on a fragment whose assignment was "do not
+   * attempt this". Refused here in the runner's words, through the refusal
+   * every caller already handles. No bar moves: the fragment stays BLOCKED.
    */
   if (repairPlan.strategies.length > 0 && repairPlan.strategies.every((strategy) => strategy === 'MARK_UNRESOLVED')) {
     throw new FragmentNotRetryable(
@@ -800,20 +799,34 @@ async function planForRetry(
   const history = (await listFragments(orchestration.id)).filter(
     (entry) => entry.fragmentKey === previous.fragmentKey,
   );
-  return buildRepairPlan({
+  // The runner's figure for the same next attempt: attempts left counted from
+  // the one that failed.
+  const remainingBudget = Math.max(0, previous.maxRepairs - previous.attempt + 1);
+  const plan = buildRepairPlan({
     fragment: previous,
     gate: recordedGate(previous, claims),
     history,
     claims,
     splitRequired: false,
-    // The runner's figure for the same next attempt: attempts left counted
-    // from the one that failed.
-    remainingBudget: Math.max(0, previous.maxRepairs - previous.attempt + 1),
+    /*
+     * Strategies are chosen as for an attempt the budget still pays for.
+     *
+     * `buildRepairPlan` answers MARK_UNRESOLVED at a budget of 1 because the
+     * runner must not spend the final attempt on a timer. That final attempt is
+     * the one this path exists for — it belongs to a person (or to surface
+     * recovery, which raised the ceiling first) and `retryFragment` has already
+     * checked it is inside `maxRepairs`. Planning it at the runner's budget told
+     * the person's attempt "do not attempt this". It gets the ladder's next
+     * fresh rungs instead, and the true budget is put back on the plan so the
+     * worker is still told it is the last attempt.
+     */
+    remainingBudget: Math.max(2, remainingBudget),
     blockCause: blockCauseOf(previous),
     envelope: orchestration.approvalEnvelopeId
       ? getApprovalEnvelope(orchestration.approvalEnvelopeId)
       : null,
   });
+  return { ...plan, remainingBudget };
 }
 
 /** The failed attempt's gate, as its stored rows record it. Mirrors the runner's reading. */
