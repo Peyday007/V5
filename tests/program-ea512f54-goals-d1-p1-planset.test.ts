@@ -9,12 +9,20 @@ import {
   publishedConfidence,
   rebuildAfter,
   renderPlanSet,
+  calibrationOf,
   type AcceptanceCondition,
   type ModelField,
   type PlanCandidate,
   type PlanModel,
 } from '../server/services/goals/planSet.ts';
 import type { VariantReading } from '../server/services/goals/reconstruction.ts';
+import { composeGoalReadings, planCalibrationScope, type PlanAcceptance } from '../server/services/goals/plan.ts';
+import { goalObjective } from '../server/services/goals/objective.ts';
+import { pathwayOf } from '../server/services/goals/pathways.ts';
+import type { GoalPortfolio } from '../server/services/goals/portfolio.ts';
+import type { TargetReading } from '../server/services/goals/target.ts';
+import type { ModelInput, ModelledOpportunity } from '../server/services/cash/goalScenario.ts';
+import type { CashOpportunity } from '../server/domain/types.ts';
 
 const field = (status: ModelField['status'], value: string | number | null = 'x'): ModelField => ({ value, low: null, high: null, status, basis: `test ${status}` });
 const model = (status: ModelField['status'] = 'ESTIMATED', over: Partial<PlanModel> = {}): PlanModel => {
@@ -166,7 +174,7 @@ describe('distinct plan set (GOAL-23)', () => {
     const set = buildPlanSet([candidate('a')], condition({ confidence: 0.9 }));
     expect(set.plans[0]?.confidence.withheld).toBe(true);
     expect(set.plans[0]?.acceptance).toBe('PROVISIONAL');
-    expect(buildPlanSet([candidate('a')], condition({ confidence: 0.9 }), calibrated).plans[0]?.acceptance).toBe('ACCEPTED');
+    expect(buildPlanSet([candidate('a', { opportunityIds: ['a'] })], condition({ confidence: 0.9 }), { calibration: calibrated, covers: [['a']] }).plans[0]?.acceptance).toBe('ACCEPTED');
     expect(set.confidence.withheld).toBe(true);
   });
 
@@ -220,5 +228,88 @@ describe('distinct plan set (GOAL-23)', () => {
     expect(canonical('The Agencies, offering SEO')).toBe(canonical('seo agency'));
     const lines = renderPlanSet(buildPlanSet([candidate('a'), candidate('b')], condition()));
     expect(lines[0]).toContain('2 distinct plan(s) from 2 candidate(s)');
+  });
+});
+
+/*
+ * Finding F1: one plan's calibration was lent to every candidate, so an
+ * unrelated pathway, construction or strategy variant became ACCEPTED and
+ * published a confidence nothing calibrated. Calibration is per candidate.
+ */
+describe('calibration covers only the plan it was measured on (repair F1)', () => {
+  const scope = { calibration: calibrated, covers: [['a']] };
+
+  it('accepts and publishes for the covered plan only; every other candidate stays PROVISIONAL and withheld', () => {
+    const covered = candidate('a', { opportunityIds: ['a'] });
+    const unrelated = candidate('b', { opportunityIds: ['b'] });
+    const construction = candidate('arr', { source: 'ARRANGEMENT', opportunityIds: ['a'] });
+    const variant = candidate('strategy:v', { source: 'STRATEGY', opportunityIds: ['a', 'b'], customers: ['buyers v'], cashSources: ['payer v'] });
+    const rebuilt = candidate('a~x', { source: 'RECONSTRUCTED', opportunityIds: ['a'], customers: ['buyers r'], cashSources: ['payer r'] });
+    const set = buildPlanSet([covered, unrelated, construction, variant, rebuilt], condition({ confidence: 0.9 }), scope);
+    const byId = new Map(set.plans.map((p) => [p.id, p]));
+    expect(byId.get('a')).toMatchObject({ acceptance: 'ACCEPTED', confidence: { withheld: false, value: 0.9 } });
+    for (const id of ['b', 'arr', 'strategy:v', 'a~x']) {
+      const p = byId.get(id);
+      expect(p, id).toBeDefined();
+      expect(p?.acceptance, id).toBe('PROVISIONAL');
+      expect(p?.confidence, id).toMatchObject({ value: null, withheld: true });
+    }
+    expect(set.accepted).toBe(1);
+  });
+
+  it('a candidate without stated openings is never covered, and a strategy over exactly the covered openings is', () => {
+    expect(calibrationOf({ source: 'PATHWAY' }, scope)?.calibrated).toBe(false);
+    expect(calibrationOf({ source: 'STRATEGY', opportunityIds: ['a'] }, scope)?.calibrated).toBe(true);
+    expect(calibrationOf({ source: 'STRATEGY', opportunityIds: ['a', 'a'] }, scope)?.calibrated).toBe(true);
+    expect(calibrationOf({ source: 'PATHWAY', opportunityIds: ['a'] }, { calibration: { ...calibrated, calibrated: false }, covers: [['a']] })?.calibrated).toBe(false);
+    expect(calibrationOf({ source: 'PATHWAY', opportunityIds: ['a'] }, null)).toBeNull();
+  });
+
+  it('rebuildAfter does not lend the calibration to survivors or rebuilt plans', () => {
+    const a = candidate('a', { opportunityIds: ['a'], channels: ['Marketplace'] });
+    const b = candidate('b', { opportunityIds: ['b'], channels: ['Referral'] });
+    const r = rebuildAfter([a, b], { kind: 'CHANNEL_FAILED', channel: 'Marketplace' }, condition({ confidence: 0.9 }), scope);
+    for (const p of [...r.surviving, ...r.reconstructed]) {
+      expect(p.acceptance, p.id).toBe('PROVISIONAL');
+      expect(p.confidence.withheld, p.id).toBe(true);
+    }
+  });
+
+  it('composeGoalReadings hands the accepted plan’s calibration to that plan alone', () => {
+    const evidence = (value: number): ModelInput => ({ value, low: value, high: value, provenance: 'EVIDENCE', source: null, note: 'a gated claim' });
+    const unknown = (low: number, high: number): ModelInput => ({ value: null, low, high, provenance: 'UNKNOWN', source: null, note: 'swept' });
+    const opening = (id: string): ModelledOpportunity =>
+      ({
+        opportunity: {
+          id, projectId: 'prj_1', title: `Opening ${id}`, mechanism: 'PRODUCTIZED_SERVICE', industry: null, payer: `Payer ${id}`, reachableChannel: `channel ${id}`,
+          buyingSignal: 'posted asking for it', signalObservedAt: null, offerScope: `report ${id}`, priceCents: 90_000, currency: 'USD', fulfillmentOwner: 'Brain',
+          economicsNote: null, expiresAt: null, requiredCapabilities: [], opportunitySignal: null, state: 'EVIDENCE_CARD',
+        } as unknown as CashOpportunity,
+        index: 1, tier: 'CANDIDATE', repeatable: true, price: evidence(900), capital: evidence(0), hours: unknown(1, 2), daysToCash: evidence(9),
+        close: unknown(0.02, 0.5), respond: unknown(0.002, 0.15), directCost: evidence(90), volume: unknown(1, 200), agreed: false, agreedValue: 0, agreedDeals: 0,
+        fulfilledBy: { value: 'Brain produces it', provenance: 'EVIDENCE', source: null }, competitiveAward: false,
+      }) as unknown as ModelledOpportunity;
+    const ctx = { remaining: 100, daysLeft: 45, currency: 'USD', perArrangement: 375, outreachPerDay: 60, permissionsMissing: [] as string[], now: new Date(), capabilities: null };
+    const pa = pathwayOf(opening('a'), null, ctx);
+    const pb = pathwayOf(opening('b'), null, ctx);
+    const combo = (id: string) => ({ members: [{ opportunityId: id, title: `Opening ${id}` }], settledP10: 5_000, settledP50: 8_000, settledP90: 12_000, reach: 0.99 });
+    const portfolio = { best: combo('a'), alternatives: [combo('b')], worlds: 2_000, basis: 'PROBABILITY', limits: { correlation: 0.3 }, missing: [], assurance: null } as unknown as GoalPortfolio;
+    const acceptance: PlanAcceptance = {
+      status: 'ACCEPTED', required: 0.9, accepted: { label: 'Opening a', opportunityIds: ['a'] }, candidate: null, shortfalls: [], sentence: 'accepted',
+      probability: { value: 0.99, lowerBound: 0.93, basis: 'EVIDENCED_PORTFOLIO', sample: 40, note: 'smallest sample 40' },
+    };
+    expect(planCalibrationScope(acceptance).covers).toEqual([['a']]);
+    const target = { metric: 'COLLECTED_REVENUE', metricLabel: 'collected', currency: 'USD', projectId: 'prj_1', targetCents: 10_000, achievedCents: 0, remainingCents: 10_000, achieved: false, daysLeft: 45, capitalCeilingCents: null, capitalBeforeProofCents: null } as unknown as TargetReading;
+    const objective = goalObjective({ title: 'Collect $100', intent: 'collect $100 at 90% confidence', outcome: null, dueAt: null, target: { amountCents: 10_000 } } as unknown as Parameters<typeof goalObjective>[0]);
+    const { planSet, objective: reading } = composeGoalReadings({ objective, target, portfolio, pathways: { pathways: [pa, pb] } as never, arrangements: [], reconstruction: null, acceptance, modelled: [] });
+    const a = planSet.plans.find((p) => p.members.includes('a'));
+    const b = planSet.plans.find((p) => p.members.includes('b'));
+    expect(a?.confidence.withheld).toBe(false);
+    expect(b?.confidence).toMatchObject({ value: null, withheld: true });
+    expect(b?.acceptance).toBe('PROVISIONAL');
+    // The unrelated alternative combination is not accepted on the best one's calibration either.
+    const alt = reading.tradeOffs.find((t) => t.key === 'b');
+    expect(alt?.status).toBe('CANDIDATE');
+    expect(reading.outcome?.confidenceWithheld).toBeNull();
   });
 });

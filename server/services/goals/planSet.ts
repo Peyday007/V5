@@ -71,6 +71,12 @@ export interface PlanCandidate {
   id: string;
   title: string;
   source: CandidateSource;
+  /**
+   * The openings this candidate is made of: one for a pathway, its members for
+   * a strategy reading, none for a construction. A calibration covers a
+   * candidate only when it was measured on exactly this set (`calibrationOf`).
+   */
+  opportunityIds?: readonly string[];
   /** The economic shape: what makes this plan a different plan. */
   dimensions: Record<DistinctnessDimension, string>;
   /** The customer pools it sells to; two plans selling to one pool count its customers once. */
@@ -133,6 +139,20 @@ export interface Calibration {
   /** Resolved predictions the calibration was measured on. */
   observations: number;
   basis: string;
+}
+
+/**
+ * A calibration and the plans it was measured on. A calibration is a property
+ * of one plan's model — the combination the quant engine's assurance read, or
+ * the strategy this Brain's record covers — and never of the plans compared
+ * beside it: an unrelated pathway, construction or strategy variant has its own
+ * uncalibrated p10/p50/p90, and lending it another plan's calibration would
+ * accept it and publish a confidence nothing supports. `covers` lists the
+ * opening sets the calibration was measured on.
+ */
+export interface CalibrationScope {
+  calibration: Calibration;
+  covers: readonly (readonly string[])[];
 }
 
 export interface PublishedConfidence {
@@ -261,6 +281,7 @@ export function candidateFromPathway(p: TransactionPathway, extra: Partial<Pick<
     id: p.opportunityId,
     title: p.title,
     source: 'PATHWAY',
+    opportunityIds: [p.opportunityId],
     dimensions: {
       mechanism: textOf(p.offer) ?? p.title,
       channel: `${p.acquisition.method} ${channel}`,
@@ -369,6 +390,7 @@ export function candidateFromStrategy(r: VariantReading, pathways: ReadonlyMap<s
     id: `strategy:${r.key}`,
     title: `Strategy ${r.key}`,
     source: 'STRATEGY',
+    opportunityIds: members.map((m) => m.opportunityIds ?? [m.id]).flat(),
     dimensions: dims,
     customers: union((c) => c.customers),
     cashSources: union((c) => c.cashSources),
@@ -435,6 +457,34 @@ export function publishedConfidence(modelled: { p10: number; p50: number; p90: n
     return { value: null, withheld: true, reason: `withheld: the model is not calibrated against resolved outcomes${calibration ? ` (${calibration.observations} observation(s); ${calibration.basis})` : ''}` };
   }
   return { value: modelledShareReaching(modelled, amount), withheld: false, reason: `calibrated on ${calibration.observations} resolved outcome(s): ${calibration.basis}` };
+}
+
+function sameSet(a: readonly string[], b: readonly string[]): boolean {
+  const x = new Set(a);
+  const y = new Set(b);
+  return x.size > 0 && x.size === y.size && [...x].every((id) => y.has(id));
+}
+
+/**
+ * The calibration that covers this one candidate, or an uncalibrated one that
+ * says why not. Only a pathway or strategy whose openings are exactly a set the
+ * calibration was measured on is covered; a construction or a rebuilt plan has
+ * no measured model, so it is never covered.
+ */
+export function calibrationOf(c: Pick<PlanCandidate, 'source' | 'opportunityIds'>, scope: CalibrationScope | null): Calibration | null {
+  if (!scope) return null;
+  const { calibration, covers } = scope;
+  if (!calibration.calibrated) return calibration;
+  const ids = c.opportunityIds ?? [];
+  if ((c.source === 'PATHWAY' || c.source === 'STRATEGY') && covers.some((set) => sameSet(set, ids))) return calibration;
+  return {
+    calibrated: false,
+    observations: 0,
+    basis:
+      c.source === 'ARRANGEMENT' || c.source === 'RECONSTRUCTED'
+        ? `this ${c.source === 'ARRANGEMENT' ? 'construction' : 'rebuilt plan'} has no measured model; the calibration (${calibration.basis}) covers only the plan it was measured on`
+        : `the calibration (${calibration.basis}) was measured on a different plan, not on this one`,
+  };
 }
 
 function downsideOf(c: { modelled: PlanCandidate['modelled']; enforceableCommitments: number }, amount: number): Downside {
@@ -509,7 +559,7 @@ function richness(c: PlanCandidate): number {
   return established * 1e9 + (c.modelled?.p50 ?? 0);
 }
 
-export function buildPlanSet(candidates: readonly PlanCandidate[], condition: AcceptanceCondition, calibration: Calibration | null = null): PlanSet {
+export function buildPlanSet(candidates: readonly PlanCandidate[], condition: AcceptanceCondition, scope: CalibrationScope | null = null): PlanSet {
   const ordered = [...candidates].sort((a, b) => richness(b) - richness(a) || a.id.localeCompare(b.id));
   const groups: { lead: PlanCandidate; members: PlanCandidate[] }[] = [];
   const collapses: Collapse[] = [];
@@ -538,6 +588,8 @@ export function buildPlanSet(candidates: readonly PlanCandidate[], condition: Ac
   }
 
   const plans: Plan[] = groups.map(({ lead, members }) => {
+    // Each plan is judged on the calibration that covers its own model, never on another plan's.
+    const calibration = calibrationOf(lead, scope);
     const acc = acceptanceOf(lead, condition, calibration);
     const union = (pick: (c: PlanCandidate) => string[]): string[] => [...new Set(members.flatMap(pick))];
     return {
@@ -590,7 +642,7 @@ export function buildPlanSet(candidates: readonly PlanCandidate[], condition: Ac
       executed: plans.filter((p) => p.attempts.executed).length,
     },
     collections: { observed: plans.reduce((s, p) => s + p.observedCollections, 0), modelledP50 },
-    confidence: calibration?.calibrated
+    confidence: scope?.calibration.calibrated
       ? { value: null, withheld: true, reason: 'a set-level probability needs the plans’ joint distribution; read each plan’s own' }
       : { value: null, withheld: true, reason: 'withheld: the model is not calibrated against resolved outcomes' },
     breadth: { required, met: required === null ? null : accepted >= required },
@@ -649,7 +701,7 @@ function hits(list: string[], name: string): boolean {
  * channel or supplier a surviving plan already has, with that part UNKNOWN.
  * A budget cut or a lost customer pool rebuilds nothing it cannot justify.
  */
-export function rebuildAfter(candidates: readonly PlanCandidate[], change: PlanChange, condition: AcceptanceCondition, calibration: Calibration | null = null): Rebuild {
+export function rebuildAfter(candidates: readonly PlanCandidate[], change: PlanChange, condition: AcceptanceCondition, scope: CalibrationScope | null = null): Rebuild {
   const removed: { id: string; why: string }[] = [];
   const kept: PlanCandidate[] = [];
   const broken: PlanCandidate[] = [];
@@ -698,7 +750,7 @@ export function rebuildAfter(candidates: readonly PlanCandidate[], change: PlanC
     }
   }
 
-  const set = buildPlanSet([...kept, ...rebuilt], condition, calibration);
+  const set = buildPlanSet([...kept, ...rebuilt], condition, scope);
   const rebuiltIds = new Set(rebuilt.map((r) => r.id));
   return {
     change,

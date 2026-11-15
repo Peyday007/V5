@@ -98,7 +98,7 @@ import { loadLibrary, recordExploration } from './reasoning/learning.ts';
 import { implementedFormats } from '../puzzle/formats/index.ts';
 import { readTimelines, type TimelineReading } from './timelines.ts';
 import { goalObjective, readOutcome, tradeOffs, type EnforceableCommitment, type GoalObjective, type OutcomeReading, type PlanTradeOff } from './objective.ts';
-import { buildPlanSet, candidateFromArrangement, candidateFromPathway, candidateFromStrategy, rebuildAfter, type AcceptanceCondition, type Calibration, type PlanCandidate, type PlanChange, type PlanSet, type Rebuild } from './planSet.ts';
+import { buildPlanSet, calibrationOf, candidateFromArrangement, candidateFromPathway, candidateFromStrategy, rebuildAfter, type AcceptanceCondition, type Calibration, type CalibrationScope, type PlanCandidate, type PlanChange, type PlanSet, type Rebuild } from './planSet.ts';
 
 export const PLAN_VERDICTS = ['RECOMMENDABLE', 'NEEDS_EVIDENCE', 'NOT_VIABLE'] as const;
 export type PlanVerdict = (typeof PLAN_VERDICTS)[number];
@@ -963,6 +963,17 @@ export function planCalibration(acceptance: PlanAcceptance): Calibration {
 }
 
 /**
+ * The calibration and the one plan it covers: the accepted combination or
+ * strategy's openings. Every other candidate is judged uncalibrated
+ * (`calibrationOf`), so one plan's assurance never accepts another.
+ */
+export function planCalibrationScope(acceptance: PlanAcceptance): CalibrationScope {
+  const calibration = planCalibration(acceptance);
+  const ids = acceptance.accepted?.opportunityIds ?? [];
+  return { calibration, covers: calibration.calibrated && ids.length > 0 ? [ids] : [] };
+}
+
+/**
  * The three readings the plan carries (GOAL-13-6, GOAL-18-4, GOAL-23), from
  * what the plan pass already composed. Pure: it reads, it decides nothing the
  * plan's own acceptance decides, and it owns no store, scheduler or authority.
@@ -979,7 +990,8 @@ export function composeGoalReadings(input: {
   modelled: readonly Pick<ModelledOpportunity, 'opportunity' | 'agreedValue' | 'daysToCash'>[];
 }): { timelines: TimelineReading; objective: ObjectiveReading; planSet: GoalPlanSet } {
   const { objective, target, portfolio, acceptance } = input;
-  const calibration = planCalibration(acceptance);
+  const scope = planCalibrationScope(acceptance);
+  const { calibration } = scope;
   const remaining = Math.max(0, target.remainingCents / 100);
   const held = target.achievedCents / 100;
 
@@ -998,11 +1010,13 @@ export function composeGoalReadings(input: {
   const combos = portfolio ? [portfolio.best, ...portfolio.alternatives].filter((c): c is NonNullable<GoalPortfolio['best']> => c !== null) : [];
   const keyOf = (c: (typeof combos)[number]) => c.members.map((m) => m.opportunityId).join('+');
   const readingOf = (c: (typeof combos)[number]): OutcomeReading => {
+    // The calibration covers the combination it was measured on; an alternative beside it is uncalibrated.
+    const own = calibrationOf({ source: 'STRATEGY', opportunityIds: c.members.map((m) => m.opportunityId) }, scope) ?? calibration;
     const r = readOutcome(objective, settledWorlds(held, { p10: c.settledP10, p50: c.settledP50, p90: c.settledP90 }), {
-      calibrated: calibration.calibrated,
+      calibrated: own.calibrated,
       commitments,
       cashOnHand: held,
-      uncalibratedReason: `withheld: ${calibration.basis}; the plan stays a candidate`,
+      uncalibratedReason: `withheld: ${own.basis}; the plan stays a candidate`,
     });
     // Only the plan's own acceptance accepts: the outcome reading never promotes a candidate by itself.
     return acceptance.status === 'ACCEPTED' && r.status === 'ACCEPTED' ? r : { ...r, status: 'CANDIDATE' };
@@ -1060,7 +1074,7 @@ export function composeGoalReadings(input: {
       independence: 0.25,
     },
   };
-  const set = buildPlanSet(candidates, condition, calibration);
+  const set = buildPlanSet(candidates, condition, scope);
   // The most important change is the shared channel or supplier the most plans fail with.
   const shared = [...set.resilience].sort((a, b) => b.fails.length - a.fails.length)[0] ?? null;
   const lead = set.plans[0] ?? null;
@@ -1073,7 +1087,7 @@ export function composeGoalReadings(input: {
         : null;
   const rebuild = change
     ? {
-        ...rebuildAfter(candidates, change, condition, calibration),
+        ...rebuildAfter(candidates, change, condition, scope),
         why: shared
           ? `${shared.fails.length} plan(s) share the ${shared.kind.toLowerCase()} “${shared.shared}”: it is the failure that takes the most alternatives with it`
           : `the leading plan's own ${change.kind === 'CHANNEL_FAILED' ? 'channel' : 'supplier'} “${change.kind === 'CHANNEL_FAILED' ? change.channel : change.supplier}” is its single point of failure`,
