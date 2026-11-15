@@ -138,9 +138,11 @@ describe('a priced payer the map does not name becomes a buyer population', () =
       expect((await cardFact(id, 'payer'))?.kind).toBe('EVIDENCE');
       expect((await cardFact(id, 'revenueRange'))?.kind).toBe('EVIDENCE');
     }
-    // Before: production's state — every priced payer matches no mapped buyer type, and nothing is filed.
+    // Before: no priced payer is on the map; the dry run reads each as a population to add, and nothing is filed yet.
     const before = await backfillCandidates(projectId);
-    expect(before.decisions.filter((one) => one.reason === 'opening payer matches no mapped buyer type')).toHaveLength(4);
+    expect(before.decisions.filter((one) => one.candidate && !one.candidate.buyer).map((one) => one.candidate!.newBuyer!.population).sort()).toEqual([
+      'US residential homeowners', 'school districts', 'state agriculture departments', 'state agriculture departments',
+    ]);
     expect(await listProjectConstructionFacts(projectId)).toHaveLength(0);
 
     const pass = await runIndustryKernel(projectId);
@@ -208,6 +210,71 @@ describe('a priced payer the map does not name becomes a buyer population', () =
 });
 
 import { payerNamedIn, buyerPopulationName as populationOf } from '../server/domain/industry.ts';
+import { backfillClaimFacts } from '../server/services/industry/expand.ts';
+
+/*
+ * Production census 2026-11-15 08:10Z: 21 buyer types on the map, 99 held
+ * openings read by the back-fill, 0 candidates — 77 of them "opening payer
+ * matches no mapped buyer type", because each opening's payer is the research
+ * sentence, which the name reader did not read.
+ */
+const SPREADSHEET = 'Buyers who pay for spreadsheet templates are primarily small business operators, freelancers, bookkeepers and teachers who want ready-made tools.';
+const FREELANCER = 'On Freelancer.com the payer is the employer who posts the project and funds the milestone before work starts.';
+const GOTRANSCRIPT = "GoTranscript's Billing Terms (its own PDF) name universities, research institutions, market research firms and media companies as customers invoiced monthly.";
+
+describe('the back-fill reads the payer production stores, and maps a population it does not hold', () => {
+  it('reads the quoted production sentences into buyer populations', () => {
+    expect(payerNamedIn(SPREADSHEET)).toBe('small business operators, freelancers, bookkeepers and teachers');
+    expect(populationOf(SPREADSHEET)).toBe('small business operators');
+    expect(payerNamedIn(FREELANCER)).toBe('employer');
+    expect(payerNamedIn(GOTRANSCRIPT)).toBe('universities');
+    expect(populationOf(GOTRANSCRIPT)).toBe('universities and colleges');
+    // A sentence that names nobody, a pronoun, or a role word alone stays unnamed.
+    expect(payerNamedIn('It pays $2,500 per application.')).toBeNull();
+    expect(payerNamedIn('The payer is unknown.')).toBeNull();
+    expect(payerNamedIn('Buyers pay $40 per hour.')).toBeNull();
+    // A company suffix is not a list.
+    expect(populationOf('GitHub, Inc. is the payer: it runs the bug bounty program')).toBe('GitHub, Inc');
+  });
+
+  it('files each priced opening against its payer population, adding the population first, and keeps honest refusals', async () => {
+    await productionMap();
+    const openings = [
+      await pricedOpening('sheets', { payer: SPREADSHEET, price: 'Spreadsheet templates on Etsy sell for $29 per template.', industry: 'Digital templates', offer: 'Spreadsheet templates' }),
+      await pricedOpening('freelancer', { payer: FREELANCER, price: 'Data-entry projects on Freelancer.com are posted at $250 per project.', industry: 'Freelance marketplaces', offer: 'Data entry' }),
+      await pricedOpening('gotranscript', { payer: GOTRANSCRIPT, price: 'GoTranscript invoices $90 per transcribed audio hour.', industry: 'Transcription', offer: 'Transcription' }),
+      await pricedOpening('nobody', { payer: 'Domain Name Wire reports that VJN.com was tested in Appraise.net', price: 'Appraise.net put the range at $55,000.', industry: 'Domains', offer: 'Domain brokerage' }),
+    ];
+    await applyValidationAnswers(projectId);
+    await proposeEngineTerms(projectId);
+    expect((await getOpportunity(openings[0]!))?.payer).toBe(SPREADSHEET);
+
+    // The dry run: three would map a new population, one names nobody.
+    const pool = await backfillCandidates(projectId);
+    const card = pool.decisions.filter((one) => one.source === 'CARD_EVIDENCE');
+    expect(card.filter((one) => one.candidate).map((one) => one.candidate!.newBuyer!.population).sort()).toEqual(['employer', 'small business operators', 'universities and colleges']);
+    expect(card.filter((one) => !one.candidate).map((one) => one.reason)).toEqual(['opening payer names no buyer population']);
+    expect(card.some((one) => one.reason === 'opening payer matches no mapped buyer type')).toBe(false);
+
+    // The back-fill alone (no `mapPricedPayers`) puts each population on the map and files the price against it.
+    const first = await backfillClaimFacts(projectId);
+    expect(first.filed).toHaveLength(3);
+    const nodes = await listNodes(projectId);
+    const discovered = nodes.filter((one) => one.kind === 'BUYER_TYPE' && one.origin === 'DISCOVERED');
+    expect(discovered.map((one) => one.name).sort()).toEqual(['employer', 'small business operators', 'universities and colleges']);
+    expect(discovered.every((one) => one.sourceClaimId)).toBe(true);
+    const facts = await listProjectConstructionFacts(projectId);
+    expect(facts.map((one) => one.low).sort((a, b) => a - b)).toEqual([29, 90, 250]);
+    // Sourced claims: provenance kept, observed, never verified.
+    expect(facts.every((one) => one.status === 'OBSERVED' && one.sourceClaimId && one.source.url)).toBe(true);
+    for (const fact of facts) expect(discovered.some((one) => fact.segment === `map_${one.id}`)).toBe(true);
+
+    // Idempotent: a replay maps and files nothing more, and the kernel's own mapping pass finds nothing left.
+    expect((await backfillClaimFacts(projectId)).filed).toHaveLength(0);
+    expect((await mapPricedPayers(projectId)).created).toHaveLength(0);
+    expect(await listProjectConstructionFacts(projectId)).toHaveLength(3);
+  });
+});
 
 describe('a payer is read out of the research sentence production stores', () => {
   it('names the payer a sentence names, and none where it names nobody', () => {
