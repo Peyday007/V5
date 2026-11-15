@@ -21,7 +21,7 @@ import { waitingNow } from './capacity.ts';
 import { recordBinEvent } from '../../repos/bins.ts';
 import { isRunpodSlot } from '../cheap/runpod.ts';
 import { readPodSpend, type PodSpend } from '../cheap/runpodPod.ts';
-import { causeOfReason, type RouteFailureCause } from './worker.ts';
+import { causeOfReason, ROUTE_PING_WORKLOAD, type RouteFailureCause } from './worker.ts';
 import type { ItemUsage } from './itemMeter.ts';
 
 export type Measured<T> = { measured: true; value: T } | { measured: false; reason: string };
@@ -38,13 +38,19 @@ export interface StageDefinition {
   rows?: readonly string[];
   /** Why the stage has no row-level measure, when it has neither work types nor rows. */
   unseen?: string;
+  /**
+   * The stage that owns failed route health pings (`ROUTE_PING_WORKLOAD` rows):
+   * a ping is a model call made for no job, so it is counted under exactly one
+   * stage's `providerFailures` — never as an item processed, and never twice.
+   */
+  ownsRoutePings?: boolean;
 }
 
 export const STAGES: readonly StageDefinition[] = [
   { id: 'source-ingestion', label: 'source fetching / ingestion', workTypes: [], rows: ['feed_pulls'] },
   { id: 'parsing-indexing', label: 'parsing and indexing', workTypes: [], rows: ['extraction_runs'] },
   { id: 'graph-quant', label: 'graph / detection / quant computation', workTypes: [], rows: ['feed_detections', 'feed_item_coverage', 'scenario_runs'] },
-  { id: 'model-interpretation', label: 'model-based interpretation', workTypes: ['RESEARCH_PLAN', 'RESEARCH_FRAGMENT', 'RESEARCH_SYNTHESIZE'] },
+  { id: 'model-interpretation', label: 'model-based interpretation', workTypes: ['RESEARCH_PLAN', 'RESEARCH_FRAGMENT', 'RESEARCH_SYNTHESIZE'], ownsRoutePings: true },
   { id: 'evidence-verification', label: 'evidence verification', workTypes: ['RESEARCH_VERIFY', 'RESEARCH_AUDIT'] },
   { id: 'commercial-execution', label: 'human / authorized commercial execution', workTypes: [], rows: ['cash_actions', 'cash_needs'] },
 ];
@@ -366,6 +372,23 @@ async function readStage(def: StageDefinition, since: string, hours: number, now
     // A model call that failed is never a dropped record, whatever its cause:
     // it is counted under its cause, not here.
     if (isDroppedOutcome(row.outcome, modelCallFailed)) dropped += n(row.k);
+  }
+  // Failed health pings (worker.ts `pingHeldRoutes`): model calls that failed
+  // with no item behind them. Counted as provider failures of the one stage that
+  // owns them, and in no item, elapsed-time or dropped measure.
+  if (def.ownsRoutePings) {
+    const pings = await db.all<{ failure: string | null; k: number | string }>(
+      `SELECT reason AS failure, COUNT(*) AS k FROM bin_events
+        WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND at <= ? AND workload_class = ?
+        GROUP BY reason`,
+      [since, until, ROUTE_PING_WORKLOAD],
+    );
+    for (const row of pings) {
+      const cause = causeOfReason(row.failure);
+      if (!cause) continue;
+      byCause[cause] = (byCause[cause] ?? 0) + n(row.k);
+      if (cause !== 'database') providerFailures += n(row.k);
+    }
   }
   const oldest = queued?.oldest ? Math.max(0, Math.round((nowMs - Date.parse(queued.oldest)) / 60_000)) : null;
   const usage = sumUsage(metered.map((row) => usageOf(row.measures)), total);
