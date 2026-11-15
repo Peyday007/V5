@@ -38,6 +38,7 @@ import {
   unparkResolvedMissions,
   withdrawMootBacklog,
 } from '../server/services/russell/needsHuman.ts';
+import { tick } from '../server/services/russell/loop.ts';
 
 const MOVED_OUT = 'the mission moved out of Needs You before the answer could be applied';
 
@@ -176,6 +177,72 @@ describe('reopenAnswered and a mission that left Needs You', () => {
     expect(after.state).toBe('OPEN');
     expect(after.choices.map((choice) => choice.key)).toEqual(request.choices.map((choice) => choice.key));
     expect(after.whyNotRussell).toBe(request.whyNotRussell);
+  });
+});
+
+/**
+ * The same failure class, driven through the loop's own `answered-requests`
+ * pass (OPERATOR:RECURRING_OPERATIONAL_FAILURE:40f485f2e4ef250f): the pass used
+ * to hand every unsettled resume back as an unresolved answer to re-ask,
+ * including an answer whose mission had already left NEEDS_HUMAN, so the
+ * operator withdrew 43 such cards by hand in a week. The pass now decides that
+ * answer itself — withdrawn with the mission's state named, reported apart from
+ * the unresolved answers, and never put back in front of the person.
+ */
+describe('the answered-requests pass and a mission that left Needs You', () => {
+  it('A01: withdraws an answer whose mission was cancelled, reports it as moot, and never reopens it', async () => {
+    const missionId = await parkedMission();
+    const request = await answeredRequest(missionId, NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key);
+    expect(
+      await transitionMission({ missionId, from: 'NEEDS_HUMAN', to: 'CANCELLED', terminalReason: 'cancelled elsewhere' }),
+    ).toBe(true);
+
+    const report = await tick('moot-answer');
+    const after = (await getHumanRequest(request.id))!;
+    expect(after.state).toBe('WITHDRAWN');
+    expect(after.whyNotRussell).toMatch(/CANCELLED/);
+    expect((await listOpenRequests(fixture.project.id)).map((r) => r.id)).not.toContain(request.id);
+    expect(report.unresolvedAnswers.map((entry) => entry.requestId)).not.toContain(request.id);
+    expect(report.withdrawnMootAnswers).toContainEqual({
+      requestId: request.id,
+      missionState: 'CANCELLED',
+      reason: MOVED_OUT,
+    });
+    expect((await getMission(missionId))!.state).toBe('CANCELLED');
+
+    // A second cycle neither reopens it nor records anything more.
+    const again = await tick('moot-answer');
+    expect((await getHumanRequest(request.id))!.state).toBe('WITHDRAWN');
+    expect(again.withdrawnMootAnswers.map((entry) => entry.requestId)).not.toContain(request.id);
+    expect(again.unresolvedAnswers.map((entry) => entry.requestId)).not.toContain(request.id);
+    expect(
+      (await listEventsByEntity('RUSSELL_HUMAN_REQUEST', request.id)).filter(
+        (event) => event.eventType === 'RUSSELL_ROUTINE_DECISION',
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('A03: reopens an answer whose mission still waits at NEEDS_HUMAN and failed for another reason, as before', async () => {
+    const missionId = await parkedMission();
+    const request = await answeredRequest(missionId, NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key);
+    // A choice this Brain does not implement: a failure a person can still act on.
+    await getDb().run(`UPDATE russell_human_requests SET answered_choice = ? WHERE id = ?`, ['NOT_A_CHOICE', request.id]);
+    // The packet is genuinely parked on its plan, so no later pass unparks the mission on its own.
+    await getDb().run(
+      `UPDATE research_orchestrations SET status = 'AWAITING_APPROVAL'
+        WHERE id = (SELECT orchestration_id FROM russell_missions WHERE id = ?)`,
+      [missionId],
+    );
+
+    const report = await tick('live-answer');
+    expect((await getMission(missionId))!.state).toBe('NEEDS_HUMAN');
+    const after = (await getHumanRequest(request.id))!;
+    expect(after.state).toBe('OPEN');
+    expect(after.recommendation).toMatch(/does not implement the answer "NOT_A_CHOICE"/);
+    expect(after.choices.map((choice) => choice.key)).toContain(NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key);
+    expect(report.unresolvedAnswers.map((entry) => entry.requestId)).toContain(request.id);
+    expect(report.withdrawnMootAnswers.map((entry) => entry.requestId)).not.toContain(request.id);
+    expect((await listOpenRequests(fixture.project.id)).map((r) => r.id)).toContain(request.id);
   });
 });
 
