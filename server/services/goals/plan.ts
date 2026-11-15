@@ -975,8 +975,6 @@ export function composeGoalReadings(input: {
   arrangements: readonly ConstructedArrangement[];
   reconstruction: Reconstruction | null;
   acceptance: PlanAcceptance;
-  /** The model's openings, for the agreements recorded on them: the only receivables a floor may count. */
-  modelled: readonly Pick<ModelledOpportunity, 'opportunity' | 'agreedValue' | 'daysToCash'>[];
 }): { timelines: TimelineReading; objective: ObjectiveReading; planSet: GoalPlanSet } {
   const { objective, target, portfolio, acceptance } = input;
   const calibration = planCalibration(acceptance);
@@ -986,15 +984,25 @@ export function composeGoalReadings(input: {
   const timelines = readTimelines({ target, pathways: input.pathways?.pathways ?? [], portfolio, acceptance });
 
   // Expected, upper and adverse outcomes of the strongest combination and each alternative (S-0199/S-0200).
-  const commitments: EnforceableCommitment[] = input.modelled
-    .filter((one) => one.agreedValue > 0)
-    .map((one) => ({
-      kind: 'COMMITTED_RECEIVABLE' as const,
-      amount: one.agreedValue,
-      counterparty: one.opportunity.title.slice(0, 80),
-      sourceRowId: one.opportunity.id,
-      settlesInHorizon: target.daysLeft === null || (one.daysToCash.value !== null && one.daysToCash.value <= target.daysLeft),
-    }));
+  /*
+   * The enforceable commitments a floor may count: one list, read by both the
+   * objective reading and the plan set, so the two cannot answer differently
+   * about the same plan.
+   *
+   * A recorded agreement (`agreedValue`) is not one. It records that a buyer
+   * said yes; nothing on the modelled row shows the yes is signed, escrowed,
+   * deposited or guaranteed, and S-0200 allows a true floor only from those
+   * stronger commitments. Counting it made `objective.outcome.floor` non-null
+   * while every plan's downside reported no floor — two answers for one goal —
+   * and manufactured a floor from a promise. The agreement still counts where
+   * it belongs: in the modelled settled cash. A row that establishes an
+   * enforceable mechanism (FLOOR_MECHANISMS) is what would put an entry here.
+   */
+  const commitments: EnforceableCommitment[] = [];
+  const committedTo = (opportunityIds: readonly string[]): number =>
+    commitments
+      .filter((c) => c.settlesInHorizon && c.sourceRowId !== null && opportunityIds.includes(c.sourceRowId))
+      .reduce((sum, c) => sum + c.amount, 0);
   const combos = portfolio ? [portfolio.best, ...portfolio.alternatives].filter((c): c is NonNullable<GoalPortfolio['best']> => c !== null) : [];
   const keyOf = (c: (typeof combos)[number]) => c.members.map((m) => m.opportunityId).join('+');
   const readingOf = (c: (typeof combos)[number]): OutcomeReading => {
@@ -1034,7 +1042,9 @@ export function composeGoalReadings(input: {
   };
 
   // The candidate plans, proven distinct (GOAL-23).
-  const fromPathways = (input.pathways?.pathways ?? []).map((p) => candidateFromPathway(p));
+  const fromPathways = (input.pathways?.pathways ?? []).map((p) =>
+    candidateFromPathway(p, { enforceableCommitments: committedTo([p.opportunityId]) }),
+  );
   const byId = new Map(fromPathways.map((c) => [c.id, c]));
   const variants = input.reconstruction ? [input.reconstruction.baseline, input.reconstruction.best, ...input.reconstruction.rounds.flatMap((r) => r.tried)] : [];
   const seen = new Set<string>();
@@ -1196,7 +1206,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     const permissions = target.achieved ? [] : await missingPermissions(target.projectId);
     const qualify: NextTest = { link: 'OFFER_AND_PRICE', test: 'Qualify at least one opening: establish who pays, an offer and a price, so there is a plan to judge.', by: 'BRAIN', blocker: null };
     const refusedSteps = target.achieved || refusedInfeasible ? [] : planSteps({ adoption: refusedPlan.adoption, reconstruction: refusedReconstruction, sales: [], nextTest: qualify, permissionsMissing: permissions });
-    const refusedReadings = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways: null, arrangements, reconstruction: refusedReconstruction, acceptance: refusedAcceptance, modelled: model.considered });
+    const refusedReadings = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways: null, arrangements, reconstruction: refusedReconstruction, acceptance: refusedAcceptance });
     const refusedContinuation = continuationOf({
       achieved: target.achieved,
       daysLeft: target.daysLeft,
@@ -1584,7 +1594,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
           currency: target.currency,
         });
   const pool = poolConclusion(bestReach, target, considered.filter((one) => !isArrangementId(one.opportunityId)).length);
-  const readings = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways, arrangements, reconstruction, acceptance, modelled: model.considered });
+  const readings = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways, arrangements, reconstruction, acceptance });
   const continuation = continuationOf({
     achieved: target.achieved,
     daysLeft: target.daysLeft,
