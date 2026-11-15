@@ -109,6 +109,7 @@ import { OPPORTUNITY_SIGNALS } from '../../domain/types.ts';
 import { discoveryAllowed, knowledgeResearchAllowed } from './lifecycle.ts';
 import { ARRANGEMENT_BUCKET_MARK, noteConstructedRoundOpened, noteConstructedRoundOutcome } from './arrangementLibrary.ts';
 import { arrangementForLegacyKey } from '../../repos/monetization.ts';
+import { listProjectConstructionFacts } from '../../repos/construction.ts';
 import { cashPosition } from './money.ts';
 import { proveCapabilities } from './deliverables/capabilities.ts';
 import { existingOpeningFor, markDuplicateOpenings, openingSourceKey } from './duplicates.ts';
@@ -722,6 +723,29 @@ export const GOAL_LENSES: readonly { id: string; angle: string }[] = Object.free
 /** At most this many industries from the map are offered as search angles. */
 export const MAX_INDUSTRY_LENSES = 60;
 
+/**
+ * Which ranked subjects become industry lenses this pass (META-18-1). Pure.
+ *
+ * Every live subject is a candidate; the bounded set is filled by how often
+ * this goal has asked each one — least-asked first — and only then by rank, so
+ * the cut rotates across the whole map instead of holding the subjects that
+ * happen to rank first while evidence is absent. A subject that has never been
+ * asked always outranks one asked before, whatever its row order, so an
+ * unfamiliar subject reaches a lens, gathers evidence, and can then outrank
+ * familiar ones on its economics. Ranked order is preserved inside the result.
+ */
+export function industryLensSelection<T extends { node: { id: string } }>(
+  ranked: readonly T[],
+  timesAsked: (nodeId: string) => number,
+  max = MAX_INDUSTRY_LENSES,
+): T[] {
+  const chosen = ranked
+    .map((one, rank) => ({ one, rank, asked: timesAsked(one.node.id) }))
+    .sort((a, b) => a.asked - b.asked || a.rank - b.rank)
+    .slice(0, Math.max(0, max));
+  return chosen.sort((a, b) => a.rank - b.rank).map(({ one }) => one);
+}
+
 /** A goal's search angle, with the origin of the question it asks (OPP-03). */
 export interface GoalLens {
   id: string;
@@ -1098,12 +1122,25 @@ export async function openGoalDiscovery(input: {
    * Which industries, in which order, is a market preference (OPP-03): by each
    * subject's own economics and how much of its work can be run remotely
    * (`rankSubjectMarkets`), never by where the owner is and never by the order
-   * rows happen to come back in. That order is what decides which subjects make
-   * the MAX_INDUSTRY_LENSES cut and which of two equally-asked angles goes first.
+   * rows happen to come back in. The economics are the facts research filed
+   * under each subject (`facts`): a map subject inherits no reference pack
+   * (W-9), so without them every subject scores 0. That order decides which of two equally-asked
+   * subjects makes the MAX_INDUSTRY_LENSES cut and which of two equally-asked
+   * angles goes first; how often each was asked decides before it does.
    */
-  const industries: GoalLens[] = (await rankSubjectMarkets(nodes, constraints))
-    .slice(0, MAX_INDUSTRY_LENSES)
-    .map(({ node }) => ({ id: `ind-${node.id}`, angle: `the ${node.name} industry, and the businesses that supply, serve or buy from it`, origin: 'MEMORY' as const }));
+  /*
+   * The cut is filled least-asked first, then by rank (META-18-1). Cutting the
+   * ranking itself let the first MAX_INDUSTRY_LENSES rows win every tie: on a
+   * map where most subjects have no economics yet they all score 0, rank by
+   * row order, and the seeded, owner-familiar subjects took every lens, so a
+   * subject added later never gathered the evidence it needed to outrank them.
+   */
+  const askedById = new Map<string, number>();
+  for (const one of mine) askedById.set(one.bucketId, (askedById.get(one.bucketId) ?? 0) + 1);
+  const industries: GoalLens[] = industryLensSelection(
+    await rankSubjectMarkets(nodes, constraints, await listProjectConstructionFacts(t.projectId)),
+    (nodeId) => askedById.get(`${prefix}-ind-${nodeId}`) ?? 0,
+  ).map(({ node }) => ({ id: `ind-${node.id}`, angle: `the ${node.name} industry, and the businesses that supply, serve or buy from it`, origin: 'MEMORY' as const }));
   /*
    * And past the map, the opportunity field (OPP-03): remembered businesses and
    * transactions, what the world reported, recombinations of prior businesses —

@@ -198,9 +198,25 @@ describe('markets in production: a subject is scored from its own evidence', () 
     expect(body).not.toMatch(/ownerLocation|owner\.location|homeLocation/);
   });
 
+  /*
+   * META-18-1 (reasoning-d1-p0) changed how the bounded set is cut: least-asked
+   * first, then by rank (`industryLensSelection`), with each subject's
+   * economics read from the facts research filed under it. The angles still
+   * come from `rankSubjectMarkets`, at most MAX_INDUSTRY_LENSES of them.
+   */
   it('is what goal discovery takes its industry angles from', () => {
     const source = readFileSync('server/services/cash/discovery.ts', 'utf8');
-    expect(source).toMatch(/await rankSubjectMarkets\(nodes, constraints\)\)\s*\.slice\(0, MAX_INDUSTRY_LENSES\)/);
+    expect(source).toMatch(/industryLensSelection\(\s*await rankSubjectMarkets\(nodes, constraints, await listProjectConstructionFacts\(t\.projectId\)\),/);
+    expect(source).toMatch(/max = MAX_INDUSTRY_LENSES/);
+  });
+
+  it('cuts the lenses least-asked first, keeps rank order inside the cut, and never exceeds the bound', async () => {
+    const { industryLensSelection } = await import('../server/services/cash/discovery.ts');
+    const ranked = ['a', 'b', 'c', 'd', 'e'].map((id) => ({ node: { id } }));
+    const asked: Record<string, number> = { a: 2, b: 0, c: 1, d: 0, e: 0 };
+    expect(industryLensSelection(ranked, (id) => asked[id] ?? 0, 3).map((one) => one.node.id)).toEqual(['b', 'd', 'e']);
+    expect(industryLensSelection(ranked, () => 0, 2).map((one) => one.node.id)).toEqual(['a', 'b']);
+    expect(industryLensSelection(ranked, (id) => asked[id] ?? 0, 4).map((one) => one.node.id)).toEqual(['b', 'c', 'd', 'e']);
   });
 });
 
