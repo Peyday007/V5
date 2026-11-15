@@ -53,6 +53,28 @@ async function uncertainEffectsFor(projectId: string | null): Promise<number> {
 }
 
 export async function pause(goalId: string, reason: string, actorRef: string): Promise<DecisionResult> {
+  // GOAL-02: a goal with its own metric and a deadline still ahead is a
+  // condition a person set. A machine actor changes how much capacity it gets
+  // (allocation, priority); it does not stop the condition. Only a person
+  // pauses it.
+  if (!actorRef.startsWith('person:')) {
+    const goal = await getWorkstream(goalId);
+    if (
+      goal &&
+      goal.target &&
+      goal.dueAt &&
+      Date.parse(goal.dueAt) > Date.now() &&
+      !goal.archivedAt &&
+      !goal.cancelledAt
+    ) {
+      return {
+        ok: false,
+        reason:
+          "This goal's own metric and deadline still bind: only a person pauses it. Reduce its capacity through allocation or priority instead of a pause.",
+        consequence: 'Nothing changed.',
+      };
+    }
+  }
   const moved = await pauseGoal(goalId, reason);
   if (!moved) {
     return { ok: false, reason: 'It is already paused, cancelled or archived.', consequence: 'Nothing changed.' };
