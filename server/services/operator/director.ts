@@ -1201,6 +1201,8 @@ export async function readDeficiencies(): Promise<DeficiencyReading[]> {
   return [...out.slice(0, 6), ...more.flat()].slice(0, 14);
 }
 
+/** Improvement-loop decisions that say a delivered repair did not fix what it was for (`judgeEngineering`: NOT_RESOLVED). */
+const NOT_RESOLVED_DECISIONS = ['REJECTED', 'REVERTED', 'KEPT_NO_EFFECT'] as const;
 /** Inventory statuses a finding is open and unclaimed in: found, or its cause confirmed, and nothing more. */
 const UNCLAIMED_INVENTORY = ['DISCOVERED', 'ROOT_CAUSE_CONFIRMED'] as const;
 /** Repository paths a finding's text names, as the owner paths of its diagnosis. */
@@ -1219,7 +1221,9 @@ function namedPaths(...texts: (string | null)[]): string[] {
 
 /**
  * (a) Open inventory findings — DISCOVERED or ROOT_CAUSE_CONFIRMED — that name no owner and have no
- * repair in flight (no linked register row, or every linked row already decided). Each becomes a
+ * repair in flight (no linked register row, or every linked row already decided), except a finding that
+ * still states no cause after a linked repair was judged not to have fixed it (REJECTED, REVERTED or
+ * KEPT_NO_EFFECT — directly, or through the host it was COMBINED into). Each becomes a
  * deficiency with the id `dfx_inv_<finding id>`, so Hermes commissions the finding by its id; the
  * commission links its register row to the finding, which then reads as in flight.
  */
@@ -1235,9 +1239,22 @@ export async function inventoryDeficiencies(max = 4): Promise<DeficiencyReading[
     if (c.decision === 'COMBINED' && c.combinedIntoId) return !byId.get(c.combinedIntoId)?.decision;
     return !c.decision;
   };
+  // A linked repair was judged not to have fixed it — REJECTED, REVERTED or KEPT_NO_EFFECT, the
+  // decisions `judgeEngineering` reads as NOT_RESOLVED, directly or through the host it was COMBINED
+  // into — and the finding still states no cause: nothing an earlier attempt lacked has arrived, so
+  // commissioning attempt N+1 would hand the Factory the same unfixable question (A-10K: an evidence
+  // gap re-offered as an engineering repair; invariant 16). It is offered again once its cause is
+  // confirmed (ROOT_CAUSE_CONFIRMED), which gives the next attempt something to act on.
+  const notResolved = (id: string): boolean => {
+    const c = byId.get(id);
+    const decision = c?.decision === 'COMBINED' && c.combinedIntoId ? byId.get(c.combinedIntoId)?.decision : c?.decision;
+    return !!decision && (NOT_RESOLVED_DECISIONS as readonly string[]).includes(decision);
+  };
+  const rejectedWithoutCause = (i: (typeof items)[number]): boolean =>
+    i.status === 'DISCOVERED' && !(i.rootCause ?? '').trim() && i.linkedCandidates.some(notResolved);
   const order = { BLOCKING: 0, MAJOR: 1, MINOR: 2 } as const;
   return items
-    .filter((i) => !i.linkedCandidates.some(inFlight))
+    .filter((i) => !i.linkedCandidates.some(inFlight) && !rejectedWithoutCause(i))
     .sort((a, b) => order[a.severity] - order[b.severity] || a.id.localeCompare(b.id))
     .slice(0, max)
     .map((i) => {
