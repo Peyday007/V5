@@ -328,7 +328,21 @@ export async function routeRunpod(
       counts.fellBack += 1;
       console.warn(`[runpod] fallback to ${backup}: ${why.slice(0, 200)}`);
     }
-    return fallback(backup);
+    // The first fallback failing is not the end of the call: every other free
+    // route the configuration holds is asked in turn (CAP-16-3). The first
+    // fallback's own error is what is thrown when all of them fail, so its
+    // status still names the cause the route-health reading classifies.
+    let first: unknown;
+    for (const model of [backup, ...(config.fallbackAlternates ?? []).filter((m) => m !== backup)]) {
+      try {
+        const text = await fallback(model);
+        if (model !== backup) console.warn(`[runpod] fallback ${backup} failed; answered by ${model}`);
+        return text;
+      } catch (error) {
+        if (first === undefined) first = error;
+      }
+    }
+    throw first;
   };
   if (!runpod) return fallBack('runpod is not configured');
   if (paused) {

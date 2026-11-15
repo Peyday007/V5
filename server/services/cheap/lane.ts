@@ -37,6 +37,11 @@ export interface LaneConfig {
   runpod?: RunpodConfig | null;
   /** The free model a failed RunPod call is answered by; null when OmniRoute is not set. */
   fallbackModel?: string | null;
+  /**
+   * Free models asked, in order, when `fallbackModel` itself fails: every one
+   * differs from it, so a GPU call no longer depends on one provider's answer.
+   */
+  fallbackAlternates?: string[];
 }
 
 /**
@@ -62,10 +67,15 @@ export function laneConfig(env: NodeJS.ProcessEnv = process.env): LaneConfig | n
   // Slot B and the GPU's fallback on one free model is one point of failure:
   // when that provider rate-limits, both slots fail together and nothing
   // answers (CAP-16-3, 2026-11-15: 80% provider failures). Naming a different
-  // fallback model (`BRAIN_RUNPOD_FALLBACK_MODEL`, e.g. the second configured
-  // free model or OmniRoute's `auto`) takes the GPU's fallback off slot B's
-  // provider. Unset, the fallback stays slot B's model, as it always was.
+  // fallback model (`BRAIN_RUNPOD_FALLBACK_MODEL`) moves the GPU's first
+  // fallback off slot B's provider. Whether or not anyone names one, the
+  // fallback is never the only route: when it fails, the GPU call goes on to
+  // every other free route the configuration already holds — the second
+  // configured free model, slot B's model, and the switchboard's own `auto`
+  // router — each different from the one that just failed. A deployment needs
+  // no new setting for the point of failure to go.
   const fallback = env['BRAIN_RUNPOD_FALLBACK_MODEL']?.trim() || free[0]!;
+  const alternates = [...new Set([...free, 'auto'])].filter((m) => m !== fallback);
   return {
     url: (url ?? runpod!.url).replace(/\/+$/, ''),
     key: (url ? env['BRAIN_CHEAP_LLM_KEY']?.trim() : runpod!.key) || null,
@@ -74,6 +84,7 @@ export function laneConfig(env: NodeJS.ProcessEnv = process.env): LaneConfig | n
     timeoutMs: 30_000,
     runpod,
     fallbackModel: runpod && url ? fallback : null,
+    fallbackAlternates: runpod && url ? alternates : [],
   };
 }
 

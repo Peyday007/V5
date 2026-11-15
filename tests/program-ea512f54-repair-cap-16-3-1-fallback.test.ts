@@ -3,7 +3,8 @@
  * with 80% provider failures. Both cheap-lane routes ended at one OmniRoute
  * model — slot B was free[0] and the GPU's fallback was the same free[0] — so
  * one provider rate-limiting took both slots down together. These tests pin the
- * repair: a fallback that can be named apart from slot B, Retry-After carried, a dead pod recovered through
+ * repair: a fallback that can be named apart from slot B and, named or not, is
+ * followed by every other configured free route, Retry-After carried, a dead pod recovered through
  * the existing `ensurePod` path once, and the failure text naming its cause.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -47,9 +48,62 @@ describe('the GPU fallback can be taken off slot B\'s model', () => {
     expect(config.fallbackModel).toBe('auto');
   });
 
-  it('unset, the fallback is slot B\'s model as before', () => {
+  it('unset, the first fallback is slot B\'s model and every other configured free route follows it', () => {
     const config = laneConfig({ ...free, ...gpu, BRAIN_RUNPOD_FALLBACK_MODEL: '  ' })!;
     expect(config.fallbackModel).toBe('fast');
+    expect(config.fallbackAlternates).toEqual(['smart', 'auto']);
+    expect(config.fallbackAlternates).not.toContain(config.fallbackModel);
+  });
+
+  it('with one free model configured, the switchboard\'s auto router still stands behind slot B', () => {
+    const config = laneConfig({ ...free, ...gpu, BRAIN_CHEAP_LLM_MODELS: 'fast' })!;
+    expect(config.fallbackAlternates).toEqual(['auto']);
+  });
+
+  it('a named fallback is followed by slot B\'s model and the rest, never by itself', () => {
+    const config = laneConfig({ ...free, ...gpu, BRAIN_RUNPOD_FALLBACK_MODEL: 'smart' })!;
+    expect(config.fallbackAlternates).toEqual(['fast', 'auto']);
+  });
+
+  it('the GPU alone (no free address) has no alternates to ask', () => {
+    const config = laneConfig(gpu)!;
+    expect(config.fallbackModel).toBeNull();
+    expect(config.fallbackAlternates).toEqual([]);
+  });
+
+  it('production config, nothing named: slot B\'s provider rate-limiting no longer takes the GPU route down with it', async () => {
+    // The recorded failure: GPU down, and slot B's model (the only fallback)
+    // answering 429. Before the repair the call threw; now another route answers.
+    const config = laneConfig({ ...free, ...gpu })!;
+    const asked: string[] = [];
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const text = await routeRunpod(
+      config, 's', 'p', { maxTokens: 10 },
+      async (m) => {
+        asked.push(m);
+        if (m === 'fast') throw new Error('cheap lane HTTP 429 from omni.test model fast retry-after 30s');
+        return `answer from ${m}`;
+      },
+      { fetchImpl: status(503) },
+    );
+    expect(asked).toEqual(['fast', 'smart']);
+    expect(text).toBe('answer from smart');
+  });
+
+  it('when every route fails, the first fallback\'s error is thrown so its cause is still classified', async () => {
+    const config = laneConfig({ ...free, ...gpu })!;
+    const asked: string[] = [];
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const error = await routeRunpod(
+      config, 's', 'p', { maxTokens: 10 },
+      async (m) => {
+        asked.push(m);
+        throw new Error(m === 'fast' ? 'cheap lane HTTP 429 from omni.test model fast' : `cheap lane HTTP 404 from omni.test model ${m}`);
+      },
+      { fetchImpl: status(503) },
+    ).catch((e: Error) => e);
+    expect(asked).toEqual(['fast', 'smart', 'auto']);
+    expect((error as Error).message).toMatch(/HTTP 429 from omni\.test model fast/);
   });
 
   it('a GPU call that falls back asks the named fallback, not slot B', async () => {
