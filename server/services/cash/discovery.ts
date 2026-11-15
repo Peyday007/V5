@@ -70,9 +70,13 @@
 import { OPERATING_MODEL_SENTENCE } from '../../domain/operatingModel.ts';
 import { constructedCapFor, freeLaneOwnsResearch, routineFocus } from './researchRoom.ts';
 import { TRIGGER_BUCKETS, triggersEnabled } from './triggers.ts';
+import { INTERMEDIATION_BUCKETS, isIntermediationBucket } from './intermediationBuckets.ts';
+import { familyCurrent, INTERMEDIATION_FAMILY, type FamilyDeclaration } from './intermediationPositions.ts';
+import { owesPositionEvidence, recordPositionEvidence } from './positionEvidence.ts';
 import { FEED_SHORTLIST_BUCKET } from '../feeds/bucket.ts';
 import { getDb } from '../../db/database.ts';
 import { cashEventsOfKindInProject, getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
+import { familyDeclarationFor } from './familyPriority.ts';
 import {
   createOpportunity,
   fillOpportunitySignal,
@@ -478,6 +482,13 @@ export const SEARCH_BUCKETS: readonly SearchBucket[] = Object.freeze([
       'sources, what each side published, and what specifically one supplies to the other?',
   },
   ...BROAD_ECONOMY_BUCKETS,
+  /*
+   * Commercial intermediation's entry points (RES-15-4, S-0149): buyer-first and
+   * supply-first, across buyer types and market structures, each asking for the
+   * per-position evidence S-0150 names. Their place here is their ordinary place;
+   * `discoveryOrder` puts them first only while the family declaration is current.
+   */
+  ...INTERMEDIATION_BUCKETS,
 ]);
 
 const OPENED = 'CASH_DISCOVERY_OPENED';
@@ -569,7 +580,8 @@ export async function openDiscovery(input: {
   const out: OpenedDiscovery[] = [];
   const limit = Math.max(1, input.limit ?? 1);
   let frame: ExecutionFrame | null | undefined;
-  for (const bucket of fairOrder([...SEARCH_BUCKETS, ...(triggersEnabled() ? TRIGGER_BUCKETS : [])], rounds)) {
+  const declaration = await familyDeclarationFor(input.projectId);
+  for (const bucket of discoveryOrder([...SEARCH_BUCKETS, ...(triggersEnabled() ? TRIGGER_BUCKETS : [])], rounds, now, declaration)) {
     if (out.length >= limit) break;
     const history = byBucket.get(bucket.id) ?? [];
     const next = nextRoundFor(history, now);
@@ -1512,6 +1524,30 @@ export function fairOrder(buckets: readonly SearchBucket[], rounds: readonly Cas
 }
 
 /**
+ * The order discovery asks its buckets in.
+ *
+ * While the commercial-intermediation family declaration is current
+ * (`familyCurrent`), its buckets are asked first — fairly among themselves —
+ * and every other bucket follows in its own fair order. A bucket already asked
+ * waits out its re-ask interval in `nextRoundFor`, so going first never starves
+ * the rest. When the declaration lapses nothing is removed: the intermediation
+ * buckets keep their ordinary place and `fairOrder` alone decides, so the family
+ * never becomes a forever-only market (S-0148).
+ */
+export function discoveryOrder(
+  buckets: readonly SearchBucket[],
+  rounds: readonly CashDiscoveryRound[],
+  now: Date | string = new Date(),
+  declaration: FamilyDeclaration = INTERMEDIATION_FAMILY,
+): SearchBucket[] {
+  if (!familyCurrent(declaration, now)) return fairOrder(buckets, rounds);
+  const family = buckets.filter((one) => isIntermediationBucket(one));
+  if (family.length === 0) return fairOrder(buckets, rounds);
+  const rest = buckets.filter((one) => !isIntermediationBucket(one));
+  return [...fairOrder(family, rounds), ...fairOrder(rest, rounds)];
+}
+
+/**
  * A round insert lost its `ON CONFLICT DO NOTHING` race.
  *
  * Thrown to roll back the candidate created in the same transaction, never
@@ -2097,6 +2133,23 @@ export async function harvest(input: {
         sourceUrl: claim.sourceUrl,
       },
     });
+
+    /*
+     * Per-position evidence, as a row (RES-15-4, S-0150). An opening found by an
+     * intermediation entry bucket or a goal's constructed arrangement owes it: which
+     * positions it is examined from, what each S-0150 field already rests on, and —
+     * where the claim shows only an asking price or a market size — buyer access and
+     * conversion named as separate open investigations. Read from the rows just
+     * written; nothing is estimated.
+     */
+    if (owesPositionEvidence(context?.bucket.id)) {
+      await recordPositionEvidence({
+        projectId: input.projectId,
+        opportunity: withSignal ?? created,
+        bucketId: context!.bucket.id,
+        claim: { id: claim.id, claim: claim.claim, signal },
+      });
+    }
 
     out.push({ opportunity: withSignal ?? created, claimId: claim.id, missionId });
   }

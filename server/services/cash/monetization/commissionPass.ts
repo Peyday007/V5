@@ -53,9 +53,10 @@ import { discoveryAllowed } from '../lifecycle.ts';
 import { discoveryAuthority } from '../discoveryAuthority.ts';
 import { composeLedger, rankableOf } from './ledger.ts';
 import { allocateCommissions } from './commission.ts';
-import { researchRoom, type ResearchRoom } from '../researchRoom.ts';
+import { offerToFamily, researchRoom, type ResearchRoom } from '../researchRoom.ts';
+import { familyDeclarationFor } from '../familyPriority.ts';
 import { diveEpochStart } from '../diveStage.ts';
-import { payerEstablished } from '../validation.ts';
+import { discoveryBucketsByRound, intermediationOpening, payerEstablished } from '../validation.ts';
 import type { CommissionAsk } from './commission.ts';
 import type { Ledger } from './ledger.ts';
 import type {
@@ -294,15 +295,41 @@ export async function runCommissions(input: {
     const start = opportunity ? diveEpochStart(opportunity) : null;
     if (start) epochStarts.set(entry.path.id, start);
   }
-  const plan = allocateCommissions({
-    entries: live,
-    rankable: live.map(rankableOf),
-    commissions,
-    contradicted: await contradictedPathAnswers(input.projectId),
-    slots: room.room,
-    now: Date.parse(input.now ?? input.ledger.readAt),
-    epochStarts,
-  });
+  /*
+   * The current priority family is offered the room first (RES-15-4, S-0148):
+   * questions about openings an intermediation entry bucket found are
+   * allocated from the whole room, and every other question from what their
+   * chosen asks leave — `offerToFamily` decides it and never raises the room.
+   * While the declaration is not current it returns the room untouched, the
+   * family has no claim on it, and this is one allocation exactly as before.
+   */
+  const bucketByRound = await discoveryBucketsByRound(input.projectId);
+  const familyEntry = (entry: (typeof live)[number]): boolean => {
+    if (entry.subject?.kind !== 'OPPORTUNITY') return false;
+    const opportunity = opportunities.get(entry.subject.id);
+    return !!opportunity && intermediationOpening(opportunity, bucketByRound);
+  };
+  const contradicted = await contradictedPathAnswers(input.projectId);
+  const nowMs = Date.parse(input.now ?? input.ledger.readAt);
+  const allocate = (entries: typeof live, slots: number) =>
+    allocateCommissions({ entries, rankable: entries.map(rankableOf), commissions, contradicted, slots, now: nowMs, epochStarts });
+  const familyLive = live.filter(familyEntry);
+  const familyPlan = familyLive.length > 0 ? allocate(familyLive, room.room) : null;
+  const otherRoom = familyPlan
+    ? offerToFamily(room, {
+        kind: null,
+        familyWaiting: familyPlan.asks.length,
+        declaration: await familyDeclarationFor(input.projectId),
+        now: input.now ?? input.ledger.readAt,
+      })
+    : room;
+  const plan =
+    familyPlan && otherRoom.family
+      ? (() => {
+          const rest = allocate(live.filter((one) => !familyEntry(one)), otherRoom.room);
+          return { asks: [...familyPlan.asks, ...rest.asks], declined: [...familyPlan.declined, ...rest.declined] };
+        })()
+      : allocate(live, room.room);
 
   const opened = await openAsks({
     projectId: input.projectId,
