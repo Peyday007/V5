@@ -112,6 +112,12 @@ export interface ResearchApplication {
    * `priority DESC`, so this reserves the next free slots for the floor.
    */
   floorReserved?: { workItemId: string; purposes: string[]; from: number; to: number }[];
+  /**
+   * Queued items a previous floor raised whose purposes are no longer below a
+   * floor, put back to the priority their owner set (or let go, when the item
+   * left the queue or its owner moved it since).
+   */
+  floorRestored?: { workItemId: string; from: number; to: number; restored: boolean }[];
   /** Below-floor purposes no live bin and no queued item serves: nothing exists to raise. */
   floorUnserved?: ResearchPurpose[];
   /** What the floor caused to be opened for an unserved purpose, through the owner that opens that purpose's work. */
@@ -311,10 +317,14 @@ export async function advanceGoals(options?: { now?: string; floorOpeners?: Floo
       liveBins,
       binPurposes,
       floorPriority,
+      shares: inForce!.shares,
       activeGoalIds: snapshot.goals.filter((g) => g.lifecycle === 'ACTIVE').map((g) => g.id),
       openers: options?.floorOpeners ?? productionFloorOpeners,
     });
   }
+  // Every pass, decision or none: a raise whose purpose is back above its floor is undone.
+  const restored = await restoreFloorReservations(application?.belowFloor ?? []);
+  if (application) application.floorRestored = restored;
   report.researchApplied = application;
   const changedPerGoal = new Map<string, string[]>();
   for (const [binId, { priority, goalId }] of target) {
@@ -382,6 +392,7 @@ async function holdFloors(
     liveBins: { id: string }[];
     binPurposes: Map<string, string[]>;
     floorPriority: number;
+    shares: SharesInForce;
     activeGoalIds: string[];
     openers: FloorOpeners;
   },
@@ -393,16 +404,41 @@ async function holdFloors(
   application.floorReserved = [];
   const items = await queuedResearchItems();
   const itemPurposes = items.length > 0 ? await (await import('./researchYield.ts')).purposesOfBins(items) : new Map<string, string[]>();
-  for (const item of items) {
+  /*
+   * Bounded by the share gap: each floor reserves at most its shortfall's
+   * share of the queue (at least one item), counting what an earlier raise
+   * still holds, so a reading just under a floor lifts a handful of items and
+   * not a whole project's queue. The highest-priority items go first, so the
+   * owners' own order is kept among the ones taken.
+   */
+  const outstanding = await outstandingFloorReservations();
+  const budget = floorBudgets(input.shares, items.length);
+  const groupOf = (purposes: readonly string[]): FloorGroup | null =>
+    (FLOOR_GROUPS.find((g) => budget[g] > 0 && purposes.some((p) => floorGroupPurposes(g).includes(p) && below.includes(p))) ?? null);
+  const raised: { workItemId: string; purposes: string[]; from: number; to: number }[] = [];
+  const ordered = [...items].sort((a, b) => b.priority - a.priority || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  for (const item of ordered) {
     const purposes = itemPurposes.get(item.id) ?? [];
     if (!purposes.some((p) => below.includes(p))) continue;
     for (const p of purposes) if (below.includes(p)) served.add(p);
+    const held = outstanding.get(item.id);
+    if (held) {
+      const g = groupOf(purposes);
+      if (g) budget[g] -= 1;
+      continue;
+    }
     if (item.priority >= input.floorPriority) continue;
+    const g = groupOf(purposes);
+    if (!g) continue;
     const changed = await getDb().run(`UPDATE work_items SET priority = ? WHERE id = ? AND state = 'QUEUED' AND priority < ?`, [input.floorPriority, item.id, input.floorPriority]);
     if (Number(changed.changes) > 0) {
-      application.floorReserved.push({ workItemId: item.id, purposes, from: item.priority, to: input.floorPriority });
+      budget[g] -= 1;
+      raised.push({ workItemId: item.id, purposes, from: item.priority, to: input.floorPriority });
     }
   }
+  application.floorReserved = raised;
+  // Each raise is recorded with the priority its owner set, which is what lets a later pass undo it.
+  if (raised.length > 0) await recordFloorEvent(FLOOR_RESERVED_EVENT, { fingerprint: application.fingerprint ?? null, items: raised });
 
   const plan = floorOpenPlan(application.belowFloor, served);
   application.floorUnserved = plan.unserved;
@@ -436,6 +472,88 @@ async function queuedResearchItems(): Promise<{ id: string; projectId: string; o
     [...FLOOR_ITEM_TYPES],
   );
   return rows.map((r) => ({ id: r.id, projectId: r.project_id, orchestrationId: r.orchestration_id, purpose: r.purpose, priority: Number(r.priority) }));
+}
+
+/**
+ * A floor raise, and its undoing, as rows (improvement events, the record the
+ * research decision itself lives in): a raise names each item's own priority
+ * before it, so the raise can be put back whatever process makes the next pass.
+ */
+export const FLOOR_RESERVED_EVENT = 'RESEARCH_FLOOR_RESERVED';
+export const FLOOR_RESTORED_EVENT = 'RESEARCH_FLOOR_RESTORED';
+/** How far back an unreturned raise is looked for. A queued research item older than this is not waiting on a floor. */
+const FLOOR_RESERVATION_LOOKBACK_MS = 14 * 24 * 60 * 60_000;
+
+type FloorGroup = 'EXPLORATION' | 'SYSTEM_HEALTH' | 'COMMERCIAL';
+const FLOOR_GROUPS: readonly FloorGroup[] = ['EXPLORATION', 'SYSTEM_HEALTH', 'COMMERCIAL'];
+
+function floorGroupPurposes(g: FloorGroup): readonly string[] {
+  return g === 'EXPLORATION' ? ['BROAD_DISCOVERY', 'FORWARD_EXPLORATION'] : g === 'SYSTEM_HEALTH' ? ['SELF_IMPROVEMENT'] : ['TRANSACTION_ROUTES'];
+}
+
+/**
+ * How many queued items each floor may hold raised: its shortfall (floor minus
+ * what the window actually gave it) as a share of the queue, at least one
+ * while it is short, none when it is not. Pure.
+ */
+export function floorBudgets(f: SharesInForce, queued: number): Record<FloorGroup, number> {
+  const shortfall: Record<FloorGroup, number> = {
+    EXPLORATION: EXPLORATION_FLOOR - (f.observed.BROAD_DISCOVERY + f.observed.FORWARD_EXPLORATION),
+    SYSTEM_HEALTH: SYSTEM_HEALTH_FLOOR - f.observed.SELF_IMPROVEMENT,
+    COMMERCIAL: f.urgentCommercialGoal ? COMMERCIAL_FLOOR - f.observed.TRANSACTION_ROUTES : 0,
+  };
+  const below = new Set(purposesBelowFloor(f));
+  const out = { EXPLORATION: 0, SYSTEM_HEALTH: 0, COMMERCIAL: 0 } as Record<FloorGroup, number>;
+  for (const g of FLOOR_GROUPS) {
+    if (!floorGroupPurposes(g).some((p) => below.has(p as ResearchPurpose))) continue;
+    out[g] = Math.max(1, Math.ceil(Math.max(0, shortfall[g]) * Math.max(0, queued)));
+  }
+  return out;
+}
+
+async function recordFloorEvent(kind: string, detail: Record<string, unknown>): Promise<void> {
+  const { recordImprovementEvent } = await import('../../repos/improvement.ts');
+  await recordImprovementEvent({ candidateId: null, kind, detail });
+}
+
+/** Raises not yet undone, by item: the priority it had before and the one it was raised to, and the purposes it served. */
+async function outstandingFloorReservations(): Promise<Map<string, { from: number; to: number; purposes: string[] }>> {
+  const { listImprovementEvents } = await import('../../repos/improvement.ts');
+  const since = new Date(Date.now() - FLOOR_RESERVATION_LOOKBACK_MS).toISOString();
+  const events = await listImprovementEvents({ kinds: [FLOOR_RESERVED_EVENT, FLOOR_RESTORED_EVENT], since, limit: 5000 });
+  const out = new Map<string, { from: number; to: number; purposes: string[] }>();
+  // Oldest first, so a raise, its undoing and a later raise of the same item read in the order they happened.
+  for (const e of [...events].reverse()) {
+    const items = Array.isArray((e.detail as { items?: unknown }).items) ? ((e.detail as { items: unknown[] }).items) : [];
+    for (const raw of items) {
+      const one = raw as { workItemId?: unknown; from?: unknown; to?: unknown; purposes?: unknown };
+      if (typeof one.workItemId !== 'string') continue;
+      if (e.kind === FLOOR_RESTORED_EVENT) out.delete(one.workItemId);
+      else if (Number.isFinite(Number(one.from)) && Number.isFinite(Number(one.to)))
+        out.set(one.workItemId, { from: Number(one.from), to: Number(one.to), purposes: Array.isArray(one.purposes) ? one.purposes.map(String) : [] });
+    }
+  }
+  return out;
+}
+
+/**
+ * Undo the floor raises whose purposes are no longer below a floor (review:
+ * a raise that is never lowered is a ratchet, and the allocation could push
+ * share toward a purpose but never take it back). Guarded in the statement:
+ * only an item still QUEUED at exactly the raised priority is put back, so a
+ * worker's claim or an owner's own later change wins. An item that left the
+ * queue or was moved since is let go, recorded as not restored.
+ */
+async function restoreFloorReservations(belowFloor: readonly string[]): Promise<{ workItemId: string; from: number; to: number; restored: boolean }[]> {
+  const outstanding = await outstandingFloorReservations();
+  const out: { workItemId: string; from: number; to: number; restored: boolean }[] = [];
+  for (const [id, r] of outstanding) {
+    if (r.purposes.some((p) => belowFloor.includes(p))) continue;
+    const changed = await getDb().run(`UPDATE work_items SET priority = ? WHERE id = ? AND state = 'QUEUED' AND priority = ?`, [r.from, id, r.to]);
+    out.push({ workItemId: id, from: r.to, to: r.from, restored: Number(changed.changes) > 0 });
+  }
+  if (out.length > 0) await recordFloorEvent(FLOOR_RESTORED_EVENT, { items: out });
+  return out;
 }
 
 /** The live bins, with what attribution needs. */
