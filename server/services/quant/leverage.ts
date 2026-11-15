@@ -276,6 +276,8 @@ export interface LeverageRowsReport {
   projects: number;
   arrangements: number;
   combinations: number;
+  /** Combinations a real limit (cash exposure, authority, capacity or contract) could be read and bound. */
+  constrained: number;
   /** Per dimension, how many traced combinations had it established vs not. */
   established: Record<Dimension, number>;
   unknown: Record<Dimension, number>;
@@ -286,8 +288,8 @@ export interface LeverageRowsReport {
 
 export interface LeverageRowsDeps {
   projects?: () => Promise<Array<{ id: string }>>;
-  /** The arrangements to trace for one project; defaults to Brain's own construction, mapped to levers. */
-  arrangementsFor?: (projectId: string) => Promise<Arrangement[]>;
+  /** The arrangements to trace for one project, bare or with their real limits; defaults to what Brain's own construction traced. */
+  arrangementsFor?: (projectId: string) => Promise<Array<Arrangement | TracedTarget>>;
   /** At most this many arrangements per project. */
   perProject?: number;
   now?: Date;
@@ -321,45 +323,43 @@ export function revenueCeilingIn(a: Arrangement): boolean {
   return false;
 }
 
+/** An arrangement to trace and the real limits it is judged against. */
+export interface TracedTarget {
+  arrangement: Arrangement;
+  constraints: LeverageConstraints;
+}
+
 /**
- * Brain's constructed arrangement, carried onto the composer with the levers
- * its design implies: a supplier fulfils (fulfilment), Brain fulfils (AI
- * labor), buyers pay before delivery (prepayment). Every part is bounds only
- * unless evidence exists — what construction itself holds — so nothing here
- * is read as established that construction did not establish.
+ * What Brain's own construction traced for one project, read through the
+ * production entry point with the limits of the project's live goals (the
+ * tightest of each, an unset one unknown). Construction composes the levers
+ * its designs imply onto the parts and observations it holds and enforces the
+ * goal's limits itself (`traceConstructed`), so this reads what the running
+ * Brain traced rather than re-mapping construction to bounds.
  */
-async function constructedFor(projectId: string, limit: number, now: Date): Promise<Arrangement[]> {
+async function constructedFor(projectId: string, limit: number, now: Date): Promise<TracedTarget[]> {
   const { constructArrangements } = await import('../cash/construct.ts');
-  const { designFacts } = await import('../cash/properties.ts');
-  const { STRUCTURES } = await import('../cash/properties.ts');
-  const built = await constructArrangements({ projectId, currency: 'USD', delivers: [], capitalCeilingCents: null, daysLeft: 30, now });
-  const share: Part = { min: 0, max: 1 };
-  const count = (max: number): Part => ({ min: 0, max });
-  const money = (max: number): Part => ({ min: 0, max });
-  return built.slice(0, limit).map((one, index) => {
-    const def = STRUCTURES[one.structure];
-    const facts = designFacts(one.design);
-    const levers: Levers = {};
-    if (facts.fulfiller === 'SUPPLIER') levers.fulfilment = { capacity: count(10_000_000), failureRate: share, paymentDays: count(365) };
-    else levers.aiLabor = { costPerTransaction: money(100_000), throughput: count(10_000_000) };
-    if (one.design.funding !== 'ON_DELIVERY') levers.prepayment = { willingness: share, refundShare: share, usableDays: count(365) };
-    levers.settlementDays = count(365);
-    const capture: Arrangement['capture'] =
-      def.capture === 'COMMISSION' ? { kind: 'COMMISSION', rate: share } : def.capture === 'FEE' ? { kind: 'FEE', fee: money(100_000) } : { kind: 'MARGIN', supplyCost: money(100_000) };
-    return {
-      key: `p${index}`,
-      label: one.label,
-      period: '30 days',
-      currency: 'USD',
-      demand: { buyers: count(10_000_000), needRate: count(400), reach: share, conversion: share },
-      supply: def.needsSupply ? { units: count(10_000_000), acceptance: share } : undefined,
-      value: money(1_000_000),
-      capture,
-      cost: money(100_000),
-      repeat: one.design.repeat !== 'ONE_OFF' ? { rate: share } : undefined,
-      levers,
-    } satisfies Arrangement;
+  const { liveGoalLimits } = await import('../cash/worthResearching.ts');
+  const goals = await liveGoalLimits(projectId, now.toISOString());
+  const tightest = (pick: (l: (typeof goals)[number]['limits']) => number | null) => {
+    const set = goals.map((g) => pick(g.limits)).filter((x): x is number => x !== null && Number.isFinite(x));
+    return set.length ? Math.min(...set) : null;
+  };
+  const days = goals.map((g) => g.limits.daysLeft).filter((x): x is number => x !== null && x > 0);
+  const capitalCeilingCents = tightest((l) => l.capitalCeilingCents);
+  const built = await constructArrangements({
+    projectId,
+    currency: 'USD',
+    delivers: [],
+    capitalCeilingCents,
+    daysLeft: days.length ? Math.min(...days) : 30,
+    limits: { daysLeft: days.length ? Math.min(...days) : 30, remainingCents: Number.MAX_SAFE_INTEGER, capitalCeilingCents, capitalBeforeProofCents: tightest((l) => l.capitalBeforeProofCents), bestReachCents: null },
+    now,
   });
+  return built
+    .filter((one) => one.leverage)
+    .slice(0, limit)
+    .map((one) => ({ arrangement: one.leverage!.arrangement, constraints: one.leverage!.constraints }));
 }
 
 /**
@@ -382,11 +382,15 @@ export async function leverageHoldsOnRows(deps: LeverageRowsDeps = {}): Promise<
   const violations: string[] = [];
   let arrangements = 0;
   let combinations = 0;
+  let constrained = 0;
   for (const p of projects) {
-    for (const a of (await arrangementsFor(p.id)).slice(0, perProject)) {
+    for (const target of (await arrangementsFor(p.id)).slice(0, perProject)) {
+      const a = 'arrangement' in target ? target.arrangement : target;
+      const constraints = 'arrangement' in target ? target.constraints : {};
       arrangements += 1;
       if (revenueCeilingIn(a)) violations.push(`${p.id}:${a.key}`);
-      const trace = traceLeverage(a, {}, { now, maxCombinations: 16 });
+      const trace = traceLeverage(a, constraints, { now, maxCombinations: 16 });
+      for (const c of trace.combinations) if (c.constraint.binding) constrained += 1;
       for (const c of trace.combinations) {
         combinations += 1;
         for (const d of DIMENSIONS) (c.dimensions[d].established ? established : unknown)[d] += 1;
@@ -403,7 +407,8 @@ export async function leverageHoldsOnRows(deps: LeverageRowsDeps = {}): Promise<
       ? `no arrangement is constructed on production rows yet (${projects.length} project(s))`
       : `${combinations} lever combination(s) traced over ${arrangements} arrangement(s) in ${projects.length} project(s); established: ` +
         DIMENSIONS.map((d) => `${d}=${established[d]}/${established[d] + unknown[d]}`).join(', ') +
+        `; ${constrained} judged against a real limit` +
         `; prepayment levers ${prepayment.levers}, verified ${prepayment.established}, credited ${prepayment.credited}` +
         (violations.length ? `; REVENUE CEILING on ${violations.join(', ')}` : '; no transaction limited by a revenue ceiling');
-  return { ok: combinations > 0 && violations.length === 0, detail, projects: projects.length, arrangements, combinations, established, unknown, prepayment, revenueCeilingViolations: violations };
+  return { ok: combinations > 0 && violations.length === 0, detail, projects: projects.length, arrangements, combinations, constrained, established, unknown, prepayment, revenueCeilingViolations: violations };
 }

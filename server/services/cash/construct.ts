@@ -47,7 +47,8 @@ import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
 import { statesNamedIn } from '../../domain/jurisdiction.ts';
 import { APPROVAL_ENVELOPES } from '../research/approvalEnvelope.ts';
 import { describesOwnAction } from '../research/actorScope.ts';
-import { composeArrangement, type Part } from '../quant/mechanism.ts';
+import { composeArrangement, type Arrangement, type Levers, type Part } from '../quant/mechanism.ts';
+import { DIMENSIONS, traceLeverage, verifyPrepayment, type CombinationTrace, type Dimension, type LeverageConstraints, type PrepaymentVerification } from '../quant/leverage.ts';
 import { reconstruct } from '../quant/reconstruct.ts';
 import type { CashOpportunity, IndustryNode } from '../../domain/types.ts';
 import type { Estimate, Observation } from '../../domain/quant.ts';
@@ -132,8 +133,35 @@ export interface ConstructedArrangement {
    * and their sum. Absent or zero is unknown, never "will not return" (LIFE-29-2).
    */
   repeatBusiness?: { observations: number; statedValueCents: number };
+  /**
+   * Commercial leverage (S-0103, COM-13-2), traced for the best-ranked
+   * arrangements: the levers the design implies composed onto the very parts
+   * and evidence construction holds, every combination traced through the
+   * seven dimensions, judged against the goal's real limits, and buyer
+   * prepayment verified rather than presumed. Absent below the traced rank.
+   */
+  leverage?: ConstructedLeverage;
 }
 
+/** What tracing one constructed arrangement's leverage found. */
+export interface ConstructedLeverage {
+  /** The composer input traced: construction's own parts and observations, with the levers its design implies. */
+  arrangement: Arrangement;
+  /** The real limits it was judged against, in the arrangement's currency; null is unknown, never unlimited. */
+  constraints: LeverageConstraints;
+  /** How many lever combinations were traced. */
+  combinations: number;
+  /** The combination carrying every lever. */
+  full: CombinationTrace;
+  /** Dimensions of the full combination evidence establishes, and those it does not. */
+  established: Dimension[];
+  unknown: Dimension[];
+  /** Null when the design takes no prepayment. */
+  prepayment: PrepaymentVerification | null;
+}
+
+/** The best-ranked arrangements whose leverage is traced per pass: only these are asked, and tracing is several reconstructions each. */
+export const MAX_LEVERAGE_TRACED = 24;
 /** At most this many arrangements are composed per goal pass (they are ranked and few are asked). */
 export const MAX_CONSTRUCTIONS = 400;
 /** Reverse arrangements composed per pass: one per design that best fits the goal. */
@@ -397,7 +425,90 @@ export async function composeConstruction(job: ConstructionJob, yieldEveryMs: nu
     }
   }
   out.push(...reverseArrangements({ ...ctx, designs, capability }));
-  return rank(out, limits, targets);
+  const ranked = rank(out, limits, targets);
+  for (const one of ranked.slice(0, MAX_LEVERAGE_TRACED)) {
+    await breathe();
+    traceConstructed(one, limits, now);
+  }
+  return ranked;
+}
+
+/** The composer input each arrangement was decomposed from, for tracing its leverage after ranking. */
+const composedFrom = new WeakMap<ConstructedArrangement, Arrangement>();
+
+/**
+ * The real limits a goal sets, in the arrangement's currency: the money it may
+ * tie up before the first payment (or, unset, its capital ceiling) and the
+ * commitment a person authorised. There is no revenue ceiling among them, and
+ * an unset limit stays unknown.
+ */
+export function constraintsFrom(limits: GoalLimits): LeverageConstraints {
+  const money = (cents: number | null) => (cents === null || !Number.isFinite(cents) ? null : cents / 100);
+  return {
+    cashAvailable: money(limits.capitalBeforeProofCents ?? limits.capitalCeilingCents),
+    authorityCeiling: money(limits.capitalCeilingCents),
+    contractMax: null,
+  };
+}
+
+/** The levers a design implies, as open parts: what nothing establishes is a bound, never a value. */
+export function leversFor(design: Design): Levers {
+  const share: Part = { min: 0, max: 1 };
+  const levers: Levers = { settlementDays: { min: 0, max: 365 } };
+  if (designFacts(design).fulfiller === 'SUPPLIER') levers.fulfilment = { capacity: { min: 0, max: 10_000_000 }, failureRate: share, paymentDays: { min: 0, max: 365 } };
+  else levers.aiLabor = { costPerTransaction: { min: 0, max: 100_000 }, throughput: { min: 0, max: 10_000_000 } };
+  if (design.funding !== 'ON_DELIVERY') levers.prepayment = { willingness: share, refundShare: share, usableDays: { min: 0, max: 365 } };
+  return levers;
+}
+
+const DIMENSION_WORDS: Record<Dimension, string> = {
+  cashConversion: 'how many days pass between paying supply and holding usable cash',
+  margin: 'the margin per transaction after every cost',
+  supplierRisk: 'what share of supplier deliveries of this kind fail',
+  deliveryCapacity: 'how many transactions the supply side can actually deliver per period',
+  liability: 'what refund and supplier-default obligations the arranger carries',
+  acquisitionSpeed: 'how quickly such buyers are acquired',
+  repeatability: 'what share of buyers buy again',
+};
+
+/**
+ * Trace one ranked arrangement's leverage, enforce the goal's real limits on
+ * it and verify its prepayment, then let what was found act: a known exposure
+ * that no real limit allows even once EXCEEDS (and the plan does not ask it),
+ * and every dimension or prepayment condition nothing establishes becomes part
+ * of the research question.
+ */
+export function traceConstructed(one: ConstructedArrangement, limits: GoalLimits, now: Date): ConstructedLeverage | null {
+  const base = composedFrom.get(one);
+  if (!base) return null;
+  const arrangement: Arrangement = { ...base, key: 'lv', levers: leversFor(one.design) };
+  const constraints = constraintsFrom(limits);
+  let trace: ReturnType<typeof traceLeverage>;
+  let prepayment: PrepaymentVerification | null;
+  try {
+    trace = traceLeverage(arrangement, constraints, { now, maxCombinations: 8 });
+    prepayment = verifyPrepayment(arrangement, now)[0] ?? null;
+  } catch {
+    return null;
+  }
+  const full = trace.combinations.find((c) => c.levers.length === trace.levers.length) ?? trace.combinations[trace.combinations.length - 1]!;
+  const established = DIMENSIONS.filter((d) => full.dimensions[d].established);
+  const unknown = DIMENSIONS.filter((d) => !full.dimensions[d].established);
+  const leverage: ConstructedLeverage = { arrangement, constraints, combinations: trace.combinations.length, full, established, unknown, prepayment };
+  one.leverage = leverage;
+  const v = full.constraint;
+  const moneyBinds = v.binding === 'CASH_EXPOSURE' || v.binding === 'AUTHORITY';
+  if (moneyBinds && full.cashExposure.established && v.allowed !== null && v.allowed < 1) one.stress = { ...one.stress, exposure: 'EXCEEDS' };
+  const asks = [
+    ...unknown.map((d) => DIMENSION_WORDS[d]),
+    ...(prepayment?.tasks ?? []).map((t) => t.replace(/^establish /, '')),
+  ];
+  if (asks.length > 0) {
+    one.question +=
+      ` Brain traced this arrangement's leverage (${trace.levers.join(', ') || 'none'}) through cash conversion, margin, supplier risk, delivery capacity, liability, acquisition speed and repeatability against the goal's real cash and authority limits` +
+      `${prepayment ? ', treating buyer prepayment as a possibility to verify, not a presumption' : ''}; find a published source for each part nothing establishes yet: ${asks.join('; ')}.`;
+  }
+  return leverage;
 }
 
 /** How long an unchanged construction is reused, and how many distinct ones are held. */
@@ -551,7 +662,7 @@ function compose(args: {
       : def.capture === 'FEE'
         ? { kind: 'FEE', fee: { min: 0, max: 100_000 } }
         : { kind: 'MARGIN', supplyCost: { min: 0, max: 100_000, context, material: [], observations: pooled ? [] : riskObs } };
-  const composed = composeArrangement({
+  const input0: Arrangement = {
     key: 'a',
     label: demand.name,
     period: `${input.daysLeft} days`,
@@ -565,7 +676,8 @@ function compose(args: {
     pooling: pooled ? { fixedCost: { min: 0, max: 1_000_000, context, material: [], observations: riskObs }, minParticipants: unknownCount(1, 10_000), threshold: design.funding === 'THRESHOLD_PRESALE' } : undefined,
     funding: design.funding !== 'ON_DELIVERY' ? { prepayShare: unknownShare } : undefined,
     repeat: design.repeat !== 'ONE_OFF' ? { rate: unknownShare } : undefined,
-  });
+  };
+  const composed = composeArrangement(input0);
   let estimates: Record<string, Estimate> = {};
   try {
     estimates = reconstruct(composed.graph, composed.contribution, args.now).estimates;
@@ -635,7 +747,7 @@ function compose(args: {
         `For each part, find a published source: ${asks}.${established}${reliesText}${failureText}${exclusionSentence(args.exclusions)} ` +
         OPENING_SENTENCE +
         'Where no source shows buyers pay for this, say so plainly — that refutes the arrangement and is a useful answer.';
-  return {
+  const built: ConstructedArrangement = {
     key,
     structure,
     design,
@@ -657,6 +769,8 @@ function compose(args: {
     question,
     repeatBusiness,
   };
+  composedFrom.set(built, input0);
+  return built;
 }
 
 /**
