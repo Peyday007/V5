@@ -1155,6 +1155,15 @@ export function applyChallengeToAssurance(assurance: Assurance, summary: Challen
   if (summary.verdict === 'CHALLENGE_FAILED') withdraw.push(`the challenge could not run${summary.error ? ` (${summary.error.slice(0, 160)})` : ''}, and an unread challenge is not a pass`);
   for (const f of blocking.slice(0, 3)) withdraw.push(`${f.mode}: ${f.assumption} — test: ${f.test}; safer: ${f.saferStructure}`);
   if (summary.independentValidation.disagreeing > 0) withdraw.push(`${summary.independentValidation.disagreeing} independent check(s) disagree with the plan`);
+  /*
+   * A deep review requires the independent-model challenge (CHAL-33 F3). Until
+   * it has answered, the plan is not validated by anything but itself — and a
+   * model agreeing with itself is not independent validation — so a due
+   * challenge holds the claim exactly as a failed one does, and asking it is
+   * research the plan still owes.
+   */
+  const due = summary.modelChallenge?.due === true;
+  if (due) withdraw.push(`the plan earns a deep review and its required independent model challenge has not answered (${summary.modelChallenge.because[0] ?? 'deep review'})`);
   const parts: string[] = [];
   if (adoption) parts.push(`the challenge replaced ${adoption.from.keys.join(' + ')} (${adoption.because.assumption}) with ${adoption.to.keys.join(' + ')}: ${adoption.description}`);
   if (withdraw.length > 0) {
@@ -1179,8 +1188,12 @@ export function applyChallengeToAssurance(assurance: Assurance, summary: Challen
     if (!needs.has(bare)) needs.add(one);
   }
   for (const f of blocking) needs.add(`test ${f.subject}: ${f.test}`);
+  if (due) needs.add(`${MODEL_CHALLENGE_NEED}: ${summary.modelChallenge.because.join('; ')}`);
   assurance.researchNeeds = [...needs];
 }
+
+/** The research need a due independent-model challenge adds to the assurance (CHAL-33 F3). */
+export const MODEL_CHALLENGE_NEED = 'ask the independent model challenge this plan\'s deep review requires';
 
 /**
  * What the best combination's figure may be called. A probability is claimed only
