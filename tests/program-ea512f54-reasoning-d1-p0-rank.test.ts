@@ -16,6 +16,8 @@ import {
   marketScore,
   rankMarkets,
   rankSubjectMarkets,
+  rankedReadings,
+  unknownFloor,
   type MarketCandidate,
 } from '../server/services/industry/construction/origins.ts';
 import { assembleEvidence, evidenceFromMap } from '../server/services/industry/construction/service.ts';
@@ -83,6 +85,58 @@ describe('the criteria a market competes on (META-18-1)', () => {
   });
 });
 
+describe('an unknown never outranks adverse evidence (invariant 39, review: repair-unknown-outranks-adverse-evidence)', () => {
+  const same: MarketCandidate = { key: 'k', geography: null, marginUsd: 100, monthlyVolume: 100, daysToCash: 30, remoteControl: 1, capitalUsd: 0, feasibility: 1, failureModes: 0, failureRate: 0 };
+
+  it('a market whose recorded capital is many months of contribution does not rank below an identical unresearched one', () => {
+    const known: MarketCandidate = { ...same, key: 'a-known', capitalUsd: 100_000 };
+    const unknown: MarketCandidate = { ...same, key: 'b-unknown', capitalUsd: null };
+    // The reviewer's case, in both key orders: the unknown never comes first, and never scores above the cost it could hide.
+    for (const [x, y] of [[known, unknown], [{ ...known, key: 'b-known' }, { ...unknown, key: 'a-unknown' }]] as const) {
+      const ranked = rankedReadings([x, y]);
+      expect(ranked[0]!.market.capitalUsd).toBe(100_000);
+      expect(ranked[1]!.criteria.score).toBeLessThanOrEqual(ranked[0]!.criteria.score);
+      expect(ranked[1]!.criteria.capitalFactor).toBeLessThanOrEqual(ranked[0]!.criteria.capitalFactor);
+      expect(rankMarkets([y, x])[0]!.capitalUsd).toBe(100_000);
+    }
+  });
+
+  it('a market whose measured failure rate is above the default does not rank below an identical unmeasured one', () => {
+    const known: MarketCandidate = { ...same, key: 'a-known', failureRate: 0.5 };
+    const unknown: MarketCandidate = { ...same, key: 'b-unknown', failureRate: null };
+    for (const [x, y] of [[known, unknown], [{ ...known, key: 'b-known' }, { ...unknown, key: 'a-unknown' }]] as const) {
+      const ranked = rankedReadings([x, y]);
+      expect(ranked[0]!.market.failureRate).toBe(0.5);
+      expect(ranked[1]!.criteria.failureRate).toBeGreaterThanOrEqual(0.5);
+      expect(ranked[1]!.criteria.score).toBeLessThanOrEqual(ranked[0]!.criteria.score);
+      expect(rankMarkets([y, x])[0]!.failureRate).toBe(0.5);
+    }
+  });
+
+  it('research that found a favourable figure still beats an unknown, and the floor is never better than the default', () => {
+    const cheap: MarketCandidate = { ...same, key: 'b-cheap', capitalUsd: 1000, failureRate: 0.05 };
+    const unknown: MarketCandidate = { ...same, key: 'a-unknown', capitalUsd: null, failureRate: null };
+    expect(rankMarkets([unknown, cheap])[0]!.key).toBe('b-cheap');
+    const floor = unknownFloor([unknown, cheap]);
+    expect(floor.capitalFactor).toBe(UNKNOWN_CAPITAL_FACTOR);
+    expect(floor.failureRate).toBe(UNKNOWN_FAILURE_RATE);
+  });
+
+  it('a better unknown market still competes: the floor costs it no more than the worst known reading', () => {
+    // Ten times the contribution, capital and failure rate unknown, against a researched costly market: economics still decide.
+    const big: MarketCandidate = { ...same, key: 'big', monthlyVolume: 1000, capitalUsd: null, failureRate: null };
+    const costly: MarketCandidate = { ...same, key: 'costly', capitalUsd: 30_000, failureRate: 0.4 };
+    const ranked = rankedReadings([costly, big]);
+    const floor = unknownFloor([costly, big]);
+    const bigReading = ranked.find((r) => r.market.key === 'big')!.criteria;
+    const costlyReading = ranked.find((r) => r.market.key === 'costly')!.criteria;
+    expect(bigReading.capitalFactor).toBe(floor.capitalFactor);
+    expect(bigReading.capitalFactor).toBe(costlyReading.capitalFactor);
+    expect(bigReading.failureRate).toBe(0.4);
+    expect(ranked[0]!.market.key).toBe('big');
+  });
+});
+
 describe('no anchoring to a label (S-0191)', () => {
   it('relabelling every subject, to familiar or invented labels, leaves the order unchanged when the evidence is unchanged', () => {
     const delivery = evidenceOf('Last-mile delivery');
@@ -118,7 +172,8 @@ describe('rankSubjectMarkets: every live subject, no shortlist or quota', () => 
     const ranked = await rankSubjectMarkets(rows, []);
     expect(ranked).toHaveLength(40);
     expect(new Set(ranked.map((r) => r.node.id)).size).toBe(40);
-    for (const r of ranked) expect(r.criteria.score).toBe(marketScore(r.market));
+    const floor = unknownFloor(ranked.map((r) => r.market));
+    for (const r of ranked) expect(r.criteria.score).toBe(marketScore(r.market, floor));
     // Several subjects of one category are all kept: no quota per category.
     expect(ranked.slice(0, 8).filter((r) => r.node.name === 'Last-mile delivery')).toHaveLength(8);
   });
