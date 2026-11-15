@@ -48,7 +48,7 @@ import { statesNamedIn } from '../../domain/jurisdiction.ts';
 import { APPROVAL_ENVELOPES } from '../research/approvalEnvelope.ts';
 import { describesOwnAction } from '../research/actorScope.ts';
 import { composeArrangement, type Arrangement, type Levers, type Part } from '../quant/mechanism.ts';
-import { leverageOf, type ArrangementLeverage, type LeverageConstraints } from '../quant/leverage.ts';
+import { leverageOfYielding, type ArrangementLeverage, type LeverageConstraints } from '../quant/leverage.ts';
 import { reconstruct } from '../quant/reconstruct.ts';
 import type { CashOpportunity, IndustryNode } from '../../domain/types.ts';
 import type { Estimate, Observation } from '../../domain/quant.ts';
@@ -489,7 +489,7 @@ async function traceLeverageOnTop(
     await breathe();
     let leverage: ArrangementLeverage;
     try {
-      leverage = leverageOf(a, constraints, { now });
+      leverage = await leverageOfYielding(a, constraints, breathe, { now });
     } catch {
       continue;
     }

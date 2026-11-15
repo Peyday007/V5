@@ -182,6 +182,17 @@ export interface TraceOptions {
 
 /** Trace every combination of the levers an arrangement carries through the seven dimensions. */
 export function traceLeverage(a: Arrangement, constraints: LeverageConstraints = {}, options: TraceOptions = {}): LeverageTrace {
+  const steps = traceSteps(a, constraints, options);
+  for (let step = steps.next(); ; step = steps.next()) if (step.done) return step.value;
+}
+
+/**
+ * The trace one combination at a time: it yields after each, so a caller on
+ * the server's only event loop can hand the loop back between them. Up to
+ * 128 combinations of several reconstructions each are seconds of work, and
+ * one stretch that long is the stall `composeConstruction` yields to avoid.
+ */
+function* traceSteps(a: Arrangement, constraints: LeverageConstraints, options: TraceOptions): Generator<void, LeverageTrace, void> {
   const now = options.now ?? new Date();
   const levers = leversOf(a);
   const all = combinationsOf(levers);
@@ -201,6 +212,7 @@ export function traceLeverage(a: Arrangement, constraints: LeverageConstraints =
       constraint: enforceConstraints({ deliveryCapacity: dimensions.deliveryCapacity, cashExposure }, constraints),
       prepaymentCredited: r.credited,
     });
+    yield;
   }
   const combinations: CombinationTrace[] = chosen.map((set) => {
     const here = byName.get(name(set))!;
@@ -357,8 +369,27 @@ export interface ArrangementLeverage {
 /** Trace, enforce and verify one arrangement's leverage, in one pass. */
 export function leverageOf(a: Arrangement, constraints: LeverageConstraints, options: TraceOptions = {}): ArrangementLeverage {
   const now = options.now ?? new Date();
-  // Every combination of every lever the arrangement carries: 2^7 = 128 at most.
-  const trace = traceLeverage(a, constraints, { now, maxCombinations: options.maxCombinations ?? 1 << LEVER_KEYS.length });
+  return leverageFrom(a, constraints, traceLeverage(a, constraints, { now, maxCombinations: options.maxCombinations ?? ALL_COMBINATIONS }), now);
+}
+
+/** Every combination of every lever an arrangement can carry: 2^7 = 128. */
+const ALL_COMBINATIONS = 1 << LEVER_KEYS.length;
+
+/**
+ * `leverageOf`, handing the event loop back through `breathe` between
+ * combinations: what construction calls, because it may run inline on the
+ * server's loop when no evaluator thread can start. The same result.
+ */
+export async function leverageOfYielding(a: Arrangement, constraints: LeverageConstraints, breathe: () => Promise<void>, options: TraceOptions = {}): Promise<ArrangementLeverage> {
+  const now = options.now ?? new Date();
+  const steps = traceSteps(a, constraints, { now, maxCombinations: options.maxCombinations ?? ALL_COMBINATIONS });
+  for (let step = steps.next(); ; step = steps.next()) {
+    if (step.done) return leverageFrom(a, constraints, step.value, now);
+    await breathe();
+  }
+}
+
+function leverageFrom(a: Arrangement, constraints: LeverageConstraints, trace: LeverageTrace, now: Date): ArrangementLeverage {
   const prepayment = verifyPrepayment(a, now);
   const full = trace.combinations.find((c) => c.levers.length === trace.levers.length) ?? null;
   /*
