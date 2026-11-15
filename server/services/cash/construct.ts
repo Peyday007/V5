@@ -389,12 +389,17 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
    * start. Either way it is the one `composeConstruction`.
    */
   let ranked: ConstructedArrangement[];
-  const { sharedEvaluator } = await import('../goals/reasoning/evaluatorPool.ts');
-  const evaluator = sharedEvaluator();
-  try {
-    ranked = evaluator.construct ? await evaluator.construct(job) : await composeConstruction(job, YIELD_EVERY_MS);
-  } finally {
-    await evaluator.close();
+  const plan = compositionPlan(job);
+  if (plan.filter((one) => !one.stored).length + MAX_REVERSE <= INLINE_COMPOSITIONS) {
+    ranked = await composeConstruction(job, YIELD_EVERY_MS, plan);
+  } else {
+    const { sharedEvaluator } = await import('../goals/reasoning/evaluatorPool.ts');
+    const evaluator = sharedEvaluator();
+    try {
+      ranked = evaluator.construct ? await evaluator.construct(job) : await composeConstruction(job, YIELD_EVERY_MS, plan);
+    } finally {
+      await evaluator.close();
+    }
   }
   constructionMemo.set(memoKey, { at: Date.now(), result: structuredClone(ranked) });
   while (constructionMemo.size > CONSTRUCTION_MEMO_MAX) constructionMemo.delete(constructionMemo.keys().next().value!);
@@ -711,7 +716,7 @@ export function selectCandidates(job: ConstructionJob): { selected: Candidate[];
  * any thread. `yieldEveryMs` hands the loop back between designs when it runs
  * on the server's own thread.
  */
-export async function composeConstruction(job: ConstructionJob, yieldEveryMs: number | null = null): Promise<ConstructedArrangement[]> {
+export async function composeConstruction(job: ConstructionJob, yieldEveryMs: number | null = null, plan: CompositionStep[] = compositionPlan(job)): Promise<ConstructedArrangement[]> {
   const { capability, priced, tiedUp, input, limits, targets, exclusions, now } = job;
   const designs = allDesigns(STRUCTURE_KEYS);
   const ctx = { priced, tiedUp, input, limits, targets, exclusions, now };
@@ -722,12 +727,7 @@ export async function composeConstruction(job: ConstructionJob, yieldEveryMs: nu
     await new Promise<void>((resolve) => setImmediate(resolve));
     lastYield = Date.now();
   };
-  const reuse = new Map(job.reuse ?? []);
-  // Everything a composition reads besides its own parts, once per pass.
-  const context = digestOf({ day: now.toISOString().slice(0, 10), currency: input.currency, daysLeft: input.daysLeft, limits, targets, exclusions, priced, tiedUp });
-  for (const one of selectCandidates(job).selected) {
-    const under = digestOf([context, designKey(one.design), one.transfer?.id ?? '-', one.sector ?? '-', one.demand, one.need, one.supply, one.related.map((o) => o.id)]);
-    const stored = reuse.get(under);
+  for (const { one, under, stored } of plan) {
     if (stored) {
       out.push(stored);
       continue;
@@ -740,6 +740,36 @@ export async function composeConstruction(job: ConstructionJob, yieldEveryMs: nu
   out.push(...reverseArrangements({ ...ctx, designs, capability }));
   return rank(out, limits, targets);
 }
+
+/** One selected candidate, the digest of everything its composition reads, and the library's arrangement composed under it. */
+export interface CompositionStep {
+  one: Candidate;
+  under: string;
+  stored: ConstructedArrangement | undefined;
+}
+
+/** The candidates a pass composes, each with its composition digest and what the library already composed under it. Pure. */
+export function compositionPlan(job: ConstructionJob): CompositionStep[] {
+  const { priced, tiedUp, input, limits, targets, exclusions, now } = job;
+  const reuse = new Map(job.reuse ?? []);
+  // Everything a composition reads besides its own parts, once per pass.
+  const context = digestOf({ day: now.toISOString().slice(0, 10), currency: input.currency, daysLeft: input.daysLeft, limits, targets, exclusions, priced, tiedUp });
+  return selectCandidates(job).selected.map((one) => {
+    const under = digestOf([context, designKey(one.design), one.transfer?.id ?? '-', one.sector ?? '-', one.demand, one.need, one.supply, one.related.map((o) => o.id)]);
+    return { one, under, stored: reuse.get(under) };
+  });
+}
+
+/**
+ * Fresh compositions a pass may run on the server's own thread (yielding every
+ * `YIELD_EVERY_MS`) rather than on the pool. A pass whose candidates the
+ * library already holds composes only its few reverse designs — milliseconds —
+ * and sending it to a thread costs the thread's boot and a copy of every stored
+ * arrangement there and back. Production, 2026-11-15: "400 reused from the
+ * library", and the construction phase still took 246 s on a 2-vCPU machine
+ * whose niced pool thread was starved.
+ */
+export const INLINE_COMPOSITIONS = 24;
 
 /** How long an unchanged construction is reused, and how many distinct ones are held. */
 export const CONSTRUCTION_MEMO_MS = 30 * 60_000;
