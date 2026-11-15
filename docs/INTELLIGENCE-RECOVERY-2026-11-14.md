@@ -220,7 +220,7 @@ nothing in flight had stalled. The post-run `show` crashed on `LIMIT NaN`
 ### Production plan read after Deploy 1070 (Goals run 43654511789, 23:43→00:08Z)
 
 Total ≈ 25 min (baseline 26 min 41 s): construct 247 s, shared frontier (979 openings) 210 s, quant portfolio 189 s, scenario 34 s, reconstruction 346 s.
-**New critical finding P-ADMIT:** `estimated arrangements: 0 of 404 (404 cut, 0 in reserve)` — every stored arrangement is cut before the goal model on production; the plan compares 11 found openings + 0 constructed estimates and reaches 0.0% (pool reaches at most $265 of $10,000). Owner: Surge B (admission engineer, REPAIRING).
+**Critical finding P-ADMIT (REPAIRED on branch 09a1c27: unpriced arrangements enter on comparable published prices at MECHANISM tier, never certifiable; with no price anywhere they stay out with a reason; surgeBArrangementAdmission passes):** `estimated arrangements: 0 of 404 (404 cut, 0 in reserve)` — every stored arrangement is cut before the goal model on production; the plan compares 11 found openings + 0 constructed estimates and reaches 0.0% (pool reaches at most $265 of $10,000). Owner: Surge B (admission engineer, REPAIRING).
 **P-SPEED-2:** the planning read is still ~25 min on production; phases above. Owner: Surge B (performance engineer, REPAIRING); DB-bound portions handed to Surge A when measured.
 
 ### Received from Surge A (22:09Z scope adjustment)
