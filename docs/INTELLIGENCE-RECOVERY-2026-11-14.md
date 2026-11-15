@@ -198,6 +198,9 @@ simulated worlds never raise confidence.
 |---|---|---|---|---|
 | 21:12–21:28 | `opr_322701cdf14f411e9b6b` (Agents run 43641617727, mission `SURGE:B` set, 3,048 chars) | `auto/best-coding` (free switchboard) | RUN_DONE, 41 tool calls, 0 failed: 19 × `brain_operator_inventory` (populated the Surge B inventory from the mission), `brain_operator_decide` (opd_0943d48c45d6ea1d), `continue_idle`, `record_learning`; commissioned **no** duplicate engineering (every root cause was already REPAIRING by a stream) | `agents.yml operator-show` run 43643347745 |
 | 23:59–00:04 | opr_a1f757372a4d439b8564 (Agents run 43654508964) | auto/best-coding | mission refreshed (SURGE:B, part-2 release state); 29 tool calls: 13 inventory reads/upserts, 3 `brain_operator_decide` (incl. RESUME_GOAL deciding to re-attempt stalled commission imp_02321af4d6e9433782cd on a different path), goal plan read, record_learning. One inventory call failed `POOL_CHECKOUT_TIMEOUT` (Surge A runtime). | agents.yml operator-run log |
+| 01:12 | opr_f08f44610451473b8ee4 | auto/best-coding | RUN_FAILED: database pool 8/8 in use, 7 waiting (Surge A runtime) | operator-show 02:59Z |
+| 01:59–02:01 | opr_7842591db1544e3f9cc8 (self-scheduled) | auto/best-coding | 22 tool calls; engineering read, record_learning, allocation | operator-show |
+| 02:33–02:51 | opr_198160824b9a460a9966 (self-scheduled; my dispatch at 02:33 was refused "an operator run is already in progress") | auto/best-coding | 23 tool calls: goal plan read ×2, inventory, verify, history, 3× `brain_operator_decide`, continue_idle, **2× `brain_operator_commission`**, **`brain_operator_reattempt`**, `brain_operator_submit_fix`, record_learning, engineering ×3 — directing without a Claude prompt | operator-show (Agents run 43670283980) |
 
 Limits observed honestly: the run's own decision and lessons still centre on
 the $10K goal and infrastructure congestion (Surge A's area); it tracked the
