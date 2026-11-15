@@ -16,9 +16,10 @@ import {
   createOrchestration,
   getFragment,
   insertClaims,
+  listFragments,
   updateFragment,
 } from '../server/repos/research.ts';
-import { retryFragment } from '../server/services/research/reissue.ts';
+import { FragmentNotRetryable, retryFragment } from '../server/services/research/reissue.ts';
 import type { Layer, Project, RepairStrategy, ResearchFragment } from '../server/domain/types.ts';
 
 let project: Project;
@@ -91,11 +92,26 @@ describe('a retry nobody planned', () => {
 
     // The repaired attempt fails too; the next retry repeats none of its rungs.
     await block(second, orchestrationId);
-    const two = await retryFragment({ fragmentId: second.id, reason: 'again', actor: ADMIN, advance: false });
-    const third = (await getFragment(two.newFragmentId!))!;
-    // Attempt 3 is the last permitted one (maxRepairs 2): it is told so, bar unchanged.
-    expect(third.repairPlan!.remainingBudget).toBe(1);
-    expect(third.repairPlan!.strategies).toEqual(['MARK_UNRESOLVED']);
+    // Attempt 3 would be the last permitted one (maxRepairs 2), so the plan is
+    // MARK_UNRESOLVED — an instruction to stop. The packet runner refuses to mint
+    // that attempt, and so does this path: no attempt is spent on "do not attempt
+    // this", and the fragment stays BLOCKED for the gap pass, bar unchanged.
+    await expect(
+      retryFragment({ fragmentId: second.id, reason: 'again', actor: ADMIN, advance: false }),
+    ).rejects.toThrow(FragmentNotRetryable);
+    const after = await listFragments(orchestrationId);
+    expect(after.filter((entry) => entry.fragmentKey === second.fragmentKey)).toHaveLength(2);
+    expect((await getFragment(second.id))!.status).toBe('BLOCKED');
+  });
+
+  it('refuses to mint an attempt whose only plan is MARK_UNRESOLVED, as the runner does', async () => {
+    const { fragment, orchestrationId } = await blockedFragment(1);
+    // maxRepairs 1: the first retry is already the last permitted attempt.
+    await expect(
+      retryFragment({ fragmentId: fragment.id, reason: 'again', actor: ADMIN, advance: false }),
+    ).rejects.toThrow(/already been tried/);
+    expect(await listFragments(orchestrationId)).toHaveLength(1);
+    expect((await getFragment(fragment.id))!.status).toBe('BLOCKED');
   });
 
   it('never re-offers a rung an earlier attempt recorded', async () => {

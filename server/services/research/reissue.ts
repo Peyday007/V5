@@ -588,6 +588,25 @@ export async function retryFragment(input: {
    */
   const repairPlan =
     input.repairPlan ?? (await planForRetry(previous, orchestration));
+  /*
+   * A plan that is only MARK_UNRESOLVED is an instruction to stop, not a search.
+   *
+   * `buildRepairPlan` answers MARK_UNRESOLVED when every strategy this failure
+   * suggests has already been tried, or when the budget is down to its last
+   * attempt. The packet runner refuses to mint an attempt carrying that plan
+   * (`assessRepairs`: "another attempt would repeat a search") and leaves the
+   * fragment for the gap pass. This path minted one anyway, so an operator's or
+   * surface recovery's retry at the end of the ladder spent an attempt on a
+   * fragment whose assignment was "do not attempt this". Refused here in the
+   * runner's words, through the refusal every caller already handles. No bar
+   * moves: the fragment stays BLOCKED, as the runner would leave it.
+   */
+  if (repairPlan.strategies.length > 0 && repairPlan.strategies.every((strategy) => strategy === 'MARK_UNRESOLVED')) {
+    throw new FragmentNotRetryable(
+      `Every search strategy ${previous.fragmentKey}'s failure suggests has already been tried, ` +
+        'so another attempt would repeat a search. The honest outcome now is unresolved, recorded as such.',
+    );
+  }
   const outcome = await runIdempotent<{ fragmentId: string }>(
     {
       namespace: RETRY_NAMESPACE,
