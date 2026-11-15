@@ -188,6 +188,17 @@ async function detectAll(now: Date): Promise<{ weaknesses: Weakness[]; originate
   return { ...cached(), errors: origination.errors };
 }
 
+/**
+ * Whether an attempt's decision says its method was tried and did not work (§87, invariant 16):
+ * kept without effect, or reverted. HELD waited on a person or a Factory stop, REJECTED was
+ * refused on evidence and COMBINED folded into another candidate — none of those ran the method to
+ * an outcome, so none is evidence that the method was inadequate. The one predicate every
+ * method-inadequacy judgment in this loop reads.
+ */
+export function isFailedMethod(decision: string | null | undefined): boolean {
+  return decision === 'KEPT_NO_EFFECT' || decision === 'REVERTED';
+}
+
 /** The candidates of one weakness family (`KEY`, `KEY#2`, …), newest attempt last. */
 async function family(baseKey: string): Promise<ImprovementCandidate[]> {
   return (await listCandidates()).filter((c) => c.weaknessKey === baseKey || c.weaknessKey.startsWith(`${baseKey}#`)).sort((a, b) => a.attempt - b.attempt);
@@ -223,7 +234,7 @@ async function register(weakness: Weakness, now: Date, report: ImprovementTickRe
   // is evidence that the method was inadequate, not that it needs running again. The judgment is
   // made from the earlier attempts' own recorded decisions and stored on the candidate, so the
   // next objective asks for a different method and names what was tried.
-  const inadequate = members.filter((m) => m.decision === 'KEPT_NO_EFFECT' || m.decision === 'REVERTED');
+  const inadequate = members.filter((m) => isFailedMethod(m.decision));
   let methodInadequacy: { judgment: string; failedAttempts: number[] } | null = null;
   // AUTO-20-1: work Brain originated carries the judgment that made an observation into work, and an
   // observation that says an earlier repair did not move the objective is a method judged inadequate.
@@ -664,13 +675,26 @@ export async function registerNextAttempt(
   if (!latest.decision) return { ok: false, reason: 'the latest attempt is not decided; it must be closed before the next one starts' };
   if (latest.attempt >= MAX_ATTEMPTS) return { ok: false, reason: `attempt ${latest.attempt} of ${MAX_ATTEMPTS} was the last: a failing improvement cannot loop` };
   const attempt = latest.attempt + 1;
-  const failed = members.filter((m) => m.decision && m.decision !== 'KEPT' && m.decision !== 'COMBINED');
-  const methodInadequacy = {
-    judgment:
-      `Attempt(s) ${failed.map((m) => m.attempt).join(', ')} ended ${failed.map((m) => m.decision).join(', ')}; the operator started this attempt: ` +
-      `${input.reason.slice(0, 400)} Change the method (the approach, the owner of the behaviour, or the measure), do not re-run it.`,
-    failedAttempts: failed.map((m) => m.attempt),
+  // Only an attempt whose method ran to an outcome and did not work is named as a failed method; an
+  // attempt HELD on a person or a Factory stop is stated as what it was, not as an inadequate method.
+  const failed = members.filter((m) => isFailedMethod(m.decision));
+  const reattempt = {
+    reason: input.reason.slice(0, 400),
+    priorDecisions: members.filter((m) => m.decision).map((m) => ({ attempt: m.attempt, decision: m.decision })),
   };
+  const methodInadequacy =
+    failed.length > 0
+      ? {
+          judgment:
+            `Attempt(s) ${failed.map((m) => m.attempt).join(', ')} ended ${failed.map((m) => m.decision).join(', ')}; the operator started this attempt: ` +
+            `${reattempt.reason} Change the method (the approach, the owner of the behaviour, or the measure), do not re-run it.`,
+          failedAttempts: failed.map((m) => m.attempt),
+        }
+      : null;
+  // The caller may pass an earlier attempt's whole evidence (the director does), which can carry
+  // that attempt's own method judgment. A judgment belongs to the attempt it was made for: this
+  // attempt's is the one just made from the family's decisions, or none, never an inherited one.
+  const { methodInadequacy: _inherited, ...carried } = input.evidence;
   const { candidate, created } = await upsertCandidate({
     weaknessKey: `${base}#${attempt}`,
     kind: latest.kind,
@@ -683,12 +707,16 @@ export async function registerNextAttempt(
     denominator: latest.denominator,
     scope: latest.scope,
     severity: latest.severity,
-    evidence: { ...input.evidence, methodInadequacy, observedAt: new Date().toISOString() },
+    evidence: { ...carried, reattempt, ...(methodInadequacy ? { methodInadequacy } : {}), observedAt: new Date().toISOString() },
     attempt,
     parentId: latest.id,
   });
   if (!created) return { ok: false, reason: `${candidate.weaknessKey} was registered by another caller first` };
-  await recordImprovementEvent({ candidateId: candidate.id, kind: 'WEAKNESS_DETECTED', detail: { key: candidate.weaknessKey, attempt, parentId: latest.id, methodInadequacy, by: 'operator re-attempt' } });
+  await recordImprovementEvent({
+    candidateId: candidate.id,
+    kind: 'WEAKNESS_DETECTED',
+    detail: { key: candidate.weaknessKey, attempt, parentId: latest.id, reattempt, ...(methodInadequacy ? { methodInadequacy } : {}), by: 'operator re-attempt' },
+  });
   return { ok: true, candidate };
 }
 
@@ -847,7 +875,7 @@ async function valueNextStep(
     // An attempt that was a hand-off to a non-software owner says nothing about how a Factory change or
     // research would fare; its failure is recorded as the route set aside (recordRouteSetAside).
     failedAttempts: earlier
-      .filter((m) => (m.decision === 'KEPT_NO_EFFECT' || m.decision === 'REVERTED') && !m.deliveredRef?.startsWith(OWNER_HANDOFF_PREFIX))
+      .filter((m) => isFailedMethod(m.decision) && !m.deliveredRef?.startsWith(OWNER_HANDOFF_PREFIX))
       .map((m) => ({ attempt: m.attempt, researched: Boolean(m.researchGoalId) })),
     history: await readRouteHistory(),
   });
@@ -1019,7 +1047,7 @@ export async function failedHandOffs(
 ): Promise<ImprovementCandidate[]> {
   const ref = ownerHandoffRef(route);
   return (await family(candidate.weaknessKey.split('#')[0]!)).filter(
-    (m) => m.attempt < candidate.attempt && m.deliveredRef === ref && (m.decision === 'KEPT_NO_EFFECT' || m.decision === 'REVERTED'),
+    (m) => m.attempt < candidate.attempt && m.deliveredRef === ref && isFailedMethod(m.decision),
   );
 }
 
@@ -1264,6 +1292,56 @@ async function recordGapLoops(rankedIds: readonly string[], report: ImprovementT
 /* The tick                                                                   */
 /* ------------------------------------------------------------------------- */
 
+/**
+ * Correct a stored method-inadequacy judgment that names an attempt its own family did not decide as a
+ * failed method (an operator re-attempt once counted HELD as failed). The current evidence is made
+ * truthful — only the attempts decided KEPT_NO_EFFECT or REVERTED stay named, and a judgment left with
+ * none moves to `reattempt` — while the original value is kept in an append-only event. Idempotent:
+ * a corrected row names no such attempt, so a later pass changes nothing.
+ */
+export async function correctMisjudgedMethods(): Promise<string[]> {
+  const all = await listCandidates();
+  const corrected: string[] = [];
+  for (const candidate of all) {
+    const judged = candidate.evidence['methodInadequacy'] as { judgment?: unknown; failedAttempts?: unknown } | undefined;
+    if (!judged || typeof judged !== 'object' || !Array.isArray(judged.failedAttempts) || judged.failedAttempts.length === 0) continue;
+    const base = candidate.weaknessKey.split('#')[0]!;
+    const members = all.filter((m) => m.weaknessKey === base || m.weaknessKey.startsWith(`${base}#`));
+    const named = judged.failedAttempts.map(Number);
+    const kept = named.filter((n) => isFailedMethod(members.find((m) => m.attempt === n)?.decision));
+    if (kept.length === named.length) continue;
+    const dropped = named.filter((n) => !kept.includes(n));
+    const evidence: Record<string, unknown> = { ...candidate.evidence };
+    const priorDecisions = members
+      .filter((m) => m.attempt < candidate.attempt && m.decision)
+      .map((m) => ({ attempt: m.attempt, decision: m.decision }));
+    const prior = (evidence['reattempt'] as Record<string, unknown> | undefined) ?? {};
+    evidence['reattempt'] = { ...prior, priorDecisions, judgment: typeof judged.judgment === 'string' ? judged.judgment : null };
+    const origination = evidence['origination'] as { methodInadequate?: unknown } | undefined;
+    if (kept.length > 0) {
+      evidence['methodInadequacy'] = { ...judged, failedAttempts: kept };
+    } else if (origination && typeof origination.methodInadequate === 'string' && origination.methodInadequate.trim()) {
+      evidence['methodInadequacy'] = { judgment: origination.methodInadequate, failedAttempts: [] };
+    } else {
+      delete evidence['methodInadequacy'];
+    }
+    await patchCandidate(candidate.id, { evidence });
+    await recordImprovementEvent({
+      candidateId: candidate.id,
+      kind: 'METHOD_JUDGMENT_CORRECTED',
+      detail: {
+        key: candidate.weaknessKey,
+        original: judged,
+        dropped: dropped.map((n) => ({ attempt: n, decision: members.find((m) => m.attempt === n)?.decision ?? null })),
+        kept,
+        reason: 'only an attempt decided KEPT_NO_EFFECT or REVERTED is a failed method',
+      },
+    });
+    corrected.push(candidate.weaknessKey);
+  }
+  return corrected;
+}
+
 export async function improvementTick(now = new Date()): Promise<ImprovementTickReport> {
   const report: ImprovementTickReport = { ran: false, reason: '', detected: 0, opened: [], advanced: [], decided: [], alerts: [], errors: [] };
   // Whether the free lane may take this loop's research: evaluated on every pass, switch on or off,
@@ -1273,6 +1351,15 @@ export async function improvementTick(now = new Date()): Promise<ImprovementTick
     report.activation = (await evaluateActivation(now, 'TICK')).state;
   } catch (error) {
     report.errors.push(`activation: ${String((error as Error).message ?? error).slice(0, 200)}`);
+  }
+  // A stored judgment that misnames a HELD attempt as a failed method is a false record, not new
+  // work: it is corrected on every pass, switch on or off, so the improvement order being off never
+  // leaves a mislabel standing in the rows (AUTO-20-1 repair F3). It originates nothing, opens no
+  // candidate and spends nothing; the correction keeps the original value in an append-only event.
+  try {
+    for (const key of await correctMisjudgedMethods()) report.advanced.push(`${key}: method judgment corrected`);
+  } catch (error) {
+    report.errors.push(`method judgments: ${String((error as Error).message ?? error).slice(0, 200)}`);
   }
   const state = await improvementSwitch();
   if (!state.enabled) {
