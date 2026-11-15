@@ -1660,6 +1660,7 @@ export function claimAsks(
   workers: readonly { model: string }[],
   index: number,
   spillover = false,
+  adopted: readonly number[] = [],
 ): FreeLaneWorkType[][] {
   const asks: FreeLaneWorkType[][] = [];
   for (const group of CLAIM_ORDER) {
@@ -1667,7 +1668,7 @@ export function claimAsks(
       if (!spillover && workers.length >= 2) {
         // RESEARCH_AUDIT goes to either worker by its payload role; the rest are fixed.
         const owner = type === 'RESEARCH_VERIFY' ? 1 : type === 'RESEARCH_AUDIT' ? index : 0;
-        if (owner !== index) continue;
+        if (owner !== index && !adopted.includes(owner)) continue;
       }
       asks.push([type]);
     }
@@ -1925,14 +1926,59 @@ export function causeOfReason(reason: string | null): RouteFailureCause | null {
   return known ?? classifyRouteFailure(text);
 }
 
-/** Consecutive provider failures after which a route stops being offered items. */
-export const ROUTE_FAILURE_LIMIT = 3;
-const ROUTE_REPROBE_MS = 5 * 60_000;
-const routeHealth = new Map<string, { failures: number; cause: RouteFailureCause; nextProbeAt: number }>();
+/**
+ * Failures of a named route cause (provider availability, credentials, task
+ * routing, broken GPU) after which a route stops being offered items: one.
+ *
+ * Production, 2026-11-15 20:03–21:51Z (CAP-16-3 probe): 2 accepted of 187 lane
+ * outcomes, 98% provider failures. The hold engaged only after three
+ * consecutive failures, and every concurrent slot of the model kept claiming
+ * items onto the refusing route meanwhile, so one outage became dozens of
+ * "model call failed" rows and items re-claimed by the same route after their
+ * cooldown. A named cause now holds the route for every slot at once.
+ */
+export const ROUTE_FAILURE_LIMIT = 1;
+/** An error nothing classifies is not yet evidence the route is down: it holds after three. */
+export const UNCLASSIFIED_FAILURE_LIMIT = 3;
+/**
+ * The re-probe wait after a failure recorded without a probe already offered;
+ * each failed probe doubles it. `takeOne` offers the first probe at once
+ * (`probeNow`): an intermittent 503 on a provider that answers most calls
+ * (production 2026-11-15 07:46Z) must not idle the model's slots for a clock,
+ * and a single probe tells that apart from an outage at the cost of one call
+ * while every other slot of the model waits for its answer.
+ */
+export const ROUTE_REPROBE_BASE_MS = 30_000;
+/** The longest a held route waits between probes. */
+export const ROUTE_REPROBE_MAX_MS = 30 * 60_000;
+/** A probe that never reported (its slot died) stops blocking the next one after this long. */
+export const ROUTE_PROBE_TIMEOUT_MS = 3 * 60_000;
+
+interface RouteState {
+  /** Failures counted towards engaging the hold. */
+  failures: number;
+  cause: RouteFailureCause;
+  /** When the next probe item may be admitted. */
+  nextProbeAt: number;
+  /** Failed probes since the hold engaged: the backoff exponent. */
+  level: number;
+  /** A probe item is on the route and has not reported. */
+  probing: boolean;
+}
+const routeHealth = new Map<string, RouteState>();
 
 /** Tests: forget every route's health. */
 export function resetRouteHealth(): void {
   routeHealth.clear();
+}
+
+/** The wait before the next probe after `level` failed probes: exponential, capped. Pure. */
+export function routeReprobeDelay(level: number): number {
+  return Math.min(ROUTE_REPROBE_MAX_MS, ROUTE_REPROBE_BASE_MS * 2 ** Math.max(0, Math.min(level, 20)));
+}
+
+function engaged(state: RouteState): boolean {
+  return state.failures >= (state.cause === 'unclassified' ? UNCLASSIFIED_FAILURE_LIMIT : ROUTE_FAILURE_LIMIT);
 }
 
 /**
@@ -1944,23 +1990,45 @@ export function resetRouteHealth(): void {
  */
 export function routeHold(model: string, now = Date.now()): string | null {
   const state = routeHealth.get(model);
-  if (!state || state.failures < ROUTE_FAILURE_LIMIT) return null;
+  if (!state || !engaged(state)) return null;
   if (now >= state.nextProbeAt) return null;
   return `model route failing (${state.cause}); another model takes the work until it is re-probed`;
 }
 
 /**
- * An item was admitted onto a held route that was due its re-probe: that item is
- * the probe, and the next is held until it answers. A healthy route is untouched.
+ * An item is being admitted onto a held route that was due its re-probe: that
+ * item is the probe, and every other slot of the model is held until it
+ * answers (or until `ROUTE_PROBE_TIMEOUT_MS`, should its slot die). A healthy
+ * or not-yet-due route is untouched. Synchronous, so two slots cannot both
+ * take the probe. Returns an undo for a probe a later filter declined, so the
+ * slot is not spent on an item that never ran; null when nothing was taken.
  */
-export function takeRouteProbe(model: string, now = Date.now()): void {
+export function takeRouteProbe(model: string, now = Date.now()): (() => void) | null {
   const state = routeHealth.get(model);
-  if (!state || state.failures < ROUTE_FAILURE_LIMIT) return;
-  if (now >= state.nextProbeAt) state.nextProbeAt = now + ROUTE_REPROBE_MS;
+  if (!state || !engaged(state) || now < state.nextProbeAt) return null;
+  const before = { nextProbeAt: state.nextProbeAt, probing: state.probing };
+  state.nextProbeAt = now + ROUTE_PROBE_TIMEOUT_MS;
+  state.probing = true;
+  return () => {
+    if (routeHealth.get(model) !== state) return;
+    state.nextProbeAt = before.nextProbeAt;
+    state.probing = before.probing;
+  };
 }
 
-/** A route that answered is healthy again; a route that did not is counted, with its cause. */
-export function recordRouteOutcome(model: string, outcome: { ok: boolean; why?: string }, now = Date.now()): void {
+/**
+ * A route that answered is healthy again, its hold and backoff gone. A route
+ * that did not is counted, with its cause: a named cause holds it at once; a
+ * failed probe doubles the wait before the next one. A failure from an item
+ * that was already on the route when the hold engaged leaves the hold as it is. Brain's own database being busy never holds
+ * a model route.
+ */
+export function recordRouteOutcome(
+  model: string,
+  outcome: { ok: boolean; why?: string },
+  now = Date.now(),
+  options: { probeNow?: boolean } = {},
+): void {
   if (outcome.ok) {
     routeHealth.delete(model);
     return;
@@ -1970,11 +2038,50 @@ export function recordRouteOutcome(model: string, outcome: { ok: boolean; why?: 
   const cause = causeOfReason(why) ?? classifyRouteFailure(why);
   // Brain's own database being busy says nothing about the model route.
   if (cause === 'database') return;
-  const state = routeHealth.get(model) ?? { failures: 0, cause, nextProbeAt: now + ROUTE_REPROBE_MS };
-  state.failures += 1;
+  const state = routeHealth.get(model);
+  if (!state) {
+    const nextProbeAt = options.probeNow ? now : now + routeReprobeDelay(0);
+    routeHealth.set(model, { failures: 1, cause, nextProbeAt, level: 0, probing: false });
+    return;
+  }
+  const wasEngaged = engaged(state);
   state.cause = cause;
-  if (state.failures === ROUTE_FAILURE_LIMIT) state.nextProbeAt = now + ROUTE_REPROBE_MS;
-  routeHealth.set(model, state);
+  if (!wasEngaged) {
+    state.failures += 1;
+    state.nextProbeAt = options.probeNow ? now : now + routeReprobeDelay(0);
+    return;
+  }
+  if (state.probing) {
+    // The probe failed: back off further before the next one.
+    state.probing = false;
+    state.level += 1;
+    state.nextProbeAt = now + routeReprobeDelay(state.level);
+    return;
+  }
+  // A straggler admitted before the hold engaged: the hold already stands, unchanged.
+}
+
+/** Whether `model` has items handed back after a route failure that are still cooling for it. */
+function hasRouteCooled(model: string, now = Date.now()): boolean {
+  for (const key of routeCooled) {
+    if (key.startsWith(`${model}\n`) && (cooldown.get(key) ?? 0) > now) return true;
+  }
+  return false;
+}
+
+/**
+ * The workers whose roles this slot also takes because their route is failing:
+ * a held route, or one that handed items back after a route failure. Their
+ * items go to a healthy model before the failing route can take them again.
+ */
+export function adoptedRoles(workers: readonly { model: string }[], index: number, now = Date.now()): number[] {
+  const own = workers[index]?.model;
+  const adopted: number[] = [];
+  workers.forEach((w, i) => {
+    if (i === index || w.model === own) return;
+    if (routeHold(w.model, now) !== null || hasRouteCooled(w.model, now)) adopted.push(i);
+  });
+  return adopted;
 }
 
 export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork | null; ok: boolean; ms: number }> {
@@ -1988,20 +2095,42 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
   const unfit = await unfitNow(workers.map((w) => w.model), Date.now(), config.fallbackModel ?? null);
   const scopes = projectIds.map((projectId) => ({ projectId, scopes: [...CONNECTOR_SCOPES] }));
   const admit = async (item: WorkItemRow) => {
-    if (!input.spillover && workerFor(workers, item) !== index) {
-      return { ok: false, reason: 'the other free worker takes this role' };
+    if (!input.spillover) {
+      const roleOwner = workerFor(workers, item);
+      const ownerModel = workers[roleOwner]?.model;
+      // The role's own model is refusing calls, or handed this very item back after
+      // a route failure: a healthy model takes it before the failing route can again.
+      const ownerFailing =
+        ownerModel !== undefined &&
+        ownerModel !== worker.model &&
+        (routeHold(ownerModel) !== null || routeCooled.has(cooldownKey(ownerModel, item.id)));
+      if (roleOwner !== index && !ownerFailing) {
+        return { ok: false, reason: 'the other free worker takes this role' };
+      }
     }
     if ((cooldown.get(cooldownKey(worker.model, item.id)) ?? 0) > Date.now()) return { ok: false, reason: 'cooling down after a provider failure' };
     const held = routeHold(worker.model);
     if (held) return { ok: false, reason: held };
     if (unfit.has(`${worker.model}|${item.work_type}`)) return { ok: false, reason: 'this model’s answers for this kind of work are rejected; another model takes it' };
-    if (!(await freeLaneAdmits(item))) return { ok: false, reason: 'not free-lane work' };
-    const owner = await owningBin(item);
-    if (owner) owners.set(item.id, owner.binId);
-    session = sessionFor(worker, item);
-    const admitted = await auditAdmission({ workerId: worker.workerId, routineId: null, accountId: null, sessionRef: session })(item);
+    // A held route due its re-probe takes this item as the probe now, before any
+    // await, so no other slot of the model can take a second one meanwhile.
+    const undoProbe = takeRouteProbe(worker.model);
+    let admitted: Awaited<ReturnType<ReturnType<typeof auditAdmission>>>;
+    try {
+      if (!(await freeLaneAdmits(item))) {
+        admitted = { ok: false, reason: 'not free-lane work' };
+      } else {
+        const owner = await owningBin(item);
+        if (owner) owners.set(item.id, owner.binId);
+        session = sessionFor(worker, item);
+        admitted = await auditAdmission({ workerId: worker.workerId, routineId: null, accountId: null, sessionRef: session })(item);
+      }
+    } catch (error) {
+      undoProbe?.();
+      throw error;
+    }
     // Only an item that passed every filter spends a held route's re-probe slot.
-    if (admitted.ok) takeRouteProbe(worker.model);
+    if (!admitted.ok) undoProbe?.();
     return admitted;
   };
   const ask = async (types: FreeLaneWorkType[], orchestrationId: string | null): Promise<ClaimedWork | undefined> => {
@@ -2038,7 +2167,8 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
   // the order it gives before the ordinary priority scan, so the decision moves
   // the free lane's compute and not only bins (RES-07, review F1).
   const shifts = await researchShiftsInForce();
-  for (const types of asksByPriority(claimAsks(workers, index, input.spillover), waiting)) {
+  const adopted = input.spillover ? [] : adoptedRoles(workers, index);
+  for (const types of asksByPriority(claimAsks(workers, index, input.spillover, adopted), waiting)) {
     if (shifts) {
       for (const id of await allocatedPackets(projectIds, types, shifts)) {
         one = await ask(types, id);
@@ -2132,7 +2262,7 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
       // Lease already gone: the queue's expiry returns it.
     }
   }
-  recordRouteOutcome(worker.model, { ok, why: ctx.why });
+  recordRouteOutcome(worker.model, { ok, why: ctx.why }, Date.now(), { probeNow: true });
   const ms = Date.now() - started;
   const used = itemMeters.close(meterKey) ?? usage;
   await recordBinEvent({
