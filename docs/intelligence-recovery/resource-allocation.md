@@ -44,3 +44,12 @@ Why that is enough: none of the backlog blocks Surge B or production. The one re
 - **RunPod:** one RTX 2000 Ada running Qwen3-4B at $0.19/h. Its balance needs a top-up before about 11-20 (owner).
 - **Model rate limits:** the free switchboard returned HTTP 429 on 2 of 4 model-lane calls (plan read at 03:53Z).
 - **Deploy infrastructure:** one Deploy at a time; a newer merge supersedes the one in flight. About 30 to 45 min per release.
+
+## Corrections
+
+- **08:10Z: free lane (part 8, commit 95abb93, waiting for the part-7 Deploy to finish).** Three root causes:
+  - `freeLane/worker.ts`: after a 503 from the provider, an item stayed blocked on brain-a for 5 to 60 minutes even once brain-a was answering again. So 8 of brain-a's 12 slots skipped work that was waiting.
+  - `stageCapacity.ts`: a route counted as "failing" if its newest row in a 6-hour window was a failure. So 100 failures from hours ago held growth back.
+  - Any failing route held growth on every model, so RunPod was held because of brain-a's failures.
+
+  Fix: an item blocked because its route was down is freed as soon as that route answers again. A route now counts as failing only if it failed within the last 30 minutes, under 20% of its items were accepted, and it has not answered since. Only the failing route is held back. No limit was raised, and the existing safety behaviour still halves a route's concurrency when it errors or slows.
