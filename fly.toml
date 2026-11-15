@@ -70,7 +70,27 @@ primary_region = "iad"        # pick the region nearest your Supabase project
     path = "/healthz"
 
 [[vm]]
-  size = "shared-cpu-2x"
+  size = "performance-2x"
+  # Dedicated vCPUs since 2026-11-15, because a shared vCPU is throttled to its
+  # baseline share once its burst balance is spent, and Brain's steady load is
+  # above that baseline. The evidence is the ratio below, which is the same on
+  # one shared vCPU and on two: a 50 000-evaluation run measured 959 ms ->
+  # 15 203 ms on shared-cpu-1x (Deploy 41226725636) and 1 004 ms -> 15 281 ms on
+  # shared-cpu-2x (Deploy 43641501207), before and after the release's
+  # restart — about 16x both times, which a second core would have halved if
+  # the cause were the event loop and the worker sharing one. Adding the vCPU
+  # did not help; the scenario runs in its own worker thread, so only a machine
+  # running below its share of the CPU slows it that much. The pattern is the
+  # same every release: the fresh machine's first process is at NORMAL with no
+  # stall (proc_9594, 7a8b565: p99 55 ms), and the restarted process on the
+  # same machine, with the balance the first pass spent, is SHEDDING within
+  # 40 s and stays there (proc_59cf, 7a8b565: stalls to 41 s for half an hour,
+  # the engine at 37.7 s, Fly's own init agent unable to reach its API).
+  # `cpu` in the Connection report (machine steal time) now reads it directly.
+  # The dedicated class costs more than the shared one; read the difference
+  # from Fly's pricing for performance-2x with 4 GB rather than from here.
+  #
+  # Before 2026-11-15 (shared-cpu-2x):
   # Two shared vCPUs since 2026-10-31. With one, the scenario worker thread and
   # the event loop share a single core: a 50 000-evaluation run measured 959 ms
   # before a restart and 15 203 ms after it (Deploy 41226725636), and event-loop

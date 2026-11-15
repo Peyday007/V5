@@ -35,6 +35,7 @@ import * as diagnosticsChannel from 'node:diagnostics_channel';
 import { Session as InspectorSession } from 'node:inspector';
 import { monitorEventLoopDelay, type IntervalHistogram } from 'node:perf_hooks';
 import { getHeapStatistics } from 'node:v8';
+import { readFileSync } from 'node:fs';
 
 /* ------------------------------------------------------------------------- */
 /* Classification                                                            */
@@ -1072,6 +1073,87 @@ export function memoryReading(now = Date.now()): MemoryReading | null {
       externalMB: mb(usage.external),
       peakRssMB: mb(peakRss),
       peakRssAt,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/* ------------------------------------------------------------------------- */
+/* CPU, and the time the machine was not given                               */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * How much CPU this process used, and how much the machine's vCPUs were
+ * stolen, since the last reading (2026-11-15).
+ *
+ * A shared-CPU Fly machine runs at a baseline share of each vCPU and bursts
+ * above it only while it holds a balance; with the balance spent it is
+ * throttled, and inside the guest that shows as steal time. Every reading
+ * Brain had — event-loop delay, stall labels, profiles — measures wall time,
+ * so a throttled machine and a busy process looked identical. `/proc/stat`'s
+ * steal column is the difference, read rather than inferred. Null figures are
+ * "could not be read" (not Linux), never zero.
+ */
+export interface CpuReading {
+  windowMs: number;
+  /** Process CPU (user + system, all threads) as a share of one core over the window. */
+  processPctOfCore: number;
+  /** Share of all vCPU time in the window that was steal; null when unreadable. */
+  stealPct: number | null;
+  /** Share that was idle; null when unreadable. */
+  idlePct: number | null;
+  vcpus: number | null;
+}
+
+let cpuLastAt = Date.now();
+let cpuLastUsage = process.cpuUsage();
+let cpuLastStat: number[] | null = readProcStat();
+
+function readProcStat(): number[] | null {
+  try {
+    const line = readFileSync('/proc/stat', 'utf8').split('\n')[0] ?? '';
+    if (!line.startsWith('cpu ')) return null;
+    return line.trim().split(/\s+/).slice(1).map(Number);
+  } catch {
+    return null;
+  }
+}
+
+function vcpuCount(): number | null {
+  try {
+    return readFileSync('/proc/stat', 'utf8').split('\n').filter((l) => /^cpu\d+ /.test(l)).length || null;
+  } catch {
+    return null;
+  }
+}
+
+export function cpuReading(now = Date.now()): CpuReading | null {
+  try {
+    const usage = process.cpuUsage();
+    const stat = readProcStat();
+    const windowMs = Math.max(1, now - cpuLastAt);
+    const usedUs = usage.user - cpuLastUsage.user + (usage.system - cpuLastUsage.system);
+    let stealPct: number | null = null;
+    let idlePct: number | null = null;
+    if (stat && cpuLastStat && stat.length >= 8 && cpuLastStat.length >= 8) {
+      const delta = stat.map((v, i) => v - (cpuLastStat![i] ?? 0));
+      // user nice system idle iowait irq softirq steal [guest guest_nice — already inside user]
+      const total = delta.slice(0, 8).reduce((a, b) => a + b, 0);
+      if (total > 0) {
+        stealPct = Math.round((1000 * (delta[7] ?? 0)) / total) / 10;
+        idlePct = Math.round((1000 * ((delta[3] ?? 0) + (delta[4] ?? 0))) / total) / 10;
+      }
+    }
+    cpuLastAt = now;
+    cpuLastUsage = usage;
+    cpuLastStat = stat;
+    return {
+      windowMs,
+      processPctOfCore: Math.round((1000 * (usedUs / 1000)) / windowMs) / 10,
+      stealPct,
+      idlePct,
+      vcpus: vcpuCount(),
     };
   } catch {
     return null;
