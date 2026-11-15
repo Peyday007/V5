@@ -21,6 +21,7 @@ import { newId, nowIso } from '../server/repos/util.ts';
 import { createRun } from '../server/repos/runs.ts';
 import { createFragments, createOrchestration } from '../server/repos/research.ts';
 import { createUser } from '../server/repos/identity.ts';
+import { createGoal } from '../server/repos/russellAuthority.ts';
 import { listEventsByEntity } from '../server/repos/events.ts';
 import {
   answerHumanRequest,
@@ -186,8 +187,8 @@ describe('reopenAnswered and a mission that left Needs You', () => {
  * to hand every unsettled resume back as an unresolved answer to re-ask,
  * including an answer whose mission had already left NEEDS_HUMAN, so the
  * operator withdrew 43 such cards by hand in a week. The pass now decides that
- * answer itself — withdrawn with the mission's state named, reported apart from
- * the unresolved answers, and never put back in front of the person.
+ * answer itself, before any resume — withdrawn with the mission's state named,
+ * reported as a moot withdrawal, and never put back in front of the person.
  */
 describe('the answered-requests pass and a mission that left Needs You', () => {
   it('A01: withdraws an answer whose mission was cancelled, reports it as moot, and never reopens it', async () => {
@@ -202,7 +203,8 @@ describe('the answered-requests pass and a mission that left Needs You', () => {
     expect(after.state).toBe('WITHDRAWN');
     expect(after.whyNotRussell).toMatch(/CANCELLED/);
     expect((await listOpenRequests(fixture.project.id)).map((r) => r.id)).not.toContain(request.id);
-    expect(report.unresolvedAnswers.map((entry) => entry.requestId)).not.toContain(request.id);
+    // Not carried out (so still an unresolved answer of this cycle), and finished as moot rather than re-asked.
+    expect(report.unresolvedAnswers.map((entry) => entry.requestId)).toContain(request.id);
     expect(report.withdrawnMootAnswers).toContainEqual({
       requestId: request.id,
       missionState: 'CANCELLED',
@@ -220,6 +222,50 @@ describe('the answered-requests pass and a mission that left Needs You', () => {
         (event) => event.eventType === 'RUSSELL_ROUTINE_DECISION',
       ),
     ).toHaveLength(1);
+  });
+
+  it('A01: withdraws an answer deferred for a research slot once its mission is running again', async () => {
+    /*
+     * The loop the operator kept breaking: an answer that needs a research
+     * slot is deferred while none is free, and that used to be a wait for
+     * ever once the mission had left NEEDS_HUMAN, because no slot can make an
+     * answer guarded on NEEDS_HUMAN apply. One live hold fills the goal's only
+     * slot; the mission's own hold has lapsed, so its resume is refused a slot.
+     */
+    const missionId = await parkedMission();
+    const request = await answeredRequest(missionId, NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key);
+    const goal = await createGoal({
+      projectId: fixture.project.id, ownerUserId: userId, createdByUserId: userId, name: 'One slot',
+      allowedWork: ['RESEARCH'], maxMissions: 5, maxFragments: 20, maxConcurrent: 1, maxProbes: 5,
+    });
+    const past = new Date(Date.now() - 3_600_000).toISOString();
+    const future = new Date(Date.now() + 3_600_000).toISOString();
+    const lapsed = newId('rsv');
+    for (const [id, expires] of [[newId('rsv'), future], [lapsed, past]] as const) {
+      await getDb().run(
+        `INSERT INTO russell_budget_reservations (id, goal_id, kind, amount, idempotency_key, state, expires_at, created_at)
+         VALUES (?, ?, 'MISSION', 1, ?, 'HELD', ?, ?)`,
+        [id, goal.id, `moot-slot-${id}`, expires, nowIso()],
+      );
+    }
+    await getDb().run(`UPDATE russell_missions SET reservation_id = ? WHERE id = ?`, [lapsed, missionId]);
+    expect(
+      // Running again on its own (a terminal move would release the hold, and the resume would not defer).
+      await transitionMission({ missionId, from: 'NEEDS_HUMAN', to: 'RUNNING' }),
+    ).toBe(true);
+    // The resume alone defers it: that is the state the pass used to keep for ever.
+    expect((await resumeAnsweredRequest(request)).deferred).toBe(true);
+
+    const report = await tick('moot-deferred');
+    const after = (await getHumanRequest(request.id))!;
+    expect(after.state).toBe('WITHDRAWN');
+    expect(after.whyNotRussell).toMatch(/RUNNING/);
+    expect(report.withdrawnMootAnswers.map((entry) => entry.requestId)).toContain(request.id);
+    expect((await listOpenRequests(fixture.project.id)).map((r) => r.id)).not.toContain(request.id);
+
+    const again = await tick('moot-deferred');
+    expect((await getHumanRequest(request.id))!.state).toBe('WITHDRAWN');
+    expect(again.unresolvedAnswers.map((entry) => entry.requestId)).not.toContain(request.id);
   });
 
   it('A03: reopens an answer whose mission still waits at NEEDS_HUMAN and failed for another reason, as before', async () => {

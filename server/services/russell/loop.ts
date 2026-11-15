@@ -146,7 +146,6 @@ import {
   parkStoppedMissions,
   unparkResolvedMissions,
   reaskRefusedPlans,
-  NEEDS_HUMAN_CHOICES,
   reopenAnswered,
   resumeAnsweredRequest,
 } from './needsHuman.ts';
@@ -461,8 +460,9 @@ export interface TickReport {
   unresolvedAnswers: { requestId: string; reason: string }[];
   /**
    * Answers withdrawn because their mission had already left NEEDS_HUMAN, so no
-   * answer could apply and nothing was left for a person to decide. Kept apart
-   * from `unresolvedAnswers`: these are finished, not a backlog.
+   * answer could apply and nothing was left for a person to decide. Each is
+   * also in `unresolvedAnswers` (it was not carried out); this says it is
+   * finished rather than re-asked.
    */
   withdrawnMootAnswers: { requestId: string; missionState: string | null; reason: string }[];
   /** Research parks Brain answered under the standing grant (§80). */
@@ -694,24 +694,23 @@ export interface TickReport {
 const MISSION_LEFT_NEEDS_YOU = 'the mission moved out of Needs You before the answer could be applied';
 
 /**
- * An answer that was not carried out: `reopenAnswered` either withdraws it
- * (its mission is no longer waiting on it) or puts it back in front of the
- * person. Read back which, so a withdrawn card is reported as finished rather
- * than as an unresolved answer the next cycle would treat as a backlog.
+ * An answer that was not carried out — always an unresolved answer of this
+ * cycle — which `reopenAnswered` either withdraws (its mission is no longer
+ * waiting on it) or puts back in front of the person. Read back which, so a
+ * withdrawn card is also reported as moot: finished, not re-asked.
  */
 async function settleUnresolvedAnswer(
   report: Pick<TickReport, 'unresolvedAnswers' | 'withdrawnMootAnswers'>,
   request: RussellHumanRequest,
   reason: string,
 ): Promise<void> {
+  report.unresolvedAnswers.push({ requestId: request.id, reason });
   await reopenAnswered(request, reason);
   const after = await getHumanRequest(request.id);
   if (after?.state === 'WITHDRAWN') {
     const mission = request.missionId ? await getMission(request.missionId) : null;
     report.withdrawnMootAnswers.push({ requestId: request.id, missionState: mission?.state ?? null, reason });
-    return;
   }
-  report.unresolvedAnswers.push({ requestId: request.id, reason });
 }
 
 /** Marks a cycle error that is per-pass failures rather than a failed tick. */
@@ -2420,29 +2419,23 @@ async function tickOnce(owner: string): Promise<TickReport> {
       // research slot keeps its place, and a window that size would hide a
       // newer answer behind it for ever.
       for (const request of await listAnsweredRequests(500)) {
-        /*
-         * An answer whose mission already left NEEDS_HUMAN is decided here,
-         * before any resume is attempted. Every answer but STOP is applied
-         * through a transition guarded on NEEDS_HUMAN, so none can apply now
-         * and none ever will; attempting it only spent a research admission,
-         * or deferred the answer for ever behind a full slot, and handed the
-         * failure back as an unresolved answer to re-ask (43 moot cards in a
-         * week, withdrawn by the operator by hand). STOP is left to the resume,
-         * which carries it out from any state. `reopenAnswered` withdraws the
-         * card through the same guarded transitions and the operator's single
-         * `moot` predicate, so the loop and the operator cannot disagree.
-         */
-        const mission = request.missionId ? await getMission(request.missionId) : null;
-        if (
-          mission &&
-          mission.state !== 'NEEDS_HUMAN' &&
-          request.answeredChoice !== NEEDS_HUMAN_CHOICES.STOP.key
-        ) {
-          await settleUnresolvedAnswer(report, request, MISSION_LEFT_NEEDS_YOU);
-          continue;
-        }
         const outcome = await resumeAnsweredRequest(request);
         if (outcome.deferred) {
+          /*
+           * Deferred for a research slot is a wait only while the mission still
+           * waits on this answer. Every answer the deferral applies to is carried
+           * out through a transition guarded on NEEDS_HUMAN, so once the mission
+           * has left it no slot will ever make the answer apply, and deferring
+           * it again each cycle kept the card unresolved for ever — the loop the
+           * operator kept breaking by hand (43 moot withdrawals in a week).
+           * Settled as moot instead, through `reopenAnswered`'s guarded
+           * withdrawal and the operator's one `moot` predicate.
+           */
+          const mission = request.missionId ? await getMission(request.missionId) : null;
+          if (mission && mission.state !== 'NEEDS_HUMAN') {
+            await settleUnresolvedAnswer(report, request, MISSION_LEFT_NEEDS_YOU);
+            continue;
+          }
           report.unresolvedAnswers.push({ requestId: request.id, reason: outcome.reason });
           continue;
         }
