@@ -6,7 +6,8 @@
  * authorized instruction."
  *
  * Nothing new is stored. Every decision a person makes about a goal already has
- * one writer in `decide.ts`, and each writes an append-only `workstream_events`
+ * one writer — `decide.ts` for most, and the writers named beside
+ * `OWNER_INSTRUCTION_EVENT_KINDS` for the rest — and each writes an append-only `workstream_events`
  * row carrying who decided, when, and what it replaced. Those rows *are* the
  * policy history: numbering them 1..n in the order they were made gives each
  * one an explicit version, and the newest is the governing one. Deriving it by
@@ -38,9 +39,23 @@ export const OWNER_POLICY_EVENT_KINDS = [
   'GOAL_CANCELLED',
   'GOAL_REINSTATED',
 ] as const;
-export type OwnerPolicyEventKind = (typeof OWNER_POLICY_EVENT_KINDS)[number];
 
-const POLICY_KINDS: ReadonlySet<string> = new Set(OWNER_POLICY_EVENT_KINDS);
+/**
+ * Owner instructions that do not pass through `decide.ts`, each with its own
+ * single writer. They are policy versions exactly like the decisions above: a
+ * person changing what a goal says it is, or re-setting its target or the
+ * capital and hours a plan may use, is a newer authorized instruction, and a
+ * plan reading made before it must not stay in force over it (S-0470; S-0471
+ * names a changed capital constraint as a trigger).
+ *
+ *   - `WORKSTREAM_AMENDED` — `PATCH /register/workstreams/:id` (routes/register.ts)
+ *   - `GOAL_TARGET_SET` — `setTarget` (goals/target.ts)
+ */
+export const OWNER_INSTRUCTION_EVENT_KINDS = ['WORKSTREAM_AMENDED', 'GOAL_TARGET_SET'] as const;
+
+export type OwnerPolicyEventKind = (typeof OWNER_POLICY_EVENT_KINDS)[number] | (typeof OWNER_INSTRUCTION_EVENT_KINDS)[number];
+
+const POLICY_KINDS: ReadonlySet<string> = new Set<string>([...OWNER_POLICY_EVENT_KINDS, ...OWNER_INSTRUCTION_EVENT_KINDS]);
 
 /** One explicit version of a goal's owner policy: one owner decision, numbered in order. */
 export interface PolicyVersion {

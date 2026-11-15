@@ -35,6 +35,15 @@
  * A fact whose fingerprint did not move causes no event and no plan pass:
  * evidence that is still valid triggers no re-research.
  *
+ * A newer owner instruction is a changed fact too (S-0470). Whatever made it —
+ * a decision in `decide.ts`, an amended intent, a re-set target or capital
+ * ceiling (`ownerPolicy.ts` numbers them all) — the goal's newest decision,
+ * produced under the older version, is no longer in force. It is examined
+ * once more: its facts are read again like any other, and it is reconsidered
+ * exactly once against the policy version that replaced it, naming every
+ * strategy as dependent and asking the plan to read again. Its id is derived
+ * from the reading and that policy event, so it is written once.
+ *
  * An unknown is never favourable (invariant 39): a fact whose row has gone is
  * a change to "nothing is recorded", not a fact kept at its old value.
  *
@@ -44,7 +53,7 @@
 import { getDb } from '../../db/database.ts';
 import { listWorkstreamEvents } from '../../repos/register.ts';
 import { canonicalJson, sha256 } from '../scenario/model.ts';
-import { POLICY_EVENT_READ_LIMIT } from './ownerPolicy.ts';
+import { governingPolicy, POLICY_EVENT_READ_LIMIT, type GoverningPolicy } from './ownerPolicy.ts';
 import {
   DECISION_EVENT_KIND,
   GOAL_WIDE_KINDS,
@@ -63,6 +72,8 @@ import type { WorkstreamEvent } from '../../domain/register.ts';
 export const RECONSIDER_EVENT_KIND = 'GOAL_DECISION_RECONSIDERED';
 /** The event id is derived from the reading, the fact and its new fingerprint: once per fact version. */
 export const RECONSIDER_EVENT_PREFIX = 'wse_gdx_';
+/** A decision superseded by a newer owner instruction: once per reading per policy version. */
+export const POLICY_SUPERSESSION_EVENT_PREFIX = 'wse_gdp_';
 /**
  * Goals examined per pass. The rest are not dropped: a pass resumes after the
  * last goal the previous one examined (`after`) and wraps to the first, so
@@ -171,6 +182,37 @@ export function reconsiderationId(readingId: string, change: Pick<FactChange, 'k
   return `${RECONSIDER_EVENT_PREFIX}${sha256(`${readingId}|${change.kind}|${change.sourceRowId}|${change.afterFingerprint}`).slice(0, 32)}`;
 }
 
+/** Once per decision per owner policy version that replaced it. */
+export function policySupersessionId(readingId: string, policyEventId: string): string {
+  return `${POLICY_SUPERSESSION_EVENT_PREFIX}${sha256(`${readingId}|${policyEventId}`).slice(0, 32)}`;
+}
+
+/**
+ * What depends on a decision a newer owner instruction replaced: the instruction
+ * bears on the whole plan, so every strategy, every approval and every action it
+ * produced. Pure.
+ */
+export function policyDependentsOf(record: DecisionRecord, facts: FactRows): Dependents {
+  const opportunities = [...new Set([...record.alternatives.flatMap((alt) => alt.opportunityIds), ...record.chain.actions.flatMap((a) => (a.kind === 'PURSUES' ? [a.opportunityId] : []))])].sort();
+  const touched = new Set(opportunities);
+  const approvals: Dependents['approvals'] = [];
+  if (record.authority.policyEventId) approvals.push({ kind: 'OWNER_POLICY', ref: record.authority.policyEventId, version: record.authority.policyVersion });
+  for (const need of [...facts.cashNeeds].filter((one) => one.opportunity_id && touched.has(one.opportunity_id)).sort((a, b) => a.id.localeCompare(b.id))) {
+    approvals.push({ kind: 'CASH_NEED', ref: need.id, state: need.state });
+  }
+  return { forecasts: [{ readingId: record.readingId, predicted: record.predicted }], opportunities, approvals, actions: [...record.chain.actions] };
+}
+
+/**
+ * The goal's newest decision when a newer owner policy version has replaced it
+ * and nothing has reconsidered it yet; null otherwise. Pure.
+ */
+export function supersededNewest(states: readonly DecisionState[], retired: ReadonlySet<string>): DecisionState | null {
+  const newest = states.at(-1);
+  if (!newest || newest.current !== 'SUPERSEDED_BY_POLICY' || retired.has(newest.record.readingId)) return null;
+  return newest;
+}
+
 /** Readings a reconsideration has taken out of current truth. Pure. */
 export function reconsideredReadings(events: readonly Pick<WorkstreamEvent, 'kind' | 'detail'>[]): Set<string> {
   const out = new Set<string>();
@@ -187,9 +229,20 @@ export function reconsideredReadings(events: readonly Pick<WorkstreamEvent, 'kin
  * any a changed fact has reconsidered. The records themselves are not touched.
  */
 export async function activeTruth(goalId: string): Promise<DecisionState[]> {
+  return (await examinable(goalId)).active;
+}
+
+/** The decisions in force, and the newest one a newer owner instruction has replaced and nobody has reconsidered. */
+async function examinable(goalId: string): Promise<{ active: DecisionState[]; superseded: DecisionState | null; policy: GoverningPolicy }> {
   const events = await listWorkstreamEvents(goalId, POLICY_EVENT_READ_LIMIT);
   const retired = reconsideredReadings(events);
-  return (await decisionHistory(goalId)).filter((one) => one.current === 'IN_FORCE' && !retired.has(one.record.readingId));
+  const policy = await governingPolicy(goalId, { listEvents: async () => events });
+  const states = await decisionHistory(goalId);
+  return {
+    active: states.filter((one) => one.current === 'IN_FORCE' && !retired.has(one.record.readingId)),
+    superseded: supersededNewest(states, retired),
+    policy,
+  };
 }
 
 async function readFacts(record: DecisionRecord): Promise<FactRows> {
@@ -207,11 +260,22 @@ export interface Reconsideration {
   dependents: Dependents;
 }
 
+export interface PolicySupersession {
+  goalId: string;
+  readingId: string;
+  eventId: string;
+  /** The owner policy version that replaced the decision. */
+  policy: { version: number; eventId: string; kind: string; decidedAt: string; actorRef: string };
+  dependents: Dependents;
+}
+
 export interface ReconsiderPassReport {
   goals: number;
   checked: number;
   unchanged: number;
   reconsidered: Reconsideration[];
+  /** Decisions a newer owner instruction replaced, reconsidered once against it. */
+  superseded: PolicySupersession[];
   /** Goals whose plan was asked to read again. */
   replanned: string[];
   /** The goals this pass examined, in the order it examined them. */
@@ -288,10 +352,11 @@ export async function reconcileFactChanges(options: { goalId?: string; limit?: n
     goals = window.goals;
     nextCursor = window.nextCursor;
   }
-  const report: ReconsiderPassReport = { goals: goals.length, checked: 0, unchanged: 0, reconsidered: [], replanned: [], goalIds: [...goals], nextCursor };
+  const report: ReconsiderPassReport = { goals: goals.length, checked: 0, unchanged: 0, reconsidered: [], superseded: [], replanned: [], goalIds: [...goals], nextCursor };
   for (const goalId of goals) {
     const reasons: string[] = [];
-    for (const state of await activeTruth(goalId)) {
+    const { active, superseded, policy } = await examinable(goalId);
+    for (const state of superseded ? [...active, superseded] : active) {
       const record = state.record;
       report.checked += 1;
       const facts = await readFacts(record);
@@ -321,6 +386,32 @@ export async function reconcileFactChanges(options: { goalId?: string; limit?: n
         if ((written.changes ?? 0) === 0) continue;
         report.reconsidered.push({ goalId, readingId: record.readingId, eventId, change, dependents });
         reasons.push(`${change.kind} of ${change.sourceRowId}`);
+      }
+    }
+    if (superseded && policy.known) {
+      const record = superseded.record;
+      const eventId = policySupersessionId(record.readingId, policy.eventId);
+      const dependents = policyDependentsOf(record, await readFacts(record));
+      const replacedBy = { version: policy.version, eventId: policy.eventId, kind: policy.kind, decidedAt: policy.decidedAt, actorRef: policy.actorRef };
+      const summary = `Reconsidered decision ${record.readingId}: owner policy version ${policy.version} (${policy.kind}) replaced the instruction it was made under. The earlier decision and its evidence are kept; the plan reads the goal again.`;
+      const detail = {
+        readingId: record.readingId,
+        decisionEventId: superseded.eventId,
+        fact: { kind: 'OWNER_POLICY', sourceRowId: policy.eventId, gone: false },
+        old: { version: record.authority.policyVersion, eventId: record.authority.policyEventId },
+        new: replacedBy,
+        why: superseded.why,
+        dependents,
+        previousNextStep: record.chain.actions.find((a) => a.kind === 'NEXT_TEST') ?? null,
+      };
+      const written = await getDb().run(
+        `INSERT INTO workstream_events (id, workstream_id, kind, summary, detail, actor_ref, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING`,
+        [eventId, goalId, RECONSIDER_EVENT_KIND, summary.slice(0, 400), JSON.stringify(detail), 'BRAIN', now],
+      );
+      if ((written.changes ?? 0) > 0) {
+        report.superseded.push({ goalId, readingId: record.readingId, eventId, policy: replacedBy, dependents });
+        reasons.push(`owner policy version ${policy.version} (${policy.kind})`);
       }
     }
     if (reasons.length > 0) {
