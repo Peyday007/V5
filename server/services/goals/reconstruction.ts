@@ -38,7 +38,8 @@
  * evaluated once. It never relabels coverage as probability, and an assumed
  * input stays assumed however good the number it produces.
  */
-import type { ModelInput, ModelledOpportunity } from '../cash/goalScenario.ts';
+import { priceSupported, type ModelInput, type ModelledOpportunity } from '../cash/goalScenario.ts';
+import { modelledTiming, type PaymentTimingReading } from '../cash/paymentTiming.ts';
 import { evaluateGoalPortfolio, type GateInput, type GoalPortfolio, type PlannedOpening } from './portfolio.ts';
 import { ACQUISITION_LEVERS, DAYS_TO_FIRST_PROOF, PARTNER_TERMS, budgetsAllowed, purchaseCapacity, buyInbound, dailyVolumePlan, type AcquisitionLever, type VolumePlan } from './acquisitionLevers.ts';
 import { CONVERSION_BOUNDS, MATERIAL_SHARE, SHAPE_MULTIPLES } from './pathways.ts';
@@ -75,6 +76,13 @@ export const SCREEN_MIN_WORLDS = 150;
  *     their ranges.
  *   HEADROOM: it reaches the target more often than every estimate at its
  *     favourable end does (with HEADROOM_SLACK for sampling): a contradiction.
+ *   SCALE: one deal of a member whose price no buyer is shown paying needs
+ *     more than the money behind the plan (its direct cost or capital) and
+ *     keeps more than RETURN_BOUND times that money. The median over
+ *     worlds hides it — production, 2026-11-15: a constructed arrangement whose
+ *     single deal kept ~$1.9M on a $3,000 limit, with no fulfiller and no
+ *     channel, closed in a minority of worlds and lifted the plan to 46.7%
+ *     while its median read $15,000.
  */
 export const RETURN_BOUND = 20;
 export const DEAL_CAPACITY_MULTIPLE = 25;
@@ -112,7 +120,7 @@ export interface StrategyChange {
 
 /** One plausibility finding on a reading (C-4). */
 export interface PlausibilityFlag {
-  kind: 'RETURN' | 'DEALS' | 'MARKET' | 'HEADROOM';
+  kind: 'RETURN' | 'DEALS' | 'MARKET' | 'HEADROOM' | 'SCALE';
   detail: string;
 }
 
@@ -343,6 +351,16 @@ async function reconstructPlanOn(input: ReconstructionInput, evaluator: Evaluato
     // Headroom is the openings held at their favourable estimates. A plan that adds a channel, a partner,
     // bought capacity, a transaction shape or financing creates reach headroom never measured, so only a
     // plan made of the held openings alone contradicts it (review F3).
+    for (const id of ids) {
+      const o = state.openings.find((x) => x.opportunity.id === id);
+      if (!o || o.agreedValue > 0 || priceSupported(o)) continue;
+      // A deal that needs no money of ours (a digital sale) is not judged by the money behind it; one whose cost
+      // or capital outruns that money is, since only someone else's money could carry it.
+      const cost = Math.max(0, knownMid(o.directCost) ?? 0);
+      const needs = Math.max(cost, knownMid(o.capital) ?? 0);
+      const keptPerDeal = (knownMid(o.price) ?? 0) - cost;
+      if (needs > behind && keptPerDeal / behind > RETURN_BOUND) out.push({ kind: 'SCALE', detail: `one deal of "${o.opportunity.title.slice(0, 60)}" needs ${money(needs)} and keeps ${money(keptPerDeal)}, ${(keptPerDeal / behind).toFixed(0)}× the ${money(behind)} behind the plan (bound ×${RETURN_BOUND}), on a price no buyer is shown paying` });
+    }
     const createsReach = state.changes.some((c) => HEADROOM_EXEMPT.has(c.dimension));
     if (headroomReach !== null && !createsReach && b.reach > headroomReach + HEADROOM_SLACK) out.push({ kind: 'HEADROOM', detail: `reaches ${pct(b.reach)}, above the ${pct(headroomReach)} every estimate at its favourable end reaches` });
     return out;
@@ -621,6 +639,7 @@ async function reconstructPlanOn(input: ReconstructionInput, evaluator: Evaluato
       testedBy: 'CASH_TIMING',
       finding: `deposits at signing: ${pct(bestOf('CASH_TIMING')?.reach ?? baseline.reach)}; cash-timing factor lift ${pct(lift('CASH_TIMING')?.liftReach ?? 0)}`,
     },
+    prepaymentChallenge(input.openings, bestOf('CAPITAL')),
     {
       assumption: 'The openings held are the market',
       status: structural ? 'ASSUMPTION' : 'ESTIMATE',
@@ -1003,17 +1022,18 @@ export function buildOperators(ctx: { input: ReconstructionInput; levers?: reado
       },
     });
   }
-  // Financing: the buyer prepays, so a supplier's cost is paid from the buyer's money, not the owner's.
+  // Financing: the buyer prepays, so a supplier's cost is paid from the buyer's money, not the owner's — only
+  // for buyers whose terms or evidence show them paying before delivery (`prepaymentEligible`).
   operators.push({
     dimension: 'CAPITAL',
     key: 'capital:prepaid-fulfilment',
     apply: (s) => {
-      const touched = s.openings.filter((o) => o.agreedValue === 0 && !o.fundedByBuyer && (o.directCost.high ?? o.directCost.value ?? 0) > 0);
+      const touched = s.openings.filter((o) => o.agreedValue === 0 && !o.fundedByBuyer && (o.directCost.high ?? o.directCost.value ?? 0) > 0 && prepaymentEligible(o).eligible);
       if (touched.length === 0) return null;
       return {
         ...s,
         openings: s.openings.map((o) => (touched.includes(o) ? { ...o, fundedByBuyer: true } : o)),
-        changes: [...s.changes, { dimension: 'CAPITAL', op: 'capital:prepaid-fulfilment', label: 'prepaid-fulfilment', detail: `the buyer pays in full before the supplier is paid, so ${touched.length} opening(s)' direct costs come from the buyer's money, not the ${money(allowed.ceiling)} limit — they still leave the cash kept`, cost: 0, basis: 'ASSUMPTION', startDay: { low: 0, high: 0 } }],
+        changes: [...s.changes, { dimension: 'CAPITAL', op: 'capital:prepaid-fulfilment', label: 'prepaid-fulfilment', detail: `the buyer pays in full before the supplier is paid, so ${touched.length} opening(s)' direct costs come from the buyer's money, not the ${money(allowed.ceiling)} limit — they still leave the cash kept; their buyers are shown paying before delivery (${touched.map((o) => modelledTiming(o).basis).join('; ').slice(0, 300)}), full prepayment assumed`, cost: 0, basis: 'ASSUMPTION', startDay: { low: 0, high: 0 } }],
       };
     },
   });
@@ -1033,6 +1053,40 @@ export function buildOperators(ctx: { input: ReconstructionInput; levers?: reado
   });
 
   return operators;
+}
+
+/**
+ * Whether the financing lever may read an opening's direct cost as paid from
+ * the buyer's money (production 2026-11-15, goal wst_7b4fcbb5f2384f31b6c3:
+ * the lever zeroed an $881,310 cost against a $3,000 limit for buyers known
+ * only from an RFP, and the plan read 46.7% on it). Only a buyer whose terms or
+ * evidence show money arriving before delivery — in full, or a deposit or
+ * at-order share the lever asks to make whole — is eligible. Stated arrears or
+ * a competitive award (paid after it is won and delivered) excludes it, and
+ * terms nobody stated are unknown: a question for research, never a
+ * prepayment (invariant 39). A constructed arrangement's terms are those its
+ * buyers' evidence states (`ConstructedArrangement.buyerTerms`). Pure.
+ */
+export function prepaymentEligible(one: ModelledOpportunity): { eligible: boolean; reading: PaymentTimingReading } {
+  const reading = modelledTiming(one);
+  return { eligible: reading.timing === 'PREPAID', reading };
+}
+
+/** What the financing lever could and could not be tried on, and why: the CAPITAL challenge. */
+function prepaymentChallenge(openings: readonly ModelledOpportunity[], best: VariantReading | undefined): AssumptionChallenge {
+  const costly = openings.filter((o) => o.agreedValue === 0 && (o.directCost.high ?? o.directCost.value ?? 0) > 0);
+  const read = costly.map((o) => prepaymentEligible(o).reading);
+  const count = (t: PaymentTimingReading['timing']) => read.filter((r) => r.timing === t).length;
+  const arrears = read.filter((r) => r.timing === 'ARREARS').map((r) => r.basis);
+  return {
+    assumption: 'Buyers pay before suppliers must be paid',
+    status: count('PREPAID') > 0 ? 'ASSUMPTION' : 'UNTESTED',
+    testedBy: 'CAPITAL',
+    finding:
+      `of ${costly.length} opening(s) with a direct cost: ${count('PREPAID')} shown paying before delivery (prepaid fulfilment tried${best ? `: ${pct(best.reach)}` : ''}), ` +
+      `${count('ARREARS')} paying in arrears, not tried${arrears.length ? ` (${arrears.slice(0, 2).join('; ')})` : ''}, ` +
+      `${count('UNKNOWN')} with terms nobody stated, not tried — research asks how these buyers pay`,
+  };
 }
 
 function pickTarget(sellable: ModelledOpportunity[], id?: string): ModelledOpportunity | undefined {
