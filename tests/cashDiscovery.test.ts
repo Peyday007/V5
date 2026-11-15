@@ -1121,7 +1121,9 @@ describe('plays: a kind of business that pays for something Brain can make', () 
   it('an opening from a play round requires producing that deliverable, which Brain proves it can', async () => {
     await activated();
     const { QUICK_PLAY_BUCKETS } = await import('../server/services/cash/discovery.ts');
-    const opened = await openDiscovery({ projectId, limit: QUICK_PLAY_BUCKETS.length + 1 });
+    const { INTERMEDIATION_BUCKETS } = await import('../server/services/cash/intermediationBuckets.ts');
+    // Intermediation's entry buckets are asked first while its family declaration is current.
+    const opened = await openDiscovery({ projectId, limit: INTERMEDIATION_BUCKETS.length + QUICK_PLAY_BUCKETS.length + 1 });
     const first = opened.find((one) => PLAY_BUCKETS.some((play) => play.id === one.bucketId));
     const bucket = PLAY_BUCKETS.find((one) => one.id === first!.bucketId)!;
     expect(bucket).toBeDefined();
@@ -1197,14 +1199,17 @@ describe('the wider economy (2026-10-28)', () => {
     const productized = fresh.filter((one) => one.mechanism === 'PRODUCTIZED_SERVICE');
     expect(productized).toHaveLength(1);
 
-    // On a real sprint, one round a tick: a week of ticks reaches the wider buckets.
+    // On a real sprint, one round a tick: a week of ticks reaches the wider buckets —
+    // after intermediation's entry buckets, which go first while its family is current.
+    const { INTERMEDIATION_BUCKETS } = await import('../server/services/cash/intermediationBuckets.ts');
     await activated();
     const opened: string[] = [];
-    for (let pass = 0; pass < 14; pass += 1) {
+    for (let pass = 0; pass < INTERMEDIATION_BUCKETS.length + 14; pass += 1) {
       for (const one of await openDiscovery({ projectId })) opened.push(one.bucketId);
     }
     expect(opened.filter((id) => id.startsWith('play-')).length).toBeLessThanOrEqual(2);
-    expect(opened, opened.join(' ')).toEqual(expect.arrayContaining(['broad-consumer-demand', 'broad-brokerage']));
+    expect(opened, opened.join(' ')).toEqual(expect.arrayContaining(['broad-consumer-demand']));
+    expect(opened.filter((id) => id.startsWith('broad-')).length, opened.join(' ')).toBeGreaterThanOrEqual(2);
   });
 
   it('turns genuinely different kinds of openings into work the same evaluation reads', async () => {

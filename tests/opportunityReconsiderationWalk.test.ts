@@ -56,7 +56,7 @@ import { tick } from '../server/services/russell/loop.ts';
 import { activate } from '../server/services/cash/lifecycle.ts';
 import { operate } from '../server/services/cash/operate.ts';
 import { archiveOpportunity } from '../server/services/cash/opportunities.ts';
-import { SEARCH_BUCKETS } from '../server/services/cash/discovery.ts';
+import { discoveryOrder, SEARCH_BUCKETS } from '../server/services/cash/discovery.ts';
 import { whyNotDiving } from '../server/services/cash/validation.ts';
 import { diveStarts } from '../server/services/cash/diveStage.ts';
 import { projectStandings } from '../server/services/cash/standing.ts';
@@ -529,7 +529,7 @@ describe('discovery → a stage-one kill → dormant → a shared capability fli
     expect(await listOpportunities({ projectId })).toEqual([]);
 
     await tick('walk');
-    const bucket = (await listCandidates({ projectId })).find((one) => one.title === SEARCH_BUCKETS[0]!.title);
+    const bucket = (await listCandidates({ projectId })).find((one) => one.title === discoveryOrder(SEARCH_BUCKETS, [])[0]!.title);
     expect(bucket, 'discovery opened a bucket round on its own').toBeDefined();
     await answer(bucket!.id, bucket!.statement, [DISCOVERY]);
 
