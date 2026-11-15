@@ -75,6 +75,7 @@ import { familyCurrent, INTERMEDIATION_FAMILY, type FamilyDeclaration } from './
 import { FEED_SHORTLIST_BUCKET } from '../feeds/bucket.ts';
 import { getDb } from '../../db/database.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
+import { familyDeclarationFor } from './familyPriority.ts';
 import {
   createOpportunity,
   fillOpportunitySignal,
@@ -574,7 +575,8 @@ export async function openDiscovery(input: {
   const out: OpenedDiscovery[] = [];
   const limit = Math.max(1, input.limit ?? 1);
   let frame: ExecutionFrame | null | undefined;
-  for (const bucket of discoveryOrder([...SEARCH_BUCKETS, ...(triggersEnabled() ? TRIGGER_BUCKETS : [])], rounds, now)) {
+  const declaration = await familyDeclarationFor(input.projectId);
+  for (const bucket of discoveryOrder([...SEARCH_BUCKETS, ...(triggersEnabled() ? TRIGGER_BUCKETS : [])], rounds, now, declaration)) {
     if (out.length >= limit) break;
     const history = byBucket.get(bucket.id) ?? [];
     const next = nextRoundFor(history, now);

@@ -54,7 +54,7 @@ import { discoveryAuthority } from '../discoveryAuthority.ts';
 import { composeLedger, rankableOf } from './ledger.ts';
 import { allocateCommissions } from './commission.ts';
 import { offerToFamily, researchRoom, type ResearchRoom } from '../researchRoom.ts';
-import { INTERMEDIATION_FAMILY } from '../intermediationPositions.ts';
+import { familyDeclarationFor } from '../familyPriority.ts';
 import { diveEpochStart } from '../diveStage.ts';
 import { discoveryBucketsByRound, intermediationOpening, payerEstablished } from '../validation.ts';
 import type { CommissionAsk } from './commission.ts';
@@ -319,7 +319,7 @@ export async function runCommissions(input: {
     ? offerToFamily(room, {
         kind: null,
         familyWaiting: familyPlan.asks.length,
-        declaration: INTERMEDIATION_FAMILY,
+        declaration: await familyDeclarationFor(input.projectId),
         now: input.now ?? input.ledger.readAt,
       })
     : room;

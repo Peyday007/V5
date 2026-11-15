@@ -93,7 +93,7 @@ import { DIVE_STARTED_EVENT, diveEpochStart, diveStarts, type DiveStage, type Di
 export { diveEpochStart } from './diveStage.ts';
 import { freeLaneOwnsResearch, offerToFamily, researchCapacity, researchRoom, type ResearchRoom, type RoomLimit } from './researchRoom.ts';
 import { isIntermediationBucket } from './intermediationBuckets.ts';
-import { INTERMEDIATION_FAMILY } from './intermediationPositions.ts';
+import { familyDeclarationFor } from './familyPriority.ts';
 import { recordReopenCondition, reopenConditionsFor } from '../../repos/cashReconsideration.ts';
 import { formatBlockerKey } from '../../domain/types.ts';
 import type { CashCardFact, CashOpportunity, OpportunityValidationState } from '../../domain/types.ts';
@@ -1325,7 +1325,7 @@ export async function startValidations(input: {
   }
   const otherRoom = offerToFamily(
     { ...derived, room },
-    { kind: null, familyWaiting, declaration: INTERMEDIATION_FAMILY, now },
+    { kind: null, familyWaiting, declaration: await familyDeclarationFor(input.projectId), now },
   ).room;
   let otherStarted = 0;
 

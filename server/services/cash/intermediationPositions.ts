@@ -361,7 +361,13 @@ export function familyCurrent(declaration: FamilyDeclaration, now: Date | string
   return at >= since && at < reviewBy;
 }
 
-/** Renew a family's priority to a new review date; the declaration itself is never mutated. */
+/**
+ * Apply a new review date to a declaration; the declaration itself is never mutated.
+ *
+ * This is pure. A renewal that lasts is a recorded decision —
+ * `recordFamilyRenewal` in `familyPriority.ts` — and `familyDeclarationFor`
+ * applies the newest one; the dates above are only the first grant.
+ */
 export function renewFamily(declaration: FamilyDeclaration, reviewBy: string): FamilyDeclaration {
   return { ...declaration, reviewBy };
 }
