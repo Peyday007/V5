@@ -118,6 +118,13 @@ export interface ResearchApplication {
    * left the queue or its owner moved it since).
    */
   floorRestored?: { workItemId: string; from: number; to: number; restored: boolean }[];
+  /**
+   * Bins no goal pursues that a previous floor raised, put back to the
+   * priority they had once no purpose they served is below a floor — or let
+   * go, when the bin left the live states, was moved since, or a goal now
+   * pursues it and owns its priority.
+   */
+  floorRaisedRestored?: { binId: string; from: number; to: number; restored: boolean }[];
   /** Below-floor purposes no live bin and no queued item serves: nothing exists to raise. */
   floorUnserved?: ResearchPurpose[];
   /** What the floor caused to be opened for an unserved purpose, through the owner that opens that purpose's work. */
@@ -303,16 +310,20 @@ export async function advanceGoals(options?: { now?: string; floorOpeners?: Floo
     entry.priority = Math.min(8, Math.max(0, entry.priority + shift));
     application!.goalBins.push({ binId, purposes: binPurposes.get(binId) ?? [], shift });
   }
-  // A bin no goal pursues has no rank to return to, so it is only ever raised,
-  // and only while a purpose it serves sits below a protected floor.
+  // A bin no goal pursues has no rank to return to, so a floor raise records the
+  // priority it had, is bounded by the floor's shortfall, and is put back once
+  // the purpose recovers — never a ratchet (the treatment queued items get).
   if (application && application.belowFloor.length > 0) {
     const floorPriority = binPriorityForRank(0);
-    for (const bin of liveBins) {
-      if (owners.has(bin.id) || bin.heldByWorkstreamId || bin.priority >= floorPriority) continue;
-      const purposes = binPurposes.get(bin.id) ?? [];
-      if (!purposes.some((p) => (application.belowFloor as readonly string[]).includes(p))) continue;
-      if (await setLiveBinPriority(bin.id, floorPriority)) application.floorRaised.push({ binId: bin.id, purposes, from: bin.priority, to: floorPriority });
-    }
+    application.floorRaised = await raiseOrphanBins({
+      liveBins,
+      binPurposes,
+      owned: new Set(owners.keys()),
+      belowFloor: application.belowFloor,
+      floorPriority,
+      shares: inForce!.shares,
+      fingerprint: application.fingerprint,
+    });
     await holdFloors(application, {
       liveBins,
       binPurposes,
@@ -324,7 +335,11 @@ export async function advanceGoals(options?: { now?: string; floorOpeners?: Floo
   }
   // Every pass, decision or none: a raise whose purpose is back above its floor is undone.
   const restored = await restoreFloorReservations(application?.belowFloor ?? []);
-  if (application) application.floorRestored = restored;
+  const binsRestored = await restoreOrphanBinRaises(application?.belowFloor ?? [], new Set(owners.keys()));
+  if (application) {
+    application.floorRestored = restored;
+    application.floorRaisedRestored = binsRestored;
+  }
   report.researchApplied = application;
   const changedPerGoal = new Map<string, string[]>();
   for (const [binId, { priority, goalId }] of target) {
@@ -518,21 +533,117 @@ async function recordFloorEvent(kind: string, detail: Record<string, unknown>): 
 
 /** Raises not yet undone, by item: the priority it had before and the one it was raised to, and the purposes it served. */
 async function outstandingFloorReservations(): Promise<Map<string, { from: number; to: number; purposes: string[] }>> {
+  return outstandingRaises('items', 'workItemId');
+}
+
+/** Floor raises of bins no goal pursues not yet undone, by bin, read from the same event rows. */
+async function outstandingBinRaises(): Promise<Map<string, { from: number; to: number; purposes: string[] }>> {
+  return outstandingRaises('bins', 'binId');
+}
+
+/**
+ * Raises not yet undone, read from the floor events' `items` (queued work) or
+ * `bins` (bins no goal pursues) lists. Oldest first, so a raise, its undoing
+ * and a later raise of the same row read in the order they happened.
+ */
+async function outstandingRaises(field: 'items' | 'bins', idKey: 'workItemId' | 'binId'): Promise<Map<string, { from: number; to: number; purposes: string[] }>> {
   const { listImprovementEvents } = await import('../../repos/improvement.ts');
   const since = new Date(Date.now() - FLOOR_RESERVATION_LOOKBACK_MS).toISOString();
   const events = await listImprovementEvents({ kinds: [FLOOR_RESERVED_EVENT, FLOOR_RESTORED_EVENT], since, limit: 5000 });
   const out = new Map<string, { from: number; to: number; purposes: string[] }>();
-  // Oldest first, so a raise, its undoing and a later raise of the same item read in the order they happened.
   for (const e of [...events].reverse()) {
-    const items = Array.isArray((e.detail as { items?: unknown }).items) ? ((e.detail as { items: unknown[] }).items) : [];
-    for (const raw of items) {
-      const one = raw as { workItemId?: unknown; from?: unknown; to?: unknown; purposes?: unknown };
-      if (typeof one.workItemId !== 'string') continue;
-      if (e.kind === FLOOR_RESTORED_EVENT) out.delete(one.workItemId);
+    const list = (e.detail as Record<string, unknown>)[field];
+    const rows = Array.isArray(list) ? (list as unknown[]) : [];
+    for (const raw of rows) {
+      const one = raw as Record<string, unknown>;
+      const id = one[idKey];
+      if (typeof id !== 'string') continue;
+      if (e.kind === FLOOR_RESTORED_EVENT) out.delete(id);
       else if (Number.isFinite(Number(one.from)) && Number.isFinite(Number(one.to)))
-        out.set(one.workItemId, { from: Number(one.from), to: Number(one.to), purposes: Array.isArray(one.purposes) ? one.purposes.map(String) : [] });
+        out.set(id, { from: Number(one.from), to: Number(one.to), purposes: Array.isArray(one.purposes) ? one.purposes.map(String) : [] });
     }
   }
+  return out;
+}
+
+/** The live bin states, as the bin repository's own priority write guards them. */
+const LIVE_BIN_STATES_SQL = `('DRAFT', 'READY', 'LEASED', 'NEEDS_HUMAN')`;
+
+/**
+ * Raise bins no goal pursues while a purpose they serve is below a protected
+ * floor (review F1). Bounded by the floor's shortfall exactly as queued items
+ * are (`floorBudgets` over the bins that could serve it, at least one, counting
+ * what an earlier raise still holds), highest priority first so the owners'
+ * order is kept among those taken. Each raise records the bin's priority
+ * before it as an improvement event, so any later pass can put it back.
+ */
+async function raiseOrphanBins(input: {
+  liveBins: { id: string; priority: number; heldByWorkstreamId: string | null }[];
+  binPurposes: ReadonlyMap<string, string[]>;
+  owned: ReadonlySet<string>;
+  belowFloor: readonly string[];
+  floorPriority: number;
+  shares: SharesInForce;
+  fingerprint: string | null;
+}): Promise<{ binId: string; purposes: string[]; from: number; to: number }[]> {
+  const below = input.belowFloor;
+  const candidates = input.liveBins.filter((bin) => {
+    if (input.owned.has(bin.id) || bin.heldByWorkstreamId) return false;
+    return (input.binPurposes.get(bin.id) ?? []).some((p) => below.includes(p));
+  });
+  if (candidates.length === 0) return [];
+  const outstanding = await outstandingBinRaises();
+  const budget = floorBudgets(input.shares, candidates.length);
+  const groupOf = (purposes: readonly string[]): FloorGroup | null =>
+    (FLOOR_GROUPS.find((g) => budget[g] > 0 && purposes.some((p) => floorGroupPurposes(g).includes(p) && below.includes(p))) ?? null);
+  const ordered = [...candidates].sort((a, b) => b.priority - a.priority || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  // What an earlier raise still holds counts against the budget before anything new is taken.
+  for (const bin of ordered) {
+    if (!outstanding.has(bin.id)) continue;
+    const g = groupOf(input.binPurposes.get(bin.id) ?? []);
+    if (g) budget[g] -= 1;
+  }
+  const raised: { binId: string; purposes: string[]; from: number; to: number }[] = [];
+  for (const bin of ordered) {
+    if (outstanding.has(bin.id) || bin.priority >= input.floorPriority) continue;
+    const purposes = input.binPurposes.get(bin.id) ?? [];
+    const g = groupOf(purposes);
+    if (!g) continue;
+    const changed = await getDb().run(
+      `UPDATE bins SET priority = ?, updated_at = ? WHERE id = ? AND priority < ? AND state IN ${LIVE_BIN_STATES_SQL}`,
+      [input.floorPriority, new Date().toISOString(), bin.id, input.floorPriority],
+    );
+    if (Number(changed.changes) > 0) {
+      budget[g] -= 1;
+      raised.push({ binId: bin.id, purposes, from: bin.priority, to: input.floorPriority });
+    }
+  }
+  if (raised.length > 0) await recordFloorEvent(FLOOR_RESERVED_EVENT, { fingerprint: input.fingerprint, bins: raised });
+  return raised;
+}
+
+/**
+ * Undo the floor raises of bins no goal pursues whose purposes are no longer
+ * below a floor. Guarded in the statement: only a bin still live at exactly
+ * the raised priority is put back, so an owner's later change wins. A bin a
+ * goal now pursues is let go untouched — its goal's rank owns its priority.
+ */
+async function restoreOrphanBinRaises(belowFloor: readonly string[], owned: ReadonlySet<string>): Promise<{ binId: string; from: number; to: number; restored: boolean }[]> {
+  const outstanding = await outstandingBinRaises();
+  const out: { binId: string; from: number; to: number; restored: boolean }[] = [];
+  for (const [id, r] of outstanding) {
+    if (r.purposes.some((p) => belowFloor.includes(p))) continue;
+    if (owned.has(id)) {
+      out.push({ binId: id, from: r.to, to: r.from, restored: false });
+      continue;
+    }
+    const changed = await getDb().run(
+      `UPDATE bins SET priority = ?, updated_at = ? WHERE id = ? AND priority = ? AND state IN ${LIVE_BIN_STATES_SQL}`,
+      [r.from, new Date().toISOString(), id, r.to],
+    );
+    out.push({ binId: id, from: r.to, to: r.from, restored: Number(changed.changes) > 0 });
+  }
+  if (out.length > 0) await recordFloorEvent(FLOOR_RESTORED_EVENT, { bins: out });
   return out;
 }
 

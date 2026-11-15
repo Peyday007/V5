@@ -13,6 +13,8 @@ import { createWorkstream, listWorkstreamEvents } from '../server/repos/register
 import { getDb } from '../server/db/database.ts';
 import {
   RESEARCH_ALLOCATION_DECIDED,
+  FLOOR_RESERVED_EVENT,
+  FLOOR_RESTORED_EVENT,
   RESEARCH_REALLOCATED_EVENT,
   advanceGoals,
   latestResearchDecision,
@@ -414,6 +416,93 @@ describe('advanceGoals applies the newest recorded decision to live bins (review
     expect(report.researchApplied?.floorRaised).toContainEqual(expect.objectContaining({ binId: loose, from: 5, to: 8 }));
     // The goal's own bin is at its rank's priority (already the top), never past it.
     expect((await getBin(owned))!.priority).toBe(8);
+  });
+
+  /** The floor raise and restore rows a bin appears in, oldest first. */
+  async function binFloorEvents(binId: string): Promise<{ kind: string; from: number; to: number; restored?: boolean }[]> {
+    const events = await listImprovementEvents({ kinds: [FLOOR_RESERVED_EVENT, FLOOR_RESTORED_EVENT], limit: 5000 });
+    return [...events].reverse().flatMap((e) =>
+      (((e.detail as { bins?: { binId: string; from: number; to: number; restored?: boolean }[] }).bins) ?? [])
+        .filter((b) => b.binId === binId)
+        .map((b) => ({ kind: e.kind, from: b.from, to: b.to, ...(b.restored === undefined ? {} : { restored: b.restored }) })),
+    );
+  }
+
+  it('records a bin’s floor raise durably and puts it back once the floor recovers — no ratchet', async () => {
+    const owned = await brainBin(5);
+    const goalId = await goalPursuing(owned);
+    const loose = await brainBin(5);
+    await decide(goalId, shares({ SELF_IMPROVEMENT: 0.02 }), shares({ SELF_IMPROVEMENT: SYSTEM_HEALTH_FLOOR }));
+    await advanceGoals();
+    expect((await getBin(loose))!.priority).toBe(8);
+    // The priority before the raise is a row, not only the transient report.
+    expect(await binFloorEvents(loose)).toEqual([{ kind: FLOOR_RESERVED_EVENT, from: 5, to: 8 }]);
+
+    // Still below the floor: the raise holds and is not raised again.
+    const again = await advanceGoals();
+    expect(again.researchApplied?.floorRaised.map((r) => r.binId)).not.toContain(loose);
+    expect(again.researchApplied?.floorRaisedRestored?.map((r) => r.binId) ?? []).not.toContain(loose);
+    expect((await getBin(loose))!.priority).toBe(8);
+
+    // The floor recovers: the bin returns to the priority it had, and the undoing is recorded.
+    await decide(goalId, shares({}), shares({}));
+    const back = await advanceGoals();
+    expect(back.researchApplied?.belowFloor).toEqual([]);
+    expect((await getBin(loose))!.priority).toBe(5);
+    expect(back.researchApplied?.floorRaisedRestored).toContainEqual({ binId: loose, from: 8, to: 5, restored: true });
+    expect((await binFloorEvents(loose)).at(-1)).toEqual({ kind: FLOOR_RESTORED_EVENT, from: 8, to: 5, restored: true });
+
+    // Restored once: a later pass has nothing outstanding for it.
+    const after = await advanceGoals();
+    expect(after.researchApplied?.floorRaisedRestored?.map((r) => r.binId) ?? []).not.toContain(loose);
+    expect((await getBin(loose))!.priority).toBe(5);
+  });
+
+  it('bounds the raise by the floor’s shortfall, not every bin serving the purpose', async () => {
+    const owned = await brainBin(5);
+    const goalId = await goalPursuing(owned);
+    const loose: string[] = [];
+    for (let i = 0; i < 10; i += 1) loose.push(await brainBin(i % 2 === 0 ? 4 : 3));
+    // 0.08 observed against a 0.10 floor: a 0.02 shortfall of ten candidates is one bin.
+    await decide(goalId, shares({ SELF_IMPROVEMENT: 0.08 }), shares({ SELF_IMPROVEMENT: SYSTEM_HEALTH_FLOOR }));
+    const report = await advanceGoals();
+    const raised = report.researchApplied!.floorRaised;
+    expect(raised).toHaveLength(Math.max(1, Math.ceil((SYSTEM_HEALTH_FLOOR - 0.08) * 10)));
+    // The highest-priority bins go first, so the owners' own order is kept among those taken.
+    expect(raised.every((r) => r.from === 4)).toBe(true);
+    let atFloor = 0;
+    for (const id of loose) if ((await getBin(id))!.priority === 8) atFloor += 1;
+    expect(atFloor).toBe(raised.length);
+    // What the earlier raise still holds counts against the budget: a second pass takes nothing new.
+    const again = await advanceGoals();
+    expect(again.researchApplied!.floorRaised).toEqual([]);
+  });
+
+  it('lets a raise go when the bin’s priority was changed since, or a goal now pursues it', async () => {
+    const owned = await brainBin(5);
+    const goalId = await goalPursuing(owned);
+    const moved = await brainBin(5);
+    const adopted = await brainBin(5);
+    // Thirteen candidates at a 0.08 shortfall budget two raises: the two highest-priority bins.
+    for (let i = 0; i < 11; i += 1) await brainBin(2);
+    await decide(goalId, shares({ SELF_IMPROVEMENT: 0.02 }), shares({ SELF_IMPROVEMENT: SYSTEM_HEALTH_FLOOR }));
+    await advanceGoals();
+    expect((await getBin(moved))!.priority).toBe(8);
+    expect((await getBin(adopted))!.priority).toBe(8);
+    // An owner moved one bin after the raise; a goal took the other one on.
+    await getDb().run(`UPDATE bins SET priority = 6 WHERE id = ?`, [moved]);
+    await goalPursuing(adopted);
+    await decide(goalId, shares({}), shares({}));
+    const back = await advanceGoals();
+    expect(back.researchApplied?.floorRaisedRestored).toContainEqual({ binId: moved, from: 8, to: 5, restored: false });
+    expect(back.researchApplied?.floorRaisedRestored).toContainEqual({ binId: adopted, from: 8, to: 5, restored: false });
+    // The owner's change wins, and the goal's rank owns the adopted bin's priority.
+    expect((await getBin(moved))!.priority).toBe(6);
+    // Its goal is the owner's second, so the rank puts it at 7 — the goal's priority, not the 5 it had before the raise.
+    expect((await getBin(adopted))!.priority).toBe(7);
+    // Let go once: neither is outstanding afterwards.
+    const after = await advanceGoals();
+    expect(after.researchApplied?.floorRaisedRestored ?? []).toEqual([]);
   });
 
   it('steps a goal bin of an over-served purpose down from its rank, and back when the decision changes', async () => {
