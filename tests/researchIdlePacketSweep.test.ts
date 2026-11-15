@@ -588,3 +588,119 @@ describe('a repair whose retry time has passed is due, not a wait', () => {
     expect(after.updatedAt).toBe(before.updatedAt);
   });
 });
+
+/**
+ * The review finding this repairs: the probe's '+work' bucket counts packets
+ * with QUEUED or LEASED items, and only the LEASED-under-a-live-heartbeat subset
+ * was moved. A packet whose QUEUED work was claimable for the whole progress
+ * deadline and never claimed stayed live and idle for ever. It now takes the
+ * deadline's existing bound action, with the deadline's own guards.
+ */
+describe('a packet whose queued work nobody claims', () => {
+  const OVERDUE = PACKET_PROGRESS_DEADLINE_MS + 60_000;
+
+  async function overdueWithQueued(opts: { availableAgoMs?: number; leasedAgoMs?: number } = {}): Promise<{ id: string; itemId: string }> {
+    const id = await packet('RESEARCHING', OVERDUE);
+    const item = await enqueueWork({
+      projectId,
+      workType: 'RESEARCH_FRAGMENT',
+      payload: {},
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId: id,
+    });
+    const created = new Date(Date.now() - OVERDUE).toISOString();
+    const available = new Date(Date.now() - (opts.availableAgoMs ?? OVERDUE)).toISOString();
+    const leased = opts.leasedAgoMs === undefined ? null : new Date(Date.now() - opts.leasedAgoMs).toISOString();
+    await getDb().run('UPDATE work_items SET created_at = ?, available_at = ?, leased_at = ? WHERE id = ?', [
+      created,
+      available,
+      leased,
+      item.id,
+    ]);
+    await getDb().run('UPDATE research_orchestrations SET updated_at = ? WHERE id = ?', [created, id]);
+    return { id, itemId: item.id };
+  }
+
+  async function itemState(itemId: string): Promise<string> {
+    return (await getDb().get<{ state: string }>('SELECT state FROM work_items WHERE id = ?', [itemId]))!.state;
+  }
+
+  it('reproduces the failure class: claimable, never claimed past the deadline, and the tick concludes it', async () => {
+    const { id, itemId } = await overdueWithQueued();
+    vi.mocked(recomputeProject).mockClear();
+
+    const swept = await advanceIdlePackets(10);
+
+    expect(swept).toContainEqual({ orchestrationId: id, from: 'RESEARCHING', to: 'FAILED' });
+    const after = (await getOrchestration(id))!;
+    expect(after.status).toBe('FAILED');
+    expect(after.failureReason).toContain('no worker claimed');
+    expect(await itemState(itemId)).toBe('CANCELLED');
+    const event = await getDb().get<{ payload: string }>(
+      `SELECT payload FROM project_events WHERE event_type = 'RESEARCH_FAILED' AND payload LIKE ?`,
+      [`%${id}%`],
+    );
+    expect(JSON.parse(event!.payload)).toMatchObject({ orchestrationId: id, unclaimedWithdrawn: 1 });
+    expect(recomputeProject).toHaveBeenCalledWith(projectId);
+
+    // Idempotent by the state it produced.
+    expect((await advanceIdlePackets(10)).map((e) => e.orchestrationId)).not.toContain(id);
+  });
+
+  it('is reached through the existing tick sweep', async () => {
+    const { id } = await overdueWithQueued();
+    await concludeUnworkablePackets(10);
+    expect((await getOrchestration(id))!.status).toBe('FAILED');
+  });
+
+  it('leaves an item in backoff alone: available only recently is not unclaimed', async () => {
+    const { id, itemId } = await overdueWithQueued({ availableAgoMs: 60_000 });
+    const before = (await getOrchestration(id))!;
+    expect((await advanceIdlePackets(10)).map((e) => e.orchestrationId)).not.toContain(id);
+    expect((await getOrchestration(id))!).toEqual(before);
+    expect(await itemState(itemId)).toBe('QUEUED');
+  });
+
+  it('leaves an item a worker took inside the window alone', async () => {
+    const { id, itemId } = await overdueWithQueued({ leasedAgoMs: 60_000 });
+    expect((await advanceIdlePackets(10)).map((e) => e.orchestrationId)).not.toContain(id);
+    expect(await itemState(itemId)).toBe('QUEUED');
+  });
+
+  it('never touches a packet under the deadline', async () => {
+    const { id, itemId } = await overdueWithQueued();
+    await getDb().run('UPDATE research_orchestrations SET updated_at = ? WHERE id = ?', [
+      new Date(Date.now() - (PACKET_PROGRESS_DEADLINE_MS - 60_000)).toISOString(),
+      id,
+    ]);
+    expect((await advanceIdlePackets(10)).map((e) => e.orchestrationId)).not.toContain(id);
+    expect(await itemState(itemId)).toBe('QUEUED');
+  });
+
+  it('never withdraws work from a plan waiting for a person to approve it (§16)', async () => {
+    const { id, itemId } = await overdueWithQueued();
+    const [fragment] = await createFragments([{
+      orchestrationId: id,
+      projectId,
+      layerId,
+      fragmentIndex: 0,
+      fragmentKey: 'f0',
+      question: 'q',
+      requiredEvidence: [],
+      acceptableSourceTypes: [],
+      excludedSourceTypes: [],
+      completionCriteria: [],
+      dependsOn: [],
+      minIndependentSources: 1,
+    }]);
+    await updateFragment(fragment!.id, { status: 'PLANNED' });
+    await getDb().run('UPDATE research_orchestrations SET updated_at = ? WHERE id = ?', [
+      new Date(Date.now() - OVERDUE).toISOString(),
+      id,
+    ]);
+    expect((await advanceIdlePackets(10)).map((e) => e.orchestrationId)).not.toContain(id);
+    expect(await itemState(itemId)).toBe('QUEUED');
+    expect((await getOrchestration(id))!.status).toBe('RESEARCHING');
+  });
+});
