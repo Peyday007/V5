@@ -691,6 +691,10 @@ export async function registerNextAttempt(
           failedAttempts: failed.map((m) => m.attempt),
         }
       : null;
+  // The caller may pass an earlier attempt's whole evidence (the director does), which can carry
+  // that attempt's own method judgment. A judgment belongs to the attempt it was made for: this
+  // attempt's is the one just made from the family's decisions, or none, never an inherited one.
+  const { methodInadequacy: _inherited, ...carried } = input.evidence;
   const { candidate, created } = await upsertCandidate({
     weaknessKey: `${base}#${attempt}`,
     kind: latest.kind,
@@ -703,7 +707,7 @@ export async function registerNextAttempt(
     denominator: latest.denominator,
     scope: latest.scope,
     severity: latest.severity,
-    evidence: { ...input.evidence, reattempt, ...(methodInadequacy ? { methodInadequacy } : {}), observedAt: new Date().toISOString() },
+    evidence: { ...carried, reattempt, ...(methodInadequacy ? { methodInadequacy } : {}), observedAt: new Date().toISOString() },
     attempt,
     parentId: latest.id,
   });
