@@ -52,14 +52,15 @@ export function planOf(pending, only) {
     const experiment = field(e.id, SAFE, 'experiment id');
     if (only && experiment !== only) continue;
     const suite = field(e.suite, SAFE, 'suite');
-    const baseline = field(e.baselineSha, SHA, 'baseline sha');
+    const baseline = field(e.baselineSha ?? e.baseline_sha, SHA, 'baseline sha');
     rows.push([experiment, suite, 'baseline', '-', 'baseline', '-', '-', baseline]);
     for (const v of e.variants ?? []) {
       const id = field(v.id, SAFE, 'variant id');
       const label = v.label && SAFE.test(String(v.label)) ? String(v.label) : id;
-      const pr = v.prNumber === null || v.prNumber === undefined ? '-' : field(v.prNumber, /^[0-9]{1,7}$/, 'pull request number');
-      const ref = field(v.headRef, REF, 'head ref');
-      const sha = field(v.headSha, SHA, 'head sha');
+      const prn = v.prNumber ?? v.pr_number;
+      const pr = prn === null || prn === undefined ? '-' : field(prn, /^[0-9]{1,7}$/, 'pull request number');
+      const ref = field(v.headRef ?? v.branch, REF, 'head ref');
+      const sha = field(v.headSha ?? v.head_sha, SHA, 'head sha');
       if (pr === '-' && ref === '-' && sha === '-') throw new Error(`variant ${id} names no pull request, branch or commit`);
       rows.push([experiment, suite, 'variant', id, label, pr, ref, sha]);
     }
