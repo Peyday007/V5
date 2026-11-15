@@ -122,6 +122,14 @@ describe('verifyPrepayment', () => {
     const [e] = verifyPrepayment(arrangement({ fulfilment: fulfil, prepayment: prepay }), now);
     expect(e!.credited).toBe(e!.willingness === 'ESTABLISHED' && e!.refundObligations === 'ESTABLISHED' && e!.timing === 'ESTABLISHED');
   });
+  it('with no supplier, timing is read against the day the work is paid for, not left unknown (repair: supplier days unknown blocked AI-only)', () => {
+    const fee = { capture: { kind: 'FEE' as const, fee: pt('fee', 100) } };
+    const [late] = verifyPrepayment(arrangement({ aiLabor: ai, prepayment: prepay, settlementDays: pt('settle', 14) }, fee), now);
+    expect(late).toMatchObject({ willingness: 'ESTABLISHED', refundObligations: 'ESTABLISHED', timing: 'ESTABLISHED', usableBeforeSupplierPayment: false, credited: true });
+    // A supplier with unstated terms is still an unknown.
+    const [unstated] = verifyPrepayment(arrangement({ aiLabor: ai, prepayment: prepay }), now);
+    expect(unstated!.timing).toBe('UNKNOWN');
+  });
   it('returns nothing for an arrangement without a prepayment lever', () => {
     expect(verifyPrepayment(arrangement({ aiLabor: ai }), now)).toEqual([]);
   });

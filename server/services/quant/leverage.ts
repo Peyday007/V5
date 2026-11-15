@@ -249,11 +249,16 @@ export function verifyPrepayment(a: Arrangement, now: Date = new Date()): Prepay
   const willing = resolveOne(k('prepay_willingness'));
   const refund = resolveOne(k('prepay_refund_share'));
   const usable = resolveOne(k('prepay_usable_days'));
-  const supplier = resolveOne(k('supplier_payment_days'));
+  // No supplier node means no supplier: the composer pays its own outlay on delivery, day 0.
+  const hasSupplierDays = composed.graph.nodes.some((n) => n.key === k('supplier_payment_days'));
+  const supplier = hasSupplierDays ? resolveOne(k('supplier_payment_days')) : undefined;
+  const supplierEstablished = !hasSupplierDays || establishes(supplier) === 'ESTABLISHED';
+  const supplierP10 = supplier?.p10 ?? 0;
+  const supplierP90 = supplier?.p90 ?? 0;
   const willingness = establishes(willing);
   const refundObligations = establishes(refund);
-  const timing: Establishment = establishes(usable) === 'ESTABLISHED' && establishes(supplier) === 'ESTABLISHED' ? 'ESTABLISHED' : 'UNKNOWN';
-  const usableBeforeSupplierPayment = timing === 'ESTABLISHED' ? usable!.p90 <= supplier!.p10 ? true : usable!.p10 > supplier!.p90 ? false : null : null;
+  const timing: Establishment = establishes(usable) === 'ESTABLISHED' && supplierEstablished ? 'ESTABLISHED' : 'UNKNOWN';
+  const usableBeforeSupplierPayment = timing === 'ESTABLISHED' ? usable!.p90 <= supplierP10 ? true : usable!.p10 > supplierP90 ? false : null : null;
   const tasks = [
     willingness === 'UNKNOWN' ? 'establish what share of these buyers will prepay, from a source' : null,
     refundObligations === 'UNKNOWN' ? 'establish the refund obligations on prepaid money (terms, law, observed refund share)' : null,

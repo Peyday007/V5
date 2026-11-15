@@ -179,6 +179,32 @@ describe('COM-13-2 composable leverage', () => {
     expect(p50(base({ ...all, settlementDays: undefined }), 'lev_cash_conversion').tier).toBe('UNKNOWN');
   });
 
+  it('an AI-labor-only arrangement with no supplier establishes cash conversion from settlement (repair: supplier days unknown blocked AI-only)', () => {
+    const aiOnly = base({ aiLabor: all.aiLabor!, settlementDays: pt('settle', 14) }, { capture: { kind: 'FEE', fee: pt('fee', 100) } });
+    const composed = composeArrangement(aiOnly);
+    // No supplier: no unanswerable supplier-days question is emitted at all.
+    expect(composed.graph.nodes.some((n) => n.key === 'lev_supplier_payment_days')).toBe(false);
+    expect(composed.formulas.lev_cash_conversion).toBe('lev_settlement_days');
+    const est = reconstruct(composed.graph, 'lev_cash_conversion', now).estimates.lev_cash_conversion!;
+    expect(est.tier).not.toBe('UNKNOWN');
+    expect(est.p50).toBeCloseTo(14, 0);
+    // With a supplier whose terms are unstated, supplier days stay an unknown.
+    const unstated = composeArrangement(base({ aiLabor: all.aiLabor!, settlementDays: pt('settle', 14) }));
+    expect(unstated.graph.nodes.some((n) => n.key === 'lev_supplier_payment_days')).toBe(true);
+    expect(reconstruct(unstated.graph, 'lev_cash_conversion', now).estimates.lev_cash_conversion!.tier).toBe('UNKNOWN');
+  });
+
+  it('with no supplier, prepayment is credited only when usable by the day the work is paid for', () => {
+    const fee = { capture: { kind: 'FEE' as const, fee: pt('fee', 100) } };
+    const late = composeArrangement(base({ aiLabor: all.aiLabor!, prepayment: all.prepayment!, settlementDays: pt('settle', 14) }, fee));
+    expect(late.prepayment?.credited).toBe(true);
+    expect(late.formulas.lev_prepay_credit).toBe('if(lev_prepay_usable_days <= 0, lev_prepay_willingness * (1 - lev_prepay_refund_share), 0)');
+    // Usable 2 days after delivery: after our own outlay, so no reduction in exposure.
+    const exposure = reconstruct(late.graph, 'lev_cash_exposure', now).estimates.lev_cash_exposure!.p50;
+    const noPrepay = p50(base({ aiLabor: all.aiLabor!, settlementDays: pt('settle', 14) }, fee), 'lev_cash_exposure').p50;
+    expect(exposure).toBeCloseTo(noPrepay, 0);
+  });
+
   it('pooling keeps its threshold rule under levers', () => {
     const pooled = composeArrangement(base(all, { pooling: { fixedCost: pt('fx', 500), minParticipants: pt('mp', 10), threshold: true } }));
     expect(pooled.formulas.lev_contribution).toBe('if(lev_transactions >= lev_min_participants, lev_transactions * lev_margin - lev_fixed_cost, 0)');
