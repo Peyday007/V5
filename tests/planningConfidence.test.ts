@@ -148,10 +148,15 @@ describe('(2) evidence strong enough for its margin is CONFIDENCE_VERIFIED', () 
     expect(acceptance.probability!.sample).toBeGreaterThanOrEqual(20);
   });
 
-  it('the lens fixture itself at the repro limits (2,100 contacts for 7 deals, a 12× margin) is verified, and says over what', () => {
-    const { acceptance } = verdict(opening({ close: lensClose, respond: lensRespond }), generous);
-    expect(acceptance.verdict).toBe('CONFIDENCE_VERIFIED');
-    expect(acceptance.probability!.note).toMatch(/5th percentile of reach over 100 draws/);
+  it('the lens fixture itself at the repro limits (2,100 contacts for 7 deals, a 12× margin) clears 90% on its evidence, and says over what', () => {
+    const { acceptance, portfolio } = verdict(opening({ close: lensClose, respond: lensRespond }), generous);
+    expect(portfolio.assurance?.reason).toMatch(/5th percentile of reach is [\d.]+%, above 90%/);
+    expect(portfolio.assurance?.reason).toMatch(/100 parameter draws/);
+    // CHAL-33: its one step puts 44% of the reference at risk, which earns a deep review; with no
+    // independent check answering it the plan is held, not certified on the statistics alone.
+    expect(portfolio.assurance?.challenge?.steps.some((step) => step.scrutiny.tier === 'DEEP' && !step.mayProceed)).toBe(true);
+    expect(portfolio.assurance?.claimsAtLeast90).toBe(false);
+    expect(acceptance.verdict).toBe('QUANTITATIVELY_CONSTRUCTED');
   });
 });
 
