@@ -14,7 +14,12 @@ import type { ProbeResult } from '../probes.ts';
 
 const CLASSES = new Set(['STANDING_GRANT_ENGINEERING', 'THIRD_PARTY_AUTHENTICATED', 'EXTERNALLY_CONSEQUENTIAL']);
 const PATHS = new Set(['API', 'BROWSER', 'INTERNAL']);
-const DISPOSITIONS = new Set(['PERFORMED', 'PROPOSED', 'REFUSED']);
+/**
+ * What a decision may say. A decision precedes the effect, so the writer says AUTHORIZED; rows written
+ * before that distinction say PERFORMED for the same thing and are read as AUTHORIZED. What Brain
+ * actually did is the AUTHORITY_EFFECT receipt beside it.
+ */
+const DISPOSITIONS = new Set(['AUTHORIZED', 'PERFORMED', 'PROPOSED', 'REFUSED']);
 /** The causes under which a consequential effect may be performed. */
 const AUTHORIZING = new Set(['ALLOWED', 'OWNER_APPROVED', 'RELEASE_ENVELOPE']);
 /** Keys that would mean a credential travelled into the ledger. */
@@ -61,8 +66,9 @@ async function eventsOfKind(kind: string): Promise<Array<{ projectId: string; cr
   });
 }
 
+/** Allowed to go ahead: AUTHORIZED, or the legacy PERFORMED that meant the same. */
 function performed(x: Decision): boolean {
-  return x.d.disposition === 'PERFORMED' && x.d.ok === true;
+  return (x.d.disposition === 'AUTHORIZED' || x.d.disposition === 'PERFORMED') && x.d.ok === true;
 }
 
 /** The ledger's own shape on every row: what any reading of authority depends on. */
@@ -71,7 +77,7 @@ function malformed(all: Decision[]): string | null {
     const scope = x.d.scope as { projectId?: unknown } | undefined;
     if (!CLASSES.has(String(x.d.consequenceClass))) return `decision ${x.id} has no consequential class (${String(x.d.consequenceClass)})`;
     if (!PATHS.has(String(x.d.path))) return `decision ${x.id} does not say which path it came by`;
-    if (!DISPOSITIONS.has(String(x.d.disposition))) return `decision ${x.id} does not say whether Brain performed, proposed or refused`;
+    if (!DISPOSITIONS.has(String(x.d.disposition))) return `decision ${x.id} does not say whether Brain authorized, proposed or refused`;
     if (typeof x.d.cause !== 'string' || x.d.cause === '') return `decision ${x.id} carries no machine cause`;
     if (!scope || scope.projectId !== x.projectId) return `decision ${x.id} is not scoped to the project it is filed under`;
     const leaked = Object.keys(x.d).find((key) => SECRET_KEY.test(key));

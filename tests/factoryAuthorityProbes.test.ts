@@ -38,7 +38,7 @@ describe('the authority probes', () => {
 
   it('pass on a ledger of well-formed decisions, every performed one authorized', async () => {
     await decision({ action: 'CONTACT_BUYER', consequenceClass: 'EXTERNALLY_CONSEQUENTIAL', disposition: 'PERFORMED', cause: 'ALLOWED', ok: true });
-    await decision({ action: 'FACTORY_DEPLOY', consequenceClass: 'STANDING_GRANT_ENGINEERING', disposition: 'PERFORMED', cause: 'RELEASE_ENVELOPE', ok: true });
+    await decision({ action: 'FACTORY_DEPLOY', consequenceClass: 'STANDING_GRANT_ENGINEERING', disposition: 'AUTHORIZED', cause: 'RELEASE_ENVELOPE', ok: true });
     await decision({ action: 'AUTHENTICATED_OPERATION', consequenceClass: 'THIRD_PARTY_AUTHENTICATED', path: 'BROWSER', disposition: 'REFUSED', cause: 'READ_ONLY_GRANT' });
     for (const name of NAMES) {
       const result = await getProbe(name)!({});
@@ -47,7 +47,7 @@ describe('the authority probes', () => {
   });
 
   it('fail when a read-only grant carried an act, or an act ran without an authorizing cause', async () => {
-    await decision({ action: 'SEND_OUTREACH', consequenceClass: 'EXTERNALLY_CONSEQUENTIAL', disposition: 'PERFORMED', cause: 'READ_ONLY_GRANT', ok: true });
+    await decision({ action: 'SEND_OUTREACH', consequenceClass: 'EXTERNALLY_CONSEQUENTIAL', disposition: 'AUTHORIZED', cause: 'READ_ONLY_GRANT', ok: true });
     for (const name of NAMES) expect((await getProbe(name)!({})).ok, name).toBe(false);
   });
 
