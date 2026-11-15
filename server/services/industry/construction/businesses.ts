@@ -70,7 +70,10 @@ export interface Business {
 /** A position's key. A position paid on its natural basis keeps the five-axis key it always had. */
 export function positionKey(p: Position): string {
   const base = `${p.contract}/${p.supply}/${p.assets}/${p.aggregation}/${p.information}`;
-  return hasOwnRevenue(p) ? `${base}/${p.revenue}` : base;
+  const paid = hasOwnRevenue(p) ? `${base}/${p.revenue}` : base;
+  // When money moves and what recurs (W-8): stated only off their defaults, so every earlier key is unchanged.
+  const timed = p.moneyTiming && p.moneyTiming !== 'ON_DELIVERY' ? `${paid}@${p.moneyTiming}` : paid;
+  return p.recurrence && p.recurrence !== 'ONE_OFF' ? `${timed}~${p.recurrence}` : timed;
 }
 
 /**

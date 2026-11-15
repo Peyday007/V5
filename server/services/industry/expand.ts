@@ -88,6 +88,8 @@ import {
   mapTitle,
   scanQuestion,
   scanTitle,
+  transferQuestion,
+  transferTitle,
 } from './questions.ts';
 import type { OpportunityOrigin } from './construction/origins.ts';
 import { commercialRoles, SEED_ROLES, type FlowRoles } from './construction/roles.ts';
@@ -426,6 +428,22 @@ async function compose(input: {
         round: ask.round,
         childrenSoFar: coverage?.children ?? 0,
       }),
+    };
+  }
+
+  /*
+   * A §82 transfer (W-8): a held precedent's design carried to this population,
+   * asked as a hypothesis that names its material differences.
+   */
+  const { transferOfBucket, transferWords } = await import('./transfer.ts');
+  const transfer = transferOfBucket(ask.bucketId);
+  if (transfer) {
+    const precedent = await getOpportunity(transfer.precedentId);
+    if (!precedent) return null;
+    const words = transferWords(transfer.design, precedent, path);
+    return {
+      title: transferTitle(precedent, path),
+      question: transferQuestion({ precedent, design: words.design, position: words.position, differences: words.differences, path, objective: mode.objective }),
     };
   }
 

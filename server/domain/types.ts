@@ -1,4 +1,5 @@
 import type { BinPurpose } from './binPurpose.ts';
+import type { Position } from './construction.ts';
 /**
  * Domain contract for Brain.
  *
@@ -10316,6 +10317,9 @@ export interface MonetizationPathRow {
   verdict_inputs_digest: string | null;
   verdict_round_id: string | null;
   verdict_at: string | null;
+  /* Migration 155: the §92 position the arrangement's design occupies (K-6). */
+  position_json: string | null;
+  position_key: string | null;
 }
 
 /**
@@ -10345,6 +10349,9 @@ export interface ConstructedArrangementRecord {
   evaluatedCount: number;
   lastEvaluation: { goalId: string; readingId: string | null; contributionCents: number | null; picked: boolean } | null;
   verdict: { verdict: 'CONFIRMED' | 'REFUTED'; inputsDigest: string; roundId: string | null; at: string | null } | null;
+  /** The §92 position the design occupies (migration 155), and its key; null on a row not re-composed since. */
+  position: Position | null;
+  positionKey: string | null;
   createdAt: string;
   updatedAt: string;
 }
