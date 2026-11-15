@@ -2956,6 +2956,7 @@ export async function advanceIdlePackets(
     out.push({ orchestrationId: row.id, from: before.status, to: result.status });
   }
   out.push(...(await stampPacketsWorkedUnderLease(live, nowMs, cutoff, limit)));
+  out.push(...(await concludeUnclaimedPackets(live, nowMs, limit)));
   return out;
 }
 
@@ -3011,6 +3012,101 @@ async function stampPacketsWorkedUnderLease(
 }
 
 /**
+ * The other '+work' half of "packet idle holding a slot": work queued and never
+ * claimed (RECOVERY.STALLS, attempt 3 review finding).
+ *
+ * `stampPacketsWorkedUnderLease` moves a packet whose worker is demonstrably
+ * moving it. A packet whose outstanding work is only QUEUED items that have been
+ * claimable for the whole progress deadline and that no worker took in that
+ * time is not being moved by anybody, and nothing else concludes it: the
+ * selection above skips it because it has outstanding work, the deadline
+ * refuses it for the same reason, and `concludeUnworkablePackets` reaches only
+ * items past their attempt ceilings. So it stayed live and idle for ever — the
+ * probe's '+work' reading — which is a progress deadline with no bound action.
+ *
+ * The bound action is the existing one. Its never-claimed items are withdrawn
+ * through `cancelWork` (the queue's own cancellation, which wins against any
+ * claim that races it, invariant 24) and the packet is concluded through
+ * `concludeStalledPacket`, which keeps every one of its guards: a plan awaiting
+ * a person's approval or a repair scheduled to return is left alone before any
+ * item is touched; a packet whose fragment asks for a person, or that stands
+ * behind a mission, parks at NEEDS_HUMAN; everything else ends FAILED with its
+ * reason and an event, and re-derives state (§6).
+ *
+ * Fail-closed, every condition load-bearing, all read from rows:
+ *   - the packet itself has not moved for `PACKET_PROGRESS_DEADLINE_MS`;
+ *   - it has no LEASED item at all, live or lapsed — a lease is a worker's, and
+ *     a lapsed one is reclaimed by the queue;
+ *   - every QUEUED item was created, and became available, before the deadline
+ *     window began, so a backoff or a fresh enqueue is never read as unclaimed;
+ *   - no QUEUED item was leased inside the window (a reclaimed item that a
+ *     worker took recently is being worked, if slowly);
+ *   - every QUEUED item still has attempts left — one past its ceiling belongs
+ *     to `concludeUnworkablePackets`, which runs first in the same tick.
+ * Nothing is synthesized, no gate or approval is consulted or skipped, and
+ * every fragment, claim, attempt and cancelled item keeps its row.
+ */
+async function concludeUnclaimedPackets(
+  live: string[],
+  nowMs: number,
+  limit: number,
+): Promise<{ orchestrationId: string; from: string; to: string }[]> {
+  const deadlineCutoff = new Date(nowMs - PACKET_PROGRESS_DEADLINE_MS).toISOString();
+  const rows = await getDb().all<{ id: string }>(
+    `SELECT o.id AS id
+       FROM research_orchestrations o
+      WHERE (o.status IN (${live.map(() => '?').join(', ')}) OR (o.status = 'QUEUED' AND o.provider = ?))
+        AND o.updated_at < ?
+        AND EXISTS (SELECT 1 FROM work_items w WHERE w.orchestration_id = o.id AND w.state = 'QUEUED')
+        AND NOT EXISTS (SELECT 1 FROM work_items w WHERE w.orchestration_id = o.id AND w.state = 'LEASED')
+        AND NOT EXISTS (SELECT 1 FROM work_items w
+                         WHERE w.orchestration_id = o.id AND w.state = 'QUEUED'
+                           AND (w.created_at >= ? OR w.available_at >= ?
+                                OR (w.leased_at IS NOT NULL AND w.leased_at >= ?)
+                                OR w.attempt_count >= w.max_attempts))
+      ORDER BY o.updated_at, o.id
+      LIMIT ?`,
+    [...live, 'WORKER', deadlineCutoff, deadlineCutoff, deadlineCutoff, deadlineCutoff, Math.max(1, limit)],
+  );
+  const out: { orchestrationId: string; from: string; to: string }[] = [];
+  for (const row of rows) {
+    const before = await getOrchestration(row.id);
+    if (!before) continue;
+    if (await waitingByDesign(before.id, nowMs)) continue;
+    const outstanding = (await listWorkItemsForOrchestration(before.id)).filter((item) => LIVE_ITEM.has(item.state));
+    // Re-read: a worker that claimed one since the selection owns this packet's movement now.
+    if (outstanding.length === 0 || outstanding.some((item) => item.state !== 'QUEUED')) continue;
+    for (const item of outstanding) {
+      await cancelWork(
+        item.id,
+        `This ${item.workType} item was claimable for the whole ${PACKET_PROGRESS_DEADLINE_MS / 3_600_000}-hour ` +
+          'progress deadline and no worker claimed it, while its packet did not move, so the packet ' +
+          'is concluded rather than left holding a slot. Its attempts and history are kept.',
+      );
+    }
+    const concluded = await concludeStalledPacket(before, nowMs, null, outstanding.length);
+    if (concluded) {
+      out.push({ orchestrationId: before.id, from: before.status, to: concluded });
+    } else {
+      // The packet moved under us; let its own advance say what it now is.
+      await advancePacket(before.id).catch(() => undefined);
+    }
+  }
+  return out;
+}
+
+/**
+ * A packet waiting by design, not stalled: a plan awaiting a person's approval
+ * (the §16 gate) or a repair scheduled to return. Read by both deadline paths.
+ */
+async function waitingByDesign(orchestrationId: string, nowMs: number): Promise<boolean> {
+  const fragments = await currentFragments(orchestrationId);
+  if (fragments.some((fragment) => fragment.status === 'PLANNED')) return true;
+  const now = new Date(nowMs).toISOString();
+  return fragments.some((fragment) => fragment.nextRetryAt !== null && fragment.nextRetryAt > now);
+}
+
+/**
  * The bound action of the progress deadline: conclude a packet whose advance has
  * stopped producing movement.
  *
@@ -3055,21 +3151,25 @@ async function concludeStalledPacket(
   packet: ResearchOrchestration,
   nowMs: number,
   failure: string | null,
+  unclaimedWithdrawn = 0,
 ): Promise<'FAILED' | 'NEEDS_HUMAN' | null> {
   const idleMs = nowMs - Date.parse(packet.updatedAt);
   if (!(idleMs >= PACKET_PROGRESS_DEADLINE_MS)) return null;
+  if (await waitingByDesign(packet.id, nowMs)) return null;
   const fragments = await currentFragments(packet.id);
-  if (fragments.some((fragment) => fragment.status === 'PLANNED')) return null;
   const now = new Date(nowMs).toISOString();
-  if (fragments.some((fragment) => fragment.nextRetryAt !== null && fragment.nextRetryAt > now)) return null;
 
   const fragmentAsks = fragments.some((fragment) => fragment.status === 'NEEDS_HUMAN');
   const mission = fragmentAsks ? null : await getMissionByOrchestration(packet.id);
   const needsPerson = fragmentAsks || mission !== null;
   const hours = Math.floor(idleMs / 3_600_000);
   const reason =
-    `This packet sat ${packet.status} for ${hours} hour${hours === 1 ? '' : 's'} with no work queued ` +
-    `or leased, and advancing it ${failure ? `failed (${failure.slice(0, 300)})` : 'changed nothing'}. ` +
+    (unclaimedWithdrawn > 0
+      ? `This packet sat ${packet.status} for ${hours} hour${hours === 1 ? '' : 's'} with ` +
+        `${unclaimedWithdrawn} work item${unclaimedWithdrawn === 1 ? '' : 's'} queued and claimable ` +
+        'that no worker claimed, so those items were withdrawn. '
+      : `This packet sat ${packet.status} for ${hours} hour${hours === 1 ? '' : 's'} with no work queued ` +
+        `or leased, and advancing it ${failure ? `failed (${failure.slice(0, 300)})` : 'changed nothing'}. `) +
     `That is past the ${PACKET_PROGRESS_DEADLINE_MS / 3_600_000}-hour progress deadline, so it is ` +
     (fragmentAsks
       ? 'parked for the person one of its fragments already asks for, and it no longer holds a ' +
@@ -3103,6 +3203,7 @@ async function concludeStalledPacket(
       stuckStatus: packet.status,
       idleMs,
       progressDeadlineMs: PACKET_PROGRESS_DEADLINE_MS,
+      ...(unclaimedWithdrawn > 0 ? { unclaimedWithdrawn } : {}),
       ...(failure ? { advanceError: failure.slice(0, 300) } : {}),
     },
   });
