@@ -37,9 +37,27 @@ export function normalizeRunpodUrl(raw: string): string {
   return /\/v1$/.test(trimmed) ? trimmed : `${trimmed}/v1`;
 }
 
+/*
+ * The pod Brain moved to. A stopped pod is pinned to its host, and when that
+ * host's GPU is taken it cannot start again (production 2026-11-15: stopped idle
+ * at ~14:10Z, then 109 starts refused "not enough free GPUs on the host machine"
+ * over eight hours while 30 research items waited). The supervisor then creates
+ * the same recipe on another host (`runpodPod.ts`) and records `MIGRATED` with the
+ * new address; that row, not a deploy secret, is where the lane now points.
+ */
+let podUrlOverride: string | null = null;
+export function setRunpodUrlOverride(url: string | null): void {
+  podUrlOverride = url ? normalizeRunpodUrl(url) : null;
+}
+export function runpodUrlOverride(): string | null {
+  return podUrlOverride;
+}
+
 /** Read per call, like the lane's own config. Null unless the GPU is switched to primary. */
 export function runpodConfig(env: NodeJS.ProcessEnv = process.env): RunpodConfig | null {
-  const url = env['BRAIN_RUNPOD_URL']?.trim();
+  const configured = env['BRAIN_RUNPOD_URL']?.trim();
+  // The override applies only where a pod is configured at all: it moves the pod, never turns the GPU on.
+  const url = configured ? (podUrlOverride ?? configured) : configured;
   const mode = (env['BRAIN_RUNPOD_MODE'] ?? 'off').trim().toLowerCase();
   if (!url || mode !== 'primary') return null;
   const model = env['BRAIN_RUNPOD_MODEL']?.trim() || 'Qwen/Qwen3-8B-AWQ';

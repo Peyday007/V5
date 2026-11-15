@@ -24,7 +24,8 @@
  */
 import { getDb } from '../../db/database.ts';
 import { recordBinEvent } from '../../repos/bins.ts';
-import { runpodConfig, setRunpodPaused, type Fetch } from './runpod.ts';
+import { runpodConfig, runpodUrlOverride, setRunpodPaused, setRunpodUrlOverride, type Fetch } from './runpod.ts';
+import { createPod, deletePod, DEFAULT_MAX_USD_PER_HOUR, POD_NAME, podUrl, RECIPES, recipeFor, type PodRecipe } from './runpodRestore.ts';
 
 const API = 'https://rest.runpod.io/v1';
 export const DEFAULT_IDLE_STOP_MS = 15 * 60_000;
@@ -50,7 +51,8 @@ export function podConfig(env: NodeJS.ProcessEnv = process.env): PodConfig | nul
   const gpu = runpodConfig(env);
   const apiKey = env['BRAIN_RUNPOD_API_KEY']?.trim();
   if (!gpu || !apiKey || (env['BRAIN_RUNPOD_AUTOSTOP'] ?? '').trim().toLowerCase() === 'off') return null;
-  const podId = env['BRAIN_RUNPOD_POD_ID']?.trim() || podIdFromUrl(env['BRAIN_RUNPOD_URL'] ?? '');
+  const moved = runpodUrlOverride();
+  const podId = (moved ? podIdFromUrl(moved) : null) || env['BRAIN_RUNPOD_POD_ID']?.trim() || podIdFromUrl(env['BRAIN_RUNPOD_URL'] ?? '');
   if (!podId) return null;
   const minutes = Number(env['BRAIN_RUNPOD_IDLE_STOP_MINUTES']);
   return { apiKey, podId, idleStopMs: Number.isFinite(minutes) && minutes > 0 ? minutes * 60_000 : DEFAULT_IDLE_STOP_MS, vllm: { url: gpu.url, key: gpu.key } };
@@ -151,6 +153,135 @@ export async function vllmReady(config: PodConfig, fetchImpl: Fetch): Promise<bo
 /** How long a refused start keeps the pod from being stopped again, unless a start has succeeded since. */
 export const START_FAILURE_MEMORY_MS = 7 * 24 * 3_600_000;
 
+/* ------------------------------------------------------------------------- */
+/* Moving a pod whose host has no GPU left                                    */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * RunPod's refusal when the pod's own host has no free GPU. A stopped pod is
+ * pinned to that host, so retrying the same start cannot succeed until someone
+ * else lets the card go — 109 refusals over eight hours on 2026-11-15, and the
+ * same on 2026-11-05/06 until it happened to free. That is not a reason to keep
+ * the GPU on forever; it is a reason to move.
+ */
+export const HOST_FULL = /not enough free GPUs|no (?:free|available) GPUs?|host machine/i;
+/** Consecutive host refusals, with research waiting, after which the pod is moved rather than retried. */
+export const MIGRATE_AFTER_REFUSALS = 3;
+
+/** Pure: move the pod now? */
+export function shouldMigrate(input: { status: PodStatus; waiting: number; hostRefusals: number }): boolean {
+  return input.status === 'EXITED' && input.waiting > 0 && input.hostRefusals >= MIGRATE_AFTER_REFUSALS;
+}
+
+/** The recipe the pod serves: the active one when it serves this model, else the first that does. */
+export function recipeServing(model: string | null | undefined): PodRecipe {
+  const active = recipeFor(null);
+  if (!model || active.served === model) return active;
+  return Object.values(RECIPES).find((r) => r.served === model) ?? active;
+}
+
+const eventMeasures = (raw: unknown): Record<string, unknown> => {
+  if (raw && typeof raw === 'object') return raw as Record<string, unknown>;
+  try {
+    return JSON.parse(String(raw ?? '{}')) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+};
+
+/** Consecutive host refusals since the last start or move, newest first, read from the rows. */
+async function hostRefusalsSinceStart(): Promise<number> {
+  try {
+    const rows = await getDb().all<{ outcome: string; reason: string | null }>(
+      `SELECT outcome, reason FROM bin_events WHERE event_type = 'RUNPOD_POD' AND outcome IN ('STARTED', 'START_FAILED', 'MIGRATED')
+        ORDER BY at DESC LIMIT 20`,
+    );
+    let n = 0;
+    for (const row of rows) {
+      if (row.outcome !== 'START_FAILED' || !HOST_FULL.test(row.reason ?? '')) break;
+      n++;
+    }
+    return n;
+  } catch {
+    return 0;
+  }
+}
+
+/** Point the lane at the pod the newest `MIGRATED` row names. Survives restarts because it is a row. */
+export async function loadMovedPod(): Promise<string | null> {
+  try {
+    const row = await getDb().get<{ measures: unknown }>(
+      `SELECT measures FROM bin_events WHERE event_type = 'RUNPOD_POD' AND outcome = 'MIGRATED' ORDER BY at DESC LIMIT 1`,
+    );
+    const url = row ? eventMeasures(row.measures)['url'] : null;
+    if (typeof url === 'string' && url && url !== runpodUrlOverride()) setRunpodUrlOverride(url);
+    return typeof url === 'string' ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+export interface MigrateDeps {
+  fetchImpl?: Fetch;
+  create?: typeof createPod;
+  remove?: typeof deletePod;
+  env?: NodeJS.ProcessEnv;
+}
+
+/**
+ * Create the same recipe on another host, point the lane at it, and delete the
+ * stranded pod (stopped, unstartable, holding nothing a new pod does not load
+ * again). Every step is a `RUNPOD_POD` row.
+ */
+export async function migratePod(config: PodConfig, why: string, deps: MigrateDeps = {}): Promise<{ ok: boolean; url: string | null; podId: string | null; detail: string }> {
+  const env = deps.env ?? process.env;
+  const served = runpodConfig(env)?.model ?? null;
+  const recipe = recipeServing(served);
+  const ceiling = Number(env['BRAIN_RUNPOD_MAX_USD_PER_HOUR']) > 0 ? Number(env['BRAIN_RUNPOD_MAX_USD_PER_HOUR']) : DEFAULT_MAX_USD_PER_HOUR;
+  const from = config.podId;
+  if (!config.vllm.key) {
+    const detail = 'no vLLM key (BRAIN_RUNPOD_KEY) to start a replacement with';
+    await recordBinEvent({ eventType: 'RUNPOD_POD', provider: 'runpod', outcome: 'MIGRATE_FAILED', reason: `${why}; ${detail}`.slice(0, 400), measures: { from }, evidenceClass: 'MEASURED' }).catch(() => undefined);
+    return { ok: false, url: null, podId: null, detail };
+  }
+  try {
+    const made = await (deps.create ?? createPod)({
+      apiKey: config.apiKey,
+      vllmKey: config.vllm.key,
+      recipe,
+      name: POD_NAME,
+      maxUsdPerHour: ceiling,
+      ...(served ? { model: served } : {}),
+      ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
+    });
+    const url = podUrl(made.podId);
+    setRunpodUrlOverride(url);
+    setRunpodPaused('pod starting');
+    await recordBinEvent({
+      eventType: 'RUNPOD_POD',
+      provider: 'runpod',
+      outcome: 'MIGRATED',
+      reason: `${why}; moved to ${made.podId} (${recipe.key}) at $${made.costPerHr ?? '?'}/h`.slice(0, 400),
+      measures: { from, podId: made.podId, url, recipe: recipe.key, costPerHr: made.costPerHr },
+      evidenceClass: 'MEASURED',
+    }).catch(() => undefined);
+    const gone = await (deps.remove ?? deletePod)(config.apiKey, from, deps.fetchImpl).catch(() => 0);
+    await recordBinEvent({
+      eventType: 'RUNPOD_POD',
+      provider: 'runpod',
+      outcome: gone >= 200 && gone < 300 ? 'OLD_POD_DELETED' : 'OLD_POD_DELETE_FAILED',
+      reason: `stranded pod ${from} (HTTP ${gone})`,
+      measures: { podId: from },
+      evidenceClass: 'MEASURED',
+    }).catch(() => undefined);
+    return { ok: true, url, podId: made.podId, detail: made.log.join(' | ') };
+  } catch (error) {
+    const detail = (error as Error).message.replace(/\s+/g, ' ').slice(0, 300);
+    await recordBinEvent({ eventType: 'RUNPOD_POD', provider: 'runpod', outcome: 'MIGRATE_FAILED', reason: `${why}; ${detail}`.slice(0, 400), measures: { from, recipe: recipe.key, ceiling }, evidenceClass: 'MEASURED' }).catch(() => undefined);
+    return { ok: false, url: null, podId: null, detail };
+  }
+}
+
 /** Whether RunPod's most recent answer to a start, in the memory window, was a refusal. */
 async function lastStartFailed(now: number): Promise<boolean> {
   try {
@@ -190,8 +321,17 @@ export interface SuperviseResult {
  */
 export async function superviseRunpodPod(
   input: { waiting: number; inFlight: number },
-  deps: { fetchImpl?: Fetch; now?: () => number; config?: PodConfig | null; force?: boolean; lastStartFailed?: (now: number) => Promise<boolean> } = {},
+  deps: {
+    fetchImpl?: Fetch;
+    now?: () => number;
+    config?: PodConfig | null;
+    force?: boolean;
+    lastStartFailed?: (now: number) => Promise<boolean>;
+    hostRefusals?: () => Promise<number>;
+    migrate?: MigrateDeps;
+  } = {},
 ): Promise<SuperviseResult | null> {
+  if (deps.config === undefined) await loadMovedPod();
   const config = deps.config === undefined ? podConfig() : deps.config;
   if (!config) return null;
   const now = (deps.now ?? Date.now)();
@@ -211,6 +351,16 @@ export async function superviseRunpodPod(
     const startFailedRecently = pod.status === 'RUNNING' && (await (deps.lastStartFailed ?? lastStartFailed)(now));
     const decision = decidePod({ status: pod.status, waiting: input.waiting, inFlight: input.inFlight, idleSince: state.idleSince, lastActionAt: state.lastActionAt, now, idleStopMs: config.idleStopMs, startFailedRecently });
     let acted = false;
+    const refusals = decision.action === 'START' ? await (deps.hostRefusals ?? hostRefusalsSinceStart)() : 0;
+    if (decision.action === 'START' && shouldMigrate({ status: pod.status, waiting: input.waiting, hostRefusals: refusals })) {
+      const moved = await migratePod(config, `${refusals} start(s) refused for a full host with ${input.waiting} research item(s) waiting`, {
+        ...(deps.migrate ?? {}),
+        ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
+      });
+      state.lastActionAt = now;
+      state.idleSince = null;
+      return { status: pod.status, ready: false, decision: { action: 'START', reason: moved.ok ? `moved to ${moved.podId}` : `move failed: ${moved.detail}` }, acted: moved.ok };
+    }
     if (decision.action !== 'NONE') {
       const path = decision.action === 'STOP' ? '/stop' : '/start';
       let outcome: string;

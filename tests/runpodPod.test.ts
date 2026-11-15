@@ -204,3 +204,75 @@ describe('a paused GPU slot', () => {
     expect(runpodCallWindow(60_000)).toEqual({ ok: 0, failed: 1 });
   });
 });
+
+describe('moving a pod whose host has no GPU left (production 2026-11-15: 109 refused starts)', () => {
+  it('moves only a stopped pod with research waiting after three host refusals', async () => {
+    const { shouldMigrate, HOST_FULL } = await import('../server/services/cheap/runpodPod.ts');
+    expect(HOST_FULL.test('start pod: There are not enough free GPUs on the host machine to start this pod.')).toBe(true);
+    expect(HOST_FULL.test('unauthorized')).toBe(false);
+    expect(shouldMigrate({ status: 'EXITED', waiting: 30, hostRefusals: 3 })).toBe(true);
+    expect(shouldMigrate({ status: 'EXITED', waiting: 30, hostRefusals: 2 })).toBe(false);
+    expect(shouldMigrate({ status: 'EXITED', waiting: 0, hostRefusals: 9 })).toBe(false);
+    expect(shouldMigrate({ status: 'RUNNING', waiting: 30, hostRefusals: 9 })).toBe(false);
+  });
+
+  it('creates the same recipe elsewhere, points the lane at it, deletes the stranded pod, and starts nothing on the old one', async () => {
+    const { runpodConfig, setRunpodUrlOverride } = await import('../server/services/cheap/runpod.ts');
+    const pod = { status: 'EXITED', vllm: false };
+    const { calls, fetchImpl } = fakeRunpod(pod);
+    const created: unknown[] = [];
+    const deleted: string[] = [];
+    const result = await superviseRunpodPod({ waiting: 30, inFlight: 0 }, {
+      config,
+      fetchImpl,
+      now: () => 10 * 3_600_000,
+      force: true,
+      lastStartFailed: async () => false,
+      hostRefusals: async () => 3,
+      migrate: {
+        env: { BRAIN_RUNPOD_URL: config.vllm.url, BRAIN_RUNPOD_MODE: 'primary', BRAIN_RUNPOD_MODEL: 'Qwen/Qwen3-4B-AWQ' },
+        create: (async (input: { recipe: { key: string }; maxUsdPerHour: number }) => {
+          created.push(input);
+          return { podId: 'newpod12345678', url: 'x', status: 'RUNNING', costPerHr: 0.19, created: true, log: ['created'] };
+        }) as never,
+        remove: async (_key: string, id: string) => {
+          deleted.push(id);
+          return 204;
+        },
+      },
+    });
+    expect(result?.acted).toBe(true);
+    expect(result?.decision.reason).toMatch(/moved to newpod12345678/);
+    expect(created).toHaveLength(1);
+    expect((created[0] as { recipe: { key: string }; maxUsdPerHour: number }).recipe.key).toBe('qwen3-4b-awq-tools');
+    expect((created[0] as { maxUsdPerHour: number }).maxUsdPerHour).toBeLessThanOrEqual(0.24);
+    expect(deleted).toEqual([config.podId]);
+    expect(calls.some((c) => c.url.endsWith('/start'))).toBe(false);
+    // The lane now points at the new pod, and its pod id follows.
+    expect(runpodConfig({ BRAIN_RUNPOD_URL: config.vllm.url, BRAIN_RUNPOD_MODE: 'primary' })?.url).toBe('https://newpod12345678-8000.proxy.runpod.net/v1');
+    expect(podConfig({ BRAIN_RUNPOD_URL: config.vllm.url, BRAIN_RUNPOD_MODE: 'primary', BRAIN_RUNPOD_API_KEY: 'k', BRAIN_RUNPOD_POD_ID: 'yxabw9083tp8hk' })?.podId).toBe('newpod12345678');
+    // The override moves a configured pod; it never turns an unconfigured GPU on.
+    expect(runpodConfig({ BRAIN_RUNPOD_MODE: 'primary' })).toBeNull();
+    setRunpodUrlOverride(null);
+  });
+
+  it('retries the start on the same host before the third refusal', async () => {
+    const pod = { status: 'EXITED', vllm: false };
+    const { calls, fetchImpl } = fakeRunpod(pod);
+    await superviseRunpodPod({ waiting: 30, inFlight: 0 }, { config, fetchImpl, now: () => 10 * 3_600_000, force: true, lastStartFailed: async () => false, hostRefusals: async () => 2 });
+    expect(calls.some((c) => c.url.endsWith('/start'))).toBe(true);
+  });
+
+  it('records a failed move and changes nothing when no replacement can be had', async () => {
+    const { runpodUrlOverride } = await import('../server/services/cheap/runpod.ts');
+    const pod = { status: 'EXITED', vllm: false };
+    const { fetchImpl } = fakeRunpod(pod);
+    const result = await superviseRunpodPod({ waiting: 30, inFlight: 0 }, {
+      config, fetchImpl, now: () => 10 * 3_600_000, force: true, lastStartFailed: async () => false, hostRefusals: async () => 5,
+      migrate: { env: { BRAIN_RUNPOD_URL: config.vllm.url, BRAIN_RUNPOD_MODE: 'primary' }, create: (async () => { throw new Error('no pod within $0.24/h could be created'); }) as never, remove: async () => 204 },
+    });
+    expect(result?.acted).toBe(false);
+    expect(result?.decision.reason).toMatch(/move failed/);
+    expect(runpodUrlOverride()).toBeNull();
+  });
+});
