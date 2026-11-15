@@ -55,6 +55,33 @@ import { reconcileRegisterIfDue, type RegisterPassReport } from './openQuestions
 import { recordDecisionsIfDue } from './decisionRecord.ts';
 import { reconcileCalibrationIfDue, type CalibrationPassReport } from './calibration.ts';
 import { reconcileFactChangesIfDue, type ReconsiderPassReport } from './reconsider.ts';
+import type { LaneCapacityReading, ResearchYieldReading } from './researchYield.ts';
+import {
+  APPLICABLE_REMEDIES,
+  COMMERCIAL_FLOOR,
+  EXPLORATION_FLOOR,
+  LANE_REMEDIES,
+  REMEDY_LEVERS,
+  RESEARCH_REMEDY_APPLIED_EVENT,
+  MIN_PURPOSE_SHARE,
+  RESEARCH_PURPOSES,
+  SYSTEM_HEALTH_FLOOR,
+  decideResearchAllocation,
+  binPriorityShift,
+  normalizeShares,
+  purposePriorityShifts,
+  purposesBelowFloor,
+  type AllocationDecision,
+  type AllocationInput,
+  type BottleneckMeasurement,
+  type LaneMeasurement,
+  type LaneRemedy,
+  type PurposeMeasurement,
+  type PriorityShift,
+  type ResearchPurpose,
+  type SharesInForce,
+} from './researchAllocation.ts';
+import { getDb } from '../../db/database.ts';
 
 export interface GoalTickReport {
   goals: number;
@@ -85,6 +112,17 @@ export interface GoalTickReport {
     calibration: CalibrationPassReport[] | { error: string } | null;
     reconsidered: ReconsiderPassReport | { error: string } | null;
   };
+  /**
+   * The research allocation across the five purposes (RES-07, RES-15-5), decided
+   * from the window's measured yield at most once an hour. Null when the pass was
+   * not due; an error is reported here, never thrown into the tick.
+   */
+  research?: ResearchAllocationReport | { error: string } | null;
+  /**
+   * The decision in force applied to the work: each purpose's priority step and
+   * the bins it moved. Null when no decision is recorded, or it was held.
+   */
+  researchApplied?: ResearchApplication | null;
 }
 
 /** The three decision-history passes, injectable for tests. */
@@ -129,6 +167,90 @@ async function runMemoryPasses(passes: MemoryPasses, now: number): Promise<GoalT
   return { decisions, calibration, reconsidered };
 }
 
+export interface ResearchApplication {
+  /** The decision applied, by its fingerprint. */
+  fingerprint: string | null;
+  shifts: Record<ResearchPurpose, PriorityShift>;
+  belowFloor: ResearchPurpose[];
+  /** Goal bins whose priority the step moved off their goal's rank. */
+  goalBins: { binId: string; purposes: string[]; shift: PriorityShift }[];
+  /** Bins no goal pursues, raised because a purpose they serve is below a protected floor. */
+  floorRaised: { binId: string; purposes: string[]; from: number; to: number }[];
+  /**
+   * Queued research items (the free lane's work among them) raised because a
+   * purpose they serve is below a protected floor: the claim order is
+   * `priority DESC`, so this reserves the next free slots for the floor.
+   */
+  floorReserved?: { workItemId: string; purposes: string[]; from: number; to: number }[];
+  /**
+   * Queued items a previous floor raised whose purposes are no longer below a
+   * floor, put back to the priority their owner set (or let go, when the item
+   * left the queue or its owner moved it since).
+   */
+  floorRestored?: { workItemId: string; from: number; to: number; restored: boolean }[];
+  /**
+   * Bins no goal pursues that a previous floor raised, put back to the
+   * priority they had once no purpose they served is below a floor — or let
+   * go, when the bin left the live states, was moved since, or a goal now
+   * pursues it and owns its priority.
+   */
+  floorRaisedRestored?: { binId: string; from: number; to: number; restored: boolean }[];
+  /** Below-floor purposes no live bin and no queued item serves: nothing exists to raise. */
+  floorUnserved?: ResearchPurpose[];
+  /** What the floor caused to be opened for an unserved purpose, through the owner that opens that purpose's work. */
+  floorOpened?: { purpose: ResearchPurpose; via: string; refs: string[] }[];
+}
+
+/**
+ * What opens work for a purpose below its floor when none exists. Each is an
+ * existing owner's entrance, used under its own caps and gates (§10.3): the
+ * goal plan pass widens a goal's search (exploration, transaction routes), and
+ * the improvement loop detects weaknesses and opens their repair (system
+ * health). The tick asks; it opens nothing itself.
+ */
+export interface FloorOpeners {
+  /** Ask the goal plan pass to widen these goals' search on its next pass. Returns the goals asked. */
+  widenGoalSearch: (goalIds: string[], why: string) => Promise<string[]>;
+  /** Run the improvement loop's detection now. Returns what it opened. */
+  openSystemHealth: (why: string) => Promise<string[]>;
+}
+
+export const productionFloorOpeners: FloorOpeners = {
+  async widenGoalSearch(goalIds, why) {
+    const { requestFloorResearch } = await import('./plan.ts');
+    for (const id of goalIds) requestFloorResearch(id, why);
+    return goalIds;
+  },
+  async openSystemHealth() {
+    const { improvementTick } = await import('../improvement/loop.ts');
+    const report = await improvementTick(new Date());
+    return report.ran ? report.opened.map((one) => String(one)) : [`not run: ${report.reason}`];
+  },
+};
+
+/** Which (decision, purpose) pairs this process already asked an opener for, so one decision opens once. */
+const floorAsked = new Set<string>();
+/** Tests. */
+export function forgetFloorOpenings(): void {
+  floorAsked.clear();
+}
+
+/** Research work types whose queued items a floor reservation may raise. */
+const FLOOR_ITEM_TYPES = ['RESEARCH_PLAN', 'RESEARCH_FRAGMENT', 'RESEARCH_VERIFY', 'RESEARCH_SYNTHESIZE', 'RESEARCH_AUDIT'] as const;
+
+/**
+ * Below-floor purposes no live bin or queued item serves, split by the opener
+ * that can create their work. Pure.
+ */
+export function floorOpenPlan(belowFloor: readonly ResearchPurpose[], served: ReadonlySet<string>): { unserved: ResearchPurpose[]; goalSearch: ResearchPurpose[]; systemHealth: boolean } {
+  const unserved = belowFloor.filter((p) => !served.has(p));
+  return {
+    unserved,
+    goalSearch: unserved.filter((p) => p === 'BROAD_DISCOVERY' || p === 'FORWARD_EXPLORATION' || p === 'TRANSACTION_ROUTES'),
+    systemHealth: unserved.includes('SELF_IMPROVEMENT'),
+  };
+}
+
 const LIVE = new Set(['DRAFT', 'READY', 'LEASED', 'NEEDS_HUMAN']);
 
 function holdReasonFor(goal: GoalView): HoldReason | null {
@@ -140,7 +262,7 @@ function holdReasonFor(goal: GoalView): HoldReason | null {
   return null;
 }
 
-export async function advanceGoals(options?: { now?: string; memory?: Partial<MemoryPasses> }): Promise<GoalTickReport> {
+export async function advanceGoals(options?: { now?: string; memory?: Partial<MemoryPasses>; floorOpeners?: FloorOpeners }): Promise<GoalTickReport> {
   // Archived goals are not derived here: they hold nothing and rank nowhere,
   // and there are more of them after every deploy. A hold one left behind is
   // released below, and its owner read directly (tests/goalTickCost.test.ts).
@@ -232,8 +354,20 @@ export async function advanceGoals(options?: { now?: string; memory?: Partial<Me
     }
   }
 
+  // The research allocation is decided (at most hourly) before capacity is
+  // handed out, and the newest recorded decision is applied on every pass.
+  report.research = await reallocateResearchIfDue({ goals: snapshot.goals, now: options?.now });
+  const inForce = await researchInForce();
+  const application: ResearchApplication | null = inForce
+    ? { fingerprint: inForce.fingerprint, shifts: purposePriorityShifts(inForce.shares), belowFloor: purposesBelowFloor(inForce.shares), goalBins: [], floorRaised: [] }
+    : null;
+  const liveBins = application ? await liveBinRows() : [];
+  const binPurposes: Map<string, string[]> = application ? await (await import('./researchYield.ts')).purposesOfBins(liveBins) : new Map<string, string[]>();
+  const shiftOf = (binId: string): PriorityShift => (application ? binPriorityShift(binPurposes.get(binId) ?? [], application.shifts) : 0);
+
   // Allocation: a workable goal's rank maps to its live bins' priority, and a
-  // bin pursued by several goals takes the highest.
+  // bin pursued by several goals takes the highest. The research decision in
+  // force then steps it one up or down by the purposes the bin serves.
   const ranked = new Map(rankGoals(snapshot.facts).map((one) => [one.id, one]));
   const target = new Map<string, { priority: number; goalId: string }>();
   for (const [binId, { goals }] of owners) {
@@ -247,6 +381,43 @@ export async function advanceGoals(options?: { now?: string; memory?: Partial<Me
       if (!current || priority > current.priority) target.set(binId, { priority, goalId: goal.id });
     }
   }
+  for (const [binId, entry] of target) {
+    const shift = shiftOf(binId);
+    if (shift === 0) continue;
+    entry.priority = Math.min(8, Math.max(0, entry.priority + shift));
+    application!.goalBins.push({ binId, purposes: binPurposes.get(binId) ?? [], shift });
+  }
+  // A bin no goal pursues has no rank to return to, so a floor raise records the
+  // priority it had, is bounded by the floor's shortfall, and is put back once
+  // the purpose recovers — never a ratchet (the treatment queued items get).
+  if (application && application.belowFloor.length > 0) {
+    const floorPriority = binPriorityForRank(0);
+    application.floorRaised = await raiseOrphanBins({
+      liveBins,
+      binPurposes,
+      owned: new Set(owners.keys()),
+      belowFloor: application.belowFloor,
+      floorPriority,
+      shares: inForce!.shares,
+      fingerprint: application.fingerprint,
+    });
+    await holdFloors(application, {
+      liveBins,
+      binPurposes,
+      floorPriority,
+      shares: inForce!.shares,
+      activeGoalIds: snapshot.goals.filter((g) => g.lifecycle === 'ACTIVE').map((g) => g.id),
+      openers: options?.floorOpeners ?? productionFloorOpeners,
+    });
+  }
+  // Every pass, decision or none: a raise whose purpose is back above its floor is undone.
+  const restored = await restoreFloorReservations(application?.belowFloor ?? []);
+  const binsRestored = await restoreOrphanBinRaises(application?.belowFloor ?? [], new Set(owners.keys()));
+  if (application) {
+    application.floorRestored = restored;
+    application.floorRaisedRestored = binsRestored;
+  }
+  report.researchApplied = application;
   const changedPerGoal = new Map<string, string[]>();
   for (const [binId, { priority, goalId }] of target) {
     if (await setLiveBinPriority(binId, priority)) {
@@ -261,8 +432,8 @@ export async function advanceGoals(options?: { now?: string; memory?: Partial<Me
     await recordWorkstreamEvent({
       workstreamId: goalId,
       kind: 'GOAL_CAPACITY_ALLOCATED',
-      summary: `${bins.length} bin(s) set to priority ${binPriorityForRank(rank?.rank ?? 99)} for this goal's position ${(rank?.rank ?? 0) + 1} among its owner's goals.`,
-      detail: { bins, rank: rank?.rank ?? null },
+      summary: `${bins.length} bin(s) set to priority ${binPriorityForRank(rank?.rank ?? 99)} for this goal's position ${(rank?.rank ?? 0) + 1} among its owner's goals${application?.goalBins.some((g) => bins.includes(g.binId)) ? ', stepped by the research allocation in force' : ''}.`,
+      detail: { bins, rank: rank?.rank ?? null, researchShift: application?.goalBins.filter((g) => bins.includes(g.binId)) ?? [], researchDecision: application?.fingerprint ?? null },
       actorRef: 'BRAIN',
     });
   }
@@ -296,4 +467,827 @@ export async function advanceGoals(options?: { now?: string; memory?: Partial<Me
   report.memory = await runMemoryPasses({ ...PRODUCTION_MEMORY, ...(options?.memory ?? {}) }, Number.isFinite(now) ? now : Date.now());
 
   return report;
+}
+
+/**
+ * Make a protected floor hold in the running Brain, not only in the recorded
+ * shares (RES-07, review F2). Raising bins reaches only bins; this reaches the
+ * rest:
+ *
+ *   1. Queued research items serving a below-floor purpose — the free lane's
+ *      work among them — are raised to the floor priority, so the next slot
+ *      that claims (`priority DESC`) takes floor work first. Guarded on the
+ *      item still being QUEUED and below that priority, in the statement that
+ *      changes it; a leased item is never touched (invariant 24).
+ *   2. A below-floor purpose that no live bin and no queued item serves has
+ *      nothing to raise, so its work is caused to exist: the goal plan pass is
+ *      asked to widen the active goals' search (exploration, transaction
+ *      routes) and the improvement loop to detect and open system-health
+ *      repair. Once per decision and purpose, so a quiet tick does not ask again.
+ */
+async function holdFloors(
+  application: ResearchApplication,
+  input: {
+    liveBins: { id: string }[];
+    binPurposes: Map<string, string[]>;
+    floorPriority: number;
+    shares: SharesInForce;
+    activeGoalIds: string[];
+    openers: FloorOpeners;
+  },
+): Promise<void> {
+  const below = application.belowFloor as readonly string[];
+  const served = new Set<string>();
+  for (const bin of input.liveBins) for (const p of input.binPurposes.get(bin.id) ?? []) if (below.includes(p)) served.add(p);
+
+  application.floorReserved = [];
+  const items = await queuedResearchItems();
+  const itemPurposes = items.length > 0 ? await (await import('./researchYield.ts')).purposesOfBins(items) : new Map<string, string[]>();
+  /*
+   * Bounded by the share gap: each floor reserves at most its shortfall's
+   * share of the queue (at least one item), counting what an earlier raise
+   * still holds, so a reading just under a floor lifts a handful of items and
+   * not a whole project's queue. The highest-priority items go first, so the
+   * owners' own order is kept among the ones taken.
+   */
+  const outstanding = await outstandingFloorReservations();
+  const budget = floorBudgets(input.shares, items.length);
+  const groupOf = (purposes: readonly string[]): FloorGroup | null =>
+    (FLOOR_GROUPS.find((g) => budget[g] > 0 && purposes.some((p) => floorGroupPurposes(g).includes(p) && below.includes(p))) ?? null);
+  const raised: { workItemId: string; purposes: string[]; from: number; to: number }[] = [];
+  const ordered = [...items].sort((a, b) => b.priority - a.priority || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  for (const item of ordered) {
+    const purposes = itemPurposes.get(item.id) ?? [];
+    if (!purposes.some((p) => below.includes(p))) continue;
+    for (const p of purposes) if (below.includes(p)) served.add(p);
+    const held = outstanding.get(item.id);
+    if (held) {
+      const g = groupOf(purposes);
+      if (g) budget[g] -= 1;
+      continue;
+    }
+    if (item.priority >= input.floorPriority) continue;
+    const g = groupOf(purposes);
+    if (!g) continue;
+    const changed = await getDb().run(`UPDATE work_items SET priority = ? WHERE id = ? AND state = 'QUEUED' AND priority < ?`, [input.floorPriority, item.id, input.floorPriority]);
+    if (Number(changed.changes) > 0) {
+      budget[g] -= 1;
+      raised.push({ workItemId: item.id, purposes, from: item.priority, to: input.floorPriority });
+    }
+  }
+  application.floorReserved = raised;
+  // Each raise is recorded with the priority its owner set, which is what lets a later pass undo it.
+  if (raised.length > 0) await recordFloorEvent(FLOOR_RESERVED_EVENT, { fingerprint: application.fingerprint ?? null, items: raised });
+
+  const plan = floorOpenPlan(application.belowFloor, served);
+  application.floorUnserved = plan.unserved;
+  application.floorOpened = [];
+  const key = (p: string) => `${application.fingerprint ?? 'none'}|${p}`;
+  const goalSearch = plan.goalSearch.filter((p) => !floorAsked.has(key(p)));
+  if (goalSearch.length > 0 && input.activeGoalIds.length > 0) {
+    const why = `${goalSearch.join(', ')} below the protected floor with no live work serving it`;
+    const refs = await input.openers.widenGoalSearch(input.activeGoalIds, why);
+    for (const p of goalSearch) {
+      floorAsked.add(key(p));
+      application.floorOpened.push({ purpose: p, via: 'goal plan pass: widen search', refs });
+    }
+  }
+  if (plan.systemHealth && !floorAsked.has(key('SELF_IMPROVEMENT'))) {
+    floorAsked.add(key('SELF_IMPROVEMENT'));
+    try {
+      const refs = await input.openers.openSystemHealth('SELF_IMPROVEMENT below the system-health floor with no live work serving it');
+      application.floorOpened.push({ purpose: 'SELF_IMPROVEMENT', via: 'improvement loop: detect and open repair', refs });
+    } catch (error) {
+      application.floorOpened.push({ purpose: 'SELF_IMPROVEMENT', via: 'improvement loop: detect and open repair', refs: [`error: ${String((error as Error).message ?? error).slice(0, 200)}`] });
+    }
+  }
+}
+
+/** Queued research items, with what attribution needs. */
+async function queuedResearchItems(): Promise<{ id: string; projectId: string; orchestrationId: string | null; purpose: string | null; priority: number }[]> {
+  const rows = await getDb().all<{ id: string; project_id: string; orchestration_id: string | null; purpose: string | null; priority: number | string }>(
+    `SELECT w.id, w.project_id, w.orchestration_id, b.purpose, w.priority FROM work_items w LEFT JOIN bins b ON b.id = w.bin_id
+      WHERE w.state = 'QUEUED' AND w.work_type IN (${FLOOR_ITEM_TYPES.map(() => '?').join(', ')}) ORDER BY w.id LIMIT 5000`,
+    [...FLOOR_ITEM_TYPES],
+  );
+  return rows.map((r) => ({ id: r.id, projectId: r.project_id, orchestrationId: r.orchestration_id, purpose: r.purpose, priority: Number(r.priority) }));
+}
+
+/**
+ * A floor raise, and its undoing, as rows (improvement events, the record the
+ * research decision itself lives in): a raise names each item's own priority
+ * before it, so the raise can be put back whatever process makes the next pass.
+ */
+export const FLOOR_RESERVED_EVENT = 'RESEARCH_FLOOR_RESERVED';
+export const FLOOR_RESTORED_EVENT = 'RESEARCH_FLOOR_RESTORED';
+/** How far back an unreturned raise is looked for. A queued research item older than this is not waiting on a floor. */
+const FLOOR_RESERVATION_LOOKBACK_MS = 14 * 24 * 60 * 60_000;
+
+type FloorGroup = 'EXPLORATION' | 'SYSTEM_HEALTH' | 'COMMERCIAL';
+const FLOOR_GROUPS: readonly FloorGroup[] = ['EXPLORATION', 'SYSTEM_HEALTH', 'COMMERCIAL'];
+
+function floorGroupPurposes(g: FloorGroup): readonly string[] {
+  return g === 'EXPLORATION' ? ['BROAD_DISCOVERY', 'FORWARD_EXPLORATION'] : g === 'SYSTEM_HEALTH' ? ['SELF_IMPROVEMENT'] : ['TRANSACTION_ROUTES'];
+}
+
+/**
+ * How many queued items each floor may hold raised: its shortfall (floor minus
+ * what the window actually gave it) as a share of the queue, at least one
+ * while it is short, none when it is not. Pure.
+ */
+export function floorBudgets(f: SharesInForce, queued: number): Record<FloorGroup, number> {
+  const shortfall: Record<FloorGroup, number> = {
+    EXPLORATION: EXPLORATION_FLOOR - (f.observed.BROAD_DISCOVERY + f.observed.FORWARD_EXPLORATION),
+    SYSTEM_HEALTH: SYSTEM_HEALTH_FLOOR - f.observed.SELF_IMPROVEMENT,
+    COMMERCIAL: f.urgentCommercialGoal ? COMMERCIAL_FLOOR - f.observed.TRANSACTION_ROUTES : 0,
+  };
+  const below = new Set(purposesBelowFloor(f));
+  const out = { EXPLORATION: 0, SYSTEM_HEALTH: 0, COMMERCIAL: 0 } as Record<FloorGroup, number>;
+  for (const g of FLOOR_GROUPS) {
+    if (!floorGroupPurposes(g).some((p) => below.has(p as ResearchPurpose))) continue;
+    out[g] = Math.max(1, Math.ceil(Math.max(0, shortfall[g]) * Math.max(0, queued)));
+  }
+  return out;
+}
+
+async function recordFloorEvent(kind: string, detail: Record<string, unknown>): Promise<void> {
+  const { recordImprovementEvent } = await import('../../repos/improvement.ts');
+  await recordImprovementEvent({ candidateId: null, kind, detail });
+}
+
+/** Raises not yet undone, by item: the priority it had before and the one it was raised to, and the purposes it served. */
+async function outstandingFloorReservations(): Promise<Map<string, { from: number; to: number; purposes: string[] }>> {
+  return outstandingRaises('items', 'workItemId');
+}
+
+/** Floor raises of bins no goal pursues not yet undone, by bin, read from the same event rows. */
+async function outstandingBinRaises(): Promise<Map<string, { from: number; to: number; purposes: string[] }>> {
+  return outstandingRaises('bins', 'binId');
+}
+
+/**
+ * Raises not yet undone, read from the floor events' `items` (queued work) or
+ * `bins` (bins no goal pursues) lists. Oldest first, so a raise, its undoing
+ * and a later raise of the same row read in the order they happened.
+ */
+async function outstandingRaises(field: 'items' | 'bins', idKey: 'workItemId' | 'binId'): Promise<Map<string, { from: number; to: number; purposes: string[] }>> {
+  const { listImprovementEvents } = await import('../../repos/improvement.ts');
+  const since = new Date(Date.now() - FLOOR_RESERVATION_LOOKBACK_MS).toISOString();
+  const events = await listImprovementEvents({ kinds: [FLOOR_RESERVED_EVENT, FLOOR_RESTORED_EVENT], since, limit: 5000 });
+  const out = new Map<string, { from: number; to: number; purposes: string[] }>();
+  for (const e of [...events].reverse()) {
+    const list = (e.detail as Record<string, unknown>)[field];
+    const rows = Array.isArray(list) ? (list as unknown[]) : [];
+    for (const raw of rows) {
+      const one = raw as Record<string, unknown>;
+      const id = one[idKey];
+      if (typeof id !== 'string') continue;
+      if (e.kind === FLOOR_RESTORED_EVENT) out.delete(id);
+      else if (Number.isFinite(Number(one.from)) && Number.isFinite(Number(one.to)))
+        out.set(id, { from: Number(one.from), to: Number(one.to), purposes: Array.isArray(one.purposes) ? one.purposes.map(String) : [] });
+    }
+  }
+  return out;
+}
+
+/** The live bin states, as the bin repository's own priority write guards them. */
+const LIVE_BIN_STATES_SQL = `('DRAFT', 'READY', 'LEASED', 'NEEDS_HUMAN')`;
+
+/**
+ * Raise bins no goal pursues while a purpose they serve is below a protected
+ * floor (review F1). Bounded by the floor's shortfall exactly as queued items
+ * are (`floorBudgets` over the bins that could serve it, at least one, counting
+ * what an earlier raise still holds), highest priority first so the owners'
+ * order is kept among those taken. Each raise records the bin's priority
+ * before it as an improvement event, so any later pass can put it back.
+ */
+async function raiseOrphanBins(input: {
+  liveBins: { id: string; priority: number; heldByWorkstreamId: string | null }[];
+  binPurposes: ReadonlyMap<string, string[]>;
+  owned: ReadonlySet<string>;
+  belowFloor: readonly string[];
+  floorPriority: number;
+  shares: SharesInForce;
+  fingerprint: string | null;
+}): Promise<{ binId: string; purposes: string[]; from: number; to: number }[]> {
+  const below = input.belowFloor;
+  const candidates = input.liveBins.filter((bin) => {
+    if (input.owned.has(bin.id) || bin.heldByWorkstreamId) return false;
+    return (input.binPurposes.get(bin.id) ?? []).some((p) => below.includes(p));
+  });
+  if (candidates.length === 0) return [];
+  const outstanding = await outstandingBinRaises();
+  const budget = floorBudgets(input.shares, candidates.length);
+  const groupOf = (purposes: readonly string[]): FloorGroup | null =>
+    (FLOOR_GROUPS.find((g) => budget[g] > 0 && purposes.some((p) => floorGroupPurposes(g).includes(p) && below.includes(p))) ?? null);
+  const ordered = [...candidates].sort((a, b) => b.priority - a.priority || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  // What an earlier raise still holds counts against the budget before anything new is taken.
+  for (const bin of ordered) {
+    if (!outstanding.has(bin.id)) continue;
+    const g = groupOf(input.binPurposes.get(bin.id) ?? []);
+    if (g) budget[g] -= 1;
+  }
+  const raised: { binId: string; purposes: string[]; from: number; to: number }[] = [];
+  for (const bin of ordered) {
+    if (outstanding.has(bin.id) || bin.priority >= input.floorPriority) continue;
+    const purposes = input.binPurposes.get(bin.id) ?? [];
+    const g = groupOf(purposes);
+    if (!g) continue;
+    const changed = await getDb().run(
+      `UPDATE bins SET priority = ?, updated_at = ? WHERE id = ? AND priority < ? AND state IN ${LIVE_BIN_STATES_SQL}`,
+      [input.floorPriority, new Date().toISOString(), bin.id, input.floorPriority],
+    );
+    if (Number(changed.changes) > 0) {
+      budget[g] -= 1;
+      raised.push({ binId: bin.id, purposes, from: bin.priority, to: input.floorPriority });
+    }
+  }
+  if (raised.length > 0) await recordFloorEvent(FLOOR_RESERVED_EVENT, { fingerprint: input.fingerprint, bins: raised });
+  return raised;
+}
+
+/**
+ * Undo the floor raises of bins no goal pursues whose purposes are no longer
+ * below a floor. Guarded in the statement: only a bin still live at exactly
+ * the raised priority is put back, so an owner's later change wins. A bin a
+ * goal now pursues is let go untouched — its goal's rank owns its priority.
+ */
+async function restoreOrphanBinRaises(belowFloor: readonly string[], owned: ReadonlySet<string>): Promise<{ binId: string; from: number; to: number; restored: boolean }[]> {
+  const outstanding = await outstandingBinRaises();
+  const out: { binId: string; from: number; to: number; restored: boolean }[] = [];
+  for (const [id, r] of outstanding) {
+    if (r.purposes.some((p) => belowFloor.includes(p))) continue;
+    if (owned.has(id)) {
+      out.push({ binId: id, from: r.to, to: r.from, restored: false });
+      continue;
+    }
+    const changed = await getDb().run(
+      `UPDATE bins SET priority = ?, updated_at = ? WHERE id = ? AND priority = ? AND state IN ${LIVE_BIN_STATES_SQL}`,
+      [r.from, new Date().toISOString(), id, r.to],
+    );
+    out.push({ binId: id, from: r.to, to: r.from, restored: Number(changed.changes) > 0 });
+  }
+  if (out.length > 0) await recordFloorEvent(FLOOR_RESTORED_EVENT, { bins: out });
+  return out;
+}
+
+/**
+ * Undo the floor raises whose purposes are no longer below a floor (review:
+ * a raise that is never lowered is a ratchet, and the allocation could push
+ * share toward a purpose but never take it back). Guarded in the statement:
+ * only an item still QUEUED at exactly the raised priority is put back, so a
+ * worker's claim or an owner's own later change wins. An item that left the
+ * queue or was moved since is let go, recorded as not restored.
+ */
+async function restoreFloorReservations(belowFloor: readonly string[]): Promise<{ workItemId: string; from: number; to: number; restored: boolean }[]> {
+  const outstanding = await outstandingFloorReservations();
+  const out: { workItemId: string; from: number; to: number; restored: boolean }[] = [];
+  for (const [id, r] of outstanding) {
+    if (r.purposes.some((p) => belowFloor.includes(p))) continue;
+    const changed = await getDb().run(`UPDATE work_items SET priority = ? WHERE id = ? AND state = 'QUEUED' AND priority = ?`, [r.from, id, r.to]);
+    out.push({ workItemId: id, from: r.to, to: r.from, restored: Number(changed.changes) > 0 });
+  }
+  if (out.length > 0) await recordFloorEvent(FLOOR_RESTORED_EVENT, { items: out });
+  return out;
+}
+
+/** The live bins, with what attribution needs. */
+async function liveBinRows(): Promise<{ id: string; projectId: string; orchestrationId: string | null; purpose: string | null; priority: number; heldByWorkstreamId: string | null }[]> {
+  const rows = await getDb().all<{ id: string; project_id: string; orchestration_id: string | null; purpose: string | null; priority: number | string; held_by_workstream_id: string | null }>(
+    `SELECT id, project_id, orchestration_id, purpose, priority, held_by_workstream_id FROM bins
+      WHERE state IN ('DRAFT', 'READY', 'LEASED', 'NEEDS_HUMAN') ORDER BY id LIMIT 5000`,
+    [],
+  );
+  return rows.map((r) => ({ id: r.id, projectId: r.project_id, orchestrationId: r.orchestration_id, purpose: r.purpose, priority: Number(r.priority), heldByWorkstreamId: r.held_by_workstream_id }));
+}
+
+/** The shares a recorded decision's detail puts in force, or null when it carries none. Pure. */
+export function sharesInForceFrom(detail: Record<string, unknown> | null): (SharesInForce & { fingerprint: string | null }) | null {
+  if (!detail || typeof detail.shares !== 'object' || detail.shares === null) return null;
+  const read = (value: unknown): Record<ResearchPurpose, number> | null => {
+    if (!value || typeof value !== 'object') return null;
+    const v = value as Record<string, unknown>;
+    if (!RESEARCH_PURPOSES.every((p) => typeof v[p] === 'number' && Number.isFinite(v[p] as number))) return null;
+    return Object.fromEntries(RESEARCH_PURPOSES.map((p) => [p, v[p] as number])) as Record<ResearchPurpose, number>;
+  };
+  const shares = read(detail.shares);
+  const observed = read(detail.observed);
+  // A decision recorded before what the window gave each purpose was stored cannot be applied: nothing to compare.
+  if (!shares || !observed) return null;
+  const floors = detail.floors as { commercial?: unknown } | undefined;
+  return {
+    shares,
+    observed,
+    held: detail.held === true,
+    urgentCommercialGoal: typeof floors?.commercial === 'number',
+    fingerprint: typeof detail.fingerprint === 'string' ? detail.fingerprint : null,
+  };
+}
+
+/**
+ * The decision in force: the newest Brain-wide decision row, unless it was
+ * held. It is one row for the whole Brain, so which goals are live, and in
+ * which order, cannot change which decision is applied.
+ */
+async function researchInForce(): Promise<{ shares: SharesInForce; fingerprint: string | null } | null> {
+  const ports = await productionResearchAllocationPorts();
+  const parsed = sharesInForceFrom((await ports.lastDecision())?.detail ?? null);
+  if (!parsed || parsed.held) return null;
+  return { shares: parsed, fingerprint: parsed.fingerprint };
+}
+
+/* ------------------------------------------------------------------------- */
+/* Research allocation across the five purposes (RES-07, RES-15-5)            */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * The goals tick is the allocation owner, so the research allocation runs here
+ * rather than in a new scheduler (§10.3, §20.4). Each pass reads one window of
+ * measured yield (`researchYieldByPurpose`: per-lane and per-purpose jobs,
+ * claims, useful results and job time, each job's cost counted once), hands it
+ * to the pure decision (`decideResearchAllocation`: marginal useful outcome per
+ * unit of cost, deadlines and bottlenecks move the shares, floors keep
+ * exploration, system health and the urgent commercial goal), and records the
+ * decision when it changed.
+ *
+ * What the pass does with the decision, and what it never does:
+ *
+ *   * It records the decision once, as one append-only Brain-wide row
+ *     (`RESEARCH_ALLOCATION_DECIDED` in `improvement_events`, the Brain-wide
+ *     operations log, with no candidate), carrying the five shares, what the
+ *     window gave each, the floors that held, every reason, the lane remedies,
+ *     the capacity each lane was measured at and the capacity verdicts. The
+ *     purposes are Brain-wide, so the decision is not copied onto every goal:
+ *     a goal's own history carries only what the decision did to that goal
+ *     (`GOAL_CAPACITY_ALLOCATED` names the bins it stepped and the decision's
+ *     fingerprint), and the goals briefing (`briefing.ts`, rendered by Home and
+ *     the goals page) shows the decision in force and the capacity it found.
+ *   * A low-actionability lane is given its next remedy (question design, then
+ *     evidence sources, then model routing) before any limit is raised for it,
+ *     and a remedy already recorded for a lane is passed back as tried.
+ *   * A capacity change is recorded naming the measured constraint and its
+ *     cost. A free-lane lane's ADD_CAPACITY (`free-lane:<model>`, bounded by
+ *     the headroom that controller measured) is applied by the §86 free-lane
+ *     controller, the one owner of that lane's targets, which reads the newest
+ *     decision and raises the model's target once per decision, never past
+ *     its own caps (S-0153); any other lane's verdict is a recommendation. The
+ *     pass itself starts no work, spends nothing, raises no limit and takes
+ *     no worker's item. It does not write bin
+ *     priorities itself: the allocation stage is their one writer, and on every
+ *     pass it applies the newest recorded decision (`sharesInForceFrom`,
+ *     `purposePriorityShifts`) — a goal bin serving an under-served purpose is
+ *     stepped up from its rank's priority and one serving an over-served purpose
+ *     down, and a bin no goal pursues is raised while a purpose it serves sits
+ *     below a protected floor. That is what makes the shares move capacity.
+ *
+ * An unchanged decision writes nothing, so a quiet hour leaves no rows.
+ */
+export const RESEARCH_ALLOCATION_EVERY_MS = 60 * 60_000;
+/** The consistent window each decision is measured over. */
+export const RESEARCH_ALLOCATION_WINDOW_MS = 24 * 60 * 60_000;
+/**
+ * The per-goal kind earlier passes wrote: the same Brain-wide decision copied
+ * onto every live goal. No longer written or read; kept so old rows stay named.
+ */
+export const RESEARCH_REALLOCATED_EVENT = 'GOAL_RESEARCH_REALLOCATED';
+/** The one Brain-wide decision row, in `improvement_events` with no candidate. */
+export const RESEARCH_ALLOCATION_DECIDED = 'RESEARCH_ALLOCATION_DECIDED';
+/** The lanes whose ADD_CAPACITY verdict the §86 free-lane controller applies (`free-lane:<model>`). */
+export const FREE_LANE_PREFIX = 'free-lane:';
+/** Who applies a free-lane capacity verdict, as the decision row names it. */
+export const FREE_LANE_CONTROLLER = 'free-lane controller (§86)';
+
+export interface ResearchAllocationReport {
+  window: { since: string; until: string };
+  shares: Record<ResearchPurpose, number>;
+  floors: { exploration: number; systemHealth: number; commercial: number | null; perPurpose: number };
+  changed: boolean;
+  held: boolean;
+  laneActions: AllocationDecision['laneActions'];
+  /** Capacity verdicts; a free-lane ADD_CAPACITY is applied by that lane's controller, any other is a recommendation. */
+  capacity: AllocationDecision['capacity'];
+  /** Whether this pass wrote the Brain-wide decision row (once, never per goal). */
+  recorded: boolean;
+  fingerprint: string;
+  /** Remedies this pass applied: each a change to how the live goals' research is asked, recorded with its reference. */
+  applied: { lane: string; remedy: LaneRemedy; ref: string }[];
+}
+
+/**
+ * A remedy actually applied to a lane: a recorded change to its question
+ * design, evidence sources or model routing, with a reference to the change
+ * itself. This — never a recommendation — is what makes a remedy tried.
+ */
+export interface AppliedRemedy {
+  lane: string;
+  remedy: LaneRemedy;
+  appliedAt: string;
+  /** What was changed: a commit, a configuration id, a prompt version. Required. */
+  ref: string;
+}
+
+export { RESEARCH_REMEDY_APPLIED_EVENT };
+
+export interface ResearchAllocationPorts {
+  readYield(window: { since: string; until: string }): Promise<ResearchYieldReading>;
+  /**
+   * Remedies recorded as applied on these goals' research. Absent means none is
+   * recorded: an unknown is never read as a change made (invariant 39).
+   */
+  appliedRemedies?(goalIds: string[]): Promise<AppliedRemedy[]>;
+  /**
+   * Each lane's capacity as it stands now: queued work, its wait, headroom and
+   * incremental cost. Absent means unmeasured, and no capacity is added.
+   */
+  readLaneCapacity?(until: string): Promise<LaneCapacityReading[]>;
+  /**
+   * Put a remedy in force on these goals' research and record it applied. The
+   * record is the switch: the question builders read it (`remediesInForce`).
+   * Absent means nothing applies here, and nothing is recorded as applied.
+   */
+  applyRemedy?(input: { lane: string; remedy: LaneRemedy; ref: string; goalIds: string[] }): Promise<void>;
+  /** The newest Brain-wide decision row, or null. */
+  lastDecision(): Promise<{ detail: Record<string, unknown>; at: string } | null>;
+  /** Write the Brain-wide decision row: once per changed decision, never per goal. */
+  recordDecision(summary: string, detail: Record<string, unknown>): Promise<void>;
+}
+
+const round3 = (n: number) => Math.round(n * 1000) / 1000;
+
+/** What live goals put on one purpose: the nearest deadline its research serves, and the stake its next unit can decide. */
+export interface PurposePressure {
+  nearestDeadlineDays: number | null;
+  /** Remaining target money (minor units) of the goals this purpose's research serves, split by the job time it gave each. Null when no goal with a target is served. */
+  decisionValue: number | null;
+  /** One line per goal that put pressure here. */
+  basis: string[];
+}
+
+/**
+ * Deadlines and expected decision value per purpose, from the live goals and
+ * the research the window actually did for each (RES-07).
+ *
+ * A goal's deadline bears on every purpose its research served in the window,
+ * and its remaining target is the value at stake in that research's decisions,
+ * split between those purposes by the job time each received — so a goal's
+ * stake is counted once, like a job's cost. A goal no job in the window names
+ * still has a deadline and a stake: a goal with a target puts them on
+ * TRANSACTION_ROUTES (turning arrangements into transactions is what moves a
+ * target), and a goal without one puts its deadline on FORWARD_EXPLORATION
+ * (future goal preparation, the same rule `attributePurposes` uses). A goal with
+ * no target has no money at stake and adds no decision value: an unknown is
+ * never a favourable assumption (invariant 39). Pure.
+ */
+export function purposePressureFrom(goals: readonly GoalView[], reading: Pick<ResearchYieldReading, 'attributions'>, nowMs: number): Record<ResearchPurpose, PurposePressure> {
+  const out = Object.fromEntries(RESEARCH_PURPOSES.map((p): [ResearchPurpose, PurposePressure] => [p, { nearestDeadlineDays: null, decisionValue: null, basis: [] }])) as Record<ResearchPurpose, PurposePressure>;
+  const isPurpose = (p: string): p is ResearchPurpose => (RESEARCH_PURPOSES as readonly string[]).includes(p);
+  // Job time each goal's research gave each purpose, a multi-purpose job split evenly (as `summarizeResearchYield` splits cost).
+  const served = new Map<string, Map<ResearchPurpose, number>>();
+  for (const a of reading.attributions) {
+    if (!a.goalId) continue;
+    const ps = a.purposes.filter(isPurpose);
+    if (ps.length === 0) continue;
+    const weight = Math.max(1, Number(a.jobMs ?? 0)) / ps.length;
+    const m = served.get(a.goalId) ?? new Map<ResearchPurpose, number>();
+    for (const p of ps) m.set(p, (m.get(p) ?? 0) + weight);
+    served.set(a.goalId, m);
+  }
+  for (const g of goals) {
+    if (g.lifecycle !== 'ACTIVE') continue;
+    const due = g.dueAt ? Date.parse(g.dueAt) : NaN;
+    const days = Number.isFinite(due) && due > nowMs ? (due - nowMs) / 86_400_000 : null;
+    const remaining = g.target && !g.target.achieved && g.target.remainingCents > 0 ? g.target.remainingCents : null;
+    if (days === null && remaining === null) continue;
+    const measured = served.get(g.id);
+    const split: [ResearchPurpose, number][] = measured && measured.size > 0
+      ? [...measured]
+      : [[g.target ? 'TRANSACTION_ROUTES' : 'FORWARD_EXPLORATION', 1]];
+    const total = split.reduce((s, [, w]) => s + w, 0);
+    const how = measured && measured.size > 0 ? 'its research in the window served this purpose' : g.target ? 'no job in the window names it; a target is moved by transaction routes' : 'no job in the window names it; a goal without a target is future goal preparation';
+    for (const [p, w] of split) {
+      const slot = out[p];
+      if (days !== null) slot.nearestDeadlineDays = slot.nearestDeadlineDays === null ? days : Math.min(slot.nearestDeadlineDays, days);
+      if (remaining !== null) slot.decisionValue = (slot.decisionValue ?? 0) + (remaining * w) / total;
+      slot.basis.push(`goal ${g.id}${days !== null ? ` due in ${days.toFixed(1)} day(s)` : ''}${remaining !== null ? `, ${Math.round((remaining * w) / total)} of ${remaining} remaining` : ''}: ${how}`);
+    }
+  }
+  return out;
+}
+
+/** The measured inputs one window gives the decision. Pure. */
+export function allocationInputFrom(
+  reading: ResearchYieldReading,
+  context: {
+    urgentCommercialGoal: boolean;
+    /** Legacy: one deadline for TRANSACTION_ROUTES. `pressure`, when given, replaces it for every purpose. */
+    nearestDeadlineDays: number | null;
+    triedRemedies: Map<string, LaneRemedy[]>;
+    measuringRemedies?: Map<string, LaneRemedy>;
+    /** Each purpose's deadline and decision value (`purposePressureFrom`). */
+    pressure?: Partial<Record<ResearchPurpose, Pick<PurposePressure, 'nearestDeadlineDays' | 'decisionValue'>>>;
+    /** The work waiting on each lane now, its headroom and its cost; a lane absent here is unmeasured. */
+    capacity?: ReadonlyMap<string, LaneCapacityReading>;
+    /** The remedies a lever can apply; absent means every remedy is waited on. */
+    remedyLevers?: readonly LaneRemedy[];
+  },
+): AllocationInput {
+  // The shares in force are where the capacity actually went: each purpose's job time in the window.
+  const currentShares: Partial<Record<ResearchPurpose, number>> = {};
+  for (const p of RESEARCH_PURPOSES) currentShares[p] = reading.purposes[p]?.jobMs ?? 0;
+  const purposes: PurposeMeasurement[] = RESEARCH_PURPOSES.map((p) => {
+    const b = reading.purposes[p];
+    const ran = !!b && b.submissions + b.completions > 0 && b.jobMs > 0;
+    return {
+      purpose: p,
+      usefulResults: ran ? b!.usefulResults : null,
+      // Job time is the cost every job records; it is split once across a job's purposes.
+      cost: ran ? b!.jobMs : null,
+      ...(context.pressure
+        ? {
+            ...(context.pressure[p]?.nearestDeadlineDays != null ? { nearestDeadlineDays: context.pressure[p]!.nearestDeadlineDays } : {}),
+            ...(context.pressure[p]?.decisionValue != null ? { decisionValue: context.pressure[p]!.decisionValue } : {}),
+          }
+        : p === 'TRANSACTION_ROUTES' && context.nearestDeadlineDays !== null ? { nearestDeadlineDays: context.nearestDeadlineDays } : {}),
+    };
+  });
+  const lanePurposes = new Map<string, Set<ResearchPurpose>>();
+  for (const a of reading.attributions) {
+    const set = lanePurposes.get(a.lane) ?? new Set<ResearchPurpose>();
+    for (const p of a.purposes) if (p !== 'UNATTRIBUTED') set.add(p);
+    lanePurposes.set(a.lane, set);
+  }
+  const lanes: LaneMeasurement[] = [];
+  const bottlenecks: BottleneckMeasurement[] = [];
+  for (const [lane, b] of Object.entries(reading.lanes)) {
+    const served = [...(lanePurposes.get(lane) ?? [])];
+    lanes.push({
+      lane,
+      purposes: served,
+      claims: b.acceptedClaims,
+      // An actionable link: a qualified position (buyer, price, fulfilment), an executable offer or a paid transaction.
+      actionableLinks: b.qualifiedPositions + b.executableOffers + b.paidTransactions,
+      triedRemedies: context.triedRemedies.get(lane) ?? [],
+      measuringRemedy: context.measuringRemedies?.get(lane) ?? null,
+    });
+    const attempts = b.completions + b.failures.total;
+    // Waiting work is what is queued now, never the jobs that already started; headroom and cost are read, never assumed.
+    const cap = context.capacity?.get(lane) ?? null;
+    bottlenecks.push({
+      lane,
+      purposes: served,
+      resource: b.failures.rateLimited > 0 ? 'MODEL_RATE_LIMIT' : null,
+      qualifiedQueued: cap ? cap.queued : null,
+      queueWaitMs: cap ? cap.queueWaitMs : null,
+      measuredMachineLimit: b.failures.rateLimited > 0,
+      quotaHeadroom: cap ? cap.quotaHeadroom : null,
+      reliability: attempts > 0 ? b.completions / attempts : null,
+      ownedByAnotherWorker: false,
+      incrementalCostPerUnit: cap ? cap.incrementalCostPerUnit : null,
+    });
+  }
+  return { currentShares, purposes, lanes, bottlenecks, urgentCommercialGoal: context.urgentCommercialGoal, ...(context.remedyLevers ? { remedyLevers: context.remedyLevers } : {}) };
+}
+
+/** What makes two decisions the same: shares to a tenth of a percent, lane remedies and capacity verdicts. */
+export function allocationFingerprint(decision: AllocationDecision): string {
+  return JSON.stringify({
+    shares: RESEARCH_PURPOSES.map((p) => round3(decision.shares[p])),
+    lanes: decision.laneActions.map((a) => `${a.lane}:${a.kind}`).sort(),
+    capacity: decision.capacity.map((c) => `${c.lane}:${c.kind}:${c.units}`).sort(),
+  });
+}
+
+/**
+ * Remedies a recorded decision says were tried on each lane. Only the `tried`
+ * list counts — it is built from applied changes (`remediesFromApplied`) — and
+ * never the decision's own recommended `remedy`: recommending a change is not
+ * making it, and reading it as made let a lane escalate to a limit raise with
+ * nothing ever changed.
+ */
+export function triedRemediesFrom(detail: Record<string, unknown> | null): Map<string, LaneRemedy[]> {
+  const out = new Map<string, LaneRemedy[]>();
+  const actions = Array.isArray(detail?.laneActions) ? (detail!.laneActions as { lane?: unknown; tried?: unknown }[]) : [];
+  for (const a of actions) {
+    if (typeof a.lane !== 'string') continue;
+    const tried = Array.isArray(a.tried) ? a.tried.filter((r): r is LaneRemedy => (LANE_REMEDIES as readonly string[]).includes(String(r))) : [];
+    out.set(a.lane, [...new Set(tried)]);
+  }
+  return out;
+}
+
+/**
+ * From applied changes, per lane: the remedies measured over a whole window
+ * after they were made (`tried`), and the newest one made inside the window,
+ * whose effect is not yet measured (`measuring`). A record without a
+ * reference to the change, or with an unreadable time, is not a change. Pure.
+ */
+export function remediesFromApplied(applied: readonly AppliedRemedy[], window: { since: string }): { tried: Map<string, LaneRemedy[]>; measuring: Map<string, LaneRemedy> } {
+  const since = Date.parse(window.since);
+  const tried = new Map<string, LaneRemedy[]>();
+  const measuring = new Map<string, { remedy: LaneRemedy; at: number }>();
+  for (const a of applied) {
+    if (!(LANE_REMEDIES as readonly string[]).includes(a.remedy) || typeof a.ref !== 'string' || a.ref.trim() === '') continue;
+    const at = Date.parse(a.appliedAt);
+    if (!Number.isFinite(at)) continue;
+    if (at <= since) {
+      const list = tried.get(a.lane) ?? [];
+      if (!list.includes(a.remedy)) list.push(a.remedy);
+      tried.set(a.lane, list);
+    } else {
+      const prior = measuring.get(a.lane);
+      if (!prior || at > prior.at) measuring.set(a.lane, { remedy: a.remedy, at });
+    }
+  }
+  return { tried, measuring: new Map([...measuring].map(([lane, m]) => [lane, m.remedy])) };
+}
+
+/**
+ * The remedies a decision recommends that a lever can apply and no record says
+ * were applied to that lane yet: what the pass puts in force. A lane already
+ * measuring a change, or one whose next remedy has no lever, gets nothing. Pure.
+ */
+export function remediesToApply(actions: AllocationDecision['laneActions'], applied: readonly AppliedRemedy[]): { lane: string; remedy: LaneRemedy; ref: string }[] {
+  const out: { lane: string; remedy: LaneRemedy; ref: string }[] = [];
+  for (const a of actions) {
+    if (a.kind !== 'CHANGE_QUESTION_DESIGN' && a.kind !== 'CHANGE_EVIDENCE_SOURCES' && a.kind !== 'CHANGE_MODEL_ROUTING') continue;
+    const lever = REMEDY_LEVERS[a.remedy];
+    if (!lever) continue;
+    if (applied.some((one) => one.lane === a.lane && one.remedy === a.remedy && one.ref.trim() !== '')) continue;
+    out.push({ lane: a.lane, remedy: a.remedy, ref: lever.ref });
+  }
+  return out;
+}
+
+/** Record that a remedy was applied to a lane, naming the change. The only way a remedy becomes tried. */
+export async function recordRemedyApplied(input: { goalId: string; lane: string; remedy: LaneRemedy; ref: string; actorRef: string }): Promise<void> {
+  if (!(LANE_REMEDIES as readonly string[]).includes(input.remedy)) throw new Error(`unknown remedy ${input.remedy}`);
+  if (input.ref.trim() === '') throw new Error('a remedy applied must name the change it made');
+  await recordWorkstreamEvent({
+    workstreamId: input.goalId,
+    kind: RESEARCH_REMEDY_APPLIED_EVENT,
+    summary: `Research remedy applied to ${input.lane}: ${input.remedy}`.slice(0, 400),
+    detail: { lane: input.lane, remedy: input.remedy, ref: input.ref },
+    actorRef: input.actorRef,
+  });
+}
+
+/** One allocation pass over the live goals. */
+export async function reallocateResearch(input: { goals: GoalView[]; now?: string }, ports: ResearchAllocationPorts): Promise<ResearchAllocationReport> {
+  const untilMs = input.now ? Date.parse(input.now) : Date.now();
+  const window = { since: new Date(untilMs - RESEARCH_ALLOCATION_WINDOW_MS).toISOString(), until: new Date(untilMs).toISOString() };
+  const live = input.goals.filter((g) => g.lifecycle === 'ACTIVE');
+  const deadlines = live
+    .filter((g) => g.target && g.dueAt && Date.parse(g.dueAt) > untilMs)
+    .map((g) => (Date.parse(g.dueAt!) - untilMs) / 86_400_000);
+  const urgentCommercialGoal = deadlines.length > 0;
+  // The goals whose own deadlines put the commercial floor in force: what the decision means for a goal.
+  const deadlineGoals = live.filter((g) => g.target && g.dueAt && Date.parse(g.dueAt) > untilMs).map((g) => g.id);
+  const previous = await ports.lastDecision();
+  // Tried means a recorded change was made, never that the last decision recommended one.
+  const applied = ports.appliedRemedies && live.length > 0 ? await ports.appliedRemedies(live.map((g) => g.id)) : [];
+  const { tried, measuring } = remediesFromApplied(applied, window);
+  const reading = await ports.readYield(window);
+  const pressure = purposePressureFrom(live, reading, untilMs);
+  const laneCapacity = ports.readLaneCapacity ? await ports.readLaneCapacity(window.until) : [];
+  const capacity = new Map(laneCapacity.map((one) => [one.lane, one]));
+  const allocationInput = allocationInputFrom(reading, { urgentCommercialGoal, nearestDeadlineDays: deadlines.length ? Math.min(...deadlines) : null, triedRemedies: tried, measuringRemedies: measuring, pressure, capacity, remedyLevers: APPLICABLE_REMEDIES });
+  const decision = decideResearchAllocation(allocationInput);
+  const observed = normalizeShares(allocationInput.currentShares);
+  const fingerprint = allocationFingerprint(decision);
+  const floors = {
+    exploration: EXPLORATION_FLOOR,
+    systemHealth: SYSTEM_HEALTH_FLOOR,
+    commercial: urgentCommercialGoal ? COMMERCIAL_FLOOR : null,
+    perPurpose: MIN_PURPOSE_SHARE,
+  };
+  const detail: Record<string, unknown> = {
+    fingerprint,
+    window,
+    shares: Object.fromEntries(RESEARCH_PURPOSES.map((p) => [p, round3(decision.shares[p])])),
+    // What the window actually gave each purpose: what the goals tick compares the decided shares with.
+    observed: Object.fromEntries(RESEARCH_PURPOSES.map((p) => [p, round3(observed[p])])),
+    floors,
+    held: decision.held,
+    changes: decision.changes.map((c) => ({ purpose: c.purpose, from: round3(c.from), to: round3(c.to), reasons: c.reasons })),
+    laneActions: decision.laneActions.map((a) => ({
+      ...a,
+      tried: tried.get(a.lane) ?? [],
+      applied: applied.filter((one) => one.lane === a.lane).map((one) => ({ remedy: one.remedy, appliedAt: one.appliedAt, ref: one.ref })),
+    })),
+    // A free-lane ADD_CAPACITY is applied by the lane's own controller (`freeLane/capacity.ts`
+    // `grantsFromDecision`), the one owner of its targets; any other lane's verdict is a recommendation.
+    capacity: decision.capacity.map((c) => {
+      const applied = c.kind === 'ADD_CAPACITY' && c.lane.startsWith(FREE_LANE_PREFIX);
+      return { ...c, recommendationOnly: !applied, ...(applied ? { appliedBy: FREE_LANE_CONTROLLER } : {}) };
+    }),
+    bottlenecks: decision.capacity.filter((c) => c.resource !== null).map((c) => ({ lane: c.lane, resource: c.resource })),
+    // The research capacity each lane was measured at in the window: what the capacity verdicts read.
+    laneCapacity: Object.entries(reading.lanes).map(([lane, b]) => ({
+      lane,
+      utilization: round3(b.utilization),
+      inFlight: b.inFlight,
+      queueWaitMedianMs: b.queueWait.medianMs,
+      // What the capacity verdict read: work waiting now, never the jobs above that already started.
+      queuedNow: capacity.get(lane)?.queued ?? null,
+      queuedWaitMs: capacity.get(lane)?.queueWaitMs ?? null,
+      quotaHeadroom: capacity.get(lane)?.quotaHeadroom ?? null,
+      incrementalCostPerUnit: capacity.get(lane)?.incrementalCostPerUnit ?? null,
+      capacityBasis: capacity.get(lane)?.basis ?? ['not measured'],
+      completions: b.completions,
+      failures: b.failures.total,
+      rateLimited: b.failures.rateLimited,
+    })),
+    deadlineGoals,
+    // Each purpose's deadline and expected decision value, and the goals that put them there.
+    pressure: Object.fromEntries(RESEARCH_PURPOSES.map((p) => [p, {
+      nearestDeadlineDays: pressure[p].nearestDeadlineDays === null ? null : round3(pressure[p].nearestDeadlineDays!),
+      decisionValue: pressure[p].decisionValue === null ? null : Math.round(pressure[p].decisionValue!),
+      basis: pressure[p].basis.slice(0, 10),
+    }])),
+    liveGoals: live.length,
+    costCountedOnce: reading.costCountedOnce,
+    notes: [...decision.notes, ...reading.notes].slice(0, 20),
+  };
+  const recorded = !(previous && previous.detail.fingerprint === fingerprint);
+  if (recorded) {
+    const summary = decision.held
+      ? 'Research allocation held: nothing in the window was measured.'
+      : `Research reallocated: ${RESEARCH_PURPOSES.map((p) => `${p} ${(decision.shares[p] * 100).toFixed(1)}%`).join(', ')}`;
+    await ports.recordDecision(summary.slice(0, 400), { ...detail, summary: summary.slice(0, 400) });
+  }
+  const toApply = remediesToApply(decision.laneActions, applied);
+  const done: ResearchAllocationReport['applied'] = [];
+  if (ports.applyRemedy && live.length > 0) {
+    for (const one of toApply) {
+      await ports.applyRemedy({ ...one, goalIds: live.map((g) => g.id) });
+      done.push(one);
+    }
+  }
+  return {
+    applied: done,
+    window,
+    shares: decision.shares,
+    floors,
+    changed: recorded,
+    held: decision.held,
+    laneActions: decision.laneActions,
+    capacity: decision.capacity,
+    recorded,
+    fingerprint,
+  };
+}
+
+/** The newest Brain-wide research allocation decision row, or null. */
+export async function latestResearchDecision(): Promise<{ detail: Record<string, unknown>; at: string } | null> {
+  const { listImprovementEvents } = await import('../../repos/improvement.ts');
+  const newest = (await listImprovementEvents({ kinds: [RESEARCH_ALLOCATION_DECIDED], limit: 1 }))[0];
+  return newest ? { detail: newest.detail, at: newest.at } : null;
+}
+
+/** The production rows: the yield reader, the goals' applied remedies, and the Brain-wide decision row. */
+export async function productionResearchAllocationPorts(): Promise<ResearchAllocationPorts> {
+  const { researchYieldByPurpose, laneCapacityNow } = await import('./researchYield.ts');
+  const { listWorkstreamEvents } = await import('../../repos/register.ts');
+  const { recordImprovementEvent } = await import('../../repos/improvement.ts');
+  return {
+    readYield: (window) => researchYieldByPurpose(window),
+    readLaneCapacity: (until) => laneCapacityNow(until),
+    lastDecision: () => latestResearchDecision(),
+    async appliedRemedies(goalIds) {
+      const out: AppliedRemedy[] = [];
+      for (const goalId of goalIds) {
+        for (const e of await listWorkstreamEvents(goalId, 500)) {
+          if (e.kind !== RESEARCH_REMEDY_APPLIED_EVENT) continue;
+          const d = e.detail as { lane?: unknown; remedy?: unknown; ref?: unknown };
+          if (typeof d.lane !== 'string' || typeof d.remedy !== 'string' || typeof d.ref !== 'string') continue;
+          out.push({ lane: d.lane, remedy: d.remedy as LaneRemedy, appliedAt: e.createdAt, ref: d.ref });
+        }
+      }
+      return out;
+    },
+    async applyRemedy({ lane, remedy, ref, goalIds }) {
+      for (const goalId of goalIds) await recordRemedyApplied({ goalId, lane, remedy, ref, actorRef: 'BRAIN' });
+    },
+    async recordDecision(_summary, detail) {
+      await recordImprovementEvent({ candidateId: null, kind: RESEARCH_ALLOCATION_DECIDED, detail });
+    },
+  };
+}
+
+let lastResearchAllocation = 0;
+
+/** At most once an hour, from the goals tick. A failure is reported, never thrown into the tick. */
+export async function reallocateResearchIfDue(
+  input: { goals: GoalView[]; now?: string },
+  ports?: ResearchAllocationPorts,
+  clock: { nowMs?: number; force?: boolean } = {},
+): Promise<ResearchAllocationReport | { error: string } | null> {
+  const nowMs = clock.nowMs ?? Date.now();
+  if (!clock.force && nowMs - lastResearchAllocation < RESEARCH_ALLOCATION_EVERY_MS) return null;
+  lastResearchAllocation = nowMs;
+  try {
+    return await reallocateResearch(input, ports ?? (await productionResearchAllocationPorts()));
+  } catch (error) {
+    return { error: error instanceof Error ? error.message.slice(0, 300) : String(error) };
+  }
 }
