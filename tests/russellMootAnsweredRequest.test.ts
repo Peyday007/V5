@@ -14,6 +14,7 @@
  * a RUSSELL_ROUTINE_DECISION event recorded, once; a live mission's card and a missionless card are
  * still reopened exactly as before.
  */
+import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject, type TestProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
@@ -368,5 +369,23 @@ describe('the source keeps each doc comment on what it documents', () => {
     const constDoc = source.slice(0, constAt).trimEnd();
     expect(constDoc.endsWith('*/')).toBe(true);
     expect(constDoc.slice(constDoc.lastIndexOf('/**'))).toContain('What a resume says when the mission left');
+  });
+});
+
+/**
+ * The pass-level fix above added a helper to `loop.ts` and first placed it
+ * between `runPass`'s doc comment and `runPass`, which left the doc comment
+ * describing the new constant and `runPass` with none. Pinned here: the block
+ * comment directly above `export async function runPass` is still `runPass`'s.
+ */
+describe('loop.ts keeps runPass documented', () => {
+  it('the doc comment immediately above runPass is the one that describes it', () => {
+    const source = readFileSync(new URL('../server/services/russell/loop.ts', import.meta.url), 'utf8');
+    const at = source.indexOf('export async function runPass(');
+    expect(at).toBeGreaterThan(0);
+    const before = source.slice(0, at).trimEnd();
+    expect(before.endsWith('*/')).toBe(true);
+    const doc = before.slice(before.lastIndexOf('/**'));
+    expect(doc).toMatch(/Run one pass as its own failure domain/);
   });
 });

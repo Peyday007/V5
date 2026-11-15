@@ -673,23 +673,6 @@ export interface TickReport {
   bounded: boolean;
 }
 
-/**
- * Run one pass as its own failure domain.
- *
- * Every pass on this tick derives from rows and is idempotent by them, so a
- * pass that throws loses nothing by being asked again next tick — and the
- * passes after it lose everything if its throw ends the tick. That is what
- * production did: a statement timeout in the shared-findings promotion, the
- * first pass, ended every tick at step 0, and the research-goal continuation,
- * the launch step and every reconciliation below it never ran again. The
- * failure is recorded rather than swallowed, on the report and on the cycle
- * row, so a pass that keeps failing is visible rather than silent.
- *
- * It deliberately does not race a pass against a timer: a pass abandoned
- * mid-flight would still hold its connection and keep writing beside the next
- * one. Each statement is bounded by the database's own statement timeout and
- * the pool's checkout timeout, which is what bounds a pass.
- */
 /** The resume's own sentence for an answer whose mission left NEEDS_HUMAN. */
 const MISSION_LEFT_NEEDS_YOU = 'the mission moved out of Needs You before the answer could be applied';
 
@@ -716,6 +699,23 @@ async function settleUnresolvedAnswer(
 /** Marks a cycle error that is per-pass failures rather than a failed tick. */
 export const PASS_FAILURE_PREFIX = 'passes: ';
 
+/**
+ * Run one pass as its own failure domain.
+ *
+ * Every pass on this tick derives from rows and is idempotent by them, so a
+ * pass that throws loses nothing by being asked again next tick — and the
+ * passes after it lose everything if its throw ends the tick. That is what
+ * production did: a statement timeout in the shared-findings promotion, the
+ * first pass, ended every tick at step 0, and the research-goal continuation,
+ * the launch step and every reconciliation below it never ran again. The
+ * failure is recorded rather than swallowed, on the report and on the cycle
+ * row, so a pass that keeps failing is visible rather than silent.
+ *
+ * It deliberately does not race a pass against a timer: a pass abandoned
+ * mid-flight would still hold its connection and keep writing beside the next
+ * one. Each statement is bounded by the database's own statement timeout and
+ * the pool's checkout timeout, which is what bounds a pass.
+ */
 export async function runPass(
   report: Pick<TickReport, 'passFailures' | 'deferred'>,
   name: string,
