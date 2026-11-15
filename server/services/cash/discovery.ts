@@ -70,6 +70,7 @@
 import { OPERATING_MODEL_SENTENCE } from '../../domain/operatingModel.ts';
 import { constructedCapFor, freeLaneOwnsResearch, routineFocus } from './researchRoom.ts';
 import { TRIGGER_BUCKETS, triggersEnabled } from './triggers.ts';
+import { INTERMEDIATION_BUCKETS, orderForFamily } from './intermediationBuckets.ts';
 import { FEED_SHORTLIST_BUCKET } from '../feeds/bucket.ts';
 import { getDb } from '../../db/database.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
@@ -361,6 +362,13 @@ export const BROAD_ECONOMY_BUCKETS: readonly SearchBucket[] = Object.freeze([
 ]);
 
 export const SEARCH_BUCKETS: readonly SearchBucket[] = Object.freeze([
+  /*
+   * Commercial intermediation's entry points (RES-15-4, S-0149): buyer-first and
+   * supply-first, across buyer types and market structures. While the family's
+   * declaration is current `openDiscovery` opens them before every other bucket
+   * (`orderForFamily`); when it lapses they are ordinary buckets in the fair order.
+   */
+  ...INTERMEDIATION_BUCKETS,
   ...QUICK_PLAY_BUCKETS,
   ...PLAY_BUCKETS,
   {
@@ -565,7 +573,7 @@ export async function openDiscovery(input: {
   const out: OpenedDiscovery[] = [];
   const limit = Math.max(1, input.limit ?? 1);
   let frame: ExecutionFrame | null | undefined;
-  for (const bucket of fairOrder([...SEARCH_BUCKETS, ...(triggersEnabled() ? TRIGGER_BUCKETS : [])], rounds)) {
+  for (const bucket of orderForFamily(fairOrder([...SEARCH_BUCKETS, ...(triggersEnabled() ? TRIGGER_BUCKETS : [])], rounds), now)) {
     if (out.length >= limit) break;
     const history = byBucket.get(bucket.id) ?? [];
     const next = nextRoundFor(history, now);
