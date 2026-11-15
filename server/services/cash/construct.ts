@@ -48,6 +48,7 @@ import { listOpportunities } from '../../repos/cashPortfolio.ts';
 import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
 import { paidOpportunityIds } from '../../repos/cashLedger.ts';
 import { statesNamedIn } from '../../domain/jurisdiction.ts';
+import { buyerNameKey } from '../../domain/industry.ts';
 import { APPROVAL_ENVELOPES } from '../research/approvalEnvelope.ts';
 import { describesOwnAction } from '../research/actorScope.ts';
 import { composeArrangement, type Part } from '../quant/mechanism.ts';
@@ -205,7 +206,11 @@ export interface ConstructedArrangement {
   /** Parts resting on a gated claim. */
   evidenced: number;
   /** The decomposition, resolved. */
-  value: Pick<Estimate, 'tier' | 'p10' | 'p50' | 'p90'> & { observations: number };
+  value: Pick<Estimate, 'tier' | 'p10' | 'p50' | 'p90'> & {
+    observations: number;
+    /** The lineage of the observations the value was reconstructed from (`claim:…`, `fact:…`, `opp:…`): its provenance. */
+    sources?: string[];
+  };
   /** Parts nothing establishes yet: what the research round asks. */
   unknownParts: string[];
   /** Openings sharing this buyer, for the novelty check and the value evidence. */
@@ -252,6 +257,14 @@ function clean(text: string): string {
 }
 
 const norm = (text: string | null | undefined) => (text ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+/**
+ * Which buyer population a payer names: the map's own identity (`buyerNameKey`,
+ * plurals folded) over the normalised text, so "Dental practice" on an opening
+ * and the map node "Dental practices" are one population, and an observation's
+ * already-normalised payer reads the same as the raw name. A qualifier is
+ * still a different population (PRICE-POOL holds).
+ */
+export const payerKey = (text: string | null | undefined): string => buyerNameKey(norm(text));
 
 function rootOf(node: IndustryNode, byId: Map<string, IndustryNode>): IndustryNode {
   let at = node;
@@ -828,7 +841,7 @@ export function selectCandidates(job: ConstructionJob): { selected: Candidate[];
   const known = new Map(job.known ?? []);
   const pricedByPayer = new Map<string, number>();
   for (const one of job.priced) {
-    const payer = String(one.context['payer'] ?? '');
+    const payer = payerKey(String(one.context['payer'] ?? ''));
     pricedByPayer.set(payer, (pricedByPayer.get(payer) ?? 0) + 1);
   }
   const metByDesign = new Map<string, number>();
@@ -846,7 +859,7 @@ export function selectCandidates(job: ConstructionJob): { selected: Candidate[];
       met: metByDesign.get(dk)!,
       precedent: one.transfer ? 1 : 0,
       evidenced: [one.demand, one.need, one.supply].filter((p) => p?.claimId).length,
-      priced: pricedByPayer.get(norm(one.demand.name)) ?? 0,
+      priced: pricedByPayer.get(payerKey(one.demand.name)) ?? 0,
       p50: held?.p50 ?? 0,
       variant: isDefaultDesign(one.design) ? 0 : 1,
       parts: partsByDesign.get(dk)!,
@@ -914,6 +927,13 @@ export async function composeConstruction(job: ConstructionJob, yieldEveryMs: nu
   return rank(out, limits, targets);
 }
 
+/**
+ * The composer's version, in every composition digest. 2: a FEE design's value
+ * is reconstructed from its own buyers' prices (it was left UNKNOWN), and own
+ * buyers are matched by `payerKey`.
+ */
+export const COMPOSITION_VERSION = 2;
+
 /** One selected candidate, the digest of everything its composition reads, and the library's arrangement composed under it. */
 export interface CompositionStep {
   one: Candidate;
@@ -928,7 +948,8 @@ export function compositionPlan(job: ConstructionJob): CompositionStep[] {
   // Everything a composition reads besides its own parts, once per pass. Fact observations only when
   // there are any, so a digest stored before they existed is still the same composition's.
   const facts = job.facts && (job.facts.unitCost.length > 0 || job.facts.volume.length > 0) ? job.facts : undefined;
-  const context = digestOf({ day: now.toISOString().slice(0, 10), currency: input.currency, daysLeft: input.daysLeft, limits, targets, exclusions, priced, tiedUp, ...(facts ? { facts } : {}) });
+  // `composition` names the composer's own version: a stored arrangement composed by an earlier one is recomposed, not reused.
+  const context = digestOf({ composition: COMPOSITION_VERSION, day: now.toISOString().slice(0, 10), currency: input.currency, daysLeft: input.daysLeft, limits, targets, exclusions, priced, tiedUp, ...(facts ? { facts } : {}) });
   return selectCandidates(job).selected.map((one) => {
     const under = digestOf([context, designKey(one.design), one.transfer?.id ?? '-', one.sector ?? '-', one.demand, one.need, one.supply, one.related.map((o) => o.id)]);
     return { one, under, stored: reuse.get(under) };
@@ -1057,6 +1078,12 @@ export function interleaveByPopulation(sorted: ConstructedArrangement[], exposur
   return out;
 }
 
+/** The lineage of the observations a value was reconstructed from: the claim a fact or a price was filed from. Pure. */
+function valueSources(value: Estimate, observations: readonly Observation[]): string[] {
+  const byId = new Map(observations.map((one) => [one.id, one]));
+  return [...new Set(value.used.flatMap((id) => byId.get(id)?.lineage ?? [id]))].sort();
+}
+
 function compose(args: {
   design: Design;
   origin: ConstructionOrigin;
@@ -1096,7 +1123,10 @@ function compose(args: {
   // arrangement as a "broad" bound and the reconstruction pooled them). An
   // arrangement with no evidence from its own buyers has an UNKNOWN value, and
   // the library keeps it that way until research establishes one.
-  const ownBuyer = (one: Observation) => one.context['payer'] === norm(demand.name);
+  // These buyers by the map's identity (`payerKey`): a construction fact filed against the node
+  // "Dental practices" is evidence about an opening's payer "Dental practice", and nothing wider.
+  const buyerKey = payerKey(demand.name);
+  const ownBuyer = (one: Observation) => payerKey(String(one.context['payer'] ?? '')) === buyerKey;
   const valueObs = args.priced.filter(ownBuyer).map((one) => ({ ...one, broad: false }));
   const riskObs = args.tiedUp.filter(ownBuyer).map((one) => ({ ...one, broad: false }));
   // What research observed supply is paid per unit for these buyers' work, and how much one of them buys (F2).
@@ -1128,7 +1158,15 @@ function compose(args: {
   try {
     estimates = reconstruct(composed.graph, composed.contribution, args.now).estimates;
     if (composed.exposure) estimates = { ...reconstruct(composed.graph, composed.exposure, args.now).estimates, ...estimates };
-    for (const leaf of ['a_prepay_share', 'a_repeat_rate']) {
+    /*
+     * What these buyers pay is read whether or not the contribution formula
+     * passes through it. A FEE design (PRODUCE, REFERRAL) earns its fee, so
+     * `a_value` is not on the contribution's path and `reconstruct` never
+     * resolved it: production, 2026-11-15, held 43 OBSERVED prices filed
+     * against buyer populations, and every PRODUCE arrangement for those very
+     * buyers (360 of 404) still read value UNKNOWN, so the plan admitted 0.
+     */
+    for (const leaf of ['a_value', 'a_prepay_share', 'a_repeat_rate']) {
       if (!estimates[leaf] && composed.graph.nodes.some((n) => n.key === leaf)) estimates = { ...estimates, ...reconstruct(composed.graph, leaf, args.now).estimates };
     }
   } catch {
@@ -1149,7 +1187,7 @@ function compose(args: {
   const targetsMet = properties.filter((p) => args.targets.includes(p));
   const emergent = properties.filter((p) => !args.targets.includes(p));
   const evidenced = [demand, need, supply].filter((one) => one?.claimId).length;
-  const repeatObs = args.priced.filter((one) => one.context['arrangement'] === 'repeat' && one.context['payer'] === norm(demand.name));
+  const repeatObs = args.priced.filter((one) => one.context['arrangement'] === 'repeat' && ownBuyer(one));
   const repeatBusiness = {
     observations: repeatObs.length,
     statedValueCents: repeatObs.reduce((t, one) => t + (one.value.kind === 'POINT' ? Math.round(one.value.value * 100) : 0), 0),
@@ -1210,7 +1248,7 @@ function compose(args: {
     emergent,
     stress,
     evidenced,
-    value: value ? { tier: value.tier, p10: value.p10, p50: value.p50, p90: value.p90, observations: value.used.length } : { tier: 'UNKNOWN', p10: 0, p50: 0, p90: 0, observations: 0 },
+    value: value ? { tier: value.tier, p10: value.p10, p50: value.p50, p90: value.p90, observations: value.used.length, sources: valueSources(value, valueObs) } : { tier: 'UNKNOWN', p10: 0, p50: 0, p90: 0, observations: 0 },
     unknownParts,
     relatedOpenings: args.related.map((one) => one.id),
     question,

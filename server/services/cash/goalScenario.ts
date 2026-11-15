@@ -47,7 +47,8 @@ import { CONTACTS_PER_DAY_BOUNDS, evaluateGoalPortfolio, heldEvaluation, measure
 import { SPREAD_FLOOR } from '../quant/pool.ts';
 import type { Estimate, EvidenceTier } from '../../domain/quant.ts';
 import type { VariableSpec } from '../../domain/scenario.ts';
-import { composeInvented, inventionContext, TRANSFER_MATERIAL, type ConstructedArrangement, type InventedDesign } from './construct.ts';
+import { composeInvented, inventionContext, payerKey, TRANSFER_MATERIAL, type ConstructedArrangement, type InventedDesign } from './construct.ts';
+import { buyerPopulationName } from '../../domain/industry.ts';
 export { TRANSFER_MATERIAL };
 
 /**
@@ -205,7 +206,9 @@ export function estimatedFromArrangement(one: ConstructedArrangement, input: { p
   // (PRICE-POOL, 2026-11-14). Like UNKNOWN, it stays a research target only.
   if (one.value.tier === 'UNKNOWN' || one.value.tier === 'MECHANISM' || !(p50 > 0) || !(p90 >= p10)) return null;
   if (one.stress.exposure === 'EXCEEDS') return null;
-  const ref: SourceRef = { kind: 'OTHER', ref: `arrangement:${one.key}`, note: `${one.value.tier} reconstruction from ${one.value.observations} observation(s)` };
+  // Provenance: the claims (or facts, or openings) the reconstruction read, carried on the note.
+  const from = one.value.sources?.length ? `: ${one.value.sources.slice(0, 6).join(', ')}${one.value.sources.length > 6 ? ', …' : ''}` : '';
+  const ref: SourceRef = { kind: 'OTHER', ref: `arrangement:${one.key}`, note: `${one.value.tier} reconstruction from ${one.value.observations} observation(s) of these buyers${from}` };
   // A transfer carries a design to buyers who differ from the precedent's on every material dimension
   // nobody has bridged: until a sourced adjustment bridges one, its price range is widened, never narrowed (S-12).
   const transfer = transferOf(one);
@@ -219,7 +222,7 @@ export function estimatedFromArrangement(one: ConstructedArrangement, input: { p
     provenance: 'ASSUMPTION',
     source: ref,
     note:
-      `reconstructed (${one.value.tier}, ${one.value.observations} obs.), not shown paid: p10 ${p10} p50 ${p50} p90 ${p90}` +
+      `reconstructed (${one.value.tier}, ${one.value.observations} obs. of these buyers${from}), not shown paid: p10 ${p10} p50 ${p50} p90 ${p90}` +
       (transfer && transfer.unbridged.length ? `; transferred from "${transfer.precedent}" with ${transfer.unbridged.join(', ')} not bridged, so swept ${Math.round(low)}–${Math.round(high)}` : ''),
     // Swept over the reconstruction's range: an estimate carries no distribution (only evidence may).
     inferred: { tier: one.value.tier as EvidenceTier, justified: false, p10, p50, p90, observations: one.value.observations },
@@ -416,8 +419,11 @@ export function comparablePricesFor(
   const held: readonly string[] = one.structure ? (STRUCTURES[one.structure]?.alreadyHeldAs ?? []) : [];
   const structure = held.length ? valid.filter((p) => p.mechanism && held.includes(p.mechanism)).map((p) => p.value) : [];
   if (structure.length >= SECTOR_PRICES_MIN && tight(structure)) return { prices: structure, scope: `with the same structure (${one.structure})` };
-  const buyer = normSector(one.demand?.name);
-  const buyers = buyer ? valid.filter((p) => normSector(p.payer) === buyer).map((p) => p.value) : [];
+  // The same kind of buyer by the map's identity: plurals folded (`payerKey`), and a named
+  // organisation read as the population the map files it under (`buyerPopulationName`).
+  const buyer = payerKey(one.demand?.name);
+  const sameBuyer = (payer: string | null | undefined) => !!payer && (payerKey(payer) === buyer || payerKey(buyerPopulationName(payer)) === buyer);
+  const buyers = buyer ? valid.filter((p) => sameBuyer(p.payer)).map((p) => p.value) : [];
   if (buyers.length >= SECTOR_PRICES_MIN && tight(buyers)) return { prices: buyers, scope: `paid by the same kind of buyer (${one.demand!.name})` };
   const all = valid.map((p) => p.value);
   if (all.length === 0 || tight(all)) return { prices: all, scope: 'in this project' };
