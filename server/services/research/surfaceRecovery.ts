@@ -47,7 +47,7 @@ import { readSurfaceProbe, type SurfaceProbeReading } from '../bins/contracts.ts
 import { currentFragments, getOrchestration, updateFragment } from '../../repos/research.ts';
 import { DEPENDENCY_DOOM_PREFIX, advancePacket } from './packetRunner.ts';
 import { dependencyKeys } from '../../domain/dependencies.ts';
-import { retryFragment } from './reissue.ts';
+import { FragmentNotRetryable, ladderExhaustedReason, planForRetry, retryFragment } from './reissue.ts';
 import { TERMINAL_ORCHESTRATION } from './outcome.ts';
 import { listEventsByEntity, recordEvent } from '../../repos/events.ts';
 import { getDb } from '../../db/database.ts';
@@ -233,25 +233,55 @@ export async function recoverFragmentAfterSurfaceChange(input: {
 
   if (refusals.length > 0) throw new SurfaceRecoveryRefused(refusals);
 
-  // (3) The ceiling rises. The counter is never touched.
   const grant = Math.max(1, Math.min(5, input.grantAttempts ?? 2));
   const maxRepairsBefore = fragment.maxRepairs;
   const maxRepairsAfter = Math.max(maxRepairsBefore, fragment.attempt + grant);
+
+  /*
+   * (2b) The next attempt is planned before anything is written.
+   *
+   * `retryFragment` refuses an attempt whose plan is only MARK_UNRESOLVED —
+   * every route this failure suggests has been tried. Learning that from its
+   * throw came after the ceiling below had already risen, and as a
+   * `FragmentNotRetryable` the automatic pass does not handle: one exhausted
+   * fragment aborted recovery for every other candidate, wrote no refusal, and
+   * threw again on every pass. So the plan is made here, with the ceiling this
+   * recovery would grant, an exhausted one is refused in this control's own
+   * terms with nothing changed, and the plan is handed to `retryFragment` so
+   * the attempt carries exactly what was checked.
+   */
+  const repairPlan = await planForRetry({ ...fragment, maxRepairs: maxRepairsAfter }, orchestration);
+  const exhausted = ladderExhaustedReason(fragment, repairPlan);
+  if (exhausted) throw new SurfaceRecoveryRefused([exhausted]);
+
+  // (3) The ceiling rises. The counter is never touched.
   if (maxRepairsAfter !== maxRepairsBefore) {
     await updateFragment(fragment.id, { maxRepairs: maxRepairsAfter });
   }
 
-  const retried = await retryFragment({
-    fragmentId: fragment.id,
-    reason:
-      `${input.reason.trim()} The previous ${fragment.attempt} attempt(s) failed because this ` +
-      'worker surface could not reach the sources, not because the sources were searched and ' +
-      'found wanting. Evidenced by probe ' +
-      `${probe!.id}: ${reached.map((r) => `${r.host} RETRIEVED`).join(', ')}. Every declaration, ` +
-      'source restriction and evidence lane is carried forward unchanged.',
-    actor: input.actor,
-    advance: false,
-  });
+  let retried: Awaited<ReturnType<typeof retryFragment>>;
+  try {
+    retried = await retryFragment({
+      fragmentId: fragment.id,
+      reason:
+        `${input.reason.trim()} The previous ${fragment.attempt} attempt(s) failed because this ` +
+        'worker surface could not reach the sources, not because the sources were searched and ' +
+        'found wanting. Evidenced by probe ' +
+        `${probe!.id}: ${reached.map((r) => `${r.host} RETRIEVED`).join(', ')}. Every declaration, ` +
+        'source restriction and evidence lane is carried forward unchanged.',
+      actor: input.actor,
+      advance: false,
+      repairPlan,
+    });
+  } catch (error) {
+    if (!(error instanceof FragmentNotRetryable)) throw error;
+    // Refused between the check above and the write (a concurrent retry, a
+    // status change): put the ceiling back and refuse in this control's terms.
+    if (maxRepairsAfter !== maxRepairsBefore) {
+      await updateFragment(fragment.id, { maxRepairs: maxRepairsBefore });
+    }
+    throw new SurfaceRecoveryRefused([error.message]);
+  }
 
   // (5) Only what this fragment stranded, and only if it says so.
   const unblocked = await restoreStrandedDependents({
