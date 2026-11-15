@@ -59,7 +59,8 @@
     "puzzle-book": "tsx scripts/puzzle-book.ts",
     "plan:check": "tsx scripts/plan-check.ts",
     "quant": "tsx scripts/quant.ts",
-    "memory": "tsx scripts/memory.ts"
+    "memory": "tsx scripts/memory.ts",
+    "bench": "tsx scripts/bench.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
