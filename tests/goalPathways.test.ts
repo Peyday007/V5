@@ -369,3 +369,20 @@ describe('R-PORTFOLIO-COST: the portfolio does not lead with a deal only someone
     expect(livingPortfolio(pathways, { remaining: 10_000, capitalCeiling: null }).unfunded).toEqual([]);
   });
 });
+
+describe('R-PORTFOLIO-COST: research on an unfunded deal does not claim to change the plan', () => {
+  it('only a cost answer that makes it fundable can bring it into the leading combination', () => {
+    const utility = modelled(opening({ id: 'arr_utility2', title: 'Constructed: state technical utility services bureaus: Brain produces it' }), {
+      repeatable: true,
+      price: { value: null, low: 341_057, high: 1_000_000, provenance: 'ASSUMPTION', source: null, note: 'reconstructed', inferred: { tier: 'COMPARABLE', justified: false, p10: 341_057, p50: 600_000, p90: 1_000_000, observations: 2 } },
+      directCost: unknown(0, 881_310),
+      volume: unknown(1, 200),
+      estimated: { arrangementKey: 'utility2', tier: 'COMPARABLE', observations: 2 },
+    });
+    const pathways = [pathwayOf(utility, null, ctx), pathwayOf(sudoku, null, ctx)];
+    const rows = informationValue(pathways, { remaining: 10_000, daysLeft: 19, outreachPerDay: 60, leaders: new Set(['cop_sudoku']), marginal: 100, capitalCeiling: 3000 });
+    const mine = rows.filter((r) => r.opportunityId === 'arr_utility2');
+    expect(mine.length).toBeGreaterThan(0);
+    for (const r of mine) expect(r.changesPlan).toBe(r.variable === 'directCost');
+  });
+});
