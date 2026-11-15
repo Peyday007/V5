@@ -37,6 +37,9 @@ beforeEach(async () => {
   await createUser({ email: `own-${uid()}@example.test`, displayName: 'Owner', password: 'correct horse battery staple' });
 });
 
+/** Every finding the detector offers — not its default top-4 — so "not offered" cannot pass by being crowded out. */
+const offeredRefs = async (): Promise<(string | undefined)[]> => (await inventoryDeficiencies(1000)).map((one) => one.source?.ref);
+
 describe('(1) an unowned BLOCKING finding like A-10K is a commissionable MISSING_CAPABILITY deficiency until a repair is in flight', () => {
   const a10k = (id: string, over: Record<string, unknown> = {}) =>
     upsertInventory(
@@ -73,13 +76,20 @@ describe('(1) an unowned BLOCKING finding like A-10K is a commissionable MISSING
       ownerComponent: `operator:MISSING_CAPABILITY:${uid()}`, frequency: 1, denominator: 1, scope: 'GENERAL', severity: 'MEDIUM', evidence: {},
     })).candidate;
     expect((await a10k(id, { linkedCandidateId: repair.id })).ok).toBe(true);
-    expect((await inventoryDeficiencies()).map((one) => one.source?.ref)).not.toContain(id);
+    expect(await offeredRefs()).not.toContain(id);
 
     // That repair is rejected (attempt 1's outcome) and the finding still states no cause. Offering it
     // again would commission attempt N+1 on the same unanswerable question, which is how A-10K kept
     // returning to the Factory as an engineering repair. It is not offered again.
-    await decideCandidate(repair.id, 'REJECTED', 'Method research ended FAILED with no accepted claim');
-    expect((await inventoryDeficiencies()).map((one) => one.source?.ref)).not.toContain(id);
+    // Control: a second causeless finding with no repair at all is still offered beside it, so the hold
+    // below is about the rejected repair and not a detector that went quiet. With the detector before the
+    // fix (aecdd0b8), the next assertion fails: A-10K is offered again on the rows attempt 1 was rejected on.
+    const sibling = `A-10K-${uid()}`;
+    expect((await a10k(sibling)).ok).toBe(true);
+    expect(await decideCandidate(repair.id, 'REJECTED', 'Method research ended FAILED with no accepted claim')).toBe(true);
+    const afterRejection = await offeredRefs();
+    expect(afterRejection).toContain(sibling);
+    expect(afterRejection).not.toContain(id);
 
     // Once its cause is confirmed, the next attempt has something to act on: offered again, carrying the cause.
     const cause = 'Evidence gap: no measured buyer conversion and no sized comparables; closes by §94 outreach replies.';
@@ -90,7 +100,7 @@ describe('(1) an unowned BLOCKING finding like A-10K is a commissionable MISSING
 
     // Owning it stops the offer: a person or session that took it is the repair.
     expect((await a10k(id, { owner: 'session A' })).ok).toBe(true);
-    expect((await inventoryDeficiencies()).map((one) => one.source?.ref)).not.toContain(id);
+    expect(await offeredRefs()).not.toContain(id);
   });
 
   // Every decision that says a repair did not fix it holds a causeless finding back, not only REJECTED:
