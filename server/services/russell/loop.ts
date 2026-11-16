@@ -678,6 +678,18 @@ export interface TickReport {
 const MISSION_LEFT_NEEDS_YOU = 'the mission moved out of Needs You before the answer could be applied';
 
 /**
+ * The reason for an answer whose resume ran, failed, and found the mission
+ * gone from NEEDS_HUMAN afterwards. The move is what makes it moot, and the
+ * resume's own refusal is what actually happened to the answer — both are
+ * kept, so the card never loses the sentence saying why nothing was done.
+ * (An answer filtered before any resume ran has no refusal to keep.)
+ */
+export function movedOutAfterResume(refusal: string): string {
+  const said = refusal.trim();
+  return said ? `${MISSION_LEFT_NEEDS_YOU}; the resume itself refused: ${said}` : MISSION_LEFT_NEEDS_YOU;
+}
+
+/**
  * An answer that was not carried out — always an unresolved answer of this
  * cycle — which `reopenAnswered` either withdraws (its mission is no longer
  * waiting on it) or puts back in front of the person. Read back which, so a
@@ -2463,11 +2475,11 @@ async function tickOnce(owner: string): Promise<TickReport> {
           /*
            * Re-read after the failed resume: a mission that left NEEDS_HUMAN
            * while it ran is just as moot, so it is settled as such (and
-           * `reopenAnswered` withdraws it by the mission's state) rather than
-           * reported as whatever the resume happened to fail on.
+           * `reopenAnswered` withdraws it by the mission's state) — with the
+           * resume's own refusal kept beside the move, never replaced by it.
            */
           const after = request.missionId ? await getMission(request.missionId) : null;
-          await settleUnresolvedAnswer(report, request, after && after.state !== 'NEEDS_HUMAN' ? MISSION_LEFT_NEEDS_YOU : outcome.reason);
+          await settleUnresolvedAnswer(report, request, after && after.state !== 'NEEDS_HUMAN' ? movedOutAfterResume(outcome.reason) : outcome.reason);
           continue;
         }
         if (await markResumed(request.id)) report.resumed.push(request.id);
