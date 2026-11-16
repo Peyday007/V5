@@ -15,8 +15,19 @@
  *  - live: a failure of this dependency on the ledger (`ledger.ts`
  *    `readFailureRecoveries`) that has not been shown recovered makes its
  *    safeguards necessary now, with that failure as the reason;
- *  - cost and reversibility of each switch: no row states them, so they are
- *    left unknown and nothing is read as cheap or reversible.
+ *  - cost and reversibility of each switch, read from what the rows show
+ *    about the substitute (`switchTermsFor`): a substitute path whose own
+ *    outcome rows show it already reached prospects through an account Brain
+ *    already uses, that meets its dependency's obligations, on a dependency
+ *    that carries none, is switched to by moving work between paths Brain
+ *    already operates — it buys nothing, opens no account and signs nothing,
+ *    so it commits 0 cents of new money and switching back undoes it. The
+ *    low-cost ceiling is 0 cents of new commitment: no money is committed
+ *    outside a ceiling a person set (invariant 38), so with none set only a
+ *    switch that commits nothing is cheap. A substitute the rows do not show
+ *    this of — one that has not run, one that does not meet its obligations,
+ *    a dependency with obligations — keeps an unknown cost and reversibility
+ *    and is not read as cheap or reversible (invariant 39).
  *
  * The order is recorded on the ledger (`bin_events`,
  * FALLBACK_PREPARATION_RANKED) whenever it changes: the state/ledger owner
@@ -29,7 +40,8 @@ import { getCashMode } from '../../repos/cashMode.ts';
 import { rankFallbacks, type FallbackRanking, type PriorityInput, type RankedFallback } from './fallbackPriority.ts';
 import { acquisitionFallbackStructure, readMeasuredPaths, sprintDaysLeft, type MeasuredPath } from './fallbackPlanReading.ts';
 import { readFailureRecoveries, type FailureRecoveryRecord } from './ledger.ts';
-import type { Dependency } from './fallbacks.ts';
+import type { Dependency, Substitute } from './fallbacks.ts';
+import { makeFigure, type Figure } from './graph.ts';
 
 export const FALLBACK_PREPARATION_EVENT = 'FALLBACK_PREPARATION_RANKED';
 
@@ -41,10 +53,50 @@ export interface FallbackPreparationRecord {
   at: string;
 }
 
+/** New money a fallback switch may commit without a ceiling a person set: none (invariant 38). */
+export function noApprovedSpendCeiling(): Figure {
+  const made = makeFigure({
+    meaning: 'new money a fallback switch may commit without a ceiling a person set',
+    unit: 'cents',
+    value: 0,
+    status: 'OBSERVED',
+    source: 'no spend ceiling is set for fallback switches, and no money is committed outside a ceiling a person set (invariant 38)',
+  });
+  if (!made.ok) throw new Error(made.reason);
+  return made.figure;
+}
+
+/**
+ * What the rows show about switching to one substitute: the new money it
+ * commits and whether switching back undoes it, or null when the rows show
+ * neither. They show it when the substitute already ran — VALIDATED, with an
+ * observed capacity above zero, so its account and channel are already in
+ * use — it meets its dependency's obligations, and the dependency carries
+ * none. Pure.
+ */
+export function switchTermsFor(dependency: Dependency, substitute: Substitute): { cost: Figure; reversible: true } | null {
+  const ran = substitute.readiness === 'VALIDATED' && substitute.capacity.status === 'OBSERVED' && (substitute.capacity.value ?? 0) > 0;
+  if (!ran) return null;
+  if (substitute.eligibility.meetsObligations !== true) return null;
+  if (dependency.consequence.obligations.length > 0) return null;
+  const made = makeFigure({
+    meaning: `new money a switch to ${substitute.key} commits`,
+    unit: 'cents',
+    value: 0,
+    status: 'OBSERVED',
+    source:
+      `${substitute.capacity.source ?? substitute.key}: the path already reached ${substitute.capacity.value} prospect(s) through an account Brain uses, ` +
+      'and the dependency carries no obligation, so a switch buys nothing, opens no account and signs nothing',
+  });
+  return made.ok ? { cost: made.figure, reversible: true } : null;
+}
+
 /**
  * The priority input for one real dependency: its consequence when the
- * records state one, and live when an unrecovered failure of it is on the
- * ledger. Pure.
+ * records state one, live when an unrecovered failure of it is on the
+ * ledger, and the cost and reversibility of each switch the rows show
+ * (`switchTermsFor`), judged against the no-unapproved-spend ceiling. A cost
+ * already stated on a substitute is kept. Pure.
  */
 export function priorityInputFor(
   dependency: Dependency,
@@ -53,8 +105,18 @@ export function priorityInputFor(
 ): PriorityInput {
   const open = failures.filter((f) => f.dependency === dependency.key && f.recovered !== true);
   const last = open[open.length - 1];
+  const reversible: Record<string, boolean> = {};
+  const substitutes = dependency.substitutes.map((one) => {
+    if (one.switchingCost) return one;
+    const terms = switchTermsFor(dependency, one);
+    if (!terms) return one;
+    reversible[one.key] = terms.reversible;
+    return { ...one, switchingCost: terms.cost };
+  });
   return {
-    dependency,
+    dependency: { ...dependency, substitutes },
+    lowCostCeiling: noApprovedSpendCeiling(),
+    ...(Object.keys(reversible).length > 0 ? { reversible } : {}),
     consequences: sprint
       ? [{ class: 'BLOCKED_REVENUE_OBJECTIVE', basis: `cash sprint ${sprint.id} (${sprint.horizonDays} days) reaches its revenue objective only through ${dependency.label}` }]
       : [],
