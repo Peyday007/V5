@@ -253,15 +253,36 @@ describe('on production rows: fallbacks are ranked for preparation on every cash
   const sprint = async () => ({ id: 'cmd_test', horizonDays: 30 });
   const count = async () => Number((await getDb().get<{ n: number }>(`SELECT COUNT(*) AS n FROM bin_events WHERE event_type = ? AND project_id = ?`, [FALLBACK_PREPARATION_EVENT, projectId]))?.n ?? 0);
 
-  it('a cash sprint makes acquisition a blocked-revenue-objective dependency; cost and reversibility unknown are not read as cheap', async () => {
+  it('a cash sprint makes acquisition a blocked-revenue-objective dependency; a path that already ran is a cheap reversible backup, prepared early', async () => {
     await path('Campaign A', 'email (Instantly)', 4);
     await path('Partner list', 'partner referral', 2);
     const { ranking, written } = await prepareProjectFallbacks(projectId, { authority: granted, sprint, failures: async () => [] });
     expect(written).toBe(true);
     expect(ranking!.ranked).toEqual([
-      expect.objectContaining({ rank: 1, substitute: 'Partner list @ partner referral', decidedBy: 'BLOCKED_REVENUE_OBJECTIVE', promoted: false, lowCost: null, reversible: null, prepareEarly: false, eligible: true }),
+      expect.objectContaining({ rank: 1, substitute: 'Partner list @ partner referral', decidedBy: 'BLOCKED_REVENUE_OBJECTIVE', promoted: false, lowCost: true, reversible: true, prepareEarly: true, eligible: true }),
     ]);
+    expect(ranking!.ranked[0]!.reason).toMatch(/low cost and reversible: prepare early/);
     expect(ranking!.preservesOngoingWork).toBe(true);
+    // The order recorded on the ledger carries it, so production reads which backups to prepare first.
+    const held = await readFallbackPreparation(projectId);
+    expect(held!.ranked.filter((one) => one.prepareEarly).map((one) => one.substitute)).toEqual(['Partner list @ partner referral']);
+  });
+
+  it('what the rows do not show stays unknown: a path that never ran, or a dependency with obligations, is not read as cheap or reversible', async () => {
+    const { switchTermsFor, priorityInputFor } = await import('../server/services/quant/fallbackPreparation.ts');
+    const { acquisitionDependency } = await import('../server/services/quant/fallbackIndependence.ts');
+    const dependency = acquisitionDependency(projectId, [
+      { mechanism: 'Campaign A', channel: 'email (Instantly)', contacts: 4 },
+      { mechanism: 'Partner list', channel: 'partner referral', contacts: 2 },
+    ] as Parameters<typeof acquisitionDependency>[1], { ok: true, reason: 'granted' })!;
+    const ran = dependency.substitutes[0]!;
+    expect(switchTermsFor(dependency, ran)?.cost.value).toBe(0);
+    expect(switchTermsFor(dependency, { ...ran, readiness: 'LOCATED' })).toBeNull();
+    expect(switchTermsFor(dependency, { ...ran, eligibility: { ...ran.eligibility, meetsObligations: null } })).toBeNull();
+    const bound = { ...dependency, consequence: { ...dependency.consequence, obligations: ['deliver the agreed report by Friday'] } };
+    expect(switchTermsFor(bound, ran)).toBeNull();
+    const ranked = rankFallbacks([priorityInputFor(bound, { id: 'cmd_test', horizonDays: 30 }, [])]).ranked;
+    expect(ranked[0]).toMatchObject({ lowCost: null, reversible: null, prepareEarly: false });
   });
 
   it('with no cash sprint no consequence is claimed', async () => {
