@@ -250,11 +250,7 @@ jobs:
               # recreates a deleted pod but never starts a stopped one. Run runpod-disconnect first,
               # or Brain starts the pod again when research arrives. Owner cost control, 2026-11-16.
               [ -n "${RUNPOD_API_KEY:-}" ] || { echo "::error::Set the RUNPOD_API_KEY repository secret."; exit 1; }
-              ids=$(curl -sS -H "Authorization: Bearer $RUNPOD_API_KEY" https://rest.runpod.io/v1/pods | python3 -c 'import json,sys; d=json.load(sys.stdin); d=d if isinstance(d,list) else d.get("pods",[]); print(" ".join(p["id"] for p in d if str(p.get("name","")).startswith("brain-vllm")))')
-              for id in $ids; do
-                code=$(curl -sS -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer $RUNPOD_API_KEY" "https://rest.runpod.io/v1/pods/$id/stop")
-                echo "STOP $id HTTP $code"
-              done
+              npx tsx scripts/runpod-stop.ts
               sleep 20
               npx tsx scripts/runpod-survey.ts | grep -E '^(ACCOUNT|POD) '
               ;;
