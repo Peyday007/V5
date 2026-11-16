@@ -296,3 +296,21 @@ describe('FALL-37-4: every failure and recovery is recorded and recurring classe
     expect(recurring[0]!.methodsToImprove).toContain('watch the advance ship notice');
   });
 });
+
+describe('goal-portfolio bounds (repair-F5-2)', () => {
+  it('reads every goal reaching its target at the Fréchet lower bound and the correlated downside at its upper', async () => {
+    const { goalPortfolioBounds } = await import('../server/services/quant/fallbackSwitch.ts');
+    const b = goalPortfolioBounds([
+      { goalId: 'a', reach: 0.9, basis: 'PROBABILITY' },
+      { goalId: 'b', reach: 0.8, basis: 'PROBABILITY' },
+    ])!;
+    expect(b.reliability.low).toBeCloseTo(0.7, 10);
+    expect(b.reliability.high).toBeCloseTo(0.8, 10);
+    expect(b.downside.low).toBeCloseTo(0.2, 10);
+    expect(b.downside.high).toBeCloseTo(0.3, 10);
+    expect(b.basis).toBe('PROBABILITY');
+    expect(goalPortfolioBounds([{ goalId: 'a', reach: 0.9, basis: 'PROBABILITY' }, { goalId: 'c', reach: 0.9, basis: 'COVERAGE' }])!.basis).toBe('COVERAGE');
+    expect(goalPortfolioBounds([{ goalId: 'a', reach: null, basis: null }])).toBeNull();
+    expect(goalPortfolioBounds([])).toBeNull();
+  });
+});

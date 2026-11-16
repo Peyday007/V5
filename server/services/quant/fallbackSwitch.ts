@@ -266,12 +266,31 @@ export function minimumSampleFor(target: number): number {
   return Math.ceil(Math.round((3 / Math.max(1e-9, 1 - target)) * 1e6) / 1e6);
 }
 
+/**
+ * One goal's portfolio as its own plan reading states it (`goal_plan_readings`):
+ * the share of worlds its best combination reaches the target in, and whether
+ * that share is a probability or only coverage of assumed inputs.
+ */
+export interface GoalPortfolioReach {
+  goalId: string;
+  reach: number | null;
+  basis: 'PROBABILITY' | 'COVERAGE' | null;
+}
+
 export interface ReliabilityReading {
   pathways: PathwayReliability[];
-  /** Share of portfolio worlds reaching the target; null when the portfolio could not be evaluated. */
+  /**
+   * Share of portfolio worlds reaching the target; null when the portfolio could not be evaluated.
+   * Read from goal portfolios, it is the conservative bound on every goal resting on the pathway
+   * reaching its target at once (`goalPortfolioBounds`).
+   */
   portfolioReliability: number | null;
   /** Share of worlds settling at or below the downside threshold, across correlated worlds. */
   correlatedDownside: number | null;
+  /** Whether the portfolio level is a probability or only coverage; null when there is none. */
+  portfolioBasis: 'PROBABILITY' | 'COVERAGE' | null;
+  /** The goal portfolios read, as their plans state them; empty when none were passed. */
+  goalPortfolios: GoalPortfolioReach[];
   /** The slowest pathway recovery, days. */
   timeToRecoveryDays: number | null;
   /** The target the caller seeks (e.g. 0.9) and whether it is supported. */
@@ -281,10 +300,41 @@ export interface ReliabilityReading {
   floorStatement: string;
 }
 
+/**
+ * Goal-portfolio reliability and correlated downside from the goals' own portfolio readings. Pure.
+ *
+ * Goals that rest on one pathway share it as a common cause, so their misses
+ * are not independent and the product of their reaches would overstate the
+ * chance that all of them succeed. Without the joint distribution, each is read
+ * at its Fréchet bound: every goal reaching its target at once is at least
+ * `max(0, 1 − Σ(1 − reachᵢ))` and at most `min(reachᵢ)`; the correlated
+ * downside — at least one goal falling short — is at most `min(1, Σ(1 − reachᵢ))`
+ * and at least `max(1 − reachᵢ)`. The conservative end of each is the one
+ * reported. Null when any goal's reach is unknown: an unknown is never read
+ * as a favourable assumption.
+ */
+export function goalPortfolioBounds(goals: readonly GoalPortfolioReach[]): {
+  reliability: { low: number; high: number };
+  downside: { low: number; high: number };
+  basis: 'PROBABILITY' | 'COVERAGE';
+} | null {
+  if (goals.length === 0 || goals.some((g) => g.reach === null || !Number.isFinite(g.reach))) return null;
+  const reaches = goals.map((g) => Math.min(1, Math.max(0, g.reach as number)));
+  const misses = reaches.map((r) => 1 - r);
+  const total = misses.reduce((a, b) => a + b, 0);
+  return {
+    reliability: { low: Math.max(0, 1 - total), high: Math.min(...reaches) },
+    downside: { low: Math.max(...misses), high: Math.min(1, total) },
+    basis: goals.every((g) => g.basis === 'PROBABILITY') ? 'PROBABILITY' : 'COVERAGE',
+  };
+}
+
 /** Reliability at every level, with an assurance stated only where the evidence supports it. */
 export function readReliability(input: {
   pathways: readonly { key: string; dependencies: readonly Dependency[] }[];
   portfolio?: PortfolioProblem;
+  /** The portfolios of the goals resting on these pathways, when no portfolio problem is passed. */
+  goalPortfolios?: readonly GoalPortfolioReach[];
   downsideAtOrBelow?: number;
   /** Trials behind the probabilities used (outcomes on record); null when not counted. */
   sampleSize: number | null;
@@ -294,11 +344,21 @@ export function readReliability(input: {
   const pathways = input.pathways.map((p) => pathwayReliability(p.key, p.dependencies));
   let portfolioReliability: number | null = null;
   let correlatedDownside: number | null = null;
+  let portfolioBasis: ReliabilityReading['portfolioBasis'] = null;
+  const goalPortfolios = [...(input.goalPortfolios ?? [])];
   if (input.portfolio) {
     const combo = evaluateCombination(input.portfolio, input.downsideAtOrBelow);
     if (!('missing' in combo)) {
       portfolioReliability = combo.reach;
       correlatedDownside = combo.shareAtOrBelow;
+      portfolioBasis = 'PROBABILITY';
+    }
+  } else {
+    const bounds = goalPortfolioBounds(goalPortfolios);
+    if (bounds) {
+      portfolioReliability = bounds.reliability.low;
+      correlatedDownside = bounds.downside.high;
+      portfolioBasis = bounds.basis;
     }
   }
   const recoveries = pathways.map((p) => p.timeToRecoveryDays);
@@ -308,7 +368,9 @@ export function readReliability(input: {
   let statement: string;
   let supported = false;
   if (level === null) statement = `a ${Math.round(target * 100)}% outcome is unsupported: a probability it rests on is unknown`;
-  else if (input.sampleSize === null || input.sampleSize < needed) {
+  else if (portfolioBasis === 'COVERAGE') {
+    statement = `a ${Math.round(target * 100)}% outcome is unsupported: a goal portfolio's reach is coverage of assumed inputs, not a probability (computed ${round(level)})`;
+  } else if (input.sampleSize === null || input.sampleSize < needed) {
     statement = `a ${Math.round(target * 100)}% outcome is unsupported: ${input.sampleSize ?? 'no'} trial(s) on record, and ${needed} are needed to tell it from chance (computed ${round(level)})`;
   } else if (level < target) statement = `the computed reliability ${round(level)} is below ${target}`;
   else {
@@ -319,6 +381,8 @@ export function readReliability(input: {
     pathways,
     portfolioReliability,
     correlatedDownside,
+    portfolioBasis,
+    goalPortfolios,
     timeToRecoveryDays,
     assurance: { target, supported, statement },
     assuredFloor: null,
