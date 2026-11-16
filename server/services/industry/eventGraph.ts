@@ -761,6 +761,45 @@ function parsedList(text: string): string[] {
   }
 }
 
+/** What one structure pass handed the graph. */
+export interface ExtractedItemsUpdate {
+  /** Graph facts the pass's records support (`factsFromItem`), each linked to its stored item. */
+  facts: number;
+  /** Facts the graph took as new or changed; one it already held unchanged is a duplicate. */
+  added: number;
+  /** Neighborhoods recomputed for them, and only those. */
+  affected: string[];
+}
+
+/**
+ * Hand the records a deterministic-extraction pass just read to the process
+ * graph, as the event that changed it: the Structure stage feeding Connect
+ * directly, so a request, offer, capacity, price or renewal reaches the rules
+ * and construction on the tick it was read. The facts are `factsFromItem`'s,
+ * under the same ids `syncEventGraph` gives the same stored rows, so the graph
+ * has one fact per record whichever path reaches it first and the other is a
+ * duplicate that recomputes nothing — one store, one fact shape, no second
+ * authority. Only the neighborhoods these facts touch are recomputed. Code
+ * detections are derived leads, not records, and are not read here. Pure code:
+ * no model.
+ */
+export function addExtractedItems(items: readonly ExtractableItem[]): ExtractedItemsUpdate {
+  const graph = processGraph.graph;
+  const affected = new Set<string>();
+  let facts = 0;
+  let added = 0;
+  for (const item of items) {
+    if (item.source === CODE_SIGNAL_SOURCE) continue;
+    for (const fact of factsFromItem(item)) {
+      facts += 1;
+      const result = graph.add(fact);
+      if (result.affected.length > 0) added += 1;
+      for (const hood of result.affected) affected.add(hood);
+    }
+  }
+  return { facts, added, affected: [...affected].sort() };
+}
+
 /**
  * Bring the process graph up to date with the durable `feed_detections` and
  * `feed_items` rows.
