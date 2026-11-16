@@ -1863,7 +1863,14 @@ async function main(): Promise<void> {
           `source sha256 ${reading.program.sourceSha256}\n` +
           `counts ${Object.entries(reading.counts).map(([k, v]) => `${k}=${v}`).join(' ')}\n`,
       );
-      for (const p of reading.progress) process.stdout.write(`  campaign ${p.key}: ${p.outcome ?? 'not started'}${p.campaignId ? ` (${p.campaignId})` : p.changeRequestId ? ` (change request ${p.changeRequestId}, not admitted)` : ''}${p.blocker ? ` — ${p.blocker}` : ''}\n`);
+      // A campaign that has not started says what it waits on: each dependency not yet LIVE, with its outcome.
+      const { getPlan } = await import('../server/repos/factoryProgram.ts');
+      const planned = new Map(((await getPlan(programId))?.plan.campaigns ?? []).map((c) => [c.key, c]));
+      const outcomeOf = new Map(reading.progress.map((p) => [p.key, p.outcome]));
+      for (const p of reading.progress) {
+        const waitsOn = p.outcome ? [] : (planned.get(p.key)?.dependsOn ?? []).filter((dep) => outcomeOf.get(dep) !== 'LIVE').map((dep) => `${dep}=${outcomeOf.get(dep) ?? 'not started'}`);
+        process.stdout.write(`  campaign ${p.key}: ${p.outcome ?? 'not started'}${p.campaignId ? ` (${p.campaignId})` : p.changeRequestId ? ` (change request ${p.changeRequestId}, not admitted)` : ''}${p.blocker ? ` — ${p.blocker}` : ''}${waitsOn.length ? ` — waits on ${waitsOn.join(', ')}` : ''}\n`);
+      }
       for (const r of reading.requirements) {
         if (r.status === 'PRODUCTION_VERIFIED' && !flags['all']) continue;
         process.stdout.write(`  ${r.key} ${r.status}${r.reopened ? ' (reopened)' : ''}: ${r.reason}\n`);
