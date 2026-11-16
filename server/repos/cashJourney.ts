@@ -283,7 +283,46 @@ export async function insertOutcome(input: {
     'SELECT id FROM cash_outcomes WHERE project_id = ? AND request_key = ?',
     [input.projectId, input.requestKey],
   );
-  return s(row?.id) === id;
+  if (s(row?.id) === id) return true;
+  return refineContactResult(input);
+}
+
+/**
+ * The answers a contact result recorded as a plain `BUYER_REPLIED` may still
+ * become. A provider states the reply first and its meaning later — Instantly
+ * sets a lead's interest status (won, not interested, lost) after the reply
+ * arrives, and the sales desk records an opt-out after reading it — so the row
+ * written on the pass that saw only the reply is not the lead's answer, it is
+ * the start of it. Every other value is already an answer and is final.
+ */
+const CONTACT_REFINEMENTS: ReadonlySet<string> = new Set(['BUYER_ACCEPTED', 'BUYER_COUNTERED', 'BUYER_DECLINED']);
+
+/**
+ * One guarded transition: the existing CONTACT_RESULT row under the same
+ * request key moves from `BUYER_REPLIED` to the classified answer the caller
+ * now holds. It names the state it comes from in the statement that makes it,
+ * so two racing passes change it once, an answer is never replaced by another
+ * answer, and a reply is never "downgraded". The row keeps its id, its
+ * `created_at` (when the contact was answered) and its request key, so it is
+ * still one row per lead for every reader that counts contacts; the earlier
+ * reading stays at the head of `basis` and the refinement is appended after it,
+ * so nothing that was observed is discarded. Returns whether it moved.
+ */
+async function refineContactResult(input: {
+  projectId: string;
+  kind: OutcomeKind;
+  valueText?: string | null;
+  basis: string;
+  requestKey: string;
+}): Promise<boolean> {
+  if (input.kind !== 'CONTACT_RESULT' || !input.valueText || !CONTACT_REFINEMENTS.has(input.valueText)) return false;
+  const result = await getDb().run(
+    `UPDATE cash_outcomes
+        SET value_text = ?, basis = basis || ?
+      WHERE project_id = ? AND request_key = ? AND kind = 'CONTACT_RESULT' AND value_text = 'BUYER_REPLIED'`,
+    [input.valueText, ` | refined to ${input.valueText} at ${journeyNow()}: ${input.basis}`, input.projectId, input.requestKey],
+  );
+  return Number(result.changes ?? 0) > 0;
 }
 
 export async function outcomesFor(input: {

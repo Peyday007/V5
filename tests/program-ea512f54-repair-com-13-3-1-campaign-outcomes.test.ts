@@ -147,12 +147,81 @@ describe('recordCampaignOutcomes', () => {
 
     const ended = LEADS.map((l) => (l.id === 'l-active' ? { ...l, status: 3 } : l.id === 'l-replied' ? { ...l, lt_interest_status: 4 } : l));
     const later = await recordCampaignOutcomes(projectId, { deps: workspace({ [NEIGHBOR]: ended }).deps, ownerProjectId: projectId, force: true });
-    expect(later.recorded).toBe(1);
+    // l-active's silence is new, and l-replied's reply is refined by the interest status that followed it.
+    expect(later.recorded).toBe(2);
     const now = await results(projectId);
     expect(now['l-active']).toBe('BUYER_SILENT');
-    // The first terminal answer stands, as learning.ts treats a deal's contact.
-    expect(now['l-replied']).toBe('BUYER_REPLIED');
+    expect(now['l-replied']).toBe('BUYER_ACCEPTED');
   });
+});
+
+describe('an answer that arrives after the reply refines the reply instead of being lost', () => {
+  const COHORT: Lead[] = [
+    { id: 'r-won', email: 'w@one.test', status: 1, email_reply_count: 1, timestamp_created: NOV1 },
+    { id: 'r-lost', email: 'l@two.test', status: 1, email_reply_count: 1, timestamp_created: NOV1 },
+    { id: 'r-notint', email: 'n@three.test', status: 1, email_reply_count: 1, timestamp_created: NOV1 },
+    { id: 'r-optout', email: 'g@seven.test', status: 1, email_reply_count: 1, timestamp_created: NOV1 },
+    { id: 'r-plain', email: 'p@four.test', status: 1, email_reply_count: 1, timestamp_created: NOV1 },
+    { id: 'r-silent', email: 's@five.test', status: 3, email_reply_count: 0, timestamp_created: NOV1 },
+  ];
+  const pass = (leads: Lead[]) =>
+    recordCampaignOutcomes(projectId, { deps: workspace({ [NEIGHBOR]: leads }).deps, ownerProjectId: projectId, force: true });
+
+  it('a lead first seen as a reply and later won, declined or opted out ends as that answer, one row per lead', async () => {
+    const first = await pass(COHORT);
+    expect(first.recorded).toBe(6);
+    expect(Object.values(await results(projectId)).filter((v) => v === 'BUYER_REPLIED')).toHaveLength(5);
+
+    await seedOptOut();
+    const labelled = COHORT.map((l) =>
+      l.id === 'r-won' ? { ...l, lt_interest_status: 4 }
+        : l.id === 'r-lost' ? { ...l, lt_interest_status: -3 }
+          : l.id === 'r-notint' ? { ...l, lt_interest_status: -1 }
+            : l,
+    );
+    const second = await pass(labelled);
+    expect(second.recorded).toBe(4);
+    expect(await results(projectId)).toEqual({
+      'r-lost': 'BUYER_DECLINED',
+      'r-notint': 'BUYER_DECLINED',
+      'r-optout': 'BUYER_DECLINED',
+      'r-plain': 'BUYER_REPLIED',
+      'r-silent': 'BUYER_SILENT',
+      'r-won': 'BUYER_ACCEPTED',
+    });
+    const rows = await getDb().all<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM cash_outcomes WHERE project_id = ? AND kind = 'CONTACT_RESULT'`, [projectId]);
+    expect(Number(rows[0]!.n)).toBe(COHORT.length);
+    // The earlier reading is kept, not discarded.
+    const won = await getDb().get<{ basis: string }>(
+      `SELECT basis FROM cash_outcomes WHERE project_id = ? AND opportunity_id = 'instantly-lead:r-won'`, [projectId]);
+    expect(won!.basis).toMatch(/interest none.*refined to BUYER_ACCEPTED.*interest 4/);
+
+    // The funnel now measures qualification from the refined answers: 1 of 5 answered leads was won.
+    const [mechanism] = await mechanismsFromRows(projectId);
+    expect(mechanism!.inputs.response).toEqual({ basis: 'MEASURED', value: 5 / 6 });
+    expect(mechanism!.inputs.qualification).toEqual({ basis: 'MEASURED', value: 1 / 5 });
+    expect(mechanism!.messagesSent).toBe(COHORT.length);
+  });
+
+  it('an answer is final: a later pass never replaces it, and never turns it back into a reply', async () => {
+    await pass(COHORT.map((l) => (l.id === 'r-won' ? { ...l, lt_interest_status: 4 } : l)));
+    const flipped = await pass(COHORT.map((l) => (l.id === 'r-won' ? { ...l, lt_interest_status: -1 } : l)));
+    const cleared = await pass(COHORT);
+    expect(flipped.recorded).toBe(0);
+    expect(cleared.recorded).toBe(0);
+    expect((await results(projectId))['r-won']).toBe('BUYER_ACCEPTED');
+  });
+
+  it('a silence or a bounce is not refined into an answer', async () => {
+    await pass(COHORT);
+    const later = await pass(COHORT.map((l) => (l.id === 'r-silent' ? { ...l, lt_interest_status: 4 } : l)));
+    expect(later.recorded).toBe(0);
+    expect((await results(projectId))['r-silent']).toBe('BUYER_SILENT');
+  });
+});
+
+describe('recordCampaignOutcomes, continued', () => {
 
   it('paces itself: a second pass inside the window reads nothing', async () => {
     const { deps, calls } = workspace({ [NEIGHBOR]: LEADS });
