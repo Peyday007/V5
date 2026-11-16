@@ -72,6 +72,24 @@ export interface Decision {
   target: number;
   reason: string;
   stable: boolean;
+  /**
+   * The model's route is failing on the provider: at least half of a measured
+   * window's calls failed there, and no window below half has been measured
+   * since. While set, nothing may raise the target: not growth, not an
+   * ADD_CAPACITY grant, not an idle-slot fill (S-0171).
+   */
+  providerHeld?: boolean;
+}
+
+/** Share of a window's outcomes at or above which a model's route counts as failing on the provider. */
+export const PROVIDER_FAILURE_HOLD_SHARE = 0.5;
+/** Outcomes a window needs before a provider-failure share can drop a model to MIN_TARGET. */
+const PROVIDER_FAILURE_MIN_SAMPLES = 4;
+
+/** The share of a window's outcomes that failed on the provider, or null when nothing was measured. Pure. */
+export function providerFailureShare(window: Window): number | null {
+  const samples = window.ok + window.content + window.transient;
+  return samples > 0 ? window.transient / samples : null;
 }
 
 /**
@@ -93,6 +111,8 @@ export function decideTarget(input: {
   window: Window;
   pressure: Pressure;
   ceiling?: number;
+  /** The previous decision's `providerHeld`: the route has not been measured below half since it failed. */
+  providerHeld?: boolean;
 }): Decision {
   const ceiling = input.ceiling ?? SAFETY_CEILING;
   const { target, active, waiting, window, pressure } = input;
@@ -100,12 +120,41 @@ export function decideTarget(input: {
   const transientRate = samples > 0 ? window.transient / samples : 0;
   const okRate = samples > 0 ? window.ok / samples : 1;
   const half = Math.max(MIN_TARGET, Math.floor(target / 2));
-  if (pressure.db) return { target: half, reason: 'Brain database saturated', stable: false };
+  /*
+   * Production 2026-11-15 (CAP-16-3 probe): 97–98% of the lane's outcomes over
+   * six hours were provider failures while the pool kept its slots, because
+   * halving on overload was undone by growth, a grant or an idle fill the next
+   * step. Restore first (S-0171): a route failing on the provider runs on one
+   * slot until a window below half is measured, and only then may it grow.
+   */
+  const share = providerFailureShare(window);
+  const failing = share !== null && samples >= PROVIDER_FAILURE_MIN_SAMPLES && share >= PROVIDER_FAILURE_HOLD_SHARE;
+  const providerHeld = failing || (!!input.providerHeld && !(share !== null && share < PROVIDER_FAILURE_HOLD_SHARE));
+  const held = providerHeld ? { providerHeld: true } : {};
+  const shrunk = providerHeld ? MIN_TARGET : half;
+  // Brain's own responsiveness comes first: database, lag and CPU shrink rules apply before the provider hold.
+  if (pressure.db) return { target: shrunk, reason: 'Brain database saturated', stable: false, ...held };
   // The lane's slots wait on HTTP; the mean lag that should shrink them is Brain's own stall,
   // not a busy loop. At 300 ms the lane sat at one slot through ordinary bursts (production
   // 2026-11-14: halved at 474–974 ms with highest stable targets of 19–26).
-  if (pressure.lagMs > LAG_SHRINK_MS) return { target: half, reason: `Brain event loop lagging ${Math.round(pressure.lagMs)} ms`, stable: false };
-  if (pressure.cpu > 0.85) return { target: half, reason: `Brain CPU at ${Math.round(pressure.cpu * 100)}%`, stable: false };
+  if (pressure.lagMs > LAG_SHRINK_MS) return { target: shrunk, reason: `Brain event loop lagging ${Math.round(pressure.lagMs)} ms`, stable: false, ...held };
+  if (pressure.cpu > 0.85) return { target: shrunk, reason: `Brain CPU at ${Math.round(pressure.cpu * 100)}%`, stable: false, ...held };
+  if (failing) {
+    return {
+      target: MIN_TARGET,
+      reason: `provider failing: ${Math.round(share * 100)}% of ${samples} calls failed on the provider (at least ${Math.round(PROVIDER_FAILURE_HOLD_SHARE * 100)}%); held at ${MIN_TARGET} slot until a window below that is measured`,
+      stable: false,
+      providerHeld: true,
+    };
+  }
+  if (providerHeld) {
+    return {
+      target: Math.min(target, MIN_TARGET),
+      reason: `provider failing: no window below ${Math.round(PROVIDER_FAILURE_HOLD_SHARE * 100)}% provider failures measured yet${share === null ? ' (no calls this window)' : ` (${Math.round(share * 100)}% of ${samples} calls)`}; held at ${MIN_TARGET} slot`,
+      stable: false,
+      providerHeld: true,
+    };
+  }
   if (samples >= 4 && transientRate >= 0.3) {
     return { target: half, reason: `provider overloaded: ${Math.round(transientRate * 100)}% of ${samples} calls failed`, stable: false };
   }
@@ -188,7 +237,8 @@ export function grantsFromDecision(decision: { detail: Record<string, unknown>; 
  */
 export function applyGrant(input: { target: number; stableHigh: number; decision: Decision; grant: CapacityGrant | null; ceiling?: number }): { decision: Decision; applied: boolean } {
   const { target, decision, grant } = input;
-  if (!grant || decision.target < target) return { decision, applied: false };
+  // A route failing on the provider is restored before it is scaled: a grant never raises it.
+  if (!grant || decision.target < target || decision.providerHeld) return { decision, applied: false };
   const ceiling = input.ceiling ?? SAFETY_CEILING;
   const bound = Math.min(ceiling, Math.max(target, input.stableHigh), target + grant.units);
   if (bound <= decision.target) return { decision, applied: false };
@@ -338,6 +388,8 @@ interface ModelPool {
   busy: number;
   /** The most slots busy at once since the last control step: simultaneous jobs, measured. */
   peakBusy: number;
+  /** The last decision's provider hold: the route has not been measured below half provider failures since it failed. */
+  providerHeld: boolean;
 }
 
 const pools = new Map<string, ModelPool>();
@@ -462,7 +514,7 @@ export async function controlStep(): Promise<ControlReading | null> {
       const saved = persisted.get(worker.model);
       // After a restart, resume at half of what was learned: fast to regain, gentle on a cold machine.
       const target = saved ? Math.max(START_TARGET, Math.floor(saved.target / 2)) : START_TARGET;
-      pools.set(worker.model, { worker, index, target, stableHigh: saved?.stableHigh ?? 1, running: 0, busy: 0, peakBusy: 0 });
+      pools.set(worker.model, { worker, index, target, stableHigh: saved?.stableHigh ?? 1, running: 0, busy: 0, peakBusy: 0, providerHeld: false });
     }
   }
   const waiting = await waitingNow();
@@ -476,7 +528,7 @@ export async function controlStep(): Promise<ControlReading | null> {
     const gpu = config.runpod && isRunpodSlot(pool.worker.model);
     const window = gpu ? gpuWindow(await windowFor(pool.worker.model)) : await windowFor(pool.worker.model);
     const peak = Math.max(pool.peakBusy, pool.busy);
-    let decision = decideTarget({ target: pool.target, active: peak, waiting, window, pressure, ...(gpu ? { ceiling: gpuCeiling() } : {}) });
+    let decision = decideTarget({ target: pool.target, active: peak, waiting, window, pressure, providerHeld: pool.providerHeld, ...(gpu ? { ceiling: gpuCeiling() } : {}) });
     const offered = grants.find((g) => g.model === pool.worker.model) ?? null;
     const grant = offered && !(await grantAlreadyApplied(pool.worker.model, offered.fingerprint)) ? offered : null;
     const granted = applyGrant({ target: pool.target, stableHigh: pool.stableHigh, decision, grant, ...(gpu ? { ceiling: gpuCeiling() } : {}) });
@@ -507,6 +559,8 @@ export async function controlStep(): Promise<ControlReading | null> {
       // measured constraint stays on the record beside it).
       decision = { ...decision, target: share, reason: `${decision.reason}; held to its share of the database pool (${share} of ${share * pools.size} slots)`, stable: false };
     }
+    // A route failing on the provider runs on MIN_TARGET whatever raised it above: the hold is the last word on growth.
+    if (decision.providerHeld && decision.target !== MIN_TARGET) decision = { ...decision, target: MIN_TARGET, stable: false };
     if (decision.stable) pool.stableHigh = Math.max(pool.stableHigh, peak);
     pool.peakBusy = pool.busy;
     // An applied verdict is consumed once, whatever the caps below left of it; one the
@@ -532,6 +586,7 @@ export async function controlStep(): Promise<ControlReading | null> {
         evidenceClass: 'MEASURED',
       });
     }
+    pool.providerHeld = !!decision.providerHeld;
     pool.target = decision.target;
     await writeCapacity(pool.worker.model, pool.target, pool.stableHigh, decision.reason);
     fill(pool, config);
