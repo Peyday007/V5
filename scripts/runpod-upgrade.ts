@@ -20,6 +20,12 @@ const arg = (name: string): string | null => {
 const apiKey = process.env['RUNPOD_API_KEY']?.trim() ?? '';
 const vllmKey = process.env['RUNPOD_VLLM_KEY']?.trim() ?? '';
 const ceiling = Number(process.env['RUNPOD_MAX_USD_PER_HOUR']) > 0 ? Number(process.env['RUNPOD_MAX_USD_PER_HOUR']) : DEFAULT_MAX_USD_PER_HOUR;
+/**
+ * The hours the balance must last with the new pod beside the old one: RunPod deletes every pod at
+ * zero, so a pod is never created that would run the account dry. 24 by default; a funded operation
+ * of known length (the owner's 15-hour acceleration, 2026-11-16) passes its own remaining hours.
+ */
+const runwayHours = Number(process.env['RUNPOD_MIN_RUNWAY_HOURS']) > 0 ? Number(process.env['RUNPOD_MIN_RUNWAY_HOURS']) : 24;
 
 async function main(): Promise<void> {
   if (!apiKey || !vllmKey) throw new Error('RUNPOD_API_KEY and RUNPOD_VLLM_KEY are both required');
@@ -33,15 +39,15 @@ async function main(): Promise<void> {
   for (const p of before) console.log(`OLD ${p.id}`);
   const account = await accountReading(apiKey);
   console.log(`ACCOUNT balance $${account.balance?.toFixed(2) ?? '?'} spending $${account.spendPerHour?.toFixed(3) ?? '?'}/h`);
-  if (account.balance !== null && account.balance / ((account.spendPerHour ?? 0) + ceiling) < 24) {
-    throw new Error('the balance would last under 24 hours with two pods running; the old pod stays');
+  if (account.balance !== null && account.balance / ((account.spendPerHour ?? 0) + ceiling) < runwayHours) {
+    throw new Error(`the balance would last under ${runwayHours} hours with two pods running; the old pod stays`);
   }
   const pod = await createPod({ apiKey, vllmKey, recipe, name: POD_NAME, maxUsdPerHour: ceiling });
   pod.log.forEach((l) => console.log(l));
   console.log(`NEW ${pod.podId}`);
   const started = Date.now();
   let ready = false;
-  while (!ready && Date.now() - started < 35 * 60_000) {
+  while (!ready && Date.now() - started < (recipe.minGpuGb >= 80 ? 60 : 35) * 60_000) {
     try {
       ready = (await fetch(`${pod.url}/models`, { headers: { authorization: `Bearer ${vllmKey}` }, signal: AbortSignal.timeout(15_000) })).ok;
     } catch {
@@ -50,7 +56,7 @@ async function main(): Promise<void> {
     if (!ready) await new Promise((resolve) => setTimeout(resolve, 20_000));
   }
   if (!ready) {
-    console.log(`NOT READY after 35 min; deleted the new pod (HTTP ${await deletePod(apiKey, pod.podId)}), the old one keeps serving`);
+    console.log(`NOT READY after ${recipe.minGpuGb >= 80 ? 60 : 35} min; deleted the new pod (HTTP ${await deletePod(apiKey, pod.podId)}), the old one keeps serving`);
     process.exit(1);
   }
   console.log(`READY ${recipe.key} served after ${Math.round((Date.now() - started) / 1000)}s`);
