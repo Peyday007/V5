@@ -21,6 +21,7 @@ import { rankCategories, type PriorityEntry } from './priority.ts';
 import { readDecisions, type DecisionReading } from './decisions.ts';
 import { readDirective, type Directive, type ScaleBand } from './directive.ts';
 import { readProgress, type RoundReadingProgress } from './progress.ts';
+import { recordedManufacturingReadings, type RecordedReadings } from './recorded.ts';
 import type {
   AcquisitionCandidate,
   Capability,
@@ -187,6 +188,16 @@ export interface ProgrammeView {
    * now. Reported and never acted on.
    */
   refusals: { at: string; claimId: string; why: string }[];
+  /**
+   * Each category's venture as last recorded (VENT-24-2): the dependency-ordered
+   * stage graph, where every stage names its decision, resource, artifact,
+   * actor, budget, evidence and completion condition. It also carries the
+   * verdict that challenges the graph against deployable capital and held
+   * capabilities, the materially different feasible alternatives, and when it
+   * was recorded. Read back from the rows the tick wrote, so this is what the
+   * running Brain derived and recorded, not a re-derivation for the page.
+   */
+  ventures: RecordedReadings['ventures'];
 
   /**
    * The decisions genuinely waiting on a person, and nothing else.
@@ -338,6 +349,7 @@ export async function programmeView(projectId: string): Promise<ProgrammeView | 
     capabilities: capabilityReadings(snapshot),
     history: historyOf(snapshot),
     refusals: await recentRefusals(projectId),
+    ventures: (await recordedManufacturingReadings(projectId)).ventures,
     decisions: decisionsFrom(snapshot, ranked),
     openQuestions: await readDecisions(snapshot, parsedDirective),
   };

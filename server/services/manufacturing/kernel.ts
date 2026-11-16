@@ -232,7 +232,14 @@ export interface VentureReconsideration {
     path: VenturePath;
     /** Null when the path was refused (a cycle, an unknown or duplicate stage). */
     verdict: VentureVerdict | null;
-    alternatives: { kind: 'SUBSTITUTED' | 'VALIDATE_FIRST'; differs: string[]; total: Money | null }[];
+    /** Each with its own stage graph and verdict, so what it would take is recorded, not only that it exists. */
+    alternatives: {
+      kind: 'SUBSTITUTED' | 'VALIDATE_FIRST';
+      differs: string[];
+      total: Money | null;
+      path: Extract<VenturePath, { ok: true }>;
+      verdict: VentureVerdict;
+    }[];
   };
 }
 
@@ -275,7 +282,7 @@ export function reconsiderFrom(
     const verdict = path.ok ? challengeVenture(path, situation) : null;
     const alternatives =
       path.ok && verdict && verdict.feasibility !== 'FEASIBLE'
-        ? alternativesFor(stages, situation).map((one) => ({ kind: one.kind, differs: one.differs, total: one.path.total }))
+        ? alternativesFor(stages, situation).map((one) => ({ kind: one.kind, differs: one.differs, total: one.path.total, path: one.path, verdict: one.verdict }))
         : [];
     return {
       categoryId: reading.categoryId,

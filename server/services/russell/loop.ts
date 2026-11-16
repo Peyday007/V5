@@ -156,10 +156,8 @@ import { launchableUnderCashMode } from '../cash/lifecycle.ts';
 import { runDiscovery } from '../cash/discovery.ts';
 import { runIndustryKernel } from '../industry/kernel.ts';
 import { runLaborKernel } from '../labor/kernel.ts';
-import { runManufacturingKernel, type VentureReconsideration } from '../manufacturing/kernel.ts';
-import type { CompetitiveSystem } from '../manufacturing/competitiveSystem.ts';
-import type { CategoryInstitutions } from '../manufacturing/institutionReading.ts';
-import { createHash } from 'node:crypto';
+import { runManufacturingKernel } from '../manufacturing/kernel.ts';
+import { recordManufacturingReadings, recordVentureTransitions } from '../manufacturing/recorded.ts';
 import { runDealflowKernel } from '../dealflow/kernel.ts';
 import { runPuzzleKernel } from '../puzzle/kernel.ts';
 import { operate } from '../cash/operate.ts';
@@ -578,10 +576,12 @@ export interface TickReport {
     evidence: string[];
     settled: string[];
     /**
-     * Ventures whose feasibility changed this tick (VENT-24-2): the kernel
-     * re-reads every category against current capital and held capabilities,
-     * and each change is recorded as a MANUFACTURING_VENTURE_READ event; one
-     * that turned FEASIBLE is also put on the project's live goals.
+     * Ventures that read differently this tick (VENT-24-2). The kernel re-reads
+     * every category against current capital and held capabilities. Each
+     * change to its stage graph, verdict or alternatives is recorded as a
+     * MANUFACTURING_VENTURE_READ event, with `from` and `to` equal when only
+     * the graph moved. One whose verdict turned FEASIBLE, or lost its
+     * blockers, is also put on the project's live goals.
      */
     ventures: { categoryId: string; from: string | null; to: string }[];
     /**
@@ -713,217 +713,19 @@ async function settleUnresolvedAnswer(
   }
 }
 
-/** The event a venture reading is recorded under (on bin_events), once per change of feasibility. */
-export const VENTURE_READ_EVENT = 'MANUFACTURING_VENTURE_READ';
-
-/** The newest recorded feasibility of each category's venture for a project, from bin_events. */
-async function recordedVentureFeasibility(projectId: string): Promise<Map<string, string>> {
-  const rows = await getDb().all<{ measures: string | null }>(
-    'SELECT measures FROM bin_events WHERE event_type = ? AND project_id = ? ORDER BY at ASC, id ASC',
-    [VENTURE_READ_EVENT, projectId],
-  );
-  const latest = new Map<string, string>();
-  for (const row of rows) {
-    try {
-      const one = JSON.parse(row.measures ?? '{}') as { categoryId?: unknown; feasibility?: unknown };
-      if (typeof one.categoryId === 'string' && typeof one.feasibility === 'string') latest.set(one.categoryId, one.feasibility);
-    } catch {
-      /* a row that does not parse is no reading */
-    }
-  }
-  return latest;
-}
-
-/**
- * Record each venture whose feasibility changed since its last recorded
- * reading, and put a venture that has just become FEASIBLE on the project's
- * live goals (VENT-24-2: earlier ventures are revisited automatically as
- * capital and capabilities change, through the same goal system).
- *
- * The kernel re-derives every reading on every tick and stores nothing; this
- * is where its result becomes a row, on the append-only bin_events ledger.
- * Compared with the newest reading recorded for the category, so an unchanged
- * reading writes nothing and one that moves back and forth is recorded each
- * time it moves. It decides, spends and commits nothing: a goal is told what
- * became possible and what turned it, and its owner acts through the existing
- * paths.
+/*
+ * The manufacturing kernel's readings become rows in the manufacturing owner
+ * (manufacturing/recorded.ts), which the programme view reads back. They are
+ * re-exported here, where the tick calls them.
  */
-export async function recordVentureTransitions(
-  projectId: string,
-  ventures: readonly VentureReconsideration[],
-): Promise<{ categoryId: string; from: string | null; to: string }[]> {
-  const out: { categoryId: string; from: string | null; to: string }[] = [];
-  if (ventures.length === 0) return out;
-  const held = await recordedVentureFeasibility(projectId);
-  const { recordBinEvent } = await import('../../repos/bins.ts');
-  for (const venture of ventures) {
-    const from = held.get(venture.categoryId) ?? null;
-    if (from === venture.feasibility) continue;
-    await recordBinEvent({
-      eventType: VENTURE_READ_EVENT,
-      projectId,
-      workloadClass: 'manufacturing-kernel',
-      outcome: venture.feasibility,
-      reason: `${venture.path.join(' → ')}: ${from ?? 'first reading'} → ${venture.feasibility}`.slice(0, 480),
-      evidenceClass: 'MEASURED',
-      measures: {
-        categoryId: venture.categoryId,
-        feasibility: venture.feasibility,
-        previous: from,
-        path: venture.path,
-        cost: venture.cost,
-        available: venture.available,
-        challenges: venture.challenges.map((one) => one.kind),
-        newestInput: venture.newestInput,
-        alternatives: venture.venture.alternatives.length,
-      },
-    });
-    out.push({ categoryId: venture.categoryId, from, to: venture.feasibility });
-    if (venture.feasibility !== 'FEASIBLE' || from === null) continue;
-    const { listWorkstreams, recordWorkstreamEvent } = await import('../../repos/register.ts');
-    for (const goal of await listWorkstreams({ projectIds: [projectId] })) {
-      if (goal.cancelledAt || goal.archivedAt) continue;
-      await recordWorkstreamEvent({
-        workstreamId: goal.id,
-        kind: 'VENTURE_BECAME_FEASIBLE',
-        summary: `Venture ${venture.path.join(' → ')} is now feasible (was ${from})`.slice(0, 300),
-        detail: { categoryId: venture.categoryId, from, cost: venture.cost, available: venture.available, newestInput: venture.newestInput },
-        actorRef: 'brain:manufacturing-kernel',
-      });
-    }
-  }
-  return out;
-}
-
-/** The event a category's competitive system is recorded under (VENT-24-1), once per change. */
-export const COMPETITIVE_READ_EVENT = 'MANUFACTURING_COMPETITIVE_READ';
-/** The event a category's institutional machinery is recorded under (INST-30), once per change. */
-export const INSTITUTIONS_READ_EVENT = 'MANUFACTURING_INSTITUTIONS_READ';
-
-/** A reading's identity: the same content always yields the same fingerprint. */
-function readingFingerprint(value: unknown, ignore: readonly string[] = []): string {
-  const skip = new Set(ignore);
-  return createHash('sha256')
-    .update(JSON.stringify(value, (key, inner: unknown) => (skip.has(key) ? undefined : inner)))
-    .digest('hex')
-    .slice(0, 32);
-}
-
-/** The newest recorded fingerprint of each subject's reading under one event type, from bin_events. */
-async function recordedFingerprints(projectId: string, eventType: string): Promise<Map<string, string>> {
-  const rows = await getDb().all<{ measures: string | null }>(
-    'SELECT measures FROM bin_events WHERE event_type = ? AND project_id = ? ORDER BY at ASC, id ASC',
-    [eventType, projectId],
-  );
-  const latest = new Map<string, string>();
-  for (const row of rows) {
-    try {
-      const one = JSON.parse(row.measures ?? '{}') as { subjectKey?: unknown; fingerprint?: unknown };
-      if (typeof one.subjectKey === 'string' && typeof one.fingerprint === 'string') latest.set(one.subjectKey, one.fingerprint);
-    } catch {
-      /* a row that does not parse is no reading */
-    }
-  }
-  return latest;
-}
-
-/**
- * Record each manufacturing reading that changed since its last recorded
- * version: the competitive system of every live category (VENT-24-1) and its
- * institutional machinery (INST-30).
- *
- * The kernel re-derives both on every pass and stores nothing, so until this
- * existed they were computed and dropped — no row a probe or a person could
- * read. This is where they become rows, on the same append-only bin_events
- * ledger the venture readings use, carrying the whole reading in `measures`.
- * Compared by fingerprint with the newest one recorded for the subject, so an
- * unchanged reading writes nothing and every change is recorded. It decides,
- * forms, signs and spends nothing: a reading is a record of what the rows
- * currently imply.
- */
-export async function recordManufacturingReadings(
-  projectId: string,
-  readings: { competitive: readonly CompetitiveSystem[]; institutions: readonly CategoryInstitutions[] },
-): Promise<{ competitive: string[]; institutions: string[] }> {
-  const out = { competitive: [] as string[], institutions: [] as string[] };
-  if (readings.competitive.length === 0 && readings.institutions.length === 0) return out;
-  const { recordBinEvent } = await import('../../repos/bins.ts');
-  // The kernel names a competitive system by its category's name; carry the id when the ladder states it.
-  const categoryIdByName = new Map(readings.institutions.map((one) => [one.name, one.categoryId]));
-
-  const competitiveHeld = readings.competitive.length > 0 ? await recordedFingerprints(projectId, COMPETITIVE_READ_EVENT) : new Map<string, string>();
-  for (const system of readings.competitive) {
-    const categoryId = categoryIdByName.get(system.subject) ?? null;
-    const subjectKey = categoryId ?? `subject:${system.subject}`;
-    const fingerprint = readingFingerprint(system);
-    if (competitiveHeld.get(subjectKey) === fingerprint) continue;
-    await recordBinEvent({
-      eventType: COMPETITIVE_READ_EVENT,
-      projectId,
-      workloadClass: 'manufacturing-kernel',
-      outcome: `${system.mechanisms.length} mechanism(s), ${system.openQuestions.length} open question(s)`,
-      reason: `${system.subject}: ${system.mechanisms.length} evidenced mechanism(s), ${system.profitPools.length} profit pool(s), ${system.activities.length} activity classification(s)`.slice(0, 480),
-      evidenceClass: 'MEASURED',
-      measures: { subjectKey, categoryId, fingerprint, previous: competitiveHeld.get(subjectKey) ?? null, system },
-    });
-    out.competitive.push(subjectKey);
-  }
-
-  const institutionsHeld = readings.institutions.length > 0 ? await recordedFingerprints(projectId, INSTITUTIONS_READ_EVENT) : new Map<string, string>();
-  for (const one of readings.institutions) {
-    const subjectKey = one.categoryId;
-    // A renewal date is counted from the pass's own clock, so it moves every tick; the date is
-    // recorded with the reading, but only a change in what the rows imply makes a new one.
-    const fingerprint = readingFingerprint(one.derivation, ['renewalDate']);
-    if (institutionsHeld.get(subjectKey) === fingerprint) continue;
-    const best = one.derivation.structures[0];
-    await recordBinEvent({
-      eventType: INSTITUTIONS_READ_EVENT,
-      projectId,
-      workloadClass: 'manufacturing-kernel',
-      outcome: best ? `${best.kind}: legal ${best.legalFeasibility}, readiness ${best.readiness}, authorization ${best.authorization}` : 'NO_STRUCTURE',
-      reason: `${one.name}: ${one.derivation.structures.length} structure(s), ${one.derivation.openQuestions.length} open question(s), ${one.derivation.limitations.length} limitation(s)`.slice(0, 480),
-      evidenceClass: 'MEASURED',
-      measures: { subjectKey, categoryId: one.categoryId, name: one.name, fingerprint, previous: institutionsHeld.get(subjectKey) ?? null, derivation: one.derivation },
-    });
-    out.institutions.push(subjectKey);
-  }
-  return out;
-}
-
-/**
- * The manufacturing readings as recorded: the newest competitive system (VENT-24-1)
- * and institutional machinery (INST-30) per category, read back from the
- * append-only events `recordManufacturingReadings` writes. This is how a person,
- * a probe or a later pass reads them, never from a pass's memory.
- */
-export async function recordedManufacturingReadings(projectId: string): Promise<{
-  competitive: { subjectKey: string; categoryId: string | null; fingerprint: string; at: string; system: CompetitiveSystem }[];
-  institutions: { subjectKey: string; categoryId: string; name: string; fingerprint: string; at: string; derivation: CategoryInstitutions['derivation'] }[];
-}> {
-  const rows = await getDb().all<{ event_type: string; at: string; measures: string | null }>(
-    'SELECT event_type, at, measures FROM bin_events WHERE project_id = ? AND event_type IN (?, ?) ORDER BY at ASC, id ASC',
-    [projectId, COMPETITIVE_READ_EVENT, INSTITUTIONS_READ_EVENT],
-  );
-  const competitive = new Map<string, { subjectKey: string; categoryId: string | null; fingerprint: string; at: string; system: CompetitiveSystem }>();
-  const institutions = new Map<string, { subjectKey: string; categoryId: string; name: string; fingerprint: string; at: string; derivation: CategoryInstitutions['derivation'] }>();
-  for (const row of rows) {
-    let m: Record<string, unknown>;
-    try {
-      m = JSON.parse(row.measures ?? '{}') as Record<string, unknown>;
-    } catch {
-      continue;
-    }
-    if (typeof m['subjectKey'] !== 'string' || typeof m['fingerprint'] !== 'string') continue;
-    const subjectKey = m['subjectKey'];
-    if (row.event_type === COMPETITIVE_READ_EVENT && m['system']) {
-      competitive.set(subjectKey, { subjectKey, categoryId: typeof m['categoryId'] === 'string' ? m['categoryId'] : null, fingerprint: m['fingerprint'], at: row.at, system: m['system'] as CompetitiveSystem });
-    } else if (row.event_type === INSTITUTIONS_READ_EVENT && m['derivation'] && typeof m['categoryId'] === 'string') {
-      institutions.set(subjectKey, { subjectKey, categoryId: m['categoryId'], name: typeof m['name'] === 'string' ? m['name'] : '', fingerprint: m['fingerprint'], at: row.at, derivation: m['derivation'] as CategoryInstitutions['derivation'] });
-    }
-  }
-  return { competitive: [...competitive.values()], institutions: [...institutions.values()] };
-}
+export {
+  COMPETITIVE_READ_EVENT,
+  INSTITUTIONS_READ_EVENT,
+  VENTURE_READ_EVENT,
+  recordManufacturingReadings,
+  recordVentureTransitions,
+  recordedManufacturingReadings,
+} from '../manufacturing/recorded.ts';
 
 /** Marks a cycle error that is per-pass failures rather than a failed tick. */
 export const PASS_FAILURE_PREFIX = 'passes: ';
