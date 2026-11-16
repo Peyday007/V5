@@ -169,6 +169,40 @@ describe('FALL-37-4: reliability at every level, assurance only where earned', (
     expect(pathwayReliability('supplier-only', [supplier]).timeToRecoveryDays).toBe(3);
   });
 
+  it('substitutes sharing a common cause with each other count as one path, not as independent failures (F6)', () => {
+    // Primary at warehouse W1; B and C both behind warehouse W2, independent of the primary but not of each other; D elsewhere.
+    const correlated = dependency({
+      key: 'shared-backups',
+      commonCauses: ['WAREHOUSE:W1'],
+      substitutes: [
+        substitute({ key: 'b', label: 'B', commonCauses: ['WAREHOUSE:W2'], failureProbability: p('B fails', 0.3) }),
+        substitute({ key: 'c', label: 'C', commonCauses: ['WAREHOUSE:W2'], failureProbability: p('C fails', 0.2) }),
+      ],
+    });
+    const r = pathwayReliability('shared', [correlated]);
+    // Before the repair this read 0.2 × 0.3 × 0.2 = 0.012, as if B and C failed independently.
+    expect(r.dependencies[0]!.unserved).toBeCloseTo(0.2 * 0.2, 12);
+    expect(r.dependencies[0]!.unserved).not.toBeCloseTo(0.2 * 0.3 * 0.2, 6);
+    expect(r.dependencies[0]!.independentSubstitutes).toBe(1);
+    expect(r.reliability).toBeCloseTo(1 - 0.04, 12);
+
+    // A genuinely independent substitute still multiplies in.
+    const withIndependent = dependency({ ...correlated, substitutes: [...correlated.substitutes, substitute({ key: 'd', label: 'D', commonCauses: ['WAREHOUSE:W3'], failureProbability: p('D fails', 0.5) })] });
+    const r2 = pathwayReliability('shared+d', [withIndependent]);
+    expect(r2.dependencies[0]!.independentSubstitutes).toBe(2);
+    expect(r2.dependencies[0]!.unserved).toBeCloseTo(0.2 * 0.2 * 0.5, 12);
+
+    // A chain of shared causes joins substitutes transitively, as scoreIndependence counts them.
+    const chained = dependency({
+      key: 'chained',
+      substitutes: [
+        substitute({ key: 'x', label: 'X', commonCauses: ['ACCOUNT:a', 'ACCOUNT:b'], failureProbability: p('X fails', 0.4) }),
+        substitute({ key: 'y', label: 'Y', commonCauses: ['ACCOUNT:b'], failureProbability: p('Y fails', 0.25) }),
+      ],
+    });
+    expect(pathwayReliability('chain', [chained]).dependencies[0]!.independentSubstitutes).toBe(1);
+  });
+
   it('an unknown probability makes the pathway reliability unknown, with what is missing', () => {
     const r = pathwayReliability('p', [dependency({ key: 'q', primaryFailureProbability: unknownFigure('q fails', 'probability') })]);
     expect(r.reliability).toBeNull();

@@ -36,6 +36,7 @@
 import type { Figure } from './graph.ts';
 import { evaluateCombination, type PortfolioProblem } from './portfolio.ts';
 import { ineligibility, planFallbacks, type Dependency, type Substitute } from './fallbacks.ts';
+import { clusterByCommonCause } from './fallbackIndependence.ts';
 
 /* ------------------------------------------------------------------------- */
 /* Switch criteria                                                            */
@@ -215,8 +216,8 @@ export interface PathwayReliability {
   pathway: string;
   /** Chance every dependency is served (by its primary or an independent eligible substitute); null when a probability is unknown. */
   reliability: number | null;
-  /** Per dependency: chance it ends unserved, or null with what is missing. */
-  dependencies: { key: string; unserved: number | null; missing: string[] }[];
+  /** Per dependency: chance it ends unserved, the independent substitute paths counted, or null with what is missing. */
+  dependencies: { key: string; unserved: number | null; independentSubstitutes: number; missing: string[] }[];
   /** Days until the slowest dependency is recovered by its fastest eligible switch; null when unknown or unrecoverable. */
   timeToRecoveryDays: number | null;
 }
@@ -235,12 +236,22 @@ export function pathwayReliability(pathway: string, dependencies: readonly Depen
       .filter((s) => s.eligible && s.readiness !== 'LOCATED' && s.sharedWithPrimary.length === 0)
       .map((s) => d.substitutes.find((x) => x.key === s.key)!);
     for (const s of counted) if (!known(s.failureProbability)) missing.push(`${s.key}: failure probability`);
+    /*
+     * Substitutes that share a common cause with each other fail together, so
+     * they are one independent path, not several (FALL-37-3). Without the
+     * cause's own probability, a group's joint failure is read at its Fréchet
+     * upper bound — the least reliable member alone (min of the members'
+     * failure probabilities) — never as the product of independent failures.
+     */
+    const groups = clusterByCommonCause(counted.map((s) => ({ key: s.key, causes: s.commonCauses ?? [], substitute: s })));
     let unserved: number | null = null;
     if (missing.length === 0) {
       unserved = (d.primaryFailureProbability as Figure & { value: number }).value;
-      for (const s of counted) unserved *= (s.failureProbability as Figure & { value: number }).value;
+      for (const group of groups) {
+        unserved *= Math.min(...group.map((g) => (g.substitute.failureProbability as Figure & { value: number }).value));
+      }
     }
-    rows.push({ key: d.key, unserved, missing });
+    rows.push({ key: d.key, unserved, independentSubstitutes: groups.length, missing });
     reliability = reliability === null || unserved === null ? null : reliability * (1 - unserved);
     const switches = counted.map((s) => s.timeToSwitchDays).filter(known).map((f) => f.value);
     const fastest = switches.length > 0 ? Math.min(...switches) : null;

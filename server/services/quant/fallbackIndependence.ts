@@ -177,7 +177,13 @@ interface PathNode {
   probability: number | null;
 }
 
-function cluster(nodes: PathNode[]): PathNode[][] {
+/**
+ * Paths joined by any common cause they share, directly or through a chain of
+ * them: each group fails together when that cause fails. Exported so every
+ * reliability reading counts independence the same way (fallbackSwitch.ts
+ * `pathwayReliability`).
+ */
+export function clusterByCommonCause<T extends { key: string; causes: readonly string[] }>(nodes: readonly T[]): T[][] {
   const parent = new Map(nodes.map((n) => [n.key, n.key]));
   const find = (k: string): string => {
     let at = k;
@@ -192,7 +198,7 @@ function cluster(nodes: PathNode[]): PathNode[][] {
       else parent.set(find(node.key), find(first));
     }
   }
-  const groups = new Map<string, PathNode[]>();
+  const groups = new Map<string, T[]>();
   for (const node of nodes) {
     const root = find(node.key);
     groups.set(root, [...(groups.get(root) ?? []), node]);
@@ -233,7 +239,7 @@ export function scoreIndependence(
     return 1 - none;
   };
 
-  const paths: IndependentPath[] = cluster(nodes).map((members) => {
+  const paths: IndependentPath[] = clusterByCommonCause(nodes).map((members) => {
     const causes = [...new Set(members.flatMap((m) => m.causes))].sort();
     // A path whose causes are shared fails if a shared cause fails, or else if every member fails on its own.
     const shared = causes.filter((c) => members.filter((m) => m.causes.includes(c)).length > 1 || members.length === 1);
