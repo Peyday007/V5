@@ -156,7 +156,7 @@ import { launchableUnderCashMode } from '../cash/lifecycle.ts';
 import { runDiscovery } from '../cash/discovery.ts';
 import { runIndustryKernel } from '../industry/kernel.ts';
 import { runLaborKernel } from '../labor/kernel.ts';
-import { runManufacturingKernel } from '../manufacturing/kernel.ts';
+import { runManufacturingKernel, type VentureReconsideration } from '../manufacturing/kernel.ts';
 import { runDealflowKernel } from '../dealflow/kernel.ts';
 import { runPuzzleKernel } from '../puzzle/kernel.ts';
 import { operate } from '../cash/operate.ts';
@@ -574,6 +574,13 @@ export interface TickReport {
     edges: string[];
     evidence: string[];
     settled: string[];
+    /**
+     * Ventures whose feasibility changed this tick (VENT-24-2): the kernel
+     * re-reads every category against current capital and held capabilities,
+     * and each change is recorded as a MANUFACTURING_VENTURE_READ event; one
+     * that turned FEASIBLE is also put on the project's live goals.
+     */
+    ventures: { categoryId: string; from: string | null; to: string }[];
   }[];
   /**
    * What the cross-border dealflow kernel did: what it filed from finished
@@ -694,6 +701,88 @@ async function settleUnresolvedAnswer(
     const mission = request.missionId ? await getMission(request.missionId) : null;
     report.withdrawnMootAnswers.push({ requestId: request.id, missionState: mission?.state ?? null, reason });
   }
+}
+
+/** The event a venture reading is recorded under (on bin_events), once per change of feasibility. */
+export const VENTURE_READ_EVENT = 'MANUFACTURING_VENTURE_READ';
+
+/** The newest recorded feasibility of each category's venture for a project, from bin_events. */
+async function recordedVentureFeasibility(projectId: string): Promise<Map<string, string>> {
+  const rows = await getDb().all<{ measures: string | null }>(
+    'SELECT measures FROM bin_events WHERE event_type = ? AND project_id = ? ORDER BY at ASC, id ASC',
+    [VENTURE_READ_EVENT, projectId],
+  );
+  const latest = new Map<string, string>();
+  for (const row of rows) {
+    try {
+      const one = JSON.parse(row.measures ?? '{}') as { categoryId?: unknown; feasibility?: unknown };
+      if (typeof one.categoryId === 'string' && typeof one.feasibility === 'string') latest.set(one.categoryId, one.feasibility);
+    } catch {
+      /* a row that does not parse is no reading */
+    }
+  }
+  return latest;
+}
+
+/**
+ * Record each venture whose feasibility changed since its last recorded
+ * reading, and put a venture that has just become FEASIBLE on the project's
+ * live goals (VENT-24-2: earlier ventures are revisited automatically as
+ * capital and capabilities change, through the same goal system).
+ *
+ * The kernel re-derives every reading on every tick and stores nothing; this
+ * is where its result becomes a row, on the append-only bin_events ledger.
+ * Compared with the newest reading recorded for the category, so an unchanged
+ * reading writes nothing and one that moves back and forth is recorded each
+ * time it moves. It decides, spends and commits nothing: a goal is told what
+ * became possible and what turned it, and its owner acts through the existing
+ * paths.
+ */
+export async function recordVentureTransitions(
+  projectId: string,
+  ventures: readonly VentureReconsideration[],
+): Promise<{ categoryId: string; from: string | null; to: string }[]> {
+  const out: { categoryId: string; from: string | null; to: string }[] = [];
+  if (ventures.length === 0) return out;
+  const held = await recordedVentureFeasibility(projectId);
+  const { recordBinEvent } = await import('../../repos/bins.ts');
+  for (const venture of ventures) {
+    const from = held.get(venture.categoryId) ?? null;
+    if (from === venture.feasibility) continue;
+    await recordBinEvent({
+      eventType: VENTURE_READ_EVENT,
+      projectId,
+      workloadClass: 'manufacturing-kernel',
+      outcome: venture.feasibility,
+      reason: `${venture.path.join(' → ')}: ${from ?? 'first reading'} → ${venture.feasibility}`.slice(0, 480),
+      evidenceClass: 'MEASURED',
+      measures: {
+        categoryId: venture.categoryId,
+        feasibility: venture.feasibility,
+        previous: from,
+        path: venture.path,
+        cost: venture.cost,
+        available: venture.available,
+        challenges: venture.challenges.map((one) => one.kind),
+        newestInput: venture.newestInput,
+        alternatives: venture.venture.alternatives.length,
+      },
+    });
+    out.push({ categoryId: venture.categoryId, from, to: venture.feasibility });
+    if (venture.feasibility !== 'FEASIBLE' || from === null) continue;
+    const { listWorkstreams, recordWorkstreamEvent } = await import('../../repos/register.ts');
+    for (const goal of await listWorkstreams({ projectIds: [projectId] })) {
+      if (goal.cancelledAt || goal.archivedAt) continue;
+      await recordWorkstreamEvent({
+        workstreamId: goal.id,
+        kind: 'VENTURE_BECAME_FEASIBLE',
+        summary: `Venture ${venture.path.join(' → ')} is now feasible (was ${from})`.slice(0, 300),
+        detail: { categoryId: venture.categoryId, from, cost: venture.cost, available: venture.available, newestInput: venture.newestInput },
+        actorRef: 'brain:manufacturing-kernel',
+      });
+    }
+  }
+  return out;
 }
 
 /** Marks a cycle error that is per-pass failures rather than a failed tick. */
@@ -2197,7 +2286,9 @@ async function tickOnce(owner: string): Promise<TickReport> {
            * is no path to it from here.
            */
           const programme = await runManufacturingKernel(project.id);
+          const ventures = await recordVentureTransitions(project.id, programme.ventures);
           if (
+            ventures.length > 0 ||
             programme.opened.length > 0 ||
             programme.absorbed.categories.length > 0 ||
             programme.absorbed.capabilities.length > 0 ||
@@ -2217,6 +2308,7 @@ async function tickOnce(owner: string): Promise<TickReport> {
               edges: programme.absorbed.edges.map((one) => one.id),
               evidence: programme.absorbed.evidence.map((one) => one.id),
               settled: programme.absorbed.settled.map((one) => one.roundId),
+              ventures,
             });
           }
         } catch {
