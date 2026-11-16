@@ -96,7 +96,9 @@ function dataParallel120b(n: number): PodRecipe {
     // multi-card stock was refused "no instances currently available".
     gpus: ['NVIDIA H100 80GB HBM3', 'NVIDIA H200'],
     image: IMAGE_2026,
-    cuda: CUDA_129,
+    // No CUDA filter: with it, x2 and x4 were refused "no instances" while the survey showed stock.
+    // A host whose driver cannot run the image fails the probe, and the upgrade deletes the pod.
+    cuda: [],
     maxModelLen: 131072,
     args: [
       '--gpu-memory-utilization', '0.92', '--max-num-seqs', '48', '--data-parallel-size', String(n),
@@ -334,7 +336,7 @@ export function podSpec(
     gpuCount: recipe.gpuCount ?? 1,
     interruptible: false,
     imageName: recipe.image,
-    allowedCudaVersions: recipe.cuda,
+    ...(recipe.cuda.length ? { allowedCudaVersions: recipe.cuda } : {}),
     // The 2026 images start with `vllm serve <model>` (their own ENTRYPOINT); the module path the
     // 2025 image needs is deprecated there, and every pod on it crash-looped within seconds
     // (2026-11-16 09:42–10:42: uptime never above 6 s, GPU memory 0%, /v1/models 404 for an hour).
