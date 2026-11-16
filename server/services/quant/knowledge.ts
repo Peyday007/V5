@@ -39,6 +39,7 @@ import type { LimitingInput } from './portfolio.ts';
 import { reconstruct } from './reconstruct.ts';
 import { rankRoutesFromLedger, routeMoneyStatement, type RouteMoneyVelocity, type RouteScore } from './deadline.ts';
 import { keepCashLedger, readLedger } from './ledger.ts';
+import { assessProjectIndependence } from './fallbackIndependence.ts';
 import { assessModelLearning, type ModelLearningReading } from './learning.ts';
 import { compareAfterCorrection, impliedProbability, MIN_CALIBRATION_SAMPLE } from './forecast.ts';
 import type { Correction, CorrectionComparison, ExposureRow, OutcomeRow, PredictionRow } from './forecast.ts';
@@ -142,6 +143,12 @@ export async function loadCashKnowledge(projectId: string, now = Date.now()): Pr
   const learning = await keepCashLedger(projectId, currencies)
     .then((kept) => learnFromCashLedger(projectId, currencies, { read: async () => kept.ledger }))
     .catch(() => null);
+  // The same refresh scores the independence of the project's real acquisition paths by common cause
+  // and rejects the fallbacks that are not eligible (FALL-37-3), recorded on the ledger when it changes.
+  // Its own catch: a reading that cannot be made never stops the knowledge a plan reads.
+  await assessProjectIndependence(projectId).catch((error: unknown) => {
+    console.warn(`[quant] fallback independence unreadable for ${projectId}: ${String((error as Error)?.message ?? error)}`);
+  });
   const { routeMoney, routeScores, routeMoneyError } = await loadRouteMoney(projectId, opportunities);
   const value: CashKnowledge = { projectId, opportunities: new Map(opportunities.map((one) => [one.id, one])), facts: evidence, lessons, sources, watermark, routeMoney, routeScores, routeMoneyError, estimates: new Map(), learning };
   cache.set(projectId, { at: now, value });
