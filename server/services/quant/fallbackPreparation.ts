@@ -175,7 +175,14 @@ export async function prepareProjectFallbacks(
     const mode = await getCashMode(projectId);
     return mode && mode.horizonDays > 0 ? { id: mode.id, horizonDays: mode.horizonDays } : null;
   }))();
-  const failures = await (deps.failures ?? (() => readFailureRecoveries(projectId)))();
+  // The dependency's own failures are recorded under its own key, from its primary path's ordered
+  // contact results, before the ledger is read: the forecast watch records forecast-claim failures
+  // under a claim id, never this dependency's, so without this a live failure could never promote.
+  const failures = await (deps.failures ?? (async () => {
+    const { recordAcquisitionFailures } = await import('./fallbackPlanReading.ts');
+    await recordAcquisitionFailures(projectId, built.dependency.key, built.primary);
+    return readFailureRecoveries(projectId);
+  }))();
   const ranking = rankFallbacks([priorityInputFor(built.dependency, sprint, failures)]);
   if (ranking.ranked.length === 0) return { ranking, written: false };
   const signature = signatureOf(ranking.ranked);
