@@ -253,15 +253,19 @@ describe('on production rows: fallbacks are ranked for preparation on every cash
   const sprint = async () => ({ id: 'cmd_test', horizonDays: 30 });
   const count = async () => Number((await getDb().get<{ n: number }>(`SELECT COUNT(*) AS n FROM bin_events WHERE event_type = ? AND project_id = ?`, [FALLBACK_PREPARATION_EVENT, projectId]))?.n ?? 0);
 
-  it('a cash sprint makes acquisition a blocked-revenue-objective dependency; cost and reversibility unknown are not read as cheap', async () => {
+  it('a cash sprint makes acquisition a blocked-revenue-objective dependency; a substitute path that already ran is cheap and reversible, so it is prepared early (F3-2)', async () => {
     await path('Campaign A', 'email (Instantly)', 4);
     await path('Partner list', 'partner referral', 2);
     const { ranking, written } = await prepareProjectFallbacks(projectId, { authority: granted, sprint, failures: async () => [] });
     expect(written).toBe(true);
+    // Before F3-2 this read lowCost: null, reversible: null, prepareEarly: false on every production input.
     expect(ranking!.ranked).toEqual([
-      expect.objectContaining({ rank: 1, substitute: 'Partner list @ partner referral', decidedBy: 'BLOCKED_REVENUE_OBJECTIVE', promoted: false, lowCost: null, reversible: null, prepareEarly: false, eligible: true }),
+      expect.objectContaining({ rank: 1, substitute: 'Partner list @ partner referral', decidedBy: 'BLOCKED_REVENUE_OBJECTIVE', promoted: false, lowCost: true, reversible: true, prepareEarly: true, eligible: true }),
     ]);
+    expect(ranking!.ranked[0]!.reason).toMatch(/low cost and reversible: prepare early/);
     expect(ranking!.preservesOngoingWork).toBe(true);
+    const recorded = await readFallbackPreparation(projectId);
+    expect(recorded!.ranked[0]!.prepareEarly).toBe(true);
   });
 
   it('with no cash sprint no consequence is claimed', async () => {
@@ -306,5 +310,49 @@ describe('on production rows: fallbacks are ranked for preparation on every cash
     expect(held).not.toBeNull();
     expect(held!.ranked).toHaveLength(1);
     expect(held!.owners.ledger).toBe('server/services/quant/ledger.ts');
+  });
+});
+
+/**
+ * Review finding F3-2: the switch terms come from what the rows show about a
+ * substitute, and only from that. A path that has not run, or a dependency
+ * that carries obligations, is still not read as cheap or reversible.
+ */
+describe('switchTermsFor: cost and reversibility only where the rows show them (F3-2)', async () => {
+  const { switchTermsFor, priorityInputFor, noApprovedSpendCeiling } = await import('../server/services/quant/fallbackPreparation.ts');
+  const { acquisitionDependency } = await import('../server/services/quant/fallbackIndependence.ts');
+  const granted = { ok: true, reason: 'standing authority permits CONTACT_BUYER' };
+  const dep = acquisitionDependency('prj_x', [
+    { mechanism: 'Campaign A', channel: 'email (Instantly)', contacts: 4 },
+    { mechanism: 'Partner list', channel: 'partner referral', contacts: 2 },
+  ], granted)!;
+  const sub = dep.substitutes[0]!;
+
+  it('a substitute that already ran, on a dependency with no obligations, commits 0 cents and is reversible, with its basis', () => {
+    const terms = switchTermsFor(dep, sub)!;
+    expect(terms.reversible).toBe(true);
+    expect(terms.cost).toMatchObject({ value: 0, unit: 'cents', status: 'OBSERVED' });
+    expect(terms.cost.source).toMatch(/already reached 2 prospect\(s\)/);
+    expect(isLowCost({ ...sub, switchingCost: terms.cost }, noApprovedSpendCeiling())).toBe(true);
+  });
+
+  it('a path that has not run is not read as cheap or reversible', () => {
+    expect(switchTermsFor(dep, { ...sub, readiness: 'LOCATED' })).toBeNull();
+    expect(switchTermsFor(dep, { ...sub, capacity: { ...sub.capacity, value: 0 } })).toBeNull();
+  });
+
+  it('a dependency that carries obligations, or a substitute that does not meet them, is not read as cheap or reversible', () => {
+    const bound = { ...dep, consequence: { ...dep.consequence, obligations: ['deliver 40 units to the buyer by Friday'] } };
+    expect(switchTermsFor(bound, sub)).toBeNull();
+    expect(switchTermsFor(dep, { ...sub, eligibility: { ...sub.eligibility, meetsObligations: false } })).toBeNull();
+    const ranked = rankFallbacks([priorityInputFor(bound, { id: 'cmd', horizonDays: 30 }, [])]);
+    expect(ranked.ranked[0]).toMatchObject({ lowCost: null, reversible: null, prepareEarly: false });
+  });
+
+  it('a switching cost a row already states is kept, not replaced', () => {
+    const priced = { ...sub, switchingCost: usd('stated switch cost', 900) };
+    const input = priorityInputFor({ ...dep, substitutes: [priced] }, null, []);
+    expect(input.dependency.substitutes[0]!.switchingCost).toBe(priced.switchingCost);
+    expect(input.reversible).toBeUndefined();
   });
 });
