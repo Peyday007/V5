@@ -242,11 +242,24 @@ export function decisionOrder<T extends { expiresAt: string | null }>(openings: 
     .sort((a, b) => a.closes - b.closes || a.index - b.index)
     .map((one) => one.opening);
   const undated = ranked.filter((one) => one.closes === null).map((one) => one.opening);
+  return reserveUndated(dated, undated, UNDATED_RESERVED_EVERY);
+}
+
+/**
+ * Merge an earliest-deadline-first queue with an undated one, giving every
+ * `every`-th place to the next undated item while any remain (temporal
+ * isolation, the remedy Buttazzo gives for EDF under overload). When one queue
+ * runs out the other fills the rest. Both queues keep their own order. Pure.
+ * Shared by `decisionOrder` and the READY contact order in operate.ts, so the
+ * reservation that fixed review finding F2 cannot be lost one step downstream.
+ */
+export function reserveUndated<T>(dated: readonly T[], undated: readonly T[], every: number): T[] {
+  const period = Math.max(1, Math.trunc(every));
   const out: T[] = [];
   let d = 0;
   let u = 0;
   while (d < dated.length || u < undated.length) {
-    const reserved = (out.length + 1) % UNDATED_RESERVED_EVERY === 0;
+    const reserved = (out.length + 1) % period === 0;
     if (u < undated.length && (reserved || d >= dated.length)) out.push(undated[u++]!);
     else out.push(dated[d++]!);
   }

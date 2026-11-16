@@ -10,6 +10,8 @@
  * nothing to PRIORITIZE it on before its window ended.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
+import { MAX_CONTACTS_PER_PASS, READY_UNDATED_RESERVED_EVERY, readyContactOrder } from '../server/services/cash/operate.ts';
+import { reserveUndated } from '../server/services/cash/decisions.ts';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { createUser } from '../server/repos/identity.ts';
@@ -280,5 +282,64 @@ describe('judging a MISSED_OPPORTUNITY hand-off by the openings it handed (revie
     expect(judgeHandedOpenings(reverted, outcome, 1)).toEqual(reverted);
     const pending = { decision: null, reason: 'Still measuring.', revert: false };
     expect(judgeHandedOpenings(pending, outcome, 1)).toEqual(pending);
+  });
+});
+
+/*
+ * Review finding R4-F2: readyContactOrder sorted every READY piece with an open
+ * window ahead of every undated one, with no reserved share, and ahead of the
+ * PRIORITIZE key. With MAX_CONTACTS_PER_PASS or more dated pieces contactable
+ * each pass, an undated piece was never reached — even one the screen had
+ * PRIORITIZED — and a dated HOLD piece went ahead of an undated PRIORITIZE one.
+ */
+describe('readyContactOrder: the screen\'s verdict leads, and undated pieces keep a reserved share', () => {
+  const NOW = '2026-11-16T00:00:00.000Z';
+  const piece = (id: string, expiresAt: string | null) => ({ id, expiresAt });
+  const inDays = (n: number) => new Date(Date.parse(NOW) + n * 86_400_000).toISOString();
+  const ctx = (prioritized: string[] = [], salesOrder: string[] = []) => ({ now: NOW, salesOrder, prioritized: new Set(prioritized) });
+
+  it('reaches an undated piece within one pass\'s contacts however many dated pieces are contactable', () => {
+    const dated = Array.from({ length: 6 }, (_, i) => piece(`d${i}`, inDays(i + 1)));
+    const order = readyContactOrder([...dated, piece('u', null)], ctx());
+    expect(READY_UNDATED_RESERVED_EVERY).toBe(MAX_CONTACTS_PER_PASS);
+    expect(order.slice(0, MAX_CONTACTS_PER_PASS).map((p) => p.id)).toContain('u');
+    // The dated ones still go earliest close first around it.
+    expect(order.map((p) => p.id)).toEqual(['d0', 'd1', 'u', 'd2', 'd3', 'd4', 'd5']);
+  });
+
+  it('puts an undated PRIORITIZE piece ahead of dated pieces with no PRIORITIZE decision', () => {
+    const order = readyContactOrder([piece('hold-soon', inDays(1)), piece('hold-later', inDays(2)), piece('prio-undated', null)], ctx(['prio-undated']));
+    expect(order[0]!.id).toBe('prio-undated');
+  });
+
+  it('within the prioritized tier, an undated piece still gets its reserved place among many dated ones', () => {
+    const dated = Array.from({ length: 5 }, (_, i) => piece(`p${i}`, inDays(i + 1)));
+    const order = readyContactOrder([...dated, piece('pu', null)], ctx([...dated.map((p) => p.id), 'pu']));
+    expect(order.slice(0, MAX_CONTACTS_PER_PASS).map((p) => p.id)).toContain('pu');
+  });
+
+  it('pass after pass with fresh dated pieces arriving, the undated piece is contacted in the first pass', () => {
+    let waiting = [piece('u', null), ...Array.from({ length: 3 }, (_, i) => piece(`a${i}`, inDays(i + 1)))];
+    const contacted: string[] = [];
+    for (let pass = 0; pass < 3; pass += 1) {
+      const taken = readyContactOrder(waiting, ctx()).slice(0, MAX_CONTACTS_PER_PASS);
+      contacted.push(...taken.map((p) => p.id));
+      waiting = [...waiting.filter((p) => !taken.includes(p)), ...Array.from({ length: 3 }, (_, i) => piece(`n${pass}-${i}`, inDays(i + 1)))];
+    }
+    expect(contacted.slice(0, MAX_CONTACTS_PER_PASS)).toContain('u');
+  });
+
+  it('a closed window sorts as undated, and undated pieces follow the goal\'s sales order', () => {
+    const order = readyContactOrder(
+      [piece('closed', inDays(-1)), piece('u2', null), piece('u1', null), piece('soon', inDays(1))],
+      ctx([], ['u1', 'u2', 'closed']),
+    );
+    expect(order.map((p) => p.id)).toEqual(['soon', 'u1', 'u2', 'closed']);
+  });
+
+  it('reserveUndated is the one interleave both orders use', () => {
+    expect(reserveUndated(['a', 'b', 'c', 'd'], ['x', 'y'], 3)).toEqual(['a', 'b', 'x', 'c', 'd', 'y']);
+    expect(reserveUndated([], ['x', 'y'], 3)).toEqual(['x', 'y']);
+    expect(reserveUndated(['a', 'b'], [], 3)).toEqual(['a', 'b']);
   });
 });

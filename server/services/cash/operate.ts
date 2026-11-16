@@ -126,7 +126,7 @@ import {
 } from './perform.ts';
 import type { ExternalOutcome } from '../effects/external.ts';
 import { cashNow, getCashMode } from '../../repos/cashMode.ts';
-import { decideOpenings, type DecideOpeningsPass } from './decisions.ts';
+import { decideOpenings, reserveUndated, type DecideOpeningsPass } from './decisions.ts';
 import { closesWithin, closingInstant, describeNotWorthResearching, notWorthResearching } from './worthResearching.ts';
 import { orderFieldsByCost } from './infoValue.ts';
 import { recordQuestionsSkipped } from './screenMetrics.ts';
@@ -1281,6 +1281,13 @@ export interface AuthorityAdvance {
 export const MAX_CONTACTS_PER_PASS = 3;
 
 /**
+ * Every this-many-th place in the READY contact order goes to an undated piece
+ * while any remain in its tier. Equal to MAX_CONTACTS_PER_PASS, so each pass's
+ * contacts reach at least one undated piece of the leading tier when there is one.
+ */
+export const READY_UNDATED_RESERVED_EVERY = MAX_CONTACTS_PER_PASS;
+
+/**
  * The order READY pieces are reached in, under MAX_CONTACTS_PER_PASS.
  *
  * Production, 2026-11-16 (ORIGINATED:MISSED_OPPORTUNITY:CLOSING): openings
@@ -1292,13 +1299,19 @@ export const MAX_CONTACTS_PER_PASS = 3;
  * three contacts a pass a piece closing in two days waited behind older,
  * undated ones until it expired unpursued.
  *
- * Earliest Deadline First goes ahead of the existing keys: a piece whose
- * recorded window is still open before one with no date, the earlier window
- * first. Then a current PRIORITIZE decision (so the code screen's verdict
- * reaches the consumer that acts on it), then the goal's sales order, then the
- * order the rows came in. A window that has already closed sorts as undated —
- * the loop withholds it anyway. No cap, gate, grant or evidence bar moves:
- * only which pieces the existing cap reaches first. Pure.
+ * The screen's verdict comes first: pieces with a current PRIORITIZE decision
+ * form the leading tier, everything else the second. Within a tier, a piece
+ * whose recorded window is still open is taken earliest close first, and
+ * undated pieces (and closes already passed, which the loop withholds anyway)
+ * in the goal's sales order, then the order the rows came in.
+ *
+ * Pure EDF within a tier would let enough dated pieces starve every undated
+ * one, which is review finding F2 again one step downstream of
+ * `decisionOrder` (review finding R4-F2). So the undated pieces get the same
+ * reserved share (`reserveUndated`): every READY_UNDATED_RESERVED_EVERY-th
+ * place in a tier goes to the next undated piece while any remain. No cap,
+ * gate, grant or evidence bar moves: only which pieces the existing cap
+ * reaches first. Pure.
  */
 export function readyContactOrder<T extends Pick<CashOpportunity, 'id' | 'expiresAt'>>(
   pieces: readonly T[],
@@ -1313,17 +1326,20 @@ export function readyContactOrder<T extends Pick<CashOpportunity, 'id' | 'expire
     const at = ctx.salesOrder.indexOf(id);
     return at < 0 ? Number.MAX_SAFE_INTEGER : at;
   };
-  return pieces
-    .map((one, at) => ({ one, at, closes: open(one), first: ctx.prioritized.has(one.id) ? 0 : 1 }))
-    .sort((a, b) => {
-      if (a.closes !== null || b.closes !== null) {
-        if (a.closes === null) return 1;
-        if (b.closes === null) return -1;
-        if (a.closes !== b.closes) return a.closes - b.closes;
-      }
-      return a.first - b.first || rank(a.one.id) - rank(b.one.id) || a.at - b.at;
-    })
-    .map(({ one }) => one);
+  const ranked = pieces.map((one, at) => ({ one, at, closes: open(one) }));
+  const tier = (prioritized: boolean) => {
+    const members = ranked.filter((entry) => ctx.prioritized.has(entry.one.id) === prioritized);
+    const dated = members
+      .filter((entry): entry is typeof entry & { closes: number } => entry.closes !== null)
+      .sort((a, b) => a.closes - b.closes || rank(a.one.id) - rank(b.one.id) || a.at - b.at)
+      .map((entry) => entry.one);
+    const undated = members
+      .filter((entry) => entry.closes === null)
+      .sort((a, b) => rank(a.one.id) - rank(b.one.id) || a.at - b.at)
+      .map((entry) => entry.one);
+    return reserveUndated(dated, undated, READY_UNDATED_RESERVED_EVERY);
+  };
+  return [...tier(true), ...tier(false)];
 }
 
 export async function advanceWithinAuthority(projectId: string): Promise<AuthorityAdvance> {
