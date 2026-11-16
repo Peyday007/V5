@@ -228,15 +228,38 @@ async function hostRefusalsSinceStart(podId: string): Promise<number> {
   }
 }
 
-/** Point the lane at the pod the newest `MIGRATED` row names. Survives restarts because it is a row. */
-export async function loadMovedPod(): Promise<string | null> {
+/**
+ * Pure: where the configured pod was moved to, following the `MIGRATED` rows
+ * (oldest first) from that pod. Null when no row moved it: a pod connected
+ * after the last move is not moved by that move. Production 2026-11-16:
+ * `runpod-upgrade` connected gpt-oss-120b on a new pod at 11:43Z and deleted
+ * the Qwen pod, but the 00:33Z row that had moved the lane to the Qwen pod
+ * still won, so every GPU call went to the deleted pod (HTTP 404), the route
+ * was held as a broken GPU, and research waited beside the idle H100.
+ */
+export function movedPodUrl(configuredPodId: string | null, rows: readonly { from: unknown; podId: unknown; url: unknown }[]): string | null {
+  if (!configuredPodId) return null;
+  let pod = configuredPodId.toLowerCase();
+  let url: string | null = null;
+  for (const row of rows) {
+    if (typeof row.from !== 'string' || row.from.toLowerCase() !== pod) continue;
+    if (typeof row.podId !== 'string' || typeof row.url !== 'string' || !row.url) continue;
+    pod = row.podId.toLowerCase();
+    url = row.url;
+  }
+  return url;
+}
+
+/** Point the lane at the pod the `MIGRATED` rows moved the configured pod to. Survives restarts because it is rows. */
+export async function loadMovedPod(env: NodeJS.ProcessEnv = process.env): Promise<string | null> {
   try {
-    const row = await getDb().get<{ measures: unknown }>(
-      `SELECT measures FROM bin_events WHERE event_type = 'RUNPOD_POD' AND outcome = 'MIGRATED' ORDER BY at DESC LIMIT 1`,
+    const rows = await getDb().all<{ measures: unknown }>(
+      `SELECT measures FROM bin_events WHERE event_type = 'RUNPOD_POD' AND outcome = 'MIGRATED' ORDER BY at ASC`,
     );
-    const url = row ? eventMeasures(row.measures)['url'] : null;
-    if (typeof url === 'string' && url && url !== runpodUrlOverride()) setRunpodUrlOverride(url);
-    return typeof url === 'string' ? url : null;
+    const configured = env['BRAIN_RUNPOD_POD_ID']?.trim() || podIdFromUrl(env['BRAIN_RUNPOD_URL'] ?? '');
+    const url = movedPodUrl(configured, rows.map((r) => eventMeasures(r.measures)).map((m) => ({ from: m['from'], podId: m['podId'], url: m['url'] })));
+    if (url && url !== runpodUrlOverride()) setRunpodUrlOverride(url);
+    return url;
   } catch {
     return null;
   }

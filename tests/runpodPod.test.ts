@@ -293,3 +293,20 @@ describe('host refusals are this pod\'s own (production 2026-11-15 23:07Z: a han
     expect(hostRefusalsOf('newpod', [{ outcome: 'START_FAILED', reason: 'pod not found', podId: 'newpod' }])).toBe(0);
   });
 });
+
+describe('a move follows the pod it moved (production 2026-11-16: a stale move sent the upgraded GPU\'s calls to a deleted pod)', () => {
+  it('follows the MIGRATED chain from the configured pod, and ignores moves of a pod no longer configured', async () => {
+    const { movedPodUrl } = await import('../server/services/cheap/runpodPod.ts');
+    const url = (id: string) => `https://${id}-8000.proxy.runpod.net/v1`;
+    const rows = [
+      { from: 'a', podId: 'b', url: url('b') },
+      { from: 'b', podId: 'c', url: url('c') },
+    ];
+    expect(movedPodUrl('a', rows)).toBe(url('c'));
+    expect(movedPodUrl('b', rows)).toBe(url('c'));
+    // The pod runpod-upgrade connected after the last move: no move applies to it.
+    expect(movedPodUrl('xwepsiiv7b0hbn', [{ from: '48zd8pqu8dh7sg', podId: 'uhtkd69eol85xz', url: url('uhtkd69eol85xz') }])).toBeNull();
+    expect(movedPodUrl(null, rows)).toBeNull();
+    expect(movedPodUrl('a', [{ from: 'a', podId: null, url: url('b') }])).toBeNull();
+  });
+});
