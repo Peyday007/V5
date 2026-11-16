@@ -25,6 +25,19 @@
  * agrees with the ledger row it cites; and every suspension still holds the
  * lifecycle commitments it says it holds.
  *
+ * The decision ledger has a beginning. `cash_actions` rows were written from
+ * 2026-09-15, gated by the commercial authority check but leaving no ledger row;
+ * consequential decisions were appended to `cash_events` only from 2026-11-09.
+ * So a `cash_actions` row earlier than the first AUTHORITY_DECISION row this
+ * Brain holds cannot cite a decision that was never written. Such a row is
+ * **unledgered history**: it is still held to everything the rows can show
+ * (the grant it names is its project's and was in force, and no stop was on),
+ * it is counted and named, and it is never presented as proof that authority
+ * governed it. Every row from the ledger's first decision on must rest on a
+ * decision, exactly as before. The ledger's start is the earliest decision of
+ * the whole Brain, not of each project, so a project that begins acting after
+ * the ledger exists has no grace period of its own.
+ *
  * Read-only: nothing here writes a row, starts a timer or calls the judge on
  * live input. Zero lifecycle effects is answered as "nothing performed yet",
  * which is ok and is never presented as proof of anything (§47).
@@ -56,6 +69,8 @@ export interface AuthorityIntegrationCounts {
   effectReceipts: number;
   remedies: number;
   suspensions: number;
+  /** Recorded actions earlier than the authority ledger's first decision: held to their grant and stop only, never counted as proof. */
+  unledgeredHistory: number;
 }
 
 export interface AuthorityIntegrationReading extends ProbeResult {
@@ -90,6 +105,8 @@ interface Effect {
 }
 
 interface Context {
+  /** When the authority ledger's first decision was made, or null when it holds none. */
+  ledgerStart: string | null;
   decisions: Decision[];
   byId: Map<string, Decision>;
   controls: EventRow[];
@@ -201,7 +218,26 @@ async function cashActionEffects(): Promise<Effect[]> {
  * have had authority in hand. The grant the row names must belong to the
  * project and be in force at the effect, unless the owner approved the scope.
  */
+/** A recorded action from before the ledger's first decision: it could cite none. */
+function unledgered(ctx: Context, e: Effect): boolean {
+  return e.source === 'CASH_ACTION' && ctx.ledgerStart !== null && e.at < ctx.ledgerStart;
+}
+
+/**
+ * A recorded action from before the ledger began is held to what the rows can
+ * still show: the grant it names belongs to its project and was in force, and
+ * no emergency stop was on. It is not held to a decision nobody could write.
+ */
+async function checkUnledgeredCashAction(ctx: Context, e: Effect): Promise<string | null> {
+  if (stoppedAt(ctx.controls, e.projectId, e.at, true)) return `${e.action} was performed while the emergency stop was on`;
+  const grant = (await grantsOf(ctx, e.projectId)).find((g) => g.id === e.detail.authorityId);
+  if (!grant) return `${e.action} (before the authority ledger began) names grant ${String(e.detail.authorityId)}, which is not a grant of its project`;
+  if (!grantInForce([grant], e.at)) return `${e.action} (before the authority ledger began) was performed under grant ${grant.id}, which was not in force at the time`;
+  return null;
+}
+
 async function checkCashAction(ctx: Context, e: Effect): Promise<string | null> {
+  if (unledgered(ctx, e)) return checkUnledgeredCashAction(ctx, e);
   const prior = ctx.decisions.filter((d) => d.projectId === e.projectId && d.detail.action === e.action && d.at <= e.at && granted(d));
   const latest = prior[prior.length - 1];
   if (!latest) return `${e.action} was performed with no authorization decision on the ledger before it`;
@@ -341,6 +377,9 @@ export async function actionsObeyAuthorityOnRows(): Promise<AuthorityIntegration
     rowsOfKinds([EMERGENCY_STOP_KIND, EMERGENCY_RESUME_KIND]),
   ]);
   const effects = [...cashActions, ...receipts, ...remedies].sort((x, y) => (x.at === y.at ? x.id.localeCompare(y.id) : x.at < y.at ? -1 : 1));
+  const ledgerStart = decisions.reduce<string | null>((first, d) => (first === null || d.at < first ? d.at : first), null);
+  const history = cashActions.filter((e) => ledgerStart !== null && e.at < ledgerStart);
+  const ledgered = effects.length - history.length;
   const counts: AuthorityIntegrationCounts = {
     decisions: decisions.length,
     effects: effects.length,
@@ -348,6 +387,7 @@ export async function actionsObeyAuthorityOnRows(): Promise<AuthorityIntegration
     effectReceipts: receipts.length,
     remedies: remedies.length,
     suspensions: suspensions.length,
+    unledgeredHistory: history.length,
   };
 
   // AUTH-34. With nothing ever judged and nothing performed there is no ledger to read, only the rule.
@@ -365,7 +405,7 @@ export async function actionsObeyAuthorityOnRows(): Promise<AuthorityIntegration
   if (exceptions.ok === false) return { ok: false, detail: `LIFE-29-3 does not hold: ${exceptions.detail}`, counts, violation: null };
 
   // The cross-check.
-  const ctx: Context = { decisions, byId: new Map(decisions.map((d) => [d.id, d])), controls, grants: new Map() };
+  const ctx: Context = { ledgerStart, decisions, byId: new Map(decisions.map((d) => [d.id, d])), controls, grants: new Map() };
   for (const e of effects) {
     const reason = e.source === 'CASH_ACTION' ? await checkCashAction(ctx, e) : e.source === 'EFFECT_RECEIPT' ? await checkReceipt(ctx, e) : await checkRemedy(ctx, e);
     if (reason) return fail(counts, e.id, reason);
@@ -373,11 +413,14 @@ export async function actionsObeyAuthorityOnRows(): Promise<AuthorityIntegration
   const lost = await checkSuspensions(suspensions);
   if (lost) return fail(counts, lost.rowId, lost.reason);
 
+  const before = history.length
+    ? `; ${history.length} recorded action(s) predate the authority ledger (its first decision: ${ledgerStart}) — ${history.slice(0, 5).map((e) => `${e.id} ${e.action}`).join(', ')}${history.length > 5 ? ', …' : ''} — held to their grant and stop only and counted as unledgered history, not as proof`
+    : '';
   const lifecycle = `LIFE-29-1: ${commitments.ok === null ? `nothing to read (${commitments.detail})` : 'holds'}; LIFE-29-3: ${exceptions.ok === null ? `nothing to read (${exceptions.detail})` : 'holds'}`;
-  if (effects.length === 0) {
+  if (ledgered === 0) {
     return {
       ok: true,
-      detail: `nothing performed yet: no lifecycle effect is recorded, so there is no action for authority to have governed and this proves nothing about it; ${decisions.length} ledger decision(s), ${suspensions.length} suspension(s) keeping their commitments; ${lifecycle}`,
+      detail: `nothing performed yet under the ledger: no lifecycle effect is recorded since it began, so there is no action for authority to have governed and this proves nothing about it; ${decisions.length} ledger decision(s), ${suspensions.length} suspension(s) keeping their commitments; ${lifecycle}${before}`,
       counts,
       violation: null,
     };
@@ -385,9 +428,9 @@ export async function actionsObeyAuthorityOnRows(): Promise<AuthorityIntegration
   return {
     ok: true,
     detail:
-      `${effects.length} lifecycle effect(s) (${cashActions.length} recorded action(s), ${receipts.length} performed effect receipt(s), ${remedies.length} remedy(ies) carried out), ` +
+      `${ledgered} lifecycle effect(s) (${cashActions.length - history.length} recorded action(s), ${receipts.length} performed effect receipt(s), ${remedies.length} remedy(ies) carried out), ` +
       `each resting on a prior authority decision or owner approval among ${decisions.length} ledger decision(s), made with no emergency stop on and a grant in force or owner-approved; ` +
-      `every remedy's recorded authority agrees with the ledger; ${suspensions.length} suspension(s), each still holding its commitments; AUTH-34 holds; ${lifecycle}`,
+      `every remedy's recorded authority agrees with the ledger; ${suspensions.length} suspension(s), each still holding its commitments; AUTH-34 holds; ${lifecycle}${before}`,
     counts,
     violation: null,
   };

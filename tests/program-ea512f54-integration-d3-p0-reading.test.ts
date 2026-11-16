@@ -255,3 +255,100 @@ describe('the reading is a reading', () => {
     expect(source).not.toMatch(/\b(INSERT|UPDATE|DELETE)\b|CREATE TABLE|setInterval|setTimeout|\.run\(|recordCashEvent|recordAction|decideAction|checkCommercialAuthority/);
   });
 });
+
+/*
+ * Reviewer finding (repair-pre-ledger-history-fails-forever): cash_actions
+ * rows were written from 2026-09-15, gated by checkCommercialAuthority but
+ * leaving no ledger row, and decisions reached the ledger only from
+ * 2026-11-09. Holding those rows to a decision nobody could have written made
+ * the reading fail forever on any Brain with that history. A row from before
+ * the ledger's first decision is now unledgered history: still held to its
+ * grant and stop, counted and named, never presented as proof. Every row
+ * from the ledger's start on still needs its decision.
+ */
+describe('recorded actions from before the authority ledger began are history, not violations and not proof', () => {
+  const HISTORY_AT = '2026-10-01T12:00:00.000Z';
+
+  /** A grant in force since before the history, so the history was performed inside it. */
+  async function grantSince(at: string): Promise<void> {
+    await getDb().run('UPDATE cash_authorities SET starts_at = ? WHERE id = ?', [at, grantId]);
+  }
+
+  /** A recorded action written as the pre-ledger code wrote it: through the gate, with no ledger row, on an earlier day. */
+  async function preLedgerAction(id: string, action: string, key: string, at = HISTORY_AT, authorityId = grantId): Promise<string> {
+    const row = (
+      await recordAction({
+        projectId, opportunityId: id, authorityId, action, performedBy: 'PERSON',
+        reference: null, detail: 'recorded before the ledger existed', confirmedBy: 'PERSON', requestKey: key,
+      })
+    ).action.id;
+    await getDb().run('UPDATE cash_actions SET created_at = ? WHERE id = ?', [at, row]);
+    return row;
+  }
+
+  it('the reviewer\'s case: a grant since September, one ledgered contact today, one contact back-dated to October — reads ok, and names the history', async () => {
+    await grantSince('2026-09-01T00:00:00.000Z');
+    const id = await executing();
+    const history = await preLedgerAction(id, 'CONTACT_BUYER', 'history:contact');
+    const reading = await actionsObeyAuthorityOnRows();
+    expect(reading.ok).toBe(true);
+    expect(reading.violation).toBeNull();
+    expect(reading.counts.unledgeredHistory).toBe(1);
+    expect(reading.detail).toContain(`1 recorded action(s) predate the authority ledger`);
+    expect(reading.detail).toContain(`${history} CONTACT_BUYER`);
+    expect(reading.detail).toMatch(/not as proof/);
+    // The history is not counted among the effects resting on a decision.
+    expect(reading.detail).toMatch(new RegExp(`^${reading.counts.effects - 1} lifecycle effect\\(s\\)`));
+  });
+
+  it('only history and no ledgered effect claims nothing was performed under the ledger', async () => {
+    await grantSince('2026-09-01T00:00:00.000Z');
+    const id = await executing();
+    // Remove the ledgered contact's effect so only the history and the decision remain.
+    await getDb().run('DELETE FROM cash_actions WHERE project_id = ?', [projectId]);
+    await preLedgerAction(id, 'CONTACT_BUYER', 'history:only');
+    const reading = await actionsObeyAuthorityOnRows();
+    expect(reading.ok).toBe(true);
+    expect(reading.counts.unledgeredHistory).toBe(1);
+    expect(reading.detail).toMatch(/^nothing performed yet under the ledger/);
+  });
+
+  it('a row after the ledger began still needs its decision: the bar is unchanged from the ledger\'s start on', async () => {
+    await grantSince('2026-09-01T00:00:00.000Z');
+    const id = await executing();
+    await preLedgerAction(id, 'CONTACT_BUYER', 'history:contact-2');
+    const rogue = await rogueAction(id, 'ACCEPT_PAYMENT', 'rogue:payment-after-ledger');
+    const reading = await actionsObeyAuthorityOnRows();
+    expect(reading.ok).toBe(false);
+    expect(reading.violation).toEqual({ rowId: rogue, reason: expect.stringMatching(/ACCEPT_PAYMENT was performed with no authorization decision/) });
+  });
+
+  it('history is still held to its grant: one performed before its grant was in force fails, naming the row', async () => {
+    // The grant starts now (beforeEach), so an October action was outside it.
+    const id = await executing();
+    const history = await preLedgerAction(id, 'CONTACT_BUYER', 'history:outside-grant');
+    const reading = await actionsObeyAuthorityOnRows();
+    expect(reading.ok).toBe(false);
+    expect(reading.violation).toEqual({ rowId: history, reason: expect.stringMatching(/before the authority ledger began\) was performed under grant .* not in force/) });
+  });
+
+  it('history naming a grant of another project fails, naming the row', async () => {
+    await grantSince('2026-09-01T00:00:00.000Z');
+    const id = await executing();
+    // Another project in the same Brain (freshProject would start a new database).
+    const { createProject } = await import('../server/repos/projects.ts');
+    const other = (await createProject({ name: 'Another project', slug: `other-${Math.random().toString(36).slice(2, 8)}` })).id;
+    const foreign = (
+      await createAuthority({
+        projectId: other, ownerUserId: userId, createdByUserId: userId, name: 'Another project\'s authority',
+        allowedActions: [...COMMERCIAL_ACTIONS], prohibitions: [...ALWAYS_PROHIBITED_COMMERCIAL],
+        maxCommittedCents: 500_000, maxPerActionCents: 200_000, maxConcurrent: 5, currency: 'USD',
+        startsAt: '2026-09-01T00:00:00.000Z', expiresAt: '2099-01-01T00:00:00.000Z',
+      })
+    ).id;
+    const history = await preLedgerAction(id, 'CONTACT_BUYER', 'history:foreign-grant', HISTORY_AT, foreign);
+    const reading = await actionsObeyAuthorityOnRows();
+    expect(reading.ok).toBe(false);
+    expect(reading.violation).toEqual({ rowId: history, reason: expect.stringMatching(new RegExp(`names grant ${foreign}, which is not a grant of its project`)) });
+  });
+});
