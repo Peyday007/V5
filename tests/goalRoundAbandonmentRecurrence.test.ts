@@ -359,6 +359,43 @@ describe(`${FAILURE_CLASS} — which upstream cause ends the rounds (finding F3)
     expect((await stopEvents()).size).toBe(stops);
   });
 
+  it('the recorded rounds, read back by the goal, count only the research that failed and name why (fails before repair F1)', async () => {
+    // The production journey end to end: missions end → the settlement pass closes the rounds and writes their
+    // stop events → the goal reads its rounds back → the diagnosis its next round is given. Before F1 the goal
+    // read all five as "research not finishing" with the blanket evidence instruction, two cancels included.
+    const opened = await openDiscovery({ projectId, limit: 5 });
+    expect(opened.length).toBeGreaterThanOrEqual(5);
+    const ids = opened.slice(0, 5).map((one) => one.candidateId) as [string, string, string, string, string];
+    await ended(ids[0], 'FAILED', 'worker lease expired');
+    await ended(ids[1], 'FAILED', 'No fragment cleared its evidence gate.');
+    await ended(ids[2], 'CANCELLED', 'cancelled before launch');
+    await ended(ids[3], 'CANCELLED', 'superseded');
+    await ended(ids[4], 'FAILED', null);
+    await harvest({ projectId, limit: 50 });
+
+    // These five rounds are the goal's: give them the goal's bucket, as the recorded rounds carried.
+    const goalId = 'wst_recorded';
+    const rounds = (await listRounds(projectId)).filter((one) => ids.includes(one.candidateId));
+    expect(rounds.map((one) => one.state)).toEqual(['ABANDONED', 'ABANDONED', 'ABANDONED', 'ABANDONED', 'ABANDONED']);
+    for (const [i, round] of rounds.entries()) {
+      await getDb().run('UPDATE cash_discovery_rounds SET bucket_id = ? WHERE id = ?', [`goal-${goalId}-r${i}`, round.id]);
+    }
+
+    const read = await recentGoalRounds(projectId, goalId);
+    expect(read).toHaveLength(5);
+    expect(read.map((one) => one.failureClass).sort()).toEqual(
+      ['MAST_TASK_VERIFICATION', 'ROUND_SETTLEMENT', 'ROUND_SETTLEMENT', 'TRAIL_TIMEOUT', 'UNATTRIBUTED'].sort(),
+    );
+
+    const diagnosis = diagnoseGoalResearch({ considered: [], excludedReasons: [], remaining: 10000, rounds: read });
+    const finishing = diagnosis.find((one) => one.cause === 'RESEARCH_NOT_FINISHING');
+    expect(finishing, 'three real research failures still name the cause').toBeDefined();
+    // The two cancels were Brain's own settlement, not research that failed to finish.
+    expect(finishing!.evidence).toMatch(/^3 of the goal's last 5 settled rounds/);
+    for (const named of ['TRAIL_TIMEOUT 1', 'MAST_TASK_VERIFICATION 1', 'UNATTRIBUTED 1']) expect(finishing!.evidence).toContain(named);
+    expect(finishing!.evidence).not.toContain('ROUND_SETTLEMENT');
+  });
+
   it("Brain's bulk release path never cancels the research of the round that discovered the opening", async () => {
     const opened = await openDiscovery({ projectId, limit: 1 });
     const discoverer = opened[0]!.candidateId;
