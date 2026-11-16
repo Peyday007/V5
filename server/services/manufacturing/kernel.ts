@@ -55,6 +55,7 @@ import {
 } from './venturePath.ts';
 import type { AcquisitionCandidate } from '../../domain/types.ts';
 import { competitiveSystemsFor, type CompetitiveSystem } from './competitiveSystem.ts';
+import { institutionsForLadder, type CategoryInstitutions } from './institutionReading.ts';
 
 export interface KernelPass {
   /** Rounds opened this pass, each carrying why the allocator chose it. */
@@ -70,6 +71,13 @@ export interface KernelPass {
    * position readings. A read, derived every pass; never new research.
    */
   competitive: CompetitiveSystem[];
+  /**
+   * Every live category's institutional machinery (INST-30), derived from the
+   * ladder's rows: the elements those rows trigger, each costed or withheld,
+   * the structures they admit with four separate readings, and what needs a
+   * person's approval. A read, derived every pass; nothing is formed or signed.
+   */
+  institutions: CategoryInstitutions[];
   /**
    * Whether the programme's directive actually reached the questions, and why
    * not when it did not.
@@ -109,6 +117,7 @@ const EMPTY: KernelPass = {
   },
   declined: [],
   competitive: [],
+  institutions: [],
   directive: { reaching: false, path: null, why: null },
   ventures: [],
   categories: 0,
@@ -156,6 +165,7 @@ export async function runManufacturingKernel(projectId: string): Promise<KernelP
   const ventures = await reconsiderVentures(projectId, readLadder(snapshot), snapshot.capabilities, snapshot.candidates);
 
   const competitive = await competitiveSystemsFor(snapshot);
+  const institutions = institutionsForLadder(snapshot);
 
   const gate = await programmeMayAsk(projectId);
   if (!gate.allowed) {
@@ -164,6 +174,7 @@ export async function runManufacturingKernel(projectId: string): Promise<KernelP
       absorbed,
       declined: [{ subject: 'every category on the ladder', why: gate.reason }],
       competitive,
+      institutions,
       directive: directive.report,
       ventures,
       ...counts,
@@ -183,6 +194,7 @@ export async function runManufacturingKernel(projectId: string): Promise<KernelP
     absorbed,
     declined: plan.declined,
     competitive,
+    institutions,
     directive: directive.report,
     ventures,
     ...counts,
