@@ -287,3 +287,144 @@ describe('an experiment, from commission to one adopted variant', () => {
     expect(Number(rows[0]!.n)).toBe(1);
   });
 });
+
+/**
+ * Production, 2026-11-16 08:02Z: Hermes commissioned evx_f0f141e30794417c8187 for a moot-request
+ * defect in the Russell loop on suite `feasibility`, which classifies plan feasibility and cannot
+ * see the defect — every variant would have scored equal to the baseline and the selection would
+ * have decided on nothing. A suite now declares what it measures: a misfit commission is refused
+ * naming the suites that fit, and an undecided experiment already on a misfit suite is moved onto
+ * the one that measures its deficiency, or held when none can.
+ */
+describe('an experiment is measured on a suite that can see its deficiency', () => {
+  const MOOT_PATHS = ['server/services/russell/needsHuman.ts', 'server/services/russell/loop.ts'];
+  const moot = (over: Record<string, unknown> = {}) =>
+    request({
+      deficiency: 'RECURRING_OPERATIONAL_FAILURE',
+      title: 'Answered research cards come back as moot person-requests',
+      observed: 'Goal reads BLOCKED on a person: open requests are moot because their missions already left NEEDS_HUMAN and no answer can apply.',
+      evidence: 'rhr_1: mission rms_1 CANCELLED; 3 OPERATOR_WITHDREW_MOOT_REQUEST events in 7 days',
+      cause: "russell/loop.ts 'answered-requests' passes every failed resume to reopenAnswered",
+      ownerPaths: MOOT_PATHS,
+      suite: 'mootRequests',
+      approaches: [
+        { label: 'atomic', approachType: 'ALGORITHM_REPLACEMENT', approach: 'Cancel pending answered requests atomically in the same statement that moves a mission out of NEEDS_HUMAN.', ownerPaths: ['server/repos/russellMissions.ts'] },
+        { label: 'filter', approachType: 'REMOVE_WORK', approach: 'Filter resumes whose mission already left Needs You in the loop pass before they ever reach reopenAnswered.', ownerPaths: ['server/services/russell/loop.ts'] },
+      ],
+      ...over,
+    });
+
+  beforeEach(async () => {
+    factory.submitted.length = 0;
+    factory.campaigns.clear();
+    await freshProject();
+    const existing = await getProjectBySlug('brain-architecture');
+    const brainId = existing?.id ?? (await createProject({ name: 'Brain Architecture', slug: 'brain-architecture' })).id;
+    await createLayer({ projectId: brainId, name: 'Methods', orderIndex: 0 });
+    await createUser({ email: 'owner@example.com', displayName: 'Owner', password: 'correct horse battery staple 1', isBrainAdmin: true });
+    await setProjectRepository({ projectId: brainId, grantId: 'brain', repositoryId: 'peyday007/v5', scopeKind: 'WHOLE_REPOSITORY', pathScope: [], reason: 'test', setBy: 'test' });
+    await setImprovementSwitch(true, 'owner@example.com', 'test');
+  });
+
+  it('declares, for every suite, what it measures, and finds the suites that fit a deficiency', async () => {
+    const { EVOLUTION_SUITES, suiteFit, suitesFitting } = await import('../server/domain/evolutionSuites.ts');
+    // Every declared suite has a runner in the harness, and every runner is declared (read from the
+    // source: importing the harness would set the bench's process environment in this test's process).
+    const { readFileSync } = await import('node:fs');
+    const registry = /export const SUITES: Record<string, Suite> = \{([^}]*)\}/.exec(readFileSync(new URL('../bench/run.ts', import.meta.url), 'utf8'))![1]!;
+    expect(EVOLUTION_SUITES.map((s) => s.name).sort()).toEqual(registry.split(',').map((x) => x.trim()).filter(Boolean).sort());
+    for (const s of EVOLUTION_SUITES) expect(s.measures.deficiencies.length).toBeGreaterThan(0);
+    expect(suitesFitting('RECURRING_OPERATIONAL_FAILURE', MOOT_PATHS).map((s) => s.name)).toEqual(['mootRequests']);
+    expect(suitesFitting('RECURRING_OPERATIONAL_FAILURE', ['server/services/russell/**']).map((s) => s.name)).toEqual(['mootRequests']);
+    // The same class on code no suite drives: nothing fits.
+    expect(suitesFitting('RECURRING_OPERATIONAL_FAILURE', ['server/services/cheap/dispatch.ts'])).toEqual([]);
+    expect(suitesFitting('ECONOMIC_REASONING', []).map((s) => s.name)).toEqual(['feasibility']);
+    const feasibility = EVOLUTION_SUITES.find((s) => s.name === 'feasibility')!;
+    expect(suiteFit(feasibility, 'RECURRING_OPERATIONAL_FAILURE', MOOT_PATHS)).toMatchObject({ fits: false });
+  });
+
+  it('refuses a commission whose suite cannot see the deficiency, naming the suite that can, before recording anything', async () => {
+    const { commission } = await import('../server/services/operator/director.ts');
+    const refused = await commission(moot({ suite: 'feasibility' }) as never);
+    expect(refused.ok).toBe(false);
+    expect(refused.reason).toMatch(/suite "feasibility" does not measure this deficiency/);
+    expect(refused.reason).toMatch(/Choose a suite that does: mootRequests/);
+    // Nothing measures a broken integration yet: refused with what to do instead.
+    const none = await commission(moot({ deficiency: 'BROKEN_INTEGRATION', suite: 'feasibility' }) as never);
+    expect(none.ok).toBe(false);
+    expect(none.reason).toMatch(/no registered suite measures BROKEN_INTEGRATION/);
+    expect(none.reason).toMatch(/commission it without approaches and suite/);
+    expect(factory.submitted).toHaveLength(0);
+    expect(await listCandidates()).toHaveLength(0);
+
+    const opened = await commission(moot() as never);
+    expect(opened).toMatchObject({ ok: true, experimentId: expect.any(String) });
+    expect(await getExperiment(opened.experimentId!)).toMatchObject({ suite: 'mootRequests', capabilityClass: 'OPERATIONS' });
+    expect(String(factory.submitted[0]!['objective'])).toContain('benchmark suite "mootRequests"');
+  });
+
+  it('moves an open experiment on a misfit suite onto the one that measures it, and decides only on that suite', async () => {
+    const { commission } = await import('../server/services/operator/director.ts');
+    const opened = await commission(moot() as never);
+    const id = opened.experimentId!;
+    // As production holds evx_f0f141e30794417c8187: opened on feasibility, before suites declared what they measure.
+    await getDb().run(`UPDATE evolution_experiments SET suite = 'feasibility', capability_class = 'REASONING' WHERE id = ?`, [id]);
+    const { pendingEvaluations, recordResult, decide } = await import('../server/services/evolution/experiments.ts');
+    finishBuilding('fcp_for_fcr_test1', 401);
+    finishBuilding('fcp_for_fcr_test2', 402);
+    const pending = await pendingEvaluations();
+    expect(pending).toHaveLength(1);
+    expect(pending[0]).toMatchObject({ id, suite: 'mootRequests' });
+    expect(await getExperiment(id)).toMatchObject({ state: 'EVALUATING', suite: 'mootRequests', capabilityClass: 'OPERATIONS' });
+    const events = await getDb().all<{ detail: string }>(`SELECT detail FROM improvement_events WHERE kind = 'EXPERIMENT_RETARGETED'`, []);
+    expect(events).toHaveLength(1);
+    expect(JSON.parse(events[0]!.detail)).toMatchObject({ experimentId: id, from: 'feasibility', to: 'mootRequests' });
+    // Moved once: another pass changes nothing.
+    await pendingEvaluations();
+    expect(await getDb().all(`SELECT 1 FROM improvement_events WHERE kind = 'EXPERIMENT_RETARGETED'`, [])).toHaveLength(1);
+
+    const [atomic, filter] = pending[0]!.variants;
+    const scored = (metrics: Record<string, number>) => result({ ...metrics, falseWithdraw: 0, historyLost: 0 }, { suite: 'mootRequests' });
+    // A feasibility result is refused now, and the mootRequests results decide.
+    expect(await recordResult({ experimentId: id, variantId: null, result: result({ accuracy: 1 }) })).toMatchObject({ ok: false });
+    await recordResult({ experimentId: id, variantId: null, result: scored({ accuracy: 0.6 }) });
+    await recordResult({ experimentId: id, variantId: atomic!.id, result: scored({ accuracy: 1 }) });
+    await recordResult({ experimentId: id, variantId: filter!.id, result: scored({ accuracy: 0.8 }) });
+    const decided = await decide(id);
+    expect(decided).toMatchObject({ ok: true, verdict: 'ADOPT', winner: { label: 'atomic' }, closePullRequests: [402] });
+    const stats = await listApproachStats();
+    expect(stats.every((s) => s.capabilityClass === 'OPERATIONS')).toBe(true);
+  });
+
+  it('commissioning the running deficiency again on another fitting suite moves the same experiment', async () => {
+    const { commission } = await import('../server/services/operator/director.ts');
+    const opened = await commission(moot() as never);
+    await getDb().run(`UPDATE evolution_experiments SET suite = 'feasibility' WHERE id = ?`, [opened.experimentId!]);
+    const again = await commission(moot({ runId: 'opr_retarget' }) as never);
+    expect(again).toMatchObject({ ok: true, duplicate: true, experimentId: opened.experimentId });
+    expect(await getExperiment(opened.experimentId!)).toMatchObject({ suite: 'mootRequests' });
+    expect(factory.submitted).toHaveLength(2);
+  });
+
+  it('holds a built experiment no registered suite can measure, instead of deciding on a blind score', async () => {
+    const { commission } = await import('../server/services/operator/director.ts');
+    const opened = await commission(moot() as never);
+    const id = opened.experimentId!;
+    // Its owner paths move to code no suite drives.
+    const parent = (await getCandidate(opened.candidateId!))!;
+    const { patchCandidate } = await import('../server/repos/improvement.ts');
+    await patchCandidate(parent.id, { evidence: { ...parent.evidence, ownerPaths: ['server/services/billing/x.ts'] } });
+    await getDb().run(`UPDATE evolution_variants SET owner_paths = '["server/services/billing/x.ts"]' WHERE experiment_id = ?`, [id]);
+    await getDb().run(`UPDATE evolution_experiments SET suite = 'feasibility' WHERE id = ?`, [id]);
+    const { pendingEvaluations, decide } = await import('../server/services/evolution/experiments.ts');
+    finishBuilding('fcp_for_fcr_test1', 501);
+    finishBuilding('fcp_for_fcr_test2', 502);
+    // Building → evaluating on this pass; the next one finds no suite that can see it.
+    await pendingEvaluations();
+    expect(await pendingEvaluations()).toEqual([]);
+    const held = (await getExperiment(id))!;
+    expect(held.state).toBe('HELD');
+    expect(held.rationale).toMatch(/no registered suite measures RECURRING_OPERATIONAL_FAILURE/);
+    expect(await decide(id)).toMatchObject({ ok: false });
+  });
+});

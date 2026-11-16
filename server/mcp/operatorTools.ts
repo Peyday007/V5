@@ -361,7 +361,7 @@ const commissionTool: McpTool = {
           additionalProperties: false,
         },
       },
-      suite: { type: 'string', description: 'The registered benchmark suite that judges the approaches (brain_operator_experiments lists them). A capability deficiency names its own.' },
+      suite: { type: 'string', description: "The registered benchmark suite that judges the approaches; it must measure this deficiency's class on its owner paths (brain_operator_experiments lists each suite's `measures`; a misfit is refused naming the suites that fit). A capability deficiency names its own. Commissioning a running experiment's deficiency again with another fitting suite moves that experiment onto it." },
       title: { type: 'string' },
       observed: { type: 'string', description: 'What is wrong and what it costs the goal, in production terms.' },
       evidence: { type: 'string', description: 'Row ids and verbatim reasons from Brain.' },

@@ -164,6 +164,14 @@ export interface BenchSuite {
   /** A difference no larger than this is noise: absolute units, or relative to the baseline value. */
   noise: { absolute: number } | { relative: number };
   guards: Guard[];
+  /**
+   * What the suite measures, so an experiment is judged on a measurement of its own deficiency
+   * (a suite that cannot see the defect scores every variant equal to the baseline, and the
+   * selection then decides on nothing). `deficiencies` are the director's deficiency classes the
+   * suite's cases exercise; `paths` are the code its cases drive — a diagnosis fits when one of
+   * its owner paths is under one of them. No paths: the class alone decides.
+   */
+  measures: { deficiencies: readonly string[]; paths: readonly string[] };
 }
 
 export interface BenchCase {

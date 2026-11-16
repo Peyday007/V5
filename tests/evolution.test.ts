@@ -81,6 +81,7 @@ const higher: BenchSuite = {
   target: 0.95,
   noise: { absolute: 0.02 },
   guards: [{ metric: 'reach', direction: 'HIGHER', tolerance: 0.01 }],
+  measures: { deficiencies: ['ECONOMIC_REASONING'], paths: [] },
 };
 
 describe('the evaluator selects one variant, or none', () => {
@@ -182,8 +183,8 @@ describe('the shared result shape and the registered suites', () => {
     expect(parseBenchResult({ suite: 'feasibility', sha: 'abc', metrics: {}, ranAt: 'yesterday' }).ok).toBe(false);
   });
 
-  it('declares feasibility and planSpeed with their targets and guards', () => {
-    expect(EVOLUTION_SUITES.map((s) => s.name)).toEqual(['feasibility', 'planSpeed']);
+  it('declares feasibility, planSpeed and mootRequests with their targets and guards', () => {
+    expect(EVOLUTION_SUITES.map((s) => s.name)).toEqual(['feasibility', 'planSpeed', 'mootRequests']);
     const f = findSuite('feasibility')!;
     expect(meetsTarget(f, 0.96, null)).toBe(true);
     expect(meetsTarget(f, 0.9, null)).toBe(false);
@@ -192,6 +193,10 @@ describe('the shared result shape and the registered suites', () => {
     expect(meetsTarget(p, 700, 1000)).toBe(false);
     expect(meetsTarget(p, 590, 1000)).toBe(true);
     expect(p.guards).toEqual([{ metric: 'reachDelta', direction: 'HIGHER', tolerance: 0.01 }]);
+    const m = findSuite('mootRequests')!;
+    expect(meetsTarget(m, 1, null)).toBe(true);
+    expect(meetsTarget(m, 0.95, null)).toBe(false);
+    expect(m.guards.map((g) => g.metric)).toEqual(['falseWithdraw', 'historyLost']);
   });
 });
 

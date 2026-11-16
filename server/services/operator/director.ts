@@ -253,7 +253,7 @@ export async function commission(input: DiagnosisRequest, now = new Date()): Pro
   if (input.approaches && input.approaches.length > 0) {
     // §111: alternatives are refused whole, before anything is recorded, when they are not alternatives.
     const { experimentInputProblem } = await import('../evolution/experiments.ts');
-    const problem = await experimentInputProblem(input.approaches, input.suite ?? null, input.deficiency);
+    const problem = await experimentInputProblem(input.approaches, input.suite ?? null, input.deficiency, input.ownerPaths);
     if (problem) return { ok: false, reason: problem, intervention: 'WATCH', why: problem, overruled: null, started: [], recordedOnly: [] };
   }
   const deficiency = input.deficiency as DeficiencyClass;
@@ -1715,11 +1715,17 @@ export async function engineeringBrief(): Promise<string> {
   const found = await readDeficiencies().catch(() => []);
   if (found.length) {
     lines.push('DEFICIENCIES THE ROWS SHOW (brain_operator_commission {deficiency_id} acts on one):');
-    for (const one of found) lines.push(`- ${readingId(one)} ${one.diagnosis.deficiency} → ${one.intervention}: ${one.diagnosis.title.slice(0, 120)}`);
+    const { suitesFitting } = await import('../../domain/evolutionSuites.ts');
+    for (const one of found) {
+      // Which suites can judge an experiment on it: one that cannot see the defect selects on nothing.
+      const fitting = one.intervention === 'ENGINEERING' ? suitesFitting(one.diagnosis.deficiency, one.diagnosis.ownerPaths).map((s) => s.name) : null;
+      const suites = fitting === null ? '' : fitting.length ? ` [suites: ${fitting.join(', ')}]` : ' [no suite measures it: commission without approaches]';
+      lines.push(`- ${readingId(one)} ${one.diagnosis.deficiency} → ${one.intervention}: ${one.diagnosis.title.slice(0, 120)}${suites}`);
+    }
     if (found.some((one) => one.intervention === 'ENGINEERING')) {
       lines.push(
         'For an ENGINEERING deficiency, propose at least two materially different approaches (different approach types or ' +
-          'mechanisms, not one idea twice): brain_operator_commission {deficiency_id, suite, approaches:[{label, approach_type, approach, owner_paths}]}. ' +
+          'mechanisms, not one idea twice) and a suite that measures it (listed beside it): brain_operator_commission {deficiency_id, suite, approaches:[{label, approach_type, approach, owner_paths}]}. ' +
           'Each is built in parallel to a pull request; an evaluator you cannot see scores them against production, and only the winner is released ' +
           '(brain_operator_experiments shows the verdicts and which approach types have worked).',
       );

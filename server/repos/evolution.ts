@@ -192,6 +192,20 @@ export async function transitionExperiment(
   return Number(result.changes ?? 0) > 0;
 }
 
+/**
+ * Move an undecided experiment onto the suite that measures its deficiency (§111). Compare-and-set
+ * on the suite it was judged on and on an undecided state, so two callers move it once. Results
+ * already recorded stay as they were (append-only); selection reads only the current suite's.
+ */
+export async function retargetExperiment(id: string, from: { suite: string }, to: { suite: string; capabilityClass: string }): Promise<boolean> {
+  const result = await getDb().run(
+    `UPDATE evolution_experiments SET suite = ?, capability_class = ?
+      WHERE id = ? AND suite = ? AND state IN ('BUILDING', 'EVALUATING')`,
+    [to.suite, to.capabilityClass, id, from.suite],
+  );
+  return Number(result.changes ?? 0) > 0;
+}
+
 /* ------------------------------------------------------------------------- */
 /* Variants                                                                   */
 /* ------------------------------------------------------------------------- */
