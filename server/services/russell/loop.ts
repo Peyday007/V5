@@ -891,6 +891,40 @@ export async function recordManufacturingReadings(
   return out;
 }
 
+/**
+ * The manufacturing readings as recorded: the newest competitive system (VENT-24-1)
+ * and institutional machinery (INST-30) per category, read back from the
+ * append-only events `recordManufacturingReadings` writes. This is how a person,
+ * a probe or a later pass reads them, never from a pass's memory.
+ */
+export async function recordedManufacturingReadings(projectId: string): Promise<{
+  competitive: { subjectKey: string; categoryId: string | null; fingerprint: string; at: string; system: CompetitiveSystem }[];
+  institutions: { subjectKey: string; categoryId: string; name: string; fingerprint: string; at: string; derivation: CategoryInstitutions['derivation'] }[];
+}> {
+  const rows = await getDb().all<{ event_type: string; at: string; measures: string | null }>(
+    'SELECT event_type, at, measures FROM bin_events WHERE project_id = ? AND event_type IN (?, ?) ORDER BY at ASC, id ASC',
+    [projectId, COMPETITIVE_READ_EVENT, INSTITUTIONS_READ_EVENT],
+  );
+  const competitive = new Map<string, { subjectKey: string; categoryId: string | null; fingerprint: string; at: string; system: CompetitiveSystem }>();
+  const institutions = new Map<string, { subjectKey: string; categoryId: string; name: string; fingerprint: string; at: string; derivation: CategoryInstitutions['derivation'] }>();
+  for (const row of rows) {
+    let m: Record<string, unknown>;
+    try {
+      m = JSON.parse(row.measures ?? '{}') as Record<string, unknown>;
+    } catch {
+      continue;
+    }
+    if (typeof m['subjectKey'] !== 'string' || typeof m['fingerprint'] !== 'string') continue;
+    const subjectKey = m['subjectKey'];
+    if (row.event_type === COMPETITIVE_READ_EVENT && m['system']) {
+      competitive.set(subjectKey, { subjectKey, categoryId: typeof m['categoryId'] === 'string' ? m['categoryId'] : null, fingerprint: m['fingerprint'], at: row.at, system: m['system'] as CompetitiveSystem });
+    } else if (row.event_type === INSTITUTIONS_READ_EVENT && m['derivation'] && typeof m['categoryId'] === 'string') {
+      institutions.set(subjectKey, { subjectKey, categoryId: m['categoryId'], name: typeof m['name'] === 'string' ? m['name'] : '', fingerprint: m['fingerprint'], at: row.at, derivation: m['derivation'] as CategoryInstitutions['derivation'] });
+    }
+  }
+  return { competitive: [...competitive.values()], institutions: [...institutions.values()] };
+}
+
 /** Marks a cycle error that is per-pass failures rather than a failed tick. */
 export const PASS_FAILURE_PREFIX = 'passes: ';
 
