@@ -39,6 +39,7 @@ import { completeUnleasedBin, getBin, recordBinEvent } from '../../repos/bins.ts
 import { itemMeters, utf8Bytes, type ItemUsage } from './itemMeter.ts';
 import { evaluateContract } from '../bins/contracts.ts';
 import { findTool } from '../../mcp/tools.ts';
+import { MAX_LIST_ITEMS } from '../../mcp/researchTools.ts';
 import { workerIdentity } from '../identity/authenticate.ts';
 import { auditAdmission } from '../research/auditAdmission.ts';
 import { webSearch } from '../sources/discover.ts';
@@ -582,6 +583,29 @@ const SYSTEM =
   'nothing else. You never invent sources, URLs, figures or quotes: every quoted passage must be ' +
   'copied character for character from the source text you were given. When the evidence does ' +
   'not establish something, say so plainly instead of guessing.';
+
+/**
+ * What counts as a claim, said to the model in the fragment prompt. Production,
+ * 2026-11-16 20:07–21:07Z: 81 of gpt-oss-120b's 96 refused fragments were the
+ * reply `{"claims":[]}` over 4–6 pages Brain had read — the model read "the
+ * claims these sources establish for the brief" as "an answer to the whole
+ * question" and listed nothing, and the repair prompt told it an empty list was
+ * acceptable. A sentence that settles part of the question is evidence; every
+ * claim it yields is still copied from the page and held to every check.
+ */
+export const PARTIAL_EVIDENCE =
+  'A claim need not answer the whole question: a figure, price, count, named buyer or seller, rule, date or ' +
+  'definition that bears on any part of the brief is a claim, with its limits stated in the claim text. ';
+
+/** The repair prompt for a reply that listed no claims at all over pages Brain read. Pure. */
+export function emptyListRepair(prompt: string, sources: number, lane: string): string {
+  return (
+    `${prompt}\n\nYour previous answer listed no claims from the ${sources} source(s) above. Read them again for ` +
+    'any sentence that bears on part of the brief. ' + PARTIAL_EVIDENCE +
+    'Cite each by SOURCE and sentence numbers, e.g. {"claim":"…","source":2,"sentences":[4,5],"evidence_lane":"' + lane + '"}. ' +
+    'Reply {"claims":[]} only if no sentence in any source bears on the brief at all.'
+  );
+}
 
 async function ask(
   completer: Completer,
@@ -1165,6 +1189,7 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
     'Extract the material claims these sources establish for the brief. For each claim give "source" (the ' +
     'SOURCE number) and "sentences" (the sentence numbers within that source that state it, e.g. [3,4]); ' +
     'Brain copies those sentences as the quoted evidence, so cite only sentences that say the claim. ' +
+    PARTIAL_EVIDENCE +
     'evidence_lane must be one of ' +
     JSON.stringify(lanes.map((l) => l.id)) +
     '; state geography/timeframe limits inside the claim. Include no claim the sources do not support. ' +
@@ -1250,7 +1275,9 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
     (error, previous) => `${prompt}\n\nYour previous answer was refused by Brain: ${error}\nPrevious: ${JSON.stringify(previous).slice(0, 4000)}\nCorrect it.`,
     finalize,
     (why, previous) =>
-      `${prompt}\n\nBrain could not use your previous answer: ${why.replace(/^the answer did not survive Brain's own checks: /, '')}. ` +
+      listedClaims(previous).length === 0 && Array.isArray(previous['claims'])
+        ? emptyListRepair(prompt, readable.length, lanes[0]?.id ?? 'lane')
+        : `${prompt}\n\nBrain could not use your previous answer: ${why.replace(/^the answer did not survive Brain's own checks: /, '')}. ` +
       'Every claim needs "source" as a SOURCE number and "sentences" as a list of the sentence numbers inside that ' +
       'source that state it — for example {"claim":"…","source":2,"sentences":[4,5],"evidence_lane":"' +
       (lanes[0]?.id ?? 'lane') + '"} for the sentences marked [S2.4] and [S2.5]. Offer only claims a sentence states; ' +
@@ -1310,6 +1337,19 @@ async function verify(ctx: Ctx, assignment: Record<string, unknown>): Promise<bo
   return ok;
 }
 
+/**
+ * The cited ids a synthesis submits, within the tool's list limit. Production,
+ * 2026-11-16: gpt-oss-120b's packet was refused whole for listing more than
+ * MAX_LIST_ITEMS ids. Every id kept is an accepted claim of this packet; the
+ * ones the report cites inline come first, then the rest in the model's order. Pure.
+ */
+export function citedWithinLimit(report: string, cited: readonly string[]): string[] {
+  const unique = [...new Set(cited)];
+  if (unique.length <= MAX_LIST_ITEMS) return unique;
+  const inline = unique.filter((id) => report.includes(id));
+  return [...inline, ...unique.filter((id) => !report.includes(id))].slice(0, MAX_LIST_ITEMS);
+}
+
 async function synthesize(ctx: Ctx, assignment: Record<string, unknown>): Promise<boolean> {
   const claims = (assignment['claimsToCite'] as Record<string, unknown>[] | null) ?? [];
   if (claims.length === 0) return false;
@@ -1319,7 +1359,8 @@ async function synthesize(ctx: Ctx, assignment: Record<string, unknown>): Promis
     `Accepted claims (the only evidence you may use):\n${JSON.stringify(claims, null, 1)}\n\n` +
     'Write the research packet as a clear report that answers the assignment from these claims only, citing ' +
     'each claim inline by its claimId in square brackets, e.g. [clm_...]. Say what the evidence does not ' +
-    'establish. Reply as {"report":"...","cited_claim_ids":["..."],"still_missing":["..."]}.';
+    `establish. cited_claim_ids lists at most ${MAX_LIST_ITEMS} ids, the claims the report relies on most. ` +
+    'Reply as {"report":"...","cited_claim_ids":["..."],"still_missing":["..."]}.';
   const answer = await askFor(ctx, prompt);
   if (!answer) return false;
   const known = new Set(claims.map((c) => String(c['claimId'])));
@@ -1331,8 +1372,8 @@ async function synthesize(ctx: Ctx, assignment: Record<string, unknown>): Promis
     if (report.length < 200 || cited.length === 0) return null;
     return {
       report,
-      cited_claim_ids: [...new Set(cited)],
-      still_missing: Array.isArray(raw['still_missing']) ? (raw['still_missing'] as unknown[]).map(String) : [],
+      cited_claim_ids: citedWithinLimit(report, cited),
+      still_missing: Array.isArray(raw['still_missing']) ? (raw['still_missing'] as unknown[]).map(String).filter((s) => s.trim()).slice(0, MAX_LIST_ITEMS) : [],
     };
   };
   return submitWithRepair(
