@@ -12,7 +12,18 @@ import { getDb } from '../server/db/database.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { activate } from '../server/services/cash/lifecycle.ts';
 import { cashEventsOfKindInProject } from '../server/repos/cashMode.ts';
-import { EXTRACTION_EVENT, openFeedShortlist, recordFeedExtraction, screenFeedLeads, screenOrder, type ExtractionPass } from '../server/services/feeds/run.ts';
+import {
+  EXTRACTION_EVENT,
+  openFeedShortlist,
+  planScreens,
+  recordFeedExtraction,
+  screenFeedLeads,
+  screenOrder,
+  screenSubject,
+  screeningEconomy,
+  shortlistFunnel,
+  type ExtractionPass,
+} from '../server/services/feeds/run.ts';
 import type { Completer, LaneConfig } from '../server/services/cheap/lane.ts';
 
 let projectId = '';
@@ -144,5 +155,64 @@ describe('the needsModel batches are sent to the free-model screen first', () =>
     };
     expect(await screenFeedLeads({ now, config, completer })).toBeGreaterThanOrEqual(3);
     expect(asked.some((p) => p.includes('Thoughts on the market'))).toBe(true);
+  });
+});
+
+describe('the screen asks each subject once (repair F3): deterministic coverage, not only a new order', () => {
+  const keep = '{"verdict":"KEEP","window":"SHORT","deliverable":"SPREADSHEET","need":"a packaging price tracker","payer":"the buyer","reason":"asks for it"}';
+  const item = (id: string, source: string, title: string, organization: string | null) => ({
+    id, source, url: `https://example.test/${source}/${id}`, title, body: 'Seeking quotes from a supplier in Austin, TX.', organization, publishedAt: hoursAgo(2), fetchedAt: hoursAgo(1),
+  });
+
+  it('screenSubject names the record kind, entity and deliverable, and nothing without both', () => {
+    expect(screenSubject(item('a', 'one', 'Request for quotes: packaging film', 'Acme Foods LLC'))).toBe(screenSubject(item('b', 'two', 'Request for quotes: packaging film', 'ACME FOODS, LLC')));
+    expect(screenSubject(item('c', 'one', 'Request for quotes: packaging film', null))).toBeNull();
+    expect(screenSubject(item('d', 'one', 'Request for quotes: packaging film', 'Acme Foods LLC'))).not.toBe(screenSubject(item('e', 'one', 'Request for quotes: shrink wrap', 'Acme Foods LLC')));
+  });
+
+  it('planScreens asks the first record of a subject, coalesces the rest and any already answered, and drops nothing', () => {
+    const a = item('a', 'one', 'Request for quotes: packaging film', 'Acme Foods LLC');
+    const b = item('b', 'two', 'Request for quotes: packaging film', 'Acme Foods LLC');
+    const c = item('c', 'one', 'Request for quotes: packaging film', null);
+    const d = item('d', 'two', 'Request for quotes: packaging film', null);
+    const e = item('e', 'one', 'Request for quotes: steel drums', 'Beta Corp');
+    const plan = planScreens([a, b, c, d, e], new Set([screenSubject(e)!]), now);
+    expect(plan.ask.map((one) => one.id).sort()).toEqual(['a', 'c', 'd']);
+    expect(plan.coalesced.map((one) => one.id).sort()).toEqual(['b', 'e']);
+  });
+
+  it('in production the same request on two feeds costs one screen, reads one answer, and reaches the shortlist once', async () => {
+    const owner = await createUser({ email: `f3-${Math.random().toString(36).slice(2, 10)}@example.test`, displayName: 'Owner', password: 'correct horse battery staple' });
+    expect((await activate({ projectId, ownerUserId: owner.id, actorUserId: owner.id, objective: 'Maximize usable cash over the next few weeks.' })).ok).toBe(true);
+    const tag = Math.random().toString(36).slice(2, 8);
+    const first = `y${tag}a`;
+    const second = `y${tag}b`;
+    await seed(first);
+    await seed(second);
+    const asked: string[] = [];
+    const completer: Completer = async (_c, _model, _system, prompt) => {
+      asked.push(prompt);
+      return prompt.includes('packaging film') ? keep : drop;
+    };
+    await screenFeedLeads({ now, config, completer });
+    // Two models per screen: one screen of the request subject, not one per feed.
+    expect(asked.filter((p) => p.includes('packaging film'))).toHaveLength(config.models.length);
+    // A record whose subject cannot be told apart is still asked on its own, once per feed.
+    expect(asked.filter((p) => p.includes('Thoughts on the market'))).toHaveLength(2 * config.models.length);
+    // A second pass asks nothing more about it: the subject is answered.
+    const before = asked.length;
+    await screenFeedLeads({ now, config, completer });
+    expect(asked.length).toBe(before);
+
+    const funnel = await shortlistFunnel(projectId, now);
+    const rfqs = [await itemId(`${first}-rfq`), await itemId(`${second}-rfq`)];
+    // Both records read the subject's answer and pass the rules on their own...
+    expect(funnel.passedRules).toBeGreaterThanOrEqual(2);
+    // ...and Claude is shown the subject once.
+    expect(funnel.chosen.filter(({ item: one }) => rfqs.includes(one.id))).toHaveLength(1);
+
+    const since = new Date(now.getTime() - 3_600_000 * 3).toISOString();
+    const reading = await screeningEconomy({ since, until: new Date(now.getTime() + 60_000).toISOString() });
+    expect(reading.notScreened.coalesced).toBeGreaterThanOrEqual(1);
   });
 });

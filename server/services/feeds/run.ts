@@ -181,8 +181,11 @@ export async function pullDueFeeds(input: {
  * nothing is stored to compute it, so it cannot drift from what happened.
  *
  *   * notScreened — items that never cost a model call: repeats storage
- *     dropped, items a code rule covers (`coveredItems`), and items code itself
- *     proved (a broken site, a code detection's own lead);
+ *     dropped, items a code rule covers (`coveredItems`), items code itself
+ *     proved (a broken site, a code detection's own lead), and items whose
+ *     subject the screen already answered for another record (`coalesced`:
+ *     the same record kind, entity and deliverable — a repost or the same
+ *     posting on a second feed — reads the one answer, never a second call);
  *   * screenCalls — the SCREEN_LEAD model calls actually made, and the
  *     distinct items they were about;
  *   * workCreated — what code produced that no single record showed: code
@@ -203,7 +206,7 @@ export interface ScreeningEconomy {
   until: string;
   fetched: number;
   stored: number;
-  notScreened: { duplicates: number; covered: number; provedByCode: number; total: number };
+  notScreened: { duplicates: number; covered: number; provedByCode: number; coalesced: number; total: number };
   screenCalls: number;
   itemsScreened: number;
   workCreated: {
@@ -316,6 +319,7 @@ export async function screeningEconomy(input: { since: string; until?: string })
   const screenable = items.filter((one) => one.source !== CODE_SIGNAL_SOURCE && one.source !== SITE_SOURCE);
   let covered = 0;
   for (let at = 0; at < screenable.length; at += 500) covered += (await coveredItems(screenable.slice(at, at + 500).map((one) => one.id))).size;
+  const coalesced = await coalescedItems(input.since, until);
   const joinedFacts = await crossSourceFacts(input.since, until);
   const graph = await crossSourceGraph(input.since, until);
   return {
@@ -323,7 +327,13 @@ export async function screeningEconomy(input: { since: string; until?: string })
     until,
     fetched,
     stored: items.length,
-    notScreened: { duplicates, covered, provedByCode: codeDetections + siteLeads, total: duplicates + covered + codeDetections + siteLeads },
+    notScreened: {
+      duplicates,
+      covered,
+      provedByCode: codeDetections + siteLeads,
+      coalesced,
+      total: duplicates + covered + codeDetections + siteLeads + coalesced,
+    },
     screenCalls: Number(calls?.n ?? 0),
     itemsScreened: Number(calls?.items ?? 0),
     workCreated: {
@@ -499,13 +509,142 @@ export async function recordFeedExtraction(input: { projectId: string; now?: Dat
 
 /** The latest SCREEN_LEAD answers, per item, already combined. */
 async function screenedLeads(ids: readonly string[]): Promise<Set<string>> {
-  if (ids.length === 0) return new Set();
-  const rows = await getDb().all<{ subject_id: string }>(
-    `SELECT DISTINCT subject_id FROM cheap_results
-      WHERE kind = 'SCREEN_LEAD' AND subject_id IN (${ids.map(() => '?').join(',')})`,
-    [...ids],
+  const out = new Set<string>();
+  for (let at = 0; at < ids.length; at += SUBJECT_PAGE) {
+    const chunk = ids.slice(at, at + SUBJECT_PAGE);
+    const rows = await getDb().all<{ subject_id: string }>(
+      `SELECT DISTINCT subject_id FROM cheap_results
+        WHERE kind = 'SCREEN_LEAD' AND subject_id IN (${chunk.map(() => '?').join(',')})`,
+      chunk,
+    );
+    for (const row of rows) out.add(row.subject_id);
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// One screen per subject (ALGO-16-2): code decides which records are the same
+// question, so the free models are asked it once.
+// ---------------------------------------------------------------------------
+
+/** Ids per statement when screen rows are read for a window. */
+const SUBJECT_PAGE = 500;
+/** Stored records read when a window's subjects are grouped. */
+export const SUBJECT_WINDOW_LIMIT = 5_000;
+
+/**
+ * The question a record's lead screen answers, as a key: its record kind, the
+ * entity it is from and the deliverable it is about, all read by the
+ * deterministic extractor. Two records with one key — a repost, the same
+ * posting on a second feed, the same employer's opening under a seniority
+ * variant — ask the free models the same thing, so one answer serves both.
+ * Null when the extractor cannot name both the entity and the deliverable: a
+ * record that cannot be told apart is never merged into another. Pure.
+ */
+export function screenSubject(item: ExtractableItem): string | null {
+  const facts = extractItem(item);
+  const entity = facts.find((f) => f.entityKey)?.entityKey ?? null;
+  const deliverable = facts.find((f) => f.field === 'deliverable');
+  if (!entity || !deliverable) return null;
+  return `${deliverable.recordKind}|${entity}|${String(deliverable.value)}`;
+}
+
+/**
+ * Which candidates the free models are asked about, and which read an answer
+ * already given for their subject. In `screenOrder` (the extractor's
+ * unreadable batches first); the first candidate of each subject not already
+ * settled is asked, every later one is coalesced onto it. A record with no
+ * subject is always asked on its own. Drops nothing: a coalesced record keeps
+ * every gate, reading its subject's answer through `leadScreens`. Pure.
+ */
+export function planScreens<T extends ExtractableItem>(
+  candidates: readonly T[],
+  settled: ReadonlySet<string>,
+  now: Date,
+  subjectOf: (item: T) => string | null = screenSubject,
+): { ask: T[]; coalesced: T[] } {
+  const ask: T[] = [];
+  const coalesced: T[] = [];
+  const asked = new Set<string>();
+  for (const item of screenOrder(candidates, now)) {
+    const subject = subjectOf(item);
+    if (subject && (settled.has(subject) || asked.has(subject))) {
+      coalesced.push(item);
+      continue;
+    }
+    if (subject) asked.add(subject);
+    ask.push(item);
+  }
+  return { ask, coalesced };
+}
+
+interface SubjectWindow {
+  /** Subject of each stored record in the window that has one. */
+  subjectOf: Map<string, string>;
+  /** Records per subject, newest first. */
+  members: Map<string, string[]>;
+  /** Subjects a shortlist round has already taken a record of. */
+  listed: Set<string>;
+}
+
+/** The stored records fetched in [since, until), grouped by subject. Code-made leads are not records and are left out. */
+async function subjectWindow(since: string, until?: string): Promise<SubjectWindow> {
+  const rows = await getDb().all<{
+    id: string;
+    source: string;
+    url: string;
+    title: string;
+    body: string | null;
+    organization: string | null;
+    published_at: string | null;
+    fetched_at: string;
+    shortlisted_round_id: string | null;
+  }>(
+    `SELECT id, source, url, title, body, organization, published_at, fetched_at, shortlisted_round_id FROM feed_items
+      WHERE fetched_at >= ?${until ? ' AND fetched_at < ?' : ''} AND source <> ? AND source <> ?
+      ORDER BY fetched_at DESC, id DESC LIMIT ${SUBJECT_WINDOW_LIMIT}`,
+    until ? [since, until, CODE_SIGNAL_SOURCE, SITE_SOURCE] : [since, CODE_SIGNAL_SOURCE, SITE_SOURCE],
   );
-  return new Set(rows.map((row) => row.subject_id));
+  const out: SubjectWindow = { subjectOf: new Map(), members: new Map(), listed: new Set() };
+  for (const row of rows) {
+    const subject = screenSubject({
+      id: row.id,
+      source: row.source,
+      url: row.url,
+      title: row.title,
+      body: row.body,
+      organization: row.organization,
+      publishedAt: row.published_at,
+      fetchedAt: row.fetched_at,
+    });
+    if (!subject) continue;
+    out.subjectOf.set(row.id, subject);
+    out.members.set(subject, [...(out.members.get(subject) ?? []), row.id]);
+    if (row.shortlisted_round_id) out.listed.add(subject);
+  }
+  return out;
+}
+
+/** Subjects in a window that the screen has answered for at least one record. */
+async function screenedSubjects(window: SubjectWindow): Promise<Set<string>> {
+  const screened = await screenedLeads([...window.subjectOf.keys()]);
+  const out = new Set<string>();
+  for (const id of screened) {
+    const subject = window.subjectOf.get(id);
+    if (subject) out.add(subject);
+  }
+  return out;
+}
+
+/** Records fetched in [since, until) that were never screened themselves because their subject's answer was read instead. */
+async function coalescedItems(since: string, until: string): Promise<number> {
+  const window = await subjectWindow(since, until);
+  const screened = await screenedLeads([...window.subjectOf.keys()]);
+  const answered = new Set<string>();
+  for (const id of screened) answered.add(window.subjectOf.get(id)!);
+  let n = 0;
+  for (const [id, subject] of window.subjectOf) if (answered.has(subject) && !screened.has(id)) n += 1;
+  return n;
 }
 
 /** The rules a free model's KEEP must also pass. Pure, so it can be argued with. */
@@ -553,7 +692,12 @@ export async function screenFeedLeads(input: {
       const published = Date.parse(item.publishedAt ?? item.fetchedAt);
       return !Number.isFinite(published) || now.getTime() - published <= LEAD_MAX_AGE_MS;
     });
-  const todo = screenOrder(todoAll, now).slice(0, pace.perPass);
+  // One question, one screen: a record whose subject is already answered (or asked first in this
+  // pass) reads that answer instead of costing its own call. The window includes listed records,
+  // so a subject a shortlist already took is not asked again under another record.
+  const window = await subjectWindow(since);
+  const settled = await screenedSubjects(window);
+  const todo = planScreens(todoAll, settled, now).ask.slice(0, pace.perPass);
   let screened = 0;
   let next = 0;
   const worker = async (): Promise<void> => {
@@ -579,27 +723,48 @@ export async function screenFeedLeads(input: {
 }
 
 /** Combined screen answers for these items, read back from rows. */
-async function leadScreens(items: readonly StoredFeedItem[]): Promise<Map<string, LeadOutput>> {
+async function ownLeadScreens(ids: readonly string[]): Promise<Map<string, LeadOutput>> {
   const out = new Map<string, LeadOutput>();
-  if (items.length === 0) return out;
+  if (ids.length === 0) return out;
   const { parseLead, combineLeads } = await import('../cheap/lane.ts');
-  const rows = await getDb().all<{ subject_id: string; model: string; ok: number; output: string | null }>(
-    `SELECT subject_id, model, ok, output FROM cheap_results
-      WHERE kind = 'SCREEN_LEAD' AND subject_id IN (${items.map(() => '?').join(',')})
-      ORDER BY created_at DESC`,
-    items.map((one) => one.id),
-  );
   const by = new Map<string, (LeadOutput | null)[]>();
   const seen = new Set<string>();
-  for (const row of rows) {
-    const key = `${row.subject_id}\n${row.model}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    by.set(row.subject_id, [...(by.get(row.subject_id) ?? []), row.ok && row.output ? parseLead(row.output) : null]);
+  for (let at = 0; at < ids.length; at += SUBJECT_PAGE) {
+    const chunk = ids.slice(at, at + SUBJECT_PAGE);
+    const rows = await getDb().all<{ subject_id: string; model: string; ok: number; output: string | null }>(
+      `SELECT subject_id, model, ok, output FROM cheap_results
+        WHERE kind = 'SCREEN_LEAD' AND subject_id IN (${chunk.map(() => '?').join(',')})
+        ORDER BY created_at DESC`,
+      chunk,
+    );
+    for (const row of rows) {
+      const key = `${row.subject_id}\n${row.model}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      by.set(row.subject_id, [...(by.get(row.subject_id) ?? []), row.ok && row.output ? parseLead(row.output) : null]);
+    }
   }
   for (const [id, answers] of by) {
     const merged = combineLeads(answers);
     if (merged) out.set(id, merged);
+  }
+  return out;
+}
+
+async function leadScreens(items: readonly StoredFeedItem[], window: SubjectWindow | null = null): Promise<Map<string, LeadOutput>> {
+  const out = await ownLeadScreens(items.map((one) => one.id));
+  if (items.length === 0) return out;
+  // A record coalesced onto its subject reads the answer given for that subject's screened record.
+  // It is the same question, so it is the same answer; every rule after this still runs on the record itself.
+  if (window) {
+    const missing = items.filter((one) => !out.has(one.id) && window.subjectOf.has(one.id));
+    const siblings = [...new Set(missing.flatMap((one) => window.members.get(window.subjectOf.get(one.id)!) ?? []))].filter((id) => !out.has(id));
+    const answers = new Map([...out, ...(await ownLeadScreens(siblings))]);
+    for (const item of missing) {
+      const subject = window.subjectOf.get(item.id)!;
+      const answeredBy = (window.members.get(subject) ?? []).find((id) => id !== item.id && answers.has(id));
+      if (answeredBy) out.set(item.id, answers.get(answeredBy)!);
+    }
   }
   // A code detection is recognised by a rule, so it needs no model to keep it —
   // and it is still only a lead: Claude verifies it on the shortlist like any other.
@@ -765,7 +930,8 @@ export async function shortlistFunnel(
 ): Promise<ShortlistFunnel> {
   const since = new Date(now.getTime() - LEAD_MAX_AGE_MS).toISOString();
   const pool = await unlistedFeedItems({ since, limit: 2_000 });
-  const screens = await leadScreens(pool);
+  const window = await subjectWindow(since);
+  const screens = await leadScreens(pool, window);
   const held = new Set(
     (await openingsWithSourceUrl(projectId))
       .map(({ sourceUrl }) => openingSourceKey(sourceUrl))
@@ -781,6 +947,11 @@ export async function shortlistFunnel(
       const key = openingSourceKey(item.url);
       return !key || !held.has(key);
     })
+    // A subject a shortlist already took is not put to Claude again under another record.
+    .filter((item) => {
+      const subject = window.subjectOf.get(item.id);
+      return !subject || !window.listed.has(subject);
+    })
     .sort((a, b) => {
       const wa = screens.get(a.id)?.window === 'SHORT' ? 0 : 1;
       const wb = screens.get(b.id)?.window === 'SHORT' ? 0 : 1;
@@ -788,10 +959,17 @@ export async function shortlistFunnel(
       return (b.publishedAt ?? b.fetchedAt).localeCompare(a.publishedAt ?? a.fetchedAt);
     });
   const chosen: { item: StoredFeedItem; line: string }[] = [];
+  const subjects = new Set<string>();
   for (const item of ranked) {
     if (chosen.length >= size) break;
+    // One record per subject: its reposts are the same lead, not more of them.
+    const subject = window.subjectOf.get(item.id);
+    if (subject && subjects.has(subject)) continue;
     const line = shortlistLine(item, screens.get(item.id)!);
-    if (line) chosen.push({ item, line });
+    if (line) {
+      chosen.push({ item, line });
+      if (subject) subjects.add(subject);
+    }
   }
   return {
     pool: pool.length,
