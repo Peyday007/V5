@@ -110,10 +110,23 @@ const SOURCE_KINDS: Record<string, RecordKind> = {
   'code-signal': 'PUBLIC_RECORD',
 };
 
+/**
+ * Wording in which a provider states, in its own record, that it serves
+ * through or for others: subcontract or overflow work, white- or private-label
+ * supply, wholesale or trade accounts, a referral, reseller, dealer, affiliate
+ * or partner programme. A record saying this is a supplier advertisement whose
+ * author has declared a partner role; nothing here is guessed from a plain
+ * advert, and a buyer asking for a subcontractor is still a stated request
+ * (that pattern is read first).
+ */
+export const PARTNER_OFFER_WORDING =
+  /\b(white[- ]label(?:ed)?|private[- ]label(?:ed)?|wholesale (?:accounts?|pricing|inquiries|partners?)|trade (?:accounts?|partners?|pricing)|referral (?:partners?|partnerships?|program(?:me)?s?|fees? paid)|(?:reseller|dealer|affiliate|partner) program(?:me)?s?|partnership (?:inquiries|enquiries|opportunities)|we partner with|(?:available|accepting|open) (?:for|to) (?:subcontract(?:ing)?|overflow) (?:work|jobs|projects)|subcontract(?:ing)? (?:work|jobs|projects) (?:welcome|wanted|accepted)|overflow work (?:welcome|wanted|accepted))\b/i;
+
 const WORDING: Array<[RegExp, RecordKind]> = [
   [/\b(request for (?:proposals?|quotes?|bids?)|rfp|rfq|invitation to bid|seeking (?:quotes|bids|a contractor|a vendor|a supplier)|looking for (?:a )?(?:contractor|vendor|supplier|provider)|need(?:s|ed)? (?:a )?(?:contractor|vendor|supplier))\b/i, 'STATED_REQUEST'],
   [/\b(we(?:'re| are) hiring|now hiring|job opening|apply now|full[- ]time|part[- ]time|salary|position)\b/i, 'JOB_POSTING'],
   [/\b(we offer|our services|available for hire|for sale|now booking|free estimates?|call us|contact us for a quote)\b/i, 'SUPPLIER_AD'],
+  [PARTNER_OFFER_WORDING, 'SUPPLIER_AD'],
   [/\b(list(?:ed)? (?:price|at)|price list|marketplace price|per unit price|asking price)\b/i, 'PLATFORM_PRICE'],
 ];
 
