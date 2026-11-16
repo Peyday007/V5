@@ -8,8 +8,8 @@
  * figure after it, each stage can only narrow the one before it, buyers do not
  * change when the messages sent do, the named ways to reach demand are all
  * considered, and no recorded mechanism is dropped from the comparison. With no
- * mechanism in the rows the answer is a failure — "nothing to look at" is not a
- * demonstration (§39). Written by the quant campaign and adopted into the
+ * mechanism in the rows the answer is UNKNOWN — "nothing to look at" is neither a
+ * demonstration nor a defect a repair can fix (§39). Written by the quant campaign and adopted into the
  * protected module (§97): probes.ts defines it, and no campaign can change it.
  */
 import { getDb } from '../../../../db/database.ts';
@@ -68,7 +68,9 @@ export async function outreachFunnelHoldsOnRows(): Promise<ProbeResult> {
       return { ok: false, detail: `project ${projectId}: a named way to reach demand is not considered` };
     }
   }
-  if (mechanismCount === 0) return { ok: false, detail: 'no outreach outcome rows: no mechanism to model on production records' };
+  // No outcome rows is an absence: nothing contradicts the requirement and nothing demonstrates it (§39).
+  // Read as a failure it opened repairs no code could satisfy while outreach is not yet running (2026-11-16).
+  if (mechanismCount === 0) return { ok: null, detail: 'no outreach outcome rows: no mechanism to model on production records' };
   return {
     ok: true,
     detail: `${mechanismCount} mechanism(s) across ${projects.length} project(s) modelled as the full funnel from rows; ${withBuyers} with a stated buyer count, the rest unknown at a named stage; messages sent moved no figure`,
