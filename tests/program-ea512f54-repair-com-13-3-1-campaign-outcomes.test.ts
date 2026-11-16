@@ -494,3 +494,43 @@ describe('one pass is bounded by a request budget and never waits inside the tic
     expect(ws.sleeps).toEqual([]);
   });
 });
+
+describe('the reply refinement is the campaign path\'s alone', () => {
+  it('a deal-contact outcome keeps its first terminal answer: a later answer under the same key changes nothing', async () => {
+    const { insertOutcome } = await import('../server/repos/cashJourney.ts');
+    const base = {
+      projectId,
+      opportunityId: 'opp_deal_contact',
+      kind: 'CONTACT_RESULT' as const,
+      mechanism: 'deal',
+      channel: 'email',
+      requestKey: 'outcome:opp_deal_contact:CONTACT_RESULT:act_1',
+    };
+    expect(await insertOutcome({ ...base, valueText: 'BUYER_REPLIED', basis: 'first answer' })).toBe(true);
+    for (const later of ['BUYER_ACCEPTED', 'BUYER_COUNTERED', 'BUYER_DECLINED']) {
+      expect(await insertOutcome({ ...base, valueText: later, basis: 'later answer' })).toBe(false);
+    }
+    const rows = await getDb().all<{ value_text: string; basis: string }>(
+      'SELECT value_text, basis FROM cash_outcomes WHERE project_id = ? AND request_key = ?',
+      [projectId, base.requestKey],
+    );
+    expect(rows).toEqual([{ value_text: 'BUYER_REPLIED', basis: 'first answer' }]);
+  });
+
+  it('the same later answer refines the reply only when the caller opts in', async () => {
+    const { insertOutcome } = await import('../server/repos/cashJourney.ts');
+    const base = {
+      projectId,
+      opportunityId: 'instantly-lead:l-opt',
+      kind: 'CONTACT_RESULT' as const,
+      requestKey: 'outcome:campaign:c:l-opt:CONTACT_RESULT',
+    };
+    await insertOutcome({ ...base, valueText: 'BUYER_REPLIED', basis: 'reply' });
+    expect(await insertOutcome({ ...base, valueText: 'BUYER_ACCEPTED', basis: 'won', refineReply: true })).toBe(true);
+    const row = await getDb().get<{ value_text: string }>(
+      'SELECT value_text FROM cash_outcomes WHERE project_id = ? AND request_key = ?',
+      [projectId, base.requestKey],
+    );
+    expect(row?.value_text).toBe('BUYER_ACCEPTED');
+  });
+});

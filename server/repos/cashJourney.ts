@@ -255,6 +255,14 @@ export async function insertOutcome(input: {
   currency?: string | null;
   basis: string;
   requestKey: string;
+  /**
+   * Whether a later classified answer may refine a `BUYER_REPLIED` already
+   * stored under this request key. Off by default: a deal's contact outcome
+   * (learning.ts) keeps "the first terminal answer stands". Only a caller whose
+   * provider states a reply before its meaning — an Instantly campaign lead's
+   * interest status — opts in.
+   */
+  refineReply?: boolean;
 }): Promise<boolean> {
   const id = newId('cou');
   await getDb().run(
@@ -284,7 +292,7 @@ export async function insertOutcome(input: {
     [input.projectId, input.requestKey],
   );
   if (s(row?.id) === id) return true;
-  return refineContactResult(input);
+  return input.refineReply === true ? refineContactResult(input) : false;
 }
 
 /**

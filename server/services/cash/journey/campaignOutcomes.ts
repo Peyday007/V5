@@ -36,8 +36,11 @@
  * lead that had the same chance and did not. A lead Instantly skipped (−3) was
  * never sent to, records nothing and holds no cohort back. One row
  * per lead, keyed by the campaign and Instantly's lead id, so a second pass
- * writes nothing, and the first terminal answer stands — exactly as
- * `learning.ts` treats a deal's contact. Messages are never recorded: a lead is
+ * writes nothing. The one exception is a plain `BUYER_REPLIED`, which this
+ * path alone (it passes `refineReply`) lets become the classified answer
+ * Instantly's interest status later states; every other answer is final.
+ * A deal's contact outcome in `learning.ts` does not opt in, so there the
+ * first terminal answer stands unchanged. Messages are never recorded: a lead is
  * a prospect, an answer is an answer, and neither is a buyer or revenue.
  *
  * The mechanism is the campaign's own name — whatever the workspace calls it,
@@ -414,6 +417,8 @@ export async function recordCampaignOutcomes(
         valueText: result,
         basis: `instantly campaign ${campaign.id}; lead ${lead.id}: status ${lead.status ?? 'none'}, replies ${lead.replies}, interest ${lead.interestStatus ?? 'none'}; enrolment cohort ${cohortOf(lead)}, every lead terminal`,
         requestKey: `outcome:campaign:${campaign.id}:${lead.id}:CONTACT_RESULT`,
+        // An Instantly lead's interest status follows its reply; only this path refines.
+        refineReply: true,
       });
       if (fresh) report.recorded += 1;
     }
