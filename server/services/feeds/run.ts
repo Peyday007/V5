@@ -4,8 +4,11 @@
  *
  *   1. pull    — every source whose interval has passed is fetched by plain
  *                code and its new items stored (`feed_items`).
- *   2. screen  — each recent item goes to the cheap lane's SCREEN_LEAD task:
- *                two free models, which must agree to keep it.
+ *   2. screen  — each recent item code cannot decide goes to the cheap lane's
+ *                SCREEN_LEAD task: two free models, which must agree to keep
+ *                it. Code decides the rest (`codeReading`): a readable supply
+ *                record is no payer, and a readable record code reads the same
+ *                as one already screened reuses that answer.
  *   3. rules   — a kept lead must be recent, name a deliverable Brain proves,
  *                state a need, and not already be an opening Brain holds.
  *   4. shortlist — once a day the best few go to Claude as one discovery
@@ -35,7 +38,7 @@ import { FEED_SOURCES, pullUrl, type FeedSource } from './sources.ts';
 import { FEED_SHORTLIST_BUCKET } from './bucket.ts';
 import { SITE_SOURCE } from './sites.ts';
 import { CODE_SIGNAL_SOURCE, coveredItems, detectionsForLeads } from './detectors.ts';
-import { extractItems, type ExtractableItem, type ExtractedFact } from './extract.ts';
+import { extractItem, extractItems, readable, recordKindOf, type ExtractableItem, type ExtractedFact } from './extract.ts';
 
 export type Fetcher = (url: string, headers: Record<string, string>, timeoutMs?: number) => Promise<unknown>;
 
@@ -179,8 +182,10 @@ export async function pullDueFeeds(input: {
  * nothing is stored to compute it, so it cannot drift from what happened.
  *
  *   * notScreened — items that never cost a model call: repeats storage
- *     dropped, items a code rule covers (`coveredItems`), and items code itself
- *     proved (a broken site, a code detection's own lead);
+ *     dropped, items a code rule covers (`coveredItems`), items code itself
+ *     proved (a broken site, a code detection's own lead), and items code
+ *     decided by reading them (`codeReading`): supply records, and records
+ *     whose reading matches one a model already answered;
  *   * screenCalls — the SCREEN_LEAD model calls actually made, and the
  *     distinct items they were about;
  *   * workCreated — leads code produced that no single record showed: code
@@ -194,7 +199,16 @@ export interface ScreeningEconomy {
   until: string;
   fetched: number;
   stored: number;
-  notScreened: { duplicates: number; covered: number; provedByCode: number; total: number };
+  notScreened: {
+    duplicates: number;
+    covered: number;
+    provedByCode: number;
+    /** Readable supply records (an advert, a listed price) code decided are no payer. */
+    supply: number;
+    /** Readable records read the same as one a model already answered, which reuse that answer. */
+    reused: number;
+    total: number;
+  };
   screenCalls: number;
   itemsScreened: number;
   workCreated: { codeDetections: number; siteLeads: number; total: number };
@@ -207,10 +221,29 @@ export async function screeningEconomy(input: { since: string; until?: string })
     `SELECT SUM(fetched) AS fetched, SUM(inserted) AS inserted FROM feed_pulls WHERE ok = 1 AND created_at >= ? AND created_at < ?`,
     [input.since, until],
   );
-  const items = await db.all<{ id: string; source: string }>(
-    `SELECT id, source FROM feed_items WHERE fetched_at >= ? AND fetched_at < ?`,
+  const rows = await db.all<{
+    id: string;
+    source: string;
+    url: string;
+    title: string;
+    body: string | null;
+    organization: string | null;
+    published_at: string | null;
+    fetched_at: string;
+  }>(
+    `SELECT id, source, url, title, body, organization, published_at, fetched_at FROM feed_items WHERE fetched_at >= ? AND fetched_at < ?`,
     [input.since, until],
   );
+  const items: ExtractableItem[] = rows.map((row) => ({
+    id: row.id,
+    source: row.source,
+    url: row.url,
+    title: row.title,
+    body: row.body,
+    organization: row.organization,
+    publishedAt: row.published_at,
+    fetchedAt: row.fetched_at,
+  }));
   const calls = await db.get<{ n: number | string; items: number | string }>(
     `SELECT COUNT(*) AS n, COUNT(DISTINCT subject_id) AS items FROM cheap_results WHERE kind = 'SCREEN_LEAD' AND created_at >= ? AND created_at < ?`,
     [input.since, until],
@@ -220,14 +253,34 @@ export async function screeningEconomy(input: { since: string; until?: string })
   const codeDetections = items.filter((one) => one.source === CODE_SIGNAL_SOURCE).length;
   const siteLeads = items.filter((one) => one.source === SITE_SOURCE).length;
   const screenable = items.filter((one) => one.source !== CODE_SIGNAL_SOURCE && one.source !== SITE_SOURCE);
-  let covered = 0;
-  for (let at = 0; at < screenable.length; at += 500) covered += (await coveredItems(screenable.slice(at, at + 500).map((one) => one.id))).size;
+  const coveredIds = new Set<string>();
+  for (let at = 0; at < screenable.length; at += 500) {
+    for (const id of await coveredItems(screenable.slice(at, at + 500).map((one) => one.id))) coveredIds.add(id);
+  }
+  const covered = coveredIds.size;
+  // What code decided by reading, counted only where no rule already covered it and no model was asked anyway.
+  const open = screenable.filter((one) => !coveredIds.has(one.id));
+  const asked = new Set<string>();
+  for (let at = 0; at < open.length; at += 500) {
+    for (const id of await screenedLeads(open.slice(at, at + 500).map((one) => one.id))) asked.add(id);
+  }
+  const reading = codeReading(open);
+  const supply = open.filter((one) => reading.supply.has(one.id) && !asked.has(one.id)).length;
+  const answeredKeys = new Set(open.filter((one) => asked.has(one.id)).map((one) => reading.keys.get(one.id)).filter((key): key is string => !!key));
+  const reused = open.filter((one) => !asked.has(one.id) && answeredKeys.has(reading.keys.get(one.id) ?? '')).length;
   return {
     since: input.since,
     until,
     fetched,
     stored: items.length,
-    notScreened: { duplicates, covered, provedByCode: codeDetections + siteLeads, total: duplicates + covered + codeDetections + siteLeads },
+    notScreened: {
+      duplicates,
+      covered,
+      provedByCode: codeDetections + siteLeads,
+      supply,
+      reused,
+      total: duplicates + covered + codeDetections + siteLeads + supply + reused,
+    },
     screenCalls: Number(calls?.n ?? 0),
     itemsScreened: Number(calls?.items ?? 0),
     workCreated: { codeDetections, siteLeads, total: codeDetections + siteLeads },
@@ -270,7 +323,8 @@ export async function recordScreeningEconomy(input: { projectId: string; now?: D
     actorRef: 'BRAIN',
     summary:
       `Code-first lane, ${reading.since} to ${reading.until}: ${reading.notScreened.total} item(s) never sent to a model ` +
-      `(${reading.notScreened.duplicates} repeat(s), ${reading.notScreened.covered} covered by a code rule, ${reading.notScreened.provedByCode} proved by code); ` +
+      `(${reading.notScreened.duplicates} repeat(s), ${reading.notScreened.covered} covered by a code rule, ${reading.notScreened.provedByCode} proved by code, ` +
+      `${reading.notScreened.supply} supply record(s) decided by code, ${reading.notScreened.reused} reusing an answer for a record code read the same); ` +
       `${reading.screenCalls} model screen call(s) on ${reading.itemsScreened} item(s); ${reading.workCreated.total} lead(s) code made that no single record showed. ` +
       'Every lead is still only a lead.',
     detail: { ...reading },
@@ -293,7 +347,11 @@ export interface ExtractionPass {
   facts: ExtractedFact[];
   /** Per fact key: OBSERVED, CONTESTED or STALE — never established — and which items said it. */
   reconciled: { key: string; status: string; value: string | number | null; itemIds: string[] }[];
-  /** Item ids the parser could not read, in the batches the free-model screen takes first. */
+  /**
+   * Item ids the parser could not read, in batches: the free-model screen takes
+   * these first, still one SCREEN_LEAD call per item (the lane has no batched
+   * task), while readable items are decided by code where it can (`codeReading`).
+   */
   needsModel: string[][];
   /** Facts by what their record is: a job posting, advert or listing is never demand. */
   demand: { statedRequest: number; notDemand: number };
@@ -385,7 +443,7 @@ export async function recordFeedExtraction(input: { projectId: string; now?: Dat
     summary:
       `Deterministic extraction over ${pass.items} stored item(s): ${pass.facts.length} normalized fact(s), each linked to its item and text; ` +
       `${pass.reconciled.length} fact key(s), ${contested} contested and ${stale} stale; ${pass.readable} item(s) read by code, ` +
-      `${needsModel.flat().length} in ${needsModel.length} batch(es) sent to the free-model screen first. ` +
+      `${needsModel.flat().length} in ${needsModel.length} batch(es) escalated to the free-model screen first, one call per item. ` +
       `${pass.demand.statedRequest} fact(s) from a record stating a request; none is a confirmed buyer.`,
     detail: { ...pass },
   });
@@ -414,11 +472,46 @@ export function leadPassesRules(item: StoredFeedItem, screen: LeadOutput | null,
 }
 
 /**
- * The order the free-model screen takes items in. The model is the escalation
- * for what code cannot read: the extractor's needsModel batches go first, whole
- * and in order, and only then the records code could read, which still need the
- * lead judgement the shortlist gate asks for. Nothing is dropped, so no gate is
- * lost; under a tight pace the unreadable records are the ones a model sees.
+ * What code decides about records by reading them, so the free-model screen is
+ * not asked one by one about what code already knows (ALGO-16-2). Pure.
+ *
+ *   * supply — a readable advert or listed price (`recordKindOf`): the record
+ *     offers supply, so it shows nobody who would pay; code decides it is no
+ *     lead, exactly as the screen's DROP would. Decided by what kind of record
+ *     it is, never by industry or trade, and counted (`screeningEconomy`) so
+ *     the decision is a row, not a silence.
+ *   * keys — for every other readable record that names who it is from and
+ *     what it is about, its reading: record kind, normalized entity and
+ *     deliverable. Two records with the same reading get one model judgement;
+ *     the other reuses it (`leadScreens`), as a cached judgement and nothing
+ *     more — the shortlist still has Claude open each page.
+ *
+ * Records code cannot read get neither, and go to the model.
+ */
+export function codeReading(items: readonly ExtractableItem[]): { supply: Set<string>; keys: Map<string, string> } {
+  const supply = new Set<string>();
+  const keys = new Map<string, string>();
+  for (const item of items) {
+    const facts = extractItem(item);
+    if (!readable(item, facts)) continue;
+    const kind = recordKindOf(item);
+    if (kind === 'SUPPLIER_AD' || kind === 'PLATFORM_PRICE') {
+      supply.add(item.id);
+      continue;
+    }
+    const entity = facts.find((fact) => fact.entityKey)?.entityKey ?? null;
+    const deliverable = facts.find((fact) => fact.field === 'deliverable')?.value ?? null;
+    if (entity && deliverable !== null && deliverable !== '') keys.set(item.id, `${kind}\n${entity}\n${String(deliverable)}`);
+  }
+  return { supply, keys };
+}
+
+/**
+ * The order the free-model screen takes what is left in. The model is the
+ * escalation for what code cannot read: the extractor's needsModel batches go
+ * first, whole and in order, and only then the readable records code could not
+ * decide (`codeReading`), which still need the lead judgement the shortlist gate
+ * asks for. Under a tight pace the unreadable records are the ones a model sees.
  * Pure.
  */
 export function screenOrder<T extends ExtractableItem>(items: readonly T[], now: Date): T[] {
@@ -442,11 +535,23 @@ export async function screenFeedLeads(input: {
   const pace = lanePacing(health, isDown);
   // A record a code rule already accounts for is not asked about one by one.
   const covered = await coveredItems(recent.map((one) => one.id));
+  // A record code decided by reading it is not asked about either: supply is no payer, and a record
+  // read the same as one already answered (or about to be, this pass) reuses that answer.
+  const reading = codeReading(recent);
+  const answered = new Set(recent.filter((item) => done.has(item.id)).map((item) => reading.keys.get(item.id)).filter((key): key is string => !!key));
   const todoAll = recent
     .filter((item) => item.source !== SITE_SOURCE && item.source !== CODE_SIGNAL_SOURCE && !covered.has(item.id) && !done.has(item.id))
     .filter((item) => {
       const published = Date.parse(item.publishedAt ?? item.fetchedAt);
       return !Number.isFinite(published) || now.getTime() - published <= LEAD_MAX_AGE_MS;
+    })
+    .filter((item) => !reading.supply.has(item.id))
+    .filter((item) => {
+      const key = reading.keys.get(item.id);
+      if (!key) return true;
+      if (answered.has(key)) return false;
+      answered.add(key);
+      return true;
     });
   const todo = screenOrder(todoAll, now).slice(0, pace.perPass);
   let screened = 0;
@@ -495,6 +600,20 @@ async function leadScreens(items: readonly StoredFeedItem[]): Promise<Map<string
   for (const [id, answers] of by) {
     const merged = combineLeads(answers);
     if (merged) out.set(id, merged);
+  }
+  // A record code read the same as an answered one carries that answer: the screen skipped it for that reason.
+  const reading = codeReading(items);
+  const byKey = new Map<string, LeadOutput>();
+  for (const item of items) {
+    const key = reading.keys.get(item.id);
+    const answer = out.get(item.id);
+    if (key && answer && !byKey.has(key)) byKey.set(key, answer);
+  }
+  for (const item of items) {
+    if (out.has(item.id)) continue;
+    const key = reading.keys.get(item.id);
+    const answer = key ? byKey.get(key) : undefined;
+    if (answer) out.set(item.id, answer);
   }
   // A code detection is recognised by a rule, so it needs no model to keep it —
   // and it is still only a lead: Claude verifies it on the shortlist like any other.
