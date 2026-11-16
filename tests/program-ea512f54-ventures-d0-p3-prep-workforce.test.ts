@@ -4,7 +4,11 @@
  * objective depends on them.
  */
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { freshProject } from './helpers.ts';
+import { createTask, createWorkflow } from '../server/repos/labor.ts';
+import { activeObjectivesOf, composeView, laborView } from '../server/services/labor/view.ts';
+import type { LaborSnapshot } from '../server/services/labor/map.ts';
 import { deriveOrganization } from '../server/services/labor/organization.ts';
 import type { TaskCoverage } from '../server/services/labor/map.ts';
 import type { Bottleneck } from '../server/services/labor/view.ts';
@@ -160,5 +164,84 @@ describe('VENT-24-3 — dormant until an active objective depends on it', () => 
   it('the module writes nothing: it imports types only', () => {
     const source = readFileSync(new URL('../server/services/labor/organization.ts', import.meta.url), 'utf8');
     expect(source.match(/^import (?!type)/gm)).toBeNull();
+  });
+});
+
+/* ------------------------------------------------------------------------- */
+/* Composed into the labour view the /labor route serves                       */
+/* ------------------------------------------------------------------------- */
+
+/** A labour snapshot of `rows`, with each workflow serving the opportunity `opportunities` names for it. */
+function snapshotOf(rows: TaskCoverage[], opportunities: Record<string, string> = {}): LaborSnapshot {
+  const workflows = new Map<string, TaskCoverage['workflow']>();
+  const coverage = rows.map((one) => {
+    const opportunityId = opportunities[one.workflow.name] ?? null;
+    const workflow = workflows.get(one.workflow.id) ?? { ...one.workflow, opportunityId };
+    workflows.set(workflow.id, workflow);
+    return { ...one, workflow };
+  });
+  return {
+    projectId: 'p',
+    at: '2026-11-16T00:00:00.000Z',
+    workflows: [...workflows.values()],
+    tasks: coverage.map((one) => one.task),
+    allocations: [],
+    answers: [],
+    options: coverage.flatMap((one) => one.options),
+    rounds: [],
+    coverage,
+    independentVerification: null,
+  };
+}
+
+describe('VENT-24-3 — the organisation reading reaches the running Brain through the labour view', () => {
+  it('composeView carries the derived organisation, and a role a live commercial workflow depends on is ACTIVE', () => {
+    const snapshot = snapshotOf(expanding, { 'Quality release': 'cop_quality' });
+    const view = composeView(snapshot, { asks: [], declined: [] });
+    expect(view.organization).toBeDefined();
+    const cert = view.organization.roles.find((role) => role.capabilityId === 'cap-cert');
+    expect(cert).toBeDefined();
+    expect(cert!.state).toBe('ACTIVE');
+    expect(cert!.dependentObjectives).toEqual(['opportunity:cop_quality']);
+    expect(cert!.cost?.rates.length).toBeGreaterThan(0);
+    expect(cert!.recruitment.filter((step) => step.status === 'REQUIRES_AUTHORIZATION').map((step) => step.action)).toEqual(
+      expect.arrayContaining(['HIRE_EMPLOYEE', 'BINDING_OFFER', 'SHARE_CANDIDATE_DATA', 'ENGAGE_PAID_RECRUITER', 'SIGN_AGREEMENT']),
+    );
+    // Roles no live commercial workflow depends on stay specified and ask for nothing.
+    expect(view.organization.roles.filter((role) => role.capabilityId !== 'cap-cert').every((role) => role.state === 'DORMANT')).toBe(true);
+    expect(view.organization.capacityRequested).toBe(1);
+    // The bottleneck the view reports is the one the organisation read.
+    expect(view.bottlenecks.map((b) => b.capabilityId)).toEqual(expect.arrayContaining(view.organization.roles.filter((r) => r.reason === null).map((r) => r.capabilityId)));
+  });
+
+  it('with no workflow serving an opportunity the reading is DORMANT and requests no capacity', () => {
+    const view = composeView(snapshotOf(expanding), { asks: [], declined: [] });
+    expect(view.organization.roles.length).toBeGreaterThan(0);
+    expect(view.organization.state).toBe('DORMANT');
+    expect(view.organization.capacityRequested).toBe(0);
+    expect(activeObjectivesOf(snapshotOf(expanding))).toEqual([]);
+  });
+
+  it('a retired workflow or task is no objective', () => {
+    const snapshot = snapshotOf(expanding, { 'Quality release': 'cop_quality' });
+    const retired = { ...snapshot, workflows: snapshot.workflows.map((w) => (w.opportunityId ? { ...w, retiredAt: '2026-11-01T00:00:00.000Z' } : w)) };
+    expect(activeObjectivesOf(retired)).toEqual([]);
+  });
+});
+
+describe('VENT-24-3 — laborView, the /labor route\'s reading, returns the organisation from production rows', () => {
+  let projectId = '';
+  beforeEach(async () => {
+    projectId = (await freshProject()).project.id;
+  });
+
+  it('a project with a declared workflow gets an organisation reading on its labour view, and nothing is created', async () => {
+    const workflow = await createWorkflow({ projectId, name: 'Order fulfilment', origin: 'SEED', declaredByRef: 'test' });
+    await createTask({ projectId, workflowId: workflow.workflow.id, name: 'Pack orders', output: 'packed orders', origin: 'SEED', capabilityId: null, declaredByRef: 'test' });
+    const view = await laborView(projectId);
+    expect(view.tasks).toBe(1);
+    expect(view.organization).toMatchObject({ state: 'DORMANT', capacityRequested: 0 });
+    expect(Array.isArray(view.organization.roles)).toBe(true);
+    expect(view.organization.coordination).toEqual([]);
   });
 });
