@@ -34,12 +34,16 @@
  * is not evidence that it selects reliable people.
  *
  * The capability is later-stage: with no active objective whose tasks depend
- * on a role, the reading is `DORMANT` and requests no capacity. It is pure,
- * performs no write and creates nothing (invariants 44, 45).
+ * on a role, the reading is `DORMANT` and requests no capacity. The
+ * derivation is pure, performs no write and creates nothing (invariants 44,
+ * 45). `organizationFor` reads the same rows the labour owner already reads —
+ * `laborSnapshot`, `composeView`'s bottlenecks — and the manufacturing kernel
+ * reports it on every pass, so the reading exists in the running Brain without
+ * a second store or schedule.
  */
-import type { LaborSnapshot, TaskCoverage } from './map.ts';
-import type { Bottleneck } from './view.ts';
-import type { HumanNecessityReason, LaborChannel, RateBasis } from '../../domain/types.ts';
+import { laborSnapshot, type LaborSnapshot, type TaskCoverage } from './map.ts';
+import { composeView, plan, type Bottleneck } from './view.ts';
+import { NON_HUMAN_LAYERS, type HumanNecessityReason, type LaborChannel, type RateBasis } from '../../domain/types.ts';
 
 export const AUTHORIZED_ACTIONS = [
   'HIRE_EMPLOYEE',
@@ -266,4 +270,34 @@ export function deriveOrganization(input: {
         ? `${roles.length} role(s) are specified and ready for promotion; no active objective depends on them, so none requests capacity.`
         : `${active} of ${roles.length} role(s) are needed by an active objective.`;
   return { state: active > 0 ? 'ACTIVE' : 'DORMANT', roles, coordination, capacityRequested: active, because };
+}
+
+/**
+ * The organisation reading for one project, from the labour owner's own rows.
+ *
+ * Read-only. Three facts come from rows rather than from a caller:
+ *  - the bottlenecks are `composeView`'s, over `laborSnapshot` and `plan`;
+ *  - an approved contractor is a live allocation a **person** decided onto a
+ *    human layer — somebody already chose who does that task, so Brain
+ *    coordinates them rather than specifying a new role;
+ *  - an active objective is a live workflow tied to an opportunity: its tasks
+ *    are work a commercial commitment depends on. A workflow tied to nothing
+ *    leaves its roles DORMANT.
+ */
+export async function organizationFor(projectId: string): Promise<OrganizationReading> {
+  const snapshot = await laborSnapshot(projectId);
+  const view = composeView(snapshot, plan(snapshot));
+  const approvedContractors: ApprovedContractor[] = snapshot.coverage
+    .filter((one) => one.allocation && one.allocation.decidedBy === 'PERSON' && !NON_HUMAN_LAYERS.includes(one.allocation.productionLayer))
+    .map((one) => ({ taskId: one.task.id, contractorRef: one.allocation!.id, approvedByRef: one.allocation!.decidedByRef ?? 'person' }));
+  const byWorkflow = new Map<string, string[]>();
+  for (const one of snapshot.coverage) {
+    if (one.task.retiredAt !== null || one.workflow.retiredAt !== null || one.workflow.opportunityId === null) continue;
+    byWorkflow.set(one.workflow.id, [...(byWorkflow.get(one.workflow.id) ?? []), one.task.id]);
+  }
+  const activeObjectives: ActiveObjective[] = [...byWorkflow.entries()].map(([workflowId, taskIds]) => {
+    const opportunityId = snapshot.coverage.find((c) => c.workflow.id === workflowId)!.workflow.opportunityId!;
+    return { id: `opportunity:${opportunityId}`, taskIds };
+  });
+  return deriveOrganization({ snapshot, bottlenecks: view.bottlenecks, approvedContractors, activeObjectives });
 }

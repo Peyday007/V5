@@ -42,6 +42,7 @@ import { ensureProgrammeAuthority, programmeMayAsk } from './program.ts';
 import { readDirective, type Directive } from './directive.ts';
 import { readLadder, type CategoryReading } from './readiness.ts';
 import { assessResources, type Challenge, type Feasibility, type Money } from './venturePath.ts';
+import { organizationFor, type OrganizationReading } from '../labor/organization.ts';
 
 export interface KernelPass {
   /** Rounds opened this pass, each carrying why the allocator chose it. */
@@ -69,6 +70,14 @@ export interface KernelPass {
    * Read before the gate: reading what is now possible is not new research.
    */
   ventures: VentureReconsideration[];
+  /**
+   * The roles an expanding operation would need that neither Brain nor an
+   * approved contractor covers (VENT-24-3), derived on every pass from the
+   * labour owner's rows. Specified and ready for promotion; DORMANT, requesting
+   * no capacity, unless an active objective's tasks depend on a role. Nothing
+   * is hired, offered or signed from here.
+   */
+  organization: OrganizationReading;
   /** The ladder as it stood when the decision was made. */
   categories: number;
   capabilitiesHeld: number;
@@ -90,6 +99,7 @@ const EMPTY: KernelPass = {
   declined: [],
   directive: { reaching: false, path: null, why: null },
   ventures: [],
+  organization: { state: 'DORMANT', roles: [], coordination: [], capacityRequested: 0, because: 'No manufacturing programme is running for this project.' },
   categories: 0,
   capabilitiesHeld: 0,
   openRounds: 0,
@@ -133,6 +143,8 @@ export async function runManufacturingKernel(projectId: string): Promise<KernelP
   const directive = await directiveFor(snapshot.program.blueprintPath);
 
   const ventures = await reconsiderVentures(projectId, readLadder(snapshot), snapshot.capabilities);
+  // A read, like the ventures: what roles the work needs is not new research and is not gated.
+  const organization = await organizationFor(projectId);
 
   const gate = await programmeMayAsk(projectId);
   if (!gate.allowed) {
@@ -142,6 +154,7 @@ export async function runManufacturingKernel(projectId: string): Promise<KernelP
       declined: [{ subject: 'every category on the ladder', why: gate.reason }],
       directive: directive.report,
       ventures,
+      organization,
       ...counts,
     };
   }
@@ -160,6 +173,7 @@ export async function runManufacturingKernel(projectId: string): Promise<KernelP
     declined: plan.declined,
     directive: directive.report,
     ventures,
+    organization,
     ...counts,
   };
 }
