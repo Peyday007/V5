@@ -35,6 +35,7 @@ import { FEED_SOURCES, pullUrl, type FeedSource } from './sources.ts';
 import { FEED_SHORTLIST_BUCKET } from './bucket.ts';
 import { SITE_SOURCE } from './sites.ts';
 import { CODE_SIGNAL_SOURCE, coveredItems, detectionsForLeads } from './detectors.ts';
+import { extractItems, type ExtractableItem, type ExtractedFact } from './extract.ts';
 
 export type Fetcher = (url: string, headers: Record<string, string>, timeoutMs?: number) => Promise<unknown>;
 
@@ -277,6 +278,120 @@ export async function recordScreeningEconomy(input: { projectId: string; now?: D
   return reading;
 }
 
+/** The cash event that carries one deterministic-extraction pass for a project (ALGO-16-1 item 2). */
+export const EXTRACTION_EVENT = 'FEED_EXTRACTION';
+/** Stored items read per pass, so one row stays a readable size; the cursor carries the rest to the next tick. */
+export const EXTRACTION_ITEMS_PER_PASS = 100;
+
+export interface ExtractionPass {
+  /** Where this pass began and ended in `feed_items` (fetched_at, id): the next pass starts after `to`. */
+  cursor: { from: { fetchedAt: string; id: string } | null; to: { fetchedAt: string; id: string } };
+  items: number;
+  /** Items the parser read: they are not escalated for extraction help. */
+  readable: number;
+  /** Every normalized fact, each with its item id, field, exact text and URL. */
+  facts: ExtractedFact[];
+  /** Per fact key: OBSERVED, CONTESTED or STALE — never established — and which items said it. */
+  reconciled: { key: string; status: string; value: string | number | null; itemIds: string[] }[];
+  /** Item ids the parser could not read, in the batches the free-model screen takes first. */
+  needsModel: string[][];
+  /** Facts by what their record is: a job posting, advert or listing is never demand. */
+  demand: { statedRequest: number; notDemand: number };
+}
+
+/**
+ * Run deterministic extraction over the stored items that arrived since the
+ * last pass and record the facts on the project's cash ledger, so every
+ * normalized fact is a row that links to the exact `feed_items` row and text
+ * it was read from. Incremental: the pass starts after the last one's cursor
+ * (or at the lead window on the first pass), so no item is read twice. Code
+ * detections are derived leads, not raw records, and are not re-read. Pure
+ * code: it runs when every model provider is down. Returns the pass written, or
+ * null when nothing new arrived.
+ */
+export async function recordFeedExtraction(input: { projectId: string; now?: Date; limit?: number }): Promise<ExtractionPass | null> {
+  const now = input.now ?? new Date();
+  const db = getDb();
+  const last = await db.get<{ detail: string | null }>(
+    `SELECT detail FROM cash_events WHERE project_id = ? AND kind = ? ORDER BY created_at DESC, id DESC LIMIT 1`,
+    [input.projectId, EXTRACTION_EVENT],
+  );
+  let from: { fetchedAt: string; id: string } | null = null;
+  try {
+    const to = (JSON.parse(last?.detail ?? '{}') as { cursor?: { to?: { fetchedAt?: unknown; id?: unknown } } }).cursor?.to;
+    if (to && typeof to.fetchedAt === 'string' && typeof to.id === 'string') from = { fetchedAt: to.fetchedAt, id: to.id };
+  } catch {
+    from = null;
+  }
+  const floor = new Date(now.getTime() - LEAD_MAX_AGE_MS).toISOString();
+  const rows = await db.all<{
+    id: string;
+    source: string;
+    url: string;
+    title: string;
+    body: string | null;
+    organization: string | null;
+    published_at: string | null;
+    fetched_at: string;
+  }>(
+    from
+      ? `SELECT id, source, url, title, body, organization, published_at, fetched_at FROM feed_items
+          WHERE source <> ? AND (fetched_at > ? OR (fetched_at = ? AND id > ?))
+          ORDER BY fetched_at, id LIMIT ?`
+      : `SELECT id, source, url, title, body, organization, published_at, fetched_at FROM feed_items
+          WHERE source <> ? AND fetched_at >= ?
+          ORDER BY fetched_at, id LIMIT ?`,
+    from
+      ? [CODE_SIGNAL_SOURCE, from.fetchedAt, from.fetchedAt, from.id, input.limit ?? EXTRACTION_ITEMS_PER_PASS]
+      : [CODE_SIGNAL_SOURCE, floor, input.limit ?? EXTRACTION_ITEMS_PER_PASS],
+  );
+  if (rows.length === 0) return null;
+  const items: ExtractableItem[] = rows.map((row) => ({
+    id: row.id,
+    source: row.source,
+    url: row.url,
+    title: row.title,
+    body: row.body,
+    organization: row.organization,
+    publishedAt: row.published_at,
+    fetchedAt: row.fetched_at,
+  }));
+  const run = extractItems(items, now);
+  const lastRow = rows[rows.length - 1]!;
+  const needsModel = run.needsModel.map((batch) => batch.map((one) => one.id));
+  const pass: ExtractionPass = {
+    cursor: { from, to: { fetchedAt: lastRow.fetched_at, id: lastRow.id } },
+    items: items.length,
+    readable: items.length - needsModel.flat().length,
+    facts: run.facts,
+    reconciled: run.reconciled.map((r) => ({
+      key: r.key,
+      status: r.status,
+      value: r.value,
+      itemIds: [...new Set(r.observations.map((o) => o.evidence.itemId))],
+    })),
+    needsModel,
+    demand: {
+      statedRequest: run.facts.filter((f) => f.demand === 'STATED_REQUEST').length,
+      notDemand: run.facts.filter((f) => f.demand === 'NOT_DEMAND').length,
+    },
+  };
+  const contested = pass.reconciled.filter((r) => r.status === 'CONTESTED').length;
+  const stale = pass.reconciled.filter((r) => r.status === 'STALE').length;
+  await recordCashEvent({
+    projectId: input.projectId,
+    kind: EXTRACTION_EVENT,
+    actorRef: 'BRAIN',
+    summary:
+      `Deterministic extraction over ${pass.items} stored item(s): ${pass.facts.length} normalized fact(s), each linked to its item and text; ` +
+      `${pass.reconciled.length} fact key(s), ${contested} contested and ${stale} stale; ${pass.readable} item(s) read by code, ` +
+      `${needsModel.flat().length} in ${needsModel.length} batch(es) sent to the free-model screen first. ` +
+      `${pass.demand.statedRequest} fact(s) from a record stating a request; none is a confirmed buyer.`,
+    detail: { ...pass },
+  });
+  return pass;
+}
+
 /** The latest SCREEN_LEAD answers, per item, already combined. */
 async function screenedLeads(ids: readonly string[]): Promise<Set<string>> {
   if (ids.length === 0) return new Set();
@@ -298,6 +413,19 @@ export function leadPassesRules(item: StoredFeedItem, screen: LeadOutput | null,
   return true;
 }
 
+/**
+ * The order the free-model screen takes items in. The model is the escalation
+ * for what code cannot read: the extractor's needsModel batches go first, whole
+ * and in order, and only then the records code could read, which still need the
+ * lead judgement the shortlist gate asks for. Nothing is dropped, so no gate is
+ * lost; under a tight pace the unreadable records are the ones a model sees.
+ * Pure.
+ */
+export function screenOrder<T extends ExtractableItem>(items: readonly T[], now: Date): T[] {
+  const unreadable = new Set(extractItems(items, now).needsModel.flat().map((one) => one.id));
+  return [...items.filter((one) => unreadable.has(one.id)), ...items.filter((one) => !unreadable.has(one.id))];
+}
+
 /** Screen recent, unscreened leads with the free models. Bounded per pass. */
 export async function screenFeedLeads(input: {
   now?: Date;
@@ -314,13 +442,13 @@ export async function screenFeedLeads(input: {
   const pace = lanePacing(health, isDown);
   // A record a code rule already accounts for is not asked about one by one.
   const covered = await coveredItems(recent.map((one) => one.id));
-  const todo = recent
+  const todoAll = recent
     .filter((item) => item.source !== SITE_SOURCE && item.source !== CODE_SIGNAL_SOURCE && !covered.has(item.id) && !done.has(item.id))
     .filter((item) => {
       const published = Date.parse(item.publishedAt ?? item.fetchedAt);
       return !Number.isFinite(published) || now.getTime() - published <= LEAD_MAX_AGE_MS;
-    })
-    .slice(0, pace.perPass);
+    });
+  const todo = screenOrder(todoAll, now).slice(0, pace.perPass);
   let screened = 0;
   let next = 0;
   const worker = async (): Promise<void> => {
@@ -432,6 +560,11 @@ export async function openFeedShortlist(input: { projectId: string; now?: Date; 
   // decides the shortlist. Its own catch: a reading that cannot be taken never stops discovery.
   await recordScreeningEconomy({ projectId: input.projectId, now }).catch((error: unknown) => {
     console.warn(`[feeds] screening economy unreadable for ${input.projectId}: ${String((error as Error)?.message ?? error)}`);
+  });
+  // Deterministic extraction of what arrived since the last pass (ALGO-16-1 item 2), on the same tick.
+  // Its own catch: a pass that cannot be recorded never stops discovery.
+  await recordFeedExtraction({ projectId: input.projectId, now }).catch((error: unknown) => {
+    console.warn(`[feeds] extraction pass failed for ${input.projectId}: ${String((error as Error)?.message ?? error)}`);
   });
   const history = (await listRounds(input.projectId)).filter((one) => one.bucketId === FEED_SHORTLIST_BUCKET.id);
   if (history.some((one) => one.state === 'OPEN')) return null;
