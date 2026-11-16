@@ -163,10 +163,25 @@ code{font-family:var(--mono);font-size:12.5px}
 <section id="actions">
   <h2>What was changed</h2>
   <ul>
-    <li><b>Dispatch unblocked</b> (PR #949): the per-minute coverage watch no longer runs the 48–82 s count only the admin terminal prints. Expected: dispatch ticks go from about 1/min to 6/min, the database host loses about 0.86 of a core, and Factory and Routine handoffs stop declining.</li>
+    <li><b>Dispatch unblocked</b> (PR #949, live since 00:19Z): the per-minute coverage watch no longer runs the 48–82 s count only the admin terminal prints. Expected: dispatch ticks go from about 1/min to 6/min, the database host loses about 0.86 of a core, and Factory and Routine handoffs stop declining.</li>
     <li><b>GPU moved off its full host</b> (Cheap lane run 43768013494, 22:24Z): new pod 8hkqnboqyv6kad, RTX 2000 Ada at $0.19/h, served after 595 s. All probes passed: auth, model, task, 4 in parallel, a ~10k-token prompt, tool calls, 64K context. It is connected as slot A and the stranded pod is retired. RunPod balance $26.95 (about 140 h at this rate).</li>
     <li><b>Strandings now fix themselves</b> (the Evolution Engine's #950, merged in parallel): the server moves the pod after 3 host refusals while research waits. This audit's own workflow-level mover was dropped as a duplicate.</li>
   </ul>
+</section>
+
+<section>
+  <h2>After the changes (verified 2026-11-16 00:32Z)</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Measure</th><th class="n">Before</th><th class="n">After</th><th>Source</th></tr></thead>
+    <tbody>
+      <tr><td>Database host CPU (2 vCPU)</td><td class="n">70–75%</td><td class="n"><b>40.7%</b></td><td class="meta">host counters, 733 s window</td></tr>
+      <tr><td>The stuck 24 h count in the serving process</td><td class="n">34 reads, 1,875 s</td><td class="n">absent</td><td class="meta">connection report 43780910883</td></tr>
+      <tr><td>App workload connections idle</td><td class="n">4–6 of 8</td><td class="n">7 of 8</td><td class="meta">liveness reading</td></tr>
+      <tr><td>Event-loop p99</td><td class="n">44–92 ms</td><td class="n">35 ms</td><td class="meta">liveness reading</td></tr>
+      <tr><td>GPU slots busy</td><td class="n">0 of 2</td><td class="n">2 of 2</td><td class="meta">brain_operator_capacity</td></tr>
+      <tr><td>Free-lane items running</td><td class="n">2</td><td class="n">7</td><td class="meta">brain_operator_capacity</td></tr>
+    </tbody></table></div>
+  <p>The release was Deploy 1109 (f76dbc7). Research throughput and dispatch cadence are re-measured in the eight-hour comparison at 06:20Z; a 16-minute window is too short to call a rate.</p>
 </section>
 
 <section>
