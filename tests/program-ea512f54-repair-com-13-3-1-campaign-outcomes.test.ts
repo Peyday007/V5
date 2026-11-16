@@ -20,7 +20,7 @@ import { CAMPAIGN_NAME, type Deps } from '../server/services/cash/neighborCard.t
 import { BRAIN_CAMPAIGN_NAME } from '../server/services/cash/providers/instantly.ts';
 import { mechanismsFromRows, modelOutreachFunnel } from '../server/services/cash/funnel.ts';
 
-type Lead = { id: string; email: string; status: number; email_reply_count?: number; lt_interest_status?: number };
+type Lead = { id: string; email: string; status: number; email_reply_count?: number; lt_interest_status?: number; timestamp_created?: string };
 
 const NEIGHBOR = 'cmp-neighbor';
 const DEAL = 'cmp-deal';
@@ -56,14 +56,17 @@ function workspace(leads: Record<string, Lead[]>): { deps: Deps; calls: string[]
   };
 }
 
+// Six leads enrolled on 1 November, every one terminal; one enrolled on 10 November, still in its sequence.
+const NOV1 = '2026-11-01T09:00:00.000Z';
+const NOV10 = '2026-11-10T09:00:00.000Z';
 const LEADS: Lead[] = [
-  { id: 'l-bounced', email: 'a@one.test', status: -1 },
-  { id: 'l-replied', email: 'b@two.test', status: 1, email_reply_count: 1 },
-  { id: 'l-unsub', email: 'c@three.test', status: -2 },
-  { id: 'l-won', email: 'd@four.test', status: 1, email_reply_count: 1, lt_interest_status: 4 },
-  { id: 'l-silent', email: 'e@five.test', status: 3, email_reply_count: 0 },
-  { id: 'l-active', email: 'f@six.test', status: 1, email_reply_count: 0 },
-  { id: 'l-optout', email: 'g@seven.test', status: 1, email_reply_count: 1 },
+  { id: 'l-bounced', email: 'a@one.test', status: -1, timestamp_created: NOV1 },
+  { id: 'l-replied', email: 'b@two.test', status: 1, email_reply_count: 1, timestamp_created: NOV1 },
+  { id: 'l-unsub', email: 'c@three.test', status: -2, timestamp_created: NOV1 },
+  { id: 'l-won', email: 'd@four.test', status: 1, email_reply_count: 1, lt_interest_status: 4, timestamp_created: NOV1 },
+  { id: 'l-silent', email: 'e@five.test', status: 3, email_reply_count: 0, timestamp_created: NOV1 },
+  { id: 'l-active', email: 'f@six.test', status: 1, email_reply_count: 0, timestamp_created: NOV10 },
+  { id: 'l-optout', email: 'g@seven.test', status: 1, email_reply_count: 1, timestamp_created: NOV1 },
 ];
 
 async function results(projectId: string): Promise<Record<string, string>> {
@@ -95,7 +98,7 @@ beforeEach(async () => {
 });
 
 describe('a lead\'s terminal answer is read from the provider\'s record, never guessed', () => {
-  const lead = (over: Partial<CampaignLead>): CampaignLead => ({ id: 'x', email: null, status: 1, replies: 0, interestStatus: null, ...over });
+  const lead = (over: Partial<CampaignLead>): CampaignLead => ({ id: 'x', email: null, status: 1, replies: 0, interestStatus: null, enrolledAt: null, ...over });
   it('maps each terminal state, and an active sequence to nothing', () => {
     expect(contactResultOf(lead({ status: -1 }))).toBe('CONTACT_UNDELIVERABLE');
     expect(contactResultOf(lead({ interestStatus: 4, replies: 1 }))).toBe('BUYER_ACCEPTED');
@@ -119,6 +122,7 @@ describe('recordCampaignOutcomes', () => {
     expect(report.leads).toBe(LEADS.length);
     expect(report.recorded).toBe(6);
     expect(report.pending).toBe(1);
+    expect(report.held).toBe(0);
     expect(await results(projectId)).toEqual({
       'l-bounced': 'CONTACT_UNDELIVERABLE',
       'l-optout': 'BUYER_DECLINED',
@@ -219,5 +223,63 @@ describe('the funnel models the recorded campaign, and messages are not buyers',
     const after = await getProbe('r01.com-13-3')!({});
     expect(after.detail).toMatch(/1 mechanism/);
     expect(after.ok).toBe(true);
+  });
+});
+
+describe('answers are recorded by enrolment cohort, so a running campaign never overstates its rates', () => {
+  // One cohort of ten, enrolled the same day: two replied and one bounced early (their sequences ended),
+  // one finished silent, and six are still being sent their follow-ups.
+  const DAY = '2026-11-12T08:00:00.000Z';
+  const cohort = (active: boolean): Lead[] => [
+    { id: 'c-r1', email: 'r1@x.test', status: 3, email_reply_count: 1, timestamp_created: DAY },
+    { id: 'c-r2', email: 'r2@x.test', status: 3, email_reply_count: 1, timestamp_created: DAY },
+    { id: 'c-b1', email: 'b1@x.test', status: -1, timestamp_created: DAY },
+    { id: 'c-s1', email: 's1@x.test', status: 3, timestamp_created: DAY },
+    ...Array.from({ length: 6 }, (_, i): Lead => ({ id: `c-q${i}`, email: `q${i}@x.test`, status: active ? 1 : 3, timestamp_created: DAY })),
+  ];
+
+  it('records none of a cohort while any of its leads is still in its sequence', async () => {
+    const report = await recordCampaignOutcomes(projectId, { deps: workspace({ [NEIGHBOR]: cohort(true) }).deps, ownerProjectId: projectId, force: true });
+    expect(report.recorded).toBe(0);
+    expect(report.pending).toBe(6);
+    expect(report.held).toBe(4);
+    expect(await results(projectId)).toEqual({});
+    // Recorded lead by lead this would read 2 of 3 delivered leads as answering; the cohort waits instead.
+    expect(await mechanismsFromRows(projectId, { permission: { basis: 'MEASURED', value: 1 } })).toEqual([]);
+  });
+
+  it('once the cohort has ended, the funnel reads every lead it enrolled, at the true rates', async () => {
+    await recordCampaignOutcomes(projectId, { deps: workspace({ [NEIGHBOR]: cohort(true) }).deps, ownerProjectId: projectId, force: true });
+    const ended = await recordCampaignOutcomes(projectId, { deps: workspace({ [NEIGHBOR]: cohort(false) }).deps, ownerProjectId: projectId, force: true });
+    expect(ended.recorded).toBe(10);
+    expect(ended.held).toBe(0);
+    const [m] = await mechanismsFromRows(projectId, { permission: { basis: 'MEASURED', value: 1 } });
+    expect(m!.inputs.uniqueProspects).toEqual({ basis: 'MEASURED', value: 10 });
+    expect(m!.inputs.deliverability).toEqual({ basis: 'MEASURED', value: 9 / 10 });
+    expect(m!.inputs.response).toEqual({ basis: 'MEASURED', value: 2 / 9 });
+  });
+
+  it('a cohort still sending holds back only itself, never an earlier one that has ended', async () => {
+    const leads: Lead[] = [
+      { id: 'e-r', email: 'er@x.test', status: 3, email_reply_count: 1, timestamp_created: NOV1 },
+      { id: 'e-s', email: 'es@x.test', status: 3, timestamp_created: NOV1 },
+      { id: 'n-r', email: 'nr@x.test', status: 3, email_reply_count: 1, timestamp_created: NOV10 },
+      { id: 'n-a', email: 'na@x.test', status: 2, timestamp_created: NOV10 },
+    ];
+    const report = await recordCampaignOutcomes(projectId, { deps: workspace({ [NEIGHBOR]: leads }).deps, ownerProjectId: projectId, force: true });
+    expect(report).toMatchObject({ recorded: 2, pending: 1, held: 1 });
+    expect(await results(projectId)).toEqual({ 'e-r': 'BUYER_REPLIED', 'e-s': 'BUYER_SILENT' });
+  });
+
+  it('leads with no enrolment time are one cohort, and a skipped lead is never sent to, so it records nothing and holds nothing', async () => {
+    const leads: Lead[] = [
+      { id: 'u-r', email: 'ur@x.test', status: 3, email_reply_count: 1 },
+      { id: 'u-a', email: 'ua@x.test', status: 1 },
+      { id: 'k-r', email: 'kr@x.test', status: 3, email_reply_count: 1, timestamp_created: NOV1 },
+      { id: 'k-skip', email: 'ks@x.test', status: -3, timestamp_created: NOV1 },
+    ];
+    const report = await recordCampaignOutcomes(projectId, { deps: workspace({ [NEIGHBOR]: leads }).deps, ownerProjectId: projectId, force: true });
+    expect(report).toMatchObject({ recorded: 1, pending: 1, held: 1 });
+    expect(await results(projectId)).toEqual({ 'k-r': 'BUYER_REPLIED' });
   });
 });
