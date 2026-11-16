@@ -18,7 +18,8 @@ import { getCashMode } from '../server/repos/cashMode.ts';
 import { createOpportunity, listOpportunities, updateOpportunity } from '../server/repos/cashPortfolio.ts';
 import { createWorkstream, getWorkstream } from '../server/repos/register.ts';
 import { setTarget } from '../server/services/goals/target.ts';
-import { decideOpenings, decisionOrder, UNDATED_RESERVED_EVERY } from '../server/services/cash/decisions.ts';
+import { DECISION_CAP_EVENT, DECISION_PASS_LIMIT, decideOpenings, decisionOrder, UNDATED_RESERVED_EVERY } from '../server/services/cash/decisions.ts';
+import { closingInstant } from '../server/services/cash/worthResearching.ts';
 import { currentDecision } from '../server/repos/cashDecisions.ts';
 import { handedOpeningsOutcome, judgeHandedOpenings } from '../server/services/improvement/loop.ts';
 import { MEASURE_MAX_HOURS } from '../server/domain/improvement.ts';
@@ -121,6 +122,58 @@ describe('decideOpenings under its cap (the recorded failure class)', () => {
     await getDb().run('UPDATE cash_opportunities SET created_at = ? WHERE id = ?', [new Date(NOW.getTime() - ageMinutes * 60_000).toISOString(), o.id]);
     return o.id;
   }
+
+  it('at the production cap, a closing opening behind more decidable openings than the cap is decided on every tick until it closes (review finding R3-F2)', async () => {
+    // Production calls decideOpenings(projectId, { now }) with no limit (operate.ts): drive exactly that.
+    const closing = await opening('JPFans buyer request (closes 2026-11-20)', 10_000, '2026-11-20');
+    const newer = 3;
+    for (let i = 0; i < DECISION_PASS_LIMIT + newer; i += 1) await opening(`undated ${i}`, 9_000 - i);
+    const closesAt = closingInstant('2026-11-20')!;
+
+    // A tick a day from the gap's reading to the close, each one inside the window.
+    const ticks = [0, 1, 2, 3, 4].map((d) => new Date(NOW.getTime() + d * DAY)).filter((t) => t.getTime() < closesAt);
+    expect(ticks.length).toBeGreaterThanOrEqual(4);
+    let decidedBeforeClose = 0;
+    for (const tick of ticks) {
+      // The failure class: in arrival order the closing opening sits past the cap on every tick,
+      // so the old walk ended every pass before reaching it and it reached its close undecided.
+      const arrival = (await listOpportunities({ projectId, states: ['DISCOVERED', 'EVIDENCE_CARD', 'READY'] })).map((one) => one.id);
+      expect(arrival.indexOf(closing)).toBeGreaterThanOrEqual(DECISION_PASS_LIMIT);
+
+      const pass = await decideOpenings(projectId, { now: tick.toISOString() });
+      // The production cap binds here, and the pass says so in its own counts.
+      expect(pass.considered).toBe(DECISION_PASS_LIMIT);
+      expect(pass.pastCap).toEqual({ dated: 0, undated: DECISION_PASS_LIMIT + newer + 1 - DECISION_PASS_LIMIT });
+
+      const decision = await currentDecision(closing, goalId);
+      expect(decision).not.toBeNull();
+      expect(Date.parse(decision!.decidedAt)).toBeLessThan(closesAt);
+      decidedBeforeClose += 1;
+    }
+    // Never left undecided at its close: every tick inside the window decided it.
+    expect(decidedBeforeClose).toBe(ticks.length);
+
+    // The cap binding is a production row, not an inference — and an unchanged backlog writes it once.
+    const capRows = await getDb().all<{ detail: string }>('SELECT detail FROM cash_events WHERE project_id = ? AND kind = ?', [projectId, DECISION_CAP_EVENT]);
+    expect(capRows).toHaveLength(1);
+    expect(JSON.parse(capRows[0]!.detail)).toMatchObject({ limit: DECISION_PASS_LIMIT, considered: DECISION_PASS_LIMIT, pastCap: { dated: 0, undated: newer + 1 } });
+  }, 120_000);
+
+  it('records which dated openings the cap left when dated openings starve, with their closes', async () => {
+    const limit = 2;
+    const dated: string[] = [];
+    for (let i = 0; i < 4; i += 1) dated.push(await opening(`dated ${i}`, 60 + i, new Date(NOW.getTime() + (i + 1) * DAY).toISOString()));
+    const pass = await decideOpenings(projectId, { now: NOW.toISOString(), limit });
+    expect(pass.pastCap).toEqual({ dated: 2, undated: 0 });
+    const rows = await getDb().all<{ detail: string }>('SELECT detail FROM cash_events WHERE project_id = ? AND kind = ?', [projectId, DECISION_CAP_EVENT]);
+    expect(rows).toHaveLength(1);
+    const detail = JSON.parse(rows[0]!.detail) as { datedLeft: { id: string }[] };
+    expect(detail.datedLeft.map((one) => one.id)).toEqual([dated[2], dated[3]]);
+    // A changed backlog is a new reading.
+    await opening('dated 4', 70, new Date(NOW.getTime() + 5 * DAY).toISOString());
+    await decideOpenings(projectId, { now: NOW.toISOString(), limit });
+    expect((await getDb().all('SELECT id FROM cash_events WHERE project_id = ? AND kind = ?', [projectId, DECISION_CAP_EVENT]))).toHaveLength(2);
+  });
 
   it('an older opening closing within 5 days takes a capped slot ahead of newer undated ones', async () => {
     const limit = 3;
