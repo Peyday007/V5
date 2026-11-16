@@ -275,6 +275,28 @@ export const RECIPES: Record<string, PodRecipe> = {
    * $250 acceleration, 2026-11-16): Brain routes to one GPU URL, so more throughput is more
    * replicas there, not a second pod nobody routes to. Each replica is the 80 GB recipe.
    */
+  /**
+   * gpt-oss-120b on one 141-180 GB card (B200, else H200): the multi-card hosts were refused
+   * "no instances" while single B200/H200 cards were in stock (runpod-survey 43897665060), and the
+   * larger card holds a far bigger KV cache, so one address serves 128 sequences instead of 48.
+   */
+  'gpt-oss-120b-big': {
+    key: 'gpt-oss-120b-big',
+    model: 'openai/gpt-oss-120b',
+    served: 'openai/gpt-oss-120b',
+    gpus: ['NVIDIA B200', 'NVIDIA H200'],
+    image: IMAGE_2026,
+    cuda: [],
+    maxModelLen: 131072,
+    args: [
+      '--gpu-memory-utilization', '0.92', '--max-num-seqs', '128',
+      '--enable-auto-tool-choice', '--tool-call-parser', 'openai', '--reasoning-parser', 'openai_gptoss',
+    ],
+    containerDiskInGb: 250,
+    minGpuGb: 141,
+    clouds: ['SECURE', 'COMMUNITY'],
+    note: 'gpt-oss-120b on one B200/H200: 128K, 128 parallel sequences behind one address',
+  },
   'gpt-oss-120b-2x80': dataParallel120b(2),
   'gpt-oss-120b-4x80': dataParallel120b(4),
   /**
