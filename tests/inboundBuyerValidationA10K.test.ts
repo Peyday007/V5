@@ -89,6 +89,11 @@ import { inputEvidence, measuredRateInput } from '../server/services/goals/portf
 import { conversionState, validationStage } from '../server/services/goals/plan.ts';
 import type { LinkCheck } from '../server/services/goals/plan.ts';
 import type { ModelInput, ModelledOpportunity } from '../server/services/cash/goalScenario.ts';
+import { modelOpportunity, readInboundCommitments } from '../server/services/cash/goalScenario.ts';
+import { recordCardFact } from '../server/repos/cashCardFacts.ts';
+import { createOpportunity } from '../server/repos/cashPortfolio.ts';
+import { getCashMode } from '../server/repos/cashMode.ts';
+import { activate } from '../server/services/cash/lifecycle.ts';
 
 const uid = () => Math.random().toString(36).slice(2, 8);
 const ctx = { runId: 'opr_99026b0ef4c04df9b03d', actor: 'test' };
@@ -448,5 +453,71 @@ describe('the loop itself closes a settled research question instead of engineer
     expect(did ?? '').not.toMatch(/research question closed|research found no answer/);
     const decided = await listImprovementEvents({ candidateId: id, kinds: ['DECIDED'] });
     expect(decided.some((one) => one.detail['question'] === true)).toBe(false);
+  });
+});
+
+describe('OPERATOR:MISSING_CAPABILITY:aed45eeb30f0ec42 — the inbound count is read from the card, through modelOpportunity', () => {
+  it('readInboundCommitments reads money-committed counts against unique visitors', () => {
+    expect(readInboundCommitments('12 pre-orders from 240 unique visitors')).toEqual({ paid: 12, visitors: 240, unit: 'pre-orders' });
+    expect(readInboundCommitments('9 paid deposits out of 1,310 visitors')).toEqual({ paid: 9, visitors: 1310, unit: 'deposits' });
+    expect(readInboundCommitments('31 pledges of 500 unique visitors')).toEqual({ paid: 31, visitors: 500, unit: 'pledges' });
+    expect(readInboundCommitments('4 paid orders among 90 visitors')).toEqual({ paid: 4, visitors: 90, unit: 'paid orders' });
+  });
+
+  it('refuses interest-only signals, a count with no visitors, and more paid than visitors', () => {
+    for (const interest of ['40 email signups from 240 unique visitors', '25 waitlist joins of 200 visitors', '60 clicks on buy now from 300 visitors', '18 sign-ups out of 200 unique visitors']) {
+      expect(readInboundCommitments(interest), interest).toBeNull();
+    }
+    expect(readInboundCommitments('12 pre-orders so far')).toBeNull();
+    expect(readInboundCommitments('3% of buyers reply')).toBeNull();
+    expect(readInboundCommitments('300 pre-orders from 240 unique visitors')).toBeNull();
+    expect(readInboundCommitments('5 pre-orders from 0 visitors')).toBeNull();
+  });
+
+  async function inboundOpening(fact: { kind: 'PERSON' | 'RECOMMENDATION' | 'EVIDENCE'; value: string } | null) {
+    const projectId = (await freshProject()).project.id;
+    const userId = (await createUser({ email: `inbound-${uid()}@example.test`, displayName: 'Owner', password: 'correct horse battery staple' })).id;
+    expect((await activate({ projectId, ownerUserId: userId, actorUserId: userId, objective: 'Collect 10000 dollars of settled cash within 30 days.' })).ok).toBe(true);
+    const mode = (await getCashMode(projectId))!;
+    const opportunity = await createOpportunity({ projectId, cashModeId: mode.id, ownerUserId: userId, title: 'PA Farm Vitality home-improvement plan', mechanism: 'EXPLICIT_PAID_REQUEST', currency: mode.currency, requiredCapabilities: [] });
+    if (fact) {
+      await recordCardFact({ projectId, opportunityId: opportunity.id, field: 'conversionRates', kind: fact.kind, value: fact.value, claimId: fact.kind === 'EVIDENCE' ? `clm_inbound_${uid()}` : undefined, decidedBy: fact.kind === 'RECOMMENDATION' ? 'BRAIN' : userId });
+    }
+    const modelled = await modelOpportunity({ ...opportunity, priceCents: 1_000_000 }, 0, 'A', mode.currency, [], null, new Date('2026-11-16T00:00:00.000Z'));
+    if ('reason' in modelled) throw new Error(modelled.reason);
+    return modelled;
+  }
+
+  it('a paid pre-order count a person recorded on the card is the measured close, HISTORICAL, and reads as conversion', async () => {
+    const modelled = await inboundOpening({ kind: 'PERSON', value: '12 pre-orders from 240 unique visitors' });
+    expect(modelled.close.provenance).toBe('HISTORICAL');
+    expect(modelled.close.note).toContain('12 money-committed pre-orders from 240 unique visitors');
+    expect(modelled.respond.value).toBe(1);
+    expect(conversionState(modelled).state).toBe('HISTORICAL');
+  });
+
+  it('a sourced claim on the card counts the same way', async () => {
+    const modelled = await inboundOpening({ kind: 'EVIDENCE', value: '31 pledges of 500 unique visitors' });
+    expect(modelled.close.provenance).toBe('HISTORICAL');
+    expect(modelled.close.note).toContain('31 money-committed pledges from 500 unique visitors');
+  });
+
+  it("Brain's own proposal on the card is never read as a measured close", async () => {
+    const modelled = await inboundOpening({ kind: 'RECOMMENDATION', value: '12 pre-orders from 240 unique visitors' });
+    expect(modelled.close.provenance).not.toBe('HISTORICAL');
+    expect(modelled.close.note).not.toContain('inbound page');
+    expect(conversionState(modelled).state).not.toBe('HISTORICAL');
+  });
+
+  it('an interest-only count on the card is never fed in as a close rate', async () => {
+    const modelled = await inboundOpening({ kind: 'PERSON', value: '40 email signups from 240 unique visitors' });
+    expect(modelled.close.note).not.toContain('inbound page');
+    expect(conversionState(modelled).state).not.toBe('HISTORICAL');
+  });
+
+  it('with no inbound count on the card the close stays unmeasured', async () => {
+    const modelled = await inboundOpening(null);
+    expect(modelled.close.provenance).not.toBe('HISTORICAL');
+    expect(conversionState(modelled).state).toBe('NONE');
   });
 });

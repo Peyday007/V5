@@ -922,8 +922,12 @@ export function wilson(successes: number, trials: number, z = 1.96): { low: numb
   return { low: Math.max(0, (centre - margin) / denom), high: Math.min(1, (centre + margin) / denom) };
 }
 
-/** Everything the model needs to know about one opportunity, read from its rows. */
-async function modelOpportunity(
+/**
+ * Everything the model needs to know about one opportunity, read from its rows.
+ * Exported so its branches can be driven through the real card-fact read
+ * (tests/inboundBuyerValidationA10K.test.ts drives the inbound one).
+ */
+export async function modelOpportunity(
   opportunity: CashOpportunity,
   index: number,
   tier: string,
