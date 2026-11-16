@@ -25,10 +25,23 @@
  * are listed, in batches, for model assistance, and a record it could read is
  * never sent.
  *
- * Pure: no database, no network, no model. It reads the stored item shape and
- * returns facts, so it works when every model provider is down.
+ * Structure feeds Connect: `extractItems` turns what it read into event-graph
+ * facts (`graphFactsFrom`) and adds them to the running Brain's graph — the
+ * same `currentEventGraph()` that `syncEventGraph` fills from detections and
+ * that construction reads — so a normalized price, quantity, place or stated
+ * request reaches the graph rules and `constructFromGraph` on the same tick it
+ * was read, and only the neighborhoods those facts touch are recomputed. A fact
+ * enters the graph only with what reconciliation left standing: a contested
+ * value enters as unknown, a stale record does not enter, and its basis (a job
+ * posting, an advert, a listing) travels as a missing condition on every
+ * hypothesis built on it, never as a buyer.
+ *
+ * `extractItem`, `reconcile` and `graphFactsFrom` are pure: no database, no
+ * network, no model. Nothing here calls a model, so it works when every model
+ * provider is down.
  */
 import { employerKey, titleKey } from './detectors.ts';
+import { currentEventGraph, type EventGraph, type GraphFact } from '../industry/eventGraph.ts';
 import { readMoneyFigures } from '../cash/figures.ts';
 import { readQuantities } from '../cash/volume.ts';
 
@@ -95,6 +108,17 @@ export interface ExtractionRun {
   reconciled: ReconciledFact[];
   /** Items the parser could not read, batched for model assistance. Never a readable one. */
   needsModel: ExtractableItem[][];
+  /** What this run handed the event graph: the facts it built, and what the graph recomputed for them. */
+  graph: ExtractionGraphUpdate;
+}
+
+export interface ExtractionGraphUpdate {
+  /** One graph fact per record the graph can relate (it names who and what), each linked to its stored item. */
+  facts: GraphFact[];
+  /** Facts the graph took as new or changed; a re-read of an unchanged record is a duplicate and adds nothing. */
+  added: number;
+  /** Neighborhoods recomputed because of them. */
+  affected: string[];
 }
 
 /** How long an observation stands before it reads as stale. */
@@ -250,8 +274,92 @@ export function reconcile(facts: readonly ExtractedFact[], now: Date, staleAfter
   return out;
 }
 
-/** Extract every item, reconcile the facts, and batch the unreadable items for model assistance. */
-export function extractItems(items: readonly ExtractableItem[], now: Date = new Date()): ExtractionRun {
+/**
+ * How a record's kind enters the graph, or null for one the graph has no
+ * relation for. Only a stated request is a buyer. A job posting is a want on
+ * the JOB_POSTING basis (as a code detection is), an advert is an offer, a
+ * listing with a price is a seller's price. A public record, a news item or a
+ * record of unknown kind states no want, offer or price of its own, so it is
+ * not given one.
+ */
+const GRAPH_KIND: Partial<Record<RecordKind, { kind: GraphFact['kind']; basis: GraphFact['basis']; role: GraphFact['actor']['role'] }>> = {
+  STATED_REQUEST: { kind: 'WANT', basis: 'STATED_REQUEST', role: 'BUYER' },
+  JOB_POSTING: { kind: 'WANT', basis: 'JOB_POSTING', role: 'UNKNOWN' },
+  SUPPLIER_AD: { kind: 'OFFER', basis: 'SUPPLIER_AD', role: 'SUPPLIER' },
+  PLATFORM_PRICE: { kind: 'OFFER', basis: 'PLATFORM_PRICE', role: 'SUPPLIER' },
+};
+
+/**
+ * The event-graph facts a set of extracted facts supports: one per record that
+ * names who it is from and what it is about. Values come only from fact keys
+ * reconciliation left OBSERVED — a CONTESTED price, quantity or place enters
+ * as unknown rather than as one side of the disagreement — and a record whose
+ * observation is older than the stale window does not enter at all. Every
+ * graph fact's evidence is the exact stored item, its source and URL. Pure.
+ */
+export function graphFactsFrom(
+  items: readonly ExtractableItem[],
+  facts: readonly ExtractedFact[],
+  reconciled: readonly ReconciledFact[],
+  now: Date,
+  staleAfterMs = STALE_AFTER_MS,
+): GraphFact[] {
+  const status = new Map(reconciled.map((r) => [r.key, r.status]));
+  const standing = (fact: ExtractedFact): boolean => status.get(fact.key) === 'OBSERVED';
+  const byItem = new Map<string, ExtractedFact[]>();
+  for (const fact of facts) byItem.set(fact.evidence.itemId, [...(byItem.get(fact.evidence.itemId) ?? []), fact]);
+  const out: GraphFact[] = [];
+  for (const item of items) {
+    const read = byItem.get(item.id) ?? [];
+    const recordKind = read[0]?.recordKind ?? recordKindOf(item);
+    const shape = GRAPH_KIND[recordKind];
+    if (!shape) continue;
+    const observedAt = item.publishedAt ?? item.fetchedAt;
+    const observed = Date.parse(observedAt);
+    if (!Number.isFinite(observed) || now.getTime() - observed > staleAfterMs) continue;
+    const actor = read.find((f) => f.field === 'buyer' || f.field === 'provider' || f.field === 'employer' || f.field === 'organization');
+    const deliverable = read.find((f) => f.field === 'deliverable');
+    if (!actor || !deliverable) continue;
+    const place = read.find((f) => f.field === 'location' && standing(f));
+    const quantity = read.find((f) => f.field === 'quantity' && standing(f));
+    const price = read.find((f) => f.field === 'price' && standing(f));
+    const days = read
+      .filter((f) => f.field === 'date' && f.evidence.field !== 'publishedAt' && standing(f))
+      .map((f) => String(f.value))
+      .sort();
+    const listed = recordKind === 'PLATFORM_PRICE' && price !== undefined;
+    out.push({
+      id: `extraction:${item.id}`,
+      kind: listed ? 'PRICE' : shape.kind,
+      basis: shape.basis,
+      actor: { key: String(actor.value), name: item.organization, role: shape.role },
+      subject: String(deliverable.value),
+      region: place ? String(place.value) : null,
+      quantity: quantity ? Number(quantity.value) : null,
+      unit: quantity ? quantity.unit : price?.unit ?? null,
+      priceCents: price ? Number(price.value) : null,
+      currency: price?.currency ?? null,
+      // Only a listing is a side of a market: a request's budget is not a price anyone agreed to pay.
+      side: listed ? 'SELL' : null,
+      statedCostCents: null,
+      // A want holds until the last day it states; anything else from when it was seen, open-ended.
+      window: { from: observedAt, to: shape.kind === 'WANT' && days.length > 0 && days[days.length - 1]! >= observedAt.slice(0, 10) ? `${days[days.length - 1]!}T23:59:59.999Z` : null },
+      channel: item.source,
+      rights: [],
+      evidence: [{ rawId: item.id, source: item.source, url: item.url, observedAt }],
+    });
+  }
+  return out;
+}
+
+/**
+ * Extract every item, reconcile the facts, batch the unreadable items for model
+ * assistance, and add what was read to the event graph (by default the running
+ * Brain's, `currentEventGraph()`, which construction reads; `graph: null` adds
+ * nothing). The graph recomputes only the neighborhoods these facts touch, and
+ * an item read again unchanged is a duplicate that recomputes nothing.
+ */
+export function extractItems(items: readonly ExtractableItem[], now: Date = new Date(), options: { graph?: EventGraph | null } = {}): ExtractionRun {
   const facts: ExtractedFact[] = [];
   const unreadable: ExtractableItem[] = [];
   for (const item of items) {
@@ -261,5 +369,17 @@ export function extractItems(items: readonly ExtractableItem[], now: Date = new 
   }
   const needsModel: ExtractableItem[][] = [];
   for (let i = 0; i < unreadable.length; i += MODEL_BATCH_SIZE) needsModel.push(unreadable.slice(i, i + MODEL_BATCH_SIZE));
-  return { facts, reconciled: reconcile(facts, now), needsModel };
+  const reconciled = reconcile(facts, now);
+  const graphFacts = graphFactsFrom(items, facts, reconciled, now);
+  const graph = options.graph === undefined ? currentEventGraph() : options.graph;
+  const affected = new Set<string>();
+  let added = 0;
+  if (graph) {
+    for (const fact of graphFacts) {
+      const result = graph.add(fact);
+      if (result.affected.length > 0) added += 1;
+      for (const hood of result.affected) affected.add(hood);
+    }
+  }
+  return { facts, reconciled, needsModel, graph: { facts: graphFacts, added, affected: [...affected].sort() } };
 }
