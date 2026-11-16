@@ -20,7 +20,7 @@ import { reopenConditionFor, type CashDecision, type DecisionVerdict } from '../
 import { screenOpportunity, type ScreenFacts, type ScreenLimits } from './screen.ts';
 import { nowIso } from '../../repos/util.ts';
 import { getOpportunity, listOpportunities } from '../../repos/cashPortfolio.ts';
-import { liveGoalLimits, screenFactsFor } from './worthResearching.ts';
+import { closingInstant, liveGoalLimits, screenFactsFor } from './worthResearching.ts';
 
 /** States a person chose. Nothing here decides over them. */
 const PERSON_STATES: ReadonlySet<string> = new Set(['ARCHIVED', 'DECLINED']);
@@ -172,6 +172,41 @@ export function factsChangeRef(facts: ScreenFacts): string {
   return createHash('sha256').update(JSON.stringify(facts)).digest('hex').slice(0, 16);
 }
 
+/**
+ * The order `decideOpenings` walks decidable openings in, before its cap:
+ * Earliest Deadline First (§90, the `diveOrder` precedent in validation.ts).
+ *
+ * Production, 2026-11-16 (ORIGINATED:MISSED_OPPORTUNITY:CLOSING): openings
+ * closing within five days (the PRPA RFP 26-152-P, JPFans closing 2026-11-20)
+ * stayed unpursued. The producer walked `listOpportunities` newest first and
+ * stopped at `limit` goal-opening pairs, with every unchanged pair still using
+ * up the cap, so an older opening with a recorded close a few days away sat
+ * past the cap on every tick. It never got a decision, and the lifecycle had
+ * nothing to PRIORITIZE it on before its window ended.
+ *
+ * Openings with a recorded close still in the future come first, earliest
+ * first. Undated openings, unreadable dates and closes already passed follow,
+ * in the order they arrived (newest first, as `listOpportunities` returns
+ * them). Stable and deterministic. No gate, verdict rule, limit or evidence
+ * bar moves: only which openings take the capped slots first. Pure.
+ */
+export function decisionOrder<T extends { expiresAt: string | null }>(openings: readonly T[], now: string): T[] {
+  const at = Date.parse(now);
+  const deadline = (opening: T): number | null => {
+    const closes = closingInstant(opening.expiresAt);
+    return closes !== null && closes > at ? closes : null;
+  };
+  return openings
+    .map((opening, index) => ({ opening, index, closes: deadline(opening) }))
+    .sort((a, b) => {
+      if (a.closes !== null && b.closes !== null && a.closes !== b.closes) return a.closes - b.closes;
+      if (a.closes !== null && b.closes === null) return -1;
+      if (a.closes === null && b.closes !== null) return 1;
+      return a.index - b.index;
+    })
+    .map((one) => one.opening);
+}
+
 export interface DecideOpeningsPass {
   goals: number;
   considered: number;
@@ -207,7 +242,7 @@ export async function decideOpenings(
   out.goals = goals.length;
   if (goals.length > 0) {
     const limit = options.limit ?? 500;
-    const openings = await listOpportunities({ projectId, states: [...DECIDABLE_STATES] });
+    const openings = decisionOrder(await listOpportunities({ projectId, states: [...DECIDABLE_STATES] }), now);
     for (const opening of openings) {
       // Each decision is synchronous work; the event loop is handed back between openings (§90, 2026-11-06 stalls).
       await new Promise<void>((resolve) => setImmediate(resolve));
