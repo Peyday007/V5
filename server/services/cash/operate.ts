@@ -1280,6 +1280,52 @@ export interface AuthorityAdvance {
 /** How many buyers one pass may write to. See the loop below. */
 export const MAX_CONTACTS_PER_PASS = 3;
 
+/**
+ * The order READY pieces are reached in, under MAX_CONTACTS_PER_PASS.
+ *
+ * Production, 2026-11-16 (ORIGINATED:MISSED_OPPORTUNITY:CLOSING): openings
+ * stayed READY until their window shut. The research orders (engine
+ * questions, dives, `decisionOrder`) already took the earliest window first,
+ * and a PRIORITIZE decision was recorded for them — but this loop is the one
+ * consumer that moves a piece out of READY (contact, then `beginExecution`),
+ * and it read neither: it ranked by goal sales order and then row age, so with
+ * three contacts a pass a piece closing in two days waited behind older,
+ * undated ones until it expired unpursued.
+ *
+ * Earliest Deadline First goes ahead of the existing keys: a piece whose
+ * recorded window is still open before one with no date, the earlier window
+ * first. Then a current PRIORITIZE decision (so the code screen's verdict
+ * reaches the consumer that acts on it), then the goal's sales order, then the
+ * order the rows came in. A window that has already closed sorts as undated —
+ * the loop withholds it anyway. No cap, gate, grant or evidence bar moves:
+ * only which pieces the existing cap reaches first. Pure.
+ */
+export function readyContactOrder<T extends Pick<CashOpportunity, 'id' | 'expiresAt'>>(
+  pieces: readonly T[],
+  ctx: { now: string; salesOrder: readonly string[]; prioritized: ReadonlySet<string> },
+): T[] {
+  const nowMs = Date.parse(ctx.now);
+  const open = (one: T): number | null => {
+    const closes = closingInstant(one.expiresAt);
+    return closes !== null && closes > nowMs ? closes : null;
+  };
+  const rank = (id: string) => {
+    const at = ctx.salesOrder.indexOf(id);
+    return at < 0 ? Number.MAX_SAFE_INTEGER : at;
+  };
+  return pieces
+    .map((one, at) => ({ one, at, closes: open(one), first: ctx.prioritized.has(one.id) ? 0 : 1 }))
+    .sort((a, b) => {
+      if (a.closes !== null || b.closes !== null) {
+        if (a.closes === null) return 1;
+        if (b.closes === null) return -1;
+        if (a.closes !== b.closes) return a.closes - b.closes;
+      }
+      return a.first - b.first || rank(a.one.id) - rank(b.one.id) || a.at - b.at;
+    })
+    .map(({ one }) => one);
+}
+
 export async function advanceWithinAuthority(projectId: string): Promise<AuthorityAdvance> {
   const out: AuthorityAdvance = { took: [], withheld: [] };
   const mode = await getCashMode(projectId);
@@ -1334,14 +1380,15 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
    */
   const { salesOrderForProject } = await import('../goals/plan.ts');
   const salesOrder = salesOrderForProject(projectId);
-  const rank = (id: string) => {
-    const at = salesOrder.indexOf(id);
-    return at < 0 ? Number.MAX_SAFE_INTEGER : at;
-  };
-  const readyPieces = (await listOpportunities({ projectId, states: ['READY'] }))
-    .map((one, at) => ({ one, at }))
-    .sort((a, b) => rank(a.one.id) - rank(b.one.id) || a.at - b.at)
-    .map(({ one }) => one);
+  const { currentDecisionsForProject } = await import('../../repos/cashDecisions.ts');
+  const prioritized = new Set(
+    (await currentDecisionsForProject(projectId)).filter((one) => one.verdict === 'PRIORITIZE').map((one) => one.opportunityId),
+  );
+  const readyPieces = readyContactOrder(await listOpportunities({ projectId, states: ['READY'] }), {
+    now: new Date().toISOString(),
+    salesOrder,
+    prioritized,
+  });
   for (const opportunity of readyPieces) {
     if (opportunity.duplicateOfId) continue;
     // A piece whose own figures lose money is never contacted for, whoever marked it ready.
