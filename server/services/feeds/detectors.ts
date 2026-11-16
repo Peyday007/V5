@@ -29,6 +29,7 @@ import { newId } from '../../repos/util.ts';
 import { insertFeedItems } from '../../repos/feeds.ts';
 import { DELIVERABLE_LABEL, type DeliverableKind } from '../cash/deliverables/spec.ts';
 import type { Weakness } from '../../domain/improvement.ts';
+import type { Completer, LaneConfig } from '../cheap/lane.ts';
 
 /** The source a detection's own lead item is filed under. */
 export const CODE_SIGNAL_SOURCE = 'code-signal';
@@ -364,9 +365,15 @@ export const DETECTORS: readonly Detector[] = [CONCENTRATED_HIRING, REPEATED_DEM
  * the screen KEEPs confirms it, one it DROPs is a false join, and an item the
  * screen KEPT from the same entity or family that the rule left out is a miss.
  * Evidence quality is the share of members with the fields a lead needs (a
- * named organisation and a publication date). An ACTIVE rule's members stop
- * being screened once covered, so its reading rests on what was screened
- * before — never on an assumption that it stayed right.
+ * named organisation and a publication date).
+ *
+ * An ACTIVE rule's members are covered and skip the per-record screen, so its
+ * pre-promotion sample would freeze its precision. `auditActiveRule` keeps an
+ * audit sample flowing instead: one covered member in `ACTIVE_AUDIT_EVERY` is
+ * still screened after it was covered, newest first. The members screened
+ * after their coverage are the rule's audit, and their precision
+ * (`auditPrecision`) is what an ACTIVE rule is judged on once the audit is
+ * large enough, so a rule that degrades returns to SHADOW on new evidence.
  */
 export interface RuleReading {
   rule: string;
@@ -382,6 +389,10 @@ export interface RuleReading {
   precision: number | null;
   /** Share of members with an organisation and a publication date; null with no members. */
   evidenceQuality: number | null;
+  /** Covered members screened after they were covered: the ACTIVE rule's audit sample. */
+  auditedMembers?: number;
+  /** Confirmed over audited members with a verdict; null below the sample a judgment needs. */
+  auditPrecision?: number | null;
 }
 
 /** Screened members needed before a rule's precision is read at all. */
@@ -391,6 +402,85 @@ export const PROMOTION_MIN_PRECISION = 0.8;
 export const PROMOTION_MIN_EVIDENCE = 0.8;
 /** An ACTIVE rule falling below this precision is returned to SHADOW. */
 export const DEMOTION_PRECISION = 0.6;
+/** One covered member in this many is still screened, as the ACTIVE rule's audit. */
+export const ACTIVE_AUDIT_EVERY = 10;
+/** At most this many audit screens per rule per pass, so an audit never floods the free lane. */
+export const AUDIT_PER_PASS = 3;
+
+/** Each covered member of a rule version: when it was covered, and when (if ever) it was screened after that. */
+async function coverageAudit(detector: Pick<Detector, 'id' | 'version'>): Promise<{ itemId: string; coveredAt: string; auditedAt: string | null }[]> {
+  const db = getDb();
+  const covered = await db.all<{ item_id: string; covered_at: string }>(
+    `SELECT c.item_id, MIN(c.covered_at) AS covered_at FROM feed_item_coverage c
+       JOIN feed_detections d ON d.id = c.detection_id
+      WHERE d.rule_id = ? AND d.rule_version = ?
+      GROUP BY c.item_id`,
+    [detector.id, detector.version],
+  );
+  const screenedAt = new Map<string, string>();
+  for (let at = 0; at < covered.length; at += 500) {
+    const slice = covered.slice(at, at + 500).map((one) => one.item_id);
+    const rows = await db.all<{ subject_id: string; latest: string }>(
+      `SELECT subject_id, MAX(created_at) AS latest FROM cheap_results
+        WHERE kind = 'SCREEN_LEAD' AND subject_id IN (${slice.map(() => '?').join(',')}) GROUP BY subject_id`,
+      slice,
+    );
+    for (const row of rows) screenedAt.set(row.subject_id, row.latest);
+  }
+  return covered.map((one) => {
+    const latest = screenedAt.get(one.item_id) ?? null;
+    return { itemId: one.item_id, coveredAt: one.covered_at, auditedAt: latest && latest > one.covered_at ? latest : null };
+  });
+}
+
+/** How many more covered members an audit needs to keep one in `every` screened after coverage. Pure. */
+export function auditShortfall(covered: number, audited: number, every: number = ACTIVE_AUDIT_EVERY): number {
+  return Math.max(0, Math.ceil(covered / Math.max(1, every)) - audited);
+}
+
+/**
+ * Screen a bounded sample of an ACTIVE rule's covered members with the free
+ * models, as an independent audit of the rule (F6). Picks the newest covered
+ * members nobody screened since coverage, up to the shortfall against one in
+ * `ACTIVE_AUDIT_EVERY` and `AUDIT_PER_PASS`. Returns how many it screened.
+ * Nothing runs without a configured lane, so the audit never invents a verdict.
+ */
+export async function auditActiveRule(
+  detector: Pick<Detector, 'id' | 'version'>,
+  input: { now?: Date; config?: LaneConfig | null; completer?: Completer; perPass?: number } = {},
+): Promise<number> {
+  const lane = await import('../cheap/lane.ts');
+  const config = input.config === undefined ? lane.laneConfig() : input.config;
+  if (!config) return 0;
+  const now = input.now ?? new Date();
+  const rows = await coverageAudit(detector);
+  const audited = rows.filter((one) => one.auditedAt !== null).length;
+  const want = Math.min(input.perPass ?? AUDIT_PER_PASS, auditShortfall(rows.length, audited));
+  if (want <= 0) return 0;
+  const pending = new Set(rows.filter((one) => one.auditedAt === null).map((one) => one.itemId));
+  if (pending.size === 0) return 0;
+  const ids = [...pending];
+  const items: { id: string; source: string; url: string; title: string; organization: string | null; published_at: string | null; fetched_at: string; body: string | null }[] = [];
+  for (let at = 0; at < ids.length; at += 500) {
+    const slice = ids.slice(at, at + 500);
+    items.push(...(await getDb().all<(typeof items)[number]>(
+      `SELECT id, source, url, title, organization, published_at, fetched_at, body FROM feed_items WHERE id IN (${slice.map(() => '?').join(',')})`,
+      slice,
+    )));
+  }
+  items.sort((a, b) => (a.fetched_at < b.fetched_at ? 1 : a.fetched_at > b.fetched_at ? -1 : a.id.localeCompare(b.id)));
+  const health = await lane.modelHealth('SCREEN_LEAD', now);
+  let screened = 0;
+  for (const item of items.slice(0, want)) {
+    await lane.screenLead(
+      item.id,
+      { source: item.source, title: item.title, organization: item.organization, publishedAt: item.published_at, body: item.body, url: item.url },
+      { config, completer: input.completer, now, health },
+    );
+    screened += 1;
+  }
+  return screened;
+}
 
 async function screenVerdicts(ids: readonly string[]): Promise<Map<string, 'KEEP' | 'DROP'>> {
   const out = new Map<string, 'KEEP' | 'DROP'>();
@@ -455,6 +545,11 @@ export async function ruleReading(detector: Detector, now: Date = new Date()): P
   const confirmed = screened.filter((id) => verdicts.get(id) === 'KEEP').length;
   const complete = memberRows.filter((row) => row.organization && row.published_at).length;
   const missed = related.filter((one) => verdicts.get(one.id) === 'KEEP');
+  // The audit: covered members screened after their coverage, read with the same verdicts.
+  const auditedIds = (await coverageAudit(detector)).filter((one) => one.auditedAt !== null).map((one) => one.itemId);
+  // Every covered item is a member of this rule's detections, so `verdicts` already holds its screen.
+  const auditJudged = auditedIds.filter((id) => verdicts.has(id));
+  const auditConfirmed = auditJudged.filter((id) => verdicts.get(id) === 'KEEP').length;
   return {
     rule: `${detector.id}@${detector.version}`,
     detections: rows.length,
@@ -466,6 +561,8 @@ export async function ruleReading(detector: Detector, now: Date = new Date()): P
     missedSamples: missed.slice(0, 5).map((one) => `${one.title} — ${one.url}`),
     precision: screened.length >= PROMOTION_MIN_SCREENED ? confirmed / screened.length : null,
     evidenceQuality: memberRows.length > 0 ? complete / memberRows.length : null,
+    auditedMembers: auditedIds.length,
+    auditPrecision: auditJudged.length >= PROMOTION_MIN_SCREENED ? auditConfirmed / auditJudged.length : null,
   };
 }
 
@@ -480,7 +577,23 @@ export async function ruleReading(detector: Detector, now: Date = new Date()): P
  * version), so a demotion or a version change is a rollback with its
  * provenance intact.
  */
-export function modeDecision(declared: DetectorMode, reading: Pick<RuleReading, 'precision' | 'evidenceQuality' | 'screenedMembers'>): { mode: DetectorMode; reason: string } {
+export function modeDecision(
+  declared: DetectorMode,
+  reading: Pick<RuleReading, 'precision' | 'evidenceQuality' | 'screenedMembers' | 'auditPrecision' | 'auditedMembers'>,
+): { mode: DetectorMode; reason: string } {
+  /*
+   * A rule with an audit ran ACTIVE (only ACTIVE covers members), so once the
+   * audit is large enough it is judged on what it detects now, not on its
+   * pre-promotion sample — whatever mode its code declares. A version demoted
+   * this way stays SHADOW: its audit does not grow again, and the correction
+   * is a new version, read from zero with this one's rows kept.
+   */
+  if (reading.auditPrecision !== undefined && reading.auditPrecision !== null) {
+    if (reading.auditPrecision < DEMOTION_PRECISION) {
+      return { mode: 'SHADOW', reason: `demoted to SHADOW: audit precision ${reading.auditPrecision.toFixed(2)} over ${reading.auditedMembers ?? 0} audited member(s) fell below ${DEMOTION_PRECISION}` };
+    }
+    return { mode: 'ACTIVE', reason: `ACTIVE: audit precision ${reading.auditPrecision.toFixed(2)} over ${reading.auditedMembers ?? 0} audited member(s)` };
+  }
   if (reading.precision === null) return { mode: declared, reason: `${reading.screenedMembers} screened member(s), under the ${PROMOTION_MIN_SCREENED} a judgment needs; ${declared} as stated` };
   if (declared === 'SHADOW') {
     if (reading.precision >= PROMOTION_MIN_PRECISION && (reading.evidenceQuality ?? 0) >= PROMOTION_MIN_EVIDENCE) {
@@ -597,10 +710,18 @@ export interface DetectorRunReport {
   filed: number;
   /** The improvement candidate this rule's repeated misses were registered as, or null. */
   proposed: string | null;
+  /** Covered members screened this pass as the ACTIVE rule's audit (`auditActiveRule`). */
+  audited: number;
 }
 
 /** Run every installed rule once over the stored items it reads. Idempotent. */
-export async function runDetectors(input: { now?: Date; detectors?: readonly Detector[]; rules?: readonly string[] } = {}): Promise<DetectorRunReport[]> {
+export async function runDetectors(input: {
+  now?: Date;
+  detectors?: readonly Detector[];
+  rules?: readonly string[];
+  /** The free lane the ACTIVE-rule audit screens with; default the configured one, null for none. */
+  audit?: { config?: LaneConfig | null; completer?: Completer };
+} = {}): Promise<DetectorRunReport[]> {
   const now = input.now ?? new Date();
   const db = getDb();
   const reports: DetectorRunReport[] = [];
@@ -632,7 +753,7 @@ export async function runDetectors(input: { now?: Date; detectors?: readonly Det
       body: row.body,
     }));
     const signals = detector.detect(records, now);
-    const report: DetectorRunReport = { rule: `${detector.id}@${detector.version}`, mode: decision.mode, modeReason: decision.reason, records: records.length, signals: signals.length, created: 0, extended: 0, covered: 0, filed: 0, proposed };
+    const report: DetectorRunReport = { rule: `${detector.id}@${detector.version}`, mode: decision.mode, modeReason: decision.reason, records: records.length, signals: signals.length, created: 0, extended: 0, covered: 0, filed: 0, proposed, audited: 0 };
     for (const signal of signals) {
       const at = now.toISOString();
       const open = await db.get<DetectionRow>(
@@ -714,6 +835,10 @@ export async function runDetectors(input: { now?: Date; detectors?: readonly Det
         report.covered += covered.changes ?? 0;
       }
       if (signal.deliverable && (await fileDetectionLead(detectionId, signal))) report.filed += 1;
+    }
+    // An ACTIVE rule's covered members keep an audit sample screened, so its precision can still move (F6).
+    if (decision.mode === 'ACTIVE') {
+      report.audited = await auditActiveRule(detector, { now, config: input.audit?.config, completer: input.audit?.completer }).catch(() => 0);
     }
     reports.push(report);
   }
