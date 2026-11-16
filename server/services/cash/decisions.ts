@@ -7,6 +7,14 @@
  * and what would reopen it. It is recomputed only for a distinct change — a
  * changed goal limit, new evidence, a date passing — and a person's archive or
  * decline is never overwritten.
+ *
+ * This module owns which opening gets decided, and in what order. That makes
+ * it the owner of "an opening closing soon went unpursued"
+ * (ORIGINATED:MISSED_OPPORTUNITY:CLOSING), even when a gap report names
+ * `lifecycle.ts`. `lifecycle.ts` turns the cash section on and winds it down.
+ * It never reads, orders or decides an opening, so changing it could not get a
+ * closing opening decided. The deadline order (`decisionOrder`) lives here,
+ * beside the cap it competes for, and nothing else orders openings.
  */
 import { createHash } from 'node:crypto';
 import { getDb } from '../../db/database.ts';
@@ -18,9 +26,10 @@ import {
 } from '../../repos/cashDecisions.ts';
 import { reopenConditionFor, type CashDecision, type DecisionVerdict } from '../../domain/cashDecisions.ts';
 import { screenOpportunity, type ScreenFacts, type ScreenLimits } from './screen.ts';
-import { nowIso } from '../../repos/util.ts';
+import { nowIso, parseJson } from '../../repos/util.ts';
+import { recordCashEvent } from '../../repos/cashMode.ts';
 import { getOpportunity, listOpportunities } from '../../repos/cashPortfolio.ts';
-import { liveGoalLimits, screenFactsFor } from './worthResearching.ts';
+import { closingInstant, liveGoalLimits, screenFactsFor } from './worthResearching.ts';
 
 /** States a person chose. Nothing here decides over them. */
 const PERSON_STATES: ReadonlySet<string> = new Set(['ARCHIVED', 'DECLINED']);
@@ -172,6 +181,78 @@ export function factsChangeRef(facts: ScreenFacts): string {
   return createHash('sha256').update(JSON.stringify(facts)).digest('hex').slice(0, 16);
 }
 
+/**
+ * How many goal-opening pairs one production decision pass considers
+ * (`operate.ts` calls `decideOpenings` without a `limit`). Exported so the
+ * failure-class test drives the cap production runs, not an artificial one.
+ */
+export const DECISION_PASS_LIMIT = 500;
+
+/**
+ * The row that a decision pass reached its cap and left decidable openings for
+ * a later tick. Without it nobody could say whether the production cap ever
+ * binds (review finding R3-F2): `pastCap` lived only in a tick's return value.
+ * Recorded when the counts change, so an unchanged backlog writes nothing new.
+ */
+export const DECISION_CAP_EVENT = 'CASH_DECISION_CAP_REACHED';
+
+/** Most dated openings left past the cap that one cap row names. */
+const CAP_EVENT_SAMPLE = 20;
+
+/** Every this-many-th place in `decisionOrder` is reserved for an undated opening while any remain. */
+export const UNDATED_RESERVED_EVERY = 4;
+
+/**
+ * The order `decideOpenings` walks decidable openings in, before its cap:
+ * Earliest Deadline First (§90, the `diveOrder` precedent in validation.ts).
+ *
+ * Production, 2026-11-16 (ORIGINATED:MISSED_OPPORTUNITY:CLOSING): openings
+ * closing within five days (the PRPA RFP 26-152-P, JPFans closing 2026-11-20)
+ * stayed unpursued. The producer walked `listOpportunities` newest first and
+ * stopped at `limit` goal-opening pairs, with every unchanged pair still using
+ * up the cap, so an older opening with a recorded close a few days away sat
+ * past the cap on every tick. It never got a decision, and the lifecycle had
+ * nothing to PRIORITIZE it on before its window ended.
+ *
+ * Openings with a recorded close still in the future are taken earliest
+ * first. Undated openings, unreadable dates and closes already passed are
+ * taken in the order they arrived (newest first, as `listOpportunities`
+ * returns them). No gate, verdict rule, limit or evidence bar moves: only
+ * which openings take the capped slots first. Pure and stable.
+ *
+ * Pure EDF would let enough dated openings starve every undated one, new
+ * ones included: the old starvation turned the other way round (review
+ * finding F2). So the undated openings get a reserved share of the order
+ * (temporal isolation, the remedy Buttazzo gives for EDF under overload):
+ * every `UNDATED_RESERVED_EVERY`-th place goes to the next undated opening
+ * while any remain. Under any cap of k openings, at least
+ * floor(k / UNDATED_RESERVED_EVERY) undated openings are decided in arrival
+ * order, and the dated ones still get the rest, earliest close first. When
+ * one of the two queues runs out, the other fills the remaining places.
+ */
+export function decisionOrder<T extends { expiresAt: string | null }>(openings: readonly T[], now: string): T[] {
+  const at = Date.parse(now);
+  const deadline = (opening: T): number | null => {
+    const closes = closingInstant(opening.expiresAt);
+    return closes !== null && closes > at ? closes : null;
+  };
+  const ranked = openings.map((opening, index) => ({ opening, index, closes: deadline(opening) }));
+  const dated = ranked
+    .filter((one): one is { opening: T; index: number; closes: number } => one.closes !== null)
+    .sort((a, b) => a.closes - b.closes || a.index - b.index)
+    .map((one) => one.opening);
+  const undated = ranked.filter((one) => one.closes === null).map((one) => one.opening);
+  const out: T[] = [];
+  let d = 0;
+  let u = 0;
+  while (d < dated.length || u < undated.length) {
+    const reserved = (out.length + 1) % UNDATED_RESERVED_EVERY === 0;
+    if (u < undated.length && (reserved || d >= dated.length)) out.push(undated[u++]!);
+    else out.push(dated[d++]!);
+  }
+  return out;
+}
+
 export interface DecideOpeningsPass {
   goals: number;
   considered: number;
@@ -179,6 +260,39 @@ export interface DecideOpeningsPass {
   unchanged: number;
   byVerdict: Record<DecisionVerdict, number>;
   recompute: { recomputed: number; released: number; deferred: number };
+  /**
+   * Decidable openings the cap left for a later tick, by whether they carry a
+   * future close. What the reservation in `decisionOrder` bounds, counted on
+   * every pass, so starvation on either side shows up in the record.
+   */
+  pastCap: { dated: number; undated: number };
+}
+
+/**
+ * Record that the cap bound, unless the latest cap row already says the same
+ * thing (same cap, same counts left on each side). A production reading of
+ * whether the cap binds, and which dated openings it left, rather than an
+ * inference from a test's artificial cap.
+ */
+async function recordCapReached(
+  projectId: string,
+  reading: { limit: number; considered: number; decidable: number; pastCap: { dated: number; undated: number }; datedLeft: { id: string; expiresAt: string | null }[] },
+): Promise<void> {
+  const last = await getDb().get<{ detail: string | null }>(
+    `SELECT detail FROM cash_events WHERE project_id = ? AND kind = ? ORDER BY created_at DESC, id DESC LIMIT 1`,
+    [projectId, DECISION_CAP_EVENT],
+  );
+  if (last) {
+    const prior = parseJson<{ limit?: unknown; pastCap?: { dated?: unknown; undated?: unknown } }>(last.detail, {});
+    if (prior.limit === reading.limit && prior.pastCap?.dated === reading.pastCap.dated && prior.pastCap?.undated === reading.pastCap.undated) return;
+  }
+  await recordCashEvent({
+    projectId,
+    kind: DECISION_CAP_EVENT,
+    actorRef: 'BRAIN',
+    summary: `The decision pass reached its cap of ${reading.limit} goal-opening pairs and left ${reading.pastCap.dated} dated and ${reading.pastCap.undated} undated openings for a later tick.`,
+    detail: { ...reading, pastCap: { ...reading.pastCap } },
+  });
 }
 
 /**
@@ -202,16 +316,29 @@ export async function decideOpenings(
     unchanged: 0,
     byVerdict: { REJECT: 0, HOLD: 0, PRIORITIZE: 0 },
     recompute: { recomputed: 0, released: 0, deferred: 0 },
+    pastCap: { dated: 0, undated: 0 },
   };
   const goals = await liveGoalLimits(projectId, now);
   out.goals = goals.length;
   if (goals.length > 0) {
-    const limit = options.limit ?? 500;
-    const openings = await listOpportunities({ projectId, states: [...DECIDABLE_STATES] });
-    for (const opening of openings) {
+    const limit = options.limit ?? DECISION_PASS_LIMIT;
+    const openings = decisionOrder(await listOpportunities({ projectId, states: [...DECIDABLE_STATES] }), now);
+    const at = Date.parse(now);
+    const datedLeft: { id: string; expiresAt: string | null }[] = [];
+    for (const [position, opening] of openings.entries()) {
+      if (out.considered >= limit) {
+        for (const left of openings.slice(position)) {
+          const closes = closingInstant(left.expiresAt);
+          if (closes !== null && closes > at) {
+            out.pastCap.dated += 1;
+            if (datedLeft.length < CAP_EVENT_SAMPLE) datedLeft.push({ id: left.id, expiresAt: left.expiresAt });
+          } else out.pastCap.undated += 1;
+        }
+        await recordCapReached(projectId, { limit, considered: out.considered, decidable: openings.length, pastCap: out.pastCap, datedLeft });
+        break;
+      }
       // Each decision is synchronous work; the event loop is handed back between openings (§90, 2026-11-06 stalls).
       await new Promise<void>((resolve) => setImmediate(resolve));
-      if (out.considered >= limit) break;
       const facts = screenFactsFor(opening);
       const factsRef = factsChangeRef(facts);
       for (const goal of goals) {

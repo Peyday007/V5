@@ -1280,6 +1280,81 @@ export interface AuthorityAdvance {
 /** How many buyers one pass may write to. See the loop below. */
 export const MAX_CONTACTS_PER_PASS = 3;
 
+/**
+ * The order READY pieces are reached in, under MAX_CONTACTS_PER_PASS.
+ *
+ * Production, 2026-11-16 (ORIGINATED:MISSED_OPPORTUNITY:CLOSING): openings
+ * stayed READY until their window shut. The research orders (engine
+ * questions, dives, `decisionOrder`) already took the earliest window first,
+ * and a PRIORITIZE decision was recorded for them — but this loop is the one
+ * consumer that moves a piece out of READY (contact, then `beginExecution`),
+ * and it read neither: it ranked by goal sales order and then row age, so with
+ * three contacts a pass a piece closing in two days waited behind older,
+ * undated ones until it expired unpursued.
+ *
+ * The order takes two queues and merges them, the way `decisionOrder` does one
+ * step upstream:
+ *
+ *   * dated pieces (a recorded window still open), a current PRIORITIZE
+ *     decision first, then Earliest Deadline First, then the goal's sales
+ *     order, then the order the rows came in;
+ *   * undated pieces (no date, an unreadable one, or a window already closed —
+ *     the loop withholds those anyway), a current PRIORITIZE decision first,
+ *     then sales order, then row order.
+ *
+ * At each place the code screen's verdict leads: an undated piece with a
+ * PRIORITIZE decision goes ahead of a dated piece without one (review finding
+ * R4-F2: the date had been outranking the verdict this order is meant to
+ * deliver). Otherwise the dated queue leads, except that every
+ * `READY_UNDATED_RESERVED_EVERY`-th place is reserved for the next undated
+ * piece while any remain — temporal isolation, the remedy for EDF under
+ * overload that `decisionOrder` already applies (UNDATED_RESERVED_EVERY,
+ * review finding F2). The share is sized to this cap, not to the decision
+ * cap: with MAX_CONTACTS_PER_PASS contacts a pass, an undated piece holds one
+ * of the places every pass reaches, so a steady supply of dated pieces can no
+ * longer starve it. When either queue runs out the other fills the rest. No
+ * cap, gate, grant or evidence bar moves: only which pieces the existing cap
+ * reaches first. Pure and stable.
+ */
+export const READY_UNDATED_RESERVED_EVERY = MAX_CONTACTS_PER_PASS;
+
+export function readyContactOrder<T extends Pick<CashOpportunity, 'id' | 'expiresAt'>>(
+  pieces: readonly T[],
+  ctx: { now: string; salesOrder: readonly string[]; prioritized: ReadonlySet<string> },
+): T[] {
+  const nowMs = Date.parse(ctx.now);
+  const open = (one: T): number | null => {
+    const closes = closingInstant(one.expiresAt);
+    return closes !== null && closes > nowMs ? closes : null;
+  };
+  const rank = (id: string) => {
+    const at = ctx.salesOrder.indexOf(id);
+    return at < 0 ? Number.MAX_SAFE_INTEGER : at;
+  };
+  type Ranked = { one: T; at: number; closes: number | null; first: number };
+  const ranked: Ranked[] = pieces.map((one, at) => ({ one, at, closes: open(one), first: ctx.prioritized.has(one.id) ? 0 : 1 }));
+  const tail = (a: Ranked, b: Ranked) => rank(a.one.id) - rank(b.one.id) || a.at - b.at;
+  const dated = ranked.filter((r) => r.closes !== null).sort((a, b) => a.first - b.first || (a.closes as number) - (b.closes as number) || tail(a, b));
+  const undated = ranked.filter((r) => r.closes === null).sort((a, b) => a.first - b.first || tail(a, b));
+  const out: T[] = [];
+  let d = 0;
+  let u = 0;
+  while (d < dated.length || u < undated.length) {
+    const nextDated = dated[d];
+    const nextUndated = undated[u];
+    const reserved = (out.length + 1) % READY_UNDATED_RESERVED_EVERY === 0;
+    const verdictLeads = !!nextUndated && !!nextDated && nextUndated.first < nextDated.first;
+    if (nextUndated && (!nextDated || verdictLeads || reserved)) {
+      out.push(nextUndated.one);
+      u += 1;
+    } else {
+      out.push(nextDated!.one);
+      d += 1;
+    }
+  }
+  return out;
+}
+
 export async function advanceWithinAuthority(projectId: string): Promise<AuthorityAdvance> {
   const out: AuthorityAdvance = { took: [], withheld: [] };
   const mode = await getCashMode(projectId);
@@ -1334,14 +1409,15 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
    */
   const { salesOrderForProject } = await import('../goals/plan.ts');
   const salesOrder = salesOrderForProject(projectId);
-  const rank = (id: string) => {
-    const at = salesOrder.indexOf(id);
-    return at < 0 ? Number.MAX_SAFE_INTEGER : at;
-  };
-  const readyPieces = (await listOpportunities({ projectId, states: ['READY'] }))
-    .map((one, at) => ({ one, at }))
-    .sort((a, b) => rank(a.one.id) - rank(b.one.id) || a.at - b.at)
-    .map(({ one }) => one);
+  const { currentDecisionsForProject } = await import('../../repos/cashDecisions.ts');
+  const prioritized = new Set(
+    (await currentDecisionsForProject(projectId)).filter((one) => one.verdict === 'PRIORITIZE').map((one) => one.opportunityId),
+  );
+  const readyPieces = readyContactOrder(await listOpportunities({ projectId, states: ['READY'] }), {
+    now: new Date().toISOString(),
+    salesOrder,
+    prioritized,
+  });
   for (const opportunity of readyPieces) {
     if (opportunity.duplicateOfId) continue;
     // A piece whose own figures lose money is never contacted for, whoever marked it ready.

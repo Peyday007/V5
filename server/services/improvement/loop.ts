@@ -40,6 +40,7 @@ import {
   BEFORE_WINDOW_HOURS,
   RECENT_WINDOW_HOURS,
   MEASURE_WINDOW_HOURS,
+  MEASURE_MAX_HOURS,
   METRICS,
   packetWeaknesses,
   ownerInterventionWeaknesses,
@@ -969,8 +970,11 @@ async function measureAndDecide(candidate: ImprovementCandidate, now: Date, repo
   const beforeDown = candidate.downstreamMetric ? await readMetric(candidate.downstreamMetric, beforeFrom, candidate.deliveredAt!) : null;
   const primary = compare(before, after);
   const downstream = beforeDown && afterDown ? compare(beforeDown, afterDown) : null;
-  const decision = decideAfterMeasurement({ primary, downstream, hoursSinceDelivery: (now.getTime() - delivered) / HOUR });
-  const result = { before, beforeDownstream: beforeDown, after, afterDownstream: afterDown, primary, downstream, at: now.toISOString() };
+  const hoursSinceDelivery = (now.getTime() - delivered) / HOUR;
+  const measured = decideAfterMeasurement({ primary, downstream, hoursSinceDelivery });
+  const handedOpenings = await readHandedOpenings(candidate, now);
+  const decision = handedOpenings ? judgeHandedOpenings(measured, handedOpenings, hoursSinceDelivery) : measured;
+  const result = { before, beforeDownstream: beforeDown, after, afterDownstream: afterDown, primary, downstream, handedOpenings, at: now.toISOString() };
   await patchCandidate(candidate.id, { result });
   if (!decision.decision) return;
   // A hand-off to a non-software owner merged nothing, so there is nothing to revert: the decision retires it.
@@ -982,6 +986,114 @@ async function measureAndDecide(candidate: ImprovementCandidate, now: Date, repo
   await decideCandidate(candidate.id, decision.decision, decision.reason, { result });
   await recordImprovementEvent({ candidateId: candidate.id, kind: 'DECIDED', detail: { decision: decision.decision, reason: decision.reason, primary, downstream } });
   report.decided.push(`${candidate.weaknessKey} ${decision.decision}`);
+}
+
+/**
+ * The openings a MISSED_OPPORTUNITY hand-off gave the cash lifecycle, and what became of each, read from
+ * production at measurement time (repair-F1). The hand-off's premise is that the lifecycle re-decides them
+ * before their window closes; whether that happened is a reading of their states, not an assumption.
+ * "Unpursued" is the origination's own definition (`selfmodel/originate.ts` UNPURSUED): a re-decision that
+ * holds an opening (e.g. "buyer not yet named") leaves it unpursued, so a recomputed decision is not progress.
+ */
+export const UNPURSUED_OPENING_STATES: ReadonlySet<string> = new Set(['DISCOVERED', 'EVIDENCE_CARD', 'READY']);
+
+export interface HandedOpening {
+  id: string;
+  stateAtHandOff: string;
+  expiresAt: string | null;
+}
+
+export interface HandedOpeningsOutcome {
+  handed: number;
+  /** Left the unpursued states: the lifecycle moved it towards execution. */
+  pursued: number;
+  /** Still unpursued and its window is open: nothing is settled about it yet. */
+  stillOpen: number;
+  /** Its window ended while it was still unpursued: the failure class the gap names. */
+  expiredUnpursued: number;
+  /** The row is gone. */
+  missing: number;
+  basis: string;
+}
+
+/** What became of the handed openings, from their current rows. Pure. */
+export function handedOpeningsOutcome(
+  handed: readonly HandedOpening[],
+  current: ReadonlyMap<string, { state: string; expiresAt: string | null } | null>,
+  now: Date,
+): HandedOpeningsOutcome {
+  let pursued = 0;
+  let stillOpen = 0;
+  let expiredUnpursued = 0;
+  let missing = 0;
+  for (const one of handed) {
+    const row = current.get(one.id);
+    if (!row) {
+      missing += 1;
+      continue;
+    }
+    if (!UNPURSUED_OPENING_STATES.has(row.state)) {
+      pursued += 1;
+      continue;
+    }
+    const ends = row.expiresAt ?? one.expiresAt;
+    if (ends && Date.parse(ends) <= now.getTime()) expiredUnpursued += 1;
+    else stillOpen += 1;
+  }
+  const basis =
+    `${pursued} of ${handed.length} handed opening(s) left ${[...UNPURSUED_OPENING_STATES].join('/')}; ` +
+    `${expiredUnpursued} expired still unpursued, ${stillOpen} still open and unpursued, ${missing} missing`;
+  return { handed: handed.length, pursued, stillOpen, expiredUnpursued, missing, basis };
+}
+
+/**
+ * A MISSED_OPPORTUNITY hand-off is kept as effective only if at least one handed opening was actually
+ * pursued. A rise in the loop's metric with every handed opening still unpursued is something else's
+ * doing, so the hand-off had no effect; a regression or a pending reading is left as measured. Pure.
+ *
+ * While a handed opening is still open and unpursued the KEPT is withheld, but only for the same
+ * MEASURE_MAX_HOURS any reading gets (review finding R2-F1). An undated opening never expires, so
+ * "wait until every window has ended" alone would leave the candidate in DECIDE forever and its
+ * weakness never released for a different strategy. Past that bound the hand-off has had its full
+ * measurement window and moved nothing, which is KEPT_NO_EFFECT.
+ */
+export function judgeHandedOpenings(
+  measured: ReturnType<typeof decideAfterMeasurement>,
+  outcome: HandedOpeningsOutcome,
+  hoursSinceDelivery: number,
+): ReturnType<typeof decideAfterMeasurement> {
+  if (outcome.handed === 0 || outcome.pursued > 0) {
+    return measured.decision ? { ...measured, reason: `${measured.reason} Handed openings: ${outcome.basis}.` } : measured;
+  }
+  if (measured.decision !== 'KEPT') return measured;
+  if (outcome.stillOpen > 0 && hoursSinceDelivery < MEASURE_MAX_HOURS) {
+    return { decision: null, reason: `${measured.reason} Not yet kept: ${outcome.basis}.`, revert: false };
+  }
+  const waited = outcome.stillOpen > 0 ? ` after ${Math.round(hoursSinceDelivery)} h` : '';
+  return {
+    decision: 'KEPT_NO_EFFECT',
+    reason:
+      `${measured.reason} But ${outcome.basis}${waited}: the hand-off moved none of the openings it was made for, ` +
+      'so the change in the metric is not its effect and the weakness stays eligible for a different strategy.',
+    revert: false,
+  };
+}
+
+/** The candidate's handed openings with their current production rows, or null when it handed none. */
+async function readHandedOpenings(candidate: ImprovementCandidate, now: Date): Promise<HandedOpeningsOutcome | null> {
+  const raw = candidate.evidence['handedOpenings'];
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const handed = raw.filter(
+    (h): h is HandedOpening => typeof h === 'object' && h !== null && typeof (h as HandedOpening).id === 'string',
+  );
+  if (handed.length === 0) return null;
+  const { getOpportunity } = await import('../../repos/cashPortfolio.ts');
+  const current = new Map<string, { state: string; expiresAt: string | null } | null>();
+  for (const one of handed) {
+    const row = await getOpportunity(one.id);
+    current.set(one.id, row ? { state: row.state, expiresAt: row.expiresAt ?? null } : null);
+  }
+  return handedOpeningsOutcome(handed, current, now);
 }
 
 /** One revert objective per regressed change; it is never retried by the loop. */
@@ -1075,6 +1187,7 @@ async function handToOwner(
   let personOnly = false;
   const refused: string[] = [];
   const work: Record<string, unknown>[] = [];
+  const handedOpenings: HandedOpening[] = [];
   if (route.family === 'UNMET_NEED') {
     const { handNeedsToOwners, handoffAllocated } = await import('../cash/needs.ts');
     const result = await handNeedsToOwners({ needIds: route.observed, gapKey: candidate.weaknessKey, actorRef: 'improvement loop', now: at });
@@ -1121,6 +1234,7 @@ async function handToOwner(
         continue;
       }
       await requestDecisionRecompute(id, `GAP_ROUTED:${candidate.weaknessKey}`, at);
+      handedOpenings.push({ id, stateAtHandOff: opening.state, expiresAt: opening.expiresAt ?? null });
       handed += 1;
     }
   }
@@ -1163,11 +1277,17 @@ async function handToOwner(
     return 'held: only a person can settle it';
   }
   const ref = ownerHandoffRef(route);
+  if (handedOpenings.length > 0) {
+    // What was handed, so measureAndDecide reads what became of these openings rather than assuming it.
+    const evidence = { ...candidate.evidence, handedOpenings: handedOpenings.slice(0, 50) };
+    await patchCandidate(candidate.id, { evidence });
+    candidate.evidence = evidence;
+  }
   await patchCandidate(candidate.id, { deliveredAt: at, deliveredRef: ref });
   await recordImprovementEvent({
     candidateId: candidate.id,
     kind: 'DELIVERED',
-    detail: { handedTo: route.owner, route: route.kind, handed, family: route.family, work: work.slice(0, 50), refused: refused.slice(0, 20) },
+    detail: { handedTo: route.owner, route: route.kind, handed, family: route.family, handedOpenings: handedOpenings.slice(0, 50), work: work.slice(0, 50), refused: refused.slice(0, 20) },
   });
   return `handed ${handed} row(s) to ${route.owner} (${route.kind})`;
 }
