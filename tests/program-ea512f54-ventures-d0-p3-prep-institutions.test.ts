@@ -8,9 +8,20 @@
  */
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { freshProject } from './helpers.ts';
+import { createUser } from '../server/repos/identity.ts';
+import { createRun } from '../server/repos/runs.ts';
+import { createFragments, createOrchestration, currentFragments, decideClaim, insertClaims, updateFragment } from '../server/repos/research.ts';
+import { getProgram, recordCategoryCapital, recordCategoryEvidence } from '../server/repos/manufacturing.ts';
+import { startProgramme } from '../server/services/manufacturing/program.ts';
+import { seedCategory } from '../server/services/manufacturing/declare.ts';
+import { runManufacturingKernel } from '../server/services/manufacturing/kernel.ts';
 import {
   deriveInstitutions,
+  obligationCalendar,
+  planInstitutions,
   readEconomics,
+  ventureFactsFromLadder,
   type EvidenceClaim,
   type StructureReading,
   type VentureFacts,
@@ -243,5 +254,97 @@ describe('INST-30 — the economics the plan consumes', () => {
     );
     expect(reading.setupTotals).toEqual([{ currency: 'EUR', lowMinor: 1, highMinor: 2 }]);
     expect(reading.adjusted).toBeNull();
+  });
+});
+
+/* ------------------------------------------------------------------------- */
+/* The derivation runs in the Brain: from ladder rows, on the kernel's tick     */
+/* ------------------------------------------------------------------------- */
+
+describe('INST-30 — facts read from the ladder rows, a plan folded into the venture, obligations monitored', () => {
+  const evidence = [
+    { id: 'e1', kind: 'BOUGHT_IN_COMPONENT', subject: 'motor', sourceClaimId: 'c1' },
+    { id: 'e2', kind: 'DISTRIBUTION_CHANNEL', subject: 'trade dealers', sourceClaimId: 'c2' },
+    { id: 'e3', kind: 'DEMAND_EVIDENCE', subject: 'fleet buyers', sourceClaimId: 'c3' },
+    { id: 'e4', kind: 'ENTRY_BARRIER', subject: 'safety certification', sourceClaimId: 'c4' },
+    { id: 'e5', kind: 'INCUMBENT_WEAKNESS', subject: 'slow service', sourceClaimId: 'c5' },
+  ];
+
+  it('maps rows to facts without inventing a jurisdiction or economics', () => {
+    const facts = ventureFactsFromLadder({ ventureId: 'cat-1', path: ['Machines', 'Washers'], evidence, capital: [{ id: 'k1', requirement: 'INTELLECTUAL_PROPERTY_OR_LICENCE' }], asOf: '2026-11-16T00:00:00.000Z' });
+    expect(facts.jurisdictions).toEqual([]);
+    expect(facts.economics).toBeNull();
+    expect(facts.parties.map((p) => p.role).sort()).toEqual(['CUSTOMER', 'DISTRIBUTOR', 'LICENSOR', 'OWNER', 'SUPPLIER']);
+    expect(facts.parties.every((p) => p.jurisdiction === null)).toBe(true);
+    expect(facts.claims).toEqual([{ id: 'e4', sourceId: 'c4', kind: 'PERMIT_REQUIRED', subject: 'safety certification', jurisdiction: null }]);
+    const derivation = deriveInstitutions(facts);
+    expect(derivation.openQuestions).toContain('no jurisdiction is stated in the record');
+    const elements = derivation.structures[0]!.elements.map((e) => e.key);
+    expect(elements).toEqual(expect.arrayContaining(['CONTRACT:supplier motor', 'CONTRACT:distributor trade dealers', 'PERMIT:safety certification']));
+  });
+
+  it('withholds the capital-with-institutions figure while anything is unpriced, and adds setup once priced', () => {
+    const facts = ventureFactsFromLadder({ ventureId: 'cat-1', path: ['Washers'], evidence: [evidence[0]!], capital: [], asOf: '2026-11-16T00:00:00.000Z' });
+    const unpriced = planInstitutions(deriveInstitutions(facts), { currency: 'USD', amountMinor: 1_000_00 }, facts.asOf);
+    expect(unpriced.capitalWithInstitutions).toBeNull();
+    expect(unpriced.unpriced.length).toBeGreaterThan(0);
+    expect(unpriced.approvalsRequired.every((a) => a.approved === false && a.professionalRole.length > 0)).toBe(true);
+
+    const keys = deriveInstitutions(facts).structures.find((s) => s.kind === 'DIRECT')!.elements.map((e) => e.key);
+    const priced: VentureFacts = { ...facts, claims: keys.map((key, i) => cost(`p${i}`, key, 100, 200)) };
+    const plan = planInstitutions(deriveInstitutions(priced), { currency: 'USD', amountMinor: 1_000_00 }, facts.asOf);
+    expect(plan.setupTotals).not.toBeNull();
+    expect(plan.capitalWithInstitutions).toEqual({ currency: 'USD', amountMinor: 1_000_00 + plan.setupTotals![0]!.highMinor });
+    expect(planInstitutions(deriveInstitutions(priced), null, facts.asOf).capitalWithInstitutions).toBeNull();
+  });
+
+  it('the obligation calendar reads overdue, due, scheduled and ongoing duties from renewal dates and held elements', () => {
+    const element = (key: string, renewalDate: string | null, held: boolean) => ({
+      key, kind: 'PERMIT' as const, subject: key, necessity: 'REQUIRED' as const, triggeredBy: ['t'], cost: null, prerequisites: [],
+      obligations: ['keep it current'], renewalDate, enables: 'x', approval: null, held,
+    });
+    const calendar = obligationCalendar([element('a', '2026-12-01', false), element('b', '2026-10-01', false), element('c', '2027-06-01', true)], '2026-11-16T00:00:00.000Z');
+    expect(calendar.map((one) => [one.elementKey, one.status])).toEqual([['b', 'OVERDUE'], ['a', 'DUE'], ['c', 'SCHEDULED'], ['c', 'ONGOING']]);
+  });
+
+  it('the manufacturing kernel derives each category\'s institutions from its rows on the tick, and creates nothing', async () => {
+    const fixture = await freshProject();
+    const projectId = fixture.project.id;
+    const layer = await fixture.layerByName('Discovery Logic');
+    const user = await createUser({ email: `inst-${Math.random().toString(36).slice(2, 10)}@example.test`, displayName: 'Owner', password: 'correct horse battery staple', isBrainAdmin: true });
+    const claim = async (text: string): Promise<string> => {
+      const run = await createRun({ projectId, layerId: layer.id, runType: 'FOUNDATION', status: 'PLANNED', provider: 'WORKER', prompt: 'a programme round' });
+      const orchestration = await createOrchestration({ projectId, layerId: layer.id, runId: run.id, title: 'a programme round', assignment: 'what entering takes', provider: 'WORKER', autoApprove: false });
+      await createFragments([
+        { orchestrationId: orchestration.id, projectId, layerId: layer.id, geography: 'any', requiredEvidence: [{ id: 'requires', description: 'what entering needs', necessity: 'REQUIRED' }], acceptableSourceTypes: ['a published requirement'], excludedSourceTypes: ['an unsourced assertion'], completionCriteria: ['every finding declared'], minIndependentSources: 1, maxRepairs: 2, fragmentIndex: 0, fragmentKey: 'institutions', question: 'What does entering require?', dependsOn: [], attempt: 1 },
+      ] as unknown as Parameters<typeof createFragments>[0]);
+      const [fragment] = await currentFragments(orchestration.id);
+      await updateFragment(fragment!.id, { status: 'ACCEPTED', completedAt: new Date().toISOString(), blockedReason: null });
+      const [row] = await insertClaims([
+        { orchestrationId: orchestration.id, fragmentId: fragment!.id, passId: null, passKey: 'BROAD_SCAN' as const, claim: text, sourceUrl: 'https://example.test/source', sourceTitle: 'A source', sourcePublisher: 'A publisher', sourceDate: '2026-09-10', evidenceExcerpt: text, evidenceLocator: 'p. 1', evidenceLane: 'requires', retrievedAt: '2026-09-12', confidence: 0.8, validationState: 'SOURCED' as const, validationDetail: null, sourced: true, claimType: 'SOURCED_FACT' as const, contentHash: text },
+      ] as unknown as Parameters<typeof insertClaims>[0]);
+      await decideClaim(row!.id, { accepted: true });
+      return row!.id;
+    };
+
+    expect((await startProgramme({ projectId, ownerUserId: user.id, actorUserId: user.id, objective: 'Enter where institutions and capital allow.' })).ok).toBe(true);
+    const program = (await getProgram(projectId))!;
+    const seeded = await seedCategory({ projectId, name: 'An unfamiliar product', actorRef: user.id, reason: 'test' });
+    if ('error' in seeded) throw new Error(seeded.error);
+    const categoryId = seeded.category.id;
+    await recordCategoryEvidence({ programId: program.id, categoryId, kind: 'BOUGHT_IN_COMPONENT', subject: 'drive unit', statement: 'The drive unit is bought in', sourceClaimId: await claim('The drive unit is bought in') });
+    await recordCategoryEvidence({ programId: program.id, categoryId, kind: 'ENTRY_BARRIER', subject: 'type approval', statement: 'Selling requires type approval', sourceClaimId: await claim('Selling requires type approval') });
+    await recordCategoryCapital({ programId: program.id, categoryId, requirement: 'TOOLING_AND_EQUIPMENT', scenario: 'SMALLEST_CREDIBLE_ENTRY', amountLowMinor: 10_000_00, amountHighMinor: 20_000_00, currency: 'USD', basis: 'PUBLISHED_PRICE_OR_SCHEDULE', asOf: '2026-09-01', statement: 'Tooling costs $10,000–$20,000', sourceClaimId: await claim('Tooling costs $10,000–$20,000') });
+
+    const pass = await runManufacturingKernel(projectId);
+    const venture = pass.ventures.find((v) => v.categoryId === categoryId)!;
+    expect(venture.institutions).toBeDefined();
+    expect(venture.institutions.openQuestions).toContain('no jurisdiction is stated in the record');
+    expect(venture.institutions.approvalsRequired.map((a) => a.elementKey)).toEqual(expect.arrayContaining(['CONTRACT:supplier drive unit', 'PERMIT:type approval']));
+    expect(venture.institutions.approvalsRequired.every((a) => !a.approved)).toBe(true);
+    // Unpriced institutions withhold the updated capital figure and leave affordability undetermined, never favourable.
+    expect(venture.institutions.capitalWithInstitutions).toBeNull();
+    expect(venture.institutions.feasibility).not.toBe('FEASIBLE');
+    expect(venture.cost).toEqual({ currency: 'USD', amountMinor: 20_000_00 });
   });
 });

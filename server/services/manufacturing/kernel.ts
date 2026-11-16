@@ -42,6 +42,8 @@ import { ensureProgrammeAuthority, programmeMayAsk } from './program.ts';
 import { readDirective, type Directive } from './directive.ts';
 import { readLadder, type CategoryReading } from './readiness.ts';
 import { assessResources, type Challenge, type Feasibility, type Money } from './venturePath.ts';
+import { deriveInstitutions, planInstitutions, ventureFactsFromLadder, type InstitutionalPlan } from './institutions.ts';
+import type { CategoryCapitalEntry } from '../../domain/types.ts';
 
 export interface KernelPass {
   /** Rounds opened this pass, each carrying why the allocator chose it. */
@@ -132,7 +134,10 @@ export async function runManufacturingKernel(projectId: string): Promise<KernelP
    */
   const directive = await directiveFor(snapshot.program.blueprintPath);
 
-  const ventures = await reconsiderVentures(projectId, readLadder(snapshot), snapshot.capabilities);
+  const ventures = await reconsiderVentures(projectId, readLadder(snapshot), snapshot.capabilities, {
+    capital: snapshot.capital,
+    asOf: snapshot.at,
+  });
 
   const gate = await programmeMayAsk(projectId);
   if (!gate.allowed) {
@@ -183,6 +188,17 @@ export interface VentureReconsideration {
    * turned it. Null when it rests on no held capability.
    */
   newestInput: { kind: 'CAPABILITY_HELD'; capabilityId: string; at: string } | null;
+  /**
+   * The institutional machinery the venture's facts call for (INST-30),
+   * derived from the same ladder rows on every pass: the best structure and
+   * its alternatives, the four readings kept apart, who genuinely has to act,
+   * the obligations falling due — and the economic plan updated with it. The
+   * capital figure with institutional setup added is re-read for
+   * affordability here, so a venture that is affordable as a product and not
+   * once its institutions are paid for says so. Nothing is created, formed,
+   * opened or signed: every such element is REQUIRES_APPROVAL.
+   */
+  institutions: InstitutionalPlan & { feasibility: Feasibility; challenges: Challenge[] };
 }
 
 /**
@@ -197,6 +213,7 @@ export function reconsiderFrom(
   readings: readonly CategoryReading[],
   availableByCurrency: ReadonlyMap<string, Money | null>,
   capabilities: readonly { id: string; heldAt: string | null }[],
+  ladder: { capital: readonly CategoryCapitalEntry[]; asOf: string } = { capital: [], asOf: new Date().toISOString() },
 ): VentureReconsideration[] {
   const heldIds = new Set(capabilities.filter((c) => c.heldAt !== null).map((c) => c.id));
   const heldAt = new Map(capabilities.filter((c) => c.heldAt !== null).map((c) => [c.id, c.heldAt as string]));
@@ -213,6 +230,19 @@ export function reconsiderFrom(
       .map((c) => ({ id: c.id, at: heldAt.get(c.id) }))
       .filter((c): c is { id: string; at: string } => typeof c.at === 'string')
       .sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0))[0];
+    const facts = ventureFactsFromLadder({
+      ventureId: reading.categoryId,
+      path: reading.path,
+      evidence: [...reading.evidence.demand, ...reading.evidence.distribution, ...reading.evidence.against, ...reading.evidence.boughtIn],
+      capital: ladder.capital.filter((row) => row.categoryId === reading.categoryId),
+      asOf: ladder.asOf,
+    });
+    const plan = planInstitutions(deriveInstitutions(facts), cost, ladder.asOf);
+    const withInstitutions = assessResources({
+      budget: plan.capitalWithInstitutions,
+      missingCapabilities: reading.missing.map((gap) => ({ id: gap.capability.id, stage: reading.path.join(' → ') })),
+      situation: { available: plan.capitalWithInstitutions ? (availableByCurrency.get(plan.capitalWithInstitutions.currency) ?? null) : null, heldCapabilityIds: heldIds },
+    });
     return {
       categoryId: reading.categoryId,
       path: reading.path,
@@ -221,6 +251,7 @@ export function reconsiderFrom(
       cost,
       available,
       newestInput: newest ? { kind: 'CAPABILITY_HELD', capabilityId: newest.id, at: newest.at } : null,
+      institutions: { ...plan, ...withInstitutions },
     };
   });
 }
@@ -229,6 +260,7 @@ async function reconsiderVentures(
   projectId: string,
   readings: readonly CategoryReading[],
   capabilities: readonly { id: string; heldAt: string | null }[],
+  ladder: { capital: readonly CategoryCapitalEntry[]; asOf: string },
 ): Promise<VentureReconsideration[]> {
   const currencies = new Set(
     readings.flatMap((r) => (r.capital.cheapestFullyPriced?.totals[0] ? [r.capital.cheapestFullyPriced.totals[0].currency] : [])),
@@ -246,7 +278,7 @@ async function reconsiderVentures(
       available.set(currency, null);
     }
   }
-  return reconsiderFrom(readings, available, capabilities);
+  return reconsiderFrom(readings, available, capabilities, ladder);
 }
 
 /**

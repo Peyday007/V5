@@ -639,3 +639,184 @@ export function deriveInstitutions(facts: VentureFacts): InstitutionalDerivation
   structures.sort(rank);
   return { ventureId: facts.ventureId, structures, openQuestions, limitations: generated };
 }
+
+// ---------------------------------------------------------------------------
+// From the rows Brain already keeps, to a plan the tick reports
+// ---------------------------------------------------------------------------
+//
+// The derivation above is pure; these three functions are what put it in the
+// running Brain. `ventureFactsFromLadder` reads a venture's facts out of the
+// ladder's own rows (the existing possibility store — no second store),
+// `planInstitutions` folds the best structure back into the venture's capital
+// figure, and `obligationCalendar` is the monitoring reading: what is overdue,
+// due within the horizon, scheduled, or ongoing. The manufacturing kernel calls
+// all three on every tick for every category it reconsiders, so the reading is
+// re-derived from rows rather than remembered, and a new evidence row reaches
+// the institutional plan on the next pass with nobody restating it.
+
+/**
+ * A venture's facts as the ladder's rows state them, and nothing more.
+ *
+ * - No row records a jurisdiction, so none is invented (invariant 34): the
+ *   derivation opens the question and keeps feasibility at UNKNOWN.
+ * - A bought-in component names a supplier; a distribution channel names a
+ *   distributor; demand evidence means there are customers to sell to.
+ * - An entry barrier is a thing to obtain, so it is a permit-shaped claim
+ *   resolving to the barrier's own source claim. Its cost, if any, is already
+ *   in the category's capital rows, so it is not counted a second time here.
+ * - A capital requirement for intellectual property or a licence names a
+ *   licensor the venture must contract with.
+ * - The venture's monthly running cost and revenue are not on any row, so
+ *   `economics` is null rather than a guessed figure; the capital figure is
+ *   folded in by `planInstitutions` instead.
+ */
+/** The fields of a ladder evidence row this reads (structurally a `CategoryEvidenceEntry`). */
+export interface LadderEvidenceRow {
+  id: string;
+  kind: string;
+  subject: string;
+  sourceClaimId: string;
+}
+
+/** The fields of a ladder capital row this reads (structurally a `CategoryCapitalEntry`). */
+export interface LadderCapitalRow {
+  id: string;
+  requirement: string;
+}
+
+export function ventureFactsFromLadder(input: {
+  ventureId: string;
+  path: readonly string[];
+  evidence: readonly LadderEvidenceRow[];
+  capital: readonly LadderCapitalRow[];
+  asOf: string;
+  held?: readonly string[];
+  approvals?: readonly string[];
+}): VentureFacts {
+  const parties: VentureParty[] = [{ id: 'owner', role: 'OWNER', jurisdiction: null }];
+  const flows: FinancialFlow[] = [];
+  const claims: EvidenceClaim[] = [];
+  const seen = new Set<string>();
+  const addParty = (id: string, role: PartyRole, flow: FlowKind): void => {
+    const key = `${role}:${id}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    parties.push({ id, role, jurisdiction: null });
+    flows.push({ kind: flow, partyId: id });
+  };
+  for (const row of [...input.evidence].sort((a, b) => a.id.localeCompare(b.id))) {
+    if (row.kind === 'BOUGHT_IN_COMPONENT') addParty(row.subject, 'SUPPLIER', 'PURCHASE');
+    else if (row.kind === 'DISTRIBUTION_CHANNEL') addParty(row.subject, 'DISTRIBUTOR', 'SALE');
+    else if (row.kind === 'DEMAND_EVIDENCE') addParty('customers', 'CUSTOMER', 'SALE');
+    else if (row.kind === 'ENTRY_BARRIER') {
+      claims.push({ id: row.id, sourceId: row.sourceClaimId, kind: 'PERMIT_REQUIRED', subject: row.subject, jurisdiction: null });
+    }
+  }
+  for (const row of [...input.capital].sort((a, b) => a.id.localeCompare(b.id))) {
+    if (row.requirement === 'INTELLECTUAL_PROPERTY_OR_LICENCE') addParty(`licensor (${row.id})`, 'LICENSOR', 'PURCHASE');
+  }
+  return {
+    ventureId: input.ventureId,
+    activities: input.path.length > 0 ? [`produce and sell ${input.path.join(' → ')}`] : [],
+    jurisdictions: [],
+    parties,
+    flows,
+    risks: [],
+    ipAssets: [],
+    claims,
+    held: [...(input.held ?? [])],
+    approvals: [...(input.approvals ?? [])],
+    economics: null,
+    asOf: input.asOf,
+  };
+}
+
+export interface ObligationEntry {
+  elementKey: string;
+  obligation: string;
+  /** OVERDUE/DUE/SCHEDULED carry a renewal date; ONGOING is a held element's standing duty. */
+  status: 'OVERDUE' | 'DUE' | 'SCHEDULED' | 'ONGOING';
+  dueOn: string | null;
+}
+
+/** The monitoring reading for one structure's elements: what falls due, and when. */
+export function obligationCalendar(elements: readonly InstitutionalElement[], asOf: string, horizonDays = 60): ObligationEntry[] {
+  const today = asOf.slice(0, 10);
+  const horizon = new Date(new Date(asOf).getTime() + horizonDays * 86_400_000).toISOString().slice(0, 10);
+  const out: ObligationEntry[] = [];
+  for (const element of elements) {
+    if (element.renewalDate) {
+      const status = element.renewalDate < today ? 'OVERDUE' : element.renewalDate <= horizon ? 'DUE' : 'SCHEDULED';
+      out.push({ elementKey: element.key, obligation: `renew ${element.subject}`, status, dueOn: element.renewalDate });
+    }
+    if (element.held) {
+      for (const obligation of element.obligations) out.push({ elementKey: element.key, obligation, status: 'ONGOING', dueOn: null });
+    }
+  }
+  const order = { OVERDUE: 0, DUE: 1, SCHEDULED: 2, ONGOING: 3 } as const;
+  return out.sort((a, b) => order[a.status] - order[b.status] || (a.dueOn ?? '').localeCompare(b.dueOn ?? '') || a.elementKey.localeCompare(b.elementKey));
+}
+
+export interface InstitutionalPlan {
+  structure: StructureKind;
+  readings: Pick<StructureReading, 'desirability' | 'legalFeasibility' | 'readiness' | 'authorization'>;
+  /** Every other structure the facts admit, best first. */
+  alternatives: StructureKind[];
+  elements: number;
+  setupTotals: MoneyRange[] | null;
+  annualTotals: MoneyRange[] | null;
+  unpriced: string[];
+  /**
+   * The venture's capital figure with the best structure's setup cost added,
+   * high end. Null when the venture is unpriced, any element is unpriced, or
+   * the currencies differ — never a smaller-than-true sum.
+   */
+  capitalWithInstitutions: { currency: string; amountMinor: number } | null;
+  because: string;
+  /** Who genuinely has to act, and on which element. Nothing here is performed. */
+  approvalsRequired: Array<{ elementKey: string; class: ApprovalClass; professionalRole: string; approved: boolean }>;
+  openQuestions: string[];
+  limitations: InstitutionalDerivation['limitations'];
+  obligations: ObligationEntry[];
+}
+
+/** The best structure, folded into the venture's own capital figure. Pure; creates nothing. */
+export function planInstitutions(
+  derivation: InstitutionalDerivation,
+  ventureCapital: { currency: string; amountMinor: number } | null,
+  asOf: string,
+): InstitutionalPlan {
+  const [best, ...rest] = derivation.structures;
+  if (!best) throw new Error('deriveInstitutions returned no structure');
+  const economics = best.economics;
+  let capitalWithInstitutions: InstitutionalPlan['capitalWithInstitutions'] = null;
+  let because: string;
+  if (!ventureCapital) {
+    because = 'The venture\'s own capital is not fully priced, so nothing was added to it.';
+  } else if (!economics.setupTotals) {
+    because = economics.because;
+  } else if (economics.setupTotals.some((one) => one.currency !== ventureCapital.currency)) {
+    because = `Institutional setup is in ${economics.setupTotals.map((one) => one.currency).join(', ')} and the venture in ${ventureCapital.currency}; nothing was converted.`;
+  } else {
+    const setup = economics.setupTotals[0]?.highMinor ?? 0;
+    capitalWithInstitutions = { currency: ventureCapital.currency, amountMinor: ventureCapital.amountMinor + setup };
+    because = `Institutional setup (${setup} ${ventureCapital.currency} minor units, high end) added to the venture's capital.`;
+  }
+  return {
+    structure: best.kind,
+    readings: { desirability: best.desirability, legalFeasibility: best.legalFeasibility, readiness: best.readiness, authorization: best.authorization },
+    alternatives: rest.map((one) => one.kind),
+    elements: best.elements.length,
+    setupTotals: economics.setupTotals,
+    annualTotals: economics.annualTotals,
+    unpriced: economics.unpriced,
+    capitalWithInstitutions,
+    because,
+    approvalsRequired: best.elements.flatMap((one) =>
+      one.approval ? [{ elementKey: one.key, class: one.approval.class, professionalRole: one.approval.professionalRole, approved: one.approval.approved }] : [],
+    ),
+    openQuestions: derivation.openQuestions,
+    limitations: derivation.limitations,
+    obligations: obligationCalendar(best.elements, asOf),
+  };
+}
