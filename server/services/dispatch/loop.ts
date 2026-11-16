@@ -250,6 +250,9 @@ export function forgetUnansweredRead(): void {
 /** How often the brain-only pass runs inside the tick. */
 const BRAIN_ONLY_PASS_MS = 60_000;
 let lastBrainOnlyPass = 0;
+/** How often the free lane's model-output incidents are read (a day of answers per read). */
+const MODEL_OUTPUT_PASS_MS = 5 * 60_000;
+let lastModelOutputPass = 0;
 
 export async function dispatchTick(
   options: { burst?: number; projectIds?: string[] } = {},
@@ -294,6 +297,16 @@ export async function dispatchTick(
       await watchDisplacedWork();
     } catch (error) {
       console.warn('[dispatch] brain-only pass failed:', (error as Error).message);
+    }
+    // A model whose answers stopped being usable is an incident, opened and closed from rows.
+    if (Date.now() - lastModelOutputPass >= MODEL_OUTPUT_PASS_MS) {
+      lastModelOutputPass = Date.now();
+      try {
+        const { watchModelOutput } = await import('../freeLane/coverage.ts');
+        await watchModelOutput();
+      } catch (error) {
+        console.warn('[dispatch] model-output watch failed:', (error as Error).message);
+      }
     }
     /*
      * §87's fallback: the improvement pass of the Russell tick evaluates the

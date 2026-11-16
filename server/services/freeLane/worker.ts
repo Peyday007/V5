@@ -1567,19 +1567,8 @@ export function unfitPairs(
    */
   alias: Readonly<Record<string, string>> = {},
 ): Set<string> {
-  const tally = new Map<string, { ok: number; bad: number }>();
-  for (const row of rows) {
-    // Only the model's own answer counts against it: an outage that ran out of
-    // strikes is recorded FAILED_RETRYABLE too (Brain's database flood, 11-05).
-    if (row.outcome === 'FAILED_RETRYABLE' && row.reason && notTheAnswer(row.reason)) continue;
-    const key = `${row.model}|${row.work_type}`;
-    const entry = tally.get(key) ?? { ok: 0, bad: 0 };
-    if (row.outcome === 'SUBMITTED') entry.ok += Number(row.n);
-    else if (row.outcome === 'FAILED_RETRYABLE') entry.bad += Number(row.n);
-    tally.set(key, entry);
-  }
   const marked = new Set<string>();
-  for (const [key, e] of tally) if (e.bad >= 4 && e.ok * 5 < e.ok + e.bad) marked.add(key);
+  for (const [key, e] of answerTally(rows)) if (isFailing(e)) marked.add(key);
   const distinct = models.filter((m) => !(m in alias));
   // Never every distinct model for one type: the work would wait for nobody.
   for (const type of new Set([...marked].map((k) => k.slice(k.indexOf('|') + 1)))) {
@@ -1595,6 +1584,32 @@ export function unfitPairs(
     }
   }
   return marked;
+}
+
+/**
+ * Each (model, kind of work) pair's accepted and rejected answers, and the
+ * reasons its rejected ones were refused — the one tally `unfitPairs` marks
+ * from and the model-output incident (`coverage.ts`) reports. Only the model's
+ * own answer counts against it: an outage that ran out of strikes is recorded
+ * FAILED_RETRYABLE too (Brain's database flood, 11-05). Pure.
+ */
+export function answerTally(
+  rows: readonly { model: string; work_type: string; outcome: string; n: number | string; reason?: string | null }[],
+): Map<string, { ok: number; bad: number; reasons: Map<string, number> }> {
+  const tally = new Map<string, { ok: number; bad: number; reasons: Map<string, number> }>();
+  for (const row of rows) {
+    if (row.outcome === 'FAILED_RETRYABLE' && row.reason && notTheAnswer(row.reason)) continue;
+    const key = `${row.model}|${row.work_type}`;
+    const entry = tally.get(key) ?? { ok: 0, bad: 0, reasons: new Map<string, number>() };
+    if (row.outcome === 'SUBMITTED') entry.ok += Number(row.n);
+    else if (row.outcome === 'FAILED_RETRYABLE') {
+      entry.bad += Number(row.n);
+      const reason = String(row.reason ?? '');
+      entry.reasons.set(reason, (entry.reasons.get(reason) ?? 0) + Number(row.n));
+    }
+    tally.set(key, entry);
+  }
+  return tally;
 }
 
 /**
@@ -1623,6 +1638,20 @@ export function resetFreeLaneFitness(): void {
 }
 export async function unfitNow(models: readonly string[], now = Date.now(), fallbackModel: string | null = null): Promise<Set<string>> {
   if (fitness && now - fitness.at < 5 * 60_000) return fitness.unfit;
+  const rows = await answerRows(now);
+  // The RunPod slot is its own model only while the GPU is answering.
+  const alias: Record<string, string> = {};
+  if (fallbackModel) {
+    const gpuServing = !runpodPaused() && !runpodBreakerOpen(now) && runpodCallWindow(30 * 60_000, now).ok > 0;
+    for (const m of models) if (isRunpodSlot(m) && !gpuServing && m !== fallbackModel) alias[m] = fallbackModel;
+  }
+  const unfit = unfitPairs(rows, models, alias);
+  fitness = { at: now, unfit };
+  return unfit;
+}
+
+/** The lane's answers over the last day, by model, kind, outcome and reason: what fitness is judged on. */
+export async function answerRows(now = Date.now()): Promise<{ model: string; reason: string | null; work_type: string; outcome: string; n: number | string }[]> {
   const rows = await getDb().all<{ reason: string | null; work_type: string; outcome: string; n: number | string }>(
     `SELECT e.reason, w.work_type, e.outcome, COUNT(*) AS n FROM bin_events e
        JOIN work_items w ON w.id = e.work_item_id
@@ -1630,19 +1659,7 @@ export async function unfitNow(models: readonly string[], now = Date.now(), fall
       GROUP BY e.reason, w.work_type, e.outcome`,
     [new Date(now - 86_400_000).toISOString()],
   );
-  // The RunPod slot is its own model only while the GPU is answering.
-  const alias: Record<string, string> = {};
-  if (fallbackModel) {
-    const gpuServing = !runpodPaused() && !runpodBreakerOpen(now) && runpodCallWindow(30 * 60_000, now).ok > 0;
-    for (const m of models) if (isRunpodSlot(m) && !gpuServing && m !== fallbackModel) alias[m] = fallbackModel;
-  }
-  const unfit = unfitPairs(
-    rows.map((r) => ({ ...r, model: String(r.reason ?? '').replace(/^model /, '').split(':')[0]! })),
-    models,
-    alias,
-  );
-  fitness = { at: now, unfit };
-  return unfit;
+  return rows.map((r) => ({ ...r, model: String(r.reason ?? '').replace(/^model /, '').split(':')[0]! }));
 }
 
 /**

@@ -61,6 +61,7 @@ import { listProjects } from '../../repos/projects.ts';
 import { getDb } from '../../db/database.ts';
 import { recordOperatorLearning } from '../../repos/operator.ts';
 import type { Approach } from '../../domain/evolution.ts';
+import type { ModelOutputIncident } from '../freeLane/coverage.ts';
 
 const sha = (text: string): string => createHash('sha256').update(text).digest('hex');
 
@@ -1274,6 +1275,7 @@ export async function readDeficiencies(): Promise<DeficiencyReading[]> {
   // repairing, goal plans that stopped moving, and goal research that ended without a report.
   // Each detector is bounded and fails alone: one unreadable source never hides the others.
   const more = await Promise.all([
+    modelOutputDeficiencies().catch(() => [] as DeficiencyReading[]),
     inventoryDeficiencies().catch(() => [] as DeficiencyReading[]),
     stuckPlanDeficiencies().catch(() => [] as DeficiencyReading[]),
     unreportedRoundDeficiencies().catch(() => [] as DeficiencyReading[]),
@@ -1283,6 +1285,52 @@ export async function readDeficiencies(): Promise<DeficiencyReading[]> {
   const capability = await capabilityDeficiencies().catch(() => [] as DeficiencyReading[]);
   if (capability.length) return [...out.slice(0, 6), ...capability, ...more.flat()].slice(0, 14 + capability.length);
   return [...out.slice(0, 6), ...more.flat()].slice(0, 14);
+}
+
+/**
+ * A free-lane model whose answers for a kind of work stopped being usable (coverage.ts
+ * `readModelOutput`), as a deficiency. Read from the rows each time, so it is gone the
+ * moment useful output returns. When no model functions for the kind it blocks work, so
+ * the standing director commissions the repair if Hermes does not; while another model
+ * takes the work it is offered and not forced. Every route held with no model failing
+ * is a capacity condition, not code. The title carries no counts, so its id is stable.
+ */
+export function modelOutputReading(one: ModelOutputIncident, described: string): DeficiencyReading {
+  const routesOnly = one.model === '*';
+  return reading({
+    goalId: null,
+    deficiency: 'RECURRING_OPERATIONAL_FAILURE',
+    title: routesOnly
+      ? `No free-lane route can take ${one.workType}: every model route is held`
+      : one.noFunctioningModel
+        ? `No functioning free-lane model for ${one.workType}: ${one.model}'s answers are refused`
+        : `Free-lane model ${one.model} gives unusable ${one.workType} answers`,
+    observed: `${described}.`.slice(0, 1600),
+    evidence: [
+      ...one.reasons.map((r) => `${r.n}× ${r.reason}`),
+      one.sample ? `what the model sent: ${one.sample}` : '',
+      `bin_events FREE_LANE_MODEL_OUTPUT_DROP key ${one.key}`,
+    ].filter(Boolean).join('; ').slice(0, 2000),
+    cause: routesOnly
+      ? null
+      : `Brain's own checks refused ${one.rejected} of ${one.accepted + one.rejected} ${one.workType} answers from ${one.model} in 24h, ` +
+        `most for "${one.reasons[0]?.reason ?? 'unknown'}": the lane's prompt or parsing for this kind does not get a usable answer from this model.`,
+    ownerPaths: routesOnly ? [] : ['server/services/freeLane/worker.ts'],
+    recurrence: Math.max(one.rejected, routesOnly ? 2 : 0),
+    expectedBenefit: `${one.workType} answers from ${routesOnly ? 'the free lane' : one.model} are accepted again, so the ${one.waiting} waiting item(s) move without depending on one route.`,
+    acceptance: `A test feeds the lane the reply ${one.model === '*' ? 'a held route' : one.model} sent ("${(one.sample ?? '').slice(0, 120)}") and shows an accepted answer, or a refusal that names what to change; production shows ${one.workType} submitted again.`.slice(0, 600),
+    metric: 'AUTO_RECOVERY_RATE',
+    blocksGoal: one.noFunctioningModel,
+    share: one.noFunctioningModel ? 0.3 : 0.05,
+    proposed: null,
+    capacityIdle: routesOnly,
+  });
+}
+
+/** Every current model-output incident, as deficiencies. */
+export async function modelOutputDeficiencies(): Promise<DeficiencyReading[]> {
+  const { readModelOutput, describeModelOutput } = await import('../freeLane/coverage.ts');
+  return (await readModelOutput()).slice(0, 3).map((one) => modelOutputReading(one, describeModelOutput(one)));
 }
 
 /** Improvement-loop decisions that say a delivered repair did not fix what it was for (`judgeEngineering`: NOT_RESOLVED). */
