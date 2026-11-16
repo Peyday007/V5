@@ -220,7 +220,10 @@ export async function advanceJourney(
     const campaigns = await recordCampaignOutcomes(projectId, { now });
     report.campaignOutcomes = {
       recorded: campaigns.recorded,
-      skipped: campaigns.skipped ?? (campaigns.failed.length > 0 ? campaigns.failed.map((f) => `${f.campaign}: ${f.reason}`).join('; ') : null),
+      skipped:
+        campaigns.skipped ??
+        campaigns.stoppedEarly ??
+        (campaigns.failed.length > 0 ? campaigns.failed.map((f) => `${f.campaign}: ${f.reason}`).join('; ') : null),
     };
   } catch (error) {
     report.campaignOutcomes = { recorded: 0, skipped: error instanceof Error ? error.message.slice(0, 200) : 'failed' };

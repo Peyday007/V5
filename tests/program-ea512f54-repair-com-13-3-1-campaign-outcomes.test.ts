@@ -11,13 +11,16 @@ import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import {
   CAMPAIGN_CHANNEL,
+  CAMPAIGN_OUTCOMES_CONTINUE_MS,
+  CAMPAIGN_OUTCOMES_EVERY_MS,
+  CAMPAIGN_OUTCOMES_REQUEST_BUDGET,
   contactResultOf,
   recordCampaignOutcomes,
   resetCampaignOutcomePacing,
   type CampaignLead,
 } from '../server/services/cash/journey/campaignOutcomes.ts';
 import { CAMPAIGN_NAME, type Deps } from '../server/services/cash/neighborCard.ts';
-import { BRAIN_CAMPAIGN_NAME } from '../server/services/cash/providers/instantly.ts';
+import { BRAIN_CAMPAIGN_NAME, BRAIN_CAMPAIGN_PREFIX } from '../server/services/cash/providers/instantly.ts';
 import { mechanismsFromRows, modelOutreachFunnel } from '../server/services/cash/funnel.ts';
 
 type Lead = { id: string; email: string; status: number; email_reply_count?: number; lt_interest_status?: number };
@@ -219,5 +222,132 @@ describe('the funnel models the recorded campaign, and messages are not buyers',
     const after = await getProbe('r01.com-13-3')!({});
     expect(after.detail).toMatch(/1 mechanism/);
     expect(after.ok).toBe(true);
+  });
+});
+
+/**
+ * A workspace as large as the old read's own ceilings: 20 pages of campaigns,
+ * three of them Brain's, each 50 pages of 100 leads. Every lead has bounced, so
+ * each is one row. `refuseAt` answers that request number (1-based) with a 429.
+ */
+function largeWorkspace(opts: { refuseAt?: number } = {}): { deps: Deps; calls: string[]; slept: number[] } {
+  const calls: string[] = [];
+  const slept: number[] = [];
+  const brain = [`${NEIGHBOR}-a`, `${NEIGHBOR}-b`, `${NEIGHBOR}-c`];
+  const fetchFake = (async (url: string | URL | Request, init?: RequestInit) => {
+    const href = String(url);
+    calls.push(`${init?.method ?? 'GET'} ${href}`);
+    if (opts.refuseAt === calls.length) return new Response('Too Many Requests', { status: 429 });
+    let body: Record<string, unknown> = { items: [] };
+    if (href.includes('/campaigns?')) {
+      const after = new URL(href).searchParams.get('starting_after');
+      const page = after ? Number(after.replace('cp', '')) : 0;
+      const items = Array.from({ length: 100 }, (_, i) => ({ id: `owner-${page}-${i}`, name: `Owner mailer ${page}-${i}` }));
+      if (page === 0) items.splice(0, 3, ...brain.map((id) => ({ id, name: `${BRAIN_CAMPAIGN_PREFIX}${id}` })));
+      body = { items, ...(page < 19 ? { next_starting_after: `cp${page + 1}` } : {}) };
+    } else if (href.endsWith('/leads/list')) {
+      const asked = JSON.parse(String(init?.body ?? '{}')) as { campaign: string; starting_after?: string };
+      const page = asked.starting_after ? Number(asked.starting_after.split(':')[1]) : 0;
+      const items = Array.from({ length: 100 }, (_, i) => ({ id: `${asked.campaign}-${page}-${i}`, email: `${page}-${i}@${asked.campaign}.test`, status: -1 }));
+      body = { items, ...(page < 49 ? { next_starting_after: `${asked.campaign}:${page + 1}` } : {}) };
+    }
+    return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
+  }) as typeof fetch;
+  return {
+    calls,
+    slept,
+    deps: {
+      fetch: fetchFake,
+      env: { INSTANTLY_API_KEY: 'test-key' },
+      sleep: async (ms: number) => {
+        slept.push(ms);
+      },
+      resolveMx: async () => true,
+      log: () => {},
+    },
+  };
+}
+
+async function rowCount(): Promise<number> {
+  const row = await getDb().get<{ n: number }>(`SELECT COUNT(*) AS n FROM cash_outcomes WHERE project_id = ? AND kind = 'CONTACT_RESULT'`, [projectId]);
+  return Number(row?.n ?? 0);
+}
+
+describe('one pass spends a bounded share of the workspace\'s 20 requests a minute, and never waits inside the tick', () => {
+  it('a workspace at the old ceilings is read across passes, each within the budget, with no request repeated', async () => {
+    expect(CAMPAIGN_OUTCOMES_REQUEST_BUDGET).toBeLessThan(20);
+    const { deps, calls, slept } = largeWorkspace();
+    const start = Date.parse('2026-11-16T00:00:00Z');
+
+    const first = await recordCampaignOutcomes(projectId, { deps, ownerProjectId: projectId, now: new Date(start) });
+    // The old read issued all 20 campaign pages and 150 lead pages here, in one pass.
+    expect(calls.length).toBe(CAMPAIGN_OUTCOMES_REQUEST_BUDGET);
+    expect(first.requests).toBe(CAMPAIGN_OUTCOMES_REQUEST_BUDGET);
+    expect(first.stoppedEarly).toMatch(/budget/);
+    // Inside the continue window nothing is read; after it, the read continues.
+    const early = await recordCampaignOutcomes(projectId, { deps, ownerProjectId: projectId, now: new Date(start + CAMPAIGN_OUTCOMES_CONTINUE_MS - 1) });
+    expect(early.skipped).toMatch(/read recently/);
+    expect(calls.length).toBe(CAMPAIGN_OUTCOMES_REQUEST_BUDGET);
+
+    let at = start;
+    let passes = 1;
+    let last = first;
+    while (last.stoppedEarly && passes < 100) {
+      at += CAMPAIGN_OUTCOMES_CONTINUE_MS;
+      const before = calls.length;
+      last = await recordCampaignOutcomes(projectId, { deps, ownerProjectId: projectId, now: new Date(at) });
+      expect(calls.length - before).toBeLessThanOrEqual(CAMPAIGN_OUTCOMES_REQUEST_BUDGET);
+      expect(last.requests).toBe(calls.length - before);
+      passes += 1;
+    }
+    expect(last.stoppedEarly).toBeNull();
+    // Every page read exactly once across the passes: 20 campaign pages, 3 x 50 lead pages.
+    expect(calls.length).toBe(20 + 3 * 50);
+    expect(new Set(calls.map((c, i) => (c.endsWith('/leads/list') ? `lead#${i}` : c))).size).toBe(calls.length);
+    expect(passes).toBe(Math.ceil(calls.length / CAMPAIGN_OUTCOMES_REQUEST_BUDGET));
+    expect(await rowCount()).toBe(3 * 50 * 100);
+    expect(slept).toEqual([]);
+
+    // A finished read waits the full pacing before starting over.
+    const soon = await recordCampaignOutcomes(projectId, { deps, ownerProjectId: projectId, now: new Date(at + CAMPAIGN_OUTCOMES_CONTINUE_MS) });
+    expect(soon.skipped).toMatch(/read recently/);
+    const later = await recordCampaignOutcomes(projectId, { deps, ownerProjectId: projectId, now: new Date(at + CAMPAIGN_OUTCOMES_EVERY_MS) });
+    expect(later.requests).toBe(CAMPAIGN_OUTCOMES_REQUEST_BUDGET);
+    expect(later.recorded).toBe(0);
+  });
+
+  it('a 429 ends the pass at once instead of waiting out the window, keeps what it read, and the next pass continues from that page', async () => {
+    // Request 3 is the third page of the campaign listing.
+    const { deps, calls, slept } = largeWorkspace({ refuseAt: 3 });
+    const start = Date.parse('2026-11-16T00:00:00Z');
+    const first = await recordCampaignOutcomes(projectId, { deps, ownerProjectId: projectId, now: new Date(start), requestBudget: 30 });
+    expect(slept).toEqual([]);
+    expect(calls.length).toBe(3);
+    expect(first.stoppedEarly).toMatch(/refused/);
+    expect(first.failed).toEqual([]);
+
+    // The listing resumes at the refused page; nothing already read is asked again.
+    const second = await recordCampaignOutcomes(projectId, { deps, ownerProjectId: projectId, now: new Date(start + CAMPAIGN_OUTCOMES_CONTINUE_MS), requestBudget: 30 });
+    expect(calls[3]).toBe(calls[2]);
+    expect(calls.slice(0, 3).filter((c) => c === calls[1])).toHaveLength(1);
+    expect(second.requests).toBe(30);
+    // 18 remaining list pages, then 12 lead pages of the first campaign, recorded as they arrived.
+    expect(await rowCount()).toBe(12 * 100);
+    expect(slept).toEqual([]);
+  });
+
+  it('a 429 on a lead page keeps the rows of the pages before it, and the next pass reads the refused page, not the first', async () => {
+    const { deps, calls, slept } = largeWorkspace({ refuseAt: 23 });
+    const start = Date.parse('2026-11-16T00:00:00Z');
+    const first = await recordCampaignOutcomes(projectId, { deps, ownerProjectId: projectId, now: new Date(start), requestBudget: 40 });
+    expect(slept).toEqual([]);
+    expect(first.stoppedEarly).toMatch(/refused/);
+    // 20 list pages, 2 lead pages recorded, the third refused.
+    expect(calls.length).toBe(23);
+    expect(await rowCount()).toBe(200);
+    await recordCampaignOutcomes(projectId, { deps, ownerProjectId: projectId, now: new Date(start + CAMPAIGN_OUTCOMES_CONTINUE_MS), requestBudget: 1 });
+    expect(calls.length).toBe(24);
+    expect(calls[23]).toBe(calls[22]);
+    expect(await rowCount()).toBe(300);
   });
 });
