@@ -8,6 +8,8 @@ import { startProgramme } from '../server/services/manufacturing/program.ts';
 import { seedCategory } from '../server/services/manufacturing/declare.ts';
 import { runManufacturingKernel } from '../server/services/manufacturing/kernel.ts';
 import type { Layer } from '../server/domain/types.ts';
+import { getDb } from '../server/db/database.ts';
+import { COMPETITIVE_READ_EVENT, recordedManufacturingReadings, recordManufacturingReadings } from '../server/services/russell/loop.ts';
 import {
   MECHANISM_PROMPTS,
   reconstructCompetitiveSystem,
@@ -271,5 +273,68 @@ describe('VENT-24-1: the reconstruction runs on production records', () => {
   it('a project with no programme reconstructs nothing', async () => {
     const fixture = await freshProject();
     expect((await runManufacturingKernel(fixture.project.id)).competitive).toEqual([]);
+  });
+});
+
+/*
+ * Review finding R2-F1b: the reconstruction was derived on every pass and dropped, so it could not be
+ * demonstrated on production records. These drive the kernel's real output through the tick's recorder
+ * and read it back from the rows, as a probe would.
+ */
+describe('VENT-24-1: the reconstruction is recorded on change and read back from the rows', () => {
+  async function pressureWashers() {
+    const fixture = await freshProject();
+    const projectId = fixture.project.id;
+    const layer = await fixture.layerByName('Discovery Logic');
+    const user = await createUser({ email: `competitive-rec-${Math.random().toString(36).slice(2, 10)}@example.test`, displayName: 'Owner', password: 'correct horse battery staple', isBrainAdmin: true });
+    expect((await startProgramme({ projectId, ownerUserId: user.id, actorUserId: user.id, objective: 'Build machines only where demand and capability allow.' })).ok).toBe(true);
+    const program = (await getProgram(projectId))!;
+    const seeded = await seedCategory({ projectId, name: 'Commercial pressure washers', actorRef: user.id, reason: 'test' });
+    if ('error' in seeded) throw new Error(seeded.error);
+    const demand = await acceptedClaim(projectId, layer, 'Fleet operators publish tenders for pressure washers every quarter');
+    await recordCategoryEvidence({ programId: program.id, categoryId: seeded.category.id, kind: 'DEMAND_EVIDENCE', subject: 'fleet washing tenders', statement: 'Fleet operators publish tenders every quarter', observedOn: '2026-09-01', sourceClaimId: demand });
+    const pump = await acceptedClaim(projectId, layer, 'High-pressure pumps are bought in from two suppliers');
+    await recordCategoryEvidence({ programId: program.id, categoryId: seeded.category.id, kind: 'BOUGHT_IN_COMPONENT', subject: 'high-pressure pump', statement: 'Pumps are bought in from two suppliers', sourceClaimId: pump });
+    return { projectId, program, categoryId: seeded.category.id, layer };
+  }
+  const rows = async (projectId: string) =>
+    (await getDb().all<{ n: number }>('SELECT COUNT(*) AS n FROM bin_events WHERE project_id = ? AND event_type = ?', [projectId, COMPETITIVE_READ_EVENT]))[0]!.n;
+
+  it('records the whole map, profit pools, rent-versus-own and the three readings under the category, and reads it back', async () => {
+    const { projectId, categoryId } = await pressureWashers();
+    const pass = await runManufacturingKernel(projectId);
+    const written = await recordManufacturingReadings(projectId, { competitive: pass.competitive, institutions: pass.institutions });
+    expect(written.competitive).toEqual([categoryId]);
+
+    const { competitive } = await recordedManufacturingReadings(projectId);
+    expect(competitive).toHaveLength(1);
+    const held = competitive[0]!;
+    expect(held.categoryId).toBe(categoryId);
+    const live = pass.competitive.find((one) => one.subject === 'Commercial pressure washers')!;
+    // What a probe reads from the row is exactly what the pass derived, not a summary of it.
+    expect(held.system).toEqual(JSON.parse(JSON.stringify(live)));
+    expect(held.system.mechanisms.map((m) => m.name).sort()).toEqual(['fleet washing tenders', 'high-pressure pump']);
+    expect(held.system.activities).toEqual([expect.objectContaining({ activity: 'high-pressure pump', mode: 'CONTRACT' })]);
+    expect(Object.keys(held.system.readings).sort()).toEqual(Object.keys(live.readings).sort());
+    expect(held.system.profitPools).toEqual(JSON.parse(JSON.stringify(live.profitPools)));
+  });
+
+  it('writes nothing for an unchanged reconstruction, and a new row when the evidence changes it', async () => {
+    const { projectId, program, categoryId, layer } = await pressureWashers();
+    const first = await runManufacturingKernel(projectId);
+    await recordManufacturingReadings(projectId, { competitive: first.competitive, institutions: first.institutions });
+    expect(await rows(projectId)).toBe(1);
+
+    const again = await runManufacturingKernel(projectId);
+    expect((await recordManufacturingReadings(projectId, { competitive: again.competitive, institutions: again.institutions })).competitive).toEqual([]);
+    expect(await rows(projectId)).toBe(1);
+
+    const dealers = await acceptedClaim(projectId, layer, 'Dealers dominate distribution of pressure washers');
+    await recordCategoryEvidence({ programId: program.id, categoryId, kind: 'DISTRIBUTION_CHANNEL', subject: 'dealer network', statement: 'Dealers dominate distribution', sourceClaimId: dealers });
+    const changed = await runManufacturingKernel(projectId);
+    expect((await recordManufacturingReadings(projectId, { competitive: changed.competitive, institutions: changed.institutions })).competitive).toEqual([categoryId]);
+    expect(await rows(projectId)).toBe(2);
+    const { competitive } = await recordedManufacturingReadings(projectId);
+    expect(competitive[0]!.system.mechanisms.map((m) => m.name)).toContain('dealer network');
   });
 });
