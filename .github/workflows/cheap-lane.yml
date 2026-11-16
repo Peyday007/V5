@@ -139,6 +139,8 @@ jobs:
           TOOL_SCORE_INPUT: ${{ inputs.tool_score || '' }}
           RUNPOD_MIN_RUNWAY_HOURS: ${{ inputs.runway_hours || '' }}
           IMAGE_INPUT: ${{ inputs.image || '' }}
+          BUDGET_USD_INPUT: ${{ inputs.budget_usd }}
+          BUDGET_WINDOW_INPUT: ${{ inputs.budget_window_hours }}
           # The most every Brain pod together may cost while runpod-bench/upgrade runs a second pod
           # beside production (a repository variable); unset = runpod-bench.ts's default of $0.45/h.
           RUNPOD_MAX_TOTAL_USD_PER_HOUR: ${{ vars.RUNPOD_MAX_TOTAL_USD_PER_HOUR }}
@@ -317,7 +319,7 @@ jobs:
             runpod-budget)
               # The GPU's hard dollar budget per rolling window (#1002): the pod supervisor stops the
               # pod and refuses every start once the window's measured spend reaches it.
-              b=$(printf '%s' "${{ inputs.budget_usd }}" | tr -cd '0-9.'); w=$(printf '%s' "${{ inputs.budget_window_hours }}" | tr -cd '0-9.')
+              b=$(printf '%s' "${BUDGET_USD_INPUT:-}" | tr -cd '0-9.'); w=$(printf '%s' "${BUDGET_WINDOW_INPUT:-}" | tr -cd '0-9.')
               [ -n "$b" ] || { echo "::error::runpod-budget needs budget_usd."; exit 1; }
               flyctl secrets set --app "$brain" BRAIN_RUNPOD_BUDGET_USD="$b" ${w:+BRAIN_RUNPOD_BUDGET_WINDOW_HOURS="$w"} >/dev/null
               echo "::notice title=runpod budget::BRAIN_RUNPOD_BUDGET_USD=$b per ${w:-24} h set."
