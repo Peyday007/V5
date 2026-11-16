@@ -15,6 +15,7 @@ const arg = (name: string): string | null => {
   const at = process.argv.indexOf(`--${name}`);
   return at >= 0 ? (process.argv[at + 1] ?? '') : null;
 };
+const has = (name: string): boolean => process.argv.includes(`--${name}`);
 const apiKey = process.env['RUNPOD_API_KEY']?.trim() ?? '';
 const ceiling = Number(process.env['RUNPOD_MAX_USD_PER_HOUR']) > 0 ? Number(process.env['RUNPOD_MAX_USD_PER_HOUR']) : DEFAULT_MAX_USD_PER_HOUR;
 const quote = (s: string): string => `'${s.replace(/'/g, `'\\''`)}'`;
@@ -26,10 +27,13 @@ async function main(): Promise<void> {
   let made: { id: string; cost: number } | null = null;
   for (const cloud of recipe.clouds) {
     const spec = podSpec(key, undefined, cloud, recipe, `${BENCH_PREFIX}diag-${recipe.key}`) as Record<string, unknown>;
-    const entry = (spec['dockerEntrypoint'] as string[]).map(quote).join(' ');
-    const args = (spec['dockerStartCmd'] as string[]).map(quote).join(' ');
+    const image = arg('image');
+    if (image) spec['imageName'] = image;
+    // --import-only: does vLLM import on this image and card at all (the 2026-11-16 defect), seconds not minutes.
+    const entry = has('import-only') ? 'python3 -c "import vllm, torch; from vllm.engine.arg_utils import EngineArgs; print(\'IMPORT OK\', vllm.__version__, torch.__version__, torch.version.cuda)"; true' : (spec['dockerEntrypoint'] as string[]).map(quote).join(' ');
+    const args = has('import-only') ? '' : (spec['dockerStartCmd'] as string[]).map(quote).join(' ');
     const script =
-      `( echo "IMAGE ${recipe.image}"; nvidia-smi 2>&1 | head -15; which vllm python3 2>&1; ` +
+      `( echo "IMAGE ${image ?? recipe.image}"; nvidia-smi 2>&1 | head -15; which vllm python3 2>&1; ` +
       `${entry} ${args}; echo "EXIT=$?" ) > /tmp/vllm.log 2>&1; ` +
       'cd /tmp && (python3 -m http.server 8000 || python -m http.server 8000)';
     spec['dockerEntrypoint'] = ['bash', '-c', script];

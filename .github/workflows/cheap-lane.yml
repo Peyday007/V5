@@ -70,6 +70,10 @@ on:
         description: 'For runpod-bench/upgrade: the hours the RunPod balance must last with a second pod running (default 24). A funded operation of known length passes its remaining hours.'
         required: false
         default: ''
+      image:
+        description: 'For runpod-diagnose: a vLLM image to check imports on instead of the recipe image (import check only).'
+        required: false
+        default: ''
       tool_score:
         description: 'For runpod-upgrade: the director-task score (0-1) the new recipe measured in runpod-bench; ranks the GPU in Hermes model chain (BRAIN_RUNPOD_TOOL_SCORE).'
         required: false
@@ -126,6 +130,7 @@ jobs:
           MAX_USD_INPUT: ${{ inputs.max_usd_per_hour || '' }}
           TOOL_SCORE_INPUT: ${{ inputs.tool_score || '' }}
           RUNPOD_MIN_RUNWAY_HOURS: ${{ inputs.runway_hours || '' }}
+          IMAGE_INPUT: ${{ inputs.image || '' }}
           # The most every Brain pod together may cost while runpod-bench/upgrade runs a second pod
           # beside production (a repository variable); unset = runpod-bench.ts's default of $0.45/h.
           RUNPOD_MAX_TOTAL_USD_PER_HOUR: ${{ vars.RUNPOD_MAX_TOTAL_USD_PER_HOUR }}
@@ -297,7 +302,8 @@ jobs:
               # temporary pod whose shell serves vLLM's own output once vLLM exits (§108).
               [ -n "${RUNPOD_API_KEY:-}" ] || { echo "::error::Set the RUNPOD_API_KEY repository secret."; exit 1; }
               recipe=$(printf '%s' "$RECIPES_INPUT" | tr -cd 'a-z0-9.-')
-              npx tsx scripts/runpod-diagnose.ts --recipe "$recipe" | tee diagnose.txt
+              image=$(printf '%s' "${IMAGE_INPUT:-}" | tr -cd 'a-zA-Z0-9.:/_-')
+              npx tsx scripts/runpod-diagnose.ts --recipe "$recipe" ${image:+--image "$image" --import-only} | tee diagnose.txt
               ;;
             runpod-restore)
               [ -n "${RUNPOD_API_KEY:-}" ] && [ -n "$RUNPOD_VLLM_KEY" ] || { echo "::error::Set the RUNPOD_API_KEY and RUNPOD_VLLM_KEY repository secrets."; exit 1; }
