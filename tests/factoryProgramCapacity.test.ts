@@ -9,6 +9,8 @@ import { describe, expect, it } from 'vitest';
 import { computeCapacity, overlap, type BinTimeline } from '../server/services/factory/program/capacity.ts';
 import { runRequirementChecks } from '../server/services/factory/program/ports.ts';
 import { registerProbe } from '../server/services/factory/program/probes.ts';
+import { isFactorySurface } from '../server/services/dispatch/router.ts';
+import type { FleetAccount, FleetRoutine } from '../server/domain/types.ts';
 
 const at = (minutes: number): string => new Date(Date.parse('2026-11-09T00:00:00.000Z') + minutes * 60_000).toISOString();
 
@@ -157,5 +159,29 @@ describe('a probe whose source did not answer', () => {
       vi.unstubAllGlobals();
       vi.resetModules();
     }
+  });
+});
+
+describe('which surfaces count as registered Factory capacity', () => {
+  // Production, 2026-11-16: "1 of 7 registered factory surfaces are usable" —
+  // four of the six were Routines retired in September and replaced.
+  const surface = (routine: Partial<FleetRoutine>, account: Partial<FleetAccount> = {}) => ({
+    routine: { capabilities: ['repository', 'repository-write'], state: 'ENABLED', ...routine } as FleetRoutine,
+    account: { state: 'ENABLED', ...account } as FleetAccount,
+  });
+
+  it('counts an enabled or recoverable repository surface', () => {
+    expect(isFactorySurface(surface({}))).toBe(true);
+    expect(isFactorySurface(surface({ state: 'QUARANTINED' }))).toBe(true);
+    expect(isFactorySurface(surface({ state: 'DRAINING' }))).toBe(true);
+  });
+
+  it('does not count a retired Routine or a Routine on a retired account', () => {
+    expect(isFactorySurface(surface({ state: 'RETIRED' }))).toBe(false);
+    expect(isFactorySurface(surface({}, { state: 'RETIRED' }))).toBe(false);
+  });
+
+  it('does not count a research surface', () => {
+    expect(isFactorySurface(surface({ capabilities: [] }))).toBe(false);
   });
 });
