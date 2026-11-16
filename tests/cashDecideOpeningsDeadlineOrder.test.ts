@@ -282,3 +282,63 @@ describe('judging a MISSED_OPPORTUNITY hand-off by the openings it handed (revie
     expect(judgeHandedOpenings(pending, outcome, 1)).toEqual(pending);
   });
 });
+
+/**
+ * The contact step reaches READY pieces in the same deadline order
+ * (`operate.ts readyContactOrder`, read by `advanceWithinAuthority` under
+ * MAX_CONTACTS_PER_PASS): a READY piece closing in days is not left behind
+ * older undated ones while the per-pass cap is spent on them.
+ */
+describe('readyContactOrder (pure): which READY pieces the contact cap reaches first', async () => {
+  const { MAX_CONTACTS_PER_PASS, readyContactOrder } = await import('../server/services/cash/operate.ts');
+  const now = NOW.toISOString();
+  const day = (n: number) => new Date(NOW.getTime() + n * DAY).toISOString().slice(0, 10);
+  const piece = (id: string, expiresAt: string | null) => ({ id, expiresAt });
+  const ids = (xs: { id: string }[]) => xs.map((x) => x.id);
+  const none = { now, salesOrder: [] as string[], prioritized: new Set<string>() };
+
+  it('a closing READY piece is reached before older undated ones, inside the per-pass cap', () => {
+    const older = Array.from({ length: MAX_CONTACTS_PER_PASS + 2 }, (_, i) => piece(`old-${i}`, null));
+    const ordered = readyContactOrder([...older, piece('closing', day(3))], none);
+    expect(ordered[0]!.id).toBe('closing');
+    expect(ids(ordered.slice(0, MAX_CONTACTS_PER_PASS))).toContain('closing');
+  });
+
+  it('dated pieces go earliest deadline first, and an ISO instant is read as its instant', () => {
+    const ordered = readyContactOrder([piece('late', day(9)), piece('soon', day(2)), piece('mid', `${day(5)}T08:00:00.000Z`)], none);
+    expect(ids(ordered)).toEqual(['soon', 'mid', 'late']);
+  });
+
+  it('a current PRIORITIZE decision outranks sales order among undated pieces', () => {
+    const ordered = readyContactOrder([piece('a', null), piece('b', null), piece('c', null)], { now, salesOrder: ['a', 'b', 'c'], prioritized: new Set(['c']) });
+    expect(ids(ordered)).toEqual(['c', 'a', 'b']);
+  });
+
+  it('a deadline still outranks a PRIORITIZE decision', () => {
+    const ordered = readyContactOrder([piece('prio', null), piece('dated', day(4))], { now, salesOrder: [], prioritized: new Set(['prio']) });
+    expect(ids(ordered)).toEqual(['dated', 'prio']);
+  });
+
+  it('sales order breaks ties, and pieces it does not name keep row order after those it does', () => {
+    const ordered = readyContactOrder([piece('x', null), piece('y', null), piece('b', null), piece('a', null)], { now, salesOrder: ['a', 'b'], prioritized: new Set() });
+    expect(ids(ordered)).toEqual(['a', 'b', 'x', 'y']);
+  });
+
+  it('an already-closed window sorts as undated, never ahead of an open one', () => {
+    const ordered = readyContactOrder([piece('closed', day(-2)), piece('undated', null), piece('open', day(6))], { now, salesOrder: ['undated', 'closed'], prioritized: new Set() });
+    expect(ordered[0]!.id).toBe('open');
+    // Closed and undated compare on sales order alone: the past date earns no place.
+    expect(ids(ordered)).toEqual(['open', 'undated', 'closed']);
+  });
+
+  it('an unparseable date is undated, not a deadline', () => {
+    const ordered = readyContactOrder([piece('junk', 'next Tuesday'), piece('open', day(1))], none);
+    expect(ids(ordered)).toEqual(['open', 'junk']);
+  });
+
+  it('is pure: the input order is left as it was', () => {
+    const input = [piece('u', null), piece('d', day(2))];
+    readyContactOrder(input, none);
+    expect(ids(input)).toEqual(['u', 'd']);
+  });
+});
