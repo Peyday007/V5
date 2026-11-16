@@ -12,7 +12,9 @@ import { getDb } from '../server/db/database.ts';
 import { COMPETITIVE_READ_EVENT, recordedManufacturingReadings, recordManufacturingReadings } from '../server/services/russell/loop.ts';
 import {
   MECHANISM_PROMPTS,
+  claimFromEvidence,
   reconstructCompetitiveSystem,
+  statedMode,
   type CompetitiveClaim,
 } from '../server/services/manufacturing/competitiveSystem.ts';
 
@@ -336,5 +338,88 @@ describe('VENT-24-1: the reconstruction is recorded on change and read back from
     expect(await rows(projectId)).toBe(2);
     const { competitive } = await recordedManufacturingReadings(projectId);
     expect(competitive[0]!.system.mechanisms.map((m) => m.name)).toContain('dealer network');
+  });
+});
+
+/*
+ * Review finding R3-F2: claimFromEvidence mapped the five evidence kinds to conditions and a CONTRACT activity
+ * only, so on production every profit pool and advantage list was empty and rent-versus-own could only ever
+ * read CONTRACT; the recorded row matched the live pass because both were empty. These drive real evidence rows
+ * through the kernel and the tick's recorder and assert the populated pools, advantages and modes on the row.
+ */
+describe('VENT-24-1: profit pools, advantage and every acquisition mode reach production records', () => {
+  const entry = (kind: Parameters<typeof claimFromEvidence>[0]['kind'], subject: string, statement: string) => ({
+    id: `cev_${subject}`,
+    programId: 'prg',
+    categoryId: 'cat',
+    kind,
+    subject,
+    statement,
+    observedOn: null,
+    sourceClaimId: `clm_${subject}`,
+    createdAt: '2026-11-01T00:00:00.000Z',
+    updatedAt: '2026-11-01T00:00:00.000Z',
+  });
+
+  it('reads a pool, an advantage and a mode from the words a row and its source claim state, and adds nothing they do not', () => {
+    const parts = claimFromEvidence(entry('DEMAND_EVIDENCE', 'replacement parts', 'Parts sales earn a 45% gross margin for incumbents'), src(1));
+    expect(parts.profitPool).toEqual({ name: 'replacement parts', marginShare: 0.45 });
+    const barrier = claimFromEvidence(entry('ENTRY_BARRIER', 'UL certification', 'Every listed motor needs UL certification'), src(2));
+    expect(barrier.advantage).toEqual({ resource: 'UL certification' });
+    expect(barrier.condition).toEqual(expect.objectContaining({ level: 'DURABLE_POSITION', met: null }));
+    const lock = claimFromEvidence(entry('INCUMBENT_WEAKNESS', 'dealer contracts', 'Incumbents rely on exclusive dealer territories'), src(3), 'Exclusive territories create lock-in');
+    expect(lock.advantage).toEqual({ resource: 'dealer contracts' });
+    const plain = claimFromEvidence(entry('DEMAND_EVIDENCE', 'fleet tenders', 'Fleet operators publish tenders every quarter'), src(4));
+    expect(plain.profitPool).toBeUndefined();
+    expect(plain.advantage).toBeUndefined();
+    expect(plain.activity).toBeUndefined();
+    expect(statedMode('Motors are licensed from the patent holder')).toBe('LICENSE');
+    expect(statedMode('Test rigs are rented by the week')).toBe('RENT');
+    expect(statedMode('Leaders build their own pumps in-house from bought parts')).toBe('OWN_OR_DEVELOP');
+    expect(statedMode('Distribution runs through regional dealers')).toBe('PARTNER');
+    expect(statedMode('Housings are bought in from two suppliers')).toBe('CONTRACT');
+    expect(statedMode('Demand peaks in spring')).toBeNull();
+    // A bought-in component that words no mode is still obtained from outside; one that words a mode keeps it.
+    expect(claimFromEvidence(entry('BOUGHT_IN_COMPONENT', 'hose', 'Hose comes from one maker'), src(5)).activity?.mode).toBe('CONTRACT');
+    expect(claimFromEvidence(entry('BOUGHT_IN_COMPONENT', 'motor', 'Motors are licensed designs'), src(6)).activity?.mode).toBe('LICENSE');
+  });
+
+  it('the kernel derives non-empty pools, advantages and RENT/LICENSE/PARTNER/OWN_OR_DEVELOP from real rows, and the recorder keeps them', async () => {
+    const fixture = await freshProject();
+    const projectId = fixture.project.id;
+    const layer = await fixture.layerByName('Discovery Logic');
+    const user = await createUser({ email: `competitive-pools-${Math.random().toString(36).slice(2, 10)}@example.test`, displayName: 'Owner', password: 'correct horse battery staple', isBrainAdmin: true });
+    expect((await startProgramme({ projectId, ownerUserId: user.id, actorUserId: user.id, objective: 'Build machines only where demand and capability allow.' })).ok).toBe(true);
+    const program = (await getProgram(projectId))!;
+    const seeded = await seedCategory({ projectId, name: 'Commercial pressure washers', actorRef: user.id, reason: 'test' });
+    if ('error' in seeded) throw new Error(seeded.error);
+    const categoryId = seeded.category.id;
+    const file = async (kind: Parameters<typeof recordCategoryEvidence>[0]['kind'], subject: string, statement: string, claimText: string) => {
+      const sourceClaimId = await acceptedClaim(projectId, layer, claimText);
+      await recordCategoryEvidence({ programId: program.id, categoryId, kind, subject, statement, observedOn: '2026-09-01', sourceClaimId });
+    };
+    await file('DEMAND_EVIDENCE', 'replacement parts', 'Fleet operators reorder parts every quarter', 'Replacement parts earn manufacturers a 45% gross margin');
+    await file('DISTRIBUTION_CHANNEL', 'dealer network', 'Dealers dominate distribution', 'Regional dealers take a 25% margin on each unit');
+    await file('ENTRY_BARRIER', 'UL certification', 'Listed motors need UL certification', 'UL certification takes nine months');
+    await file('BOUGHT_IN_COMPONENT', 'motor design', 'Motor designs are licensed from two patent holders', 'Assemblers pay royalties on licensed motor designs');
+    await file('BOUGHT_IN_COMPONENT', 'test rigs', 'Pressure test rigs are rented by the week', 'Small assemblers rent test rigs');
+    await file('INCUMBENT_WEAKNESS', 'pump manufacturing', 'The leader builds its own pumps in-house and is slow to change them', 'The leader manufactures pumps in-house');
+
+    const pass = await runManufacturingKernel(projectId);
+    const live = pass.competitive.find((one) => one.subject === 'Commercial pressure washers')!;
+    expect(live.profitPools.map((p) => [p.name, p.marginShare])).toEqual([
+      ['replacement parts', 0.45],
+      ['dealer network', 0.25],
+    ]);
+    expect(live.advantages.map((a) => a.resource)).toEqual(['UL certification']);
+    const modes = Object.fromEntries(live.activities.map((a) => [a.activity, a.mode]));
+    expect(modes).toEqual({ 'dealer network': 'PARTNER', 'motor design': 'LICENSE', 'test rigs': 'RENT', 'pump manufacturing': 'OWN_OR_DEVELOP' });
+
+    await recordManufacturingReadings(projectId, { competitive: pass.competitive, institutions: pass.institutions });
+    const held = (await recordedManufacturingReadings(projectId)).competitive.find((one) => one.categoryId === categoryId)!;
+    expect(held.system.profitPools.length).toBeGreaterThan(0);
+    expect(held.system.profitPools).toEqual(JSON.parse(JSON.stringify(live.profitPools)));
+    expect(held.system.advantages.map((a) => a.resource)).toEqual(['UL certification']);
+    expect(new Set(held.system.activities.map((a) => a.mode))).toEqual(new Set(['PARTNER', 'LICENSE', 'RENT', 'OWN_OR_DEVELOP']));
   });
 });

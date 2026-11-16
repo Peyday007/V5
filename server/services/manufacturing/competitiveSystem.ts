@@ -293,18 +293,75 @@ export function reconstructCompetitiveSystem(input: {
 /* ------------------------------------------------------------------------- */
 
 /**
+ * How an activity is obtained, as a statement words it. Ordered from the most
+ * committed mode down, so a statement that names an in-house capability is not
+ * read as a contract because it also mentions a supplier. A statement with none
+ * of these words states no mode, and none is inferred for it.
+ */
+const MODE_CUES: readonly { mode: AcquisitionMode; cue: RegExp }[] = [
+  { mode: 'OWN_OR_DEVELOP', cue: /\bin[- ]house\b|\bown(?:s|ed)? (?:its|their) own\b|\bdevelop(?:s|ed)? (?:internally|in[- ]house)\b|\bvertically integrated\b|\bbuild(?:s)? (?:its|their) own\b/ },
+  { mode: 'LICENSE', cue: /\blicen[cs](?:e|es|ed|ing)\b|\broyalt(?:y|ies)\b/ },
+  { mode: 'PARTNER', cue: /\bpartner(?:s|ed|ing|ship|ships)?\b|\bjoint venture\b|\bwhite[- ]label\b|\bdealers?\b|\bdistributors?\b|\bresellers?\b/ },
+  { mode: 'RENT', cue: /\brent(?:s|ed|al|ing)?\b|\blease(?:s|d)?\b|\bleasing\b|\bhire(?:s|d)?\b|\bpay[- ]per[- ]use\b|\btolling\b|\bon[- ]demand\b/ },
+  { mode: 'CONTRACT', cue: /\bcontract(?:s|ed|ing|or|ors)?\b|\boutsourc(?:e|es|ed|ing)\b|\bbought in\b|\bbuy(?:s)? in\b|\bpurchased? from\b|\bsuppliers?\b|\bsubcontract|\bco-?packers?\b|\bcontract manufactur/ },
+];
+
+/** Words that say where participants earn margin. */
+const PROFIT_CUE = /\bmargins?\b|\bprofit(?:s|able|ability)?\b|\bearn(?:s|ed|ing)?\b|\bmark-?ups?\b|\bcommissions?\b|\btake rate\b|\bgross profit\b/;
+
+/** Words that say a resource or asset confers advantage. */
+const ADVANTAGE_CUE =
+  /\badvantage\b|\bmoat\b|\block-?in\b|\bswitching costs?\b|\bexclusive\b|\bproprietary\b|\beconomies of scale\b|\bscale economies\b|\bnetwork effects?\b|\binstalled base\b|\bhard to replicate\b/;
+
+/** The first percentage a statement gives, as a share; null when it gives none in (0, 100]. */
+function statedShare(text: string): number | null {
+  const m = /(\d+(?:\.\d+)?)\s*(?:%|percent\b|per cent\b)/.exec(text);
+  if (!m) return null;
+  const value = Number(m[1]);
+  return Number.isFinite(value) && value > 0 && value <= 100 ? value / 100 : null;
+}
+
+/** The acquisition mode a statement words, or null when it words none. */
+export function statedMode(text: string): AcquisitionMode | null {
+  const lower = text.toLowerCase();
+  return MODE_CUES.find((one) => one.cue.test(lower))?.mode ?? null;
+}
+
+/**
  * What one category-evidence row says, as a competitive claim.
  *
  * The row's own subject names the mechanism, in the claim's words, and the row
- * kind says only which reading a row bears on: published demand and a route to
+ * kind says which reading a row bears on: published demand and a route to
  * buyers are conditions of a company that can sell; an incumbent's weakness is
  * a condition of a durable position; an entry barrier is a durable-position
  * condition nobody has yet shown this company clears (met: null — invariant
- * 39); a bought-in component is an activity obtained by contract. Nothing is
- * added that the row does not state.
+ * 39), and — being what keeps entrants out — a resource that confers advantage
+ * on whoever holds it; a bought-in component is an activity obtained from
+ * outside.
+ *
+ * Profit pools, advantage resources and how an activity is obtained are read
+ * from the words of the row's statement and of the source claim it was filed
+ * from, whatever its kind (review finding R3-F2: reading them only from the
+ * kind left every production pool empty and every activity CONTRACT). A
+ * statement that says where margin is earned names a pool under the row's
+ * subject, with the share it states; one that says a resource confers
+ * advantage names it; one that words a rental, licence, partnership, contract
+ * or in-house capability classifies the activity by that wording. A bought-in
+ * component that words no mode is CONTRACT, because buying it in is what the
+ * kind records. Nothing is added that neither text states.
  */
-export function claimFromEvidence(entry: CategoryEvidenceEntry, sourceUrl: string | null): CompetitiveClaim {
-  const base = { id: entry.sourceClaimId, accepted: true, sourceUrl, mechanism: entry.subject, statement: entry.statement };
+export function claimFromEvidence(entry: CategoryEvidenceEntry, sourceUrl: string | null, sourceText: string | null = null): CompetitiveClaim {
+  const base: CompetitiveClaim = { id: entry.sourceClaimId, accepted: true, sourceUrl, mechanism: entry.subject, statement: entry.statement };
+  const text = [entry.statement, sourceText ?? ''].join(' ').toLowerCase();
+  const subject = entry.subject.trim();
+
+  if (PROFIT_CUE.test(text)) base.profitPool = { name: subject, marginShare: statedShare(text) };
+  if (entry.kind === 'ENTRY_BARRIER' || ADVANTAGE_CUE.test(text)) base.advantage = { resource: subject };
+
+  const worded = statedMode(text);
+  const mode = entry.kind === 'BOUGHT_IN_COMPONENT' ? (worded ?? 'CONTRACT') : worded;
+  if (mode) base.activity = { name: subject, mode, reason: entry.statement };
+
   switch (entry.kind) {
     case 'DEMAND_EVIDENCE':
       return { ...base, condition: { level: 'SELLING_COMPANY', requirement: `published demand: ${entry.subject}`, met: true } };
@@ -314,8 +371,6 @@ export function claimFromEvidence(entry: CategoryEvidenceEntry, sourceUrl: strin
       return { ...base, condition: { level: 'DURABLE_POSITION', requirement: `an incumbent weakness to win on: ${entry.subject}`, met: true } };
     case 'ENTRY_BARRIER':
       return { ...base, condition: { level: 'DURABLE_POSITION', requirement: `clears the entry barrier: ${entry.subject}`, met: null } };
-    case 'BOUGHT_IN_COMPONENT':
-      return { ...base, activity: { name: entry.subject, mode: 'CONTRACT', reason: entry.statement } };
     default:
       return base;
   }
@@ -324,7 +379,7 @@ export function claimFromEvidence(entry: CategoryEvidenceEntry, sourceUrl: strin
 /**
  * The competitive system of every live category on the ladder, reconstructed
  * from the category evidence its research filed. Each row's own claim supplies
- * the source URL; a claim with none is ignored by `reconstructCompetitiveSystem`,
+ * the source URL and its words; a claim with no URL is ignored by `reconstructCompetitiveSystem`,
  * never counted. A category with no evidence yet gets its open questions only.
  * Read on every manufacturing kernel pass (kernel.ts), so the reconstruction
  * exists on production records without a second store.
@@ -333,11 +388,16 @@ export async function competitiveSystemsFor(snapshot: Pick<LadderSnapshot, 'cate
   const live = snapshot.categories.filter((one) => one.retiredAt === null);
   if (live.length === 0) return [];
   const claimIds = [...new Set(snapshot.evidence.map((one) => one.sourceClaimId))];
-  const urls = new Map((claimIds.length > 0 ? await claimsByIds(claimIds) : []).map((one) => [one.id, one.sourceUrl]));
+  const sources = new Map((claimIds.length > 0 ? await claimsByIds(claimIds) : []).map((one) => [one.id, one]));
   return live.map((category) =>
     reconstructCompetitiveSystem({
       subjectPath: [category.name],
-      claims: snapshot.evidence.filter((one) => one.categoryId === category.id).map((one) => claimFromEvidence(one, urls.get(one.sourceClaimId) ?? null)),
+      claims: snapshot.evidence
+        .filter((one) => one.categoryId === category.id)
+        .map((one) => {
+          const source = sources.get(one.sourceClaimId);
+          return claimFromEvidence(one, source?.sourceUrl ?? null, source?.claim ?? null);
+        }),
     }),
   );
 }
