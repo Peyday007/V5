@@ -7,6 +7,14 @@
  * and what would reopen it. It is recomputed only for a distinct change — a
  * changed goal limit, new evidence, a date passing — and a person's archive or
  * decline is never overwritten.
+ *
+ * This module owns which opening gets decided, and in what order. That makes
+ * it the owner of "an opening closing soon went unpursued"
+ * (ORIGINATED:MISSED_OPPORTUNITY:CLOSING), even when a gap report names
+ * `lifecycle.ts`. `lifecycle.ts` turns the cash section on and winds it down.
+ * It never reads, orders or decides an opening, so changing it could not get a
+ * closing opening decided. The deadline order (`decisionOrder`) lives here,
+ * beside the cap it competes for, and nothing else orders openings.
  */
 import { createHash } from 'node:crypto';
 import { getDb } from '../../db/database.ts';
