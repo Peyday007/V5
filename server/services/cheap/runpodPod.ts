@@ -233,11 +233,47 @@ export function decidePod(input: {
 /* ------------------------------------------------------------------------- */
 
 async function api(config: PodConfig, method: 'GET' | 'POST', path: string, fetchImpl: Fetch): Promise<Response> {
-  return fetchImpl(`${API}/pods/${encodeURIComponent(config.podId)}${path}`, {
-    method,
-    headers: { authorization: `Bearer ${config.apiKey}` },
+  try {
+    return await fetchImpl(`${API}/pods/${encodeURIComponent(config.podId)}${path}`, {
+      method,
+      headers: { authorization: `Bearer ${config.apiKey}` },
+      signal: AbortSignal.timeout(20_000),
+    });
+  } catch (error) {
+    // RunPod's REST host unreachable (production 2026-11-16 23:36Z: "fetch failed" from every
+    // client while GraphQL answered). Reading, stopping and starting the pod — the budget's and the
+    // idle timer's only way to stop spend — must not depend on one API, so the same request goes to
+    // GraphQL. Only a thrown request falls back; an HTTP answer from REST is RunPod's own word.
+    const answered = await viaGraphql(config, method, path, fetchImpl).catch(() => null);
+    if (answered) return answered;
+    throw error;
+  }
+}
+
+/** The pod request `api` makes, through RunPod's GraphQL API, shaped as the REST answer it replaces. */
+export async function viaGraphql(config: Pick<PodConfig, 'apiKey' | 'podId'>, method: 'GET' | 'POST', path: string, fetchImpl: Fetch): Promise<Response | null> {
+  const id = JSON.stringify(config.podId);
+  const query =
+    method === 'GET' && path === ''
+      ? `query { pod(input: { podId: ${id} }) { desiredStatus costPerHr } }`
+      : method === 'POST' && path === '/stop'
+        ? `mutation { podStop(input: { podId: ${id} }) { desiredStatus } }`
+        : method === 'POST' && path === '/start'
+          ? `mutation { podResume(input: { podId: ${id}, gpuCount: 1 }) { desiredStatus } }`
+          : null;
+  if (!query) return null;
+  const response = await fetchImpl('https://api.runpod.io/graphql', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${config.apiKey}` },
+    body: JSON.stringify({ query }),
     signal: AbortSignal.timeout(20_000),
   });
+  const body = (await response.json().catch(() => null)) as { data?: Record<string, unknown>; errors?: { message: string }[] } | null;
+  const value = body?.data ? Object.values(body.data)[0] : null;
+  if (!response.ok || !value || body?.errors?.length) {
+    return new Response(JSON.stringify({ error: body?.errors?.map((e) => e.message).join('; ') ?? `GraphQL HTTP ${response.status}` }), { status: 502 });
+  }
+  return new Response(JSON.stringify(value), { status: 200, headers: { 'content-type': 'application/json' } });
 }
 
 export async function readPod(config: PodConfig, fetchImpl: Fetch = fetch): Promise<{ status: PodStatus; costPerHr: number | null }> {

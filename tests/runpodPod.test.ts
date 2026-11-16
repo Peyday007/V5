@@ -401,3 +401,25 @@ describe('a move follows the pod it moved (production 2026-11-16: a stale move s
     expect(movedPodUrl('a', [{ from: 'a', podId: null, url: url('b') }])).toBeNull();
   });
 });
+
+describe('a pod is stopped even when RunPod REST is unreachable (production 2026-11-16 23:36Z: "fetch failed")', () => {
+  it('falls back to GraphQL podStop when the REST request throws, and reads status the same way', async () => {
+    const { stopOrStartForTest, readPod } = await import('../server/services/cheap/runpodPod.ts').then((m) => ({ stopOrStartForTest: m.viaGraphql, readPod: m.readPod }));
+    const calls: string[] = [];
+    const fetchImpl = (async (url: string | URL, init?: RequestInit) => {
+      const u = String(url);
+      calls.push(u.includes('graphql') ? `gql:${String(init?.body ?? '')}` : `rest:${u}`);
+      if (!u.includes('graphql')) throw new TypeError('fetch failed');
+      const q = String(init?.body ?? '');
+      const data = q.includes('podStop') ? { podStop: { desiredStatus: 'EXITED' } } : { pod: { desiredStatus: 'RUNNING', costPerHr: 5.29 } };
+      return new Response(JSON.stringify({ data }), { status: 200 });
+    }) as typeof fetch;
+    const config = { apiKey: 'k', podId: 'pod1', idleStopMs: 1, vllm: { url: 'u', key: 'k' } };
+    const read = await readPod(config as never, fetchImpl);
+    expect(read).toEqual({ status: 'RUNNING', costPerHr: 5.29 });
+    const stopped = await stopOrStartForTest(config, 'POST', '/stop', fetchImpl);
+    expect(stopped?.status).toBe(200);
+    expect(calls.some((c) => c.startsWith('gql:') && c.includes('podStop'))).toBe(true);
+    expect(await stopOrStartForTest(config, 'POST', '/other', fetchImpl)).toBeNull();
+  });
+});
