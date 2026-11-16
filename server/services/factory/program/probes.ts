@@ -292,6 +292,7 @@ define('r01.goal-18-4', async (args) => (await releaseOne<typeof import('./relea
 define('r01.goal-23', async (args) => (await releaseOne<typeof import('./release01/researchGoalProbe.ts')>('./release01/researchGoalProbe.ts', (m) => m.distinctPlansHoldOnRows))(args));
 define('r01.com-13-2', async (args) => (await releaseOne<typeof import('./release01/researchGoalProbe.ts')>('./release01/researchGoalProbe.ts', (m) => m.leverageHoldsOnRowsProbe))(args));
 define('r01.meta-18-1', async (args) => (await releaseOne<typeof import('./release01/researchGoalProbe.ts')>('./release01/researchGoalProbe.ts', (m) => m.anchoringHoldsOnRowsProbe))(args));
+define('r01.int-38-authority', async (args) => (await releaseOne<typeof import('./release01/researchGoalProbe.ts')>('./release01/researchGoalProbe.ts', (m) => m.authorityIntegrationHoldsOnRows))(args));
 define('r01.auto-20-1', async (args) => (await releaseOne<typeof import('./release01/autonomyProbe.ts')>('./release01/autonomyProbe.ts', (m) => m.originationHoldsOnRows))(args));
 define('r01.auto-20-2', async (args) => (await releaseOne<typeof import('./release01/autonomyProbe.ts')>('./release01/autonomyProbe.ts', (m) => m.gapLoopHoldsOnRows))(args));
 define('r01.auto-20-4', async (args) => (await releaseOne<typeof import('./release01/autonomyProbe.ts')>('./release01/autonomyProbe.ts', (m) => m.gapMeasuresHoldOnRows))(args));

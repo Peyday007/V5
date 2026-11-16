@@ -27,7 +27,7 @@ const judgment = (capability: string, outcome: string, route: string | null, rea
 });
 
 describe('the probes are registered in the protected module', () => {
-  it.each(['r01.acq-21-1', 'r01.acq-21-2', 'r01.acq-21-5', 'r01.cont-35', 'r01.learn-15-1', 'r01.gov-11', 'r01.gov-22-1', 'r01.arch-01', 'r01.com-13-1', 'r01.opp-03', 'r01.cp-31', 'r01.mem-32', 'r01.chal-33', 'r01.res-07', 'r01.res-15-5', 'r01.goal-13-6', 'r01.goal-18-4', 'r01.goal-23', 'r01.meta-18-1'])('%s, and its query runs: UNKNOWN on an empty Brain', async (name) => {
+  it.each(['r01.acq-21-1', 'r01.acq-21-2', 'r01.acq-21-5', 'r01.cont-35', 'r01.learn-15-1', 'r01.gov-11', 'r01.gov-22-1', 'r01.arch-01', 'r01.com-13-1', 'r01.opp-03', 'r01.cp-31', 'r01.mem-32', 'r01.chal-33', 'r01.res-07', 'r01.res-15-5', 'r01.goal-13-6', 'r01.goal-18-4', 'r01.goal-23', 'r01.meta-18-1', 'r01.int-38-authority'])('%s, and its query runs: UNKNOWN on an empty Brain', async (name) => {
     await freshProject();
     const probe = getProbe(name);
     expect(probe).not.toBeNull();
@@ -312,5 +312,14 @@ describe('RES-07, RES-15-5, RES-15-4, GOAL-13-6, GOAL-18-4, GOAL-23, COM-13-2, M
     expect(m.anchoringVerdict({ ok: false, detail: 'vacuous', live: 3, discriminating: 0, violations: [] }).ok).toBeNull();
     expect(m.anchoringVerdict({ ok: false, detail: 'w', live: 3, discriminating: 1, violations: [{}] }).ok).toBe(false);
     expect(m.anchoringVerdict({ ok: true, detail: 'ok', live: 3, discriminating: 1, violations: [] }).ok).toBe(true);
+  });
+});
+
+describe('INT-38-AUTHORITY: nothing performed is UNKNOWN, never a pass', () => {
+  it('maps the joint reader', async () => {
+    const m = await import('../server/services/factory/program/release01/researchGoalProbe.ts');
+    expect(m.authorityIntegrationVerdict({ ok: true, detail: 'nothing performed yet under the ledger: …', counts: { effects: 0 } }).ok).toBeNull();
+    expect(m.authorityIntegrationVerdict({ ok: true, detail: '3 lifecycle effect(s) …', counts: { effects: 3 } }).ok).toBe(true);
+    expect(m.authorityIntegrationVerdict({ ok: false, detail: 'AUTH-34 does not hold', counts: { effects: 1 } }).ok).toBe(false);
   });
 });

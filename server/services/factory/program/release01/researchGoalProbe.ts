@@ -256,3 +256,26 @@ export async function anchoringHoldsOnRowsProbe(): Promise<ProbeResult> {
   if (!mod.noAnchoringHoldsOnRows) return { ok: null, detail: 'the anchoring check is not deployed in this Brain yet' };
   return anchoringVerdict(await mod.noAnchoringHoldsOnRows());
 }
+
+/* ------------------------------------------------------------------------- */
+/* INT-38-AUTHORITY: the campaign's joint reader, absence as UNKNOWN          */
+/* ------------------------------------------------------------------------- */
+
+/** INT-38-AUTHORITY from `actionsObeyAuthorityOnRows`: no ledgered lifecycle effect yet is UNKNOWN (§39), never a pass. Pure. */
+export function authorityIntegrationVerdict(r: { ok: boolean | null; detail: string; counts: { effects: number } }): ProbeResult {
+  if (r.ok === false) return { ok: false, detail: r.detail };
+  if (r.ok === null || /^nothing performed yet/.test(r.detail)) return { ok: null, detail: r.detail };
+  return { ok: true, detail: r.detail };
+}
+
+export async function authorityIntegrationHoldsOnRows(): Promise<ProbeResult> {
+  const specifier = '../../../cash/authorityIntegration.ts';
+  let mod: { actionsObeyAuthorityOnRows?: () => Promise<Parameters<typeof authorityIntegrationVerdict>[0]> };
+  try {
+    mod = (await import(specifier)) as typeof mod;
+  } catch {
+    return { ok: null, detail: 'the authority integration reader is not deployed in this Brain yet' };
+  }
+  if (!mod.actionsObeyAuthorityOnRows) return { ok: null, detail: 'the authority integration reader is not deployed in this Brain yet' };
+  return authorityIntegrationVerdict(await mod.actionsObeyAuthorityOnRows());
+}
