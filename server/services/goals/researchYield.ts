@@ -18,6 +18,7 @@
  *    many the quant model takes, and the plan's own reach over time.
  */
 import { getDb } from '../../db/database.ts';
+import { cashEventsOfKindInProject } from '../../repos/cashMode.ts';
 import type { ChainLink, ConsideredOpening } from './plan.ts';
 // The purposes have one definition, beside the decision that allocates them.
 import { RESEARCH_PURPOSES, type ResearchPurpose } from './researchAllocation.ts';
@@ -51,7 +52,50 @@ export interface ResearchDiagnosis {
 export interface GoalRoundOutcome {
   state: string;
   found: number;
+  /**
+   * Why an ABANDONED round stopped, as its stop event classified it
+   * (`abandonedFailureClass` in cash/discovery.ts), or null/absent when no
+   * event states it. Only an abandoned round carries one.
+   */
+  failureClass?: string | null;
 }
+
+/**
+ * Abandoned-round classes that are Brain's own settlement rather than research
+ * that failed to finish: an idea the archive answered, a mission a person must
+ * act on or a cancel, and an idea that never launched. A different question
+ * changes none of them, so they never name the research as the cause.
+ */
+export const SETTLEMENT_CLASSES: ReadonlySet<string> = new Set(['ROUND_SETTLEMENT', 'ROUND_CAP_LOGIC']);
+
+/** Classes where the worker ran out of time, context or allowance before it could submit. */
+const OVERRUN_CLASSES: ReadonlySet<string> = new Set(['TRAIL_TIMEOUT', 'TRAIL_CONTEXT_HANDLING', 'TRAIL_RESOURCE_EXHAUSTION']);
+/** Classes where the claims did not clear the evidence check. */
+const EVIDENCE_CLASSES: ReadonlySet<string> = new Set(['MAST_TASK_VERIFICATION']);
+/** Classes where the sources cited could not be opened. */
+const SOURCE_CLASSES: ReadonlySet<string> = new Set(['SOURCE_UNREACHABLE']);
+
+/**
+ * What an abandoned round's class asks of the next question. The question is
+ * the one lever a goal round has, so an instruction is given only where a
+ * different question can change the ending: claims refused by the evidence
+ * check, sources nobody could open, and a worker that ran out of time before
+ * submitting. An API error, a configuration fault, a formatting fault or an
+ * unstated reason is execution, not the question; asking differently would not
+ * help, so those name the cause and leave the question alone.
+ */
+function abandonedInstruction(failureClass: string | null | undefined): string {
+  if (failureClass === null || failureClass === undefined) return INSTRUCTION.RESEARCH_NOT_FINISHING;
+  if (EVIDENCE_CLASSES.has(failureClass)) return INSTRUCTION.RESEARCH_NOT_FINISHING;
+  if (SOURCE_CLASSES.has(failureClass)) return SOURCES_UNREADABLE_INSTRUCTION;
+  if (OVERRUN_CLASSES.has(failureClass)) return OVERRUN_INSTRUCTION;
+  return '';
+}
+
+const SOURCES_UNREADABLE_INSTRUCTION =
+  'Recent searches for this goal ended without a report because the pages they relied on could not be opened, so cite only pages that open without a login, paywall or bot wall (official pages, public marketplace listings, public registers) and quote the exact sentence that names the buyer, the work and the price.';
+const OVERRUN_INSTRUCTION =
+  'Recent searches for this goal ran out of time before submitting anything, so keep the question narrow enough to finish in one sitting: one kind of buyer, one deliverable and a handful of primary sources, and submit what is sourced as soon as it is, rather than surveying the whole field.';
 
 /** A share at or above this of the openings held lacking a link names that link as a cause. */
 export const CAUSE_SHARE = 0.5;
@@ -94,10 +138,24 @@ export function diagnoseGoalResearch(input: {
   const out: ResearchDiagnosis[] = [];
   const settled = input.rounds.filter((one) => one.state !== 'OPEN');
   const fruitful = settled.filter((one) => one.state === 'HARVESTED' && one.found > 0).length;
-  const abandoned = settled.filter((one) => one.state === 'ABANDONED').length;
+  // A round Brain's own settlement ended is not research that failed to finish.
+  const failedRounds = settled.filter((one) => one.state === 'ABANDONED' && !SETTLEMENT_CLASSES.has(one.failureClass ?? ''));
+  const abandoned = failedRounds.length;
   const empty = settled.filter((one) => one.state === 'HARVESTED' && one.found === 0).length;
   if (fruitful === 0 && abandoned >= BARREN_ROUNDS_FOR_CAUSE && abandoned >= empty) {
-    out.push({ cause: 'RESEARCH_NOT_FINISHING', evidence: `${abandoned} of the goal's last ${settled.length} settled rounds ended without a report, and none filed an opening`, instruction: INSTRUCTION.RESEARCH_NOT_FINISHING });
+    // The instruction follows why the rounds actually stopped: the most common class wins, ties to the newest round.
+    const tally = new Map<string, number>();
+    for (const one of failedRounds) tally.set(one.failureClass ?? '', (tally.get(one.failureClass ?? '') ?? 0) + 1);
+    const [dominant] = [...tally.entries()].sort((a, b) => b[1] - a[1]);
+    const dominantClass = dominant && dominant[0] !== '' ? dominant[0] : null;
+    const classes = [...tally.entries()].filter(([name]) => name !== '').map(([name, n]) => `${name} ${n}`);
+    out.push({
+      cause: 'RESEARCH_NOT_FINISHING',
+      evidence:
+        `${abandoned} of the goal's last ${settled.length} settled rounds ended without a report, and none filed an opening` +
+        (classes.length > 0 ? ` (stopped as ${classes.join(', ')})` : ''),
+      instruction: abandonedInstruction(dominantClass),
+    });
   } else if (fruitful === 0 && empty >= BARREN_ROUNDS_FOR_CAUSE) {
     out.push({ cause: 'NO_OPENINGS_REPORTED', evidence: `${empty} of the goal's last ${settled.length} settled rounds filed a report with no opening in it`, instruction: INSTRUCTION.NO_OPENINGS_REPORTED });
   }
@@ -132,16 +190,29 @@ export function diagnoseGoalResearch(input: {
 
 /** The instructions a goal round is given, from a diagnosis. */
 export function diagnosisInstructions(diagnosis: ResearchDiagnosis[]): string {
-  return diagnosis.slice(0, MAX_INSTRUCTIONS).map((one) => one.instruction).join(' ');
+  // A cause the question cannot change carries no instruction, and takes no place in the question.
+  return diagnosis.filter((one) => one.instruction !== '').slice(0, MAX_INSTRUCTIONS).map((one) => one.instruction).join(' ');
 }
 
 /** The goal's own rounds (lens and constructed), newest first. */
 export async function recentGoalRounds(projectId: string, goalId: string, limit = 12): Promise<GoalRoundOutcome[]> {
-  return await getDb().all<GoalRoundOutcome>(
-    `SELECT state, found FROM cash_discovery_rounds WHERE project_id = ? AND bucket_id LIKE ?
+  const rounds = await getDb().all<{ id: string; state: string; found: number }>(
+    `SELECT id, state, found FROM cash_discovery_rounds WHERE project_id = ? AND bucket_id LIKE ?
       ORDER BY opened_at DESC, id DESC LIMIT ${Math.max(1, Math.trunc(limit))}`,
     [projectId, `goal-${goalId}%`],
   );
+  const abandoned = new Set(rounds.filter((one) => one.state === 'ABANDONED').map((one) => one.id));
+  const classOf = new Map<string, string>();
+  if (abandoned.size > 0) {
+    // Each stop event names its round and the class it was closed as; read only the rounds asked about.
+    for (const event of await cashEventsOfKindInProject(projectId, 'CASH_DISCOVERY_ROUND_STOPPED')) {
+      const detail = event.detail ?? {};
+      if (typeof detail.roundId === 'string' && abandoned.has(detail.roundId) && typeof detail.failureClass === 'string' && detail.failureClass) {
+        classOf.set(detail.roundId, detail.failureClass);
+      }
+    }
+  }
+  return rounds.map((one) => ({ state: one.state, found: Number(one.found), failureClass: classOf.get(one.id) ?? null }));
 }
 
 /** The model that answered a free-lane job, from its event's reason (`model <name>[: why]`). */

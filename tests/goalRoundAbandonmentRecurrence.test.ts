@@ -54,6 +54,21 @@
  * So the recurrence is not something capacity control can fix. Each round dies
  * of its own mission's failure, and the place to read which one is
  * `diagnoseAbandonedRounds` over the stop events these tests pin.
+ *
+ * The repair (finding F1). What the goal fed back to its next round ignored
+ * that class. `diagnoseGoalResearch` read every ABANDONED round as "no claim
+ * survived the evidence check" and asked the next round to fix its citations:
+ * a round that ran out of time got the same instruction as one the gate
+ * refused, and rounds Brain's own settlement ended (a cancel, a mission parked
+ * at a person, the unlaunched cap) counted as research that failed. So the
+ * next round was asked the same kind of question and failed the same way.
+ * `recentGoalRounds` now reads each abandoned round's class from its stop
+ * event. The diagnosis leaves settlement endings out, and the instruction
+ * follows the most common class: a narrower question for an overrun, readable
+ * sources for unreachable pages, the evidence instruction for gate refusals,
+ * and nothing added to the question for an execution fault it cannot change.
+ * No bar moves. The evidence gate, the round outcome rule and the cap are
+ * untouched.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
@@ -65,12 +80,14 @@ import { missionsForRounds, roundOutcome } from '../server/services/russell/roun
 import {
   BARREN_ROUNDS_FOR_CAUSE,
   diagnoseGoalResearch,
+  diagnosisInstructions,
+  recentGoalRounds,
   type GoalRoundOutcome,
 } from '../server/services/goals/researchYield.ts';
 import type { MissionState, RussellMission } from '../server/domain/types.ts';
 import { getDb } from '../server/db/database.ts';
-import { getCashMode, listCashEvents } from '../server/repos/cashMode.ts';
-import { listRounds } from '../server/repos/cashDiscovery.ts';
+import { getCashMode, listCashEvents, recordCashEvent } from '../server/repos/cashMode.ts';
+import { closeRound, listRounds, openRound } from '../server/repos/cashDiscovery.ts';
 import { createOpportunity } from '../server/repos/cashPortfolio.ts';
 import { reserve, setGoalConcurrency } from '../server/repos/russellAuthority.ts';
 import { createWorkstream, getWorkstream } from '../server/repos/register.ts';
@@ -432,5 +449,70 @@ describe(`${FAILURE_CLASS} — which upstream cause ends the rounds (finding F3)
     const round = (await listRounds(projectId)).find((one) => one.id === roundId)!;
     expect(round.state).toBe('ABANDONED');
     expect((await stopEvents()).get(roundId)).toMatchObject({ cause: 'ROUND_CAP_UNLAUNCHED_6H', failureClass: 'ROUND_CAP_LOGIC', missionId: null });
+  });
+});
+
+describe(`${FAILURE_CLASS} — the next round is told why the rounds actually stopped (repair F1)`, () => {
+  const plan = { considered: [], excludedReasons: [], remaining: 10000 };
+  const rounds = (failureClass: string | null, n = 5): GoalRoundOutcome[] =>
+    Array.from({ length: n }, () => ({ state: 'ABANDONED', found: 0, failureClass }));
+  const EVIDENCE_TEXT = 'no claim survived the evidence check';
+
+  it('rounds that ran out of time are asked a narrower question, not told to fix their evidence', () => {
+    const [diagnosis] = diagnoseGoalResearch({ ...plan, rounds: rounds('TRAIL_TIMEOUT') });
+    expect(diagnosis?.cause).toBe('RESEARCH_NOT_FINISHING');
+    expect(diagnosis?.evidence).toContain('TRAIL_TIMEOUT 5');
+    expect(diagnosis?.instruction).toMatch(/ran out of time/);
+    expect(diagnosis?.instruction).not.toContain(EVIDENCE_TEXT);
+  });
+
+  it('rounds refused by the evidence check keep the evidence instruction, and unclassified rounds read as before', () => {
+    expect(diagnoseGoalResearch({ ...plan, rounds: rounds('MAST_TASK_VERIFICATION') })[0]?.instruction).toContain(EVIDENCE_TEXT);
+    expect(diagnoseGoalResearch({ ...plan, rounds: rounds(null) })[0]?.instruction).toContain(EVIDENCE_TEXT);
+    expect(diagnoseGoalResearch({ ...plan, rounds: rounds('SOURCE_UNREACHABLE') })[0]?.instruction).toMatch(/could not be opened/);
+  });
+
+  it('rounds Brain\'s own settlement ended are not research that failed to finish', () => {
+    for (const failureClass of ['ROUND_SETTLEMENT', 'ROUND_CAP_LOGIC']) {
+      const diagnosis = diagnoseGoalResearch({ ...plan, rounds: rounds(failureClass) });
+      expect(diagnosis.map((one) => one.cause), failureClass).not.toContain('RESEARCH_NOT_FINISHING');
+    }
+    // Settlement beside real failures: only the failures count, and they need BARREN_ROUNDS_FOR_CAUSE of their own.
+    const mixed = [...rounds('ROUND_SETTLEMENT', 4), ...rounds('TRAIL_TIMEOUT', BARREN_ROUNDS_FOR_CAUSE - 1)];
+    expect(diagnoseGoalResearch({ ...plan, rounds: mixed }).map((one) => one.cause)).not.toContain('RESEARCH_NOT_FINISHING');
+  });
+
+  it('an execution fault names the cause but puts nothing into the question, since asking differently cannot fix it', () => {
+    const diagnosis = diagnoseGoalResearch({ ...plan, rounds: rounds('TRAIL_API_ERROR') });
+    expect(diagnosis[0]?.cause).toBe('RESEARCH_NOT_FINISHING');
+    expect(diagnosis[0]?.instruction).toBe('');
+    expect(diagnosisInstructions(diagnosis)).toBe('');
+  });
+
+  it('the most common class decides the instruction', () => {
+    const mixed = [...rounds('MAST_TASK_VERIFICATION', 2), ...rounds('TRAIL_TIMEOUT', 3)];
+    const [diagnosis] = diagnoseGoalResearch({ ...plan, rounds: mixed });
+    expect(diagnosis?.instruction).toMatch(/ran out of time/);
+    expect(diagnosis?.evidence).toContain('MAST_TASK_VERIFICATION 2');
+  });
+
+  it('recentGoalRounds reads each abandoned round\'s class from its own stop event', async () => {
+    const projectId = (await freshProject()).project.id;
+    const goalId = 'wst_recurrence';
+    const opened: string[] = [];
+    for (const [i, failureClass] of (['TRAIL_TIMEOUT', 'ROUND_SETTLEMENT', null] as const).entries()) {
+      const { round } = await openRound({ projectId, cashModeId: 'cm_test', bucketId: `goal-${goalId}-b${i}`, mechanism: 'm', round: 1, candidateId: `rcn_rec_${i}` });
+      expect(await closeRound({ id: round.id, to: 'ABANDONED', found: 0 })).toBe(true);
+      if (failureClass) {
+        await recordCashEvent({ projectId, kind: 'CASH_DISCOVERY_ROUND_STOPPED', actorRef: 'BRAIN', summary: 'stopped', detail: { roundId: round.id, cause: 'x', failureClass } });
+      }
+      opened.push(round.id);
+    }
+    // A stop event for a round outside the goal is never read onto it.
+    await recordCashEvent({ projectId, kind: 'CASH_DISCOVERY_ROUND_STOPPED', actorRef: 'BRAIN', summary: 'other', detail: { roundId: 'cdr_elsewhere', failureClass: 'TRAIL_API_ERROR' } });
+    const read = await recentGoalRounds(projectId, goalId);
+    expect(read).toHaveLength(3);
+    expect(read.map((one) => one.failureClass).sort()).toEqual([null, 'ROUND_SETTLEMENT', 'TRAIL_TIMEOUT'].sort());
+    expect(read.every((one) => one.state === 'ABANDONED' && one.found === 0)).toBe(true);
   });
 });
