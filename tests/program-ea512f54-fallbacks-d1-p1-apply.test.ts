@@ -9,11 +9,18 @@ import { freshProject } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { createAuthority } from '../server/repos/cashAuthority.ts';
 import { ALWAYS_PROHIBITED_COMMERCIAL, COMMERCIAL_ACTIONS } from '../server/services/cash/authority.ts';
-import { insertOutcome } from '../server/repos/cashJourney.ts';
+import { getDb } from '../server/db/database.ts';
 import { forgetKnowledge, inferCashQuantity, loadCashKnowledge, observationsFor } from '../server/services/quant/knowledge.ts';
-import { recordFailureRecovery, type FailureRecoveryInput, type FailureRecoveryRecord } from '../server/services/quant/ledger.ts';
-import { readSwitchDecision, switchDecision } from '../server/services/quant/fallbackApply.ts';
-import type { ProjectFallbackPlanRecord } from '../server/services/quant/fallbackPlanReading.ts';
+import { keepCashLedger, readFailureRecoveries, recordFailureRecovery, type FailureRecoveryInput, type FailureRecoveryRecord } from '../server/services/quant/ledger.ts';
+import { readSwitchDecision, switchDecision, switchVerification, triedOf } from '../server/services/quant/fallbackApply.ts';
+import {
+  ACQUISITION_METHODS,
+  NO_REPLACEMENT_METHOD,
+  SWITCH_TRIED_PREFIX,
+  readSwitchDecisionRecords,
+  settledOnOwnPath,
+  type ProjectFallbackPlanRecord,
+} from '../server/services/quant/fallbackPlanReading.ts';
 import type { ProjectIndependenceRecord } from '../server/services/quant/fallbackIndependence.ts';
 import type { FallbackPreparationRecord } from '../server/services/quant/fallbackPreparation.ts';
 import type { SubstituteReading } from '../server/services/quant/fallbacks.ts';
@@ -152,11 +159,32 @@ describe('on production rows: a knowledge refresh reads the records back and the
     });
   });
 
+  // Every contact result gets its own instant, in the order written: rows sharing a millisecond have no order,
+  // and the failure reading reads a path's results in order, so a fixture that leaves ties reads differently on
+  // every run. Written a day back, before any switch a refresh decides.
+  let tick = 0;
+  async function insertResult(mechanism: string, channel: string, key: string, value: string, at: Date = new Date(Date.now() - 86_400_000 + tick * 1000)): Promise<void> {
+    tick++;
+    await getDb().run(
+      `INSERT INTO cash_outcomes (id, project_id, opportunity_id, kind, mechanism, channel, value_text, basis, request_key, created_at)
+       VALUES (?, ?, ?, 'CONTACT_RESULT', ?, ?, ?, 'test row', ?, ?)`,
+      [`cou_${key}_${projectId}`.replace(/\W/g, '_'), projectId, `lead:${mechanism}:${key}`, mechanism, channel, value, `p:${mechanism}:${channel}:${key}`, at.toISOString()],
+    );
+  }
+
+  /**
+   * A path's funnel with no failure in its order: its bounces, then its silences, then its answers. A run of
+   * failures that follows a success is a failure the reading records (`acquisitionFailures`); a path whose
+   * results open with failures never started, so this funnel is measured without reading as failing.
+   */
   async function path(mechanism: string, channel: string, n: number, bounced: number, answered: number): Promise<void> {
-    for (let i = 0; i < n; i++) {
-      const value = i < bounced ? 'CONTACT_UNDELIVERABLE' : i < bounced + answered ? 'BUYER_REPLIED' : 'BUYER_SILENT';
-      await insertOutcome({ projectId, opportunityId: `lead:${mechanism}:${i}`, kind: 'CONTACT_RESULT', mechanism, channel, valueText: value, basis: 'test row', requestKey: `p:${mechanism}:${channel}:${i}` });
-    }
+    const silent = n - bounced - answered;
+    const values = [
+      ...Array<string>(bounced).fill('CONTACT_UNDELIVERABLE'),
+      ...Array<string>(silent).fill('BUYER_SILENT'),
+      ...Array<string>(answered).fill('BUYER_REPLIED'),
+    ];
+    for (const [i, value] of values.entries()) await insertResult(mechanism, channel, `${mechanism}:${i}`, value);
   }
 
   const target = (mechanism: string) => ({ id: 'opp-target', projectId, mechanism, opportunitySignal: null, industry: null, priceCents: 50_000, currency: 'USD', title: 'target', duplicateOfId: null }) as unknown as CashOpportunity;
@@ -225,5 +253,133 @@ describe('on production rows: a knowledge refresh reads the records back and the
     const knowledge = await loadCashKnowledge(projectId);
     expect(knowledge.fallbackDecision).toMatchObject({ state: 'NO_REPLACEMENT', replacement: null });
     expect(observationsFor(knowledge, 'respond', target('Partner list')).some((o) => o.id.startsWith('fallback-switch:'))).toBe(false);
+  });
+});
+
+/* ------------------------------------------------------------------------- */
+/* What Brain tried on a path's failure, and whether it worked (repair-F1)    */
+/* ------------------------------------------------------------------------- */
+
+describe('a switch is recorded as what Brain tried, verified on the substitute\'s own rows, and settles the failure', () => {
+  const at = (s: number) => new Date(Date.UTC(2026, 9, 1, 0, 0, s)).toISOString();
+
+  it('pure: the switch and each substitute passed over are what was tried; a plan on its primary tried nothing', () => {
+    const d = {
+      dependency: 'acquisition:p', state: 'SWITCHED' as const, primaryPath: 'A @ email (11 prospect(s) reached)',
+      failure: { occurrence: 'occ', failureMode: 'channel-stops-delivering', recovered: null },
+      replacement: 'C @ partner', funnel: null,
+      passedOver: [{ substitute: 'B @ email', because: ['shares channel account: email with the failed primary, so it fails with it'] }],
+      order: { keys: ['B @ email', 'C @ partner'], from: 'PREPARATION' as const }, because: '',
+    };
+    expect(triedOf(d)).toEqual([
+      `${SWITCH_TRIED_PREFIX}acquisition:p from A @ email (11 prospect(s) reached) to C @ partner (order from preparation)`,
+      'passed over B @ email: shares channel account: email with the failed primary, so it fails with it',
+    ]);
+    expect(triedOf({ ...d, state: 'PRIMARY', failure: null, replacement: null, passedOver: [] })).toEqual([]);
+  });
+
+  it('pure: recovery is verified only by a result written after the switch that is good for the failed mode', () => {
+    const results = [
+      { id: 'before', result: 'BUYER_REPLIED', at: at(1) },
+      { id: 'bounce', result: 'CONTACT_UNDELIVERABLE', at: at(3) },
+      { id: 'silent', result: 'BUYER_SILENT', at: at(4) },
+      { id: 'reply', result: 'BUYER_REPLIED', at: at(5) },
+    ];
+    // Delivered is enough for a channel that stopped delivering; an answer is needed for prospects that went silent.
+    expect(switchVerification('channel-stops-delivering', at(2), results)!.id).toBe('silent');
+    expect(switchVerification('prospects-stop-answering', at(2), results)!.id).toBe('reply');
+    expect(switchVerification('channel-stops-delivering', at(6), results)).toBeNull();
+  });
+
+  it('pure: a failure settled by a switch still fails its own path until that path\'s rows show recovery', () => {
+    const settled = failure({ occurrence: `acquisition-failure:${DEP}:A @ email:channel-stops-delivering:r9`, path: 'A @ email', recovered: true, tried: [`${SWITCH_TRIED_PREFIX}${DEP} from A @ email to C @ partner`] });
+    const plan = planRecord([sub('C @ partner')]);
+    const ind = independence({ 'C @ partner': 'SWITCH' });
+    expect(switchDecision({ plan, independence: ind, preparation: null, failures: [settled], ownRecovered: new Set() })!.state).toBe('SWITCHED');
+    expect(switchDecision({ plan, independence: ind, preparation: null, failures: [settled], ownRecovered: new Set([settled.occurrence]) })!.state).toBe('PRIMARY');
+    // A failure its own path recovered from is recovered, whatever the own-row reading says.
+    expect(switchDecision({ plan, independence: ind, preparation: null, failures: [{ ...settled, tried: ['paused sends'] }], ownRecovered: new Set() })!.state).toBe('PRIMARY');
+  });
+
+  it('pure: a failure its own path recovered from carries the recorded decisions, and a missing substitute is a method to improve', () => {
+    const found: FailureRecoveryInput = {
+      occurrence: 'occ', dependency: 'acquisition:p', path: 'A @ email', failureMode: 'channel-stops-delivering', failureClass: 'ACQUISITION:channel-stops-delivering',
+      detectionDelayDays: 1, timeToHarmDays: null, tried: [], recovered: true, cashLostCents: null, cashPreservedCents: null, timeLostDays: null, reputation: null,
+      methodsToImprove: [...ACQUISITION_METHODS['channel-stops-delivering']!],
+    };
+    const settled = settledOnOwnPath(found, [
+      { occurrence: 'occ', dependency: 'acquisition:p', state: 'NO_REPLACEMENT', primaryPath: 'A @ email', replacement: null, tried: ['no substitute of acquisition:p qualified to replace A @ email'], at: at(1) },
+      { occurrence: 'other', dependency: 'acquisition:p', state: 'NO_REPLACEMENT', primaryPath: 'A @ email', replacement: null, tried: ['unrelated'], at: at(2) },
+    ]);
+    expect(settled.tried[0]).toBe('no substitute of acquisition:p qualified to replace A @ email');
+    expect(settled.tried).not.toContain('unrelated');
+    expect(settled.tried[settled.tried.length - 1]).toMatch(/^recovery verified: A @ email recorded a good result/);
+    expect(settled.methodsToImprove).toContain(NO_REPLACEMENT_METHOD);
+  });
+
+  describe('on production rows, through the cash knowledge refresh', () => {
+    let projectId = '';
+    beforeEach(async () => {
+      projectId = (await freshProject()).project.id;
+      forgetKnowledge();
+      const user = await createUser({ email: `fallback-tried-${Math.random().toString(36).slice(2, 10)}@example.test`, displayName: 'Owner', password: 'correct horse battery staple' });
+      await createAuthority({
+        projectId, ownerUserId: user.id, createdByUserId: user.id, name: 'Cash Mode commercial authority',
+        allowedActions: [...COMMERCIAL_ACTIONS], prohibitions: [...ALWAYS_PROHIBITED_COMMERCIAL],
+        maxCommittedCents: 100_000, maxPerActionCents: 40_000, maxConcurrent: 3, currency: 'USD',
+      });
+    });
+
+    async function row(mechanism: string, channel: string, i: number, result: string, when: Date): Promise<void> {
+      await getDb().run(
+        `INSERT INTO cash_outcomes (id, project_id, opportunity_id, kind, mechanism, channel, value_text, basis, request_key, created_at)
+         VALUES (?, ?, ?, 'CONTACT_RESULT', ?, ?, ?, 'test row', ?, ?)`,
+        [`cou_${mechanism}_${i}_${projectId}`.replace(/\W/g, '_'), projectId, `lead:${mechanism}:${i}`, mechanism, channel, result, `r:${mechanism}:${i}`, when.toISOString()],
+      );
+    }
+    const past = (d: number) => new Date(Date.UTC(2026, 9, 1 + d));
+
+    it('records the switch once, settles the failure when the substitute delivers, and stays switched until the failed path recovers on its own rows', async () => {
+      for (let i = 0; i < 8; i++) await row('Campaign A', 'email (Instantly)', i, 'BUYER_REPLIED', past(i));
+      for (let i = 0; i < 3; i++) await row('Partner list', 'partner referral', i, 'BUYER_REPLIED', past(i));
+      for (let i = 8; i < 11; i++) await row('Campaign A', 'email (Instantly)', i, 'CONTACT_UNDELIVERABLE', past(i));
+
+      let knowledge = await loadCashKnowledge(projectId);
+      expect(knowledge.fallbackDecision).toMatchObject({ state: 'SWITCHED', replacement: 'Partner list @ partner referral' });
+      const decisions = await readSwitchDecisionRecords(projectId);
+      expect(decisions).toEqual([expect.objectContaining({ state: 'SWITCHED', replacement: 'Partner list @ partner referral' })]);
+      expect(decisions[0]!.tried[0]).toMatch(new RegExp(`^${SWITCH_TRIED_PREFIX}acquisition:${projectId} from Campaign A @ email \\(Instantly\\)`));
+      let [held] = await readFailureRecoveries(projectId);
+      // Open while no substitute row verifies the switch; the methods it names are what a recurring class hands Factory.
+      expect(held).toMatchObject({ path: 'Campaign A @ email (Instantly)', recovered: null });
+      expect(held!.methodsToImprove).toEqual(ACQUISITION_METHODS['channel-stops-delivering']);
+
+      // The same decision on the next refresh is not recorded again.
+      forgetKnowledge();
+      await loadCashKnowledge(projectId);
+      expect(await readSwitchDecisionRecords(projectId)).toHaveLength(1);
+
+      // The substitute delivers after the switch: the switch worked, and the failure says so.
+      await row('Partner list', 'partner referral', 3, 'BUYER_REPLIED', new Date(Date.now() + 1000));
+      forgetKnowledge();
+      await loadCashKnowledge(projectId);
+      [held] = await readFailureRecoveries(projectId);
+      expect(held!.recovered).toBe(true);
+      expect(held!.tried[0]).toMatch(new RegExp(`^${SWITCH_TRIED_PREFIX}`));
+      expect(held!.tried[held!.tried.length - 1]).toMatch(/^recovery verified: Partner list @ partner referral recorded result .* \(BUYER_REPLIED\)/);
+      expect(held!.timeLostDays).not.toBeNull();
+
+      // Recovered by the switch, not by Campaign A: the plan stays on the partner list.
+      forgetKnowledge();
+      knowledge = await loadCashKnowledge(projectId);
+      expect(knowledge.fallbackDecision).toMatchObject({ state: 'SWITCHED', replacement: 'Partner list @ partner referral' });
+
+      // Campaign A's own rows recover: the plan is back on its primary.
+      await row('Campaign A', 'email (Instantly)', 11, 'BUYER_REPLIED', new Date(Date.now() + 2000));
+      await keepCashLedger(projectId, []);
+      forgetKnowledge();
+      knowledge = await loadCashKnowledge(projectId);
+      expect(knowledge.fallbackDecision!.state).toBe('PRIMARY');
+    });
   });
 });
