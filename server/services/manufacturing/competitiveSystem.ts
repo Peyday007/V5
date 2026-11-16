@@ -26,10 +26,16 @@
  * it. An unknown condition never makes a reading established (invariant 39),
  * and a reading with no conditions at all is UNKNOWN rather than met.
  *
- * Pure: it reads the claims a caller passes and writes nothing. A claim that
+ * `reconstructCompetitiveSystem` is pure: it reads the claims a caller passes and writes nothing.
+ * `competitiveSystemsFor` feeds it from the category evidence store and the
+ * claims behind it, read-only, on every manufacturing kernel pass. A claim that
  * has not cleared the evidence gate, or carries no source, is not evidence and
  * is ignored here (§10, §14).
  */
+
+import { claimsByIds } from '../../repos/research.ts';
+import type { CategoryEvidenceEntry } from '../../domain/types.ts';
+import type { LadderSnapshot } from './ladder.ts';
 
 /** How an activity can be obtained. */
 export const ACQUISITION_MODES = ['RENT', 'CONTRACT', 'LICENSE', 'PARTNER', 'OWN_OR_DEVELOP'] as const;
@@ -280,4 +286,58 @@ export function reconstructCompetitiveSystem(input: {
     readings,
     ignored,
   };
+}
+
+/* ------------------------------------------------------------------------- */
+/* Fed from the evidence store                                                */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * What one category-evidence row says, as a competitive claim.
+ *
+ * The row's own subject names the mechanism, in the claim's words, and the row
+ * kind says only which reading a row bears on: published demand and a route to
+ * buyers are conditions of a company that can sell; an incumbent's weakness is
+ * a condition of a durable position; an entry barrier is a durable-position
+ * condition nobody has yet shown this company clears (met: null — invariant
+ * 39); a bought-in component is an activity obtained by contract. Nothing is
+ * added that the row does not state.
+ */
+export function claimFromEvidence(entry: CategoryEvidenceEntry, sourceUrl: string | null): CompetitiveClaim {
+  const base = { id: entry.sourceClaimId, accepted: true, sourceUrl, mechanism: entry.subject, statement: entry.statement };
+  switch (entry.kind) {
+    case 'DEMAND_EVIDENCE':
+      return { ...base, condition: { level: 'SELLING_COMPANY', requirement: `published demand: ${entry.subject}`, met: true } };
+    case 'DISTRIBUTION_CHANNEL':
+      return { ...base, condition: { level: 'SELLING_COMPANY', requirement: `a route to buyers: ${entry.subject}`, met: true } };
+    case 'INCUMBENT_WEAKNESS':
+      return { ...base, condition: { level: 'DURABLE_POSITION', requirement: `an incumbent weakness to win on: ${entry.subject}`, met: true } };
+    case 'ENTRY_BARRIER':
+      return { ...base, condition: { level: 'DURABLE_POSITION', requirement: `clears the entry barrier: ${entry.subject}`, met: null } };
+    case 'BOUGHT_IN_COMPONENT':
+      return { ...base, activity: { name: entry.subject, mode: 'CONTRACT', reason: entry.statement } };
+    default:
+      return base;
+  }
+}
+
+/**
+ * The competitive system of every live category on the ladder, reconstructed
+ * from the category evidence its research filed. Each row's own claim supplies
+ * the source URL; a claim with none is ignored by `reconstructCompetitiveSystem`,
+ * never counted. A category with no evidence yet gets its open questions only.
+ * Read on every manufacturing kernel pass (kernel.ts), so the reconstruction
+ * exists on production records without a second store.
+ */
+export async function competitiveSystemsFor(snapshot: Pick<LadderSnapshot, 'categories' | 'evidence'>): Promise<CompetitiveSystem[]> {
+  const live = snapshot.categories.filter((one) => one.retiredAt === null);
+  if (live.length === 0) return [];
+  const claimIds = [...new Set(snapshot.evidence.map((one) => one.sourceClaimId))];
+  const urls = new Map((claimIds.length > 0 ? await claimsByIds(claimIds) : []).map((one) => [one.id, one.sourceUrl]));
+  return live.map((category) =>
+    reconstructCompetitiveSystem({
+      subjectPath: [category.name],
+      claims: snapshot.evidence.filter((one) => one.categoryId === category.id).map((one) => claimFromEvidence(one, urls.get(one.sourceClaimId) ?? null)),
+    }),
+  );
 }

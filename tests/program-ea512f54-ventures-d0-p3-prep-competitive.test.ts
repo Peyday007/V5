@@ -1,4 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import { freshProject } from './helpers.ts';
+import { createUser } from '../server/repos/identity.ts';
+import { createRun } from '../server/repos/runs.ts';
+import { createFragments, createOrchestration, currentFragments, decideClaim, insertClaims, updateFragment } from '../server/repos/research.ts';
+import { getProgram, recordCategoryEvidence } from '../server/repos/manufacturing.ts';
+import { startProgramme } from '../server/services/manufacturing/program.ts';
+import { seedCategory } from '../server/services/manufacturing/declare.ts';
+import { runManufacturingKernel } from '../server/services/manufacturing/kernel.ts';
+import type { Layer } from '../server/domain/types.ts';
 import {
   MECHANISM_PROMPTS,
   reconstructCompetitiveSystem,
@@ -166,5 +175,101 @@ describe('VENT-24-1: product, selling company and durable position are separate 
     });
     expect(s.readings.SELLING_COMPANY.verdict).toBe('NOT_MET');
     expect(s.readings.SELLING_COMPANY.unmet[0]!.claimIds).toHaveLength(2);
+  });
+});
+
+/** One accepted, sourced claim, so the capital and requirement rows have the evidence the schema demands. */
+async function acceptedClaim(projectId: string, layer: Layer, text: string, sourceUrl: string | null = 'https://example.test/source'): Promise<string> {
+  const run = await createRun({ projectId, layerId: layer.id, runType: 'FOUNDATION', status: 'PLANNED', provider: 'WORKER', prompt: 'a programme round' });
+  const orchestration = await createOrchestration({
+    projectId,
+    layerId: layer.id,
+    runId: run.id,
+    title: 'a programme round',
+    assignment: 'what building this takes',
+    provider: 'WORKER',
+    autoApprove: false,
+  });
+  await createFragments([
+    {
+      orchestrationId: orchestration.id,
+      projectId,
+      layerId: layer.id,
+      geography: 'the markets the programme may look at',
+      requiredEvidence: [{ id: 'requires', description: 'what producing needs', necessity: 'REQUIRED' }],
+      acceptableSourceTypes: ['a published requirement'],
+      excludedSourceTypes: ['an unsourced assertion'],
+      completionCriteria: ['every finding declared'],
+      minIndependentSources: 1,
+      maxRepairs: 2,
+      fragmentIndex: 0,
+      fragmentKey: 'venture-path',
+      question: 'What does producing this require?',
+      dependsOn: [],
+      attempt: 1,
+    },
+  ] as unknown as Parameters<typeof createFragments>[0]);
+  const [fragment] = await currentFragments(orchestration.id);
+  await updateFragment(fragment!.id, { status: 'ACCEPTED', completedAt: new Date().toISOString(), blockedReason: null });
+  const [claim] = await insertClaims([
+    {
+      orchestrationId: orchestration.id,
+      fragmentId: fragment!.id,
+      passId: null,
+      passKey: 'BROAD_SCAN' as const,
+      claim: text,
+      sourceUrl,
+      sourceTitle: 'A source',
+      sourcePublisher: 'A publisher',
+      sourceDate: '2026-09-10',
+      evidenceExcerpt: text,
+      evidenceLocator: 'p. 1',
+      evidenceLane: 'requires',
+      retrievedAt: '2026-09-12',
+      confidence: 0.8,
+      validationState: 'SOURCED' as const,
+      validationDetail: null,
+      sourced: true,
+      claimType: 'SOURCED_FACT' as const,
+      contentHash: text,
+    },
+  ] as unknown as Parameters<typeof insertClaims>[0]);
+  await decideClaim(claim!.id, { accepted: true });
+  return claim!.id;
+}
+
+describe('VENT-24-1: the reconstruction runs on production records', () => {
+  it('the manufacturing kernel reconstructs each category from the evidence its research filed, ignoring an unsourced claim', async () => {
+    const fixture = await freshProject();
+    const projectId = fixture.project.id;
+    const layer = await fixture.layerByName('Discovery Logic');
+    const user = await createUser({ email: `competitive-${Math.random().toString(36).slice(2, 10)}@example.test`, displayName: 'Owner', password: 'correct horse battery staple', isBrainAdmin: true });
+    expect((await startProgramme({ projectId, ownerUserId: user.id, actorUserId: user.id, objective: 'Build machines only where demand and capability allow.' })).ok).toBe(true);
+    const program = (await getProgram(projectId))!;
+    const seeded = await seedCategory({ projectId, name: 'Commercial pressure washers', actorRef: user.id, reason: 'test' });
+    if ('error' in seeded) throw new Error(seeded.error);
+    const category = seeded.category;
+
+    const demand = await acceptedClaim(projectId, layer, 'Fleet operators publish tenders for pressure washers every quarter');
+    await recordCategoryEvidence({ programId: program.id, categoryId: category.id, kind: 'DEMAND_EVIDENCE', subject: 'fleet washing tenders', statement: 'Fleet operators publish tenders every quarter', observedOn: '2026-09-01', sourceClaimId: demand });
+    const pump = await acceptedClaim(projectId, layer, 'High-pressure pumps are bought in from two suppliers');
+    await recordCategoryEvidence({ programId: program.id, categoryId: category.id, kind: 'BOUGHT_IN_COMPONENT', subject: 'high-pressure pump', statement: 'Pumps are bought in from two suppliers', sourceClaimId: pump });
+    const unsourced = await acceptedClaim(projectId, layer, 'Dealers dominate distribution', null);
+    await recordCategoryEvidence({ programId: program.id, categoryId: category.id, kind: 'DISTRIBUTION_CHANNEL', subject: 'dealer network', statement: 'Dealers dominate distribution', sourceClaimId: unsourced });
+
+    const pass = await runManufacturingKernel(projectId);
+    const system = pass.competitive.find((one) => one.subject === 'Commercial pressure washers')!;
+    expect(system, 'the pass carries the category reconstruction').toBeDefined();
+    expect(system.mechanisms.map((m) => m.name).sort()).toEqual(['fleet washing tenders', 'high-pressure pump']);
+    expect(system.activities).toEqual([expect.objectContaining({ activity: 'high-pressure pump', mode: 'CONTRACT' })]);
+    expect(system.readings.SELLING_COMPANY.met.map((m) => m.requirement)).toContain('published demand: fleet washing tenders');
+    // A claim with no source is not evidence and never reaches the map.
+    expect(system.ignored.map((one) => one.claimId)).toEqual([unsourced]);
+    expect(system.openQuestions.length).toBeGreaterThan(0);
+  });
+
+  it('a project with no programme reconstructs nothing', async () => {
+    const fixture = await freshProject();
+    expect((await runManufacturingKernel(fixture.project.id)).competitive).toEqual([]);
   });
 });

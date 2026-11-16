@@ -54,6 +54,7 @@ import {
   type VentureVerdict,
 } from './venturePath.ts';
 import type { AcquisitionCandidate } from '../../domain/types.ts';
+import { competitiveSystemsFor, type CompetitiveSystem } from './competitiveSystem.ts';
 
 export interface KernelPass {
   /** Rounds opened this pass, each carrying why the allocator chose it. */
@@ -62,6 +63,13 @@ export interface KernelPass {
   absorbed: Absorbed;
   /** Considered and not asked, with the reason. Reported, never acted on. */
   declined: { subject: string; why: string }[];
+  /**
+   * Every live category's competitive system, reconstructed from the category
+   * evidence research has filed (VENT-24-1): mechanisms named by sourced claims,
+   * open questions for the rest, and the product / selling-company / durable-
+   * position readings. A read, derived every pass; never new research.
+   */
+  competitive: CompetitiveSystem[];
   /**
    * Whether the programme's directive actually reached the questions, and why
    * not when it did not.
@@ -100,6 +108,7 @@ const EMPTY: KernelPass = {
     refused: [],
   },
   declined: [],
+  competitive: [],
   directive: { reaching: false, path: null, why: null },
   ventures: [],
   categories: 0,
@@ -146,12 +155,15 @@ export async function runManufacturingKernel(projectId: string): Promise<KernelP
 
   const ventures = await reconsiderVentures(projectId, readLadder(snapshot), snapshot.capabilities, snapshot.candidates);
 
+  const competitive = await competitiveSystemsFor(snapshot);
+
   const gate = await programmeMayAsk(projectId);
   if (!gate.allowed) {
     return {
       opened: [],
       absorbed,
       declined: [{ subject: 'every category on the ladder', why: gate.reason }],
+      competitive,
       directive: directive.report,
       ventures,
       ...counts,
@@ -170,6 +182,7 @@ export async function runManufacturingKernel(projectId: string): Promise<KernelP
     opened,
     absorbed,
     declined: plan.declined,
+    competitive,
     directive: directive.report,
     ventures,
     ...counts,
