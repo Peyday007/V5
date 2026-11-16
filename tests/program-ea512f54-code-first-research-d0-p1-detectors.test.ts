@@ -9,8 +9,13 @@ import { getDb } from '../server/db/database.ts';
 import { insertFeedItems } from '../server/repos/feeds.ts';
 import { listCandidates } from '../server/repos/improvement.ts';
 import {
+  ACTIVE_AUDIT_EVERY,
+  AUDIT_PER_PASS,
   CONCENTRATED_HIRING,
+  DEMOTION_PRECISION,
   DETECTORS,
+  auditActiveRule,
+  auditShortfall,
   PROMOTION_MIN_SCREENED,
   REPEATED_DEMAND,
   RULE_MISS_PROPOSAL_MIN,
@@ -25,6 +30,7 @@ import {
   type Detector,
   type DetectorRecord,
 } from '../server/services/feeds/detectors.ts';
+import type { Completer, LaneConfig } from '../server/services/cheap/lane.ts';
 
 const now = new Date();
 const DAY = 86_400_000;
@@ -254,5 +260,71 @@ describe('repeated misses become a Factory proposal', () => {
     expect(severe).toMatchObject({ key: 'DETECTOR_MISSES:X@1', severity: 'HIGH', samples: ['a — u'] });
     const outweighed = ruleMissWeakness({ id: 'X', version: 2, label: 'x' }, { ...base, confirmed: 20, misses: RULE_MISS_PROPOSAL_MIN });
     expect(outweighed).toMatchObject({ key: 'DETECTOR_MISSES:X@2', severity: 'MEDIUM' });
+  });
+});
+
+/**
+ * F6: an ACTIVE rule's covered members skip the per-record screen, so a
+ * bounded audit sample of them is still screened after coverage, and the rule
+ * is judged on that audit — a rule that degrades returns to SHADOW from new
+ * evidence instead of resting on its pre-promotion sample.
+ */
+describe('an ACTIVE rule keeps an audit sample, and degrades back to SHADOW on it', () => {
+  const lane: LaneConfig = { url: 'http://cheap.test/v1', key: null, models: ['m1', 'm2'], dailyBudget: 10_000, timeoutMs: 1000 };
+  const answering = (verdict: 'KEEP' | 'DROP'): { completer: Completer; asked: string[] } => {
+    const asked: string[] = [];
+    const completer: Completer = async (_config, _model, _system, prompt) => {
+      asked.push(prompt);
+      return JSON.stringify({ verdict, window: 'SHORT', deliverable: 'DATASET', need: 'a data cleanup', payer: 'the employer', reason: 'x' });
+    };
+    return { completer, asked };
+  };
+
+  it('keeps one covered member in ACTIVE_AUDIT_EVERY audited, bounded per pass', () => {
+    expect(auditShortfall(0, 0)).toBe(0);
+    expect(auditShortfall(100, 0)).toBe(100 / ACTIVE_AUDIT_EVERY);
+    expect(auditShortfall(100, 10)).toBe(0);
+    expect(auditShortfall(101, 10)).toBe(1);
+  });
+
+  it('a promoted rule audits covered members through runDetectors, and an audit of drops demotes it', async () => {
+    const count = PROMOTION_MIN_SCREENED * ACTIVE_AUDIT_EVERY;
+    const items = await seedDemand(count);
+    // Promotion on a clean pre-coverage sample: the rule detects in SHADOW, every member is screened KEEP, then it is promoted.
+    await runDetectors({ now, detectors: [SHADOW_DEMAND], audit: { config: null } });
+    for (const item of items) await screen(item.id, 'KEEP');
+    const promoted = await runDetectors({ now, detectors: [SHADOW_DEMAND], audit: { config: null } });
+    expect(promoted[0]).toMatchObject({ mode: 'ACTIVE', audited: 0 });
+    expect(promoted[0]!.covered).toBe(count);
+    // Screens from before coverage are not an audit.
+    expect((await ruleReading(SHADOW_DEMAND, now)).auditedMembers).toBe(0);
+
+    // Later passes audit covered members with the free lane; the rule has started detecting badly.
+    const { completer, asked } = answering('DROP');
+    const pass = await runDetectors({ now, detectors: [SHADOW_DEMAND], audit: { config: lane, completer } });
+    expect(pass[0]).toMatchObject({ mode: 'ACTIVE', audited: AUDIT_PER_PASS });
+    expect(asked).toHaveLength(AUDIT_PER_PASS * lane.models.length);
+    // Fill the rest of the audit sample directly; it never exceeds one in ACTIVE_AUDIT_EVERY.
+    await auditActiveRule(SHADOW_DEMAND, { now, config: lane, completer, perPass: count });
+    expect(await auditActiveRule(SHADOW_DEMAND, { now, config: lane, completer, perPass: count })).toBe(0);
+
+    const reading = await ruleReading(SHADOW_DEMAND, now);
+    expect(reading.auditedMembers).toBe(count / ACTIVE_AUDIT_EVERY);
+    expect(reading.auditPrecision).toBe(0);
+    // The all-time sample alone would still read the rule as sound.
+    expect(reading.precision!).toBeGreaterThan(DEMOTION_PRECISION);
+    expect(modeDecision('SHADOW', reading)).toMatchObject({ mode: 'SHADOW', reason: expect.stringMatching(/demoted.*audit precision/) });
+    const after = await runDetectors({ now, detectors: [SHADOW_DEMAND], audit: { config: null } });
+    expect(after[0]!.mode).toBe('SHADOW');
+  });
+
+  it('an audit that confirms the rule keeps it ACTIVE', () => {
+    expect(modeDecision('SHADOW', { precision: 0.9, evidenceQuality: 1, screenedMembers: 30, auditPrecision: 0.9, auditedMembers: 12 }).mode).toBe('ACTIVE');
+    expect(modeDecision('ACTIVE', { precision: 0.9, evidenceQuality: 1, screenedMembers: 30, auditPrecision: null, auditedMembers: 3 }).mode).toBe('ACTIVE');
+  });
+
+  it('nothing is audited without a configured lane', async () => {
+    await seedDemand(4);
+    expect(await auditActiveRule(SHADOW_DEMAND, { now, config: null })).toBe(0);
   });
 });
