@@ -14,7 +14,8 @@ import { enqueueWork, getWorkItem } from '../server/repos/workQueue.ts';
 import { workType } from '../server/services/queue/workTypes.ts';
 import { setBrainOnlyMode } from '../server/services/bins/brainOnly.ts';
 import { checkIn } from '../server/services/bins/service.ts';
-import { asksByPriority, claimAsks, ensureFreeWorkers, firstJson, freeLaneTick, quotedIn, resetFreeLaneMemberships, retryNotReached, takeWave } from '../server/services/freeLane/worker.ts';
+import { asksByPriority, citedWithinLimit, claimAsks, emptyListRepair, ensureFreeWorkers, firstJson, freeLaneTick, PARTIAL_EVIDENCE, quotedIn, resetFreeLaneMemberships, retryNotReached, takeWave } from '../server/services/freeLane/worker.ts';
+import { MAX_LIST_ITEMS } from '../server/mcp/researchTools.ts';
 import { freeLaneMayTakeImprovement, resetActivationCache } from '../server/services/improvement/activation.ts';
 import { createLayer } from '../server/repos/layers.ts';
 import { IMPROVEMENT_RESEARCH_SLOT_CAP } from '../server/domain/improvement.ts';
@@ -1083,5 +1084,25 @@ describe('a model keeps only the kinds of work Brain accepts from it', () => {
     expect(heldBackFor('gpu', 'RESEARCH_FRAGMENT', ['gpu', 'free'], unfit, freeCooling)).toBe(false);
     expect(heldBackFor('gpu', 'RESEARCH_FRAGMENT', ['gpu'], unfit, healthy)).toBe(false);
     expect(heldBackFor('free', 'RESEARCH_FRAGMENT', ['gpu', 'free'], unfit, healthy)).toBe(false);
+  });
+});
+
+describe('gpt-oss-120b refusals (production, 2026-11-16)', () => {
+  it('tells a model that listed no claims what partial evidence is, and never that an empty list is fine', () => {
+    const prompt = emptyListRepair('BRIEF', 5, 'L1');
+    expect(prompt).toContain('listed no claims from the 5 source(s)');
+    expect(prompt).toContain(PARTIAL_EVIDENCE);
+    expect(prompt).toContain('"evidence_lane":"L1"');
+    expect(prompt).toContain('only if no sentence in any source bears on the brief at all');
+  });
+
+  it('keeps a synthesis within the list limit, inline citations first, instead of refusing it whole', () => {
+    const ids = Array.from({ length: MAX_LIST_ITEMS + 5 }, (_, i) => `clm_${String(i).padStart(3, '0')}`);
+    const inline = ids.slice(-3);
+    const kept = citedWithinLimit(`report citing [${inline.join('] [')}]`, [...ids, ids[0]!]);
+    expect(kept).toHaveLength(MAX_LIST_ITEMS);
+    expect(kept.slice(0, 3)).toEqual(inline);
+    expect(new Set(kept).size).toBe(kept.length);
+    expect(citedWithinLimit('r', ['a', 'b', 'a'])).toEqual(['a', 'b']);
   });
 });
