@@ -1930,9 +1930,43 @@ export const ROUTE_FAILURE_LIMIT = 3;
 const ROUTE_REPROBE_MS = 5 * 60_000;
 const routeHealth = new Map<string, { failures: number; cause: RouteFailureCause; nextProbeAt: number }>();
 
+/**
+ * How far back a route's own call outcomes are read to judge it, and how many are kept. The same
+ * half hour `failingModels` reads, held in memory so it binds inside a tick rather than across ticks.
+ */
+export const ROUTE_WINDOW_MS = 30 * 60_000;
+const ROUTE_WINDOW_MAX = 64;
+const routeWindow = new Map<string, { at: number; ok: boolean; cause: RouteFailureCause | null }[]>();
+
 /** Tests: forget every route's health. */
 export function resetRouteHealth(): void {
   routeHealth.clear();
+  routeWindow.clear();
+}
+
+/**
+ * Whether a route's recent calls mostly failed: the bar `isFailing` holds a model to (at least four
+ * failures and under one in five answered), read over its last ROUTE_WINDOW_MS of outcomes.
+ *
+ * Production, 2026-11-16 16:48Z (CAP-16-3, episode 3): brain-a's provider was "overloaded: 89% of 9
+ * calls failed" beside a healthy GPU route, and r01.cap-16-3 read 62–98% of six hours' lane outcomes
+ * as provider failures. The breaker counted only consecutive failures and forgot everything on one
+ * success, and that success also ended every route cooldown (`clearRouteCooldowns`). So a provider
+ * answering about one call in nine was never held: each rare answer reopened it to every slot and
+ * every cooled item, and each of those recorded another "model call failed". A route is judged by its
+ * ratio instead. One success no longer reopens a route that is still mostly failing, and a route that
+ * mostly answers through occasional 503s (the 2026-11-15 07:46Z case) is never held by it.
+ */
+export function routeWindowFailing(model: string, now = Date.now()): boolean {
+  const recent = (routeWindow.get(model) ?? []).filter((one) => now - one.at < ROUTE_WINDOW_MS);
+  const ok = recent.filter((one) => one.ok).length;
+  return isFailing({ ok, bad: recent.length - ok });
+}
+
+function noteRouteCall(model: string, entry: { at: number; ok: boolean; cause: RouteFailureCause | null }): void {
+  const kept = (routeWindow.get(model) ?? []).filter((one) => entry.at - one.at < ROUTE_WINDOW_MS);
+  kept.push(entry);
+  routeWindow.set(model, kept.slice(-ROUTE_WINDOW_MAX));
 }
 
 /**
@@ -1959,22 +1993,41 @@ export function takeRouteProbe(model: string, now = Date.now()): void {
   if (now >= state.nextProbeAt) state.nextProbeAt = now + ROUTE_REPROBE_MS;
 }
 
-/** A route that answered is healthy again; a route that did not is counted, with its cause. */
-export function recordRouteOutcome(model: string, outcome: { ok: boolean; why?: string }, now = Date.now()): void {
+/**
+ * A route that answered is healthy again — unless its recent calls still mostly failed
+ * (`routeWindowFailing`), when the answer was its re-probe and the route stays held until the next
+ * one. A route that did not answer is counted, with its cause. Returns whether the route is open.
+ */
+export function recordRouteOutcome(model: string, outcome: { ok: boolean; why?: string }, now = Date.now()): boolean {
   if (outcome.ok) {
-    routeHealth.delete(model);
-    return;
+    noteRouteCall(model, { at: now, ok: true, cause: null });
+    if (!routeWindowFailing(model, now)) {
+      routeHealth.delete(model);
+      return true;
+    }
+    const recent = routeWindow.get(model) ?? [];
+    const cause = [...recent].reverse().find((one) => !one.ok)?.cause ?? routeHealth.get(model)?.cause ?? 'unclassified';
+    const state = routeHealth.get(model) ?? { failures: 0, cause, nextProbeAt: now };
+    state.failures = Math.max(state.failures, ROUTE_FAILURE_LIMIT);
+    state.nextProbeAt = now + ROUTE_REPROBE_MS;
+    routeHealth.set(model, state);
+    return false;
   }
   const why = outcome.why ?? '';
-  if (!/^model call failed/.test(why) && !BRAIN_UNAVAILABLE.test(why)) return;
+  if (!/^model call failed/.test(why) && !BRAIN_UNAVAILABLE.test(why)) return routeHold(model, now) === null;
   const cause = causeOfReason(why) ?? classifyRouteFailure(why);
   // Brain's own database being busy says nothing about the model route.
-  if (cause === 'database') return;
+  if (cause === 'database') return routeHold(model, now) === null;
+  noteRouteCall(model, { at: now, ok: false, cause });
   const state = routeHealth.get(model) ?? { failures: 0, cause, nextProbeAt: now + ROUTE_REPROBE_MS };
+  const wasHeld = state.failures >= ROUTE_FAILURE_LIMIT;
   state.failures += 1;
   state.cause = cause;
-  if (state.failures === ROUTE_FAILURE_LIMIT) state.nextProbeAt = now + ROUTE_REPROBE_MS;
+  // A route whose window is over the bar is held now, however its failures were interleaved.
+  if (routeWindowFailing(model, now)) state.failures = Math.max(state.failures, ROUTE_FAILURE_LIMIT);
+  if (!wasHeld && state.failures >= ROUTE_FAILURE_LIMIT) state.nextProbeAt = now + ROUTE_REPROBE_MS;
   routeHealth.set(model, state);
+  return false;
 }
 
 export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork | null; ok: boolean; ms: number }> {
@@ -2096,9 +2149,12 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
   const brainUnavailable = !ok && BRAIN_UNAVAILABLE.test(ctx.why);
   const providerFailure = !ok && ((/^model call failed/.test(ctx.why) && PROVIDER_BUSY.test(ctx.why)) || brainUnavailable);
   const strikes = transient || brainUnavailable ? (transientStrikes.get(one.workItemId) ?? 0) + 1 : 0;
+  // Recorded before the cooldowns are touched: one answer from a route whose recent calls still
+  // mostly failed is its re-probe, and does not reopen it to every cooled item (CAP-16-3).
+  const routeOpen = recordRouteOutcome(worker.model, { ok, why: ctx.why });
   if (ok) {
     transientStrikes.delete(one.workItemId);
-    clearRouteCooldowns(worker.model);
+    if (routeOpen) clearRouteCooldowns(worker.model);
   } else if ((transient || brainUnavailable) && (strikes < 3 || providerFailure)) {
     /*
      * The model or its provider failed, not the work: hand the item back with
@@ -2132,7 +2188,6 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
       // Lease already gone: the queue's expiry returns it.
     }
   }
-  recordRouteOutcome(worker.model, { ok, why: ctx.why });
   const ms = Date.now() - started;
   const used = itemMeters.close(meterKey) ?? usage;
   await recordBinEvent({
