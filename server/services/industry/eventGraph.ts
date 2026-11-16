@@ -123,6 +123,12 @@ export interface GraphHypothesis {
   neighborhood: string;
   summary: string;
   actorKeys: string[];
+  /**
+   * The actors the joined facts name, each with the name its record states (or
+   * null) and the role the record gave it — what construction reads as the
+   * buyer and supplier sides of a design. Sorted by key.
+   */
+  actors: { key: string; name: string | null; role: ActorRole }[];
   factIds: string[];
   evidence: EvidenceLink[];
   /** Never empty: what nobody has established yet. */
@@ -221,6 +227,7 @@ function hypothesis(
     neighborhood,
     summary,
     actorKeys: uniq(facts.map((f) => f.actor.key)).sort(),
+    actors: [...new Map(facts.map((f) => [f.actor.key, f.actor] as const)).values()].sort((a, b) => a.key.localeCompare(b.key)).map((a) => ({ ...a })),
     factIds,
     evidence: evidenceOf(facts),
     missingConditions,
