@@ -6,11 +6,12 @@
  * exactly one CONTACT_RESULT, that nothing is guessed, and that the funnel and
  * the probe then model those rows without ever counting a message as a buyer.
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import {
   CAMPAIGN_CHANNEL,
+  CAMPAIGN_COHORT_HOLD_MS,
   CAMPAIGN_OUTCOMES_CONTINUE_MS,
   CAMPAIGN_OUTCOMES_REQUESTS_PER_PASS,
   contactResultOf,
@@ -93,10 +94,22 @@ async function seedOptOut(): Promise<void> {
   );
 }
 
+/**
+ * The wall clock these tests read. A held cohort ages past CAMPAIGN_COHORT_HOLD_MS
+ * from its enrolment day, so a test that leaves `now` to the clock must not
+ * change its answer as the calendar moves: only Date is pinned, never a timer.
+ */
+const CLOCK = '2026-11-16T12:00:00.000Z';
+
 let projectId: string;
 beforeEach(async () => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date(CLOCK));
   projectId = (await freshProject()).project.id;
   resetCampaignOutcomePacing();
+});
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe('a lead\'s terminal answer is read from the provider\'s record, never guessed', () => {
@@ -492,5 +505,121 @@ describe('one pass is bounded by a request budget and never waits inside the tic
     expect(second.paused).toBeNull();
     expect(await countRows()).toBe(2 * 2 * PAGE);
     expect(ws.sleeps).toEqual([]);
+  });
+});
+
+/*
+ * Reviewer finding (repair-R2-F3): a cohort with any lead not yet terminal
+ * recorded none of its leads, and a lead in a paused campaign (Instantly lead
+ * status 2) or a still-active one never becomes terminal — so a paused or
+ * long-running campaign left cash_outcomes empty and the probe failing with
+ * "no outreach outcome rows". The hold is now bounded: past
+ * CAMPAIGN_COHORT_HOLD_MS a cohort is recorded whole, its unanswered leads as
+ * provisional silences the provider's later answer settles.
+ */
+describe('a paused or long-running campaign still reaches the funnel, whole and never overstated', () => {
+  const ENROLLED = '2026-11-02T10:00:00.000Z';
+  const enrolledMs = Date.parse('2026-11-02T00:00:00.000Z');
+  const insideHold = new Date(enrolledMs + CAMPAIGN_COHORT_HOLD_MS - 60_000);
+  const pastHold = new Date(enrolledMs + CAMPAIGN_COHORT_HOLD_MS);
+  // Ten leads enrolled one day; the campaign was paused after one bounce and two replies.
+  const paused: Lead[] = [
+    { id: 'p-b', email: 'pb@x.test', status: -1, timestamp_created: ENROLLED },
+    { id: 'p-r1', email: 'pr1@x.test', status: 2, email_reply_count: 1, timestamp_created: ENROLLED },
+    { id: 'p-r2', email: 'pr2@x.test', status: 2, email_reply_count: 1, timestamp_created: ENROLLED },
+    ...Array.from({ length: 7 }, (_, i): Lead => ({ id: `p-q${i}`, email: `pq${i}@x.test`, status: 2, timestamp_created: ENROLLED })),
+  ];
+  const pass = (leads: Lead[], now: Date) =>
+    recordCampaignOutcomes(projectId, { deps: workspace({ [NEIGHBOR]: leads }).deps, ownerProjectId: projectId, force: true, now });
+  const basisOf = async (lead: string): Promise<string> =>
+    (await getDb().get<{ basis: string }>(`SELECT basis FROM cash_outcomes WHERE project_id = ? AND opportunity_id = ?`, [projectId, `instantly-lead:${lead}`]))!.basis;
+
+  it('inside the hold a paused cohort is held, as before', async () => {
+    const report = await pass(paused, insideHold);
+    expect(report).toMatchObject({ recorded: 0, pending: 7, held: 3, provisional: 0 });
+    expect(await results(projectId)).toEqual({});
+  });
+
+  it('past the hold a paused cohort is recorded whole: every answer, and every unanswered lead as a provisional silence', async () => {
+    await pass(paused, insideHold);
+    const report = await pass(paused, pastHold);
+    expect(report).toMatchObject({ recorded: 10, pending: 0, held: 0, provisional: 7 });
+    const rows = await results(projectId);
+    expect(Object.keys(rows)).toHaveLength(10);
+    expect(rows['p-b']).toBe('CONTACT_UNDELIVERABLE');
+    expect(rows['p-r1']).toBe('BUYER_REPLIED');
+    expect(rows['p-q0']).toBe('BUYER_SILENT');
+    expect(await basisOf('p-q0')).toMatch(/^provisional silence: no answer as of .*still paused/);
+    expect(await basisOf('p-r1')).toMatch(/aged past the 21-day hold/);
+    // The denominator is every lead the cohort enrolled, so no rate is overstated.
+    const [m] = await mechanismsFromRows(projectId, { permission: { basis: 'MEASURED', value: 1 } });
+    expect(m!.inputs.uniqueProspects).toEqual({ basis: 'MEASURED', value: 10 });
+    expect(m!.inputs.deliverability).toEqual({ basis: 'MEASURED', value: 9 / 10 });
+    expect(m!.inputs.response).toEqual({ basis: 'MEASURED', value: 2 / 9 });
+    // Messages are still not buyers.
+    const r = modelOutreachFunnel(m!);
+    const scaled = modelOutreachFunnel({ ...m!, messagesSent: 1_000_000 });
+    expect(scaled.buyers).toEqual(r.buyers);
+    expect(scaled.revenueCents).toEqual(r.revenueCents);
+  });
+
+  it('gives probe r01.com-13-3 a mechanism to model when the only campaign is paused', async () => {
+    const { getProbe } = await import('../server/services/factory/program/probes.ts');
+    await pass(paused, insideHold);
+    expect((await getProbe('r01.com-13-3')!({})).detail).toMatch(/no outreach outcome rows/);
+    await pass(paused, pastHold);
+    const after = await getProbe('r01.com-13-3')!({});
+    expect(after.detail).toMatch(/1 mechanism/);
+    expect(after.ok).toBe(true);
+  });
+
+  it('a still-active cohort ages the same way: a long-running campaign is not held forever', async () => {
+    const active = paused.map((l) => (l.status === 2 ? { ...l, status: 1 } : l));
+    expect((await pass(active, insideHold)).recorded).toBe(0);
+    const report = await pass(active, pastHold);
+    expect(report).toMatchObject({ recorded: 10, provisional: 7 });
+    expect(await basisOf('p-q1')).toMatch(/^provisional silence: .*still in its sequence/);
+  });
+
+  it('a provisional silence settles into whatever the lead later states, once, and a repeat pass moves nothing', async () => {
+    await pass(paused, pastHold);
+    const later = new Date(pastHold.getTime() + 86_400_000);
+    // Resumed: q0 replied and was won, q1 bounced, q2 replied, q3 finished silent; the rest still sending.
+    const resumed = paused.map((l) =>
+      l.id === 'p-q0' ? { ...l, status: 1, email_reply_count: 1, lt_interest_status: 4 }
+      : l.id === 'p-q1' ? { ...l, status: -1 }
+      : l.id === 'p-q2' ? { ...l, status: 1, email_reply_count: 1 }
+      : l.id === 'p-q3' ? { ...l, status: 3 }
+      : l.status === 2 ? { ...l, status: 1 } : l,
+    );
+    const settled = await pass(resumed, later);
+    expect(settled.recorded).toBe(4);
+    const rows = await results(projectId);
+    expect(rows).toMatchObject({ 'p-q0': 'BUYER_ACCEPTED', 'p-q1': 'CONTACT_UNDELIVERABLE', 'p-q2': 'BUYER_REPLIED', 'p-q3': 'BUYER_SILENT', 'p-q4': 'BUYER_SILENT' });
+    expect(Object.keys(rows)).toHaveLength(10);
+    expect(await basisOf('p-q3')).toMatch(/^settled from provisional silence: .* settled as BUYER_SILENT/);
+    expect(await basisOf('p-q4')).toMatch(/^provisional silence: /);
+    // Nothing changed at the provider: nothing moves.
+    expect((await pass(resumed, later)).recorded).toBe(0);
+    // A settled silence is final, like every silence the provider stated.
+    const flipped = await pass(resumed.map((l) => (l.id === 'p-q3' ? { ...l, lt_interest_status: 4 } : l)), later);
+    expect(flipped.recorded).toBe(0);
+    expect((await results(projectId))['p-q3']).toBe('BUYER_SILENT');
+    // The reply that settled a provisional silence is still refined by its later answer.
+    const won = await pass(resumed.map((l) => (l.id === 'p-q2' ? { ...l, lt_interest_status: 4 } : l)), later);
+    expect(won.recorded).toBe(1);
+    expect((await results(projectId))['p-q2']).toBe('BUYER_ACCEPTED');
+  });
+
+  it('an undated cohort ages from the first pass that found it held', async () => {
+    const undated: Lead[] = [
+      { id: 'u-r', email: 'ur@x.test', status: 3, email_reply_count: 1 },
+      { id: 'u-p', email: 'up@x.test', status: 2 },
+    ];
+    const t0 = new Date(CLOCK);
+    expect(await pass(undated, t0)).toMatchObject({ recorded: 0, held: 1, pending: 1 });
+    expect(await pass(undated, new Date(t0.getTime() + CAMPAIGN_COHORT_HOLD_MS - 1))).toMatchObject({ recorded: 0 });
+    expect(await pass(undated, new Date(t0.getTime() + CAMPAIGN_COHORT_HOLD_MS))).toMatchObject({ recorded: 2, provisional: 1 });
+    expect(await results(projectId)).toEqual({ 'u-r': 'BUYER_REPLIED', 'u-p': 'BUYER_SILENT' });
   });
 });

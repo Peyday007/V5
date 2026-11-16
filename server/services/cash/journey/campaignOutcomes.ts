@@ -20,8 +20,8 @@
  *   - any reply on record                            → BUYER_REPLIED
  *   - the sequence completed (3) with no reply       → BUYER_SILENT
  *
- * A lead still in an active or paused sequence records nothing: silence is
- * learned only from a terminal provider state, never from a clock here.
+ * A lead still in an active or paused sequence states no answer, and while
+ * its cohort is inside the hold (below) it records nothing.
  *
  * Answers are recorded by enrolment cohort, never lead by lead. A reply or a
  * bounce ends a lead's sequence days before a silent lead's last step does, so
@@ -34,7 +34,23 @@
  * A cohort is chosen by when it was enrolled, never by how its leads answered,
  * so the rows the funnel reads are a whole sample: what was answered, and every
  * lead that had the same chance and did not. A lead Instantly skipped (−3) was
- * never sent to, records nothing and holds no cohort back. One row
+ * never sent to, records nothing and holds no cohort back.
+ *
+ * The hold is bounded. A campaign can be paused (lead status 2) or run for
+ * weeks — sending capacity is itself bought and rationed (§110) — and a cohort
+ * held until every lead is terminal would then record nothing at all, so the
+ * funnel would have no mechanism to model for an outreach that plainly ran.
+ * Once a cohort is `CAMPAIGN_COHORT_HOLD_MS` past its enrolment day (an
+ * undated cohort: past the first pass that found it held), it is recorded
+ * whole anyway: every lead with a stated answer as that answer, and every lead
+ * still in its sequence as a *provisional* silence — `BUYER_SILENT` whose basis
+ * opens with `PROVISIONAL_SILENCE_BASIS` and states that the lead was still
+ * active or paused and had not answered as of that pass. That keeps the
+ * denominator whole (the funnel reads "answered by then", which can only
+ * understate a rate, never overstate one), and it is not a final answer: the
+ * repository settles it into whatever the lead's own record states later — a
+ * bounce, a reply, a classified answer, or the final silence of a completed
+ * sequence. One row
  * per lead, keyed by the campaign and Instantly's lead id, so a second pass
  * writes nothing, and the first terminal answer stands — exactly as
  * `learning.ts` treats a deal's contact. Messages are never recorded: a lead is
@@ -59,7 +75,7 @@
  * any size is read whole over several ticks and never stalls one.
  */
 import { getDb } from '../../../db/database.ts';
-import { insertOutcome } from '../../../repos/cashJourney.ts';
+import { PROVISIONAL_SILENCE_BASIS, insertOutcome } from '../../../repos/cashJourney.ts';
 import { BRAIN_PRINCIPAL, actionContext, checkCommercialAuthority } from '../authority.ts';
 import { CAMPAIGN_NAME, PERSONAL_CAMPAIGN_NAME, defaultDeps, instantly, itemsOf, type Deps } from '../neighborCard.ts';
 import { EXPANSION_CAMPAIGNS } from '../expansionOutreach.ts';
@@ -74,8 +90,19 @@ const LEAD_BOUNCED = -1;
 const LEAD_UNSUBSCRIBED = -2;
 const LEAD_COMPLETED = 3;
 const LEAD_SKIPPED = -3;
+/** A lead whose campaign is paused: in its sequence, stating no answer. */
+const LEAD_PAUSED = 2;
 /** The cohort of leads whose enrolment time Instantly did not state. */
 export const UNDATED_COHORT = 'undated';
+
+/**
+ * How long a cohort with a lead still in its sequence is held before it is
+ * recorded whole, its unanswered leads as provisional silences. A sequence's
+ * steps and the replies to them land inside about three weeks; a lead still
+ * unanswered after that is a paused or long-running campaign, and holding it
+ * longer would only keep a real outreach out of the funnel.
+ */
+export const CAMPAIGN_COHORT_HOLD_MS = 21 * 24 * 60 * 60 * 1000;
 
 /** A workspace allows 20 requests a minute; a full read is a few hundred leads, so every few hours is plenty. */
 export const CAMPAIGN_OUTCOMES_EVERY_MS = 6 * 60 * 60 * 1000;
@@ -126,6 +153,12 @@ export interface CampaignOutcomesReport {
    * of a cohort without its silences.
    */
   held: number;
+  /**
+   * Leads still in their sequence (active or paused) whose cohort aged past
+   * `CAMPAIGN_COHORT_HOLD_MS`: counted as provisional silences so the cohort is
+   * recorded whole, and settled into their answer when the provider states one.
+   */
+  provisional: number;
   /** Why nothing was read or written, when that is the case. */
   skipped: string | null;
   /**
@@ -141,7 +174,7 @@ export interface CampaignOutcomesReport {
 }
 
 function emptyReport(): CampaignOutcomesReport {
-  return { campaigns: 0, leads: 0, recorded: 0, pending: 0, held: 0, skipped: null, paused: null, requests: 0, failed: [] };
+  return { campaigns: 0, leads: 0, recorded: 0, pending: 0, held: 0, provisional: 0, skipped: null, paused: null, requests: 0, failed: [] };
 }
 
 function num(value: unknown): number | null {
@@ -168,6 +201,13 @@ export function contactResultOf(lead: CampaignLead, optedOut = false): CampaignC
 export function cohortOf(lead: CampaignLead): string {
   const at = lead.enrolledAt === null ? Number.NaN : Date.parse(lead.enrolledAt);
   return Number.isFinite(at) ? new Date(at).toISOString().slice(0, 10) : UNDATED_COHORT;
+}
+
+/** The UTC start of a dated cohort's enrolment day, or null for the undated cohort. */
+function cohortStartMs(cohort: string): number | null {
+  if (cohort === UNDATED_COHORT) return null;
+  const at = Date.parse(`${cohort}T00:00:00.000Z`);
+  return Number.isFinite(at) ? at : null;
 }
 
 /** A lead Instantly never sent to: it is no prospect reached and no answer. */
@@ -314,6 +354,23 @@ async function optedOutOn(campaignId: string): Promise<Set<string>> {
   return new Set(rows.map((row) => row.lead_email.toLowerCase()));
 }
 
+/**
+ * When a pass first found an undated cohort held, per project and campaign: an
+ * undated cohort states no enrolment day to age from. Held in memory, so a
+ * restart starts its hold again — later, never earlier.
+ */
+const undatedHeldSince = new Map<string, number>();
+
+/** Whether a held cohort has aged past the hold and is recorded whole. */
+function cohortAged(projectId: string, campaignId: string, cohort: string, nowMs: number): boolean {
+  const start = cohortStartMs(cohort);
+  if (start !== null) return nowMs - start >= CAMPAIGN_COHORT_HOLD_MS;
+  const key = `${projectId}\u0000${campaignId}`;
+  const since = undatedHeldSince.get(key) ?? nowMs;
+  undatedHeldSince.set(key, since);
+  return nowMs - since >= CAMPAIGN_COHORT_HOLD_MS;
+}
+
 /** When each project's last complete read began. */
 const lastPass = new Map<string, number>();
 /** Each project's unfinished read, and when it last advanced. */
@@ -394,27 +451,34 @@ export async function recordCampaignOutcomes(
     const answered = leads
       .filter((lead) => !neverSent(lead))
       .map((lead) => ({ lead, result: contactResultOf(lead, lead.email !== null && optedOut.has(lead.email)) }));
-    // A cohort with any lead still in its sequence records none of its leads.
+    // A cohort with any lead still in its sequence records none of its leads
+    // until it ages past the hold; then it is recorded whole.
     const openCohorts = new Set(answered.filter((one) => one.result === null).map((one) => cohortOf(one.lead)));
+    const agedCohorts = new Set([...openCohorts].filter((cohort) => cohortAged(projectId, campaign.id, cohort, nowMs)));
+    const asOf = new Date(nowMs).toISOString();
     for (const { lead, result } of answered) {
-      if (!result) {
-        report.pending += 1;
+      const cohort = cohortOf(lead);
+      const open = openCohorts.has(cohort);
+      const aged = agedCohorts.has(cohort);
+      if (open && !aged) {
+        if (result) report.held += 1;
+        else report.pending += 1;
         continue;
       }
-      if (openCohorts.has(cohortOf(lead))) {
-        report.held += 1;
-        continue;
-      }
+      const reading = `instantly campaign ${campaign.id}; lead ${lead.id}: status ${lead.status ?? 'none'}, replies ${lead.replies}, interest ${lead.interestStatus ?? 'none'}`;
       const fresh = await insertOutcome({
         projectId,
         opportunityId: `instantly-lead:${lead.id}`,
         kind: 'CONTACT_RESULT',
         mechanism: campaign.name,
         channel: CAMPAIGN_CHANNEL,
-        valueText: result,
-        basis: `instantly campaign ${campaign.id}; lead ${lead.id}: status ${lead.status ?? 'none'}, replies ${lead.replies}, interest ${lead.interestStatus ?? 'none'}; enrolment cohort ${cohortOf(lead)}, every lead terminal`,
+        valueText: result ?? 'BUYER_SILENT',
+        basis: result
+          ? `${reading}; enrolment cohort ${cohort}, ${open ? `aged past the ${CAMPAIGN_COHORT_HOLD_MS / 86_400_000}-day hold` : 'every lead terminal'}`
+          : `${PROVISIONAL_SILENCE_BASIS}no answer as of ${asOf}; ${reading} — still ${lead.status === LEAD_PAUSED ? 'paused' : 'in its sequence'} when enrolment cohort ${cohort} aged past the ${CAMPAIGN_COHORT_HOLD_MS / 86_400_000}-day hold`,
         requestKey: `outcome:campaign:${campaign.id}:${lead.id}:CONTACT_RESULT`,
       });
+      if (!result) report.provisional += 1;
       if (fresh) report.recorded += 1;
     }
     nextCampaign(progress);
@@ -427,4 +491,5 @@ export async function recordCampaignOutcomes(
 export function resetCampaignOutcomePacing(): void {
   lastPass.clear();
   unfinished.clear();
+  undatedHeldSince.clear();
 }

@@ -298,6 +298,28 @@ export async function insertOutcome(input: {
 const CONTACT_REFINEMENTS: ReadonlySet<string> = new Set(['BUYER_ACCEPTED', 'BUYER_COUNTERED', 'BUYER_DECLINED']);
 
 /**
+ * The head of the `basis` of a `BUYER_SILENT` that is not yet an answer: a
+ * lead whose sequence had not ended (still sending, or its campaign paused)
+ * when its enrolment cohort aged past the hold, so it was counted in the
+ * cohort's denominator as "no answer as of then" rather than left out
+ * (`campaignOutcomes.ts`). Unlike a silence the provider stated, it is the
+ * start of an answer, so it may still become any answer the lead's own record
+ * later states — a bounce, a reply, a classified answer, or the final silence
+ * of a completed sequence. Every other silence is final.
+ */
+export const PROVISIONAL_SILENCE_BASIS = 'provisional silence: ';
+
+/** What a provisional silence may still become. */
+const PROVISIONAL_SILENCE_REFINEMENTS: ReadonlySet<string> = new Set([
+  'CONTACT_UNDELIVERABLE',
+  'BUYER_REPLIED',
+  'BUYER_ACCEPTED',
+  'BUYER_COUNTERED',
+  'BUYER_DECLINED',
+  'BUYER_SILENT',
+]);
+
+/**
  * One guarded transition: the existing CONTACT_RESULT row under the same
  * request key moves from `BUYER_REPLIED` to the classified answer the caller
  * now holds. It names the state it comes from in the statement that makes it,
@@ -315,7 +337,26 @@ async function refineContactResult(input: {
   basis: string;
   requestKey: string;
 }): Promise<boolean> {
-  if (input.kind !== 'CONTACT_RESULT' || !input.valueText || !CONTACT_REFINEMENTS.has(input.valueText)) return false;
+  if (input.kind !== 'CONTACT_RESULT' || !input.valueText) return false;
+  // A provisional silence becomes the lead's stated answer once there is one;
+  // the head of its basis changes, so it is provisional exactly once. Another
+  // provisional reading of the same lead is not an answer and moves nothing.
+  if (PROVISIONAL_SILENCE_REFINEMENTS.has(input.valueText) && !input.basis.startsWith(PROVISIONAL_SILENCE_BASIS)) {
+    const settled = await getDb().run(
+      `UPDATE cash_outcomes
+          SET value_text = ?, basis = 'settled from ' || basis || ?
+        WHERE project_id = ? AND request_key = ? AND kind = 'CONTACT_RESULT' AND value_text = 'BUYER_SILENT' AND basis LIKE ?`,
+      [
+        input.valueText,
+        ` | settled as ${input.valueText} at ${journeyNow()}: ${input.basis}`,
+        input.projectId,
+        input.requestKey,
+        `${PROVISIONAL_SILENCE_BASIS}%`,
+      ],
+    );
+    if (Number(settled.changes ?? 0) > 0) return true;
+  }
+  if (!CONTACT_REFINEMENTS.has(input.valueText)) return false;
   const result = await getDb().run(
     `UPDATE cash_outcomes
         SET value_text = ?, basis = basis || ?
