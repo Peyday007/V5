@@ -450,6 +450,14 @@ export async function keepCashLedger(
   const measured = await (deps.measured ?? ((id: string) => outcomesFor({ projectId: id })))(projectId);
   const outcomes = await recordCashOutcomes(projectId, measured, scoped);
   ledger.outcomes.push(...outcomes);
+  // Which backups to prepare first, re-ranked on the same refresh from the project's real dependencies
+  // and the failures on this ledger (FALL-37-6). Loaded when used: the ranking reads this ledger. Its own
+  // catch: a ranking that cannot be made never stops the cash ledger.
+  await import('./fallbackPreparation.ts')
+    .then(({ prepareProjectFallbacks }) => prepareProjectFallbacks(projectId))
+    .catch((error: unknown) => {
+      console.warn(`[quant] fallback preparation unreadable for ${projectId}: ${String((error as Error)?.message ?? error)}`);
+    });
   return { written, exposures, outcomes, reading: await assessLedger({}, scoped), ledger: await held() };
 }
 
@@ -623,4 +631,149 @@ export async function forecastAndRecordCash(
 ): Promise<{ forecast: CashForecast; predictions: PredictionRow[] }> {
   const forecast = await cashForecast(input);
   return { forecast, predictions: await recordCashForecast(input.projectId, forecast, { ...deps, projectId: input.projectId }) };
+}
+
+/* ------------------------------------------------------------------------- */
+/* Failure and recovery (FALL-37-4)                                           */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * Every time a path fails: whether it was detected in time, what Brain tried,
+ * whether recovery worked, what it cost or saved, and which general method
+ * needs improving. Written through the same append-only writer as the forecast
+ * ledgers (`recordBinEvent` → `bin_events`), never a table of its own, and read
+ * back so a recurring failure class is a count the improvement loop can act on.
+ */
+export const RECOVERY_EVENT = 'FALLBACK_FAILURE_RECOVERY';
+
+export interface FailureRecoveryRecord {
+  /** Stable per occurrence, so recording it again writes nothing. */
+  occurrence: string;
+  dependency: string;
+  /**
+   * The path of the dependency that failed, when the dependency runs on one of
+   * several (an acquisition path's `mechanism @ channel`). A failure belongs to
+   * the path it happened on, not to whichever path is primary when it is read.
+   * Absent on records that name no path.
+   */
+  path?: string | null;
+  failureMode: string;
+  /** The general class this failure belongs to, the unit a recurrence is counted in. */
+  failureClass: string;
+  /** Days from the failure to its detection, when known. */
+  detectionDelayDays: number | null;
+  /** Days from the failure until harm would land, when known. */
+  timeToHarmDays: number | null;
+  /** Derived: detected before harm landed. Null when either figure is unknown. */
+  detectionTimely: boolean | null;
+  /** What Brain tried, in order. */
+  tried: string[];
+  /** Whether recovery worked; null while unknown. */
+  recovered: boolean | null;
+  cashLostCents: number | null;
+  cashPreservedCents: number | null;
+  timeLostDays: number | null;
+  /** What happened to reputation, in words; null when nothing was observed. */
+  reputation: string | null;
+  /** The general methods this failure says need improving. */
+  methodsToImprove: string[];
+  at: string;
+}
+
+export type FailureRecoveryInput = Omit<FailureRecoveryRecord, 'detectionTimely' | 'at'>;
+
+/** Whether detection beat harm, from the two figures; unknown when either is. */
+export function detectionWasTimely(detectionDelayDays: number | null, timeToHarmDays: number | null): boolean | null {
+  if (detectionDelayDays === null || timeToHarmDays === null) return null;
+  return detectionDelayDays < timeToHarmDays;
+}
+
+/** Read every failure-and-recovery record, optionally for one project, in write order (records written in the same millisecond may tie). */
+export async function readFailureRecoveries(projectId: string | null = null): Promise<FailureRecoveryRecord[]> {
+  const params: SqlParam[] = [RECOVERY_EVENT];
+  let where = 'event_type = ?';
+  if (projectId !== null) {
+    where += ' AND project_id = ?';
+    params.push(projectId);
+  }
+  const rows = await getDb().all<{ measures: string | null }>(`SELECT measures FROM bin_events WHERE ${where} ORDER BY at ASC, id ASC`, params);
+  const seen = new Map<string, number>();
+  const out: FailureRecoveryRecord[] = [];
+  for (const r of rows) {
+    let parsed: { recovery?: FailureRecoveryRecord };
+    try {
+      parsed = JSON.parse(r.measures ?? '{}') as typeof parsed;
+    } catch {
+      continue;
+    }
+    const rec = parsed.recovery;
+    if (!rec || typeof rec.occurrence !== 'string') continue;
+    // A later record of the same occurrence settles a recovery the first one left unknown; it replaces it in
+    // place, so the record keeps its write order and both rows stay in the append-only history.
+    const at = seen.get(rec.occurrence);
+    if (at === undefined) {
+      seen.set(rec.occurrence, out.length);
+      out.push(rec);
+    } else if (out[at]!.recovered === null && rec.recovered !== null) out[at] = rec;
+  }
+  return out;
+}
+
+/**
+ * Record one failure and what became of it. The first record of an occurrence stands and a repeat writes
+ * nothing — except that a recovery the record left unknown is settled by a later one that knows it (a path
+ * fails before anyone can say whether recovery worked), appended beside it and never overwriting it.
+ */
+export async function recordFailureRecovery(
+  input: FailureRecoveryInput,
+  deps: Pick<LedgerDeps, 'record' | 'now' | 'caller' | 'projectId'> & { read?: () => Promise<FailureRecoveryRecord[]> } = {},
+): Promise<{ record: FailureRecoveryRecord; written: boolean }> {
+  const held = (await (deps.read ?? (() => readFailureRecoveries(deps.projectId ?? null)))()).find((r) => r.occurrence === input.occurrence);
+  if (held && !(held.recovered === null && input.recovered !== null)) return { record: held, written: false };
+  const record: FailureRecoveryRecord = {
+    ...input,
+    detectionTimely: detectionWasTimely(input.detectionDelayDays, input.timeToHarmDays),
+    at: deps.now?.() ?? new Date().toISOString(),
+  };
+  await (deps.record ?? recordBinEvent)({
+    eventType: RECOVERY_EVENT,
+    projectId: deps.projectId ?? null,
+    workloadClass: deps.caller ?? 'fallback-recovery',
+    outcome: record.recovered === null ? 'UNKNOWN' : record.recovered ? 'RECOVERED' : 'NOT_RECOVERED',
+    reason: `${record.dependency}: ${record.failureMode} (${record.failureClass})`.slice(0, 480),
+    evidenceClass: 'MEASURED',
+    measures: { recovery: record },
+  });
+  return { record, written: true };
+}
+
+export interface RecurringFailureClass {
+  failureClass: string;
+  occurrences: number;
+  recovered: number;
+  notRecovered: number;
+  untimelyDetections: number;
+  /** The methods its records most often name for improvement, most frequent first. */
+  methodsToImprove: string[];
+}
+
+/** Failure classes seen at least `minimum` times: the candidates for a Factory improvement objective. Pure. */
+export function recurringFailureClasses(records: readonly FailureRecoveryRecord[], minimum = 2): RecurringFailureClass[] {
+  const byClass = new Map<string, FailureRecoveryRecord[]>();
+  for (const r of records) byClass.set(r.failureClass, [...(byClass.get(r.failureClass) ?? []), r]);
+  const out: RecurringFailureClass[] = [];
+  for (const [failureClass, list] of byClass) {
+    if (list.length < minimum) continue;
+    const methods = new Map<string, number>();
+    for (const r of list) for (const m of r.methodsToImprove) methods.set(m, (methods.get(m) ?? 0) + 1);
+    out.push({
+      failureClass,
+      occurrences: list.length,
+      recovered: list.filter((r) => r.recovered === true).length,
+      notRecovered: list.filter((r) => r.recovered === false).length,
+      untimelyDetections: list.filter((r) => r.detectionTimely === false).length,
+      methodsToImprove: [...methods.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([m]) => m),
+    });
+  }
+  return out.sort((a, b) => b.occurrences - a.occurrences || a.failureClass.localeCompare(b.failureClass));
 }

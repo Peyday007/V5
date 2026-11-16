@@ -27,6 +27,8 @@
  * Reads are cached per project for a few minutes, keyed on the newest fact,
  * so a goal tick that infers fifty quantities reads the rows once.
  */
+import { assessProjectFallbackPlan } from './fallbackPlanReading.ts';
+import { readSwitchDecision, type FallbackSwitchDecision } from './fallbackApply.ts';
 import { listOpportunities } from '../../repos/cashPortfolio.ts';
 import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
 import { claimSources, type ClaimSource } from '../../repos/research.ts';
@@ -39,6 +41,8 @@ import type { LimitingInput } from './portfolio.ts';
 import { reconstruct } from './reconstruct.ts';
 import { rankRoutesFromLedger, routeMoneyStatement, type RouteMoneyVelocity, type RouteScore } from './deadline.ts';
 import { keepCashLedger, readLedger } from './ledger.ts';
+import { assessProjectIndependence } from './fallbackIndependence.ts';
+import { watchForecastPath, type FallbackWatch } from './fallbackWatch.ts';
 import { assessModelLearning, type ModelLearningReading } from './learning.ts';
 import { compareAfterCorrection, impliedProbability, MIN_CALIBRATION_SAMPLE } from './forecast.ts';
 import type { Correction, CorrectionComparison, ExposureRow, OutcomeRow, PredictionRow } from './forecast.ts';
@@ -107,6 +111,24 @@ export interface CashKnowledge {
    * ledger failure never stops a goal reading.
    */
   learning: ModelLearningReading | null;
+  /**
+   * The fallback watch on the forecast this knowledge carries (FALL-37-4): its misses recorded as failures,
+   * drift warnings and the plans they re-read, each correction judged as a switch, the pathway's reliability
+   * and the recurring failure classes handed to Factory. Null when it could not run; absent on knowledge
+   * built without a refresh.
+   */
+  fallbacks?: FallbackWatch | null;
+  /**
+   * What the recorded acquisition fallback plan, independence reading and
+   * preparation order say the dependency runs on now (`fallbackApply.ts`):
+   * the primary, or — after an unrecovered failure on the ledger — the
+   * substitute the plan switches to. A switch enters the switched path's
+   * re-derived funnel as this project's measured `respond` observation, so a
+   * goal plan built on this knowledge recalculates its portfolio on it. Null
+   * when no plan is on record or it could not be read; absent on knowledge
+   * built without a refresh.
+   */
+  fallbackDecision?: FallbackSwitchDecision | null;
 }
 
 const cache = new Map<string, { at: number; value: CashKnowledge }>();
@@ -142,9 +164,31 @@ export async function loadCashKnowledge(projectId: string, now = Date.now()): Pr
   const learning = await keepCashLedger(projectId, currencies)
     .then((kept) => learnFromCashLedger(projectId, currencies, { read: async () => kept.ledger }))
     .catch(() => null);
+  // The same refresh scores the independence of the project's real acquisition paths by common cause
+  // and rejects the fallbacks that are not eligible (FALL-37-3), recorded on the ledger when it changes.
+  // Its own catch: a reading that cannot be made never stops the knowledge a plan reads.
+  await assessProjectIndependence(projectId).catch((error: unknown) => {
+    console.warn(`[quant] fallback independence unreadable for ${projectId}: ${String((error as Error)?.message ?? error)}`);
+  });
+  // The forecast is a consequential dependency of every plan that reads it: its failures are recorded and
+  // its switches judged on the same refresh. A watch that fails never stops the knowledge.
+  const fallbacks = learning ? await watchFallbacks(projectId, currencies, learning).catch(() => null) : null;
   const { routeMoney, routeScores, routeMoneyError } = await loadRouteMoney(projectId, opportunities);
-  const value: CashKnowledge = { projectId, opportunities: new Map(opportunities.map((one) => [one.id, one])), facts: evidence, lessons, sources, watermark, routeMoney, routeScores, routeMoneyError, estimates: new Map(), learning };
+  const value: CashKnowledge = { projectId, opportunities: new Map(opportunities.map((one) => [one.id, one])), facts: evidence, lessons, sources, watermark, routeMoney, routeScores, routeMoneyError, estimates: new Map(), learning, fallbacks };
   cache.set(projectId, { at: now, value });
+  // The same refresh plans the fallbacks of the project's real acquisition dependency — failure
+  // modes, substitutes, the alternatives it needs and each switch's re-derived funnel (FALL-37-1/2) —
+  // and records the plan when it changes. Its own catch: a plan that cannot be made never stops this.
+  await assessProjectFallbackPlan(projectId).catch((error: unknown) => {
+    console.warn(`[quant] fallback plan unreadable for ${projectId}: ${String((error as Error)?.message ?? error)}`);
+  });
+  // The recorded plan, independence and preparation order are read back and acted on: an unrecovered failure
+  // of the primary switches the plan to the substitute they qualify, and its funnel reaches every estimate below.
+  value.fallbackDecision = await readSwitchDecision(projectId).catch((error: unknown) => {
+    console.warn(`[quant] fallback decision unreadable for ${projectId}: ${String((error as Error)?.message ?? error)}`);
+    return null;
+  });
+  value.estimates.clear();
   return value;
 }
 
@@ -349,6 +393,18 @@ export function correctionRounds(reading: Pick<ModelLearningReading, 'ledger' | 
 /** When each correction took effect, per comparable bucket (see `correctionRounds`). Pure. */
 export function correctionTimes(reading: Pick<ModelLearningReading, 'ledger' | 'diagnoses' | 'corrections'>, predictions: readonly PredictionRow[]): Map<string, string> {
   return new Map([...correctionRounds(reading, predictions)].map(([key, round]) => [key, round.correctedAt]));
+}
+
+/** Run the fallback watch on the forecast reading, with the goals whose plans rest on each claim. */
+async function watchFallbacks(projectId: string, currencies: readonly string[], learning: ModelLearningReading): Promise<FallbackWatch> {
+  const goals = await dependentGoals(projectId);
+  const dependents = new Map<string, string[]>();
+  for (const [plan, claims] of cashDependencyGraph(projectId, currencies, goals)) {
+    const goal = goals.find((g) => planClaimId(g.id) === plan);
+    if (!goal) continue;
+    for (const claim of claims) dependents.set(claim, [...(dependents.get(claim) ?? []), goal.id]);
+  }
+  return watchForecastPath(projectId, learning, { dependents });
 }
 
 /** The goals whose plans read this project's cash knowledge. */
@@ -851,6 +907,33 @@ function lineageOf(fact: CashCardFact, knowledge: CashKnowledge): string[] {
   return [`fact:${fact.id}`];
 }
 
+/**
+ * The switched acquisition path's re-derived funnel as a `respond`
+ * observation: its responders out of the prospects it reached, measured on
+ * this project's own contact results. Only when the recorded fallback plan
+ * has switched (an unrecovered primary failure on the ledger, a qualified
+ * substitute) and the funnel is measured; the failed primary contributes
+ * nothing here. Broad when the substitute's mechanism differs from the
+ * opening's.
+ */
+export function switchedPathObservations(knowledge: CashKnowledge, target: CashOpportunity): Observation[] {
+  const decision = knowledge.fallbackDecision;
+  if (!decision || decision.state !== 'SWITCHED' || !decision.replacement || !decision.funnel) return [];
+  const [mechanism = 'unstated', channel = 'unstated'] = decision.replacement.split(' @ ');
+  const trials = Math.round(decision.funnel.prospectsReached);
+  const successes = Math.min(trials, Math.max(0, Math.round(decision.funnel.responders)));
+  if (trials <= 0) return [];
+  return [{
+    id: `fallback-switch:${decision.dependency}:${decision.replacement}`,
+    value: { kind: 'COUNT', successes, trials },
+    context: { mechanism, channel },
+    lineage: [`cash_outcomes:${knowledge.projectId}:${mechanism}:${channel}`],
+    source: { kind: 'OTHER', ref: `fallback-switch:${decision.failure?.occurrence ?? decision.dependency}`, note: decision.funnel.source },
+    broad: mechanism !== target.mechanism,
+    measures: `prospects answering on ${decision.replacement}, the path the plan switched to after ${decision.primaryPath} failed`,
+  }];
+}
+
 /** The observations a project holds about one quantity. */
 export function observationsFor(knowledge: CashKnowledge, quantity: CashQuantity, target: CashOpportunity): Observation[] {
   const spec = CASH_QUANTITIES[quantity];
@@ -871,6 +954,8 @@ export function observationsFor(knowledge: CashKnowledge, quantity: CashQuantity
       });
     }
   }
+  // The path the acquisition dependency runs on after a switch, measured on this Brain's own contacts (FALL-37-2).
+  if (quantity === 'respond') out.push(...switchedPathObservations(knowledge, target));
   // What money actually did on a route outranks what research says it would do, so it comes first.
   if (quantity === 'daysToCash' || quantity === 'costShare' || quantity === 'capitalShare') out.push(...ledgerObservations(knowledge, quantity, target));
   for (const fact of knowledge.facts) {
