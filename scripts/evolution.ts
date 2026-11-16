@@ -114,7 +114,17 @@ try {
       const rows = await listBaselines(suite.name, 50);
       if (!rows.some((b) => b.experimentId === null && b.sha === BRAIN_REVISION)) unbaselined.push(suite.name);
     }
-    out({ sha: BRAIN_REVISION, suites: EVOLUTION_SUITES.map((s) => s.name), unbaselined });
+    // What the CAPABILITY_BELOW_TARGET detector reads from those baselines, or why it could not:
+    // readDeficiencies swallows a detector's error so one bad source never hides the others,
+    // which also made this one's silence unreadable on production (2026-11-16).
+    let detector: unknown;
+    try {
+      const { capabilityDeficiencies } = await import('../server/services/operator/director.ts');
+      detector = (await capabilityDeficiencies()).map((one) => ({ title: one.diagnosis.title, intervention: one.intervention }));
+    } catch (error) {
+      detector = { error: error instanceof Error ? `${error.name}: ${error.message}`.slice(0, 500) : String(error).slice(0, 500) };
+    }
+    out({ sha: BRAIN_REVISION, suites: EVOLUTION_SUITES.map((s) => s.name), unbaselined, detector });
   } else if (command === 'show') {
     out(await evolution.readExperiments({ limit: 50 }));
   } else {

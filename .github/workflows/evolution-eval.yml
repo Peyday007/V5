@@ -100,6 +100,8 @@ jobs:
           # A revision with no baseline yet (a fresh deploy) is scored on the next half-hour run.
           on_brain "revision --json" > "$work/revision.txt" 2>&1 || { echo "::error::Brain did not answer revision"; tail -5 "$work/revision.txt"; exit 1; }
           node bench/evaluator.mjs extract "$work/revision.txt" > "$work/revision.json"
+          # The running sha, unbaselined suites and what the detector reads (titles only, never cases).
+          echo "revision: $(cut -c1-1500 "$work/revision.json")"
           prod_sha=$(node -e 'const r=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); process.stdout.write(/^[0-9a-f]{7,40}$/.test(r.sha??"")?r.sha:"")' "$work/revision.json")
           if [ "${SCHEDULE:-}" = '27 */6 * * *' ] || [ "${BASELINE:-false}" = true ]; then which=suites; else which=unbaselined; fi
           suites=$(node -e 'const r=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); for (const s of r[process.argv[2]]??[]) if (/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(s)) console.log(s)' "$work/revision.json" "$which")
