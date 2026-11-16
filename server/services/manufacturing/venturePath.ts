@@ -33,6 +33,9 @@
  * out of reach become reachable without anybody restating it.
  */
 
+import type { CategoryReading } from './readiness.ts';
+import type { AcquisitionCandidate } from '../../domain/types.ts';
+
 export type StageMode = 'BUILD' | 'CONTRACT' | 'PARTNER' | 'LICENSE' | 'BUY';
 
 export interface Money {
@@ -345,4 +348,118 @@ function validateFirst(stages: readonly VentureStage[], situation: ResourceSitua
   if (verdict.feasibility !== 'FEASIBLE') return null;
   const dropped = stages.filter((s) => !chosen.includes(s)).map((s) => s.key);
   return { kind: 'VALIDATE_FIRST', differs: [`funds ${chosen.map((c) => c.key).join(', ')} first; defers ${dropped.join(', ')}`], stages: variant, path, verdict };
+}
+
+/* ------------------------------------------------------------------------- */
+/* A real venture's stages, from the ladder's rows                            */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * The stages of entering one category, derived from what the ladder has
+ * recorded about it, and nothing else. Pure.
+ *
+ * Every stage stands on a row:
+ * - each capital requirement established under the scenario the reading
+ *   prices (the cheapest fully priced one, otherwise the smallest one anything
+ *   was found for) is a stage, priced from its published high figure or
+ *   withheld when no figure is published;
+ * - each required capability nobody holds is a stage, with the acquisition
+ *   candidates recorded as supplying it as BUY alternatives (unpriced, because
+ *   no candidate row carries a price, so an alternative never reads as
+ *   feasible on figures nobody published);
+ * - each entry barrier established is a stage of its own, because a barrier is
+ *   a thing to obtain and never an amount (`readiness.ts`).
+ *
+ * The rows state no dependency between two requirements, so none is invented:
+ * they share the first layer and may run in parallel. What they all feed is
+ * the entry decision, which depends on every one of them and is the owner's to
+ * take, because entering commits money (invariant 38). Missing demand or
+ * distribution evidence is carried on that decision as an unknown, so a
+ * venture with none never reads as feasible (invariant 39).
+ */
+export function stagesFromReading(
+  reading: CategoryReading,
+  candidates: readonly AcquisitionCandidate[] = [],
+): VentureStage[] {
+  const subject = reading.path.join(' → ') || reading.categoryId;
+  const scenario = reading.capital.cheapestFullyPriced ?? reading.capital.scenarios[0] ?? null;
+  const stages: VentureStage[] = [];
+
+  for (const entry of scenario ? [...scenario.priced, ...scenario.unpriced] : []) {
+    const budget: Money | null =
+      entry.amountHighMinor !== null && entry.currency !== null ? { currency: entry.currency, amountMinor: entry.amountHighMinor } : null;
+    const requirement = entry.requirement.toLowerCase().replace(/_/g, ' ');
+    stages.push({
+      key: `capital:${entry.requirement}`,
+      title: `${requirement} for ${subject}`,
+      dependsOn: [],
+      decision: `Commit to the ${requirement} the ${entry.scenario.toLowerCase().replace(/_/g, ' ')} scenario requires`,
+      resource: budget ? `${budget.amountMinor} ${budget.currency} (minor units), published ${entry.asOf}` : 'an amount nobody has published',
+      artifact: entry.statement,
+      actor: 'Brain prepares; the owner commits the money',
+      budget,
+      evidence: [entry.sourceClaimId],
+      completion: `The ${requirement} is in place and recorded`,
+    });
+  }
+
+  for (const gap of reading.missing) {
+    const capability = gap.capability;
+    const supplying = candidates.filter((one) => one.capabilityId === capability.id && one.setAsideAt === null);
+    stages.push({
+      key: `capability:${capability.id}`,
+      title: `Hold ${capability.name}`,
+      dependsOn: [],
+      decision: `Develop ${capability.name}, or obtain it from someone who holds it`,
+      resource: gap.taughtBy.length > 0 ? `taught by ${gap.taughtBy.map((one) => one.name).join(', ')}` : 'no category on the ladder teaches it yet',
+      artifact: `A person's record that this company holds ${capability.name}`,
+      actor: 'the owner, who alone records a capability as held',
+      budget: null,
+      evidence: capability.sourceClaimId ? [capability.sourceClaimId] : [],
+      completion: `${capability.name} is recorded as held`,
+      requiresCapabilityIds: [capability.id],
+      alternatives: supplying.map((one) => ({
+        mode: 'BUY' as const,
+        actor: one.name,
+        budget: null,
+        requiresCapabilityIds: [],
+        evidence: [one.sourceClaimId],
+      })),
+    });
+  }
+
+  const barriers = reading.evidence.against.filter((one) => one.kind === 'ENTRY_BARRIER');
+  for (const barrier of barriers) {
+    stages.push({
+      key: `barrier:${barrier.id}`,
+      title: `Obtain ${barrier.subject}`,
+      dependsOn: [],
+      decision: `Pursue ${barrier.subject}, or find a holder of it to work through`,
+      resource: 'whatever the issuing body requires; not an amount on record',
+      artifact: barrier.statement,
+      actor: 'Brain prepares; the owner or the holder applies',
+      budget: null,
+      evidence: [barrier.sourceClaimId],
+      completion: `${barrier.subject} is obtained and recorded`,
+    });
+  }
+
+  const unknowns: string[] = [];
+  if (reading.evidence.demand.length === 0) unknowns.push(`no demand evidence is on record for ${subject}`);
+  if (reading.evidence.distribution.length === 0) unknowns.push(`no distribution channel is on record for ${subject}`);
+  const currency = stages.find((one) => one.budget)?.budget?.currency ?? null;
+  stages.push({
+    key: 'enter',
+    title: `Enter ${subject}`,
+    dependsOn: stages.map((one) => one.key),
+    decision: `Enter ${subject} on what the prerequisite stages established, change the strategy, or stop`,
+    resource: 'the artifacts of every prerequisite stage',
+    artifact: 'A recorded entry decision with the evidence it rests on',
+    actor: 'the owner, on Brain’s recommendation',
+    budget: currency ? { currency, amountMinor: 0 } : null,
+    evidence: [...reading.evidence.demand, ...reading.evidence.distribution].map((one) => one.sourceClaimId),
+    completion: 'The entry decision is recorded',
+    unknowns,
+  });
+  return stages;
 }

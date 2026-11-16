@@ -3,7 +3,7 @@ import { freshProject } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { createRun } from '../server/repos/runs.ts';
 import { createFragments, createOrchestration, currentFragments, decideClaim, insertClaims, updateFragment } from '../server/repos/research.ts';
-import { ensureCapability, getProgram, recordCategoryCapital, recordEdge } from '../server/repos/manufacturing.ts';
+import { ensureCapability, getProgram, recordAcquisitionCandidate, recordCategoryCapital, recordCategoryEvidence, recordEdge } from '../server/repos/manufacturing.ts';
 import { recordMoney } from '../server/repos/cashLedger.ts';
 import { startProgramme } from '../server/services/manufacturing/program.ts';
 import { declareHeld, seedCategory } from '../server/services/manufacturing/declare.ts';
@@ -258,6 +258,96 @@ describe('VENT-24-2: the kernel revisits an earlier venture when capital or capa
     expect(second.feasibility).toBe('FEASIBLE');
     expect(second.available).toEqual({ currency: 'USD', amountMinor: 75_000_00 });
     expect(second.newestInput).toMatchObject({ kind: 'CAPABILITY_HELD', capabilityId: capability.id });
+  });
+
+  it('builds every real category into a dependency-ordered stage graph from its own rows, challenged, with alternatives', async () => {
+    const started = await startProgramme({ projectId, ownerUserId: userId, actorUserId: userId, objective: 'Build machines only where demand and capability allow.' });
+    expect(started.ok).toBe(true);
+    const program = (await getProgram(projectId))!;
+    const seeded = await seedCategory({ projectId, name: 'Industrial floor scrubbers', actorRef: userId, reason: 'test' });
+    if ('error' in seeded) throw new Error(seeded.error);
+    const category = seeded.category;
+
+    const { capability } = await ensureCapability({ programId: program.id, projectId, name: 'Brushless drive integration', origin: 'SEED' });
+    await recordEdge({
+      programId: program.id,
+      categoryId: category.id,
+      capabilityId: capability.id,
+      relation: 'REQUIRES',
+      statement: 'A scrubber drive needs brushless motor integration',
+      sourceClaimId: await acceptedClaim('A scrubber drive needs brushless motor integration'),
+    });
+    const toolingClaim = await acceptedClaim('Tooling for a scrubber chassis costs $20,000–$30,000');
+    await recordCategoryCapital({
+      programId: program.id,
+      categoryId: category.id,
+      requirement: 'TOOLING_AND_EQUIPMENT',
+      scenario: 'SMALLEST_CREDIBLE_ENTRY',
+      amountLowMinor: 20_000_00,
+      amountHighMinor: 30_000_00,
+      currency: 'USD',
+      basis: 'PUBLISHED_PRICE_OR_SCHEDULE',
+      asOf: '2026-09-01',
+      statement: 'Tooling for a scrubber chassis costs $20,000–$30,000',
+      sourceClaimId: toolingClaim,
+    });
+    await recordCategoryEvidence({
+      programId: program.id,
+      categoryId: category.id,
+      kind: 'ENTRY_BARRIER',
+      subject: 'electrical safety listing',
+      statement: 'Sale requires an electrical safety listing',
+      sourceClaimId: await acceptedClaim('Sale requires an electrical safety listing'),
+    });
+    const supplierClaim = await acceptedClaim('A drive integrator offers brushless integration as a service');
+    await recordAcquisitionCandidate({
+      programId: program.id,
+      categoryId: category.id,
+      capabilityId: capability.id,
+      name: 'A drive integrator',
+      contribution: 'CAPABILITY',
+      statement: 'A drive integrator offers brushless integration as a service',
+      sourceClaimId: supplierClaim,
+    });
+    await recordMoney({ projectId, kind: 'CAPITAL_IN', amountCents: 50_000_00, currency: 'USD', recordedBy: userId, idempotencyKey: `capital-graph-${projectId}` });
+
+    const pass = await runManufacturingKernel(projectId);
+    const reading = pass.ventures.find((v) => v.categoryId === category.id)!;
+    const { path, verdict, alternatives } = reading.venture;
+    if (!path.ok) throw new Error(`path refused: ${path.detail}`);
+
+    // Prerequisites the rows name share the first layer; the entry decision depends on all of them.
+    const capitalKey = 'capital:TOOLING_AND_EQUIPMENT';
+    const capabilityKey = `capability:${capability.id}`;
+    expect(path.layers[0]).toEqual(expect.arrayContaining([capitalKey, capabilityKey]));
+    expect(path.layers[0]!.some((key) => key.startsWith('barrier:'))).toBe(true);
+    expect(path.layers[1]).toEqual(['enter']);
+    const enter = path.nodes.find((n) => n.key === 'enter')!;
+    expect(enter.dependsOn).toEqual(expect.arrayContaining([capitalKey, capabilityKey]));
+
+    // Every node carries the seven fields, and evidence resolves to the rows it stands on.
+    for (const node of path.nodes) {
+      for (const field of ['decision', 'resource', 'artifact', 'actor', 'completion'] as const) expect(node[field].length).toBeGreaterThan(0);
+    }
+    const tooling = path.nodes.find((n) => n.key === capitalKey)!;
+    expect(tooling.budget).toEqual({ state: 'PRICED', money: { currency: 'USD', amountMinor: 30_000_00 } });
+    expect(tooling.evidence).toEqual([toolingClaim]);
+
+    // Unpriced stages withhold the total, and the challenge names what stops it.
+    expect(path.total).toBeNull();
+    expect(path.unpriced).toEqual(expect.arrayContaining([capabilityKey]));
+    expect(verdict!.feasibility).toBe('INFEASIBLE');
+    expect(verdict!.challenges.map((c) => c.kind)).toEqual(expect.arrayContaining(['CAPABILITY_NOT_HELD', 'UNPRICED_STAGE', 'BUILT_ON_UNKNOWNS']));
+
+    // The supplier on record is carried as a BUY alternative to developing the capability.
+    const capabilityNode = path.nodes.find((n) => n.key === capabilityKey)!;
+    expect(capabilityNode.alternatives).toEqual([expect.objectContaining({ mode: 'BUY', actor: 'A drive integrator', evidence: [supplierClaim] })]);
+
+    // The rebuilt alternative funds the priced, capability-free prefix the capital covers.
+    const first = alternatives.find((a) => a.kind === 'VALIDATE_FIRST');
+    expect(first).toBeDefined();
+    expect(first!.differs[0]).toContain(capitalKey);
+    expect(first!.total).toEqual({ currency: 'USD', amountMinor: 30_000_00 });
   });
 
   it('a project with no programme reports no ventures and does no work', async () => {
