@@ -14,7 +14,10 @@
  *    reached only by reaching buyers. No sprint, no consequence claimed;
  *  - live: a failure of this dependency on the ledger (`ledger.ts`
  *    `readFailureRecoveries`) that has not been shown recovered makes its
- *    safeguards necessary now, with that failure as the reason;
+ *    safeguards necessary now, with that failure as the reason. Those records
+ *    are written on the same pass, before they are read, by
+ *    `fallbackPlanReading.ts recordAcquisitionFailures` from the primary
+ *    path's own ordered contact results under this dependency's key;
  *  - cost and reversibility of each switch: no row states them, so they are
  *    left unknown and nothing is read as cheap or reversible.
  *
@@ -27,7 +30,7 @@ import { recordBinEvent } from '../../repos/bins.ts';
 import { getDb } from '../../db/database.ts';
 import { getCashMode } from '../../repos/cashMode.ts';
 import { rankFallbacks, type FallbackRanking, type PriorityInput, type RankedFallback } from './fallbackPriority.ts';
-import { acquisitionFallbackStructure, readMeasuredPaths, sprintDaysLeft, type MeasuredPath } from './fallbackPlanReading.ts';
+import { acquisitionFallbackStructure, readMeasuredPaths, recordAcquisitionFailures, sprintDaysLeft, type MeasuredPath } from './fallbackPlanReading.ts';
 import { readFailureRecoveries, type FailureRecoveryRecord } from './ledger.ts';
 import type { Dependency } from './fallbacks.ts';
 
@@ -95,6 +98,8 @@ export async function prepareProjectFallbacks(
     authority?: () => Promise<{ ok: boolean | null; reason: string }>;
     sprint?: () => Promise<{ id: string; horizonDays: number } | null>;
     failures?: () => Promise<FailureRecoveryRecord[]>;
+    /** Record the dependency's own failures from its rows before they are read; defaults to `recordAcquisitionFailures`. */
+    observe?: (dependencyKey: string, primary: MeasuredPath) => Promise<unknown>;
     last?: () => Promise<FallbackPreparationRecord | null>;
     record?: typeof recordBinEvent;
     now?: () => Date;
@@ -113,6 +118,9 @@ export async function prepareProjectFallbacks(
     const mode = await getCashMode(projectId);
     return mode && mode.horizonDays > 0 ? { id: mode.id, horizonDays: mode.horizonDays } : null;
   }))();
+  // The dependency's own failures are recorded under its own key first, so a live one is on the ledger
+  // this ranking reads; the forecast watch records forecast-claim failures, never this dependency's.
+  await (deps.observe ?? ((key: string, primary: MeasuredPath) => recordAcquisitionFailures(projectId, key, primary)))(built.dependency.key, built.primary);
   const failures = await (deps.failures ?? (() => readFailureRecoveries(projectId)))();
   const ranking = rankFallbacks([priorityInputFor(built.dependency, sprint, failures)]);
   if (ranking.ranked.length === 0) return { ranking, written: false };
