@@ -11,6 +11,8 @@ import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import {
   CAMPAIGN_CHANNEL,
+  CAMPAIGN_OUTCOMES_CONTINUE_MS,
+  CAMPAIGN_OUTCOMES_REQUESTS_PER_PASS,
   contactResultOf,
   recordCampaignOutcomes,
   resetCampaignOutcomePacing,
@@ -281,5 +283,145 @@ describe('answers are recorded by enrolment cohort, so a running campaign never 
     const report = await recordCampaignOutcomes(projectId, { deps: workspace({ [NEIGHBOR]: leads }).deps, ownerProjectId: projectId, force: true });
     expect(report).toMatchObject({ recorded: 1, pending: 1, held: 1 });
     expect(await results(projectId)).toEqual({ 'k-r': 'BUYER_REPLIED' });
+  });
+});
+
+/*
+ * Reviewer finding (repair-rate-budget-unbounded): one pass could send up to
+ * 20 campaign-list pages plus 50 lead pages per campaign against a workspace
+ * limited to 20 requests a minute, and `instantly()` backs a 429 off by
+ * sleeping — inside `advanceJourney`, ahead of the deal passes. A pass now
+ * sends at most CAMPAIGN_OUTCOMES_REQUESTS_PER_PASS requests, never sleeps,
+ * and the next pass continues the read where it stopped.
+ */
+describe('one pass is bounded by a request budget and never waits inside the tick', () => {
+  const PAGE = 100;
+  /** A paged workspace: `campaignCount` Brain campaigns over pages of 2, each with `leadPages` pages of leads. */
+  function pagedWorkspace(campaignCount: number, leadPages: number, options: { throttleAt?: number } = {}) {
+    const calls: string[] = [];
+    const sleeps: number[] = [];
+    const campaigns = Array.from({ length: campaignCount }, (_, i) => ({ id: `cmp-${i}`, name: `${CAMPAIGN_NAME} ${String(i).padStart(2, '0')}` }));
+    // Brain's own campaigns are matched by the sales desk's lead rows here, as production matches them.
+    const leadsOf = (campaign: string, page: number) =>
+      Array.from({ length: PAGE }, (_, j) => ({ id: `${campaign}-p${page}-${j}`, email: `${campaign}-${page}-${j}@x.test`, status: 3, timestamp_created: NOV1 }));
+    const fetchFake = (async (url: string | URL | Request, init?: RequestInit) => {
+      const href = String(url);
+      calls.push(`${init?.method ?? 'GET'} ${href}`);
+      if (options.throttleAt !== undefined && calls.length === options.throttleAt) return new Response('slow down', { status: 429 });
+      let body: Record<string, unknown> = { items: [] };
+      if (href.includes('/campaigns?')) {
+        const after = new URL(href).searchParams.get('starting_after');
+        const start = after ? Number(after) : 0;
+        const next = start + 2 < campaigns.length ? String(start + 2) : undefined;
+        body = { items: campaigns.slice(start, start + 2), ...(next ? { next_starting_after: next } : {}) };
+      } else if (href.endsWith('/leads/list')) {
+        const asked = JSON.parse(String(init?.body ?? '{}')) as { campaign: string; starting_after?: string };
+        const page = asked.starting_after ? Number(asked.starting_after) : 0;
+        body = { items: leadsOf(asked.campaign, page), ...(page + 1 < leadPages ? { next_starting_after: String(page + 1) } : {}) };
+      }
+      return new Response(JSON.stringify(body), { status: 200 });
+    }) as typeof fetch;
+    const deps: Deps = {
+      fetch: fetchFake,
+      env: { INSTANTLY_API_KEY: 'test-key' },
+      sleep: async (ms: number) => {
+        sleeps.push(ms);
+      },
+      resolveMx: async () => true,
+      log: () => {},
+    };
+    return { deps, calls, sleeps, campaigns };
+  }
+
+  async function seedDeskCampaigns(ids: string[]): Promise<void> {
+    for (const id of ids) {
+      await getDb().run(
+        `INSERT INTO sales_leads (id, business, email, domain, campaign_id, variant, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [`sl-${id}`, 'neighbor-card', `${id}@desk.test`, 'desk.test', id, 'TEMPLATE', NOV1, NOV1],
+      );
+    }
+  }
+
+  async function countRows(): Promise<number> {
+    const row = await getDb().get<{ n: number }>(`SELECT COUNT(*) AS n FROM cash_outcomes WHERE project_id = ? AND kind = 'CONTACT_RESULT'`, [projectId]);
+    return Number(row?.n ?? 0);
+  }
+
+  it('a large workspace is read over several passes, each within the budget, with no sleep, and recorded whole', async () => {
+    const ws = pagedWorkspace(9, 3);
+    await seedDeskCampaigns(ws.campaigns.map((c) => c.id));
+    // Every campaign-list page and every lead page the unbounded read would have sent.
+    const needed = Math.ceil(9 / 2) + 9 * 3;
+    expect(needed).toBeGreaterThan(CAMPAIGN_OUTCOMES_REQUESTS_PER_PASS * 3);
+
+    let at = Date.parse('2026-11-16T00:00:00Z');
+    let passes = 0;
+    let recorded = 0;
+    for (;;) {
+      const before = ws.calls.length;
+      const report = await recordCampaignOutcomes(projectId, { deps: ws.deps, ownerProjectId: projectId, now: new Date(at) });
+      passes += 1;
+      const sent = ws.calls.length - before;
+      expect(report.requests).toBe(sent);
+      expect(sent).toBeLessThanOrEqual(CAMPAIGN_OUTCOMES_REQUESTS_PER_PASS);
+      recorded += report.recorded;
+      if (!report.paused) break;
+      expect(report.paused).toMatch(/budget/);
+      expect(passes).toBeLessThan(20);
+      at += CAMPAIGN_OUTCOMES_CONTINUE_MS;
+    }
+    expect(ws.sleeps).toEqual([]);
+    expect(passes).toBe(Math.ceil(needed / CAMPAIGN_OUTCOMES_REQUESTS_PER_PASS));
+    // Every page was read exactly once across the passes, and every lead recorded once.
+    expect(ws.calls.length).toBe(needed);
+    expect(new Set(ws.calls.filter((c) => c.includes('/campaigns?'))).size).toBe(Math.ceil(9 / 2));
+    expect(recorded).toBe(9 * 3 * PAGE);
+    expect(await countRows()).toBe(9 * 3 * PAGE);
+
+    // The read is finished: the next pass inside the window sends nothing.
+    const quiet = await recordCampaignOutcomes(projectId, { deps: ws.deps, ownerProjectId: projectId, now: new Date(at + CAMPAIGN_OUTCOMES_CONTINUE_MS) });
+    expect(quiet.skipped).toMatch(/read recently/);
+    expect(quiet.requests).toBe(0);
+  });
+
+  it('a campaign read only partly by one pass records nothing of it until its last page is read', async () => {
+    const ws = pagedWorkspace(1, 12);
+    await seedDeskCampaigns(ws.campaigns.map((c) => c.id));
+    const first = await recordCampaignOutcomes(projectId, { deps: ws.deps, ownerProjectId: projectId, force: true });
+    expect(first.paused).toMatch(/budget/);
+    expect(first.recorded).toBe(0);
+    expect(await countRows()).toBe(0);
+    const second = await recordCampaignOutcomes(projectId, { deps: ws.deps, ownerProjectId: projectId, force: true });
+    expect(second.paused).toBeNull();
+    expect(second.recorded).toBe(12 * PAGE);
+    expect(ws.sleeps).toEqual([]);
+  });
+
+  it('an unfinished read waits out the rate window rather than resending inside it', async () => {
+    const ws = pagedWorkspace(1, 12);
+    await seedDeskCampaigns(ws.campaigns.map((c) => c.id));
+    const t0 = Date.parse('2026-11-16T00:00:00Z');
+    await recordCampaignOutcomes(projectId, { deps: ws.deps, ownerProjectId: projectId, now: new Date(t0) });
+    const n = ws.calls.length;
+    const soon = await recordCampaignOutcomes(projectId, { deps: ws.deps, ownerProjectId: projectId, now: new Date(t0 + 10_000) });
+    expect(soon.skipped).toMatch(/rate window/);
+    expect(ws.calls.length).toBe(n);
+    const later = await recordCampaignOutcomes(projectId, { deps: ws.deps, ownerProjectId: projectId, now: new Date(t0 + CAMPAIGN_OUTCOMES_CONTINUE_MS) });
+    expect(later.requests).toBeGreaterThan(0);
+  });
+
+  it('a 429 ends the pass at once instead of backing off, and the next pass continues where it stopped', async () => {
+    const ws = pagedWorkspace(2, 2, { throttleAt: 3 });
+    await seedDeskCampaigns(ws.campaigns.map((c) => c.id));
+    const first = await recordCampaignOutcomes(projectId, { deps: ws.deps, ownerProjectId: projectId, force: true });
+    expect(ws.sleeps).toEqual([]);
+    expect(first.requests).toBe(3);
+    expect(first.paused).toMatch(/slow down/);
+    expect(first.failed).toEqual([]);
+    expect(first.recorded).toBe(0);
+    const second = await recordCampaignOutcomes(projectId, { deps: ws.deps, ownerProjectId: projectId, force: true });
+    expect(second.paused).toBeNull();
+    expect(await countRows()).toBe(2 * 2 * PAGE);
+    expect(ws.sleeps).toEqual([]);
   });
 });

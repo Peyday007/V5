@@ -50,6 +50,13 @@
  * records nothing, so a campaign is never counted twice; with no such project,
  * or no Instantly key, or a read that fails, nothing is written and the pass
  * says why. Read-only toward Instantly.
+ *
+ * A pass sends at most `CAMPAIGN_OUTCOMES_REQUESTS_PER_PASS` requests and never
+ * waits: it runs inside the journey tick, ahead of the deal passes, and shares
+ * the workspace's 20-a-minute allowance with the reply sync. When the budget
+ * is spent, or Instantly answers 429 or 5xx, the pass stops where it got to and
+ * the next tick continues the same read a rate window later, so a workspace of
+ * any size is read whole over several ticks and never stalls one.
  */
 import { getDb } from '../../../db/database.ts';
 import { insertOutcome } from '../../../repos/cashJourney.ts';
@@ -72,8 +79,20 @@ export const UNDATED_COHORT = 'undated';
 
 /** A workspace allows 20 requests a minute; a full read is a few hundred leads, so every few hours is plenty. */
 export const CAMPAIGN_OUTCOMES_EVERY_MS = 6 * 60 * 60 * 1000;
-/** At most this many pages of 100 leads per campaign per pass. */
+/** At most this many pages of 100 leads per campaign. */
 const MAX_LEAD_PAGES = 50;
+/** At most this many campaign-list pages per read of the workspace. */
+const MAX_CAMPAIGN_PAGES = 20;
+/**
+ * The most Instantly requests one pass may send. The workspace allows 20 a
+ * minute, and the reply sync (`instantlySync.ts`) and the sales desk share
+ * that allowance, so one pass takes well under half of it. A read larger than
+ * this is not cut short: the pass stops where it got to, and the next tick
+ * continues from there (see `CAMPAIGN_OUTCOMES_CONTINUE_MS`).
+ */
+export const CAMPAIGN_OUTCOMES_REQUESTS_PER_PASS = 8;
+/** A read left unfinished by the budget or a refusal continues no sooner than one rate window later. */
+export const CAMPAIGN_OUTCOMES_CONTINUE_MS = 60 * 1000;
 
 export type CampaignContactResult =
   | 'CONTACT_UNDELIVERABLE'
@@ -109,12 +128,20 @@ export interface CampaignOutcomesReport {
   held: number;
   /** Why nothing was read or written, when that is the case. */
   skipped: string | null;
+  /**
+   * Why this pass stopped before the read was finished — its request budget
+   * was spent, or Instantly asked it to slow down — or null when it finished.
+   * The pass never waits inside the tick: the next one continues from here.
+   */
+  paused: string | null;
+  /** Instantly requests this pass sent. Never more than `CAMPAIGN_OUTCOMES_REQUESTS_PER_PASS`. */
+  requests: number;
   /** Campaigns whose read failed, with why. A failure writes nothing for that campaign. */
   failed: { campaign: string; reason: string }[];
 }
 
 function emptyReport(): CampaignOutcomesReport {
-  return { campaigns: 0, leads: 0, recorded: 0, pending: 0, held: 0, skipped: null, failed: [] };
+  return { campaigns: 0, leads: 0, recorded: 0, pending: 0, held: 0, skipped: null, paused: null, requests: 0, failed: [] };
 }
 
 function num(value: unknown): number | null {
@@ -166,8 +193,61 @@ export async function campaignOutcomeProject(): Promise<{ ok: true; projectId: s
   return { ok: false, reason: 'no cash project holds standing commercial authority to contact buyers' };
 }
 
+/**
+ * Where an unfinished read got to. A pass is bounded by a request budget, so a
+ * large workspace is read over several passes; nothing of a campaign is
+ * recorded until all of its leads have been read, so the cohort rule below
+ * always sees the whole campaign. Held in memory: after a restart the read
+ * simply starts again, and the request keys make a repeat write nothing.
+ */
+interface ReadProgress {
+  /** Brain's campaigns, once the workspace list has been read to its end. */
+  campaigns: { id: string; name: string }[] | null;
+  listed: { id: string; name: string }[];
+  listAfter: string | undefined;
+  listPage: number;
+  /** The campaign being read, as an index into `campaigns`. */
+  index: number;
+  leads: CampaignLead[];
+  leadAfter: string | undefined;
+  leadPage: number;
+}
+
+function freshProgress(): ReadProgress {
+  return { campaigns: null, listed: [], listAfter: undefined, listPage: 0, index: 0, leads: [], leadAfter: undefined, leadPage: 0 };
+}
+
+/** Thrown when a pass must stop and continue on the next tick instead of waiting. */
+class PassPaused extends Error {}
+
+/**
+ * The provider dependencies one pass reads through: every request counts
+ * against the pass's budget and is refused once it is spent, and a retry's
+ * wait — a 429, a 5xx, a dropped connection — ends the pass rather than
+ * sleeping inside the tick. `instantly()` retries by sleeping, so turning the
+ * sleep into a stop is what keeps its backoff out of `advanceJourney`.
+ */
+function budgeted(deps: Deps, report: CampaignOutcomesReport, budget: number): Deps {
+  return {
+    ...deps,
+    fetch: (async (input: Parameters<Deps['fetch']>[0], init?: Parameters<Deps['fetch']>[1]) => {
+      if (report.requests >= budget) throw new PassPaused(`request budget of ${budget} spent; the next pass continues`);
+      report.requests += 1;
+      return deps.fetch(input, init);
+    }) as Deps['fetch'],
+    sleep: async () => {
+      throw new PassPaused(
+        report.requests >= budget
+          ? `request budget of ${budget} spent; the next pass continues`
+          : 'Instantly asked the pass to slow down; the next pass continues',
+      );
+    },
+  };
+}
+
 /** Brain's outreach campaigns in the workspace, by name or by a sales-desk lead row, less the deal campaign. */
-async function brainCampaigns(deps: Deps): Promise<{ id: string; name: string }[]> {
+async function readCampaigns(deps: Deps, progress: ReadProgress): Promise<{ id: string; name: string }[]> {
+  if (progress.campaigns) return progress.campaigns;
   const named = new Set<string>([CAMPAIGN_NAME, PERSONAL_CAMPAIGN_NAME, ...EXPANSION_CAMPAIGNS.map((c) => c.name)]);
   const deskRows = await getDb().all<{ campaign_id: string }>(
     `SELECT DISTINCT campaign_id FROM sales_leads WHERE campaign_id IS NOT NULL ORDER BY campaign_id`,
@@ -175,9 +255,8 @@ async function brainCampaigns(deps: Deps): Promise<{ id: string; name: string }[
   const deskIds = new Set(deskRows.map((row) => row.campaign_id));
   const dealCampaignId = secretValue(INSTANTLY_CAMPAIGN_ENV, deps.env);
 
-  const out: { id: string; name: string }[] = [];
-  let after: string | undefined;
-  for (let page = 0; page < 20; page += 1) {
+  while (progress.listPage < MAX_CAMPAIGN_PAGES) {
+    const after = progress.listAfter;
     const answer = await instantly(deps, 'GET', `/campaigns?limit=100${after ? `&starting_after=${encodeURIComponent(after)}` : ''}`);
     const rows = itemsOf(answer);
     for (const row of rows) {
@@ -185,23 +264,25 @@ async function brainCampaigns(deps: Deps): Promise<{ id: string; name: string }[
       const name = typeof row.name === 'string' ? row.name : '';
       if (!id) continue;
       if (name === BRAIN_CAMPAIGN_NAME || (dealCampaignId && id === dealCampaignId)) continue;
-      if (named.has(name) || deskIds.has(id) || name.startsWith(BRAIN_CAMPAIGN_PREFIX)) out.push({ id, name: name || id });
+      if (named.has(name) || deskIds.has(id) || name.startsWith(BRAIN_CAMPAIGN_PREFIX)) progress.listed.push({ id, name: name || id });
     }
-    after = typeof answer.next_starting_after === 'string' ? answer.next_starting_after : undefined;
-    if (!after || rows.length === 0) break;
+    progress.listPage += 1;
+    progress.listAfter = typeof answer.next_starting_after === 'string' ? answer.next_starting_after : undefined;
+    if (!progress.listAfter || rows.length === 0) break;
   }
-  return out.sort((a, b) => a.name.localeCompare(b.name));
+  progress.campaigns = [...progress.listed].sort((a, b) => a.name.localeCompare(b.name));
+  return progress.campaigns;
 }
 
-async function leadsOf(deps: Deps, campaignId: string): Promise<CampaignLead[]> {
-  const leads: CampaignLead[] = [];
-  let after: string | undefined;
-  for (let page = 0; page < MAX_LEAD_PAGES; page += 1) {
+/** Reads the current campaign's leads onward from where `progress` got to, until the last page. */
+async function readLeads(deps: Deps, campaignId: string, progress: ReadProgress): Promise<CampaignLead[]> {
+  while (progress.leadPage < MAX_LEAD_PAGES) {
+    const after = progress.leadAfter;
     const answer = await instantly(deps, 'POST', '/leads/list', { campaign: campaignId, limit: 100, ...(after ? { starting_after: after } : {}) });
     const rows = itemsOf(answer);
     for (const row of rows) {
       if (typeof row.id !== 'string') continue;
-      leads.push({
+      progress.leads.push({
         id: row.id,
         email: typeof row.email === 'string' ? row.email.toLowerCase() : null,
         status: num(row.status),
@@ -210,10 +291,18 @@ async function leadsOf(deps: Deps, campaignId: string): Promise<CampaignLead[]> 
         enrolledAt: typeof row.timestamp_created === 'string' ? row.timestamp_created : null,
       });
     }
-    after = typeof answer.next_starting_after === 'string' ? answer.next_starting_after : undefined;
-    if (!after || rows.length === 0) break;
+    progress.leadPage += 1;
+    progress.leadAfter = typeof answer.next_starting_after === 'string' ? answer.next_starting_after : undefined;
+    if (!progress.leadAfter || rows.length === 0) break;
   }
-  return leads;
+  return progress.leads;
+}
+
+function nextCampaign(progress: ReadProgress): void {
+  progress.index += 1;
+  progress.leads = [];
+  progress.leadAfter = undefined;
+  progress.leadPage = 0;
 }
 
 /** Lead addresses the sales desk recorded an opt-out for, on one campaign. */
@@ -225,7 +314,10 @@ async function optedOutOn(campaignId: string): Promise<Set<string>> {
   return new Set(rows.map((row) => row.lead_email.toLowerCase()));
 }
 
+/** When each project's last complete read began. */
 const lastPass = new Map<string, number>();
+/** Each project's unfinished read, and when it last advanced. */
+const unfinished = new Map<string, { progress: ReadProgress; at: number }>();
 
 /**
  * One pass for `projectId`. Records only when it is the campaign-outcome
@@ -234,7 +326,7 @@ const lastPass = new Map<string, number>();
  */
 export async function recordCampaignOutcomes(
   projectId: string,
-  options: { deps?: Deps; now?: Date; force?: boolean; ownerProjectId?: string } = {},
+  options: { deps?: Deps; now?: Date; force?: boolean; ownerProjectId?: string; requestBudget?: number } = {},
 ): Promise<CampaignOutcomesReport> {
   const report = emptyReport();
   const deps = options.deps ?? defaultDeps();
@@ -243,9 +335,16 @@ export async function recordCampaignOutcomes(
     return report;
   }
   const nowMs = (options.now ?? new Date()).getTime();
-  if (!options.force && nowMs - (lastPass.get(projectId) ?? -Infinity) < CAMPAIGN_OUTCOMES_EVERY_MS) {
-    report.skipped = 'read recently; the next pass reads again';
-    return report;
+  const resumed = unfinished.get(projectId);
+  if (!options.force) {
+    if (resumed && nowMs - resumed.at < CAMPAIGN_OUTCOMES_CONTINUE_MS) {
+      report.skipped = 'an unfinished read continues once the rate window has passed';
+      return report;
+    }
+    if (!resumed && nowMs - (lastPass.get(projectId) ?? -Infinity) < CAMPAIGN_OUTCOMES_EVERY_MS) {
+      report.skipped = 'read recently; the next pass reads again';
+      return report;
+    }
   }
   const owner = options.ownerProjectId
     ? { ok: true as const, projectId: options.ownerProjectId }
@@ -258,21 +357,35 @@ export async function recordCampaignOutcomes(
     report.skipped = `campaign outcomes are recorded on project ${owner.projectId}`;
     return report;
   }
-  lastPass.set(projectId, nowMs);
+  const budget = options.requestBudget ?? CAMPAIGN_OUTCOMES_REQUESTS_PER_PASS;
+  const reader = budgeted(deps, report, budget);
+  const progress = resumed?.progress ?? freshProgress();
+  if (!resumed) lastPass.set(projectId, nowMs);
+  const pause = (error: unknown): boolean => {
+    if (!(error instanceof PassPaused)) return false;
+    report.paused = error.message;
+    unfinished.set(projectId, { progress, at: nowMs });
+    return true;
+  };
 
   let campaigns: { id: string; name: string }[];
   try {
-    campaigns = await brainCampaigns(deps);
+    campaigns = await readCampaigns(reader, progress);
   } catch (error) {
+    if (pause(error)) return report;
+    unfinished.delete(projectId);
     report.skipped = `the workspace's campaigns could not be read: ${error instanceof Error ? error.message.slice(0, 200) : 'failed'}`;
     return report;
   }
-  for (const campaign of campaigns) {
+  while (progress.index < campaigns.length) {
+    const campaign = campaigns[progress.index]!;
     let leads: CampaignLead[];
     try {
-      leads = await leadsOf(deps, campaign.id);
+      leads = await readLeads(reader, campaign.id, progress);
     } catch (error) {
+      if (pause(error)) return report;
       report.failed.push({ campaign: campaign.name, reason: error instanceof Error ? error.message.slice(0, 200) : 'failed' });
+      nextCampaign(progress);
       continue;
     }
     report.campaigns += 1;
@@ -304,11 +417,14 @@ export async function recordCampaignOutcomes(
       });
       if (fresh) report.recorded += 1;
     }
+    nextCampaign(progress);
   }
+  unfinished.delete(projectId);
   return report;
 }
 
-/** Test seam: forget the pacing. */
+/** Test seam: forget the pacing and any unfinished read. */
 export function resetCampaignOutcomePacing(): void {
   lastPass.clear();
+  unfinished.clear();
 }

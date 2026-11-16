@@ -220,7 +220,12 @@ export async function advanceJourney(
     const campaigns = await recordCampaignOutcomes(projectId, { now });
     report.campaignOutcomes = {
       recorded: campaigns.recorded,
-      skipped: campaigns.skipped ?? (campaigns.failed.length > 0 ? campaigns.failed.map((f) => `${f.campaign}: ${f.reason}`).join('; ') : null),
+      // A paused read is said here too: the pass stopped at its request
+      // budget (or on a 429) instead of waiting inside this tick, and the
+      // next tick continues it — the deal passes after it are never held up.
+      skipped:
+        campaigns.skipped ??
+        ([...campaigns.failed.map((f) => `${f.campaign}: ${f.reason}`), ...(campaigns.paused ? [campaigns.paused] : [])].join('; ') || null),
     };
   } catch (error) {
     report.campaignOutcomes = { recorded: 0, skipped: error instanceof Error ? error.message.slice(0, 200) : 'failed' };
