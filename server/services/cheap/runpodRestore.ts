@@ -231,7 +231,9 @@ export const RECIPES: Record<string, PodRecipe> = {
       '--gpu-memory-utilization', '0.92', '--max-num-seqs', '48',
       '--enable-auto-tool-choice', '--tool-call-parser', 'openai', '--reasoning-parser', 'openai_gptoss',
     ],
-    containerDiskInGb: 120,
+    // 120 GB ran out mid-download (runpod-diagnose 2026-11-16: "CAS service error: No space left on
+    // device"): ~65 GB of weights plus the hub's chunk cache of the same bytes. Disk is cents an hour.
+    containerDiskInGb: 250,
     minGpuGb: 80,
     clouds: ['SECURE', 'COMMUNITY'],
     note: 'MoE 117B/5.1B active, MXFP4 ~61 GB on an 80 GB card (H100/H200/A100-80), 128K, 48 parallel sequences',
