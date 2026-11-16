@@ -60,6 +60,37 @@ code{font-family:var(--mono);font-size:12.5px}
   <p>Every figure below comes from a production read: the connection report (runs 43767404016, 43768266235), the productivity report (43767409816), the RunPod report (43767406968), <code>brain_operator_capacity</code>, the Deploy history and the session list. Resource classes are separate pools and are never added together. When a figure was not measured, the table says <span class="pill p-unk">not measured</span>.</p>
 </header>
 
+<section id="eight-hour">
+  <span class="eyebrow">22:15Z → 06:21Z · connection report 43816108485 · productivity 43816111968 · RunPod 43816115415</span>
+  <h2>BRAIN RESOURCE UTILIZATION — EIGHT-HOUR COMPARISON</h2>
+  <div class="strip">
+    <div class="tile ok"><span class="eyebrow">Accepted research claims</span><b>2.4 → 25.2 /h</b><span>×10.5. The GPU ran 420 of 480 min and averaged 1.07 of 2 slots busy.</span></div>
+    <div class="tile ok"><span class="eyebrow">Database host CPU</span><b>70–75% → 45.9%</b><span>Average over 5.8 h after the dispatch fix (2 vCPU).</span></div>
+    <div class="tile ok"><span class="eyebrow">Factory units accepted</span><b>10.8 → 14.9 /h</b><span>119 in 8 h, all on 1 usable surface (2 quarantined).</span></div>
+    <div class="tile warn"><span class="eyebrow">Plan evaluations</span><b>9.4 → 3.9 /h</b><span>No new opening arrived to re-read. CPU was never the limit.</span></div>
+  </div>
+  <div class="scroll"><table>
+    <thead><tr><th>Resource</th><th class="n">Start</th><th class="n">End</th><th class="n">Interval average</th><th class="n">Peak</th></tr></thead>
+    <tbody>
+      <tr><td>App CPU (2 vCPU)</td><td class="n">~10%</td><td class="n">12.4%</td><td class="n">not sampled continuously</td><td class="n">57.5% (restart)</td></tr>
+      <tr><td>App memory (4 GB)</td><td class="n">≤2,157 MB</td><td class="n">1,683 MB</td><td class="n">—</td><td class="n">2,511 MB</td></tr>
+      <tr><td>DB host CPU</td><td class="n">70.2%</td><td class="n">—</td><td class="n">45.9% (5.8 h)</td><td class="n">75.2%</td></tr>
+      <tr><td>GPU slots</td><td class="n">0 of 2</td><td class="n">running</td><td class="n">1.07 of 2 (54%)</td><td class="n">2 of 2</td></tr>
+      <tr><td>Free-lane jobs at once</td><td class="n">0.3 avg</td><td class="n">7 running</td><td class="n">1.05</td><td class="n">6</td></tr>
+      <tr><td>Lane utilization</td><td class="n">74.9%</td><td class="n">98.9%</td><td class="n">—</td><td class="n">100%</td></tr>
+      <tr><td>Routines active</td><td class="n">0–1 of 12</td><td class="n">3 of 12</td><td class="n">—</td><td class="n">3</td></tr>
+      <tr><td>Releases</td><td class="n">6 of 12</td><td class="n">8 of 10</td><td class="n">—</td><td class="n">—</td></tr>
+    </tbody></table></div>
+  <ul>
+    <li><b>Up/down allocation:</b> 17 PRs merged (2.1/h, up from 1.5/h): 13 up curve, 4 reliability (the two outages this audit found, closed). Before: about 90% up.</li>
+    <li><b>Capacity transferred:</b> no workers moved. About 0.9 GPU-pod-hours per hour and about 0.5 of a database core went back to useful work.</li>
+    <li><b>Productive vs idle:</b> GPU about 7.5 of 8 pod-hours productive (before: 0.9). Lane idle 0.6%. About 16 Factory surface-hours unusable (quarantined).</li>
+    <li><b>Spending:</b> $1.40 measured on the GPU ($0.0040 per job). $0 of new money against the shared $100 ceiling.</li>
+    <li><b>Time saved:</b> the 202 claims accepted this window would have taken about 84 h at the old rate, so about 76 h saved. The dispatch fix's own throughput effect cannot be separated from the GPU move's.</li>
+    <li><b>Remaining bottlenecks:</b> commercial evidence (plan coverage 9%, 0 new openings); Cerebras credits; 2 quarantined Factory surfaces; grant ceilings (492 ideas held beside about 0.9 idle GPU slots).</li>
+  </ul>
+</section>
+
 <section>
   <h2>Where the power went in the last 8 hours</h2>
   <div class="strip">
