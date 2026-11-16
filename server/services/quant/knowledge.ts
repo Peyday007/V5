@@ -27,6 +27,7 @@
  * Reads are cached per project for a few minutes, keyed on the newest fact,
  * so a goal tick that infers fifty quantities reads the rows once.
  */
+import { assessProjectFallbackPlan } from './fallbackPlanReading.ts';
 import { listOpportunities } from '../../repos/cashPortfolio.ts';
 import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
 import { claimSources, type ClaimSource } from '../../repos/research.ts';
@@ -152,6 +153,12 @@ export async function loadCashKnowledge(projectId: string, now = Date.now()): Pr
   const { routeMoney, routeScores, routeMoneyError } = await loadRouteMoney(projectId, opportunities);
   const value: CashKnowledge = { projectId, opportunities: new Map(opportunities.map((one) => [one.id, one])), facts: evidence, lessons, sources, watermark, routeMoney, routeScores, routeMoneyError, estimates: new Map(), learning };
   cache.set(projectId, { at: now, value });
+  // The same refresh plans the fallbacks of the project's real acquisition dependency — failure
+  // modes, substitutes, the alternatives it needs and each switch's re-derived funnel (FALL-37-1/2) —
+  // and records the plan when it changes. Its own catch: a plan that cannot be made never stops this.
+  await assessProjectFallbackPlan(projectId).catch((error: unknown) => {
+    console.warn(`[quant] fallback plan unreadable for ${projectId}: ${String((error as Error)?.message ?? error)}`);
+  });
   return value;
 }
 
