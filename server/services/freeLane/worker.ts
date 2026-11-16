@@ -425,7 +425,23 @@ function closingBracket(text: string, open: number): number {
  * only `</think>` appears, starts after it.
  */
 export function firstJson(text: string): Record<string, unknown> | null {
-  let answer = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
+  let answer = text;
+  /*
+   * Harmony-format models (gpt-oss) write reasoning on an analysis channel and
+   * the reply on a final one, as `<|channel|>analysis<|message|>…<|end|>
+   * <|start|>assistant<|channel|>final<|message|>{…}`. The analysis carries the
+   * prompt's own example claim and draft answers, so it is reasoning exactly as
+   * a `<think>` block is: the reply is what follows the last final-channel
+   * marker. A reply with an analysis channel and no final one was cut off, and
+   * its answer, if any, is its last whole JSON value. Control tokens are not text.
+   */
+  const finalMarker = /<\|channel\|>\s*final\b[^<]*(?:<\|constrain\|>[^<]*)?<\|message\|>/gi;
+  let finalAt = -1;
+  for (let m = finalMarker.exec(answer); m; m = finalMarker.exec(answer)) finalAt = m.index + m[0].length;
+  if (finalAt >= 0) answer = answer.slice(finalAt);
+  else if (/<\|channel\|>\s*analysis\b/i.test(answer)) return lastJsonValue(answer.replace(/<\|[a-z_]+\|>/gi, ' '));
+  answer = answer.replace(/<\|[a-z_]+\|>/gi, ' ');
+  answer = answer.replace(/<think>[\s\S]*?<\/think>/gi, '');
   // A chat template that opens the think block itself leaves only its close in the reply: what precedes it is reasoning.
   const closed = answer.search(/<\/think>(?![\s\S]*<\/think>)/i);
   if (closed >= 0) answer = answer.slice(closed + '</think>'.length);
@@ -510,15 +526,57 @@ function lastJsonValue(text: string): Record<string, unknown> | null {
  * Production, 2026-11-14: "0 claim(s) offered, dropped {}" was most of the
  * recorded drops. Every claim read here still meets every check after it.
  */
-export function listedClaims(raw: Record<string, unknown>): Record<string, unknown>[] {
+export function listedClaims(raw: Record<string, unknown>, depth = 0): Record<string, unknown>[] {
   const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+  /*
+   * A value a model wrote as a JSON string ("claims": "[{…}]", or a wrapper
+   * whose value is a string holding the object) is that value. Production,
+   * 2026-11-16: gpt-oss-120b's RESEARCH_FRAGMENT replies were refused as "0
+   * claim(s) offered, dropped {}" with the list one level down or encoded.
+   */
+  const decoded = (v: unknown): unknown => {
+    if (typeof v !== 'string') return v;
+    const t = v.trim();
+    if (!t.startsWith('[') && !t.startsWith('{')) return v;
+    try {
+      return JSON.parse(t) as unknown;
+    } catch {
+      return v;
+    }
+  };
   const key = 'claims' in raw ? 'claims' : Object.keys(raw).find((k) => k.trim().toLowerCase() === 'claims');
-  const value = key === undefined ? undefined : raw[key];
+  const value = key === undefined ? undefined : decoded(raw[key]);
   if (Array.isArray(value)) return value.filter(isObject);
   if (isObject(value) && typeof value['claim'] === 'string') return [value];
   if (value === undefined && typeof raw['claim'] === 'string') return [raw];
+  /*
+   * One level of wrapper and no more: {"answer"|"result"|"response"|"output"|
+   * "data": {"claims": …}}, or an object with a single field that holds the
+   * answer. Whatever is found is a claim like any other, held to every check
+   * after it; an explicit empty list stays empty.
+   */
+  if (value === undefined && depth === 0) {
+    const keys = Object.keys(raw);
+    const wrappers = keys.filter((k) => WRAPPER_KEYS.has(k.trim().toLowerCase()));
+    const candidates = keys.length === 1 ? keys : wrappers;
+    for (const k of candidates) {
+      const inner = decoded(raw[k]);
+      if (Array.isArray(inner)) {
+        const objects = inner.filter(isObject);
+        if (objects.length > 0 && objects.every((one) => typeof one['claim'] === 'string')) return objects;
+        continue;
+      }
+      if (isObject(inner)) {
+        const found = listedClaims(inner, depth + 1);
+        if (found.length > 0) return found;
+      }
+    }
+  }
   return [];
 }
+
+/** The fields a model wraps its whole answer in. */
+const WRAPPER_KEYS = new Set(['answer', 'result', 'results', 'response', 'output', 'data', 'final', 'reply']);
 
 /**
  * The declared lane a model's label names, or null. An exact id wins; then a
