@@ -97,7 +97,12 @@ describe('answered-requests reads the mission before resuming', () => {
     expect(after.state).toBe('WITHDRAWN');
     expect(resume.mock.calls.map(([one]) => one.id)).not.toContain(request.id);
     expect(after.whyNotRussell).toContain(state);
-    expect(report.withdrawnMootAnswers).toContainEqual({ requestId: request.id, missionState: state, reason: MOVED_OUT });
+    // The move, and beside it what was wrong with the answer itself: nothing in this packet cleared its gate.
+    const settled = report.withdrawnMootAnswers.find((one) => one.requestId === request.id)!;
+    expect(settled.missionState).toBe(state);
+    expect(settled.reason.startsWith(`${MOVED_OUT}; `)).toBe(true);
+    expect(settled.reason).toMatch(/no report to file/);
+    expect(after.whyNotRussell).toMatch(/no report to file/);
     expect((await listOpenRequests(fixture.project.id)).map((r) => r.id)).not.toContain(request.id);
   });
 
