@@ -115,3 +115,12 @@ describe('the switch is unchanged', () => {
     expect(triggersEnabled({})).toBe(false);
   });
 });
+
+describe('one reader for a rule\'s effective date', () => {
+  it('the trigger reads the date through the detectors\' parser, not a second copy of its pattern', async () => {
+    const { readFileSync } = await import('node:fs');
+    const source = readFileSync(new URL('../server/services/cash/triggers.ts', import.meta.url), 'utf8');
+    expect(source).toMatch(/import \{[^}]*\beffectiveDateOf\b[^}]*\} from '\.\.\/feeds\/detectors\.ts'/);
+    expect(source).not.toMatch(/Effective \(\\d\{4\}/);
+  });
+});

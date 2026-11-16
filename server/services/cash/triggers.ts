@@ -15,6 +15,7 @@
  */
 import type { SearchBucket } from './discovery.ts';
 import { getDb } from '../../db/database.ts';
+import { effectiveDateOf } from '../feeds/detectors.ts';
 
 /**
  * On once the free-model lane is connected, because the lane is what sorts
@@ -210,7 +211,7 @@ const SIGNAL_READERS: Readonly<Record<string, SignalReader>> = {
     );
     const out: TriggerSubject[] = [];
     for (const row of rows) {
-      const effective = /Effective (\d{4}-\d{2}-\d{2})\./.exec(row.body ?? '')?.[1];
+      const effective = effectiveDateOf(row.body);
       if (!effective) continue;
       const at = Date.parse(`${effective}T00:00:00.000Z`);
       if (!Number.isFinite(at) || at < now.getTime() - DAY || at > now.getTime() + 60 * DAY) continue;
