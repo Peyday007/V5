@@ -7,14 +7,19 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { insertFeedItems } from '../server/repos/feeds.ts';
+import { listCandidates } from '../server/repos/improvement.ts';
 import {
   CONCENTRATED_HIRING,
   DETECTORS,
   PROMOTION_MIN_SCREENED,
   REPEATED_DEMAND,
+  RULE_MISS_PROPOSAL_MIN,
   RULE_EFFECTIVE_SOON,
   effectiveDateOf,
+  jobFamily,
   modeDecision,
+  ruleMissKey,
+  ruleMissWeakness,
   ruleReading,
   runDetectors,
   type Detector,
@@ -172,5 +177,82 @@ describe('readings from rows, and promotion through runDetectors', () => {
     await seedDemand(4);
     const reports = await runDetectors({ now, detectors: [SHADOW_DEMAND, CONCENTRATED_HIRING], rules: ['TEST_DEMAND'] });
     expect(reports.map((one) => one.rule)).toEqual(['TEST_DEMAND@1']);
+  });
+});
+
+/**
+ * F7: a rule that keeps missing what the independent screen keeps is proposed
+ * for a new version through Factory — registered with the improvement loop,
+ * which owns turning a weakness into a Factory objective — and nothing about
+ * the rule itself changes at run time.
+ */
+describe('repeated misses become a Factory proposal', () => {
+  // Recognises only the first three records of a family it knows; the rest are misses.
+  const NARROW: Detector = {
+    id: 'TEST_NARROW',
+    version: 1,
+    label: 'test narrow family rule',
+    mode: 'SHADOW',
+    sources: ['remoteok'],
+    lookbackMs: 14 * DAY,
+    detect(records) {
+      const sorted = [...records].sort((a, b) => a.id.localeCompare(b.id)).slice(0, 3);
+      if (sorted.length === 0) return [];
+      return [{
+        groupKey: 'narrow', label: 'narrow', entityKey: null, entityName: null,
+        category: jobFamily('Data Analyst')!.key,
+        windowFrom: daysAgo(10), windowTo: now.toISOString(),
+        memberIds: sorted.map((one) => one.id), memberTitles: sorted.map((one) => one.title),
+        sourceUrls: sorted.map((one) => one.url), qualifiers: [], hypothesis: null, deliverable: null,
+      }];
+    },
+  };
+
+  it('misses the screen kept are counted with samples, and enough of them register one candidate owned by the detectors', async () => {
+    const items = await seedDemand(3 + RULE_MISS_PROPOSAL_MIN + 1);
+    await runDetectors({ now, detectors: [NARROW] });
+    for (const item of items) await screen(item.id, 'KEEP');
+
+    const reading = await ruleReading(NARROW, now);
+    expect(reading.members).toBe(3);
+    expect(reading.misses).toBe(items.length - 3);
+    expect(reading.missedSamples.length).toBeGreaterThan(0);
+    expect(reading.missedSamples[0]).toMatch(/Data Analyst — https:\/\/remoteok\.test\//);
+
+    const pass = await runDetectors({ now, detectors: [NARROW] });
+    expect(pass[0]!.proposed).toBe(ruleMissKey(NARROW));
+    // The rule's own mode is untouched by the proposal: it is still decided by its readings.
+    expect(pass[0]!.mode).toBe('SHADOW');
+
+    const again = await runDetectors({ now, detectors: [NARROW] });
+    expect(again[0]!.proposed).toBe(ruleMissKey(NARROW));
+    const candidates = (await listCandidates()).filter((one) => one.weaknessKey.startsWith(ruleMissKey(NARROW)));
+    expect(candidates).toHaveLength(1);
+    const candidate = candidates[0]!;
+    expect(candidate.kind).toBe('DETECTOR_MISSES');
+    expect(candidate.ownerComponent).toBe('server/services/feeds/detectors.ts');
+    expect(candidate.problem).toMatch(/starts in SHADOW/);
+    expect(candidate.frequency).toBe(reading.misses);
+    expect(candidate.evidence['mutationScope']).toEqual(['server/services/feeds/**', 'tests/**']);
+    expect(candidate.evidence['detectorProposal']).toMatchObject({ rule: 'TEST_NARROW@1', misses: reading.misses });
+    expect((candidate.evidence['samples'] as string[]).length).toBeGreaterThan(0);
+  });
+
+  it('a rule below the miss bar proposes nothing', async () => {
+    const items = await seedDemand(3 + RULE_MISS_PROPOSAL_MIN - 1);
+    await runDetectors({ now, detectors: [NARROW] });
+    for (const item of items) await screen(item.id, 'KEEP');
+    const pass = await runDetectors({ now, detectors: [NARROW] });
+    expect(pass[0]!.proposed).toBeNull();
+    expect((await listCandidates()).filter((one) => one.weaknessKey.startsWith(ruleMissKey(NARROW)))).toHaveLength(0);
+  });
+
+  it('the weakness is pure, keyed by version, and severe when misses outnumber confirmations', () => {
+    const base = { rule: 'X@1', detections: 1, members: 3, screenedMembers: 3, confirmed: 3, falseJoins: 0, precision: null, evidenceQuality: 1, missedSamples: ['a — u'] };
+    expect(ruleMissWeakness({ id: 'X', version: 1, label: 'x' }, { ...base, misses: RULE_MISS_PROPOSAL_MIN - 1 })).toBeNull();
+    const severe = ruleMissWeakness({ id: 'X', version: 1, label: 'x' }, { ...base, misses: RULE_MISS_PROPOSAL_MIN });
+    expect(severe).toMatchObject({ key: 'DETECTOR_MISSES:X@1', severity: 'HIGH', samples: ['a — u'] });
+    const outweighed = ruleMissWeakness({ id: 'X', version: 2, label: 'x' }, { ...base, confirmed: 20, misses: RULE_MISS_PROPOSAL_MIN });
+    expect(outweighed).toMatchObject({ key: 'DETECTOR_MISSES:X@2', severity: 'MEDIUM' });
   });
 });
