@@ -11388,6 +11388,82 @@ export interface ImprovementEventRow {
   at: string;
 }
 
+/** One deficiency built several ways and compared (§111, migration 156 / pg 147). */
+export interface EvolutionExperimentRow {
+  id: string;
+  candidate_id: string;
+  deficiency: string;
+  capability_class: string;
+  suite: string;
+  baseline_sha: string;
+  state: string;
+  verdict: string | null;
+  winner_variant_id: string | null;
+  origin: string;
+  run_id: string | null;
+  cause: string | null;
+  rationale: string | null;
+  created_at: string;
+  decided_at: string | null;
+}
+
+export interface EvolutionVariantRow {
+  id: string;
+  experiment_id: string;
+  label: string;
+  approach_type: string;
+  approach_text: string;
+  signature: string;
+  /** JSON array of repository paths. */
+  owner_paths: string;
+  candidate_id: string | null;
+  campaign_id: string | null;
+  pr_url: string | null;
+  head_sha: string | null;
+  branch: string | null;
+  lines_changed: number | null;
+  state: string;
+  /** JSON: the variant's ranking entry once decided. */
+  score: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Append-only evaluator scores; `variant_id` NULL is the production baseline. */
+export interface EvolutionResultRow {
+  id: string;
+  experiment_id: string | null;
+  variant_id: string | null;
+  sha: string;
+  ref: string | null;
+  suite: string;
+  metrics_json: string;
+  cases_json: string;
+  hidden: number;
+  cause: string | null;
+  owner_paths: string | null;
+  ran_at: string;
+  recorded_at: string;
+}
+
+export interface EvolutionHiddenCaseRow {
+  id: string;
+  suite: string;
+  case_json: string;
+  created_by: string;
+  created_at: string;
+}
+
+export interface EvolutionApproachStatRow {
+  approach_type: string;
+  capability_class: string;
+  trials: number;
+  wins: number;
+  total_lift: number;
+  retired_at: string | null;
+  updated_at: string;
+}
+
 /** A way of reasoning about a goal and its record (§101, migration 143). */
 export interface ReasoningMethodRow {
   id: string;

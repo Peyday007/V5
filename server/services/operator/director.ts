@@ -60,6 +60,7 @@ import { recordEvent } from '../../repos/events.ts';
 import { listProjects } from '../../repos/projects.ts';
 import { getDb } from '../../db/database.ts';
 import { recordOperatorLearning } from '../../repos/operator.ts';
+import type { Approach } from '../../domain/evolution.ts';
 
 const sha = (text: string): string => createHash('sha256').update(text).digest('hex');
 
@@ -97,6 +98,13 @@ export interface DiagnosisRequest {
   runId: string | null;
   /** Brain's standing director commissioning in the operator's place (never Hermes identifying it). */
   standing?: boolean;
+  /**
+   * §111: two or more materially different approaches, and the registered benchmark suite that
+   * judges them. Engineering then opens an experiment — each approach its own Factory objective
+   * ending at a pull request — instead of one objective.
+   */
+  approaches?: Approach[] | null;
+  suite?: string | null;
 }
 
 /** Why a diagnosis is too thin to act on, or null. The same bar `validateFix` set for a fix. */
@@ -131,6 +139,9 @@ export function defaultMetric(deficiency: DeficiencyClass): MetricKey {
       return 'RESEARCH_JOB_SUCCESS_RATE';
     case 'RECURRING_OPERATIONAL_FAILURE':
       return 'OWNER_INTERVENTIONS_PER_DAY';
+    case 'CAPABILITY_BELOW_TARGET':
+      // The benchmark itself is the comparison before adoption (§111); after release §87 reads the goal-facing effect.
+      return 'READY_OPPORTUNITIES_PER_DAY';
   }
 }
 
@@ -218,6 +229,9 @@ export interface CommissionResult {
   recordedOnly?: string[];
   /** The goal research round an EVIDENCE or STRATEGY intervention opened. */
   roundCandidateId?: string;
+  /** §111: the experiment engineering opened instead of one objective, and its variants. */
+  experimentId?: string;
+  variants?: { variantId: string; label: string; candidateId: string | null; campaignId: string | null; did: string }[];
 }
 
 async function anchorProject(goalProjectId: string | null): Promise<string | null> {
@@ -236,6 +250,12 @@ async function anchorProject(goalProjectId: string | null): Promise<string | nul
 export async function commission(input: DiagnosisRequest, now = new Date()): Promise<CommissionResult> {
   const invalid = validateDiagnosis(input);
   if (invalid) return { ok: false, reason: invalid, intervention: 'WATCH', why: invalid, overruled: null };
+  if (input.approaches && input.approaches.length > 0) {
+    // §111: alternatives are refused whole, before anything is recorded, when they are not alternatives.
+    const { experimentInputProblem } = await import('../evolution/experiments.ts');
+    const problem = await experimentInputProblem(input.approaches, input.suite ?? null, input.deficiency);
+    if (problem) return { ok: false, reason: problem, intervention: 'WATCH', why: problem, overruled: null, started: [], recordedOnly: [] };
+  }
   const deficiency = input.deficiency as DeficiencyClass;
   const goal = await goalMark(input.goalId);
   const diagnosis: Diagnosis = {
@@ -280,6 +300,9 @@ export async function commission(input: DiagnosisRequest, now = new Date()): Pro
   const base = { intervention: decision.intervention, why: decision.why, overruled: decision.overruled };
   switch (decision.intervention) {
     case 'ENGINEERING':
+      if (input.approaches && input.approaches.length >= 2 && input.suite) {
+        return commissionExperiment(diagnosis, input.approaches, input.suite, input.runId, goal, base, now, input.standing === true);
+      }
       return engineerOrResearch(diagnosis, decision.intervention, input.runId, goal, base, now, input.standing === true);
     case 'EVIDENCE': {
       // The cause is not established: §87's loop researches the defect's cause, and the goal's own search is asked
@@ -727,6 +750,57 @@ async function engineerOrResearch(
     priority: priority.priority,
     urgency: priority.urgency,
     route,
+  };
+}
+
+/**
+ * Engineering as an experiment (§111): the deficiency is registered once (its parent row in §87's
+ * register), each approach becomes its own register row and Factory objective ending at a pull
+ * request, and the evaluator — not this call — decides which one is released.
+ */
+async function commissionExperiment(
+  d: Diagnosis,
+  approaches: Approach[],
+  suite: string,
+  runId: string | null,
+  goal: Awaited<ReturnType<typeof goalMark>>,
+  base: { intervention: Intervention; why: string; overruled: string | null },
+  now: Date,
+  standing: boolean,
+): Promise<CommissionResult> {
+  const { openExperiment } = await import('../evolution/experiments.ts');
+  const opened = await openExperiment({ diagnosis: d, goal, suite, approaches, origin: standing ? 'STANDING_DIRECTOR' : 'OPERATOR', runId }, now);
+  if (!opened.ok) return { ok: false, reason: opened.reason, ...base, started: [], recordedOnly: [] };
+  for (const v of opened.variants) if (v.campaignId && opened.priority) await applyPriority(v.campaignId, opened.priority);
+  const projectId = await anchorProject(await goalProject(d.goalId));
+  if (projectId) {
+    await recordEvent({
+      projectId,
+      entityType: 'PROJECT',
+      entityId: projectId,
+      eventType: ENGINEERING_EVENTS.commissioned,
+      payload: { runId, goalId: d.goalId, candidateId: opened.candidateId, weaknessKey: opened.weaknessKey, intervention: 'ENGINEERING', experimentId: opened.experimentId, duplicate: opened.duplicate, suite, variants: opened.variants },
+    });
+  }
+  const started = opened.duplicate ? [] : opened.variants.filter((v) => v.campaignId).map((v) => `Factory campaign ${v.campaignId} (variant ${v.label})`);
+  return {
+    ok: true,
+    reason:
+      `${opened.duplicate ? 'Already an experiment — the same one, not a second: ' : 'Acknowledged: '}experiment ${opened.experimentId} on suite ${suite}, ` +
+      `${opened.variants.length} variant(s): ${opened.variants.map((v) => `${v.label} → ${v.campaignId ?? v.did}`).join('; ')}. ` +
+      'Each ends at a pull request; the evaluator scores them and the baseline, and only the winner is released.',
+    ...base,
+    candidateId: opened.candidateId,
+    weaknessKey: opened.weaknessKey,
+    duplicate: opened.duplicate,
+    campaignId: null,
+    changeRequestId: null,
+    ...(opened.priority ? { priority: opened.priority } : {}),
+    action: `experiment ${opened.experimentId}`,
+    started,
+    recordedOnly: started.length ? [] : [`experiment ${opened.experimentId} (nothing new started)`],
+    experimentId: opened.experimentId,
+    variants: opened.variants,
   };
 }
 
@@ -1198,6 +1272,10 @@ export async function readDeficiencies(): Promise<DeficiencyReading[]> {
     stuckPlanDeficiencies().catch(() => [] as DeficiencyReading[]),
     unreportedRoundDeficiencies().catch(() => [] as DeficiencyReading[]),
   ]);
+  // 7. §111: a registered capability benchmark whose production baseline misses its target — at
+  // most one per suite, ahead of the open-ended detectors so the bound never cuts it.
+  const capability = await capabilityDeficiencies().catch(() => [] as DeficiencyReading[]);
+  if (capability.length) return [...out.slice(0, 6), ...capability, ...more.flat()].slice(0, 14 + capability.length);
   return [...out.slice(0, 6), ...more.flat()].slice(0, 14);
 }
 
@@ -1510,14 +1588,71 @@ export async function unreportedRoundDeficiencies(now = new Date()): Promise<Def
  * commission produced to its finding (the inventory's own `linkedCandidateId`), so the finding reads
  * as in flight and is not offered again while that repair runs.
  */
-export async function commissionReading(one: DeficiencyReading, runId: string | null, options: { standing?: boolean; now?: Date } = {}): Promise<CommissionResult & { linkedFinding?: string }> {
-  const result = await commission({ ...one.diagnosis, runId, ...(options.standing ? { standing: true } : {}) }, options.now ?? new Date());
+export async function commissionReading(
+  one: DeficiencyReading,
+  runId: string | null,
+  options: { standing?: boolean; now?: Date; approaches?: Approach[] | null; suite?: string | null } = {},
+): Promise<CommissionResult & { linkedFinding?: string }> {
+  const experiment = options.approaches && options.approaches.length ? { approaches: options.approaches, suite: options.suite ?? one.diagnosis.suite ?? null } : {};
+  const result = await commission({ ...one.diagnosis, runId, ...(options.standing ? { standing: true } : {}), ...experiment }, options.now ?? new Date());
   if (one.source?.kind === 'INVENTORY' && result.ok && result.candidateId) {
     const { upsertInventory } = await import('./inventory.ts');
     const linked = await upsertInventory({ id: one.source.ref, linkedCandidateId: result.candidateId }, { runId, actor: options.standing ? 'standing-director' : `operator:${runId ?? '-'}` });
     if (linked.ok) return { ...result, linkedFinding: one.source.ref };
   }
   return result;
+}
+
+/**
+ * §111, generic: every registered benchmark suite whose latest production baseline (the
+ * evaluator's result on the running SHA, or the latest when the process carries none) misses
+ * the suite's declared target is a deficiency, naming the suite and its metric and nothing
+ * more. Its cause is the one the results themselves state, with the files they name; without
+ * one the rules give it EVIDENCE.
+ */
+export async function capabilityDeficiencies(): Promise<DeficiencyReading[]> {
+  const { EVOLUTION_SUITES } = await import('../../domain/evolutionSuites.ts');
+  const { meetsTarget, targetValue } = await import('../../domain/evolution.ts');
+  const { listBaselines, firstBaseline } = await import('../../repos/evolution.ts');
+  const { BRAIN_REVISION } = await import('../../env.ts');
+  const out: DeficiencyReading[] = [];
+  for (const suite of EVOLUTION_SUITES) {
+    const baselines = await listBaselines(suite.name, 20);
+    const onProduction = BRAIN_REVISION ? baselines.filter((b) => b.sha === BRAIN_REVISION) : baselines;
+    const latest = onProduction.at(-1);
+    const value = latest?.metrics[suite.primaryMetric];
+    if (!latest || value === undefined) continue;
+    const first = (await firstBaseline(suite.name))?.metrics[suite.primaryMetric] ?? null;
+    if (meetsTarget(suite, value, first) !== false) continue;
+    const target = targetValue(suite, first)!;
+    const missed = baselines.filter((b) => {
+      const v = b.metrics[suite.primaryMetric];
+      return v !== undefined && meetsTarget(suite, v, first) === false;
+    }).length;
+    out.push({
+      ...reading({
+        goalId: null,
+        deficiency: 'CAPABILITY_BELOW_TARGET',
+        title: `Capability benchmark ${suite.name} misses its target on ${suite.primaryMetric}`,
+        observed:
+          `The production baseline of suite ${suite.name} (${suite.capabilityClass}) reads ${suite.primaryMetric} ${value} ` +
+          `against a target of ${Math.round(target * 10_000) / 10_000} (${suite.direction === 'HIGHER' ? 'at least' : 'at most'}); ` +
+          `${missed} of the last ${baselines.length} baseline result(s) missed it.`,
+        evidence: `evolution_results ${latest.id}: sha ${latest.sha}, ran ${latest.ranAt}, ${latest.cases.length} case(s), metrics ${JSON.stringify(latest.metrics).slice(0, 300)}`,
+        cause: latest.cause,
+        ownerPaths: latest.ownerPaths,
+        recurrence: missed,
+        expectedBenefit: `Suite ${suite.name} meets its target: ${suite.description.slice(0, 200)}`,
+        acceptance: `The evaluator's result for suite ${suite.name} meets ${suite.primaryMetric} ${suite.direction === 'HIGHER' ? '>=' : '<='} its target on the public and hidden cases, with no guard regressed.`,
+        metric: defaultMetric('CAPABILITY_BELOW_TARGET'),
+        blocksGoal: false,
+        share: 0.1,
+        proposed: latest.cause ? 'ENGINEERING' : 'EVIDENCE',
+        suite: suite.name,
+      }),
+    });
+  }
+  return out;
 }
 
 function reading(diagnosis: Omit<DiagnosisRequest, 'runId'>): DeficiencyReading {
@@ -1581,6 +1716,14 @@ export async function engineeringBrief(): Promise<string> {
   if (found.length) {
     lines.push('DEFICIENCIES THE ROWS SHOW (brain_operator_commission {deficiency_id} acts on one):');
     for (const one of found) lines.push(`- ${readingId(one)} ${one.diagnosis.deficiency} → ${one.intervention}: ${one.diagnosis.title.slice(0, 120)}`);
+    if (found.some((one) => one.intervention === 'ENGINEERING')) {
+      lines.push(
+        'For an ENGINEERING deficiency, propose at least two materially different approaches (different approach types or ' +
+          'mechanisms, not one idea twice): brain_operator_commission {deficiency_id, suite, approaches:[{label, approach_type, approach, owner_paths}]}. ' +
+          'Each is built in parallel to a pull request; an evaluator you cannot see scores them against production, and only the winner is released ' +
+          '(brain_operator_experiments shows the verdicts and which approach types have worked).',
+      );
+    }
   }
   return lines.join('\n').slice(0, 4000);
 }
@@ -1691,6 +1834,28 @@ export async function cycleFacts(outcome: EngineeringOutcome): Promise<CycleFact
     status: outcome.status,
     goal: { effect: outcome.goal.effect as CycleFacts['goal']['effect'], reasons: outcome.goal.reasons },
     evaluation: evaluation ? { runId: evaluation.run_id, recordedAt: evaluation.recorded_at, lesson: evaluation.lesson } : null,
+    alternatives: await alternativesFacts(candidate.id),
+  };
+}
+
+/** §111: the experiment a register row's change won, read from its rows; null when it was never compared. */
+export async function alternativesFacts(candidateId: string): Promise<CycleFacts['alternatives']> {
+  const { variantForCandidate, getExperiment, listVariants, listResults, getVariant } = await import('../../repos/evolution.ts');
+  const variant = await variantForCandidate(candidateId);
+  if (!variant) return null;
+  const experiment = await getExperiment(variant.experimentId);
+  if (!experiment) return null;
+  const results = await listResults(experiment.id);
+  const scored = new Set(results.filter((r) => r.variantId !== null).map((r) => r.variantId));
+  const variants = await listVariants(experiment.id);
+  const winner = experiment.winnerVariantId ? await getVariant(experiment.winnerVariantId) : null;
+  return {
+    experimentId: experiment.id,
+    variantsEvaluated: variants.filter((v) => scored.has(v.id)).length,
+    verdict: experiment.verdict,
+    winnerCandidateId: winner?.candidateId ?? null,
+    winnerCampaignId: winner?.campaignId ?? null,
+    winnerHeadSha: winner?.headSha ?? null,
   };
 }
 

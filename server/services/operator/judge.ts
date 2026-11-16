@@ -25,6 +25,7 @@ export const OPERATOR_READS = [
   'brain_operator_goals',
   'brain_operator_allocation',
   'brain_operator_engineering',
+  'brain_operator_experiments',
 ];
 
 export interface RunCheck {

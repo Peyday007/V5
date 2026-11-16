@@ -31,6 +31,7 @@
     "goal-budget-proof": "tsx scripts/goal-budget-proof.ts",
     "engineering": "tsx scripts/engineering.ts",
     "operator": "tsx scripts/operator.ts",
+    "evolution": "tsx scripts/evolution.ts",
     "finish": "node .claude/hooks/finish-job.mjs",
     "goals": "tsx scripts/goals.ts",
     "report:packet": "tsx scripts/packet-report.ts",
@@ -58,7 +59,8 @@
     "puzzle-book": "tsx scripts/puzzle-book.ts",
     "plan:check": "tsx scripts/plan-check.ts",
     "quant": "tsx scripts/quant.ts",
-    "memory": "tsx scripts/memory.ts"
+    "memory": "tsx scripts/memory.ts",
+    "bench": "tsx scripts/bench.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
