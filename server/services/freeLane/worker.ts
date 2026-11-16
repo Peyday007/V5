@@ -1595,9 +1595,22 @@ export function unfitPairs(
   return marked;
 }
 
-/** A failure that says Brain or the provider was unavailable, not that the answer was wrong. */
+/**
+ * A failure that says Brain, the provider or the sources were unavailable, not
+ * that the answer was wrong. Production, 2026-11-16 17:25Z: 26 fragments waited
+ * with no slot busy, "answers … rejected" the top decline (148,575 since boot),
+ * and the lane accepted 2 claims an hour. The day of rows it judged held hours
+ * when the GPU slot's calls never reached the model ("model call failed [broken
+ * GPU]", stale pod routing, fixed in #984) and pages no model could open ("no
+ * readable source": 404s and DNS failures every model met alike). A model that
+ * never answered, or that Brain gave nothing to read, is not judged by it.
+ */
 function notTheAnswer(reason: string): boolean {
-  return /threw:|refused: .*(?:connection|timeout|not queryable)/i.test(reason) || BRAIN_UNAVAILABLE.test(reason) || PROVIDER_BUSY.test(reason);
+  return (
+    /threw:|refused: .*(?:connection|timeout|not queryable)|: model call failed|: no readable source among/i.test(reason) ||
+    BRAIN_UNAVAILABLE.test(reason) ||
+    PROVIDER_BUSY.test(reason)
+  );
 }
 
 let fitness: { at: number; unfit: Set<string> } | null = null;

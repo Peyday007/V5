@@ -26,7 +26,8 @@ import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
 import { describePoolerRefusal } from '../server/db/adapters/postgres.ts';
 import { runpodConfig } from '../server/services/cheap/runpod.ts';
 import { listReadings, planProgress, readGoalPlan } from '../server/services/goals/plan.ts';
-import { goalPipelineSpeed, goalResearchProgress } from '../server/services/goals/researchYield.ts';
+import { failureClass, goalPipelineSpeed, goalResearchProgress } from '../server/services/goals/researchYield.ts';
+import { resetFreeLaneFitness, unfitNow } from '../server/services/freeLane/worker.ts';
 
 const argv = process.argv.slice(2);
 const at = argv.indexOf('--hours');
@@ -59,6 +60,29 @@ async function main(): Promise<void> {
     const avg = e.ms.length ? Math.round(e.ms.reduce((a, b) => a + b, 0) / e.ms.length / 1000) : null;
     console.log(`  ${model.padEnd(40)} submitted ${e.submitted} · not accepted ${e.failed}${avg !== null ? ` · ~${avg}s each` : ''}${e.kinds.size ? ` · ${[...e.kinds].join(',')}` : ''}`);
   }
+  // Why each model's jobs were not accepted: outcome, kind and reason with ids and counts stripped.
+  const why = new Map<string, number>();
+  for (const row of rows) {
+    if (row.outcome === 'SUBMITTED') continue;
+    const model = String(row.reason ?? '').replace(/^model /, '').split(':')[0] || '(unknown)';
+    const key = `${model}\t${row.outcome} ${row.workload_class ?? '?'}: ${failureClass(row.reason)}`;
+    why.set(key, (why.get(key) ?? 0) + Number(row.n));
+  }
+  console.log(`NOT ACCEPTED, by model and reason, last ${hours}h`);
+  if (why.size === 0) console.log('  none');
+  for (const [key, n] of [...why].sort((a, b) => b[1] - a[1]).slice(0, 30)) {
+    const [model, reason] = key.split('\t');
+    console.log(`  ${String(n).padStart(4)} × ${model!.padEnd(28)} ${reason}`);
+  }
+  // Which model|kind pairs the lane holds back now (24h of answers Brain rejected).
+  const seen = await getDb().all<{ reason: string | null }>(
+    `SELECT DISTINCT reason FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND outcome = 'SUBMITTED' AND at >= ?`,
+    [new Date(Date.now() - 86_400_000).toISOString()],
+  );
+  const models = [...new Set(seen.map((r) => String(r.reason ?? '').replace(/^model /, '').split(':')[0]!).filter(Boolean))];
+  resetFreeLaneFitness();
+  const held = await unfitNow(models, Date.now(), null);
+  console.log(`HELD BACK ${held.size === 0 ? 'none' : [...held].join(', ')} (model|kind whose answers Brain rejected, 24h; among ${models.join(', ') || 'no models'})`);
   const quality = await getDb().all<{ reason: string | null; claims: number | string; sourced: number | string | null; refuted: number | string | null }>(
     `SELECT e.reason AS reason, COUNT(c.id) AS claims,
             SUM(CASE WHEN c.sourced = 1 THEN 1 ELSE 0 END) AS sourced,

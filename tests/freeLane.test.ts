@@ -1053,6 +1053,14 @@ describe('a model keeps only the kinds of work Brain accepts from it', () => {
     // An outage recorded as a failure is not the model's answer.
     const outage = [{ model: 'small', work_type: 'RESEARCH_AUDIT', outcome: 'FAILED_RETRYABLE', n: 9, reason: 'model small: threw: The database pool had no free connection within 10000ms' }];
     expect(unfitPairs(outage, ['small', 'large']).size).toBe(0);
+    // A call that never reached the model, or pages nobody could open, judge no answer.
+    const unanswered = [
+      { model: 'gpu', work_type: 'RESEARCH_FRAGMENT', outcome: 'FAILED_RETRYABLE', n: 9, reason: "model gpu: model call failed [broken GPU]: GPU slot's own calls failing; the fallback then said: cheap lane HTTP 400" },
+      { model: 'gpu', work_type: 'RESEARCH_FRAGMENT', outcome: 'FAILED_RETRYABLE', n: 9, reason: 'model gpu: no readable source among 12 candidate page(s): {"HTTP_ERROR":12} the site answered 404' },
+    ];
+    expect(unfitPairs(unanswered, ['gpu', 'large']).size).toBe(0);
+    const rejected = [{ model: 'gpu', work_type: 'RESEARCH_FRAGMENT', outcome: 'FAILED_RETRYABLE', n: 9, reason: "model gpu: the answer did not survive Brain's own checks: 0 claim(s) offered, dropped {}" }];
+    expect([...unfitPairs(rejected, ['gpu', 'large'])]).toEqual(['gpu|RESEARCH_FRAGMENT']);
     // A GPU slot answering through 'large' is 'large': held back with it, and no alternative to it.
     const viaFallback = [
       { model: 'a', work_type: 'RESEARCH_AUDIT', outcome: 'FAILED_RETRYABLE', n: 6 },
