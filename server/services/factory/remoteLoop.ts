@@ -2926,6 +2926,11 @@ export function resetFinishedSweep(): void {
   finishedJudged.clear();
 }
 
+/** The finished campaigns whose delivery the sweep observes: COMPLETE, and CANCELLED (a retired one another request may carry). */
+export function deliverySweepable<T extends { state: string }>(campaigns: readonly T[]): T[] {
+  return campaigns.filter((one) => one.state === 'COMPLETE' || one.state === 'CANCELLED');
+}
+
 /**
  * Observe what happened to finished campaigns' pull requests and record, once,
  * every objective that reached an end (`delivery.ts`). A campaign is judged
@@ -2937,7 +2942,10 @@ export async function sweepFinishedObjectives(now = Date.now()): Promise<{ noted
   finishedSweptAt = now;
   const { campaignsAwaitingDelivery, observeDeliveries, noteObjectiveOutcome } = await import('./delivery.ts');
   const campaigns = await campaignsAwaitingDelivery();
-  const { changed } = await observeDeliveries(campaigns.filter((one) => one.state === 'COMPLETE'));
+  // A retired campaign another request carried (`recordDeliveredBy --campaigns`) is watched too:
+  // filtered to COMPLETE here, it never read LIVE and its dependents never started (2026-11-16).
+  // `observeDeliveries` itself skips any campaign with neither its own request nor a carrier.
+  const { changed } = await observeDeliveries(deliverySweepable(campaigns));
   const changedSet = new Set(changed);
   const noted: string[] = [];
   for (const campaign of campaigns) {
