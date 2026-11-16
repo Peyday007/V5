@@ -13,6 +13,9 @@ import {
   CAMPAIGN_CHANNEL,
   CAMPAIGN_OUTCOMES_CONTINUE_MS,
   CAMPAIGN_OUTCOMES_REQUESTS_PER_PASS,
+  COHORT_SETTLE_DAYS,
+  SILENCE_AFTER_CONTACT_DAYS,
+  boundStateOf,
   contactResultOf,
   recordCampaignOutcomes,
   resetCampaignOutcomePacing,
@@ -22,7 +25,9 @@ import { CAMPAIGN_NAME, type Deps } from '../server/services/cash/neighborCard.t
 import { BRAIN_CAMPAIGN_NAME } from '../server/services/cash/providers/instantly.ts';
 import { mechanismsFromRows, modelOutreachFunnel } from '../server/services/cash/funnel.ts';
 
-type Lead = { id: string; email: string; status: number; email_reply_count?: number; lt_interest_status?: number; timestamp_created?: string };
+type Lead = { id: string; email: string; status: number; email_reply_count?: number; lt_interest_status?: number; timestamp_created?: string; timestamp_last_contact?: string };
+/** The day these campaigns are described as of: a forced pass reads them then, never by the wall clock. */
+const WRITTEN = new Date('2026-11-16T00:00:00.000Z');
 
 const NEIGHBOR = 'cmp-neighbor';
 const DEAL = 'cmp-deal';
@@ -118,7 +123,7 @@ describe('recordCampaignOutcomes', () => {
   it('writes one CONTACT_RESULT per answered lead of Brain\'s campaigns, and none for the deal or the owner\'s other campaign', async () => {
     await seedOptOut();
     const { deps, calls } = workspace({ [NEIGHBOR]: LEADS, [DEAL]: [{ id: 'l-deal', email: 'z@deal.test', status: -1 }], [OTHER]: [{ id: 'l-other', email: 'y@o.test', status: -1 }] });
-    const report = await recordCampaignOutcomes(projectId, { deps, ownerProjectId: projectId, force: true });
+    const report = await recordCampaignOutcomes(projectId, { deps, ownerProjectId: projectId, force: true, now: WRITTEN });
     expect(report.skipped).toBeNull();
     expect(report.campaigns).toBe(1);
     expect(report.leads).toBe(LEADS.length);
@@ -140,13 +145,13 @@ describe('recordCampaignOutcomes', () => {
 
   it('writes nothing twice, and records an active lead only once its sequence ends', async () => {
     const first = workspace({ [NEIGHBOR]: LEADS });
-    await recordCampaignOutcomes(projectId, { deps: first.deps, ownerProjectId: projectId, force: true });
-    const again = await recordCampaignOutcomes(projectId, { deps: first.deps, ownerProjectId: projectId, force: true });
+    await recordCampaignOutcomes(projectId, { deps: first.deps, ownerProjectId: projectId, force: true, now: WRITTEN });
+    const again = await recordCampaignOutcomes(projectId, { deps: first.deps, ownerProjectId: projectId, force: true, now: WRITTEN });
     expect(again.recorded).toBe(0);
     expect((await results(projectId))['l-active']).toBeUndefined();
 
     const ended = LEADS.map((l) => (l.id === 'l-active' ? { ...l, status: 3 } : l.id === 'l-replied' ? { ...l, lt_interest_status: 4 } : l));
-    const later = await recordCampaignOutcomes(projectId, { deps: workspace({ [NEIGHBOR]: ended }).deps, ownerProjectId: projectId, force: true });
+    const later = await recordCampaignOutcomes(projectId, { deps: workspace({ [NEIGHBOR]: ended }).deps, ownerProjectId: projectId, force: true, now: WRITTEN });
     // l-active's silence is new, and l-replied's reply is refined by the interest status that followed it.
     expect(later.recorded).toBe(2);
     const now = await results(projectId);
@@ -165,7 +170,7 @@ describe('an answer that arrives after the reply refines the reply instead of be
     { id: 'r-silent', email: 's@five.test', status: 3, email_reply_count: 0, timestamp_created: NOV1 },
   ];
   const pass = (leads: Lead[]) =>
-    recordCampaignOutcomes(projectId, { deps: workspace({ [NEIGHBOR]: leads }).deps, ownerProjectId: projectId, force: true });
+    recordCampaignOutcomes(projectId, { deps: workspace({ [NEIGHBOR]: leads }).deps, ownerProjectId: projectId, force: true, now: WRITTEN });
 
   it('a lead first seen as a reply and later won, declined or opted out ends as that answer, one row per lead', async () => {
     const first = await pass(COHORT);
@@ -234,7 +239,7 @@ describe('recordCampaignOutcomes, continued', () => {
 
   it('with no Instantly key, writes nothing and says why', async () => {
     const { deps, calls } = workspace({ [NEIGHBOR]: LEADS });
-    const report = await recordCampaignOutcomes(projectId, { deps: { ...deps, env: {} }, ownerProjectId: projectId, force: true });
+    const report = await recordCampaignOutcomes(projectId, { deps: { ...deps, env: {} }, ownerProjectId: projectId, force: true, now: WRITTEN });
     expect(report.skipped).toMatch(/INSTANTLY_API_KEY/);
     expect(report.recorded).toBe(0);
     expect(calls).toEqual([]);
@@ -243,7 +248,7 @@ describe('recordCampaignOutcomes, continued', () => {
 
   it('with no project holding authority to contact buyers, writes nothing and says why', async () => {
     const { deps, calls } = workspace({ [NEIGHBOR]: LEADS });
-    const report = await recordCampaignOutcomes(projectId, { deps, force: true });
+    const report = await recordCampaignOutcomes(projectId, { deps, force: true, now: WRITTEN });
     expect(report.skipped).toMatch(/no cash project holds standing commercial authority/);
     expect(calls).toEqual([]);
     expect(await results(projectId)).toEqual({});
@@ -251,7 +256,7 @@ describe('recordCampaignOutcomes, continued', () => {
 
   it('records only on the owning project, so a campaign is never counted twice', async () => {
     const { deps } = workspace({ [NEIGHBOR]: LEADS });
-    const report = await recordCampaignOutcomes(projectId, { deps, ownerProjectId: 'prj_someone_else', force: true });
+    const report = await recordCampaignOutcomes(projectId, { deps, ownerProjectId: 'prj_someone_else', force: true, now: WRITTEN });
     expect(report.skipped).toMatch(/recorded on project prj_someone_else/);
     expect(await results(projectId)).toEqual({});
   });
@@ -263,7 +268,7 @@ describe('recordCampaignOutcomes, continued', () => {
       fetch: (async (url: string | URL | Request, init?: RequestInit) =>
         String(url).endsWith('/leads/list') ? new Response('nope', { status: 403 }) : deps.fetch(url, init)) as typeof fetch,
     };
-    const report = await recordCampaignOutcomes(projectId, { deps: failing, ownerProjectId: projectId, force: true });
+    const report = await recordCampaignOutcomes(projectId, { deps: failing, ownerProjectId: projectId, force: true, now: WRITTEN });
     expect(report.failed).toHaveLength(1);
     expect(report.recorded).toBe(0);
     expect(await results(projectId)).toEqual({});
@@ -273,7 +278,7 @@ describe('recordCampaignOutcomes, continued', () => {
 describe('the funnel models the recorded campaign, and messages are not buyers', () => {
   it('yields one mechanism named by the campaign, measured from its rows', async () => {
     await seedOptOut();
-    await recordCampaignOutcomes(projectId, { deps: workspace({ [NEIGHBOR]: LEADS }).deps, ownerProjectId: projectId, force: true });
+    await recordCampaignOutcomes(projectId, { deps: workspace({ [NEIGHBOR]: LEADS }).deps, ownerProjectId: projectId, force: true, now: WRITTEN });
     const mechanisms = await mechanismsFromRows(projectId, { permission: { basis: 'MEASURED', value: 1 } });
     expect(mechanisms.map((m) => m.mode)).toEqual([CAMPAIGN_NAME]);
     const m = mechanisms[0]!;
@@ -290,7 +295,7 @@ describe('the funnel models the recorded campaign, and messages are not buyers',
     const { getProbe } = await import('../server/services/factory/program/probes.ts');
     const before = await getProbe('r01.com-13-3')!({});
     expect(before.detail).toMatch(/no outreach outcome rows/);
-    await recordCampaignOutcomes(projectId, { deps: workspace({ [NEIGHBOR]: LEADS }).deps, ownerProjectId: projectId, force: true });
+    await recordCampaignOutcomes(projectId, { deps: workspace({ [NEIGHBOR]: LEADS }).deps, ownerProjectId: projectId, force: true, now: WRITTEN });
     const after = await getProbe('r01.com-13-3')!({});
     expect(after.detail).toMatch(/1 mechanism/);
     expect(after.ok).toBe(true);
@@ -310,7 +315,7 @@ describe('answers are recorded by enrolment cohort, so a running campaign never 
   ];
 
   it('records none of a cohort while any of its leads is still in its sequence', async () => {
-    const report = await recordCampaignOutcomes(projectId, { deps: workspace({ [NEIGHBOR]: cohort(true) }).deps, ownerProjectId: projectId, force: true });
+    const report = await recordCampaignOutcomes(projectId, { deps: workspace({ [NEIGHBOR]: cohort(true) }).deps, ownerProjectId: projectId, force: true, now: WRITTEN });
     expect(report.recorded).toBe(0);
     expect(report.pending).toBe(6);
     expect(report.held).toBe(4);
@@ -320,8 +325,8 @@ describe('answers are recorded by enrolment cohort, so a running campaign never 
   });
 
   it('once the cohort has ended, the funnel reads every lead it enrolled, at the true rates', async () => {
-    await recordCampaignOutcomes(projectId, { deps: workspace({ [NEIGHBOR]: cohort(true) }).deps, ownerProjectId: projectId, force: true });
-    const ended = await recordCampaignOutcomes(projectId, { deps: workspace({ [NEIGHBOR]: cohort(false) }).deps, ownerProjectId: projectId, force: true });
+    await recordCampaignOutcomes(projectId, { deps: workspace({ [NEIGHBOR]: cohort(true) }).deps, ownerProjectId: projectId, force: true, now: WRITTEN });
+    const ended = await recordCampaignOutcomes(projectId, { deps: workspace({ [NEIGHBOR]: cohort(false) }).deps, ownerProjectId: projectId, force: true, now: WRITTEN });
     expect(ended.recorded).toBe(10);
     expect(ended.held).toBe(0);
     const [m] = await mechanismsFromRows(projectId, { permission: { basis: 'MEASURED', value: 1 } });
@@ -337,7 +342,7 @@ describe('answers are recorded by enrolment cohort, so a running campaign never 
       { id: 'n-r', email: 'nr@x.test', status: 3, email_reply_count: 1, timestamp_created: NOV10 },
       { id: 'n-a', email: 'na@x.test', status: 2, timestamp_created: NOV10 },
     ];
-    const report = await recordCampaignOutcomes(projectId, { deps: workspace({ [NEIGHBOR]: leads }).deps, ownerProjectId: projectId, force: true });
+    const report = await recordCampaignOutcomes(projectId, { deps: workspace({ [NEIGHBOR]: leads }).deps, ownerProjectId: projectId, force: true, now: WRITTEN });
     expect(report).toMatchObject({ recorded: 2, pending: 1, held: 1 });
     expect(await results(projectId)).toEqual({ 'e-r': 'BUYER_REPLIED', 'e-s': 'BUYER_SILENT' });
   });
@@ -349,7 +354,7 @@ describe('answers are recorded by enrolment cohort, so a running campaign never 
       { id: 'k-r', email: 'kr@x.test', status: 3, email_reply_count: 1, timestamp_created: NOV1 },
       { id: 'k-skip', email: 'ks@x.test', status: -3, timestamp_created: NOV1 },
     ];
-    const report = await recordCampaignOutcomes(projectId, { deps: workspace({ [NEIGHBOR]: leads }).deps, ownerProjectId: projectId, force: true });
+    const report = await recordCampaignOutcomes(projectId, { deps: workspace({ [NEIGHBOR]: leads }).deps, ownerProjectId: projectId, force: true, now: WRITTEN });
     expect(report).toMatchObject({ recorded: 1, pending: 1, held: 1 });
     expect(await results(projectId)).toEqual({ 'k-r': 'BUYER_REPLIED' });
   });
@@ -456,11 +461,11 @@ describe('one pass is bounded by a request budget and never waits inside the tic
   it('a campaign read only partly by one pass records nothing of it until its last page is read', async () => {
     const ws = pagedWorkspace(1, 12);
     await seedDeskCampaigns(ws.campaigns.map((c) => c.id));
-    const first = await recordCampaignOutcomes(projectId, { deps: ws.deps, ownerProjectId: projectId, force: true });
+    const first = await recordCampaignOutcomes(projectId, { deps: ws.deps, ownerProjectId: projectId, force: true, now: WRITTEN });
     expect(first.paused).toMatch(/budget/);
     expect(first.recorded).toBe(0);
     expect(await countRows()).toBe(0);
-    const second = await recordCampaignOutcomes(projectId, { deps: ws.deps, ownerProjectId: projectId, force: true });
+    const second = await recordCampaignOutcomes(projectId, { deps: ws.deps, ownerProjectId: projectId, force: true, now: WRITTEN });
     expect(second.paused).toBeNull();
     expect(second.recorded).toBe(12 * PAGE);
     expect(ws.sleeps).toEqual([]);
@@ -482,13 +487,13 @@ describe('one pass is bounded by a request budget and never waits inside the tic
   it('a 429 ends the pass at once instead of backing off, and the next pass continues where it stopped', async () => {
     const ws = pagedWorkspace(2, 2, { throttleAt: 3 });
     await seedDeskCampaigns(ws.campaigns.map((c) => c.id));
-    const first = await recordCampaignOutcomes(projectId, { deps: ws.deps, ownerProjectId: projectId, force: true });
+    const first = await recordCampaignOutcomes(projectId, { deps: ws.deps, ownerProjectId: projectId, force: true, now: WRITTEN });
     expect(ws.sleeps).toEqual([]);
     expect(first.requests).toBe(3);
     expect(first.paused).toMatch(/slow down/);
     expect(first.failed).toEqual([]);
     expect(first.recorded).toBe(0);
-    const second = await recordCampaignOutcomes(projectId, { deps: ws.deps, ownerProjectId: projectId, force: true });
+    const second = await recordCampaignOutcomes(projectId, { deps: ws.deps, ownerProjectId: projectId, force: true, now: WRITTEN });
     expect(second.paused).toBeNull();
     expect(await countRows()).toBe(2 * 2 * PAGE);
     expect(ws.sleeps).toEqual([]);
@@ -532,5 +537,88 @@ describe('the reply refinement is the campaign path\'s alone', () => {
       [projectId, base.requestKey],
     );
     expect(row?.value_text).toBe('BUYER_ACCEPTED');
+  });
+});
+
+/*
+ * Reviewer finding (repair-R2-F3): a cohort with any lead not yet terminal
+ * recorded none of its leads, and a lead in a paused campaign (Instantly lead
+ * status 2) or a still-active one never became terminal, so a paused or
+ * long-running campaign left cash_outcomes empty and the probe failing with
+ * "no outreach outcome rows". A cohort now settles COHORT_SETTLE_DAYS after
+ * enrolment: a lead never contacted is not reached, and a contacted lead with
+ * no reply SILENCE_AFTER_CONTACT_DAYS after its last contact is silent at the
+ * bound — marked so, and refined if it answers later.
+ */
+describe('a paused or long-running campaign settles into rows instead of holding its cohort for ever', () => {
+  const OCT1 = '2026-10-01T09:00:00.000Z';
+  const OCT5 = '2026-10-05T09:00:00.000Z';
+  const NOV12 = '2026-11-12T09:00:00.000Z';
+  const pausedCohort = (): Lead[] => [
+    { id: 'p-r', email: 'pr@x.test', status: 3, email_reply_count: 1, timestamp_created: OCT1, timestamp_last_contact: OCT5 },
+    { id: 'p-b', email: 'pb@x.test', status: -1, timestamp_created: OCT1, timestamp_last_contact: OCT1 },
+    { id: 'p-s', email: 'ps@x.test', status: 3, timestamp_created: OCT1, timestamp_last_contact: OCT5 },
+    // Paused mid-sequence: contacted, never answered, never terminal.
+    { id: 'p-paused', email: 'pp@x.test', status: 2, timestamp_created: OCT1, timestamp_last_contact: OCT5 },
+    // Paused before its first step: never sent to.
+    { id: 'p-unsent', email: 'pu@x.test', status: 2, timestamp_created: OCT1 },
+  ];
+  const day = (n: number) => n * 24 * 60 * 60 * 1000;
+
+  it('reproduces the finding before the bound: the paused cohort is held and nothing is recorded', async () => {
+    const report = await recordCampaignOutcomes(projectId, {
+      deps: workspace({ [NEIGHBOR]: pausedCohort() }).deps,
+      ownerProjectId: projectId,
+      force: true,
+      now: new Date(Date.parse(OCT1) + day(COHORT_SETTLE_DAYS) - 1),
+    });
+    expect(report).toMatchObject({ recorded: 0, pending: 2, held: 3, silentAtBound: 0, notReached: 0 });
+    expect(await results(projectId)).toEqual({});
+  });
+
+  it('once the cohort settles, the paused campaign records every lead that had its chance, and the funnel has a mechanism to model', async () => {
+    const report = await recordCampaignOutcomes(projectId, { deps: workspace({ [NEIGHBOR]: pausedCohort() }).deps, ownerProjectId: projectId, force: true, now: WRITTEN });
+    expect(report).toMatchObject({ recorded: 4, pending: 0, held: 0, silentAtBound: 1, notReached: 1 });
+    expect(await results(projectId)).toEqual({ 'p-b': 'CONTACT_UNDELIVERABLE', 'p-paused': 'BUYER_SILENT', 'p-r': 'BUYER_REPLIED', 'p-s': 'BUYER_SILENT' });
+    const paused = await getDb().get<{ basis: string }>(`SELECT basis FROM cash_outcomes WHERE project_id = ? AND opportunity_id = 'instantly-lead:p-paused'`, [projectId]);
+    expect(paused!.basis).toContain('[silent at the bound]');
+    expect(paused!.basis).toContain('no terminal provider state');
+    const terminal = await getDb().get<{ basis: string }>(`SELECT basis FROM cash_outcomes WHERE project_id = ? AND opportunity_id = 'instantly-lead:p-s'`, [projectId]);
+    expect(terminal!.basis).not.toContain('[silent at the bound]');
+
+    const [m] = await mechanismsFromRows(projectId, { permission: { basis: 'MEASURED', value: 1 } });
+    expect(m).toBeDefined();
+    // The never-sent lead is no prospect: 4 reached, 1 bounced, 1 of the 3 delivered answered.
+    expect(m!.inputs.uniqueProspects).toEqual({ basis: 'MEASURED', value: 4 });
+    expect(m!.inputs.deliverability).toEqual({ basis: 'MEASURED', value: 3 / 4 });
+    expect(m!.inputs.response).toEqual({ basis: 'MEASURED', value: 1 / 3 });
+  });
+
+  it('a lead still running and contacted recently keeps holding its settled cohort', async () => {
+    const leads: Lead[] = [
+      { id: 'l-r', email: 'lr@x.test', status: 3, email_reply_count: 1, timestamp_created: OCT1, timestamp_last_contact: OCT5 },
+      { id: 'l-run', email: 'lrun@x.test', status: 1, timestamp_created: OCT1, timestamp_last_contact: NOV12 },
+    ];
+    const report = await recordCampaignOutcomes(projectId, { deps: workspace({ [NEIGHBOR]: leads }).deps, ownerProjectId: projectId, force: true, now: WRITTEN });
+    expect(report).toMatchObject({ recorded: 0, pending: 1, held: 1, silentAtBound: 0 });
+  });
+
+  it('a silence at the bound is refined when the lead answers later; a provider-terminal silence stays final', async () => {
+    await recordCampaignOutcomes(projectId, { deps: workspace({ [NEIGHBOR]: pausedCohort() }).deps, ownerProjectId: projectId, force: true, now: WRITTEN });
+    const answeredLater = pausedCohort().map((one) =>
+      one.id === 'p-paused' ? { ...one, email_reply_count: 1 } : one.id === 'p-s' ? { ...one, email_reply_count: 1 } : one,
+    );
+    const later = await recordCampaignOutcomes(projectId, { deps: workspace({ [NEIGHBOR]: answeredLater }).deps, ownerProjectId: projectId, force: true, now: new Date(WRITTEN.getTime() + day(1)) });
+    expect(later.recorded).toBe(1);
+    expect(await results(projectId)).toMatchObject({ 'p-paused': 'BUYER_REPLIED', 'p-s': 'BUYER_SILENT' });
+  });
+
+  it('settles a lead with no enrolment time on its last contact, and never one with neither', () => {
+    const now = WRITTEN.getTime();
+    const base: CampaignLead = { id: 'x', email: null, status: 2, replies: 0, interestStatus: null, enrolledAt: null };
+    expect(boundStateOf({ ...base, lastContactAt: OCT5 }, now)).toBe('SILENT_AT_BOUND');
+    expect(boundStateOf({ ...base, lastContactAt: null }, now)).toBeNull();
+    expect(boundStateOf({ ...base, enrolledAt: OCT1, lastContactAt: new Date(now - day(SILENCE_AFTER_CONTACT_DAYS) + 1).toISOString() }, now)).toBeNull();
+    expect(boundStateOf({ ...base, enrolledAt: OCT1 }, now)).toBe('NOT_REACHED');
   });
 });
