@@ -48,7 +48,7 @@
  */
 import type { DetectedSignal } from '../feeds/detectors.ts';
 import { CODE_SIGNAL_SOURCE } from '../feeds/detectors.ts';
-import { extractItem, recordKindOf, type ExtractableItem, type ExtractedFact } from '../feeds/extract.ts';
+import { PARTNER_OFFER_WORDING, extractItem, recordKindOf, type ExtractableItem, type ExtractedFact } from '../feeds/extract.ts';
 import { getDb } from '../../db/database.ts';
 
 /** The version every hypothesis is stamped with, so a rule change is traceable to what it produced. */
@@ -507,9 +507,12 @@ const CAPACITY_WORDING = /\b(capacity|availability|available (?:now|for|from)|no
 const KIND_WORDS =
   /\b(request for (?:proposals?|quotes?|bids?)|rfp|rfq|invitation to bid|seeking (?:quotes|bids|a contractor|a vendor|a supplier)|looking for (?:a )?(?:contractor|vendor|supplier|provider)|need(?:s|ed)? (?:a )?(?:contractor|vendor|supplier)|we offer|our services|available for hire|for sale|now booking|free estimates?|call us|list(?:ed)? (?:price|at)|price list|marketplace price|asking price)\b/gi;
 
+/** A partner declaration ("subcontract work welcome", "trade accounts") is likewise record-kind wording, not the subject. */
+const PARTNER_KIND_WORDS = new RegExp(PARTNER_OFFER_WORDING.source, 'gi');
+
 /** A record's subject: its deliverable key with the record-kind words taken out, or the key itself if nothing is left. */
 export function itemSubject(deliverable: string): string {
-  const stripped = deliverable.replace(KIND_WORDS, ' ').replace(/[^a-z0-9]+/gi, ' ').trim().toLowerCase();
+  const stripped = deliverable.replace(KIND_WORDS, ' ').replace(PARTNER_KIND_WORDS, ' ').replace(/[^a-z0-9]+/gi, ' ').trim().toLowerCase();
   return stripped || deliverable;
 }
 
@@ -536,8 +539,12 @@ function single(facts: readonly ExtractedFact[], field: ExtractedFact['field']):
  * Place, quantity and price come from the extractor's normalized facts, and
  * only when the record states exactly one — two places or two prices are an
  * ambiguity for the model lane, not a value to pick. The actor's role is what
- * the record says (BUYER only for a stated request, SUPPLIER for a seller);
- * PARTNER is never inferred from wording. Every fact's raw evidence is the
+ * the record says (BUYER only for a stated request, SUPPLIER for a seller,
+ * PARTNER for a seller whose own record declares it serves through or for
+ * others — subcontract or overflow work, white-label, wholesale or trade
+ * accounts, a referral, reseller or partner programme: `PARTNER_OFFER_WORDING`).
+ * PARTNER is the record's own declaration, never guessed from a plain advert
+ * or from where the seller is. Every fact's raw evidence is the
  * stored item itself. Pure.
  */
 export function factsFromItem(item: ExtractableItem): GraphFact[] {
@@ -603,7 +610,7 @@ export function factsFromItem(item: ExtractableItem): GraphFact[] {
           id: `item:${item.id}`,
           kind: CAPACITY_WORDING.test(text) ? 'CAPACITY' : 'OFFER',
           basis: 'SUPPLIER_AD',
-          actor: { key: actorKey, name: actorName, role: 'SUPPLIER' },
+          actor: { key: actorKey, name: actorName, role: PARTNER_OFFER_WORDING.test(text) ? 'PARTNER' : 'SUPPLIER' },
           priceCents: price ? Number(price.value) : null,
           currency: price?.currency ?? null,
         },

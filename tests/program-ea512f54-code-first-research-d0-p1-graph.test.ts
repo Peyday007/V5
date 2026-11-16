@@ -292,6 +292,89 @@ describe('stored feed records reach the rules in production (repair F1)', () => 
     expect(f!.region).toBeNull();
   });
 
+  it('a provider whose own record declares a partner arrangement is a PARTNER; a plain advert stays a SUPPLIER and a buyer seeking a subcontractor stays a BUYER (repair R3-F4)', () => {
+    const partner = factsFromItem(
+      item({ id: 'pa1', title: 'Fence repair: subcontract work welcome', body: 'We partner with contractors serving York, PA. Crews available now.', organization: 'York Fencing LLC' }),
+    );
+    expect(partner.map((f) => [f.kind, f.basis, f.actor.role])).toEqual([['CAPACITY', 'SUPPLIER_AD', 'PARTNER']]);
+    expect(partner[0]!.subject).toBe('fence repair');
+    expect(partner[0]!.region).toBe('york, pa');
+    expect(partner[0]!.evidence[0]!.rawId).toBe('pa1');
+
+    for (const [id, title, body] of [
+      ['pa2', 'Hay bales wholesale accounts', 'Trade pricing for feed stores in Lancaster, PA.'],
+      ['pa3', 'Bookkeeping white-label', 'White-label bookkeeping for agencies, remote.'],
+      ['pa4', 'Snow plowing referral program', 'Referral partners welcome in Erie, PA.'],
+    ] as const) {
+      expect(factsFromItem(item({ id, title, body, organization: `Org ${id}` }))[0]?.actor.role).toBe('PARTNER');
+    }
+
+    // A plain advert is not a partner declaration, and a buyer asking for one is still the buyer.
+    expect(factsFromItem(item({ id: 'pa5', title: 'Fence repair now booking', body: 'We offer fence repair in York, PA.', organization: 'Solo Fence' }))[0]!.actor.role).toBe('SUPPLIER');
+    expect(
+      factsFromItem(item({ id: 'pa6', title: 'Request for quotes: fence repair', body: 'Seeking a contractor; subcontract work welcome. In York, PA.', organization: 'Farm Co' }))[0]!.actor.role,
+    ).toBe('BUYER');
+  });
+
+  it('PARTNER_SERVABLE_CONCENTRATION fires from stored feed_items alone, and construction pays it through its graph roles (repair R3-F4)', async () => {
+    await freshProject();
+    resetEventGraph();
+    const now = new Date();
+    const hoursAgo = (n: number) => new Date(now.getTime() - n * 3_600_000).toISOString();
+    const due = new Date(now.getTime() + 20 * 86_400_000).toISOString().slice(0, 10);
+    await insertFeedItems('rfq-board', [
+      ...['Maple Farm', 'Oak Ridge HOA', 'Pine Dairy LLC'].map((org, n) => ({
+        externalId: `r3f4-rfq-${n}`,
+        url: `https://board.test/r3f4-rfq-${n}`,
+        title: 'Request for quotes: fence repair',
+        body: `Seeking quotes from a supplier in Lancaster, PA by ${due}.`,
+        organization: org,
+        publishedAt: hoursAgo(6 - n),
+      })),
+      {
+        externalId: 'r3f4-partner',
+        url: 'https://board.test/r3f4-partner',
+        title: 'Fence repair: subcontract work welcome',
+        body: 'We partner with contractors serving York, PA. Crews available now.',
+        organization: 'York Fencing LLC',
+        publishedAt: hoursAgo(2),
+      },
+    ]);
+
+    const sync = await syncEventGraph(now);
+    expect(sync.itemsRead).toBe(4);
+    const graph = currentEventGraph();
+    // The PARTNER edge was produced by the extractor from the stored row, not built by hand.
+    const edge = graph.edges().find((e) => e.role === 'PARTNER');
+    expect(edge).toBeDefined();
+    expect(edge!.neighborhood).toBe('fence repair');
+    expect(edge!.evidence.map((e) => e.url)).toEqual(['https://board.test/r3f4-partner']);
+
+    const concentrated = only(graph.hypotheses(), 'PARTNER_SERVABLE_CONCENTRATION');
+    expect(concentrated).toHaveLength(1);
+    const h = concentrated[0]!;
+    expect(h.status).toBe('HYPOTHESIS');
+    expect(h.figures).toEqual({ buyers: 3 });
+    expect(h.evidence.map((e) => e.url).sort()).toEqual([
+      'https://board.test/r3f4-partner',
+      'https://board.test/r3f4-rfq-0',
+      'https://board.test/r3f4-rfq-1',
+      'https://board.test/r3f4-rfq-2',
+    ]);
+    expect(h.missingConditions.join(' ')).toMatch(/no agreement with York Fencing LLC/);
+    expect(h.missingConditions.join(' ')).toMatch(/recorded in york, pa, not in lancaster pa/);
+    expect(h.missingConditions.join(' ')).toMatch(/advertisement is not capacity reserved/);
+
+    const built = constructFromGraph(graph.hypotheses(), { capitalCeilingCents: null, delivers: [] });
+    const structures = new Set(
+      [...built.kept, ...built.pruned].filter((one) => one.hypothesisKey === h.key).map((one) => one.structure),
+    );
+    expect([...structures].sort()).toEqual(['BROKER', 'REFERRAL', 'SUBCONTRACT']);
+    expect(built.kept.some((one) => one.hypothesisKey === h.key)).toBe(true);
+    expect(built.kept.every((one) => one.status === 'HYPOTHESIS')).toBe(true);
+    resetEventGraph();
+  });
+
   it('syncEventGraph reads stored feed_items past its cursor, emits hypotheses from them, and construction keeps candidates', async () => {
     await freshProject();
     resetEventGraph();
