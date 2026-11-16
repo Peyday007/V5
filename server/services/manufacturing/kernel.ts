@@ -162,10 +162,12 @@ export async function runManufacturingKernel(projectId: string): Promise<KernelP
    */
   const directive = await directiveFor(snapshot.program.blueprintPath);
 
-  const ventures = await reconsiderVentures(projectId, readLadder(snapshot), snapshot.capabilities, snapshot.candidates);
+  const readings = readLadder(snapshot);
+  const ventures = await reconsiderVentures(projectId, readings, snapshot.capabilities, snapshot.candidates);
 
   const competitive = await competitiveSystemsFor(snapshot);
-  const institutions = institutionsForLadder(snapshot);
+  // The same readings the venture path is costed from, so both read one scenario and one set of figures.
+  const institutions = institutionsForLadder(snapshot, readings);
 
   const gate = await programmeMayAsk(projectId);
   if (!gate.allowed) {

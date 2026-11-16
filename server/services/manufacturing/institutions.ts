@@ -149,8 +149,12 @@ export interface VentureFacts {
   held: string[];
   /** Approvals a person has recorded, by element key. */
   approvals: string[];
-  /** The venture's own economics before institutions, when known. */
-  economics: { capitalMinor: number; monthlyRunningMinor: number; monthlyRevenueMinor: number; currency: string } | null;
+  /**
+   * The venture's own economics before institutions, when known. Running cost
+   * and revenue are null when no row states them: the capital is still
+   * adjusted, and desirability stays UNKNOWN (invariant 39).
+   */
+  economics: { capitalMinor: number; monthlyRunningMinor: number | null; monthlyRevenueMinor: number | null; currency: string } | null;
   /** The date renewals are computed from (ISO-8601). */
   asOf: string;
 }
@@ -223,7 +227,7 @@ export interface EconomicsReading {
   annualTotals: MoneyRange[] | null;
   unpriced: string[];
   /** The venture's economics with institutions added; null when withheld or the currency differs. */
-  adjusted: { capitalLowMinor: number; capitalHighMinor: number; monthlyRunningLowMinor: number; monthlyRunningHighMinor: number; currency: string } | null;
+  adjusted: { capitalLowMinor: number; capitalHighMinor: number; monthlyRunningLowMinor: number | null; monthlyRunningHighMinor: number | null; currency: string } | null;
   because: string;
 }
 
@@ -459,6 +463,20 @@ function finish(drafts: Draft[], facts: VentureFacts): InstitutionalElement[] {
       held: facts.held.includes(key),
     });
   }
+  /*
+   * A permitting authority is paid through the permit's own fee. When every
+   * element an authority acts on is a permit priced by a sourced figure, the
+   * authority adds nothing further, and that is a sourced answer (the permit's
+   * claims) rather than a blank read as zero. Any other professional — a
+   * lawyer, a formation agent, a bank's onboarding — stays unpriced until a
+   * row prices it.
+   */
+  for (const element of seen.values()) {
+    if (element.kind !== 'EXTERNAL_PROVIDER' || element.cost !== null) continue;
+    const acted = element.triggeredBy.map((key) => seen.get(key));
+    if (acted.length === 0 || acted.some((one) => !one || one.kind !== 'PERMIT' || one.cost === null || one.approval?.professionalRole !== element.subject)) continue;
+    element.cost = { oneTime: null, annual: null, claimIds: [...new Set(acted.flatMap((one) => one!.cost!.claimIds))] };
+  }
   return [...seen.values()];
 }
 
@@ -494,11 +512,20 @@ export function readEconomics(elements: InstitutionalElement[], economics: Ventu
   const adjusted = {
     capitalLowMinor: economics.capitalMinor + setup.lowMinor,
     capitalHighMinor: economics.capitalMinor + setup.highMinor,
-    monthlyRunningLowMinor: economics.monthlyRunningMinor + Math.round(annual.lowMinor / 12),
-    monthlyRunningHighMinor: economics.monthlyRunningMinor + Math.round(annual.highMinor / 12),
+    monthlyRunningLowMinor: economics.monthlyRunningMinor === null ? null : economics.monthlyRunningMinor + Math.round(annual.lowMinor / 12),
+    monthlyRunningHighMinor: economics.monthlyRunningMinor === null ? null : economics.monthlyRunningMinor + Math.round(annual.highMinor / 12),
     currency: economics.currency,
   };
-  return { setupTotals, annualTotals, unpriced, adjusted, because: 'Institutional setup added to capital and recurring cost added to monthly running cost.' };
+  return {
+    setupTotals,
+    annualTotals,
+    unpriced,
+    adjusted,
+    because:
+      economics.monthlyRunningMinor === null
+        ? 'Institutional setup added to capital; the venture\'s running cost is not recorded, so recurring cost was not added to it.'
+        : 'Institutional setup added to capital and recurring cost added to monthly running cost.',
+  };
 }
 
 function readStructure(kind: StructureKind, drafts: Draft[], facts: VentureFacts, openQuestions: string[], infeasible: string[]): StructureReading {
@@ -537,9 +564,11 @@ function readStructure(kind: StructureKind, drafts: Draft[], facts: VentureFacts
 
   let desirability: ConditionAnswer = 'UNKNOWN';
   const adjusted = economics.adjusted;
-  if (adjusted && facts.economics) {
+  if (adjusted && facts.economics && facts.economics.monthlyRevenueMinor !== null && adjusted.monthlyRunningHighMinor !== null) {
     desirability = facts.economics.monthlyRevenueMinor > adjusted.monthlyRunningHighMinor ? 'MET' : 'NOT_MET';
     because.push(desirability === 'MET' ? 'Revenue covers running cost after institutional costs.' : 'Revenue does not cover running cost once institutional costs are added.');
+  } else if (adjusted) {
+    because.push(`Desirability unknown: the venture's revenue or running cost is not recorded (${economics.because})`);
   } else {
     because.push(`Desirability unknown: ${economics.because}`);
   }

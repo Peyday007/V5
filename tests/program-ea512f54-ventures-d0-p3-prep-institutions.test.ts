@@ -12,7 +12,7 @@ import { freshProject } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { createRun } from '../server/repos/runs.ts';
 import { createFragments, createOrchestration, currentFragments, decideClaim, insertClaims, updateFragment } from '../server/repos/research.ts';
-import { getProgram, recordCategoryEvidence } from '../server/repos/manufacturing.ts';
+import { getProgram, recordCategoryCapital, recordCategoryEvidence } from '../server/repos/manufacturing.ts';
 import { startProgramme } from '../server/services/manufacturing/program.ts';
 import { seedCategory } from '../server/services/manufacturing/declare.ts';
 import { runManufacturingKernel } from '../server/services/manufacturing/kernel.ts';
@@ -348,6 +348,49 @@ describe('INST-30 — the derivation runs on production records', () => {
     expect(direct.economics.setupTotals).toBeNull();
     // A read: no event, action or entity was written by deriving it.
     expect(await rows()).toBe(before);
+  });
+
+  it('filed barrier, capital and jurisdiction rows cost the prerequisites and adjust the venture path\'s capital', async () => {
+    const fixture = await freshProject();
+    const projectId = fixture.project.id;
+    const layer = await fixture.layerByName('Discovery Logic');
+    const user = await createUser({ email: `inst-${Math.random().toString(36).slice(2, 10)}@example.test`, displayName: 'Owner', password: 'correct horse battery staple', isBrainAdmin: true });
+    expect((await startProgramme({ projectId, ownerUserId: user.id, actorUserId: user.id, objective: 'Build machines only where demand and capability allow.' })).ok).toBe(true);
+    const program = (await getProgram(projectId))!;
+    const seeded = await seedCategory({ projectId, name: 'Industrial boilers', actorRef: user.id, reason: 'test' });
+    if ('error' in seeded) throw new Error(seeded.error);
+    const category = seeded.category;
+    const barrierClaim = await acceptedClaim(projectId, layer, 'Boilers sold in Ohio need a state pressure-vessel certification');
+    await recordCategoryEvidence({ programId: program.id, categoryId: category.id, kind: 'ENTRY_BARRIER', subject: 'pressure-vessel certification', statement: 'Boilers sold in Ohio need a state pressure-vessel certification', sourceClaimId: barrierClaim });
+    const feeClaim = await acceptedClaim(projectId, layer, 'The certification fee schedule is $1,200 to $2,000');
+    await recordCategoryCapital({ programId: program.id, categoryId: category.id, requirement: 'CERTIFICATION_AND_APPROVAL', scenario: 'SMALLEST_CREDIBLE_ENTRY', amountLowMinor: 120_000, amountHighMinor: 200_000, currency: 'USD', basis: 'REGULATORY_FEE_SCHEDULE', asOf: '2026-09-01', statement: 'Certification fees are $1,200 to $2,000', sourceClaimId: feeClaim });
+    const toolClaim = await acceptedClaim(projectId, layer, 'A welding cell costs $40,000 to $60,000');
+    await recordCategoryCapital({ programId: program.id, categoryId: category.id, requirement: 'TOOLING_AND_EQUIPMENT', scenario: 'SMALLEST_CREDIBLE_ENTRY', amountLowMinor: 4_000_000, amountHighMinor: 6_000_000, currency: 'USD', basis: 'PUBLISHED_PRICE_OR_SCHEDULE', asOf: '2026-09-01', statement: 'A welding cell costs $40,000 to $60,000', sourceClaimId: toolClaim });
+
+    const pass = await runManufacturingKernel(projectId);
+    const reading = pass.institutions.find((one) => one.categoryId === category.id)!;
+    // The jurisdiction is the one the filed statement names, so it is no longer an open question.
+    expect(reading.derivation.openQuestions).not.toContain('no jurisdiction is stated in the record');
+    const direct = reading.derivation.structures.find((one) => one.kind === 'DIRECT')!;
+    const permit = direct.elements.find((one) => one.kind === 'PERMIT')!;
+    expect(permit.subject).toBe('pressure-vessel certification');
+    expect(permit.approval?.professionalRole).toBe('the permitting authority in ohio');
+    // The permit is priced by the filed fee, traced to the row that states it.
+    expect(permit.cost?.oneTime).toEqual({ currency: 'USD', lowMinor: 120_000, highMinor: 200_000 });
+    expect(permit.cost?.claimIds).toHaveLength(1);
+    expect(direct.economics.unpriced).toEqual([]);
+    expect(direct.economics.setupTotals).toEqual([{ currency: 'USD', lowMinor: 120_000, highMinor: 200_000 }]);
+    // The venture path's capital (the welding cell's high figure, as the path budgets it) is adjusted by the institutional setup.
+    expect(direct.economics.adjusted).toEqual({ capitalLowMinor: 6_000_000 + 120_000, capitalHighMinor: 6_000_000 + 200_000, monthlyRunningLowMinor: null, monthlyRunningHighMinor: null, currency: 'USD' });
+    const path = pass.ventures.find((one) => one.categoryId === category.id)?.venture.path;
+    expect(path?.ok).toBe(true);
+    if (path?.ok) expect(path.nodes.map((node) => node.key)).toContain('capital:TOOLING_AND_EQUIPMENT');
+    // No row states revenue, so desirability is not assumed.
+    expect(direct.desirability).toBe('UNKNOWN');
+    // An entity no row prices stays unpriced, and withholds that structure's total.
+    const single = reading.derivation.structures.find((one) => one.kind === 'SINGLE_ENTITY')!;
+    expect(single.economics.unpriced).toContain('LEGAL_ENTITY:venture entity');
+    expect(single.economics.adjusted).toBeNull();
   });
 
   it('a project with no programme derives nothing', async () => {
