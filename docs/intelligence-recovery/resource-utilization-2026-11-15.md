@@ -142,6 +142,22 @@ Prices are the RunPod recipe ceilings in `cheap/runpodRestore.ts` (measured $0.1
 
 **Best value:** the dispatch fix ($0). **Fastest justified:** the GPU move (at most $0.24/h, existing infrastructure). **Spending more accomplishes little** while idle pools sit beside waiting work. No consolidated funding request is made. The shared $100 ceiling is untouched ($0 committed by this audit) and is counted once.
 
+## Verified after release (2026-11-16 00:32Z)
+
+#949 reached production in Deploy 1109 (f76dbc7, "Deploy to Fly" succeeded 00:19:23Z). Deploys 1107 and 1108 did not release it: 1107 failed on an unrelated flaky test (fixed by #953), and 1108 was superseded.
+
+| measure | before (22:06Z–23:41Z, revisions 6fdb3ec and c72ce1c) | after (f76dbc7, connection reports 43779717565 and 43780910883) |
+|---|---|---|
+| the 24 h consumption count in the serving process | 30–34 reads per ~35 min, 1,652–1,875 s of DB time, max 89 s | **absent** from the process's statement costs (0 of the 11 costliest) |
+| DB host CPU busy (2 vCPU) | 70.2% (22:06–22:15Z), 75.2% (22:15–23:41Z) | **40.7%** (00:20–00:32Z, 733 s) |
+| app workload pool idle | 4–6 of 8 | 7 of 8; 0 waiting |
+| event loop p99 | 44–92 ms | 35 ms |
+| dispatch tick stalls | 6–11 per process lifetime | 1 in 16 min (the restart warm-up) |
+| GPU slots busy | 0 (pod stranded) | 2/2 (pod moved; see above) |
+| free lane running | 2 (22:05Z) | 7 (00:32Z) |
+
+The database host gained about 30 points of CPU headroom (0.6 of a core), in line with the ~0.86 core the query had used. Dispatch-cadence and research-throughput effects are read in the eight-hour end reading, because one 16-minute window does not establish a rate.
+
 ## End reading (due ~2026-11-16 06:15Z)
 
 Re-read the same sources over 22:15Z–06:15Z. Report, against the table above: capacity, utilization at both times, average and peak, up/down allocation, capacity transferred, productive versus idle worker-hours, contention, actual spend, throughput before and after, remaining bottlenecks, and the measured time saved by each change.
