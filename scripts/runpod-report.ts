@@ -27,7 +27,7 @@
 import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
 import { describePoolerRefusal } from '../server/db/adapters/postgres.ts';
 import { runpodConfig } from '../server/services/cheap/runpod.ts';
-import { podConfig, podIdFromUrl, readPod } from '../server/services/cheap/runpodPod.ts';
+import { podConfig, readPod } from '../server/services/cheap/runpodPod.ts';
 import { listReadings, planProgress, readGoalPlan } from '../server/services/goals/plan.ts';
 import { failureClass, goalPipelineSpeed, goalResearchProgress } from '../server/services/goals/researchYield.ts';
 import { resetFreeLaneFitness, unfitNow } from '../server/services/freeLane/worker.ts';
@@ -283,7 +283,7 @@ async function liveRunpodPrice(): Promise<{ podId: string; status: string; costP
   const apiKey = process.env['BRAIN_RUNPOD_API_KEY']?.trim();
   if (!apiKey) return null;
   const supervised = podConfig();
-  const podId = supervised?.podId || process.env['BRAIN_RUNPOD_POD_ID']?.trim() || podIdFromUrl(process.env['BRAIN_RUNPOD_URL'] ?? '');
+  const podId = supervised?.podId || process.env['BRAIN_RUNPOD_POD_ID']?.trim();
   if (!podId) return null;
   const read = await readPod({ apiKey, podId, idleStopMs: 0, vllm: { url: '', key: null } });
   // A stopped pod may report no price; its status still answers "what does it bill now".
