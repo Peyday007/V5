@@ -372,7 +372,21 @@ export async function campaignsAwaitingDelivery(limit = 200): Promise<FactoryCam
       LIMIT ?`,
     [limit],
   );
-  return rows.map(mapCampaign);
+  /*
+   * A campaign recorded as carried by another request (`recordDeliveredBy`) is
+   * read whatever its age: under the newest-first window an old retired campaign
+   * was never compared against production, so it never read LIVE and every
+   * campaign depending on it stayed unstarted (program fpg_ea512f54,
+   * 2026-11-16: money-d0-p0). Few rows; final ones are skipped by the sweep.
+   */
+  const seen = new Set(rows.map((one) => one.id));
+  const carried = await getDb().all<import('../../domain/factory.ts').FactoryCampaignRow>(
+    `SELECT c.* FROM factory_campaigns c
+      WHERE c.id IN (SELECT DISTINCT e.campaign_id FROM factory_events e WHERE e.kind = ? AND e.detail LIKE ? AND e.campaign_id IS NOT NULL)
+        AND c.state IN ('COMPLETE', 'CANCELLED')`,
+    [FACTORY_EVENT_KINDS.deliveryObserved, '%"via":%'],
+  );
+  return [...rows, ...carried.filter((one) => !seen.has(one.id))].map(mapCampaign);
 }
 
 /**

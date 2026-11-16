@@ -1027,6 +1027,17 @@ describe('a finished campaign is delivered only when the forge says so', () => {
     expect(states).toEqual(['COMPLETE', 'CANCELLED']);
   });
 
+  it('a carried campaign is swept whatever its age, beyond the newest-first window', async () => {
+    const { campaignsAwaitingDelivery } = await import('../server/services/factory/delivery.ts');
+    const old = await completeCampaign(await approved('An old greeting line on the Build page.'));
+    await getDb().run("UPDATE factory_campaigns SET state = 'CANCELLED', updated_at = '2026-01-01T00:00:00.000Z' WHERE id = ?", [old.id]);
+    const recent = await completeCampaign(await approved('A newer greeting line on the Build page.'));
+    expect((await campaignsAwaitingDelivery(1)).map((c) => c.id)).toEqual([recent.id]);
+    const merged = forgePort({ state: 'closed', merged: true, mergeCommitSha: MERGE }).port;
+    expect((await recordDeliveredBy({ remote: REMOTE, landing: 700, closes: [], campaigns: [old.id], forge: merged })).recorded).toEqual([old.id]);
+    expect((await campaignsAwaitingDelivery(1)).map((c) => c.id).sort()).toEqual([old.id, recent.id].sort());
+  });
+
   it('one compare answers every campaign the same merge delivered', async () => {
     const one = await completeCampaign(await approved('First greeting line on the Build page.'));
     await getDb().run('UPDATE factory_campaigns SET pr_ref = ? WHERE id = ?', ['#78', one.id]);
