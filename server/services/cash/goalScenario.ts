@@ -32,7 +32,7 @@ import { cardFactMap } from '../../repos/cashCardFacts.ts';
 import { agreementsFor } from '../../repos/cashJourney.ts';
 import { readMoneyFigures } from './figures.ts';
 import { readDays } from './monetization/commissionPass.ts';
-import { cashOutcomeLessons, LESSON_MIN_SAMPLE } from './journey/learning.ts';
+import { cashOutcomeLessons, INBOUND_MIN_VISITORS, LESSON_MIN_SAMPLE } from './journey/learning.ts';
 import { isTestFirstPlay } from './tier.ts';
 import { readVolume } from './volume.ts';
 import { frontierTiers } from './shared.ts';
@@ -996,8 +996,11 @@ export async function modelOpportunity(
   const inbound = inboundFact && inboundFact.kind !== 'RECOMMENDATION' ? readInboundCommitments(inboundFact.value) : null;
   // An agreement is one buyer's yes, and is counted as that money — never as a
   // rate the next buyer will match. More buyers need a measured rate of their own.
+  // Below the directional floor the inbound count is an anecdote: it never becomes a measured rate, and the
+  // close falls back to Brain's own record or stays unknown (invariant 39), never a favourable reading.
+  const inboundMeasured = inbound !== null && inbound.visitors >= INBOUND_MIN_VISITORS;
   let close: ModelInput;
-  if (inbound && inbound.visitors >= LESSON_MIN_SAMPLE) {
+  if (inbound && inboundMeasured) {
     // Paid commitments per unique visitor are this opening's own measured close: no outreach, no reply step.
     close = {
       ...measuredRateInput({ trials: inbound.visitors, low: inbound.paid, high: inbound.paid }),
@@ -1018,7 +1021,7 @@ export async function modelOpportunity(
     close = inferOr(knowledge, 'close', opportunity, now, unknown(0.02, 0.5, 'no buyer has been asked yet; swept from 2% to 50% of buyers agreeing'));
   }
   // Agreements per contact (or paid commitments per visitor) already include whether the person replied.
-  const respond: ModelInput = inbound && inbound.visitors >= LESSON_MIN_SAMPLE
+  const respond: ModelInput = inbound && inboundMeasured
     ? known(1, 'HISTORICAL', close.source, 'the measured rate is paid commitments per unique visitor, which includes showing interest')
     : lesson
     ? known(1, 'HISTORICAL', close.source, 'the measured rate is agreements per contact, which includes replying')
