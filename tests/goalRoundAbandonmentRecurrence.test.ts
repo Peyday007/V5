@@ -63,10 +63,17 @@
  * at a person, the unlaunched cap) counted as research that failed. So the
  * next round was asked the same kind of question and failed the same way.
  * `recentGoalRounds` now reads each abandoned round's class from its stop
- * event. The diagnosis leaves settlement endings out, and the instruction
- * follows the most common class: a narrower question for an overrun, readable
- * sources for unreachable pages, the evidence instruction for gate refusals,
- * and nothing added to the question for an execution fault it cannot change.
+ * event, and the instruction follows the most common class a question can
+ * change: a narrower question for an overrun, readable sources for unreachable
+ * pages, the evidence instruction for gate refusals, and nothing added to the
+ * question for an execution fault it cannot change.
+ *
+ * Settlement endings stay in the count (finding R2-F2). A cancel, a mission
+ * parked at a person and an idea that expired unlaunched are exactly the waste
+ * the objective names, so every abandoned round counts toward the cause. They
+ * never decide the instruction, because no question fixes them; the diagnosis
+ * names them and routes them (`routedTo`) to the owner that cancels or starves
+ * the work: the cancel path, the unlaunched cap and research-slot contention.
  * No bar moves. The evidence gate, the round outcome rule and the cap are
  * untouched.
  */
@@ -82,6 +89,7 @@ import {
   diagnoseGoalResearch,
   diagnosisInstructions,
   recentGoalRounds,
+  SETTLEMENT_ROUTES,
   type GoalRoundOutcome,
 } from '../server/services/goals/researchYield.ts';
 import type { MissionState, RussellMission } from '../server/domain/types.ts';
@@ -359,7 +367,7 @@ describe(`${FAILURE_CLASS} — which upstream cause ends the rounds (finding F3)
     expect((await stopEvents()).size).toBe(stops);
   });
 
-  it('the recorded rounds, read back by the goal, count only the research that failed and name why (fails before repair F1)', async () => {
+  it('the recorded rounds, read back by the goal, are all counted and each named by why it stopped (fails before repair F1)', async () => {
     // The production journey end to end: missions end → the settlement pass closes the rounds and writes their
     // stop events → the goal reads its rounds back → the diagnosis its next round is given. Before F1 the goal
     // read all five as "research not finishing" with the blanket evidence instruction, two cancels included.
@@ -389,11 +397,12 @@ describe(`${FAILURE_CLASS} — which upstream cause ends the rounds (finding F3)
 
     const diagnosis = diagnoseGoalResearch({ considered: [], excludedReasons: [], remaining: 10000, rounds: read });
     const finishing = diagnosis.find((one) => one.cause === 'RESEARCH_NOT_FINISHING');
-    expect(finishing, 'three real research failures still name the cause').toBeDefined();
-    // The two cancels were Brain's own settlement, not research that failed to finish.
-    expect(finishing!.evidence).toMatch(/^3 of the goal's last 5 settled rounds/);
-    for (const named of ['TRAIL_TIMEOUT 1', 'MAST_TASK_VERIFICATION 1', 'UNATTRIBUTED 1']) expect(finishing!.evidence).toContain(named);
-    expect(finishing!.evidence).not.toContain('ROUND_SETTLEMENT');
+    expect(finishing, 'the recorded rounds name the cause').toBeDefined();
+    // All five are waste the goal paid for: the two cancels count beside the three failed searches.
+    expect(finishing!.evidence).toMatch(/^5 of the goal's last 5 settled rounds/);
+    for (const named of ['TRAIL_TIMEOUT 1', 'MAST_TASK_VERIFICATION 1', 'UNATTRIBUTED 1', 'ROUND_SETTLEMENT 2']) expect(finishing!.evidence).toContain(named);
+    // The cancels are routed to the path that cancelled them; no question can fix them.
+    expect(finishing!.routedTo).toEqual([SETTLEMENT_ROUTES.ROUND_SETTLEMENT]);
   });
 
   it("Brain's bulk release path never cancels the research of the round that discovered the opening", async () => {
@@ -509,14 +518,28 @@ describe(`${FAILURE_CLASS} — the next round is told why the rounds actually st
     expect(diagnoseGoalResearch({ ...plan, rounds: rounds('SOURCE_UNREACHABLE') })[0]?.instruction).toMatch(/could not be opened/);
   });
 
-  it('rounds Brain\'s own settlement ended are not research that failed to finish', () => {
+  it('rounds Brain\'s own settlement ended are counted as waste, named, and routed to what cancelled or starved them', () => {
     for (const failureClass of ['ROUND_SETTLEMENT', 'ROUND_CAP_LOGIC']) {
-      const diagnosis = diagnoseGoalResearch({ ...plan, rounds: rounds(failureClass) });
-      expect(diagnosis.map((one) => one.cause), failureClass).not.toContain('RESEARCH_NOT_FINISHING');
+      const [diagnosis] = diagnoseGoalResearch({ ...plan, rounds: rounds(failureClass) });
+      expect(diagnosis?.cause, failureClass).toBe('RESEARCH_NOT_FINISHING');
+      expect(diagnosis?.evidence, failureClass).toMatch(/^5 of the goal's last 5 settled rounds/);
+      expect(diagnosis?.evidence, failureClass).toContain(`${failureClass} 5`);
+      expect(diagnosis?.routedTo, failureClass).toEqual([SETTLEMENT_ROUTES[failureClass]]);
+      // No question fixes a cancel or a starved slot, so nothing is added to the question.
+      expect(diagnosis?.instruction, failureClass).toBe('');
     }
-    // Settlement beside real failures: only the failures count, and they need BARREN_ROUNDS_FOR_CAUSE of their own.
-    const mixed = [...rounds('ROUND_SETTLEMENT', 4), ...rounds('TRAIL_TIMEOUT', BARREN_ROUNDS_FOR_CAUSE - 1)];
-    expect(diagnoseGoalResearch({ ...plan, rounds: mixed }).map((one) => one.cause)).not.toContain('RESEARCH_NOT_FINISHING');
+    expect(SETTLEMENT_ROUTES.ROUND_SETTLEMENT).toMatch(/cancel/);
+    expect(SETTLEMENT_ROUTES.ROUND_CAP_LOGIC).toMatch(/unlaunched cap/);
+    expect(SETTLEMENT_ROUTES.ROUND_CAP_LOGIC).toMatch(/slot/);
+    // Mostly settlement beside a few real failures: the whole count names the cause, the failures decide the
+    // instruction, and the settlement share is routed — a goal whose rounds mostly end cancelled or unlaunched
+    // is never read as fewer abandoned rounds than it paid for.
+    const mixed = [...rounds('ROUND_SETTLEMENT', 4), ...rounds('ROUND_CAP_LOGIC', 2), ...rounds('TRAIL_TIMEOUT', BARREN_ROUNDS_FOR_CAUSE - 1)];
+    const [read] = diagnoseGoalResearch({ ...plan, rounds: mixed });
+    expect(read?.cause).toBe('RESEARCH_NOT_FINISHING');
+    expect(read?.evidence).toMatch(new RegExp(`^${mixed.length} of the goal's last ${mixed.length} settled rounds`));
+    expect(read?.instruction).toMatch(/ran out of time/);
+    expect(read?.routedTo).toEqual([SETTLEMENT_ROUTES.ROUND_CAP_LOGIC, SETTLEMENT_ROUTES.ROUND_SETTLEMENT]);
   });
 
   it('an execution fault names the cause but puts nothing into the question, since asking differently cannot fix it', () => {

@@ -47,6 +47,12 @@ export interface ResearchDiagnosis {
   evidence: string;
   /** What the next round is asked to do differently. */
   instruction: string;
+  /**
+   * Owners outside the question that must change for the cause to clear:
+   * present when rounds ended by Brain's own settlement (a cancel, a park, the
+   * unlaunched cap), which no instruction to the next round can fix.
+   */
+  routedTo?: string[];
 }
 
 export interface GoalRoundOutcome {
@@ -61,12 +67,21 @@ export interface GoalRoundOutcome {
 }
 
 /**
- * Abandoned-round classes that are Brain's own settlement rather than research
- * that failed to finish: an idea the archive answered, a mission a person must
- * act on or a cancel, and an idea that never launched. A different question
- * changes none of them, so they never name the research as the cause.
+ * Abandoned-round classes that Brain's own settlement produced rather than a
+ * worker that failed to finish: a mission cancelled or parked at a person, an
+ * idea the archive answered, and an idea that never launched. They are the
+ * waste the goal paid for as much as any failed search, so they are counted
+ * among the abandoned rounds and named — but a different question changes none
+ * of them, so they never decide the instruction. Each is routed instead to the
+ * owner that ends or starves the work (`SETTLEMENT_ROUTES`).
  */
 export const SETTLEMENT_CLASSES: ReadonlySet<string> = new Set(['ROUND_SETTLEMENT', 'ROUND_CAP_LOGIC']);
+
+/** Where a settlement ending is fixed: the path that cancels or parks the work, or the one that starves it. */
+export const SETTLEMENT_ROUTES: Readonly<Record<string, string>> = {
+  ROUND_SETTLEMENT: 'the cancel path and missions parked at a person (releaseOpportunityResearch, NEEDS_HUMAN)',
+  ROUND_CAP_LOGIC: 'the unlaunched cap and research-slot contention (expireUnlaunchedGoalRound, researchMissionSlots)',
+};
 
 /** Classes where the worker ran out of time, context or allowance before it could submit. */
 const OVERRUN_CLASSES: ReadonlySet<string> = new Set(['TRAIL_TIMEOUT', 'TRAIL_CONTEXT_HANDLING', 'TRAIL_RESOURCE_EXHAUSTION']);
@@ -138,23 +153,26 @@ export function diagnoseGoalResearch(input: {
   const out: ResearchDiagnosis[] = [];
   const settled = input.rounds.filter((one) => one.state !== 'OPEN');
   const fruitful = settled.filter((one) => one.state === 'HARVESTED' && one.found > 0).length;
-  // A round Brain's own settlement ended is not research that failed to finish.
-  const failedRounds = settled.filter((one) => one.state === 'ABANDONED' && !SETTLEMENT_CLASSES.has(one.failureClass ?? ''));
-  const abandoned = failedRounds.length;
+  // Every abandoned round is waste the goal paid for, Brain's own settlement included: all of them count.
+  const abandonedRounds = settled.filter((one) => one.state === 'ABANDONED');
+  const abandoned = abandonedRounds.length;
   const empty = settled.filter((one) => one.state === 'HARVESTED' && one.found === 0).length;
   if (fruitful === 0 && abandoned >= BARREN_ROUNDS_FOR_CAUSE && abandoned >= empty) {
-    // The instruction follows why the rounds actually stopped: the most common class wins, ties to the newest round.
     const tally = new Map<string, number>();
-    for (const one of failedRounds) tally.set(one.failureClass ?? '', (tally.get(one.failureClass ?? '') ?? 0) + 1);
-    const [dominant] = [...tally.entries()].sort((a, b) => b[1] - a[1]);
-    const dominantClass = dominant && dominant[0] !== '' ? dominant[0] : null;
+    for (const one of abandonedRounds) tally.set(one.failureClass ?? '', (tally.get(one.failureClass ?? '') ?? 0) + 1);
+    // The instruction follows the most common class a different question can change: settlement endings never decide it.
+    const [dominant] = [...tally.entries()].filter(([name]) => !SETTLEMENT_CLASSES.has(name)).sort((a, b) => b[1] - a[1]);
+    const instruction = dominant ? abandonedInstruction(dominant[0] !== '' ? dominant[0] : null) : '';
     const classes = [...tally.entries()].filter(([name]) => name !== '').map(([name, n]) => `${name} ${n}`);
+    const routedTo = [...tally.keys()].filter((name) => SETTLEMENT_CLASSES.has(name)).sort().map((name) => SETTLEMENT_ROUTES[name] ?? name);
     out.push({
       cause: 'RESEARCH_NOT_FINISHING',
       evidence:
         `${abandoned} of the goal's last ${settled.length} settled rounds ended without a report, and none filed an opening` +
-        (classes.length > 0 ? ` (stopped as ${classes.join(', ')})` : ''),
-      instruction: abandonedInstruction(dominantClass),
+        (classes.length > 0 ? ` (stopped as ${classes.join(', ')})` : '') +
+        (routedTo.length > 0 ? `; settlement endings are fixed in ${routedTo.join(' and ')}, not in the question` : ''),
+      instruction,
+      ...(routedTo.length > 0 ? { routedTo } : {}),
     });
   } else if (fruitful === 0 && empty >= BARREN_ROUNDS_FOR_CAUSE) {
     out.push({ cause: 'NO_OPENINGS_REPORTED', evidence: `${empty} of the goal's last ${settled.length} settled rounds filed a report with no opening in it`, instruction: INSTRUCTION.NO_OPENINGS_REPORTED });
