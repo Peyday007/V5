@@ -1021,6 +1021,12 @@ describe('a finished campaign is delivered only when the forge says so', () => {
     expect((await objectiveOutcome(retired)).status).toBe('LIVE');
   });
 
+  it('the finished sweep observes retired campaigns too, so a carried one can read LIVE', async () => {
+    const { deliverySweepable } = await import('../server/services/factory/remoteLoop.ts');
+    const states = deliverySweepable([{ state: 'COMPLETE' }, { state: 'CANCELLED' }, { state: 'BLOCKED' }]).map((one) => one.state);
+    expect(states).toEqual(['COMPLETE', 'CANCELLED']);
+  });
+
   it('one compare answers every campaign the same merge delivered', async () => {
     const one = await completeCampaign(await approved('First greeting line on the Build page.'));
     await getDb().run('UPDATE factory_campaigns SET pr_ref = ? WHERE id = ?', ['#78', one.id]);
