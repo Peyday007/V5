@@ -19,12 +19,15 @@
  *
  * Cost: a pod bills by the hour whether it is busy or not, so the GPU's cost per
  * research job is its hourly price × the window ÷ the jobs it submitted. The price
- * is `BRAIN_RUNPOD_USD_PER_HOUR` (what RunPod charges for the pod); unset, the cost
- * is reported as unknown rather than guessed.
+ * is RunPod's own, sampled while the pod ran; else `BRAIN_RUNPOD_USD_PER_HOUR`; else
+ * RunPod's price for the pod read live with the Brain's key. With none, the cost is
+ * reported as unknown rather than guessed. Also per accepted GPU claim, and per
+ * surviving one (accepted and not refuted).
  */
 import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
 import { describePoolerRefusal } from '../server/db/adapters/postgres.ts';
 import { runpodConfig } from '../server/services/cheap/runpod.ts';
+import { podConfig, podIdFromUrl, readPod } from '../server/services/cheap/runpodPod.ts';
 import { listReadings, planProgress, readGoalPlan } from '../server/services/goals/plan.ts';
 import { failureClass, goalPipelineSpeed, goalResearchProgress } from '../server/services/goals/researchYield.ts';
 import { resetFreeLaneFitness, unfitNow } from '../server/services/freeLane/worker.ts';
@@ -83,10 +86,12 @@ async function main(): Promise<void> {
   resetFreeLaneFitness();
   const held = await unfitNow(models, Date.now(), null);
   console.log(`HELD BACK ${held.size === 0 ? 'none' : [...held].join(', ')} (model|kind whose answers Brain rejected, 24h; among ${models.join(', ') || 'no models'})`);
-  const quality = await getDb().all<{ reason: string | null; claims: number | string; sourced: number | string | null; refuted: number | string | null }>(
+  const quality = await getDb().all<{ reason: string | null; claims: number | string; sourced: number | string | null; refuted: number | string | null; accepted: number | string | null; accepted_refuted: number | string | null }>(
     `SELECT e.reason AS reason, COUNT(c.id) AS claims,
             SUM(CASE WHEN c.sourced = 1 THEN 1 ELSE 0 END) AS sourced,
-            SUM(CASE WHEN c.contradiction_state = 'REFUTED' THEN 1 ELSE 0 END) AS refuted
+            SUM(CASE WHEN c.contradiction_state = 'REFUTED' THEN 1 ELSE 0 END) AS refuted,
+            SUM(CASE WHEN c.accepted = 1 THEN 1 ELSE 0 END) AS accepted,
+            SUM(CASE WHEN c.accepted = 1 AND c.contradiction_state = 'REFUTED' THEN 1 ELSE 0 END) AS accepted_refuted
        FROM bin_events e
        JOIN work_items w ON w.id = e.work_item_id
        JOIN research_claims c ON c.fragment_id = w.fragment_id
@@ -97,6 +102,16 @@ async function main(): Promise<void> {
   );
   console.log('RESEARCH QUALITY (claims on fragments each model submitted)');
   if (quality.length === 0) console.log('  none');
+  // Accepted and surviving (accepted, not refuted) claims per model, summed across
+  // the reasons one model's rows carry, for the GPU's cost per claim below.
+  const accepted = new Map<string, { accepted: number; surviving: number }>();
+  for (const row of quality) {
+    const model = String(row.reason ?? '').replace(/^model /, '').split(':')[0] || '(unknown)';
+    const a = accepted.get(model) ?? { accepted: 0, surviving: 0 };
+    a.accepted += Number(row.accepted ?? 0);
+    a.surviving += Number(row.accepted ?? 0) - Number(row.accepted_refuted ?? 0);
+    accepted.set(model, a);
+  }
   for (const row of quality) {
     const model = String(row.reason ?? '').replace(/^model /, '').split(':')[0] || '(unknown)';
     const claims = Number(row.claims);
@@ -131,14 +146,29 @@ async function main(): Promise<void> {
     );
     for (const row of recent) console.log(`  pod ${row.at} ${row.outcome} ${String(row.reason ?? '').slice(0, 220)}`);
   } else console.log('POD no supervision events (auto stop/start is off without BRAIN_RUNPOD_API_KEY)');
-  const price = sampledCost ?? Number(process.env['BRAIN_RUNPOD_USD_PER_HOUR'] ?? '');
+  const gpuClaims = [...accepted].filter(([m]) => m.startsWith('runpod/')).reduce((t, [, a]) => ({ accepted: t.accepted + a.accepted, surviving: t.surviving + a.surviving }), { accepted: 0, surviving: 0 });
+  /*
+   * The price: RunPod's own, sampled while the pod ran; else the configured
+   * `BRAIN_RUNPOD_USD_PER_HOUR`; else RunPod's price for the pod read live now
+   * (production 2026-11-16: no samples and no variable, so the line said
+   * "unknown" while the Brain held the key and the pod id to ask RunPod).
+   */
+  const configured = Number(process.env['BRAIN_RUNPOD_USD_PER_HOUR'] ?? '');
+  const livePrice = sampledCost === null && !(Number.isFinite(configured) && configured > 0) ? await liveRunpodPrice() : null;
+  const price = sampledCost ?? (Number.isFinite(configured) && configured > 0 ? configured : livePrice?.costPerHr ?? NaN);
+  const perClaim = (spend: number) =>
+    ` · ${gpuJobs ? `$${(spend / gpuJobs).toFixed(4)} per research job` : 'no GPU jobs yet'}` +
+    ` · ${gpuClaims.accepted ? `$${(spend / gpuClaims.accepted).toFixed(4)} per accepted claim (${gpuClaims.accepted})` : 'no accepted GPU claims'}` +
+    ` · ${gpuClaims.surviving > 0 ? `$${(spend / gpuClaims.surviving).toFixed(4)} per surviving claim (${gpuClaims.surviving}, accepted minus refuted)` : 'no surviving GPU claims'}`;
   if (sampledCost && runningMs > 0) {
     const spend = (sampledCost * runningMs) / 3_600_000;
-    console.log(`GPU COST $${spend.toFixed(2)} measured: ${Math.round(runningMs / 60_000)} min running at RunPod's $${sampledCost}/h · ${gpuJobs ? `$${(spend / gpuJobs).toFixed(4)} per research job` : 'no GPU jobs yet'}`);
+    console.log(`GPU COST $${spend.toFixed(2)} measured: ${Math.round(runningMs / 60_000)} min running at RunPod's $${sampledCost}/h${perClaim(spend)}`);
   } else if (Number.isFinite(price) && price > 0) {
     const spend = price * hours;
-    console.log(`GPU COST $${spend.toFixed(2)} for ${hours}h at $${price}/h · ${gpuJobs ? `$${(spend / gpuJobs).toFixed(4)} per research job` : 'no GPU jobs yet'}`);
-  } else console.log('GPU COST unknown (set BRAIN_RUNPOD_USD_PER_HOUR to the pod price)');
+    const source = livePrice ? `RunPod's live price for pod ${livePrice.podId} (${livePrice.status}), billed as if running the whole window` : 'BRAIN_RUNPOD_USD_PER_HOUR';
+    console.log(`GPU COST $${spend.toFixed(2)} for ${hours}h at $${price}/h from ${source}${perClaim(spend)}`);
+  } else console.log(`GPU COST unknown (${livePrice === null && !(process.env['BRAIN_RUNPOD_API_KEY'] ?? '').trim() ? 'no BRAIN_RUNPOD_API_KEY to ask RunPod, and BRAIN_RUNPOD_USD_PER_HOUR unset' : 'RunPod returned no price for the pod, and BRAIN_RUNPOD_USD_PER_HOUR unset'})`);
+  console.log(`RUNPOD_ACCEPTED_CLAIMS ${gpuClaims.accepted} surviving ${gpuClaims.surviving}`);
   console.log(`RUNPOD_SUBMITTED ${gpuJobs}`);
   await goalSection(since, hours);
   console.log('RUNPOD-REPORT: OK');
@@ -213,6 +243,17 @@ async function goalSection(since: string, hours: number): Promise<void> {
   }
   console.log(`RUNPOD_GOAL_OPENINGS ${gpuOpenings}`);
   console.log(`RUNPOD_GOAL_OPENINGS_IN_PLAN ${gpuInPlan}`);
+}
+
+/** RunPod's price for Brain's pod, asked live with the Brain's own key; null when there is no key, no pod id or no price. */
+async function liveRunpodPrice(): Promise<{ podId: string; status: string; costPerHr: number } | null> {
+  const apiKey = process.env['BRAIN_RUNPOD_API_KEY']?.trim();
+  if (!apiKey) return null;
+  const supervised = podConfig();
+  const podId = supervised?.podId || process.env['BRAIN_RUNPOD_POD_ID']?.trim() || podIdFromUrl(process.env['BRAIN_RUNPOD_URL'] ?? '');
+  if (!podId) return null;
+  const read = await readPod({ apiKey, podId, idleStopMs: 0, vllm: { url: '', key: null } });
+  return read.costPerHr !== null && read.costPerHr > 0 ? { podId, status: read.status, costPerHr: read.costPerHr } : null;
 }
 
 main()
