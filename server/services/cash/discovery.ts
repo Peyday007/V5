@@ -69,7 +69,7 @@
  */
 import { OPERATING_MODEL_SENTENCE } from '../../domain/operatingModel.ts';
 import { constructedCapFor, freeLaneOwnsResearch, routineFocus } from './researchRoom.ts';
-import { TRIGGER_BUCKETS, triggersEnabled } from './triggers.ts';
+import { TRIGGER_BUCKETS, triggerBucketsFor, triggersEnabled } from './triggers.ts';
 import { INTERMEDIATION_BUCKETS, isIntermediationBucket } from './intermediationBuckets.ts';
 import { familyCurrent, INTERMEDIATION_FAMILY, type FamilyDeclaration } from './intermediationPositions.ts';
 import { owesPositionEvidence, recordPositionEvidence } from './positionEvidence.ts';
@@ -552,6 +552,18 @@ export function claudeDiscoveryEnabled(env = process.env): boolean {
   return env['BRAIN_CLAUDE_DISCOVERY']?.trim().toLowerCase() !== 'off';
 }
 
+/**
+ * The buckets one discovery pass may open: the search buckets, then — when
+ * triggers are on — each trigger carrying the question `triggerBucketsFor`
+ * composed for this pass (ALGO-16-2). A trigger with stored signals asks about
+ * the named rows Brain already holds, composed by code; one without keeps its
+ * own question. Same ids, mechanisms and deliverables as `TRIGGER_BUCKETS`, so
+ * rounds, the scoreboard and harvesting (`bucketForRound`) read them unchanged.
+ */
+export async function discoveryBuckets(now: Date = new Date()): Promise<SearchBucket[]> {
+  return [...SEARCH_BUCKETS, ...(triggersEnabled() ? await triggerBucketsFor(now) : [])];
+}
+
 export async function openDiscovery(input: {
   projectId: string;
   limit?: number;
@@ -581,7 +593,7 @@ export async function openDiscovery(input: {
   const limit = Math.max(1, input.limit ?? 1);
   let frame: ExecutionFrame | null | undefined;
   const declaration = await familyDeclarationFor(input.projectId);
-  for (const bucket of discoveryOrder([...SEARCH_BUCKETS, ...(triggersEnabled() ? TRIGGER_BUCKETS : [])], rounds, now, declaration)) {
+  for (const bucket of discoveryOrder(await discoveryBuckets(new Date(now)), rounds, now, declaration)) {
     if (out.length >= limit) break;
     const history = byBucket.get(bucket.id) ?? [];
     const next = nextRoundFor(history, now);
