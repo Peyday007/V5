@@ -190,6 +190,16 @@ describe('the most important work fires first', () => {
     await recordBinEvent({ eventType: 'DISPATCH_UNROUTED', binId: refused, projectId, outcome: 'NO_SURFACE_SERVES_THIS_FAMILY', reason: 'test' });
     expect((await idleCounts()).executableWork).toBe(before - 1);
     await getDb().run("UPDATE bins SET state = 'CANCELLED' WHERE id = ?", [refused]);
+    // A bin pinned to a quarantined surface waits on that surface's repair, not on idle capacity.
+    const { createAccount, createRoutine } = await import('../server/repos/fleet.ts');
+    const account = await createAccount({ name: 'pinned-account' });
+    const routine = await createRoutine({ accountId: account.id, routineRef: 'trig_pinned_test', name: 'pinned', tokenSecretName: 'T' });
+    const pinned = await make('probe pinned to one surface', 5);
+    await getDb().run('UPDATE bins SET pinned_routine_id = ? WHERE id = ?', [routine.id, pinned]);
+    const withEnabled = (await idleCounts()).executableWork;
+    await getDb().run("UPDATE fleet_routines SET state = 'QUARANTINED' WHERE id = ?", [routine.id]);
+    expect((await idleCounts()).executableWork).toBe(withEnabled - 1);
+    await getDb().run("UPDATE bins SET state = 'CANCELLED' WHERE id = ?", [pinned]);
     const older = await make('older, ordinary', 5);
     await ensureDispatchIntent((await getBin(older))!);
     const urgent = await make('newer, revenue goal', 8);

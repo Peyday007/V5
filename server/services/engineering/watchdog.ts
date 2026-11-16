@@ -42,10 +42,20 @@ export async function idleCounts(now = new Date()): Promise<Omit<IdleReading, 'i
   // a named limit, not on idle capacity. Production, 2026-11-09: "3 executable,
   // 13 eligible" for hours, the 3 being Factory bins only a repository surface
   // can take and the 13 research surfaces.
+  //
+  // And a bin pinned to one surface can run only on that surface: while it (or its
+  // account) is not ENABLED the bin waits on the surface's repair, not on idle
+  // capacity. Production, 2026-11-16: two FACTORY_SURFACE_PROBE bins pinned to
+  // quarantined surfaces were refused 34 times each, and between refusals (outside
+  // the unrouted window) they read as "executable work beside a free surface — a
+  // fault", which Hermes then cited as a Factory fault and stopped commissioning.
   const unroutedSince = new Date(now.getTime() - UNROUTED_WINDOW_MS).toISOString();
   const executable = await getDb().get<{ n: number | string }>(
     `SELECT COUNT(*) AS n FROM bins WHERE ${DISPATCHABLE_SQL} AND ${FIREABLE_SQL} AND ${workReadySql('bins.')}
-        AND NOT EXISTS (SELECT 1 FROM bin_events e WHERE e.bin_id = bins.id AND e.event_type = 'DISPATCH_UNROUTED' AND e.at > ?)`,
+        AND NOT EXISTS (SELECT 1 FROM bin_events e WHERE e.bin_id = bins.id AND e.event_type = 'DISPATCH_UNROUTED' AND e.at > ?)
+        AND (bins.pinned_routine_id IS NULL OR EXISTS (
+          SELECT 1 FROM fleet_routines r JOIN fleet_accounts a ON a.id = r.account_id
+           WHERE r.id = bins.pinned_routine_id AND r.state = 'ENABLED' AND a.state = 'ENABLED'))`,
     [iso, iso, iso, iso, unroutedSince],
   );
   const active = await getDb().get<{ n: number | string }>(
