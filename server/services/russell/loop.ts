@@ -148,7 +148,10 @@ import {
   reaskRefusedPlans,
   reopenAnswered,
   resumeAnsweredRequest,
+  withdrawMootBacklog,
+  NEEDS_HUMAN_CHOICES,
 } from './needsHuman.ts';
+import { moot } from '../../domain/operator.ts';
 import type { RussellHumanRequest } from '../../domain/types.ts';
 import { parseJson } from '../../repos/util.ts';
 import { cashNow, getCashMode } from '../../repos/cashMode.ts';
@@ -694,6 +697,20 @@ async function settleUnresolvedAnswer(
     const mission = request.missionId ? await getMission(request.missionId) : null;
     report.withdrawnMootAnswers.push({ requestId: request.id, missionState: mission?.state ?? null, reason });
   }
+}
+
+/**
+ * Whether an answered card's mission has left NEEDS_HUMAN, read from its row now,
+ * by the operator's one predicate (`moot`, domain/operator.ts). Then no answer
+ * except STOP can apply: every other answer goes through a transition guarded on
+ * NEEDS_HUMAN. A card with no mission, a mission that cannot be read, and the
+ * kinds that are not about a mission are never moot here.
+ */
+async function missionLeftNeedsYou(request: RussellHumanRequest): Promise<boolean> {
+  if (!request.missionId) return false;
+  const mission = await getMission(request.missionId);
+  if (!mission) return false;
+  return moot({ resumeKey: request.resumeKey, missionId: request.missionId, missionState: mission.state, packetStatus: null }).moot;
 }
 
 /** Marks a cycle error that is per-pass failures rather than a failed tick. */
@@ -2418,7 +2435,27 @@ async function tickOnce(owner: string): Promise<TickReport> {
       // The whole backlog, not one cycle's worth: an answer waiting for a
       // research slot keeps its place, and a window that size would hide a
       // newer answer behind it for ever.
+      // Cards this pass put back OPEN, so one whose mission a later answer moved on is not left in front of anybody.
+      const reopened: RussellHumanRequest[] = [];
+      const settleUnresolved = async (request: RussellHumanRequest, reason: string): Promise<void> => {
+        await settleUnresolvedAnswer(report, request, reason);
+        if ((await getHumanRequest(request.id))?.state === 'OPEN') reopened.push(request);
+      };
       for (const request of await listAnsweredRequests(500)) {
+        /*
+         * Filter before the resume. An answer whose mission already left
+         * NEEDS_HUMAN can never apply, so it is settled as moot through
+         * `reopenAnswered`'s guarded withdrawal (ANSWERED -> OPEN -> WITHDRAWN)
+         * and never resumed. The resume used to run first, and a RECORD_GAPS
+         * answer authorized the packet's gap policy in the person's name
+         * before the guarded transition reported that the mission had moved
+         * on. STOP is the exception and still settles first: `stop()` applies
+         * from any state.
+         */
+        if (request.answeredChoice !== NEEDS_HUMAN_CHOICES.STOP.key && (await missionLeftNeedsYou(request))) {
+          await settleUnresolved(request, MISSION_LEFT_NEEDS_YOU);
+          continue;
+        }
         const outcome = await resumeAnsweredRequest(request);
         if (outcome.deferred) {
           /*
@@ -2433,17 +2470,34 @@ async function tickOnce(owner: string): Promise<TickReport> {
            */
           const mission = request.missionId ? await getMission(request.missionId) : null;
           if (mission && mission.state !== 'NEEDS_HUMAN') {
-            await settleUnresolvedAnswer(report, request, MISSION_LEFT_NEEDS_YOU);
+            await settleUnresolved(request, MISSION_LEFT_NEEDS_YOU);
             continue;
           }
           report.unresolvedAnswers.push({ requestId: request.id, reason: outcome.reason });
           continue;
         }
         if (!outcome.settled) {
-          await settleUnresolvedAnswer(report, request, outcome.reason);
+          // Re-read after the failed resume: a mission that left NEEDS_HUMAN meanwhile is withdrawn, not re-asked.
+          await settleUnresolved(request, (await missionLeftNeedsYou(request)) ? MISSION_LEFT_NEEDS_YOU : outcome.reason);
           continue;
         }
         if (await markResumed(request.id)) report.resumed.push(request.id);
+      }
+      /*
+       * A card reopened earlier in this pass, whose mission a later answer (or
+       * anything else) has since moved out of NEEDS_HUMAN, is moot now. It is
+       * withdrawn here, through the existing sweep and the same predicate,
+       * rather than left OPEN in front of a person until some later pass.
+       */
+      const nowMoot = new Map<string, RussellHumanRequest>();
+      for (const request of reopened) if (await missionLeftNeedsYou(request)) nowMoot.set(request.id, request);
+      if (nowMoot.size > 0) {
+        for (const id of await withdrawMootBacklog(500, 'ANY')) {
+          const request = nowMoot.get(id);
+          if (!request) continue;
+          const mission = request.missionId ? await getMission(request.missionId) : null;
+          report.withdrawnMootAnswers.push({ requestId: id, missionState: mission?.state ?? null, reason: MISSION_LEFT_NEEDS_YOU });
+        }
       }
     });
 
