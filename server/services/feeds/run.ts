@@ -37,7 +37,8 @@ import { SITE_SOURCE } from './sites.ts';
 import { CODE_SIGNAL_SOURCE, coveredItems, detectionsForLeads } from './detectors.ts';
 import { extractItem, extractItems, type ExtractableItem, type ExtractedFact } from './extract.ts';
 import { addExtractedItems, currentEventGraph, syncEventGraph, type ExtractedItemsUpdate, type GraphHypothesis } from '../industry/eventGraph.ts';
-import { constructFromGraph } from '../cash/construct.ts';
+import { constructFromGraph, type MissingLinkQuestion } from '../cash/construct.ts';
+import type { Weakness } from '../../domain/improvement.ts';
 
 export type Fetcher = (url: string, headers: Record<string, string>, timeoutMs?: number) => Promise<unknown>;
 
@@ -525,6 +526,141 @@ export async function recordFeedExtraction(input: { projectId: string; now?: Dat
   return pass;
 }
 
+// ---------------------------------------------------------------------------
+// The feed loop's Act and Codify (ALGO-19-4): what Derive ranked reaches
+// research, and what code keeps failing to read becomes a rule proposal.
+// ---------------------------------------------------------------------------
+
+/** The event one feed-loop cycle is recorded under (`russell/loop.ts` writes it, the shortlist reads it). */
+export const FEED_LOOP_CYCLE_EVENT = 'FEED_LOOP_CYCLE';
+/** The event that records which derived missing-link questions a shortlist round took, and into which round. */
+export const LOOP_QUESTIONS_ASKED_EVENT = 'FEED_LOOP_QUESTIONS_ASKED';
+/** Missing-link questions one shortlist round carries beside its leads. */
+export const LOOP_QUESTIONS_PER_ROUND = 5;
+/** A question asked this recently is not asked again; after it, an unanswered gap may be asked once more. */
+export const LOOP_QUESTION_REASK_MS = 7 * 24 * 3_600_000;
+
+/**
+ * The missing-link questions the feed loop's latest cycle derived that no
+ * round has taken recently, in the cycle's own ranking. Read from the
+ * `FEED_LOOP_CYCLE` row the loop wrote and the `FEED_LOOP_QUESTIONS_ASKED`
+ * rows the shortlist wrote, so the ranking is a row's and never recomputed
+ * here. Writes nothing.
+ */
+export async function pendingLoopQuestions(projectId: string, now: Date = new Date(), limit: number = LOOP_QUESTIONS_PER_ROUND): Promise<MissingLinkQuestion[]> {
+  const db = getDb();
+  const latest = await db.get<{ detail: string | null }>(
+    `SELECT detail FROM cash_events WHERE project_id = ? AND kind = ? ORDER BY created_at DESC, id DESC LIMIT 1`,
+    [projectId, FEED_LOOP_CYCLE_EVENT],
+  );
+  let questions: MissingLinkQuestion[] = [];
+  try {
+    const derived = (JSON.parse(latest?.detail ?? '{}') as { derive?: { questions?: unknown } | null }).derive?.questions;
+    if (Array.isArray(derived)) {
+      questions = derived.filter(
+        (q): q is MissingLinkQuestion => !!q && typeof (q as MissingLinkQuestion).key === 'string' && typeof (q as MissingLinkQuestion).question === 'string',
+      );
+    }
+  } catch {
+    questions = [];
+  }
+  if (questions.length === 0) return [];
+  const since = new Date(now.getTime() - LOOP_QUESTION_REASK_MS).toISOString();
+  const asked = await db.all<{ detail: string | null }>(
+    `SELECT detail FROM cash_events WHERE project_id = ? AND kind = ? AND created_at >= ?`,
+    [projectId, LOOP_QUESTIONS_ASKED_EVENT, since],
+  );
+  const taken = new Set<string>();
+  for (const row of asked) {
+    try {
+      const keys = (JSON.parse(row.detail ?? '{}') as { keys?: unknown }).keys;
+      if (Array.isArray(keys)) for (const key of keys) if (typeof key === 'string') taken.add(key);
+    } catch {
+      // An unreadable row takes nothing.
+    }
+  }
+  return questions.filter((q) => !taken.has(q.key)).slice(0, Math.max(0, limit));
+}
+
+/** Items one source must leave unreadable in a single pass before a parser for it is proposed. */
+export const PARSER_PROPOSAL_MIN = 5;
+
+/** The weakness key a source's unreadable records are registered under. */
+export function unreadableSourceKey(source: string): string {
+  return `EXTRACTION_UNREADABLE:${source}`;
+}
+
+/**
+ * The weakness a source's unreadable records are, or null when too few. Pure.
+ *
+ * This is the loop compiling its own reasoning into a rule (ALGO-19-3 item 2):
+ * every record code could not read goes to a model one by one, so a source
+ * that keeps producing them is a format a model should read once and a
+ * versioned parser should read afterwards. The objective asks Factory for that
+ * parser; it lands as code with a test from the samples, and nothing here
+ * installs or trusts it. No source or industry is a whitelist: which formats
+ * get a parser is decided by what code failed to read.
+ */
+export function unreadableSourceWeakness(source: string, unreadable: number, items: number, samples: readonly string[]): Weakness | null {
+  if (unreadable < PARSER_PROPOSAL_MIN) return null;
+  return {
+    key: unreadableSourceKey(source),
+    kind: 'EXTRACTION_UNREADABLE',
+    title: `Deterministic extraction cannot read records from feed source ${source}`,
+    problem:
+      `The feed loop's extraction pass left ${unreadable} of ${items} stored record(s) from source ${source} unreadable by code, ` +
+      'so each one waits for a model to read it. Read the samples below once, and propose the parser or normaliser that reads this format, ' +
+      'in server/services/feeds/extract.ts, with a test built from these records. Every fact it extracts must keep its link to the exact ' +
+      'raw text, a posting or advert must stay NOT_DEMAND, and nothing it reads may be stated as established.',
+    metric: 'READY_OPPORTUNITIES_PER_DAY',
+    downstreamMetric: null,
+    ownerComponent: 'server/services/feeds/extract.ts',
+    mutationScope: ['server/services/feeds/**', 'tests/**'],
+    frequency: unreadable,
+    denominator: Math.max(items, 1),
+    scope: 'LOCAL',
+    severity: unreadable * 2 > items ? 'HIGH' : 'MEDIUM',
+    researchQuestion: `What structure do records from feed source ${source} follow, and what deterministic parser reads them?`,
+    samples: samples.slice(0, 5),
+    knownCause: null,
+  };
+}
+
+/**
+ * Codify what one extraction pass could not read: per source, register the
+ * unreadable records with the improvement loop (§87), which owns turning a
+ * weakness into a Factory objective. Idempotent per source. Returns the keys
+ * registered.
+ */
+export async function proposeParsersForUnreadable(pass: Pick<ExtractionPass, 'items' | 'needsModel'>, now: Date = new Date()): Promise<string[]> {
+  const ids = pass.needsModel.flat();
+  if (ids.length < PARSER_PROPOSAL_MIN) return [];
+  const bySource = new Map<string, string[]>();
+  for (let at = 0; at < ids.length; at += SUBJECT_PAGE) {
+    const chunk = ids.slice(at, at + SUBJECT_PAGE);
+    const rows = await getDb().all<{ id: string; source: string; url: string; title: string }>(
+      `SELECT id, source, url, title FROM feed_items WHERE id IN (${chunk.map(() => '?').join(',')}) ORDER BY id`,
+      chunk,
+    );
+    for (const row of rows) {
+      const list = bySource.get(row.source) ?? [];
+      list.push(`${row.title.slice(0, 120)} (${row.url})`);
+      bySource.set(row.source, list);
+    }
+  }
+  const registered: string[] = [];
+  const { registerDirected } = await import('../improvement/loop.ts');
+  for (const [source, samples] of [...bySource.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    const weakness = unreadableSourceWeakness(source, samples.length, pass.items, samples);
+    if (!weakness) continue;
+    const { candidate } = await registerDirected(weakness, now, {
+      evidence: { feedLoopCodify: { source, unreadable: samples.length, items: pass.items } },
+    });
+    registered.push(candidate.weaknessKey);
+  }
+  return registered;
+}
+
 /** The latest SCREEN_LEAD answers, per item, already combined. */
 async function screenedLeads(ids: readonly string[]): Promise<Set<string>> {
   const out = new Set<string>();
@@ -868,7 +1004,13 @@ export async function openFeedShortlist(input: { projectId: string; now?: Date; 
   }
 
   const { chosen } = await shortlistFunnel(input.projectId, now, pace.size);
-  if (chosen.length === 0) return null;
+  // What the feed loop derived and ranked (ALGO-19-4 act): the gaps between its constructions and an
+  // opening go to Claude in the same round as the leads, so a ranking is research, not a ledger line.
+  const questions = await pendingLoopQuestions(input.projectId, now).catch((error: unknown) => {
+    console.warn(`[feeds] feed-loop questions unreadable for ${input.projectId}: ${String((error as Error)?.message ?? error)}`);
+    return [] as MissingLinkQuestion[];
+  });
+  if (chosen.length === 0 && questions.length === 0) return null;
 
   const frame = await executionFrame(input.projectId, mode.currency);
   const statement = [
@@ -879,6 +1021,11 @@ export async function openFeedShortlist(input: { projectId: string; now?: Date; 
       'Open each page. Report as an opening only what the page itself shows, quoting it, and say ' +
       'plainly for each one that does not hold up.',
     ...chosen.map(({ line }) => `\n- lead: ${line}`),
+    questions.length
+      ? '\nCode joined these records into designs that are still hypotheses, and derived what stands between them and an opening. ' +
+        'Answer each from a source you can quote; an unanswered gap is reported as unanswered, never assumed.'
+      : '',
+    ...questions.map((q) => `\n- missing link: ${q.question}${q.evidenceUrls.length ? ` Start from: ${q.evidenceUrls.join(', ')}.` : ''}`),
   ]
     .filter(Boolean)
     .join(' ');
@@ -909,17 +1056,27 @@ export async function openFeedShortlist(input: { projectId: string; now?: Date; 
   });
   if (!round) return null;
   await markShortlisted(chosen.map(({ item }) => item.id), round.id);
+  if (questions.length) {
+    await recordCashEvent({
+      projectId: input.projectId,
+      kind: LOOP_QUESTIONS_ASKED_EVENT,
+      actorRef: 'BRAIN',
+      summary: `Feed loop: ${questions.length} derived missing-link question(s) put to research in shortlist round ${roundNo}; each stays open until a quoted source answers it.`,
+      detail: { roundId: round.id, candidateId: round.candidateId, keys: questions.map((q) => q.key), questions: questions.map((q) => ({ key: q.key, neighborhood: q.neighborhood, condition: q.condition, constructionKeys: q.constructionKeys, value: q.value })) },
+    });
+  }
   await recordCashEvent({
     projectId: input.projectId,
     kind: 'CASH_DISCOVERY_OPENED',
     actorRef: 'BRAIN',
-    summary: `Feed shortlist opened: ${chosen.length} lead(s) for Claude to verify (round ${roundNo}).`,
+    summary: `Feed shortlist opened: ${chosen.length} lead(s) for Claude to verify${questions.length ? ` and ${questions.length} missing-link question(s) to answer` : ''} (round ${roundNo}).`,
     detail: {
       bucketId: FEED_SHORTLIST_BUCKET.id,
       candidateId: round.candidateId,
       cashModeId: mode.id,
       round: roundNo,
       leads: chosen.map(({ item }) => item.id),
+      questions: questions.map((q) => q.key),
     },
   });
   return round.id;

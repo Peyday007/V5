@@ -2213,3 +2213,85 @@ export function constructFromGraph(hypotheses: readonly GraphHypothesis[], ctx: 
   }
   return { kept: [...bySignature.values()].sort(decisionOrder), pruned };
 }
+
+// ---------------------------------------------------------------------------
+// Missing-link questions (ALGO-19-4 "derive … rank possible transactions and missing-link questions")
+// ---------------------------------------------------------------------------
+
+/**
+ * One question derived from the constructions: a condition nobody has
+ * established, in one neighborhood, that stands between one or more ranked
+ * constructions and an opening. It is a research question, never an answer:
+ * the condition is unestablished until a source a person or an audit can read
+ * says otherwise.
+ */
+export interface MissingLinkQuestion {
+  /** Stable across cycles: the neighborhood and the condition, so the same gap is asked once. */
+  key: string;
+  neighborhood: string;
+  /** The unestablished condition, verbatim from the construction that carries it. */
+  condition: string;
+  /** The question as it is put to research. */
+  question: string;
+  /** The constructions that would move if it were answered, strongest first. */
+  constructionKeys: string[];
+  /** Distinct mechanisms it bears on: an answer that settles several structures is worth more. */
+  structures: Structure[];
+  /** Source records the constructions were read from, so research starts where the graph did. */
+  evidenceUrls: string[];
+  /**
+   * Expected decision value, ordinal: for each construction it bears on, one
+   * over that construction's unknowns — closing one of two gaps moves a design
+   * further than closing one of six — plus a unit when the design states a
+   * margin, so a gap in front of a priced design ranks above one in front of
+   * an unpriced one.
+   */
+  value: number;
+}
+
+/** Questions one cycle carries forward; the rest wait for the next cycle's ranking. */
+export const MISSING_LINK_QUESTIONS = 10;
+
+/**
+ * The missing-link questions a construction result implies, ranked by what an
+ * answer would move. Pure.
+ *
+ * Each kept construction names what it still lacks; the same condition in the
+ * same neighborhood is one question however many constructions carry it, so a
+ * gap shared by a broker, a referral and a subcontract design is asked once
+ * and ranks by all three. Pruned designs contribute nothing here: their hard
+ * constraint failed, and asking about their soft gaps would spend research on
+ * a design that cannot run.
+ */
+export function missingLinkQuestions(result: Pick<GraphConstructionResult, 'kept'>, limit: number = MISSING_LINK_QUESTIONS): MissingLinkQuestion[] {
+  const byKey = new Map<string, MissingLinkQuestion>();
+  // In the construction ranking, whatever order the caller holds them in: the same result asks the same questions.
+  for (const one of [...result.kept].sort(decisionOrder)) {
+    const weight = 1 / Math.max(1, one.missingConditions.length) + (one.marginCents.high !== null ? 1 : 0);
+    for (const condition of one.missingConditions) {
+      const key = digestOf(['missing-link/v1', one.neighborhood, norm(condition)].join('|'));
+      let q = byKey.get(key);
+      if (!q) {
+        q = {
+          key,
+          neighborhood: one.neighborhood,
+          condition,
+          question: `For ${one.neighborhood}, nobody has established this yet: ${condition}. Find what a source says about it, quoting the source, or report it unanswered.`,
+          constructionKeys: [],
+          structures: [],
+          evidenceUrls: [],
+          value: 0,
+        };
+        byKey.set(key, q);
+      }
+      q.constructionKeys.push(one.key);
+      if (!q.structures.includes(one.structure)) q.structures.push(one.structure);
+      for (const link of one.evidence) if (link.url && !q.evidenceUrls.includes(link.url) && q.evidenceUrls.length < 3) q.evidenceUrls.push(link.url);
+      q.value += weight;
+    }
+  }
+  return [...byKey.values()]
+    .map((q) => ({ ...q, value: Math.round(q.value * 1000) / 1000 }))
+    .sort((a, b) => b.value - a.value || b.structures.length - a.structures.length || a.key.localeCompare(b.key))
+    .slice(0, Math.max(0, limit));
+}
