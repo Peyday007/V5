@@ -180,6 +180,9 @@ export function factsChangeRef(facts: ScreenFacts): string {
   return createHash('sha256').update(JSON.stringify(facts)).digest('hex').slice(0, 16);
 }
 
+/** Every this-many-th place in `decisionOrder` is reserved for an undated opening while any remain. */
+export const UNDATED_RESERVED_EVERY = 4;
+
 /**
  * The order `decideOpenings` walks decidable openings in, before its cap:
  * Earliest Deadline First (§90, the `diveOrder` precedent in validation.ts).
@@ -192,11 +195,21 @@ export function factsChangeRef(facts: ScreenFacts): string {
  * past the cap on every tick. It never got a decision, and the lifecycle had
  * nothing to PRIORITIZE it on before its window ended.
  *
- * Openings with a recorded close still in the future come first, earliest
- * first. Undated openings, unreadable dates and closes already passed follow,
- * in the order they arrived (newest first, as `listOpportunities` returns
- * them). Stable and deterministic. No gate, verdict rule, limit or evidence
- * bar moves: only which openings take the capped slots first. Pure.
+ * Openings with a recorded close still in the future are taken earliest
+ * first. Undated openings, unreadable dates and closes already passed are
+ * taken in the order they arrived (newest first, as `listOpportunities`
+ * returns them). No gate, verdict rule, limit or evidence bar moves: only
+ * which openings take the capped slots first. Pure and stable.
+ *
+ * Pure EDF would let enough dated openings starve every undated one, new
+ * ones included: the old starvation turned the other way round (review
+ * finding F2). So the undated openings get a reserved share of the order
+ * (temporal isolation, the remedy Buttazzo gives for EDF under overload):
+ * every `UNDATED_RESERVED_EVERY`-th place goes to the next undated opening
+ * while any remain. Under any cap of k openings, at least
+ * floor(k / UNDATED_RESERVED_EVERY) undated openings are decided in arrival
+ * order, and the dated ones still get the rest, earliest close first. When
+ * one of the two queues runs out, the other fills the remaining places.
  */
 export function decisionOrder<T extends { expiresAt: string | null }>(openings: readonly T[], now: string): T[] {
   const at = Date.parse(now);
@@ -204,15 +217,21 @@ export function decisionOrder<T extends { expiresAt: string | null }>(openings: 
     const closes = closingInstant(opening.expiresAt);
     return closes !== null && closes > at ? closes : null;
   };
-  return openings
-    .map((opening, index) => ({ opening, index, closes: deadline(opening) }))
-    .sort((a, b) => {
-      if (a.closes !== null && b.closes !== null && a.closes !== b.closes) return a.closes - b.closes;
-      if (a.closes !== null && b.closes === null) return -1;
-      if (a.closes === null && b.closes !== null) return 1;
-      return a.index - b.index;
-    })
+  const ranked = openings.map((opening, index) => ({ opening, index, closes: deadline(opening) }));
+  const dated = ranked
+    .filter((one): one is { opening: T; index: number; closes: number } => one.closes !== null)
+    .sort((a, b) => a.closes - b.closes || a.index - b.index)
     .map((one) => one.opening);
+  const undated = ranked.filter((one) => one.closes === null).map((one) => one.opening);
+  const out: T[] = [];
+  let d = 0;
+  let u = 0;
+  while (d < dated.length || u < undated.length) {
+    const reserved = (out.length + 1) % UNDATED_RESERVED_EVERY === 0;
+    if (u < undated.length && (reserved || d >= dated.length)) out.push(undated[u++]!);
+    else out.push(dated[d++]!);
+  }
+  return out;
 }
 
 export interface DecideOpeningsPass {
@@ -222,6 +241,12 @@ export interface DecideOpeningsPass {
   unchanged: number;
   byVerdict: Record<DecisionVerdict, number>;
   recompute: { recomputed: number; released: number; deferred: number };
+  /**
+   * Decidable openings the cap left for a later tick, by whether they carry a
+   * future close. What the reservation in `decisionOrder` bounds, counted on
+   * every pass, so starvation on either side shows up in the record.
+   */
+  pastCap: { dated: number; undated: number };
 }
 
 /**
@@ -245,16 +270,25 @@ export async function decideOpenings(
     unchanged: 0,
     byVerdict: { REJECT: 0, HOLD: 0, PRIORITIZE: 0 },
     recompute: { recomputed: 0, released: 0, deferred: 0 },
+    pastCap: { dated: 0, undated: 0 },
   };
   const goals = await liveGoalLimits(projectId, now);
   out.goals = goals.length;
   if (goals.length > 0) {
     const limit = options.limit ?? 500;
     const openings = decisionOrder(await listOpportunities({ projectId, states: [...DECIDABLE_STATES] }), now);
-    for (const opening of openings) {
+    const at = Date.parse(now);
+    for (const [position, opening] of openings.entries()) {
+      if (out.considered >= limit) {
+        for (const left of openings.slice(position)) {
+          const closes = closingInstant(left.expiresAt);
+          if (closes !== null && closes > at) out.pastCap.dated += 1;
+          else out.pastCap.undated += 1;
+        }
+        break;
+      }
       // Each decision is synchronous work; the event loop is handed back between openings (§90, 2026-11-06 stalls).
       await new Promise<void>((resolve) => setImmediate(resolve));
-      if (out.considered >= limit) break;
       const facts = screenFactsFor(opening);
       const factsRef = factsChangeRef(facts);
       for (const goal of goals) {
