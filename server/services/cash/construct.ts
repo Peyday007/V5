@@ -103,7 +103,7 @@ export interface Primitive {
   name: string;
   /** A gated claim behind it, or null for a proved capability, an opening's own words, or a part reverse construction asks the world for. */
   claimId: string | null;
-  from: 'INDUSTRY_MAP' | 'OPENING' | 'CAPABILITY' | 'REVERSE';
+  from: 'INDUSTRY_MAP' | 'OPENING' | 'CAPABILITY' | 'REVERSE' | 'EVENT_GRAPH';
   ref: string;
   /**
    * What this part *is*, independent of any row id (K-7): a map node's kind and
@@ -482,6 +482,46 @@ function addSignalDemand(
 }
 
 /**
+ * Kept event-graph constructions as construction parts (R3-F1, ALGO-16-1 item
+ * 4): the graph's prune has already chosen which hypotheses deserve costly
+ * investigation, and this hands exactly those to the composition every other
+ * part goes through — so a graph construction reaches the goal's ranked
+ * arrangements, its portfolio and the research questions asked about them.
+ *
+ * Per kept construction, in its neighborhood's sector: each named actor on
+ * the wanting side (a stated buyer, or a record whose role is unknown) is a
+ * buyer population, the neighborhood is the need, and each named supplier or
+ * partner is a supply part. An actor its record does not name is not a part —
+ * an item id is not a buyer anyone can ask about. Every part is `EVENT_GRAPH`
+ * with no claim, so composition asks for its payer and supplier rather than
+ * reading them as established (invariant 39). The same part from two
+ * constructions is one part; bounded per sector like signal demand. Mutates
+ * the sectors it is handed; reads nothing.
+ */
+export function addGraphParts(
+  kept: readonly Pick<GraphConstruction, 'neighborhood' | 'hypothesisKey' | 'actors'>[],
+  allowed: (text: string | null | undefined) => boolean,
+  sector: (name: string | null) => { demand: Primitive[]; needs: Primitive[]; supply: Primitive[] },
+): void {
+  for (const one of kept) {
+    const hood = norm(one.neighborhood);
+    if (!hood || !safeName(one.neighborhood) || !allowed(one.neighborhood)) continue;
+    const s = sector(one.neighborhood);
+    const push = (list: Primitive[], name: string, path: string): void => {
+      if (list.length >= SIGNAL_PARTS_PER_SECTOR || list.some((p) => p.path === path)) return;
+      list.push({ name: clean(name), claimId: null, from: 'EVENT_GRAPH', ref: one.hypothesisKey, path });
+    };
+    push(s.needs, one.neighborhood, `GRAPH_NEED:${hood}`);
+    for (const actor of one.actors) {
+      const name = actor.name?.trim();
+      if (!name || !safeName(name) || !allowed(name)) continue;
+      if (actor.role === 'SUPPLIER' || actor.role === 'PARTNER') push(s.supply, name, `GRAPH_SUPPLY:${hood}>${norm(name)}`);
+      else push(s.demand, name, `GRAPH_BUYER:${hood}>${norm(name)}`);
+    }
+  }
+}
+
+/**
  * Compose every arrangement the project's own rows support — forward from its
  * parts, transferred from designs held openings show working, and in reverse
  * from the properties the goal needs — decompose each, stress it, and rank
@@ -578,7 +618,17 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
    * result stays a hypothesis; it is reported beside this pass, never read as
    * a found opening.
    */
-  graphReports.set(input.projectId, await graphPass(input, exclusions, now));
+  const graphReport = await graphPass(input, exclusions, now);
+  graphReports.set(input.projectId, graphReport);
+  /*
+   * The kept graph constructions are construction inputs, not a report beside
+   * it (R3-F1): their buyers, need and suppliers become parts in their own
+   * neighborhood's sector, so the same composition, ranking, portfolio and
+   * research questions (`askConstructedArrangements`) that every other part
+   * reaches, reach them. A part carries no gated claim, so its payer and
+   * supplier stay questions for research to answer, never facts.
+   */
+  addGraphParts(graphReport.result.kept, allowed, sector);
   // What the rows state about each lever's parts, each payer's contract limit, and the real limits leverage is judged against (S-0103).
   const { leverEvidence, contractLimits } = await leverInputs(input, opportunities, facts, allowed);
   const constraints = await leverageConstraints(input, limits);
@@ -2082,6 +2132,8 @@ export interface GraphConstruction {
   breakEvenCostCents: number | null;
   /** Other hypotheses' near-identical designs this one stands for. */
   collapsed: string[];
+  /** The actors the hypothesis joined, as its records name them: the buyer and supplier sides construction composes. */
+  actors: GraphHypothesis['actors'];
 }
 
 export interface GraphPruned {
@@ -2200,6 +2252,7 @@ export function constructFromGraph(hypotheses: readonly GraphHypothesis[], ctx: 
         evidence: h.evidence,
         ...boundsOf(h),
         collapsed: [],
+        actors: h.actors,
       };
       const held = bySignature.get(candidate.signature);
       if (!held) {
