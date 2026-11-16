@@ -94,6 +94,7 @@ import { recordCardFact } from '../server/repos/cashCardFacts.ts';
 import { createOpportunity } from '../server/repos/cashPortfolio.ts';
 import { getCashMode } from '../server/repos/cashMode.ts';
 import { activate } from '../server/services/cash/lifecycle.ts';
+import { INBOUND_MIN_VISITORS } from '../server/services/cash/journey/learning.ts';
 
 const uid = () => Math.random().toString(36).slice(2, 8);
 const ctx = { runId: 'opr_99026b0ef4c04df9b03d', actor: 'test' };
@@ -513,6 +514,24 @@ describe('OPERATOR:MISSING_CAPABILITY:aed45eeb30f0ec42 — the inbound count is 
     const modelled = await inboundOpening({ kind: 'PERSON', value: '40 email signups from 240 unique visitors' });
     expect(modelled.close.note).not.toContain('inbound page');
     expect(conversionState(modelled).state).not.toBe('HISTORICAL');
+  });
+
+  it(`below the ${INBOUND_MIN_VISITORS}-visitor floor a paid count is an anecdote, never a measured close`, async () => {
+    expect(INBOUND_MIN_VISITORS).toBe(200);
+    for (const value of ['1 deposit from 3 visitors', '4 paid orders among 90 visitors', `12 pre-orders from ${INBOUND_MIN_VISITORS - 1} unique visitors`]) {
+      const modelled = await inboundOpening({ kind: 'PERSON', value });
+      expect(modelled.close.provenance, value).not.toBe('HISTORICAL');
+      expect(modelled.close.note ?? '', value).not.toContain('inbound page');
+      expect(modelled.respond.value, value).not.toBe(1);
+      expect(conversionState(modelled).state, value).not.toBe('HISTORICAL');
+    }
+  });
+
+  it(`at exactly ${INBOUND_MIN_VISITORS} unique visitors the paid count is the measured close`, async () => {
+    const modelled = await inboundOpening({ kind: 'PERSON', value: `12 pre-orders from ${INBOUND_MIN_VISITORS} unique visitors` });
+    expect(modelled.close.provenance).toBe('HISTORICAL');
+    expect(modelled.close.note).toContain(`12 money-committed pre-orders from ${INBOUND_MIN_VISITORS} unique visitors`);
+    expect(conversionState(modelled).state).toBe('HISTORICAL');
   });
 
   it('with no inbound count on the card the close stays unmeasured', async () => {
