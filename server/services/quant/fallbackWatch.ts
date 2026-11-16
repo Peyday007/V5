@@ -42,9 +42,12 @@ import {
   authorityForSwitch,
   earlyWarning,
   readReliability,
+  safeguardEffect,
   switchDecision,
+  type GoalPortfolioReach,
   type PreventiveAction,
   type ReliabilityReading,
+  type SafeguardEffect,
   type SwitchAuthority,
   type SwitchDecision,
   type SwitchFacts,
@@ -61,6 +64,7 @@ import {
   type RecurringFailureClass,
 } from './ledger.ts';
 import { upsertCandidate } from '../../repos/improvement.ts';
+import { getDb } from '../../db/database.ts';
 
 const DAY_MS = 86_400_000;
 
@@ -74,6 +78,8 @@ export interface FallbackWatchDeps {
   /** The goals whose plans rest on each claim (`knowledge.ts cashDependencyGraph`, inverted). */
   dependents?: ReadonlyMap<string, readonly string[]>;
   toFactory?: typeof upsertCandidate;
+  /** The goals' portfolios as their latest plan readings state them; defaults to `goal_plan_readings`. */
+  goalPortfolios?: (goalIds: readonly string[]) => Promise<GoalPortfolioReach[]>;
 }
 
 export interface CorrectionSwitch {
@@ -92,7 +98,10 @@ export interface FallbackWatch {
   /** Goals whose plans were handed back by a preventive action. */
   replanned: string[];
   switches: CorrectionSwitch[];
+  /** Pathway, goal-portfolio and correlated-downside reliability, and time to recovery. */
   reliability: ReliabilityReading;
+  /** What each correction, as a safeguard, changes in the pathway's chance of success and its expected net. */
+  safeguards: SafeguardEffect[];
   recurring: RecurringFailureClass[];
   /** Recurring classes handed to Factory, by weakness key. */
   improvements: { weaknessKey: string; created: boolean }[];
@@ -285,6 +294,66 @@ export function driftSignals(reading: Pick<ModelLearningReading, 'ledger' | 'cal
   return out;
 }
 
+/**
+ * Each goal's portfolio as its latest plan reading states it (`goals/plan.ts persistReading`):
+ * the accepted-or-candidate combination's reach and its basis, else the portfolio's best reach as
+ * coverage. A goal with no reading, or one whose reading states no reach, is read as unknown.
+ */
+export async function readGoalPortfolioReach(goalIds: readonly string[]): Promise<GoalPortfolioReach[]> {
+  const ids = [...new Set(goalIds)].sort();
+  if (ids.length === 0) return [];
+  const rows = await getDb().all<{ workstream_id: string; forecast: string | null }>(
+    `SELECT r.workstream_id, r.forecast FROM goal_plan_readings r
+      WHERE r.workstream_id IN (${ids.map(() => '?').join(',')})
+        AND r.created_at = (SELECT MAX(x.created_at) FROM goal_plan_readings x WHERE x.workstream_id = r.workstream_id)`,
+    [...ids],
+  );
+  const latest = new Map(rows.map((row) => [row.workstream_id, row.forecast]));
+  return ids.map((goalId) => ({ goalId, ...portfolioReachOf(latest.get(goalId) ?? null) }));
+}
+
+/** The reach a stored plan forecast states, and its basis. Pure. */
+export function portfolioReachOf(forecast: string | null): Pick<GoalPortfolioReach, 'reach' | 'basis'> {
+  if (!forecast) return { reach: null, basis: null };
+  type Stored = { reach?: unknown; acceptance?: { candidate?: { reach?: unknown; reachBasis?: unknown } | null } } | null;
+  const parsed = ((): Stored => {
+    try {
+      return JSON.parse(forecast) as Stored;
+    } catch {
+      return null;
+    }
+  })();
+  const candidate = parsed?.acceptance?.candidate ?? null;
+  if (candidate && typeof candidate.reach === 'number' && Number.isFinite(candidate.reach)) {
+    return { reach: candidate.reach, basis: candidate.reachBasis === 'PROBABILITY' ? 'PROBABILITY' : 'COVERAGE' };
+  }
+  // The portfolio's best reach without a candidate's basis is not called a probability.
+  if (typeof parsed?.reach === 'number' && Number.isFinite(parsed.reach)) return { reach: parsed.reach, basis: 'COVERAGE' };
+  return { reach: null, basis: null };
+}
+
+/** Each correction's effect as a safeguard: the pathway without it, then with it. Pure. */
+export function correctionSafeguards(pathway: string, dependencies: readonly Dependency[]): SafeguardEffect[] {
+  const out: SafeguardEffect[] = [];
+  for (const d of dependencies) {
+    for (const safeguard of d.substitutes) {
+      const without = dependencies.map((x) => (x.key === d.key ? { ...x, substitutes: x.substitutes.filter((s) => s.key !== safeguard.key) } : x));
+      out.push(
+        safeguardEffect({
+          pathway,
+          dependencies: without,
+          dependencyKey: d.key,
+          safeguard,
+          // Neither is on record for a forecast correction; the expected net stays unknown rather than assumed.
+          valueAtStake: unknownFigure(`what ${pathway} is worth when it holds`, 'cents'),
+          cost: unknownFigure(`what correcting ${d.key} costs`, 'cents'),
+        }),
+      );
+    }
+  }
+  return out;
+}
+
 async function defaultReplan(goalId: string, why: string): Promise<void> {
   const { requestGoalPlanPass } = await import('../goals/plan.ts');
   requestGoalPlanPass(goalId, why);
@@ -326,8 +395,14 @@ export async function watchForecastPath(projectId: string, reading: ModelLearnin
   }
 
   // 4. Reliability on the outcomes on record.
+  // Every level the pathway holds up: the pathway itself, and the portfolios of the goals resting on it,
+  // read from their own plan readings — the goal-portfolio reliability and the correlated downside.
   const sampleSize = reading.ledger.filter((e) => e.outcome).length;
-  const reliability = readReliability({ pathways: [{ key: `cash-forecast:${projectId}`, dependencies }], sampleSize });
+  const pathway = `cash-forecast:${projectId}`;
+  const goalIds = [...new Set([...(deps.dependents?.values() ?? [])].flat())];
+  const goalPortfolios = await (deps.goalPortfolios ?? readGoalPortfolioReach)(goalIds).catch(() => [] as GoalPortfolioReach[]);
+  const reliability = readReliability({ pathways: [{ key: pathway, dependencies }], goalPortfolios, sampleSize });
+  const safeguards = correctionSafeguards(pathway, dependencies);
 
   // 5. A recurring failure class with a method to improve becomes a Factory improvement objective.
   const recurring = recurringFailureClasses(held);
@@ -358,5 +433,5 @@ export async function watchForecastPath(projectId: string, reading: ModelLearnin
     improvements.push({ weaknessKey, created });
   }
 
-  return { dependencies, failures, warnings, replanned: [...replanned], switches, reliability, recurring, improvements };
+  return { dependencies, failures, warnings, replanned: [...replanned], switches, reliability, safeguards, recurring, improvements };
 }

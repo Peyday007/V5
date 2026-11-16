@@ -168,3 +168,61 @@ describe('FALL-37-4 runs in production through the cash knowledge refresh', () =
     expect(stored.every((s) => s.dependency === claimId)).toBe(true);
   });
 });
+
+/**
+ * repair-F5-2: multi-level reliability on production records. The watch reads
+ * the goals resting on the forecast from their own plan readings
+ * (`goal_plan_readings`), so goal-portfolio reliability and correlated downside
+ * are stated — at their conservative common-cause bounds — rather than always
+ * null, and each correction's effect as a safeguard is read.
+ */
+describe('the watch reads reliability at the goal-portfolio level from plan readings', () => {
+  async function planReading(goalId: string, forecast: Record<string, unknown>, at: string) {
+    await getDb().run(
+      `INSERT INTO goal_plan_readings (id, workstream_id, digest, scenario_model_id, scenario_run_id, verdict, chosen_strategy, strategies, next_test, forecast, created_at)
+       VALUES (?, ?, ?, NULL, NULL, 'X', NULL, '[]', NULL, ?, ?)`,
+      [`gpr-${goalId}-${at}`, goalId, `d-${at}`, JSON.stringify(forecast), at],
+    );
+  }
+
+  it('states goal-portfolio reliability and correlated downside from the latest reading of each dependent goal', async () => {
+    const { project } = await freshProject();
+    const r = reading(claimHistory('claim-bad', 'bad', 30, (i) => i % 10 < 3, 'PARAMETER_ESTIMATE'));
+    // An earlier reading of goal-a is superseded by the latest one.
+    await planReading('goal-a', { acceptance: { candidate: { reach: 0.2, reachBasis: 'PROBABILITY' } } }, day(1));
+    await planReading('goal-a', { acceptance: { candidate: { reach: 0.95, reachBasis: 'PROBABILITY' } } }, day(2));
+    await planReading('goal-b', { acceptance: { candidate: { reach: 0.9, reachBasis: 'PROBABILITY' } } }, day(2));
+    const dependents = new Map([['claim-bad', ['goal-a', 'goal-b']]]);
+
+    const watch = await watchForecastPath(project.id, r, { authority: async () => ({ ok: null, reason: 'none' }), replan: () => {}, dependents });
+
+    expect(watch.reliability.goalPortfolios).toEqual([
+      { goalId: 'goal-a', reach: 0.95, basis: 'PROBABILITY' },
+      { goalId: 'goal-b', reach: 0.9, basis: 'PROBABILITY' },
+    ]);
+    // Common cause: both goals rest on one forecast, so neither the product nor independence is assumed.
+    expect(watch.reliability.portfolioReliability).toBeCloseTo(0.85, 10);
+    expect(watch.reliability.correlatedDownside).toBeCloseTo(0.15, 10);
+    expect(watch.reliability.portfolioBasis).toBe('PROBABILITY');
+    expect(watch.reliability.timeToRecoveryDays === null || typeof watch.reliability.timeToRecoveryDays === 'number').toBe(true);
+    // Each correction is read as a safeguard on the pathway's chance of success; its expected net is not invented.
+    expect(watch.safeguards.length).toBeGreaterThan(0);
+    expect(watch.safeguards.every((s) => s.expectedNetDelta === null)).toBe(true);
+  });
+
+  it('a coverage reach is stated but never supports an assurance, and an unread goal leaves the portfolio unknown', async () => {
+    const { project } = await freshProject();
+    const r = reading(claimHistory('claim-bad', 'bad', 30, (i) => i % 10 < 3, 'PARAMETER_ESTIMATE'));
+    await planReading('goal-c', { reach: 0.97 }, day(3));
+    const covered = await watchForecastPath(project.id, r, { authority: async () => ({ ok: null, reason: 'none' }), replan: () => {}, dependents: new Map([['claim-bad', ['goal-c']]]) });
+    expect(covered.reliability.portfolioReliability).toBeCloseTo(0.97, 10);
+    expect(covered.reliability.portfolioBasis).toBe('COVERAGE');
+    expect(covered.reliability.assurance.supported).toBe(false);
+    expect(covered.reliability.assurance.statement).toMatch(/coverage/);
+
+    const unread = await watchForecastPath(project.id, r, { authority: async () => ({ ok: null, reason: 'none' }), replan: () => {}, dependents: new Map([['claim-bad', ['goal-c', 'goal-never-read']]]) });
+    expect(unread.reliability.goalPortfolios.find((g) => g.goalId === 'goal-never-read')).toEqual({ goalId: 'goal-never-read', reach: null, basis: null });
+    expect(unread.reliability.portfolioReliability).toBeNull();
+    expect(unread.reliability.correlatedDownside).toBeNull();
+  });
+});
