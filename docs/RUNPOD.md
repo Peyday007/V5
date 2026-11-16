@@ -93,6 +93,14 @@ Nothing generates work to keep it busy — new research only comes from goals an
   No two changes within 3 minutes. `BRAIN_RUNPOD_AUTOSTOP=off` turns it off. An item every
   lane model is cooling down on after a provider failure is not counted as waiting: nothing
   would run it, so it does not keep the pod billing (2026-11-05: 14 such items, no slot busy).
+- **Capped in dollars.** `BRAIN_RUNPOD_BUDGET_USD` per rolling `BRAIN_RUNPOD_BUDGET_WINDOW_HOURS`
+  (default 24), measured from the pod's own 5-minute price samples. A primary GPU with no budget
+  set runs under $10 per 24 h (`DEFAULT_PRIMARY_BUDGET_USD`), so continuous operation is never
+  open-ended. Spent ≥ budget → the pod is stopped even with research in flight (and even after
+  a refused start), no start or move happens until the window frees budget, and one
+  `BUDGET_EXHAUSTED` event is recorded (one `BUDGET_AVAILABLE` when budget frees again). An
+  unreadable spend refuses starts but stops nothing. `readPodBudget()` returns
+  `{ spent, budget, remaining, exhausted }` for reports.
 - **Reported while stopped.** The hourly `runpod-auto` still runs the report when the probe fails
   because Brain stopped the pod, so stopped time is measured too.
 - **Never interrupts research.** While the pod is stopped, starting, or vLLM is still loading,
