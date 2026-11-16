@@ -186,6 +186,12 @@ jobs:
               node -e 'const [suite, sha, ref] = process.argv.slice(1); console.log(JSON.stringify({ suite, sha, ref, cases: [], metrics: {}, ranAt: new Date().toISOString() }))' \
                 "$suite" "$sha" "$(printf "%s/%s" "$experiment" "$label" | cut -c1-100)" > "$out/result.json"
             fi
+            # The sha is the commit this run checked out, stamped by the trusted side. Inside the
+            # container `git rev-parse HEAD` cannot read the worktree's metadata (its .git names a
+            # host path that is not mounted), so the harness wrote "unknown" — and the detector, which
+            # reads only baselines on BRAIN_REVISION, never saw one (2026-11-16).
+            node -e 'const fs=require("fs"); const [f, sha] = process.argv.slice(1); const r=JSON.parse(fs.readFileSync(f,"utf8")); r.sha=sha; fs.writeFileSync(f, JSON.stringify(r))' \
+              "$out/result.json" "$sha"
             echo "$experiment $kind ${variant} ($label @ ${sha:0:12}): done"
             git worktree remove --force "$wt" || rm -rf "$wt"
           done < "$work/targets.tsv"
