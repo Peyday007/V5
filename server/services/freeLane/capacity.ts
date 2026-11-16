@@ -57,7 +57,48 @@ export interface Window {
   ok: number;
   content: number;
   transient: number;
+  /**
+   * Of the window's outcomes, those whose model call failed on the provider,
+   * whatever outcome the item was recorded with — the same reading the
+   * stage-capacity report and the probe count (`model call failed`). An item
+   * whose call failed for the third time is recorded `FAILED_RETRYABLE`, so
+   * `transient` alone under-reads a provider outage. Absent, `transient` is the
+   * provider reading.
+   */
+  provider?: number;
 }
+
+/**
+ * Outcomes a window needs before its provider-failure share binds. Two keep a
+ * single failed call from collapsing a model, and a slot at the minimum still
+ * produces them within a window.
+ */
+export const PROVIDER_SHARE_MIN_SAMPLES = 2;
+
+/** The share of a window's outcomes that failed on the provider, 0 when it has none. Pure. */
+export function providerFailureShare(window: Window): number {
+  const samples = window.ok + window.content + window.transient;
+  if (samples <= 0) return 0;
+  return Math.min(1, (window.provider ?? window.transient) / samples);
+}
+
+/**
+ * Whether a model is held at the minimum for provider failures, from the
+ * previous holding and this window (S-0171: restore the failing route before
+ * any scale-up). Set when at least half of a measured window failed on the
+ * provider; cleared only by a measured window below half; an empty window
+ * changes nothing, so no grant, decay or restart raises a model on no evidence.
+ * Pure.
+ */
+export function providerHeld(previous: boolean, window: Window): boolean {
+  const samples = window.ok + window.content + window.transient;
+  if (samples >= PROVIDER_SHARE_MIN_SAMPLES && providerFailureShare(window) >= 0.5) return true;
+  if (samples > 0 && providerFailureShare(window) < 0.5) return false;
+  return previous;
+}
+
+/** The reason prefix a provider-failure hold is persisted with, so a restart resumes it. */
+export const PROVIDER_HOLD_REASON = 'provider failing';
 
 export interface Pressure {
   /** Saturated: an infrastructure failure in the last minute, or the pools' queues at their size. */
@@ -93,6 +134,8 @@ export function decideTarget(input: {
   window: Window;
   pressure: Pressure;
   ceiling?: number;
+  /** The model was held for provider failures before this window (`providerHeld`). */
+  providerHeld?: boolean;
 }): Decision {
   const ceiling = input.ceiling ?? SAFETY_CEILING;
   const { target, active, waiting, window, pressure } = input;
@@ -106,6 +149,24 @@ export function decideTarget(input: {
   // 2026-11-14: halved at 474–974 ms with highest stable targets of 19–26).
   if (pressure.lagMs > LAG_SHRINK_MS) return { target: half, reason: `Brain event loop lagging ${Math.round(pressure.lagMs)} ms`, stable: false };
   if (pressure.cpu > 0.85) return { target: half, reason: `Brain CPU at ${Math.round(pressure.cpu * 100)}%`, stable: false };
+  /*
+   * Restore first (S-0171): slots on a route whose calls mostly fail multiply
+   * failed work, and a queue being long is no reason to add them. Production,
+   * 2026-11-15 20:03–23:03Z: 64–98% of six hours' lane outcomes were provider
+   * failures while targets kept being raised by grants and decay. The model
+   * drops to the minimum, and stays there until a measured window is below half.
+   */
+  const share = providerFailureShare(window);
+  if (providerHeld(input.providerHeld ?? false, window)) {
+    const measured = samples >= PROVIDER_SHARE_MIN_SAMPLES && share >= 0.5;
+    return {
+      target: MIN_TARGET,
+      reason: measured
+        ? `${PROVIDER_HOLD_REASON}: ${Math.round(share * 100)}% of ${samples} calls failed on the provider; held at ${MIN_TARGET} until a window below 50% is measured`
+        : `${PROVIDER_HOLD_REASON}: no window below 50% provider failures measured since the hold; held at ${MIN_TARGET}`,
+      stable: false,
+    };
+  }
   if (samples >= 4 && transientRate >= 0.3) {
     return { target: half, reason: `provider overloaded: ${Math.round(transientRate * 100)}% of ${samples} calls failed`, stable: false };
   }
@@ -186,9 +247,11 @@ export function grantsFromDecision(decision: { detail: Record<string, unknown>; 
  * never above the measured sustainable concurrency, the ceiling, or — when the
  * grant is already met — changed at all.
  */
-export function applyGrant(input: { target: number; stableHigh: number; decision: Decision; grant: CapacityGrant | null; ceiling?: number }): { decision: Decision; applied: boolean } {
+export function applyGrant(input: { target: number; stableHigh: number; decision: Decision; grant: CapacityGrant | null; ceiling?: number; providerHeld?: boolean }): { decision: Decision; applied: boolean } {
   const { target, decision, grant } = input;
   if (!grant || decision.target < target) return { decision, applied: false };
+  // A grant adds slots for a measured limit; it never adds them to a route failing on its provider.
+  if (input.providerHeld) return { decision, applied: false };
   const ceiling = input.ceiling ?? SAFETY_CEILING;
   const bound = Math.min(ceiling, Math.max(target, input.stableHigh), target + grant.units);
   if (bound <= decision.target) return { decision, applied: false };
@@ -255,7 +318,7 @@ function readPressure(): Pressure {
 function gpuWindow(items: Window): Window {
   const calls = runpodCallWindow(WINDOW_MS);
   if (calls.ok + calls.failed === 0) return items;
-  return { ok: calls.ok, content: items.content, transient: calls.failed };
+  return { ok: calls.ok, content: items.content, transient: calls.failed, provider: calls.failed };
 }
 
 /** A runaway guard for the GPU's slots, above what one vLLM pod serves at once; not the operating limit. */
@@ -265,14 +328,26 @@ export function gpuCeiling(env: NodeJS.ProcessEnv = process.env): number {
 }
 
 async function windowFor(model: string, now = Date.now()): Promise<Window> {
-  const rows = await getDb().all<{ outcome: string; n: number | string }>(
-    `SELECT outcome, COUNT(*) AS n FROM bin_events
+  const rows = await getDb().all<{ outcome: string; failed: number | string; n: number | string }>(
+    `SELECT outcome, CASE WHEN reason LIKE '%model call failed%' THEN 1 ELSE 0 END AS failed, COUNT(*) AS n FROM bin_events
       WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND (reason = ? OR reason LIKE ?)
-      GROUP BY outcome`,
+      GROUP BY outcome, CASE WHEN reason LIKE '%model call failed%' THEN 1 ELSE 0 END`,
     [new Date(now - WINDOW_MS).toISOString(), `model ${model}`, `model ${model}:%`],
   );
-  const get = (outcome: string): number => Number(rows.find((r) => r.outcome === outcome)?.n ?? 0);
-  return { ok: get('SUBMITTED'), content: get('FAILED_RETRYABLE'), transient: get('RELEASED_TRANSIENT') };
+  return windowFromRows(rows);
+}
+
+/**
+ * A model's window from its grouped `FREE_LANE_ITEM` rows. Pure. A provider
+ * failure is a call that failed on the provider (`model call failed`) or an
+ * item handed back for a transient provider/Brain outage, whatever its outcome.
+ */
+export function windowFromRows(rows: ReadonlyArray<{ outcome: string; failed?: number | string; n: number | string }>): Window {
+  const get = (outcome: string): number => rows.filter((r) => r.outcome === outcome).reduce((sum, r) => sum + Number(r.n), 0);
+  const provider = rows
+    .filter((r) => r.outcome === 'RELEASED_TRANSIENT' || (r.outcome !== 'SUBMITTED' && Number(r.failed ?? 0) === 1))
+    .reduce((sum, r) => sum + Number(r.n), 0);
+  return { ok: get('SUBMITTED'), content: get('FAILED_RETRYABLE'), transient: get('RELEASED_TRANSIENT'), provider };
 }
 
 /** Free-lane jobs queued and claimable now. */
@@ -338,6 +413,8 @@ interface ModelPool {
   busy: number;
   /** The most slots busy at once since the last control step: simultaneous jobs, measured. */
   peakBusy: number;
+  /** Held at the minimum for provider failures until a window below half is measured (`providerHeld`). */
+  providerHeld: boolean;
 }
 
 const pools = new Map<string, ModelPool>();
@@ -461,8 +538,10 @@ export async function controlStep(): Promise<ControlReading | null> {
     if (!pools.has(worker.model)) {
       const saved = persisted.get(worker.model);
       // After a restart, resume at half of what was learned: fast to regain, gentle on a cold machine.
-      const target = saved ? Math.max(START_TARGET, Math.floor(saved.target / 2)) : START_TARGET;
-      pools.set(worker.model, { worker, index, target, stableHigh: saved?.stableHigh ?? 1, running: 0, busy: 0, peakBusy: 0 });
+      // A model last held for provider failures resumes held: a restart is not a measured recovery.
+      const held = !!saved && saved.reason.startsWith(PROVIDER_HOLD_REASON);
+      const target = held ? MIN_TARGET : saved ? Math.max(START_TARGET, Math.floor(saved.target / 2)) : START_TARGET;
+      pools.set(worker.model, { worker, index, target, stableHigh: saved?.stableHigh ?? 1, running: 0, busy: 0, peakBusy: 0, providerHeld: held });
     }
   }
   const waiting = await waitingNow();
@@ -476,10 +555,11 @@ export async function controlStep(): Promise<ControlReading | null> {
     const gpu = config.runpod && isRunpodSlot(pool.worker.model);
     const window = gpu ? gpuWindow(await windowFor(pool.worker.model)) : await windowFor(pool.worker.model);
     const peak = Math.max(pool.peakBusy, pool.busy);
-    let decision = decideTarget({ target: pool.target, active: peak, waiting, window, pressure, ...(gpu ? { ceiling: gpuCeiling() } : {}) });
+    let decision = decideTarget({ target: pool.target, active: peak, waiting, window, pressure, providerHeld: pool.providerHeld, ...(gpu ? { ceiling: gpuCeiling() } : {}) });
+    pool.providerHeld = providerHeld(pool.providerHeld, window);
     const offered = grants.find((g) => g.model === pool.worker.model) ?? null;
     const grant = offered && !(await grantAlreadyApplied(pool.worker.model, offered.fingerprint)) ? offered : null;
-    const granted = applyGrant({ target: pool.target, stableHigh: pool.stableHigh, decision, grant, ...(gpu ? { ceiling: gpuCeiling() } : {}) });
+    const granted = applyGrant({ target: pool.target, stableHigh: pool.stableHigh, decision, grant, providerHeld: pool.providerHeld, ...(gpu ? { ceiling: gpuCeiling() } : {}) });
     decision = granted.decision;
     // Just after a restart the database is busiest (boot passes, a deploy's verification):
     // the lane stays at its starting size until it has been up BOOT_GRACE_MS.
