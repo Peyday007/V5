@@ -22,7 +22,10 @@
  *   - after a restart, the free-lane loop starts the pool only after a delay
  *     (`startFreeLaneLoop`, 3 min), while research queued before the restart
  *     has already waited past the coverage window — the pool is stopped beside
- *     stale displaced work;
+ *     stale displaced work. Production boots the dispatcher with that same
+ *     delay (`startDispatcher(undefined, { freeLaneStartDelayMs })`), so inside
+ *     it the pass records the fault and DEFERS to the lane's own timer, and
+ *     once it has elapsed the pass starts the stopped pool itself;
  *   - in steady state the pool is running, its slots asleep between empty
  *     looks, when displaced work arrives already past the window.
  *
@@ -84,7 +87,15 @@ import { enqueueWork } from '../server/repos/workQueue.ts';
 import { workType } from '../server/services/queue/workTypes.ts';
 import { adaptivePoolRunning, lastControlReading, startAdaptivePool, stopAdaptivePool } from '../server/services/freeLane/capacity.ts';
 import { watchDisplacedWork } from '../server/services/freeLane/coverage.ts';
-import { continueDisplacedWork, dispatchTick, forgetBrainOnlyPass } from '../server/services/dispatch/loop.ts';
+import {
+  continueDisplacedWork,
+  dispatchTick,
+  displacedContinuationHeldUntil,
+  forgetBrainOnlyPass,
+  holdDisplacedContinuation,
+  startDispatcher,
+  stopDispatcher,
+} from '../server/services/dispatch/loop.ts';
 
 let project: TestProject;
 const HOUR = 60 * 60_000;
@@ -157,20 +168,81 @@ async function untilSucceeded(id: string, ms: number): Promise<string | undefine
   return itemState(id);
 }
 
+/** The free-lane boot delay production passes to both the lane and the dispatcher (server/index.ts). */
+const FREE_LANE_START_DELAY_MS = 3 * 60_000;
+/** A dispatcher interval no test outlives, so only the ticks a case drives itself run. */
+const NEVER = 24 * HOUR;
+
 beforeEach(async () => {
   stopAdaptivePool();
+  stopDispatcher();
+  holdDisplacedContinuation(0);
   project = await freshProject();
   forgetBrainOnlyPass();
 });
-afterEach(() => stopAdaptivePool());
+afterEach(() => {
+  stopDispatcher();
+  holdDisplacedContinuation(0);
+  vi.restoreAllMocks();
+  stopAdaptivePool();
+});
 
 describe('the dispatch pass continues stranded displaced research through the free lane', () => {
-  it('after a restart, inside the free-lane start delay: records the fault, starts the pool, and the displaced item is claimed and submitted (the recorded failure class)', async () => {
+  it('after a restart, inside the free-lane start delay: records the fault and defers to the lane\'s own timer — the pool is not started and the item stays queued', async () => {
+    // Boot exactly as server/index.ts does: the dispatcher carries the lane's start delay.
+    const before = Date.now();
+    startDispatcher(NEVER, { freeLaneStartDelayMs: FREE_LANE_START_DELAY_MS });
+    const heldUntil = displacedContinuationHeldUntil();
+    expect(heldUntil).toBeGreaterThanOrEqual(before + FREE_LANE_START_DELAY_MS);
+    expect(heldUntil).toBeLessThanOrEqual(Date.now() + FREE_LANE_START_DELAY_MS);
+
     const id = await displaced(HOUR);
     expect(adaptivePoolRunning()).toBe(false);
     expect((await watchDisplacedWork()).stranded).toBe(true);
 
     await dispatchTick({});
+
+    // The fault is still recorded — deferring is not hiding it.
+    expect(await coverageInterventions()).toBe(1);
+    // But the pass did not skip the lane's boot delay by starting the pool itself.
+    expect(adaptivePoolRunning()).toBe(false);
+    expect(await continueDisplacedWork(true)).toBe('DEFERRED');
+    expect(adaptivePoolRunning()).toBe(false);
+    expect(await itemState(id)).toBe('QUEUED');
+  });
+
+  it('a dispatcher started without a free-lane delay holds nothing, and holdDisplacedContinuation(0) clears an armed hold', async () => {
+    startDispatcher(NEVER);
+    expect(displacedContinuationHeldUntil()).toBe(0);
+    stopDispatcher();
+
+    holdDisplacedContinuation(FREE_LANE_START_DELAY_MS);
+    expect(displacedContinuationHeldUntil()).toBeGreaterThan(Date.now());
+    holdDisplacedContinuation(0);
+    expect(displacedContinuationHeldUntil()).toBe(0);
+  });
+
+  it('after a restart, once the free-lane start delay has elapsed: the next pass records the fault, starts the stopped pool, and the displaced item is claimed and submitted (the recorded failure class)', async () => {
+    // Boot as production does, with the hold armed, then let the delay run out.
+    startDispatcher(NEVER, { freeLaneStartDelayMs: FREE_LANE_START_DELAY_MS });
+    const heldUntil = displacedContinuationHeldUntil();
+    expect(heldUntil).toBeGreaterThan(Date.now());
+    const id = await displaced(HOUR);
+    expect(adaptivePoolRunning()).toBe(false);
+    expect((await watchDisplacedWork()).stranded).toBe(true);
+    expect(await continueDisplacedWork(true)).toBe('DEFERRED');
+
+    // The clock passes the end of the hold for exactly the dispatch pass; the
+    // real clock is restored before waiting on the pool, so the pool's own
+    // timing is untouched.
+    const realNow = Date.now.bind(Date);
+    const skew = heldUntil - realNow() + 1;
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => realNow() + skew);
+    try {
+      await dispatchTick({});
+    } finally {
+      clock.mockRestore();
+    }
 
     expect(await coverageInterventions()).toBe(1);
     expect(adaptivePoolRunning()).toBe(true);
