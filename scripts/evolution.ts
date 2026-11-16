@@ -102,6 +102,19 @@ try {
       out(result);
       if (!result.ok && result.verdict !== 'INSUFFICIENT') process.exitCode = 1;
     }
+  } else if (command === 'revision') {
+    // The commit this machine runs, and the suites with no standalone baseline on it yet. The
+    // CAPABILITY_BELOW_TARGET detector reads only baselines on the running revision, so the
+    // evaluator must score this sha — not its own checkout, which a workflow-only commit moves.
+    const { BRAIN_REVISION } = await import('../server/env.ts');
+    const { EVOLUTION_SUITES } = await import('../server/domain/evolutionSuites.ts');
+    const { listBaselines } = await import('../server/repos/evolution.ts');
+    const unbaselined: string[] = [];
+    for (const suite of EVOLUTION_SUITES) {
+      const rows = await listBaselines(suite.name, 50);
+      if (!rows.some((b) => b.experimentId === null && b.sha === BRAIN_REVISION)) unbaselined.push(suite.name);
+    }
+    out({ sha: BRAIN_REVISION, suites: EVOLUTION_SUITES.map((s) => s.name), unbaselined });
   } else if (command === 'show') {
     out(await evolution.readExperiments({ limit: 50 }));
   } else {

@@ -94,11 +94,22 @@ jobs:
           on_brain "pending --json" > "$work/pending.txt" 2>&1 || { echo "::error::Brain did not answer pending"; tail -20 "$work/pending.txt"; exit 1; }
           node bench/evaluator.mjs plan "$work/pending.txt" "${EXPERIMENT:-}" > "$work/plan.tsv"
           # Production on every suite, as the detector's baseline (kind "production" → record --baseline).
-          if [ "${SCHEDULE:-}" = '27 */6 * * *' ] || [ "${BASELINE:-false}" = true ]; then
-            head_sha=$(git rev-parse HEAD)
-            for suite in feasibility planSpeed; do
-              printf 'production\t%s\tproduction\t-\tproduction\t-\t-\t%s\n' "$suite" "$head_sha" >> "$work/plan.tsv"
+          # The baseline is the commit production RUNS (BRAIN_REVISION), never this checkout's HEAD:
+          # the detector reads only baselines on the running revision, and a workflow-only commit
+          # moved HEAD past it, so the first production baselines (2026-11-16) were never read.
+          # A revision with no baseline yet (a fresh deploy) is scored on the next half-hour run.
+          on_brain "revision --json" > "$work/revision.txt" 2>&1 || { echo "::error::Brain did not answer revision"; tail -5 "$work/revision.txt"; exit 1; }
+          node bench/evaluator.mjs extract "$work/revision.txt" > "$work/revision.json"
+          prod_sha=$(node -e 'const r=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); process.stdout.write(/^[0-9a-f]{7,40}$/.test(r.sha??"")?r.sha:"")' "$work/revision.json")
+          if [ "${SCHEDULE:-}" = '27 */6 * * *' ] || [ "${BASELINE:-false}" = true ]; then which=suites; else which=unbaselined; fi
+          suites=$(node -e 'const r=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); for (const s of r[process.argv[2]]??[]) if (/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(s)) console.log(s)' "$work/revision.json" "$which")
+          if [ -z "$prod_sha" ]; then
+            echo "::warning::production reports no BRAIN_REVISION; no standalone baseline can be read by the detector"
+          elif [ -n "$suites" ]; then
+            for suite in $suites; do
+              printf 'production\t%s\tproduction\t-\tproduction\t-\t-\t%s\n' "$suite" "$prod_sha" >> "$work/plan.tsv"
             done
+            echo "production $prod_sha: baselining $(echo $suites | tr '\n' ' ')"
           fi
           if [ ! -s "$work/plan.tsv" ]; then
             echo "Nothing is awaiting evaluation."
