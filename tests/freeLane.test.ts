@@ -1070,4 +1070,15 @@ describe('a model keeps only the kinds of work Brain accepts from it', () => {
     expect([...unfitPairs(viaFallback, ['a', 'gpu'], { gpu: 'a' })]).toEqual([]);
     expect([...unfitPairs(viaFallback, ['a', 'b', 'gpu'], { gpu: 'a' })].sort()).toEqual(['a|RESEARCH_AUDIT', 'gpu|RESEARCH_AUDIT']);
   });
+
+  it('takes the work anyway when the only other model’s route is down', async () => {
+    const { heldBackFor } = await import('../server/services/freeLane/worker.ts');
+    const unfit = new Set(['gpu|RESEARCH_FRAGMENT']);
+    const healthy = () => null;
+    const free429 = (m: string) => (m === 'free' ? 'model route failing (provider availability)' : null);
+    expect(heldBackFor('gpu', 'RESEARCH_FRAGMENT', ['gpu', 'free'], unfit, healthy)).toBe(true);
+    expect(heldBackFor('gpu', 'RESEARCH_FRAGMENT', ['gpu', 'free'], unfit, free429)).toBe(false);
+    expect(heldBackFor('gpu', 'RESEARCH_FRAGMENT', ['gpu'], unfit, healthy)).toBe(false);
+    expect(heldBackFor('free', 'RESEARCH_FRAGMENT', ['gpu', 'free'], unfit, healthy)).toBe(false);
+  });
 });

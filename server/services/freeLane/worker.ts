@@ -1992,6 +1992,26 @@ export function recordRouteOutcome(model: string, outcome: { ok: boolean; why?: 
   routeHealth.set(model, state);
 }
 
+/**
+ * Whether a model is held back from a kind of work: it is marked unfit for it
+ * AND another model in the lane can take it now — not marked, and its route
+ * not held. Pure. Production, 2026-11-16 18:05–19:04Z: gpt-oss-120b was marked
+ * unfit for RESEARCH_FRAGMENT while brain-a's route was held on HTTP 429s, so
+ * 33 fragments waited with no slot busy (143,318 declines "another model takes
+ * it") and nothing was submitted for an hour. `unfitPairs` never marks every
+ * model, but a model whose route is down takes nothing either.
+ */
+export function heldBackFor(
+  model: string,
+  workType: string,
+  models: readonly string[],
+  unfit: ReadonlySet<string>,
+  hold: (model: string) => string | null,
+): boolean {
+  if (!unfit.has(`${model}|${workType}`)) return false;
+  return models.some((other) => other !== model && !unfit.has(`${other}|${workType}`) && hold(other) === null);
+}
+
 export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork | null; ok: boolean; ms: number }> {
   const { workers, worker, index, config } = input;
   const projectIds = await projectsFor(worker);
@@ -2009,7 +2029,9 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
     if ((cooldown.get(cooldownKey(worker.model, item.id)) ?? 0) > Date.now()) return { ok: false, reason: 'cooling down after a provider failure' };
     const held = routeHold(worker.model);
     if (held) return { ok: false, reason: held };
-    if (unfit.has(`${worker.model}|${item.work_type}`)) return { ok: false, reason: 'this model’s answers for this kind of work are rejected; another model takes it' };
+    if (heldBackFor(worker.model, item.work_type, workers.map((w) => w.model), unfit, routeHold)) {
+      return { ok: false, reason: 'this model’s answers for this kind of work are rejected; another model takes it' };
+    }
     if (!(await freeLaneAdmits(item))) return { ok: false, reason: 'not free-lane work' };
     const owner = await owningBin(item);
     if (owner) owners.set(item.id, owner.binId);
