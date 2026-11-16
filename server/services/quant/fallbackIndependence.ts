@@ -383,7 +383,87 @@ export interface AcquisitionPath {
   channel: string;
   /** Recorded contact results: prospects the path measurably reached (never messages sent). */
   contacts: number;
+  /**
+   * What the same rows measured about how the path performs — the facts a
+   * harm is read from (`pathHarms`). Absent when nothing was read; a path that
+   * states none of them is never judged harmful on a blank.
+   */
+  measured?: PathMeasures;
 }
+
+/** One path's measured performance, from its own `cash_outcomes` rows. */
+export interface PathMeasures {
+  /** CONTACT_RESULT rows (each contact's terminal result). */
+  contactResults: number;
+  /** Of those, the channel itself refused (`CONTACT_UNDELIVERABLE`). */
+  undeliverable: number;
+  /** Deals agreed through it (ACCEPTED_PRICE rows). */
+  accepted: number;
+  /** Of those, refunded (REFUNDED rows). */
+  refunded: number;
+  /** Mean first-contact → agreement time, in ms, or null when no agreement measured it. */
+  meanTimeToAgreementMs: number | null;
+}
+
+/** A harm one substitute path would cause, with the measurement it was read from. */
+export interface PathHarm {
+  harm: HarmClass;
+  because: string;
+}
+
+/** Fewer measured results than this say nothing about a path's quality. */
+export const HARM_MIN_RESULTS = 4;
+/** A path the channel refuses for more than this share of its contacts is a low-quality replacement. */
+export const HARM_UNDELIVERABLE_SHARE = 0.5;
+/** A path that takes more than this multiple of the primary's time to agreement slows execution. */
+export const HARM_SLOWER_FACTOR = 2;
+
+/**
+ * Whether switching from the primary to one substitute path makes things worse,
+ * read only from what both paths' outcome rows measured (FALL-37-3: "evaluate
+ * when the fallback itself makes things worse"). Three harms are measurable
+ * from those rows, and each needs enough results to say anything:
+ *
+ *  - LOW_QUALITY_REPLACEMENT — the channel refused most of the path's contacts
+ *    (bounces, closed inboxes), or most deals it agreed were refunded.
+ *  - SLOWER_EXECUTION — its measured time to agreement is more than twice the
+ *    primary's, both measured.
+ *
+ * A harm no row states is never assumed: an unmeasured path has none here,
+ * and stays unchecked for safety rather than being called harmless.
+ */
+export function pathHarms(primary: AcquisitionPath, path: AcquisitionPath): PathHarm[] {
+  const m = path.measured;
+  if (!m) return [];
+  const harms: PathHarm[] = [];
+  const low: string[] = [];
+  if (m.contactResults >= HARM_MIN_RESULTS && m.undeliverable / m.contactResults > HARM_UNDELIVERABLE_SHARE) {
+    low.push(`the channel refused ${m.undeliverable} of its ${m.contactResults} measured contact result(s)`);
+  }
+  if (m.accepted > 0 && m.refunded * 2 > m.accepted && m.accepted + m.refunded >= HARM_MIN_RESULTS / 2) {
+    low.push(`${m.refunded} of its ${m.accepted} agreed deal(s) were refunded`);
+  }
+  if (low.length > 0) harms.push({ harm: 'LOW_QUALITY_REPLACEMENT', because: low.join('; ') });
+  const theirs = m.meanTimeToAgreementMs;
+  const ours = primary.measured?.meanTimeToAgreementMs ?? null;
+  if (theirs !== null && ours !== null && ours > 0 && theirs > ours * HARM_SLOWER_FACTOR) {
+    harms.push({
+      harm: 'SLOWER_EXECUTION',
+      because: `its mean time to agreement (${Math.round(theirs / 3_600_000)} h) is over ${HARM_SLOWER_FACTOR}× the primary's (${Math.round(ours / 3_600_000)} h)`,
+    });
+  }
+  return harms;
+}
+
+/** The harms of every substitute of a project's acquisition dependency, keyed as `acquisitionDependency` keys them. */
+export function acquisitionHarms(paths: readonly AcquisitionPath[]): Record<string, PathHarm[]> {
+  const ranked = rankPaths(paths);
+  const primary = ranked[0];
+  if (!primary) return {};
+  return Object.fromEntries(ranked.slice(1).map((p) => [pathKey(p), pathHarms(primary, p)]));
+}
+
+const pathKey = (p: AcquisitionPath): string => `${p.mechanism} @ ${p.channel}`;
 
 export interface ProjectIndependenceRecord {
   /** Stable for one reading: a refresh that reads the same way writes nothing. */
@@ -394,6 +474,8 @@ export interface ProjectIndependenceRecord {
   actions: { key: string; action: FallbackAction; because: string[] }[];
   /** Per substitute: whether keeping it as a diverse path is judged worth its cost. */
   diversity: DiversityReading[];
+  /** Per substitute: the harms its rows measured, with the measurement (empty when none). */
+  harms?: Record<string, PathHarm[]>;
   at: string;
 }
 
@@ -435,7 +517,7 @@ export function acquisitionDependency(
   const ranked = rankPaths(paths);
   const primary = ranked[0];
   if (!primary) return null;
-  const keyOf = (p: AcquisitionPath) => `${p.mechanism} @ ${p.channel}`;
+  const keyOf = pathKey;
   const source = (p: AcquisitionPath) => `cash_outcomes CONTACT_RESULT rows of project ${projectId}, mechanism "${p.mechanism}", channel "${p.channel}"`;
   return {
     key: `acquisition:${projectId}`,
@@ -480,13 +562,18 @@ export function acquisitionDependency(
  * judged against the dependency without it, and not judged on a blank.
  * `safe` is what is known about the safety constraints of the paths: the
  * standing authority is what permits outreach at all, so a path is safe only
- * when it is granted and unknown when nobody has said. Pure.
+ * when it is granted and unknown when nobody has said. `harms` are what each
+ * substitute's own rows measured (`acquisitionHarms`); a substitute with a
+ * harm is HARMFUL and never switched to. Pure.
  */
 export function scoreDependency(
   dependency: Dependency,
   safe: boolean | null,
+  harms: Record<string, readonly PathHarm[]> = {},
 ): Pick<ProjectIndependenceRecord, 'independence' | 'actions' | 'diversity'> {
-  const assessments: Record<string, FallbackAssessment> = Object.fromEntries(dependency.substitutes.map((s) => [s.key, { safe, harms: [] }]));
+  const assessments: Record<string, FallbackAssessment> = Object.fromEntries(
+    dependency.substitutes.map((s) => [s.key, { safe, harms: [...new Set((harms[s.key] ?? []).map((h) => h.harm))] }]),
+  );
   const independence = scoreIndependence(dependency, { assessments });
   const actions = dependency.substitutes.map((s) => ({ key: s.key, ...nextFallbackAction(s, assessments[s.key]) }));
   const diversity = dependency.substitutes.map((candidate) =>
@@ -505,13 +592,43 @@ export function scoreDependency(
 
 /** Each acquisition path the project's outcome rows state: mechanism, channel and prospects reached. */
 export async function readAcquisitionPaths(projectId: string): Promise<AcquisitionPath[]> {
-  const rows = await getDb().all<{ mechanism: string | null; channel: string | null; n: number }>(
-    `SELECT mechanism, channel, COUNT(DISTINCT opportunity_id) AS n FROM cash_outcomes
-      WHERE project_id = ? AND kind = 'CONTACT_RESULT'
+  const rows = await getDb().all<{
+    mechanism: string | null;
+    channel: string | null;
+    n: number | null;
+    results: number | null;
+    undeliverable: number | null;
+    accepted: number | null;
+    refunded: number | null;
+    mean_ms: number | string | null;
+  }>(
+    `SELECT mechanism, channel,
+            COUNT(DISTINCT CASE WHEN kind = 'CONTACT_RESULT' THEN opportunity_id END) AS n,
+            SUM(CASE WHEN kind = 'CONTACT_RESULT' THEN 1 ELSE 0 END) AS results,
+            SUM(CASE WHEN kind = 'CONTACT_RESULT' AND value_text = 'CONTACT_UNDELIVERABLE' THEN 1 ELSE 0 END) AS undeliverable,
+            SUM(CASE WHEN kind = 'ACCEPTED_PRICE' THEN 1 ELSE 0 END) AS accepted,
+            SUM(CASE WHEN kind = 'REFUNDED' THEN 1 ELSE 0 END) AS refunded,
+            AVG(CASE WHEN kind = 'TIME_TO_AGREEMENT' THEN value_ms END) AS mean_ms
+       FROM cash_outcomes
+      WHERE project_id = ? AND kind IN ('CONTACT_RESULT', 'ACCEPTED_PRICE', 'REFUNDED', 'TIME_TO_AGREEMENT')
       GROUP BY mechanism, channel ORDER BY mechanism, channel`,
     [projectId],
   );
-  return rows.map((r) => ({ mechanism: r.mechanism ?? 'unspecified', channel: r.channel ?? 'unspecified', contacts: Number(r.n) }));
+  return rows.map((r) => {
+    const mean = r.mean_ms === null || r.mean_ms === undefined ? null : Number(r.mean_ms);
+    return {
+      mechanism: r.mechanism ?? 'unspecified',
+      channel: r.channel ?? 'unspecified',
+      contacts: Number(r.n ?? 0),
+      measured: {
+        contactResults: Number(r.results ?? 0),
+        undeliverable: Number(r.undeliverable ?? 0),
+        accepted: Number(r.accepted ?? 0),
+        refunded: Number(r.refunded ?? 0),
+        meanTimeToAgreementMs: mean !== null && Number.isFinite(mean) ? mean : null,
+      },
+    };
+  });
 }
 
 /** The last independence reading recorded for a project, or null. */
@@ -569,12 +686,13 @@ export async function assessProjectIndependence(
   }))();
   const dependency = acquisitionDependency(projectId, paths, authority);
   if (!dependency) return { record: null, written: false };
-  const scored = scoreDependency(dependency, authority.ok === true ? true : authority.ok === false ? false : null);
+  const harms = acquisitionHarms(paths);
+  const scored = scoreDependency(dependency, authority.ok === true ? true : authority.ok === false ? false : null, harms);
   const primary = rankPaths(paths)[0]!;
   const signature = signatureOf(`${primary.mechanism} @ ${primary.channel}`, dependency, scored);
   const last = await (deps.last ?? (() => readProjectIndependence(projectId)))();
   if (last?.signature === signature) return { record: last, written: false };
-  const record: ProjectIndependenceRecord = { signature, dependency, ...scored, at: deps.now?.() ?? new Date().toISOString() };
+  const record: ProjectIndependenceRecord = { signature, dependency, ...scored, harms, at: deps.now?.() ?? new Date().toISOString() };
   const shared = scored.independence.concentration[0];
   await (deps.record ?? recordBinEvent)({
     eventType: FALLBACK_INDEPENDENCE_EVENT,
