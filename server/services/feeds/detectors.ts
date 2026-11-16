@@ -28,6 +28,7 @@ import { getDb } from '../../db/database.ts';
 import { newId } from '../../repos/util.ts';
 import { insertFeedItems } from '../../repos/feeds.ts';
 import { DELIVERABLE_LABEL, type DeliverableKind } from '../cash/deliverables/spec.ts';
+import type { Weakness } from '../../domain/improvement.ts';
 
 /** The source a detection's own lead item is filed under. */
 export const CODE_SIGNAL_SOURCE = 'code-signal';
@@ -347,6 +348,7 @@ export const RULE_EFFECTIVE_SOON: Detector = {
  * Every installed rule. Adding one is a new entry here and its tests — nothing else.
  * A model may propose a rule only as a Factory objective (reviewed code, starting
  * in SHADOW); no model output installs, edits or promotes a rule at run time.
+ * `proposeRuleRepair` is how a rule's repeated misses become that objective.
  */
 export const DETECTORS: readonly Detector[] = [CONCENTRATED_HIRING, REPEATED_DEMAND, RULE_EFFECTIVE_SOON];
 
@@ -374,6 +376,8 @@ export interface RuleReading {
   confirmed: number;
   falseJoins: number;
   misses: number;
+  /** Up to five missed items, `title — url`, verbatim from the rows: what a proposal is about. */
+  missedSamples: string[];
   /** Confirmed over screened members; null below the sample a judgment needs. */
   precision: number | null;
   /** Share of members with an organisation and a publication date; null with no members. */
@@ -423,8 +427,8 @@ export async function ruleReading(detector: Detector, now: Date = new Date()): P
   );
   const memberIds = [...new Set(rows.flatMap((row) => JSON.parse(row.member_ids) as string[]))];
   const since = new Date(now.getTime() - detector.lookbackMs - DAY).toISOString();
-  const items = await db.all<{ id: string; title: string; organization: string | null; published_at: string | null }>(
-    `SELECT id, title, organization, published_at FROM feed_items
+  const items = await db.all<{ id: string; title: string; url: string; organization: string | null; published_at: string | null }>(
+    `SELECT id, title, url, organization, published_at FROM feed_items
       WHERE source IN (${detector.sources.map(() => '?').join(',')}) AND fetched_at >= ? LIMIT 5000`,
     [...detector.sources, since],
   );
@@ -450,6 +454,7 @@ export async function ruleReading(detector: Detector, now: Date = new Date()): P
   const screened = memberIds.filter((id) => verdicts.has(id));
   const confirmed = screened.filter((id) => verdicts.get(id) === 'KEEP').length;
   const complete = memberRows.filter((row) => row.organization && row.published_at).length;
+  const missed = related.filter((one) => verdicts.get(one.id) === 'KEEP');
   return {
     rule: `${detector.id}@${detector.version}`,
     detections: rows.length,
@@ -457,7 +462,8 @@ export async function ruleReading(detector: Detector, now: Date = new Date()): P
     screenedMembers: screened.length,
     confirmed,
     falseJoins: screened.length - confirmed,
-    misses: related.filter((one) => verdicts.get(one.id) === 'KEEP').length,
+    misses: missed.length,
+    missedSamples: missed.slice(0, 5).map((one) => `${one.title} — ${one.url}`),
     precision: screened.length >= PROMOTION_MIN_SCREENED ? confirmed / screened.length : null,
     evidenceQuality: memberRows.length > 0 ? complete / memberRows.length : null,
   };
@@ -484,6 +490,78 @@ export function modeDecision(declared: DetectorMode, reading: Pick<RuleReading, 
   }
   if (reading.precision < DEMOTION_PRECISION) return { mode: 'SHADOW', reason: `demoted to SHADOW: precision ${reading.precision.toFixed(2)} fell below ${DEMOTION_PRECISION}` };
   return { mode: 'ACTIVE', reason: `ACTIVE: precision ${reading.precision.toFixed(2)}` };
+}
+
+// ---------------------------------------------------------------------------
+// Repeated misses become a Factory objective, through the one improvement loop
+// ---------------------------------------------------------------------------
+
+/**
+ * Misses a rule version must show before a new version is proposed. A miss is
+ * an item the independent screen KEPT, from an entity or family the rule
+ * already recognises, that the rule left out — so this many is a pattern in
+ * what the rule cannot see, not one odd record.
+ */
+export const RULE_MISS_PROPOSAL_MIN = 5;
+
+/** The weakness key a rule version's misses are registered under; a new version is a new family. */
+export function ruleMissKey(detector: Pick<Detector, 'id' | 'version'>): string {
+  return `DETECTOR_MISSES:${detector.id}@${detector.version}`;
+}
+
+/**
+ * The weakness a rule's repeated misses are, or null when they are not repeated. Pure.
+ *
+ * The objective it carries asks Factory — a model writing reviewed code — to
+ * propose the connector, extraction or detector change that would have caught
+ * the missed items, as a new rule version that starts in SHADOW. Nothing here
+ * installs, edits or promotes a rule: the proposal lands as code, is read
+ * against the screen like every other rule, and earns ACTIVE only from its own
+ * verified output. The earlier version keeps its rows, so the change is a
+ * rollback away. No category is a whitelist: the misses decide what to cover.
+ */
+export function ruleMissWeakness(detector: Pick<Detector, 'id' | 'version' | 'label'>, reading: RuleReading): Weakness | null {
+  if (reading.misses < RULE_MISS_PROPOSAL_MIN) return null;
+  const rule = `${detector.id}@${detector.version}`;
+  const seen = reading.confirmed + reading.misses;
+  return {
+    key: ruleMissKey(detector),
+    kind: 'DETECTOR_MISSES',
+    title: `Rule ${rule} (${detector.label}) misses items the independent screen kept`,
+    problem:
+      `The code rule ${rule} left out ${reading.misses} item(s) the free screen KEPT from entities or families it already recognises ` +
+      `(${reading.confirmed} confirmed member(s), ${reading.falseJoins} false join(s)), so those records still go to a model one by one. ` +
+      'Propose the connector, extraction schema, normaliser or detector change that would have caught them, as a new version of this rule ' +
+      'in server/services/feeds/detectors.ts that starts in SHADOW, with a test built from the missed items below. Do not promote it, ' +
+      'lower a bar, or narrow which industries the rule may see: its own readings decide its mode, and the current version keeps its rows.',
+    metric: 'READY_OPPORTUNITIES_PER_DAY',
+    downstreamMetric: null,
+    ownerComponent: 'server/services/feeds/detectors.ts',
+    mutationScope: ['server/services/feeds/**', 'tests/**'],
+    frequency: reading.misses,
+    denominator: Math.max(seen, 1),
+    scope: 'LOCAL',
+    severity: reading.misses > reading.confirmed ? 'HIGH' : 'MEDIUM',
+    researchQuestion: `Which records does code rule ${detector.label} miss, and what extraction or grouping would recognise them?`,
+    samples: reading.missedSamples.slice(0, 5),
+    knownCause: null,
+  };
+}
+
+/**
+ * Register a rule's repeated misses with the improvement loop (§87), which owns
+ * turning a weakness into a Factory objective. Idempotent: the same rule
+ * version refreshes its one candidate. Returns the candidate's key, or null
+ * when the misses are not repeated.
+ */
+export async function proposeRuleRepair(detector: Pick<Detector, 'id' | 'version' | 'label'>, reading: RuleReading, now: Date = new Date()): Promise<string | null> {
+  const weakness = ruleMissWeakness(detector, reading);
+  if (!weakness) return null;
+  const { registerDirected } = await import('../improvement/loop.ts');
+  const { candidate } = await registerDirected(weakness, now, {
+    evidence: { detectorProposal: { rule: reading.rule, misses: reading.misses, confirmed: reading.confirmed, falseJoins: reading.falseJoins } },
+  });
+  return candidate.weaknessKey;
 }
 
 // ---------------------------------------------------------------------------
@@ -517,6 +595,8 @@ export interface DetectorRunReport {
   extended: number;
   covered: number;
   filed: number;
+  /** The improvement candidate this rule's repeated misses were registered as, or null. */
+  proposed: string | null;
 }
 
 /** Run every installed rule once over the stored items it reads. Idempotent. */
@@ -527,7 +607,13 @@ export async function runDetectors(input: { now?: Date; detectors?: readonly Det
   // `rules` narrows a pass to the rules whose version or data changed: nothing else is recomputed.
   const chosen = (input.detectors ?? DETECTORS).filter((one) => !input.rules || input.rules.includes(one.id));
   for (const detector of chosen) {
-    const decision = modeDecision(detector.mode, await ruleReading(detector, now));
+    const reading = await ruleReading(detector, now);
+    const decision = modeDecision(detector.mode, reading);
+    // A proposal is a record for the improvement loop; failing to file one never stops detection.
+    const proposed = await proposeRuleRepair(detector, reading, now).catch((error: unknown) => {
+      console.warn(`rule proposal for ${reading.rule} not registered: ${String((error as Error)?.message ?? error).slice(0, 200)}`);
+      return null;
+    });
     const since = new Date(now.getTime() - detector.lookbackMs - DAY).toISOString();
     const rows = await db.all<{ id: string; source: string; url: string; title: string; organization: string | null; published_at: string | null; fetched_at: string; body: string | null }>(
       `SELECT id, source, url, title, organization, published_at, fetched_at, body FROM feed_items
@@ -546,7 +632,7 @@ export async function runDetectors(input: { now?: Date; detectors?: readonly Det
       body: row.body,
     }));
     const signals = detector.detect(records, now);
-    const report: DetectorRunReport = { rule: `${detector.id}@${detector.version}`, mode: decision.mode, modeReason: decision.reason, records: records.length, signals: signals.length, created: 0, extended: 0, covered: 0, filed: 0 };
+    const report: DetectorRunReport = { rule: `${detector.id}@${detector.version}`, mode: decision.mode, modeReason: decision.reason, records: records.length, signals: signals.length, created: 0, extended: 0, covered: 0, filed: 0, proposed };
     for (const signal of signals) {
       const at = now.toISOString();
       const open = await db.get<DetectionRow>(
