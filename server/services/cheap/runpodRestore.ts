@@ -64,8 +64,21 @@ const GPUS_20 = ['NVIDIA RTX A5000', 'NVIDIA RTX A4500', 'NVIDIA RTX 4000 Ada Ge
 const GPUS_48 = ['NVIDIA RTX A6000', 'NVIDIA A40', 'NVIDIA L40', 'NVIDIA L40S', 'NVIDIA RTX 6000 Ada Generation'];
 /** 80 GB and up, fastest first: the H100s and H200 serve MXFP4 natively; the A100s are the stock fallback. */
 const GPUS_80 = ['NVIDIA H100 80GB HBM3', 'NVIDIA H100 NVL', 'NVIDIA H100 PCIe', 'NVIDIA H200', 'NVIDIA A100-SXM4-80GB', 'NVIDIA A100 80GB PCIe'];
-const CUDA_129 = ['12.9', '13.0'];
-const IMAGE_2026 = 'vllm/vllm-openai:v0.32.0-cu129';
+/**
+ * The CUDA versions a host may offer this image. v0.11.0 is built for 12.8, which every
+ * 12.8+ driver runs (the earlier 12.9/13.0 list served the v0.32 image, which never ran).
+ */
+const CUDA_129 = ['12.8', '12.9', '13.0'];
+/**
+ * The image for every recipe newer than the 2025 4B one. Measured, not assumed (cheap-lane
+ * runpod-diagnose on an H200, CUDA 12.9 driver, 2026-11-16): v0.32.0-cu129 and v0.31.0-cu129 fail
+ * to import vLLM (torchcodec needs libnvrtc.so.13, a CUDA 13 library the cu129 image lacks);
+ * v0.30.0-cu129 fails on a torchvision mismatch; the untagged builds are CUDA 13, which these
+ * hosts' drivers do not run. v0.11.0 and v0.10.2 import cleanly (torch 2.8.0+cu128) and serve
+ * gpt-oss's tool and reasoning parsers. Every pod on the v0.32 image crash-looped within seconds,
+ * which is why no 2026 recipe ever served before this.
+ */
+const IMAGE_2026 = 'vllm/vllm-openai:v0.11.0';
 
 export const RECIPES: Record<string, PodRecipe> = {
   'qwen3-4b-legacy': {
