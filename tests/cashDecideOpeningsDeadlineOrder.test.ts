@@ -314,9 +314,43 @@ describe('readyContactOrder (pure): which READY pieces the contact cap reaches f
     expect(ids(ordered)).toEqual(['c', 'a', 'b']);
   });
 
-  it('a deadline still outranks a PRIORITIZE decision', () => {
-    const ordered = readyContactOrder([piece('prio', null), piece('dated', day(4))], { now, salesOrder: [], prioritized: new Set(['prio']) });
-    expect(ids(ordered)).toEqual(['dated', 'prio']);
+  it('a PRIORITIZE decision outranks a date: an undated prioritized piece goes ahead of a dated one without it (R4-F2)', () => {
+    const ordered = readyContactOrder([piece('dated', day(4)), piece('prio', null)], { now, salesOrder: [], prioritized: new Set(['prio']) });
+    expect(ids(ordered)).toEqual(['prio', 'dated']);
+  });
+
+  it('among prioritized pieces, the earliest window still goes first', () => {
+    const ordered = readyContactOrder([piece('p-undated', null), piece('p-late', day(8)), piece('p-soon', day(2)), piece('plain-soon', day(1))], {
+      now,
+      salesOrder: [],
+      prioritized: new Set(['p-undated', 'p-late', 'p-soon']),
+    });
+    expect(ids(ordered).slice(0, 2)).toEqual(['p-soon', 'p-late']);
+    expect(ids(ordered).indexOf('p-undated')).toBeLessThan(ids(ordered).indexOf('plain-soon'));
+  });
+
+  it('a steady supply of dated pieces cannot starve an undated one: it holds a place inside every pass (R4-F2)', () => {
+    const datedPieces = Array.from({ length: MAX_CONTACTS_PER_PASS * 3 }, (_, i) => piece(`dated-${i}`, day(1 + i)));
+    const ordered = readyContactOrder([...datedPieces, piece('undated', null)], none);
+    expect(ids(ordered.slice(0, MAX_CONTACTS_PER_PASS))).toContain('undated');
+    // The rest of the pass still goes to the earliest windows, in order.
+    expect(ids(ordered.slice(0, MAX_CONTACTS_PER_PASS)).filter((id) => id !== 'undated')).toEqual(['dated-0', 'dated-1'].slice(0, MAX_CONTACTS_PER_PASS - 1));
+  });
+
+  it('every reserved place goes to the next undated piece while any remain, then dated fill the rest', () => {
+    const datedPieces = Array.from({ length: 6 }, (_, i) => piece(`d${i}`, day(1 + i)));
+    const undatedPieces = [piece('u0', null), piece('u1', null)];
+    const ordered = ids(readyContactOrder([...undatedPieces, ...datedPieces], none));
+    const every = MAX_CONTACTS_PER_PASS;
+    expect(ordered[every - 1]).toBe('u0');
+    expect(ordered[2 * every - 1]).toBe('u1');
+    expect(ordered.filter((id) => id.startsWith('d'))).toEqual(['d0', 'd1', 'd2', 'd3', 'd4', 'd5']);
+  });
+
+  it('an undated PRIORITIZE piece is reached in the first pass however many dated pieces wait', () => {
+    const datedPieces = Array.from({ length: 10 }, (_, i) => piece(`dated-${i}`, day(1 + i)));
+    const ordered = readyContactOrder([...datedPieces, piece('prio', null)], { now, salesOrder: [], prioritized: new Set(['prio']) });
+    expect(ordered[0]!.id).toBe('prio');
   });
 
   it('sales order breaks ties, and pieces it does not name keep row order after those it does', () => {
