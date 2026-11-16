@@ -37,6 +37,7 @@ import { layerIsHuman, questionAnsweredBy } from '../../domain/labor.ts';
 import { AUTOMATED_CHANNELS, PRODUCTION_LAYERS } from '../../domain/types.ts';
 import type { LaborBlockerKind } from './necessity.ts';
 import { projectCounterparties, type ProjectCounterpartyReading } from './counterparties/operations.ts';
+import { deriveOrganization, type ActiveObjective, type OrganizationReading } from './organization.ts';
 import type {
   HumanNecessityReason,
   LaborChannel,
@@ -184,6 +185,15 @@ export interface LaborView {
    * whether the sale is deliverable — with its steps and one workforce plan.
    */
   counterparties: ProjectCounterpartyReading;
+  /**
+   * The organisation the work on this map would need (VENT-24-3): roles derived
+   * from the tasks only a person can do and the bottlenecks above, each with its
+   * specification, cost model, sourcing, recruitment preparation and the steps a
+   * person must authorise. Read from the same snapshot; it hires, offers and
+   * creates nothing, and stays DORMANT unless a live commercial workflow's tasks
+   * depend on a role.
+   */
+  organization: OrganizationReading;
 }
 
 export async function laborView(projectId: string): Promise<LaborView> {
@@ -223,6 +233,7 @@ export function composeView(
   planned: { asks: { subject: string; purpose: string; why: string }[]; declined: { subject: string; why: string }[] },
 ): Omit<LaborView, 'counterparties'> {
   const live = snapshot.coverage;
+  const held = bottlenecks(live);
 
   return {
     projectId: snapshot.projectId,
@@ -231,7 +242,7 @@ export function composeView(
     tasks: live.length,
     humanDependencies: humanDependencies(live),
     automationFrontier: automationFrontier(live),
-    bottlenecks: bottlenecks(live),
+    bottlenecks: held,
     capacityNeeds: capacityNeeds(live),
     roleCompression: roleCompression(live),
     economics: economics(snapshot, live),
@@ -239,7 +250,26 @@ export function composeView(
     nextQuestions: planned.asks,
     declined: planned.declined,
     summary: summarize(live),
+    organization: deriveOrganization({ snapshot, bottlenecks: held, activeObjectives: activeObjectivesOf(snapshot) }),
   };
+}
+
+/**
+ * The objectives whose work depends on this map's tasks: every live workflow
+ * that serves a commercial opportunity, with its live tasks. A workflow serving
+ * none is a description of how work could be done, not an objective, so a map
+ * of those keeps the organisation DORMANT and asks for no capacity. Pure.
+ */
+export function activeObjectivesOf(snapshot: Pick<LaborSnapshot, 'workflows' | 'coverage'>): ActiveObjective[] {
+  const out: ActiveObjective[] = [];
+  for (const workflow of snapshot.workflows) {
+    if (workflow.retiredAt !== null || !workflow.opportunityId) continue;
+    const taskIds = snapshot.coverage
+      .filter((one) => one.task.workflowId === workflow.id && one.task.retiredAt === null)
+      .map((one) => one.task.id);
+    if (taskIds.length > 0) out.push({ id: `opportunity:${workflow.opportunityId}`, taskIds });
+  }
+  return out;
 }
 
 /** §13's HUMAN DEPENDENCIES: what people do here, and why they remain necessary. */
