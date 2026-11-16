@@ -9,12 +9,17 @@ import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { insertFeedItems } from '../server/repos/feeds.ts';
 import { CURSOR_OVERLAP_MS, FEED_SOURCES, pullUrl, type FeedSource } from '../server/services/feeds/sources.ts';
-import { pullDueFeeds, screenFeedLeads, screeningEconomy } from '../server/services/feeds/run.ts';
+import { openFeedShortlist, pullDueFeeds, screenFeedLeads, screeningEconomy, SCREENING_ECONOMY_EVENT, SCREENING_ECONOMY_INTERVAL_MS } from '../server/services/feeds/run.ts';
+import { createUser } from '../server/repos/identity.ts';
+import { activate } from '../server/services/cash/lifecycle.ts';
+import { cashEventsOfKindInProject } from '../server/repos/cashMode.ts';
 import { runDetectors } from '../server/services/feeds/detectors.ts';
 import type { Completer, LaneConfig } from '../server/services/cheap/lane.ts';
 
+let projectId = '';
+
 beforeEach(async () => {
-  await freshProject();
+  projectId = (await freshProject()).project.id;
 });
 
 const now = new Date();
@@ -134,5 +139,44 @@ describe('what the code-first lane saved and made, read from rows', () => {
     expect(reading.screenCalls).toBe(0);
     expect(reading.stored).toBe(1 + 4 + 1);
     expect(reading.notScreened.covered).toBe(3);
+  });
+});
+
+describe('the screening economy is read in production, not only on request', () => {
+  it('the shortlist tick records one reading a day on the cash ledger, windows back to back', async () => {
+    const owner = await createUser({ email: `economy-${Math.random().toString(36).slice(2, 10)}@example.test`, displayName: 'Owner', password: 'correct horse battery staple' });
+    expect((await activate({ projectId, ownerUserId: owner.id, actorUserId: owner.id, objective: 'Maximize usable cash over the next few weeks.' })).ok).toBe(true);
+    await pullDueFeeds({ now, sources: [source('c', true)], fetcher: async () => [{ n: 1 }, { n: 2 }] });
+    await pullDueFeeds({ now: new Date(now.getTime() + 2 * 3_600_000), sources: [source('c', true)], fetcher: async () => [{ n: 1 }, { n: 2 }] });
+    const asked: string[] = [];
+    const completer: Completer = async (_c, model) => {
+      asked.push(model);
+      return drop;
+    };
+    await screenFeedLeads({ now, config, completer });
+
+    // The production entry point: the loop's shortlist tick. Nothing here asks for the reading.
+    const tick = new Date(now.getTime() + 3 * 3_600_000);
+    await openFeedShortlist({ projectId, now: tick });
+    const rows = await cashEventsOfKindInProject(projectId, SCREENING_ECONOMY_EVENT);
+    expect(rows).toHaveLength(1);
+    const detail = rows[0]!.detail as { since: string; until: string; screenCalls: number; notScreened: { duplicates: number }; workCreated: { total: number } };
+    expect(detail.until).toBe(tick.toISOString());
+    expect(detail.since).toBe(new Date(tick.getTime() - SCREENING_ECONOMY_INTERVAL_MS).toISOString());
+    expect(detail.screenCalls).toBe(asked.length);
+    expect(detail.screenCalls).toBeGreaterThan(0);
+    expect(detail.notScreened.duplicates).toBe(2);
+    expect(rows[0]!.summary).toContain('never sent to a model');
+    // The same reading the function gives for that window: the row is the measurement, not a copy of a guess.
+    expect(detail).toEqual(JSON.parse(JSON.stringify(await screeningEconomy({ since: detail.since, until: detail.until }))));
+
+    // Another tick within the day writes nothing; the next day's window starts where this one ended.
+    await openFeedShortlist({ projectId, now: new Date(tick.getTime() + 3_600_000) });
+    expect(await cashEventsOfKindInProject(projectId, SCREENING_ECONOMY_EVENT)).toHaveLength(1);
+    const nextDay = new Date(tick.getTime() + SCREENING_ECONOMY_INTERVAL_MS + 60_000);
+    await openFeedShortlist({ projectId, now: nextDay });
+    const after = await cashEventsOfKindInProject(projectId, SCREENING_ECONOMY_EVENT);
+    expect(after).toHaveLength(2);
+    expect((after[1]!.detail as { since: string }).since).toBe(tick.toISOString());
   });
 });

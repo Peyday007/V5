@@ -233,6 +233,50 @@ export async function screeningEconomy(input: { since: string; until?: string })
   };
 }
 
+/** The cash event that carries one screening-economy reading for a project. */
+export const SCREENING_ECONOMY_EVENT = 'FEED_SCREENING_ECONOMY';
+
+/** How often the reading is taken: one window per day, back to back. */
+export const SCREENING_ECONOMY_INTERVAL_MS = 24 * 3_600_000;
+
+/**
+ * Take the screening-economy reading for the window since the last one and
+ * record it on the project's cash ledger (`cash_events`), so what the
+ * code-first lane saved and made is a row anyone can read rather than a
+ * function nobody calls. Windows are back to back: each starts where the last
+ * one ended, so no call or item is counted twice. A window shorter than the
+ * interval writes nothing. Returns the reading written, or null.
+ */
+export async function recordScreeningEconomy(input: { projectId: string; now?: Date }): Promise<ScreeningEconomy | null> {
+  const now = input.now ?? new Date();
+  const last = await getDb().get<{ detail: string | null }>(
+    `SELECT detail FROM cash_events WHERE project_id = ? AND kind = ? ORDER BY created_at DESC, id DESC LIMIT 1`,
+    [input.projectId, SCREENING_ECONOMY_EVENT],
+  );
+  let since: string | null = null;
+  try {
+    const until = (JSON.parse(last?.detail ?? '{}') as { until?: unknown }).until;
+    if (typeof until === 'string' && Number.isFinite(Date.parse(until))) since = until;
+  } catch {
+    since = null;
+  }
+  if (since === null) since = new Date(now.getTime() - SCREENING_ECONOMY_INTERVAL_MS).toISOString();
+  if (now.getTime() - Date.parse(since) < SCREENING_ECONOMY_INTERVAL_MS) return null;
+  const reading = await screeningEconomy({ since, until: now.toISOString() });
+  await recordCashEvent({
+    projectId: input.projectId,
+    kind: SCREENING_ECONOMY_EVENT,
+    actorRef: 'BRAIN',
+    summary:
+      `Code-first lane, ${reading.since} to ${reading.until}: ${reading.notScreened.total} item(s) never sent to a model ` +
+      `(${reading.notScreened.duplicates} repeat(s), ${reading.notScreened.covered} covered by a code rule, ${reading.notScreened.provedByCode} proved by code); ` +
+      `${reading.screenCalls} model screen call(s) on ${reading.itemsScreened} item(s); ${reading.workCreated.total} lead(s) code made that no single record showed. ` +
+      'Every lead is still only a lead.',
+    detail: { ...reading },
+  });
+  return reading;
+}
+
 /** The latest SCREEN_LEAD answers, per item, already combined. */
 async function screenedLeads(ids: readonly string[]): Promise<Set<string>> {
   if (ids.length === 0) return new Set();
@@ -384,6 +428,11 @@ export async function openFeedShortlist(input: { projectId: string; now?: Date; 
   const gate = await discoveryAllowed(input.projectId);
   if (!gate.allowed || !gate.mode) return null;
   const mode = gate.mode;
+  // The daily reading of what the code-first lane saved and made (ALGO-19-3), on the same tick that
+  // decides the shortlist. Its own catch: a reading that cannot be taken never stops discovery.
+  await recordScreeningEconomy({ projectId: input.projectId, now }).catch((error: unknown) => {
+    console.warn(`[feeds] screening economy unreadable for ${input.projectId}: ${String((error as Error)?.message ?? error)}`);
+  });
   const history = (await listRounds(input.projectId)).filter((one) => one.bucketId === FEED_SHORTLIST_BUCKET.id);
   if (history.some((one) => one.state === 'OPEN')) return null;
   const latest = history.reduce<string | null>((max, one) => (!max || one.openedAt > max ? one.openedAt : max), null);
