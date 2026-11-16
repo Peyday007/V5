@@ -291,10 +291,11 @@ export async function readCapacity(input: { sinceHours: number; now?: Date }): P
   let readyBinsNow: number | null = null;
   try {
     const { fleetSnapshot } = await import('../../dispatch/candidates.ts');
-    const { surfaceIneligibility } = await import('../../dispatch/router.ts');
+    const { isFactorySurface, surfaceIneligibility } = await import('../../dispatch/router.ts');
     const { currentAdmissionPolicy } = await import('../../../repos/factoryLine.ts');
     const snapshot = await fleetSnapshot(new Date(until));
-    const factoryCapable = snapshot.candidates.filter((c) => c.routine.capabilities.includes('repository'));
+    // A retired Routine is history, not capacity to restore (`isFactorySurface`).
+    const factoryCapable = snapshot.candidates.filter(isFactorySurface);
     fleet = {
       registered: factoryCapable.length,
       usable: factoryCapable.filter((c) => surfaceIneligibility(c) === null).length,

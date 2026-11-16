@@ -396,6 +396,28 @@ export function surfaceIneligibility(candidate: RoutingCandidate): string | null
 }
 
 /**
+ * Is this a Factory surface at all — one a reader should count as registered
+ * Factory capacity, usable or not?
+ *
+ * A `RETIRED` Routine or account is a surface somebody replaced or wound down
+ * on purpose, and nothing brings it back: it is history, not a surface waiting
+ * to be restored. Counting it made the Factory's capacity reading say "1 of 7
+ * registered factory surfaces are usable" in production (2026-11-16) when four
+ * of the six were Routines retired in September and replaced by the ones beside
+ * them — and recommend "restoring the others", which no person can do. A
+ * QUARANTINED, DRAINING or UNAVAILABLE surface still counts: those are states a
+ * probe, a person or a renewed consent can lift, so reporting them unusable is
+ * the true and useful reading.
+ */
+export function isFactorySurface(candidate: Pick<RoutingCandidate, 'routine' | 'account'>): boolean {
+  return (
+    candidate.routine.capabilities.includes('repository') &&
+    candidate.routine.state !== 'RETIRED' &&
+    candidate.account.state !== 'RETIRED'
+  );
+}
+
+/**
  * Does this surface have what the bin asked for?
  *
  * A bin with no declared requirements is satisfied by any surface, which is

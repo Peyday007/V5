@@ -51,7 +51,7 @@ import { approveObjective } from './contract.ts';
 import { campaignSpecFor } from './remote.ts';
 import { INITIAL_LANE_TARGET } from './scheduler.ts';
 import { fleetSnapshot, sharedFleetSnapshot } from '../dispatch/candidates.ts';
-import { surfaceIneligibility } from '../dispatch/router.ts';
+import { isFactorySurface, surfaceIneligibility } from '../dispatch/router.ts';
 
 /** The ledger kinds this module writes. */
 export const LINE_EVENT_KINDS = {
@@ -533,7 +533,7 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
   }
 
   const surfaces: LineCapacitySurface[] = snapshot.candidates
-    .filter((candidate) => candidate.routine.capabilities.includes('repository'))
+    .filter(isFactorySurface)
     .map((candidate) => {
       const refusal = surfaceIneligibility(candidate);
       const underRoutine = candidate.routineTarget === null || candidate.routineInFlight < candidate.routineTarget;
