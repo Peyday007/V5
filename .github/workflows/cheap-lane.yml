@@ -47,7 +47,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'deploy | status | prune | test | connect | disconnect | claude-discovery-off | claude-discovery-on | focus | unfocus | runpod-test | runpod-connect | runpod-disconnect | runpod-report | runpod-auto | runpod-cycle | runpod-restore | runpod-survey | runpod-bench | runpod-upgrade | runpod-repurpose | runpod-diagnose'
+        description: 'deploy | status | prune | test | connect | disconnect | claude-discovery-off | claude-discovery-on | focus | unfocus | runpod-test | runpod-connect | runpod-disconnect | runpod-report | runpod-auto | runpod-cycle | runpod-restore | runpod-survey | runpod-bench | runpod-upgrade | runpod-repurpose | runpod-diagnose | runpod-score'
         required: true
         default: deploy
       recipes:
@@ -296,6 +296,14 @@ jobs:
                 npx tsx scripts/runpod-bench.ts --recipes "$recipes" --switchboard "https://$cheap.fly.dev/v1" $base --reps "$(printf '%s' "$REPS_INPUT" | tr -cd '1-5' | cut -c1)" | tee bench.txt
               grep -q '^RUNPOD-BENCH: OK' bench.txt || { echo "::error title=runpod::The benchmark did not finish."; exit 1; }
               grep '^WINNER' bench.txt | sed 's/^/::notice title=runpod bench::/'
+              ;;
+            runpod-score)
+              # Record the serving GPU model's measured director score (runpod-bench baseline) for
+              # Hermes' model ranking (BRAIN_RUNPOD_TOOL_SCORE, §108). Changes nothing else.
+              score=$(printf '%s' "$TOOL_SCORE_INPUT" | tr -cd '0-9.')
+              [ -n "$score" ] || { echo "::error::runpod-score needs tool_score (0-1)."; exit 1; }
+              flyctl secrets set --app "$brain" BRAIN_RUNPOD_TOOL_SCORE="$score" >/dev/null
+              echo "::notice title=runpod::BRAIN_RUNPOD_TOOL_SCORE=$score set; Hermes' model ranking reads it on its next run."
               ;;
             runpod-diagnose)
               # Why a recipe's pod never serves: its exact image, GPU and vLLM arguments on a
