@@ -7,7 +7,9 @@
  * by a read-back, so a retry, a restart mid-journey or two ticks racing produce
  * one row — the same shape `cash_money_entries` and `cash_actions` already
  * have. The only mutations are guarded transitions naming the state they come
- * from; nothing here deletes, and an amount is never updated.
+ * from (an agreement's release, and a plain-reply contact result refined to
+ * the answer it turned out to be); nothing here deletes, and an amount is
+ * never updated.
  */
 import { inReadScope, scopedRead } from './readScope.ts';
 import { getDb } from '../db/database.ts';
@@ -243,6 +245,31 @@ function mapOutcome(r: Row): CashOutcome {
   };
 }
 
+/**
+ * A contact result that says only "they answered". It is the one answer a
+ * later reading may refine: a provider states the reply first and its meaning
+ * (won, not interested, an opt-out) afterwards, so a lead read between the two
+ * is recorded as a plain reply. Freezing that row would leave the funnel's
+ * qualification and close measured from replies whose real answer arrived a
+ * pass later (COM-13-3).
+ */
+const REFINABLE_CONTACT_RESULT = 'BUYER_REPLIED';
+/** The answers that refine a plain reply: each one is a reply whose meaning is now stated. */
+const CONTACT_RESULT_REFINEMENTS = new Set(['BUYER_ACCEPTED', 'BUYER_COUNTERED', 'BUYER_DECLINED']);
+
+/**
+ * Writes one outcome, once per request key; true when this call wrote it.
+ *
+ * The single exception to "the first row stands" is a `CONTACT_RESULT` that
+ * recorded only `BUYER_REPLIED`: when a later reading of the same contact (the
+ * same request key) states what the reply meant — accepted, countered or
+ * declined — the row is refined to that answer, in one statement guarded on the
+ * row still saying `BUYER_REPLIED`, and its basis keeps the earlier reading
+ * and when it was recorded, so nothing is silently overwritten. A refinement
+ * returns true. Every other conflict writes nothing, so a retry or a racing
+ * tick still produces one row, and no answer other than a plain reply is ever
+ * changed.
+ */
 export async function insertOutcome(input: {
   projectId: string;
   opportunityId: string;
@@ -280,10 +307,32 @@ export async function insertOutcome(input: {
     ],
   );
   const row = await getDb().get<Row>(
-    'SELECT id FROM cash_outcomes WHERE project_id = ? AND request_key = ?',
+    'SELECT id, kind, value_text, created_at FROM cash_outcomes WHERE project_id = ? AND request_key = ?',
     [input.projectId, input.requestKey],
   );
-  return s(row?.id) === id;
+  if (s(row?.id) === id) return true;
+  if (
+    row &&
+    input.kind === 'CONTACT_RESULT' &&
+    s(row.kind) === 'CONTACT_RESULT' &&
+    ns(row.value_text) === REFINABLE_CONTACT_RESULT &&
+    input.valueText &&
+    CONTACT_RESULT_REFINEMENTS.has(input.valueText)
+  ) {
+    const res = await getDb().run(
+      `UPDATE cash_outcomes
+          SET value_text = ?, basis = ?
+        WHERE id = ? AND kind = 'CONTACT_RESULT' AND value_text = ?`,
+      [
+        input.valueText,
+        `${input.basis}; refines ${REFINABLE_CONTACT_RESULT} recorded ${s(row.created_at)}`,
+        s(row.id),
+        REFINABLE_CONTACT_RESULT,
+      ],
+    );
+    return res.changes === 1;
+  }
+  return false;
 }
 
 export async function outcomesFor(input: {
