@@ -16504,7 +16504,7 @@ register, scheduler, Factory or release path:
   winning under 15% retires. `experimentYield` is the loop's own metric —
   adoptions per decided experiment and hours from identification to adoption.
 - **A generic detector.** Every registered suite (`domain/evolutionSuites.ts`:
-  `feasibility` and `planSpeed` so far) whose latest production baseline misses
+  `feasibility`, `planSpeed` and `mootRequests` so far) whose latest production baseline misses
   its declared target is a `CAPABILITY_BELOW_TARGET` deficiency naming the suite
   and metric, EVIDENCE until the results state a cause and its files. Nothing
   names a specific problem for Hermes.
@@ -16512,6 +16512,32 @@ register, scheduler, Factory or release path:
   variants scored, an ADOPT verdict, and the merged change is the selected
   variant's own campaign. A single unexamined approach is no longer a verified
   self-improvement.
+
+- **A measurement fits its deficiency** (production, 2026-11-16 08:02Z). Hermes
+  commissioned evx_f0f141e30794417c8187 for a moot-request defect in the Russell
+  loop (RECURRING_OPERATIONAL_FAILURE on `russell/loop.ts`, `needsHuman.ts`) on
+  `feasibility`, the only suites then being plan-feasibility and plan-speed: every
+  variant would have scored equal to the baseline, the selection would have
+  decided on nothing, and each approach type would have been credited a loss it
+  never earned. A suite now declares what it `measures` — the deficiency classes
+  its cases exercise and the code paths they drive (`evolutionSuites.ts`). A
+  commission on a suite that does not measure its deficiency on its owner paths is
+  refused, naming the suites that do, or saying none does and to commission one
+  objective instead; the brief lists the fitting suites beside each ENGINEERING
+  deficiency. An undecided experiment on a misfit suite is moved, compare-and-set
+  and once, onto the most specific suite that fits (`EXPERIMENT_RETARGETED`, read
+  on every `pending` the evaluator asks); one no suite can measure is HELD once
+  built; `decide` reads only the current suite's results and refuses a misfit.
+  Commissioning a running experiment's deficiency again on another fitting suite
+  moves the same experiment. **Scenario suites** are the second kind beside
+  judgement suites: `mootRequests` runs behavioural scripts (park, ask, answer, a
+  mission's own transition, the loop's `tick`) against the variant's own
+  repositories and loop, each on a copy of one migrated database, and reads the
+  end state in plain SQL — never through a variant's reader — with controls
+  (`falseWithdraw`, `historyLost` as guards) so withdrawing live decisions cannot
+  buy a score. Its hidden cases are scenarios in the same JSON shape. Like every
+  suite it is harness code under `bench/`, which the evaluator copies over each
+  tree, so a variant cannot edit the cases it is scored on.
 
 **Doors.** `brain_operator_experiments` (every experiment, variant, score,
 verdict, approach-type ranking and the yield — never a hidden case) and

@@ -18,6 +18,10 @@
  *             rejects the others with their scores, credits the approach types, and closes the
  *             parent into the winner — §87 then measures the winner after release as always
  *
+ *   FIT       an experiment is judged only on a suite that measures its deficiency
+ *             (`suiteFit`): a misfit commission is refused naming the suites that fit, and an
+ *             undecided experiment on a misfit suite is moved onto the one that does, or held
+ *
  * Restart-safe: every step is a row, every state change is compare-and-set, and a pass that
  * stopped half-way is completed by the next (`ensureVariantsSubmitted`).
  */
@@ -32,7 +36,7 @@ import {
   type BenchResult,
   type Selection,
 } from '../../domain/evolution.ts';
-import { EVOLUTION_SUITES, findSuite } from '../../domain/evolutionSuites.ts';
+import { EVOLUTION_SUITES, findSuite, noSuiteMeasures, suiteFit, suitesFitting } from '../../domain/evolutionSuites.ts';
 import { deficiencyKey, engineeringPriority, routeEngineering, type Diagnosis } from '../../domain/engineeringDirector.ts';
 import { MAX_ATTEMPTS, riskForScope, type Weakness } from '../../domain/improvement.ts';
 import { RELEASE_EXCLUDED_PATHS } from '../../domain/factoryRelease.ts';
@@ -59,6 +63,7 @@ import {
   listVariants,
   newExperimentId,
   retireApproach,
+  retargetExperiment,
   transitionExperiment,
   transitionVariant,
   type EvolutionResult,
@@ -81,17 +86,54 @@ export const EXPERIMENT_EVENTS = {
   result: 'EXPERIMENT_RESULT_RECORDED',
   decided: 'EXPERIMENT_DECIDED',
   held: 'EXPERIMENT_HELD',
+  retargeted: 'EXPERIMENT_RETARGETED',
 } as const;
 
 /* ------------------------------------------------------------------------- */
 /* Opening                                                                    */
 /* ------------------------------------------------------------------------- */
 
-/** Why these approaches cannot open an experiment on this suite, or null. Reads the approach statistics. */
-export async function experimentInputProblem(approaches: readonly Approach[], suiteName: string | null, _deficiency?: string): Promise<string | null> {
-  if (!suiteName) return `approaches need a registered suite to be judged on: one of ${EVOLUTION_SUITES.map((s) => s.name).join(', ')}`;
+/** The owner paths a deficiency's measurement is placed by: the diagnosis's and every approach's. */
+function measuredPaths(ownerPaths: readonly string[], approaches: readonly { ownerPaths: readonly string[] }[]): string[] {
+  return [...new Set([...ownerPaths, ...approaches.flatMap((a) => a.ownerPaths)])];
+}
+
+/**
+ * Why a suite cannot judge this deficiency, naming the suites that can (or what to do when none
+ * can), or null when it fits. A suite that does not exercise the defect scores every variant
+ * equal to the baseline, so the selection would decide on nothing and credit each approach type
+ * with a loss it never earned.
+ */
+export function suiteFitProblem(suiteName: string, deficiency: string, ownerPaths: readonly string[]): string | null {
   const suite = findSuite(suiteName);
   if (!suite) return `suite "${suiteName}" is not registered: one of ${EVOLUTION_SUITES.map((s) => s.name).join(', ')}`;
+  const fit = suiteFit(suite, deficiency, ownerPaths);
+  if (fit.fits) return null;
+  const fitting = suitesFitting(deficiency, ownerPaths);
+  return fitting.length
+    ? `suite "${suite.name}" does not measure this deficiency: ${fit.why}. Choose a suite that does: ` +
+        fitting.map((s) => `${s.name} (${s.primaryMetric}, ${s.description.slice(0, 120)})`).join('; ')
+    : `suite "${suite.name}" does not measure this deficiency: ${fit.why}; ${noSuiteMeasures(deficiency, ownerPaths)}`;
+}
+
+/** Why these approaches cannot open an experiment on this suite, or null. Reads the approach statistics. */
+export async function experimentInputProblem(
+  approaches: readonly Approach[],
+  suiteName: string | null,
+  deficiency?: string,
+  ownerPaths: readonly string[] = [],
+): Promise<string | null> {
+  if (!suiteName) {
+    const fitting = deficiency ? suitesFitting(deficiency, measuredPaths(ownerPaths, approaches)) : [];
+    if (deficiency && !fitting.length) return noSuiteMeasures(deficiency, measuredPaths(ownerPaths, approaches));
+    return `approaches need a registered suite to be judged on: ${(fitting.length ? fitting : EVOLUTION_SUITES).map((s) => s.name).join(', ')}`;
+  }
+  const suite = findSuite(suiteName);
+  if (!suite) return `suite "${suiteName}" is not registered: one of ${EVOLUTION_SUITES.map((s) => s.name).join(', ')}`;
+  if (deficiency) {
+    const misfit = suiteFitProblem(suite.name, deficiency, measuredPaths(ownerPaths, approaches));
+    if (misfit) return misfit;
+  }
   const valid = validateApproaches(approaches);
   if (!valid.ok) return valid.reason;
   const stats = await listApproachStats();
@@ -161,7 +203,7 @@ export function variantPreamble(input: { experimentId: string; label: string; ap
  * deficiency named again while its experiment runs is the same experiment, not a second.
  */
 export async function openExperiment(input: OpenExperimentInput, now = new Date()): Promise<OpenExperimentResult> {
-  const problem = await experimentInputProblem(input.approaches, input.suite, input.diagnosis.deficiency);
+  const problem = await experimentInputProblem(input.approaches, input.suite, input.diagnosis.deficiency, input.diagnosis.ownerPaths);
   if (problem) return { ok: false, reason: problem };
   const suite = findSuite(input.suite)!;
   const valid = validateApproaches(input.approaches);
@@ -215,6 +257,9 @@ export async function openExperiment(input: OpenExperimentInput, now = new Date(
     if (marker?.role === 'PARENT' && marker.id) {
       const running = await getExperiment(marker.id);
       if (running && (running.state === 'BUILDING' || running.state === 'EVALUATING')) {
+        // Named again with another suite (already checked to measure it): the running experiment is
+        // judged on that one from now on — the same experiment, never a second.
+        if (running.suite !== suite.name) await retarget(running, suite.name, `commissioned again on suite ${suite.name}`);
         const variants = await ensureVariantsSubmitted(running.id, now);
         return { ok: true, duplicate: true, experimentId: running.id, candidateId: latest.id, weaknessKey: latest.weaknessKey, priority: priority.priority, variants };
       }
@@ -377,6 +422,10 @@ function prNumber(url: string | null): number | null {
 export async function refreshExperiment(experimentId: string, now = new Date()): Promise<Experiment | null> {
   let experiment = await getExperiment(experimentId);
   if (!experiment) return null;
+  if (experiment.state === 'BUILDING' || experiment.state === 'EVALUATING') {
+    experiment = await fitSuite(experiment, now);
+    if (experiment.state === 'HELD') return experiment;
+  }
   if (experiment.state === 'BUILDING') {
     await ensureVariantsSubmitted(experiment.id, now);
     const { getCampaign } = await import('../../repos/factory.ts');
@@ -412,6 +461,47 @@ export async function refreshExperiment(experimentId: string, now = new Date()):
   }
   experiment = await getExperiment(experimentId);
   return experiment;
+}
+
+/** The owner paths an experiment's measurement is placed by: its parent's diagnosis and every variant's. */
+async function experimentPaths(experiment: Experiment): Promise<string[]> {
+  const parent = await getCandidate(experiment.candidateId);
+  const own = (parent?.evidence['ownerPaths'] as string[] | undefined) ?? [];
+  return measuredPaths(Array.isArray(own) ? own : [], await listVariants(experiment.id));
+}
+
+/** Move an undecided experiment onto another suite once, and say so in the register's history. */
+async function retarget(experiment: Experiment, to: string, why: string): Promise<boolean> {
+  const suite = findSuite(to);
+  if (!suite || suite.name === experiment.suite) return false;
+  if (!(await retargetExperiment(experiment.id, { suite: experiment.suite }, { suite: suite.name, capabilityClass: suite.capabilityClass }))) return false;
+  await recordImprovementEvent({
+    candidateId: experiment.candidateId,
+    kind: EXPERIMENT_EVENTS.retargeted,
+    detail: { experimentId: experiment.id, from: experiment.suite, to: suite.name, why: why.slice(0, 500) },
+  });
+  return true;
+}
+
+/**
+ * An undecided experiment is judged on a suite that measures its deficiency. One opened before
+ * suites declared what they measure (evx_f0f141e30794417c8187: a moot-request defect on
+ * `feasibility`) is moved onto the most specific suite that does; one no registered suite can
+ * measure is HELD once its variants are built, with the reason, rather than decided on a score
+ * that cannot see the defect.
+ */
+async function fitSuite(experiment: Experiment, now: Date): Promise<Experiment> {
+  const paths = await experimentPaths(experiment);
+  const current = findSuite(experiment.suite);
+  if (current && suiteFit(current, experiment.deficiency, paths).fits) return experiment;
+  const best = suitesFitting(experiment.deficiency, paths)[0];
+  if (best) {
+    const why = current ? suiteFit(current, experiment.deficiency, paths).why : `suite ${experiment.suite} is not registered`;
+    await retarget(experiment, best.name, `${experiment.suite} does not measure it (${why}); ${best.name} does`);
+  } else if (experiment.state === 'EVALUATING') {
+    await hold(experiment, `suite ${experiment.suite} cannot measure it: ${noSuiteMeasures(experiment.deficiency, paths)}`.slice(0, 1000), now);
+  }
+  return (await getExperiment(experiment.id)) ?? experiment;
 }
 
 async function hold(experiment: Experiment, why: string, now: Date): Promise<void> {
@@ -533,9 +623,12 @@ export async function decide(experimentId: string, now = new Date()): Promise<De
   if (experiment.state !== 'EVALUATING') return { ok: false, reason: `experiment ${experiment.id} is ${experiment.state}${experiment.verdict ? ` (${experiment.verdict})` : ''}, not EVALUATING` };
   const suite = findSuite(experiment.suite);
   if (!suite) return { ok: false, reason: `suite ${experiment.suite} is no longer registered` };
+  const misfit = suiteFitProblem(suite.name, experiment.deficiency, await experimentPaths(experiment));
+  if (misfit) return { ok: false, reason: `experiment ${experiment.id} is not decided on a suite that cannot see its defect: ${misfit}` };
   const variants = await listVariants(experiment.id);
   const ready = variants.filter((v) => v.state === 'PR_READY');
-  const scores = scoresFor(await listResults(experiment.id), ready.map((v) => v.id));
+  // Only the current suite's results: a result recorded before a retarget measured something else.
+  const scores = scoresFor((await listResults(experiment.id)).filter((r) => r.suite === suite.name), ready.map((v) => v.id));
   const selection = selectVariant(
     scores.baseline,
     ready.filter((v) => scores.variants.has(v.id)).map((v) => ({ id: v.id, metrics: scores.variants.get(v.id) ?? null, linesChanged: v.linesChanged })),
@@ -615,7 +708,7 @@ export async function readExperiments(options: { limit?: number } = {}): Promise
   approachTypes: Record<string, ReturnType<typeof rankApproachTypes>>;
   yield: ReturnType<typeof experimentYield>;
   hiddenCases: Record<string, number>;
-  suites: { name: string; capabilityClass: string; primaryMetric: string; direction: string; target: unknown; guards: unknown }[];
+  suites: { name: string; capabilityClass: string; primaryMetric: string; direction: string; target: unknown; guards: unknown; measures: unknown }[];
 }> {
   const experiments = await listExperiments({ limit: options.limit ?? 20 });
   const out: Record<string, unknown>[] = [];
@@ -652,7 +745,7 @@ export async function readExperiments(options: { limit?: number } = {}): Promise
     approachTypes: Object.fromEntries(classes.map((c) => [c, rankApproachTypes(stats, c)])),
     yield: experimentYield(summaries),
     hiddenCases: await countHiddenCases(),
-    suites: EVOLUTION_SUITES.map((s) => ({ name: s.name, capabilityClass: s.capabilityClass, primaryMetric: s.primaryMetric, direction: s.direction, target: s.target, guards: s.guards })),
+    suites: EVOLUTION_SUITES.map((s) => ({ name: s.name, capabilityClass: s.capabilityClass, primaryMetric: s.primaryMetric, direction: s.direction, target: s.target, guards: s.guards, measures: s.measures })),
   };
 }
 

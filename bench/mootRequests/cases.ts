@@ -1,0 +1,252 @@
+/**
+ * The mootRequests suite's public cases. Each reproduces a shape production showed
+ * (§111's deficiency dfx_d319a3c45a55: answered research cards coming back as moot
+ * person-requests), or is a control that a fix must not break: a card whose mission
+ * still waits stays in front of the person, and an answer that can apply is carried out.
+ *
+ * Hidden cases (Brain's database, `brain_operator_add_hidden_case {suite: "mootRequests"}`)
+ * use exactly this shape; they decide when every subject has a hidden-case score.
+ */
+import type { MootCase } from './case.ts';
+
+export const PUBLIC_CASES: readonly MootCase[] = [
+  {
+    id: 'left-cancelled-before-resume',
+    class: 'LEFT_BEFORE_RESUME',
+    note: 'rhr_2036cc5e: answered, then the mission was cancelled before the loop applied the answer.',
+    steps: [
+      { do: 'park', mission: 'm1' },
+      { do: 'ask', request: 'r1', mission: 'm1' },
+      { do: 'answer', request: 'r1', choice: 'APPROVE_PLAN' },
+      { do: 'move', mission: 'm1', to: 'CANCELLED' },
+      { do: 'tick' },
+      { do: 'tick' },
+    ],
+    expect: { r1: 'WITHDRAWN' },
+  },
+  {
+    id: 'left-running-before-resume',
+    class: 'LEFT_BEFORE_RESUME',
+    note: 'The mission was unparked and runs again on its own before the answer applied.',
+    steps: [
+      { do: 'park', mission: 'm1' },
+      { do: 'ask', request: 'r1', mission: 'm1' },
+      { do: 'answer', request: 'r1', choice: 'RECORD_GAPS' },
+      { do: 'move', mission: 'm1', to: 'RUNNING' },
+      { do: 'tick' },
+      { do: 'tick' },
+    ],
+    expect: { r1: 'SETTLED' },
+  },
+  {
+    id: 'left-done-before-resume',
+    class: 'LEFT_BEFORE_RESUME',
+    steps: [
+      { do: 'park', mission: 'm1' },
+      { do: 'ask', request: 'r1', mission: 'm1' },
+      { do: 'answer', request: 'r1', choice: 'APPROVE_PLAN' },
+      { do: 'move', mission: 'm1', to: 'RUNNING' },
+      { do: 'move', mission: 'm1', to: 'DONE' },
+      { do: 'tick' },
+    ],
+    expect: { r1: 'SETTLED' },
+  },
+  {
+    id: 'left-failed-unimplemented-answer',
+    class: 'LEFT_BEFORE_RESUME',
+    note: 'An answer this Brain cannot apply, on a mission that failed meanwhile: nobody can act on it.',
+    steps: [
+      { do: 'park', mission: 'm1' },
+      { do: 'ask', request: 'r1', mission: 'm1' },
+      { do: 'answer', request: 'r1', choice: 'NOT_A_CHOICE' },
+      { do: 'move', mission: 'm1', to: 'FAILED' },
+      { do: 'tick' },
+      { do: 'tick' },
+    ],
+    expect: { r1: 'WITHDRAWN' },
+  },
+  {
+    id: 'left-while-deferred-for-slot',
+    class: 'LEFT_WHILE_DEFERRED',
+    note: 'The answer waited for a research slot while the mission ran again; no slot can make it apply.',
+    steps: [
+      { do: 'park', mission: 'm1' },
+      { do: 'ask', request: 'r1', mission: 'm1' },
+      { do: 'answer', request: 'r1', choice: 'APPROVE_PLAN' },
+      { do: 'slotFull', mission: 'm1' },
+      { do: 'move', mission: 'm1', to: 'RUNNING' },
+      { do: 'tick' },
+      { do: 'tick' },
+    ],
+    expect: { r1: 'WITHDRAWN' },
+  },
+  {
+    id: 'deferred-then-left',
+    class: 'LEFT_WHILE_DEFERRED',
+    note: 'Deferred for a slot on one pass, and the mission left before the next.',
+    steps: [
+      { do: 'park', mission: 'm1', packet: 'AWAITING_APPROVAL' },
+      { do: 'ask', request: 'r1', mission: 'm1' },
+      { do: 'answer', request: 'r1', choice: 'APPROVE_PLAN' },
+      { do: 'slotFull', mission: 'm1' },
+      { do: 'tick' },
+      { do: 'move', mission: 'm1', to: 'CANCELLED' },
+      { do: 'tick' },
+    ],
+    expect: { r1: 'SETTLED' },
+  },
+  {
+    id: 'open-card-mission-cancelled',
+    class: 'LEFT_WHILE_OPEN',
+    note: 'Nobody answered, and the mission was cancelled: the card asks for a decision nobody needs.',
+    steps: [
+      { do: 'park', mission: 'm1' },
+      { do: 'ask', request: 'r1', mission: 'm1' },
+      { do: 'move', mission: 'm1', to: 'CANCELLED' },
+      { do: 'tick' },
+    ],
+    expect: { r1: 'WITHDRAWN' },
+  },
+  {
+    id: 'open-card-mission-waiting',
+    class: 'LEFT_WHILE_OPEN',
+    note: 'The mission moved to WAITING (on a source, not a person) while its card stayed open.',
+    steps: [
+      { do: 'park', mission: 'm1' },
+      { do: 'ask', request: 'r1', mission: 'm1' },
+      { do: 'move', mission: 'm1', to: 'WAITING' },
+      { do: 'tick' },
+    ],
+    expect: { r1: 'WITHDRAWN' },
+  },
+  {
+    id: 'reasked-after-cancel',
+    class: 'REASKED_AFTER_LEAVING',
+    note: 'An earlier version re-asked a card whose mission had already been cancelled.',
+    steps: [
+      { do: 'park', mission: 'm1' },
+      { do: 'ask', request: 'r1', mission: 'm1' },
+      { do: 'answer', request: 'r1', choice: 'APPROVE_PLAN' },
+      { do: 'move', mission: 'm1', to: 'CANCELLED' },
+      { do: 'reopen', request: 'r1' },
+      { do: 'tick' },
+    ],
+    expect: { r1: 'WITHDRAWN' },
+  },
+  {
+    id: 'reasked-other-reason-after-leaving',
+    class: 'REASKED_AFTER_LEAVING',
+    note: 'Re-asked for a reason other than leaving Needs You, then the mission ran again: still moot.',
+    steps: [
+      { do: 'park', mission: 'm1' },
+      { do: 'ask', request: 'r1', mission: 'm1' },
+      { do: 'answer', request: 'r1', choice: 'APPROVE_PLAN' },
+      { do: 'reopen', request: 'r1', recommendation: 'the person who answered cannot be resolved' },
+      { do: 'move', mission: 'm1', to: 'RUNNING' },
+      { do: 'tick' },
+      { do: 'tick' },
+    ],
+    expect: { r1: 'SETTLED' },
+  },
+  {
+    id: 'several-cards-one-mission',
+    class: 'SEVERAL_CARDS',
+    note: 'Two cards on one mission — one answered, one not — when the mission is cancelled.',
+    steps: [
+      { do: 'park', mission: 'm1' },
+      { do: 'ask', request: 'r1', mission: 'm1' },
+      { do: 'ask', request: 'r2', mission: 'm1', resumeKey: 'bench:several:second' },
+      { do: 'answer', request: 'r1', choice: 'APPROVE_PLAN' },
+      { do: 'move', mission: 'm1', to: 'CANCELLED' },
+      { do: 'tick' },
+      { do: 'tick' },
+    ],
+    expect: { r1: 'WITHDRAWN', r2: 'WITHDRAWN' },
+  },
+  {
+    id: 'two-missions-one-leaves',
+    class: 'SEVERAL_CARDS',
+    note: 'Only the card whose mission left is moot; the other mission still waits on its person.',
+    steps: [
+      { do: 'park', mission: 'm1', packet: 'AWAITING_APPROVAL' },
+      { do: 'park', mission: 'm2', packet: 'AWAITING_APPROVAL' },
+      { do: 'ask', request: 'r1', mission: 'm1' },
+      { do: 'ask', request: 'r2', mission: 'm2' },
+      { do: 'answer', request: 'r1', choice: 'APPROVE_PLAN' },
+      { do: 'move', mission: 'm1', to: 'CANCELLED' },
+      { do: 'tick' },
+    ],
+    expect: { r1: 'WITHDRAWN', r2: 'OPEN' },
+  },
+  {
+    id: 'control-still-waiting-unanswered',
+    class: 'STILL_WAITING',
+    note: 'A real decision: the mission waits on the person, nobody has answered. It stays in front of them.',
+    steps: [
+      { do: 'park', mission: 'm1', packet: 'AWAITING_APPROVAL' },
+      { do: 'ask', request: 'r1', mission: 'm1' },
+      { do: 'tick' },
+    ],
+    expect: { r1: 'OPEN' },
+  },
+  {
+    id: 'control-still-waiting-answer-failed',
+    class: 'STILL_WAITING',
+    note: 'An answer that cannot apply on a mission that still waits: re-asked, never withdrawn.',
+    steps: [
+      { do: 'park', mission: 'm1', packet: 'AWAITING_APPROVAL' },
+      { do: 'ask', request: 'r1', mission: 'm1' },
+      { do: 'answer', request: 'r1', choice: 'NOT_A_CHOICE' },
+      { do: 'tick' },
+    ],
+    expect: { r1: 'OPEN' },
+  },
+  {
+    id: 'control-came-back-to-needs-you',
+    class: 'STILL_WAITING',
+    note: 'The mission left Needs You and came back to it: the open card is a live decision again.',
+    steps: [
+      { do: 'park', mission: 'm1', packet: 'AWAITING_APPROVAL' },
+      { do: 'ask', request: 'r1', mission: 'm1' },
+      { do: 'move', mission: 'm1', to: 'RUNNING' },
+      { do: 'move', mission: 'm1', to: 'NEEDS_HUMAN' },
+      { do: 'tick' },
+    ],
+    expect: { r1: 'OPEN' },
+  },
+  {
+    id: 'control-stop-applies',
+    class: 'ANSWER_APPLIES',
+    note: 'STOP applies to a mission in any state: carried out, never withdrawn as moot.',
+    steps: [
+      { do: 'park', mission: 'm1' },
+      { do: 'ask', request: 'r1', mission: 'm1' },
+      { do: 'answer', request: 'r1', choice: 'STOP' },
+      { do: 'tick' },
+    ],
+    expect: { r1: 'RESUMED' },
+  },
+  {
+    id: 'control-missionless-card',
+    class: 'NOT_ABOUT_A_MISSION',
+    note: 'An unanswered card about no mission is not moot: it stays in front of the person.',
+    steps: [
+      { do: 'ask', request: 'r1', mission: null },
+      { do: 'tick' },
+      { do: 'tick' },
+    ],
+    expect: { r1: 'OPEN' },
+  },
+  {
+    id: 'control-authority-card-on-moved-mission',
+    class: 'NOT_ABOUT_A_MISSION',
+    note: 'A capability-authority card names a mission but is not about its research: the mission moving does not make it moot.',
+    steps: [
+      { do: 'park', mission: 'm1' },
+      { do: 'ask', request: 'r1', mission: 'm1', resumeKey: 'capability-authority:bench-1' },
+      { do: 'move', mission: 'm1', to: 'RUNNING' },
+      { do: 'tick' },
+    ],
+    expect: { r1: 'OPEN' },
+  },
+];

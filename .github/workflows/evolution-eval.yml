@@ -179,7 +179,7 @@ jobs:
                 > "$out/bench.log" 2>&1 || ok=0
             fi
             # Only the harness's summary lines reach the log; a hidden case's content never does.
-            grep -E '^(feasibility|planSpeed): |^metrics ' "$out/bench.log" 2>/dev/null | cut -c1-2000 || true
+            grep -E '^(feasibility|planSpeed|mootRequests): |^metrics ' "$out/bench.log" 2>/dev/null | cut -c1-2000 || true
             if [ "$ok" != 1 ] || [ ! -s "$out/result.json" ]; then
               echo "::warning::$experiment $kind ${variant} did not complete its $suite bench; recorded as a run with no metrics"
               tail -5 "$out/install.log" 2>/dev/null | cut -c1-300 || true
