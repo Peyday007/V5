@@ -172,10 +172,10 @@ function membership(id: string, role: ProjectMembership['role'] = 'MEMBER'): Pro
  */
 /**
  * The reason an answer whose mission already left Needs You is withdrawn with.
- * When the loop finds that before resuming (filter-at-loop) no resume runs, so
- * the move is the whole reason. When a resume ran, failed, and the mission is
- * found to have left afterwards, the move is named *and* the resume's own
- * refusal is kept beside it — the tests below assert both.
+ * The move is named, and the answer's own refusal is kept beside it — the
+ * resume's, when one ran and failed, or the one it would have given, when the
+ * loop found the mission gone first and never resumed it (filter-at-loop). The
+ * tests below assert both halves.
  */
 const MOVED_OUT_REASON = /the mission moved out of Needs You before the answer could be applied/;
 
@@ -2587,12 +2587,13 @@ describe('the loop keeps going without anybody watching', () => {
      * is never silently lost and never marked resumed. This mission is
      * RUNNING — it is not waiting on the card — so only a STOP could still
      * apply, and that would cancel work that is running on its own: it is
-     * withdrawn as moot, with one routine decision recorded, rather than
-     * re-asked. The mission was RUNNING before the tick read it, so no resume
-     * ran and there is no refusal to keep: the move is the whole reason. (The
-     * three tests above, where a resume did run and fail, keep its refusal.)
+     * withdrawn as moot, with the refusal on the card and one routine decision
+     * recorded, rather than re-asked. The mission was RUNNING before the tick
+     * read it, so it is never resumed — but the refusal the resume would have
+     * given is still kept beside the move.
      */
     await expectWithdrawnAsMoot(request.id, 'RUNNING', MOVED_OUT_REASON);
+    await expectWithdrawnAsMoot(request.id, 'RUNNING', /does not implement the answer/i);
     expect((await getHumanRequest(request.id))!.state).not.toBe('RESUMED');
   });
 
