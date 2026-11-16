@@ -32,18 +32,23 @@
  *
  * The class is pure and in memory, with its own input interface, so it does
  * not wait on whichever extraction produces its facts: `factFromDetection`
- * reads a stored feed detection into one, and an extractor writes the same
- * shape. The running Brain's graph is not that class alone: `syncEventGraph`
- * keeps one process graph backed by the durable `feed_detections` rows (the
- * graph's facts are those rows, so they survive a restart, a deploy and a
- * second process), reading only rows changed since its cursor and adding each
- * as an event, so only the neighborhoods those rows touch are recomputed.
+ * reads a stored feed detection into one, and `factsFromItem` reads a stored
+ * feed item through the deterministic extractor (`feeds/extract.ts`) into the
+ * want, offer, capacity, price or renewal it states, with its place, quantity,
+ * price and window. The running Brain's graph is not that class alone:
+ * `syncEventGraph` keeps one process graph backed by the durable
+ * `feed_detections` and `feed_items` rows (the graph's facts are read from
+ * those rows, so they survive a restart, a deploy and a second process),
+ * reading only rows past its cursors and adding each as an event, so only the
+ * neighborhoods those rows touch are recomputed.
  * Construction (`constructArrangements`) calls it on every pass.
  * Nothing here calls a model, so the lane keeps working when every model
  * provider is down. No subject, region, industry or example is a whitelist:
  * the rules relate whatever facts arrive.
  */
 import type { DetectedSignal } from '../feeds/detectors.ts';
+import { CODE_SIGNAL_SOURCE } from '../feeds/detectors.ts';
+import { extractItem, recordKindOf, type ExtractableItem, type ExtractedFact } from '../feeds/extract.ts';
 import { getDb } from '../../db/database.ts';
 
 /** The version every hypothesis is stamped with, so a rule change is traceable to what it produced. */
@@ -485,6 +490,159 @@ export function factFromDetection(
 }
 
 // ---------------------------------------------------------------------------
+// A stored feed item as graph facts, through the deterministic extractor
+// ---------------------------------------------------------------------------
+
+/** Wording that makes a public record a renewal (a contract, licence or term coming up again). */
+const RENEWAL_WORDING = /\b(renewal|renews|renewing|up for renewal|re-?bid|contract (?:expires|expiration|ends))\b/i;
+/** Wording that makes a seller's advertisement a statement of capacity rather than a plain offer. */
+const CAPACITY_WORDING = /\b(capacity|availability|available (?:now|for|from)|now booking|openings?|slots? (?:open|available)|accepting (?:new )?(?:clients|customers|orders))\b/i;
+
+/**
+ * The words a title uses to say what kind of record it is ("Request for
+ * quotes:", "now booking", "for sale"), not what it is about. They are
+ * dropped from the subject so a request and an advert about the same thing
+ * meet in one neighborhood; the kind itself is kept on the fact.
+ */
+const KIND_WORDS =
+  /\b(request for (?:proposals?|quotes?|bids?)|rfp|rfq|invitation to bid|seeking (?:quotes|bids|a contractor|a vendor|a supplier)|looking for (?:a )?(?:contractor|vendor|supplier|provider)|need(?:s|ed)? (?:a )?(?:contractor|vendor|supplier)|we offer|our services|available for hire|for sale|now booking|free estimates?|call us|list(?:ed)? (?:price|at)|price list|marketplace price|asking price)\b/gi;
+
+/** A record's subject: its deliverable key with the record-kind words taken out, or the key itself if nothing is left. */
+export function itemSubject(deliverable: string): string {
+  const stripped = deliverable.replace(KIND_WORDS, ' ').replace(/[^a-z0-9]+/gi, ' ').trim().toLowerCase();
+  return stripped || deliverable;
+}
+
+/** The one value a field states, or null when the record states none or several that disagree — never guessed. */
+function single(facts: readonly ExtractedFact[], field: ExtractedFact['field']): ExtractedFact | null {
+  const found = facts.filter((f) => f.field === field);
+  if (found.length === 0) return null;
+  const values = new Set(found.map((f) => String(f.value)));
+  return values.size === 1 ? found[0]! : null;
+}
+
+/**
+ * Read one stored feed item into graph facts (ALGO-16-1 items 2 → 3).
+ *
+ * The record's kind (`recordKindOf`) decides what the fact can be, and nothing
+ * is upgraded on the way: a record stating a request is a WANT on the
+ * STATED_REQUEST basis (and, when it states a budget, a BUY price); a job
+ * posting is a WANT on the JOB_POSTING basis, carrying that limit as a missing
+ * condition; a seller's advertisement is an OFFER, or CAPACITY when it says it
+ * has room, on the SUPPLIER_AD basis; a platform listing is a SELL price on the
+ * PLATFORM_PRICE basis; a public record that names a renewal and a date is a
+ * RENEWAL. News and records the parser cannot classify are not facts.
+ *
+ * Place, quantity and price come from the extractor's normalized facts, and
+ * only when the record states exactly one — two places or two prices are an
+ * ambiguity for the model lane, not a value to pick. The actor's role is what
+ * the record says (BUYER only for a stated request, SUPPLIER for a seller);
+ * PARTNER is never inferred from wording. Every fact's raw evidence is the
+ * stored item itself. Pure.
+ */
+export function factsFromItem(item: ExtractableItem): GraphFact[] {
+  const kind = recordKindOf(item);
+  const extracted = extractItem(item);
+  const deliverable = extracted.find((f) => f.field === 'deliverable');
+  if (!deliverable) return [];
+  const subject = itemSubject(String(deliverable.value));
+  const actorKey = extracted.find((f) => f.entityKey)?.entityKey ?? `item:${item.id}`;
+  const actorName = item.organization?.trim() || null;
+  const place = single(extracted, 'location');
+  const quantity = single(extracted, 'quantity');
+  const price = single(extracted, 'price');
+  const observedAt = item.publishedAt ?? item.fetchedAt;
+  const stated = extracted
+    .filter((f) => f.field === 'date' && f.evidence.field !== 'publishedAt')
+    .map((f) => String(f.value))
+    .sort();
+  const from = observedAt;
+  const fromDay = from.slice(0, 10);
+  const later = stated.filter((day) => day >= fromDay);
+  const window = { from, to: later.length > 0 ? `${later[later.length - 1]}T23:59:59.999Z` : null };
+  const evidence: EvidenceLink[] = [{ rawId: item.id, source: item.source, url: item.url, observedAt }];
+  const base = {
+    subject,
+    region: place ? String(place.value) : null,
+    quantity: quantity ? Number(quantity.value) : null,
+    unit: quantity?.unit ?? null,
+    priceCents: null as number | null,
+    currency: null as string | null,
+    side: null as GraphFact['side'],
+    statedCostCents: null,
+    window,
+    channel: item.source,
+    rights: [] as string[],
+    evidence,
+  };
+  const text = `${item.title}\n${item.body ?? ''}`;
+  switch (kind) {
+    case 'STATED_REQUEST': {
+      const out: GraphFact[] = [{ ...base, id: `item:${item.id}`, kind: 'WANT', basis: 'STATED_REQUEST', actor: { key: actorKey, name: actorName, role: 'BUYER' } }];
+      if (price && price.currency) {
+        out.push({
+          ...base,
+          id: `item:${item.id}:price`,
+          kind: 'PRICE',
+          basis: 'STATED_REQUEST',
+          actor: { key: actorKey, name: actorName, role: 'BUYER' },
+          priceCents: Number(price.value),
+          currency: price.currency,
+          unit: price.unit === 'per-unit' ? base.unit : null,
+          side: 'BUY',
+        });
+      }
+      return out;
+    }
+    case 'JOB_POSTING':
+      return [{ ...base, id: `item:${item.id}`, kind: 'WANT', basis: 'JOB_POSTING', actor: { key: actorKey, name: actorName, role: 'UNKNOWN' } }];
+    case 'SUPPLIER_AD':
+      return [
+        {
+          ...base,
+          id: `item:${item.id}`,
+          kind: CAPACITY_WORDING.test(text) ? 'CAPACITY' : 'OFFER',
+          basis: 'SUPPLIER_AD',
+          actor: { key: actorKey, name: actorName, role: 'SUPPLIER' },
+          priceCents: price ? Number(price.value) : null,
+          currency: price?.currency ?? null,
+        },
+      ];
+    case 'PLATFORM_PRICE':
+      if (!price || !price.currency) return [];
+      return [
+        {
+          ...base,
+          id: `item:${item.id}`,
+          kind: 'PRICE',
+          basis: 'PLATFORM_PRICE',
+          actor: { key: actorKey, name: actorName, role: 'SUPPLIER' },
+          priceCents: Number(price.value),
+          currency: price.currency,
+          unit: price.unit === 'per-unit' ? base.unit : null,
+          side: 'SELL',
+        },
+      ];
+    case 'PUBLIC_RECORD':
+    case 'NEWS':
+    case 'UNKNOWN': {
+      // A renewal needs both the wording and the date it renews on; the date is the window's start.
+      if (!RENEWAL_WORDING.test(text) || later.length === 0) return [];
+      return [
+        {
+          ...base,
+          id: `item:${item.id}`,
+          kind: 'RENEWAL',
+          basis: 'PUBLIC_RECORD',
+          actor: { key: actorKey, name: actorName, role: 'UNKNOWN' },
+          window: { from: `${later[0]}T00:00:00.000Z`, to: null },
+        },
+      ];
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // The running Brain's graph, backed by the durable detection rows
 // ---------------------------------------------------------------------------
 
@@ -507,9 +665,21 @@ interface StoredDetection {
   updated_at: string;
 }
 
+/** One stored `feed_items` row, as the sync reads it. */
+interface StoredItem {
+  id: string;
+  source: string;
+  url: string;
+  title: string;
+  body: string | null;
+  organization: string | null;
+  published_at: string | null;
+  fetched_at: string;
+}
+
 /** What one sync did, so a caller can say what an event actually cost. */
 export interface EventGraphSync {
-  /** Detection rows read because they changed since the cursor. */
+  /** Rows read because they moved past a cursor: detection rows, plus stored feed items (`itemsRead`). */
   read: number;
   /** Facts added or re-read with a change. */
   added: number;
@@ -524,17 +694,33 @@ export interface EventGraphSync {
   hypotheses: number;
   /** The cursor after this sync: the last row read, by (updated_at, id). */
   cursor: { updatedAt: string; id: string } | null;
+  /** Of `read`, stored feed items read through the extractor since the item cursor. */
+  itemsRead: number;
+  /** The item cursor after this sync: the last `feed_items` row read, by (fetched_at, id). */
+  itemCursor: { fetchedAt: string; id: string } | null;
   at: string;
 }
 
 interface ProcessGraph {
   graph: EventGraph;
   cursor: { updatedAt: string; id: string } | null;
+  itemCursor: { fetchedAt: string; id: string } | null;
   last: EventGraphSync | null;
   running: Promise<EventGraphSync> | null;
 }
 
-let processGraph: ProcessGraph = { graph: new EventGraph(), cursor: null, last: null, running: null };
+/**
+ * How far back a fresh process reads stored feed items: a fact older than this
+ * is past any window a hypothesis could still act on. Detection rows have no
+ * floor because a rule's ACTIVE output is already bounded by its own window.
+ */
+export const EVENT_GRAPH_ITEM_WINDOW_MS = 120 * 86_400_000;
+
+function emptyGraph(): ProcessGraph {
+  return { graph: new EventGraph(), cursor: null, itemCursor: null, last: null, running: null };
+}
+
+let processGraph: ProcessGraph = emptyGraph();
 
 /** The process graph (after at least one `syncEventGraph`, the durable rows' graph). */
 export function currentEventGraph(): EventGraph {
@@ -548,7 +734,7 @@ export function lastEventGraphSync(): EventGraphSync | null {
 
 /** Forget the process graph; the next sync rebuilds it from the rows. For a test, or a rule-version change. */
 export function resetEventGraph(): void {
-  processGraph = { graph: new EventGraph(), cursor: null, last: null, running: null };
+  processGraph = emptyGraph();
 }
 
 /** Which source each raw item came from, so every evidence link names its own feed. */
@@ -576,7 +762,15 @@ function parsedList(text: string): string[] {
 }
 
 /**
- * Bring the process graph up to date with the durable `feed_detections` rows.
+ * Bring the process graph up to date with the durable `feed_detections` and
+ * `feed_items` rows.
+ *
+ * Stored feed items (not code detections, which are derived) are read past
+ * their own (fetched_at, id) cursor — a fresh process from
+ * `EVENT_GRAPH_ITEM_WINDOW_MS` back — through `factsFromItem`, so the wants,
+ * offers, capacities, prices and renewals the records state, with their places,
+ * reach the rules; without them every rule but a job-post cluster has nothing
+ * to join.
  *
  * Incremental: it reads only rows whose `updated_at` moved past its cursor (a
  * new detection, one that grew, one promoted or rolled back), in pages, and
@@ -641,6 +835,54 @@ export function syncEventGraph(now: Date = new Date()): Promise<EventGraphSync> 
       held.cursor = { updatedAt: last.updated_at, id: last.id };
       if (rows.length < EVENT_GRAPH_SYNC_PAGE) break;
     }
+    // The stored records themselves, through the deterministic extractor: the wants, offers,
+    // capacities, prices and renewals they state, with place, quantity, price and window — the
+    // facts every rule but a job-post cluster needs. Code detections are derived, not records.
+    let itemsRead = 0;
+    for (;;) {
+      const cursor = held.itemCursor;
+      const floor = new Date(now.getTime() - EVENT_GRAPH_ITEM_WINDOW_MS).toISOString();
+      const rows = await getDb().all<StoredItem>(
+        cursor
+          ? `SELECT id, source, url, title, body, organization, published_at, fetched_at FROM feed_items
+              WHERE source <> ? AND (fetched_at > ? OR (fetched_at = ? AND id > ?))
+              ORDER BY fetched_at, id LIMIT ${EVENT_GRAPH_SYNC_PAGE}`
+          : `SELECT id, source, url, title, body, organization, published_at, fetched_at FROM feed_items
+              WHERE source <> ? AND fetched_at >= ?
+              ORDER BY fetched_at, id LIMIT ${EVENT_GRAPH_SYNC_PAGE}`,
+        cursor ? [CODE_SIGNAL_SOURCE, cursor.fetchedAt, cursor.fetchedAt, cursor.id] : [CODE_SIGNAL_SOURCE, floor],
+      );
+      if (rows.length === 0) break;
+      for (const row of rows) {
+        read += 1;
+        itemsRead += 1;
+        const facts = factsFromItem({
+          id: row.id,
+          source: row.source,
+          url: row.url,
+          title: row.title,
+          body: row.body,
+          organization: row.organization,
+          publishedAt: row.published_at,
+          fetchedAt: row.fetched_at,
+        });
+        if (facts.length === 0) {
+          unchanged += 1;
+          continue;
+        }
+        let moved = false;
+        for (const fact of facts) {
+          const result = held.graph.add(fact);
+          if (result.affected.length > 0) moved = true;
+          for (const hood of result.affected) recomputed.add(hood);
+        }
+        if (moved) added += 1;
+        else unchanged += 1;
+      }
+      const last = rows[rows.length - 1]!;
+      held.itemCursor = { fetchedAt: last.fetched_at, id: last.id };
+      if (rows.length < EVENT_GRAPH_SYNC_PAGE) break;
+    }
     const sync: EventGraphSync = {
       read,
       added,
@@ -650,6 +892,8 @@ export function syncEventGraph(now: Date = new Date()): Promise<EventGraphSync> 
       facts: held.graph.size(),
       hypotheses: held.graph.hypotheses().length,
       cursor: held.cursor,
+      itemsRead,
+      itemCursor: held.itemCursor,
       at: now.toISOString(),
     };
     held.last = sync;

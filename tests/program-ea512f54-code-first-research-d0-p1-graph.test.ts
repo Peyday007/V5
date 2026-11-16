@@ -7,13 +7,21 @@
 import { describe, expect, it } from 'vitest';
 import {
   EventGraph,
+  currentEventGraph,
   detectInNeighborhood,
   factFromDetection,
+  factsFromItem,
+  resetEventGraph,
+  syncEventGraph,
   neighborhoodOf,
   REPEATED_DEMAND_MIN_BUYERS,
   type GraphFact,
   type GraphHypothesis,
 } from '../server/services/industry/eventGraph.ts';
+import type { ExtractableItem } from '../server/services/feeds/extract.ts';
+import { constructFromGraph } from '../server/services/cash/construct.ts';
+import { insertFeedItems } from '../server/repos/feeds.ts';
+import { freshProject } from './helpers.ts';
 
 let seq = 0;
 function fact(over: Partial<GraphFact> & Pick<GraphFact, 'kind' | 'subject'>): GraphFact {
@@ -228,5 +236,115 @@ describe('a stored feed detection enters as a fact', () => {
         's',
       ),
     ).toBeNull();
+  });
+});
+
+describe('stored feed records reach the rules in production (repair F1)', () => {
+  const at = '2026-11-10T12:00:00.000Z';
+  const item = (over: Partial<ExtractableItem> & Pick<ExtractableItem, 'id' | 'title'>): ExtractableItem => ({
+    source: 'rfq-board',
+    url: `https://board.test/${over.id}`,
+    body: null,
+    organization: null,
+    publishedAt: at,
+    fetchedAt: at,
+    ...over,
+  });
+
+  it('a record stating a request is a regioned BUYER want, with its budget as a BUY price; an advert with room is CAPACITY', () => {
+    const request = factsFromItem(
+      item({ id: 'r1', title: 'Request for quotes: lawn mowing', body: 'Seeking quotes from a supplier in Dallas, TX by 2026-12-15. Budget $60.', organization: 'Acme Foods LLC' }),
+    );
+    expect(request.map((f) => [f.kind, f.basis, f.actor.role, f.side])).toEqual([
+      ['WANT', 'STATED_REQUEST', 'BUYER', null],
+      ['PRICE', 'STATED_REQUEST', 'BUYER', 'BUY'],
+    ]);
+    expect(request[0]!.region).toBe('dallas, tx');
+    expect(request[0]!.subject).toBe('lawn mowing');
+    expect(request[0]!.window.to?.slice(0, 10)).toBe('2026-12-15');
+    expect(request[1]!.priceCents).toBe(6000);
+    expect(request.every((f) => f.evidence[0]!.rawId === 'r1')).toBe(true);
+
+    const ad = factsFromItem(item({ id: 'a1', title: 'Lawn mowing now booking', body: 'We offer weekly mowing in Dallas, TX for $45.', organization: 'Green Co' }));
+    expect(ad.map((f) => [f.kind, f.basis, f.actor.role])).toEqual([['CAPACITY', 'SUPPLIER_AD', 'SUPPLIER']]);
+    expect(ad[0]!.subject).toBe('lawn mowing');
+  });
+
+  it('a job posting stays a JOB_POSTING want, a listing a SELL price, a dated renewal a RENEWAL; news and unreadable records are not facts', () => {
+    expect(factsFromItem(item({ id: 'j1', source: 'remoteok', title: 'Senior Bookkeeper', body: 'Remote. Full-time.', organization: 'Acme' }))[0]).toMatchObject({
+      kind: 'WANT',
+      basis: 'JOB_POSTING',
+      region: 'remote',
+    });
+    const listing = factsFromItem(item({ id: 'p2', title: 'Round bales', body: 'Listed price $60.', organization: 'Hay Mart' }));
+    expect(listing[0]).toMatchObject({ kind: 'PRICE', basis: 'PLATFORM_PRICE', side: 'SELL', priceCents: 6000, currency: 'USD' });
+    const renewal = factsFromItem(
+      item({ id: 'g1', source: 'county-records', title: 'Janitorial services contract', body: 'The janitorial contract is up for renewal on 2027-01-31.', organization: 'Erie County' }),
+    );
+    expect(renewal[0]).toMatchObject({ kind: 'RENEWAL', basis: 'PUBLIC_RECORD', window: { from: '2027-01-31T00:00:00.000Z', to: null } });
+    expect(factsFromItem(item({ id: 'n1', source: 'news-x', title: 'Markets moved', body: 'Something happened.' }))).toEqual([]);
+    expect(factsFromItem(item({ id: 'u1', title: 'Thoughts', body: 'Nobody knows what.' }))).toEqual([]);
+  });
+
+  it('two places stated is an ambiguity, not a region picked', () => {
+    const [f] = factsFromItem(item({ id: 'r2', title: 'Request for quotes: fence repair', body: 'Seeking quotes from a supplier in York, PA or in Erie, PA.', organization: 'Farm' }));
+    expect(f!.region).toBeNull();
+  });
+
+  it('syncEventGraph reads stored feed_items past its cursor, emits hypotheses from them, and construction keeps candidates', async () => {
+    await freshProject();
+    resetEventGraph();
+    const now = new Date();
+    const hoursAgo = (n: number) => new Date(now.getTime() - n * 3_600_000).toISOString();
+    const due = new Date(now.getTime() + 20 * 86_400_000).toISOString().slice(0, 10);
+    await insertFeedItems('rfq-board', [
+      {
+        externalId: 'rfq-1',
+        url: 'https://board.test/rfq-1',
+        title: 'Request for quotes: lawn mowing',
+        body: `Seeking quotes from a supplier in Dallas, TX by ${due}. Budget $60.`,
+        organization: 'Acme Foods LLC',
+        publishedAt: hoursAgo(5),
+      },
+      {
+        externalId: 'ad-1',
+        url: 'https://board.test/ad-1',
+        title: 'Lawn mowing now booking',
+        body: 'We offer weekly mowing in Dallas, TX for $45.',
+        organization: 'Green Co',
+        publishedAt: hoursAgo(4),
+      },
+    ]);
+    await insertFeedItems('remoteok', [1, 2, 3].map((n) => ({
+      externalId: `job-${n}`,
+      url: `https://jobs.test/${n}`,
+      title: 'Bookkeeper',
+      body: 'Remote. Full-time.',
+      organization: `Employer ${n} Inc`,
+      publishedAt: hoursAgo(3),
+    })));
+
+    const sync = await syncEventGraph(now);
+    expect(sync.itemsRead).toBe(5);
+    expect(sync.itemCursor).not.toBeNull();
+    const hypotheses = currentEventGraph().hypotheses();
+    const match = only(hypotheses, 'BUYER_REQUEST_AGAINST_SUPPLIER');
+    expect(match).toHaveLength(1);
+    expect(match[0]!.neighborhood).toBe('lawn mowing');
+    expect(match[0]!.evidence.map((e) => e.source)).toEqual(['rfq-board', 'rfq-board']);
+    const repeated = only(hypotheses, 'REPEATED_DEMAND_LIMITED_SUPPLY');
+    expect(repeated).toHaveLength(1);
+    expect(repeated[0]!.missingConditions.join(' ')).toMatch(/hiring, not a request to buy/);
+    for (const h of hypotheses) expect(h.missingConditions.length).toBeGreaterThan(0);
+
+    const built = constructFromGraph(hypotheses, { capitalCeilingCents: null, delivers: [] });
+    expect(built.kept.length).toBeGreaterThan(0);
+    expect(built.kept.every((one) => one.status === 'HYPOTHESIS')).toBe(true);
+
+    // Incremental: nothing new stored, nothing read, nothing recomputed.
+    const again = await syncEventGraph(new Date(now.getTime() + 1000));
+    expect(again.itemsRead).toBe(0);
+    expect(again.recomputed).toEqual([]);
+    resetEventGraph();
   });
 });
