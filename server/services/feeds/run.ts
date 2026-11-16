@@ -36,7 +36,7 @@ import { FEED_SHORTLIST_BUCKET } from './bucket.ts';
 import { SITE_SOURCE } from './sites.ts';
 import { CODE_SIGNAL_SOURCE, coveredItems, detectionsForLeads } from './detectors.ts';
 import { extractItem, extractItems, type ExtractableItem, type ExtractedFact } from './extract.ts';
-import { currentEventGraph, syncEventGraph, type GraphHypothesis } from '../industry/eventGraph.ts';
+import { addExtractedItems, currentEventGraph, syncEventGraph, type ExtractedItemsUpdate, type GraphHypothesis } from '../industry/eventGraph.ts';
 import { constructFromGraph } from '../cash/construct.ts';
 
 export type Fetcher = (url: string, headers: Record<string, string>, timeoutMs?: number) => Promise<unknown>;
@@ -402,6 +402,12 @@ export interface ExtractionPass {
   needsModel: string[][];
   /** Facts by what their record is: a job posting, advert or listing is never demand. */
   demand: { statedRequest: number; notDemand: number };
+  /**
+   * What the pass handed the event graph (`addExtractedItems`): the records it read, as graph
+   * facts, and the neighborhoods recomputed for them — Structure feeding Connect and Derive on
+   * the same tick. Null when the graph could not take them; the pass is still recorded.
+   */
+  graph: ExtractedItemsUpdate | null;
 }
 
 /**
@@ -462,6 +468,14 @@ export async function recordFeedExtraction(input: { projectId: string; now?: Dat
     fetchedAt: row.fetched_at,
   }));
   const run = extractItems(items, now);
+  // Structure feeds Connect: what was just read goes into the event graph that construction reads,
+  // under the ids the graph's own sync gives these rows, so neither path makes a second fact.
+  let graph: ExtractedItemsUpdate | null = null;
+  try {
+    graph = addExtractedItems(items);
+  } catch (error) {
+    console.warn(`[feeds] extraction pass could not reach the event graph: ${String((error as Error)?.message ?? error)}`);
+  }
   const lastRow = rows[rows.length - 1]!;
   const needsModel = run.needsModel.map((batch) => batch.map((one) => one.id));
   const pass: ExtractionPass = {
@@ -480,6 +494,7 @@ export async function recordFeedExtraction(input: { projectId: string; now?: Dat
       statedRequest: run.facts.filter((f) => f.demand === 'STATED_REQUEST').length,
       notDemand: run.facts.filter((f) => f.demand === 'NOT_DEMAND').length,
     },
+    graph,
   };
   const contested = pass.reconciled.filter((r) => r.status === 'CONTESTED').length;
   const stale = pass.reconciled.filter((r) => r.status === 'STALE').length;
@@ -491,7 +506,10 @@ export async function recordFeedExtraction(input: { projectId: string; now?: Dat
       `Deterministic extraction over ${pass.items} stored item(s): ${pass.facts.length} normalized fact(s), each linked to its item and text; ` +
       `${pass.reconciled.length} fact key(s), ${contested} contested and ${stale} stale; ${pass.readable} item(s) read by code, ` +
       `${needsModel.flat().length} in ${needsModel.length} batch(es) sent to the free-model screen first. ` +
-      `${pass.demand.statedRequest} fact(s) from a record stating a request; none is a confirmed buyer.`,
+      `${pass.demand.statedRequest} fact(s) from a record stating a request; none is a confirmed buyer. ` +
+      (graph
+        ? `${graph.facts} graph fact(s) handed to the event graph, ${graph.added} new, ${graph.affected.length} neighborhood(s) recomputed; every hypothesis is still only a hypothesis.`
+        : 'The event graph could not take them this pass; its own sync reads the same rows.'),
     detail: { ...pass },
   });
   return pass;

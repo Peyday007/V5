@@ -707,8 +707,17 @@ export interface FeedLoopCycle {
   /** Observe: what the due sources returned this tick (`pullDueFeeds`). */
   observe: { sources: number; fetched: number; inserted: number; duplicates: number; incremental: number; failed: number };
   /** Structure: the deterministic extraction pass over items stored since its cursor (`recordFeedExtraction`). */
-  structure: { cursor: ExtractionPass['cursor'] | null; items: number; readable: number; facts: number; contested: number; stale: number } | null;
-  /** Connect: the event graph brought up to the durable detection rows (`syncEventGraph`). */
+  structure: {
+    cursor: ExtractionPass['cursor'] | null;
+    items: number;
+    readable: number;
+    facts: number;
+    contested: number;
+    stale: number;
+    /** What the pass handed Connect: graph facts from its records, how many were new, neighborhoods recomputed. Null when the graph could not take them. */
+    graph: { facts: number; added: number; affected: number } | null;
+  } | null;
+  /** Connect: the event graph brought up to the durable detection and item rows (`syncEventGraph`); records Structure already handed it are duplicates here. */
   connect: { read: number; added: number; removed: number; recomputed: number; facts: number; hypotheses: number; cursor: EventGraphSync['cursor'] } | null;
   /** Derive: graph hypotheses joined with the structures they can be paid through, pruned on hard constraints (`constructFromGraph`). */
   derive: { hypotheses: number; kept: number; pruned: number; top: { key: string; structure: string; rule: string; missingConditions: number }[] } | null;
@@ -765,6 +774,7 @@ export async function runFeedLoopCycle(
         facts: extraction.facts.length,
         contested: extraction.reconciled.filter((one) => one.status === 'CONTESTED').length,
         stale: extraction.reconciled.filter((one) => one.status === 'STALE').length,
+        graph: extraction.graph ? { facts: extraction.graph.facts, added: extraction.graph.added, affected: extraction.graph.affected.length } : null,
       }
     : null;
   const sync = await syncEventGraph(now).catch(failure('connect'));

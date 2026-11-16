@@ -22,6 +22,7 @@ import type { ExtractableItem } from '../server/services/feeds/extract.ts';
 import { constructFromGraph } from '../server/services/cash/construct.ts';
 import { insertFeedItems } from '../server/repos/feeds.ts';
 import { freshProject } from './helpers.ts';
+import { recordFeedExtraction } from '../server/services/feeds/run.ts';
 
 let seq = 0;
 function fact(over: Partial<GraphFact> & Pick<GraphFact, 'kind' | 'subject'>): GraphFact {
@@ -345,6 +346,61 @@ describe('stored feed records reach the rules in production (repair F1)', () => 
     const again = await syncEventGraph(new Date(now.getTime() + 1000));
     expect(again.itemsRead).toBe(0);
     expect(again.recomputed).toEqual([]);
+    resetEventGraph();
+  });
+});
+
+describe('the structure pass feeds connect and derive directly (repair F2)', () => {
+  it('recordFeedExtraction hands its records to the graph construction reads, and the sync then adds no second fact', async () => {
+    const { project } = await freshProject();
+    resetEventGraph();
+    const now = new Date();
+    const hoursAgo = (n: number) => new Date(now.getTime() - n * 3_600_000).toISOString();
+    const due = new Date(now.getTime() + 20 * 86_400_000).toISOString().slice(0, 10);
+    await insertFeedItems('rfq-board', [
+      {
+        externalId: 'f2-rfq',
+        url: 'https://board.test/f2-rfq',
+        title: 'Request for quotes: gutter cleaning',
+        body: `Seeking quotes from a supplier in Tulsa, OK by ${due}. Budget $300.`,
+        organization: 'Maple HOA',
+        publishedAt: hoursAgo(5),
+      },
+      {
+        externalId: 'f2-ad',
+        url: 'https://board.test/f2-ad',
+        title: 'Gutter cleaning now booking',
+        body: 'We offer gutter cleaning in Tulsa, OK for $150.',
+        organization: 'Clear Gutters',
+        publishedAt: hoursAgo(4),
+      },
+    ]);
+    expect(currentEventGraph().size()).toBe(0);
+
+    // Structure, alone: no sync has run, and the graph already holds what the pass read.
+    const pass = await recordFeedExtraction({ projectId: project.id, now });
+    expect(pass).not.toBeNull();
+    expect(pass!.graph).not.toBeNull();
+    expect(pass!.graph!.added).toBeGreaterThan(0);
+    expect(pass!.graph!.affected).toContain('gutter cleaning');
+    const hypotheses = currentEventGraph().hypotheses();
+    const match = only(hypotheses, 'BUYER_REQUEST_AGAINST_SUPPLIER');
+    expect(match).toHaveLength(1);
+    expect(match[0]!.evidence.map((e) => e.url).sort()).toEqual(['https://board.test/f2-ad', 'https://board.test/f2-rfq']);
+    // A supplier advert stays supply, a request stays a stated request: nobody becomes a confirmed buyer.
+    expect(match[0]!.status).toBe('HYPOTHESIS');
+    expect(match[0]!.missingConditions.length).toBeGreaterThan(0);
+    // Derive reads the same graph: construction keeps candidates from what Structure read.
+    const built = constructFromGraph(hypotheses, { capitalCeilingCents: null, delivers: [] });
+    expect(built.kept.some((one) => one.hypothesisKey === match[0]!.key)).toBe(true);
+
+    // Connect after it reads the same rows and finds every fact already held: one fact per record, nothing recomputed.
+    const size = currentEventGraph().size();
+    const sync = await syncEventGraph(now);
+    expect(sync.itemsRead).toBeGreaterThanOrEqual(2);
+    expect(sync.recomputed).toEqual([]);
+    expect(currentEventGraph().size()).toBe(size);
+    expect(only(currentEventGraph().hypotheses(), 'BUYER_REQUEST_AGAINST_SUPPLIER')).toHaveLength(1);
     resetEventGraph();
   });
 });
