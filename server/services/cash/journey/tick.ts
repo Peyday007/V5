@@ -29,13 +29,19 @@
  *      (`deliverables/exceptions.ts`); a refund that would remedy it is asked
  *      for as a person's approval, and a sourced case is traced as a rehearsal
  *      whenever it changed. Nothing is carried out here;
+ *   8b. what Brain's Instantly campaigns measured — one terminal answer per
+ *      lead, read from the provider's own record — is recorded as outcomes the
+ *      outreach funnel models (`campaignOutcomes.ts`, COM-13-3), on the one
+ *      project that holds the authority to contact buyers;
  *  10. the deal's realization is read from its rows — delivery steps derived from
  *      the agreed scope, delivery and acceptance evidence, open redo obligations,
  *      the accounting result — and recorded when it changed, with each repeat-
  *      business signal the rows show (`deliverables/realization.ts`).
  *
  * It sends nothing. Every external effect is still a person's press or a
- * granted tick through `perform.ts`, and nothing here calls an adapter.
+ * granted tick through `perform.ts`, and nothing here calls an adapter. The
+ * one outside read is 8b's, of Instantly's own lead records, and it changes
+ * nothing there.
  */
 import { getOpportunity, transitionOpportunity, listOpportunities } from '../../../repos/cashPortfolio.ts';
 import { getCashMode, recordCashEvent } from '../../../repos/cashMode.ts';
@@ -58,6 +64,7 @@ import { agreementAnswering } from '../../../domain/cashJourney.ts';
 import { advanceFulfillment, moveToDelivering, type FulfillmentPass } from './fulfillment.ts';
 import { collectable, dealPosition } from './position.ts';
 import { recordOutcomes } from './learning.ts';
+import { recordCampaignOutcomes } from './campaignOutcomes.ts';
 import { recordDetectedExceptions, rehearseCaseOnTick } from '../deliverables/exceptions.ts';
 import { recordRealization } from '../deliverables/realization.ts';
 import { recordRowDependencies } from '../deliverables/commitments.ts';
@@ -81,6 +88,11 @@ export interface JourneyTickReport {
   delivering: number;
   collected: number;
   outcomes: number;
+  /**
+   * Campaign outcomes newly recorded from Brain's Instantly campaigns, and why
+   * none were read when that is the case (`campaignOutcomes.ts`).
+   */
+  campaignOutcomes: { recorded: number; skipped: string | null };
   /** Exceptions the commitment rows show, and the new ones recorded this pass. */
   exceptions: { detected: number; recorded: number; rehearsed: number };
   /** Realization readings recorded this pass, and repeat-business signals newly on record. */
@@ -100,6 +112,7 @@ export async function advanceJourney(
     delivering: 0,
     collected: 0,
     outcomes: 0,
+    campaignOutcomes: { recorded: 0, skipped: null },
     exceptions: { detected: 0, recorded: 0, rehearsed: 0 },
     realization: { recorded: 0, aftercare: 0 },
   };
@@ -199,6 +212,18 @@ export async function advanceJourney(
       if (realized.recorded) report.realization.recorded += 1;
       report.realization.aftercare += realized.aftercare;
     }
+  }
+
+  // 8b. What the campaigns measured. Its own failure domain: an unreadable
+  // workspace never stops the deals above, and the next pass reads again.
+  try {
+    const campaigns = await recordCampaignOutcomes(projectId, { now });
+    report.campaignOutcomes = {
+      recorded: campaigns.recorded,
+      skipped: campaigns.skipped ?? (campaigns.failed.length > 0 ? campaigns.failed.map((f) => `${f.campaign}: ${f.reason}`).join('; ') : null),
+    };
+  } catch (error) {
+    report.campaignOutcomes = { recorded: 0, skipped: error instanceof Error ? error.message.slice(0, 200) : 'failed' };
   }
   return report;
 }
