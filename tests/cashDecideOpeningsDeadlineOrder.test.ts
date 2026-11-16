@@ -20,6 +20,8 @@ import { createWorkstream, getWorkstream } from '../server/repos/register.ts';
 import { setTarget } from '../server/services/goals/target.ts';
 import { decideOpenings, decisionOrder, UNDATED_RESERVED_EVERY } from '../server/services/cash/decisions.ts';
 import { currentDecision } from '../server/repos/cashDecisions.ts';
+import { handedOpeningsOutcome, judgeHandedOpenings } from '../server/services/improvement/loop.ts';
+import { MEASURE_MAX_HOURS } from '../server/domain/improvement.ts';
 
 const NOW = new Date('2026-11-16T12:00:00.000Z');
 const DAY = 24 * 60 * 60_000;
@@ -180,5 +182,50 @@ describe('decideOpenings under its cap (the recorded failure class)', () => {
     expect(await currentDecision(dated[dated.length - 1]!, goalId)).toBeNull();
     // Starvation on either side is in the record, not inferred.
     expect(pass.pastCap).toEqual({ dated: dated.length - (limit - 1), undated: 0 });
+  });
+});
+
+describe('judging a MISSED_OPPORTUNITY hand-off by the openings it handed (review finding R2-F1)', () => {
+  const kept = { decision: 'KEPT' as const, reason: 'Metric improved.', revert: false };
+  const handed = [
+    { id: 'undated', stateAtHandOff: 'DISCOVERED', expiresAt: null },
+    { id: 'dated', stateAtHandOff: 'EVIDENCE_CARD', expiresAt: '2026-11-20' },
+  ];
+  const unpursued = new Map([
+    ['undated', { state: 'DISCOVERED', expiresAt: null }],
+    ['dated', { state: 'EVIDENCE_CARD', expiresAt: '2026-11-20' }],
+  ]);
+
+  it('counts an undated unpursued opening as still open, however much time passes', () => {
+    const outcome = handedOpeningsOutcome(handed, unpursued, new Date('2027-06-01T00:00:00.000Z'));
+    expect(outcome).toMatchObject({ handed: 2, pursued: 0, stillOpen: 1, expiredUnpursued: 1, missing: 0 });
+  });
+
+  it('withholds a KEPT while a handed opening is still open, within the measurement bound', () => {
+    const outcome = handedOpeningsOutcome(handed, unpursued, NOW);
+    expect(outcome.stillOpen).toBe(2);
+    expect(judgeHandedOpenings(kept, outcome, 24).decision).toBeNull();
+    expect(judgeHandedOpenings(kept, outcome, MEASURE_MAX_HOURS - 1).decision).toBeNull();
+  });
+
+  it('decides KEPT_NO_EFFECT once the bound has passed with an undated opening still unpursued, rather than never', () => {
+    const outcome = handedOpeningsOutcome(handed, unpursued, new Date('2027-06-01T00:00:00.000Z'));
+    expect(outcome.stillOpen).toBeGreaterThan(0);
+    const judged = judgeHandedOpenings(kept, outcome, MEASURE_MAX_HOURS);
+    expect(judged.decision).toBe('KEPT_NO_EFFECT');
+    expect(judged.revert).toBe(false);
+    // A later tick still decides: there is no reachable state where it stays null for ever.
+    expect(judgeHandedOpenings(kept, outcome, MEASURE_MAX_HOURS * 10).decision).toBe('KEPT_NO_EFFECT');
+  });
+
+  it('keeps the KEPT when a handed opening was pursued, and leaves a regression or pending reading as measured', () => {
+    const pursued = new Map(unpursued);
+    pursued.set('dated', { state: 'EXECUTING', expiresAt: '2026-11-20' });
+    expect(judgeHandedOpenings(kept, handedOpeningsOutcome(handed, pursued, NOW), 1).decision).toBe('KEPT');
+    const outcome = handedOpeningsOutcome(handed, unpursued, NOW);
+    const reverted = { decision: 'REVERTED' as const, reason: 'Regressed.', revert: true };
+    expect(judgeHandedOpenings(reverted, outcome, 1)).toEqual(reverted);
+    const pending = { decision: null, reason: 'Still measuring.', revert: false };
+    expect(judgeHandedOpenings(pending, outcome, 1)).toEqual(pending);
   });
 });

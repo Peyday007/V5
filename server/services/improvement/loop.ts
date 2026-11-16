@@ -40,6 +40,7 @@ import {
   BEFORE_WINDOW_HOURS,
   RECENT_WINDOW_HOURS,
   MEASURE_WINDOW_HOURS,
+  MEASURE_MAX_HOURS,
   METRICS,
   packetWeaknesses,
   ownerInterventionWeaknesses,
@@ -873,9 +874,10 @@ async function measureAndDecide(candidate: ImprovementCandidate, now: Date, repo
   const beforeDown = candidate.downstreamMetric ? await readMetric(candidate.downstreamMetric, beforeFrom, candidate.deliveredAt!) : null;
   const primary = compare(before, after);
   const downstream = beforeDown && afterDown ? compare(beforeDown, afterDown) : null;
-  const measured = decideAfterMeasurement({ primary, downstream, hoursSinceDelivery: (now.getTime() - delivered) / HOUR });
+  const hoursSinceDelivery = (now.getTime() - delivered) / HOUR;
+  const measured = decideAfterMeasurement({ primary, downstream, hoursSinceDelivery });
   const handedOpenings = await readHandedOpenings(candidate, now);
-  const decision = handedOpenings ? judgeHandedOpenings(measured, handedOpenings) : measured;
+  const decision = handedOpenings ? judgeHandedOpenings(measured, handedOpenings, hoursSinceDelivery) : measured;
   const result = { before, beforeDownstream: beforeDown, after, afterDownstream: afterDown, primary, downstream, handedOpenings, at: now.toISOString() };
   await patchCandidate(candidate.id, { result });
   if (!decision.decision) return;
@@ -952,22 +954,30 @@ export function handedOpeningsOutcome(
  * A MISSED_OPPORTUNITY hand-off is kept as effective only if at least one handed opening was actually
  * pursued. A rise in the loop's metric with every handed opening still unpursued is something else's
  * doing, so the hand-off had no effect; a regression or a pending reading is left as measured. Pure.
+ *
+ * While a handed opening is still open and unpursued the KEPT is withheld, but only for the same
+ * MEASURE_MAX_HOURS any reading gets (review finding R2-F1). An undated opening never expires, so
+ * "wait until every window has ended" alone would leave the candidate in DECIDE forever and its
+ * weakness never released for a different strategy. Past that bound the hand-off has had its full
+ * measurement window and moved nothing, which is KEPT_NO_EFFECT.
  */
 export function judgeHandedOpenings(
   measured: ReturnType<typeof decideAfterMeasurement>,
   outcome: HandedOpeningsOutcome,
+  hoursSinceDelivery: number,
 ): ReturnType<typeof decideAfterMeasurement> {
   if (outcome.handed === 0 || outcome.pursued > 0) {
     return measured.decision ? { ...measured, reason: `${measured.reason} Handed openings: ${outcome.basis}.` } : measured;
   }
   if (measured.decision !== 'KEPT') return measured;
-  if (outcome.stillOpen > 0) {
+  if (outcome.stillOpen > 0 && hoursSinceDelivery < MEASURE_MAX_HOURS) {
     return { decision: null, reason: `${measured.reason} Not yet kept: ${outcome.basis}.`, revert: false };
   }
+  const waited = outcome.stillOpen > 0 ? ` after ${Math.round(hoursSinceDelivery)} h` : '';
   return {
     decision: 'KEPT_NO_EFFECT',
     reason:
-      `${measured.reason} But ${outcome.basis}: the hand-off moved none of the openings it was made for, ` +
+      `${measured.reason} But ${outcome.basis}${waited}: the hand-off moved none of the openings it was made for, ` +
       'so the change in the metric is not its effect and the weakness stays eligible for a different strategy.',
     revert: false,
   };
