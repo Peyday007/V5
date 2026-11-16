@@ -8,9 +8,13 @@ import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { insertFeedItems } from '../server/repos/feeds.ts';
 import {
+  ACTIVE_AUDIT_EVERY,
   CONCENTRATED_HIRING,
+  DEMOTION_PRECISION,
   DETECTORS,
   PROMOTION_MIN_SCREENED,
+  RULE_READING_RECENT,
+  activeAuditSampled,
   REPEATED_DEMAND,
   RULE_EFFECTIVE_SOON,
   effectiveDateOf,
@@ -172,5 +176,81 @@ describe('readings from rows, and promotion through runDetectors', () => {
     await seedDemand(4);
     const reports = await runDetectors({ now, detectors: [SHADOW_DEMAND, CONCENTRATED_HIRING], rules: ['TEST_DEMAND'] });
     expect(reports.map((one) => one.rule)).toEqual(['TEST_DEMAND@1']);
+  });
+});
+
+/**
+ * Review finding F6: once a rule was ACTIVE every member was covered and never
+ * screened again, so its precision stayed frozen at the sample that promoted it
+ * and the DEMOTION_PRECISION rollback could not fire from new evidence. An
+ * ACTIVE rule now leaves a stable audit sample to the free screen, and its
+ * precision is read over its most recently screened members.
+ */
+describe('an ACTIVE rule keeps being audited, and degrades back to SHADOW on new evidence (F6)', () => {
+  async function screenAt(itemId: string, verdict: 'KEEP' | 'DROP', at: string) {
+    for (const model of ['m1', 'm2']) {
+      await getDb().run(
+        `INSERT INTO cheap_results (id, kind, input_hash, subject_id, model, ok, output, error, created_at)
+         VALUES (?, 'SCREEN_LEAD', ?, ?, ?, 1, ?, NULL, ?)`,
+        [`cr-${itemId}-${model}`, `h-${itemId}`, itemId, model, JSON.stringify({ verdict, window: 'SHORT', deliverable: 'DATASET', need: 'x', payer: 'y', reason: 'z' }), at],
+      );
+    }
+  }
+
+  it('the audit sample is stable and about one in ACTIVE_AUDIT_EVERY', () => {
+    const ids = Array.from({ length: 2000 }, (_, i) => `item-${i}`);
+    const sampled = ids.filter((id) => activeAuditSampled(id)).length;
+    expect(sampled).toBeGreaterThan(2000 / ACTIVE_AUDIT_EVERY / 2);
+    expect(sampled).toBeLessThan((2000 / ACTIVE_AUDIT_EVERY) * 2);
+    for (const id of ids.slice(0, 50)) expect(activeAuditSampled(id)).toBe(activeAuditSampled(id));
+  });
+
+  it('leaves the audit sample uncovered, so the screen still reads the rule after promotion', async () => {
+    const items = await seedDemand(PROMOTION_MIN_SCREENED + 2);
+    await runDetectors({ now, detectors: [SHADOW_DEMAND] }); // SHADOW: records the detection, covers nothing
+    const earlier = new Date(now.getTime() - 3_600_000).toISOString();
+    for (const item of items) await screenAt(item.id, 'KEEP', earlier);
+    const pass = await runDetectors({ now, detectors: [SHADOW_DEMAND] });
+    expect(pass[0]!.mode).toBe('ACTIVE');
+    const covered = new Set((await getDb().all<{ item_id: string }>('SELECT item_id FROM feed_item_coverage')).map((one) => one.item_id));
+    for (const item of items) expect(covered.has(item.id)).toBe(!activeAuditSampled(item.id));
+    expect(pass[0]!.audited).toBe(items.filter((one) => activeAuditSampled(one.id)).length);
+    expect(pass[0]!.covered + pass[0]!.audited).toBe(items.length);
+  });
+
+  it('demotes an ACTIVE rule whose audited members the screen now drops, though its promoting sample was perfect', async () => {
+    // Promotion: twelve members, all confirmed by the screen an hour ago.
+    const first = await seedDemand(PROMOTION_MIN_SCREENED + 2);
+    await runDetectors({ now, detectors: [SHADOW_DEMAND] });
+    const earlier = new Date(now.getTime() - 3_600_000).toISOString();
+    for (const item of first) await screenAt(item.id, 'KEEP', earlier);
+    expect((await runDetectors({ now, detectors: [SHADOW_DEMAND] }))[0]!.mode).toBe('ACTIVE');
+
+    // The rule then joins many more postings; only its audit sample reaches the screen, which drops them.
+    const more = Array.from({ length: 160 }, (_, i) => `Later Employer ${i}`);
+    await insertFeedItems(
+      'remoteok',
+      more.map((org, i) => ({ externalId: `y${i}`, url: `https://remoteok.test/y${i}`, title: 'Data Analyst', body: null, organization: org, publishedAt: daysAgo(1 + (i % 5)) })),
+    );
+    const active = await runDetectors({ now, detectors: [SHADOW_DEMAND] });
+    expect(active[0]!.mode).toBe('ACTIVE');
+    const covered = new Set((await getDb().all<{ item_id: string }>('SELECT item_id FROM feed_item_coverage')).map((one) => one.item_id));
+    const later = await getDb().all<{ id: string }>(`SELECT id FROM feed_items WHERE source = 'remoteok' AND external_id LIKE 'y%'`);
+    const audited = later.filter((one) => !covered.has(one.id));
+    expect(audited.length).toBeGreaterThanOrEqual(RULE_READING_RECENT);
+    expect(audited.every((one) => activeAuditSampled(one.id))).toBe(true);
+    for (const item of audited) await screenAt(item.id, 'DROP', now.toISOString());
+
+    const reading = await ruleReading(SHADOW_DEMAND, now);
+    // The newest screened members are the audit sample's drops, so the recent read falls below the bar.
+    expect(reading.precision).not.toBeNull();
+    expect(reading.precision!).toBeLessThan(DEMOTION_PRECISION);
+    const next = await runDetectors({ now, detectors: [SHADOW_DEMAND] });
+    // The rule left ACTIVE on the new evidence, and its open detection carries the rollback.
+    expect(next[0]!.mode).toBe('SHADOW');
+    const modes = await getDb().all<{ mode: string }>(`SELECT mode FROM feed_detections WHERE rule_id = 'TEST_DEMAND'`);
+    expect(modes.every((one) => one.mode === 'SHADOW')).toBe(true);
+    // A rule declared ACTIVE in code is demoted by the same reading.
+    expect(modeDecision('ACTIVE', reading)).toMatchObject({ mode: 'SHADOW', reason: expect.stringMatching(/demoted/) });
   });
 });

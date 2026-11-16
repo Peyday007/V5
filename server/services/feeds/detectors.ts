@@ -24,6 +24,7 @@
  * Detection rows are idempotent by `(rule, version, group)`: a restart or a
  * second tick finds the same row and only ever adds members to it.
  */
+import { createHash } from 'node:crypto';
 import { getDb } from '../../db/database.ts';
 import { newId } from '../../repos/util.ts';
 import { insertFeedItems } from '../../repos/feeds.ts';
@@ -362,9 +363,16 @@ export const DETECTORS: readonly Detector[] = [CONCENTRATED_HIRING, REPEATED_DEM
  * the screen KEEPs confirms it, one it DROPs is a false join, and an item the
  * screen KEPT from the same entity or family that the rule left out is a miss.
  * Evidence quality is the share of members with the fields a lead needs (a
- * named organisation and a publication date). An ACTIVE rule's members stop
- * being screened once covered, so its reading rests on what was screened
- * before — never on an assumption that it stayed right.
+ * named organisation and a publication date).
+ *
+ * An ACTIVE rule's members stop being screened once covered — all but a fixed
+ * audit sample (`activeAuditSampled`, one in ACTIVE_AUDIT_EVERY), which it
+ * never covers, so the free screen keeps checking the rule after promotion.
+ * Precision is read over the most recent RULE_READING_RECENT screened members,
+ * so a rule that starts joining wrongly shows it in new evidence instead of
+ * being outvoted by the sample that promoted it, and the demotion bar can fire
+ * (review finding F6: before, an ACTIVE rule's precision was frozen at its
+ * pre-promotion sample and could never be rolled back from new evidence).
  */
 export interface RuleReading {
   rule: string;
@@ -374,7 +382,7 @@ export interface RuleReading {
   confirmed: number;
   falseJoins: number;
   misses: number;
-  /** Confirmed over screened members; null below the sample a judgment needs. */
+  /** Confirmed over the most recent RULE_READING_RECENT screened members; null below the sample a judgment needs. */
   precision: number | null;
   /** Share of members with an organisation and a publication date; null with no members. */
   evidenceQuality: number | null;
@@ -387,20 +395,37 @@ export const PROMOTION_MIN_PRECISION = 0.8;
 export const PROMOTION_MIN_EVIDENCE = 0.8;
 /** An ACTIVE rule falling below this precision is returned to SHADOW. */
 export const DEMOTION_PRECISION = 0.6;
+/** One in this many of an ACTIVE rule's members is left uncovered, for the free screen to audit. */
+export const ACTIVE_AUDIT_EVERY = 5;
+/** Precision is read over at most this many of a rule's most recently screened members. */
+export const RULE_READING_RECENT = 20;
 
-async function screenVerdicts(ids: readonly string[]): Promise<Map<string, 'KEEP' | 'DROP'>> {
-  const out = new Map<string, 'KEEP' | 'DROP'>();
+/**
+ * Whether an ACTIVE rule leaves this member to the free screen as its audit sample. Pure and
+ * stable: the same item is always in or out, so the sample cannot be chosen after the fact.
+ */
+export function activeAuditSampled(itemId: string): boolean {
+  const head = createHash('sha256').update(itemId).digest().readUInt32BE(0);
+  return head % ACTIVE_AUDIT_EVERY === 0;
+}
+
+/** Each screened item's combined verdict and when it was last screened. */
+async function screenVerdictsAt(ids: readonly string[]): Promise<Map<string, { verdict: 'KEEP' | 'DROP'; at: string }>> {
+  const out = new Map<string, { verdict: 'KEEP' | 'DROP'; at: string }>();
   if (ids.length === 0) return out;
   const { parseLead, combineLeads } = await import('../cheap/lane.ts');
   const by = new Map<string, Map<string, string | null>>();
+  const latest = new Map<string, string>();
   for (let at = 0; at < ids.length; at += 500) {
     const slice = ids.slice(at, at + 500);
-    const rows = await getDb().all<{ subject_id: string; model: string; ok: number; output: string | null }>(
-      `SELECT subject_id, model, ok, output FROM cheap_results
+    const rows = await getDb().all<{ subject_id: string; model: string; ok: number; output: string | null; created_at: string }>(
+      `SELECT subject_id, model, ok, output, created_at FROM cheap_results
         WHERE kind = 'SCREEN_LEAD' AND subject_id IN (${slice.map(() => '?').join(',')}) ORDER BY created_at DESC`,
       [...slice],
     );
     for (const row of rows) {
+      const stamp = String(row.created_at);
+      if ((latest.get(row.subject_id) ?? '') < stamp) latest.set(row.subject_id, stamp);
       const models = by.get(row.subject_id) ?? new Map<string, string | null>();
       if (!models.has(row.model)) models.set(row.model, row.ok ? row.output : null);
       by.set(row.subject_id, models);
@@ -409,7 +434,7 @@ async function screenVerdicts(ids: readonly string[]): Promise<Map<string, 'KEEP
   for (const [id, models] of by) {
     const merged = combineLeads([...models.values()].map((text) => (text ? parseLead(text) : null)));
     // UNSURE (the models disagreed) is no verdict: it neither confirms nor refutes a member.
-    if (merged && (merged.verdict === 'KEEP' || merged.verdict === 'DROP')) out.set(id, merged.verdict);
+    if (merged && (merged.verdict === 'KEEP' || merged.verdict === 'DROP')) out.set(id, { verdict: merged.verdict, at: latest.get(id) ?? '' });
   }
   return out;
 }
@@ -446,9 +471,15 @@ export async function ruleReading(detector: Detector, now: Date = new Date()): P
   const related = items.filter((item) => !members.has(item.id) && (
     entities.has(employerKey(item.organization) ?? '') || categories.has(jobFamily(item.title)?.key ?? '')
   ));
-  const verdicts = await screenVerdicts([...memberIds, ...related.map((one) => one.id)]);
+  const timed = await screenVerdictsAt([...memberIds, ...related.map((one) => one.id)]);
+  const verdicts = new Map([...timed].map(([id, one]) => [id, one.verdict]));
   const screened = memberIds.filter((id) => verdicts.has(id));
   const confirmed = screened.filter((id) => verdicts.get(id) === 'KEEP').length;
+  // The judgment reads the newest evidence: the most recently screened members, newest first.
+  const recent = [...screened]
+    .sort((a, b) => (timed.get(b)!.at < timed.get(a)!.at ? -1 : timed.get(b)!.at > timed.get(a)!.at ? 1 : a < b ? -1 : 1))
+    .slice(0, RULE_READING_RECENT);
+  const recentConfirmed = recent.filter((id) => verdicts.get(id) === 'KEEP').length;
   const complete = memberRows.filter((row) => row.organization && row.published_at).length;
   return {
     rule: `${detector.id}@${detector.version}`,
@@ -458,7 +489,7 @@ export async function ruleReading(detector: Detector, now: Date = new Date()): P
     confirmed,
     falseJoins: screened.length - confirmed,
     misses: related.filter((one) => verdicts.get(one.id) === 'KEEP').length,
-    precision: screened.length >= PROMOTION_MIN_SCREENED ? confirmed / screened.length : null,
+    precision: recent.length >= PROMOTION_MIN_SCREENED ? recentConfirmed / recent.length : null,
     evidenceQuality: memberRows.length > 0 ? complete / memberRows.length : null,
   };
 }
@@ -516,6 +547,8 @@ export interface DetectorRunReport {
   created: number;
   extended: number;
   covered: number;
+  /** ACTIVE members left uncovered as the free screen's audit sample (`activeAuditSampled`). */
+  audited: number;
   filed: number;
 }
 
@@ -546,7 +579,7 @@ export async function runDetectors(input: { now?: Date; detectors?: readonly Det
       body: row.body,
     }));
     const signals = detector.detect(records, now);
-    const report: DetectorRunReport = { rule: `${detector.id}@${detector.version}`, mode: decision.mode, modeReason: decision.reason, records: records.length, signals: signals.length, created: 0, extended: 0, covered: 0, filed: 0 };
+    const report: DetectorRunReport = { rule: `${detector.id}@${detector.version}`, mode: decision.mode, modeReason: decision.reason, records: records.length, signals: signals.length, created: 0, extended: 0, covered: 0, audited: 0, filed: 0 };
     for (const signal of signals) {
       const at = now.toISOString();
       const open = await db.get<DetectionRow>(
@@ -621,6 +654,11 @@ export async function runDetectors(input: { now?: Date; detectors?: readonly Det
       }
       if (decision.mode !== 'ACTIVE') continue;
       for (const itemId of signal.memberIds) {
+        // The audit sample stays uncovered, so the free screen keeps reading the rule after promotion.
+        if (activeAuditSampled(itemId)) {
+          report.audited += 1;
+          continue;
+        }
         const covered = await db.run(
           'INSERT INTO feed_item_coverage (item_id, detection_id, covered_at) VALUES (?, ?, ?) ON CONFLICT (item_id, detection_id) DO NOTHING',
           [itemId, detectionId, at],
