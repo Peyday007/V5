@@ -18,7 +18,7 @@ import { getCashMode } from '../server/repos/cashMode.ts';
 import { createOpportunity, listOpportunities, updateOpportunity } from '../server/repos/cashPortfolio.ts';
 import { createWorkstream, getWorkstream } from '../server/repos/register.ts';
 import { setTarget } from '../server/services/goals/target.ts';
-import { decideOpenings, decisionOrder } from '../server/services/cash/decisions.ts';
+import { decideOpenings, decisionOrder, UNDATED_RESERVED_EVERY } from '../server/services/cash/decisions.ts';
 import { currentDecision } from '../server/repos/cashDecisions.ts';
 
 const NOW = new Date('2026-11-16T12:00:00.000Z');
@@ -59,6 +59,32 @@ describe('decisionOrder (pure)', () => {
       o('undated', null),
     ];
     expect(decisionOrder(input, now).map((one) => one.id)).toEqual(['dated', 'unreadable', 'passed', 'undated']);
+  });
+
+  it('under overload keeps a reserved share of places for undated openings, newest first (review finding F2)', () => {
+    // More dated openings than any cap: pure EDF would never reach an undated one.
+    const dated = Array.from({ length: 20 }, (_, i) => o(`dated-${i}`, new Date(NOW.getTime() + (i + 1) * DAY).toISOString()));
+    const input = [o('newest-undated', null), ...dated, o('older-undated', null), o('oldest-undated', null)];
+    const order = decisionOrder(input, now).map((one) => one.id);
+    expect(order).toHaveLength(input.length);
+    expect(new Set(order).size).toBe(input.length);
+    // Every UNDATED_RESERVED_EVERY-th place goes to the next undated opening, in arrival order.
+    expect(UNDATED_RESERVED_EVERY).toBeGreaterThan(1);
+    expect(order[UNDATED_RESERVED_EVERY - 1]).toBe('newest-undated');
+    expect(order[2 * UNDATED_RESERVED_EVERY - 1]).toBe('older-undated');
+    expect(order[3 * UNDATED_RESERVED_EVERY - 1]).toBe('oldest-undated');
+    // The dated ones keep every other place, earliest close first.
+    expect(order.filter((id) => id.startsWith('dated-'))).toEqual(dated.map((one) => one.id));
+    // So any cap of k places decides at least floor(k / UNDATED_RESERVED_EVERY) undated openings.
+    for (let k = 1; k <= input.length; k += 1) {
+      const undatedTaken = order.slice(0, k).filter((id) => id.endsWith('-undated')).length;
+      expect(undatedTaken).toBeGreaterThanOrEqual(Math.min(3, Math.floor(k / UNDATED_RESERVED_EVERY)));
+    }
+  });
+
+  it('gives the remaining places to whichever queue still has openings', () => {
+    const input = [o('u1', null), o('u2', null), o('u3', null), o('u4', null), o('u5', null), o('d1', '2026-11-18')];
+    expect(decisionOrder(input, now).map((one) => one.id)).toEqual(['d1', 'u1', 'u2', 'u3', 'u4', 'u5']);
   });
 
   it('is stable for equal closes and does not mutate its input', () => {
@@ -137,5 +163,22 @@ describe('decideOpenings under its cap (the recorded failure class)', () => {
     const second = await currentDecision(closing, goalId);
     expect(second?.id).not.toBe(first?.id);
     expect(second?.verdict).toBe('REJECT');
+  });
+
+  it('under overload of dated openings still decides an undated one, and counts what the cap left (review finding F2)', async () => {
+    const limit = UNDATED_RESERVED_EVERY;
+    const undated = await opening('newest undated', 5);
+    const dated: string[] = [];
+    for (let i = 0; i < 2 * UNDATED_RESERVED_EVERY; i += 1) {
+      dated.push(await opening(`dated ${i}`, 60 + i, new Date(NOW.getTime() + (i + 1) * DAY).toISOString()));
+    }
+    const pass = await decideOpenings(projectId, { now: NOW.toISOString(), limit });
+    expect(pass.considered).toBe(limit);
+    // Pure EDF would have filled every slot with dated openings; the reserved place decides the undated one.
+    expect(await currentDecision(undated, goalId)).not.toBeNull();
+    expect(await currentDecision(dated[0]!, goalId)).not.toBeNull();
+    expect(await currentDecision(dated[dated.length - 1]!, goalId)).toBeNull();
+    // Starvation on either side is in the record, not inferred.
+    expect(pass.pastCap).toEqual({ dated: dated.length - (limit - 1), undated: 0 });
   });
 });
