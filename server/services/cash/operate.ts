@@ -1292,14 +1292,32 @@ export const MAX_CONTACTS_PER_PASS = 3;
  * three contacts a pass a piece closing in two days waited behind older,
  * undated ones until it expired unpursued.
  *
- * Earliest Deadline First goes ahead of the existing keys: a piece whose
- * recorded window is still open before one with no date, the earlier window
- * first. Then a current PRIORITIZE decision (so the code screen's verdict
- * reaches the consumer that acts on it), then the goal's sales order, then the
- * order the rows came in. A window that has already closed sorts as undated —
- * the loop withholds it anyway. No cap, gate, grant or evidence bar moves:
- * only which pieces the existing cap reaches first. Pure.
+ * The order takes two queues and merges them, the way `decisionOrder` does one
+ * step upstream:
+ *
+ *   * dated pieces (a recorded window still open), a current PRIORITIZE
+ *     decision first, then Earliest Deadline First, then the goal's sales
+ *     order, then the order the rows came in;
+ *   * undated pieces (no date, an unreadable one, or a window already closed —
+ *     the loop withholds those anyway), a current PRIORITIZE decision first,
+ *     then sales order, then row order.
+ *
+ * At each place the code screen's verdict leads: an undated piece with a
+ * PRIORITIZE decision goes ahead of a dated piece without one (review finding
+ * R4-F2: the date had been outranking the verdict this order is meant to
+ * deliver). Otherwise the dated queue leads, except that every
+ * `READY_UNDATED_RESERVED_EVERY`-th place is reserved for the next undated
+ * piece while any remain — temporal isolation, the remedy for EDF under
+ * overload that `decisionOrder` already applies (UNDATED_RESERVED_EVERY,
+ * review finding F2). The share is sized to this cap, not to the decision
+ * cap: with MAX_CONTACTS_PER_PASS contacts a pass, an undated piece holds one
+ * of the places every pass reaches, so a steady supply of dated pieces can no
+ * longer starve it. When either queue runs out the other fills the rest. No
+ * cap, gate, grant or evidence bar moves: only which pieces the existing cap
+ * reaches first. Pure and stable.
  */
+export const READY_UNDATED_RESERVED_EVERY = MAX_CONTACTS_PER_PASS;
+
 export function readyContactOrder<T extends Pick<CashOpportunity, 'id' | 'expiresAt'>>(
   pieces: readonly T[],
   ctx: { now: string; salesOrder: readonly string[]; prioritized: ReadonlySet<string> },
@@ -1313,17 +1331,28 @@ export function readyContactOrder<T extends Pick<CashOpportunity, 'id' | 'expire
     const at = ctx.salesOrder.indexOf(id);
     return at < 0 ? Number.MAX_SAFE_INTEGER : at;
   };
-  return pieces
-    .map((one, at) => ({ one, at, closes: open(one), first: ctx.prioritized.has(one.id) ? 0 : 1 }))
-    .sort((a, b) => {
-      if (a.closes !== null || b.closes !== null) {
-        if (a.closes === null) return 1;
-        if (b.closes === null) return -1;
-        if (a.closes !== b.closes) return a.closes - b.closes;
-      }
-      return a.first - b.first || rank(a.one.id) - rank(b.one.id) || a.at - b.at;
-    })
-    .map(({ one }) => one);
+  type Ranked = { one: T; at: number; closes: number | null; first: number };
+  const ranked: Ranked[] = pieces.map((one, at) => ({ one, at, closes: open(one), first: ctx.prioritized.has(one.id) ? 0 : 1 }));
+  const tail = (a: Ranked, b: Ranked) => rank(a.one.id) - rank(b.one.id) || a.at - b.at;
+  const dated = ranked.filter((r) => r.closes !== null).sort((a, b) => a.first - b.first || (a.closes as number) - (b.closes as number) || tail(a, b));
+  const undated = ranked.filter((r) => r.closes === null).sort((a, b) => a.first - b.first || tail(a, b));
+  const out: T[] = [];
+  let d = 0;
+  let u = 0;
+  while (d < dated.length || u < undated.length) {
+    const nextDated = dated[d];
+    const nextUndated = undated[u];
+    const reserved = (out.length + 1) % READY_UNDATED_RESERVED_EVERY === 0;
+    const verdictLeads = !!nextUndated && !!nextDated && nextUndated.first < nextDated.first;
+    if (nextUndated && (!nextDated || verdictLeads || reserved)) {
+      out.push(nextUndated.one);
+      u += 1;
+    } else {
+      out.push(nextDated!.one);
+      d += 1;
+    }
+  }
+  return out;
 }
 
 export async function advanceWithinAuthority(projectId: string): Promise<AuthorityAdvance> {
