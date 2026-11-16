@@ -47,7 +47,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'deploy | status | prune | test | connect | disconnect | claude-discovery-off | claude-discovery-on | focus | unfocus | runpod-test | runpod-connect | runpod-disconnect | runpod-report | runpod-auto | runpod-cycle | runpod-restore | runpod-survey | runpod-bench | runpod-upgrade | runpod-repurpose'
+        description: 'deploy | status | prune | test | connect | disconnect | claude-discovery-off | claude-discovery-on | focus | unfocus | runpod-test | runpod-connect | runpod-disconnect | runpod-report | runpod-auto | runpod-cycle | runpod-restore | runpod-survey | runpod-bench | runpod-upgrade | runpod-repurpose | runpod-diagnose'
         required: true
         default: deploy
       recipes:
@@ -291,6 +291,13 @@ jobs:
                 npx tsx scripts/runpod-bench.ts --recipes "$recipes" --switchboard "https://$cheap.fly.dev/v1" $base --reps "$(printf '%s' "$REPS_INPUT" | tr -cd '1-5' | cut -c1)" | tee bench.txt
               grep -q '^RUNPOD-BENCH: OK' bench.txt || { echo "::error title=runpod::The benchmark did not finish."; exit 1; }
               grep '^WINNER' bench.txt | sed 's/^/::notice title=runpod bench::/'
+              ;;
+            runpod-diagnose)
+              # Why a recipe's pod never serves: its exact image, GPU and vLLM arguments on a
+              # temporary pod whose shell serves vLLM's own output once vLLM exits (§108).
+              [ -n "${RUNPOD_API_KEY:-}" ] || { echo "::error::Set the RUNPOD_API_KEY repository secret."; exit 1; }
+              recipe=$(printf '%s' "$RECIPES_INPUT" | tr -cd 'a-z0-9.-')
+              npx tsx scripts/runpod-diagnose.ts --recipe "$recipe" | tee diagnose.txt
               ;;
             runpod-restore)
               [ -n "${RUNPOD_API_KEY:-}" ] && [ -n "$RUNPOD_VLLM_KEY" ] || { echo "::error::Set the RUNPOD_API_KEY and RUNPOD_VLLM_KEY repository secrets."; exit 1; }
