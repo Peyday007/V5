@@ -26,7 +26,8 @@ import {
 } from '../../repos/cashDecisions.ts';
 import { reopenConditionFor, type CashDecision, type DecisionVerdict } from '../../domain/cashDecisions.ts';
 import { screenOpportunity, type ScreenFacts, type ScreenLimits } from './screen.ts';
-import { nowIso } from '../../repos/util.ts';
+import { nowIso, parseJson } from '../../repos/util.ts';
+import { recordCashEvent } from '../../repos/cashMode.ts';
 import { getOpportunity, listOpportunities } from '../../repos/cashPortfolio.ts';
 import { closingInstant, liveGoalLimits, screenFactsFor } from './worthResearching.ts';
 
@@ -180,6 +181,24 @@ export function factsChangeRef(facts: ScreenFacts): string {
   return createHash('sha256').update(JSON.stringify(facts)).digest('hex').slice(0, 16);
 }
 
+/**
+ * How many goal-opening pairs one production decision pass considers
+ * (`operate.ts` calls `decideOpenings` without a `limit`). Exported so the
+ * failure-class test drives the cap production runs, not an artificial one.
+ */
+export const DECISION_PASS_LIMIT = 500;
+
+/**
+ * The row that a decision pass reached its cap and left decidable openings for
+ * a later tick. Without it nobody could say whether the production cap ever
+ * binds (review finding R3-F2): `pastCap` lived only in a tick's return value.
+ * Recorded when the counts change, so an unchanged backlog writes nothing new.
+ */
+export const DECISION_CAP_EVENT = 'CASH_DECISION_CAP_REACHED';
+
+/** Most dated openings left past the cap that one cap row names. */
+const CAP_EVENT_SAMPLE = 20;
+
 /** Every this-many-th place in `decisionOrder` is reserved for an undated opening while any remain. */
 export const UNDATED_RESERVED_EVERY = 4;
 
@@ -250,6 +269,33 @@ export interface DecideOpeningsPass {
 }
 
 /**
+ * Record that the cap bound, unless the latest cap row already says the same
+ * thing (same cap, same counts left on each side). A production reading of
+ * whether the cap binds, and which dated openings it left, rather than an
+ * inference from a test's artificial cap.
+ */
+async function recordCapReached(
+  projectId: string,
+  reading: { limit: number; considered: number; decidable: number; pastCap: { dated: number; undated: number }; datedLeft: { id: string; expiresAt: string | null }[] },
+): Promise<void> {
+  const last = await getDb().get<{ detail: string | null }>(
+    `SELECT detail FROM cash_events WHERE project_id = ? AND kind = ? ORDER BY created_at DESC, id DESC LIMIT 1`,
+    [projectId, DECISION_CAP_EVENT],
+  );
+  if (last) {
+    const prior = parseJson<{ limit?: unknown; pastCap?: { dated?: unknown; undated?: unknown } }>(last.detail, {});
+    if (prior.limit === reading.limit && prior.pastCap?.dated === reading.pastCap.dated && prior.pastCap?.undated === reading.pastCap.undated) return;
+  }
+  await recordCashEvent({
+    projectId,
+    kind: DECISION_CAP_EVENT,
+    actorRef: 'BRAIN',
+    summary: `The decision pass reached its cap of ${reading.limit} goal-opening pairs and left ${reading.pastCap.dated} dated and ${reading.pastCap.undated} undated openings for a later tick.`,
+    detail: { ...reading, pastCap: { ...reading.pastCap } },
+  });
+}
+
+/**
  * The producer: every decidable opening, under every live goal with a target,
  * gets one current REJECT / HOLD / PRIORITIZE from the deterministic screen.
  *
@@ -275,16 +321,20 @@ export async function decideOpenings(
   const goals = await liveGoalLimits(projectId, now);
   out.goals = goals.length;
   if (goals.length > 0) {
-    const limit = options.limit ?? 500;
+    const limit = options.limit ?? DECISION_PASS_LIMIT;
     const openings = decisionOrder(await listOpportunities({ projectId, states: [...DECIDABLE_STATES] }), now);
     const at = Date.parse(now);
+    const datedLeft: { id: string; expiresAt: string | null }[] = [];
     for (const [position, opening] of openings.entries()) {
       if (out.considered >= limit) {
         for (const left of openings.slice(position)) {
           const closes = closingInstant(left.expiresAt);
-          if (closes !== null && closes > at) out.pastCap.dated += 1;
-          else out.pastCap.undated += 1;
+          if (closes !== null && closes > at) {
+            out.pastCap.dated += 1;
+            if (datedLeft.length < CAP_EVENT_SAMPLE) datedLeft.push({ id: left.id, expiresAt: left.expiresAt });
+          } else out.pastCap.undated += 1;
         }
+        await recordCapReached(projectId, { limit, considered: out.considered, decidable: openings.length, pastCap: out.pastCap, datedLeft });
         break;
       }
       // Each decision is synchronous work; the event loop is handed back between openings (§90, 2026-11-06 stalls).
