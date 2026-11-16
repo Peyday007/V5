@@ -272,10 +272,10 @@ jobs:
             runpod-cycle)
               # The production test of automatic power: stop the pod, watch the running
               # Brain start it again for waiting research, wait for vLLM. Always leaves it started.
-              timeout --signal=TERM --kill-after=30 3000 \
+              timeout --signal=TERM --kill-after=30 4200 \
                 flyctl ssh console --app "$brain" -C "sh /app/scripts/runpod-cycle.sh" | tee cycle.txt || true
               grep -q '^RUNPOD-CYCLE: PASS' cycle.txt || { echo "::error title=runpod::The automatic stop/start test did not pass; the lines above say which step."; exit 1; }
-              echo "::notice title=runpod::Automatic power proven: stopped, started by Brain for waiting research, model served."
+              echo "::notice title=runpod::Automatic power proven: stopped, started or moved by Brain for waiting research, model served and answering."
               ;;
             prune)
               gateway_prune
