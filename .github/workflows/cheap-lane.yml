@@ -47,7 +47,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'deploy | status | prune | test | connect | disconnect | claude-discovery-off | claude-discovery-on | focus | unfocus | runpod-test | runpod-connect | runpod-disconnect | runpod-report | runpod-auto | runpod-cycle | runpod-restore | runpod-survey | runpod-bench | runpod-upgrade | runpod-repurpose | runpod-diagnose | runpod-score | runpod-stop'
+        description: 'deploy | status | prune | test | connect | disconnect | claude-discovery-off | claude-discovery-on | focus | unfocus | runpod-test | runpod-connect | runpod-disconnect | runpod-report | runpod-auto | runpod-cycle | runpod-restore | runpod-survey | runpod-bench | runpod-upgrade | runpod-repurpose | runpod-diagnose | runpod-score | runpod-stop | runpod-budget'
         required: true
         default: deploy
       recipes:
@@ -76,6 +76,14 @@ on:
         default: ''
       tool_score:
         description: 'For runpod-upgrade: the director-task score (0-1) the new recipe measured in runpod-bench; ranks the GPU in Hermes model chain (BRAIN_RUNPOD_TOOL_SCORE).'
+        required: false
+        default: ''
+      budget_usd:
+        description: 'For runpod-budget: the GPU dollar budget per window (BRAIN_RUNPOD_BUDGET_USD).'
+        required: false
+        default: ''
+      budget_window_hours:
+        description: 'For runpod-budget: the rolling budget window in hours (BRAIN_RUNPOD_BUDGET_WINDOW_HOURS).'
         required: false
         default: ''
 
@@ -305,6 +313,14 @@ jobs:
                 npx tsx scripts/runpod-bench.ts --recipes "$recipes" --switchboard "https://$cheap.fly.dev/v1" $base --reps "$(printf '%s' "$REPS_INPUT" | tr -cd '1-5' | cut -c1)" | tee bench.txt
               grep -q '^RUNPOD-BENCH: OK' bench.txt || { echo "::error title=runpod::The benchmark did not finish."; exit 1; }
               grep '^WINNER' bench.txt | sed 's/^/::notice title=runpod bench::/'
+              ;;
+            runpod-budget)
+              # The GPU's hard dollar budget per rolling window (#1002): the pod supervisor stops the
+              # pod and refuses every start once the window's measured spend reaches it.
+              b=$(printf '%s' "${{ inputs.budget_usd }}" | tr -cd '0-9.'); w=$(printf '%s' "${{ inputs.budget_window_hours }}" | tr -cd '0-9.')
+              [ -n "$b" ] || { echo "::error::runpod-budget needs budget_usd."; exit 1; }
+              flyctl secrets set --app "$brain" BRAIN_RUNPOD_BUDGET_USD="$b" ${w:+BRAIN_RUNPOD_BUDGET_WINDOW_HOURS="$w"} >/dev/null
+              echo "::notice title=runpod budget::BRAIN_RUNPOD_BUDGET_USD=$b per ${w:-24} h set."
               ;;
             runpod-score)
               # Record the serving GPU model's measured director score (runpod-bench baseline) for
