@@ -21,9 +21,16 @@
  * Every decision that changes the pod is a `RUNPOD_POD` event, and the pod's
  * status and RunPod's own `costPerHr` are sampled into one every
  * `SAMPLE_MS`, so its running time and spend are measured, not assumed.
+ *
+ * A dollar budget binds all of it (`podBudget`): `BRAIN_RUNPOD_BUDGET_USD` per
+ * rolling `BRAIN_RUNPOD_BUDGET_WINDOW_HOURS` (default 24), measured from those
+ * same samples. Spent ≥ budget → the pod is stopped whatever it is doing, and
+ * no start or move happens until the window frees budget. A GPU in primary mode
+ * with no budget set runs under `DEFAULT_PRIMARY_BUDGET_USD` ($10 per 24 h), so
+ * continuous operation is never open-ended.
  */
 import { getDb } from '../../db/database.ts';
-import { recordBinEvent } from '../../repos/bins.ts';
+import { recordBinEvent, type RecordBinEventInput } from '../../repos/bins.ts';
 import { runpodConfig, runpodUrlOverride, setRunpodPaused, setRunpodUrlOverride, type Fetch } from './runpod.ts';
 import { createPod, deletePod, DEFAULT_MAX_USD_PER_HOUR, POD_NAME, podUrl, RECIPES, recipeFor, type PodRecipe } from './runpodRestore.ts';
 
@@ -34,10 +41,115 @@ export const MIN_ACTION_GAP_MS = 3 * 60_000;
 export const SUPERVISE_MS = 60_000;
 export const SAMPLE_MS = 5 * 60_000;
 
+/**
+ * The GPU's spend cap when the GPU is primary and `BRAIN_RUNPOD_BUDGET_USD` is
+ * not set: $10 per rolling 24 h — about 40 h of the $0.24/h ceiling pod, so a
+ * day of continuous research fits and nothing runs open-ended. Set
+ * `BRAIN_RUNPOD_BUDGET_USD` to change it.
+ */
+export const DEFAULT_PRIMARY_BUDGET_USD = 10;
+export const DEFAULT_BUDGET_WINDOW_HOURS = 24;
+
+export interface PodBudget {
+  usd: number;
+  windowMs: number;
+  /** True when `DEFAULT_PRIMARY_BUDGET_USD` applies because no budget was set. */
+  defaulted: boolean;
+}
+
+/**
+ * The dollar budget the pod runs under, or null for none. An explicit
+ * `BRAIN_RUNPOD_BUDGET_USD` (≥ 0) always applies; unset, a primary GPU gets
+ * `DEFAULT_PRIMARY_BUDGET_USD` and anything else gets none (nothing runs then).
+ */
+export function podBudget(env: NodeJS.ProcessEnv = process.env): PodBudget | null {
+  const hours = Number(env['BRAIN_RUNPOD_BUDGET_WINDOW_HOURS']);
+  const windowMs = (Number.isFinite(hours) && hours > 0 ? hours : DEFAULT_BUDGET_WINDOW_HOURS) * 3_600_000;
+  const raw = env['BRAIN_RUNPOD_BUDGET_USD']?.trim();
+  const usd = raw ? Number(raw) : Number.NaN;
+  if (Number.isFinite(usd) && usd >= 0) return { usd, windowMs, defaulted: false };
+  if ((env['BRAIN_RUNPOD_MODE'] ?? '').trim().toLowerCase() === 'primary') return { usd: DEFAULT_PRIMARY_BUDGET_USD, windowMs, defaulted: true };
+  return null;
+}
+
+export interface PodBudgetReading {
+  /** Dollars the pod billed in the window, from its samples; null when they could not be read. */
+  spent: number | null;
+  budget: number;
+  /** Budget left in the window; null when spend is unknown. */
+  remaining: number | null;
+  /** Spent ≥ budget. An unreadable spend is not exhausted, but it is not `known` either. */
+  exhausted: boolean;
+  known: boolean;
+  windowHours: number;
+  /** The window's start (ISO). */
+  since: string;
+  defaulted: boolean;
+}
+
+/** Pure: the budget reading for a measured (or unreadable) spend. */
+export function budgetReading(budget: PodBudget, spent: number | null, now: number): PodBudgetReading {
+  const known = spent !== null && Number.isFinite(spent);
+  return {
+    spent: known ? spent : null,
+    budget: budget.usd,
+    remaining: known ? Math.max(0, budget.usd - spent) : null,
+    exhausted: known && spent >= budget.usd,
+    known,
+    windowHours: budget.windowMs / 3_600_000,
+    since: new Date(now - budget.windowMs).toISOString(),
+    defaulted: budget.defaulted,
+  };
+}
+
+/** The pod's budget now, from its sample rows: what an operator or report reads. Null when no budget applies. */
+export async function readPodBudget(now: number = Date.now(), env: NodeJS.ProcessEnv = process.env): Promise<PodBudgetReading | null> {
+  const budget = podBudget(env);
+  if (!budget) return null;
+  return readBudget(budget, now);
+}
+
+async function readBudget(budget: PodBudget, now: number): Promise<PodBudgetReading> {
+  let spent: number | null = null;
+  try {
+    spent = (await readPodSpend(new Date(now - budget.windowMs).toISOString())).dollars;
+  } catch {
+    spent = null;
+  }
+  return budgetReading(budget, spent, now);
+}
+
+export type BudgetMark = 'BUDGET_EXHAUSTED' | 'BUDGET_AVAILABLE';
+
+/**
+ * Pure: which budget event, if any, this reading adds after `lastMark` (the
+ * newest budget row). One `BUDGET_EXHAUSTED` per exhaustion, not one per tick,
+ * and one `BUDGET_AVAILABLE` when the window frees budget again.
+ */
+export function budgetEvent(reading: PodBudgetReading | null, lastMark: BudgetMark | null): BudgetMark | null {
+  if (!reading || !reading.known) return null;
+  if (reading.exhausted) return lastMark === 'BUDGET_EXHAUSTED' ? null : 'BUDGET_EXHAUSTED';
+  return lastMark === 'BUDGET_EXHAUSTED' ? 'BUDGET_AVAILABLE' : null;
+}
+
+async function lastBudgetMark(): Promise<BudgetMark | null> {
+  try {
+    const row = await getDb().get<{ outcome: string }>(
+      `SELECT outcome FROM bin_events WHERE event_type = 'RUNPOD_POD' AND outcome IN ('BUDGET_EXHAUSTED', 'BUDGET_AVAILABLE')
+        ORDER BY at DESC LIMIT 1`,
+    );
+    return row?.outcome === 'BUDGET_EXHAUSTED' || row?.outcome === 'BUDGET_AVAILABLE' ? row.outcome : null;
+  } catch {
+    return null;
+  }
+}
+
 export interface PodConfig {
   apiKey: string;
   podId: string;
   idleStopMs: number;
+  /** The dollar cap the supervisor enforces; absent or null, none. */
+  budget?: PodBudget | null;
   /** vLLM's own address and key, to tell a loaded pod from a booting one. */
   vllm: { url: string; key: string | null };
 }
@@ -55,7 +167,7 @@ export function podConfig(env: NodeJS.ProcessEnv = process.env): PodConfig | nul
   const podId = (moved ? podIdFromUrl(moved) : null) || env['BRAIN_RUNPOD_POD_ID']?.trim() || podIdFromUrl(env['BRAIN_RUNPOD_URL'] ?? '');
   if (!podId) return null;
   const minutes = Number(env['BRAIN_RUNPOD_IDLE_STOP_MINUTES']);
-  return { apiKey, podId, idleStopMs: Number.isFinite(minutes) && minutes > 0 ? minutes * 60_000 : DEFAULT_IDLE_STOP_MS, vllm: { url: gpu.url, key: gpu.key } };
+  return { apiKey, podId, idleStopMs: Number.isFinite(minutes) && minutes > 0 ? minutes * 60_000 : DEFAULT_IDLE_STOP_MS, budget: podBudget(env), vllm: { url: gpu.url, key: gpu.key } };
 }
 
 export type PodStatus = 'RUNNING' | 'EXITED' | 'TERMINATED' | 'UNKNOWN';
@@ -82,15 +194,31 @@ export function decidePod(input: {
    * idle time costs cents, a lost GPU costs the research.
    */
   startFailedRecently?: boolean;
+  /**
+   * The dollar budget's reading. Exhausted → a running pod is stopped whatever
+   * it is doing and nothing starts. Unreadable spend under a budget → nothing
+   * starts (a cap that cannot be read is not a cap), but nothing is stopped on it.
+   */
+  budget?: PodBudgetReading | null;
 }): PodDecision {
-  const { status, waiting, inFlight, idleSince, lastActionAt, now, idleStopMs } = input;
+  const { status, waiting, inFlight, idleSince, lastActionAt, now, idleStopMs, budget } = input;
   const settled = now - lastActionAt >= MIN_ACTION_GAP_MS;
+  const overBudget = budget?.exhausted
+    ? `GPU budget exhausted: $${(budget.spent ?? 0).toFixed(2)} of $${budget.budget.toFixed(2)} spent in ${budget.windowHours} h`
+    : null;
   if (status === 'TERMINATED') return { action: 'NONE', reason: 'pod terminated; a new one must be created' };
   if (status === 'UNKNOWN') return { action: 'NONE', reason: 'pod status unknown; changing nothing' };
   if (status === 'EXITED') {
-    if (waiting <= 0) return { action: 'NONE', reason: 'stopped, and no research waiting' };
+    if (waiting <= 0) return { action: 'NONE', reason: overBudget ? `stopped; ${overBudget}` : 'stopped, and no research waiting' };
+    if (overBudget) return { action: 'NONE', reason: `${waiting} research item(s) waiting, not starting: ${overBudget}` };
+    if (budget && !budget.known) return { action: 'NONE', reason: `${waiting} research item(s) waiting, not starting: GPU spend unreadable under a $${budget.budget} budget` };
     if (!settled) return { action: 'NONE', reason: 'research waiting; just changed the pod, holding' };
     return { action: 'START', reason: `${waiting} research item(s) waiting` };
+  }
+  if (overBudget) {
+    // The cap outranks the work and a refused start alike: the money is the hard edge.
+    if (!settled) return { action: 'NONE', reason: `${overBudget}; just changed the pod, holding` };
+    return { action: 'STOP', reason: overBudget };
   }
   if (waiting > 0 || inFlight > 0) return { action: 'NONE', reason: `busy: ${waiting} waiting, ${inFlight} in flight` };
   const idleFor = idleSince === null ? 0 : now - idleSince;
@@ -341,7 +469,7 @@ async function lastStartFailed(now: number): Promise<boolean> {
   }
 }
 
-const state = { idleSince: null as number | null, lastActionAt: 0, lastRun: 0, lastSample: 0, running: false };
+const state = { idleSince: null as number | null, lastActionAt: 0, lastRun: 0, lastSample: 0, running: false, budgetMark: undefined as BudgetMark | null | undefined };
 
 export function resetPodSupervisor(): void {
   state.idleSince = null;
@@ -349,6 +477,7 @@ export function resetPodSupervisor(): void {
   state.lastRun = 0;
   state.lastSample = 0;
   state.running = false;
+  state.budgetMark = undefined;
   setRunpodPaused(null);
 }
 
@@ -357,6 +486,8 @@ export interface SuperviseResult {
   ready: boolean;
   decision: PodDecision;
   acted: boolean;
+  /** The dollar budget's reading this step; null when none applies. */
+  budget: PodBudgetReading | null;
 }
 
 /**
@@ -373,6 +504,10 @@ export async function superviseRunpodPod(
     lastStartFailed?: (now: number) => Promise<boolean>;
     hostRefusals?: (podId: string) => Promise<number>;
     migrate?: MigrateDeps;
+    /** The window's spend in dollars (default: the sample rows); null when unreadable. */
+    spend?: (since: string) => Promise<number | null>;
+    /** Where the supervisor's own events go (default: `recordBinEvent`). */
+    record?: (event: RecordBinEventInput) => Promise<void>;
   } = {},
 ): Promise<SuperviseResult | null> {
   if (deps.config === undefined) await loadMovedPod();
@@ -383,8 +518,29 @@ export async function superviseRunpodPod(
   state.running = true;
   state.lastRun = now;
   const fetchImpl = deps.fetchImpl ?? fetch;
+  const record = deps.record ?? recordBinEvent;
   try {
     const pod = await readPod(config, fetchImpl);
+    let budget: PodBudgetReading | null = null;
+    if (config.budget) {
+      if (deps.spend) {
+        const spent = await deps.spend(new Date(now - config.budget.windowMs).toISOString()).catch(() => null);
+        budget = budgetReading(config.budget, spent, now);
+      } else budget = await readBudget(config.budget, now);
+      if (state.budgetMark === undefined) state.budgetMark = await lastBudgetMark();
+      const mark = budgetEvent(budget, state.budgetMark);
+      if (mark) {
+        state.budgetMark = mark;
+        await record({
+          eventType: 'RUNPOD_POD',
+          provider: 'runpod',
+          outcome: mark,
+          reason: `GPU spend $${(budget.spent ?? 0).toFixed(2)} of $${budget.budget.toFixed(2)} in the last ${budget.windowHours} h${budget.defaulted ? ' (default budget: BRAIN_RUNPOD_BUDGET_USD unset)' : ''}`,
+          measures: { podId: config.podId, spent: budget.spent, budget: budget.budget, windowHours: budget.windowHours, since: budget.since, status: pod.status },
+          evidenceClass: 'MEASURED',
+        }).catch(() => undefined);
+      }
+    }
     const busy = input.waiting > 0 || input.inFlight > 0;
     if (busy || pod.status !== 'RUNNING') state.idleSince = null;
     else if (state.idleSince === null) state.idleSince = now;
@@ -393,7 +549,7 @@ export async function superviseRunpodPod(
     setRunpodPaused(pod.status === 'RUNNING' ? (ready ? null : 'vLLM still loading') : pod.status === 'UNKNOWN' ? null : `pod ${pod.status.toLowerCase()}`);
 
     const startFailedRecently = pod.status === 'RUNNING' && (await (deps.lastStartFailed ?? lastStartFailed)(now));
-    const decision = decidePod({ status: pod.status, waiting: input.waiting, inFlight: input.inFlight, idleSince: state.idleSince, lastActionAt: state.lastActionAt, now, idleStopMs: config.idleStopMs, startFailedRecently });
+    const decision = decidePod({ status: pod.status, waiting: input.waiting, inFlight: input.inFlight, idleSince: state.idleSince, lastActionAt: state.lastActionAt, now, idleStopMs: config.idleStopMs, startFailedRecently, budget });
     let acted = false;
     const refusals = decision.action === 'START' ? await (deps.hostRefusals ?? hostRefusalsSinceStart)(config.podId) : 0;
     if (decision.action === 'START' && shouldMigrate({ status: pod.status, waiting: input.waiting, hostRefusals: refusals })) {
@@ -403,7 +559,7 @@ export async function superviseRunpodPod(
       });
       state.lastActionAt = now;
       state.idleSince = null;
-      return { status: pod.status, ready: false, decision: { action: 'START', reason: moved.ok ? `moved to ${moved.podId}` : `move failed: ${moved.detail}` }, acted: moved.ok };
+      return { status: pod.status, ready: false, decision: { action: 'START', reason: moved.ok ? `moved to ${moved.podId}` : `move failed: ${moved.detail}` }, acted: moved.ok, budget };
     }
     if (decision.action !== 'NONE') {
       const path = decision.action === 'STOP' ? '/stop' : '/start';
@@ -429,7 +585,7 @@ export async function superviseRunpodPod(
         setRunpodPaused('pod stopped');
       }
       if (acted && decision.action === 'START') setRunpodPaused('pod starting');
-      await recordBinEvent({
+      await record({
         eventType: 'RUNPOD_POD',
         provider: 'runpod',
         outcome,
@@ -440,7 +596,7 @@ export async function superviseRunpodPod(
     }
     if (now - state.lastSample >= SAMPLE_MS) {
       state.lastSample = now;
-      await recordBinEvent({
+      await record({
         eventType: 'RUNPOD_POD',
         provider: 'runpod',
         outcome: `SAMPLE_${pod.status}`,
@@ -450,7 +606,7 @@ export async function superviseRunpodPod(
         evidenceClass: 'MEASURED',
       }).catch(() => undefined);
     }
-    return { status: pod.status, ready, decision, acted };
+    return { status: pod.status, ready, decision, acted, budget };
   } catch (error) {
     console.warn('[runpod] pod supervision failed:', (error as Error).message);
     return null;
