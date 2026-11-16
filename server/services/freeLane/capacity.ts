@@ -72,6 +72,32 @@ export interface Decision {
   target: number;
   reason: string;
   stable: boolean;
+  /**
+   * The model's provider is failing (S-0171): at least half of its last measured
+   * window failed on the provider. While set, the target stays at MIN_TARGET and
+   * neither an ADD_CAPACITY grant nor idle-slot filling may raise it; it clears
+   * only when a window with provider failures below half is measured.
+   */
+  providerHold?: boolean;
+}
+
+/** Every provider-hold reason starts with this, so the hold survives a restart through `free_lane_capacity.reason`. */
+export const PROVIDER_HOLD_PREFIX = 'provider failing';
+/** Samples a window needs before its provider-failure share is a measurement. */
+export const PROVIDER_HOLD_MIN_SAMPLES = 4;
+
+/**
+ * The share of a model's window that failed on the provider, or null when the
+ * window is too small to be a measurement. Pure.
+ */
+export function providerFailureShare(window: Window): number | null {
+  const samples = window.ok + window.content + window.transient;
+  return samples >= PROVIDER_HOLD_MIN_SAMPLES ? window.transient / samples : null;
+}
+
+/** Whether a persisted capacity reason records a provider hold. Pure. */
+export function isProviderHoldReason(reason: string | null | undefined): boolean {
+  return typeof reason === 'string' && reason.startsWith(PROVIDER_HOLD_PREFIX);
 }
 
 /**
@@ -93,6 +119,8 @@ export function decideTarget(input: {
   window: Window;
   pressure: Pressure;
   ceiling?: number;
+  /** The previous step held this model on its provider's failures. */
+  providerHold?: boolean;
 }): Decision {
   const ceiling = input.ceiling ?? SAFETY_CEILING;
   const { target, active, waiting, window, pressure } = input;
@@ -106,6 +134,30 @@ export function decideTarget(input: {
   // 2026-11-14: halved at 474–974 ms with highest stable targets of 19–26).
   if (pressure.lagMs > LAG_SHRINK_MS) return { target: half, reason: `Brain event loop lagging ${Math.round(pressure.lagMs)} ms`, stable: false };
   if (pressure.cpu > 0.85) return { target: half, reason: `Brain CPU at ${Math.round(pressure.cpu * 100)}%`, stable: false };
+  /*
+   * Restore the route before any scale-up (S-0171). Production 2026-11-15:
+   * 2 accepted of 145-187 lane outcomes with 97-98% provider failures, while
+   * grants and idle fill kept a model's slots up. At half or more of a window
+   * failing on the provider, the model drops to one slot and stays there until
+   * a window below half is measured; an unmeasured window does not release it.
+   */
+  const share = providerFailureShare(window);
+  if (share !== null && share >= 0.5) {
+    return {
+      target: MIN_TARGET,
+      reason: `${PROVIDER_HOLD_PREFIX}: ${Math.round(share * 100)}% of ${samples} calls failed on the provider; held at ${MIN_TARGET} until a window below half is measured`,
+      stable: false,
+      providerHold: true,
+    };
+  }
+  if (input.providerHold && share === null) {
+    return {
+      target: MIN_TARGET,
+      reason: `${PROVIDER_HOLD_PREFIX}: last measured window had half or more of its calls fail on the provider; held at ${MIN_TARGET} until a window below half is measured (${samples} call(s) since)`,
+      stable: false,
+      providerHold: true,
+    };
+  }
   if (samples >= 4 && transientRate >= 0.3) {
     return { target: half, reason: `provider overloaded: ${Math.round(transientRate * 100)}% of ${samples} calls failed`, stable: false };
   }
@@ -189,6 +241,10 @@ export function grantsFromDecision(decision: { detail: Record<string, unknown>; 
 export function applyGrant(input: { target: number; stableHigh: number; decision: Decision; grant: CapacityGrant | null; ceiling?: number }): { decision: Decision; applied: boolean } {
   const { target, decision, grant } = input;
   if (!grant || decision.target < target) return { decision, applied: false };
+  // A failing provider is restored before it is scaled (S-0171): no grant raises it.
+  if (decision.providerHold) {
+    return { decision: { ...decision, target: MIN_TARGET, reason: decision.reason.startsWith(PROVIDER_HOLD_PREFIX) ? decision.reason : `${PROVIDER_HOLD_PREFIX}: ${decision.reason}` }, applied: false };
+  }
   const ceiling = input.ceiling ?? SAFETY_CEILING;
   const bound = Math.min(ceiling, Math.max(target, input.stableHigh), target + grant.units);
   if (bound <= decision.target) return { decision, applied: false };
@@ -338,6 +394,8 @@ interface ModelPool {
   busy: number;
   /** The most slots busy at once since the last control step: simultaneous jobs, measured. */
   peakBusy: number;
+  /** Held at MIN_TARGET on its provider's failures until a window below half is measured. */
+  providerHold: boolean;
 }
 
 const pools = new Map<string, ModelPool>();
@@ -461,8 +519,10 @@ export async function controlStep(): Promise<ControlReading | null> {
     if (!pools.has(worker.model)) {
       const saved = persisted.get(worker.model);
       // After a restart, resume at half of what was learned: fast to regain, gentle on a cold machine.
-      const target = saved ? Math.max(START_TARGET, Math.floor(saved.target / 2)) : START_TARGET;
-      pools.set(worker.model, { worker, index, target, stableHigh: saved?.stableHigh ?? 1, running: 0, busy: 0, peakBusy: 0 });
+      // A provider hold survives the restart: the route has not been measured answering since.
+      const providerHold = isProviderHoldReason(saved?.reason);
+      const target = providerHold ? MIN_TARGET : saved ? Math.max(START_TARGET, Math.floor(saved.target / 2)) : START_TARGET;
+      pools.set(worker.model, { worker, index, target, stableHigh: saved?.stableHigh ?? 1, running: 0, busy: 0, peakBusy: 0, providerHold });
     }
   }
   const waiting = await waitingNow();
@@ -476,7 +536,7 @@ export async function controlStep(): Promise<ControlReading | null> {
     const gpu = config.runpod && isRunpodSlot(pool.worker.model);
     const window = gpu ? gpuWindow(await windowFor(pool.worker.model)) : await windowFor(pool.worker.model);
     const peak = Math.max(pool.peakBusy, pool.busy);
-    let decision = decideTarget({ target: pool.target, active: peak, waiting, window, pressure, ...(gpu ? { ceiling: gpuCeiling() } : {}) });
+    let decision = decideTarget({ target: pool.target, active: peak, waiting, window, pressure, providerHold: pool.providerHold, ...(gpu ? { ceiling: gpuCeiling() } : {}) });
     const offered = grants.find((g) => g.model === pool.worker.model) ?? null;
     const grant = offered && !(await grantAlreadyApplied(pool.worker.model, offered.fingerprint)) ? offered : null;
     const granted = applyGrant({ target: pool.target, stableHigh: pool.stableHigh, decision, grant, ...(gpu ? { ceiling: gpuCeiling() } : {}) });
@@ -533,6 +593,7 @@ export async function controlStep(): Promise<ControlReading | null> {
       });
     }
     pool.target = decision.target;
+    pool.providerHold = decision.providerHold === true;
     await writeCapacity(pool.worker.model, pool.target, pool.stableHigh, decision.reason);
     fill(pool, config);
     reading.models.push({
@@ -642,7 +703,9 @@ export async function freeLaneSpareSurfaces(now = Date.now()): Promise<number> {
    * reported "no research waiting" while the plan lacked evidence on 17 of 19
    * openings. Room opened here is work queued, which raises the target again.
    */
-  const granted = rows.reduce((sum, r) => sum + Math.max(r.target, r.stableHigh), 0) || START_TARGET * 2;
+  // A model held on its provider's failures offers only the slot it holds: no room is
+  // opened for a route that is not answering (S-0171).
+  const granted = rows.reduce((sum, r) => sum + (isProviderHoldReason(r.reason) ? r.target : Math.max(r.target, r.stableHigh)), 0) || START_TARGET * 2;
   const busy = await db.get<{ n: number | string }>(
     `SELECT COUNT(*) AS n FROM work_items WHERE state = 'LEASED' AND lease_expires_at > ?
        AND worker_id IN (SELECT k.id FROM workers k WHERE k.name IN ('free-lane-a', 'free-lane-b'))`,
