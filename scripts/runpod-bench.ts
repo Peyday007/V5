@@ -29,6 +29,12 @@ const arg = (name: string): string | null => {
 };
 const apiKey = process.env['RUNPOD_API_KEY']?.trim() ?? '';
 const ceiling = Number(process.env['RUNPOD_MAX_USD_PER_HOUR']) > 0 ? Number(process.env['RUNPOD_MAX_USD_PER_HOUR']) : DEFAULT_MAX_USD_PER_HOUR;
+/**
+ * The hours the balance must last with the new pod beside the old one: RunPod deletes every pod at
+ * zero, so a pod is never created that would run the account dry. 24 by default; a funded operation
+ * of known length (the owner's 15-hour acceleration, 2026-11-16) passes its own remaining hours.
+ */
+const runwayHours = Number(process.env['RUNPOD_MIN_RUNWAY_HOURS']) > 0 ? Number(process.env['RUNPOD_MIN_RUNWAY_HOURS']) : 24;
 const totalCeiling = Number(process.env['RUNPOD_MAX_TOTAL_USD_PER_HOUR']) > 0 ? Number(process.env['RUNPOD_MAX_TOTAL_USD_PER_HOUR']) : 0.45;
 const repetitions = repsFromArgs(process.argv);
 const only = tasksFromArgs(process.argv);
@@ -64,8 +70,8 @@ async function benchRecipe(key: string): Promise<BenchSummary | null> {
     console.log(`SKIP ${key}: spending $${account.spendPerHour}/h plus a pod up to $${ceiling}/h would pass the $${totalCeiling}/h total ceiling`);
     return null;
   }
-  if (account.balance !== null && account.spendPerHour !== null && account.balance / (account.spendPerHour + ceiling) < 24) {
-    console.log(`SKIP ${key}: the balance would last under 24 hours with a benchmark pod running`);
+  if (account.balance !== null && account.spendPerHour !== null && account.balance / (account.spendPerHour + ceiling) < runwayHours) {
+    console.log(`SKIP ${key}: the balance would last under ${runwayHours} hours with a benchmark pod running`);
     return null;
   }
   const vllmKey = randomBytes(24).toString('hex');

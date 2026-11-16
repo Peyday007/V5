@@ -66,6 +66,10 @@ on:
         description: 'For runpod-bench/upgrade/restore: the most one pod may cost per hour, this dispatch only (default: the RUNPOD_MAX_USD_PER_HOUR variable, else $0.24). An upgrade also gives it to the Brain, so its own restart or migration of that pod stays within it. Total ceiling is 3x this.'
         required: false
         default: ''
+      runway_hours:
+        description: 'For runpod-bench/upgrade: the hours the RunPod balance must last with a second pod running (default 24). A funded operation of known length passes its remaining hours.'
+        required: false
+        default: ''
       tool_score:
         description: 'For runpod-upgrade: the director-task score (0-1) the new recipe measured in runpod-bench; ranks the GPU in Hermes model chain (BRAIN_RUNPOD_TOOL_SCORE).'
         required: false
@@ -121,6 +125,7 @@ jobs:
           RUNPOD_MAX_USD_PER_HOUR: ${{ inputs.max_usd_per_hour || vars.RUNPOD_MAX_USD_PER_HOUR }}
           MAX_USD_INPUT: ${{ inputs.max_usd_per_hour || '' }}
           TOOL_SCORE_INPUT: ${{ inputs.tool_score || '' }}
+          RUNPOD_MIN_RUNWAY_HOURS: ${{ inputs.runway_hours || '' }}
           # The most every Brain pod together may cost while runpod-bench/upgrade runs a second pod
           # beside production (a repository variable); unset = runpod-bench.ts's default of $0.45/h.
           RUNPOD_MAX_TOTAL_USD_PER_HOUR: ${{ vars.RUNPOD_MAX_TOTAL_USD_PER_HOUR }}
