@@ -28,6 +28,7 @@
  * so a goal tick that infers fifty quantities reads the rows once.
  */
 import { assessProjectFallbackPlan } from './fallbackPlanReading.ts';
+import { readSwitchDecision, type FallbackSwitchDecision } from './fallbackApply.ts';
 import { listOpportunities } from '../../repos/cashPortfolio.ts';
 import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
 import { claimSources, type ClaimSource } from '../../repos/research.ts';
@@ -117,6 +118,17 @@ export interface CashKnowledge {
    * built without a refresh.
    */
   fallbacks?: FallbackWatch | null;
+  /**
+   * What the recorded acquisition fallback plan, independence reading and
+   * preparation order say the dependency runs on now (`fallbackApply.ts`):
+   * the primary, or — after an unrecovered failure on the ledger — the
+   * substitute the plan switches to. A switch enters the switched path's
+   * re-derived funnel as this project's measured `respond` observation, so a
+   * goal plan built on this knowledge recalculates its portfolio on it. Null
+   * when no plan is on record or it could not be read; absent on knowledge
+   * built without a refresh.
+   */
+  fallbackDecision?: FallbackSwitchDecision | null;
 }
 
 const cache = new Map<string, { at: number; value: CashKnowledge }>();
@@ -170,6 +182,13 @@ export async function loadCashKnowledge(projectId: string, now = Date.now()): Pr
   await assessProjectFallbackPlan(projectId).catch((error: unknown) => {
     console.warn(`[quant] fallback plan unreadable for ${projectId}: ${String((error as Error)?.message ?? error)}`);
   });
+  // The recorded plan, independence and preparation order are read back and acted on: an unrecovered failure
+  // of the primary switches the plan to the substitute they qualify, and its funnel reaches every estimate below.
+  value.fallbackDecision = await readSwitchDecision(projectId).catch((error: unknown) => {
+    console.warn(`[quant] fallback decision unreadable for ${projectId}: ${String((error as Error)?.message ?? error)}`);
+    return null;
+  });
+  value.estimates.clear();
   return value;
 }
 
@@ -888,6 +907,33 @@ function lineageOf(fact: CashCardFact, knowledge: CashKnowledge): string[] {
   return [`fact:${fact.id}`];
 }
 
+/**
+ * The switched acquisition path's re-derived funnel as a `respond`
+ * observation: its responders out of the prospects it reached, measured on
+ * this project's own contact results. Only when the recorded fallback plan
+ * has switched (an unrecovered primary failure on the ledger, a qualified
+ * substitute) and the funnel is measured; the failed primary contributes
+ * nothing here. Broad when the substitute's mechanism differs from the
+ * opening's.
+ */
+export function switchedPathObservations(knowledge: CashKnowledge, target: CashOpportunity): Observation[] {
+  const decision = knowledge.fallbackDecision;
+  if (!decision || decision.state !== 'SWITCHED' || !decision.replacement || !decision.funnel) return [];
+  const [mechanism = 'unstated', channel = 'unstated'] = decision.replacement.split(' @ ');
+  const trials = Math.round(decision.funnel.prospectsReached);
+  const successes = Math.min(trials, Math.max(0, Math.round(decision.funnel.responders)));
+  if (trials <= 0) return [];
+  return [{
+    id: `fallback-switch:${decision.dependency}:${decision.replacement}`,
+    value: { kind: 'COUNT', successes, trials },
+    context: { mechanism, channel },
+    lineage: [`cash_outcomes:${knowledge.projectId}:${mechanism}:${channel}`],
+    source: { kind: 'OTHER', ref: `fallback-switch:${decision.failure?.occurrence ?? decision.dependency}`, note: decision.funnel.source },
+    broad: mechanism !== target.mechanism,
+    measures: `prospects answering on ${decision.replacement}, the path the plan switched to after ${decision.primaryPath} failed`,
+  }];
+}
+
 /** The observations a project holds about one quantity. */
 export function observationsFor(knowledge: CashKnowledge, quantity: CashQuantity, target: CashOpportunity): Observation[] {
   const spec = CASH_QUANTITIES[quantity];
@@ -908,6 +954,8 @@ export function observationsFor(knowledge: CashKnowledge, quantity: CashQuantity
       });
     }
   }
+  // The path the acquisition dependency runs on after a switch, measured on this Brain's own contacts (FALL-37-2).
+  if (quantity === 'respond') out.push(...switchedPathObservations(knowledge, target));
   // What money actually did on a route outranks what research says it would do, so it comes first.
   if (quantity === 'daysToCash' || quantity === 'costShare' || quantity === 'capitalShare') out.push(...ledgerObservations(knowledge, quantity, target));
   for (const fact of knowledge.facts) {
