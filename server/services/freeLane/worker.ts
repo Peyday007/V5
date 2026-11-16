@@ -1938,10 +1938,63 @@ export const ROUTE_WINDOW_MS = 30 * 60_000;
 const ROUTE_WINDOW_MAX = 64;
 const routeWindow = new Map<string, { at: number; ok: boolean; cause: RouteFailureCause | null }[]>();
 
+/** Routes whose window this process has already rebuilt from the lane's rows. */
+const routeRestored = new Set<string>();
+
 /** Tests: forget every route's health. */
 export function resetRouteHealth(): void {
   routeHealth.clear();
   routeWindow.clear();
+  routeRestored.clear();
+}
+
+/**
+ * Rebuild each route's breaker from the lane's own durable rows, once per process.
+ *
+ * The window and the hold are memory, so a worker restart used to reopen a failing route to every
+ * slot until it re-accumulated ROUTE_FAILURE_LIMIT failures (CAP-16-3, episode 3 review F1). The
+ * same outcomes are already recorded: each item writes one `FREE_LANE_ITEM` row naming its model and
+ * its reason (`takeOne`). Those rows are the record, and the breaker is derived from them: the last
+ * ROUTE_WINDOW_MS of a route's rows are replayed, at their own times and in order, through
+ * `recordRouteOutcome` — the same rule that judged them live — so after a restart the route stands
+ * exactly where it would have stood had the process never stopped. Nothing new is stored.
+ *
+ * A route this process has already judged is left alone (its in-memory window holds the same rows,
+ * and replaying them would count them twice). A failed read rebuilds nothing and is retried on the
+ * next tick: the breaker then starts from live calls, as it did before.
+ */
+export async function restoreRouteHealth(models: readonly string[], now = Date.now()): Promise<number> {
+  const pending = [...new Set(models)].filter((model) => !routeRestored.has(model));
+  if (pending.length === 0) return 0;
+  let rows: { at: string; outcome: string | null; reason: string | null }[];
+  try {
+    rows = await getDb().all<{ at: string; outcome: string | null; reason: string | null }>(
+      `SELECT at, outcome, reason FROM bin_events
+        WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND at <= ?
+        ORDER BY at ASC, id ASC`,
+      [new Date(now - ROUTE_WINDOW_MS).toISOString(), new Date(now).toISOString()],
+    );
+  } catch {
+    return 0;
+  }
+  let replayed = 0;
+  for (const model of pending) {
+    routeRestored.add(model);
+    // Already judged live in this process: its window is current.
+    if ((routeWindow.get(model)?.length ?? 0) > 0 || routeHealth.has(model)) continue;
+    const ok = `model ${model}`;
+    const failed = `model ${model}: `;
+    for (const row of rows) {
+      const reason = row.reason ?? '';
+      const at = Date.parse(row.at);
+      if (!Number.isFinite(at)) continue;
+      if (row.outcome === 'SUBMITTED' && reason === ok) recordRouteOutcome(model, { ok: true }, at);
+      else if (row.outcome !== 'SUBMITTED' && reason.startsWith(failed)) recordRouteOutcome(model, { ok: false, why: reason.slice(failed.length) }, at);
+      else continue;
+      replayed += 1;
+    }
+  }
+  return replayed;
 }
 
 /**
@@ -2214,6 +2267,8 @@ export async function freeLaneTick(options: FreeLaneOptions = {}): Promise<FreeL
   running = true;
   try {
     const all = await ensureFreeWorkers(config);
+    // After a restart, each route's breaker resumes from the lane's recorded outcomes (CAP-16-3).
+    await restoreRouteHealth(all.map((w) => w.model));
     /*
      * Reroute: a model whose free-lane items in the last half hour mostly failed
      * (on enough of them) is skipped, and its roles go to the other model.

@@ -9,9 +9,12 @@
  * so a provider answering about one call in nine was never held.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
+import { freshProject } from './helpers.ts';
+import { getDb } from '../server/db/database.ts';
 import {
   recordRouteOutcome,
   resetRouteHealth,
+  restoreRouteHealth,
   ROUTE_FAILURE_LIMIT,
   ROUTE_WINDOW_MS,
   routeHold,
@@ -111,5 +114,78 @@ describe('route breaker leaves a mostly answering route alone (2026-11-15 07:46Z
     expect(routeHold('brain-a', at)).not.toBeNull();
     expect(routeHold('runpod/openai/gpt-oss-120b', at)).toBeNull();
     expect(recordRouteOutcome('runpod/openai/gpt-oss-120b', { ok: true }, at)).toBe(true);
+  });
+});
+
+describe('route breaker survives a worker restart (review F1: the window was process memory)', () => {
+  let seq = 0;
+  async function laneRow(at: number, model: string, why: string | null): Promise<void> {
+    seq += 1;
+    await getDb().run(
+      `INSERT INTO bin_events (id, event_type, at, outcome, reason) VALUES (?, 'FREE_LANE_ITEM', ?, ?, ?)`,
+      [
+        `bev_route_${seq}`,
+        new Date(at).toISOString(),
+        why === null ? 'SUBMITTED' : 'RELEASED_TRANSIENT',
+        why === null ? `model ${model}` : `model ${model}: ${why}`,
+      ],
+    );
+  }
+
+  beforeEach(async () => {
+    await freshProject();
+    resetRouteHealth();
+  });
+
+  it('a failing route recorded before the restart is held on the first tick after it, with no new failure', async () => {
+    const start = Date.parse('2026-11-16T16:00:00.000Z');
+    let at = start;
+    // Production pattern: about one call in nine answered.
+    for (let i = 0; i < 9; i += 1) await laneRow((at += 10_000), 'brain-a', i === 4 ? null : i % 2 ? LIMITED : BUSY);
+    // A healthy route beside it.
+    for (let i = 0; i < 5; i += 1) await laneRow((at += 10_000), 'runpod/qwen', null);
+
+    // The restart: every bit of memory is gone.
+    resetRouteHealth();
+    expect(routeHold('brain-a', at)).toBeNull(); // the defect, before the rows are read
+
+    const replayed = await restoreRouteHealth(['brain-a', 'runpod/qwen'], at);
+    expect(replayed).toBe(14);
+    expect(routeWindowFailing('brain-a', at)).toBe(true);
+    expect(routeHold('brain-a', at)).toMatch(/model route failing \(provider availability\)/);
+    expect(routeHold('runpod/qwen', at)).toBeNull();
+    expect(routeWindowFailing('runpod/qwen', at)).toBe(false);
+  });
+
+  it('rows older than the window are not replayed, so a recovered route is not held for its past', async () => {
+    let at = Date.parse('2026-11-16T16:00:00.000Z');
+    for (let i = 0; i < 8; i += 1) await laneRow((at += 1000), 'brain-a', BUSY);
+    at += ROUTE_WINDOW_MS + 1000;
+    expect(await restoreRouteHealth(['brain-a'], at)).toBe(0);
+    expect(routeHold('brain-a', at)).toBeNull();
+  });
+
+  it('replays once per process, and never double-counts a route already judged live', async () => {
+    let at = Date.parse('2026-11-16T16:00:00.000Z');
+    for (let i = 0; i < 3; i += 1) await laneRow((at += 1000), 'brain-a', BUSY);
+    expect(await restoreRouteHealth(['brain-a'], at)).toBe(3);
+    // The next tick reads nothing again.
+    expect(await restoreRouteHealth(['brain-a'], at)).toBe(0);
+
+    // A route this process already called keeps its live window rather than adding the rows to it.
+    resetRouteHealth();
+    recordRouteOutcome('brain-b', { ok: true }, at);
+    for (let i = 0; i < 6; i += 1) await laneRow((at += 1000), 'brain-b', BUSY);
+    expect(await restoreRouteHealth(['brain-b'], at)).toBe(0);
+    expect(routeHold('brain-b', at)).toBeNull();
+  });
+
+  it('Brain\'s own database outage recorded in the rows is still not counted against the route', async () => {
+    let at = Date.parse('2026-11-16T16:00:00.000Z');
+    const why = 'model call failed: The database pool had no free connection (12 caller(s) waiting)';
+    for (let i = 0; i < 8; i += 1) await laneRow((at += 1000), 'brain-a', why);
+    await restoreRouteHealth(['brain-a'], at);
+    expect(routeWindowFailing('brain-a', at)).toBe(false);
+    expect(routeHold('brain-a', at)).toBeNull();
   });
 });
