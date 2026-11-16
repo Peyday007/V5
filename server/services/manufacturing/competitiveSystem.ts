@@ -33,6 +33,9 @@
  * is ignored here (§10, §14).
  */
 
+import { createHash } from 'node:crypto';
+import { getDb } from '../../db/database.ts';
+import { recordBinEvent } from '../../repos/bins.ts';
 import { claimsByIds } from '../../repos/research.ts';
 import type { CategoryEvidenceEntry } from '../../domain/types.ts';
 import type { LadderSnapshot } from './ladder.ts';
@@ -329,15 +332,130 @@ export function claimFromEvidence(entry: CategoryEvidenceEntry, sourceUrl: strin
  * Read on every manufacturing kernel pass (kernel.ts), so the reconstruction
  * exists on production records without a second store.
  */
-export async function competitiveSystemsFor(snapshot: Pick<LadderSnapshot, 'categories' | 'evidence'>): Promise<CompetitiveSystem[]> {
+export async function competitiveSystemsFor(snapshot: Pick<LadderSnapshot, 'categories' | 'evidence'>): Promise<CategoryCompetitiveSystem[]> {
   const live = snapshot.categories.filter((one) => one.retiredAt === null);
   if (live.length === 0) return [];
   const claimIds = [...new Set(snapshot.evidence.map((one) => one.sourceClaimId))];
   const urls = new Map((claimIds.length > 0 ? await claimsByIds(claimIds) : []).map((one) => [one.id, one.sourceUrl]));
-  return live.map((category) =>
-    reconstructCompetitiveSystem({
+  return live.map((category) => ({
+    categoryId: category.id,
+    ...reconstructCompetitiveSystem({
       subjectPath: [category.name],
       claims: snapshot.evidence.filter((one) => one.categoryId === category.id).map((one) => claimFromEvidence(one, urls.get(one.sourceClaimId) ?? null)),
     }),
+  }));
+}
+
+/** One live category's reconstruction, keyed by the category it was read for. */
+export type CategoryCompetitiveSystem = CompetitiveSystem & { categoryId: string };
+
+/* ------------------------------------------------------------------------- */
+/* Recorded on change, so the reconstruction is a production record           */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * The event a category's reconstructed competitive system is recorded under,
+ * on the append-only bin_events ledger — the place and the rule a venture
+ * reading uses (`MANUFACTURING_VENTURE_READ` in russell/loop.ts): one row per
+ * category per change, never one per tick. The row carries the whole map, so a
+ * reader needs nothing but the row.
+ */
+export const COMPETITIVE_SYSTEM_EVENT = 'MANUFACTURING_COMPETITIVE_SYSTEM';
+
+/** Key-sorted JSON, so two equal reconstructions serialize identically. */
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value !== null && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return Object.fromEntries(Object.keys(record).sort().map((key) => [key, canonical(record[key])]));
+  }
+  return value;
+}
+
+/** A fingerprint of a reconstruction: an unchanged map has an unchanged print and writes nothing. */
+export function competitiveFingerprint(system: CompetitiveSystem): string {
+  return createHash('sha256').update(JSON.stringify(canonical(system)), 'utf8').digest('hex');
+}
+
+export interface RecordedCompetitiveSystem {
+  categoryId: string;
+  /** When this reconstruction was recorded. */
+  at: string;
+  fingerprint: string;
+  /** The fingerprint of the reconstruction it replaced, or null for the first. */
+  previous: string | null;
+  system: CompetitiveSystem;
+}
+
+/**
+ * The newest recorded reconstruction of each category for a project, read from
+ * bin_events: the mechanisms, open questions, profit pools, advantage
+ * resources, rent-versus-own classifications and the product / selling-company
+ * / durable-position readings exactly as the kernel derived them. Earlier rows
+ * stay on the ledger as the history. A row that does not parse is no reading.
+ */
+export async function recordedCompetitiveSystems(projectId: string): Promise<Map<string, RecordedCompetitiveSystem>> {
+  const rows = await getDb().all<{ at: string; measures: string | null }>(
+    'SELECT at, measures FROM bin_events WHERE event_type = ? AND project_id = ? ORDER BY at ASC, id ASC',
+    [COMPETITIVE_SYSTEM_EVENT, projectId],
   );
+  const latest = new Map<string, RecordedCompetitiveSystem>();
+  for (const row of rows) {
+    try {
+      const one = JSON.parse(row.measures ?? '{}') as {
+        categoryId?: unknown;
+        fingerprint?: unknown;
+        previous?: unknown;
+        system?: unknown;
+      };
+      if (typeof one.categoryId !== 'string' || typeof one.fingerprint !== 'string') continue;
+      if (one.system === null || typeof one.system !== 'object') continue;
+      latest.set(one.categoryId, {
+        categoryId: one.categoryId,
+        at: row.at,
+        fingerprint: one.fingerprint,
+        previous: typeof one.previous === 'string' ? one.previous : null,
+        system: one.system as CompetitiveSystem,
+      });
+    } catch {
+      /* a row that does not parse is no reading */
+    }
+  }
+  return latest;
+}
+
+/**
+ * Record each category whose reconstruction changed since its newest recorded
+ * one (VENT-24-1 on production records). The kernel re-derives every map on
+ * every pass and stores nothing; the Russell tick calls this with the pass's
+ * maps, and this is where they become rows. Compared by fingerprint, so an
+ * unchanged map writes nothing and a changed one is recorded every time it
+ * changes, earlier rows kept. It decides, spends and commits nothing.
+ */
+export async function recordCompetitiveSystems(
+  projectId: string,
+  systems: readonly CategoryCompetitiveSystem[],
+): Promise<{ categoryId: string; fingerprint: string; previous: string | null }[]> {
+  const out: { categoryId: string; fingerprint: string; previous: string | null }[] = [];
+  if (systems.length === 0) return out;
+  const held = await recordedCompetitiveSystems(projectId);
+  for (const { categoryId, ...system } of systems) {
+    const fingerprint = competitiveFingerprint(system);
+    const previous = held.get(categoryId)?.fingerprint ?? null;
+    if (previous === fingerprint) continue;
+    const established = COMPETITIVE_LEVELS.filter((level) => system.readings[level].verdict === 'ESTABLISHED');
+    await recordBinEvent({
+      eventType: COMPETITIVE_SYSTEM_EVENT,
+      projectId,
+      workloadClass: 'manufacturing-kernel',
+      outcome: established.length > 0 ? established.join(',') : 'NONE_ESTABLISHED',
+      reason:
+        `${system.subject}: ${system.mechanisms.length} mechanism(s), ${system.profitPools.length} profit pool(s), ` +
+        `${system.activities.length} activity classification(s), ${system.openQuestions.length} open question(s)`,
+      evidenceClass: 'MEASURED',
+      measures: { categoryId, fingerprint, previous, system },
+    });
+    out.push({ categoryId, fingerprint, previous });
+  }
+  return out;
 }

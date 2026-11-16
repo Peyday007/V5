@@ -54,7 +54,7 @@ import {
   type VentureVerdict,
 } from './venturePath.ts';
 import type { AcquisitionCandidate } from '../../domain/types.ts';
-import { competitiveSystemsFor, type CompetitiveSystem } from './competitiveSystem.ts';
+import { competitiveSystemsFor, type CategoryCompetitiveSystem } from './competitiveSystem.ts';
 import { institutionsForLadder, type CategoryInstitutions } from './institutionReading.ts';
 
 export interface KernelPass {
@@ -70,7 +70,7 @@ export interface KernelPass {
    * open questions for the rest, and the product / selling-company / durable-
    * position readings. A read, derived every pass; never new research.
    */
-  competitive: CompetitiveSystem[];
+  competitive: CategoryCompetitiveSystem[];
   /**
    * Every live category's institutional machinery (INST-30), derived from the
    * ladder's rows: the elements those rows trigger, each costed or withheld,

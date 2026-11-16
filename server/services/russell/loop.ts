@@ -157,6 +157,7 @@ import { runDiscovery } from '../cash/discovery.ts';
 import { runIndustryKernel } from '../industry/kernel.ts';
 import { runLaborKernel } from '../labor/kernel.ts';
 import { runManufacturingKernel, type VentureReconsideration } from '../manufacturing/kernel.ts';
+import { recordCompetitiveSystems } from '../manufacturing/competitiveSystem.ts';
 import { runDealflowKernel } from '../dealflow/kernel.ts';
 import { runPuzzleKernel } from '../puzzle/kernel.ts';
 import { operate } from '../cash/operate.ts';
@@ -581,6 +582,12 @@ export interface TickReport {
      * that turned FEASIBLE is also put on the project's live goals.
      */
     ventures: { categoryId: string; from: string | null; to: string }[];
+    /**
+     * Categories whose reconstructed competitive system changed this tick
+     * (VENT-24-1): each change is recorded as a MANUFACTURING_COMPETITIVE_SYSTEM
+     * event carrying the whole map, read back by `recordedCompetitiveSystems`.
+     */
+    competitive: { categoryId: string; fingerprint: string; previous: string | null }[];
   }[];
   /**
    * What the cross-border dealflow kernel did: what it filed from finished
@@ -2287,8 +2294,10 @@ async function tickOnce(owner: string): Promise<TickReport> {
            */
           const programme = await runManufacturingKernel(project.id);
           const ventures = await recordVentureTransitions(project.id, programme.ventures);
+          const competitive = await recordCompetitiveSystems(project.id, programme.competitive);
           if (
             ventures.length > 0 ||
+            competitive.length > 0 ||
             programme.opened.length > 0 ||
             programme.absorbed.categories.length > 0 ||
             programme.absorbed.capabilities.length > 0 ||
@@ -2309,6 +2318,7 @@ async function tickOnce(owner: string): Promise<TickReport> {
               evidence: programme.absorbed.evidence.map((one) => one.id),
               settled: programme.absorbed.settled.map((one) => one.roundId),
               ventures,
+              competitive,
             });
           }
         } catch {
