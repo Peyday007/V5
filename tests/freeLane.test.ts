@@ -931,6 +931,10 @@ describe('a restriction must name a replacement that is doing the work', () => {
     expect(reading.packetsTouched).toBe(1);
     expect(reading.claimsSubmitted).toBe(1);
     expect(reading.outcomesLastDay['RESEARCH_FRAGMENT:SUBMITTED']).toBe(1);
+    // The 24h consumption count is the admin readout's alone: the dispatch
+    // tick's per-minute watch never pays for it (48-82 s on production).
+    expect(typeof reading.coverage.consumedLastDay).toBe('number');
+    expect((await laneCoverage()).consumedLastDay).toBeNull();
   });
   it('asks an audit that already timed out over the compact brief, so it stops cycling', async () => {
     const { endFreeLaneCooldowns } = await import('../server/services/freeLane/worker.ts');

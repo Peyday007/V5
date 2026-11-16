@@ -19,7 +19,8 @@
  */
 import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
 import { recordBinEvent } from '../server/repos/bins.ts';
-import { podConfig, powerPod, readPod, vllmReady } from '../server/services/cheap/runpodPod.ts';
+import { runpodConfig } from '../server/services/cheap/runpod.ts';
+import { loadMovedPod, podConfig, powerPod, readPod, vllmReady } from '../server/services/cheap/runpodPod.ts';
 import { waitingNow } from '../server/services/freeLane/capacity.ts';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -46,6 +47,8 @@ function fail(why: string): void {
 
 async function main(): Promise<void> {
   await initDatabase();
+  // The pod Brain moved to, if it moved one: the deploy secret may still name the old one.
+  await loadMovedPod();
   const config = podConfig();
   if (!config) return fail('automatic power is off: BRAIN_RUNPOD_API_KEY, the GPU in primary mode, or a pod id is missing');
   console.log(`POD ${config.podId} · stopped after ${Math.round(config.idleStopMs / 60_000)} idle min`);
@@ -71,19 +74,31 @@ async function main(): Promise<void> {
   console.log(`  research waiting now: ${await waitingNow()}`);
 
   const startWait = Date.now();
-  const autoStarted = await until('Brain started the pod by itself', 12 * 60_000, async () => {
-    const row = await getDb().get<{ n: number | string }>(
-      `SELECT COUNT(*) AS n FROM bin_events WHERE event_type = 'RUNPOD_POD' AND outcome = 'STARTED' AND at >= ?`,
+  // Recovery is either a start of this pod or, when its host has no GPU left, a move to a new
+  // pod (runpodPod.ts): production 2026-11-16 00:21Z, the host was full again within seconds of
+  // the stop, and Brain moved the pod at 00:33Z. Both are the automatic recovery; waiting only for
+  // a start called a correct move a failure. The window covers three refused starts and the move.
+  const recovered = await until('Brain started or moved the pod by itself', 25 * 60_000, async () => {
+    const row = await getDb().get<{ outcome: string }>(
+      `SELECT outcome FROM bin_events WHERE event_type = 'RUNPOD_POD' AND outcome IN ('STARTED', 'MIGRATED') AND at >= ?
+        ORDER BY at DESC LIMIT 1`,
       [started],
     );
-    return Number(row?.n ?? 0) > 0;
+    return !!row;
   });
-  if (autoStarted) console.log(`PASS Brain started the pod by itself ${secs(startWait)}s after the test stopped it`);
-  else {
+  let target = config;
+  if (recovered) {
+    await loadMovedPod();
+    const now = podConfig();
+    if (now && now.podId !== config.podId) {
+      target = now;
+      console.log(`PASS Brain moved the pod to ${now.podId} by itself ${secs(startWait)}s after the test stopped it (its host had no GPU left)`);
+    } else console.log(`PASS Brain started the pod by itself ${secs(startWait)}s after the test stopped it`);
+  } else {
     const waiting = await waitingNow();
     console.log(
       waiting > 0
-        ? `FAIL ${waiting} research item(s) waited and Brain did not start the pod; starting it here`
+        ? `FAIL ${waiting} research item(s) waited and Brain neither started nor moved the pod; starting it here`
         : 'NOTE no research waited, so Brain rightly left the pod stopped; starting it here so the test does not leave the GPU off',
     );
     const start = await powerPod(config, 'start');
@@ -97,12 +112,31 @@ async function main(): Promise<void> {
       evidenceClass: 'MEASURED',
     }).catch(() => undefined);
   }
-  const running = await until('RunPod reports RUNNING', 10 * 60_000, async () => (await readPod(config)).status === 'RUNNING');
+  const running = await until('RunPod reports RUNNING', 10 * 60_000, async () => (await readPod(target)).status === 'RUNNING');
   const bootAt = Date.now();
-  const ready = running && (await until('vLLM answers /models with its key', 15 * 60_000, () => vllmReady(config, fetch)));
+  const ready = running && (await until('vLLM answers /models with its key', 20 * 60_000, () => vllmReady(target, fetch)));
   if (ready) console.log(`  model served ${secs(bootAt)}s after RUNNING`);
-  const ok = stopped && autoStarted && running && ready;
-  console.log(`${ok ? 'PASS' : 'FAIL'} stop → automatic start → model served, ${secs(stopAt)}s overall`);
+  // A real completion, not only a listing: the model must answer.
+  let answered = false;
+  if (ready) {
+    const model = runpodConfig()?.model ?? '';
+    try {
+      const response = await fetch(`${target.vllm.url}/chat/completions`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...(target.vllm.key ? { authorization: `Bearer ${target.vllm.key}` } : {}) },
+        body: JSON.stringify({ model, messages: [{ role: 'user', content: 'Reply with the single word READY. /no_think' }], max_tokens: 16, temperature: 0 }),
+        signal: AbortSignal.timeout(120_000),
+      });
+      const body = (await response.json().catch(() => null)) as { choices?: { message?: { content?: string } }[] } | null;
+      const text = body?.choices?.[0]?.message?.content ?? '';
+      answered = response.ok && text.trim().length > 0;
+      console.log(`${answered ? 'PASS' : 'FAIL'} a real completion from ${model}: HTTP ${response.status} "${text.replace(/\s+/g, ' ').trim().slice(0, 40)}"`);
+    } catch (error) {
+      console.log(`FAIL a real completion: ${(error as Error).name}`);
+    }
+  }
+  const ok = stopped && recovered && running && ready && answered;
+  console.log(`${ok ? 'PASS' : 'FAIL'} stop → automatic start or move → model served and answering, ${secs(stopAt)}s overall`);
   console.log(`RUNPOD-CYCLE: ${ok ? 'PASS' : 'FAIL'}`);
   if (!ok) process.exitCode = 1;
 }
