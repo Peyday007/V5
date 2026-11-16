@@ -260,9 +260,10 @@ function gpuWindow(items: Window): Window {
 }
 
 /** A runaway guard for the GPU's slots, above what one vLLM pod serves at once; not the operating limit. */
-export function gpuCeiling(env: NodeJS.ProcessEnv = process.env): number {
+export function gpuCeiling(env: NodeJS.ProcessEnv = process.env, served: number | null = null): number {
   const n = Number(env['BRAIN_RUNPOD_MAX_SLOTS']);
-  return Number.isFinite(n) && n >= 1 ? Math.min(SAFETY_CEILING, Math.floor(n)) : 32;
+  // A data-parallel pod serves more than 32 at once; the guard stays above what it serves.
+  return Number.isFinite(n) && n >= 1 ? Math.min(SAFETY_CEILING, Math.floor(n)) : Math.min(SAFETY_CEILING, Math.max(32, served ?? 0));
 }
 
 /**
@@ -288,7 +289,10 @@ export function servedSequences(model: string, recipes: Record<string, PodRecipe
   if (!recipe) return null;
   const at = recipe.args.indexOf('--max-num-seqs');
   const n = at >= 0 ? Number(recipe.args[at + 1]) : NaN;
-  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : null;
+  // `--max-num-seqs` is per replica: a data-parallel pod serves that many on each card.
+  const dp = recipe.args.indexOf('--data-parallel-size');
+  const replicas = dp >= 0 && Number(recipe.args[dp + 1]) >= 1 ? Math.floor(Number(recipe.args[dp + 1])) : 1;
+  return Number.isFinite(n) && n >= 1 ? Math.floor(n) * replicas : null;
 }
 
 function activeRecipe(): PodRecipe | null {
@@ -511,10 +515,10 @@ export async function controlStep(): Promise<ControlReading | null> {
     const gpu = config.runpod && isRunpodSlot(pool.worker.model);
     const window = gpu ? gpuWindow(await windowFor(pool.worker.model)) : await windowFor(pool.worker.model);
     const peak = Math.max(pool.peakBusy, pool.busy);
-    let decision = decideTarget({ target: pool.target, active: peak, waiting, window, pressure, ...(gpu ? { ceiling: gpuCeiling() } : {}) });
+    let decision = decideTarget({ target: pool.target, active: peak, waiting, window, pressure, ...(gpu ? { ceiling: gpuCeiling(process.env, servedSequences(pool.worker.model)) } : {}) });
     const offered = grants.find((g) => g.model === pool.worker.model) ?? null;
     const grant = offered && !(await grantAlreadyApplied(pool.worker.model, offered.fingerprint)) ? offered : null;
-    const granted = applyGrant({ target: pool.target, stableHigh: pool.stableHigh, decision, grant, ...(gpu ? { ceiling: gpuCeiling() } : {}) });
+    const granted = applyGrant({ target: pool.target, stableHigh: pool.stableHigh, decision, grant, ...(gpu ? { ceiling: gpuCeiling(process.env, servedSequences(pool.worker.model)) } : {}) });
     decision = granted.decision;
     // Just after a restart the database is busiest (boot passes, a deploy's verification):
     // the lane stays at its starting size until it has been up BOOT_GRACE_MS.
