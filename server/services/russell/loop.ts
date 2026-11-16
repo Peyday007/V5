@@ -157,6 +157,9 @@ import { runDiscovery } from '../cash/discovery.ts';
 import { runIndustryKernel } from '../industry/kernel.ts';
 import { runLaborKernel } from '../labor/kernel.ts';
 import { runManufacturingKernel, type VentureReconsideration } from '../manufacturing/kernel.ts';
+import type { CompetitiveSystem } from '../manufacturing/competitiveSystem.ts';
+import type { CategoryInstitutions } from '../manufacturing/institutionReading.ts';
+import { createHash } from 'node:crypto';
 import { runDealflowKernel } from '../dealflow/kernel.ts';
 import { runPuzzleKernel } from '../puzzle/kernel.ts';
 import { operate } from '../cash/operate.ts';
@@ -581,6 +584,13 @@ export interface TickReport {
      * that turned FEASIBLE is also put on the project's live goals.
      */
     ventures: { categoryId: string; from: string | null; to: string }[];
+    /**
+     * Categories whose competitive system (VENT-24-1) or institutional
+     * machinery (INST-30) read differently this tick, each recorded as a
+     * MANUFACTURING_COMPETITIVE_READ / MANUFACTURING_INSTITUTIONS_READ event.
+     */
+    competitive: string[];
+    institutions: string[];
   }[];
   /**
    * What the cross-border dealflow kernel did: what it filed from finished
@@ -781,6 +791,102 @@ export async function recordVentureTransitions(
         actorRef: 'brain:manufacturing-kernel',
       });
     }
+  }
+  return out;
+}
+
+/** The event a category's competitive system is recorded under (VENT-24-1), once per change. */
+export const COMPETITIVE_READ_EVENT = 'MANUFACTURING_COMPETITIVE_READ';
+/** The event a category's institutional machinery is recorded under (INST-30), once per change. */
+export const INSTITUTIONS_READ_EVENT = 'MANUFACTURING_INSTITUTIONS_READ';
+
+/** A reading's identity: the same content always yields the same fingerprint. */
+function readingFingerprint(value: unknown, ignore: readonly string[] = []): string {
+  const skip = new Set(ignore);
+  return createHash('sha256')
+    .update(JSON.stringify(value, (key, inner: unknown) => (skip.has(key) ? undefined : inner)))
+    .digest('hex')
+    .slice(0, 32);
+}
+
+/** The newest recorded fingerprint of each subject's reading under one event type, from bin_events. */
+async function recordedFingerprints(projectId: string, eventType: string): Promise<Map<string, string>> {
+  const rows = await getDb().all<{ measures: string | null }>(
+    'SELECT measures FROM bin_events WHERE event_type = ? AND project_id = ? ORDER BY at ASC, id ASC',
+    [eventType, projectId],
+  );
+  const latest = new Map<string, string>();
+  for (const row of rows) {
+    try {
+      const one = JSON.parse(row.measures ?? '{}') as { subjectKey?: unknown; fingerprint?: unknown };
+      if (typeof one.subjectKey === 'string' && typeof one.fingerprint === 'string') latest.set(one.subjectKey, one.fingerprint);
+    } catch {
+      /* a row that does not parse is no reading */
+    }
+  }
+  return latest;
+}
+
+/**
+ * Record each manufacturing reading that changed since its last recorded
+ * version: the competitive system of every live category (VENT-24-1) and its
+ * institutional machinery (INST-30).
+ *
+ * The kernel re-derives both on every pass and stores nothing, so until this
+ * existed they were computed and dropped — no row a probe or a person could
+ * read. This is where they become rows, on the same append-only bin_events
+ * ledger the venture readings use, carrying the whole reading in `measures`.
+ * Compared by fingerprint with the newest one recorded for the subject, so an
+ * unchanged reading writes nothing and every change is recorded. It decides,
+ * forms, signs and spends nothing: a reading is a record of what the rows
+ * currently imply.
+ */
+export async function recordManufacturingReadings(
+  projectId: string,
+  readings: { competitive: readonly CompetitiveSystem[]; institutions: readonly CategoryInstitutions[] },
+): Promise<{ competitive: string[]; institutions: string[] }> {
+  const out = { competitive: [] as string[], institutions: [] as string[] };
+  if (readings.competitive.length === 0 && readings.institutions.length === 0) return out;
+  const { recordBinEvent } = await import('../../repos/bins.ts');
+  // The kernel names a competitive system by its category's name; carry the id when the ladder states it.
+  const categoryIdByName = new Map(readings.institutions.map((one) => [one.name, one.categoryId]));
+
+  const competitiveHeld = readings.competitive.length > 0 ? await recordedFingerprints(projectId, COMPETITIVE_READ_EVENT) : new Map<string, string>();
+  for (const system of readings.competitive) {
+    const categoryId = categoryIdByName.get(system.subject) ?? null;
+    const subjectKey = categoryId ?? `subject:${system.subject}`;
+    const fingerprint = readingFingerprint(system);
+    if (competitiveHeld.get(subjectKey) === fingerprint) continue;
+    await recordBinEvent({
+      eventType: COMPETITIVE_READ_EVENT,
+      projectId,
+      workloadClass: 'manufacturing-kernel',
+      outcome: `${system.mechanisms.length} mechanism(s), ${system.openQuestions.length} open question(s)`,
+      reason: `${system.subject}: ${system.mechanisms.length} evidenced mechanism(s), ${system.profitPools.length} profit pool(s), ${system.activities.length} activity classification(s)`.slice(0, 480),
+      evidenceClass: 'MEASURED',
+      measures: { subjectKey, categoryId, fingerprint, previous: competitiveHeld.get(subjectKey) ?? null, system },
+    });
+    out.competitive.push(subjectKey);
+  }
+
+  const institutionsHeld = readings.institutions.length > 0 ? await recordedFingerprints(projectId, INSTITUTIONS_READ_EVENT) : new Map<string, string>();
+  for (const one of readings.institutions) {
+    const subjectKey = one.categoryId;
+    // A renewal date is counted from the pass's own clock, so it moves every tick; the date is
+    // recorded with the reading, but only a change in what the rows imply makes a new one.
+    const fingerprint = readingFingerprint(one.derivation, ['renewalDate']);
+    if (institutionsHeld.get(subjectKey) === fingerprint) continue;
+    const best = one.derivation.structures[0];
+    await recordBinEvent({
+      eventType: INSTITUTIONS_READ_EVENT,
+      projectId,
+      workloadClass: 'manufacturing-kernel',
+      outcome: best ? `${best.kind}: legal ${best.legalFeasibility}, readiness ${best.readiness}, authorization ${best.authorization}` : 'NO_STRUCTURE',
+      reason: `${one.name}: ${one.derivation.structures.length} structure(s), ${one.derivation.openQuestions.length} open question(s), ${one.derivation.limitations.length} limitation(s)`.slice(0, 480),
+      evidenceClass: 'MEASURED',
+      measures: { subjectKey, categoryId: one.categoryId, name: one.name, fingerprint, previous: institutionsHeld.get(subjectKey) ?? null, derivation: one.derivation },
+    });
+    out.institutions.push(subjectKey);
   }
   return out;
 }
@@ -2287,8 +2393,14 @@ async function tickOnce(owner: string): Promise<TickReport> {
            */
           const programme = await runManufacturingKernel(project.id);
           const ventures = await recordVentureTransitions(project.id, programme.ventures);
+          const readings = await recordManufacturingReadings(project.id, {
+            competitive: programme.competitive,
+            institutions: programme.institutions,
+          });
           if (
             ventures.length > 0 ||
+            readings.competitive.length > 0 ||
+            readings.institutions.length > 0 ||
             programme.opened.length > 0 ||
             programme.absorbed.categories.length > 0 ||
             programme.absorbed.capabilities.length > 0 ||
@@ -2309,6 +2421,8 @@ async function tickOnce(owner: string): Promise<TickReport> {
               evidence: programme.absorbed.evidence.map((one) => one.id),
               settled: programme.absorbed.settled.map((one) => one.roundId),
               ventures,
+              competitive: readings.competitive,
+              institutions: readings.institutions,
             });
           }
         } catch {
