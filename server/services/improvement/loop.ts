@@ -619,11 +619,47 @@ export interface Directive {
   minimumModelClass: 'STRONGEST' | 'FAST';
   routeWhy: string;
   evaluation: string;
+  /**
+   * The operator asked a question (`commissionResearch` with no goal), not for a change. Its answer
+   * is the method research itself, so it closes when that research settles and never becomes a
+   * Factory objective (OPERATOR:MISSING_CAPABILITY:aed45eeb30f0ec42). Absent on older rows.
+   */
+  question?: boolean;
 }
 
 export function directiveOf(candidate: Pick<ImprovementCandidate, 'evidence'>): Directive | null {
   const value = candidate.evidence['directive'];
   return value && typeof value === 'object' && (value as { origin?: unknown }).origin === 'OPERATOR' ? (value as Directive) : null;
+}
+
+/**
+ * Whether a candidate is a research question the operator asked rather than a defect to repair.
+ * Explicit on new rows (`directive.question`); older rows are recognised by the exact shape
+ * `commissionResearch` gives a goal-less question — an EVIDENCE directive, a `Research: ` title, no
+ * owner path and no known cause — so a question already in the register is not engineered either.
+ * Pure.
+ */
+export function isResearchQuestion(candidate: Pick<ImprovementCandidate, 'evidence' | 'title'>): boolean {
+  const d = directiveOf(candidate);
+  if (!d || d.intervention !== 'EVIDENCE') return false;
+  if (d.question === true) return true;
+  const paths = candidate.evidence['ownerPaths'];
+  const noOwner = !Array.isArray(paths) || paths.length === 0;
+  return noOwner && !candidate.evidence['knownCause'] && candidate.title.startsWith('Research: ');
+}
+
+/**
+ * How a research question closes once its method research has settled, or null while it has not
+ * (or when the candidate is not a question). The answer is the research: accepted claims answer
+ * it; none means research found no supported answer, which engineering cannot supply either.
+ * Either way no Factory objective is opened for it. Pure.
+ */
+export function questionClosure(candidate: Pick<ImprovementCandidate, 'evidence' | 'title' | 'researchGoalId'>, link: Pick<Linked, 'research' | 'archive'>): string | null {
+  if (!isResearchQuestion(candidate) || !candidate.researchGoalId || !link.research?.settled) return null;
+  const answered = link.research.acceptedClaims + link.archive.length;
+  return answered > 0
+    ? `Answered by method research ${candidate.researchGoalId} (${link.research.acceptedClaims} accepted claim(s), ${link.archive.length} from the archive): the operator asked a question, and its answer is the research, so there is nothing to engineer.`
+    : `Method research ${candidate.researchGoalId} ended ${link.research.status ?? 'without a result'} with no accepted claim; the operator asked a question, and a code change cannot answer it, so no Factory objective is opened.`;
 }
 
 function directiveSentence(candidate: ImprovementCandidate): string {
@@ -1154,6 +1190,15 @@ async function advance(candidate: ImprovementCandidate, busyOwners: Set<string>,
   switch (stage as Stage) {
     case 'DIAGNOSE':
     case 'ENGINEER': {
+      // A question the operator asked is answered by its method research, never engineered: once that
+      // research settles the row closes, so it does not come back to Factory as an engineering bin.
+      const closure = questionClosure(candidate, link);
+      if (closure) {
+        await decideCandidate(candidate.id, 'REJECTED', closure.slice(0, 1000));
+        await recordImprovementEvent({ candidateId: candidate.id, kind: 'DECIDED', detail: { decision: 'REJECTED', question: true, research: link.research?.status ?? null, acceptedClaims: link.research?.acceptedClaims ?? 0 } });
+        report.decided.push(`${candidate.weaknessKey} REJECTED`);
+        return link.research && link.research.acceptedClaims + link.archive.length > 0 ? 'answered: research question closed' : 'closed: research found no answer';
+      }
       // Reuse comes first (AUTO-20-2 step 3): what exists is searched and recorded before anything is valued or acquired.
       const found = await searchFirst(candidate, link);
       // A missing connector, supplier, payer, piece of information or watched fact is acquired by the owner

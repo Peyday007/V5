@@ -98,6 +98,8 @@ export interface DiagnosisRequest {
   runId: string | null;
   /** Brain's standing director commissioning in the operator's place (never Hermes identifying it). */
   standing?: boolean;
+  /** A question the operator asked (`commissionResearch`), answered by research and never engineered. */
+  question?: boolean;
   /**
    * §111: two or more materially different approaches, and the registered benchmark suite that
    * judges them. Engineering then opens an experiment — each approach its own Factory objective
@@ -307,7 +309,7 @@ export async function commission(input: DiagnosisRequest, now = new Date()): Pro
     case 'EVIDENCE': {
       // The cause is not established: §87's loop researches the defect's cause, and the goal's own search is asked
       // again with this diagnosis so the goal does not wait on the answer.
-      const researched = await engineerOrResearch(diagnosis, decision.intervention, input.runId, goal, base, now, input.standing === true);
+      const researched = await engineerOrResearch(diagnosis, decision.intervention, input.runId, goal, base, now, input.standing === true, input.question === true);
       const round = await openGoalResearchRound(diagnosis, 'EVIDENCE', input.runId, now);
       return {
         ...researched,
@@ -501,6 +503,7 @@ export async function commissionResearch(
         share: 0.05,
         proposed: 'EVIDENCE',
         runId: input.runId,
+        question: true,
       },
       now,
     );
@@ -603,6 +606,7 @@ async function engineerOrResearch(
   base: { intervention: Intervention; why: string; overruled: string | null },
   now: Date,
   standing = false,
+  question = false,
 ): Promise<CommissionResult> {
   const scope = d.ownerPaths.length ? [...d.ownerPaths, 'tests/**'] : ['tests/**'];
   const risk = riskForScope(scope, RELEASE_EXCLUDED_PATHS);
@@ -676,6 +680,8 @@ async function engineerOrResearch(
     blocksGoal: d.blocksGoal,
     share: d.share,
     recurrence: d.recurrence,
+    // A question is answered by its research and closes there; only EVIDENCE can carry one.
+    ...(question && intervention === 'EVIDENCE' ? { question: true } : {}),
   };
   if (candidate.decision === 'COMBINED' && candidate.combinedIntoId) {
     // Same owner, not yet engineered: the host carries it, and the host gets the directive.

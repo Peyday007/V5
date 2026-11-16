@@ -44,17 +44,27 @@
  * mechanism is needed, and the gate is unchanged: an assumed rate, an unsized
  * rate, or an interest-only signal stays NONE.
  *
- * The failure class: a causeless MISSING_CAPABILITY finding for this question is
- * offered by `inventoryDeficiencies` by its id, and is not re-offered while its
- * repair is in flight or after the repair was rejected — so it does not loop
- * back to the Factory as engineering work. Nothing here lowers a bar.
+ * The failure class: a question the operator asked (`commissionResearch` with no
+ * goal — a causeless MISSING_CAPABILITY Brain holds no answer to) was carried by
+ * §87's loop through method research and then on to Factory as an engineering
+ * objective, as if the answer were code. A question now carries
+ * `directive.question`, and once its method research settles the loop closes it
+ * (`questionClosure`) instead of opening a Factory objective; older rows of the
+ * same shape are recognised too. The inventory finding is also not re-offered
+ * while its repair is in flight or after the repair was rejected. Nothing here
+ * lowers a bar.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
-import { decideCandidate, upsertCandidate } from '../server/repos/improvement.ts';
+import { decideCandidate, getCandidate, upsertCandidate } from '../server/repos/improvement.ts';
+import { createProject, getProjectBySlug } from '../server/repos/projects.ts';
+import { createLayer } from '../server/repos/layers.ts';
+import { setImprovementSwitch } from '../server/services/improvement/authority.ts';
+import { isResearchQuestion, questionClosure } from '../server/services/improvement/loop.ts';
+import type { Linked } from '../server/services/improvement/loop.ts';
 import { getInventoryItem, upsertInventory } from '../server/services/operator/inventory.ts';
-import { inventoryDeficiencies, readingId } from '../server/services/operator/director.ts';
+import { commission, commissionResearch, inventoryDeficiencies, readingId } from '../server/services/operator/director.ts';
 import { inputEvidence, measuredRateInput } from '../server/services/goals/portfolio.ts';
 import { conversionState, validationStage } from '../server/services/goals/plan.ts';
 import type { LinkCheck } from '../server/services/goals/plan.ts';
@@ -175,5 +185,89 @@ describe('the failure class OPERATOR:MISSING_CAPABILITY:aed45eeb30f0ec42 does no
     const cause = 'Answered: count paid pre-orders/pledges against unique visitors via measuredRateInput; signups and clicks never certify conversion.';
     expect((await finding(id, { rootCause: cause, status: 'ROOT_CAUSE_CONFIRMED' })).ok).toBe(true);
     expect((await inventoryDeficiencies()).find((one) => one.source?.ref === id)?.diagnosis.cause).toBe(cause);
+  });
+});
+
+describe('a question the operator asked is answered by research and never sent to Factory as engineering', () => {
+  const QUESTION =
+    'Design an inbound validation mechanism for $10K PA Farm Vitality/home improvement plans that generates buyer-validated openings without direct outreach, paid spend, automated research, or Factory engineering.';
+  const settled = (acceptedClaims: number): Pick<Linked, 'research' | 'archive'> => ({
+    research: { settled: true, acceptedClaims, status: 'COMPLETE', claims: [] },
+    archive: [],
+  });
+
+  beforeEach(async () => {
+    await freshProject();
+    const brain = (await getProjectBySlug('brain-architecture'))?.id ?? (await createProject({ name: 'Brain Architecture', slug: 'brain-architecture' })).id;
+    await createLayer({ projectId: brain, name: 'Methods', orderIndex: 0 });
+    const admin = `admin-${uid()}@example.com`;
+    await createUser({ email: admin, displayName: 'Admin', password: 'correct horse battery staple 1', isBrainAdmin: true });
+    // No Factory submission and no research goal from this test: only the register row is read.
+    await setImprovementSwitch(false, admin, 'test: no Factory submission from this test');
+  });
+
+  it('reproduces the failure class: the commissioned question is marked a question, and once its research settles it closes instead of becoming a Factory objective', async () => {
+    const out = await commissionResearch({ goalId: null, question: QUESTION, evidence: null, runId: 'opr_99026b0ef4c04df9b03d' });
+    expect(out.ok).toBe(true);
+    expect(out.intervention).toBe('EVIDENCE');
+    const row = (await getCandidate(out.candidateId!))!;
+    expect((row.evidence['directive'] as { question?: boolean }).question).toBe(true);
+    expect(isResearchQuestion(row)).toBe(true);
+
+    // Research not opened or not settled yet: the loop keeps researching, nothing closes.
+    expect(questionClosure({ ...row, researchGoalId: null }, settled(3))).toBeNull();
+    expect(questionClosure({ ...row, researchGoalId: 'rgl_q' }, { research: { settled: false, acceptedClaims: 0, status: 'RUNNING', claims: [] }, archive: [] })).toBeNull();
+
+    // Settled with accepted claims: answered — the research is the answer, nothing to engineer.
+    const answered = questionClosure({ ...row, researchGoalId: 'rgl_q' }, settled(8));
+    expect(answered).toContain('Answered by method research rgl_q');
+    expect(answered).toContain('nothing to engineer');
+    // Settled with none: still closed, never handed to Factory, and said honestly.
+    expect(questionClosure({ ...row, researchGoalId: 'rgl_q' }, settled(0))).toContain('no accepted claim');
+  });
+
+  it('recognises a question already in the register from before the flag (the row this job came from)', () => {
+    const older = {
+      title: `Research: ${QUESTION}`,
+      researchGoalId: 'rgl_old',
+      evidence: { directive: { origin: 'OPERATOR', intervention: 'EVIDENCE', deficiency: 'MISSING_CAPABILITY' }, ownerPaths: [] },
+    };
+    expect(isResearchQuestion(older)).toBe(true);
+    expect(questionClosure(older, settled(8))).not.toBeNull();
+  });
+
+  it('does not touch a defect to repair: an engineering directive, owner paths or a known cause keep the Factory path', async () => {
+    const base = { title: `Research: ${QUESTION}`, researchGoalId: 'rgl_x' };
+    const engineering = { ...base, evidence: { directive: { origin: 'OPERATOR', intervention: 'ENGINEERING', question: true }, ownerPaths: [] } };
+    const owned = { ...base, evidence: { directive: { origin: 'OPERATOR', intervention: 'EVIDENCE' }, ownerPaths: ['server/services/x.ts'] } };
+    const caused = { ...base, evidence: { directive: { origin: 'OPERATOR', intervention: 'EVIDENCE' }, ownerPaths: [], knownCause: 'the rows say why' } };
+    const detector = { ...base, evidence: {} };
+    for (const one of [engineering, owned, caused, detector]) {
+      expect(isResearchQuestion(one)).toBe(false);
+      expect(questionClosure(one, settled(8))).toBeNull();
+    }
+
+    // A causeless defect diagnosis (not a question) is not marked a question either.
+    const defect = await commission({
+      goalId: null,
+      deficiency: 'MISSING_CAPABILITY',
+      title: 'Inbound replies are not recorded as measured close rates',
+      observed: 'Replies to inbound pages arrive but no measured close rate is recorded, so conversion stays NONE on every opening.',
+      evidence: 'Operator run opr_99026b0ef4c04df9b03d; rows cop_inbound',
+      cause: null,
+      ownerPaths: ['server/services/goals/portfolio.ts'],
+      recurrence: 1,
+      expectedBenefit: 'Measured conversion reaches the plan.',
+      acceptance: 'A test shows a recorded inbound count becomes a measured rate.',
+      metric: null,
+      blocksGoal: false,
+      share: null,
+      proposed: 'EVIDENCE',
+      runId: 'opr_99026b0ef4c04df9b03d',
+    });
+    expect(defect.ok).toBe(true);
+    const row = (await getCandidate(defect.candidateId!))!;
+    expect((row.evidence['directive'] as { question?: boolean }).question).toBeUndefined();
+    expect(isResearchQuestion(row)).toBe(false);
   });
 });
