@@ -72,6 +72,9 @@ import { resumePulledPackets } from './services/research/packetRunner.ts';
 import { recoverInterruptedImports } from './services/archive/import.ts';
 import { bootFailureApp } from './bootFailure.ts';
 
+/** The free research lane's deliberate boot delay (see `startFreeLaneLoop`). */
+const FREE_LANE_START_DELAY_MS = 3 * 60_000;
+
 /**
  * `node:sqlite` prints an experimental-feature warning the moment it is loaded.
  * The user did not choose that dependency and cannot act on the warning, so this
@@ -808,7 +811,10 @@ async function continueBoot(migrations: MigrationReport): Promise<void> {
     // The dispatcher itself. A plain interval, no model, and nothing waiting on a
     // socket: it reads two indexed tables and occasionally makes one HTTP call.
     // An idle Brain spends essentially nothing here.
-    startDispatcher();
+    // The free lane's boot delay is one number, given to both owners: the lane
+    // starts its pool when it elapses, and the dispatcher's displaced-work
+    // continuation does not start the pool before it does.
+    startDispatcher(undefined, { freeLaneStartDelayMs: FREE_LANE_START_DELAY_MS });
 
     /*
      * The factory's own loop, beside the dispatcher.
@@ -831,7 +837,7 @@ async function continueBoot(migrations: MigrationReport): Promise<void> {
      * longer take, answered by the cheap lane's free models through the same
      * queue, tools and gates. Off when no cheap lane is configured.
      */
-    startFreeLaneLoop();
+    startFreeLaneLoop(undefined, FREE_LANE_START_DELAY_MS);
 
     /*
      * One reading of Brain's own parts, if the last one is no longer about this

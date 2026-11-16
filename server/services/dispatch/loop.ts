@@ -251,6 +251,58 @@ export function forgetUnansweredRead(): void {
 const BRAIN_ONLY_PASS_MS = 60_000;
 let lastBrainOnlyPass = 0;
 
+/** Tests: run the brain-only pass on the next tick whatever happened. */
+export function forgetBrainOnlyPass(): void {
+  lastBrainOnlyPass = 0;
+}
+
+/**
+ * Continue stranded displaced research through the free lane's own owner
+ * (§85, §98, rule 9). `watchDisplacedWork` records the fault and promises "a
+ * free-lane tick"; this is that tick. A stopped pool is started — which arms
+ * the pool's own control timer and runs its first step off this tick, not
+ * awaited here. A running pool is left to that timer: it steps every 30s,
+ * more often than this pass runs, so an extra step from here could only
+ * overlap one of its own (two steps resizing the same pools and writing the
+ * same capacity rows at once) and would put the controller's database reads
+ * and writes inside the dispatch tick. The controller has one clock, and it is
+ * the pool's. No new scheduler, and it runs only when work is stranded.
+ */
+export async function continueDisplacedWork(stranded: boolean): Promise<'STARTED' | 'RUNNING' | 'DEFERRED' | null> {
+  if (!stranded) return null;
+  const { adaptivePoolRunning, startAdaptivePool } = await import('../freeLane/capacity.ts');
+  if (adaptivePoolRunning()) return 'RUNNING';
+  /*
+   * The free lane waits out its boot delay on purpose (`startFreeLaneLoop`:
+   * model-driven slots competing with the boot passes made Deploy's restart
+   * verification too slow to finish, Deploy 41601470270). The first dispatch
+   * tick after a restart runs this pass, and a backlog stranded before the
+   * restart is still stranded, so starting the pool here would skip that delay
+   * entirely. Inside it, the lane's own timer is the one that starts the pool;
+   * this pass resumes continuing once it has elapsed.
+   */
+  if (Date.now() < continuationHeldUntil) return 'DEFERRED';
+  startAdaptivePool();
+  return 'STARTED';
+}
+
+/**
+ * Until when `continueDisplacedWork` must not start the free-lane pool: the end
+ * of the lane's boot delay, armed by `startDispatcher` at boot. Zero (a tick
+ * driven without the dispatcher's boot, as tests do) holds nothing.
+ */
+let continuationHeldUntil = 0;
+
+/** The instant until which displaced-work continuation defers to the lane's own boot delay. */
+export function displacedContinuationHeldUntil(): number {
+  return continuationHeldUntil;
+}
+
+/** Arm (or, with 0, clear) the boot hold on displaced-work continuation. */
+export function holdDisplacedContinuation(delayMs: number): void {
+  continuationHeldUntil = delayMs > 0 ? Date.now() + delayMs : 0;
+}
+
 export async function dispatchTick(
   options: { burst?: number; projectIds?: string[] } = {},
 ): Promise<TickResult> {
@@ -291,7 +343,14 @@ export async function dispatchTick(
       await enforceBrainOnly();
       // §85: displaced research must be progressing on its replacement.
       const { watchDisplacedWork } = await import('../freeLane/coverage.ts');
-      await watchDisplacedWork();
+      const displaced = await watchDisplacedWork();
+      // ...and when it is not, the promised free-lane tick runs here rather than nowhere.
+      try {
+        const continued = await continueDisplacedWork(displaced.stranded);
+        if (continued === 'STARTED') console.log(`[dispatch] displaced research continued (free-lane pool started): ${displaced.reason}`);
+      } catch (error) {
+        console.warn('[dispatch] displaced research continuation failed:', (error as Error).message);
+      }
     } catch (error) {
       console.warn('[dispatch] brain-only pass failed:', (error as Error).message);
     }
@@ -1131,8 +1190,13 @@ let running = false;
  * dispatcher is a background convenience, not a reason for the Brain to stay
  * alive.
  */
-export function startDispatcher(intervalMs = DISPATCH_TICK_MS): void {
+export function startDispatcher(
+  intervalMs = DISPATCH_TICK_MS,
+  options: { freeLaneStartDelayMs?: number } = {},
+): void {
   if (timer) return;
+  // The free lane's boot delay binds the dispatcher's continuation too (see `continueDisplacedWork`).
+  if (options.freeLaneStartDelayMs !== undefined) holdDisplacedContinuation(options.freeLaneStartDelayMs);
   timer = setInterval(() => {
     if (running) return;
     running = true;
