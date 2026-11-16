@@ -378,20 +378,45 @@ function noteRefusal(config: LaneConfig, model: string, refusal: RouteRefusal, n
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** One route, honouring its backoff: waits when the wait fits the call's budget, else refuses without sending. */
+/**
+ * The budget of a call that fails over (repair-F3). Each route is given its own
+ * clock — up to `timeoutMs` from when it is tried — so a route that timed out
+ * does not spend the next route's time; the whole call is bounded by
+ * `timeoutMs` per route, for at most this many routes.
+ */
+export const FAILOVER_ROUTE_BUDGETS = 2;
+/**
+ * The least time a route is sent with. Below it the route is not tried and no
+ * refusal is noted against it: a request aborted for want of time says nothing
+ * about the provider, and striking a healthy route for it would back it off for
+ * every caller in the process.
+ */
+export const MIN_ROUTE_MS = 5_000;
+
+/** The time a route is sent with: its own `timeoutMs`, within what the call has left; 0 when too little is left. Pure. */
+export function routeBudget(config: Pick<LaneConfig, 'timeoutMs'>, deadline: number, now: number): number {
+  const left = deadline - now;
+  const least = Math.min(MIN_ROUTE_MS, config.timeoutMs / 2);
+  return left < least ? 0 : Math.min(config.timeoutMs, left);
+}
+
+/** One route, honouring its backoff: waits when the wait fits the route's budget, else refuses without sending. */
 async function callRoute(
   config: LaneConfig,
   model: string,
   system: string,
   prompt: string,
   options: { maxTokens?: number; json?: boolean } | undefined,
-  started: number,
+  budget: number,
 ): Promise<string> {
+  // The route's own clock: the time spent on the routes before it is not charged to it.
+  const started = Date.now();
+  const own = { ...config, timeoutMs: budget };
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const now = Date.now();
     const held = routeBackoff(config, model, now);
     if (held) {
-      const left = config.timeoutMs - (now - started) - WAIT_RESERVE_MS;
+      const left = budget - (now - started) - WAIT_RESERVE_MS;
       const wait = held.until - now;
       if (wait > Math.min(ROUTE_WAIT_MAX_MS, left)) {
         throw new RouteRefusal(`cheap lane ${held.why}; backing off ${Math.ceil(wait / 1000)} s`, true);
@@ -399,7 +424,7 @@ async function callRoute(
       await sleep(wait);
     }
     try {
-      const text = await openAiCompleter(config, model, system, prompt, options, started);
+      const text = await openAiCompleter(own, model, system, prompt, options, started);
       backoff.delete(routeKey(config, model));
       return text;
     } catch (error) {
@@ -428,9 +453,16 @@ async function failover(
 ): Promise<string> {
   const refused: string[] = [];
   let only: unknown = null;
+  const deadline = started + config.timeoutMs * Math.min(chain.length, FAILOVER_ROUTE_BUDGETS);
   for (const model of chain) {
+    const budget = routeBudget(config, deadline, Date.now());
+    if (budget === 0) {
+      // Not sent, and no refusal noted against it: the call ran out of time, the route did not refuse.
+      refused.push(`${model}: not tried, the call's time was spent`);
+      break;
+    }
     try {
-      return await callRoute(config, model, system, prompt, options, started);
+      return await callRoute(config, model, system, prompt, options, budget);
     } catch (error) {
       if (!(error instanceof RouteRefusal) || !error.busy) {
         if (refused.length === 0) throw error;

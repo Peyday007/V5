@@ -9,6 +9,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  MIN_ROUTE_MS,
   ROUTE_BACKOFF_BASE_MS,
   busyStatus,
   httpCompleter,
@@ -16,6 +17,7 @@ import {
   parseRetryAfter,
   resetRouteBackoff,
   routeBackoff,
+  routeBudget,
   type LaneConfig,
 } from '../server/services/cheap/lane.ts';
 import { resetRunpod } from '../server/services/cheap/runpod.ts';
@@ -191,5 +193,77 @@ describe('configuration', () => {
     expect(parseRetryAfter(null, now)).toBeNull();
     expect([408, 409, 413, 425, 429, 500, 503].every(busyStatus)).toBe(true);
     expect([400, 401, 403, 404, 422].some(busyStatus)).toBe(false);
+  });
+});
+
+/**
+ * Review finding F3: every route of a chain shared one clock, so after the first
+ * route timed out the next was sent with a 1 ms signal, aborted at once, and was
+ * itself backed off for every caller for a timeout it never had.
+ */
+describe('a timed-out route does not spend or poison the next route (repair-F3)', () => {
+  /** A fetch where the named models never answer until their signal aborts them; the rest answer. */
+  function hangingFetch(hang: readonly string[]): { seen: Seen[]; budgets: Map<string, number> } {
+    const seen: Seen[] = [];
+    const budgets = new Map<string, number>();
+    vi.stubGlobal('fetch', (url: string, init: { body: string; signal: AbortSignal }) => {
+      const model = String((JSON.parse(init.body) as { model: string }).model);
+      seen.push({ model, url: String(url) });
+      const sent = Date.now();
+      if (!hang.includes(model)) {
+        // A healthy route still takes a moment to answer, and honours its signal like any request.
+        return new Promise((resolve, reject) => {
+          const timer = setTimeout(
+            () => resolve(new Response(JSON.stringify({ choices: [{ message: { content: `answer from ${model}` } }] }), { status: 200 })),
+            50,
+          );
+          init.signal.addEventListener('abort', () => {
+            clearTimeout(timer);
+            reject(init.signal.reason ?? new Error('This operation was aborted'));
+          });
+        });
+      }
+      return new Promise((_resolve, reject) => {
+        init.signal.addEventListener('abort', () => {
+          budgets.set(model, Date.now() - sent);
+          reject(init.signal.reason ?? new Error('This operation was aborted'));
+        });
+      });
+    });
+    return { seen, budgets };
+  }
+
+  it('answers from the next route with its own time after the first route timed out, and backs off only the route that timed out', async () => {
+    const c = config({ timeoutMs: 400 });
+    const { seen } = hangingFetch(['primary']);
+    const text = await httpCompleter(c, 'primary', 's', 'p');
+    expect(text).toBe('answer from spare');
+    expect(seen.map((s) => s.model)).toEqual(['primary', 'spare']);
+    expect(routeBackoff(c, 'primary')).not.toBeNull();
+    expect(routeBackoff(c, 'spare')).toBeNull();
+  });
+
+  it('gives a fallback that also hangs a real budget, not the 1 ms the first route left', async () => {
+    const c = config({ timeoutMs: 400 });
+    const { budgets } = hangingFetch(['primary', 'spare']);
+    await expect(httpCompleter(c, 'primary', 's', 'p')).rejects.toThrow(/every route refused/);
+    expect(budgets.get('primary')!).toBeGreaterThanOrEqual(300);
+    expect(budgets.get('spare')!).toBeGreaterThanOrEqual(300);
+  });
+
+  it('does not send, and does not back off, a route the call has no time left for', async () => {
+    const c = config({ timeoutMs: 400, fallbacks: ['spare', 'third'] });
+    const { seen } = hangingFetch(['primary', 'spare']);
+    await expect(httpCompleter(c, 'primary', 's', 'p')).rejects.toThrow(/third: not tried, the call's time was spent/);
+    expect(seen.map((s) => s.model)).toEqual(['primary', 'spare']);
+    expect(routeBackoff(c, 'third')).toBeNull();
+  });
+
+  it('a single-route call keeps exactly its one timeout', () => {
+    const now = 1_000_000;
+    expect(routeBudget({ timeoutMs: 30_000 }, now + 30_000, now)).toBe(30_000);
+    expect(routeBudget({ timeoutMs: 30_000 }, now + 60_000, now)).toBe(30_000);
+    expect(routeBudget({ timeoutMs: 30_000 }, now + 12_000, now)).toBe(12_000);
+    expect(routeBudget({ timeoutMs: 30_000 }, now + MIN_ROUTE_MS - 1, now)).toBe(0);
   });
 });
