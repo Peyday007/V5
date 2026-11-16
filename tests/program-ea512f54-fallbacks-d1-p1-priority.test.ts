@@ -223,3 +223,88 @@ describe('fallbackPriority: owns nothing and pauses nothing', () => {
     expect(rankFallbacks(inputs)).toEqual(rankFallbacks(inputs));
   });
 });
+
+/*
+ * Reviewer finding (repair-F5): rankFallbacks was never invoked, and no
+ * preparation of any backup was recorded through the owners REUSED_OWNERS
+ * names. Every cash-ledger refresh (keepCashLedger, reached from every
+ * cash-knowledge refresh) now ranks the project's real acquisition
+ * dependency for preparation and records the order on the ledger.
+ */
+describe('on production rows: fallbacks are ranked for preparation on every cash-ledger refresh', async () => {
+  const { beforeEach } = await import('vitest');
+  const { freshProject } = await import('./helpers.ts');
+  const { getDb } = await import('../server/db/database.ts');
+  const { insertOutcome } = await import('../server/repos/cashJourney.ts');
+  const { keepCashLedger, recordFailureRecovery } = await import('../server/services/quant/ledger.ts');
+  const { FALLBACK_PREPARATION_EVENT, prepareProjectFallbacks, readFallbackPreparation } = await import('../server/services/quant/fallbackPreparation.ts');
+
+  let projectId: string;
+  beforeEach(async () => {
+    projectId = (await freshProject()).project.id;
+  });
+
+  async function path(mechanism: string, channel: string, n: number): Promise<void> {
+    for (let i = 0; i < n; i++) {
+      await insertOutcome({ projectId, opportunityId: `lead:${mechanism}:${i}`, kind: 'CONTACT_RESULT', mechanism, channel, valueText: i === 0 ? 'BUYER_REPLIED' : 'BUYER_SILENT', basis: 'test row', requestKey: `r:${mechanism}:${channel}:${i}` });
+    }
+  }
+  const granted = async () => ({ ok: true, reason: 'standing authority permits CONTACT_BUYER' });
+  const sprint = async () => ({ id: 'cmd_test', horizonDays: 30 });
+  const count = async () => Number((await getDb().get<{ n: number }>(`SELECT COUNT(*) AS n FROM bin_events WHERE event_type = ? AND project_id = ?`, [FALLBACK_PREPARATION_EVENT, projectId]))?.n ?? 0);
+
+  it('a cash sprint makes acquisition a blocked-revenue-objective dependency; cost and reversibility unknown are not read as cheap', async () => {
+    await path('Campaign A', 'email (Instantly)', 4);
+    await path('Partner list', 'partner referral', 2);
+    const { ranking, written } = await prepareProjectFallbacks(projectId, { authority: granted, sprint, failures: async () => [] });
+    expect(written).toBe(true);
+    expect(ranking!.ranked).toEqual([
+      expect.objectContaining({ rank: 1, substitute: 'Partner list @ partner referral', decidedBy: 'BLOCKED_REVENUE_OBJECTIVE', promoted: false, lowCost: null, reversible: null, prepareEarly: false, eligible: true }),
+    ]);
+    expect(ranking!.preservesOngoingWork).toBe(true);
+  });
+
+  it('with no cash sprint no consequence is claimed', async () => {
+    await path('Campaign A', 'email (Instantly)', 3);
+    await path('Partner list', 'partner referral', 1);
+    const { ranking } = await prepareProjectFallbacks(projectId, { authority: granted, sprint: async () => null, failures: async () => [] });
+    expect(ranking!.ranked[0]).toMatchObject({ decidedBy: 'NO_CONSEQUENCE', consequenceClasses: [] });
+  });
+
+  it('an unrecovered failure of the dependency on the ledger promotes it, with that failure as the reason', async () => {
+    await path('Campaign A', 'email (Instantly)', 3);
+    await path('Partner list', 'partner referral', 1);
+    await recordFailureRecovery(
+      {
+        occurrence: 'occ-1', dependency: `acquisition:${projectId}`, failureMode: 'channel-stops-delivering', failureClass: 'CHANNEL_SUSPENDED',
+        detectionDelayDays: 1, timeToHarmDays: 3, tried: ['paused sends'], recovered: null, cashLostCents: null, cashPreservedCents: null,
+        timeLostDays: null, reputation: null, methodsToImprove: [],
+      },
+      { projectId },
+    );
+    const { ranking } = await prepareProjectFallbacks(projectId, { authority: granted, sprint });
+    expect(ranking!.ranked[0]).toMatchObject({ decidedBy: 'LIVE_DEPENDENCY', promoted: true });
+    expect(ranking!.ranked[0]!.promotedBecause).toMatch(/failure occ-1 \(channel-stops-delivering\) is on the ledger and recovery is not yet known/);
+  });
+
+  it('records the order once, again only when it changes, and nothing with no dependency on record', async () => {
+    expect(await prepareProjectFallbacks(projectId, { authority: granted, sprint, failures: async () => [] })).toEqual({ ranking: null, written: false });
+    await path('Campaign A', 'email (Instantly)', 3);
+    await path('Partner list', 'partner referral', 1);
+    expect((await prepareProjectFallbacks(projectId, { authority: granted, sprint, failures: async () => [] })).written).toBe(true);
+    expect((await prepareProjectFallbacks(projectId, { authority: granted, sprint, failures: async () => [] })).written).toBe(false);
+    await path('Campaign B', 'phone', 1);
+    expect((await prepareProjectFallbacks(projectId, { authority: granted, sprint, failures: async () => [] })).written).toBe(true);
+    expect(await count()).toBe(2);
+  });
+
+  it('runs on the production path: a cash-ledger refresh records the preparation order', async () => {
+    await path('Campaign A', 'email (Instantly)', 3);
+    await path('Campaign B', 'email (Instantly)', 1);
+    await keepCashLedger(projectId, []);
+    const held = await readFallbackPreparation(projectId);
+    expect(held).not.toBeNull();
+    expect(held!.ranked).toHaveLength(1);
+    expect(held!.owners.ledger).toBe('server/services/quant/ledger.ts');
+  });
+});

@@ -450,6 +450,14 @@ export async function keepCashLedger(
   const measured = await (deps.measured ?? ((id: string) => outcomesFor({ projectId: id })))(projectId);
   const outcomes = await recordCashOutcomes(projectId, measured, scoped);
   ledger.outcomes.push(...outcomes);
+  // Which backups to prepare first, re-ranked on the same refresh from the project's real dependencies
+  // and the failures on this ledger (FALL-37-6). Loaded when used: the ranking reads this ledger. Its own
+  // catch: a ranking that cannot be made never stops the cash ledger.
+  await import('./fallbackPreparation.ts')
+    .then(({ prepareProjectFallbacks }) => prepareProjectFallbacks(projectId))
+    .catch((error: unknown) => {
+      console.warn(`[quant] fallback preparation unreadable for ${projectId}: ${String((error as Error)?.message ?? error)}`);
+    });
   return { written, exposures, outcomes, reading: await assessLedger({}, scoped), ledger: await held() };
 }
 
