@@ -53,15 +53,27 @@
  * same shape are recognised too. The inventory finding is also not re-offered
  * while its repair is in flight or after the repair was rejected. Nothing here
  * lowers a bar.
+ *
+ * The production change is `questionClosure` in the loop's DIAGNOSE/ENGINEER
+ * step (server/services/improvement/loop.ts) and `question: true` on the
+ * directive `commissionResearch` writes (server/services/operator/director.ts).
+ * The last describe block drives that real step, `advanceNow`, over the
+ * commissioned row with its method research settled. Without the change the
+ * step went on to reuse search and a Factory objective, and the row stayed
+ * open; with it, the row closes as a question and no change request exists.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
-import { decideCandidate, getCandidate, upsertCandidate } from '../server/repos/improvement.ts';
+import { decideCandidate, getCandidate, listImprovementEvents, patchCandidate, upsertCandidate } from '../server/repos/improvement.ts';
 import { createProject, getProjectBySlug } from '../server/repos/projects.ts';
 import { createLayer } from '../server/repos/layers.ts';
+import { getDb } from '../server/db/database.ts';
+import { createGoal } from '../server/repos/russellAuthority.ts';
+import { createRun } from '../server/repos/runs.ts';
+import { createFragments, createOrchestration, currentFragments, decideClaim, insertClaims, updateFragment } from '../server/repos/research.ts';
 import { setImprovementSwitch } from '../server/services/improvement/authority.ts';
-import { isResearchQuestion, questionClosure } from '../server/services/improvement/loop.ts';
+import { advanceNow, isResearchQuestion, questionClosure } from '../server/services/improvement/loop.ts';
 import type { Linked } from '../server/services/improvement/loop.ts';
 import { getInventoryItem, upsertInventory } from '../server/services/operator/inventory.ts';
 import { commission, commissionResearch, inventoryDeficiencies, readingId } from '../server/services/operator/director.ts';
@@ -269,5 +281,136 @@ describe('a question the operator asked is answered by research and never sent t
     const row = (await getCandidate(defect.candidateId!))!;
     expect((row.evidence['directive'] as { question?: boolean }).question).toBeUndefined();
     expect(isResearchQuestion(row)).toBe(false);
+  });
+});
+
+describe('the loop itself closes a settled research question instead of engineering it (the production change, end to end)', () => {
+  const QUESTION =
+    'Design an inbound validation mechanism for $10K PA Farm Vitality/home improvement plans that generates buyer-validated openings without direct outreach, paid spend, automated research, or Factory engineering.';
+  let admin = '';
+  let adminId = '';
+  let brainId = '';
+  let layerId = '';
+
+  beforeEach(async () => {
+    await freshProject();
+    brainId = (await getProjectBySlug('brain-architecture'))?.id ?? (await createProject({ name: 'Brain Architecture', slug: 'brain-architecture' })).id;
+    layerId = (await createLayer({ projectId: brainId, name: 'Methods', orderIndex: 0 })).id;
+    admin = `admin-${uid()}@example.com`;
+    adminId = (await createUser({ email: admin, displayName: 'Admin', password: 'correct horse battery staple 1', isBrainAdmin: true })).id;
+  });
+
+  it('advanceNow closes the commissioned question once its method research has settled, and opens no Factory objective', async () => {
+    // Commission with the order off, so the question is registered without research or Factory side effects.
+    await setImprovementSwitch(false, admin, 'test: register the question only');
+    const out = await commissionResearch({ goalId: null, question: QUESTION, evidence: null, runId: 'opr_99026b0ef4c04df9b03d' });
+    expect(out.ok).toBe(true);
+    const id = out.candidateId!;
+    // Its method research ran and ended: a goal that no longer exists, with no packet still running, reads settled with no accepted claim.
+    expect(await patchCandidate(id, { researchGoalId: `rgl_settled_${uid()}` })).toBe(true);
+    const before = (await getCandidate(id))!;
+    expect(before.decision).toBeNull();
+    expect(before.changeRequestId).toBeNull();
+
+    // The order on: this is the step that, before the change, carried the row on toward Factory.
+    await setImprovementSwitch(true, admin, 'test: let the loop advance the question');
+    const { did, report } = await advanceNow(id);
+    expect(report.errors).toEqual([]);
+    expect(did).toBe('closed: research found no answer');
+
+    const after = (await getCandidate(id))!;
+    expect(after.decision).toBe('REJECTED');
+    expect(after.changeRequestId).toBeNull();
+    const decided = await listImprovementEvents({ candidateId: id, kinds: ['DECIDED'] });
+    expect(decided.map((one) => one.detail['question'])).toContain(true);
+
+    // Closed means closed: a second advance does nothing, and still no Factory objective.
+    expect((await advanceNow(id)).did).toBeNull();
+    expect((await getCandidate(id))!.changeRequestId).toBeNull();
+  });
+
+  /** A finished method-research packet under a research goal, carrying `accepted` accepted, sourced claims. Returns the goal. */
+  async function settledResearch(accepted: number): Promise<string> {
+    const goalId = (
+      await createGoal({
+        projectId: brainId, ownerUserId: adminId, createdByUserId: adminId, name: `method research ${uid()}`,
+        allowedWork: ['RESEARCH'], maxMissions: 1, maxFragments: 4, maxConcurrent: 1, maxProbes: 0,
+      })
+    ).id;
+    const run = await createRun({ projectId: brainId, layerId, runType: 'FOUNDATION', status: 'PLANNED', provider: 'WORKER', prompt: 'q' });
+    const packet = await createOrchestration({ projectId: brainId, layerId, runId: run.id, title: 'q', assignment: 'q', provider: 'WORKER', autoApprove: false });
+    await createFragments([
+      {
+        orchestrationId: packet.id, projectId: brainId, layerId, geography: 'any market',
+        requiredEvidence: [{ id: 'method', description: 'a documented validation method', necessity: 'CONDITIONAL' }],
+        acceptableSourceTypes: ['a peer-reviewed paper'], excludedSourceTypes: ['a forecast'], completionCriteria: ['one source'],
+        minIndependentSources: 1, maxRepairs: 2, fragmentIndex: 0, fragmentKey: 'method', question: 'q', dependsOn: [], attempt: 1,
+      },
+    ] as unknown as Parameters<typeof createFragments>[0]);
+    const [fragment] = await currentFragments(packet.id);
+    await updateFragment(fragment!.id, { status: 'ACCEPTED', completedAt: new Date().toISOString(), blockedReason: null });
+    for (let i = 0; i < accepted; i += 1) {
+      const text = `Reward crowdfunding pledges separate offers that attract backers from those that do not (${i}).`;
+      const [claim] = await insertClaims([{
+        orchestrationId: packet.id, fragmentId: fragment!.id, passId: null, passKey: 'BROAD_SCAN' as const,
+        claim: text, sourceUrl: `https://conference.iza.org/conference_files/EntreRes2015/xu_t22362.pdf#${i}`, sourceTitle: 'Xu 2015', sourcePublisher: 'IZA', sourceDate: '2015-09-01',
+        evidenceExcerpt: 'x', evidenceLocator: 'p. 1', evidenceLane: 'method', opportunitySignal: null, closesOn: null,
+        retrievedAt: '2026-11-15', confidence: 0.8, validationState: 'SOURCED' as const, validationDetail: null, sourced: true,
+        claimType: 'SOURCED_FACT' as const, contentHash: `${goalId}|${i}`,
+      }] as unknown as Parameters<typeof insertClaims>[0]);
+      await decideClaim(claim!.id, { accepted: true });
+    }
+    await getDb().run('UPDATE research_orchestrations SET goal_id = ?, status = ? WHERE id = ?', [goalId, 'COMPLETE', packet.id]);
+    return goalId;
+  }
+
+  it('reproduces the failure class end to end: research that answered the question is not carried on to Factory as engineering', async () => {
+    await setImprovementSwitch(false, admin, 'test: register the question only');
+    const out = await commissionResearch({ goalId: null, question: QUESTION, evidence: null, runId: 'opr_99026b0ef4c04df9b03d' });
+    expect(out.ok).toBe(true);
+    const id = out.candidateId!;
+    const goalId = await settledResearch(3);
+    expect(await patchCandidate(id, { researchGoalId: goalId })).toBe(true);
+
+    // Before the change, accepted claims moved the row to ENGINEER and on toward a Factory objective.
+    await setImprovementSwitch(true, admin, 'test: let the loop advance the question');
+    const { did, report } = await advanceNow(id);
+    expect(report.errors).toEqual([]);
+    expect(did).toBe('answered: research question closed');
+    const after = (await getCandidate(id))!;
+    expect(after.decision).toBe('REJECTED');
+    expect(after.decisionReason ?? '').toContain('nothing to engineer');
+    expect(after.changeRequestId).toBeNull();
+    const decided = await listImprovementEvents({ candidateId: id, kinds: ['DECIDED'] });
+    expect(decided.find((one) => one.detail['question'] === true)?.detail['acceptedClaims']).toBe(3);
+  });
+
+  it('advanceNow leaves a defect to repair on the Factory path: the same settled research does not close it', async () => {
+    await setImprovementSwitch(false, admin, 'test: register the defect only');
+    const defect = await commission({
+      goalId: null,
+      deficiency: 'MISSING_CAPABILITY',
+      title: 'Inbound replies are not recorded as measured close rates',
+      observed: 'Replies to inbound pages arrive but no measured close rate is recorded, so conversion stays NONE on every opening.',
+      evidence: 'Operator run opr_99026b0ef4c04df9b03d; rows cop_inbound',
+      cause: null,
+      ownerPaths: ['server/services/goals/portfolio.ts'],
+      recurrence: 1,
+      expectedBenefit: 'Measured conversion reaches the plan.',
+      acceptance: 'A test shows a recorded inbound count becomes a measured rate.',
+      metric: null,
+      blocksGoal: false,
+      share: null,
+      proposed: 'EVIDENCE',
+      runId: 'opr_99026b0ef4c04df9b03d',
+    });
+    expect(defect.ok).toBe(true);
+    const id = defect.candidateId!;
+    expect(await patchCandidate(id, { researchGoalId: `rgl_settled_${uid()}` })).toBe(true);
+    await setImprovementSwitch(true, admin, 'test: let the loop advance the defect');
+    const { did } = await advanceNow(id);
+    expect(did ?? '').not.toMatch(/research question closed|research found no answer/);
+    const decided = await listImprovementEvents({ candidateId: id, kinds: ['DECIDED'] });
+    expect(decided.some((one) => one.detail['question'] === true)).toBe(false);
   });
 });
