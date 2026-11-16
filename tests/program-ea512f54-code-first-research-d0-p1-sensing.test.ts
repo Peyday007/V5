@@ -13,7 +13,7 @@ import { openFeedShortlist, pullDueFeeds, screenFeedLeads, screeningEconomy, SCR
 import { createUser } from '../server/repos/identity.ts';
 import { activate } from '../server/services/cash/lifecycle.ts';
 import { cashEventsOfKindInProject } from '../server/repos/cashMode.ts';
-import { runDetectors } from '../server/services/feeds/detectors.ts';
+import { activeAuditSampled, runDetectors } from '../server/services/feeds/detectors.ts';
 import type { Completer, LaneConfig } from '../server/services/cheap/lane.ts';
 
 let projectId = '';
@@ -99,6 +99,18 @@ describe('what the code-first lane saved and made, read from rows', () => {
     await insertFeedItems('remoteok', rows.map(([id, title, org, d]) => ({ externalId: id, url: `https://remoteok.test/${id}`, title, body: null, organization: org, publishedAt: daysAgo(d) })));
   }
 
+  /**
+   * How many of the three hiring posts an ACTIVE rule leaves to the free screen as its audit
+   * sample. Item ids are random, so the sample is read from the stored ids, never assumed.
+   */
+  async function auditedHiring(): Promise<number> {
+    const rows = await getDb().all<{ id: string }>(
+      `SELECT id FROM feed_items WHERE source = 'remoteok' AND title IN ('Data Analyst', 'Analytics Engineer', 'BI Developer')`,
+    );
+    expect(rows).toHaveLength(3);
+    return rows.filter((row) => activeAuditSampled(row.id)).length;
+  }
+
   it('counts repeats, covered items and code-made leads as not screened, and the calls actually made', async () => {
     const since = new Date(now.getTime() - 60_000).toISOString();
     // A pull seen twice: three items stored, three repeats dropped.
@@ -116,15 +128,17 @@ describe('what the code-first lane saved and made, read from rows', () => {
     const screened = await screenFeedLeads({ now, config, completer });
     const reading = await screeningEconomy({ since, until: new Date(now.getTime() + 3 * 3_600_000).toISOString() });
 
-    // Three hiring posts are covered by the code rule and never screened one by one.
-    expect(reading.notScreened.covered).toBe(3);
+    // The three hiring posts are covered by the code rule and never screened one by one — all but
+    // the rule's audit sample, which the free screen keeps reading so the rule can still be demoted.
+    const audited = await auditedHiring();
+    expect(reading.notScreened.covered).toBe(3 - audited);
     expect(reading.notScreened.duplicates).toBe(3);
     expect(reading.workCreated.codeDetections).toBe(1);
     expect(reading.notScreened.provedByCode).toBe(1);
-    expect(reading.notScreened.total).toBe(3 + 3 + 1);
-    // Only the uncovered items were screened: three pull items and the store manager post.
-    expect(screened).toBe(4);
-    expect(reading.itemsScreened).toBe(4);
+    expect(reading.notScreened.total).toBe(3 - audited + 3 + 1);
+    // Only the uncovered items were screened: three pull items, the store manager post and the audit sample.
+    expect(screened).toBe(4 + audited);
+    expect(reading.itemsScreened).toBe(4 + audited);
     expect(reading.screenCalls).toBe(asked.length);
   });
 
@@ -133,12 +147,13 @@ describe('what the code-first lane saved and made, read from rows', () => {
     await pullDueFeeds({ now, sources: [source('c', true)], fetcher: async () => [{ n: 1 }] });
     await seedHiring();
     const detected = await runDetectors({ now });
-    expect(detected[0]).toMatchObject({ covered: 3 });
+    const audited = await auditedHiring();
+    expect(detected[0]).toMatchObject({ covered: 3 - audited, audited });
     expect(await screenFeedLeads({ now, config: null })).toBe(0);
     const reading = await screeningEconomy({ since, until: new Date(now.getTime() + 60_000).toISOString() });
     expect(reading.screenCalls).toBe(0);
     expect(reading.stored).toBe(1 + 4 + 1);
-    expect(reading.notScreened.covered).toBe(3);
+    expect(reading.notScreened.covered).toBe(3 - audited);
   });
 });
 
