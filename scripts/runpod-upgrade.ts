@@ -27,6 +27,25 @@ const ceiling = Number(process.env['RUNPOD_MAX_USD_PER_HOUR']) > 0 ? Number(proc
  */
 const runwayHours = Number(process.env['RUNPOD_MIN_RUNWAY_HOURS']) > 0 ? Number(process.env['RUNPOD_MIN_RUNWAY_HOURS']) : 24;
 
+async function podRuntime(podId: string): Promise<string> {
+  try {
+    const res = await fetch('https://api.runpod.io/graphql', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({ query: `{ pod(input: { podId: "${podId.replace(/[^a-z0-9]/gi, '')}" }) { desiredStatus lastStatusChange runtime { uptimeInSeconds gpus { gpuUtilPercent memoryUtilPercent } container { cpuPercent memoryPercent } } } }` }),
+      signal: AbortSignal.timeout(20_000),
+    });
+    const pod = ((await res.json()) as { data?: { pod?: Record<string, unknown> } }).data?.pod;
+    if (!pod) return 'no pod reading';
+    const rt = pod['runtime'] as { uptimeInSeconds?: number; gpus?: { gpuUtilPercent?: number; memoryUtilPercent?: number }[]; container?: { cpuPercent?: number; memoryPercent?: number } } | null;
+    const gpu = rt?.gpus?.[0];
+    const models = await fetch(`https://${podId}-8000.proxy.runpod.net/v1/models`, { signal: AbortSignal.timeout(10_000) }).then((r) => r.status).catch(() => 0);
+    return `status=${String(pod['desiredStatus'])} change="${String(pod['lastStatusChange'] ?? '').slice(0, 80)}" uptime=${rt?.uptimeInSeconds ?? 'none'}s gpuMem=${gpu?.memoryUtilPercent ?? '?'}% gpuUtil=${gpu?.gpuUtilPercent ?? '?'}% cpu=${rt?.container?.cpuPercent ?? '?'}% models=HTTP${models}`;
+  } catch (error) {
+    return `no reading (${error instanceof Error ? error.message.slice(0, 80) : 'error'})`;
+  }
+}
+
 async function main(): Promise<void> {
   if (!apiKey || !vllmKey) throw new Error('RUNPOD_API_KEY and RUNPOD_VLLM_KEY are both required');
   const retire = arg('retire');
@@ -47,13 +66,32 @@ async function main(): Promise<void> {
   console.log(`NEW ${pod.podId}`);
   const started = Date.now();
   let ready = false;
+  let polls = 0;
+  let shortLived = 0;
   while (!ready && Date.now() - started < (recipe.minGpuGb >= 80 ? 60 : 35) * 60_000) {
     try {
       ready = (await fetch(`${pod.url}/models`, { headers: { authorization: `Bearer ${vllmKey}` }, signal: AbortSignal.timeout(15_000) })).ok;
     } catch {
       /* downloading the model */
     }
-    if (!ready) await new Promise((resolve) => setTimeout(resolve, 20_000));
+    if (!ready) {
+      // What the pod is doing while it does not serve, every two minutes (2026-11-16: a 120B pod
+      // never served in 60 min and was deleted with nothing recorded): uptime that resets is a
+      // crash loop, GPU memory that climbs is a model loading, nothing at all is an image pull.
+      if (++polls % 6 === 0) {
+        const reading = await podRuntime(pod.podId);
+        console.log(`WAITING ${Math.round((Date.now() - started) / 60_000)}m ${reading}`);
+        // A container that never stays up a minute is crash-looping: stop paying for it.
+        const up = Number(/uptime=(-?\d+)s/.exec(reading)?.[1] ?? NaN);
+        if (Number.isFinite(up) && up < 60) shortLived += 1;
+        else shortLived = 0;
+        if (shortLived >= 6) {
+          console.log(`CRASH-LOOP after ${Math.round((Date.now() - started) / 60_000)} min (uptime never above a minute); deleted the new pod (HTTP ${await deletePod(apiKey, pod.podId)}), the old one keeps serving`);
+          process.exit(1);
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, 20_000));
+    }
   }
   if (!ready) {
     console.log(`NOT READY after ${recipe.minGpuGb >= 80 ? 60 : 35} min; deleted the new pod (HTTP ${await deletePod(apiKey, pod.podId)}), the old one keeps serving`);

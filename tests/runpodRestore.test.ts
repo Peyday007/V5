@@ -99,6 +99,12 @@ describe('recipes, benchmark pods and the account (§108)', () => {
     expect(cmd[cmd.indexOf('--tool-call-parser') + 1]).toBe('openai');
     expect(cmd[cmd.indexOf('--max-model-len') + 1]).toBe('131072');
     expect(DEFAULT_MAX_USD_PER_HOUR).toBe(0.24);
+    // The 2026 image starts through `vllm serve <model>`; the 2025 one keeps the module path.
+    const spec = podSpec('k', undefined, 'SECURE', recipe);
+    expect(spec['dockerEntrypoint']).toEqual(['vllm', 'serve']);
+    expect(cmd[0]).toBe('openai/gpt-oss-120b');
+    expect(cmd).not.toContain('--model');
+    expect(podSpec('k')['dockerEntrypoint']).toEqual(['python3', '-m', 'vllm.entrypoints.openai.api_server']);
   });
 
   it('sweeps only benchmark pods older than the bound', async () => {
