@@ -70,7 +70,7 @@ describe('recipes, benchmark pods and the account (§108)', () => {
   it('the 48 GB director recipe serves Qwen3-32B-AWQ with hermes tools, qwen3 reasoning, 64K by YaRN and FP8 KV on an A6000 or A40', async () => {
     const { RECIPES, podSpec, ACTIVE_RECIPE } = await import('../server/services/cheap/runpodRestore.ts');
     const recipe = RECIPES['qwen3-32b-awq-48']!;
-    expect(recipe).toMatchObject({ model: 'Qwen/Qwen3-32B-AWQ', minGpuGb: 48, gpus: ['NVIDIA RTX A6000', 'NVIDIA A40'] });
+    expect(recipe).toMatchObject({ model: 'Qwen/Qwen3-32B-AWQ', minGpuGb: 48, gpus: ['NVIDIA RTX A6000', 'NVIDIA A40', 'NVIDIA L40', 'NVIDIA L40S', 'NVIDIA RTX 6000 Ada Generation'] });
     const cmd = podSpec('v', undefined, 'COMMUNITY', recipe)['dockerStartCmd'] as string[];
     expect(cmd[cmd.indexOf('--max-model-len') + 1]).toBe('65536');
     expect(cmd[cmd.indexOf('--tool-call-parser') + 1]).toBe('hermes');

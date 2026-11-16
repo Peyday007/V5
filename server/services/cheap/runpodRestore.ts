@@ -61,7 +61,7 @@ const GPUS_24 = ['NVIDIA RTX A5000', 'NVIDIA GeForce RTX 3090', 'NVIDIA GeForce 
 /** 20 GB and up, for a model whose weights and 64K window fit 20 GB: more cards, so more stock. */
 const GPUS_20 = ['NVIDIA RTX A5000', 'NVIDIA RTX A4500', 'NVIDIA RTX 4000 Ada Generation', 'NVIDIA GeForce RTX 3090', 'NVIDIA GeForce RTX 3090 Ti'];
 /** 48 GB cards from cheapest measured community price (runpod-survey 43281884981, 2026-11-12). */
-const GPUS_48 = ['NVIDIA RTX A6000', 'NVIDIA A40'];
+const GPUS_48 = ['NVIDIA RTX A6000', 'NVIDIA A40', 'NVIDIA L40', 'NVIDIA L40S', 'NVIDIA RTX 6000 Ada Generation'];
 /** 80 GB and up, fastest first: the H100s and H200 serve MXFP4 natively; the A100s are the stock fallback. */
 const GPUS_80 = ['NVIDIA H100 80GB HBM3', 'NVIDIA H100 NVL', 'NVIDIA H100 PCIe', 'NVIDIA H200', 'NVIDIA A100-SXM4-80GB', 'NVIDIA A100 80GB PCIe'];
 const CUDA_129 = ['12.9', '13.0'];
