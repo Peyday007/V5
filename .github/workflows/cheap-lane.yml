@@ -62,6 +62,14 @@ on:
         description: 'For runpod-bench: repetitions per task (1-5). The director tasks (§108) rotate reworded variants across repetitions, so 3 is the reading a model is chosen on.'
         required: false
         default: '3'
+      max_usd_per_hour:
+        description: 'For runpod-bench/upgrade/restore: the most one pod may cost per hour, this dispatch only (default: the RUNPOD_MAX_USD_PER_HOUR variable, else $0.24). An upgrade also gives it to the Brain, so its own restart or migration of that pod stays within it. Total ceiling is 3x this.'
+        required: false
+        default: ''
+      tool_score:
+        description: 'For runpod-upgrade: the director-task score (0-1) the new recipe measured in runpod-bench; ranks the GPU in Hermes model chain (BRAIN_RUNPOD_TOOL_SCORE).'
+        required: false
+        default: ''
 
 concurrency:
   group: cheap-lane
@@ -110,7 +118,9 @@ jobs:
           # The pod's hourly price (a repository variable, not a secret), for cost per research job.
           RUNPOD_USD_PER_HOUR: ${{ vars.RUNPOD_USD_PER_HOUR }}
           # The most a recreated pod may cost (a repository variable); unset = the measured $0.24/h.
-          RUNPOD_MAX_USD_PER_HOUR: ${{ vars.RUNPOD_MAX_USD_PER_HOUR }}
+          RUNPOD_MAX_USD_PER_HOUR: ${{ inputs.max_usd_per_hour || vars.RUNPOD_MAX_USD_PER_HOUR }}
+          MAX_USD_INPUT: ${{ inputs.max_usd_per_hour || '' }}
+          TOOL_SCORE_INPUT: ${{ inputs.tool_score || '' }}
           # The most every Brain pod together may cost while runpod-bench/upgrade runs a second pod
           # beside production (a repository variable); unset = runpod-bench.ts's default of $0.45/h.
           RUNPOD_MAX_TOTAL_USD_PER_HOUR: ${{ vars.RUNPOD_MAX_TOTAL_USD_PER_HOUR }}
@@ -127,6 +137,9 @@ jobs:
           case "$HOURS" in ''|0) HOURS=6 ;; esac
           [ "$HOURS" -gt 48 ] && HOURS=48
           cheap=northline-cheap
+          # A dispatch's own price ceiling covers this pod and one beside it while it is replaced.
+          ceil_in=$(printf '%s' "${MAX_USD_INPUT:-}" | tr -cd '0-9.')
+          [ -z "$ceil_in" ] || export RUNPOD_MAX_TOTAL_USD_PER_HOUR=$(awk -v c="$ceil_in" 'BEGIN { printf "%.2f", c * 3 }')
           # The GPU's settings, fingerprinted so a changed secret is noticed without reading one back.
           fingerprint() { gpu_fp=$(printf '%s\n%s\n%s\n%s' "$RUNPOD_VLLM_URL" "$RUNPOD_VLLM_KEY" "$RUNPOD_VLLM_MODEL" "${RUNPOD_API_KEY:-}" | sha256sum | cut -c1-16); }
           fingerprint
@@ -158,6 +171,16 @@ jobs:
               BRAIN_RUNPOD_CONTEXT="$(grep '^CONTEXT ' probe.txt | cut -d' ' -f2 | tr -cd '0-9')" \
               BRAIN_RUNPOD_MODE=primary >/dev/null
             [ -z "$pod_id" ] || flyctl secrets set --app "$brain" BRAIN_RUNPOD_POD_ID="$pod_id" >/dev/null
+            # A dispatch that raised the price ceiling hands it to the Brain (its own restart or
+            # migration of this pod), with the pod's price for cost per job and the recipe's
+            # measured director score for Hermes' model ranking.
+            extra=()
+            ceil=$(printf '%s' "$MAX_USD_INPUT" | tr -cd '0-9.')
+            [ -z "$ceil" ] || extra+=(BRAIN_RUNPOD_MAX_USD_PER_HOUR="$ceil")
+            [ -z "${pod_price:-}" ] || extra+=(BRAIN_RUNPOD_USD_PER_HOUR="$pod_price")
+            score=$(printf '%s' "$TOOL_SCORE_INPUT" | tr -cd '0-9.')
+            [ -z "$score" ] || extra+=(BRAIN_RUNPOD_TOOL_SCORE="$score")
+            [ ${#extra[@]} -eq 0 ] || flyctl secrets set --app "$brain" "${extra[@]}" >/dev/null
             if [ -n "${RUNPOD_API_KEY:-}" ]; then
               flyctl secrets set --app "$brain" BRAIN_RUNPOD_API_KEY="$RUNPOD_API_KEY" >/dev/null
               echo "::notice title=runpod::Auto stop/start on: Brain stops the pod after 15 idle minutes and starts it when research arrives."
@@ -243,6 +266,7 @@ jobs:
               RUNPOD_VLLM_URL=$(grep '^URL ' upgrade.txt | cut -d' ' -f2-)
               RUNPOD_VLLM_MODEL=""
               pod_id="$new_id"
+              pod_price=$(grep '^POD ' upgrade.txt | cut -d' ' -f4 | tr -cd '0-9.')
               fingerprint
               if ! probe || ! grep -q '^TOOLS on' probe.txt; then
                 npx tsx scripts/runpod-upgrade.ts --retire "$new_id"

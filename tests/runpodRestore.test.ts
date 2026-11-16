@@ -84,8 +84,21 @@ describe('recipes, benchmark pods and the account (§108)', () => {
   it('cheap-lane passes both RunPod ceilings from repository variables to bench and upgrade', async () => {
     const { readFileSync } = await import('node:fs');
     const yml = readFileSync('.github/workflows/cheap-lane.yml', 'utf8');
-    expect(yml).toContain('RUNPOD_MAX_USD_PER_HOUR: ${{ vars.RUNPOD_MAX_USD_PER_HOUR }}');
+    expect(yml).toContain('RUNPOD_MAX_USD_PER_HOUR: ${{ inputs.max_usd_per_hour || vars.RUNPOD_MAX_USD_PER_HOUR }}');
     expect(yml).toContain('RUNPOD_MAX_TOTAL_USD_PER_HOUR: ${{ vars.RUNPOD_MAX_TOTAL_USD_PER_HOUR }}');
+    // A dispatch's own ceiling is that dispatch's only: the hourly schedule passes no input.
+    expect(yml).toMatch(/RUNPOD_MAX_TOTAL_USD_PER_HOUR=\$\(awk -v c="\$ceil_in"/);
+  });
+
+  it('the 80 GB recipe is a challenger above every default ceiling, with tool calls and 128K', async () => {
+    const { RECIPES, podSpec, DEFAULT_MAX_USD_PER_HOUR } = await import('../server/services/cheap/runpodRestore.ts');
+    const recipe = RECIPES['gpt-oss-120b-80']!;
+    expect(recipe.minGpuGb).toBe(80);
+    expect(recipe.gpus.every((g) => /H100|H200|A100/.test(g))).toBe(true);
+    const cmd = podSpec('k', undefined, 'SECURE', recipe)['dockerStartCmd'] as string[];
+    expect(cmd[cmd.indexOf('--tool-call-parser') + 1]).toBe('openai');
+    expect(cmd[cmd.indexOf('--max-model-len') + 1]).toBe('131072');
+    expect(DEFAULT_MAX_USD_PER_HOUR).toBe(0.24);
   });
 
   it('sweeps only benchmark pods older than the bound', async () => {

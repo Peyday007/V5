@@ -62,6 +62,8 @@ const GPUS_24 = ['NVIDIA RTX A5000', 'NVIDIA GeForce RTX 3090', 'NVIDIA GeForce 
 const GPUS_20 = ['NVIDIA RTX A5000', 'NVIDIA RTX A4500', 'NVIDIA RTX 4000 Ada Generation', 'NVIDIA GeForce RTX 3090', 'NVIDIA GeForce RTX 3090 Ti'];
 /** 48 GB cards from cheapest measured community price (runpod-survey 43281884981, 2026-11-12). */
 const GPUS_48 = ['NVIDIA RTX A6000', 'NVIDIA A40'];
+/** 80 GB and up, fastest first: the H100s and H200 serve MXFP4 natively; the A100s are the stock fallback. */
+const GPUS_80 = ['NVIDIA H100 80GB HBM3', 'NVIDIA H100 NVL', 'NVIDIA H100 PCIe', 'NVIDIA H200', 'NVIDIA A100-SXM4-80GB', 'NVIDIA A100 80GB PCIe'];
 const CUDA_129 = ['12.9', '13.0'];
 const IMAGE_2026 = 'vllm/vllm-openai:v0.32.0-cu129';
 
@@ -196,6 +198,30 @@ export const RECIPES: Record<string, PodRecipe> = {
     minGpuGb: 24,
     clouds: ['COMMUNITY', 'SECURE'],
     note: 'MoE 26B/4B active, AWQ 17 GB, 64K',
+  },
+  /**
+   * The strongest open reasoning model one card holds (2026-11-16 acceleration, owner-funded
+   * $250 / 15 h): gpt-oss-120b, MoE 117B/5.1B active, MXFP4 ~61 GB on an 80 GB card. Its
+   * sliding-window layers keep the KV cache small, so 128K and 48 sequences fit beside the
+   * weights: one pod serves Hermes and the research lane in parallel. Above every default
+   * ceiling — dispatched only with an explicit `max_usd_per_hour`.
+   */
+  'gpt-oss-120b-80': {
+    key: 'gpt-oss-120b-80',
+    model: 'openai/gpt-oss-120b',
+    served: 'openai/gpt-oss-120b',
+    gpus: GPUS_80,
+    image: IMAGE_2026,
+    cuda: CUDA_129,
+    maxModelLen: 131072,
+    args: [
+      '--gpu-memory-utilization', '0.92', '--max-num-seqs', '48',
+      '--enable-auto-tool-choice', '--tool-call-parser', 'openai', '--reasoning-parser', 'openai_gptoss',
+    ],
+    containerDiskInGb: 120,
+    minGpuGb: 80,
+    clouds: ['SECURE', 'COMMUNITY'],
+    note: 'MoE 117B/5.1B active, MXFP4 ~61 GB on an 80 GB card (H100/H200/A100-80), 128K, 48 parallel sequences',
   },
   /**
    * A director-class model for the operator (Surge B H2-9): Qwen3-32B at 4 bits (~19 GB) on a
