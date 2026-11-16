@@ -1,9 +1,21 @@
-import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
   MECHANISM_PROMPTS,
+  claimsFromCategoryRows,
   reconstructCompetitiveSystem,
+  type CategoryRows,
   type CompetitiveClaim,
 } from '../server/services/manufacturing/competitiveSystem.ts';
+import { freshProject } from './helpers.ts';
+import { createUser } from '../server/repos/identity.ts';
+import { createRun } from '../server/repos/runs.ts';
+import { createFragments, createOrchestration, currentFragments, decideClaim, insertClaims, updateFragment } from '../server/repos/research.ts';
+import { ensureCapability, getProgram, recordCategoryCapital, recordCategoryEvidence, recordEdge } from '../server/repos/manufacturing.ts';
+import { startProgramme } from '../server/services/manufacturing/program.ts';
+import { seedCategory } from '../server/services/manufacturing/declare.ts';
+import { runManufacturingKernel } from '../server/services/manufacturing/kernel.ts';
+import type { Layer } from '../server/domain/types.ts';
 
 /*
  * VENT-24-1 on two industries that share nothing: commercial pressure washers
@@ -166,5 +178,189 @@ describe('VENT-24-1: product, selling company and durable position are separate 
     });
     expect(s.readings.SELLING_COMPANY.verdict).toBe('NOT_MET');
     expect(s.readings.SELLING_COMPANY.unmet[0]!.claimIds).toHaveLength(2);
+  });
+});
+
+/* ------------------------------------------------------------------------- */
+/* Fed from the ladder's rows and the claims store, on the kernel tick         */
+/* ------------------------------------------------------------------------- */
+
+describe('VENT-24-1: the ladder rows become competitive claims without a blueprint', () => {
+  const rows: CategoryRows = {
+    categoryId: 'mca_1',
+    path: ['Cleaning equipment', 'Commercial pressure washers'],
+    evidence: [
+      { kind: 'DISTRIBUTION_CHANNEL', subject: 'Equipment dealers', statement: 'Most units sell through dealers', sourceClaimId: 'clm_a' },
+      { kind: 'ENTRY_BARRIER', subject: 'UL certification', statement: 'Motors need UL listing', sourceClaimId: 'clm_b' },
+      { kind: 'BOUGHT_IN_COMPONENT', subject: 'Triplex pumps', statement: 'Assemblers buy pumps from OEMs', sourceClaimId: 'clm_c' },
+      { kind: 'DEMAND_EVIDENCE', subject: 'Fleet washing', statement: 'Unsourced', sourceClaimId: 'clm_unsourced' },
+    ],
+    capital: [{ requirement: 'TOOLING_AND_EQUIPMENT', statement: 'Rigs cost $40k', sourceClaimId: 'clm_d' }],
+    candidates: [{ name: 'Set-aside Co', statement: 'x', sourceClaimId: 'clm_e', setAsideAt: '2026-10-01T00:00:00.000Z' }],
+    requires: [{ name: 'Pump assembly', heldAt: null, sourceClaimId: 'clm_f' }],
+  };
+  const gate = new Map([
+    ['clm_a', { accepted: true, sourceUrl: 'https://example.test/a' }],
+    ['clm_b', { accepted: true, sourceUrl: 'https://example.test/b' }],
+    ['clm_c', { accepted: true, sourceUrl: 'https://example.test/c' }],
+    ['clm_unsourced', { accepted: true, sourceUrl: null }],
+    ['clm_d', { accepted: true, sourceUrl: 'https://example.test/d' }],
+    ['clm_f', { accepted: true, sourceUrl: 'https://example.test/f' }],
+  ]);
+
+  it('names every mechanism from its row, takes gate state from the store, and drops set-aside candidates', () => {
+    const s = reconstructCompetitiveSystem({ subjectPath: rows.path, claims: claimsFromCategoryRows(rows, gate) });
+    expect(s.mechanisms.map((m) => m.name)).toEqual([
+      'distribution channel: Equipment dealers',
+      'entry barrier: UL certification',
+      'sourcing of bought-in components: Triplex pumps',
+      'capital requirement: tooling and equipment',
+      'production capability: Pump assembly',
+    ]);
+    expect(s.ignored).toEqual([{ claimId: 'clm_unsourced', why: 'carries no source' }]);
+    expect(s.activities).toEqual([
+      expect.objectContaining({ activity: 'Triplex pumps', mode: 'CONTRACT', contested: false }),
+    ]);
+    expect(s.readings.SELLING_COMPANY.verdict).toBe('UNKNOWN');
+    expect(s.readings.PRODUCT.verdict).toBe('NOT_MET');
+    expect(s.openQuestions.map((q) => q.prompt)).toContain('customer segments');
+  });
+
+  it('reads a claim the store does not return as not evidence', () => {
+    const s = reconstructCompetitiveSystem({ subjectPath: rows.path, claims: claimsFromCategoryRows(rows, new Map()) });
+    expect(s.mechanisms).toEqual([]);
+    expect(s.ignored.every((i) => i.why === 'not accepted by the evidence gate')).toBe(true);
+  });
+
+  it('has a production caller: the manufacturing kernel calls it on the tick', () => {
+    const kernel = readFileSync(new URL('../server/services/manufacturing/kernel.ts', import.meta.url), 'utf8');
+    expect(kernel).toMatch(/from '\.\/competitiveSystem\.ts'/);
+    expect(kernel).toMatch(/competitiveSystemsFor\(/);
+  });
+});
+
+let projectId = '';
+let userId = '';
+let layer: Layer;
+
+beforeEach(async () => {
+  const fixture = await freshProject();
+  projectId = fixture.project.id;
+  layer = await fixture.layerByName('Discovery Logic');
+  const user = await createUser({
+    email: `competitive-${Math.random().toString(36).slice(2, 10)}@example.test`,
+    displayName: 'Owner',
+    password: 'correct horse battery staple',
+    isBrainAdmin: true,
+  });
+  userId = user.id;
+});
+
+/** One gated, sourced research claim in the claims store; `accepted` decides its gate state. */
+async function storedClaim(text: string, accepted = true): Promise<string> {
+  const run = await createRun({ projectId, layerId: layer.id, runType: 'FOUNDATION', status: 'PLANNED', provider: 'WORKER', prompt: 'a programme round' });
+  const orchestration = await createOrchestration({
+    projectId,
+    layerId: layer.id,
+    runId: run.id,
+    title: 'a programme round',
+    assignment: 'how this market works',
+    provider: 'WORKER',
+    autoApprove: false,
+  });
+  await createFragments([
+    {
+      orchestrationId: orchestration.id,
+      projectId,
+      layerId: layer.id,
+      geography: 'the markets the programme may look at',
+      requiredEvidence: [{ id: 'market', description: 'how the market works', necessity: 'REQUIRED' }],
+      acceptableSourceTypes: ['a published source'],
+      excludedSourceTypes: ['an unsourced assertion'],
+      completionCriteria: ['every finding declared'],
+      minIndependentSources: 1,
+      maxRepairs: 2,
+      fragmentIndex: 0,
+      fragmentKey: 'competitive',
+      question: 'How does this market work?',
+      dependsOn: [],
+      attempt: 1,
+    },
+  ] as unknown as Parameters<typeof createFragments>[0]);
+  const [fragment] = await currentFragments(orchestration.id);
+  await updateFragment(fragment!.id, { status: 'ACCEPTED', completedAt: new Date().toISOString(), blockedReason: null });
+  const [claim] = await insertClaims([
+    {
+      orchestrationId: orchestration.id,
+      fragmentId: fragment!.id,
+      passId: null,
+      passKey: 'BROAD_SCAN' as const,
+      claim: text,
+      sourceUrl: `https://example.test/${encodeURIComponent(text)}`,
+      sourceTitle: 'A source',
+      sourcePublisher: 'A publisher',
+      sourceDate: '2026-09-10',
+      evidenceExcerpt: text,
+      evidenceLocator: 'p. 1',
+      evidenceLane: 'market',
+      retrievedAt: '2026-09-12',
+      confidence: 0.8,
+      validationState: 'SOURCED' as const,
+      validationDetail: null,
+      sourced: true,
+      claimType: 'SOURCED_FACT' as const,
+      contentHash: text,
+    },
+  ] as unknown as Parameters<typeof insertClaims>[0]);
+  await decideClaim(claim!.id, { accepted });
+  return claim!.id;
+}
+
+describe('VENT-24-1: the kernel reconstructs each category from the claims its rows were filed from', () => {
+  it('produces the competitive system on the tick from production rows, and drops a claim the gate since rejected', async () => {
+    const started = await startProgramme({ projectId, ownerUserId: userId, actorUserId: userId, objective: 'Build machines only where demand and capability allow.' });
+    expect(started.ok).toBe(true);
+    const program = (await getProgram(projectId))!;
+    const seeded = await seedCategory({ projectId, name: 'Commercial pressure washers', actorRef: userId, reason: 'test' });
+    if ('error' in seeded) throw new Error(seeded.error);
+    const category = seeded.category;
+
+    const dealers = await storedClaim('Most commercial units sell through equipment dealers');
+    await recordCategoryEvidence({ programId: program.id, categoryId: category.id, kind: 'DISTRIBUTION_CHANNEL', subject: 'Equipment dealers', statement: 'Most commercial units sell through equipment dealers', sourceClaimId: dealers });
+    const pumps = await storedClaim('Assemblers buy triplex pumps from two OEMs');
+    await recordCategoryEvidence({ programId: program.id, categoryId: category.id, kind: 'BOUGHT_IN_COMPONENT', subject: 'Triplex pumps', statement: 'Assemblers buy triplex pumps from two OEMs', sourceClaimId: pumps });
+    const rejected = await storedClaim('Demand is booming everywhere', false);
+    await recordCategoryEvidence({ programId: program.id, categoryId: category.id, kind: 'DEMAND_EVIDENCE', subject: 'Everywhere', statement: 'Demand is booming everywhere', observedOn: '2026-09-01', sourceClaimId: rejected });
+    const { capability } = await ensureCapability({ programId: program.id, projectId, name: 'High-pressure pump assembly', origin: 'SEED' });
+    await recordEdge({ programId: program.id, categoryId: category.id, capabilityId: capability.id, relation: 'REQUIRES', statement: 'Assembly requires a pressure-tested line', sourceClaimId: await storedClaim('Assembly requires a pressure-tested line') });
+    await recordCategoryCapital({
+      programId: program.id,
+      categoryId: category.id,
+      requirement: 'TOOLING_AND_EQUIPMENT',
+      scenario: 'SMALLEST_CREDIBLE_ENTRY',
+      amountLowMinor: 40_000_00,
+      amountHighMinor: 60_000_00,
+      currency: 'USD',
+      basis: 'PUBLISHED_PRICE_OR_SCHEDULE',
+      asOf: '2026-09-01',
+      statement: 'A test rig and fixtures cost $40,000–$60,000',
+      sourceClaimId: await storedClaim('A test rig and fixtures cost $40,000–$60,000'),
+    });
+
+    const pass = await runManufacturingKernel(projectId);
+    const system = pass.competitive.find((s) => s.categoryId === category.id);
+    expect(system).toBeDefined();
+    expect(system!.subject).toContain('Commercial pressure washers');
+    expect(system!.mechanisms.map((m) => m.name).sort()).toEqual([
+      'capital requirement: tooling and equipment',
+      'distribution channel: Equipment dealers',
+      'production capability: High-pressure pump assembly',
+      'sourcing of bought-in components: Triplex pumps',
+    ]);
+    expect(system!.mechanisms.find((m) => m.name.startsWith('distribution'))!.claimIds).toEqual([dealers]);
+    expect(system!.ignored).toEqual([{ claimId: rejected, why: 'not accepted by the evidence gate' }]);
+    expect(system!.activities).toEqual([expect.objectContaining({ activity: 'Triplex pumps', mode: 'CONTRACT', claimIds: [pumps] })]);
+    expect(system!.readings.PRODUCT.verdict).toBe('NOT_MET');
+    expect(system!.openQuestions.map((q) => q.prompt)).toContain('customer segments');
   });
 });

@@ -41,6 +41,7 @@ import { ladderSnapshot, type LadderSnapshot } from './ladder.ts';
 import { ensureProgrammeAuthority, programmeMayAsk } from './program.ts';
 import { readDirective, type Directive } from './directive.ts';
 import { readLadder, type CategoryReading } from './readiness.ts';
+import { competitiveSystemsFor, type CategoryCompetitiveSystem } from './competitiveSystem.ts';
 import { assessResources, type Challenge, type Feasibility, type Money } from './venturePath.ts';
 
 export interface KernelPass {
@@ -69,6 +70,13 @@ export interface KernelPass {
    * Read before the gate: reading what is now possible is not new research.
    */
   ventures: VentureReconsideration[];
+  /**
+   * Every live category's competitive system, reconstructed from the accepted,
+   * sourced claims its ladder rows were filed from (VENT-24-1). Derived on every
+   * pass, before the gate: reading what research already established is not
+   * new research. Empty when the claims store could not be read.
+   */
+  competitive: CategoryCompetitiveSystem[];
   /** The ladder as it stood when the decision was made. */
   categories: number;
   capabilitiesHeld: number;
@@ -90,6 +98,7 @@ const EMPTY: KernelPass = {
   declined: [],
   directive: { reaching: false, path: null, why: null },
   ventures: [],
+  competitive: [],
   categories: 0,
   capabilitiesHeld: 0,
   openRounds: 0,
@@ -134,6 +143,8 @@ export async function runManufacturingKernel(projectId: string): Promise<KernelP
 
   const ventures = await reconsiderVentures(projectId, readLadder(snapshot), snapshot.capabilities);
 
+  const competitive = await competitiveFor(projectId, snapshot);
+
   const gate = await programmeMayAsk(projectId);
   if (!gate.allowed) {
     return {
@@ -142,6 +153,7 @@ export async function runManufacturingKernel(projectId: string): Promise<KernelP
       declined: [{ subject: 'every category on the ladder', why: gate.reason }],
       directive: directive.report,
       ventures,
+      competitive,
       ...counts,
     };
   }
@@ -160,8 +172,19 @@ export async function runManufacturingKernel(projectId: string): Promise<KernelP
     declined: plan.declined,
     directive: directive.report,
     ventures,
+    competitive,
     ...counts,
   };
+}
+
+async function competitiveFor(projectId: string, snapshot: LadderSnapshot): Promise<CategoryCompetitiveSystem[]> {
+  try {
+    return await competitiveSystemsFor(snapshot);
+  } catch (error) {
+    // An unreadable claims store leaves the reading empty; it never invents a map.
+    console.warn(`[manufacturing] competitive systems unreadable for ${projectId}: ${String((error as Error)?.message ?? error)}`);
+    return [];
+  }
 }
 
 /* ------------------------------------------------------------------------- */

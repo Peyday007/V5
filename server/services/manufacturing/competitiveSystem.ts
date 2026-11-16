@@ -28,8 +28,17 @@
  *
  * Pure: it reads the claims a caller passes and writes nothing. A claim that
  * has not cleared the evidence gate, or carries no source, is not evidence and
- * is ignored here (§10, §14).
+ * is ignored here (§10, §14). `competitiveSystemsFor` is the production entrance:
+ * the manufacturing kernel calls it on every tick with the ladder's rows, and it
+ * reads each cited claim's gate state and source from the research claims store.
  */
+import type {
+  AcquisitionCandidate,
+  CategoryCapitalEntry,
+  CategoryEvidenceEntry,
+} from '../../domain/types.ts';
+import { claimsByIds } from '../../repos/research.ts';
+import type { LadderSnapshot } from './ladder.ts';
 
 /** How an activity can be obtained. */
 export const ACQUISITION_MODES = ['RENT', 'CONTRACT', 'LICENSE', 'PARTNER', 'OWN_OR_DEVELOP'] as const;
@@ -280,4 +289,152 @@ export function reconstructCompetitiveSystem(input: {
     readings,
     ignored,
   };
+}
+
+/* ------------------------------------------------------------------------- */
+/* Fed from the ladder and the claims store, on the kernel tick               */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * The research claims' own gate state and source, by claim id. A claim id the
+ * store does not return is absent from this map and is read as not evidence.
+ */
+export type ClaimGate = ReadonlyMap<string, { accepted: boolean; sourceUrl: string | null }>;
+
+/** One live category's rows, as the ladder snapshot holds them. */
+export interface CategoryRows {
+  categoryId: string;
+  path: readonly string[];
+  evidence: readonly Pick<CategoryEvidenceEntry, 'kind' | 'subject' | 'statement' | 'sourceClaimId'>[];
+  capital: readonly Pick<CategoryCapitalEntry, 'requirement' | 'statement' | 'sourceClaimId'>[];
+  candidates: readonly Pick<AcquisitionCandidate, 'name' | 'statement' | 'sourceClaimId' | 'setAsideAt'>[];
+  /** Capabilities a source establishes this category requires, and whether this company holds each. */
+  requires: readonly { name: string; heldAt: string | null; sourceClaimId: string }[];
+}
+
+function phrase(text: string): string {
+  return text.toLowerCase().replace(/_/g, ' ');
+}
+
+/**
+ * The claims one category's filed rows stand on, as competitive claims. Pure.
+ *
+ * Every mechanism is named from the row's own subject, so the map is as wide as
+ * what research filed for that category and no wider. A kind adds only what
+ * the kind itself states: a bought-in component is obtained by contract; an
+ * entry barrier is a requirement on becoming a selling company whose status no
+ * row states (UNKNOWN, invariant 39); a required capability is a product
+ * requirement that is met only when a person has recorded it held (§39).
+ */
+export function claimsFromCategoryRows(rows: CategoryRows, gate: ClaimGate): CompetitiveClaim[] {
+  const base = (sourceClaimId: string) => {
+    const g = gate.get(sourceClaimId);
+    return { id: sourceClaimId, accepted: g?.accepted ?? false, sourceUrl: g?.sourceUrl ?? null };
+  };
+  const out: CompetitiveClaim[] = [];
+  for (const e of rows.evidence) {
+    const subject = e.subject.trim();
+    switch (e.kind) {
+      case 'DEMAND_EVIDENCE':
+        out.push({ ...base(e.sourceClaimId), mechanism: `customer demand: ${subject}`, statement: e.statement });
+        break;
+      case 'DISTRIBUTION_CHANNEL':
+        out.push({ ...base(e.sourceClaimId), mechanism: `distribution channel: ${subject}`, statement: e.statement });
+        break;
+      case 'INCUMBENT_WEAKNESS':
+        out.push({ ...base(e.sourceClaimId), mechanism: `competing incumbents: ${subject}`, statement: e.statement });
+        break;
+      case 'ENTRY_BARRIER':
+        out.push({
+          ...base(e.sourceClaimId),
+          mechanism: `entry barrier: ${subject}`,
+          statement: e.statement,
+          condition: { level: 'SELLING_COMPANY', requirement: subject, met: null },
+        });
+        break;
+      case 'BOUGHT_IN_COMPONENT':
+        out.push({
+          ...base(e.sourceClaimId),
+          mechanism: `sourcing of bought-in components: ${subject}`,
+          statement: e.statement,
+          activity: { name: subject, mode: 'CONTRACT', reason: 'a source states participants buy it in rather than make it' },
+        });
+        break;
+      default: {
+        // A kind added later still reaches the map under its own name rather than being dropped.
+        const kind: string = e.kind;
+        out.push({ ...base(e.sourceClaimId), mechanism: `${phrase(kind)}: ${subject}`, statement: e.statement });
+      }
+    }
+  }
+  for (const c of rows.capital) {
+    out.push({ ...base(c.sourceClaimId), mechanism: `capital requirement: ${phrase(c.requirement)}`, statement: c.statement });
+  }
+  for (const c of rows.candidates) {
+    if (c.setAsideAt) continue;
+    out.push({ ...base(c.sourceClaimId), mechanism: `acquirable supplier: ${c.name.trim()}`, statement: c.statement });
+  }
+  for (const r of rows.requires) {
+    out.push({
+      ...base(r.sourceClaimId),
+      mechanism: `production capability: ${r.name.trim()}`,
+      statement: `requires ${r.name.trim()}`,
+      condition: { level: 'PRODUCT', requirement: r.name.trim(), met: r.heldAt !== null },
+    });
+  }
+  return out;
+}
+
+/** Every live category's rows, split out of one ladder snapshot. Pure. */
+export function categoryRowsOf(snapshot: Pick<LadderSnapshot, 'coverage' | 'edges' | 'capabilities'>): CategoryRows[] {
+  const capabilityById = new Map(snapshot.capabilities.map((c) => [c.id, c]));
+  return snapshot.coverage.map((cov) => ({
+    categoryId: cov.category.id,
+    path: cov.path,
+    evidence: [...cov.demand, ...cov.distribution, ...cov.weaknesses, ...cov.barriers, ...cov.boughtIn],
+    capital: cov.capital,
+    candidates: cov.candidates,
+    requires: snapshot.edges
+      .filter((edge) => edge.categoryId === cov.category.id && edge.relation === 'REQUIRES')
+      .flatMap((edge) => {
+        const capability = capabilityById.get(edge.capabilityId);
+        return capability ? [{ name: capability.name, heldAt: capability.heldAt, sourceClaimId: edge.sourceClaimId }] : [];
+      }),
+  }));
+}
+
+export interface CategoryCompetitiveSystem extends CompetitiveSystem {
+  categoryId: string;
+}
+
+/**
+ * The competitive system of every live category on a programme's ladder,
+ * reconstructed from the claims its rows were filed from (VENT-24-1).
+ *
+ * Reads the research claims store for each claim's gate state and source in
+ * one batch, so a claim that has since lost acceptance, or never carried a
+ * source, is ignored rather than trusted because a row once cited it. Writes
+ * nothing: re-derived on every kernel pass from rows.
+ */
+export async function competitiveSystemsFor(
+  snapshot: Pick<LadderSnapshot, 'coverage' | 'edges' | 'capabilities'>,
+): Promise<CategoryCompetitiveSystem[]> {
+  const rows = categoryRowsOf(snapshot);
+  const ids = [
+    ...new Set(
+      rows.flatMap((r) => [
+        ...r.evidence.map((e) => e.sourceClaimId),
+        ...r.capital.map((c) => c.sourceClaimId),
+        ...r.candidates.map((c) => c.sourceClaimId),
+        ...r.requires.map((c) => c.sourceClaimId),
+      ]),
+    ),
+  ];
+  const gate = new Map(
+    ids.length === 0 ? [] : (await claimsByIds(ids)).map((c) => [c.id, { accepted: c.accepted, sourceUrl: c.sourceUrl }] as const),
+  );
+  return rows.map((r) => ({
+    categoryId: r.categoryId,
+    ...reconstructCompetitiveSystem({ subjectPath: r.path, claims: claimsFromCategoryRows(r, gate) }),
+  }));
 }
