@@ -13,7 +13,8 @@ afterEach(async () => {
 describe('Release 01 probes before their behavior ships', () => {
   it('COM-13-3 does not pass on a Brain without the code', async () => {
     const result = await getProbe('r01.com-13-3')!({});
-    expect(result.ok, `r01.com-13-3: ${result.detail}`).toBe(false);
+    // An empty Brain has no outreach rows: absence is UNKNOWN (§39, #982), never a pass.
+    expect(result.ok, `r01.com-13-3: ${result.detail}`).not.toBe(true);
     expect(result.detail.length).toBeGreaterThan(10);
   });
 
