@@ -690,7 +690,7 @@ export async function readFailureRecoveries(projectId: string | null = null): Pr
     params.push(projectId);
   }
   const rows = await getDb().all<{ measures: string | null }>(`SELECT measures FROM bin_events WHERE ${where} ORDER BY at ASC, id ASC`, params);
-  const seen = new Set<string>();
+  const seen = new Map<string, number>();
   const out: FailureRecoveryRecord[] = [];
   for (const r of rows) {
     let parsed: { recovery?: FailureRecoveryRecord };
@@ -700,20 +700,29 @@ export async function readFailureRecoveries(projectId: string | null = null): Pr
       continue;
     }
     const rec = parsed.recovery;
-    if (!rec || typeof rec.occurrence !== 'string' || seen.has(rec.occurrence)) continue;
-    seen.add(rec.occurrence);
-    out.push(rec);
+    if (!rec || typeof rec.occurrence !== 'string') continue;
+    // A later record of the same occurrence settles a recovery the first one left unknown; it replaces it in
+    // place, so the record keeps its write order and both rows stay in the append-only history.
+    const at = seen.get(rec.occurrence);
+    if (at === undefined) {
+      seen.set(rec.occurrence, out.length);
+      out.push(rec);
+    } else if (out[at]!.recovered === null && rec.recovered !== null) out[at] = rec;
   }
   return out;
 }
 
-/** Record one failure and what became of it. The first record of an occurrence stands; a repeat writes nothing. */
+/**
+ * Record one failure and what became of it. The first record of an occurrence stands and a repeat writes
+ * nothing — except that a recovery the record left unknown is settled by a later one that knows it (a path
+ * fails before anyone can say whether recovery worked), appended beside it and never overwriting it.
+ */
 export async function recordFailureRecovery(
   input: FailureRecoveryInput,
   deps: Pick<LedgerDeps, 'record' | 'now' | 'caller' | 'projectId'> & { read?: () => Promise<FailureRecoveryRecord[]> } = {},
 ): Promise<{ record: FailureRecoveryRecord; written: boolean }> {
   const held = (await (deps.read ?? (() => readFailureRecoveries(deps.projectId ?? null)))()).find((r) => r.occurrence === input.occurrence);
-  if (held) return { record: held, written: false };
+  if (held && !(held.recovered === null && input.recovered !== null)) return { record: held, written: false };
   const record: FailureRecoveryRecord = {
     ...input,
     detectionTimely: detectionWasTimely(input.detectionDelayDays, input.timeToHarmDays),
