@@ -67,6 +67,7 @@ async function main(): Promise<void> {
   const started = Date.now();
   let ready = false;
   let polls = 0;
+  let shortLived = 0;
   while (!ready && Date.now() - started < (recipe.minGpuGb >= 80 ? 60 : 35) * 60_000) {
     try {
       ready = (await fetch(`${pod.url}/models`, { headers: { authorization: `Bearer ${vllmKey}` }, signal: AbortSignal.timeout(15_000) })).ok;
@@ -77,7 +78,18 @@ async function main(): Promise<void> {
       // What the pod is doing while it does not serve, every two minutes (2026-11-16: a 120B pod
       // never served in 60 min and was deleted with nothing recorded): uptime that resets is a
       // crash loop, GPU memory that climbs is a model loading, nothing at all is an image pull.
-      if (++polls % 6 === 0) console.log(`WAITING ${Math.round((Date.now() - started) / 60_000)}m ${await podRuntime(pod.podId)}`);
+      if (++polls % 6 === 0) {
+        const reading = await podRuntime(pod.podId);
+        console.log(`WAITING ${Math.round((Date.now() - started) / 60_000)}m ${reading}`);
+        // A container that never stays up a minute is crash-looping: stop paying for it.
+        const up = Number(/uptime=(-?\d+)s/.exec(reading)?.[1] ?? NaN);
+        if (Number.isFinite(up) && up < 60) shortLived += 1;
+        else shortLived = 0;
+        if (shortLived >= 6) {
+          console.log(`CRASH-LOOP after ${Math.round((Date.now() - started) / 60_000)} min (uptime never above a minute); deleted the new pod (HTTP ${await deletePod(apiKey, pod.podId)}), the old one keeps serving`);
+          process.exit(1);
+        }
+      }
       await new Promise((resolve) => setTimeout(resolve, 20_000));
     }
   }

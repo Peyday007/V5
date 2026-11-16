@@ -283,9 +283,12 @@ export function podSpec(
     interruptible: false,
     imageName: recipe.image,
     allowedCudaVersions: recipe.cuda,
-    dockerEntrypoint: ['python3', '-m', 'vllm.entrypoints.openai.api_server'],
+    // The 2026 images start with `vllm serve <model>` (their own ENTRYPOINT); the module path the
+    // 2025 image needs is deprecated there, and every pod on it crash-looped within seconds
+    // (2026-11-16 09:42–10:42: uptime never above 6 s, GPU memory 0%, /v1/models 404 for an hour).
+    dockerEntrypoint: recipe.image === IMAGE_2026 ? ['vllm', 'serve'] : ['python3', '-m', 'vllm.entrypoints.openai.api_server'],
     dockerStartCmd: [
-      '--model', loaded, '--served-model-name', served,
+      ...(recipe.image === IMAGE_2026 ? [loaded] : ['--model', loaded]), '--served-model-name', served,
       '--host', '0.0.0.0', '--port', '8000',
       '--api-key', apiKey,
       '--max-model-len', String(recipe.maxModelLen),
