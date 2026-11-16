@@ -678,6 +678,23 @@ export interface TickReport {
 const MISSION_LEFT_NEEDS_YOU = 'the mission moved out of Needs You before the answer could be applied';
 
 /**
+ * The reason an answer whose resume *ran and failed* is settled with, once the
+ * mission is found to have left NEEDS_HUMAN afterwards.
+ *
+ * The move is why the card is moot, and the resume's refusal is what actually
+ * happened to the answer — a person reading the withdrawn card needs both, so
+ * neither replaces the other. (Replacing the refusal with the generic sentence
+ * lost "nothing in this packet is waiting to be approved", "no report to file"
+ * and every other specific refusal from the card.) A refusal that already says
+ * the mission moved is not repeated.
+ */
+export function movedOutAfterResume(refusal: string): string {
+  const said = refusal.trim();
+  if (!said || said.includes(MISSION_LEFT_NEEDS_YOU)) return said || MISSION_LEFT_NEEDS_YOU;
+  return `${MISSION_LEFT_NEEDS_YOU}; the resume refused: ${said}`;
+}
+
+/**
  * An answer that was not carried out — always an unresolved answer of this
  * cycle — which `reopenAnswered` either withdraws (its mission is no longer
  * waiting on it) or puts back in front of the person. Read back which, so a
@@ -2463,11 +2480,16 @@ async function tickOnce(owner: string): Promise<TickReport> {
           /*
            * Re-read after the failed resume: a mission that left NEEDS_HUMAN
            * while it ran is just as moot, so it is settled as such (and
-           * `reopenAnswered` withdraws it by the mission's state) rather than
-           * reported as whatever the resume happened to fail on.
+           * `reopenAnswered` withdraws it by the mission's state) — and the
+           * resume's own refusal stays on the card beside the move, because it
+           * is what actually happened to the person's answer.
            */
           const after = request.missionId ? await getMission(request.missionId) : null;
-          await settleUnresolvedAnswer(report, request, after && after.state !== 'NEEDS_HUMAN' ? MISSION_LEFT_NEEDS_YOU : outcome.reason);
+          await settleUnresolvedAnswer(
+            report,
+            request,
+            after && after.state !== 'NEEDS_HUMAN' ? movedOutAfterResume(outcome.reason) : outcome.reason,
+          );
           continue;
         }
         if (await markResumed(request.id)) report.resumed.push(request.id);

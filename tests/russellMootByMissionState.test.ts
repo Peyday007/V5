@@ -17,7 +17,7 @@ import { createUser } from '../server/repos/identity.ts';
 import { answerHumanRequest, askHuman, getHumanRequest, getMission, listOpenRequests, transitionMission } from '../server/repos/russellMissions.ts';
 import * as needsHuman from '../server/services/russell/needsHuman.ts';
 import { NEEDS_HUMAN_CHOICES } from '../server/services/russell/needsHuman.ts';
-import { tick } from '../server/services/russell/loop.ts';
+import { movedOutAfterResume, tick } from '../server/services/russell/loop.ts';
 
 const MOVED_OUT = 'the mission moved out of Needs You before the answer could be applied';
 
@@ -160,8 +160,21 @@ describe('answered-requests reads the mission before resuming', () => {
 
     const after = (await getHumanRequest(request.id))!;
     expect(after.state).toBe('WITHDRAWN');
-    expect(report.withdrawnMootAnswers).toContainEqual({ requestId: request.id, missionState: 'RUNNING', reason: MOVED_OUT });
+    const refusal = 'the person who answered cannot be resolved, so nothing is authorized in their name';
+    // Both halves survive: the move that made it moot, and what the resume actually said.
+    const settled = report.withdrawnMootAnswers.find((one) => one.requestId === request.id)!;
+    expect(settled.missionState).toBe('RUNNING');
+    expect(settled.reason).toContain(MOVED_OUT);
+    expect(settled.reason).toContain(refusal);
+    expect(after.whyNotRussell).toContain(MOVED_OUT);
+    expect(after.whyNotRussell).toContain(refusal);
     expect((await listOpenRequests(fixture.project.id)).map((r) => r.id)).not.toContain(request.id);
+  });
+
+  it('names the move alone when no resume ran, and never repeats it', () => {
+    expect(movedOutAfterResume('no report to file')).toBe(`${MOVED_OUT}; the resume refused: no report to file`);
+    expect(movedOutAfterResume(MOVED_OUT)).toBe(MOVED_OUT);
+    expect(movedOutAfterResume('  ')).toBe(MOVED_OUT);
   });
 
   it('reproduces the recorded failure class: a RECORD_GAPS answer on a mission already running authorizes nothing in the answerer\'s name', async () => {
