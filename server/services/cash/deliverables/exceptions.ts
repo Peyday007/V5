@@ -28,10 +28,20 @@
  */
 import type { CashMoneyEntry } from '../../../domain/types.ts';
 import { authorizeRefund } from '../journey/fulfillment.ts';
-import { BRAIN_PRINCIPAL, actionContext, checkCommercialAuthority, type CommercialAction } from '../authority.ts';
+import {
+  AUTHORITY_DECISION_KIND,
+  BRAIN_PRINCIPAL,
+  actionContext,
+  checkCommercialAuthority,
+  classifyAction,
+  emergencyStopOn,
+  type CommercialAction,
+  type ConsequenceClass,
+} from '../authority.ts';
+import { heldCentsForProject, listCommitments } from '../../../repos/cashAuthority.ts';
 import { createHash } from 'node:crypto';
 import type { CashNeed } from '../../../domain/types.ts';
-import { cashEventsOfKind, getCashMode, recordCashEvent } from '../../../repos/cashMode.ts';
+import { cashEventsOfKind, cashEventsOfKindInProject, getCashMode, recordCashEvent } from '../../../repos/cashMode.ts';
 import { listMoneyEntries } from '../../../repos/cashLedger.ts';
 import { getOpportunity } from '../../../repos/cashPortfolio.ts';
 import { observationsFor } from '../../../repos/cashJourney.ts';
@@ -950,34 +960,255 @@ export const REMEDY_CARRIED_OUT = 'remedy.carried_out';
 export const REMEDY_REFUSED = 'remedy.refused';
 
 /**
+ * The authority a remedy was carried out or refused under (INT-38-AUTHORITY,
+ * §34), written into every REMEDY_CARRIED_OUT / REMEDY_REFUSED event.
+ *
+ * It is read, never decided here: a remedy that is a commercial action is
+ * judged by `checkCommercialAuthority` at the moment of effect, and its grant,
+ * policy version, consequence class, cause and disposition are copied from
+ * that decision and the AUTHORITY_DECISION row it wrote. A remedy that is no
+ * commercial action (a refund, a renegotiation, an orderly cancellation) is
+ * authorized by the per-case approval a person gave — the cash need whose id
+ * is `approvalRequestId` — and says explicitly that it needed no commercial
+ * action. Either way the project's emergency stop is re-read at the moment of
+ * effect, so a stop, a revocation or an expiry between the approval and the
+ * effect refuses the remedy and leaves `obligations` naming what stays owed.
+ */
+export interface RemedyAuthorityRecord {
+  /**
+   * GRANT: a live commercial grant (or an owner's stored answer the grant path
+   * applied) decided it. OWNER_APPROVAL: a person's per-case approval is the
+   * authority. NOT_APPROVED: no approval reached the effect. NOT_EVALUATED:
+   * nothing here performs this remedy, so no authority was asked for.
+   */
+  basis: 'GRANT' | 'OWNER_APPROVAL' | 'NOT_APPROVED' | 'NOT_EVALUATED';
+  /** The commercial action the remedy is, or null when it is none. */
+  commercialAction: CommercialAction | null;
+  /** False when the remedy is no commercial action and so needed none — stated, never left implicit. */
+  commercialActionNeeded: boolean;
+  /** The cash need a person resolved to approve this case, when one did. */
+  approvalRequestId: string | null;
+  approvedBy: string | null;
+  grantId: string | null;
+  grantName: string | null;
+  policyVersion: number | null;
+  consequenceClass: ConsequenceClass | null;
+  /** The ledger's machine cause (OWNER_APPROVED, ALLOWED, EMERGENCY_STOP, REVOKED, …) or this file's own for a non-commercial remedy. */
+  cause: string | null;
+  disposition: 'AUTHORIZED' | 'PROPOSED' | 'REFUSED' | null;
+  /** The AUTHORITY_DECISION row the check wrote, when it wrote one. */
+  decisionId: string | null;
+  /** Whether the stop was on when the effect was reached. Null: not read, because no effect was reached. */
+  emergencyStop: boolean | null;
+  /** Whether the authority allowed the effect at the moment it was reached. */
+  allowed: boolean;
+  reason: string;
+  /** On a refusal at the moment of effect: what stays owed. */
+  obligations: RemedyObligations | null;
+  checkedAt: string;
+}
+
+export interface RemedyObligations {
+  /** The remedy itself is still owed to the buyer: nothing was paid, released or sent. */
+  remedy: { remedy: Remedy; agreementId: string; exceptionId: string; amountCents: number | null };
+  /** The project's commitments still held, which stay tracked and accounted for. */
+  heldCents: number;
+  heldCommitmentIds: string[];
+}
+
+async function obligationsLeft(projectId: string, remedy: RemedyObligations['remedy']): Promise<RemedyObligations> {
+  const held = (await listCommitments(projectId)).filter((one) => one.state === 'HELD').map((one) => one.id);
+  return { remedy, heldCents: await heldCentsForProject(projectId), heldCommitmentIds: held };
+}
+
+/** An authority record for a remedy that never reached its effect. */
+function authorityNotReached(input: {
+  remedy: Remedy;
+  basis: 'NOT_APPROVED' | 'NOT_EVALUATED';
+  approvalRequestId: string | null;
+  approvedBy: string | null;
+  reason: string;
+}): RemedyAuthorityRecord {
+  const action = REMEDY_ACTION[input.remedy];
+  return {
+    basis: input.basis,
+    commercialAction: action,
+    commercialActionNeeded: action !== null,
+    approvalRequestId: input.approvalRequestId,
+    approvedBy: input.approvedBy,
+    grantId: null,
+    grantName: null,
+    policyVersion: null,
+    consequenceClass: action ? classifyAction(action) : null,
+    cause: null,
+    disposition: null,
+    decisionId: null,
+    emergencyStop: null,
+    allowed: false,
+    reason: input.reason,
+    obligations: null,
+    checkedAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Reads, at the moment of effect, the authority a remedy may be carried out
+ * under — through the existing path only. A commercial remedy is judged by
+ * `checkCommercialAuthority` (which itself reads the stop, the live grant, a
+ * revocation and the owner's stored answers, and records the decision and any
+ * suspension); a non-commercial one rests on the person's approval and is
+ * refused while the emergency stop is on. Nothing is performed here.
+ */
+export async function remedyAuthorityAtEffect(input: {
+  projectId: string;
+  opportunityId: string | null;
+  remedy: Remedy;
+  agreementId: string;
+  exceptionId: string;
+  amountCents: number | null;
+  approvalRequestId: string | null;
+  approvedBy: string | null;
+  at?: string;
+}): Promise<RemedyAuthorityRecord> {
+  const checkedAt = input.at ?? new Date().toISOString();
+  const action = REMEDY_ACTION[input.remedy];
+  const owed = { remedy: input.remedy, agreementId: input.agreementId, exceptionId: input.exceptionId, amountCents: input.amountCents };
+  if (!action) {
+    const stopped = await emergencyStopOn(input.projectId);
+    const approved = Boolean(input.approvedBy && input.approvalRequestId);
+    const allowed = approved && !stopped;
+    return {
+      basis: approved ? 'OWNER_APPROVAL' : 'NOT_APPROVED',
+      commercialAction: null,
+      commercialActionNeeded: false,
+      approvalRequestId: input.approvalRequestId,
+      approvedBy: input.approvedBy,
+      grantId: null,
+      grantName: null,
+      policyVersion: null,
+      consequenceClass: 'EXTERNALLY_CONSEQUENTIAL',
+      cause: stopped ? 'EMERGENCY_STOP' : approved ? 'OWNER_APPROVED' : 'NO_AUTHORITY',
+      disposition: allowed ? 'AUTHORIZED' : 'REFUSED',
+      decisionId: null,
+      emergencyStop: stopped,
+      allowed,
+      reason: stopped
+        ? 'the emergency stop is on, so the approved remedy was not carried out; what it owes stays owed'
+        : approved
+          ? `${input.remedy} is no commercial action, so it needed none; it was authorized by a person's approval of this case`
+          : `${input.remedy} commits the company and no person approved it for this case`,
+      obligations: allowed ? null : await obligationsLeft(input.projectId, owed),
+      checkedAt,
+    };
+  }
+  const decision = await checkCommercialAuthority({
+    projectId: input.projectId,
+    action,
+    at: input.at,
+    opportunityId: input.opportunityId,
+    subjectRef: input.approvalRequestId,
+    ...actionContext({ principal: input.approvedBy ?? BRAIN_PRINCIPAL, amountCents: input.amountCents }),
+  });
+  const row = decision.decisionId
+    ? (await cashEventsOfKindInProject(input.projectId, AUTHORITY_DECISION_KIND)).find((one) => one.id === decision.decisionId)
+    : undefined;
+  const detail = (row?.detail ?? {}) as { cause?: unknown; disposition?: unknown; consequenceClass?: unknown; approvalNeedId?: unknown };
+  const cause = typeof detail.cause === 'string' ? detail.cause : null;
+  const disposition = detail.disposition === 'AUTHORIZED' || detail.disposition === 'PROPOSED' || detail.disposition === 'REFUSED'
+    ? detail.disposition
+    : decision.ok ? 'AUTHORIZED' : 'REFUSED';
+  const stopped = cause === 'EMERGENCY_STOP' ? true : await emergencyStopOn(input.projectId);
+  const allowed = decision.ok && !stopped;
+  return {
+    basis: 'GRANT',
+    commercialAction: action,
+    commercialActionNeeded: true,
+    approvalRequestId: input.approvalRequestId ?? (typeof detail.approvalNeedId === 'string' ? detail.approvalNeedId : null),
+    approvedBy: input.approvedBy,
+    grantId: decision.authority?.id ?? null,
+    grantName: decision.authority?.name ?? null,
+    policyVersion: decision.policyVersion,
+    consequenceClass: (typeof detail.consequenceClass === 'string' ? detail.consequenceClass : classifyAction(action)) as ConsequenceClass | null,
+    cause,
+    disposition: allowed ? disposition : 'REFUSED',
+    decisionId: decision.decisionId ?? null,
+    emergencyStop: stopped,
+    allowed,
+    reason: decision.reason,
+    obligations: allowed ? null : await obligationsLeft(input.projectId, owed),
+    checkedAt,
+  };
+}
+
+/**
  * Carries out the remedy a person approved by resolving its need. Called once
  * per answered need by the need continuation, which claimed it first. A
  * refusal is recorded and never retried (§26); the refund path's own key joins
- * a repeat of the same request rather than paying twice.
+ * a repeat of the same request rather than paying twice. Every event it writes
+ * names the authority it acted under (`RemedyAuthorityRecord`), and the
+ * authority is re-read at the moment of effect, so a stop, revocation or
+ * expiry after the approval refuses the remedy rather than carrying it out.
  */
 export async function carryOutApprovedRemedy(need: CashNeed): Promise<{ ok: boolean; note: string }> {
   const key = parseRemedyApprovalKey(need.requestKey);
   if (!key) return { ok: false, note: 'This need does not approve a remedy.' };
-  const record = async (ok: boolean, note: string, approvedBy: string | null): Promise<{ ok: boolean; note: string }> => {
+  const record = async (ok: boolean, note: string, approvedBy: string | null, authority: RemedyAuthorityRecord): Promise<{ ok: boolean; note: string }> => {
     await recordCashEvent({
       projectId: need.projectId,
       opportunityId: need.opportunityId,
       kind: ok ? REMEDY_CARRIED_OUT : REMEDY_REFUSED,
       actorRef: approvedBy ?? 'BRAIN',
       summary: `${key.remedy.toLowerCase().replace(/_/g, ' ')}: ${note}`.slice(0, 300),
-      detail: { needId: need.id, exceptionId: key.exceptionId, remedy: key.remedy, agreementId: key.agreementId, amountCents: need.expectedCostCents, approvedBy, ok, note },
+      detail: {
+        needId: need.id,
+        exceptionId: key.exceptionId,
+        remedy: key.remedy,
+        agreementId: key.agreementId,
+        amountCents: need.expectedCostCents,
+        approvedBy,
+        ok,
+        note,
+        authority,
+      },
     });
     return { ok, note };
   };
-  if (need.state !== 'RESOLVED') return record(false, `The approval was ${need.state.toLowerCase()}, so nothing was carried out.`, need.resolvedByUserId);
-  const approvedBy = need.resolvedByUserId;
-  if (!approvedBy || approvedBy === 'BRAIN') return record(false, 'No person resolved this need, so nothing was approved.', null);
-  if (!(await mayApproveRefund(need.projectId, approvedBy))) {
-    return record(false, 'The person who resolved this need may not approve a refund (it needs a project owner or administrator).', approvedBy);
+  const notReached = (basis: 'NOT_APPROVED' | 'NOT_EVALUATED', approvedBy: string | null, reason: string) =>
+    authorityNotReached({ remedy: key.remedy, basis, approvalRequestId: need.id, approvedBy, reason });
+  if (need.state !== 'RESOLVED') {
+    const note = `The approval was ${need.state.toLowerCase()}, so nothing was carried out.`;
+    return record(false, note, need.resolvedByUserId, notReached('NOT_APPROVED', need.resolvedByUserId, note));
   }
-  if (key.remedy !== 'APPROVED_REFUND') return record(false, `Nothing here carries out ${key.remedy}.`, approvedBy);
+  const approvedBy = need.resolvedByUserId;
+  if (!approvedBy || approvedBy === 'BRAIN') {
+    const note = 'No person resolved this need, so nothing was approved.';
+    return record(false, note, null, notReached('NOT_APPROVED', null, note));
+  }
+  if (!(await mayApproveRefund(need.projectId, approvedBy))) {
+    const note = 'The person who resolved this need may not approve a refund (it needs a project owner or administrator).';
+    return record(false, note, approvedBy, notReached('NOT_APPROVED', approvedBy, note));
+  }
+  if (key.remedy !== 'APPROVED_REFUND') {
+    const note = `Nothing here carries out ${key.remedy}.`;
+    return record(false, note, approvedBy, notReached('NOT_EVALUATED', approvedBy, note));
+  }
   const amount = need.expectedCostCents;
-  if (amount === null || amount <= 0) return record(false, 'The approval states no amount.', approvedBy);
+  if (amount === null || amount <= 0) {
+    const note = 'The approval states no amount.';
+    return record(false, note, approvedBy, notReached('NOT_APPROVED', approvedBy, note));
+  }
+  // The moment of effect: the stop and the authority are read now, not when the approval was given.
+  const authority = await remedyAuthorityAtEffect({
+    projectId: need.projectId,
+    opportunityId: need.opportunityId,
+    remedy: key.remedy,
+    agreementId: key.agreementId,
+    exceptionId: key.exceptionId,
+    amountCents: amount,
+    approvalRequestId: need.id,
+    approvedBy,
+  });
+  if (!authority.allowed) return record(false, `Refused at the moment of effect: ${authority.reason}.`, approvedBy, authority);
   const done = await carryOutApprovedRefund({
     projectId: need.projectId,
     agreementId: key.agreementId,
@@ -985,7 +1216,11 @@ export async function carryOutApprovedRemedy(need: CashNeed): Promise<{ ok: bool
     reason: `Approved remedy for ${key.exceptionId}: ${need.resolution ?? 'approved'}`,
     approval: { approvedBy, ceilingCents: amount },
   });
-  return done.ok ? record(true, done.detail, approvedBy) : record(false, done.reason, approvedBy);
+  if (done.ok) return record(true, done.detail, approvedBy, authority);
+  return record(false, done.reason, approvedBy, {
+    ...authority,
+    obligations: await obligationsLeft(need.projectId, { remedy: key.remedy, agreementId: key.agreementId, exceptionId: key.exceptionId, amountCents: amount }),
+  });
 }
 
 /** Recovery decisions actually carried out on this case, for the trace. */
