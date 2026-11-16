@@ -367,13 +367,13 @@ describe('outreach funnel read from cash_outcomes rows (outreachFromRows via cas
 });
 
 describe('probe r01.com-13-3 is registered and judges production rows', () => {
-  it('is registered once the funnel is loaded, and fails with no outreach rows rather than passing', async () => {
+  it('is registered once the funnel is loaded, and is UNKNOWN with no outreach rows rather than passing', async () => {
     const { getProbe } = await import('../server/services/factory/program/probes.ts');
     const probe = getProbe('r01.com-13-3');
     expect(probe).not.toBeNull();
     await freshProject();
     const result = await probe!({});
-    expect(result.ok).toBe(false);
+    expect(result.ok).toBeNull();
     expect(result.detail).toMatch(/no outreach outcome rows/);
   });
 
