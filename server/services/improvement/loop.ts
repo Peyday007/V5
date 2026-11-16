@@ -662,6 +662,32 @@ export function questionClosure(candidate: Pick<ImprovementCandidate, 'evidence'
     : `Method research ${candidate.researchGoalId} ended ${link.research.status ?? 'without a result'} with no accepted claim; the operator asked a question, and a code change cannot answer it, so no Factory objective is opened.`;
 }
 
+/**
+ * The answer a settled research question closes with, as the operator reads and cites it: every
+ * accepted claim the research produced and every archive claim that already answered it, each with
+ * its source. Closing a question records this on the decision itself, so the answer is a row the
+ * asker can read rather than something that existed only while the loop held it in memory
+ * (OPERATOR:MISSING_CAPABILITY:aed45eeb30f0ec42). Pure; nothing is invented when there is none.
+ */
+export function questionAnswer(link: Pick<Linked, 'research' | 'archive'>): { claim: string; source: string | null }[] {
+  const seen = new Set<string>();
+  const out: { claim: string; source: string | null }[] = [];
+  for (const one of [...(link.research?.claims ?? []), ...link.archive]) {
+    const key = `${one.claim}\u0000${one.source ?? ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ claim: one.claim, source: one.source });
+  }
+  return out;
+}
+
+/** The decision reason a closed question carries: the closure, then its answer claim by claim with each source. */
+export function questionDecisionReason(closure: string, answer: { claim: string; source: string | null }[]): string {
+  if (!answer.length) return closure.slice(0, 1000);
+  const body = answer.map((one, i) => `(${i + 1}) ${one.claim}${one.source ? ` [${one.source}]` : ' [no source]'}`).join(' ');
+  return `${closure} Answer: ${body}`.slice(0, 1000);
+}
+
 function directiveSentence(candidate: ImprovementCandidate): string {
   const d = directiveOf(candidate);
   if (!d) return '';
@@ -1194,8 +1220,25 @@ async function advance(candidate: ImprovementCandidate, busyOwners: Set<string>,
       // research settles the row closes, so it does not come back to Factory as an engineering bin.
       const closure = questionClosure(candidate, link);
       if (closure) {
-        await decideCandidate(candidate.id, 'REJECTED', closure.slice(0, 1000));
-        await recordImprovementEvent({ candidateId: candidate.id, kind: 'DECIDED', detail: { decision: 'REJECTED', question: true, research: link.research?.status ?? null, acceptedClaims: link.research?.acceptedClaims ?? 0 } });
+        // The answer is recorded with the decision, claim by claim with its source, so the operator whose
+        // decision waited on the question reads and cites it from the register rather than from nowhere.
+        const answer = questionAnswer(link);
+        const d = directiveOf(candidate);
+        await decideCandidate(candidate.id, 'REJECTED', questionDecisionReason(closure, answer));
+        await recordImprovementEvent({
+          candidateId: candidate.id,
+          kind: 'DECIDED',
+          detail: {
+            decision: 'REJECTED',
+            question: true,
+            research: link.research?.status ?? null,
+            researchGoalId: candidate.researchGoalId,
+            acceptedClaims: link.research?.acceptedClaims ?? 0,
+            askedIn: d?.runId ?? null,
+            questionText: String(candidate.evidence['researchQuestion'] ?? candidate.title).slice(0, 600),
+            answer,
+          },
+        });
         report.decided.push(`${candidate.weaknessKey} REJECTED`);
         return link.research && link.research.acceptedClaims + link.archive.length > 0 ? 'answered: research question closed' : 'closed: research found no answer';
       }

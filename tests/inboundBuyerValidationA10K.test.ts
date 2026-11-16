@@ -54,6 +54,14 @@
  * while its repair is in flight or after the repair was rejected. Nothing here
  * lowers a bar.
  *
+ * Where the answer lives: not in this comment. When the loop closes a question it
+ * records the answer on the decision itself — `questionAnswer` gathers every
+ * accepted research claim and archive claim with its source, the DECIDED event
+ * carries them (`answer`, `researchGoalId`, `askedIn`, `questionText`) and the
+ * candidate's decision reason lists them with their sources — so the operator run
+ * whose decision waited on the question reads and cites the register row. The
+ * claims above are this file's fixtures and expectations, not the record.
+ *
  * The production change is `questionClosure` in the loop's DIAGNOSE/ENGINEER
  * step (server/services/improvement/loop.ts) and `question: true` on the
  * directive `commissionResearch` writes (server/services/operator/director.ts).
@@ -73,7 +81,7 @@ import { createGoal } from '../server/repos/russellAuthority.ts';
 import { createRun } from '../server/repos/runs.ts';
 import { createFragments, createOrchestration, currentFragments, decideClaim, insertClaims, updateFragment } from '../server/repos/research.ts';
 import { setImprovementSwitch } from '../server/services/improvement/authority.ts';
-import { advanceNow, isResearchQuestion, questionClosure } from '../server/services/improvement/loop.ts';
+import { advanceNow, isResearchQuestion, questionAnswer, questionClosure, questionDecisionReason } from '../server/services/improvement/loop.ts';
 import type { Linked } from '../server/services/improvement/loop.ts';
 import { getInventoryItem, upsertInventory } from '../server/services/operator/inventory.ts';
 import { commission, commissionResearch, inventoryDeficiencies, readingId } from '../server/services/operator/director.ts';
@@ -382,7 +390,35 @@ describe('the loop itself closes a settled research question instead of engineer
     expect(after.decisionReason ?? '').toContain('nothing to engineer');
     expect(after.changeRequestId).toBeNull();
     const decided = await listImprovementEvents({ candidateId: id, kinds: ['DECIDED'] });
-    expect(decided.find((one) => one.detail['question'] === true)?.detail['acceptedClaims']).toBe(3);
+    const closed = decided.find((one) => one.detail['question'] === true)!;
+    expect(closed.detail['acceptedClaims']).toBe(3);
+
+    // The answer is a record the asker can read and cite, not a comment: every accepted claim with its source,
+    // the research goal it came from and the operator run that asked.
+    const answer = closed.detail['answer'] as { claim: string; source: string | null }[];
+    expect(answer).toHaveLength(3);
+    for (const one of answer) {
+      expect(one.claim).toContain('Reward crowdfunding pledges');
+      expect(one.source).toMatch(/^https:\/\/conference\.iza\.org\//);
+    }
+    expect(closed.detail['researchGoalId']).toBe(goalId);
+    expect(closed.detail['askedIn']).toBe('opr_99026b0ef4c04df9b03d');
+    expect(String(closed.detail['questionText'])).toContain('inbound validation mechanism');
+    expect(after.decisionReason ?? '').toContain('Answer: (1) Reward crowdfunding pledges');
+    expect(after.decisionReason ?? '').toContain('[https://conference.iza.org/conference_files/EntreRes2015/xu_t22362.pdf#0]');
+  });
+
+  it('a question that closes with no supported answer records none, and invents nothing', () => {
+    const empty = { research: { settled: true, acceptedClaims: 0, status: 'COMPLETE', claims: [] }, archive: [] };
+    expect(questionAnswer(empty)).toEqual([]);
+    expect(questionDecisionReason('closed.', [])).toBe('closed.');
+    // Duplicates across research and archive are recorded once; an unsourced archive claim says so rather than borrowing a source.
+    const answer = questionAnswer({
+      research: { settled: true, acceptedClaims: 1, status: 'COMPLETE', claims: [{ claim: 'a', source: 'https://x.test/a' }] },
+      archive: [{ claim: 'a', source: 'https://x.test/a', topic: null }, { claim: 'b', source: null, topic: null }],
+    });
+    expect(answer).toEqual([{ claim: 'a', source: 'https://x.test/a' }, { claim: 'b', source: null }]);
+    expect(questionDecisionReason('closed.', answer)).toBe('closed. Answer: (1) a [https://x.test/a] (2) b [no source]');
   });
 
   it('advanceNow leaves a defect to repair on the Factory path: the same settled research does not close it', async () => {
