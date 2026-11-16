@@ -1654,16 +1654,19 @@ async function main(): Promise<void> {
      */
     case 'delivered-by': {
       const landing = Number(flagString(flags, 'pull-request') ?? fail('--pull-request <landing number> is required'));
-      const closes = (flagString(flags, 'closes') ?? fail('--closes 40,41,... is required'))
+      const closes = (flagString(flags, 'closes') ?? '')
         .split(',')
         .map((one) => Number(one.trim()))
         .filter((one) => Number.isInteger(one) && one > 0);
-      if (!Number.isInteger(landing) || landing <= 0 || closes.length === 0) fail('numbers, please');
+      // `--campaigns fcp_a,fcp_b`: campaigns with no pull request of their own the landing request merged.
+      const named = (flagString(flags, 'campaigns') ?? '').split(',').map((one) => one.trim()).filter(Boolean);
+      if (!Number.isInteger(landing) || landing <= 0 || (closes.length === 0 && named.length === 0)) fail('--closes 40,41,... or --campaigns fcp_a,... is required');
       const { recordDeliveredBy } = await import('../server/services/factory/delivery.ts');
       const result = await recordDeliveredBy({
         remote: flagString(flags, 'repository') ?? 'https://github.com/Peyday007/V5',
         landing,
         closes,
+        campaigns: named,
       });
       if (result.refused) {
         process.stdout.write(`FACTORY REFUSED: ${result.refused}\n`);

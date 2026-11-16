@@ -107,8 +107,16 @@ export function deriveOutcome(input: OutcomeInput): ObjectiveOutcome {
     personAction,
   });
 
+  // Retired after its work landed through another request: what production runs decides.
+  const carried = input.delivery?.via ? input.delivery : null;
   switch (campaign.state) {
     case 'CANCELLED':
+      if (carried?.state === 'MERGED' && carried.deployed) {
+        return make('LIVE', `Delivered by #${carried.via} as ${carried.mergeSha?.slice(0, 12) ?? '—'} and running in production (${carried.revision?.slice(0, 12) ?? '—'}).`);
+      }
+      if (carried?.state === 'MERGED') {
+        return make('BLOCKED', `Delivered by #${carried.via}; production does not run it yet.`, 'The merge is not deployed.', 'Dispatch Deploy on the canonical branch.');
+      }
       return make('CANCELLED', 'This objective was cancelled.');
     case 'BLOCKED': {
       const kind = campaign.blockerKind;
@@ -238,7 +246,7 @@ export async function objectiveOutcome(campaign: FactoryCampaign): Promise<Objec
   const [grant, latest, delivery] = await Promise.all([
     liveGrantFor(campaign.changeRequestId),
     readLatest(campaign.id),
-    campaign.state === 'COMPLETE' ? latestDelivery(campaign.id) : Promise.resolve(null),
+    campaign.state === 'COMPLETE' || campaign.state === 'CANCELLED' ? latestDelivery(campaign.id) : Promise.resolve(null),
   ]);
   return deriveOutcome({ campaign, grant, latestRun: latest, origin: null, delivery });
 }

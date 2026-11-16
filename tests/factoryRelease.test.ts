@@ -1000,6 +1000,27 @@ describe('a finished campaign is delivered only when the forge says so', () => {
     expect((await objectiveOutcome(campaign)).status).toBe('LIVE');
   });
 
+  it('a retired campaign whose branch another merged request carried reads LIVE once production runs it', async () => {
+    const campaign = await completeCampaign(await approved());
+    await getDb().run("UPDATE factory_campaigns SET state = 'CANCELLED' WHERE id = ?", [campaign.id]);
+    const retired = (await getCampaign(campaign.id))!;
+    expect((await objectiveOutcome(retired)).status).toBe('CANCELLED');
+
+    // Not named: nothing recorded, even though the landing request merged.
+    const merged = forgePort({ state: 'closed', merged: true, mergeCommitSha: MERGE }).port;
+    expect((await recordDeliveredBy({ remote: REMOTE, landing: 600, closes: [], forge: merged })).recorded).toEqual([]);
+
+    const landed = await recordDeliveredBy({ remote: REMOTE, landing: 600, closes: [], campaigns: [campaign.id], forge: merged });
+    expect(landed.recorded).toEqual([campaign.id]);
+    expect((await objectiveOutcome(retired)).status).toBe('BLOCKED');
+
+    resetDeliveryThrottle();
+    const live = forgePort({ state: 'closed', merged: true, mergeCommitSha: MERGE }, true);
+    await observeDeliveries([retired], { forge: live.port, revision: REV });
+    expect(live.calls.contains).toBe(1);
+    expect((await objectiveOutcome(retired)).status).toBe('LIVE');
+  });
+
   it('one compare answers every campaign the same merge delivered', async () => {
     const one = await completeCampaign(await approved('First greeting line on the Build page.'));
     await getDb().run('UPDATE factory_campaigns SET pr_ref = ? WHERE id = ?', ['#78', one.id]);

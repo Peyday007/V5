@@ -175,10 +175,11 @@ export async function observeDeliveries(
   const { pullRequestNumber } = await import('./remote.ts');
 
   for (const campaign of campaigns) {
-    if (campaign.state !== 'COMPLETE' || !campaign.prUrl) continue;
-    const number = pullRequestNumber(campaign);
-    if (number === null) continue;
+    // A campaign delivered by another request (`recordDeliveredBy`) is watched whatever its own state or PR.
     const previous = await latestDelivery(campaign.id);
+    if (!previous?.via && (campaign.state !== 'COMPLETE' || !campaign.prUrl)) continue;
+    const number = previous?.via ?? pullRequestNumber(campaign);
+    if (number === null) continue;
     if (deliveryIsFinal(previous)) continue;
     const changeRequest = await getChangeRequest(campaign.changeRequestId);
     if (!changeRequest) continue;
@@ -386,6 +387,14 @@ export async function recordDeliveredBy(input: {
   remote: string;
   landing: number;
   closes: number[];
+  /**
+   * Campaigns with no pull request of their own whose integration branch the
+   * landing request merged — a campaign retired after its work was released by
+   * hand (program fpg_ea512f54, 2026-11-15: reasoning-d1-p0 and memory-d1 read
+   * CANCELLED with their work running in production, so every campaign that
+   * depends on them never started). Named by id; COMPLETE or CANCELLED only.
+   */
+  campaigns?: string[];
   forge?: ForgePort;
 }): Promise<{ recorded: string[]; refused: string | null }> {
   const forge = input.forge ?? (await defaultForge());
@@ -395,11 +404,13 @@ export async function recordDeliveredBy(input: {
   }
   const { pullRequestNumber } = await import('./remote.ts');
   const wanted = new Set(input.closes);
+  const named = new Set(input.campaigns ?? []);
   const recorded: string[] = [];
   for (const campaign of await campaignsAwaitingDelivery(1000)) {
-    if (campaign.state !== 'COMPLETE') continue;
     const own = pullRequestNumber(campaign);
-    if (own === null || !wanted.has(own)) continue;
+    const byPullRequest = campaign.state === 'COMPLETE' && own !== null && wanted.has(own);
+    const byName = named.has(campaign.id) && (campaign.state === 'COMPLETE' || campaign.state === 'CANCELLED');
+    if (!byPullRequest && !byName) continue;
     const changeRequest = await getChangeRequest(campaign.changeRequestId);
     if (!changeRequest || changeRequest.repository.replace(/\.git$/, '').toLowerCase() !== input.remote.replace(/\.git$/, '').toLowerCase()) continue;
     const previous = await latestDelivery(campaign.id);
@@ -415,7 +426,7 @@ export async function recordDeliveredBy(input: {
         revision: null,
         via: input.landing,
         pullRequest: input.landing,
-        supersedes: own,
+        supersedes: byPullRequest ? own : null,
       },
     });
     recorded.push(campaign.id);
