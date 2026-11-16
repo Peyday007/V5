@@ -40,6 +40,8 @@ export interface DetectorRecord {
   organization: string | null;
   publishedAt: string | null;
   fetchedAt: string;
+  /** The item's own text, when a rule reads it (a rule's effective date). */
+  body?: string | null;
 }
 
 export interface DetectedSignal {
@@ -214,8 +216,275 @@ export const CONCENTRATED_HIRING: Detector = {
   },
 };
 
-/** Every installed rule. Adding one is a new entry here and its tests — nothing else. */
-export const DETECTORS: readonly Detector[] = [CONCENTRATED_HIRING];
+// ---------------------------------------------------------------------------
+// Rule 2: repeated demand for one kind of work across employers
+// ---------------------------------------------------------------------------
+
+/** Distinct employers posting the same family of work inside the window. A candidate heuristic. */
+export const REPEATED_DEMAND_MIN_EMPLOYERS = 3;
+export const REPEATED_DEMAND_WINDOW_MS = 14 * DAY;
+
+/**
+ * The same kind of work asked for by several unrelated employers. It reads
+ * every job family, including ones with no deliverable Brain sells (sales,
+ * support): a family with no deliverable is still a signal, filed with none,
+ * never dropped — no family or industry is excluded.
+ */
+export const REPEATED_DEMAND: Detector = {
+  id: 'REPEATED_DEMAND',
+  version: 1,
+  label: 'Repeated demand: one family of work asked for by several distinct employers',
+  mode: 'SHADOW',
+  sources: ['remoteok', 'remotive'],
+  lookbackMs: REPEATED_DEMAND_WINDOW_MS,
+  detect(records, now) {
+    const from = now.getTime() - REPEATED_DEMAND_WINDOW_MS;
+    const groups = new Map<string, { family: (typeof JOB_FAMILIES)[number]; byEmployer: Map<string, DetectorRecord[]> }>();
+    for (const record of records) {
+      if (!this.sources.includes(record.source)) continue;
+      const entity = employerKey(record.organization);
+      if (!entity) continue;
+      const at = record.publishedAt ? Date.parse(record.publishedAt) : NaN;
+      if (!Number.isFinite(at) || at < from || at > now.getTime() + DAY) continue;
+      const family = jobFamily(record.title);
+      if (!family) continue;
+      const group = groups.get(family.key) ?? { family, byEmployer: new Map() };
+      group.byEmployer.set(entity, [...(group.byEmployer.get(entity) ?? []), record]);
+      groups.set(family.key, group);
+    }
+    const out: DetectedSignal[] = [];
+    for (const [key, group] of [...groups].sort((a, b) => a[0].localeCompare(b[0]))) {
+      if (group.byEmployer.size < REPEATED_DEMAND_MIN_EMPLOYERS) continue;
+      const members = [...group.byEmployer.values()].flat();
+      const dates = members.map((one) => Date.parse(one.publishedAt!)).sort((a, b) => a - b);
+      const deliverable = group.family.deliverable;
+      out.push({
+        groupKey: `family:${key}`,
+        label: `${group.byEmployer.size} distinct employers asking for ${key.toLowerCase()} work within ${Math.max(1, Math.ceil((dates[dates.length - 1]! - dates[0]!) / DAY))} day(s)`,
+        entityKey: null,
+        entityName: null,
+        category: key,
+        windowFrom: new Date(dates[0]!).toISOString(),
+        windowTo: new Date(dates[dates.length - 1]!).toISOString(),
+        memberIds: members.map((one) => one.id),
+        memberTitles: members.map((one) => one.title).slice(0, 20),
+        sourceUrls: [...new Set(members.map((one) => one.url))],
+        qualifiers: [
+          'counts employers posting the family, not buyers of outside work',
+          'a job post shows hiring; it does not show any employer would pay for outside work',
+        ],
+        hypothesis: deliverable
+          ? `Several employers need ${key.toLowerCase()} work at once; some may buy bounded ${DELIVERABLE_LABEL[deliverable]} work instead of hiring. Not established.`
+          : null,
+        deliverable,
+      });
+    }
+    return out;
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Rule 3: a federal rule taking effect soon
+// ---------------------------------------------------------------------------
+
+/** A rule whose stated effective date falls inside this many days of now. */
+export const RULE_EFFECTIVE_SOON_DAYS = 45;
+
+/** The effective date the Federal Register parser writes into an item's body ("Effective 2026-11-22."). Pure. */
+export function effectiveDateOf(body: string | null | undefined): string | null {
+  const m = /Effective (\d{4}-\d{2}-\d{2})\./.exec(body ?? '');
+  return m ? m[1]! : null;
+}
+
+export const RULE_EFFECTIVE_SOON: Detector = {
+  id: 'RULE_EFFECTIVE_SOON',
+  version: 1,
+  label: 'Rules taking effect soon: final rules from one agency effective within weeks',
+  mode: 'SHADOW',
+  sources: ['federal-register-rules'],
+  lookbackMs: 30 * DAY,
+  detect(records, now) {
+    const until = now.getTime() + RULE_EFFECTIVE_SOON_DAYS * DAY;
+    const groups = new Map<string, { name: string; members: { record: DetectorRecord; effective: string }[] }>();
+    for (const record of records) {
+      if (!this.sources.includes(record.source)) continue;
+      const agency = employerKey(record.organization);
+      const effective = effectiveDateOf(record.body);
+      if (!agency || !effective) continue;
+      const at = Date.parse(`${effective}T00:00:00.000Z`);
+      if (!Number.isFinite(at) || at < now.getTime() - DAY || at > until) continue;
+      const group = groups.get(agency) ?? { name: record.organization!.trim(), members: [] };
+      group.members.push({ record, effective });
+      groups.set(agency, group);
+    }
+    const out: DetectedSignal[] = [];
+    for (const [agency, group] of [...groups].sort((a, b) => a[0].localeCompare(b[0]))) {
+      const dates = group.members.map((one) => one.effective).sort();
+      out.push({
+        groupKey: `agency:${agency}`,
+        label: `${group.members.length} final rule(s) from one agency taking effect by ${dates[dates.length - 1]}`,
+        entityKey: agency,
+        entityName: group.name,
+        category: 'REGULATION',
+        windowFrom: `${dates[0]}T00:00:00.000Z`,
+        windowTo: `${dates[dates.length - 1]}T00:00:00.000Z`,
+        memberIds: group.members.map((one) => one.record.id),
+        memberTitles: group.members.map((one) => one.record.title),
+        sourceUrls: [...new Set(group.members.map((one) => one.record.url))],
+        qualifiers: [
+          'a rule taking effect names who is regulated, not who will pay for help complying',
+          'the effective date is the one the Federal Register states; a delay or stay is not read',
+        ],
+        hypothesis: `Businesses this agency regulates must comply by ${dates[0]}; some may buy a plain compliance summary or checklist. Not established.`,
+        deliverable: 'DOCUMENT',
+      });
+    }
+    return out;
+  },
+};
+
+/**
+ * Every installed rule. Adding one is a new entry here and its tests — nothing else.
+ * A model may propose a rule only as a Factory objective (reviewed code, starting
+ * in SHADOW); no model output installs, edits or promotes a rule at run time.
+ */
+export const DETECTORS: readonly Detector[] = [CONCENTRATED_HIRING, REPEATED_DEMAND, RULE_EFFECTIVE_SOON];
+
+// ---------------------------------------------------------------------------
+// SHADOW before ACTIVE: readings, promotion and rollback, from rows
+// ---------------------------------------------------------------------------
+
+/**
+ * What one rule version's detections have shown, read from rows (§45).
+ *
+ * A SHADOW rule covers nothing, so its members still go to the free screen one
+ * by one: that screen is an independent check the rule never saw. A member
+ * the screen KEEPs confirms it, one it DROPs is a false join, and an item the
+ * screen KEPT from the same entity or family that the rule left out is a miss.
+ * Evidence quality is the share of members with the fields a lead needs (a
+ * named organisation and a publication date). An ACTIVE rule's members stop
+ * being screened once covered, so its reading rests on what was screened
+ * before — never on an assumption that it stayed right.
+ */
+export interface RuleReading {
+  rule: string;
+  detections: number;
+  members: number;
+  screenedMembers: number;
+  confirmed: number;
+  falseJoins: number;
+  misses: number;
+  /** Confirmed over screened members; null below the sample a judgment needs. */
+  precision: number | null;
+  /** Share of members with an organisation and a publication date; null with no members. */
+  evidenceQuality: number | null;
+}
+
+/** Screened members needed before a rule's precision is read at all. */
+export const PROMOTION_MIN_SCREENED = 10;
+/** A SHADOW rule is promoted only at or above this precision and evidence quality. */
+export const PROMOTION_MIN_PRECISION = 0.8;
+export const PROMOTION_MIN_EVIDENCE = 0.8;
+/** An ACTIVE rule falling below this precision is returned to SHADOW. */
+export const DEMOTION_PRECISION = 0.6;
+
+async function screenVerdicts(ids: readonly string[]): Promise<Map<string, 'KEEP' | 'DROP'>> {
+  const out = new Map<string, 'KEEP' | 'DROP'>();
+  if (ids.length === 0) return out;
+  const { parseLead, combineLeads } = await import('../cheap/lane.ts');
+  const by = new Map<string, Map<string, string | null>>();
+  for (let at = 0; at < ids.length; at += 500) {
+    const slice = ids.slice(at, at + 500);
+    const rows = await getDb().all<{ subject_id: string; model: string; ok: number; output: string | null }>(
+      `SELECT subject_id, model, ok, output FROM cheap_results
+        WHERE kind = 'SCREEN_LEAD' AND subject_id IN (${slice.map(() => '?').join(',')}) ORDER BY created_at DESC`,
+      [...slice],
+    );
+    for (const row of rows) {
+      const models = by.get(row.subject_id) ?? new Map<string, string | null>();
+      if (!models.has(row.model)) models.set(row.model, row.ok ? row.output : null);
+      by.set(row.subject_id, models);
+    }
+  }
+  for (const [id, models] of by) {
+    const merged = combineLeads([...models.values()].map((text) => (text ? parseLead(text) : null)));
+    // UNSURE (the models disagreed) is no verdict: it neither confirms nor refutes a member.
+    if (merged && (merged.verdict === 'KEEP' || merged.verdict === 'DROP')) out.set(id, merged.verdict);
+  }
+  return out;
+}
+
+/** Read one rule version's detections back against the independent screen. */
+export async function ruleReading(detector: Detector, now: Date = new Date()): Promise<RuleReading> {
+  const db = getDb();
+  const rows = await db.all<{ member_ids: string; entity_key: string | null; category: string | null }>(
+    'SELECT member_ids, entity_key, category FROM feed_detections WHERE rule_id = ? AND rule_version = ?',
+    [detector.id, detector.version],
+  );
+  const memberIds = [...new Set(rows.flatMap((row) => JSON.parse(row.member_ids) as string[]))];
+  const since = new Date(now.getTime() - detector.lookbackMs - DAY).toISOString();
+  const items = await db.all<{ id: string; title: string; organization: string | null; published_at: string | null }>(
+    `SELECT id, title, organization, published_at FROM feed_items
+      WHERE source IN (${detector.sources.map(() => '?').join(',')}) AND fetched_at >= ? LIMIT 5000`,
+    [...detector.sources, since],
+  );
+  const members = new Set(memberIds);
+  const memberRows = await (async () => {
+    if (memberIds.length === 0) return [] as { id: string; organization: string | null; published_at: string | null }[];
+    const out: { id: string; organization: string | null; published_at: string | null }[] = [];
+    for (let at = 0; at < memberIds.length; at += 500) {
+      const slice = memberIds.slice(at, at + 500);
+      out.push(...(await db.all<{ id: string; organization: string | null; published_at: string | null }>(
+        `SELECT id, organization, published_at FROM feed_items WHERE id IN (${slice.map(() => '?').join(',')})`,
+        [...slice],
+      )));
+    }
+    return out;
+  })();
+  const entities = new Set(rows.map((row) => row.entity_key).filter((one): one is string => !!one));
+  const categories = new Set(rows.filter((row) => !row.entity_key).map((row) => row.category).filter((one): one is string => !!one));
+  const related = items.filter((item) => !members.has(item.id) && (
+    entities.has(employerKey(item.organization) ?? '') || categories.has(jobFamily(item.title)?.key ?? '')
+  ));
+  const verdicts = await screenVerdicts([...memberIds, ...related.map((one) => one.id)]);
+  const screened = memberIds.filter((id) => verdicts.has(id));
+  const confirmed = screened.filter((id) => verdicts.get(id) === 'KEEP').length;
+  const complete = memberRows.filter((row) => row.organization && row.published_at).length;
+  return {
+    rule: `${detector.id}@${detector.version}`,
+    detections: rows.length,
+    members: memberIds.length,
+    screenedMembers: screened.length,
+    confirmed,
+    falseJoins: screened.length - confirmed,
+    misses: related.filter((one) => verdicts.get(one.id) === 'KEEP').length,
+    precision: screened.length >= PROMOTION_MIN_SCREENED ? confirmed / screened.length : null,
+    evidenceQuality: memberRows.length > 0 ? complete / memberRows.length : null,
+  };
+}
+
+/**
+ * The mode a rule runs in this pass, decided from its readings. Pure.
+ *
+ * The code states where a rule starts; its verified output moves it. A SHADOW
+ * rule is promoted only on a sized sample at or above the precision and
+ * evidence bars; an ACTIVE rule that falls below the demotion bar returns to
+ * SHADOW. Too little screened evidence keeps the stated mode — time alone
+ * never promotes. Earlier versions keep their rows (detections are keyed by
+ * version), so a demotion or a version change is a rollback with its
+ * provenance intact.
+ */
+export function modeDecision(declared: DetectorMode, reading: Pick<RuleReading, 'precision' | 'evidenceQuality' | 'screenedMembers'>): { mode: DetectorMode; reason: string } {
+  if (reading.precision === null) return { mode: declared, reason: `${reading.screenedMembers} screened member(s), under the ${PROMOTION_MIN_SCREENED} a judgment needs; ${declared} as stated` };
+  if (declared === 'SHADOW') {
+    if (reading.precision >= PROMOTION_MIN_PRECISION && (reading.evidenceQuality ?? 0) >= PROMOTION_MIN_EVIDENCE) {
+      return { mode: 'ACTIVE', reason: `promoted: precision ${reading.precision.toFixed(2)} and evidence quality ${(reading.evidenceQuality ?? 0).toFixed(2)} meet the bars` };
+    }
+    return { mode: 'SHADOW', reason: `held in SHADOW: precision ${reading.precision.toFixed(2)}, evidence quality ${(reading.evidenceQuality ?? 0).toFixed(2)}` };
+  }
+  if (reading.precision < DEMOTION_PRECISION) return { mode: 'SHADOW', reason: `demoted to SHADOW: precision ${reading.precision.toFixed(2)} fell below ${DEMOTION_PRECISION}` };
+  return { mode: 'ACTIVE', reason: `ACTIVE: precision ${reading.precision.toFixed(2)}` };
+}
 
 // ---------------------------------------------------------------------------
 // Running the rules over what is stored
@@ -239,6 +508,9 @@ export const DETECTION_REOPEN_MS = 30 * DAY;
 
 export interface DetectorRunReport {
   rule: string;
+  /** The mode this pass ran the rule in, and why (`modeDecision`). */
+  mode: DetectorMode;
+  modeReason: string;
   records: number;
   signals: number;
   created: number;
@@ -248,14 +520,17 @@ export interface DetectorRunReport {
 }
 
 /** Run every installed rule once over the stored items it reads. Idempotent. */
-export async function runDetectors(input: { now?: Date; detectors?: readonly Detector[] } = {}): Promise<DetectorRunReport[]> {
+export async function runDetectors(input: { now?: Date; detectors?: readonly Detector[]; rules?: readonly string[] } = {}): Promise<DetectorRunReport[]> {
   const now = input.now ?? new Date();
   const db = getDb();
   const reports: DetectorRunReport[] = [];
-  for (const detector of input.detectors ?? DETECTORS) {
+  // `rules` narrows a pass to the rules whose version or data changed: nothing else is recomputed.
+  const chosen = (input.detectors ?? DETECTORS).filter((one) => !input.rules || input.rules.includes(one.id));
+  for (const detector of chosen) {
+    const decision = modeDecision(detector.mode, await ruleReading(detector, now));
     const since = new Date(now.getTime() - detector.lookbackMs - DAY).toISOString();
-    const rows = await db.all<{ id: string; source: string; url: string; title: string; organization: string | null; published_at: string | null; fetched_at: string }>(
-      `SELECT id, source, url, title, organization, published_at, fetched_at FROM feed_items
+    const rows = await db.all<{ id: string; source: string; url: string; title: string; organization: string | null; published_at: string | null; fetched_at: string; body: string | null }>(
+      `SELECT id, source, url, title, organization, published_at, fetched_at, body FROM feed_items
         WHERE source IN (${detector.sources.map(() => '?').join(',')}) AND fetched_at >= ?
         ORDER BY fetched_at DESC, id LIMIT 5000`,
       [...detector.sources, since],
@@ -268,9 +543,10 @@ export async function runDetectors(input: { now?: Date; detectors?: readonly Det
       organization: row.organization,
       publishedAt: row.published_at,
       fetchedAt: row.fetched_at,
+      body: row.body,
     }));
     const signals = detector.detect(records, now);
-    const report: DetectorRunReport = { rule: `${detector.id}@${detector.version}`, records: records.length, signals: signals.length, created: 0, extended: 0, covered: 0, filed: 0 };
+    const report: DetectorRunReport = { rule: `${detector.id}@${detector.version}`, mode: decision.mode, modeReason: decision.reason, records: records.length, signals: signals.length, created: 0, extended: 0, covered: 0, filed: 0 };
     for (const signal of signals) {
       const at = now.toISOString();
       const open = await db.get<DetectionRow>(
@@ -299,6 +575,10 @@ export async function runDetectors(input: { now?: Date; detectors?: readonly Det
           );
           report.extended += 1;
         }
+        // A promotion or a rollback carries the open detection with it, so its mode is the rule's current one.
+        if (open.mode !== decision.mode) {
+          await db.run('UPDATE feed_detections SET mode = ?, updated_at = ? WHERE id = ?', [decision.mode, at, open.id]);
+        }
         detectionId = open.id;
       } else {
         detectionId = newId('fdt');
@@ -322,7 +602,7 @@ export async function runDetectors(input: { now?: Date; detectors?: readonly Det
             JSON.stringify(signal.sourceUrls),
             JSON.stringify(signal.qualifiers),
             signal.hypothesis,
-            detector.mode,
+            decision.mode,
             at,
             at,
           ],
@@ -339,7 +619,7 @@ export async function runDetectors(input: { now?: Date; detectors?: readonly Det
           report.created += 1;
         }
       }
-      if (detector.mode !== 'ACTIVE') continue;
+      if (decision.mode !== 'ACTIVE') continue;
       for (const itemId of signal.memberIds) {
         const covered = await db.run(
           'INSERT INTO feed_item_coverage (item_id, detection_id, covered_at) VALUES (?, ?, ?) ON CONFLICT (item_id, detection_id) DO NOTHING',
