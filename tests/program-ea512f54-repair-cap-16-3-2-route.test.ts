@@ -20,6 +20,7 @@ import { createFragments, createOrchestration } from '../server/repos/research.t
 import { enqueueWork } from '../server/repos/workQueue.ts';
 import { workType } from '../server/services/queue/workTypes.ts';
 import { setBrainOnlyMode } from '../server/services/bins/brainOnly.ts';
+import { auditAdmission, FREE_LANE_SESSION_PREFIX, verifiesOwnFinding } from '../server/services/research/auditAdmission.ts';
 import {
   adoptedRoles,
   claimAsks,
@@ -33,6 +34,7 @@ import {
   ROUTE_REPROBE_MAX_MS,
   routeHold,
   routeReprobeDelay,
+  sessionFor,
   takeOne,
   takeRouteProbe,
   UNCLASSIFIED_FAILURE_LIMIT,
@@ -448,5 +450,87 @@ describe('route hold through takeOne (worker.ts)', () => {
       expect(row.reason).toMatch(/^model brain-a: model call failed/);
       expect(row.reason).toMatch(/HTTP 503/);
     }
+  });
+});
+
+/* ------------------------------------------------------------------------- */
+/* Review finding F1: an adopted role never verifies the adopter's own claims  */
+/* ------------------------------------------------------------------------- */
+
+describe('a claim is verified by a different model than found it, even when a held route\u2019s role is adopted (review F1)', () => {
+  beforeEach(async () => {
+    play = await freshProject();
+    resetFreeLaneFitness();
+    resetRouteHealth();
+    endFreeLaneCooldowns();
+    layerId = (await play.layerByName('Monetization Logic')).id;
+    await setBrainOnlyMode(true, 'test', 'self-verification suite');
+  });
+  afterEach(() => {
+    resetRouteHealth();
+    endFreeLaneCooldowns();
+  });
+
+  /** brain-a researches one fragment to completion; then its verification is queued. */
+  async function researchedByA(): Promise<{ workers: Awaited<ReturnType<typeof ensureFreeWorkers>>; verifyId: string; fragmentId: string }> {
+    const researchId = await fragmentItem('self verify');
+    const workers = await ensureFreeWorkers(CONFIG);
+    const base = { workers, completer: answers, fetchSource, search: async () => [], config: CONFIG };
+    const researched = await takeOne({ ...base, worker: workers[0]!, index: 0 });
+    expect(researched.claimed?.workItemId).toBe(researchId);
+    expect(researched.ok).toBe(true);
+    const row = await getDb().get<{ fragment_id: string; orchestration_id: string }>('SELECT fragment_id, orchestration_id FROM work_items WHERE id = ?', [researchId]);
+    const lease = await getDb().get<{ worker_id: string; outcome: string }>('SELECT worker_id, outcome FROM work_leases WHERE work_item_id = ?', [researchId]);
+    expect(lease).toEqual({ worker_id: workers[0]!.workerId, outcome: 'SUCCEEDED' });
+    // Whatever the packet runner has queued, there is exactly one open verification for this fragment.
+    await getDb().run("UPDATE work_items SET state = 'CANCELLED' WHERE fragment_id = ? AND work_type = 'RESEARCH_VERIFY' AND state = 'QUEUED'", [row!.fragment_id]);
+    const definition = workType('RESEARCH_VERIFY');
+    const verify = await enqueueWork({
+      projectId: play.project.id,
+      workType: 'RESEARCH_VERIFY',
+      payload: definition.validate({}),
+      requiredScopes: definition.requiredScopes,
+      orchestrationId: row!.orchestration_id,
+      fragmentId: row!.fragment_id,
+      createdByType: 'SYSTEM',
+    });
+    return { workers, verifyId: verify.id, fragmentId: row!.fragment_id };
+  }
+
+  it('brain-a, adopting held brain-b\u2019s verifier role, does not claim the verification of its own fragment; brain-b takes it once healthy', async () => {
+    const { workers, verifyId } = await researchedByA();
+    const base = { workers, completer: answers, fetchSource, search: async () => [], config: CONFIG };
+    recordRouteOutcome('brain-b', { ok: false, why: 'model call failed: cheap lane HTTP 503' });
+    expect(routeHold('brain-b')).not.toBeNull();
+    expect(adoptedRoles(workers, 0)).toEqual([1]);
+    // The role is adopted (brain-a asks for RESEARCH_VERIFY), but this item is brain-a's own finding.
+    expect(claimAsks(workers, 0, false, [1]).flat()).toContain('RESEARCH_VERIFY');
+    const adopted = await takeOne({ ...base, worker: workers[0]!, index: 0 });
+    expect(adopted.claimed?.workItemId).not.toBe(verifyId);
+    const state = await getDb().get<{ state: string }>('SELECT state FROM work_items WHERE id = ?', [verifyId]);
+    expect(state?.state).toBe('QUEUED'); // the held verifier's item waits: the honest state
+    resetRouteHealth();
+    const verified = await takeOne({ ...base, worker: workers[1]!, index: 1 });
+    expect(verified.claimed?.workItemId).toBe(verifyId);
+  });
+
+  it('auditAdmission refuses the free-lane finder and admits a different model, a fleet executor, and other work', async () => {
+    const { workers, verifyId, fragmentId } = await researchedByA();
+    const item = (await getDb().get<Parameters<ReturnType<typeof auditAdmission>>[0]>('SELECT * FROM work_items WHERE id = ?', [verifyId]))!;
+    const lineage = (workerId: string, sessionRef: string) => ({ workerId, routineId: null, accountId: null, sessionRef });
+    // The free lane's own session for the verify item: its namespace is the one auditAdmission reads.
+    const aSession = sessionFor(workers[0]!, item);
+    expect(aSession.startsWith(FREE_LANE_SESSION_PREFIX)).toBe(true);
+    const refused = await auditAdmission(lineage(workers[0]!.workerId, aSession))(item);
+    expect(refused.ok).toBe(false);
+    expect(refused.reason).toMatch(/verified by a different model than found it/);
+    expect((await auditAdmission(lineage(workers[1]!.workerId, sessionFor(workers[1]!, item)))(item)).ok).toBe(true);
+    // A fleet executor is untouched: a packet worked end to end in one session is how fleet packets run.
+    expect(await verifiesOwnFinding(item, lineage(workers[0]!.workerId, 'cse_fleet_session'))).toBe(false);
+    // A free-lane worker that never researched this fragment is admitted.
+    await getDb().run("UPDATE work_leases SET outcome = 'FAILED' WHERE work_item_id IN (SELECT id FROM work_items WHERE fragment_id = ? AND work_type = 'RESEARCH_FRAGMENT')", [fragmentId]);
+    expect(await verifiesOwnFinding(item, lineage(workers[0]!.workerId, aSession))).toBe(false);
+    // Not a verification: untouched.
+    expect(await verifiesOwnFinding({ ...item, work_type: 'RESEARCH_SYNTHESIZE' }, lineage(workers[0]!.workerId, aSession))).toBe(false);
   });
 });

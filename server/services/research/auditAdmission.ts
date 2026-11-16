@@ -109,16 +109,54 @@ export async function lineageForWorker(input: {
 }
 
 /**
+ * The session namespace the free research lane mints (`freeLane/worker.ts` `sessionFor`). A free-lane
+ * worker is one configured model slot, and it gets a different session per role, so for it the
+ * session cannot show that the finder and the verifier are the same model; its worker identity can.
+ */
+export const FREE_LANE_SESSION_PREFIX = 'cse_free_';
+
+/**
+ * Whether this executor researched the fragment whose claims a `RESEARCH_VERIFY` item asks it to verify.
+ *
+ * "A claim is verified by a different model than found it" (§85; `freeLane/worker.ts` header). The free
+ * lane used to keep that rule only by which slot asks for which type, and adopting a held slot's role
+ * (CAP-16-3 episode 2) let the finding slot verify its own claims. The rule now binds where every claim
+ * is admitted: from `work_leases`, the append-only record of who did the work, never from a body field.
+ * It is the free lane's guarantee, so it binds a free-lane executor (a session in
+ * `FREE_LANE_SESSION_PREFIX`): each free-lane worker is one model, so its worker identity having leased
+ * the fragment's research to success is the finder being the verifier. A fleet executor is untouched:
+ * a packet worked end to end in one session is how the fleet's research packets run, and one fleet
+ * worker identity can stand for several Routines, so neither is evidence of the same model here.
+ */
+export async function verifiesOwnFinding(item: Pick<WorkItemRow, 'work_type' | 'fragment_id'>, executor: ExecutorLineage): Promise<boolean> {
+  if (item.work_type !== 'RESEARCH_VERIFY' || !item.fragment_id) return false;
+  if (!executor.sessionRef.startsWith(FREE_LANE_SESSION_PREFIX)) return false;
+  const found = await getDb().get<{ n: number | string }>(
+    `SELECT COUNT(*) AS n
+       FROM work_leases l
+       JOIN work_items w ON w.id = l.work_item_id
+      WHERE w.fragment_id = ? AND w.work_type = 'RESEARCH_FRAGMENT' AND l.outcome = 'SUCCEEDED' AND l.worker_id = ?`,
+    [item.fragment_id, executor.workerId],
+  );
+  return Number(found?.n ?? 0) > 0;
+}
+
+/**
  * The `admit` callback for `claimWork`.
  *
  * Returns `ok` for everything that is not a research audit item, which is
  * requirement 9 in one line: ordinary research, verification, synthesis and bin
- * draining are not touched by this at all.
+ * draining are not touched by this at all. The one exception is a verification
+ * the executor would perform on claims it found itself (`verifiesOwnFinding`):
+ * refused, so a held verifier route waits rather than being stood in for by the finder.
  */
 export function auditAdmission(executor: ExecutorLineage) {
   return async (
     item: WorkItemRow,
   ): Promise<{ ok: boolean; reason?: string; sessionBlocked?: boolean }> => {
+    if (await verifiesOwnFinding(item, executor)) {
+      return { ok: false, reason: 'this executor found the claims this item verifies: a claim is verified by a different model than found it' };
+    }
     if (item.work_type !== 'RESEARCH_AUDIT') return { ok: true };
     if (!item.orchestration_id) return { ok: true };
 
