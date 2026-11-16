@@ -35,7 +35,9 @@
 import { ineligibility, type Dependency, type Substitute } from './fallbacks.ts';
 import { detectSharedExposure, type ActivityFacts } from './challenge.ts';
 import type { PortfolioProblem, PortfolioReading } from './portfolio.ts';
-import type { Figure } from './graph.ts';
+import { makeFigure, unknownFigure, type Figure } from './graph.ts';
+import { getDb } from '../../db/database.ts';
+import { recordBinEvent } from '../../repos/bins.ts';
 
 /* ------------------------------------------------------------------------- */
 /* Shapes                                                                     */
@@ -363,4 +365,228 @@ export function objectiveCommonCauses(problem: PortfolioProblem, best: Portfolio
       reachIfItFails: e.reachIfItFails,
     }))
     .sort((a, b) => b.share - a.share || a.cause.localeCompare(b.cause));
+}
+
+/* ------------------------------------------------------------------------- */
+/* On production rows: a project's acquisition paths (FALL-37-3)              */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * The reading `assessProjectIndependence` runs on a project's real outreach,
+ * recorded on the ledger whenever it changes.
+ */
+export const FALLBACK_INDEPENDENCE_EVENT = 'FALLBACK_INDEPENDENCE_SCORED';
+
+/** One acquisition path as the outcome rows state it: a mechanism on a channel, with what it measurably reached. */
+export interface AcquisitionPath {
+  mechanism: string;
+  channel: string;
+  /** Recorded contact results: prospects the path measurably reached (never messages sent). */
+  contacts: number;
+}
+
+export interface ProjectIndependenceRecord {
+  /** Stable for one reading: a refresh that reads the same way writes nothing. */
+  signature: string;
+  dependency: Dependency;
+  independence: IndependenceReading;
+  /** Per substitute: what to do about switching to it now. */
+  actions: { key: string; action: FallbackAction; because: string[] }[];
+  /** Per substitute: whether keeping it as a diverse path is judged worth its cost. */
+  diversity: DiversityReading[];
+  at: string;
+}
+
+/** Paths that reached anyone, most prospects first: the first is the primary. */
+function rankPaths(paths: readonly AcquisitionPath[]): AcquisitionPath[] {
+  return [...paths].filter((p) => p.contacts > 0).sort((a, b) => b.contacts - a.contacts || a.mechanism.localeCompare(b.mechanism) || a.channel.localeCompare(b.channel));
+}
+
+/** The common cause a path rests on: the sending channel's account it goes out through. */
+export function channelCause(channel: string): string {
+  return `channel account: ${channel}`;
+}
+
+function observed(meaning: string, unit: string, value: number, source: string): Figure {
+  const made = makeFigure({ meaning, unit, value, status: 'OBSERVED', source });
+  return made.ok ? made.figure : unknownFigure(meaning, unit);
+}
+
+/**
+ * A project's acquisition dependency, built from what its outcome rows
+ * measured — the rows the outreach funnel reads (`cash_outcomes`
+ * CONTACT_RESULT, by mechanism and channel). The path that reached the most
+ * prospects is the primary; every other path that measurably ran is a
+ * substitute, VALIDATED because it did run. Each path rests on the channel
+ * account it goes out through, so three campaigns on one provider account are
+ * scored as one path. Nothing that no row states is filled in: failure
+ * probabilities, cash at risk, switching cost and time stay unknown, and
+ * the obligations an outreach path carries are the ones the primary's rows state
+ * — none — so a substitute meets them. Authority is the standing commercial
+ * authority to contact buyers (`fallbackSwitch.ts` `authorityForSwitch`, the
+ * one path every caller uses), and null when nobody has granted or refused it.
+ * Pure: null when there is no path to read.
+ */
+export function acquisitionDependency(
+  projectId: string,
+  paths: readonly AcquisitionPath[],
+  authority: { ok: boolean | null; reason: string },
+): Dependency | null {
+  const ranked = rankPaths(paths);
+  const primary = ranked[0];
+  if (!primary) return null;
+  const keyOf = (p: AcquisitionPath) => `${p.mechanism} @ ${p.channel}`;
+  const source = (p: AcquisitionPath) => `cash_outcomes CONTACT_RESULT rows of project ${projectId}, mechanism "${p.mechanism}", channel "${p.channel}"`;
+  return {
+    key: `acquisition:${projectId}`,
+    label: `buyer acquisition for project ${projectId}`,
+    servesActivity: 'reaching buyers: every revenue pathway of the project starts here',
+    primaryPath: `${keyOf(primary)} (${primary.contacts} prospect(s) reached)`,
+    primaryFailureProbability: unknownFigure(`${keyOf(primary)} fails this period`, 'probability', ['a measured failure rate of the path']),
+    commonCauses: [channelCause(primary.channel)],
+    failureModes: [],
+    substitutes: ranked.slice(1).map((p): Substitute => ({
+      key: keyOf(p),
+      label: `${p.mechanism} through ${p.channel}`,
+      changes: p.channel === primary.channel ? ['SEGMENT'] : ['DISTRIBUTION'],
+      readiness: 'VALIDATED',
+      capacity: observed(`${keyOf(p)}: prospects reached`, 'prospects', p.contacts, source(p)),
+      failureProbability: unknownFigure(`${keyOf(p)} fails this period`, 'probability', ['a measured failure rate of the path']),
+      commonCauses: [channelCause(p.channel)],
+      eligibility: {
+        authorized: authority.ok,
+        meetsObligations: true,
+        basis: `authority: ${authority.reason}; obligations: the primary outreach path carries none of its own, so there are none to meet`,
+      },
+      switchingCost: null,
+      timeToSwitchDays: null,
+      overrides: {},
+      recoveryVerification: 'the path records new contact results after the switch',
+    })),
+    consequence: {
+      cashAtRisk: unknownFigure('cash lost if acquisition fails and nothing recovers it', 'cents', ['a stated value of the pipeline acquisition feeds']),
+      obligations: [],
+      capability: 'reaching new buyers',
+      tolerableLoss: unknownFigure('tolerable expected loss from acquisition', 'cents', ['a person states it']),
+    },
+  };
+}
+
+/**
+ * Score one dependency the way production reads it: independence by common
+ * cause, eligibility (a harmful or unchecked fallback is not one), the next
+ * action per substitute (an unknown confirmation is reconciled, never
+ * retried), and whether each substitute is worth keeping as a diverse path —
+ * judged against the dependency without it, and not judged on a blank.
+ * `safe` is what is known about the safety constraints of the paths: the
+ * standing authority is what permits outreach at all, so a path is safe only
+ * when it is granted and unknown when nobody has said. Pure.
+ */
+export function scoreDependency(
+  dependency: Dependency,
+  safe: boolean | null,
+): Pick<ProjectIndependenceRecord, 'independence' | 'actions' | 'diversity'> {
+  const assessments: Record<string, FallbackAssessment> = Object.fromEntries(dependency.substitutes.map((s) => [s.key, { safe, harms: [] }]));
+  const independence = scoreIndependence(dependency, { assessments });
+  const actions = dependency.substitutes.map((s) => ({ key: s.key, ...nextFallbackAction(s, assessments[s.key]) }));
+  const diversity = dependency.substitutes.map((candidate) =>
+    judgeDiversity(
+      { ...dependency, substitutes: dependency.substitutes.filter((s) => s.key !== candidate.key) },
+      candidate,
+      {
+        cost: candidate.switchingCost ?? unknownFigure(`cost of keeping ${candidate.key} ready`, 'cents'),
+        capitalExposure: unknownFigure(`capital ${candidate.key} exposes`, 'cents'),
+      },
+      { assessments },
+    ),
+  );
+  return { independence, actions, diversity };
+}
+
+/** Each acquisition path the project's outcome rows state: mechanism, channel and prospects reached. */
+export async function readAcquisitionPaths(projectId: string): Promise<AcquisitionPath[]> {
+  const rows = await getDb().all<{ mechanism: string | null; channel: string | null; n: number }>(
+    `SELECT mechanism, channel, COUNT(DISTINCT opportunity_id) AS n FROM cash_outcomes
+      WHERE project_id = ? AND kind = 'CONTACT_RESULT'
+      GROUP BY mechanism, channel ORDER BY mechanism, channel`,
+    [projectId],
+  );
+  return rows.map((r) => ({ mechanism: r.mechanism ?? 'unspecified', channel: r.channel ?? 'unspecified', contacts: Number(r.n) }));
+}
+
+/** The last independence reading recorded for a project, or null. */
+export async function readProjectIndependence(projectId: string): Promise<ProjectIndependenceRecord | null> {
+  const row = await getDb().get<{ measures: string | null }>(
+    `SELECT measures FROM bin_events WHERE event_type = ? AND project_id = ? ORDER BY at DESC, id DESC LIMIT 1`,
+    [FALLBACK_INDEPENDENCE_EVENT, projectId],
+  );
+  try {
+    const value = (JSON.parse(row?.measures ?? '{}') as { independence?: ProjectIndependenceRecord }).independence;
+    return value && typeof value.signature === 'string' ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+/** What a reading is, without the counts that move on every new contact: a new contact alone is not a new reading. */
+function signatureOf(primary: string, dependency: Dependency, scored: Pick<ProjectIndependenceRecord, 'independence' | 'actions' | 'diversity'>): string {
+  return JSON.stringify([
+    primary,
+    dependency.substitutes.map((s) => [s.key, s.eligibility.authorized]),
+    scored.independence.independentBackups,
+    scored.independence.paths.map((p) => p.members),
+    scored.independence.eligibility.map((e) => [e.key, e.status]),
+    scored.actions.map((a) => [a.key, a.action]),
+    scored.diversity.map((d) => [d.candidate, d.verdict]),
+  ]);
+}
+
+/**
+ * The production path (FALL-37-3): on every cash-knowledge refresh
+ * (`knowledge.ts` `loadCashKnowledge`), score the independence of the
+ * project's real acquisition paths by common cause and reject the fallbacks
+ * that are not eligible, and record the reading on the append-only ledger
+ * (`bin_events`) whenever it changes. With no outreach on record there is
+ * nothing to score and nothing is written. It decides nothing and switches
+ * nothing: discovery and execution go on exactly as before.
+ */
+export async function assessProjectIndependence(
+  projectId: string,
+  deps: {
+    paths?: () => Promise<AcquisitionPath[]>;
+    authority?: () => Promise<{ ok: boolean | null; reason: string }>;
+    last?: () => Promise<ProjectIndependenceRecord | null>;
+    record?: typeof recordBinEvent;
+    now?: () => string;
+  } = {},
+): Promise<{ record: ProjectIndependenceRecord | null; written: boolean }> {
+  const paths = await (deps.paths ?? (() => readAcquisitionPaths(projectId)))();
+  if (!paths.some((p) => p.contacts > 0)) return { record: null, written: false };
+  const authority = await (deps.authority ?? (async () => {
+    // Loaded when used: the switch module reads this one.
+    const { authorityForSwitch } = await import('./fallbackSwitch.ts');
+    return authorityForSwitch(projectId, 'CONTACT_BUYER');
+  }))();
+  const dependency = acquisitionDependency(projectId, paths, authority);
+  if (!dependency) return { record: null, written: false };
+  const scored = scoreDependency(dependency, authority.ok === true ? true : authority.ok === false ? false : null);
+  const primary = rankPaths(paths)[0]!;
+  const signature = signatureOf(`${primary.mechanism} @ ${primary.channel}`, dependency, scored);
+  const last = await (deps.last ?? (() => readProjectIndependence(projectId)))();
+  if (last?.signature === signature) return { record: last, written: false };
+  const record: ProjectIndependenceRecord = { signature, dependency, ...scored, at: deps.now?.() ?? new Date().toISOString() };
+  const shared = scored.independence.concentration[0];
+  await (deps.record ?? recordBinEvent)({
+    eventType: FALLBACK_INDEPENDENCE_EVENT,
+    projectId,
+    workloadClass: 'fallback-independence',
+    outcome: 'SCORED',
+    reason: (
+      `${dependency.key}: ${scored.independence.namedBackups} named backup(s), ${scored.independence.independentBackups} independent; ` +
+      (shared ? `most concentrated cause "${shared.cause}" under ${shared.paths.length} path(s)` : 'no common cause stated')
+    ).slice(0, 480),
+    evidenceClass: 'MEASURED',
+    measures: { independence: record },
+  });
+  return { record, written: true };
 }

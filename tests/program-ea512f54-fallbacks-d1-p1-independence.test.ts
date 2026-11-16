@@ -204,3 +204,119 @@ describe('FALL-37-3 — unknown is reconciled, never retried', () => {
     }
   });
 });
+
+/*
+ * Reviewer finding (repair-F3): scoreIndependence, judgeDiversity,
+ * assessEligibility and nextFallbackAction were never called from
+ * production, so common-cause scoring and the rejection of ineligible
+ * fallbacks never ran on a real dependency. They now run on every cash
+ * knowledge refresh, over the project's real acquisition paths (the outcome
+ * rows the funnel reads), and the reading is recorded on the ledger.
+ */
+describe('on production rows: a project\'s acquisition paths are scored by common cause on every knowledge refresh', async () => {
+  const { beforeEach } = await import('vitest');
+  const { freshProject } = await import('./helpers.ts');
+  const { getDb } = await import('../server/db/database.ts');
+  const { insertOutcome } = await import('../server/repos/cashJourney.ts');
+  const { loadCashKnowledge, forgetKnowledge } = await import('../server/services/quant/knowledge.ts');
+  const {
+    FALLBACK_INDEPENDENCE_EVENT,
+    acquisitionDependency,
+    assessProjectIndependence,
+    channelCause,
+    readProjectIndependence,
+  } = await import('../server/services/quant/fallbackIndependence.ts');
+
+  let projectId: string;
+  beforeEach(async () => {
+    projectId = (await freshProject()).project.id;
+    forgetKnowledge();
+  });
+
+  async function contacts(mechanism: string, channel: string, n: number): Promise<void> {
+    for (let i = 0; i < n; i++) {
+      await insertOutcome({
+        projectId,
+        opportunityId: `lead:${mechanism}:${i}`,
+        kind: 'CONTACT_RESULT',
+        mechanism,
+        channel,
+        valueText: i === 0 ? 'BUYER_REPLIED' : 'BUYER_SILENT',
+        basis: 'test row',
+        requestKey: `t:${mechanism}:${channel}:${i}`,
+      });
+    }
+  }
+  const granted = async () => ({ ok: true, reason: 'standing authority permits CONTACT_BUYER' });
+  const events = async () =>
+    Number((await getDb().get<{ n: number }>(`SELECT COUNT(*) AS n FROM bin_events WHERE event_type = ? AND project_id = ?`, [FALLBACK_INDEPENDENCE_EVENT, projectId]))?.n ?? 0);
+
+  it('three campaigns on one sending account are one path: named backups 2, independent backups 0', async () => {
+    await contacts('Campaign A', 'email (Instantly)', 5);
+    await contacts('Campaign B', 'email (Instantly)', 3);
+    await contacts('Campaign C', 'email (Instantly)', 2);
+    const { record, written } = await assessProjectIndependence(projectId, { authority: granted });
+    expect(written).toBe(true);
+    expect(record!.dependency.primaryPath).toMatch(/^Campaign A @ email \(Instantly\)/);
+    expect(record!.independence.namedBackups).toBe(2);
+    expect(record!.independence.independentBackups).toBe(0);
+    expect(record!.independence.paths).toHaveLength(1);
+    expect(record!.independence.concentration[0]).toMatchObject({ cause: channelCause('email (Instantly)'), share: 1, survivorsIfItFails: [] });
+    // Unknown figures are never judged: no diversity verdict on a blank (invariant 39).
+    expect(record!.diversity.every((d) => d.verdict === 'NOT_JUDGED')).toBe(true);
+    expect(record!.actions.every((a) => a.action === 'SWITCH')).toBe(true);
+  });
+
+  it('a path on a different channel account is an independent backup', async () => {
+    await contacts('Campaign A', 'email (Instantly)', 5);
+    await contacts('Campaign B', 'email (Instantly)', 3);
+    await contacts('Partner list', 'partner referral', 2);
+    const { record } = await assessProjectIndependence(projectId, { authority: granted });
+    expect(record!.independence.namedBackups).toBe(2);
+    expect(record!.independence.independentBackups).toBe(1);
+    const concentration = Object.fromEntries(record!.independence.concentration.map((c) => [c.cause, c.survivorsIfItFails]));
+    expect(concentration[channelCause('email (Instantly)')]).toEqual(['Partner list @ partner referral']);
+  });
+
+  it('without standing authority no substitute is eligible: each is rejected with the reason, never switched to', async () => {
+    await contacts('Campaign A', 'email (Instantly)', 5);
+    await contacts('Partner list', 'partner referral', 2);
+    const refused = await assessProjectIndependence(projectId, { authority: async () => ({ ok: false, reason: 'no standing authority to contact buyers' }) });
+    expect(refused.record!.independence.eligibility).toEqual([
+      expect.objectContaining({ key: 'Partner list @ partner referral', status: 'INELIGIBLE' }),
+    ]);
+    expect(refused.record!.independence.independentBackups).toBe(0);
+    expect(refused.record!.actions[0]!.action).toBe('INELIGIBLE');
+    // Nobody has said: reconciled first, never assumed.
+    const unknown = acquisitionDependency(projectId, [{ mechanism: 'A', channel: 'x', contacts: 3 }, { mechanism: 'B', channel: 'y', contacts: 1 }], { ok: null, reason: 'not stated' });
+    expect(unknown!.substitutes[0]!.eligibility.authorized).toBeNull();
+  });
+
+  it('records the reading once, and again only when it changes', async () => {
+    await contacts('Campaign A', 'email (Instantly)', 5);
+    await contacts('Campaign B', 'email (Instantly)', 3);
+    expect((await assessProjectIndependence(projectId, { authority: granted })).written).toBe(true);
+    await contacts('Campaign A', 'email (Instantly)', 7);
+    expect((await assessProjectIndependence(projectId, { authority: granted })).written).toBe(false);
+    await contacts('Partner list', 'partner referral', 1);
+    expect((await assessProjectIndependence(projectId, { authority: granted })).written).toBe(true);
+    expect(await events()).toBe(2);
+    expect((await readProjectIndependence(projectId))!.independence.independentBackups).toBe(1);
+  });
+
+  it('with no outreach on record there is nothing to score and nothing is written', async () => {
+    expect(await assessProjectIndependence(projectId, { authority: granted })).toEqual({ record: null, written: false });
+    expect(await events()).toBe(0);
+  });
+
+  it('runs on the production path: a cash knowledge refresh records the reading', async () => {
+    await contacts('Campaign A', 'email (Instantly)', 4);
+    await contacts('Campaign B', 'email (Instantly)', 2);
+    await loadCashKnowledge(projectId);
+    const held = await readProjectIndependence(projectId);
+    expect(held).not.toBeNull();
+    expect(held!.independence.namedBackups).toBe(1);
+    expect(held!.independence.independentBackups).toBe(0);
+    expect(held!.independence.eligibility).toHaveLength(1);
+  });
+});
