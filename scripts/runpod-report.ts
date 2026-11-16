@@ -28,6 +28,7 @@ import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
 import { describePoolerRefusal } from '../server/db/adapters/postgres.ts';
 import { runpodConfig } from '../server/services/cheap/runpod.ts';
 import { podConfig, readPod } from '../server/services/cheap/runpodPod.ts';
+import { BENCH_PREFIX, listPods } from '../server/services/cheap/runpodRestore.ts';
 import { listReadings, planProgress, readGoalPlan } from '../server/services/goals/plan.ts';
 import { failureClass, goalPipelineSpeed, goalResearchProgress } from '../server/services/goals/researchYield.ts';
 import { resetFreeLaneFitness, unfitNow } from '../server/services/freeLane/worker.ts';
@@ -200,7 +201,7 @@ async function main(): Promise<void> {
   } else if (Number.isFinite(price) && price > 0) {
     const spend = price * hours;
     console.log(`GPU COST $${spend.toFixed(2)} for ${hours}h at $${price}/h from BRAIN_RUNPOD_USD_PER_HOUR${perClaim(spend)}`);
-  } else console.log(`GPU COST unknown (${livePrice === null && !(process.env['BRAIN_RUNPOD_API_KEY'] ?? '').trim() ? 'no BRAIN_RUNPOD_API_KEY to ask RunPod, and BRAIN_RUNPOD_USD_PER_HOUR unset' : 'RunPod returned no price for the pod, and BRAIN_RUNPOD_USD_PER_HOUR unset'})`);
+  } else console.log(`GPU COST unknown (${livePrice === null && !(process.env['BRAIN_RUNPOD_API_KEY'] ?? '').trim() ? 'no BRAIN_RUNPOD_API_KEY to ask RunPod, and BRAIN_RUNPOD_USD_PER_HOUR unset' : `RunPod returned no price for the pod${liveFailure ? `: ${liveFailure}` : ''}, and BRAIN_RUNPOD_USD_PER_HOUR unset`})`);
   console.log(`RUNPOD_ACCEPTED_CLAIMS ${gpuClaims.accepted} surviving ${gpuClaims.surviving}`);
   console.log(`RUNPOD_SUBMITTED ${gpuJobs}`);
   await goalSection(since, hours);
@@ -284,13 +285,42 @@ async function liveRunpodPrice(): Promise<{ podId: string; status: string; costP
   if (!apiKey) return null;
   const supervised = podConfig();
   const podId = supervised?.podId || process.env['BRAIN_RUNPOD_POD_ID']?.trim();
-  if (!podId) return null;
-  const read = await readPod({ apiKey, podId, idleStopMs: 0, vllm: { url: '', key: null } });
-  // A stopped pod may report no price; its status still answers "what does it bill now".
-  if (read.status === 'UNKNOWN') return null;
-  if (read.status === 'RUNNING' && !(read.costPerHr !== null && read.costPerHr > 0)) return null;
-  return { podId, status: read.status, costPerHr: read.costPerHr ?? 0 };
+  if (podId) {
+    const read = await readPod({ apiKey, podId, idleStopMs: 0, vllm: { url: '', key: null } });
+    // A stopped pod may report no price; its status still answers "what does it bill now".
+    if (read.status !== 'UNKNOWN' && !(read.status === 'RUNNING' && !(read.costPerHr !== null && read.costPerHr > 0))) {
+      return { podId, status: read.status, costPerHr: read.costPerHr ?? 0 };
+    }
+  }
+  /*
+   * No pod id the Brain is supervising (the GPU disconnected, BRAIN_RUNPOD_MODE=off,
+   * 2026-11-16 21:35Z): ask RunPod for the account's own pods, read-only. Bench
+   * pods and terminated ones are not Brain's research GPU. One pod is that pod;
+   * several are summed over the running ones, so the line is what the account bills.
+   */
+  try {
+    const pods = (await listPods(apiKey)).filter((p) => !p.name?.startsWith(BENCH_PREFIX) && p.desiredStatus !== 'TERMINATED');
+    if (pods.length === 0) {
+      liveFailure = 'RunPod lists no pod on the account';
+      return null;
+    }
+    const rate = (p: (typeof pods)[number]) => {
+      const n = Number(p.adjustedCostPerHr ?? p.costPerHr);
+      return Number.isFinite(n) && n > 0 ? n : 0;
+    };
+    const running = pods.filter((p) => p.desiredStatus === 'RUNNING');
+    const shown = running.length > 0 ? running : pods;
+    return {
+      podId: shown.map((p) => p.id).join('+'),
+      status: running.length > 0 ? 'RUNNING' : shown.map((p) => p.desiredStatus ?? 'UNKNOWN').join('+'),
+      costPerHr: Math.round(shown.reduce((sum, p) => sum + rate(p), 0) * 1000) / 1000,
+    };
+  } catch (error) {
+    liveFailure = String((error as Error)?.message ?? error).slice(0, 160);
+    return null;
+  }
 }
+let liveFailure = '';
 
 main()
   .catch((error) => {
