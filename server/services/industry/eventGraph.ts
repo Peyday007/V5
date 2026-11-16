@@ -532,6 +532,34 @@ function single(facts: readonly ExtractedFact[], field: ExtractedFact['field']):
 }
 
 /**
+ * The unit a price is per: the record's stated quantity unit for a per-unit
+ * price, `per-unit` when it is a rate whose unit the record does not name, and
+ * null for a total. A rate and a total are never one unit, so a budget for the
+ * whole job is never read against an hourly rate as a spread.
+ */
+function priceUnit(price: ExtractedFact, quantityUnit: string | null, text: string): string | null {
+  if (price.unit !== 'per-unit') return null;
+  if (quantityUnit) return quantityUnit;
+  // The period or unit the record writes after the figure ("$80/hr", "$4,000 a month"): an hourly rate is never a monthly one.
+  const at = text.indexOf(price.evidence.text);
+  const after = at >= 0 ? text.slice(at + price.evidence.text.length, at + price.evidence.text.length + 24) : '';
+  const m = RATE_UNIT.exec(after);
+  const word = m ? (m[1] ?? m[2] ?? '').toLowerCase() : '';
+  const unit = RATE_UNITS[word];
+  return unit ? `per-${unit}` : 'per-unit';
+}
+
+const RATE_UNIT = /^\s*(?:(?:\/|per\b|an?\b)\s*(hours?|hrs?|h|days?|weeks?|wks?|months?|mos?|years?|yrs?|words?|pages?|units?|items?)\b|(hourly|daily|weekly|monthly|annually|yearly)\b)/i;
+const RATE_UNITS: Record<string, string> = {
+  hour: 'hour', hours: 'hour', hr: 'hour', hrs: 'hour', h: 'hour', hourly: 'hour',
+  day: 'day', days: 'day', daily: 'day',
+  week: 'week', weeks: 'week', wk: 'week', wks: 'week', weekly: 'week',
+  month: 'month', months: 'month', mo: 'month', mos: 'month', monthly: 'month',
+  year: 'year', years: 'year', yr: 'year', yrs: 'year', annually: 'year', yearly: 'year',
+  word: 'word', words: 'word', page: 'page', pages: 'page', unit: 'unit', units: 'unit', item: 'item', items: 'item',
+};
+
+/**
  * Read one stored feed item into graph facts (ALGO-16-1 items 2 → 3).
  *
  * The record's kind (`recordKindOf`) decides what the fact can be, and nothing
@@ -602,7 +630,7 @@ export function factsFromItem(item: ExtractableItem): GraphFact[] {
           actor: { key: actorKey, name: actorName, role: 'BUYER' },
           priceCents: Number(price.value),
           currency: price.currency,
-          unit: price.unit === 'per-unit' ? base.unit : null,
+          unit: priceUnit(price, base.unit, text),
           side: 'BUY',
         });
       }
@@ -610,8 +638,8 @@ export function factsFromItem(item: ExtractableItem): GraphFact[] {
     }
     case 'JOB_POSTING':
       return [{ ...base, id: `item:${item.id}`, kind: 'WANT', basis: 'JOB_POSTING', actor: { key: actorKey, name: actorName, role: 'UNKNOWN' } }];
-    case 'SUPPLIER_AD':
-      return [
+    case 'SUPPLIER_AD': {
+      const out: GraphFact[] = [
         {
           ...base,
           id: `item:${item.id}`,
@@ -622,6 +650,24 @@ export function factsFromItem(item: ExtractableItem): GraphFact[] {
           currency: price?.currency ?? null,
         },
       ];
+      // The rate a provider asks is a sell price — still an advert's, never an agreed one — so a buyer's
+      // stated budget for the same work can be read against it (SPREAD_AFTER_COSTS).
+      if (price && price.currency) {
+        out.push({
+          ...base,
+          id: `item:${item.id}:price`,
+          kind: 'PRICE',
+          basis: 'SUPPLIER_AD',
+          // The same actor, in the role its own advert declared (a partner stays a partner).
+          actor: { ...out[0]!.actor },
+          priceCents: Number(price.value),
+          currency: price.currency,
+          unit: priceUnit(price, base.unit, text),
+          side: 'SELL',
+        });
+      }
+      return out;
+    }
     case 'PLATFORM_PRICE':
       if (!price || !price.currency) return [];
       return [
@@ -633,7 +679,7 @@ export function factsFromItem(item: ExtractableItem): GraphFact[] {
           actor: { key: actorKey, name: actorName, role: 'SUPPLIER' },
           priceCents: Number(price.value),
           currency: price.currency,
-          unit: price.unit === 'per-unit' ? base.unit : null,
+          unit: priceUnit(price, base.unit, text),
           side: 'SELL',
         },
       ];

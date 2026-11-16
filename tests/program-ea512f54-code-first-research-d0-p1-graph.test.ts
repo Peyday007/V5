@@ -267,7 +267,11 @@ describe('stored feed records reach the rules in production (repair F1)', () => 
     expect(request.every((f) => f.evidence[0]!.rawId === 'r1')).toBe(true);
 
     const ad = factsFromItem(item({ id: 'a1', title: 'Lawn mowing now booking', body: 'We offer weekly mowing in Dallas, TX for $45.', organization: 'Green Co' }));
-    expect(ad.map((f) => [f.kind, f.basis, f.actor.role])).toEqual([['CAPACITY', 'SUPPLIER_AD', 'SUPPLIER']]);
+    // The advert's asked price is also a SELL price on the advert's basis (R3-F3), never an agreed one.
+    expect(ad.map((f) => [f.kind, f.basis, f.actor.role, f.side])).toEqual([
+      ['CAPACITY', 'SUPPLIER_AD', 'SUPPLIER', null],
+      ['PRICE', 'SUPPLIER_AD', 'SUPPLIER', 'SELL'],
+    ]);
     expect(ad[0]!.subject).toBe('lawn mowing');
   });
 
