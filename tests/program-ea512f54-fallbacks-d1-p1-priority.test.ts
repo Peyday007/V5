@@ -8,6 +8,17 @@
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { freshProject } from './helpers.ts';
+import {
+  keepCashLedger,
+  prepareFallbacks,
+  readFallbackPreparation,
+  recordFailureRecovery,
+  recordFallbackDependency,
+  withLiveFailures,
+  type FailureRecoveryRecord,
+} from '../server/services/quant/ledger.ts';
+import type { CashForecast } from '../server/services/cash/forecast.ts';
 import { makeFigure, unknownFigure, type Figure } from '../server/services/quant/graph.ts';
 import type { Dependency, Substitute } from '../server/services/quant/fallbacks.ts';
 import {
@@ -221,5 +232,106 @@ describe('fallbackPriority: owns nothing and pauses nothing', () => {
   it('is deterministic: the same inputs give the same order', () => {
     const inputs = [input('x'), input('y'), input('z', { consequences: [{ class: 'LOST_DATA', basis: 'b' }] })];
     expect(rankFallbacks(inputs)).toEqual(rankFallbacks(inputs));
+  });
+});
+
+/* ------------------------------------------------------------------------- */
+/* Invoked in production: the cash-ledger refresh ranks and records it         */
+/* ------------------------------------------------------------------------- */
+
+function failure(dependency: string, occurrence: string, recovered: boolean | null): FailureRecoveryRecord {
+  return {
+    occurrence,
+    dependency,
+    failureMode: 'provider outage',
+    failureClass: 'provider-outage',
+    detectionDelayDays: 1,
+    timeToHarmDays: 3,
+    detectionTimely: true,
+    tried: ['retry'],
+    recovered,
+    cashLostCents: null,
+    cashPreservedCents: null,
+    timeLostDays: null,
+    reputation: null,
+    methodsToImprove: [],
+    at: '2026-11-01T00:00:00.000Z',
+  };
+}
+
+describe('fallback preparation on the ledger: an unrecovered failure makes its dependency live', () => {
+  it('promotes a dependency with an unrecovered failure, citing it, and leaves recovered ones alone', () => {
+    const out = withLiveFailures(
+      [input('payments'), input('email'), input('backup', { live: { necessary: false, reason: 'stated by caller' } })],
+      [failure('payments', 'occ-1', null), failure('email', 'occ-2', true), failure('backup', 'occ-3', false)],
+    );
+    expect(out[0]!.live).toEqual({ necessary: true, reason: 'failure occ-1 (provider outage) is on record and recovery is not yet known' });
+    expect(out[1]!.live).toBeUndefined();
+    expect(out[2]!.live).toEqual({ necessary: false, reason: 'stated by caller' });
+  });
+
+  it('records the order once and writes nothing again while it is unchanged', async () => {
+    const written: unknown[] = [];
+    const record = async (row: unknown) => {
+      written.push(row);
+    };
+    const declarations = async () => [input('payments', { consequences: [{ class: 'FINANCIAL_LOSS', basis: 'card revenue' }] }), input('report')];
+    const first = await prepareFallbacks('prj', { record, declarations, failures: async () => [], last: async () => null });
+    expect(first.written).toBe(true);
+    expect(first.ranking.ranked.map((r) => r.dependency)).toEqual(['payments', 'report']);
+    const again = await prepareFallbacks('prj', { record, declarations, failures: async () => [], last: async () => first.record });
+    expect(again.written).toBe(false);
+    expect(written).toHaveLength(1);
+  });
+});
+
+describe('fallback preparation is invoked by the cash-ledger refresh and recorded on production rows', () => {
+  it('keepCashLedger ranks the declared dependencies, promotes the one with a live failure, and records it once', async () => {
+    const { project } = await freshProject();
+    const projectId = project.id;
+    await recordFallbackDependency(
+      input('payments-provider', {
+        nominalPriority: 1,
+        consequences: [{ class: 'FINANCIAL_LOSS', basis: 'every card payment routes through it' }],
+        reversible: { 'payments-provider-alt': true },
+        lowCostCeiling: usd('low-cost ceiling', 100),
+      }, [substitute('payments-provider-alt', { switchingCost: usd('switch to the alternate processor', 40) })]),
+      { projectId },
+    );
+    await recordFallbackDependency(input('weekly-report', { nominalPriority: 9 }), { projectId });
+    await recordFailureRecovery(
+      { ...failure('weekly-report', `occ-${projectId}`, null) } as Omit<FailureRecoveryRecord, 'detectionTimely' | 'at'>,
+      { projectId },
+    );
+
+    const forecast = {
+      projectId,
+      currency: 'USD',
+      considered: 0,
+      qualified: 0,
+      revenue: { valueCents: null, lowCents: null, highCents: null, basis: 'none', fromRows: 0 },
+      contribution: { valueCents: null, lowCents: null, highCents: null, basis: 'none', fromRows: 0 },
+      upfrontCash: { valueCents: null, lowCents: null, highCents: null, basis: 'none', fromRows: 0 },
+      timeToFirstDollar: { days: null },
+    } as unknown as CashForecast;
+    const kept = await keepCashLedger(projectId, ['USD'], { forecast: async () => forecast, measured: async () => [] });
+    expect(kept.preparation).toEqual({ ranked: 2, written: true });
+
+    const recorded = await readFallbackPreparation(projectId);
+    expect(recorded).not.toBeNull();
+    expect(recorded!.ranked.map((r) => r.dependency)).toEqual(['weekly-report', 'payments-provider']);
+    expect(recorded!.ranked[0]).toMatchObject({ promoted: true, decidedBy: 'LIVE_DEPENDENCY' });
+    expect(recorded!.ranked[0]!.promotedBecause).toContain(`occ-${projectId}`);
+    expect(recorded!.ranked[1]).toMatchObject({ decidedBy: 'FINANCIAL_LOSS', prepareEarly: true });
+    expect(recorded!.owners).toEqual(REUSED_OWNERS);
+
+    const again = await keepCashLedger(projectId, ['USD'], { forecast: async () => forecast, measured: async () => [] });
+    expect(again.preparation).toEqual({ ranked: 2, written: false });
+  });
+
+  it('the ranking has a production caller: the ledger refresh calls it', () => {
+    const ledger = readFileSync(new URL('../server/services/quant/ledger.ts', import.meta.url), 'utf8');
+    expect(ledger).toMatch(/import\('\.\/fallbackPriority\.ts'\)/);
+    expect(ledger).toMatch(/deps\.prepare \?\? prepareFallbacks/);
   });
 });

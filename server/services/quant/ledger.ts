@@ -28,6 +28,7 @@ import { outcomesFor } from '../../repos/cashJourney.ts';
 import { getCashMode } from '../../repos/cashMode.ts';
 import type { CashOutcome } from '../../domain/cashJourney.ts';
 import { asReason, type OutcomeReason } from '../../domain/cashOutcomeReasons.ts';
+import type { FallbackRanking, PriorityInput, RankedFallback } from './fallbackPriority.ts';
 import { versionAt, type ExposureRow, type MissCause, type OutcomeRow, type PredictionRow } from './forecast.ts';
 
 export const LEDGER_EVENTS = {
@@ -418,7 +419,12 @@ export function statesSame(held: PredictionRow, input: PredictionInput): boolean
 export async function keepCashLedger(
   projectId: string,
   currencies: readonly string[],
-  deps: LedgerDeps & { forecast?: typeof cashForecast; measured?: (projectId: string) => Promise<CashOutcome[]>; sprintHorizon?: typeof sprintHorizonOf } = {},
+  deps: LedgerDeps & {
+    forecast?: typeof cashForecast;
+    measured?: (projectId: string) => Promise<CashOutcome[]>;
+    sprintHorizon?: typeof sprintHorizonOf;
+    prepare?: typeof prepareFallbacks;
+  } = {},
 ): Promise<{
   written: PredictionRow[];
   exposures: ExposureRow[];
@@ -426,6 +432,8 @@ export async function keepCashLedger(
   reading: ModelLearningReading;
   /** This project's ledger as held after this refresh's own writes: what the refresh's learning step reads instead of reading again. */
   ledger: { predictions: PredictionRow[]; exposures: ExposureRow[]; outcomes: OutcomeRow[] };
+  /** The fallback preparation ranking this refresh ran (FALL-37-6); null when it could not be read. */
+  preparation: { ranked: number; written: boolean } | null;
 }> {
   const written: PredictionRow[] = [];
   const exposures: ExposureRow[] = [];
@@ -450,7 +458,15 @@ export async function keepCashLedger(
   const measured = await (deps.measured ?? ((id: string) => outcomesFor({ projectId: id })))(projectId);
   const outcomes = await recordCashOutcomes(projectId, measured, scoped);
   ledger.outcomes.push(...outcomes);
-  return { written, exposures, outcomes, reading: await assessLedger({}, scoped), ledger: await held() };
+  // Which backups to prepare first, re-ranked on the same refresh from the declared dependencies and the
+  // failures on record (FALL-37-6). Its own catch: a ranking that cannot be read never stops the cash ledger.
+  const preparation = await (deps.prepare ?? prepareFallbacks)(projectId, { record: deps.record, now: deps.now, caller: deps.caller })
+    .then((one) => ({ ranked: one.ranking.ranked.length, written: one.written }))
+    .catch((error: unknown) => {
+      console.warn(`[quant] fallback preparation unreadable for ${projectId}: ${String((error as Error)?.message ?? error)}`);
+      return null;
+    });
+  return { written, exposures, outcomes, reading: await assessLedger({}, scoped), ledger: await held(), preparation };
 }
 
 /** One ended deal's realized figures, read from its `cash_outcomes` rows. */
@@ -752,4 +768,166 @@ export function recurringFailureClasses(records: readonly FailureRecoveryRecord[
     });
   }
   return out.sort((a, b) => b.occurrences - a.occurrences || a.failureClass.localeCompare(b.failureClass));
+}
+
+/* ------------------------------------------------------------------------- */
+/* Which backups to prepare first, recorded on the ledger (FALL-37-6)         */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * A consequential dependency someone (a person, a planner, an operator call)
+ * has declared, with what its failure could cause. Written through the same
+ * append-only writer as everything else here (`recordBinEvent` → `bin_events`);
+ * the latest declaration of a key stands, and earlier ones stay as history.
+ */
+export const FALLBACK_DEPENDENCY_EVENT = 'FALLBACK_DEPENDENCY_DECLARED';
+
+/** What `rankFallbacks` decided, recorded each time the order changes. */
+export const FALLBACK_PREPARATION_EVENT = 'FALLBACK_PREPARATION_RANKED';
+
+export type FallbackDependencyDeclaration = PriorityInput & { at?: string };
+
+export interface FallbackPreparationRecord {
+  /** Stable for one order: a refresh that ranks the same way writes nothing. */
+  signature: string;
+  ranked: RankedFallback[];
+  /** The owners the ranking informs; it writes to none of them but this ledger. */
+  owners: FallbackRanking['owners'];
+  at: string;
+}
+
+async function rowsOf(eventType: string, projectId: string | null): Promise<{ measures: string | null }[]> {
+  const params: SqlParam[] = [eventType];
+  let where = 'event_type = ?';
+  if (projectId !== null) {
+    where += ' AND project_id = ?';
+    params.push(projectId);
+  }
+  return getDb().all<{ measures: string | null }>(`SELECT measures FROM bin_events WHERE ${where} ORDER BY at ASC, id ASC`, params);
+}
+
+function parsed<T>(measures: string | null, key: string): T | null {
+  try {
+    const value = (JSON.parse(measures ?? '{}') as Record<string, unknown>)[key];
+    return value && typeof value === 'object' ? (value as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Declare (or re-declare) one consequential dependency and its substitutes for a project. */
+export async function recordFallbackDependency(
+  declaration: PriorityInput,
+  deps: Pick<LedgerDeps, 'record' | 'now' | 'caller'> & { projectId: string },
+): Promise<FallbackDependencyDeclaration> {
+  if (!declaration.dependency?.key?.trim()) throw new Error('A fallback dependency needs a key.');
+  const stored: FallbackDependencyDeclaration = { ...declaration, at: deps.now?.() ?? new Date().toISOString() };
+  await (deps.record ?? recordBinEvent)({
+    eventType: FALLBACK_DEPENDENCY_EVENT,
+    projectId: deps.projectId,
+    workloadClass: deps.caller ?? 'fallback-preparation',
+    outcome: 'DECLARED',
+    reason: `${declaration.dependency.key}: ${declaration.dependency.substitutes.length} substitute(s)`.slice(0, 480),
+    evidenceClass: 'MEASURED',
+    measures: { fallbackDependency: stored },
+  });
+  return stored;
+}
+
+/** The standing declaration of every dependency key for a project: the latest of each. */
+export async function readFallbackDependencies(projectId: string): Promise<FallbackDependencyDeclaration[]> {
+  const latest = new Map<string, FallbackDependencyDeclaration>();
+  for (const row of await rowsOf(FALLBACK_DEPENDENCY_EVENT, projectId)) {
+    const one = parsed<FallbackDependencyDeclaration>(row.measures, 'fallbackDependency');
+    if (one?.dependency?.key && Array.isArray(one.dependency.substitutes)) latest.set(one.dependency.key, one);
+  }
+  return [...latest.values()];
+}
+
+/** The last preparation order recorded for a project, or null when none has been. */
+export async function readFallbackPreparation(projectId: string): Promise<FallbackPreparationRecord | null> {
+  const rows = await rowsOf(FALLBACK_PREPARATION_EVENT, projectId);
+  for (let i = rows.length - 1; i >= 0; i -= 1) {
+    const one = parsed<FallbackPreparationRecord>(rows[i]!.measures, 'preparation');
+    if (one && typeof one.signature === 'string') return one;
+  }
+  return null;
+}
+
+/**
+ * A failure on record that has not been shown recovered makes its dependency
+ * live: its safeguards are necessary now, for the stated reason. A declaration
+ * that already states its own live reading keeps it. Pure.
+ */
+export function withLiveFailures(
+  declarations: readonly PriorityInput[],
+  failures: readonly FailureRecoveryRecord[],
+): PriorityInput[] {
+  return declarations.map((one) => {
+    if (one.live) return one;
+    const open = failures.filter((f) => f.dependency === one.dependency.key && f.recovered !== true);
+    if (open.length === 0) return one;
+    const last = open[open.length - 1]!;
+    return {
+      ...one,
+      live: {
+        necessary: true,
+        reason:
+          `failure ${last.occurrence} (${last.failureMode}) is on record and recovery ` +
+          (last.recovered === false ? 'did not work' : 'is not yet known'),
+      },
+    };
+  });
+}
+
+function signatureOf(ranked: readonly RankedFallback[]): string {
+  return JSON.stringify(
+    ranked.map((r) => [r.rank, r.dependency, r.substitute, r.decidedBy, r.promoted, r.prepareEarly, r.eligible]),
+  );
+}
+
+/**
+ * Rank every declared dependency's substitutes for preparation and record the
+ * order on the ledger whenever it changes. Consequence sets the order, cheap
+ * reversible backups are marked for early preparation, and a dependency with
+ * an unrecovered failure on record is promoted with that failure as the
+ * reason. It orders preparation only: nothing is switched, scheduled or
+ * paused, and discovery and execution go on exactly as before (invariant 40).
+ */
+export async function prepareFallbacks(
+  projectId: string,
+  deps: Pick<LedgerDeps, 'record' | 'now' | 'caller'> & {
+    declarations?: () => Promise<PriorityInput[]>;
+    failures?: () => Promise<FailureRecoveryRecord[]>;
+    last?: () => Promise<FallbackPreparationRecord | null>;
+  } = {},
+): Promise<{ ranking: FallbackRanking; written: boolean; record: FallbackPreparationRecord | null }> {
+  // Loaded when used: the ranking reaches the portfolio engine, which reads this ledger.
+  const { rankFallbacks } = await import('./fallbackPriority.ts');
+  const [declared, failures, last] = await Promise.all([
+    (deps.declarations ?? (() => readFallbackDependencies(projectId)))(),
+    (deps.failures ?? (() => readFailureRecoveries(projectId)))(),
+    (deps.last ?? (() => readFallbackPreparation(projectId)))(),
+  ]);
+  const ranking = rankFallbacks(withLiveFailures(declared, failures));
+  if (ranking.ranked.length === 0) return { ranking, written: false, record: last };
+  const signature = signatureOf(ranking.ranked);
+  if (last?.signature === signature) return { ranking, written: false, record: last };
+  const record: FallbackPreparationRecord = {
+    signature,
+    ranked: ranking.ranked,
+    owners: ranking.owners,
+    at: deps.now?.() ?? new Date().toISOString(),
+  };
+  const early = ranking.ranked.filter((r) => r.prepareEarly).length;
+  await (deps.record ?? recordBinEvent)({
+    eventType: FALLBACK_PREPARATION_EVENT,
+    projectId,
+    workloadClass: deps.caller ?? 'fallback-preparation',
+    outcome: 'RANKED',
+    reason: `${ranking.ranked.length} fallback(s) ranked for preparation; first: ${ranking.ranked[0]!.dependency} → ${ranking.ranked[0]!.substitute}; ${early} to prepare early`.slice(0, 480),
+    evidenceClass: 'MEASURED',
+    measures: { preparation: record },
+  });
+  return { ranking, written: true, record };
 }
