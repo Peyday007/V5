@@ -83,6 +83,7 @@ import {
   type Structure,
 } from './properties.ts';
 import { excludedBy, exclusionSentence, type ExclusionClass } from './exclusions.ts';
+import type { GraphHypothesis, RuleId } from '../industry/eventGraph.ts';
 import {
   ENTRY_POINTS,
   EVIDENCE_FIELDS,
@@ -1988,3 +1989,187 @@ export const OPENING_SENTENCE =
 
 /** The design every structure had before §82, for callers that still name a structure. */
 export { defaultDesign };
+
+
+// ---------------------------------------------------------------------------
+// Construction from the event graph (ALGO-16-1 item 4, ALGO-19-4 "derive")
+// ---------------------------------------------------------------------------
+
+/**
+ * The structures each graph rule's relationship can be paid through. A rule
+ * names a relationship (a buyer's request against a supplier, demand against
+ * short supply, a renewal against capacity, a spread, requests a partner could
+ * serve); the structures are the closed table above, so nothing here is a
+ * per-industry template and a relationship in any industry reads the same way.
+ */
+const GRAPH_ROLES: Record<RuleId, readonly Structure[]> = {
+  BUYER_REQUEST_AGAINST_SUPPLIER: ['BROKER', 'REFERRAL', 'SUBCONTRACT', 'PRODUCE'],
+  REPEATED_DEMAND_LIMITED_SUPPLY: ['POOL', 'BROKER', 'PRODUCE'],
+  RENEWAL_AGAINST_CAPACITY: ['BROKER', 'REFERRAL', 'SUBCONTRACT'],
+  SPREAD_AFTER_COSTS: ['SUBCONTRACT', 'BROKER'],
+  PARTNER_SERVABLE_CONCENTRATION: ['REFERRAL', 'BROKER', 'SUBCONTRACT'],
+};
+
+/** What the goal allows, for the cheap hard-constraint prune. Unknown is never read as allowed-and-proven. */
+export interface GraphConstructionContext {
+  /** The goal's capital ceiling; 0 means none may be committed, null that the owner set none. */
+  capitalCeilingCents: number | null;
+  /** Deliverable kinds Brain proved it can produce, as people read them. */
+  delivers: readonly string[];
+  exclusions?: readonly ExclusionClass[];
+}
+
+/** One candidate built from a graph hypothesis. Still a hypothesis: the type has no other status. */
+export interface GraphConstruction {
+  status: 'HYPOTHESIS';
+  /** Stable: structure plus the hypothesis it came from. */
+  key: string;
+  /** Near-identical designs share this; distinct mechanisms never do. */
+  signature: string;
+  structure: Structure;
+  structureLabel: string;
+  rule: RuleId;
+  neighborhood: string;
+  hypothesisKey: string;
+  /** The hypothesis's missing conditions, carried, plus what this structure itself still lacks. */
+  missingConditions: string[];
+  evidence: GraphHypothesis['evidence'];
+  /** Price and margin bounds in minor units, where the hypothesis states figures; null where nothing does. */
+  marginCents: { low: number | null; high: number | null };
+  /** Deals the relationship shows room for; null when nothing counts them. */
+  availableDeals: number | null;
+  /** The stated cost at which the margin vanishes, where one is computable. */
+  breakEvenCostCents: number | null;
+  /** Other hypotheses' near-identical designs this one stands for. */
+  collapsed: string[];
+}
+
+export interface GraphPruned {
+  key: string;
+  structure: Structure;
+  hypothesisKey: string;
+  /** The hard constraint that failed, in a sentence. */
+  reason: string;
+  /**
+   * What of the failed design stays worth a later one: the relationship the
+   * graph found (its actors, facts and neighborhood) is unchanged by one
+   * structure failing, and another structure, or the same one once the
+   * constraint lifts, can still use it.
+   */
+  salvage: { rule: RuleId; actorKeys: string[]; factIds: string[]; neighborhood: string };
+}
+
+export interface GraphConstructionResult {
+  /** Ranked: what most deserves costly investigation first. */
+  kept: GraphConstruction[];
+  pruned: GraphPruned[];
+}
+
+function hardConstraintFailure(structure: Structure, h: GraphHypothesis, ctx: GraphConstructionContext): string | null {
+  const def = STRUCTURES[structure];
+  if (def.capital !== 'NONE' && ctx.capitalCeilingCents === 0) {
+    return `${def.label} commits capital per deal, and the goal allows none`;
+  }
+  if (def.needsDeliverable && !ctx.delivers.some((kind) => norm(kind) === norm(h.neighborhood))) {
+    return `Brain has not proved it can produce ${h.neighborhood}, which ${def.label} requires`;
+  }
+  if (def.needsSupply && h.rule === 'REPEATED_DEMAND_LIMITED_SUPPLY' && !h.figures['supplied']) {
+    return `${def.label} needs a supplier, and none is recorded in this place`;
+  }
+  const excluded = ctx.exclusions?.length ? excludedBy(`${h.neighborhood} ${h.summary}`, ctx.exclusions) : null;
+  if (excluded) return `the goal's owner excluded this class (${excluded})`;
+  return null;
+}
+
+function structureGaps(structure: Structure, h: GraphHypothesis, ctx: GraphConstructionContext): string[] {
+  const def = STRUCTURES[structure];
+  const gaps: string[] = [];
+  if (def.capture === 'COMMISSION') gaps.push('the commission share the supplier would pay is not established');
+  if (def.capture === 'FEE' && def.needsSupply) gaps.push('the referral fee the supplier would pay is not established');
+  if (def.capital !== 'NONE' && ctx.capitalCeilingCents === null) gaps.push('the capital per deal is not established against any ceiling');
+  if (def.capital !== 'NONE' && h.figures['netCents'] === undefined && h.figures['grossCents'] === undefined) gaps.push('the margin per deal is not established');
+  return gaps;
+}
+
+function boundsOf(h: GraphHypothesis): Pick<GraphConstruction, 'marginCents' | 'availableDeals' | 'breakEvenCostCents'> {
+  const gross = h.figures['grossCents'];
+  const net = h.figures['netCents'];
+  const demanded = h.figures['demanded'];
+  const supplied = h.figures['supplied'];
+  const buyers = h.figures['buyers'];
+  return {
+    marginCents: { low: net ?? null, high: gross ?? net ?? null },
+    availableDeals: demanded !== undefined && supplied !== undefined ? Math.max(0, demanded - supplied) : buyers ?? (h.rule === 'BUYER_REQUEST_AGAINST_SUPPLIER' || h.rule === 'RENEWAL_AGAINST_CAPACITY' ? 1 : null),
+    breakEvenCostCents: gross ?? null,
+  };
+}
+
+/** Lexicographic, as the rest of this module ranks: fewer unknowns, then a larger margin bound, then more room, then the key. */
+function decisionOrder(a: GraphConstruction, b: GraphConstruction): number {
+  return (
+    a.missingConditions.length - b.missingConditions.length ||
+    (b.marginCents.high ?? -Infinity) - (a.marginCents.high ?? -Infinity) ||
+    (b.availableDeals ?? -1) - (a.availableDeals ?? -1) ||
+    a.key.localeCompare(b.key)
+  );
+}
+
+/**
+ * Event-graph hypotheses as construction inputs, beside the industry map,
+ * openings and capabilities the rest of this module composes from.
+ *
+ * Each hypothesis is joined with every structure its relationship can be paid
+ * through (the transaction roles). A cheap prune drops a candidate whose hard
+ * constraint fails — capital the goal does not allow, a deliverable Brain has
+ * not proved, a supplier nobody recorded, a class the owner excluded — before
+ * anything costly is spent on it, recording why, and keeps the side of it that
+ * is still worth a later design. Near-identical designs (one structure, one
+ * neighborhood, one relationship, other actors) collapse into the strongest;
+ * different structures are different mechanisms and all stay. What is left is
+ * ranked by what most deserves costly investigation. Every result is a
+ * hypothesis carrying the graph's missing conditions plus its own. Pure.
+ */
+export function constructFromGraph(hypotheses: readonly GraphHypothesis[], ctx: GraphConstructionContext): GraphConstructionResult {
+  const pruned: GraphPruned[] = [];
+  const bySignature = new Map<string, GraphConstruction>();
+  for (const h of [...hypotheses].sort((a, b) => a.key.localeCompare(b.key))) {
+    if (h.status !== 'HYPOTHESIS') continue;
+    for (const structure of GRAPH_ROLES[h.rule]) {
+      const key = `${structure}:${h.key}`;
+      const failure = hardConstraintFailure(structure, h, ctx);
+      if (failure) {
+        pruned.push({
+          key,
+          structure,
+          hypothesisKey: h.key,
+          reason: failure,
+          salvage: { rule: h.rule, actorKeys: h.actorKeys, factIds: h.factIds, neighborhood: h.neighborhood },
+        });
+        continue;
+      }
+      const candidate: GraphConstruction = {
+        status: 'HYPOTHESIS',
+        key,
+        signature: digestOf(['graph-construction/v1', structure, h.rule, h.neighborhood].join('|')),
+        structure,
+        structureLabel: STRUCTURES[structure].label,
+        rule: h.rule,
+        neighborhood: h.neighborhood,
+        hypothesisKey: h.key,
+        missingConditions: [...new Set([...h.missingConditions, ...structureGaps(structure, h, ctx)])],
+        evidence: h.evidence,
+        ...boundsOf(h),
+        collapsed: [],
+      };
+      const held = bySignature.get(candidate.signature);
+      if (!held) {
+        bySignature.set(candidate.signature, candidate);
+      } else if (decisionOrder(candidate, held) < 0) {
+        bySignature.set(candidate.signature, { ...candidate, collapsed: [...held.collapsed, held.key] });
+      } else {
+        held.collapsed.push(candidate.key);
+      }
+    }
+  }
+  return { kept: [...bySignature.values()].sort(decisionOrder), pruned };
+}
