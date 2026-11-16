@@ -37,7 +37,14 @@ import { layerIsHuman, questionAnsweredBy } from '../../domain/labor.ts';
 import { AUTOMATED_CHANNELS, PRODUCTION_LAYERS } from '../../domain/types.ts';
 import type { LaborBlockerKind } from './necessity.ts';
 import { projectCounterparties, type ProjectCounterpartyReading } from './counterparties/operations.ts';
-import { deriveOrganization, type ActiveObjective, type OrganizationReading } from './organization.ts';
+import {
+  deriveOrganization,
+  type ActiveObjective,
+  type ApprovedContractor,
+  type AutomationProposal,
+  type OrganizationReading,
+} from './organization.ts';
+import { listBaselines, type EvolutionResult } from '../../repos/evolution.ts';
 import type {
   HumanNecessityReason,
   LaborChannel,
@@ -198,7 +205,101 @@ export interface LaborView {
 
 export async function laborView(projectId: string): Promise<LaborView> {
   const snapshot = await laborSnapshot(projectId);
-  return { ...composeView(snapshot, plan(snapshot)), counterparties: await projectCounterparties(projectId, { at: snapshot.at }) };
+  const automation = await hiringAutomationOnRecord(snapshot);
+  return {
+    ...composeView(snapshot, plan(snapshot), { automation }),
+    counterparties: await projectCounterparties(projectId, { at: snapshot.at }),
+  };
+}
+
+/**
+ * The selection automation Brain itself would use to screen people for a role:
+ * its own ranking of counterparties (`compareFulfillers`, behind
+ * `planWorkforce`). It is proposed for every derived role, so every role says
+ * whether automated selection is established for it rather than saying
+ * nothing.
+ */
+export const HIRING_AUTOMATION_TOOL = 'brain-counterparty-ranking';
+
+/**
+ * The evaluator suite a job-specific hiring-automation assessment for one role
+ * is recorded under. The suite is the role's own, so a result in it is
+ * job-specific by construction; a general benchmark lives in another suite and
+ * is never read here.
+ */
+export function hiringAutomationSuite(projectId: string, roleKey: string): string {
+  return `hiring-automation:${projectId}:${roleKey}`;
+}
+
+/**
+ * The hiring-automation proposals for these roles, each carrying the latest
+ * evaluator result recorded in that role's own suite. `quality` and `fairness`
+ * are read from the result's metrics; a metric that is absent is null, never
+ * a favourable default, and `assessAutomation` then reads NOT_ESTABLISHED.
+ * Pure.
+ */
+export function hiringAutomationOf(roleKeys: readonly string[], results: ReadonlyMap<string, EvolutionResult | null>): AutomationProposal[] {
+  return roleKeys.map((roleKey) => {
+    const result = results.get(roleKey) ?? null;
+    if (!result) return { roleKey, tool: HIRING_AUTOMATION_TOOL, assessment: null };
+    const metric = (name: string): number | null => {
+      const value = result.metrics[name];
+      return typeof value === 'number' && Number.isFinite(value) ? value : null;
+    };
+    return {
+      roleKey,
+      tool: HIRING_AUTOMATION_TOOL,
+      assessment: { jobSpecific: true, quality: metric('quality'), fairness: metric('fairness'), evidenceRef: `evolution_results ${result.id}` },
+    };
+  });
+}
+
+/** Reads, for every role this snapshot derives, the latest assessment on record. */
+async function hiringAutomationOnRecord(snapshot: LaborSnapshot): Promise<AutomationProposal[]> {
+  const keys = deriveOrganization({
+    snapshot,
+    bottlenecks: bottlenecks(snapshot.coverage),
+    approvedContractors: approvedContractorsOf(snapshot),
+  }).roles.map((role) => role.key);
+  const results = new Map<string, EvolutionResult | null>();
+  await Promise.all(
+    keys.map(async (key) => {
+      const latest = await listBaselines(hiringAutomationSuite(snapshot.projectId, key), 1);
+      results.set(key, latest.at(-1) ?? null);
+    }),
+  );
+  return hiringAutomationOf(keys, results);
+}
+
+/** Engagement routes that are not employment and not software: the ones a contractor is engaged through. */
+const EMPLOYMENT_OR_TOOL_CHANNELS: ReadonlySet<LaborChannel> = new Set<LaborChannel>(['DOMESTIC_EMPLOYEE', 'OFFSHORE_EMPLOYEE', 'SOFTWARE_TOOL']);
+
+/**
+ * The contractors a person has already approved, read from the labour rows: a
+ * task whose live allocation a **person** decided onto a layer that is not
+ * Brain or software, and whose market options on record name a non-employment
+ * engagement route. The person's allocation is the approval; each such route
+ * is a contractor Brain may coordinate without further authorisation. An
+ * allocation Brain made for itself approves nobody, and a person's allocation
+ * with no contractor route on record names no contractor. Pure.
+ */
+export function approvedContractorsOf(snapshot: Pick<LaborSnapshot, 'coverage'>): ApprovedContractor[] {
+  const out: ApprovedContractor[] = [];
+  for (const one of snapshot.coverage) {
+    const allocation = one.allocation;
+    if (one.task.retiredAt !== null || !allocation || allocation.supersededAt !== null) continue;
+    if (allocation.decidedBy !== 'PERSON') continue;
+    if (allocation.productionLayer === 'BRAIN' || allocation.productionLayer === 'SOFTWARE_TOOL') continue;
+    for (const option of one.options) {
+      if (EMPLOYMENT_OR_TOOL_CHANNELS.has(option.channel)) continue;
+      out.push({
+        taskId: one.task.id,
+        contractorRef: `${option.channel} option ${option.id}`,
+        approvedByRef: allocation.decidedByRef ?? `allocation ${allocation.id}`,
+      });
+    }
+  }
+  return out;
 }
 
 /**
@@ -231,9 +332,16 @@ export function plan(snapshot: LaborSnapshot): {
 export function composeView(
   snapshot: LaborSnapshot,
   planned: { asks: { subject: string; purpose: string; why: string }[]; declined: { subject: string; why: string }[] },
+  records: { approvedContractors?: readonly ApprovedContractor[]; automation?: readonly AutomationProposal[] } = {},
 ): Omit<LaborView, 'counterparties'> {
   const live = snapshot.coverage;
   const held = bottlenecks(live);
+  // What a person has already approved is read from the rows unless the caller holds it.
+  const approvedContractors = records.approvedContractors ?? approvedContractorsOf(snapshot);
+  // Every derived role carries Brain's own selection automation; with no assessment supplied it reads NOT_ESTABLISHED.
+  const automation =
+    records.automation ??
+    hiringAutomationOf(deriveOrganization({ snapshot, bottlenecks: held, approvedContractors }).roles.map((role) => role.key), new Map());
 
   return {
     projectId: snapshot.projectId,
@@ -250,7 +358,7 @@ export function composeView(
     nextQuestions: planned.asks,
     declined: planned.declined,
     summary: summarize(live),
-    organization: deriveOrganization({ snapshot, bottlenecks: held, activeObjectives: activeObjectivesOf(snapshot) }),
+    organization: deriveOrganization({ snapshot, bottlenecks: held, activeObjectives: activeObjectivesOf(snapshot), approvedContractors, automation }),
   };
 }
 
