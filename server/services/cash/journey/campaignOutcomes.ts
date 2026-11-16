@@ -20,8 +20,24 @@
  *   - any reply on record                            → BUYER_REPLIED
  *   - the sequence completed (3) with no reply       → BUYER_SILENT
  *
- * A lead still in an active or paused sequence records nothing: silence is
- * learned only from a terminal provider state, never from a clock here.
+ * A lead still in an active or paused sequence (Instantly status 1 or 2)
+ * records nothing while it can still answer. A cohort is not held for ever,
+ * though: a paused campaign, or one that keeps running, would otherwise leave
+ * the funnel with no rows at all. Once a cohort was enrolled
+ * `COHORT_SETTLE_DAYS` ago, each of its leads still without a terminal state
+ * is resolved at that bound, and says so in its basis:
+ *
+ *   - a lead Instantly never contacted (no last-contact time)  → not reached:
+ *     like a skipped lead it records nothing and holds nothing back;
+ *   - a lead last contacted at least `SILENCE_AFTER_CONTACT_DAYS` ago with no
+ *     reply → `BUYER_SILENT`, marked `SILENT_AT_BOUND` ("no answer by the
+ *     bound", not a provider-terminal silence), which a reply arriving later
+ *     still refines to that answer (`insertOutcome` `refineReply`);
+ *   - a lead contacted more recently than that still holds its cohort.
+ *
+ * So the funnel reads a whole cohort — every answer and every lead that had
+ * the same chance and gave none — instead of nothing, and nothing it reads is
+ * a lead that was never sent to.
  *
  * Answers are recorded by enrolment cohort, never lead by lead. A reply or a
  * bounce ends a lead's sequence days before a silent lead's last step does, so
@@ -62,7 +78,7 @@
  * any size is read whole over several ticks and never stalls one.
  */
 import { getDb } from '../../../db/database.ts';
-import { insertOutcome } from '../../../repos/cashJourney.ts';
+import { SILENT_AT_BOUND, insertOutcome } from '../../../repos/cashJourney.ts';
 import { BRAIN_PRINCIPAL, actionContext, checkCommercialAuthority } from '../authority.ts';
 import { CAMPAIGN_NAME, PERSONAL_CAMPAIGN_NAME, defaultDeps, instantly, itemsOf, type Deps } from '../neighborCard.ts';
 import { EXPANSION_CAMPAIGNS } from '../expansionOutreach.ts';
@@ -77,6 +93,15 @@ const LEAD_BOUNCED = -1;
 const LEAD_UNSUBSCRIBED = -2;
 const LEAD_COMPLETED = 3;
 const LEAD_SKIPPED = -3;
+/**
+ * A cohort enrolled this long ago is resolved: none of its leads holds it back
+ * any longer. Well past any sequence Brain's campaigns run, so a cohort still
+ * sending normally has ended long before it.
+ */
+export const COHORT_SETTLE_DAYS = 30;
+/** A contacted lead with no reply this long after its last contact is silent at the bound. */
+export const SILENCE_AFTER_CONTACT_DAYS = 14;
+const DAY_MS = 24 * 60 * 60 * 1000;
 /** The cohort of leads whose enrolment time Instantly did not state. */
 export const UNDATED_COHORT = 'undated';
 
@@ -112,6 +137,8 @@ export interface CampaignLead {
   interestStatus: number | null;
   /** When the campaign enrolled the lead (Instantly's `timestamp_created`), or null when not stated. */
   enrolledAt: string | null;
+  /** When Instantly last sent to the lead (`timestamp_last_contact`), or null when it never has (or did not say). */
+  lastContactAt?: string | null;
 }
 
 export interface CampaignOutcomesReport {
@@ -129,6 +156,14 @@ export interface CampaignOutcomesReport {
    * of a cohort without its silences.
    */
   held: number;
+  /**
+   * Leads with no terminal provider state whose cohort settled
+   * (`COHORT_SETTLE_DAYS`) and who were contacted with no reply for
+   * `SILENCE_AFTER_CONTACT_DAYS`: recorded as silent at the bound.
+   */
+  silentAtBound: number;
+  /** Leads in a settled cohort that Instantly never contacted: no prospect reached, nothing recorded. */
+  notReached: number;
   /** Why nothing was read or written, when that is the case. */
   skipped: string | null;
   /**
@@ -144,7 +179,7 @@ export interface CampaignOutcomesReport {
 }
 
 function emptyReport(): CampaignOutcomesReport {
-  return { campaigns: 0, leads: 0, recorded: 0, pending: 0, held: 0, skipped: null, paused: null, requests: 0, failed: [] };
+  return { campaigns: 0, leads: 0, recorded: 0, pending: 0, held: 0, silentAtBound: 0, notReached: 0, skipped: null, paused: null, requests: 0, failed: [] };
 }
 
 function num(value: unknown): number | null {
@@ -171,6 +206,24 @@ export function contactResultOf(lead: CampaignLead, optedOut = false): CampaignC
 export function cohortOf(lead: CampaignLead): string {
   const at = lead.enrolledAt === null ? Number.NaN : Date.parse(lead.enrolledAt);
   return Number.isFinite(at) ? new Date(at).toISOString().slice(0, 10) : UNDATED_COHORT;
+}
+
+/**
+ * How a lead with no terminal provider state stands at the cohort bound:
+ * `NOT_REACHED` when its cohort has settled and Instantly never contacted it,
+ * `SILENT_AT_BOUND` when its cohort has settled and its last contact is
+ * `SILENCE_AFTER_CONTACT_DAYS` old with no reply, or null while it can still
+ * answer and so holds its cohort. A lead with no enrolment time settles on its
+ * last contact instead; with neither, nothing says it has had its chance, and
+ * it keeps holding. Pure.
+ */
+export function boundStateOf(lead: CampaignLead, nowMs: number): 'NOT_REACHED' | 'SILENT_AT_BOUND' | null {
+  const enrolled = lead.enrolledAt === null ? Number.NaN : Date.parse(lead.enrolledAt);
+  const contacted = lead.lastContactAt ? Date.parse(lead.lastContactAt) : Number.NaN;
+  const since = Number.isFinite(enrolled) ? enrolled : contacted;
+  if (!Number.isFinite(since) || nowMs - since < COHORT_SETTLE_DAYS * DAY_MS) return null;
+  if (!Number.isFinite(contacted)) return 'NOT_REACHED';
+  return nowMs - contacted >= SILENCE_AFTER_CONTACT_DAYS * DAY_MS ? 'SILENT_AT_BOUND' : null;
 }
 
 /** A lead Instantly never sent to: it is no prospect reached and no answer. */
@@ -292,6 +345,7 @@ async function readLeads(deps: Deps, campaignId: string, progress: ReadProgress)
         replies: Math.max(0, num(row.email_reply_count) ?? 0),
         interestStatus: num(row.lt_interest_status),
         enrolledAt: typeof row.timestamp_created === 'string' ? row.timestamp_created : null,
+        lastContactAt: typeof row.timestamp_last_contact === 'string' ? row.timestamp_last_contact : null,
       });
     }
     progress.leadPage += 1;
@@ -394,12 +448,25 @@ export async function recordCampaignOutcomes(
     report.campaigns += 1;
     report.leads += leads.length;
     const optedOut = await optedOutOn(campaign.id);
-    const answered = leads
-      .filter((lead) => !neverSent(lead))
-      .map((lead) => ({ lead, result: contactResultOf(lead, lead.email !== null && optedOut.has(lead.email)) }));
-    // A cohort with any lead still in its sequence records none of its leads.
+    const answered: { lead: CampaignLead; result: CampaignContactResult | null; atBound: boolean }[] = [];
+    for (const lead of leads) {
+      if (neverSent(lead)) continue;
+      const result = contactResultOf(lead, lead.email !== null && optedOut.has(lead.email));
+      if (result) {
+        answered.push({ lead, result, atBound: false });
+        continue;
+      }
+      const bound = boundStateOf(lead, nowMs);
+      if (bound === 'NOT_REACHED') {
+        // Never sent to, and its cohort has had its time: no prospect reached, and it holds nothing back.
+        report.notReached += 1;
+        continue;
+      }
+      answered.push({ lead, result: bound === 'SILENT_AT_BOUND' ? 'BUYER_SILENT' : null, atBound: bound === 'SILENT_AT_BOUND' });
+    }
+    // A cohort with any lead still able to answer records none of its leads.
     const openCohorts = new Set(answered.filter((one) => one.result === null).map((one) => cohortOf(one.lead)));
-    for (const { lead, result } of answered) {
+    for (const { lead, result, atBound } of answered) {
       if (!result) {
         report.pending += 1;
         continue;
@@ -408,6 +475,12 @@ export async function recordCampaignOutcomes(
         report.held += 1;
         continue;
       }
+      const state = `status ${lead.status ?? 'none'}, replies ${lead.replies}, interest ${lead.interestStatus ?? 'none'}`;
+      const basis = atBound
+        ? `instantly campaign ${campaign.id}; lead ${lead.id}: ${state}, last contact ${lead.lastContactAt}; ${SILENT_AT_BOUND} ` +
+          `no terminal provider state: enrolment cohort ${cohortOf(lead)} settled (${COHORT_SETTLE_DAYS} days) and no reply ` +
+          `${SILENCE_AFTER_CONTACT_DAYS}+ days after the last contact; a later reply refines it`
+        : `instantly campaign ${campaign.id}; lead ${lead.id}: ${state}; enrolment cohort ${cohortOf(lead)}, every lead terminal or settled`;
       const fresh = await insertOutcome({
         projectId,
         opportunityId: `instantly-lead:${lead.id}`,
@@ -415,12 +488,15 @@ export async function recordCampaignOutcomes(
         mechanism: campaign.name,
         channel: CAMPAIGN_CHANNEL,
         valueText: result,
-        basis: `instantly campaign ${campaign.id}; lead ${lead.id}: status ${lead.status ?? 'none'}, replies ${lead.replies}, interest ${lead.interestStatus ?? 'none'}; enrolment cohort ${cohortOf(lead)}, every lead terminal`,
+        basis,
         requestKey: `outcome:campaign:${campaign.id}:${lead.id}:CONTACT_RESULT`,
-        // An Instantly lead's interest status follows its reply; only this path refines.
+        // An Instantly lead's interest status follows its reply, and a reply may follow a silence at the bound; only this path refines.
         refineReply: true,
       });
-      if (fresh) report.recorded += 1;
+      if (fresh) {
+        report.recorded += 1;
+        if (atBound) report.silentAtBound += 1;
+      }
     }
     nextCampaign(progress);
   }

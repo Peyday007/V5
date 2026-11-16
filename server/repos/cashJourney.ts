@@ -306,6 +306,17 @@ export async function insertOutcome(input: {
 const CONTACT_REFINEMENTS: ReadonlySet<string> = new Set(['BUYER_ACCEPTED', 'BUYER_COUNTERED', 'BUYER_DECLINED']);
 
 /**
+ * The basis marker of a `BUYER_SILENT` that is not a provider-terminal silence
+ * but "no answer by the bound" — a campaign lead whose cohort settled with its
+ * sequence still paused or running (`campaignOutcomes.ts`). It is the one
+ * silence a later reply may still refine, because nothing terminal ever said
+ * the lead would not answer. A provider-terminal `BUYER_SILENT` stays final.
+ */
+export const SILENT_AT_BOUND = '[silent at the bound]';
+/** What a silence at the bound may become: any answer the lead later gives. */
+const SILENCE_REFINEMENTS: ReadonlySet<string> = new Set(['BUYER_REPLIED', ...CONTACT_REFINEMENTS]);
+
+/**
  * One guarded transition: the existing CONTACT_RESULT row under the same
  * request key moves from `BUYER_REPLIED` to the classified answer the caller
  * now holds. It names the state it comes from in the statement that makes it,
@@ -323,7 +334,19 @@ async function refineContactResult(input: {
   basis: string;
   requestKey: string;
 }): Promise<boolean> {
-  if (input.kind !== 'CONTACT_RESULT' || !input.valueText || !CONTACT_REFINEMENTS.has(input.valueText)) return false;
+  if (input.kind !== 'CONTACT_RESULT' || !input.valueText) return false;
+  if (SILENCE_REFINEMENTS.has(input.valueText)) {
+    // A silence at the bound, answered after all: the answer replaces it, guarded on the marker in the same statement.
+    const answered = await getDb().run(
+      `UPDATE cash_outcomes
+          SET value_text = ?, basis = basis || ?
+        WHERE project_id = ? AND request_key = ? AND kind = 'CONTACT_RESULT' AND value_text = 'BUYER_SILENT'
+          AND basis LIKE ?`,
+      [input.valueText, ` | refined to ${input.valueText} at ${journeyNow()}: ${input.basis}`, input.projectId, input.requestKey, `%${SILENT_AT_BOUND}%`],
+    );
+    if (Number(answered.changes ?? 0) > 0) return true;
+  }
+  if (!CONTACT_REFINEMENTS.has(input.valueText)) return false;
   const result = await getDb().run(
     `UPDATE cash_outcomes
         SET value_text = ?, basis = basis || ?
