@@ -31,7 +31,7 @@ import { statesNamedIn } from '../../domain/jurisdiction.ts';
 import { openingSourceKey } from '../cash/duplicates.ts';
 import { discoveryAllowed } from '../cash/lifecycle.ts';
 import { DELIVERABLE_LABEL } from '../cash/deliverables/spec.ts';
-import { FEED_SOURCES, type FeedSource } from './sources.ts';
+import { FEED_SOURCES, pullUrl, type FeedSource } from './sources.ts';
 import { FEED_SHORTLIST_BUCKET } from './bucket.ts';
 import { SITE_SOURCE } from './sites.ts';
 import { CODE_SIGNAL_SOURCE, coveredItems, detectionsForLeads } from './detectors.ts';
@@ -127,31 +127,110 @@ export function shortlistPace(spare: number): { size: number; intervalMs: number
     : { size: SHORTLIST_SIZE, intervalMs: SHORTLIST_INTERVAL_MS };
 }
 
+export interface FeedPullResult {
+  source: string;
+  inserted: number;
+  error: string | null;
+  /** Items the response carried. */
+  fetched: number;
+  /** Of those, items already stored: dropped by storage, never screened again. */
+  duplicates: number;
+  /** Whether the request was narrowed to what was published since the source's last success. */
+  incremental: boolean;
+}
+
+/**
+ * Pull every due source once. A source that takes a start date is asked only
+ * for what was published since its own last success (`pullUrl`); every item is
+ * stored once, by its source key, so a repeat costs no storage and no screen.
+ */
 export async function pullDueFeeds(input: {
   now?: Date;
   fetcher?: Fetcher;
   sources?: readonly FeedSource[];
-} = {}): Promise<{ source: string; inserted: number; error: string | null }[]> {
+} = {}): Promise<FeedPullResult[]> {
   const now = input.now ?? new Date();
-  const out: { source: string; inserted: number; error: string | null }[] = [];
+  const out: FeedPullResult[] = [];
   for (const source of input.sources ?? FEED_SOURCES) {
-    if (now.getTime() < nextPullAt(source, await pullState(source.id))) continue;
+    const state = await pullState(source.id);
+    if (now.getTime() < nextPullAt(source, state)) continue;
     if (source.spacingMs && out.length > 0 && !input.fetcher) {
       await new Promise((resolve) => setTimeout(resolve, source.spacingMs));
     }
+    const ask = pullUrl(source, state.lastSuccessAt);
     try {
-      const body = await (input.fetcher ?? httpFetcher)(source.url, source.headers ?? {}, source.timeoutMs);
+      const body = await (input.fetcher ?? httpFetcher)(ask.url, source.headers ?? {}, source.timeoutMs);
       const items = source.parse(body);
       const inserted = await insertFeedItems(source.id, items);
       await recordFeedPull({ source: source.id, ok: true, fetched: items.length, inserted, error: null, at: now.toISOString() });
-      out.push({ source: source.id, inserted, error: null });
+      out.push({ source: source.id, inserted, error: null, fetched: items.length, duplicates: Math.max(0, items.length - inserted), incremental: ask.incremental });
     } catch (error) {
       const message = (error instanceof Error ? error.message : String(error)).slice(0, 300);
       await recordFeedPull({ source: source.id, ok: false, fetched: 0, inserted: 0, error: message, at: now.toISOString() });
-      out.push({ source: source.id, inserted: 0, error: message });
+      out.push({ source: source.id, inserted: 0, error: message, fetched: 0, duplicates: 0, incremental: ask.incremental });
     }
   }
   return out;
+}
+
+/**
+ * What the code-first lane saved and made over a window, read from rows (§45):
+ * nothing is stored to compute it, so it cannot drift from what happened.
+ *
+ *   * notScreened — items that never cost a model call: repeats storage
+ *     dropped, items a code rule covers (`coveredItems`), and items code itself
+ *     proved (a broken site, a code detection's own lead);
+ *   * screenCalls — the SCREEN_LEAD model calls actually made, and the
+ *     distinct items they were about;
+ *   * workCreated — leads code produced that no single record showed: code
+ *     detections and code-proved site leads.
+ *
+ * Every lead counted here is still only a lead: it reaches Claude on the same
+ * evidence gate as any other, and nothing in this reading is a buyer.
+ */
+export interface ScreeningEconomy {
+  since: string;
+  until: string;
+  fetched: number;
+  stored: number;
+  notScreened: { duplicates: number; covered: number; provedByCode: number; total: number };
+  screenCalls: number;
+  itemsScreened: number;
+  workCreated: { codeDetections: number; siteLeads: number; total: number };
+}
+
+export async function screeningEconomy(input: { since: string; until?: string }): Promise<ScreeningEconomy> {
+  const until = input.until ?? new Date().toISOString();
+  const db = getDb();
+  const pulls = await db.get<{ fetched: number | string | null; inserted: number | string | null }>(
+    `SELECT SUM(fetched) AS fetched, SUM(inserted) AS inserted FROM feed_pulls WHERE ok = 1 AND created_at >= ? AND created_at < ?`,
+    [input.since, until],
+  );
+  const items = await db.all<{ id: string; source: string }>(
+    `SELECT id, source FROM feed_items WHERE fetched_at >= ? AND fetched_at < ?`,
+    [input.since, until],
+  );
+  const calls = await db.get<{ n: number | string; items: number | string }>(
+    `SELECT COUNT(*) AS n, COUNT(DISTINCT subject_id) AS items FROM cheap_results WHERE kind = 'SCREEN_LEAD' AND created_at >= ? AND created_at < ?`,
+    [input.since, until],
+  );
+  const fetched = Number(pulls?.fetched ?? 0);
+  const duplicates = Math.max(0, fetched - Number(pulls?.inserted ?? 0));
+  const codeDetections = items.filter((one) => one.source === CODE_SIGNAL_SOURCE).length;
+  const siteLeads = items.filter((one) => one.source === SITE_SOURCE).length;
+  const screenable = items.filter((one) => one.source !== CODE_SIGNAL_SOURCE && one.source !== SITE_SOURCE);
+  let covered = 0;
+  for (let at = 0; at < screenable.length; at += 500) covered += (await coveredItems(screenable.slice(at, at + 500).map((one) => one.id))).size;
+  return {
+    since: input.since,
+    until,
+    fetched,
+    stored: items.length,
+    notScreened: { duplicates, covered, provedByCode: codeDetections + siteLeads, total: duplicates + covered + codeDetections + siteLeads },
+    screenCalls: Number(calls?.n ?? 0),
+    itemsScreened: Number(calls?.items ?? 0),
+    workCreated: { codeDetections, siteLeads, total: codeDetections + siteLeads },
+  };
 }
 
 /** The latest SCREEN_LEAD answers, per item, already combined. */
