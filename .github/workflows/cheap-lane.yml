@@ -248,7 +248,7 @@ jobs:
             runpod-survey)
               # What the account holds and could rent, from RunPod itself (§108). Changes nothing.
               [ -n "${RUNPOD_API_KEY:-}" ] || { echo "::error::Set the RUNPOD_API_KEY repository secret."; exit 1; }
-              npx tsx scripts/runpod-survey.ts
+              for n in 1 2 4; do RUNPOD_SURVEY_GPU_COUNT=$n npx tsx scripts/runpod-survey.ts; done
               ;;
             runpod-repurpose)
               # Serve a recipe on the existing pod in place (§108): same host and GPU, no second pod.
