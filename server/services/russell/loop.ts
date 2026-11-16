@@ -74,10 +74,10 @@ import { currentFragments, getOrchestration, updateOrchestration } from '../../r
 import { listCoverage, listRequirements } from '../../repos/reconciliation.ts';
 import { getProject, listProjects } from '../../repos/projects.ts';
 import { laneConfig } from '../cheap/lane.ts';
-import { openFeedShortlist, pullDueFeeds, recordFeedExtraction, screenFeedLeads, shortlistProject, type ExtractionPass, type FeedPullResult } from '../feeds/run.ts';
+import { FEED_LOOP_CYCLE_EVENT, openFeedShortlist, proposeParsersForUnreadable, pullDueFeeds, recordFeedExtraction, screenFeedLeads, shortlistProject, type ExtractionPass, type FeedPullResult } from '../feeds/run.ts';
 import { DETECTORS, type DetectorRunReport } from '../feeds/detectors.ts';
 import { EVENT_GRAPH_RULES_VERSION, currentEventGraph, syncEventGraph, type EventGraphSync } from '../industry/eventGraph.ts';
-import { constructFromGraph } from '../cash/construct.ts';
+import { constructFromGraph, missingLinkQuestions, type MissingLinkQuestion } from '../cash/construct.ts';
 import { checkDueSites, mapNextMetro } from '../feeds/sites.ts';
 import { runDetectors } from '../feeds/detectors.ts';
 import { frontierIsDue, refreshFrontier } from './frontier.ts';
@@ -700,7 +700,7 @@ async function settleUnresolvedAnswer(
 }
 
 /** The event one observe→structure→connect→derive→reason→codify→act cycle over the feeds is recorded under (ALGO-19-4). */
-export const FEED_LOOP_EVENT = 'FEED_LOOP_CYCLE';
+export const FEED_LOOP_EVENT = FEED_LOOP_CYCLE_EVENT;
 
 /** What one cycle of the feed loop did, stage by stage, read back from the owners that did it. */
 export interface FeedLoopCycle {
@@ -720,11 +720,26 @@ export interface FeedLoopCycle {
   /** Connect: the event graph brought up to the durable detection and item rows (`syncEventGraph`); records Structure already handed it are duplicates here. */
   connect: { read: number; added: number; removed: number; recomputed: number; facts: number; hypotheses: number; cursor: EventGraphSync['cursor'] } | null;
   /** Derive: graph hypotheses joined with the structures they can be paid through, pruned on hard constraints (`constructFromGraph`). */
-  derive: { hypotheses: number; kept: number; pruned: number; top: { key: string; structure: string; rule: string; missingConditions: number }[] } | null;
+  derive: {
+    hypotheses: number;
+    kept: number;
+    pruned: number;
+    top: { key: string; structure: string; rule: string; missingConditions: number }[];
+    /**
+     * The missing-link questions the ranking implies (`missingLinkQuestions`), ranked by what an answer
+     * would move. The feed shortlist reads them from this row and puts them to research (Act).
+     */
+    questions: MissingLinkQuestion[];
+  } | null;
   /** Reason selectively: only what code could not read is batched for a model; everything else stayed with code. */
   reason: { batches: number; items: number; readByCode: number };
   /** Codify: each installed rule, its mode this pass and why, and any repair it filed for the improvement loop. */
   codify: { rule: string; mode: string; modeReason: string; signals: number; created: number; extended: number; proposed: string | null }[];
+  /**
+   * Codify, from this loop's own Reason stage: sources whose records code could not read this pass,
+   * registered with the improvement loop as a parser for Factory to write (`proposeParsersForUnreadable`).
+   */
+  parsersProposed: string[];
   /** Reproducibility: the rule versions every stage ran under. */
   versions: { graphRules: number; detectors: string[] };
   /** Stage failures, each its own; a failed stage never stops the stages after it. */
@@ -735,17 +750,21 @@ export interface FeedLoopCycle {
 /**
  * One cycle of the feed loop through the owners that already exist (ALGO-19-4):
  * observe (`pullDueFeeds`, passed in), structure (`recordFeedExtraction`),
- * connect (`syncEventGraph`), derive (`constructFromGraph`), reason (the
- * extractor's needsModel batches, which the free-model screen takes first and
- * nothing else), codify (`runDetectors`' mode decisions and repair proposals,
- * passed in) and act (this record).
+ * connect (`syncEventGraph`), derive (`constructFromGraph`, then
+ * `missingLinkQuestions` over its ranking), reason (the extractor's needsModel
+ * batches, which the free-model screen takes first and nothing else), codify
+ * (`runDetectors`' mode decisions and repair proposals, passed in, and
+ * `proposeParsersForUnreadable` over what this pass's code could not read) and
+ * act (this record, which `openFeedShortlist` reads on the same tick: its
+ * missing-link questions go to research in the next shortlist round).
  *
  * Before this the scheduled tick pulled and ran the detectors, but extraction
  * ran only when a shortlist round was being opened, and the graph and its
  * construction only inside a goal's plan read; no scheduled path chained them.
  * Each stage reads incrementally from its own cursor, so an unchanged tick
  * recomputes nothing and records nothing. Every construction stays a
- * hypothesis: this records what was derived, it opens, approves and spends nothing.
+ * hypothesis: the loop approves and spends nothing itself, and what it hands
+ * research goes through the shortlist's own discovery gate.
  */
 export async function runFeedLoopCycle(
   projectId: string,
@@ -791,6 +810,7 @@ export async function runFeedLoopCycle(
       kept: result.kept.length,
       pruned: result.pruned.length,
       top: result.kept.slice(0, 5).map((one) => ({ key: one.key, structure: one.structure, rule: one.rule, missingConditions: one.missingConditions.length })),
+      questions: missingLinkQuestions(result),
     };
   } catch (error) {
     failure('derive')(error);
@@ -800,6 +820,8 @@ export async function runFeedLoopCycle(
     items: extraction?.needsModel.flat().length ?? 0,
     readByCode: extraction?.readable ?? 0,
   };
+  // What a model would otherwise read record by record becomes a parser proposal (codify from Reason).
+  const parsersProposed = extraction ? ((await proposeParsersForUnreadable(extraction, now).catch(failure('codify'))) ?? []) : [];
   const codify = input.detectors.map((one) => ({
     rule: one.rule,
     mode: one.mode,
@@ -816,6 +838,7 @@ export async function runFeedLoopCycle(
     derive,
     reason,
     codify,
+    parsersProposed,
     versions: { graphRules: EVENT_GRAPH_RULES_VERSION, detectors: DETECTORS.map((one) => `${one.id}@${one.version}`) },
     errors,
     at: now.toISOString(),
@@ -825,6 +848,7 @@ export async function runFeedLoopCycle(
     structure !== null ||
     (connect !== null && connect.read > 0) ||
     codify.some((one) => one.created > 0 || one.extended > 0 || one.proposed !== null) ||
+    parsersProposed.length > 0 ||
     errors.length > 0;
   if (!moved) return null;
   await recordCashEvent({
@@ -835,9 +859,9 @@ export async function runFeedLoopCycle(
       `Feed loop: observed ${observe.inserted} new of ${observe.fetched} fetched (${observe.duplicates} duplicate); ` +
       `structured ${structure?.facts ?? 0} fact(s) from ${structure?.items ?? 0} item(s); ` +
       `connected ${connect?.read ?? 0} detection row(s), ${connect?.recomputed ?? 0} neighborhood(s) recomputed; ` +
-      `derived ${derive?.kept ?? 0} hypothesis construction(s), ${derive?.pruned ?? 0} pruned; ` +
+      `derived ${derive?.kept ?? 0} hypothesis construction(s), ${derive?.pruned ?? 0} pruned, ${derive?.questions.length ?? 0} missing-link question(s) for the shortlist to put to research; ` +
       `${reason.items} item(s) in ${reason.batches} batch(es) left for a model; ` +
-      `${codify.length} rule(s) run${errors.length ? `; ${errors.length} stage failure(s)` : ''}. Every construction is a hypothesis.`,
+      `${codify.length} rule(s) run, ${parsersProposed.length} parser(s) proposed${errors.length ? `; ${errors.length} stage failure(s)` : ''}. Every construction is a hypothesis.`,
     detail: { ...cycle },
   });
   return cycle;
