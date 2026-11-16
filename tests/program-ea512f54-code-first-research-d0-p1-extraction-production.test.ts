@@ -192,13 +192,26 @@ describe('the screen asks each subject once (repair F3): deterministic coverage,
     const asked: string[] = [];
     const completer: Completer = async (_c, _model, _system, prompt) => {
       asked.push(prompt);
+      if (prompt.includes('{"answers"')) {
+        const posts = prompt.split(/\nPost \d+:\n/).slice(1);
+        return JSON.stringify({ answers: posts.map((post, i) => ({ post: i + 1, ...JSON.parse(post.includes('packaging film') ? keep : drop) })) });
+      }
       return prompt.includes('packaging film') ? keep : drop;
     };
     await screenFeedLeads({ now, config, completer });
     // Two models per screen: one screen of the request subject, not one per feed.
     expect(asked.filter((p) => p.includes('packaging film'))).toHaveLength(config.models.length);
-    // A record whose subject cannot be told apart is still asked on its own, once per feed.
-    expect(asked.filter((p) => p.includes('Thoughts on the market'))).toHaveLength(2 * config.models.length);
+    // A record whose subject cannot be told apart is never merged into another: both are asked about,
+    // and as what the parser could not read they go to the models as one batch, one call per model.
+    const vague = asked.filter((p) => p.includes('Thoughts on the market'));
+    expect(vague).toHaveLength(config.models.length);
+    for (const prompt of vague) expect(prompt.match(/Title: Thoughts on the market/g)).toHaveLength(2);
+    const vagueIds = [await itemId(`${first}-vague`), await itemId(`${second}-vague`)];
+    const answered = await getDb().all<{ subject_id: string }>(
+      `SELECT subject_id FROM cheap_results WHERE kind = 'SCREEN_LEAD' AND subject_id IN (?, ?)`,
+      vagueIds,
+    );
+    expect(answered).toHaveLength(2 * config.models.length);
     // A second pass asks nothing more about it: the subject is answered.
     const before = asked.length;
     await screenFeedLeads({ now, config, completer });

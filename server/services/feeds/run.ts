@@ -23,7 +23,22 @@ import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { openingsWithSourceUrl } from '../../repos/cashPortfolio.ts';
 import { listRounds, openRound } from '../../repos/cashDiscovery.ts';
 import { createCandidate } from '../../repos/russellCandidates.ts';
-import { isDown, laneConfig, modelHealth, screenLead, type Completer, type LaneConfig, type LeadOutput } from '../cheap/lane.ts';
+import {
+  httpCompleter,
+  inputHash,
+  isDown,
+  laneConfig,
+  modelHealth,
+  parseLead,
+  screenLead,
+  TASKS,
+  type Completer,
+  type LaneConfig,
+  type LeadInput,
+  type LeadOutput,
+  type ModelHealth,
+} from '../cheap/lane.ts';
+import { newId, nowIso } from '../../repos/util.ts';
 import { executionFrame, executionFrameSentence } from '../cash/discovery.ts';
 import { APPROVAL_ENVELOPES } from '../research/approvalEnvelope.ts';
 import { describesOwnAction } from '../research/actorScope.ts';
@@ -35,7 +50,7 @@ import { FEED_SOURCES, pullUrl, type FeedSource } from './sources.ts';
 import { FEED_SHORTLIST_BUCKET } from './bucket.ts';
 import { SITE_SOURCE } from './sites.ts';
 import { CODE_SIGNAL_SOURCE, coveredItems, detectionsForLeads } from './detectors.ts';
-import { extractItem, extractItems, type ExtractableItem, type ExtractedFact } from './extract.ts';
+import { extractItem, extractItems, MODEL_BATCH_SIZE, type ExtractableItem, type ExtractedFact } from './extract.ts';
 import { addExtractedItems, currentEventGraph, syncEventGraph, type ExtractedItemsUpdate, type GraphHypothesis } from '../industry/eventGraph.ts';
 import { constructFromGraph } from '../cash/construct.ts';
 
@@ -186,8 +201,9 @@ export async function pullDueFeeds(input: {
  *     subject the screen already answered for another record (`coalesced`:
  *     the same record kind, entity and deliverable — a repost or the same
  *     posting on a second feed — reads the one answer, never a second call);
- *   * screenCalls — the SCREEN_LEAD model calls actually made, and the
- *     distinct items they were about;
+ *   * screenCalls — the SCREEN_LEAD model calls actually made, a batched
+ *     call counted once however many records it answered (`batchCalls`),
+ *     and the distinct items they were about;
  *   * workCreated — what code produced that no single record showed: code
  *     detections and code-proved site leads, and the cross-source joins
  *     themselves (ALGO-19-3): fact keys the deterministic extractor read from
@@ -208,6 +224,8 @@ export interface ScreeningEconomy {
   stored: number;
   notScreened: { duplicates: number; covered: number; provedByCode: number; coalesced: number; total: number };
   screenCalls: number;
+  /** Of `screenCalls`, the ones that asked about a whole needsModel batch in one call. */
+  batchCalls: number;
   itemsScreened: number;
   workCreated: {
     codeDetections: number;
@@ -308,9 +326,17 @@ export async function screeningEconomy(input: { since: string; until?: string })
     `SELECT id, source FROM feed_items WHERE fetched_at >= ? AND fetched_at < ?`,
     [input.since, until],
   );
+  // A per-record screen is one row per model call. A batched screen (`screenLeadBatch`) is one
+  // SCREEN_LEAD_BATCH row per call, and the per-record answers it gave are rows marked as its own
+  // (`BATCH_ROW_PREFIX`), so they are items screened but not calls made.
   const calls = await db.get<{ n: number | string; items: number | string }>(
-    `SELECT COUNT(*) AS n, COUNT(DISTINCT subject_id) AS items FROM cheap_results WHERE kind = 'SCREEN_LEAD' AND created_at >= ? AND created_at < ?`,
-    [input.since, until],
+    `SELECT SUM(CASE WHEN id LIKE ? THEN 0 ELSE 1 END) AS n, COUNT(DISTINCT subject_id) AS items FROM cheap_results
+      WHERE kind = 'SCREEN_LEAD' AND created_at >= ? AND created_at < ?`,
+    [`${BATCH_ROW_PREFIX}%`, input.since, until],
+  );
+  const batchCalls = await db.get<{ n: number | string }>(
+    `SELECT COUNT(*) AS n FROM cheap_results WHERE kind = ? AND created_at >= ? AND created_at < ?`,
+    [SCREEN_LEAD_BATCH_KIND, input.since, until],
   );
   const fetched = Number(pulls?.fetched ?? 0);
   const duplicates = Math.max(0, fetched - Number(pulls?.inserted ?? 0));
@@ -334,7 +360,8 @@ export async function screeningEconomy(input: { since: string; until?: string })
       coalesced,
       total: duplicates + covered + codeDetections + siteLeads + coalesced,
     },
-    screenCalls: Number(calls?.n ?? 0),
+    screenCalls: Number(calls?.n ?? 0) + Number(batchCalls?.n ?? 0),
+    batchCalls: Number(batchCalls?.n ?? 0),
     itemsScreened: Number(calls?.items ?? 0),
     workCreated: {
       codeDetections,
@@ -408,7 +435,7 @@ export interface ExtractionPass {
   facts: ExtractedFact[];
   /** Per fact key: OBSERVED, CONTESTED or STALE — never established — and which items said it. */
   reconciled: { key: string; status: string; value: string | number | null; itemIds: string[] }[];
-  /** Item ids the parser could not read, in the batches the free-model screen takes first. */
+  /** Item ids the parser could not read, in the batches the free-model screen asks about whole, one call per batch (`screenLeadBatch`). */
   needsModel: string[][];
   /** Facts by what their record is: a job posting, advert or listing is never demand. */
   demand: { statedRequest: number; notDemand: number };
@@ -515,7 +542,9 @@ export async function recordFeedExtraction(input: { projectId: string; now?: Dat
     summary:
       `Deterministic extraction over ${pass.items} stored item(s): ${pass.facts.length} normalized fact(s), each linked to its item and text; ` +
       `${pass.reconciled.length} fact key(s), ${contested} contested and ${stale} stale; ${pass.readable} item(s) read by code, ` +
-      `${needsModel.flat().length} in ${needsModel.length} batch(es) sent to the free-model screen first. ` +
+      `${needsModel.flat().length} the parser could not read, in ${needsModel.length} batch(es) of up to ${MODEL_BATCH_SIZE}: ` +
+      'the free-model screen takes those first, one call per batch and model for every batch of two or more, ' +
+      'and asks record by record only about what a batch answer left unanswered. ' +
       `${pass.demand.statedRequest} fact(s) from a record stating a request; none is a confirmed buyer. ` +
       (graph
         ? `${graph.facts} graph fact(s) handed to the event graph, ${graph.added} new, ${graph.affected.length} neighborhood(s) recomputed; every hypothesis is still only a hypothesis.`
@@ -681,14 +710,200 @@ export function leadPassesRules(item: StoredFeedItem, screen: LeadOutput | null,
  * and in order, and only then the records code could read, which still need the
  * lead judgement the shortlist gate asks for. Nothing is dropped, so no gate is
  * lost; under a tight pace the unreadable records are the ones a model sees.
- * Pure.
+ * The order alone saves no call: `screenFeedLeads` asks about each needsModel
+ * batch in one call per model (`screenLeadBatch`). Pure.
  */
 export function screenOrder<T extends ExtractableItem>(items: readonly T[], now: Date): T[] {
   const unreadable = new Set(extractItems(items, now).needsModel.flat().map((one) => one.id));
   return [...items.filter((one) => unreadable.has(one.id)), ...items.filter((one) => !unreadable.has(one.id))];
 }
 
-/** Screen recent, unscreened leads with the free models. Bounded per pass. */
+// ---------------------------------------------------------------------------
+// Batched escalation (ALGO-16-1 item 5): what code cannot read goes to the
+// free models together, one call per batch and model, not one call per record.
+// ---------------------------------------------------------------------------
+
+/** The cheap_results kind of one batched screen call: one row per call, whatever it answered. */
+export const SCREEN_LEAD_BATCH_KIND = 'SCREEN_LEAD_BATCH';
+/** Id prefix of a SCREEN_LEAD answer a batched call gave: an item screened, not a call made. */
+export const BATCH_ROW_PREFIX = 'chpb_';
+
+/** What the per-record screen is asked about an item: the same object, so a batch answer is that screen's cache. */
+function leadInputOf(item: ExtractableItem): LeadInput {
+  return {
+    source: item.source,
+    title: item.title,
+    organization: item.organization,
+    publishedAt: item.publishedAt,
+    body: item.body,
+    url: item.url,
+  };
+}
+
+/**
+ * The needsModel batches among the records a pass will screen: the
+ * extractor's own unreadable batches (`extractItems(...).needsModel`), cut at
+ * `MODEL_BATCH_SIZE`, keeping only those of two or more records — one record
+ * asked alone is the per-record screen. Pure.
+ */
+export function leadBatches<T extends ExtractableItem>(items: readonly T[], now: Date): T[][] {
+  const byId = new Map(items.map((one) => [one.id, one]));
+  return extractItems(items, now)
+    .needsModel.map((batch) => batch.map((one) => byId.get(one.id)).filter((one): one is T => !!one))
+    .filter((batch) => batch.length >= 2);
+}
+
+/**
+ * The question for one batch: the per-record screen's own question, read from
+ * the task (so there is one wording), followed by each post numbered, and a
+ * reply with one answer per post. Pure.
+ */
+export function leadBatchPrompt(items: readonly ExtractableItem[]): string {
+  const single = TASKS.SCREEN_LEAD.prompt(leadInputOf(items[0]!)).split('\n');
+  const cut = single.findIndex((line) => line.startsWith('Source:'));
+  const question = (cut > 0 ? single.slice(0, cut) : single).filter((line, i, all) => !(i === all.length - 1 && line === ''));
+  const posts = items.map((item, i) =>
+    [
+      `Post ${i + 1}:`,
+      `Source: ${item.source}`,
+      `Title: ${item.title}`,
+      `Organization: ${item.organization ?? 'unknown'}`,
+      `Published: ${item.publishedAt ?? 'unknown'}`,
+      `Text: ${(item.body ?? '').slice(0, 800)}`,
+    ].join('\n'),
+  );
+  return [
+    ...question,
+    `Answer that question separately for each of the ${items.length} posts below; one post's answer never decides another's.`,
+    '',
+    ...posts.flatMap((post) => [post, '']),
+    `Reply exactly: {"answers":[{"post":1,"verdict":"KEEP|DROP|UNSURE","window":"SHORT|ONGOING|UNKNOWN","deliverable":"KIND","need":"a few words","payer":"a few words or empty","reason":"one sentence"}, ...]} with one answer per post, ${items.length} in all.`,
+  ].join('\n');
+}
+
+/**
+ * One batch answer, per post. Each post's answer is validated exactly as the
+ * per-record screen validates one (`parseLead`); a post with no answer, a
+ * repeated post number or an off-shape answer is left unanswered, never
+ * guessed. Pure.
+ */
+export function parseLeadBatch(text: string, size: number): Map<number, LeadOutput> {
+  const out = new Map<number, LeadOutput>();
+  const match = /\{[\s\S]*\}/.exec(text);
+  if (!match) return out;
+  let value: unknown;
+  try {
+    value = JSON.parse(match[0]);
+  } catch {
+    return out;
+  }
+  const answers = value && typeof value === 'object' && !Array.isArray(value) ? (value as { answers?: unknown }).answers : null;
+  if (!Array.isArray(answers)) return out;
+  const repeated = new Set<number>();
+  for (const answer of answers) {
+    if (!answer || typeof answer !== 'object' || Array.isArray(answer)) continue;
+    const { post, ...rest } = answer as Record<string, unknown>;
+    const n = typeof post === 'number' ? post : typeof post === 'string' ? Number(post) : NaN;
+    if (!Number.isInteger(n) || n < 1 || n > size) continue;
+    if (out.has(n) || repeated.has(n)) {
+      out.delete(n);
+      repeated.add(n);
+      continue;
+    }
+    const parsed = parseLead(JSON.stringify(rest));
+    if (parsed) out.set(n, parsed);
+  }
+  return out;
+}
+
+/** SCREEN_LEAD rows written today, the per-record screen's own daily budget measure. */
+async function leadRowsToday(now: Date): Promise<number> {
+  const row = await getDb().get<{ n: number | string }>(
+    `SELECT COUNT(*) AS n FROM cheap_results WHERE kind = 'SCREEN_LEAD' AND created_at >= ?`,
+    [`${now.toISOString().slice(0, 10)}T00:00:00.000Z`],
+  );
+  return Number(row?.n ?? 0);
+}
+
+/**
+ * Ask the free models about a whole needsModel batch: one call per model that
+ * is not down, never one per record. Every call is one SCREEN_LEAD_BATCH row
+ * (ok when it answered at least one post), and every post it answered is a
+ * SCREEN_LEAD row under the same input hash the per-record screen would use —
+ * so that answer is the per-record screen's cache, and every gate after it
+ * (two models agreeing, `leadPassesRules`, the shortlist) runs unchanged.
+ * A post a model left unanswered has no row from it, so the per-record screen
+ * still asks that model about that post: nothing is dropped, and a model
+ * answer is still only a screen, never a fact. Returns how many calls it made.
+ */
+export async function screenLeadBatch(
+  items: readonly ExtractableItem[],
+  options: { config: LaneConfig; completer?: Completer; now: Date; health: Map<string, ModelHealth> },
+): Promise<number> {
+  if (items.length < 2) return 0;
+  const db = getDb();
+  const hashes = items.map((item) => inputHash('SCREEN_LEAD', leadInputOf(item)));
+  const prompt = leadBatchPrompt(items);
+  let calls = 0;
+  for (const model of options.config.models) {
+    if (isDown(options.health.get(model))) continue;
+    const cached = await db.all<{ input_hash: string }>(
+      `SELECT input_hash FROM cheap_results WHERE kind = 'SCREEN_LEAD' AND model = ? AND input_hash IN (${hashes.map(() => '?').join(',')})`,
+      [model, ...hashes],
+    );
+    const have = new Set(cached.map((row) => row.input_hash));
+    const open = items.map((item, i) => ({ item, hash: hashes[i]! })).filter((one) => !have.has(one.hash));
+    if (open.length < 2) continue;
+    // The same daily budget the per-record screen keeps; a batch that would cross it is left to that screen.
+    if ((await leadRowsToday(options.now)) + open.length > options.config.dailyBudget) continue;
+    const asked = open.length === items.length ? prompt : leadBatchPrompt(open.map((one) => one.item));
+    let text = '';
+    let error: string | null = null;
+    try {
+      text = await (options.completer ?? httpCompleter)(options.config, model, TASKS.SCREEN_LEAD.system, asked, { maxTokens: 4000 });
+    } catch (caught) {
+      error = caught instanceof Error ? caught.message.slice(0, 300) : 'failed';
+    }
+    calls += 1;
+    const answers = error ? new Map<number, LeadOutput>() : parseLeadBatch(text, open.length);
+    const callId = newId(BATCH_ROW_PREFIX.slice(0, -1));
+    const at = nowIso();
+    await db.transaction(async () => {
+      await db.run(
+        `INSERT INTO cheap_results (id, kind, input_hash, subject_id, model, ok, output, error, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          callId,
+          SCREEN_LEAD_BATCH_KIND,
+          inputHash('SCREEN_LEAD', { batch: callId, hashes: open.map((one) => one.hash) }),
+          null,
+          model,
+          answers.size > 0 ? 1 : 0,
+          JSON.stringify({ items: open.map((one) => one.item.id), answered: answers.size }),
+          error ?? (answers.size === open.length ? null : `answered ${answers.size} of ${open.length}: ${text.slice(0, 200)}`),
+          at,
+        ],
+      );
+      for (const [n, answer] of answers) {
+        const one = open[n - 1]!;
+        await db.run(
+          `INSERT INTO cheap_results (id, kind, input_hash, subject_id, model, ok, output, error, created_at)
+           VALUES (?, 'SCREEN_LEAD', ?, ?, ?, 1, ?, NULL, ?)
+           ON CONFLICT (kind, input_hash, model) DO NOTHING`,
+          [`${callId}_${n}`, one.hash, one.item.id, model, JSON.stringify(answer), at],
+        );
+      }
+    });
+  }
+  return calls;
+}
+
+/**
+ * Screen recent, unscreened leads with the free models. Bounded per pass.
+ * The needsModel batches among them are asked about whole first
+ * (`screenLeadBatch`); every record then goes through the per-record screen,
+ * which reads a batch answer as its cache and asks only what is still open.
+ */
 export async function screenFeedLeads(input: {
   now?: Date;
   config?: LaneConfig | null;
@@ -716,6 +931,16 @@ export async function screenFeedLeads(input: {
   const window = await subjectWindow(since);
   const settled = await screenedSubjects(window);
   const todo = planScreens(todoAll, settled, now).ask.slice(0, pace.perPass);
+  // Escalation in batches: what the parser could not read is asked about together.
+  const batches = leadBatches(todo, now);
+  let nextBatch = 0;
+  const batchWorker = async (): Promise<void> => {
+    while (nextBatch < batches.length) {
+      const batch = batches[nextBatch++]!;
+      await screenLeadBatch(batch, { config, completer: input.completer, now, health });
+    }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(pace.parallel, batches.length)) }, () => batchWorker()));
   let screened = 0;
   let next = 0;
   const worker = async (): Promise<void> => {
