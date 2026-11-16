@@ -47,7 +47,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'deploy | status | prune | test | connect | disconnect | claude-discovery-off | claude-discovery-on | focus | unfocus | runpod-test | runpod-connect | runpod-disconnect | runpod-report | runpod-auto | runpod-cycle | runpod-restore | runpod-survey | runpod-bench | runpod-upgrade | runpod-repurpose | runpod-diagnose | runpod-score | runpod-stop | runpod-budget'
+        description: 'deploy | status | prune | test | connect | disconnect | claude-discovery-off | claude-discovery-on | focus | unfocus | runpod-test | runpod-connect | runpod-disconnect | runpod-report | runpod-auto | runpod-cycle | runpod-restore | runpod-survey | runpod-bench | runpod-upgrade | runpod-repurpose | runpod-diagnose | runpod-score | runpod-stop | runpod-budget | runpod-start'
         required: true
         default: deploy
       recipes:
@@ -315,6 +315,15 @@ jobs:
                 npx tsx scripts/runpod-bench.ts --recipes "$recipes" --switchboard "https://$cheap.fly.dev/v1" $base --reps "$(printf '%s' "$REPS_INPUT" | tr -cd '1-5' | cut -c1)" | tee bench.txt
               grep -q '^RUNPOD-BENCH: OK' bench.txt || { echo "::error title=runpod::The benchmark did not finish."; exit 1; }
               grep '^WINNER' bench.txt | sed 's/^/::notice title=runpod bench::/'
+              ;;
+            runpod-start)
+              # Resume the stopped pod for a bounded run, wait for vLLM, then connect as runpod-connect does.
+              # Set the dollar budget first (runpod-budget): the supervisor stops the pod at it.
+              [ -n "${RUNPOD_API_KEY:-}" ] || { echo "::error::Set the RUNPOD_API_KEY repository secret."; exit 1; }
+              npx tsx scripts/runpod-start.ts || { echo "::error::The pod did not start or serve; nothing on the Brain changed."; exit 1; }
+              restore
+              probe || { echo "::error::The GPU did not pass the probe; nothing on the Brain changed."; exit 1; }
+              gpu_connect
               ;;
             runpod-budget)
               # The GPU's hard dollar budget per rolling window (#1002): the pod supervisor stops the
