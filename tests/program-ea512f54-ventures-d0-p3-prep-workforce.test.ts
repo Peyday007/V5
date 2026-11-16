@@ -7,13 +7,21 @@ import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { createTask, createWorkflow } from '../server/repos/labor.ts';
-import { activeObjectivesOf, composeView, laborView } from '../server/services/labor/view.ts';
+import {
+  activeObjectivesOf,
+  approvedContractorsOf,
+  composeView,
+  HIRING_AUTOMATION_TOOL,
+  hiringAutomationSuite,
+  laborView,
+} from '../server/services/labor/view.ts';
+import { insertResult } from '../server/repos/evolution.ts';
 import type { LaborSnapshot } from '../server/services/labor/map.ts';
 import { deriveOrganization } from '../server/services/labor/organization.ts';
 import type { TaskCoverage } from '../server/services/labor/map.ts';
 import type { Bottleneck } from '../server/services/labor/view.ts';
 import type { NecessityReading } from '../server/services/labor/necessity.ts';
-import type { HumanNecessityReason, LaborMarketOption } from '../server/domain/types.ts';
+import type { HumanNecessityReason, LaborAllocation, LaborMarketOption } from '../server/domain/types.ts';
 
 function coverage(input: {
   id: string;
@@ -243,5 +251,108 @@ describe('VENT-24-3 — laborView, the /labor route\'s reading, returns the orga
     expect(view.organization).toMatchObject({ state: 'DORMANT', capacityRequested: 0 });
     expect(Array.isArray(view.organization.roles)).toBe(true);
     expect(view.organization.coordination).toEqual([]);
+  });
+});
+
+/* ------------------------------------------------------------------------- */
+/* Approved contractors and hiring automation reach the composed view (R2-F3)  */
+/* ------------------------------------------------------------------------- */
+
+function allocated(row: TaskCoverage, allocation: Partial<LaborAllocation>): TaskCoverage {
+  return {
+    ...row,
+    allocation: {
+      id: `lal-${row.task.id}`,
+      projectId: 'p',
+      taskId: row.task.id,
+      productionLayer: 'PHYSICAL_OPERATOR',
+      necessityReason: 'PHYSICAL_EXECUTION',
+      decidedBy: 'PERSON',
+      decidedByRef: 'person:owner',
+      rationale: 'the owner approved this route',
+      supersedesId: null,
+      supersededAt: null,
+      createdAt: '',
+      ...allocation,
+    },
+  };
+}
+
+const packApproved = () =>
+  expanding.map((row) =>
+    row.task.id === 't-pack'
+      ? allocated(coverage({ id: 't-pack', workflow: 'Fulfilment', output: 'packed orders', verdict: 'HUMAN_REQUIRED', reason: 'PHYSICAL_EXECUTION', options: [{ channel: 'ON_DEMAND_OPERATOR' }, { channel: 'DOMESTIC_EMPLOYEE' }] }), {})
+      : row,
+  );
+
+describe('VENT-24-3 — approved contractors are read from the rows the view composes', () => {
+  it('a person-decided allocation with a contractor route is an approved contractor; employment routes are not', () => {
+    const approved = approvedContractorsOf({ coverage: packApproved() });
+    expect(approved).toEqual([{ taskId: 't-pack', contractorRef: 'ON_DEMAND_OPERATOR option o-t-pack-0', approvedByRef: 'person:owner' }]);
+  });
+
+  it('Brain\'s own allocation, a superseded one, or a Brain/software layer approves nobody', () => {
+    const base = coverage({ id: 't-pack', workflow: 'Fulfilment', output: 'packed orders', verdict: 'HUMAN_REQUIRED', reason: 'PHYSICAL_EXECUTION', options: [{ channel: 'ON_DEMAND_OPERATOR' }] });
+    expect(approvedContractorsOf({ coverage: [allocated(base, { decidedBy: 'BRAIN', decidedByRef: null })] })).toEqual([]);
+    expect(approvedContractorsOf({ coverage: [allocated(base, { supersededAt: '2026-11-01T00:00:00.000Z' })] })).toEqual([]);
+    expect(approvedContractorsOf({ coverage: [allocated(base, { productionLayer: 'BRAIN', necessityReason: null })] })).toEqual([]);
+    expect(approvedContractorsOf({ coverage: [base] })).toEqual([]);
+  });
+
+  it('composeView coordinates the approved contractor and proposes no role for its task', () => {
+    const view = composeView(snapshotOf(packApproved(), { Fulfilment: 'cop_fulfil' }), { asks: [], declined: [] });
+    expect(view.organization.coordination).toEqual([{ taskId: 't-pack', contractorRef: 'ON_DEMAND_OPERATOR option o-t-pack-0', status: 'PERMITTED' }]);
+    expect(view.organization.roles.some((role) => role.taskAllocation.includes('t-pack'))).toBe(false);
+    // Without the approval the same task does get a role: the difference is the rows.
+    const without = composeView(snapshotOf(expanding, { Fulfilment: 'cop_fulfil' }), { asks: [], declined: [] });
+    expect(without.organization.roles.some((role) => role.taskAllocation.includes('t-pack'))).toBe(true);
+    expect(without.organization.coordination).toEqual([]);
+  });
+
+  it('composeView gives every role Brain\'s own selection automation, NOT_ESTABLISHED with no assessment, and carries a supplied one', () => {
+    const view = composeView(snapshotOf(expanding), { asks: [], declined: [] });
+    expect(view.organization.roles.length).toBeGreaterThan(0);
+    for (const role of view.organization.roles) {
+      expect(role.automation.map((one) => [one.tool, one.status])).toEqual([[HIRING_AUTOMATION_TOOL, 'NOT_ESTABLISHED']]);
+    }
+    const key = 'ACCOUNTABILITY_LICENSING:cap-cert';
+    const assessed = composeView(snapshotOf(expanding), { asks: [], declined: [] }, {
+      automation: [{ roleKey: key, tool: HIRING_AUTOMATION_TOOL, assessment: { jobSpecific: true, quality: 0.8, fairness: 0.9, evidenceRef: 'evr_x' } }],
+    });
+    expect(assessed.organization.roles.find((role) => role.key === key)!.automation.map((one) => one.status)).toEqual(['ESTABLISHED']);
+  });
+});
+
+describe('VENT-24-3 — laborView reads the hiring-automation assessment on record', () => {
+  let projectId = '';
+  beforeEach(async () => {
+    projectId = (await freshProject()).project.id;
+  });
+
+  it('a role\'s own evaluator result decides the assessment; a missing metric keeps it NOT_ESTABLISHED', async () => {
+    const workflow = await createWorkflow({ projectId, name: 'Laundry service', origin: 'SEED', declaredByRef: 'test' });
+    await createTask({ projectId, workflowId: workflow.workflow.id, name: 'Fold', output: 'folded laundry', origin: 'SEED', capabilityId: 'SEND_A_MESSAGE', declaredByRef: 'test' });
+
+    let view = await laborView(projectId);
+    const role = view.organization.roles.find((one) => one.capabilityId === 'SEND_A_MESSAGE');
+    expect(role, JSON.stringify(view.organization)).toBeDefined();
+    expect(role!.automation).toEqual([expect.objectContaining({ tool: HIRING_AUTOMATION_TOOL, status: 'NOT_ESTABLISHED' })]);
+
+    const record = (metrics: Record<string, number>, ranAt: string) =>
+      insertResult({ experimentId: null, variantId: null, sha: 'abc', ref: null, suite: hiringAutomationSuite(projectId, role!.key), metrics, cases: [], hidden: false, cause: null, ownerPaths: [], ranAt });
+
+    await record({ quality: 0.85 }, '2026-11-16T00:00:00.000Z');
+    view = await laborView(projectId);
+    expect(view.organization.roles.find((one) => one.key === role!.key)!.automation[0]!.status).toBe('NOT_ESTABLISHED');
+
+    const full = await record({ quality: 0.85, fairness: 0.92 }, '2026-11-16T01:00:00.000Z');
+    view = await laborView(projectId);
+    const reading = view.organization.roles.find((one) => one.key === role!.key)!.automation[0]!;
+    expect(reading.status).toBe('ESTABLISHED');
+    expect(reading.because).toContain(full.id);
+
+    // A result in another role's suite, or a general benchmark, is never read for this role.
+    const other = await freshProject();
+    expect(hiringAutomationSuite(other.project.id, role!.key)).not.toBe(hiringAutomationSuite(projectId, role!.key));
   });
 });
