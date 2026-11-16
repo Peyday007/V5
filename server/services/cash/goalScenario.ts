@@ -32,7 +32,7 @@ import { cardFactMap } from '../../repos/cashCardFacts.ts';
 import { agreementsFor } from '../../repos/cashJourney.ts';
 import { readMoneyFigures } from './figures.ts';
 import { readDays } from './monetization/commissionPass.ts';
-import { cashOutcomeLessons, LESSON_MIN_SAMPLE } from './journey/learning.ts';
+import { cashOutcomeLessons, INBOUND_MIN_VISITORS, LESSON_MIN_SAMPLE } from './journey/learning.ts';
 import { isTestFirstPlay } from './tier.ts';
 import { readVolume } from './volume.ts';
 import { frontierTiers } from './shared.ts';
@@ -825,6 +825,30 @@ export interface GoalModel {
   portfolioInput?: Parameters<typeof evaluateGoalPortfolio>[0] | null;
 }
 
+/**
+ * An inbound offer's money-committed count, read from what a person or a sourced
+ * claim recorded on the card's `conversionRates` field: "12 pre-orders from 240
+ * unique visitors", "9 paid deposits out of 310 visitors", "31 pledges of 500
+ * unique visitors".
+ *
+ * Only money commits: a pre-order, deposit, pledge, paid order or purchase. A
+ * signup, a waitlist join, a click or a fake-door "buy now" is interest, not
+ * purchase (no published study measures how well those predict buying, and the
+ * practitioner guides say a signup overstates willingness to pay —
+ * kromatic.com/real-startup-book/landing-page-smoke-test), so it never matches
+ * and is never fed in as a close rate. The denominator is unique visitors, the
+ * smoke test's own measure. Null when the text states no such count.
+ */
+export function readInboundCommitments(text: string): { paid: number; visitors: number; unit: string } | null {
+  const num = (raw: string) => Number(raw.replace(/,/g, ''));
+  const match = /(\d[\d,]*)\s+(?:paid\s+|money[- ]committed\s+)?(pre-?orders?|deposits?|pledges?|paid orders?|purchases?)\b[^.;]*?\b(?:from|of|out of|among|per)\s+(\d[\d,]*)\s+(?:unique\s+)?visitors?\b/i.exec(text);
+  if (!match) return null;
+  const paid = num(match[1]!);
+  const visitors = num(match[3]!);
+  if (!Number.isFinite(paid) || !Number.isFinite(visitors) || visitors <= 0 || paid > visitors) return null;
+  return { paid, visitors, unit: match[2]!.toLowerCase() };
+}
+
 function kindToProvenance(fact: CashCardFact | null): { provenance: VariableProvenance; source: SourceRef | null } {
   if (!fact) return { provenance: 'UNKNOWN', source: null };
   if (fact.kind === 'EVIDENCE') return { provenance: 'EVIDENCE', source: fact.claimId ? { kind: 'CLAIM', ref: fact.claimId } : { kind: 'CARD_FACT', ref: fact.id } };
@@ -898,8 +922,12 @@ export function wilson(successes: number, trials: number, z = 1.96): { low: numb
   return { low: Math.max(0, (centre - margin) / denom), high: Math.min(1, (centre + margin) / denom) };
 }
 
-/** Everything the model needs to know about one opportunity, read from its rows. */
-async function modelOpportunity(
+/**
+ * Everything the model needs to know about one opportunity, read from its rows.
+ * Exported so its branches can be driven through the real card-fact read
+ * (tests/inboundBuyerValidationA10K.test.ts drives the inbound one).
+ */
+export async function modelOpportunity(
   opportunity: CashOpportunity,
   index: number,
   tier: string,
@@ -962,10 +990,25 @@ async function modelOpportunity(
 
   const agreements = (await agreementsFor(opportunity.id, opportunity.projectId ?? undefined)).filter((one) => !one.releasedAt);
   const lesson = lessons.find((one) => one.mechanism === opportunity.mechanism && one.contacts >= LESSON_MIN_SAMPLE);
+  // An inbound offer's own money-committed count (pre-orders, deposits, pledges
+  // against unique visitors), recorded on the card's conversionRates field.
+  const inboundFact = fact('conversionRates');
+  const inbound = inboundFact && inboundFact.kind !== 'RECOMMENDATION' ? readInboundCommitments(inboundFact.value) : null;
   // An agreement is one buyer's yes, and is counted as that money — never as a
   // rate the next buyer will match. More buyers need a measured rate of their own.
+  // Below the directional floor the inbound count is an anecdote: it never becomes a measured rate, and the
+  // close falls back to Brain's own record or stays unknown (invariant 39), never a favourable reading.
+  const inboundMeasured = inbound !== null && inbound.visitors >= INBOUND_MIN_VISITORS;
   let close: ModelInput;
-  if (lesson) {
+  if (inbound && inboundMeasured) {
+    // Paid commitments per unique visitor are this opening's own measured close: no outreach, no reply step.
+    close = {
+      ...measuredRateInput({ trials: inbound.visitors, low: inbound.paid, high: inbound.paid }),
+      provenance: 'HISTORICAL',
+      source: kindToProvenance(inboundFact).source,
+      note: `measured on this offer's own inbound page: ${inbound.paid} money-committed ${inbound.unit} from ${inbound.visitors} unique visitors`,
+    };
+  } else if (lesson) {
     // Brain's own record carries its counts, so the assurance reads it as a
     // sized sample (Surge B, Q2-4 follow-up), not as bounds without a size.
     close = {
@@ -977,8 +1020,10 @@ async function modelOpportunity(
   } else {
     close = inferOr(knowledge, 'close', opportunity, now, unknown(0.02, 0.5, 'no buyer has been asked yet; swept from 2% to 50% of buyers agreeing'));
   }
-  // Agreements per contact already include whether the contact replied.
-  const respond: ModelInput = lesson
+  // Agreements per contact (or paid commitments per visitor) already include whether the person replied.
+  const respond: ModelInput = inbound && inboundMeasured
+    ? known(1, 'HISTORICAL', close.source, 'the measured rate is paid commitments per unique visitor, which includes showing interest')
+    : lesson
     ? known(1, 'HISTORICAL', close.source, 'the measured rate is agreements per contact, which includes replying')
     : inferOr(knowledge, 'respond', opportunity, now, unknown(0.002, 0.15, 'nobody has established how many prospects of this kind reply; swept from 0.2% to 15%'));
 
