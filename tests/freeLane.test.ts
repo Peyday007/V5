@@ -1078,6 +1078,9 @@ describe('a model keeps only the kinds of work Brain accepts from it', () => {
     const free429 = (m: string) => (m === 'free' ? 'model route failing (provider availability)' : null);
     expect(heldBackFor('gpu', 'RESEARCH_FRAGMENT', ['gpu', 'free'], unfit, healthy)).toBe(true);
     expect(heldBackFor('gpu', 'RESEARCH_FRAGMENT', ['gpu', 'free'], unfit, free429)).toBe(false);
+    // The item cooling down for the other model after its 429s: it cannot take it either.
+    const freeCooling = (m: string) => (m === 'free' ? 'cooling down after a provider failure' : null);
+    expect(heldBackFor('gpu', 'RESEARCH_FRAGMENT', ['gpu', 'free'], unfit, freeCooling)).toBe(false);
     expect(heldBackFor('gpu', 'RESEARCH_FRAGMENT', ['gpu'], unfit, healthy)).toBe(false);
     expect(heldBackFor('free', 'RESEARCH_FRAGMENT', ['gpu', 'free'], unfit, healthy)).toBe(false);
   });

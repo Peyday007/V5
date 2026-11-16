@@ -2046,7 +2046,16 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
     if ((cooldown.get(cooldownKey(worker.model, item.id)) ?? 0) > Date.now()) return { ok: false, reason: 'cooling down after a provider failure' };
     const held = routeHold(worker.model);
     if (held) return { ok: false, reason: held };
-    if (heldBackFor(worker.model, item.work_type, workers.map((w) => w.model), unfit, routeHold)) {
+    /*
+     * Another model takes this item only if it could take it now: its route not
+     * held AND the item not cooling down for it. Production, 2026-11-16 19:50–20:09Z:
+     * every waiting fragment was cooling down for brain-a after its 429s, so it
+     * never admitted its route re-probe, its overdue probe read as a healthy route,
+     * and the GPU stayed held back with 35 fragments waiting and nothing running.
+     */
+    const otherHold = (model: string): string | null =>
+      routeHold(model) ?? ((cooldown.get(cooldownKey(model, item.id)) ?? 0) > Date.now() ? 'cooling down after a provider failure' : null);
+    if (heldBackFor(worker.model, item.work_type, workers.map((w) => w.model), unfit, otherHold)) {
       return { ok: false, reason: 'this model’s answers for this kind of work are rejected; another model takes it' };
     }
     if (!(await freeLaneAdmits(item))) return { ok: false, reason: 'not free-lane work' };
@@ -2070,7 +2079,8 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
       admit,
       onSkip: (_item, reason) => {
         declined += 1;
-        const key = reason.slice(0, 80);
+        // Per model: 453,012 "answers … rejected" declines (2026-11-16 20:07Z) did not say whose.
+        const key = `${worker.model}: ${reason.slice(0, 80)}`;
         skipTally.set(key, (skipTally.get(key) ?? 0) + 1);
       },
     });
