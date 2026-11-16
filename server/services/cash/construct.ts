@@ -83,7 +83,7 @@ import {
   type Structure,
 } from './properties.ts';
 import { excludedBy, exclusionSentence, type ExclusionClass } from './exclusions.ts';
-import type { GraphHypothesis, RuleId } from '../industry/eventGraph.ts';
+import { syncEventGraph, currentEventGraph, type EventGraphSync, type GraphHypothesis, type RuleId } from '../industry/eventGraph.ts';
 import {
   ENTRY_POINTS,
   EVIDENCE_FIELDS,
@@ -570,6 +570,15 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
    * rather than recomposed — after a restart, a deploy or by another goal.
    */
   const { known, reuse } = await libraryFor(input.projectId);
+  /*
+   * The relational event graph (ALGO-16-1 items 3–4): brought up to date with
+   * the durable detection rows changed since the last pass — only their
+   * neighborhoods recompute — and its hypotheses joined with the structures
+   * they can be paid through, pruned on the goal's hard constraints. Every
+   * result stays a hypothesis; it is reported beside this pass, never read as
+   * a found opening.
+   */
+  graphReports.set(input.projectId, await graphPass(input, exclusions, now));
   // What the rows state about each lever's parts, each payer's contract limit, and the real limits leverage is judged against (S-0103).
   const { leverEvidence, contractLimits } = await leverInputs(input, opportunities, facts, allowed);
   const constraints = await leverageConstraints(input, limits);
@@ -837,6 +846,37 @@ export interface ConstructionReport {
 const constructionReports = new Map<string, ConstructionReport>();
 export function lastConstructionReport(projectId: string): ConstructionReport | null {
   return constructionReports.get(projectId) ?? null;
+}
+
+/** What the last construction pass for a project read from the event graph and built from it. */
+export interface GraphConstructionReport {
+  /** The graph sync this pass ran: rows read since the cursor and neighborhoods recomputed. Null when it could not run. */
+  sync: EventGraphSync | null;
+  /** Hypotheses the graph holds after the sync. */
+  hypotheses: number;
+  /** The ranked graph constructions (each a hypothesis) and the pruned ones with their reasons. */
+  result: GraphConstructionResult;
+  /** Why the graph could not be read this pass, when it could not; construction from the map and openings goes on. */
+  error: string | null;
+  at: string;
+}
+const graphReports = new Map<string, GraphConstructionReport>();
+export function lastGraphConstruction(projectId: string): GraphConstructionReport | null {
+  return graphReports.get(projectId) ?? null;
+}
+
+/** One graph pass for a construction: sync the durable rows into the process graph, then construct from its hypotheses. */
+export async function graphPass(input: Pick<ConstructionInput, 'capitalCeilingCents' | 'delivers'>, exclusions: readonly ExclusionClass[], now: Date): Promise<GraphConstructionReport> {
+  let sync: EventGraphSync | null = null;
+  let error: string | null = null;
+  try {
+    sync = await syncEventGraph(now);
+  } catch (err) {
+    error = err instanceof Error ? err.message : String(err);
+  }
+  const hypotheses = currentEventGraph().hypotheses();
+  const result = constructFromGraph(hypotheses, { capitalCeilingCents: input.capitalCeilingCents, delivers: input.delivers, exclusions });
+  return { sync, hypotheses: hypotheses.length, result, error, at: now.toISOString() };
 }
 
 /** What the library holds for construction to rank by and reuse. */

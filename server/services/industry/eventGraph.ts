@@ -30,14 +30,21 @@
  * hypotheses are returned from the last computation untouched. A fact that
  * arrives again unchanged is a duplicate and recomputes nothing.
  *
- * It is pure and in memory, with its own input interface, so it does not wait
- * on whichever extraction produces its facts: `factFromDetection` reads a
- * stored feed detection into one, and an extractor writes the same shape.
+ * The class is pure and in memory, with its own input interface, so it does
+ * not wait on whichever extraction produces its facts: `factFromDetection`
+ * reads a stored feed detection into one, and an extractor writes the same
+ * shape. The running Brain's graph is not that class alone: `syncEventGraph`
+ * keeps one process graph backed by the durable `feed_detections` rows (the
+ * graph's facts are those rows, so they survive a restart, a deploy and a
+ * second process), reading only rows changed since its cursor and adding each
+ * as an event, so only the neighborhoods those rows touch are recomputed.
+ * Construction (`constructArrangements`) calls it on every pass.
  * Nothing here calls a model, so the lane keeps working when every model
  * provider is down. No subject, region, industry or example is a whitelist:
  * the rules relate whatever facts arrive.
  */
 import type { DetectedSignal } from '../feeds/detectors.ts';
+import { getDb } from '../../db/database.ts';
 
 /** The version every hypothesis is stamped with, so a rule change is traceable to what it produced. */
 export const EVENT_GRAPH_RULES_VERSION = 1;
@@ -395,6 +402,25 @@ export class EventGraph {
     return { affected: keys, hypotheses: keys.flatMap((key) => this.detected.get(key) ?? []) };
   }
 
+  /** Take a fact out (its row was rolled back to SHADOW, or no longer names an entity). Recomputes only its neighborhood. */
+  remove(factId: string): AddResult {
+    const previous = this.facts.get(factId);
+    if (!previous) return { affected: [], hypotheses: [] };
+    this.facts.delete(factId);
+    const hood = neighborhoodOf(previous.subject);
+    this.members.get(hood)?.delete(factId);
+    this.recompute(hood);
+    return { affected: [hood], hypotheses: this.detected.get(hood) ?? [] };
+  }
+
+  has(factId: string): boolean {
+    return this.facts.has(factId);
+  }
+
+  size(): number {
+    return this.facts.size;
+  }
+
   private recompute(neighborhood: string): void {
     this.recomputations.push(neighborhood);
     const facts = [...(this.members.get(neighborhood) ?? [])].map((id) => this.facts.get(id)!);
@@ -434,9 +460,10 @@ export class EventGraph {
  */
 export function factFromDetection(
   detection: Pick<DetectedSignal, 'groupKey' | 'label' | 'entityKey' | 'entityName' | 'category' | 'windowFrom' | 'windowTo' | 'memberIds' | 'sourceUrls'>,
-  source: string,
+  source: string | ((rawId: string) => string),
 ): GraphFact | null {
   if (!detection.entityKey) return null;
+  const sourceOf = typeof source === 'string' ? () => source : source;
   return {
     id: `detection:${detection.groupKey}`,
     kind: 'WANT',
@@ -453,6 +480,183 @@ export function factFromDetection(
     window: { from: detection.windowFrom, to: detection.windowTo },
     channel: null,
     rights: [],
-    evidence: detection.memberIds.map((rawId, i) => ({ rawId, source, url: detection.sourceUrls[i] ?? null, observedAt: detection.windowTo })),
+    evidence: detection.memberIds.map((rawId, i) => ({ rawId, source: sourceOf(rawId), url: detection.sourceUrls[i] ?? null, observedAt: detection.windowTo })),
   };
+}
+
+// ---------------------------------------------------------------------------
+// The running Brain's graph, backed by the durable detection rows
+// ---------------------------------------------------------------------------
+
+/** Rows read per page while syncing; a large backlog is read in pages, never in one statement. */
+export const EVENT_GRAPH_SYNC_PAGE = 500;
+
+/** One stored `feed_detections` row, as the sync reads it. */
+interface StoredDetection {
+  id: string;
+  rule_id: string;
+  group_key: string;
+  label: string;
+  entity_key: string | null;
+  category: string | null;
+  window_from: string;
+  window_to: string;
+  member_ids: string;
+  source_urls: string;
+  mode: string;
+  updated_at: string;
+}
+
+/** What one sync did, so a caller can say what an event actually cost. */
+export interface EventGraphSync {
+  /** Detection rows read because they changed since the cursor. */
+  read: number;
+  /** Facts added or re-read with a change. */
+  added: number;
+  /** Facts taken out: rolled back to SHADOW, or naming no entity any more. */
+  removed: number;
+  /** Rows that changed in a way the graph does not read (a duplicate): nothing recomputed. */
+  unchanged: number;
+  /** Distinct neighborhoods recomputed by this sync. */
+  recomputed: string[];
+  /** Facts the graph holds after it. */
+  facts: number;
+  hypotheses: number;
+  /** The cursor after this sync: the last row read, by (updated_at, id). */
+  cursor: { updatedAt: string; id: string } | null;
+  at: string;
+}
+
+interface ProcessGraph {
+  graph: EventGraph;
+  cursor: { updatedAt: string; id: string } | null;
+  last: EventGraphSync | null;
+  running: Promise<EventGraphSync> | null;
+}
+
+let processGraph: ProcessGraph = { graph: new EventGraph(), cursor: null, last: null, running: null };
+
+/** The process graph (after at least one `syncEventGraph`, the durable rows' graph). */
+export function currentEventGraph(): EventGraph {
+  return processGraph.graph;
+}
+
+/** What the last sync did, or null before the first one. */
+export function lastEventGraphSync(): EventGraphSync | null {
+  return processGraph.last;
+}
+
+/** Forget the process graph; the next sync rebuilds it from the rows. For a test, or a rule-version change. */
+export function resetEventGraph(): void {
+  processGraph = { graph: new EventGraph(), cursor: null, last: null, running: null };
+}
+
+/** Which source each raw item came from, so every evidence link names its own feed. */
+async function sourcesOf(itemIds: readonly string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const ids = [...new Set(itemIds)];
+  for (let i = 0; i < ids.length; i += EVENT_GRAPH_SYNC_PAGE) {
+    const chunk = ids.slice(i, i + EVENT_GRAPH_SYNC_PAGE);
+    const rows = await getDb().all<{ id: string; source: string }>(
+      `SELECT id, source FROM feed_items WHERE id IN (${chunk.map(() => '?').join(',')})`,
+      chunk,
+    );
+    for (const row of rows) out.set(row.id, row.source);
+  }
+  return out;
+}
+
+function parsedList(text: string): string[] {
+  try {
+    const value: unknown = JSON.parse(text);
+    return Array.isArray(value) ? value.filter((one): one is string => typeof one === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Bring the process graph up to date with the durable `feed_detections` rows.
+ *
+ * Incremental: it reads only rows whose `updated_at` moved past its cursor (a
+ * new detection, one that grew, one promoted or rolled back), in pages, and
+ * adds each as one event, so only the neighborhoods those rows touch are
+ * recomputed and an unchanged row recomputes nothing. A fresh process starts
+ * with no cursor and reads every row once — the rows are the graph's durable
+ * state, so nothing is lost across a restart. Only ACTIVE detections enter: a
+ * SHADOW rule's output is unverified (its promotion gate is `detectors.ts`),
+ * and a detection rolled back to SHADOW leaves the graph. Concurrent callers
+ * share one sync. Nothing here calls a model.
+ */
+export function syncEventGraph(now: Date = new Date()): Promise<EventGraphSync> {
+  const held = processGraph;
+  if (held.running) return held.running;
+  const run = (async (): Promise<EventGraphSync> => {
+    const recomputed = new Set<string>();
+    let read = 0;
+    let added = 0;
+    let removed = 0;
+    let unchanged = 0;
+    for (;;) {
+      const cursor = held.cursor;
+      const rows = await getDb().all<StoredDetection>(
+        cursor
+          ? `SELECT id, rule_id, group_key, label, entity_key, category, window_from, window_to, member_ids, source_urls, mode, updated_at
+               FROM feed_detections WHERE updated_at > ? OR (updated_at = ? AND id > ?)
+              ORDER BY updated_at, id LIMIT ${EVENT_GRAPH_SYNC_PAGE}`
+          : `SELECT id, rule_id, group_key, label, entity_key, category, window_from, window_to, member_ids, source_urls, mode, updated_at
+               FROM feed_detections ORDER BY updated_at, id LIMIT ${EVENT_GRAPH_SYNC_PAGE}`,
+        cursor ? [cursor.updatedAt, cursor.updatedAt, cursor.id] : [],
+      );
+      if (rows.length === 0) break;
+      const sources = await sourcesOf(rows.flatMap((row) => parsedList(row.member_ids)));
+      for (const row of rows) {
+        read += 1;
+        const factId = `detection:${row.rule_id}|${row.group_key}`;
+        const memberIds = parsedList(row.member_ids);
+        const fact =
+          row.mode === 'ACTIVE' && memberIds.length > 0
+            ? factFromDetection(
+                {
+                  groupKey: `${row.rule_id}|${row.group_key}`,
+                  label: row.label,
+                  entityKey: row.entity_key,
+                  entityName: row.entity_key,
+                  category: row.category,
+                  windowFrom: row.window_from,
+                  windowTo: row.window_to,
+                  memberIds,
+                  sourceUrls: parsedList(row.source_urls),
+                },
+                (rawId) => sources.get(rawId) ?? 'feed',
+              )
+            : null;
+        const result = fact ? held.graph.add(fact) : held.graph.remove(factId);
+        if (result.affected.length === 0) unchanged += 1;
+        else if (fact) added += 1;
+        else removed += 1;
+        for (const hood of result.affected) recomputed.add(hood);
+      }
+      const last = rows[rows.length - 1]!;
+      held.cursor = { updatedAt: last.updated_at, id: last.id };
+      if (rows.length < EVENT_GRAPH_SYNC_PAGE) break;
+    }
+    const sync: EventGraphSync = {
+      read,
+      added,
+      removed,
+      unchanged,
+      recomputed: [...recomputed].sort(),
+      facts: held.graph.size(),
+      hypotheses: held.graph.hypotheses().length,
+      cursor: held.cursor,
+      at: now.toISOString(),
+    };
+    held.last = sync;
+    return sync;
+  })();
+  held.running = run;
+  return run.finally(() => {
+    if (held.running === run) held.running = null;
+  });
 }
