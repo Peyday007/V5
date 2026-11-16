@@ -91,7 +91,10 @@ function dataParallel120b(n: number): PodRecipe {
     key: `gpt-oss-120b-${n}x80`,
     model: 'openai/gpt-oss-120b',
     served: 'openai/gpt-oss-120b',
-    gpus: GPUS_80,
+    // Only the types RunPod shows multi-card stock for (runpod-survey 43897665060, 2026-11-16:
+    // x2/x4 H100 HBM3 and H200 "Low", every other 80 GB type none); a list naming types with no
+    // multi-card stock was refused "no instances currently available".
+    gpus: ['NVIDIA H100 80GB HBM3', 'NVIDIA H200'],
     image: IMAGE_2026,
     cuda: CUDA_129,
     maxModelLen: 131072,
