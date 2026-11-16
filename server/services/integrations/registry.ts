@@ -327,6 +327,8 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
     credentials: [
       fly('BRAIN_CHEAP_LLM_KEY', ['WORKFLOW'], { required: false }),
       fly('BRAIN_RUNPOD_API_KEY', ['WORKFLOW'], { required: false }),
+      // The pod's vLLM endpoint; the pod id is read from it (runpod-report, runpodPod.ts).
+      fly('BRAIN_RUNPOD_URL', ['WORKFLOW'], { required: false }),
       actions('RUNPOD_API_KEY', { required: false }),
       actions('RUNPOD_VLLM_KEY', { required: false }),
       actions('RUNPOD_VLLM_URL', { required: false }),
