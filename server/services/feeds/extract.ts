@@ -108,6 +108,9 @@ const SOURCE_KINDS: Record<string, RecordKind> = {
   remotive: 'JOB_POSTING',
   'federal-register-rules': 'PUBLIC_RECORD',
   'code-signal': 'PUBLIC_RECORD',
+  // Each side of the HN freelance thread states what it is: a request to buy outside work, or a provider's offer.
+  'hn-seeking-freelancer': 'STATED_REQUEST',
+  'hn-seeking-work': 'SUPPLIER_AD',
 };
 
 /**
@@ -121,6 +124,9 @@ const SOURCE_KINDS: Record<string, RecordKind> = {
  */
 export const PARTNER_OFFER_WORDING =
   /\b(white[- ]label(?:ed)?|private[- ]label(?:ed)?|wholesale (?:accounts?|pricing|inquiries|partners?)|trade (?:accounts?|partners?|pricing)|referral (?:partners?|partnerships?|program(?:me)?s?|fees? paid)|(?:reseller|dealer|affiliate|partner) program(?:me)?s?|partnership (?:inquiries|enquiries|opportunities)|we partner with|(?:available|accepting|open) (?:for|to) (?:subcontract(?:ing)?|overflow) (?:work|jobs|projects)|subcontract(?:ing)? (?:work|jobs|projects) (?:welcome|wanted|accepted)|overflow work (?:welcome|wanted|accepted))\b/i;
+
+/** Sources whose titles are roles (a job, a freelancer wanted or offered): read the way job titles are, so both sides of one role share a deliverable. */
+const ROLE_TITLE_SOURCES = new Set(['remoteok', 'remotive', 'hn-seeking-freelancer', 'hn-seeking-work']);
 
 const WORDING: Array<[RegExp, RecordKind]> = [
   [/\b(request for (?:proposals?|quotes?|bids?)|rfp|rfq|invitation to bid|seeking (?:quotes|bids|a contractor|a vendor|a supplier)|looking for (?:a )?(?:contractor|vendor|supplier|provider)|need(?:s|ed)? (?:a )?(?:contractor|vendor|supplier))\b/i, 'STATED_REQUEST'],
@@ -145,7 +151,7 @@ const CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'NZD', 'JPY'];
 const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
 const ISO_DAY = /\b(20\d{2})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])\b/g;
 const WRITTEN_DAY = new RegExp(`\\b(${MONTHS.join('|')}|${MONTHS.map((m) => m.slice(0, 3)).join('|')})\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?,?\\s+(20\\d{2})\\b`, 'gi');
-const PLACE = /\b(?:in|near|serving|located in|based in)\s+([A-Z][A-Za-z.' -]{1,40}?),\s*([A-Z]{2})\b/g;
+const PLACE = /(?:\b(?:in|near|serving|located in|based in|[Ll]ocation:)|\|)\s+([A-Z][A-Za-z.' -]{1,40}?),\s*([A-Z]{2})\b/g;
 const REMOTE = /\b(remote|anywhere|worldwide)\b/i;
 
 function pad(n: number): string {
@@ -183,7 +189,7 @@ export function readPlaces(text: string): { place: string; text: string }[] {
 
 /** The deliverable a record is about, as a comparable key. Job titles lose seniority and work-mode words. */
 function deliverableOf(item: ExtractableItem, kind: RecordKind): string | null {
-  const key = kind === 'JOB_POSTING' ? titleKey(item.title) : item.title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const key = kind === 'JOB_POSTING' || ROLE_TITLE_SOURCES.has(item.source) ? titleKey(item.title) : item.title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
   return key || null;
 }
 
