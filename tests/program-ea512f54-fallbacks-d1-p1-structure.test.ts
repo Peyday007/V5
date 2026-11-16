@@ -432,3 +432,110 @@ describe('an unverified evidence source is never promoted when the primary evide
     expect(chooseReplacement(withoutSnapshot)).toBeNull();
   });
 });
+
+/*
+ * Reviewer finding (repair-F1): planFallbacks, judgeAlternatives, switchTo
+ * and fallbackChain had no production caller, and no code derived a
+ * Dependency from Brain's real records, so no fallback structure ever existed
+ * for a real dependency and no switch recalculated real economics. Every cash
+ * knowledge refresh now plans the project's acquisition dependency from its
+ * outcome rows and records the plan.
+ */
+describe('on production rows: the acquisition dependency is planned on every knowledge refresh', async () => {
+  const { beforeEach } = await import('vitest');
+  const { freshProject } = await import('./helpers.ts');
+  const { getDb } = await import('../server/db/database.ts');
+  const { insertOutcome } = await import('../server/repos/cashJourney.ts');
+  const { loadCashKnowledge, forgetKnowledge } = await import('../server/services/quant/knowledge.ts');
+  const { FALLBACK_PLAN_EVENT, assessProjectFallbackPlan, readProjectFallbackPlan } = await import('../server/services/quant/fallbackPlanReading.ts');
+
+  let projectId: string;
+  beforeEach(async () => {
+    projectId = (await freshProject()).project.id;
+    forgetKnowledge();
+  });
+
+  /** `n` prospects on one path: `bounced` undeliverable, `answered` answering, the rest silent. */
+  async function path(mechanism: string, channel: string, n: number, bounced: number, answered: number): Promise<void> {
+    for (let i = 0; i < n; i++) {
+      const value = i < bounced ? 'CONTACT_UNDELIVERABLE' : i < bounced + answered ? 'BUYER_REPLIED' : 'BUYER_SILENT';
+      await insertOutcome({ projectId, opportunityId: `lead:${mechanism}:${i}`, kind: 'CONTACT_RESULT', mechanism, channel, valueText: value, basis: 'test row', requestKey: `p:${mechanism}:${channel}:${i}` });
+    }
+  }
+  const granted = async () => ({ ok: true, reason: 'standing authority permits CONTACT_BUYER' });
+  const window = async (): Promise<Figure> => {
+    const made = makeFigure({ meaning: 'days left of the cash sprint', unit: 'days', value: 20, status: 'EVIDENCED', source: 'cash_modes test' });
+    if (!made.ok) throw new Error(made.reason);
+    return made.figure;
+  };
+
+  it('builds failure modes with signals, evidence and the sprint as the recovery window, and plans the substitutes', async () => {
+    await path('Campaign A', 'email (Instantly)', 10, 2, 2);
+    await path('Partner list', 'partner referral', 4, 0, 2);
+    const { record, written } = await assessProjectFallbackPlan(projectId, { authority: granted, recoveryWindow: window });
+    expect(written).toBe(true);
+    const plan = record!.plan;
+    expect(plan.failureModes.map((m) => m.key)).toEqual(['channel-stops-delivering', 'prospects-stop-answering']);
+    for (const m of plan.failureModes) {
+      expect(m.detectionSignals.length).toBeGreaterThan(0);
+      expect(m.failureEvidence!.length).toBeGreaterThan(0);
+      expect(m.recoveryWindowDays.value).toBe(20);
+      // Nothing on record sizes it: unknown, never assumed.
+      expect(m.probability.status).toBe('UNKNOWN');
+      expect(m.timeToHarmDays.status).toBe('UNKNOWN');
+    }
+    expect(plan.substitutes).toEqual([expect.objectContaining({ key: 'Partner list @ partner referral', readiness: 'VALIDATED', changesMechanism: true, eligible: true, sharedWithPrimary: [] })]);
+    // judgeAlternatives ran: with cash at risk unknown it says it cannot judge, and names why.
+    expect(plan.alternatives.required).toBeNull();
+    expect(plan.alternatives.missing).toEqual(expect.arrayContaining([expect.stringMatching(/cash at risk/)]));
+  });
+
+  it('a switch re-derives the funnel from the substitute\'s own measured figures', async () => {
+    await path('Campaign A', 'email (Instantly)', 10, 2, 2);
+    await path('Partner list', 'partner referral', 4, 0, 2);
+    const { record } = await assessProjectFallbackPlan(projectId, { authority: granted, recoveryWindow: window });
+    const chain = record!.chains.find((c) => c.failureCondition.includes('stops delivering'))!;
+    expect(chain.primaryPath).toMatch(/^Campaign A @ email \(Instantly\)/);
+    const impact = chain.replacements[0]!.impact!;
+    // Primary: 10 reached, 8 delivered, 2 of 8 answer. Partner list: 4 reached, all delivered, 2 of 4 answer.
+    expect(impact.before.deliveredProspects!.value).toBeCloseTo(8);
+    expect(impact.before.responders!.value).toBeCloseTo(2);
+    expect(impact.after.prospectsReached!.value).toBe(4);
+    expect(impact.after.deliveredProspects!.value).toBeCloseTo(4);
+    expect(impact.after.responders!.value).toBeCloseTo(2);
+    expect(impact.changed).toEqual(expect.arrayContaining(['prospectsReached', 'deliverability', 'responseRate', 'deliveredProspects']));
+    expect(impact.portfolioUnreadBecause).toBe('no portfolio was given');
+  });
+
+  it('without standing authority the substitute is ineligible in the plan and in the chain', async () => {
+    await path('Campaign A', 'email (Instantly)', 5, 0, 1);
+    await path('Partner list', 'partner referral', 3, 0, 1);
+    const { record } = await assessProjectFallbackPlan(projectId, { authority: async () => ({ ok: false, reason: 'no standing authority' }), recoveryWindow: window });
+    expect(record!.plan.substitutes[0]!.eligible).toBe(false);
+    expect(record!.chains[0]!.replacements[0]!.eligibility.eligible).toBe(false);
+  });
+
+  it('records once, again only when the plan changes, and nothing with no outreach on record', async () => {
+    const count = async () => Number((await getDb().get<{ n: number }>(`SELECT COUNT(*) AS n FROM bin_events WHERE event_type = ? AND project_id = ?`, [FALLBACK_PLAN_EVENT, projectId]))?.n ?? 0);
+    expect(await assessProjectFallbackPlan(projectId, { authority: granted, recoveryWindow: window })).toEqual({ record: null, written: false });
+    await path('Campaign A', 'email (Instantly)', 5, 0, 1);
+    expect((await assessProjectFallbackPlan(projectId, { authority: granted, recoveryWindow: window })).written).toBe(true);
+    await path('Campaign A', 'email (Instantly)', 7, 0, 1);
+    expect((await assessProjectFallbackPlan(projectId, { authority: granted, recoveryWindow: window })).written).toBe(false);
+    await path('Partner list', 'partner referral', 2, 0, 1);
+    expect((await assessProjectFallbackPlan(projectId, { authority: granted, recoveryWindow: window })).written).toBe(true);
+    expect(await count()).toBe(2);
+  });
+
+  it('runs on the production path: a cash knowledge refresh records the plan', async () => {
+    await path('Campaign A', 'email (Instantly)', 4, 1, 1);
+    await path('Campaign B', 'email (Instantly)', 2, 0, 1);
+    await loadCashKnowledge(projectId);
+    const held = await readProjectFallbackPlan(projectId);
+    expect(held).not.toBeNull();
+    expect(held!.plan.failureModes).toHaveLength(2);
+    // Same channel account: the substitute shares the primary's common cause, so it does not count as independent.
+    expect(held!.plan.substitutes[0]!.sharedWithPrimary).toEqual(['channel account: email (Instantly)']);
+    expect(held!.chains).toHaveLength(2);
+  });
+});
