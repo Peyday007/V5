@@ -118,7 +118,9 @@ describe('gateGrowth: restore first, then scale only the measured constraint', (
     expect(answering({ ok: 0, content: 0, transient: 0 })).toBe(false);
     // Backpressure is the controller's own and is untouched: an overloaded route halves.
     const calm = { db: false, lagMs: 5, cpu: 0.1 };
-    expect(decideTarget({ target: 8, active: 8, waiting: 11, window: { ok: 5, content: 0, transient: 5 }, pressure: calm }).target).toBe(4);
+    expect(decideTarget({ target: 8, active: 8, waiting: 11, window: { ok: 6, content: 0, transient: 4 }, pressure: calm }).target).toBe(4);
+    // At half or more failing on the provider it drops to the minimum (CAP-16-3 repair, episode 2).
+    expect(decideTarget({ target: 8, active: 8, waiting: 11, window: { ok: 5, content: 0, transient: 5 }, pressure: calm }).target).toBe(1);
   });
 
   it('holds when the measured constraint is a stage model slots do not serve', () => {

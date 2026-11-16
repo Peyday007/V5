@@ -41,7 +41,9 @@ describe('the decision', () => {
     }
   });
   it('halves when the provider overloads, and when Brain is under pressure', () => {
-    expect(decideTarget({ target: 32, active: 32, waiting: 99, window: { ok: 5, content: 1, transient: 6 }, pressure: calm }).target).toBe(16);
+    expect(decideTarget({ target: 32, active: 32, waiting: 99, window: { ok: 6, content: 1, transient: 4 }, pressure: calm }).target).toBe(16);
+    // Half or more failing on the provider drops to the minimum (CAP-16-3 repair, episode 2).
+    expect(decideTarget({ target: 32, active: 32, waiting: 99, window: { ok: 5, content: 1, transient: 6 }, pressure: calm }).target).toBe(1);
     expect(decideTarget({ target: 32, active: 32, waiting: 99, window: { ok: 9, content: 0, transient: 0 }, pressure: { ...calm, db: true } }).target).toBe(16);
     expect(decideTarget({ target: 32, active: 32, waiting: 99, window: { ok: 9, content: 0, transient: 0 }, pressure: { ...calm, lagMs: 1_500 } }).target).toBe(16);
   });
