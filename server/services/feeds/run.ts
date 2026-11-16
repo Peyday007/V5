@@ -35,7 +35,9 @@ import { FEED_SOURCES, pullUrl, type FeedSource } from './sources.ts';
 import { FEED_SHORTLIST_BUCKET } from './bucket.ts';
 import { SITE_SOURCE } from './sites.ts';
 import { CODE_SIGNAL_SOURCE, coveredItems, detectionsForLeads } from './detectors.ts';
-import { extractItems, type ExtractableItem, type ExtractedFact } from './extract.ts';
+import { extractItem, extractItems, type ExtractableItem, type ExtractedFact } from './extract.ts';
+import { currentEventGraph, syncEventGraph, type GraphHypothesis } from '../industry/eventGraph.ts';
+import { constructFromGraph } from '../cash/construct.ts';
 
 export type Fetcher = (url: string, headers: Record<string, string>, timeoutMs?: number) => Promise<unknown>;
 
@@ -183,8 +185,15 @@ export async function pullDueFeeds(input: {
  *     proved (a broken site, a code detection's own lead);
  *   * screenCalls — the SCREEN_LEAD model calls actually made, and the
  *     distinct items they were about;
- *   * workCreated — leads code produced that no single record showed: code
- *     detections and code-proved site leads.
+ *   * workCreated — what code produced that no single record showed: code
+ *     detections and code-proved site leads, and the cross-source joins
+ *     themselves (ALGO-19-3): fact keys the deterministic extractor read from
+ *     items of two or more different sources in the window (one entity's price,
+ *     quantity, date or place seen on separate feeds), event-graph hypotheses
+ *     whose raw evidence spans two or more sources and was observed in the
+ *     window, and the distinct transaction designs the graph constructor builds
+ *     from those hypotheses before any goal's constraints. A graph figure is
+ *     null — never zero — when the graph could not be read.
  *
  * Every lead counted here is still only a lead: it reaches Claude on the same
  * evidence gate as any other, and nothing in this reading is a buyer.
@@ -197,7 +206,92 @@ export interface ScreeningEconomy {
   notScreened: { duplicates: number; covered: number; provedByCode: number; total: number };
   screenCalls: number;
   itemsScreened: number;
-  workCreated: { codeDetections: number; siteLeads: number; total: number };
+  workCreated: {
+    codeDetections: number;
+    siteLeads: number;
+    /** Extracted fact keys observed on two or more distinct sources in the window. */
+    crossSourceFacts: number;
+    /** Event-graph hypotheses whose evidence spans two or more sources, observed in the window; null when the graph could not be read. */
+    graphHypotheses: number | null;
+    /** Graph constructions kept from those hypotheses, before any goal's constraints; null when the graph could not be read. */
+    graphConstructions: number | null;
+    total: number;
+  };
+}
+
+/** Feed items read per page when the window's cross-source joins are counted. */
+const CROSS_SOURCE_PAGE = 500;
+
+/**
+ * Fact keys the deterministic extractor reads from items of at least two
+ * different sources in [since, until). A key carries its entity and
+ * deliverable (`extract.ts`), and a record without an entity keys by its own
+ * id, so a key two sources share is the same entity's fact seen separately —
+ * a join no single record showed. Code-made items are left out: they are
+ * counted as code detections and site leads already. Paged, never one read.
+ */
+async function crossSourceFacts(since: string, until: string): Promise<number> {
+  const sources = new Map<string, Set<string>>();
+  let after: { fetchedAt: string; id: string } | null = null;
+  for (;;) {
+    const rows: { id: string; source: string; url: string; title: string; body: string | null; organization: string | null; published_at: string | null; fetched_at: string }[] =
+      await getDb().all(
+        after
+          ? `SELECT id, source, url, title, body, organization, published_at, fetched_at FROM feed_items
+              WHERE fetched_at < ? AND source <> ? AND source <> ? AND (fetched_at > ? OR (fetched_at = ? AND id > ?))
+              ORDER BY fetched_at, id LIMIT ${CROSS_SOURCE_PAGE}`
+          : `SELECT id, source, url, title, body, organization, published_at, fetched_at FROM feed_items
+              WHERE fetched_at < ? AND source <> ? AND source <> ? AND fetched_at >= ?
+              ORDER BY fetched_at, id LIMIT ${CROSS_SOURCE_PAGE}`,
+        after
+          ? [until, CODE_SIGNAL_SOURCE, SITE_SOURCE, after.fetchedAt, after.fetchedAt, after.id]
+          : [until, CODE_SIGNAL_SOURCE, SITE_SOURCE, since],
+      );
+    for (const row of rows) {
+      const facts = extractItem({
+        id: row.id,
+        source: row.source,
+        url: row.url,
+        title: row.title,
+        body: row.body,
+        organization: row.organization,
+        publishedAt: row.published_at,
+        fetchedAt: row.fetched_at,
+      });
+      for (const fact of facts) {
+        const seen = sources.get(fact.key) ?? new Set<string>();
+        seen.add(row.source);
+        sources.set(fact.key, seen);
+      }
+    }
+    if (rows.length < CROSS_SOURCE_PAGE) break;
+    const last = rows[rows.length - 1]!;
+    after = { fetchedAt: last.fetched_at, id: last.id };
+  }
+  let joined = 0;
+  for (const seen of sources.values()) if (seen.size >= 2) joined += 1;
+  return joined;
+}
+
+/** A graph hypothesis is cross-source work in a window when its evidence spans two sources and some of it was observed there. */
+export function crossSourceHypothesis(h: GraphHypothesis, since: string, until: string): boolean {
+  if (new Set(h.evidence.map((e) => e.source)).size < 2) return false;
+  return h.evidence.some((e) => e.observedAt >= since && e.observedAt < until);
+}
+
+/** The event graph's cross-source hypotheses and constructions in a window, or nulls when it cannot be read. */
+async function crossSourceGraph(since: string, until: string): Promise<{ hypotheses: number | null; constructions: number | null }> {
+  try {
+    await syncEventGraph(new Date(until));
+  } catch {
+    return { hypotheses: null, constructions: null };
+  }
+  const joined = currentEventGraph()
+    .hypotheses()
+    .filter((h) => crossSourceHypothesis(h, since, until));
+  // No goal's ceiling, deliverables or exclusions: the designs the joins make possible, not one goal's shortlist.
+  const built = constructFromGraph(joined, { capitalCeilingCents: null, delivers: [] });
+  return { hypotheses: joined.length, constructions: built.kept.length };
 }
 
 export async function screeningEconomy(input: { since: string; until?: string }): Promise<ScreeningEconomy> {
@@ -222,6 +316,8 @@ export async function screeningEconomy(input: { since: string; until?: string })
   const screenable = items.filter((one) => one.source !== CODE_SIGNAL_SOURCE && one.source !== SITE_SOURCE);
   let covered = 0;
   for (let at = 0; at < screenable.length; at += 500) covered += (await coveredItems(screenable.slice(at, at + 500).map((one) => one.id))).size;
+  const joinedFacts = await crossSourceFacts(input.since, until);
+  const graph = await crossSourceGraph(input.since, until);
   return {
     since: input.since,
     until,
@@ -230,7 +326,14 @@ export async function screeningEconomy(input: { since: string; until?: string })
     notScreened: { duplicates, covered, provedByCode: codeDetections + siteLeads, total: duplicates + covered + codeDetections + siteLeads },
     screenCalls: Number(calls?.n ?? 0),
     itemsScreened: Number(calls?.items ?? 0),
-    workCreated: { codeDetections, siteLeads, total: codeDetections + siteLeads },
+    workCreated: {
+      codeDetections,
+      siteLeads,
+      crossSourceFacts: joinedFacts,
+      graphHypotheses: graph.hypotheses,
+      graphConstructions: graph.constructions,
+      total: codeDetections + siteLeads + joinedFacts + (graph.hypotheses ?? 0) + (graph.constructions ?? 0),
+    },
   };
 }
 
@@ -271,8 +374,10 @@ export async function recordScreeningEconomy(input: { projectId: string; now?: D
     summary:
       `Code-first lane, ${reading.since} to ${reading.until}: ${reading.notScreened.total} item(s) never sent to a model ` +
       `(${reading.notScreened.duplicates} repeat(s), ${reading.notScreened.covered} covered by a code rule, ${reading.notScreened.provedByCode} proved by code); ` +
-      `${reading.screenCalls} model screen call(s) on ${reading.itemsScreened} item(s); ${reading.workCreated.total} lead(s) code made that no single record showed. ` +
-      'Every lead is still only a lead.',
+      `${reading.screenCalls} model screen call(s) on ${reading.itemsScreened} item(s); ${reading.workCreated.total} piece(s) of work code made that no single record showed ` +
+      `(${reading.workCreated.codeDetections} code detection(s), ${reading.workCreated.siteLeads} site lead(s), ${reading.workCreated.crossSourceFacts} fact(s) joined across sources, ` +
+      `${reading.workCreated.graphHypotheses ?? 'unread'} cross-source graph hypothes(es), ${reading.workCreated.graphConstructions ?? 'unread'} graph construction(s)). ` +
+      'Every lead, join and construction is still only a hypothesis.',
     detail: { ...reading },
   });
   return reading;
