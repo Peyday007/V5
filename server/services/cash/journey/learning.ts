@@ -29,6 +29,18 @@ import { asReason, reasonBinds, reasonClass, type GoalConditions, type OutcomeRe
 /** Below this many observations a figure is an anecdote, and says so. */
 export const LESSON_MIN_SAMPLE = 3;
 
+/**
+ * Unique visitors an inbound offer's own page needs before its money-committed
+ * count is read as that offer's measured conversion. The method it comes from
+ * (the landing-page smoke test, Kromatic, The Real Startup Book section 4.4.8)
+ * puts the floor for even a directional read at about 200 unique visitors;
+ * below it, one deposit from three visitors is an anecdote, not a rate. It is
+ * deliberately not LESSON_MIN_SAMPLE: that floor separates a pattern in Brain's
+ * own outreach record from a single result, and says nothing about how many
+ * visitors a conversion rate needs.
+ */
+export const INBOUND_MIN_VISITORS = 200;
+
 const TERMINAL = new Set(['COLLECTED', 'DECLINED', 'ARCHIVED']);
 
 function ms(from: string, to: string): number {
