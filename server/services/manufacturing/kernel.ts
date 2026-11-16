@@ -40,6 +40,8 @@ import { absorb, openAsks, type Absorbed, type OpenedRound } from './expand.ts';
 import { ladderSnapshot, type LadderSnapshot } from './ladder.ts';
 import { ensureProgrammeAuthority, programmeMayAsk } from './program.ts';
 import { readDirective, type Directive } from './directive.ts';
+import { readLadder, type CategoryReading } from './readiness.ts';
+import { assessResources, type Challenge, type Feasibility, type Money } from './venturePath.ts';
 
 export interface KernelPass {
   /** Rounds opened this pass, each carrying why the allocator chose it. */
@@ -59,6 +61,14 @@ export interface KernelPass {
    * read almost right.
    */
   directive: { reaching: boolean; path: string | null; why: string | null };
+  /**
+   * Every category on the ladder re-read as a venture against the capital and
+   * capabilities recorded now (VENT-24-2). Derived on every pass from rows, so a
+   * category that was out of reach becomes reachable on the first tick after
+   * deployable capital or a held capability changes, with nobody restating it.
+   * Read before the gate: reading what is now possible is not new research.
+   */
+  ventures: VentureReconsideration[];
   /** The ladder as it stood when the decision was made. */
   categories: number;
   capabilitiesHeld: number;
@@ -79,6 +89,7 @@ const EMPTY: KernelPass = {
   },
   declined: [],
   directive: { reaching: false, path: null, why: null },
+  ventures: [],
   categories: 0,
   capabilitiesHeld: 0,
   openRounds: 0,
@@ -121,6 +132,8 @@ export async function runManufacturingKernel(projectId: string): Promise<KernelP
    */
   const directive = await directiveFor(snapshot.program.blueprintPath);
 
+  const ventures = await reconsiderVentures(projectId, readLadder(snapshot), snapshot.capabilities);
+
   const gate = await programmeMayAsk(projectId);
   if (!gate.allowed) {
     return {
@@ -128,6 +141,7 @@ export async function runManufacturingKernel(projectId: string): Promise<KernelP
       absorbed,
       declined: [{ subject: 'every category on the ladder', why: gate.reason }],
       directive: directive.report,
+      ventures,
       ...counts,
     };
   }
@@ -145,8 +159,94 @@ export async function runManufacturingKernel(projectId: string): Promise<KernelP
     absorbed,
     declined: plan.declined,
     directive: directive.report,
+    ventures,
     ...counts,
   };
+}
+
+/* ------------------------------------------------------------------------- */
+/* Revisiting earlier ventures as capital and capabilities change             */
+/* ------------------------------------------------------------------------- */
+
+export interface VentureReconsideration {
+  categoryId: string;
+  path: string[];
+  feasibility: Feasibility;
+  challenges: Challenge[];
+  /** The cheapest fully priced entry, high end, in its currency; null when not fully priced. */
+  cost: Money | null;
+  /** Deployable capital it was read against, from the money ledger; null when unreadable. */
+  available: Money | null;
+  /**
+   * The newest recorded input the reading rests on — the latest capability
+   * held that it requires — so a reading that just turned FEASIBLE says what
+   * turned it. Null when it rests on no held capability.
+   */
+  newestInput: { kind: 'CAPABILITY_HELD'; capabilityId: string; at: string } | null;
+}
+
+/**
+ * The per-category venture reading for given resources. Pure, so a test — or a
+ * person — can ask what is reachable at a stated capital without any row.
+ *
+ * Nothing is stored: the reading is re-derived on every tick from the ladder
+ * (the existing possibility store) and the money ledger, so the transition from
+ * INFEASIBLE to FEASIBLE is observed by the next pass rather than remembered.
+ */
+export function reconsiderFrom(
+  readings: readonly CategoryReading[],
+  availableByCurrency: ReadonlyMap<string, Money | null>,
+  capabilities: readonly { id: string; heldAt: string | null }[],
+): VentureReconsideration[] {
+  const heldIds = new Set(capabilities.filter((c) => c.heldAt !== null).map((c) => c.id));
+  const heldAt = new Map(capabilities.filter((c) => c.heldAt !== null).map((c) => [c.id, c.heldAt as string]));
+  return readings.map((reading) => {
+    const total = reading.capital.cheapestFullyPriced?.totals[0] ?? null;
+    const cost: Money | null = total ? { currency: total.currency, amountMinor: total.highMinor } : null;
+    const available = cost ? (availableByCurrency.get(cost.currency) ?? null) : null;
+    const { feasibility, challenges } = assessResources({
+      budget: cost,
+      missingCapabilities: reading.missing.map((gap) => ({ id: gap.capability.id, stage: reading.path.join(' → ') })),
+      situation: { available, heldCapabilityIds: heldIds },
+    });
+    const newest = reading.held
+      .map((c) => ({ id: c.id, at: heldAt.get(c.id) }))
+      .filter((c): c is { id: string; at: string } => typeof c.at === 'string')
+      .sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0))[0];
+    return {
+      categoryId: reading.categoryId,
+      path: reading.path,
+      feasibility,
+      challenges,
+      cost,
+      available,
+      newestInput: newest ? { kind: 'CAPABILITY_HELD', capabilityId: newest.id, at: newest.at } : null,
+    };
+  });
+}
+
+async function reconsiderVentures(
+  projectId: string,
+  readings: readonly CategoryReading[],
+  capabilities: readonly { id: string; heldAt: string | null }[],
+): Promise<VentureReconsideration[]> {
+  const currencies = new Set(
+    readings.flatMap((r) => (r.capital.cheapestFullyPriced?.totals[0] ? [r.capital.cheapestFullyPriced.totals[0].currency] : [])),
+  );
+  const available = new Map<string, Money | null>();
+  for (const currency of currencies) {
+    try {
+      // The one deployable figure, from append-only entries (invariant 37); never a second calculation.
+      const { cashPosition } = await import('../cash/money.ts');
+      const position = await cashPosition({ projectId, currency });
+      available.set(currency, { currency, amountMinor: position.deployableCents });
+    } catch (error) {
+      // An unreadable ledger is an unknown, and an unknown never makes a venture feasible.
+      console.warn(`[manufacturing] deployable ${currency} unreadable for ${projectId}: ${String((error as Error)?.message ?? error)}`);
+      available.set(currency, null);
+    }
+  }
+  return reconsiderFrom(readings, available, capabilities);
 }
 
 /**
