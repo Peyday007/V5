@@ -74,7 +74,10 @@ import { currentFragments, getOrchestration, updateOrchestration } from '../../r
 import { listCoverage, listRequirements } from '../../repos/reconciliation.ts';
 import { getProject, listProjects } from '../../repos/projects.ts';
 import { laneConfig } from '../cheap/lane.ts';
-import { openFeedShortlist, pullDueFeeds, screenFeedLeads, shortlistProject } from '../feeds/run.ts';
+import { openFeedShortlist, pullDueFeeds, recordFeedExtraction, screenFeedLeads, shortlistProject, type ExtractionPass, type FeedPullResult } from '../feeds/run.ts';
+import { DETECTORS, type DetectorRunReport } from '../feeds/detectors.ts';
+import { EVENT_GRAPH_RULES_VERSION, currentEventGraph, syncEventGraph, type EventGraphSync } from '../industry/eventGraph.ts';
+import { constructFromGraph } from '../cash/construct.ts';
 import { checkDueSites, mapNextMetro } from '../feeds/sites.ts';
 import { runDetectors } from '../feeds/detectors.ts';
 import { frontierIsDue, refreshFrontier } from './frontier.ts';
@@ -151,7 +154,7 @@ import {
 } from './needsHuman.ts';
 import type { RussellHumanRequest } from '../../domain/types.ts';
 import { parseJson } from '../../repos/util.ts';
-import { cashNow, getCashMode } from '../../repos/cashMode.ts';
+import { cashNow, getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { launchableUnderCashMode } from '../cash/lifecycle.ts';
 import { runDiscovery } from '../cash/discovery.ts';
 import { runIndustryKernel } from '../industry/kernel.ts';
@@ -694,6 +697,140 @@ async function settleUnresolvedAnswer(
     const mission = request.missionId ? await getMission(request.missionId) : null;
     report.withdrawnMootAnswers.push({ requestId: request.id, missionState: mission?.state ?? null, reason });
   }
+}
+
+/** The event one observe→structure→connect→derive→reason→codify→act cycle over the feeds is recorded under (ALGO-19-4). */
+export const FEED_LOOP_EVENT = 'FEED_LOOP_CYCLE';
+
+/** What one cycle of the feed loop did, stage by stage, read back from the owners that did it. */
+export interface FeedLoopCycle {
+  /** Observe: what the due sources returned this tick (`pullDueFeeds`). */
+  observe: { sources: number; fetched: number; inserted: number; duplicates: number; incremental: number; failed: number };
+  /** Structure: the deterministic extraction pass over items stored since its cursor (`recordFeedExtraction`). */
+  structure: { cursor: ExtractionPass['cursor'] | null; items: number; readable: number; facts: number; contested: number; stale: number } | null;
+  /** Connect: the event graph brought up to the durable detection rows (`syncEventGraph`). */
+  connect: { read: number; added: number; removed: number; recomputed: number; facts: number; hypotheses: number; cursor: EventGraphSync['cursor'] } | null;
+  /** Derive: graph hypotheses joined with the structures they can be paid through, pruned on hard constraints (`constructFromGraph`). */
+  derive: { hypotheses: number; kept: number; pruned: number; top: { key: string; structure: string; rule: string; missingConditions: number }[] } | null;
+  /** Reason selectively: only what code could not read is batched for a model; everything else stayed with code. */
+  reason: { batches: number; items: number; readByCode: number };
+  /** Codify: each installed rule, its mode this pass and why, and any repair it filed for the improvement loop. */
+  codify: { rule: string; mode: string; modeReason: string; signals: number; created: number; extended: number; proposed: string | null }[];
+  /** Reproducibility: the rule versions every stage ran under. */
+  versions: { graphRules: number; detectors: string[] };
+  /** Stage failures, each its own; a failed stage never stops the stages after it. */
+  errors: string[];
+  at: string;
+}
+
+/**
+ * One cycle of the feed loop through the owners that already exist (ALGO-19-4):
+ * observe (`pullDueFeeds`, passed in), structure (`recordFeedExtraction`),
+ * connect (`syncEventGraph`), derive (`constructFromGraph`), reason (the
+ * extractor's needsModel batches, which the free-model screen takes first and
+ * nothing else), codify (`runDetectors`' mode decisions and repair proposals,
+ * passed in) and act (this record).
+ *
+ * Before this the scheduled tick pulled and ran the detectors, but extraction
+ * ran only when a shortlist round was being opened, and the graph and its
+ * construction only inside a goal's plan read; no scheduled path chained them.
+ * Each stage reads incrementally from its own cursor, so an unchanged tick
+ * recomputes nothing and records nothing. Every construction stays a
+ * hypothesis: this records what was derived, it opens, approves and spends nothing.
+ */
+export async function runFeedLoopCycle(
+  projectId: string,
+  input: { pulled: readonly FeedPullResult[]; detectors: readonly DetectorRunReport[]; now?: Date },
+): Promise<FeedLoopCycle | null> {
+  const now = input.now ?? new Date();
+  const errors: string[] = [];
+  const failure = (stage: string) => (error: unknown) => {
+    errors.push(`${stage}: ${String((error as Error)?.message ?? error).slice(0, 200)}`);
+    return null;
+  };
+  const observe = {
+    sources: input.pulled.length,
+    fetched: input.pulled.reduce((n, one) => n + one.fetched, 0),
+    inserted: input.pulled.reduce((n, one) => n + one.inserted, 0),
+    duplicates: input.pulled.reduce((n, one) => n + one.duplicates, 0),
+    incremental: input.pulled.filter((one) => one.incremental).length,
+    failed: input.pulled.filter((one) => one.error !== null).length,
+  };
+  const extraction = await recordFeedExtraction({ projectId, now }).catch(failure('structure'));
+  const structure = extraction
+    ? {
+        cursor: extraction.cursor,
+        items: extraction.items,
+        readable: extraction.readable,
+        facts: extraction.facts.length,
+        contested: extraction.reconciled.filter((one) => one.status === 'CONTESTED').length,
+        stale: extraction.reconciled.filter((one) => one.status === 'STALE').length,
+      }
+    : null;
+  const sync = await syncEventGraph(now).catch(failure('connect'));
+  const connect = sync
+    ? { read: sync.read, added: sync.added, removed: sync.removed, recomputed: sync.recomputed.length, facts: sync.facts, hypotheses: sync.hypotheses, cursor: sync.cursor }
+    : null;
+  let derive: FeedLoopCycle['derive'] = null;
+  try {
+    const hypotheses = currentEventGraph().hypotheses();
+    // No goal is in scope on the scheduled path: no ceiling the owner set, and only proved deliverables count.
+    const result = constructFromGraph(hypotheses, { capitalCeilingCents: null, delivers: [] });
+    derive = {
+      hypotheses: hypotheses.length,
+      kept: result.kept.length,
+      pruned: result.pruned.length,
+      top: result.kept.slice(0, 5).map((one) => ({ key: one.key, structure: one.structure, rule: one.rule, missingConditions: one.missingConditions.length })),
+    };
+  } catch (error) {
+    failure('derive')(error);
+  }
+  const reason = {
+    batches: extraction?.needsModel.length ?? 0,
+    items: extraction?.needsModel.flat().length ?? 0,
+    readByCode: extraction?.readable ?? 0,
+  };
+  const codify = input.detectors.map((one) => ({
+    rule: one.rule,
+    mode: one.mode,
+    modeReason: one.modeReason,
+    signals: one.signals,
+    created: one.created,
+    extended: one.extended,
+    proposed: one.proposed,
+  }));
+  const cycle: FeedLoopCycle = {
+    observe,
+    structure,
+    connect,
+    derive,
+    reason,
+    codify,
+    versions: { graphRules: EVENT_GRAPH_RULES_VERSION, detectors: DETECTORS.map((one) => `${one.id}@${one.version}`) },
+    errors,
+    at: now.toISOString(),
+  };
+  const moved =
+    observe.inserted > 0 ||
+    structure !== null ||
+    (connect !== null && connect.read > 0) ||
+    codify.some((one) => one.created > 0 || one.extended > 0 || one.proposed !== null) ||
+    errors.length > 0;
+  if (!moved) return null;
+  await recordCashEvent({
+    projectId,
+    kind: FEED_LOOP_EVENT,
+    actorRef: 'BRAIN',
+    summary:
+      `Feed loop: observed ${observe.inserted} new of ${observe.fetched} fetched (${observe.duplicates} duplicate); ` +
+      `structured ${structure?.facts ?? 0} fact(s) from ${structure?.items ?? 0} item(s); ` +
+      `connected ${connect?.read ?? 0} detection row(s), ${connect?.recomputed ?? 0} neighborhood(s) recomputed; ` +
+      `derived ${derive?.kept ?? 0} hypothesis construction(s), ${derive?.pruned ?? 0} pruned; ` +
+      `${reason.items} item(s) in ${reason.batches} batch(es) left for a model; ` +
+      `${codify.length} rule(s) run${errors.length ? `; ${errors.length} stage failure(s)` : ''}. Every construction is a hypothesis.`,
+    detail: { ...cycle },
+  });
+  return cycle;
 }
 
 /** Marks a cycle error that is per-pass failures rather than a failed tick. */
@@ -1860,14 +1997,21 @@ async function tickOnce(owner: string): Promise<TickReport> {
        */
       await runPass(report, 'feeds', async () => {
         if (!laneConfig()) return;
-        await pullDueFeeds();
+        const pulled = await pullDueFeeds();
         // Code-first: installed rules recognise patterns before any model is asked.
-        await runDetectors();
+        const detected = await runDetectors();
+        const target = await shortlistProject((await listProjects()).map((one) => one.id));
+        // The rest of the loop on what was just observed and detected: structure, connect, derive,
+        // reason, codify, act (ALGO-19-4). Its own failure domain: a cycle that cannot run never stops the feeds.
+        if (target) {
+          await runFeedLoopCycle(target, { pulled, detectors: detected }).catch((error: unknown) => {
+            report.passFailures.push({ pass: `feed-loop ${target}`, error: String((error as Error)?.message ?? error).slice(0, 300) });
+          });
+        }
         // Broken money paths: map named businesses, check their sites, file what repeats.
         await mapNextMetro();
         await checkDueSites();
         await screenFeedLeads();
-        const target = await shortlistProject((await listProjects()).map((one) => one.id));
         if (target) {
           // Under focus idle Routines are kept for Brain work, so the shortlist is not widened.
           const { cashSpareSurfaces } = await import('../cash/researchRoom.ts');
