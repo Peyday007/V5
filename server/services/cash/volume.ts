@@ -91,3 +91,68 @@ export function readVolume(text: string, windowDays: number): VolumeReading | nu
         : `${buyers} reachable buyers, each buying about every ${Math.round(everyDays)} days, so ${purchases} purchase(s) each in ${window} days`,
   };
 }
+
+/**
+ * A physical or counted quantity a record states, with its unit normalized —
+ * the numeric extraction ALGO-16-1 item 2 names, kept beside `readVolume`
+ * because both read numbers out of prose and share its rule: a quantity counts
+ * only when a unit stands next to it, and a bare number is not read.
+ *
+ * Mass normalizes to kilograms, volume to litres, area to acres, time to
+ * hours; anything counted (bales, units, loads, …) keeps its own singular unit,
+ * because two different things counted are not one quantity. A US "ton" is the
+ * short ton (907.18474 kg) and a "tonne" the metric one; the text that was read
+ * travels with the value so a reader can check which was meant.
+ */
+export interface QuantityReading {
+  value: number;
+  unit: string;
+  normalizedValue: number;
+  normalizedUnit: 'kg' | 'l' | 'acre' | 'hour' | string;
+  text: string;
+}
+
+const QUANTITY_UNITS: Record<string, { unit: string; factor: number }> = {
+  kg: { unit: 'kg', factor: 1 }, kgs: { unit: 'kg', factor: 1 }, kilogram: { unit: 'kg', factor: 1 }, kilograms: { unit: 'kg', factor: 1 },
+  lb: { unit: 'kg', factor: 0.45359237 }, lbs: { unit: 'kg', factor: 0.45359237 }, pound: { unit: 'kg', factor: 0.45359237 }, pounds: { unit: 'kg', factor: 0.45359237 },
+  tonne: { unit: 'kg', factor: 1000 }, tonnes: { unit: 'kg', factor: 1000 }, ton: { unit: 'kg', factor: 907.18474 }, tons: { unit: 'kg', factor: 907.18474 },
+  l: { unit: 'l', factor: 1 }, litre: { unit: 'l', factor: 1 }, litres: { unit: 'l', factor: 1 }, liter: { unit: 'l', factor: 1 }, liters: { unit: 'l', factor: 1 },
+  gallon: { unit: 'l', factor: 3.785411784 }, gallons: { unit: 'l', factor: 3.785411784 }, gal: { unit: 'l', factor: 3.785411784 },
+  acre: { unit: 'acre', factor: 1 }, acres: { unit: 'acre', factor: 1 }, hectare: { unit: 'acre', factor: 2.4710538 }, hectares: { unit: 'acre', factor: 2.4710538 }, ha: { unit: 'acre', factor: 2.4710538 },
+  hour: { unit: 'hour', factor: 1 }, hours: { unit: 'hour', factor: 1 }, hrs: { unit: 'hour', factor: 1 },
+};
+
+const COUNTED = 'units?|items?|pieces?|pallets?|loads?|truckloads?|bales?|head|crates?|boxes|cases?|bushels?|cords?|seats?|licen[cs]es?|copies|sets?|bags?|rolls?|sheets?|panels?|vehicles?|trucks?|machines?';
+const QUANTITY = new RegExp(
+  `(?<![$£€¥\\d.,])(\\d{1,3}(?:,\\d{3})+|\\d+(?:\\.\\d+)?)\\s*(${Object.keys(QUANTITY_UNITS).join('|')}|${COUNTED})\\b(?!\\s*%)`,
+  'gi',
+);
+
+function singular(word: string): string {
+  const w = word.toLowerCase();
+  if (w === 'head' || w === 'copies') return w === 'copies' ? 'copy' : 'head';
+  if (w === 'boxes') return 'box';
+  if (w.endsWith('ces') && w !== 'pieces') return w.replace(/ces$/, 'ce');
+  return w.replace(/s$/, '');
+}
+
+/** Every unit-bearing quantity in the text, normalized; empty when none is stated. */
+export function readQuantities(text: string): QuantityReading[] {
+  if (!text) return [];
+  const out: QuantityReading[] = [];
+  for (const match of text.matchAll(QUANTITY)) {
+    const value = Number(match[1]!.replace(/,/g, ''));
+    if (!Number.isFinite(value) || value <= 0) continue;
+    const raw = match[2]!.toLowerCase();
+    const known = QUANTITY_UNITS[raw];
+    const unit = known ? raw : singular(raw);
+    out.push({
+      value,
+      unit,
+      normalizedValue: known ? Math.round(value * known.factor * 1000) / 1000 : value,
+      normalizedUnit: known ? known.unit : unit,
+      text: match[0]!,
+    });
+  }
+  return out;
+}
