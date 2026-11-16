@@ -798,6 +798,22 @@ export async function grantStandingRelease(changeRequestId: string, riskClass: s
   return { granted: true, detail: 'automatic release granted (LOW risk)' };
 }
 
+/**
+ * Whether a mutation scope can hold a change to behaviour: at least one entry is a repository path
+ * that is not a test. A scope of nothing but `tests/**` (a diagnosis that named no owner path) or a
+ * component label such as `operator:CAPABILITY_BELOW_TARGET` cannot — production, 2026-11-16:
+ * fcp_351dce2b and fcp_344f15e6 were submitted with `["tests/**"]`, and every architect session
+ * (twenty, ten per plan bin) correctly answered that no plan fits, until both plan bins were spent
+ * and read as waiting for a person.
+ */
+export function scopeCarriesAChange(scope: readonly string[]): boolean {
+  return scope.some((entry) => {
+    const path = entry.trim();
+    if (!path || path.includes(':') || path.startsWith('/') || path.includes('..')) return false;
+    return !/(^|\/)(tests?|__tests__)\//.test(path) && !/\.(test|spec)\.[^/]*$/.test(path);
+  });
+}
+
 async function submitEngineering(
   candidate: ImprovementCandidate,
   link: Linked,
@@ -822,6 +838,24 @@ async function submitEngineering(
   const history = await family(candidate.weaknessKey.split('#')[0]!);
   const composed = composeObjective(candidate, link, history, baseline, existing);
   const spec = options.preamble ? { ...composed, objective: `${options.preamble} ${composed.objective}`.slice(0, 7900) } : composed;
+  if (!scopeCarriesAChange(spec.mutationScope)) {
+    /*
+     * Not sent to Factory: an objective whose only writable paths are tests cannot remove the cause
+     * it describes, so its plan bin can only be spent on honest refusals. The owner of the behaviour
+     * is named first (the operator commissions again with owner_paths, or a diagnosis that names
+     * them), and then it is engineered.
+     */
+    const heldOn =
+      `the owner of the behaviour is not named: the mutation scope ${JSON.stringify(spec.mutationScope)} holds no path ` +
+      'outside tests, so no plan can change the behaviour. Commission it again with owner_paths naming the files that produce it.';
+    await decideCandidate(candidate.id, 'HELD', `Not sent to Factory: ${heldOn}`, { heldOn: heldOn.slice(0, 300) });
+    await recordImprovementEvent({
+      candidateId: candidate.id,
+      kind: 'DECIDED',
+      detail: { decision: 'HELD', needsPerson: false, reason: 'SCOPE_HOLDS_NO_OWNER_PATH', mutationScope: spec.mutationScope },
+    });
+    return `held: ${heldOn}`;
+  }
   const { submitObjective } = await import('../factory/contract.ts');
   const submitted = await submitObjective({
     projectId,
