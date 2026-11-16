@@ -28,8 +28,9 @@ import { recordBinEvent } from '../../repos/bins.ts';
 import { databasePoolReadings } from '../../db/database.ts';
 import { recentInfraFailures } from '../../db/infra.ts';
 import { httpCompleter, laneConfig, type Completer, type LaneConfig } from '../cheap/lane.ts';
-import { isRunpodSlot, runpodCallWindow } from '../cheap/runpod.ts';
+import { isRunpodSlot, runpodCallWindow, RUNPOD_PREFIX } from '../cheap/runpod.ts';
 import { superviseRunpodPod } from '../cheap/runpodPod.ts';
+import { RECIPES, recipeFor, type PodRecipe } from '../cheap/runpodRestore.ts';
 import type { SourceFetch } from '../sources/fetchForWorker.ts';
 import type { RecordedStageCapacity } from './stageCapacity.ts';
 import { readSource } from '../sources/access.ts';
@@ -264,6 +265,40 @@ export function gpuCeiling(env: NodeJS.ProcessEnv = process.env): number {
   return Number.isFinite(n) && n >= 1 ? Math.min(SAFETY_CEILING, Math.floor(n)) : 32;
 }
 
+/**
+ * The sequences the GPU slot's pod serves at once (vLLM `--max-num-seqs` in the
+ * recipe that serves this model), or null when it is not a GPU slot or no
+ * recipe serves it. Pure in its inputs.
+ *
+ * It is the growth gate's floor for "proven" on the GPU. The pod is billed by
+ * the hour whatever it holds, and vLLM batches up to this many sequences in one
+ * forward pass by design, so filling them is using capacity already deployed,
+ * not growing past what was measured. A fresh pod — a new model starts its
+ * `free_lane_capacity` row at a highest-stable of 1 — was otherwise held at two
+ * slots by any stage reading that named a non-lane constraint, while it served
+ * eight (production 2026-11-16 08:24Z: `runpod/Qwen/Qwen3-4B-AWQ` held at 2,
+ * "the constrained stage is commercial-execution", 17 items waiting, 0 busy).
+ * Every other control still binds: pressure and provider overload halve, nothing
+ * waiting decays, the GPU ceiling and the database-pool share cap the step.
+ */
+export function servedSequences(model: string, recipes: Record<string, PodRecipe> = RECIPES, active: PodRecipe | null = activeRecipe()): number | null {
+  if (!isRunpodSlot(model)) return null;
+  const served = model.slice(RUNPOD_PREFIX.length);
+  const recipe = active && active.served === served ? active : Object.values(recipes).find((r) => r.served === served);
+  if (!recipe) return null;
+  const at = recipe.args.indexOf('--max-num-seqs');
+  const n = at >= 0 ? Number(recipe.args[at + 1]) : NaN;
+  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : null;
+}
+
+function activeRecipe(): PodRecipe | null {
+  try {
+    return recipeFor(null);
+  } catch {
+    return null;
+  }
+}
+
 async function windowFor(model: string, now = Date.now()): Promise<Window> {
   const rows = await getDb().all<{ outcome: string; n: number | string }>(
     `SELECT outcome, COUNT(*) AS n FROM bin_events
@@ -494,7 +529,9 @@ export async function controlStep(): Promise<ControlReading | null> {
      * (`gateGrowth`). Regaining proven capacity is restoring, never held.
      */
     if (decision.target > pool.target) {
-      const verdict = gateGrowth({ model: pool.worker.model, gpu: !!gpu, current: pool.target, proposed: decision.target, stableHigh: pool.stableHigh, recorded: stages, answering: answering(window) });
+      // A GPU's served sequences count as proven: the pod already runs them in one batch (`servedSequences`).
+      const proven = gpu ? Math.max(pool.stableHigh, servedSequences(pool.worker.model) ?? 0) : pool.stableHigh;
+      const verdict = gateGrowth({ model: pool.worker.model, gpu: !!gpu, current: pool.target, proposed: decision.target, stableHigh: proven, recorded: stages, answering: answering(window) });
       if (verdict.held) decision = { ...decision, target: verdict.target, reason: verdict.reason!, stable: false };
       else if (verdict.reason) decision = { ...decision, reason: `${decision.reason}; ${verdict.reason}` };
     }
