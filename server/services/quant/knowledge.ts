@@ -39,6 +39,7 @@ import type { LimitingInput } from './portfolio.ts';
 import { reconstruct } from './reconstruct.ts';
 import { rankRoutesFromLedger, routeMoneyStatement, type RouteMoneyVelocity, type RouteScore } from './deadline.ts';
 import { keepCashLedger, readLedger } from './ledger.ts';
+import { watchForecastPath, type FallbackWatch } from './fallbackWatch.ts';
 import { assessModelLearning, type ModelLearningReading } from './learning.ts';
 import { compareAfterCorrection, impliedProbability, MIN_CALIBRATION_SAMPLE } from './forecast.ts';
 import type { Correction, CorrectionComparison, ExposureRow, OutcomeRow, PredictionRow } from './forecast.ts';
@@ -107,6 +108,13 @@ export interface CashKnowledge {
    * ledger failure never stops a goal reading.
    */
   learning: ModelLearningReading | null;
+  /**
+   * The fallback watch on the forecast this knowledge carries (FALL-37-4): its misses recorded as failures,
+   * drift warnings and the plans they re-read, each correction judged as a switch, the pathway's reliability
+   * and the recurring failure classes handed to Factory. Null when it could not run; absent on knowledge
+   * built without a refresh.
+   */
+  fallbacks?: FallbackWatch | null;
 }
 
 const cache = new Map<string, { at: number; value: CashKnowledge }>();
@@ -142,8 +150,11 @@ export async function loadCashKnowledge(projectId: string, now = Date.now()): Pr
   const learning = await keepCashLedger(projectId, currencies)
     .then((kept) => learnFromCashLedger(projectId, currencies, { read: async () => kept.ledger }))
     .catch(() => null);
+  // The forecast is a consequential dependency of every plan that reads it: its failures are recorded and
+  // its switches judged on the same refresh. A watch that fails never stops the knowledge.
+  const fallbacks = learning ? await watchFallbacks(projectId, currencies, learning).catch(() => null) : null;
   const { routeMoney, routeScores, routeMoneyError } = await loadRouteMoney(projectId, opportunities);
-  const value: CashKnowledge = { projectId, opportunities: new Map(opportunities.map((one) => [one.id, one])), facts: evidence, lessons, sources, watermark, routeMoney, routeScores, routeMoneyError, estimates: new Map(), learning };
+  const value: CashKnowledge = { projectId, opportunities: new Map(opportunities.map((one) => [one.id, one])), facts: evidence, lessons, sources, watermark, routeMoney, routeScores, routeMoneyError, estimates: new Map(), learning, fallbacks };
   cache.set(projectId, { at: now, value });
   return value;
 }
@@ -349,6 +360,18 @@ export function correctionRounds(reading: Pick<ModelLearningReading, 'ledger' | 
 /** When each correction took effect, per comparable bucket (see `correctionRounds`). Pure. */
 export function correctionTimes(reading: Pick<ModelLearningReading, 'ledger' | 'diagnoses' | 'corrections'>, predictions: readonly PredictionRow[]): Map<string, string> {
   return new Map([...correctionRounds(reading, predictions)].map(([key, round]) => [key, round.correctedAt]));
+}
+
+/** Run the fallback watch on the forecast reading, with the goals whose plans rest on each claim. */
+async function watchFallbacks(projectId: string, currencies: readonly string[], learning: ModelLearningReading): Promise<FallbackWatch> {
+  const goals = await dependentGoals(projectId);
+  const dependents = new Map<string, string[]>();
+  for (const [plan, claims] of cashDependencyGraph(projectId, currencies, goals)) {
+    const goal = goals.find((g) => planClaimId(g.id) === plan);
+    if (!goal) continue;
+    for (const claim of claims) dependents.set(claim, [...(dependents.get(claim) ?? []), goal.id]);
+  }
+  return watchForecastPath(projectId, learning, { dependents });
 }
 
 /** The goals whose plans read this project's cash knowledge. */
