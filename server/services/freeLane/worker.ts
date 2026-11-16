@@ -1235,7 +1235,9 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
       drop(CITATION_KEYS.some((key) => c[key] !== undefined && key !== 'evidence_excerpt') ? citationFailure(c, numbered) : uncitedReason(c));
     }
     if (claims.length === 0) {
-      ctx.why = `the answer did not survive Brain's own checks: ${listed.length} claim(s) offered, dropped ${JSON.stringify(dropped)}`;
+      // With nothing listed, what the model sent instead is the only clue to why (2026-11-16: 28 of the GPU's 29 refusals in 2h).
+      const sent = listed.length === 0 ? ` from ${readable.length} source(s); the reply was ${JSON.stringify(raw).slice(0, 200)}` : '';
+      ctx.why = `the answer did not survive Brain's own checks: ${listed.length} claim(s) offered, dropped ${JSON.stringify(dropped)}${sent}`;
       return null;
     }
     return { claims: claims.slice(0, 25) };
