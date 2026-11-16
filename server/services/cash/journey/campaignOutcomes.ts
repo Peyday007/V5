@@ -21,7 +21,20 @@
  *   - the sequence completed (3) with no reply       → BUYER_SILENT
  *
  * A lead still in an active or paused sequence records nothing: silence is
- * learned only from a terminal provider state, never from a clock here. One row
+ * learned only from a terminal provider state, never from a clock here.
+ *
+ * Answers are recorded by enrolment cohort, never lead by lead. A reply or a
+ * bounce ends a lead's sequence days before a silent lead's last step does, so
+ * recording each lead the moment it is terminal would put every early answer
+ * in the funnel's denominator and leave out most of the silent leads beside
+ * them, overstating the bounce rate and the response rate while a campaign
+ * runs. A cohort is the leads a campaign enrolled on one UTC day
+ * (Instantly's `timestamp_created`; leads without one are one cohort of their
+ * own), and none of its leads is recorded until every one of them is terminal.
+ * A cohort is chosen by when it was enrolled, never by how its leads answered,
+ * so the rows the funnel reads are a whole sample: what was answered, and every
+ * lead that had the same chance and did not. A lead Instantly skipped (−3) was
+ * never sent to, records nothing and holds no cohort back. One row
  * per lead, keyed by the campaign and Instantly's lead id, so a second pass
  * writes nothing, and the first terminal answer stands — exactly as
  * `learning.ts` treats a deal's contact. Messages are never recorded: a lead is
@@ -53,6 +66,9 @@ export const CAMPAIGN_CHANNEL = 'email (Instantly)';
 const LEAD_BOUNCED = -1;
 const LEAD_UNSUBSCRIBED = -2;
 const LEAD_COMPLETED = 3;
+const LEAD_SKIPPED = -3;
+/** The cohort of leads whose enrolment time Instantly did not state. */
+export const UNDATED_COHORT = 'undated';
 
 /** A workspace allows 20 requests a minute; a full read is a few hundred leads, so every few hours is plenty. */
 export const CAMPAIGN_OUTCOMES_EVERY_MS = 6 * 60 * 60 * 1000;
@@ -72,6 +88,8 @@ export interface CampaignLead {
   status: number | null;
   replies: number;
   interestStatus: number | null;
+  /** When the campaign enrolled the lead (Instantly's `timestamp_created`), or null when not stated. */
+  enrolledAt: string | null;
 }
 
 export interface CampaignOutcomesReport {
@@ -83,6 +101,12 @@ export interface CampaignOutcomesReport {
   recorded: number;
   /** Leads still in their sequence with no answer: nothing recorded for them. */
   pending: number;
+  /**
+   * Leads whose answer is terminal but whose enrolment cohort still has a lead
+   * in its sequence: held, not recorded, so the funnel never reads the answers
+   * of a cohort without its silences.
+   */
+  held: number;
   /** Why nothing was read or written, when that is the case. */
   skipped: string | null;
   /** Campaigns whose read failed, with why. A failure writes nothing for that campaign. */
@@ -90,7 +114,7 @@ export interface CampaignOutcomesReport {
 }
 
 function emptyReport(): CampaignOutcomesReport {
-  return { campaigns: 0, leads: 0, recorded: 0, pending: 0, skipped: null, failed: [] };
+  return { campaigns: 0, leads: 0, recorded: 0, pending: 0, held: 0, skipped: null, failed: [] };
 }
 
 function num(value: unknown): number | null {
@@ -111,6 +135,17 @@ export function contactResultOf(lead: CampaignLead, optedOut = false): CampaignC
   if (lead.replies > 0) return 'BUYER_REPLIED';
   if (lead.status === LEAD_COMPLETED) return 'BUYER_SILENT';
   return null;
+}
+
+/** The enrolment cohort a lead belongs to: the UTC day the campaign enrolled it. */
+export function cohortOf(lead: CampaignLead): string {
+  const at = lead.enrolledAt === null ? Number.NaN : Date.parse(lead.enrolledAt);
+  return Number.isFinite(at) ? new Date(at).toISOString().slice(0, 10) : UNDATED_COHORT;
+}
+
+/** A lead Instantly never sent to: it is no prospect reached and no answer. */
+function neverSent(lead: CampaignLead): boolean {
+  return lead.status === LEAD_SKIPPED;
 }
 
 /**
@@ -172,6 +207,7 @@ async function leadsOf(deps: Deps, campaignId: string): Promise<CampaignLead[]> 
         status: num(row.status),
         replies: Math.max(0, num(row.email_reply_count) ?? 0),
         interestStatus: num(row.lt_interest_status),
+        enrolledAt: typeof row.timestamp_created === 'string' ? row.timestamp_created : null,
       });
     }
     after = typeof answer.next_starting_after === 'string' ? answer.next_starting_after : undefined;
@@ -242,10 +278,18 @@ export async function recordCampaignOutcomes(
     report.campaigns += 1;
     report.leads += leads.length;
     const optedOut = await optedOutOn(campaign.id);
-    for (const lead of leads) {
-      const result = contactResultOf(lead, lead.email !== null && optedOut.has(lead.email));
+    const answered = leads
+      .filter((lead) => !neverSent(lead))
+      .map((lead) => ({ lead, result: contactResultOf(lead, lead.email !== null && optedOut.has(lead.email)) }));
+    // A cohort with any lead still in its sequence records none of its leads.
+    const openCohorts = new Set(answered.filter((one) => one.result === null).map((one) => cohortOf(one.lead)));
+    for (const { lead, result } of answered) {
       if (!result) {
         report.pending += 1;
+        continue;
+      }
+      if (openCohorts.has(cohortOf(lead))) {
+        report.held += 1;
         continue;
       }
       const fresh = await insertOutcome({
@@ -255,7 +299,7 @@ export async function recordCampaignOutcomes(
         mechanism: campaign.name,
         channel: CAMPAIGN_CHANNEL,
         valueText: result,
-        basis: `instantly campaign ${campaign.id}; lead ${lead.id}: status ${lead.status ?? 'none'}, replies ${lead.replies}, interest ${lead.interestStatus ?? 'none'}`,
+        basis: `instantly campaign ${campaign.id}; lead ${lead.id}: status ${lead.status ?? 'none'}, replies ${lead.replies}, interest ${lead.interestStatus ?? 'none'}; enrolment cohort ${cohortOf(lead)}, every lead terminal`,
         requestKey: `outcome:campaign:${campaign.id}:${lead.id}:CONTACT_RESULT`,
       });
       if (fresh) report.recorded += 1;
