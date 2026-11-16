@@ -352,3 +352,89 @@ describe('recorded actions from before the authority ledger began are history, n
     expect(reading.violation).toEqual({ rowId: history, reason: expect.stringMatching(new RegExp(`names grant ${foreign}, which is not a grant of its project`)) });
   });
 });
+
+/*
+ * Reviewer finding (repair-no-test-for-pre-ledger-rows): every scenario above
+ * built its grant and effects after the ledger existed, so no fixture had the
+ * production shape — months of recorded actions, across projects, before the
+ * first AUTHORITY_DECISION row anywhere — and the permanent failure passed 161
+ * tests. This fixture is that shape: history in two projects, then the ledger's
+ * first decision, then ledgered work.
+ */
+describe('the production shape: months of recorded actions across projects before the ledger\'s first decision', () => {
+  async function backdate(table: 'cash_actions' | 'cash_authorities', column: string, id: string, at: string): Promise<void> {
+    await getDb().run(`UPDATE ${table} SET ${column} = ? WHERE id = ?`, [at, id]);
+  }
+
+  async function historical(project: string, authority: string, action: string, key: string, at: string): Promise<string> {
+    const row = (
+      await recordAction({
+        projectId: project, opportunityId: `opp-${key}`, authorityId: authority, action, performedBy: 'PERSON',
+        reference: null, detail: 'recorded through the gate before the ledger existed', confirmedBy: 'PERSON', requestKey: key,
+      })
+    ).action.id;
+    await backdate('cash_actions', 'created_at', row, at);
+    return row;
+  }
+
+  async function secondProject(): Promise<{ id: string; grant: string }> {
+    const { createProject } = await import('../server/repos/projects.ts');
+    const id = (await createProject({ name: 'A second operation', slug: `second-${Math.random().toString(36).slice(2, 8)}` })).id;
+    const grant = (
+      await createAuthority({
+        projectId: id, ownerUserId: userId, createdByUserId: userId, name: 'Second operation authority',
+        allowedActions: [...COMMERCIAL_ACTIONS], prohibitions: [...ALWAYS_PROHIBITED_COMMERCIAL],
+        maxCommittedCents: 500_000, maxPerActionCents: 200_000, maxConcurrent: 5, currency: 'USD',
+        startsAt: '2026-09-01T00:00:00.000Z', expiresAt: '2099-01-01T00:00:00.000Z',
+      })
+    ).id;
+    return { id, grant };
+  }
+
+  it('September-to-November history in two projects, then ledgered work, reads ok with every historical row counted and none taken as proof', async () => {
+    await backdate('cash_authorities', 'starts_at', grantId, '2026-09-01T00:00:00.000Z');
+    const second = await secondProject();
+    const rows = [
+      await historical(projectId, grantId, 'CONTACT_BUYER', 'h1', '2026-09-15T10:00:00.000Z'),
+      await historical(projectId, grantId, 'QUOTE_AND_INVOICE', 'h2', '2026-10-02T10:00:00.000Z'),
+      await historical(second.id, second.grant, 'CONTACT_BUYER', 'h3', '2026-10-20T10:00:00.000Z'),
+      await historical(second.id, second.grant, 'ACCEPT_PAYMENT', 'h4', '2026-11-08T23:59:00.000Z'),
+    ];
+    const id = await executing();
+    await invoiced(id);
+    const reading = await actionsObeyAuthorityOnRows();
+    expect(reading.ok).toBe(true);
+    expect(reading.counts.unledgeredHistory).toBe(rows.length);
+    for (const row of rows) expect(reading.detail).toContain(row);
+    expect(reading.detail).toMatch(/^2 lifecycle effect\(s\) \(2 recorded action\(s\)/);
+  });
+
+  it('the ledger starts once for the whole Brain: a project that acts after it began, before its own first decision, is a violation', async () => {
+    const second = await secondProject();
+    await executing(); // the ledger's first decision, in the first project
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const late = (
+      await recordAction({
+        projectId: second.id, opportunityId: 'opp-late', authorityId: second.grant, action: 'CONTACT_BUYER', performedBy: 'BRAIN',
+        reference: null, detail: 'written without asking', confirmedBy: 'BRAIN', requestKey: 'late:contact',
+      })
+    ).action.id;
+    const reading = await actionsObeyAuthorityOnRows();
+    expect(reading.ok).toBe(false);
+    expect(reading.violation).toEqual({ rowId: late, reason: expect.stringMatching(/CONTACT_BUYER was performed with no authorization decision/) });
+  });
+
+  it('history under an emergency stop is still a violation, whatever its date', async () => {
+    await backdate('cash_authorities', 'starts_at', grantId, '2026-09-01T00:00:00.000Z');
+    await setEmergencyStop({ projectId, on: true, actorUserId: userId, reason: 'pause' });
+    const stop = (await cashEventsOfKindInProject(projectId, 'AUTHORITY_EMERGENCY_STOP'))[0];
+    expect(stop).toBeDefined();
+    await getDb().run('UPDATE cash_events SET created_at = ? WHERE id = ?', ['2026-09-20T00:00:00.000Z', stop!.id]);
+    const row = await historical(projectId, grantId, 'CONTACT_BUYER', 'h-under-stop', '2026-10-01T00:00:00.000Z');
+    await setEmergencyStop({ projectId, on: false, actorUserId: userId, reason: 'resume' });
+    await executing();
+    const reading = await actionsObeyAuthorityOnRows();
+    expect(reading.ok).toBe(false);
+    expect(reading.violation).toEqual({ rowId: row, reason: expect.stringMatching(/emergency stop was on/) });
+  });
+});
