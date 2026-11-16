@@ -154,8 +154,8 @@ async function main(): Promise<void> {
    * "unknown" while the Brain held the key and the pod id to ask RunPod).
    */
   const configured = Number(process.env['BRAIN_RUNPOD_USD_PER_HOUR'] ?? '');
-  const livePrice = sampledCost === null && !(Number.isFinite(configured) && configured > 0) ? await liveRunpodPrice() : null;
-  const price = sampledCost ?? (Number.isFinite(configured) && configured > 0 ? configured : livePrice?.costPerHr ?? NaN);
+  const livePrice = sampledCost === null || runningMs === 0 ? await liveRunpodPrice() : null;
+  const price = Number.isFinite(configured) && configured > 0 ? configured : NaN;
   const perClaim = (spend: number) =>
     ` · ${gpuJobs ? `$${(spend / gpuJobs).toFixed(4)} per research job` : 'no GPU jobs yet'}` +
     ` · ${gpuClaims.accepted ? `$${(spend / gpuClaims.accepted).toFixed(4)} per accepted claim (${gpuClaims.accepted})` : 'no accepted GPU claims'}` +
@@ -163,10 +163,43 @@ async function main(): Promise<void> {
   if (sampledCost && runningMs > 0) {
     const spend = (sampledCost * runningMs) / 3_600_000;
     console.log(`GPU COST $${spend.toFixed(2)} measured: ${Math.round(runningMs / 60_000)} min running at RunPod's $${sampledCost}/h${perClaim(spend)}`);
+  } else if (livePrice && livePrice.costPerHr >= 0 && !(Number.isFinite(configured) && configured > 0)) {
+    /*
+     * RunPod's live rate, priced over the time the pod actually ran in the
+     * window, not the whole window: the owner runs bounded GPU tests and
+     * stops the pod (2026-11-16 21:35Z), so "rate × window" would bill hours
+     * it was stopped. Running time is the larger of Brain's own STARTED→STOPPED
+     * events and the span of GPU jobs; a pod running now runs to now.
+     */
+    const span = await getDb().get<{ first: string | null; last: string | null }>(
+      `SELECT MIN(at) AS first, MAX(at) AS last FROM bin_events
+        WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND reason LIKE 'model runpod/%'`,
+      [since],
+    );
+    const power = await getDb().all<{ at: string; outcome: string }>(
+      `SELECT at, outcome FROM bin_events WHERE event_type = 'RUNPOD_POD' AND outcome IN ('STARTED', 'STOPPED') AND at >= ? ORDER BY at`,
+      [since],
+    );
+    const nowMs = Date.now();
+    const running = livePrice.status === 'RUNNING';
+    let eventMs = 0;
+    let on: number | null = running && !power.some((p) => p.outcome === 'STARTED') ? Date.parse(since) : null;
+    for (const p of power) {
+      if (p.outcome === 'STARTED' && on === null) on = Date.parse(p.at);
+      else if (p.outcome === 'STOPPED') {
+        eventMs += on === null ? Date.parse(p.at) - Date.parse(since) : Date.parse(p.at) - on;
+        on = null;
+      }
+    }
+    if (on !== null && running) eventMs += nowMs - on;
+    const jobMs = span?.first && span.last ? Math.max(0, (running ? nowMs : Date.parse(span.last)) - Date.parse(span.first)) : 0;
+    const ranMs = Math.min(hours * 3_600_000, Math.max(eventMs, jobMs));
+    const spend = (livePrice.costPerHr * ranMs) / 3_600_000;
+    const now = running ? `$${livePrice.costPerHr}/h now` : `$0/h now (rate ${livePrice.costPerHr > 0 ? `$${livePrice.costPerHr}/h` : 'not reported'} while running)`;
+    console.log(`GPU COST $${spend.toFixed(2)} for ~${Math.round(ranMs / 60_000)} min running in ${hours}h · pod ${livePrice.podId} ${livePrice.status}, RunPod's live price ${now}${spend > 0 ? perClaim(spend) : ''}`);
   } else if (Number.isFinite(price) && price > 0) {
     const spend = price * hours;
-    const source = livePrice ? `RunPod's live price for pod ${livePrice.podId} (${livePrice.status}), billed as if running the whole window` : 'BRAIN_RUNPOD_USD_PER_HOUR';
-    console.log(`GPU COST $${spend.toFixed(2)} for ${hours}h at $${price}/h from ${source}${perClaim(spend)}`);
+    console.log(`GPU COST $${spend.toFixed(2)} for ${hours}h at $${price}/h from BRAIN_RUNPOD_USD_PER_HOUR${perClaim(spend)}`);
   } else console.log(`GPU COST unknown (${livePrice === null && !(process.env['BRAIN_RUNPOD_API_KEY'] ?? '').trim() ? 'no BRAIN_RUNPOD_API_KEY to ask RunPod, and BRAIN_RUNPOD_USD_PER_HOUR unset' : 'RunPod returned no price for the pod, and BRAIN_RUNPOD_USD_PER_HOUR unset'})`);
   console.log(`RUNPOD_ACCEPTED_CLAIMS ${gpuClaims.accepted} surviving ${gpuClaims.surviving}`);
   console.log(`RUNPOD_SUBMITTED ${gpuJobs}`);
@@ -253,7 +286,10 @@ async function liveRunpodPrice(): Promise<{ podId: string; status: string; costP
   const podId = supervised?.podId || process.env['BRAIN_RUNPOD_POD_ID']?.trim() || podIdFromUrl(process.env['BRAIN_RUNPOD_URL'] ?? '');
   if (!podId) return null;
   const read = await readPod({ apiKey, podId, idleStopMs: 0, vllm: { url: '', key: null } });
-  return read.costPerHr !== null && read.costPerHr > 0 ? { podId, status: read.status, costPerHr: read.costPerHr } : null;
+  // A stopped pod may report no price; its status still answers "what does it bill now".
+  if (read.status === 'UNKNOWN') return null;
+  if (read.status === 'RUNNING' && !(read.costPerHr !== null && read.costPerHr > 0)) return null;
+  return { podId, status: read.status, costPerHr: read.costPerHr ?? 0 };
 }
 
 main()
