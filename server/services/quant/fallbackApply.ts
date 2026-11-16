@@ -41,9 +41,19 @@
  * the plan's eligibility already checked.
  */
 import type { FailureRecoveryRecord } from './ledger.ts';
-import { openPathFailures, openPrimaryFailures } from './fallbackPlanReading.ts';
-import type { ProjectFallbackPlanRecord } from './fallbackPlanReading.ts';
-import type { ProjectIndependenceRecord } from './fallbackIndependence.ts';
+import { recordBinEvent } from '../../repos/bins.ts';
+import {
+  FALLBACK_SWITCH_EVENT,
+  SWITCH_TRIED_PREFIX,
+  failedPathOf,
+  openPathFailures,
+  openPrimaryFailures,
+  triedFor,
+  type ContactResult,
+  type SwitchDecisionRecord,
+} from './fallbackPlanReading.ts';
+import type { MeasuredPath, ProjectFallbackPlanRecord } from './fallbackPlanReading.ts';
+import type { AcquisitionPath, ProjectIndependenceRecord } from './fallbackIndependence.ts';
 import type { FallbackPreparationRecord } from './fallbackPreparation.ts';
 import type { ChainReplacement } from './fallbacks.ts';
 import type { Figure } from './graph.ts';
@@ -78,6 +88,13 @@ export function switchDecision(input: {
   independence: ProjectIndependenceRecord | null;
   preparation: FallbackPreparationRecord | null;
   failures: readonly FailureRecoveryRecord[];
+  /**
+   * The failure occurrences whose own path's rows show recovery
+   * (`ownPathRecoveries`). A failure the dependency recovered from by
+   * switching is still its path's failure until these say so; without them a
+   * switch-settled failure reads as recovered.
+   */
+  ownRecovered?: ReadonlySet<string>;
 }): FallbackSwitchDecision | null {
   const record = input.plan;
   if (!record) return null;
@@ -85,7 +102,7 @@ export function switchDecision(input: {
   const primaryPath = chains[0]?.primaryPath ?? plan.dependency;
   const modeKeys = new Set(plan.failureModes.map((m) => m.key));
   // A failure belongs to the path it happened on: only the current primary's own open failures switch the plan.
-  const open = openPrimaryFailures(input.failures, plan.dependency, primaryPath).filter((f) => modeKeys.has(f.failureMode));
+  const open = openPrimaryFailures(input.failures, plan.dependency, primaryPath, input.ownRecovered).filter((f) => modeKeys.has(f.failureMode));
   const failure = open[open.length - 1] ?? null;
 
   const planOrder = plan.substitutes.map((s) => s.key);
@@ -115,7 +132,7 @@ export function switchDecision(input: {
     if (!reading.eligible) why.push(`not eligible: ${reading.ineligibleBecause.join('; ') || 'the plan reads it ineligible'}`);
     if (reading.readiness === 'LOCATED') why.push('only located: a possible substitute is not available capacity');
     if (reading.sharedWithPrimary.length > 0) why.push(`shares ${reading.sharedWithPrimary.join(', ')} with the failed primary, so it fails with it`);
-    const own = openPathFailures(input.failures, plan.dependency, key);
+    const own = openPathFailures(input.failures, plan.dependency, key, input.ownRecovered);
     if (own.length > 0) why.push(`has an unrecovered failure of its own (${own.map((f) => `${f.failureMode}, ${f.occurrence}`).join('; ')}), so it is not a working path to switch to`);
     const action = actionOf.get(key);
     if (!action) why.push('no independence reading on record judges switching to it');
@@ -148,19 +165,141 @@ export function switchDecision(input: {
   };
 }
 
+/** What a decision on an open failure tried, in words, in order. Empty for a plan running on its primary. Pure. */
+export function triedOf(decision: FallbackSwitchDecision): string[] {
+  if (decision.state === 'PRIMARY' || !decision.failure) return [];
+  const passed = decision.passedOver.map((p) => `passed over ${p.substitute}: ${p.because.join('; ')}`);
+  const head = decision.state === 'SWITCHED'
+    ? `${SWITCH_TRIED_PREFIX}${decision.dependency} from ${decision.primaryPath} to ${decision.replacement} (order from ${decision.order.from.toLowerCase()})`
+    : `no substitute of ${decision.dependency} qualified to replace ${decision.primaryPath}`;
+  return [head, ...passed];
+}
+
+/**
+ * The decision as the ledger keeps it, or null when there is nothing to keep
+ * (a plan on its primary tried nothing). Pure.
+ */
+export function decisionRecord(decision: FallbackSwitchDecision, at: string): SwitchDecisionRecord | null {
+  if (decision.state === 'PRIMARY' || !decision.failure) return null;
+  return {
+    occurrence: decision.failure.occurrence,
+    dependency: decision.dependency,
+    state: decision.state,
+    primaryPath: decision.primaryPath,
+    replacement: decision.replacement,
+    tried: triedOf(decision),
+    at,
+  };
+}
+
+/**
+ * Whether a switch worked, read from the substitute's own rows — the
+ * verification its plan names (`recoveryVerification`: the path records new
+ * contact results after the switch): the first result written after the
+ * switch was decided that is good for the failed mode (delivered, for a
+ * channel that stopped delivering; an answer, for prospects that stopped
+ * answering). Null while no such result is on record. Pure.
+ */
+export function switchVerification(failureMode: string, switchedAt: string, results: readonly ContactResult[]): ContactResult | null {
+  const after = Date.parse(switchedAt);
+  const good = failureMode === 'prospects-stop-answering'
+    ? (r: ContactResult) => r.result !== 'CONTACT_UNDELIVERABLE' && r.result !== 'BUYER_SILENT'
+    : (r: ContactResult) => r.result !== 'CONTACT_UNDELIVERABLE';
+  return results.find((r) => Date.parse(r.at) > after && good(r)) ?? null;
+}
+
+const DAY_MS = 86_400_000;
+
+/**
+ * Keep what Brain tried and whether it worked (FALL-37-4, S-0500, S-0506):
+ * record the decision when it changes, and once the switched-to path's own
+ * rows verify the switch, settle the failure — recovered, with the switch and
+ * every substitute passed over as what was tried, the verifying result, and
+ * the days from the failure's record to that result as the time lost. A
+ * failure no path names is the dependency's as a whole and is never settled
+ * here: it has no rows of its own to say its path came back. Writes only
+ * through the ledger's writers.
+ */
+export async function keepSwitchOutcome(
+  projectId: string,
+  decision: FallbackSwitchDecision | null,
+  input: {
+    failures: readonly FailureRecoveryRecord[];
+    decisions: readonly SwitchDecisionRecord[];
+    paths: readonly MeasuredPath[];
+    results: (path: AcquisitionPath) => Promise<ContactResult[]>;
+    record?: typeof recordBinEvent;
+    now?: () => Date;
+  },
+): Promise<{ decisionWritten: boolean; settled: string | null }> {
+  if (!decision || decision.state === 'PRIMARY' || !decision.failure) return { decisionWritten: false, settled: null };
+  const now = (input.now?.() ?? new Date()).toISOString();
+  const kept = decisionRecord(decision, now)!;
+  const same = (d: SwitchDecisionRecord) => d.occurrence === kept.occurrence && d.state === kept.state && d.replacement === kept.replacement && JSON.stringify(d.tried) === JSON.stringify(kept.tried);
+  const prior = input.decisions.find(same);
+  let decisionWritten = false;
+  if (!prior) {
+    await (input.record ?? recordBinEvent)({
+      eventType: FALLBACK_SWITCH_EVENT,
+      projectId,
+      workloadClass: 'fallback-switch',
+      outcome: kept.state,
+      reason: kept.tried[0]!.slice(0, 480),
+      evidenceClass: 'MEASURED',
+      measures: { switchDecision: kept },
+    });
+    decisionWritten = true;
+  }
+  if (decision.state !== 'SWITCHED' || !decision.replacement) return { decisionWritten, settled: null };
+  const failure = input.failures.find((f) => f.occurrence === decision.failure!.occurrence);
+  if (!failure || failure.recovered !== null || failedPathOf(failure) === null) return { decisionWritten, settled: null };
+  const switchedAt = (prior ?? input.decisions.find((d) => d.occurrence === kept.occurrence && d.state === 'SWITCHED' && d.replacement === kept.replacement) ?? kept).at;
+  const path = input.paths.find((p) => `${p.mechanism} @ ${p.channel}` === decision.replacement);
+  if (!path) return { decisionWritten, settled: null };
+  const verified = switchVerification(failure.failureMode, switchedAt, await input.results(path));
+  if (!verified) return { decisionWritten, settled: null };
+  const { recordFailureRecovery } = await import('./ledger.ts');
+  const lost = (Date.parse(verified.at) - Date.parse(failure.at)) / DAY_MS;
+  const { detectionTimely: _timely, at: _at, ...base } = failure;
+  await recordFailureRecovery(
+    {
+      ...base,
+      tried: [
+        ...new Set([...failure.tried, ...triedFor(failure.occurrence, [...input.decisions, kept])]),
+        `recovery verified: ${decision.replacement} recorded result ${verified.id} (${verified.result}) at ${verified.at}, after the switch`,
+      ],
+      recovered: true,
+      timeLostDays: Number.isFinite(lost) ? Math.max(0, lost) : null,
+    },
+    { projectId, caller: 'fallback-switch', read: async () => input.failures as FailureRecoveryRecord[], ...(input.record ? { record: input.record } : {}) },
+  );
+  return { decisionWritten, settled: failure.occurrence };
+}
+
 /** Reads the three records and the failures, and decides. Null when no plan is on record. */
 export async function readSwitchDecision(projectId: string): Promise<FallbackSwitchDecision | null> {
-  const [{ readProjectFallbackPlan }, { readProjectIndependence }, { readFallbackPreparation }, { readFailureRecoveries }] = await Promise.all([
+  const [reading, { readProjectIndependence }, { readFallbackPreparation }, { readFailureRecoveries }] = await Promise.all([
     import('./fallbackPlanReading.ts'),
     import('./fallbackIndependence.ts'),
     import('./fallbackPreparation.ts'),
     import('./ledger.ts'),
   ]);
-  const [plan, independence, preparation, failures] = await Promise.all([
-    readProjectFallbackPlan(projectId),
+  const [plan, independence, preparation, failures, decisions, paths] = await Promise.all([
+    reading.readProjectFallbackPlan(projectId),
     readProjectIndependence(projectId),
     readFallbackPreparation(projectId),
     readFailureRecoveries(projectId),
+    reading.readSwitchDecisionRecords(projectId),
+    reading.readMeasuredPaths(projectId),
   ]);
-  return switchDecision({ plan, independence, preparation, failures });
+  if (!plan) return null;
+  const results = (p: AcquisitionPath) => reading.readContactResults(projectId, p);
+  const ownRecovered = await reading.ownPathRecoveries(projectId, plan.plan.dependency, paths, results);
+  const decision = switchDecision({ plan, independence, preparation, failures, ownRecovered });
+  // What Brain tried is kept, and a switch its substitute's rows verify settles the failure. Its own catch:
+  // keeping the record never stops the decision a plan reads.
+  await keepSwitchOutcome(projectId, decision, { failures, decisions, paths, results }).catch((error: unknown) => {
+    console.warn(`[quant] fallback switch outcome unrecorded for ${projectId}: ${String((error as Error)?.message ?? error)}`);
+  });
+  return decision;
 }

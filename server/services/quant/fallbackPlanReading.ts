@@ -301,6 +301,7 @@ export function acquisitionFailures(dependencyKey: string, pathKey: string, resu
     { mode: 'channel-stops-delivering', considered: () => true, failed: (r) => r.result === 'CONTACT_UNDELIVERABLE' },
     { mode: 'prospects-stop-answering', considered: (r) => r.result !== 'CONTACT_UNDELIVERABLE', failed: (r) => r.result === 'BUYER_SILENT' },
   ];
+  assertModesNamed(modes.map((m) => m.mode));
   const out: FailureRecoveryInput[] = [];
   for (const { mode, considered, failed } of modes) {
     const seq = results.filter(considered);
@@ -341,12 +342,119 @@ export function acquisitionFailures(dependencyKey: string, pathKey: string, resu
           cashPreservedCents: null,
           timeLostDays: null,
           reputation: null,
-          methodsToImprove: [],
+          methodsToImprove: [...ACQUISITION_METHODS[mode]!],
         });
       }
       total += j - i;
       i = j;
     }
+  }
+  return out;
+}
+
+/**
+ * The general methods a failure of each acquisition mode says need improving:
+ * how early the mode is detected on a path's own results, and whether the
+ * dependency had an independent path ready to carry it. They are what a
+ * recurring failure class hands Factory (`fallbackWatch.ts`), so a class that
+ * keeps recurring becomes an improvement objective rather than a count.
+ */
+export const ACQUISITION_METHODS: Readonly<Record<string, readonly string[]>> = {
+  'channel-stops-delivering': [
+    'detecting an outreach channel that stops delivering (runs of CONTACT_UNDELIVERABLE results) early on the path\'s own results',
+    'keeping an independent acquisition path, on a different channel account, prepared to carry the dependency',
+  ],
+  'prospects-stop-answering': [
+    'detecting delivered prospects going silent (runs of BUYER_SILENT results) early on the path\'s own results',
+    'changing the segment or offer of a path whose delivered prospects stop answering',
+  ],
+};
+
+/** The method a failure names when no qualified substitute could carry the dependency. */
+export const NO_REPLACEMENT_METHOD = 'qualifying an eligible, independent substitute for the acquisition dependency before its primary fails';
+
+function assertModesNamed(modes: readonly string[]): void {
+  for (const mode of modes) if (!ACQUISITION_METHODS[mode]) throw new Error(`acquisition failure mode ${mode} names no method to improve`);
+}
+
+/* ------------------------------------------------------------------------- */
+/* What Brain tried, and whether it worked (FALL-37-4, S-0500, S-0506)        */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * Each switch decision `fallbackApply.ts` takes on an open failure, recorded
+ * on the append-only ledger (`bin_events`) when it changes: what Brain tried
+ * for that failure. The failure record itself is settled once — when its
+ * recovery is known — and carries these as its `tried`.
+ */
+export const FALLBACK_SWITCH_EVENT = 'FALLBACK_SWITCH_DECIDED';
+
+/** The `tried` entry a switch writes; a failure settled under it recovered by the switch, not on its own path. */
+export const SWITCH_TRIED_PREFIX = 'switched: ';
+
+export interface SwitchDecisionRecord {
+  /** The failure occurrence the decision answered. */
+  occurrence: string;
+  dependency: string;
+  state: 'SWITCHED' | 'NO_REPLACEMENT';
+  /** The failed path the decision moved off. */
+  primaryPath: string;
+  replacement: string | null;
+  /** What Brain tried, in words, in order: the switch (or that none qualified) and each substitute passed over. */
+  tried: string[];
+  at: string;
+}
+
+/** Every recorded switch decision of a project, in write order. */
+export async function readSwitchDecisionRecords(projectId: string): Promise<SwitchDecisionRecord[]> {
+  const rows = await getDb().all<{ measures: string | null }>(
+    `SELECT measures FROM bin_events WHERE event_type = ? AND project_id = ? ORDER BY at ASC, id ASC`,
+    [FALLBACK_SWITCH_EVENT, projectId],
+  );
+  const out: SwitchDecisionRecord[] = [];
+  for (const r of rows) {
+    try {
+      const value = (JSON.parse(r.measures ?? '{}') as { switchDecision?: SwitchDecisionRecord }).switchDecision;
+      if (value && typeof value.occurrence === 'string') out.push(value);
+    } catch {
+      continue;
+    }
+  }
+  return out;
+}
+
+/** What the recorded decisions on one failure say Brain tried, de-duplicated, in order. Pure. */
+export function triedFor(occurrence: string, decisions: readonly SwitchDecisionRecord[]): string[] {
+  return [...new Set(decisions.filter((d) => d.occurrence === occurrence).flatMap((d) => d.tried))];
+}
+
+/** Whether a failure was settled by switching the dependency to a substitute, rather than by its own path recovering. Pure. */
+export function recoveredBySwitch(f: Pick<FailureRecoveryRecord, 'recovered' | 'tried'>): boolean {
+  return f.recovered === true && f.tried.some((t) => t.startsWith(SWITCH_TRIED_PREFIX));
+}
+
+/** Whether a failure still holds its path down: unrecovered, or recovered only by a switch while its own rows show no recovery. Pure. */
+function stillFailing(f: FailureRecoveryRecord, ownRecovered: ReadonlySet<string> | undefined): boolean {
+  if (f.recovered !== true) return true;
+  return ownRecovered !== undefined && recoveredBySwitch(f) && !ownRecovered.has(f.occurrence);
+}
+
+/**
+ * The occurrences whose own path's results show it recovered, re-read from
+ * every path's rows (the same reading `recordAcquisitionFailures` records
+ * from). A failure the dependency recovered from by switching stays a failure
+ * of its path until these say otherwise.
+ */
+export async function ownPathRecoveries(
+  projectId: string,
+  dependencyKey: string,
+  paths: readonly AcquisitionPath[],
+  results: (path: AcquisitionPath) => Promise<ContactResult[]> = (p) => readContactResults(projectId, p),
+): Promise<Set<string>> {
+  const out = new Set<string>();
+  for (const path of paths) {
+    if (path.contacts <= 0) continue;
+    for (const f of acquisitionFailures(dependencyKey, keyOf(path), await results(path))) if (f.recovered === true) out.add(f.occurrence);
   }
   return out;
 }
@@ -391,17 +499,27 @@ export function isPrimaryPath(primaryPath: string, path: string): boolean {
  * path's failure, not the primary's, and never makes a healthy primary read
  * as failed. Pure.
  */
-export function openPrimaryFailures(failures: readonly FailureRecoveryRecord[], dependencyKey: string, primaryPath: string): FailureRecoveryRecord[] {
+export function openPrimaryFailures(
+  failures: readonly FailureRecoveryRecord[],
+  dependencyKey: string,
+  primaryPath: string,
+  ownRecovered?: ReadonlySet<string>,
+): FailureRecoveryRecord[] {
   return failures.filter((f) => {
-    if (f.dependency !== dependencyKey || f.recovered === true) return false;
+    if (f.dependency !== dependencyKey || !stillFailing(f, ownRecovered)) return false;
     const path = failedPathOf(f);
     return path === null || isPrimaryPath(primaryPath, path);
   });
 }
 
 /** The unrecovered failures of one named path of a dependency (a substitute's own failures). Pure. */
-export function openPathFailures(failures: readonly FailureRecoveryRecord[], dependencyKey: string, path: string): FailureRecoveryRecord[] {
-  return failures.filter((f) => f.dependency === dependencyKey && f.recovered !== true && failedPathOf(f) === path);
+export function openPathFailures(
+  failures: readonly FailureRecoveryRecord[],
+  dependencyKey: string,
+  path: string,
+  ownRecovered?: ReadonlySet<string>,
+): FailureRecoveryRecord[] {
+  return failures.filter((f) => f.dependency === dependencyKey && stillFailing(f, ownRecovered) && failedPathOf(f) === path);
 }
 
 /**
@@ -417,7 +535,11 @@ export async function recordAcquisitionFailures(
   projectId: string,
   dependencyKey: string,
   paths: readonly AcquisitionPath[],
-  deps: { results?: (path: AcquisitionPath) => Promise<ContactResult[]>; record?: NonNullable<Parameters<typeof recordFailureRecovery>[1]>['record'] } = {},
+  deps: {
+    results?: (path: AcquisitionPath) => Promise<ContactResult[]>;
+    record?: NonNullable<Parameters<typeof recordFailureRecovery>[1]>['record'];
+    decisions?: () => Promise<SwitchDecisionRecord[]>;
+  } = {},
 ): Promise<{ occurrence: string; recovered: boolean | null; written: boolean }[]> {
   const found: FailureRecoveryInput[] = [];
   for (const path of paths) {
@@ -427,11 +549,30 @@ export async function recordAcquisitionFailures(
   }
   if (found.length === 0) return [];
   let held = await readFailureRecoveries(projectId);
+  const decisions = found.some((f) => f.recovered !== null) ? await (deps.decisions ?? (() => readSwitchDecisionRecords(projectId)))() : [];
   const out: { occurrence: string; recovered: boolean | null; written: boolean }[] = [];
-  for (const input of found) {
+  for (const candidate of found) {
+    // A failure settled by its own path's results carries what Brain tried for it meanwhile (each recorded
+    // switch decision), and the path's own recovery as the verification that it worked.
+    const input: FailureRecoveryInput = candidate.recovered === null ? candidate : settledOnOwnPath(candidate, decisions);
     const { record, written } = await recordFailureRecovery(input, { projectId, caller: 'fallback-acquisition', read: async () => held, ...(deps.record ? { record: deps.record } : {}) });
     if (written) held = [...held.filter((r) => r.occurrence !== record.occurrence), record];
     out.push({ occurrence: record.occurrence, recovered: record.recovered, written });
   }
   return out;
+}
+
+/**
+ * A failure its own path recovered from, with what Brain tried for it: every
+ * recorded decision on the occurrence, then the verification. When no
+ * substitute could carry it, that is named as a method to improve. Pure.
+ */
+export function settledOnOwnPath(found: FailureRecoveryInput, decisions: readonly SwitchDecisionRecord[]): FailureRecoveryInput {
+  const tried = triedFor(found.occurrence, decisions);
+  const noReplacement = decisions.some((d) => d.occurrence === found.occurrence && d.state === 'NO_REPLACEMENT');
+  return {
+    ...found,
+    tried: [...tried, `recovery verified: ${found.path ?? 'the path'} recorded a good result after the failure on its own rows`],
+    methodsToImprove: noReplacement && !found.methodsToImprove.includes(NO_REPLACEMENT_METHOD) ? [...found.methodsToImprove, NO_REPLACEMENT_METHOD] : found.methodsToImprove,
+  };
 }
