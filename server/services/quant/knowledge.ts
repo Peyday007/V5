@@ -142,6 +142,11 @@ export async function loadCashKnowledge(projectId: string, now = Date.now()): Pr
   const learning = await keepCashLedger(projectId, currencies)
     .then((kept) => learnFromCashLedger(projectId, currencies, { read: async () => kept.ledger }))
     .catch(() => null);
+  // Every real fulfilment dependency's fallback chain (FALL-37-2), read from the counterparty model and
+  // recorded on bin_events when it changes. Its own catch: a chain that cannot be read never stops the refresh.
+  await import('./fallbackChains.ts')
+    .then(({ recordFulfilmentChains }) => recordFulfilmentChains(projectId))
+    .catch((error: unknown) => console.warn(`[quant] fallback chains unreadable for ${projectId}: ${String((error as Error)?.message ?? error)}`));
   const { routeMoney, routeScores, routeMoneyError } = await loadRouteMoney(projectId, opportunities);
   const value: CashKnowledge = { projectId, opportunities: new Map(opportunities.map((one) => [one.id, one])), facts: evidence, lessons, sources, watermark, routeMoney, routeScores, routeMoneyError, estimates: new Map(), learning };
   cache.set(projectId, { at: now, value });

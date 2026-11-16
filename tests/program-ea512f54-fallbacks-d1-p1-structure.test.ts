@@ -7,6 +7,15 @@
  * unverified source is never promoted because the primary failed.
  */
 import { describe, expect, it } from 'vitest';
+import { readFileSync as readSourceFile } from 'node:fs';
+import { freshProject } from './helpers.ts';
+import {
+  FALLBACK_CHAIN_EVENT,
+  fulfilmentChains,
+  readFulfilmentChains,
+  readinessOfStage,
+  recordFulfilmentChains,
+} from '../server/services/quant/fallbackChains.ts';
 import { makeFigure, unknownFigure, type Figure } from '../server/services/quant/graph.ts';
 import {
   availableCapacity,
@@ -430,5 +439,110 @@ describe('an unverified evidence source is never promoted when the primary evide
     expect(chooseReplacement(evidence)?.key).toBe('captured-snapshot');
     const withoutSnapshot = { ...evidence, substitutes: [evidence.substitutes[0]!] };
     expect(chooseReplacement(withoutSnapshot)).toBeNull();
+  });
+});
+
+/* ------------------------------------------------------------------------- */
+/* Repair F2: the chain of a real dependency, recorded on a row               */
+/* ------------------------------------------------------------------------- */
+
+describe('fulfilment chains: every opening\'s fulfiller is a dependency whose chain is read and recorded', () => {
+  type Cand = {
+    counterpartyId: string;
+    stage: string | null;
+    eligible: boolean;
+    reasons: string[];
+    reliability: number | null;
+  };
+  const cand = (counterpartyId: string, stage: string | null, over: Partial<Cand> = {}): Cand => ({ counterpartyId, stage, eligible: true, reasons: [], reliability: null, ...over });
+  const opening = (id: string, primary: Cand | null, alternative: Cand | null, ranked: Cand[] = [], ineligible: Cand[] = []) => ({
+    opportunityId: id,
+    title: `Opening ${id}`,
+    transaction: {
+      reading: primary ? { primary, alternative, comparison: { ranked: [primary, ...ranked], ineligible } } : null,
+    },
+  });
+  const reading = () => ({
+    opportunities: [
+      opening('cop_1', cand('fulfiller:acme', 'CONTRACTED'), cand('fulfiller:bolt', 'RESERVED'), [cand('fulfiller:crane', 'QUOTE'), cand('fulfiller:dune', 'LISTING')], [cand('fulfiller:eel', 'CAPABILITY', { eligible: false, reasons: ['outside the commitment geography'] })]),
+      opening('cop_none', null, null),
+    ],
+  }) as unknown as Parameters<typeof fulfilmentChains>[0];
+
+  it('maps ladder stages onto located / validated / reserved', () => {
+    expect(readinessOfStage(null)).toBe('LOCATED');
+    expect(readinessOfStage('LISTING')).toBe('LOCATED');
+    expect(readinessOfStage('WILLINGNESS')).toBe('LOCATED');
+    expect(readinessOfStage('CAPABILITY')).toBe('VALIDATED');
+    expect(readinessOfStage('QUOTE')).toBe('VALIDATED');
+    expect(readinessOfStage('RESERVED')).toBe('RESERVED');
+    expect(readinessOfStage('CONTRACTED')).toBe('RESERVED');
+  });
+
+  it('builds the whole machine-readable chain for an opening with a primary, and none for one without', () => {
+    const [one, ...rest] = fulfilmentChains(reading());
+    expect(rest).toEqual([]);
+    expect(one!.opportunityId).toBe('cop_1');
+    const chain = one!.chain;
+    expect(chain.dependency).toBe('fulfilment:cop_1');
+    expect(chain.primaryPath).toContain('fulfiller:acme');
+    expect(chain.failureCondition).toContain('does not perform');
+    expect(chain.failureEvidence!.length).toBeGreaterThan(0);
+    expect(chain.detectionSignals.length).toBeGreaterThan(0);
+    expect(chain.timeToHarmDays.status).toBe('UNKNOWN');
+    expect(chain.replacements.map((r) => [r.substitute, r.readiness])).toEqual([
+      ['fulfiller:bolt', 'RESERVED'],
+      ['fulfiller:crane', 'VALIDATED'],
+      ['fulfiller:dune', 'LOCATED'],
+      ['fulfiller:eel', 'VALIDATED'],
+    ]);
+    const bolt = chain.replacements[0]!;
+    expect(bolt.eligibility).toMatchObject({ eligible: true, authorized: true, meetsObligations: true });
+    expect(bolt.recoveryVerification).toContain('PERFORMED report');
+    // A quote is validated but no authority to switch is on record: reconcile before acting.
+    expect(chain.replacements[1]!.eligibility.eligible).toBe(false);
+    expect(chain.replacements[1]!.eligibility.authorized).toBeNull();
+    // An ineligible candidate carries the counterparty model's own reason.
+    expect(chain.replacements[3]!.eligibility).toMatchObject({ eligible: false, meetsObligations: false });
+    expect(chain.replacements.every((r) => r.switchingCost === null && r.timeToSwitchDays === null)).toBe(true);
+    expect(one!.replacement).toBe('fulfiller:bolt');
+  });
+
+  it('records a chain once and writes nothing again while it is unchanged', async () => {
+    const recorded: Array<{ eventType: string; measures?: unknown }> = [];
+    const record = (async (row: { eventType: string; measures?: unknown }) => { recorded.push(row); }) as unknown as Parameters<typeof recordFulfilmentChains>[1] extends infer D ? D extends { record?: infer R } ? R : never : never;
+    const held = new Map<string, { signature: string }>();
+    const first = await recordFulfilmentChains('prj', { read: async () => reading(), record, held: async () => held });
+    expect(first.written).toBe(1);
+    expect(recorded[0]!.eventType).toBe(FALLBACK_CHAIN_EVENT);
+    const stored = (recorded[0]!.measures as { fallbackChain: { signature: string; chain: { dependency: string } } }).fallbackChain;
+    held.set(stored.chain.dependency, { signature: stored.signature });
+    const again = await recordFulfilmentChains('prj', { read: async () => reading(), record, held: async () => held });
+    expect(again.written).toBe(0);
+    expect(recorded).toHaveLength(1);
+  });
+
+  it('is recorded on bin_events and read back from the row', async () => {
+    const { project } = await freshProject();
+    const out = await recordFulfilmentChains(project.id, { read: async () => reading() });
+    expect(out.written).toBe(1);
+    const rows = await readFulfilmentChains(project.id);
+    const row = rows.get('fulfilment:cop_1');
+    expect(row).toBeDefined();
+    expect(row!.chain.replacements.map((r) => r.readiness)).toEqual(['RESERVED', 'VALIDATED', 'LOCATED', 'VALIDATED']);
+    expect(row!.replacement).toBe('fulfiller:bolt');
+    expect((await recordFulfilmentChains(project.id, { read: async () => reading() })).written).toBe(0);
+  });
+
+  it('a project with no opening naming a fulfiller records nothing, read through the real counterparty model', async () => {
+    const { project } = await freshProject();
+    const out = await recordFulfilmentChains(project.id);
+    expect(out).toEqual({ chains: [], written: 0 });
+  });
+
+  it('has a production caller: the cash-knowledge refresh records the chains', () => {
+    const source = readSourceFile(new URL('../server/services/quant/knowledge.ts', import.meta.url), 'utf8');
+    expect(source).toMatch(/import\('\.\/fallbackChains\.ts'\)/);
+    expect(source).toMatch(/recordFulfilmentChains\(projectId\)/);
   });
 });
