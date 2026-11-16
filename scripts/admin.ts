@@ -1476,6 +1476,14 @@ async function main(): Promise<void> {
         const { laneConfig } = await import('../server/services/cheap/lane.ts');
         const unfit = await unfitNow(t.capacity.map((c) => c.model), Date.now(), laneConfig()?.fallbackModel ?? null);
         console.log(`  held back         ${unfit.size === 0 ? 'none' : [...unfit].join(', ')} (model|work type whose answers Brain rejects, 24h)`);
+        // Model-output incidents: what the dispatch tick records and Hermes reads as deficiencies.
+        // This process holds no route holds, so a kind every route of which is held shows only in the server's rows.
+        const { readModelOutput, describeModelOutput, openModelOutputIncidents } = await import('../server/services/freeLane/coverage.ts');
+        const incidents = await readModelOutput();
+        if (incidents.length === 0) console.log('  output incidents  none now');
+        for (const one of incidents) console.log(`  output incident   ${one.key}: ${describeModelOutput(one).slice(0, 400)}`);
+        const open = await openModelOutputIncidents();
+        console.log(`  incidents open    ${open.size === 0 ? 'none recorded' : [...open].map(([k, v]) => `${k} since ${v.at}${v.noFunctioningModel ? ' (no functioning model)' : ''}`).join('; ')}`);
       }
       const h = t.lastHour;
       console.log(`  last hour         completed=${h.completed} accepted=${h.accepted} failed=${h.failed} providerErrors=${h.providerErrors}`);
