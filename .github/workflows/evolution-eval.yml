@@ -189,19 +189,31 @@ jobs:
           work="$RUNNER_TEMP/evolution"
           brain=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
           failed=0
+          # A result travels as base64 in chunks to a file on the machine, then reaches the CLI on its
+          # stdin: no character of it is parsed by a shell, and no single ssh command line carries more
+          # than a few kilobytes (one 11 KB command line failed on the first production run, 2026-11-16).
+          send_result() {
+            local file="$1" args="$2" tmp="/tmp/evr-$(date +%s%N).b64"
+            base64 -w0 "$file" | fold -w 3000 > "$RUNNER_TEMP/chunks.txt"
+            flyctl ssh console --app "$brain" -C "sh -c ': > $tmp'" >/dev/null 2>&1 || return 1
+            while IFS= read -r chunk || [ -n "$chunk" ]; do
+              flyctl ssh console --app "$brain" -C "sh -c 'printf %s $chunk >> $tmp'" >/dev/null 2>&1 || return 1
+            done < "$RUNNER_TEMP/chunks.txt"
+            flyctl ssh console --app "$brain" -C "sh -c 'cd /app && base64 -d $tmp | env BRAIN_DATABASE_POOL_SIZE=1 node --import tsx scripts/evolution.ts $args; rc=\$?; rm -f $tmp; exit \$rc'"
+          }
           for out in "$work"/results/*/; do
             IFS=$'\t' read -r experiment kind variant suite < "$out/target.tsv"
             flag=""
             if [ "$kind" = production ]; then
-              b64=$(base64 -w0 "$out/result.json")
-              flyctl ssh console --app "$brain" -C "sh -c 'cd /app && echo $b64 | base64 -d | env BRAIN_DATABASE_POOL_SIZE=1 node --import tsx scripts/evolution.ts record --baseline'" > "$out/record.txt" 2>&1 \
-                && echo "recorded production baseline for $suite" || { echo "::error::recording the $suite production baseline failed"; failed=1; }
+              if send_result "$out/result.json" "record --baseline" > "$out/record.txt" 2>&1; then
+                echo "recorded production baseline for $suite"
+              else
+                echo "::error::recording the $suite production baseline failed"; tail -5 "$out/record.txt" | cut -c1-300; failed=1
+              fi
               continue
             fi
             [ "$kind" = variant ] && flag="--variant $variant --lines $(tr -cd '0-9' < "$work/lines/$variant" 2>/dev/null || echo 0)"
-            # The result travels as base64 and reaches the CLI on its stdin: no character of it is parsed by a shell.
-            b64=$(base64 -w0 "$out/result.json")
-            if flyctl ssh console --app "$brain" -C "sh -c 'cd /app && echo $b64 | base64 -d | env BRAIN_DATABASE_POOL_SIZE=1 node --import tsx scripts/evolution.ts record --experiment $experiment $flag'" > "$out/record.txt" 2>&1; then
+            if send_result "$out/result.json" "record --experiment $experiment $flag" > "$out/record.txt" 2>&1; then
               echo "recorded $experiment $kind $variant"
             else
               echo "::error::recording $experiment $kind $variant failed"; tail -5 "$out/record.txt" | cut -c1-300; failed=1
