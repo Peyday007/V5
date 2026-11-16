@@ -158,6 +158,90 @@ Prices are the RunPod recipe ceilings in `cheap/runpodRestore.ts` (measured $0.1
 
 The database host gained about 30 points of CPU headroom (0.6 of a core), in line with the ~0.86 core the query had used. Dispatch-cadence and research-throughput effects are read in the eight-hour end reading, because one 16-minute window does not establish a rate.
 
-## End reading (due ~2026-11-16 06:15Z)
+## End reading — BRAIN RESOURCE UTILIZATION — EIGHT-HOUR COMPARISON (2026-11-16 06:21Z)
 
-Re-read the same sources over 22:15Z–06:15Z. Report, against the table above: capacity, utilization at both times, average and peak, up/down allocation, capacity transferred, productive versus idle worker-hours, contention, actual spend, throughput before and after, remaining bottlenecks, and the measured time saved by each change.
+Sources:
+- Connection report 43816108485 (window since 22:21Z).
+- Productivity report 43816111968.
+- RunPod report (cheap lane 43816115415, 8 h, with the 8 h before it).
+- `brain_operator_capacity` at 06:20:58Z.
+- Deploy runs 1106–1115 and `git log origin/production`.
+
+Start = the 22:15Z reading above.
+
+| resource | start (22:15Z) | end (06:21Z) | average over the interval | peak |
+|---|---|---|---|---|
+| App CPU (2 vCPU) | ~10% steady | 12.4% steady (process 83 min old) | not continuously sampled | 57.5% in the first 3 min after a restart (6 restarts) |
+| App memory (4 GB) | RSS 1,207–2,157 MB | RSS 1,683 MB | — | **2,511 MB** at 05:09Z (new peak, 61% of 4 GB) |
+| Event loop p99 | 25–74 ms | 27 ms | — | stall 3.2 s (planning code, unchanged) |
+| App DB pool (8) | 0 waiting | 0 waiting, 6 idle | — | 7 of 8 in use at 04:02Z (warm-up) |
+| DB host CPU (2 vCPU) | 70.2% | — | **45.9%** over 00:32–06:21Z (5.8 h); 53.0% over the whole 8.2 h | 75.2% (22:15–23:41Z, before #949) |
+| GPU (2 slots) | stopped, 0% | running | **running 420 of 480 min; 1.07 slots busy (54%)** | 2 of 2 |
+| Free lane (14) | 2 running | 7 running | 1.05 jobs at once (0.3 the 8 h before) | 6 at once (4 before) |
+| Lane utilization (any lane item or lease) | 74.9% (6 h) | 98.9% (6 h), idle 0.6% | — | 100% (last hour) |
+| brain-a (free providers) | 0 of 104 accepted | 3 of 38 accepted, 45 provider-availability failures | — | — |
+| Routines (12) | 0–1 active | 3 active, 0 waiting | — | 3 |
+| Factory (1 usable of 3) | 10.8 units/h | **14.9 units/h** (119 accepted in 8 h) | — | — |
+| Research slots (13) | 13/13, 538 waiting | 17 running, 493 waiting | — | 18 |
+| Release pipeline | 6 of 12 Deploys released | 8 of 10 released (1107 failed on a flaky test; 1108 was superseded) | — | one at a time |
+
+**Up and down allocation, before and after (merged engineering).**
+- Before (8 h to 22:15Z): 12 merged PRs, about 90% up curve.
+- After (22:15–06:21Z): 17 merged PRs (2.1/h).
+  - 13 up curve: Evolution Engine #948, #951, #955, #957–#965.
+  - 4 down curve or reliability: #949 dispatch, #950 and #952 GPU mover, #953 flaky test. That is about 76% up and 24% down.
+- The down-curve share rose because the two outages this audit found (GPU, dispatch) were repaired. Both are closed, and the reserve went back to process-level (deploy verification, monitoring).
+
+**Capacity transferred between operations.** No worker was moved between surges.
+- What changed is capacity that existed but did no work. The GPU went from unavailable to 420 of 480 min running (about 0.9 GPU-pod-hours per hour returned to research).
+- The database host gave back about 24–29 points of CPU (about 0.5 of a core) that a report-only query had held.
+
+**Productive versus idle worker-hours.**
+- GPU: 448.8 job-minutes over 420 running minutes, so about 7.5 of 8 pod-hours were productive. The 8 h before: 0.9 of 8.
+- Free lane: utilization 98.9%, idle 0.6% (6 h). It was "idle with work queued ~430 min" the 8 h before and ~180 min in this window; the remainder is brain-a's dead providers.
+- Factory: 1 usable surface, busy whenever it held work. 2 surfaces are quarantined, so about 16 surface-hours could not be used.
+
+**Contention.**
+- No pool waits.
+- Database pressure was felt by 3 of 12 processes in 6 h (25%), all at restart warm-up.
+- The lane's brain-a route is held to its share of the database pool (12 of 24).
+- Resource deferrals: 80.8% of dispatch decisions over 6 h. This counts dispatches deferred to keep within account targets. It is not an outage.
+
+**Actual infrastructure spending.**
+- GPU: $1.40, measured (420 min at RunPod's $0.20/h, $0.0040 per research job).
+- Nothing else new. Fly and Supabase stayed on their existing plans.
+- Against the shared $100 ceiling, this audit committed $0 of new money. The GPU is existing infrastructure.
+
+**Throughput before and after.**
+
+| measure | 8 h before (14:21–22:21Z) | 8 h after (22:21–06:21Z) | change |
+|---|---|---|---|
+| accepted research claims/h | 2.4 | **25.2** | ×10.5 |
+| this goal's accepted claims/h | 0 | 3.1 | — |
+| GPU research jobs | 2 | 354 | — |
+| claims accepted / produced (6 h) | 13/29 (44.8%) | 160/266 (60.2%) | +15 pts |
+| readable sources (6 h) | 55.2% | 96.6% | — |
+| plan evaluations/h | 9.4 | **3.9** | lower: no new opening arrived to re-read, and CPU was never the limit; not caused by a resource |
+| merged PRs/h | 1.5 | 2.1 | +40% |
+| Deploys released | 6 | 8 | — |
+| Factory units/h | 10.8 | 14.9 | +38% |
+| DB host CPU | 70–75% | 45.9% | −24 to −29 pts |
+
+**Time saved per change (measured where possible, otherwise estimated with the basis stated).**
+- GPU move. Measured: 25.2 − 2.4 = 22.8 more accepted claims per hour. The 202 claims accepted in this window would have taken about 84 h at the old rate, so about **76 h saved** for the same evidence. The automatic mover (#950, #952) keeps this from recurring; it moved the pod by itself at 00:33Z.
+- Dispatch fix (#949). Measured: about 0.5 of a database core freed, and dispatch no longer blocks for 48–89 s each minute.
+  - Its effect on throughput cannot be separated from the GPU move's, because both landed in the same window. Factory's +38% and the merged-PR rate are consistent with it, but not proven by it.
+
+**Remaining bottlenecks, in order.**
+1. Commercial evidence. The $10K plan is still NEEDS_EVIDENCE: 9% coverage, 0 new openings in 8 h, 5 of the last 7 rounds without a report. This is a research-content limit, not a capacity limit: the lane is at 98.9% and the GPU's growth is held because "the constrained stage is commercial-execution".
+2. brain-a's free providers: Cerebras credits are exhausted, and only the owner can fix that.
+3. Factory surfaces 1 and 3 are quarantined and need the owner's connector re-authorized.
+4. Research grant ceilings hold 492 ideas, and the GPU's measured headroom is about 0.9 slots. Raising a ceiling is the owner's decision under §16/§52 and would fill that headroom.
+5. App memory peaked at 2,511 MB (61%), up from 2,157 MB. This is within the ≤3 GB limit, so watch it.
+
+**Recommended scaling options (re-judged on this reading).**
+- Still no new spending.
+- A second GPU would add capacity beside 0.9 idle slots on the first.
+- A larger app server or database is not justified: app CPU 12%, DB 46% after the fix.
+- The best-value actions are all $0 and need the owner's hands: Cerebras credits, the two Factory connectors, and optionally a higher grant ceiling.
+- RunPod's balance is about $25 at $0.20/h, about 5 days. Top up before about Nov 21.
