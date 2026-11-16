@@ -650,6 +650,13 @@ export interface FailureRecoveryRecord {
   /** Stable per occurrence, so recording it again writes nothing. */
   occurrence: string;
   dependency: string;
+  /**
+   * The path of the dependency that failed, when the dependency runs on one of
+   * several (an acquisition path's `mechanism @ channel`). A failure belongs to
+   * the path it happened on, not to whichever path is primary when it is read.
+   * Absent on records that name no path.
+   */
+  path?: string | null;
   failureMode: string;
   /** The general class this failure belongs to, the unit a recurrence is counted in. */
   failureClass: string;

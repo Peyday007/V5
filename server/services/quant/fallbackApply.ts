@@ -9,7 +9,9 @@
  * plan reading the funnel of a path that no longer delivers.
  *
  * This is the reading that acts. `switchDecision` takes the three records and
- * the ledger's failure/recovery rows (`ledger.ts readFailureRecoveries`) and
+ * the ledger's failure/recovery rows (`ledger.ts readFailureRecoveries`, each
+ * on the path it happened on, so a former primary's failure is never read as
+ * the current primary's) and
  * answers one question: is the project's acquisition dependency running on its
  * primary, or has it failed, and if so which substitute does the plan now run
  * on? A substitute is taken only when
@@ -21,6 +23,7 @@
  *     external confirmation is reconciled first, never switched blindly),
  *   - it shares no common cause with the primary (a path on the same failed
  *     account fails with it: that is one correlated failure, not a backup),
+ *   - it has no unrecovered failure of its own on the ledger,
  *
  * and among those it follows the recorded preparation order, so the backups
  * prepared first are the ones switched to first.
@@ -38,6 +41,7 @@
  * the plan's eligibility already checked.
  */
 import type { FailureRecoveryRecord } from './ledger.ts';
+import { openPathFailures, openPrimaryFailures } from './fallbackPlanReading.ts';
 import type { ProjectFallbackPlanRecord } from './fallbackPlanReading.ts';
 import type { ProjectIndependenceRecord } from './fallbackIndependence.ts';
 import type { FallbackPreparationRecord } from './fallbackPreparation.ts';
@@ -80,7 +84,8 @@ export function switchDecision(input: {
   const { plan, chains } = record;
   const primaryPath = chains[0]?.primaryPath ?? plan.dependency;
   const modeKeys = new Set(plan.failureModes.map((m) => m.key));
-  const open = input.failures.filter((f) => f.dependency === plan.dependency && f.recovered !== true && modeKeys.has(f.failureMode));
+  // A failure belongs to the path it happened on: only the current primary's own open failures switch the plan.
+  const open = openPrimaryFailures(input.failures, plan.dependency, primaryPath).filter((f) => modeKeys.has(f.failureMode));
   const failure = open[open.length - 1] ?? null;
 
   const planOrder = plan.substitutes.map((s) => s.key);
@@ -110,6 +115,8 @@ export function switchDecision(input: {
     if (!reading.eligible) why.push(`not eligible: ${reading.ineligibleBecause.join('; ') || 'the plan reads it ineligible'}`);
     if (reading.readiness === 'LOCATED') why.push('only located: a possible substitute is not available capacity');
     if (reading.sharedWithPrimary.length > 0) why.push(`shares ${reading.sharedWithPrimary.join(', ')} with the failed primary, so it fails with it`);
+    const own = openPathFailures(input.failures, plan.dependency, key);
+    if (own.length > 0) why.push(`has an unrecovered failure of its own (${own.map((f) => `${f.failureMode}, ${f.occurrence}`).join('; ')}), so it is not a working path to switch to`);
     const action = actionOf.get(key);
     if (!action) why.push('no independence reading on record judges switching to it');
     else if (action.action !== 'SWITCH') why.push(`independence reading says ${action.action}: ${action.because.join('; ')}`);

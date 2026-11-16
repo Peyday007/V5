@@ -38,7 +38,7 @@ import { recordBinEvent } from '../../repos/bins.ts';
 import { getDb } from '../../db/database.ts';
 import { getCashMode } from '../../repos/cashMode.ts';
 import { rankFallbacks, type FallbackRanking, type PriorityInput, type RankedFallback } from './fallbackPriority.ts';
-import { acquisitionFallbackStructure, readMeasuredPaths, sprintDaysLeft, type MeasuredPath } from './fallbackPlanReading.ts';
+import { acquisitionFallbackStructure, openPrimaryFailures, readMeasuredPaths, sprintDaysLeft, type MeasuredPath } from './fallbackPlanReading.ts';
 import { readFailureRecoveries, type FailureRecoveryRecord } from './ledger.ts';
 import type { Dependency, Substitute } from './fallbacks.ts';
 import { makeFigure, type Figure } from './graph.ts';
@@ -103,7 +103,8 @@ export function priorityInputFor(
   sprint: { id: string; horizonDays: number } | null,
   failures: readonly FailureRecoveryRecord[],
 ): PriorityInput {
-  const open = failures.filter((f) => f.dependency === dependency.key && f.recovered !== true);
+  // Only a failure of the path the dependency runs on now is live: a former primary's failure is its own.
+  const open = openPrimaryFailures(failures, dependency.key, dependency.primaryPath);
   const last = open[open.length - 1];
   const reversible: Record<string, boolean> = {};
   const substitutes = dependency.substitutes.map((one) => {
@@ -175,12 +176,12 @@ export async function prepareProjectFallbacks(
     const mode = await getCashMode(projectId);
     return mode && mode.horizonDays > 0 ? { id: mode.id, horizonDays: mode.horizonDays } : null;
   }))();
-  // The dependency's own failures are recorded under its own key, from its primary path's ordered
-  // contact results, before the ledger is read: the forecast watch records forecast-claim failures
+  // The dependency's own failures are recorded under its own key, each on the path it happened on, from
+  // every path's ordered contact results, before the ledger is read: the forecast watch records forecast-claim failures
   // under a claim id, never this dependency's, so without this a live failure could never promote.
   const failures = await (deps.failures ?? (async () => {
     const { recordAcquisitionFailures } = await import('./fallbackPlanReading.ts');
-    await recordAcquisitionFailures(projectId, built.dependency.key, built.primary);
+    await recordAcquisitionFailures(projectId, built.dependency.key, paths);
     return readFailureRecoveries(projectId);
   }))();
   const ranking = rankFallbacks([priorityInputFor(built.dependency, sprint, failures)]);

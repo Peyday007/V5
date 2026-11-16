@@ -46,9 +46,12 @@ import {
 } from './fallbacks.ts';
 import { acquisitionDependency, type AcquisitionPath } from './fallbackIndependence.ts';
 import { makeFigure, unknownFigure, type Figure } from './graph.ts';
-import { readFailureRecoveries, recordFailureRecovery, type FailureRecoveryInput } from './ledger.ts';
+import { readFailureRecoveries, recordFailureRecovery, type FailureRecoveryInput, type FailureRecoveryRecord } from './ledger.ts';
 
 export const FALLBACK_PLAN_EVENT = 'FALLBACK_PLAN_RECORDED';
+
+/** The occurrence key prefix of an acquisition path's failure records. */
+export const ACQUISITION_FAILURE_PREFIX = 'acquisition-failure:';
 
 /** One acquisition path's measured funnel, from its own contact results. */
 export interface MeasuredPath extends AcquisitionPath {
@@ -325,8 +328,9 @@ export function acquisitionFailures(dependencyKey: string, pathKey: string, resu
         const seen = seq[crossedAt]!;
         const delay = (Date.parse(seen.at) - Date.parse(start.at)) / DAY_MS;
         out.push({
-          occurrence: `acquisition-failure:${dependencyKey}:${pathKey}:${mode}:${start.id}`,
+          occurrence: `${ACQUISITION_FAILURE_PREFIX}${dependencyKey}:${pathKey}:${mode}:${start.id}`,
           dependency: dependencyKey,
+          path: pathKey,
           failureMode: mode,
           failureClass: `ACQUISITION:${mode}`,
           detectionDelayDays: Number.isFinite(delay) ? Math.max(0, delay) : null,
@@ -360,18 +364,67 @@ export async function readContactResults(projectId: string, path: AcquisitionPat
 }
 
 /**
+ * The path a failure record happened on: the path it names, or — for a record
+ * written before records named one — the path inside its acquisition
+ * occurrence key. Null when neither says, which is a failure of the
+ * dependency as a whole. Pure.
+ */
+export function failedPathOf(f: Pick<FailureRecoveryRecord, 'occurrence' | 'dependency' | 'failureMode' | 'path'>): string | null {
+  if (typeof f.path === 'string' && f.path.length > 0) return f.path;
+  const prefix = `${ACQUISITION_FAILURE_PREFIX}${f.dependency}:`;
+  if (!f.occurrence.startsWith(prefix)) return null;
+  const rest = f.occurrence.slice(prefix.length);
+  const end = rest.lastIndexOf(`:${f.failureMode}:`);
+  return end > 0 ? rest.slice(0, end) : null;
+}
+
+/** Whether a stated primary path (`key (N prospect(s) reached)`, or the bare key) is this path. Pure. */
+export function isPrimaryPath(primaryPath: string, path: string): boolean {
+  return primaryPath === path || primaryPath.startsWith(`${path} (`);
+}
+
+/**
+ * The unrecovered failures that are failures of the dependency's current
+ * primary: of this dependency, not recovered, and on the primary path (or on
+ * no stated path, which is the dependency as a whole). A failure of a path
+ * that has since stopped being primary stays on the ledger, but it is that
+ * path's failure, not the primary's, and never makes a healthy primary read
+ * as failed. Pure.
+ */
+export function openPrimaryFailures(failures: readonly FailureRecoveryRecord[], dependencyKey: string, primaryPath: string): FailureRecoveryRecord[] {
+  return failures.filter((f) => {
+    if (f.dependency !== dependencyKey || f.recovered === true) return false;
+    const path = failedPathOf(f);
+    return path === null || isPrimaryPath(primaryPath, path);
+  });
+}
+
+/** The unrecovered failures of one named path of a dependency (a substitute's own failures). Pure. */
+export function openPathFailures(failures: readonly FailureRecoveryRecord[], dependencyKey: string, path: string): FailureRecoveryRecord[] {
+  return failures.filter((f) => f.dependency === dependencyKey && f.recovered !== true && failedPathOf(f) === path);
+}
+
+/**
  * The production producer of the acquisition dependency's failure records:
- * read the primary path's results, and record every failure its rows show, and
- * its recovery once the rows show that, through the ledger's one writer.
+ * read every path's own ordered results — the primary's and each
+ * substitute's — and record every failure its rows show, under the path it
+ * happened on, and its recovery once the rows show that, through the
+ * ledger's one writer. Reading every path is what settles a failure on a path
+ * that has since stopped being the primary, and what keeps a substitute that
+ * is itself failing from being switched to.
  */
 export async function recordAcquisitionFailures(
   projectId: string,
   dependencyKey: string,
-  primary: AcquisitionPath,
-  deps: { results?: () => Promise<ContactResult[]>; record?: NonNullable<Parameters<typeof recordFailureRecovery>[1]>['record'] } = {},
+  paths: readonly AcquisitionPath[],
+  deps: { results?: (path: AcquisitionPath) => Promise<ContactResult[]>; record?: NonNullable<Parameters<typeof recordFailureRecovery>[1]>['record'] } = {},
 ): Promise<{ occurrence: string; recovered: boolean | null; written: boolean }[]> {
-  const results = await (deps.results ?? (() => readContactResults(projectId, primary)))();
-  const found = acquisitionFailures(dependencyKey, keyOf(primary), results);
+  const found: FailureRecoveryInput[] = [];
+  for (const path of paths) {
+    if (path.contacts <= 0) continue;
+    const results = await (deps.results ?? ((p: AcquisitionPath) => readContactResults(projectId, p)))(path);
+    found.push(...acquisitionFailures(dependencyKey, keyOf(path), results));
+  }
   if (found.length === 0) return [];
   let held = await readFailureRecoveries(projectId);
   const out: { occurrence: string; recovered: boolean | null; written: boolean }[] = [];

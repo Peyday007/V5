@@ -98,6 +98,30 @@ describe('switchDecision reads the recorded structures and acts on them', () => 
     expect(d.funnel).toBeNull();
   });
 
+  it('a failure belongs to the path it happened on: a former primary\'s open failure never fails the healthy primary, and that path is never switched to', () => {
+    // The primary is now A @ email; X @ old was the primary when it failed and has since been overtaken.
+    const formerPrimary = failure({ occurrence: `acquisition-failure:${DEP}:X @ old:prospects-stop-answering:r3`, path: 'X @ old', failureMode: 'prospects-stop-answering' });
+    const withFormer = [...subs, sub('X @ old')];
+    const d = switchDecision({ plan: planRecord(withFormer), independence: independence({ 'C @ partner': 'SWITCH', 'D @ ads': 'SWITCH', 'X @ old': 'SWITCH' }), preparation: null, failures: [formerPrimary] })!;
+    expect(d.state).toBe('PRIMARY');
+    expect(d.failure).toBeNull();
+    expect(d.replacement).toBeNull();
+    // A record written before records named their path is attributed by its occurrence key, the same way.
+    const legacy = { ...formerPrimary, path: undefined };
+    expect(switchDecision({ plan: planRecord(withFormer), independence: actions, preparation: null, failures: [legacy] })!.state).toBe('PRIMARY');
+    // When the primary itself fails, the former primary — still failing on its own record — is passed over.
+    const now = switchDecision({
+      plan: planRecord(withFormer),
+      independence: independence({ 'B @ email': 'SWITCH', 'C @ partner': 'SWITCH', 'D @ ads': 'SWITCH', 'X @ old': 'SWITCH' }),
+      preparation: preparation(['X @ old', 'D @ ads']),
+      failures: [formerPrimary, failure({ occurrence: `acquisition-failure:${DEP}:A @ email:channel-stops-delivering:r9`, path: 'A @ email' })],
+    })!;
+    expect(now.state).toBe('SWITCHED');
+    expect(now.failure!.occurrence).toMatch(/:A @ email:/);
+    expect(now.replacement).toBe('D @ ads');
+    expect(now.passedOver.find((p) => p.substitute === 'X @ old')!.because.join(' ')).toMatch(/unrecovered failure of its own \(prospects-stop-answering/);
+  });
+
   it('a failure of another dependency, or of a mode the plan does not name, switches nothing', () => {
     expect(switchDecision({ plan: planRecord(subs), independence: actions, preparation: null, failures: [failure({ dependency: 'other' })] })!.state).toBe('PRIMARY');
     expect(switchDecision({ plan: planRecord(subs), independence: actions, preparation: null, failures: [failure({ failureMode: 'unknown-mode' })] })!.state).toBe('PRIMARY');
