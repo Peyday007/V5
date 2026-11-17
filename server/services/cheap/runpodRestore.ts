@@ -371,8 +371,142 @@ function caller(apiKey: string, fetchImpl?: Fetch): Call {
   };
 }
 
+/* ------------------------------------------------------------------------- */
+/* GraphQL, when the REST host cannot be reached                              */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * RunPod's REST host stopped answering (production 2026-11-16 ~21:30Z: "fetch failed" from
+ * GitHub's runners, CONNECT 502 through proxies) while https://api.runpod.io/graphql answered.
+ * Listing, creating and retiring a pod must not depend on one API, so each of them sends the
+ * same request to GraphQL when — and only when — the REST request throws. An HTTP answer from
+ * REST is RunPod's own word and is kept, exactly as `runpodPod.ts`'s `api()` does (#1006).
+ */
+const GRAPHQL = 'https://api.runpod.io/graphql';
+
+async function graphql(apiKey: string, query: string, fetchImpl?: Fetch): Promise<{ ok: boolean; data: Record<string, unknown> | null; error: string }> {
+  const response = await (fetchImpl ?? fetch)(GRAPHQL, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({ query }),
+    signal: AbortSignal.timeout(60_000),
+  });
+  const body = (await response.json().catch(() => null)) as { data?: Record<string, unknown> | null; errors?: { message?: string }[] } | null;
+  const errors = body?.errors?.map((e) => e.message ?? 'error').join('; ') ?? '';
+  const ok = response.ok && !!body?.data && !errors;
+  return { ok, data: body?.data ?? null, error: errors || (ok ? '' : `GraphQL HTTP ${response.status}`) };
+}
+
+/** A GraphQL string literal. JSON's escaping is GraphQL's. */
+const lit = (value: string): string => JSON.stringify(value);
+
+/** Split GraphQL's `dockerArgs` string back into the argument list REST calls `dockerStartCmd`. */
+export function splitDockerArgs(args: unknown): string[] {
+  if (typeof args !== 'string') return [];
+  const out: string[] = [];
+  for (const m of args.matchAll(/'([^']*)'|"((?:[^"\\]|\\.)*)"|(\S+)/g)) out.push(m[1] ?? m[2] ?? m[3] ?? '');
+  return out;
+}
+
+/** The argument list as GraphQL's single `dockerArgs` string: a token with whitespace or quotes is single-quoted. */
+export function joinDockerArgs(args: readonly string[]): string {
+  return args.map((a) => (/^[^\s'"]+$/.test(a) ? a : `'${a.replace(/'/g, `'\\''`)}'`)).join(' ');
+}
+
+interface GraphqlPod {
+  id: string;
+  name?: string;
+  desiredStatus?: string;
+  costPerHr?: number | string;
+  adjustedCostPerHr?: number | string;
+  imageName?: string;
+  gpuCount?: number;
+  dockerArgs?: string;
+  machine?: { gpuDisplayName?: string } | null;
+}
+
+/** A GraphQL pod in the REST shape every caller reads. */
+function fromGraphql(pod: GraphqlPod): Pod & { dockerStartCmd?: unknown; imageName?: string; gpuCount?: number; via: 'graphql' } {
+  return {
+    id: pod.id,
+    ...(pod.name !== undefined ? { name: pod.name } : {}),
+    ...(pod.desiredStatus !== undefined ? { desiredStatus: pod.desiredStatus } : {}),
+    ...(pod.costPerHr !== undefined && pod.costPerHr !== null ? { costPerHr: pod.costPerHr } : {}),
+    ...(pod.adjustedCostPerHr !== undefined && pod.adjustedCostPerHr !== null ? { adjustedCostPerHr: pod.adjustedCostPerHr } : {}),
+    ...(pod.imageName !== undefined ? { imageName: pod.imageName } : {}),
+    ...(pod.gpuCount !== undefined ? { gpuCount: pod.gpuCount } : {}),
+    ...(pod.machine?.gpuDisplayName ? { gpu: { displayName: pod.machine.gpuDisplayName } } : {}),
+    dockerStartCmd: splitDockerArgs(pod.dockerArgs),
+    via: 'graphql',
+  };
+}
+
+async function listPodsViaGraphql(apiKey: string, fetchImpl?: Fetch): Promise<(Pod & { dockerStartCmd?: unknown })[]> {
+  const r = await graphql(
+    apiKey,
+    'query { myself { pods { id name desiredStatus costPerHr adjustedCostPerHr imageName gpuCount dockerArgs machine { gpuDisplayName } } } }',
+    fetchImpl,
+  );
+  const myself = r.data?.['myself'] as { pods?: GraphqlPod[] } | null | undefined;
+  if (!r.ok || !myself) throw new Error(`RunPod refused to list pods (GraphQL): ${r.error.slice(0, 200)}`);
+  return (myself.pods ?? []).map(fromGraphql);
+}
+
+async function terminateViaGraphql(apiKey: string, podId: string, fetchImpl?: Fetch): Promise<number> {
+  // podTerminate returns nothing: success is an answer with data and no errors.
+  const r = await graphql(apiKey, `mutation { podTerminate(input: { podId: ${lit(podId)} }) }`, fetchImpl);
+  return r.ok ? 200 : 502;
+}
+
+/**
+ * One pod from a recipe on one cloud, through GraphQL. It takes one GPU type, not REST's
+ * list, so the recipe's GPUs are tried in its order until one is created. GraphQL has no
+ * entrypoint override, so `dockerArgs` is REST's start command for the image's OWN entrypoint
+ * — which is what `podSpec` sets anyway: `vllm serve` on the 2026 image (positional model),
+ * the module path on the 2025 one (`--model`).
+ */
+async function createViaGraphql(
+  apiKey: string,
+  spec: Record<string, unknown>,
+  recipe: PodRecipe,
+  fetchImpl?: Fetch,
+): Promise<{ pod: Pod | null; refusals: string[] }> {
+  const refusals: string[] = [];
+  const cudas = recipe.cuda.map(Number).filter(Number.isFinite);
+  const minCuda = cudas.length ? recipe.cuda[cudas.indexOf(Math.min(...cudas))] : null;
+  const dockerArgs = joinDockerArgs(spec['dockerStartCmd'] as string[]);
+  for (const gpu of recipe.gpus) {
+    const input = [
+      `cloudType: ${spec['cloudType']}`,
+      'gpuCount: 1',
+      `gpuTypeId: ${lit(gpu)}`,
+      `name: ${lit(String(spec['name']))}`,
+      `imageName: ${lit(recipe.image)}`,
+      `containerDiskInGb: ${recipe.containerDiskInGb}`,
+      'volumeInGb: 0',
+      'ports: "8000/http"',
+      `dockerArgs: ${lit(dockerArgs)}`,
+      ...(minCuda ? [`minCudaVersion: ${lit(minCuda)}`] : []),
+    ].join(', ');
+    const r = await graphql(apiKey, `mutation { podFindAndDeployOnDemand(input: { ${input} }) { id desiredStatus costPerHr machine { gpuDisplayName } } }`, fetchImpl);
+    const made = r.data?.['podFindAndDeployOnDemand'] as GraphqlPod | null | undefined;
+    if (r.ok && made?.id) return { pod: fromGraphql(made), refusals };
+    refusals.push(`${gpu}: ${r.error.replace(/\s+/g, ' ').slice(0, 300)}`);
+  }
+  return { pod: null, refusals };
+}
+
 export async function listPods(apiKey: string, fetchImpl?: Fetch): Promise<(Pod & { dockerStartCmd?: unknown })[]> {
-  const listed = await caller(apiKey, fetchImpl)('GET', '/pods');
+  let listed: Awaited<ReturnType<Call>>;
+  try {
+    listed = await caller(apiKey, fetchImpl)('GET', '/pods');
+  } catch (error) {
+    try {
+      return await listPodsViaGraphql(apiKey, fetchImpl);
+    } catch {
+      throw error;
+    }
+  }
   if (!listed.ok) throw new Error(`RunPod refused to list pods: HTTP ${listed.status} ${listed.text.slice(0, 200)}`);
   return (JSON.parse(listed.text || '[]') as Pod[]) ?? [];
 }
@@ -390,7 +524,13 @@ export async function repurposePod(apiKey: string, podId: string, recipe: PodRec
 }
 
 export async function deletePod(apiKey: string, podId: string, fetchImpl?: Fetch): Promise<number> {
-  return (await caller(apiKey, fetchImpl)('DELETE', `/pods/${encodeURIComponent(podId)}`)).status;
+  try {
+    return (await caller(apiKey, fetchImpl)('DELETE', `/pods/${encodeURIComponent(podId)}`)).status;
+  } catch (error) {
+    const status = await terminateViaGraphql(apiKey, podId, fetchImpl).catch(() => null);
+    if (status === null) throw error;
+    return status;
+  }
 }
 
 /**
@@ -410,19 +550,33 @@ export async function createPod(input: {
   const log: string[] = [];
   const refusals: string[] = [];
   for (const cloud of input.recipe.clouds) {
-    const made = await call('POST', '/pods', podSpec(input.vllmKey, input.model ?? POD_MODEL, cloud, input.recipe, input.name));
-    if (!made.ok) {
-      refusals.push(`${cloud}: HTTP ${made.status} ${made.text.replace(/\s+/g, ' ').slice(0, 700)}`);
-      continue;
+    const spec = podSpec(input.vllmKey, input.model ?? POD_MODEL, cloud, input.recipe, input.name);
+    let pod: Pod;
+    let via = '';
+    try {
+      const made = await call('POST', '/pods', spec);
+      if (!made.ok) {
+        refusals.push(`${cloud}: HTTP ${made.status} ${made.text.replace(/\s+/g, ' ').slice(0, 700)}`);
+        continue;
+      }
+      pod = JSON.parse(made.text) as Pod;
+    } catch (error) {
+      // REST unreachable (a thrown request, not an answer): the same pod through GraphQL.
+      const viaGql = await createViaGraphql(input.apiKey, spec, input.recipe, input.fetchImpl).catch((e: Error) => ({ pod: null, refusals: [`GraphQL: ${e.message}`] }));
+      if (!viaGql.pod) {
+        refusals.push(`${cloud}: REST ${(error as Error)?.message ?? error}; GraphQL ${viaGql.refusals.join('; ')}`);
+        continue;
+      }
+      pod = viaGql.pod;
+      via = ' via GraphQL';
     }
-    const pod = JSON.parse(made.text) as Pod;
     const cost = price(pod);
     if (cost === null || cost > input.maxUsdPerHour + 1e-9) {
-      const gone = await call('DELETE', `/pods/${encodeURIComponent(pod.id)}`);
-      refusals.push(`${cloud}: priced ${cost ?? 'unknown'}/h, over the ${input.maxUsdPerHour}/h ceiling; deleted (HTTP ${gone.status})`);
+      const gone = await deletePod(input.apiKey, pod.id, input.fetchImpl).catch(() => 0);
+      refusals.push(`${cloud}: priced ${cost ?? 'unknown'}/h, over the ${input.maxUsdPerHour}/h ceiling; deleted (HTTP ${gone})`);
       continue;
     }
-    log.push(`created pod ${pod.id} (${input.name}, ${input.recipe.key}) on ${cloud} at $${cost}/h (${pod.gpu?.displayName ?? input.recipe.gpus[0]})`);
+    log.push(`created pod ${pod.id} (${input.name}, ${input.recipe.key}) on ${cloud}${via} at $${cost}/h (${pod.gpu?.displayName ?? input.recipe.gpus[0]})`);
     return { podId: pod.id, url: podUrl(pod.id), status: pod.desiredStatus ?? 'RUNNING', costPerHr: cost, created: true, log };
   }
   throw new Error(`no pod within $${input.maxUsdPerHour}/h could be created: ${refusals.join(' | ')}`);
@@ -479,6 +633,9 @@ export async function sweepBenchPods(apiKey: string, nowMs = Date.now(), fetchIm
   for (const pod of await listPods(apiKey, fetchImpl)) {
     if (!pod.name?.startsWith(BENCH_PREFIX)) continue;
     const created = Date.parse(String((pod as unknown as Record<string, unknown>)['createdAt'] ?? ''));
+    // GraphQL's listing carries no creation time: an age it cannot read is not a leak, so a
+    // benchmark that is still running is never deleted under it.
+    if (!Number.isFinite(created) && (pod as { via?: string }).via === 'graphql') continue;
     const age = Number.isFinite(created) ? (nowMs - created) / 60_000 : Infinity;
     if (age < BENCH_MAX_MINUTES) continue;
     await deletePod(apiKey, pod.id, fetchImpl);
