@@ -45,6 +45,7 @@ import {
   openCommissionsByCandidate,
   pathFact,
   recordPathFact,
+  setSourceClaim,
   settleCommission,
 } from '../../../repos/monetization.ts';
 import { ATTRIBUTE, attributeForLane, laneForAttribute } from '../../../domain/monetization.ts';
@@ -52,7 +53,7 @@ import { readDays, readMoneyFigures } from '../figures.ts';
 import { discoveryAllowed } from '../lifecycle.ts';
 import { discoveryAuthority } from '../discoveryAuthority.ts';
 import { composeLedger, rankableOf } from './ledger.ts';
-import { allocateCommissions } from './commission.ts';
+import { allocateCommissions, HYPOTHESIS_RULE_RANK } from './commission.ts';
 import { statedBySource } from './enumerate.ts';
 import { offerToFamily, researchRoom, type ResearchRoom } from '../researchRoom.ts';
 import { familyDeclarationFor } from '../familyPriority.ts';
@@ -127,8 +128,24 @@ export function commissionQuestion(input: {
   subjectTitle: string | null;
   attribute: MonetizationAttribute;
   round: number;
+  /**
+   * The way of being paid, when this is a hypothesis's bounded check (W3b):
+   * the question is then whether a source states it at all, and by whom.
+   */
+  hypothesis?: string | null;
 }): string {
   const declared = ATTRIBUTE[input.attribute];
+  if (input.hypothesis) {
+    const subject = input.subjectTitle ? `"${input.subjectTitle}"` : `"${input.pathTitle}"`;
+    return (
+      `Does any published source state that money is made from ${subject} by ` +
+      `${input.hypothesis.toLowerCase()} — and if so, who pays that way? Name that party and ` +
+      `what the source says about the arrangement, with the source, under the evidence lane ` +
+      `"${laneForAttribute(input.attribute)}". Only a source that states this way of being paid ` +
+      'for this kind of opening answers it. If none does, say so plainly — that is the answer, ' +
+      'and the possibility stays a hypothesis.'
+    );
+  }
   const about = input.subjectTitle
     ? `"${input.pathTitle}" as a way of making money from "${input.subjectTitle}"`
     : `"${input.pathTitle}"`;
@@ -400,6 +417,7 @@ async function openAsks(input: {
       subjectTitle: entry.subject?.title ?? null,
       attribute: ask.attribute,
       round: ask.round,
+      hypothesis: ask.ruleRank === HYPOTHESIS_RULE_RANK ? entry.method.label : null,
     });
 
     const candidate = await createCandidate({
@@ -627,6 +645,27 @@ async function settleFinished(input: {
      * that settled it.
      */
     const held = !hitTheAsk && filed.heldBack.includes(commission.attribute);
+    /*
+     * A hypothesis's bounded check that a source answered states the path
+     * (W3b): the claim that names who pays this way is the source saying the
+     * arrangement exists, and recording it as the path's source is what makes
+     * every other question about it askable on the next pass. Guarded on the
+     * path having no source yet, so nothing earlier is replaced.
+     */
+    if (commission.ruleRank === HYPOTHESIS_RULE_RANK && hitTheAsk) {
+      const answer = answers.find((one) => one.attribute === commission.attribute)!;
+      if (await setSourceClaim(commission.pathId, answer.claimId)) {
+        await recordCashEvent({
+          projectId: input.projectId,
+          kind: 'MONETIZATION_PATH_STATED',
+          actorRef: 'BRAIN',
+          summary:
+            'A published source states this way of being paid for the opening, so it is no longer ' +
+            'a hypothesis and its other questions can be asked.',
+          detail: { pathId: commission.pathId, claimId: answer.claimId, commissionId: commission.id },
+        });
+      }
+    }
     const outcome = describeOutcome({
       state,
       hitTheAsk,
@@ -676,6 +715,18 @@ function describeOutcome(input: {
   commission: MonetizationCommission;
 }): string {
   const label = ATTRIBUTE[input.commission.attribute].label.toLowerCase();
+  if (
+    input.commission.ruleRank === HYPOTHESIS_RULE_RANK &&
+    !input.hitTheAsk &&
+    !input.held &&
+    input.state === 'DONE'
+  ) {
+    return (
+      'No published source states this way of being paid for the opening, so it stays a ' +
+      'hypothesis: kept on the ledger, its other questions not asked, and checked again when the ' +
+      'opening changes or a source or a person states it.'
+    );
+  }
   if (input.held) {
     return (
       `A published source answers the ${label}, and the answer already recorded here outranks ` +

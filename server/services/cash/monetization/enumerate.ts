@@ -66,6 +66,7 @@ import {
   recordPath,
   recordPathFact,
   setMergedInto,
+  replaceCarriedFact,
   setSourceClaim,
 } from '../../../repos/monetization.ts';
 import type {
@@ -448,6 +449,7 @@ async function carryFigures(input: {
   const byAttribute = new Map<MonetizationAttribute, { kind: FactKind }>(
     input.existing.map((one) => [one.attribute, one]),
   );
+  const heldFacts = new Map(input.existing.map((one) => [one.attribute, one]));
   const written: string[] = [];
 
   const propose = async (
@@ -489,8 +491,6 @@ async function carryFigures(input: {
   );
 
   for (const answer of cardAnswers(input.opportunity, input.card ?? [])) {
-    if (byAttribute.get(answer.attribute)?.kind === 'PERSON') continue;
-    if (!mayReplace(byAttribute.get(answer.attribute) ?? null, answer.kind)) continue;
     const declared = ATTRIBUTE[answer.attribute];
     const figures =
       declared.unit === 'MONEY' ? readMoneyFigures(answer.value, input.opportunity.currency) : [];
@@ -498,9 +498,7 @@ async function carryFigures(input: {
       (low, one) => (low === null || one.cents < low ? one.cents : low),
       null,
     );
-    await recordPathFact({
-      projectId: input.projectId,
-      pathId: input.pathId,
+    const fact = {
       attribute: answer.attribute,
       kind: answer.kind,
       value: answer.value.slice(0, 600),
@@ -511,7 +509,45 @@ async function carryFigures(input: {
       assumptions: answer.assumptions,
       uncertainty: answer.uncertainty,
       decidedBy: answer.decidedBy,
-    });
+    };
+
+    /*
+     * A copy follows the card (W3b). The card's own evidence is never replaced
+     * by other evidence while it stands (`recordEvidenceFact`), so a copy that
+     * differs from the card means the card was corrected — its claim withdrawn
+     * and another recorded, or a person answering over it — and a copy of the
+     * withdrawn claim must not outlive it. Only a row this function wrote is
+     * moved, by its marker, and only while it is still the row read here.
+     */
+    const held = heldFacts.get(answer.attribute);
+    if (held && isCardCopy(held)) {
+      const same = held.kind === fact.kind && held.claimId === fact.claimId && held.value === fact.value;
+      if (same) continue;
+      const moved = await replaceCarriedFact({ id: held.id, expectUpdatedAt: held.updatedAt, ...fact });
+      if (!moved) continue;
+      await recordCashEvent({
+        projectId: input.projectId,
+        opportunityId: input.opportunity.id,
+        kind: 'MONETIZATION_CARD_ANSWER_CORRECTED',
+        actorRef: BRAIN,
+        summary:
+          `The ${declared.label.toLowerCase()} carried from the card changed because the card did. ` +
+          'The earlier answer and its claim keep their rows.',
+        detail: {
+          pathId: input.pathId,
+          attribute: answer.attribute,
+          from: { kind: held.kind, claimId: held.claimId, value: held.value },
+          to: { kind: fact.kind, claimId: fact.claimId },
+        },
+      });
+      byAttribute.set(answer.attribute, { kind: answer.kind });
+      written.push(answer.attribute);
+      continue;
+    }
+
+    if (byAttribute.get(answer.attribute)?.kind === 'PERSON') continue;
+    if (!mayReplace(byAttribute.get(answer.attribute) ?? null, answer.kind)) continue;
+    await recordPathFact({ projectId: input.projectId, pathId: input.pathId, ...fact });
     byAttribute.set(answer.attribute, { kind: answer.kind });
     written.push(answer.attribute);
   }
@@ -530,6 +566,17 @@ export function termDays(text: string): number | null {
   if (!net) return null;
   const days = Number.parseInt(net[1] as string, 10);
   return days > 0 ? days : null;
+}
+
+/**
+ * What marks a path answer as carried from the card, in its basis. A reading of
+ * the row this module wrote, never of anybody else's: a person's answer and a
+ * researched one carry no such basis, so they are never moved by the card.
+ */
+export const CARD_COPY_BASIS = 'Carried from the discovery card: ';
+
+function isCardCopy(fact: Pick<MonetizationPathFact, 'basis'>): boolean {
+  return (fact.basis ?? '').startsWith(CARD_COPY_BASIS);
 }
 
 interface CardAnswer {
@@ -580,9 +627,8 @@ export function cardAnswers(
         value: fact.value.trim(),
         claimId: kind === 'EVIDENCE' ? fact.claimId : null,
         basis:
-          kind === 'RECOMMENDATION'
-            ? fact.basis ?? `the ${field} recorded on the discovery's card`
-            : null,
+          `${CARD_COPY_BASIS}${field}` +
+          (kind === 'RECOMMENDATION' ? ` — ${fact.basis ?? 'the value recorded there'}` : ''),
         assumptions:
           kind === 'RECOMMENDATION'
             ? fact.assumptions ?? 'that what the card says of the opening holds for this way of taking it'
@@ -601,7 +647,7 @@ export function cardAnswers(
           kind: 'RECOMMENDATION',
           value,
           claimId: null,
-          basis: `the ${field} recorded on the discovery's card`,
+          basis: `${CARD_COPY_BASIS}${field} — the value recorded there, with no source behind it`,
           assumptions: 'that what the card says of the opening holds for this way of taking it',
           uncertainty:
             'Nothing has researched this for this way of being paid in particular. Anything that ' +

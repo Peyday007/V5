@@ -393,15 +393,35 @@ export interface CommissionInput {
 }
 
 /**
- * Why a hypothetical path is not researched, and what makes it researchable.
- * Exported so the surface and the tests read the one sentence.
+ * The rule a hypothesis check is admitted under (W3b). Below every other rule,
+ * so it takes only the capacity stated questions leave.
+ */
+export const HYPOTHESIS_RULE_RANK = 50;
+
+/**
+ * The one question a hypothesis is asked: who pays this way, from a source that
+ * says money is made from this opening this way. A party paying is what makes
+ * an arrangement exist, and an answer with its source is what states the path
+ * (`settleFinished` records that claim as its source).
+ */
+export const HYPOTHESIS_ATTRIBUTE: MonetizationAttribute = 'requiredRelationships';
+
+/**
+ * Why a hypothetical path is not asked its ordinary questions, and what happens
+ * to it instead. Exported so the surface and the tests read the one sentence.
  */
 export const UNSTATED_WHY =
   'no source names this way of being paid for this opening — it is a shape of transaction ' +
   'the method table says could apply, and no publication settles a question about an ' +
-  'arrangement nobody has said exists. It stays on the ledger, and it is asked about the ' +
-  'moment research on the opening names this method (its claim becomes the source) or a ' +
-  'person adds or judges it';
+  'arrangement nobody has said exists. It stays on the ledger with one bounded check — does ' +
+  'any published source state that money is paid this way here — and is asked everything ' +
+  'else the moment a source or a person states it';
+
+/** Why a hypothesis already checked is not checked again yet. */
+export const UNSTATED_CHECKED_WHY =
+  'its bounded check found no published source stating this way of being paid for this ' +
+  'opening, so it stays a hypothesis, recorded on that check. It is checked again when the ' +
+  'opening changes, and asked everything else the moment a source or a person states it';
 
 /**
  * What to ask next, as a pure function over a recorded snapshot.
@@ -428,6 +448,14 @@ export function allocateCommissions(input: CommissionInput): CommissionAllocatio
     else byPathAttribute.set(key, [one]);
   }
 
+  /* Openings with at least one stated, live path to ask the opening's own questions on. */
+  const statedOpenings = new Set(
+    input.entries
+      .filter((one) => WORTH_ASKING.has(one.status) && !input.unstated?.has(one.path.id))
+      .map((one) => one.path.opportunityId)
+      .filter((one): one is string => !!one),
+  );
+
   for (let index = 0; index < input.entries.length; index += 1) {
     const entry = input.entries[index]!;
     const mine = rankableById.get(entry.path.id);
@@ -444,19 +472,52 @@ export function allocateCommissions(input: CommissionInput): CommissionAllocatio
     }
 
     /*
-     * A hypothetical arrangement is not a research subject (F3e). Asking what
-     * a referral fee on a surplus auction pays, when nothing says one exists,
-     * settles UNRESOLVED by construction. One decline per path, with what
-     * would make it askable, so the possibility is kept and nothing is dropped
-     * silently. A contradiction is still re-asked: research answered it once.
+     * A hypothetical arrangement is not asked its ordinary questions (F3e):
+     * asking what a referral fee on a surplus auction pays, when nothing says
+     * one exists, settles UNRESOLVED by construction. It is not dropped either
+     * (W3b): its next action is one bounded check per epoch of the opening —
+     * does a source state money is paid this way here — recorded as a
+     * commission row like any other, whose answer states the path.
+     *
+     * Two things stay askable on it. A contradicted answer, because research
+     * answered it once. And what a blocker on the opening names, when no
+     * stated path of that opening exists to ask it on: the blocker is about
+     * the opening, not the method, and otherwise nothing would ever ask it.
      */
-    if (
-      input.unstated?.has(entry.path.id) &&
-      !MONETIZATION_ATTRIBUTES.some((attribute) =>
-        input.contradicted.has(`${entry.path.id}::${attribute}`),
-      )
-    ) {
-      declined.push({ subject: entry.path.title, why: UNSTATED_WHY });
+    const contradictedAny = MONETIZATION_ATTRIBUTES.some((attribute) =>
+      input.contradicted.has(`${entry.path.id}::${attribute}`),
+    );
+    const unstated = Boolean(input.unstated?.has(entry.path.id)) && !contradictedAny;
+    const blockerOnly =
+      unstated &&
+      entry.status === 'BLOCKED' &&
+      !!entry.path.opportunityId &&
+      !statedOpenings.has(entry.path.opportunityId);
+    if (unstated && !blockerOnly) {
+      // A blocked opening's hypotheses wait with it: the check is asked once
+      // what blocks the opening is resolved, through the same rule.
+      if (entry.status === 'BLOCKED') {
+        declined.push({
+          subject: entry.path.title,
+          why:
+            `${UNSTATED_WHY}. The opening is blocked — ${entry.statusBecause} — and its stated ` +
+            'path is asked what the blocker names; this check follows once it is lifted',
+        });
+        continue;
+      }
+      const check = hypothesisCheck(entry, byPathAttribute, input.epochStarts);
+      if (check) candidates.push(check);
+      else {
+        const history = byPathAttribute.get(`${entry.path.id}::${HYPOTHESIS_ATTRIBUTE}`) ?? [];
+        declined.push({
+          subject: entry.path.title,
+          why: history.some((one) => one.state === 'OPEN')
+            ? 'its bounded check — does a published source state this way of being paid here — is being asked now'
+            : history.length > 0
+              ? UNSTATED_CHECKED_WHY
+              : UNSTATED_WHY,
+        });
+      }
       continue;
     }
 
@@ -645,6 +706,8 @@ export function allocateCommissions(input: CommissionInput): CommissionAllocatio
 
   const asks: CommissionAsk[] = [];
   const takenPaths = new Set<string>();
+  const checkedOpenings = new Set<string>();
+  const openingOf = new Map(input.entries.map((one) => [one.path.id, one.path.opportunityId]));
   for (const one of candidates) {
     if (asks.length >= slots) {
       declined.push({
@@ -669,10 +732,54 @@ export function allocateCommissions(input: CommissionInput): CommissionAllocatio
       });
       continue;
     }
+    if (one.ruleRank === HYPOTHESIS_RULE_RANK) {
+      const opening = openingOf.get(one.pathId);
+      if (opening && checkedOpenings.has(opening)) {
+        declined.push({
+          subject: `${one.subject} — ${ATTRIBUTE[one.attribute].label}`,
+          why: 'another way of being paid for this same opening is being checked first',
+        });
+        continue;
+      }
+      if (opening) checkedOpenings.add(opening);
+    }
     takenPaths.add(one.pathId);
     asks.push(one);
   }
   return { asks, declined };
+}
+
+/**
+ * The bounded check a hypothetical path gets, or null when it has had it.
+ *
+ * Once per epoch of the opening (a distinct change to the opening starts a new
+ * one, exactly as for every other question), never re-asked inside it: the
+ * same sources will not start stating an arrangement they did not state. An
+ * open check, or one already answered, is not asked again.
+ */
+function hypothesisCheck(
+  entry: LedgerEntry,
+  byPathAttribute: ReadonlyMap<string, MonetizationCommission[]>,
+  epochStarts: ReadonlyMap<string, string> | undefined,
+): CommissionAsk | null {
+  if (!entry.unknowns.includes(HYPOTHESIS_ATTRIBUTE)) return null;
+  const everything = byPathAttribute.get(`${entry.path.id}::${HYPOTHESIS_ATTRIBUTE}`) ?? [];
+  if (everything.some((one) => one.state === 'OPEN')) return null;
+  const epochStart = epochStarts?.get(entry.path.id);
+  const thisEpoch = epochStart ? everything.filter((one) => one.openedAt >= epochStart) : everything;
+  if (thisEpoch.some((one) => one.state !== 'ABANDONED')) return null;
+  return {
+    pathId: entry.path.id,
+    attribute: HYPOTHESIS_ATTRIBUTE,
+    round: everything.length + 1,
+    ruleRank: HYPOTHESIS_RULE_RANK,
+    subject: entry.path.title,
+    rank: entry.rank,
+    reason:
+      'No source states this way of being paid for this opening, so its ordinary questions are ' +
+      'not asked. This is its one bounded check: whether a published source says money is paid ' +
+      'this way here, and by whom. An answer states the path; none keeps it a hypothesis.',
+  };
 }
 
 /**
