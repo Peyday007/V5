@@ -25,6 +25,17 @@
  * are listed, in batches, for model assistance, and a record it could read is
  * never sent.
  *
+ * Every fact also carries its provenance at fine granularity (ACQ-21-4 item
+ * 5): where the record lives, when it was published and retrieved, the
+ * source's version, format and licence when the item states them, the
+ * extractor code version, the exact character span of the evidence in the
+ * item field it was read from, the entities and the units. A value the item
+ * does not state is null, never invented. Each fact is classed by what it is
+ * epistemically — extraction only ever produces OBSERVED (read off the record)
+ * or DERIVED (a role inferred from the record's kind); it never produces a
+ * model estimate, a counterfactual or a verified commercial fact, which only
+ * their own producers may assert.
+ *
  * Pure: no database, no network, no model. It reads the stored item shape and
  * returns facts, so it works when every model provider is down.
  */
@@ -42,6 +53,50 @@ export interface ExtractableItem {
   organization: string | null;
   publishedAt: string | null;
   fetchedAt: string;
+  /** The source's own version of the record (an ETag, revision or dataset version), when the item carries one. */
+  sourceVersion?: string | null;
+  /** The format the record arrived in (e.g. `application/json`, `text/html`, `rss`), when known. */
+  format?: string | null;
+  /** The licence or permission the record was retrieved under, when the item states one. */
+  license?: string | null;
+}
+
+/** The version of this extractor's code, recorded on every fact so a change in reading is visible in the rows. */
+export const EXTRACTOR_VERSION = 'feeds-extract/2';
+
+/**
+ * What a fact is epistemically. Extraction emits only OBSERVED and DERIVED;
+ * the other classes exist so downstream producers can say what they made
+ * without a fact read off a record ever being mistaken for one of them.
+ */
+export type EpistemicClass = 'OBSERVED' | 'DERIVED' | 'MODEL_ESTIMATE' | 'COUNTERFACTUAL' | 'VERIFIED_COMMERCIAL';
+
+/** The exact characters of the item field the evidence is: `source[field].slice(start, end) === text`. */
+export interface EvidenceSpan {
+  start: number;
+  end: number;
+  text: string;
+}
+
+/** Fine-grained provenance of one fact. Every field is present; an unknown is null. */
+export interface FactProvenance {
+  /** The original location of the record. */
+  location: string;
+  itemId: string;
+  source: string;
+  field: ItemField;
+  publishedAt: string | null;
+  retrievedAt: string;
+  sourceVersion: string | null;
+  format: string | null;
+  license: string | null;
+  /** The code that read the fact, and the model that did (always null: extraction calls no model). */
+  extractor: { code: string; model: string | null };
+  /** Where in the field the evidence sits; null only when the evidence text cannot be located verbatim. */
+  span: EvidenceSpan | null;
+  /** The normalized entity keys the fact concerns. */
+  entities: string[];
+  units: { unit: string | null; currency: string | null };
 }
 
 /**
@@ -78,6 +133,8 @@ export interface ExtractedFact {
   demand: 'NOT_DEMAND' | 'STATED_REQUEST';
   evidence: { itemId: string; field: ItemField; text: string; url: string };
   observedAt: string;
+  epistemicClass: EpistemicClass;
+  provenance: FactProvenance;
 }
 
 export type ReconciledStatus = 'OBSERVED' | 'CONTESTED' | 'STALE';
@@ -165,25 +222,40 @@ function validDay(y: number, m: number, d: number): string | null {
 
 /** Every ISO day a text states, written either way. */
 export function readDays(text: string): { day: string; text: string }[] {
-  const out: { day: string; text: string }[] = [];
+  return locatedDays(text).map(({ day, text: t }) => ({ day, text: t }));
+}
+
+/** `readDays` with where each day sits in the text. */
+function locatedDays(text: string): { day: string; text: string; index: number }[] {
+  const out: { day: string; text: string; index: number }[] = [];
   for (const m of text.matchAll(ISO_DAY)) {
     const day = validDay(Number(m[1]), Number(m[2]), Number(m[3]));
-    if (day) out.push({ day, text: m[0]! });
+    if (day) out.push({ day, text: m[0]!, index: m.index });
   }
   for (const m of text.matchAll(WRITTEN_DAY)) {
     const month = MONTHS.findIndex((name) => name.startsWith(m[1]!.toLowerCase().slice(0, 3))) + 1;
     const day = validDay(Number(m[3]), month, Number(m[2]));
-    if (day) out.push({ day, text: m[0]! });
+    if (day) out.push({ day, text: m[0]!, index: m.index });
   }
   return out;
 }
 
 /** "City, ST" places a text states, normalized to lower case. Remote reads as "remote". */
 export function readPlaces(text: string): { place: string; text: string }[] {
-  const out: { place: string; text: string }[] = [];
-  for (const m of text.matchAll(PLACE)) out.push({ place: `${m[1]!.trim().toLowerCase()}, ${m[2]!.toLowerCase()}`, text: `${m[1]!.trim()}, ${m[2]}` });
+  return locatedPlaces(text).map(({ place, text: t }) => ({ place, text: t }));
+}
+
+/** `readPlaces` with the exact span of the text each place was read from. */
+function locatedPlaces(text: string): { place: string; text: string; span: EvidenceSpan }[] {
+  const out: { place: string; text: string; span: EvidenceSpan }[] = [];
+  for (const m of text.matchAll(PLACE)) {
+    const city = m[1]!.trim();
+    const start = m.index + m[0].indexOf(city);
+    const end = m.index + m[0].length;
+    out.push({ place: `${city.toLowerCase()}, ${m[2]!.toLowerCase()}`, text: `${city}, ${m[2]}`, span: { start, end, text: text.slice(start, end) } });
+  }
   const remote = REMOTE.exec(text);
-  if (remote) out.push({ place: 'remote', text: remote[0] });
+  if (remote) out.push({ place: 'remote', text: remote[0], span: { start: remote.index, end: remote.index + remote[0].length, text: remote[0] } });
   return out;
 }
 
@@ -202,8 +274,40 @@ export function extractItem(item: ExtractableItem): ExtractedFact[] {
   const demand: ExtractedFact['demand'] = kind === 'STATED_REQUEST' ? 'STATED_REQUEST' : 'NOT_DEMAND';
   const subject = `${entity ?? item.id}:${deliverable ?? '-'}`;
   const out: ExtractedFact[] = [];
-  const push = (fact: Omit<ExtractedFact, 'recordKind' | 'demand' | 'observedAt' | 'entityKey'>): void => {
-    out.push({ ...fact, entityKey: entity, recordKind: kind, demand, observedAt });
+  const fieldText = (field: ItemField): string => (field === 'body' ? item.body ?? '' : field === 'organization' ? item.organization ?? '' : field === 'publishedAt' ? item.publishedAt ?? '' : item.title);
+  // Where to look next for each repeated (field, text), so the second identical figure points at the second occurrence.
+  const cursors = new Map<string, number>();
+  const locate = (field: ItemField, text: string): EvidenceSpan | null => {
+    const source = fieldText(field);
+    const cursorKey = `${field}\u0000${text}`;
+    let start = source.indexOf(text, cursors.get(cursorKey) ?? 0);
+    if (start < 0) start = source.indexOf(text);
+    if (start < 0 || !text) return null;
+    cursors.set(cursorKey, start + 1);
+    return { start, end: start + text.length, text };
+  };
+  const push = (
+    fact: Omit<ExtractedFact, 'recordKind' | 'demand' | 'observedAt' | 'entityKey' | 'epistemicClass' | 'provenance'>,
+    span?: EvidenceSpan,
+  ): void => {
+    // A role (buyer, provider, employer) is inferred from the record's kind; everything else is read off the record.
+    const epistemicClass: EpistemicClass = fact.field === 'buyer' || fact.field === 'provider' || fact.field === 'employer' ? 'DERIVED' : 'OBSERVED';
+    const provenance: FactProvenance = {
+      location: item.url,
+      itemId: item.id,
+      source: item.source,
+      field: fact.evidence.field,
+      publishedAt: item.publishedAt ?? null,
+      retrievedAt: item.fetchedAt,
+      sourceVersion: item.sourceVersion ?? null,
+      format: item.format ?? null,
+      license: item.license ?? null,
+      extractor: { code: EXTRACTOR_VERSION, model: null },
+      span: span ?? locate(fact.evidence.field, fact.evidence.text),
+      entities: entity ? [entity] : [],
+      units: { unit: fact.unit, currency: fact.currency },
+    };
+    out.push({ ...fact, entityKey: entity, recordKind: kind, demand, observedAt, epistemicClass, provenance });
   };
   const ev = (field: ItemField, text: string) => ({ itemId: item.id, field, text, url: item.url });
 
@@ -234,8 +338,11 @@ export function extractItem(item: ExtractableItem): ExtractedFact[] {
     for (const q of readQuantities(text)) {
       push({ key: `quantity:${subject}:${q.normalizedUnit}`, field: 'quantity', value: q.normalizedValue, unit: q.normalizedUnit, currency: null, evidence: ev(field, q.text) });
     }
-    for (const d of readDays(text)) push({ key: `date:${subject}:${d.day}`, field: 'date', value: d.day, unit: null, currency: null, evidence: ev(field, d.text) });
-    for (const p of readPlaces(text)) push({ key: `location:${subject}`, field: 'location', value: p.place, unit: null, currency: null, evidence: ev(field, p.text) });
+    for (const d of locatedDays(text)) {
+      const span = { start: d.index, end: d.index + d.text.length, text: d.text };
+      push({ key: `date:${subject}:${d.day}`, field: 'date', value: d.day, unit: null, currency: null, evidence: ev(field, d.text) }, span);
+    }
+    for (const p of locatedPlaces(text)) push({ key: `location:${subject}`, field: 'location', value: p.place, unit: null, currency: null, evidence: ev(field, p.text) }, p.span);
   }
   if (item.publishedAt) {
     const day = item.publishedAt.slice(0, 10);
