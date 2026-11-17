@@ -48,11 +48,12 @@ import {
   settleCommission,
 } from '../../../repos/monetization.ts';
 import { ATTRIBUTE, attributeForLane, laneForAttribute } from '../../../domain/monetization.ts';
-import { readMoneyFigures } from '../figures.ts';
+import { readDays, readMoneyFigures } from '../figures.ts';
 import { discoveryAllowed } from '../lifecycle.ts';
 import { discoveryAuthority } from '../discoveryAuthority.ts';
 import { composeLedger, rankableOf } from './ledger.ts';
 import { allocateCommissions } from './commission.ts';
+import { statedBySource } from './enumerate.ts';
 import { offerToFamily, researchRoom, type ResearchRoom } from '../researchRoom.ts';
 import { familyDeclarationFor } from '../familyPriority.ts';
 import { diveEpochStart } from '../diveStage.ts';
@@ -319,8 +320,24 @@ export async function runCommissions(input: {
   };
   const contradicted = await contradictedPathAnswers(input.projectId);
   const nowMs = Date.parse(input.now ?? input.ledger.readAt);
+  /*
+   * The opening × method cross product is a space of hypotheses (F3e): only a
+   * path a source or a person has stated is researched.
+   */
+  const unstated = new Set(
+    live
+      .filter(
+        (entry) =>
+          !statedBySource(
+            entry.path,
+            entry.path.opportunityId ? opportunities.get(entry.path.opportunityId) ?? null : null,
+            entry.judgments.length > 0,
+          ),
+      )
+      .map((entry) => entry.path.id),
+  );
   const allocate = (entries: typeof live, slots: number) =>
-    allocateCommissions({ entries, rankable: entries.map(rankableOf), commissions, contradicted, slots, now: nowMs, epochStarts });
+    allocateCommissions({ entries, rankable: entries.map(rankableOf), commissions, contradicted, slots, now: nowMs, epochStarts, unstated });
   const familyLive = live.filter(familyEntry);
   const familyPlan = familyLive.length > 0 ? allocate(familyLive, room.room) : null;
   const otherRoom = familyPlan
@@ -823,27 +840,7 @@ export function matchChoice(text: string, choices: readonly string[] | undefined
   return hits.length === 1 ? (hits[0] as string) : null;
 }
 
-/**
- * A number of days a source states, or null.
- *
- * Deliberately narrow, and its failure mode is fixed at **missing** a duration
- * rather than inventing one — `figures.ts`' own contract, at the other unit. It
- * reads a stated count of days, weeks or months and nothing else: no "a couple
- * of", no "next quarter", no arithmetic on a date. A payment term nobody
- * publishes stays unknown.
- */
-export function readDays(text: string): number | null {
-  const match = /(\d{1,4})(?:\s*[-–]\s*\d{1,4})?\s*(day|business day|week|month)s?\b/i.exec(
-    text,
-  );
-  if (!match) return null;
-  const count = Number.parseInt(match[1] as string, 10);
-  if (!Number.isFinite(count) || count <= 0 || count > 3_650) return null;
-  const unit = (match[2] as string).toLowerCase();
-  if (unit === 'week') return count * 7;
-  if (unit === 'month') return count * 30;
-  return count;
-}
+export { readDays };
 
 function clamp(text: string, max: number): string {
   const tidy = text.trim().replace(/\s+/g, ' ');
