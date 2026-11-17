@@ -100,7 +100,14 @@ compaction. These rules answer each of those.
    re-injects the owner's messages verbatim (full text in `owner-words.md`
    beside the transcript). Re-read them and reconcile the task list before
    deciding anything is done.
-8. **Keep this file small.** It is loaded into every session's context. Detail
+8. **A deadline is enforced, not aimed at** (owner's permanent rule, 2026-11-17;
+   §112). A deadline the owner names is set with its deliverable and acceptance
+   criteria, registered as one-shot scheduled tasks that fire whatever the
+   session is doing, tracked on the critical path and escalated before it is
+   missed. At the deadline only `npm run finish -- deadline deliver` runs, and
+   its report — completed, unfinished, failed acceptance — is delivered even if
+   incomplete. The session never extends it.
+9. **Keep this file small.** It is loaded into every session's context. Detail
    goes in `docs/ARCHITECTURE-RECORD.md`; `tests/claudeMdBudget.test.ts` refuses
    a CLAUDE.md over budget.
 
@@ -294,7 +301,7 @@ There must be no workflow where the user has to remember "now go update the data
     time to revenue and whether it can be done, and a goal's constraint binds
     that goal, only while it runs.
 
-## 8–111. The architecture record
+## 8–112. The architecture record
 
 Sections 8 onward — why each subsystem is shaped as it is, and the production
 defects that shaped it — are in **`docs/ARCHITECTURE-RECORD.md`**, verbatim and
@@ -407,6 +414,7 @@ resolves. Read the section for the area you are changing before you change it
 - §109. The operator directs engineering, and a merged pull request is not the improvement.
 - §110. Sending inboxes are bought with money the owner put in, priced by the seller first, and never bought twice.
 - §111. Brain improves itself by comparing alternatives, and an evaluator it cannot see decides.
+- §112. A deadline is a delivery commitment: an independent scheduler enforces it, and the session cannot move it.
 
 ## Conventions
 

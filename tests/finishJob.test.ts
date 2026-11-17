@@ -371,3 +371,125 @@ describe('registration', () => {
     expect(fs.readFileSync(path.join(ROOT, '.claude/skills/finish-the-job/SKILL.md'), 'utf8')).toMatch(/^---\nname: finish-the-job\n/);
   });
 });
+
+describe('a deadline is an externally enforced delivery commitment (owner rule, 2026-11-17)', () => {
+  const T0 = Date.now();
+  const at = (min: number) => new Date(T0 + min * 60_000).toISOString();
+  const tool = (tool_name: string, tool_input: object = {}) => hook({ hook_event_name: 'PreToolUse', tool_name, tool_input });
+  const JOB =
+    'Ship the importer fix. Deadline: 5pm today.\n' +
+    '1. The importer accepts PDFs over 50 MB.\n' +
+    '2. The release notes name the fix.\n' +
+    '3. Tidy the importer logging.\n';
+  const setUp = () => {
+    env.FINISH_JOB_NOW = at(0);
+    expect(assign(JOB).out).toContain('DEADLINE UNSET');
+    expect(cli('deadline', 'set', '--at', at(240), '--deliverable', 'the importer fix released', '--accept', 'R1,R2').code).toBe(0);
+    const plan = cli('deadline', 'status').out;
+    expect(plan).toContain(`"run_once_at":"${at(240)}"`);
+    expect(plan).toContain('[DEADLINE SCHEDULER] DEADLINE');
+    expect(cli('deadline', 'register', '--trigger', 'trig_D', '--at', at(240), '--warn', 'trig_W', '--warn-at', at(180)).code).toBe(0);
+  };
+
+  it('a rule about deadlines names none; a message naming one demands registration with the independent scheduler before any other work', () => {
+    const rule = 'A user-designated hard deadline is an externally enforced delivery commitment.\n1. A persistent deadline registered with an independent scheduler.\n5. Mandatory delivery at the deadline, even if the work is incomplete.\n';
+    assign(rule);
+    expect(ledger().deadline).toBeUndefined();
+    cli('dismiss', '--reason', 'test');
+
+    env.FINISH_JOB_NOW = at(0);
+    assign(JOB);
+    expect(ledger().deadline.ownerText).toBe('Ship the importer fix. Deadline: 5pm today.');
+    expect(tool('Edit', { file_path: `${work}/x.ts` }).err).toContain('register the deadline');
+    expect(tool('Bash', { command: 'npm test' }).code).toBe(2);
+    expect(tool('Read', { file_path: `${work}/x.ts` }).code).toBe(0);
+    expect(cli('check').out).toMatch(/\[OPEN\s*\] DEADLINE/);
+    // A deliverable and acceptance criteria are part of setting it.
+    expect(cli('deadline', 'set', '--at', at(240)).out).toContain('--deliverable');
+    expect(cli('deadline', 'set', '--at', at(240), '--deliverable', 'x', '--accept', 'R9').out).toContain('no requirement R9');
+    expect(cli('deadline', 'set', '--at', at(-5), '--deliverable', 'x', '--accept', 'R1').code).toBe(1);
+    expect(cli('deadline', 'set', '--at', at(240), '--deliverable', 'the importer fix released', '--accept', 'R1,R2').code).toBe(0);
+    expect(tool('Edit', { file_path: `${work}/x.ts` }).err).toContain('no independent scheduler');
+    // The scheduled tasks must be the deadline itself and an early warning.
+    expect(cli('deadline', 'register', '--trigger', 'trig_D', '--at', at(300)).out).toContain('must be the deadline');
+    expect(cli('deadline', 'register', '--trigger', 'trig_D', '--at', at(240)).out).toContain('early-warning');
+    expect(cli('deadline', 'register', '--trigger', 'trig_D', '--at', at(240), '--warn', 'trig_W', '--warn-at', at(230)).code).toBe(1);
+    expect(cli('deadline', 'register', '--trigger', 'trig_D', '--at', at(240), '--warn', 'trig_W', '--warn-at', at(180)).code).toBe(0);
+    expect(tool('Edit', { file_path: `${work}/x.ts` }).code).toBe(0);
+    expect(cli('check').out).toMatch(/\[DONE\s*\] DEADLINE/);
+  });
+
+  it('the session never extends it: no later deadline, and the scheduled tasks are not moved or deleted; the owner can', () => {
+    setUp();
+    expect(cli('deadline', 'set', '--at', at(300)).out).toContain('never extends a deadline');
+    expect(tool('mcp__claude-code-remote__delete_trigger', { trigger_id: 'trig_D' }).err).toContain('not extended by the session');
+    expect(tool('mcp__claude-code-remote__update_trigger', { trigger_id: 'trig_W', enabled: false }).code).toBe(2);
+    expect(tool('mcp__claude-code-remote__update_trigger', { trigger_id: 'trig_other', enabled: false }).code).toBe(0);
+    expect(cli('deadline', 'set', '--at', at(120)).code).toBe(0); // earlier is always allowed, and needs registering again
+    expect(tool('Edit', { file_path: `${work}/x.ts` }).code).toBe(2);
+    env.FINISH_JOB_NOW = at(1);
+    assign('New deadline: tomorrow 9am, same work.');
+    expect(cli('deadline', 'set', '--at', at(1000)).code).toBe(0);
+    expect(ledger().deadline.history).toHaveLength(3);
+  });
+
+  it('tracks the critical path, escalates before the deadline when completion becomes unlikely, and may defer only nonessential work', () => {
+    setUp();
+    expect(cli('deadline', 'estimate', 'R1', '--min', '200').code).toBe(0);
+    let res = cli('check').out;
+    expect(res).toMatch(/\[OPEN\s*\] DEADLINE:[^\n]*AT RISK — critical path R1, R2, R3 needs ~260 min/);
+    expect(tool('Edit', { file_path: `${work}/x.ts` }).err).toContain('report that to the owner before any other work');
+    expect(tool('PushNotification', { message: 'at risk' }).code).toBe(0);
+    expect(cli('deadline', 'defer', 'R2', '--reason', 'x').out).toContain('acceptance criterion');
+    expect(cli('deadline', 'escalate', '--note', 'R1 will not be released by 5pm; R2 will').code).toBe(0);
+    expect(tool('Edit', { file_path: `${work}/x.ts` }).code).toBe(0);
+    expect(cli('deadline', 'defer', 'R3', '--reason', 'logging tidy is nonessential').out).toContain('leaves the critical path');
+    expect(cli('deadline', 'estimate', 'R1', '--min', '100').code).toBe(0);
+    res = cli('check').out;
+    expect(res).toMatch(/\[DONE\s*\] DEADLINE:[^\n]*— \d+ min to[^\n]*\(R1, R2\)/);
+    expect(res).not.toContain('R3, ');
+  });
+
+  it('at the deadline only delivery runs; the delivery separates completed, unfinished and failed acceptance; nothing continues past it', () => {
+    setUp();
+    sh('echo "release notes: importer fix" > NOTES.md');
+    expect(cli('evidence', 'R2', '--file', 'NOTES.md', '--contains', 'importer fix').code).toBe(0);
+    // Before the deadline, delivery is not a way out of executable work.
+    expect(cli('deadline', 'deliver').out).toContain('keep working');
+
+    env.FINISH_JOB_NOW = at(241);
+    expect(tool('Edit', { file_path: `${work}/x.ts` }).err).toContain('Continued engineering is not a substitute');
+    expect(tool('Bash', { command: 'npx vitest run' }).code).toBe(2);
+    expect(ralph()).toContain('DEADLINE REACHED');
+    expect(cli('check').out).toMatch(/^FINISH-JOB DELIVER/);
+    if (haveRalph) expect(ralphStops('Almost there, one more fix.')).toBe('block');
+
+    const out = cli('deadline', 'deliver').out;
+    expect(out).toContain('# Deadline delivery — ACCEPTANCE FAILED');
+    expect(out).toMatch(/## Completed work \(verified\) — 2\n- R2[^\n]*\n- GIT-COMMIT/);
+    expect(out).toMatch(/## Unfinished work — 2\n- R1[^\n]*\n- R3/);
+    expect(out).toMatch(/## Failed acceptance criteria — 1\n- R1/);
+    expect(out).toContain('delivered AFTER the deadline');
+    expect(fs.readFileSync(path.join(work, `.claude/finish-job/${SID}.delivery.md`), 'utf8')).toContain('## Failed acceptance criteria');
+    expect(ledger().status).toBe('DELIVERED');
+    expect(ralph()).toBeNull();
+    expect(cli('deadline', 'set', '--at', at(600)).out).toContain('deadline is closed');
+  });
+
+  it('the scheduler fires independently: its prompt is not the owner, adds no requirement, and revives the ledger in a fresh container', () => {
+    setUp();
+    const fire = '[DEADLINE SCHEDULER] DEADLINE reached for: the importer fix released.\n1. one\n2. two';
+    const transcript = path.join(dir, 't.jsonl');
+    cli('check');
+    const printed = cli('check').out;
+    fs.writeFileSync(transcript, `${JSON.stringify({ message: { role: 'user', content: printed } })}\n`);
+    fs.rmSync(path.join(work, '.claude/finish-job'), { recursive: true });
+    fs.rmSync(path.join(work, '.claude/ralph-loop.local.md'), { force: true });
+    env.FINISH_JOB_NOW = at(240);
+    const r = hook({ hook_event_name: 'UserPromptSubmit', prompt: fire, transcript_path: transcript });
+    expect(r.out).toContain('DEADLINE REACHED');
+    expect(ledger().requirements).toHaveLength(3);
+    expect(ledger().deadline.firings).toHaveLength(1);
+    expect(ralph()).toContain('DEADLINE REACHED');
+  });
+});

@@ -16551,3 +16551,74 @@ verdict, approach-type ranking and the yield — never a hidden case) and
 `brain_operator_add_hidden_case`. From a terminal, `npm run evolution --
 pending | hidden | record | decide | show`. Tests: `tests/evolution.test.ts`,
 `tests/evolutionExperiments.test.ts`.
+
+## 112. A deadline is a delivery commitment: an independent scheduler enforces it, and the session cannot move it.
+
+**Owner's permanent operating rule, 2026-11-17.** A user-designated hard
+deadline is an externally enforced delivery commitment, not an informal target.
+Every deadline-bound assignment has: (1) a persistent deadline registered with
+an independent scheduler; (2) an explicit final deliverable and acceptance
+criteria; (3) automatic critical-path tracking and early escalation when
+completion becomes unlikely; (4) authority to redistribute resources and reduce
+nonessential work to protect it; (5) mandatory delivery at the deadline, even
+if the work is incomplete; (6) an explicit distinction between completed work,
+unfinished work and failed acceptance criteria; (7) no autonomous extension;
+(8) no substitution of continued engineering for the deliverable. The scheduler
+enforces reporting independently of what the agent is doing, and a deadline
+that cannot be met is reported before it whenever that is detectable — never
+silently passed.
+
+**What was wrong.** The finishing contract (`finish-job.mjs`, "Finishing an
+assignment") knew requirements, evidence, waits and blockers, and nothing about
+time. A session could work past any hour the owner named, keep engineering
+instead of delivering, and its only scheduled wake was a check-in it chose.
+
+**The shape.** It extends the finish-the-job ledger and its hook; it adds no
+second loop, scheduler or ledger.
+
+- **Detection.** `deadlineIn` reads a deadline from the owner's message — a
+  deadline word *followed by a time* ("Deadline: 5pm", "by Friday", "within 3
+  hours"), so a rule *about* deadlines names none. It is stored on the ledger
+  as `deadline.ownerText`.
+- **Setting it (2).** `npm run finish -- deadline set --at <ISO> --deliverable
+  "…" --accept R1,R2` — the deliverable and the requirement ids that are its
+  acceptance criteria are required; an unknown id is refused.
+- **The independent scheduler (1, 9).** `deadline status` prints the exact
+  `create_trigger` calls: a one-shot Claude Code Remote scheduled task at the
+  deadline and, for a deadline more than 30 minutes out, an early warning at
+  75% of the window. Both are server-side and fire into the session whatever it
+  is doing, and even after its container is reclaimed (the fired prompt revives
+  the ledger from the transcript). `deadline register --trigger … --at …
+  --warn … --warn-at …` refuses a task not at the deadline. Until the deadline
+  is set and registered, the `PreToolUse` hook refuses every tool except
+  reading, notifying and the ledger CLI. The fired prompt begins
+  `[DEADLINE SCHEDULER]`, so it is never read as the owner's words.
+- **Critical path and escalation (3, 10).** Every open, non-deferred
+  requirement (the owner's and the repository's own: MERGE, CI, DEPLOY) costs
+  its estimate (`deadline estimate R3 --min 45`, default 30 min). When the
+  path exceeds the minutes left, the deadline is AT RISK: from that moment the
+  hook refuses work until `deadline escalate --note "…"` records that the owner
+  was told (with a PushNotification). A new risk episode after one clears needs
+  a new escalation.
+- **Reducing nonessential work (4).** `deadline defer R7 --reason …` takes a
+  requirement off the critical path; an acceptance criterion is never
+  deferred. A deferred item is still the owner's and is reported unfinished —
+  deferral protects the deadline, it does not narrow the assignment.
+- **No extension (7).** `deadline set` to a later time is refused unless an
+  owner message naming a deadline arrived after it was set (that message
+  unlocks one change). The hook refuses `delete_trigger` and any reschedule,
+  disable or rewrite through `update_trigger` of the registered tasks.
+- **Mandatory delivery (5, 8).** From the deadline on — by the hook's clock,
+  mid-turn, and by the fired task between turns — every tool except the ledger
+  CLI and notifying is refused, `check` returns `DELIVER`, and Ralph's prompt
+  becomes the delivery. `deadline deliver` runs the check, writes
+  `.claude/finish-job/<session>.delivery.md`, closes the ledger as `DELIVERED`
+  (or `DONE`) and prints the report for the final message. Before the deadline
+  it is refused while executable work remains: delivery is not an early exit.
+- **The distinction (6).** The report has three lists from the check's own
+  verdicts: completed (verified), unfinished (open, waiting, blocked, deferred)
+  and failed acceptance criteria, and says whether it was delivered on time.
+
+Tests: `tests/finishJob.test.ts` ("a deadline is an externally enforced delivery
+commitment"), run as the processes Claude Code spawns, with the clock set by
+`FINISH_JOB_NOW`.
