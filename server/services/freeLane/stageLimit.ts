@@ -336,6 +336,18 @@ export interface AdditionOption {
    * prices them its cost is unmeasured.
    */
   cost: Measured<number>;
+  /**
+   * True when one more of this is more model capacity: an LLM job, or a
+   * free-lane slot (a slot runs model calls). Defaults to `kind === 'LLM_JOB'`.
+   * The LLM-versus-non-LLM comparison S-0362 requires counts only options for
+   * which this is false as the non-LLM side.
+   */
+  modelCapacity?: boolean;
+}
+
+/** Whether an option adds model capacity (an LLM job, or a slot that runs model calls). Pure. */
+export function isModelCapacity(o: Pick<AdditionOption, 'kind' | 'modelCapacity'>): boolean {
+  return o.modelCapacity ?? o.kind === 'LLM_JOB';
 }
 
 export interface Allocation {
@@ -347,7 +359,11 @@ export interface Allocation {
    */
   ranked: { kind: AdditionKind; id: string; gain: number; cost: number; gainPerCost: number | null }[];
   unmeasured: { kind: AdditionKind; id: string; reason: string }[];
-  /** True when an LLM job and at least one non-LLM option were both measured and compared. */
+  /**
+   * True when model capacity (an LLM job or a model slot) and at least one
+   * option that needs no model call (an algorithm, connector or index) were
+   * both measured and compared. A free-lane slot is model capacity, never the non-LLM side.
+   */
   comparedLlmWithNonLlm: boolean;
   basis: string;
 }
@@ -365,7 +381,7 @@ function compareOptions(a: AdditionOption & { gain: { measured: true; value: num
   if (freeA !== freeB) return freeA ? -1 : 1;
   const score = (o: typeof a): number => (freeA ? o.gain.value : o.cost.value > 0 ? o.gain.value / o.cost.value : 0);
   return score(b) - score(a)
-    || Number(a.kind === 'LLM_JOB') - Number(b.kind === 'LLM_JOB')
+    || Number(isModelCapacity(a)) - Number(isModelCapacity(b))
     || a.id.localeCompare(b.id);
 }
 
@@ -387,7 +403,7 @@ export function allocateMarginal(options: readonly AdditionOption[]): Allocation
   }
   measured.sort(compareOptions);
   const best = measured.find((m) => m.gain.value > 0) ?? null;
-  const compared = measured.some((m) => m.kind === 'LLM_JOB') && measured.some((m) => m.kind !== 'LLM_JOB');
+  const compared = measured.some((m) => isModelCapacity(m)) && measured.some((m) => !isModelCapacity(m));
   return {
     chosen: best,
     ranked: measured.map((m) => ({
@@ -397,7 +413,7 @@ export function allocateMarginal(options: readonly AdditionOption[]): Allocation
     unmeasured,
     comparedLlmWithNonLlm: compared,
     basis: best
-      ? `${best.kind} ${best.id} adds the most accepted output per cost${compared ? ' (an LLM job and a non-LLM option were both measured)' : ''}.`
+      ? `${best.kind} ${best.id} adds the most accepted output per cost${compared ? ' (model capacity and an option that needs no model call were both measured)' : ''}.`
       : 'No option has a measured positive gain at a measured cost; add nothing.',
   };
 }
@@ -521,7 +537,12 @@ export function routesCostPerHour(routes: readonly RouteWindowReading[], hours: 
  * priced; anything else is unmeasured with its reason — never extrapolated
  * from a different component, and never a code path assumed to cost $0. Pure.
  */
-export function additionOptions(report: StageCapacityReport | null, routes: readonly RouteWindowReading[], hours: number): AdditionOption[] {
+export function additionOptions(
+  report: StageCapacityReport | null,
+  routes: readonly RouteWindowReading[],
+  hours: number,
+  algorithms: AlgorithmAdditions | null = null,
+): AdditionOption[] {
   const out: AdditionOption[] = [];
   const interp = report?.stages.find((s) => s.stage === 'model-interpretation');
   if (interp && interp.itemsProcessedPerHour.measured && interp.itemsProcessedPerHour.value > 0) {
@@ -550,15 +571,75 @@ export function additionOptions(report: StageCapacityReport | null, routes: read
       })(),
     });
   }
-  // A parser/algorithm: no row records a code parser's addition and the accepted output it changed.
-  out.push({
-    kind: 'ALGORITHM', id: 'code parser',
-    gain: NOT('no row records a parser or algorithm being added and the accepted output it changed; unread records converting at the current accepted share is an extrapolation, not a measurement'),
-    cost: NOT('no row records the compute a parser or algorithm consumes'),
-  });
-  out.push({ kind: 'WORKER', id: 'free-lane slot', gain: report?.constrained.expectedGain.measured ? ok(round(report.constrained.expectedGain.value.acceptedFactsPerHour)) : NOT(report?.constrained.expectedGain.measured === false ? report.constrained.expectedGain.reason : 'no recorded stage-capacity reading'), cost: report?.constrained.expectedGain.measured ? ok(round(report.constrained.expectedGain.value.dollars)) : NOT('no reading') });
+  // A code algorithm: what the detector rule versions added in the lookback measurably produced since they were added.
+  out.push(algorithmOption(algorithms));
+  // A free-lane slot runs model calls: it is model capacity, never the non-LLM side of the comparison.
+  out.push({ kind: 'WORKER', id: 'free-lane slot', modelCapacity: true, gain: report?.constrained.expectedGain.measured ? ok(round(report.constrained.expectedGain.value.acceptedFactsPerHour)) : NOT(report?.constrained.expectedGain.measured === false ? report.constrained.expectedGain.reason : 'no recorded stage-capacity reading'), cost: report?.constrained.expectedGain.measured ? ok(round(report.constrained.expectedGain.value.dollars)) : NOT('no reading') });
   out.push({ kind: 'INDEXING', id: 'index improvement', gain: NOT('no row measures a query or index improvement\'s effect on accepted output'), cost: NOT('no row records an index improvement\'s cost') });
   return out;
+}
+
+/**
+ * One code-rule (detector) version, read from its `feed_detections` rows: when
+ * it first detected anything (its addition), whether it ran ACTIVE, the leads
+ * its detections became, and the bytes its rows hold.
+ */
+export interface AlgorithmAddition {
+  ruleId: string;
+  ruleVersion: number;
+  /** ACTIVE when any of its detections ran ACTIVE; a SHADOW rule changes nothing downstream. */
+  mode: string;
+  /** Its first detection: when this version was added. */
+  addedAt: string;
+  /** Detections that became a lead: accepted output a model call did not produce. */
+  leads: number;
+  /** Bytes its detection rows store. */
+  bytes: number;
+}
+
+export interface AlgorithmAdditions {
+  additions: readonly AlgorithmAddition[];
+  nowMs: number;
+  /** The operator's storage unit price; null when none is configured. */
+  storagePerGbMonth: number | null;
+}
+
+/** How far back a rule version's first detection counts as a recent addition. */
+export const ALGORITHM_ADDITION_LOOKBACK_MS = 7 * 24 * 3_600_000;
+
+/**
+ * Another code algorithm, priced from the rule versions that were actually
+ * added: each ACTIVE version first detecting within the lookback contributes
+ * its leads per hour since it was added (its own measured output, never an
+ * extrapolation from unread records), and its cost is what its rows measurably
+ * consume. A rule runs inside the feed tick on the application server, a fixed
+ * cost no rule changes, and calls no model, GPU or provider, so the only
+ * dollars it adds are the storage of its rows, priced at the operator's unit
+ * price; unpriced storage leaves the cost unmeasured, never assumed $0. Pure.
+ */
+export function algorithmOption(input: AlgorithmAdditions | null): AdditionOption {
+  const kind = 'ALGORITHM' as const;
+  if (!input) return { kind, id: 'code rule', gain: NOT('the detector rule rows could not be read'), cost: NOT('the detector rule rows could not be read') };
+  const from = input.nowMs - ALGORITHM_ADDITION_LOOKBACK_MS;
+  const recent = input.additions.filter((a) => {
+    const at = Date.parse(a.addedAt);
+    return Number.isFinite(at) && at >= from && at <= input.nowMs;
+  });
+  const active = recent.filter((a) => a.mode === 'ACTIVE');
+  if (active.length === 0) {
+    const reason = recent.length > 0
+      ? `the rule versions added in the last 7 days (${recent.map((a) => `${a.ruleId}@${a.ruleVersion}`).sort().join(', ')}) ran SHADOW, which changes nothing downstream, so the gain of one more is not measured`
+      : 'no detector rule version was added in the last 7 days, so the gain of one more is not measured';
+    return { kind, id: 'code rule', gain: NOT(reason), cost: NOT(reason) };
+  }
+  const id = `added: ${active.map((a) => `${a.ruleId}@${a.ruleVersion}`).sort().join(', ')}`;
+  const hoursLive = (a: AlgorithmAddition): number => Math.max(1, (input.nowMs - Date.parse(a.addedAt)) / 3_600_000);
+  const gain = active.reduce((t, a) => t + a.leads / hoursLive(a), 0) / active.length;
+  const price = input.storagePerGbMonth;
+  const cost: Measured<number> = price === null || !Number.isFinite(price) || price < 0
+    ? NOT('no storage unit price is configured (BRAIN_STORAGE_COST_PER_GB_MONTH), so the rule rows\' storage cannot be priced')
+    : ok(round(active.reduce((t, a) => t + (a.bytes / 1024 ** 3) * price / (30 * 24), 0) / active.length, 8));
+  return { kind, id, gain: ok(round(gain)), cost };
 }
 
 /** One recorded growth of a lane model's slots (`FREE_LANE_CAPACITY` GROW, "a -> b: …"). */
@@ -615,6 +696,8 @@ export function buildStageLimitReport(input: {
   cpu: Measured<number>;
   /** The latest capacity growth and the accepted output measured either side of it. */
   change?: MeasuredChange | null;
+  /** The detector rule versions recently added, priced as the ALGORITHM option; null when unread. */
+  algorithms?: AlgorithmAdditions | null;
 }): StageLimitReport {
   const report = input.recorded?.report ?? null;
   const domains = new Map<string, { domain: string; routes: number; recordsConsidered: number; acceptedFacts: number }>();
@@ -650,7 +733,7 @@ export function buildStageLimitReport(input: {
     domains: [...domains.values()],
     pressures: stagePressures(report, input.retriesByStage, input.utilization),
     limit,
-    allocation: allocateMarginal(additionOptions(report, input.routes, input.hours)),
+    allocation: allocateMarginal(additionOptions(report, input.routes, input.hours, input.algorithms ?? null)),
     gate: preSpendGate({
       latestHealthy: input.recorded && input.recorded.outcome === 'MEASURED' ? { at: input.recorded.at, stale: input.recorded.stale } : null,
       blockages: blockagesOf(input.recorded),
@@ -765,12 +848,34 @@ export async function readStageLimit(options: { hours?: number; now?: number } =
   const utilization: Measured<number> = slots > 0 ? ok(round(busy / slots)) : NOT('no capacity row carries a target and busy count');
   const recorded = await safely(() => readStageCapacity(nowMs), null as RecordedStageCapacity | null);
   const change = await safely(() => readMeasuredChange(nowMs), null as MeasuredChange | null);
+  const additions = await safely(() => readAlgorithmAdditions(nowMs), null as AlgorithmAddition[] | null);
+  const storagePerGbMonth = storageUnitPrice();
 
   return buildStageLimitReport({
     since, until, hours,
     routes: routeWindowReadings({ since, until, rows: acqRows, seenBefore, yields, attribution, storagePerGbMonth: storageUnitPrice() }),
     recorded, retriesByStage, utilization, cpu, change,
+    algorithms: additions === null ? null : { additions, nowMs, storagePerGbMonth },
   });
+}
+
+/** The detector rule versions whose first detection falls in the lookback, from `feed_detections`. Read-only. */
+export async function readAlgorithmAdditions(nowMs: number, lookbackMs = ALGORITHM_ADDITION_LOOKBACK_MS): Promise<AlgorithmAddition[]> {
+  const from = new Date(nowMs - lookbackMs).toISOString();
+  const rows = await getDb().all<{ rule_id: string; rule_version: number | string; added_at: string; active: number | string; leads: number | string; bytes: number | string | null }>(
+    `SELECT rule_id, rule_version, MIN(detected_at) AS added_at,
+            SUM(CASE WHEN mode = 'ACTIVE' THEN 1 ELSE 0 END) AS active,
+            SUM(CASE WHEN lead_item_id IS NOT NULL THEN 1 ELSE 0 END) AS leads,
+            SUM(LENGTH(group_key) + LENGTH(label) + LENGTH(member_ids) + LENGTH(source_urls) + LENGTH(qualifiers) + COALESCE(LENGTH(hypothesis), 0)) AS bytes
+       FROM feed_detections
+      GROUP BY rule_id, rule_version
+     HAVING MIN(detected_at) >= ?`,
+    [from],
+  );
+  return rows.map((r) => ({
+    ruleId: r.rule_id, ruleVersion: n(r.rule_version), mode: n(r.active) > 0 ? 'ACTIVE' : 'SHADOW',
+    addedAt: r.added_at, leads: n(r.leads), bytes: n(r.bytes),
+  }));
 }
 
 /** Measure and record one `STAGE_LIMIT` row. Background only. */
