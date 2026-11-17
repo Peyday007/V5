@@ -59,3 +59,8 @@ Spending safeguard for W6: every GPU start goes through `runpod-launch` with a B
   - #1039, W12, the mission ceiling grows with the GPU's served sequences and with waiting ideas;
   - #1040, W3c, the hypothesis cap.
   W12 found each mission is one fragment run in strict stage order, so model jobs scale about 1:1 with live missions. Still open: W2c (planner CPU) and W13 (120B fragment drops).
+- 09:21Z: release 4 (72008cd2, adding #1042 W2c planner CPU: 19.6 s → 0.9 s on a 400-arrangement fixture) passed every test and the Postgres gate. Fly skipped it, superseded by #1043.
+- 09:22Z: release 5 = 4cec7709, deploy 44054816761. It is release 4 plus:
+  - #1043, W13: an empty claim list states why.
+  - #1045, W13b: a gap fragment keeps its requirement's source rules, and a stated empty list is neutral for fitness.
+  W13 root cause: the 120B's fragment failures were empty lists under official-only source rules, which search could not satisfy. Brain's checks were not dropping valid claims.
