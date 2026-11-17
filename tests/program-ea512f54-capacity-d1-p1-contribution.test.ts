@@ -11,6 +11,11 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { newId } from '../server/repos/util.ts';
+import { insertFeedItems } from '../server/repos/feeds.ts';
+import { createUser } from '../server/repos/identity.ts';
+import { activate } from '../server/services/cash/lifecycle.ts';
+import { getCashMode } from '../server/repos/cashMode.ts';
+import { createOpportunity } from '../server/repos/cashPortfolio.ts';
 import {
   CAPACITY_CONTRIBUTION_EVENT,
   CONTRIBUTION_MEASURE_KEYS,
@@ -18,7 +23,14 @@ import {
   compareContributions,
   decideComponent,
   detectorReadings,
-  extractionGapsFromYields,
+  CONTACT_CALLS,
+  PARSER_BUILD_CALLS,
+  extractionGaps,
+  modelCallsPerAnswer,
+  openingGaps,
+  permittedActionsByProject,
+  type GapContext,
+  type OpeningCardRow,
   parserReadings,
   planGap,
   poolReadings,
@@ -113,11 +125,98 @@ describe('gaps', () => {
     expect(plan.reason).toMatch(/no permitted way/);
   });
 
+  const ctx = (over: Partial<GapContext> = {}): GapContext => ({ permissionNeeds: new Set(), callsPerAnswer: ok(2), providerContactPermitted: false, ...over });
+
   it('a source under a permission need does not get code or model extraction chosen over it', () => {
-    const [gap] = extractionGapsFromYields([{ source: 's1', acquired: 10, accepted: 4, usable: 1, acceptedShare: 0.4, usableShare: 0.1, value: 0.6 }], new Set(['s1']));
+    const [gap] = extractionGaps([{ source: 's1', stored: 10, screened: 4, unread: 6 }], ctx({ permissionNeeds: new Set(['s1']) }));
     const plan = planGap(gap!);
     expect(plan.excluded.map((e) => e.method)).toContain('code parser for the source');
     expect(plan.chosen).toBeNull();
+  });
+
+  it('counts only records nothing has read: a screened DROP is known, not an extraction unknown (review F5)', () => {
+    // 10 stored, all 10 screened (most of them DROP): no gap at all.
+    expect(extractionGaps([{ source: 's1', stored: 10, screened: 10, unread: 0 }], ctx())).toEqual([]);
+    expect(extractionGaps([{ source: 's1', stored: 10, screened: 7, unread: 3 }], ctx())[0]!.count).toBe(3);
+  });
+
+  it('chooses the extraction way from the measurements, not a fixed order (review F5)', () => {
+    // Few unread records at 2 measured calls each: a model reading them beats building a parser.
+    const few = planGap(extractionGaps([{ source: 's1', stored: 5, screened: 0, unread: 5 }], ctx())[0]!);
+    expect(few.chosen!.method).toBe('model assistance on unread records');
+    // Many unread records: one parser build serves them all.
+    const many = planGap(extractionGaps([{ source: 's1', stored: 500, screened: 0, unread: 500 }], ctx())[0]!);
+    expect(many.chosen!.method).toBe('code parser for the source');
+    expect(PARSER_BUILD_CALLS).toBeGreaterThan(0);
+    // Model calls per answer not measured: the model way is excluded with the reason, never assumed cheap.
+    const blind = planGap(extractionGaps([{ source: 's1', stored: 5, screened: 0, unread: 5 }], ctx({ callsPerAnswer: NOT('no route measured') }))[0]!);
+    expect(blind.chosen!.method).toBe('code parser for the source');
+    expect(blind.excluded.find((e) => e.method === 'model assistance on unread records')!.reason).toContain('no route measured');
+  });
+
+  it('asks the provider for structured access only where a live authority permits it, and then prefers it (review F5)', () => {
+    const refused = planGap(extractionGaps([{ source: 's1', stored: 500, screened: 0, unread: 500 }], ctx())[0]!);
+    expect(refused.excluded.map((e) => e.method)).toContain('request structured access from the provider');
+    const allowed = planGap(extractionGaps([{ source: 's1', stored: 500, screened: 0, unread: 500 }], ctx({ providerContactPermitted: true }))[0]!);
+    expect(allowed.chosen!.method).toBe('request structured access from the provider');
+  });
+
+  const card = (over: Partial<OpeningCardRow> = {}): OpeningCardRow => ({
+    projectId: 'p1', mechanism: 'ANY_MECHANISM', payer: 'a payer', reachableChannel: 'email', buyingSignal: 'a signal',
+    paymentTerms: 'net 30', fulfillmentOwner: 'us', deliveryMethod: 'file', ...over,
+  });
+
+  it('exposes relationship, market demand, delivery capability and payment timing gaps from open evidence cards (review F5)', () => {
+    const gaps = openingGaps(
+      [card({ payer: null }), card({ buyingSignal: ' ' }), card({ deliveryMethod: null }), card({ paymentTerms: null }), card({ paymentTerms: null, mechanism: 'OTHER' }), card()],
+      new Map(), ok(2),
+    );
+    expect(gaps.map((g) => `${g.subject}@${g.key}x${g.count}`).sort()).toEqual([
+      'DELIVERY_CAPABILITY@p1:ANY_MECHANISMx1',
+      'MARKET_DEMAND@p1:ANY_MECHANISMx1',
+      'PAYMENT_TIMING@p1:ANY_MECHANISMx1',
+      'PAYMENT_TIMING@p1:OTHERx1',
+      'RELATIONSHIP@p1:ANY_MECHANISMx1',
+    ]);
+    // A complete card exposes nothing.
+    expect(openingGaps([card()], new Map(), ok(2))).toEqual([]);
+  });
+
+  it('chooses research or contact by measured cost, and contact only under the project\'s own permission (review F5)', () => {
+    const rows = [card({ paymentTerms: null })];
+    // No permission: research, whatever it costs.
+    expect(planGap(openingGaps(rows, new Map(), ok(CONTACT_CALLS * 4))[0]!).chosen!.method).toBe('research question through the free lane');
+    // Permission held and research cheaper than a contact: research.
+    const allowed = new Map([['p1', new Set(['CONTACT_BUYER'])]]);
+    expect(planGap(openingGaps(rows, allowed, ok(1))[0]!).chosen!.method).toBe('research question through the free lane');
+    // Permission held and research measured dearer than a contact: ask the buyer.
+    expect(planGap(openingGaps(rows, allowed, ok(CONTACT_CALLS * 4))[0]!).chosen!.method).toBe('ask the buyer');
+    // Another project's permission does not reach this one.
+    const elsewhere = new Map([['p2', new Set(['CONTACT_BUYER'])]]);
+    expect(planGap(openingGaps(rows, elsewhere, ok(CONTACT_CALLS * 4))[0]!).excluded.map((e) => e.method)).toContain('ask the buyer');
+    // Delivery capability needs ENGAGE_CONTRACTOR, not CONTACT_BUYER.
+    const delivery = planGap(openingGaps([card({ fulfillmentOwner: null })], allowed, ok(CONTACT_CALLS * 4))[0]!);
+    expect(delivery.excluded.map((e) => e.method)).toContain('ask a fulfilment provider');
+  });
+
+  it('reads permitted actions from live authorities only: allowed, not prohibited, started, not expired', () => {
+    const now = Date.parse('2026-11-17T12:00:00.000Z');
+    const permitted = permittedActionsByProject([
+      { projectId: 'p1', allowedActions: '["CONTACT_BUYER","ENGAGE_CONTRACTOR"]', prohibitions: '["ENGAGE_CONTRACTOR"]', startsAt: '2026-11-01T00:00:00.000Z', expiresAt: null },
+      { projectId: 'p2', allowedActions: '["CONTACT_BUYER"]', prohibitions: '[]', startsAt: '2026-11-01T00:00:00.000Z', expiresAt: '2026-11-10T00:00:00.000Z' },
+      { projectId: 'p3', allowedActions: '["CONTACT_BUYER"]', prohibitions: '[]', startsAt: '2026-12-01T00:00:00.000Z', expiresAt: null },
+      { projectId: 'p4', allowedActions: 'not json', prohibitions: '[]', startsAt: '2026-11-01T00:00:00.000Z', expiresAt: null },
+    ], now);
+    expect([...permitted.get('p1')!]).toEqual(['CONTACT_BUYER']);
+    expect(permitted.has('p2')).toBe(false);
+    expect(permitted.has('p3')).toBe(false);
+    expect([...permitted.get('p4')!]).toEqual([]);
+  });
+
+  it('prices a model answer at the median measured calls per finding across routes, or says it is unmeasured', () => {
+    const route = (id: string, calls: ReturnType<typeof ok> | ReturnType<typeof NOT>) => reading({ id, measures: measures({ aiCallsPerUsefulFinding: calls }) });
+    expect(modelCallsPerAnswer([route('a', ok(1)), route('b', ok(3)), route('c', ok(9))])).toEqual(ok(3));
+    expect(modelCallsPerAnswer([route('a', NOT('x'))]).measured).toBe(false);
   });
 });
 
@@ -224,6 +323,42 @@ describe('recordContribution', () => {
       await recordContribution(new Date(now));
       const row = await db.get<{ outcome: string }>(`SELECT outcome FROM bin_events WHERE event_type = ? ORDER BY at DESC LIMIT 1`, [CAPACITY_CONTRIBUTION_EVENT]);
       expect(row?.outcome).toBe('REPAIR_FIRST');
+    });
+
+    it('exposes every gap subject from real rows: unread feed records and blank evidence cards (review F5)', async () => {
+      const db = getDb();
+      const at = new Date(Date.now() - 60_000).toISOString();
+      const source = `gap-src-${Math.random().toString(36).slice(2, 8)}`;
+      await insertFeedItems(source, ['dropped', 'unread', 'covered'].map((externalId) => ({ externalId, url: `https://gap.test/${source}/${externalId}`, title: externalId, body: null, organization: null, publishedAt: at })));
+      const items = new Map((await db.all<{ id: string; external_id: string }>(`SELECT id, external_id FROM feed_items WHERE source = ?`, [source])).map((r) => [r.external_id, r.id]));
+      await db.run(
+        `INSERT INTO cheap_results (id, kind, input_hash, subject_id, model, ok, output, error, created_at) VALUES (?, 'SCREEN_LEAD', ?, ?, 'm', 1, ?, NULL, ?)`,
+        [newId('cr'), `h-${source}`, items.get('dropped')!, JSON.stringify({ verdict: 'DROP', reason: 'irrelevant' }), at],
+      );
+      await db.run(`INSERT INTO feed_item_coverage (item_id, detection_id, covered_at) VALUES (?, ?, ?)`, [items.get('covered')!, `fd-${source}`, at]);
+
+      const projectId = (await getDb().get<{ id: string }>(`SELECT id FROM projects ORDER BY created_at DESC LIMIT 1`))!.id;
+      const userId = (await createUser({ email: `gaps-${Math.random().toString(36).slice(2, 10)}@example.test`, displayName: 'Owner', password: 'correct horse battery staple' })).id;
+      expect((await activate({ projectId, ownerUserId: userId, actorUserId: userId, objective: 'Maximize usable cash over the next few weeks.' })).ok).toBe(true);
+      const cashModeId = (await getCashMode(projectId))!.id;
+      await createOpportunity({
+        projectId, cashModeId, ownerUserId: userId, title: 'An opening with a blank card', mechanism: 'PRODUCTIZED_SERVICE', currency: 'USD',
+        sourceClaimId: `clm_${Math.random().toString(36).slice(2, 12)}`, opportunitySignal: 'RECURRING_OUTSOURCED_WORK', source: 'A publisher',
+        requiredCapabilities: ['PRODUCE_SPREADSHEET'],
+      });
+
+      // The window ends after the items were stored (fetched_at is their insert time).
+      const report = await readContribution({ now: Date.now() + 1_000 });
+      const extraction = report.gaps.filter((g) => g.subject === 'EXTRACTION' && g.key === source);
+      // Three stored: the DROP is known and the covered one was read by a code rule, so one unknown.
+      expect(extraction.map((g) => g.count)).toEqual([1]);
+      const subjects = new Set(report.gaps.filter((g) => g.key.startsWith(`${projectId}:`)).map((g) => g.subject));
+      expect([...subjects].sort()).toEqual(['DELIVERY_CAPABILITY', 'MARKET_DEMAND', 'PAYMENT_TIMING', 'RELATIONSHIP']);
+      for (const g of report.gaps.filter((one) => one.key.startsWith(`${projectId}:`))) {
+        // No contact permission is held, so no contact is ever chosen; the reason is on the record.
+        expect(g.chosen?.method ?? '').not.toMatch(/^ask /);
+        expect(g.excluded.some((e) => /^ask /.test(e.method))).toBe(true);
+      }
     });
   });
 });
