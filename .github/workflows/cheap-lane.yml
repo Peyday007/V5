@@ -452,14 +452,14 @@ jobs:
             test)
               # One real question to each combo, timed, from outside the machine.
               [ -n "$OMNIROUTE_API_KEY" ] || { echo "::error::Set OMNIROUTE_API_KEY."; exit 1; }
-              for model in $(echo "${OMNIROUTE_MODEL:-auto}" | tr ',' ' '); do
+              for model in $(echo "${OMNIROUTE_MODEL:-auto},auto/best-coding,auto" | tr ',' ' '); do
                 start=$(date +%s)
                 code=$(curl -sS -o reply.json -w '%{http_code}' --max-time 120 \
                   -H "authorization: Bearer $OMNIROUTE_API_KEY" -H 'content-type: application/json' \
                   -d "{\"model\":\"$model\",\"max_tokens\":2000,\"reasoning_effort\":\"low\",\"messages\":[{\"role\":\"user\",\"content\":\"Reply with the word ok.\"}]}" \
                   "https://$cheap.fly.dev/v1/chat/completions") || code=000
                 echo "model $model: HTTP $code in $(( $(date +%s) - start ))s"
-                head -c 600 reply.json 2>/dev/null; echo
+                head -c 2500 reply.json 2>/dev/null; echo
               done
               ;;
             connect)
