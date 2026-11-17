@@ -169,8 +169,10 @@ export interface FeedPullResult {
   duplicates: number;
   /** Whether the request was narrowed to what was published since the source's last success. */
   incremental: boolean;
-  /** The source answered that nothing changed (304, or the same content hash): nothing was ingested. */
+  /** The source answered that nothing changed (304, the same content hash, or every shard already checkpointed): nothing was ingested. */
   notModified?: boolean;
+  /** The provider stated it holds no records for what was asked (`FeedSource.emptyBody`): a quiet period, not an empty parse. */
+  nothingPublished?: boolean;
   /** Why the source was not asked at all this pass (its corpus evaluation skipped it, or no permitted access). */
   skipped?: string | null;
   /** Shards a previous, interrupted read had already checkpointed and this one did not fetch again. */
@@ -196,6 +198,26 @@ export const FEED_SOURCE_YIELD_EVENT = 'FEED_SOURCE_YIELD';
 export const SOURCE_YIELD_WINDOW_MS = 24 * 3_600_000;
 /** What a pull answered with a 304 or an unchanged hash is recorded as, so health never reads it as an empty parse. */
 export const NOT_MODIFIED_MARK = 'NOT_MODIFIED';
+/**
+ * What a pull is recorded as when the provider itself stated that it holds no
+ * records for what was asked (`FeedSource.emptyBody`: an EDGAR filing day with
+ * `hits.total.value` 0, a weekend or a holiday). A quiet day, not a parser that
+ * reads nothing, so health never counts it toward a schema change.
+ */
+export const NOTHING_PUBLISHED_MARK = 'NOTHING_PUBLISHED';
+
+/**
+ * Whether a recorded pull only learned that there was nothing new to read: a
+ * 304 or unchanged hash, a sharded read whose every shard was already
+ * checkpointed, or a provider that said it holds no records. Such a pull is no
+ * evidence about the parser either way, so connector health does not read it
+ * (a zero-record streak of these is not a schema change). Pure.
+ */
+export function isQuietPull(pull: { ok: boolean; error: string | null }): boolean {
+  if (!pull.ok) return false;
+  const error = pull.error ?? '';
+  return error.startsWith(NOT_MODIFIED_MARK) || error.startsWith(NOTHING_PUBLISHED_MARK);
+}
 /** The version of this pipeline's ordering, carried on every acquisition row. */
 export const ACQUISITION_PIPELINE_VERSION = 'feeds-acquisition/1';
 
@@ -328,7 +350,7 @@ export async function recordSourceYields(now: Date, record: typeof recordBinEven
 /** The validators the last successful read of a source stored. */
 async function readValidators(source: string): Promise<Validators | null> {
   const row = await getDb().get<{ measures: string | null }>(
-    `SELECT measures FROM bin_events WHERE event_type = ? AND provider = ? AND outcome IN ('INGESTED', 'NOT_MODIFIED')
+    `SELECT measures FROM bin_events WHERE event_type = ? AND provider = ? AND outcome IN ('INGESTED', 'NOT_MODIFIED', 'NOTHING_PUBLISHED')
       ORDER BY at DESC, id DESC LIMIT 1`,
     [FEED_ACQUISITION_EVENT, source],
   );
@@ -439,6 +461,8 @@ async function acquireSource(
     // 3. Conditional, checkpointed ingest.
     if (source.shards) {
       const plan = source.shards(now);
+      // Shards whose provider stated it holds no records: a quiet day, never a parser that read nothing.
+      const emptyShards = new Set<string>();
       const sharded: ShardedSource = {
         id: source.id,
         snapshot: plan.snapshot,
@@ -446,7 +470,11 @@ async function acquireSource(
         spacingMs: source.spacingMs ?? 0,
         fetchShard: async (key) => {
           const got = await deps.read(plan.url(key), null, headers, source.timeoutMs);
-          return got.status === 'MODIFIED' ? source.parse(parseJsonBody(got.body)) : [];
+          if (got.status !== 'MODIFIED') return [];
+          const body = parseJsonBody(got.body);
+          const items = source.parse(body);
+          if (items.length === 0 && source.emptyBody?.(body)) emptyShards.add(key);
+          return items;
         },
       };
       const store: IngestStore = deps.ingestStore ?? {
@@ -459,7 +487,19 @@ async function acquireSource(
       const inserted = run.completed.reduce((n, c) => n + c.stored, 0);
       if (run.interruptedAt) throw Object.assign(new Error(run.interruptedAt.error), { partial: { fetched, inserted, resumedPast: run.resumedPast } });
       result = { ...base, fetched, inserted, duplicates: Math.max(0, fetched - inserted), resumedPast: run.resumedPast };
-      await recordFeedPull({ source: source.id, ok: true, fetched, inserted, error: null, at });
+      if (run.completed.length === 0) {
+        // Every shard was already checkpointed: nothing was asked, so nothing is known about the parser.
+        outcome = 'NOT_MODIFIED';
+        result.notModified = true;
+        await recordFeedPull({ source: source.id, ok: true, fetched: 0, inserted: 0, error: `${NOT_MODIFIED_MARK}: every shard (${run.resumedPast.join(', ')}) already checkpointed`.slice(0, 300), at });
+      } else if (fetched === 0 && run.completed.every((c) => emptyShards.has(c.shard))) {
+        // The provider said each shard read holds no records (a weekend or holiday filing day).
+        outcome = NOTHING_PUBLISHED_MARK;
+        result.nothingPublished = true;
+        await recordFeedPull({ source: source.id, ok: true, fetched: 0, inserted: 0, error: `${NOTHING_PUBLISHED_MARK}: the provider reports no records for ${run.completed.map((c) => c.shard).join(', ')}`.slice(0, 300), at });
+      } else {
+        await recordFeedPull({ source: source.id, ok: true, fetched, inserted, error: null, at });
+      }
     } else {
       const prior = await deps.validators(source.id);
       const got = await deps.read(url, prior, headers, source.timeoutMs);
@@ -469,10 +509,17 @@ async function acquireSource(
         result = { ...base, notModified: true };
         await recordFeedPull({ source: source.id, ok: true, fetched: 0, inserted: 0, error: `${NOT_MODIFIED_MARK}: ${got.reason}`.slice(0, 300), at });
       } else {
-        const items = source.parse(parseJsonBody(got.body));
-        const inserted = await insertFeedItems(source.id, items);
-        result = { ...base, fetched: items.length, inserted, duplicates: Math.max(0, items.length - inserted) };
-        await recordFeedPull({ source: source.id, ok: true, fetched: items.length, inserted, error: null, at });
+        const body = parseJsonBody(got.body);
+        const items = source.parse(body);
+        if (items.length === 0 && source.emptyBody?.(body)) {
+          outcome = NOTHING_PUBLISHED_MARK;
+          result = { ...base, nothingPublished: true };
+          await recordFeedPull({ source: source.id, ok: true, fetched: 0, inserted: 0, error: `${NOTHING_PUBLISHED_MARK}: the provider reports no records`, at });
+        } else {
+          const inserted = await insertFeedItems(source.id, items);
+          result = { ...base, fetched: items.length, inserted, duplicates: Math.max(0, items.length - inserted) };
+          await recordFeedPull({ source: source.id, ok: true, fetched: items.length, inserted, error: null, at });
+        }
       }
     }
   } catch (error) {
@@ -489,7 +536,7 @@ async function acquireSource(
     provider: source.id,
     workloadClass: 'acquisition',
     outcome,
-    reason: `${source.id}: ${outcome === 'FAILED' ? result.error : `${result.fetched} read, ${result.inserted} stored${result.notModified ? ' (not modified)' : ''}`}`.slice(0, 480),
+    reason: `${source.id}: ${outcome === 'FAILED' ? result.error : `${result.fetched} read, ${result.inserted} stored${result.notModified ? ' (not modified)' : ''}${result.nothingPublished ? ' (provider reports no records)' : ''}`}`.slice(0, 480),
     evidenceClass: 'MEASURED',
     measures: {
       corpus: acq.corpus,
@@ -521,10 +568,10 @@ async function acquireSource(
   return result;
 }
 
-/** Pull history for health, without the pulls that only learned nothing changed. */
-async function historyWithoutNotModified(source: string) {
+/** Pull history for health, without the quiet pulls that only learned there was nothing new (`isQuietPull`). */
+export async function historyWithoutNotModified(source: string) {
   const { readPullHistory } = await import('./health.ts');
-  return (await readPullHistory(source)).filter((p) => !(p.ok && (p.error ?? '').startsWith(NOT_MODIFIED_MARK)));
+  return (await readPullHistory(source)).filter((p) => !isQuietPull(p));
 }
 
 /** The production dependencies of the pipeline. */

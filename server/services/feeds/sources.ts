@@ -53,6 +53,13 @@ export interface FeedSource {
    * read resumes where it stopped. Absent: one request is one shard.
    */
   shards?: (now: Date) => { snapshot: string; keys: readonly string[]; url: (key: string) => string };
+  /**
+   * The provider's own statement, read from a body, that it holds no records
+   * for what was asked (a total of zero), as distinct from a body whose
+   * records the parser cannot read. Only an explicit zero counts; absent, an
+   * empty parse is never assumed to be a quiet period (inv. 39).
+   */
+  emptyBody?: (body: unknown) => boolean;
 }
 
 /** How a source is reached and what each pull of it is recorded with. */
@@ -377,6 +384,21 @@ export function parseCfpbComplaints(body: unknown): FeedItem[] {
   return out;
 }
 
+/**
+ * Whether an Elasticsearch-shaped body (EDGAR full-text search) states a total
+ * of zero hits and carries none: `{ hits: { total: { value: 0 }, hits: [] } }`
+ * (older shape: `total: 0`). Anything else, including a moved shape, is not
+ * a statement of zero. Pure.
+ */
+export function statesZeroHits(body: unknown): boolean {
+  const outer = body && typeof body === 'object' ? (body as Record<string, unknown>)['hits'] : null;
+  if (!outer || typeof outer !== 'object') return false;
+  const o = outer as Record<string, unknown>;
+  const total = o['total'];
+  const value = typeof total === 'number' ? total : total && typeof total === 'object' ? (total as Record<string, unknown>)['value'] : undefined;
+  return value === 0 && Array.isArray(o['hits']) && o['hits'].length === 0;
+}
+
 /** The last `count` completed UTC days before `now`, oldest first, as YYYY-MM-DD. Pure. */
 export function completedUtcDays(now: Date, count: number): string[] {
   const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
@@ -492,6 +514,8 @@ function edgarCurrentReports(): FeedSource {
     spacingMs: 1_000,
     timeoutMs: 30_000,
     parse: parseEdgarFullText,
+    // A weekend or holiday filing day has no 8-Ks; EDGAR says so with a zero total.
+    emptyBody: statesZeroHits,
     shards: (now: Date) => ({ snapshot: EDGAR_SNAPSHOT, keys: completedUtcDays(now, EDGAR_SHARD_DAYS), url: (day: string) => edgarFullTextUrl(day) }),
     acquisition: {
       corpus: 'sec-edgar',

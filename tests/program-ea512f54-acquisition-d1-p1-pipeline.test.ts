@@ -10,13 +10,16 @@ import { getDb } from '../server/db/database.ts';
 import type { RecordBinEventInput } from '../server/repos/bins.ts';
 import { evaluateCorpora, type CorpusNeed } from '../server/services/feeds/corpora.ts';
 import type { Transport, TransportResponse } from '../server/services/feeds/access.ts';
-import { superviseConnector, readPullHistory } from '../server/services/feeds/health.ts';
+import { superviseConnector, readPullHistory, classifyConnector } from '../server/services/feeds/health.ts';
 import type { IngestStore, ShardCheckpoint } from '../server/services/feeds/ingest.ts';
-import { FEED_SOURCES, type FeedSource, type SourceAcquisition } from '../server/services/feeds/sources.ts';
+import { FEED_SOURCES, statesZeroHits, type FeedSource, type SourceAcquisition } from '../server/services/feeds/sources.ts';
 import {
   FEED_ACQUISITION_EVENT,
   FEED_SOURCE_YIELD_EVENT,
   NOT_MODIFIED_MARK,
+  NOTHING_PUBLISHED_MARK,
+  historyWithoutNotModified,
+  isQuietPull,
   latestSourceYields,
   orderByYield,
   pullDueFeeds,
@@ -93,7 +96,8 @@ function harness(transport: Transport, extra: Partial<AcquisitionDeps> = {}) {
     supervise: async (id, intervalMs) => {
       log.push(`health:${id}`);
       return superviseConnector(id, intervalMs, {
-        history: async (s) => (await readPullHistory(s)).filter((p) => !(p.ok && (p.error ?? '').startsWith(NOT_MODIFIED_MARK))),
+        // The production filter itself, so a quiet pull the pipeline records is read exactly as production reads it.
+        history: historyWithoutNotModified,
         routedUnverified: async () => false,
         register: async (weakness) => {
           routed.push(weakness.key);
@@ -399,5 +403,116 @@ describe('production sources exercise sharded ingestion and listing resolution',
     expect(out[0]!.skipped).toMatch(/readable as JSON/);
     expect(fetched).toEqual([cfpb().acquisition!.listingUrl]);
     expect(events.some((e) => e.provider === 'data-gov-cfpb-complaints' && e.outcome === 'PERMISSION_NEED')).toBe(true);
+  });
+});
+
+
+/**
+ * Review finding F1: a sharded pull that resumed past every shard, or read only
+ * days on which EDGAR filed nothing, was recorded as a successful zero-record
+ * pull, and three of them in a row (every weekend) read as a schema change and
+ * opened a Factory repair. Quiet pulls are now marked and health does not read
+ * them; a real shape change still routes.
+ */
+describe('a quiet sharded corpus is not a broken connector (finding F1)', () => {
+  const edgar = () => FEED_SOURCES.find((s) => s.id === 'sec-edgar-8k')!;
+  const hit = (day: string, n: number) => ({
+    _id: `0000000000-26-0000${n}:form8k-${day}.htm`,
+    _source: { adsh: `0000000000-26-0000${n}`, ciks: ['0000123456'], display_names: [`ACME ${n} CORP  (CIK 0000123456)`], form: '8-K', file_date: day },
+  });
+  const isWeekend = (day: string) => [0, 6].includes(new Date(`${day}T00:00:00Z`).getUTCDay());
+  const memoryStore = (): IngestStore => {
+    const saved: ShardCheckpoint[] = [];
+    return {
+      checkpoints: async () => [...saved],
+      saveCheckpoint: async (c) => {
+        saved.push(c);
+      },
+      store: async (s, items) => (await import('../server/repos/feeds.ts')).insertFeedItems(s, items),
+    };
+  };
+
+  it('EDGAR declares a zero total as a quiet day, and nothing else is read as one', () => {
+    expect(edgar().emptyBody).toBe(statesZeroHits);
+    expect(statesZeroHits({ hits: { total: { value: 0, relation: 'eq' }, max_score: null, hits: [] } })).toBe(true);
+    expect(statesZeroHits({ hits: { total: 0, hits: [] } })).toBe(true);
+    expect(statesZeroHits({ hits: { total: { value: 3 }, hits: [] } })).toBe(false);
+    expect(statesZeroHits({ results: [] })).toBe(false);
+    expect(statesZeroHits({ hits: { hits: [] } })).toBe(false);
+    expect(isQuietPull({ ok: true, error: `${NOTHING_PUBLISHED_MARK}: x` })).toBe(true);
+    expect(isQuietPull({ ok: true, error: `${NOT_MODIFIED_MARK}: x` })).toBe(true);
+    expect(isQuietPull({ ok: true, error: null })).toBe(false);
+    expect(isQuietPull({ ok: false, error: `${NOT_MODIFIED_MARK}: x` })).toBe(false);
+  });
+
+  it('a week of 12-hourly pulls across a weekend routes nothing to Factory and never reads as a schema change', async () => {
+    const { deps, events, routed } = harness(
+      async (url) => {
+        const day = /startdt=(\d{4}-\d{2}-\d{2})/.exec(url)![1]!;
+        const hits = isWeekend(day) ? [] : [hit(day, Number(day.slice(-2)))];
+        return { status: 200, headers: {}, body: JSON.stringify({ hits: { total: { value: hits.length, relation: 'eq' }, hits } }) };
+      },
+      { ingestStore: memoryStore() },
+    );
+    // Thursday 2026-11-12 00:30 UTC to the following Wednesday, every 12 hours.
+    const start = Date.parse('2026-11-12T00:30:00Z');
+    const results = [];
+    for (let i = 0; i < 14; i += 1) {
+      results.push(...(await pullDueFeeds({ now: new Date(start + i * 12 * HOUR), sources: [edgar()], acquisition: deps })));
+    }
+    expect(results.length).toBe(14);
+    // Every second pull resumes past every shard; the weekend days are read and the provider says they are empty.
+    expect(results.some((r) => r.notModified)).toBe(true);
+    expect(results.some((r) => r.nothingPublished)).toBe(true);
+    expect(results.every((r) => r.error === null)).toBe(true);
+
+    const health = events.filter((e) => e.eventType === 'CONNECTOR_HEALTH');
+    expect(health.map((e) => (e.measures as { state?: string }).state)).not.toContain('SCHEMA_CHANGED');
+    expect(health.map((e) => (e.measures as { state?: string }).state)).not.toContain('BROKEN_PARSER');
+    expect(routed).toEqual([]);
+
+    // The quiet pulls are on record as such, and health reads only the pulls that asked and read.
+    const pulls = await readPullHistory('sec-edgar-8k', 50);
+    expect(pulls.filter(isQuietPull).length).toBeGreaterThanOrEqual(5);
+    expect((await historyWithoutNotModified('sec-edgar-8k')).every((p) => !isQuietPull(p))).toBe(true);
+  });
+
+  it('the weekend sequence the review reproduced is no schema change once the quiet pulls are marked', () => {
+    const at = (h: number) => new Date(Date.parse('2026-11-14T00:30:00Z') + h * HOUR).toISOString();
+    const recorded = [
+      { at: at(-12), ok: true, fetched: 80, inserted: 80, error: null },
+      { at: at(0), ok: true, fetched: 75, inserted: 75, error: null },
+      { at: at(12), ok: true, fetched: 0, inserted: 0, error: `${NOT_MODIFIED_MARK}: every shard already checkpointed` },
+      { at: at(24), ok: true, fetched: 0, inserted: 0, error: `${NOTHING_PUBLISHED_MARK}: the provider reports no records for 2026-11-14` },
+      { at: at(36), ok: true, fetched: 0, inserted: 0, error: `${NOT_MODIFIED_MARK}: every shard already checkpointed` },
+    ];
+    const verdict = classifyConnector('sec-edgar-8k', recorded.filter((p) => !isQuietPull(p)), { intervalMs: 12 * HOUR, now: Date.parse(at(37)) });
+    expect(verdict.state).toBe('HEALTHY');
+    expect(verdict.action).toBe('NONE');
+  });
+
+  it('a body that holds records the parser cannot read is still a schema change routed to Factory', async () => {
+    let moved = false;
+    const { deps, events, routed } = harness(
+      async (url) => {
+        const day = /startdt=(\d{4}-\d{2}-\d{2})/.exec(url)![1]!;
+        // After the move, EDGAR still reports hits, under a shape the parser does not read.
+        const body = moved
+          ? { hits: { total: { value: 2, relation: 'eq' }, results: [hit(day, 1), hit(day, 2)] } }
+          : { hits: { total: { value: 1, relation: 'eq' }, hits: [hit(day, Number(day.slice(-2)))] } };
+        return { status: 200, headers: {}, body: JSON.stringify(body) };
+      },
+      { ingestStore: memoryStore() },
+    );
+    const start = Date.parse('2026-11-16T00:30:00Z'); // a Monday
+    await pullDueFeeds({ now: new Date(start), sources: [edgar()], acquisition: deps });
+    moved = true;
+    // One new filing day per pull: each pull asks EDGAR and the parser reads nothing it returned.
+    for (let i = 1; i <= 3; i += 1) {
+      await pullDueFeeds({ now: new Date(start + i * 24 * HOUR), sources: [edgar()], acquisition: deps });
+    }
+    const states = events.filter((e) => e.eventType === 'CONNECTOR_HEALTH').map((e) => (e.measures as { state?: string }).state);
+    expect(states).toContain('SCHEMA_CHANGED');
+    expect(routed).toEqual(['FEED_CONNECTOR_REPAIR:sec-edgar-8k']);
   });
 });
