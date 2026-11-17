@@ -1685,7 +1685,40 @@ export async function signalledClaims(input: {
                   OR (c.opportunity_signal IS NULL AND COALESCE(c.evidence_lane, '') = ?)))`
     : '';
   const staleParams = input.staleBefore ? [input.staleBefore, ...pointSignals, GOAL_REQUEST_LANE] : [];
-  const rows = await getDb().all<ResearchClaimRow & { fragment_required_evidence: string | null }>(
+  /*
+   * Paged until `limit` claims survive the checks below, not one window.
+   *
+   * Two checks run in code after the read (a seller's own page; the exact
+   * lane declaration), and nothing marks a row they drop, so it comes back on
+   * every pass at the head of this oldest-first read. Production, 2026-11-17
+   * (W17): one window of such rows and the read returned nothing at all —
+   * every newer accepted goal claim behind them, a constructed round's opening
+   * included, never reached the harvest. Bounded, so a project of nothing but
+   * dropped rows costs a fixed number of reads per pass.
+   */
+  const want = Math.max(1, input.limit ?? 50);
+  const out: { claim: ResearchClaim; orchestrationId: string; fragmentId: string | null }[] = [];
+  for (let page = 0; page < SIGNALLED_MAX_PAGES && out.length < want; page += 1) {
+    const rows = await signalledPage(input.projectId, staleSql, staleParams, want, page * want);
+    for (const one of keepSignalled(rows)) {
+      if (out.length < want) out.push(one);
+    }
+    if (rows.length < want) break;
+  }
+  return out;
+}
+
+/** How many windows `signalledClaims` reads past rows its code checks drop. */
+const SIGNALLED_MAX_PAGES = 20;
+
+async function signalledPage(
+  projectId: string,
+  staleSql: string,
+  staleParams: readonly (string | number)[],
+  limit: number,
+  offset: number,
+): Promise<(ResearchClaimRow & { fragment_required_evidence: string | null })[]> {
+  return getDb().all<ResearchClaimRow & { fragment_required_evidence: string | null }>(
     `SELECT c.*, f.required_evidence AS fragment_required_evidence FROM research_claims c
        JOIN research_fragments f ON f.id = c.fragment_id
        JOIN research_orchestrations o ON o.id = c.orchestration_id
@@ -1815,10 +1848,16 @@ export async function signalledClaims(input: {
         )
         ${staleSql}
       ORDER BY c.created_at, c.rowid
-      LIMIT ?`,
-    [input.projectId, PATTERN_LANE, 'goal-%-mx-%', 'goal-%', GOAL_REQUEST_LANE, GOAL_REQUEST_LANE_DECLARED,
-      `%${GOAL_REQUEST_LANE_MEANS}%`, 'goal-%', ...staleParams, Math.max(1, input.limit ?? 50)],
+      LIMIT ? OFFSET ?`,
+    [projectId, PATTERN_LANE, 'goal-%-mx-%', 'goal-%', GOAL_REQUEST_LANE, GOAL_REQUEST_LANE_DECLARED,
+      `%${GOAL_REQUEST_LANE_MEANS}%`, 'goal-%', ...staleParams, limit, offset],
   );
+}
+
+/** The rows of one `signalledPage` that are openings, each with the kind its lane names. */
+function keepSignalled(
+  rows: readonly (ResearchClaimRow & { fragment_required_evidence: string | null })[],
+): { claim: ResearchClaim; orchestrationId: string; fragmentId: string | null }[] {
   return rows.filter((row) => {
     // A worker's own tag is judged by the tag, as before.
     if (row.opportunity_signal !== null) return true;
