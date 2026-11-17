@@ -129,3 +129,106 @@ describe('recipes, benchmark pods and the account (§108)', () => {
     expect(runway(null, 0.2)).toBeNull();
   });
 });
+
+/**
+ * RunPod's REST host unreachable (production 2026-11-16 ~21:30Z): every REST request throws,
+ * GraphQL answers. Listing, creating and retiring a pod go through GraphQL, shaped as before.
+ */
+describe('pod lifecycle through GraphQL when REST throws', () => {
+  type Gql = { query: string };
+  function restDown(answer: (query: string) => unknown) {
+    const gql: Gql[] = [];
+    let restCalls = 0;
+    const fetchImpl = (async (url: string, init?: RequestInit) => {
+      if (String(url).startsWith('https://rest.runpod.io/')) {
+        restCalls++;
+        throw new TypeError('fetch failed');
+      }
+      expect(url).toBe('https://api.runpod.io/graphql');
+      const { query } = JSON.parse(String(init?.body)) as Gql;
+      gql.push({ query });
+      return new Response(JSON.stringify(answer(query)), { status: 200 });
+    }) as typeof fetch;
+    return { gql, fetchImpl, restCalls: () => restCalls };
+  }
+
+  it('lists pods with the served model read from dockerArgs', async () => {
+    const { listPods, podServedModel } = await import('../server/services/cheap/runpodRestore.ts');
+    const { gql, fetchImpl, restCalls } = restDown(() => ({
+      data: { myself: { pods: [{ id: 'p1', name: 'brain-vllm', desiredStatus: 'RUNNING', costPerHr: 0.2, adjustedCostPerHr: 0.19, imageName: 'img', gpuCount: 1, dockerArgs: "Qwen/X --served-model-name Qwen/X --rope-scaling '{\"a\":1}'", machine: { gpuDisplayName: 'RTX A5000' } }] } },
+    }));
+    const pods = await listPods('k', fetchImpl);
+    expect(restCalls()).toBe(1);
+    expect(gql[0]!.query).toContain('myself { pods {');
+    expect(pods[0]).toMatchObject({ id: 'p1', name: 'brain-vllm', desiredStatus: 'RUNNING', adjustedCostPerHr: 0.19, gpu: { displayName: 'RTX A5000' } });
+    expect(podServedModel(pods[0]!)).toBe('Qwen/X');
+    expect(pods[0]!.dockerStartCmd).toEqual(['Qwen/X', '--served-model-name', 'Qwen/X', '--rope-scaling', '{"a":1}']);
+  });
+
+  it('a GraphQL error is not an empty account', async () => {
+    const { listPods } = await import('../server/services/cheap/runpodRestore.ts');
+    const { fetchImpl } = restDown(() => ({ errors: [{ message: 'Unauthorized' }] }));
+    await expect(listPods('k', fetchImpl)).rejects.toThrow(/fetch failed/);
+  });
+
+  it('retires a pod with podTerminate', async () => {
+    const { deletePod } = await import('../server/services/cheap/runpodRestore.ts');
+    const { gql, fetchImpl } = restDown(() => ({ data: { podTerminate: null } }));
+    expect(await deletePod('k', 'p9', fetchImpl)).toBe(200);
+    expect(gql[0]!.query).toBe('mutation { podTerminate(input: { podId: "p9" }) }');
+  });
+
+  it('creates on the first GPU that has stock, with the start command as dockerArgs for the image entrypoint', async () => {
+    const { createPod, RECIPES, podSpec, splitDockerArgs } = await import('../server/services/cheap/runpodRestore.ts');
+    const recipe = RECIPES['qwen3-32b-awq-48']!;
+    const { gql, fetchImpl } = restDown((q) =>
+      q.includes('"NVIDIA RTX A6000"')
+        ? { data: { podFindAndDeployOnDemand: null }, errors: [{ message: 'There are no longer any instances available with the requested specifications.' }] }
+        : { data: { podFindAndDeployOnDemand: { id: 'g1', desiredStatus: 'RUNNING', costPerHr: 0.35, machine: { gpuDisplayName: 'A40' } } } },
+    );
+    const pod = await createPod({ apiKey: 'k', vllmKey: 'secret', recipe, name: 'brain-vllm', maxUsdPerHour: 0.4, fetchImpl });
+    expect(pod).toMatchObject({ podId: 'g1', created: true, costPerHr: 0.35, url: 'https://g1-8000.proxy.runpod.net/v1' });
+    expect(gql).toHaveLength(2);
+    const q = gql[1]!.query;
+    expect(q).toContain('podFindAndDeployOnDemand(input: { cloudType: COMMUNITY, gpuCount: 1, gpuTypeId: "NVIDIA A40", name: "brain-vllm", imageName: "vllm/vllm-openai:v0.11.0"');
+    expect(q).toContain('volumeInGb: 0, ports: "8000/http"');
+    expect(q).toContain('minCudaVersion: "12.8"');
+    // The 2026 image's own entrypoint is `vllm serve`: the model is positional, and the args are REST's start command.
+    const args = JSON.parse(/dockerArgs: ("(?:[^"\\]|\\.)*")/.exec(q)![1]!) as string;
+    const expected = podSpec('secret', undefined, 'COMMUNITY', recipe, 'brain-vllm')['dockerStartCmd'];
+    expect(splitDockerArgs(args)).toEqual(expected);
+    expect(splitDockerArgs(args)[0]).toBe('Qwen/Qwen3-32B-AWQ');
+    expect(args).toContain('--api-key secret');
+  });
+
+  it('keeps the legacy image on its module entrypoint form', async () => {
+    const { createPod, RECIPES, splitDockerArgs } = await import('../server/services/cheap/runpodRestore.ts');
+    const { gql, fetchImpl } = restDown(() => ({ data: { podFindAndDeployOnDemand: { id: 'g2', desiredStatus: 'RUNNING', costPerHr: 0.2 } } }));
+    await createPod({ apiKey: 'k', vllmKey: 'v', recipe: RECIPES['qwen3-4b-awq-tools']!, name: 'brain-vllm', maxUsdPerHour: 0.24, fetchImpl });
+    const args = JSON.parse(/dockerArgs: ("(?:[^"\\]|\\.)*")/.exec(gql[0]!.query)![1]!) as string;
+    const cmd = splitDockerArgs(args);
+    expect(cmd.slice(0, 2)).toEqual(['--model', 'Qwen/Qwen3-4B-AWQ']);
+    expect(JSON.parse(cmd[cmd.indexOf('--rope-scaling') + 1]!)).toMatchObject({ rope_type: 'yarn' });
+  });
+
+  it('deletes a GraphQL pod priced over the ceiling at once, and keeps none', async () => {
+    const { ensurePod } = await import('../server/services/cheap/runpodRestore.ts');
+    const { gql, fetchImpl } = restDown((q) =>
+      q.startsWith('query') ? { data: { myself: { pods: [] } } }
+      : q.includes('podTerminate') ? { data: { podTerminate: null } }
+      : { data: { podFindAndDeployOnDemand: { id: `dear${gql.length}`, desiredStatus: 'RUNNING', costPerHr: 0.5 } } },
+    );
+    await expect(ensurePod({ apiKey: 'k', vllmKey: 'v', fetchImpl })).rejects.toThrow(/over the 0.24\/h ceiling; deleted \(HTTP 200\)/);
+    const created = gql.filter((g) => g.query.includes('podFindAndDeployOnDemand')).length;
+    const terminated = gql.filter((g) => g.query.includes('podTerminate')).length;
+    expect(created).toBe(2); // one per cloud: a priced-over pod ends that cloud, as on REST
+    expect(terminated).toBe(created);
+  });
+
+  it('never sweeps a bench pod whose age GraphQL cannot tell', async () => {
+    const { sweepBenchPods } = await import('../server/services/cheap/runpodRestore.ts');
+    const { gql, fetchImpl } = restDown(() => ({ data: { myself: { pods: [{ id: 'b1', name: 'brain-bench-x', desiredStatus: 'RUNNING' }] } } }));
+    expect(await sweepBenchPods('k', Date.now(), fetchImpl)).toEqual([]);
+    expect(gql.some((g) => g.query.includes('podTerminate'))).toBe(false);
+  });
+});
