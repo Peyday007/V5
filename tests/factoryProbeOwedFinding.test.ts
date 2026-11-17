@@ -16,7 +16,7 @@ import {
 } from '../server/repos/factory.ts';
 import { listFindings, recordReview } from '../server/repos/factoryFleet.ts';
 import { getDb } from '../server/db/database.ts';
-import { isProtectedVerificationPath, queueRepairs } from '../server/services/factory/repair.ts';
+import { isProtectedVerificationPath, queueRepairs, settleProgramOwedRepairs } from '../server/services/factory/repair.ts';
 
 const REPO = 'https://github.com/Peyday007/oakwood-junk-removal';
 const BASE = 'a'.repeat(40);
@@ -149,6 +149,38 @@ describe('a finding only the protected probes module can answer', () => {
     const [finding] = await listFindings(campaign.id);
     expect(finding?.state).toBe('ACCEPTED_LIMITATION');
     expect(finding?.resolution).toMatch(/owed by the platform/);
+  });
+});
+
+describe('a repair that spent every attempt because the fix needs a schema change', () => {
+  async function exhaustedRepair(failureDetail: string) {
+    const { campaign, changeRequest } = await campaignWithProbeFinding('The ledger cannot reach the weakness state from server/services/cash/ledger.ts.');
+    const result = await queueRepairs(campaign, changeRequest);
+    expect(result.queued.length).toBe(1);
+    const [finding] = await listFindings(campaign.id);
+    await getDb().run(
+      'UPDATE factory_work_units SET state = ?, attempt = max_attempts, failure_detail = ? WHERE id = ?',
+      ['FAILED', failureDetail, finding!.repairUnitId],
+    );
+    return campaign;
+  }
+
+  it('is the program\'s: no grant of exact paths reaches a migration not yet written (ventures-d0-p3-prep)', async () => {
+    const campaign = await exhaustedRepair(
+      'Out of scope: closing the finding needs a recorded expected-return figure per category or venture. That means a new column or table (server/db/migrations/NNN_*.sql and server/db/pg-migrations/NNN_*.sql, plus the *Row type in server/domain/types.ts).',
+    );
+    expect(await settleProgramOwedRepairs(campaign.id)).toHaveLength(1);
+    const [finding] = await listFindings(campaign.id);
+    expect(finding?.state).toBe('ACCEPTED_LIMITATION');
+    expect(finding?.resolution).toMatch(/schema change/);
+    expect(finding?.resolution).toMatch(/stays unverified until its probe passes/);
+  });
+
+  it('still blocks when the worker failed for any other reason', async () => {
+    const campaign = await exhaustedRepair('The test still fails after the change: expected 3 to be 4.');
+    expect(await settleProgramOwedRepairs(campaign.id)).toEqual([]);
+    const [finding] = await listFindings(campaign.id);
+    expect(finding?.state).not.toBe('ACCEPTED_LIMITATION');
   });
 });
 
