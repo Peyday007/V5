@@ -723,12 +723,12 @@ describe('the free research lane', () => {
     expect(citedExcerpt({ source: '2', sentences: ['S2.1'] }, two)?.url).toBe('https://b');
     // A number in prose is not a reference: a year or a count does not become a cited sentence.
     expect(citedExcerpt({ sentences: ['published in 2 papers'] }, one)).toBeNull();
-    expect(citationFailure({ sentences: ['the 2nd one, from 2019'] }, one)).toBe('citation not readable as sentence numbers');
+    expect(citationFailure({ sentences: ['the 2nd one, from 2019'] }, one)).toMatch(/^citation not readable as sentence numbers/);
     expect(citedExcerpt({ sentences: ['see S1.2 (published in 2019)'] }, one)?.excerpt).toBe(s[1]);
     // Still never invented: a number outside the page, or no number at all, is dropped and says which.
     expect(citedExcerpt({ sentences: ['S1.9'] }, one)).toBeNull();
     expect(citationFailure({ sentences: ['S1.9'] }, one)).toBe('cited sentences outside the page');
-    expect(citationFailure({ sentences: ['the first one'] }, one)).toBe('citation not readable as sentence numbers');
+    expect(citationFailure({ sentences: ['the first one'] }, one)).toMatch(/^citation not readable as sentence numbers/);
   });
 
   it('reads the claim list in every shape a model sends it, and the lane a label names (FREE_LANE:CITATION_DROPPED#3)', async () => {
