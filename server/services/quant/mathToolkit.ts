@@ -42,9 +42,10 @@ import {
   type CalibrationBucket,
   type ExposureRow,
   type OutcomeRow,
+  impliedProbability,
   type PredictionRow,
 } from './forecast.ts';
-import { claimedRange } from './ledger.ts';
+import { claimedRange, readLedger } from './ledger.ts';
 
 /* ------------------------------------------------------------------------- */
 /* Method families: an illustrative toolbox                                  */
@@ -562,6 +563,7 @@ export function forecastBias(predictions: readonly PredictionRow[], exposures: r
 export const MATH_EVENTS = {
   SELECTION: 'MATH_METHOD_SELECTION',
   PROVENANCE: 'NUMBER_PROVENANCE',
+  BIAS: 'FORECAST_BIAS_CORRECTION',
 } as const;
 
 export interface MathRecordDeps {
@@ -596,4 +598,184 @@ export async function recordNumberProvenance(record: NumberProvenance, deps: Mat
     evidenceClass: 'MEASURED',
     measures: { provenance: record },
   });
+}
+
+/** Record one systematic forecast error and its proposed correction. */
+export async function recordForecastBias(reading: BiasReading, deps: MathRecordDeps = {}): Promise<void> {
+  await (deps.record ?? recordBinEvent)({
+    eventType: MATH_EVENTS.BIAS,
+    projectId: deps.projectId ?? null,
+    workloadClass: deps.caller ?? 'math-toolkit',
+    outcome: reading.verdict,
+    reason: `${reading.comparableKey} (${reading.basis}) n=${reading.n} bias=${reading.bias ?? 'unknown'}`.slice(0, 480),
+    evidenceClass: 'MEASURED',
+    measures: { bias: reading },
+  });
+}
+
+/* ------------------------------------------------------------------------- */
+/* The production pass over the forecast ledger                              */
+/* ------------------------------------------------------------------------- */
+
+type Ledger = Awaited<ReturnType<typeof readLedger>>;
+
+/**
+ * The method question every comparable bucket of the forecast ledger poses —
+ * "how far can these forecasts be trusted, and should they be corrected?" —
+ * with each candidate family's preconditions read from the bucket's own rows.
+ * Calibration needs enough resolved outcomes with a probability; figure
+ * correction needs realized figures against a stated range; Bayesian
+ * updating needs at least one resolved outcome. A precondition the rows do
+ * not answer is UNKNOWN (§7.39), never assumed.
+ */
+export function ledgerBucketQuestion(comparableKey: string, ledger: Ledger): MathQuestion {
+  const preds = new Map(ledger.predictions.filter((p) => p.comparableKey === comparableKey).map((p) => [p.id, p]));
+  const outcomes = ledger.outcomes.filter((o) => preds.has(o.predictionId));
+  const ev = (rows: readonly OutcomeRow[]): string[] => rows.map((o) => o.evidence ?? `prediction:${o.predictionId}@${o.observedAt}`).slice(0, 20);
+  const withProbability = outcomes.filter((o) => {
+    const p = preds.get(o.predictionId);
+    return p ? impliedProbability(p) !== null : false;
+  });
+  const withFigure = outcomes.filter((o) => {
+    const p = preds.get(o.predictionId);
+    return o.realized !== undefined && p ? claimedRange(p) !== null : false;
+  });
+  const sampleState = (rows: readonly OutcomeRow[]): MethodPrecondition['state'] => (rows.length >= MIN_CALIBRATION_SAMPLE ? 'HOLDS' : rows.length === 0 ? 'UNKNOWN' : 'FAILS');
+  return {
+    question: 'How far can these forecasts be trusted, and does their systematic error call for a correction?',
+    subject: `forecast bucket ${comparableKey}`,
+    candidates: [
+      {
+        family: 'statistical_estimation_calibration',
+        purpose: 'compare stated probabilities with how often the outcome occurred',
+        preconditions: [{
+          condition: `at least ${MIN_CALIBRATION_SAMPLE} resolved outcomes carry a stated or implied probability`,
+          state: sampleState(withProbability),
+          evidence: withProbability.length > 0 ? ev(withProbability) : [],
+        }],
+      },
+      {
+        family: 'forecasting_state_estimation',
+        purpose: 'compare realized figures with the stated range and scale the forecast',
+        preconditions: [{
+          condition: `at least ${MIN_CALIBRATION_SAMPLE} realized figures against a stated range`,
+          state: sampleState(withFigure),
+          evidence: withFigure.length > 0 ? ev(withFigure) : [],
+        }],
+      },
+      {
+        family: 'probability_bayesian_inference',
+        purpose: 'update the bucket\'s probability from each resolved outcome',
+        preconditions: [{
+          condition: 'at least one resolved outcome with a stated or implied probability',
+          state: withProbability.length > 0 ? 'HOLDS' : 'UNKNOWN',
+          evidence: withProbability.length > 0 ? ev(withProbability) : [],
+        }],
+      },
+    ],
+  };
+}
+
+/**
+ * The provenance of one forecast's claimed probability: the stated (or
+ * range-implied) probability as a sourced input, judged calibrated only when
+ * its bucket's calibration says so, with the bucket's correction as the
+ * alternative parameterization when one is proposed.
+ */
+export function predictionProbabilityProvenance(p: PredictionRow, bucket: CalibrationBucket | null, bias: BiasReading | null): ProvenanceResult | null {
+  const probability = impliedProbability(p);
+  if (probability === null) return null;
+  const source = `bin_events:${p.id}`;
+  const figure: Figure = {
+    meaning: `probability that ${p.outcome}`,
+    unit: 'probability',
+    value: probability,
+    source,
+    derivedFrom: [],
+    status: p.probability !== null ? 'MODELED' : 'EVIDENCED',
+    window: p.horizonDays !== null ? `${p.horizonDays} days` : null,
+    geography: null,
+    scope: p.population,
+    bounds: null,
+    invalidatedBy: [...p.assumptions],
+  };
+  const corrected = bias?.correction?.kind === 'SHIFT_PROBABILITY' ? Math.min(1, Math.max(0, probability + bias.correction.amount)) : null;
+  const alternatives = [
+    ...(corrected !== null ? [{ label: `corrected by bucket bias (${bias!.correction!.rationale})`, parameters: { p: corrected } }] : []),
+    ...(bucket?.observedRate !== null && bucket?.observedRate !== undefined ? [{ label: `bucket observed rate over ${bucket.n} outcomes`, parameters: { p: bucket.observedRate } }] : []),
+    { label: 'uninformed (no evidence either way)', parameters: { p: 0.5 } },
+  ];
+  return buildNumberProvenance({
+    key: `prediction:${p.id}`,
+    quantity: { kind: 'PROBABILITY', definition: `probability that ${p.outcome} (${p.population})` },
+    units: 'probability',
+    horizon: p.horizonDays !== null ? `${p.horizonDays} days from ${p.madeAt}` : `unstated horizon from ${p.madeAt}`,
+    formula: { ref: 'p' },
+    inputs: [{ key: 'p', figure, source: { ref: source, retrievedAt: p.madeAt } }],
+    alternatives,
+    interdependence: [`shares comparable bucket ${p.comparableKey}`, ...p.data.map((d) => `rests on ${d}`)],
+    applicability: {
+      method: bucket ? `calibration of bucket ${p.comparableKey}: ${bucket.verdict} (n=${bucket.n})` : 'no calibration bucket yet',
+      evidence: [source, ...p.data],
+    },
+    form: 'PROBABILITY',
+    calibration: bucket,
+  });
+}
+
+export interface LedgerMathResult {
+  buckets: number;
+  selections: MathSelection[];
+  biases: BiasReading[];
+  provenanceRecorded: number;
+  provenanceRefused: { key: string; reasons: string[] }[];
+}
+
+export interface LedgerMathDeps extends MathRecordDeps {
+  read?: () => Promise<Ledger>;
+  windowDays?: number;
+}
+
+/**
+ * The production consumer of this toolkit over real forecast rows: for every
+ * comparable bucket of the ledger it judges which mathematics fits (and
+ * records the judgment), measures forecast-against-realized bias (and records
+ * each systematic one with its correction), and records the provenance of the
+ * current version of every claimed probability. Idempotence is the caller's
+ * cadence; every record is append-only.
+ */
+export async function assessLedgerMathematics(deps: LedgerMathDeps = {}): Promise<LedgerMathResult> {
+  const ledger = await (deps.read ?? (() => readLedger(deps.projectId ?? null)))();
+  const windowDays = deps.windowDays ?? 90;
+  const keys = [...new Set(ledger.predictions.map((p) => p.comparableKey))].sort();
+  const selections = keys.map((k) => selectMathematics(ledgerBucketQuestion(k, ledger)));
+  for (const s of selections) await recordMathSelection(s, deps);
+
+  const biases = forecastBias(ledger.predictions, ledger.exposures, ledger.outcomes, windowDays);
+  for (const b of biases) if (b.verdict === 'SYSTEMATIC') await recordForecastBias(b, deps);
+
+  const pooled = new Map<string, CalibrationBucket>();
+  for (const b of calibrate(buildLedger(ledger.predictions, ledger.exposures, ledger.outcomes), windowDays)) {
+    const held = pooled.get(b.comparableKey);
+    if (!held || (b.scope === 'POOLED' && held.scope !== 'POOLED')) pooled.set(b.comparableKey, b);
+  }
+  const probabilityBias = new Map(biases.filter((b) => b.basis === 'PROBABILITY').map((b) => [b.comparableKey, b]));
+  const current = new Map<string, PredictionRow>();
+  for (const p of ledger.predictions) {
+    const held = current.get(p.claimId);
+    if (!held || p.version > held.version) current.set(p.claimId, p);
+  }
+  let provenanceRecorded = 0;
+  const provenanceRefused: LedgerMathResult['provenanceRefused'] = [];
+  for (const p of current.values()) {
+    const built = predictionProbabilityProvenance(p, pooled.get(p.comparableKey) ?? null, probabilityBias.get(p.comparableKey) ?? null);
+    if (!built) continue;
+    if (!built.ok) {
+      provenanceRefused.push({ key: `prediction:${p.id}`, reasons: [...built.missing.map((m) => `missing ${m}`), ...built.problems] });
+      continue;
+    }
+    await recordNumberProvenance(built.record, deps);
+    provenanceRecorded += 1;
+  }
+  return { buckets: keys.length, selections, biases, provenanceRecorded, provenanceRefused };
 }
