@@ -920,7 +920,10 @@ async function researchInForce(): Promise<{ shares: SharesInForce; fingerprint: 
  *     down, and a bin no goal pursues is raised while a purpose it serves sits
  *     below a protected floor. That is what makes the shares move capacity.
  *
- * An unchanged decision writes nothing, so a quiet hour leaves no rows.
+ * An unchanged decision writes nothing, so a quiet hour leaves no rows —
+ * except that while a counted-once failure is still among the rows probe
+ * r01.res-15-5 judges, a holding measured pass is recorded once per cadence
+ * (`failureFollowUp`), so the running recorder's holding shows within hours.
  */
 export const RESEARCH_ALLOCATION_EVERY_MS = 60 * 60_000;
 /** The consistent window each decision is measured over. */
@@ -1466,6 +1469,37 @@ export function probeWindowStanding(
   };
 }
 
+/** Why a decision row that repeats its window's decision was written anyway (`failureFollowUp`). */
+export const RECORDED_AFTER_FAILURE = 'COUNTED_ONCE_FAILURE_IN_AUDIT_WINDOW';
+
+/**
+ * Whether a measured pass that holds the counted-once check, and would
+ * otherwise write nothing (the newest row's decision, in the same daily
+ * window), is recorded because a counted-once failure is still among the
+ * newest `ALLOCATION_AUDIT_ROWS` decision rows probe r01.res-15-5 judges.
+ *
+ * Read from the newest row alone: its `priorCostFailures.standing` was taken
+ * over the rows before it, so the newest failing row now sits one place
+ * further back. Such a pass repeats the newest row's fingerprint, which
+ * carries `held`, so that row held too and is not itself the failure. At most
+ * one follow-up per `RESEARCH_ALLOCATION_EVERY_MS` of reading time, measured
+ * from the newest row's own window, so a forced or repeated pass writes nothing
+ * more; and it stops by itself once the failure has left the window — at most
+ * `ALLOCATION_AUDIT_ROWS` rows after it, never a standing rate. A newest row
+ * with no audit gives no follow-up (an unknown is not a failure). Pure.
+ */
+export function failureFollowUp(newest: { detail: Record<string, unknown> | null } | null, until: string): boolean {
+  const d = newest?.detail ?? null;
+  if (!d) return false;
+  const standing = (d.priorCostFailures as { standing?: { newestFailingIndex?: unknown } } | undefined)?.standing;
+  const index = standing?.newestFailingIndex;
+  if (typeof index !== 'number' || !Number.isInteger(index) || index + 1 >= ALLOCATION_AUDIT_ROWS) return false;
+  const untilMs = Date.parse(until);
+  const w = d.window as { until?: unknown } | undefined;
+  const lastMs = w && typeof w.until === 'string' ? Date.parse(w.until) : NaN;
+  return Number.isFinite(untilMs) && Number.isFinite(lastMs) && untilMs - lastMs >= RESEARCH_ALLOCATION_EVERY_MS;
+}
+
 /**
  * The job-time inputs an earlier pass re-read for failing windows, as the
  * newest decision row carries them (`priorCostFailures.reread`), keyed by
@@ -1653,8 +1687,19 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
   const changed = !(previous && previous.detail.fingerprint === fingerprint);
   const newWindow = windowKey === null || recordedWindowKey(previous?.detail ?? null) !== windowKey;
   const measuredWindow = !decision.held || heldForCost;
-  const recorded = changed || (measuredWindow && newWindow);
+  // While a recorded counted-once failure is still among the rows probe
+  // r01.res-15-5 judges, a holding measured pass is recorded once per cadence,
+  // not once per day (`failureFollowUp`). The failure is history and is never
+  // edited (§5), but at one row a day it stayed among the newest fifty for up
+  // to fifty days, so whether the running recorder counts cost once could not
+  // be read from production for weeks after the recorder was fixed. Each such
+  // row is a real decision over its own 24-hour reading and says why it was
+  // written. It is decided from the newest row's carried audit, so a pass that
+  // records nothing still reads no history.
+  const followUp = !changed && !(measuredWindow && newWindow) && !decision.held && !heldForCost && failureFollowUp(previous, window.until);
+  const recorded = changed || (measuredWindow && newWindow) || followUp;
   if (recorded) {
+    if (followUp) detail.recordedBecause = RECORDED_AFTER_FAILURE;
     // Every recorded counted-once failure the probe still reads, with the cause its own numbers show.
     // Read only when a row is written: a pass that records nothing reads no history and re-reads no window.
     detail.priorCostFailures = await priorCostAudit(ports, previous);
