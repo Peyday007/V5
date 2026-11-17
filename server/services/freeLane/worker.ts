@@ -94,7 +94,10 @@ export function takeWave(queue: string[], limit: number): string[] {
   }
   return wave;
 }
+/** The characters of a page's sentences a model is shown (`pageSentences`). */
 const SOURCE_CHARS = 7_000;
+/** The characters of a page Brain reads to choose them from. */
+const PAGE_READ_CHARS = 60_000;
 
 /**
  * Hosts Brain could not reach (DNS, connect, timeout), remembered for a while so the next
@@ -671,6 +674,69 @@ export function sentencesOf(text: string, max = 90): string[] {
     .slice(0, max);
 }
 
+const STOP = new Set(
+  ('about above after again also among and any are because been before being between both but can could does doing down during ' +
+    'each every from further have having here how into its itself just more most must not now off once only other our out over ' +
+    'own same should some such than that the their them then there these they this those through too under until very was were ' +
+    'what when where which while who whom why will with within would your yours brain claim claims source sources evidence lane ' +
+    'fragment question null').split(' '),
+);
+
+const stem = (word: string): string => word.replace(/(?:ies|es|s)$/, '');
+
+/** The words a brief or a claim is about, for picking the page sentences that bear on it. Pure. */
+export function focusTerms(focus: string): Set<string> {
+  const out = new Set<string>();
+  for (const word of focus.toLowerCase().match(/[a-z][a-z0-9-]{3,}/g) ?? []) if (!STOP.has(word)) out.add(stem(word));
+  return out;
+}
+
+/**
+ * The sentences of a page a model is shown, verbatim and in the page's order.
+ *
+ * Production, 2026-11-17 01:02–01:49Z: most of gpt-oss-120b's refused
+ * fragments were the reply `{"claims":[]}` over 2–6 pages Brain had read, and
+ * again after the re-ask (#998). The lane showed each page's first 7 000
+ * characters, and a commercial page's first 7 000 characters are mostly its
+ * menus: a pricing page measured that day had 13 prose sentences of 90 in that
+ * window and its first price past it. A page short enough to show whole is
+ * shown whole, as before. A longer one is read in full; lines that are neither
+ * prose nor a figure are left out, and the rest are kept by how many of the
+ * brief's words they carry, then whether they state a figure, then their place
+ * on the page, up to the same character budget. Every sentence is still the
+ * page's own text, cited by number and copied by Brain: what a claim must
+ * prove does not change. Pure.
+ */
+export function pageSentences(text: string, focus: string, budget = SOURCE_CHARS, max = 90): string[] {
+  const all = sentencesOf(text, 100_000);
+  const size = (list: string[]): number => list.reduce((n, one) => n + one.length + 1, 0);
+  if (all.length <= max && size(all) <= budget) return all;
+  const terms = focusTerms(focus);
+  const seen = new Set<string>();
+  const scored = all
+    .map((one, index) => {
+      // A menu repeated in a page's header and footer is shown once.
+      const repeat = seen.has(one);
+      seen.add(one);
+      if (repeat) return { one, index, hits: 0, figure: false, keep: false };
+      const words = one.toLowerCase().match(/[a-z][a-z0-9-]{3,}/g) ?? [];
+      const hits = new Set(words.map(stem).filter((w) => terms.has(w))).size;
+      const figure = /\d/.test(one);
+      return { one, index, hits, figure, keep: figure || one.split(' ').length >= 6 };
+    })
+    .filter((s) => s.keep)
+    .sort((a, b) => b.hits - a.hits || Number(b.figure) - Number(a.figure) || a.index - b.index);
+  const chosen: typeof scored = [];
+  let used = 0;
+  for (const s of scored) {
+    if (chosen.length >= max) break;
+    if (used + s.one.length + 1 > budget) continue;
+    chosen.push(s);
+    used += s.one.length + 1;
+  }
+  return chosen.sort((a, b) => a.index - b.index).map((s) => s.one);
+}
+
 type Citation =
   | { ok: true; url: string; excerpt: string; locator: string }
   | { ok: false; why: 'unparseable' | 'out of range' };
@@ -772,7 +838,12 @@ export function citedExcerpt(
 /** Why a citation was dropped, so the recorded failure says which kind it was. */
 export function citationFailure(claim: Record<string, unknown>, numbered: { url: string; sentences: string[] }[]): string {
   const found = resolveCitation(claim, numbered);
-  return found.ok ? 'cited' : found.why === 'out of range' ? 'cited sentences outside the page' : 'citation not readable as sentence numbers';
+  if (found.ok) return 'cited';
+  if (found.why === 'out of range') return 'cited sentences outside the page';
+  // What the model wrote where a citation goes, bounded, so the next unread shape is read from the record (2026-11-17: 2 of 8 recorded drops).
+  const key = CITATION_KEYS.find((k) => claim[k] !== undefined && k !== 'evidence_excerpt');
+  const shape = key ? `${key}=${JSON.stringify(claim[key]).slice(0, 60)}` : '';
+  return shape ? `citation not readable as sentence numbers (${shape})` : 'citation not readable as sentence numbers';
 }
 
 /**
@@ -1138,7 +1209,7 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
         if (fetched.readable && host) forgiveHost(url);
         if (!fetched.readable) rememberUnreachable(url, String(fetched.reason), Date.now(), String(fetched.detail ?? ''));
         if (fetched.readable && fetched.text.trim().length > 200 && readable.length < MAX_SOURCES) {
-          readable.push({ url: fetched.finalUrl, text: fetched.text.slice(0, SOURCE_CHARS) });
+          readable.push({ url: fetched.finalUrl, text: fetched.text.slice(0, PAGE_READ_CHARS) });
         } else if (!(fetched.readable && fetched.text.trim().length > 200)) {
           failedUrls.push(url);
           fetchReasons.push(fetched.readable ? 'EMPTY' : String(fetched.reason));
@@ -1180,7 +1251,8 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
   // 2. Claims, cited by sentence number. Brain copies the sentences itself, so
   //    every excerpt is verbatim by construction: the model never retypes a quote.
   const claimSchema = schemaForModel('brain_submit_claims', 'claims');
-  const numbered = readable.map((one) => ({ url: one.url, sentences: sentencesOf(one.text) }));
+  const focus = [question, ...lanes.map((l) => l.description), JSON.stringify(brief.scope)].join(' ');
+  const numbered = readable.map((one) => ({ url: one.url, sentences: pageSentences(one.text, focus) }));
   const sources = numbered
     .map((one, i) => `SOURCE ${i + 1} — ${one.url}\n${one.sentences.map((t, n) => `[S${i + 1}.${n + 1}] ${t}`).join('\n')}`)
     .join('\n\n---\n\n');
@@ -1296,7 +1368,17 @@ async function verify(ctx: Ctx, assignment: Record<string, unknown>): Promise<bo
   while (queue.length > 0) {
     const wave = takeWave(queue, queue.length);
     const fetched = await Promise.all(wave.map(async (url) => ({ url, page: await ctx.fetchSource(url) })));
-    for (const { url, page } of fetched) pages.set(url, page.readable ? page.text.slice(0, SOURCE_CHARS) : `UNREADABLE: ${page.reason}`);
+    for (const { url, page } of fetched) {
+      if (!page.readable) {
+        pages.set(url, `UNREADABLE: ${page.reason}`);
+        continue;
+      }
+      // The sentences that bear on the claims citing this page, verbatim: a cited passage past the page's
+      // first 7 000 characters (where its menus end) is in front of the verifier, not cut off before it.
+      const citing = claims.filter((claim) => claim['sourceUrl'] === url);
+      const focus = citing.map((claim) => `${String(claim['claim'] ?? '')} ${String(claim['evidenceExcerpt'] ?? '')}`).join(' ');
+      pages.set(url, pageSentences(page.text.slice(0, PAGE_READ_CHARS), focus).join('\n'));
+    }
   }
   // Kept in the claims' own order for the prompt.
   const ordered = new Map<string, string>();
