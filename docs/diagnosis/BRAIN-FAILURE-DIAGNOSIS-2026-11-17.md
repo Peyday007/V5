@@ -245,3 +245,15 @@ See F1–F7 above. Each one gives the cause, file:line, run IDs, the smallest ch
   - Findings due 09:30Z: how the ceiling is computed, and why the adaptive ceiling (#1000) stopped at 16.
   - Fix PR due 10:15Z: the ceiling grows while ideas wait and the lane or GPU is idle, and shrinks under DB or CPU pressure.
   - W6 will report the ceiling reached, whether it grew, and sustained accepted claims per hour, first on bd5e0419 and then after W12.
+- **08:45Z, review of #1037 and #1038 in bd5e0419.** Both mostly CONFIRMED.
+  - Confirmed, file:line in the message to the integration owner:
+    - same-buyer evidence counts;
+    - hours and volume are inferred;
+    - candidateFromArrangement reads evidence;
+    - inventedDesigner receives knowledge;
+    - a bounded hypothesis check makes paths stated;
+    - card copies follow corrections.
+  - Checks: typecheck passes with an 8 GB heap; 63/63 directly run tests pass.
+  - CONCERN, medium, to be measured in W6: planner CPU. arrangementTarget loops over every opening with regex work for each of 400 arrangements. The check is the W4 plan-run time and loop lag.
+  - CONCERN, medium, to be measured in W6: hypothesis-check commissions have no total cap across passes. The check is the share of hypothesis checks versus goal rounds once the mission ceiling rises.
+  - Low: an UNRESOLVED check is not read by the goal planner; the old card copies have no backfill.
