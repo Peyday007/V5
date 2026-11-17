@@ -52,3 +52,10 @@ Spending safeguard for W6: every GPU start goes through `runpod-launch` with a B
     - Research-mission ceiling: about 16 missions, 568 ideas waiting (troubleshooting reading 08:28Z). Owner: W12.
     - 120B fragment answers dropped by Brain's checks: 20 in the hour, so it is HELD BACK from fragments. Owner: W13.
   - **New owners:** W2c (planner CPU index) and W3c (hypothesis-check cap, PR #1040 ready).
+- 08:55Z: GPU stopped, $0/h. RunPod balance $169.26: a deposit of about $100 landed after 07:43Z, when the balance was $75.43.
+- 09:00Z: RC bd5e0419 FAILED the deploy's SQLite tests with FOREIGN KEY constraint failed in carryFigures → recordPathFact (#1029). Bisect: eda04071 clean, 74b0a3c3 fails. Production is still on eda04071. Fixed by #1041.
+- 09:13Z: release 4 = f4eb5352, deploy 44051739781. It is bd5e0419 plus:
+  - #1041, the FK fix;
+  - #1039, W12, the mission ceiling grows with the GPU's served sequences and with waiting ideas;
+  - #1040, W3c, the hypothesis cap.
+  W12 found each mission is one fragment run in strict stage order, so model jobs scale about 1:1 with live missions. Still open: W2c (planner CPU) and W13 (120B fragment drops).
