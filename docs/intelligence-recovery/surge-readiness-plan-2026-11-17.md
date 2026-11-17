@@ -42,3 +42,4 @@ Spending safeguard for W6: every GPU start goes through `runpod-launch` with a B
   - W10b: the recovery exclusion is scoped to the round, and an attempts-exhausted bin gets a regrant.
   - W9: VERIFY replies with no JSON.
 - Troubleshooting session: the goal's 15 Routine bins are ruled out as a blocker (§84/§85, the free lane works them). The budget-cap evidence (V7) stays valid. The textFact provenance finding was passed to W2.
+- 08:28Z: release candidate LOCKED at bd5e0419, deploy 44046891820. It carries #1028, #1029, #1031–#1038, adding #1034 (W9, verify JSON), #1036 (W10b), #1037 (W3b) and #1038 (W2b). Review findings 1–3 are closed in code. Fly expected around 09:15Z. After that, only a defect found in verification merges.
