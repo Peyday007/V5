@@ -374,3 +374,9 @@ Lane-wide accepted claims fell from 14/h to 2/h as concurrency rose (runpod-repo
 - After W14 and W15 deploy, run one capped GPU hour (`runpod-launch`, cap ≤ $6/h). Read SPEED, PLAN INPUTS and PRESSURE.
 - Start the run only when all three YES criteria above hold. Then keep the same caps and watch accepted claims per GPU-hour and the research-fed input count every hour. Stop on any regression.
 - 13:51Z: the integration owner confirms production is serving **06b3d981**: release 6 plus Factory's feed and rule merges, deployed 11:43Z. The 13:01Z readings above were taken on that SHA. The integration owner's own call is also **NO** for a paid 12 h GPU run until W14 lands and a re-measure shows accepted GPU claims. Both readiness calls agree.
+
+---
+
+# T4 VERIFICATION, 56bc7f12 (coordinator session_01QF5Tk6gJZ5UNMYcbPxbsu1; new deadline 19:00Z, readings due 18:45Z)
+
+- 17:23Z: Deploy 44127191670 (56bc7f12 = W15 #1058 + W16 #1057) is still in progress. Readings use read-only reports only; no paid compute from this session.
