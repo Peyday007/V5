@@ -8,8 +8,11 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { insertFeedItems } from '../server/repos/feeds.ts';
 import { getDb } from '../server/db/database.ts';
-import { EXTRACTION_EVENT, LEAD_MAX_AGE_MS, recordFeedExtraction, routeEscalation, screenFeedLeads, screenOrder, SCREENS_PER_PASS, type ExtractionPass } from '../server/services/feeds/run.ts';
+import { recordCashEvent } from '../server/repos/cashMode.ts';
+import { EXTRACTION_EVENT, LEAD_MAX_AGE_MS, readParserHistory, recordFeedExtraction, routeEscalation, screenFeedLeads, screenOrder, SCREENS_PER_PASS, type ExtractionPass } from '../server/services/feeds/run.ts';
 import type { Completer, LaneConfig } from '../server/services/cheap/lane.ts';
+import { EXTRACTOR_VERSION } from '../server/services/feeds/extract.ts';
+import { judgeStructure, plannedStage, planProcessing } from '../server/services/knowledge/processingGraph.ts';
 
 let projectId = '';
 beforeEach(async () => {
@@ -143,6 +146,77 @@ describe('recordFeedExtraction records the processing graph, delta, identity, de
     expect(row!.funnel).toBeDefined();
     const summary = await getDb().get<{ summary: string }>('SELECT summary FROM cash_events WHERE project_id = ? AND kind = ?', [projectId, EXTRACTION_EVENT]);
     expect(summary!.summary).toContain('identity');
+  });
+
+  it('the plan is judged before any stage runs and decides what runs, per source, from that source\'s own evidence', async () => {
+    const source = `w${Math.random().toString(36).slice(2, 8)}`;
+    await insertFeedItems(source, records(source, 'a'));
+    const first = (await recordFeedExtraction({ projectId, now: new Date(), capacity: 1 }))!;
+    const plan = first.processingGraph![0]!;
+    // Evidence from the source itself: fielded records with no declared format are semi-structured, and a
+    // first read has no parser history, so parsing is given to the model with its reason.
+    expect(plannedStage(plan, 'PARSE_NORMALIZE')).toMatchObject({ executor: 'LLM', llmReason: 'SOURCE_INTERPRETATION' });
+    // Every stage the pass ran is one the plan contains, with the executor the plan gave it.
+    expect(first.stagesRun!.length).toBeGreaterThan(0);
+    for (const run of first.stagesRun!) {
+      expect(run.planned).toBe(true);
+      expect(plannedStage(plan, run.stage)?.executor).toBe(run.executor);
+    }
+    expect(first.stagesRun!.map((r) => r.stage)).toEqual(expect.arrayContaining(['PARSE_NORMALIZE', 'ENTITY_IDENTIFICATION', 'EVENT_DETECTION']));
+    // A model parse queues what code could not read for the model.
+    expect(first.needsModel.flat().length).toBeGreaterThan(0);
+    // The parser's measured record is carried for the next pass's plan.
+    expect(first.parserHistory).toEqual({ parserVersion: EXTRACTOR_VERSION, sources: { [source]: expect.objectContaining({ runs: 3 }) } });
+  });
+
+  it('a source whose parser has proved itself is parsed by code, and what it cannot read is not spent on the model', async () => {
+    const source = `w${Math.random().toString(36).slice(2, 8)}`;
+    await insertFeedItems(source, records(source, 'a'));
+    // A prior pass recorded under the current parser: 40 of 40 records read on this source.
+    await recordCashEvent({
+      projectId,
+      kind: EXTRACTION_EVENT,
+      actorRef: 'BRAIN',
+      summary: 'prior pass',
+      detail: { parserHistory: { parserVersion: EXTRACTOR_VERSION, sources: { [source]: { runs: 40, successes: 40, decisionValue: 1, reconstructs: false } } } },
+    });
+    await tick();
+    const pass = (await recordFeedExtraction({ projectId, now: new Date(), capacity: 1 }))!;
+    const plan = pass.processingGraph![0]!;
+    expect(plannedStage(plan, 'PARSE_NORMALIZE')).toMatchObject({ executor: 'CODE', llmReason: null });
+    expect(pass.stagesRun!.find((r) => r.stage === 'PARSE_NORMALIZE')).toMatchObject({ executor: 'CODE', records: 3 });
+    // The vague record is still unreadable by code, but no unreadable record is handed to the model or promoted.
+    expect(pass.items - pass.readable).toBeGreaterThan(0);
+    expect(pass.needsModel).toEqual([]);
+    expect([...pass.deepening!.promoted, ...pass.deepening!.held].some((d) => d.id.startsWith('item:'))).toBe(false);
+    expect(pass.parserHistory!.sources[source]!.runs).toBe(43);
+  });
+
+  it('a source whose records state no time is not handed to event detection', async () => {
+    const source = `w${Math.random().toString(36).slice(2, 8)}`;
+    await insertFeedItems(source, records(source, 'a').map((r) => ({ ...r, publishedAt: null })));
+    const pass = (await recordFeedExtraction({ projectId, now: new Date(), capacity: 1 }))!;
+    const plan = pass.processingGraph![0]!;
+    expect(plannedStage(plan, 'EVENT_DETECTION')).toBeNull();
+    expect(plan.skipped.map((s) => s.stage)).toContain('EVENT_DETECTION');
+    expect(pass.stagesRun!.map((r) => r.stage)).not.toContain('EVENT_DETECTION');
+    expect(pass.graph).toBeNull();
+  });
+
+  it('the plan\'s structure is judged from the source, and the carried history from its own parser version only', () => {
+    expect(judgeStructure('JSON', [])).toBe('STRUCTURED');
+    expect(judgeStructure('pdf', [])).toBe('UNSTRUCTURED');
+    expect(judgeStructure(null, [{ organization: 'Acme', publishedAt: null }])).toBe('SEMI_STRUCTURED');
+    expect(judgeStructure(undefined, [{ organization: null, publishedAt: null }])).toBe('UNSTRUCTURED');
+    expect(readParserHistory({ parserVersion: 'old', sources: { s: { runs: 4, successes: 4 } } }, 'new')).toEqual({});
+    expect(readParserHistory({ parserVersion: 'v', sources: { s: { runs: 2, successes: 3 } } }, 'v')).toEqual({});
+    expect(readParserHistory({ parserVersion: 'v', sources: { s: { runs: 4, successes: 4 } } }, 'v')).toEqual({ s: { runs: 4, successes: 4, decisionValue: 1, reconstructs: false } });
+    const unchanged = planProcessing(
+      { sourceId: 's', structure: 'STRUCTURED', authoritative: true, routes: [{ url: 'u', kind: 'FEED', updateMechanism: 'CONDITIONAL_FETCH', automatable: true }], hasCheckpoint: true, contentChanged: false, priorParserRuns: 1, priorParserSuccesses: 1, establishedEntityMappings: true, identityCollisionsSuspected: false, timeSeries: true },
+      { questionId: 'q', decision: 'd', decisionValue: 1, uncertainty: 0, needsReconstruction: false, needsRelationships: false, novel: false },
+    );
+    // An unchanged source's plan runs no parse at all.
+    expect(plannedStage(unchanged, 'PARSE_NORMALIZE')).toBeNull();
   });
 });
 
