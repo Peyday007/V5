@@ -1209,6 +1209,26 @@ export async function recordRemedyApplied(input: { goalId: string; lane: string;
   });
 }
 
+/**
+ * The reading's cost-counted-once record with a boolean `holds` that is true
+ * only when the reading itself says so: a missing, malformed or non-boolean
+ * record reads as not holding. Pure.
+ */
+export function verifiedCostReading(once: unknown): ResearchYieldReading['costCountedOnce'] {
+  const o = (once && typeof once === 'object' ? once : {}) as Partial<ResearchYieldReading['costCountedOnce']>;
+  const num = (n: unknown) => (typeof n === 'number' && Number.isFinite(n) ? n : 0);
+  const money = (n: unknown) => (typeof n === 'number' && Number.isFinite(n) ? n : null);
+  return {
+    jobs: num(o.jobs),
+    totalJobMs: num(o.totalJobMs),
+    purposeJobMs: num(o.purposeJobMs),
+    totalCostMinor: money(o.totalCostMinor),
+    purposeCostMinor: money(o.purposeCostMinor),
+    unmeasuredJobs: num(o.unmeasuredJobs),
+    holds: o.holds === true && [o.totalJobMs, o.purposeJobMs].every((n) => typeof n === 'number' && Number.isFinite(n)),
+  };
+}
+
 /** One allocation pass over the live goals. */
 export async function reallocateResearch(input: { goals: GoalView[]; now?: string }, ports: ResearchAllocationPorts): Promise<ResearchAllocationReport> {
   const untilMs = input.now ? Date.parse(input.now) : Date.now();
@@ -1229,8 +1249,21 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
   const laneCapacity = ports.readLaneCapacity ? await ports.readLaneCapacity(window.until) : [];
   const capacity = new Map(laneCapacity.map((one) => [one.lane, one]));
   const allocationInput = allocationInputFrom(reading, { urgentCommercialGoal, nearestDeadlineDays: deadlines.length ? Math.min(...deadlines) : null, triedRemedies: tried, measuringRemedies: measuring, pressure, capacity, remedyLevers: APPLICABLE_REMEDIES });
-  const decision = decideResearchAllocation(allocationInput);
+  const decided = decideResearchAllocation(allocationInput);
   const observed = normalizeShares(allocationInput.currentShares);
+  // Shares move only on a reading whose cost is shown counted once. A reading
+  // that cannot show it is recorded as a held decision — the observed shares,
+  // nothing moved — with the reason, never as a move on an unverified reading.
+  const costCountedOnce = verifiedCostReading(reading.costCountedOnce);
+  const decision: AllocationDecision = costCountedOnce.holds
+    ? decided
+    : {
+        ...decided,
+        held: true,
+        shares: observed,
+        changes: [],
+        notes: [`Held: the window's cost reading does not show each job's cost counted once (total ${String(costCountedOnce.totalJobMs)} ms against ${String(costCountedOnce.purposeJobMs)} ms across purposes), so no share moves on it.`, ...decided.notes],
+      };
   const fingerprint = allocationFingerprint(decision);
   const floors = {
     exploration: EXPLORATION_FLOOR,
@@ -1283,12 +1316,14 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
       basis: pressure[p].basis.slice(0, 10),
     }])),
     liveGoals: live.length,
-    costCountedOnce: reading.costCountedOnce,
+    costCountedOnce,
     notes: [...decision.notes, ...reading.notes].slice(0, 20),
   };
   const recorded = !(previous && previous.detail.fingerprint === fingerprint);
   if (recorded) {
-    const summary = decision.held
+    const summary = !costCountedOnce.holds
+      ? "Research allocation held: the window's cost reading does not show each job's cost counted once."
+      : decision.held
       ? 'Research allocation held: nothing in the window was measured.'
       : `Research reallocated: ${RESEARCH_PURPOSES.map((p) => `${p} ${(decision.shares[p] * 100).toFixed(1)}%`).join(', ')}`;
     await ports.recordDecision(summary.slice(0, 400), { ...detail, summary: summary.slice(0, 400) });
