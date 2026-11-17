@@ -131,6 +131,12 @@ The path runs objective → research question → accepted claim → plan input 
 
 **Operating versus result.** The table says what operating the run costs. Whether that buys useful research depends on the GPU's post-#1052 yield, which the one-hour test measures. Without it, the same $64.80 would buy about 200 audit and verify jobs per hour and no new claims.
 
+## GO TEST STATUS (15:05Z)
+
+**First attempt, 15:01Z: no pod, $0 billed.** SECURE H200 was priced **$7.99/h**, above the $5.50 ceiling, and COMMUNITY H200 and B200 had no capacity.
+
+**Second attempt, 15:05Z:** relaunched with a $8.50/h ceiling and an $11 cap. A 12-hour run at that price would be 12.25 h × $7.99 = **$97.88**, which is still inside the ~$120.57 left under the $250 ceiling and inside the $147.06 balance. The measurement and stop follow automatically one hour after serving.
+
 ## HANDOFF
 
 The session runs this itself when deploy 44097071502 shows "Deploy to Fly: success". Nothing here needs the owner.
