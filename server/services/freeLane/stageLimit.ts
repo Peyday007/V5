@@ -29,13 +29,18 @@
  *     offered as scaling options beside the application request loop.
  *
  * Read-only over existing rows (`bin_events`: FEED_ACQUISITION, FEED_SOURCE_YIELD,
- * FREE_LANE_ITEM, FREE_LANE_CAPACITY, the recorded FREE_LANE_STAGE_CAPACITY),
+ * FREE_LANE_ITEM, FREE_LANE_CAPACITY, the recorded FREE_LANE_STAGE_CAPACITY;
+ * and, through the feed owner's `readSourceOutcomeLinks`, the claims, plan
+ * facts and opportunities a route's stored items led to — which is how a
+ * route's relationships, settled contradictions, resolved variables,
+ * source-to-plan time, compute and storage cost are measured),
  * one `STAGE_LIMIT` row written through the existing bin-event writer. No
  * scheduler, store or table. Domains and routes are whatever the rows name.
  */
 import { getDb } from '../../db/database.ts';
 import { recordBinEvent } from '../../repos/bins.ts';
 import { readSourceYields, type SourceYield } from '../feeds/run.ts';
+import { readWindowOutcomeLinks, type SourceOutcomeLinks } from '../feeds/acquisitionMeasures.ts';
 import { readStageCapacity, STAGES, type Measured, type RecordedStageCapacity, type StageCapacityReport } from './stageCapacity.ts';
 
 export const STAGE_LIMIT_EVENT = 'STAGE_LIMIT';
@@ -44,6 +49,19 @@ const NOT = (reason: string): { measured: false; reason: string } => ({ measured
 const ok = <T>(value: T): { measured: true; value: T } => ({ measured: true, value });
 const n = (value: unknown): number => Number(value ?? 0) || 0;
 const round = (value: number, places = 4): number => Math.round(value * 10 ** places) / 10 ** places;
+const NO_LINKS: SourceOutcomeLinks = {
+  storedBytes: 0, acceptedEvidence: 0, settledContradictions: 0, variablesResolved: 0, economicRelationships: 0,
+  verifiedLinks: { buyer: 0, price: 0, fulfillment: 0, complete: 0 },
+  minutesToGoalImpact: null, revenueCents: 0, screenCalls: 0, screenDollars: 0,
+};
+
+/** The operator's stated storage price per GB-month, or null when none is stated (never a made-up price). */
+export function storagePricePerGbMonth(env: Record<string, string | undefined> = process.env): number | null {
+  const raw = env['BRAIN_STORAGE_COST_PER_GB_MONTH'];
+  if (!raw) return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
 
 // ---------------------------------------------------------------------------
 // Per domain × route × window.
@@ -63,7 +81,8 @@ export interface RouteWindowMeasures {
   correctedContradictions: Measured<number>;
   variablesResolved: Measured<number>;
   candidatesImproved: Measured<number>;
-  minutesSourceChangeToPlan: Measured<number>;
+  /** Median minutes from a stored record's arrival to the first plan fact or opportunity it caused; null when none did yet. */
+  minutesSourceChangeToPlan: Measured<number | null>;
   computeCost: Measured<number>;
   apiCost: Measured<number>;
   storageCost: Measured<number>;
@@ -109,6 +128,15 @@ export function routeWindowReadings(input: {
   /** Routes that had any acquisition row before `since`. */
   seenBefore: ReadonlySet<string>;
   yields: readonly SourceYield[];
+  /**
+   * What each route's stored items became downstream (`readSourceOutcomeLinks`):
+   * the bytes kept, the relationships, contradictions and plan variables their
+   * claims settled, when they reached the plan, and what their screens cost.
+   * Absent or null means the linkage was not read, and those figures say so.
+   */
+  links?: ReadonlyMap<string, SourceOutcomeLinks> | null;
+  /** Dollars per GB-month of storage, where the operator has said (`BRAIN_STORAGE_COST_PER_GB_MONTH`). */
+  storagePricePerGbMonth?: number | null;
 }): RouteWindowReading[] {
   const groups = new Map<string, { domain: string; route: string; pulls: number; failed: number; fetched: number; inserted: number; bytes: number; bytesSeen: number; ms: number; msSeen: number }>();
   for (const row of input.rows) {
@@ -127,24 +155,40 @@ export function routeWindowReadings(input: {
   return [...groups.values()].map((g): RouteWindowReading => {
     const y = yieldOf.get(g.route);
     const notOnRow = (what: string) => NOT(`${what} is not on the route's FEED_ACQUISITION rows`);
+    const linked = input.links ? input.links.get(g.route) ?? null : undefined;
+    const noLinks = NOT('the linkage from the route\'s stored items to claims, plan facts and opportunities was not read');
+    const fromLinks = <T>(pick: (l: SourceOutcomeLinks) => T): Measured<T> =>
+      linked === undefined ? noLinks : ok(pick(linked ?? NO_LINKS));
+    const price = input.storagePricePerGbMonth ?? null;
     const measures: RouteWindowMeasures = {
       newRelevantSources: ok(input.seenBefore.has(g.route) ? 0 : 1),
       recordsConsidered: ok(g.fetched),
       recordsNewlyFetched: ok(g.inserted),
-      bytes: g.bytesSeen > 0 ? ok(g.bytes) : notOnRow('raw bytes'),
+      // Bytes on the pull rows where the connector reported them; otherwise the bytes of the records the route delivered and storage kept.
+      bytes: g.bytesSeen > 0 ? ok(g.bytes) : linked !== undefined ? ok((linked ?? NO_LINKS).storedBytes) : notOnRow('raw bytes'),
       transferMs: g.msSeen > 0 ? ok(g.ms) : notOnRow('transfer time'),
       processedRecords: y ? ok(y.acquired) : NOT('no source-yield reading for the route in the window'),
       deduplicatedRecords: ok(Math.max(0, g.fetched - g.inserted)),
       acceptedFacts: y ? ok(y.accepted) : NOT('no source-yield reading for the route in the window'),
       evidenceQuality: y && y.acquired > 0 ? ok(round(y.accepted / y.acquired)) : NOT('nothing acquired to judge'),
-      economicRelationships: NOT('event-graph relationships are not attributed to the route that supplied them'),
-      correctedContradictions: NOT('contradiction corrections are not attributed to a route'),
-      variablesResolved: NOT('plan variables resolved are not attributed to a route'),
+      economicRelationships: fromLinks((l) => l.economicRelationships),
+      correctedContradictions: fromLinks((l) => l.settledContradictions),
+      variablesResolved: fromLinks((l) => l.variablesResolved),
       candidatesImproved: y ? ok(y.usable) : NOT('no source-yield reading for the route in the window'),
-      minutesSourceChangeToPlan: NOT('no row stamps when a source change reached the blueprint and goal plan'),
-      computeCost: NOT('feed pulls record no CPU time'),
+      minutesSourceChangeToPlan: fromLinks((l) => l.minutesToGoalImpact),
+      // Model compute the route's records consumed, at the models' recorded prices.
+      computeCost: linked === undefined
+        ? noLinks
+        : (linked ?? NO_LINKS).screenDollars === null
+          ? NOT('a screen of this route ran on a model with no recorded price')
+          : ok(round((linked ?? NO_LINKS).screenDollars ?? 0)),
       apiCost: ok(0),
-      storageCost: NOT('stored bytes per route are not recorded'),
+      // Dollars per month to keep what the route delivered, at the operator's stated unit price.
+      storageCost: linked === undefined
+        ? noLinks
+        : price === null
+          ? NOT('BRAIN_STORAGE_COST_PER_GB_MONTH is not set, so stored bytes have no unit price')
+          : ok(round(((linked ?? NO_LINKS).storedBytes / 1024 ** 3) * price, 6)),
     };
     return { domain: g.domain, route: g.route, since: input.since, until: input.until, pulls: g.pulls, failedPulls: g.failed, measures };
   });
@@ -547,7 +591,7 @@ export async function readStageLimit(options: { hours?: number; now?: number } =
 
   return buildStageLimitReport({
     since, until, hours,
-    routes: routeWindowReadings({ since, until, rows: acqRows, seenBefore, yields }),
+    routes: routeWindowReadings({ since, until, rows: acqRows, seenBefore, yields, links: await readWindowOutcomeLinks(since, until), storagePricePerGbMonth: storagePricePerGbMonth() }),
     recorded, retriesByStage, utilization, cpu,
   });
 }

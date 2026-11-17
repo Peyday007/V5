@@ -19,6 +19,7 @@ import {
   decideComponent,
   detectorReadings,
   extractionGapsFromYields,
+  minutesToVerification,
   parserReadings,
   planGap,
   poolReadings,
@@ -30,7 +31,7 @@ import {
   type ContributionReport,
 } from '../server/services/freeLane/contribution.ts';
 
-const ok = (value: number) => ({ measured: true as const, value });
+const ok = <T = number>(value: T) => ({ measured: true as const, value });
 const NOT = (reason: string) => ({ measured: false as const, reason });
 
 function measures(over: Partial<ContributionMeasures> = {}): ContributionMeasures {
@@ -225,5 +226,58 @@ describe('recordContribution', () => {
       const row = await db.get<{ outcome: string }>(`SELECT outcome FROM bin_events WHERE event_type = ? ORDER BY at DESC LIMIT 1`, [CAPACITY_CONTRIBUTION_EVENT]);
       expect(row?.outcome).toBe('REPAIR_FIRST');
     });
+
+    it('measures time to a verified candidate and cash outcomes from the opportunity and money rows', async () => {
+      const db = getDb();
+      const now = Date.now();
+      const iso = (msAgo: number) => new Date(now - msAgo).toISOString();
+      const empty = await readContribution({ now });
+      // Nothing verified and no money yet: measured, and said as null / zero, never NOT_MEASURED.
+      expect(empty.system.minutesToVerifiedCandidate).toEqual(ok(null));
+      expect(empty.system.cashOutcomes).toEqual(ok(0));
+
+      const project = (await db.get<{ id: string }>(`SELECT id FROM projects LIMIT 1`))!.id;
+      const cashMode = newId('cm');
+      await db.run(
+        `INSERT INTO cash_modes (id, project_id, owner_user_id, objective, horizon_days, envelope_id, state, activated_at, created_by_user_id, created_at, updated_at)
+         VALUES (?, ?, 'u', 'cash', 30, 'env', 'ACTIVE', ?, 'u', ?, ?)`,
+        [cashMode, project, iso(10 * 3_600_000), iso(10 * 3_600_000), iso(10 * 3_600_000)],
+      );
+      const opp = async (signalMsAgo: number, settledMsAgo: number, state: string) => {
+        const id = newId('opp');
+        await db.run(
+          `INSERT INTO cash_opportunities (id, project_id, cash_mode_id, owner_user_id, title, mechanism, currency, required_capabilities, state,
+             signal_observed_at, validation_state, validation_settled_at, created_at, updated_at)
+           VALUES (?, ?, ?, 'u', 'An opening', 'SERVICE', 'USD', '[]', 'DISCOVERED', ?, ?, ?, ?, ?)`,
+          [id, project, cashMode, iso(signalMsAgo), state, iso(settledMsAgo), iso(signalMsAgo), iso(signalMsAgo)],
+        );
+        return id;
+      };
+      const verified = await opp(3 * 3_600_000, 3_600_000, 'COMPLETE'); // 120 minutes
+      await opp(5 * 3_600_000, 3_600_000, 'COMPLETE'); // 240 minutes
+      await opp(2 * 3_600_000, 3_600_000, 'BLOCKED'); // not verified
+      const money = (kind: string, cents: number) => db.run(
+        `INSERT INTO cash_money_entries (id, project_id, opportunity_id, kind, amount_cents, currency, verified_reference, occurred_at, recorded_by, created_at)
+         VALUES (?, ?, ?, ?, ?, 'USD', 'stripe:test', ?, 'u', ?)`,
+        [newId('cme'), project, verified, kind, cents, iso(60_000), iso(60_000)],
+      );
+      await money('CUSTOMER_PAYMENT', 25_000);
+      await money('REFUND', 5_000);
+      await money('COST', 1_000);
+
+      const report = await readContribution({ now });
+      expect(report.system.minutesToVerifiedCandidate).toEqual(ok(180));
+      expect(report.system.cashOutcomes).toEqual(ok(20_000));
+    });
+  });
+});
+
+describe('minutesToVerification', () => {
+  it('is the median from first signal (else opening) to verification, null with none', () => {
+    expect(minutesToVerification([])).toBeNull();
+    expect(minutesToVerification([
+      { signal_observed_at: null, created_at: '2026-11-17T00:00:00.000Z', validation_settled_at: '2026-11-17T00:30:00.000Z' },
+      { signal_observed_at: '2026-11-17T00:00:00.000Z', created_at: '2026-11-17T01:00:00.000Z', validation_settled_at: '2026-11-17T01:30:00.000Z' },
+    ])).toBe(60);
   });
 });

@@ -459,9 +459,39 @@ export function parserReadings(
 
 /** System-wide commercial outcomes: not attributable per component, so reported once, measured or not. */
 export interface SystemOutcomes {
-  minutesToVerifiedCandidate: Measured<number>;
+  /**
+   * Median minutes from a candidate's first signal (`signal_observed_at`, else
+   * when it was opened) to its validation settling COMPLETE, over candidates
+   * verified in the window; null when none was verified in it.
+   */
+  minutesToVerifiedCandidate: Measured<number | null>;
   offerReadyPathways: Measured<number>;
+  /**
+   * Customer payments less refunds that occurred in the window, in cents, from
+   * the append-only money ledger — which only carries money on deals a person
+   * authorized, so nothing unauthorized is counted.
+   */
   cashOutcomes: Measured<number>;
+}
+
+/** The median of a list, or null for an empty one. Pure. */
+function medianOf(values: readonly number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 1 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
+}
+
+/** Minutes from each verified candidate's first signal to its verification. Pure. */
+export function minutesToVerification(rows: readonly { signal_observed_at: string | null; created_at: string; validation_settled_at: string | null }[]): number | null {
+  const minutes: number[] = [];
+  for (const row of rows) {
+    const from = Date.parse(row.signal_observed_at ?? row.created_at);
+    const to = Date.parse(row.validation_settled_at ?? '');
+    if (Number.isFinite(from) && Number.isFinite(to)) minutes.push(Math.max(0, (to - from) / 60_000));
+  }
+  const mid = medianOf(minutes);
+  return mid === null ? null : round(mid);
 }
 
 export interface ContributionReport {
@@ -510,11 +540,24 @@ async function readSystemOutcomes(since: string): Promise<SystemOutcomes> {
     async () => ok(n((await db.get<{ k: number | string }>(`SELECT COUNT(*) AS k FROM cash_opportunities WHERE created_at >= ?`, [since]))?.k)),
     NOT('cash_opportunities could not be read') as Measured<number>,
   );
-  return {
-    minutesToVerifiedCandidate: NOT('no row stamps when a candidate was verified against when its first source arrived'),
-    offerReadyPathways: opened,
-    cashOutcomes: NOT('cash outcomes are read only where the owner authorized the deal; no per-window outcome row is attributed here'),
-  };
+  const minutesToVerifiedCandidate = await safely(
+    async () => ok(minutesToVerification(await db.all<{ signal_observed_at: string | null; created_at: string; validation_settled_at: string | null }>(
+      `SELECT signal_observed_at, created_at, validation_settled_at FROM cash_opportunities
+        WHERE validation_state = 'COMPLETE' AND validation_settled_at >= ?`, [since],
+    ))),
+    NOT('cash_opportunities could not be read') as Measured<number | null>,
+  );
+  const cashOutcomes = await safely(
+    async () => {
+      const rows = await db.all<{ kind: string; total: number | string | null }>(
+        `SELECT kind, SUM(amount_cents) AS total FROM cash_money_entries
+          WHERE kind IN ('CUSTOMER_PAYMENT', 'REFUND') AND occurred_at >= ? GROUP BY kind`, [since],
+      );
+      return ok(rows.reduce((sum, r) => sum + (r.kind === 'REFUND' ? -n(r.total) : n(r.total)), 0));
+    },
+    NOT('cash_money_entries could not be read') as Measured<number>,
+  );
+  return { minutesToVerifiedCandidate, offerReadyPathways: opened, cashOutcomes };
 }
 
 /** Read every component's contribution over the window, from rows. Read-only. */

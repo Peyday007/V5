@@ -9,6 +9,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
+import { createOrchestration } from '../server/repos/research.ts';
+import { createRun } from '../server/repos/runs.ts';
+import { newId } from '../server/repos/util.ts';
 import type { RecordBinEventInput } from '../server/repos/bins.ts';
 import type { Measured, RecordedStageCapacity, StageCapacityReport, StageReading } from '../server/services/freeLane/stageCapacity.ts';
 import { CONNECTOR_HEALTH_EVENT } from '../server/services/feeds/health.ts';
@@ -24,8 +27,11 @@ import {
   failureRecovery,
   laneReadings,
   placementAdvice,
+  median,
   readAcquisitionMeasures,
+  readSourceOutcomeLinks,
   recordAcquisitionMeasures,
+  recordBytes,
   resourceSignals,
   sourceRepair,
   type ResourceSignal,
@@ -167,13 +173,94 @@ describe('per-source acquisition measures (CAP-21-7)', () => {
     expect(one.providerSaturation).toEqual(m({ throttled: 1, latestHealth: null }));
     expect(one.parserCoverage.measured).toBe(true);
     expect(one.structuredFacts.measured).toBe(true);
-    // What the rows cannot see is not guessed.
-    expect(one.rawBytes).toEqual(nm(UNMEASURED_REASONS.rawBytes));
-    expect(one.acceptedEvidence).toEqual(nm(UNMEASURED_REASONS.acceptedEvidence));
-    expect(one.verifiedBuyerPriceFulfillmentLinks.measured).toBe(false);
-    expect(one.timeToGoalImpactMinutes.measured).toBe(false);
-    expect(one.dollarsPerUsefulFinding.measured).toBe(false);
-    expect(one.revenue.measured).toBe(false);
+    // The downstream measures are read from the linkage rows, never NOT_MEASURED by construction.
+    expect(one.rawBytes.measured && one.rawBytes.value).toBeGreaterThan(0);
+    expect(one.acceptedEvidence).toEqual(m(0));
+    expect(one.verifiedBuyerPriceFulfillmentLinks).toEqual(m({ buyer: 0, price: 0, fulfillment: 0, complete: 0 }));
+    expect(one.timeToGoalImpactMinutes).toEqual(m(null));
+    expect(one.revenue).toEqual(m(0));
+    // The screens ran on 'free-a', which no row prices: the cost is unknown, and said so — never $0.
+    expect(one.dollarsPerUsefulFinding).toEqual(nm(UNMEASURED_REASONS.dollarsPerUsefulFinding));
+    await getDb().run(`INSERT INTO free_lane_capacity (model, target, stable_high, updated_at, reason) VALUES ('free-a', 2, 1, ?, 'test')`, [at(1)]);
+    const priced = (await readAcquisitionMeasures(SINCE, NOW.toISOString(), [])).find((s) => s.source === src)!;
+    expect(priced.dollarsPerUsefulFinding).toEqual(m(0));
+  });
+
+  it('measures bytes, accepted evidence, verified links, time to goal impact, cost and revenue through the linkage rows', async () => {
+    const fixture = await freshProject();
+    const projectId = fixture.project.id;
+    const layerId = fixture.layers[0]!.id;
+    const run = await createRun({ projectId, layerId, runType: 'FOUNDATION', provider: 'WORKER' });
+    const orch = await createOrchestration({ projectId, layerId, runId: run.id, title: 'linkage', assignment: 'linkage', provider: 'WORKER' });
+    const src = `linked-${tag}`;
+    await pull(src, true, 2, 2, 6);
+    const a = await item(src, 1, 6, { shortlisted: true });
+    const b = await item(src, 2, 6);
+    await screen(a, true);
+    await getDb().run(`INSERT INTO free_lane_capacity (model, target, stable_high, updated_at, reason) VALUES ('free-a', 2, 1, ?, 'test')`, [at(1)]);
+    const claimRow = async (id: string, url: string, validation: string, contradiction: string) => getDb().run(
+      `INSERT INTO research_claims (id, orchestration_id, pass_key, claim, source_url, evidence_excerpt, confidence,
+         contradiction_state, validation_state, content_hash, created_at)
+       VALUES (?, ?, 'RESEARCH', 'A buyer pays $500 a month', ?, 'Budget $500 per month', 0.9, ?, ?, ?, ?)`,
+      [id, orch.id, url, contradiction, validation, `hash-${id}`, at(5)],
+    );
+    await claimRow(`cl_${tag}_1`, `https://feed.test/${src}/1`, 'SOURCED', 'SUPPORTED');
+    await claimRow(`cl_${tag}_2`, `https://feed.test/${src}/2`, 'SOURCED', 'REFUTED');
+    await claimRow(`cl_${tag}_3`, `https://elsewhere.test/x`, 'SOURCED', 'UNCHALLENGED');
+    const cashMode = newId('cm');
+    await getDb().run(
+      `INSERT INTO cash_modes (id, project_id, owner_user_id, objective, horizon_days, envelope_id, state, activated_at, created_by_user_id, created_at, updated_at)
+       VALUES (?, ?, 'u', 'cash', 30, 'env', 'ACTIVE', ?, 'u', ?, ?)`,
+      [cashMode, projectId, at(10), at(10), at(10)],
+    );
+    const opp = newId('opp');
+    await getDb().run(
+      `INSERT INTO cash_opportunities (id, project_id, cash_mode_id, owner_user_id, title, mechanism, currency, required_capabilities, state,
+         payer, price_cents, fulfillment_owner, discovery_round_id, validation_state, created_at, updated_at)
+       VALUES (?, ?, ?, 'u', 'Bookkeeping for Acme', 'SERVICE', 'USD', '[]', 'DISCOVERED', 'Acme Dental LLC', 50000, 'BRAIN', ?, 'COMPLETE', ?, ?)`,
+      [opp, projectId, cashMode, `rnd_${tag}`, at(5), at(5)],
+    );
+    const path = `mp_${tag}`;
+    await getDb().run(
+      `INSERT INTO monetization_paths (id, project_id, opportunity_id, method, title, origin, created_at, updated_at) VALUES (?, ?, ?, 'SERVICE', 'Bookkeeping', 'ENUMERATED', ?, ?)`,
+      [path, projectId, opp, at(5), at(5)],
+    );
+    await getDb().run(
+      `INSERT INTO monetization_path_facts (id, project_id, path_id, attribute, kind, value, claim_id, decided_by, created_at, updated_at)
+       VALUES (?, ?, ?, 'expectedRevenue', 'EVIDENCE', '$500 a month', ?, 'BRAIN', ?, ?)`,
+      [`mpf_${tag}`, projectId, path, `cl_${tag}_1`, at(4), at(4)],
+    );
+    const money = async (kind: string, cents: number) => getDb().run(
+      `INSERT INTO cash_money_entries (id, project_id, opportunity_id, kind, amount_cents, currency, verified_reference, occurred_at, recorded_by, created_at)
+       VALUES (?, ?, ?, ?, ?, 'USD', 'stripe:test', ?, 'u', ?)`,
+      [newId('cme'), projectId, opp, kind, cents, at(2), at(2)],
+    );
+    await money('CUSTOMER_PAYMENT', 50000);
+    await money('REFUND', 10000);
+
+    const one = (await readAcquisitionMeasures(SINCE, NOW.toISOString(), [])).find((s) => s.source === src)!;
+    expect(one.rawBytes).toEqual(m(recordBytes({ url: `https://feed.test/${src}/1`, title: `Hiring a contract bookkeeper for monthly reconciliation 1`, body: 'We need a freelance bookkeeper to reconcile accounts monthly. Budget $500 per month.', organization: 'Acme Dental LLC' })
+      + recordBytes({ url: `https://feed.test/${src}/2`, title: `Hiring a contract bookkeeper for monthly reconciliation 2`, body: 'We need a freelance bookkeeper to reconcile accounts monthly. Budget $500 per month.', organization: 'Acme Dental LLC' })));
+    // The refuted claim is not accepted; the claim citing another site is not this source's.
+    expect(one.acceptedEvidence).toEqual(m(1));
+    expect(one.verifiedBuyerPriceFulfillmentLinks).toEqual(m({ buyer: 1, price: 1, fulfillment: 1, complete: 1 }));
+    // Item 1 arrived 6 h ago; its opportunity opened 5 h ago, before the plan fact (4 h ago): 60 minutes.
+    expect(one.timeToGoalImpactMinutes).toEqual(m(60));
+    expect(one.dollarsPerUsefulFinding).toEqual(m(0));
+    expect(one.revenue).toEqual(m(400));
+    void b;
+
+    const links = (await readSourceOutcomeLinks([{ id: a, source: src, url: `https://feed.test/${src}/1`, title: 't', body: null, organization: null, fetched_at: at(6), shortlisted_round_id: `rnd_${tag}` }])).get(src)!;
+    expect(links.variablesResolved).toBe(1);
+    expect(links.economicRelationships).toBe(1);
+    expect(links.settledContradictions).toBe(1);
+    expect(links.screenCalls).toBe(1);
+  });
+
+  it('the median of an empty list is null, never zero', () => {
+    expect(median([])).toBeNull();
+    expect(median([3, 1, 2])).toBe(2);
+    expect(median([1, 2, 3, 4])).toBe(2.5);
   });
 
   it('takes its sources from the rows as well as the catalog: nothing is a whitelist', async () => {

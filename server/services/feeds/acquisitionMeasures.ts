@@ -4,11 +4,12 @@
  * Per source and window it measures what acquisition actually produced — records
  * visited, new unique useful documents, refreshed records, parser coverage,
  * structured facts, code-derived matches, AI jobs avoided and escalated, AI
- * calls per useful finding, failure and recovery, provider saturation — and,
- * for every measure Brain's rows cannot see (raw bytes, accepted evidence,
- * verified buyer/price/fulfillment links, time-to-goal impact, dollars per
- * finding, revenue), says `NOT_MEASURED` with the reason instead of a guess
- * (inv. 33, inv. 39).
+ * calls per useful finding, failure and recovery, provider saturation, raw
+ * bytes, accepted evidence, verified buyer/price/fulfillment links,
+ * time-to-goal impact, dollars per useful finding and revenue — the last six
+ * through the rows that link a stored item to what it became
+ * (`readSourceOutcomeLinks`). A measure that cannot be read on one reading
+ * says `NOT_MEASURED` with the reason instead of a guess (inv. 33, inv. 39).
  *
  * From those readings and the free lane's recorded stage capacity
  * (`stageCapacity.ts`) it names which resource class is constrained —
@@ -23,7 +24,9 @@
  * owner-set quota.
  *
  * Nothing here schedules, queues or stores anything new: it reads `feed_pulls`,
- * `feed_items`, `feed_item_coverage`, `cheap_results` and `bin_events`, and
+ * `feed_items`, `feed_item_coverage`, `cheap_results`, `research_claims`,
+ * `monetization_path_facts`, `cash_opportunities`, `cash_money_entries`,
+ * `free_lane_capacity`, `llm_models` and `bin_events`, and
  * writes one `ACQUISITION_MEASURES` bin event per window. Sources are whatever
  * the rows and `FEED_SOURCES` name; no source, category or industry is a list
  * of what is allowed.
@@ -54,15 +57,230 @@ const round4 = (n: number): number => Math.round(n * 10_000) / 10_000;
 // Per-source measures
 // ---------------------------------------------------------------------------
 
-/** Why a measure the rows cannot see is not measured; each names the missing row, never a guess. */
+/**
+ * Why a measure could not be read on this reading. Each names the row that
+ * would have had to answer, never a guess. These are conditions of one
+ * reading (a linkage read that failed, a screen on a model with no recorded
+ * price) — not measures that are unmeasured by construction.
+ */
 export const UNMEASURED_REASONS = {
-  rawBytes: 'feed_pulls records item counts, not response bytes; no acquisition row carries the bytes a pull transferred',
-  acceptedEvidence: 'feed items are leads, not evidence; no row ties an accepted research claim back to the feed source it came from',
-  verifiedLinks: 'no row links a verified buyer, price or fulfillment fact to the feed source whose item led to it',
-  timeToGoalImpact: 'no row joins a feed item to the goal-plan change it caused, so the time from publication to plan impact is not recorded',
-  dollarsPerUsefulFinding: 'no row attributes dollar cost to a feed source; the screens run on the free lane, whose per-call cost is not recorded per source',
-  revenue: 'no revenue row is attributed to a feed source',
+  linkage: 'the rows that link a feed item to claims, plan facts, opportunities and money could not be read on this reading',
+  dollarsPerUsefulFinding: 'a screen of this source ran on a model with no free_lane_capacity row and no zero-priced llm_models row, and cheap_results records no token counts to price it',
 } as const;
+
+// ---------------------------------------------------------------------------
+// Downstream linkage: what a source's stored items went on to become
+// ---------------------------------------------------------------------------
+
+/**
+ * What one source's stored items became downstream, read from the rows that
+ * carry the link — never inferred:
+ *
+ * - a research claim cites the item by `research_claims.source_url = feed_items.url`;
+ * - a plan fact cites the claim by `monetization_path_facts.claim_id`;
+ * - an opportunity came from the item's shortlist round by
+ *   `cash_opportunities.discovery_round_id = feed_items.shortlisted_round_id`;
+ * - money arrived on that opportunity by `cash_money_entries.opportunity_id`;
+ * - a screen call's price is its model's: $0 for a model the free lane runs
+ *   (`free_lane_capacity`) or one `llm_models` prices at zero, unknown otherwise.
+ */
+export interface SourceOutcomeLinks {
+  /** UTF-8 bytes of the records this source delivered that storage kept (url, title, body, organization). */
+  storedBytes: number;
+  /** Claims citing a stored item that structural validation sourced and no contradiction check refuted. */
+  acceptedEvidence: number;
+  /** Claims citing a stored item whose contradiction was settled (SUPPORTED or REFUTED). */
+  settledContradictions: number;
+  /** Distinct (pathway, attribute) plan variables an EVIDENCE fact resolved from those claims. */
+  variablesResolved: number;
+  /** Distinct monetization pathways those facts sit on: the economic relationships the source evidenced. */
+  economicRelationships: number;
+  /** Opportunities from the source's shortlist rounds whose validation is COMPLETE, by which link they carry. */
+  verifiedLinks: { buyer: number; price: number; fulfillment: number; complete: number };
+  /** Median minutes from an item's arrival to the first plan fact or opportunity it caused; null when none did. */
+  minutesToGoalImpact: number | null;
+  /** Customer payments less refunds on those opportunities, in cents. */
+  revenueCents: number;
+  /** Screen calls the source's items cost (a batch's per-record rows are not calls). */
+  screenCalls: number;
+  /** Dollars those calls cost; null when one ran on a model with no recorded price. */
+  screenDollars: number | null;
+}
+
+/** A stored item, as the linkage reads it. */
+export interface LinkedItem {
+  id: string;
+  source: string;
+  url: string;
+  title: string;
+  body: string | null;
+  organization: string | null;
+  fetched_at: string;
+  shortlisted_round_id: string | null;
+}
+
+/** UTF-8 bytes of a stored record's content. Pure. */
+export function recordBytes(item: Pick<LinkedItem, 'url' | 'title' | 'body' | 'organization'>): number {
+  return Buffer.byteLength(item.url, 'utf8') + Buffer.byteLength(item.title, 'utf8')
+    + Buffer.byteLength(item.body ?? '', 'utf8') + Buffer.byteLength(item.organization ?? '', 'utf8');
+}
+
+/** The median of a list, or null for an empty one. Pure. */
+export function median(values: readonly number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 1 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
+}
+
+const emptyLinks = (): SourceOutcomeLinks => ({
+  storedBytes: 0, acceptedEvidence: 0, settledContradictions: 0, variablesResolved: 0, economicRelationships: 0,
+  verifiedLinks: { buyer: 0, price: 0, fulfillment: 0, complete: 0 },
+  minutesToGoalImpact: null, revenueCents: 0, screenCalls: 0, screenDollars: 0,
+});
+
+async function inChunks<R>(keys: readonly string[], read: (chunk: string[], marks: string) => Promise<R[]>): Promise<R[]> {
+  const out: R[] = [];
+  const unique = [...new Set(keys)];
+  for (let at = 0; at < unique.length; at += PAGE) {
+    const chunk = unique.slice(at, at + PAGE);
+    out.push(...(await read(chunk, chunk.map(() => '?').join(','))));
+  }
+  return out;
+}
+
+const filled = (value: string | null | undefined): boolean => typeof value === 'string' && value.trim().length > 0;
+
+/**
+ * Per-source downstream linkage for a set of stored items, from rows. Every
+ * source with an item gets an entry; a source whose items led nowhere reads
+ * zero, which is a measurement, not an absence of one.
+ */
+export async function readSourceOutcomeLinks(items: readonly LinkedItem[]): Promise<Map<string, SourceOutcomeLinks>> {
+  const db = getDb();
+  const out = new Map<string, SourceOutcomeLinks>();
+  const linksOf = (source: string): SourceOutcomeLinks => {
+    let one = out.get(source);
+    if (!one) { one = emptyLinks(); out.set(source, one); }
+    return one;
+  };
+  const itemsByUrl = new Map<string, LinkedItem[]>();
+  const itemsByRound = new Map<string, LinkedItem[]>();
+  for (const item of items) {
+    linksOf(item.source).storedBytes += recordBytes(item);
+    itemsByUrl.set(item.url, [...(itemsByUrl.get(item.url) ?? []), item]);
+    if (item.shortlisted_round_id) itemsByRound.set(item.shortlisted_round_id, [...(itemsByRound.get(item.shortlisted_round_id) ?? []), item]);
+  }
+
+  // Claims citing the items.
+  const claims = await inChunks([...itemsByUrl.keys()], (chunk, marks) => db.all<{ id: string; source_url: string; validation_state: string; contradiction_state: string }>(
+    `SELECT id, source_url, validation_state, contradiction_state FROM research_claims WHERE source_url IN (${marks})`, chunk,
+  ));
+  const itemsOfClaim = new Map<string, LinkedItem[]>();
+  for (const claim of claims) {
+    const cited = itemsByUrl.get(claim.source_url) ?? [];
+    const accepted = claim.validation_state === 'SOURCED' && claim.contradiction_state !== 'REFUTED';
+    const settled = claim.contradiction_state === 'SUPPORTED' || claim.contradiction_state === 'REFUTED';
+    for (const source of new Set(cited.map((i) => i.source))) {
+      if (accepted) linksOf(source).acceptedEvidence += 1;
+      if (settled) linksOf(source).settledContradictions += 1;
+    }
+    if (accepted) itemsOfClaim.set(claim.id, cited);
+  }
+
+  // The earliest downstream effect per item: a plan fact or an opportunity.
+  const firstEffect = new Map<string, number>();
+  const touch = (item: LinkedItem, at: string) => {
+    const t = Date.parse(at);
+    if (!Number.isFinite(t)) return;
+    const prior = firstEffect.get(item.id);
+    if (prior === undefined || t < prior) firstEffect.set(item.id, t);
+  };
+
+  // Plan facts resolved from those claims.
+  const facts = await inChunks([...itemsOfClaim.keys()], (chunk, marks) => db.all<{ claim_id: string; path_id: string; attribute: string; created_at: string }>(
+    `SELECT claim_id, path_id, attribute, created_at FROM monetization_path_facts WHERE kind = 'EVIDENCE' AND claim_id IN (${marks})`, chunk,
+  ));
+  const variables = new Map<string, Set<string>>();
+  const pathways = new Map<string, Set<string>>();
+  for (const fact of facts) {
+    for (const item of itemsOfClaim.get(fact.claim_id) ?? []) {
+      variables.set(item.source, (variables.get(item.source) ?? new Set()).add(`${fact.path_id}\u0000${fact.attribute}`));
+      pathways.set(item.source, (pathways.get(item.source) ?? new Set()).add(fact.path_id));
+      touch(item, fact.created_at);
+    }
+  }
+  for (const [source, set] of variables) linksOf(source).variablesResolved = set.size;
+  for (const [source, set] of pathways) linksOf(source).economicRelationships = set.size;
+
+  // Opportunities opened from the items' shortlist rounds, and money on them.
+  const opportunities = await inChunks([...itemsByRound.keys()], (chunk, marks) => db.all<{ id: string; discovery_round_id: string; validation_state: string | null; payer: string | null; price_cents: number | string | null; fulfillment_owner: string | null; created_at: string }>(
+    `SELECT id, discovery_round_id, validation_state, payer, price_cents, fulfillment_owner, created_at FROM cash_opportunities WHERE discovery_round_id IN (${marks})`, chunk,
+  ));
+  const sourcesOfOpportunity = new Map<string, Set<string>>();
+  for (const opp of opportunities) {
+    const fed = itemsByRound.get(opp.discovery_round_id) ?? [];
+    for (const item of fed) touch(item, opp.created_at);
+    const sources = new Set(fed.map((i) => i.source));
+    sourcesOfOpportunity.set(opp.id, sources);
+    if (opp.validation_state !== 'COMPLETE') continue;
+    const buyer = filled(opp.payer);
+    const price = opp.price_cents !== null && opp.price_cents !== undefined;
+    const fulfillment = filled(opp.fulfillment_owner);
+    for (const source of sources) {
+      const v = linksOf(source).verifiedLinks;
+      if (buyer) v.buyer += 1;
+      if (price) v.price += 1;
+      if (fulfillment) v.fulfillment += 1;
+      if (buyer && price && fulfillment) v.complete += 1;
+    }
+  }
+  const money = await inChunks([...sourcesOfOpportunity.keys()], (chunk, marks) => db.all<{ opportunity_id: string; kind: string; amount_cents: number | string }>(
+    `SELECT opportunity_id, kind, amount_cents FROM cash_money_entries WHERE kind IN ('CUSTOMER_PAYMENT', 'REFUND') AND opportunity_id IN (${marks})`, chunk,
+  ));
+  for (const entry of money) {
+    const signed = entry.kind === 'REFUND' ? -Number(entry.amount_cents) : Number(entry.amount_cents);
+    for (const source of sourcesOfOpportunity.get(entry.opportunity_id) ?? []) linksOf(source).revenueCents += signed;
+  }
+
+  const delays = new Map<string, number[]>();
+  for (const item of items) {
+    const effect = firstEffect.get(item.id);
+    const arrived = Date.parse(item.fetched_at);
+    if (effect === undefined || !Number.isFinite(arrived)) continue;
+    delays.set(item.source, [...(delays.get(item.source) ?? []), Math.max(0, (effect - arrived) / 60_000)]);
+  }
+  for (const [source, list] of delays) {
+    const mid = median(list);
+    linksOf(source).minutesToGoalImpact = mid === null ? null : round4(mid);
+  }
+
+  // What the screens of these items cost, at their models' recorded prices.
+  const freeModels = new Set((await db.all<{ model: string }>(`SELECT model FROM free_lane_capacity`)).map((r) => r.model));
+  for (const r of await db.all<{ model_id: string }>(`SELECT model_id FROM llm_models WHERE input_micros_per_mtok = 0 AND output_micros_per_mtok = 0`)) freeModels.add(r.model_id);
+  const sourceOfItem = new Map(items.map((i) => [i.id, i.source]));
+  const screens = await inChunks([...sourceOfItem.keys()], (chunk, marks) => db.all<{ id: string; subject_id: string; model: string }>(
+    `SELECT id, subject_id, model FROM cheap_results WHERE kind = 'SCREEN_LEAD' AND subject_id IN (${marks})`, chunk,
+  ));
+  for (const call of screens) {
+    if (call.id.startsWith(BATCH_ROW_PREFIX)) continue;
+    const source = sourceOfItem.get(call.subject_id);
+    if (!source) continue;
+    const links = linksOf(source);
+    links.screenCalls += 1;
+    if (!freeModels.has(call.model)) links.screenDollars = null;
+  }
+  return out;
+}
+
+/** The window's stored items, with linkage read for every source. Null when a linkage row could not be read. */
+export async function readWindowOutcomeLinks(since: string, until: string): Promise<Map<string, SourceOutcomeLinks> | null> {
+  try {
+    return await readSourceOutcomeLinks(await pagedItems(since, until));
+  } catch {
+    return null;
+  }
+}
 
 export interface SourceAcquisitionMeasures {
   source: string;
@@ -74,29 +292,35 @@ export interface SourceAcquisitionMeasures {
   newUniqueUsefulDocuments: Measured<number>;
   /** Records read again that storage already held (visited − stored). */
   refreshedRecords: Measured<number>;
+  /** UTF-8 bytes of the records the source delivered that storage kept. */
   rawBytes: Measured<number>;
   /** Share of stored items from which the deterministic extractor read at least one fact. */
   parserCoverage: Measured<number | null>;
   /** Facts the deterministic extractor read from the window's stored items. */
   structuredFacts: Measured<number>;
+  /** Sourced, unrefuted research claims citing a stored item of the source. */
   acceptedEvidence: Measured<number>;
   /** Stored items a code detector accounted for (`feed_item_coverage`). */
   codeDerivedMatches: Measured<number>;
-  verifiedBuyerPriceFulfillmentLinks: Measured<number>;
+  /** Opportunities from the source's shortlist rounds whose validation is COMPLETE, by the buyer, price and fulfillment link each carries. */
+  verifiedBuyerPriceFulfillmentLinks: Measured<{ buyer: number; price: number; fulfillment: number; complete: number }>;
   /** Stored items a shortlist round took: the commercially usable leads a transaction path starts from. */
   usableTransactionPaths: Measured<number>;
-  timeToGoalImpactMinutes: Measured<number>;
+  /** Median minutes from an item's arrival to the first plan fact or opportunity it caused; null when none did yet. */
+  timeToGoalImpactMinutes: Measured<number | null>;
   /** Records that never reached a model: repeats storage dropped plus items a code rule covered. */
   aiJobsAvoided: Measured<number>;
   /** Stored items a free-model screen was asked about. */
   aiEscalations: Measured<number>;
   /** Model screen calls per useful document; null when nothing useful came out (unknown, never cheap). */
   aiCallsPerUsefulFinding: Measured<number | null>;
-  dollarsPerUsefulFinding: Measured<number>;
+  /** Screen dollars per useful document at the models' recorded prices; null when nothing useful came out. */
+  dollarsPerUsefulFinding: Measured<number | null>;
   /** Failed pulls, and failed pulls the next pull of the source recovered from. */
   failureRecovery: Measured<{ failures: number; recoveries: number; pulls: number }>;
   /** Pulls the provider answered with 429 / 503, and the latest recorded connector state. */
   providerSaturation: Measured<{ throttled: number; latestHealth: ConnectorState | null }>;
+  /** Customer payments less refunds, in dollars, on opportunities the source's shortlisted items led to. */
   revenue: Measured<number>;
   /** What to do about this source's own provider, from its health — a repair, never compute. */
   repair: SourceRepair | null;
@@ -290,6 +514,12 @@ export async function readAcquisitionMeasures(
   for (const p of pulls) sources.add(p.source);
   for (const i of items) sources.add(i.source);
   const byId = new Map(catalog.map((s) => [s.id, s]));
+  let links: Map<string, SourceOutcomeLinks> | null;
+  try {
+    links = await readSourceOutcomeLinks(items);
+  } catch {
+    links = null;
+  }
 
   const out: SourceAcquisitionMeasures[] = [];
   for (const source of [...sources].sort()) {
@@ -320,27 +550,32 @@ export async function readAcquisitionMeasures(
     const calls = stored.reduce((n, i) => n + (screenCallsBySubject.get(i.id) ?? 0), 0);
     const repeats = Math.max(0, visited - insertedByPulls);
     const state = health.get(source) ?? null;
+    const links_here = links ? links.get(source) ?? emptyLinks() : null;
     out.push({
       source,
       recordsVisited: measured(visited),
       newUniqueDocuments: measured(stored.length),
       newUniqueUsefulDocuments: measured(useful.length),
       refreshedRecords: measured(repeats),
-      rawBytes: notMeasured(UNMEASURED_REASONS.rawBytes),
+      rawBytes: links_here ? measured(links_here.storedBytes) : notMeasured(UNMEASURED_REASONS.linkage),
       parserCoverage: measured(stored.length > 0 ? round4(parsed / stored.length) : null),
       structuredFacts: measured(facts),
-      acceptedEvidence: notMeasured(UNMEASURED_REASONS.acceptedEvidence),
+      acceptedEvidence: links_here ? measured(links_here.acceptedEvidence) : notMeasured(UNMEASURED_REASONS.linkage),
       codeDerivedMatches: measured(codeMatches),
-      verifiedBuyerPriceFulfillmentLinks: notMeasured(UNMEASURED_REASONS.verifiedLinks),
+      verifiedBuyerPriceFulfillmentLinks: links_here ? measured({ ...links_here.verifiedLinks }) : notMeasured(UNMEASURED_REASONS.linkage),
       usableTransactionPaths: measured(stored.filter((i) => i.shortlisted_round_id).length),
-      timeToGoalImpactMinutes: notMeasured(UNMEASURED_REASONS.timeToGoalImpact),
+      timeToGoalImpactMinutes: links_here ? measured(links_here.minutesToGoalImpact) : notMeasured(UNMEASURED_REASONS.linkage),
       aiJobsAvoided: measured(repeats + stored.filter((i) => covered.has(i.id) && !screened.has(i.id)).length),
       aiEscalations: measured(escalated),
       aiCallsPerUsefulFinding: measured(useful.length > 0 ? round4(calls / useful.length) : null),
-      dollarsPerUsefulFinding: notMeasured(UNMEASURED_REASONS.dollarsPerUsefulFinding),
+      dollarsPerUsefulFinding: !links_here
+        ? notMeasured(UNMEASURED_REASONS.linkage)
+        : links_here.screenDollars === null
+          ? notMeasured(UNMEASURED_REASONS.dollarsPerUsefulFinding)
+          : measured(useful.length > 0 ? round4(links_here.screenDollars / useful.length) : null),
       failureRecovery: measured(failureRecovery(mine.map((p) => ({ ok: Number(p.ok) === 1 })))),
       providerSaturation: measured({ throttled: mine.filter((p) => Number(p.ok) !== 1 && isThrottled(p.error)).length, latestHealth: state }),
-      revenue: notMeasured(UNMEASURED_REASONS.revenue),
+      revenue: links_here ? measured(links_here.revenueCents / 100) : notMeasured(UNMEASURED_REASONS.linkage),
       repair: sourceRepair(state),
       placement: placementAdvice(byId.get(source) ?? null),
     });

@@ -23,13 +23,14 @@ import {
   readStageLimit,
   recordStageLimit,
   routeWindowReadings,
+  storagePricePerGbMonth,
   stagePressures,
   type LimitSignals,
   type StageLimitReport,
 } from '../server/services/freeLane/stageLimit.ts';
 import type { RecordedStageCapacity, StageCapacityReport, StageReading } from '../server/services/freeLane/stageCapacity.ts';
 
-const ok = (value: number) => ({ measured: true as const, value });
+const ok = <T = number>(value: T) => ({ measured: true as const, value });
 const NOT = (reason: string) => ({ measured: false as const, reason });
 
 const signals = (over: Partial<LimitSignals> = {}): LimitSignals => ({
@@ -60,6 +61,52 @@ describe('routeWindowReadings', () => {
     expect(a.measures.acceptedFacts).toEqual(ok(2));
     expect(a.failedPulls).toBe(1);
     for (const r of readings) for (const k of ROUTE_MEASURE_KEYS) expect(r.measures[k]).toHaveProperty('measured');
+  });
+
+  it('measures relationships, contradictions, variables, source-to-plan time, compute and storage cost from the linkage rows', () => {
+    const links = new Map([
+      ['src-a', {
+        storedBytes: 1024 ** 3, acceptedEvidence: 3, settledContradictions: 2, variablesResolved: 4, economicRelationships: 2,
+        verifiedLinks: { buyer: 1, price: 1, fulfillment: 0, complete: 0 },
+        minutesToGoalImpact: 42, revenueCents: 0, screenCalls: 5, screenDollars: 0,
+      }],
+    ]);
+    const readings = routeWindowReadings({
+      since: '2026-11-16T00:00:00.000Z', until: '2026-11-17T00:00:00.000Z',
+      rows: [
+        { source: 'src-a', outcome: 'OK', at: 'x', corpus: 'domain:any', fetched: 10, inserted: 4 },
+        { source: 'src-b', outcome: 'OK', at: 'z', corpus: 'corpus-x', fetched: 5, inserted: 5 },
+      ],
+      seenBefore: new Set(),
+      yields: [],
+      links,
+      storagePricePerGbMonth: 0.02,
+    });
+    const a = readings.find((r) => r.route === 'src-a')!.measures;
+    const b = readings.find((r) => r.route === 'src-b')!.measures;
+    expect(a.bytes).toEqual(ok(1024 ** 3));
+    expect(a.economicRelationships).toEqual(ok(2));
+    expect(a.correctedContradictions).toEqual(ok(2));
+    expect(a.variablesResolved).toEqual(ok(4));
+    expect(a.minutesSourceChangeToPlan).toEqual(ok(42));
+    expect(a.computeCost).toEqual(ok(0));
+    expect(a.storageCost).toEqual(ok(0.02));
+    // A route whose items led nowhere reads zero — a measurement — and no plan impact yet reads null.
+    expect(b.economicRelationships).toEqual(ok(0));
+    expect(b.minutesSourceChangeToPlan).toEqual(ok(null));
+    expect(b.bytes).toEqual(ok(0));
+    // Without an operator price, storage cost says why instead of inventing one.
+    const unpriced = routeWindowReadings({ since: 's', until: 'u', rows: [{ source: 'src-a', outcome: 'OK', at: 'x', corpus: null, fetched: 1, inserted: 1 }], seenBefore: new Set(), yields: [], links });
+    expect(unpriced[0]!.measures.storageCost.measured).toBe(false);
+    // A screen on a model with no recorded price leaves compute cost unknown, never $0.
+    const priced = routeWindowReadings({ since: 's', until: 'u', rows: [{ source: 'src-a', outcome: 'OK', at: 'x', corpus: null, fetched: 1, inserted: 1 }], seenBefore: new Set(), yields: [], links: new Map([['src-a', { ...links.get('src-a')!, screenDollars: null }]]) });
+    expect(priced[0]!.measures.computeCost.measured).toBe(false);
+  });
+
+  it('reads the storage price only from the operator setting', () => {
+    expect(storagePricePerGbMonth({})).toBeNull();
+    expect(storagePricePerGbMonth({ BRAIN_STORAGE_COST_PER_GB_MONTH: '0.023' })).toBe(0.023);
+    expect(storagePricePerGbMonth({ BRAIN_STORAGE_COST_PER_GB_MONTH: 'nope' })).toBeNull();
   });
 });
 
