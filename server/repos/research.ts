@@ -1193,6 +1193,37 @@ export async function unfiledUnitEconomicClaims(projectId: string, afterId: stri
   return rows.map(mapClaim);
 }
 
+/**
+ * Gated, sourced claims a goal's constructed-arrangement round produced
+ * (`goal-<goal>-mx-<key>`, in any state) that declare no structural finding
+ * and that no construction fact names yet, with the round's bucket, by claim
+ * id after `afterId`, at most `limit` (the back-fill's third source). The
+ * round need not be settled: a claim is gated when it is accepted, and its
+ * round may never file a report.
+ */
+export async function unfiledConstructedRoundClaims(projectId: string, afterId: string, limit: number): Promise<{ claim: ResearchClaim; bucketId: string }[]> {
+  const rows = await getDb().all<ResearchClaimRow & { round_bucket_id: string }>(
+    `SELECT c.*, r.bucket_id AS round_bucket_id FROM research_claims c
+       JOIN russell_missions m ON m.orchestration_id = c.orchestration_id
+       JOIN cash_discovery_rounds r ON r.candidate_id = m.candidate_id
+      WHERE r.project_id = ? AND r.bucket_id LIKE ?
+        AND c.accepted = 1 AND c.source_url IS NOT NULL AND c.structural_finding IS NULL
+        AND c.id > ?
+        AND NOT EXISTS (SELECT 1 FROM construction_facts f WHERE f.source_claim_id = c.id)
+      ORDER BY c.id
+      LIMIT ?`,
+    [projectId, 'goal-%-mx-%', afterId, Math.max(1, Math.trunc(limit))],
+  );
+  const seen = new Set<string>();
+  const out: { claim: ResearchClaim; bucketId: string }[] = [];
+  for (const row of rows) {
+    if (seen.has(row.id)) continue;
+    seen.add(row.id);
+    out.push({ claim: mapClaim(row), bucketId: row.round_bucket_id });
+  }
+  return out;
+}
+
 export async function getClaim(id: string): Promise<ResearchClaim | null> {
   const row = await getDb().get<ResearchClaimRow>('SELECT * FROM research_claims WHERE id = ?', [id]);
   return row ? mapClaim(row) : null;

@@ -53,7 +53,9 @@ import { getDb } from '../../db/database.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { createCandidate } from '../../repos/russellCandidates.ts';
 import { byClaimTime, everyPage, missionsForRounds } from '../russell/roundMissions.ts';
-import { claimsByIds, structuralClaims, unfiledUnitEconomicClaims } from '../../repos/research.ts';
+import { claimsByIds, structuralClaims, unfiledConstructedRoundClaims, unfiledUnitEconomicClaims } from '../../repos/research.ts';
+import { arrangementForLegacyKey } from '../../repos/monetization.ts';
+import { arrangementKeyOfBucket } from '../cash/arrangementLibrary.ts';
 import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
 import { readMoneyFigures } from '../cash/figures.ts';
 import {
@@ -994,6 +996,8 @@ const BACKFILL_FIELDS: Readonly<Record<string, { key: FactKey; end: 'LOW' | 'HIG
 };
 /** Where each project's UNIT_ECONOMIC scan stopped, so a pass that filed nothing moves on rather than rereading it. */
 const unitEconomicCursor = new Map<string, string>();
+/** Where each project's constructed-round scan stopped, for the same reason. */
+const constructedCursor = new Map<string, string>();
 
 export interface Backfilled {
   filed: RecordedFact[];
@@ -1001,8 +1005,8 @@ export interface Backfilled {
   skipped: number;
 }
 
-/** Which of the back-fill's two sources a candidate came from. */
-export type BackfillSource = 'UNIT_ECONOMIC' | 'CARD_EVIDENCE';
+/** Which of the back-fill's sources a candidate came from. */
+export type BackfillSource = 'UNIT_ECONOMIC' | 'CARD_EVIDENCE' | 'CONSTRUCTED_ROUND';
 
 /** A claim the back-fill would file, and as what. */
 export interface BackfillCandidate {
@@ -1169,6 +1173,71 @@ async function cardEvidenceDecisions(projectId: string, nodes: readonly Industry
   return out;
 }
 
+/**
+ * Source 3's verdicts: gated claims a goal's constructed-arrangement round
+ * produced, read whether or not the round ever settles (B1c, 2026-11-17).
+ *
+ * Production 08cba93f, goal wst_7b4fcbb5f2384f31b6c3: `TRACE claims 7 stored 0
+ * in_plan 0`. Round goal-…-mx-2821cce3c372 r1, still OPEN, held accepted
+ * claims such as "Oppizi charges $0.47 per postcard piece for a 10,000-home
+ * EDDM run". The harvest files an opening only from a claim carrying an
+ * opportunity_signal (a published price list is not an opening), source 1
+ * reads only a claim that declares UNIT_ECONOMIC (these predate the question
+ * asking for it), and source 2 reads only a card's evidence (no card exists
+ * without an opening). So a published per-unit price for exactly the buyers
+ * the arrangement names reached nothing.
+ *
+ * The round asked about one arrangement whose buyers are a map buyer type
+ * (`monetization_paths.industry_node_id`, by the round's 12-hex key), so the
+ * buyer is the round's own, never read from the prose. The figure is the
+ * lowest USD figure the claim states per unit (`perUnit`), filed as
+ * `price_per_unit` — the unfavourable end, the card rule's own. A claim that
+ * declares a structural finding is source 1's; one with no per-unit figure,
+ * or on an arrangement whose buyers are not a live map buyer type, is skipped.
+ */
+async function constructedRoundDecisions(
+  projectId: string,
+  nodes: readonly IndustryNode[],
+  rows: readonly { claim: ResearchClaim; bucketId: string }[],
+): Promise<BackfillDecision[]> {
+  const buyerByKey = new Map<string, IndustryNode | null>();
+  const out: BackfillDecision[] = [];
+  for (const { claim, bucketId } of rows) {
+    const refuse = (reason: string): BackfillDecision => ({ source: 'CONSTRUCTED_ROUND', claimId: claim.id, candidate: null, reason, countsAsSkipped: true });
+    const key = arrangementKeyOfBucket(bucketId) ?? '';
+    if (!buyerByKey.has(key)) {
+      const arrangement = key ? await arrangementForLegacyKey(projectId, key) : null;
+      const node = arrangement?.industryNodeId ? nodes.find((one) => one.id === arrangement.industryNodeId) : undefined;
+      buyerByKey.set(key, node && node.kind === 'BUYER_TYPE' && !node.retiredAt ? node : null);
+    }
+    const buyer = buyerByKey.get(key) ?? null;
+    if (!buyer) {
+      out.push(refuse('round’s arrangement names no live map buyer type'));
+      continue;
+    }
+    const figures = readMoneyFigures(claim.claim, 'USD').filter((one) => one.cents > 0 && one.perUnit);
+    if (figures.length === 0) {
+      out.push(refuse('claim states no positive USD figure per unit'));
+      continue;
+    }
+    out.push({
+      source: 'CONSTRUCTED_ROUND',
+      claimId: claim.id,
+      candidate: {
+        source: 'CONSTRUCTED_ROUND',
+        claim,
+        buyer,
+        key: 'price_per_unit',
+        amount: Math.min(...figures.map((one) => one.cents)) / 100,
+        measures: `what these buyers are published paying per unit, from a constructed arrangement's research: ${claim.claim}`,
+      },
+      reason: null,
+      countsAsSkipped: true,
+    });
+  }
+  return out;
+}
+
 /** What a dry run of the back-fill found: its pool, as the writer computes it, and nothing written. */
 export interface BackfillPool {
   /** False when the map holds no live buyer type, and the back-fill reads nothing. */
@@ -1190,7 +1259,11 @@ export async function backfillCandidates(projectId: string, afterId = ''): Promi
   return {
     hasBuyerTypes: true,
     unitEconomicRead: declared.length,
-    decisions: [...declared.map((claim) => judgeUnitEconomic(claim, nodes)), ...(await cardEvidenceDecisions(projectId, nodes))],
+    decisions: [
+      ...declared.map((claim) => judgeUnitEconomic(claim, nodes)),
+      ...(await cardEvidenceDecisions(projectId, nodes)),
+      ...(await constructedRoundDecisions(projectId, nodes, await unfiledConstructedRoundClaims(projectId, afterId, BACKFILL_SCAN))),
+    ],
   };
 }
 
@@ -1276,6 +1349,18 @@ export async function backfillClaimFacts(projectId: string, batch = BACKFILL_BAT
     if (room() <= 0) break;
     await consume(decision);
   }
+  if (room() <= 0) return out;
+
+  // 3. Per-unit prices a constructed-arrangement round found, for its own buyers, settled or not.
+  const asked = await unfiledConstructedRoundClaims(projectId, constructedCursor.get(projectId) ?? '', BACKFILL_SCAN);
+  let last = '';
+  for (const decision of await constructedRoundDecisions(projectId, nodes, asked)) {
+    if (room() <= 0) break;
+    last = decision.claimId ?? last;
+    await consume(decision);
+  }
+  // Everything read: start over next pass (an arrangement mapped since may now match). Otherwise resume after the last one read.
+  constructedCursor.set(projectId, last === asked[asked.length - 1]?.claim.id && asked.length < BACKFILL_SCAN ? '' : last);
   return out;
 }
 
