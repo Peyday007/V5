@@ -306,3 +306,7 @@ See F1–F7 above. Each one gives the cause, file:line, run IDs, the smallest ch
 - Recommended to the integration owner: a temporary hold on Factory merges into production until release 6 is live (owner §4: a stable release candidate).
 - **09:56Z, release 6 is 8885038e** (Deploy 44060012669, live about 10:40Z). It is release 5 plus #1046 (both Postgres-only test fixes) and #1048. Both tests pass on SQLite and Postgres locally.
   - W6 stage 2 starts automatically when the Fly deploy succeeds: SECURE H200, at most $5.50/h, capped at $16 per 3 h. Readings at +60 and +120 min.
+- **10:00Z, Factory hold declined by the integration owner. Accepted.**
+  - No merge-only hold exists. Pausing workers would breach the owner's standing order "Do not shut down or disconnect Factory".
+  - Mitigation: a new head only supersedes the Fly step, and the watcher re-dispatches. Any later slip is attributed to the merge.
+  - The 22P02 cause was a test binding the string 'not-a-number' into integer duration_ms, fixed by #1046. This matches the type-coercion hypothesis sent at 09:49Z.
