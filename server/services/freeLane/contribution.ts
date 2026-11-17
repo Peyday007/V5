@@ -38,7 +38,9 @@ import { getDb } from '../../db/database.ts';
 import { recordBinEvent } from '../../repos/bins.ts';
 import { isRunpodSlot } from '../cheap/runpod.ts';
 import { readPodSpend, type PodSpend } from '../cheap/runpodPod.ts';
+import { CODE_SIGNAL_SOURCE } from '../feeds/detectors.ts';
 import { readSourceYields, type SourceYield } from '../feeds/run.ts';
+import { SITE_SOURCE } from '../feeds/sites.ts';
 import { causeOfReason, type RouteFailureCause } from './worker.ts';
 import { waitingNow } from './capacity.ts';
 import { routeOfReason, usageOf, type Measured } from './stageCapacity.ts';
@@ -214,6 +216,10 @@ export interface AcquisitionWay {
   /** Whether it contacts a person and, if so, whether a contact permission exists. */
   contacts: boolean;
   contactPermitted: boolean;
+  /** Set when the way's cost per answer is not measured: it is excluded with this reason, never ranked as cheap (inv. 39). */
+  unmeasured?: string;
+  /** Where the value and cost came from, so the choice is auditable. */
+  basis?: string;
 }
 
 export interface Gap {
@@ -245,6 +251,7 @@ export function planGap(gap: Gap): GapPlan {
   for (const way of gap.ways) {
     if (!way.accessPermitted) excluded.push({ method: way.method, reason: 'data-access constraint does not permit it' });
     else if (way.contacts && !way.contactPermitted) excluded.push({ method: way.method, reason: 'no commercial contact permission' });
+    else if (way.unmeasured) excluded.push({ method: way.method, reason: `its cost is not measured: ${way.unmeasured}` });
     else allowed.push(way);
   }
   const score = (w: AcquisitionWay): number => (w.cost <= 0 ? Number.POSITIVE_INFINITY : w.value / w.cost);
@@ -255,36 +262,184 @@ export function planGap(gap: Gap): GapPlan {
     chosen: best ? { method: best.method, value: best.value, cost: best.cost } : null,
     excluded,
     reason: best
-      ? `${gap.count} ${gap.subject.toLowerCase().replace('_', ' ')} unknown(s) at ${gap.key}: obtain by ${best.method}.`
+      ? `${gap.count} ${gap.subject.toLowerCase().replace('_', ' ')} unknown(s) at ${gap.key}: obtain by ${best.method}${best.basis ? ` (${best.basis})` : ''}.`
       : `${gap.count} ${gap.subject.toLowerCase().replace('_', ' ')} unknown(s) at ${gap.key}: no permitted way to obtain them; the gap stays open and is reported.`,
   };
 }
 
 /**
- * The extraction gaps a source's own yield shows: records acquired that neither
- * the screen kept nor a code rule accounted for. The ways are data: a parser
- * written for the source (code, $0 per record afterwards), model assistance on
- * the unread records (a model call each), or asking the provider for structured
- * access (only where the source's access state permits it).
+ * What a model costs per answer, in model calls: the median of the measured
+ * calls per accepted finding across model routes. Unmeasured when no route
+ * measured it — then a model way is excluded, never assumed cheap. Pure.
  */
-export function extractionGapsFromYields(yields: readonly SourceYield[], permissionNeeds: ReadonlySet<string> = new Set()): Gap[] {
+export function modelCallsPerAnswer(components: readonly ComponentReading[]): Measured<number> {
+  const values = components
+    .filter((c) => c.kind === 'MODEL_ROUTE' && c.measures.aiCallsPerUsefulFinding.measured)
+    .map((c) => (c.measures.aiCallsPerUsefulFinding as { value: number }).value)
+    .filter((v) => v > 0)
+    .sort((a, b) => a - b);
+  if (values.length === 0) return NOT('no model route measured its calls per accepted finding in the window');
+  return ok(values[Math.floor((values.length - 1) / 2)]!);
+}
+
+/**
+ * Costs that are not read from a row, in model-call equivalents, named so the
+ * choice they feed is auditable: building a code parser is one Factory job
+ * (reviewed code, run once, then $0 per record), and one contact is a person's
+ * message and reply. Neither is a measurement and neither is reported as one;
+ * each way that uses them says so in its basis.
+ */
+export const PARSER_BUILD_CALLS = 50;
+export const CONTACT_CALLS = 5;
+
+/** A source's stored records in the window, and how many of them nothing has read yet. */
+export interface ExtractionReading {
+  source: string;
+  /** Records stored in the window. */
+  stored: number;
+  /** Stored records the screen judged, KEEP or DROP: their content is known either way. */
+  screened: number;
+  /** Stored records neither screened, nor covered by a code rule, nor shortlisted: extraction unknowns. */
+  unread: number;
+}
+
+/** What the gap ways read from rows besides the gap itself. */
+export interface GapContext {
+  /** Sources whose acquisition is waiting on a data-access permission. */
+  permissionNeeds: ReadonlySet<string>;
+  /** `modelCallsPerAnswer` over the window's model routes. */
+  callsPerAnswer: Measured<number>;
+  /** Whether a live commercial authority permits contacting a data provider for access (PURCHASE_TOOL_OR_DATA). */
+  providerContactPermitted: boolean;
+}
+
+function modelWay(method: string, count: number, callsPerAnswer: Measured<number>, accessPermitted: boolean): AcquisitionWay {
+  return callsPerAnswer.measured
+    ? { method, value: count, cost: round(count * callsPerAnswer.value), accessPermitted, contacts: false, contactPermitted: false, basis: `${callsPerAnswer.value} measured model call(s) per accepted answer` }
+    : { method, value: count, cost: count, accessPermitted, contacts: false, contactPermitted: false, unmeasured: callsPerAnswer.reason };
+}
+
+function contactWay(method: string, count: number, permitted: boolean, permission: string): AcquisitionWay {
+  return { method, value: count, cost: count * CONTACT_CALLS, accessPermitted: true, contacts: true, contactPermitted: permitted, basis: `${CONTACT_CALLS} call-equivalents per contact (not measured); needs ${permission}` };
+}
+
+/**
+ * The extraction gaps the rows show: per source, stored records nothing has
+ * read — not screened (a DROP is a known irrelevance, not an unknown), not
+ * covered by a code rule, not shortlisted. The ways are priced so the choice
+ * moves with the measurements: a parser is one build (PARSER_BUILD_CALLS) for
+ * every unread record, a model reads each record at the measured calls per
+ * answer, and asking the provider for structured access is a contact that a
+ * live authority must permit. Pure.
+ */
+export function extractionGaps(readings: readonly ExtractionReading[], context: GapContext): Gap[] {
   const gaps: Gap[] = [];
-  for (const y of yields) {
-    const unread = Math.max(0, y.acquired - y.accepted);
-    if (unread <= 0) continue;
-    const accessOk = !permissionNeeds.has(y.source);
+  for (const r of readings) {
+    if (r.unread <= 0) continue;
+    const accessOk = !context.permissionNeeds.has(r.source);
     gaps.push({
       subject: 'EXTRACTION',
-      key: y.source,
-      count: unread,
+      key: r.source,
+      count: r.unread,
       ways: [
-        { method: 'code parser for the source', value: unread, cost: 0, accessPermitted: accessOk, contacts: false, contactPermitted: false },
-        { method: 'model assistance on unread records', value: unread, cost: unread, accessPermitted: accessOk, contacts: false, contactPermitted: false },
-        { method: 'request structured access from the provider', value: unread * 2, cost: 1, accessPermitted: true, contacts: true, contactPermitted: false },
+        { method: 'code parser for the source', value: r.unread, cost: PARSER_BUILD_CALLS, accessPermitted: accessOk, contacts: false, contactPermitted: false, basis: `one parser build (${PARSER_BUILD_CALLS} call-equivalents, not measured) for ${r.unread} record(s)` },
+        modelWay('model assistance on unread records', r.unread, context.callsPerAnswer, accessOk),
+        { ...contactWay('request structured access from the provider', r.unread, context.providerContactPermitted, 'a live authority permitting PURCHASE_TOOL_OR_DATA'), cost: CONTACT_CALLS },
       ],
     });
   }
   return gaps;
+}
+
+/** An open opening's evidence card, as the gap reader needs it: blank is unknown (inv. 39). */
+export interface OpeningCardRow {
+  projectId: string;
+  mechanism: string;
+  payer: string | null;
+  reachableChannel: string | null;
+  buyingSignal: string | null;
+  paymentTerms: string | null;
+  fulfillmentOwner: string | null;
+  deliveryMethod: string | null;
+}
+
+const blank = (v: string | null): boolean => v === null || v.trim() === '';
+
+/** Which card fields leave each non-extraction subject unknown. */
+const CARD_UNKNOWN: Record<Exclude<GapSubject, 'EXTRACTION'>, (o: OpeningCardRow) => boolean> = {
+  RELATIONSHIP: (o) => blank(o.payer) || blank(o.reachableChannel),
+  MARKET_DEMAND: (o) => blank(o.buyingSignal),
+  DELIVERY_CAPABILITY: (o) => blank(o.fulfillmentOwner) || blank(o.deliveryMethod),
+  PAYMENT_TIMING: (o) => blank(o.paymentTerms),
+};
+
+/** Who would be contacted for each subject, and which commercial action must permit it. */
+const CONTACT_FOR: Record<Exclude<GapSubject, 'EXTRACTION'>, { method: string; action: string }> = {
+  RELATIONSHIP: { method: 'ask the buyer', action: 'CONTACT_BUYER' },
+  MARKET_DEMAND: { method: 'ask prospective buyers', action: 'CONTACT_BUYER' },
+  DELIVERY_CAPABILITY: { method: 'ask a fulfilment provider', action: 'ENGAGE_CONTRACTOR' },
+  PAYMENT_TIMING: { method: 'ask the buyer', action: 'CONTACT_BUYER' },
+};
+
+/**
+ * The relationship, market-demand, delivery-capability and payment-timing gaps
+ * the open openings' evidence cards show, per subject and project and
+ * mechanism (mechanisms are whatever the rows say; none is a list of what is
+ * allowed). Each is obtained by research (a model job at the measured calls
+ * per answer) or by contacting the party who knows — only where that
+ * project's live authority permits the action. Pure.
+ */
+export function openingGaps(rows: readonly OpeningCardRow[], permittedActions: ReadonlyMap<string, ReadonlySet<string>>, callsPerAnswer: Measured<number>): Gap[] {
+  const counts = new Map<string, { subject: Exclude<GapSubject, 'EXTRACTION'>; projectId: string; mechanism: string; count: number }>();
+  for (const o of rows) {
+    for (const subject of Object.keys(CARD_UNKNOWN) as Exclude<GapSubject, 'EXTRACTION'>[]) {
+      if (!CARD_UNKNOWN[subject](o)) continue;
+      const key = `${subject}|${o.projectId}|${o.mechanism}`;
+      const entry = counts.get(key) ?? { subject, projectId: o.projectId, mechanism: o.mechanism, count: 0 };
+      entry.count += 1;
+      counts.set(key, entry);
+    }
+  }
+  return [...counts.values()]
+    .sort((a, b) => a.subject.localeCompare(b.subject) || a.projectId.localeCompare(b.projectId) || a.mechanism.localeCompare(b.mechanism))
+    .map((g): Gap => {
+      const contact = CONTACT_FOR[g.subject];
+      const permitted = permittedActions.get(g.projectId)?.has(contact.action) ?? false;
+      return {
+        subject: g.subject,
+        key: `${g.projectId}:${g.mechanism}`,
+        count: g.count,
+        ways: [
+          modelWay('research question through the free lane', g.count, callsPerAnswer, true),
+          contactWay(contact.method, g.count, permitted, `a live authority permitting ${contact.action}`),
+        ],
+      };
+    });
+}
+
+/** The commercial actions each project's live authorities permit now: allowed, not prohibited, started and not expired. Pure. */
+export function permittedActionsByProject(
+  rows: readonly { projectId: string; allowedActions: string; prohibitions: string; startsAt: string; expiresAt: string | null }[],
+  nowMs: number,
+): Map<string, Set<string>> {
+  const parse = (json: string): string[] => {
+    try {
+      const v = JSON.parse(json) as unknown;
+      return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+    } catch {
+      return [];
+    }
+  };
+  const out = new Map<string, Set<string>>();
+  for (const r of rows) {
+    if (Date.parse(r.startsAt) > nowMs) continue;
+    if (r.expiresAt && Date.parse(r.expiresAt) <= nowMs) continue;
+    const prohibited = new Set(parse(r.prohibitions));
+    const set = out.get(r.projectId) ?? new Set<string>();
+    for (const action of parse(r.allowedActions)) if (!prohibited.has(action)) set.add(action);
+    out.set(r.projectId, set);
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -517,6 +672,27 @@ async function readSystemOutcomes(since: string): Promise<SystemOutcomes> {
   };
 }
 
+/** Openings still being worked: their unknowns can still change a decision. */
+export const OPEN_OPENING_STATES = ['DISCOVERED', 'EVIDENCE_CARD', 'READY', 'EXECUTING'] as const;
+
+/** Per source, the window's stored records and how many nothing has read (`ExtractionReading`). */
+async function readExtractionReadings(since: string, until: string): Promise<ExtractionReading[]> {
+  const rows = await getDb().all<{ source: string; stored: number | string; screened: number | string; unread: number | string }>(
+    `SELECT i.source AS source, COUNT(*) AS stored,
+            SUM(CASE WHEN EXISTS (SELECT 1 FROM cheap_results r WHERE r.kind = 'SCREEN_LEAD' AND r.ok = 1 AND r.subject_id = i.id) THEN 1 ELSE 0 END) AS screened,
+            SUM(CASE WHEN i.shortlisted_round_id IS NULL
+                      AND NOT EXISTS (SELECT 1 FROM cheap_results r WHERE r.kind = 'SCREEN_LEAD' AND r.ok = 1 AND r.subject_id = i.id)
+                      AND NOT EXISTS (SELECT 1 FROM feed_item_coverage c WHERE c.item_id = i.id)
+                     THEN 1 ELSE 0 END) AS unread
+       FROM feed_items i
+      WHERE i.fetched_at >= ? AND i.fetched_at < ? AND i.source <> ? AND i.source <> ?
+      GROUP BY i.source
+      ORDER BY i.source`,
+    [since, until, CODE_SIGNAL_SOURCE, SITE_SOURCE],
+  );
+  return rows.map((r) => ({ source: r.source, stored: n(r.stored), screened: n(r.screened), unread: n(r.unread) }));
+}
+
 /** Read every component's contribution over the window, from rows. Read-only. */
 export async function readContribution(options: { hours?: number; now?: number } = {}): Promise<ContributionReport> {
   const hours = options.hours ?? 24;
@@ -570,15 +746,34 @@ export async function readContribution(options: { hours?: number; now?: number }
     [since],
   )).map((r) => r.provider ?? '').filter(Boolean), [] as string[]));
 
+  const components = [
+    ...parserReadings(yields, pulls),
+    ...detectorReadings(detectorRows, uncovered),
+    ...poolReadings(pools, submittedByModel),
+    ...routeReadings(laneRows, podSpend, waiting),
+  ];
+  const callsPerAnswer = modelCallsPerAnswer(components);
+  const permitted = permittedActionsByProject(await safely(async () => (await db.all<{ project_id: string; allowed_actions: string; prohibitions: string; starts_at: string; expires_at: string | null }>(
+    `SELECT project_id, allowed_actions, prohibitions, starts_at, expires_at FROM cash_authorities WHERE state = 'ACTIVE'`,
+  )).map((r) => ({ projectId: r.project_id, allowedActions: r.allowed_actions, prohibitions: r.prohibitions, startsAt: r.starts_at, expiresAt: r.expires_at })), []), nowMs);
+  const providerContactPermitted = [...permitted.values()].some((actions) => actions.has('PURCHASE_TOOL_OR_DATA'));
+  const extraction = await safely(() => readExtractionReadings(since, until), [] as ExtractionReading[]);
+  const openings = await safely(async () => (await db.all<{ project_id: string; mechanism: string; payer: string | null; reachable_channel: string | null; buying_signal: string | null; payment_terms: string | null; fulfillment_owner: string | null; delivery_method: string | null }>(
+    `SELECT project_id, mechanism, payer, reachable_channel, buying_signal, payment_terms, fulfillment_owner, delivery_method
+       FROM cash_opportunities WHERE state IN (${OPEN_OPENING_STATES.map(() => '?').join(', ')})`,
+    [...OPEN_OPENING_STATES],
+  )).map((r): OpeningCardRow => ({
+    projectId: r.project_id, mechanism: r.mechanism, payer: r.payer, reachableChannel: r.reachable_channel, buyingSignal: r.buying_signal,
+    paymentTerms: r.payment_terms, fulfillmentOwner: r.fulfillment_owner, deliveryMethod: r.delivery_method,
+  })), [] as OpeningCardRow[]);
+
   return buildContributionReport({
     since, until,
-    components: [
-      ...parserReadings(yields, pulls),
-      ...detectorReadings(detectorRows, uncovered),
-      ...poolReadings(pools, submittedByModel),
-      ...routeReadings(laneRows, podSpend, waiting),
+    components,
+    gaps: [
+      ...extractionGaps(extraction, { permissionNeeds, callsPerAnswer, providerContactPermitted }),
+      ...openingGaps(openings, permitted, callsPerAnswer),
     ],
-    gaps: extractionGapsFromYields(yields, permissionNeeds),
     system: await readSystemOutcomes(since),
   });
 }
