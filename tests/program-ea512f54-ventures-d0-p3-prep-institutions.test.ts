@@ -206,7 +206,11 @@ describe('INST-30 — approval is required, and nothing is created', () => {
 describe('INST-30 — a regulatory limitation yields compliant alternatives', () => {
   it('venture B: the restricted activity produces a licensed partner, an agent referral and an own-authorisation route', () => {
     const out = deriveInstitutions(ventureB());
-    expect(out.limitations).toEqual([{ claimId: 'c-limit', activity: 'consumer credit arrangement', alternatives: ['LICENSED_PARTNER', 'AGENT_REFERRAL', 'OWN_AUTHORISATION'] }]);
+    // The restricted activity, and the permit nobody holds yet, each yield the compliant alternatives.
+    expect(out.limitations).toEqual([
+      { claimId: 'c-limit', activity: 'consumer credit arrangement', alternatives: ['LICENSED_PARTNER', 'AGENT_REFERRAL', 'OWN_AUTHORISATION'] },
+      { claimId: 'c-permit', activity: 'import of the product', alternatives: ['LICENSED_PARTNER', 'AGENT_REFERRAL', 'OWN_AUTHORISATION'] },
+    ]);
     const partner = byKind(out.structures, 'LICENSED_PARTNER');
     expect(partner.legalFeasibility).toBe('MET');
     expect(partner.elements.some((one) => one.kind === 'CONTRACT' && one.subject.includes('licensed partner'))).toBe(true);
@@ -215,6 +219,66 @@ describe('INST-30 — a regulatory limitation yields compliant alternatives', ()
     // The structures that would perform the activity themselves are what the limitation rules out — never the market.
     expect(byKind(out.structures, 'SINGLE_ENTITY').legalFeasibility).toBe('NOT_MET');
     expect(out.structures.some((one) => one.legalFeasibility === 'MET')).toBe(true);
+  });
+});
+
+describe('INST-30 — a permit, a sale and a jurisdiction are enough to derive limitation, cover and tax', () => {
+  /** Exactly the shape the manufacturing feeder builds from rows: parties, flows, a jurisdiction and a permit claim. */
+  const rowShaped = (over: Partial<VentureFacts> = {}): VentureFacts =>
+    base({
+      ventureId: 'row-shaped',
+      parties: [
+        { id: 'owner:u', role: 'OWNER', jurisdiction: null },
+        { id: 'customer:tenders', role: 'CUSTOMER', jurisdiction: 'XA' },
+      ],
+      flows: [{ kind: 'SALE', partyId: 'customer:tenders' }],
+      claims: [{ id: 'barrier:1', sourceId: 'src-b', kind: 'PERMIT_REQUIRED', subject: 'a state certification', jurisdiction: 'XA' }],
+      ...over,
+    });
+
+  it('a permit nobody holds yields a licensed partner, an agent referral and the own-permit route — never a closed market', () => {
+    const out = deriveInstitutions(rowShaped());
+    expect(out.limitations).toEqual([{ claimId: 'barrier:1', activity: 'a state certification', alternatives: ['LICENSED_PARTNER', 'AGENT_REFERRAL', 'OWN_AUTHORISATION'] }]);
+    const partner = byKind(out.structures, 'LICENSED_PARTNER');
+    expect(partner.legalFeasibility).toBe('MET');
+    // A holder performs the activity, so this route does not obtain the permit itself.
+    expect(partner.elements.some((one) => one.kind === 'PERMIT')).toBe(false);
+    expect(partner.elements.some((one) => one.kind === 'CONTRACT' && one.subject === 'licensed partner performing a state certification')).toBe(true);
+    expect(byKind(out.structures, 'AGENT_REFERRAL').elements.some((one) => one.kind === 'CONTRACT' && one.subject.startsWith('agent referral of a state certification'))).toBe(true);
+    // Obtaining it is the own route, and it stays feasible: a permit limits who acts, not whether anyone may.
+    const own = byKind(out.structures, 'OWN_AUTHORISATION');
+    expect(own.elements.find((one) => one.kind === 'PERMIT')?.approval?.class).toBe('REGULATED_SERVICE');
+    expect(own.elements.some((one) => one.kind === 'LICENSE')).toBe(false);
+    expect(byKind(out.structures, 'DIRECT').legalFeasibility).toBe('MET');
+  });
+
+  it('a held permit is no limitation, and a held and approved element moves readiness and authorisation', () => {
+    const out = deriveInstitutions(rowShaped({ held: ['PERMIT:a state certification'], approvals: ['PERMIT:a state certification'] }));
+    expect(out.limitations).toEqual([]);
+    const direct = byKind(out.structures, 'DIRECT');
+    const permit = direct.elements.find((one) => one.kind === 'PERMIT')!;
+    expect(permit.held).toBe(true);
+    expect(permit.approval?.approved).toBe(true);
+    expect(direct.because.join(' ')).not.toMatch(/PERMIT:a state certification require/);
+  });
+
+  it('selling where the record places the venture derives a tax position and liability cover, both advisable and traced', () => {
+    const direct = byKind(deriveInstitutions(rowShaped()).structures, 'DIRECT');
+    const tax = direct.elements.find((one) => one.kind === 'TAX_REGISTRATION')!;
+    expect(tax.subject).toBe('revenue earned in XA');
+    expect(tax.necessity).toBe('ADVISABLE');
+    expect(tax.triggeredBy).toEqual(['flow SALE', 'jurisdiction XA stated in the record']);
+    const cover = direct.elements.find((one) => one.kind === 'INSURANCE')!;
+    expect(cover.subject).toBe('liability to customer customer:tenders');
+    expect(cover.necessity).toBe('ADVISABLE');
+    // Unpriced, so the institutional total is withheld rather than read as free.
+    expect(direct.economics.unpriced).toEqual(expect.arrayContaining([tax.key, cover.key]));
+  });
+
+  it('with no jurisdiction stated, no tax position is invented: it stays an open question', () => {
+    const out = deriveInstitutions(rowShaped({ jurisdictions: [], claims: [] }));
+    expect(out.openQuestions).toContain('which tax obligations apply to the venture\'s revenue');
+    expect(byKind(out.structures, 'DIRECT').elements.some((one) => one.kind === 'TAX_REGISTRATION')).toBe(false);
   });
 });
 
@@ -387,10 +451,39 @@ describe('INST-30 — the derivation runs on production records', () => {
     if (path?.ok) expect(path.nodes.map((node) => node.key)).toContain('capital:TOOLING_AND_EQUIPMENT');
     // No row states revenue, so desirability is not assumed.
     expect(direct.desirability).toBe('UNKNOWN');
+    // The filed barrier is a limitation on whoever lacks the certification, so the rows yield compliant alternatives.
+    expect(reading.derivation.limitations).toEqual([{ claimId: expect.stringMatching(/^barrier:/), activity: 'pressure-vessel certification', alternatives: ['LICENSED_PARTNER', 'AGENT_REFERRAL', 'OWN_AUTHORISATION'] }]);
+    const partner = reading.derivation.structures.find((one) => one.kind === 'LICENSED_PARTNER')!;
+    expect(partner.legalFeasibility).toBe('MET');
+    expect(partner.elements.some((one) => one.kind === 'PERMIT')).toBe(false);
+    expect(partner.elements.some((one) => one.kind === 'CONTRACT' && one.subject === 'licensed partner performing pressure-vessel certification')).toBe(true);
     // An entity no row prices stays unpriced, and withholds that structure's total.
     const single = reading.derivation.structures.find((one) => one.kind === 'SINGLE_ENTITY')!;
     expect(single.economics.unpriced).toContain('LEGAL_ENTITY:venture entity');
     expect(single.economics.adjusted).toBeNull();
+  });
+
+  it('a filed demand row that names its state derives the tax position and liability cover from rows', async () => {
+    const fixture = await freshProject();
+    const projectId = fixture.project.id;
+    const layer = await fixture.layerByName('Discovery Logic');
+    const user = await createUser({ email: `inst-${Math.random().toString(36).slice(2, 10)}@example.test`, displayName: 'Owner', password: 'correct horse battery staple', isBrainAdmin: true });
+    expect((await startProgramme({ projectId, ownerUserId: user.id, actorUserId: user.id, objective: 'Build machines only where demand and capability allow.' })).ok).toBe(true);
+    const program = (await getProgram(projectId))!;
+    const seeded = await seedCategory({ projectId, name: 'Grain dryers', actorRef: user.id, reason: 'test' });
+    if ('error' in seeded) throw new Error(seeded.error);
+    const category = seeded.category;
+    const demand = await acceptedClaim(projectId, layer, 'Cooperatives in Iowa tender for grain dryers each season');
+    await recordCategoryEvidence({ programId: program.id, categoryId: category.id, kind: 'DEMAND_EVIDENCE', subject: 'cooperative tenders', statement: 'Cooperatives in Iowa tender for grain dryers each season', observedOn: '2026-09-01', sourceClaimId: demand });
+
+    const pass = await runManufacturingKernel(projectId);
+    const reading = pass.institutions.find((one) => one.categoryId === category.id)!;
+    const direct = reading.derivation.structures.find((one) => one.kind === 'DIRECT')!;
+    const tax = direct.elements.find((one) => one.kind === 'TAX_REGISTRATION')!;
+    expect(tax.subject).toBe('revenue earned in iowa');
+    expect(tax.triggeredBy).toContain('flow SALE');
+    expect(direct.elements.find((one) => one.kind === 'INSURANCE')?.subject).toBe('liability to customer customer:cooperative tenders');
+    expect(reading.derivation.openQuestions).not.toContain('which tax obligations apply to the venture\'s revenue');
   });
 
   it('a project with no programme derives nothing', async () => {

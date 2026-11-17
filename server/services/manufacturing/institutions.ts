@@ -358,6 +358,41 @@ function baseDrafts(facts: VentureFacts, holder: string): Draft[] {
   for (const risk of facts.risks) {
     out.push({ kind: 'INSURANCE', subject: risk.kind, necessity: 'ADVISABLE', triggeredBy: [`risk ${risk.kind}`], obligations: ['renew cover and report claims'] });
   }
+  /*
+   * Exposures and obligations the flows themselves carry, so a venture whose
+   * rows state only parties, flows and a jurisdiction still has them derived
+   * rather than waiting for somebody to name them. Selling to a counterparty
+   * exposes the seller to that counterparty's claims; earning revenue where
+   * the record says the venture operates creates a tax position there. Both
+   * are ADVISABLE: which cover and which taxes apply is for a sourced claim
+   * (INSURANCE_REQUIRED, TAX_OBLIGATION) or a professional to settle, so
+   * neither is asserted as law. With no jurisdiction stated the tax position
+   * stays the open question `deriveInstitutions` raises (invariant 34).
+   */
+  const byParty = new Map(facts.parties.map((one) => [one.id, one]));
+  const exposures = new Map<string, string[]>();
+  for (const flow of facts.flows) {
+    if (flow.kind !== 'SALE' && flow.kind !== 'ROYALTY_IN') continue;
+    const party = flow.partyId ? byParty.get(flow.partyId) : undefined;
+    const subject = `liability to ${party ? party.role.toLowerCase() : 'counterparty'} ${flow.partyId ?? '(not named)'}`;
+    exposures.set(subject, [...(exposures.get(subject) ?? []), `flow ${flow.kind}${flow.partyId ? ` to ${flow.partyId}` : ''}`]);
+  }
+  for (const [subject, why] of exposures) {
+    out.push({ kind: 'INSURANCE', subject, necessity: 'ADVISABLE', triggeredBy: why, obligations: ['renew cover and report claims'] });
+  }
+  const revenue = facts.flows.filter((one) => one.kind === 'SALE' || one.kind === 'ROYALTY_IN');
+  if (revenue.length > 0) {
+    for (const jurisdiction of jurisdictionsOf(facts)) {
+      out.push({
+        kind: 'TAX_REGISTRATION',
+        subject: `revenue earned in ${jurisdiction}`,
+        necessity: 'ADVISABLE',
+        triggeredBy: [...new Set(revenue.map((one) => `flow ${one.kind}`)), `jurisdiction ${jurisdiction} stated in the record`],
+        obligations: ['establish which taxes apply to the revenue, register and file where they do'],
+        jurisdiction,
+      });
+    }
+  }
   for (const claim of facts.claims) {
     const where = claim.jurisdiction ?? 'the stated jurisdiction';
     if (claim.kind === 'PERMIT_REQUIRED') {
@@ -610,12 +645,21 @@ export function deriveInstitutions(facts: VentureFacts): InstitutionalDerivation
   if (owners.length > 1) entityReasons.push(`${owners.length} owners share the venture`);
   if (facts.flows.some((one) => one.kind === 'EQUITY_INVESTMENT')) entityReasons.push('an investor takes equity');
   for (const claim of facts.claims.filter((one) => one.kind === 'ENTITY_REQUIRED')) entityReasons.push(`claim ${claim.id}`);
-  const limitations = facts.claims.filter((one) => one.kind === 'REGULATORY_LIMITATION');
+  /*
+   * A required permit nobody holds is a regulatory limitation too: until it is
+   * issued, only a holder may perform the activity. The structures that obtain
+   * it themselves stay feasible (they carry the PERMIT element), and the
+   * limitation also yields the compliant alternatives a holder makes possible,
+   * so a barrier on record never reads as a closed market.
+   */
+  const unheldPermits = facts.claims.filter((one) => one.kind === 'PERMIT_REQUIRED' && !facts.held.includes(keyOf('PERMIT', one.subject)));
+  const permitLimited = new Set(unheldPermits.map((one) => one.subject));
+  const limitations = [...facts.claims.filter((one) => one.kind === 'REGULATORY_LIMITATION'), ...unheldPermits];
   const licensedFor = new Set(facts.claims.filter((one) => one.kind === 'LICENSE_REQUIRED').map((one) => one.subject));
 
   const home = jurisdictions[0] ?? null;
   const structures: StructureReading[] = [];
-  const limitationBlocks = limitations.map((one) => `claim ${one.id}: ${one.subject} may only be performed by an authorisation holder`);
+  const limitationBlocks = limitations.filter((one) => one.kind === 'REGULATORY_LIMITATION').map((one) => `claim ${one.id}: ${one.subject} may only be performed by an authorisation holder`);
 
   // DIRECT: the owner acts in their own name.
   structures.push(
@@ -645,14 +689,17 @@ export function deriveInstitutions(facts: VentureFacts): InstitutionalDerivation
   if (limitations.length > 0) {
     const holder = entityReasons.length > 0 ? 'venture entity' : 'owner';
     const prefix = (): Draft[] => (holder === 'owner' ? [] : entityDrafts(facts, holder, home, entityReasons));
-    const partner: Draft[] = [...prefix(), ...baseDrafts(facts, holder)];
-    const agent: Draft[] = [...prefix(), ...baseDrafts(facts, holder)];
+    // A holder performs the permitted activity, so the venture does not obtain that permit itself.
+    const withoutLimitedPermits = (): Draft[] => baseDrafts(facts, holder).filter((one) => !(one.kind === 'PERMIT' && permitLimited.has(one.subject)));
+    const partner: Draft[] = [...prefix(), ...withoutLimitedPermits()];
+    const agent: Draft[] = [...prefix(), ...withoutLimitedPermits()];
     const own: Draft[] = [...prefix(), ...baseDrafts(facts, holder)];
     for (const claim of limitations) {
       const where = claim.jurisdiction ?? home ?? 'the stated jurisdiction';
       partner.push({ kind: 'CONTRACT', subject: `licensed partner performing ${claim.subject}`, necessity: 'REQUIRED', triggeredBy: [`claim ${claim.id}`], prerequisites: [keyOf('SIGNING_AUTHORITY', holder)], obligations: ['monitor the partner\'s authorisation stays current'], approval: { class: 'LEGAL_COMMITMENT', professionalRole: `a lawyer admitted in ${where}` } });
       agent.push({ kind: 'CONTRACT', subject: `agent referral of ${claim.subject} to an authorised provider`, necessity: 'REQUIRED', triggeredBy: [`claim ${claim.id}`], prerequisites: [keyOf('SIGNING_AUTHORITY', holder)], obligations: ['stay within the referral the provider\'s authorisation permits'], approval: { class: 'LEGAL_COMMITMENT', professionalRole: `a lawyer admitted in ${where}` } });
-      if (!licensedFor.has(claim.subject)) {
+      // Obtaining a permit is already the PERMIT element; only a regulated service needs a licence of its own.
+      if (claim.kind === 'REGULATORY_LIMITATION' && !licensedFor.has(claim.subject)) {
         own.push({ kind: 'LICENSE', subject: claim.subject, necessity: 'REQUIRED', triggeredBy: [`claim ${claim.id}`], obligations: ['meet the licence conditions and report to the regulator'], approval: { class: 'REGULATED_SERVICE', professionalRole: `the licensing regulator in ${where}, with compliance counsel` }, jurisdiction: claim.jurisdiction });
       }
     }
