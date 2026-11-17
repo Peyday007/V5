@@ -23,3 +23,9 @@ Spending safeguard for W6: every GPU start goes through `runpod-launch` with a B
 
 ## Status log
 - 07:36Z: W1 deploy 44036476327 is at "Deploy to Fly". W2–W5 agents launching.
+- 07:39Z: W1 live on eda04071 (Fly success).
+- 07:43Z: W6 first launch failed with $0 billed. COMMUNITY H200 had no capacity, and SECURE at $5.29 was over the $4/h ceiling.
+- 07:50Z: W6 stage 1 live. Pod c316n2e7hp4up4, SECURE H200 at $5.29/h, Brain cap $12 per 2.5 h, ready in 265 s. Readings at 08:50Z.
+- 07:47Z: W4 PR #1028 (queue flow, pressure, plan derivation, information-use trace) merged; deploy 44041630154 running.
+- 07:48Z: new W9, free-lane RESEARCH_VERIFY replies with no JSON. These dominate the 315 jobs not accepted in 6 h, so they are ineffective retries. Agent assigned; PR due 10:45Z.
+- Troubleshooting session: the goal's 15 Routine bins are ruled out as a blocker (§84/§85, the free lane works them). The budget-cap evidence (V7) stays valid. The textFact provenance finding was passed to W2.
