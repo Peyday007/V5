@@ -203,10 +203,14 @@ describe('reallocateResearch records only decisions whose cost is counted once',
     const verdict = yieldAllocationHolds(decisions as never);
     expect(verdict.ok).toBe(false);
     expect(verdict.detail).toMatch(/counted once/);
-    // Beside good decisions it still surfaces.
+    // Newest first: a failing decision newer than good ones fails the probe;
+    // one that newer good decisions superseded is reported, never hidden (finding F1, repair 1).
     const good = memoryPorts(() => readingFrom(degenerateJobs()));
     await reallocateResearch({ goals: [goalView('wst_a')], now: UNTIL }, good.ports);
-    expect(yieldAllocationHolds([...good.decisions, ...decisions] as never).ok).toBe(false);
+    expect(yieldAllocationHolds([...decisions, ...good.decisions] as never).ok).toBe(false);
+    const superseded = yieldAllocationHolds([...good.decisions, ...decisions] as never);
+    expect(superseded.ok).not.toBe(false);
+    expect(superseded.detail).toMatch(/1 older decision\(s\) that did not hold are superseded/);
     // A window with nothing measured is still held and not read by the probe.
     const empty = memoryPorts(() => summarizeResearchYield({ since: SINCE, until: UNTIL, jobs: [], outputs: [] }));
     await reallocateResearch({ goals: [goalView('wst_a')], now: UNTIL }, empty.ports);
@@ -239,7 +243,14 @@ describe('reallocateResearch records only decisions whose cost is counted once',
     }
     // Pass 3's reading cannot show its cost counted once: it is recorded measured and the probe flags it.
     expect(decisions.some((d) => d.heldForCost === true && d.held === false)).toBe(true);
-    expect(yieldAllocationHolds(decisions as never).ok).toBe(false);
+    // The probe reads newest first: while pass 3 is the newest it fails ...
+    const failedAt = decisions.findIndex((d) => d.heldForCost === true);
+    expect(failedAt).toBeLessThan(decisions.length - 1);
+    expect(yieldAllocationHolds(decisions.slice(0, failedAt + 1).reverse() as never).ok).toBe(false);
+    // ... and once pass 4 holds, pass 3 is superseded history, reported in the detail (finding F1, repair 1).
+    const after = yieldAllocationHolds([...decisions].reverse() as never);
+    expect(after.ok).not.toBe(false);
+    expect(after.detail).toMatch(/superseded/);
     // Every decision whose cost was shown counted once passes the probe.
     expect(yieldAllocationHolds(decisions.filter((d) => d.heldForCost !== true) as never).ok).not.toBe(false);
   });

@@ -61,20 +61,37 @@ export function continuousResearchHolds(rows: readonly AllocationRow[]): ProbeRe
   return { ok: true, detail: `${measured.length} measured allocation decision(s) give all five purposes a share within the protected floors; ${moved.length} reallocated from measured yield` };
 }
 
-/** RES-15-5 on given decision details, newest first. Pure. */
+/** What is wrong with one measured decision's cost-once record or its moves, or null. Pure. */
+export function yieldDecisionProblem(d: AllocationRow): string | null {
+  const once = d.costCountedOnce as { holds?: unknown } | undefined;
+  if (!once || once.holds !== true) return `decision ${String(d.fingerprint ?? '?')} does not show its cost counted once`;
+  for (const c of (Array.isArray(d.changes) ? d.changes : []) as Array<{ purpose?: unknown; reasons?: unknown }>) {
+    if (!Array.isArray(c.reasons) || c.reasons.length === 0) return `decision ${String(d.fingerprint ?? '?')} moves ${String(c.purpose)} without a measured reason`;
+  }
+  return null;
+}
+
+/**
+ * RES-15-5 on given decision details, newest first. Pure.
+ *
+ * The rows are append-only history, so a decision that failed stays in the
+ * read window long after a repair. What the requirement asks is whether the
+ * running Brain counts cost once now: the decisions in force are the measured
+ * ones newer than the newest failing one. The newest measured decision failing
+ * is a FAIL; an older failure that newer measured decisions all superseded is
+ * reported, never hidden, and does not fail the probe.
+ */
 export function yieldAllocationHolds(rows: readonly AllocationRow[]): ProbeResult {
   const measured = rows.filter((d) => d.held !== true);
   if (measured.length === 0) return { ok: null, detail: 'no measured research allocation decision is recorded on production yet' };
-  for (const d of measured) {
-    const once = d.costCountedOnce as { holds?: unknown } | undefined;
-    if (!once || once.holds !== true) return { ok: false, detail: `decision ${String(d.fingerprint ?? '?')} does not show its cost counted once` };
-    for (const c of (Array.isArray(d.changes) ? d.changes : []) as Array<{ purpose?: unknown; reasons?: unknown }>) {
-      if (!Array.isArray(c.reasons) || c.reasons.length === 0) return { ok: false, detail: `decision ${String(d.fingerprint ?? '?')} moves ${String(c.purpose)} without a measured reason` };
-    }
-  }
-  const moved = measured.filter((d) => Array.isArray(d.changes) && d.changes.length > 0).length;
-  if (moved === 0) return { ok: null, detail: `${measured.length} measured decision(s) count cost once; none has yet moved a share by yield` };
-  return { ok: true, detail: `${measured.length} measured decision(s) count each job's cost once; ${moved} moved shares, every change with its measured reason` };
+  const failing = measured.findIndex((d) => yieldDecisionProblem(d) !== null);
+  if (failing === 0) return { ok: false, detail: yieldDecisionProblem(measured[0]!)! };
+  const current = failing < 0 ? measured : measured.slice(0, failing);
+  const superseded = failing < 0 ? 0 : measured.slice(failing).filter((d) => yieldDecisionProblem(d) !== null).length;
+  const history = superseded > 0 ? `; ${superseded} older decision(s) that did not hold are superseded (newest: ${yieldDecisionProblem(measured[failing]!)})` : '';
+  const moved = current.filter((d) => Array.isArray(d.changes) && d.changes.length > 0).length;
+  if (moved === 0) return { ok: null, detail: `${current.length} measured decision(s) count cost once; none has yet moved a share by yield${history}` };
+  return { ok: true, detail: `${current.length} measured decision(s) count each job's cost once; ${moved} moved shares, every change with its measured reason${history}` };
 }
 
 async function allocationRows(): Promise<AllocationRow[]> {
