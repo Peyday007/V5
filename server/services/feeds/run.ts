@@ -46,7 +46,7 @@ import { statesNamedIn } from '../../domain/jurisdiction.ts';
 import { openingSourceKey } from '../cash/duplicates.ts';
 import { discoveryAllowed } from '../cash/lifecycle.ts';
 import { DELIVERABLE_LABEL } from '../cash/deliverables/spec.ts';
-import { FEED_SOURCES, pullUrl, type FeedSource } from './sources.ts';
+import { FEED_SOURCES, pullUrl, type FeedItem, type FeedSource } from './sources.ts';
 import { FEED_SHORTLIST_BUCKET } from './bucket.ts';
 import { SITE_SOURCE } from './sites.ts';
 import { CODE_SIGNAL_SOURCE, coveredItems, detectionsForLeads } from './detectors.ts';
@@ -391,6 +391,16 @@ export interface AcquisitionDeps {
 
 const ACCEPT_JSON = { accept: 'application/json' };
 
+/** A source's own completion of its parsed items (`FeedSource.complete`); never fails the pull — a source without one, or one that throws, keeps what it parsed. */
+async function completeParsed(source: FeedSource, items: FeedItem[], getJson: (url: string) => Promise<unknown>): Promise<FeedItem[]> {
+  if (!source.complete || items.length === 0) return items;
+  try {
+    return await source.complete(items, getJson);
+  } catch {
+    return items;
+  }
+}
+
 /** Parse a JSON body; a body that is not JSON throws the parser's own SyntaxError, which health reads as a broken parser. */
 function parseJsonBody(body: string): unknown {
   return JSON.parse(body);
@@ -515,7 +525,11 @@ async function acquireSource(
         await recordFeedPull({ source: source.id, ok: true, fetched: 0, inserted: 0, error: `${NOT_MODIFIED_MARK}: ${got.reason}`.slice(0, 300), at });
       } else {
         const body = parseJsonBody(got.body);
-        const items = source.parse(body);
+        const items = await completeParsed(source, source.parse(body), async (followUp) => {
+          const more = await deps.read(followUp, null, headers, source.timeoutMs);
+          if (more.status !== 'MODIFIED') throw new Error(`no body for ${followUp}`);
+          return parseJsonBody(more.body);
+        });
         if (items.length === 0 && source.emptyBody?.(body)) {
           outcome = NOTHING_PUBLISHED_MARK;
           result = { ...base, nothingPublished: true };
@@ -661,8 +675,9 @@ export async function pullDueFeeds(input: {
       continue;
     }
     try {
-      const body = await (input.fetcher ?? httpFetcher)(ask.url, source.headers ?? {}, source.timeoutMs);
-      const items = source.parse(body);
+      const fetcher = input.fetcher ?? httpFetcher;
+      const body = await fetcher(ask.url, source.headers ?? {}, source.timeoutMs);
+      const items = await completeParsed(source, source.parse(body), (followUp) => fetcher(followUp, source.headers ?? {}, source.timeoutMs));
       const inserted = await insertFeedItems(source.id, items);
       await recordFeedPull({ source: source.id, ok: true, fetched: items.length, inserted, error: null, at: now.toISOString() });
       out.push({ source: source.id, inserted, error: null, fetched: items.length, duplicates: Math.max(0, items.length - inserted), incremental: ask.incremental });

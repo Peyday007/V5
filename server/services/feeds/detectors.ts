@@ -491,14 +491,157 @@ export const RULE_EFFECTIVE_SOON_V2: Detector = {
   },
 };
 
+/** The corrected rule's effective date the Federal Register connector writes on a correction ("Corrected rule effective 2026-12-28."). Pure. */
+export function correctedEffectiveDateOf(body: string | null | undefined): string | null {
+  const m = /Corrected rule effective (\d{4}-\d{2}-\d{2})\./.exec(body ?? '');
+  return m ? m[1]! : null;
+}
+
+/** Midnight UTC of the day an ISO instant falls on, in ms. Pure. */
+const utcDay = (ms: number): number => Date.parse(`${new Date(ms).toISOString().slice(0, 10)}T00:00:00.000Z`);
+
+/**
+ * v3's label and hypothesis, worded against the day the rule runs. v3 keeps a
+ * member while its effective date is at or after the day Brain first held it,
+ * so on a later run a date may already be past; a signal then says the rule
+ * took effect on that date and never asserts "must comply by" a date that has
+ * gone. `dates` is sorted ascending. Pure.
+ */
+export function ruleEffectiveSoonWording(dates: readonly string[], now: Date): { label: string; hypothesis: string } {
+  const today = new Date(now.getTime()).toISOString().slice(0, 10);
+  const past = dates.filter((one) => one < today);
+  const upcoming = dates.filter((one) => one >= today);
+  const first = dates[0]!;
+  const last = dates[dates.length - 1]!;
+  if (past.length === 0) {
+    return {
+      label: `${dates.length} final rule(s) from one agency taking effect by ${last}`,
+      hypothesis: `Businesses this agency regulates must comply by ${first}; some may buy a plain compliance summary or checklist. Not established.`,
+    };
+  }
+  if (upcoming.length === 0) {
+    return {
+      label: `${dates.length} final rule(s) from one agency that took effect by ${last}`,
+      hypothesis:
+        `These rules took effect between ${first} and ${last}, before ${today}; businesses this agency regulates have had to comply since ${first}, ` +
+        'and some may buy a plain compliance summary or checklist after the fact. Not established.',
+    };
+  }
+  return {
+    label: `${dates.length} final rule(s) from one agency, ${past.length} in force since ${first} and ${upcoming.length} taking effect by ${last}`,
+    hypothesis:
+      `${past.length} of these rules took effect on or after ${first}, before ${today}; businesses this agency regulates must comply with the rest by ${upcoming[0]}; ` +
+      'some may buy a plain compliance summary or checklist. Not established.',
+  };
+}
+
+/**
+ * RULE_EFFECTIVE_SOON, version 3 (SHADOW). Two causes of v2's recorded misses
+ * (DETECTOR_MISSES:RULE_EFFECTIVE_SOON@2), each fixed without lowering a bar:
+ *
+ *  1. The not-already-in-force bar is anchored to the record, not the run.
+ *     v2's lower bound was the later of publication and one day before *now*,
+ *     so a final rule effective on its own publication day (FAA 2026-23073 and
+ *     2026-23072, FCC 2026-23041) left detection a day after publication while
+ *     it stayed a member for 30 days, and was counted a miss. v3 measures it
+ *     from the day Brain first held the record (its fetch day, less v1's one
+ *     day of grace), bounded below by publication, so a verdict does not
+ *     depend on which day the detector runs. A rule effective before its
+ *     publication is still never kept, a rule already in force when Brain
+ *     first read it is still not "taking effect soon", and the eight-week
+ *     upper bound from publication is unchanged.
+ *  2. A correction (C1-2026-21030) reads the corrected rule's effective date
+ *     the connector recorded from the Federal Register API's own effective_on
+ *     ("Corrected rule effective YYYY-MM-DD."), and only then falls back to
+ *     v2's lookup of the stored corrected record, so a correction whose rule
+ *     was published before the lookback is no longer silently dropped.
+ *
+ * Because membership is anchored to the record, a later run can keep a rule
+ * whose date has passed; its label and hypothesis are worded against the run
+ * day (`ruleEffectiveSoonWording`), so no signal claims a business "must comply
+ * by" a date already gone.
+ *
+ * Grouping stays by issuing agency (the last listed). Free-text dates are still
+ * not parsed: Coast Guard 2026-23047, enforced before it was published and
+ * dated only in prose, stays out.
+ */
+export const RULE_EFFECTIVE_SOON_V3: Detector = {
+  id: 'RULE_EFFECTIVE_SOON',
+  version: 3,
+  label: RULE_EFFECTIVE_SOON.label,
+  mode: 'SHADOW',
+  sources: RULE_EFFECTIVE_SOON.sources,
+  lookbackMs: RULE_EFFECTIVE_SOON_V2.lookbackMs,
+  entityKeyOf(organization) {
+    return employerKey(issuingAgencyOf(organization));
+  },
+  memberWindowMs: RULE_EFFECTIVE_SOON_PUBLISHED_DAYS * DAY,
+  detect(records, now) {
+    const ours = records.filter((record) => this.sources.includes(record.source));
+    const effectiveOfDocument = (documentNumber: string): string | null => {
+      const corrected = ours.find((record) => record.url.includes(`/${documentNumber}/`));
+      return corrected ? effectiveDateOf(corrected.body) : null;
+    };
+    const groups = new Map<string, { name: string; members: { record: DetectorRecord; effective: string }[] }>();
+    for (const record of ours) {
+      const name = issuingAgencyOf(record.organization);
+      const agency = this.entityKeyOf!(record.organization);
+      if (!agency || !name) continue;
+      if (!withinMemberWindow(this, record.publishedAt, record.fetchedAt, now)) continue;
+      const published = Date.parse(record.publishedAt ?? record.fetchedAt);
+      const fetched = Date.parse(record.fetchedAt);
+      if (!Number.isFinite(published) || !Number.isFinite(fetched)) continue;
+      const corrects = correctedDocumentOf(record.body);
+      const effective =
+        effectiveDateOf(record.body) ?? (corrects ? correctedEffectiveDateOf(record.body) ?? effectiveOfDocument(corrects) : null);
+      if (!effective) continue;
+      const at = Date.parse(`${effective}T00:00:00.000Z`);
+      const publishedDay = utcDay(published);
+      // Lower bound: not before its own publication, and not in force for more than a day when
+      // Brain first held the record. Upper bound: eight weeks after publication.
+      const from = Math.max(publishedDay, utcDay(fetched) - DAY);
+      if (!Number.isFinite(at) || at < from || at > publishedDay + RULE_EFFECTIVE_SOON_V2_LEAD_DAYS * DAY) continue;
+      const group = groups.get(agency) ?? { name, members: [] };
+      group.members.push({ record, effective });
+      groups.set(agency, group);
+    }
+    const out: DetectedSignal[] = [];
+    for (const [agency, group] of [...groups].sort((a, b) => a[0].localeCompare(b[0]))) {
+      const dates = group.members.map((one) => one.effective).sort();
+      const wording = ruleEffectiveSoonWording(dates, now);
+      out.push({
+        groupKey: `agency:${agency}`,
+        label: wording.label,
+        entityKey: agency,
+        entityName: group.name,
+        category: 'REGULATION',
+        windowFrom: `${dates[0]}T00:00:00.000Z`,
+        windowTo: `${dates[dates.length - 1]}T00:00:00.000Z`,
+        memberIds: group.members.map((one) => one.record.id),
+        memberTitles: group.members.map((one) => one.record.title),
+        sourceUrls: [...new Set(group.members.map((one) => one.record.url))],
+        qualifiers: [
+          'a rule taking effect names who is regulated, not who will pay for help complying',
+          'the effective date is the one the Federal Register states; a delay or stay is not read',
+          'a correction carries the effective date of the rule it corrects, as the Federal Register API states it for that rule',
+          'kept against the day Brain first held the record; the wording says which effective dates had passed on the day it ran',
+        ],
+        hypothesis: wording.hypothesis,
+        deliverable: 'DOCUMENT',
+      });
+    }
+    return out;
+  },
+};
+
 /**
  * Every installed rule. Adding one is a new entry here and its tests — nothing else.
- * RULE_EFFECTIVE_SOON v1 stays exported so its recorded rows and readings keep their key (@1).
+ * RULE_EFFECTIVE_SOON v1 and v2 stay exported so their recorded rows and readings keep their keys (@1, @2).
  * A model may propose a rule only as a Factory objective (reviewed code, starting
  * in SHADOW); no model output installs, edits or promotes a rule at run time.
  * `proposeRuleRepair` is how a rule's repeated misses become that objective.
  */
-export const DETECTORS: readonly Detector[] = [CONCENTRATED_HIRING, REPEATED_DEMAND, RULE_EFFECTIVE_SOON_V2];
+export const DETECTORS: readonly Detector[] = [CONCENTRATED_HIRING, REPEATED_DEMAND, RULE_EFFECTIVE_SOON_V3];
 
 // ---------------------------------------------------------------------------
 // SHADOW before ACTIVE: readings, promotion and rollback, from rows
