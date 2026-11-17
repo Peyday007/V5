@@ -686,6 +686,17 @@ export async function nonGatingFailedRepairIds(campaignId: string): Promise<Set<
 const PROGRAM_OWED_FAILURE = /protected (probes module|verification path)|server\/services\/factory\/program\/probes\.ts/i;
 
 /**
+ * What a repair worker writes when closing the finding needs a schema change —
+ * a migration in both chains and the row type — that no repair of this
+ * campaign owns (production 2026-11-17, ventures-d0-p3-prep: eight attempts,
+ * each reporting that an expected-return figure needs "a new column or table
+ * (server/db/migrations/NNN_*.sql and server/db/pg-migrations/NNN_*.sql …)").
+ * A migration's file name is not known before it is written, so no grant of
+ * exact paths can reach it, and the campaign parked for good.
+ */
+const SCHEMA_OWED_FAILURE = /server\/db\/(pg-)?migrations\/|new (column|table)/i;
+
+/**
  * A repair that spent every attempt because its fix is the program's own probe
  * (production 2026-11-11: factory-program-d0, telemetry-d0-p1 — twelve attempts
  * each, every worker reporting the probe lives on the protected path) is the
@@ -702,8 +713,14 @@ export async function settleProgramOwedRepairs(campaignId: string): Promise<stri
       if (await settleAsPlatformOwed(campaignId, finding, `${unit.unitKey} spent every attempt on the factory's own machinery`)) settled.push(finding.id);
       continue;
     }
-    if (!PROGRAM_OWED_FAILURE.test(unit.failureDetail ?? '')) continue;
-    const note = `owed by the program, not this campaign: ${unit.unitKey} spent every attempt because the fix is the protected verification path; the requirement stays unverified until its probe passes on production`;
+    const detail = unit.failureDetail ?? '';
+    const owedFor = PROGRAM_OWED_FAILURE.test(detail)
+      ? 'the fix is the protected verification path'
+      : SCHEMA_OWED_FAILURE.test(detail)
+        ? 'the fix needs a schema change and a producer this campaign does not own'
+        : null;
+    if (!owedFor) continue;
+    const note = `owed by the program, not this campaign: ${unit.unitKey} spent every attempt because ${owedFor}; the requirement stays unverified until its probe passes on production`;
     if (!(await resolveFinding(finding.id, 'ACCEPTED_LIMITATION', note))) continue;
     await recordFactoryEvent({
       campaignId,
