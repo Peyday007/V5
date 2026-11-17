@@ -518,3 +518,44 @@ export function extractItems(items: readonly ExtractableItem[], now: Date = new 
   const status = new Map(reconciled.map((r) => [r.key, r.status]));
   return { facts: facts.map((f) => ({ ...f, contradictionStatus: status.get(f.key) ?? 'UNRECONCILED' })), reconciled, needsModel };
 }
+
+/**
+ * A stored fact read back from a recorded pass, or null when the value is not
+ * one this module wrote. Only what reconciliation and provenance need is
+ * checked; the rest of the fact is carried as it was stored.
+ */
+export function readStoredFact(raw: unknown): ExtractedFact | null {
+  const f = raw as Partial<ExtractedFact> | null;
+  if (!f || typeof f !== 'object') return null;
+  if (typeof f.key !== 'string' || (typeof f.value !== 'string' && typeof f.value !== 'number') || typeof f.observedAt !== 'string') return null;
+  if (!f.evidence || typeof f.evidence.itemId !== 'string' || typeof f.evidence.url !== 'string') return null;
+  if (!f.provenance || typeof f.provenance.source !== 'string') return null;
+  return f as ExtractedFact;
+}
+
+/**
+ * Recompute the facts a pass affects against what is already known
+ * (KNOW-25-1: "a changed record should trigger recomputation of affected
+ * facts"). Delta processing reads only the records that changed, so the
+ * observations of the same keys from records that did not change are not in
+ * the pass; without them a changed value could never be found to contradict
+ * an unchanged one. Every key the pass read, and every key a changed record's
+ * previous version produced, is reconciled over this pass's facts together
+ * with the stored observations of that key the caller passes — the current
+ * observations of records not re-read now, never a superseded version of a
+ * record that was. Only those keys are touched; no other stored fact is
+ * re-read. Pure.
+ */
+export function recomputeFacts(input: {
+  current: readonly ExtractedFact[];
+  stored: readonly ExtractedFact[];
+  /** Keys to recompute beyond those the current facts carry (a changed record's previous keys). */
+  affectedKeys?: Iterable<string>;
+  now: Date;
+}): { facts: ExtractedFact[]; reconciled: ReconciledFact[] } {
+  const keys = new Set<string>([...input.current.map((f) => f.key), ...(input.affectedKeys ?? [])]);
+  const stored = input.stored.filter((f) => keys.has(f.key));
+  const reconciled = reconcile([...input.current, ...stored], input.now);
+  const status = new Map(reconciled.map((r) => [r.key, r.status]));
+  return { facts: input.current.map((f) => ({ ...f, contradictionStatus: status.get(f.key) ?? 'UNRECONCILED' })), reconciled };
+}

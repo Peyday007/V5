@@ -332,3 +332,53 @@ describe('selective deepening routes the model reads (repair: deepening not cons
     for (let i = 0; i < 10; i += 1) expect(later).toContain(`Musing old ${i} ${source}`);
   });
 });
+
+describe('a changed record is reconciled against unchanged records from earlier passes (repair: unchanged items drop from pass facts)', () => {
+  function twin(source: string, tag: string, path: string, budget: string) {
+    return {
+      externalId: `${source}-${path}-${tag}`,
+      url: `https://example.test/${source}/${path}`,
+      title: 'Request for quotes: 500 kg of packaging film',
+      body: `Seeking quotes from a supplier. Budget ${budget}.`,
+      organization: 'Acme Foods LLC',
+      publishedAt: hoursAgo(5),
+    };
+  }
+
+  it('the changed value is CONTESTED against the unchanged record\'s stored observation, and the row names both items', async () => {
+    const source = `w${Math.random().toString(36).slice(2, 8)}`;
+    await insertFeedItems(source, [twin(source, 'a', 'one', '$4,000'), twin(source, 'a', 'two', '$4,000')]);
+    const first = (await recordFeedExtraction({ projectId, now: new Date(), capacity: 0 }))!;
+    const priceKey = first.facts.find((f) => f.field === 'price')!.key;
+    expect(first.facts.filter((f) => f.key === priceKey).length).toBe(2);
+    expect(first.reconciled.find((r) => r.key === priceKey)!.status).toBe('OBSERVED');
+    await tick();
+    // Record "one" changes its budget; record "two" is republished unchanged and is not re-read.
+    await insertFeedItems(source, [twin(source, 'b', 'one', '$6,500'), twin(source, 'b', 'two', '$4,000')]);
+    const second = (await recordFeedExtraction({ projectId, now: new Date(), capacity: 0 }))!;
+    expect(second.delta!.counts).toMatchObject({ CHANGED: 1, UNCHANGED: 1, NEW: 0 });
+    expect(second.facts.every((f) => f.evidence.itemId === second.delta!.changedItems[0])).toBe(true);
+    const price = second.reconciled.find((r) => r.key === priceKey)!;
+    expect(price.status).toBe('CONTESTED');
+    const unchangedTwo = first.facts.find((f) => f.key === priceKey && f.evidence.url.endsWith('/two'))!.evidence.itemId;
+    expect(price.itemIds).toContain(unchangedTwo);
+    expect(price.itemIds).toContain(second.delta!.changedItems[0]);
+    expect(second.facts.find((f) => f.key === priceKey)!.contradictionStatus).toBe('CONTESTED');
+    expect(second.delta!.recomputedKeys).toContain(priceKey);
+    expect(second.stageFailures).toEqual([]);
+  });
+
+  it('a superseded version of the changed record never contests its own successor', async () => {
+    const source = `w${Math.random().toString(36).slice(2, 8)}`;
+    await insertFeedItems(source, [twin(source, 'a', 'one', '$4,000')]);
+    const first = (await recordFeedExtraction({ projectId, now: new Date(), capacity: 0 }))!;
+    const priceKey = first.facts.find((f) => f.field === 'price')!.key;
+    await tick();
+    await insertFeedItems(source, [twin(source, 'b', 'one', '$6,500')]);
+    const second = (await recordFeedExtraction({ projectId, now: new Date(), capacity: 0 }))!;
+    expect(second.delta!.counts.CHANGED).toBe(1);
+    const price = second.reconciled.find((r) => r.key === priceKey)!;
+    expect(price.status).toBe('OBSERVED');
+    expect(price.itemIds).toEqual([second.delta!.changedItems[0]]);
+  });
+});

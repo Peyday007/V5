@@ -14,6 +14,8 @@ import {
   extractItems,
   priceMeasure,
   quantityMeasure,
+  readStoredFact,
+  recomputeFacts,
   reconcile,
   scopeOf,
   type ExtractableItem,
@@ -133,5 +135,42 @@ describe('contradiction status is on each fact', () => {
     expect(run.facts.length).toBeGreaterThan(0);
     expect(run.facts.every((f) => f.contradictionStatus === 'STALE')).toBe(true);
     expect(reconcile(extractItem(old), NOW).every((r) => r.observations.every((o) => o.contradictionStatus === 'STALE'))).toBe(true);
+  });
+});
+
+describe('a changed record is recomputed against the stored observations of unchanged records (repair)', () => {
+  const offer = (id: string, price: string): ExtractableItem =>
+    item({ id, url: `https://example.test/${id}`, organization: 'Acme Foods LLC', title: 'Request for quotes: packaging film', body: `Seeking quotes. Budget ${price}.`, publishedAt: '2026-11-16T00:00:00.000Z' });
+
+  it('a changed value contests an unchanged one it was never read beside', () => {
+    const stored = extractItems([offer('itm_a', '$4,000'), offer('itm_b', '$4,000')], NOW).facts.filter((f) => f.evidence.itemId === 'itm_b');
+    const current = extractItems([offer('itm_a', '$6,500')], NOW).facts;
+    const priceKey = current.find((f) => f.field === 'price')!.key;
+    expect(stored.some((f) => f.key === priceKey)).toBe(true);
+    // Alone, the changed record agrees with itself; that is the defect this repairs.
+    expect(extractItems([offer('itm_a', '$6,500')], NOW).reconciled.find((r) => r.key === priceKey)!.status).toBe('OBSERVED');
+    const run = recomputeFacts({ current, stored, now: NOW });
+    const price = run.reconciled.find((r) => r.key === priceKey)!;
+    expect(price.status).toBe('CONTESTED');
+    expect(new Set(price.observations.map((o) => o.evidence.itemId))).toEqual(new Set(['itm_a', 'itm_b']));
+    expect(run.facts.find((f) => f.key === priceKey)!.contradictionStatus).toBe('CONTESTED');
+    // Only this pass's facts are the pass's facts; the stored ones are observations, not re-read records.
+    expect(run.facts.every((f) => f.evidence.itemId === 'itm_a')).toBe(true);
+  });
+
+  it('only affected keys are touched, and a key a changed record dropped is recomputed from what remains', () => {
+    const stored = extractItems([offer('itm_b', '$4,000'), item({ id: 'itm_z', url: 'https://example.test/z', organization: 'Other Co', title: 'Lawn care', body: 'Mowing for $45.' })], NOW).facts;
+    const bKey = stored.find((f) => f.field === 'price' && f.evidence.itemId === 'itm_b')!.key;
+    const run = recomputeFacts({ current: [], stored, affectedKeys: [bKey], now: NOW });
+    expect(run.reconciled.map((r) => r.key)).toEqual([bKey]);
+    expect(run.reconciled[0]!.status).toBe('OBSERVED');
+    expect(run.reconciled[0]!.observations.every((o) => o.evidence.itemId === 'itm_b')).toBe(true);
+  });
+
+  it('a stored fact reads back from its JSON row, and a foreign value does not', () => {
+    const [fact] = extractItems([offer('itm_a', '$4,000')], NOW).facts;
+    expect(readStoredFact(JSON.parse(JSON.stringify(fact)))).toEqual(fact);
+    expect(readStoredFact({ key: 'x' })).toBeNull();
+    expect(readStoredFact(null)).toBeNull();
   });
 });

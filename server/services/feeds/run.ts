@@ -50,7 +50,7 @@ import { FEED_SOURCES, pullUrl, type FeedSource } from './sources.ts';
 import { FEED_SHORTLIST_BUCKET } from './bucket.ts';
 import { SITE_SOURCE } from './sites.ts';
 import { CODE_SIGNAL_SOURCE, coveredItems, detectionsForLeads } from './detectors.ts';
-import { EXTRACTOR_VERSION, extractItem, extractItems, MODEL_BATCH_SIZE, type ExtractableItem, type ExtractedFact } from './extract.ts';
+import { EXTRACTOR_VERSION, extractItem, extractItems, MODEL_BATCH_SIZE, readStoredFact, recomputeFacts, type ExtractableItem, type ExtractedFact } from './extract.ts';
 import { commitReadings, emptyDeltaIndex, foldSlices, planDelta, recordIdentity, sliceOf, type DeltaIndex, type DeltaPlan, type DeltaStatus, type RecordReading } from '../knowledge/delta.ts';
 import { nameKeyOf, resolveIdentities, type IdentityCollision, type IdentityLink, type IdentityRecord } from '../knowledge/identity.ts';
 import { selectForDeepening, type DeepeningCandidate, type DeepeningDecision, type DeepeningResult } from '../knowledge/deepening.ts';
@@ -1085,10 +1085,13 @@ export async function recordFeedExtraction(input: {
   let from: { fetchedAt: string; id: string } | null = null;
   let priorHistory: ParserHistory = {};
   const slices: unknown[] = [];
+  // The facts each recent pass stored, newest first: what a changed record's keys are recomputed against.
+  const storedFactRows: unknown[] = [];
   for (const [i, row] of recent.entries()) {
     try {
-      const parsed = JSON.parse(row.detail ?? '{}') as { cursor?: { to?: { fetchedAt?: unknown; id?: unknown } }; deltaIndex?: unknown; parserHistory?: unknown };
+      const parsed = JSON.parse(row.detail ?? '{}') as { cursor?: { to?: { fetchedAt?: unknown; id?: unknown } }; deltaIndex?: unknown; parserHistory?: unknown; facts?: unknown };
       slices.push(parsed.deltaIndex);
+      storedFactRows.push(parsed.facts);
       if (i !== 0) continue;
       const to = parsed.cursor?.to;
       if (to && typeof to.fetchedAt === 'string' && typeof to.id === 'string') from = { fetchedAt: to.fetchedAt, id: to.id };
@@ -1255,7 +1258,37 @@ export async function recordFeedExtraction(input: {
     ran(sourceId, 'CONTRADICTION_FRESHNESS', count);
     ran(sourceId, 'EVIDENCE_ATTACHMENT', count);
   }
-  const run = extractItems(readItems, now);
+  const extracted = extractItems(readItems, now);
+  // Recompute the affected keys against what is already known: the current observations of every record
+  // the index still holds and this pass did not re-read, from the newest pass that read it, limited to the
+  // keys its latest reading produced (so a superseded version never contests its successor). Unchanged
+  // records are not re-read; their stored facts are what a changed value is reconciled against.
+  const run = stage('recompute', extracted, () => {
+    const readIdentities = new Set(readItems.map((item) => identityOfItem.get(item.id)!));
+    const storedByIdentity = new Map<string, ExtractedFact[]>();
+    for (const raw of storedFactRows) {
+      if (!Array.isArray(raw)) continue;
+      const inRow = new Map<string, ExtractedFact[]>();
+      for (const one of raw) {
+        const fact = readStoredFact(one);
+        if (!fact) continue;
+        const identity = recordIdentity(fact.provenance.source, fact.evidence.url || fact.evidence.itemId);
+        if (readIdentities.has(identity) || storedByIdentity.has(identity)) continue;
+        const versions = priorIndex.records[identity]?.versions ?? [];
+        const latest = versions[versions.length - 1];
+        if (!latest || !latest.factKeys.includes(fact.key)) continue;
+        inRow.set(identity, [...(inRow.get(identity) ?? []), fact]);
+      }
+      for (const [identity, facts] of inRow) storedByIdentity.set(identity, facts);
+    }
+    const recomputed = recomputeFacts({
+      current: extracted.facts,
+      stored: [...storedByIdentity.values()].flat(),
+      affectedKeys: deltaPlan?.affectedFactKeys ?? [],
+      now,
+    });
+    return { ...extracted, ...recomputed };
+  });
   // Structure feeds Connect: what was just read goes into the event graph that construction reads,
   // under the ids the graph's own sync gives these rows, so neither path makes a second fact. Only
   // records whose plan detects events are handed over; the graph's own sync still reads every row.
@@ -1339,7 +1372,8 @@ export async function recordFeedExtraction(input: {
         const ids = [...new Set(r.observations.map((o) => o.evidence.itemId))];
         return {
           id: `key:${r.key}`,
-          decisionValue: statedValue(ids.flatMap((id) => factsByItem.get(id) ?? [])),
+          // A stored observation's item was not read this pass; its own observation still states the value at stake.
+          decisionValue: statedValue([...ids.flatMap((id) => factsByItem.get(id) ?? []), ...r.observations]),
           uncertainty: 0.5,
           novelty: Math.max(0, ...ids.map(noveltyOf)),
           contradicted: true,
