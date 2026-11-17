@@ -28,4 +28,17 @@ Spending safeguard for W6: every GPU start goes through `runpod-launch` with a B
 - 07:50Z: W6 stage 1 live. Pod c316n2e7hp4up4, SECURE H200 at $5.29/h, Brain cap $12 per 2.5 h, ready in 265 s. Readings at 08:50Z.
 - 07:47Z: W4 PR #1028 (queue flow, pressure, plan derivation, information-use trace) merged; deploy 44041630154 running.
 - 07:48Z: new W9, free-lane RESEARCH_VERIFY replies with no JSON. These dominate the 315 jobs not accepted in 6 h, so they are ineffective retries. Agent assigned; PR due 10:45Z.
+- 08:02Z cash report: the 10 newest missions all went to the goal tier; goal rounds at 2 AWAITING_LAUNCH (was 9), 1 ANSWERED, 3 PARKED, 1 RESEARCHING. Monetization questions are still 13 ANSWERED / 490 UNRESOLVED (historic; #1023 only went live at 07:39Z).
+- 08:14Z: RC2 = 7cfcde99, deploy 44044888041. It carries:
+  - #1028 W4 instrumentation.
+  - #1029 W3 F3e.
+  - #1031 W2 F2: arrangements read evidence (price confirmed).
+  - #1032 W10: synthesis recovery scoped to the current round.
+  - #1033 W5: the two Postgres flakes, whose root causes were in the tests.
+  - #1035 W11: the free lane admits commercial items that have no bin, after it sat idle beside 23 waiting items.
+- Release 3, due around 11:00Z, takes the independent review's findings plus W9:
+  - W2b: arrangement buyer ids go into inference, volume/hours are inferred, and candidateFromArrangement uses the inferred inputs.
+  - W3b: each declined question becomes an explicit assumption or next action.
+  - W10b: the recovery exclusion is scoped to the round, and an attempts-exhausted bin gets a regrant.
+  - W9: VERIFY replies with no JSON.
 - Troubleshooting session: the goal's 15 Routine bins are ruled out as a blocker (§84/§85, the free lane works them). The budget-cap evidence (V7) stays valid. The textFact provenance finding was passed to W2.
