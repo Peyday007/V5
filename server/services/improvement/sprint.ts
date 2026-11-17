@@ -85,6 +85,8 @@ import {
   type ControllerHistory,
   type ControllerSnapshot,
   type PriorDecision,
+  type ScoredHypothesis,
+  type ValuedAction,
 } from '../research/reasoningController.ts';
 import { MECHANISM_ROLES, loadProjectKnowledge, mechanismFromOpening, type KnowledgeReading, type MechanismModel, type MechanismRole } from '../research/knowledgeModel.ts';
 import {
@@ -657,6 +659,37 @@ export function needsPersonOf(actionable: boolean, decision: Pick<ControllerDeci
   const settled = first !== undefined && first.score - (second?.score ?? 0) >= SETTLED_MARGIN;
   return !researchable && !settled;
 }
+
+/**
+ * The needs-a-person rule's contract, checked when this module loads (as
+ * `assertSettledMarginScale` is) so every test and every boot that imports the
+ * sprint reproduces the recorded failure class if the rule regresses:
+ * reasoning-sprint:general-method attempt 1 lost to baseline:payer-and-price on
+ * "people" because a general-method opening with a null next step and research
+ * candidates still open was read as needing a person. Each case below is one
+ * shape of opening; `rule` is injectable so the check can be shown to refuse a
+ * regressed rule.
+ */
+export function assertNeedsPersonRule(rule: typeof needsPersonOf = needsPersonOf): void {
+  const action = (kind: ValuedAction['kind']): ValuedAction => ({
+    key: `contract:${kind}`, kind, subject: 'contract', question: 'contract', resolves: 'contract',
+    discriminates: [], cost: 0, value: 0, net: 0, valueBasis: 'HYPOTHESIS_DISCRIMINATION',
+  });
+  const hypothesis = (id: string, score: number): ScoredHypothesis => ({ id, statement: id, basis: 'contract', score, supports: [], refutes: [] });
+  const lean = SETTLED_MARGIN / 2;
+  const cases: Array<{ name: string; actionable: boolean; decision: Pick<ControllerDecision, 'next' | 'valued' | 'hypotheses'>; expected: boolean }> = [
+    { name: 'null next with research still open (the recorded failure)', actionable: false, decision: { next: null, valued: [action('RESEARCH')], hypotheses: [] }, expected: false },
+    { name: 'null next with research open and no mechanism hypotheses', actionable: false, decision: { next: null, valued: [action('EXPERIMENT'), action('RESEARCH')], hypotheses: [hypothesis('a', 0.5), hypothesis('b', 0.5)] }, expected: false },
+    { name: 'next step is obtaining a method', actionable: false, decision: { next: action('METHOD_GAP'), valued: [action('METHOD_GAP')], hypotheses: [] }, expected: true },
+    { name: 'next step is research', actionable: false, decision: { next: action('RESEARCH'), valued: [action('RESEARCH')], hypotheses: [] }, expected: false },
+    { name: 'nothing researchable and the decision unsettled', actionable: false, decision: { next: null, valued: [action('EXPERIMENT')], hypotheses: [hypothesis('a', 0.5 + lean), hypothesis('b', 0.5)] }, expected: true },
+    { name: 'nothing researchable and the decision settled (a rejection)', actionable: false, decision: { next: null, valued: [], hypotheses: [hypothesis('a', 0.9), hypothesis('b', 0.9 - SETTLED_MARGIN)] }, expected: false },
+    { name: 'actionable', actionable: true, decision: { next: action('METHOD_GAP'), valued: [], hypotheses: [] }, expected: false },
+  ];
+  const failures = cases.filter((c) => rule(c.actionable, c.decision) !== c.expected).map((c) => `${c.name}: expected needsPerson ${c.expected}`);
+  if (failures.length > 0) throw new Error(`needsPersonOf breaks its contract: ${failures.join('; ')}`);
+}
+assertNeedsPersonRule();
 
 /** The general method: the controller over the card, with the gross billed carried with its provenance. */
 export const GENERAL_METHOD: SprintMethod = {
