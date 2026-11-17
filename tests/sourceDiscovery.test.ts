@@ -11,6 +11,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   isSearchAnomaly,
+  maxWaiters,
   parseDuckDuckGo,
   pathWords,
   resetSearchState,
@@ -24,6 +25,7 @@ import {
 import { readSource, type AccessDeps } from '../server/services/sources/access.ts';
 import type { Resolver, SourceFetch } from '../server/services/sources/fetchForWorker.ts';
 import { guidanceBrief } from '../server/services/freeLane/worker.ts';
+import { failureClass } from '../server/services/goals/researchYield.ts';
 
 const HTML = `
 <div class="result"><a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.sba.gov%2Fdocument%2Fsupport%2Dtable%2Dsize%2Dstandards&amp;rut=abc">Table</a></div>
@@ -108,6 +110,34 @@ describe('a search result is a candidate page that exists', () => {
     }
     expect(searchSpacingMs()).toBeLessThan(start * 2);
     expect(searchSpacingMs()).toBeGreaterThanOrEqual(2_000);
+  });
+
+  it('serves a GPU tick of fragments at once instead of dropping most of their searches (B3, 2026-11-17)', async () => {
+    // Production shape: 14 GPU slots start in one tick and each fragment asks two searches at once.
+    // With a fixed 12 waiters, 16 of the 28 came back empty without being sent.
+    let clock = 1_000_000;
+    const nowMs = () => clock;
+    const answered = (async () => {
+      clock += 5_000; // each answer takes longer than the spacing, so no real timer waits
+      return new Response(HTML, { status: 200 });
+    }) as unknown as typeof fetch;
+    const results = await Promise.all(Array.from({ length: 28 }, (_, i) => webSearch(`fragment ${i} subject`, { fetchImpl: answered, nowMs })));
+    expect(results.filter((urls) => urls.length > 0)).toHaveLength(28);
+    expect(searchStats.skipped).toBe(0);
+    expect(searchStats.queries).toBe(28);
+  });
+
+  it('bounds the queue by how long a search would wait, never below 12 or above 64', () => {
+    expect(maxWaiters(4_000)).toBe(30);
+    expect(maxWaiters(30_000)).toBe(12);
+    expect(maxWaiters(2_000)).toBe(60);
+    expect(maxWaiters(500)).toBe(64);
+  });
+
+  it('says in the failure class when web search gave no candidate', () => {
+    expect(
+      failureClass('model runpod/openai/gpt-oss-120b: no readable source among 4 candidate page(s), none from web search: {"OFF_TOPIC":3,"HTTP_ERROR":1} the site answered 403'),
+    ).toBe('no readable source among N candidate page(s), none from web search: {…} the site answered …');
   });
 
   it('never throws: a failed search is an empty candidate list', async () => {
