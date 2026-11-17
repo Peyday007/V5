@@ -18,7 +18,9 @@ import {
   podIdFromUrl,
   resetPodSupervisor,
   superviseRunpodPod,
+  windowSpendFromRows,
   type PodConfig,
+  type PodRow,
 } from '../server/services/cheap/runpodPod.ts';
 import { gpuCeiling } from '../server/services/freeLane/capacity.ts';
 
@@ -95,7 +97,7 @@ function fakeRunpod(pod: { status: string; vllm: boolean }) {
       pod.status = 'RUNNING';
       return new Response('{}', { status: 200 });
     }
-    if (u.includes('rest.runpod.io')) return new Response(JSON.stringify({ desiredStatus: pod.status, costPerHr: 0.24 }), { status: 200 });
+    if (u.includes('rest.runpod.io')) return new Response(JSON.stringify({ desiredStatus: pod.status, costPerHr: 0.24, lastStartedAt: '1970-01-01T09:59:00.000Z' }), { status: 200 });
     return new Response('{"data":[]}', { status: pod.vllm ? 200 : 503 });
   }) as Fetch;
   return { calls, fetchImpl };
@@ -416,10 +418,144 @@ describe('a pod is stopped even when RunPod REST is unreachable (production 2026
     }) as typeof fetch;
     const config = { apiKey: 'k', podId: 'pod1', idleStopMs: 1, vllm: { url: 'u', key: 'k' } };
     const read = await readPod(config as never, fetchImpl);
-    expect(read).toEqual({ status: 'RUNNING', costPerHr: 5.29 });
+    expect(read).toEqual({ status: 'RUNNING', costPerHr: 5.29, startedAt: null });
     const stopped = await stopOrStartForTest(config, 'POST', '/stop', fetchImpl);
     expect(stopped?.status).toBe(200);
     expect(calls.some((c) => c.startsWith('gql:') && c.includes('podStop'))).toBe(true);
     expect(await stopOrStartForTest(config, 'POST', '/other', fetchImpl)).toBeNull();
+  });
+});
+
+describe('the budget is measured from what RunPod bills, not only from Brain\'s samples (production 2026-11-17: pod 6lsnbsnctavj2m)', () => {
+  const H = 3_600_000;
+  const M = 60_000;
+  const PRICE = 5.29;
+  const budget = { usd: 4, windowMs: 2 * H, defaulted: false };
+  const podId = '6lsnbsnctavj2m';
+  const podConf: PodConfig = { apiKey: 'rp', podId, idleStopMs: DEFAULT_IDLE_STOP_MS, budget, vllm: { url: `https://${podId}-8000.proxy.runpod.net/v1`, key: 'vllm-key' } };
+  const sample = (at: number): PodRow => ({ at, outcome: 'SAMPLE_RUNNING', durationMs: 5 * M, measures: { podId, costPerHr: PRICE } });
+
+  /** RunPod as GraphQL answers it (REST is down): the pod, its price and its uptime; stop and resume change it. */
+  function graphqlRunpod(pod: { status: string; uptimeSeconds: number | null }) {
+    const posts: string[] = [];
+    const fetchImpl = (async (url: string | URL, init?: RequestInit) => {
+      const u = String(url);
+      if (u.includes('rest.runpod.io')) throw new TypeError('fetch failed');
+      if (u.includes('graphql')) {
+        const q = String(init?.body ?? '');
+        if (q.includes('podStop')) {
+          posts.push('stop');
+          pod.status = 'EXITED';
+          return new Response(JSON.stringify({ data: { podStop: { desiredStatus: 'EXITED' } } }), { status: 200 });
+        }
+        if (q.includes('podResume')) {
+          posts.push('start');
+          pod.status = 'RUNNING';
+          return new Response(JSON.stringify({ data: { podResume: { desiredStatus: 'RUNNING' } } }), { status: 200 });
+        }
+        const running = pod.status === 'RUNNING';
+        return new Response(
+          JSON.stringify({ data: { pod: { desiredStatus: pod.status, costPerHr: PRICE, runtime: running && pod.uptimeSeconds !== null ? { uptimeInSeconds: pod.uptimeSeconds } : null } } }),
+          { status: 200 },
+        );
+      }
+      return new Response('{"data":[]}', { status: 200 });
+    }) as Fetch;
+    return { posts, fetchImpl };
+  }
+
+  it('reads when RunPod started billing from lastStartedAt, else from the runtime uptime', async () => {
+    const { billingStartOf } = await import('../server/services/cheap/runpodPod.ts');
+    const now = Date.parse('2026-11-17T01:46:00Z');
+    expect(billingStartOf({ lastStartedAt: '2026-11-17T00:45:00Z' }, now)).toBe(Date.parse('2026-11-17T00:45:00Z'));
+    expect(billingStartOf({ runtime: { uptimeInSeconds: 3000 } }, now)).toBe(now - 3000 * 1000);
+    expect(billingStartOf({ runtime: null }, now)).toBeNull();
+  });
+
+  it('a pod billed 61 min at $5.29 with only 35 min of samples exhausts a $4 / 2 h budget: STOP, and no START after', async () => {
+    const rented = Date.parse('2026-11-17T00:45:00Z');
+    let t = rented + 61 * M;
+    // 15 min of model load before Brain connected, 35 min sampled, then a restart's 11 unsampled minutes.
+    const rows: PodRow[] = [];
+    for (let i = 0; i < 7; i += 1) rows.push(sample(rented + 20 * M + i * 5 * M));
+    const sampledOnly = windowSpendFromRows(rows, { since: t - budget.windowMs, now: t, live: null });
+    expect(sampledOnly.sampled).toBeCloseTo((35 / 60) * PRICE, 2); // $3.09: what PR #1002 counted
+    expect(sampledOnly.sampled).toBeLessThan(budget.usd);
+
+    const pod = { status: 'RUNNING', uptimeSeconds: 61 * 60 };
+    const { posts, fetchImpl } = graphqlRunpod(pod);
+    const record = async (e: { outcome?: string | null; measures?: Record<string, unknown>; durationMs?: number | null }) => {
+      rows.push({ at: t, outcome: e.outcome ?? '', durationMs: e.durationMs ?? null, measures: e.measures ?? {} });
+    };
+    const tick = (waiting: number, inFlight: number) =>
+      superviseRunpodPod({ waiting, inFlight }, { config: podConf, fetchImpl, now: () => t, force: true, lastStartFailed: async () => false, hostRefusals: async () => 0, rows: async () => rows, record });
+
+    const capped = await tick(12, 6);
+    expect(capped?.budget).toMatchObject({ exhausted: true, known: true, budget: 4, windowHours: 2 });
+    expect(capped!.budget!.spent!).toBeCloseTo((61 / 60) * PRICE, 2); // $5.38, RunPod's figure
+    expect(capped?.decision.action).toBe('STOP');
+    expect(capped?.acted).toBe(true);
+    expect(pod.status).toBe('EXITED');
+    const exhausted = rows.filter((r) => r.outcome === 'BUDGET_EXHAUSTED');
+    expect(exhausted).toHaveLength(1);
+    expect(exhausted[0]!.measures).toMatchObject({ startedAt: new Date(rented).toISOString() });
+
+    // Stopped, RunPod reports no uptime any more; the rows still carry when billing began. Nothing starts.
+    for (let i = 0; i < 30; i += 1) {
+      t += 2 * M;
+      const step = await tick(40, 0);
+      expect(step?.decision.action).toBe('NONE');
+      expect(step?.budget?.exhausted).toBe(true);
+    }
+    expect(posts).toEqual(['stop']);
+  });
+
+  it('a RUNNING pod with no samples at all counts from when RunPod started billing it — on the first step after boot', async () => {
+    const t = Date.parse('2026-11-17T01:35:00Z');
+    const pod = { status: 'RUNNING', uptimeSeconds: 50 * 60 };
+    const { posts, fetchImpl } = graphqlRunpod(pod);
+    const rows: PodRow[] = [];
+    const record = async (e: { outcome?: string | null; measures?: Record<string, unknown>; durationMs?: number | null }) => {
+      rows.push({ at: t, outcome: e.outcome ?? '', durationMs: e.durationMs ?? null, measures: e.measures ?? {} });
+    };
+    // The boot check: budget only, no reading of the work.
+    const first = await superviseRunpodPod({ waiting: 0, inFlight: 0 }, { config: podConf, fetchImpl, now: () => t, force: true, lastStartFailed: async () => false, rows: async () => [], record, budgetOnly: true });
+    expect(first!.budget!.spent!).toBeCloseTo((50 / 60) * PRICE, 2); // $4.41 with zero samples
+    expect(first?.budget?.exhausted).toBe(true);
+    expect(first?.decision.action).toBe('STOP');
+    expect(posts).toEqual(['stop']);
+    // The first sample row records when RunPod started billing, so the time survives the stop.
+    expect(rows.find((r) => r.outcome === 'SAMPLE_RUNNING')?.measures).toMatchObject({ startedAt: new Date(t - 50 * M).toISOString() });
+  });
+
+  it('the boot check under budget changes nothing, whatever the idle reading would say', async () => {
+    const t = Date.parse('2026-11-17T01:35:00Z');
+    const pod = { status: 'RUNNING', uptimeSeconds: 10 * 60 };
+    const { posts, fetchImpl } = graphqlRunpod(pod);
+    const step = await superviseRunpodPod({ waiting: 0, inFlight: 0 }, { config: podConf, fetchImpl, now: () => t, force: true, lastStartFailed: async () => false, rows: async () => [], record: async () => undefined, budgetOnly: true });
+    expect(step?.budget?.exhausted).toBe(false);
+    expect(step?.decision.action).toBe('NONE');
+    expect(posts).toEqual([]);
+  });
+
+  it('counts a pod created and deleted in the window from its rows, clipped to the window, and never twice', () => {
+    const now = 10 * H;
+    const since = now - 2 * H;
+    const rows: PodRow[] = [
+      // Old pod running since before the window, moved off at since + 30 min; new pod created then.
+      { at: since - 60 * M, outcome: 'STARTED', durationMs: null, measures: { podId: 'old', costPerHr: 2 } },
+      { at: since + 30 * M, outcome: 'MIGRATED', durationMs: null, measures: { from: 'old', podId: 'new', costPerHr: 3 } },
+      { at: since + 31 * M, outcome: 'OLD_POD_DELETED', durationMs: null, measures: { podId: 'old' } },
+      // The new pod sampled for 10 min, then stopped at since + 60 min.
+      { at: since + 35 * M, outcome: 'SAMPLE_RUNNING', durationMs: 5 * M, measures: { podId: 'new', costPerHr: 3 } },
+      { at: since + 40 * M, outcome: 'SAMPLE_RUNNING', durationMs: 5 * M, measures: { podId: 'new', costPerHr: 3 } },
+      { at: since + 60 * M, outcome: 'STOPPED', durationMs: null, measures: { podId: 'new', costPerHr: 3 } },
+    ];
+    const spend = windowSpendFromRows(rows, { since, now, live: { podId: 'new', status: 'EXITED', costPerHr: 3, startedAt: null } });
+    const byPod = Object.fromEntries(spend.pods.map((p) => [p.podId, p]));
+    expect(byPod['old']!.billed).toBeCloseTo(0.5 * 2, 4); // 30 min in the window, not the 60 before it
+    expect(byPod['new']!.billed).toBeCloseTo(0.5 * 3, 4); // 30 min billed, though only 10 sampled
+    expect(byPod['new']!.sampled).toBeCloseTo((10 / 60) * 3, 4);
+    expect(spend.dollars).toBeCloseTo(1 + 1.5, 4);
   });
 });

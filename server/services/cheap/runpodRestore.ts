@@ -445,7 +445,7 @@ function caller(apiKey: string, fetchImpl?: Fetch): Call {
  */
 const GRAPHQL = 'https://api.runpod.io/graphql';
 
-async function graphql(apiKey: string, query: string, fetchImpl?: Fetch): Promise<{ ok: boolean; data: Record<string, unknown> | null; error: string }> {
+export async function graphql(apiKey: string, query: string, fetchImpl?: Fetch): Promise<{ ok: boolean; data: Record<string, unknown> | null; error: string }> {
   const response = await (fetchImpl ?? fetch)(GRAPHQL, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
