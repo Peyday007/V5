@@ -73,3 +73,5 @@ Spending safeguard for W6: every GPU start goes through `runpod-launch` with a B
   - #1048, W12: pool-precondition cases for its test.
   #1047 closed as superseded. Both tests pass on both backends locally.
 - DECIDED: no Factory merge hold. No merge-only hold exists; the only lever, pausing workers, would break the standing order "do not disconnect Factory". Mitigation: re-dispatch Deploy on any superseding commit, and fix any breakage it brings.
+- 10:45Z: release 6 = 8885038e LIVE (deploy 44060012669; all four SQLite shards and the Postgres gate passed). It carries #1028, #1029, #1031–#1036, #1037, #1038, #1039–#1043, #1045, #1046 and #1048.
+- 11:02Z: W6 stage 2. Pod 2ua3kt3ftnd7n9, SECURE H200 at $5.29/h, loaded in 926 s (billed). Cap $16 per 3 h. Readings at 12:03Z.
