@@ -43,3 +43,12 @@ Spending safeguard for W6: every GPU start goes through `runpod-launch` with a B
   - W9: VERIFY replies with no JSON.
 - Troubleshooting session: the goal's 15 Routine bins are ruled out as a blocker (§84/§85, the free lane works them). The budget-cap evidence (V7) stays valid. The textFact provenance finding was passed to W2.
 - 08:28Z: release candidate LOCKED at bd5e0419, deploy 44046891820. It carries #1028, #1029, #1031–#1038, adding #1034 (W9, verify JSON), #1036 (W10b), #1037 (W3b) and #1038 (W2b). Review findings 1–3 are closed in code. Fly expected around 09:15Z. After that, only a defect found in verification merges.
+- 08:50Z W6 stage 1 reading, eda04071 + #1028 pending. Pod c316n2e7hp4up4, SECURE H200 at $5.29/h, 07:50–08:50Z:
+  - **GPU:** 221 jobs (24 not accepted, 11%), about 38 s each, 4.22 slots busy on average. It produced 2 accepted claims. $4.41 for 50 min, which is $2.20 per claim.
+  - **Lane-wide:** 20.4 accepted claims/h; this goal 6.8/h, up from 0/h at 05:45Z. The goal's jobs peaked at 7 at once (72 jobs).
+  - **Plan runs:** median 0.5 s. Event loop stalls of 2–3 s inside evaluatorPool.ts.
+  - **Pressure:** DB NORMAL, p90 21 ms, 33 pool-checkout timeouts felt. RSS 1.7 GB, peak 2.8 GB. CPU 28% of one core.
+  - **Binding constraints:**
+    - Research-mission ceiling: about 16 missions, 568 ideas waiting (troubleshooting reading 08:28Z). Owner: W12.
+    - 120B fragment answers dropped by Brain's checks: 20 in the hour, so it is HELD BACK from fragments. Owner: W13.
+  - **New owners:** W2c (planner CPU index) and W3c (hypothesis-check cap, PR #1040 ready).
