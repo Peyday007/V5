@@ -15,9 +15,12 @@
  * A tested parsing method is kept by recording which parser version read each
  * version: a parser change re-reads exactly the records that parser read.
  *
- * Nothing here opens a source, owns a schedule or stores anything: the index
- * is a plain JSON value the caller keeps in a row it already writes (§10.3,
- * §20.4). Pure.
+ * Nothing here opens a source, owns a schedule or stores anything (§10.3,
+ * §20.4). The index is never carried forward as a stored copy: a caller whose
+ * source records are already rows rebuilds it, for just the batch in hand,
+ * from those rows with `indexFromObservations` — the rows are the history, so
+ * no snapshot of it is written per pass and none grows with it (invariant 45).
+ * Pure.
  */
 import { createHash } from 'node:crypto';
 
@@ -137,6 +140,50 @@ export function readDeltaIndex(value: unknown): DeltaIndex {
 }
 
 const sortedUnique = (xs: Iterable<string>) => [...new Set(xs)].sort();
+
+/** One stored observation of a record, as the caller's own rows hold it, read back to rebuild its history. */
+export interface RecordObservation {
+  identity: string;
+  fingerprint: string;
+  seenAt: string;
+  /** The parser that read this observation, or null when it was never read. */
+  parserVersion: string | null;
+  /** What reading this observation produced (recomputed by the caller's own code from the row). */
+  factKeys?: readonly string[];
+  entities?: readonly string[];
+  dependents?: readonly string[];
+}
+
+/**
+ * Rebuild the index for the records a batch names from their stored
+ * observations, oldest first. Consecutive observations with the same
+ * fingerprint are one version; a different fingerprint is the next version.
+ * A version counts as read by a parser when its newest observation was. Only
+ * the identities given are in the result, so its size is the batch's, never
+ * the history's. Pure.
+ */
+export function indexFromObservations(observations: readonly RecordObservation[], entityMappings: Readonly<Record<string, EntityMapping>> = {}): DeltaIndex {
+  const index = emptyDeltaIndex();
+  const ordered = [...observations].sort((a, b) => a.seenAt.localeCompare(b.seenAt));
+  for (const o of ordered) {
+    const history = (index.records[o.identity] ??= { identity: o.identity, versions: [] });
+    const latest = history.versions[history.versions.length - 1];
+    const reading = {
+      parserVersion: o.parserVersion,
+      factKeys: sortedUnique(o.factKeys ?? []),
+      entities: sortedUnique(o.entities ?? []),
+      dependents: sortedUnique(o.dependents ?? []),
+    };
+    if (latest && latest.fingerprint === o.fingerprint) {
+      latest.seenAt = o.seenAt;
+      Object.assign(latest, reading);
+      continue;
+    }
+    history.versions.push({ version: (latest?.version ?? 0) + 1, fingerprint: o.fingerprint, seenAt: o.seenAt, ...reading });
+  }
+  for (const [identity, mapping] of Object.entries(entityMappings)) index.entityMappings[identity] = { ...mapping };
+  return index;
+}
 
 function cloneIndex(index: DeltaIndex): DeltaIndex {
   return JSON.parse(JSON.stringify(index)) as DeltaIndex;
