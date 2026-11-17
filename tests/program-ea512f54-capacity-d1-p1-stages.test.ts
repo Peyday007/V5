@@ -225,6 +225,8 @@ describe('recordStageLimit', () => {
         [newId('bev'), atIso, item, outcome],
       );
       await attempt('wi-once', 'FAILED_RETRYABLE', new Date(now - 50 * 60_000).toISOString());
+      await attempt('wi-once-b', 'FAILED_RETRYABLE', new Date(now - 45 * 60_000).toISOString());
+      await attempt('wi-once-c', 'RELEASED_TRANSIENT', new Date(now - 44 * 60_000).toISOString());
       await attempt('wi-twice', 'FAILED_RETRYABLE', new Date(now - 40 * 60_000).toISOString());
       await attempt('wi-twice', 'SUBMITTED', new Date(now - 30 * 60_000).toISOString());
       await attempt('wi-old', 'RELEASED_TRANSIENT', new Date(now - 30 * 3_600_000).toISOString());
@@ -236,6 +238,7 @@ describe('recordStageLimit', () => {
       expect(report.limit.kind).toBe('SOURCE_ACCESS');
       expect(report.gate.decision).toBe('REFUSE_NO_HEALTHY_READING');
       expect(report.allocation.ranked.length + report.allocation.unmeasured.length).toBe(5);
+      // Four non-submitted rows in the window, but only two re-attempts.
       expect(report.pressures.find((p) => p.stage === 'model-interpretation')!.retries).toEqual(ok(2));
 
       await recordStageLimit(new Date(now));
