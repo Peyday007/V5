@@ -28,8 +28,13 @@ import {
   recordAcquisitionMeasures,
   resourceSignals,
   sourceRepair,
+  storedAcquisition,
+  EXTRACT_BUDGET,
+  type AcquisitionMeasuresReading,
   type ResourceSignal,
+  type SourceAcquisitionMeasures,
 } from '../server/services/feeds/acquisitionMeasures.ts';
+import { STORED_MEASURES_MAX_BYTES } from '../server/services/freeLane/stageCapacity.ts';
 
 const HOUR = 3_600_000;
 const NOW = new Date('2026-11-17T12:00:00.000Z');
@@ -467,5 +472,81 @@ describe('the recorded reading', () => {
       readStageCapacity: async () => null, catalog: [], readAllocation: async () => { throw new Error('unreadable'); },
     });
     for (const s of failed!.allocation) expect(s.decided.measured).toBe(false);
+  });
+});
+
+describe('the hourly acquisition reading is bounded (finding F8)', () => {
+  it('runs the extractor over at most the budget, and never claims a fact count it did not read', async () => {
+    const src = `big-${tag}`;
+    for (let n = 1; n <= 5; n += 1) await item(src, n, 2);
+    const full = (await readAcquisitionMeasures(SINCE, NOW.toISOString(), [])).find((s) => s.source === src)!;
+    expect(full.parserSample).toEqual({ examined: 5, stored: 5 });
+    expect(full.structuredFacts.measured).toBe(true);
+
+    const capped = (await readAcquisitionMeasures(SINCE, NOW.toISOString(), [], { perWindow: 100, perSource: 2 })).find((s) => s.source === src)!;
+    expect(capped.parserSample).toEqual({ examined: 2, stored: 5 });
+    expect(capped.structuredFacts.measured).toBe(false);
+    if (!capped.structuredFacts.measured) expect(capped.structuredFacts.reason).toContain('2 of 5');
+    // Counts that need no body are still over every stored item.
+    expect(capped.newUniqueDocuments).toEqual(m(5));
+    expect(capped.parserCoverage).toEqual(full.parserCoverage);
+
+    const windowCapped = (await readAcquisitionMeasures(SINCE, NOW.toISOString(), [], { perWindow: 3, perSource: 100 })).find((s) => s.source === src)!;
+    expect(windowCapped.parserSample).toEqual({ examined: 3, stored: 5 });
+    expect(EXTRACT_BUDGET.perWindow).toBeGreaterThan(0);
+  });
+
+  it('reads items a page at a time across a window larger than one page', async () => {
+    const src = `paged-${tag}`;
+    for (let n = 1; n <= 520; n += 1) await item(src, n, 3);
+    const one = (await readAcquisitionMeasures(SINCE, NOW.toISOString(), [], { perWindow: 10, perSource: 10 })).find((s) => s.source === src)!;
+    expect(one.newUniqueDocuments).toEqual(m(520));
+    expect(one.parserSample).toEqual({ examined: 10, stored: 520 });
+  });
+
+  it('stores a bounded row however many sources the window measured, keeping until and repairs first', () => {
+    const base = (id: string, repair: boolean): SourceAcquisitionMeasures => ({
+      source: id,
+      recordsVisited: m(1),
+      newUniqueDocuments: m(1),
+      newUniqueUsefulDocuments: m(0),
+      refreshedRecords: m(0),
+      rawBytes: nm(UNMEASURED_REASONS.rawBytes),
+      parserCoverage: m(1),
+      parserSample: { examined: 1, stored: 1 },
+      structuredFacts: m(1),
+      acceptedEvidence: nm(UNMEASURED_REASONS.acceptedEvidence),
+      codeDerivedMatches: m(0),
+      verifiedBuyerPriceFulfillmentLinks: nm(UNMEASURED_REASONS.verifiedLinks),
+      usableTransactionPaths: m(0),
+      timeToGoalImpactMinutes: nm(UNMEASURED_REASONS.timeToGoalImpact),
+      aiJobsAvoided: m(0),
+      aiEscalations: m(0),
+      aiCallsPerUsefulFinding: m(null),
+      dollarsPerUsefulFinding: nm(UNMEASURED_REASONS.dollarsPerUsefulFinding),
+      failureRecovery: m({ failures: 0, recoveries: 0, pulls: 1 }),
+      providerSaturation: m({ throttled: 0, latestHealth: null }),
+      revenue: nm(UNMEASURED_REASONS.revenue),
+      repair: repair ? { kind: 'REPAIR_OUTAGE', reason: 'down' } : null,
+      placement: { placement: 'WHOLE_READ', reason: 'r' },
+    });
+    const sources = Array.from({ length: 3_000 }, (_, i) => base(`s${String(i).padStart(4, '0')}`, i === 2_999));
+    const reading = { since: SINCE, until: NOW.toISOString(), sources, constraint: { constrained: null, basis: 'b', recommendations: [] }, allocation: [] } as AcquisitionMeasuresReading;
+    const stored = storedAcquisition(reading);
+    expect(JSON.stringify(stored).length).toBeLessThanOrEqual(STORED_MEASURES_MAX_BYTES);
+    expect(stored['until']).toBe(NOW.toISOString());
+    expect((stored['sources'] as SourceAcquisitionMeasures[])[0]!.source).toBe('s2999');
+    expect((stored['truncated'] as Record<string, { total: number }>)['sources']!.total).toBe(3_000);
+    expect(stored['totals']).toEqual({ sources: 3_000 });
+  });
+
+  it('records the bounded row, not the whole reading', async () => {
+    const rows: RecordBinEventInput[] = [];
+    const catalog = Array.from({ length: 200 }, (_, i) => catalogSource(`cat-${tag}-${i}`));
+    const reading = await recordAcquisitionMeasures(NOW, async (e) => { rows.push(e); }, { readStageCapacity: async () => null, catalog });
+    expect(reading!.sources.length).toBeGreaterThanOrEqual(200);
+    expect(rows).toHaveLength(1);
+    expect(JSON.stringify(rows[0]!.measures).length).toBeLessThanOrEqual(STORED_MEASURES_MAX_BYTES);
+    expect((rows[0]!.measures as { sources: unknown[] }).sources.length).toBeLessThan(reading!.sources.length);
   });
 });

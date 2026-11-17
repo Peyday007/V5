@@ -1554,3 +1554,59 @@ function freeGain(stage: StageReading | undefined, windowHours: number): Measure
 function round2(x: number): number {
   return Math.round(x * 100) / 100;
 }
+
+/* ------------------------------------------------------------------------- */
+/* Bounding what an hourly reading stores                                      */
+/* ------------------------------------------------------------------------- */
+
+/** Entries any one list keeps in a stored reading; the rest are counted, not stored. */
+export const STORED_LIST_LIMIT = 40;
+/** The most bytes of JSON one hourly reading writes to `bin_events.measures`. */
+export const STORED_MEASURES_MAX_BYTES = 64 * 1024;
+
+/** What a bounded reading dropped: per list path, how many it kept of how many. */
+export type MeasuresTruncation = Record<string, { kept: number; total: number }>;
+
+function capLists(value: unknown, limit: number, path: string, dropped: MeasuresTruncation, own: number = limit): unknown {
+  if (Array.isArray(value)) {
+    if (value.length > own) dropped[path || '.'] = { kept: own, total: value.length };
+    return value.slice(0, own).map((v, i) => capLists(v, limit, `${path}[${i}]`, dropped));
+  }
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) out[k] = capLists(v, limit, path ? `${path}.${k}` : k, dropped);
+    return out;
+  }
+  return value;
+}
+
+/**
+ * The reading as stored: every list cut to `limit` entries, or a top-level
+ * list to its own entry in `limits` (callers order the lists so the entries
+ * that matter come first), halving the limits until the
+ * JSON fits `maxBytes`, and as a last resort only the top-level scalars. What
+ * was cut is recorded under `truncated`, so a stored count is never mistaken
+ * for the whole (inv. 33). Pure. A reading already inside both bounds is
+ * returned unchanged in content.
+ */
+export function boundMeasures(
+  reading: Record<string, unknown>,
+  options: { limit?: number; maxBytes?: number; limits?: Readonly<Record<string, number>> } = {},
+): Record<string, unknown> {
+  const maxBytes = options.maxBytes ?? STORED_MEASURES_MAX_BYTES;
+  const first = options.limit ?? STORED_LIST_LIMIT;
+  for (let limit = first; limit >= 1; limit = Math.floor(limit / 2)) {
+    const dropped: MeasuresTruncation = {};
+    const capped: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(reading)) {
+      // A top-level list the caller gave its own limit shrinks in the same proportion.
+      const own = options.limits?.[k] !== undefined ? Math.max(1, Math.floor((options.limits[k]! * limit) / first)) : limit;
+      capped[k] = capLists(v, limit, k, dropped, own);
+    }
+    const out = Object.keys(dropped).length > 0 ? { ...capped, truncated: dropped } : capped;
+    if (JSON.stringify(out).length <= maxBytes) return out;
+  }
+  const scalars: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(reading)) if (v === null || typeof v !== 'object') scalars[k] = v;
+  return { ...scalars, truncated: { '*': { kept: 0, total: Object.keys(reading).length } } };
+}

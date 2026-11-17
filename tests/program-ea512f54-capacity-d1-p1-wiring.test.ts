@@ -207,3 +207,23 @@ describe('the capacity controller acts on the recorded decisions', () => {
     expect((await readCapacityDecisions()).stageLimit).toBeNull();
   });
 });
+
+describe('boundMeasures (finding F8)', () => {
+  it('leaves a small reading as it is and cuts long lists, counting what it cut', async () => {
+    const { boundMeasures, STORED_LIST_LIMIT, STORED_MEASURES_MAX_BYTES } = await import('../server/services/freeLane/stageCapacity.ts');
+    expect(boundMeasures({ a: 1, list: [1, 2] })).toEqual({ a: 1, list: [1, 2] });
+    const big = { since: 's', nested: { rows: Array.from({ length: 500 }, (_, i) => ({ i, pad: 'x'.repeat(400) })) } };
+    const out = boundMeasures(big);
+    expect(JSON.stringify(out).length).toBeLessThanOrEqual(STORED_MEASURES_MAX_BYTES);
+    expect((out['nested'] as { rows: unknown[] }).rows.length).toBeLessThanOrEqual(STORED_LIST_LIMIT);
+    expect((out['truncated'] as Record<string, { total: number }>)['nested.rows']!.total).toBe(500);
+    expect(out['since']).toBe('s');
+    const scalarOnly = boundMeasures({ until: 'u', blob: { s: 'y'.repeat(200_000) } });
+    expect(scalarOnly['until']).toBe('u');
+    expect(JSON.stringify(scalarOnly).length).toBeLessThanOrEqual(STORED_MEASURES_MAX_BYTES);
+    // A top-level list given its own limit keeps more, and shrinks with the rest when the row is too big.
+    const own = boundMeasures({ keep: Array.from({ length: 300 }, (_, i) => i), other: Array.from({ length: 300 }, (_, i) => i) }, { limits: { keep: 200 } });
+    expect((own['keep'] as unknown[]).length).toBe(200);
+    expect((own['other'] as unknown[]).length).toBe(STORED_LIST_LIMIT);
+  });
+});

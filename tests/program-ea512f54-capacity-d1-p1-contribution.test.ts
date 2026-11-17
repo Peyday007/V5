@@ -37,11 +37,14 @@ import {
   readContribution,
   recordContribution,
   routeReadings,
+  storedContribution,
   waitingByPool,
   type ComponentReading,
   type ContributionMeasures,
   type ContributionReport,
 } from '../server/services/freeLane/contribution.ts';
+import { readCapacityDecisions, STORED_MEASURES_MAX_BYTES } from '../server/services/freeLane/stageCapacity.ts';
+import { recordBinEvent } from '../server/repos/bins.ts';
 
 const ok = (value: number) => ({ measured: true as const, value });
 const NOT = (reason: string) => ({ measured: false as const, reason });
@@ -395,5 +398,46 @@ describe('recordContribution', () => {
         expect(g.excluded.some((e) => /^ask /.test(e.method))).toBe(true);
       }
     });
+  });
+});
+
+describe('the hourly contribution row is bounded (finding F8)', () => {
+  it('stores a bounded row however many components the window read, the controller holds first', async () => {
+    const components = Array.from({ length: 2_000 }, (_, i) => reading({ id: `route-${i}`, workWaiting: ok(0) }));
+    components.push(reading({ id: 'broken', failing: { cause: 'credentials', failures: 3 } }));
+    const report = buildContributionReport({
+      since: 'a', until: 'b', gaps: [],
+      system: { minutesToVerifiedCandidate: NOT('x'), offerReadyPathways: ok(1), cashOutcomes: NOT('x') },
+      components,
+    });
+    const recorded: { measures?: Record<string, unknown> }[] = [];
+    const returned = await recordContribution(new Date(), async (e) => { recorded.push(e); }, async () => report);
+    expect(returned.components).toHaveLength(2_001);
+    const stored = recorded[0]!.measures!;
+    // The contribution row carries the controller's decisions too, so its bound is twice a reading's.
+    expect(JSON.stringify(stored).length).toBeLessThanOrEqual(2 * STORED_MEASURES_MAX_BYTES);
+    expect((stored['decisions'] as { id: string; verdict: string }[])[0]).toMatchObject({ id: 'broken', verdict: 'REPAIR' });
+    expect((stored['components'] as { id: string }[])[0]!.id).toBe('broken');
+    expect(stored['totals']).toMatchObject({ components: 2_001, decisions: 2_001 });
+    expect((stored['truncated'] as Record<string, { total: number }>)['components']!.total).toBe(2_001);
+    expect(stored['repairsFirst']).toEqual(['MODEL_ROUTE:broken']);
+    expect(storedContribution(report, { SCALE: 0, HOLD: 0, RETIRE: 0, REPAIR: 1, MEASURE: 0 })['counts']).toMatchObject({ REPAIR: 1 });
+  });
+
+  it('keeps the decisions the capacity controller holds growth on, read back from the real row', async () => {
+    await freshProject();
+    const components = Array.from({ length: 1_500 }, (_, i) => reading({ id: `route-${i}`, measures: measures({ saturation: ok(0.9) }) }));
+    components.push(reading({ id: 'runpod/Org/broken', failing: { cause: 'broken GPU', failures: 2 } }));
+    const report = buildContributionReport({
+      since: 'a', until: 'b', gaps: [],
+      system: { minutesToVerifiedCandidate: NOT('x'), offerReadyPathways: ok(1), cashOutcomes: NOT('x') },
+      components,
+    });
+    await recordContribution(new Date(), recordBinEvent, async () => report);
+    const decisions = await readCapacityDecisions();
+    expect(decisions.contribution?.decisions[0]).toMatchObject({ id: 'runpod/Org/broken', verdict: 'REPAIR' });
+    expect(decisions.contribution!.decisions.length).toBeGreaterThan(40);
+    const row = await getDb().get<{ measures: string }>(`SELECT measures FROM bin_events WHERE event_type = ? ORDER BY at DESC LIMIT 1`, [CAPACITY_CONTRIBUTION_EVENT]);
+    expect(row!.measures.length).toBeLessThanOrEqual(2 * STORED_MEASURES_MAX_BYTES);
   });
 });

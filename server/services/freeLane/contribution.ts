@@ -42,7 +42,7 @@ import { isRunpodSlot } from '../cheap/runpod.ts';
 import { readPodSpend, type PodSpend } from '../cheap/runpodPod.ts';
 import { readSourceYields, type SourceYield } from '../feeds/run.ts';
 import { causeOfReason, type RouteFailureCause } from './worker.ts';
-import { routeOfReason, usageOf, type Measured } from './stageCapacity.ts';
+import { boundMeasures, STORED_MEASURES_MAX_BYTES, routeOfReason, usageOf, type Measured } from './stageCapacity.ts';
 
 export const CAPACITY_CONTRIBUTION_EVENT = 'CAPACITY_CONTRIBUTION';
 
@@ -844,7 +844,35 @@ export async function recordContribution(
         ? `Measured contribution justifies more for: ${report.hardwareJustifiedFor.join(', ')}.`
         : 'No component shows measured saturation of a working path or a marginal gain.').slice(0, 480),
     evidenceClass: 'MEASURED',
-    measures: { ...report, counts } as unknown as Record<string, unknown>,
+    measures: storedContribution(report, counts),
   });
   return report;
+}
+
+/** Verdicts in the order a stored reading keeps them: the ones the capacity controller holds growth on first. */
+const VERDICT_ORDER: readonly ContributionVerdict[] = ['REPAIR', 'RETIRE', 'HOLD', 'SCALE', 'MEASURE'];
+/** Decisions a stored row keeps: the capacity controller (`readCapacityDecisions`) reads them, so they get more room than the readings. */
+export const STORED_DECISION_LIMIT = 200;
+
+/**
+ * The reading as one hourly row stores it: decisions ordered by verdict so the
+ * repairs, retirements and holds the capacity controller acts on survive the
+ * list bound (with more room than the readings), components in the same order,
+ * and every list cut to `boundMeasures`' size with what was cut counted. The
+ * full report is still returned to the caller; only the row is bounded. Pure.
+ */
+export function storedContribution(report: ContributionReport, counts: Record<ContributionVerdict, number>): Record<string, unknown> {
+  const rank = (v: ContributionVerdict): number => VERDICT_ORDER.indexOf(v);
+  const decisions = [...(report.decisions ?? [])].sort((a, b) => rank(a.verdict) - rank(b.verdict));
+  const order = new Map(decisions.map((d, i) => [`${d.kind}:${d.id}`, i]));
+  const components = [...(report.components ?? [])].sort(
+    (a, b) => (order.get(`${a.kind}:${a.id}`) ?? Number.MAX_SAFE_INTEGER) - (order.get(`${b.kind}:${b.id}`) ?? Number.MAX_SAFE_INTEGER),
+  );
+  return boundMeasures({
+    ...report,
+    decisions,
+    components,
+    counts,
+    totals: { components: components.length, decisions: decisions.length, gaps: (report.gaps ?? []).length },
+  } as unknown as Record<string, unknown>, { limits: { decisions: STORED_DECISION_LIMIT }, maxBytes: 2 * STORED_MEASURES_MAX_BYTES });
 }
