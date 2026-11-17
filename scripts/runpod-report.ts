@@ -30,7 +30,7 @@ import { runpodConfig } from '../server/services/cheap/runpod.ts';
 import { podConfig, readPod } from '../server/services/cheap/runpodPod.ts';
 import { BENCH_PREFIX, listPods } from '../server/services/cheap/runpodRestore.ts';
 import { listReadings, planProgress, readGoalPlan } from '../server/services/goals/plan.ts';
-import { failureClass, goalPipelineSpeed, goalResearchProgress } from '../server/services/goals/researchYield.ts';
+import { failureClass, goalPipelineSpeed, goalResearchProgress, percentile, waitsUntilNext } from '../server/services/goals/researchYield.ts';
 import { resetFreeLaneFitness, unfitNow } from '../server/services/freeLane/worker.ts';
 
 const argv = process.argv.slice(2);
@@ -204,6 +204,8 @@ async function main(): Promise<void> {
   } else console.log(`GPU COST unknown (${livePrice === null && !(process.env['BRAIN_RUNPOD_API_KEY'] ?? '').trim() ? 'no BRAIN_RUNPOD_API_KEY to ask RunPod, and BRAIN_RUNPOD_USD_PER_HOUR unset' : `RunPod returned no price for the pod${liveFailure ? `: ${liveFailure}` : ''}, and BRAIN_RUNPOD_USD_PER_HOUR unset`})`);
   console.log(`RUNPOD_ACCEPTED_CLAIMS ${gpuClaims.accepted} surviving ${gpuClaims.surviving}`);
   console.log(`RUNPOD_SUBMITTED ${gpuJobs}`);
+  await queueSection(since, hours);
+  await pressureSection(since, hours);
   await goalSection(since, hours);
   console.log('RUNPOD-REPORT: OK');
 }
@@ -274,9 +276,344 @@ async function goalSection(since: string, hours: number): Promise<void> {
     console.log(`SPEED_JOBS_PEAK ${windows[0]!.speed.jobs.peak} before ${windows[1]!.speed.jobs.peak}`);
     for (const d of reading.researchDiagnosis) console.log(`  why short ${d.cause}: ${d.evidence}`);
     if (reading.researchDiagnosis.length === 0) console.log('  why short            nothing stands out');
+    await traceSection(goal.id, reading, since, hours);
   }
   console.log(`RUNPOD_GOAL_OPENINGS ${gpuOpenings}`);
   console.log(`RUNPOD_GOAL_OPENINGS_IN_PLAN ${gpuInPlan}`);
+}
+
+const num = (x: number | string | null | undefined): number => Number(x ?? 0) || 0;
+const ageMin = (at: string | null | undefined, nowMs = Date.now()): string => (at ? `${Math.round((nowMs - Date.parse(at)) / 6_000) / 10} min` : '-');
+function parseJson(text: string | null | undefined): Record<string, unknown> {
+  try {
+    const value = text ? (JSON.parse(text) as unknown) : {};
+    return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * The work queue under a surge (surge readiness W4): what arrived against what
+ * finished, per work type and per hour; what waits now, how much of it is
+ * claimable and how long the oldest has waited; and the retries — items that
+ * needed more than one lease, split into those a retry rescued and those it did
+ * not (an ineffective retry). Read-only and aggregated in the database: every
+ * statement is bounded by the window or by the live states.
+ */
+async function queueSection(since: string, hours: number): Promise<void> {
+  const db = getDb();
+  const nowIso = new Date().toISOString();
+  const arrived = await db.all<{ work_type: string; hour: string; n: number | string }>(
+    `SELECT work_type, SUBSTR(created_at, 1, 13) AS hour, COUNT(*) AS n FROM work_items
+      WHERE created_at >= ? GROUP BY work_type, SUBSTR(created_at, 1, 13)`,
+    [since],
+  );
+  const finished = await db.all<{ work_type: string; hour: string; state: string; n: number | string; retried: number | string | null }>(
+    `SELECT work_type, SUBSTR(completed_at, 1, 13) AS hour, state, COUNT(*) AS n,
+            SUM(CASE WHEN attempt_count > 1 THEN 1 ELSE 0 END) AS retried
+       FROM work_items WHERE completed_at >= ? GROUP BY work_type, SUBSTR(completed_at, 1, 13), state`,
+    [since],
+  );
+  type Flow = { arrived: number; succeeded: number; failed: number; cancelled: number; retriedOk: number; retriedNot: number };
+  const blank = (): Flow => ({ arrived: 0, succeeded: 0, failed: 0, cancelled: 0, retriedOk: 0, retriedNot: 0 });
+  const byType = new Map<string, Flow>();
+  const byHour = new Map<string, Flow>();
+  for (const row of arrived) {
+    for (const [map, key] of [[byType, row.work_type], [byHour, row.hour]] as const) {
+      const f = map.get(key) ?? blank();
+      f.arrived += num(row.n);
+      map.set(key, f);
+    }
+  }
+  for (const row of finished) {
+    for (const [map, key] of [[byType, row.work_type], [byHour, row.hour]] as const) {
+      const f = map.get(key) ?? blank();
+      if (row.state === 'SUCCEEDED') {
+        f.succeeded += num(row.n);
+        f.retriedOk += num(row.retried);
+      } else {
+        if (row.state === 'FAILED') f.failed += num(row.n);
+        else f.cancelled += num(row.n);
+        f.retriedNot += num(row.retried);
+      }
+      map.set(key, f);
+    }
+  }
+  console.log(`QUEUE FLOW, last ${hours}h (work_items: arrived = created, finished = completed; retried = needed more than one lease)`);
+  if (byType.size === 0) console.log('  none');
+  const line = (f: Flow) => {
+    const done = f.succeeded + f.failed + f.cancelled;
+    return `arrived ${String(f.arrived).padStart(5)} · finished ${String(done).padStart(5)} (succeeded ${f.succeeded}, failed ${f.failed}, cancelled ${f.cancelled}) · net ${f.arrived - done >= 0 ? '+' : ''}${f.arrived - done} · retries rescued ${f.retriedOk}, ineffective ${f.retriedNot}`;
+  };
+  for (const [type, f] of [...byType].sort((a, b) => b[1].arrived - a[1].arrived)) console.log(`  ${type.padEnd(26)} ${line(f)}`);
+  for (const [hour, f] of [...byHour].sort((a, b) => a[0].localeCompare(b[0]))) console.log(`  hour ${hour}Z${' '.repeat(8)} ${line(f)}`);
+  const total = [...byType.values()].reduce((t, f) => ({ arrived: t.arrived + f.arrived, done: t.done + f.succeeded + f.failed + f.cancelled, ok: t.ok + f.succeeded, ineffective: t.ineffective + f.retriedNot }), { arrived: 0, done: 0, ok: 0, ineffective: 0 });
+  console.log(`QUEUE_ARRIVED ${total.arrived} FINISHED ${total.done} SUCCEEDED ${total.ok} INEFFECTIVE_RETRIES ${total.ineffective}`);
+
+  const live = await db.all<{ work_type: string; state: string; n: number | string; claimable: number | string | null; oldest_created: string | null; oldest_claimable: string | null; oldest_leased: string | null; overdue: number | string | null }>(
+    `SELECT work_type, state, COUNT(*) AS n,
+            SUM(CASE WHEN available_at <= ? THEN 1 ELSE 0 END) AS claimable,
+            MIN(created_at) AS oldest_created,
+            MIN(CASE WHEN available_at <= ? THEN available_at END) AS oldest_claimable,
+            MIN(leased_at) AS oldest_leased,
+            SUM(CASE WHEN lease_expires_at < ? THEN 1 ELSE 0 END) AS overdue
+       FROM work_items WHERE state IN ('QUEUED', 'LEASED') GROUP BY work_type, state`,
+    [nowIso, nowIso, nowIso],
+  );
+  console.log('QUEUE DEPTH now (QUEUED: claimable = available now, waited = since it became available; LEASED: overdue = lease past expiry)');
+  if (live.length === 0) console.log('  empty');
+  for (const row of live.sort((a, b) => a.state.localeCompare(b.state) || num(b.n) - num(a.n))) {
+    if (row.state === 'QUEUED') {
+      console.log(`  QUEUED ${row.work_type.padEnd(26)} ${String(num(row.n)).padStart(5)} · claimable ${num(row.claimable)} · oldest claimable waited ${ageMin(row.oldest_claimable)} · oldest created ${ageMin(row.oldest_created)} ago`);
+    } else {
+      console.log(`  LEASED ${row.work_type.padEnd(26)} ${String(num(row.n)).padStart(5)} · oldest lease ${ageMin(row.oldest_leased)} · overdue ${num(row.overdue)}`);
+    }
+  }
+  const queued = live.filter((r) => r.state === 'QUEUED');
+  const oldestClaimable = queued.map((r) => r.oldest_claimable).filter((x): x is string => !!x).sort()[0] ?? null;
+  console.log(`QUEUE_DEPTH queued ${queued.reduce((t, r) => t + num(r.n), 0)} claimable ${queued.reduce((t, r) => t + num(r.claimable), 0)} leased ${live.filter((r) => r.state === 'LEASED').reduce((t, r) => t + num(r.n), 0)} oldest_claimable_wait_min ${oldestClaimable ? Math.round((Date.now() - Date.parse(oldestClaimable)) / 60_000) : 'n/a'}`);
+
+  const leases = await db.all<{ outcome: string | null; n: number | string }>(
+    'SELECT outcome, COUNT(*) AS n FROM work_leases WHERE ended_at >= ? GROUP BY outcome',
+    [since],
+  );
+  console.log(`LEASES ENDED, last ${hours}h ${leases.length ? leases.map((r) => `${(r.outcome ?? 'none').toLowerCase()}=${num(r.n)}`).join(' ') : 'none'}`);
+  const bins = await db.all<{ state: string; n: number | string; oldest: string | null }>(
+    `SELECT state, COUNT(*) AS n, MIN(created_at) AS oldest FROM bins WHERE state IN ('READY', 'LEASED') GROUP BY state`,
+  );
+  console.log(`BINS now ${bins.length ? bins.map((r) => `${r.state.toLowerCase()}=${num(r.n)} (oldest ${ageMin(r.oldest)})`).join(' · ') : 'none ready or leased'}`);
+}
+
+/**
+ * Server pressure as Brain itself records it (surge readiness W4): each live
+ * process's own last reading (`runtime_liveness.readings`, written about every
+ * thirty seconds: CPU, memory, event loop, pool waits, the §63 database
+ * pressure state), and across the window the free-lane controller's measured
+ * decisions (`FREE_LANE_CAPACITY`, each carrying the CPU, loop lag, database
+ * state and queue it acted on) and its idle-with-work readings. The database
+ * server's own view (sessions, Supabase host CPU and disk) is the connection
+ * report's; this does not repeat it.
+ */
+async function pressureSection(since: string, hours: number): Promise<void> {
+  const db = getDb();
+  const alive = await db.all<{ instance_id: string; alive_at: string; readings: string | null }>(
+    'SELECT instance_id, alive_at, readings FROM runtime_liveness WHERE alive_at >= ? ORDER BY alive_at DESC LIMIT 5',
+    [new Date(Date.now() - 120_000).toISOString()],
+  );
+  console.log('PRESSURE now (each live process\'s own last reading)');
+  if (alive.length === 0) console.log('  no process wrote a reading in the last 2 min');
+  for (const row of alive) {
+    const r = parseJson(row.readings);
+    const cpu = r['cpu'] as { windowMs?: number; processPctOfCore?: number; stealPct?: number | null; idlePct?: number | null; vcpus?: number | null } | null | undefined;
+    const mem = r['memory'] as { rssMB?: number; heapUsedMB?: number; heapLimitMB?: number; peakRssMB?: number } | null | undefined;
+    const loop = r['eventLoop'] as { p99?: number; max?: number } | null | undefined;
+    const pools = r['pools'] as Record<string, { total?: number; idle?: number; waiting?: number; max?: number }> | null | undefined;
+    const checkouts = r['checkouts'] as Record<string, { p95?: number; max?: number }> | null | undefined;
+    const pressure = r['pressure'] as { state?: string; p90Ms?: number | null; failures?: number } | null | undefined;
+    const pool = (name: string) => {
+      const p = pools?.[name];
+      const c = checkouts?.[name.toUpperCase()];
+      return p ? `${name} ${num(p.total) - num(p.idle)}/${num(p.max)} busy, ${num(p.waiting)} waiting${c ? `, wait p95 ${num(c.p95)}ms max ${num(c.max)}ms` : ''}` : `${name} -`;
+    };
+    console.log(`  ${row.instance_id.slice(0, 12)} rev ${String(r['revision'] ?? '?').slice(0, 8)} alive ${row.alive_at}`);
+    console.log(`    cpu ${cpu ? `${cpu.processPctOfCore ?? '?'}% of one core over ${Math.round(num(cpu.windowMs) / 1000)}s · machine idle ${cpu.idlePct ?? '?'}% steal ${cpu.stealPct ?? '?'}% · ${cpu.vcpus ?? '?'} vCPU` : 'not measured'} · memory ${mem ? `rss ${mem.rssMB}MB heap ${mem.heapUsedMB}/${mem.heapLimitMB}MB peak rss ${mem.peakRssMB}MB` : 'not measured'} · loop ${loop ? `p99 ${loop.p99}ms max ${loop.max}ms` : 'not measured'}`);
+    console.log(`    db ${pool('workload')} · ${pool('control')} · pressure ${pressure ? `${pressure.state} (statement p90 ${pressure.p90Ms === null || pressure.p90Ms === undefined ? '-' : Math.round(pressure.p90Ms)}ms, ${num(pressure.failures)} overload failure(s) in 120s)` : 'not measured'}`);
+  }
+  const decisions = await db.all<{ at: string; outcome: string; workload_class: string | null; measures: string | null; reason: string | null }>(
+    `SELECT at, outcome, workload_class, measures, reason FROM bin_events
+      WHERE event_type = 'FREE_LANE_CAPACITY' AND at >= ? ORDER BY at DESC LIMIT 500`,
+    [since],
+  );
+  const counts = new Map<string, number>();
+  let maxCpu = 0;
+  let maxLag = 0;
+  let maxWaiting = 0;
+  const dbStates = new Map<string, number>();
+  for (const d of decisions) {
+    counts.set(d.outcome, (counts.get(d.outcome) ?? 0) + 1);
+    const m = parseJson(d.measures);
+    maxCpu = Math.max(maxCpu, num(m['cpu'] as number));
+    maxLag = Math.max(maxLag, num(m['lagMs'] as number));
+    maxWaiting = Math.max(maxWaiting, num(m['waiting'] as number));
+    if (m['db'] !== undefined) dbStates.set(String(m['db']), (dbStates.get(String(m['db'])) ?? 0) + 1);
+  }
+  const idle = await db.get<{ n: number | string }>(
+    `SELECT COUNT(*) AS n FROM bin_events WHERE event_type = 'FREE_LANE_IDLE' AND at >= ?`,
+    [since],
+  );
+  console.log(`PRESSURE over ${hours}h (free-lane controller's measured decisions${decisions.length === 500 ? ', newest 500' : ''})`);
+  console.log(`  decisions ${decisions.length ? [...counts].map(([k, v]) => `${k.toLowerCase()}=${v}`).join(' ') : 'none'} · peak brain cpu ${Math.round(maxCpu * 100)}% · peak loop lag ${Math.round(maxLag)}ms · peak waiting items ${maxWaiting} · database ${dbStates.size ? [...dbStates].map(([k, v]) => `${k}=${v}`).join(' ') : '-'} · idle with work queued ~${num(idle?.n) * 10} min`);
+  for (const d of decisions.filter((one) => one.outcome === 'SHRINK').slice(0, 5)) {
+    console.log(`  shrink ${d.at} ${d.workload_class ?? '?'}: ${String(d.reason ?? '').slice(0, 200)}`);
+  }
+}
+
+/**
+ * Whether research is used (surge readiness W4): the goal's newest accepted
+ * claims, each traced from the round and question that asked for it, through
+ * what it was stored as, to the plan reading that judged it — or to the point
+ * it stopped. Brain records no per-claim retrieval event, so "reached the plan"
+ * is read from the rows that carry a claim into it: an opening filed from the
+ * claim or its fragment (`cash_opportunities.source_claim_id` / `fragment_id`),
+ * a card fact citing it (`cash_card_facts.claim_id`), a construction fact
+ * derived from it (`construction_facts.source_claim_id`), and the plan reading's
+ * own considered/excluded lists. Retained knowledge is a shared finding
+ * (`shared_findings`, §31). Latency is from the claim's acceptance to the
+ * goal's next plan evaluation (a scenario run or a reading).
+ */
+async function traceSection(goalId: string, reading: NonNullable<Awaited<ReturnType<typeof readGoalPlan>>>, since: string, hours: number): Promise<void> {
+  const db = getDb();
+  const projectId = reading.target.projectId;
+  await planInputsSection(goalId, projectId, reading);
+  const rounds = await db.all<{ id: string; bucket_id: string; round: number | string; state: string; orchestration_id: string }>(
+    `SELECT r.id, r.bucket_id, r.round, r.state, m.orchestration_id FROM cash_discovery_rounds r
+       JOIN russell_missions m ON m.candidate_id = r.candidate_id
+      WHERE r.project_id = ? AND r.bucket_id LIKE ? AND m.orchestration_id IS NOT NULL
+      ORDER BY r.opened_at DESC LIMIT 400`,
+    [projectId, `goal-${goalId}%`],
+  );
+  const roundOf = new Map(rounds.map((r) => [r.orchestration_id, r]));
+  const orchestrations = [...roundOf.keys()];
+  if (orchestrations.length === 0) {
+    console.log('  TRACE no research round of this goal has a packet yet');
+    return;
+  }
+  const marks = (n: number) => Array.from({ length: n }, () => '?').join(', ');
+  const claims: { id: string; orchestration_id: string; fragment_id: string | null; claim: string; created_at: string; opportunity_signal: string | null }[] = [];
+  for (let i = 0; i < orchestrations.length; i += 200) {
+    const chunk = orchestrations.slice(i, i + 200);
+    claims.push(
+      ...(await db.all<(typeof claims)[number]>(
+        `SELECT id, orchestration_id, fragment_id, claim, created_at, opportunity_signal FROM research_claims
+          WHERE accepted = 1 AND created_at >= ? AND orchestration_id IN (${marks(chunk.length)})
+          ORDER BY created_at DESC LIMIT 200`,
+        [since, ...chunk],
+      )),
+    );
+  }
+  claims.sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const window = claims.slice(0, 200);
+  if (window.length === 0) {
+    console.log(`  TRACE no accepted claim on this goal's research in ${hours}h`);
+    return;
+  }
+  const ids = window.map((c) => c.id);
+  const fragmentIds = [...new Set(window.map((c) => c.fragment_id).filter((x): x is string => !!x))];
+  const questions = new Map(
+    fragmentIds.length
+      ? (await db.all<{ id: string; question: string }>(`SELECT id, question FROM research_fragments WHERE id IN (${marks(fragmentIds.length)})`, fragmentIds)).map((f) => [f.id, f.question])
+      : [],
+  );
+  const openings = await db.all<{ id: string; source_claim_id: string | null; fragment_id: string | null; created_at: string }>(
+    `SELECT id, source_claim_id, fragment_id, created_at FROM cash_opportunities
+      WHERE project_id = ? AND duplicate_of_id IS NULL
+        AND (source_claim_id IN (${marks(ids.length)})${fragmentIds.length ? ` OR fragment_id IN (${marks(fragmentIds.length)})` : ''})`,
+    [projectId, ...ids, ...fragmentIds],
+  );
+  const facts = await db.all<{ claim_id: string; opportunity_id: string; field: string }>(
+    `SELECT claim_id, opportunity_id, field FROM cash_card_facts WHERE project_id = ? AND claim_id IN (${marks(ids.length)})`,
+    [projectId, ...ids],
+  );
+  const construction = await db.all<{ source_claim_id: string; fact_key: string }>(
+    `SELECT source_claim_id, fact_key FROM construction_facts WHERE source_claim_id IN (${marks(ids.length)})`,
+    ids,
+  );
+  const findings = await db.all<{ claim_id: string; state: string }>(
+    `SELECT claim_id, state FROM shared_findings WHERE claim_id IN (${marks(ids.length)})`,
+    ids,
+  );
+  const evaluations = [
+    ...(await db.all<{ at: string }>('SELECT started_at AS at FROM scenario_runs WHERE project_id = ? AND label = ? AND started_at >= ?', [projectId, `goal ${goalId}`, since])),
+    ...(await db.all<{ at: string }>('SELECT created_at AS at FROM goal_plan_readings WHERE workstream_id = ? AND created_at >= ?', [goalId, since])),
+  ].map((e) => Date.parse(e.at));
+  const considered = new Map(reading.considered.map((one) => [one.opportunityId, one]));
+  const excluded = new Map(reading.excluded.map((one) => [one.opportunityId, one]));
+  const traces = window.map((c) => {
+    const opened = openings.filter((o) => o.source_claim_id === c.id || (c.fragment_id !== null && o.fragment_id === c.fragment_id));
+    const cardFacts = facts.filter((f) => f.claim_id === c.id);
+    const openingIds = [...new Set([...opened.map((o) => o.id), ...cardFacts.map((f) => f.opportunity_id)])];
+    const plan = openingIds.map((id) => {
+      const judged = considered.get(id);
+      const left = excluded.get(id);
+      return { id, where: judged ? (judged.modelled ? 'MODELLED' : 'CONSIDERED') : left ? `EXCLUDED: ${left.reason.slice(0, 60)}` : 'NOT READ' };
+    });
+    const built = construction.filter((f) => f.source_claim_id === c.id);
+    const retained = findings.filter((f) => f.claim_id === c.id);
+    const [wait] = waitsUntilNext([Date.parse(c.created_at)], evaluations);
+    return { c, openingIds, cardFacts, plan, built, retained, wait: wait ?? null };
+  });
+  const inPlan = traces.filter((t) => t.plan.some((p) => p.where === 'MODELLED' || p.where === 'CONSIDERED') || t.built.length > 0);
+  const stored = traces.filter((t) => t.openingIds.length > 0 || t.built.length > 0);
+  const waits = traces.map((t) => t.wait).filter((x): x is number => x !== null);
+  const pct = (n: number) => `${Math.round((100 * n) / traces.length)}%`;
+  console.log(`  TRACE ${traces.length} newest accepted claim(s) on this goal's research in ${hours}h`);
+  console.log(`  trace reach          became an opening, card fact or construction fact ${stored.length} (${pct(stored.length)}) · read by the plan (considered/modelled, or a construction fact) ${inPlan.length} (${pct(inPlan.length)}) · reached nothing ${traces.length - stored.length} · retained as shared findings ${traces.filter((t) => t.retained.some((f) => f.state === 'ACTIVE')).length}`);
+  console.log(`  trace latency        claim accepted → next plan evaluation: median ${waits.length ? `${Math.round((percentile(waits, 50) ?? 0) / 6_000) / 10} min` : 'n/a'}, p90 ${waits.length ? `${Math.round((percentile(waits, 90) ?? 0) / 6_000) / 10} min` : 'n/a'} over ${waits.length} claim(s), ${traces.length - waits.length} with no evaluation since`);
+  for (const t of traces.slice(0, 8)) {
+    const round = roundOf.get(t.c.orchestration_id);
+    console.log(`  trace claim ${t.c.id} accepted ${t.c.created_at}${t.wait === null ? ' · no plan evaluation since' : ` · next plan evaluation +${Math.round(t.wait / 6_000) / 10} min`}`);
+    console.log(`        round   ${round ? `${round.bucket_id} r${round.round} (${round.state})` : '-'} · question: ${(t.c.fragment_id ? (questions.get(t.c.fragment_id) ?? '-') : '-').replace(/\s+/g, ' ').slice(0, 140)}`);
+    console.log(`        answer  ${t.c.claim.replace(/\s+/g, ' ').slice(0, 160)}${t.c.opportunity_signal ? ' [opening signal]' : ''}`);
+    console.log(`        reached ${t.plan.length ? t.plan.map((p) => `${p.id} ${p.where}`).join('; ') : 'no opening'}${t.cardFacts.length ? ` · card facts ${t.cardFacts.map((f) => f.field).join(',')}` : ''}${t.built.length ? ` · construction ${t.built.map((f) => f.fact_key).join(',')}` : ''}${t.retained.length ? ` · shared finding ${t.retained.map((f) => f.state).join(',')}` : ''}`);
+  }
+  console.log(`TRACE_${goalId} claims ${traces.length} stored ${stored.length} in_plan ${inPlan.length} retained ${traces.filter((t) => t.retained.some((f) => f.state === 'ACTIVE')).length} latency_median_ms ${percentile(waits, 50) ?? 'n/a'}`);
+}
+
+/**
+ * When the plan was last re-derived, and what each of its inputs rested on.
+ *
+ * A plan reading's `readAt` does not move while its conclusion is unchanged, so
+ * it cannot say whether new evidence was considered. The scenario run is the
+ * re-derivation itself, and the model it evaluated is stored with every
+ * variable's provenance and source (`goalScenario.ts` `variable()`): a CLAIM or
+ * CARD_FACT source is research that fed the plan; an ASSUMPTION or UNKNOWN
+ * input is one no research fed. Read from the latest run's own stored model,
+ * so it is what the plan actually computed on, not what it would compute now.
+ */
+async function planInputsSection(goalId: string, projectId: string, reading: NonNullable<Awaited<ReturnType<typeof readGoalPlan>>>): Promise<void> {
+  const db = getDb();
+  const run = await db.get<{ id: string; model_id: string; state: string; started_at: string; finished_at: string | null; elapsed_ms: number | string | null }>(
+    `SELECT id, model_id, state, started_at, finished_at, elapsed_ms FROM scenario_runs
+      WHERE project_id = ? AND label = ? ORDER BY started_at DESC LIMIT 1`,
+    [projectId, `goal ${goalId}`],
+  );
+  const latest = await db.get<{ created_at: string; verdict: string; scenario_run_id: string | null }>(
+    'SELECT created_at, verdict, scenario_run_id FROM goal_plan_readings WHERE workstream_id = ? ORDER BY created_at DESC LIMIT 1',
+    [goalId],
+  );
+  console.log(`  PLAN DERIVATION      latest re-derivation (scenario run) ${run ? `${run.id} started ${run.started_at} ${run.state}${run.elapsed_ms != null ? ` in ${Math.round(num(run.elapsed_ms) / 1000)}s` : ''} (${ageMin(run.started_at)} ago)` : 'none recorded'} · latest stored reading ${latest ? `${latest.created_at} ${latest.verdict} on run ${latest.scenario_run_id ?? '-'}` : 'none'} · this report's reading on run ${reading.scenarioRunId ?? '-'}`);
+  if (!run) return;
+  const model = await db.get<{ definition_json: string }>('SELECT definition_json FROM scenario_models WHERE id = ?', [run.model_id]);
+  const variables = (parseJson(model?.definition_json)['variables'] as { key?: string; label?: string; provenance?: string; controllable?: boolean; sources?: { kind?: string; ref?: string }[] }[] | undefined) ?? [];
+  const inputs = variables.filter((v) => !v.controllable);
+  const fedBy = (v: (typeof inputs)[number]) => (v.sources ?? []).filter((s) => s.kind === 'CLAIM' || s.kind === 'CARD_FACT');
+  const claimRefs = [...new Set(inputs.flatMap((v) => fedBy(v).filter((s) => s.kind === 'CLAIM').map((s) => String(s.ref))))];
+  const newer = await db.get<{ n: number | string; newest: string | null }>(
+    `SELECT COUNT(*) AS n, MAX(c.created_at) AS newest FROM research_claims c
+      WHERE c.accepted = 1 AND c.created_at > ? AND c.orchestration_id IN (
+        SELECT m.orchestration_id FROM russell_missions m JOIN cash_discovery_rounds r ON r.candidate_id = m.candidate_id
+         WHERE r.project_id = ? AND r.bucket_id LIKE ? AND m.orchestration_id IS NOT NULL)`,
+    [run.started_at, projectId, `goal-${goalId}%`],
+  );
+  const tally = new Map<string, number>();
+  for (const v of inputs) {
+    const key = fedBy(v).length ? `research-fed (${v.provenance})` : String(v.provenance ?? 'UNKNOWN');
+    tally.set(key, (tally.get(key) ?? 0) + 1);
+  }
+  console.log(`  PLAN INPUTS          model ${run.model_id}: ${inputs.length} input(s) · ${[...tally].map(([k, v]) => `${k} ${v}`).join(' · ') || 'none'} · distinct claims cited ${claimRefs.length} · accepted goal claims newer than this derivation ${num(newer?.n)}${newer?.newest ? ` (newest ${newer.newest})` : ''}`);
+  for (const v of inputs.slice(0, 80)) {
+    const fed = fedBy(v);
+    const other = (v.sources ?? []).filter((s) => !fed.includes(s));
+    const basis = fed.length
+      ? fed.map((s) => `${s.kind} ${s.ref}`).join(', ')
+      : v.provenance === 'EVIDENCE' || v.provenance === 'HISTORICAL'
+        ? `${v.provenance} via ${other.map((s) => `${s.kind} ${String(s.ref).slice(0, 60)}`).join(', ') || 'no source'}`
+        : `${v.provenance ?? 'UNKNOWN'}${other.length ? ` (${other.map((s) => `${s.kind} ${String(s.ref).slice(0, 60)}`).join(', ')})` : ''}`;
+    console.log(`    input ${String(v.label ?? v.key).replace(/\s+/g, ' ').slice(0, 70).padEnd(70)} ${basis}`);
+  }
+  if (inputs.length > 80) console.log(`    … ${inputs.length - 80} more input(s)`);
+  console.log(`PLAN_DERIVED_${goalId} ${run.started_at} inputs ${inputs.length} research_fed ${inputs.filter((v) => fedBy(v).length).length} claims_cited ${claimRefs.length} newer_claims ${num(newer?.n)}`);
 }
 
 /** RunPod's price for Brain's pod, asked live with the Brain's own key; null when there is no key, no pod id or no price. */
