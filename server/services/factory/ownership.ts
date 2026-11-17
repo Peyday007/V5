@@ -718,6 +718,20 @@ export function resolveRepairScope(input: RepairScopeInput): RepairScope {
   const onDisk = (path: string): boolean => existsSync(fileURLToPath(new URL(`../../../${path}`, import.meta.url)));
   const canonical = (path: string): string => {
     if (knownPaths.includes(path)) return path;
+    /*
+     * A reviewer abbreviates a long name with an ellipsis — `tests/...venture-path.test.ts`
+     * for `tests/program-ea512f54-ventures-d0-p3-prep-venture-path.test.ts` (production
+     * 2026-11-17: read literally it named no file, the repair could not anchor it, and the
+     * campaign blocked twice). The ellipsis is a gap: the one known path that starts with
+     * what precedes it and ends with what follows it is the file meant; none, or two, and
+     * it stays as written.
+     */
+    const gap = path.match(/^(.*?)(?:\.\.\.|…)(.*)$/);
+    if (gap) {
+      const [, head = '', tail = ''] = gap;
+      const fits = knownPaths.filter((known) => known.length > head.length + tail.length && known.startsWith(head) && known.endsWith(tail));
+      if (fits.length === 1) return fits[0]!;
+    }
     if (input.mutationScope.some((glob) => matchesGlob(path, glob))) return path;
     // A path that is already a file from the repository root is not a short path
     // (production 2026-11-11, authority-d0-p0: objectives/programs/…/release-01.map.json
