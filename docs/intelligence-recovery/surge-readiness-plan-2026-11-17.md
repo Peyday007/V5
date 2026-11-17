@@ -75,3 +75,13 @@ Spending safeguard for W6: every GPU start goes through `runpod-launch` with a B
 - DECIDED: no Factory merge hold. No merge-only hold exists; the only lever, pausing workers, would break the standing order "do not disconnect Factory". Mitigation: re-dispatch Deploy on any superseding commit, and fix any breakage it brings.
 - 10:45Z: release 6 = 8885038e LIVE (deploy 44060012669; all four SQLite shards and the Postgres gate passed). It carries #1028, #1029, #1031–#1036, #1037, #1038, #1039–#1043, #1045, #1046 and #1048.
 - 11:02Z: W6 stage 2. Pod 2ua3kt3ftnd7n9, SECURE H200 at $5.29/h, loaded in 926 s (billed). Cap $16 per 3 h. Readings at 12:03Z.
+- 13:00Z T-2h. W6 stage 2 (release 6, GPU 11:02–12:03Z):
+  - **GPU:** 108 jobs, 111 not accepted, 0 accepted GPU claims, $4.85/55 min. Fragment answers are honest empty lists; the stated reasons say the fetched pages are off-topic (company contact pages, physics papers, GitHub about pages).
+  - **Concurrency grew:** GPU 7.86 slots busy, free-lane jobs average 8.39 / peak 14. The controller grew the 120B 6 → 12 ("useful research waiting 88–119").
+  - **Queue:** 189 arrived / 222 finished per hour, net draining. VERIFY backlog 20 (55 min); AUDIT 89 claimable (66 min). 59 ineffective retries, 54 of them fragments.
+  - **Pressure:** SHEDDING. Event loop stalled 10–20 s per 120 s. CPU in planSet canonical, payerNamedIn and evaluatorPool. RSS 2.4 GB, peak 3.2 GB.
+  - **Information use (proven):** plan reach 9% → 51% at 10:56Z (54% at 12:03Z), p50 settled $26,550. Plan model scm_b93979c3: 68 inputs, 32 research-fed, 12 distinct claims cited. Goal rounds: 6+ ANSWERED. Verdict NOT_VIABLE, PRICE binds.
+- 13:05Z new owners:
+  - W14: source relevance for fragments; findings 13:55Z, PR 14:20Z.
+  - W15: planner CPU stalls; findings 13:50Z, PR 14:15Z.
+  GPU being measured for its second hour, then stopped.
