@@ -1254,6 +1254,25 @@ export function sharesMeetFloors(shares: Record<ResearchPurpose, number>, urgent
   return true;
 }
 
+/**
+ * The allocation window a pass belongs to: the cadence slot its window ends
+ * in. Consecutive passes an hour apart are consecutive windows of the same
+ * length, so each measured window is recorded once and a second pass inside
+ * the same slot records nothing. Pure.
+ */
+export function allocationWindowKey(untilMs: number): number {
+  return Math.floor(untilMs / RESEARCH_ALLOCATION_EVERY_MS);
+}
+
+/** The window slot a recorded decision row belongs to, or null when it names none readable. Pure. */
+export function allocationWindowKeyOf(detail: Record<string, unknown> | null): number | null {
+  if (!detail) return null;
+  if (typeof detail.windowKey === 'number' && Number.isFinite(detail.windowKey)) return detail.windowKey;
+  const w = detail.window as { until?: unknown } | undefined;
+  const until = typeof w?.until === 'string' ? Date.parse(w.until) : NaN;
+  return Number.isFinite(until) ? allocationWindowKey(until) : null;
+}
+
 /** One allocation pass over the live goals. */
 export async function reallocateResearch(input: { goals: GoalView[]; now?: string }, ports: ResearchAllocationPorts): Promise<ResearchAllocationReport> {
   const untilMs = input.now ? Date.parse(input.now) : Date.now();
@@ -1360,7 +1379,21 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
     costCountedOnce,
     notes: [...decision.notes, ...reading.notes].slice(0, 20),
   };
-  const recorded = !(previous && previous.detail.fingerprint === fingerprint);
+  // `changed` is the decision itself moving (its fingerprint). What is recorded
+  // is every measured window, once: recording only on a changed fingerprint
+  // left a steady decision unrecorded for days, so the decision row on
+  // production was an old one — its window, its counted-once record and its
+  // capacity all stale — and a failed window stayed among the newest rows
+  // forever instead of leaving them as later measured windows were recorded
+  // (probe r01.res-15-5). A pass with nothing measured stays recorded as held,
+  // and only when that changes the decision on record.
+  const changed = !(previous && previous.detail.fingerprint === fingerprint);
+  const windowKey = allocationWindowKey(untilMs);
+  const previousWindow = allocationWindowKeyOf(previous?.detail ?? null);
+  const sameWindow = previousWindow !== null && previousWindow === windowKey;
+  const measuredWindow = !decision.held;
+  const recorded = !sameWindow && (measuredWindow || changed);
+  detail.windowKey = windowKey;
   if (recorded) {
     const summary = heldForCost
       ? "Research allocation held: the window's cost reading does not show each job's cost counted once."
@@ -1382,7 +1415,7 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
     window,
     shares: decision.shares,
     floors,
-    changed: recorded,
+    changed,
     held: decision.held || heldForCost,
     laneActions: decision.laneActions,
     capacity: decision.capacity,
