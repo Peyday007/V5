@@ -31,7 +31,7 @@
 import { employerKey, titleKey } from './detectors.ts';
 import { readMoneyFigures } from '../cash/figures.ts';
 import { readQuantities } from '../cash/volume.ts';
-import { PROBLEM_TITLE, SITE_SOURCE, type SiteProblem } from './sites.ts';
+import { METROS, PROBLEM_TITLE, SITE_SOURCE, type SiteProblem } from './sites.ts';
 
 /** The stored item fields extraction reads: `StoredFeedItem`'s shape, nothing more. */
 export interface ExtractableItem {
@@ -207,9 +207,26 @@ export function readSiteDefect(item: Pick<ExtractableItem, 'source' | 'title' | 
     const city = head.slice(lead.length).trim();
     // Any script's letters (with combining marks), digits and the punctuation place names use: "San José", "Cañon City", "29 Palms".
     if (!/^[\p{Lu}\p{Nd}][\p{L}\p{M}\p{Nd}.'\u2019 -]{0,40}$/u.test(city)) return null;
-    return { problem, city: city.toLowerCase(), cityText: `in ${city}`, phraseText: phrase };
+    return { problem, city, cityText: `in ${city}`, phraseText: phrase };
   }
   return null;
+}
+
+/**
+ * The comparable location value of a site-defect city. A lead line names a
+ * city and never a state, so the bare name would make "Las Vegas" (NV) and
+ * "Las Vegas" (NM) one place. The site checker only searches the bounding
+ * boxes in `METROS`, so a city that is exactly one metro's name is qualified
+ * by that metro's box — a place on the map, not a guessed state. A city the
+ * checker's metros do not name exactly once is scoped to its own record, so
+ * it is never equal to another lead's location. Nothing is inferred: the
+ * evidence span stays the city text the title states.
+ */
+export function siteCityValue(city: string, itemId: string): string {
+  const metros = METROS.filter((m) => m.city === city);
+  const name = city.toLowerCase();
+  if (metros.length === 1) return `${name} @ bbox:${metros[0]!.bbox.join(',')}`;
+  return `${name} @ item:${itemId}`;
 }
 
 /** The deliverable a record is about, as a comparable key. Job titles lose seniority and work-mode words. */
@@ -244,8 +261,9 @@ export function extractItem(item: ExtractableItem): ExtractedFact[] {
   }
   const defect = readSiteDefect(item);
   if (deliverable) push({ key: `deliverable:${item.id}`, field: 'deliverable', value: deliverable, unit: null, currency: null, evidence: ev('title', defect ? defect.phraseText : item.title) });
-  // The city a site-defect line names (it deliberately names no state, so the "City, ST" reader cannot).
-  if (defect) push({ key: `location:${subject}`, field: 'location', value: defect.city, unit: null, currency: null, evidence: ev('title', defect.cityText) });
+  // The city a site-defect line names (it deliberately names no state, so the "City, ST" reader cannot),
+  // qualified so same-named cities in different states never share a value.
+  if (defect) push({ key: `location:${subject}`, field: 'location', value: siteCityValue(defect.city, item.id), unit: null, currency: null, evidence: ev('title', defect.cityText) });
 
   for (const field of ['title', 'body'] as const) {
     const text = field === 'title' ? item.title : item.body ?? '';

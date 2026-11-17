@@ -8,7 +8,9 @@
  */
 import { describe, expect, it } from 'vitest';
 import { extractItem, extractItems, readable, recordKindOf, type ExtractableItem } from '../server/services/feeds/extract.ts';
-import { PROBLEM_TITLE, SITE_SOURCE, type SiteProblem } from '../server/services/feeds/sites.ts';
+import { METROS, PROBLEM_TITLE, SITE_SOURCE, type SiteProblem } from '../server/services/feeds/sites.ts';
+
+const box = (id: string): string => METROS.find((m) => m.id === id)!.bbox.join(',');
 
 const CONFIRMED = '2026-11-16T12:00:00.000Z';
 
@@ -82,7 +84,7 @@ describe('broken-site lead lines are read by code', () => {
   it('reads the city with its exact span, and one deliverable key per problem class', () => {
     const facts = RECORDED.map((i) => extractItem(i));
     const loc = facts.map((fs) => fs.filter((f) => f.field === 'location'));
-    for (const [i, city, text] of [[0, 'san antonio', 'in San Antonio'], [1, 'san antonio', 'in San Antonio'], [2, 'san antonio', 'in San Antonio'], [3, 'san antonio', 'in San Antonio'], [4, 'las vegas', 'in Las Vegas']] as const) {
+    for (const [i, city, text] of [[0, `san antonio @ bbox:${box('san-antonio')}`, 'in San Antonio'], [1, `san antonio @ bbox:${box('san-antonio')}`, 'in San Antonio'], [2, `san antonio @ bbox:${box('san-antonio')}`, 'in San Antonio'], [3, `san antonio @ bbox:${box('san-antonio')}`, 'in San Antonio'], [4, `las vegas @ bbox:${box('las-vegas')}`, 'in Las Vegas']] as const) {
       expect(loc[i]).toHaveLength(1);
       expect(loc[i]![0]!.value).toBe(city);
       expect(loc[i]![0]!.evidence.text).toBe(text);
@@ -118,7 +120,7 @@ describe('broken-site lead lines are read by code', () => {
       const facts = extractItem(item);
       const loc = facts.filter((f) => f.field === 'location');
       expect(loc).toHaveLength(1);
-      expect(loc[0]!.value).toBe(value);
+      expect(loc[0]!.value).toBe(`${value} @ item:${item.id}`);
       expect(loc[0]!.evidence.text).toBe(`in ${city}`);
       expect(item.title).toContain(loc[0]!.evidence.text);
       expect(readable(item, facts)).toBe(true);
@@ -131,5 +133,32 @@ describe('broken-site lead lines are read by code', () => {
       const item = lead(`fi_bad`, 'Corner Shop', city, 'PARKED', 'http://corner.example/');
       expect(extractItem(item).some((f) => f.field === 'location')).toBe(false);
     }
+  });
+
+  it('never gives same-named cities in different states one location value', () => {
+    // Finding F2: the bare lowercased city ("las vegas") made Las Vegas NV and Las Vegas NM one place.
+    // A city outside the checker's metros is scoped to its own record; a metro city to the metro's box.
+    const nm = lead('fi_nm', 'Plaza Hotel', 'Las Vegas', 'NO_DNS', 'http://plaza.example/');
+    const nv = RECORDED[4]!;
+    const [nmLoc] = extractItem(nm).filter((f) => f.field === 'location');
+    const [nvLoc] = extractItem(nv).filter((f) => f.field === 'location');
+    expect(nvLoc!.value).not.toBe('las vegas');
+    // Two leads in the checker's one Las Vegas box are one place, and agree.
+    expect(nmLoc!.value).toBe(nvLoc!.value);
+
+    const springA = lead('fi_sa', 'Corner Shop', 'Springfield', 'PARKED', 'http://a.example/');
+    const springB = lead('fi_sb', 'Other Shop', 'Springfield', 'PARKED', 'http://b.example/');
+    const a = extractItem(springA).find((f) => f.field === 'location')!;
+    const b = extractItem(springB).find((f) => f.field === 'location')!;
+    expect(a.value).not.toBe(b.value);
+    expect(a.value).not.toBe('springfield');
+    expect(b.value).not.toBe('springfield');
+    for (const [item, f] of [[springA, a], [springB, b]] as const) {
+      expect(f.evidence.text).toBe('in Springfield');
+      expect(item.title).toContain(f.evidence.text);
+      expect(f.demand).toBe('NOT_DEMAND');
+    }
+    const run = extractItems([springA, springB], new Date(CONFIRMED));
+    for (const r of run.reconciled.filter((x) => x.key.startsWith('location:'))) expect(r.status).not.toBe('CONTESTED');
   });
 });
