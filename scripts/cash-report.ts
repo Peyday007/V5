@@ -917,6 +917,9 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
     `WHAT BRAIN IS ASKING ABOUT IT (${commissions.length} ever, ${openAsks.length} open)` +
       ` — ${tally(commissions, (one) => one.state)}`,
   );
+  // Per attribute, so a question research cannot answer shows up as its own
+  // UNRESOLVED column rather than inside one total (F3e).
+  console.log(`  by attribute: ${tally(commissions, (one) => `${one.attribute}:${one.state}`)}`);
   for (const one of commissions.slice(-12)) {
     const path = ledger.entries.find((entry) => entry.path.id === one.pathId);
     console.log(

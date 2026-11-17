@@ -1181,13 +1181,15 @@ describe('adversarial: an invalid path or attribute combination lands nowhere', 
     await discovery('PAID_TASK_OR_CONTRACT', 'A published request for transcription.');
     await enumeratePossibilities(projectId);
     const asked = (await tick()).opened[0]!;
+    // What the opening's card already answered is carried before any asking (F3e).
+    const before = await pathFactsFor(asked.pathId);
     await finishResearch({
       candidateId: asked.candidateId,
       claims: [{ claim: 'Something about demand.', lane: 'demand_signal' }],
     });
     const pass = await tick();
     expect(pass.recorded).toEqual([]);
-    expect(await pathFactsFor(asked.pathId)).toHaveLength(0);
+    expect(await pathFactsFor(asked.pathId)).toHaveLength(before.length);
   });
 
   it('refuses a choice attribute whose claim states no declared choice', async () => {
@@ -1471,7 +1473,11 @@ describe('adversarial: a possibility put away while its question is still being 
   });
 
   it('frees the slot, so three put-away questions cannot stop the loop for ever', async () => {
-    await discovery('PAID_TASK_OR_CONTRACT', 'A published request for transcription.');
+    // One stated possibility per opening is researched (F3e), so four openings:
+    // three to put away and one still to ask about once the slots come back.
+    for (const title of ['transcription', 'translation', 'captioning', 'indexing']) {
+      await discovery('PAID_TASK_OR_CONTRACT', `A published request for ${title}.`);
+    }
     await enumeratePossibilities(projectId);
     // Three routable surfaces, so the derived room opens three at once.
     await registerResearchSurfaces(projectId, MAX_OPEN_COMMISSIONS);

@@ -234,14 +234,40 @@ export function decisiveCriteria(
  * some other question's research turns it up.
  */
 export const NEVER_COMMISSIONED: ReadonlySet<MonetizationAttribute> = Object.freeze(
-  new Set<MonetizationAttribute>(['probabilityOfSuccess']),
+  new Set<MonetizationAttribute>([
+    'probabilityOfSuccess',
+    /*
+     * And every attribute whose owner is `BRAIN_PROPOSES` (F3e). Execution
+     * difficulty and scalability are judgements Brain makes from what it
+     * already holds, not facts a publication states, so commissioning them as
+     * published-source research asked a question no source answers and it
+     * settled UNRESOLVED every time. Read off `owner` rather than listed, so
+     * the declaration is the one place that decides it.
+     */
+    ...MONETIZATION_ATTRIBUTES.filter((attribute) => ATTRIBUTE[attribute].owner === 'BRAIN_PROPOSES'),
+  ]),
 );
+
+/** Why an attribute in `NEVER_COMMISSIONED` is not asked, in words a person reads. */
+function neverCommissionedWhy(attribute: MonetizationAttribute): string {
+  if (ATTRIBUTE[attribute].owner === 'BRAIN_PROPOSES') {
+    return (
+      'this is a judgement Brain makes, not a fact a publication states, so it is not ' +
+      'commissioned as published-source research. It stays open on the ledger, a person may ' +
+      'record it, and a source that states it is still filed when other research turns one up'
+    );
+  }
+  return (
+    'Brain does not produce a probability, so this is never commissioned; a published ' +
+    'rate is still filed when other research turns one up'
+  );
+}
 
 /**
  * The card field a `question:` need is about, and the attribute of a path that
  * asks the same thing. A field with no counterpart here names no attribute.
  */
-const CARD_FIELD_ATTRIBUTE: Readonly<Record<string, MonetizationAttribute>> = Object.freeze({
+export const CARD_FIELD_ATTRIBUTE: Readonly<Record<string, MonetizationAttribute>> = Object.freeze({
   payer: 'requiredRelationships',
   access: 'requiredRelationships',
   price: 'expectedRevenue',
@@ -357,7 +383,25 @@ export interface CommissionInput {
    * epochs. Composed by the pass from the opening a possibility is about.
    */
   epochStarts?: ReadonlyMap<string, string>;
+  /**
+   * Paths no source and no person has stated apply (F3e): enumerated from the
+   * opening × method table only, not the method the opening's own mechanism
+   * stands for, with no source claim and no judgement. Composed by the pass
+   * (`statedBySource`). Absent is none, the behaviour before this.
+   */
+  unstated?: ReadonlySet<string>;
 }
+
+/**
+ * Why a hypothetical path is not researched, and what makes it researchable.
+ * Exported so the surface and the tests read the one sentence.
+ */
+export const UNSTATED_WHY =
+  'no source names this way of being paid for this opening — it is a shape of transaction ' +
+  'the method table says could apply, and no publication settles a question about an ' +
+  'arrangement nobody has said exists. It stays on the ledger, and it is asked about the ' +
+  'moment research on the opening names this method (its claim becomes the source) or a ' +
+  'person adds or judges it';
 
 /**
  * What to ask next, as a pure function over a recorded snapshot.
@@ -399,6 +443,23 @@ export function allocateCommissions(input: CommissionInput): CommissionAllocatio
       continue;
     }
 
+    /*
+     * A hypothetical arrangement is not a research subject (F3e). Asking what
+     * a referral fee on a surplus auction pays, when nothing says one exists,
+     * settles UNRESOLVED by construction. One decline per path, with what
+     * would make it askable, so the possibility is kept and nothing is dropped
+     * silently. A contradiction is still re-asked: research answered it once.
+     */
+    if (
+      input.unstated?.has(entry.path.id) &&
+      !MONETIZATION_ATTRIBUTES.some((attribute) =>
+        input.contradicted.has(`${entry.path.id}::${attribute}`),
+      )
+    ) {
+      declined.push({ subject: entry.path.title, why: UNSTATED_WHY });
+      continue;
+    }
+
     const neighbours = [input.rankable[index - 1], input.rankable[index + 1]].filter(
       (one): one is RankableEntry => one !== undefined,
     );
@@ -431,9 +492,7 @@ export function allocateCommissions(input: CommissionInput): CommissionAllocatio
       if (NEVER_COMMISSIONED.has(attribute)) {
         declined.push({
           subject: `${entry.path.title} — ${ATTRIBUTE[attribute].label}`,
-          why:
-            'Brain does not produce a probability, so this is never commissioned; a published ' +
-            'rate is still filed when other research turns one up',
+          why: neverCommissionedWhy(attribute),
         });
         continue;
       }

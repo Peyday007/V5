@@ -48,7 +48,7 @@
  * assumption and what would change them, and `mayReplace` lets researched
  * evidence overwrite them the moment any arrives.
  */
-import { METHOD, MONETIZATION_METHODS } from '../../../domain/monetization.ts';
+import { ATTRIBUTE, METHOD, MONETIZATION_METHODS, mayAnswer } from '../../../domain/monetization.ts';
 import {
   getOpportunity,
   listOpportunities,
@@ -56,7 +56,10 @@ import {
 } from '../../../repos/cashPortfolio.ts';
 import { claimedMethods } from '../../../repos/research.ts';
 import { recordCashEvent } from '../../../repos/cashMode.ts';
-import { mayReplace } from '../../../repos/cashCardFacts.ts';
+import { cardFactsForProject, mayReplace } from '../../../repos/cashCardFacts.ts';
+import { evidenceCard } from '../card.ts';
+import { readDays, readMoneyFigures } from '../figures.ts';
+import { CARD_FIELD_ATTRIBUTE } from './commission.ts';
 import {
   listPaths,
   pathFactsForProject,
@@ -66,8 +69,11 @@ import {
   setSourceClaim,
 } from '../../../repos/monetization.ts';
 import type {
+  CashCardFact,
   CashMechanism,
   CashOpportunity,
+  FactKind,
+  MonetizationAttribute,
   MonetizationMethod,
   MonetizationPath,
   MonetizationPathFact,
@@ -101,6 +107,47 @@ const PRIMARY_METHOD: Readonly<Record<CashMechanism, MonetizationMethod>> = Obje
   JIGSAW_COMBINATION: 'MANAGED_SERVICE',
   OTHER: 'DIRECT_SALE',
 });
+
+/**
+ * Whether a source or a person has said this path applies (F3e).
+ *
+ * The table produces every shape of transaction that *could* apply to an
+ * opening, and only one of them is the shape the opening's own mechanism —
+ * chosen by a worker that read the source — stands for. The rest are
+ * hypotheses until something states them: a claim naming the method
+ * (`EVIDENCED`, or a source claim on the row), a person adding it (`SEED`), or
+ * a person judging it. Research is asked about stated paths only, because no
+ * publication settles a question about an arrangement nobody said exists.
+ */
+export function statedBySource(
+  path: Pick<MonetizationPath, 'origin' | 'sourceClaimId' | 'method' | 'opportunityId'>,
+  opportunity: Pick<CashOpportunity, 'mechanism'> | null,
+  judged: boolean,
+): boolean {
+  if (path.origin !== 'ENUMERATED') return true;
+  if (path.sourceClaimId || judged) return true;
+  // A path with no opening (an industry node) is not the table's cross product.
+  if (!path.opportunityId) return true;
+  if (!opportunity) return false;
+  return PRIMARY_METHOD[opportunity.mechanism] === path.method;
+}
+
+/**
+ * The card fields whose answer is the same question as a path attribute.
+ *
+ * The allocator's own equivalence (`CARD_FIELD_ATTRIBUTE`) plus the payment
+ * terms and the engine fields that ask the same thing in other words.
+ */
+const CARRIED_FIELD_ATTRIBUTE: Readonly<Record<string, MonetizationAttribute>> = Object.freeze({
+  ...CARD_FIELD_ATTRIBUTE,
+  paymentTerms: 'timeToCash',
+  timeToFirstCash: 'timeToCash',
+  revenueRange: 'expectedRevenue',
+  directCosts: 'directCosts',
+  requiredCapital: 'requiredCapital',
+});
+
+const KIND_STRENGTH: Readonly<Record<FactKind, number>> = { PERSON: 3, EVIDENCE: 2, RECOMMENDATION: 1 };
 
 /**
  * Which shapes of transaction could apply to a subject of this kind.
@@ -165,6 +212,17 @@ export async function enumeratePossibilities(projectId: string): Promise<Enumera
    * `recordPath` and one of them loses there, exactly as before — so this is a
    * cheaper way of asking the same question rather than a second answer to it.
    */
+  /*
+   * What each opening's card already answers (F3e). A payment term, a payer or
+   * a price already on the card is the answer to the matching path question,
+   * and asking research for it again spent an activation on a question the
+   * rows had settled.
+   */
+  const cardByOpening = new Map<string, CashCardFact[]>();
+  for (const fact of await cardFactsForProject(projectId)) {
+    cardByOpening.set(fact.opportunityId, [...(cardByOpening.get(fact.opportunityId) ?? []), fact]);
+  }
+
   const existing = new Map<string, MonetizationPath>();
   for (const path of await listPaths({ projectId })) {
     existing.set(`${path.opportunityId ?? '-'}|${path.method}`, path);
@@ -203,6 +261,7 @@ export async function enumeratePossibilities(projectId: string): Promise<Enumera
         pathId: path.id,
         opportunity,
         existing: factsByPath.get(path.id) ?? [],
+        card: cardByOpening.get(opportunity.id) ?? [],
       });
       if (carried.length > 0) report.carried.push({ pathId: path.id, attributes: carried });
     }
@@ -384,8 +443,11 @@ async function carryFigures(input: {
   pathId: string;
   opportunity: CashOpportunity;
   existing: readonly MonetizationPathFact[];
+  card?: readonly CashCardFact[];
 }): Promise<string[]> {
-  const byAttribute = new Map(input.existing.map((one) => [one.attribute, one]));
+  const byAttribute = new Map<MonetizationAttribute, { kind: FactKind }>(
+    input.existing.map((one) => [one.attribute, one]),
+  );
   const written: string[] = [];
 
   const propose = async (
@@ -411,6 +473,7 @@ async function carryFigures(input: {
         'that does replaces this.',
       decidedBy: BRAIN,
     });
+    byAttribute.set(attribute, { kind: 'RECOMMENDATION' });
     written.push(attribute);
   };
 
@@ -425,7 +488,133 @@ async function carryFigures(input: {
     'that the exposure established for this discovery is the exposure of this way of taking it',
   );
 
+  for (const answer of cardAnswers(input.opportunity, input.card ?? [])) {
+    if (byAttribute.get(answer.attribute)?.kind === 'PERSON') continue;
+    if (!mayReplace(byAttribute.get(answer.attribute) ?? null, answer.kind)) continue;
+    const declared = ATTRIBUTE[answer.attribute];
+    const figures =
+      declared.unit === 'MONEY' ? readMoneyFigures(answer.value, input.opportunity.currency) : [];
+    const lowest = figures.reduce<number | null>(
+      (low, one) => (low === null || one.cents < low ? one.cents : low),
+      null,
+    );
+    await recordPathFact({
+      projectId: input.projectId,
+      pathId: input.pathId,
+      attribute: answer.attribute,
+      kind: answer.kind,
+      value: answer.value.slice(0, 600),
+      amountCents: lowest,
+      days: declared.unit === 'DAYS' ? termDays(answer.value) : null,
+      claimId: answer.claimId,
+      basis: answer.basis,
+      assumptions: answer.assumptions,
+      uncertainty: answer.uncertainty,
+      decidedBy: answer.decidedBy,
+    });
+    byAttribute.set(answer.attribute, { kind: answer.kind });
+    written.push(answer.attribute);
+  }
+
   return written;
+}
+
+/**
+ * The days a recorded term states: a stated duration, or a payment term
+ * ("Net 30") — a count of days by definition. Anything else stays unknown.
+ */
+export function termDays(text: string): number | null {
+  const stated = readDays(text);
+  if (stated !== null) return stated;
+  const net = /\bnet[\s-]*(\d{1,3})\b/i.exec(text);
+  if (!net) return null;
+  const days = Number.parseInt(net[1] as string, 10);
+  return days > 0 ? days : null;
+}
+
+interface CardAnswer {
+  attribute: MonetizationAttribute;
+  kind: FactKind;
+  value: string;
+  claimId: string | null;
+  basis: string | null;
+  assumptions: string | null;
+  uncertainty: string | null;
+  decidedBy: string;
+}
+
+/**
+ * What the opening's card already answers, one per path attribute (F3e).
+ *
+ * A card fact keeps its own authority: a person's answer is a person's, a gated
+ * claim stays evidence resolving to that claim, and Brain's proposal stays a
+ * proposal with its basis. An `EVIDENCE` row with no claim is not evidence
+ * here, so it is carried as a proposal. A card value with no fact row behind
+ * it (an older column, or the payment terms) is carried as a proposal resting
+ * on the column, exactly as the price and exposure above. Where two fields ask
+ * the same attribute the stronger kind wins, then the table's order.
+ */
+export function cardAnswers(
+  opportunity: CashOpportunity,
+  card: readonly CashCardFact[],
+): CardAnswer[] {
+  const byField = new Map(card.map((one) => [one.field, one]));
+  const columns = new Map<string, string | null>(
+    evidenceCard(opportunity).fields.map((one) => [one.key as string, one.value]),
+  );
+  columns.set('paymentTerms', opportunity.paymentTerms?.trim() || null);
+  // Already carried from their own columns, with their amounts, above.
+  columns.delete('price');
+  columns.delete('exposure');
+
+  const best = new Map<MonetizationAttribute, CardAnswer>();
+  for (const [field, attribute] of Object.entries(CARRIED_FIELD_ATTRIBUTE)) {
+    if (!mayAnswer(attribute, 'RECOMMENDATION')) continue;
+    const fact = byField.get(field);
+    let answer: CardAnswer | null = null;
+    if (fact && fact.value.trim()) {
+      const kind: FactKind = fact.kind === 'EVIDENCE' && !fact.claimId ? 'RECOMMENDATION' : fact.kind;
+      answer = {
+        attribute,
+        kind,
+        value: fact.value.trim(),
+        claimId: kind === 'EVIDENCE' ? fact.claimId : null,
+        basis:
+          kind === 'RECOMMENDATION'
+            ? fact.basis ?? `the ${field} recorded on the discovery's card`
+            : null,
+        assumptions:
+          kind === 'RECOMMENDATION'
+            ? fact.assumptions ?? 'that what the card says of the opening holds for this way of taking it'
+            : null,
+        uncertainty:
+          kind === 'RECOMMENDATION'
+            ? fact.uncertainty ?? 'Nothing has researched this for this way of being paid in particular.'
+            : null,
+        decidedBy: fact.decidedBy,
+      };
+    } else {
+      const value = columns.get(field);
+      if (value) {
+        answer = {
+          attribute,
+          kind: 'RECOMMENDATION',
+          value,
+          claimId: null,
+          basis: `the ${field} recorded on the discovery's card`,
+          assumptions: 'that what the card says of the opening holds for this way of taking it',
+          uncertainty:
+            'Nothing has researched this for this way of being paid in particular. Anything that ' +
+            'does replaces this.',
+          decidedBy: BRAIN,
+        };
+      }
+    }
+    if (!answer) continue;
+    const held = best.get(attribute);
+    if (!held || KIND_STRENGTH[answer.kind] > KIND_STRENGTH[held.kind]) best.set(attribute, answer);
+  }
+  return [...best.values()];
 }
 
 /**

@@ -148,3 +148,25 @@ export function formatMoney(cents: number, currency: string): string {
     maximumFractionDigits: 2,
   })}`;
 }
+
+/**
+ * A number of days a source states, or null.
+ *
+ * Deliberately narrow, and its failure mode is fixed at **missing** a duration
+ * rather than inventing one — this file's own contract, at the other unit. It
+ * reads a stated count of days, weeks or months and nothing else: no "a couple
+ * of", no "next quarter", no arithmetic on a date. A payment term nobody
+ * publishes stays unknown.
+ */
+export function readDays(text: string): number | null {
+  const match = /(\d{1,4})(?:\s*[-–]\s*\d{1,4})?\s*(day|business day|week|month)s?\b/i.exec(
+    text,
+  );
+  if (!match) return null;
+  const count = Number.parseInt(match[1] as string, 10);
+  if (!Number.isFinite(count) || count <= 0 || count > 3_650) return null;
+  const unit = (match[2] as string).toLowerCase();
+  if (unit === 'week') return count * 7;
+  if (unit === 'month') return count * 30;
+  return count;
+}
