@@ -36,6 +36,7 @@ import { deriveInstitutions, type EvidenceClaim, type FinancialFlow, type Instit
 import type { LadderSnapshot } from './ladder.ts';
 import { readLadder, type CategoryReading } from './readiness.ts';
 import { statesNamedIn } from '../../domain/jurisdiction.ts';
+import { certificationPricesBarrier } from './venturePath.ts';
 import type { CategoryCapitalEntry, MachineCategory, MachineCapitalRequirement } from '../../domain/types.ts';
 
 export interface CategoryInstitutions {
@@ -106,7 +107,7 @@ export function ventureFactsFor(
       let subject: string;
       if (entry.requirement === 'CERTIFICATION_AND_APPROVAL') {
         // One barrier on record is what the certification figure pays for; otherwise the figure names its own permit.
-        if (barriers.length === 1) {
+        if (certificationPricesBarrier(barriers.length)) {
           subject = `PERMIT:${barriers[0]!.subject}`;
         } else {
           const own = `${words(entry.requirement)} for ${category.name}`;

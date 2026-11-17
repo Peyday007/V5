@@ -377,6 +377,20 @@ function validateFirst(stages: readonly VentureStage[], situation: ResourceSitua
  * distribution evidence is carried on that decision as an unknown, so a
  * venture with none never reads as feasible (invariant 39).
  */
+/**
+ * Whether a certification figure pays for the barrier on record.
+ *
+ * One rule, read by the venture path here and by the institutional plan
+ * (`institutionReading.ventureFactsFor`), so the two never disagree about the
+ * same rows: when exactly one entry barrier is established, a published
+ * CERTIFICATION_AND_APPROVAL figure is what obtaining it costs. With several
+ * barriers no row says which one the figure pays for, so none is priced by it
+ * and nothing is guessed (invariant 39).
+ */
+export function certificationPricesBarrier(barrierCount: number): boolean {
+  return barrierCount === 1;
+}
+
 export function stagesFromReading(
   reading: CategoryReading,
   candidates: readonly AcquisitionCandidate[] = [],
@@ -384,8 +398,22 @@ export function stagesFromReading(
   const subject = reading.path.join(' → ') || reading.categoryId;
   const scenario = reading.capital.cheapestFullyPriced ?? reading.capital.scenarios[0] ?? null;
   const stages: VentureStage[] = [];
+  const barriers = reading.evidence.against.filter((one) => one.kind === 'ENTRY_BARRIER');
+  const entries = scenario ? [...scenario.priced, ...scenario.unpriced] : [];
+  /*
+   * A certification figure that prices the one barrier on record is that
+   * barrier's budget, not a second, unlinked stage. Before, the barrier stage
+   * was always unpriced, so a category with any barrier withheld its total and
+   * read UNDETERMINED for ever — capital arriving could never make it
+   * FEASIBLE, and the reconsideration never fired — while the institutional
+   * plan had already tied the same figure to the same barrier.
+   */
+  const certification = certificationPricesBarrier(barriers.length)
+    ? entries.filter((entry) => entry.requirement === 'CERTIFICATION_AND_APPROVAL')
+    : [];
 
-  for (const entry of scenario ? [...scenario.priced, ...scenario.unpriced] : []) {
+  for (const entry of entries) {
+    if (certification.includes(entry)) continue;
     const budget: Money | null =
       entry.amountHighMinor !== null && entry.currency !== null ? { currency: entry.currency, amountMinor: entry.amountHighMinor } : null;
     const requirement = entry.requirement.toLowerCase().replace(/_/g, ' ');
@@ -428,18 +456,29 @@ export function stagesFromReading(
     });
   }
 
-  const barriers = reading.evidence.against.filter((one) => one.kind === 'ENTRY_BARRIER');
+  // The barrier's price, when a certification figure pays for it: every such row priced and in one currency, else withheld.
+  const fees = certification.map((entry) =>
+    entry.amountHighMinor !== null && entry.currency !== null ? { currency: entry.currency, amountMinor: entry.amountHighMinor } : null,
+  );
+  const fee: Money | null =
+    fees.length > 0 && fees.every((one) => one !== null && one.currency === fees[0]!.currency)
+      ? { currency: fees[0]!.currency, amountMinor: fees.reduce((sum, one) => sum + one!.amountMinor, 0) }
+      : null;
   for (const barrier of barriers) {
     stages.push({
       key: `barrier:${barrier.id}`,
       title: `Obtain ${barrier.subject}`,
       dependsOn: [],
       decision: `Pursue ${barrier.subject}, or find a holder of it to work through`,
-      resource: 'whatever the issuing body requires; not an amount on record',
+      resource: fee
+        ? `${fee.amountMinor} ${fee.currency} (minor units), the certification and approval figure published ${certification.map((one) => one.asOf).join(', ')}`
+        : certification.length > 0
+          ? 'the certification and approval figure on record is not fully published'
+          : 'whatever the issuing body requires; not an amount on record',
       artifact: barrier.statement,
       actor: 'Brain prepares; the owner or the holder applies',
-      budget: null,
-      evidence: [barrier.sourceClaimId],
+      budget: fee,
+      evidence: [barrier.sourceClaimId, ...certification.map((one) => one.sourceClaimId)],
       completion: `${barrier.subject} is obtained and recorded`,
     });
   }

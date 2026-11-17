@@ -8,6 +8,7 @@ import { recordMoney } from '../server/repos/cashLedger.ts';
 import { startProgramme } from '../server/services/manufacturing/program.ts';
 import { declareHeld, seedCategory } from '../server/services/manufacturing/declare.ts';
 import { runManufacturingKernel } from '../server/services/manufacturing/kernel.ts';
+import { ventureRecord } from '../server/services/manufacturing/recorded.ts';
 import {
   alternativesFor,
   buildVenturePath,
@@ -348,6 +349,150 @@ describe('VENT-24-2: the kernel revisits an earlier venture when capital or capa
     expect(first).toBeDefined();
     expect(first!.differs[0]).toContain(capitalKey);
     expect(first!.total).toEqual({ currency: 'USD', amountMinor: 30_000_00 });
+  });
+
+  it('a category with an entry barrier priced by its certification row becomes FEASIBLE when capital arrives, and the institutional plan prices the same permit (R4-F2)', async () => {
+    const started = await startProgramme({ projectId, ownerUserId: userId, actorUserId: userId, objective: 'Build machines only where demand and capability allow.' });
+    expect(started.ok).toBe(true);
+    const program = (await getProgram(projectId))!;
+    const seeded = await seedCategory({ projectId, name: 'Commercial dehumidifiers', actorRef: userId, reason: 'test' });
+    if ('error' in seeded) throw new Error(seeded.error);
+    const category = seeded.category;
+
+    await recordCategoryCapital({
+      programId: program.id,
+      categoryId: category.id,
+      requirement: 'TOOLING_AND_EQUIPMENT',
+      scenario: 'SMALLEST_CREDIBLE_ENTRY',
+      amountLowMinor: 30_000_00,
+      amountHighMinor: 40_000_00,
+      currency: 'USD',
+      basis: 'PUBLISHED_PRICE_OR_SCHEDULE',
+      asOf: '2026-09-01',
+      statement: 'Coil-forming tooling costs $30,000–$40,000',
+      sourceClaimId: await acceptedClaim('Coil-forming tooling costs $30,000–$40,000'),
+    });
+    const feeClaim = await acceptedClaim('A safety listing for a dehumidifier costs $8,000–$12,000');
+    await recordCategoryCapital({
+      programId: program.id,
+      categoryId: category.id,
+      requirement: 'CERTIFICATION_AND_APPROVAL',
+      scenario: 'SMALLEST_CREDIBLE_ENTRY',
+      amountLowMinor: 8_000_00,
+      amountHighMinor: 12_000_00,
+      currency: 'USD',
+      basis: 'PUBLISHED_PRICE_OR_SCHEDULE',
+      asOf: '2026-09-01',
+      statement: 'A safety listing for a dehumidifier costs $8,000–$12,000',
+      sourceClaimId: feeClaim,
+    });
+    const barrierClaim = await acceptedClaim('Sale requires an appliance safety listing');
+    await recordCategoryEvidence({
+      programId: program.id,
+      categoryId: category.id,
+      kind: 'ENTRY_BARRIER',
+      subject: 'appliance safety listing',
+      statement: 'Sale requires an appliance safety listing',
+      sourceClaimId: barrierClaim,
+    });
+    // Demand and a channel on record, so the graph's only open question is the money.
+    await recordCategoryEvidence({
+      programId: program.id,
+      categoryId: category.id,
+      kind: 'DEMAND_EVIDENCE',
+      subject: 'restoration contractors',
+      statement: 'Restoration contractors bought 40,000 commercial dehumidifiers last year',
+      observedOn: '2026-09-01',
+      sourceClaimId: await acceptedClaim('Restoration contractors bought 40,000 commercial dehumidifiers last year'),
+    });
+    await recordCategoryEvidence({
+      programId: program.id,
+      categoryId: category.id,
+      kind: 'DISTRIBUTION_CHANNEL',
+      subject: 'equipment rental houses',
+      statement: 'Equipment rental houses stock commercial dehumidifiers',
+      sourceClaimId: await acceptedClaim('Equipment rental houses stock commercial dehumidifiers'),
+    });
+
+    const before = await runManufacturingKernel(projectId);
+    const first = before.ventures.find((v) => v.categoryId === category.id)!;
+    const path = first.venture.path;
+    if (!path.ok) throw new Error(`path refused: ${path.detail}`);
+    // The barrier is priced by the certification row, which is not also a second, unlinked stage.
+    const barrierNode = path.nodes.find((n) => n.key.startsWith('barrier:'))!;
+    expect(barrierNode.budget).toEqual({ state: 'PRICED', money: { currency: 'USD', amountMinor: 12_000_00 } });
+    expect(barrierNode.evidence).toEqual([barrierClaim, feeClaim]);
+    expect(path.nodes.some((n) => n.key === 'capital:CERTIFICATION_AND_APPROVAL')).toBe(false);
+    expect(path.unpriced).toEqual([]);
+    expect(path.total).toEqual({ currency: 'USD', amountMinor: 52_000_00 });
+    // Before capital the graph's verdict — the one recorded and told to goals — is a capital shortfall, not a permanent UNPRICED_STAGE.
+    const firstVerdict = first.venture.verdict!;
+    expect(firstVerdict.challenges.map((c) => c.kind)).toContain('CAPITAL_EXCEEDED');
+    expect(firstVerdict.challenges.map((c) => c.kind)).not.toContain('UNPRICED_STAGE');
+    expect(firstVerdict.feasibility).toBe('INFEASIBLE');
+    expect(ventureRecord(first).feasibility).toBe('INFEASIBLE');
+
+    // The institutional plan reads the same rows the same way: the permit for that barrier is priced by that fee.
+    const plan = before.institutions.find((one) => one.categoryId === category.id)!;
+    const permits = plan.derivation.structures.flatMap((one) => one.elements).filter((one) => one.key === 'PERMIT:appliance safety listing');
+    expect(permits.length).toBeGreaterThan(0);
+    for (const permit of permits) expect(permit.cost?.oneTime).toEqual({ currency: 'USD', lowMinor: 8_000_00, highMinor: 12_000_00 });
+
+    // Capital arrives from a successful operation; the next pass reconsiders the venture with nobody restating it.
+    await recordMoney({ projectId, kind: 'CAPITAL_IN', amountCents: 60_000_00, currency: 'USD', recordedBy: userId, idempotencyKey: `capital-barrier-${projectId}` });
+    const after = await runManufacturingKernel(projectId);
+    const second = after.ventures.find((v) => v.categoryId === category.id)!;
+    if (!second.venture.path.ok) throw new Error('path refused');
+    expect(second.venture.path.total).toEqual({ currency: 'USD', amountMinor: 52_000_00 });
+    // The capital blocker cleared: the recorded verdict moves INFEASIBLE -> UNDETERMINED, which is the transition
+    // that tells the project's goals the venture was unblocked. Before the repair the barrier held it at
+    // UNDETERMINED on both passes (UNPRICED_STAGE), so capital arriving changed nothing and nothing was told.
+    const secondKinds = second.venture.verdict!.challenges.map((c) => c.kind);
+    expect(secondKinds).not.toContain('CAPITAL_EXCEEDED');
+    expect(secondKinds).not.toContain('UNPRICED_STAGE');
+    expect(ventureRecord(second).feasibility).toBe('UNDETERMINED');
+    // What remains is only the return nobody has established (invariant 39), never the barrier: once a return is
+    // established the same graph, barrier included, reads FEASIBLE against the same capital.
+    expect(second.venture.verdict!.challenges).toEqual([{ kind: 'BUILT_ON_UNKNOWNS', detail: 'the expected return is not established', stages: [] }]);
+    const withReturn = challengeVenture(second.venture.path, { available: usd(60_000_00), heldCapabilityIds: new Set() }, { expectedReturn: usd(90_000_00) });
+    expect(withReturn.feasibility).toBe('FEASIBLE');
+  });
+
+  it('a barrier no published figure prices still withholds the total: nothing is guessed (R4-F2)', async () => {
+    const started = await startProgramme({ projectId, ownerUserId: userId, actorUserId: userId, objective: 'Build machines only where demand and capability allow.' });
+    expect(started.ok).toBe(true);
+    const program = (await getProgram(projectId))!;
+    const seeded = await seedCategory({ projectId, name: 'Commercial ice makers', actorRef: userId, reason: 'test' });
+    if ('error' in seeded) throw new Error(seeded.error);
+    const category = seeded.category;
+    await recordCategoryCapital({
+      programId: program.id,
+      categoryId: category.id,
+      requirement: 'TOOLING_AND_EQUIPMENT',
+      scenario: 'SMALLEST_CREDIBLE_ENTRY',
+      amountLowMinor: 10_000_00,
+      amountHighMinor: 15_000_00,
+      currency: 'USD',
+      basis: 'PUBLISHED_PRICE_OR_SCHEDULE',
+      asOf: '2026-09-01',
+      statement: 'Evaporator tooling costs $10,000–$15,000',
+      sourceClaimId: await acceptedClaim('Evaporator tooling costs $10,000–$15,000'),
+    });
+    await recordCategoryEvidence({
+      programId: program.id,
+      categoryId: category.id,
+      kind: 'ENTRY_BARRIER',
+      subject: 'sanitation certification',
+      statement: 'Sale requires a sanitation certification',
+      sourceClaimId: await acceptedClaim('Sale requires a sanitation certification'),
+    });
+    await recordMoney({ projectId, kind: 'CAPITAL_IN', amountCents: 100_000_00, currency: 'USD', recordedBy: userId, idempotencyKey: `capital-unpriced-${projectId}` });
+    const pass = await runManufacturingKernel(projectId);
+    const reading = pass.ventures.find((v) => v.categoryId === category.id)!;
+    if (!reading.venture.path.ok) throw new Error('path refused');
+    expect(reading.venture.path.total).toBeNull();
+    expect(reading.venture.verdict!.feasibility).toBe('UNDETERMINED');
+    expect(reading.venture.verdict!.challenges.map((c) => c.kind)).toContain('UNPRICED_STAGE');
   });
 
   it('a project with no programme reports no ventures and does no work', async () => {
