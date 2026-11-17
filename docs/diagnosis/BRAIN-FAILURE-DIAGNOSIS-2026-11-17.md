@@ -241,3 +241,7 @@ See F1–F7 above. Each one gives the cause, file:line, run IDs, the smallest ch
   - With the GPU healthy, the binding constraint is work supply, i.e. the mission ceiling of the discovery grant. GPU sequences are not the constraint.
   - W6 has been asked to report the ceiling reached and whether it grew under load. If it does not grow, raising it becomes a readiness item.
 - The 5 NEEDS_HUMAN packets are owned by W10/W10b (#1032, #1036 in bd5e0419). They are verified after bd5e0419 is live.
+- **08:31Z, W12 assigned: the mission ceiling.**
+  - Findings due 09:30Z: how the ceiling is computed, and why the adaptive ceiling (#1000) stopped at 16.
+  - Fix PR due 10:15Z: the ceiling grows while ideas wait and the lane or GPU is idle, and shrinks under DB or CPU pressure.
+  - W6 will report the ceiling reached, whether it grew, and sustained accepted claims per hour, first on bd5e0419 and then after W12.
