@@ -70,6 +70,7 @@ import {
   SYSTEM_HEALTH_FLOOR,
   decideResearchAllocation,
   binPriorityShift,
+  enforceFloors,
   normalizeShares,
   purposePriorityShifts,
   purposesBelowFloor,
@@ -1239,6 +1240,20 @@ export function verifiedCostReading(once: unknown): ResearchYieldReading['costCo
   };
 }
 
+/**
+ * Whether recorded shares already meet every protected floor (each purpose,
+ * exploration together, system health, and commercial while a deadline is
+ * open), to the precision the row is recorded at. Pure.
+ */
+export function sharesMeetFloors(shares: Record<ResearchPurpose, number>, urgentCommercialGoal: boolean): boolean {
+  const eps = 1e-3;
+  if (RESEARCH_PURPOSES.some((p) => !(shares[p] >= MIN_PURPOSE_SHARE - eps))) return false;
+  if (shares.BROAD_DISCOVERY + shares.FORWARD_EXPLORATION < EXPLORATION_FLOOR - eps) return false;
+  if (shares.SELF_IMPROVEMENT < SYSTEM_HEALTH_FLOOR - eps) return false;
+  if (urgentCommercialGoal && shares.TRANSACTION_ROUTES < COMMERCIAL_FLOOR - eps) return false;
+  return true;
+}
+
 /** One allocation pass over the live goals. */
 export async function reallocateResearch(input: { goals: GoalView[]; now?: string }, ports: ResearchAllocationPorts): Promise<ResearchAllocationReport> {
   const untilMs = input.now ? Date.parse(input.now) : Date.now();
@@ -1262,7 +1277,7 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
   const decided = decideResearchAllocation(allocationInput);
   const observed = normalizeShares(allocationInput.currentShares);
   // Shares move only on a reading whose cost is shown counted once. A reading
-  // that cannot show it moves nothing — the observed shares, no change — and
+  // that cannot show it moves nothing — the shares in force, no change — and
   // is recorded as what it is: a measured window that failed the counted-once
   // check (`heldForCost`), never as `held`, which means nothing was measured.
   // Recording it as `held` hid a genuine double count from probe r01.res-15-5,
@@ -1275,10 +1290,15 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
   const diagnosis = diagnoseCostCountedOnce(reading.costCountedOnce);
   const costCountedOnce = { ...verifiedCostReading(reading.costCountedOnce), cause: diagnosis.cause, jobMsGap: diagnosis.jobMsGap };
   const heldForCost = !costCountedOnce.holds;
+  // A held-for-cost row records the shares already in force — the previous
+  // decision's, floors restored — never the raw usage: `shares` always means
+  // shares Brain decided, so probe r01.res-07 (which reads every row not
+  // `held`) never judges usage Brain did not choose. Raw usage stays in `observed`.
+  const inForce = sharesInForceFrom(previous?.detail ?? null)?.shares ?? null;
   const decision: AllocationDecision = heldForCost
     ? {
         ...decided,
-        shares: observed,
+        shares: inForce && sharesMeetFloors(inForce, urgentCommercialGoal) ? normalizeShares(inForce) : enforceFloors(inForce ?? observed, urgentCommercialGoal),
         changes: [],
         notes: [`Held: the window's cost reading does not show each job's cost counted once (${diagnosis.cause}: ${diagnosis.detail}), so no share moves on it.`, ...decided.notes],
       }
