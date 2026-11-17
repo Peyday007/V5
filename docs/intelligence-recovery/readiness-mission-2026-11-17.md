@@ -165,3 +165,16 @@ All three run in parallel, owned by the intelligence-recovery session, with a me
 | Previous GO test (16:17Z) | $9.16 incl. load ($7.32 GPU for 55 min) | runpod-report |
 | T1 cap | $11, at $8.50/h max | launch run 44136684089 |
 | Measured price | SECURE B200/H200 $7.99/h | RunPod quote |
+
+## 23:20Z: verification of 08cba93f (serving fa60ad5e). Still NOT READY.
+
+Runs: launch 44187098347 (H200 $5.29/h, 50 min) · report 44195685485 · disconnect 44197423405 · stop 44197575890 (pod yej3jvbix0vo6k EXITED, $0/h, balance $120.77).
+
+| criterion | measured | verdict |
+|---|---|---|
+| B2 pressure | pressure NORMAL, no SHEDDING; the controller still halved the GPU 12→6 twice at 90–95% event-loop CPU; 6.64 slots busy on average; peak 14 jobs at once (4 the hour before) | PASS at 6 slots; 12 not sustained |
+| B3 web search | 3 of 9 refusals "no readable source" (was 60 of 149) | PASS |
+| throughput / cost | 46 GPU jobs, 12 accepted claims, 47 claims 100% sourced, 0% refuted; $4.41 → $0.096/job, $0.37/accepted claim | measured |
+| B1 research → plan | plan re-derived 6 times in 2 h (21:13 … 22:50), so the plan does re-read; but the cash goal got 0 accepted claims in the window (5 jobs, 3 refused), 0 rounds opened or harvested, 6 open; its 15 research bins have sat READY at priority 8 since 2026-11-14 waiting on "the next free Routine" | UNPROVEN: no new research reached the goal to trace |
+
+Remaining blocker: the cash goal's own research does not run. Its bins wait on Claude Routines (reserved for Brain improvement by §84) instead of being served by the free lane / GPU, so a 12 h run would spend most GPU time on other projects' audits and verifies and would not feed this goal's plan. Next fix: serve the goal's READY bins on the free lane, then re-run the capped window and require TRACE stored > 0 and in_plan > 0.
