@@ -10,7 +10,11 @@ import {
   SPRINT_DISCLAIMER,
   SPRINT_CALLER,
   SPRINT_EVENT,
+  SPRINT_CAPABILITIES,
   chooseDemonstrated,
+  generalWith,
+  readOwnerInterventions,
+  trialCapability,
   chooseThreshold,
   pendingResult,
   productionOutcome,
@@ -251,5 +255,135 @@ describe('the controller loop runs on real openings: results are tracked, the me
     expect(pendingResult({ ...p, updatedAt: '2026-10-31T00:00:00.000Z' }, history)).toBeNull();
     expect(pendingResult(p, { ...history, results: [{ actionKey: 'k', hypothesisId: 'pathway-holds', outcome: 'CONTRADICTED', evidence: 'e', at: 'x', decisionAt: history.decidedAt }] })).toBeNull();
     expect(chooseDemonstrated([p], new Map([['opp_x', history]]))).toHaveLength(1);
+  });
+});
+
+/* ------------------------------------------------------------------------- */
+/* repair-F6: the sprint implements, verifies and adopts a capability, feeds  */
+/* false positives to repair even when it wins, and counts real interventions */
+/* ------------------------------------------------------------------------- */
+
+/** Openings missing secondary fields closed anyway: a capability that learns which fields really bear load gains here. */
+const looserWorld = (): SprintProblem[] => {
+  const out: SprintProblem[] = [];
+  for (let i = 0; i < 40; i++) out.push(problem());
+  for (let i = 0; i < 40; i++) out.push(problem({ state: 'COLLECTED', buyingSignal: null, paymentTerms: null, fulfillmentOwner: null }));
+  for (let i = 0; i < 20; i++) out.push(problem({ state: 'EVIDENCE_CARD', payer: null, priceCents: null, reachableChannel: null }));
+  // Ids fixed, so the hash split does not depend on what other tests created.
+  return out.map((p, i) => ({ ...p, id: `lw_${i}` }));
+};
+
+describe('the sprint selects, implements, verifies and adopts the highest-leverage capability', () => {
+  it('selects by benchmark gain, reruns benchmark and held-out sets with it, and adopts it only when it wins there', () => {
+    const split = splitProblems(looserWorld(), null);
+    const trial = trialCapability(split, [], new Set());
+    expect(trial).not.toBeNull();
+    expect(trial!.leverage.length).toBe(SPRINT_CAPABILITIES.length);
+    expect(trial!.leverage[0]!.capability).toBe(trial!.capability);
+    expect(trial!.leverage[0]!.gain).toBeGreaterThan(0);
+    expect(trial!.benchmarkLoss.variant).toBeLessThan(trial!.benchmarkLoss.incumbent);
+    expect(trial!.verification.map((v) => v.set)).toEqual(['HELD_OUT', 'NEW_HELD_OUT']);
+    expect(trial!.verdict).toBe('ADOPTED');
+    const heldOut = trial!.delta.find((d) => d.set === 'HELD_OUT')!;
+    expect((heldOut.pathwayRate ?? 0) > 0 || (heldOut.brier ?? 0) < 0).toBe(true);
+  });
+
+  it('rejects a capability the held-out sets contradict, counting false positives against it', () => {
+    // The benchmark says missing secondary fields do not matter; the held-out world says they do.
+    const benchmark = looserWorld();
+    const heldOut = population().map((p) => ({ ...p, state: p.state === 'DISCOVERED' ? 'DECLINED' : p.state }));
+    const only = new Set(SPRINT_CAPABILITIES.map((c) => c.key).filter((k) => k !== 'learned-load-bearing'));
+    const trial = trialCapability({ BENCHMARK: benchmark, HELD_OUT: heldOut, NEW_HELD_OUT: [] }, [], only);
+    expect(trial?.capability).toBe('learned-load-bearing');
+    expect(trial?.verdict).toBe('REJECTED');
+    expect(trial?.verification[0]?.statement).toContain('false positive');
+    expect(trial!.delta.find((d) => d.set === 'HELD_OUT')!.falsePositives).toBeGreaterThan(0);
+  });
+
+  it('a capability applied with nothing adopted is the general method itself, and none is tried twice', () => {
+    expect(generalWith([], {})).toBe(GENERAL_METHOD);
+    const split = splitProblems(looserWorld(), null);
+    expect(trialCapability(split, [], new Set(SPRINT_CAPABILITIES.map((c) => c.key)))).toBeNull();
+  });
+
+  it('records the adoption, runs the next run with it, and links that rerun delta to the change', async () => {
+    await freshProject();
+    const stubs = { recordDecision: async () => {}, recordProvenance: async () => {}, registerDirected: async () => ({ candidate: { id: 'imc_x' } }) };
+    const first = await runSprintBenchmark({ ...stubs, read: async () => looserWorld(), now: () => new Date('2026-11-15T00:00:00.000Z') });
+    expect(first.capabilities).toEqual([]);
+    expect(first.trial?.verdict).toBe('ADOPTED');
+    expect(first.rerun).toBeNull();
+    const [event] = await listImprovementEvents({ kinds: [SPRINT_EVENT], limit: 1 });
+    expect((event!.detail['capabilities'] as { adopted: string[] }).adopted).toEqual([first.trial!.capability]);
+
+    const second = await runSprintBenchmark({ ...stubs, read: async () => looserWorld(), now: () => new Date('2026-11-16T00:00:00.000Z') });
+    expect(second.capabilities).toEqual([first.trial!.capability]);
+    expect(second.readings[0]!.method).toContain(first.trial!.capability);
+    expect(second.rerun?.change).toEqual({ capability: first.trial!.capability, adoptedAt: '2026-11-15T00:00:00.000Z' });
+    expect(second.rerun?.deltas.map((d) => d.set)).toEqual(['BENCHMARK', 'HELD_OUT']);
+    const moved = second.rerun!.deltas.find((d) => d.set === 'HELD_OUT')!;
+    expect((moved.pathwayRate ?? 0) > 0 || (moved.brier ?? 0) < 0).toBe(true);
+    expect(second.trial?.capability ?? null).not.toBe(first.trial!.capability);
+  });
+});
+
+describe('false positives reach repair even when the general method wins', () => {
+  it('registers the held-out false positives as their own weakness while the comparison is earned', async () => {
+    await freshProject();
+    // Three fully-evidenced openings that died, all in the held-out set: a few false positives inside a winning method.
+    // Ids fixed here, so the hash split (and so this scenario) does not depend on what other tests created.
+    const declined: SprintProblem[] = [];
+    for (let k = 0; declined.length < 3; k++) {
+      const d = { ...problem({ state: 'DECLINED' }), id: `fp_dead_${k}` };
+      if (splitProblems([d], null).HELD_OUT.length === 1) declined.push(d);
+    }
+    const ps = [...population().map((p, i) => ({ ...p, id: `fp_${i}` })), ...declined];
+    const registered: { key: string; samples: string[] }[] = [];
+    const run = await runSprintBenchmark({
+      read: async () => ps,
+      previous: async () => null,
+      recordDecision: async () => {},
+      recordProvenance: async () => {},
+      registerDirected: async (w) => {
+        registered.push({ key: w.key, samples: w.samples });
+        return { candidate: { id: `imc_${w.key}` } };
+      },
+    });
+    const heldOut = run.comparisons.filter((c) => c.set === 'HELD_OUT');
+    expect(heldOut[0]?.earned).toBe(true);
+    expect([...heldOut[0]!.general.falsePositives].sort()).toEqual(declined.map((d) => d.id).sort());
+    expect(registered.map((r) => r.key)).toEqual(['reasoning-sprint:false-positives']);
+    expect(registered[0]!.samples.every((id) => heldOut[0]!.general.falsePositives.includes(id))).toBe(true);
+    expect(run.repairCandidateIds).toEqual(['imc_reasoning-sprint:false-positives']);
+  });
+});
+
+describe('required human interventions are counted from real owner rows, not modelled', () => {
+  it('counts a person acting on an opening and a Needs-You request about it, never Brain\'s own rows', async () => {
+    const { project } = await freshProject();
+    const db = getDb();
+    const at = '2026-11-10T00:00:00.000Z';
+    const event = (id: string, opp: string, actor: string) =>
+      db.run(`INSERT INTO cash_events (id, project_id, opportunity_id, kind, actor_ref, summary, detail, created_at) VALUES (?, ?, ?, 'X', ?, 's', '{}', ?)`, [id, project.id, opp, actor, at]);
+    await event('cev_1', 'opp_a', 'usr_owner');
+    await event('cev_2', 'opp_a', 'BRAIN');
+    await event('cev_3', 'opp_b', 'brain:goal-tick');
+    await db.run(
+      `INSERT INTO cash_needs (id, project_id, opportunity_id, blocked_action, why_it_matters, recommended_path, setup_effort, next_step, state, created_at, updated_at)
+       VALUES ('cnd_1', ?, 'opp_a', 'b', 'w', 'r', 'LOW', 'n', 'OPEN', ?, ?)`,
+      [project.id, at, at],
+    );
+    const counts = await readOwnerInterventions();
+    expect(counts.get('opp_a')).toBe(2);
+    expect(counts.get('opp_b')).toBeUndefined();
+
+    // The reading carries the real count; the method's own prediction is a separate, named measure.
+    const ps = population().map((p, i) => ({ ...p, ownerInterventions: i < 10 ? 1 : 0 }));
+    const reading = readSet('HELD_OUT', BASELINE_METHOD.key, ps, ps.map((p) => BASELINE_METHOD.run(p, 0.5)));
+    expect(reading.humanInterventions).toMatchObject({ numerator: 10, denominator: 100 });
+    expect(reading.modelledPersonNeeds.numerator).toBe(20);
+    // Problems whose rows were not read are not counted as zero interventions.
+    const unread = readSet('HELD_OUT', BASELINE_METHOD.key, population(), population().map((p) => BASELINE_METHOD.run(p, 0.5)));
+    expect(unread.humanInterventions).toMatchObject({ value: 'INSUFFICIENT_DATA', denominator: 0 });
   });
 });
