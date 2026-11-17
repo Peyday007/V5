@@ -365,7 +365,15 @@ export async function loadProjectKnowledge(projectId: string, input: Omit<Knowle
 /* Layer 2: the mechanism of a transaction                                   */
 /* ------------------------------------------------------------------------- */
 
-/** The questions every transaction answers. Each becomes one or more graph nodes. */
+/**
+ * A starting checklist of questions most transactions answer — never a
+ * universal form (S-0194: the graph is open-ended). Each role a domain has
+ * becomes one or more graph nodes; a role the domain does not have is judged
+ * not applicable from evidence (`notApplicable`) and is then neither a node,
+ * an unknown nor a gap; anything the checklist lacks is added through
+ * `types`, `extraNodes` and `relations`, and the default skeleton can be
+ * replaced by the domain's own wiring (`skeleton: 'NONE'`).
+ */
 export const MECHANISM_ROLES = {
   initiator: { type: 'actor', question: 'Who initiates the transaction?' },
   access: { type: 'channel', question: 'How is access to the buyer won?' },
@@ -398,7 +406,16 @@ export interface MechanismInput {
   roles: Partial<Record<MechanismRole, MechanismPart | MechanismPart[]>>;
   /** Types the domain needs beyond the seed vocabulary, each with why. */
   types?: { kind: 'node' | 'relation'; name: string; reason: string }[];
-  /** Further parts outside the nine roles: the graph is open-ended. */
+  /**
+   * Checklist roles this domain does not have, each with why and the claim ids
+   * that show it (Brain judges fitness per case from evidence). A judged role
+   * is recorded as NOT_APPLICABLE: no node, not unknown, no skeleton edge.
+   * Without a supported claim the judgment is refused rather than assumed.
+   */
+  notApplicable?: Partial<Record<MechanismRole, { reason: string; evidence: string[] }>>;
+  /** 'DEFAULT' wires the checklist skeleton between present roles; 'NONE' wires only `relations` and `routes`. */
+  skeleton?: 'DEFAULT' | 'NONE';
+  /** Further parts outside the checklist roles: the graph is open-ended. */
   extraNodes?: MechanismPart[];
   /** Relations beyond the default skeleton. */
   relations?: { id: string; type: string; from: string; to: string; label?: string }[];
@@ -409,16 +426,18 @@ export interface RoleReading {
   role: MechanismRole;
   question: string;
   nodes: string[];
-  /** KNOWN when every part has supported evidence; UNKNOWN otherwise. */
-  status: 'KNOWN' | 'UNKNOWN';
+  /** KNOWN when every part has supported evidence; NOT_APPLICABLE when evidence shows the domain has no such role; UNKNOWN otherwise. */
+  status: 'KNOWN' | 'UNKNOWN' | 'NOT_APPLICABLE';
   reason: string;
 }
 
 export interface MechanismModel {
   graph: CausalGraph;
   roles: RoleReading[];
-  /** Roles without evidence, by name: what research must still establish. */
+  /** Roles without evidence, by name: what research must still establish. A role judged not applicable is never here. */
   unknown: MechanismRole[];
+  /** Checklist roles the domain does not have, with the evidence that says so. */
+  notApplicable: { role: MechanismRole; reason: string; evidence: string[] }[];
   /** Types declared beyond the seed vocabulary, with the reason each was needed. */
   declaredTypes: { kind: 'node' | 'relation'; name: string; reason: string }[];
   /** Variables the graph implies but does not hold (`discoverMissing`). */
@@ -427,7 +446,7 @@ export interface MechanismModel {
 
 export type MechanismResult = { ok: true; model: MechanismModel } | { ok: false; reason: string };
 
-/** The default causal skeleton between roles: who starts it, what it causes, who is paid. */
+/** The default causal skeleton between checklist roles; an edge touching an absent role is not drawn. */
 const SKELETON: { from: MechanismRole; to: MechanismRole; type: string }[] = [
   { from: 'access', to: 'initiator', type: 'authorizes' },
   { from: 'initiator', to: 'trigger', type: 'causes' },
@@ -491,9 +510,20 @@ export function buildMechanismModel(input: MechanismInput): MechanismResult {
 
   const roles: RoleReading[] = [];
   const roleNodes = new Map<MechanismRole, string[]>();
+  const notApplicable: MechanismModel['notApplicable'] = [];
   for (const role of MECHANISM_ROLE_NAMES) {
     const spec = MECHANISM_ROLES[role];
     const given = input.roles[role];
+    const absent = input.notApplicable?.[role];
+    if (absent !== undefined) {
+      if (given !== undefined) return { ok: false, reason: `${role}: a role cannot both have parts and be judged not applicable.` };
+      if (!absent.reason.trim()) return { ok: false, reason: `${role}: a not-applicable judgment states why.` };
+      const proof = evidenced({ id: `na:${role}`, label: role, evidence: absent.evidence });
+      if (!proof.ok) return { ok: false, reason: `${role}: not applicable is a judgment from evidence, and ${proof.reason}.` };
+      notApplicable.push({ role, reason: absent.reason.trim(), evidence: [...absent.evidence] });
+      roles.push({ role, question: spec.question, nodes: [], status: 'NOT_APPLICABLE', reason: `${absent.reason.trim()} (${proof.reason})` });
+      continue;
+    }
     const parts = given === undefined ? [] : Array.isArray(given) ? given : [given];
     if (parts.length === 0) {
       const id = `unknown:${role}`;
@@ -521,7 +551,7 @@ export function buildMechanismModel(input: MechanismInput): MechanismResult {
   }
 
   let n = 0;
-  for (const edge of SKELETON) {
+  for (const edge of input.skeleton === 'NONE' ? [] : SKELETON) {
     for (const from of roleNodes.get(edge.from) ?? []) {
       for (const to of roleNodes.get(edge.to) ?? []) {
         n += 1;
@@ -545,6 +575,7 @@ export function buildMechanismModel(input: MechanismInput): MechanismResult {
       graph,
       roles,
       unknown: roles.filter((one) => one.status === 'UNKNOWN').map((one) => one.role),
+      notApplicable,
       declaredTypes,
       gaps: discoverMissing(graph),
     },

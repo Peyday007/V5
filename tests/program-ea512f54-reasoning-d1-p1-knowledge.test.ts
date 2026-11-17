@@ -183,6 +183,61 @@ describe('buildMechanismModel', () => {
     expect(result.model.graph.relations.get('r1')?.type).toBe('retires_on');
   });
 
+  it('treats the roles as a checklist: a role evidence shows the domain lacks is not a node, an unknown or a skeleton edge', () => {
+    const result = buildMechanismModel({
+      subject: 'subcontracted inspection',
+      knowledge,
+      roles: { initiator: { id: 'gc', label: 'General contractor', evidence: ['gc'] } },
+      notApplicable: {
+        reusable: { reason: 'Each inspection is consumed on delivery; nothing carries to the next job.', evidence: ['lic'] },
+        access: { reason: 'The contractor commissions directly; no access channel stands between.', evidence: ['gc'] },
+      },
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const { model } = result;
+    expect(model.notApplicable.map((one) => one.role)).toEqual(['access', 'reusable']);
+    expect(model.unknown).not.toContain('reusable');
+    expect(model.unknown).not.toContain('access');
+    expect(model.roles.find((one) => one.role === 'reusable')?.status).toBe('NOT_APPLICABLE');
+    expect(model.graph.nodes.has('unknown:reusable')).toBe(false);
+    expect(model.graph.nodes.has('unknown:access')).toBe(false);
+    expect([...model.graph.relations.values()].some((rel) => rel.to === 'gc' && rel.type === 'authorizes')).toBe(false);
+    expect(model.gaps.some((gap) => JSON.stringify(gap).includes('reusable'))).toBe(false);
+  });
+
+  it('refuses a not-applicable judgment without supported evidence, or alongside parts for the same role', () => {
+    const unevidenced = buildMechanismModel({ subject: 'x', knowledge, roles: {}, notApplicable: { failure: { reason: 'nothing can fail', evidence: [] } } });
+    expect(unevidenced.ok).toBe(false);
+    const refuted = buildMechanismModel({ subject: 'x', knowledge, roles: {}, notApplicable: { riskBearer: { reason: 'nobody carries risk', evidence: ['contested'] } } });
+    expect(refuted.ok).toBe(false);
+    const both = buildMechanismModel({
+      subject: 'x',
+      knowledge,
+      roles: { initiator: { id: 'gc', label: 'GC', evidence: ['gc'] } },
+      notApplicable: { initiator: { reason: 'no initiator', evidence: ['gc'] } },
+    });
+    expect(both.ok).toBe(false);
+  });
+
+  it('replaces the default skeleton with the domain\'s own wiring when asked', () => {
+    const result = buildMechanismModel({
+      subject: 'subcontracted inspection',
+      knowledge,
+      skeleton: 'NONE',
+      roles: {
+        initiator: { id: 'gc', label: 'General contractor', evidence: ['gc'] },
+        moneyMovement: { id: 'pay', label: 'Net-30 invoice payment', evidence: ['net30'] },
+      },
+      relations: [{ id: 'own', type: 'causes', from: 'gc', to: 'pay' }],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const relations = [...result.model.graph.relations.values()];
+    expect(relations.some((rel) => rel.id.startsWith('skeleton:'))).toBe(false);
+    expect(relations.map((rel) => rel.id)).toEqual(['own']);
+  });
+
   it('refuses an undeclared type instead of forcing it into the vocabulary', () => {
     const result = buildMechanismModel({
       subject: 'x',
