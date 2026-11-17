@@ -374,6 +374,13 @@ export const RULE_EFFECTIVE_SOON: Detector = {
 /** How recently a rule must have been published for v2 to count it as news. */
 export const RULE_EFFECTIVE_SOON_PUBLISHED_DAYS = 30;
 
+/**
+ * v2's "soon": a rule takes effect no later than this many days (eight weeks)
+ * after its own publication. Measured from publication, not from the run, so a
+ * verdict does not depend on which day the detector happens to run.
+ */
+export const RULE_EFFECTIVE_SOON_V2_LEAD_DAYS = 56;
+
 /** The document a Federal Register correction corrects, as its record body states it ("Corrects 2026-21030."). Pure. */
 export function correctedDocumentOf(body: string | null | undefined): string | null {
   const m = /Corrects ([A-Za-z0-9-]+)\./.exec(body ?? '');
@@ -396,9 +403,13 @@ export function issuingAgencyOf(organization: string | null): string | null {
  *
  *  1. The window is measured from the rule's own publication. A final rule
  *     published in the last 30 days counts when it takes effect on or after its
- *     publication date and no later than now + RULE_EFFECTIVE_SOON_DAYS. v1
- *     measured the lower bound from the run, so a rule effective on its own
- *     publication day (FAA 2026-23073, FCC 2026-23041) dropped out days later.
+ *     publication date and no later than RULE_EFFECTIVE_SOON_V2_LEAD_DAYS (eight
+ *     weeks) after it. v1 measured both bounds from the run, so a rule
+ *     effective on its own publication day (FAA 2026-23073, FCC 2026-23041)
+ *     dropped out days later, and a correction effective 46 days after its
+ *     publication (C1-2026-21030) was missed on the day it was published and
+ *     kept only from the next. Both bounds now come from the record, so the
+ *     verdict is the same on every run inside the membership window.
  *     A rule effective before it was published is still never kept.
  *  2. A correction inherits the effective date of the rule it corrects
  *     ("Corrects <document_number>."), read from that stored record, and is
@@ -425,7 +436,6 @@ export const RULE_EFFECTIVE_SOON_V2: Detector = {
   },
   memberWindowMs: RULE_EFFECTIVE_SOON_PUBLISHED_DAYS * DAY,
   detect(records, now) {
-    const until = now.getTime() + RULE_EFFECTIVE_SOON_DAYS * DAY;
     const ours = records.filter((record) => this.sources.includes(record.source));
     const effectiveOfDocument = (documentNumber: string): string | null => {
       const corrected = ours.find((record) => record.url.includes(`/${documentNumber}/`));
@@ -443,7 +453,7 @@ export const RULE_EFFECTIVE_SOON_V2: Detector = {
       if (!effective) continue;
       const at = Date.parse(`${effective}T00:00:00.000Z`);
       const publishedDay = Date.parse(`${new Date(published).toISOString().slice(0, 10)}T00:00:00.000Z`);
-      if (!Number.isFinite(at) || at < publishedDay || at > until) continue;
+      if (!Number.isFinite(at) || at < publishedDay || at > publishedDay + RULE_EFFECTIVE_SOON_V2_LEAD_DAYS * DAY) continue;
       const group = groups.get(agency) ?? { name, members: [] };
       group.members.push({ record, effective });
       groups.set(agency, group);

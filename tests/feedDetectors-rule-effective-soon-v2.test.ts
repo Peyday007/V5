@@ -13,6 +13,7 @@ import {
   RULE_EFFECTIVE_SOON,
   RULE_EFFECTIVE_SOON_DAYS,
   RULE_EFFECTIVE_SOON_V2,
+  RULE_EFFECTIVE_SOON_V2_LEAD_DAYS,
   correctedDocumentOf,
   employerKey,
   issuingAgencyOf,
@@ -93,6 +94,22 @@ describe('RULE_EFFECTIVE_SOON@2 reads them', () => {
     expect(members(RULE_EFFECTIVE_SOON_V2.detect(missed, now))).not.toContain('fi_C1-2026-21030');
   });
 
+  it('keeps the correction on its own publication day, and on every later day inside the window', () => {
+    // C1-2026-21030 was published 2026-11-12 and inherits 2026-12-28: 46 days later.
+    // Measured from the run, that is outside 45 days on the publication day itself.
+    for (const at of ['2026-11-12T00:00:00.000Z', '2026-11-12T12:00:00.000Z', '2026-11-13T12:00:00.000Z', '2026-12-11T12:00:00.000Z']) {
+      expect(members(RULE_EFFECTIVE_SOON_V2.detect([...missed, corrected], new Date(at)))).toContain('fi_C1-2026-21030');
+    }
+    // Past the 30-day membership window it is no longer news.
+    expect(members(RULE_EFFECTIVE_SOON_V2.detect([...missed, corrected], new Date('2026-12-13T12:00:00.000Z')))).not.toContain('fi_C1-2026-21030');
+  });
+
+  it('the same items get the same verdict whichever day inside the window the rule runs', () => {
+    const verdict = (at: string) => members(RULE_EFFECTIVE_SOON_V2.detect([...missed, corrected], new Date(at))).sort();
+    expect(verdict('2026-11-12T12:00:00.000Z')).toEqual(verdict('2026-11-17T12:00:00.000Z'));
+    expect(verdict('2026-11-12T12:00:00.000Z')).toEqual(['fi_2026-23041', 'fi_2026-23072', 'fi_2026-23073', 'fi_C1-2026-21030']);
+  });
+
   it('does not flag a notice whose only date is in its text, enforced before it was published', () => {
     expect(members(signals)).not.toContain('fi_2026-23047');
   });
@@ -107,7 +124,9 @@ describe('RULE_EFFECTIVE_SOON@2 reads them', () => {
 
 describe('RULE_EFFECTIVE_SOON@2 lowers no bar', () => {
   it('drops a rule effective before its publication, one beyond the window, and one published over 30 days ago', () => {
-    const beyond = new Date(now.getTime() + (RULE_EFFECTIVE_SOON_DAYS + 2) * 86_400_000).toISOString().slice(0, 10);
+    // One day past eight weeks from its publication, and two days past v1's 45 days from now.
+    const beyond = new Date(Date.parse('2026-11-12T00:00:00.000Z') + (RULE_EFFECTIVE_SOON_V2_LEAD_DAYS + 1) * 86_400_000).toISOString().slice(0, 10);
+    expect(Date.parse(`${beyond}T00:00:00.000Z`)).toBeGreaterThan(now.getTime() + (RULE_EFFECTIVE_SOON_DAYS + 2) * 86_400_000);
     const out = RULE_EFFECTIVE_SOON_V2.detect(
       [
         fr('2026-90001', '2026-11-12', 'Environmental Protection Agency', 'Effective 2026-11-10.'),
@@ -118,6 +137,20 @@ describe('RULE_EFFECTIVE_SOON@2 lowers no bar', () => {
       now,
     );
     expect(out).toEqual([]);
+  });
+
+  it('the window ends exactly eight weeks after publication, on the publication day as on later days', () => {
+    const edge = new Date(Date.parse('2026-11-12T00:00:00.000Z') + RULE_EFFECTIVE_SOON_V2_LEAD_DAYS * 86_400_000).toISOString().slice(0, 10);
+    const past = new Date(Date.parse('2026-11-12T00:00:00.000Z') + (RULE_EFFECTIVE_SOON_V2_LEAD_DAYS + 1) * 86_400_000).toISOString().slice(0, 10);
+    for (const at of ['2026-11-12T12:00:00.000Z', '2026-11-30T12:00:00.000Z']) {
+      const kept = members(
+        RULE_EFFECTIVE_SOON_V2.detect(
+          [fr('2026-90005', '2026-11-12', 'Environmental Protection Agency', `Effective ${edge}.`), fr('2026-90006', '2026-11-12', 'Environmental Protection Agency', `Effective ${past}.`)],
+          new Date(at),
+        ),
+      );
+      expect(kept).toEqual(['fi_2026-90005']);
+    }
   });
 
   it('reads only its own source', () => {
