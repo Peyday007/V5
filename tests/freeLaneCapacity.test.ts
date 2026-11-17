@@ -12,6 +12,7 @@ import { workType } from '../server/services/queue/workTypes.ts';
 import { setBrainOnlyMode } from '../server/services/bins/brainOnly.ts';
 import {
   brainCpu,
+  cpuReason,
   controlStep,
   decideTarget,
   slotShare,
@@ -211,5 +212,16 @@ describe('the CPU the lane guard reads (production, 2026-11-16)', () => {
     for (const cpu of [loop, machine]) {
       expect(decideTarget({ target: 6, active: 6, waiting: 10, window: { ok: 10, content: 0, transient: 0 }, pressure: { db: false, lagMs: 5, cpu } })).toMatchObject({ target: 3, stable: false });
     }
+  });
+
+  it('names whether the loop or the machine was busy (production 2026-11-17 18:28Z, 56bc7f12)', () => {
+    // GPU slots 12 -> 6 on "Brain CPU at 85%" with the machine 72% idle: the loop, not the cores.
+    const pressure = { db: false, lagMs: 47, cpu: brainCpu({ loop: 0.86, processCoreSeconds: 16, seconds: 30, cores: 2 }), loop: 0.86, machine: 16 / 30 / 2 };
+    const loopBound = decideTarget({ target: 12, active: 12, waiting: 10, window: { ok: 10, content: 0, transient: 0 }, pressure });
+    expect(loopBound).toMatchObject({ target: 6, stable: false });
+    expect(loopBound.reason).toBe("Brain CPU at 86%: the server's event loop busy 86% of the step (machine 27% of its cores)");
+    const machineBound = cpuReason({ db: false, lagMs: 5, cpu: 0.95, loop: 0.2, machine: 0.95 });
+    expect(machineBound).toBe("Brain CPU at 95%: the process using 95% of the machine's cores (event loop 20%)");
+    expect(cpuReason({ db: false, lagMs: 5, cpu: 0.9 })).toBe('Brain CPU at 90%');
   });
 });

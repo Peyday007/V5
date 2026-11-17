@@ -410,7 +410,7 @@ async function pressureSection(since: string, hours: number): Promise<void> {
     const loop = r['eventLoop'] as { p99?: number; max?: number } | null | undefined;
     const pools = r['pools'] as Record<string, { total?: number; idle?: number; waiting?: number; max?: number }> | null | undefined;
     const checkouts = r['checkouts'] as Record<string, { p95?: number; max?: number }> | null | undefined;
-    const pressure = r['pressure'] as { state?: string; p90Ms?: number | null; failures?: number } | null | undefined;
+    const pressure = r['pressure'] as { state?: string; p90Ms?: number | null; failures?: number; reason?: string; since?: string } | null | undefined;
     const pool = (name: string) => {
       const p = pools?.[name];
       const c = checkouts?.[name.toUpperCase()];
@@ -419,6 +419,8 @@ async function pressureSection(since: string, hours: number): Promise<void> {
     console.log(`  ${row.instance_id.slice(0, 12)} rev ${String(r['revision'] ?? '?').slice(0, 8)} alive ${row.alive_at}`);
     console.log(`    cpu ${cpu ? `${cpu.processPctOfCore ?? '?'}% of one core over ${Math.round(num(cpu.windowMs) / 1000)}s · machine idle ${cpu.idlePct ?? '?'}% steal ${cpu.stealPct ?? '?'}% · ${cpu.vcpus ?? '?'} vCPU` : 'not measured'} · memory ${mem ? `rss ${mem.rssMB}MB heap ${mem.heapUsedMB}/${mem.heapLimitMB}MB peak rss ${mem.peakRssMB}MB` : 'not measured'} · loop ${loop ? `p99 ${loop.p99}ms max ${loop.max}ms` : 'not measured'}`);
     console.log(`    db ${pool('workload')} · ${pool('control')} · pressure ${pressure ? `${pressure.state} (statement p90 ${pressure.p90Ms === null || pressure.p90Ms === undefined ? '-' : Math.round(pressure.p90Ms)}ms, ${num(pressure.failures)} overload failure(s) in 120s)` : 'not measured'}`);
+    // The state alone read as a database mislabel on 2026-11-17 (SHEDDING beside a 23 ms p90); the reason says what entered it.
+    if (pressure?.state === 'SHEDDING' && pressure.reason) console.log(`    shedding since ${pressure.since ?? '?'}: ${pressure.reason}`);
   }
   const decisions = await db.all<{ at: string; outcome: string; workload_class: string | null; measures: string | null; reason: string | null }>(
     `SELECT at, outcome, workload_class, measures, reason FROM bin_events
@@ -427,6 +429,8 @@ async function pressureSection(since: string, hours: number): Promise<void> {
   );
   const counts = new Map<string, number>();
   let maxCpu = 0;
+  let maxLoop = 0;
+  let maxMachine: number | null = null;
   let maxLag = 0;
   let maxWaiting = 0;
   const dbStates = new Map<string, number>();
@@ -434,6 +438,8 @@ async function pressureSection(since: string, hours: number): Promise<void> {
     counts.set(d.outcome, (counts.get(d.outcome) ?? 0) + 1);
     const m = parseJson(d.measures);
     maxCpu = Math.max(maxCpu, num(m['cpu'] as number));
+    maxLoop = Math.max(maxLoop, num(m['loop'] as number));
+    if (m['machine'] !== undefined) maxMachine = Math.max(maxMachine ?? 0, num(m['machine'] as number));
     maxLag = Math.max(maxLag, num(m['lagMs'] as number));
     maxWaiting = Math.max(maxWaiting, num(m['waiting'] as number));
     if (m['db'] !== undefined) dbStates.set(String(m['db']), (dbStates.get(String(m['db'])) ?? 0) + 1);
@@ -443,7 +449,7 @@ async function pressureSection(since: string, hours: number): Promise<void> {
     [since],
   );
   console.log(`PRESSURE over ${hours}h (free-lane controller's measured decisions${decisions.length === 500 ? ', newest 500' : ''})`);
-  console.log(`  decisions ${decisions.length ? [...counts].map(([k, v]) => `${k.toLowerCase()}=${v}`).join(' ') : 'none'} · peak brain cpu ${Math.round(maxCpu * 100)}% · peak loop lag ${Math.round(maxLag)}ms · peak waiting items ${maxWaiting} · database ${dbStates.size ? [...dbStates].map(([k, v]) => `${k}=${v}`).join(' ') : '-'} · idle with work queued ~${num(idle?.n) * 10} min`);
+  console.log(`  decisions ${decisions.length ? [...counts].map(([k, v]) => `${k.toLowerCase()}=${v}`).join(' ') : 'none'} · peak brain cpu ${Math.round(maxCpu * 100)}% (event loop ${Math.round(maxLoop * 100)}%, machine ${maxMachine === null ? '-' : `${Math.round(maxMachine * 100)}%`}) · peak loop lag ${Math.round(maxLag)}ms · peak waiting items ${maxWaiting} · database ${dbStates.size ? [...dbStates].map(([k, v]) => `${k}=${v}`).join(' ') : '-'} · idle with work queued ~${num(idle?.n) * 10} min`);
   for (const d of decisions.filter((one) => one.outcome === 'SHRINK').slice(0, 5)) {
     console.log(`  shrink ${d.at} ${d.workload_class ?? '?'}: ${String(d.reason ?? '').slice(0, 200)}`);
   }

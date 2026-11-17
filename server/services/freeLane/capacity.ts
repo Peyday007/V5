@@ -72,6 +72,25 @@ export interface Pressure {
   /** What `cpu` was taken from, for the record. */
   loop?: number;
   processCpu?: number;
+  /** The process's CPU as a share of the whole machine (all cores), 0–1. */
+  machine?: number;
+}
+
+/**
+ * Which half of `brainCpu` a CPU shrink was read from, in the reason itself.
+ * Production 2026-11-17 18:28Z (56bc7f12): the lane halved the GPU slots on
+ * "Brain CPU at 85%" while the machine read 72% idle, and the record could not
+ * say that the 85% was the server's event loop (one thread, busy 85% of the
+ * step, stalling 2–4 s a minute) and not the cores. More vCPUs do not shorten
+ * one thread's work; the reason has to say which it was.
+ */
+export function cpuReason(pressure: Pressure): string {
+  const pct = (n: number) => `${Math.round(n * 100)}%`;
+  const head = `Brain CPU at ${pct(pressure.cpu)}`;
+  if (pressure.loop === undefined || pressure.machine === undefined) return head;
+  return pressure.loop >= pressure.machine
+    ? `${head}: the server's event loop busy ${pct(pressure.loop)} of the step (machine ${pct(pressure.machine)} of its cores)`
+    : `${head}: the process using ${pct(pressure.machine)} of the machine's cores (event loop ${pct(pressure.loop)})`;
 }
 
 export interface Decision {
@@ -111,7 +130,7 @@ export function decideTarget(input: {
   // not a busy loop. At 300 ms the lane sat at one slot through ordinary bursts (production
   // 2026-11-14: halved at 474–974 ms with highest stable targets of 19–26).
   if (pressure.lagMs > LAG_SHRINK_MS) return { target: half, reason: `Brain event loop lagging ${Math.round(pressure.lagMs)} ms`, stable: false };
-  if (pressure.cpu > 0.85) return { target: half, reason: `Brain CPU at ${Math.round(pressure.cpu * 100)}%`, stable: false };
+  if (pressure.cpu > 0.85) return { target: half, reason: cpuReason(pressure), stable: false };
   if (samples >= 4 && transientRate >= 0.3) {
     return { target: half, reason: `provider overloaded: ${Math.round(transientRate * 100)}% of ${samples} calls failed`, stable: false };
   }
@@ -282,7 +301,7 @@ function readPressure(): Pressure {
   const dbContended = peakWaiting > 0;
   peakWaiting = 0;
   peakControlWaiting = 0;
-  return { db, dbContended, lagMs: Number.isFinite(lagMs) ? lagMs : 0, cpu, loop: Number.isFinite(loop) ? loop : 0, processCpu: processCoreSeconds / seconds };
+  return { db, dbContended, lagMs: Number.isFinite(lagMs) ? lagMs : 0, cpu, loop: Number.isFinite(loop) ? loop : 0, processCpu: processCoreSeconds / seconds, machine: processCoreSeconds / seconds / CORES };
 }
 
 /*
@@ -606,7 +625,7 @@ export async function controlStep(): Promise<ControlReading | null> {
         workloadClass: pool.worker.model,
         outcome: decision.target > pool.target ? 'GROW' : 'SHRINK',
         reason: `${pool.target} -> ${decision.target}: ${decision.reason}`.slice(0, 340) + (granted.applied && !decision.reason.includes(`(allocation ${grant!.fingerprint})`) ? ` (allocation ${grant!.fingerprint})` : ''),
-        measures: { waiting, busy: pool.busy, peakBusy: peak, ...(granted.applied ? { granted: grant!.units } : {}), ...window, lagMs: Math.round(pressure.lagMs), cpu: Number(pressure.cpu.toFixed(2)), ...(pressure.loop !== undefined ? { loop: Number(pressure.loop.toFixed(2)), processCpu: Number((pressure.processCpu ?? 0).toFixed(2)) } : {}), db: pressure.db, dbContended: pressure.dbContended ?? false },
+        measures: { waiting, busy: pool.busy, peakBusy: peak, ...(granted.applied ? { granted: grant!.units } : {}), ...window, lagMs: Math.round(pressure.lagMs), cpu: Number(pressure.cpu.toFixed(2)), ...(pressure.loop !== undefined ? { loop: Number(pressure.loop.toFixed(2)), processCpu: Number((pressure.processCpu ?? 0).toFixed(2)), ...(pressure.machine !== undefined ? { machine: Number(pressure.machine.toFixed(2)) } : {}) } : {}), db: pressure.db, dbContended: pressure.dbContended ?? false },
         evidenceClass: 'MEASURED',
       });
     }
