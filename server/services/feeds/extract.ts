@@ -245,7 +245,10 @@ export function extractItem(item: ExtractableItem): ExtractedFact[] {
   const deliverable = deliverableOf(item, kind);
   const observedAt = item.publishedAt ?? item.fetchedAt;
   const demand: ExtractedFact['demand'] = kind === 'STATED_REQUEST' ? 'STATED_REQUEST' : 'NOT_DEMAND';
-  const subject = `${entity ?? item.id}:${deliverable ?? '-'}`;
+  const defect = readSiteDefect(item);
+  // A site-defect lead is one branch of a business at one address: a chain files a lead per branch under one
+  // name and one problem class, so its facts are scoped to the record, or two branches would read as a contradiction.
+  const subject = defect ? `${entity ?? item.id}:${deliverable ?? '-'}:${item.id}` : `${entity ?? item.id}:${deliverable ?? '-'}`;
   const out: ExtractedFact[] = [];
   const push = (fact: Omit<ExtractedFact, 'recordKind' | 'demand' | 'observedAt' | 'entityKey'>): void => {
     out.push({ ...fact, entityKey: entity, recordKind: kind, demand, observedAt });
@@ -259,7 +262,6 @@ export function extractItem(item: ExtractableItem): ExtractedFact[] {
       kind === 'STATED_REQUEST' ? 'buyer' : kind === 'SUPPLIER_AD' || kind === 'PLATFORM_PRICE' ? 'provider' : kind === 'JOB_POSTING' ? 'employer' : 'organization';
     push({ key: `${role}:${item.id}`, field: role, value: entity, unit: null, currency: null, evidence: ev('organization', item.organization) });
   }
-  const defect = readSiteDefect(item);
   if (deliverable) push({ key: `deliverable:${item.id}`, field: 'deliverable', value: deliverable, unit: null, currency: null, evidence: ev('title', defect ? defect.phraseText : item.title) });
   // The city a site-defect line names (it deliberately names no state, so the "City, ST" reader cannot),
   // qualified so same-named cities in different states never share a value.

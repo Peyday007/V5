@@ -161,4 +161,23 @@ describe('broken-site lead lines are read by code', () => {
     const run = extractItems([springA, springB], new Date(CONFIRMED));
     for (const r of run.reconciled.filter((x) => x.key.startsWith('location:'))) expect(r.status).not.toBe('CONTESTED');
   });
+
+  it('never reads two branches of one chain as a contradiction', () => {
+    // Finding F3: one organization, one problem class, two cities shared a location key and reconciled CONTESTED.
+    const sa = RECORDED[3]!;
+    const austin = lead('fi_aus', 'Einstein Bros. Bagels', 'Austin', 'NOT_FOUND', 'https://locations.einsteinbros.com/us/tx/austin/2-guadalupe', 'the home page answered 404', 'cafe');
+    const sa2 = lead('fi_sa2', 'Einstein Bros. Bagels', 'San Antonio', 'NOT_FOUND', 'https://locations.einsteinbros.com/us/tx/san-antonio/3-loop-410', 'the home page answered 404', 'cafe');
+    const run = extractItems([sa, austin, sa2], new Date(CONFIRMED));
+    const locations = run.reconciled.filter((r) => r.key.startsWith('location:'));
+    expect(locations).toHaveLength(3);
+    for (const r of locations) {
+      expect(r.status).toBe('OBSERVED');
+      expect(r.observations).toHaveLength(1);
+    }
+    expect(run.reconciled.some((r) => r.status === 'CONTESTED')).toBe(false);
+    const byItem = new Map(locations.map((r) => [r.observations[0]!.evidence.itemId, r.value]));
+    expect(byItem.get(sa.id)).toBe(`san antonio @ bbox:${box('san-antonio')}`);
+    expect(byItem.get(austin.id)).toBe(`austin @ bbox:${box('austin')}`);
+    expect(byItem.get(sa2.id)).toBe(`san antonio @ bbox:${box('san-antonio')}`);
+  });
 });
