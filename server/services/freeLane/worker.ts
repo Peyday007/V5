@@ -1757,6 +1757,7 @@ let fitness: { at: number; unfit: Set<string> } | null = null;
 /** Tests: forget the cached fitness reading. */
 export function resetFreeLaneFitness(): void {
   fitness = null;
+  pairProbes.clear();
   resetRouteHealth();
 }
 export async function unfitNow(models: readonly string[], now = Date.now(), fallbackModel: string | null = null): Promise<Set<string>> {
@@ -1773,16 +1774,66 @@ export async function unfitNow(models: readonly string[], now = Date.now(), fall
   return unfit;
 }
 
-/** The lane's answers over the last day, by model, kind, outcome and reason: what fitness is judged on. */
+/**
+ * The answers fitness is judged on: each (model, kind of work) pair's most
+ * recent RECENT_ANSWERS judged answers within the last day, by model, kind,
+ * outcome and reason. Production, 2026-11-17 04:38–05:45Z: #1014 fixed the
+ * page truncation behind gpt-oss-120b's empty fragment answers, but a day of
+ * pre-fix rejections kept it held back from RESEARCH_FRAGMENT, so the H200
+ * sat 0.28 slots busy and produced 1 accepted claim in an hour ($3.59) while
+ * it held no new answer that could ever clear it. A pair is judged on what it
+ * does now, and `pairProbeDue` gives a held pair the answers to show it.
+ * Answers that are not the model's own (`notTheAnswer`) do not use up the window.
+ */
 export async function answerRows(now = Date.now()): Promise<{ model: string; reason: string | null; work_type: string; outcome: string; n: number | string }[]> {
-  const rows = await getDb().all<{ reason: string | null; work_type: string; outcome: string; n: number | string }>(
-    `SELECT e.reason, w.work_type, e.outcome, COUNT(*) AS n FROM bin_events e
+  const rows = await getDb().all<{ reason: string | null; work_type: string; outcome: string }>(
+    `SELECT e.reason, w.work_type, e.outcome FROM bin_events e
        JOIN work_items w ON w.id = e.work_item_id
       WHERE e.event_type = 'FREE_LANE_ITEM' AND e.at >= ?
-      GROUP BY e.reason, w.work_type, e.outcome`,
+      ORDER BY e.at DESC`,
     [new Date(now - 86_400_000).toISOString()],
   );
-  return rows.map((r) => ({ ...r, model: String(r.reason ?? '').replace(/^model /, '').split(':')[0]! }));
+  return recentAnswers(rows);
+}
+
+/** How many of a pair's latest judged answers decide whether it is fit. */
+export const RECENT_ANSWERS = 10;
+
+/** Newest-first answer rows → each pair's latest RECENT_ANSWERS judged answers, grouped. Pure. */
+export function recentAnswers(
+  rows: readonly { reason: string | null; work_type: string; outcome: string }[],
+): { model: string; reason: string | null; work_type: string; outcome: string; n: number }[] {
+  const judged = new Map<string, number>();
+  const grouped = new Map<string, { model: string; reason: string | null; work_type: string; outcome: string; n: number }>();
+  for (const row of rows) {
+    const model = String(row.reason ?? '').replace(/^model /, '').split(':')[0]!;
+    const pair = `${model}|${row.work_type}`;
+    const counts = row.outcome === 'SUBMITTED' || (row.outcome === 'FAILED_RETRYABLE' && !(row.reason && notTheAnswer(row.reason)));
+    if (counts) {
+      const seen = judged.get(pair) ?? 0;
+      if (seen >= RECENT_ANSWERS) continue;
+      judged.set(pair, seen + 1);
+    }
+    const key = `${pair}\t${row.outcome}\t${row.reason ?? ''}`;
+    const entry = grouped.get(key) ?? { model, reason: row.reason, work_type: row.work_type, outcome: row.outcome, n: 0 };
+    entry.n += 1;
+    grouped.set(key, entry);
+  }
+  return [...grouped.values()];
+}
+
+/** How often a held (model, kind) pair is given one item to show whether it still fails. */
+export const PAIR_REPROBE_MS = 30 * 60_000;
+const pairProbes = new Map<string, number>();
+
+/** Whether a held pair is due its re-probe item. It only reads. */
+export function pairProbeDue(model: string, workType: string, now = Date.now()): boolean {
+  return now - (pairProbes.get(`${model}|${workType}`) ?? 0) >= PAIR_REPROBE_MS;
+}
+
+/** The admitted item is the held pair's re-probe; the next waits PAIR_REPROBE_MS. */
+export function takePairProbe(model: string, workType: string, now = Date.now()): void {
+  pairProbes.set(`${model}|${workType}`, now);
 }
 
 /**
@@ -2284,7 +2335,8 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
      */
     const otherHold = (model: string): string | null =>
       routeHold(model) ?? ((cooldown.get(cooldownKey(model, item.id)) ?? 0) > Date.now() ? 'cooling down after a provider failure' : null);
-    if (heldBackFor(worker.model, item.work_type, workers.map((w) => w.model), unfit, otherHold)) {
+    const pairProbe = heldBackFor(worker.model, item.work_type, workers.map((w) => w.model), unfit, otherHold);
+    if (pairProbe && !pairProbeDue(worker.model, item.work_type)) {
       return { ok: false, reason: 'this model’s answers for this kind of work are rejected; another model takes it' };
     }
     if (!(await freeLaneAdmits(item))) return { ok: false, reason: 'not free-lane work' };
@@ -2293,7 +2345,10 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
     session = sessionFor(worker, item);
     const admitted = await auditAdmission({ workerId: worker.workerId, routineId: null, accountId: null, sessionRef: session })(item);
     // Only an item that passed every filter spends a held route's re-probe slot.
-    if (admitted.ok) takeRouteProbe(worker.model);
+    if (admitted.ok) {
+      takeRouteProbe(worker.model);
+      if (pairProbe) takePairProbe(worker.model, item.work_type);
+    }
     return admitted;
   };
   const ask = async (types: FreeLaneWorkType[], orchestrationId: string | null): Promise<ClaimedWork | undefined> => {
