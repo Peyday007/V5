@@ -77,7 +77,24 @@ import {
   type PriorDecision,
 } from '../research/reasoningController.ts';
 import { MECHANISM_ROLES, loadProjectKnowledge, mechanismFromOpening, type KnowledgeReading, type MechanismModel, type MechanismRole } from '../research/knowledgeModel.ts';
-import { buildNumberProvenance, recordNumberProvenance, type NumberProvenance, type ProvenanceInput } from '../quant/mathToolkit.ts';
+import {
+  buildNumberProvenance,
+  countPrecondition,
+  forecastBias,
+  probabilityProvenance,
+  provenanceReason,
+  readRecordedMathReasons,
+  recordForecastBias,
+  recordMathSelection,
+  recordNumberProvenance,
+  selectMathematics,
+  selectionReason,
+  type BiasReading,
+  type MathSelection,
+  type NumberProvenance,
+  type ProvenanceInput,
+} from '../quant/mathToolkit.ts';
+import { MIN_CALIBRATION_SAMPLE, buildLedger, calibrate, type CalibrationBucket, type ExposureRow, type OutcomeRow, type PredictionRow } from '../quant/forecast.ts';
 import type { Figure } from '../quant/graph.ts';
 import type { sendNeeds } from '../quant/needs.ts';
 
@@ -828,12 +845,239 @@ export async function readOwnerInterventions(problems: readonly SprintProblem[])
 }
 
 /* ------------------------------------------------------------------------- */
+/* The numbers the run states                                                 */
+/* ------------------------------------------------------------------------- */
+
+/** Whether production has resolved an opening either way: only those are outcomes a probability can be judged on. */
+export function resolvedInProduction(p: Pick<SprintProblem, 'state'>): boolean {
+  return ACTIONABLE_STATES.has(p.state) || DEAD_STATES.has(p.state);
+}
+
+/**
+ * One method's probabilities against what production resolved, through the
+ * existing forecast ledger shapes: each resolved opening is a prediction the
+ * method made (its probability that the opening is an actionable pathway)
+ * and an outcome (whether production made it one). The existing calibration
+ * judges the bucket; `forecastBias` names a systematic error and the
+ * correction it proposes. Openings production has not resolved are not
+ * outcomes and are left out, never read as failures.
+ */
+export function methodForecastReading(
+  methodKey: string,
+  problems: readonly SprintProblem[],
+  verdicts: readonly MethodVerdict[],
+  at: string,
+): { bias: BiasReading[]; calibration: CalibrationBucket | null } {
+  const byId = new Map(problems.map((p) => [p.id, p]));
+  const predictions: PredictionRow[] = [];
+  const exposures: ExposureRow[] = [];
+  const outcomes: OutcomeRow[] = [];
+  for (const v of verdicts) {
+    const p = byId.get(v.problemId);
+    if (!p || !resolvedInProduction(p)) continue;
+    const id = `${methodKey}:${p.id}`;
+    predictions.push({
+      id,
+      claimId: id,
+      version: 1,
+      outcome: `"${p.title}" becomes an actionable transaction pathway`,
+      horizonDays: null,
+      population: 'cash_opportunities with an evidence card',
+      data: [`cash_opportunities:${p.id}`],
+      assumptions: [],
+      probability: v.probability,
+      comparableKey: methodKey,
+      madeAt: at,
+    });
+    exposures.push({ predictionId: id, exposedAt: at, atRiskCents: null });
+    outcomes.push({ predictionId: id, observedAt: at, occurred: actionableInProduction(p), evidence: `cash_opportunities:${p.id}#state=${p.state}` });
+  }
+  const buckets = calibrate(buildLedger(predictions, exposures, outcomes));
+  return { bias: forecastBias(predictions, exposures, outcomes), calibration: buckets.find((b) => b.comparableKey === methodKey) ?? null };
+}
+
+/** The per-question method judgment for one opening, from what its card, controller and calibration evidence say. */
+export function sprintSelection(p: SprintProblem, general: MethodVerdict, calibration: CalibrationBucket | null): MathSelection {
+  const holds = general.decision?.hypotheses.find((h) => h.id === MECHANISM_HOLDS) ?? null;
+  const supports = holds?.supports ?? [];
+  const next = general.decision?.next ?? null;
+  const unknowns = profileOf(p).unknowns;
+  const selection = selectMathematics({
+    question: 'What does one transaction bill, and how likely is it to become an actionable pathway?',
+    subject: `opening ${p.id}`,
+    candidates: [
+      {
+        family: 'cash_flow_identities',
+        purpose: 'the gross billed per transaction, exact given the sourced price',
+        preconditions: [
+          general.provenance
+            ? { condition: 'a sourced price states the billed amount', state: 'HOLDS', evidence: general.provenance.sources.map((x) => x.ref) }
+            : { condition: 'a sourced price states the billed amount', state: 'UNKNOWN', evidence: [] },
+        ],
+      },
+      {
+        family: 'probability_bayesian_inference',
+        purpose: 'weigh the mechanism hypotheses on the research claims they cite',
+        preconditions: [
+          supports.length > 0
+            ? { condition: 'research claims bear on the mechanism', state: 'HOLDS', evidence: supports.map((id) => `claim:${id}`) }
+            : { condition: 'research claims bear on the mechanism', state: 'UNKNOWN', evidence: [] },
+        ],
+      },
+      {
+        family: 'statistical_estimation_calibration',
+        purpose: 'judge the stated probability against resolved openings',
+        preconditions: [countPrecondition('enough resolved openings to judge calibration', calibration?.n ?? 0, MIN_CALIBRATION_SAMPLE, `sprint:${GENERAL_METHOD.key}`)],
+      },
+      {
+        family: 'value_of_information_experimental_design',
+        purpose: 'choose which unknown to research first by what it could change',
+        preconditions: [
+          unknowns.length > 0 && next
+            ? { condition: 'an open unknown whose answer could change the decision', state: 'HOLDS', evidence: [next.key] }
+            : { condition: 'an open unknown whose answer could change the decision', state: 'FAILS', evidence: [`cash_opportunities:${p.id}: ${unknowns.length} load-bearing unknown(s)${next ? '' : ', no action valued'}`] },
+        ],
+      },
+    ],
+  });
+  // The subject carries what was chosen, so a changed judgment is a new row and an unchanged one is not repeated.
+  return { ...selection, subject: `opening ${p.id} [${selection.selected.join('+') || 'none fit'}]` };
+}
+
+/** Both methods' probabilities for one opening, each with its provenance. */
+export function probabilityRecords(
+  p: SprintProblem,
+  general: MethodVerdict,
+  baseline: MethodVerdict,
+  reading: Record<string, { bias: BiasReading[]; calibration: CalibrationBucket | null }>,
+  at: string,
+): { records: NumberProvenance[]; refused: number } {
+  const holds = general.decision?.hypotheses.find((h) => h.id === MECHANISM_HOLDS) ?? null;
+  const definition = `probability that "${p.title}" becomes an actionable transaction pathway`.slice(0, 300);
+  const horizon = 'until production resolves the opening (READY or later, or declined/archived)';
+  const out: NumberProvenance[] = [];
+  let refused = 0;
+  const specs = [
+    {
+      method: GENERAL_METHOD.key,
+      v: general,
+      other: baseline,
+      sourceRef: `method:${GENERAL_METHOD.key}:cash_opportunities:${p.id}`,
+      evidence: holds && holds.supports.length > 0 ? holds.supports.map((id) => `claim:${id}`) : [`cash_opportunities:${p.id}: no cited research claim, so the uninformed 0.5 per unresolved role`],
+      applies: 'mechanism hypotheses scored on cited claims, times each unresolved role\'s counter-model',
+    },
+    {
+      method: BASELINE_METHOD.key,
+      v: baseline,
+      other: general,
+      sourceRef: `rule:${BASELINE_METHOD.key}`,
+      evidence: [`cash_opportunities:${p.id}: payer ${known(p, 'payer') ? 'stated' : 'blank'}, price ${known(p, 'priceCents') ? 'stated' : 'blank'}`],
+      applies: 'a fixed payer-and-price rule: 0.6 when both are stated, 0.2 otherwise',
+    },
+  ];
+  for (const s of specs) {
+    const built = probabilityProvenance({
+      key: `actionable-probability:${s.method}:${p.id}`,
+      definition,
+      value: s.v.probability,
+      horizon,
+      sourceRef: s.sourceRef,
+      retrievedAt: at,
+      method: s.applies,
+      evidence: s.evidence,
+      alternatives: [{ label: `the ${s.method === GENERAL_METHOD.key ? BASELINE_METHOD.key : GENERAL_METHOD.key} reading of the same opening`, value: s.other.probability }],
+      comparableKey: s.method,
+      calibration: reading[s.method]?.calibration ?? null,
+      bias: reading[s.method]?.bias ?? [],
+      interdependence: p.payer ? [`payer:${p.payer}`] : [],
+    });
+    if (built.ok) out.push(built.record);
+    else refused += 1;
+  }
+  return { records: out, refused };
+}
+
+/**
+ * Record the numbers every scored opening states — not a sample. A number or
+ * judgment already on record unchanged is not written again, so a daily run
+ * writes what changed; the first run covers every opening.
+ */
+export async function recordSprintMath(
+  problems: readonly SprintProblem[],
+  generalVerdicts: readonly MethodVerdict[],
+  baselineVerdicts: readonly MethodVerdict[],
+  now: Date,
+  deps: SprintDeps,
+  errors: string[],
+): Promise<SprintMath> {
+  const at = now.toISOString();
+  const reading: Record<string, { bias: BiasReading[]; calibration: CalibrationBucket | null }> = {
+    [GENERAL_METHOD.key]: methodForecastReading(GENERAL_METHOD.key, problems, generalVerdicts, at),
+    [BASELINE_METHOD.key]: methodForecastReading(BASELINE_METHOD.key, problems, baselineVerdicts, at),
+  };
+  const math: SprintMath = {
+    provenanceRecorded: 0,
+    provenanceUnchanged: 0,
+    provenanceRefused: 0,
+    selectionsRecorded: 0,
+    bias: Object.fromEntries(Object.entries(reading).map(([k, r]) => [k, r.bias])),
+    calibration: Object.fromEntries(Object.entries(reading).map(([k, r]) => [k, r.calibration])),
+  };
+  let held: Set<string>;
+  try {
+    held = await (deps.recordedMath ?? (() => readRecordedMathReasons(SPRINT_CALLER)))();
+  } catch (error) {
+    errors.push(`math: ${String((error as Error).message ?? error).slice(0, 200)}`);
+    held = new Set();
+  }
+  try {
+    for (const [method, r] of Object.entries(reading)) {
+      if (r.bias.length > 0) await (deps.recordBias ?? recordForecastBias)(r.bias, { caller: SPRINT_CALLER, subject: `sprint method ${method}` });
+    }
+  } catch (error) {
+    errors.push(`bias: ${String((error as Error).message ?? error).slice(0, 200)}`);
+  }
+  const byId = new Map(problems.map((p) => [p.id, p]));
+  const baselineOf = new Map(baselineVerdicts.map((v) => [v.problemId, v]));
+  for (const g of generalVerdicts) {
+    const p = byId.get(g.problemId);
+    const b = baselineOf.get(g.problemId);
+    if (!p || !b) continue;
+    const projectId = p.projectId ?? null;
+    try {
+      const { records, refused } = probabilityRecords(p, g, b, reading, at);
+      math.provenanceRefused += refused;
+      for (const record of [...(g.provenance ? [g.provenance] : []), ...records]) {
+        const key = provenanceReason(record);
+        if (held.has(key)) {
+          math.provenanceUnchanged += 1;
+          continue;
+        }
+        await (deps.recordProvenance ?? recordNumberProvenance)(record, { projectId, caller: SPRINT_CALLER });
+        held.add(key);
+        math.provenanceRecorded += 1;
+      }
+      const selection = sprintSelection(p, g, reading[GENERAL_METHOD.key]?.calibration ?? null);
+      const sKey = selectionReason(selection);
+      if (!held.has(sKey)) {
+        await (deps.recordSelection ?? recordMathSelection)(selection, { projectId, caller: SPRINT_CALLER });
+        held.add(sKey);
+        math.selectionsRecorded += 1;
+      }
+    } catch (error) {
+      errors.push(`math ${p.id}: ${String((error as Error).message ?? error).slice(0, 200)}`);
+    }
+  }
+  return math;
+}
+
+/* ------------------------------------------------------------------------- */
 /* The run                                                                    */
 /* ------------------------------------------------------------------------- */
 
 export const SPRINT_EVENT = 'SPRINT_BENCHMARK';
 export const SPRINT_INTERVAL_MS = 24 * 3_600_000;
-/** How many real problems per run also leave their controller decision and provenance as rows. */
+/** How many real problems per run also leave a controller decision as rows (every scored problem's numbers are recorded; see `recordSprintMath`). */
 export const DEMONSTRATED_PER_RUN = 5;
 
 export interface SprintRun {
@@ -856,8 +1100,25 @@ export interface SprintRun {
   rerun: RerunReading | null;
   /** The controller's operational loop on real openings this run. */
   loop: SprintLoop;
+  /** Every scored opening's material numbers: provenance, per-question method selection and forecast-versus-realized bias. */
+  math: SprintMath;
   /** Always present: what the reading is not evidence of. */
   disclaimer: string;
+}
+
+/** What the run did with the numbers it states (META-18-3). */
+export interface SprintMath {
+  /** Provenance rows recorded this run (a number unchanged since its last record is not recorded again). */
+  provenanceRecorded: number;
+  /** Numbers already on record unchanged. */
+  provenanceUnchanged: number;
+  /** Numbers the toolkit refused (an unsourced figure, units that do not reconcile): findings, not failures. */
+  provenanceRefused: number;
+  selectionsRecorded: number;
+  /** Per method: its probabilities against what production resolved, with the correction a systematic error proposes. */
+  bias: Record<string, BiasReading[]>;
+  /** Per method: the calibration bucket that decides whether its probabilities may be called calibrated. */
+  calibration: Record<string, CalibrationBucket | null>;
 }
 
 /** What the controller's loop did this run: results tracked, decisions taken, methods changed, actions handed off. */
@@ -882,6 +1143,10 @@ export interface SprintDeps {
   record?: typeof recordImprovementEvent;
   recordDecision?: typeof recordControllerDecision;
   recordProvenance?: typeof recordNumberProvenance;
+  recordSelection?: typeof recordMathSelection;
+  recordBias?: typeof recordForecastBias;
+  /** What this caller's provenance and selection rows already say (default: `readRecordedMathReasons`), so only a changed number is recorded again. */
+  recordedMath?: () => Promise<Set<string>>;
   registerDirected?: (weakness: Weakness, now?: Date) => Promise<{ candidate: { id: string } }>;
   now?: () => Date;
   /** What the method library has learned: the catalogue, outcomes and procedures recorded so far. */
@@ -1019,12 +1284,14 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
   const readings: SetReading[] = [];
   const comparisons: BaselineComparison[] = [];
   const generalVerdicts: MethodVerdict[] = [];
+  const baselineVerdicts: MethodVerdict[] = [];
   let benchmarkVerdicts: MethodVerdict[] = [];
   for (const set of ['BENCHMARK', 'HELD_OUT', 'NEW_HELD_OUT'] as const) {
     const ps = split[set];
     const g = ps.map((p) => GENERAL_METHOD.run(p, threshold, contextOf(p)));
     const b = ps.map((p) => BASELINE_METHOD.run(p, threshold));
     generalVerdicts.push(...g);
+    baselineVerdicts.push(...b);
     if (set === 'BENCHMARK') benchmarkVerdicts = g;
     const gr = readSet(set, GENERAL_METHOD.key, ps, g, interventions);
     const br = readSet(set, BASELINE_METHOD.key, ps, b, interventions);
@@ -1035,7 +1302,6 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
   // The controller's operational loop on real openings: track what production said about an earlier
   // decision (a row, and a method outcome the library learns from), decide again with that result —
   // a contradicted one changes the method — record the decision, and hand the next action to its owner.
-  const verdictOf = new Map(generalVerdicts.map((v) => [v.problemId, v]));
   const history = await (deps.history ?? (() => readControllerHistory(SPRINT_CALLER)))();
   const loop: SprintLoop = { resultsTracked: 0, decisions: 0, methodChanges: 0, capabilityGaps: 0, handOffs: {}, proceduresRecorded: 0, knowledgeRead: 0, mechanismsModelled: 0, informationNeeds: 0, errors: [...readErrors] };
   for (const { problem: p, result } of chooseDemonstrated(problems, history)) {
@@ -1092,15 +1358,11 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
     } catch (error) {
       loop.errors.push(`${p.id}: ${String((error as Error).message ?? error).slice(0, 200)}`);
     }
-    const v = verdictOf.get(p.id);
-    if (v?.provenance) {
-      try {
-        await (deps.recordProvenance ?? recordNumberProvenance)(v.provenance, { projectId, caller: SPRINT_CALLER });
-      } catch {
-        // A record the toolkit refuses is a finding already counted in method quality, not a run failure.
-      }
-    }
   }
+  // Every scored opening's numbers, not only the demonstrated ones: provenance for the gross billed and both
+  // methods' probabilities, the per-question method judgment, and each method's forecasts against what
+  // production resolved, with the correction a systematic error proposes (META-18-3).
+  const math = await recordSprintMath(problems, generalVerdicts, baselineVerdicts, now, deps, loop.errors);
   try {
     loop.proceduresRecorded = (
       await learnAndRecordProcedures(outcomes, learning.procedures, {
@@ -1221,6 +1483,7 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
     falsePositiveCandidateId,
     rerun,
     loop,
+    math,
     disclaimer: SPRINT_DISCLAIMER,
   };
   await (deps.record ?? recordImprovementEvent)({
@@ -1239,6 +1502,7 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
       falsePositiveCandidateId: run.falsePositiveCandidateId,
       rerun: run.rerun,
       loop: run.loop,
+      math: run.math,
       disclaimer: run.disclaimer,
     },
   });

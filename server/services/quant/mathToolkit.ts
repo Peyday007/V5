@@ -597,3 +597,281 @@ export async function recordNumberProvenance(record: NumberProvenance, deps: Mat
     measures: { provenance: record },
   });
 }
+
+export const BIAS_EVENT = 'FORECAST_BIAS';
+
+/** Record forecast-versus-realized readings, with the correction each systematic one proposes. */
+export async function recordForecastBias(readings: readonly BiasReading[], deps: MathRecordDeps & { subject?: string } = {}): Promise<void> {
+  const systematic = readings.filter((r) => r.verdict === 'SYSTEMATIC');
+  await (deps.record ?? recordBinEvent)({
+    eventType: BIAS_EVENT,
+    projectId: deps.projectId ?? null,
+    workloadClass: deps.caller ?? 'math-toolkit',
+    outcome: systematic.length > 0 ? 'SYSTEMATIC' : readings.some((r) => r.verdict === 'WITHIN_BAND') ? 'WITHIN_BAND' : 'INSUFFICIENT',
+    reason: `${deps.subject ?? 'forecasts'}: ${readings.length} bucket(s), ${systematic.length} systematic`.slice(0, 480),
+    evidenceClass: 'MEASURED',
+    measures: { readings },
+  });
+}
+
+/* ------------------------------------------------------------------------- */
+/* Production consumers: the numbers Brain already states                     */
+/* ------------------------------------------------------------------------- */
+
+/** A money figure in cents with the spread of the rows it came from (the shape `cash/forecast.ts` states). */
+export interface CentsEstimate {
+  valueCents: number | null;
+  lowCents: number | null;
+  highCents: number | null;
+  fromRows: number;
+  basis: string;
+  unknown?: readonly string[];
+}
+
+/** The correction a systematic bias on this comparable bucket proposes, as an alternative parameterization; null when none. */
+function figureCorrection(bias: readonly BiasReading[] | undefined, comparableKey: string): BiasReading['correction'] {
+  const hit = (bias ?? []).find((b) => b.comparableKey === comparableKey && b.basis === 'FIGURE' && b.verdict === 'SYSTEMATIC');
+  return hit?.correction ?? null;
+}
+
+function probabilityCorrection(bias: readonly BiasReading[] | undefined, comparableKey: string): BiasReading['correction'] {
+  const hit = (bias ?? []).find((b) => b.comparableKey === comparableKey && b.basis === 'PROBABILITY' && b.verdict === 'SYSTEMATIC');
+  return hit?.correction ?? null;
+}
+
+/**
+ * The provenance of one money figure a forecast states, in the currency's
+ * unit: the cents the rows support divided by 100 cents per unit, its spread
+ * as the alternative parameterizations, and — when the forecast ledger shows
+ * a systematic error on this figure's comparable bucket — the bias-corrected
+ * figure as one more. A figure the evidence does not support stays unknown,
+ * with the blank fields named, never a convenient number.
+ */
+export function estimateProvenance(input: {
+  key: string;
+  quantity: { kind: QuantityKind; definition: string };
+  currency: string;
+  horizon: string;
+  estimate: CentsEstimate;
+  sourceRef: string;
+  retrievedAt: string;
+  method: string;
+  comparableKey?: string;
+  bias?: readonly BiasReading[];
+  interdependence?: readonly string[];
+}): ProvenanceResult {
+  const e = input.estimate;
+  const hasValue = typeof e.valueCents === 'number' && Number.isFinite(e.valueCents);
+  const bounded = hasValue && typeof e.lowCents === 'number' && typeof e.highCents === 'number' && e.highCents >= e.lowCents;
+  const figure: Figure = {
+    meaning: input.quantity.definition,
+    unit: 'cents',
+    value: hasValue ? e.valueCents : null,
+    source: hasValue ? input.sourceRef : null,
+    derivedFrom: [],
+    status: hasValue ? 'EVIDENCED' : 'UNKNOWN',
+    window: null,
+    geography: null,
+    scope: input.key,
+    bounds: bounded ? { low: e.lowCents as number, high: e.highCents as number } : null,
+    invalidatedBy: [],
+  };
+  const alternatives: { label: string; parameters: Record<string, number> }[] = [];
+  if (bounded) {
+    alternatives.push({ label: `low end of the ${e.fromRows} row(s) it came from`, parameters: { figure: e.lowCents as number } });
+    alternatives.push({ label: `high end of the ${e.fromRows} row(s) it came from`, parameters: { figure: e.highCents as number } });
+  }
+  const correction = input.comparableKey ? figureCorrection(input.bias, input.comparableKey) : null;
+  if (hasValue && correction?.kind === 'SCALE_FIGURE') {
+    alternatives.push({ label: `corrected for measured systematic error ×${correction.amount.toFixed(3)} (${correction.rationale})`, parameters: { figure: (e.valueCents as number) * correction.amount } });
+  }
+  if (alternatives.length === 0) {
+    alternatives.push({ label: hasValue ? 'no spread: a single row states it' : `no parameterization: unknown until ${(e.unknown ?? []).join(', ') || 'the evidence states it'}`, parameters: hasValue ? { figure: e.valueCents as number } : {} });
+  }
+  const evidence = [e.basis, `${e.fromRows} opportunity row(s)`].filter((s) => typeof s === 'string' && s.trim());
+  return buildNumberProvenance({
+    key: input.key,
+    quantity: input.quantity,
+    units: input.currency,
+    horizon: input.horizon,
+    formula: { op: '/', args: [{ ref: 'figure' }, { const: 100, unit: `cents/${input.currency}` }] },
+    inputs: [{ key: 'figure', figure, source: { ref: input.sourceRef, retrievedAt: input.retrievedAt } }],
+    alternatives,
+    interdependence: input.interdependence,
+    applicability: { method: input.method, evidence: evidence.length > 0 ? evidence : [input.sourceRef] },
+    form: 'ESTIMATE',
+  });
+}
+
+/**
+ * The provenance of a claimed probability: what it is a probability of, the
+ * rule or evidence it was read from, the other methods' readings of the same
+ * event and — when its comparable bucket is systematically off against
+ * realized results — the bias-corrected probability as alternatives, and the
+ * calibration that decides whether it may be called calibrated.
+ */
+export function probabilityProvenance(input: {
+  key: string;
+  definition: string;
+  value: number;
+  horizon: string;
+  sourceRef: string;
+  retrievedAt: string;
+  method: string;
+  evidence: readonly string[];
+  alternatives: readonly { label: string; value: number }[];
+  comparableKey: string;
+  calibration?: CalibrationBucket | null;
+  bias?: readonly BiasReading[];
+  interdependence?: readonly string[];
+}): ProvenanceResult {
+  const figure: Figure = {
+    meaning: input.definition,
+    unit: 'probability',
+    value: input.value,
+    source: input.sourceRef,
+    derivedFrom: [],
+    status: 'EVIDENCED',
+    window: null,
+    geography: null,
+    scope: input.key,
+    bounds: null,
+    invalidatedBy: [],
+  };
+  const alternatives = input.alternatives.map((a) => ({ label: a.label, parameters: { p: a.value } }));
+  const correction = probabilityCorrection(input.bias, input.comparableKey);
+  if (correction?.kind === 'SHIFT_PROBABILITY') {
+    alternatives.push({ label: `corrected for measured systematic error ${correction.amount >= 0 ? '+' : ''}${correction.amount.toFixed(3)} (${correction.rationale})`, parameters: { p: Math.min(1, Math.max(0, input.value + correction.amount)) } });
+  }
+  return buildNumberProvenance({
+    key: input.key,
+    quantity: { kind: 'PROBABILITY', definition: input.definition },
+    units: 'probability',
+    horizon: input.horizon,
+    formula: { ref: 'p' },
+    inputs: [{ key: 'p', figure, source: { ref: input.sourceRef, retrievedAt: input.retrievedAt } }],
+    alternatives,
+    interdependence: input.interdependence,
+    applicability: { method: input.method, evidence: input.evidence.length > 0 ? [...input.evidence] : [input.sourceRef] },
+    form: 'PROBABILITY',
+    calibration: input.calibration ?? null,
+  });
+}
+
+/** Precondition evidence for a family, read from a count: HOLDS at or above the need, FAILS below it, with the count as the evidence. */
+export function countPrecondition(condition: string, count: number, need: number, evidenceRef: string): MethodPrecondition {
+  return { condition, state: count >= need ? 'HOLDS' : 'FAILS', evidence: [`${evidenceRef} (${count} of ${need} needed)`] };
+}
+
+/** The ledger rows a cash refresh holds, and what it just wrote. */
+export interface CashMathInput {
+  projectId: string;
+  forecasts: readonly { currency: string; forecast: { [figure: string]: unknown } }[];
+  /** The predictions this refresh wrote: a figure is given provenance when its claim got a new version. */
+  written: readonly PredictionRow[];
+  /** Outcomes this refresh recorded: the bias is re-read and recorded when realized results arrived. */
+  outcomesWritten: number;
+  ledger: { predictions: readonly PredictionRow[]; exposures: readonly ExposureRow[]; outcomes: readonly OutcomeRow[] };
+  now: string;
+}
+
+/** The cash forecast figures that are material numbers, and the quantity each one is. */
+export const CASH_FIGURES: readonly { name: string; kind: QuantityKind; definition: string }[] = [
+  { name: 'revenue', kind: 'GROSS_BILLED', definition: 'revenue billed per deal, as the qualified openings state it' },
+  { name: 'contribution', kind: 'NET_CONTRIBUTION', definition: 'contribution per deal after the costs the openings state' },
+  { name: 'upfrontCash', kind: 'OTHER', definition: 'most cash out at once before a deal pays (exposure)' },
+  { name: 'ongoingCosts', kind: 'OTHER', definition: 'ongoing costs per deal the openings state' },
+];
+
+/**
+ * The cash ledger's material numbers, given method selection, provenance and
+ * forecast-versus-realized correction on the refresh that states them
+ * (`ledger.ts keepCashLedger`, reached from every goal-plan reading). It
+ * reads nothing: the ledger rows are the ones the refresh already holds.
+ * Each currency whose claims got a new version records, per figure, its
+ * provenance (unknown figures included, as unknown) and the per-question
+ * method judgment; whenever realized results arrived, the bias reading over
+ * the ledger is recorded with the correction it proposes, and the same
+ * reading becomes the bias-corrected alternative in every provenance.
+ */
+export async function recordCashForecastMath(input: CashMathInput, deps: MathRecordDeps = {}): Promise<{ provenance: number; refused: string[]; selections: number; bias: BiasReading[] }> {
+  const caller = deps.caller ?? 'cash-ledger';
+  const projectId = input.projectId;
+  const bias = forecastBias(input.ledger.predictions, input.ledger.exposures, input.ledger.outcomes);
+  const refused: string[] = [];
+  let provenance = 0;
+  let selections = 0;
+  if (input.outcomesWritten > 0) await recordForecastBias(bias, { ...deps, projectId, caller, subject: `cash ledger of ${projectId}` });
+  const freshCurrencies = new Set(input.written.map((p) => /^cash:[^:]+:([^:]+):/.exec(p.claimId)?.[1]).filter((c): c is string => !!c));
+  for (const { currency, forecast } of input.forecasts) {
+    if (!freshCurrencies.has(currency)) continue;
+    const written = input.written.filter((p) => p.claimId.startsWith(`cash:${projectId}:${currency}:`));
+    const horizonDays = written.find((p) => p.horizonDays !== null)?.horizonDays ?? null;
+    const horizon = horizonDays !== null ? `${horizonDays} day(s) from ${written[0]?.madeAt ?? input.now}` : 'per deal; no horizon stated by any row';
+    const resolved = (name: string): number =>
+      input.ledger.outcomes.filter((o) => input.ledger.predictions.some((p) => p.id === o.predictionId && p.comparableKey === `cash:${currency}:${name}`)).length;
+    const versions = (name: string): number => input.ledger.predictions.filter((p) => p.claimId === `cash:${projectId}:${currency}:${name}`).length;
+    for (const f of CASH_FIGURES) {
+      const est = forecast[f.name] as CentsEstimate | undefined;
+      if (!est || typeof est !== 'object') continue;
+      const comparableKey = `cash:${currency}:${f.name}`;
+      const built = estimateProvenance({
+        key: `cash:${projectId}:${currency}:${f.name}`,
+        quantity: { kind: f.kind, definition: f.definition },
+        currency,
+        horizon,
+        estimate: { ...est, unknown: est.unknown ?? [] },
+        sourceRef: `cash_forecast:${projectId}:${currency}:${f.name}`,
+        retrievedAt: input.now,
+        method: 'spread of sourced opportunity rows (cash/forecast.ts)',
+        comparableKey,
+        bias,
+        interdependence: f.name === 'contribution' ? [`revenue:${currency}`, `ongoingCosts:${currency}`] : f.name === 'revenue' ? [`payers of ${projectId} in ${currency}`] : [],
+      });
+      if (built.ok) {
+        await recordNumberProvenance(built.record, { ...deps, projectId, caller });
+        provenance += 1;
+      } else {
+        refused.push(`${f.name}: ${[...built.missing.map((m) => `missing ${m}`), ...built.problems].join('; ')}`);
+      }
+      const rows = typeof est.fromRows === 'number' ? est.fromRows : 0;
+      const selection = selectMathematics({
+        question: `What ${f.definition} should this project plan on, and how far can it be trusted?`,
+        subject: `cash:${projectId}:${currency}:${f.name}`,
+        candidates: [
+          { family: 'cash_flow_identities', purpose: 'state the figure exactly from the rows it is computed from', preconditions: [countPrecondition('at least one sourced row states the figure', rows, 1, `cash_forecast:${projectId}:${currency}:${f.name}`)] },
+          { family: 'statistical_estimation_calibration', purpose: 'judge the stated range against realized deals', preconditions: [countPrecondition('enough resolved outcomes on this comparable bucket', resolved(f.name), MIN_CALIBRATION_SAMPLE, `bin_events:${comparableKey}`)] },
+          { family: 'forecasting_state_estimation', purpose: 'track how the figure moves between versions', preconditions: [countPrecondition('more than one version of the claim', versions(f.name), 2, `bin_events:cash:${projectId}:${currency}:${f.name}`)] },
+        ],
+      });
+      await recordMathSelection(selection, { ...deps, projectId, caller });
+      selections += 1;
+    }
+  }
+  return { provenance, refused, selections, bias };
+}
+
+/**
+ * What a recorder already holds for this caller: the `reason` of each
+ * provenance and selection row, so a run records a number again only when it
+ * changed (a provenance reason names the key and the value, a selection
+ * reason the subject and question).
+ */
+export async function readRecordedMathReasons(caller: string): Promise<Set<string>> {
+  const { getDb } = await import('../../db/database.ts');
+  const rows = await getDb().all<{ reason: string | null; outcome: string | null }>(
+    'SELECT reason, outcome FROM bin_events WHERE event_type IN (?, ?) AND workload_class = ?',
+    [MATH_EVENTS.SELECTION, MATH_EVENTS.PROVENANCE, caller],
+  );
+  return new Set(rows.map((r) => `${r.outcome ?? ''}|${r.reason ?? ''}`));
+}
+
+/** The dedupe key `readRecordedMathReasons` holds for a provenance record. */
+export function provenanceReason(record: NumberProvenance): string {
+  return `${record.nature}|${`${record.key} = ${record.value ?? 'unknown'} ${record.units} (${record.horizon})`.slice(0, 480)}`;
+}
+
+/** The dedupe key `readRecordedMathReasons` holds for a selection. */
+export function selectionReason(selection: MathSelection): string {
+  return `${selection.selected.length > 0 ? 'SELECTED' : 'NONE_FIT'}|${`${selection.subject}: ${selection.question}`.slice(0, 480)}`;
+}
