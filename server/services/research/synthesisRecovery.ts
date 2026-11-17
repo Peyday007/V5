@@ -766,8 +766,9 @@ export const FILING_RECOVERY_ACTOR = 'synthesis-filing-recovery';
  * was the attempt, not the evidence, so one fresh synthesis is issued — a new
  * item, the spent one kept as it is (§5) — under every check
  * `assessSynthesisRecovery` makes. The bound is the filing path's: one
- * automatic recovery per packet, ever, whichever actor made it; a replacement
- * that fails too leaves the packet for a person.
+ * automatic recovery per packet per round, whichever actor made it; a
+ * replacement that fails too leaves the packet for a person until a judge
+ * opens a new round (W10b).
  */
 export const SPENT_RECOVERY_ACTOR = 'synthesis-spent-recovery';
 
@@ -785,6 +786,23 @@ export const SPENT_SYNTHESIS_CATEGORIES = [
 export const FILING_REGRANT_REASON =
   'FILING_DEFECT: the dispatch attempts went on syntheses Brain could not file; the research survived';
 
+/**
+ * The reason a bin's spent budget is raised for a spent-attempts recovery
+ * (W10b), matched exactly.
+ *
+ * The bin's attempts are the dispatches that fetched the synthesis whose own
+ * attempts the queue spent, so a bin can reach `attempt_count = max_attempts`
+ * on exactly the packet this recovery is for. Without budget, the reissued
+ * item would sit in a bin nothing can fire at: a recovery in name only. The
+ * bound is the recovery's own. The regrant goes only to a packet that every
+ * other check already passed (`BIN_EXHAUSTED` is the assessment's last
+ * refusal), at most once per round, by the same `FILING_REGRANT_ATTEMPTS`,
+ * through the guarded transition that only raises the ceiling and records why.
+ * The spent attempts stay counted.
+ */
+export const SPENT_REGRANT_REASON =
+  'ATTEMPTS_SPENT: the dispatch attempts went on a synthesis the queue ran out of attempts on; the research survived';
+
 /** How much budget the one regrant adds: a synthesis and three audit roles. */
 const FILING_REGRANT_ATTEMPTS = 4;
 
@@ -795,7 +813,7 @@ let lastFilingRecoveryAt = 0;
 /** Test seam: the throttle is process state, and a suite runs many passes. */
 export function resetFilingRecoveryThrottle(): void {
   lastFilingRecoveryAt = 0;
-  permanentlyRefused.clear();
+  settled.clear();
 }
 
 export interface FilingRecovery {
@@ -824,24 +842,32 @@ export interface FilingRecovery {
  *     ATTEMPTS_EXHAUSTED, a lapsed lease, a timeout, a transient cause — which
  *     says nothing about the evidence. INVALID_INPUT is never selected;
  *   - with no live synthesis beside it, and no earlier automatic recovery on
- *     the same packet, by either path. One per packet, ever: if the replacement is refused by
- *     the store again, the defect is not historical and a person should look.
+ *     the same packet **in its current round**, by either path. One per round:
+ *     if the replacement fails too, the defect is not historical and a person
+ *     should look. A judge's new round (`auditRoundStartedAt`, the boundary
+ *     `assessSynthesisRecovery` already reads) is new research with its own
+ *     synthesis, so the round-one recovery does not use up round two's (W10b).
+ *     Before that change, a packet recovered once was never swept again, and
+ *     its accepted claims stayed parked.
  *
  * Everything after selection is `assessSynthesisRecovery` unchanged — every
  * refusal it has still applies, including the store being asked for an orphan
  * upload before a second copy is written. The one thing added is the answer to
- * `BIN_EXHAUSTED`: a bin whose dispatch budget was spent fetching syntheses the
- * store refused is regranted once, by `FILING_REGRANT_ATTEMPTS`, through the
- * guarded transition that only ever raises and records why.
+ * `BIN_EXHAUSTED`: a bin whose dispatch budget was spent, on syntheses the
+ * store refused or on one the queue ran out of attempts on, is regranted once
+ * per round by `FILING_REGRANT_ATTEMPTS`, with the reason for its path,
+ * through the guarded transition that only ever raises and records why.
  *
  * Nothing is re-researched. The claims, verifications and gate decisions were
  * written by earlier tools and survived the rollback; what is re-run is the
  * synthesis, because its text rolled back with the failed filing.
  */
 /**
- * Refusals that no later tick can change on their own: the evidence, the bytes
- * or the packet would have to move first. Remembered per process so they do not
- * hold the front of the queue; a restart re-asks each one once.
+ * Refusals that no later tick in the same round can change on their own: the
+ * evidence, the bytes or the packet would have to move first. Remembered per
+ * process with the round they were met in, so they do not hold the front of the
+ * queue. A new round re-asks each one, because a judge's round is the thing
+ * that does move a packet. A restart re-asks each one once.
  */
 const PERMANENT_REFUSALS = new Set<string>([
   'NO_CITABLE_EVIDENCE',
@@ -854,7 +880,32 @@ const PERMANENT_REFUSALS = new Set<string>([
   'SYNTHESIS_RECORDED',
   'EARLIER_ROUND',
 ]);
-const permanentlyRefused = new Set<string>();
+/** Packet → the round (its `auditRoundStartedAt`, null before any) it was settled in. */
+const settled = new Map<string, string | null>();
+
+/** Whether Brain already recovered this packet by itself in the round that began at `roundFrom`. */
+async function recoveredInRound(orchestrationId: string, roundFrom: string | null): Promise<boolean> {
+  const row = await getDb().get<{ id: string }>(
+    `SELECT id FROM work_items
+      WHERE orchestration_id = ?
+        AND work_type = 'RESEARCH_SYNTHESIZE'
+        AND created_by_type = 'SYSTEM'
+        AND created_by_id IN (?, ?)${roundFrom ? '\n        AND created_at > ?' : ''}
+      LIMIT 1`,
+    [orchestrationId, FILING_RECOVERY_ACTOR, SPENT_RECOVERY_ACTOR, ...(roundFrom ? [roundFrom] : [])],
+  );
+  return !!row;
+}
+
+/** Whether this bin was already regranted for `reason` in the round that began at `roundFrom`. */
+async function regrantedInRound(binId: string, reason: string, roundFrom: string | null): Promise<boolean> {
+  const row = await getDb().get<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM bin_events
+      WHERE bin_id = ? AND event_type = 'BIN_ATTEMPTS_REGRANTED' AND reason = ?${roundFrom ? ' AND at > ?' : ''}`,
+    [binId, reason, ...(roundFrom ? [roundFrom] : [])],
+  );
+  return Number(row?.n ?? 0) > 0;
+}
 
 /** Put back cards this pass withdrew for a recovery that did not go ahead. */
 async function restoreCards(cards: RussellHumanRequest[]): Promise<void> {
@@ -918,24 +969,34 @@ export async function recoverFilingFailures(
           SELECT 1 FROM work_items r
            WHERE r.orchestration_id = w.orchestration_id
              AND r.work_type = 'RESEARCH_SYNTHESIZE'
-             AND (r.state IN ('QUEUED','LEASED')
-                  OR (r.created_by_type = 'SYSTEM' AND r.created_by_id IN (?, ?)))
+             AND r.state IN ('QUEUED','LEASED')
         )
       ORDER BY w.orchestration_id
       LIMIT ?`,
-    [
-      ...SPENT_SYNTHESIS_CATEGORIES,
-      FILING_RECOVERY_ACTOR,
-      SPENT_RECOVERY_ACTOR,
-      Math.max(1, limit) + permanentlyRefused.size,
-    ],
+    [...SPENT_SYNTHESIS_CATEGORIES, Math.max(1, limit) + settled.size],
   );
 
   const out: FilingRecovery[] = [];
   const seen = new Set<string>();
   for (const row of rows) {
-    if (permanentlyRefused.has(row.orchestration_id)) continue;
+    /*
+     * The packet's current round decides the bound, read here rather than in
+     * the selection because the boundary lives in an event's payload. One
+     * automatic recovery per round (W10b): a recovery made before a judge
+     * opened this round belonged to research the round superseded, and leaves
+     * this round's own synthesis free to be recovered once.
+     */
+    const roundFrom = await auditRoundStartedAt(row.orchestration_id);
+    if (settled.has(row.orchestration_id)) {
+      if (settled.get(row.orchestration_id) === roundFrom) continue;
+      settled.delete(row.orchestration_id);
+    }
     if (out.length >= Math.max(1, limit)) break;
+    if (await recoveredInRound(row.orchestration_id, roundFrom)) {
+      // Already recovered once this round and stopped again: a person's, until a new round.
+      settled.set(row.orchestration_id, roundFrom);
+      continue;
+    }
     /*
      * A person's STOP is never undone here. Answering STOP cancels the mission
      * and can leave its packet parked; `recoverFailedSynthesis` would move a
@@ -945,7 +1006,7 @@ export async function recoverFilingFailures(
      */
     const mission = await getMissionByOrchestration(row.orchestration_id);
     if (mission && (mission.state === 'CANCELLED' || mission.state === 'FAILED')) {
-      permanentlyRefused.add(row.orchestration_id);
+      settled.set(row.orchestration_id, roundFrom);
       out.push({
         workItemId: row.id,
         orchestrationId: row.orchestration_id,
@@ -977,24 +1038,24 @@ export async function recoverFilingFailures(
 
     let regranted: string | null = null;
     const filing = Number(row.filing) === 1;
-    // The regrant answers budget spent on Brain's own filing defect, and nothing else.
-    if (filing && !assessed.eligible && assessed.outcome.refusal === 'BIN_EXHAUSTED' && orchestrationId) {
+    /*
+     * The regrant answers budget the recovery's own cause spent: Brain's filing
+     * defect, or a synthesis the queue ran out of attempts on (W10b). Nothing
+     * else reaches it. `BIN_EXHAUSTED` is the assessment's last check, so every
+     * other refusal has already passed, and the regrant is bounded to once per
+     * round for each path, the same bound the recovery itself has.
+     */
+    const regrantReason = filing ? FILING_REGRANT_REASON : SPENT_REGRANT_REASON;
+    if (!assessed.eligible && assessed.outcome.refusal === 'BIN_EXHAUSTED' && orchestrationId) {
       const found = await binForOrchestration(orchestrationId);
       const bin = found ? await getBin(found.id) : null;
-      if (bin) {
-        const prior = await db.get<{ n: number }>(
-          `SELECT COUNT(*) AS n FROM bin_events
-            WHERE bin_id = ? AND event_type = 'BIN_ATTEMPTS_REGRANTED' AND reason = ?`,
-          [bin.id, FILING_REGRANT_REASON],
-        );
-        if (Number(prior?.n ?? 0) === 0) {
-          const raised = await regrantBinAttempts({
-            binId: bin.id,
-            maxAttempts: bin.attemptCount + FILING_REGRANT_ATTEMPTS,
-            reason: FILING_REGRANT_REASON,
-          });
-          if (raised.raised) regranted = bin.id;
-        }
+      if (bin && !(await regrantedInRound(bin.id, regrantReason, roundFrom))) {
+        const raised = await regrantBinAttempts({
+          binId: bin.id,
+          maxAttempts: bin.attemptCount + FILING_REGRANT_ATTEMPTS,
+          reason: regrantReason,
+        });
+        if (raised.raised) regranted = bin.id;
       }
     }
 
@@ -1052,7 +1113,7 @@ export async function recoverFilingFailures(
     // An exhausted bin whose one regrant is already spent cannot change on its own either.
     const spentBudget = outcome.refusal === 'BIN_EXHAUSTED' && !regranted;
     if (outcome.status !== 'RECOVERED' && outcome.refusal && (PERMANENT_REFUSALS.has(outcome.refusal) || spentBudget) && orchestrationId) {
-      permanentlyRefused.add(orchestrationId);
+      settled.set(orchestrationId, roundFrom);
     }
     out.push({
       workItemId: row.id,

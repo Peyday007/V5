@@ -55,6 +55,7 @@ import {
   recoverFailedSynthesis,
   recoverFilingFailures,
   SPENT_RECOVERY_ACTOR,
+  SPENT_REGRANT_REASON,
   resetFilingRecoveryThrottle,
 } from '../server/services/research/synthesisRecovery.ts';
 
@@ -658,6 +659,131 @@ describe('the automatic recovery of a synthesis Brain could not file', () => {
     expect((await getWorkItem(stuck.workItemId))!.state).toBe('SUCCEEDED');
     expect((await getWorkItem(second.id))!).toMatchObject({ state: 'FAILED', attemptCount: 2 });
     expect((await getOrchestration(stuck.orchestrationId))!.status).toBe('SYNTHESIZING');
+  });
+
+  /** Spend a synthesis item's attempts the way the queue does. */
+  async function spend(workItemId: string): Promise<void> {
+    await getDb().run(
+      `UPDATE work_items SET state = 'FAILED', failure_category = 'ATTEMPTS_EXHAUSTED',
+              attempt_count = 2, max_attempts = 2 WHERE id = ?`,
+      [workItemId],
+    );
+  }
+
+  /** A judge opens a new round on the packet, and that round's synthesis runs out of attempts. */
+  async function newRoundSpent(stuck: Stuck): Promise<string> {
+    const tick = () => new Promise((resolve) => setTimeout(resolve, 5));
+    const packet = (await getOrchestration(stuck.orchestrationId))!;
+    await tick();
+    await recordEvent({
+      projectId,
+      layerId,
+      entityType: 'RUN',
+      entityId: packet.runId,
+      eventType: 'RESEARCH_ROUND_RESUMED',
+      payload: { orchestrationId: stuck.orchestrationId, roundStartedAt: new Date().toISOString() },
+    });
+    await tick();
+    const item = await enqueueWork({
+      projectId,
+      workType: 'RESEARCH_SYNTHESIZE',
+      payload: { orchestrationId: stuck.orchestrationId },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId: stuck.orchestrationId,
+    });
+    await spend(item.id);
+    await updateOrchestration(stuck.orchestrationId, { status: 'NEEDS_HUMAN' });
+    return item.id;
+  }
+
+  const queuedFor = async (orchestrationId: string) =>
+    (await listWorkItems(projectId, { limit: 50 })).filter(
+      (item) => item.orchestrationId === orchestrationId && item.state === 'QUEUED',
+    );
+
+  it('recovers once per round: a packet recovered in round one is swept again when a judge opens round two (W10b)', async () => {
+    const stuck = await stuckPacket({ claims: 2 });
+    await spend(stuck.workItemId);
+
+    // Round one: one automatic recovery, whose replacement then runs out as well.
+    expect((await recoverFilingFailures(10, { force: true }))[0]).toMatchObject({ outcome: 'RECOVERED' });
+    const roundOne = (await queuedFor(stuck.orchestrationId))[0]!;
+    await spend(roundOne.id);
+    await updateOrchestration(stuck.orchestrationId, { status: 'NEEDS_HUMAN' });
+    // The bound holds inside the round: a person's now, not a second reissue.
+    expect(await recoverFilingFailures(10, { force: true })).toEqual([]);
+    expect(await queuedFor(stuck.orchestrationId)).toHaveLength(0);
+
+    // The judge's round two is new research, and its own synthesis ran out.
+    const roundTwo = await newRoundSpent(stuck);
+    const out = await recoverFilingFailures(10, { force: true });
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ workItemId: roundTwo, outcome: 'RECOVERED' });
+    const replacement = (await queuedFor(stuck.orchestrationId))[0]!;
+    expect(replacement.createdById).toBe(SPENT_RECOVERY_ACTOR);
+    // §5: every earlier item is kept exactly as it ended.
+    expect((await getWorkItem(stuck.workItemId))!).toMatchObject({ state: 'FAILED', attemptCount: 2 });
+    expect((await getWorkItem(roundOne.id))!).toMatchObject({ state: 'FAILED', createdById: SPENT_RECOVERY_ACTOR });
+    expect((await getWorkItem(roundTwo))!).toMatchObject({ state: 'FAILED', attemptCount: 2 });
+
+    // And round two is bounded the same way.
+    await spend(replacement.id);
+    await updateOrchestration(stuck.orchestrationId, { status: 'NEEDS_HUMAN' });
+    expect(await recoverFilingFailures(10, { force: true })).toEqual([]);
+  });
+
+  it('gives a spent synthesis an attempt in its exhausted bin, once per round, and records why (W10b)', async () => {
+    const stuck = await stuckPacket({ claims: 2, binAttempts: 3 });
+    await spend(stuck.workItemId);
+
+    const out = await recoverFilingFailures(10, { force: true });
+    expect(out[0]).toMatchObject({ outcome: 'RECOVERED', regranted: stuck.binId });
+    const bin = (await getBin(stuck.binId))!;
+    expect(bin.attemptCount).toBe(3); // the spent attempts stay counted
+    expect(bin.maxAttempts).toBe(7);
+    expect(bin.state).toBe('READY');
+    const reasons = async () =>
+      (
+        await getDb().all<{ reason: string }>(
+          `SELECT reason FROM bin_events WHERE bin_id = ? AND event_type = 'BIN_ATTEMPTS_REGRANTED' ORDER BY at`,
+          [stuck.binId],
+        )
+      ).map((event) => event.reason);
+    expect(await reasons()).toEqual([SPENT_REGRANT_REASON]);
+
+    // The replacement spends the bin again. Inside the round nothing more is given.
+    const replacement = (await queuedFor(stuck.orchestrationId))[0]!;
+    await spend(replacement.id);
+    await getDb().run(`UPDATE bins SET attempt_count = max_attempts, state = 'NEEDS_HUMAN' WHERE id = ?`, [stuck.binId]);
+    await updateOrchestration(stuck.orchestrationId, { status: 'NEEDS_HUMAN' });
+    expect(await recoverFilingFailures(10, { force: true })).toEqual([]);
+    expect((await getBin(stuck.binId))!.maxAttempts).toBe(7);
+
+    // A judge's new round earns its one recovery, and the attempt it needs to run.
+    await newRoundSpent(stuck);
+    expect((await recoverFilingFailures(10, { force: true }))[0]).toMatchObject({ outcome: 'RECOVERED', regranted: stuck.binId });
+    expect((await getBin(stuck.binId))!).toMatchObject({ attemptCount: 7, maxAttempts: 11, state: 'READY' });
+    expect(await reasons()).toEqual([SPENT_REGRANT_REASON, SPENT_REGRANT_REASON]);
+  });
+
+  it('does not regrant a spent synthesis\'s bin when anything else refuses the recovery', async () => {
+    const stuck = await stuckPacket({ claims: 0, binAttempts: 3 });
+    await spend(stuck.workItemId);
+    const out = await recoverFilingFailures(10, { force: true });
+    expect(out[0]).toMatchObject({ outcome: 'REFUSED', refusal: 'NO_CITABLE_EVIDENCE', regranted: null });
+    expect((await getBin(stuck.binId))!.maxAttempts).toBe(3);
+  });
+
+  it('leaves a spent synthesis\'s exhausted bin alone when a person has answered its card', async () => {
+    const stuck = await stuckPacket({ binAttempts: 3 });
+    await spend(stuck.workItemId);
+    const { requestId } = await parkedWithCard(stuck);
+    const person = await createCredentiallessUser({ email: null, displayName: 'Answerer', createdByType: 'SYSTEM', createdById: 'test' });
+    await answerHumanRequest({ requestId, actorUserId: person.id, choice: 'STOP' });
+    const out = await recoverFilingFailures(10, { force: true });
+    expect(out[0]).toMatchObject({ outcome: 'REFUSED', refusal: 'PERSON_HAS_ANSWERED' });
+    expect((await getBin(stuck.binId))!.maxAttempts).toBe(3);
   });
 
   it('still refuses a synthesis recorded in the current round', async () => {
