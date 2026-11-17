@@ -11,6 +11,8 @@
 - Goals (05:58Z): all 5 goals NOT_DERIVED — "Brain was too busy to derive the goal this run".
 - $10K plan (read 00:02Z, ~6h stale): NEEDS_EVIDENCE / IMPROVEMENT_REQUIRED; ladder B_EVIDENCED 11, C..F 0; best reach 9–11% "coverage, not probability"; "samples are not evidence-backed (invented or unvalidated inputs)"; "too few finished accepted plans (under 10) to calibrate"; 427 candidate plans, 0 accepted, every one with gaps acquisitionRoute/costs/controls/evidence.
 
+- Goals workflow run 44027622659 (05:57–06:00Z, serving 0ee1a30): pool POOL_INSUFFICIENT — "the 11 openings held reach at most 265 of the 10000 USD"; 23 pathways (11 found, 12 constructed), 2 executable, **0 with every permission granted**, 0 with delivery capacity estimated; facts P 65 · E 115 · ? 142. Every constructed pathway shows `why ? | channel ? [UNKNOWN] | offer ? | fulfils ?` with buyer strings like "state technical utility services bureaus: Brain produces it" and net p90 up to 200 000 000; the best FOUND pathway (Mechanicsburg) is "one sale of 10.89 … 0.11% of the gap". construction cap: 400 of 10 446 candidate arrangements composed.
+
 ## Findings
 
-(pending)
+- F0 RULED OUT — "Brain was too busy to derive the goal": a cold-cache light reading (`server/services/operator/snapshot.ts:52-56`, full derivation bounded at 150 s, 25-min TTL). A second call at 05:58Z returned the full derivation. Not a cause.
