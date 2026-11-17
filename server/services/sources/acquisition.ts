@@ -264,24 +264,74 @@ export function repeatedUseFromRows(
   const since = now - (opts.windowMs ?? REPEATED_USE_WINDOW_MS);
   const groups = new Map<string, { uses: number; fallback: number }>();
   for (const row of rows) {
-    const at = row.at ? Date.parse(row.at) : Number.NaN;
-    if (!Number.isFinite(at) || at < since || at > now) continue;
-    let measures: { host?: unknown; url?: unknown; attempts?: unknown } = {};
-    try {
-      measures = row.measures ? (JSON.parse(row.measures) as typeof measures) : {};
-    } catch {
-      continue;
-    }
-    if (typeof measures.host !== 'string' || measures.host.toLowerCase() !== want) continue;
-    const key = workflowKeyOf(measures, want);
-    const g = groups.get(key) ?? { uses: 0, fallback: 0 };
+    const read = accessRowOf(row);
+    if (!read || read.host !== want) continue;
+    if (!Number.isFinite(read.at) || read.at < since || read.at > now) continue;
+    const g = groups.get(read.key) ?? { uses: 0, fallback: 0 };
     g.uses += 1;
-    if (neededFallback(row, measures)) g.fallback += 1;
-    groups.set(key, g);
+    if (read.fallback) g.fallback += 1;
+    groups.set(read.key, g);
   }
   let best = { uses: 0, fallback: 0 };
   for (const g of groups.values()) if (g.uses > best.uses || (g.uses === best.uses && g.fallback > best.fallback)) best = g;
   return { repeatedUses: best.uses, repeatedUsesNeedingFallback: best.fallback };
+}
+
+/*
+ * What one SOURCE_ACCESS row says, parsed once per row rather than once per read.
+ *
+ * `access.ts` holds up to 5 000 of these rows and asks `repeatedUseFromRows`
+ * about one host on every page it reads, and each call used to `JSON.parse`
+ * every held row's measures (about 1 KB each: the attempts, the methods
+ * considered, the constraints) to find that host's handful. Production,
+ * 2026-11-17 (04b754ce, about 12 GPU research jobs at once): the top Brain
+ * self-time frame in every stall profile, 6.3 s of 128 s on the CPU in one
+ * window, beside 31 s of garbage collection — about 5.5 MB of parsed JSON
+ * thrown away per page read, 13 ms each on a development machine. The held
+ * rows are never edited, so the parse is memoized on the row object; the
+ * row's own `at` and `measures` strings are kept beside it and compared by
+ * reference, so a row that is changed is parsed again rather than misread.
+ */
+interface ParsedAccessRow {
+  atText: string | null | undefined;
+  measuresText: string | null;
+  provider: string | null;
+  /** Epoch ms of `at`; NaN when it has none, which the window then excludes. */
+  at: number;
+  /** The measured host, lower-cased; null when the row names none or cannot be parsed. */
+  host: string | null;
+  key: string;
+  fallback: boolean;
+}
+
+const parsedAccessRows = new WeakMap<object, ParsedAccessRow>();
+
+function accessRowOf(row: { provider: string | null; measures: string | null; at?: string | null }): ParsedAccessRow | null {
+  const held = parsedAccessRows.get(row);
+  if (held && held.atText === row.at && held.measuresText === row.measures && held.provider === row.provider) {
+    return held.host === null ? null : held;
+  }
+  const parsed: ParsedAccessRow = {
+    atText: row.at,
+    measuresText: row.measures,
+    provider: row.provider,
+    at: row.at ? Date.parse(row.at) : Number.NaN,
+    host: null,
+    key: '',
+    fallback: false,
+  };
+  try {
+    const measures = (row.measures ? JSON.parse(row.measures) : {}) as { host?: unknown; url?: unknown; attempts?: unknown } | null;
+    if (measures && typeof measures.host === 'string') {
+      parsed.host = measures.host.toLowerCase();
+      parsed.key = workflowKeyOf(measures, parsed.host);
+      parsed.fallback = neededFallback(row, measures);
+    }
+  } catch {
+    /* an unparseable row counts toward nothing */
+  }
+  parsedAccessRows.set(row, parsed);
+  return parsed.host === null ? null : parsed;
 }
 
 /**
