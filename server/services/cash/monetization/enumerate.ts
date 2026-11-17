@@ -58,6 +58,7 @@ import { claimedMethods } from '../../../repos/research.ts';
 import { recordCashEvent } from '../../../repos/cashMode.ts';
 import { cardFactsForProject, mayReplace } from '../../../repos/cashCardFacts.ts';
 import { evidenceCard } from '../card.ts';
+import { getDb } from '../../../db/database.ts';
 import { readDays, readMoneyFigures } from '../figures.ts';
 import { CARD_FIELD_ATTRIBUTE } from './commission.ts';
 import {
@@ -490,7 +491,36 @@ async function carryFigures(input: {
     'that the exposure established for this discovery is the exposure of this way of taking it',
   );
 
-  for (const answer of cardAnswers(input.opportunity, input.card ?? [])) {
+  /*
+   * A card fact's claim id is not constrained to `research_claims` (a card
+   * records claims from other sources too), but a path fact's is. A card
+   * answer whose claim is not a research claim is carried as the card's
+   * proposal, never as evidence the path cannot resolve — and never as a
+   * foreign-key failure that stops the whole ledger pass (RC bd5e0419,
+   * cashFirstDollar F01: FOREIGN KEY constraint failed in recordPathFact).
+   */
+  const answers = cardAnswers(input.opportunity, input.card ?? []);
+  const cited = [...new Set(answers.map((one) => one.claimId).filter((id): id is string => !!id))];
+  const known = new Set<string>();
+  if (cited.length > 0) {
+    const rows = await getDb().all<{ id: string }>(
+      `SELECT id FROM research_claims WHERE id IN (${cited.map(() => '?').join(', ')})`,
+      cited,
+    );
+    for (const row of rows) known.add(row.id);
+  }
+  for (const raw of answers) {
+    const answer: CardAnswer =
+      raw.kind === 'EVIDENCE' && raw.claimId && !known.has(raw.claimId)
+        ? {
+            ...raw,
+            kind: 'RECOMMENDATION',
+            claimId: null,
+            basis: `${raw.basis} — the card cites ${raw.claimId}, which is not a research claim this path can resolve`,
+            assumptions: 'that what the card says of the opening holds for this way of taking it',
+            uncertainty: 'The card’s source is not a research claim; research for this way of being paid replaces this.',
+          }
+        : raw;
     const declared = ATTRIBUTE[answer.attribute];
     const figures =
       declared.unit === 'MONEY' ? readMoneyFigures(answer.value, input.opportunity.currency) : [];
