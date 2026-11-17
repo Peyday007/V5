@@ -235,3 +235,9 @@ See F1–F7 above. Each one gives the cause, file:line, run IDs, the smallest ch
   - Verification against bd5e0419 starts once it is live.
   - An independent review of #1037 and #1038 started at 08:28Z.
 - **08:28Z, recalculation:** critical path is bd5e0419 live (09:15Z) → Postgres gate green on bd5e0419 → V1–V8 readings plus the W6 GPU stages on bd5e0419 (09:15–12:30Z) → report (14:30Z). Slack is about 2 h.
+- **08:28Z, capacity reading during GPU stage 1:**
+  - FREE_LANE: 0 waiting, 3 of 5 running. gpt-oss-120b runs at 2/3, idle for lack of research.
+  - RESEARCH_SLOTS: 568 waiting, 13 running, capacity 16 (13 at 05:58Z).
+  - With the GPU healthy, the binding constraint is work supply, i.e. the mission ceiling of the discovery grant. GPU sequences are not the constraint.
+  - W6 has been asked to report the ceiling reached and whether it grew under load. If it does not grow, raising it becomes a readiness item.
+- The 5 NEEDS_HUMAN packets are owned by W10/W10b (#1032, #1036 in bd5e0419). They are verified after bd5e0419 is live.
