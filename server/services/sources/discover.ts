@@ -16,8 +16,8 @@
  * candidate — nothing a search engine says is evidence.
  *
  * It is a shared public service, so it is used politely: one query at a time,
- * spaced, a short queue that gives up rather than piling up, and a pause after
- * the endpoint answers with an anomaly page instead of results.
+ * spaced, a bounded queue, and a pause after the endpoint answers with an
+ * anomaly page instead of results.
  */
 
 export interface SearchDeps {
@@ -28,6 +28,8 @@ export interface SearchDeps {
    * is short, so a fragment's own discovery keeps the budget the endpoint allows.
    */
   priority?: 'NORMAL' | 'LOW';
+  /** Test seam: how a search waits for a paused endpoint to reopen. */
+  sleepMs?: (ms: number) => Promise<void>;
 }
 
 /**
@@ -76,7 +78,26 @@ export function maxWaiters(spacing = spacingMs): number {
   return Math.min(MAX_WAITERS_CEILING, Math.max(MIN_WAITERS, Math.floor(MAX_QUEUE_WAIT_MS / Math.max(1, spacing))));
 }
 const MAX_LOW_WAITERS = 3;
-const PAUSE_AFTER_ANOMALY_MS = 10 * 60_000;
+/**
+ * How long an endpoint rests after an anomaly page: a minute, doubling on each
+ * refusal in a row, up to ten; one answer resets it.
+ *
+ * Production, 2026-11-17 20:16-21:02Z (release 04b754ce): every one of 64 GPU
+ * research-fragment failures read "none from web search". A refusal paused its
+ * endpoint for a flat ten minutes, so two refusals in a row (one per endpoint)
+ * closed search for every fragment for ten minutes, and each search in that
+ * time came back empty without being sent. The endpoint's throttle is not ten
+ * minutes long: measured from a shared egress the same evening, html and lite
+ * answered 202 and 200 alternately four seconds apart, and a run of four 202s
+ * was followed by answers 40 s later. The 2026-11-05 reading (both endpoints
+ * refusing "right after the pause lifted", every ten minutes) is this pause
+ * re-arming, not a ten-minute block.
+ */
+const PAUSE_BASE_MS = 60_000;
+const PAUSE_MAX_MS = 10 * 60_000;
+export function pauseAfterRefusals(streak: number): number {
+  return Math.min(PAUSE_MAX_MS, PAUSE_BASE_MS * 2 ** Math.max(0, streak - 1));
+}
 const MAX_RESULTS = 8;
 /** The same query within ten minutes is answered from memory: dead links on one site repeat. */
 const RESULT_TTL_MS = 10 * 60_000;
@@ -86,6 +107,7 @@ let waiting = 0;
 let lastAt = 0;
 let turn = 0;
 const pausedUntil = new Map<string, number>();
+const refusalStreak = new Map<string, number>();
 const remembered = new Map<string, { at: number; urls: string[] }>();
 
 /** What the last searches did, for tests and the capability map. */
@@ -110,6 +132,7 @@ export function resetSearchState(): void {
   spacingMs = 4_000;
   answeredSinceRefusal = 0;
   pausedUntil.clear();
+  refusalStreak.clear();
   remembered.clear();
   for (const key of Object.keys(searchStats) as (keyof typeof searchStats)[]) searchStats[key] = 0;
 }
@@ -158,6 +181,7 @@ export function isSearchAnomaly(status: number, html: string): boolean {
 export async function webSearch(query: string, deps: SearchDeps = {}): Promise<string[]> {
   const fetchImpl = deps.fetchImpl ?? fetch;
   const now = deps.nowMs ?? Date.now;
+  const sleep = deps.sleepMs ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   const q = query.replace(/\s+/g, ' ').trim().slice(0, 240);
   if (!q) return [];
   const known = remembered.get(q);
@@ -172,7 +196,14 @@ export async function webSearch(query: string, deps: SearchDeps = {}): Promise<s
     }
     return null;
   };
-  if (!open() || waiting >= maxWaiters() ||(deps.priority === 'LOW' && waiting >= MAX_LOW_WAITERS)) {
+  /*
+   * With every endpoint resting, a fragment's search waits for the first to
+   * reopen when that is within the queue's wait bound, instead of coming back
+   * empty unsent. Dead-link recovery (LOW) never waits for a pause.
+   */
+  const reopenWait = (): number => Math.max(0, Math.min(...ENDPOINTS.map((one) => pausedUntil.get(one.name) ?? 0)) - now());
+  const mayWaitForReopen = (): boolean => deps.priority !== 'LOW' && reopenWait() <= MAX_QUEUE_WAIT_MS;
+  if ((!open() && !mayWaitForReopen()) || waiting >= maxWaiters() || (deps.priority === 'LOW' && waiting >= MAX_LOW_WAITERS)) {
     searchStats.skipped += 1;
     return [];
   }
@@ -180,9 +211,17 @@ export async function webSearch(query: string, deps: SearchDeps = {}): Promise<s
   const run = chain.then(async () => {
     const wait = lastAt + spacingMs - now();
     if (wait > 0) await new Promise((resolve) => setTimeout(resolve, Math.min(wait, spacingMs)));
-    for (let tries = 0; tries < ENDPOINTS.length; tries += 1) {
-      const endpoint = open();
-      if (!endpoint) break;
+    // Each endpoint at most once before a rest and once after it.
+    let waitedForReopen = false;
+    for (let tries = 0; tries < ENDPOINTS.length * 2; tries += 1) {
+      let endpoint = open();
+      if (!endpoint) {
+        if (waitedForReopen || !mayWaitForReopen()) break;
+        waitedForReopen = true;
+        await sleep(reopenWait());
+        endpoint = open();
+        if (!endpoint) break;
+      }
       turn += 1;
       lastAt = now();
       searchStats.queries += 1;
@@ -194,12 +233,15 @@ export async function webSearch(query: string, deps: SearchDeps = {}): Promise<s
         const html = await response.text();
         if (isSearchAnomaly(response.status, html)) {
           searchStats.refused += 1;
-          pausedUntil.set(endpoint.name, now() + PAUSE_AFTER_ANOMALY_MS);
+          const streak = (refusalStreak.get(endpoint.name) ?? 0) + 1;
+          refusalStreak.set(endpoint.name, streak);
+          pausedUntil.set(endpoint.name, now() + pauseAfterRefusals(streak));
           spacingMs = Math.min(MAX_SPACING_MS, spacingMs * 2);
           answeredSinceRefusal = 0;
           onRefusal?.(endpoint.name, response.status);
           continue;
         }
+        refusalStreak.delete(endpoint.name);
         answeredSinceRefusal += 1;
         if (answeredSinceRefusal % 10 === 0) spacingMs = Math.max(MIN_SPACING_MS, Math.round(spacingMs * 0.8));
         const urls = parseDuckDuckGo(html).slice(0, MAX_RESULTS);
