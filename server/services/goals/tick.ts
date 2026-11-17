@@ -1329,7 +1329,12 @@ const needsJobInputs = (cause: CostOnceCause) => cause === 'FLAG_DISAGREES' || c
  * and that recorded no job inputs themselves, earliest first, at most `limit`.
  * Pure.
  */
-export function priorWindowsToReread(rows: readonly { detail: Record<string, unknown> | null; at: string }[], limit = PRIOR_WINDOW_REREADS): { key: string; since: string; until: string }[] {
+export function priorWindowsToReread(
+  rows: readonly { detail: Record<string, unknown> | null; at: string }[],
+  limit = PRIOR_WINDOW_REREADS,
+  /** Windows whose job rows an earlier pass already re-read (`carriedRereads`): never read again. */
+  known: ReadonlySet<string> = new Set(),
+): { key: string; since: string; until: string }[] {
   const out = new Map<string, { key: string; since: string; until: string }>();
   for (const row of [...rows].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0))) {
     const d = row.detail;
@@ -1339,7 +1344,7 @@ export function priorWindowsToReread(rows: readonly { detail: Record<string, unk
     if (!needsJobInputs(diagnoseCostCountedOnce(once).cause)) continue;
     if (once && once.jobTimeInputs && typeof once.jobTimeInputs === 'object') continue;
     const w = recordedWindow(d);
-    if (w && !out.has(w.key)) out.set(w.key, w);
+    if (w && !known.has(w.key) && !out.has(w.key)) out.set(w.key, w);
     if (out.size >= limit) break;
   }
   return [...out.values()];
@@ -1409,6 +1414,70 @@ export function diagnosePriorCostFailures(
   return { failures, causes, earliest: failures[0] ?? null };
 }
 
+/**
+ * The job-time inputs an earlier pass re-read for failing windows, as the
+ * newest decision row carries them (`priorCostFailures.reread`), keyed by
+ * `recordedWindow`. A window's job rows are append-only, so what one pass read
+ * is what any later pass would read: carrying it makes the re-read a one-time
+ * diagnosis rather than an hourly one. Pure.
+ */
+export function carriedRereads(detail: Record<string, unknown> | null | undefined): Map<string, JobTimeInputs> {
+  const audit = detail?.priorCostFailures as { reread?: unknown } | undefined;
+  const out = new Map<string, JobTimeInputs>();
+  if (!audit || !audit.reread || typeof audit.reread !== 'object') return out;
+  for (const [key, inputs] of Object.entries(audit.reread as Record<string, unknown>)) {
+    const i = inputs as Partial<JobTimeInputs> | null;
+    if (!i || typeof i.jobs !== 'number' || typeof i.measured !== 'number' || typeof i.unmeasured !== 'number' || !i.issues || typeof i.issues !== 'object') continue;
+    out.set(key, {
+      jobs: i.jobs,
+      measured: i.measured,
+      zeroMeasured: typeof i.zeroMeasured === 'number' ? i.zeroMeasured : 0,
+      unmeasured: i.unmeasured,
+      issues: i.issues,
+      examples: Array.isArray(i.examples) ? i.examples : [],
+      maxMeasuredMs: typeof i.maxMeasuredMs === 'number' ? i.maxMeasuredMs : null,
+    });
+  }
+  return out;
+}
+
+/**
+ * The counted-once audit a recorded decision row carries: every failing
+ * measured row the probe reads, diagnosed from its own numbers, and — only
+ * for a failing window whose numbers cannot show the cause and which no
+ * earlier pass re-read — its job rows read once. Run only on a pass that
+ * writes a row (about one per window), never on the hourly passes that write
+ * nothing; the re-read inputs are carried on the row (`reread`), pruned to
+ * windows that still fail in the rows read, so no window is read twice.
+ */
+async function priorCostAudit(
+  ports: ResearchAllocationPorts,
+  previous: { detail: Record<string, unknown>; at: string } | null,
+): Promise<Record<string, unknown>> {
+  const history = ports.recentDecisions ? await ports.recentDecisions(ALLOCATION_AUDIT_ROWS) : previous ? [previous] : [];
+  const reread = carriedRereads(previous?.detail ?? null);
+  for (const w of priorWindowsToReread(history, PRIOR_WINDOW_REREADS, new Set(reread.keys()))) {
+    const again = (await ports.readYield({ since: w.since, until: w.until })).costCountedOnce.jobTimeInputs;
+    if (again) reread.set(w.key, again);
+  }
+  const prior = diagnosePriorCostFailures(history, reread);
+  // Carried only while a window still fails in the rows the probe reads.
+  const stillFailing = new Set(
+    history
+      .filter((row) => row.detail && row.detail.held !== true && (row.detail.costCountedOnce as { holds?: unknown } | undefined)?.holds !== true)
+      .map((row) => recordedWindow(row.detail)?.key)
+      .filter((key): key is string => typeof key === 'string'),
+  );
+  return {
+    rowsRead: history.length,
+    failing: prior.failures.length,
+    causes: prior.causes,
+    earliest: prior.earliest,
+    failures: prior.failures.slice(-10),
+    reread: Object.fromEntries([...reread.entries()].filter(([key]) => stillFailing.has(key))),
+  };
+}
+
 /** One allocation pass over the live goals. */
 export async function reallocateResearch(input: { goals: GoalView[]; now?: string }, ports: ResearchAllocationPorts): Promise<ResearchAllocationReport> {
   const untilMs = input.now ? Date.parse(input.now) : Date.now();
@@ -1460,16 +1529,6 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
     : decided;
   const fingerprint = allocationFingerprint({ ...decision, held: decision.held || heldForCost });
   const windowKey = allocationWindowKey(window.until);
-  const history = ports.recentDecisions ? await ports.recentDecisions(ALLOCATION_AUDIT_ROWS) : previous ? [previous] : [];
-  // A failing row written before job inputs were recorded has its window's job
-  // rows read again (append-only event rows, so the same window reads the same jobs).
-  const reread = new Map<string, JobTimeInputs>();
-  for (const w of priorWindowsToReread(history)) {
-    const again = (await ports.readYield({ since: w.since, until: w.until })).costCountedOnce.jobTimeInputs;
-    if (again) reread.set(w.key, again);
-  }
-  const prior = diagnosePriorCostFailures(history, reread);
-  const audit = { rowsRead: history.length, failing: prior.failures.length, causes: prior.causes, earliest: prior.earliest, failures: prior.failures.slice(-10) };
   const floors = {
     exploration: EXPLORATION_FLOOR,
     systemHealth: SYSTEM_HEALTH_FLOOR,
@@ -1525,8 +1584,6 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
     }])),
     liveGoals: live.length,
     costCountedOnce,
-    // Every recorded counted-once failure the probe still reads, with the cause its own numbers show.
-    priorCostFailures: audit,
     notes: [...decision.notes, ...reading.notes].slice(0, 20),
   };
   // One row per measured window (RES-15-5: yield is recorded "over consistent
@@ -1545,6 +1602,9 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
   const measuredWindow = !decision.held || heldForCost;
   const recorded = changed || (measuredWindow && newWindow);
   if (recorded) {
+    // Every recorded counted-once failure the probe still reads, with the cause its own numbers show.
+    // Read only when a row is written: a pass that records nothing reads no history and re-reads no window.
+    detail.priorCostFailures = await priorCostAudit(ports, previous);
     const summary = heldForCost
       ? "Research allocation held: the window's cost reading does not show each job's cost counted once."
       : decision.held
