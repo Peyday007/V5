@@ -12,6 +12,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   isSearchAnomaly,
   maxWaiters,
+  pauseAfterRefusals,
   parseDuckDuckGo,
   pathWords,
   resetSearchState,
@@ -75,22 +76,77 @@ describe('a search result is a candidate page that exists', () => {
     resetSearchState();
     const refusals: string[] = [];
     setSearchRefusalRecorder((endpoint) => refusals.push(endpoint));
+    let clock = 1_000_000;
+    const nowMs = () => clock;
+    const sleepMs = async (ms: number) => {
+      clock += ms;
+    };
+    const timed = (status: number, body: string): typeof fetch =>
+      (async (input: RequestInfo | URL) => {
+        clock += 40_000; // past the spacing, so no real timer waits
+        seen.push(String(input));
+        return new Response(body, { status });
+      }) as typeof fetch;
     // One endpoint refuses, the other answers: results, and one refusal recorded.
     let calls = 0;
     const firstRefuses = (async (input: RequestInfo | URL) => {
+      clock += 40_000;
       seen.push(String(input));
       calls += 1;
       return calls === 1 ? new Response('anomaly-modal', { status: 202 }) : new Response(HTML, { status: 200 });
     }) as typeof fetch;
-    expect(await webSearch('a b', { fetchImpl: firstRefuses })).toHaveLength(2);
+    expect(await webSearch('a b', { fetchImpl: firstRefuses, nowMs, sleepMs })).toHaveLength(2);
     expect(refusals).toHaveLength(1);
-    // The other now refuses too: nothing is open, so the next query is not sent.
-    expect(await webSearch('c d', { fetchImpl: fakeFetch(202, 'anomaly-modal', seen) })).toEqual([]);
+    // The other now refuses too, and so does the first after its rest: nothing is open.
+    expect(await webSearch('c d', { fetchImpl: timed(202, 'anomaly-modal'), nowMs, sleepMs })).toEqual([]);
+    // Dead-link recovery (LOW) does not wait a rest out: it is not sent.
     const before = seen.length;
-    expect(await webSearch('e f', { fetchImpl: fakeFetch(200, HTML, seen) })).toEqual([]);
+    expect(await webSearch('e f', { fetchImpl: timed(200, HTML), nowMs, sleepMs, priority: 'LOW' })).toEqual([]);
     expect(seen.length).toBe(before);
     expect(searchStats.skipped).toBe(1);
     setSearchRefusalRecorder(null);
+  });
+
+  it('a fragment search waits a short rest out instead of coming back empty unsent (2026-11-17, 64 of 64)', async () => {
+    // Production 20:16-21:02Z: two refusals in a row closed both endpoints for a flat ten
+    // minutes, and every fragment's search in that time returned [] without being sent.
+    // The endpoint answers again within a minute, so the rest is a minute, doubling on a streak.
+    let clock = 1_000_000;
+    const nowMs = () => clock;
+    const slept: number[] = [];
+    const sleepMs = async (ms: number) => {
+      slept.push(ms);
+      clock += ms;
+    };
+    const seen: string[] = [];
+    const timed = (status: number, body: string): typeof fetch =>
+      (async (input: RequestInfo | URL) => {
+        clock += 1_000;
+        seen.push(String(input));
+        return new Response(body, { status });
+      }) as typeof fetch;
+    // Both endpoints refuse once each, then the search waits the minute out and the endpoint answers.
+    let n = 0;
+    const twoRefusals = (async (input: RequestInfo | URL) => {
+      n += 1;
+      return n <= 2 ? timed(202, 'anomaly-modal')(input) : timed(200, HTML)(input);
+    }) as typeof fetch;
+    const first = await webSearch('first query', { fetchImpl: twoRefusals, nowMs, sleepMs });
+    expect(first).toHaveLength(2);
+    expect(seen).toHaveLength(3);
+    clock += 60_000; // past the doubled spacing
+    const answers = await webSearch('fragment subject', { fetchImpl: timed(200, HTML), nowMs, sleepMs });
+    expect(answers).toHaveLength(2);
+    expect(slept.length).toBe(1);
+    expect(slept[0]).toBeLessThanOrEqual(60_000);
+    expect(searchStats.skipped).toBe(0);
+  });
+
+  it('rests a minute after one refusal, doubling on a streak up to ten minutes', () => {
+    expect(pauseAfterRefusals(1)).toBe(60_000);
+    expect(pauseAfterRefusals(2)).toBe(120_000);
+    expect(pauseAfterRefusals(3)).toBe(240_000);
+    expect(pauseAfterRefusals(10)).toBe(600_000);
   });
 
   it('slows itself after a refusal and speeds up again only on sustained answers', async () => {

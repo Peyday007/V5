@@ -687,7 +687,7 @@ export function startAdaptivePool(options: PoolOptions = {}, intervalMs = CONTRO
       eventType: 'SOURCE_SEARCH',
       provider: endpoint,
       outcome: 'REFUSED',
-      reason: `search endpoint ${endpoint} answered ${status}; paused ten minutes`,
+      reason: `search endpoint ${endpoint} answered ${status}; it rests before its next query`,
       evidenceClass: 'MEASURED',
     }).catch(() => undefined);
   });
