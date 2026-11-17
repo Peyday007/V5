@@ -532,6 +532,13 @@ export interface YieldJob {
   costMinor: number | null;
   /** The goal this research belongs to, when a row names one; how a goal's deadline and stake reach the purposes its work served. */
   goalId?: string | null;
+  /**
+   * False when the rows do not say how long the job ran (an unreadable
+   * timestamp or duration). Such a job is still counted once, charged no
+   * measured time, and reported in `costCountedOnce.unmeasuredJobs` — never
+   * dropped and never given a guessed time (invariant 39).
+   */
+  timeMeasured?: boolean;
 }
 
 export const YIELD_OUTPUT_KINDS = ['ACCEPTED_CLAIM', 'PACKET_FILED', 'NEW_MECHANISM', 'QUALIFIED_POSITION', 'EXECUTABLE_OFFER', 'PAID_TRANSACTION'] as const;
@@ -581,10 +588,101 @@ export interface ResearchYieldReading {
   lanes: Record<string, YieldBucket>;
   purposes: Record<PurposeKey, YieldBucket>;
   /** Distinct jobs, the job time and money they spent, and whether every purpose's share sums back to it. */
-  costCountedOnce: { jobs: number; totalJobMs: number; purposeJobMs: number; totalCostMinor: number | null; purposeCostMinor: number | null; holds: boolean };
+  costCountedOnce: { jobs: number; totalJobMs: number; purposeJobMs: number; totalCostMinor: number | null; purposeCostMinor: number | null; holds: boolean; /** Jobs counted once whose run time no row gives (charged 0 measured time). */ unmeasuredJobs?: number; /** Which way the sums agree or disagree, read from the numbers themselves (`diagnoseCostCountedOnce`). */ cause?: CostOnceCause; /** |total − purposes| job time, when both are finite. */ jobMsGap?: number | null };
   /** Each job's attribution basis, so "why is this job SELF_IMPROVEMENT" is answerable. */
   attributions: { jobId: string; lane: string; purposes: PurposeKey[]; basis: string[]; goalId?: string | null; jobMs?: number }[];
   notes: string[];
+}
+
+const finite = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n);
+const PURPOSE_KEYS: readonly PurposeKey[] = [...RESEARCH_PURPOSES, 'UNATTRIBUTED'];
+
+/**
+ * A job as `summarizeResearchYield` may fold it: every number finite, its
+ * purposes distinct and known. A job whose time no row can be read from is
+ * charged 0 measured time and marked unmeasured; a cost that is not a finite,
+ * non-negative number is no recorded cost. Pure.
+ */
+export function sanitizeYieldJob(job: YieldJob, windowStartMs: number): { job: YieldJob; unmeasured: boolean } {
+  const durationOk = finite(job.durationMs) && job.durationMs >= 0;
+  const startOk = finite(job.startMs);
+  const unmeasured = job.timeMeasured === false || !durationOk || !startOk;
+  const fallbackStart = finite(windowStartMs) ? windowStartMs : 0;
+  const known = (job.purposes ?? []).filter((p): p is PurposeKey => (PURPOSE_KEYS as readonly string[]).includes(p));
+  const distinct = [...new Set(known)];
+  const purposes: PurposeKey[] = distinct.length > 0 ? distinct : ['UNATTRIBUTED'];
+  return {
+    unmeasured,
+    job: {
+      ...job,
+      purposes,
+      basis: Array.isArray(job.basis) ? job.basis : [],
+      startMs: startOk ? job.startMs : fallbackStart,
+      durationMs: unmeasured ? 0 : job.durationMs,
+      queueWaitMs: finite(job.queueWaitMs) ? Math.max(0, job.queueWaitMs) : null,
+      costMinor: finite(job.costMinor) && job.costMinor >= 0 ? job.costMinor : null,
+      timeMeasured: !unmeasured,
+    },
+  };
+}
+
+/**
+ * Whether two sums of the same job costs agree. The tolerance is an absolute
+ * 0.01 (the 3-decimal rounding of six buckets) or one part in a billion of the
+ * magnitude summed, whichever is larger: float drift over many split jobs is
+ * not a double count, and a job charged twice moves a sum by far more.
+ */
+export function sumsAgree(a: number | null, b: number | null): boolean {
+  if (a === null || b === null) return a === b;
+  if (!finite(a) || !finite(b)) return false;
+  return Math.abs(a - b) <= Math.max(0.01, 1e-9 * Math.max(Math.abs(a), Math.abs(b)));
+}
+
+/**
+ * Why a cost-counted-once record holds or does not, read only from the record's
+ * own numbers — so a recorded decision row demonstrates its cause instead of a
+ * repair asserting one. The causes are mutually exclusive and checked in order:
+ *  - NOT_RECORDED: no record at all;
+ *  - NON_FINITE_JOB_TIME: a job-time sum is NaN, Infinity or missing (NaN is
+ *    written to a JSON row as `null`, so a recorded `null` reads here too);
+ *  - NON_FINITE_COST: one money sum is a number and the other is not;
+ *  - DOUBLE_COUNT: the sums differ by more than any rounding or float drift;
+ *  - FLOAT_DRIFT: the sums differ by more than the absolute 0.01 an earlier
+ *    reader allowed, but within one part in a billion of the magnitude — not a
+ *    double count, and read as one before `sumsAgree`;
+ *  - FLAG_DISAGREES: the numbers agree but the record's `holds` is not true;
+ *  - HOLDS: the numbers agree and the record says so.
+ * Pure.
+ */
+export type CostOnceCause = 'HOLDS' | 'NOT_RECORDED' | 'NON_FINITE_JOB_TIME' | 'NON_FINITE_COST' | 'DOUBLE_COUNT' | 'FLOAT_DRIFT' | 'FLAG_DISAGREES';
+
+export function diagnoseCostCountedOnce(once: unknown): { cause: CostOnceCause; jobMsGap: number | null; costGap: number | null; detail: string } {
+  if (!once || typeof once !== 'object') return { cause: 'NOT_RECORDED', jobMsGap: null, costGap: null, detail: 'no cost-counted-once record' };
+  const o = once as Record<string, unknown>;
+  const t = o.totalJobMs;
+  const p = o.purposeJobMs;
+  if (!finite(t) || !finite(p)) {
+    return { cause: 'NON_FINITE_JOB_TIME', jobMsGap: null, costGap: null, detail: `job time is not a finite sum (total ${String(t)} ms, purposes ${String(p)} ms): a job's run time was unreadable` };
+  }
+  const jobMsGap = Math.abs(t - p);
+  const tc = o.totalCostMinor;
+  const pc = o.purposeCostMinor;
+  const tcNum = finite(tc);
+  const pcNum = finite(pc);
+  if (tcNum !== pcNum || (!tcNum && tc !== null && tc !== undefined) || (!pcNum && pc !== null && pc !== undefined)) {
+    return { cause: 'NON_FINITE_COST', jobMsGap, costGap: null, detail: `money is not a finite sum on both sides (total ${String(tc)}, purposes ${String(pc)})` };
+  }
+  const costGap = tcNum && pcNum ? Math.abs((tc as number) - (pc as number)) : null;
+  const relTol = (a: number, b: number) => 1e-9 * Math.max(Math.abs(a), Math.abs(b));
+  const beyond = (gap: number, a: number, b: number) => gap > Math.max(0.01, relTol(a, b));
+  if (beyond(jobMsGap, t, p) || (costGap !== null && beyond(costGap, tc as number, pc as number))) {
+    return { cause: 'DOUBLE_COUNT', jobMsGap, costGap, detail: `purposes sum to ${p} ms against a total of ${t} ms (gap ${jobMsGap}); cost gap ${String(costGap)}` };
+  }
+  if (jobMsGap >= 0.01 || (costGap !== null && costGap >= 0.01)) {
+    return { cause: 'FLOAT_DRIFT', jobMsGap, costGap, detail: `the sums differ by ${jobMsGap} ms, within float drift of ${Math.max(Math.abs(t), Math.abs(p))} ms but over an absolute 0.01` };
+  }
+  if (o.holds !== true) return { cause: 'FLAG_DISAGREES', jobMsGap, costGap, detail: `the sums agree (gap ${jobMsGap} ms) but the record's holds is ${String(o.holds)}` };
+  return { cause: 'HOLDS', jobMsGap, costGap, detail: `each job's cost is counted once (gap ${jobMsGap} ms)` };
 }
 
 function emptyBucket(): YieldBucket {
@@ -615,6 +713,8 @@ export function summarizeResearchYield(input: { since: string; until: string; jo
   const intervals = new Map<YieldBucket, { start: number; end: number }[]>();
   const lane = (key: string) => (lanes[key] ??= emptyBucket());
   const seen = new Set<string>();
+  const kept: YieldJob[] = [];
+  let unmeasuredJobs = 0;
   const countJob = (bucket: YieldBucket, job: YieldJob, share: number) => {
     bucket.submissions += 1;
     if (job.outcome === 'COMPLETED') bucket.completions += 1;
@@ -634,13 +734,15 @@ export function summarizeResearchYield(input: { since: string; until: string; jo
     if (job.costMinor === null) bucket.uncostedJobs += 1;
     else bucket.costMinor = (bucket.costMinor ?? 0) + job.costMinor * share;
   };
-  for (const job of input.jobs) {
-    if (seen.has(job.id)) continue;
-    seen.add(job.id);
+  for (const raw of input.jobs) {
+    if (seen.has(raw.id)) continue;
+    seen.add(raw.id);
+    const { job, unmeasured } = sanitizeYieldJob(raw, from);
+    if (unmeasured) unmeasuredJobs += 1;
+    kept.push(job);
     countJob(total, job, 1);
     countJob(lane(job.lane), job, 1);
-    const served = job.purposes.length > 0 ? job.purposes : (['UNATTRIBUTED'] as PurposeKey[]);
-    for (const p of served) countJob(purposes[p], job, 1 / served.length);
+    for (const p of job.purposes) countJob(purposes[p], job, 1 / job.purposes.length);
   }
   const outputSeen = new Set<string>();
   const countOutput = (bucket: YieldBucket, out: YieldOutput) => {
@@ -686,7 +788,8 @@ export function summarizeResearchYield(input: { since: string; until: string; jo
   const purposeJobMs = Math.round(Object.values(purposes).reduce((sum, b) => sum + b.jobMs, 0) * 1000) / 1000;
   const costed = Object.values(purposes).filter((b) => b.costMinor !== null);
   const purposeCostMinor = costed.length > 0 ? Math.round(costed.reduce((sum, b) => sum + (b.costMinor ?? 0), 0) * 1000) / 1000 : null;
-  const close = (a: number | null, b: number | null) => (a === null || b === null ? a === b : Math.abs(a - b) < 0.01);
+  const holds = sumsAgree(total.jobMs, purposeJobMs) && sumsAgree(total.costMinor, purposeCostMinor);
+  const diagnosis = diagnoseCostCountedOnce({ totalJobMs: total.jobMs, purposeJobMs, totalCostMinor: total.costMinor, purposeCostMinor, holds });
   return {
     window: { since: input.since, until: input.until, ms: windowMs },
     total,
@@ -698,10 +801,14 @@ export function summarizeResearchYield(input: { since: string; until: string; jo
       purposeJobMs,
       totalCostMinor: total.costMinor,
       purposeCostMinor,
-      holds: close(total.jobMs, purposeJobMs) && close(total.costMinor, purposeCostMinor),
+      holds,
+      unmeasuredJobs,
+      cause: diagnosis.cause,
+      jobMsGap: diagnosis.jobMsGap,
     },
-    attributions: input.jobs.filter((job, i, all) => all.findIndex((o) => o.id === job.id) === i).map((job) => ({ jobId: job.id, lane: job.lane, purposes: job.purposes.length ? job.purposes : ['UNATTRIBUTED'], basis: job.basis, ...(job.goalId ? { goalId: job.goalId } : {}), jobMs: job.durationMs })),
+    attributions: kept.map((job) => ({ jobId: job.id, lane: job.lane, purposes: job.purposes, basis: job.basis, ...(job.goalId ? { goalId: job.goalId } : {}), jobMs: job.durationMs })),
     notes: [
+      ...(unmeasuredJobs > 0 ? [`${unmeasuredJobs} job(s) have no readable run time in their rows: each is counted once, charged no measured time, and its time is not guessed`] : []),
       'a job is a free-lane item or a bin handed to a worker; its cost is job time, and money only where a row records it',
       'a job serving several purposes counts in each purpose, with its cost split evenly so purposes sum to the total once',
       'source quality: PRIMARY when the claim says its source produced the data, UNRETRIEVED when the source was not read, otherwise SECONDARY',
@@ -811,6 +918,8 @@ export async function researchYieldByPurpose(input: { since: string; until?: str
   const since = input.since;
   const until = input.until ?? new Date().toISOString();
   const untilMs = Date.parse(until);
+  const sinceMs = Date.parse(since);
+  const windowStart = finite(sinceMs) ? sinceMs : 0;
   const laneRows = await db.all<{ id: string; at: string; ms: number | string | null; reason: string | null; outcome: string | null; eo: string | null; wo: string | null; fragment_id: string | null; queued_at: string | null; project_id: string | null; wp: string | null; bp: string | null }>(
     `SELECT e.id, e.at, e.duration_ms AS ms, e.reason, e.outcome, e.orchestration_id AS eo, w.orchestration_id AS wo, w.fragment_id,
             w.created_at AS queued_at, e.project_id, w.project_id AS wp, b.purpose AS bp
@@ -876,8 +985,13 @@ export async function researchYieldByPurpose(input: { since: string; until?: str
   });
   const jobs: YieldJob[] = [];
   for (const row of laneRows) {
-    const duration = Math.max(0, Number(row.ms ?? 0));
-    const start = Date.parse(row.at) - duration;
+    const ms = row.ms === null || row.ms === undefined || row.ms === '' ? Number.NaN : Number(row.ms);
+    const atMs = Date.parse(String(row.at));
+    // A duration or an end time the rows do not give is unmeasured, never guessed and never NaN.
+    const measured = finite(ms) && ms >= 0 && finite(atMs);
+    const duration = measured ? ms : 0;
+    const start = finite(atMs) ? atMs - duration : windowStart;
+    const queuedMs = row.queued_at ? Date.parse(String(row.queued_at)) : Number.NaN;
     const rowFacts = factsOf(row.wo ?? row.eo, row.wp ?? row.project_id, row.bp);
     const attribution = attributePurposes(rowFacts);
     const failed = row.outcome !== 'SUBMITTED';
@@ -888,7 +1002,8 @@ export async function researchYieldByPurpose(input: { since: string; until?: str
       basis: attribution.basis,
       startMs: start,
       durationMs: duration,
-      queueWaitMs: row.queued_at ? Math.max(0, start - Date.parse(row.queued_at)) : null,
+      timeMeasured: measured,
+      queueWaitMs: measured && finite(queuedMs) ? Math.max(0, start - queuedMs) : null,
       outcome: failed ? 'FAILED' : 'COMPLETED',
       failureCause: failed ? failureClass(row.reason) : null,
       rateLimited: failed && isRateLimited(row.reason),
@@ -898,9 +1013,16 @@ export async function researchYieldByPurpose(input: { since: string; until?: str
     });
   }
   for (const row of binRows) {
-    const at = Date.parse(row.at);
-    const close = closes.filter((one) => one.bin_id === row.bin_id && Date.parse(one.at) > at).sort((a, b) => Date.parse(a.at) - Date.parse(b.at))[0];
-    const end = close ? Date.parse(close.at) : row.state === 'LEASED' ? untilMs : at;
+    const atRead = Date.parse(String(row.at));
+    const atOk = finite(atRead);
+    const at = atOk ? atRead : windowStart;
+    const close = atOk
+      ? closes.filter((one) => one.bin_id === row.bin_id && Date.parse(String(one.at)) > at).sort((a, b) => Date.parse(String(a.at)) - Date.parse(String(b.at)))[0]
+      : closes.filter((one) => one.bin_id === row.bin_id).sort((a, b) => String(a.at).localeCompare(String(b.at)))[0];
+    const endRead = close ? Date.parse(String(close.at)) : row.state === 'LEASED' ? untilMs : at;
+    // The bin's run time is measured only when both ends are readable; otherwise it is unmeasured, not NaN.
+    const measured = atOk && finite(endRead);
+    const queuedMs = row.ready_at ?? row.created_at ? Date.parse(String(row.ready_at ?? row.created_at)) : Number.NaN;
     const completed = close?.event_type === 'BIN_TERMINAL' && row.state === 'COMPLETE';
     const reason = close ? (close.event_type === 'BIN_TERMINAL' ? `terminal ${row.state ?? ''}`.trim() : close.event_type.replace('BIN_', '').toLowerCase().replace('_', ' ')) : null;
     const binFacts = factsOf(row.orchestration_id, row.project_id, row.purpose);
@@ -912,8 +1034,9 @@ export async function researchYieldByPurpose(input: { since: string; until?: str
       purposes: attribution.purposes,
       basis: attribution.basis,
       startMs: at,
-      durationMs: Math.max(0, end - at),
-      queueWaitMs: queuedFrom ? Math.max(0, at - Date.parse(queuedFrom)) : null,
+      durationMs: measured ? Math.max(0, endRead - at) : 0,
+      timeMeasured: measured,
+      queueWaitMs: atOk && queuedFrom && finite(queuedMs) ? Math.max(0, at - queuedMs) : null,
       outcome: !close ? 'IN_FLIGHT' : completed ? 'COMPLETED' : 'FAILED',
       failureCause: close && !completed ? reason : null,
       rateLimited: !!close && !completed && isRateLimited(close.reason),

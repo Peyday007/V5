@@ -57,7 +57,7 @@ import { reconcileRegisterIfDue, type RegisterPassReport } from './openQuestions
 import { recordDecisionsIfDue } from './decisionRecord.ts';
 import { reconcileCalibrationIfDue, type CalibrationPassReport } from './calibration.ts';
 import { reconcileFactChangesIfDue, type ReconsiderPassReport } from './reconsider.ts';
-import type { LaneCapacityReading, ResearchYieldReading } from './researchYield.ts';
+import { diagnoseCostCountedOnce, type LaneCapacityReading, type ResearchYieldReading } from './researchYield.ts';
 import {
   APPLICABLE_REMEDIES,
   COMMERCIAL_FLOOR,
@@ -70,6 +70,7 @@ import {
   SYSTEM_HEALTH_FLOOR,
   decideResearchAllocation,
   binPriorityShift,
+  enforceFloors,
   normalizeShares,
   purposePriorityShifts,
   purposesBelowFloor,
@@ -856,7 +857,8 @@ export function sharesInForceFrom(detail: Record<string, unknown> | null): (Shar
   return {
     shares,
     observed,
-    held: detail.held === true,
+    // A decision whose cost was not shown counted once is never applied.
+    held: detail.held === true || detail.heldForCost === true,
     urgentCommercialGoal: typeof floors?.commercial === 'number',
     fingerprint: typeof detail.fingerprint === 'string' ? detail.fingerprint : null,
   };
@@ -1126,9 +1128,18 @@ export function allocationInputFrom(
   return { currentShares, purposes, lanes, bottlenecks, urgentCommercialGoal: context.urgentCommercialGoal, ...(context.remedyLevers ? { remedyLevers: context.remedyLevers } : {}) };
 }
 
-/** What makes two decisions the same: shares to a tenth of a percent, lane remedies and capacity verdicts. */
+/**
+ * What makes two decisions the same: shares to a tenth of a percent, lane
+ * remedies, capacity verdicts, and whether the decision was held. `held` is
+ * part of it because a window that failed the counted-once check is recorded
+ * with the observed shares, and the next window that holds can decide those
+ * very shares: without `held` the two fingerprints matched, the holding
+ * decision was never recorded, and the failing row stayed the newest measured
+ * one forever (probe r01.res-15-5).
+ */
 export function allocationFingerprint(decision: AllocationDecision): string {
   return JSON.stringify({
+    held: decision.held === true,
     shares: RESEARCH_PURPOSES.map((p) => round3(decision.shares[p])),
     lanes: decision.laneActions.map((a) => `${a.lane}:${a.kind}`).sort(),
     capacity: decision.capacity.map((c) => `${c.lane}:${c.kind}:${c.units}`).sort(),
@@ -1209,6 +1220,40 @@ export async function recordRemedyApplied(input: { goalId: string; lane: string;
   });
 }
 
+/**
+ * The reading's cost-counted-once record with a boolean `holds` that is true
+ * only when the reading itself says so: a missing, malformed or non-boolean
+ * record reads as not holding. Pure.
+ */
+export function verifiedCostReading(once: unknown): ResearchYieldReading['costCountedOnce'] {
+  const o = (once && typeof once === 'object' ? once : {}) as Partial<ResearchYieldReading['costCountedOnce']>;
+  const num = (n: unknown) => (typeof n === 'number' && Number.isFinite(n) ? n : 0);
+  const money = (n: unknown) => (typeof n === 'number' && Number.isFinite(n) ? n : null);
+  return {
+    jobs: num(o.jobs),
+    totalJobMs: num(o.totalJobMs),
+    purposeJobMs: num(o.purposeJobMs),
+    totalCostMinor: money(o.totalCostMinor),
+    purposeCostMinor: money(o.purposeCostMinor),
+    unmeasuredJobs: num(o.unmeasuredJobs),
+    holds: o.holds === true && [o.totalJobMs, o.purposeJobMs].every((n) => typeof n === 'number' && Number.isFinite(n)),
+  };
+}
+
+/**
+ * Whether recorded shares already meet every protected floor (each purpose,
+ * exploration together, system health, and commercial while a deadline is
+ * open), to the precision the row is recorded at. Pure.
+ */
+export function sharesMeetFloors(shares: Record<ResearchPurpose, number>, urgentCommercialGoal: boolean): boolean {
+  const eps = 1e-3;
+  if (RESEARCH_PURPOSES.some((p) => !(shares[p] >= MIN_PURPOSE_SHARE - eps))) return false;
+  if (shares.BROAD_DISCOVERY + shares.FORWARD_EXPLORATION < EXPLORATION_FLOOR - eps) return false;
+  if (shares.SELF_IMPROVEMENT < SYSTEM_HEALTH_FLOOR - eps) return false;
+  if (urgentCommercialGoal && shares.TRANSACTION_ROUTES < COMMERCIAL_FLOOR - eps) return false;
+  return true;
+}
+
 /** One allocation pass over the live goals. */
 export async function reallocateResearch(input: { goals: GoalView[]; now?: string }, ports: ResearchAllocationPorts): Promise<ResearchAllocationReport> {
   const untilMs = input.now ? Date.parse(input.now) : Date.now();
@@ -1229,9 +1274,36 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
   const laneCapacity = ports.readLaneCapacity ? await ports.readLaneCapacity(window.until) : [];
   const capacity = new Map(laneCapacity.map((one) => [one.lane, one]));
   const allocationInput = allocationInputFrom(reading, { urgentCommercialGoal, nearestDeadlineDays: deadlines.length ? Math.min(...deadlines) : null, triedRemedies: tried, measuringRemedies: measuring, pressure, capacity, remedyLevers: APPLICABLE_REMEDIES });
-  const decision = decideResearchAllocation(allocationInput);
+  const decided = decideResearchAllocation(allocationInput);
   const observed = normalizeShares(allocationInput.currentShares);
-  const fingerprint = allocationFingerprint(decision);
+  // Shares move only on a reading whose cost is shown counted once. A reading
+  // that cannot show it moves nothing — the shares in force, no change — and
+  // is recorded as what it is: a measured window that failed the counted-once
+  // check (`heldForCost`), never as `held`, which means nothing was measured.
+  // Recording it as `held` hid a genuine double count from probe r01.res-15-5,
+  // which reads only measured decisions; recorded this way it fails the probe.
+  // The allocation stage still never applies it (`sharesInForceFrom`).
+  // The cause is read from the reading as the reader returned it, before
+  // `verifiedCostReading` coerces a non-finite sum to 0 — so the recorded row
+  // says which way it failed (a NaN job time, a double count, float drift),
+  // and no repair has to assert it.
+  const diagnosis = diagnoseCostCountedOnce(reading.costCountedOnce);
+  const costCountedOnce = { ...verifiedCostReading(reading.costCountedOnce), cause: diagnosis.cause, jobMsGap: diagnosis.jobMsGap };
+  const heldForCost = !costCountedOnce.holds;
+  // A held-for-cost row records the shares already in force — the previous
+  // decision's, floors restored — never the raw usage: `shares` always means
+  // shares Brain decided, so probe r01.res-07 (which reads every row not
+  // `held`) never judges usage Brain did not choose. Raw usage stays in `observed`.
+  const inForce = sharesInForceFrom(previous?.detail ?? null)?.shares ?? null;
+  const decision: AllocationDecision = heldForCost
+    ? {
+        ...decided,
+        shares: inForce && sharesMeetFloors(inForce, urgentCommercialGoal) ? normalizeShares(inForce) : enforceFloors(inForce ?? observed, urgentCommercialGoal),
+        changes: [],
+        notes: [`Held: the window's cost reading does not show each job's cost counted once (${diagnosis.cause}: ${diagnosis.detail}), so no share moves on it.`, ...decided.notes],
+      }
+    : decided;
+  const fingerprint = allocationFingerprint({ ...decision, held: decision.held || heldForCost });
   const floors = {
     exploration: EXPLORATION_FLOOR,
     systemHealth: SYSTEM_HEALTH_FLOOR,
@@ -1246,6 +1318,8 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
     observed: Object.fromEntries(RESEARCH_PURPOSES.map((p) => [p, round3(observed[p])])),
     floors,
     held: decision.held,
+    // A measured window whose cost was not shown counted once: nothing moved, and never applied.
+    heldForCost,
     changes: decision.changes.map((c) => ({ purpose: c.purpose, from: round3(c.from), to: round3(c.to), reasons: c.reasons })),
     laneActions: decision.laneActions.map((a) => ({
       ...a,
@@ -1283,12 +1357,14 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
       basis: pressure[p].basis.slice(0, 10),
     }])),
     liveGoals: live.length,
-    costCountedOnce: reading.costCountedOnce,
+    costCountedOnce,
     notes: [...decision.notes, ...reading.notes].slice(0, 20),
   };
   const recorded = !(previous && previous.detail.fingerprint === fingerprint);
   if (recorded) {
-    const summary = decision.held
+    const summary = heldForCost
+      ? "Research allocation held: the window's cost reading does not show each job's cost counted once."
+      : decision.held
       ? 'Research allocation held: nothing in the window was measured.'
       : `Research reallocated: ${RESEARCH_PURPOSES.map((p) => `${p} ${(decision.shares[p] * 100).toFixed(1)}%`).join(', ')}`;
     await ports.recordDecision(summary.slice(0, 400), { ...detail, summary: summary.slice(0, 400) });
@@ -1307,7 +1383,7 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
     shares: decision.shares,
     floors,
     changed: recorded,
-    held: decision.held,
+    held: decision.held || heldForCost,
     laneActions: decision.laneActions,
     capacity: decision.capacity,
     recorded,
