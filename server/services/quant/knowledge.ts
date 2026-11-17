@@ -102,9 +102,9 @@ export type InferenceTarget = CashOpportunity & { sameBuyer?: readonly string[] 
  * measured under (mechanism, a material dimension, and price band) stays its
  * own, so a different mechanism is still refused or bridged, never assumed.
  */
-function contextFor(opportunity: CashOpportunity, target: InferenceTarget): Record<string, string> {
+function contextFor(opportunity: CashOpportunity, target: InferenceTarget, same?: ReadonlySet<string>): Record<string, string> {
   const context = contextOf(opportunity);
-  if (!target.sameBuyer?.includes(opportunity.id)) return context;
+  if (!(same ? same.has(opportunity.id) : target.sameBuyer?.includes(opportunity.id))) return context;
   const own = contextOf(target);
   return { ...context, opportunity: own.opportunity!, industry: own.industry!, signal: own.signal! };
 }
@@ -975,36 +975,37 @@ export function switchedPathObservations(knowledge: CashKnowledge, target: CashO
   }];
 }
 
-/** The observations a project holds about one quantity. */
-export function observationsFor(knowledge: CashKnowledge, quantity: CashQuantity, target: InferenceTarget): Observation[] {
-  const spec = CASH_QUANTITIES[quantity];
-  const out: Observation[] = [];
-  if (quantity === 'close') {
-    for (const lesson of knowledge.lessons) {
-      if (lesson.contacts <= 0) continue;
-      const same = lesson.mechanism === target.mechanism;
-      out.push({
-        id: `lesson:${lesson.mechanism ?? '-'}:${lesson.channel ?? '-'}`,
-        value: { kind: 'COUNT', successes: lesson.agreements, trials: lesson.contacts },
-        // Agreements per contact on this Brain's own offers: the stage a close rate measures.
-        context: { mechanism: lesson.mechanism ?? 'unstated', channel: lesson.channel ?? 'unstated', funnelStage: 'LEAD_TO_CLOSE' },
-        lineage: [`cash_outcomes:${knowledge.projectId}:${lesson.mechanism ?? '-'}:${lesson.channel ?? '-'}`],
-        source: { kind: 'OTHER', ref: `cash_outcomes:${lesson.mechanism ?? '-'}`, note: `${lesson.agreements} of ${lesson.contacts} contacts agreed` },
-        broad: !same,
-        measures: 'agreements per contact, measured on this Brain',
-      });
-    }
+/** One researched fact read as an observation of a quantity: everything but what depends on the target. */
+interface FactObservation {
+  opportunity: CashOpportunity;
+  obs: Omit<Observation, 'context' | 'broad'>;
+  funnelStage?: string;
+}
+
+/**
+ * The card facts read as observations of each quantity, parsed once per
+ * knowledge load (W2c, 2026-11-17). Parsing reads the fact and the opening it
+ * was measured on, never the target, so every target — each found opening and
+ * each of hundreds of constructed arrangements — shares one parse instead of
+ * re-reading every card fact. Rebuilt if the knowledge's facts, openings or
+ * sources are replaced.
+ */
+const factObservationCache = new WeakMap<CashKnowledge, { facts: CashKnowledge['facts']; opportunities: CashKnowledge['opportunities']; sources: CashKnowledge['sources']; byQuantity: Map<CashQuantity, FactObservation[]>; idsByQuantity: Map<CashQuantity, Set<string>> }>();
+
+export function factObservations(knowledge: CashKnowledge, quantity: CashQuantity): FactObservation[] {
+  let cached = factObservationCache.get(knowledge);
+  if (!cached || cached.facts !== knowledge.facts || cached.opportunities !== knowledge.opportunities || cached.sources !== knowledge.sources) {
+    cached = { facts: knowledge.facts, opportunities: knowledge.opportunities, sources: knowledge.sources, byQuantity: new Map(), idsByQuantity: new Map() };
+    factObservationCache.set(knowledge, cached);
   }
-  // The path the acquisition dependency runs on after a switch, measured on this Brain's own contacts (FALL-37-2).
-  if (quantity === 'respond') out.push(...switchedPathObservations(knowledge, target));
-  // What money actually did on a route outranks what research says it would do, so it comes first.
-  if (quantity === 'daysToCash' || quantity === 'costShare' || quantity === 'capitalShare') out.push(...ledgerObservations(knowledge, quantity, target));
+  const hit = cached.byQuantity.get(quantity);
+  if (hit) return hit;
+  const spec = CASH_QUANTITIES[quantity];
+  const out: FactObservation[] = [];
   for (const fact of knowledge.facts) {
     if (!(spec.fields as readonly string[]).includes(fact.field)) continue;
     const opportunity = knowledge.opportunities.get(fact.opportunityId);
     if (!opportunity || opportunity.duplicateOfId) continue;
-    // A market's size is about that market: another buyer's volume is not even a bound on this one's.
-    if (quantity === 'dealsPerMonth' && opportunity.id !== target.id && !target.sameBuyer?.includes(opportunity.id)) continue;
     let value: Observation['value'] | null = null;
     if (quantity === 'respond' || quantity === 'close') {
       value = readRate(fact.value, quantity);
@@ -1036,21 +1037,80 @@ export function observationsFor(knowledge: CashKnowledge, quantity: CashQuantity
     const rate = quantity === 'respond' || quantity === 'close';
     const cites = rate ? citedStudyOf(fact.value) : null;
     out.push({
-      id: `fact:${fact.id}`,
-      value,
-      context: quantity === 'close' ? { ...contextFor(opportunity, target), funnelStage: funnelStageOf(fact.value) } : contextFor(opportunity, target),
-      lineage: [...lineageOf(fact, knowledge), ...(cites ? [cites] : [])],
-      // A demand rate somebody chose to publish is read through the selection discount (`pool.ts`).
-      ...(rate ? { published: true } : {}),
-      source: fact.claimId ? { kind: 'CLAIM', ref: fact.claimId, note: src?.sourcePublisher ?? undefined } : { kind: 'CARD_FACT', ref: fact.id },
-      observedAt: src?.sourceDate && !Number.isNaN(Date.parse(src.sourceDate)) ? new Date(Date.parse(src.sourceDate)).toISOString() : fact.createdAt,
-      // How it was measured and how long it holds, from the claim itself (W-11/W-12).
-      ...(src?.validUntil ? { validUntil: src.validUntil } : {}),
-      ...(src?.measurementMethod ? { method: src.measurementMethod } : {}),
-      ...(src?.invalidatedBy ? { invalidation: { condition: src.invalidatedBy, metAt: src.invalidationMetAt ?? null, note: src.invalidationNote ?? null } } : {}),
-      broad: opportunity.mechanism !== target.mechanism,
-      measures: `${fact.field} on "${opportunity.title.slice(0, 60)}"`,
+      opportunity,
+      ...(quantity === 'close' ? { funnelStage: funnelStageOf(fact.value) } : {}),
+      obs: {
+        id: `fact:${fact.id}`,
+        value,
+        lineage: [...lineageOf(fact, knowledge), ...(cites ? [cites] : [])],
+        // A demand rate somebody chose to publish is read through the selection discount (`pool.ts`).
+        ...(rate ? { published: true } : {}),
+        source: fact.claimId ? { kind: 'CLAIM', ref: fact.claimId, note: src?.sourcePublisher ?? undefined } : { kind: 'CARD_FACT', ref: fact.id },
+        observedAt: src?.sourceDate && !Number.isNaN(Date.parse(src.sourceDate)) ? new Date(Date.parse(src.sourceDate)).toISOString() : fact.createdAt,
+        // How it was measured and how long it holds, from the claim itself (W-11/W-12).
+        ...(src?.validUntil ? { validUntil: src.validUntil } : {}),
+        ...(src?.measurementMethod ? { method: src.measurementMethod } : {}),
+        ...(src?.invalidatedBy ? { invalidation: { condition: src.invalidatedBy, metAt: src.invalidationMetAt ?? null, note: src.invalidationNote ?? null } } : {}),
+        measures: `${fact.field} on "${opportunity.title.slice(0, 60)}"`,
+      },
     });
+  }
+  cached.byQuantity.set(quantity, out);
+  cached.idsByQuantity.set(quantity, new Set(out.map((one) => one.opportunity.id)));
+  return out;
+}
+
+/**
+ * Whether any observation of `quantity` is the target's own — the context
+ * `observationsFor` would give it names the target — read from indexes, without
+ * building the observations (W2c). Exactly the test `inferCashQuantity` made on
+ * the built list: a fact or ledger route on the target itself or on an opening
+ * of its very buyers; lessons and a switched path never name an opening.
+ */
+export function holdsOwnEvidence(knowledge: CashKnowledge, quantity: CashQuantity, target: InferenceTarget): boolean {
+  factObservations(knowledge, quantity);
+  const ids = factObservationCache.get(knowledge)!.idsByQuantity.get(quantity)!;
+  const mine = (id: string) => id === target.id || !!target.sameBuyer?.includes(id);
+  if (ids.has(target.id) || (target.sameBuyer ?? []).some((id) => ids.has(id))) return true;
+  if (quantity !== 'daysToCash' && quantity !== 'costShare' && quantity !== 'capitalShare') return false;
+  for (const [routeKey, money] of knowledge.routeMoney) {
+    if (!mine(routeKey)) continue;
+    const opportunity = knowledge.opportunities.get(routeKey);
+    if (opportunity && !opportunity.duplicateOfId && ledgerValue(money, quantity)) return true;
+  }
+  return false;
+}
+
+/** The observations a project holds about one quantity. */
+export function observationsFor(knowledge: CashKnowledge, quantity: CashQuantity, target: InferenceTarget): Observation[] {
+  const out: Observation[] = [];
+  if (quantity === 'close') {
+    for (const lesson of knowledge.lessons) {
+      if (lesson.contacts <= 0) continue;
+      const same = lesson.mechanism === target.mechanism;
+      out.push({
+        id: `lesson:${lesson.mechanism ?? '-'}:${lesson.channel ?? '-'}`,
+        value: { kind: 'COUNT', successes: lesson.agreements, trials: lesson.contacts },
+        // Agreements per contact on this Brain's own offers: the stage a close rate measures.
+        context: { mechanism: lesson.mechanism ?? 'unstated', channel: lesson.channel ?? 'unstated', funnelStage: 'LEAD_TO_CLOSE' },
+        lineage: [`cash_outcomes:${knowledge.projectId}:${lesson.mechanism ?? '-'}:${lesson.channel ?? '-'}`],
+        source: { kind: 'OTHER', ref: `cash_outcomes:${lesson.mechanism ?? '-'}`, note: `${lesson.agreements} of ${lesson.contacts} contacts agreed` },
+        broad: !same,
+        measures: 'agreements per contact, measured on this Brain',
+      });
+    }
+  }
+  // The path the acquisition dependency runs on after a switch, measured on this Brain's own contacts (FALL-37-2).
+  if (quantity === 'respond') out.push(...switchedPathObservations(knowledge, target));
+  // What money actually did on a route outranks what research says it would do, so it comes first.
+  if (quantity === 'daysToCash' || quantity === 'costShare' || quantity === 'capitalShare') out.push(...ledgerObservations(knowledge, quantity, target));
+  const same = new Set(target.sameBuyer ?? []);
+  for (const base of factObservations(knowledge, quantity)) {
+    const { opportunity } = base;
+    // A market's size is about that market: another buyer's volume is not even a bound on this one's.
+    if (quantity === 'dealsPerMonth' && opportunity.id !== target.id && !same.has(opportunity.id)) continue;
+    const context = contextFor(opportunity, target, same);
+    out.push({ ...base.obs, context: base.funnelStage ? { ...context, funnelStage: base.funnelStage } : context, broad: opportunity.mechanism !== target.mechanism });
   }
   return out;
 }
@@ -1079,15 +1139,25 @@ export function nodeFor(knowledge: CashKnowledge, quantity: CashQuantity, target
  * says nothing the existing sweep did not already say).
  */
 export function inferCashQuantity(knowledge: CashKnowledge, quantity: CashQuantity, target: InferenceTarget, now: Date = new Date()): Estimate | null {
+  // Openings that differ only in identity and hold no evidence of their own
+  // get the same answer; it is computed once per context. Whether the target
+  // holds evidence of its own is read from an index, so a target whose answer
+  // is already known builds no observations at all (W2c).
+  const own = holdsOwnEvidence(knowledge, quantity, target);
+  const { opportunity: _id, ...shared } = contextOf(target);
+  /*
+   * A target that is no opening (a constructed arrangement) is "own" only
+   * through its buyers' openings (`sameBuyer`): the answer is the same for
+   * every target with that context and those buyers, so it is computed once
+   * for them (W2c). A real opening's own evidence is never shared.
+   */
+  const viaSameBuyer = own && !!target.sameBuyer?.length && !knowledge.opportunities.has(target.id);
+  const base = `${quantity}|${now.toISOString().slice(0, 10)}|${JSON.stringify(shared)}`;
+  const key = !own ? base : viaSameBuyer ? `${base}|same:${target.sameBuyer!.join(',')}` : null;
+  if (key && knowledge.estimates.has(key)) return knowledge.estimates.get(key)!;
   const node = nodeFor(knowledge, quantity, target);
   const observations = node.observations ?? [];
   if (observations.length === 0) return null;
-  // Openings that differ only in identity and hold no evidence of their own
-  // get the same answer; it is computed once per context.
-  const own = observations.some((one) => one.context.opportunity === target.id);
-  const { opportunity: _id, ...shared } = contextOf(target);
-  const key = own ? null : `${quantity}|${now.toISOString().slice(0, 10)}|${JSON.stringify(shared)}`;
-  if (key && knowledge.estimates.has(key)) return knowledge.estimates.get(key)!;
   const est = reconstruct({ nodes: [node] }, node.key, now).estimates[node.key]!;
   const out = est.tier === 'UNKNOWN' ? null : est;
   if (key) knowledge.estimates.set(key, out);

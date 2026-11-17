@@ -43,7 +43,7 @@ import { SCENARIO_LIMITS, type ScenarioModelDefinition, type ScenarioVariable, t
 import type { Workstream } from '../../domain/register.ts';
 import type { TargetReading } from '../goals/target.ts';
 import { inferCashQuantity, loadCashKnowledge, type CashKnowledge, type CashQuantity, type InferenceTarget } from '../quant/knowledge.ts';
-import { inputSample, toScenarioInput, type InputSample } from '../quant/export.ts';
+import { inputSample, toScenarioInput, toScenarioInputScaled, type InputSample } from '../quant/export.ts';
 import { CONTACTS_PER_DAY_BOUNDS, evaluateGoalPortfolio, heldEvaluation, measuredRateInput, type GoalPortfolio, type PlannedOpening } from '../goals/portfolio.ts';
 import { SPREAD_FLOOR } from '../quant/pool.ts';
 import type { Estimate, EvidenceTier } from '../../domain/quant.ts';
@@ -218,6 +218,31 @@ export interface ArrangementInput {
 }
 
 /**
+ * The project's openings by who pays, keyed by the map's buyer identity — the
+ * payer as named and the population it is filed under — built once per set of
+ * openings (W2c, 2026-11-17). Before, every arrangement re-keyed every opening
+ * (`payerKey`, `buyerPopulationName`): 400 arrangements × 1,000 openings was
+ * 800,000 regex-heavy readings a plan pass. Ids keep the openings' order.
+ */
+const payerIndexCache = new WeakMap<ReadonlyMap<string, CashOpportunity>, { size: number; index: Map<string, string[]> }>();
+export function openingsByPayer(opportunities: ReadonlyMap<string, CashOpportunity>): Map<string, string[]> {
+  const hit = payerIndexCache.get(opportunities);
+  if (hit && hit.size === opportunities.size) return hit.index;
+  const index = new Map<string, string[]>();
+  for (const o of opportunities.values()) {
+    if (o.duplicateOfId || !o.payer) continue;
+    for (const key of new Set([payerKey(o.payer), payerKey(buyerPopulationName(o.payer))])) {
+      if (!key) continue;
+      const ids = index.get(key);
+      if (ids) ids.push(o.id);
+      else index.set(key, [o.id]);
+    }
+  }
+  payerIndexCache.set(opportunities, { size: opportunities.size, index });
+  return index;
+}
+
+/**
  * The opening the knowledge inference reads an arrangement as (F2): its own
  * id, its sector, its price band, and the mechanism its structure is already
  * held as — the one its buyers' related openings are sold through when they
@@ -237,12 +262,7 @@ export function arrangementTarget(one: ConstructedArrangement, knowledge: Pick<C
    */
   const buyer = payerKey(one.demand.name);
   const sameBuyer = new Set((one.relatedOpenings ?? []).filter((id) => knowledge.opportunities.has(id)));
-  if (buyer) {
-    for (const o of knowledge.opportunities.values()) {
-      if (o.duplicateOfId || !o.payer) continue;
-      if (payerKey(o.payer) === buyer || payerKey(buyerPopulationName(o.payer)) === buyer) sameBuyer.add(o.id);
-    }
-  }
+  if (buyer) for (const id of openingsByPayer(knowledge.opportunities).get(buyer) ?? []) sameBuyer.add(id);
   const counts = new Map<string, number>();
   const signals = new Map<string, number>();
   for (const id of sameBuyer) {
@@ -762,8 +782,10 @@ export function selectEstimatedArrangements(
      */
     otherPrices?: readonly ComparablePrice[];
   },
-): { openings: PlannedOpening[]; reserve: PlannedOpening[]; selection: ArrangementSelection } {
+): { openings: PlannedOpening[]; reserve: PlannedOpening[]; selection: ArrangementSelection; conversions: Map<string, ModelledOpportunity | null> } {
   const limit = input.limit ?? MAX_ESTIMATED_ARRANGEMENTS;
+  // Each arrangement's `estimatedFromArrangement`, as read here: the plan candidate reuses it rather than converting again (W2c).
+  const conversions = new Map<string, ModelledOpportunity | null>();
   const daysLeft = input.daysLeft && input.daysLeft > 0 ? input.daysLeft : 30;
   const contactsPerDay = input.contactsPerDay ?? CONTACTS_PER_DAY_BOUNDS.low;
   const cut: ArrangementCut[] = [];
@@ -781,6 +803,7 @@ export function selectEstimatedArrangements(
     if (breaksOperatingModel(operatingFit({ title: arrangement.label, offerScope: arrangement.demand.name }))) return no('it breaks the operating model');
     if (arrangement.stress.exposure === 'EXCEEDS') return no('its known worst case exceeds the limits');
     let one: ModelledOpportunity | null = estimatedFromArrangement(arrangement, input);
+    conversions.set(arrangement.key, one);
     let value: Value = arrangement.value;
     let screenValue: Value | null = null;
     if (!one) {
@@ -886,6 +909,7 @@ export function selectEstimatedArrangements(
   return {
     openings: picked.map((r) => r.one),
     reserve: left.filter((r) => r.screen.value > 0).slice(0, RESERVE_ARRANGEMENTS).map((r) => r.one),
+    conversions,
     selection: {
       considered: arrangements.length,
       picked: picked.map((r) => ({ arrangementKey: r.arrangement.key, label: r.arrangement.label, population: r.population, screen: r.screen.value, upside: r.screen.upside, slot: taken.get(r)!, basis: r.screen.basis })),
@@ -926,6 +950,8 @@ export interface GoalModel {
   estimates?: ModelledOpportunity[];
   /** Which constructed arrangements took the estimate slots, by what reading, and every one cut with its reason (S-17). */
   arrangementSelection?: ArrangementSelection | null;
+  /** Each arrangement's conversion as selection read it, null where it has none: what plan candidates reuse (W2c). */
+  arrangementConversions?: ReadonlyMap<string, ModelledOpportunity | null> | null;
   /** Why nothing could be modelled, when nothing could. */
   refusal: string | null;
   /**
@@ -1012,8 +1038,9 @@ export function ownMechanismCapital(inferred: ModelInput, top: number): ModelInp
  * assurance redraws from, Q2-1/Q2-12) is never dropped by a hand-built copy.
  */
 export function estimateInput(est: Estimate, scale = 1, what = ''): ModelInput {
-  const scaled: Estimate = scale === 1 ? est : { ...est, p05: est.p05 * scale, p10: est.p10 * scale, p50: est.p50 * scale, p90: est.p90 * scale, p95: est.p95 * scale, samples: est.samples.map((x) => x * scale) };
-  const exported = toScenarioInput(scaled);
+  // The samples are scaled inside the export, from the estimate's one sorted copy (W2c): never copied and re-sorted per reader.
+  const scaled: Estimate = scale === 1 ? est : { ...est, p05: est.p05 * scale, p10: est.p10 * scale, p50: est.p50 * scale, p90: est.p90 * scale, p95: est.p95 * scale };
+  const exported = toScenarioInputScaled(est, scaled, scale);
   return {
     value: null,
     low: scaled.p05,
@@ -1380,6 +1407,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
    */
   const estimates: ModelledOpportunity[] = [];
   let arrangementSelection: ArrangementSelection | null = null;
+  let arrangementConversions: Map<string, ModelledOpportunity | null> | null = null;
   let reserve: PlannedOpening[] = [];
   if (input.arrangements?.length) {
     const selected = selectEstimatedArrangements(input.arrangements, {
@@ -1399,6 +1427,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     });
     estimates.push(...selected.openings);
     arrangementSelection = selected.selection;
+    arrangementConversions = selected.conversions;
     reserve = selected.reserve;
     const why = new Map<string, number>();
     for (const c of selected.selection.cut) {
@@ -1502,6 +1531,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       portfolioInput,
       estimates,
       arrangementSelection,
+      arrangementConversions,
     };
   }
 
@@ -1682,6 +1712,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     considered: candidates,
     estimates,
     arrangementSelection,
+    arrangementConversions,
     refusal: null,
     portfolio,
     portfolioInput,

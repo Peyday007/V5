@@ -54,8 +54,41 @@ export function inputSample(est: Pick<Estimate, 'populations' | 'sizedPopulation
   return { events: justifiesDistribution(est) ? (est.events ?? 0) : 0, populations: est.populations ?? 0, sizedPopulations: est.sizedPopulations ?? 0, ...(est.contested ? { contested: est.contested.reason } : {}) };
 }
 
+/**
+ * Exports already made, by estimate (W2c, 2026-11-17). An estimate is read,
+ * never changed, once reconstructed, and one estimate in a context is shared
+ * by every opening and arrangement in it — so the sort of its samples is done
+ * once, not once per reader: 400 arrangements re-sorted the same samples for
+ * each of seven inputs.
+ */
+const exportedCache = new WeakMap<Estimate, ExportedInput>();
+
 /** The engine's input for an estimate. */
 export function toScenarioInput(est: Estimate): ExportedInput {
+  const hit = exportedCache.get(est);
+  if (hit) return hit;
+  const out = exportOf(est);
+  exportedCache.set(est, out);
+  return out;
+}
+
+/**
+ * The input for an estimate read in other units (`scale` > 0, e.g. a share of
+ * a price into money): exactly `toScenarioInput` of the scaled estimate, from
+ * the unscaled export, so the samples are not copied and sorted again.
+ * `scaled` is the estimate with its quantiles already scaled. Pure.
+ */
+export function toScenarioInputScaled(est: Estimate, scaled: Estimate, scale: number): ExportedInput {
+  if (scale === 1 || !(scale > 0)) return toScenarioInput(scale === 1 ? est : { ...scaled, samples: est.samples.map((x) => x * scale) });
+  const base = toScenarioInput(est);
+  const note = describeEstimate(scaled);
+  if (base.spec.kind === 'EMPIRICAL') return { ...base, spec: { kind: 'EMPIRICAL', values: base.spec.values.map((x) => x * scale) }, note };
+  const min = Math.min(scaled.p05, scaled.p95);
+  const max = Math.max(scaled.p05, scaled.p95, min + 1e-9);
+  return { ...base, spec: { kind: 'RANGE', min, max }, note: `${note}; bounds only` };
+}
+
+function exportOf(est: Estimate): ExportedInput {
   const sources = dedupe(est.sources).slice(0, 12);
   const note = describeEstimate(est);
   if (justifiesDistribution(est) && est.samples.length > 0) {

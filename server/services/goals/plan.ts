@@ -1250,12 +1250,24 @@ export function combinationDaysToCash(memberIds: readonly string[], pathways: re
  * read). Without knowledge the conversion sweeps, so nothing unestablished
  * becomes a candidate's field. Pure but for that cache.
  */
-export function arrangementModels(arrangements: readonly ConstructedArrangement[], estimates: readonly ModelledOpportunity[], target: Pick<TargetReading, 'projectId' | 'currency' | 'daysLeft' | 'capitalBeforeProofCents'>, now = new Date()): Map<string, ModelledOpportunity> {
+export function arrangementModels(
+  arrangements: readonly ConstructedArrangement[],
+  estimates: readonly ModelledOpportunity[],
+  target: Pick<TargetReading, 'projectId' | 'currency' | 'daysLeft' | 'capitalBeforeProofCents'>,
+  now = new Date(),
+  conversions: ReadonlyMap<string, ModelledOpportunity | null> | null = null,
+): Map<string, ModelledOpportunity> {
   const out = new Map<string, ModelledOpportunity>();
   for (const one of estimates) if (one.estimated?.arrangementKey) out.set(one.estimated.arrangementKey, one);
   const knowledge = cachedCashKnowledge(target.projectId);
   for (const a of arrangements) {
     if (out.has(a.key)) continue;
+    // Selection already converted it (or found it has no conversion): never a second run (W2c).
+    if (conversions?.has(a.key)) {
+      const seen = conversions.get(a.key);
+      if (seen) out.set(a.key, seen);
+      continue;
+    }
     const one = estimatedFromArrangement(a, { projectId: target.projectId, currency: target.currency, beforeProofCents: target.capitalBeforeProofCents, knowledge, now, daysLeft: target.daysLeft });
     if (one) out.set(a.key, one);
   }
@@ -1521,7 +1533,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     const permissions = target.achieved ? [] : await missingPermissions(target.projectId);
     const qualify: NextTest = { link: 'OFFER_AND_PRICE', test: 'Qualify at least one opening: establish who pays, an offer and a price, so there is a plan to judge.', by: 'BRAIN', blocker: null };
     const refusedSteps = target.achieved || refusedInfeasible ? [] : planSteps({ adoption: refusedPlan.adoption, reconstruction: refusedReconstruction, sales: [], nextTest: qualify, permissionsMissing: permissions });
-    const refusedReadings = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways: null, arrangements, reconstruction: refusedReconstruction, acceptance: refusedAcceptance, arrangementModels: arrangementModels(arrangements, model.estimates ?? [], target) });
+    const refusedReadings = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways: null, arrangements, reconstruction: refusedReconstruction, acceptance: refusedAcceptance, arrangementModels: arrangementModels(arrangements, model.estimates ?? [], target, undefined, model.arrangementConversions ?? null) });
     const refusedContinuation = continuationOf({
       achieved: target.achieved,
       daysLeft: target.daysLeft,
@@ -1921,7 +1933,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   } catch (error) {
     degraded.push(`opening ledger: ${errorText(error)} (the plan set reads no observed collections or executed sales)`);
   }
-  const readings = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways, arrangements, reconstruction, acceptance, ledger, arrangementModels: arrangementModels(arrangements, model.estimates ?? [], target) });
+  const readings = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways, arrangements, reconstruction, acceptance, ledger, arrangementModels: arrangementModels(arrangements, model.estimates ?? [], target, undefined, model.arrangementConversions ?? null) });
   const continuation = continuationOf({
     achieved: target.achieved,
     daysLeft: target.daysLeft,
