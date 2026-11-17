@@ -16,7 +16,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { summarizeResearchYield, type PurposeKey, type ResearchYieldReading, type YieldJob, type YieldOutput } from '../server/services/goals/researchYield.ts';
-import { ALLOCATION_AUDIT_ROWS, probeWindowStanding, reallocateResearch, withMeasuredReasons, type ResearchAllocationPorts } from '../server/services/goals/tick.ts';
+import { ALLOCATION_AUDIT_ROWS, probeWindowStanding, reallocateResearch, type ResearchAllocationPorts } from '../server/services/goals/tick.ts';
 import { decideResearchAllocation, type AllocationInput } from '../server/services/goals/researchAllocation.ts';
 import { researchBriefingFrom } from '../server/services/goals/briefing.ts';
 import { yieldAllocationHolds } from '../server/services/factory/program/release01/researchGoalProbe.ts';
@@ -179,24 +179,47 @@ describe('a share that moves only by renormalization still carries its measured 
     urgentCommercialGoal: false,
   } as unknown as AllocationInput;
 
-  it('the allocator alone records a reasonless change, which the probe would fail', () => {
-    const raw = decideResearchAllocation(input);
-    const silent = raw.changes.filter((c) => c.reasons.length === 0);
-    expect(silent.length).toBeGreaterThan(0);
-    expect(yieldAllocationHolds([{ fingerprint: 'raw', held: false, changes: raw.changes, costCountedOnce: { holds: true } }]).ok).toBe(false);
+  it('the allocator itself names a measured reason for every change, and the probe passes on its decision', () => {
+    const d = decideResearchAllocation(input);
+    expect(d.changes.length).toBeGreaterThan(0);
+    for (const c of d.changes) expect(c.reasons.length).toBeGreaterThan(0);
+    const self = d.changes.find((c) => c.purpose === 'SELF_IMPROVEMENT');
+    expect(self!.reasons).toHaveLength(1);
+    expect(self!.reasons[0]).toMatch(/^useful results per unit cost 0\.96× the measured average, within 5% so not itself a reason to move; renormalized as /);
+    // Every purpose named as a mover really moved, and is named with the drivers it actually had.
+    expect(self!.reasons[0]).toContain('BROAD_DISCOVERY (yield)');
+    expect(yieldAllocationHolds([{ fingerprint: 'fixed', held: false, changes: d.changes, costCountedOnce: { holds: true } }]).ok).toBe(true);
   });
 
-  it('the recorded decision names the measured reason for every change and passes the probe', () => {
-    const fixed = withMeasuredReasons(decideResearchAllocation(input), input);
-    expect(fixed.changes.length).toBeGreaterThan(0);
-    for (const c of fixed.changes) expect(c.reasons.length).toBeGreaterThan(0);
-    const self = fixed.changes.find((c) => c.purpose === 'SELF_IMPROVEMENT');
-    expect(self!.reasons[0]).toMatch(/0\.96× the measured average; moved only as the other purposes/);
-    expect(yieldAllocationHolds([{ fingerprint: 'fixed', held: false, changes: fixed.changes, costCountedOnce: { holds: true } }]).ok).toBe(true);
+  it('never attributes a renormalization to yield when the others moved for a deadline, value, bottleneck or floor', () => {
+    // Every purpose has the identical yield, so no yield reason exists; only a deadline and a decision value move shares.
+    const same = {
+      currentShares: { BROAD_DISCOVERY: 0.2, TRANSACTION_ROUTES: 0.3, OPERATING_SUPPORT: 0.15, SELF_IMPROVEMENT: 0.2, FORWARD_EXPLORATION: 0.15 },
+      purposes: [
+        { purpose: 'BROAD_DISCOVERY', usefulResults: 10, cost: 10 },
+        { purpose: 'TRANSACTION_ROUTES', usefulResults: 10, cost: 10, nearestDeadlineDays: 2 },
+        { purpose: 'OPERATING_SUPPORT', usefulResults: 10, cost: 10 },
+        { purpose: 'SELF_IMPROVEMENT', usefulResults: 10, cost: 10, decisionValue: 5 },
+        { purpose: 'FORWARD_EXPLORATION', usefulResults: 10, cost: 10 },
+      ],
+      urgentCommercialGoal: false,
+    } as unknown as AllocationInput;
+    const d = decideResearchAllocation(same);
+    expect(d.changes.length).toBeGreaterThan(0);
+    for (const c of d.changes) expect(c.reasons.length).toBeGreaterThan(0);
+    const renormalized = d.changes.filter((c) => c.reasons.some((r) => r.includes('renormalized as')));
+    expect(renormalized.length).toBeGreaterThan(0);
+    for (const c of renormalized) {
+      const text = c.reasons.join(' ');
+      expect(text).not.toMatch(/measured yields moved/);
+      expect(text).not.toMatch(/\(yield/);
+      expect(text).toMatch(/TRANSACTION_ROUTES \(deadline\)/);
+      expect(text).toMatch(/SELF_IMPROVEMENT \(decision value\)/);
+    }
   });
 
-  it('leaves a decision whose changes all have reasons untouched', () => {
-    const d = { held: false, shares: input.currentShares, changes: [{ purpose: 'BROAD_DISCOVERY', from: 0.2, to: 0.25, reasons: ['x'] }], laneActions: [], capacity: [], notes: [] } as never;
-    expect(withMeasuredReasons(d, input)).toBe(d);
+  it('the recorded tick decision is the allocator\'s own, with no post-processor between them', async () => {
+    const tick = await import('../server/services/goals/tick.ts');
+    expect('withMeasuredReasons' in tick).toBe(false);
   });
 });

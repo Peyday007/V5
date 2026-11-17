@@ -1531,39 +1531,6 @@ async function priorCostAudit(
   };
 }
 
-/**
- * Every share change carries the measured reason it moved (RES-15-5: probe
- * r01.res-15-5 fails a decision that "moves X without a measured reason").
- * `decideResearchAllocation` names a purpose's yield only when it is more than
- * 5% off the measured average, so a purpose whose yield sat near the average —
- * and that no deadline, value, bottleneck or floor touched — still moved when
- * the shares around it were renormalized, and was recorded with no reason at
- * all. That is a measured reason, and it is now written down: its own yield
- * relative to the average, read from the same measurements, and that it moved
- * only because the other purposes' measured yields moved their shares. A change
- * that already has a reason is left as it is. Pure.
- */
-export function withMeasuredReasons(decision: AllocationDecision, input: Pick<AllocationInput, 'purposes'>): AllocationDecision {
-  if (!decision.changes.some((c) => c.reasons.length === 0)) return decision;
-  const yieldOf = (m: PurposeMeasurement | undefined): number | null =>
-    m && typeof m.usefulResults === 'number' && Number.isFinite(m.usefulResults) && typeof m.cost === 'number' && Number.isFinite(m.cost) && m.cost > 0 && m.usefulResults >= 0 ? m.usefulResults / m.cost : null;
-  const yields = new Map<string, number>();
-  for (const m of input.purposes) {
-    const y = yieldOf(m);
-    if (y !== null) yields.set(m.purpose, y);
-  }
-  const mean = yields.size > 0 ? [...yields.values()].reduce((a, b) => a + b, 0) / yields.size : 0;
-  return {
-    ...decision,
-    changes: decision.changes.map((c) => {
-      if (c.reasons.length > 0) return c;
-      const y = yields.get(c.purpose);
-      const own = y !== undefined && mean > 0 ? `useful results per unit cost ${(y / mean).toFixed(2)}× the measured average` : 'its own yield gave no reason to move';
-      return { ...c, reasons: [`${own}; moved only as the other purposes' measured yields moved their shares`] };
-    }),
-  };
-}
-
 /** One allocation pass over the live goals. */
 export async function reallocateResearch(input: { goals: GoalView[]; now?: string }, ports: ResearchAllocationPorts): Promise<ResearchAllocationReport> {
   const untilMs = input.now ? Date.parse(input.now) : Date.now();
@@ -1584,7 +1551,7 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
   const laneCapacity = ports.readLaneCapacity ? await ports.readLaneCapacity(window.until) : [];
   const capacity = new Map(laneCapacity.map((one) => [one.lane, one]));
   const allocationInput = allocationInputFrom(reading, { urgentCommercialGoal, nearestDeadlineDays: deadlines.length ? Math.min(...deadlines) : null, triedRemedies: tried, measuringRemedies: measuring, pressure, capacity, remedyLevers: APPLICABLE_REMEDIES });
-  const decided = withMeasuredReasons(decideResearchAllocation(allocationInput), allocationInput);
+  const decided = decideResearchAllocation(allocationInput);
   const observed = normalizeShares(allocationInput.currentShares);
   // Shares move only on a reading whose cost is shown counted once. A reading
   // that cannot show it moves nothing — the shares in force, no change — and
