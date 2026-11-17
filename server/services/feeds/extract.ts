@@ -31,6 +31,7 @@
 import { employerKey, titleKey } from './detectors.ts';
 import { readMoneyFigures } from '../cash/figures.ts';
 import { readQuantities } from '../cash/volume.ts';
+import { PROBLEM_TITLE, SITE_SOURCE, type SiteProblem } from './sites.ts';
 
 /** The stored item fields extraction reads: `StoredFeedItem`'s shape, nothing more. */
 export interface ExtractableItem {
@@ -111,6 +112,8 @@ const SOURCE_KINDS: Record<string, RecordKind> = {
   // Each side of the HN freelance thread states what it is: a request to buy outside work, or a provider's offer.
   'hn-seeking-freelancer': 'STATED_REQUEST',
   'hn-seeking-work': 'SUPPLIER_AD',
+  // A named business whose own website was observed failing: an observed fact about an organization, never demand.
+  [SITE_SOURCE]: 'PUBLIC_RECORD',
 };
 
 /**
@@ -187,8 +190,32 @@ export function readPlaces(text: string): { place: string; text: string }[] {
   return out;
 }
 
+/**
+ * A broken-site lead line, `<organization> in <City>: <problem phrase>`, read
+ * only when the phrase is exactly one of the site checker's own problem titles
+ * and the organization is the one the record names. Anything else is null:
+ * nothing is guessed. Each span is the exact text of the title.
+ */
+export function readSiteDefect(item: Pick<ExtractableItem, 'source' | 'title' | 'organization'>): { problem: SiteProblem; city: string; cityText: string; phraseText: string } | null {
+  if (item.source !== SITE_SOURCE || !item.organization) return null;
+  for (const [problem, phrase] of Object.entries(PROBLEM_TITLE) as [SiteProblem, string][]) {
+    const tail = `: ${phrase}`;
+    if (!item.title.endsWith(tail)) continue;
+    const head = item.title.slice(0, item.title.length - tail.length);
+    const lead = `${item.organization} in `;
+    if (!head.startsWith(lead)) return null;
+    const city = head.slice(lead.length).trim();
+    if (!/^[A-Z][A-Za-z.' -]{0,40}$/.test(city)) return null;
+    return { problem, city: city.toLowerCase(), cityText: `in ${city}`, phraseText: phrase };
+  }
+  return null;
+}
+
 /** The deliverable a record is about, as a comparable key. Job titles lose seniority and work-mode words. */
 function deliverableOf(item: ExtractableItem, kind: RecordKind): string | null {
+  // A site defect is one deliverable per problem class, not one unique title per business.
+  const defect = readSiteDefect(item);
+  if (defect) return `website-repair:${defect.problem}`;
   const key = kind === 'JOB_POSTING' || ROLE_TITLE_SOURCES.has(item.source) ? titleKey(item.title) : item.title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
   return key || null;
 }
@@ -214,7 +241,10 @@ export function extractItem(item: ExtractableItem): ExtractedFact[] {
       kind === 'STATED_REQUEST' ? 'buyer' : kind === 'SUPPLIER_AD' || kind === 'PLATFORM_PRICE' ? 'provider' : kind === 'JOB_POSTING' ? 'employer' : 'organization';
     push({ key: `${role}:${item.id}`, field: role, value: entity, unit: null, currency: null, evidence: ev('organization', item.organization) });
   }
-  if (deliverable) push({ key: `deliverable:${item.id}`, field: 'deliverable', value: deliverable, unit: null, currency: null, evidence: ev('title', item.title) });
+  const defect = readSiteDefect(item);
+  if (deliverable) push({ key: `deliverable:${item.id}`, field: 'deliverable', value: deliverable, unit: null, currency: null, evidence: ev('title', defect ? defect.phraseText : item.title) });
+  // The city a site-defect line names (it deliberately names no state, so the "City, ST" reader cannot).
+  if (defect) push({ key: `location:${subject}`, field: 'location', value: defect.city, unit: null, currency: null, evidence: ev('title', defect.cityText) });
 
   for (const field of ['title', 'body'] as const) {
     const text = field === 'title' ? item.title : item.body ?? '';
