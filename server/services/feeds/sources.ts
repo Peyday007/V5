@@ -40,6 +40,14 @@ export interface FeedSource {
   cursorUrl?: (since: string) => string;
   parse(body: unknown): FeedItem[];
   /**
+   * Follow-up reads a parser cannot make from one body: an official field of a
+   * record the parsed items refer to (a Federal Register correction's corrected
+   * rule). Given the items and a JSON reader for the same publisher, it returns
+   * the items with what it read added. A follow-up that fails leaves the items
+   * as parsed — the pull is not lost over it, and nothing is inferred instead.
+   */
+  follow?(items: FeedItem[], getJson: (url: string) => Promise<unknown>): Promise<FeedItem[]>;
+  /**
    * What the acquisition pipeline in `run.ts` reads about this source
    * (ACQ-21-3, ACQ-21-4): which corpus or open domain class it is an instance
    * of, the facts it is pulled for, how its real content is reached, and the
@@ -226,10 +234,30 @@ function correctedDocumentNumber(value: unknown): string | null {
   }
 }
 
+/**
+ * The sentence a correction's body carries for the effective date the corrected
+ * rule states in its own `effective_on` ("Corrected rule effective 2026-12-28.").
+ * Deliberately not "Effective …": a correction has no effective date of its own,
+ * and readers of the "Effective" sentence (RULE_EFFECTIVE_SOON@1, @2) must read
+ * exactly what they read before.
+ */
+export const CORRECTED_RULE_EFFECTIVE = 'Corrected rule effective';
+
+const correctedRuleSentence = (date: string): string => `${CORRECTED_RULE_EFFECTIVE} ${date}.`;
+const CORRECTS_RE = /Corrects ([A-Za-z0-9-]+)\./;
+const ISO_DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 /** The Federal Register's documents API: newly published final rules. */
 export function parseFederalRegister(body: unknown): FeedItem[] {
   const results = body && typeof body === 'object' ? (body as Record<string, unknown>)['results'] : null;
   const out: FeedItem[] = [];
+  // A corrected rule published in the same page: its own stated effective_on, read without another request.
+  const effectiveInPage = new Map<string, string>();
+  for (const row of records(results)) {
+    const id = text(row['document_number']);
+    const effective = text(row['effective_on']);
+    if (id && effective && ISO_DAY_RE.test(effective)) effectiveInPage.set(id, effective);
+  }
   for (const row of records(results)) {
     const id = text(row['document_number']);
     const title = text(row['title']);
@@ -246,7 +274,12 @@ export function parseFederalRegister(body: unknown): FeedItem[] {
       url,
       title,
       body:
-        [abstract, effective ? `Effective ${effective}.` : null, corrects ? `Corrects ${corrects}.` : null]
+        [
+          abstract,
+          effective ? `Effective ${effective}.` : null,
+          corrects ? `Corrects ${corrects}.` : null,
+          corrects && effectiveInPage.has(corrects) ? correctedRuleSentence(effectiveInPage.get(corrects)!) : null,
+        ]
           .filter(Boolean)
           .join(' ') || null,
       organization: agencies.join(', ') || null,
@@ -254,6 +287,46 @@ export function parseFederalRegister(body: unknown): FeedItem[] {
     });
   }
   return out;
+}
+
+/** How many document numbers one Federal Register follow-up asks for (its documents endpoint takes a comma-separated list). */
+const FEDERAL_REGISTER_FOLLOW_BATCH = 20;
+
+/**
+ * For every correction whose corrected rule was not in the parsed page, read
+ * that rule's own `effective_on` from the Federal Register documents API (an
+ * official field, never prose) and add it as the corrected-rule sentence. A
+ * rule stating no effective date adds nothing; a failed request adds nothing.
+ */
+export async function followFederalRegisterCorrections(items: FeedItem[], getJson: (url: string) => Promise<unknown>): Promise<FeedItem[]> {
+  const pending = (item: FeedItem): string | null =>
+    item.body && !item.body.includes(CORRECTED_RULE_EFFECTIVE) ? (CORRECTS_RE.exec(item.body)?.[1] ?? null) : null;
+  const wanted = [...new Set(items.map(pending).filter((one): one is string => !!one))];
+  if (wanted.length === 0) return items;
+  const effectiveOf = new Map<string, string>();
+  for (let i = 0; i < wanted.length; i += FEDERAL_REGISTER_FOLLOW_BATCH) {
+    const batch = wanted.slice(i, i + FEDERAL_REGISTER_FOLLOW_BATCH);
+    try {
+      const body = await getJson(
+        `https://www.federalregister.gov/api/v1/documents/${batch.map(encodeURIComponent).join(',')}.json` +
+          '?fields%5B%5D=document_number&fields%5B%5D=effective_on',
+      );
+      // Several numbers answer `{ results: [...] }`; one number answers the document itself.
+      const many = body && typeof body === 'object' && Array.isArray((body as Record<string, unknown>)['results']);
+      for (const row of many ? records((body as Record<string, unknown>)['results']) : records([body])) {
+        const id = text(row['document_number']);
+        const effective = text(row['effective_on']);
+        if (id && batch.includes(id) && effective && ISO_DAY_RE.test(effective)) effectiveOf.set(id, effective);
+      }
+    } catch {
+      // Unknown stays unknown (inv. 39): the correction is stored as parsed.
+    }
+  }
+  return items.map((item) => {
+    const corrects = pending(item);
+    const effective = corrects ? effectiveOf.get(corrects) : undefined;
+    return effective ? { ...item, body: `${item.body} ${correctedRuleSentence(effective)}` } : item;
+  });
 }
 
 /** GDELT's seen-date, `20261026T120000Z`, as ISO. */
@@ -621,6 +694,7 @@ export const FEED_SOURCES: readonly FeedSource[] = [
     // The Federal Register filters by publication date: only rules published since the last read.
     cursorUrl: (since: string) => `${FEDERAL_REGISTER_RULES_URL}&conditions%5Bpublication_date%5D%5Bgte%5D=${since.slice(0, 10)}`,
     parse: parseFederalRegister,
+    follow: followFederalRegisterCorrections,
     acquisition: jsonApi(
       'domain:regulatory-records',
       ['regulatory', 'compliance-deadline'],

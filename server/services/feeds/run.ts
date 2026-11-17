@@ -46,7 +46,7 @@ import { statesNamedIn } from '../../domain/jurisdiction.ts';
 import { openingSourceKey } from '../cash/duplicates.ts';
 import { discoveryAllowed } from '../cash/lifecycle.ts';
 import { DELIVERABLE_LABEL } from '../cash/deliverables/spec.ts';
-import { FEED_SOURCES, pullUrl, type FeedSource } from './sources.ts';
+import { FEED_SOURCES, pullUrl, type FeedItem, type FeedSource } from './sources.ts';
 import { FEED_SHORTLIST_BUCKET } from './bucket.ts';
 import { SITE_SOURCE } from './sites.ts';
 import { CODE_SIGNAL_SOURCE, coveredItems, detectionsForLeads } from './detectors.ts';
@@ -396,6 +396,25 @@ function parseJsonBody(body: string): unknown {
   return JSON.parse(body);
 }
 
+/** A source's follow-up reads over parsed items; one that throws leaves the items as parsed. */
+async function followed(source: FeedSource, items: FeedItem[], getJson: (url: string) => Promise<unknown>): Promise<FeedItem[]> {
+  if (!source.follow || items.length === 0) return items;
+  try {
+    return await source.follow(items, getJson);
+  } catch {
+    return items;
+  }
+}
+
+/** A JSON reader over a conditional read, for a source's follow-up requests. */
+function jsonReader(read: ConditionalRead, headers: Record<string, string>, timeoutMs?: number): (url: string) => Promise<unknown> {
+  return async (url) => {
+    const got = await read(url, null, headers, timeoutMs);
+    if (got.status !== 'MODIFIED') throw new Error(`follow-up ${url} returned no body`);
+    return parseJsonBody(got.body);
+  };
+}
+
 /** Resolve the real content behind a catalog listing. Null when every resource states a constraint. */
 async function resolvedUrl(
   read: ConditionalRead,
@@ -479,7 +498,7 @@ async function acquireSource(
           const body = parseJsonBody(got.body);
           const items = source.parse(body);
           if (items.length === 0 && source.emptyBody?.(body)) emptyShards.add(key);
-          return items;
+          return followed(source, items, jsonReader(deps.read, headers, source.timeoutMs));
         },
       };
       const store: IngestStore = deps.ingestStore ?? {
@@ -521,7 +540,7 @@ async function acquireSource(
           result = { ...base, nothingPublished: true };
           await recordFeedPull({ source: source.id, ok: true, fetched: 0, inserted: 0, error: `${NOTHING_PUBLISHED_MARK}: the provider reports no records`, at });
         } else {
-          const inserted = await insertFeedItems(source.id, items);
+          const inserted = await insertFeedItems(source.id, await followed(source, items, jsonReader(deps.read, headers, source.timeoutMs)));
           result = { ...base, fetched: items.length, inserted, duplicates: Math.max(0, items.length - inserted) };
           await recordFeedPull({ source: source.id, ok: true, fetched: items.length, inserted, error: null, at });
         }
@@ -662,7 +681,8 @@ export async function pullDueFeeds(input: {
     }
     try {
       const body = await (input.fetcher ?? httpFetcher)(ask.url, source.headers ?? {}, source.timeoutMs);
-      const items = source.parse(body);
+      const fetchJson = input.fetcher ?? httpFetcher;
+      const items = await followed(source, source.parse(body), (url) => fetchJson(url, source.headers ?? {}, source.timeoutMs));
       const inserted = await insertFeedItems(source.id, items);
       await recordFeedPull({ source: source.id, ok: true, fetched: items.length, inserted, error: null, at: now.toISOString() });
       out.push({ source: source.id, inserted, error: null, fetched: items.length, duplicates: Math.max(0, items.length - inserted), incremental: ask.incremental });

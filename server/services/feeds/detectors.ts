@@ -491,14 +491,108 @@ export const RULE_EFFECTIVE_SOON_V2: Detector = {
   },
 };
 
+/** The corrected rule's own stated effective date the Federal Register connector writes into a correction's body ("Corrected rule effective 2026-12-28."). Pure. */
+export function correctedRuleEffectiveOf(body: string | null | undefined): string | null {
+  const m = /Corrected rule effective (\d{4}-\d{2}-\d{2})\./.exec(body ?? '');
+  return m ? m[1]! : null;
+}
+
+/**
+ * RULE_EFFECTIVE_SOON, version 3 (SHADOW). Two causes of v2's recorded misses
+ * (DETECTOR_MISSES:RULE_EFFECTIVE_SOON@2), each fixed without lowering a bar:
+ *
+ *  1. The not-already-in-force bar is anchored to the record, not to the run.
+ *     v2's lower bound was the later of publication and one day before *now*,
+ *     so a rule effective on its own publication day (FAA 2026-23073 and
+ *     2026-23072, FCC 2026-23041) left detection a day after publication while
+ *     it stayed a member for the 30-day window — and was counted a miss. v3
+ *     measures it from the day Brain first held the record (its fetch time,
+ *     less v1's one day, bounded below by publication), so a verdict does not
+ *     depend on which day the detector runs. A rule effective before its
+ *     publication, or already in force when Brain first read it, is still
+ *     never kept, and the eight-week upper bound from publication is unchanged.
+ *  2. A correction's date comes from the connector first: the Federal Register
+ *     connector records the corrected rule's own `effective_on` as "Corrected
+ *     rule effective YYYY-MM-DD." (C1-2026-21030), so it no longer depends on
+ *     the corrected rule being stored inside the lookback. v2's stored-record
+ *     lookup stays as the fallback.
+ *
+ * Grouping by the issuing agency (the last listed) is kept from v2, and
+ * free-text dates are still not parsed (Coast Guard 2026-23047 stays out).
+ */
+export const RULE_EFFECTIVE_SOON_V3: Detector = {
+  ...RULE_EFFECTIVE_SOON_V2,
+  version: 3,
+  mode: 'SHADOW',
+  entityKeyOf(organization) {
+    return employerKey(issuingAgencyOf(organization));
+  },
+  detect(records, now) {
+    const ours = records.filter((record) => this.sources.includes(record.source));
+    const effectiveOfDocument = (documentNumber: string): string | null => {
+      const corrected = ours.find((record) => record.url.includes(`/${documentNumber}/`));
+      return corrected ? effectiveDateOf(corrected.body) : null;
+    };
+    const dayOf = (at: number) => Date.parse(`${new Date(at).toISOString().slice(0, 10)}T00:00:00.000Z`);
+    const groups = new Map<string, { name: string; members: { record: DetectorRecord; effective: string }[] }>();
+    for (const record of ours) {
+      const name = issuingAgencyOf(record.organization);
+      const agency = this.entityKeyOf!(record.organization);
+      if (!agency || !name) continue;
+      if (!withinMemberWindow(this, record.publishedAt, record.fetchedAt, now)) continue;
+      const published = Date.parse(record.publishedAt ?? record.fetchedAt);
+      const held = Date.parse(record.fetchedAt);
+      if (!Number.isFinite(published) || !Number.isFinite(held)) continue;
+      const corrects = correctedDocumentOf(record.body);
+      const effective =
+        effectiveDateOf(record.body) ?? correctedRuleEffectiveOf(record.body) ?? (corrects ? effectiveOfDocument(corrects) : null);
+      if (!effective) continue;
+      const at = Date.parse(`${effective}T00:00:00.000Z`);
+      const publishedDay = dayOf(published);
+      // Lower bound: not before its own publication, and not already in force for more than a day
+      // when Brain first held it. Upper bound: eight weeks after publication. Neither reads the run clock.
+      const from = Math.max(publishedDay, held - DAY);
+      if (!Number.isFinite(at) || at < from || at > publishedDay + RULE_EFFECTIVE_SOON_V2_LEAD_DAYS * DAY) continue;
+      const group = groups.get(agency) ?? { name, members: [] };
+      group.members.push({ record, effective });
+      groups.set(agency, group);
+    }
+    const out: DetectedSignal[] = [];
+    for (const [agency, group] of [...groups].sort((a, b) => a[0].localeCompare(b[0]))) {
+      const dates = group.members.map((one) => one.effective).sort();
+      out.push({
+        groupKey: `agency:${agency}`,
+        label: `${group.members.length} final rule(s) from one agency taking effect by ${dates[dates.length - 1]}`,
+        entityKey: agency,
+        entityName: group.name,
+        category: 'REGULATION',
+        windowFrom: `${dates[0]}T00:00:00.000Z`,
+        windowTo: `${dates[dates.length - 1]}T00:00:00.000Z`,
+        memberIds: group.members.map((one) => one.record.id),
+        memberTitles: group.members.map((one) => one.record.title),
+        sourceUrls: [...new Set(group.members.map((one) => one.record.url))],
+        qualifiers: [
+          'a rule taking effect names who is regulated, not who will pay for help complying',
+          'the effective date is the one the Federal Register states; a delay or stay is not read',
+          'a correction carries the effective date the corrected rule states, read by the connector or from the stored record',
+          'whether a rule was already in force is judged on the day Brain first held it',
+        ],
+        hypothesis: `Businesses this agency regulates must comply by ${dates[0]}; some may buy a plain compliance summary or checklist. Not established.`,
+        deliverable: 'DOCUMENT',
+      });
+    }
+    return out;
+  },
+};
+
 /**
  * Every installed rule. Adding one is a new entry here and its tests — nothing else.
- * RULE_EFFECTIVE_SOON v1 stays exported so its recorded rows and readings keep their key (@1).
+ * RULE_EFFECTIVE_SOON v1 and v2 stay exported so their recorded rows and readings keep their keys (@1, @2).
  * A model may propose a rule only as a Factory objective (reviewed code, starting
  * in SHADOW); no model output installs, edits or promotes a rule at run time.
  * `proposeRuleRepair` is how a rule's repeated misses become that objective.
  */
-export const DETECTORS: readonly Detector[] = [CONCENTRATED_HIRING, REPEATED_DEMAND, RULE_EFFECTIVE_SOON_V2];
+export const DETECTORS: readonly Detector[] = [CONCENTRATED_HIRING, REPEATED_DEMAND, RULE_EFFECTIVE_SOON_V3];
 
 // ---------------------------------------------------------------------------
 // SHADOW before ACTIVE: readings, promotion and rollback, from rows
