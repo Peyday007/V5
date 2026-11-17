@@ -148,7 +148,18 @@ export async function discoveryConcurrencyFor(projectId: string): Promise<number
  * - **hold** otherwise, and step at most once per `LANE_STEP_MS`, so missions
  *   that have not yet queued their fragments are not counted as idle room.
  *
- * Bounded by `LANE_LIFT_MAX` above the floor. It is concurrency, not money: the
+ * "The grant is full" is read as demand, not as an instant: the grant binds when
+ * more of the project's launchable ideas wait than it has free slots, and it is
+ * within one step of full. Production, 2026-11-17 08:28Z: the launch pass
+ * refills freed slots each tick, so a two-minute sample of `live >= current`
+ * caught 13 of 16 held while 568 ideas waited, and read it as "not full". A
+ * grant far below full is not grown (its launches are failing for some other
+ * reason, and a bigger grant would not fix that).
+ *
+ * Bounded above the floor by `LANE_LIFT_MAX`, or by the lane's proven room in
+ * slots when that is larger (`freeLaneProvenSlots`: a GPU batching 128
+ * sequences is room for more than 48 missions; the spare and the pressure
+ * readings still decide each step). It is concurrency, not money: the
  * grant still writes `max_external_spend = 0`, and the lane's GPU is paid by
  * the hour whether it is fed or not. Fairness and order are unchanged: each
  * project's grant moves by its own reading, and the launch pass still takes the
@@ -167,6 +178,8 @@ export interface LaneReading {
   waiting: number;
   /** The lane controller's last pressure reading, or null when this process has none. */
   pressure: { db: boolean; cpu: number } | null;
+  /** The lane's proven room in slots (`freeLaneProvenSlots`); lifts the bound above `LANE_LIFT_MAX` when larger. */
+  slots?: number;
 }
 
 /**
@@ -180,9 +193,11 @@ export function laneAdaptiveCeiling(input: {
   current: number;
   live: number;
   lane: LaneReading | null;
+  /** The project's launchable ideas now (`launchableInProject`); absent reads the grant as full only when every slot is held. */
+  waitingIdeas?: number;
 }): { target: number; why: string } {
   const { floor, lane } = input;
-  const max = floor + LANE_LIFT_MAX;
+  const max = floor + Math.max(LANE_LIFT_MAX, Math.floor(lane?.slots ?? 0));
   const current = Math.min(max, Math.max(floor, input.current));
   if (!lane) return { target: floor, why: 'the free lane is not configured or cannot be read: the surfaces on record' };
   const pressed = lane.pressure !== null && (lane.pressure.db || (lane.pressure.cpu >= LANE_CPU_SHRINK && lane.waiting > 0));
@@ -196,10 +211,15 @@ export function laneAdaptiveCeiling(input: {
         : `the free lane's queue is backing up (${lane.waiting} job(s) waiting, no spare)`,
     };
   }
-  if (!pressed && lane.spare > 0 && input.live >= current && current < max) {
+  const free = Math.max(0, current - input.live);
+  const binding = free === 0 || ((input.waitingIdeas ?? 0) > free && free <= LANE_GROW_STEP_MAX);
+  if (!pressed && lane.spare > 0 && binding && current < max) {
     return {
       target: Math.min(max, current + Math.min(LANE_GROW_STEP_MAX, lane.spare)),
-      why: `every slot is held and the free lane has ${lane.spare} spare surface(s) with ${lane.waiting} job(s) waiting`,
+      why:
+        free === 0
+          ? `every slot is held and the free lane has ${lane.spare} spare surface(s) with ${lane.waiting} job(s) waiting`
+          : `${input.waitingIdeas} launchable idea(s) wait beside ${free} free slot(s) and the free lane has ${lane.spare} spare surface(s) with ${lane.waiting} job(s) waiting`,
     };
   }
   return { target: current, why: 'the free lane neither has spare beside a full grant nor is backing up' };
@@ -212,12 +232,13 @@ async function readLane(nowMs: number): Promise<LaneReading | null> {
   try {
     const { laneConfig } = await import('../cheap/lane.ts');
     if (!laneConfig()) return null;
-    const { freeLaneSpareSurfaces, lastControlReading, waitingNow } = await import('../freeLane/capacity.ts');
+    const { freeLaneProvenSlots, freeLaneSpareSurfaces, lastControlReading, waitingNow } = await import('../freeLane/capacity.ts');
     const reading = lastControlReading();
     return {
       spare: await freeLaneSpareSurfaces(nowMs),
       waiting: await waitingNow(),
       pressure: reading ? { db: reading.pressure.db, cpu: reading.pressure.cpu } : null,
+      slots: await freeLaneProvenSlots(),
     };
   } catch {
     return null;
@@ -239,11 +260,14 @@ export async function adaptiveDiscoveryConcurrency(
   if (!laneConfig()) return laneAdaptiveCeiling({ floor, current: goal.maxConcurrent, live: 0, lane: null });
   const last = laneSteps.get(goal.id) ?? 0;
   if (goal.maxConcurrent >= floor && nowMs - last < LANE_STEP_MS) {
-    return { target: Math.min(floor + LANE_LIFT_MAX, goal.maxConcurrent), why: 'held: the lane was read less than two minutes ago' };
+    return { target: goal.maxConcurrent, why: 'held: the lane was read less than two minutes ago' };
   }
   const lane = await readLane(nowMs);
   const { live } = await spendTotals(goal.id, 'MISSION', authorityNow());
-  const next = laneAdaptiveCeiling({ floor, current: goal.maxConcurrent, live, lane });
+  const waitingIdeas = await import('../russell/loop.ts')
+    .then(({ launchableInProject }) => launchableInProject(projectId))
+    .catch(() => undefined);
+  const next = laneAdaptiveCeiling({ floor, current: goal.maxConcurrent, live, lane, ...(waitingIdeas === undefined ? {} : { waitingIdeas }) });
   laneSteps.set(goal.id, nowMs);
   return next;
 }
