@@ -55,7 +55,7 @@ import { commitReadings, emptyDeltaIndex, foldSlices, planDelta, recordIdentity,
 import { nameKeyOf, resolveIdentities, type IdentityCollision, type IdentityLink, type IdentityRecord } from '../knowledge/identity.ts';
 import { selectForDeepening, type DeepeningCandidate, type DeepeningDecision, type DeepeningResult } from '../knowledge/deepening.ts';
 import { judgeStructure, plannedStage, planProcessing, type Executor, type PlannedStage, type ProcessingPlan, type RouteEvidence, type Stage } from '../knowledge/processingGraph.ts';
-import { funnelGain, readFunnel, type FunnelReading, type FunnelRecord } from '../knowledge/funnel.ts';
+import { addFunnelReadings, funnelGain, readFunnel, readStoredFunnel, type FunnelReading, type FunnelRecord } from '../knowledge/funnel.ts';
 import { addExtractedItems, currentEventGraph, syncEventGraph, type ExtractedItemsUpdate, type GraphHypothesis } from '../industry/eventGraph.ts';
 import { constructFromGraph, type MissingLinkQuestion } from '../cash/construct.ts';
 import type { Weakness } from '../../domain/improvement.ts';
@@ -946,7 +946,16 @@ export interface ExtractionPass {
   /** Selective deepening of the unreadable and contested candidates, against measured capacity. */
   deepening?: { capacity: number; threshold: number | null; promoted: DeepeningDecision[]; held: DeepeningDecision[] };
   /** The intelligence funnel for this pass, and what it gained: raw intake beside usable intelligence. */
-  funnel?: { reading: FunnelReading; gain: { raw: number; usableIntelligence: number; falseSpeed: boolean } };
+  funnel?: {
+    /** This pass alone: its records at each stage, with evidence and decisions recorded since the previous pass. */
+    reading: FunnelReading;
+    /** The previous pass's cumulative reading plus this one: what Brain has understood across passes. */
+    cumulative: FunnelReading;
+    /** Start of the window the downstream stages (evidence accepted, goal decisions) were read over. */
+    since: string;
+    /** `cumulative` against the previous pass's cumulative reading. */
+    gain: { raw: number; usableIntelligence: number; falseSpeed: boolean };
+  };
   /** A stage that failed this pass; the pass is still recorded and the stage is named. */
   stageFailures?: { stage: string; error: string }[];
   /**
@@ -1067,6 +1076,49 @@ async function measuredDeepeningCapacity(projectId: string): Promise<number> {
  * code: it runs when every model provider is down. Returns the pass written, or
  * null when nothing new arrived.
  */
+/** Rows read per downstream funnel stage per pass; a longer window is read on the next pass. */
+export const FUNNEL_DOWNSTREAM_LIMIT = 5_000;
+
+/**
+ * The funnel's downstream stages, each from its own rows over (since, until]:
+ * evidence accepted is a lead screen's answer (verified only when a model said
+ * KEEP) or a detector's coverage, one record per item; a goal-impacting
+ * decision is a shortlist round taking a stored record into research.
+ */
+export async function downstreamFunnelRecords(since: string, until: string): Promise<{ evidence: FunnelRecord[]; decisions: FunnelRecord[] }> {
+  const db = getDb();
+  const screens = await db.all<{ subject_id: string; output: string | null; created_at: string }>(
+    `SELECT subject_id, output, created_at FROM cheap_results
+      WHERE kind = 'SCREEN_LEAD' AND ok = 1 AND subject_id IS NOT NULL AND created_at > ? AND created_at <= ?
+      ORDER BY created_at, id LIMIT ?`,
+    [since, until, FUNNEL_DOWNSTREAM_LIMIT],
+  );
+  const covered = await db.all<{ item_id: string; covered_at: string }>(
+    `SELECT item_id, covered_at FROM feed_item_coverage WHERE covered_at > ? AND covered_at <= ? ORDER BY covered_at, item_id LIMIT ?`,
+    [since, until, FUNNEL_DOWNSTREAM_LIMIT],
+  );
+  const byItem = new Map<string, { observedAt: string; verified: boolean }>();
+  const accept = (id: string, at: string, verified: boolean) => {
+    const held = byItem.get(id);
+    byItem.set(id, { observedAt: held && held.observedAt > at ? held.observedAt : at, verified: (held?.verified ?? false) || verified });
+  };
+  for (const row of screens) accept(row.subject_id, row.created_at, (row.output ?? '').includes('"verdict":"KEEP"'));
+  for (const row of covered) accept(row.item_id, row.covered_at, true);
+  const evidence: FunnelRecord[] = [...byItem.entries()].map(([id, e]) => ({ id, fingerprint: `evidence:${id}`, observedAt: e.observedAt, verified: e.verified }));
+  const shortlisted = await db.all<{ id: string; shortlisted_round_id: string; shortlisted_at: string }>(
+    `SELECT id, shortlisted_round_id, shortlisted_at FROM feed_items
+      WHERE shortlisted_round_id IS NOT NULL AND shortlisted_at > ? AND shortlisted_at <= ?
+      ORDER BY shortlisted_at, id LIMIT ?`,
+    [since, until, FUNNEL_DOWNSTREAM_LIMIT],
+  );
+  const decisions: FunnelRecord[] = shortlisted.map((row) => ({
+    id: row.id,
+    fingerprint: `${row.shortlisted_round_id}:${row.id}`,
+    observedAt: row.shortlisted_at,
+  }));
+  return { evidence, decisions };
+}
+
 export async function recordFeedExtraction(input: {
   projectId: string;
   now?: Date;
@@ -1078,21 +1130,31 @@ export async function recordFeedExtraction(input: {
 }): Promise<ExtractionPass | null> {
   const now = input.now ?? new Date();
   const db = getDb();
-  const recent = await db.all<{ detail: string | null }>(
-    `SELECT detail FROM cash_events WHERE project_id = ? AND kind = ? ORDER BY created_at DESC, id DESC LIMIT ?`,
+  const recent = await db.all<{ detail: string | null; created_at: string }>(
+    `SELECT detail, created_at FROM cash_events WHERE project_id = ? AND kind = ? ORDER BY created_at DESC, id DESC LIMIT ?`,
     [input.projectId, EXTRACTION_EVENT, DELTA_LOOKBACK_PASSES],
   );
   let from: { fetchedAt: string; id: string } | null = null;
   let priorHistory: ParserHistory = {};
+  // The funnel the previous pass ended at (cumulative), and when it was recorded: this pass's gain is measured against it.
+  let priorFunnel: FunnelReading = readFunnel({});
+  const priorPassAt: string | null = recent[0]?.created_at ?? null;
   const slices: unknown[] = [];
   for (const [i, row] of recent.entries()) {
     try {
-      const parsed = JSON.parse(row.detail ?? '{}') as { cursor?: { to?: { fetchedAt?: unknown; id?: unknown } }; deltaIndex?: unknown; parserHistory?: unknown };
+      const parsed = JSON.parse(row.detail ?? '{}') as {
+        cursor?: { to?: { fetchedAt?: unknown; id?: unknown } };
+        deltaIndex?: unknown;
+        parserHistory?: unknown;
+        funnel?: { reading?: unknown; cumulative?: unknown };
+      };
       slices.push(parsed.deltaIndex);
       if (i !== 0) continue;
       const to = parsed.cursor?.to;
       if (to && typeof to.fetchedAt === 'string' && typeof to.id === 'string') from = { fetchedAt: to.fetchedAt, id: to.id };
       priorHistory = readParserHistory(parsed.parserHistory, EXTRACTOR_VERSION);
+      // A row from before the cumulative reading existed carries only its own pass: that is where the total starts.
+      priorFunnel = readStoredFunnel(parsed.funnel?.cumulative) ?? readStoredFunnel(parsed.funnel?.reading) ?? priorFunnel;
     } catch {
       // An unreadable row contributes no slice; when it is the newest, the cursor starts again at the lead window.
     }
@@ -1392,6 +1454,17 @@ export async function recordFeedExtraction(input: {
       }
     : undefined;
 
+  // Evidence accepted and goal-impacting decisions are read from their own rows, recorded since the previous
+  // pass: a screen's verdict or a detector's coverage, and a shortlist round taking a record into research.
+  const sinceFunnel = priorPassAt ?? floor;
+  let downstream: { evidence: FunnelRecord[]; decisions: FunnelRecord[] } | null = null;
+  try {
+    if (input.failStages?.includes('funnelRecords')) throw new Error('stage funnelRecords failed on request');
+    downstream = await downstreamFunnelRecords(sinceFunnel, nowIsoText);
+  } catch (error) {
+    stageFailures.push({ stage: 'funnelRecords', error: errorText(error) });
+  }
+
   // The funnel: raw intake beside what this pass actually understood.
   const funnel = stage('funnel', undefined as ExtractionPass['funnel'], () => {
     const fingerprintOfItem = new Map((deltaPlan?.changes ?? []).map((c) => [c.identity, c.fingerprint]));
@@ -1407,13 +1480,15 @@ export async function recordFeedExtraction(input: {
           observedAt: f.observedAt,
           status: (reconciledStatus.get(f.key) ?? null) as FunnelRecord['status'],
         })),
-        EVIDENCE_ACCEPTED: [],
+        EVIDENCE_ACCEPTED: downstream?.evidence ?? [],
         RELATIONSHIPS_UPDATED: relationshipLinks.map((l) => ({ id: l.entityId, fingerprint: `${l.entityId}:${l.refs.join(',')}` })),
-        GOAL_DECISIONS: [],
+        GOAL_DECISIONS: downstream?.decisions ?? [],
       },
       { now },
     );
-    return { reading, gain: funnelGain(readFunnel({}), reading) };
+    // Gain is measured against the reading the previous pass ended at, never against nothing.
+    const cumulative = addFunnelReadings(priorFunnel, reading);
+    return { reading, cumulative, since: sinceFunnel, gain: funnelGain(priorFunnel, cumulative) };
   });
 
   const pass: ExtractionPass = {

@@ -124,3 +124,45 @@ export function funnelGain(before: FunnelReading, after: FunnelReading): { raw: 
   const usableIntelligence = after.usableIntelligence - before.usableIntelligence;
   return { raw, usableIntelligence, falseSpeed: raw > 0 && usableIntelligence <= 0 };
 }
+
+/**
+ * Two readings added stage by stage: the previous pass's cumulative reading
+ * plus this pass's. Counts are carried, not records, so a record two passes
+ * both read is kept apart by the delta (an unchanged record is not read again),
+ * never by this sum.
+ */
+export function addFunnelReadings(a: FunnelReading, b: FunnelReading): FunnelReading {
+  const stages = FUNNEL_STAGES.map((stage): StageReading => {
+    const x = a.stages.find((s) => s.stage === stage);
+    const y = b.stages.find((s) => s.stage === stage);
+    const excluded = emptyExclusions();
+    for (const reason of EXCLUSION_REASONS) excluded[reason] = (x?.excluded[reason] ?? 0) + (y?.excluded[reason] ?? 0);
+    return { stage, raw: (x?.raw ?? 0) + (y?.raw ?? 0), usable: (x?.usable ?? 0) + (y?.usable ?? 0), excluded };
+  });
+  const excluded = emptyExclusions();
+  let raw = 0;
+  let usableIntelligence = 0;
+  for (const reading of stages) {
+    raw += reading.raw;
+    if (reading.stage !== 'RAW_INTAKE') usableIntelligence += reading.usable;
+    for (const reason of EXCLUSION_REASONS) excluded[reason] += reading.excluded[reason];
+  }
+  return { stages, raw, usableIntelligence, excluded };
+}
+
+const count = (value: unknown): number => (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0);
+
+/** A reading as a stored row carries it, re-derived from its stage counts; null when the value is not a reading. */
+export function readStoredFunnel(value: unknown): FunnelReading | null {
+  if (!value || typeof value !== 'object' || !Array.isArray((value as { stages?: unknown }).stages)) return null;
+  const stored = (value as { stages: unknown[] }).stages;
+  const stages = FUNNEL_STAGES.map((stage): StageReading => {
+    const one = stored.find((s) => !!s && typeof s === 'object' && (s as { stage?: unknown }).stage === stage) as
+      | { raw?: unknown; usable?: unknown; excluded?: Record<string, unknown> }
+      | undefined;
+    const excluded = emptyExclusions();
+    for (const reason of EXCLUSION_REASONS) excluded[reason] = count(one?.excluded?.[reason]);
+    return { stage, raw: count(one?.raw), usable: count(one?.usable), excluded };
+  });
+  return addFunnelReadings({ stages: [], raw: 0, usableIntelligence: 0, excluded: emptyExclusions() }, { stages, raw: 0, usableIntelligence: 0, excluded: emptyExclusions() });
+}
