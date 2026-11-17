@@ -52,9 +52,9 @@ import { SITE_SOURCE } from './sites.ts';
 import { CODE_SIGNAL_SOURCE, coveredItems, detectionsForLeads } from './detectors.ts';
 import { EXTRACTOR_VERSION, extractItem, extractItems, MODEL_BATCH_SIZE, type ExtractableItem, type ExtractedFact } from './extract.ts';
 import { commitReadings, planDelta, readDeltaIndex, recordIdentity, type DeltaIndex, type DeltaPlan, type DeltaStatus, type RecordReading } from '../knowledge/delta.ts';
-import { resolveIdentities, type IdentityCollision, type IdentityLink, type IdentityRecord } from '../knowledge/identity.ts';
+import { nameKeyOf, resolveIdentities, type IdentityCollision, type IdentityLink, type IdentityRecord } from '../knowledge/identity.ts';
 import { selectForDeepening, type DeepeningCandidate, type DeepeningDecision, type DeepeningResult } from '../knowledge/deepening.ts';
-import { planProcessing, type ProcessingPlan, type RouteEvidence } from '../knowledge/processingGraph.ts';
+import { judgeStructure, plannedStage, planProcessing, type Executor, type PlannedStage, type ProcessingPlan, type RouteEvidence, type Stage } from '../knowledge/processingGraph.ts';
 import { funnelGain, readFunnel, type FunnelReading, type FunnelRecord } from '../knowledge/funnel.ts';
 import { addExtractedItems, currentEventGraph, syncEventGraph, type ExtractedItemsUpdate, type GraphHypothesis } from '../industry/eventGraph.ts';
 import { constructFromGraph, type MissingLinkQuestion } from '../cash/construct.ts';
@@ -951,6 +951,47 @@ export interface ExtractionPass {
   stageFailures?: { stage: string; error: string }[];
   /** The fingerprint index the next pass classifies against (bounded to the most recently seen records). */
   deltaIndex?: DeltaIndex;
+  /**
+   * What each source's plan actually ran this pass, with the executor the plan gave it and how many
+   * records it ran over: the plan decides, and this is the record that it did. `planned` is false only
+   * when the planner failed and the source ran as code.
+   */
+  stagesRun?: StageRun[];
+  /** The parser's measured record per source under one parser version, which the next pass's plans read. */
+  parserHistory?: { parserVersion: string; sources: ParserHistory };
+}
+
+export interface StageRun {
+  sourceId: string;
+  stage: Stage;
+  executor: Executor;
+  records: number;
+  planned: boolean;
+}
+
+/** Per source: records the parser read, records it could read, the value they put at stake, and whether they carried quantities. */
+export type ParserHistory = Record<string, { runs: number; successes: number; decisionValue: number; reconstructs: boolean }>;
+
+/**
+ * The carried parser history, or empty when it is absent, malformed or from another parser version:
+ * a new parser has no record yet, and an old parser's record is never credited to it.
+ */
+export function readParserHistory(raw: unknown, parserVersion: string): ParserHistory {
+  if (!raw || typeof raw !== 'object') return {};
+  const { parserVersion: version, sources } = raw as { parserVersion?: unknown; sources?: unknown };
+  if (version !== parserVersion || !sources || typeof sources !== 'object') return {};
+  const out: ParserHistory = {};
+  for (const [id, one] of Object.entries(sources as Record<string, unknown>)) {
+    const h = one as { runs?: unknown; successes?: unknown; decisionValue?: unknown; reconstructs?: unknown };
+    if (typeof h?.runs !== 'number' || typeof h.successes !== 'number' || h.runs < 0 || h.successes < 0 || h.successes > h.runs) continue;
+    out[id] = {
+      runs: h.runs,
+      successes: h.successes,
+      decisionValue: typeof h.decisionValue === 'number' && h.decisionValue > 0 ? h.decisionValue : 1,
+      reconstructs: h.reconstructs === true,
+    };
+  }
+  return out;
 }
 
 export interface ExtractionDelta {
@@ -1045,11 +1086,13 @@ export async function recordFeedExtraction(input: {
   );
   let from: { fetchedAt: string; id: string } | null = null;
   let priorIndex: DeltaIndex = readDeltaIndex(null);
+  let priorHistory: ParserHistory = {};
   try {
-    const parsed = JSON.parse(last?.detail ?? '{}') as { cursor?: { to?: { fetchedAt?: unknown; id?: unknown } }; deltaIndex?: unknown };
+    const parsed = JSON.parse(last?.detail ?? '{}') as { cursor?: { to?: { fetchedAt?: unknown; id?: unknown } }; deltaIndex?: unknown; parserHistory?: unknown };
     const to = parsed.cursor?.to;
     if (to && typeof to.fetchedAt === 'string' && typeof to.id === 'string') from = { fetchedAt: to.fetchedAt, id: to.id };
     priorIndex = readDeltaIndex(parsed.deltaIndex);
+    priorHistory = readParserHistory(parsed.parserHistory, EXTRACTOR_VERSION);
   } catch {
     from = null;
   }
@@ -1107,7 +1150,7 @@ export async function recordFeedExtraction(input: {
   const statusOfIdentity = new Map((deltaPlan?.changes ?? []).map((c) => [c.identity, c.status]));
   const toRead = deltaPlan ? new Set(deltaPlan.toRead) : null;
   const claimed = new Set<string>();
-  const readItems = toRead
+  const deltaItems = toRead
     ? items.filter((item) => {
         const identity = identityOfItem.get(item.id)!;
         if (!toRead.has(identity) || claimed.has(identity)) return false;
@@ -1116,24 +1159,127 @@ export async function recordFeedExtraction(input: {
       })
     : items;
 
+  // Processing graph, judged before anything is read: one plan per source, from that source's own
+  // evidence (its declared format and route, its checkpoint and delta, its parser's measured history,
+  // the names its records carry), and the plan decides which stages run on its records and whether a
+  // stage goes to code or to the model (KNOW-25-1). A source the planner could not judge runs as code
+  // did before, and the failure is named.
+  const capacity = input.capacity ?? (await measuredDeepeningCapacity(input.projectId));
+  const bySource = new Map<string, ExtractableItem[]>();
+  for (const item of items) bySource.set(item.source, [...(bySource.get(item.source) ?? []), item]);
+  const nameOf = (item: ExtractableItem) => ((item.organization ?? '').trim() === '' ? '' : nameKeyOf('ENTITY', item.organization!));
+  const recordsByName = new Map<string, number>();
+  const sourcesByName = new Map<string, Set<string>>();
+  for (const item of deltaItems) {
+    const key = nameOf(item);
+    if (!key) continue;
+    recordsByName.set(key, (recordsByName.get(key) ?? 0) + 1);
+    sourcesByName.set(key, new Set([...(sourcesByName.get(key) ?? []), item.source]));
+  }
+  const plans = stage<ProcessingPlan[] | null>('processingGraph', null, () =>
+    [...bySource.entries()].map(([sourceId, sourceItems]) => {
+      const feed = FEED_SOURCES.find((s) => s.id === sourceId);
+      const pending = sourceItems.filter((item) => deltaItems.includes(item));
+      const hasCheckpoint = Object.values(priorIndex.records).some((h) => h.identity.startsWith(`${sourceId}\u0000`));
+      const statuses = sourceItems.map((item) => statusOfIdentity.get(identityOfItem.get(item.id) ?? ''));
+      const history = priorHistory[sourceId] ?? null;
+      const establishedEntityMappings = Object.values(priorIndex.entityMappings).some((m) => m.setBy.startsWith(`${sourceId}\u0000`));
+      const names = pending.map(nameOf).filter((key) => key !== '');
+      return planProcessing(
+        {
+          sourceId,
+          structure: judgeStructure(feed?.acquisition?.access.format, sourceItems),
+          // The publisher is the authority for what it states only when the source names it and the terms it publishes under.
+          authoritative: !!(feed?.acquisition?.provenance.publisher && feed.acquisition.provenance.license),
+          routes: [routeOf(sourceId, sourceItems)],
+          hasCheckpoint,
+          contentChanged: deltaPlan ? statuses.some((st) => st !== 'UNCHANGED') : null,
+          // The parser's measured record on this source under the current parser version, never this pass's own result.
+          priorParserRuns: history?.runs ?? 0,
+          priorParserSuccesses: history?.successes ?? 0,
+          establishedEntityMappings,
+          // One name on several records must be told apart or joined before anything is matched.
+          identityCollisionsSuspected: names.some((key) => (recordsByName.get(key) ?? 0) > 1),
+          timeSeries: sourceItems.some((item) => !!item.publishedAt),
+        },
+        {
+          questionId: `feed-extraction:${sourceId}`,
+          decision: 'which stored records reach research through the shortlist',
+          // What this source's records last put at stake; with no history, the unit value, never a favourable guess.
+          decisionValue: history?.decisionValue ?? 1,
+          uncertainty: history && history.runs > 0 ? 1 - history.successes / history.runs : 1,
+          needsReconstruction: history ? history.reconstructs : (feed?.acquisition?.factKinds.length ?? 0) > 0,
+          needsRelationships: names.some((key) => (sourcesByName.get(key)?.size ?? 0) > 1),
+          novel: !hasCheckpoint,
+        },
+        { llmIdleShare: capacity > 0 ? 1 : 0 },
+      );
+    }),
+  );
+  const planOf = new Map((plans ?? []).map((p) => [p.sourceId, p]));
+  /** The stage as the source's plan runs it; UNPLANNED when the planner failed; null when the plan leaves it out. */
+  const planned = (sourceId: string, name: Stage): PlannedStage | 'UNPLANNED' | null => {
+    if (!plans) return 'UNPLANNED';
+    const plan = planOf.get(sourceId);
+    return plan ? plannedStage(plan, name) : null;
+  };
+  const executorOf = (sourceId: string, name: Stage): Executor | null => {
+    const one = planned(sourceId, name);
+    return one === null ? null : one === 'UNPLANNED' ? 'CODE' : one.executor;
+  };
+  const stagesRun: StageRun[] = [];
+  const ran = (sourceId: string, name: Stage, count: number) => {
+    if (count === 0) return;
+    const executor = executorOf(sourceId, name) ?? 'CODE';
+    const plan = planOf.get(sourceId);
+    stagesRun.push({ sourceId, stage: name, executor, records: count, planned: !!plan });
+  };
+  const countBy = (list: readonly ExtractableItem[]) => {
+    const counts = new Map<string, number>();
+    for (const item of list) counts.set(item.source, (counts.get(item.source) ?? 0) + 1);
+    return counts;
+  };
+  for (const plan of plans ?? []) {
+    if (plan.status === 'UNCHANGED') ran(plan.sourceId, 'CHANGE_DATA_CAPTURE', bySource.get(plan.sourceId)!.length);
+  }
+
+  // Parse and normalize only the records whose source's plan runs that stage; the rest are not read.
+  const readItems = deltaItems.filter((item) => planned(item.source, 'PARSE_NORMALIZE') !== null);
+  for (const [sourceId, count] of countBy(readItems)) {
+    if (planned(sourceId, 'CHANGE_DATA_CAPTURE') !== null && plans) ran(sourceId, 'CHANGE_DATA_CAPTURE', count);
+    ran(sourceId, 'PARSE_NORMALIZE', count);
+    // Code extraction reconciles every fact against the others and keeps its exact span: the next two stages.
+    ran(sourceId, 'CONTRADICTION_FRESHNESS', count);
+    ran(sourceId, 'EVIDENCE_ATTACHMENT', count);
+  }
   const run = extractItems(readItems, now);
   // Structure feeds Connect: what was just read goes into the event graph that construction reads,
-  // under the ids the graph's own sync gives these rows, so neither path makes a second fact.
+  // under the ids the graph's own sync gives these rows, so neither path makes a second fact. Only
+  // records whose plan detects events are handed over; the graph's own sync still reads every row.
+  const eventItems = readItems.filter((item) => planned(item.source, 'EVENT_DETECTION') !== null);
   let graph: ExtractedItemsUpdate | null = null;
   try {
-    graph = readItems.length > 0 ? addExtractedItems(readItems) : null;
+    graph = eventItems.length > 0 ? addExtractedItems(eventItems) : null;
+    if (graph) for (const [sourceId, count] of countBy(eventItems)) ran(sourceId, 'EVENT_DETECTION', count);
   } catch (error) {
     console.warn(`[feeds] extraction pass could not reach the event graph: ${String((error as Error)?.message ?? error)}`);
   }
   const lastRow = rows[rows.length - 1]!;
-  const needsModel = run.needsModel.map((batch) => batch.map((one) => one.id));
-  const unreadable = new Set(needsModel.flat());
+  const unreadable = new Set(run.needsModel.flat().map((one) => one.id));
+  // A record the code parser could not read goes to the model only when its source's plan gives parsing to
+  // the model (no tested parser for content that needs interpreting). Under a tested parser of structured
+  // content, an unreadable record carries no signal the model would add, and it is held, not spent on.
+  const needsModel = run.needsModel
+    .map((batch) => batch.filter((one) => executorOf(one.source, 'PARSE_NORMALIZE') === 'LLM').map((one) => one.id))
+    .filter((batch) => batch.length > 0);
+  const toModel = new Set(needsModel.flat());
   const factsByItem = new Map<string, ExtractedFact[]>();
   for (const f of run.facts) factsByItem.set(f.evidence.itemId, [...(factsByItem.get(f.evidence.itemId) ?? []), f]);
 
-  // Identity: the pass's named entities, linked only when an attribute corroborates it; collisions are kept apart.
+  // Identity: the named entities of records whose plan identifies entities, linked only when an attribute
+  // corroborates it; collisions are kept apart.
   const identityRecords: IdentityRecord[] = readItems
-    .filter((item) => (item.organization ?? '').trim() !== '')
+    .filter((item) => (item.organization ?? '').trim() !== '' && planned(item.source, 'ENTITY_IDENTIFICATION') !== null)
     .map((item) => {
       const place = (factsByItem.get(item.id) ?? []).map((f) => f.scope.jurisdiction).find((j): j is string => !!j) ?? null;
       return { ref: item.id, source: item.source, kind: 'ENTITY' as const, name: item.organization!, location: place };
@@ -1144,15 +1290,30 @@ export async function recordFeedExtraction(input: {
     if (held) established[r.ref] = held.entityId;
   }
   const resolution = stage('identity', null as ReturnType<typeof resolveIdentities> | null, () => resolveIdentities({ records: identityRecords, established }));
+  if (resolution) for (const [sourceId, count] of countBy(readItems.filter((item) => identityRecords.some((r) => r.ref === item.id)))) ran(sourceId, 'ENTITY_IDENTIFICATION', count);
+  const sourceOfItem = new Map(readItems.map((item) => [item.id, item.source]));
+  // A cross-source link is a relationship update only for a source whose plan extracts relationships.
+  const relationshipLinks = (resolution?.links ?? []).filter(
+    (l) => l.sources.length > 1 && l.refs.some((ref) => planned(sourceOfItem.get(ref) ?? '', 'RELATIONSHIP_EXTRACTION') !== null),
+  );
+  for (const [sourceId, count] of countBy(readItems.filter((item) => relationshipLinks.some((l) => l.refs.includes(item.id))))) ran(sourceId, 'RELATIONSHIP_EXTRACTION', count);
 
-  // Selective deepening: unreadable items and contested keys, promoted by value of information within measured capacity.
-  const capacity = input.capacity ?? (await measuredDeepeningCapacity(input.projectId));
+  // Selective deepening: what the plans gave the model — unreadable records under a model parse, identity
+  // the plan judged ambiguous, relationships the plan judged consequential — and contested keys, promoted
+  // by value of information within measured capacity.
   const noveltyOf = (itemId: string) => {
     const status = statusOfIdentity.get(identityOfItem.get(itemId) ?? '');
     return status === 'NEW' ? 1 : status === 'CHANGED' ? 0.5 : status === 'REPARSE' ? 0.25 : 0;
   };
+  const llmFor = (refs: readonly string[], name: Stage) => refs.some((ref) => executorOf(sourceOfItem.get(ref) ?? '', name) === 'LLM');
   const candidates: DeepeningCandidate[] = [
-    ...readItems.filter((item) => unreadable.has(item.id)).map((item) => ({ id: `item:${item.id}`, decisionValue: 1, uncertainty: 1, novelty: noveltyOf(item.id) })),
+    ...readItems.filter((item) => toModel.has(item.id)).map((item) => ({ id: `item:${item.id}`, decisionValue: 1, uncertainty: 1, novelty: noveltyOf(item.id) })),
+    ...(resolution?.collisions ?? [])
+      .filter((c) => llmFor(c.refs, 'ENTITY_IDENTIFICATION'))
+      .map((c) => ({ id: `entity:${c.refs.join('+')}`, decisionValue: 1, uncertainty: 0.5, novelty: Math.max(...c.refs.map(noveltyOf)), contradicted: true })),
+    ...relationshipLinks
+      .filter((l) => llmFor(l.refs, 'RELATIONSHIP_EXTRACTION'))
+      .map((l) => ({ id: `link:${l.entityId}`, decisionValue: statedValue(l.refs.flatMap((id) => factsByItem.get(id) ?? [])), uncertainty: 0.5, novelty: Math.max(0, ...l.refs.map(noveltyOf)) })),
     ...run.reconciled
       .filter((r) => r.status === 'CONTESTED')
       .map((r) => {
@@ -1168,45 +1329,20 @@ export async function recordFeedExtraction(input: {
   ];
   const deepened = stage('deepening', null as ReturnType<typeof selectForDeepening> | null, () => selectForDeepening(candidates, { capacity }));
 
-  // Processing graph: one judgment per source in the pass, from that source's own evidence.
-  const bySource = new Map<string, ExtractableItem[]>();
-  for (const item of items) bySource.set(item.source, [...(bySource.get(item.source) ?? []), item]);
-  const collidingRefs = new Set([...(resolution?.collisions ?? []).flatMap((c) => c.refs), ...(resolution?.uncorroborated ?? []).flatMap((u) => u.refs)]);
-  const crossSourceRefs = new Set((resolution?.links ?? []).filter((l) => l.sources.length > 1).flatMap((l) => l.refs));
-  const plans = stage<ProcessingPlan[] | null>('processingGraph', null, () =>
-    [...bySource.entries()].map(([sourceId, sourceItems]) => {
-      const read = sourceItems.filter((item) => readItems.includes(item));
-      const readable = read.filter((item) => !unreadable.has(item.id)).length;
-      const facts = read.flatMap((item) => factsByItem.get(item.id) ?? []);
-      const hasCheckpoint = Object.values(priorIndex.records).some((h) => h.identity.startsWith(`${sourceId}\u0000`));
-      const statuses = sourceItems.map((item) => statusOfIdentity.get(identityOfItem.get(item.id) ?? ''));
-      return planProcessing(
-        {
-          sourceId,
-          structure: 'SEMI_STRUCTURED',
-          authoritative: false,
-          routes: [routeOf(sourceId, sourceItems)],
-          hasCheckpoint,
-          contentChanged: deltaPlan ? statuses.some((st) => st !== 'UNCHANGED') : null,
-          priorParserRuns: read.length,
-          priorParserSuccesses: readable,
-          establishedEntityMappings: Object.values(priorIndex.entityMappings).some((m) => m.setBy.startsWith(`${sourceId}\u0000`)),
-          identityCollisionsSuspected: sourceItems.some((item) => collidingRefs.has(item.id)),
-          timeSeries: sourceItems.some((item) => !!item.publishedAt),
-        },
-        {
-          questionId: `feed-extraction:${sourceId}`,
-          decision: 'which stored records reach research through the shortlist',
-          decisionValue: statedValue(facts),
-          uncertainty: read.length === 0 ? 0 : (read.length - readable) / read.length,
-          needsReconstruction: facts.some((f) => f.measureKind !== null),
-          needsRelationships: sourceItems.some((item) => crossSourceRefs.has(item.id)),
-          novel: !hasCheckpoint,
-        },
-        { llmIdleShare: capacity > 0 ? 1 : 0 },
-      );
-    }),
-  );
+  // The parser's record on each source, carried to the next pass's plan: what it read, what it could read,
+  // and what the records put at stake.
+  const parserHistory: ParserHistory = { ...priorHistory };
+  for (const [sourceId, count] of countBy(readItems)) {
+    const read = readItems.filter((item) => item.source === sourceId);
+    const facts = read.flatMap((item) => factsByItem.get(item.id) ?? []);
+    const before = priorHistory[sourceId];
+    parserHistory[sourceId] = {
+      runs: (before?.runs ?? 0) + count,
+      successes: (before?.successes ?? 0) + read.filter((item) => !unreadable.has(item.id)).length,
+      decisionValue: statedValue(facts),
+      reconstructs: facts.some((f) => f.measureKind !== null),
+    };
+  }
 
   // Commit what was read to the index the next pass classifies against.
   const readings: RecordReading[] = readItems.map((item) => {
@@ -1253,7 +1389,7 @@ export async function recordFeedExtraction(input: {
           status: (reconciledStatus.get(f.key) ?? null) as FunnelRecord['status'],
         })),
         EVIDENCE_ACCEPTED: [],
-        RELATIONSHIPS_UPDATED: (resolution?.links ?? []).filter((l) => l.sources.length > 1).map((l) => ({ id: l.entityId, fingerprint: `${l.entityId}:${l.refs.join(',')}` })),
+        RELATIONSHIPS_UPDATED: relationshipLinks.map((l) => ({ id: l.entityId, fingerprint: `${l.entityId}:${l.refs.join(',')}` })),
         GOAL_DECISIONS: [],
       },
       { now },
@@ -1279,6 +1415,7 @@ export async function recordFeedExtraction(input: {
     },
     graph,
     processingGraph: plans ?? [],
+    stagesRun,
     ...(delta ? { delta } : {}),
     identity: resolution ? { links: resolution.links, collisions: resolution.collisions, uncorroborated: resolution.uncorroborated.length } : { links: [], collisions: [], uncorroborated: 0 },
     deepening: deepened
@@ -1288,6 +1425,7 @@ export async function recordFeedExtraction(input: {
     stageFailures,
     // Carried forward unchanged when this pass could not commit, so the next pass still classifies against something.
     deltaIndex: nextIndex ?? priorIndex,
+    parserHistory: { parserVersion: EXTRACTOR_VERSION, sources: parserHistory },
   };
   const contested = pass.reconciled.filter((r) => r.status === 'CONTESTED').length;
   const stale = pass.reconciled.filter((r) => r.status === 'STALE').length;
@@ -1298,7 +1436,7 @@ export async function recordFeedExtraction(input: {
     summary:
       `Deterministic extraction over ${pass.items} stored item(s): ${pass.facts.length} normalized fact(s), each linked to its item and text; ` +
       `${pass.reconciled.length} fact key(s), ${contested} contested and ${stale} stale; ${pass.readable} item(s) read by code, ` +
-      `${needsModel.flat().length} the parser could not read, in ${needsModel.length} batch(es) of up to ${MODEL_BATCH_SIZE}: ` +
+      `${unreadable.size} the parser could not read, ${needsModel.flat().length} of them given to the model by their source's processing graph, in ${needsModel.length} batch(es) of up to ${MODEL_BATCH_SIZE}: ` +
       'the free-model screen takes those first, one call per batch and model for every batch of two or more, ' +
       'and asks record by record only about what a batch answer left unanswered. ' +
       `${pass.demand.statedRequest} fact(s) from a record stating a request; none is a confirmed buyer. ` +
