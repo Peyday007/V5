@@ -56,7 +56,7 @@ import { constructFromGraph, type MissingLinkQuestion } from '../cash/construct.
 import type { Weakness } from '../../domain/improvement.ts';
 import { recordBinEvent } from '../../repos/bins.ts';
 import { recordCorporaEvaluation, type CorporaEvaluation, type CorpusNeed } from './corpora.ts';
-import { conditionalFetcher, contentHashOf, httpTransport, resolveAccess, type ConditionalResult, type Transport, type Validators } from './access.ts';
+import { conditionalFetcher, contentHashOf, httpTransport, preferredReadable, resolveAccess, type ConditionalResult, type Transport, type Validators } from './access.ts';
 import { feedIngestStore, ingestShards, type IngestStore, type ShardedSource } from './ingest.ts';
 import type { SourceAcquisition } from './sources.ts';
 
@@ -362,12 +362,23 @@ function parseJsonBody(body: string): unknown {
 }
 
 /** Resolve the real content behind a catalog listing. Null when every resource states a constraint. */
-async function resolvedUrl(read: ConditionalRead, listingUrl: string, headers: Record<string, string>, timeoutMs?: number): Promise<{ url: string | null; reason: string }> {
-  const listing = await read(listingUrl, null, headers, timeoutMs);
+async function resolvedUrl(
+  read: ConditionalRead,
+  acq: SourceAcquisition & { listingUrl: string },
+  headers: Record<string, string>,
+  timeoutMs?: number,
+): Promise<{ url: string | null; reason: string }> {
+  const listing = await read(acq.listingUrl, null, headers, timeoutMs);
   if (listing.status !== 'MODIFIED') return { url: null, reason: 'the listing returned no body' };
-  const access = resolveAccess(parseJsonBody(listing.body), listingUrl);
+  const access = resolveAccess(parseJsonBody(listing.body), acq.listingUrl);
   if (!access.preferred) return { url: null, reason: access.handoff ?? 'the listing names no resource that carries the data' };
-  return { url: access.preferred.url, reason: access.preferred.note };
+  // The resource this source's parser can read, in the ranking resolveAccess made: a bulk ZIP is never handed to a JSON parser.
+  const readable = preferredReadable(access, acq.access.format);
+  if (!readable) {
+    return { url: null, reason: `the listing names no automatable resource readable as ${acq.access.format} (resources: ${access.resources.map((r) => `${r.format ?? '?'} ${r.kind}`).join(', ') || 'none'})` };
+  }
+  const query = acq.resourceQuery ? `${readable.url.includes('?') ? '&' : '?'}${acq.resourceQuery.replace(/^[?&]/, '')}` : '';
+  return { url: `${readable.url}${query}`, reason: readable.note };
 }
 
 /**
@@ -405,10 +416,10 @@ async function acquireSource(
   let result: FeedPullResult = base;
   let validators: Validators | null = null;
   let resolvedFrom: string | null = null;
+  let url = ask.url;
   try {
-    let url = ask.url;
     if (acq.listingUrl) {
-      const resolved = await resolvedUrl(deps.read, acq.listingUrl, headers, source.timeoutMs);
+      const resolved = await resolvedUrl(deps.read, acq as SourceAcquisition & { listingUrl: string }, headers, source.timeoutMs);
       if (!resolved.url) {
         await deps.record({ eventType: FEED_ACQUISITION_EVENT, provider: source.id, workloadClass: 'acquisition', outcome: 'PERMISSION_NEED', reason: resolved.reason.slice(0, 480), evidenceClass: 'MEASURED', measures: { corpus: acq.corpus, listingUrl: acq.listingUrl } });
         return { ...base, skipped: resolved.reason.slice(0, 300) };
@@ -475,7 +486,7 @@ async function acquireSource(
     measures: {
       corpus: acq.corpus,
       corpusScore: decision.score,
-      location: ask.url,
+      location: url,
       resolvedFrom,
       retrievedAt: at,
       validators,

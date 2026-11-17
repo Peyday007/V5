@@ -307,6 +307,36 @@ export function resolveAccess(listing: unknown, listingUrl: string | null = null
   };
 }
 
+/** A URL that names a packed archive: whatever format a catalog states, its body is not the records themselves. */
+const ARCHIVE_URL = /\.(zip|t?gz|gzip|bz2|xz|7z|tar)(\?|$)/i;
+/** Formats a JSON reader can parse as they arrive. */
+const JSON_READABLE = new Set(['JSON', 'GEOJSON']);
+
+/**
+ * Whether a reader that parses `format` (a source's declared access format)
+ * can read this resource's body as it arrives. A catalog's "JSON" link to a
+ * `.json.zip` is an archive, never a JSON body; an API resource with no stated
+ * format (or `API`) answers JSON, the common case a JSON reader expects, and
+ * health classifies it as a broken parser if it does not. Pure.
+ */
+export function readableAs(resource: Pick<ResolvedResource, 'url' | 'format' | 'kind' | 'automatable'>, format: string): boolean {
+  if (!resource.automatable || resource.kind === 'LANDING_PAGE') return false;
+  if (ARCHIVE_URL.test(resource.url)) return false;
+  const want = format.toUpperCase();
+  const have = resource.format?.toUpperCase() ?? null;
+  if (want === 'JSON') return (have !== null && JSON_READABLE.has(have)) || (resource.kind === 'API' && (have === null || have === 'API' || have === 'JSON'));
+  return have === want;
+}
+
+/**
+ * The best resource of a resolved listing that a reader of `format` can read:
+ * the ranking `resolveAccess` made, narrowed to what the reader parses, so a
+ * bulk ZIP is never handed to a JSON parser. Null when none qualifies. Pure.
+ */
+export function preferredReadable(access: ResolvedAccess, format: string): ResolvedResource | null {
+  return access.resources.find((r) => readableAs(r, format)) ?? null;
+}
+
 // ---------------------------------------------------------------------------
 // Conditional fetching
 // ---------------------------------------------------------------------------

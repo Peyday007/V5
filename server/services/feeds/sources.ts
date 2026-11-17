@@ -73,6 +73,12 @@ export interface SourceAcquisition {
    * the resource that carries the data, and that resource is read instead.
    */
   listingUrl?: string;
+  /**
+   * Query parameters appended to the resource a listing resolves to (paging,
+   * ordering), in the provider's own vocabulary. The resource is still the one
+   * the listing named; this only narrows what is asked of it.
+   */
+  resourceQuery?: string;
   access: {
     /** The format of the real content, upper case (JSON, CSV, ZIP …). */
     format: string;
@@ -296,6 +302,89 @@ export function parseHnFreelance(side: HnFreelanceSide): (body: unknown) => Feed
   };
 }
 
+/**
+ * SEC EDGAR full-text search hits (`efts.sec.gov/LATEST/search-index`):
+ * `{ hits: { hits: [{ _id: "<accession>:<file>", _source: { adsh, ciks, display_names, form, file_date, file_description, items, biz_locations } }] } }`.
+ * A filing is a dated, named company's own statement of what it did; it is
+ * company activity, never by itself a request to buy work.
+ */
+export function parseEdgarFullText(body: unknown): FeedItem[] {
+  const outer = body && typeof body === 'object' ? (body as Record<string, unknown>)['hits'] : null;
+  const hits = outer && typeof outer === 'object' ? (outer as Record<string, unknown>)['hits'] : null;
+  const out: FeedItem[] = [];
+  for (const row of records(hits)) {
+    const id = text(row['_id']);
+    const src = row['_source'] && typeof row['_source'] === 'object' ? (row['_source'] as Record<string, unknown>) : null;
+    if (!id || !src) continue;
+    const adsh = text(src['adsh']) ?? id.split(':')[0] ?? null;
+    const file = id.includes(':') ? id.slice(id.indexOf(':') + 1) : null;
+    const cik = Array.isArray(src['ciks']) ? text(src['ciks'][0]) : null;
+    const form = text(src['form']) ?? text(src['root_form']);
+    const names = Array.isArray(src['display_names']) ? src['display_names'].map(text).filter((n): n is string => !!n) : [];
+    // "ACME CORP  (ACME)  (CIK 0000123456)" → "ACME CORP"
+    const organization = names[0]?.replace(/\s*\(CIK \d+\)\s*$/i, '').replace(/\s*\([A-Z0-9.,\s-]+\)\s*$/, '').trim() || null;
+    if (!adsh || !cik || !form || !organization) continue;
+    const folder = `https://www.sec.gov/Archives/edgar/data/${String(Number(cik))}/${adsh.replace(/-/g, '')}`;
+    const items = Array.isArray(src['items']) ? src['items'].map(text).filter(Boolean).join(', ') : '';
+    const places = Array.isArray(src['biz_locations']) ? src['biz_locations'].map(text).filter(Boolean).join('; ') : '';
+    const description = text(src['file_description']);
+    out.push({
+      externalId: id.slice(0, 500),
+      url: file ? `${folder}/${file}` : `${folder}/`,
+      title: `${form}${description ? ` (${description})` : ''}: ${organization}`.slice(0, 200),
+      body: [items ? `Items ${items}.` : null, places ? `Business location: ${places}.` : null].filter(Boolean).join(' ') || null,
+      organization,
+      publishedAt: isoOrNull(src['file_date']),
+    });
+  }
+  return out;
+}
+
+/**
+ * The CFPB Consumer Complaint Database search API, the resource Data.gov's
+ * listing of the dataset points to: an Elasticsearch-shaped
+ * `{ hits: { hits: [{ _source: { complaint_id, company, product, issue, date_received, ... } }] } }`.
+ * A complaint names a company and the problem its customers report; it is a
+ * dated observation about a business, never a request to buy work.
+ */
+export function parseCfpbComplaints(body: unknown): FeedItem[] {
+  const outer = body && typeof body === 'object' ? (body as Record<string, unknown>)['hits'] : null;
+  const hits = outer && typeof outer === 'object' ? (outer as Record<string, unknown>)['hits'] : null;
+  const out: FeedItem[] = [];
+  for (const row of records(hits)) {
+    const src = row['_source'] && typeof row['_source'] === 'object' ? (row['_source'] as Record<string, unknown>) : row;
+    const raw = src['complaint_id'] ?? row['_id'];
+    const id = typeof raw === 'number' || typeof raw === 'string' ? String(raw).trim() : '';
+    const company = text(src['company']);
+    const product = text(src['product']);
+    const issue = text(src['issue']);
+    if (!id || !company || !(product || issue)) continue;
+    const parts = [
+      text(src['sub_product']) ? `Product: ${product ?? ''} / ${text(src['sub_product'])}.` : product ? `Product: ${product}.` : null,
+      text(src['sub_issue']) ? `Detail: ${text(src['sub_issue'])}.` : null,
+      text(src['state']) ? `State: ${text(src['state'])}.` : null,
+      text(src['company_response']) ? `Company response: ${text(src['company_response'])}.` : null,
+    ].filter(Boolean);
+    out.push({
+      externalId: id,
+      url: `https://www.consumerfinance.gov/data-research/consumer-complaints/search/detail/${encodeURIComponent(id)}`,
+      title: `${product ?? 'Complaint'}${issue ? `: ${issue}` : ''}`.slice(0, 200),
+      body: parts.join(' ') || null,
+      organization: company,
+      publishedAt: isoOrNull(src['date_received']),
+    });
+  }
+  return out;
+}
+
+/** The last `count` completed UTC days before `now`, oldest first, as YYYY-MM-DD. Pure. */
+export function completedUtcDays(now: Date, count: number): string[] {
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const out: string[] = [];
+  for (let back = count; back >= 1; back -= 1) out.push(new Date(today - back * 86_400_000).toISOString().slice(0, 10));
+  return out;
+}
+
 /** The acquisition metadata of a JSON API read with plain conditional GETs. */
 function jsonApi(
   corpus: string,
@@ -371,6 +460,84 @@ function gdelt(id: string, label: string, query: string): FeedSource {
 }
 
 
+/**
+ * SEC EDGAR's keyless full-text search over 8-K current reports, read as a
+ * sharded corpus: one shard is one completed filing day. A finished day's
+ * filings do not change, so each day is read once, checkpointed, and never
+ * asked again; an interrupted pass resumes at the first unread day, and a new
+ * day is the only new shard (ACQ-21-4 step 3). The SEC's fair-access rules
+ * hold on every request: a declared User-Agent naming the operator (the
+ * deployment sets `SEC_EDGAR_USER_AGENT` to its own name and contact) and far
+ * below ten requests a second. A refusal is a permission need health records,
+ * never something read around.
+ */
+export const EDGAR_8K_QUERY = '"new facility" OR "expansion" OR "acquisition" OR "new headquarters"';
+export const EDGAR_SHARD_DAYS = 3;
+export const EDGAR_SNAPSHOT = 'efts/8-K/v1';
+
+export function edgarFullTextUrl(day: string, from = 0): string {
+  const params = new URLSearchParams({ q: EDGAR_8K_QUERY, forms: '8-K', dateRange: 'custom', startdt: day, enddt: day });
+  if (from > 0) params.set('from', String(from));
+  return `https://efts.sec.gov/LATEST/search-index?${params.toString()}`;
+}
+
+function edgarCurrentReports(): FeedSource {
+  return {
+    id: 'sec-edgar-8k',
+    label: 'SEC EDGAR: 8-K current reports of company activity',
+    url: edgarFullTextUrl(completedUtcDays(new Date(), 1)[0]!),
+    intervalMs: 12 * HOUR,
+    headers: { 'user-agent': process.env['SEC_EDGAR_USER_AGENT']?.trim() || 'Brain research-operations brain-feed/1.0' },
+    // Fair access: at most ten requests a second; Brain asks far less often.
+    spacingMs: 1_000,
+    timeoutMs: 30_000,
+    parse: parseEdgarFullText,
+    shards: (now: Date) => ({ snapshot: EDGAR_SNAPSHOT, keys: completedUtcDays(now, EDGAR_SHARD_DAYS), url: (day: string) => edgarFullTextUrl(day) }),
+    acquisition: {
+      corpus: 'sec-edgar',
+      factKinds: ['company-filing', 'company-activity'],
+      maxAgeDays: EDGAR_SHARD_DAYS + 1,
+      access: {
+        format: 'JSON',
+        updateMechanism: 'PAGED_API',
+        authentication: 'NONE',
+        usage: 'SEC fair access: a declared User-Agent, no more than 10 requests a second; one completed filing day per shard',
+      },
+      provenance: { publisher: 'U.S. Securities and Exchange Commission (EDGAR)', license: 'public filings; SEC website terms and fair-access rules', parserVersion: 'sec-edgar-efts/1' },
+    },
+  };
+}
+
+/**
+ * The CFPB Consumer Complaint Database, reached the way the corpus says Data.gov
+ * must be: the catalog's CKAN `package_show` is a listing, never the data, so
+ * each pull resolves it (`resolveAccess`) to the provider's own resource and
+ * reads that — the newest complaints, conditionally — never the catalog record
+ * (ACQ-21-4 step 2). A bulk archive the listing names is not handed to the JSON
+ * parser; Data.gov being public says nothing about pursuing government work.
+ */
+export const DATA_GOV_CFPB_LISTING = 'https://catalog.data.gov/api/3/action/package_show?id=consumer-complaint-database';
+
+function dataGovCfpbComplaints(): FeedSource {
+  return {
+    id: 'data-gov-cfpb-complaints',
+    label: 'Data.gov → CFPB consumer complaints about named companies',
+    // The listing; every pull resolves it to the resource that carries the data.
+    url: DATA_GOV_CFPB_LISTING,
+    intervalMs: 24 * HOUR,
+    timeoutMs: 60_000,
+    parse: parseCfpbComplaints,
+    acquisition: {
+      corpus: 'data-gov',
+      factKinds: ['government-dataset', 'regulatory'],
+      listingUrl: DATA_GOV_CFPB_LISTING,
+      resourceQuery: 'size=100&sort=created_date_desc&no_aggs=true',
+      access: { format: 'JSON', updateMechanism: 'CONDITIONAL_FETCH', authentication: 'NONE', usage: 'public API of the listed provider; the listing is metadata only and is resolved on every pull' },
+      provenance: { publisher: 'Consumer Financial Protection Bureau, listed on Data.gov', license: 'U.S. government work, public domain', parserVersion: 'data-gov-cfpb/1' },
+    },
+  };
+}
+
 const FEDERAL_REGISTER_RULES_URL =
   'https://www.federalregister.gov/api/v1/documents.json?per_page=100&order=newest' +
   '&conditions%5Btype%5D%5B%5D=RULE' +
@@ -423,4 +590,8 @@ export const FEED_SOURCES: readonly FeedSource[] = [
   gdelt('news-shutdown', 'News: a tool businesses use shutting down', '("shutting down" OR "will be discontinued" OR "end of support" OR "sunsetting") (platform OR software OR app OR service)'),
   gdelt('news-closures', 'News: a competitor closing, leaving customers behind', '("closing all" OR "closes its doors" OR "going out of business") (business OR company OR store)'),
   gdelt('news-event-rush', 'News: an event businesses are rushing to prepare for', '("ahead of" OR "in time for") ("holiday season" OR "black friday" OR "tax season" OR "open enrollment" OR "festival")'),
+  // A large corpus read in checkpointed, resumable shards (ACQ-21-4 step 3).
+  edgarCurrentReports(),
+  // A catalog listing resolved to the provider's real resource (ACQ-21-4 step 2).
+  dataGovCfpbComplaints(),
 ];

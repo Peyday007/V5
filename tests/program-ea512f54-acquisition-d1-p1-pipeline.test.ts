@@ -250,3 +250,154 @@ describe('yield ranking', () => {
     expect(log.filter((l) => l.startsWith('fetch:'))).toEqual([`fetch:https://feed.test/${useful}`, `fetch:https://feed.test/${volume}`]);
   });
 });
+
+/**
+ * Review finding R1-2: per-shard checkpoints, resume and "a catalog listing is
+ * not the underlying dataset" existed only in tests, because no production
+ * source declared `shards` or `acquisition.listingUrl`. These tests drive the
+ * production entries themselves, so removing either one fails here.
+ */
+describe('production sources exercise sharded ingestion and listing resolution', () => {
+  const edgar = () => FEED_SOURCES.find((s) => s.id === 'sec-edgar-8k')!;
+  const cfpb = () => FEED_SOURCES.find((s) => s.id === 'data-gov-cfpb-complaints')!;
+
+  it('the production catalog declares a sharded corpus and a listing-backed source', () => {
+    expect(FEED_SOURCES.some((s) => typeof s.shards === 'function')).toBe(true);
+    expect(FEED_SOURCES.some((s) => !!s.acquisition?.listingUrl)).toBe(true);
+    expect(edgar().acquisition?.corpus).toBe('sec-edgar');
+    expect(cfpb().acquisition?.corpus).toBe('data-gov');
+    expect(cfpb().acquisition?.listingUrl).toMatch(/^https:\/\/catalog\.data\.gov\/api\/3\/action\/package_show\?id=/);
+  });
+
+  it('the EDGAR corpus shards by completed filing day, never today, and declares a User-Agent', () => {
+    const plan = edgar().shards!(new Date('2026-11-17T09:00:00Z'));
+    expect(plan.keys).toEqual(['2026-11-14', '2026-11-15', '2026-11-16']);
+    expect(plan.url('2026-11-15')).toContain('startdt=2026-11-15');
+    expect(plan.url('2026-11-15')).toContain('enddt=2026-11-15');
+    expect(plan.url('2026-11-15')).toContain('forms=8-K');
+    expect(edgar().headers?.['user-agent']).toBeTruthy();
+    expect(edgar().spacingMs).toBeGreaterThanOrEqual(100);
+  });
+
+  const edgarBody = (day: string, n: number) =>
+    JSON.stringify({
+      hits: {
+        hits: [
+          {
+            _id: `0000000000-26-00000${n}:form8k-${day}.htm`,
+            _source: {
+              adsh: `0000000000-26-00000${n}`,
+              ciks: ['0000123456'],
+              display_names: [`ACME ${n} CORP  (ACM)  (CIK 0000123456)`],
+              form: '8-K',
+              file_date: day,
+              file_description: 'Current report',
+              items: ['2.01', '8.01'],
+              biz_locations: ['Austin, TX'],
+            },
+          },
+        ],
+      },
+    });
+
+  it('the EDGAR source is checkpointed per day, resumes after an interruption and never re-asks a finished day', async () => {
+    const saved: ShardCheckpoint[] = [];
+    const store: IngestStore = {
+      checkpoints: async () => [...saved],
+      saveCheckpoint: async (c) => {
+        saved.push(c);
+      },
+      store: async (s, items) => (await import('../server/repos/feeds.ts')).insertFeedItems(s, items),
+    };
+    let failDay: string | null = '2026-11-15';
+    const fetched: string[] = [];
+    const { deps } = harness(
+      async (url, headers) => {
+        expect(headers['user-agent']).toBeTruthy();
+        fetched.push(url);
+        const day = /startdt=(\d{4}-\d{2}-\d{2})/.exec(url)![1]!;
+        if (day === failDay) return { status: 503, headers: {}, body: '' };
+        return { status: 200, headers: {}, body: edgarBody(day, Number(day.slice(-1))) };
+      },
+      { ingestStore: store },
+    );
+    const t0 = new Date('2026-11-17T09:00:00Z');
+    const first = await pullDueFeeds({ now: t0, sources: [edgar()], acquisition: deps });
+    expect(first[0]).toMatchObject({ source: 'sec-edgar-8k', error: 'HTTP 503', inserted: 1 });
+    expect(saved.map((c) => c.shard)).toEqual(['2026-11-14']);
+    expect(saved[0]!.snapshot).toBe('efts/8-K/v1');
+    expect(Object.values(saved[0]!.hashes)[0]).toMatch(/^[0-9a-f]{64}$/);
+
+    failDay = null;
+    fetched.length = 0;
+    const second = await pullDueFeeds({ now: new Date(t0.getTime() + 13 * HOUR), sources: [edgar()], acquisition: deps });
+    expect(second[0]).toMatchObject({ error: null, resumedPast: ['2026-11-14'], inserted: 2 });
+    expect(fetched.map((u) => /startdt=([\d-]+)/.exec(u)![1])).toEqual(['2026-11-15', '2026-11-16']);
+
+    // The next day only the new day is read; the three finished days are never asked again.
+    fetched.length = 0;
+    const third = await pullDueFeeds({ now: new Date(t0.getTime() + 26 * HOUR), sources: [edgar()], acquisition: deps });
+    expect(third[0]).toMatchObject({ error: null, resumedPast: ['2026-11-15', '2026-11-16'], inserted: 1 });
+    expect(fetched.map((u) => /startdt=([\d-]+)/.exec(u)![1])).toEqual(['2026-11-17']);
+
+    const rows = await getDb().all<{ title: string; organization: string; url: string }>(`SELECT title, organization, url FROM feed_items WHERE source = 'sec-edgar-8k' ORDER BY external_id`);
+    expect(rows.length).toBe(4);
+    expect(rows[0]).toMatchObject({ organization: 'ACME 4 CORP', title: '8-K (Current report): ACME 4 CORP' });
+    expect(rows[0]!.url).toBe('https://www.sec.gov/Archives/edgar/data/123456/000000000026000004/form8k-2026-11-14.htm');
+  });
+
+  const listing = {
+    success: true,
+    result: {
+      title: 'Consumer Complaint Database',
+      license_title: 'Public Domain',
+      resources: [
+        { url: 'https://catalog.data.gov/dataset/consumer-complaint-database', format: 'HTML', name: 'catalog page' },
+        { url: 'https://files.consumerfinance.gov/ccdb/complaints.json.zip', format: 'JSON', name: 'Complete dataset (JSON, zipped)' },
+        { url: 'https://files.consumerfinance.gov/ccdb/complaints.csv.zip', format: 'CSV', name: 'Complete dataset (CSV, zipped)' },
+        { url: 'https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/', format: 'API', name: 'Consumer complaint API' },
+      ],
+    },
+  };
+  const complaints = JSON.stringify({
+    hits: {
+      hits: [
+        { _source: { complaint_id: 9001, company: 'Example Lending LLC', product: 'Mortgage', issue: 'Trouble during payment process', date_received: '2026-11-16T00:00:00-05:00', state: 'TX', company_response: 'In progress' } },
+        { _source: { complaint_id: 9002, company: '', product: 'Mortgage', issue: 'no company: dropped' } },
+      ],
+    },
+  });
+
+  it('the Data.gov source reads the provider resource the listing names, never the listing, page or zipped archive', async () => {
+    const fetched: string[] = [];
+    const { deps, events } = harness(async (url) => {
+      fetched.push(url);
+      if (url === cfpb().acquisition!.listingUrl) return { status: 200, headers: {}, body: JSON.stringify(listing) };
+      if (url.startsWith('https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/')) return { status: 200, headers: { etag: '"c1"' }, body: complaints };
+      return { status: 500, headers: {}, body: 'should not be read' };
+    });
+    const out = await pullDueFeeds({ sources: [cfpb()], acquisition: deps });
+    expect(out[0]).toMatchObject({ source: 'data-gov-cfpb-complaints', error: null, fetched: 1, inserted: 1 });
+    expect(fetched).toEqual([
+      cfpb().acquisition!.listingUrl,
+      'https://www.consumerfinance.gov/data-research/consumer-complaints/search/api/v1/?size=100&sort=created_date_desc&no_aggs=true',
+    ]);
+    const provenance = events.find((e) => e.eventType === FEED_ACQUISITION_EVENT && e.provider === 'data-gov-cfpb-complaints' && e.outcome === 'INGESTED');
+    expect(provenance?.measures).toMatchObject({ corpus: 'data-gov', resolvedFrom: cfpb().acquisition!.listingUrl, location: fetched[1] });
+    const row = await getDb().get<{ organization: string; title: string }>(`SELECT organization, title FROM feed_items WHERE source = 'data-gov-cfpb-complaints'`);
+    expect(row).toMatchObject({ organization: 'Example Lending LLC', title: 'Mortgage: Trouble during payment process' });
+  });
+
+  it('a listing that names only archives is recorded as unresolved access, and no archive is parsed as JSON', async () => {
+    const fetched: string[] = [];
+    const onlyArchives = { result: { resources: listing.result.resources.slice(0, 3) } };
+    const { deps, events } = harness(async (url) => {
+      fetched.push(url);
+      return { status: 200, headers: {}, body: JSON.stringify(onlyArchives) };
+    });
+    const out = await pullDueFeeds({ sources: [cfpb()], acquisition: deps });
+    expect(out[0]!.skipped).toMatch(/readable as JSON/);
+    expect(fetched).toEqual([cfpb().acquisition!.listingUrl]);
+    expect(events.some((e) => e.provider === 'data-gov-cfpb-complaints' && e.outcome === 'PERMISSION_NEED')).toBe(true);
+  });
+});
