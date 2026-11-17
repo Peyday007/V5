@@ -108,7 +108,8 @@ describe('a model whose answers stop being usable', () => {
     expect(first.opened).toEqual([`${GPU}|RESEARCH_FRAGMENT`]);
     const incident = first.incidents[0]!;
     expect(incident).toMatchObject({ model: GPU, workType: 'RESEARCH_FRAGMENT', accepted: 0, rejected: 6, waiting: 3, noFunctioningModel: true });
-    expect(incident.reasons[0]!.reason).toMatch(/N claim\(s\) offered/);
+    // An empty list is named as one, not as claims the checks dropped (W13).
+    expect(incident.reasons[0]!.reason).toBe('listed no claims (no reason given)');
     expect(incident.sample).toContain('the reply was');
     expect(incident.sample).not.toContain('abcdefghijklmnop1234');
     expect(incident.others).toEqual([{ model: FREE, state: expect.stringMatching(/route failing/) }]);

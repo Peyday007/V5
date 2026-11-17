@@ -14,7 +14,7 @@ import { enqueueWork, getWorkItem } from '../server/repos/workQueue.ts';
 import { workType } from '../server/services/queue/workTypes.ts';
 import { setBrainOnlyMode } from '../server/services/bins/brainOnly.ts';
 import { checkIn } from '../server/services/bins/service.ts';
-import { asksByPriority, citedWithinLimit, claimAsks, emptyListRepair, ensureFreeWorkers, firstJson, freeLaneTick, PARTIAL_EVIDENCE, quotedIn, resetFreeLaneMemberships, retryNotReached, takeWave } from '../server/services/freeLane/worker.ts';
+import { asksByPriority, citedWithinLimit, claimAsks, droppedReason, emptyListRepair, ensureFreeWorkers, firstJson, freeLaneTick, noneBecause, PARTIAL_EVIDENCE, quotedIn, resetFreeLaneMemberships, retryNotReached, takeWave } from '../server/services/freeLane/worker.ts';
 import { MAX_LIST_ITEMS } from '../server/mcp/researchTools.ts';
 import { freeLaneMayTakeImprovement, resetActivationCache } from '../server/services/improvement/activation.ts';
 import { createLayer } from '../server/repos/layers.ts';
@@ -1121,6 +1121,34 @@ describe('gpt-oss-120b refusals (production, 2026-11-16)', () => {
     expect(prompt).toContain(PARTIAL_EVIDENCE);
     expect(prompt).toContain('"evidence_lane":"L1"');
     expect(prompt).toContain('only if no sentence in any source bears on the brief at all');
+  });
+
+  it('asks a model that lists no claims to name why, and records its words instead of an empty drop map (W13)', () => {
+    const prompt = emptyListRepair('BRIEF', 5, 'L1');
+    expect(prompt).toContain('{"claims":[],"none_because":"…"}');
+    expect(prompt).toContain('the sources are about something else');
+    // Production 2026-11-17 08:50Z, verbatim: the reply after #998's re-ask over five read pages.
+    expect(droppedReason(0, {}, 5, { claims: [] })).toBe(
+      'the answer did not survive Brain\'s own checks: 0 claim(s) offered, dropped {} from 5 source(s); the reply was {"claims":[]}',
+    );
+    const stated = { claims: [], none_because: 'SOURCE 1-5 are vendor\n pricing pages; the brief excludes vendor marketing pages.' };
+    expect(droppedReason(0, {}, 5, stated)).toBe(
+      'the answer did not survive Brain\'s own checks: 0 claim(s) offered, dropped {} from 5 source(s); ' +
+        'the model listed none because: SOURCE 1-5 are vendor pricing pages; the brief excludes vendor marketing pages.',
+    );
+    // A model that listed claims the checks dropped is reported as before, with the reasons by count.
+    const dropped = { 'citation not readable as sentence numbers (evidence_locator="Entire site content")': 1 };
+    expect(droppedReason(1, dropped, 3, stated)).toBe(
+      `the answer did not survive Brain's own checks: 1 claim(s) offered, dropped ${JSON.stringify(dropped)}`,
+    );
+  });
+
+  it('reads a stated reason under the keys a model uses, bounded and without a credential', () => {
+    expect(noneBecause({ claims: [], reason: 'nothing on Pennsylvania' })).toBe('nothing on Pennsylvania');
+    expect(noneBecause({ claims: [], why: '  ' })).toBeNull();
+    expect(noneBecause({ claims: [] })).toBeNull();
+    expect(noneBecause({ claims: [], none_because: 'x'.repeat(500) })).toHaveLength(240);
+    expect(noneBecause({ claims: [], none_because: 'page said api_key=abcdefghijklmnop1234' })).not.toContain('abcdefghijklmnop1234');
   });
 
   it('keeps a synthesis within the list limit, inline citations first, instead of refusing it whole', () => {
