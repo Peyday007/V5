@@ -300,6 +300,9 @@ function jurisdictionsOf(facts: VentureFacts): string[] {
 /** The elements the facts trigger whatever the structure. */
 function baseDrafts(facts: VentureFacts, holder: string): Draft[] {
   const out: Draft[] = [];
+  // A licence for an activity only a holder may perform is what the OWN_AUTHORISATION route obtains;
+  // a licensed partner or a referral performs the activity without it.
+  const limitedActivities = new Set(facts.claims.filter((one) => one.kind === 'REGULATORY_LIMITATION').map((one) => one.subject));
   for (const party of facts.parties) {
     if (!COUNTERPARTY_ROLES.has(party.role)) continue;
     out.push({
@@ -355,6 +358,22 @@ function baseDrafts(facts: VentureFacts, holder: string): Draft[] {
       out.push({ kind: 'ACCOUNTING_BOOKS', subject: 'segregated customer funds', necessity: 'ADVISABLE', triggeredBy: ['flow CUSTOMER_FUNDS_HELD'], obligations: ['reconcile held funds separately'] });
     }
   }
+  // Revenue earned where a jurisdiction is stated is a legal fact that attracts tax there, whether or not
+  // a filed claim has named the tax yet; a claim that does name it is the element, so it is not repeated.
+  if (facts.flows.some((one) => one.kind === 'SALE' || one.kind === 'ROYALTY_IN')) {
+    const taxed = new Set(facts.claims.filter((one) => one.kind === 'TAX_OBLIGATION').map((one) => one.jurisdiction));
+    for (const where of jurisdictionsOf(facts)) {
+      if (taxed.has(where)) continue;
+      out.push({
+        kind: 'TAX_REGISTRATION',
+        subject: `tax on revenue earned in ${where}`,
+        necessity: 'REQUIRED',
+        triggeredBy: [`revenue flow in ${where}, a jurisdiction the record states`],
+        obligations: ['determine which taxes the revenue attracts there, then register, file and pay on their schedules'],
+        jurisdiction: where,
+      });
+    }
+  }
   for (const risk of facts.risks) {
     out.push({ kind: 'INSURANCE', subject: risk.kind, necessity: 'ADVISABLE', triggeredBy: [`risk ${risk.kind}`], obligations: ['renew cover and report claims'] });
   }
@@ -366,7 +385,7 @@ function baseDrafts(facts: VentureFacts, holder: string): Draft[] {
       out.push({ kind: 'TAX_REGISTRATION', subject: claim.subject, necessity: 'REQUIRED', triggeredBy: [`claim ${claim.id}`], obligations: ['file and pay on the stated schedule'], jurisdiction: claim.jurisdiction });
     } else if (claim.kind === 'INSURANCE_REQUIRED') {
       out.push({ kind: 'INSURANCE', subject: claim.subject, necessity: 'REQUIRED', triggeredBy: [`claim ${claim.id}`], obligations: ['maintain the mandatory cover'] });
-    } else if (claim.kind === 'LICENSE_REQUIRED') {
+    } else if (claim.kind === 'LICENSE_REQUIRED' && !limitedActivities.has(claim.subject)) {
       out.push({ kind: 'LICENSE', subject: claim.subject, necessity: 'REQUIRED', triggeredBy: [`claim ${claim.id}`], obligations: ['meet the licence conditions and report to the regulator'], approval: { class: 'REGULATED_SERVICE', professionalRole: `the licensing regulator in ${where}, with compliance counsel` }, jurisdiction: claim.jurisdiction });
     }
   }
@@ -594,10 +613,60 @@ function rank(a: StructureReading, b: StructureReading): number {
 }
 
 /**
+ * What an entry barrier recorded in the ladder's closed vocabulary
+ * (`ENTRY_BARRIER_KINDS`) is, institutionally.
+ *
+ * The ladder files every barrier as "something to obtain", and the feeder
+ * passes it here as a PERMIT_REQUIRED claim whose subject is the barrier's
+ * closed value. Two of those values say more than "a permit":
+ *
+ * - `PRODUCTION_LICENCE` is an authorisation to perform the activity at all.
+ *   Only a holder may produce, so it is a REGULATORY_LIMITATION on producing
+ *   and a LICENSE_REQUIRED for it — which is what generates the compliant
+ *   alternatives (a licensed partner, an agent referral, obtaining the licence)
+ *   rather than a market read as closed.
+ * - a safety, type or airworthiness approval certifies that the product is safe
+ *   to put in a buyer's hands. Selling such a product is a product-liability
+ *   exposure, so where the venture sells, the risk is stated and insurance for
+ *   it is derived (ADVISABLE: no row says the cover is mandatory).
+ *
+ * The values are the shapes of barriers, not industries (R01-A1): any venture
+ * whose record names one of them reads the same way. Spelled out here rather
+ * than imported, because this module imports nothing that runs; a test holds
+ * them to the vocabulary.
+ */
+export const LICENCE_TO_PERFORM_BARRIERS: readonly string[] = ['PRODUCTION_LICENCE'];
+export const PRODUCT_SAFETY_BARRIERS: readonly string[] = ['TYPE_APPROVAL_OR_HOMOLOGATION', 'SAFETY_CERTIFICATION', 'AIRWORTHINESS_CERTIFICATION'];
+
+/** The venture's facts with what its recorded barrier claims mean made explicit. Pure. */
+export function readRecordedFacts(facts: VentureFacts): VentureFacts {
+  const activity = facts.activities.length === 1 ? `producing ${facts.activities[0]}` : 'producing the venture\'s product';
+  const claims: EvidenceClaim[] = [];
+  const renamed = new Map<string, string>();
+  let safety = false;
+  for (const claim of facts.claims) {
+    if (claim.kind === 'PERMIT_REQUIRED' && LICENCE_TO_PERFORM_BARRIERS.includes(claim.subject)) {
+      claims.push({ id: `${claim.id}:limits`, sourceId: claim.sourceId, kind: 'REGULATORY_LIMITATION', subject: activity, jurisdiction: claim.jurisdiction });
+      claims.push({ id: `${claim.id}:licence`, sourceId: claim.sourceId, kind: 'LICENSE_REQUIRED', subject: activity, jurisdiction: claim.jurisdiction });
+      renamed.set(keyOf('PERMIT', claim.subject), keyOf('LICENSE', activity));
+      continue;
+    }
+    if (claim.kind === 'PERMIT_REQUIRED' && PRODUCT_SAFETY_BARRIERS.includes(claim.subject)) safety = true;
+    claims.push(claim);
+  }
+  // A figure or a renewal filed against the barrier prices or dates the licence it now is.
+  const repriced = claims.map((one) => ((one.kind === 'COST' || one.kind === 'RENEWAL') && renamed.has(one.subject) ? { ...one, subject: renamed.get(one.subject)! } : one));
+  const sells = facts.flows.some((one) => one.kind === 'SALE');
+  const risks = safety && sells && !facts.risks.some((one) => one.kind === 'PRODUCT_LIABILITY') ? [...facts.risks, { kind: 'PRODUCT_LIABILITY' }] : facts.risks;
+  return { ...facts, claims: repriced, risks };
+}
+
+/**
  * Derive the institutional machinery a venture's facts call for, and every
  * structure they admit. Pure: no row is written and nothing is created.
  */
-export function deriveInstitutions(facts: VentureFacts): InstitutionalDerivation {
+export function deriveInstitutions(recorded: VentureFacts): InstitutionalDerivation {
+  const facts = readRecordedFacts(recorded);
   const jurisdictions = jurisdictionsOf(facts);
   const openQuestions: string[] = [];
   if (jurisdictions.length === 0) openQuestions.push('no jurisdiction is stated in the record');
@@ -611,7 +680,6 @@ export function deriveInstitutions(facts: VentureFacts): InstitutionalDerivation
   if (facts.flows.some((one) => one.kind === 'EQUITY_INVESTMENT')) entityReasons.push('an investor takes equity');
   for (const claim of facts.claims.filter((one) => one.kind === 'ENTITY_REQUIRED')) entityReasons.push(`claim ${claim.id}`);
   const limitations = facts.claims.filter((one) => one.kind === 'REGULATORY_LIMITATION');
-  const licensedFor = new Set(facts.claims.filter((one) => one.kind === 'LICENSE_REQUIRED').map((one) => one.subject));
 
   const home = jurisdictions[0] ?? null;
   const structures: StructureReading[] = [];
@@ -652,8 +720,9 @@ export function deriveInstitutions(facts: VentureFacts): InstitutionalDerivation
       const where = claim.jurisdiction ?? home ?? 'the stated jurisdiction';
       partner.push({ kind: 'CONTRACT', subject: `licensed partner performing ${claim.subject}`, necessity: 'REQUIRED', triggeredBy: [`claim ${claim.id}`], prerequisites: [keyOf('SIGNING_AUTHORITY', holder)], obligations: ['monitor the partner\'s authorisation stays current'], approval: { class: 'LEGAL_COMMITMENT', professionalRole: `a lawyer admitted in ${where}` } });
       agent.push({ kind: 'CONTRACT', subject: `agent referral of ${claim.subject} to an authorised provider`, necessity: 'REQUIRED', triggeredBy: [`claim ${claim.id}`], prerequisites: [keyOf('SIGNING_AUTHORITY', holder)], obligations: ['stay within the referral the provider\'s authorisation permits'], approval: { class: 'LEGAL_COMMITMENT', professionalRole: `a lawyer admitted in ${where}` } });
-      if (!licensedFor.has(claim.subject)) {
-        own.push({ kind: 'LICENSE', subject: claim.subject, necessity: 'REQUIRED', triggeredBy: [`claim ${claim.id}`], obligations: ['meet the licence conditions and report to the regulator'], approval: { class: 'REGULATED_SERVICE', professionalRole: `the licensing regulator in ${where}, with compliance counsel` }, jurisdiction: claim.jurisdiction });
+      {
+        const licences = facts.claims.filter((one) => one.kind === 'LICENSE_REQUIRED' && one.subject === claim.subject).map((one) => `claim ${one.id}`);
+        own.push({ kind: 'LICENSE', subject: claim.subject, necessity: 'REQUIRED', triggeredBy: [`claim ${claim.id}`, ...licences], obligations: ['meet the licence conditions and report to the regulator'], approval: { class: 'REGULATED_SERVICE', professionalRole: `the licensing regulator in ${where}, with compliance counsel` }, jurisdiction: claim.jurisdiction });
       }
     }
     for (const drafts of [partner, agent]) {

@@ -16,8 +16,10 @@ import { getProgram, recordCategoryCapital, recordCategoryEvidence } from '../se
 import { startProgramme } from '../server/services/manufacturing/program.ts';
 import { seedCategory } from '../server/services/manufacturing/declare.ts';
 import { runManufacturingKernel } from '../server/services/manufacturing/kernel.ts';
-import type { Layer } from '../server/domain/types.ts';
+import { ENTRY_BARRIER_KINDS, type Layer } from '../server/domain/types.ts';
 import {
+  LICENCE_TO_PERFORM_BARRIERS,
+  PRODUCT_SAFETY_BARRIERS,
   deriveInstitutions,
   readEconomics,
   type EvidenceClaim,
@@ -391,6 +393,68 @@ describe('INST-30 — the derivation runs on production records', () => {
     const single = reading.derivation.structures.find((one) => one.kind === 'SINGLE_ENTITY')!;
     expect(single.economics.unpriced).toContain('LEGAL_ENTITY:venture entity');
     expect(single.economics.adjusted).toBeNull();
+  });
+
+  it('filed rows alone reach a regulatory limitation, its compliant alternatives, a licence, a tax obligation and insurance (R3-F1)', async () => {
+    const fixture = await freshProject();
+    const projectId = fixture.project.id;
+    const layer = await fixture.layerByName('Discovery Logic');
+    const user = await createUser({ email: `inst-${Math.random().toString(36).slice(2, 10)}@example.test`, displayName: 'Owner', password: 'correct horse battery staple', isBrainAdmin: true });
+    expect((await startProgramme({ projectId, ownerUserId: user.id, actorUserId: user.id, objective: 'Build machines only where demand and capability allow.' })).ok).toBe(true);
+    const program = (await getProgram(projectId))!;
+    const seeded = await seedCategory({ projectId, name: 'Utility tractors', actorRef: user.id, reason: 'test' });
+    if ('error' in seeded) throw new Error(seeded.error);
+    const category = seeded.category;
+    const licence = await acceptedClaim(projectId, layer, 'Only licensed manufacturers may produce tractors for sale in Texas');
+    await recordCategoryEvidence({ programId: program.id, categoryId: category.id, kind: 'ENTRY_BARRIER', subject: 'PRODUCTION_LICENCE', statement: 'Only licensed manufacturers may produce tractors for sale in Texas', sourceClaimId: licence });
+    const safety = await acceptedClaim(projectId, layer, 'Tractors sold in Texas must carry a rollover safety certification');
+    await recordCategoryEvidence({ programId: program.id, categoryId: category.id, kind: 'ENTRY_BARRIER', subject: 'SAFETY_CERTIFICATION', statement: 'Tractors sold in Texas must carry a rollover safety certification', sourceClaimId: safety });
+    const demand = await acceptedClaim(projectId, layer, 'Texas county fleets tender for utility tractors yearly');
+    await recordCategoryEvidence({ programId: program.id, categoryId: category.id, kind: 'DEMAND_EVIDENCE', subject: 'TENDER_OR_CONTRACT', statement: 'Texas county fleets tender for utility tractors yearly', observedOn: '2026-09-01', sourceClaimId: demand });
+
+    const pass = await runManufacturingKernel(projectId);
+    const derivation = pass.institutions.find((one) => one.categoryId === category.id)!.derivation;
+    // The licence barrier is a limitation on producing, and it yields compliant routes rather than a closed market.
+    expect(derivation.limitations).toEqual([{ claimId: expect.stringMatching(/:limits$/), activity: 'producing Utility tractors', alternatives: ['LICENSED_PARTNER', 'AGENT_REFERRAL', 'OWN_AUTHORISATION'] }]);
+    const kinds = derivation.structures.map((one) => one.kind);
+    for (const kind of ['LICENSED_PARTNER', 'AGENT_REFERRAL', 'OWN_AUTHORISATION'] as const) expect(kinds).toContain(kind);
+    const direct = derivation.structures.find((one) => one.kind === 'DIRECT')!;
+    expect(direct.legalFeasibility).toBe('NOT_MET');
+    const partner = derivation.structures.find((one) => one.kind === 'LICENSED_PARTNER')!;
+    expect(partner.legalFeasibility).toBe('MET');
+    expect(partner.elements.some((one) => one.kind === 'LICENSE'), 'a partner performs the activity under its own licence').toBe(false);
+    const own = derivation.structures.find((one) => one.kind === 'OWN_AUTHORISATION')!;
+    const licenceElement = own.elements.find((one) => one.kind === 'LICENSE')!;
+    expect(licenceElement.subject).toBe('producing Utility tractors');
+    expect(licenceElement.triggeredBy.some((one) => one.endsWith(':licence')), 'traced to the LICENSE_REQUIRED claim').toBe(true);
+    expect(licenceElement.approval).toMatchObject({ class: 'REGULATED_SERVICE', approved: false });
+    expect(licenceElement.approval?.professionalRole).toMatch(/texas/);
+    // The safety certification stays a permit, and selling a certified product is a product-liability exposure.
+    expect(partner.elements.some((one) => one.kind === 'PERMIT' && one.subject === 'SAFETY_CERTIFICATION')).toBe(true);
+    expect(partner.elements.find((one) => one.kind === 'INSURANCE')?.subject).toBe('PRODUCT_LIABILITY');
+    // Revenue in a jurisdiction the record states is taxed there.
+    const tax = partner.elements.find((one) => one.kind === 'TAX_REGISTRATION')!;
+    expect(tax).toMatchObject({ subject: 'tax on revenue earned in texas', necessity: 'REQUIRED' });
+  });
+
+  it('the barrier values read institutionally are members of the ladder\'s closed vocabulary', () => {
+    for (const value of [...LICENCE_TO_PERFORM_BARRIERS, ...PRODUCT_SAFETY_BARRIERS]) expect(ENTRY_BARRIER_KINDS as readonly string[]).toContain(value);
+  });
+
+  it('a figure and a renewal filed against a licence barrier price and date the licence it becomes', () => {
+    const out = deriveInstitutions(
+      base({
+        activities: ['a product'],
+        claims: [
+          { id: 'b1', sourceId: 's1', kind: 'PERMIT_REQUIRED', subject: 'PRODUCTION_LICENCE', jurisdiction: 'XA' },
+          cost('fee', 'PERMIT:PRODUCTION_LICENCE', 5_000, 7_000),
+          { id: 'r1', sourceId: 's2', kind: 'RENEWAL', subject: 'PERMIT:PRODUCTION_LICENCE', jurisdiction: 'XA', intervalMonths: 24 },
+        ],
+      }),
+    );
+    const licence = out.structures.find((one) => one.kind === 'OWN_AUTHORISATION')!.elements.find((one) => one.kind === 'LICENSE')!;
+    expect(licence.cost?.oneTime).toEqual({ currency: 'USD', lowMinor: 5_000, highMinor: 7_000 });
+    expect(licence.renewalDate).toBe('2028-11-16');
   });
 
   it('a project with no programme derives nothing', async () => {
