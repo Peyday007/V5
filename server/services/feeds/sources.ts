@@ -142,6 +142,27 @@ export function parseRemotive(body: unknown): FeedItem[] {
   return out;
 }
 
+/**
+ * The document a Federal Register correction corrects. A correction (C1-2026-21030) carries no
+ * effective_on, dates or action of its own; its `correction_of` names the rule it corrects, either
+ * as a document number, a documents URL (its final path segment) or an object with document_number.
+ */
+function correctedDocumentNumber(value: unknown): string | null {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return correctedDocumentNumber((value as Record<string, unknown>)['document_number']);
+  }
+  const raw = text(value);
+  if (!raw) return null;
+  if (!isHttpUrl(raw)) return raw;
+  try {
+    const segments = new URL(raw).pathname.split('/').filter(Boolean);
+    const last = segments[segments.length - 1];
+    return last ? decodeURIComponent(last).replace(/\.json$/i, '') : null;
+  } catch {
+    return null;
+  }
+}
+
 /** The Federal Register's documents API: newly published final rules. */
 export function parseFederalRegister(body: unknown): FeedItem[] {
   const results = body && typeof body === 'object' ? (body as Record<string, unknown>)['results'] : null;
@@ -156,11 +177,15 @@ export function parseFederalRegister(body: unknown): FeedItem[] {
       .filter((name): name is string => !!name);
     const effective = text(row['effective_on']);
     const abstract = plain(row['abstract']);
+    const corrects = correctedDocumentNumber(row['correction_of']);
     out.push({
       externalId: id,
       url,
       title,
-      body: [abstract, effective ? `Effective ${effective}.` : null].filter(Boolean).join(' ') || null,
+      body:
+        [abstract, effective ? `Effective ${effective}.` : null, corrects ? `Corrects ${corrects}.` : null]
+          .filter(Boolean)
+          .join(' ') || null,
       organization: agencies.join(', ') || null,
       publishedAt: isoOrNull(row['publication_date']),
     });
@@ -291,7 +316,8 @@ const FEDERAL_REGISTER_RULES_URL =
   'https://www.federalregister.gov/api/v1/documents.json?per_page=100&order=newest' +
   '&conditions%5Btype%5D%5B%5D=RULE' +
   '&fields%5B%5D=document_number&fields%5B%5D=title&fields%5B%5D=abstract&fields%5B%5D=html_url' +
-  '&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies';
+  '&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies' +
+  '&fields%5B%5D=correction_of';
 
 export const FEED_SOURCES: readonly FeedSource[] = [
   {
