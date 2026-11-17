@@ -1169,6 +1169,38 @@ async function researchAccounting(projectId: string): Promise<void> {
   }
   try {
     console.log('');
+    console.log('MISSIONS LAUNCHED LAST (newest 10) — which ideas took the freed slots');
+    const { goalRoundSql, goalIdeaSql } = await import('../server/services/goals/goalWork.ts');
+    const launched = await db.all<{ created_at: string; state: string; candidate_id: string | null; tier: number; title: string | null }>(
+      `SELECT m.created_at, m.state, m.candidate_id,
+              CASE WHEN ${goalRoundSql('c')} THEN 0 WHEN ${goalIdeaSql('c')} THEN 1 ELSE 2 END AS tier,
+              SUBSTR(c.title, 1, 80) AS title
+         FROM russell_missions m LEFT JOIN russell_candidates c ON c.id = m.candidate_id
+        WHERE m.project_id = ? ORDER BY m.created_at DESC LIMIT 10`,
+      [projectId],
+    );
+    for (const m of launched) {
+      const tier = Number(m.tier) === 0 ? 'goal round' : Number(m.tier) === 1 ? 'goal idea ' : 'other     ';
+      console.log(`  ${m.created_at} ${m.state.padEnd(11)} ${tier} ${m.candidate_id ?? '—'} ${m.title ?? ''}`);
+    }
+    console.log('GOAL ROUND IDEAS NOT YET LAUNCHED (open goal rounds without a mission)');
+    const rounds = await db.all<{ bucket_id: string; candidate_id: string; state: string | null; priority: string | null; spec: number }>(
+      `SELECT r.bucket_id, r.candidate_id, c.state, c.priority,
+              CASE WHEN c.judgment LIKE '%"missionSpec"%' THEN 1 ELSE 0 END AS spec
+         FROM cash_discovery_rounds r LEFT JOIN russell_candidates c ON c.id = r.candidate_id
+        WHERE r.project_id = ? AND r.bucket_id LIKE 'goal-%' AND r.state = 'OPEN'
+          AND NOT EXISTS (SELECT 1 FROM russell_missions m WHERE m.candidate_id = r.candidate_id)`,
+      [projectId],
+    );
+    if (rounds.length === 0) console.log('  none');
+    for (const r of rounds) {
+      console.log(`  ${r.candidate_id} ${r.state ?? '—'} priority=${r.priority ?? 'unjudged'} spec=${Number(r.spec) ? 'yes' : 'no'} ${r.bucket_id.slice(0, 70)}`);
+    }
+  } catch (error) {
+    console.log(`  (could not be read: ${error instanceof Error ? error.message.split('\n')[0] : String(error)})`);
+  }
+  try {
+    console.log('');
     console.log("MISSIONS FAILED 'left RESEARCHING with nothing queued' — what cancelled their work");
     const reasons = await db.all<{ work_type: string; reason: string | null; n: number; example: string }>(
       `SELECT w.work_type, SUBSTR(COALESCE(w.cancelled_reason, ''), 1, 110) AS reason, COUNT(*) AS n,
