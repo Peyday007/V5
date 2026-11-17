@@ -231,7 +231,13 @@ export interface SourceYield {
   source: string;
   /** Items the source's pulls carried in the window. */
   acquired: number;
-  /** Stored items the screen kept or a code rule accounted for: accepted information. */
+  /**
+   * Stored items the screen kept or a code rule accounted for: accepted
+   * information. This is the relevance screen's answer, never parsing: a
+   * screen that correctly drops most records, or one that has not reached
+   * them yet, lowers it while the parser read every record. Parsing is
+   * `parseCoverage`; a screen that is behind is `screenBacklog`.
+   */
   accepted: number;
   /** Stored items a shortlist round took: commercially usable leads. */
   usable: number;
@@ -239,6 +245,42 @@ export interface SourceYield {
   usableShare: number | null;
   /** Marginal decision value per acquired item; null when nothing was acquired (unknown, never favourable). */
   value: number | null;
+  /** Pulls whose body arrived and the parser read (successful, not a 304 or a provider-stated empty period). */
+  parsedPulls?: number;
+  /** Pulls whose body arrived and the parser could not read (`failureKind` UNREADABLE_BODY). */
+  unparsedPulls?: number;
+  /**
+   * Parsing success: the share of bodies that arrived which the parser read,
+   * `parsedPulls / (parsedPulls + unparsedPulls)`. Null when no body arrived
+   * (unknown, never favourable). Independent of the screen: a stage-limit or
+   * contribution reading that asks "is parsing limiting?" reads this, never
+   * `accepted / acquired` (S-0362: "If parsing is limiting, add efficient code workers").
+   */
+  parseCoverage?: number | null;
+  /** Stored items in the window: what the parser turned into records. */
+  stored?: number;
+  /** Stored items the screen has answered (any verdict), a code rule covered, or a shortlist took. */
+  screened?: number;
+  /** Stored items nothing has screened yet: model-interpretation work waiting, never a parsing failure. */
+  screenBacklog?: number;
+}
+
+/**
+ * Parse coverage from a source's pulls: of the bodies that arrived, the share
+ * the parser read. A quiet pull (`isQuietPull`) carried no body to parse and an
+ * access failure (outage, permission, DNS) never reached the parser, so neither
+ * counts either way. Null when no body arrived. Pure.
+ */
+export function parseCoverageOf(pulls: readonly { ok: boolean; error: string | null }[], unreadable: (error: string | null) => boolean): { parsedPulls: number; unparsedPulls: number; parseCoverage: number | null } {
+  let parsedPulls = 0;
+  let unparsedPulls = 0;
+  for (const pull of pulls) {
+    if (pull.ok) {
+      if (!isQuietPull(pull)) parsedPulls += 1;
+    } else if (unreadable(pull.error)) unparsedPulls += 1;
+  }
+  const bodies = parsedPulls + unparsedPulls;
+  return { parsedPulls, unparsedPulls, parseCoverage: bodies > 0 ? Math.round((parsedPulls / bodies) * 10_000) / 10_000 : null };
 }
 
 /** Marginal decision value: a usable lead is worth twice an accepted record, and volume alone is worth nothing. Pure. */
@@ -270,33 +312,62 @@ export async function readSourceYields(since: string, until: string): Promise<So
     `SELECT source, SUM(fetched) AS fetched FROM feed_pulls WHERE ok = 1 AND created_at >= ? AND created_at < ? GROUP BY source`,
     [since, until],
   );
+  const attempts = await db.all<{ source: string; ok: number | boolean; error: string | null }>(
+    `SELECT source, ok, error FROM feed_pulls WHERE created_at >= ? AND created_at < ?`,
+    [since, until],
+  );
+  const { failureKind } = await import('./health.ts');
   const items = await db.all<{ id: string; source: string; shortlisted_round_id: string | null }>(
     `SELECT id, source, shortlisted_round_id FROM feed_items WHERE fetched_at >= ? AND fetched_at < ? AND source <> ? AND source <> ?`,
     [since, until, CODE_SIGNAL_SOURCE, SITE_SOURCE],
   );
   const kept = new Set<string>();
+  const screened = new Set<string>();
   for (let at = 0; at < items.length; at += SUBJECT_PAGE) {
     const chunk = items.slice(at, at + SUBJECT_PAGE).map((one) => one.id);
-    const rows = await db.all<{ subject_id: string }>(
-      `SELECT DISTINCT subject_id FROM cheap_results
-        WHERE kind = 'SCREEN_LEAD' AND ok = 1 AND output LIKE ? AND subject_id IN (${chunk.map(() => '?').join(',')})`,
+    const rows = await db.all<{ subject_id: string; kept: number | string | null }>(
+      `SELECT subject_id, MAX(CASE WHEN output LIKE ? THEN 1 ELSE 0 END) AS kept FROM cheap_results
+        WHERE kind = 'SCREEN_LEAD' AND ok = 1 AND subject_id IN (${chunk.map(() => '?').join(',')})
+        GROUP BY subject_id`,
       ['%"verdict":"KEEP"%', ...chunk],
     );
-    for (const row of rows) kept.add(row.subject_id);
-    for (const id of await coveredItems(chunk)) kept.add(id);
+    for (const row of rows) {
+      screened.add(row.subject_id);
+      if (Number(row.kept ?? 0) > 0) kept.add(row.subject_id);
+    }
+    for (const id of await coveredItems(chunk)) {
+      kept.add(id);
+      screened.add(id);
+    }
   }
   const by = new Map<string, SourceYield>();
   const at = (source: string): SourceYield => {
     let y = by.get(source);
     if (!y) {
-      y = { source, acquired: 0, accepted: 0, usable: 0, acceptedShare: null, usableShare: null, value: null };
+      y = {
+        source, acquired: 0, accepted: 0, usable: 0, acceptedShare: null, usableShare: null, value: null,
+        parsedPulls: 0, unparsedPulls: 0, parseCoverage: null, stored: 0, screened: 0, screenBacklog: 0,
+      };
       by.set(source, y);
     }
     return y;
   };
   for (const row of pulls) at(row.source).acquired += Number(row.fetched ?? 0);
+  const attemptsBy = new Map<string, { ok: boolean; error: string | null }[]>();
+  for (const row of attempts) {
+    const list = attemptsBy.get(row.source) ?? [];
+    list.push({ ok: Number(row.ok) === 1 || row.ok === true, error: row.error });
+    attemptsBy.set(row.source, list);
+  }
+  for (const [source, list] of attemptsBy) {
+    if (source === CODE_SIGNAL_SOURCE || source === SITE_SOURCE) continue;
+    Object.assign(at(source), parseCoverageOf(list, (error) => failureKind(error).kind === 'UNREADABLE_BODY'));
+  }
   for (const item of items) {
     const y = at(item.source);
+    y.stored = (y.stored ?? 0) + 1;
+    if (screened.has(item.id) || item.shortlisted_round_id) y.screened = (y.screened ?? 0) + 1;
+    else y.screenBacklog = (y.screenBacklog ?? 0) + 1;
     if (kept.has(item.id) || item.shortlisted_round_id) y.accepted += 1;
     if (item.shortlisted_round_id) y.usable += 1;
   }
