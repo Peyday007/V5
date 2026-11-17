@@ -193,6 +193,51 @@ export function isArrangementId(id: string): boolean {
 export const MAX_ESTIMATED_ARRANGEMENTS = 12;
 
 /**
+ * What converting an arrangement reads: its project and currency, and the
+ * project's evidence (`loadCashKnowledge`) when the caller holds it. Without
+ * knowledge every unestablished link is swept, as before.
+ */
+export interface ArrangementInput {
+  projectId: string;
+  currency: string;
+  knowledge?: CashKnowledge | null;
+  now?: Date;
+}
+
+/**
+ * The opening the knowledge inference reads an arrangement as (F2): its own
+ * id, its sector, its price band, and the mechanism its structure is already
+ * held as — the one its buyers' related openings are sold through when they
+ * are, else its precedent's, else the structure's first. A structure held as
+ * no mechanism stays OTHER, so every observation is broad: bounds, never a
+ * distribution. Only `inferCashQuantity`'s context reads it; it is never a row.
+ * Pure.
+ */
+export function arrangementTarget(one: ConstructedArrangement, knowledge: Pick<CashKnowledge, 'opportunities' | 'projectId'>, price: ModelInput, currency: string): CashOpportunity {
+  const held: readonly string[] = one.structure ? (STRUCTURES[one.structure]?.alreadyHeldAs ?? []) : [];
+  const counts = new Map<string, number>();
+  for (const id of one.relatedOpenings ?? []) {
+    const m = knowledge.opportunities.get(id)?.mechanism;
+    if (m && held.includes(m)) counts.set(m, (counts.get(m) ?? 0) + 1);
+  }
+  const related = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0];
+  const precedent = one.precedent ? knowledge.opportunities.get(one.precedent.opportunityId)?.mechanism : undefined;
+  const mechanism = related ?? (precedent && held.includes(precedent) ? precedent : undefined) ?? held[0] ?? 'OTHER';
+  const p50 = price.inferred?.p50 ?? price.value ?? null;
+  return {
+    id: `${ARRANGEMENT_ID_PREFIX}${one.key}`,
+    projectId: knowledge.projectId,
+    title: one.label,
+    mechanism,
+    industry: one.sector,
+    opportunitySignal: null,
+    priceCents: p50 !== null && p50 > 0 ? Math.round(p50 * 100) : null,
+    currency,
+    duplicateOfId: null,
+  } as unknown as CashOpportunity;
+}
+
+/**
  * A constructed arrangement as a model candidate, from its reconstructed value
  * alone — or null when nothing reconstructs its value, or its known worst case
  * breaks the limits. Price is the reconstruction's own p10–p50–p90; everything
@@ -200,7 +245,7 @@ export const MAX_ESTIMATED_ARRANGEMENTS = 12;
  * on its card. A recurring design is repeatable, with its volume a range from
  * one deal, never a number assumed. Pure.
  */
-export function estimatedFromArrangement(one: ConstructedArrangement, input: { projectId: string; currency: string; beforeProofCents: number | null }): ModelledOpportunity | null {
+export function estimatedFromArrangement(one: ConstructedArrangement, input: ArrangementInput & { beforeProofCents: number | null }): ModelledOpportunity | null {
   const { p10, p50, p90 } = one.value;
   // A MECHANISM value is a pool of other buyers' prices, not these buyers': it
   // is no price, and a cost or capital swept from its top would be borrowed too
@@ -216,6 +261,23 @@ export function estimatedFromArrangement(one: ConstructedArrangement, input: { p
   const widen = transfer && transfer.unbridged.length > 0 ? Math.exp(SPREAD_FLOOR.COMPARABLE * Z90) : 1;
   const low = Math.max(0.01, p10 / widen);
   const high = Math.max(low + 0.01, p90 * widen);
+  // Accepted evidence about what these buyers pay, justified as a distribution by the reconstruction (F2): the
+  // price is that evidence. A transfer nobody has bridged, or bounds alone, stays the assumption swept below.
+  const evidence = !(transfer && transfer.unbridged.length) ? one.value.evidence : undefined;
+  if (evidence) {
+    const { values, low: eLow, high: eHigh, ...sample } = evidence;
+    const evidenced: ModelInput = {
+      value: null,
+      low: eLow,
+      high: Math.max(eLow + 0.01, eHigh),
+      provenance: 'EVIDENCE',
+      source: ref,
+      note: `evidenced (${one.value.tier}, ${one.value.observations} obs. of these buyers${from}): p10 ${p10} p50 ${p50} p90 ${p90}`,
+      distribution: { kind: 'EMPIRICAL', values },
+      inferred: { tier: one.value.tier as EvidenceTier, justified: true, p10, p50, p90, observations: one.value.observations, ...sample },
+    };
+    return arrangementOpening(one, input, evidenced, evidenced.high!, transfer);
+  }
   const price: ModelInput = {
     value: null,
     low,
@@ -249,15 +311,27 @@ export function inheritedTerms(one: Pick<ConstructedArrangement, 'buyerTerms'>):
  * links nobody has established swept exactly as for an opening with nothing on
  * its card. Shared by the estimated and the invented conversions. Pure.
  */
-function arrangementOpening(one: ConstructedArrangement, input: { projectId: string; currency: string }, price: ModelInput, high: number, transfer: ReturnType<typeof transferOf>, invented = false): ModelledOpportunity {
+function arrangementOpening(one: ConstructedArrangement, input: ArrangementInput, price: ModelInput, high: number, transfer: ReturnType<typeof transferOf>, invented = false): ModelledOpportunity {
   const ref: SourceRef = price.source ?? { kind: 'OTHER', ref: `arrangement:${one.key}` };
   const worst = one.stress.worstCaseCents === null ? null : one.stress.worstCaseCents / 100;
+  /*
+   * F2 (2026-11-17): every link below was a hard-coded sweep, so accepted
+   * research about these buyers could never move a plan built from
+   * arrangements. Each now reads the project's evidence through the one
+   * inference path found openings use (`inferOr`), on the population the
+   * arrangement sells to (`arrangementTarget`); where nothing bears on it the
+   * sweep is unchanged.
+   */
+  const knowledge = input.knowledge ?? null;
+  const now = input.now ?? new Date();
+  const target = knowledge ? arrangementTarget(one, knowledge, price, input.currency) : null;
+  const infer = (quantity: CashQuantity, fallback: ModelInput, scale = 1, what = ''): ModelInput => (target ? inferOr(knowledge, quantity, target, now, fallback, scale, what) : fallback);
   const capital: ModelInput =
     one.stress.exposure === 'SAFE'
       ? { value: null, low: 0, high: 0.01, provenance: 'ASSUMPTION', source: ref, note: 'the design spends nothing of ours before buyers commit; not yet established in practice' }
       : worst !== null
         ? unknown(0, Math.max(0.01, worst), `the design's known worst case is ${worst}; swept from nothing to it`)
-        : unknown(0, high, 'nobody has established the money tied up; swept from nothing to the top price');
+        : ownMechanismCapital(infer('capitalShare', unknown(0, high, 'nobody has established the money tied up; swept from nothing to the top price'), high, ' as a share of the top price'), high);
   const repeatable = one.design.repeat !== 'ONE_OFF';
   const opportunity = {
     id: `${ARRANGEMENT_ID_PREFIX}${one.key}`,
@@ -293,10 +367,10 @@ function arrangementOpening(one: ConstructedArrangement, input: { projectId: str
     price,
     capital,
     hours: unknown(1, 40, 'nobody has established the hours; swept from 1 to 40 per deal'),
-    daysToCash: unknown(3, 60, 'nobody has established when the money would settle; swept from 3 to 60 days'),
-    close: unknown(0.02, 0.5, 'no buyer has been asked yet; swept from 2% to 50% of buyers agreeing'),
-    respond: unknown(0.002, 0.15, 'nobody has established how many prospects of this kind reply; swept from 0.2% to 15%'),
-    directCost: unknown(0, Math.max(0.01, high * 0.6), 'nobody has established the direct cost; swept from nothing to 60% of the top price'),
+    daysToCash: infer('daysToCash', unknown(3, 60, 'nobody has established when the money would settle; swept from 3 to 60 days')),
+    close: infer('close', unknown(0.02, 0.5, 'no buyer has been asked yet; swept from 2% to 50% of buyers agreeing')),
+    respond: infer('respond', unknown(0.002, 0.15, 'nobody has established how many prospects of this kind reply; swept from 0.2% to 15%')),
+    directCost: infer('costShare', unknown(0, Math.max(0.01, high * 0.6), 'nobody has established the direct cost; swept from nothing to 60% of the top price'), high, ' as a share of the top price'),
     volume: repeatable
       ? unknown(1, MAX_BUYERS_OFFERED, `a ${one.design.repeat.toLowerCase().replace('_', ' ')} design repeats, but nobody has established how many buyers exist; swept from 1 deal`)
       : known(1, 'ASSUMPTION', ref, 'a one-off design is one deal'),
@@ -352,7 +426,7 @@ const LOG_GRID_POINTS = 41;
  */
 function sweptOverOtherPrices(
   one: ConstructedArrangement,
-  input: { projectId: string; currency: string },
+  input: ArrangementInput,
   otherPrices: readonly number[],
   invented: boolean,
   scope = 'in this project',
@@ -631,9 +705,7 @@ export const populationMarket = (population: string) => `${ARRANGEMENT_ID_PREFIX
  */
 export function selectEstimatedArrangements(
   arrangements: readonly ConstructedArrangement[],
-  input: {
-    projectId: string;
-    currency: string;
+  input: ArrangementInput & {
     beforeProofCents: number | null;
     remaining: number;
     exclusions: Parameters<typeof excludedBy>[1];
@@ -1274,6 +1346,9 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       remaining: target.remainingCents / 100,
       exclusions,
       daysLeft: target.daysLeft,
+      // The evidence the found openings were just inferred from: an arrangement's links read it the same way (F2).
+      knowledge,
+      now: input.now ?? new Date(),
       // What construction reads as held prices (`heldEvidence`), from the openings already loaded: no new query.
       otherPrices: live
         .filter((one) => one.payer && one.priceCents !== null && one.priceCents > 0 && !excludedBy(`${one.title} ${one.payer ?? ''} ${one.industry ?? ''}`, exclusions))
