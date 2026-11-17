@@ -69,6 +69,25 @@ scheduled check are not the objective. Here:
 - Re-waiting on an unchanged state doubles the minimum `send_later` delay
   (45 → 90 → 180 min…, enforced by the hook). Watch the event instead of polling.
 
+## Deadlines (owner's permanent rule, §112)
+
+A deadline the owner names is enforced, not aimed at. The hook detects it
+(`DEADLINE UNSET` in the ledger) and refuses other work until it is registered:
+
+1. `npm run finish -- deadline set --at <ISO> --deliverable "<final deliverable>" --accept R1,R2`
+2. `npm run finish -- deadline status` prints the `create_trigger` calls — make them
+   exactly (the deadline, and an early warning), then
+   `npm run finish -- deadline register --trigger trig_… --at <ISO> --warn trig_… --warn-at <ISO>`.
+3. Keep estimates honest (`deadline estimate R3 --min 45`). When the critical path
+   exceeds the time left, work is refused until `deadline escalate --note "…"` and a
+   PushNotification tell the owner. `deadline defer R7 --reason …` drops nonessential
+   work from the path (never an acceptance criterion).
+4. At the deadline only `npm run finish -- deadline deliver` runs. Send its report —
+   completed, unfinished, failed acceptance criteria — as the final message, even if
+   the work is incomplete. Never extend the deadline, never move or delete its
+   scheduled tasks, never keep engineering instead of delivering. Only an owner
+   message naming a new deadline unlocks a later one.
+
 ## Blocked
 
 Only the rule-11 reasons (`SPEND_OVER_CEILING`, `IRREVERSIBLE_PRODUCTION_LOSS`,

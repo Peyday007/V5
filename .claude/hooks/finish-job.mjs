@@ -29,7 +29,12 @@
  *     state after compaction or resume; the ledger is also printed into the
  *     transcript on every check, so a fresh container can rebuild it.
  *
- * Usage: `npm run finish -- <status|check|evidence|withdraw|wait|block|clear|add|init|dismiss> …`
+ *   - A deadline the owner names (§112) is registered with an independent
+ *     scheduler, tracked on the critical path, escalated early, and delivered at
+ *     the deadline whatever is unfinished: `deadline status|set|register|
+ *     estimate|defer|escalate|deliver`.
+ *
+ * Usage: `npm run finish -- <status|check|evidence|withdraw|wait|block|clear|add|init|dismiss|deadline> …`
  * Hook:  `node finish-job.mjs hook` (UserPromptSubmit, PreToolUse, SessionStart).
  */
 import { spawnSync } from 'node:child_process';
@@ -62,6 +67,8 @@ export const HARNESS_NOTICE =
 const FINISH_CLI = /finish-job\.mjs|npm run (-s )?finish\b/;
 
 const root = () => process.env.FINISH_JOB_ROOT || process.env.CLAUDE_PROJECT_DIR || process.cwd();
+/** The time. FINISH_JOB_NOW exists for the tests; the scheduled tasks fire on the real clock whatever it says. */
+const clock = () => (process.env.FINISH_JOB_NOW ? Date.parse(process.env.FINISH_JOB_NOW) : Date.now());
 const sha = (s) => createHash('sha256').update(s).digest('hex').slice(0, 16);
 const short = (s, n = 120) => (s.length > n ? `${s.slice(0, n - 1)}…` : s).replace(/\s+/g, ' ');
 
@@ -139,7 +146,7 @@ function saveLedger(l) {
   fs.mkdirSync(path.dirname(ledgerPath(l.sessionId)), { recursive: true });
   fs.writeFileSync(ledgerPath(l.sessionId), `${JSON.stringify(l, null, 2)}\n`);
 }
-const isOpen = (l) => l && !['DONE', 'CANCELLED', 'DISMISSED'].includes(l.status);
+const isOpen = (l) => l && !['DONE', 'CANCELLED', 'DISMISSED', 'DELIVERED'].includes(l.status);
 
 export function newLedger(sid, messages) {
   const [first, ...later] = messages;
@@ -391,9 +398,19 @@ export function check(l, { fetch = true } = {}) {
     const hint = a.pending ? ` — watch it (Monitor) and \`npm run finish -- wait ${a.id} --on "${a.pending}" --wake ${a.pending}\`` : '';
     judge(a.id, a.text, [{ ok: a.ok, detail: `${a.detail}${hint}` }], l.autoMarks[a.id]);
   }
+  const dl = deadlineState(l, clock(), done);
+  if (dl && dl.phase !== 'DELIVERED') {
+    trackRisk(l, dl);
+    const gate = deadlineState(l, clock(), done)?.gate;
+    const registered = !['UNSET', 'UNREGISTERED'].includes(dl.phase);
+    rows.push({ id: 'DEADLINE', text: `Deadline ${l.deadline.at ?? '(not set)'} is registered with the independent scheduler and on track`, status: registered && !gate ? 'done' : 'open', detail: dl.detail, results: [] });
+  }
   const by = (s) => rows.filter((r) => r.status === s);
   const verdict = { open: by('open'), waiting: by('waiting'), blocked: by('blocked'), done: by('done') };
   let word = verdict.open.length ? 'CONTINUE' : verdict.waiting.length ? 'WAITING' : verdict.blocked.length ? 'BLOCKED' : 'DONE';
+  // Past the deadline the only next act is the delivery, whatever else is open.
+  const due = dl?.phase === 'DUE' && word !== 'DONE';
+  if (due) word = 'DELIVER';
   const fp = sha(JSON.stringify([g.head, sha(g.dirty ?? ''), rows.map((r) => [r.id, r.status, r.detail.replace(/ \(cached for this tree\)/g, '')])]));
   // Progress (a requirement newly verified) renews the loop's budget: the
   // iteration limit bounds unproductive stops, never a long objective that keeps
@@ -402,7 +419,7 @@ export function check(l, { fetch = true } = {}) {
   l.doneCount = done.size;
   if (progressed) l.strategyShifts = 0;
   let shift = false;
-  if (word === 'CONTINUE') {
+  if (word === 'CONTINUE' || word === 'DELIVER') {
     l.same = fp === l.lastFp ? l.same + 1 : 0;
     if (l.same >= STALL_LIMIT - 1) {
       // A repeated identical failure is first a demand for a different approach,
@@ -419,8 +436,10 @@ export function check(l, { fetch = true } = {}) {
     l.unchangedParks = fp === l.lastParkFp ? l.unchangedParks + 1 : 0;
     l.lastParkFp = fp;
   }
-  l.status = word === 'CONTINUE' ? 'ACTIVE' : word;
-  if (word === 'CONTINUE') arm(l, continuePrompt(l, verdict, shift), { renew: progressed });
+  if (due) word = 'DELIVER';
+  l.status = word === 'CONTINUE' || word === 'DELIVER' ? 'ACTIVE' : word;
+  if (word === 'DELIVER') arm(l, deliverPrompt(l));
+  else if (word === 'CONTINUE') arm(l, continuePrompt(l, verdict, shift), { renew: progressed });
   else disarm(l);
   l.lastCheck = { at: new Date().toISOString(), word, rows: rows.map(({ id, status, detail }) => ({ id, status, detail })) };
   saveLedger(l);
@@ -435,7 +454,8 @@ export function report(l, res) {
     WAITING: `Every open item waits on an armed wake. The stop is released; the objective is NOT done and the next tool call re-arms it.${l.unchangedParks ? ` Unchanged since the last wait (${l.unchangedParks}x): a re-armed check-in must be ≥ ${minDelay(l)} min out.` : ''}`,
     BLOCKED: 'Everything left is blocked by a rule-11 reason. Report NOT DONE with each blocker.',
     STALLED: `The same failing state ${STALL_LIMIT} checks in a row. The stop is released; report NOT DONE with each open item. Do not repeat the same attempt.`,
-    DONE: 'Every requirement and repository check passed. Report DONE.',
+    DONE: `Every requirement and repository check passed. Report DONE.${l.deadline?.scheduler ? ` Delete the deadline's scheduled task(s) ${[l.deadline.scheduler.trigger, l.deadline.scheduler.warn].filter(Boolean).join(', ')}.` : ''}`,
+    DELIVER: 'The deadline has passed. Deliver now: `npm run finish -- deadline deliver`, and send its report as the final message. No extension, no further engineering.',
   }[res.word];
   const lines = [`FINISH-JOB ${res.word} — ${say}`];
   for (const r of res.rows) lines.push(`  [${r.status.toUpperCase().padEnd(7)}] ${r.id}: ${short(r.text, 70)} — ${short(r.detail, 200)}`);
@@ -445,6 +465,280 @@ export function report(l, res) {
 }
 
 export const minDelay = (l) => Math.min(1440, 45 * 2 ** Math.max(0, l.unchangedParks));
+
+// ---------------------------------------------------------------- deadline
+
+/*
+ * A deadline the owner names is a delivery commitment the session cannot move
+ * (owner's permanent operating rule, 2026-11-17; §112). The ledger holds it; an
+ * independent scheduler — a one-shot Claude Code Remote scheduled task the
+ * session must register, firing whatever the session is doing and even after
+ * its container is gone — enforces it; and this hook's clock enforces it
+ * mid-turn. Past the deadline nothing but delivery runs.
+ */
+
+/** Minutes assumed for an open requirement with no estimate on the critical path. */
+export const DEFAULT_ESTIMATE_MIN = 30;
+/** The prompt the scheduler delivers begins with this, so it is never read as the owner's words. */
+export const DEADLINE_FIRE = /^\s*\[DEADLINE SCHEDULER\]/;
+const TIME_AFTER =
+  '(?:today|tonight|tomorrow|noon|midnight|eod|cob|end\\s+of\\s+(?:the\\s+)?(?:day|week|month)|(?:mon|tues|wednes|thurs|fri|satur|sun)day|' +
+  '\\d{1,2}(?::\\d{2})?\\s*(?:am|pm)\\b|\\d{1,2}:\\d{2}|\\d{4}-\\d{2}-\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\\.?\\s+\\d{1,2}|' +
+  '(?:in\\s+)?\\d+\\s*(?:min|minute|hour|hr|day)s?\\b)';
+/** A deadline word followed by a time: "deadline: 5pm", "by Friday", "due 2026-11-20", "within 3 hours". A rule about deadlines names none. */
+const DEADLINE_WORDS = new RegExp(`\\b(?:hard\\s+deadline|deadline|due|no\\s+later\\s+than|by|within|before)\\b[\\s:—–-]*(?:is\\s+|at\\s+|on\\s+|of\\s+)?(?:the\\s+)?${TIME_AFTER}`, 'i');
+
+/** The line of the owner's message that names a deadline, or null. */
+export function deadlineIn(text) {
+  const m = String(text).match(DEADLINE_WORDS);
+  if (!m) return null;
+  const start = text.lastIndexOf('\n', m.index) + 1;
+  const end = text.indexOf('\n', m.index);
+  return short(text.slice(start, end < 0 ? undefined : end).trim(), 240);
+}
+
+const AUTO_IDS = ['GIT-COMMIT', 'GIT-PUSH', 'MERGE', 'CI', 'DEPLOY'];
+
+/**
+ * Where the deadline stands now. `done` is the set of verified ids (the last
+ * check's, unless a fresher one is given). `gate` names what must happen before
+ * any other work may: register the deadline, escalate a risk, or deliver.
+ */
+export function deadlineState(l, now = clock(), done = null) {
+  const d = l?.deadline;
+  if (!d) return null;
+  if (d.delivered) return { phase: 'DELIVERED', detail: `delivered ${d.delivered.at}${d.delivered.met ? '' : ' (AFTER the deadline)'}` };
+  if (!d.at) {
+    return { phase: 'UNSET', gate: 'register', detail: `the owner named a deadline ("${short(d.ownerText ?? '', 100)}") and it is not set: \`npm run finish -- deadline set --at <ISO> --deliverable "<…>" --accept R1,R2\`` };
+  }
+  const at = Date.parse(d.at);
+  const remaining = Math.floor((at - now) / 60_000);
+  if (remaining <= 0) return { phase: 'DUE', gate: 'deliver', remaining, detail: `the deadline ${d.at} has passed: deliver now — \`npm run finish -- deadline deliver\`` };
+  if (!d.scheduler) {
+    return { phase: 'UNREGISTERED', gate: 'register', remaining, detail: `the deadline ${d.at} has no independent scheduler: create the scheduled task(s) \`npm run finish -- deadline status\` prints, then \`npm run finish -- deadline register …\`` };
+  }
+  const verified = done ?? new Set((l.lastCheck?.rows ?? []).filter((r) => r.status === 'done').map((r) => r.id));
+  const ids = [...new Set([...l.requirements.map((r) => r.id), ...(l.lastCheck?.rows ?? []).map((r) => r.id).filter((id) => AUTO_IDS.includes(id))])];
+  const path_ = ids.filter((id) => !verified.has(id) && !d.deferred?.[id]);
+  const needed = path_.reduce((s, id) => s + (d.estimates?.[id] ?? DEFAULT_ESTIMATE_MIN), 0);
+  const failingAccept = (d.accept ?? []).filter((id) => !verified.has(id));
+  const risk = needed > remaining ? `critical path ${path_.join(', ')} needs ~${needed} min; ${remaining} min remain` : null;
+  const escalated = !!risk && !!d.riskSince && (d.escalations ?? []).some((e) => Date.parse(e.at) >= Date.parse(d.riskSince));
+  return {
+    phase: risk ? 'AT_RISK' : 'ON_TRACK', remaining, needed, path: path_, failingAccept, risk, escalated,
+    gate: risk && d.riskSince && !escalated ? 'escalate' : null,
+    detail: risk
+      ? `AT RISK — ${risk}.${escalated ? ' Escalated to the owner.' : ' Tell the owner now: `npm run finish -- deadline escalate --note "<what will and will not be done by the deadline>"` and a PushNotification.'}`
+      : `${remaining} min to ${d.at}; critical path ~${needed} min (${path_.join(', ') || 'nothing open'})`,
+  };
+}
+
+/** Keeps the risk episode current: a risk first seen now needs an escalation made after now. */
+function trackRisk(l, s, now = clock()) {
+  const d = l.deadline;
+  if (!d || !s) return false;
+  if (s.risk && !d.riskSince) {
+    d.riskSince = new Date(now).toISOString();
+    return true;
+  }
+  if (!s.risk && d.riskSince && s.phase === 'ON_TRACK') {
+    d.riskSince = null;
+    return true;
+  }
+  return false;
+}
+
+/** The exact scheduled tasks to create: the deadline itself and an early warning. */
+export function schedulerPlan(l, now = clock()) {
+  const d = l.deadline;
+  const at = Date.parse(d.at);
+  const window = at - now;
+  const what = short(d.deliverable ?? 'the assignment', 160);
+  const deadline = {
+    name: `Deadline: ${short(what, 60)}`, run_once_at: new Date(at).toISOString(),
+    prompt: `[DEADLINE SCHEDULER] DEADLINE ${d.at} reached for: ${what}. Whatever you are doing, stop it: run \`npm run finish -- deadline deliver\` now and send the owner its report (completed work, unfinished work, failed acceptance criteria). No extension and no further engineering first. If the ledger is already DONE or DELIVERED, reply in one line.`,
+  };
+  if (window <= 30 * 60_000) return { deadline, warn: null };
+  const warnAt = at - Math.max(10 * 60_000, Math.round(window * 0.25));
+  return {
+    deadline,
+    warn: {
+      name: `Deadline warning: ${short(what, 52)}`, run_once_at: new Date(warnAt).toISOString(),
+      prompt: `[DEADLINE SCHEDULER] WARNING: the deadline ${d.at} for "${what}" is ${Math.round((at - warnAt) / 60_000)} min away. Run \`npm run finish -- check\` and \`npm run finish -- deadline status\`. If completion by the deadline is unlikely, escalate now (\`npm run finish -- deadline escalate --note …\` and tell the owner), defer nonessential work, and keep the acceptance criteria first.`,
+    },
+  };
+}
+
+/** Tools a deadline gate still allows: reading, notifying the owner, the scheduler, and the ledger's own CLI. */
+const GATE_TOOLS = /^(Read|Grep|Glob|ToolSearch|Skill|PushNotification|SendUserFile|TaskList|TaskGet)$|send_message|create_trigger|list_triggers|get_trigger|send_later/;
+
+/** Refuses moving or cancelling the registered deadline's own scheduled tasks: no autonomous extension. */
+function schedulerTamper(l, tool, input) {
+  const s = l.deadline?.scheduler;
+  if (!s || l.deadline.delivered || !/update_trigger|delete_trigger/.test(tool)) return '';
+  if (![s.trigger, s.warn].includes(String(input.trigger_id ?? ''))) return '';
+  if (/delete_trigger/.test(tool) || input.run_once_at || input.cron_expression || input.enabled === false || input.prompt) {
+    return `FINISH-THE-JOB DEADLINE: ${input.trigger_id} is the registered deadline's independent scheduler. It is not moved, disabled, rewritten or deleted before delivery — the deadline is not extended by the session (owner's rule 7). Only the owner can change it.`;
+  }
+  return '';
+}
+
+function deadlineGate(l, tool, input, command) {
+  const tamper = schedulerTamper(l, tool, input);
+  if (tamper) return tamper;
+  const s = deadlineState(l);
+  if (trackRisk(l, s)) saveLedger(l);
+  const gate = deadlineState(l)?.gate;
+  if (!gate) return '';
+  if (gate === 'deliver') {
+    const prev = ralphState();
+    if (!prev || !prev.includes('DEADLINE REACHED')) arm(l, deliverPrompt(l));
+  }
+  if (GATE_TOOLS.test(tool) || (tool === 'Bash' && FINISH_CLI.test(command))) return '';
+  const why = {
+    register: 'register the deadline with the independent scheduler before any other work',
+    escalate: 'completion by the deadline has become unlikely; report that to the owner before any other work',
+    deliver: 'the deadline has passed; deliver what exists now. Continued engineering is not a substitute for the deliverable',
+  }[gate];
+  return `FINISH-THE-JOB DEADLINE: ${why}. ${deadlineState(l).detail}`;
+}
+
+function deliverPrompt(l) {
+  return [
+    `FINISH THE JOB — DEADLINE REACHED (${l.deadline.at}). Deliver now, even though the work may be incomplete.`,
+    'Run `npm run finish -- deadline deliver`, then send the owner its report as your final message, verbatim:',
+    'completed work, unfinished work and failed acceptance criteria, each listed. Do not extend the deadline and',
+    'do not continue engineering instead of delivering.',
+  ].join('\n');
+}
+
+/** The delivery: what is verified, what is not, and which acceptance criteria failed, at the moment of delivery. */
+export function deliveryReport(l, res, now = clock()) {
+  const d = l.deadline;
+  const text = Object.fromEntries(l.requirements.map((r) => [r.id, r.text]));
+  const line = (r) => `- ${r.id}${text[r.id] ? `: ${short(text[r.id], 160)}` : `: ${short(r.text, 160)}`} — ${short(r.detail, 220)}`;
+  const accept = new Set(d.accept ?? []);
+  const rows = res.rows.filter((r) => r.id !== 'DEADLINE');
+  const completed = rows.filter((r) => r.status === 'done');
+  const unfinished = rows.filter((r) => r.status !== 'done');
+  const failed = unfinished.filter((r) => accept.has(r.id));
+  const met = now <= Date.parse(d.at);
+  const pass = failed.length === 0 && unfinished.length === 0;
+  return [
+    `# Deadline delivery — ${pass ? 'ACCEPTED' : failed.length ? 'ACCEPTANCE FAILED' : 'INCOMPLETE'}`,
+    '',
+    `- Deadline: ${d.at} (${met ? 'delivered on time' : 'delivered AFTER the deadline'}, at ${new Date(now).toISOString()})`,
+    `- Deliverable: ${d.deliverable}`,
+    `- Acceptance criteria: ${[...accept].join(', ') || 'none named'}`,
+    ...(d.escalations?.length ? [`- Escalated: ${d.escalations.map((e) => `${e.at} — ${short(e.note, 120)}`).join('; ')}`] : []),
+    '',
+    `## Completed work (verified) — ${completed.length}`,
+    ...(completed.length ? completed.map(line) : ['- none']),
+    '',
+    `## Unfinished work — ${unfinished.length}`,
+    ...(unfinished.length ? unfinished.map((r) => `${line(r)}${d.deferred?.[r.id] ? ` [deferred as nonessential: ${short(d.deferred[r.id], 100)}]` : ''}`) : ['- none']),
+    '',
+    `## Failed acceptance criteria — ${failed.length}`,
+    ...(failed.length ? failed.map(line) : ['- none']),
+    '',
+  ].join('\n');
+}
+
+function deadlineCli(l, sub, id, flags, now = clock()) {
+  const fail = (m) => ({ code: 1, out: `FINISH-JOB DEADLINE: ${m}` });
+  const d = l.deadline;
+  const exists = (x) => l.requirements.some((r) => r.id === x) || AUTO_IDS.includes(x);
+  const ok = (m) => {
+    saveLedger(l);
+    return { code: 0, out: `FINISH-JOB DEADLINE: ${m}` };
+  };
+  if (sub === 'status' || !sub) {
+    if (!d) return { code: 0, out: 'FINISH-JOB DEADLINE: this assignment has no deadline.' };
+    const s = deadlineState(l, now);
+    const lines = [`FINISH-JOB DEADLINE ${s.phase} — ${s.detail}`];
+    if (d.at) lines.push(`  deliverable: ${d.deliverable}`, `  acceptance criteria: ${(d.accept ?? []).join(', ')}`);
+    if (d.scheduler) lines.push(`  scheduler: ${d.scheduler.trigger} at ${d.scheduler.at}${d.scheduler.warn ? `; warning ${d.scheduler.warn} at ${d.scheduler.warnAt}` : ''}`);
+    else if (d.at) {
+      const p = schedulerPlan(l, now);
+      lines.push('  Register it: call create_trigger (claude-code-remote) with exactly these, then `npm run finish -- deadline register --trigger <trig_…> --at <run_once_at>' + (p.warn ? ' --warn <trig_…> --warn-at <run_once_at>`' : '`'));
+      for (const [k, t] of Object.entries(p)) if (t) lines.push(`  ${k}: ${JSON.stringify({ ...t, initiation: 'human_request' })}`);
+    }
+    return { code: 0, out: lines.join('\n') };
+  }
+  if (sub === 'set') {
+    const at = Date.parse(String(flags.at ?? ''));
+    if (!Number.isFinite(at)) return fail('set needs --at <ISO-8601 time with a zone, e.g. 2026-11-17T22:00:00Z>.');
+    if (at <= now) return fail(`${new Date(at).toISOString()} is not in the future.`);
+    const accept = typeof flags.accept === 'string' ? flags.accept.split(',').map((s) => s.trim()).filter(Boolean) : d?.accept;
+    const deliverable = typeof flags.deliverable === 'string' ? flags.deliverable : d?.deliverable;
+    if (!deliverable || !accept?.length) return fail('set needs --deliverable "<the final deliverable>" and --accept <requirement ids that are its acceptance criteria>.');
+    const unknown = accept.filter((x) => !exists(x));
+    if (unknown.length) return fail(`no requirement ${unknown.join(', ')} (add one with \`npm run finish -- add "<criterion>"\`).`);
+    const next = l.deadline ?? (l.deadline = { ownerText: null });
+    if (next.at && at > Date.parse(next.at)) {
+      // Rule 7: only the owner moves a deadline later, in a message after it was set.
+      const rev = next.ownerRevision;
+      if (!rev || Date.parse(rev.at) <= Date.parse(next.setAt)) {
+        return fail(`refused: ${new Date(at).toISOString()} is later than the deadline ${next.at}. The session never extends a deadline; only a new owner message naming one can.`);
+      }
+      next.ownerRevision = { ...rev, usedAt: new Date(now).toISOString() };
+    }
+    if (next.at && next.delivered) return fail('this deadline was already delivered.');
+    (next.history ??= []).push({ at: new Date(now).toISOString(), from: next.at ?? null, to: new Date(at).toISOString() });
+    const moved = next.at && Date.parse(next.at) !== at;
+    Object.assign(next, { at: new Date(at).toISOString(), setAt: new Date(now).toISOString(), deliverable, accept, estimates: next.estimates ?? {}, deferred: next.deferred ?? {}, escalations: next.escalations ?? [] });
+    if (moved || !next.scheduler) next.scheduler = null;
+    saveLedger(l);
+    return { code: 0, out: `FINISH-JOB DEADLINE: set to ${next.at}.\n${deadlineCli(l, 'status', null, {}, now).out}` };
+  }
+  if (!d?.at) return fail('no deadline is set (`npm run finish -- deadline set …`).');
+  if (sub === 'register') {
+    const p = schedulerPlan(l, now);
+    const near = (a, b) => Math.abs(Date.parse(String(a)) - Date.parse(b)) <= 60_000;
+    if (!/^trig_\w+$/.test(String(flags.trigger ?? ''))) return fail('register needs --trigger <the trig_… id create_trigger returned>.');
+    if (!near(flags.at, d.at)) return fail(`--at must be the trigger's run_once_at, and it must be the deadline ${d.at}.`);
+    if (p.warn) {
+      if (!/^trig_\w+$/.test(String(flags.warn ?? ''))) return fail(`a deadline more than 30 minutes out needs an early-warning task too: --warn <trig_…> --warn-at ${p.warn.run_once_at}.`);
+      const w = Date.parse(String(flags['warn-at']));
+      if (!(w > now && w <= Date.parse(p.warn.run_once_at) + 60_000)) return fail(`--warn-at must be between now and ${p.warn.run_once_at}.`);
+    }
+    d.scheduler = { trigger: flags.trigger, at: d.at, warn: p.warn ? flags.warn : null, warnAt: p.warn ? new Date(Date.parse(String(flags['warn-at']))).toISOString() : null, registeredAt: new Date(now).toISOString() };
+    return ok(`registered — ${d.scheduler.trigger} fires at ${d.at}${d.scheduler.warn ? `, ${d.scheduler.warn} warns at ${d.scheduler.warnAt}` : ''}. Neither may be moved or removed by the session.`);
+  }
+  if (sub === 'estimate') {
+    const min = Number(flags.min);
+    if (!exists(id) || !(min > 0)) return fail('estimate needs a requirement id and --min <minutes left on it>.');
+    d.estimates[id] = min;
+    return ok(`${id} ~${min} min. ${deadlineState(l, now).detail}`);
+  }
+  if (sub === 'defer') {
+    if (!exists(id) || typeof flags.reason !== 'string') return fail('defer needs a requirement id and --reason.');
+    if ((d.accept ?? []).includes(id)) return fail(`${id} is an acceptance criterion: it is never deferred to protect the deadline.`);
+    d.deferred[id] = flags.reason;
+    return ok(`${id} deferred as nonessential; it leaves the critical path and is reported as unfinished. ${deadlineState(l, now).detail}`);
+  }
+  if (sub === 'escalate') {
+    if (typeof flags.note !== 'string' || flags.note.length < 10) return fail('escalate needs --note "<what will and will not be done by the deadline, and why>".');
+    d.escalations.push({ at: new Date(now).toISOString(), note: flags.note });
+    return ok(`escalation recorded. Send it to the owner now (PushNotification, and in your next message): ${flags.note}`);
+  }
+  if (sub === 'deliver') {
+    const due = now >= Date.parse(d.at);
+    const res = check(l);
+    if (!due && !['DONE', 'BLOCKED', 'STALLED'].includes(res.word)) {
+      return fail(`the deadline is ${d.at} and executable work remains (${res.word}): keep working; delivery is mandatory at the deadline, not before it.\n${report(l, res)}`);
+    }
+    const body = deliveryReport(l, res, now);
+    const file = path.join(LEDGER_DIR, `${l.sessionId}.delivery.md`);
+    fs.writeFileSync(path.join(root(), file), body);
+    d.delivered = { at: new Date(now).toISOString(), met: now <= Date.parse(d.at), file };
+    l.status = res.word === 'DONE' ? 'DONE' : 'DELIVERED';
+    disarm(l);
+    saveLedger(l);
+    return { code: 0, out: `FINISH-JOB DELIVERED — written to ${file}. Send this to the owner as your final message now:\n\n${body}` };
+  }
+  return fail(`unknown deadline command ${sub}. Use status, set, register, estimate, defer, escalate or deliver.`);
+}
 
 // ---------------------------------------------------------------- recovery
 
@@ -465,7 +759,8 @@ function brief(l) {
   return [
     `FINISH-THE-JOB LEDGER (${l.status}, ${l.requirements.length} owner requirement(s)) — enforced by \`npm run finish -- check\`; Ralph Loop refuses the stop until it releases it.`,
     ...rows.map((r) => `  [${r.status.toUpperCase()}] ${r.id}${text[r.id] ? `: ${short(text[r.id], 90)}` : ''} — ${short(r.detail, 110)}`),
-  ].join('\n').slice(0, 2500);
+    ...(l.deadline ? [`  DEADLINE ${deadlineState(l).phase}: ${short(deadlineState(l).detail, 300)}`] : []),
+  ].join('\n').slice(0, 2800);
 }
 
 /** For restore-objective.mjs: put the ledger back after compaction or resume, and re-arm it. */
@@ -490,10 +785,33 @@ export function sessionContext(event) {
 
 // ---------------------------------------------------------------- hooks
 
+/** The scheduler fired. It is not the owner and adds no requirement; it demands the delivery or a fresh risk reading. */
+function deadlineFired(e, kind) {
+  let l = loadLedger(e.session_id);
+  if (!l && e.transcript_path) {
+    // A fired task can resume a session whose container was reclaimed: the ledger comes back from the transcript.
+    try {
+      l = ledgerFromTranscript(fs.readFileSync(e.transcript_path, 'utf8'));
+      if (l) l.sessionId = e.session_id;
+    } catch { /* no transcript */ }
+  }
+  if (!isOpen(l) || !l.deadline || l.deadline.delivered) {
+    return `FINISH-THE-JOB: the deadline scheduler fired (${kind}) for an assignment that is ${l?.status ?? 'not on record'}. Reply in one line; nothing is due.`;
+  }
+  (l.deadline.firings ??= []).push({ at: new Date(clock()).toISOString(), kind });
+  if (l.status !== 'ACTIVE') l.status = 'ACTIVE';
+  const s = deadlineState(l);
+  trackRisk(l, s);
+  arm(l, s.phase === 'DUE' ? deliverPrompt(l) : undefined);
+  saveLedger(l);
+  return `${brief(l)}\n${s.phase === 'DUE' ? deliverPrompt(l) : 'DEADLINE WARNING: run `npm run finish -- check`; if completion is unlikely escalate now (`npm run finish -- deadline escalate --note …`, PushNotification), defer nonessential work, acceptance criteria first.'}`;
+}
+
 function hookUserPrompt(e) {
   const sid = e.session_id;
   const prompt = String(e.prompt ?? '');
   if (!sid || !prompt.trim()) return '';
+  if (DEADLINE_FIRE.test(prompt)) return deadlineFired(e, /WARNING/.test(prompt.slice(0, 40)) ? 'warning' : 'deadline');
   // A harness notice (a finished background task or subagent, a reminder) arrives as a
   // prompt but is not the owner's words: 2026-11-04 a subagent's report became R8-R72,
   // and 2026-11-11 a subagent hand-back (`<agent-message …>`) became R18-R33.
@@ -509,11 +827,17 @@ function hookUserPrompt(e) {
     if (!isAssignment(prompt)) return '';
     if (l) fs.renameSync(ledgerPath(sid), ledgerPath(`${sid}.${l.createdAt.replace(/\W/g, '')}`));
     l = newLedger(sid, [{ at: new Date().toISOString(), text: prompt }]);
+    const named = deadlineIn(prompt);
+    if (named) l.deadline = { ownerText: named, detectedAt: new Date().toISOString(), at: null };
     arm(l);
     saveLedger(l);
     return `${brief(l)}\nThese are the owner's words, split by list item. Attach evidence to each; \`npm run finish -- check\` decides DONE.`;
   }
   if (requirementsFrom(prompt).length >= 2) l.requirements.push(...makeReqs(prompt, l.requirements.length + 1, `owner ${new Date().toISOString()}`));
+  const named = deadlineIn(prompt);
+  // Only the owner's own later message can move a deadline (rule 7); it unlocks one `deadline set`.
+  if (named && l.deadline?.at) l.deadline.ownerRevision = { text: named, at: new Date(clock()).toISOString() };
+  else if (named && !l.deadline) l.deadline = { ownerText: named, detectedAt: new Date().toISOString(), at: null };
   if (l.status !== 'ACTIVE') {
     l.status = 'ACTIVE';
     arm(l);
@@ -538,6 +862,10 @@ function hookPreTool(e) {
   const sid = e.session_id;
   const l = sid && loadLedger(sid);
   if (!isOpen(l)) return '';
+  if (l.deadline) {
+    const refusal = deadlineGate(l, tool, input, command);
+    if (refusal) return refusal;
+  }
   if (/send_later/.test(tool) && l.unchangedParks > 0) {
     const minutes = input.delay_minutes ? Number(input.delay_minutes) : input.at ? (Date.parse(String(input.at).replace(/\[.*\]$/, '')) - Date.now()) / 60_000 : 0;
     if (minutes < minDelay(l)) {
@@ -626,6 +954,10 @@ export function cli(argv) {
   }
   if (!l) return fail('no ledger for this session. `npm run finish -- init` builds one from the owner\'s messages.');
   if (cmd === 'status' || !cmd) return { code: 0, out: brief(l) };
+  if (cmd === 'deadline') {
+    if (!isOpen(l) && pos[1] !== 'status') return fail(`the assignment is ${l.status}; its deadline is closed.`);
+    return deadlineCli(l, pos[1], pos[2], flags, clock());
+  }
   if (cmd === 'check') {
     const res = check(l);
     return { code: res.word === 'DONE' ? 0 : 1, out: report(l, res) };
