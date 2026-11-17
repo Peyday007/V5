@@ -8,8 +8,14 @@
  * effective date as "Effective YYYY-MM-DD.", a correction as "Corrects N.").
  */
 import { describe, expect, it } from 'vitest';
+import { freshProject } from './helpers.ts';
+import { getDb } from '../server/db/database.ts';
+import { insertFeedItems } from '../server/repos/feeds.ts';
 import {
   DETECTORS,
+  ruleReading,
+  runDetectors,
+  withinMemberWindow,
   RULE_EFFECTIVE_SOON,
   RULE_EFFECTIVE_SOON_DAYS,
   RULE_EFFECTIVE_SOON_V2,
@@ -134,5 +140,64 @@ describe('installation', () => {
     expect(issuingAgencyOf(FAA)).toBe('Federal Aviation Administration');
     expect(issuingAgencyOf('Federal Communications Commission')).toBe('Federal Communications Commission');
     expect(issuingAgencyOf(null)).toBeNull();
+  });
+});
+
+/**
+ * Finding repair-reading-lookback-inflates-misses: v2 reads 90 days back only to
+ * hold the rule a recent correction corrects, but keeps nothing published more
+ * than 30 days ago. Its reading used the 90-day lookback as the universe of
+ * misses, so an old rule the screen KEPT from a recognised agency counted as a
+ * v2 miss and fed a spurious DETECTOR_MISSES:RULE_EFFECTIVE_SOON@2 proposal.
+ */
+describe('RULE_EFFECTIVE_SOON@2 counts as a miss only what it could have kept', () => {
+  const DAY = 86_400_000;
+  const live = new Date();
+  const daysAgo = (n: number) => new Date(live.getTime() - n * DAY).toISOString();
+  const dayAhead = (n: number) => new Date(live.getTime() + n * DAY).toISOString().slice(0, 10);
+  const FCC = 'Federal Communications Commission';
+
+  async function keep(itemId: string) {
+    for (const model of ['m1', 'm2']) {
+      await getDb().run(
+        `INSERT INTO cheap_results (id, kind, input_hash, subject_id, model, ok, output, error, created_at)
+         VALUES (?, 'SCREEN_LEAD', ?, ?, ?, 1, ?, NULL, ?)`,
+        [`cr-${itemId}-${model}`, `h-${itemId}`, itemId, model, JSON.stringify({ verdict: 'KEEP', window: 'SHORT', deliverable: 'DOCUMENT', need: 'x', payer: 'y', reason: 'z' }), live.toISOString()],
+      );
+    }
+  }
+
+  it('the membership window is the one detect applies; a rule without one keeps what it reads', () => {
+    expect(RULE_EFFECTIVE_SOON_V2.memberWindowMs).toBe(30 * DAY);
+    expect(RULE_EFFECTIVE_SOON_V2.lookbackMs).toBeGreaterThan(RULE_EFFECTIVE_SOON_V2.memberWindowMs!);
+    expect(withinMemberWindow(RULE_EFFECTIVE_SOON_V2, daysAgo(29), live.toISOString(), live)).toBe(true);
+    expect(withinMemberWindow(RULE_EFFECTIVE_SOON_V2, daysAgo(31), live.toISOString(), live)).toBe(false);
+    expect(withinMemberWindow(RULE_EFFECTIVE_SOON_V2, null, daysAgo(31), live)).toBe(false);
+    expect(withinMemberWindow(RULE_EFFECTIVE_SOON_V2, 'not a date', live.toISOString(), live)).toBe(false);
+    expect(withinMemberWindow(RULE_EFFECTIVE_SOON, daysAgo(400), live.toISOString(), live)).toBe(true);
+  });
+
+  it('an item published 30–90 days ago that the screen KEPT is not a miss; one inside the window still is', async () => {
+    await freshProject();
+    const rule = (n: string, published: string, body: string | null) => ({ externalId: n, url: `${FR}/x/${n}/rule-${n}`, title: `Rule ${n}`, body, organization: FCC, publishedAt: published });
+    await insertFeedItems('federal-register-rules', [
+      // Members: published in the window, effective within the horizon.
+      rule('m1', daysAgo(2), `Effective ${dayAhead(10)}.`),
+      rule('m2', daysAgo(3), `Effective ${dayAhead(20)}.`),
+      // Read as context only (published 60 days ago), kept by the screen: not a miss.
+      rule('old', daysAgo(60), `Effective ${dayAhead(5)}.`),
+      // Inside the window but with no effective date the rule can read: a genuine miss.
+      rule('recent', daysAgo(4), 'The rule takes effect on a date stated in its text.'),
+    ]);
+    const ids = new Map((await getDb().all<{ id: string; external_id: string }>(`SELECT id, external_id FROM feed_items WHERE source = 'federal-register-rules'`)).map((r) => [r.external_id, r.id]));
+    const pass = await runDetectors({ now: live, detectors: [RULE_EFFECTIVE_SOON_V2] });
+    expect(pass[0]!.records).toBe(4);
+    for (const id of ids.values()) await keep(id);
+
+    const reading = await ruleReading(RULE_EFFECTIVE_SOON_V2, live);
+    expect(reading.members).toBe(2);
+    expect(reading.confirmed).toBe(2);
+    expect(reading.misses).toBe(1);
+    expect(reading.missedSamples).toEqual([`Rule recent — ${FR}/x/recent/rule-recent`]);
   });
 });

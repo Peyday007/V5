@@ -77,6 +77,14 @@ export interface Detector {
   sources: readonly string[];
   /** How far back the rule looks. */
   lookbackMs: number;
+  /**
+   * How recently an item must have been published (its fetch time when it
+   * states none) for this rule to be able to keep it, when that is narrower
+   * than `lookbackMs`. A rule may read further back than it keeps — to hold
+   * the record a recent item refers to — and an item it could never keep is
+   * not a miss (`ruleReading`). Unset: every item the rule reads can be kept.
+   */
+  memberWindowMs?: number;
   detect(records: readonly DetectorRecord[], now: Date): DetectedSignal[];
 }
 
@@ -289,6 +297,17 @@ export const REPEATED_DEMAND: Detector = {
 // Rule 3: a federal rule taking effect soon
 // ---------------------------------------------------------------------------
 
+/**
+ * Whether an item is inside a rule's membership window: published (or, with no
+ * date, fetched) no earlier than `memberWindowMs` before now and not after now.
+ * A rule with no `memberWindowMs` can keep anything it reads. Pure.
+ */
+export function withinMemberWindow(detector: Pick<Detector, 'memberWindowMs'>, publishedAt: string | null, fetchedAt: string, now: Date): boolean {
+  if (detector.memberWindowMs === undefined) return true;
+  const at = Date.parse(publishedAt ?? fetchedAt);
+  return Number.isFinite(at) && at >= now.getTime() - detector.memberWindowMs && at <= now.getTime();
+}
+
 /** A rule whose stated effective date falls inside this many days of now. */
 export const RULE_EFFECTIVE_SOON_DAYS = 45;
 
@@ -391,11 +410,12 @@ export const RULE_EFFECTIVE_SOON_V2: Detector = {
   label: RULE_EFFECTIVE_SOON.label,
   mode: 'SHADOW',
   sources: RULE_EFFECTIVE_SOON.sources,
-  // Long enough to hold the rule a recent correction corrects; membership stays at 30 days.
+  // Long enough to hold the rule a recent correction corrects; membership stays at 30 days,
+  // and only an item inside it can be a miss (`memberWindowMs`, read by `ruleReading`).
   lookbackMs: 90 * DAY,
+  memberWindowMs: RULE_EFFECTIVE_SOON_PUBLISHED_DAYS * DAY,
   detect(records, now) {
     const until = now.getTime() + RULE_EFFECTIVE_SOON_DAYS * DAY;
-    const since = now.getTime() - RULE_EFFECTIVE_SOON_PUBLISHED_DAYS * DAY;
     const ours = records.filter((record) => this.sources.includes(record.source));
     const effectiveOfDocument = (documentNumber: string): string | null => {
       const corrected = ours.find((record) => record.url.includes(`/${documentNumber}/`));
@@ -406,8 +426,8 @@ export const RULE_EFFECTIVE_SOON_V2: Detector = {
       const name = issuingAgencyOf(record.organization);
       const agency = employerKey(name);
       if (!agency || !name) continue;
+      if (!withinMemberWindow(this, record.publishedAt, record.fetchedAt, now)) continue;
       const published = Date.parse(record.publishedAt ?? record.fetchedAt);
-      if (!Number.isFinite(published) || published < since || published > now.getTime()) continue;
       const corrects = correctedDocumentOf(record.body);
       const effective = effectiveDateOf(record.body) ?? (corrects ? effectiveOfDocument(corrects) : null);
       if (!effective) continue;
@@ -618,8 +638,8 @@ export async function ruleReading(detector: Detector, now: Date = new Date()): P
   );
   const memberIds = [...new Set(rows.flatMap((row) => JSON.parse(row.member_ids) as string[]))];
   const since = new Date(now.getTime() - detector.lookbackMs - DAY).toISOString();
-  const items = await db.all<{ id: string; title: string; url: string; organization: string | null; published_at: string | null }>(
-    `SELECT id, title, url, organization, published_at FROM feed_items
+  const items = await db.all<{ id: string; title: string; url: string; organization: string | null; published_at: string | null; fetched_at: string }>(
+    `SELECT id, title, url, organization, published_at, fetched_at FROM feed_items
       WHERE source IN (${detector.sources.map(() => '?').join(',')}) AND fetched_at >= ? LIMIT 5000`,
     [...detector.sources, since],
   );
@@ -638,7 +658,9 @@ export async function ruleReading(detector: Detector, now: Date = new Date()): P
   })();
   const entities = new Set(rows.map((row) => row.entity_key).filter((one): one is string => !!one));
   const categories = new Set(rows.filter((row) => !row.entity_key).map((row) => row.category).filter((one): one is string => !!one));
-  const related = items.filter((item) => !members.has(item.id) && (
+  // A miss is an item the rule could have kept: one it reads only as context
+  // (outside its membership window) is never a miss, however far back it reads.
+  const related = items.filter((item) => !members.has(item.id) && withinMemberWindow(detector, item.published_at, item.fetched_at, now) && (
     entities.has(employerKey(item.organization) ?? '') || categories.has(jobFamily(item.title)?.key ?? '')
   ));
   const verdicts = await screenVerdicts([...memberIds, ...related.map((one) => one.id)]);
