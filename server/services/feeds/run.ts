@@ -944,7 +944,18 @@ export interface ExtractionPass {
   /** Identity resolution of the pass's entities: corroborated links, and collisions kept apart. */
   identity?: { links: IdentityLink[]; collisions: IdentityCollision[]; uncorroborated: number };
   /** Selective deepening of the unreadable and contested candidates, against measured capacity. */
-  deepening?: { capacity: number; threshold: number | null; promoted: DeepeningDecision[]; held: DeepeningDecision[] };
+  deepening?: {
+    capacity: number;
+    threshold: number | null;
+    promoted: DeepeningDecision[];
+    held: DeepeningDecision[];
+    /**
+     * The promoted contested keys, entity collisions and cross-source links, each as the verification
+     * question the next feed shortlist round puts to research (`pendingDeepeningQuestions`). A promoted
+     * unreadable record is not here: the free-model screen reads it (`routeEscalation`).
+     */
+    questions?: MissingLinkQuestion[];
+  };
   /** The intelligence funnel for this pass, and what it gained: raw intake beside usable intelligence. */
   funnel?: {
     /** This pass alone: its records at each stage, with evidence and decisions recorded since the previous pass. */
@@ -1409,6 +1420,54 @@ export async function recordFeedExtraction(input: {
       }),
   ];
   const deepened = stage('deepening', null as ReturnType<typeof selectForDeepening> | null, () => selectForDeepening(candidates, { capacity }));
+  // What deepening promoted beyond the unreadable records goes to costly verification: each promoted
+  // contested key, entity collision and cross-source link becomes a question the next shortlist round
+  // puts to research, with the records it rests on. The question is built from code's own structure
+  // (the fact's field, the attribute that kept two names apart, the sources) and the records' URLs,
+  // never from a record's words.
+  const urlOfItem = new Map(readItems.map((item) => [item.id, item.url]));
+  const refsOfCandidate = new Map<string, { refs: string[]; condition: string; question: string }>();
+  for (const c of resolution?.collisions ?? []) {
+    refsOfCandidate.set(`entity:${c.refs.join('+')}`, {
+      refs: [...c.refs],
+      condition: `two records carry the same name but differ on ${c.attribute}`,
+      question: `Two records carry the same organization name but differ on ${c.attribute}. Open both pages and report whether they are one organization or two, quoting what decides it.`,
+    });
+  }
+  for (const l of relationshipLinks) {
+    refsOfCandidate.set(`link:${l.entityId}`, {
+      refs: [...l.refs],
+      condition: `records from ${l.sources.length} sources were linked as one entity`,
+      question: `Records from ${l.sources.length} different sources were linked as one organization. Open each page and confirm or refute that they describe the same organization, quoting the page.`,
+    });
+  }
+  for (const r of run.reconciled) {
+    if (r.status !== 'CONTESTED') continue;
+    const field = r.observations[0]?.field ?? 'value';
+    refsOfCandidate.set(`key:${r.key}`, {
+      refs: [...new Set(r.observations.map((o) => o.evidence.itemId))],
+      condition: `records state different values for one ${field}`,
+      question: `Records state different values for the same ${field}. Open each page and report which value the page itself states, quoting it, or say that it cannot be settled.`,
+    });
+  }
+  const deepeningQuestions: MissingLinkQuestion[] = (deepened?.decisions ?? [])
+    .filter((d) => d.promote && refsOfCandidate.has(d.id))
+    .map((d) => {
+      const one = refsOfCandidate.get(d.id)!;
+      return {
+        key: `deepen:${d.id}`,
+        neighborhood: d.id,
+        condition: one.condition,
+        question: one.question,
+        constructionKeys: [],
+        structures: [],
+        evidenceUrls: [...new Set(one.refs.map((ref) => urlOfItem.get(ref)).filter((u): u is string => !!u))],
+        value: d.score,
+      };
+    })
+    // One question per candidate: the same pair can be found as a collision more than once.
+    .filter((q, i, all) => all.findIndex((other) => other.key === q.key) === i)
+    .sort((a, b) => b.value - a.value || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 
   // The parser's record on each source, carried to the next pass's plan: what it read, what it could read,
   // and what the records put at stake.
@@ -1513,8 +1572,14 @@ export async function recordFeedExtraction(input: {
     ...(delta ? { delta } : {}),
     identity: resolution ? { links: resolution.links, collisions: resolution.collisions, uncorroborated: resolution.uncorroborated.length } : { links: [], collisions: [], uncorroborated: 0 },
     deepening: deepened
-      ? { capacity, threshold: deepened.threshold, promoted: deepened.decisions.filter((d) => d.promote), held: deepened.decisions.filter((d) => !d.promote) }
-      : { capacity, threshold: null, promoted: [], held: [] },
+      ? {
+          capacity,
+          threshold: deepened.threshold,
+          promoted: deepened.decisions.filter((d) => d.promote),
+          held: deepened.decisions.filter((d) => !d.promote),
+          questions: deepeningQuestions,
+        }
+      : { capacity, threshold: null, promoted: [], held: [], questions: [] },
     ...(funnel ? { funnel } : {}),
     stageFailures,
     // Only this pass's slice: the records it saw, at their latest version. When the commit failed nothing new
@@ -1540,7 +1605,8 @@ export async function recordFeedExtraction(input: {
         : 'The event graph could not take them this pass; its own sync reads the same rows.') +
       (delta ? ` Delta: ${delta.counts.NEW} new, ${delta.counts.CHANGED} changed, ${delta.counts.REPARSE} re-parsed, ${delta.unchangedItems.length} unchanged and not re-read; ${delta.recomputedKeys.length} fact key(s) recomputed.` : '') +
       ` Identity: ${pass.identity!.links.length} link(s), ${pass.identity!.collisions.length} collision(s) kept apart.` +
-      ` Deepening: ${pass.deepening!.promoted.length} promoted, ${pass.deepening!.held.length} held at capacity ${capacity}.` +
+      ` Deepening: ${pass.deepening!.promoted.length} promoted, ${pass.deepening!.held.length} held at capacity ${capacity}; ` +
+      `${deepeningQuestions.length} contested fact(s), identity collision(s) or cross-source link(s) queued for verification in the next shortlist round.` +
       (funnel ? ` Usable intelligence gained: ${funnel.gain.usableIntelligence} from ${funnel.reading.stages[0]!.raw} raw record(s)${funnel.gain.falseSpeed ? ' (raw intake without usable gain)' : ''}.` : '') +
       (stageFailures.length > 0 ? ` Stage(s) failed and named: ${stageFailures.map((f) => f.stage).join(', ')}.` : ''),
     detail: { ...pass },
@@ -1602,6 +1668,62 @@ export async function pendingLoopQuestions(projectId: string, now: Date = new Da
     }
   }
   return questions.filter((q) => !taken.has(q.key)).slice(0, Math.max(0, limit));
+}
+
+/** Records whose words would narrow a round or read as Brain's own action are kept out of a question. */
+function safeQuestion(q: MissingLinkQuestion): boolean {
+  const rendered = `- verify: ${q.question} Start from: ${q.evidenceUrls.join(', ')}.`;
+  if (statesNamedIn(rendered).length > 0) return false;
+  return Object.values(APPROVAL_ENVELOPES).every((envelope) => !describesOwnAction(rendered, envelope.forbiddenActions));
+}
+
+/**
+ * The verification questions selective deepening promoted in the recent
+ * extraction passes (KNOW-25-1, S-0358) that no round has taken recently,
+ * highest value of information first. Read from the `FEED_EXTRACTION` rows'
+ * `deepening.questions` and the `FEED_LOOP_QUESTIONS_ASKED` rows the shortlist
+ * wrote, so a promotion is consumed once and an unsettled one may be asked
+ * again after `LOOP_QUESTION_REASK_MS`. Writes nothing.
+ */
+export async function pendingDeepeningQuestions(projectId: string, now: Date = new Date(), limit: number = LOOP_QUESTIONS_PER_ROUND): Promise<MissingLinkQuestion[]> {
+  const db = getDb();
+  const passes = await db.all<{ detail: string | null }>(
+    `SELECT detail FROM cash_events WHERE project_id = ? AND kind = ? ORDER BY created_at DESC, id DESC LIMIT ?`,
+    [projectId, EXTRACTION_EVENT, DELTA_LOOKBACK_PASSES],
+  );
+  const byKey = new Map<string, MissingLinkQuestion>();
+  for (const row of passes) {
+    try {
+      const questions = (JSON.parse(row.detail ?? '{}') as { deepening?: { questions?: unknown } }).deepening?.questions;
+      if (!Array.isArray(questions)) continue;
+      for (const q of questions as MissingLinkQuestion[]) {
+        if (!q || typeof q.key !== 'string' || typeof q.question !== 'string' || !Array.isArray(q.evidenceUrls) || typeof q.value !== 'number') continue;
+        // Newest pass first: a key promoted again keeps its newest reading.
+        if (!byKey.has(q.key)) byKey.set(q.key, q);
+      }
+    } catch {
+      // An unreadable row promotes nothing.
+    }
+  }
+  if (byKey.size === 0) return [];
+  const since = new Date(now.getTime() - LOOP_QUESTION_REASK_MS).toISOString();
+  const asked = await db.all<{ detail: string | null }>(
+    `SELECT detail FROM cash_events WHERE project_id = ? AND kind = ? AND created_at >= ?`,
+    [projectId, LOOP_QUESTIONS_ASKED_EVENT, since],
+  );
+  const taken = new Set<string>();
+  for (const row of asked) {
+    try {
+      const keys = (JSON.parse(row.detail ?? '{}') as { keys?: unknown }).keys;
+      if (Array.isArray(keys)) for (const key of keys) if (typeof key === 'string') taken.add(key);
+    } catch {
+      // An unreadable row takes nothing.
+    }
+  }
+  return [...byKey.values()]
+    .filter((q) => !taken.has(q.key) && safeQuestion(q))
+    .sort((a, b) => b.value - a.value || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
+    .slice(0, Math.max(0, limit));
 }
 
 /** The corpora the connected feed sources are instances of: what Brain can already read. */
@@ -2383,7 +2505,13 @@ export async function openFeedShortlist(input: { projectId: string; now?: Date; 
       console.warn(`[feeds] corpus discovery failed for ${input.projectId}: ${String((error as Error)?.message ?? error)}`);
     });
   }
-  if (chosen.length === 0 && questions.length === 0) return null;
+  // What selective deepening promoted in the extraction passes (contested facts, identity collisions,
+  // cross-source links) is verified in the same round: the costly read deepening selected them for.
+  const verify = await pendingDeepeningQuestions(input.projectId, now).catch((error: unknown) => {
+    console.warn(`[feeds] deepening questions unreadable for ${input.projectId}: ${String((error as Error)?.message ?? error)}`);
+    return [] as MissingLinkQuestion[];
+  });
+  if (chosen.length === 0 && questions.length === 0 && verify.length === 0) return null;
 
   const frame = await executionFrame(input.projectId, mode.currency);
   const statement = [
@@ -2399,6 +2527,11 @@ export async function openFeedShortlist(input: { projectId: string; now?: Date; 
         'Answer each from a source you can quote; an unanswered gap is reported as unanswered, never assumed.'
       : '',
     ...questions.map((q) => `\n- missing link: ${q.question}${q.evidenceUrls.length ? ` Start from: ${q.evidenceUrls.join(', ')}.` : ''}`),
+    verify.length
+      ? '\nCode found these records disagreeing or linked across sources, and judged settling them worth a read. ' +
+        'Settle each from the pages themselves, quoting them; one that cannot be settled is reported as unsettled.'
+      : '',
+    ...verify.map((q) => `\n- verify: ${q.question}${q.evidenceUrls.length ? ` Start from: ${q.evidenceUrls.join(', ')}.` : ''}`),
   ]
     .filter(Boolean)
     .join(' ');
@@ -2429,20 +2562,29 @@ export async function openFeedShortlist(input: { projectId: string; now?: Date; 
   });
   if (!round) return null;
   await markShortlisted(chosen.map(({ item }) => item.id), round.id);
-  if (questions.length) {
+  if (questions.length || verify.length) {
+    const asked = [...questions, ...verify];
     await recordCashEvent({
       projectId: input.projectId,
       kind: LOOP_QUESTIONS_ASKED_EVENT,
       actorRef: 'BRAIN',
-      summary: `Feed loop: ${questions.length} derived missing-link question(s) put to research in shortlist round ${roundNo}; each stays open until a quoted source answers it.`,
-      detail: { roundId: round.id, candidateId: round.candidateId, keys: questions.map((q) => q.key), questions: questions.map((q) => ({ key: q.key, neighborhood: q.neighborhood, condition: q.condition, constructionKeys: q.constructionKeys, value: q.value })) },
+      summary:
+        `Feed loop: ${questions.length} derived missing-link question(s) and ${verify.length} deepening verification question(s) put to research in shortlist round ${roundNo}; ` +
+        'each stays open until a quoted source answers it.',
+      detail: {
+        roundId: round.id,
+        candidateId: round.candidateId,
+        keys: asked.map((q) => q.key),
+        questions: asked.map((q) => ({ key: q.key, neighborhood: q.neighborhood, condition: q.condition, constructionKeys: q.constructionKeys, value: q.value })),
+        deepening: verify.map((q) => q.key),
+      },
     });
   }
   await recordCashEvent({
     projectId: input.projectId,
     kind: 'CASH_DISCOVERY_OPENED',
     actorRef: 'BRAIN',
-    summary: `Feed shortlist opened: ${chosen.length} lead(s) for Claude to verify${questions.length ? ` and ${questions.length} missing-link question(s) to answer` : ''} (round ${roundNo}).`,
+    summary: `Feed shortlist opened: ${chosen.length} lead(s) for Claude to verify${questions.length ? ` and ${questions.length} missing-link question(s) to answer` : ''}${verify.length ? `, ${verify.length} deepening question(s) to settle` : ''} (round ${roundNo}).`,
     detail: {
       bucketId: FEED_SHORTLIST_BUCKET.id,
       candidateId: round.candidateId,
@@ -2450,6 +2592,7 @@ export async function openFeedShortlist(input: { projectId: string; now?: Date; 
       round: roundNo,
       leads: chosen.map(({ item }) => item.id),
       questions: questions.map((q) => q.key),
+      deepening: verify.map((q) => q.key),
     },
   });
   return round.id;
