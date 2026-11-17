@@ -580,6 +580,12 @@ export interface YieldBucket {
   costMinorPerUsefulResult: number | null;
   /** Average jobs running at once over the window (time-weighted); 1 = one slot busy throughout. */
   utilization: number;
+  /**
+   * Useful results per hour of job time charged here, over this reading's
+   * window: what a lane or purpose yields at the margin. Null when no job time
+   * was measured here, so an unmeasured lane is never read as a barren one.
+   */
+  usefulPerJobHour?: number | null;
 }
 
 export interface ResearchYieldReading {
@@ -692,8 +698,28 @@ function emptyBucket(): YieldBucket {
     queueWait: { measured: 0, medianMs: null, p90Ms: null },
     acceptedClaims: 0, sourceQuality: { primary: 0, secondary: 0, unretrieved: 0, primaryShare: null },
     packetsFiled: 0, newMechanisms: 0, qualifiedPositions: 0, executableOffers: 0, paidTransactions: 0, usefulResults: 0,
-    jobMs: 0, costMinor: null, uncostedJobs: 0, msPerUsefulResult: null, costMinorPerUsefulResult: null, utilization: 0,
+    jobMs: 0, costMinor: null, uncostedJobs: 0, msPerUsefulResult: null, costMinorPerUsefulResult: null, utilization: 0, usefulPerJobHour: null,
   };
+}
+
+/**
+ * One job's charge split between the purposes it served so the parts sum back
+ * to the charge itself: every part but the last is an equal share, and the last
+ * takes the remainder. An even split by multiplication (`charge / n` each) can
+ * miss the charge by float error, and over many jobs that error is what a
+ * counted-once check reads; a remainder split cannot miss it. Pure.
+ */
+export function splitCharge(charge: number, parts: number): number[] {
+  if (parts <= 1) return [charge];
+  const each = charge / parts;
+  const out: number[] = [];
+  let given = 0;
+  for (let i = 0; i < parts - 1; i++) {
+    out.push(each);
+    given += each;
+  }
+  out.push(charge - given);
+  return out;
 }
 
 /**
@@ -715,7 +741,14 @@ export function summarizeResearchYield(input: { since: string; until: string; jo
   const seen = new Set<string>();
   const kept: YieldJob[] = [];
   let unmeasuredJobs = 0;
-  const countJob = (bucket: YieldBucket, job: YieldJob, share: number) => {
+  // The exact (unrounded) sums the counted-once check compares: every distinct
+  // job's charge once on the total side, and the same charge in parts on the
+  // purpose side. Rounding for the record happens after the comparison.
+  let rawTotalMs = 0;
+  let rawPurposeMs = 0;
+  let rawTotalCost: number | null = null;
+  let rawPurposeCost: number | null = null;
+  const countJob = (bucket: YieldBucket, job: YieldJob, chargeMs: number, chargeCost: number | null) => {
     bucket.submissions += 1;
     if (job.outcome === 'COMPLETED') bucket.completions += 1;
     else if (job.outcome === 'IN_FLIGHT') bucket.inFlight += 1;
@@ -730,9 +763,9 @@ export function summarizeResearchYield(input: { since: string; until: string; jo
     }
     if (job.queueWaitMs !== null) (waits.get(bucket) ?? waits.set(bucket, []).get(bucket)!).push(job.queueWaitMs);
     (intervals.get(bucket) ?? intervals.set(bucket, []).get(bucket)!).push({ start: job.startMs, end: job.startMs + job.durationMs });
-    bucket.jobMs += job.durationMs * share;
-    if (job.costMinor === null) bucket.uncostedJobs += 1;
-    else bucket.costMinor = (bucket.costMinor ?? 0) + job.costMinor * share;
+    bucket.jobMs += chargeMs;
+    if (chargeCost === null) bucket.uncostedJobs += 1;
+    else bucket.costMinor = (bucket.costMinor ?? 0) + chargeCost;
   };
   for (const raw of input.jobs) {
     if (seen.has(raw.id)) continue;
@@ -740,9 +773,26 @@ export function summarizeResearchYield(input: { since: string; until: string; jo
     const { job, unmeasured } = sanitizeYieldJob(raw, from);
     if (unmeasured) unmeasuredJobs += 1;
     kept.push(job);
-    countJob(total, job, 1);
-    countJob(lane(job.lane), job, 1);
-    for (const p of job.purposes) countJob(purposes[p], job, 1 / job.purposes.length);
+    countJob(total, job, job.durationMs, job.costMinor);
+    countJob(lane(job.lane), job, job.durationMs, job.costMinor);
+    rawTotalMs += job.durationMs;
+    if (job.costMinor !== null) rawTotalCost = (rawTotalCost ?? 0) + job.costMinor;
+    const msParts = splitCharge(job.durationMs, job.purposes.length);
+    const costParts = job.costMinor === null ? null : splitCharge(job.costMinor, job.purposes.length);
+    // The purpose side adds this job's parts summed together, so both sides
+    // accumulate the same sequence of per-job charges and cannot drift apart
+    // by more than one job's split error, however many jobs the window holds.
+    let jobPartsMs = 0;
+    let jobPartsCost: number | null = null;
+    job.purposes.forEach((p, i) => {
+      const ms = msParts[i] ?? 0;
+      const cost = costParts ? (costParts[i] ?? 0) : null;
+      countJob(purposes[p], job, ms, cost);
+      jobPartsMs += ms;
+      if (cost !== null) jobPartsCost = (jobPartsCost ?? 0) + cost;
+    });
+    rawPurposeMs += jobPartsMs;
+    if (jobPartsCost !== null) rawPurposeCost = (rawPurposeCost ?? 0) + jobPartsCost;
   }
   const outputSeen = new Set<string>();
   const countOutput = (bucket: YieldBucket, out: YieldOutput) => {
@@ -781,14 +831,18 @@ export function summarizeResearchYield(input: { since: string; until: string; jo
     bucket.msPerUsefulResult = bucket.usefulResults > 0 ? Math.round(bucket.jobMs / bucket.usefulResults) : null;
     bucket.costMinorPerUsefulResult = bucket.usefulResults > 0 && bucket.costMinor !== null && bucket.uncostedJobs === 0 ? Math.round(bucket.costMinor / bucket.usefulResults) : null;
     bucket.utilization = overlap(intervals.get(bucket) ?? [], from, to).average;
+    bucket.usefulPerJobHour = bucket.jobMs > 0 ? Math.round((1000 * bucket.usefulResults * 3_600_000) / bucket.jobMs) / 1000 : null;
   };
   finish(total);
   for (const bucket of Object.values(lanes)) finish(bucket);
   for (const bucket of Object.values(purposes)) finish(bucket);
-  const purposeJobMs = Math.round(Object.values(purposes).reduce((sum, b) => sum + b.jobMs, 0) * 1000) / 1000;
-  const costed = Object.values(purposes).filter((b) => b.costMinor !== null);
-  const purposeCostMinor = costed.length > 0 ? Math.round(costed.reduce((sum, b) => sum + (b.costMinor ?? 0), 0) * 1000) / 1000 : null;
-  const holds = sumsAgree(total.jobMs, purposeJobMs) && sumsAgree(total.costMinor, purposeCostMinor);
+  // Compared exact, before rounding: the total and the purposes are the same
+  // charges summed two ways, so they agree to float drift. The recorded figures
+  // are those exact sums rounded alike, never a sum of separately rounded buckets.
+  const round = (n: number) => Math.round(n * 1000) / 1000;
+  const holds = sumsAgree(rawTotalMs, rawPurposeMs) && sumsAgree(rawTotalCost, rawPurposeCost);
+  const purposeJobMs = round(rawPurposeMs);
+  const purposeCostMinor = rawPurposeCost === null ? null : round(rawPurposeCost);
   const diagnosis = diagnoseCostCountedOnce({ totalJobMs: total.jobMs, purposeJobMs, totalCostMinor: total.costMinor, purposeCostMinor, holds });
   return {
     window: { since: input.since, until: input.until, ms: windowMs },
