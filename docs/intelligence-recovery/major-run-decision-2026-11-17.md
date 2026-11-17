@@ -10,7 +10,7 @@ The cause has been found, and its fix (#1052) was merged at 13:52Z and is deploy
 
 **Exact blocker.** The GPU's research yield after #1052 is unmeasured.
 
-**Shortest action.** When deploy 44097071502 is live, run the one-hour capped test under HANDOFF (cap $6). GO if, for that hour:
+**Shortest action.** Deploy 44097071502 is live (14:40Z). Now run the one-hour capped test under HANDOFF (cap $6). GO if, for that hour:
 - the GPU has ≥ 10 accepted claims (≤ $0.53 per claim at $5.29/h);
 - the goal has > 0 accepted claims;
 - pressure is not SHEDDING.
@@ -35,7 +35,7 @@ The cause has been found, and its fix (#1052) was merged at 13:52Z and is deploy
 
 **Merged, not yet verified:** #1052 (W14). A fetched page must bear on the question; contact, login and search pages are opened last; prompts ask for the subject's pricing and terms page.
 
-**Deploy 44097071502:** every test shard and the Postgres gate passed. The Fly step failed at 14:21Z on a Fly API error (`api.machines.dev … stream error INTERNAL_ERROR`), so no new image was released. **Production serves 53f54667**: release 6 plus Factory merges #1049–#1051/#1053; healthz 200. The Fly step was re-run at 14:32Z.
+**Deploy 44097071502:** every test shard and the Postgres gate passed. The Fly step failed at 14:21Z on a Fly API error (`api.machines.dev … stream error INTERNAL_ERROR`), so no new image was released. **Production serves 53f54667**: release 6 plus Factory merges #1049–#1051/#1053; healthz 200. The Fly step was re-run at 14:32Z and **succeeded at 14:40Z: production now serves 40fe2ad5, which includes #1052**; healthz 200. The GPU's yield on it is still unmeasured.
 
 ## SURGE CAPACITY (measured; configuration: free lane + gpt-oss-120b on one H200 SXM, recipe gpt-oss-120b-big)
 
@@ -116,7 +116,7 @@ The path runs objective → research question → accepted claim → plan input 
 - **Against the $250 ceiling:** about $96.50 before today plus about $32.93, which is **about $129.43 spent and about $120.57 remaining**.
 - Two pods were stopped at 13:04Z: 2ua3kt3ftnd7n9, mine, and lb3ae1xgbgqid1, started by another session.
 
-**Usable balance:** RunPod **$147.12**, spending $0/h (13:04Z).
+**Usable balance:** RunPod **$147.06**, spending $0/h (survey, 14:3xZ).
 
 **Expected expenditure for the next run:** $6.61 for the test, plus $64.80 for the run, is **$71.41** on SECURE.
 
