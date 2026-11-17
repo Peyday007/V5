@@ -127,6 +127,26 @@ describe('a short path in a finding', () => {
     }
   });
 
+  it('expands an ellipsis even when the abbreviation itself was granted into the scope', () => {
+    const test = 'tests/program-x-ventures-d0-venture-path.test.ts';
+    const scope = resolveRepairScope({
+      suggested: ['tests/...venture-path.test.ts'],
+      statement: 'substitution-and-weakness-unreachable: tests/...venture-path.test.ts never reaches the weakness branch',
+      evidence: '',
+      category: 'BEHAVIOR',
+      mutationScope: ['server/services/manufacturing/**', 'tests/program-x-ventures*.test.ts', 'tests/...venture-path.test.ts', test],
+      forbiddenPaths: [],
+      units: [
+        { unitKey: 'path', ownedPaths: ['server/services/manufacturing/venturePath.ts', 'server/services/manufacturing/kernel.ts', test] },
+      ],
+    });
+    expect(scope.ok).toBe(true);
+    if (scope.ok) {
+      expect(scope.verificationFiles).toEqual([test]);
+      expect(scope.rootCauseFiles).toEqual(['server/services/manufacturing/venturePath.ts']);
+    }
+  });
+
   it('keeps a root path the running image does not carry, such as a test', () => {
     const scope = resolveRepairScope({
       suggested: ['tests/someEngineThatIsNotOnDisk.test.ts'],
