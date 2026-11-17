@@ -16,4 +16,39 @@
 
 ## Findings
 
+### F1 CONFIRMED — the GO signal the project uses cannot move: a $10K plan cannot be ACCEPTED from research at any volume
+- CAUSE: `judgeAcceptance` (server/services/goals/plan.ts ~954) accepts only via EVIDENCED_PORTFOLIO or MEASURED_RECORD. MEASURED_RECORD (`measuredPlanChance` ~915-931) needs ≥`minPlanOutcomes` ended adopted plans with a Wilson lower bound ≥0.9 (≈35 straight successes); none exist. EVIDENCED_PORTFOLIO needs every input of every member to be evidence with sample ≥20 (`MIN_EVIDENCE_SAMPLE`, server/services/quant/portfolio.ts:384, :1320). Reply/close rates are only evidenced by real contacts, and the research grant prohibits CONTACT_PERSON with the commercial grant ABSENT (cash report 44027151112). The plan's own next test is "sell to measure conversion" (plan.ts ~1819, ~2749), which cannot run.
+- EFFECT: "plan reach 9% vs 90%", "research does not reach the goal", and the NO-GO built on them are fixed by the acceptance rule plus the grants, not by research throughput. A 12-hour GPU run measured against that signal shows no improvement whatever it learns.
+- CHANGE: judge readiness and the run on signals research can move (F3/F6 metrics below); keep the 90% rule for spending/commitment decisions. Whether to grant contact (to measure conversion) is the owner's call.
+- VERIFY: the run's acceptance metric moves when research is accepted (e.g. evidenced plan inputs, answered-question share), on a 1-hour capped measurement.
+
+### F2 CONFIRMED — constructed arrangements never read research
+- CAUSE: `estimatedFromArrangement` (server/services/cash/goalScenario.ts ~215-302) hard-codes price provenance ASSUMPTION and close/respond/daysToCash/directCost/hours/volume as unknown sweeps; `candidateFromArrangement` (server/services/goals/planSet.ts ~389-397) hard-codes acquisitionRoute/costs/controls UNKNOWN. Goals run 44027622659 shows every constructed pathway as `why ? | channel ? | offer ? | fulfils ?`.
+- EFFECT: the 12 constructed pathways and most of the 427 candidate plans cannot improve from any accepted claim, so research "arrives but is not used" for them.
+- CHANGE: read those inputs through the same `inferOr(knowledge, …)` found openings use (goalScenario.ts ~900-912).
+- VERIFY: `brain_operator_goal_plan wst_7b4fcbb5f2384f31b6c3` shows arrangement members with justified inputs >0; the "samples are not evidence-backed" shortfall changes to sample-size wording.
+
+### F3 SUPPORTED (code + report; per-attribute DB split not read) — most commercial research asks questions no publication can answer
+- EVIDENCE: 515 monetization questions → 13 ANSWERED, 490 UNRESOLVED; "do not settle" is written only for DONE packets (commissionPass.ts:564, :679), so research ran and returned sourced claims that did not land on the asked attribute.
+- CAUSES: (e) questions about hypothetical arrangements from the opening × method cross-product (`enumerate.ts`; 11 529 possibilities from 979 openings) and Brain-judgement attributes (execution difficulty, scalability, required capability; domain/monetization.ts:778, :824) asked as published-source research the research rules forbid inferring (compilerProfiles.ts:1910-1916); (c) choice-type answers dropped: `commissionQuestion` (commissionPass.ts:141-144) never states the allowed values while `matchChoice` (:763-764, :809) needs an exact token; card facts already found (GoTranscript "Net 30") are not reused for the open question.
+- CHANGE: put allowed values in the question; never ask judgement attributes as research; only ask about methods a source states; copy card facts before asking.
+- VERIFY: one read of `monetization_commissions` grouped by attribute and method (splits c vs e); after the change the ANSWERED share rises and fewer questions are opened.
+
+### F4 CONFIRMED — surge throughput is limited by answer acceptance, not GPU uptime or the ceiling of 13
+- EVIDENCE: runpod-report 44026244200 (05:45Z, a10cc63): gpt-oss-120b 27 jobs, **1 accepted claim** in 60 min ($3.59), **held back on RESEARCH_FRAGMENT** after earlier dropped fragment answers, GPU 0.28 slots busy. Free `auto/best-coding`: 12 of 17 jobs not accepted (5 provider timeouts, 4 no JSON, 2 checks, 1 DNS); `auto` 0%; brain-a/brain-b dead (Cerebras 402, Groq limit, missing model; #1015). Free lane averaged 1.68 of 4 jobs busy, so raising 13 adds queue, not claims. GPU is disconnected now (runpod-disconnect 44026630515, stopped 44026723215 05:49Z).
+- CHANGE: owned by the main session — #1018 (re-probe held pair, judge on latest answers) deploying in 44027365881; then a capped GPU hour.
+- VERIFY: 1-hour runpod-report with GPU connected: no HELD BACK on RESEARCH_FRAGMENT, RUNPOD_ACCEPTED_CLAIMS ≫ 1, GPU >1 slot busy, and claims on the $10K goal >0/h.
+
+### F5 CONFIRMED — no retained commercial learning loop exists yet
+- `goal_outcomes` → calibration only from accepted plans (`recordGoalOutcome` plan.ts:3180-3198; `goalPredictionRows` calibration.ts:261-272 skips readings with no probability) → with F1, the calibration record stays empty forever.
+- Evolution engine: 0 completed cycles; evolution-eval runs 43999026354 (baselines only), 44000206068 ("Nothing is awaiting evaluation"); not run since 02:03Z despite `13,43 * * * *`. Suites are narrow (feasibility = one false-acceptance judgement on 67 cases; planSpeed; mootRequests). `evolution_approach_stats` (repos/evolution.ts:391) is read only by experiments.ts:139-145 — nothing in planning reads it. Operator lessons go to the director as prose (actions.ts:105, judge.ts:45).
+- This is the capability the run is meant to build; it is not a precondition, but the run needs a metric that records what it learned (see F1).
+
+### Ruled out / fixed (not blockers now)
+- Budget cap: FIXED and not invalidated (last budget change #1011; later #1013/#1014/#1018 do not touch it; boot check worker.ts:2595-2604).
+- Research ceiling 13: NOT BINDING (lane under-filled, see F4). Secondary once acceptance improves.
+- CPU: fixed (#998), not re-measured; no evidence it limits work.
+- Cost accounting: fixed (#1001/#1005/#1011).
+- "Too busy to derive": cold-cache artifact (F0).
+
 - F0 RULED OUT — "Brain was too busy to derive the goal": a cold-cache light reading (`server/services/operator/snapshot.ts:52-56`, full derivation bounded at 150 s, 25-min TTL). A second call at 05:58Z returned the full derivation. Not a cause.
