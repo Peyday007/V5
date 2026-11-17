@@ -9,7 +9,7 @@ import { freshProject } from './helpers.ts';
 import { insertFeedItems } from '../server/repos/feeds.ts';
 import { getDb } from '../server/db/database.ts';
 import { recordCashEvent } from '../server/repos/cashMode.ts';
-import { EXTRACTION_EVENT, LEAD_MAX_AGE_MS, readParserHistory, recordFeedExtraction, routeEscalation, screenFeedLeads, screenOrder, SCREENS_PER_PASS, type ExtractionPass } from '../server/services/feeds/run.ts';
+import { DELTA_SNAPSHOT_EVERY, EXTRACTION_EVENT, LEAD_MAX_AGE_MS, restoreCarriedIndex, readParserHistory, recordFeedExtraction, routeEscalation, screenFeedLeads, screenOrder, SCREENS_PER_PASS, type ExtractionPass } from '../server/services/feeds/run.ts';
 import type { Completer, LaneConfig } from '../server/services/cheap/lane.ts';
 import { EXTRACTOR_VERSION } from '../server/services/feeds/extract.ts';
 import { judgeStructure, plannedStage, planProcessing } from '../server/services/knowledge/processingGraph.ts';
@@ -96,7 +96,54 @@ describe('recordFeedExtraction records the processing graph, delta, identity, de
     expect(row!.funnel!.reading.stages[0]!.raw).toBe(3);
     expect(row!.funnel!.gain.usableIntelligence).toBeGreaterThan(0);
     expect(row!.stageFailures).toEqual([]);
-    expect(row!.deltaIndex).toBeDefined();
+    // The first pass has nothing to build on, so it writes the compact whole; never the legacy full index.
+    expect(row!.deltaCarry).toMatchObject({ kind: 'SNAPSHOT' });
+    expect((row as unknown as Record<string, unknown>).deltaIndex).toBeUndefined();
+  });
+
+  it('later passes append a journal of their own changes, never another copy of the whole index', async () => {
+    const source = `w${Math.random().toString(36).slice(2, 8)}`;
+    await insertFeedItems(source, records(source, 'a'));
+    await recordFeedExtraction({ projectId, now: new Date(), capacity: 0 });
+    await tick();
+    const changed = records(source, 'b').map((r, i) => (i === 0 ? { ...r, body: r.body!.replace('$4,000', '$6,500') } : r));
+    await insertFeedItems(source, changed);
+    await recordFeedExtraction({ projectId, now: new Date(), capacity: 0 });
+    await tick();
+    // The changed record arrives again unchanged: the index rebuilt from snapshot + journal still knows it.
+    await insertFeedItems(source, changed.map((r) => ({ ...r, externalId: `${r.externalId}-c` })));
+    const third = (await recordFeedExtraction({ projectId, now: new Date(), capacity: 0 }))!;
+    expect(third.delta!.counts).toMatchObject({ UNCHANGED: 3, CHANGED: 0, NEW: 0 });
+    const [first, second, last] = await rows();
+    expect(first!.deltaCarry!.kind).toBe('SNAPSHOT');
+    expect(second!.deltaCarry!.kind).toBe('JOURNAL');
+    // Only the one record this pass re-read is in its journal.
+    expect(Object.keys(second!.deltaCarry!.records)).toHaveLength(1);
+    expect(last!.deltaCarry!.kind).toBe('JOURNAL');
+    expect(Object.keys(last!.deltaCarry!.records)).toHaveLength(0);
+    for (const r of [first, second, last]) expect(JSON.stringify(r!.deltaCarry)).not.toMatch(/dependents/);
+  });
+
+  it('a snapshot is written again within DELTA_SNAPSHOT_EVERY passes, so a rebuild never reads further back', async () => {
+    const source = `w${Math.random().toString(36).slice(2, 8)}`;
+    for (let i = 0; i < DELTA_SNAPSHOT_EVERY + 1; i += 1) {
+      await insertFeedItems(source, [{ externalId: `${source}-${i}`, url: `https://example.test/${source}/${i}`, title: `Item ${i}`, body: 'Budget $100.', organization: null, publishedAt: hoursAgo(2) }]);
+      await recordFeedExtraction({ projectId, now: new Date(), capacity: 0 });
+      await tick();
+    }
+    const kinds = (await rows()).map((r) => r.deltaCarry!.kind);
+    expect(kinds[0]).toBe('SNAPSHOT');
+    expect(kinds.slice(1, DELTA_SNAPSHOT_EVERY)).toEqual(Array(DELTA_SNAPSHOT_EVERY - 1).fill('JOURNAL'));
+    expect(kinds[DELTA_SNAPSHOT_EVERY]).toBe('SNAPSHOT');
+    const restored = restoreCarriedIndex((await rows()).reverse());
+    expect(Object.keys(restored.index.records)).toHaveLength(DELTA_SNAPSHOT_EVERY + 1);
+  });
+
+  it('a row written before the carried form is read once as the base', () => {
+    const legacy = { schema: 'knowledge-delta/1', records: { 'a\u0000x': { identity: 'a\u0000x', versions: [{ version: 1, fingerprint: 'f1', seenAt: 't', parserVersion: 'p', factKeys: ['k'], entities: [], dependents: ['d'] }, { version: 2, fingerprint: 'f2', seenAt: 't', parserVersion: 'p', factKeys: ['k2'], entities: [], dependents: ['d'] }] } }, entityMappings: {} };
+    const restored = restoreCarriedIndex([{ deltaIndex: legacy }]);
+    expect(restored.sinceSnapshot).toBeNull();
+    expect(restored.index.records['a\u0000x']!.versions).toEqual([{ version: 2, fingerprint: 'f2', seenAt: 't', parserVersion: 'p', factKeys: ['k2'], entities: [], dependents: [] }]);
   });
 
   it('a second pass over unchanged records recomputes nothing and gains no usable intelligence', async () => {

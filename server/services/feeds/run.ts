@@ -51,7 +51,22 @@ import { FEED_SHORTLIST_BUCKET } from './bucket.ts';
 import { SITE_SOURCE } from './sites.ts';
 import { CODE_SIGNAL_SOURCE, coveredItems, detectionsForLeads } from './detectors.ts';
 import { EXTRACTOR_VERSION, extractItem, extractItems, MODEL_BATCH_SIZE, type ExtractableItem, type ExtractedFact } from './extract.ts';
-import { commitReadings, planDelta, readDeltaIndex, recordIdentity, type DeltaIndex, type DeltaPlan, type DeltaStatus, type RecordReading } from '../knowledge/delta.ts';
+import {
+  carryDeltaIndex,
+  commitReadings,
+  isCarriedSnapshot,
+  isDeltaJournal,
+  journalDeltaIndex,
+  planDelta,
+  recordIdentity,
+  restoreDeltaIndex,
+  type CarriedDeltaIndex,
+  type DeltaIndex,
+  type DeltaJournal,
+  type DeltaPlan,
+  type DeltaStatus,
+  type RecordReading,
+} from '../knowledge/delta.ts';
 import { nameKeyOf, resolveIdentities, type IdentityCollision, type IdentityLink, type IdentityRecord } from '../knowledge/identity.ts';
 import { selectForDeepening, type DeepeningCandidate, type DeepeningDecision, type DeepeningResult } from '../knowledge/deepening.ts';
 import { judgeStructure, plannedStage, planProcessing, type Executor, type PlannedStage, type ProcessingPlan, type RouteEvidence, type Stage } from '../knowledge/processingGraph.ts';
@@ -949,8 +964,14 @@ export interface ExtractionPass {
   funnel?: { reading: FunnelReading; gain: { raw: number; usableIntelligence: number; falseSpeed: boolean } };
   /** A stage that failed this pass; the pass is still recorded and the stage is named. */
   stageFailures?: { stage: string; error: string }[];
-  /** The fingerprint index the next pass classifies against (bounded to the most recently seen records). */
-  deltaIndex?: DeltaIndex;
+  /**
+   * What the next pass needs to rebuild the fingerprint index it classifies against. This row is
+   * append-only, so it is never the whole index each pass: it is a journal of the records and
+   * mappings this pass changed (bounded by the batch), and only once every DELTA_SNAPSHOT_EVERY
+   * passes the compact whole (latest version per record, no per-record dependents), from which the
+   * next passes rebuild by replaying the journals after it.
+   */
+  deltaCarry?: CarriedDeltaIndex | DeltaJournal;
   /**
    * What each source's plan actually ran this pass, with the executor the plan gave it and how many
    * records it ran over: the plan decides, and this is the record that it did. `planned` is false only
@@ -1007,8 +1028,31 @@ export interface ExtractionDelta {
   affectedEntities: string[];
 }
 
-/** Records the carried fingerprint index keeps, most recently seen first, so one row stays a readable size. */
+/** Records the carried fingerprint index keeps, most recently seen first, so one snapshot stays a readable size. */
 export const DELTA_INDEX_MAX_RECORDS = 5000;
+
+/**
+ * A pass writes the compact whole index at most once in this many passes, and a journal of its own
+ * changes otherwise; a pass rebuilds from the last snapshot and at most this many rows after it.
+ */
+export const DELTA_SNAPSHOT_EVERY = 25;
+
+/**
+ * Rebuild the index the previous passes carried, from the newest extraction rows first: the journals
+ * back to the last snapshot (or a legacy whole index), replayed oldest first. Also says how many
+ * passes have written since that snapshot, or null when none is within reach.
+ */
+export function restoreCarriedIndex(newestFirst: readonly unknown[]): { index: DeltaIndex; sinceSnapshot: number | null } {
+  const journals: unknown[] = [];
+  for (const parsed of newestFirst) {
+    const p = parsed as { deltaCarry?: unknown; deltaIndex?: unknown } | null;
+    if (isCarriedSnapshot(p?.deltaCarry)) return { index: restoreDeltaIndex(p.deltaCarry, journals.reverse()), sinceSnapshot: journals.length };
+    // A row from before the carried form held the whole index: it is the base, read once more.
+    if (p?.deltaIndex !== undefined && p.deltaCarry === undefined) return { index: restoreDeltaIndex(p.deltaIndex, journals.reverse()), sinceSnapshot: null };
+    if (isDeltaJournal(p?.deltaCarry)) journals.push(p.deltaCarry);
+  }
+  return { index: restoreDeltaIndex(null, journals.reverse()), sinceSnapshot: null };
+}
 
 function boundDeltaIndex(index: DeltaIndex): DeltaIndex {
   const histories = Object.values(index.records);
@@ -1080,22 +1124,25 @@ export async function recordFeedExtraction(input: {
 }): Promise<ExtractionPass | null> {
   const now = input.now ?? new Date();
   const db = getDb();
-  const last = await db.get<{ detail: string | null }>(
-    `SELECT detail FROM cash_events WHERE project_id = ? AND kind = ? ORDER BY created_at DESC, id DESC LIMIT 1`,
-    [input.projectId, EXTRACTION_EVENT],
+  const recent = await db.all<{ detail: string | null }>(
+    `SELECT detail FROM cash_events WHERE project_id = ? AND kind = ? ORDER BY created_at DESC, id DESC LIMIT ?`,
+    [input.projectId, EXTRACTION_EVENT, DELTA_SNAPSHOT_EVERY],
   );
+  const parseDetail = (detail: string | null | undefined): unknown => {
+    try {
+      return JSON.parse(detail ?? '{}');
+    } catch {
+      return null;
+    }
+  };
+  const recentParsed = recent.map((r) => parseDetail(r.detail));
   let from: { fetchedAt: string; id: string } | null = null;
-  let priorIndex: DeltaIndex = readDeltaIndex(null);
   let priorHistory: ParserHistory = {};
-  try {
-    const parsed = JSON.parse(last?.detail ?? '{}') as { cursor?: { to?: { fetchedAt?: unknown; id?: unknown } }; deltaIndex?: unknown; parserHistory?: unknown };
-    const to = parsed.cursor?.to;
-    if (to && typeof to.fetchedAt === 'string' && typeof to.id === 'string') from = { fetchedAt: to.fetchedAt, id: to.id };
-    priorIndex = readDeltaIndex(parsed.deltaIndex);
-    priorHistory = readParserHistory(parsed.parserHistory, EXTRACTOR_VERSION);
-  } catch {
-    from = null;
-  }
+  const latest = recentParsed[0] as { cursor?: { to?: { fetchedAt?: unknown; id?: unknown } }; parserHistory?: unknown } | null | undefined;
+  const to = latest?.cursor?.to;
+  if (to && typeof to.fetchedAt === 'string' && typeof to.id === 'string') from = { fetchedAt: to.fetchedAt, id: to.id };
+  if (latest) priorHistory = readParserHistory(latest.parserHistory, EXTRACTOR_VERSION);
+  const { index: priorIndex, sinceSnapshot } = restoreCarriedIndex(recentParsed);
   const floor = new Date(now.getTime() - LEAD_MAX_AGE_MS).toISOString();
   const rows = await db.all<{
     id: string;
@@ -1354,7 +1401,8 @@ export async function recordFeedExtraction(input: {
       parserVersion: EXTRACTOR_VERSION,
       factKeys: facts.map((f) => f.key),
       entities: entityId ? [entityId] : [],
-      dependents: graph?.affected ?? [],
+      // The batch's dependents are on the pass's graph record once; they are never repeated per record.
+      dependents: [],
       entityMappings: entityId ? { [identity]: entityId } : {},
     };
   });
@@ -1423,8 +1471,12 @@ export async function recordFeedExtraction(input: {
       : { capacity, threshold: null, promoted: [], held: [] },
     ...(funnel ? { funnel } : {}),
     stageFailures,
-    // Carried forward unchanged when this pass could not commit, so the next pass still classifies against something.
-    deltaIndex: nextIndex ?? priorIndex,
+    // Carried forward unchanged when this pass could not commit, so the next pass still classifies against something:
+    // a journal of what changed, or the compact whole when the last one is out of reach.
+    deltaCarry:
+      sinceSnapshot === null || sinceSnapshot + 1 >= DELTA_SNAPSHOT_EVERY
+        ? carryDeltaIndex(boundDeltaIndex(nextIndex ?? priorIndex))
+        : journalDeltaIndex(priorIndex, nextIndex ?? priorIndex),
     parserHistory: { parserVersion: EXTRACTOR_VERSION, sources: parserHistory },
   };
   const contested = pass.reconciled.filter((r) => r.status === 'CONTESTED').length;

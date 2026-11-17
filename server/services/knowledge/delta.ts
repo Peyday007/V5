@@ -15,9 +15,16 @@
  * A tested parsing method is kept by recording which parser version read each
  * version: a parser change re-reads exactly the records that parser read.
  *
- * Nothing here opens a source, owns a schedule or stores anything: the index
- * is a plain JSON value the caller keeps in a row it already writes (§10.3,
- * §20.4). Pure.
+ * Nothing here opens a source, owns a schedule or stores anything (§10.3,
+ * §20.4). The working index lives in memory for one pass; what a caller keeps
+ * between passes is its carried form (`carryDeltaIndex`): the latest version
+ * of each record only, without the per-record dependents — and, because the
+ * row a caller keeps it in may be append-only, a caller writes that full form
+ * only occasionally and otherwise a journal of what one pass changed
+ * (`journalDeltaIndex`), and rebuilds the index from the last full form and
+ * the journals after it (`restoreDeltaIndex`). The history of every version is
+ * the append-only pass records themselves, never a copy re-written each pass.
+ * Pure.
  */
 import { createHash } from 'node:crypto';
 
@@ -51,7 +58,11 @@ export interface RecordVersion {
 
 export interface RecordHistory {
   identity: string;
-  /** Every version, oldest first. Never overwritten or pruned. */
+  /**
+   * Versions, oldest first. Within one pass a changed record holds its previous
+   * version and the new one; the carried form keeps only the latest, so this
+   * never grows across passes. Earlier versions are in the pass records.
+   */
   versions: RecordVersion[];
 }
 
@@ -251,4 +262,127 @@ export function recordsReadByOtherParser(index: DeltaIndex, parserVersion: strin
     })
     .map((h) => h.identity)
     .sort();
+}
+
+// ---------------------------------------------------------------------------
+// The carried form: what a caller keeps between passes.
+// ---------------------------------------------------------------------------
+
+export const CARRIED_DELTA_SCHEMA = 'knowledge-delta-carried/2';
+
+/** One record's latest version, compactly: version, fingerprint, parser, when, fact keys, entities. No dependents. */
+export type CarriedRecord = [version: number, fingerprint: string, parserVersion: string | null, seenAt: string, factKeys: string[], entities: string[]];
+
+/** An entity mapping, compactly: entity, the record that set it, when. */
+export type CarriedMapping = [entityId: string, setBy: string, setAt: string];
+
+/** The whole index in its carried form: the latest version of each record and the established mappings. */
+export interface CarriedDeltaIndex {
+  schema: typeof CARRIED_DELTA_SCHEMA;
+  kind: 'SNAPSHOT';
+  records: Record<string, CarriedRecord>;
+  mappings: Record<string, CarriedMapping>;
+}
+
+/** What one pass changed: the records and mappings whose carried form differs from before, and nothing else. */
+export interface DeltaJournal {
+  schema: typeof CARRIED_DELTA_SCHEMA;
+  kind: 'JOURNAL';
+  records: Record<string, CarriedRecord>;
+  mappings: Record<string, CarriedMapping>;
+  /** Records dropped from the index by the caller's bound, so a restore drops them too. */
+  dropped: string[];
+}
+
+function carriedRecordOf(history: RecordHistory): CarriedRecord | null {
+  const latest = history.versions[history.versions.length - 1];
+  if (!latest) return null;
+  return [latest.version, latest.fingerprint, latest.parserVersion, latest.seenAt, [...latest.factKeys], [...latest.entities]];
+}
+
+const sameCarried = (a: CarriedRecord | CarriedMapping | null | undefined, b: CarriedRecord | CarriedMapping | null | undefined) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
+/** The carried form of an index: latest version per record, mappings, nothing per-record that is batch-wide. */
+export function carryDeltaIndex(index: DeltaIndex): CarriedDeltaIndex {
+  const records: Record<string, CarriedRecord> = {};
+  for (const [identity, history] of Object.entries(index.records)) {
+    const carried = carriedRecordOf(history);
+    if (carried) records[identity] = carried;
+  }
+  const mappings: Record<string, CarriedMapping> = {};
+  for (const [name, m] of Object.entries(index.entityMappings)) mappings[name] = [m.entityId, m.setBy, m.setAt];
+  return { schema: CARRIED_DELTA_SCHEMA, kind: 'SNAPSHOT', records, mappings };
+}
+
+/** What changed between two indexes, in carried form: only the records and mappings this pass moved. */
+export function journalDeltaIndex(before: DeltaIndex, after: DeltaIndex): DeltaJournal {
+  const a = carryDeltaIndex(before);
+  const b = carryDeltaIndex(after);
+  const records: Record<string, CarriedRecord> = {};
+  for (const [identity, rec] of Object.entries(b.records)) if (!sameCarried(a.records[identity], rec)) records[identity] = rec;
+  const mappings: Record<string, CarriedMapping> = {};
+  for (const [name, m] of Object.entries(b.mappings)) if (!sameCarried(a.mappings[name], m)) mappings[name] = m;
+  const dropped = Object.keys(a.records).filter((identity) => !(identity in b.records)).sort();
+  return { schema: CARRIED_DELTA_SCHEMA, kind: 'JOURNAL', records, mappings, dropped };
+}
+
+function isCarried(value: unknown, kind: 'SNAPSHOT' | 'JOURNAL'): boolean {
+  const v = value as { schema?: unknown; kind?: unknown; records?: unknown } | null;
+  return !!v && v.schema === CARRIED_DELTA_SCHEMA && v.kind === kind && typeof v.records === 'object' && v.records !== null;
+}
+
+/** True when a JSON-read value is a carried snapshot this module wrote. */
+export const isCarriedSnapshot = (value: unknown): value is CarriedDeltaIndex => isCarried(value, 'SNAPSHOT');
+/** True when a JSON-read value is a journal this module wrote. */
+export const isDeltaJournal = (value: unknown): value is DeltaJournal => isCarried(value, 'JOURNAL');
+
+function applyCarried(index: DeltaIndex, records: Record<string, unknown>, mappings: Record<string, unknown> | undefined): void {
+  for (const [identity, raw] of Object.entries(records)) {
+    const r = raw as unknown[];
+    if (!Array.isArray(r) || typeof r[0] !== 'number' || typeof r[1] !== 'string') continue;
+    index.records[identity] = {
+      identity,
+      versions: [{
+        version: r[0],
+        fingerprint: r[1],
+        parserVersion: typeof r[2] === 'string' ? r[2] : null,
+        seenAt: typeof r[3] === 'string' ? r[3] : '',
+        factKeys: Array.isArray(r[4]) ? (r[4] as unknown[]).filter((x): x is string => typeof x === 'string') : [],
+        entities: Array.isArray(r[5]) ? (r[5] as unknown[]).filter((x): x is string => typeof x === 'string') : [],
+        dependents: [],
+      }],
+    };
+  }
+  for (const [name, raw] of Object.entries(mappings ?? {})) {
+    const m = raw as unknown[];
+    if (!Array.isArray(m) || typeof m[0] !== 'string' || typeof m[1] !== 'string') continue;
+    index.entityMappings[name] = { entityId: m[0], setBy: m[1], setAt: typeof m[2] === 'string' ? m[2] : '' };
+  }
+}
+
+/**
+ * Rebuild the working index from a base (a carried snapshot, a legacy full
+ * index, or nothing) and the journals written after it, oldest first. Each
+ * record comes back holding its latest version only. Pure.
+ */
+export function restoreDeltaIndex(base: unknown, journals: readonly unknown[]): DeltaIndex {
+  let index: DeltaIndex;
+  if (isCarriedSnapshot(base)) {
+    index = emptyDeltaIndex();
+    applyCarried(index, base.records as Record<string, unknown>, base.mappings as Record<string, unknown>);
+  } else {
+    // A legacy full index (or nothing): keep only each record's latest version.
+    const legacy = carryDeltaIndex(readDeltaIndex(base));
+    index = emptyDeltaIndex();
+    applyCarried(index, legacy.records as Record<string, unknown>, legacy.mappings as Record<string, unknown>);
+  }
+  for (const journal of journals) {
+    if (!isDeltaJournal(journal)) continue;
+    for (const identity of Array.isArray(journal.dropped) ? journal.dropped : []) {
+      delete index.records[identity];
+      for (const [name, m] of Object.entries(index.entityMappings)) if (m.setBy === identity) delete index.entityMappings[name];
+    }
+    applyCarried(index, journal.records as Record<string, unknown>, journal.mappings as Record<string, unknown>);
+  }
+  return index;
 }
