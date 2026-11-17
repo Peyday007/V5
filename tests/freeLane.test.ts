@@ -237,6 +237,31 @@ beforeEach(async () => {
 });
 
 describe('the free research lane', () => {
+  it('never shows the model a page that is not about the question, and opens the next candidate instead', async () => {
+    const { orchestration, fragment } = await packet(play.project.id);
+    await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);
+    // Production, 2026-11-17: search results about physics and NHS wellbeing filled the brief.
+    const OFF = 'https://arxiv.example.test/quantum';
+    const offText =
+      'Quantum entanglement is a phenomenon in which the state of each particle cannot be described independently. '.repeat(4);
+    const withOffTopic = async (url: string): Promise<SourceFetch> =>
+      url === OFF
+        ? { readable: true, requestedUrl: url, finalUrl: url, status: 200, contentType: 'text/html', retrievedAt: new Date().toISOString(), sha256: 'y', text: offText, truncated: false, totalChars: offText.length }
+        : fetchSource(url);
+    const prompts: string[] = [];
+    const { completer: inner } = model();
+    const completer: Completer = async (config, name, system, prompt, ...rest) => {
+      prompts.push(prompt);
+      return inner(config, name, system, prompt, ...rest);
+    };
+    const tick = await freeLaneTick({ config: CONFIG, completer, fetchSource: withOffTopic, search: async () => [OFF, PAGE_URL] });
+    expect(tick.submitted).toBe(1);
+    const extract = prompts.find((p) => p.includes('Extract the material claims')) ?? '';
+    expect(extract).toContain(PAGE_URL);
+    expect(extract).not.toContain(OFF);
+    expect((await listClaimsForFragment(fragment.id))[0]!.sourceUrl).toBe(PAGE_URL);
+  });
+
   it('opens candidate pages at once, one per host, and still reads the page it needs', async () => {
     const { orchestration, fragment } = await packet(play.project.id);
     await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);

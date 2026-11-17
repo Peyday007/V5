@@ -851,6 +851,75 @@ export function focusTerms(focus: string): Set<string> {
 }
 
 /**
+ * Words Brain's own question templates put around a subject ("Establish whether
+ * such buyers actually pay", "nobody has established this yet … quoting the
+ * source, or report it unanswered", "What published evidence shows how …
+ * behaves for buyers and offers like this plan's"). They say nothing about what
+ * a page must be about, so a page is never judged on-topic by them.
+ */
+const ASK_WORDS = focusTerms(
+  'establish established whether actually such published publish nobody find says say quoting quote report unanswered answer ' +
+    'composed arrangement opening needs world confirm refute described fulfilled producing shows show behaves offers like plan reading ' +
+    'part packet missing name named known public page pages web specific data information',
+);
+
+/** The terms a page must carry to bear on a question: its quoted subject when it names one, else the question. Pure. */
+export function subjectTerms(question: string): Set<string> {
+  const quoted = [...question.matchAll(/["“]([^"”]{4,120})["”]/g)].map((m) => m[1]!);
+  const terms = focusTerms(quoted.length > 0 ? quoted.join(' ') : question);
+  for (const one of ASK_WORDS) terms.delete(one);
+  return terms;
+}
+
+/**
+ * Whether a fetched page bears on the question at all: it carries at least two
+ * of the subject's terms (one when the subject has fewer than three). Pure.
+ *
+ * Production, 2026-11-17 11:03–12:03Z: gpt-oss-120b worked 108 fragments and
+ * answered every one with an honest empty claim list, and its reasons named the
+ * pages Brain had handed it — "quantum entanglement and chlamydia infection",
+ * "high-speed train positioning and NHS staff wellbeing", "GitHub about and
+ * security pages", "unreadable binary data". Every readable page a search or the
+ * model named was shown, in the order found, with no check that it was about the
+ * question; the first six readable pages filled the brief, so an on-topic page
+ * further down the list was never opened, and a paid model was asked to cite
+ * pages that could not answer. An off-topic page is now skipped like an empty
+ * one and the next candidate opened. The evidence bar is unchanged: a page that
+ * passes still has to state the claim in its own sentences.
+ */
+export function pageBearsOn(text: string, terms: Set<string>): boolean {
+  if (terms.size === 0) return true;
+  const need = terms.size >= 3 ? 2 : 1;
+  const seen = new Set<string>();
+  for (const word of text.toLowerCase().match(/[a-z][a-z0-9-]{3,}/g) ?? []) {
+    const w = stem(word);
+    if (terms.has(w)) {
+      seen.add(w);
+      if (seen.size >= need) return true;
+    }
+  }
+  return false;
+}
+
+/** A site's navigation page (contact, security, login, privacy, careers, a search form): it states no market fact. Pure. */
+export function isNavigationPage(url: string): boolean {
+  try {
+    const path = new URL(url).pathname.toLowerCase().replace(/\/+$/, '');
+    return /(^|\/)(contact(-us)?|security|privacy(-policy)?|cookies?(-policy)?|log-?in|sign-?in|sign-?up|register|careers?|jobs|search|cgi-bin\/browse-edgar|accessibility|sitemap)(\.[a-z]+)?$/.test(path);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Candidates in the order to open them: as found, with navigation pages moved
+ * to the end so they are read only when nothing better was found. Pure.
+ */
+export function candidateOrder(urls: string[]): string[] {
+  return [...urls.filter((u) => !isNavigationPage(u)), ...urls.filter((u) => isNavigationPage(u))];
+}
+
+/**
  * The sentences of a page a model is shown, verbatim and in the page's order.
  *
  * Production, 2026-11-17 01:02–01:49Z: most of gpt-oss-120b's refused
@@ -1328,9 +1397,10 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
     ctx.worker.model,
     `Research brief:\n${JSON.stringify(brief, null, 1)}\n\nName up to ${MAX_SOURCES} specific public web pages ` +
       'most likely to contain primary evidence for this question (official statistics, regulators, company ' +
-      'filings, published price lists, trade bodies). Prefer exact page URLs you are confident exist. ' +
+      'filings, published price lists, trade bodies). Prefer exact page URLs you are confident exist, and the page that ' +
+      'states the asked fact (a named company\'s own pricing, rates or terms page) over its home, about or contact page. ' +
       unreachableNote() +
-      'Reply as {"urls":["https://..."],"searches":["two or three short web search phrases, under ten words each, naming the buyers, product or market the question is about"]}.',
+      'Reply as {"urls":["https://..."],"searches":["two or three short web search phrases, under ten words each, naming the subject the question is about and the fact it asks (a price, rate, term or count)"]}.',
   );
   const urlsOf = (answer: Record<string, unknown> | null): string[] =>
     Array.isArray(answer?.['urls']) ? (answer!['urls'] as unknown[]).filter((u): u is string => typeof u === 'string') : [];
@@ -1338,6 +1408,7 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
   // stops the second waiting on the first's answer before it is even asked.
   const queries = searchQueries(question, plan?.['searches'] ?? plan?.['search']);
   const searched = (await Promise.all(queries.map((q) => ctx.search(q)))).flat();
+  const subject = subjectTerms(question);
   const tried = new Set<string>();
   const skipped = new Set<string>();
   const failedUrls: string[] = [];
@@ -1374,11 +1445,13 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
         const host = hostOf(url);
         if (fetched.readable && host) forgiveHost(url);
         if (!fetched.readable) rememberUnreachable(url, String(fetched.reason), Date.now(), String(fetched.detail ?? ''));
-        if (fetched.readable && fetched.text.trim().length > 200 && readable.length < MAX_SOURCES) {
+        const read = fetched.readable && fetched.text.trim().length > 200;
+        const onTopic = read && pageBearsOn(fetched.text.slice(0, PAGE_READ_CHARS), subject);
+        if (onTopic && readable.length < MAX_SOURCES) {
           readable.push({ url: fetched.finalUrl, text: fetched.text.slice(0, PAGE_READ_CHARS) });
-        } else if (!(fetched.readable && fetched.text.trim().length > 200)) {
+        } else if (!onTopic) {
           failedUrls.push(url);
-          fetchReasons.push(fetched.readable ? 'EMPTY' : String(fetched.reason));
+          fetchReasons.push(read ? 'OFF_TOPIC' : fetched.readable ? 'EMPTY' : String(fetched.reason));
           if (!fetched.readable && fetchDetails.length < 2 && !fetchDetails.includes(fetched.detail)) fetchDetails.push(fetched.detail);
         }
       }
@@ -1386,17 +1459,18 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
   };
   // Search results first: they are pages that exist. A remembered URL is a guess.
   const fromSearch = new Set(searched);
-  await open([...searched, ...urlsOf(plan)]);
+  await open(candidateOrder([...searched, ...urlsOf(plan)]));
   // A second round: show the model what Brain could not open and ask for other pages.
   if (readable.length < 2) {
     const retry = await askFor(
       ctx,
       `Research brief:\n${JSON.stringify(brief, null, 1)}\n\nBrain could not open these pages (missing, blocked or ` +
         `empty): ${JSON.stringify(failedUrls)}. ${unreachableNote()}Name up to ${MAX_SOURCES} OTHER public pages likely to hold primary ` +
-        'evidence — prefer stable top-level pages of official bodies, regulators, statistics offices and company ' +
-        'sites over deep links. Reply as {"urls":["https://..."]}.',
+        'evidence — prefer stable pages of official bodies, regulators, statistics offices and the subject\'s own ' +
+        'pricing, rates or terms pages over guessed deep links, and never a home, about, contact, login or search page, ' +
+        'which states no fact about the question. Reply as {"urls":["https://..."]}.',
     );
-    await open(urlsOf(retry));
+    await open(candidateOrder(urlsOf(retry)));
   } else if (ctx.usage) {
     // Enough pages were read on the first round, so the second round's model call was not needed.
     ctx.usage.modelCallsAvoided += 1;
