@@ -89,6 +89,24 @@ describe('a short path in a finding', () => {
     if (scope.ok) expect(scope.rootCauseFiles).toEqual(['server/services/manufacturing/institutions.ts']);
   });
 
+  it('reads a program test\'s subject from its kebab-case name when its unit owns several source files', () => {
+    const test = 'tests/program-x-ventures-d0-venture-path.test.ts';
+    const scope = resolveRepairScope({
+      suggested: [test],
+      statement: `R4-F1: ${test} shows the venture path skips a stage`,
+      evidence: '',
+      category: 'BEHAVIOR',
+      mutationScope: ['server/services/manufacturing/**', 'server/services/manufacturing/institutions.ts', 'server/services/manufacturing/kernel.ts', 'tests/program-x-ventures*.test.ts'],
+      forbiddenPaths: [],
+      units: [
+        { unitKey: 'path', ownedPaths: ['server/services/manufacturing/venturePath.ts', 'server/services/manufacturing/kernel.ts', test] },
+        { unitKey: 'repair-F1', ownedPaths: ['server/services/manufacturing/institutions.ts', 'server/services/manufacturing/venturePath.ts', 'server/services/manufacturing/kernel.ts', test] },
+      ],
+    });
+    expect(scope.ok).toBe(true);
+    if (scope.ok) expect(scope.rootCauseFiles).toEqual(['server/services/manufacturing/venturePath.ts']);
+  });
+
   it('keeps a root path the running image does not carry, such as a test', () => {
     const scope = resolveRepairScope({
       suggested: ['tests/someEngineThatIsNotOnDisk.test.ts'],
