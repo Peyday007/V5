@@ -1068,14 +1068,27 @@ async function storedObservationsFor(input: {
       !!r.latest && r.latest.parserVersion === EXTRACTOR_VERSION && r.latest.factKeys.some((k) => input.keys.has(k)),
     )
     .slice(0, Math.max(0, STORED_OBSERVATIONS_MAX - out.length));
+  out.push(...(await storedAtIndexedVersion(wanted, taken)));
+  return out;
+}
+
+/**
+ * The stored rows of indexed records, each at exactly the version the index holds (same fingerprint):
+ * a row with other content is a version that reading never saw. `taken` identities are skipped and
+ * filled in as rows are taken.
+ */
+async function storedAtIndexedVersion(
+  wanted: readonly { identity: string; latest: { fingerprint: string } }[],
+  taken: Set<string>,
+): Promise<ExtractableItem[]> {
   const bySource = new Map<string, Map<string, string>>();
   for (const r of wanted) {
     const at = r.identity.indexOf('\u0000');
     if (at < 0) continue;
     const source = r.identity.slice(0, at);
-    const recordId = r.identity.slice(at + 1);
-    bySource.set(source, new Map([...(bySource.get(source) ?? []), [recordId, r.latest.fingerprint]]));
+    bySource.set(source, new Map([...(bySource.get(source) ?? []), [r.identity.slice(at + 1), r.latest.fingerprint]]));
   }
+  const out: ExtractableItem[] = [];
   const db = getDb();
   for (const [source, records] of bySource) {
     const ids = [...records.keys()];
@@ -1095,7 +1108,6 @@ async function storedObservationsFor(input: {
         };
         const record = deltaRecordOf(item);
         const identity = recordIdentity(record.source, record.recordId);
-        // Only the version the index holds: a row with other content is a version this index never read.
         if (taken.has(identity) || records.get(record.recordId) !== fingerprintOf(record.content)) continue;
         taken.add(identity);
         out.push(item);
@@ -1103,6 +1115,31 @@ async function storedObservationsFor(input: {
     }
   }
   return out;
+}
+
+/** Stored records a pass re-presents because an older parser read them; bounded so a parser change is absorbed over passes. */
+export const REPARSE_PER_PASS = 100;
+
+/**
+ * Records the index says an older parser read, re-presented from their stored rows at exactly the
+ * version that parser read (same fingerprint), so the delta classifies them REPARSE and the current
+ * parser reads them again (KNOW-25-1: "a parser change re-reads exactly the records that parser read").
+ * Intake never brings an unchanged record back, so without this a parser change would re-read nothing.
+ * A record the cursor batch already carries is not re-presented twice.
+ */
+async function storedForReparse(input: {
+  priorIndex: DeltaIndex;
+  exclude: ReadonlySet<string>;
+  limit: number;
+}): Promise<ExtractableItem[]> {
+  const wanted = Object.values(input.priorIndex.records)
+    .filter((h) => !input.exclude.has(h.identity))
+    .map((h) => ({ identity: h.identity, latest: h.versions[h.versions.length - 1] }))
+    .filter((r): r is { identity: string; latest: NonNullable<typeof r.latest> } =>
+      !!r.latest && r.latest.parserVersion !== null && r.latest.parserVersion !== EXTRACTOR_VERSION,
+    )
+    .slice(0, Math.max(0, input.limit));
+  return storedAtIndexedVersion(wanted, new Set());
 }
 
 /** Records the folded fingerprint index keeps, most recently seen first. */
@@ -1267,8 +1304,7 @@ export async function recordFeedExtraction(input: {
       ? [CODE_SIGNAL_SOURCE, from.fetchedAt, from.fetchedAt, from.id, input.limit ?? EXTRACTION_ITEMS_PER_PASS]
       : [CODE_SIGNAL_SOURCE, floor, input.limit ?? EXTRACTION_ITEMS_PER_PASS],
   );
-  if (rows.length === 0) return null;
-  const items: ExtractableItem[] = rows.map((row) => ({
+  const fromRows: ExtractableItem[] = rows.map((row) => ({
     id: row.id,
     source: row.source,
     url: row.url,
@@ -1278,6 +1314,15 @@ export async function recordFeedExtraction(input: {
     publishedAt: row.published_at,
     fetchedAt: row.fetched_at,
   }));
+  // Records an older parser read come back from their stored rows: intake never re-sends an unchanged
+  // record, so this is the only way a parser change reaches what that parser read.
+  const reparse = await storedForReparse({
+    priorIndex,
+    exclude: new Set(fromRows.map((item) => recordIdentity(item.source, deltaRecordOf(item).recordId))),
+    limit: REPARSE_PER_PASS,
+  });
+  if (fromRows.length === 0 && reparse.length === 0) return null;
+  const items: ExtractableItem[] = [...fromRows, ...reparse];
   const nowIsoText = now.toISOString();
   const stageFailures: { stage: string; error: string }[] = [];
   const stage = <T,>(name: string, fallback: T, fn: () => T): T => {
@@ -1444,7 +1489,9 @@ export async function recordFeedExtraction(input: {
   } catch (error) {
     console.warn(`[feeds] extraction pass could not reach the event graph: ${String((error as Error)?.message ?? error)}`);
   }
-  const lastRow = rows[rows.length - 1]!;
+  // The cursor moves over the rows intake brought; a pass that only re-read records stays where it was.
+  const lastRow = rows[rows.length - 1];
+  const cursorTo = lastRow ? { fetchedAt: lastRow.fetched_at, id: lastRow.id } : (from ?? { fetchedAt: floor, id: '' });
   const unreadable = new Set(run.needsModel.flat().map((one) => one.id));
   // A record the code parser could not read goes to the model only when its source's plan gives parsing to
   // the model (no tested parser for content that needs interpreting). Under a tested parser of structured
@@ -1640,7 +1687,7 @@ export async function recordFeedExtraction(input: {
   });
 
   const pass: ExtractionPass = {
-    cursor: { from, to: { fetchedAt: lastRow.fetched_at, id: lastRow.id } },
+    cursor: { from, to: cursorTo },
     items: items.length,
     readable: readItems.length - unreadable.size,
     facts: run.facts,

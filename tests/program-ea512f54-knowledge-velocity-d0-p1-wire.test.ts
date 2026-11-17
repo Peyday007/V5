@@ -123,6 +123,7 @@ describe('recordFeedExtraction records the processing graph, delta, identity, de
     await insertFeedItems(source, records(source, 'a'));
     const first = (await recordFeedExtraction({ projectId, now: new Date(), capacity: 0 }))!;
     await tick();
+    // The same records republished under new ids, one of them edited.
     const changed = records(source, 'b').map((r, i) => (i === 0 ? { ...r, body: r.body!.replace('$4,000', '$6,500') } : r));
     await insertFeedItems(source, changed);
     const second = (await recordFeedExtraction({ projectId, now: new Date(), capacity: 0 }))!;
@@ -132,6 +133,76 @@ describe('recordFeedExtraction records the processing graph, delta, identity, de
     expect(second.facts.every((f) => f.evidence.itemId === second.delta!.changedItems[0])).toBe(true);
     // No capacity: nothing is promoted, and the threshold says so.
     expect(second.deepening!.promoted).toEqual([]);
+  });
+
+  it('production intake: a re-fetched record with edited content under its own id is a new version, and the next pass reads it as CHANGED', async () => {
+    const source = `w${Math.random().toString(36).slice(2, 8)}`;
+    expect(await insertFeedItems(source, records(source, 'a'))).toBe(3);
+    const first = (await recordFeedExtraction({ projectId, now: new Date(), capacity: 0 }))!;
+    expect(first.delta!.counts.NEW).toBe(3);
+    await tick();
+    // The source sends the same records again, under the same external ids (as sources.ts keys them), one edited.
+    const edited = records(source, 'a').map((r, i) => (i === 0 ? { ...r, body: r.body!.replace('$4,000', '$6,500') } : r));
+    expect(await insertFeedItems(source, edited)).toBe(1);
+    // The earlier version is kept as its own row; the edit is a new row at the same url.
+    const held = await getDb().all<{ external_id: string; body: string }>(
+      'SELECT external_id, body FROM feed_items WHERE source = ? AND url = ? ORDER BY fetched_at, id',
+      [source, `https://example.test/${source}/rfq`],
+    );
+    expect(held.map((h) => h.external_id)).toEqual([`${source}-rfq-a`, `${source}-rfq-a#v2`]);
+    expect(held[0]!.body).toContain('$4,000');
+    expect(held[1]!.body).toContain('$6,500');
+
+    const second = (await recordFeedExtraction({ projectId, now: new Date(), capacity: 0 }))!;
+    expect(second.items).toBe(1);
+    expect(second.delta!.counts).toMatchObject({ CHANGED: 1, NEW: 0, REPARSE: 0 });
+    expect(second.delta!.changedItems.length).toBe(1);
+    const oldKeys = first.facts.filter((f) => f.evidence.text.includes('4,000')).map((f) => f.key);
+    expect(oldKeys.length).toBeGreaterThan(0);
+    for (const key of oldKeys) expect(second.delta!.recomputedKeys).toContain(key);
+    expect(second.facts.length).toBeGreaterThan(0);
+    expect(second.facts.every((f) => f.evidence.itemId === second.delta!.changedItems[0])).toBe(true);
+
+    // Sent once more, unchanged: nothing is stored and nothing is re-read.
+    await tick();
+    expect(await insertFeedItems(source, edited)).toBe(0);
+    expect(await recordFeedExtraction({ projectId, now: new Date(), capacity: 0 })).toBeNull();
+    // Edited back to what it first said: that is a third version, not a dropped record.
+    await tick();
+    expect(await insertFeedItems(source, records(source, 'a'))).toBe(1);
+    const third = (await recordFeedExtraction({ projectId, now: new Date(), capacity: 0 }))!;
+    expect(third.delta!.counts).toMatchObject({ CHANGED: 1, NEW: 0 });
+  });
+
+  it('a parser change re-reads exactly the records the older parser read, from their stored rows', async () => {
+    const source = `w${Math.random().toString(36).slice(2, 8)}`;
+    await insertFeedItems(source, records(source, 'a'));
+    await recordFeedExtraction({ projectId, now: new Date(), capacity: 0 });
+    const [prior] = await rows();
+    // The newest pass was recorded by an older parser: its slice says every record was read by it.
+    const index = prior!.deltaIndex as { records: Record<string, { versions: { parserVersion: string | null }[] }> };
+    const olderIndex = JSON.parse(JSON.stringify(index)) as typeof index;
+    for (const history of Object.values(olderIndex.records)) for (const v of history.versions) v.parserVersion = 'older-parser';
+    await tick();
+    await recordCashEvent({
+      projectId,
+      kind: EXTRACTION_EVENT,
+      actorRef: 'BRAIN',
+      summary: 'pass by an older parser',
+      detail: { cursor: prior!.cursor, deltaIndex: olderIndex },
+    });
+    await tick();
+    // Intake brings nothing new: the cursor batch is empty, and the pass still re-reads.
+    const reparse = (await recordFeedExtraction({ projectId, now: new Date(), capacity: 0 }))!;
+    expect(reparse).not.toBeNull();
+    expect(reparse.delta!.counts).toMatchObject({ REPARSE: 3, NEW: 0, CHANGED: 0 });
+    expect(reparse.delta!.parserVersion).toBe(EXTRACTOR_VERSION);
+    expect(reparse.facts.length).toBeGreaterThan(0);
+    // The cursor did not move over rows it did not read.
+    expect(reparse.cursor.to).toEqual(prior!.cursor.to);
+    // Read by the current parser now, so the next pass has nothing to re-read.
+    await tick();
+    expect(await recordFeedExtraction({ projectId, now: new Date(), capacity: 0 })).toBeNull();
   });
 
   it('a pass still records when one stage fails, naming the stage', async () => {
