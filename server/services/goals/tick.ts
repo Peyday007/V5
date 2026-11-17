@@ -57,7 +57,7 @@ import { reconcileRegisterIfDue, type RegisterPassReport } from './openQuestions
 import { recordDecisionsIfDue } from './decisionRecord.ts';
 import { reconcileCalibrationIfDue, type CalibrationPassReport } from './calibration.ts';
 import { reconcileFactChangesIfDue, type ReconsiderPassReport } from './reconsider.ts';
-import type { LaneCapacityReading, ResearchYieldReading } from './researchYield.ts';
+import { diagnoseCostCountedOnce, type LaneCapacityReading, type ResearchYieldReading } from './researchYield.ts';
 import {
   APPLICABLE_REMEDIES,
   COMMERCIAL_FLOOR,
@@ -1254,7 +1254,12 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
   // Shares move only on a reading whose cost is shown counted once. A reading
   // that cannot show it is recorded as a held decision — the observed shares,
   // nothing moved — with the reason, never as a move on an unverified reading.
-  const costCountedOnce = verifiedCostReading(reading.costCountedOnce);
+  // The cause is read from the reading as the reader returned it, before
+  // `verifiedCostReading` coerces a non-finite sum to 0 — so the recorded row
+  // says which way it failed (a NaN job time, a double count, float drift),
+  // and no repair has to assert it.
+  const diagnosis = diagnoseCostCountedOnce(reading.costCountedOnce);
+  const costCountedOnce = { ...verifiedCostReading(reading.costCountedOnce), cause: diagnosis.cause, jobMsGap: diagnosis.jobMsGap };
   const decision: AllocationDecision = costCountedOnce.holds
     ? decided
     : {
@@ -1262,7 +1267,7 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
         held: true,
         shares: observed,
         changes: [],
-        notes: [`Held: the window's cost reading does not show each job's cost counted once (total ${String(costCountedOnce.totalJobMs)} ms against ${String(costCountedOnce.purposeJobMs)} ms across purposes), so no share moves on it.`, ...decided.notes],
+        notes: [`Held: the window's cost reading does not show each job's cost counted once (${diagnosis.cause}: ${diagnosis.detail}), so no share moves on it.`, ...decided.notes],
       };
   const fingerprint = allocationFingerprint(decision);
   const floors = {
