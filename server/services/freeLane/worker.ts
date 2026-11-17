@@ -871,17 +871,52 @@ const ASK_WORDS = focusTerms(
     'part packet missing name named known public page pages web specific data information',
 );
 
+/**
+ * Words nearly every page carries, commercial or academic: a wage table, a
+ * NAICS index, a company's contact page and an arXiv abstract all say
+ * "business", "member", "account", "rate", "data" or "model". They name no
+ * subject, so a page is never judged on-topic by them — unless they are all
+ * the subject has.
+ *
+ * Production, 2026-11-17 15:20–16:15Z: constructed rounds quote buyers as
+ * "anonymous members of the public" and "individual account of unknown
+ * business"; their subject terms were {anonymou, member} and {individual,
+ * account, unknown, busines}, so one or two of these words let a photometric
+ * redshift paper, a BLS wage table and a mine-supply contact page through.
+ */
+const GENERIC_WORDS = focusTerms(
+  'anonymous member members individual individuals account accounts unknown business businesses company companies ' +
+    'people person general common kind kinds type types various other another group groups organisation organization ' +
+    'service services product products customer customers user users market markets data model models method methods ' +
+    'number numbers rate rates price prices cost costs value values amount average typical percent percentage total ' +
+    'year years time times based include includes including provide provides using used make made work works high large ' +
+    'small level levels result results system systems process information case cases area areas',
+);
+
 /** The terms a page must carry to bear on a question: its quoted subject when it names one, else the question. Pure. */
 export function subjectTerms(question: string): Set<string> {
   const quoted = [...question.matchAll(/["“]([^"”]{4,120})["”]/g)].map((m) => m[1]!);
-  const terms = focusTerms(quoted.length > 0 ? quoted.join(' ') : question);
-  for (const one of ASK_WORDS) terms.delete(one);
-  return terms;
+  const of = (text: string): { all: Set<string>; specific: Set<string> } => {
+    const all = focusTerms(text);
+    for (const one of ASK_WORDS) all.delete(one);
+    return { all, specific: new Set([...all].filter((one) => !GENERIC_WORDS.has(one))) };
+  };
+  const named = of(quoted.length > 0 ? quoted.join(' ') : question);
+  if (named.specific.size > 0) return named.specific;
+  // A quoted subject made only of generic words ("individual account of unknown business") is
+  // read with the rest of the question (the product, the channel); generic words stay only when
+  // nothing specific is said anywhere.
+  if (quoted.length > 0) {
+    const whole = of(question);
+    if (whole.specific.size > 0) return whole.specific;
+  }
+  return named.all;
 }
 
 /**
  * Whether a fetched page bears on the question at all: it carries at least two
- * of the subject's terms (one when the subject has fewer than three). Pure.
+ * of the subject's terms (three of a subject of six or more; every one of a
+ * one-term subject). Pure.
  *
  * Production, 2026-11-17 11:03–12:03Z: gpt-oss-120b worked 108 fragments and
  * answered every one with an honest empty claim list, and its reasons named the
@@ -897,7 +932,8 @@ export function subjectTerms(question: string): Set<string> {
  */
 export function pageBearsOn(text: string, terms: Set<string>): boolean {
   if (terms.size === 0) return true;
-  const need = terms.size >= 3 ? 2 : 1;
+  // A long subject (a whole unquoted question) shares two words with almost any page, so it needs three.
+  const need = Math.min(terms.size, terms.size >= 6 ? 3 : 2);
   const seen = new Set<string>();
   for (const word of text.toLowerCase().match(/[a-z][a-z0-9-]{3,}/g) ?? []) {
     const w = stem(word);
@@ -909,22 +945,56 @@ export function pageBearsOn(text: string, terms: Set<string>): boolean {
   return false;
 }
 
-/** A site's navigation page (contact, security, login, privacy, careers, a search form): it states no market fact. Pure. */
+/**
+ * A site's navigation page (contact, security, login, privacy, careers) or a
+ * search interface (EDGAR's search, a NAICS lookup, any `?q=` results page):
+ * it states no market fact, only the site's own interface text. Pure.
+ */
 export function isNavigationPage(url: string): boolean {
   try {
-    const path = new URL(url).pathname.toLowerCase().replace(/\/+$/, '');
-    return /(^|\/)(contact(-us)?|security|privacy(-policy)?|cookies?(-policy)?|log-?in|sign-?in|sign-?up|register|careers?|jobs|search|cgi-bin\/browse-edgar|accessibility|sitemap)(\.[a-z]+)?$/.test(path);
+    const parsed = new URL(url);
+    const path = parsed.pathname.toLowerCase().replace(/\/+$/, '');
+    if (/(^|\/)(contact(-us)?|security|privacy(-policy)?|cookies?(-policy)?|log-?in|sign-?in|sign-?up|register|careers?|jobs|search|cgi-bin\/browse-edgar|accessibility|sitemap)(\.[a-z]+)?$/.test(path)) return true;
+    if (/(^|\/)(edgar\/search|search-results?|naics\/?$)/.test(path)) return true;
+    return [...parsed.searchParams.keys()].some((key) => /^(q|query|search|keywords?|input|searchterm)$/i.test(key));
   } catch {
     return false;
   }
 }
 
+/** Hosts of academic preprints and paper indexes. */
+const ACADEMIC_HOSTS = /(^|\.)(arxiv\.org|biorxiv\.org|medrxiv\.org|semanticscholar\.org|researchgate\.net|scholar\.google\.com|paperswithcode\.com|openreview\.net|aclanthology\.org|pubmed\.ncbi\.nlm\.nih\.gov)$/;
+
+/** An academic preprint or paper index page. Pure. */
+export function isAcademicPage(url: string): boolean {
+  try {
+    return ACADEMIC_HOSTS.test(new URL(url).hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
+/** Whether a fragment's own source rules ask for academic sources. Pure. */
+export function wantsAcademicSources(acceptableSourceTypes: unknown): boolean {
+  const types = Array.isArray(acceptableSourceTypes) ? acceptableSourceTypes : [];
+  return types.some((one) => typeof one === 'string' && /academic|peer|journal|paper|preprint|scholar|study|studies|literature/i.test(one));
+}
+
 /**
- * Candidates in the order to open them: as found, with navigation pages moved
- * to the end so they are read only when nothing better was found. Pure.
+ * Candidates to open, in the order found, without the pages that cannot
+ * answer: navigation and search-interface pages always, and academic
+ * preprints unless the fragment's source rules ask for academic sources. Pure.
+ *
+ * Production, 2026-11-17 15:20–16:15Z: of ~25 fragments gpt-oss-120b worked,
+ * 2 produced accepted claims; its empty answers named the candidates — arXiv
+ * papers on photometric redshift, weighted MaxSAT and chemical reaction
+ * networks for commercial questions, the SEC EDGAR search interface, a
+ * mine-supply company's contact page. Until then a navigation page was only
+ * moved to the end of the list (#1052), so it was still opened and shown
+ * whenever nothing better had been read.
  */
-export function candidateOrder(urls: string[]): string[] {
-  return [...urls.filter((u) => !isNavigationPage(u)), ...urls.filter((u) => isNavigationPage(u))];
+export function candidateOrder(urls: string[], options: { academic?: boolean } = {}): string[] {
+  return urls.filter((u) => !isNavigationPage(u) && (options.academic === true || !isAcademicPage(u)));
 }
 
 /**
@@ -1355,7 +1425,13 @@ export function searchQueries(question: string, modelPhrases: unknown): string[]
     const q = one.replace(/\s+/g, ' ').trim().slice(0, SEARCH_QUERY_CHARS);
     if (q.length >= 3 && !out.some((have) => have.toLowerCase() === q.toLowerCase())) out.push(q);
   };
-  const phrases = (Array.isArray(modelPhrases) ? modelPhrases : [modelPhrases]).filter((one): one is string => typeof one === 'string');
+  const subject = subjectTerms(question);
+  const carriesSubject = (phrase: string): boolean => subject.size === 0 || [...focusTerms(phrase)].some((one) => subject.has(one));
+  // A model phrase that names none of the subject ("weighted MaxSAT benchmark", "occupational wage data") searches
+  // for something else, and its results are off-topic candidates; it is not searched.
+  const phrases = (Array.isArray(modelPhrases) ? modelPhrases : [modelPhrases]).filter(
+    (one): one is string => typeof one === 'string' && carriesSubject(one),
+  );
   const quoted = [...question.matchAll(/["“]([^"”]{4,120})["”]/g)].map((m) => m[1]!);
   // As many searches as before (two): the model's best phrase, then the question's own subject.
   if (phrases[0]) add(phrases[0]);
@@ -1404,8 +1480,10 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
     ctx.config,
     ctx.worker.model,
     `Research brief:\n${JSON.stringify(brief, null, 1)}\n\nName up to ${MAX_SOURCES} specific public web pages ` +
-      'most likely to contain primary evidence for this question (official statistics, regulators, company ' +
-      'filings, published price lists, trade bodies). Prefer exact page URLs you are confident exist, and the page that ' +
+      'most likely to contain primary evidence for this question: pages about the buyers, product or industry the ' +
+      'question names (their own pricing, rates or terms pages, published price lists, trade bodies, regulators), and an ' +
+      'official statistics table or company filing only when it reports on that subject. Never a search interface, a code ' +
+      'directory or an academic paper unless acceptableSourceTypes asks for one. Prefer exact page URLs you are confident exist, and the page that ' +
       'states the asked fact (a named company\'s own pricing, rates or terms page) over its home, about or contact page. ' +
       unreachableNote() +
       'Reply as {"urls":["https://..."],"searches":["two or three short web search phrases, under ten words each, naming the subject the question is about and the fact it asks (a price, rate, term or count)"]}.',
@@ -1417,6 +1495,7 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
   const queries = searchQueries(question, plan?.['searches'] ?? plan?.['search']);
   const searched = (await Promise.all(queries.map((q) => ctx.search(q)))).flat();
   const subject = subjectTerms(question);
+  const academic = wantsAcademicSources(frag['acceptableSourceTypes']);
   const tried = new Set<string>();
   const skipped = new Set<string>();
   const failedUrls: string[] = [];
@@ -1465,20 +1544,31 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
       }
     }
   };
+  // Pages that cannot answer are not opened at all, and the reason is kept for `none_because`.
+  const keep = (urls: string[]): string[] => {
+    const kept = candidateOrder(urls, { academic });
+    for (const url of urls) {
+      if (kept.includes(url) || tried.has(url) || failedUrls.includes(url)) continue;
+      failedUrls.push(url);
+      fetchReasons.push(isNavigationPage(url) ? 'NAVIGATION_PAGE' : 'ACADEMIC_OFF_SCOPE');
+    }
+    return kept;
+  };
   // Search results first: they are pages that exist. A remembered URL is a guess.
   const fromSearch = new Set(searched);
-  await open(candidateOrder([...searched, ...urlsOf(plan)]));
+  await open(keep([...searched, ...urlsOf(plan)]));
   // A second round: show the model what Brain could not open and ask for other pages.
   if (readable.length < 2) {
     const retry = await askFor(
       ctx,
       `Research brief:\n${JSON.stringify(brief, null, 1)}\n\nBrain could not open these pages (missing, blocked or ` +
         `empty): ${JSON.stringify(failedUrls)}. ${unreachableNote()}Name up to ${MAX_SOURCES} OTHER public pages likely to hold primary ` +
-        'evidence — prefer stable pages of official bodies, regulators, statistics offices and the subject\'s own ' +
-        'pricing, rates or terms pages over guessed deep links, and never a home, about, contact, login or search page, ' +
-        'which states no fact about the question. Reply as {"urls":["https://..."]}.',
+        'evidence about the buyers, product or industry the question names — prefer the subject\'s own pricing, rates or ' +
+        'terms pages and stable pages of trade bodies and regulators that report on it over guessed deep links, and never a ' +
+        'home, about, contact, login or search page or an unrelated statistics table, which states no fact about the question. ' +
+        'Reply as {"urls":["https://..."]}.',
     );
-    await open(candidateOrder(urlsOf(retry)));
+    await open(keep(urlsOf(retry)));
   } else if (ctx.usage) {
     // Enough pages were read on the first round, so the second round's model call was not needed.
     ctx.usage.modelCallsAvoided += 1;

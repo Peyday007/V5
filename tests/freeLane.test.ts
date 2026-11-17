@@ -262,6 +262,30 @@ describe('the free research lane', () => {
     expect((await listClaimsForFragment(fragment.id))[0]!.sourceUrl).toBe(PAGE_URL);
   });
 
+  it('never opens an arXiv preprint, a search interface or a contact page for a non-academic fragment (W16)', async () => {
+    const { orchestration, fragment } = await packet(play.project.id);
+    await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);
+    // Production, 2026-11-17 15:20–16:15Z: the candidates gpt-oss-120b was handed.
+    const NOT_SOURCES = ['https://arxiv.org/abs/2107.07566', 'https://www.sec.gov/edgar/search/', 'https://www.vestaminesupply.com/contact-us/'];
+    const fetched: string[] = [];
+    const recording = async (url: string): Promise<SourceFetch> => {
+      fetched.push(url);
+      return fetchSource(url);
+    };
+    const prompts: string[] = [];
+    const { completer: inner } = model();
+    const completer: Completer = async (config, name, system, prompt, ...rest) => {
+      prompts.push(prompt);
+      return inner(config, name, system, prompt, ...rest);
+    };
+    const tick = await freeLaneTick({ config: CONFIG, completer, fetchSource: recording, search: async () => [...NOT_SOURCES, PAGE_URL] });
+    expect(tick.submitted).toBe(1);
+    expect(fetched.some((url) => NOT_SOURCES.includes(url))).toBe(false);
+    const extract = prompts.find((p) => p.includes('Extract the material claims')) ?? '';
+    for (const url of NOT_SOURCES) expect(extract).not.toContain(url);
+    expect((await listClaimsForFragment(fragment.id))[0]!.sourceUrl).toBe(PAGE_URL);
+  });
+
   it('opens candidate pages at once, one per host, and still reads the page it needs', async () => {
     const { orchestration, fragment } = await packet(play.project.id);
     await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);

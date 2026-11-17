@@ -58,7 +58,7 @@ describe('free-lane source relevance', () => {
     expect(pageBearsOn(QUANTUM, subjectTerms('What is it?'))).toBe(true);
   });
 
-  it('opens navigation pages (contact, security, search forms) only after every other candidate', () => {
+  it('never opens navigation pages (contact, security, search forms): they state no fact (W16)', () => {
     expect(isNavigationPage('https://github.com/security')).toBe(true);
     expect(isNavigationPage('https://www.vestaminesupply.com/contact-us/')).toBe(true);
     expect(isNavigationPage('https://www.sec.gov/cgi-bin/browse-edgar')).toBe(true);
@@ -67,6 +67,6 @@ describe('free-lane source relevance', () => {
     expect(isNavigationPage('https://www.example.com/research/security-market-report')).toBe(false);
     expect(
       candidateOrder(['https://github.com/security', 'https://acme.example/pricing', 'https://acme.example/contact', 'https://acme.example/terms']),
-    ).toEqual(['https://acme.example/pricing', 'https://acme.example/terms', 'https://github.com/security', 'https://acme.example/contact']);
+    ).toEqual(['https://acme.example/pricing', 'https://acme.example/terms']);
   });
 });
