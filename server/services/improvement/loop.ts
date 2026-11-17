@@ -1720,15 +1720,17 @@ export async function improvementTick(now = new Date()): Promise<ImprovementTick
       report.errors.push(`objectives: ${String((error as Error).message ?? error).slice(0, 200)}`);
     }
   }
-  // SPRINT-18-5: the reasoning benchmark on held-out real openings, at most daily; a held-out loss
-  // registers its weakness through `registerDirected`, the same path every weakness takes.
+  // SPRINT-18-5: the reasoning benchmark on held-out real openings, at most daily. It tries the
+  // highest-leverage capability and adopts it only when held-out problems improve; a held-out loss
+  // and the general method's false positives register through `registerDirected`, the path every weakness takes.
   try {
     const { sprintIfDue } = await import('./sprint.ts');
     const sprint = await sprintIfDue(now);
     if (sprint) {
       report.advanced.push(
         `reasoning sprint: ${sprint.sets.BENCHMARK}/${sprint.sets.HELD_OUT}/${sprint.sets.NEW_HELD_OUT} problems; ` +
-          sprint.comparisons.map((c) => `${c.set} ${c.earned === null ? 'insufficient' : c.earned ? 'earned' : 'not earned'}`).join(', '),
+          sprint.comparisons.map((c) => `${c.set} ${c.earned === null ? 'insufficient' : c.earned ? 'earned' : 'not earned'}`).join(', ') +
+          (sprint.trials.length > 0 ? `; capabilities: ${sprint.trials.map((t) => `${t.capability} ${t.verdict.toLowerCase()}`).join(', ')}` : ''),
       );
     }
   } catch (error) {

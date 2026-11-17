@@ -27,12 +27,28 @@
  * coverage, each with its numerator and denominator, or INSUFFICIENT_DATA
  * below a minimum sample (§77: a number nobody can check is not shown).
  *
+ * It does not only measure. Each run tries the highest-leverage general
+ * reasoning capability it has not adopted yet (`SPRINT_CAPABILITIES`: closed-loop
+ * forecast recalibration, dimensional validation, a counter-model of the
+ * pathway's own failure), chosen by its improvement on the benchmark set alone,
+ * then reruns the held-out sets with and without it. A capability that improves
+ * the held-out score is adopted, and every later run composes it into the
+ * general method; one that does not is rejected; an adopted one whose held-out
+ * score turns against it is reverted. Each trial is its own row, so a rerun's
+ * delta is linked to the exact change that produced it.
+ *
+ * Required human interventions are counted, not modelled: the owner's real
+ * Needs-You requests and orchestrations parked NEEDS_HUMAN (the same rows the
+ * scoreboard's OWNER_INTERVENTIONS_PER_DAY reads) inside each opening's life.
+ * The method's own projection is kept beside it, named as a projection.
+ *
  * Owners reused, none added: rows go to `improvement_events` (the loop's
  * append-only record) and, for the controller and provenance it produced on
  * real problems, to `bin_events` through their own recorders; a held-out
  * result where the general method did not earn its cost becomes a weakness
  * registered through the loop's existing `registerDirected`, which is the one
- * path from a weakness to a Factory objective. It runs from `improvementTick`,
+ * path from a weakness to a Factory objective — and so do the general method's
+ * false positives, even on a run where it beat the baseline. It runs from `improvementTick`,
  * at most once per `SPRINT_INTERVAL_MS`, and owns no schedule of its own.
  */
 import { createHash } from 'node:crypto';
@@ -180,7 +196,7 @@ export interface MethodVerdict {
   actionable: boolean;
   /** The method's probability that this is an actionable pathway. */
   probability: number;
-  /** The method could not progress without a person. */
+  /** The method projects it could not progress without a person (a projection, not an observed intervention). */
   needsPerson: boolean;
   /** Its actionable verdict survives the adverse alternatives of its own numbers. */
   robust: boolean;
@@ -365,8 +381,13 @@ export interface SetReading {
   methodQuality: Measure;
   /** Total decision milliseconds over decisions. */
   decisionTimeMs: Measure;
-  /** Problems the method could not progress without a person, over the set. */
+  /**
+   * Observed: problems during whose life the owner was actually asked (a Needs-You request or an
+   * orchestration parked NEEDS_HUMAN in its project), over the problems those rows were read for.
+   */
   humanInterventions: Measure;
+  /** Projected: problems the method says it could not progress without a person, over the set. */
+  projectedHumanInterventions: Measure;
   /** Brier score: summed squared error of the probability against what happened, over the set. Lower is better. */
   calibrationBrier: Measure;
   /** Actually actionable problems the method called actionable robustly, over actually actionable problems. */
@@ -375,13 +396,21 @@ export interface SetReading {
   falsePositives: string[];
 }
 
-export function readSet(set: ProblemSet, method: string, problems: readonly SprintProblem[], verdicts: readonly MethodVerdict[]): SetReading {
+export function readSet(
+  set: ProblemSet,
+  method: string,
+  problems: readonly SprintProblem[],
+  verdicts: readonly MethodVerdict[],
+  /** Real owner interventions per problem id; absent means they were not read, never zero. */
+  observed?: ReadonlyMap<string, number>,
+): SetReading {
   const truth = new Map(problems.map((p) => [p.id, actionableInProduction(p)]));
   const n = verdicts.length;
   const tp = verdicts.filter((v) => v.actionable && truth.get(v.problemId)).length;
   const clean = verdicts.filter((v) => v.findings === 0).length;
   const time = verdicts.reduce((s, v) => s + v.elapsedMs, 0);
   const people = verdicts.filter((v) => v.needsPerson).length;
+  const asked = observed ? verdicts.filter((v) => (observed.get(v.problemId) ?? 0) > 0).length : 0;
   const brier = verdicts.reduce((s, v) => s + (v.probability - (truth.get(v.problemId) ? 1 : 0)) ** 2, 0);
   const targets = verdicts.filter((v) => truth.get(v.problemId));
   const covered = targets.filter((v) => v.actionable && v.robust).length;
@@ -392,7 +421,8 @@ export function readSet(set: ProblemSet, method: string, problems: readonly Spri
     actionablePathwayRate: measure(tp, n),
     methodQuality: measure(clean, n),
     decisionTimeMs: measure(time, n, 1),
-    humanInterventions: measure(people, n),
+    humanInterventions: measure(asked, observed ? n : 0),
+    projectedHumanInterventions: measure(people, n),
     calibrationBrier: measure(brier, n),
     robustTargetCoverage: measure(covered, targets.length),
     falsePositives: verdicts.filter((v) => v.actionable && !truth.get(v.problemId)).map((v) => v.problemId),
@@ -434,8 +464,9 @@ const num = (m: Measure): number | null => (m.value === 'INSUFFICIENT_DATA' ? nu
  * people no more often, for the decision time it spends beyond the baseline.
  */
 export function compareWithBaseline(general: SetReading, baseline: SetReading): BaselineComparison {
-  const g = { rate: num(general.actionablePathwayRate), brier: num(general.calibrationBrier), people: num(general.humanInterventions) };
-  const b = { rate: num(baseline.actionablePathwayRate), brier: num(baseline.calibrationBrier), people: num(baseline.humanInterventions) };
+  // Observed interventions happened once per problem whatever method reads it, so the methods differ only in what they project.
+  const g = { rate: num(general.actionablePathwayRate), brier: num(general.calibrationBrier), people: num(general.projectedHumanInterventions) };
+  const b = { rate: num(baseline.actionablePathwayRate), brier: num(baseline.calibrationBrier), people: num(baseline.projectedHumanInterventions) };
   const costRatio = baseline.decisionTimeMs.numerator > 0 ? general.decisionTimeMs.numerator / baseline.decisionTimeMs.numerator : null;
   if (g.rate === null || b.rate === null || g.brier === null || b.brier === null || g.people === null || b.people === null) {
     return { set: general.set, earned: null, statement: `${general.set}: too few problems (${general.problems}) to say whether the general method earned its cost`, general, baseline };
@@ -446,11 +477,284 @@ export function compareWithBaseline(general: SetReading, baseline: SetReading): 
     set: general.set,
     earned,
     statement:
-      `${general.set}: pathway rate ${g.rate} vs ${b.rate}, Brier ${g.brier} vs ${b.brier}, people ${g.people} vs ${b.people}, at ${cost} — ` +
+      `${general.set}: pathway rate ${g.rate} vs ${b.rate}, Brier ${g.brier} vs ${b.brier}, projected people ${g.people} vs ${b.people}, at ${cost} — ` +
       (earned ? 'the extra complexity earned its cost' : 'the extra complexity did not earn its cost on this set'),
     general,
     baseline,
   };
+}
+
+/* ------------------------------------------------------------------------- */
+/* Capabilities: implemented, tried, adopted or rejected by measurement       */
+/* ------------------------------------------------------------------------- */
+
+/** A capability fitted on the benchmark set: a transform of the general method's verdict. */
+export interface FittedCapability {
+  key: string;
+  apply(problem: SprintProblem, verdict: MethodVerdict): MethodVerdict;
+}
+
+/** A general reasoning capability the sprint can add to the general method. */
+export interface SprintCapability {
+  key: string;
+  title: string;
+  /** Which reasoning failure it addresses. */
+  addresses: string;
+  /** Fit on benchmark problems and verdicts only; held-out rows never reach this. */
+  fit(benchmark: readonly SprintProblem[], verdicts: readonly MethodVerdict[]): FittedCapability;
+}
+
+const downgrade = (v: MethodVerdict): MethodVerdict => ({
+  ...v,
+  actionable: false,
+  robust: false,
+  probability: Math.min(v.probability, 0.2),
+  findings: v.findings + 1,
+});
+
+/** Closed-loop forecast evaluation: map the method's probability onto the rate it actually achieved on the benchmark. */
+export const RECALIBRATION: SprintCapability = {
+  key: 'forecast-recalibration',
+  title: 'Closed-loop forecast recalibration',
+  addresses: 'probabilities that do not match the rate at which such calls came true',
+  fit(benchmark, verdicts) {
+    const truth = new Map(benchmark.map((p) => [p.id, actionableInProduction(p)]));
+    const bins = new Map<number, { hit: number; n: number }>();
+    const binOf = (q: number) => Math.min(9, Math.max(0, Math.floor(q * 10)));
+    for (const v of verdicts) {
+      const b = bins.get(binOf(v.probability)) ?? { hit: 0, n: 0 };
+      b.n += 1;
+      if (truth.get(v.problemId)) b.hit += 1;
+      bins.set(binOf(v.probability), b);
+    }
+    return {
+      key: 'forecast-recalibration',
+      apply(_p, v) {
+        const b = bins.get(binOf(v.probability));
+        // An empty bin has no evidence to recalibrate with; the raw probability stands.
+        if (!b || b.n < 2) return v;
+        return { ...v, probability: (b.hit + 1) / (b.n + 2) };
+      },
+    };
+  },
+};
+
+/** Dimensional validation: a pathway's price, currency and effort must be quantities of the right kind and sign. */
+export const DIMENSIONAL_VALIDATION: SprintCapability = {
+  key: 'dimensional-validation',
+  title: 'Dimensional validation of the card',
+  addresses: 'actionable calls on a non-positive price, an unknown currency unit or negative effort',
+  fit() {
+    return {
+      key: 'dimensional-validation',
+      apply(p, v) {
+        const bad =
+          (p.priceCents !== null && !(Number.isFinite(p.priceCents) && p.priceCents > 0)) ||
+          !/^[A-Z]{3}$/.test(p.currency ?? '') ||
+          (p.humanHours !== null && !(Number.isFinite(p.humanHours) && p.humanHours >= 0));
+        return bad && v.actionable ? downgrade(v) : bad ? { ...v, findings: v.findings + 1 } : v;
+      },
+    };
+  },
+};
+
+/** Counter-model: the most direct way the pathway fails — its own deadline passed before the card was last touched. */
+export const EXPIRED_WINDOW_COUNTER_MODEL: SprintCapability = {
+  key: 'counter-model:expired-window',
+  title: 'Counter-model: the opening\'s window has closed',
+  addresses: 'actionable calls on openings whose stated deadline had already passed',
+  fit() {
+    return {
+      key: 'counter-model:expired-window',
+      apply(p, v) {
+        // The counter-model lowers the forecast as well as the call: a closed window is evidence either way.
+        if (!p.deadline) return v;
+        const deadline = Date.parse(p.deadline);
+        const seen = Date.parse(p.updatedAt);
+        return Number.isFinite(deadline) && Number.isFinite(seen) && deadline < seen ? downgrade(v) : v;
+      },
+    };
+  },
+};
+
+/** The library the sprint draws from. Illustrative, never exhaustive: a capability earns adoption only by measurement. */
+export const SPRINT_CAPABILITIES: readonly SprintCapability[] = [RECALIBRATION, DIMENSIONAL_VALIDATION, EXPIRED_WINDOW_COUNTER_MODEL];
+
+/** Run the general method, then the adopted capabilities in order. `cache` holds the general method's own verdicts. */
+export function composeVerdicts(
+  problems: readonly SprintProblem[],
+  threshold: number,
+  fitted: readonly FittedCapability[],
+  cache?: Map<string, MethodVerdict>,
+): MethodVerdict[] {
+  return problems.map((p) => {
+    const cacheKey = `${threshold}:${p.id}`;
+    let v = cache?.get(cacheKey) ?? GENERAL_METHOD.run(p, threshold);
+    cache?.set(cacheKey, v);
+    for (const f of fitted) {
+      const started = performance.now();
+      const next = f.apply(p, v);
+      v = { ...next, elapsedMs: next.elapsedMs + (performance.now() - started) };
+    }
+    return v;
+  });
+}
+
+/** Misclassification rate plus mean Brier: lower is better. Null below the minimum sample. */
+export function sprintScore(problems: readonly SprintProblem[], verdicts: readonly MethodVerdict[]): number | null {
+  if (verdicts.length < MIN_SAMPLE) return null;
+  const truth = new Map(problems.map((p) => [p.id, actionableInProduction(p)]));
+  let wrong = 0;
+  let brier = 0;
+  for (const v of verdicts) {
+    const t = truth.get(v.problemId) ?? false;
+    if (v.actionable !== t) wrong += 1;
+    brier += (v.probability - (t ? 1 : 0)) ** 2;
+  }
+  return Math.round(((wrong + brier) / verdicts.length) * 10000) / 10000;
+}
+
+export const THRESHOLDS = [0.5, 0.6, 0.7, 0.8, 0.9] as const;
+
+/** The threshold for a composition, chosen on the benchmark only: the lowest misclassification there. */
+export function composedThreshold(benchmark: readonly SprintProblem[], fitted: readonly FittedCapability[], cache?: Map<string, MethodVerdict>): number {
+  let best: number = THRESHOLDS[0];
+  let bestErrors = Infinity;
+  for (const t of THRESHOLDS) {
+    const errors = composeVerdicts(benchmark, t, fitted, cache).filter((v, i) => v.actionable !== actionableInProduction(benchmark[i]!)).length;
+    if (errors < bestErrors) {
+      best = t;
+      bestErrors = errors;
+    }
+  }
+  return best;
+}
+
+export type TrialVerdict = 'ADOPTED' | 'REJECTED' | 'UNVERIFIED' | 'REVERTED' | 'RETAINED';
+
+export interface CapabilityTrial {
+  capability: string;
+  title: string;
+  verdict: TrialVerdict;
+  /** The change this delta is linked to: the capability and the run that tried it. */
+  change: string;
+  benchmark: { before: number | null; after: number | null; problems: number };
+  heldOut: { before: number | null; after: number | null; problems: number };
+  statement: string;
+}
+
+/** Minimum benchmark improvement for a capability to be worth trying on held-out problems. */
+export const MIN_LEVERAGE = 0.001;
+
+interface CapabilityContext {
+  split: Record<ProblemSet, SprintProblem[]>;
+  threshold: number;
+  adopted: readonly string[];
+  library: readonly SprintCapability[];
+  ranAt: string;
+}
+
+/**
+ * Choose, try and verify. Re-verifies every adopted capability on held-out problems (reverting one
+ * the results now invalidate), then picks the not-yet-adopted capability with the largest benchmark
+ * improvement and adopts it only when the held-out rerun improves too.
+ */
+export function trialCapabilities(ctx: CapabilityContext): { adopted: string[]; trials: CapabilityTrial[]; fitted: FittedCapability[]; threshold: number } {
+  const bench = ctx.split.BENCHMARK;
+  const held = [...ctx.split.HELD_OUT, ...ctx.split.NEW_HELD_OUT];
+  const byKey = new Map(ctx.library.map((c) => [c.key, c]));
+  const cache = new Map<string, MethodVerdict>();
+  const fitWith = (keys: readonly string[]): FittedCapability[] => {
+    const out: FittedCapability[] = [];
+    for (const key of keys) {
+      const cap = byKey.get(key);
+      if (!cap) continue;
+      out.push(cap.fit(bench, composeVerdicts(bench, ctx.threshold, out, cache)));
+    }
+    return out;
+  };
+  // Each composition is scored at its own threshold, tuned on the benchmark alone.
+  const score = (ps: readonly SprintProblem[], keys: readonly string[]) => {
+    const fitted = fitWith(keys);
+    return sprintScore(ps, composeVerdicts(ps, composedThreshold(bench, fitted, cache), fitted, cache));
+  };
+  const trials: CapabilityTrial[] = [];
+  let adopted = ctx.adopted.filter((k) => byKey.has(k));
+
+  // Results that invalidate an adopted capability change the method.
+  for (const key of [...adopted]) {
+    const without = adopted.filter((k) => k !== key);
+    const before = score(held, without);
+    const after = score(held, adopted);
+    const reverted = before !== null && after !== null && after > before;
+    if (reverted) adopted = without;
+    trials.push({
+      capability: key,
+      title: byKey.get(key)!.title,
+      verdict: reverted ? 'REVERTED' : 'RETAINED',
+      change: `capability:${key}@${ctx.ranAt}`,
+      benchmark: { before: score(bench, without), after: score(bench, [...without, key]), problems: bench.length },
+      heldOut: { before, after, problems: held.length },
+      statement: reverted
+        ? `${key}: held-out score ${after} is worse than ${before} without it — reverted`
+        : `${key}: held-out score ${after ?? 'insufficient'} vs ${before ?? 'insufficient'} without it — retained`,
+    });
+  }
+
+  // The highest-leverage capability not yet adopted, judged on the benchmark alone.
+  const baseBench = score(bench, adopted);
+  let best: { cap: SprintCapability; after: number } | null = null;
+  if (baseBench !== null) {
+    for (const cap of ctx.library) {
+      if (adopted.includes(cap.key)) continue;
+      const after = score(bench, [...adopted, cap.key]);
+      if (after !== null && baseBench - after > MIN_LEVERAGE && (!best || after < best.after)) best = { cap, after };
+    }
+  }
+  if (best) {
+    const before = score(held, adopted);
+    const after = score(held, [...adopted, best.cap.key]);
+    const verdict: TrialVerdict = before === null || after === null ? 'UNVERIFIED' : after < before ? 'ADOPTED' : 'REJECTED';
+    if (verdict === 'ADOPTED') adopted = [...adopted, best.cap.key];
+    trials.push({
+      capability: best.cap.key,
+      title: best.cap.title,
+      verdict,
+      change: `capability:${best.cap.key}@${ctx.ranAt}`,
+      benchmark: { before: baseBench, after: best.after, problems: bench.length },
+      heldOut: { before, after, problems: held.length },
+      statement:
+        `${best.cap.key} (${best.cap.addresses}): benchmark ${baseBench} -> ${best.after}; held-out ${before ?? 'insufficient'} -> ${after ?? 'insufficient'} — ` +
+        (verdict === 'ADOPTED' ? 'adopted' : verdict === 'REJECTED' ? 'rejected: it did not improve held-out problems' : 'not adopted: too few held-out problems to verify'),
+    });
+  }
+  const fitted = fitWith(adopted);
+  return { adopted, trials, fitted, threshold: adopted.length > 0 ? composedThreshold(bench, fitted, cache) : ctx.threshold };
+}
+
+/* ------------------------------------------------------------------------- */
+/* Observed owner interventions                                               */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * Real owner interventions per opening: Needs-You requests and orchestrations parked NEEDS_HUMAN
+ * in its project between its creation and its last update — the rows OWNER_INTERVENTIONS_PER_DAY counts.
+ */
+export async function readOwnerInterventions(problems: readonly SprintProblem[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  const byProject = new Map<string, SprintProblem[]>();
+  for (const p of problems) byProject.set(p.projectId, [...(byProject.get(p.projectId) ?? []), p]);
+  const db = getDb();
+  for (const [projectId, ps] of byProject) {
+    const asks = await db.all<{ at: string }>('SELECT created_at AS at FROM russell_human_requests WHERE project_id = ?', [projectId]);
+    const parked = await db.all<{ at: string }>(
+      "SELECT updated_at AS at FROM research_orchestrations WHERE project_id = ? AND status = 'NEEDS_HUMAN'",
+      [projectId],
+    );
+    const times = [...asks, ...parked].map((r) => r.at);
+    for (const p of ps) out.set(p.id, times.filter((t) => t >= p.createdAt && t <= p.updatedAt).length);
+  }
+  return out;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -472,13 +776,21 @@ export interface SprintRun {
   comparisons: BaselineComparison[];
   /** The candidate a failed held-out comparison was registered as, when one was. */
   repairCandidateId: string | null;
+  /** The candidate the general method's false positives were registered as, when it had any. */
+  falsePositiveCandidateId: string | null;
+  /** Capabilities composed into the general method after this run, in order. */
+  adoptedCapabilities: string[];
+  /** Every capability tried, retained, adopted, rejected or reverted this run, each with its linked delta. */
+  trials: CapabilityTrial[];
   /** Always present: what the reading is not evidence of. */
   disclaimer: string;
 }
 
 export interface SprintDeps {
   read?: () => Promise<SprintProblem[]>;
-  previous?: () => Promise<{ at: string; cutoff: string | null } | null>;
+  previous?: () => Promise<PreviousRun | null>;
+  interventions?: (problems: readonly SprintProblem[]) => Promise<Map<string, number>>;
+  capabilities?: readonly SprintCapability[];
   record?: typeof recordImprovementEvent;
   recordDecision?: typeof recordControllerDecision;
   recordProvenance?: typeof recordNumberProvenance;
@@ -489,12 +801,23 @@ export interface SprintDeps {
 export const SPRINT_DISCLAIMER =
   'A comparison of two reasoning methods on these production rows. It is not evidence that a general superintelligence can be created, in seven days or otherwise.';
 
-async function previousRun(): Promise<{ at: string; cutoff: string | null } | null> {
+export interface PreviousRun {
+  at: string;
+  cutoff: string | null;
+  /** Capabilities the previous run left adopted; absent on runs before capabilities existed. */
+  adopted?: string[];
+}
+
+async function previousRun(): Promise<PreviousRun | null> {
   const [last] = await listImprovementEvents({ kinds: [SPRINT_EVENT], limit: 1 });
   if (!last) return null;
   const cutoff = typeof last.detail['cutoff'] === 'string' ? (last.detail['cutoff'] as string) : null;
-  return { at: last.at, cutoff };
+  const raw = last.detail['adoptedCapabilities'];
+  const adopted = Array.isArray(raw) ? raw.filter((k): k is string => typeof k === 'string') : [];
+  return { at: last.at, cutoff, adopted };
 }
+
+export const SPRINT_CAPABILITY_EVENT = 'SPRINT_CAPABILITY_TRIAL';
 
 /** Run the benchmark once: split, tune on the benchmark only, score every set, compare, record. */
 export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintRun> {
@@ -503,18 +826,29 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
   const previous = await (deps.previous ?? previousRun)();
   const previousCutoff = previous?.cutoff ?? null;
   const split = splitProblems(problems, previousCutoff);
-  const threshold = chooseThreshold(split.BENCHMARK);
+  const ranAt = now.toISOString();
+
+  // Implement, then verify: try the highest-leverage capability and keep only what held-out problems confirm.
+  const { adopted, trials, fitted, threshold } = trialCapabilities({
+    split,
+    threshold: chooseThreshold(split.BENCHMARK),
+    adopted: previous?.adopted ?? [],
+    library: deps.capabilities ?? SPRINT_CAPABILITIES,
+    ranAt,
+  });
+  const generalKey = adopted.length > 0 ? `${GENERAL_METHOD.key}+${adopted.join('+')}` : GENERAL_METHOD.key;
+  const observed = await (deps.interventions ?? readOwnerInterventions)(problems);
 
   const readings: SetReading[] = [];
   const comparisons: BaselineComparison[] = [];
   const generalVerdicts: MethodVerdict[] = [];
   for (const set of ['BENCHMARK', 'HELD_OUT', 'NEW_HELD_OUT'] as const) {
     const ps = split[set];
-    const g = ps.map((p) => GENERAL_METHOD.run(p, threshold));
+    const g = composeVerdicts(ps, threshold, fitted);
     const b = ps.map((p) => BASELINE_METHOD.run(p, threshold));
     generalVerdicts.push(...g);
-    const gr = readSet(set, GENERAL_METHOD.key, ps, g);
-    const br = readSet(set, BASELINE_METHOD.key, ps, b);
+    const gr = readSet(set, generalKey, ps, g, observed);
+    const br = readSet(set, BASELINE_METHOD.key, ps, b, observed);
     readings.push(gr, br);
     comparisons.push(compareWithBaseline(gr, br));
   }
@@ -562,9 +896,50 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
     repairCandidateId = candidate.id;
   }
 
+  // The general method's false positives are failures even on a run where it beat the baseline.
+  let falsePositiveCandidateId: string | null = null;
+  const generalReadings = readings.filter((r) => r.method === generalKey);
+  const falsePositives = generalReadings.flatMap((r) => r.falsePositives);
+  if (falsePositives.length > 0) {
+    const register = deps.registerDirected ?? (await import('./loop.ts')).registerDirected;
+    const called = generalReadings.reduce((s, r) => s + r.falsePositives.length + r.actionablePathwayRate.numerator, 0);
+    const { candidate } = await register(
+      {
+        key: 'reasoning-sprint:false-positives',
+        kind: 'REASONING_CAPABILITY',
+        title: 'The general reasoning method called openings actionable that production did not confirm',
+        problem:
+          `${falsePositives.length} of ${called} actionable calls by ${generalKey} did not become actionable pathways: ` +
+          generalReadings.map((r) => `${r.set} ${r.falsePositives.length}`).join(', '),
+        metric: 'READY_OPPORTUNITIES_PER_DAY',
+        downstreamMetric: null,
+        ownerComponent: 'improvement/sprint',
+        mutationScope: ['server/services/research/**', 'server/services/quant/**', 'server/services/improvement/sprint.ts'],
+        frequency: falsePositives.length,
+        denominator: Math.max(1, called),
+        scope: 'GENERAL',
+        severity: 'MEDIUM',
+        researchQuestion: 'which general reasoning check would have refused these actionable calls without refusing the confirmed ones',
+        samples: falsePositives.slice(0, 5),
+        knownCause: null,
+      },
+      now,
+    );
+    falsePositiveCandidateId = candidate.id;
+  }
+
+  for (const trial of trials) {
+    await (deps.record ?? recordImprovementEvent)({
+      candidateId: null,
+      kind: SPRINT_CAPABILITY_EVENT,
+      at: ranAt,
+      detail: { ...trial, threshold, disclaimer: SPRINT_DISCLAIMER },
+    });
+  }
+
   const cutoff = problems.reduce<string | null>((m, p) => (m === null || p.createdAt > m ? p.createdAt : m), previousCutoff);
   const run: SprintRun = {
-    ranAt: now.toISOString(),
+    ranAt,
     cutoff,
     previousCutoff,
     threshold,
@@ -572,6 +947,9 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
     readings,
     comparisons: comparisons.map((c) => ({ ...c, general: { ...c.general }, baseline: { ...c.baseline } })),
     repairCandidateId,
+    falsePositiveCandidateId,
+    adoptedCapabilities: adopted,
+    trials,
     disclaimer: SPRINT_DISCLAIMER,
   };
   await (deps.record ?? recordImprovementEvent)({
@@ -585,6 +963,9 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
       sets: run.sets,
       readings: run.readings,
       comparisons: run.comparisons.map((c) => ({ set: c.set, earned: c.earned, statement: c.statement })),
+      adoptedCapabilities: run.adoptedCapabilities,
+      trials: run.trials.map((t) => ({ capability: t.capability, verdict: t.verdict, change: t.change, statement: t.statement })),
+      falsePositiveCandidateId: run.falsePositiveCandidateId,
       disclaimer: run.disclaimer,
     },
   });

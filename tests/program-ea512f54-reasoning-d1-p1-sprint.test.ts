@@ -5,7 +5,13 @@ import { getDb } from '../server/db/database.ts';
 import { listImprovementEvents } from '../server/repos/improvement.ts';
 import {
   BASELINE_METHOD,
+  DIMENSIONAL_VALIDATION,
+  EXPIRED_WINDOW_COUNTER_MODEL,
   GENERAL_METHOD,
+  RECALIBRATION,
+  SPRINT_CAPABILITY_EVENT,
+  readOwnerInterventions,
+  trialCapabilities,
   SPRINT_DISCLAIMER,
   SPRINT_EVENT,
   chooseThreshold,
@@ -183,5 +189,111 @@ describe('a run records its readings, feeds failure to the existing repair path,
 
   it('is run by the improvement tick', () => {
     expect(readFileSync('server/services/improvement/loop.ts', 'utf8')).toContain("import('./sprint.ts')");
+  });
+});
+
+/** Openings whose deadline passed before their card was last touched: complete cards that never became pathways. */
+const withExpired = (): SprintProblem[] => [
+  ...population(),
+  ...Array.from({ length: 40 }, () => problem({ state: 'DISCOVERED', deadline: '2026-10-15T00:00:00.000Z' })),
+];
+
+describe('the sprint implements and verifies a capability, not only measures (repair F6)', () => {
+  it('picks the highest-leverage capability on the benchmark and adopts it only when held-out problems improve', () => {
+    const ps = withExpired();
+    const split = splitProblems(ps, null);
+    const threshold = chooseThreshold(split.BENCHMARK);
+    const out = trialCapabilities({ split, threshold, adopted: [], library: [RECALIBRATION, DIMENSIONAL_VALIDATION, EXPIRED_WINDOW_COUNTER_MODEL], ranAt: '2026-11-17T00:00:00.000Z' });
+    const trial = out.trials.find((t) => t.capability === EXPIRED_WINDOW_COUNTER_MODEL.key);
+    expect(trial?.verdict).toBe('ADOPTED');
+    expect(trial!.heldOut.after!).toBeLessThan(trial!.heldOut.before!);
+    expect(trial!.benchmark.after!).toBeLessThan(trial!.benchmark.before!);
+    expect(trial!.change).toBe('capability:counter-model:expired-window@2026-11-17T00:00:00.000Z');
+    expect(out.adopted).toContain(EXPIRED_WINDOW_COUNTER_MODEL.key);
+  });
+
+  it('rejects a capability that helps the benchmark but not held-out problems, and reverts an adopted one the results invalidate', () => {
+    const ps = withExpired();
+    const split = splitProblems(ps, null);
+    // On held-out problems the world is the reverse of the benchmark: expired openings closed and complete open ones did not.
+    const flip = (q: SprintProblem) => (q.deadline ? { ...q, state: 'COLLECTED' } : q.state === 'READY' ? { ...q, state: 'DISCOVERED' } : q);
+    const skewed = { ...split, HELD_OUT: split.HELD_OUT.map(flip), NEW_HELD_OUT: split.NEW_HELD_OUT.map(flip) };
+    const threshold = chooseThreshold(split.BENCHMARK);
+    const library = [EXPIRED_WINDOW_COUNTER_MODEL];
+    const fresh = trialCapabilities({ split: skewed, threshold, adopted: [], library, ranAt: 'r1' });
+    expect(fresh.trials[0]?.verdict).toBe('REJECTED');
+    expect(fresh.adopted).toEqual([]);
+    const reverted = trialCapabilities({ split: skewed, threshold, adopted: [EXPIRED_WINDOW_COUNTER_MODEL.key], library, ranAt: 'r2' });
+    expect(reverted.trials[0]?.verdict).toBe('REVERTED');
+    expect(reverted.adopted).toEqual([]);
+  });
+
+  it('carries an adopted capability into the next run and records each trial as its own linked row', async () => {
+    await freshProject();
+    const ps = withExpired();
+    const deps = {
+      read: async () => ps,
+      recordDecision: async () => {},
+      recordProvenance: async () => {},
+      interventions: async () => new Map<string, number>(),
+      registerDirected: async () => ({ candidate: { id: 'imc_x' } }),
+    };
+    const first = await runSprintBenchmark({ ...deps, capabilities: [EXPIRED_WINDOW_COUNTER_MODEL], previous: async () => null });
+    expect(first.adoptedCapabilities).toContain(EXPIRED_WINDOW_COUNTER_MODEL.key);
+    expect(first.readings[0]?.method).toContain(EXPIRED_WINDOW_COUNTER_MODEL.key);
+    const rows = await listImprovementEvents({ kinds: [SPRINT_CAPABILITY_EVENT], limit: 10 });
+    expect(rows.some((r) => r.detail['verdict'] === 'ADOPTED' && String(r.detail['change']).startsWith('capability:'))).toBe(true);
+    const second = await runSprintBenchmark({ ...deps, capabilities: [EXPIRED_WINDOW_COUNTER_MODEL], previous: async () => ({ at: first.ranAt, cutoff: first.cutoff, adopted: first.adoptedCapabilities }) });
+    expect(second.trials.find((t) => t.capability === EXPIRED_WINDOW_COUNTER_MODEL.key)?.verdict).toBe('RETAINED');
+    expect(second.adoptedCapabilities).toContain(EXPIRED_WINDOW_COUNTER_MODEL.key);
+  });
+});
+
+describe('false positives reach repair even when the general method wins (repair F6)', () => {
+  it('registers the general method\'s false positives on a run where it earned its cost', async () => {
+    await freshProject();
+    const registered: Array<{ key: string; samples: string[] }> = [];
+    // A few complete cards did not become pathways: the general method calls them, wrongly, and still beats the baseline.
+    const ps = [...population(), ...Array.from({ length: 2 }, () => problem({ state: 'DISCOVERED' }))];
+    const run = await runSprintBenchmark({
+      read: async () => ps,
+      previous: async () => null,
+      capabilities: [],
+      recordDecision: async () => {},
+      recordProvenance: async () => {},
+      interventions: async () => new Map<string, number>(),
+      registerDirected: async (w) => {
+        registered.push({ key: w.key, samples: w.samples });
+        return { candidate: { id: `imc_${w.key}` } };
+      },
+    });
+    // The general method's FP registration does not depend on it losing to the baseline.
+    expect(registered.map((r) => r.key)).toContain('reasoning-sprint:false-positives');
+    const fp = registered.find((r) => r.key === 'reasoning-sprint:false-positives');
+    expect(fp?.samples.length).toBeGreaterThan(0);
+    expect(run.falsePositiveCandidateId).toBe('imc_reasoning-sprint:false-positives');
+  });
+});
+
+describe('required human interventions are counted from real owner rows, not modelled (repair F6)', () => {
+  it('reads Needs-You requests inside each opening\'s life and keeps the method\'s projection separate', async () => {
+    const { project } = await freshProject();
+    const db = getDb();
+    const inside = problem({ projectId: project.id, createdAt: '2026-10-01T00:00:00.000Z', updatedAt: '2026-10-10T00:00:00.000Z' });
+    const outside = problem({ projectId: project.id, createdAt: '2026-10-20T00:00:00.000Z', updatedAt: '2026-10-25T00:00:00.000Z' });
+    await db.run(
+      `INSERT INTO russell_human_requests (id, project_id, authority_needed, why_not_russell, resume_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      ['rhr_sprint_1', project.id, 'APPROVAL', 'spend', 'rk_sprint_1', '2026-10-05T00:00:00.000Z', '2026-10-05T00:00:00.000Z'],
+    );
+    const observed = await readOwnerInterventions([inside, outside]);
+    expect(observed.get(inside.id)).toBe(1);
+    expect(observed.get(outside.id)).toBe(0);
+    const ps = [inside, outside, ...population().slice(0, 4)];
+    const reading = readSet('HELD_OUT', GENERAL_METHOD.key, ps, ps.map((p) => GENERAL_METHOD.run(p, 0.7)), observed);
+    expect(reading.humanInterventions).toMatchObject({ numerator: 1, denominator: 6 });
+    expect(reading.projectedHumanInterventions.denominator).toBe(6);
+    // Not read is not zero.
+    const unread = readSet('HELD_OUT', GENERAL_METHOD.key, ps, ps.map((p) => GENERAL_METHOD.run(p, 0.7)));
+    expect(unread.humanInterventions.value).toBe('INSUFFICIENT_DATA');
   });
 });
