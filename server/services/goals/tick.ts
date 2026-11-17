@@ -57,7 +57,7 @@ import { reconcileRegisterIfDue, type RegisterPassReport } from './openQuestions
 import { recordDecisionsIfDue } from './decisionRecord.ts';
 import { reconcileCalibrationIfDue, type CalibrationPassReport } from './calibration.ts';
 import { reconcileFactChangesIfDue, type ReconsiderPassReport } from './reconsider.ts';
-import type { LaneCapacityReading, ResearchYieldReading } from './researchYield.ts';
+import { diagnoseCostCountedOnce, type LaneCapacityReading, type ResearchYieldReading } from './researchYield.ts';
 import {
   APPLICABLE_REMEDIES,
   COMMERCIAL_FLOOR,
@@ -1259,14 +1259,19 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
   // Recording it as `held` hid a genuine double count from probe r01.res-15-5,
   // which reads only measured decisions; recorded this way it fails the probe.
   // The allocation stage still never applies it (`sharesInForceFrom`).
-  const costCountedOnce = verifiedCostReading(reading.costCountedOnce);
+  // The cause is read from the reading as the reader returned it, before
+  // `verifiedCostReading` coerces a non-finite sum to 0 — so the recorded row
+  // says which way it failed (a NaN job time, a double count, float drift),
+  // and no repair has to assert it.
+  const diagnosis = diagnoseCostCountedOnce(reading.costCountedOnce);
+  const costCountedOnce = { ...verifiedCostReading(reading.costCountedOnce), cause: diagnosis.cause, jobMsGap: diagnosis.jobMsGap };
   const heldForCost = !costCountedOnce.holds;
   const decision: AllocationDecision = heldForCost
     ? {
         ...decided,
         shares: observed,
         changes: [],
-        notes: [`Held: the window's cost reading does not show each job's cost counted once (total ${String(costCountedOnce.totalJobMs)} ms against ${String(costCountedOnce.purposeJobMs)} ms across purposes), so no share moves on it.`, ...decided.notes],
+        notes: [`Held: the window's cost reading does not show each job's cost counted once (${diagnosis.cause}: ${diagnosis.detail}), so no share moves on it.`, ...decided.notes],
       }
     : decided;
   const fingerprint = allocationFingerprint({ ...decision, held: decision.held || heldForCost });

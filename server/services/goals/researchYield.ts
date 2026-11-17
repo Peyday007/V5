@@ -580,7 +580,7 @@ export interface ResearchYieldReading {
   lanes: Record<string, YieldBucket>;
   purposes: Record<PurposeKey, YieldBucket>;
   /** Distinct jobs, the job time and money they spent, and whether every purpose's share sums back to it. */
-  costCountedOnce: { jobs: number; totalJobMs: number; purposeJobMs: number; totalCostMinor: number | null; purposeCostMinor: number | null; holds: boolean; /** Jobs counted once whose run time no row gives (charged 0 measured time). */ unmeasuredJobs?: number };
+  costCountedOnce: { jobs: number; totalJobMs: number; purposeJobMs: number; totalCostMinor: number | null; purposeCostMinor: number | null; holds: boolean; /** Jobs counted once whose run time no row gives (charged 0 measured time). */ unmeasuredJobs?: number; /** Which way the sums agree or disagree, read from the numbers themselves (`diagnoseCostCountedOnce`). */ cause?: CostOnceCause; /** |total − purposes| job time, when both are finite. */ jobMsGap?: number | null };
   /** Each job's attribution basis, so "why is this job SELF_IMPROVEMENT" is answerable. */
   attributions: { jobId: string; lane: string; purposes: PurposeKey[]; basis: string[]; goalId?: string | null; jobMs?: number }[];
   notes: string[];
@@ -628,6 +628,53 @@ export function sumsAgree(a: number | null, b: number | null): boolean {
   if (a === null || b === null) return a === b;
   if (!finite(a) || !finite(b)) return false;
   return Math.abs(a - b) <= Math.max(0.01, 1e-9 * Math.max(Math.abs(a), Math.abs(b)));
+}
+
+/**
+ * Why a cost-counted-once record holds or does not, read only from the record's
+ * own numbers — so a recorded decision row demonstrates its cause instead of a
+ * repair asserting one. The causes are mutually exclusive and checked in order:
+ *  - NOT_RECORDED: no record at all;
+ *  - NON_FINITE_JOB_TIME: a job-time sum is NaN, Infinity or missing (NaN is
+ *    written to a JSON row as `null`, so a recorded `null` reads here too);
+ *  - NON_FINITE_COST: one money sum is a number and the other is not;
+ *  - DOUBLE_COUNT: the sums differ by more than any rounding or float drift;
+ *  - FLOAT_DRIFT: the sums differ by more than the absolute 0.01 an earlier
+ *    reader allowed, but within one part in a billion of the magnitude — not a
+ *    double count, and read as one before `sumsAgree`;
+ *  - FLAG_DISAGREES: the numbers agree but the record's `holds` is not true;
+ *  - HOLDS: the numbers agree and the record says so.
+ * Pure.
+ */
+export type CostOnceCause = 'HOLDS' | 'NOT_RECORDED' | 'NON_FINITE_JOB_TIME' | 'NON_FINITE_COST' | 'DOUBLE_COUNT' | 'FLOAT_DRIFT' | 'FLAG_DISAGREES';
+
+export function diagnoseCostCountedOnce(once: unknown): { cause: CostOnceCause; jobMsGap: number | null; costGap: number | null; detail: string } {
+  if (!once || typeof once !== 'object') return { cause: 'NOT_RECORDED', jobMsGap: null, costGap: null, detail: 'no cost-counted-once record' };
+  const o = once as Record<string, unknown>;
+  const t = o.totalJobMs;
+  const p = o.purposeJobMs;
+  if (!finite(t) || !finite(p)) {
+    return { cause: 'NON_FINITE_JOB_TIME', jobMsGap: null, costGap: null, detail: `job time is not a finite sum (total ${String(t)} ms, purposes ${String(p)} ms): a job's run time was unreadable` };
+  }
+  const jobMsGap = Math.abs(t - p);
+  const tc = o.totalCostMinor;
+  const pc = o.purposeCostMinor;
+  const tcNum = finite(tc);
+  const pcNum = finite(pc);
+  if (tcNum !== pcNum || (!tcNum && tc !== null && tc !== undefined) || (!pcNum && pc !== null && pc !== undefined)) {
+    return { cause: 'NON_FINITE_COST', jobMsGap, costGap: null, detail: `money is not a finite sum on both sides (total ${String(tc)}, purposes ${String(pc)})` };
+  }
+  const costGap = tcNum && pcNum ? Math.abs((tc as number) - (pc as number)) : null;
+  const relTol = (a: number, b: number) => 1e-9 * Math.max(Math.abs(a), Math.abs(b));
+  const beyond = (gap: number, a: number, b: number) => gap > Math.max(0.01, relTol(a, b));
+  if (beyond(jobMsGap, t, p) || (costGap !== null && beyond(costGap, tc as number, pc as number))) {
+    return { cause: 'DOUBLE_COUNT', jobMsGap, costGap, detail: `purposes sum to ${p} ms against a total of ${t} ms (gap ${jobMsGap}); cost gap ${String(costGap)}` };
+  }
+  if (jobMsGap >= 0.01 || (costGap !== null && costGap >= 0.01)) {
+    return { cause: 'FLOAT_DRIFT', jobMsGap, costGap, detail: `the sums differ by ${jobMsGap} ms, within float drift of ${Math.max(Math.abs(t), Math.abs(p))} ms but over an absolute 0.01` };
+  }
+  if (o.holds !== true) return { cause: 'FLAG_DISAGREES', jobMsGap, costGap, detail: `the sums agree (gap ${jobMsGap} ms) but the record's holds is ${String(o.holds)}` };
+  return { cause: 'HOLDS', jobMsGap, costGap, detail: `each job's cost is counted once (gap ${jobMsGap} ms)` };
 }
 
 function emptyBucket(): YieldBucket {
@@ -733,6 +780,8 @@ export function summarizeResearchYield(input: { since: string; until: string; jo
   const purposeJobMs = Math.round(Object.values(purposes).reduce((sum, b) => sum + b.jobMs, 0) * 1000) / 1000;
   const costed = Object.values(purposes).filter((b) => b.costMinor !== null);
   const purposeCostMinor = costed.length > 0 ? Math.round(costed.reduce((sum, b) => sum + (b.costMinor ?? 0), 0) * 1000) / 1000 : null;
+  const holds = sumsAgree(total.jobMs, purposeJobMs) && sumsAgree(total.costMinor, purposeCostMinor);
+  const diagnosis = diagnoseCostCountedOnce({ totalJobMs: total.jobMs, purposeJobMs, totalCostMinor: total.costMinor, purposeCostMinor, holds });
   return {
     window: { since: input.since, until: input.until, ms: windowMs },
     total,
@@ -744,8 +793,10 @@ export function summarizeResearchYield(input: { since: string; until: string; jo
       purposeJobMs,
       totalCostMinor: total.costMinor,
       purposeCostMinor,
-      holds: sumsAgree(total.jobMs, purposeJobMs) && sumsAgree(total.costMinor, purposeCostMinor),
+      holds,
       unmeasuredJobs,
+      cause: diagnosis.cause,
+      jobMsGap: diagnosis.jobMsGap,
     },
     attributions: kept.map((job) => ({ jobId: job.id, lane: job.lane, purposes: job.purposes, basis: job.basis, ...(job.goalId ? { goalId: job.goalId } : {}), jobMs: job.durationMs })),
     notes: [

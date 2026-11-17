@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import {
+  diagnoseCostCountedOnce,
   researchYieldByPurpose,
   summarizeResearchYield,
   sumsAgree,
@@ -18,7 +19,7 @@ import {
   type ResearchYieldReading,
   type YieldJob,
 } from '../server/services/goals/researchYield.ts';
-import { reallocateResearch, sharesInForceFrom, verifiedCostReading, type ResearchAllocationPorts } from '../server/services/goals/tick.ts';
+import { RESEARCH_ALLOCATION_WINDOW_MS, reallocateResearch, sharesInForceFrom, verifiedCostReading, type ResearchAllocationPorts } from '../server/services/goals/tick.ts';
 import { RESEARCH_PURPOSES } from '../server/services/goals/researchAllocation.ts';
 import { yieldAllocationHolds } from '../server/services/factory/program/release01/researchGoalProbe.ts';
 import type { GoalView } from '../server/services/goals/model.ts';
@@ -241,5 +242,87 @@ describe('reallocateResearch records only decisions whose cost is counted once',
     expect(yieldAllocationHolds(decisions as never).ok).toBe(false);
     // Every decision whose cost was shown counted once passes the probe.
     expect(yieldAllocationHolds(decisions.filter((d) => d.heldForCost !== true) as never).ok).not.toBe(false);
+  });
+});
+
+/**
+ * Review finding F3: the earlier repair asserted a NaN job time as the cause
+ * without showing it. These tests make the cause something the row itself
+ * demonstrates: every recorded decision now carries `costCountedOnce.cause`,
+ * read from the reading's own sums before they are coerced, and a row recorded
+ * before that field existed is classified from its numbers the same way.
+ */
+describe('a decision row demonstrates why its cost is or is not counted once', () => {
+  it('names each cause from the numbers alone, and the causes do not overlap', () => {
+    expect(diagnoseCostCountedOnce(undefined).cause).toBe('NOT_RECORDED');
+    expect(diagnoseCostCountedOnce({ totalJobMs: Number.NaN, purposeJobMs: 5, holds: false }).cause).toBe('NON_FINITE_JOB_TIME');
+    expect(diagnoseCostCountedOnce({ totalJobMs: 5, purposeJobMs: 5, totalCostMinor: 3, purposeCostMinor: null, holds: false }).cause).toBe('NON_FINITE_COST');
+    expect(diagnoseCostCountedOnce({ totalJobMs: 60_000, purposeJobMs: 120_000, totalCostMinor: null, purposeCostMinor: null, holds: false }).cause).toBe('DOUBLE_COUNT');
+    expect(diagnoseCostCountedOnce({ totalJobMs: 4e12, purposeJobMs: 4e12 + 0.3, totalCostMinor: null, purposeCostMinor: null, holds: false }).cause).toBe('FLOAT_DRIFT');
+    expect(diagnoseCostCountedOnce({ totalJobMs: 5, purposeJobMs: 5, totalCostMinor: null, purposeCostMinor: null, holds: false }).cause).toBe('FLAG_DISAGREES');
+    expect(diagnoseCostCountedOnce({ totalJobMs: 5, purposeJobMs: 5.001, totalCostMinor: 2, purposeCostMinor: 2, holds: true }).cause).toBe('HOLDS');
+  });
+
+  it('classifies a row written before the fix: NaN job time is stored as null and reads as NON_FINITE_JOB_TIME, never as drift', () => {
+    // The pre-fix allocation pass recorded the reader's costCountedOnce as-is;
+    // JSON (the improvement_events detail column) turns a NaN sum into null.
+    const preFix = JSON.parse(JSON.stringify({ jobs: 40, totalJobMs: Number.NaN, purposeJobMs: Number.NaN, totalCostMinor: null, purposeCostMinor: null, holds: false }));
+    expect(preFix.totalJobMs).toBeNull();
+    const d = diagnoseCostCountedOnce(preFix);
+    expect(d.cause).toBe('NON_FINITE_JOB_TIME');
+    expect(d.detail).toMatch(/unreadable/);
+  });
+
+  it('float drift cannot exceed the old absolute 0.01 at any job time a 24h window can hold for a thousand always-busy workers', () => {
+    // Total job time is bounded by window × concurrency. A thousand workers busy
+    // for the whole window, split across one to five purposes with fractional
+    // durations, is far above the fleet production runs, and still drifts by
+    // under the 0.01 the pre-fix reader allowed — so the pre-fix failure could
+    // not have been drift; it is the non-finite job time the row's null shows.
+    const workers = 1000;
+    const jobsPerWorker = 48;
+    const each = RESEARCH_ALLOCATION_WINDOW_MS / jobsPerWorker;
+    const jobs: YieldJob[] = [];
+    for (let w = 0; w < workers; w++) {
+      for (let k = 0; k < jobsPerWorker; k++) {
+        const i = w * jobsPerWorker + k;
+        jobs.push(job(`w${w}k${k}`, { purposes: [...RESEARCH_PURPOSES.slice(0, 1 + (i % RESEARCH_PURPOSES.length))], startMs: T0 + k * each, durationMs: each - (i % 7) / 3 }));
+      }
+    }
+    const r = summarize(jobs);
+    expect(r.costCountedOnce.totalJobMs).toBeLessThanOrEqual(workers * RESEARCH_ALLOCATION_WINDOW_MS);
+    expect(r.costCountedOnce.jobMsGap).not.toBeNull();
+    expect(r.costCountedOnce.jobMsGap!).toBeLessThan(0.01);
+    expect(r.costCountedOnce.cause).toBe('HOLDS');
+  });
+
+  it('records the cause in the decision row: HOLDS on a measured reading, NON_FINITE_JOB_TIME on a NaN one, with the cause in the held note', async () => {
+    const good = memoryPorts(() => readingFrom(degenerateJobs()));
+    await reallocateResearch({ goals: [goalView('wst_a')], now: UNTIL }, good.ports);
+    const ok = good.decisions[0]!.costCountedOnce as { cause: unknown; holds: unknown };
+    expect(ok.holds).toBe(true);
+    expect(ok.cause).toBe('HOLDS');
+
+    const nan = memoryPorts(() => ({ ...readingFrom(degenerateJobs()), costCountedOnce: { jobs: 3, totalJobMs: Number.NaN, purposeJobMs: Number.NaN, totalCostMinor: null, purposeCostMinor: null, holds: false } }));
+    await reallocateResearch({ goals: [goalView('wst_a')], now: UNTIL }, nan.ports);
+    const row = JSON.parse(JSON.stringify(nan.decisions[0]!)) as Record<string, unknown>;
+    const once = row.costCountedOnce as { cause: unknown; holds: unknown };
+    // Measured but not counted once: heldForCost (never applied), not held, so the probe reads it.
+    expect(row.held).toBe(false);
+    expect(row.heldForCost).toBe(true);
+    expect(sharesInForceFrom(row)?.held).toBe(true);
+    expect(yieldAllocationHolds([row] as never).ok).toBe(false);
+    expect(once.holds).toBe(false);
+    expect(once.cause).toBe('NON_FINITE_JOB_TIME');
+    expect((row.notes as string[])[0]).toMatch(/NON_FINITE_JOB_TIME/);
+    // The recorded row, read back, diagnoses to the same cause it states.
+    expect(diagnoseCostCountedOnce({ ...once, totalJobMs: null, purposeJobMs: null }).cause).toBe('NON_FINITE_JOB_TIME');
+
+    const doubled = memoryPorts(() => {
+      const r = readingFrom(degenerateJobs());
+      return { ...r, costCountedOnce: { ...r.costCountedOnce, purposeJobMs: r.costCountedOnce.totalJobMs * 2, holds: false } };
+    });
+    await reallocateResearch({ goals: [goalView('wst_a')], now: UNTIL }, doubled.ports);
+    expect((doubled.decisions[0]!.costCountedOnce as { cause: unknown }).cause).toBe('DOUBLE_COUNT');
   });
 });
