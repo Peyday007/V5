@@ -11,6 +11,7 @@ import {
   commitReadings,
   emptyDeltaIndex,
   fingerprintOf,
+  indexFromObservations,
   planDelta,
   readDeltaIndex,
   recordIdentity,
@@ -128,5 +129,30 @@ describe('serialization', () => {
     expect(planDelta({ index: back, batch: [rec('1', { title: 'a' })], parserVersion: P1, now: T2 }).counts.UNCHANGED).toBe(1);
     expect(readDeltaIndex({ schema: 'other' })).toEqual(emptyDeltaIndex());
     expect(readDeltaIndex(null)).toEqual(emptyDeltaIndex());
+  });
+});
+
+describe('indexFromObservations rebuilds the history from stored rows', () => {
+  it('folds repeated fingerprints into one version, versions changes, and classifies a batch exactly as a carried index would', () => {
+    const a = fingerprintOf({ v: 1 });
+    const b = fingerprintOf({ v: 2 });
+    const index = indexFromObservations([
+      { identity: idOf('x'), fingerprint: b, seenAt: T3, parserVersion: P1, factKeys: ['k2'] },
+      { identity: idOf('x'), fingerprint: a, seenAt: T1, parserVersion: 'feeds-extract/2', factKeys: ['k1'] },
+      { identity: idOf('x'), fingerprint: a, seenAt: T2, parserVersion: P1, factKeys: ['k1'] },
+      { identity: idOf('y'), fingerprint: a, seenAt: T1, parserVersion: 'feeds-extract/2', factKeys: ['ky'] },
+    ]);
+    expect(index.records[idOf('x')]!.versions.map((v) => [v.version, v.fingerprint, v.parserVersion])).toEqual([
+      [1, a, P1],
+      [2, b, P1],
+    ]);
+    const plan = planDelta({ index, batch: [rec('x', { v: 2 }), rec('y', { v: 1 }), rec('z', { v: 1 })], parserVersion: P1, now: T3 });
+    expect(plan.changes.map((c) => c.status)).toEqual(['UNCHANGED', 'REPARSE', 'NEW']);
+    expect(plan.affectedFactKeys).toEqual(['ky']);
+  });
+
+  it('holds only the identities it was given, so its size follows the batch and not the history', () => {
+    const observations = Array.from({ length: 50 }, (_, i) => ({ identity: idOf(`r${i}`), fingerprint: fingerprintOf(i), seenAt: T1, parserVersion: P1 }));
+    expect(Object.keys(indexFromObservations(observations.slice(0, 3)).records)).toHaveLength(3);
   });
 });

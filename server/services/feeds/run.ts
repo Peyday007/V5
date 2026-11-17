@@ -51,7 +51,8 @@ import { FEED_SHORTLIST_BUCKET } from './bucket.ts';
 import { SITE_SOURCE } from './sites.ts';
 import { CODE_SIGNAL_SOURCE, coveredItems, detectionsForLeads } from './detectors.ts';
 import { EXTRACTOR_VERSION, extractItem, extractItems, MODEL_BATCH_SIZE, type ExtractableItem, type ExtractedFact } from './extract.ts';
-import { commitReadings, planDelta, readDeltaIndex, recordIdentity, type DeltaIndex, type DeltaPlan, type DeltaStatus, type RecordReading } from '../knowledge/delta.ts';
+import { fingerprintOf, indexFromObservations, planDelta, recordIdentity, type DeltaPlan, type DeltaStatus, type EntityMapping, type RecordObservation } from '../knowledge/delta.ts';
+import { entityIdFor } from '../knowledge/identity.ts';
 import { resolveIdentities, type IdentityCollision, type IdentityLink, type IdentityRecord } from '../knowledge/identity.ts';
 import { selectForDeepening, type DeepeningCandidate, type DeepeningDecision } from '../knowledge/deepening.ts';
 import { planProcessing, type ProcessingPlan, type RouteEvidence } from '../knowledge/processingGraph.ts';
@@ -949,8 +950,20 @@ export interface ExtractionPass {
   funnel?: { reading: FunnelReading; gain: { raw: number; usableIntelligence: number; falseSpeed: boolean } };
   /** A stage that failed this pass; the pass is still recorded and the stage is named. */
   stageFailures?: { stage: string; error: string }[];
-  /** The fingerprint index the next pass classifies against (bounded to the most recently seen records). */
-  deltaIndex?: DeltaIndex;
+  /**
+   * Which parser read which rows: the current version, and the cursor position
+   * before which an older one did. A few fields, whatever the history: the
+   * next pass rebuilds its delta index from the stored feed rows, so no copy
+   * of the index is ever written into this append-only row.
+   */
+  parser?: ParserSpan;
+}
+
+export interface ParserSpan {
+  version: string;
+  /** Rows at or before this position were read by `before`; null when this version has read every row. */
+  since: { fetchedAt: string; id: string } | null;
+  before: string | null;
 }
 
 export interface ExtractionDelta {
@@ -966,22 +979,6 @@ export interface ExtractionDelta {
   affectedEntities: string[];
 }
 
-/** Records the carried fingerprint index keeps, most recently seen first, so one row stays a readable size. */
-export const DELTA_INDEX_MAX_RECORDS = 5000;
-
-function boundDeltaIndex(index: DeltaIndex): DeltaIndex {
-  const histories = Object.values(index.records);
-  if (histories.length <= DELTA_INDEX_MAX_RECORDS) return index;
-  const lastSeen = (h: (typeof histories)[number]) => h.versions[h.versions.length - 1]?.seenAt ?? '';
-  const kept = histories.sort((a, b) => lastSeen(b).localeCompare(lastSeen(a)) || a.identity.localeCompare(b.identity)).slice(0, DELTA_INDEX_MAX_RECORDS);
-  const keep = new Set(kept.map((h) => h.identity));
-  return {
-    schema: index.schema,
-    records: Object.fromEntries(kept.map((h) => [h.identity, h])),
-    entityMappings: Object.fromEntries(Object.entries(index.entityMappings).filter(([, m]) => keep.has(m.setBy))),
-  };
-}
-
 const errorText = (error: unknown) => String((error as Error)?.message ?? error);
 
 /** What a record says, for its fingerprint: never when or where it was fetched. */
@@ -991,6 +988,98 @@ function deltaRecordOf(item: ExtractableItem) {
     recordId: item.url || item.id,
     content: { title: item.title, body: item.body, organization: item.organization, publishedAt: item.publishedAt },
   };
+}
+
+type StoredFeedRow = {
+  id: string;
+  source: string;
+  url: string;
+  title: string;
+  body: string | null;
+  organization: string | null;
+  published_at: string | null;
+  fetched_at: string;
+};
+
+const itemOfRow = (row: StoredFeedRow): ExtractableItem => ({
+  id: row.id,
+  source: row.source,
+  url: row.url,
+  title: row.title,
+  body: row.body,
+  organization: row.organization,
+  publishedAt: row.published_at,
+  fetchedAt: row.fetched_at,
+});
+
+/** Whether a row position is at or before a cursor position. */
+const atOrBefore = (row: { fetched_at: string; id: string }, at: { fetchedAt: string; id: string }) =>
+  row.fetched_at < at.fetchedAt || (row.fetched_at === at.fetchedAt && row.id <= at.id);
+
+/** Rows per IN (...) list, so one statement never carries an unbounded parameter list. */
+const PRIOR_ROWS_CHUNK = 100;
+
+/**
+ * The delta history of the batch's records, read from the rows that already
+ * hold it (KNOW-25-1, avoid recreating old understanding). `feed_items` is
+ * insert-only, and every row at or before the cursor has been read by an
+ * earlier pass, so the earlier rows that share a record's source and address
+ * are exactly its earlier versions. Their facts are recomputed by the same
+ * code that read them; which parser did is the recorded parser span; the
+ * entity a record was established as is the one its first row was read as.
+ * Nothing is carried in the pass row, so the row stays the size of one batch.
+ */
+async function priorDelta(
+  items: readonly ExtractableItem[],
+  from: { fetchedAt: string; id: string } | null,
+  parser: ParserSpan,
+): Promise<{ observations: RecordObservation[]; entityMappings: Record<string, EntityMapping>; readSources: Set<string> }> {
+  const observations: RecordObservation[] = [];
+  const entityMappings: Record<string, EntityMapping> = {};
+  const readSources = new Set<string>();
+  if (!from || items.length === 0) return { observations, entityMappings, readSources };
+  const db = getDb();
+  const sources = [...new Set(items.map((item) => item.source))];
+  const urls = [...new Set(items.map((item) => item.url).filter((url) => !!url))];
+  const prior: StoredFeedRow[] = [];
+  for (let i = 0; i < urls.length; i += PRIOR_ROWS_CHUNK) {
+    const chunk = urls.slice(i, i + PRIOR_ROWS_CHUNK);
+    prior.push(
+      ...(await db.all<StoredFeedRow>(
+        `SELECT id, source, url, title, body, organization, published_at, fetched_at FROM feed_items
+          WHERE source IN (${sources.map(() => '?').join(', ')}) AND url IN (${chunk.map(() => '?').join(', ')})
+            AND (fetched_at < ? OR (fetched_at = ? AND id <= ?))
+          ORDER BY fetched_at, id`,
+        [...sources, ...chunk, from.fetchedAt, from.fetchedAt, from.id],
+      )),
+    );
+  }
+  for (const source of sources) {
+    const seen = await db.get<{ id: string }>(
+      `SELECT id FROM feed_items WHERE source = ? AND (fetched_at < ? OR (fetched_at = ? AND id <= ?)) LIMIT 1`,
+      [source, from.fetchedAt, from.fetchedAt, from.id],
+    );
+    if (seen) readSources.add(source);
+  }
+  const wanted = new Set(items.map((item) => recordIdentity(item.source, deltaRecordOf(item).recordId)));
+  for (const row of prior) {
+    const item = itemOfRow(row);
+    const record = deltaRecordOf(item);
+    const identity = recordIdentity(record.source, record.recordId);
+    if (!wanted.has(identity)) continue;
+    const readByCurrent = parser.since === null || !atOrBefore(row, parser.since);
+    const entity = (row.organization ?? '').trim() !== '' ? entityIdFor('ENTITY', row.id) : null;
+    if (entity && !entityMappings[identity]) entityMappings[identity] = { entityId: entity, setBy: identity, setAt: row.fetched_at };
+    observations.push({
+      identity,
+      fingerprint: fingerprintOf(record.content),
+      seenAt: `${row.fetched_at}\u0000${row.id}`,
+      parserVersion: readByCurrent ? parser.version : (parser.before ?? 'unrecorded'),
+      factKeys: extractItem(item).map((fact) => fact.key),
+      entities: entityMappings[identity] ? [entityMappings[identity]!.entityId] : [],
+    });
+  }
+  return { observations, entityMappings, readSources };
 }
 
 /** The route a stored source is pulled through, as the processing graph reads it. */
@@ -1044,26 +1133,25 @@ export async function recordFeedExtraction(input: {
     [input.projectId, EXTRACTION_EVENT],
   );
   let from: { fetchedAt: string; id: string } | null = null;
-  let priorIndex: DeltaIndex = readDeltaIndex(null);
+  let lastParser: Partial<ParserSpan> | null = null;
   try {
-    const parsed = JSON.parse(last?.detail ?? '{}') as { cursor?: { to?: { fetchedAt?: unknown; id?: unknown } }; deltaIndex?: unknown };
+    const parsed = JSON.parse(last?.detail ?? '{}') as { cursor?: { to?: { fetchedAt?: unknown; id?: unknown } }; parser?: Partial<ParserSpan> };
     const to = parsed.cursor?.to;
     if (to && typeof to.fetchedAt === 'string' && typeof to.id === 'string') from = { fetchedAt: to.fetchedAt, id: to.id };
-    priorIndex = readDeltaIndex(parsed.deltaIndex);
+    lastParser = parsed.parser && typeof parsed.parser.version === 'string' ? parsed.parser : null;
   } catch {
     from = null;
   }
+  // The parser span: carried while the parser is the same; a new parser starts at the cursor,
+  // and every row before it was read by the one recorded before (or by one nobody recorded).
+  const parser: ParserSpan =
+    !from
+      ? { version: EXTRACTOR_VERSION, since: null, before: null }
+      : lastParser && lastParser.version === EXTRACTOR_VERSION
+        ? { version: EXTRACTOR_VERSION, since: lastParser.since ?? null, before: lastParser.before ?? null }
+        : { version: EXTRACTOR_VERSION, since: from, before: lastParser?.version ?? null };
   const floor = new Date(now.getTime() - LEAD_MAX_AGE_MS).toISOString();
-  const rows = await db.all<{
-    id: string;
-    source: string;
-    url: string;
-    title: string;
-    body: string | null;
-    organization: string | null;
-    published_at: string | null;
-    fetched_at: string;
-  }>(
+  const rows = await db.all<StoredFeedRow>(
     from
       ? `SELECT id, source, url, title, body, organization, published_at, fetched_at FROM feed_items
           WHERE source <> ? AND (fetched_at > ? OR (fetched_at = ? AND id > ?))
@@ -1076,16 +1164,7 @@ export async function recordFeedExtraction(input: {
       : [CODE_SIGNAL_SOURCE, floor, input.limit ?? EXTRACTION_ITEMS_PER_PASS],
   );
   if (rows.length === 0) return null;
-  const items: ExtractableItem[] = rows.map((row) => ({
-    id: row.id,
-    source: row.source,
-    url: row.url,
-    title: row.title,
-    body: row.body,
-    organization: row.organization,
-    publishedAt: row.published_at,
-    fetchedAt: row.fetched_at,
-  }));
+  const items: ExtractableItem[] = rows.map(itemOfRow);
   const nowIsoText = now.toISOString();
   const stageFailures: { stage: string; error: string }[] = [];
   const stage = <T,>(name: string, fallback: T, fn: () => T): T => {
@@ -1101,9 +1180,19 @@ export async function recordFeedExtraction(input: {
   // Delta: classify the batch against the index the previous pass carried; only what is new,
   // changed or read by an older parser is read again, and only its facts are recomputed.
   const identityOfItem = new Map(items.map((item) => [item.id, recordIdentity(item.source, deltaRecordOf(item).recordId)]));
-  const deltaPlan = stage<DeltaPlan | null>('delta', null, () =>
-    planDelta({ index: priorIndex, batch: items.map(deltaRecordOf), parserVersion: EXTRACTOR_VERSION, now: nowIsoText }),
-  );
+  let history: Awaited<ReturnType<typeof priorDelta>> | null = null;
+  try {
+    if (input.failStages?.includes('delta')) throw new Error('stage delta failed on request');
+    history = await priorDelta(items, from, parser);
+  } catch (error) {
+    stageFailures.push({ stage: 'delta', error: errorText(error) });
+  }
+  const priorIndex = history ? indexFromObservations(history.observations, history.entityMappings) : null;
+  const deltaPlan = priorIndex
+    ? stage<DeltaPlan | null>('delta', null, () =>
+        planDelta({ index: priorIndex, batch: items.map(deltaRecordOf), parserVersion: EXTRACTOR_VERSION, now: nowIsoText }),
+      )
+    : null;
   const statusOfIdentity = new Map((deltaPlan?.changes ?? []).map((c) => [c.identity, c.status]));
   const toRead = deltaPlan ? new Set(deltaPlan.toRead) : null;
   const claimed = new Set<string>();
@@ -1140,7 +1229,7 @@ export async function recordFeedExtraction(input: {
     });
   const established: Record<string, string> = {};
   for (const r of identityRecords) {
-    const held = priorIndex.entityMappings[identityOfItem.get(r.ref)!];
+    const held = priorIndex?.entityMappings[identityOfItem.get(r.ref)!];
     if (held) established[r.ref] = held.entityId;
   }
   const resolution = stage('identity', null as ReturnType<typeof resolveIdentities> | null, () => resolveIdentities({ records: identityRecords, established }));
@@ -1178,7 +1267,7 @@ export async function recordFeedExtraction(input: {
       const read = sourceItems.filter((item) => readItems.includes(item));
       const readable = read.filter((item) => !unreadable.has(item.id)).length;
       const facts = read.flatMap((item) => factsByItem.get(item.id) ?? []);
-      const hasCheckpoint = Object.values(priorIndex.records).some((h) => h.identity.startsWith(`${sourceId}\u0000`));
+      const hasCheckpoint = history?.readSources.has(sourceId) ?? false;
       const statuses = sourceItems.map((item) => statusOfIdentity.get(identityOfItem.get(item.id) ?? ''));
       return planProcessing(
         {
@@ -1190,7 +1279,7 @@ export async function recordFeedExtraction(input: {
           contentChanged: deltaPlan ? statuses.some((st) => st !== 'UNCHANGED') : null,
           priorParserRuns: read.length,
           priorParserSuccesses: readable,
-          establishedEntityMappings: Object.values(priorIndex.entityMappings).some((m) => m.setBy.startsWith(`${sourceId}\u0000`)),
+          establishedEntityMappings: Object.values(priorIndex?.entityMappings ?? {}).some((m) => m.setBy.startsWith(`${sourceId}\u0000`)),
           identityCollisionsSuspected: sourceItems.some((item) => collidingRefs.has(item.id)),
           timeSeries: sourceItems.some((item) => !!item.publishedAt),
         },
@@ -1208,21 +1297,6 @@ export async function recordFeedExtraction(input: {
     }),
   );
 
-  // Commit what was read to the index the next pass classifies against.
-  const readings: RecordReading[] = readItems.map((item) => {
-    const facts = factsByItem.get(item.id) ?? [];
-    const entityId = resolution?.mappings[item.id];
-    const identity = identityOfItem.get(item.id)!;
-    return {
-      identity,
-      parserVersion: EXTRACTOR_VERSION,
-      factKeys: facts.map((f) => f.key),
-      entities: entityId ? [entityId] : [],
-      dependents: graph?.affected ?? [],
-      entityMappings: entityId ? { [identity]: entityId } : {},
-    };
-  });
-  const nextIndex = deltaPlan ? stage<DeltaIndex | null>('deltaCommit', null, () => boundDeltaIndex(commitReadings(deltaPlan.index, readings, nowIsoText))) : null;
   const readWith = (status: DeltaStatus) => readItems.filter((item) => statusOfIdentity.get(identityOfItem.get(item.id)!) === status).map((item) => item.id);
   const delta: ExtractionDelta | undefined = deltaPlan
     ? {
@@ -1286,8 +1360,7 @@ export async function recordFeedExtraction(input: {
       : { capacity, threshold: null, promoted: [], held: [] },
     ...(funnel ? { funnel } : {}),
     stageFailures,
-    // Carried forward unchanged when this pass could not commit, so the next pass still classifies against something.
-    deltaIndex: nextIndex ?? priorIndex,
+    parser,
   };
   const contested = pass.reconciled.filter((r) => r.status === 'CONTESTED').length;
   const stale = pass.reconciled.filter((r) => r.status === 'STALE').length;

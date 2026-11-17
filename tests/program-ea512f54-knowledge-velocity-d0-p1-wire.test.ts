@@ -9,6 +9,8 @@ import { freshProject } from './helpers.ts';
 import { insertFeedItems } from '../server/repos/feeds.ts';
 import { getDb } from '../server/db/database.ts';
 import { EXTRACTION_EVENT, recordFeedExtraction, type ExtractionPass } from '../server/services/feeds/run.ts';
+import { EXTRACTOR_VERSION } from '../server/services/feeds/extract.ts';
+import { entityIdFor } from '../server/services/knowledge/identity.ts';
 
 let projectId = '';
 beforeEach(async () => {
@@ -92,7 +94,9 @@ describe('recordFeedExtraction records the processing graph, delta, identity, de
     expect(row!.funnel!.reading.stages[0]!.raw).toBe(3);
     expect(row!.funnel!.gain.usableIntelligence).toBeGreaterThan(0);
     expect(row!.stageFailures).toEqual([]);
-    expect(row!.deltaIndex).toBeDefined();
+    // The delta history is the stored feed rows: the append-only pass row carries no copy of it.
+    expect(row).not.toHaveProperty('deltaIndex');
+    expect(row!.parser).toEqual({ version: EXTRACTOR_VERSION, since: null, before: null });
   });
 
   it('a second pass over unchanged records recomputes nothing and gains no usable intelligence', async () => {
@@ -142,5 +146,54 @@ describe('recordFeedExtraction records the processing graph, delta, identity, de
     expect(row!.funnel).toBeDefined();
     const summary = await getDb().get<{ summary: string }>('SELECT summary FROM cash_events WHERE project_id = ? AND kind = ?', [projectId, EXTRACTION_EVENT]);
     expect(summary!.summary).toContain('identity');
+  });
+
+  it('the pass row stays the size of one batch however much history there is, and history is still read', async () => {
+    const source = `w${Math.random().toString(36).slice(2, 8)}`;
+    const many = (pass: number) =>
+      records(source, `p${pass}`).map((r, i) => ({ ...r, url: `${r.url}/${pass}-${i}`, title: `${r.title} ${pass}` }));
+    await insertFeedItems(source, records(source, 'a'));
+    await recordFeedExtraction({ projectId, now: new Date(), capacity: 0 });
+    for (let pass = 0; pass < 12; pass += 1) {
+      await tick();
+      await insertFeedItems(source, many(pass));
+      await recordFeedExtraction({ projectId, now: new Date(), capacity: 0 });
+    }
+    const sizes = (
+      await getDb().all<{ detail: string }>('SELECT detail FROM cash_events WHERE project_id = ? AND kind = ? ORDER BY created_at, id', [projectId, EXTRACTION_EVENT])
+    ).map((r) => r.detail.length);
+    expect(sizes.length).toBe(13);
+    // Twelve passes of new records later, a pass of the same batch size writes about what the second pass wrote.
+    expect(sizes[12]!).toBeLessThan(sizes[1]! * 1.25);
+    // And the first records, republished after all of that, are still recognised from the rows as unchanged.
+    await tick();
+    await insertFeedItems(source, records(source, 'again'));
+    const again = (await recordFeedExtraction({ projectId, now: new Date(), capacity: 0 }))!;
+    expect(again.delta!.counts).toMatchObject({ UNCHANGED: 3, NEW: 0, CHANGED: 0, REPARSE: 0 });
+    expect(again.processingGraph![0]!.status).toBe('UNCHANGED');
+  });
+
+  it('records read by an earlier parser are re-parsed, and an established entity is kept', async () => {
+    const source = `w${Math.random().toString(36).slice(2, 8)}`;
+    await insertFeedItems(source, records(source, 'a'));
+    const first = (await recordFeedExtraction({ projectId, now: new Date(), capacity: 0 }))!;
+    // The first pass as an older parser would have recorded it.
+    const stored = await getDb().get<{ id: string; detail: string }>('SELECT id, detail FROM cash_events WHERE project_id = ? AND kind = ?', [projectId, EXTRACTION_EVENT]);
+    const detail = JSON.parse(stored!.detail) as ExtractionPass;
+    await getDb().run('UPDATE cash_events SET detail = ? WHERE id = ?', [JSON.stringify({ ...detail, parser: { version: 'feeds-extract/older', since: null, before: null } }), stored!.id]);
+    await tick();
+    await insertFeedItems(source, records(source, 'b'));
+    const second = (await recordFeedExtraction({ projectId, now: new Date(), capacity: 0 }))!;
+    expect(second.delta!.counts).toMatchObject({ REPARSE: 3, UNCHANGED: 0 });
+    expect(second.parser).toEqual({ version: EXTRACTOR_VERSION, since: first.cursor.to, before: 'feeds-extract/older' });
+    // The span is carried: a later pass still knows which rows the older parser read.
+    await tick();
+    await insertFeedItems(source, records(source, 'c'));
+    const third = (await recordFeedExtraction({ projectId, now: new Date(), capacity: 0 }))!;
+    expect(third.parser).toEqual(second.parser);
+    expect(third.delta!.counts).toMatchObject({ UNCHANGED: 3 });
+    // The organisation-bearing records keep the entity their first row was read as.
+    const firstRfq = first.delta!.newItems.find((id) => first.facts.some((f) => f.evidence.itemId === id && f.evidence.text.includes('4,000')))!;
+    expect(second.delta!.affectedEntities).toContain(entityIdFor('ENTITY', firstRfq));
   });
 });
