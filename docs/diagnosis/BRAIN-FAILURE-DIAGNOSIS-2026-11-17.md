@@ -44,6 +44,23 @@
 - Evolution engine: 0 completed cycles; evolution-eval runs 43999026354 (baselines only), 44000206068 ("Nothing is awaiting evaluation"); not run since 02:03Z despite `13,43 * * * *`. Suites are narrow (feasibility = one false-acceptance judgement on 67 cases; planSpeed; mootRequests). `evolution_approach_stats` (repos/evolution.ts:391) is read only by experiments.ts:139-145 — nothing in planning reads it. Operator lessons go to the director as prose (actions.ts:105, judge.ts:45).
 - This is the capability the run is meant to build; it is not a precondition, but the run needs a metric that records what it learned (see F1).
 
+
+## FINAL REPORT (draft, 06:20Z — refined at delivery)
+
+**Brain has not achieved the goal because** the run is being judged on a signal research cannot move, and the research it does do is mostly spent on questions that cannot be answered. Specifically:
+1. The readiness and success test is "the $10K plan becomes ACCEPTED or reaches 90%". That test requires measured buyer conversion, which needs contact, and contact is forbidden (F1).
+2. Most of Brain's plans are built in a way that ignores research entirely (F2).
+3. About 95% of its commercial research questions ask about hypothetical arrangements, or about judgements no publication answers (F3).
+4. The paid GPU model was held out of research work, so it produced 1 accepted claim in its last hour (F4).
+5. Nothing that is learned is written back where later plans read it (F5).
+
+**To correct that, change these, in this order:**
+1. (Owner of the run's acceptance criteria: the main session) Measure the run on what research can move: answered-question share, evidence-backed plan inputs, the goal's accepted claims per hour, and the feasibility and transfer suites. Keep the 90% rule for commitments only.
+2. (Main session, already in flight) Verify #1018 un-holds gpt-oss-120b on RESEARCH_FRAGMENT, in one capped GPU hour.
+3. Fix question generation: allowed values in the question text, no judgement attributes asked as research, only methods a source states, reuse card facts (F3).
+4. Route research into constructed arrangements' inputs (F2).
+5. Then run the paid improvement run, and build the plan-outcome → calibration and evolution loops as the run's capability work (F5).
+
 ### Ruled out / fixed (not blockers now)
 - Budget cap: FIXED and not invalidated (last budget change #1011; later #1013/#1014/#1018 do not touch it; boot check worker.ts:2595-2604).
 - Research ceiling 13: NOT BINDING (lane under-filled, see F4). Secondary once acceptance improves.
