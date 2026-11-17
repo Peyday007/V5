@@ -103,3 +103,29 @@ The 15:00Z deadline was missed, and that is preserved in the record. The coordin
 | F5: retained commercial learning loop | Non-blocking | — | — | The capability the run is meant to build | Not a prerequisite |
 
 **The clearance depends on one thing:** the GO-test report on 56bc7f12. It needs GPU accepted claims ≥ 10/h, goal claims > 0, and pressure not SHEDDING. The intelligence-recovery session owns the run, and the pod stops automatically after the report.
+
+## Verification of B1–B3 on 04b754ce (20:16–21:02Z) — TROUBLESHOOTING CLEARANCE: NO
+
+The original 15:00Z deadline was missed, and so was the closeout deadline of 19:00Z. Release 04b754ce (#1062–#1065) went live on Fly at 20:06Z.
+
+**Test window**
+- Capped GPU window: launch 44165676119, report 44174859590, disconnect 44175194196, stop 44175385253.
+- Pod tfhhepjhx6appc ran gpt-oss-120b-big at $5.29/h. It served from 20:16Z and was stopped (EXITED) at 21:02Z.
+- Cost: $3.53 of GPU over 40 min for 14 accepted claims, $0.25 per claim. The RunPod balance went from $131.34 to $126.72 and spending is now $0/h.
+
+| check | result | verdict |
+|---|---|---|
+| B1: new answers reach the plan | 5 new goal claims; stored 0, in_plan 0, `newer_claims` 5, `claims_cited` 12 | **not proven**. All 5 are on a round that is still OPEN (mx-2821cce3c372 r1), and no plan evaluation ran after them (plan evaluations 1/h). Harvest did not run in the window, so it was neither proven nor disproven. The claims are usable: the Oppizi EDDM price is $0.47 per piece, or $4,675 for 10,000 homes, with no setup fees. |
+| B2b: no SHEDDING | SHEDDING from 20:42Z (a 12 s stall in 120 s, max 932 ms). Event loop busy 85–98% while the machine was 45–55% idle. GPU slots fell 12→6 twice and 6→3 once. | **failed**. The profiler restart is fixed, but the server's own event-loop work during research is still too much. SHEDDING also defers plan evaluation (§63), which is why B1 never saw an evaluation. |
+| B3: sources | 64 of 64 "no readable source" failures report "none from web search". 60 of them are a candidate site answering with an error. Another 30 or so are "listed no claims" on navigation or homepage sources (Houzz, Japan Times, BEA). | **failed**. Searches are no longer dropped, but web search contributes zero pages. |
+
+**Remaining blockers**
+- **E1 (B2 owner: this session):** the event loop is saturated during GPU research.
+  - Action: read the stall profile captured during the 20:42Z stall and remove the top self-time path.
+  - Pass: no SHEDDING and no GPU shrink in a capped window.
+- **S1 (B3 owner: this session):** web search returns no pages.
+  - Action: find why `discover.ts` gets zero results (provider error, quota or parse) from its production log, then fix it.
+  - Pass: fewer than 20% of failures carry "none from web search".
+- **B1 (owner: this session; gated on E1):** the same capped window, with a round settling and a plan evaluation inside it.
+  - Pass: stored > 0 and in_plan > 0.
+- **12h run:** not cleared; it stays held under the coordinator's gate.
