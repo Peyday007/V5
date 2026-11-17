@@ -11,10 +11,12 @@ import {
   commitReadings,
   emptyDeltaIndex,
   fingerprintOf,
+  foldSlices,
   planDelta,
   readDeltaIndex,
   recordIdentity,
   recordsReadByOtherParser,
+  sliceOf,
   type DeltaIndex,
   type SourceRecord,
 } from '../server/services/knowledge/delta.ts';
@@ -128,5 +130,74 @@ describe('serialization', () => {
     expect(planDelta({ index: back, batch: [rec('1', { title: 'a' })], parserVersion: P1, now: T2 }).counts.UNCHANGED).toBe(1);
     expect(readDeltaIndex({ schema: 'other' })).toEqual(emptyDeltaIndex());
     expect(readDeltaIndex(null)).toEqual(emptyDeltaIndex());
+  });
+});
+
+/*
+ * Repair: the whole carried index was written into every append-only extraction row
+ * (up to 5000 histories with every version and the batch-wide dependents on each), so
+ * each pass permanently wrote another full copy. A pass now writes only its slice, and
+ * the next pass folds the recent slices back into the index.
+ */
+describe('a pass writes its slice of the index, never the whole of it', () => {
+  /** One pass over `batch` against `index`, every record read, with `dependents` per record. */
+  const pass = (index: DeltaIndex, batch: SourceRecord[], now: string, dependents: (id: string) => string[] = () => []) => {
+    const plan = planDelta({ index, batch, parserVersion: P1, now });
+    const next = commitReadings(
+      plan.index,
+      plan.toRead.map((identity) => ({ identity, parserVersion: P1, factKeys: [`k:${identity}`], entities: [`e:${identity}`], dependents: dependents(identity), entityMappings: { [`n:${identity}`]: `ent:${identity}` } })),
+      now,
+    );
+    return { plan, next, slice: sliceOf(next, plan.changes.map((c) => c.identity)) };
+  };
+
+  it('a slice is bounded by the batch, not by the index or a record\'s history', () => {
+    // An index already at the cap, as the reviewer simulated it: 5000 records with 8 fact keys and 40 dependents each.
+    let index = emptyDeltaIndex();
+    const big = Array.from({ length: 5000 }, (_, i) => rec(`r${i}`, { v: 1 }));
+    const fortyDependents = (identity: string) => Array.from({ length: 40 }, (_, j) => `hood:${identity}:${j}`);
+    index = pass(index, big, T1, fortyDependents).next;
+    const fullSize = JSON.stringify(index).length;
+
+    // One record changed three times: the index keeps its versions within the pass, the slice only the latest.
+    let state = index;
+    for (const [n, at] of [[2, T2], [3, T3]] as const) state = pass(state, [rec('r1', { v: n })], at).next;
+    expect(state.records[idOf('r1')]!.versions.map((v) => v.version)).toEqual([1, 2, 3]);
+
+    const { slice } = pass(state, [rec('r1', { v: 4 }), rec('r2', { v: 1 }), rec('new', { v: 1 })], '2026-11-17T03:00:00.000Z');
+    expect(Object.keys(slice.records).sort()).toEqual([idOf('new'), idOf('r1'), idOf('r2')].sort());
+    for (const history of Object.values(slice.records)) expect(history.versions).toHaveLength(1);
+    expect(slice.records[idOf('r1')]!.versions[0]!.version).toBe(4);
+    // Only the mappings the named records set.
+    expect(Object.values(slice.entityMappings).every((m) => m.setBy in slice.records)).toBe(true);
+    // Three records: orders of magnitude below the full index the row used to carry.
+    expect(JSON.stringify(slice).length * 100).toBeLessThan(fullSize);
+  });
+
+  it('folding the recent slices classifies exactly as the carried index did', () => {
+    const p1 = pass(emptyDeltaIndex(), [rec('a', { t: 1 }), rec('b', { t: 1 })], T1);
+    const p2 = pass(foldSlices([p1.slice], 5000), [rec('c', { t: 1 }), rec('a', { t: 2 })], T2);
+    const folded = foldSlices([p2.slice, p1.slice], 5000);
+    // The newest slice wins for a record both name.
+    expect(folded.records[idOf('a')]!.versions[0]!.version).toBe(2);
+    expect(Object.keys(folded.records).sort()).toEqual([idOf('a'), idOf('b'), idOf('c')].sort());
+    expect(folded.entityMappings[`n:${idOf('b')}`]).toMatchObject({ setBy: idOf('b') });
+    const third = planDelta({ index: folded, batch: [rec('a', { t: 2 }), rec('b', { t: 1 }), rec('c', { t: 9 }), rec('d', {})], parserVersion: P1, now: T3 });
+    expect(Object.fromEntries(third.changes.map((c) => [c.identity, c.status]))).toEqual({
+      [idOf('a')]: 'UNCHANGED',
+      [idOf('b')]: 'UNCHANGED',
+      [idOf('c')]: 'CHANGED',
+      [idOf('d')]: 'NEW',
+    });
+    // A changed record still recomputes what its previous version produced.
+    expect(third.affectedFactKeys).toEqual([`k:${idOf('c')}`]);
+  });
+
+  it('a fold keeps at most the cap, newest first, and skips what is not a slice', () => {
+    const older = pass(emptyDeltaIndex(), [rec('x', 1), rec('y', 1)], T1).slice;
+    const newer = pass(emptyDeltaIndex(), [rec('z', 1)], T2).slice;
+    const folded = foldSlices([newer, { schema: 'other' }, null, older], 2);
+    expect(Object.keys(folded.records).sort()).toEqual([idOf('x'), idOf('z')].sort());
+    expect(Object.values(folded.entityMappings).every((m) => m.setBy in folded.records)).toBe(true);
   });
 });

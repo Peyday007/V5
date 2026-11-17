@@ -220,6 +220,40 @@ describe('recordFeedExtraction records the processing graph, delta, identity, de
   });
 });
 
+describe('the extraction row carries its own slice of the delta index, never a copy of the whole (repair)', () => {
+  it('each row holds only the records its pass saw, at their latest version, and the next pass still folds every earlier one', async () => {
+    const source = `w${Math.random().toString(36).slice(2, 8)}`;
+    const other = `w${Math.random().toString(36).slice(2, 8)}`;
+    await insertFeedItems(source, records(source, 'a'));
+    const first = (await recordFeedExtraction({ projectId, now: new Date(), capacity: 0 }))!;
+    await tick();
+    await insertFeedItems(other, records(other, 'a'));
+    const second = (await recordFeedExtraction({ projectId, now: new Date(), capacity: 0 }))!;
+    await tick();
+    // The first source's records republished: they were in the first row only, and still read as unchanged.
+    await insertFeedItems(source, records(source, 'b'));
+    const third = (await recordFeedExtraction({ projectId, now: new Date(), capacity: 0 }))!;
+    expect(third.delta!.counts).toMatchObject({ UNCHANGED: 3, NEW: 0, CHANGED: 0 });
+
+    const stored = await rows();
+    expect(stored).toHaveLength(3);
+    for (const [i, row] of stored.entries()) {
+      const slice = row.deltaIndex!;
+      // No row repeats the records an earlier row already holds: three per pass, not three, six, nine.
+      expect(Object.keys(slice.records)).toHaveLength(3);
+      expect(Object.keys(slice.records).every((identity) => identity.startsWith(`${i === 1 ? other : source}\u0000`))).toBe(true);
+      for (const history of Object.values(slice.records)) expect(history.versions).toHaveLength(1);
+    }
+    // Each record carries the neighborhoods its own facts recomputed, never the batch's whole set.
+    for (const pass of [first, second]) {
+      const perRecord = Object.values(pass.deltaIndex!.records).map((h) => h.versions[0]!.dependents);
+      const union = [...new Set(perRecord.flat())].sort();
+      expect(union).toEqual(pass.graph?.affected ?? []);
+      if (union.length > 0) expect(perRecord.every((deps) => deps.length === union.length)).toBe(false);
+    }
+  });
+});
+
 describe('selective deepening routes the model reads (repair: deepening not consumed)', () => {
   const vague = (id: string, ageHours: number) => ({
     id,

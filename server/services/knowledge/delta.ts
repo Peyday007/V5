@@ -16,8 +16,13 @@
  * version: a parser change re-reads exactly the records that parser read.
  *
  * Nothing here opens a source, owns a schedule or stores anything: the index
- * is a plain JSON value the caller keeps in a row it already writes (§10.3,
- * §20.4). Pure.
+ * is a plain JSON value the caller keeps in rows it already writes (§10.3,
+ * §20.4). Those rows are append-only, so the caller never writes the whole
+ * index: each pass writes only its own slice (`sliceOf`: the records the batch
+ * presented, each at its latest version), and the next pass folds the recent
+ * slices back into an index (`foldSlices`). A record's earlier versions are
+ * not lost — each is in the slice of the pass that saw it — and no row
+ * repeats what an earlier row already holds. Pure.
  */
 import { createHash } from 'node:crypto';
 
@@ -51,7 +56,11 @@ export interface RecordVersion {
 
 export interface RecordHistory {
   identity: string;
-  /** Every version, oldest first. Never overwritten or pruned. */
+  /**
+   * Versions, oldest first. Within a pass every version seen is kept; a slice
+   * carries only the latest, because the earlier ones are already in the
+   * slices of the passes that saw them (append-only rows, never rewritten).
+   */
   versions: RecordVersion[];
 }
 
@@ -251,4 +260,53 @@ export function recordsReadByOtherParser(index: DeltaIndex, parserVersion: strin
     })
     .map((h) => h.identity)
     .sort();
+}
+
+/**
+ * The part of an index one pass writes: the records named (every record the
+ * batch presented, whatever its status, so a record seen again stays recent),
+ * each at its latest version only, and the entity mappings those records set.
+ * Its size is bounded by the batch, never by the index or a record's history,
+ * which is what lets it sit in an append-only row. Pure.
+ */
+export function sliceOf(index: DeltaIndex, identities: Iterable<string>): DeltaIndex {
+  const named = new Set(identities);
+  const records: Record<string, RecordHistory> = {};
+  for (const identity of named) {
+    const history = index.records[identity];
+    const latest = history?.versions[history.versions.length - 1];
+    if (!history || !latest) continue;
+    records[identity] = { identity, versions: [{ ...latest, factKeys: [...latest.factKeys], entities: [...latest.entities], dependents: [...latest.dependents] }] };
+  }
+  const entityMappings = Object.fromEntries(Object.entries(index.entityMappings).filter(([, m]) => named.has(m.setBy)));
+  return { schema: DELTA_INDEX_SCHEMA, records, entityMappings };
+}
+
+/**
+ * The index the next pass classifies against, folded from recent slices,
+ * newest first: a record's newest slice wins, a name's newest mapping wins,
+ * and at most `maxRecords` records are kept (the most recently seen), with the
+ * mappings whose setting record is kept. Each record keeps its latest version
+ * only. A value that is not a slice this module wrote is skipped. Pure.
+ */
+export function foldSlices(newestFirst: readonly unknown[], maxRecords: number): DeltaIndex {
+  const records: Record<string, RecordHistory> = {};
+  const entityMappings: Record<string, EntityMapping> = {};
+  let kept = 0;
+  for (const raw of newestFirst) {
+    const slice = readDeltaIndex(raw);
+    for (const history of Object.values(slice.records)) {
+      if (kept >= maxRecords) break;
+      if (!history || typeof history.identity !== 'string' || records[history.identity] || !Array.isArray(history.versions)) continue;
+      const latest = history.versions[history.versions.length - 1];
+      if (!latest) continue;
+      records[history.identity] = { identity: history.identity, versions: [latest] };
+      kept += 1;
+    }
+    for (const [name, mapping] of Object.entries(slice.entityMappings)) {
+      if (!entityMappings[name] && mapping && typeof mapping.setBy === 'string') entityMappings[name] = mapping;
+    }
+  }
+  for (const [name, mapping] of Object.entries(entityMappings)) if (!records[mapping.setBy]) delete entityMappings[name];
+  return { schema: DELTA_INDEX_SCHEMA, records, entityMappings };
 }
