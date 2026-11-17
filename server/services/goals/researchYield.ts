@@ -580,6 +580,12 @@ export interface YieldBucket {
   costMinorPerUsefulResult: number | null;
   /** Average jobs running at once over the window (time-weighted); 1 = one slot busy throughout. */
   utilization: number;
+  /**
+   * Useful results per hour of job time charged here in the window: what lanes
+   * and purposes are compared on (marginal useful yield). Null when no time was
+   * measured here — an unknown is never a zero (invariant 39).
+   */
+  usefulPerJobHour?: number | null;
 }
 
 export interface ResearchYieldReading {
@@ -595,6 +601,31 @@ export interface ResearchYieldReading {
 }
 
 const finite = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n);
+/**
+ * The longest run time a row can be read as giving one job: about 31 years. A
+ * longer one is not a reading of a job but an unreadable value, and is counted
+ * once as unmeasured rather than allowed to overflow the window's sums.
+ */
+export const MAX_READABLE_JOB_MS = 1e12;
+/** The largest money one job's row is read as recording, in minor units; beyond it the cost is unrecorded. */
+export const MAX_READABLE_COST_MINOR = 1e12;
+/** Charges are kept in thousandths (the precision buckets display), as integers, so splits and sums are exact. */
+const CHARGE_SCALE = 1000;
+const toUnits = (n: number): bigint => BigInt(Math.round(n * CHARGE_SCALE));
+const fromUnits = (u: bigint): number => Number(u) / CHARGE_SCALE;
+/**
+ * One job's charge split between its purposes so the parts sum to the charge
+ * exactly: each takes an even integer share and the last takes the remainder.
+ * Pure.
+ */
+export function splitCharge(units: bigint, parts: number): bigint[] {
+  const n = BigInt(Math.max(1, parts));
+  const each = units / n;
+  const out: bigint[] = [];
+  for (let i = 1n; i < n; i += 1n) out.push(each);
+  out.push(units - each * (n - 1n));
+  return out;
+}
 const PURPOSE_KEYS: readonly PurposeKey[] = [...RESEARCH_PURPOSES, 'UNATTRIBUTED'];
 
 /**
@@ -604,7 +635,7 @@ const PURPOSE_KEYS: readonly PurposeKey[] = [...RESEARCH_PURPOSES, 'UNATTRIBUTED
  * non-negative number is no recorded cost. Pure.
  */
 export function sanitizeYieldJob(job: YieldJob, windowStartMs: number): { job: YieldJob; unmeasured: boolean } {
-  const durationOk = finite(job.durationMs) && job.durationMs >= 0;
+  const durationOk = finite(job.durationMs) && job.durationMs >= 0 && job.durationMs <= MAX_READABLE_JOB_MS;
   const startOk = finite(job.startMs);
   const unmeasured = job.timeMeasured === false || !durationOk || !startOk;
   const fallbackStart = finite(windowStartMs) ? windowStartMs : 0;
@@ -620,7 +651,7 @@ export function sanitizeYieldJob(job: YieldJob, windowStartMs: number): { job: Y
       startMs: startOk ? job.startMs : fallbackStart,
       durationMs: unmeasured ? 0 : job.durationMs,
       queueWaitMs: finite(job.queueWaitMs) ? Math.max(0, job.queueWaitMs) : null,
-      costMinor: finite(job.costMinor) && job.costMinor >= 0 ? job.costMinor : null,
+      costMinor: finite(job.costMinor) && job.costMinor >= 0 && job.costMinor <= MAX_READABLE_COST_MINOR ? job.costMinor : null,
       timeMeasured: !unmeasured,
     },
   };
@@ -715,7 +746,17 @@ export function summarizeResearchYield(input: { since: string; until: string; jo
   const seen = new Set<string>();
   const kept: YieldJob[] = [];
   let unmeasuredJobs = 0;
-  const countJob = (bucket: YieldBucket, job: YieldJob, share: number) => {
+  // Each job's charge in exact integer thousandths: the total takes it whole,
+  // every lane takes it whole, and its purposes take parts that sum back to it.
+  // The purposes therefore sum to the total by construction — not within a
+  // tolerance — whatever the mix of splits, magnitudes or window length.
+  const msUnits = new Map<YieldBucket, bigint>();
+  const costUnits = new Map<YieldBucket, bigint>();
+  const charge = (bucket: YieldBucket, ms: bigint, cost: bigint | null) => {
+    msUnits.set(bucket, (msUnits.get(bucket) ?? 0n) + ms);
+    if (cost !== null) costUnits.set(bucket, (costUnits.get(bucket) ?? 0n) + cost);
+  };
+  const countJob = (bucket: YieldBucket, job: YieldJob) => {
     bucket.submissions += 1;
     if (job.outcome === 'COMPLETED') bucket.completions += 1;
     else if (job.outcome === 'IN_FLIGHT') bucket.inFlight += 1;
@@ -730,9 +771,7 @@ export function summarizeResearchYield(input: { since: string; until: string; jo
     }
     if (job.queueWaitMs !== null) (waits.get(bucket) ?? waits.set(bucket, []).get(bucket)!).push(job.queueWaitMs);
     (intervals.get(bucket) ?? intervals.set(bucket, []).get(bucket)!).push({ start: job.startMs, end: job.startMs + job.durationMs });
-    bucket.jobMs += job.durationMs * share;
     if (job.costMinor === null) bucket.uncostedJobs += 1;
-    else bucket.costMinor = (bucket.costMinor ?? 0) + job.costMinor * share;
   };
   for (const raw of input.jobs) {
     if (seen.has(raw.id)) continue;
@@ -740,9 +779,18 @@ export function summarizeResearchYield(input: { since: string; until: string; jo
     const { job, unmeasured } = sanitizeYieldJob(raw, from);
     if (unmeasured) unmeasuredJobs += 1;
     kept.push(job);
-    countJob(total, job, 1);
-    countJob(lane(job.lane), job, 1);
-    for (const p of job.purposes) countJob(purposes[p], job, 1 / job.purposes.length);
+    const ms = toUnits(job.durationMs);
+    const cost = job.costMinor === null ? null : toUnits(job.costMinor);
+    countJob(total, job);
+    charge(total, ms, cost);
+    countJob(lane(job.lane), job);
+    charge(lane(job.lane), ms, cost);
+    const msParts = splitCharge(ms, job.purposes.length);
+    const costParts = cost === null ? null : splitCharge(cost, job.purposes.length);
+    job.purposes.forEach((p, i) => {
+      countJob(purposes[p], job);
+      charge(purposes[p], msParts[i]!, costParts ? costParts[i]! : null);
+    });
   }
   const outputSeen = new Set<string>();
   const countOutput = (bucket: YieldBucket, out: YieldOutput) => {
@@ -776,8 +824,10 @@ export function summarizeResearchYield(input: { since: string; until: string; jo
     bucket.failures.causes = [...(causes.get(bucket) ?? new Map<string, number>()).entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 8).map(([cause, n]) => ({ cause, n }));
     const rated = bucket.sourceQuality.primary + bucket.sourceQuality.secondary + bucket.sourceQuality.unretrieved;
     bucket.sourceQuality.primaryShare = rated > 0 ? Math.round((1000 * bucket.sourceQuality.primary) / rated) / 1000 : null;
-    bucket.jobMs = Math.round(bucket.jobMs * 1000) / 1000;
-    if (bucket.costMinor !== null) bucket.costMinor = Math.round(bucket.costMinor * 1000) / 1000;
+    bucket.jobMs = fromUnits(msUnits.get(bucket) ?? 0n);
+    const spent = costUnits.get(bucket);
+    bucket.costMinor = spent === undefined ? null : fromUnits(spent);
+    bucket.usefulPerJobHour = bucket.jobMs > 0 ? Math.round((bucket.usefulResults / (bucket.jobMs / 3_600_000)) * 1000) / 1000 : null;
     bucket.msPerUsefulResult = bucket.usefulResults > 0 ? Math.round(bucket.jobMs / bucket.usefulResults) : null;
     bucket.costMinorPerUsefulResult = bucket.usefulResults > 0 && bucket.costMinor !== null && bucket.uncostedJobs === 0 ? Math.round(bucket.costMinor / bucket.usefulResults) : null;
     bucket.utilization = overlap(intervals.get(bucket) ?? [], from, to).average;
@@ -785,10 +835,16 @@ export function summarizeResearchYield(input: { since: string; until: string; jo
   finish(total);
   for (const bucket of Object.values(lanes)) finish(bucket);
   for (const bucket of Object.values(purposes)) finish(bucket);
-  const purposeJobMs = Math.round(Object.values(purposes).reduce((sum, b) => sum + b.jobMs, 0) * 1000) / 1000;
-  const costed = Object.values(purposes).filter((b) => b.costMinor !== null);
-  const purposeCostMinor = costed.length > 0 ? Math.round(costed.reduce((sum, b) => sum + (b.costMinor ?? 0), 0) * 1000) / 1000 : null;
-  const holds = sumsAgree(total.jobMs, purposeJobMs) && sumsAgree(total.costMinor, purposeCostMinor);
+  // Summed in the same exact units the total was charged in, before any display conversion.
+  const purposeMsUnits = Object.values(purposes).reduce((sum, b) => sum + (msUnits.get(b) ?? 0n), 0n);
+  const costedPurposes = Object.values(purposes).filter((b) => costUnits.has(b));
+  const purposeCostUnits = costedPurposes.length > 0 ? costedPurposes.reduce((sum, b) => sum + costUnits.get(b)!, 0n) : null;
+  const totalMsUnits = msUnits.get(total) ?? 0n;
+  const totalCostUnits = costUnits.get(total) ?? null;
+  const purposeJobMs = fromUnits(purposeMsUnits);
+  const purposeCostMinor = purposeCostUnits === null ? null : fromUnits(purposeCostUnits);
+  const exact = purposeMsUnits === totalMsUnits && purposeCostUnits === totalCostUnits;
+  const holds = exact && finite(total.jobMs) && finite(purposeJobMs) && sumsAgree(total.jobMs, purposeJobMs) && sumsAgree(total.costMinor, purposeCostMinor);
   const diagnosis = diagnoseCostCountedOnce({ totalJobMs: total.jobMs, purposeJobMs, totalCostMinor: total.costMinor, purposeCostMinor, holds });
   return {
     window: { since: input.since, until: input.until, ms: windowMs },
@@ -810,7 +866,7 @@ export function summarizeResearchYield(input: { since: string; until: string; jo
     notes: [
       ...(unmeasuredJobs > 0 ? [`${unmeasuredJobs} job(s) have no readable run time in their rows: each is counted once, charged no measured time, and its time is not guessed`] : []),
       'a job is a free-lane item or a bin handed to a worker; its cost is job time, and money only where a row records it',
-      'a job serving several purposes counts in each purpose, with its cost split evenly so purposes sum to the total once',
+      'a job serving several purposes counts in each purpose, with its cost split evenly (the last purpose taking the remainder) so purposes sum to the total exactly, once',
       'source quality: PRIMARY when the claim says its source produced the data, UNRETRIEVED when the source was not read, otherwise SECONDARY',
       'useful results: packets filed, evidence-qualified positions, executable offers and verified customer payments',
     ],
