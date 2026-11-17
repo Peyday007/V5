@@ -310,3 +310,66 @@ See F1–F7 above. Each one gives the cause, file:line, run IDs, the smallest ch
   - No merge-only hold exists. Pausing workers would breach the owner's standing order "Do not shut down or disconnect Factory".
   - Mitigation: a new head only supersedes the Fly step, and the watcher re-dispatches. Any later slip is attributed to the merge.
   - The 22P02 cause was a test binding the string 'not-a-number' into integer duration_ms, fixed by #1046. This matches the type-coercion hypothesis sent at 09:49Z.
+
+---
+
+# READINESS REPORT — 2026-11-17, deadline 15:00Z (10 a.m. Detroit)
+
+## READY TO START THE BRAIN-IMPROVEMENT RUN: **NO**
+
+The run is not yet productive at surge scale. On release 6 (8885038e) with the GPU attached:
+1. **GPU research gets no answers.** It produced 0 accepted claims in an hour at 8.62 busy slots, for $4.85. Its fragment answers are honest empty lists because the fetched pages are off-topic.
+2. **Brain overloads.** It went into SHEDDING, with 10–20 s event-loop stalls from planner CPU (planSet canonical, payerNamedIn, evaluatorPool).
+
+Lane-wide accepted claims fell from 14/h to 2/h as concurrency rose (runpod-report 44088593540, 13:01Z). Owners: W14 (source relevance, PR due 14:20Z) and W15 (planner CPU, PR due 14:15Z). Neither can be deployed and re-measured before 15:00Z.
+
+**Shortest path to YES:** deploy W14 and W15, then run one capped GPU hour. YES needs all three:
+- accepted claims/h at or above the free-lane baseline, and rising with GPU slots;
+- goal claims/h above 0;
+- PRESSURE not SHEDDING.
+
+## 1. Fixed and verified on production (release 6, live 10:45Z)
+
+| Problem | Fix | Production evidence |
+|---|---|---|
+| Research does not reach or change plans | #1031, #1038, #1042 | PLAN INPUTS, model scm_8a4c73fed4a24271950c: 32 of 68 inputs research-fed, 12 claims cited (13:01Z). Goal reach went from 9% to 55.8%. |
+| Goal research not scheduled | #1024 | Goal claims went from 0/h to 6.8/h, with up to 7 goal jobs at once (W6 stage 1). |
+| Mission ceiling stuck at 13–16 | #1039 | Free-lane jobs averaged 9.53 at once, peaking at 14. The 120B grew from 6 to 12. The queue drains (189 arrived, 222 finished per hour). |
+| Spending controls | #1002, #1011 | Cap shutdown verified (pod 5e8ks9cr2o8yml, 03:01Z). All of today's GPU stages ran under a Brain cap. |
+| Traced example | — | cop_9fd24b12. Claims clm_f869272e (price), clm_c80bf824 (days to cash) and clm_dff346be (direct cost) are plan inputs. Decision: TOO_SMALL_AS_IS → CONSTRUCT "sell the same deliverable to similar buyers". |
+
+## 2. Deployed but not confirmed in production
+
+- Monetization answers filed (#1023, #1020): the ANSWERED count was not re-read on release 6.
+- Parked-packet recovery (#1032, #1036): the 5 packets were not re-read.
+- Hypothesis-check follow-up and cap (#1037, #1040): their share of research work was not measured.
+- #1045 (source rules for gap fragments): the 120B now states its reasons, but still files no claims (see W14).
+
+## 3. Tested configuration and workload
+
+- **Sustainable today:** the free lane (auto/best-coding) alone, at about 12–20 accepted claims/h.
+- **Not sustainable:** gpt-oss-120b on a SECURE H200 ($5.29/h) at 8–9 busy slots. It gives 0 claims/h and drives Brain into SHEDDING.
+- Advertised GPU capacity is 128 sequences. That is not demonstrated capacity.
+
+## 4. Remaining work and owners (integration owner session_01QF5Tk7etm6MGmaFuHMd6eZ)
+
+- **Blocking:** W14 (source relevance) and W15 (planner CPU).
+- **Non-blocking:**
+  - Routine-bin "next action" wording.
+  - Backfill of old card copies.
+  - UNRESOLVED hypothesis checks reaching the planner.
+- **Capability for the run itself:** the F5 retained-learning loop.
+
+## 5. Spending and balances
+
+- **RunPod:**
+  - stage 1: $4.41 for 50 min;
+  - stage 2: $4.85 for 55 min, plus the billed model load and the second hour, still to be reported by the integration owner.
+  - Balance: $169.26 at 08:55Z.
+- **This session:** $0 of paid compute.
+
+## 6. Handoff to the Brain-building session
+
+- Do not start the run on release 6 with the GPU.
+- After W14 and W15 deploy, run one capped GPU hour (`runpod-launch`, cap ≤ $6/h). Read SPEED, PLAN INPUTS and PRESSURE.
+- Start the run only when all three YES criteria above hold. Then keep the same caps and watch accepted claims per GPU-hour and the research-fed input count every hour. Stop on any regression.
