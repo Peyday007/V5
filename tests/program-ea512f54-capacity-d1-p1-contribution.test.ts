@@ -35,6 +35,8 @@ import {
   planGap,
   poolReadings,
   readContribution,
+  minutesToVerified,
+  netCashCents,
   recordContribution,
   routeReadings,
   storedContribution,
@@ -397,6 +399,52 @@ describe('recordContribution', () => {
         expect(g.chosen?.method ?? '').not.toMatch(/^ask /);
         expect(g.excluded.some((e) => /^ask /.test(e.method))).toBe(true);
       }
+    });
+
+    it('measures time to a verified candidate and cash outcomes from opening and money rows (review F6)', async () => {
+      const db = getDb();
+      const now = Date.now();
+      const iso = (msAgo: number) => new Date(now - msAgo).toISOString();
+      const projectId = (await db.get<{ id: string }>(`SELECT id FROM projects ORDER BY created_at DESC LIMIT 1`))!.id;
+      const userId = (await createUser({ email: `outcomes-${Math.random().toString(36).slice(2, 10)}@example.test`, displayName: 'Owner', password: 'correct horse battery staple' })).id;
+      expect((await activate({ projectId, ownerUserId: userId, actorUserId: userId, objective: 'Maximize usable cash over the next few weeks.' })).ok).toBe(true);
+      const cashModeId = (await getCashMode(projectId))!.id;
+      const opening = async (minutesToSettle: number, state: string) => {
+        const created = await createOpportunity({
+          projectId, cashModeId, ownerUserId: userId, title: `Opening ${minutesToSettle}`, mechanism: 'PRODUCTIZED_SERVICE', currency: 'USD',
+          sourceClaimId: `clm_${Math.random().toString(36).slice(2, 12)}`, opportunitySignal: 'RECURRING_OUTSOURCED_WORK', source: 'A publisher',
+          requiredCapabilities: ['PRODUCE_SPREADSHEET'],
+        });
+        const id = created.id;
+        await db.run(
+          `UPDATE cash_opportunities SET signal_observed_at = ?, validation_state = ?, validation_settled_at = ? WHERE id = ?`,
+          [iso(3 * 3_600_000), state, iso(3 * 3_600_000 - minutesToSettle * 60_000), id],
+        );
+        return id;
+      };
+      const fast = await opening(30, 'COMPLETE');
+      await opening(90, 'COMPLETE');
+      await opening(5, 'BLOCKED'); // a parked deep dive is not a verified candidate
+      const money = (kind: string, cents: number, reference: string | null) => db.run(
+        `INSERT INTO cash_money_entries (id, project_id, opportunity_id, kind, amount_cents, currency, verified_reference, occurred_at, recorded_by, created_at)
+         VALUES (?, ?, ?, ?, ?, 'USD', ?, ?, 'test', ?)`,
+        [newId('cme'), projectId, fast, kind, cents, reference, iso(60_000), iso(60_000)],
+      );
+      await money('CUSTOMER_PAYMENT', 20_000, 'pi_1');
+      await money('CUSTOMER_PAYMENT', 7_000, null);
+      await money('REFUND', 2_500, null);
+
+      const report = await readContribution({ now: now + 1_000 });
+      expect(report.system.minutesToVerifiedCandidate).toEqual(ok(60));
+      expect(report.system.cashOutcomes).toEqual(ok(17_500));
+    });
+
+    it('measures zero cash in a quiet window, and says when no candidate was verified', async () => {
+      const report = await readContribution({ now: Date.now() });
+      expect(report.system.cashOutcomes).toEqual(ok(0));
+      expect(report.system.minutesToVerifiedCandidate.measured).toBe(false);
+      expect(minutesToVerified([{ signal_observed_at: null, created_at: '2026-11-17T00:00:00.000Z', validation_settled_at: '2026-11-17T02:00:00.000Z' }])).toEqual([120]);
+      expect(netCashCents([{ kind: 'CUSTOMER_PAYMENT', amount_cents: '100', verified_reference: 'r' }, { kind: 'SETTLEMENT', amount_cents: 100, verified_reference: 'r' }])).toBe(100);
     });
   });
 });

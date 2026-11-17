@@ -4,11 +4,19 @@
  * Per source and window it measures what acquisition actually produced — records
  * visited, new unique useful documents, refreshed records, parser coverage,
  * structured facts, code-derived matches, AI jobs avoided and escalated, AI
- * calls per useful finding, failure and recovery, provider saturation — and,
- * for every measure Brain's rows cannot see (raw bytes, accepted evidence,
- * verified buyer/price/fulfillment links, time-to-goal impact, dollars per
- * finding, revenue), says `NOT_MEASURED` with the reason instead of a guess
- * (inv. 33, inv. 39).
+ * calls per useful finding, failure and recovery, provider saturation — and
+ * raw bytes of the records acquired, accepted evidence, verified
+ * buyer/price/fulfillment links, time to goal impact, dollars per useful
+ * finding and revenue. The last six are attributed to the source through the
+ * rows that already carry the chain: a feed item's URL is the `source_url` of
+ * the research claims read from it, an accepted claim is the `claim_id` of a
+ * monetization path's evidence fact and the `source_claim_id` of an opening,
+ * an opening is the `opportunity_id` of the money entries it earned, and a
+ * blueprint fact names its `source_url` (`attributePage`). A figure the
+ * window's rows do not settle — no item shortlisted, a pod hour RunPod
+ * returned no price for — says `NOT_MEASURED` with that reason, never a guess
+ * (inv. 33, inv. 39). Attribution is read a page at a time like everything
+ * else here, so no window is held in memory.
  *
  * From those readings and the free lane's recorded stage capacity
  * (`stageCapacity.ts`) it names which resource class is constrained —
@@ -25,12 +33,16 @@
  * no owner-set quota.
  *
  * Nothing here schedules, queues or stores anything new: it reads `feed_pulls`,
- * `feed_items`, `feed_item_coverage`, `cheap_results` and `bin_events`, and
+ * `feed_items`, `feed_item_coverage`, `cheap_results`, `research_claims`,
+ * `monetization_path_facts`, `cash_opportunities`, `cash_money_entries`,
+ * `construction_facts` and `bin_events`, and
  * writes one `ACQUISITION_MEASURES` bin event per window. Sources are whatever
  * the rows and `FEED_SOURCES` name; no source, category or industry is a list
  * of what is allowed.
  */
 import { getDb } from '../../db/database.ts';
+import { isRunpodSlot } from '../cheap/runpod.ts';
+import { readPodSpend, type PodSpend } from '../cheap/runpodPod.ts';
 import { recordBinEvent } from '../../repos/bins.ts';
 import { boundMeasures, readStageCapacity, type Measured, type RecordedStageCapacity } from '../freeLane/stageCapacity.ts';
 import type { RouteFailureCause } from '../freeLane/worker.ts';
@@ -57,15 +69,286 @@ const round4 = (n: number): number => Math.round(n * 10_000) / 10_000;
 // Per-source measures
 // ---------------------------------------------------------------------------
 
-/** Why a measure the rows cannot see is not measured; each names the missing row, never a guess. */
+/**
+ * Why an attributed measure is not measured in a particular window. Each is a
+ * fact about that window's rows, never a property of the code: with the rows
+ * present, every one of these measures is a number.
+ */
 export const UNMEASURED_REASONS = {
-  rawBytes: 'feed_pulls records item counts, not response bytes; no acquisition row carries the bytes a pull transferred',
-  acceptedEvidence: 'feed items are leads, not evidence; no row ties an accepted research claim back to the feed source it came from',
-  verifiedLinks: 'no row links a verified buyer, price or fulfillment fact to the feed source whose item led to it',
-  timeToGoalImpact: 'no row joins a feed item to the goal-plan change it caused, so the time from publication to plan impact is not recorded',
-  dollarsPerUsefulFinding: 'no row attributes dollar cost to a feed source; the screens run on the free lane, whose per-call cost is not recorded per source',
-  revenue: 'no revenue row is attributed to a feed source',
+  timeToGoalImpact: 'no record the source stored in the window has reached a shortlist yet, so there is no publication-to-goal time to read',
+  dollarsUnpriced: 'the window ran screens on the GPU pod while RunPod returned no price for some of its running time, so the dollar cost is not known',
+  dollarsNoUseful: 'nothing the source stored in the window was useful, so there is no finding to divide the cost by',
+  attributionUnreadable: 'the attribution rows (research claims, path facts, openings, money entries) could not be read',
 } as const;
+
+/** UTF-8 bytes of one acquired record as stored: what the source delivered for it. Pure. */
+export function recordBytes(record: { externalId?: string | null; url: string; title: string; body: string | null; organization: string | null; publishedAt?: string | null }): number {
+  let total = 0;
+  for (const part of [record.externalId, record.url, record.title, record.body, record.organization, record.publishedAt]) {
+    if (part) total += Buffer.byteLength(part, 'utf8');
+  }
+  return total;
+}
+
+/** The median of a list, or null when it is empty. Pure. */
+export function median(values: readonly number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 1 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
+}
+
+/** One feed item, as attribution reads it. */
+export interface AttributedItem {
+  id: string;
+  source: string;
+  url: string;
+  publishedAt: string | null;
+  fetchedAt: string;
+  shortlistedAt: string | null;
+  bytes: number;
+}
+
+/** What the rows say a source's records led to downstream. */
+export interface SourceAttribution {
+  source: string;
+  /** Bytes of the records the source stored in the window. */
+  bytes: number;
+  /** Research claims read from the source's records that the gate accepted. */
+  acceptedEvidence: number;
+  /** Path evidence facts resting on those claims, plus openings from them with a named payer, a price and a fulfillment route. */
+  verifiedLinks: number;
+  /** Distinct monetization paths and openings the source's accepted claims support. */
+  economicRelationships: number;
+  /** Claims from the source's records a contradiction check challenged, refuted or reconciled. */
+  correctedContradictions: number;
+  /** Distinct blueprint variables (`construction_facts.fact_key`) the source's records resolved. */
+  variablesResolved: number;
+  /** Minutes from each record's publication to its shortlist. */
+  minutesToGoalImpact: number[];
+  /** Minutes from each record's publication to the first blueprint fact citing it. */
+  minutesToPlan: number[];
+  /** Verified customer payments, net of refunds, on openings the source's accepted claims started (cents). */
+  revenueCents: number;
+}
+
+/** Openings with these three settled are a verified buyer, price and fulfillment link. Pure. */
+export function isVerifiedLink(opening: { payer: string | null; price_cents: number | string | null; fulfillment_owner: string | null; delivery_method: string | null }): boolean {
+  return Boolean(opening.payer && opening.price_cents !== null && Number(opening.price_cents) > 0 && (opening.fulfillment_owner || opening.delivery_method));
+}
+
+const minutesBetween = (from: string, to: string): number | null => {
+  const a = Date.parse(from);
+  const b = Date.parse(to);
+  return Number.isFinite(a) && Number.isFinite(b) && b >= a ? Math.round((b - a) / 60_000) : null;
+};
+
+async function chunked<T>(ids: readonly string[], read: (chunk: string[], marks: string) => Promise<T[]>): Promise<T[]> {
+  const out: T[] = [];
+  for (let at = 0; at < ids.length; at += PAGE) {
+    const chunk = ids.slice(at, at + PAGE);
+    if (chunk.length === 0) continue;
+    out.push(...(await read(chunk, chunk.map(() => '?').join(','))));
+  }
+  return out;
+}
+
+/**
+ * One source's attribution while pages are still being read. Every count is a
+ * set of the downstream row's key, so a claim, fact, opening or variable two
+ * pages both reach is counted once.
+ */
+interface SourceAttributionAcc {
+  bytes: number;
+  accepted: Set<string>;
+  corrected: Set<string>;
+  links: Set<string>;
+  relations: Set<string>;
+  variables: Set<string>;
+  minutesToGoalImpact: number[];
+  /** Earliest publication, and earliest blueprint fact, per record URL. */
+  planStart: Map<string, string>;
+  planFact: Map<string, string>;
+  revenueOpenings: Set<string>;
+  revenueCents: number;
+}
+
+/** Attribution accumulated over a window's pages, by source. */
+export type AttributionAccumulator = Map<string, SourceAttributionAcc>;
+
+const blankAcc = (): SourceAttributionAcc => ({
+  bytes: 0, accepted: new Set(), corrected: new Set(), links: new Set(), relations: new Set(), variables: new Set(),
+  minutesToGoalImpact: [], planStart: new Map(), planFact: new Map(), revenueOpenings: new Set(), revenueCents: 0,
+});
+
+/**
+ * Follow one page of a source's records downstream through the rows that
+ * already carry the chain — item URL → research claim → path fact / opening →
+ * money entry, and item URL → blueprint fact — into `acc`. A record nothing
+ * has cited yet contributes zero, which is a measurement. Read-only.
+ */
+export async function attributePage(acc: AttributionAccumulator, items: readonly AttributedItem[], until: string): Promise<void> {
+  const db = getDb();
+  const sourcesOfUrl = new Map<string, Set<string>>();
+  for (const item of items) {
+    const a = acc.get(item.source) ?? blankAcc();
+    acc.set(item.source, a);
+    a.bytes += item.bytes;
+    const start = item.publishedAt ?? item.fetchedAt;
+    if (item.shortlistedAt) {
+      const minutes = minutesBetween(start, item.shortlistedAt);
+      if (minutes !== null) a.minutesToGoalImpact.push(minutes);
+    }
+    const prior = a.planStart.get(item.url);
+    if (!prior || start < prior) a.planStart.set(item.url, start);
+    const set = sourcesOfUrl.get(item.url) ?? new Set<string>();
+    set.add(item.source);
+    sourcesOfUrl.set(item.url, set);
+  }
+  const urls = [...sourcesOfUrl.keys()];
+  if (urls.length === 0) return;
+
+  const claims = await chunked(urls, (chunk, marks) => db.all<{ id: string; source_url: string; accepted: number | string; contradiction_state: string | null; reconciliation: string | null }>(
+    `SELECT id, source_url, accepted, contradiction_state, reconciliation FROM research_claims WHERE source_url IN (${marks})`,
+    chunk,
+  ));
+  const sourcesOfClaim = new Map<string, Set<string>>();
+  for (const claim of claims) {
+    const sources = sourcesOfUrl.get(claim.source_url) ?? new Set<string>();
+    const corrected = (claim.contradiction_state ?? 'UNCHALLENGED') !== 'UNCHALLENGED' || Boolean(claim.reconciliation);
+    const accepted = Number(claim.accepted) === 1;
+    if (accepted) sourcesOfClaim.set(claim.id, sources);
+    for (const source of sources) {
+      const a = acc.get(source)!;
+      if (corrected) a.corrected.add(claim.id);
+      if (accepted) a.accepted.add(claim.id);
+    }
+  }
+  const acceptedIds = [...sourcesOfClaim.keys()];
+
+  const facts = await chunked(acceptedIds, (chunk, marks) => db.all<{ path_id: string; claim_id: string }>(
+    `SELECT path_id, claim_id FROM monetization_path_facts WHERE kind = 'EVIDENCE' AND claim_id IN (${marks})`,
+    chunk,
+  ));
+  for (const fact of facts) {
+    for (const source of sourcesOfClaim.get(fact.claim_id) ?? []) {
+      const a = acc.get(source)!;
+      a.links.add(`fact:${fact.path_id}\u0000${fact.claim_id}`);
+      a.relations.add(`path:${fact.path_id}`);
+    }
+  }
+  const openings = await chunked(acceptedIds, (chunk, marks) => db.all<{ id: string; source_claim_id: string; payer: string | null; price_cents: number | string | null; fulfillment_owner: string | null; delivery_method: string | null }>(
+    `SELECT id, source_claim_id, payer, price_cents, fulfillment_owner, delivery_method FROM cash_opportunities WHERE source_claim_id IN (${marks})`,
+    chunk,
+  ));
+  // Money is read once per (source, opening): an opening an earlier page already counted is not counted again.
+  const newlyEarning = new Map<string, Set<string>>();
+  for (const opening of openings) {
+    for (const source of sourcesOfClaim.get(opening.source_claim_id) ?? []) {
+      const a = acc.get(source)!;
+      if (isVerifiedLink(opening)) a.links.add(`opening:${opening.id}`);
+      a.relations.add(`opening:${opening.id}`);
+      if (a.revenueOpenings.has(opening.id)) continue;
+      a.revenueOpenings.add(opening.id);
+      const set = newlyEarning.get(opening.id) ?? new Set<string>();
+      set.add(source);
+      newlyEarning.set(opening.id, set);
+    }
+  }
+  const money = await chunked([...newlyEarning.keys()], (chunk, marks) => db.all<{ opportunity_id: string; kind: string; amount_cents: number | string }>(
+    `SELECT opportunity_id, kind, amount_cents FROM cash_money_entries
+      WHERE opportunity_id IN (${marks}) AND occurred_at < ?
+        AND ((kind = 'CUSTOMER_PAYMENT' AND verified_reference IS NOT NULL) OR kind = 'REFUND')`,
+    [...chunk, until],
+  ));
+  for (const entry of money) {
+    const signed = entry.kind === 'REFUND' ? -Number(entry.amount_cents) : Number(entry.amount_cents);
+    for (const source of newlyEarning.get(entry.opportunity_id) ?? []) acc.get(source)!.revenueCents += signed;
+  }
+
+  const blueprint = await chunked(urls, (chunk, marks) => db.all<{ source_url: string; fact_key: string; status: string; created_at: string }>(
+    `SELECT source_url, fact_key, status, created_at FROM construction_facts WHERE source_url IN (${marks}) AND created_at < ?`,
+    [...chunk, until],
+  ));
+  for (const fact of blueprint) {
+    for (const source of sourcesOfUrl.get(fact.source_url) ?? []) {
+      const a = acc.get(source)!;
+      if (fact.status === 'VERIFIED' || fact.status === 'OBSERVED') a.variables.add(fact.fact_key);
+      const prior = a.planFact.get(fact.source_url);
+      if (!prior || fact.created_at < prior) a.planFact.set(fact.source_url, fact.created_at);
+    }
+  }
+}
+
+/** The totals an accumulator holds, by source. Pure. */
+export function finishAttribution(acc: AttributionAccumulator): Map<string, SourceAttribution> {
+  const out = new Map<string, SourceAttribution>();
+  for (const [source, a] of acc) {
+    const minutesToPlan: number[] = [];
+    for (const [url, factAt] of a.planFact) {
+      const start = a.planStart.get(url);
+      const minutes = start ? minutesBetween(start, factAt) : null;
+      if (minutes !== null) minutesToPlan.push(minutes);
+    }
+    out.set(source, {
+      source,
+      bytes: a.bytes,
+      acceptedEvidence: a.accepted.size,
+      verifiedLinks: a.links.size,
+      economicRelationships: a.relations.size,
+      correctedContradictions: a.corrected.size,
+      variablesResolved: a.variables.size,
+      minutesToGoalImpact: a.minutesToGoalImpact,
+      minutesToPlan,
+      revenueCents: a.revenueCents,
+    });
+  }
+  return out;
+}
+
+/** `attributePage` over one list of items, finished. Read-only. */
+export async function readSourceAttribution(items: readonly AttributedItem[], until: string): Promise<Map<string, SourceAttribution>> {
+  const acc: AttributionAccumulator = new Map();
+  for (let at = 0; at < items.length; at += PAGE) await attributePage(acc, items.slice(at, at + PAGE), until);
+  return finishAttribution(acc);
+}
+
+/**
+ * Dollars per screen call by model over the window: the free providers are a
+ * measured $0, and a GPU pod call carries an even share of the pod's billed
+ * spend. Unknown (null) when the pod ran unpriced. Pure.
+ */
+export function dollarsPerCall(spend: Pick<PodSpend, 'dollars' | 'unpricedRunningSamples'> | null, podCalls: number): { pod: number | null } {
+  if (podCalls === 0) return { pod: 0 };
+  if (!spend || spend.unpricedRunningSamples > 0) return { pod: null };
+  return { pod: spend.dollars / podCalls };
+}
+
+/** Pod screen calls in [since, until) and what each cost; `readSpend` is RunPod's billed spend since `since`. */
+async function podPricing(
+  since: string,
+  until: string,
+  readSpend: (since: string) => Promise<Pick<PodSpend, 'dollars' | 'unpricedRunningSamples'>>,
+): Promise<{ pod: number | null }> {
+  const callRows = await getDb().all<{ model: string; k: number | string }>(
+    `SELECT model, COUNT(*) AS k FROM cheap_results WHERE created_at >= ? AND created_at < ? AND substr(id, 1, ${BATCH_ROW_PREFIX.length}) <> ? GROUP BY model`,
+    [since, until, BATCH_ROW_PREFIX],
+  );
+  const podCalls = callRows.filter((r) => isRunpodSlot(r.model)).reduce((k, r) => k + Number(r.k), 0);
+  return dollarsPerCall(podCalls > 0 ? await readSpend(since).catch(() => null) : null, podCalls);
+}
+
+/** Bodies of one page of items, by id: read for bytes and extraction, then dropped with the page. */
+async function pageBodies(ids: readonly string[]): Promise<Map<string, string | null>> {
+  const out = new Map<string, string | null>();
+  if (ids.length === 0) return out;
+  const rows = await getDb().all<{ id: string; body: string | null }>(
+    `SELECT id, body FROM feed_items WHERE id IN (${ids.map(() => '?').join(',')})`,
+    [...ids],
+  );
+  for (const row of rows) out.set(row.id, row.body);
+  return out;
+}
 
 export interface SourceAcquisitionMeasures {
   source: string;
@@ -77,6 +360,7 @@ export interface SourceAcquisitionMeasures {
   newUniqueUsefulDocuments: Measured<number>;
   /** Records read again that storage already held (visited − stored). */
   refreshedRecords: Measured<number>;
+  /** UTF-8 bytes of the records the source stored in the window (`recordBytes`). */
   rawBytes: Measured<number>;
   /** Share of examined items from which the deterministic extractor read at least one fact. */
   parserCoverage: Measured<number | null>;
@@ -84,12 +368,15 @@ export interface SourceAcquisitionMeasures {
   parserSample: { examined: number; stored: number };
   /** Facts the deterministic extractor read from the window's stored items. */
   structuredFacts: Measured<number>;
+  /** Research claims read from the source's stored records that the gate accepted. */
   acceptedEvidence: Measured<number>;
   /** Stored items a code detector accounted for (`feed_item_coverage`). */
   codeDerivedMatches: Measured<number>;
+  /** Path evidence facts on those claims, plus openings from them with a payer, a price and a fulfillment route. */
   verifiedBuyerPriceFulfillmentLinks: Measured<number>;
   /** Stored items a shortlist round took: the commercially usable leads a transaction path starts from. */
   usableTransactionPaths: Measured<number>;
+  /** Median minutes from a stored record's publication to the shortlist that took it into goal work. */
   timeToGoalImpactMinutes: Measured<number>;
   /** Records that never reached a model: repeats storage dropped plus items a code rule covered. */
   aiJobsAvoided: Measured<number>;
@@ -97,11 +384,13 @@ export interface SourceAcquisitionMeasures {
   aiEscalations: Measured<number>;
   /** Model screen calls per useful document; null when nothing useful came out (unknown, never cheap). */
   aiCallsPerUsefulFinding: Measured<number | null>;
+  /** Dollars the source's screens cost (free providers $0, a pod call its share of billed pod spend) per useful document. */
   dollarsPerUsefulFinding: Measured<number>;
   /** Failed pulls, and failed pulls the next pull of the source recovered from. */
   failureRecovery: Measured<{ failures: number; recoveries: number; pulls: number }>;
   /** Pulls the provider answered with 429 / 503, and the latest recorded connector state. */
   providerSaturation: Measured<{ throttled: number; latestHealth: ConnectorState | null }>;
+  /** Verified customer payments net of refunds on openings the source's accepted claims started, in cents. */
   revenue: Measured<number>;
   /** What to do about this source's own provider, from its health — a repair, never compute. */
   repair: SourceRepair | null;
@@ -173,12 +462,14 @@ interface PullRow {
 interface ItemRow {
   id: string;
   source: string;
+  external_id: string | null;
   url: string;
   title: string;
   organization: string | null;
   published_at: string | null;
   fetched_at: string;
   shortlisted_round_id: string | null;
+  shortlisted_at: string | null;
 }
 
 /** Whether a recorded pull error is the provider saying it is saturated (rate limit or overload). */
@@ -226,9 +517,9 @@ async function forEachItemPage(since: string, until: string, visit: (rows: reado
   for (;;) {
     const rows: ItemRow[] = await getDb().all(
       after
-        ? `SELECT id, source, url, title, organization, published_at, fetched_at, shortlisted_round_id FROM feed_items
+        ? `SELECT id, source, external_id, url, title, organization, published_at, fetched_at, shortlisted_round_id, shortlisted_at FROM feed_items
             WHERE fetched_at < ? AND source <> ? AND source <> ? AND (fetched_at > ? OR (fetched_at = ? AND id > ?)) ORDER BY fetched_at, id LIMIT ${PAGE}`
-        : `SELECT id, source, url, title, organization, published_at, fetched_at, shortlisted_round_id FROM feed_items
+        : `SELECT id, source, external_id, url, title, organization, published_at, fetched_at, shortlisted_round_id, shortlisted_at FROM feed_items
             WHERE fetched_at < ? AND source <> ? AND source <> ? AND fetched_at >= ? ORDER BY fetched_at, id LIMIT ${PAGE}`,
       after ? [until, CODE_SIGNAL_SOURCE, SITE_SOURCE, after.at, after.at, after.id] : [until, CODE_SIGNAL_SOURCE, SITE_SOURCE, since],
     );
@@ -277,9 +568,14 @@ export async function readAcquisitionMeasures(
   until: string,
   catalog: readonly FeedSource[] = FEED_SOURCES,
   budget: { perWindow: number; perSource: number } = EXTRACT_BUDGET,
+  readSpend: (since: string) => Promise<Pick<PodSpend, 'dollars' | 'unpricedRunningSamples'>> = readPodSpend,
 ): Promise<SourceAcquisitionMeasures[]> {
   const db = getDb();
   const health = await latestHealth(until);
+  // A pod screen call's share of the pod's billed spend is its cost; a free provider's is $0.
+  const perCall = await podPricing(since, until, readSpend);
+  const attribution: AttributionAccumulator = new Map();
+  let attributionReadable = true;
 
   const pullsBy = new Map<string, { visited: number; inserted: number; pulls: number; failures: number; recoveries: number; throttled: number; lastFailed: boolean }>();
   await forEachPullPage(since, until, (rows) => {
@@ -300,7 +596,7 @@ export async function readAcquisitionMeasures(
     }
   });
 
-  type ItemAcc = { stored: number; useful: number; examined: number; parsed: number; facts: number; codeMatches: number; escalated: number; calls: number; shortlisted: number; avoided: number };
+  type ItemAcc = { stored: number; useful: number; examined: number; parsed: number; facts: number; codeMatches: number; escalated: number; calls: number; podCalls: number; shortlisted: number; avoided: number };
   const itemsBy = new Map<string, ItemAcc>();
   let examinedTotal = 0;
   await forEachItemPage(since, until, async (page) => {
@@ -310,14 +606,18 @@ export async function readAcquisitionMeasures(
     const kept = new Set<string>();
     const screened = new Set<string>();
     const screenCalls = new Map<string, number>();
-    const rows = await db.all<{ id: string; subject_id: string; ok: number | string; output: string | null }>(
-      `SELECT id, subject_id, ok, output FROM cheap_results WHERE kind = 'SCREEN_LEAD' AND subject_id IN (${marks})`,
+    const podCalls = new Map<string, number>();
+    const rows = await db.all<{ id: string; subject_id: string; model: string; ok: number | string; output: string | null }>(
+      `SELECT id, subject_id, model, ok, output FROM cheap_results WHERE kind = 'SCREEN_LEAD' AND subject_id IN (${marks})`,
       [...ids],
     );
     for (const row of rows) {
       screened.add(row.subject_id);
       // A batched screen's per-record rows are its answers, not calls of their own.
-      if (!row.id.startsWith(BATCH_ROW_PREFIX)) screenCalls.set(row.subject_id, (screenCalls.get(row.subject_id) ?? 0) + 1);
+      if (!row.id.startsWith(BATCH_ROW_PREFIX)) {
+        screenCalls.set(row.subject_id, (screenCalls.get(row.subject_id) ?? 0) + 1);
+        if (isRunpodSlot(row.model)) podCalls.set(row.subject_id, (podCalls.get(row.subject_id) ?? 0) + 1);
+      }
       if (Number(row.ok) === 1 && (row.output ?? '').includes('"verdict":"KEEP"')) kept.add(row.subject_id);
     }
     const covered = new Set(await coveredItems(ids));
@@ -331,18 +631,26 @@ export async function readAcquisitionMeasures(
       toExamine.push(item);
       pending.set(item.source, (pending.get(item.source) ?? 0) + 1);
     }
-    const bodies = new Map<string, string | null>();
-    if (toExamine.length > 0) {
-      const bodyRows = await db.all<{ id: string; body: string | null }>(
-        `SELECT id, body FROM feed_items WHERE id IN (${toExamine.map(() => '?').join(',')})`,
-        toExamine.map((one) => one.id),
-      );
-      for (const row of bodyRows) bodies.set(row.id, row.body);
-    }
+    // Every item's bytes are measured; only the budgeted ones are run through the extractor.
+    const bodies = await pageBodies(ids);
     const examineIds = new Set(toExamine.map((one) => one.id));
+    if (attributionReadable) {
+      try {
+        await attributePage(
+          attribution,
+          page.map((item) => ({
+            id: item.id, source: item.source, url: item.url, publishedAt: item.published_at, fetchedAt: item.fetched_at, shortlistedAt: item.shortlisted_at,
+            bytes: recordBytes({ externalId: item.external_id, url: item.url, title: item.title, body: bodies.get(item.id) ?? null, organization: item.organization, publishedAt: item.published_at }),
+          })),
+          until,
+        );
+      } catch {
+        attributionReadable = false;
+      }
+    }
 
     for (const item of page) {
-      const acc = itemsBy.get(item.source) ?? { stored: 0, useful: 0, examined: 0, parsed: 0, facts: 0, codeMatches: 0, escalated: 0, calls: 0, shortlisted: 0, avoided: 0 };
+      const acc = itemsBy.get(item.source) ?? { stored: 0, useful: 0, examined: 0, parsed: 0, facts: 0, codeMatches: 0, escalated: 0, calls: 0, podCalls: 0, shortlisted: 0, avoided: 0 };
       acc.stored += 1;
       if (kept.has(item.id) || covered.has(item.id) || item.shortlisted_round_id) acc.useful += 1;
       if (covered.has(item.id)) acc.codeMatches += 1;
@@ -350,6 +658,7 @@ export async function readAcquisitionMeasures(
       if (covered.has(item.id) && !screened.has(item.id)) acc.avoided += 1;
       if (item.shortlisted_round_id) acc.shortlisted += 1;
       acc.calls += screenCalls.get(item.id) ?? 0;
+      acc.podCalls += podCalls.get(item.id) ?? 0;
       if (examineIds.has(item.id)) {
         const read = extractItem({
           id: item.id,
@@ -375,37 +684,49 @@ export async function readAcquisitionMeasures(
   for (const source of itemsBy.keys()) sources.add(source);
   const byId = new Map(catalog.map((s) => [s.id, s]));
 
+  const attributedBy = finishAttribution(attribution);
   const out: SourceAcquisitionMeasures[] = [];
   for (const source of [...sources].sort()) {
     const p = pullsBy.get(source) ?? { visited: 0, inserted: 0, pulls: 0, failures: 0, recoveries: 0, throttled: 0, lastFailed: false };
-    const i = itemsBy.get(source) ?? { stored: 0, useful: 0, examined: 0, parsed: 0, facts: 0, codeMatches: 0, escalated: 0, calls: 0, shortlisted: 0, avoided: 0 };
+    const i = itemsBy.get(source) ?? { stored: 0, useful: 0, examined: 0, parsed: 0, facts: 0, codeMatches: 0, escalated: 0, calls: 0, podCalls: 0, shortlisted: 0, avoided: 0 };
     const repeats = Math.max(0, p.visited - p.inserted);
     const state = health.get(source) ?? null;
     const complete = i.examined === i.stored;
+    const attributed = attributedBy.get(source) ?? null;
+    const fromRows = <T>(read: (a: SourceAttribution) => T): Measured<T> => {
+      if (!attributionReadable) return notMeasured(UNMEASURED_REASONS.attributionUnreadable);
+      return measured(read(attributed ?? { source, bytes: 0, acceptedEvidence: 0, verifiedLinks: 0, economicRelationships: 0, correctedContradictions: 0, variablesResolved: 0, minutesToGoalImpact: [], minutesToPlan: [], revenueCents: 0 }));
+    };
+    const toGoal = median(attributed?.minutesToGoalImpact ?? []);
+    const dollars: Measured<number> = i.useful === 0
+      ? notMeasured(UNMEASURED_REASONS.dollarsNoUseful)
+      : i.podCalls > 0 && perCall.pod === null
+        ? notMeasured(UNMEASURED_REASONS.dollarsUnpriced)
+        : measured(round4((i.podCalls * (perCall.pod ?? 0)) / i.useful));
     out.push({
       source,
       recordsVisited: measured(p.visited),
       newUniqueDocuments: measured(i.stored),
       newUniqueUsefulDocuments: measured(i.useful),
       refreshedRecords: measured(repeats),
-      rawBytes: notMeasured(UNMEASURED_REASONS.rawBytes),
+      rawBytes: measured(attributed?.bytes ?? 0),
       parserCoverage: measured(i.examined > 0 ? round4(i.parsed / i.examined) : null),
       parserSample: { examined: i.examined, stored: i.stored },
       structuredFacts: complete
         ? measured(i.facts)
         : notMeasured(`the extractor read ${i.facts} fact(s) from ${i.examined} of ${i.stored} stored item(s); the window's extraction budget (${budget.perWindow} per window, ${budget.perSource} per source) stopped there, so the whole count is not claimed`),
-      acceptedEvidence: notMeasured(UNMEASURED_REASONS.acceptedEvidence),
+      acceptedEvidence: fromRows((a) => a.acceptedEvidence),
       codeDerivedMatches: measured(i.codeMatches),
-      verifiedBuyerPriceFulfillmentLinks: notMeasured(UNMEASURED_REASONS.verifiedLinks),
+      verifiedBuyerPriceFulfillmentLinks: fromRows((a) => a.verifiedLinks),
       usableTransactionPaths: measured(i.shortlisted),
-      timeToGoalImpactMinutes: notMeasured(UNMEASURED_REASONS.timeToGoalImpact),
+      timeToGoalImpactMinutes: toGoal === null ? notMeasured(UNMEASURED_REASONS.timeToGoalImpact) : measured(toGoal),
       aiJobsAvoided: measured(repeats + i.avoided),
       aiEscalations: measured(i.escalated),
       aiCallsPerUsefulFinding: measured(i.useful > 0 ? round4(i.calls / i.useful) : null),
-      dollarsPerUsefulFinding: notMeasured(UNMEASURED_REASONS.dollarsPerUsefulFinding),
+      dollarsPerUsefulFinding: dollars,
       failureRecovery: measured({ failures: p.failures, recoveries: p.recoveries, pulls: p.pulls }),
       providerSaturation: measured({ throttled: p.throttled, latestHealth: state }),
-      revenue: notMeasured(UNMEASURED_REASONS.revenue),
+      revenue: fromRows((a) => a.revenueCents),
       repair: sourceRepair(state),
       placement: placementAdvice(byId.get(source) ?? null),
     });
@@ -802,4 +1123,56 @@ export function storedAcquisition(reading: AcquisitionMeasuresReading): Record<s
   const visited = (s: SourceAcquisitionMeasures): number => (s.recordsVisited.measured ? s.recordsVisited.value : 0);
   const sources = [...(reading.sources ?? [])].sort((a, b) => Number(Boolean(b.repair)) - Number(Boolean(a.repair)) || visited(b) - visited(a));
   return boundMeasures({ ...reading, sources, totals: { sources: sources.length } } as unknown as Record<string, unknown>);
+}
+
+/** A route's attribution plus the compute it was billed for. */
+export interface RouteAttribution extends SourceAttribution {
+  /** The route's screens' share of billed GPU pod spend in dollars; free providers are $0; null when the pod ran unpriced. */
+  computeDollars: number | null;
+}
+
+/**
+ * Per route (feed source), what its records stored in [since, until) led to
+ * downstream and the compute its screens were billed for — the CAP-25-2 stage
+ * reading's attributed measures, read by the same chain and the same pages as
+ * the per-source acquisition reading. Read-only.
+ */
+export async function readRouteAttribution(
+  since: string,
+  until: string,
+  readSpend: (since: string) => Promise<Pick<PodSpend, 'dollars' | 'unpricedRunningSamples'>> = readPodSpend,
+): Promise<Map<string, RouteAttribution>> {
+  const db = getDb();
+  const acc: AttributionAccumulator = new Map();
+  const podCallsBySource = new Map<string, number>();
+  await forEachItemPage(since, until, async (page) => {
+    if (page.length === 0) return;
+    const ids = page.map((one) => one.id);
+    const bodies = await pageBodies(ids);
+    await attributePage(
+      acc,
+      page.map((item) => ({
+        id: item.id, source: item.source, url: item.url, publishedAt: item.published_at, fetchedAt: item.fetched_at, shortlistedAt: item.shortlisted_at,
+        bytes: recordBytes({ externalId: item.external_id, url: item.url, title: item.title, body: bodies.get(item.id) ?? null, organization: item.organization, publishedAt: item.published_at }),
+      })),
+      until,
+    );
+    const sourceOf = new Map(page.map((item) => [item.id, item.source]));
+    const rows = await db.all<{ id: string; subject_id: string; model: string }>(
+      `SELECT id, subject_id, model FROM cheap_results WHERE kind = 'SCREEN_LEAD' AND subject_id IN (${ids.map(() => '?').join(',')})`,
+      ids,
+    );
+    for (const row of rows) {
+      if (row.id.startsWith(BATCH_ROW_PREFIX) || !isRunpodSlot(row.model)) continue;
+      const source = sourceOf.get(row.subject_id);
+      if (source) podCallsBySource.set(source, (podCallsBySource.get(source) ?? 0) + 1);
+    }
+  });
+  const perCall = await podPricing(since, until, readSpend);
+  const out = new Map<string, RouteAttribution>();
+  for (const [source, a] of finishAttribution(acc)) {
+    const calls = podCallsBySource.get(source) ?? 0;
+    out.set(source, { ...a, computeDollars: calls === 0 ? 0 : perCall.pod === null ? null : Math.round(calls * perCall.pod * 10_000) / 10_000 });
+  }
+  return out;
 }

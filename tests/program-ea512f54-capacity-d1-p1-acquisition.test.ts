@@ -7,7 +7,9 @@
  * quota. Over real database rows.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
-import { freshProject } from './helpers.ts';
+import { freshProject, type TestProject } from './helpers.ts';
+import { createOrchestration } from '../server/repos/research.ts';
+import { createRun } from '../server/repos/runs.ts';
 import { getDb } from '../server/db/database.ts';
 import type { RecordBinEventInput } from '../server/repos/bins.ts';
 import type { Measured, RecordedStageCapacity, StageCapacityReport, StageReading } from '../server/services/freeLane/stageCapacity.ts';
@@ -25,6 +27,16 @@ import {
   laneReadings,
   placementAdvice,
   readAcquisitionMeasures,
+  readRouteAttribution,
+  readSourceAttribution,
+  attributePage,
+  finishAttribution,
+  type AttributedItem,
+  type AttributionAccumulator,
+  recordBytes,
+  dollarsPerCall,
+  isVerifiedLink,
+  median,
   recordAcquisitionMeasures,
   resourceSignals,
   sourceRepair,
@@ -44,8 +56,9 @@ const m = <T>(value: T): Measured<T> => ({ measured: true, value });
 const nm = <T>(reason: string): Measured<T> => ({ measured: false, reason });
 
 let tag = '';
+let project: TestProject;
 beforeEach(async () => {
-  await freshProject();
+  project = await freshProject();
   tag = Math.random().toString(36).slice(2, 8);
 });
 
@@ -172,13 +185,32 @@ describe('per-source acquisition measures (CAP-21-7)', () => {
     expect(one.providerSaturation).toEqual(m({ throttled: 1, latestHealth: null }));
     expect(one.parserCoverage.measured).toBe(true);
     expect(one.structuredFacts.measured).toBe(true);
-    // What the rows cannot see is not guessed.
-    expect(one.rawBytes).toEqual(nm(UNMEASURED_REASONS.rawBytes));
-    expect(one.acceptedEvidence).toEqual(nm(UNMEASURED_REASONS.acceptedEvidence));
-    expect(one.verifiedBuyerPriceFulfillmentLinks.measured).toBe(false);
-    expect(one.timeToGoalImpactMinutes.measured).toBe(false);
-    expect(one.dollarsPerUsefulFinding.measured).toBe(false);
-    expect(one.revenue.measured).toBe(false);
+    // Review F6: every quoted measure is read from rows; none is NOT_MEASURED by construction.
+    const stored = await getDb().all<{ external_id: string; url: string; title: string; body: string | null; organization: string | null; published_at: string | null }>(
+      `SELECT external_id, url, title, body, organization, published_at FROM feed_items WHERE source = ?`, [src],
+    );
+    const bytes = stored.reduce((k, r) => k + recordBytes({ externalId: r.external_id, url: r.url, title: r.title, body: r.body, organization: r.organization, publishedAt: r.published_at }), 0);
+    expect(bytes).toBeGreaterThan(4 * 100);
+    expect(one.rawBytes).toEqual(m(bytes));
+    // Nothing downstream cites these records yet: zero is a measurement, not an unknown.
+    expect(one.acceptedEvidence).toEqual(m(0));
+    expect(one.verifiedBuyerPriceFulfillmentLinks).toEqual(m(0));
+    expect(one.revenue).toEqual(m(0));
+    // The shortlisted record was taken the hour it was published.
+    expect(one.timeToGoalImpactMinutes).toEqual(m(0));
+    // Screens ran on a free provider: a measured $0 per useful finding.
+    expect(one.dollarsPerUsefulFinding).toEqual(m(0));
+  });
+
+  it('says why a window leaves a measure unread, as a fact about that window, never by construction', async () => {
+    const src = `quiet-${tag}`;
+    await pull(src, true, 1, 1, 2);
+    await item(src, 1, 2);
+    const one = (await readAcquisitionMeasures(SINCE, NOW.toISOString(), [])).find((s) => s.source === src)!;
+    expect(one.timeToGoalImpactMinutes).toEqual(nm(UNMEASURED_REASONS.timeToGoalImpact));
+    expect(one.dollarsPerUsefulFinding).toEqual(nm(UNMEASURED_REASONS.dollarsNoUseful));
+    expect(one.rawBytes.measured).toBe(true);
+    expect(one.acceptedEvidence).toEqual(m(0));
   });
 
   it('takes its sources from the rows as well as the catalog: nothing is a whitelist', async () => {
@@ -511,22 +543,22 @@ describe('the hourly acquisition reading is bounded (finding F8)', () => {
       newUniqueDocuments: m(1),
       newUniqueUsefulDocuments: m(0),
       refreshedRecords: m(0),
-      rawBytes: nm(UNMEASURED_REASONS.rawBytes),
+      rawBytes: m(100),
       parserCoverage: m(1),
       parserSample: { examined: 1, stored: 1 },
       structuredFacts: m(1),
-      acceptedEvidence: nm(UNMEASURED_REASONS.acceptedEvidence),
+      acceptedEvidence: m(0),
       codeDerivedMatches: m(0),
-      verifiedBuyerPriceFulfillmentLinks: nm(UNMEASURED_REASONS.verifiedLinks),
+      verifiedBuyerPriceFulfillmentLinks: m(0),
       usableTransactionPaths: m(0),
       timeToGoalImpactMinutes: nm(UNMEASURED_REASONS.timeToGoalImpact),
       aiJobsAvoided: m(0),
       aiEscalations: m(0),
       aiCallsPerUsefulFinding: m(null),
-      dollarsPerUsefulFinding: nm(UNMEASURED_REASONS.dollarsPerUsefulFinding),
+      dollarsPerUsefulFinding: nm(UNMEASURED_REASONS.dollarsNoUseful),
       failureRecovery: m({ failures: 0, recoveries: 0, pulls: 1 }),
       providerSaturation: m({ throttled: 0, latestHealth: null }),
-      revenue: nm(UNMEASURED_REASONS.revenue),
+      revenue: m(0),
       repair: repair ? { kind: 'REPAIR_OUTAGE', reason: 'down' } : null,
       placement: { placement: 'WHOLE_READ', reason: 'r' },
     });
@@ -548,5 +580,186 @@ describe('the hourly acquisition reading is bounded (finding F8)', () => {
     expect(rows).toHaveLength(1);
     expect(JSON.stringify(rows[0]!.measures).length).toBeLessThanOrEqual(STORED_MEASURES_MAX_BYTES);
     expect((rows[0]!.measures as { sources: unknown[] }).sources.length).toBeLessThan(reading!.sources.length);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Review F6: the attributed measures, over the rows that carry the chain.
+// ---------------------------------------------------------------------------
+
+async function claimFrom(url: string, accepted: boolean, over: { contradiction?: string } = {}): Promise<string> {
+  const projectId = project.project.id;
+  const layerId = project.layers[0]!.id;
+  const run = await createRun({ projectId, layerId, runType: 'FOUNDATION', provider: 'WORKER' });
+  const orchestration = await createOrchestration({ projectId, layerId, runId: run.id, title: 'attribution fixture', assignment: 'read the record', provider: 'WORKER' });
+  const id = `rc_${tag}_${Math.random().toString(36).slice(2)}`;
+  await getDb().run(
+    `INSERT INTO research_claims
+       (id, orchestration_id, fragment_id, pass_id, pass_key, claim, source_url, source_title,
+        source_publisher, source_date, evidence_excerpt, evidence_locator, evidence_lane,
+        retrieved_at, confidence, contradiction_state, contradiction_note, validation_state,
+        validation_detail, sourced, derived, derived_from, accepted, content_hash, created_at)
+     VALUES (?, ?, NULL, NULL, 'RESEARCH', 'A buyer pays $500 a month', ?, 'record', NULL, NULL, 'excerpt', NULL, 'lane-1',
+             ?, 0.9, ?, NULL, 'VALID', NULL, 1, 0, '[]', ?, ?, ?)`,
+    [id, orchestration.id, url, at(1), over.contradiction ?? 'UNCHALLENGED', accepted ? 1 : 0, `hash-${id}`, at(1)],
+  );
+  return id;
+}
+
+async function openingFrom(claimId: string | null, verified: boolean): Promise<string> {
+  const projectId = project.project.id;
+  const cashMode = `cm_${tag}`;
+  await getDb().run(
+    `INSERT INTO cash_modes (id, project_id, owner_user_id, objective, horizon_days, envelope_id, state, activated_at, created_by_user_id, created_at, updated_at)
+     SELECT ?, ?, 'u', 'cash', 30, 'env', 'ACTIVE', ?, 'u', ?, ? WHERE NOT EXISTS (SELECT 1 FROM cash_modes WHERE id = ?)`,
+    [cashMode, projectId, at(2), at(2), at(2), cashMode],
+  );
+  const id = `opp_${tag}_${Math.random().toString(36).slice(2)}`;
+  await getDb().run(
+    `INSERT INTO cash_opportunities (id, project_id, cash_mode_id, owner_user_id, title, mechanism, currency, required_capabilities, state,
+       created_at, updated_at, source_claim_id, payer, price_cents, fulfillment_owner)
+     VALUES (?, ?, ?, 'u', 'An opening', 'SERVICE', 'USD', '[]', 'DISCOVERED', ?, ?, ?, ?, ?, ?)`,
+    [id, projectId, cashMode, at(1), at(1), claimId, verified ? 'Acme Dental LLC' : null, verified ? 50_000 : null, verified ? 'Brain' : null],
+  );
+  return id;
+}
+
+async function pathFact(claimId: string): Promise<void> {
+  const projectId = project.project.id;
+  // The path hangs from an opening of its own; the claim reaches it only as the path's evidence.
+  const opening = await openingFrom(null, false);
+  const pathId = `mp_${tag}_${Math.random().toString(36).slice(2)}`;
+  await getDb().run(
+    `INSERT INTO monetization_paths (id, project_id, opportunity_id, method, title, origin, created_at, updated_at)
+     VALUES (?, ?, ?, 'SERVICE', 'A path', 'ENUMERATED', ?, ?)`,
+    [pathId, projectId, opening, at(1), at(1)],
+  );
+  await getDb().run(
+    `INSERT INTO monetization_path_facts (id, project_id, path_id, attribute, kind, value, claim_id, decided_by, created_at, updated_at)
+     VALUES (?, ?, ?, 'PRICE', 'EVIDENCE', '$500 a month', ?, 'BRAIN', ?, ?)`,
+    [`mpf_${tag}_${Math.random().toString(36).slice(2)}`, projectId, pathId, claimId, at(1), at(1)],
+  );
+}
+
+async function payment(opportunityId: string, kind: 'CUSTOMER_PAYMENT' | 'REFUND', cents: number, reference: string | null): Promise<void> {
+  await getDb().run(
+    `INSERT INTO cash_money_entries (id, project_id, opportunity_id, kind, amount_cents, currency, verified_reference, occurred_at, recorded_by, created_at)
+     VALUES (?, ?, ?, ?, ?, 'USD', ?, ?, 'test', ?)`,
+    [`cme_${tag}_${Math.random().toString(36).slice(2)}`, project.project.id, opportunityId, kind, cents, reference, at(1), at(1)],
+  );
+}
+
+async function blueprintFact(url: string, key: string, minutesAfterPublication: number, publishedHoursAgo: number): Promise<void> {
+  const projectId = project.project.id;
+  const ws = `ws_${tag}_${Math.random().toString(36).slice(2)}`;
+  await getDb().run(
+    `INSERT INTO workstreams (id, project_id, title, intent, purpose, created_at, updated_at) VALUES (?, ?, 'Goal', 'cash', 'REVENUE_DIRECT', ?, ?)`,
+    [ws, projectId, at(6), at(6)],
+  );
+  const created = new Date(NOW.getTime() - publishedHoursAgo * HOUR + minutesAfterPublication * 60_000).toISOString();
+  await getDb().run(
+    `INSERT INTO construction_facts (id, project_id, workstream_id, fact_key, low, high, status, measures, source_title, source_url, recorded_by, created_at)
+     VALUES (?, ?, ?, ?, 1, 2, 'OBSERVED', '{}', 'record', ?, 'BRAIN', ?)`,
+    [`cf_${tag}_${Math.random().toString(36).slice(2)}`, projectId, ws, key, url, created],
+  );
+}
+
+describe('measures attributed to the source through the rows (review F6)', () => {
+  it('follows item → claim → path fact / opening → money, and item → blueprint fact, per source', async () => {
+    const src = `chain-${tag}`;
+    const other = `other-${tag}`;
+    await pull(src, true, 3, 3, 5);
+    await pull(other, true, 1, 1, 5);
+    await item(src, 1, 5, { shortlisted: true });
+    await item(src, 2, 5);
+    await item(src, 3, 5);
+    await item(other, 1, 5);
+    const urlOf = (source: string, k: number) => `https://feed.test/${source}/${k}`;
+
+    const accepted = await claimFrom(urlOf(src, 1), true);
+    await claimFrom(urlOf(src, 2), false, { contradiction: 'REFUTED' });
+    const second = await claimFrom(urlOf(src, 3), true, { contradiction: 'CONTESTED' });
+    await claimFrom(urlOf(other, 1), false);
+    await pathFact(accepted);
+    const won = await openingFrom(second, true);
+    await openingFrom(accepted, false);
+    await payment(won, 'CUSTOMER_PAYMENT', 50_000, 'pi_123');
+    await payment(won, 'CUSTOMER_PAYMENT', 9_999, null); // no provider reference: pipeline, not revenue
+    await payment(won, 'REFUND', 5_000, null);
+    await blueprintFact(urlOf(src, 1), 'price_per_month', 90, 5);
+    await blueprintFact(urlOf(src, 3), 'price_per_month', 30, 5);
+    await blueprintFact(urlOf(src, 3), 'buyers_per_region', 60, 5);
+
+    const all = await readAcquisitionMeasures(SINCE, NOW.toISOString(), []);
+    const one = all.find((s) => s.source === src)!;
+    expect(one.acceptedEvidence).toEqual(m(2));
+    // One path evidence fact plus one opening with payer, price and fulfillment; the bare opening is not a verified link.
+    expect(one.verifiedBuyerPriceFulfillmentLinks).toEqual(m(2));
+    expect(one.revenue).toEqual(m(45_000));
+    const none = all.find((s) => s.source === other)!;
+    expect(none.acceptedEvidence).toEqual(m(0));
+    expect(none.revenue).toEqual(m(0));
+
+    const routes = await readRouteAttribution(SINCE, NOW.toISOString());
+    const route = routes.get(src)!;
+    // The path its evidence fact sits on, and the two openings started from accepted claims.
+    expect(route.economicRelationships).toBe(3);
+    expect(route.correctedContradictions).toBe(2);
+    expect(route.variablesResolved).toBe(2);
+    expect(median(route.minutesToPlan)).toBe(60);
+    expect(route.computeDollars).toBe(0);
+    expect(route.bytes).toBeGreaterThan(0);
+  });
+
+  it('reads attribution a page at a time and counts a claim, link, opening or payment two pages reach once', async () => {
+    const src = `pages-${tag}`;
+    const url = `https://feed.test/${src}/1`;
+    const claim = await claimFrom(url, true);
+    await pathFact(claim);
+    const won = await openingFrom(claim, true);
+    await payment(won, 'CUSTOMER_PAYMENT', 10_000, 'pi_pages');
+    const record = (id: string): AttributedItem => ({ id, source: src, url, publishedAt: SINCE, fetchedAt: SINCE, shortlistedAt: null, bytes: 7 });
+    const acc: AttributionAccumulator = new Map();
+    await attributePage(acc, [record('p1')], NOW.toISOString());
+    await attributePage(acc, [record('p2')], NOW.toISOString());
+    const paged = finishAttribution(acc).get(src)!;
+    const whole = (await readSourceAttribution([record('p1'), record('p2')], NOW.toISOString())).get(src)!;
+    expect(paged).toEqual(whole);
+    expect(paged.acceptedEvidence).toBe(1);
+    expect(paged.verifiedLinks).toBe(2);
+    expect(paged.economicRelationships).toBe(2);
+    expect(paged.revenueCents).toBe(10_000);
+    expect(paged.bytes).toBe(14);
+  });
+
+  it('prices a GPU pod screen at its share of billed pod spend, and leaves an unpriced pod unknown', async () => {
+    expect(dollarsPerCall(null, 0)).toEqual({ pod: 0 });
+    expect(dollarsPerCall({ dollars: 2, unpricedRunningSamples: 0 }, 4)).toEqual({ pod: 0.5 });
+    expect(dollarsPerCall({ dollars: 2, unpricedRunningSamples: 1 }, 4)).toEqual({ pod: null });
+    expect(dollarsPerCall(null, 4)).toEqual({ pod: null });
+
+    const src = `pod-${tag}`;
+    await pull(src, true, 2, 2, 3);
+    const a = await item(src, 1, 3);
+    await item(src, 2, 3);
+    await getDb().run(
+      `INSERT INTO cheap_results (id, kind, input_hash, subject_id, model, ok, output, error, created_at) VALUES (?, 'SCREEN_LEAD', ?, ?, 'runpod/qwen', 1, ?, NULL, ?)`,
+      [`cr_${tag}_pod`, `hp_${a}`, a, JSON.stringify({ verdict: 'KEEP' }), at(1)],
+    );
+    const priced = (await readAcquisitionMeasures(SINCE, NOW.toISOString(), [], EXTRACT_BUDGET, async () => ({ dollars: 3, unpricedRunningSamples: 0 }))).find((s) => s.source === src)!;
+    expect(priced.dollarsPerUsefulFinding).toEqual(m(3));
+    const unpriced = (await readAcquisitionMeasures(SINCE, NOW.toISOString(), [], EXTRACT_BUDGET, async () => ({ dollars: 3, unpricedRunningSamples: 2 }))).find((s) => s.source === src)!;
+    expect(unpriced.dollarsPerUsefulFinding).toEqual(nm(UNMEASURED_REASONS.dollarsUnpriced));
+    expect((await readRouteAttribution(SINCE, NOW.toISOString(), async () => ({ dollars: 3, unpricedRunningSamples: 0 }))).get(src)!.computeDollars).toBe(3);
+  });
+
+  it('counts a record\'s bytes as stored, and a link only when payer, price and fulfillment are all settled', async () => {
+    expect(recordBytes({ url: 'ab', title: 'é', body: null, organization: null })).toBe(4);
+    expect(isVerifiedLink({ payer: 'A', price_cents: 100, fulfillment_owner: null, delivery_method: 'email' })).toBe(true);
+    expect(isVerifiedLink({ payer: 'A', price_cents: null, fulfillment_owner: 'B', delivery_method: null })).toBe(false);
+    expect(isVerifiedLink({ payer: null, price_cents: 100, fulfillment_owner: 'B', delivery_method: null })).toBe(false);
+    expect(median([5, 1, 3])).toBe(3);
+    expect(median([])).toBeNull();
+    expect((await readSourceAttribution([], NOW.toISOString())).size).toBe(0);
   });
 });
