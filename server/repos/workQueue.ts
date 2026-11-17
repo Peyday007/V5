@@ -1170,6 +1170,86 @@ export async function sweepExpiredLeases(): Promise<number> {
   return result.changes;
 }
 
+/**
+ * Fail a lapsed lease that was the item's last attempt.
+ *
+ * `claimWork` recovers an expired lease by re-leasing it, and since the
+ * ceiling went into `CLAIMABLE_SQL` it does so only while `attempt_count <
+ * max_attempts`. That was right, and it left a state with no owner: an item
+ * whose *last* lease lapsed is no longer claimable, `failWork` needs a worker
+ * holding a live lease, and `sweepExpiredLeases` closes only the lease row. So
+ * the item stayed `LEASED` for ever — neither re-offered nor finished — and
+ * `advancePacket`'s `stillRunning` kept answering "waiting on it". Production,
+ * Cash Mode 1, 2026-11-17: `wki_4d8c4039a4634ab194dc` and
+ * `wki_89af110a238a4beeb88a`, both `RESEARCH_SYNTHESIZE` at 2/2 on leases that
+ * lapsed at 16:56Z, still `LEASED` at 23:20Z while their goal's rounds sat OPEN
+ * without a report. `concludeUnworkablePackets` reaches such an item only when
+ * *every* other item on its packet is spent too.
+ *
+ * This is the missing transition, and it is `failWork`'s exhausted branch
+ * performed by the queue instead of a worker: `FAILED` with `LEASE_EXPIRED`,
+ * the lease row closed `EXPIRED`, an event on the project's history. Nothing
+ * is reset or deleted (§5). Whether the target gets a replacement item is the
+ * packet's own decision — `mayReplace` already counts a `LEASE_EXPIRED`
+ * failure as spent, and a redo is a new item.
+ *
+ * The guard is in the statement that makes the change (§19): still `LEASED`,
+ * still at the generation read, still expired, still at its ceiling. A worker
+ * trying to finish afterwards is refused by its ownership proof, exactly as it
+ * already is on any expired lease.
+ */
+export async function failExhaustedExpiredLeases(
+  limit: number,
+): Promise<{ workItemId: string; projectId: string; orchestrationId: string | null }[]> {
+  const db = getDb();
+  const now = queueNow();
+  const rows = await db.all<WorkItemRow>(
+    `SELECT * FROM work_items
+      WHERE state = 'LEASED' AND lease_expires_at <= ? AND attempt_count >= max_attempts
+      ORDER BY lease_expires_at, id
+      LIMIT ?`,
+    [now, Math.max(1, limit)],
+  );
+  const out: { workItemId: string; projectId: string; orchestrationId: string | null }[] = [];
+  for (const row of rows) {
+    const detail =
+      `The lease on this item's last attempt (${row.attempt_count} of ${row.max_attempts}) ` +
+      'expired with nothing recorded, so no further attempt can be made.';
+    const updated = await db.run(
+      `UPDATE work_items
+          SET state = 'FAILED', failure_category = 'LEASE_EXPIRED',
+              result_summary = COALESCE(result_summary, ?),
+              lease_id = NULL, worker_id = NULL, lease_expires_at = NULL,
+              completed_at = ?, updated_at = ?
+        WHERE id = ? AND state = 'LEASED' AND lease_generation = ?
+          AND lease_expires_at <= ? AND attempt_count >= max_attempts`,
+      [bounded(detail, MAX_SUMMARY_CHARS), now, now, row.id, row.lease_generation, now],
+    );
+    if (updated.changes !== 1) continue;
+    await db.run(
+      `UPDATE work_leases SET ended_at = ?, outcome = 'EXPIRED', detail = COALESCE(detail, ?)
+        WHERE work_item_id = ? AND lease_generation = ? AND ended_at IS NULL`,
+      [now, bounded(detail, MAX_DETAIL_CHARS), row.id, row.lease_generation],
+    );
+    await recordEvent({
+      projectId: row.project_id,
+      entityType: 'RUN',
+      entityId: row.id,
+      eventType: 'WORK_LEASE_EXHAUSTED',
+      payload: {
+        workItemId: row.id,
+        workType: row.work_type,
+        orchestrationId: row.orchestration_id,
+        attemptCount: row.attempt_count,
+        maxAttempts: row.max_attempts,
+        leaseExpiredAt: row.lease_expires_at,
+      },
+    });
+    out.push({ workItemId: row.id, projectId: row.project_id, orchestrationId: row.orchestration_id });
+  }
+  return out;
+}
+
 /* ------------------------------------------------------------------------- */
 /* Metrics                                                                    */
 /* ------------------------------------------------------------------------- */

@@ -89,6 +89,7 @@ import { binForOrchestration, creditBinAttempt } from '../../repos/bins.ts';
 import {
   cancelWork,
   enqueueWork,
+  failExhaustedExpiredLeases,
   listWorkItemsForOrchestration,
   queueNow,
 } from '../../repos/workQueue.ts';
@@ -3170,6 +3171,26 @@ export async function concludeUnworkablePackets(
     'AWAITING_REPAIR',
     'NEEDS_HUMAN',
   ];
+  /*
+   * First, item by item: a lease that lapsed on the item's last attempt is a
+   * failure, whatever its siblings are doing. The packet-wide retirement below
+   * waits until *every* outstanding item is spent, so one healthy sibling kept
+   * an exhausted synthesis `LEASED` for ever and its packet "waiting on the
+   * synthesis" (Cash Mode 1, 2026-11-17). Failing it lets `advancePacket`
+   * decide — a replacement under `mayReplace`, or the packet's fault path.
+   */
+  const out: { orchestrationId: string; retired: number }[] = [];
+  const lapsed = new Map<string, number>();
+  for (const failed of await failExhaustedExpiredLeases(limit)) {
+    if (failed.orchestrationId) {
+      lapsed.set(failed.orchestrationId, (lapsed.get(failed.orchestrationId) ?? 0) + 1);
+    }
+  }
+  for (const [orchestrationId, retired] of lapsed) {
+    await advancePacket(orchestrationId);
+    out.push({ orchestrationId, retired });
+  }
+
   const now = queueNow();
   const rows = await getDb().all<{ id: string }>(
     `SELECT DISTINCT o.id AS id
@@ -3183,7 +3204,6 @@ export async function concludeUnworkablePackets(
     [...live, Math.max(1, limit)],
   );
 
-  const out: { orchestrationId: string; retired: number }[] = [];
   for (const row of rows) {
     const orchestration = await getOrchestration(row.id);
     if (!orchestration) continue;

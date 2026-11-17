@@ -505,6 +505,8 @@ export const EVENT_TYPES = [
   // The answering transition for a work item whose attempt ceiling now
   // binds at the claim as well as at `failWork`.
   'WORK_ATTEMPTS_REGRANTED',
+  /** The queue failed an item whose last attempt's lease lapsed (`failExhaustedExpiredLeases`). */
+  'WORK_LEASE_EXHAUSTED',
   /** A research park Brain answered under the standing grant (§80). */
   'RUSSELL_ROUTINE_DECISION',
   /** A substantial goal checked against the capability maps; recorded when what blocks it changes (§88). */

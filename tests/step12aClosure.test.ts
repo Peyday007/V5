@@ -1078,14 +1078,71 @@ describe('a live packet whose every item is past its ceiling', () => {
 
   it('leaves the packet alone while one item could still be attempted', async () => {
     const { orchestrationId, ids } = await packetWithItems();
-    await spend(ids[0]!, 'LEASED');
+    await spend(ids[0]!, 'QUEUED');
     // The second keeps its attempts, so a worker can still move this packet.
 
     expect(
       (await concludeUnworkablePackets(10)).map((entry) => entry.orchestrationId),
     ).not.toContain(orchestrationId);
-    expect((await getWorkItem(ids[0]!))!.state).toBe('LEASED');
+    expect((await getWorkItem(ids[0]!))!.state).toBe('QUEUED');
     expect((await getWorkItem(ids[1]!))!.state).toBe('QUEUED');
+  });
+
+  /**
+   * Cash Mode 1, 2026-11-17: `wki_4d8c4039a4634ab194dc` and
+   * `wki_89af110a238a4beeb88a`, RESEARCH_SYNTHESIZE at 2/2, LEASED on leases
+   * that lapsed at 16:56Z and still LEASED at 23:20Z. The claim no longer
+   * offers an item past its ceiling, `failWork` needs a live lease, and the
+   * packet-wide retirement waits for every sibling to be spent — so nothing
+   * owned the transition. A lapsed last attempt is now a failure on its own,
+   * whatever its siblings are doing, and the packet is advanced on it.
+   */
+  it('fails a lapsed lease on its last attempt even while a sibling is workable', async () => {
+    const { orchestrationId, ids } = await packetWithItems();
+    await getDb().run('UPDATE work_items SET max_attempts = 2 WHERE id = ?', [ids[0]!]);
+    const holder = await createWorker({ name: `holder-${ids[0]!}`, createdByType: 'SYSTEM', createdById: 'test' });
+    await getDb().run(
+      `UPDATE work_items
+          SET attempt_count = 2, state = 'LEASED', lease_generation = 2,
+              lease_id = ?, worker_id = ?, lease_expires_at = ?
+        WHERE id = ?`,
+      [`lease-${ids[0]!}`, holder.id, new Date(Date.now() - 6 * 3_600_000).toISOString(), ids[0]!],
+    );
+
+    const first = await concludeUnworkablePackets(10);
+    expect(first).toContainEqual({ orchestrationId, retired: 1 });
+
+    const failed = (await getWorkItem(ids[0]!))!;
+    expect(failed.state).toBe('FAILED');
+    expect(failed.failureCategory).toBe('LEASE_EXPIRED');
+    // History kept (§5): the spent attempts stay on the row.
+    expect(failed.attemptCount).toBe(2);
+    expect(failed.workerId).toBeNull();
+    // The sibling with attempts left is untouched.
+    expect((await getWorkItem(ids[1]!))!.state).toBe('QUEUED');
+
+    const events = await getDb().all<{ entity_id: string }>(
+      `SELECT entity_id FROM project_events WHERE event_type = 'WORK_LEASE_EXHAUSTED'`,
+    );
+    expect(events.map((e) => e.entity_id)).toEqual([ids[0]!]);
+
+    // Idempotent by the state it produces.
+    expect((await concludeUnworkablePackets(10)).map((e) => e.orchestrationId)).not.toContain(orchestrationId);
+    expect((await getWorkItem(ids[0]!))!.state).toBe('FAILED');
+  });
+
+  it('does not fail a lapsed lease that still has attempts left — the claim recovers it', async () => {
+    const { ids } = await packetWithItems();
+    const holder = await createWorker({ name: `holder-${ids[0]!}`, createdByType: 'SYSTEM', createdById: 'test' });
+    await getDb().run(
+      `UPDATE work_items
+          SET attempt_count = 1, max_attempts = 2, state = 'LEASED',
+              lease_id = ?, worker_id = ?, lease_expires_at = ?
+        WHERE id = ?`,
+      [`lease-${ids[0]!}`, holder.id, new Date(Date.now() - 60_000).toISOString(), ids[0]!],
+    );
+    await concludeUnworkablePackets(10);
+    expect((await getWorkItem(ids[0]!))!.state).toBe('LEASED');
   });
 
   it('leaves it alone while somebody is actually holding one', async () => {
@@ -1113,7 +1170,7 @@ describe('a live packet whose every item is past its ceiling', () => {
 
   it('retires every spent item, keeps the rows, and is idempotent', async () => {
     const { orchestrationId, ids } = await packetWithItems();
-    await spend(ids[0]!, 'LEASED');
+    await spend(ids[0]!, 'QUEUED');
     await spend(ids[1]!, 'QUEUED');
 
     const first = await concludeUnworkablePackets(10);
@@ -1151,7 +1208,9 @@ describe('a live packet whose every item is past its ceiling', () => {
     expect(first.map((entry) => entry.orchestrationId)).toContain(orchestrationId);
     for (const id of ids) {
       const item = (await getWorkItem(id))!;
-      expect(item.state).toBe('CANCELLED');
+      // Both were lapsed leases on spent attempts: failed, rows kept.
+      expect(item.state).toBe('FAILED');
+      expect(item.failureCategory).toBe('LEASE_EXPIRED');
       expect(item.attemptCount).toBeGreaterThan(item.maxAttempts);
     }
     const after = await getOrchestration(orchestrationId);
@@ -1162,7 +1221,7 @@ describe('a live packet whose every item is past its ceiling', () => {
 
   it('leaves a parked packet alone while one of its items could still be attempted', async () => {
     const { orchestrationId, ids } = await packetWithItems();
-    await spend(ids[0]!, 'LEASED');
+    await spend(ids[0]!, 'QUEUED');
     await updateOrchestration(orchestrationId, { status: 'NEEDS_HUMAN' });
 
     expect(
