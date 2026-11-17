@@ -14,14 +14,26 @@ import {
   buildVenturePath,
   challengeVenture,
   economicsFromReading,
+  stagesFromReading,
   statedAmounts,
   statedPrice,
+  type InstitutionalPrerequisite,
   type ResourceSituation,
+  type VentureNode,
   type VentureStage,
 } from '../server/services/manufacturing/venturePath.ts';
+import { pathPrerequisites } from '../server/services/manufacturing/institutionReading.ts';
+import { readLadder } from '../server/services/manufacturing/readiness.ts';
+import { ladderSnapshot } from '../server/services/manufacturing/ladder.ts';
 import type { Layer } from '../server/domain/types.ts';
 
 const usd = (amountMinor: number) => ({ currency: 'USD', amountMinor });
+
+/** A built node back as the stage it came from, with the budget a test supplies for the unpriced ones. */
+function asStage(node: VentureNode, price: (node: VentureNode) => { currency: string; amountMinor: number } | null): VentureStage {
+  const { layer: _layer, budget, ...rest } = node;
+  return { ...rest, budget: budget.state === 'PRICED' ? budget.money : price(node) };
+}
 
 function stage(key: string, dependsOn: string[], part: Partial<VentureStage> = {}): VentureStage {
   return {
@@ -502,12 +514,17 @@ describe('VENT-24-2: the kernel revisits an earlier venture when capital or capa
     expect(path.nodes.find((n) => n.key === 'production')!.dependsOn).toEqual(expect.arrayContaining([barrierNode.key, 'capital:TOOLING_AND_EQUIPMENT']));
     expect(path.layers[0]).toEqual(['market-research']);
     expect(path.nodes.some((n) => n.key === 'capital:CERTIFICATION_AND_APPROVAL')).toBe(false);
-    expect(path.unpriced).toEqual([]);
-    expect(path.total).toEqual({ currency: 'USD', amountMinor: 52_000_00 });
-    // Before capital the graph's verdict — the one recorded and told to goals — is a capital shortfall, not a permanent UNPRICED_STAGE.
+    // The permit for that barrier is the barrier stage, not a second institutional stage (R6-F1).
+    expect(path.nodes.some((n) => n.key === 'institution:PERMIT:appliance safety listing')).toBe(false);
+    // What is unpriced is exactly the institutional machinery trading needs and no row prices (R6-F1); the barrier is priced.
+    expect(path.unpriced.length).toBeGreaterThan(0);
+    for (const key of path.unpriced) expect(key.startsWith('institution:')).toBe(true);
+    expect(path.total).toBeNull();
+    expect(path.floor).toEqual({ currency: 'USD', amountMinor: 52_000_00 });
+    // Before capital the graph's verdict — the one recorded and told to goals — is a capital shortfall read from what is priced.
     const firstVerdict = first.venture.verdict!;
     expect(firstVerdict.challenges.map((c) => c.kind)).toContain('CAPITAL_EXCEEDED');
-    expect(firstVerdict.challenges.map((c) => c.kind)).not.toContain('UNPRICED_STAGE');
+    expect(firstVerdict.challenges.find((c) => c.kind === 'UNPRICED_STAGE')!.stages).toEqual(path.unpriced);
     expect(firstVerdict.feasibility).toBe('INFEASIBLE');
     expect(ventureRecord(first).feasibility).toBe('INFEASIBLE');
 
@@ -522,18 +539,23 @@ describe('VENT-24-2: the kernel revisits an earlier venture when capital or capa
     const after = await runManufacturingKernel(projectId);
     const second = after.ventures.find((v) => v.categoryId === category.id)!;
     if (!second.venture.path.ok) throw new Error('path refused');
-    expect(second.venture.path.total).toEqual({ currency: 'USD', amountMinor: 52_000_00 });
+    expect(second.venture.path.floor).toEqual({ currency: 'USD', amountMinor: 52_000_00 });
     // The capital blocker cleared: the recorded verdict moves INFEASIBLE -> UNDETERMINED, which is the transition
     // that tells the project's goals the venture was unblocked. Before the repair the barrier held it at
     // UNDETERMINED on both passes (UNPRICED_STAGE), so capital arriving changed nothing and nothing was told.
     const secondKinds = second.venture.verdict!.challenges.map((c) => c.kind);
     expect(secondKinds).not.toContain('CAPITAL_EXCEEDED');
-    expect(secondKinds).not.toContain('UNPRICED_STAGE');
     expect(ventureRecord(second).feasibility).toBe('UNDETERMINED');
-    // What remains is only the return nobody has established (invariant 39), never the barrier: once a return is
-    // established the same graph, barrier included, reads FEASIBLE against the same capital.
-    expect(second.venture.verdict!.challenges).toEqual([{ kind: 'BUILT_ON_UNKNOWNS', detail: 'the expected return is not established', stages: [] }]);
-    const withReturn = challengeVenture(second.venture.path, { available: usd(60_000_00), heldCapabilityIds: new Set() }, { expectedReturn: usd(90_000_00) });
+    // What remains is the institutional machinery nobody has priced and the return nobody has established
+    // (invariant 39), never the barrier: the barrier stage is priced and no challenge names it.
+    expect(new Set(secondKinds)).toEqual(new Set(['UNPRICED_STAGE', 'BUILT_ON_UNKNOWNS']));
+    for (const one of second.venture.verdict!.challenges) for (const key of one.stages) expect(key.startsWith('institution:')).toBe(true);
+    // Once the institutions are priced and a return is established, the same graph, barrier included, reads FEASIBLE
+    // against the same capital — and the institutional cost is in the total it is judged on.
+    const priced = buildVenturePath(second.venture.path.nodes.map((n) => asStage(n, () => usd(500_00))));
+    if (!priced.ok) throw new Error('path refused');
+    expect(priced.total).toEqual(usd(52_000_00 + 500_00 * second.venture.path.unpriced.length));
+    const withReturn = challengeVenture(priced, { available: usd(60_000_00), heldCapabilityIds: new Set() }, { expectedReturn: usd(90_000_00) });
     expect(withReturn.feasibility).toBe('FEASIBLE');
   });
 
@@ -661,7 +683,10 @@ describe('VENT-24-2: the kernel itself names a weak strategy and keeps the route
 
     const weak = (await runManufacturingKernel(projectId)).ventures.find((v) => v.categoryId === category.id)!;
     if (!weak.venture.path.ok) throw new Error('path refused');
-    expect(weak.venture.path.total).toEqual(usd(60_000_00));
+    // The contract with the studios, the account and the books are unpriced, so the total is withheld (R6-F1);
+    // the tooling alone already costs more than all the spending on record, so the weakness holds whatever they cost.
+    expect(weak.venture.path.total).toBeNull();
+    expect(weak.venture.path.floor).toEqual(usd(60_000_00));
     const named = weak.venture.verdict!.challenges.find((c) => c.kind === 'ECONOMICALLY_WEAK');
     expect(named).toBeDefined();
     expect(named!.evidence).toEqual([spendClaim]);
@@ -732,13 +757,146 @@ describe('VENT-24-2: the kernel itself names a weak strategy and keeps the route
     const bought = reading.venture.alternatives.find((a) => a.kind === 'SUBSTITUTED');
     expect(bought).toBeDefined();
     expect(bought!.differs).toEqual([`capability:${capability.id}: BUILD → BUY via A firmware studio`]);
-    expect(bought!.total).toEqual(usd(25_000_00));
+    // Tooling and the bought studio are priced; the institutional machinery is not, so the total is withheld (R6-F1).
+    expect(bought!.total).toBeNull();
+    expect(bought!.path.floor).toEqual(usd(25_000_00));
     const kinds = bought!.verdict.challenges.map((c) => c.kind);
     expect(kinds).not.toContain('CAPABILITY_NOT_HELD');
-    expect(kinds).not.toContain('UNPRICED_STAGE');
     expect(kinds).not.toContain('ECONOMICALLY_WEAK');
+    for (const key of bought!.verdict.challenges.find((c) => c.kind === 'UNPRICED_STAGE')!.stages) expect(key.startsWith('institution:')).toBe(true);
     // The return is still nobody's established fact, so the route is recorded as UNDETERMINED, never as ready.
     expect(bought!.verdict.feasibility).toBe('UNDETERMINED');
     expect(ventureRecord(reading).alternatives.map((a) => a.kind)).toContain('SUBSTITUTED');
+  });
+});
+
+describe('INST-30 / VENT-24-2: the institutional machinery is part of the venture plan (R6-F1)', () => {
+  async function juicers(): Promise<{ categoryId: string; toolingClaim: string }> {
+    const started = await startProgramme({ projectId, ownerUserId: userId, actorUserId: userId, objective: 'Build machines only where demand and capability allow.' });
+    expect(started.ok).toBe(true);
+    const program = (await getProgram(projectId))!;
+    const seeded = await seedCategory({ projectId, name: 'Commercial cold-press juicers', actorRef: userId, reason: 'test' });
+    if ('error' in seeded) throw new Error(seeded.error);
+    const categoryId = seeded.category.id;
+    const toolingClaim = await acceptedClaim('Press frame tooling costs $15,000–$20,000');
+    await recordCategoryCapital({
+      programId: program.id,
+      categoryId,
+      requirement: 'TOOLING_AND_EQUIPMENT',
+      scenario: 'SMALLEST_CREDIBLE_ENTRY',
+      amountLowMinor: 15_000_00,
+      amountHighMinor: 20_000_00,
+      currency: 'USD',
+      basis: 'PUBLISHED_PRICE_OR_SCHEDULE',
+      asOf: '2026-09-01',
+      statement: 'Press frame tooling costs $15,000–$20,000',
+      sourceClaimId: toolingClaim,
+    });
+    await recordCategoryEvidence({
+      programId: program.id,
+      categoryId,
+      kind: 'DEMAND_EVIDENCE',
+      observedOn: '2026-09-01',
+      subject: 'juice bars',
+      statement: 'Juice bars replace cold presses every four years',
+      sourceClaimId: await acceptedClaim('Juice bars replace cold presses every four years'),
+    });
+    await recordCategoryEvidence({
+      programId: program.id,
+      categoryId,
+      kind: 'DISTRIBUTION_CHANNEL',
+      subject: 'food-service equipment dealers',
+      statement: 'Food-service equipment dealers carry cold presses',
+      sourceClaimId: await acceptedClaim('Food-service equipment dealers carry cold presses'),
+    });
+    return { categoryId, toolingClaim };
+  }
+
+  it('the kernel carries every institutional prerequisite of the best structure as a stage the entry decision waits for, withheld when unpriced', async () => {
+    const { categoryId } = await juicers();
+    await recordMoney({ projectId, kind: 'CAPITAL_IN', amountCents: 100_000_00, currency: 'USD', recordedBy: userId, idempotencyKey: `capital-inst-${projectId}` });
+
+    const pass = await runManufacturingKernel(projectId);
+    const plan = pass.institutions.find((one) => one.categoryId === categoryId)!;
+    const prerequisites = pathPrerequisites(plan);
+    // The rows name a buyer and a distributor, so trading through them needs contracts, authority to sign, an account and books.
+    const kinds = new Set(prerequisites.map((one) => one.kind));
+    for (const kind of ['CONTRACT', 'SIGNING_AUTHORITY', 'PAYMENT_ACCOUNT', 'ACCOUNTING_BOOKS', 'EXTERNAL_PROVIDER']) expect(kinds.has(kind)).toBe(true);
+
+    const venture = pass.ventures.find((one) => one.categoryId === categoryId)!;
+    const path = venture.venture.path;
+    if (!path.ok) throw new Error(`path refused: ${path.detail}`);
+    const institutionKeys = prerequisites.map((one) => `institution:${one.key}`);
+    for (const one of prerequisites) {
+      const node = path.nodes.find((n) => n.key === `institution:${one.key}`)!;
+      expect(node).toBeDefined();
+      expect(node.evidence).toEqual(one.evidence);
+      expect(node.approval ?? null).toEqual(one.approval);
+      expect(node.dependsOn).toEqual(expect.arrayContaining(['unit-economics', ...one.prerequisites.map((key) => `institution:${key}`)]));
+      // Nobody has priced it, so it is withheld — never zero.
+      expect(node.budget.state).toBe('WITHHELD');
+    }
+    // Opening the account and signing contracts are approvals a person gives; the plan names them and who acts.
+    const account = path.nodes.find((n) => n.key.startsWith('institution:PAYMENT_ACCOUNT:'))!;
+    expect(account.approval?.class).toBe('ACCOUNT_OPENING');
+    const contract = path.nodes.find((n) => n.key.startsWith('institution:CONTRACT:'))!;
+    expect(contract.approval?.class).toBe('LEGAL_COMMITMENT');
+    // Entering waits for every one of them, and launch follows entry.
+    expect(path.nodes.find((n) => n.key === 'enter')!.dependsOn).toEqual(expect.arrayContaining(institutionKeys));
+    // The total no longer reads as if institutions were free: it is withheld, naming exactly them.
+    expect(path.total).toBeNull();
+    expect(new Set(path.unpriced)).toEqual(new Set(institutionKeys));
+    expect(path.floor).toEqual(usd(20_000_00));
+    const verdict = venture.venture.verdict!;
+    expect(verdict.challenges.find((c) => c.kind === 'UNPRICED_STAGE')!.stages).toEqual(path.unpriced);
+    expect(verdict.feasibility).toBe('UNDETERMINED');
+    // A validate-first route never funds a stage that needs an approval, nor the entry that waits for one.
+    for (const alternative of venture.venture.alternatives.filter((a) => a.kind === 'VALIDATE_FIRST')) {
+      for (const node of alternative.path.nodes) {
+        expect(node.approval).toBeUndefined();
+        expect(['enter', 'launch', 'scale']).not.toContain(node.key);
+      }
+    }
+    // Nothing was formed, signed or opened: the derivation still holds no element and no approval.
+    for (const structure of plan.derivation.structures) {
+      for (const element of structure.elements) {
+        expect(element.held).toBe(false);
+        if (element.approval) expect(element.approval.approved).toBe(false);
+      }
+    }
+  });
+
+  it('a priced institutional prerequisite enters the venture total, and can make an affordable plan unaffordable', async () => {
+    const { categoryId } = await juicers();
+    const snapshot = (await ladderSnapshot(projectId))!;
+    const reading = readLadder(snapshot).find((one) => one.categoryId === categoryId)!;
+    const situation: ResourceSituation = { available: usd(25_000_00), heldCapabilityIds: new Set() };
+
+    // Without the institutions the plan costs the tooling alone and fits the capital.
+    const bare = buildVenturePath(stagesFromReading(reading));
+    if (!bare.ok) throw new Error('path refused');
+    expect(bare.total).toEqual(usd(20_000_00));
+    expect(challengeVenture(bare, situation).challenges.map((c) => c.kind)).not.toContain('CAPITAL_EXCEEDED');
+
+    // With a sourced setup figure on each institutional element, the total carries them and exceeds the capital.
+    const plan = (await runManufacturingKernel(projectId)).institutions.find((one) => one.categoryId === categoryId)!;
+    const priced: InstitutionalPrerequisite[] = pathPrerequisites(plan).map((one) => ({ ...one, setup: { state: 'PRICED', money: usd(2_000_00) } }));
+    expect(priced.length).toBeGreaterThan(2);
+    const full = buildVenturePath(stagesFromReading(reading, [], priced));
+    if (!full.ok) throw new Error('path refused');
+    expect(full.unpriced).toEqual([]);
+    expect(full.total).toEqual(usd(20_000_00 + 2_000_00 * priced.length));
+    const verdict = challengeVenture(full, situation);
+    expect(verdict.challenges.map((c) => c.kind)).toContain('CAPITAL_EXCEEDED');
+    expect(verdict.feasibility).toBe('INFEASIBLE');
+
+    // An unpriced one withholds the total but the priced part still bounds it from below: a floor beyond capital is a shortfall.
+    const partly = buildVenturePath(stagesFromReading(reading, [], [...priced.slice(1), { ...priced[0]!, setup: { state: 'UNPRICED' } }]));
+    if (!partly.ok) throw new Error('path refused');
+    expect(partly.total).toBeNull();
+    expect(partly.floor).toEqual(usd(20_000_00 + 2_000_00 * (priced.length - 1)));
+    const partlyVerdict = challengeVenture(partly, situation);
+    expect(partlyVerdict.challenges.map((c) => c.kind)).toEqual(expect.arrayContaining(['CAPITAL_EXCEEDED', 'UNPRICED_STAGE']));
+    expect(partlyVerdict.feasibility).toBe('INFEASIBLE');
   });
 });

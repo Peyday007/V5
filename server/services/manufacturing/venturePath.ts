@@ -70,6 +70,12 @@ export interface VentureStage {
   /** Facts the stage's outcome rests on that nobody has established. */
   unknowns?: string[];
   alternatives?: StageAlternative[];
+  /**
+   * The approval a stage needs before it may be acted on (INST-30): forming an
+   * entity, a legal commitment, opening an account, a regulated service or
+   * material borrowing. Brain prepares it; it never acts on it by itself.
+   */
+  approval?: { class: string; professionalRole: string };
 }
 
 export interface VentureNode extends Omit<VentureStage, 'budget' | 'mode'> {
@@ -79,7 +85,21 @@ export interface VentureNode extends Omit<VentureStage, 'budget' | 'mode'> {
 }
 
 export type VenturePath =
-  | { ok: true; layers: string[][]; nodes: VentureNode[]; total: Money | null; unpriced: string[] }
+  | {
+      ok: true;
+      layers: string[][];
+      nodes: VentureNode[];
+      total: Money | null;
+      unpriced: string[];
+      /**
+       * What the priced stages alone cost, in one currency; null when none is
+       * priced or they differ. With a stage unpriced it is a floor, never the
+       * total: it can only show the venture costs at least this much, which
+       * is enough to name capital exceeded or a weak strategy and never enough
+       * to call anything affordable (invariant 39).
+       */
+      floor: Money | null;
+    }
   | { ok: false; refused: 'CYCLE' | 'UNKNOWN_DEPENDENCY' | 'DUPLICATE_STAGE'; detail: string; stages: string[] };
 
 /** Order a venture's stages by their declared dependencies. Pure. */
@@ -119,7 +139,8 @@ export function buildVenturePath(stages: readonly VentureStage[]): VenturePath {
       : { state: 'WITHHELD', because: `no published figure for "${stage.title}", so no total may include it` },
   }));
   const unpriced = nodes.filter((n) => n.budget.state === 'WITHHELD').map((n) => n.key);
-  return { ok: true, layers, nodes, total: unpriced.length > 0 ? null : sumMoney(nodes.map((n) => (n.budget as { money: Money }).money)), unpriced };
+  const floor = sumMoney(nodes.flatMap((n) => (n.budget.state === 'PRICED' ? [n.budget.money] : [])));
+  return { ok: true, layers, nodes, total: unpriced.length > 0 ? null : floor, unpriced, floor };
 }
 
 function findCycle(keys: readonly string[], byKey: ReadonlyMap<string, VentureStage>): string[] {
@@ -237,6 +258,23 @@ export function challengeVenture(
     (n.requiresCapabilityIds ?? []).filter((id) => !situation.heldCapabilityIds.has(id)).map((id) => ({ id, stage: n.key })),
   );
   const { challenges } = assessResources({ budget: path.total, missingCapabilities: missing, situation });
+  for (const one of challenges) if (one.kind === 'UNPRICED_STAGE') one.stages = [...path.unpriced];
+  /*
+   * An unpriced stage can only add cost, so what the priced stages alone need
+   * is a floor. A floor beyond deployable capital is a capital shortfall
+   * whatever the rest costs; it is never read the other way (invariant 39).
+   */
+  const floor = path.total === null ? path.floor : null;
+  const { available } = situation;
+  if (floor && available && floor.currency === available.currency && floor.amountMinor > available.amountMinor) {
+    challenges.push({
+      kind: 'CAPITAL_EXCEEDED',
+      detail: `the priced stages alone need ${floor.amountMinor} and ${available.amountMinor} ${available.currency} (minor units) is deployable; the unpriced stages can only add to it`,
+      stages: path.nodes.filter((n) => n.budget.state === 'PRICED').map((n) => n.key),
+    });
+  }
+  // The cost a return is weighed against: the total, or the floor when a stage is unpriced (a weakness shown on a floor holds a fortiori).
+  const cost = path.total ?? path.floor;
   const resting = path.nodes.filter((n) => (n.unknowns ?? []).length > 0);
   if (resting.length > 0) {
     challenges.push({
@@ -249,22 +287,22 @@ export function challengeVenture(
   if (
     economics.expectedReturn === null &&
     ceiling &&
-    path.total &&
-    ceiling.money.currency === path.total.currency &&
-    ceiling.money.amountMinor <= path.total.amountMinor
+    cost &&
+    ceiling.money.currency === cost.currency &&
+    ceiling.money.amountMinor <= cost.amountMinor
   ) {
     challenges.push({
       kind: 'ECONOMICALLY_WEAK',
-      detail: `the cost ${path.total.amountMinor} ${path.total.currency} is no less than ${ceiling.money.amountMinor}, all the buyer spending the evidence states, so no share of it can repay the cost`,
+      detail: `the cost ${path.total ? '' : 'of the priced stages alone, '}${cost.amountMinor} ${cost.currency}, is no less than ${ceiling.money.amountMinor}, all the buyer spending the evidence states, so no share of it can repay the cost`,
       stages: [],
       evidence: ceiling.evidence,
     });
   } else if (economics.expectedReturn === null) {
     challenges.push({ kind: 'BUILT_ON_UNKNOWNS', detail: 'the expected return is not established', stages: [] });
-  } else if (path.total && economics.expectedReturn.currency === path.total.currency && economics.expectedReturn.amountMinor <= path.total.amountMinor) {
+  } else if (cost && economics.expectedReturn.currency === cost.currency && economics.expectedReturn.amountMinor <= cost.amountMinor) {
     challenges.push({
       kind: 'ECONOMICALLY_WEAK',
-      detail: `expected return ${economics.expectedReturn.amountMinor} does not exceed the cost ${path.total.amountMinor} ${path.total.currency}`,
+      detail: `expected return ${economics.expectedReturn.amountMinor} does not exceed the cost ${cost.amountMinor} ${cost.currency}${path.total ? '' : ' of the priced stages alone'}`,
       stages: [],
     });
   }
@@ -363,6 +401,13 @@ function validateFirst(stages: readonly VentureStage[], situation: ResourceSitua
        * is on record (invariant 39).
        */
       if ((stage.unknowns ?? []).length > 0) continue;
+      /*
+       * Validation funds learning, not commitments: a stage that needs a
+       * person's approval (forming an entity, a legal commitment, opening an
+       * account) is never in the funded prefix, so the plan never reads as
+       * binding the owner because it was affordable (INST-30).
+       */
+      if (stage.approval) continue;
       if (!stage.dependsOn.every((dep) => chosen.some((c) => c.key === dep))) continue;
       if (!stage.budget || stage.budget.currency !== situation.available.currency) continue;
       if ((stage.requiresCapabilityIds ?? []).some((id) => !situation.heldCapabilityIds.has(id))) continue;
@@ -533,9 +578,38 @@ const CONSUMES: Readonly<Record<MachineCapitalRequirement, readonly string[]>> =
   WORKING_CAPITAL: ['pricing'],
 };
 
+/**
+ * One institutional element the venture's best structure needs before it can
+ * trade (INST-30), as the venture path consumes it. Built from the
+ * institutional derivation (`institutionReading.pathPrerequisites`), never
+ * invented here, so the plan the kernel challenges carries what the
+ * institutional reading says it needs.
+ */
+export interface InstitutionalPrerequisite {
+  /** The element's key in the derivation, e.g. `CONTRACT:customer customer:…`. */
+  key: string;
+  kind: string;
+  subject: string;
+  necessity: 'REQUIRED' | 'ADVISABLE';
+  /**
+   * What putting it in place costs once: PRICED from a sourced figure,
+   * NONE_FURTHER when a sourced answer says it adds no setup cost, UNPRICED
+   * when no row prices it — never read as zero (invariant 39).
+   */
+  setup: { state: 'PRICED'; money: Money } | { state: 'NONE_FURTHER' } | { state: 'UNPRICED' };
+  approval: { class: string; professionalRole: string } | null;
+  /** Keys of the other prerequisites it needs first. */
+  prerequisites: string[];
+  /** The facts and claims that triggered it. */
+  evidence: string[];
+  /** What becomes possible once it exists. */
+  enables: string;
+}
+
 export function stagesFromReading(
   reading: CategoryReading,
   candidates: readonly AcquisitionCandidate[] = [],
+  institutions: readonly InstitutionalPrerequisite[] = [],
 ): VentureStage[] {
   const subject = reading.path.join(' → ') || reading.categoryId;
   const scenario = reading.capital.cheapestFullyPriced ?? reading.capital.scenarios[0] ?? null;
@@ -561,6 +635,8 @@ export function stagesFromReading(
   const capabilityKeys = reading.missing.map((gap) => `capability:${gap.capability.id}`);
   const barrierKeys = barriers.map((barrier) => `barrier:${barrier.id}`);
   const capitalKeys = committed.map((entry) => capitalKey(entry.requirement));
+  const institutionKey = (key: string) => `institution:${key}`;
+  const institutionKeys = institutions.map((one) => institutionKey(one.key));
 
   const stages: VentureStage[] = [];
   const gate = (stage: Omit<VentureStage, 'budget'>): void => {
@@ -616,7 +692,7 @@ export function stagesFromReading(
     completion: 'The unit economics are recorded',
   });
 
-  const has = new Set<string>(['market-research', 'positioning', 'specification', 'unit-economics', 'validation', 'pricing', 'channel', 'production', 'enter', 'launch', ...capitalKeys, ...capabilityKeys, ...barrierKeys]);
+  const has = new Set<string>(['market-research', 'positioning', 'specification', 'unit-economics', 'validation', 'pricing', 'channel', 'production', 'enter', 'launch', ...capitalKeys, ...capabilityKeys, ...barrierKeys, ...institutionKeys]);
   const present = (keys: readonly string[]): string[] => [...new Set(keys.filter((key) => has.has(key)))];
 
   for (const entry of committed) {
@@ -710,6 +786,41 @@ export function stagesFromReading(
     });
   }
 
+  /*
+   * The institutional machinery the best structure needs (INST-30): each
+   * element is a stage of the plan, priced from its sourced figure or withheld,
+   * carrying the approval and the professional it needs. It is decided once
+   * the unit economics hold, after whatever it depends on institutionally, and
+   * the entry decision waits for all of it — so the venture's total, its
+   * verdict and its validate-first route read what trading would actually
+   * take, and nothing is formed, signed or opened by the plan itself.
+   */
+  for (const one of institutions) {
+    const budget: Money | null =
+      one.setup.state === 'PRICED' ? one.setup.money : one.setup.state === 'NONE_FURTHER' ? nothing : null;
+    const what = `${one.kind.toLowerCase().replace(/_/g, ' ')}: ${one.subject}`;
+    stages.push({
+      key: institutionKey(one.key),
+      title: `Put in place ${what}`,
+      dependsOn: present(['unit-economics', ...one.prerequisites.map(institutionKey)]),
+      decision: `Whether to put in place ${what} (${one.necessity.toLowerCase()}), and on what terms`,
+      resource:
+        one.setup.state === 'PRICED'
+          ? `${one.setup.money.amountMinor} ${one.setup.money.currency} (minor units), the sourced setup figure`
+          : one.setup.state === 'NONE_FURTHER'
+            ? 'no setup cost beyond what the sourced figures it rests on already price'
+            : 'an amount nobody has published',
+      artifact: `A record that ${what} is in place`,
+      actor: one.approval
+        ? `Brain prepares; ${one.approval.professionalRole} acts once the owner approves the ${one.approval.class.toLowerCase().replace(/_/g, ' ')}`
+        : 'Brain prepares; the owner decides',
+      budget,
+      evidence: one.evidence,
+      completion: `${what} is recorded as in place; it enables ${one.enables}`,
+      ...(one.approval ? { approval: one.approval } : {}),
+    });
+  }
+
   gate({
     key: 'pricing',
     title: `Price ${subject}`,
@@ -753,7 +864,8 @@ export function stagesFromReading(
     key: 'enter',
     title: `Enter ${subject}`,
     // Every capital, capability and barrier stage reaches the decision through production, the channel or working capital.
-    dependsOn: present(['production', 'channel', capitalKey('WORKING_CAPITAL')]),
+    // Trading needs the institutions it trades through, so the entry decision waits for every one of them.
+    dependsOn: present(['production', 'channel', capitalKey('WORKING_CAPITAL'), ...institutionKeys]),
     decision: `Enter ${subject} on what the prerequisite stages established, change the strategy, or stop`,
     resource: 'the artifacts of every prerequisite stage',
     artifact: 'A recorded entry decision with the evidence it rests on',

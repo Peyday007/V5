@@ -50,13 +50,14 @@ import {
   stagesFromReading,
   type Challenge,
   type Feasibility,
+  type InstitutionalPrerequisite,
   type Money,
   type VenturePath,
   type VentureVerdict,
 } from './venturePath.ts';
 import type { AcquisitionCandidate } from '../../domain/types.ts';
 import { competitiveSystemsFor, type CompetitiveSystem } from './competitiveSystem.ts';
-import { institutionsForLadder, type CategoryInstitutions } from './institutionReading.ts';
+import { institutionsForLadder, pathPrerequisites, type CategoryInstitutions } from './institutionReading.ts';
 
 export interface KernelPass {
   /** Rounds opened this pass, each carrying why the allocator chose it. */
@@ -164,11 +165,13 @@ export async function runManufacturingKernel(projectId: string): Promise<KernelP
   const directive = await directiveFor(snapshot.program.blueprintPath);
 
   const readings = readLadder(snapshot);
-  const ventures = await reconsiderVentures(projectId, readings, snapshot.capabilities, snapshot.candidates);
-
-  const competitive = await competitiveSystemsFor(snapshot);
   // The same readings the venture path is costed from, so both read one scenario and one set of figures.
   const institutions = institutionsForLadder(snapshot, readings);
+  // The institutional machinery each venture needs is part of its plan (INST-30), not a reading beside it.
+  const prerequisites = new Map(institutions.map((one) => [one.categoryId, pathPrerequisites(one)]));
+  const ventures = await reconsiderVentures(projectId, readings, snapshot.capabilities, snapshot.candidates, prerequisites);
+
+  const competitive = await competitiveSystemsFor(snapshot);
 
   const gate = await programmeMayAsk(projectId);
   if (!gate.allowed) {
@@ -257,6 +260,7 @@ export function reconsiderFrom(
   availableByCurrency: ReadonlyMap<string, Money | null>,
   capabilities: readonly { id: string; heldAt: string | null }[],
   candidates: readonly AcquisitionCandidate[] = [],
+  institutions: ReadonlyMap<string, readonly InstitutionalPrerequisite[]> = new Map(),
 ): VentureReconsideration[] {
   const heldIds = new Set(capabilities.filter((c) => c.heldAt !== null).map((c) => c.id));
   const heldAt = new Map(capabilities.filter((c) => c.heldAt !== null).map((c) => [c.id, c.heldAt as string]));
@@ -273,7 +277,7 @@ export function reconsiderFrom(
       .map((c) => ({ id: c.id, at: heldAt.get(c.id) }))
       .filter((c): c is { id: string; at: string } => typeof c.at === 'string')
       .sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0))[0];
-    const stages = stagesFromReading(reading, candidates.filter((one) => one.categoryId === reading.categoryId || one.categoryId === null));
+    const stages = stagesFromReading(reading, candidates.filter((one) => one.categoryId === reading.categoryId || one.categoryId === null), institutions.get(reading.categoryId) ?? []);
     const path = buildVenturePath(stages);
     const pathCurrency = path.ok ? (path.total?.currency ?? stages.find((one) => one.budget)?.budget?.currency ?? null) : null;
     const situation = {
@@ -305,6 +309,7 @@ async function reconsiderVentures(
   readings: readonly CategoryReading[],
   capabilities: readonly { id: string; heldAt: string | null }[],
   candidates: readonly AcquisitionCandidate[],
+  institutions: ReadonlyMap<string, readonly InstitutionalPrerequisite[]>,
 ): Promise<VentureReconsideration[]> {
   // Every currency a reading or a stage is priced in, so the stage graph is read against the same ledger.
   const currencies = new Set(
@@ -326,7 +331,7 @@ async function reconsiderVentures(
       available.set(currency, null);
     }
   }
-  return reconsiderFrom(readings, available, capabilities, candidates);
+  return reconsiderFrom(readings, available, capabilities, candidates, institutions);
 }
 
 /**

@@ -36,7 +36,7 @@ import { deriveInstitutions, type EvidenceClaim, type FinancialFlow, type Instit
 import type { LadderSnapshot } from './ladder.ts';
 import { readLadder, type CategoryReading } from './readiness.ts';
 import { statesNamedIn } from '../../domain/jurisdiction.ts';
-import { certificationPricesBarrier } from './venturePath.ts';
+import { certificationPricesBarrier, type InstitutionalPrerequisite } from './venturePath.ts';
 import type { CategoryCapitalEntry, MachineCategory, MachineCapitalRequirement } from '../../domain/types.ts';
 
 export interface CategoryInstitutions {
@@ -175,4 +175,49 @@ export function institutionsForLadder(snapshot: LadderSnapshot, readings: readon
       name: category.name,
       derivation: deriveInstitutions(ventureFactsFor(snapshot, category, byCategory.get(category.id))),
     }));
+}
+
+/**
+ * The institutional elements the venture path must carry as stages (INST-30):
+ * every element of the best-ranked structure that is not already held and not
+ * already a stage of the path. Pure.
+ *
+ * The path already carries what the ladder's rows price directly — the entry
+ * barrier (a PERMIT, or the LICENSE a licence-to-perform barrier becomes), a
+ * certification figure's own permit, and the intellectual property a capital
+ * row prices — so an element triggered by those claims, priced by a capital
+ * row, or naming that asset is not repeated; everything else (contracts,
+ * signing authority, accounts, books, tax, entities, insurance, the
+ * professionals) is what the plan did not know it needed.
+ */
+export function pathPrerequisites(one: Pick<CategoryInstitutions, 'name' | 'derivation'>): InstitutionalPrerequisite[] {
+  const best = one.derivation.structures[0];
+  if (!best) return [];
+  const capitalAsset = `${words('INTELLECTUAL_PROPERTY_OR_LICENCE')} for ${one.name}`;
+  const carried = (element: (typeof best.elements)[number]): boolean =>
+    ((element.kind === 'PERMIT' || element.kind === 'LICENSE') && element.triggeredBy.some((by) => /^claim (?:barrier|capital):/.test(by))) ||
+    (element.cost?.claimIds ?? []).some((id) => id.startsWith('capital:')) ||
+    (element.kind === 'IP_OWNERSHIP' && element.subject === capitalAsset);
+  const kept = best.elements.filter((element) => !element.held && !carried(element));
+  const keys = new Set(kept.map((element) => element.key));
+  return kept.map((element) => {
+    const oneTime = element.cost?.oneTime ?? null;
+    const setup: InstitutionalPrerequisite['setup'] = !element.cost
+      ? { state: 'UNPRICED' }
+      : oneTime
+        ? { state: 'PRICED', money: { currency: oneTime.currency, amountMinor: oneTime.highMinor } }
+        : { state: 'NONE_FURTHER' };
+    return {
+      key: element.key,
+      kind: element.kind,
+      subject: element.subject,
+      necessity: element.necessity,
+      setup,
+      approval: element.approval ? { class: element.approval.class, professionalRole: element.approval.professionalRole } : null,
+      // Only prerequisites the path carries are depended on; one it already holds or carries elsewhere is not a stage here.
+      prerequisites: element.prerequisites.filter((key) => keys.has(key)),
+      evidence: [...element.triggeredBy, ...(element.cost?.claimIds ?? [])],
+      enables: element.enables,
+    };
+  });
 }
