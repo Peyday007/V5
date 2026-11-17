@@ -207,3 +207,17 @@ See F1–F7 above. Each one gives the cause, file:line, run IDs, the smallest ch
 - Still open on the repair side: W5 (Postgres flakes), W9 (RESEARCH_VERIFY "no JSON"), W11 (research items QUEUED since 11-11 and never claimed).
 - W6 GPU stage 1 is running: SECURE H200 c316n2e7hp4up4, $5.29/h, cap $12/2.5 h. Readings at 08:50Z.
 - An independent code review of #1029, #1031 and #1032 against 74b0a3c3 started at 08:05Z.
+- **08:20Z, independent review of RC2 (eda0407..74b0a3c3).** Sent to the integration owner.
+  - **#1031 (F2)**:
+    - CONFIRMED: price. Evidenced distributions reach arrangement price as EVIDENCE/justified (goalScenario.ts:277-291).
+    - CONCERN, medium:
+      - close, respond, daysToCash, cost and capital infer through a synthetic `arr:<key>` target (:227-249), so only pooled project context moves them.
+      - Not changed although claimed: volume and hours are still fixed (:380, :385-387); `candidateFromArrangement` (planSet.ts:365-405) still has acquisitionRoute, costs, capital and controls UNKNOWN; `inventedDesigner` (:548) passes no knowledge.
+  - **#1032 (W10)**:
+    - CONFIRMED: bounded and scoped to the round.
+    - CONCERN, medium:
+      - The once-per-packet exclusion (:917-922) is not round-scoped.
+      - A bin exhausted by attempts is never regranted (:973).
+  - **#1029 (F3e)**:
+    - CONFIRMED: requiredCapability is still asked; only executionDifficulty and scalability are dropped.
+    - CONCERN, medium: a declined path gets only a reason (commissionPass.ts:355, :369). There is no assumption, replan or next action, so the owner's §3 "no dead end" is unmet. The unstated-path filter also declines answerable attributes.
