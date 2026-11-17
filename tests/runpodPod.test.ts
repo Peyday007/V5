@@ -8,8 +8,12 @@ import { laneConfig } from '../server/services/cheap/lane.ts';
 import { resetRunpod, routeRunpod, runpodCallWindow, runpodPaused, runpodReading, type Fetch } from '../server/services/cheap/runpod.ts';
 import {
   DEFAULT_IDLE_STOP_MS,
+  DEFAULT_PRIMARY_BUDGET_USD,
   MIN_ACTION_GAP_MS,
+  budgetEvent,
+  budgetReading,
   decidePod,
+  podBudget,
   podConfig,
   podIdFromUrl,
   resetPodSupervisor,
@@ -170,6 +174,93 @@ describe('the supervisor', () => {
   });
 });
 
+describe('the dollar budget (owner 2026-11-16: continuous GPU operation under automatic budget control)', () => {
+  const budgetOf = (usd: number) => ({ usd, windowMs: 24 * 3_600_000, defaulted: false });
+
+  it('reads the budget from the environment, and caps a primary GPU by default', () => {
+    expect(podBudget({})).toBeNull();
+    expect(podBudget({ BRAIN_RUNPOD_MODE: 'primary' })).toEqual({ usd: DEFAULT_PRIMARY_BUDGET_USD, windowMs: 24 * 3_600_000, defaulted: true });
+    expect(podBudget({ BRAIN_RUNPOD_MODE: 'primary', BRAIN_RUNPOD_BUDGET_USD: '25', BRAIN_RUNPOD_BUDGET_WINDOW_HOURS: '12' })).toEqual({ usd: 25, windowMs: 12 * 3_600_000, defaulted: false });
+    expect(podBudget({ BRAIN_RUNPOD_BUDGET_USD: 'lots' })).toBeNull();
+    const gpu = { BRAIN_RUNPOD_URL: 'https://yxabw9083tp8hk-8000.proxy.runpod.net/v1', BRAIN_RUNPOD_MODE: 'primary', BRAIN_RUNPOD_API_KEY: 'k' };
+    expect(podConfig(gpu)?.budget).toMatchObject({ usd: 10, defaulted: true });
+  });
+
+  it('stops a busy pod and refuses every start once spend reaches the budget; an unreadable spend refuses starts only', () => {
+    const now = base.now;
+    const over = budgetReading(budgetOf(5), 5.01, now);
+    const under = budgetReading(budgetOf(5), 4.99, now);
+    const unknown = budgetReading(budgetOf(5), null, now);
+    expect(over).toMatchObject({ spent: 5.01, budget: 5, remaining: 0, exhausted: true, known: true });
+    expect(under.exhausted).toBe(false);
+    expect(under.remaining).toBeCloseTo(0.01, 5);
+    // Over budget: stopped even with research in flight and after a refused start.
+    expect(decidePod({ ...base, inFlight: 4, waiting: 9, budget: over, startFailedRecently: true })).toMatchObject({ action: 'STOP', reason: expect.stringMatching(/budget exhausted/) });
+    expect(decidePod({ ...base, status: 'EXITED', waiting: 9, budget: over }).action).toBe('NONE');
+    expect(decidePod({ ...base, status: 'EXITED', waiting: 9, budget: under }).action).toBe('START');
+    expect(decidePod({ ...base, status: 'EXITED', waiting: 9, budget: unknown }).action).toBe('NONE');
+    expect(decidePod({ ...base, inFlight: 4, budget: unknown }).action).toBe('NONE');
+  });
+
+  it('records one BUDGET_EXHAUSTED per exhaustion, and one BUDGET_AVAILABLE when the window frees budget', () => {
+    const now = base.now;
+    const over = budgetReading(budgetOf(5), 6, now);
+    const under = budgetReading(budgetOf(5), 1, now);
+    expect(budgetEvent(over, null)).toBe('BUDGET_EXHAUSTED');
+    expect(budgetEvent(over, 'BUDGET_AVAILABLE')).toBe('BUDGET_EXHAUSTED');
+    expect(budgetEvent(over, 'BUDGET_EXHAUSTED')).toBeNull();
+    expect(budgetEvent(under, 'BUDGET_EXHAUSTED')).toBe('BUDGET_AVAILABLE');
+    expect(budgetEvent(under, null)).toBeNull();
+    expect(budgetEvent(budgetReading(budgetOf(5), null, now), 'BUDGET_EXHAUSTED')).toBeNull();
+  });
+
+  it('as spend crosses the budget: the running pod is stopped, no start or move follows, and one event is recorded', async () => {
+    const pod = { status: 'RUNNING', vllm: true };
+    const { calls, fetchImpl } = fakeRunpod(pod);
+    const events: { outcome: string; measures: unknown }[] = [];
+    const record = async (e: { outcome?: string | null; measures?: unknown }) => {
+      events.push({ outcome: e.outcome ?? '', measures: e.measures });
+    };
+    let spent = 4.5;
+    const spend = async () => spent;
+    const budgeted: PodConfig = { ...config, budget: budgetOf(5) };
+    let t = 10 * 3_600_000;
+    const tick = (waiting: number, inFlight: number, hostRefusals = 9) =>
+      superviseRunpodPod({ waiting, inFlight }, { config: budgeted, fetchImpl, now: () => t, force: true, lastStartFailed: async () => false, hostRefusals: async () => hostRefusals, spend, record });
+
+    const busy = await tick(20, 8);
+    expect(busy?.decision.action).toBe('NONE');
+    expect(busy?.budget).toMatchObject({ spent: 4.5, remaining: 0.5, exhausted: false });
+
+    spent = 5.2;
+    t += MIN_ACTION_GAP_MS;
+    const capped = await tick(20, 8);
+    expect(capped?.decision.action).toBe('STOP');
+    expect(capped?.acted).toBe(true);
+    expect(pod.status).toBe('EXITED');
+
+    // Research keeps waiting for an hour (with enough host refusals to move): nothing starts, nothing moves, no more budget events.
+    for (let i = 0; i < 60; i += 1) {
+      t += 60_000;
+      const step = await tick(30, 0);
+      expect(step?.decision.action).toBe('NONE');
+    }
+    expect(calls.filter((c) => c.method === 'POST').map((c) => c.url)).toEqual(['https://rest.runpod.io/v1/pods/yxabw9083tp8hk/stop']);
+    expect(pod.status).toBe('EXITED');
+    const exhausted = events.filter((e) => e.outcome === 'BUDGET_EXHAUSTED');
+    expect(exhausted).toHaveLength(1);
+    expect(exhausted[0]!.measures).toMatchObject({ spent: 5.2, budget: 5, windowHours: 24 });
+    expect(events.filter((e) => e.outcome === 'STOPPED')).toHaveLength(1);
+
+    // The window frees budget: one BUDGET_AVAILABLE, and the waiting research starts the pod.
+    spent = 3;
+    t += MIN_ACTION_GAP_MS;
+    const freed = await tick(30, 0, 0);
+    expect(freed?.decision.action).toBe('START');
+    expect(events.filter((e) => e.outcome === 'BUDGET_AVAILABLE')).toHaveLength(1);
+  });
+});
+
 describe('a paused GPU slot', () => {
   const env = {
     BRAIN_CHEAP_LLM_URL: 'https://cheap.test/v1',
@@ -308,5 +399,27 @@ describe('a move follows the pod it moved (production 2026-11-16: a stale move s
     expect(movedPodUrl('xwepsiiv7b0hbn', [{ from: '48zd8pqu8dh7sg', podId: 'uhtkd69eol85xz', url: url('uhtkd69eol85xz') }])).toBeNull();
     expect(movedPodUrl(null, rows)).toBeNull();
     expect(movedPodUrl('a', [{ from: 'a', podId: null, url: url('b') }])).toBeNull();
+  });
+});
+
+describe('a pod is stopped even when RunPod REST is unreachable (production 2026-11-16 23:36Z: "fetch failed")', () => {
+  it('falls back to GraphQL podStop when the REST request throws, and reads status the same way', async () => {
+    const { stopOrStartForTest, readPod } = await import('../server/services/cheap/runpodPod.ts').then((m) => ({ stopOrStartForTest: m.viaGraphql, readPod: m.readPod }));
+    const calls: string[] = [];
+    const fetchImpl = (async (url: string | URL, init?: RequestInit) => {
+      const u = String(url);
+      calls.push(u.includes('graphql') ? `gql:${String(init?.body ?? '')}` : `rest:${u}`);
+      if (!u.includes('graphql')) throw new TypeError('fetch failed');
+      const q = String(init?.body ?? '');
+      const data = q.includes('podStop') ? { podStop: { desiredStatus: 'EXITED' } } : { pod: { desiredStatus: 'RUNNING', costPerHr: 5.29 } };
+      return new Response(JSON.stringify({ data }), { status: 200 });
+    }) as typeof fetch;
+    const config = { apiKey: 'k', podId: 'pod1', idleStopMs: 1, vllm: { url: 'u', key: 'k' } };
+    const read = await readPod(config as never, fetchImpl);
+    expect(read).toEqual({ status: 'RUNNING', costPerHr: 5.29 });
+    const stopped = await stopOrStartForTest(config, 'POST', '/stop', fetchImpl);
+    expect(stopped?.status).toBe(200);
+    expect(calls.some((c) => c.startsWith('gql:') && c.includes('podStop'))).toBe(true);
+    expect(await stopOrStartForTest(config, 'POST', '/other', fetchImpl)).toBeNull();
   });
 });

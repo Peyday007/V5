@@ -22,7 +22,8 @@
  * fixed number is `SAFETY_CEILING`, a runaway guard far above anything the
  * measurements have reached; it is not the operating limit.
  */
-import { monitorEventLoopDelay } from 'node:perf_hooks';
+import { availableParallelism } from 'node:os';
+import { monitorEventLoopDelay, performance } from 'node:perf_hooks';
 import { getDb } from '../../db/database.ts';
 import { recordBinEvent } from '../../repos/bins.ts';
 import { databasePoolReadings } from '../../db/database.ts';
@@ -66,7 +67,11 @@ export interface Pressure {
   /** Contended: callers waited for a connection since the last step. Holds growth; does not shrink. */
   dbContended?: boolean;
   lagMs: number;
+  /** The busier of the server's own loop and the whole machine, 0–1 (`brainCpu`). */
   cpu: number;
+  /** What `cpu` was taken from, for the record. */
+  loop?: number;
+  processCpu?: number;
 }
 
 export interface Decision {
@@ -207,6 +212,33 @@ const lag = monitorEventLoopDelay({ resolution: 20 });
 lag.enable();
 let lastCpu = process.cpuUsage();
 let lastCpuAt = Date.now();
+let lastLoop = performance.eventLoopUtilization();
+const CORES = (() => {
+  try {
+    return Math.max(1, availableParallelism());
+  } catch {
+    return 1;
+  }
+})();
+
+/**
+ * Brain's CPU as the lane's guard reads it: the busier of the server's own loop
+ * (the share of the step it spent running, `eventLoopUtilization`) and the whole
+ * process's CPU across the machine's cores. Pure.
+ *
+ * `process.cpuUsage()` sums every thread. Production, 2026-11-16 21:07Z: the
+ * lane was halved on "Brain CPU at 87%" — one core's worth on a 2-vCPU machine,
+ * which is what the goal-plan evaluator thread spends by design on the spare
+ * core (`goals/reasoning/evaluatorPool.ts`: 238 evaluations and a 75,103-variation
+ * sweep in 89 s per plan run, off the server's loop). Read as a fraction of one
+ * core, that thread alone held the lane at half while the loop the lane's slots
+ * share was not the constraint. A saturated loop and a saturated machine both
+ * still shrink the lane; the loop's stalls are read separately as lag.
+ */
+export function brainCpu(input: { loop: number; processCoreSeconds: number; seconds: number; cores: number }): number {
+  const machine = input.processCoreSeconds / Math.max(0.001, input.seconds) / Math.max(1, input.cores);
+  return Math.max(Number.isFinite(input.loop) ? input.loop : 0, machine);
+}
 
 /** The most callers seen waiting for a connection since the last step, sampled by every slot. */
 let peakWaiting = 0;
@@ -223,9 +255,14 @@ function readPressure(): Pressure {
   lag.reset();
   const now = Date.now();
   const used = process.cpuUsage(lastCpu);
-  const cpu = (used.user + used.system) / 1000 / Math.max(1, now - lastCpuAt);
+  const seconds = Math.max(1, now - lastCpuAt) / 1000;
+  const processCoreSeconds = (used.user + used.system) / 1e6;
+  const loopNow = performance.eventLoopUtilization();
+  const loop = performance.eventLoopUtilization(loopNow, lastLoop).utilization;
+  const cpu = brainCpu({ loop, processCoreSeconds, seconds, cores: CORES });
   lastCpu = process.cpuUsage();
   lastCpuAt = now;
+  lastLoop = loopNow;
   /*
    * Graded, not `databaseUnderPressure`'s yes/no. That reads any single waiter
    * as pressure, which is right for deferring optional work (§63) and wrong for
@@ -245,7 +282,7 @@ function readPressure(): Pressure {
   const dbContended = peakWaiting > 0;
   peakWaiting = 0;
   peakControlWaiting = 0;
-  return { db, dbContended, lagMs: Number.isFinite(lagMs) ? lagMs : 0, cpu };
+  return { db, dbContended, lagMs: Number.isFinite(lagMs) ? lagMs : 0, cpu, loop: Number.isFinite(loop) ? loop : 0, processCpu: processCoreSeconds / seconds };
 }
 
 /*
@@ -569,7 +606,7 @@ export async function controlStep(): Promise<ControlReading | null> {
         workloadClass: pool.worker.model,
         outcome: decision.target > pool.target ? 'GROW' : 'SHRINK',
         reason: `${pool.target} -> ${decision.target}: ${decision.reason}`.slice(0, 340) + (granted.applied && !decision.reason.includes(`(allocation ${grant!.fingerprint})`) ? ` (allocation ${grant!.fingerprint})` : ''),
-        measures: { waiting, busy: pool.busy, peakBusy: peak, ...(granted.applied ? { granted: grant!.units } : {}), ...window, lagMs: Math.round(pressure.lagMs), cpu: Number(pressure.cpu.toFixed(2)), db: pressure.db, dbContended: pressure.dbContended ?? false },
+        measures: { waiting, busy: pool.busy, peakBusy: peak, ...(granted.applied ? { granted: grant!.units } : {}), ...window, lagMs: Math.round(pressure.lagMs), cpu: Number(pressure.cpu.toFixed(2)), ...(pressure.loop !== undefined ? { loop: Number(pressure.loop.toFixed(2)), processCpu: Number((pressure.processCpu ?? 0).toFixed(2)) } : {}), db: pressure.db, dbContended: pressure.dbContended ?? false },
         evidenceClass: 'MEASURED',
       });
     }

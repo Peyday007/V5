@@ -45,10 +45,12 @@
  * has needed a compare-and-swap on a value the claimant does not supply.
  */
 import {
+  authorityNow,
   ensureGoal,
   liveGoalNamed,
   revokeGoal,
   setGoalConcurrency,
+  spendTotals,
 } from '../../repos/russellAuthority.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { resumeParkedForProject } from '../russell/resumeParked.ts';
@@ -127,6 +129,125 @@ export async function discoveryConcurrencyFor(projectId: string): Promise<number
   return Math.max(DISCOVERY_CONCURRENCY, onRecord);
 }
 
+/**
+ * How far the free lane may lift a discovery grant above the surfaces on record.
+ *
+ * §78 grows a goal's search with the idle fleet, and `discoveryConcurrencyFor`
+ * counted the fleet as Claude Routines only. Production, 2026-11-16 21:07Z: the
+ * free lane (a GPU billed by the hour, and a free model) had nothing queued
+ * while 508 ideas waited in projects whose grant was at its at-once ceiling,
+ * 13 slots across them. The lane is research capacity this grant's missions
+ * feed, so its measured headroom lifts the ceiling, and the lift is a
+ * controller's output (§86), never a typed number:
+ *
+ * - **grow** only while the grant is full and the lane has measured spare
+ *   (`freeLaneSpareSurfaces`: proven room less busy and less already queued,
+ *   zero while its answers mostly fail), a few missions per step;
+ * - **shrink** while the lane's queue backs up (no spare and work waiting), or
+ *   the database is saturated, or Brain's CPU is pinned with work waiting;
+ * - **hold** otherwise, and step at most once per `LANE_STEP_MS`, so missions
+ *   that have not yet queued their fragments are not counted as idle room.
+ *
+ * Bounded by `LANE_LIFT_MAX` above the floor. It is concurrency, not money: the
+ * grant still writes `max_external_spend = 0`, and the lane's GPU is paid by
+ * the hour whether it is fed or not. Fairness and order are unchanged: each
+ * project's grant moves by its own reading, and the launch pass still takes the
+ * most important idea first (`nextLaunchable`).
+ */
+export const LANE_LIFT_MAX = 48;
+export const LANE_GROW_STEP_MAX = 4;
+export const LANE_STEP_MS = 2 * 60_000;
+/** Brain's CPU (0-1, `brainCpu`) at which waiting work shrinks the lift rather than holding it. */
+export const LANE_CPU_SHRINK = 0.95;
+
+export interface LaneReading {
+  /** The lane's spare in surfaces (`freeLaneSpareSurfaces`). */
+  spare: number;
+  /** Free-lane jobs queued and claimable now. */
+  waiting: number;
+  /** The lane controller's last pressure reading, or null when this process has none. */
+  pressure: { db: boolean; cpu: number } | null;
+}
+
+/**
+ * The grant's next ceiling from the lane's headroom. Pure.
+ *
+ * `floor` is the Routine-based ceiling, `current` what the grant carries, `live`
+ * the missions holding a slot now.
+ */
+export function laneAdaptiveCeiling(input: {
+  floor: number;
+  current: number;
+  live: number;
+  lane: LaneReading | null;
+}): { target: number; why: string } {
+  const { floor, lane } = input;
+  const max = floor + LANE_LIFT_MAX;
+  const current = Math.min(max, Math.max(floor, input.current));
+  if (!lane) return { target: floor, why: 'the free lane is not configured or cannot be read: the surfaces on record' };
+  const pressed = lane.pressure !== null && (lane.pressure.db || (lane.pressure.cpu >= LANE_CPU_SHRINK && lane.waiting > 0));
+  const backlog = lane.spare === 0 && lane.waiting > 0;
+  if ((pressed || backlog) && current > floor) {
+    const step = Math.max(1, Math.ceil((current - floor) / 4));
+    return {
+      target: Math.max(floor, current - step),
+      why: pressed
+        ? `the free lane is under pressure (${lane.pressure!.db ? 'database saturated' : `Brain CPU ${Math.round(lane.pressure!.cpu * 100)}%`}, ${lane.waiting} job(s) waiting)`
+        : `the free lane's queue is backing up (${lane.waiting} job(s) waiting, no spare)`,
+    };
+  }
+  if (!pressed && lane.spare > 0 && input.live >= current && current < max) {
+    return {
+      target: Math.min(max, current + Math.min(LANE_GROW_STEP_MAX, lane.spare)),
+      why: `every slot is held and the free lane has ${lane.spare} spare surface(s) with ${lane.waiting} job(s) waiting`,
+    };
+  }
+  return { target: current, why: 'the free lane neither has spare beside a full grant nor is backing up' };
+}
+
+const laneSteps = new Map<string, number>();
+
+/** The lane's headroom now; null when there is no lane or it cannot be read. */
+async function readLane(nowMs: number): Promise<LaneReading | null> {
+  try {
+    const { laneConfig } = await import('../cheap/lane.ts');
+    if (!laneConfig()) return null;
+    const { freeLaneSpareSurfaces, lastControlReading, waitingNow } = await import('../freeLane/capacity.ts');
+    const reading = lastControlReading();
+    return {
+      spare: await freeLaneSpareSurfaces(nowMs),
+      waiting: await waitingNow(),
+      pressure: reading ? { db: reading.pressure.db, cpu: reading.pressure.cpu } : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The ceiling a grant should carry: the Routine floor, lifted by the lane's
+ * measured headroom. Null when the fleet cannot be read (the grant is left alone).
+ */
+export async function adaptiveDiscoveryConcurrency(
+  projectId: string,
+  goal: Pick<RussellGoal, 'id' | 'maxConcurrent'>,
+  nowMs = Date.now(),
+): Promise<{ target: number; why: string } | null> {
+  const floor = await discoveryConcurrencyFor(projectId);
+  if (floor === null) return null;
+  const { laneConfig } = await import('../cheap/lane.ts');
+  if (!laneConfig()) return laneAdaptiveCeiling({ floor, current: goal.maxConcurrent, live: 0, lane: null });
+  const last = laneSteps.get(goal.id) ?? 0;
+  if (goal.maxConcurrent >= floor && nowMs - last < LANE_STEP_MS) {
+    return { target: Math.min(floor + LANE_LIFT_MAX, goal.maxConcurrent), why: 'held: the lane was read less than two minutes ago' };
+  }
+  const lane = await readLane(nowMs);
+  const { live } = await spendTotals(goal.id, 'MISSION', authorityNow());
+  const next = laneAdaptiveCeiling({ floor, current: goal.maxConcurrent, live, lane });
+  laneSteps.set(goal.id, nowMs);
+  return next;
+}
+
 export interface EnsuredAuthority {
   goal: RussellGoal;
   /** True only on the tick that actually wrote it. */
@@ -200,7 +321,8 @@ export async function ensureDiscoveryAuthority(
    * and no other term of the grant moves. Ordering the check by inequality
    * keeps it idempotent: once they agree, no tick writes anything.
    */
-  const target = (await discoveryConcurrencyFor(projectId)) ?? goal.maxConcurrent;
+  const adaptive = await adaptiveDiscoveryConcurrency(projectId, goal);
+  const target = adaptive?.target ?? goal.maxConcurrent;
   /*
    * Raising concurrency is a capacity upgrade, and an upgrade is decided on a
    * fresh production telemetry reading or not at all (TEL-07-1, S-0083). A
@@ -213,7 +335,7 @@ export async function ensureDiscoveryAuthority(
           direction: target > goal.maxConcurrent ? 'INCREASE' : 'DECREASE',
           from: goal.maxConcurrent,
           to: target,
-          reason: 'discovery grant follows the research surfaces on record',
+          reason: `discovery grant follows the research surfaces on record and the free lane's headroom: ${adaptive?.why ?? ''}`,
         })
       : null;
   if (gate?.allowed) {
@@ -225,9 +347,9 @@ export async function ensureDiscoveryAuthority(
         actorRef: 'BRAIN',
         summary:
           `How much of this sprint may run at once moved from ${from} to ` +
-          `${target}, the research surfaces it has on record. It is provider capacity rather than an allowance, and ` +
+          `${target}: the research surfaces it has on record, and ${adaptive?.why ?? 'no free-lane reading'}. It is provider capacity rather than an allowance, and ` +
           'nothing about what may be researched, spent or acted on changed.',
-        detail: { goalId: goal.id, from, to: target, telemetryReadingAt: gate.readingAt, capacityGate: gate.code },
+        detail: { goalId: goal.id, from, to: target, why: adaptive?.why ?? null, telemetryReadingAt: gate.readingAt, capacityGate: gate.code },
       });
     }
   }

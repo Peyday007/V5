@@ -1874,6 +1874,12 @@ async function main(): Promise<void> {
       for (const r of reading.requirements) {
         if (r.status === 'PRODUCTION_VERIFIED' && !flags['all']) continue;
         process.stdout.write(`  ${r.key} ${r.status}${r.reopened ? ' (reopened)' : ''}: ${r.reason}\n`);
+        // The last answer production gave, whatever the status: a reopened requirement says why without a database read.
+        const last = r.lastVerification;
+        if (last && r.status !== 'PRODUCTION_VERIFIED') {
+          const failing = last.checks.filter((c) => c.ok !== true).map((c) => `${c.check}: ${c.detail}`).join(' | ');
+          process.stdout.write(`    last ${last.outcome} at ${last.at} (${last.revision?.slice(0, 12) ?? '—'})${failing ? `: ${failing.slice(0, 400)}` : ''}\n`);
+        }
       }
       process.stdout.write(`PROGRAM-VERDICT: ${reading.verdict}\n`);
       // The second, independent status (Release 01, R01-C): whether each cash goal

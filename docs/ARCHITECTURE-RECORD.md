@@ -13628,6 +13628,13 @@ Dispatch was not the limit (it fired every bin that had claimable work). Generat
   The loop asks `endsBurst(bin, refusal)`, which never ends the burst for a pinned bin; the
   refusal's name is unchanged because the Build card reads it: 136 such refusals in six hours.
 
+- **The discovery grant's at-once ceiling counted Routines only.** Production, 2026-11-16
+  21:07Z: the free lane (GPU and free model) had nothing queued while 508 ideas waited in
+  projects whose grant was at its ceiling. `adaptiveDiscoveryConcurrency`
+  (`cash/discoveryAuthority.ts`) lifts a full grant by the lane's measured spare, a few
+  missions per two-minute step, shrinks it while the lane's queue backs up or the database
+  or CPU is pressed, and never goes below the Routine floor or more than 48 above it.
+
 Downstream stages are fleet work on the same surfaces, so they scale with it: more busy
 sessions is also more distinct sessions for the audit-independence floor. Nothing here touches
 a gate, an envelope, a grant, a spending limit or an authorization.

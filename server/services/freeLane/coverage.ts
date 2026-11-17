@@ -20,7 +20,10 @@
 import { getDb } from '../../db/database.ts';
 import { recordIntervention } from '../../repos/engineering.ts';
 import { laneConfig } from '../cheap/lane.ts';
-import { FREE_LANE_WORK_TYPES } from './worker.ts';
+import { recordBinEvent } from '../../repos/bins.ts';
+import { redactCredentials } from '../effects/failureDetail.ts';
+import { failureClass } from '../goals/researchYield.ts';
+import { FREE_LANE_WORK_TYPES, answerRows, answerTally, isFailing, routeHold } from './worker.ts';
 import { readStageCapacity, recordedCause, stageCapacityLines, type RecordedStageCapacity } from './stageCapacity.ts';
 
 export interface LaneCoverage {
@@ -161,6 +164,197 @@ export async function watchDisplacedWork(now = new Date()): Promise<{ stranded: 
     });
   }
   return { stranded, reason: coverage.reason };
+}
+
+/* ------------------------------------------------------------------------- */
+/* A model whose answers stopped being usable                                  */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * A sustained drop in useful output for one (model, kind of work), read from
+ * the lane's own rows. Production, 2026-11-16 18:05–19:04Z: gpt-oss-120b's
+ * fragment answers listed "0 claim(s)" 28 times, `unfitPairs` held it back,
+ * brain-a's route was held on HTTP 429s, and 33 fragments waited with nothing
+ * running for an hour while nothing anywhere said so. #992 lets the held model
+ * take the work when nobody else can; this says that it happened, why, and
+ * whether any model still functions for the kind.
+ *
+ * The bar is `unfitPairs`' own (`isFailing` over the same day of answers), so
+ * the incident and the routing can never disagree about which model failed.
+ * `model` is `*` when every route for a kind is held and no model's answers
+ * were the problem: the work then has no functioning model either.
+ */
+export interface ModelOutputIncident {
+  /** Stable for the condition, never for its counts: what dedupes the record. */
+  key: string;
+  model: string;
+  workType: string;
+  accepted: number;
+  rejected: number;
+  /** Queued items of this kind under free-lane bins. */
+  waiting: number;
+  /** No model can take the kind now: every one is failing it or its route is held. */
+  noFunctioningModel: boolean;
+  /** Why the rejected answers were refused, ids and counts stripped, most frequent first. */
+  reasons: { reason: string; n: number }[];
+  /** The most frequent refusal as recorded (what the model sent), credentials removed. */
+  sample: string | null;
+  /** Each other model's state for the kind: failing, route held, or able. */
+  others: { model: string; state: string }[];
+}
+
+/** Incidents from rows and route holds. Pure. */
+export function modelOutputIncidents(input: {
+  rows: Parameters<typeof answerTally>[0];
+  models: readonly string[];
+  waiting: Readonly<Record<string, number>>;
+  hold: (model: string) => string | null;
+}): ModelOutputIncident[] {
+  const tally = answerTally(input.rows);
+  const failing = (model: string, type: string): boolean => {
+    const e = tally.get(`${model}|${type}`);
+    return !!e && isFailing(e);
+  };
+  const able = (model: string, type: string): boolean => !failing(model, type) && input.hold(model) === null;
+  const types = new Set<string>([...Object.keys(input.waiting), ...[...tally.keys()].map((k) => k.slice(k.indexOf('|') + 1))]);
+  const out: ModelOutputIncident[] = [];
+  for (const type of [...types].sort()) {
+    const waiting = input.waiting[type] ?? 0;
+    const none = waiting > 0 && input.models.length > 0 && !input.models.some((m) => able(m, type));
+    const others = (model: string) =>
+      input.models.filter((m) => m !== model).map((m) => ({ model: m, state: failing(m, type) ? 'failing' : (input.hold(m) ?? 'able') }));
+    const failed = input.models.filter((m) => failing(m, type));
+    for (const model of failed) {
+      const e = tally.get(`${model}|${type}`)!;
+      const byClass = new Map<string, number>();
+      for (const [reason, n] of e.reasons) byClass.set(failureClass(reason), (byClass.get(failureClass(reason)) ?? 0) + n);
+      const top = [...e.reasons].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+      out.push({
+        key: `${model}|${type}`,
+        model,
+        workType: type,
+        accepted: e.ok,
+        rejected: e.bad,
+        waiting,
+        noFunctioningModel: none,
+        reasons: [...byClass].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([reason, n]) => ({ reason, n })),
+        sample: top ? redactCredentials(top).slice(0, 400) : null,
+        others: others(model),
+      });
+    }
+    if (none && failed.length === 0) {
+      out.push({
+        key: `*|${type}`,
+        model: '*',
+        workType: type,
+        accepted: 0,
+        rejected: 0,
+        waiting,
+        noFunctioningModel: true,
+        reasons: [],
+        sample: null,
+        others: input.models.map((m) => ({ model: m, state: input.hold(m) ?? 'able' })),
+      });
+    }
+  }
+  return out;
+}
+
+/** The incidents true now, from the lane's rows and this process's route holds. */
+export async function readModelOutput(options: { now?: Date; models?: readonly string[] } = {}): Promise<ModelOutputIncident[]> {
+  const now = options.now ?? new Date();
+  const models = options.models ?? laneConfig()?.models ?? [];
+  if (models.length === 0) return [];
+  const rows = await answerRows(now.getTime());
+  const queued = await getDb().all<{ work_type: string; n: number | string }>(
+    `SELECT w.work_type, COUNT(*) AS n FROM work_items w
+      WHERE w.state = 'QUEUED' AND ${OWNED_BY_FREE_LANE_BIN}
+      GROUP BY w.work_type`,
+    [],
+  );
+  const waiting: Record<string, number> = {};
+  for (const row of queued) if ((FREE_LANE_WORK_TYPES as readonly string[]).includes(row.work_type)) waiting[row.work_type] = Number(row.n);
+  return modelOutputIncidents({ rows, models, waiting, hold: (m) => routeHold(m, now.getTime()) });
+}
+
+export const MODEL_OUTPUT_DROP = 'FREE_LANE_MODEL_OUTPUT_DROP';
+export const MODEL_OUTPUT_RECOVERED = 'FREE_LANE_MODEL_OUTPUT_RECOVERED';
+
+/** The latest record per incident key: open when it is a drop. */
+export async function openModelOutputIncidents(now = new Date()): Promise<Map<string, { at: string; noFunctioningModel: boolean }>> {
+  const rows = await getDb().all<{ event_type: string; at: string; workload_class: string | null; measures: string }>(
+    `SELECT event_type, at, workload_class, measures FROM bin_events
+      WHERE event_type IN (?, ?) AND at >= ? ORDER BY at ASC`,
+    [MODEL_OUTPUT_DROP, MODEL_OUTPUT_RECOVERED, new Date(now.getTime() - 14 * 86_400_000).toISOString()],
+  );
+  const open = new Map<string, { at: string; noFunctioningModel: boolean }>();
+  for (const row of rows) {
+    const key = row.workload_class ?? '';
+    if (row.event_type === MODEL_OUTPUT_RECOVERED) {
+      open.delete(key);
+      continue;
+    }
+    let none = false;
+    try {
+      none = (JSON.parse(row.measures) as { noFunctioningModel?: boolean }).noFunctioningModel === true;
+    } catch {
+      none = false;
+    }
+    open.set(key, { at: row.at, noFunctioningModel: none });
+  }
+  return open;
+}
+
+/** One line a person or Hermes reads for an incident. */
+export function describeModelOutput(one: ModelOutputIncident): string {
+  const who = one.model === '*' ? `every free-lane route for ${one.workType} is held` : `${one.model} had ${one.rejected} of ${one.accepted + one.rejected} ${one.workType} answers refused in 24h`;
+  const why = one.reasons.length ? `; refused for: ${one.reasons.map((r) => `${r.n}× ${r.reason}`).join(' | ')}` : '';
+  const others = one.others.length ? `; other models: ${one.others.map((o) => `${o.model} ${o.state}`).join(', ')}` : '';
+  const state = one.noFunctioningModel ? `NO functioning model for ${one.workType}, ${one.waiting} waiting` : `${one.waiting} waiting, routed to another model`;
+  return `${who}${why}${others}; ${state}`;
+}
+
+/**
+ * The incident record: a drop is written once when it starts (and again if it
+ * worsens to no functioning model), a recovery once when useful output returns
+ * — so the record is the incident's start and end, never a row a tick.
+ * Rows go to `bin_events` beside the lane's FREE_LANE_ITEM rows; the incident
+ * key is `workload_class`, the evidence is `measures`. Hermes reads the same
+ * incidents as deficiencies (`readDeficiencies`), and the standing director
+ * commissions the repair when no model functions. Queued work is never
+ * touched: it stays QUEUED for whichever model can take it (#992).
+ */
+export async function watchModelOutput(options: { now?: Date; models?: readonly string[] } = {}): Promise<{ opened: string[]; recovered: string[]; incidents: ModelOutputIncident[] }> {
+  const now = options.now ?? new Date();
+  const incidents = await readModelOutput({ now, ...(options.models ? { models: options.models } : {}) });
+  const open = await openModelOutputIncidents(now);
+  const opened: string[] = [];
+  const recovered: string[] = [];
+  for (const one of incidents) {
+    const was = open.get(one.key);
+    if (was && (was.noFunctioningModel || !one.noFunctioningModel)) continue;
+    await recordBinEvent({
+      eventType: MODEL_OUTPUT_DROP,
+      workloadClass: one.key,
+      outcome: one.noFunctioningModel ? 'NO_FUNCTIONING_MODEL' : 'ROUTED_TO_ANOTHER_MODEL',
+      reason: describeModelOutput(one),
+      measures: { ...one },
+    });
+    opened.push(one.key);
+  }
+  const current = new Set(incidents.map((one) => one.key));
+  for (const key of open.keys()) {
+    if (current.has(key)) continue;
+    await recordBinEvent({
+      eventType: MODEL_OUTPUT_RECOVERED,
+      workloadClass: key,
+      outcome: 'USEFUL_OUTPUT_RETURNED',
+      reason: `${key}: no longer failing, and the kind has a functioning model`,
+      measures: { key },
+    });
+    recovered.push(key);
+  }
+  return { opened, recovered, incidents };
 }
 
 /** What `admin free-lane show` prints: coverage, outcomes, and what reached Brain. */

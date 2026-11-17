@@ -39,6 +39,7 @@ import { completeUnleasedBin, getBin, recordBinEvent } from '../../repos/bins.ts
 import { itemMeters, utf8Bytes, type ItemUsage } from './itemMeter.ts';
 import { evaluateContract } from '../bins/contracts.ts';
 import { findTool } from '../../mcp/tools.ts';
+import { MAX_LIST_ITEMS } from '../../mcp/researchTools.ts';
 import { workerIdentity } from '../identity/authenticate.ts';
 import { auditAdmission } from '../research/auditAdmission.ts';
 import { webSearch } from '../sources/discover.ts';
@@ -582,6 +583,29 @@ const SYSTEM =
   'nothing else. You never invent sources, URLs, figures or quotes: every quoted passage must be ' +
   'copied character for character from the source text you were given. When the evidence does ' +
   'not establish something, say so plainly instead of guessing.';
+
+/**
+ * What counts as a claim, said to the model in the fragment prompt. Production,
+ * 2026-11-16 20:07–21:07Z: 81 of gpt-oss-120b's 96 refused fragments were the
+ * reply `{"claims":[]}` over 4–6 pages Brain had read — the model read "the
+ * claims these sources establish for the brief" as "an answer to the whole
+ * question" and listed nothing, and the repair prompt told it an empty list was
+ * acceptable. A sentence that settles part of the question is evidence; every
+ * claim it yields is still copied from the page and held to every check.
+ */
+export const PARTIAL_EVIDENCE =
+  'A claim need not answer the whole question: a figure, price, count, named buyer or seller, rule, date or ' +
+  'definition that bears on any part of the brief is a claim, with its limits stated in the claim text. ';
+
+/** The repair prompt for a reply that listed no claims at all over pages Brain read. Pure. */
+export function emptyListRepair(prompt: string, sources: number, lane: string): string {
+  return (
+    `${prompt}\n\nYour previous answer listed no claims from the ${sources} source(s) above. Read them again for ` +
+    'any sentence that bears on part of the brief. ' + PARTIAL_EVIDENCE +
+    'Cite each by SOURCE and sentence numbers, e.g. {"claim":"…","source":2,"sentences":[4,5],"evidence_lane":"' + lane + '"}. ' +
+    'Reply {"claims":[]} only if no sentence in any source bears on the brief at all.'
+  );
+}
 
 async function ask(
   completer: Completer,
@@ -1165,6 +1189,7 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
     'Extract the material claims these sources establish for the brief. For each claim give "source" (the ' +
     'SOURCE number) and "sentences" (the sentence numbers within that source that state it, e.g. [3,4]); ' +
     'Brain copies those sentences as the quoted evidence, so cite only sentences that say the claim. ' +
+    PARTIAL_EVIDENCE +
     'evidence_lane must be one of ' +
     JSON.stringify(lanes.map((l) => l.id)) +
     '; state geography/timeframe limits inside the claim. Include no claim the sources do not support. ' +
@@ -1235,7 +1260,9 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
       drop(CITATION_KEYS.some((key) => c[key] !== undefined && key !== 'evidence_excerpt') ? citationFailure(c, numbered) : uncitedReason(c));
     }
     if (claims.length === 0) {
-      ctx.why = `the answer did not survive Brain's own checks: ${listed.length} claim(s) offered, dropped ${JSON.stringify(dropped)}`;
+      // With nothing listed, what the model sent instead is the only clue to why (2026-11-16: 28 of the GPU's 29 refusals in 2h).
+      const sent = listed.length === 0 ? ` from ${readable.length} source(s); the reply was ${JSON.stringify(raw).slice(0, 200)}` : '';
+      ctx.why = `the answer did not survive Brain's own checks: ${listed.length} claim(s) offered, dropped ${JSON.stringify(dropped)}${sent}`;
       return null;
     }
     return { claims: claims.slice(0, 25) };
@@ -1248,7 +1275,9 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
     (error, previous) => `${prompt}\n\nYour previous answer was refused by Brain: ${error}\nPrevious: ${JSON.stringify(previous).slice(0, 4000)}\nCorrect it.`,
     finalize,
     (why, previous) =>
-      `${prompt}\n\nBrain could not use your previous answer: ${why.replace(/^the answer did not survive Brain's own checks: /, '')}. ` +
+      listedClaims(previous).length === 0 && Array.isArray(previous['claims'])
+        ? emptyListRepair(prompt, readable.length, lanes[0]?.id ?? 'lane')
+        : `${prompt}\n\nBrain could not use your previous answer: ${why.replace(/^the answer did not survive Brain's own checks: /, '')}. ` +
       'Every claim needs "source" as a SOURCE number and "sentences" as a list of the sentence numbers inside that ' +
       'source that state it — for example {"claim":"…","source":2,"sentences":[4,5],"evidence_lane":"' +
       (lanes[0]?.id ?? 'lane') + '"} for the sentences marked [S2.4] and [S2.5]. Offer only claims a sentence states; ' +
@@ -1308,6 +1337,19 @@ async function verify(ctx: Ctx, assignment: Record<string, unknown>): Promise<bo
   return ok;
 }
 
+/**
+ * The cited ids a synthesis submits, within the tool's list limit. Production,
+ * 2026-11-16: gpt-oss-120b's packet was refused whole for listing more than
+ * MAX_LIST_ITEMS ids. Every id kept is an accepted claim of this packet; the
+ * ones the report cites inline come first, then the rest in the model's order. Pure.
+ */
+export function citedWithinLimit(report: string, cited: readonly string[]): string[] {
+  const unique = [...new Set(cited)];
+  if (unique.length <= MAX_LIST_ITEMS) return unique;
+  const inline = unique.filter((id) => report.includes(id));
+  return [...inline, ...unique.filter((id) => !report.includes(id))].slice(0, MAX_LIST_ITEMS);
+}
+
 async function synthesize(ctx: Ctx, assignment: Record<string, unknown>): Promise<boolean> {
   const claims = (assignment['claimsToCite'] as Record<string, unknown>[] | null) ?? [];
   if (claims.length === 0) return false;
@@ -1317,7 +1359,8 @@ async function synthesize(ctx: Ctx, assignment: Record<string, unknown>): Promis
     `Accepted claims (the only evidence you may use):\n${JSON.stringify(claims, null, 1)}\n\n` +
     'Write the research packet as a clear report that answers the assignment from these claims only, citing ' +
     'each claim inline by its claimId in square brackets, e.g. [clm_...]. Say what the evidence does not ' +
-    'establish. Reply as {"report":"...","cited_claim_ids":["..."],"still_missing":["..."]}.';
+    `establish. cited_claim_ids lists at most ${MAX_LIST_ITEMS} ids, the claims the report relies on most. ` +
+    'Reply as {"report":"...","cited_claim_ids":["..."],"still_missing":["..."]}.';
   const answer = await askFor(ctx, prompt);
   if (!answer) return false;
   const known = new Set(claims.map((c) => String(c['claimId'])));
@@ -1329,8 +1372,8 @@ async function synthesize(ctx: Ctx, assignment: Record<string, unknown>): Promis
     if (report.length < 200 || cited.length === 0) return null;
     return {
       report,
-      cited_claim_ids: [...new Set(cited)],
-      still_missing: Array.isArray(raw['still_missing']) ? (raw['still_missing'] as unknown[]).map(String) : [],
+      cited_claim_ids: citedWithinLimit(report, cited),
+      still_missing: Array.isArray(raw['still_missing']) ? (raw['still_missing'] as unknown[]).map(String).filter((s) => s.trim()).slice(0, MAX_LIST_ITEMS) : [],
     };
   };
   return submitWithRepair(
@@ -1565,19 +1608,8 @@ export function unfitPairs(
    */
   alias: Readonly<Record<string, string>> = {},
 ): Set<string> {
-  const tally = new Map<string, { ok: number; bad: number }>();
-  for (const row of rows) {
-    // Only the model's own answer counts against it: an outage that ran out of
-    // strikes is recorded FAILED_RETRYABLE too (Brain's database flood, 11-05).
-    if (row.outcome === 'FAILED_RETRYABLE' && row.reason && notTheAnswer(row.reason)) continue;
-    const key = `${row.model}|${row.work_type}`;
-    const entry = tally.get(key) ?? { ok: 0, bad: 0 };
-    if (row.outcome === 'SUBMITTED') entry.ok += Number(row.n);
-    else if (row.outcome === 'FAILED_RETRYABLE') entry.bad += Number(row.n);
-    tally.set(key, entry);
-  }
   const marked = new Set<string>();
-  for (const [key, e] of tally) if (e.bad >= 4 && e.ok * 5 < e.ok + e.bad) marked.add(key);
+  for (const [key, e] of answerTally(rows)) if (isFailing(e)) marked.add(key);
   const distinct = models.filter((m) => !(m in alias));
   // Never every distinct model for one type: the work would wait for nobody.
   for (const type of new Set([...marked].map((k) => k.slice(k.indexOf('|') + 1)))) {
@@ -1595,9 +1627,48 @@ export function unfitPairs(
   return marked;
 }
 
-/** A failure that says Brain or the provider was unavailable, not that the answer was wrong. */
+/**
+ * Each (model, kind of work) pair's accepted and rejected answers, and the
+ * reasons its rejected ones were refused — the one tally `unfitPairs` marks
+ * from and the model-output incident (`coverage.ts`) reports. Only the model's
+ * own answer counts against it: an outage that ran out of strikes is recorded
+ * FAILED_RETRYABLE too (Brain's database flood, 11-05). Pure.
+ */
+export function answerTally(
+  rows: readonly { model: string; work_type: string; outcome: string; n: number | string; reason?: string | null }[],
+): Map<string, { ok: number; bad: number; reasons: Map<string, number> }> {
+  const tally = new Map<string, { ok: number; bad: number; reasons: Map<string, number> }>();
+  for (const row of rows) {
+    if (row.outcome === 'FAILED_RETRYABLE' && row.reason && notTheAnswer(row.reason)) continue;
+    const key = `${row.model}|${row.work_type}`;
+    const entry = tally.get(key) ?? { ok: 0, bad: 0, reasons: new Map<string, number>() };
+    if (row.outcome === 'SUBMITTED') entry.ok += Number(row.n);
+    else if (row.outcome === 'FAILED_RETRYABLE') {
+      entry.bad += Number(row.n);
+      const reason = String(row.reason ?? '');
+      entry.reasons.set(reason, (entry.reasons.get(reason) ?? 0) + Number(row.n));
+    }
+    tally.set(key, entry);
+  }
+  return tally;
+}
+
+/**
+ * A failure that says Brain, the provider or the sources were unavailable, not
+ * that the answer was wrong. Production, 2026-11-16 17:25Z: 26 fragments waited
+ * with no slot busy, "answers … rejected" the top decline (148,575 since boot),
+ * and the lane accepted 2 claims an hour. The day of rows it judged held hours
+ * when the GPU slot's calls never reached the model ("model call failed [broken
+ * GPU]", stale pod routing, fixed in #984) and pages no model could open ("no
+ * readable source": 404s and DNS failures every model met alike). A model that
+ * never answered, or that Brain gave nothing to read, is not judged by it.
+ */
 function notTheAnswer(reason: string): boolean {
-  return /threw:|refused: .*(?:connection|timeout|not queryable)/i.test(reason) || BRAIN_UNAVAILABLE.test(reason) || PROVIDER_BUSY.test(reason);
+  return (
+    /threw:|refused: .*(?:connection|timeout|not queryable)|: model call failed|: no readable source among/i.test(reason) ||
+    BRAIN_UNAVAILABLE.test(reason) ||
+    PROVIDER_BUSY.test(reason)
+  );
 }
 
 let fitness: { at: number; unfit: Set<string> } | null = null;
@@ -1608,6 +1679,20 @@ export function resetFreeLaneFitness(): void {
 }
 export async function unfitNow(models: readonly string[], now = Date.now(), fallbackModel: string | null = null): Promise<Set<string>> {
   if (fitness && now - fitness.at < 5 * 60_000) return fitness.unfit;
+  const rows = await answerRows(now);
+  // The RunPod slot is its own model only while the GPU is answering.
+  const alias: Record<string, string> = {};
+  if (fallbackModel) {
+    const gpuServing = !runpodPaused() && !runpodBreakerOpen(now) && runpodCallWindow(30 * 60_000, now).ok > 0;
+    for (const m of models) if (isRunpodSlot(m) && !gpuServing && m !== fallbackModel) alias[m] = fallbackModel;
+  }
+  const unfit = unfitPairs(rows, models, alias);
+  fitness = { at: now, unfit };
+  return unfit;
+}
+
+/** The lane's answers over the last day, by model, kind, outcome and reason: what fitness is judged on. */
+export async function answerRows(now = Date.now()): Promise<{ model: string; reason: string | null; work_type: string; outcome: string; n: number | string }[]> {
   const rows = await getDb().all<{ reason: string | null; work_type: string; outcome: string; n: number | string }>(
     `SELECT e.reason, w.work_type, e.outcome, COUNT(*) AS n FROM bin_events e
        JOIN work_items w ON w.id = e.work_item_id
@@ -1615,19 +1700,7 @@ export async function unfitNow(models: readonly string[], now = Date.now(), fall
       GROUP BY e.reason, w.work_type, e.outcome`,
     [new Date(now - 86_400_000).toISOString()],
   );
-  // The RunPod slot is its own model only while the GPU is answering.
-  const alias: Record<string, string> = {};
-  if (fallbackModel) {
-    const gpuServing = !runpodPaused() && !runpodBreakerOpen(now) && runpodCallWindow(30 * 60_000, now).ok > 0;
-    for (const m of models) if (isRunpodSlot(m) && !gpuServing && m !== fallbackModel) alias[m] = fallbackModel;
-  }
-  const unfit = unfitPairs(
-    rows.map((r) => ({ ...r, model: String(r.reason ?? '').replace(/^model /, '').split(':')[0]! })),
-    models,
-    alias,
-  );
-  fitness = { at: now, unfit };
-  return unfit;
+  return rows.map((r) => ({ ...r, model: String(r.reason ?? '').replace(/^model /, '').split(':')[0]! }));
 }
 
 /**
@@ -1930,9 +2003,96 @@ export const ROUTE_FAILURE_LIMIT = 3;
 const ROUTE_REPROBE_MS = 5 * 60_000;
 const routeHealth = new Map<string, { failures: number; cause: RouteFailureCause; nextProbeAt: number }>();
 
+/**
+ * How far back a route's own call outcomes are read to judge it, and how many are kept. The same
+ * half hour `failingModels` reads, held in memory so it binds inside a tick rather than across ticks.
+ */
+export const ROUTE_WINDOW_MS = 30 * 60_000;
+const ROUTE_WINDOW_MAX = 64;
+const routeWindow = new Map<string, { at: number; ok: boolean; cause: RouteFailureCause | null }[]>();
+
+/** Routes whose window this process has already rebuilt from the lane's rows. */
+const routeRestored = new Set<string>();
+
 /** Tests: forget every route's health. */
 export function resetRouteHealth(): void {
   routeHealth.clear();
+  routeWindow.clear();
+  routeRestored.clear();
+}
+
+/**
+ * Rebuild each route's breaker from the lane's own durable rows, once per process.
+ *
+ * The window and the hold are memory, so a worker restart used to reopen a failing route to every
+ * slot until it re-accumulated ROUTE_FAILURE_LIMIT failures (CAP-16-3, episode 3 review F1). The
+ * same outcomes are already recorded: each item writes one `FREE_LANE_ITEM` row naming its model and
+ * its reason (`takeOne`). Those rows are the record, and the breaker is derived from them: the last
+ * ROUTE_WINDOW_MS of a route's rows are replayed, at their own times and in order, through
+ * `recordRouteOutcome` — the same rule that judged them live — so after a restart the route stands
+ * exactly where it would have stood had the process never stopped. Nothing new is stored.
+ *
+ * A route this process has already judged is left alone (its in-memory window holds the same rows,
+ * and replaying them would count them twice). A failed read rebuilds nothing and is retried on the
+ * next tick: the breaker then starts from live calls, as it did before.
+ */
+export async function restoreRouteHealth(models: readonly string[], now = Date.now()): Promise<number> {
+  const pending = [...new Set(models)].filter((model) => !routeRestored.has(model));
+  if (pending.length === 0) return 0;
+  let rows: { at: string; outcome: string | null; reason: string | null }[];
+  try {
+    rows = await getDb().all<{ at: string; outcome: string | null; reason: string | null }>(
+      `SELECT at, outcome, reason FROM bin_events
+        WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND at <= ?
+        ORDER BY at ASC, id ASC`,
+      [new Date(now - ROUTE_WINDOW_MS).toISOString(), new Date(now).toISOString()],
+    );
+  } catch {
+    return 0;
+  }
+  let replayed = 0;
+  for (const model of pending) {
+    routeRestored.add(model);
+    // Already judged live in this process: its window is current.
+    if ((routeWindow.get(model)?.length ?? 0) > 0 || routeHealth.has(model)) continue;
+    const ok = `model ${model}`;
+    const failed = `model ${model}: `;
+    for (const row of rows) {
+      const reason = row.reason ?? '';
+      const at = Date.parse(row.at);
+      if (!Number.isFinite(at)) continue;
+      if (row.outcome === 'SUBMITTED' && reason === ok) recordRouteOutcome(model, { ok: true }, at);
+      else if (row.outcome !== 'SUBMITTED' && reason.startsWith(failed)) recordRouteOutcome(model, { ok: false, why: reason.slice(failed.length) }, at);
+      else continue;
+      replayed += 1;
+    }
+  }
+  return replayed;
+}
+
+/**
+ * Whether a route's recent calls mostly failed: the bar `isFailing` holds a model to (at least four
+ * failures and under one in five answered), read over its last ROUTE_WINDOW_MS of outcomes.
+ *
+ * Production, 2026-11-16 16:48Z (CAP-16-3, episode 3): brain-a's provider was "overloaded: 89% of 9
+ * calls failed" beside a healthy GPU route, and r01.cap-16-3 read 62–98% of six hours' lane outcomes
+ * as provider failures. The breaker counted only consecutive failures and forgot everything on one
+ * success, and that success also ended every route cooldown (`clearRouteCooldowns`). So a provider
+ * answering about one call in nine was never held: each rare answer reopened it to every slot and
+ * every cooled item, and each of those recorded another "model call failed". A route is judged by its
+ * ratio instead. One success no longer reopens a route that is still mostly failing, and a route that
+ * mostly answers through occasional 503s (the 2026-11-15 07:46Z case) is never held by it.
+ */
+export function routeWindowFailing(model: string, now = Date.now()): boolean {
+  const recent = (routeWindow.get(model) ?? []).filter((one) => now - one.at < ROUTE_WINDOW_MS);
+  const ok = recent.filter((one) => one.ok).length;
+  return isFailing({ ok, bad: recent.length - ok });
+}
+
+function noteRouteCall(model: string, entry: { at: number; ok: boolean; cause: RouteFailureCause | null }): void {
+  const kept = (routeWindow.get(model) ?? []).filter((one) => entry.at - one.at < ROUTE_WINDOW_MS);
+  kept.push(entry);
+  routeWindow.set(model, kept.slice(-ROUTE_WINDOW_MAX));
 }
 
 /**
@@ -1959,22 +2119,61 @@ export function takeRouteProbe(model: string, now = Date.now()): void {
   if (now >= state.nextProbeAt) state.nextProbeAt = now + ROUTE_REPROBE_MS;
 }
 
-/** A route that answered is healthy again; a route that did not is counted, with its cause. */
-export function recordRouteOutcome(model: string, outcome: { ok: boolean; why?: string }, now = Date.now()): void {
+/**
+ * A route that answered is healthy again — unless its recent calls still mostly failed
+ * (`routeWindowFailing`), when the answer was its re-probe and the route stays held until the next
+ * one. A route that did not answer is counted, with its cause. Returns whether the route is open.
+ */
+export function recordRouteOutcome(model: string, outcome: { ok: boolean; why?: string }, now = Date.now()): boolean {
   if (outcome.ok) {
-    routeHealth.delete(model);
-    return;
+    noteRouteCall(model, { at: now, ok: true, cause: null });
+    if (!routeWindowFailing(model, now)) {
+      routeHealth.delete(model);
+      return true;
+    }
+    const recent = routeWindow.get(model) ?? [];
+    const cause = [...recent].reverse().find((one) => !one.ok)?.cause ?? routeHealth.get(model)?.cause ?? 'unclassified';
+    const state = routeHealth.get(model) ?? { failures: 0, cause, nextProbeAt: now };
+    state.failures = Math.max(state.failures, ROUTE_FAILURE_LIMIT);
+    state.nextProbeAt = now + ROUTE_REPROBE_MS;
+    routeHealth.set(model, state);
+    return false;
   }
   const why = outcome.why ?? '';
-  if (!/^model call failed/.test(why) && !BRAIN_UNAVAILABLE.test(why)) return;
+  if (!/^model call failed/.test(why) && !BRAIN_UNAVAILABLE.test(why)) return routeHold(model, now) === null;
   const cause = causeOfReason(why) ?? classifyRouteFailure(why);
   // Brain's own database being busy says nothing about the model route.
-  if (cause === 'database') return;
+  if (cause === 'database') return routeHold(model, now) === null;
+  noteRouteCall(model, { at: now, ok: false, cause });
   const state = routeHealth.get(model) ?? { failures: 0, cause, nextProbeAt: now + ROUTE_REPROBE_MS };
+  const wasHeld = state.failures >= ROUTE_FAILURE_LIMIT;
   state.failures += 1;
   state.cause = cause;
-  if (state.failures === ROUTE_FAILURE_LIMIT) state.nextProbeAt = now + ROUTE_REPROBE_MS;
+  // A route whose window is over the bar is held now, however its failures were interleaved.
+  if (routeWindowFailing(model, now)) state.failures = Math.max(state.failures, ROUTE_FAILURE_LIMIT);
+  if (!wasHeld && state.failures >= ROUTE_FAILURE_LIMIT) state.nextProbeAt = now + ROUTE_REPROBE_MS;
   routeHealth.set(model, state);
+  return false;
+}
+
+/**
+ * Whether a model is held back from a kind of work: it is marked unfit for it
+ * AND another model in the lane can take it now — not marked, and its route
+ * not held. Pure. Production, 2026-11-16 18:05–19:04Z: gpt-oss-120b was marked
+ * unfit for RESEARCH_FRAGMENT while brain-a's route was held on HTTP 429s, so
+ * 33 fragments waited with no slot busy (143,318 declines "another model takes
+ * it") and nothing was submitted for an hour. `unfitPairs` never marks every
+ * model, but a model whose route is down takes nothing either.
+ */
+export function heldBackFor(
+  model: string,
+  workType: string,
+  models: readonly string[],
+  unfit: ReadonlySet<string>,
+  hold: (model: string) => string | null,
+): boolean {
+  if (!unfit.has(`${model}|${workType}`)) return false;
+  return models.some((other) => other !== model && !unfit.has(`${other}|${workType}`) && hold(other) === null);
 }
 
 export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork | null; ok: boolean; ms: number }> {
@@ -1994,7 +2193,18 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
     if ((cooldown.get(cooldownKey(worker.model, item.id)) ?? 0) > Date.now()) return { ok: false, reason: 'cooling down after a provider failure' };
     const held = routeHold(worker.model);
     if (held) return { ok: false, reason: held };
-    if (unfit.has(`${worker.model}|${item.work_type}`)) return { ok: false, reason: 'this model’s answers for this kind of work are rejected; another model takes it' };
+    /*
+     * Another model takes this item only if it could take it now: its route not
+     * held AND the item not cooling down for it. Production, 2026-11-16 19:50–20:09Z:
+     * every waiting fragment was cooling down for brain-a after its 429s, so it
+     * never admitted its route re-probe, its overdue probe read as a healthy route,
+     * and the GPU stayed held back with 35 fragments waiting and nothing running.
+     */
+    const otherHold = (model: string): string | null =>
+      routeHold(model) ?? ((cooldown.get(cooldownKey(model, item.id)) ?? 0) > Date.now() ? 'cooling down after a provider failure' : null);
+    if (heldBackFor(worker.model, item.work_type, workers.map((w) => w.model), unfit, otherHold)) {
+      return { ok: false, reason: 'this model’s answers for this kind of work are rejected; another model takes it' };
+    }
     if (!(await freeLaneAdmits(item))) return { ok: false, reason: 'not free-lane work' };
     const owner = await owningBin(item);
     if (owner) owners.set(item.id, owner.binId);
@@ -2016,7 +2226,8 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
       admit,
       onSkip: (_item, reason) => {
         declined += 1;
-        const key = reason.slice(0, 80);
+        // Per model: 453,012 "answers … rejected" declines (2026-11-16 20:07Z) did not say whose.
+        const key = `${worker.model}: ${reason.slice(0, 80)}`;
         skipTally.set(key, (skipTally.get(key) ?? 0) + 1);
       },
     });
@@ -2096,9 +2307,12 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
   const brainUnavailable = !ok && BRAIN_UNAVAILABLE.test(ctx.why);
   const providerFailure = !ok && ((/^model call failed/.test(ctx.why) && PROVIDER_BUSY.test(ctx.why)) || brainUnavailable);
   const strikes = transient || brainUnavailable ? (transientStrikes.get(one.workItemId) ?? 0) + 1 : 0;
+  // Recorded before the cooldowns are touched: one answer from a route whose recent calls still
+  // mostly failed is its re-probe, and does not reopen it to every cooled item (CAP-16-3).
+  const routeOpen = recordRouteOutcome(worker.model, { ok, why: ctx.why });
   if (ok) {
     transientStrikes.delete(one.workItemId);
-    clearRouteCooldowns(worker.model);
+    if (routeOpen) clearRouteCooldowns(worker.model);
   } else if ((transient || brainUnavailable) && (strikes < 3 || providerFailure)) {
     /*
      * The model or its provider failed, not the work: hand the item back with
@@ -2132,7 +2346,6 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
       // Lease already gone: the queue's expiry returns it.
     }
   }
-  recordRouteOutcome(worker.model, { ok, why: ctx.why });
   const ms = Date.now() - started;
   const used = itemMeters.close(meterKey) ?? usage;
   await recordBinEvent({
@@ -2159,6 +2372,8 @@ export async function freeLaneTick(options: FreeLaneOptions = {}): Promise<FreeL
   running = true;
   try {
     const all = await ensureFreeWorkers(config);
+    // After a restart, each route's breaker resumes from the lane's recorded outcomes (CAP-16-3).
+    await restoreRouteHealth(all.map((w) => w.model));
     /*
      * Reroute: a model whose free-lane items in the last half hour mostly failed
      * (on enough of them) is skipped, and its roles go to the other model.

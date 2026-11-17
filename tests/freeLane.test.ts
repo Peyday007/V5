@@ -14,7 +14,8 @@ import { enqueueWork, getWorkItem } from '../server/repos/workQueue.ts';
 import { workType } from '../server/services/queue/workTypes.ts';
 import { setBrainOnlyMode } from '../server/services/bins/brainOnly.ts';
 import { checkIn } from '../server/services/bins/service.ts';
-import { asksByPriority, claimAsks, ensureFreeWorkers, firstJson, freeLaneTick, quotedIn, resetFreeLaneMemberships, retryNotReached, takeWave } from '../server/services/freeLane/worker.ts';
+import { asksByPriority, citedWithinLimit, claimAsks, emptyListRepair, ensureFreeWorkers, firstJson, freeLaneTick, PARTIAL_EVIDENCE, quotedIn, resetFreeLaneMemberships, retryNotReached, takeWave } from '../server/services/freeLane/worker.ts';
+import { MAX_LIST_ITEMS } from '../server/mcp/researchTools.ts';
 import { freeLaneMayTakeImprovement, resetActivationCache } from '../server/services/improvement/activation.ts';
 import { createLayer } from '../server/repos/layers.ts';
 import { IMPROVEMENT_RESEARCH_SLOT_CAP } from '../server/domain/improvement.ts';
@@ -1053,6 +1054,14 @@ describe('a model keeps only the kinds of work Brain accepts from it', () => {
     // An outage recorded as a failure is not the model's answer.
     const outage = [{ model: 'small', work_type: 'RESEARCH_AUDIT', outcome: 'FAILED_RETRYABLE', n: 9, reason: 'model small: threw: The database pool had no free connection within 10000ms' }];
     expect(unfitPairs(outage, ['small', 'large']).size).toBe(0);
+    // A call that never reached the model, or pages nobody could open, judge no answer.
+    const unanswered = [
+      { model: 'gpu', work_type: 'RESEARCH_FRAGMENT', outcome: 'FAILED_RETRYABLE', n: 9, reason: "model gpu: model call failed [broken GPU]: GPU slot's own calls failing; the fallback then said: cheap lane HTTP 400" },
+      { model: 'gpu', work_type: 'RESEARCH_FRAGMENT', outcome: 'FAILED_RETRYABLE', n: 9, reason: 'model gpu: no readable source among 12 candidate page(s): {"HTTP_ERROR":12} the site answered 404' },
+    ];
+    expect(unfitPairs(unanswered, ['gpu', 'large']).size).toBe(0);
+    const rejected = [{ model: 'gpu', work_type: 'RESEARCH_FRAGMENT', outcome: 'FAILED_RETRYABLE', n: 9, reason: "model gpu: the answer did not survive Brain's own checks: 0 claim(s) offered, dropped {}" }];
+    expect([...unfitPairs(rejected, ['gpu', 'large'])]).toEqual(['gpu|RESEARCH_FRAGMENT']);
     // A GPU slot answering through 'large' is 'large': held back with it, and no alternative to it.
     const viaFallback = [
       { model: 'a', work_type: 'RESEARCH_AUDIT', outcome: 'FAILED_RETRYABLE', n: 6 },
@@ -1061,5 +1070,39 @@ describe('a model keeps only the kinds of work Brain accepts from it', () => {
     expect([...unfitPairs(viaFallback, ['a', 'b', 'gpu'])]).toEqual(['a|RESEARCH_AUDIT']);
     expect([...unfitPairs(viaFallback, ['a', 'gpu'], { gpu: 'a' })]).toEqual([]);
     expect([...unfitPairs(viaFallback, ['a', 'b', 'gpu'], { gpu: 'a' })].sort()).toEqual(['a|RESEARCH_AUDIT', 'gpu|RESEARCH_AUDIT']);
+  });
+
+  it('takes the work anyway when the only other model’s route is down', async () => {
+    const { heldBackFor } = await import('../server/services/freeLane/worker.ts');
+    const unfit = new Set(['gpu|RESEARCH_FRAGMENT']);
+    const healthy = () => null;
+    const free429 = (m: string) => (m === 'free' ? 'model route failing (provider availability)' : null);
+    expect(heldBackFor('gpu', 'RESEARCH_FRAGMENT', ['gpu', 'free'], unfit, healthy)).toBe(true);
+    expect(heldBackFor('gpu', 'RESEARCH_FRAGMENT', ['gpu', 'free'], unfit, free429)).toBe(false);
+    // The item cooling down for the other model after its 429s: it cannot take it either.
+    const freeCooling = (m: string) => (m === 'free' ? 'cooling down after a provider failure' : null);
+    expect(heldBackFor('gpu', 'RESEARCH_FRAGMENT', ['gpu', 'free'], unfit, freeCooling)).toBe(false);
+    expect(heldBackFor('gpu', 'RESEARCH_FRAGMENT', ['gpu'], unfit, healthy)).toBe(false);
+    expect(heldBackFor('free', 'RESEARCH_FRAGMENT', ['gpu', 'free'], unfit, healthy)).toBe(false);
+  });
+});
+
+describe('gpt-oss-120b refusals (production, 2026-11-16)', () => {
+  it('tells a model that listed no claims what partial evidence is, and never that an empty list is fine', () => {
+    const prompt = emptyListRepair('BRIEF', 5, 'L1');
+    expect(prompt).toContain('listed no claims from the 5 source(s)');
+    expect(prompt).toContain(PARTIAL_EVIDENCE);
+    expect(prompt).toContain('"evidence_lane":"L1"');
+    expect(prompt).toContain('only if no sentence in any source bears on the brief at all');
+  });
+
+  it('keeps a synthesis within the list limit, inline citations first, instead of refusing it whole', () => {
+    const ids = Array.from({ length: MAX_LIST_ITEMS + 5 }, (_, i) => `clm_${String(i).padStart(3, '0')}`);
+    const inline = ids.slice(-3);
+    const kept = citedWithinLimit(`report citing [${inline.join('] [')}]`, [...ids, ids[0]!]);
+    expect(kept).toHaveLength(MAX_LIST_ITEMS);
+    expect(kept.slice(0, 3)).toEqual(inline);
+    expect(new Set(kept).size).toBe(kept.length);
+    expect(citedWithinLimit('r', ['a', 'b', 'a'])).toEqual(['a', 'b']);
   });
 });

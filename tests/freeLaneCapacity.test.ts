@@ -11,6 +11,7 @@ import { enqueueWork } from '../server/repos/workQueue.ts';
 import { workType } from '../server/services/queue/workTypes.ts';
 import { setBrainOnlyMode } from '../server/services/bins/brainOnly.ts';
 import {
+  brainCpu,
   controlStep,
   decideTarget,
   slotShare,
@@ -193,5 +194,22 @@ describe('the lane stays within what the database pool can carry', () => {
     expect(slotShare(30, 8)).toBe(1);
     expect(slotShare(3, null)).toBeNull();
     expect(slotShare(3, 0)).toBeNull();
+  });
+});
+
+describe('the CPU the lane guard reads (production, 2026-11-16)', () => {
+  it('does not read the plan evaluator thread on the spare core as Brain saturated', () => {
+    // One core busy for a 30 s step on a 2-vCPU machine, the server loop 10% busy.
+    const cpu = brainCpu({ loop: 0.1, processCoreSeconds: 30, seconds: 30, cores: 2 });
+    expect(cpu).toBeCloseTo(0.5);
+    expect(decideTarget({ target: 6, active: 6, waiting: 10, window: { ok: 10, content: 0, transient: 0 }, pressure: { db: false, lagMs: 5, cpu } }).reason).not.toMatch(/CPU/);
+  });
+
+  it('still shrinks on a saturated server loop or a saturated machine', () => {
+    const loop = brainCpu({ loop: 0.95, processCoreSeconds: 30, seconds: 30, cores: 2 });
+    const machine = brainCpu({ loop: 0.2, processCoreSeconds: 57, seconds: 30, cores: 2 });
+    for (const cpu of [loop, machine]) {
+      expect(decideTarget({ target: 6, active: 6, waiting: 10, window: { ok: 10, content: 0, transient: 0 }, pressure: { db: false, lagMs: 5, cpu } })).toMatchObject({ target: 3, stable: false });
+    }
   });
 });
