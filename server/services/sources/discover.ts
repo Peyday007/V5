@@ -50,7 +50,31 @@ const MIN_SPACING_MS = 2_000;
 const MAX_SPACING_MS = 30_000;
 let spacingMs = 4_000;
 let answeredSinceRefusal = 0;
-const MAX_WAITERS = 12;
+/**
+ * How many searches may wait their turn. The pacing above is what keeps Brain
+ * polite to the endpoint; this only decides whether a search waits or is
+ * dropped as an empty candidate list.
+ *
+ * Production, 2026-11-17 (after #1057): the queue held a fixed 12, sized when
+ * the free lane ran two slots. The GPU lane now runs up to 32 slots started in
+ * one tick (SPEED_JOBS_PEAK 14), and every fragment asks two searches at once
+ * after its first model call, so most searches found 12 already waiting and
+ * came back empty without being sent. Those fragments were left with the
+ * model's remembered pages (PA DEP and NAICS index pages, 403s on guessed deep
+ * links): 64% of GPU research fragments failed "no readable source" or listed
+ * no claims, while the same queries through the same code returned 5-8
+ * readable, on-topic pages. A fragment's lease is 20 minutes and a job takes
+ * ~5, so a search may now wait up to `MAX_QUEUE_WAIT_MS` at the current
+ * spacing (30 waiters at the 4 s default), never fewer than the 12 it always
+ * could, never more than `MAX_WAITERS_CEILING`. The endpoint sees the same rate.
+ */
+const MIN_WAITERS = 12;
+const MAX_WAITERS_CEILING = 64;
+const MAX_QUEUE_WAIT_MS = 120_000;
+/** The searches that may wait now, at the given spacing. Pure; exported for tests. */
+export function maxWaiters(spacing = spacingMs): number {
+  return Math.min(MAX_WAITERS_CEILING, Math.max(MIN_WAITERS, Math.floor(MAX_QUEUE_WAIT_MS / Math.max(1, spacing))));
+}
 const MAX_LOW_WAITERS = 3;
 const PAUSE_AFTER_ANOMALY_MS = 10 * 60_000;
 const MAX_RESULTS = 8;
@@ -148,7 +172,7 @@ export async function webSearch(query: string, deps: SearchDeps = {}): Promise<s
     }
     return null;
   };
-  if (!open() || waiting >= MAX_WAITERS || (deps.priority === 'LOW' && waiting >= MAX_LOW_WAITERS)) {
+  if (!open() || waiting >= maxWaiters() ||(deps.priority === 'LOW' && waiting >= MAX_LOW_WAITERS)) {
     searchStats.skipped += 1;
     return [];
   }
