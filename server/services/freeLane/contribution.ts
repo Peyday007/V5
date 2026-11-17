@@ -42,7 +42,6 @@ import { isRunpodSlot } from '../cheap/runpod.ts';
 import { readPodSpend, type PodSpend } from '../cheap/runpodPod.ts';
 import { readSourceYields, type SourceYield } from '../feeds/run.ts';
 import { causeOfReason, type RouteFailureCause } from './worker.ts';
-import { waitingNow } from './capacity.ts';
 import { routeOfReason, usageOf, type Measured } from './stageCapacity.ts';
 
 export const CAPACITY_CONTRIBUTION_EVENT = 'CAPACITY_CONTRIBUTION';
@@ -170,12 +169,22 @@ export function decideComponent(reading: ComponentReading, kindMedianPerDollar: 
       recommendation: `${reading.id} is a working path at measured saturation ${round((reading.measures.saturation as { value: number }).value, 2)} with ${(reading.workWaiting as { value: number }).value} waiting; one more unit is justified, then re-measure accepted output.`,
     };
   }
-  const gain = waiting && kindMedianPerDollar !== null && (perDollar === null ? reading.cost.measured : perDollar > kindMedianPerDollar);
+  // A marginal gain is a measured contribution per dollar above the kind's median. A $0 component has no
+  // per-dollar figure to compare, so it is never a marginal gain by default: it can grow only on its own
+  // measured saturation with its own work waiting (above), never because some priced peer exists.
+  const gain = waiting && kindMedianPerDollar !== null && perDollar !== null && perDollar > kindMedianPerDollar;
   if (gain) {
     return {
       ...base, verdict: 'SCALE', hardwareJustified: true, contributionPerDollar: perDollar,
       basis: 'MARGINAL_GAIN',
-      recommendation: `${reading.id} yields ${perDollar === null ? 'accepted output at $0' : `${round(perDollar, 2)} accepted per dollar, above its kind's median ${round(kindMedianPerDollar!, 2)}`} with work waiting; add to it and re-measure.`,
+      recommendation: `${reading.id} yields ${round(perDollar!, 2)} accepted per dollar, above its kind's median ${round(kindMedianPerDollar!, 2)}, with its own work waiting; add to it and re-measure.`,
+    };
+  }
+  if (waiting && perDollar === null && !saturated) {
+    return {
+      ...base, verdict: 'HOLD', hardwareJustified: false, contributionPerDollar: null,
+      basis: 'NO_MARGINAL_MEASURE',
+      recommendation: `${reading.id} contributes ${useful} accepted at ${reading.cost.measured ? '$0' : 'an unmeasured cost'}; with no per-dollar figure, more of it is justified only by its own measured saturation, which ${reading.measures.saturation.measured ? 'is below the floor' : 'is not measured on this component'}.`,
     };
   }
   return {
@@ -461,8 +470,13 @@ export interface LaneItemRow {
   measures: string | null;
 }
 
-/** Model-route readings from lane rows. GPU routes are priced at the pod's measured spend; free providers are a measured $0. Pure. */
-export function routeReadings(rows: readonly LaneItemRow[], podSpend: PodSpend | null, waiting: number | null): ComponentReading[] {
+/**
+ * Model-route readings from lane rows. GPU routes are priced at the pod's
+ * measured spend; free providers are a measured $0. A route's work waiting is
+ * its own pool's (`waitingByRoute`, from that model's latest capacity row) —
+ * never the whole lane's queue, which every route would share. Pure.
+ */
+export function routeReadings(rows: readonly LaneItemRow[], podSpend: PodSpend | null, waitingByRoute: ReadonlyMap<string, number> | null): ComponentReading[] {
   const byRoute = new Map<string, { items: number; submitted: number; failures: number; causes: Map<RouteFailureCause, number>; modelCalls: number; avoided: number; cpuMicros: number; metered: number; elapsedMs: number }>();
   for (const row of rows) {
     const route = routeOfReason(row.reason);
@@ -509,11 +523,26 @@ export function routeReadings(rows: readonly LaneItemRow[], podSpend: PodSpend |
       kind: 'MODEL_ROUTE', id: route, provisioned: null,
       usefulOutput: ok(e.submitted), cost,
       downstreamEffect: e.metered > 0 ? ok(e.avoided) : NOT('no item on this route recorded model calls avoided'),
-      workWaiting: waiting === null ? NOT('the lane queue was not read') : ok(waiting),
+      workWaiting: waitingByRoute === null
+        ? NOT('the route pools\' capacity rows were not read')
+        : waitingByRoute.has(route)
+          ? ok(waitingByRoute.get(route)!)
+          : NOT('no capacity row for this route\'s pool carries a waiting count; the lane-wide queue is not this route\'s'),
       failing: failingNow && ranked[0] ? { cause: ranked[0][0], failures: e.failures } : null,
       measures,
     };
   });
+}
+
+/** Each pool's own waiting count from its latest capacity row, by model. A row without one is absent, not 0. Pure. */
+export function waitingByPool(pools: readonly PoolRow[]): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const pool of pools) {
+    let m: Record<string, unknown> = {};
+    try { m = JSON.parse(pool.measures ?? '{}') as Record<string, unknown>; } catch { m = {}; }
+    if (typeof m.waiting === 'number') out.set(pool.model, m.waiting);
+  }
+  return out;
 }
 
 /** One `FREE_LANE_CAPACITY` row, the latest per model. */
@@ -730,7 +759,6 @@ export async function readContribution(options: { hours?: number; now?: number }
       WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND reason LIKE 'model %'`,
     [since],
   )).map((r) => ({ outcome: r.outcome, reason: r.reason, durationMs: r.duration_ms === null ? null : n(r.duration_ms), measures: r.measures })), [] as LaneItemRow[]);
-  const waiting = await safely(() => waitingNow(), null as number | null);
   const podSpend = await safely(() => readPodSpend(since), null as PodSpend | null);
 
   const submittedByModel = new Map<string, number>();
@@ -790,7 +818,7 @@ export async function readContribution(options: { hours?: number; now?: number }
       ...parserReadings(yields, pulls),
       ...detectorReadings(detectorRows, uncovered),
       ...poolReadings(pools, submittedByModel),
-      ...routeReadings(laneRows, podSpend, waiting),
+      ...routeReadings(laneRows, podSpend, waitingByPool(pools)),
     ],
     gaps: (components) => gapsFromRows(components, { extraction, openings, permitted, permissionNeeds, providerContactPermitted }),
     system: await readSystemOutcomes(since),

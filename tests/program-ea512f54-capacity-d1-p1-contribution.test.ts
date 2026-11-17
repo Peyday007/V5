@@ -37,6 +37,7 @@ import {
   readContribution,
   recordContribution,
   routeReadings,
+  waitingByPool,
   type ComponentReading,
   type ContributionMeasures,
   type ContributionReport,
@@ -101,6 +102,39 @@ describe('decideComponent', () => {
     expect(decisions.find((d) => d.id === 'gpu-a')).toMatchObject({ verdict: 'SCALE', basis: 'MARGINAL_GAIN', hardwareJustified: true });
     expect(decisions.find((d) => d.id === 'gpu-b')!.verdict).toBe('HOLD');
     expect(decisions.find((d) => d.id === 'gpu-a')!.contributionPerDollar).toBe(40);
+  });
+});
+
+describe('a free route is not scaled on a priced peer and the lane-wide queue (finding F9)', () => {
+  it('a $0 route with output is not a MARGINAL_GAIN just because a priced route sets a median', () => {
+    const free = reading({ id: 'groq/x', usefulOutput: ok(50), cost: ok(0), workWaiting: ok(9) });
+    const gpuA = reading({ id: 'runpod/a', usefulOutput: ok(10), cost: ok(1) });
+    const gpuB = reading({ id: 'runpod/b', usefulOutput: ok(4), cost: ok(2) });
+    const d = compareContributions([free, gpuA, gpuB]).find((x) => x.id === 'groq/x')!;
+    expect(d.verdict).toBe('HOLD');
+    expect(d.basis).toBe('NO_MARGINAL_MEASURE');
+    expect(d.hardwareJustified).toBe(false);
+  });
+
+  it('a $0 route still scales on its own measured saturation with its own work waiting', () => {
+    const d = decideComponent(reading({ cost: ok(0), workWaiting: ok(4), measures: measures({ saturation: ok(0.95) }) }), 2);
+    expect(d).toMatchObject({ verdict: 'SCALE', basis: 'MEASURED_SATURATION' });
+  });
+
+  it('each route reads its own pool\'s waiting count, never the lane-wide queue', () => {
+    const rows = [
+      { outcome: 'SUBMITTED', reason: 'model free/a', durationMs: 10, measures: null },
+      { outcome: 'SUBMITTED', reason: 'model free/c', durationMs: 10, measures: null },
+    ];
+    const waiting = waitingByPool([
+      { model: 'free/a', reason: '2 -> 4', measures: JSON.stringify({ busy: 2, waiting: 0 }) },
+      { model: 'free/b', reason: '2 -> 4', measures: JSON.stringify({ busy: 2, waiting: 7 }) },
+      { model: 'free/c', reason: '2 -> 4', measures: JSON.stringify({ busy: 2 }) },
+    ]);
+    const r = routeReadings(rows, null, waiting);
+    expect(r.find((x) => x.id === 'free/a')!.workWaiting).toEqual(ok(0));
+    expect(r.find((x) => x.id === 'free/c')!.workWaiting.measured).toBe(false);
+    for (const x of r) expect(decideComponent(x, 1).hardwareJustified).toBe(false);
   });
 });
 
@@ -226,7 +260,7 @@ describe('readings from rows', () => {
       ...Array.from({ length: 4 }, () => ({ outcome: 'SUBMITTED', reason: 'model free/a', durationMs: 1000, measures: JSON.stringify({ usage: { modelCalls: 2, modelCallsAvoided: 1, cpuMicros: 500_000 } }) })),
       ...Array.from({ length: 6 }, () => ({ outcome: 'FAILED_RETRYABLE', reason: 'model free/b: model call failed [provider availability] 503', durationMs: 100, measures: null })),
     ];
-    const r = routeReadings(rows, null, 3);
+    const r = routeReadings(rows, null, new Map([['free/a', 3]]));
     const a = r.find((x) => x.id === 'free/a')!;
     const b = r.find((x) => x.id === 'free/b')!;
     expect(a.measures.aiCallsPerUsefulFinding).toEqual(ok(2));
@@ -319,6 +353,7 @@ describe('recordContribution', () => {
       expect(report.decisions.find((d) => d.kind === 'WORKER' && d.id === 'free/a')).toBeDefined();
       expect(report.repairsFirst).toContain('MODEL_ROUTE:free/b');
       expect(report.hardwareJustifiedFor).toEqual([]);
+      expect(report.components.find((c) => c.kind === 'MODEL_ROUTE' && c.id === 'free/a')!.workWaiting).toEqual(ok(6));
 
       await recordContribution(new Date(now));
       const row = await db.get<{ outcome: string }>(`SELECT outcome FROM bin_events WHERE event_type = ? ORDER BY at DESC LIMIT 1`, [CAPACITY_CONTRIBUTION_EVENT]);
