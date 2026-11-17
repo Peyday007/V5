@@ -12,13 +12,17 @@ import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { newId } from '../server/repos/util.ts';
 import {
+  POST_CHANGE_WINDOW_MS,
   REMEDIES,
   ROUTE_MEASURE_KEYS,
   SCALING_OPTIONS,
   STAGE_LIMIT_EVENT,
   allocateMarginal,
   blockagesOf,
+  capacityChangeOf,
   limitingStage,
+  postChangeWindows,
+  readMeasuredChange,
   preSpendGate,
   readStageLimit,
   recordStageLimit,
@@ -27,7 +31,7 @@ import {
   type LimitSignals,
   type StageLimitReport,
 } from '../server/services/freeLane/stageLimit.ts';
-import type { RecordedStageCapacity, StageCapacityReport, StageReading } from '../server/services/freeLane/stageCapacity.ts';
+import { recordStageCapacity, type RecordedStageCapacity, type StageCapacityReport, type StageReading } from '../server/services/freeLane/stageCapacity.ts';
 
 const ok = (value: number) => ({ measured: true as const, value });
 const NOT = (reason: string) => ({ measured: false as const, reason });
@@ -205,6 +209,94 @@ describe('recordStageLimit', () => {
       await recordStageLimit(new Date(now));
       const row = await db.get<{ outcome: string }>(`SELECT outcome FROM bin_events WHERE event_type = ? ORDER BY at DESC LIMIT 1`, [STAGE_LIMIT_EVENT]);
       expect(row?.outcome).toBe('SOURCE_ACCESS');
+    });
+  });
+});
+
+/*
+ * F4 (review round 1): GAIN_VERIFIED / NO_GAIN_REVERT were unreachable on
+ * production because nothing fed the gate a before/after pair. The reading now
+ * finds the latest recorded growth (FREE_LANE_CAPACITY GROW, written by the
+ * capacity controller) and counts the lane's accepted output over equal windows
+ * either side of it, from FREE_LANE_ITEM rows.
+ */
+describe('the post-change measurement is fed from rows', () => {
+  it('reads a growth from its capacity row and only judges a fully elapsed after-window', () => {
+    expect(capacityChangeOf({ workload_class: 'free/a', at: 't', reason: '2 -> 4: waiting' })).toEqual({ model: 'free/a', at: 't', from: 2, to: 4 });
+    expect(capacityChangeOf({ workload_class: 'free/a', at: 't', reason: '4 -> 2: overloaded' })).toBeNull();
+    expect(capacityChangeOf({ workload_class: null, at: 't', reason: '2 -> 4' })).toBeNull();
+    const at = '2026-11-17T00:00:00.000Z';
+    expect(postChangeWindows({ at }, Date.parse(at) + POST_CHANGE_WINDOW_MS - 1)).toBeNull();
+    expect(postChangeWindows({ at }, Date.parse(at) + POST_CHANGE_WINDOW_MS)).toEqual({
+      before: [new Date(Date.parse(at) - POST_CHANGE_WINDOW_MS).toISOString(), at],
+      after: [at, new Date(Date.parse(at) + POST_CHANGE_WINDOW_MS).toISOString()],
+    });
+  });
+
+  describe('against a real database', () => {
+    beforeEach(async () => {
+      await freshProject();
+    });
+
+    const insertAt = (type: string, at: string, outcome: string, reason: string, workload: string | null = null) =>
+      getDb().run(
+        `INSERT INTO bin_events (id, event_type, at, measures, outcome, reason, is_proxy, workload_class) VALUES (?, ?, ?, '{}', ?, ?, 0, ?)`,
+        [newId('bev'), type, at, outcome, reason, workload],
+      );
+    const iso = (ms: number) => new Date(ms).toISOString();
+
+    async function scenario(before: number, after: number): Promise<number> {
+      const now = Date.now();
+      const grewAt = now - POST_CHANGE_WINDOW_MS - 30 * 60_000;
+      await insertAt('FREE_LANE_CAPACITY', iso(grewAt), 'GROW', '2 -> 4: waiting', 'free/a');
+      for (let i = 0; i < before; i += 1) await insertAt('FREE_LANE_ITEM', iso(grewAt - 60_000 * (i + 1)), 'SUBMITTED', 'model free/a: ok', 'claims');
+      for (let i = 0; i < after; i += 1) await insertAt('FREE_LANE_ITEM', iso(grewAt + 60_000 * (i + 1)), 'SUBMITTED', 'model free/a: ok', 'claims');
+      // Not accepted output, and output outside the windows: neither counts.
+      await insertAt('FREE_LANE_ITEM', iso(grewAt + 60_000), 'FAILED', 'model free/a: HTTP 503', 'claims');
+      await insertAt('FREE_LANE_ITEM', iso(grewAt - POST_CHANGE_WINDOW_MS - 60_000), 'SUBMITTED', 'model free/a: ok', 'claims');
+      return now;
+    }
+
+    it('counts accepted output either side of the latest growth', async () => {
+      const now = await scenario(3, 7);
+      const measured = await readMeasuredChange(now);
+      expect(measured).toMatchObject({ change: { model: 'free/a', from: 2, to: 4 }, usefulBefore: 3, usefulAfter: 7 });
+    });
+
+    it('the recorded reading reaches GAIN_VERIFIED when output rose after the growth', async () => {
+      const now = await scenario(3, 7);
+      await recordStageCapacity({ hours: 1, now, followers: [] });
+      const report = await readStageLimit({ now });
+      expect(report.capacityChange?.change.model).toBe('free/a');
+      expect(report.gate.decision).toBe('GAIN_VERIFIED');
+      expect(report.gate.reason).toContain('free/a grew 2 -> 4');
+    });
+
+    it('the recorded reading reaches NO_GAIN_REVERT when output did not rise, and writes it on the STAGE_LIMIT row', async () => {
+      const now = await scenario(5, 5);
+      await recordStageCapacity({ hours: 1, now, followers: [] });
+      expect((await readStageLimit({ now })).gate.decision).toBe('NO_GAIN_REVERT');
+      await recordStageLimit(new Date(now));
+      const row = await getDb().get<{ reason: string; measures: string }>(`SELECT reason, measures FROM bin_events WHERE event_type = ? ORDER BY at DESC LIMIT 1`, [STAGE_LIMIT_EVENT]);
+      expect(row?.reason).toContain('NO_GAIN_REVERT');
+      expect((JSON.parse(row!.measures) as StageLimitReport).gate.decision).toBe('NO_GAIN_REVERT');
+    });
+
+    it('a growth whose after-window is still open is named and still measured after, not judged', async () => {
+      const now = Date.now();
+      await insertAt('FREE_LANE_CAPACITY', iso(now - 60 * 60_000), 'GROW', '1 -> 3: waiting', 'free/b');
+      await recordStageCapacity({ hours: 1, now, followers: [] });
+      const report = await readStageLimit({ now });
+      expect(report.capacityChange).toMatchObject({ change: { model: 'free/b' }, usefulBefore: null, usefulAfter: null });
+      expect(report.gate.decision).toBe('ALLOW_THEN_MEASURE');
+      expect(report.gate.reason).toContain('still inside its after-window');
+    });
+
+    it('no growth in the lookback leaves the gate as before', async () => {
+      const now = Date.now();
+      expect(await readMeasuredChange(now)).toBeNull();
+      await recordStageCapacity({ hours: 1, now, followers: [] });
+      expect((await readStageLimit({ now })).gate.decision).toBe('ALLOW_THEN_MEASURE');
     });
   });
 });

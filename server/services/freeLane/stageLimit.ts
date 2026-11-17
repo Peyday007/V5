@@ -344,6 +344,8 @@ export function preSpendGate(input: {
   blockages: readonly Blockage[];
   usefulBefore?: number | null;
   usefulAfter?: number | null;
+  /** The added capacity the before/after pair is measured around. */
+  change?: CapacityChange | null;
 }): SpendGate {
   const base = { scalingOptions: SCALING_OPTIONS };
   if (!input.latestHealthy || input.latestHealthy.stale) {
@@ -357,14 +359,15 @@ export function preSpendGate(input: {
       measureAfter: null,
     };
   }
+  const which = input.change ? ` after ${input.change.model} grew ${input.change.from} -> ${input.change.to} at ${input.change.at}` : '';
   if (typeof input.usefulBefore === 'number' && typeof input.usefulAfter === 'number') {
     return input.usefulAfter > input.usefulBefore
-      ? { ...base, decision: 'GAIN_VERIFIED', reason: `Accepted useful output rose from ${input.usefulBefore} to ${input.usefulAfter}.`, measureAfter: null }
-      : { ...base, decision: 'NO_GAIN_REVERT', reason: `Accepted useful output did not rise (${input.usefulBefore} -> ${input.usefulAfter}); the added capacity is not earning, revert it.`, measureAfter: null };
+      ? { ...base, decision: 'GAIN_VERIFIED', reason: `Accepted useful output rose from ${input.usefulBefore} to ${input.usefulAfter}${which}.`, measureAfter: null }
+      : { ...base, decision: 'NO_GAIN_REVERT', reason: `Accepted useful output did not rise (${input.usefulBefore} -> ${input.usefulAfter})${which}; the added capacity is not earning, revert it.`, measureAfter: null };
   }
   return {
     ...base, decision: 'ALLOW_THEN_MEASURE',
-    reason: 'No reversible blockage in the latest healthy reading.',
+    reason: `No reversible blockage in the latest healthy reading.${input.change ? ` The growth of ${input.change.model} at ${input.change.at} is still inside its after-window.` : ''}`,
     measureAfter: 'accepted, commercially useful output per hour over an equal window after the change',
   };
 }
@@ -397,6 +400,8 @@ export interface StageLimitReport {
   limit: LimitVerdict;
   allocation: Allocation;
   gate: SpendGate;
+  /** The latest capacity growth the gate measured after, or null when none was recorded in the lookback. */
+  capacityChange: MeasuredChange | null;
 }
 
 /** The addition options the rows can price: one more LLM job vs one more code path per kind. Pure. */
@@ -427,6 +432,49 @@ export function additionOptions(report: StageCapacityReport | null, routes: read
   return out;
 }
 
+/** One recorded growth of a lane model's slots (`FREE_LANE_CAPACITY` GROW, "a -> b: …"). */
+export interface CapacityChange {
+  model: string;
+  at: string;
+  from: number;
+  to: number;
+}
+
+/** The equal windows either side of a capacity change that the after-measurement compares. */
+export const POST_CHANGE_WINDOW_MS = 6 * 3_600_000;
+/** How far back the latest growth is looked for; an older one has been judged already. */
+export const POST_CHANGE_LOOKBACK_MS = 7 * 24 * 3_600_000;
+
+/** A GROW row as a capacity change, or null when its reason does not state "a -> b". Pure. */
+export function capacityChangeOf(row: { workload_class: string | null; at: string; reason: string | null }): CapacityChange | null {
+  const m = /^\s*(\d+)\s*->\s*(\d+)/.exec(row.reason ?? '');
+  if (!m || !row.workload_class) return null;
+  const from = Number(m[1]);
+  const to = Number(m[2]);
+  return to > from ? { model: row.workload_class, at: row.at, from, to } : null;
+}
+
+/**
+ * The before and after windows of one change: equal, adjacent at the change.
+ * Null until the after window has fully elapsed — a partial window would
+ * compare less time after the change with a full one before it. Pure.
+ */
+export function postChangeWindows(change: Pick<CapacityChange, 'at'>, nowMs: number, windowMs = POST_CHANGE_WINDOW_MS): { before: [string, string]; after: [string, string] } | null {
+  const at = Date.parse(change.at);
+  if (!Number.isFinite(at) || at + windowMs > nowMs) return null;
+  const iso = (ms: number) => new Date(ms).toISOString();
+  return { before: [iso(at - windowMs), iso(at)], after: [iso(at), iso(at + windowMs)] };
+}
+
+/** The latest added capacity and the accepted output either side of it, as the gate reads it. */
+export interface MeasuredChange {
+  change: CapacityChange;
+  /** Null while the after window is still open. */
+  usefulBefore: number | null;
+  usefulAfter: number | null;
+  windowHours: number;
+}
+
 export function buildStageLimitReport(input: {
   since: string;
   until: string;
@@ -436,6 +484,8 @@ export function buildStageLimitReport(input: {
   retriesByStage: ReadonlyMap<string, number>;
   utilization: Measured<number>;
   cpu: Measured<number>;
+  /** The latest capacity growth and the accepted output measured either side of it. */
+  change?: MeasuredChange | null;
 }): StageLimitReport {
   const report = input.recorded?.report ?? null;
   const domains = new Map<string, { domain: string; routes: number; recordsConsidered: number; acceptedFacts: number }>();
@@ -475,7 +525,11 @@ export function buildStageLimitReport(input: {
     gate: preSpendGate({
       latestHealthy: input.recorded && input.recorded.outcome === 'MEASURED' ? { at: input.recorded.at, stale: input.recorded.stale } : null,
       blockages: blockagesOf(input.recorded),
+      usefulBefore: input.change?.usefulBefore ?? null,
+      usefulAfter: input.change?.usefulAfter ?? null,
+      change: input.change?.change ?? null,
     }),
+    capacityChange: input.change ?? null,
   };
 }
 
@@ -494,6 +548,32 @@ const parse = (text: string | null): Record<string, unknown> => {
     return {};
   }
 };
+
+/**
+ * The latest recorded growth of a lane model's slots within the lookback, and
+ * the lane's accepted output (`FREE_LANE_ITEM` SUBMITTED) over equal windows
+ * before and after it — S-0363's "measure whether the added capacity actually
+ * increases accepted and commercially useful output", from the rows the
+ * capacity controller and the lane already write. Read-only.
+ */
+export async function readMeasuredChange(nowMs: number, windowMs = POST_CHANGE_WINDOW_MS): Promise<MeasuredChange | null> {
+  const db = getDb();
+  const rows = await db.all<{ workload_class: string | null; at: string; reason: string | null }>(
+    `SELECT workload_class, at, reason FROM bin_events WHERE event_type = 'FREE_LANE_CAPACITY' AND outcome = 'GROW' AND at >= ? AND at <= ? ORDER BY at DESC, id DESC LIMIT 20`,
+    [new Date(nowMs - POST_CHANGE_LOOKBACK_MS).toISOString(), new Date(nowMs).toISOString()],
+  );
+  const change = rows.map(capacityChangeOf).find((one): one is CapacityChange => one !== null) ?? null;
+  if (!change) return null;
+  const windows = postChangeWindows(change, nowMs, windowMs);
+  const windowHours = round(windowMs / 3_600_000, 2);
+  if (!windows) return { change, usefulBefore: null, usefulAfter: null, windowHours };
+  const accepted = async ([from, to]: [string, string]): Promise<number> =>
+    n((await db.get<{ k: number | string }>(
+      `SELECT COUNT(*) AS k FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND outcome = 'SUBMITTED' AND at >= ? AND at < ?`,
+      [from, to],
+    ))?.k);
+  return { change, usefulBefore: await accepted(windows.before), usefulAfter: await accepted(windows.after), windowHours };
+}
 
 /** Read the stage-limit reading over one window, from rows. Read-only. */
 export async function readStageLimit(options: { hours?: number; now?: number } = {}): Promise<StageLimitReport> {
@@ -544,11 +624,12 @@ export async function readStageLimit(options: { hours?: number; now?: number } =
   }
   const utilization: Measured<number> = slots > 0 ? ok(round(busy / slots)) : NOT('no capacity row carries a target and busy count');
   const recorded = await safely(() => readStageCapacity(nowMs), null as RecordedStageCapacity | null);
+  const change = await safely(() => readMeasuredChange(nowMs), null as MeasuredChange | null);
 
   return buildStageLimitReport({
     since, until, hours,
     routes: routeWindowReadings({ since, until, rows: acqRows, seenBefore, yields }),
-    recorded, retriesByStage, utilization, cpu,
+    recorded, retriesByStage, utilization, cpu, change,
   });
 }
 
