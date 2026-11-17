@@ -257,3 +257,14 @@ See F1–F7 above. Each one gives the cause, file:line, run IDs, the smallest ch
   - CONCERN, medium, to be measured in W6: planner CPU. arrangementTarget loops over every opening with regex work for each of 400 arrangements. The check is the W4 plan-run time and loop lag.
   - CONCERN, medium, to be measured in W6: hypothesis-check commissions have no total cap across passes. The check is the share of hypothesis checks versus goal rounds once the mission ceiling rises.
   - Low: an UNRESOLVED check is not read by the goal planner; the old card copies have no backfill.
+- **08:43Z, owners for the review concerns.**
+  - W2c: planner CPU index.
+  - W3c: cap on hypothesis checks; UNRESOLVED wired to a planner or Hermes reader.
+  - Both PRs are due 10:00Z and ship in release 4 with W12, around 10:15Z.
+  - W6 still measures bd5e0419 for plan-run time, CPU, loop lag and hypothesis-check share.
+- **Recalculated critical path:**
+  - release 4 merged about 10:15Z;
+  - Postgres plus Deploy about 11:00Z;
+  - V1–V8 and W6 re-measure on release 4 from 11:00 to 13:00Z;
+  - report by 14:30Z.
+  - Slack is about 30–60 min. The checks on bd5e0419 between 09:15 and 11:00Z de-risk the path: anything already verified there and untouched by release 4 does not need re-verifying.
