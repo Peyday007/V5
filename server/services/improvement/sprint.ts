@@ -65,6 +65,7 @@ import {
   readCatalogue,
   readMethodOutcomes,
   readProcedures,
+  type InferenceStep,
   type MethodOutcome,
   type MethodSpec,
   type Procedure,
@@ -421,6 +422,89 @@ export function grossBilledProvenance(p: SprintProblem): { record: NumberProvena
 }
 
 /**
+ * The reasoning chain behind "this opening is an actionable pathway", built
+ * from what actually stands behind it: the research claim the card was drawn
+ * from (with that claim's status in the project's knowledge), each card field
+ * the conclusion rests on, the price as an estimate, and the causal step from
+ * the buying signal to payment. It is what `detectWeakInferences` reads, so a
+ * premise no supported claim backs, a price anchored on one figure, or a causal
+ * step no evidenced mechanism stands behind is a finding on the real opening —
+ * never assumed away and never invented.
+ */
+export function inferenceChainOf(
+  p: SprintProblem,
+  knowledge: KnowledgeReading | null = null,
+  mechanism: MechanismModel | null = null,
+): InferenceStep[] {
+  const chain: InferenceStep[] = [];
+  const supported = (knowledge?.claims ?? []).filter((c) => c.status === 'SUPPORTED');
+  const sourceUrlOf = (claimId: string): string | null => supported.find((c) => c.id === claimId)?.provenance?.sourceUrl?.trim() || null;
+
+  // The evidence step: the claim the card was drawn from, sourced only when the knowledge holds it as SUPPORTED.
+  let evidenceStep: string | null = null;
+  if (p.sourceClaimId) {
+    const atomic = knowledge?.claims.find((c) => c.id === p.sourceClaimId) ?? null;
+    const url = sourceUrlOf(p.sourceClaimId);
+    evidenceStep = `claim:${p.sourceClaimId}`;
+    chain.push({
+      id: evidenceStep,
+      claim: atomic
+        ? `research claim ${p.sourceClaimId} (${atomic.status}: ${atomic.reason})`.slice(0, 300)
+        : `research claim ${p.sourceClaimId} (not found in the project's knowledge)`,
+      kind: 'OBSERVATION',
+      premises: [],
+      sources: url ? [url] : [],
+    });
+  } else if (p.source?.trim()) {
+    evidenceStep = `source:${p.id}`;
+    chain.push({ id: evidenceStep, claim: `the card's own source for "${p.title}"`.slice(0, 300), kind: 'OBSERVATION', premises: [], sources: [p.source.trim()] });
+  }
+
+  const roleKnown = (role: MechanismRole): boolean => mechanism?.roles.some((r) => r.role === role && r.status === 'KNOWN') ?? false;
+
+  // One step per stated card field the conclusion rests on; each rests on the evidence step, or on nothing. A buying
+  // signal the mechanism does not hold as a KNOWN trigger is only seen alongside the opening: a correlate, not a cause.
+  const fieldStep = new Map<LoadBearing, string>();
+  for (const f of LOAD_BEARING) {
+    if (f === 'priceCents' || !known(p, f)) continue;
+    const id = `field:${f}`;
+    fieldStep.set(f, id);
+    const kind = f === 'buyingSignal' && !roleKnown('trigger') ? 'CORRELATION' : 'OBSERVATION';
+    chain.push({ id, claim: `${f} of "${p.title}" is ${String(p[f]).slice(0, 120)}`, kind, premises: evidenceStep ? [evidenceStep] : [], sources: [] });
+  }
+
+  // The price is an estimate: independent figures are the distinct supported claims that state a price for this project.
+  if (p.priceCents !== null) {
+    const priceClaims = new Set(supported.filter((c) => c.facet === 'prices').map((c) => c.id));
+    if (p.sourceClaimId && sourceUrlOf(p.sourceClaimId)) priceClaims.add(p.sourceClaimId);
+    fieldStep.set('priceCents', 'field:priceCents');
+    chain.push({
+      id: 'field:priceCents',
+      claim: `the price of one transaction of "${p.title}" is ${p.priceCents / 100} ${p.currency}`.slice(0, 300),
+      kind: 'ESTIMATE',
+      premises: evidenceStep ? [evidenceStep] : [],
+      sources: [],
+      independentFigures: priceClaims.size,
+    });
+  }
+
+  // The conclusion is causal: the buying signal makes the payer pay. It is backed by a mechanism only when the model
+  // holds both the trigger and the money movement as KNOWN on supported evidence.
+  const premises = [fieldStep.get('buyingSignal'), fieldStep.get('payer'), fieldStep.get('priceCents'), fieldStep.get('paymentTerms')].filter(
+    (s): s is string => typeof s === 'string',
+  );
+  chain.push({
+    id: `conclusion:${p.id}`,
+    claim: `"${p.title}" is a transaction the payer will pay for`.slice(0, 300),
+    kind: 'CAUSAL',
+    premises,
+    sources: [],
+    causalSupport: roleKnown('trigger') && roleKnown('moneyMovement') ? 'MECHANISM' : null,
+  });
+  return chain;
+}
+
+/**
  * The controller's snapshot of one opening: the card's evidence, the learned
  * catalogue and method outcomes, and — when the controller decided this
  * opening before — its prior decision and the results tracked against it, so
@@ -451,6 +535,8 @@ export function controllerSnapshotOf(p: SprintProblem, context: MethodContext = 
     // No hypotheses or evidence are given: the controller generates them from the mechanism and weighs them on its cited claims.
     hypotheses: [],
     evidence: [],
+    // The chain the conclusion rests on, so weak inferences are found on the real opening (S-0195).
+    chain: inferenceChainOf(p, context.knowledge ?? null, mechanism),
     actions: [...actions, ...roleActions],
     prior: context.prior ?? null,
     results: context.results ?? [],
