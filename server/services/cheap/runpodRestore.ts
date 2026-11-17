@@ -535,7 +535,14 @@ async function createViaGraphql(
   const refusals: string[] = [];
   const cudas = recipe.cuda.map(Number).filter(Number.isFinite);
   const minCuda = cudas.length ? recipe.cuda[cudas.indexOf(Math.min(...cudas))] : null;
-  const dockerArgs = joinDockerArgs(spec['dockerStartCmd'] as string[]);
+  // `--model <name>` rather than a positional model: both the image's `vllm serve` and the module
+  // entrypoint accept it, so the start command does not depend on which entrypoint the image ships
+  // (production 2026-11-17 00:31Z: a positional-model pod crash-looped for 12 minutes).
+  const cmd = [...(spec['dockerStartCmd'] as string[])];
+  if (cmd[0] && !cmd[0].startsWith('-')) cmd.unshift('--model');
+  const dockerArgs = joinDockerArgs(cmd);
+  // A recipe with no CUDA filter still needs a driver that runs the image (12.8 for the 2026 one).
+  const minCudaFor = minCuda ?? (recipe.image === IMAGE_2026 ? '12.8' : null);
   for (const gpu of recipe.gpus) {
     const input = [
       `cloudType: ${spec['cloudType']}`,
@@ -547,7 +554,7 @@ async function createViaGraphql(
       'volumeInGb: 0',
       'ports: "8000/http"',
       `dockerArgs: ${lit(dockerArgs)}`,
-      ...(minCuda ? [`minCudaVersion: ${lit(minCuda)}`] : []),
+      ...(minCudaFor ? [`minCudaVersion: ${lit(minCudaFor)}`] : []),
     ].join(', ');
     const r = await graphql(apiKey, `mutation { podFindAndDeployOnDemand(input: { ${input} }) { id desiredStatus costPerHr machine { gpuDisplayName } } }`, fetchImpl);
     const made = r.data?.['podFindAndDeployOnDemand'] as GraphqlPod | null | undefined;
