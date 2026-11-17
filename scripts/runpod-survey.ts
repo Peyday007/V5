@@ -12,6 +12,9 @@ if (!key) {
   process.exit(2);
 }
 
+/** RUNPOD_SURVEY_GPU_COUNT: the card count stock and price are read for (default 1). */
+const GPU_COUNT = Math.max(1, Math.floor(Number(process.env['RUNPOD_SURVEY_GPU_COUNT']) || 1));
+
 async function gql(query: string): Promise<{ data?: Record<string, unknown>; errors?: { message: string }[] }> {
   const res = await fetch('https://api.runpod.io/graphql', {
     method: 'POST',
@@ -53,8 +56,8 @@ async function main(): Promise<void> {
   }
 
   const gpus = await first([
-    '{ gpuTypes { id displayName memoryInGb secureCloud communityCloud securePrice communityPrice secureSpotPrice communitySpotPrice lowestPrice(input: { gpuCount: 1 }) { minimumBidPrice uninterruptablePrice stockStatus } } }',
-    '{ gpuTypes { id displayName memoryInGb secureCloud communityCloud securePrice communityPrice lowestPrice(input: { gpuCount: 1 }) { uninterruptablePrice stockStatus } } }',
+    `{ gpuTypes { id displayName memoryInGb secureCloud communityCloud securePrice communityPrice secureSpotPrice communitySpotPrice lowestPrice(input: { gpuCount: ${GPU_COUNT} }) { minimumBidPrice uninterruptablePrice stockStatus } } }`,
+    `{ gpuTypes { id displayName memoryInGb secureCloud communityCloud securePrice communityPrice lowestPrice(input: { gpuCount: ${GPU_COUNT} }) { uninterruptablePrice stockStatus } } }`,
     '{ gpuTypes { id displayName memoryInGb securePrice communityPrice } }',
   ]);
   const types = ((gpus?.['gpuTypes'] ?? []) as Record<string, unknown>[])
@@ -63,7 +66,7 @@ async function main(): Promise<void> {
   for (const g of types) {
     const low = (g['lowestPrice'] ?? {}) as Record<string, unknown>;
     console.log(
-      `GPU ${String(g['memoryInGb']).padStart(3)}GB ${String(g['id']).padEnd(42)} secure $${g['securePrice'] ?? '-'} community $${g['communityPrice'] ?? '-'} spot $${g['communitySpotPrice'] ?? g['secureSpotPrice'] ?? '-'} · lowest $${low['uninterruptablePrice'] ?? '-'} stock ${low['stockStatus'] ?? '-'}`,
+      `GPU x${GPU_COUNT} ${String(g['memoryInGb']).padStart(3)}GB ${String(g['id']).padEnd(42)} secure $${g['securePrice'] ?? '-'} community $${g['communityPrice'] ?? '-'} spot $${g['communitySpotPrice'] ?? g['secureSpotPrice'] ?? '-'} · lowest $${low['uninterruptablePrice'] ?? '-'} stock ${low['stockStatus'] ?? '-'}`,
     );
   }
   console.log('RUNPOD-SURVEY: OK');

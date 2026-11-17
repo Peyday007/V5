@@ -51,6 +51,11 @@ export interface PodRecipe {
   containerDiskInGb: number;
   /** The GPU memory the recipe needs; a card with less is never asked for. */
   minGpuGb: number;
+  /**
+   * Cards in the pod (default 1). Above 1 the recipe serves `--data-parallel-size` replicas of
+   * the model behind one address, so Brain's single GPU route gets that many times the sequences.
+   */
+  gpuCount?: number;
   /** Which RunPod cloud to ask first: the 24 GB cards are cheapest on COMMUNITY, the 2000 Ada on SECURE. */
   clouds: ('SECURE' | 'COMMUNITY')[];
   note: string;
@@ -79,6 +84,33 @@ const CUDA_129 = ['12.8', '12.9', '13.0'];
  * which is why no 2026 recipe ever served before this.
  */
 const IMAGE_2026 = 'vllm/vllm-openai:v0.11.0';
+
+
+function dataParallel120b(n: number): PodRecipe {
+  return {
+    key: `gpt-oss-120b-${n}x80`,
+    model: 'openai/gpt-oss-120b',
+    served: 'openai/gpt-oss-120b',
+    // Only the types RunPod shows multi-card stock for (runpod-survey 43897665060, 2026-11-16:
+    // x2/x4 H100 HBM3 and H200 "Low", every other 80 GB type none); a list naming types with no
+    // multi-card stock was refused "no instances currently available".
+    gpus: ['NVIDIA H100 80GB HBM3', 'NVIDIA H200'],
+    image: IMAGE_2026,
+    // No CUDA filter: with it, x2 and x4 were refused "no instances" while the survey showed stock.
+    // A host whose driver cannot run the image fails the probe, and the upgrade deletes the pod.
+    cuda: [],
+    maxModelLen: 131072,
+    args: [
+      '--gpu-memory-utilization', '0.92', '--max-num-seqs', '48', '--data-parallel-size', String(n),
+      '--enable-auto-tool-choice', '--tool-call-parser', 'openai', '--reasoning-parser', 'openai_gptoss',
+    ],
+    containerDiskInGb: 250,
+    minGpuGb: 80,
+    gpuCount: n,
+    clouds: ['SECURE', 'COMMUNITY'],
+    note: `gpt-oss-120b, ${n} data-parallel replicas on ${n} x 80 GB, 128K, ${48 * n} parallel sequences behind one address`,
+  };
+}
 
 export const RECIPES: Record<string, PodRecipe> = {
   'qwen3-4b-legacy': {
@@ -239,6 +271,35 @@ export const RECIPES: Record<string, PodRecipe> = {
     note: 'MoE 117B/5.1B active, MXFP4 ~61 GB on an 80 GB card (H100/H200/A100-80), 128K, 48 parallel sequences',
   },
   /**
+   * gpt-oss-120b as data-parallel replicas on 2 or 4 80 GB cards behind one address (owner's
+   * $250 acceleration, 2026-11-16): Brain routes to one GPU URL, so more throughput is more
+   * replicas there, not a second pod nobody routes to. Each replica is the 80 GB recipe.
+   */
+  /**
+   * gpt-oss-120b on one 141-180 GB card (B200, else H200): the multi-card hosts were refused
+   * "no instances" while single B200/H200 cards were in stock (runpod-survey 43897665060), and the
+   * larger card holds a far bigger KV cache, so one address serves 128 sequences instead of 48.
+   */
+  'gpt-oss-120b-big': {
+    key: 'gpt-oss-120b-big',
+    model: 'openai/gpt-oss-120b',
+    served: 'openai/gpt-oss-120b',
+    gpus: ['NVIDIA B200', 'NVIDIA H200'],
+    image: IMAGE_2026,
+    cuda: [],
+    maxModelLen: 131072,
+    args: [
+      '--gpu-memory-utilization', '0.92', '--max-num-seqs', '128',
+      '--enable-auto-tool-choice', '--tool-call-parser', 'openai', '--reasoning-parser', 'openai_gptoss',
+    ],
+    containerDiskInGb: 250,
+    minGpuGb: 141,
+    clouds: ['SECURE', 'COMMUNITY'],
+    note: 'gpt-oss-120b on one B200/H200: 128K, 128 parallel sequences behind one address',
+  },
+  'gpt-oss-120b-2x80': dataParallel120b(2),
+  'gpt-oss-120b-4x80': dataParallel120b(4),
+  /**
    * A director-class model for the operator (Surge B H2-9): Qwen3-32B at 4 bits (~19 GB) on a
    * 48 GB card, 64K by YaRN with an FP8 KV cache, hermes tool calls and qwen3 reasoning.
    * runpod-survey 2026-11-12: RTX A6000 $0.33/h, A40 $0.35/h community — above the 0.24 default
@@ -294,10 +355,10 @@ export function podSpec(
     computeType: 'GPU',
     gpuTypeIds: recipe.gpus,
     gpuTypePriority: 'custom',
-    gpuCount: 1,
+    gpuCount: recipe.gpuCount ?? 1,
     interruptible: false,
     imageName: recipe.image,
-    allowedCudaVersions: recipe.cuda,
+    ...(recipe.cuda.length ? { allowedCudaVersions: recipe.cuda } : {}),
     // The 2026 images start with `vllm serve <model>` (their own ENTRYPOINT); the module path the
     // 2025 image needs is deprecated there, and every pod on it crash-looped within seconds
     // (2026-11-16 09:42–10:42: uptime never above 6 s, GPU memory 0%, /v1/models 404 for an hour).

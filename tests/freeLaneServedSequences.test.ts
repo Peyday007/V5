@@ -62,3 +62,25 @@ describe('the GPU growth gate with served sequences as proven', () => {
     expect(gateGrowth({ model, gpu: true, current: 8, stableHigh: proven, proposed: 16, recorded: elsewhere })).toMatchObject({ held: true, target: 8 });
   });
 });
+
+describe('a data-parallel pod (owner acceleration 2026-11-16: more replicas behind the one GPU address)', () => {
+  it('serves --max-num-seqs on every replica, and the runaway guard stays above it', async () => {
+    const { gpuCeiling } = await import('../server/services/freeLane/capacity.ts');
+    const two = RECIPES['gpt-oss-120b-2x80']!;
+    const four = RECIPES['gpt-oss-120b-4x80']!;
+    expect(two.gpuCount).toBe(2);
+    expect(four.gpuCount).toBe(4);
+    expect(servedSequences('runpod/openai/gpt-oss-120b', RECIPES, four)).toBe(192);
+    expect(servedSequences('runpod/openai/gpt-oss-120b', RECIPES, two)).toBe(96);
+    expect(gpuCeiling({}, 192)).toBe(192);
+    expect(gpuCeiling({}, 48)).toBe(48);
+    expect(gpuCeiling({}, null)).toBe(32);
+    expect(gpuCeiling({ BRAIN_RUNPOD_MAX_SLOTS: '64' }, 192)).toBe(64);
+  });
+
+  it('asks RunPod for that many cards', async () => {
+    const { podSpec } = await import('../server/services/cheap/runpodRestore.ts');
+    expect(podSpec('k', undefined, 'SECURE', RECIPES['gpt-oss-120b-4x80']!)['gpuCount']).toBe(4);
+    expect(podSpec('k', undefined, 'SECURE', RECIPES['gpt-oss-120b-80']!)['gpuCount']).toBe(1);
+  });
+});

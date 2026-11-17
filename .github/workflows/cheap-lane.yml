@@ -47,7 +47,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'deploy | status | prune | test | connect | disconnect | claude-discovery-off | claude-discovery-on | focus | unfocus | runpod-test | runpod-connect | runpod-disconnect | runpod-report | runpod-auto | runpod-cycle | runpod-restore | runpod-survey | runpod-bench | runpod-upgrade | runpod-repurpose | runpod-diagnose | runpod-score'
+        description: 'deploy | status | prune | test | connect | disconnect | claude-discovery-off | claude-discovery-on | focus | unfocus | runpod-test | runpod-connect | runpod-disconnect | runpod-report | runpod-auto | runpod-cycle | runpod-restore | runpod-survey | runpod-bench | runpod-upgrade | runpod-repurpose | runpod-diagnose | runpod-score | runpod-stop | runpod-budget | runpod-start'
         required: true
         default: deploy
       recipes:
@@ -76,6 +76,14 @@ on:
         default: ''
       tool_score:
         description: 'For runpod-upgrade: the director-task score (0-1) the new recipe measured in runpod-bench; ranks the GPU in Hermes model chain (BRAIN_RUNPOD_TOOL_SCORE).'
+        required: false
+        default: ''
+      budget_usd:
+        description: 'For runpod-budget: the GPU dollar budget per window (BRAIN_RUNPOD_BUDGET_USD).'
+        required: false
+        default: ''
+      budget_window_hours:
+        description: 'For runpod-budget: the rolling budget window in hours (BRAIN_RUNPOD_BUDGET_WINDOW_HOURS).'
         required: false
         default: ''
 
@@ -131,6 +139,8 @@ jobs:
           TOOL_SCORE_INPUT: ${{ inputs.tool_score || '' }}
           RUNPOD_MIN_RUNWAY_HOURS: ${{ inputs.runway_hours || '' }}
           IMAGE_INPUT: ${{ inputs.image || '' }}
+          BUDGET_USD_INPUT: ${{ inputs.budget_usd }}
+          BUDGET_WINDOW_INPUT: ${{ inputs.budget_window_hours }}
           # The most every Brain pod together may cost while runpod-bench/upgrade runs a second pod
           # beside production (a repository variable); unset = runpod-bench.ts's default of $0.45/h.
           RUNPOD_MAX_TOTAL_USD_PER_HOUR: ${{ vars.RUNPOD_MAX_TOTAL_USD_PER_HOUR }}
@@ -245,10 +255,19 @@ jobs:
             runpod-report)
               gpu_report
               ;;
+            runpod-stop)
+              # Stop (not delete) every Brain pod: a stopped pod bills no GPU, and runpod-auto
+              # recreates a deleted pod but never starts a stopped one. Run runpod-disconnect first,
+              # or Brain starts the pod again when research arrives. Owner cost control, 2026-11-16.
+              [ -n "${RUNPOD_API_KEY:-}" ] || { echo "::error::Set the RUNPOD_API_KEY repository secret."; exit 1; }
+              npx tsx scripts/runpod-stop.ts
+              sleep 20
+              npx tsx scripts/runpod-survey.ts | grep -E '^(ACCOUNT|POD) '
+              ;;
             runpod-survey)
               # What the account holds and could rent, from RunPod itself (§108). Changes nothing.
               [ -n "${RUNPOD_API_KEY:-}" ] || { echo "::error::Set the RUNPOD_API_KEY repository secret."; exit 1; }
-              npx tsx scripts/runpod-survey.ts
+              for n in 1 2 4; do RUNPOD_SURVEY_GPU_COUNT=$n npx tsx scripts/runpod-survey.ts; done
               ;;
             runpod-repurpose)
               # Serve a recipe on the existing pod in place (§108): same host and GPU, no second pod.
@@ -296,6 +315,23 @@ jobs:
                 npx tsx scripts/runpod-bench.ts --recipes "$recipes" --switchboard "https://$cheap.fly.dev/v1" $base --reps "$(printf '%s' "$REPS_INPUT" | tr -cd '1-5' | cut -c1)" | tee bench.txt
               grep -q '^RUNPOD-BENCH: OK' bench.txt || { echo "::error title=runpod::The benchmark did not finish."; exit 1; }
               grep '^WINNER' bench.txt | sed 's/^/::notice title=runpod bench::/'
+              ;;
+            runpod-start)
+              # Resume the stopped pod for a bounded run, wait for vLLM, then connect as runpod-connect does.
+              # Set the dollar budget first (runpod-budget): the supervisor stops the pod at it.
+              [ -n "${RUNPOD_API_KEY:-}" ] || { echo "::error::Set the RUNPOD_API_KEY repository secret."; exit 1; }
+              npx tsx scripts/runpod-start.ts || { echo "::error::The pod did not start or serve; nothing on the Brain changed."; exit 1; }
+              restore
+              probe || { echo "::error::The GPU did not pass the probe; nothing on the Brain changed."; exit 1; }
+              gpu_connect
+              ;;
+            runpod-budget)
+              # The GPU's hard dollar budget per rolling window (#1002): the pod supervisor stops the
+              # pod and refuses every start once the window's measured spend reaches it.
+              b=$(printf '%s' "${BUDGET_USD_INPUT:-}" | tr -cd '0-9.'); w=$(printf '%s' "${BUDGET_WINDOW_INPUT:-}" | tr -cd '0-9.')
+              [ -n "$b" ] || { echo "::error::runpod-budget needs budget_usd."; exit 1; }
+              flyctl secrets set --app "$brain" BRAIN_RUNPOD_BUDGET_USD="$b" ${w:+BRAIN_RUNPOD_BUDGET_WINDOW_HOURS="$w"} >/dev/null
+              echo "::notice title=runpod budget::BRAIN_RUNPOD_BUDGET_USD=$b per ${w:-24} h set."
               ;;
             runpod-score)
               # Record the serving GPU model's measured director score (runpod-bench baseline) for
