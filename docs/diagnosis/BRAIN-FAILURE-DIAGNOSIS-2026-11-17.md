@@ -159,3 +159,23 @@ See F1–F7 above. Each one gives the cause, file:line, run IDs, the smallest ch
 | V7 | Cost accounting and spending controls | budget-cap shutdown evidence (#1002+#1011, pod 5e8ks9cr2o8yml 03:01Z) stays valid unless budget code changes; the W6 GPU hours show RunPod-billed spend matching the cap | reuse; re-check code diff |
 | V8 | Sustained measured workload without a growing bottleneck | W6 stepped load test: accepted claims/h, queue drain, CPU/DB below saturation | pending W6 |
 | G | Production gate | Postgres suite green and Deploy success on the released SHA; arrangementLibrary:284 accounted for (W5) | eda04071: suite rerun green (44030756257); Deploy 44036476327 running |
+
+## Verification log
+
+- **07:38:52Z, release:** Deploy 44036476327 of eda04071 succeeded. Its Postgres suite passed on the rerun 44030756257.
+- **07:42Z, capacity reading:**
+  - Free lane: 2 slots running, 37 items waiting. The `auto` provider failed 100% of 5 calls, and `auto/best-coding` is held at 1 slot. The GPU is off.
+  - So without the GPU, research capacity is about 2 slots. The run's productivity depends on the GPU configuration that the W6 stepped load test will measure.
+- **07:5xZ, the goal's 15 READY Routine bins: RULED OUT as a blocker.**
+  - What they are: PLAY_RESEARCH packet bins. While brain-only mode is on, the §84 filter (`purposeAdmitsSql`, repos/bins.ts:1626-1630) keeps them from Routines.
+  - Who does the work: under §85 the free lane claims their work items directly (freeLane/worker.ts:62-65, 237, 365-367). Production shows items leased today, e.g. wki_c1bc6322… RESEARCH_SYNTHESIZE at 07:40Z.
+  - Residual wording defect, non-blocking: goals/model.ts:1129-1142 promises "Brain fires the next free Routine at bin …" without checking the bin's lane.
+- **Traced example: CONFIRMED except two hops.** The chain runs from the objective through research and accepted evidence to a plan decision, for cop_9fd24b12b74c46c58c38:
+  - discovery claim clm_0d48aae6… → buying_signal (discovery.ts:2125);
+  - deep dive rcn_1d5f81bdd050415e9d61, 16/16 answered, accepted claims payer clm_00a2d7fb…@orc_91773939…, access clm_3457e54c…, fulfillment clm_e2c8ceec…, revenueRange clm_f869272e…, directCosts clm_d5db9c14…;
+  - these become EVIDENCE card facts plus columns (validation.ts:2313-2347, answers.ts:110-130);
+  - the pathway reads buyer, why and channel from those columns (pathways.ts:633-641), and price becomes a 14.83–250 range from revenueRange (goalScenario.ts:943-952);
+  - plan decision: fit TOO_SMALL_AS_IS → CONSTRUCT "sell the same deliverable to buyers like this one; 17 buyers at 60.89" (Goals run 44027622659), and job cjb_dcb956… held at WAITING_RESEARCH on need cnd_940c629….
+  - Not read: the revenueRange claim's full text, and whether the discovery claim was accepted.
+  - Non-blocking defect: `textFact` marks any non-empty column PROVEN (pathways.ts:460-462). In this example buyer and channel do trace to accepted claims.
+- **V4/V6 gap:** the goal-plan reading still carries readAt 00:02:39Z, because unchanged readings write no row. Fresh-derivation evidence has been requested from W4.
