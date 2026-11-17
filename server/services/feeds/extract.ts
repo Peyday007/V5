@@ -62,7 +62,7 @@ export interface ExtractableItem {
 }
 
 /** The version of this extractor's code, recorded on every fact so a change in reading is visible in the rows. */
-export const EXTRACTOR_VERSION = 'feeds-extract/2';
+export const EXTRACTOR_VERSION = 'feeds-extract/3';
 
 /**
  * What a fact is epistemically. Extraction emits only OBSERVED and DERIVED;
@@ -115,7 +115,54 @@ export type FactField = 'price' | 'quantity' | 'date' | 'location' | 'deliverabl
 /** The item field a value was read from. */
 export type ItemField = 'title' | 'body' | 'organization' | 'publishedAt';
 
+/**
+ * What a figure measures, where two readings of the same number must never be
+ * merged (KNOW-25-1, decision-ready facts): a provider's advertised price is
+ * not what a buyer actually paid, an available market size is not a count of
+ * reachable leads, and published capacity is not contractually available
+ * fulfilment. Decided from the record's kind and its own wording around the
+ * figure — never from an industry or category list — and null when the record
+ * does not say which it is (an unknown is not a favourable assumption).
+ */
+export type MeasureKind =
+  | 'ADVERTISED_PRICE'
+  | 'PAID_PRICE'
+  | 'REQUESTED_BUDGET'
+  | 'OFFERED_WAGE'
+  | 'STATED_PRICE'
+  | 'MARKET_SIZE'
+  | 'REACHABLE_LEADS'
+  | 'PUBLISHED_CAPACITY'
+  | 'CONTRACTED_CAPACITY';
+
+/** The jurisdiction or scope a fact holds in, as the record states it; null with basis 'not stated' when it does not. */
+export interface FactScope {
+  jurisdiction: string | null;
+  basis: string;
+}
+
+/** Why the fact is believed: the reading rule that produced it and what it rests on. */
+export interface ConfidenceBasis {
+  rule: 'ROLE_FROM_RECORD_KIND' | 'TITLE' | 'MONEY_FIGURE' | 'QUANTITY' | 'STATED_DATE' | 'PUBLISHED_DATE' | 'STATED_PLACE';
+  /** Whether the evidence text was found verbatim in the record (a located span) or not. */
+  evidence: 'VERBATIM_SPAN' | 'SPAN_NOT_LOCATED';
+  /** One line a person can check against the record. */
+  detail: string;
+}
+
+/** Contradiction status: a reconciled status, or UNRECONCILED when the fact was read alone (`extractItem`). */
+export type ContradictionStatus = ReconciledStatus | 'UNRECONCILED';
+
 export interface ExtractedFact {
+  /** What the figure measures, for prices and quantities; null for every other field or when the record does not say. */
+  measureKind: MeasureKind | null;
+  /** Jurisdiction or scope read from the record. */
+  scope: FactScope;
+  /** The code (and model, always none here) version that read it — the same as `provenance.extractor.code`. */
+  parserVersion: string;
+  confidenceBasis: ConfidenceBasis;
+  /** OBSERVED, CONTESTED or STALE once reconciled with the other observations of its key. */
+  contradictionStatus: ContradictionStatus;
   /** Which fact this observes: the same key across items means the same fact, so they reconcile. */
   key: string;
   field: FactField;
@@ -259,6 +306,56 @@ function locatedPlaces(text: string): { place: string; text: string; span: Evide
   return out;
 }
 
+/** Wording, near a figure, that says a price was actually paid or awarded rather than asked. */
+const PAID_WORDING = /\b(paid|was paid|sold for|purchased for|bought for|awarded|award(?:ed)? amount|contract value|invoice(?:d)? (?:paid|settled)|settled for|closed at)\b/i;
+const MARKET_SIZE_WORDING = /\b(market size|market (?:is|was) (?:worth|valued)|total addressable|addressable market|tam\b|industry (?:size|revenue)|market of)\b/i;
+const REACHABLE_WORDING = /\b(leads?|prospects?|contacts?|reachable|opted[- ]in|subscribers?|mailing list)\b/i;
+const CONTRACTED_WORDING = /\b(contracted|under contract|guaranteed|reserved|committed|booked|allocated to us|take[- ]or[- ]pay)\b/i;
+const CAPACITY_WORDING = /\b(capacity|can (?:produce|deliver|ship|handle|serve)|up to|per (?:day|week|month|year) output|throughput)\b/i;
+
+/** The record text around one figure, where its own wording says what the figure is. */
+function around(text: string, figure: string): string {
+  const at = text.indexOf(figure);
+  if (at < 0) return text;
+  return text.slice(Math.max(0, at - 80), at + figure.length + 80);
+}
+
+/**
+ * What a price figure is, from the record's kind and its own wording. An
+ * advert or a listing only ever advertises: it is never a paid price, however
+ * it is worded. A stated request states a budget, a job posting offers a wage.
+ */
+export function priceMeasure(kind: RecordKind, near: string): MeasureKind {
+  if (kind === 'SUPPLIER_AD' || kind === 'PLATFORM_PRICE') return 'ADVERTISED_PRICE';
+  if (kind === 'STATED_REQUEST') return 'REQUESTED_BUDGET';
+  if (kind === 'JOB_POSTING') return 'OFFERED_WAGE';
+  if (MARKET_SIZE_WORDING.test(near)) return 'MARKET_SIZE';
+  return PAID_WORDING.test(near) ? 'PAID_PRICE' : 'STATED_PRICE';
+}
+
+/** What a quantity is: a market size, reachable leads, published or contracted capacity — or null when the record does not say. */
+export function quantityMeasure(kind: RecordKind, near: string): MeasureKind | null {
+  if (MARKET_SIZE_WORDING.test(near)) return 'MARKET_SIZE';
+  if (CAPACITY_WORDING.test(near) || CONTRACTED_WORDING.test(near)) {
+    // An advert can only publish capacity; a contract is not something an advert shows.
+    return CONTRACTED_WORDING.test(near) && kind !== 'SUPPLIER_AD' && kind !== 'PLATFORM_PRICE' ? 'CONTRACTED_CAPACITY' : 'PUBLISHED_CAPACITY';
+  }
+  if (REACHABLE_WORDING.test(near)) return 'REACHABLE_LEADS';
+  return null;
+}
+
+/**
+ * The jurisdiction or scope the record states: its "City, ST" places (as the
+ * region code) or "remote". Nothing is inferred from the source or an industry;
+ * a record that names none is scope unknown, said so (invariant 34).
+ */
+export function scopeOf(item: Pick<ExtractableItem, 'title' | 'body'>): FactScope {
+  const places = [...locatedPlaces(item.title), ...locatedPlaces(item.body ?? '')];
+  if (places.length === 0) return { jurisdiction: null, basis: 'not stated' };
+  const regions = [...new Set(places.map((p) => (p.place === 'remote' ? 'remote' : p.place.split(', ')[1]!.toUpperCase())))].sort();
+  return { jurisdiction: regions.join('|'), basis: `stated in record: ${places.map((p) => `"${p.text}"`).slice(0, 3).join(', ')}` };
+}
+
 /** The deliverable a record is about, as a comparable key. Job titles lose seniority and work-mode words. */
 function deliverableOf(item: ExtractableItem, kind: RecordKind): string | null {
   const key = kind === 'JOB_POSTING' || ROLE_TITLE_SOURCES.has(item.source) ? titleKey(item.title) : item.title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -273,6 +370,7 @@ export function extractItem(item: ExtractableItem): ExtractedFact[] {
   const observedAt = item.publishedAt ?? item.fetchedAt;
   const demand: ExtractedFact['demand'] = kind === 'STATED_REQUEST' ? 'STATED_REQUEST' : 'NOT_DEMAND';
   const subject = `${entity ?? item.id}:${deliverable ?? '-'}`;
+  const scope = scopeOf(item);
   const out: ExtractedFact[] = [];
   const fieldText = (field: ItemField): string => (field === 'body' ? item.body ?? '' : field === 'organization' ? item.organization ?? '' : field === 'publishedAt' ? item.publishedAt ?? '' : item.title);
   // Where to look next for each repeated (field, text), so the second identical figure points at the second occurrence.
@@ -286,10 +384,8 @@ export function extractItem(item: ExtractableItem): ExtractedFact[] {
     cursors.set(cursorKey, start + 1);
     return { start, end: start + text.length, text };
   };
-  const push = (
-    fact: Omit<ExtractedFact, 'recordKind' | 'demand' | 'observedAt' | 'entityKey' | 'epistemicClass' | 'provenance'>,
-    span?: EvidenceSpan,
-  ): void => {
+  type Read = Omit<ExtractedFact, 'recordKind' | 'demand' | 'observedAt' | 'entityKey' | 'epistemicClass' | 'provenance' | 'measureKind' | 'scope' | 'parserVersion' | 'confidenceBasis' | 'contradictionStatus'>;
+  const push = (fact: Read, rule: ConfidenceBasis['rule'], measureKind: MeasureKind | null = null, span?: EvidenceSpan): void => {
     // A role (buyer, provider, employer) is inferred from the record's kind; everything else is read off the record.
     const epistemicClass: EpistemicClass = fact.field === 'buyer' || fact.field === 'provider' || fact.field === 'employer' ? 'DERIVED' : 'OBSERVED';
     const provenance: FactProvenance = {
@@ -307,7 +403,25 @@ export function extractItem(item: ExtractableItem): ExtractedFact[] {
       entities: entity ? [entity] : [],
       units: { unit: fact.unit, currency: fact.currency },
     };
-    out.push({ ...fact, entityKey: entity, recordKind: kind, demand, observedAt, epistemicClass, provenance });
+    const confidenceBasis: ConfidenceBasis = {
+      rule,
+      evidence: provenance.span ? 'VERBATIM_SPAN' : 'SPAN_NOT_LOCATED',
+      detail: `${rule.toLowerCase().replace(/_/g, ' ')} read by ${EXTRACTOR_VERSION} from ${fact.evidence.field} of a ${kind} record: "${fact.evidence.text.slice(0, 80)}"`,
+    };
+    out.push({
+      ...fact,
+      measureKind,
+      scope,
+      parserVersion: EXTRACTOR_VERSION,
+      confidenceBasis,
+      contradictionStatus: 'UNRECONCILED',
+      entityKey: entity,
+      recordKind: kind,
+      demand,
+      observedAt,
+      epistemicClass,
+      provenance,
+    });
   };
   const ev = (field: ItemField, text: string) => ({ itemId: item.id, field, text, url: item.url });
 
@@ -316,37 +430,48 @@ export function extractItem(item: ExtractableItem): ExtractedFact[] {
     // an employer hiring is not buying from anyone outside, and a seller advertising is supply.
     const role: FactField =
       kind === 'STATED_REQUEST' ? 'buyer' : kind === 'SUPPLIER_AD' || kind === 'PLATFORM_PRICE' ? 'provider' : kind === 'JOB_POSTING' ? 'employer' : 'organization';
-    push({ key: `${role}:${item.id}`, field: role, value: entity, unit: null, currency: null, evidence: ev('organization', item.organization) });
+    push({ key: `${role}:${item.id}`, field: role, value: entity, unit: null, currency: null, evidence: ev('organization', item.organization) }, 'ROLE_FROM_RECORD_KIND');
   }
-  if (deliverable) push({ key: `deliverable:${item.id}`, field: 'deliverable', value: deliverable, unit: null, currency: null, evidence: ev('title', item.title) });
+  if (deliverable) push({ key: `deliverable:${item.id}`, field: 'deliverable', value: deliverable, unit: null, currency: null, evidence: ev('title', item.title) }, 'TITLE');
 
   for (const field of ['title', 'body'] as const) {
     const text = field === 'title' ? item.title : item.body ?? '';
     if (!text) continue;
     for (const currency of CURRENCIES) {
       for (const figure of readMoneyFigures(text, currency)) {
-        push({
-          key: `price:${subject}:${currency}:${figure.perUnit ? 'rate' : 'total'}`,
-          field: 'price',
-          value: figure.cents,
-          unit: figure.perUnit ? 'per-unit' : null,
-          currency,
-          evidence: ev(field, figure.text),
-        });
+        // A different measure is a different fact: an advertised price never reconciles with a paid one.
+        const measure = priceMeasure(kind, around(text, figure.text));
+        push(
+          {
+            key: `price:${subject}:${currency}:${figure.perUnit ? 'rate' : 'total'}:${measure}`,
+            field: 'price',
+            value: figure.cents,
+            unit: figure.perUnit ? 'per-unit' : null,
+            currency,
+            evidence: ev(field, figure.text),
+          },
+          'MONEY_FIGURE',
+          measure,
+        );
       }
     }
     for (const q of readQuantities(text)) {
-      push({ key: `quantity:${subject}:${q.normalizedUnit}`, field: 'quantity', value: q.normalizedValue, unit: q.normalizedUnit, currency: null, evidence: ev(field, q.text) });
+      const measure = quantityMeasure(kind, around(text, q.text));
+      push(
+        { key: `quantity:${subject}:${q.normalizedUnit}${measure ? `:${measure}` : ''}`, field: 'quantity', value: q.normalizedValue, unit: q.normalizedUnit, currency: null, evidence: ev(field, q.text) },
+        'QUANTITY',
+        measure,
+      );
     }
     for (const d of locatedDays(text)) {
       const span = { start: d.index, end: d.index + d.text.length, text: d.text };
-      push({ key: `date:${subject}:${d.day}`, field: 'date', value: d.day, unit: null, currency: null, evidence: ev(field, d.text) }, span);
+      push({ key: `date:${subject}:${d.day}`, field: 'date', value: d.day, unit: null, currency: null, evidence: ev(field, d.text) }, 'STATED_DATE', null, span);
     }
-    for (const p of locatedPlaces(text)) push({ key: `location:${subject}`, field: 'location', value: p.place, unit: null, currency: null, evidence: ev(field, p.text) }, p.span);
+    for (const p of locatedPlaces(text)) push({ key: `location:${subject}`, field: 'location', value: p.place, unit: null, currency: null, evidence: ev(field, p.text) }, 'STATED_PLACE', null, p.span);
   }
   if (item.publishedAt) {
     const day = item.publishedAt.slice(0, 10);
-    push({ key: `date:${item.id}:published`, field: 'date', value: day, unit: null, currency: null, evidence: ev('publishedAt', item.publishedAt) });
+    push({ key: `date:${item.id}:published`, field: 'date', value: day, unit: null, currency: null, evidence: ev('publishedAt', item.publishedAt) }, 'PUBLISHED_DATE');
   }
   return out;
 }
@@ -371,7 +496,9 @@ export function reconcile(facts: readonly ExtractedFact[], now: Date, staleAfter
     const newest = Date.parse(observations[observations.length - 1]!.observedAt);
     const values = new Set(observations.map((o) => String(o.value)));
     const status: ReconciledStatus = Number.isFinite(newest) && now.getTime() - newest > staleAfterMs ? 'STALE' : values.size > 1 ? 'CONTESTED' : 'OBSERVED';
-    out.push({ key, status, value: status === 'CONTESTED' ? null : observations[observations.length - 1]!.value, observations });
+    // Each observation carries the status of its key, so a stored fact says whether it is contested or stale.
+    const marked = observations.map((o) => ({ ...o, contradictionStatus: status }));
+    out.push({ key, status, value: status === 'CONTESTED' ? null : marked[marked.length - 1]!.value, observations: marked });
   }
   return out;
 }
@@ -387,5 +514,7 @@ export function extractItems(items: readonly ExtractableItem[], now: Date = new 
   }
   const needsModel: ExtractableItem[][] = [];
   for (let i = 0; i < unreadable.length; i += MODEL_BATCH_SIZE) needsModel.push(unreadable.slice(i, i + MODEL_BATCH_SIZE));
-  return { facts, reconciled: reconcile(facts, now), needsModel };
+  const reconciled = reconcile(facts, now);
+  const status = new Map(reconciled.map((r) => [r.key, r.status]));
+  return { facts: facts.map((f) => ({ ...f, contradictionStatus: status.get(f.key) ?? 'UNRECONCILED' })), reconciled, needsModel };
 }
