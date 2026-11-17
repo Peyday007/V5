@@ -8,10 +8,27 @@ import { describe, expect, it } from 'vitest';
 import {
   CORPORA,
   CORPUS_EVALUATION_EVENT,
+  CORPUS_PROPOSAL_MIN_SCORE,
+  corpusProposalKey,
+  corpusToAdd,
   evaluateCorpora,
+  factKindsIn,
+  needFromUnknown,
   recordCorporaEvaluation,
   type CorpusDescriptor,
 } from '../server/services/feeds/corpora.ts';
+import { freshProject } from './helpers.ts';
+import { getDb } from '../server/db/database.ts';
+import { listCandidates } from '../server/repos/improvement.ts';
+import { connectedCorpora, corpusConnectorWeakness, discoverCorporaForUnknowns } from '../server/services/feeds/run.ts';
+import { FEED_SOURCES } from '../server/services/feeds/sources.ts';
+import type { Weakness } from '../server/domain/improvement.ts';
+import { insertFeedItems } from '../server/repos/feeds.ts';
+import { createUser } from '../server/repos/identity.ts';
+import { activate } from '../server/services/cash/lifecycle.ts';
+import { resetEventGraph } from '../server/services/industry/eventGraph.ts';
+import { openFeedShortlist, pendingLoopQuestions } from '../server/services/feeds/run.ts';
+import { runFeedLoopCycle } from '../server/services/russell/loop.ts';
 
 const byId = (id: string): CorpusDescriptor => {
   const c = CORPORA.find((one) => one.id === id);
@@ -135,5 +152,160 @@ describe('recordCorporaEvaluation', () => {
     expect(row.measures.decisions).toHaveLength(CORPORA.length);
     expect(row.measures.decisions.find((d) => d.corpus === 'sec-edgar')!.outcome).toBe('APPLIED');
     expect(ev.applied).toContain('sec-edgar');
+  });
+});
+
+/*
+ * Finding repair-R1-1: corpus discovery was circular. The only production evaluation built its need from an
+ * already-connected source's own declaration, so it always applied that source's corpus, never discovered the
+ * best source for a real unknown, and nothing proposed connecting an unconnected corpus that pays.
+ */
+
+const filings = {
+  key: 'q-filings',
+  question: 'Does the target company filing show its financial condition and recent company activity?',
+  condition: 'the counterparty can carry the risk',
+};
+// SEC EDGAR is connected now (the sec-edgar-8k feed source), so the unconnected corpus these tests propose is Wikidata.
+const relations = {
+  key: 'q-relations',
+  question: 'Which parent company relationship and identifier tie this supplier entity to its group?',
+  condition: 'the counterparty is who it says it is',
+};
+const news = {
+  key: 'q-news',
+  question: 'Did a news event trigger a market change for this buyer?',
+  condition: 'a trigger exists',
+};
+
+describe('a need comes from the unknown, not from a connected source', () => {
+  it('reads the fact kinds a research unknown asks for from its own words', () => {
+    expect(factKindsIn(`${filings.question} ${filings.condition}`)).toEqual(['company-activity', 'company-filing', 'financial-condition', 'financials']);
+    expect(factKindsIn('Is the sky blue today?')).toEqual([]);
+  });
+
+  it('the connected corpora are what the feed sources are instances of, and Wikidata is not one of them', () => {
+    const connected = connectedCorpora();
+    expect(connected.size).toBeGreaterThan(0);
+    for (const source of FEED_SOURCES) if (source.acquisition) expect(connected.has(source.acquisition.corpus)).toBe(true);
+    expect(connected.has('wikidata')).toBe(false);
+  });
+
+  it('ranks an unconnected corpus first when it answers the unknown best, and proposes it', () => {
+    const connected = connectedCorpora();
+    const need = needFromUnknown(relations, [...connected]);
+    const evaluation = evaluateCorpora(need);
+    expect(evaluation.decisions[0]!.corpusId).toBe('wikidata');
+    const add = corpusToAdd(evaluation, connected);
+    expect(add?.corpusId).toBe('wikidata');
+    expect(add!.score).toBeGreaterThanOrEqual(CORPUS_PROPOSAL_MIN_SCORE);
+  });
+
+  it('once a corpus is connected, an unknown it answers best proposes nothing (SEC EDGAR through sec-edgar-8k)', () => {
+    const connected = connectedCorpora();
+    expect(connected.has('sec-edgar')).toBe(true);
+    const evaluation = evaluateCorpora(needFromUnknown(filings, [...connected]));
+    expect(evaluation.decisions[0]!.corpusId).toBe('sec-edgar');
+    expect(corpusToAdd(evaluation, connected)).toBeNull();
+    // Without it connected, the same unknown proposes it: the decision follows what is connected, not a fixed list.
+    const without = new Set([...connected].filter((c) => c !== 'sec-edgar'));
+    expect(corpusToAdd(evaluateCorpora(needFromUnknown(filings, [...without])), without)?.corpusId).toBe('sec-edgar');
+  });
+
+  it('proposes nothing when a connected source already answers the unknown at least as well', () => {
+    const connected = connectedCorpora();
+    expect(connected.has('gdelt')).toBe(true);
+    const evaluation = evaluateCorpora(needFromUnknown(news, [...connected]));
+    expect(evaluation.decisions[0]!.corpusId).toBe('gdelt');
+    expect(corpusToAdd(evaluation, connected)).toBeNull();
+  });
+
+  it('proposes nothing that answers too little to pay for a connector, or for an unknown no corpus answers', () => {
+    const connected = new Set<string>();
+    const thin = evaluateCorpora({ purpose: 'thin', factKinds: ['web-page', 'a', 'b', 'c', 'd'], connected: [] });
+    expect(thin.decisions[0]!.score).toBeLessThan(CORPUS_PROPOSAL_MIN_SCORE);
+    expect(corpusToAdd(thin, connected)).toBeNull();
+    expect(corpusToAdd(evaluateCorpora(needFromUnknown({ key: 'none', question: 'Is the sky blue?', condition: '' }, [])), connected)).toBeNull();
+  });
+
+  it('the weakness asks for the connector in the owner of feed sources, keyed once per corpus', () => {
+    const connected = connectedCorpora();
+    const need = needFromUnknown(relations, [...connected]);
+    const add = corpusToAdd(evaluateCorpora(need), connected)!;
+    const weakness = corpusConnectorWeakness(add, need, relations.key);
+    expect(weakness.key).toBe(corpusProposalKey('wikidata'));
+    expect(weakness.ownerComponent).toBe('server/services/feeds/sources.ts');
+    expect(weakness.problem).toContain('company-relationship');
+    expect(weakness.problem).toContain(relations.key);
+    // A domain class is asked to be discovered, not assumed to be one source.
+    const domain = CORPORA.find((c) => c.kind === 'DOMAIN_CLASS')!;
+    const classWeakness = corpusConnectorWeakness({ ...add, corpusId: domain.id, label: domain.label, kind: 'DOMAIN_CLASS' }, need, relations.key);
+    expect(classWeakness.problem).toMatch(/^.*Discover the specific/s);
+  });
+});
+
+describe('discovery runs on real unknowns and reaches the improvement loop', () => {
+  it('records each unknown’s evaluation and registers only the corpus that pays', async () => {
+    await freshProject();
+    const registered: Weakness[] = [];
+    const out = await discoverCorporaForUnknowns({
+      projectId: 'prj_discovery',
+      unknowns: [relations, news],
+      now: new Date('2026-11-17T09:00:00.000Z'),
+      register: async (w) => {
+        registered.push(w);
+      },
+    });
+    expect(out).toEqual([
+      expect.objectContaining({ questionKey: 'q-relations', proposed: 'wikidata' }),
+      expect.objectContaining({ questionKey: 'q-news', proposed: null }),
+    ]);
+    expect(registered.map((w) => w.key)).toEqual([corpusProposalKey('wikidata')]);
+    const rows = await getDb().all<{ measures: string }>(`SELECT measures FROM bin_events WHERE event_type = ? ORDER BY at, id`, [CORPUS_EVALUATION_EVENT]);
+    const purposes = rows.map((row) => (JSON.parse(row.measures) as { purpose: string }).purpose);
+    expect(purposes.some((p) => p.startsWith('missing link q-relations'))).toBe(true);
+    expect(purposes.some((p) => p.startsWith('missing link q-news'))).toBe(true);
+  });
+
+  it('turns the proposal into an improvement candidate through the real loop, once per corpus', async () => {
+    await freshProject();
+    const now = new Date('2026-11-17T09:00:00.000Z');
+    await discoverCorporaForUnknowns({ projectId: 'prj_discovery', unknowns: [relations], now });
+    await discoverCorporaForUnknowns({ projectId: 'prj_discovery', unknowns: [{ ...relations, key: 'q-relations-2' }], now });
+    const candidates = (await listCandidates()).filter((one) => one.weaknessKey === corpusProposalKey('wikidata'));
+    expect(candidates).toHaveLength(1);
+  });
+});
+
+describe('the production entry point weighs the corpora for every unknown it asks', () => {
+  it('openFeedShortlist records a corpus evaluation per pending missing-link question, in the question’s own words', async () => {
+    const projectId = (await freshProject()).project.id;
+    const owner = await createUser({ email: `corpora-${Math.random().toString(36).slice(2, 10)}@example.test`, displayName: 'Owner', password: 'correct horse battery staple' });
+    expect((await activate({ projectId, ownerUserId: owner.id, actorUserId: owner.id, objective: 'Maximize usable cash over the next few weeks.' })).ok).toBe(true);
+    const now = new Date();
+    const hoursAgo = (n: number) => new Date(now.getTime() - n * 3_600_000).toISOString();
+    const due = new Date(now.getTime() + 20 * 86_400_000).toISOString().slice(0, 10);
+    await insertFeedItems('rfq-board', [
+      { externalId: 'corp-rfq', url: 'https://board.test/corp-rfq', title: 'Request for quotes: gutter cleaning', body: `Seeking quotes from a supplier in Tulsa, OK by ${due}. Budget $300.`, organization: 'Maple HOA', publishedAt: hoursAgo(5) },
+      { externalId: 'corp-ad', url: 'https://board.test/corp-ad', title: 'Gutter cleaning now booking', body: 'We offer gutter cleaning in Tulsa, OK for $150.', organization: 'Clear Gutters', publishedAt: hoursAgo(4) },
+    ]);
+    await runFeedLoopCycle(projectId, { pulled: [], detectors: [], now });
+    const pending = await pendingLoopQuestions(projectId, now);
+    expect(pending.length).toBeGreaterThan(0);
+
+    await openFeedShortlist({ projectId, now });
+    const rows = await getDb().all<{ measures: string; project_id: string | null }>(
+      `SELECT measures, project_id FROM bin_events WHERE event_type = ? AND workload_class = 'feeds-discovery'`,
+      [CORPUS_EVALUATION_EVENT],
+    );
+    const purposes = rows.map((row) => (JSON.parse(row.measures) as { purpose: string }).purpose);
+    for (const q of pending) expect(purposes.some((p) => p.startsWith(`missing link ${q.key}`))).toBe(true);
+    for (const row of rows) expect(row.project_id).toBe(projectId);
+    // Not a connected source confirming itself: the need's fact kinds are read from the question, never declared by a source.
+    for (const row of rows) {
+      const measures = JSON.parse(row.measures) as { factKinds: string[]; connected: string[] };
+      expect(measures.connected.length).toBeGreaterThan(0);
+    }
+    resetEventGraph();
   });
 });

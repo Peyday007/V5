@@ -345,3 +345,72 @@ export async function recordCorporaEvaluation(
   });
   return evaluation;
 }
+
+// ---------------------------------------------------------------------------
+// Discovery from a real unknown, and adding what pays (ACQ-21-3)
+// ---------------------------------------------------------------------------
+
+/** The share of a need a corpus must answer, times its quality, before connecting it is proposed. */
+export const CORPUS_PROPOSAL_MIN_SCORE = 0.5;
+
+/** A word as compared: lower case, a trailing plural `s` dropped. */
+const stem = (word: string): string => {
+  const w = word.toLowerCase();
+  return w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w;
+};
+
+/**
+ * The fact kinds a piece of research text asks for, read against the catalog's
+ * own open vocabulary. Pure. A kind matches when every word of it appears in
+ * the text ("company-filing" in "which company filed …" matches; "price" in
+ * "what price do suppliers publish" matches). Nothing is invented: a text that
+ * names no catalogued kind of fact yields none, and its need is recorded as one
+ * no corpus answers.
+ */
+export function factKindsIn(text: string, corpora: readonly CorpusDescriptor[] = CORPORA): string[] {
+  const words = new Set(text.split(/[^A-Za-z0-9]+/).filter(Boolean).map(stem));
+  const vocabulary = [...new Set(corpora.flatMap((c) => c.factKinds.map(norm)))];
+  return vocabulary.filter((kind) => kind.split('-').filter(Boolean).every((part) => words.has(stem(part)))).sort();
+}
+
+/** A research unknown, as the feed loop derives it (`MissingLinkQuestion`), reduced to what a need reads. */
+export interface ResearchUnknown {
+  key: string;
+  question: string;
+  condition: string;
+}
+
+/**
+ * The need a research unknown states. Pure. Its fact kinds come from the
+ * unknown's own words, so the need is the goal's, never a connected source's
+ * declaration of itself; `connected` is carried for the record and never ranks.
+ */
+export function needFromUnknown(unknown: ResearchUnknown, connected: readonly string[], corpora: readonly CorpusDescriptor[] = CORPORA): CorpusNeed {
+  return {
+    purpose: `missing link ${unknown.key}: ${unknown.question}`.slice(0, 300),
+    factKinds: factKindsIn(`${unknown.question} ${unknown.condition}`, corpora),
+    intendedUse: 'commercial',
+    connected,
+  };
+}
+
+/**
+ * The corpus worth connecting for this need, or null. Pure.
+ *
+ * Only when the best-ranked applied candidate is not already connected, and it
+ * answers enough of the need (`CORPUS_PROPOSAL_MIN_SCORE`): a corpus that a
+ * connected source already matches or beats adds nothing, and one that answers
+ * too little does not pay for a connector.
+ */
+export function corpusToAdd(evaluation: CorporaEvaluation, connected: ReadonlySet<string>): CorpusDecision | null {
+  const best = evaluation.decisions.find((d) => d.outcome === 'APPLIED') ?? null;
+  if (!best || connected.has(best.corpusId) || best.score < CORPUS_PROPOSAL_MIN_SCORE) return null;
+  const connectedBest = evaluation.decisions.find((d) => d.outcome === 'APPLIED' && connected.has(d.corpusId));
+  if (connectedBest && connectedBest.score >= best.score) return null;
+  return best;
+}
+
+/** The weakness key an unconnected corpus is proposed under: one per corpus, however many needs it answers. */
+export function corpusProposalKey(corpusId: string): string {
+  return `CORPUS_UNCONNECTED:${corpusId}`;
+}

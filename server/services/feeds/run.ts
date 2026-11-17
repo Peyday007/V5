@@ -55,7 +55,15 @@ import { addExtractedItems, currentEventGraph, syncEventGraph, type ExtractedIte
 import { constructFromGraph, type MissingLinkQuestion } from '../cash/construct.ts';
 import type { Weakness } from '../../domain/improvement.ts';
 import { recordBinEvent } from '../../repos/bins.ts';
-import { recordCorporaEvaluation, type CorporaEvaluation, type CorpusNeed } from './corpora.ts';
+import {
+  corpusProposalKey,
+  corpusToAdd,
+  needFromUnknown,
+  recordCorporaEvaluation,
+  type CorporaEvaluation,
+  type CorpusDecision,
+  type CorpusNeed,
+} from './corpora.ts';
 import { conditionalFetcher, contentHashOf, httpTransport, preferredReadable, resolveAccess, type ConditionalResult, type Transport, type Validators } from './access.ts';
 import { feedIngestStore, ingestShards, type IngestStore, type ShardedSource } from './ingest.ts';
 import type { SourceAcquisition } from './sources.ts';
@@ -1042,6 +1050,96 @@ export async function pendingLoopQuestions(projectId: string, now: Date = new Da
   return questions.filter((q) => !taken.has(q.key)).slice(0, Math.max(0, limit));
 }
 
+/** The corpora the connected feed sources are instances of: what Brain can already read. */
+export function connectedCorpora(sources: readonly FeedSource[] = FEED_SOURCES): Set<string> {
+  return new Set(sources.flatMap((source) => (source.acquisition ? [source.acquisition.corpus] : [])));
+}
+
+/**
+ * The weakness an unconnected corpus that answers a real unknown is. Pure.
+ *
+ * It asks Factory, through the improvement loop that owns turning a weakness
+ * into an objective (§87), for the connector: a feed source in
+ * `sources.ts` with its acquisition metadata, read through the existing
+ * pipeline and judged by the same corpus evaluation, with a test. A domain
+ * class asks for the specific source of that class to be discovered first.
+ * Nothing here opens the corpus or trusts it.
+ */
+export function corpusConnectorWeakness(decision: CorpusDecision, need: CorpusNeed, questionKey: string): Weakness {
+  const what = decision.kind === 'DOMAIN_CLASS'
+    ? `Discover the specific ${decision.label.toLowerCase()} source that answers it, judge its terms and freshness, and connect it`
+    : `Connect ${decision.label}`;
+  return {
+    key: corpusProposalKey(decision.corpusId),
+    kind: 'CORPUS_UNCONNECTED',
+    title: `${decision.label} answers a research unknown no connected source answers as well`,
+    problem:
+      `The feed loop's research unknown ${questionKey} ("${need.purpose}") consumes ${need.factKinds.join(', ')}. ` +
+      `Corpus evaluation ranked ${decision.label} first (score ${decision.score}): ${decision.reason}. ` +
+      `No connected feed source answers it as well. ${what} as a feed source in server/services/feeds/sources.ts with its ` +
+      `acquisition metadata (corpus ${decision.corpusId}), read through the existing acquisition pipeline in run.ts, with a test. ` +
+      `Keep its caveats: ${decision.caveats.join('; ') || 'none stated'}` +
+      (decision.needsCorroboration.length ? `; it is not evidence of ${decision.needsCorroboration.join(', ')} alone.` : '.'),
+    metric: 'READY_OPPORTUNITIES_PER_DAY',
+    downstreamMetric: null,
+    ownerComponent: 'server/services/feeds/sources.ts',
+    mutationScope: ['server/services/feeds/**', 'tests/**'],
+    frequency: 1,
+    denominator: 1,
+    scope: 'LOCAL',
+    severity: 'MEDIUM',
+    researchQuestion: `How is ${decision.label} accessed for ${need.factKinds.join(', ')}, under what terms and pacing?`,
+    samples: [need.purpose.slice(0, 200)],
+    knownCause: `no feed source is an instance of corpus ${decision.corpusId}`,
+  };
+}
+
+export interface CorpusDiscovery {
+  questionKey: string;
+  factKinds: readonly string[];
+  applied: string[];
+  /** The corpus proposed for connection, when one pays; null otherwise. */
+  proposed: string | null;
+}
+
+/**
+ * Discover the best corpus for each research unknown the feed loop is about to
+ * ask (ACQ-21-3), before any crawler or round. Each unknown becomes a need in
+ * its own words, every corpus and domain class is evaluated against it and the
+ * decision recorded (`CORPUS_EVALUATION`), and the unconnected corpus that
+ * answers it best — when it pays — is registered with the improvement loop,
+ * which turns it into a Factory objective. Idempotent per corpus (the loop
+ * keys a weakness), and each step is caught: discovery never stops a round.
+ */
+export async function discoverCorporaForUnknowns(input: {
+  projectId: string;
+  unknowns: readonly { key: string; question: string; condition: string }[];
+  now?: Date;
+  sources?: readonly FeedSource[];
+  evaluate?: (need: CorpusNeed) => Promise<CorporaEvaluation>;
+  register?: (weakness: Weakness, at: Date, options: { evidence: Record<string, unknown> }) => Promise<unknown>;
+}): Promise<CorpusDiscovery[]> {
+  const now = input.now ?? new Date();
+  const connected = connectedCorpora(input.sources);
+  const evaluate = input.evaluate ?? ((need: CorpusNeed) => recordCorporaEvaluation(need, { caller: 'feeds-discovery', projectId: input.projectId }));
+  const register =
+    input.register ??
+    (async (w: Weakness, at: Date, options: { evidence: Record<string, unknown> }) => (await import('../improvement/loop.ts')).registerDirected(w, at, options));
+  const out: CorpusDiscovery[] = [];
+  for (const unknown of input.unknowns) {
+    const need = needFromUnknown(unknown, [...connected].sort());
+    const evaluation = await evaluate(need);
+    const add = corpusToAdd(evaluation, connected);
+    if (add) {
+      await register(corpusConnectorWeakness(add, need, unknown.key), now, {
+        evidence: { corpusDiscovery: { questionKey: unknown.key, corpus: add.corpusId, score: add.score, factKinds: need.factKinds } },
+      });
+    }
+    out.push({ questionKey: unknown.key, factKinds: need.factKinds, applied: evaluation.applied, proposed: add?.corpusId ?? null });
+  }
+  return out;
+}
+
 /** Items one source must leave unreadable in a single pass before a parser for it is proposed. */
 export const PARSER_PROPOSAL_MIN = 5;
 
@@ -1666,6 +1764,13 @@ export async function openFeedShortlist(input: { projectId: string; now?: Date; 
     console.warn(`[feeds] feed-loop questions unreadable for ${input.projectId}: ${String((error as Error)?.message ?? error)}`);
     return [] as MissingLinkQuestion[];
   });
+  // Before research is asked, the large corpora are weighed for each unknown, and one that pays is proposed (ACQ-21-3).
+  // Its own catch: discovery that cannot be recorded never stops the round.
+  if (questions.length > 0) {
+    await discoverCorporaForUnknowns({ projectId: input.projectId, unknowns: questions, now }).catch((error: unknown) => {
+      console.warn(`[feeds] corpus discovery failed for ${input.projectId}: ${String((error as Error)?.message ?? error)}`);
+    });
+  }
   if (chosen.length === 0 && questions.length === 0) return null;
 
   const frame = await executionFrame(input.projectId, mode.currency);
