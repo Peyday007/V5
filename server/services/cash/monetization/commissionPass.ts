@@ -47,7 +47,7 @@ import {
   recordPathFact,
   settleCommission,
 } from '../../../repos/monetization.ts';
-import { ATTRIBUTE, isMonetizationAttribute } from '../../../domain/monetization.ts';
+import { ATTRIBUTE, attributeForLane, laneForAttribute } from '../../../domain/monetization.ts';
 import { readMoneyFigures } from '../figures.ts';
 import { discoveryAllowed } from '../lifecycle.ts';
 import { discoveryAuthority } from '../discoveryAuthority.ts';
@@ -148,7 +148,7 @@ export function commissionQuestion(input: {
       : '';
   return (
     `For ${about}: ${declared.question} ${declared.task}${choices}` +
-    ` Record the answer under the evidence lane "${input.attribute}".${again}`
+    ` Record the answer under the evidence lane "${laneForAttribute(input.attribute)}".${again}`
   );
 }
 
@@ -729,8 +729,8 @@ async function fileAnswers(input: {
 
   for (const claim of input.claims) {
     const lane = claim.evidenceLane ?? '';
-    if (!isMonetizationAttribute(lane)) continue;
-    const attribute: MonetizationAttribute = lane;
+    const attribute = attributeForLane(lane);
+    if (!attribute) continue;
     // One claim per attribute per pass: the first gated one wins, and the rest
     // stay on their own rows in `research_claims` exactly as submitted. The
     // alternative is a later claim in the same list silently replacing an

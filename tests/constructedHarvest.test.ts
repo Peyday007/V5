@@ -178,6 +178,15 @@ describe('a withdrawn question about a goal-found opening is no longer the goalâ
     const goalIdeas = async () =>
       (await getDb().all<{ id: string }>(`SELECT c.id FROM russell_candidates c WHERE c.id IN (?, ?, ?) AND ${goalIdeaSql('c')} ORDER BY c.id`, [older.id, question.id, round!.candidateId])).map((one) => one.id);
     expect(await goalIdeas()).toEqual([question.id, round!.candidateId].sort());
+    // Inside the goal tier the goal's own rounds go first: a round opened after
+    // the OPEN question still launches before it (production 2026-11-17: nine
+    // rounds AWAITING_LAUNCH while each freed slot went to older goal questions).
+    const later = await openConstructedRound({ goal: w, projectId, key: 'wd2', title: 'Constructed: corporate gifting', question: 'Which firms pay for client gifting?' });
+    const tier = await getDb().all<{ id: string }>(
+      `SELECT c.id FROM russell_candidates c WHERE c.id IN (?, ?, ?) ORDER BY ${goalFirstSql('c')}, c.created_at, c.rowid`,
+      [older.id, question.id, later!.candidateId],
+    );
+    expect(tier.map((one) => one.id)).toEqual([later!.candidateId, question.id, older.id]);
     expect((await closeNeed({ needId: need.value.id, to: 'WITHDRAWN', resolution: 'Asked again a different way.', actorUserId: 'BRAIN' })).ok).toBe(true);
     expect(await goalIdeas()).toEqual([round!.candidateId]);
     // In the launch order the round now comes first, and the moot question waits with the ordinary work.

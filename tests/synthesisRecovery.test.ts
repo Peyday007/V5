@@ -50,6 +50,7 @@ import {
   FILING_REGRANT_REASON,
   recoverFailedSynthesis,
   recoverFilingFailures,
+  SPENT_RECOVERY_ACTOR,
   resetFilingRecoveryThrottle,
 } from '../server/services/research/synthesisRecovery.ts';
 
@@ -552,6 +553,47 @@ describe('the automatic recovery of a synthesis Brain could not file', () => {
     expect(await recoverFilingFailures(10, { force: true })).toEqual([]);
     // And one with no ledger at all — a worker that never submitted.
     await stuckPacket();
+    expect(await recoverFilingFailures(10, { force: true })).toEqual([]);
+  });
+
+  it('reissues, once, a synthesis whose attempts the queue spent, and leaves a second failure to a person (F7)', async () => {
+    const stuck = await stuckPacket({ claims: 2 });
+    // The production shape: FAILED, ATTEMPTS_EXHAUSTED, no filing refusal in its ledger.
+    await getDb().run(
+      `UPDATE work_items SET state = 'FAILED', failure_category = 'ATTEMPTS_EXHAUSTED',
+              attempt_count = 2, max_attempts = 2 WHERE id = ?`,
+      [stuck.workItemId],
+    );
+
+    const out = await recoverFilingFailures(10, { force: true });
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ workItemId: stuck.workItemId, outcome: 'RECOVERED', regranted: null });
+    const items = (await listWorkItems(projectId, { limit: 50 })).filter(
+      (item) => item.orchestrationId === stuck.orchestrationId,
+    );
+    const replacement = items.find((item) => item.state === 'QUEUED')!;
+    expect(replacement.createdById).toBe(SPENT_RECOVERY_ACTOR);
+    // Lineage: the spent item keeps its state and its attempts.
+    expect((await getWorkItem(stuck.workItemId))!).toMatchObject({ state: 'FAILED', attemptCount: 2 });
+    expect((await getOrchestration(stuck.orchestrationId))!.status).toBe('SYNTHESIZING');
+
+    // The replacement spends its attempts too: nothing is reissued a second time.
+    await getDb().run(
+      `UPDATE work_items SET state = 'FAILED', failure_category = 'ATTEMPTS_EXHAUSTED',
+              attempt_count = max_attempts WHERE id = ?`,
+      [replacement.id],
+    );
+    await updateOrchestration(stuck.orchestrationId, { status: 'NEEDS_HUMAN' });
+    expect(await recoverFilingFailures(10, { force: true })).toEqual([]);
+  });
+
+  it('does not reissue a synthesis its worker failed as invalid input', async () => {
+    const stuck = await stuckPacket();
+    await getDb().run(
+      `UPDATE work_items SET state = 'FAILED', failure_category = 'INVALID_INPUT',
+              attempt_count = 1, max_attempts = 2 WHERE id = ?`,
+      [stuck.workItemId],
+    );
     expect(await recoverFilingFailures(10, { force: true })).toEqual([]);
   });
 

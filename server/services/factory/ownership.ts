@@ -860,6 +860,26 @@ function subjectsOf(
   }
   const named = byName.filter(accept);
   if (named.length > 0) return named;
+  /*
+   * A program campaign's test is named `program-<id>-<campaign>-<subject>`,
+   * and its subject is written as the source file's name in kebab case
+   * (production 2026-11-17, ventures-d0-p3-prep: `…-venture-path.test.ts`
+   * tests `venturePath.ts`; no same-stem rule paired them, the test's unit
+   * owned two source files, and the campaign stayed blocked). A source whose
+   * name, read without case or separators, ends the test's name is its
+   * subject when exactly one does.
+   */
+  const flat = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const testFlat = flat(stem);
+  const tail = [...new Set([...knownSources, ...granted])].filter((path) => {
+    const s = stemOf(path);
+    const f = flat(s);
+    return f.length >= 6 && !AMBIGUOUS_STEMS.has(s) && testFlat.endsWith(f) && testFlat !== f;
+  });
+  if (tail.length === 1) {
+    const one = tail.filter(accept);
+    if (one.length === 1) return one;
+  }
 
   const owners = units.filter((unit) => owns(unit.ownedPaths, test));
   const context = new Set<string>();
