@@ -315,3 +315,32 @@ export function planProcessing(source: SourceEvidence, question: QuestionEvidenc
 export function planIsWellFormed(plan: ProcessingPlan): boolean {
   return plan.stages.every((s) => (s.executor === 'LLM' ? s.llmReason !== null && s.why.length > 0 : s.llmReason === null));
 }
+
+/**
+ * How a source's content is shaped, judged from what the source states about
+ * its own format and, failing that, from its records' fields. Never from what
+ * the source is about. Pure.
+ *
+ * A declared machine format (JSON, CSV, XML, a spreadsheet) is STRUCTURED. A
+ * declared document format (HTML, PDF, plain text) is UNSTRUCTURED. With no
+ * declaration the records decide: fielded records (a named organization or a
+ * publication date beside the text) are SEMI_STRUCTURED, and free text alone
+ * is UNSTRUCTURED.
+ */
+export function judgeStructure(
+  format: string | null | undefined,
+  records: readonly { organization?: string | null; publishedAt?: string | null }[],
+): SourceStructure {
+  const declared = (format ?? '').trim().toUpperCase();
+  if (/^(JSON|JSONL|NDJSON|CSV|TSV|XML|XLSX?|PARQUET|ATOM|RSS)$/.test(declared)) return 'STRUCTURED';
+  if (/^(HTML?|PDF|TXT|TEXT|DOCX?)$/.test(declared)) return 'UNSTRUCTURED';
+  if (records.length === 0) return 'UNSTRUCTURED';
+  const fielded = records.filter((r) => (r.organization ?? '').trim() !== '' || (r.publishedAt ?? '').trim() !== '').length;
+  return fielded * 2 >= records.length ? 'SEMI_STRUCTURED' : 'UNSTRUCTURED';
+}
+
+/** The planned stage when the plan runs it, or null when the plan leaves it out. An executing pass asks this, never a fixed list. */
+export function plannedStage(plan: ProcessingPlan, stage: Stage): PlannedStage | null {
+  if (plan.status !== 'PLANNED') return null;
+  return plan.stages.find((s) => s.stage === stage) ?? null;
+}
