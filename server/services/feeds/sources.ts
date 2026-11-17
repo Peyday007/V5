@@ -39,6 +39,56 @@ export interface FeedSource {
    */
   cursorUrl?: (since: string) => string;
   parse(body: unknown): FeedItem[];
+  /**
+   * What the acquisition pipeline in `run.ts` reads about this source
+   * (ACQ-21-3, ACQ-21-4): which corpus or open domain class it is an instance
+   * of, the facts it is pulled for, how its real content is reached, and the
+   * provenance every pull of it carries. Absent: the source is pulled the old
+   * way, with no evaluation, health supervision or yield ranking.
+   */
+  acquisition?: SourceAcquisition;
+  /**
+   * A large source read in shards (index pages, archive members, query
+   * windows) through `ingestShards`, checkpointed per shard so an interrupted
+   * read resumes where it stopped. Absent: one request is one shard.
+   */
+  shards?: (now: Date) => { snapshot: string; keys: readonly string[]; url: (key: string) => string };
+}
+
+/** How a source is reached and what each pull of it is recorded with. */
+export interface SourceAcquisition {
+  /**
+   * The `CORPORA` id (`corpora.ts`) this source is an instance of: a named
+   * corpus, or an open domain class (`domain:…`). Judged per need before every
+   * pull; it is never a whitelist.
+   */
+  corpus: string;
+  /** The kinds of fact the source is pulled for, in `corpora.ts`'s open vocabulary. */
+  factKinds: readonly string[];
+  /** The oldest a record may be and still answer the need, in days. Unstated is unknown, never favourable. */
+  maxAgeDays?: number;
+  /**
+   * A catalog listing (a CKAN `package_show`, a DCAT record) that describes the
+   * dataset rather than being it. When present, `resolveAccess` turns it into
+   * the resource that carries the data, and that resource is read instead.
+   */
+  listingUrl?: string;
+  access: {
+    /** The format of the real content, upper case (JSON, CSV, ZIP …). */
+    format: string;
+    /** How the content is kept current: read conditionally, or a paged API asked again. */
+    updateMechanism: 'CONDITIONAL_FETCH' | 'PAGED_API' | 'BULK_SNAPSHOT' | 'EVENT_SUBSCRIPTION';
+    authentication: 'NONE' | 'REQUIRED';
+    /** The publisher's stated usage constraint, honoured on every read. */
+    usage: string;
+  };
+  provenance: {
+    publisher: string;
+    /** The licence or terms the records are retrieved under. */
+    license: string;
+    /** The version of this source's parser; a change in reading is visible in the rows. */
+    parserVersion: string;
+  };
 }
 
 /**
@@ -246,6 +296,24 @@ export function parseHnFreelance(side: HnFreelanceSide): (body: unknown) => Feed
   };
 }
 
+/** The acquisition metadata of a JSON API read with plain conditional GETs. */
+function jsonApi(
+  corpus: string,
+  factKinds: readonly string[],
+  publisher: string,
+  license: string,
+  usage: string,
+  extra: { maxAgeDays?: number; updateMechanism?: SourceAcquisition['access']['updateMechanism'] } = {},
+): SourceAcquisition {
+  return {
+    corpus,
+    factKinds,
+    ...(extra.maxAgeDays !== undefined ? { maxAgeDays: extra.maxAgeDays } : {}),
+    access: { format: 'JSON', updateMechanism: extra.updateMechanism ?? 'CONDITIONAL_FETCH', authentication: 'NONE', usage },
+    provenance: { publisher, license, parserVersion: `${corpus}/1` },
+  };
+}
+
 /** One side of the HN freelance thread, newest first; incremental by the comment's own creation time. */
 function hnFreelance(id: string, label: string, side: HnFreelanceSide): FeedSource {
   const base = `https://hn.algolia.com/api/v1/search_by_date?tags=comment&hitsPerPage=200&query=${encodeURIComponent(`"${side.toLowerCase()}"`)}`;
@@ -258,6 +326,14 @@ function hnFreelance(id: string, label: string, side: HnFreelanceSide): FeedSour
     intervalMs: 6 * HOUR,
     headers: { 'user-agent': 'brain-feed/1.0' },
     parse: parseHnFreelance(side),
+    acquisition: jsonApi(
+      'domain:permitted-marketplaces',
+      side === 'SEEKING FREELANCER' ? ['buyer-request', 'listing'] : ['supplier', 'price', 'listing'],
+      'Hacker News via the Algolia HN Search API',
+      'public comments; Y Combinator / Algolia API terms',
+      'keyless public search API; incremental by created_at_i',
+      { updateMechanism: 'PAGED_API' },
+    ),
   };
 }
 
@@ -283,6 +359,14 @@ function gdelt(id: string, label: string, query: string): FeedSource {
     // And it is slow: a day's article list often takes longer than 20 seconds.
     timeoutMs: 60_000,
     parse: parseGdelt,
+    acquisition: jsonApi(
+      'gdelt',
+      ['news-event', 'event-trigger', 'market-change'],
+      'The GDELT Project',
+      'open for research and commercial use with attribution',
+      'no more than one DOC API request every five seconds',
+      { maxAgeDays: 1, updateMechanism: 'PAGED_API' },
+    ),
   };
 }
 
@@ -301,6 +385,7 @@ export const FEED_SOURCES: readonly FeedSource[] = [
     intervalMs: 6 * HOUR,
     headers: { 'user-agent': 'brain-feed/1.0' },
     parse: parseRemoteOk,
+    acquisition: jsonApi('domain:permitted-marketplaces', ['listing'], 'Remote OK', 'Remote OK API terms: link back and credit Remote OK', 'public API; credit the source on every use'),
   },
   {
     // Remotive asks for no more than four requests a day.
@@ -309,6 +394,7 @@ export const FEED_SOURCES: readonly FeedSource[] = [
     url: 'https://remotive.com/api/remote-jobs?limit=300',
     intervalMs: 6 * HOUR,
     parse: parseRemotive,
+    acquisition: jsonApi('domain:permitted-marketplaces', ['listing'], 'Remotive', 'Remotive public API terms: link back to the job', 'no more than four requests a day'),
   },
   {
     id: 'federal-register-rules',
@@ -318,6 +404,13 @@ export const FEED_SOURCES: readonly FeedSource[] = [
     // The Federal Register filters by publication date: only rules published since the last read.
     cursorUrl: (since: string) => `${FEDERAL_REGISTER_RULES_URL}&conditions%5Bpublication_date%5D%5Bgte%5D=${since.slice(0, 10)}`,
     parse: parseFederalRegister,
+    acquisition: jsonApi(
+      'domain:regulatory-records',
+      ['regulatory', 'compliance-deadline'],
+      'Office of the Federal Register (NARA)',
+      'US government work, public domain',
+      'keyless public API; filtered by publication date',
+    ),
   },
   // A market with both sides on one page: buyers stating what they will pay an outside provider for,
   // and providers stating what they do, when they are free and at what rate.
