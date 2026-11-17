@@ -66,6 +66,7 @@ import {
   markResumed,
   openRequestFor,
   renewLiveMissionReservations,
+  closeStrandedWritebacks,
   setNextMission,
   transitionMission,
   withdrawRequest,
@@ -1219,63 +1220,76 @@ async function tickOnce(owner: string): Promise<TickReport> {
     // 1. Finish what ended — but only where the loop can say something true.
     await runPass(report, 'writeback', async () => {
       for (const raw of await missionsAwaitingWriteback(cycle.maxEventsPerCycle)) {
-        const outcome = await outcomeOf(raw);
-        if (!outcome) continue;
+        // One mission whose writeback throws must not keep every mission behind
+        // it (ordered oldest first, it would be first again next tick) holding
+        // its research slot.
+        try {
+          const outcome = await outcomeOf(raw);
+          if (!outcome) continue;
 
-        /*
-         * Tell the mission what its own packet produced.
-         *
-         * This is the connection that was missing, and it made two conditions
-         * unreachable rather than merely untested. `linkMission` was called with
-         * an orchestration and a bin at launch and **never with a document or an
-         * audit** — nothing anywhere set `russell_missions.document_id`. The
-         * guard immediately below skips any non-failed mission without one, so a
-         * packet that filed a real report would have been pushed onto
-         * `awaitingFiling` on every tick, for ever. And `followOnsToCreate`
-         * requires `writeback_at IS NOT NULL`, so the automatic follow-on sat
-         * behind the same wall.
-         *
-         * Read from the orchestration and from the audit rows — Brain's own
-         * records of what the pipeline did — never from anything a worker said
-         * about itself. `linkMission` is a plain update on columns that are null
-         * until the pipeline fills them, so a redelivery writes the same ids.
-         */
-        const mission = await linkFiledWork(raw);
+          /*
+           * Tell the mission what its own packet produced.
+           *
+           * This is the connection that was missing, and it made two conditions
+           * unreachable rather than merely untested. `linkMission` was called with
+           * an orchestration and a bin at launch and **never with a document or an
+           * audit** — nothing anywhere set `russell_missions.document_id`. The
+           * guard immediately below skips any non-failed mission without one, so a
+           * packet that filed a real report would have been pushed onto
+           * `awaitingFiling` on every tick, for ever. And `followOnsToCreate`
+           * requires `writeback_at IS NOT NULL`, so the automatic follow-on sat
+           * behind the same wall.
+           *
+           * Read from the orchestration and from the audit rows — Brain's own
+           * records of what the pipeline did — never from anything a worker said
+           * about itself. `linkMission` is a plain update on columns that are null
+           * until the pipeline fills them, so a redelivery writes the same ids.
+           */
+          const mission = await linkFiledWork(raw);
 
-        /*
-         * The loop must not spend the writeback on a placeholder.
-         *
-         * `claimWriteback` is once-only, which is what makes the effects
-         * exactly-once — and it means whoever writes back *first* decides what
-         * the project ends up believing. A tick that fired before the filed
-         * document was linked would therefore promote a sentence assembled from
-         * the mission row, permanently, and the real conclusion could never land.
-         *
-         * So an accepted packet with nothing filed yet is left alone and picked
-         * up on a later tick. A failed one is safe to finish immediately, because
-         * nothing is promoted from a run that did not finish and there is no
-         * conclusion to lose.
-         */
-        if (outcome !== 'FAILED' && !mission.documentId) {
-          report.awaitingFiling.push(mission.id);
-          continue;
+          /*
+           * The loop must not spend the writeback on a placeholder.
+           *
+           * `claimWriteback` is once-only, which is what makes the effects
+           * exactly-once — and it means whoever writes back *first* decides what
+           * the project ends up believing. A tick that fired before the filed
+           * document was linked would therefore promote a sentence assembled from
+           * the mission row, permanently, and the real conclusion could never land.
+           *
+           * So an accepted packet with nothing filed yet is left alone and picked
+           * up on a later tick. A failed one is safe to finish immediately, because
+           * nothing is promoted from a run that did not finish and there is no
+           * conclusion to lose.
+           */
+          if (outcome !== 'FAILED' && !mission.documentId) {
+            report.awaitingFiling.push(mission.id);
+            continue;
+          }
+
+          const result = await writeBack({
+            missionId: mission.id,
+            outcome,
+            conclusion:
+              outcome === 'FAILED'
+                ? ''
+                : `${mission.objective} — filed and audited through the existing pipeline.`,
+            provenance: {
+              orchestrationId: mission.orchestrationId,
+              documentId: mission.documentId,
+              auditId: mission.auditId,
+            },
+          });
+          if (result.ok && !result.alreadyDone) report.wroteBack.push(mission.id);
+        } catch (error) {
+          report.passFailures.push({
+            pass: 'writeback',
+            error: `${raw.id}: ${(error instanceof Error ? error.message : String(error)).slice(0, 240)}`,
+          });
         }
-
-        const result = await writeBack({
-          missionId: mission.id,
-          outcome,
-          conclusion:
-            outcome === 'FAILED'
-              ? ''
-              : `${mission.objective} — filed and audited through the existing pipeline.`,
-          provenance: {
-            orchestrationId: mission.orchestrationId,
-            documentId: mission.documentId,
-            auditId: mission.auditId,
-          },
-        });
-        if (result.ok && !result.alreadyDone) report.wroteBack.push(mission.id);
       }
+      // A writeback claimed and never finished would hold its mission live for
+      // ever (`claimWriteback` is once-only); its packet has ended, so close it.
+      for (const id of await closeStrandedWritebacks(cycle.maxEventsPerCycle)) report.wroteBack.push(id);
     });
 
     /*
@@ -2906,11 +2920,23 @@ async function linkFiledWork(mission: RussellMission): Promise<RussellMission> {
 
 async function missionsAwaitingWriteback(limit: number): Promise<RussellMission[]> {
   const rows = await getDb().all<{ id: string }>(
-    `SELECT id FROM russell_missions
-      WHERE writeback_at IS NULL
-        AND state IN ('RUNNING','LAUNCHING','WAITING')
-        AND orchestration_id IS NOT NULL
-      ORDER BY updated_at, rowid
+    /*
+     * Only missions whose packet has ended. `outcomeOf` answers null for every
+     * other one, so this filter loses nothing — but without it the window was
+     * the oldest-updated live missions Brain-wide, which are the ones still
+     * running, and a mission whose packet had ended waited behind them holding
+     * its research slot (production 2026-11-17: 41 RUNNING missions, 22–26 live
+     * holds against a ceiling of 13).
+     */
+    // A finished packet with nothing filed yet is left for a later tick by the
+    // caller, so those go last and cannot fill the window either.
+    `SELECT m.id AS id FROM russell_missions m
+       JOIN research_orchestrations o ON o.id = m.orchestration_id
+      WHERE m.writeback_at IS NULL
+        AND m.state IN ('RUNNING','LAUNCHING','WAITING')
+        AND o.status IN ('COMPLETE','COMPLETE_WITH_GAPS','FAILED','CANCELLED')
+      ORDER BY CASE WHEN o.status IN ('FAILED','CANCELLED') OR o.document_id IS NOT NULL THEN 0 ELSE 1 END,
+               m.updated_at, m.rowid
       LIMIT ?`,
     [Math.max(1, limit)],
   );
