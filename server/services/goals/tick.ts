@@ -57,7 +57,7 @@ import { reconcileRegisterIfDue, type RegisterPassReport } from './openQuestions
 import { recordDecisionsIfDue } from './decisionRecord.ts';
 import { reconcileCalibrationIfDue, type CalibrationPassReport } from './calibration.ts';
 import { reconcileFactChangesIfDue, type ReconsiderPassReport } from './reconsider.ts';
-import { diagnoseCostCountedOnce, type LaneCapacityReading, type ResearchYieldReading } from './researchYield.ts';
+import { causeFromJobInputs, diagnoseCostCountedOnce, type CostOnceCause, type JobInputCause, type JobTimeInputs, type LaneCapacityReading, type ResearchYieldReading } from './researchYield.ts';
 import {
   APPLICABLE_REMEDIES,
   COMMERCIAL_FLOOR,
@@ -892,7 +892,7 @@ async function researchInForce(): Promise<{ shares: SharesInForce; fingerprint: 
  *
  * What the pass does with the decision, and what it never does:
  *
- *   * It records the decision once, as one append-only Brain-wide row
+ *   * It records each measured window's decision once, as one append-only Brain-wide row
  *     (`RESEARCH_ALLOCATION_DECIDED` in `improvement_events`, the Brain-wide
  *     operations log, with no candidate), carrying the five shares, what the
  *     window gave each, the floors that held, every reason, the lane remedies,
@@ -988,7 +988,14 @@ export interface ResearchAllocationPorts {
   applyRemedy?(input: { lane: string; remedy: LaneRemedy; ref: string; goalIds: string[] }): Promise<void>;
   /** The newest Brain-wide decision row, or null. */
   lastDecision(): Promise<{ detail: Record<string, unknown>; at: string } | null>;
-  /** Write the Brain-wide decision row: once per changed decision, never per goal. */
+  /**
+   * The newest Brain-wide decision rows, newest first, up to `limit`: the rows
+   * probe r01.res-15-5 judges. Each pass diagnoses the measured ones that do
+   * not show their cost counted once, from their own recorded numbers
+   * (`diagnosePriorCostFailures`). Absent means the history is not read.
+   */
+  recentDecisions?(limit: number): Promise<{ detail: Record<string, unknown>; at: string }[]>;
+  /** Write the Brain-wide decision row: once per measured window (or per changed unmeasured decision), never per goal. */
   recordDecision(summary: string, detail: Record<string, unknown>): Promise<void>;
 }
 
@@ -1236,6 +1243,7 @@ export function verifiedCostReading(once: unknown): ResearchYieldReading['costCo
     totalCostMinor: money(o.totalCostMinor),
     purposeCostMinor: money(o.purposeCostMinor),
     unmeasuredJobs: num(o.unmeasuredJobs),
+    ...(o.jobTimeInputs && typeof o.jobTimeInputs === 'object' ? { jobTimeInputs: o.jobTimeInputs } : {}),
     holds: o.holds === true && [o.totalJobMs, o.purposeJobMs].every((n) => typeof n === 'number' && Number.isFinite(n)),
   };
 }
@@ -1252,6 +1260,222 @@ export function sharesMeetFloors(shares: Record<ResearchPurpose, number>, urgent
   if (shares.SELF_IMPROVEMENT < SYSTEM_HEALTH_FLOOR - eps) return false;
   if (urgentCommercialGoal && shares.TRANSACTION_ROUTES < COMMERCIAL_FLOOR - eps) return false;
   return true;
+}
+
+/**
+ * The consistent allocation window a pass's reading ends in: the
+ * RESEARCH_ALLOCATION_WINDOW_MS period (a UTC day) containing its `until`.
+ * Every pass reads the same 24-hour length of yield; the period is what "one
+ * row per window" counts, so hourly passes over one day's yield are one window
+ * and the next day's is the next. Null for an unreadable time. Pure.
+ */
+export function allocationWindowKey(until: string | null): string | null {
+  const ms = until === null ? NaN : Date.parse(until);
+  if (!Number.isFinite(ms)) return null;
+  return new Date(Math.floor(ms / RESEARCH_ALLOCATION_WINDOW_MS) * RESEARCH_ALLOCATION_WINDOW_MS).toISOString();
+}
+
+/** The allocation window a recorded decision belongs to, or null. Pure. */
+export function recordedWindowKey(detail: Record<string, unknown> | null): string | null {
+  if (!detail) return null;
+  if (typeof detail.windowKey === 'string') return detail.windowKey;
+  const w = detail.window as { until?: unknown } | undefined;
+  return allocationWindowKey(w && typeof w.until === 'string' ? w.until : null);
+}
+
+/** The decision rows probe r01.res-15-5 reads: the newest fifty. */
+export const ALLOCATION_AUDIT_ROWS = 50;
+
+/** One recorded decision that does not show its cost counted once, and why, read from that row alone. */
+export interface PriorCostFailure {
+  at: string;
+  fingerprint: string;
+  /** The cause read from the row's own recorded numbers (`diagnoseCostCountedOnce`). */
+  cause: CostOnceCause;
+  /** The cause the row itself recorded, when the code that wrote it recorded one. */
+  recordedCause: string | null;
+  /**
+   * When the row's numbers cannot tell the cause apart (FLAG_DISAGREES or
+   * NON_FINITE_JOB_TIME), what the window's job rows show
+   * (`causeFromJobInputs`): read from the inputs the row recorded, or from
+   * its window's job rows re-read — never inferred from the row's shape. Null
+   * when the row's own numbers already show the cause.
+   */
+  shownByJobs: JobInputCause | null;
+  /** The job-time inputs that cause was read from, and where they came from. */
+  jobInputs: (JobTimeInputs & { source: 'RECORDED' | 'REREAD' }) | null;
+  /** Which recorder wrote it: fingerprints without a leading `held` predate that change. */
+  recorder: 'HELD_IN_FINGERPRINT' | 'BEFORE_HELD_IN_FINGERPRINT';
+  jobMsGap: number | null;
+  costGap: number | null;
+  basis: string;
+}
+
+/** The window a decision row recorded, as a key and a readable window; null when it recorded none. */
+export function recordedWindow(detail: Record<string, unknown> | null): { key: string; since: string; until: string } | null {
+  const w = detail?.window as { since?: unknown; until?: unknown } | undefined;
+  if (!w || typeof w.since !== 'string' || typeof w.until !== 'string') return null;
+  return { key: `${w.since}|${w.until}`, since: w.since, until: w.until };
+}
+
+/** How many failing windows one pass re-reads job rows for, earliest first: a bound on the reads, not on what is recorded. */
+export const PRIOR_WINDOW_REREADS = 6;
+
+/** Whether a failure's own numbers leave its cause to the job rows. */
+const needsJobInputs = (cause: CostOnceCause) => cause === 'FLAG_DISAGREES' || cause === 'NON_FINITE_JOB_TIME';
+
+/**
+ * The windows of the failing rows whose cause only their job rows can show
+ * and that recorded no job inputs themselves, earliest first, at most `limit`.
+ * Pure.
+ */
+export function priorWindowsToReread(
+  rows: readonly { detail: Record<string, unknown> | null; at: string }[],
+  limit = PRIOR_WINDOW_REREADS,
+  /** Windows whose job rows an earlier pass already re-read (`carriedRereads`): never read again. */
+  known: ReadonlySet<string> = new Set(),
+): { key: string; since: string; until: string }[] {
+  const out = new Map<string, { key: string; since: string; until: string }>();
+  for (const row of [...rows].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0))) {
+    const d = row.detail;
+    if (!d || d.held === true) continue;
+    const once = d.costCountedOnce as Record<string, unknown> | undefined;
+    if (once && once.holds === true) continue;
+    if (!needsJobInputs(diagnoseCostCountedOnce(once).cause)) continue;
+    if (once && once.jobTimeInputs && typeof once.jobTimeInputs === 'object') continue;
+    const w = recordedWindow(d);
+    if (w && !known.has(w.key) && !out.has(w.key)) out.set(w.key, w);
+    if (out.size >= limit) break;
+  }
+  return [...out.values()];
+}
+
+/**
+ * The earliest cause of every recorded counted-once failure, read from the
+ * production rows themselves rather than asserted by a repair (RES-15-5).
+ * Where a row's own sums cannot tell its cause, the cause is read from its
+ * window's job-time inputs — those the row recorded, or `reread` (its window's
+ * job rows read again, keyed by `recordedWindow`) — and is NOT_SHOWN when
+ * neither is available. Nothing is inferred from the row's shape.
+ * Takes the decision rows newest first, keeps the measured ones (`held` is not
+ * true — what the probe judges) whose `costCountedOnce.holds` is not true, and
+ * diagnoses each from its own numbers. JSON writes NaN and Infinity as `null`,
+ * so a non-finite sum reads as NON_FINITE_JOB_TIME; a row with no record at
+ * all reads as NOT_RECORDED. Oldest first, so the first entry is the earliest
+ * failure on record. Pure.
+ */
+export function diagnosePriorCostFailures(
+  rows: readonly { detail: Record<string, unknown> | null; at: string }[],
+  reread: ReadonlyMap<string, JobTimeInputs> = new Map(),
+): {
+  failures: PriorCostFailure[];
+  causes: Partial<Record<CostOnceCause | JobInputCause, number>>;
+  earliest: PriorCostFailure | null;
+} {
+  const failures: PriorCostFailure[] = [];
+  for (const row of rows) {
+    const d = row.detail;
+    if (!d || d.held === true) continue;
+    const once = d.costCountedOnce as Record<string, unknown> | undefined;
+    if (once && once.holds === true) continue;
+    const diagnosis = diagnoseCostCountedOnce(once);
+    const fingerprint = typeof d.fingerprint === 'string' ? d.fingerprint : '?';
+    let shownByJobs: JobInputCause | null = null;
+    let jobInputs: PriorCostFailure['jobInputs'] = null;
+    let jobBasis = '';
+    if (needsJobInputs(diagnosis.cause)) {
+      const recorded = once && once.jobTimeInputs && typeof once.jobTimeInputs === 'object' ? (once.jobTimeInputs as JobTimeInputs) : null;
+      const w = recordedWindow(d);
+      const again = w ? reread.get(w.key) ?? null : null;
+      jobInputs = recorded ? { ...recorded, source: 'RECORDED' } : again ? { ...again, source: 'REREAD' } : null;
+      const shown = causeFromJobInputs(jobInputs);
+      shownByJobs = shown.cause;
+      jobBasis = `; job rows (${jobInputs ? jobInputs.source.toLowerCase() : w ? 'not re-read' : 'no window recorded'}): ${shown.basis}`;
+    }
+    failures.push({
+      at: row.at,
+      fingerprint: fingerprint.slice(0, 400),
+      cause: diagnosis.cause,
+      recordedCause: once && typeof once.cause === 'string' ? once.cause : null,
+      shownByJobs,
+      jobInputs,
+      recorder: fingerprint.startsWith('{"held"') ? 'HELD_IN_FINGERPRINT' : 'BEFORE_HELD_IN_FINGERPRINT',
+      jobMsGap: diagnosis.jobMsGap,
+      costGap: diagnosis.costGap,
+      basis: `${diagnosis.detail}${jobBasis}`,
+    });
+  }
+  failures.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+  const causes: Partial<Record<CostOnceCause | JobInputCause, number>> = {};
+  for (const f of failures) {
+    const c = f.shownByJobs && f.shownByJobs !== 'NOT_SHOWN' ? f.shownByJobs : f.cause;
+    causes[c] = (causes[c] ?? 0) + 1;
+  }
+  return { failures, causes, earliest: failures[0] ?? null };
+}
+
+/**
+ * The job-time inputs an earlier pass re-read for failing windows, as the
+ * newest decision row carries them (`priorCostFailures.reread`), keyed by
+ * `recordedWindow`. A window's job rows are append-only, so what one pass read
+ * is what any later pass would read: carrying it makes the re-read a one-time
+ * diagnosis rather than an hourly one. Pure.
+ */
+export function carriedRereads(detail: Record<string, unknown> | null | undefined): Map<string, JobTimeInputs> {
+  const audit = detail?.priorCostFailures as { reread?: unknown } | undefined;
+  const out = new Map<string, JobTimeInputs>();
+  if (!audit || !audit.reread || typeof audit.reread !== 'object') return out;
+  for (const [key, inputs] of Object.entries(audit.reread as Record<string, unknown>)) {
+    const i = inputs as Partial<JobTimeInputs> | null;
+    if (!i || typeof i.jobs !== 'number' || typeof i.measured !== 'number' || typeof i.unmeasured !== 'number' || !i.issues || typeof i.issues !== 'object') continue;
+    out.set(key, {
+      jobs: i.jobs,
+      measured: i.measured,
+      zeroMeasured: typeof i.zeroMeasured === 'number' ? i.zeroMeasured : 0,
+      unmeasured: i.unmeasured,
+      issues: i.issues,
+      examples: Array.isArray(i.examples) ? i.examples : [],
+      maxMeasuredMs: typeof i.maxMeasuredMs === 'number' ? i.maxMeasuredMs : null,
+    });
+  }
+  return out;
+}
+
+/**
+ * The counted-once audit a recorded decision row carries: every failing
+ * measured row the probe reads, diagnosed from its own numbers, and — only
+ * for a failing window whose numbers cannot show the cause and which no
+ * earlier pass re-read — its job rows read once. Run only on a pass that
+ * writes a row (about one per window), never on the hourly passes that write
+ * nothing; the re-read inputs are carried on the row (`reread`), pruned to
+ * windows that still fail in the rows read, so no window is read twice.
+ */
+async function priorCostAudit(
+  ports: ResearchAllocationPorts,
+  previous: { detail: Record<string, unknown>; at: string } | null,
+): Promise<Record<string, unknown>> {
+  const history = ports.recentDecisions ? await ports.recentDecisions(ALLOCATION_AUDIT_ROWS) : previous ? [previous] : [];
+  const reread = carriedRereads(previous?.detail ?? null);
+  for (const w of priorWindowsToReread(history, PRIOR_WINDOW_REREADS, new Set(reread.keys()))) {
+    const again = (await ports.readYield({ since: w.since, until: w.until })).costCountedOnce.jobTimeInputs;
+    if (again) reread.set(w.key, again);
+  }
+  const prior = diagnosePriorCostFailures(history, reread);
+  // Carried only while a window still fails in the rows the probe reads.
+  const stillFailing = new Set(
+    history
+      .filter((row) => row.detail && row.detail.held !== true && (row.detail.costCountedOnce as { holds?: unknown } | undefined)?.holds !== true)
+      .map((row) => recordedWindow(row.detail)?.key)
+      .filter((key): key is string => typeof key === 'string'),
+  );
+  return {
+    rowsRead: history.length,
+    failing: prior.failures.length,
+    causes: prior.causes,
+    earliest: prior.earliest,
+    failures: prior.failures.slice(-10),
+    reread: Object.fromEntries([...reread.entries()].filter(([key]) => stillFailing.has(key))),
+  };
 }
 
 /** One allocation pass over the live goals. */
@@ -1304,6 +1528,7 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
       }
     : decided;
   const fingerprint = allocationFingerprint({ ...decision, held: decision.held || heldForCost });
+  const windowKey = allocationWindowKey(window.until);
   const floors = {
     exploration: EXPLORATION_FLOOR,
     systemHealth: SYSTEM_HEALTH_FLOOR,
@@ -1313,6 +1538,7 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
   const detail: Record<string, unknown> = {
     fingerprint,
     window,
+    windowKey,
     shares: Object.fromEntries(RESEARCH_PURPOSES.map((p) => [p, round3(decision.shares[p])])),
     // What the window actually gave each purpose: what the goals tick compares the decided shares with.
     observed: Object.fromEntries(RESEARCH_PURPOSES.map((p) => [p, round3(observed[p])])),
@@ -1360,8 +1586,25 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
     costCountedOnce,
     notes: [...decision.notes, ...reading.notes].slice(0, 20),
   };
-  const recorded = !(previous && previous.detail.fingerprint === fingerprint);
+  // One row per measured window (RES-15-5: yield is recorded "over consistent
+  // windows"). Recording only on a changed fingerprint left a window whose
+  // decision repeated the last one with no row of its own, so the newest
+  // measured row could be days old and a failed counted-once row stayed the
+  // newest. Now a measured pass — shares decided from yield, or held because
+  // its cost was not shown counted once — records its window's decision the
+  // first time that window is measured, even when nothing changed. Within a
+  // window, a changed decision (a recovered cost reading, a new capacity
+  // verdict) is recorded the pass it is measured, and an unchanged one never
+  // twice. A pass with nothing measured is recorded only when it differs from
+  // the newest row. `changed` means the decision differs from the newest row.
+  const changed = !(previous && previous.detail.fingerprint === fingerprint);
+  const newWindow = windowKey === null || recordedWindowKey(previous?.detail ?? null) !== windowKey;
+  const measuredWindow = !decision.held || heldForCost;
+  const recorded = changed || (measuredWindow && newWindow);
   if (recorded) {
+    // Every recorded counted-once failure the probe still reads, with the cause its own numbers show.
+    // Read only when a row is written: a pass that records nothing reads no history and re-reads no window.
+    detail.priorCostFailures = await priorCostAudit(ports, previous);
     const summary = heldForCost
       ? "Research allocation held: the window's cost reading does not show each job's cost counted once."
       : decision.held
@@ -1382,7 +1625,7 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
     window,
     shares: decision.shares,
     floors,
-    changed: recorded,
+    changed,
     held: decision.held || heldForCost,
     laneActions: decision.laneActions,
     capacity: decision.capacity,
@@ -1407,6 +1650,10 @@ export async function productionResearchAllocationPorts(): Promise<ResearchAlloc
     readYield: (window) => researchYieldByPurpose(window),
     readLaneCapacity: (until) => laneCapacityNow(until),
     lastDecision: () => latestResearchDecision(),
+    async recentDecisions(limit) {
+      const { listImprovementEvents } = await import('../../repos/improvement.ts');
+      return (await listImprovementEvents({ kinds: [RESEARCH_ALLOCATION_DECIDED], limit })).map((e) => ({ detail: e.detail, at: e.at }));
+    },
     async appliedRemedies(goalIds) {
       const out: AppliedRemedy[] = [];
       for (const goalId of goalIds) {

@@ -58,6 +58,12 @@ export interface ResearchBriefing {
   capacity: { lane: string; kind: string; units: number; resource: string | null; reason: string }[];
   /** Lane remedies, each tried before any limit is raised. */
   laneActions: { lane: string; kind: string; reason: string }[];
+  /**
+   * Whether this decision's window shows each job's cost counted once, and the
+   * earlier decisions the probe still reads that did not, with the earliest
+   * one's cause as the row's own audit diagnosed it (`priorCostFailures`).
+   */
+  costCountedOnce: { holds: boolean | null; earlierFailures: number; earliestCause: string | null; earliestAt: string | null };
 }
 
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
@@ -84,6 +90,18 @@ export function researchBriefingFrom(detail: Record<string, unknown> | null, dec
   const w = obj(detail.window);
   const window = typeof w.since === 'string' && typeof w.until === 'string' ? { since: w.since, until: w.until } : null;
   const held = detail.held === true;
+  const onceIn = obj(detail.costCountedOnce);
+  const audit = obj(detail.priorCostFailures);
+  const earliest = obj(audit.earliest);
+  // The cause a person reads is what the job rows showed, when they showed one; otherwise what the row's own numbers did.
+  const earliestCause =
+    typeof earliest.shownByJobs === 'string' && earliest.shownByJobs !== 'NOT_SHOWN' ? earliest.shownByJobs : typeof earliest.cause === 'string' ? earliest.cause : null;
+  const costCountedOnce = {
+    holds: typeof onceIn.holds === 'boolean' ? onceIn.holds : null,
+    earlierFailures: num(audit.failing) ?? 0,
+    earliestCause,
+    earliestAt: typeof earliest.at === 'string' ? earliest.at : null,
+  };
 
   const parts: string[] = [];
   if (held) parts.push('Research allocation held: nothing in the last window was measured');
@@ -101,7 +119,13 @@ export function researchBriefingFrom(detail: Record<string, unknown> | null, dec
   if (added.length) parts.push(`capacity recommended: ${added.map((c) => `${c.lane} +${c.units} (${c.resource ?? 'unknown'})`).join(', ')}`);
   else parts.push('no capacity added');
   if (laneActions.length) parts.push(`lanes: ${laneActions.map((a) => `${a.lane} ${a.kind.toLowerCase().replace(/_/g, ' ')}`).join(', ')}`);
-  return { line: `${parts.join('; ')}.`, decidedAt, window, held, shares, floors, deadlineGoals, laneCapacity, capacity, laneActions };
+  if (costCountedOnce.earlierFailures > 0) {
+    parts.push(
+      `${costCountedOnce.earlierFailures} earlier decision(s) did not show cost counted once` +
+        (costCountedOnce.earliestCause ? ` (earliest: ${costCountedOnce.earliestCause.toLowerCase().replace(/_/g, ' ')})` : ''),
+    );
+  }
+  return { line: `${parts.join('; ')}.`, decidedAt, window, held, shares, floors, deadlineGoals, laneCapacity, capacity, laneActions, costCountedOnce };
 }
 
 export function briefFrom(goals: GoalView[], generatedAt: string, research: ResearchBriefing | null = null): GoalBriefing {
