@@ -285,3 +285,4 @@ See F1–F7 above. Each one gives the cause, file:line, run IDs, the smallest ch
 - W12 finding: one fragment per mission, so jobs scale about 1:1 with missions.
 - Still open: W2c (planner CPU), W13 (120B fragments dropped).
 - Integration lesson: a release candidate re-cut five times left the Deploy test on bd5e0419 as the first full SQLite run of #1029. That cost about 40 min.
+- **09:06Z, release 4 is now 72008cd2** (Deploy 44052412701, live about 09:50Z). It adds #1042 (W2c): the planner index cut the fixture with 400 arrangements, 1k openings and 3k facts from 19.6 s to 0.9 s, and 754/754 impacted tests pass. Only W13 (120B fragment drops) remains open.
