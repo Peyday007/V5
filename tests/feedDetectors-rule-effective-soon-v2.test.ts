@@ -14,9 +14,15 @@ import {
   RULE_EFFECTIVE_SOON_DAYS,
   RULE_EFFECTIVE_SOON_V2,
   correctedDocumentOf,
+  employerKey,
   issuingAgencyOf,
+  ruleReading,
+  runDetectors,
   type DetectorRecord,
 } from '../server/services/feeds/detectors.ts';
+import { freshProject } from './helpers.ts';
+import { getDb } from '../server/db/database.ts';
+import { insertFeedItems } from '../server/repos/feeds.ts';
 
 const now = new Date('2026-11-17T12:00:00.000Z');
 const FR = 'https://www.federalregister.gov/documents';
@@ -134,5 +140,40 @@ describe('installation', () => {
     expect(issuingAgencyOf(FAA)).toBe('Federal Aviation Administration');
     expect(issuingAgencyOf('Federal Communications Commission')).toBe('Federal Communications Commission');
     expect(issuingAgencyOf(null)).toBeNull();
+  });
+});
+
+describe('RULE_EFFECTIVE_SOON@2 readings key items the way the rule keys its entities', () => {
+  it('declares the issuing-agency key it groups by', () => {
+    expect(RULE_EFFECTIVE_SOON_V2.entityKeyOf!(FAA)).toBe('federal aviation administration');
+    expect(RULE_EFFECTIVE_SOON_V2.entityKeyOf!(FAA)).not.toBe(employerKey(FAA));
+  });
+
+  it('counts a screened-KEEP item from a multi-agency issuer it left out as a miss', async () => {
+    await freshProject();
+    const live = new Date();
+    const day = (offset: number) => new Date(live.getTime() + offset * 86_400_000).toISOString().slice(0, 10);
+    await insertFeedItems('federal-register-rules', [
+      // A member: FAA final rule effective inside the window.
+      { externalId: 'faa-member', url: `${FR}/x/faa-member/a`, title: 'FAA member', body: `Effective ${day(10)}.`, organization: FAA, publishedAt: `${day(-1)}T00:00:00.000Z` },
+      // Left out (no stated effective date) but the screen keeps it: a miss for the FAA entity.
+      { externalId: 'faa-missed', url: `${FR}/x/faa-missed/b`, title: 'FAA missed', body: null, organization: FAA, publishedAt: `${day(-1)}T00:00:00.000Z` },
+    ]);
+    const items = await getDb().all<{ id: string; external_id: string }>(`SELECT id, external_id FROM feed_items WHERE source = 'federal-register-rules'`);
+    const id = (externalId: string) => items.find((one) => one.external_id === externalId)!.id;
+    await runDetectors({ now: live, detectors: [RULE_EFFECTIVE_SOON_V2] });
+    const stored = await getDb().all<{ entity_key: string | null }>(`SELECT entity_key FROM feed_detections WHERE rule_id = 'RULE_EFFECTIVE_SOON' AND rule_version = 2`);
+    expect(stored.map((one) => one.entity_key)).toEqual(['federal aviation administration']);
+    for (const model of ['m1', 'm2']) {
+      await getDb().run(
+        `INSERT INTO cheap_results (id, kind, input_hash, subject_id, model, ok, output, error, created_at)
+         VALUES (?, 'SCREEN_LEAD', ?, ?, ?, 1, ?, NULL, ?)`,
+        [`cr-missed-${model}`, 'h-missed', id('faa-missed'), model, JSON.stringify({ verdict: 'KEEP', window: 'SHORT', deliverable: 'DOCUMENT', need: 'x', payer: 'y', reason: 'z' }), live.toISOString()],
+      );
+    }
+    const reading = await ruleReading(RULE_EFFECTIVE_SOON_V2, live);
+    expect(reading.members).toBe(1);
+    expect(reading.misses).toBe(1);
+    expect(reading.missedSamples.join(' ')).toContain('FAA missed');
   });
 });
