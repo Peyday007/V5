@@ -34,6 +34,7 @@ import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
 import { claimSources, type ClaimSource } from '../../repos/research.ts';
 import { cashOutcomeLessons, type CashLesson } from '../cash/journey/learning.ts';
 import { readMoneyFigures } from '../cash/figures.ts';
+import { readVolume } from '../cash/volume.ts';
 import type { CashCardFact, CashOpportunity } from '../../domain/types.ts';
 import type { Estimate, Observation, QuantityNode } from '../../domain/quant.ts';
 import { ageOf } from './pool.ts';
@@ -74,8 +75,48 @@ export const CASH_QUANTITIES = {
    * definition rather than averaging it in.
    */
   close: { label: 'Share of interested buyers who agree', unit: 'share', kind: 'RATE', fields: ['conversionRates', 'buyingEvidence'], material: ['mechanism', 'funnelStage'], freshDays: 1095 },
+  /*
+   * Read only for constructed arrangements (W2b, 2026-11-17), whose hours and
+   * deal volume were fixed sweeps. Hours travel within a mechanism. How many
+   * deals a market holds is a fact about that market alone, so the opening it
+   * was measured on is material: only these buyers' own evidence counts, and
+   * another population's volume is refused rather than transferred.
+   */
+  hours: { label: 'Hours of work per deal', unit: 'hours', kind: 'POSITIVE', fields: ['hours'], material: ['mechanism'], freshDays: 365 },
+  dealsPerMonth: { label: 'Deals these buyers make in 30 days', unit: 'deals', kind: 'POSITIVE', fields: ['buyerVolume'], material: ['mechanism', 'opportunity'], freshDays: 365 },
 } as const;
 export type CashQuantity = keyof typeof CASH_QUANTITIES;
+
+/**
+ * An opening to infer for. `sameBuyer` names openings of the very same buyers
+ * (a constructed arrangement's related openings, W2b): what is evidenced on
+ * them is evidence about this target's own population, read as its own rather
+ * than as a comparable. Never set for a found opening.
+ */
+export type InferenceTarget = CashOpportunity & { sameBuyer?: readonly string[] };
+
+/**
+ * The context an observation on `opportunity` carries for `target`. On an
+ * opening of the same buyers it describes the target's own population — its
+ * identity, industry and buying signal are the target's — while what it was
+ * measured under (mechanism, a material dimension, and price band) stays its
+ * own, so a different mechanism is still refused or bridged, never assumed.
+ */
+function contextFor(opportunity: CashOpportunity, target: InferenceTarget): Record<string, string> {
+  const context = contextOf(opportunity);
+  if (!target.sameBuyer?.includes(opportunity.id)) return context;
+  const own = contextOf(target);
+  return { ...context, opportunity: own.opportunity!, industry: own.industry!, signal: own.signal! };
+}
+
+/** Hours a researched sentence states for the work: "6 hours", "4–8 hrs". */
+export function readHours(text: string): { low: number; high: number } | null {
+  const match = /(\d{1,4}(?:\.\d+)?)(?:\s*(?:-|–|to)\s*(\d{1,4}(?:\.\d+)?))?\s*(?:hours?|hrs?)\b/i.exec(text);
+  if (!match) return null;
+  const low = Number(match[1]);
+  const high = match[2] ? Number(match[2]) : low;
+  return low > 0 && high >= low && high <= 2000 ? { low, high } : null;
+}
 
 export const KNOWLEDGE_TTL_MS = 5 * 60 * 1000;
 
@@ -261,7 +302,7 @@ export function ledgerValue(money: RouteMoneyVelocity, quantity: CashQuantity): 
 }
 
 /** The ledger's measurements about one quantity, one observation per route that states it. */
-export function ledgerObservations(knowledge: CashKnowledge, quantity: CashQuantity, target: CashOpportunity): Observation[] {
+export function ledgerObservations(knowledge: CashKnowledge, quantity: CashQuantity, target: InferenceTarget): Observation[] {
   const out: Observation[] = [];
   for (const [routeKey, money] of knowledge.routeMoney) {
     const opportunity = knowledge.opportunities.get(routeKey);
@@ -272,8 +313,8 @@ export function ledgerObservations(knowledge: CashKnowledge, quantity: CashQuant
     out.push({
       id: `ledger:${quantity}:${routeKey}`,
       value,
-      context: contextOf(opportunity),
       lineage: [`cash_money_entries:${routeKey}`],
+      context: contextFor(opportunity, target),
       source: { kind: 'LEDGER_ENTRY', ref: routeKey, note: `money ledger of "${opportunity.title.slice(0, 60)}": ${routeMoneyStatement(money, knowledge.routeScores.get(routeKey) ?? null)}` },
       observedAt: last,
       broad: opportunity.mechanism !== target.mechanism,
@@ -935,7 +976,7 @@ export function switchedPathObservations(knowledge: CashKnowledge, target: CashO
 }
 
 /** The observations a project holds about one quantity. */
-export function observationsFor(knowledge: CashKnowledge, quantity: CashQuantity, target: CashOpportunity): Observation[] {
+export function observationsFor(knowledge: CashKnowledge, quantity: CashQuantity, target: InferenceTarget): Observation[] {
   const spec = CASH_QUANTITIES[quantity];
   const out: Observation[] = [];
   if (quantity === 'close') {
@@ -962,12 +1003,20 @@ export function observationsFor(knowledge: CashKnowledge, quantity: CashQuantity
     if (!(spec.fields as readonly string[]).includes(fact.field)) continue;
     const opportunity = knowledge.opportunities.get(fact.opportunityId);
     if (!opportunity || opportunity.duplicateOfId) continue;
+    // A market's size is about that market: another buyer's volume is not even a bound on this one's.
+    if (quantity === 'dealsPerMonth' && opportunity.id !== target.id && !target.sameBuyer?.includes(opportunity.id)) continue;
     let value: Observation['value'] | null = null;
     if (quantity === 'respond' || quantity === 'close') {
       value = readRate(fact.value, quantity);
     } else if (quantity === 'daysToCash') {
       const days = readDayRange(fact.value);
       if (days) value = days.low === days.high ? { kind: 'POINT', value: days.low } : { kind: 'RANGE', low: days.low, high: days.high };
+    } else if (quantity === 'hours') {
+      const hours = readHours(fact.value);
+      if (hours) value = hours.low === hours.high ? { kind: 'POINT', value: hours.low } : { kind: 'RANGE', low: hours.low, high: hours.high };
+    } else if (quantity === 'dealsPerMonth') {
+      const volume = readVolume(fact.value, 30);
+      if (volume && volume.deals >= 1) value = { kind: 'POINT', value: volume.deals };
     } else {
       // A money fact travels as a share of the price it was measured against.
       const price = opportunity.priceCents;
@@ -989,7 +1038,7 @@ export function observationsFor(knowledge: CashKnowledge, quantity: CashQuantity
     out.push({
       id: `fact:${fact.id}`,
       value,
-      context: quantity === 'close' ? { ...contextOf(opportunity), funnelStage: funnelStageOf(fact.value) } : contextOf(opportunity),
+      context: quantity === 'close' ? { ...contextFor(opportunity, target), funnelStage: funnelStageOf(fact.value) } : contextFor(opportunity, target),
       lineage: [...lineageOf(fact, knowledge), ...(cites ? [cites] : [])],
       // A demand rate somebody chose to publish is read through the selection discount (`pool.ts`).
       ...(rate ? { published: true } : {}),
@@ -1007,7 +1056,7 @@ export function observationsFor(knowledge: CashKnowledge, quantity: CashQuantity
 }
 
 /** The node `reconstruct` resolves for one quantity of one opening. */
-export function nodeFor(knowledge: CashKnowledge, quantity: CashQuantity, target: CashOpportunity): QuantityNode {
+export function nodeFor(knowledge: CashKnowledge, quantity: CashQuantity, target: InferenceTarget): QuantityNode {
   const spec = CASH_QUANTITIES[quantity];
   return {
     key: quantity.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`),
@@ -1029,7 +1078,7 @@ export function nodeFor(knowledge: CashKnowledge, quantity: CashQuantity, target
  * null when nothing at all bears on it (an UNKNOWN with only physical bounds
  * says nothing the existing sweep did not already say).
  */
-export function inferCashQuantity(knowledge: CashKnowledge, quantity: CashQuantity, target: CashOpportunity, now: Date = new Date()): Estimate | null {
+export function inferCashQuantity(knowledge: CashKnowledge, quantity: CashQuantity, target: InferenceTarget, now: Date = new Date()): Estimate | null {
   const node = nodeFor(knowledge, quantity, target);
   const observations = node.observations ?? [];
   if (observations.length === 0) return null;

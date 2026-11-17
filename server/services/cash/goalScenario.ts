@@ -42,7 +42,7 @@ import { COMPETITIVE_AWARD } from './paymentTiming.ts';
 import { SCENARIO_LIMITS, type ScenarioModelDefinition, type ScenarioVariable, type SourceRef, type StrategySpec, type VariableProvenance } from '../../domain/scenario.ts';
 import type { Workstream } from '../../domain/register.ts';
 import type { TargetReading } from '../goals/target.ts';
-import { inferCashQuantity, loadCashKnowledge, type CashKnowledge, type CashQuantity } from '../quant/knowledge.ts';
+import { inferCashQuantity, loadCashKnowledge, type CashKnowledge, type CashQuantity, type InferenceTarget } from '../quant/knowledge.ts';
 import { inputSample, toScenarioInput, type InputSample } from '../quant/export.ts';
 import { CONTACTS_PER_DAY_BOUNDS, evaluateGoalPortfolio, heldEvaluation, measuredRateInput, type GoalPortfolio, type PlannedOpening } from '../goals/portfolio.ts';
 import { SPREAD_FLOOR } from '../quant/pool.ts';
@@ -213,6 +213,8 @@ export interface ArrangementInput {
   currency: string;
   knowledge?: CashKnowledge | null;
   now?: Date;
+  /** Days the goal has left: what an inferred monthly deal volume is scaled to (30 when unstated). */
+  daysLeft?: number | null;
 }
 
 /**
@@ -224,14 +226,32 @@ export interface ArrangementInput {
  * distribution. Only `inferCashQuantity`'s context reads it; it is never a row.
  * Pure.
  */
-export function arrangementTarget(one: ConstructedArrangement, knowledge: Pick<CashKnowledge, 'opportunities' | 'projectId'>, price: ModelInput, currency: string): CashOpportunity {
+export function arrangementTarget(one: ConstructedArrangement, knowledge: Pick<CashKnowledge, 'opportunities' | 'projectId'>, price: ModelInput, currency: string): InferenceTarget {
   const held: readonly string[] = one.structure ? (STRUCTURES[one.structure]?.alreadyHeldAs ?? []) : [];
-  const counts = new Map<string, number>();
-  for (const id of one.relatedOpenings ?? []) {
-    const m = knowledge.opportunities.get(id)?.mechanism;
-    if (m && held.includes(m)) counts.set(m, (counts.get(m) ?? 0) + 1);
+  /*
+   * The openings of these very buyers (W2b): its related openings, and any
+   * opening whose payer is this population by the map's identity. What is
+   * evidenced on them is evidence about the arrangement's own buyers, so the
+   * inference reads it as its own (`sameBuyer`) instead of only through
+   * project-wide comparables.
+   */
+  const buyer = payerKey(one.demand.name);
+  const sameBuyer = new Set((one.relatedOpenings ?? []).filter((id) => knowledge.opportunities.has(id)));
+  if (buyer) {
+    for (const o of knowledge.opportunities.values()) {
+      if (o.duplicateOfId || !o.payer) continue;
+      if (payerKey(o.payer) === buyer || payerKey(buyerPopulationName(o.payer)) === buyer) sameBuyer.add(o.id);
+    }
   }
-  const related = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0];
+  const counts = new Map<string, number>();
+  const signals = new Map<string, number>();
+  for (const id of sameBuyer) {
+    const o = knowledge.opportunities.get(id);
+    if (o?.mechanism && held.includes(o.mechanism)) counts.set(o.mechanism, (counts.get(o.mechanism) ?? 0) + 1);
+    if (o?.opportunitySignal) signals.set(o.opportunitySignal, (signals.get(o.opportunitySignal) ?? 0) + 1);
+  }
+  const top = (m: Map<string, number>) => [...m].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0];
+  const related = top(counts);
   const precedent = one.precedent ? knowledge.opportunities.get(one.precedent.opportunityId)?.mechanism : undefined;
   const mechanism = related ?? (precedent && held.includes(precedent) ? precedent : undefined) ?? held[0] ?? 'OTHER';
   const p50 = price.inferred?.p50 ?? price.value ?? null;
@@ -241,11 +261,13 @@ export function arrangementTarget(one: ConstructedArrangement, knowledge: Pick<C
     title: one.label,
     mechanism,
     industry: one.sector,
-    opportunitySignal: null,
+    // These buyers' own buying signal, when their openings state one.
+    opportunitySignal: top(signals) ?? null,
     priceCents: p50 !== null && p50 > 0 ? Math.round(p50 * 100) : null,
     currency,
     duplicateOfId: null,
-  } as unknown as CashOpportunity;
+    sameBuyer: [...sameBuyer].sort(),
+  } as unknown as InferenceTarget;
 }
 
 /**
@@ -377,13 +399,19 @@ function arrangementOpening(one: ConstructedArrangement, input: ArrangementInput
     repeatable,
     price,
     capital,
-    hours: unknown(1, 40, 'nobody has established the hours; swept from 1 to 40 per deal'),
+    hours: infer('hours', unknown(1, 40, 'nobody has established the hours; swept from 1 to 40 per deal')),
     daysToCash: infer('daysToCash', unknown(3, 60, 'nobody has established when the money would settle; swept from 3 to 60 days')),
     close: infer('close', unknown(0.02, 0.5, 'no buyer has been asked yet; swept from 2% to 50% of buyers agreeing')),
     respond: infer('respond', unknown(0.002, 0.15, 'nobody has established how many prospects of this kind reply; swept from 0.2% to 15%')),
     directCost: infer('costShare', unknown(0, Math.max(0.01, high * 0.6), 'nobody has established the direct cost; swept from nothing to 60% of the top price'), high, ' as a share of the top price'),
+    // A repeating design's deals in the window, from these buyers' own stated volume only (a market's size never transfers).
     volume: repeatable
-      ? unknown(1, MAX_BUYERS_OFFERED, `a ${one.design.repeat.toLowerCase().replace('_', ' ')} design repeats, but nobody has established how many buyers exist; swept from 1 deal`)
+      ? infer(
+          'dealsPerMonth',
+          unknown(1, MAX_BUYERS_OFFERED, `a ${one.design.repeat.toLowerCase().replace('_', ' ')} design repeats, but nobody has established how many buyers exist; swept from 1 deal`),
+          Math.max(1, input.daysLeft ?? 30) / 30,
+          ' over the days left',
+        )
       : known(1, 'ASSUMPTION', ref, 'a one-off design is one deal'),
     agreed: false,
     agreedValue: 0,
@@ -411,7 +439,7 @@ function arrangementOpening(one: ConstructedArrangement, input: ArrangementInput
  */
 export function inventedFromArrangement(
   one: ConstructedArrangement,
-  input: { projectId: string; currency: string; beforeProofCents: number | null; otherPrices: readonly number[] },
+  input: ArrangementInput & { beforeProofCents: number | null; otherPrices: readonly number[] },
 ): PlannedOpening | { refused: string } {
   if (one.stress.exposure === 'EXCEEDS') return { refused: "its known worst case exceeds the goal's limits" };
   const marketKey = populationMarket(one.demand.ref);
@@ -541,11 +569,14 @@ export function comparablePricesFor(
  */
 export async function inventedDesigner(input: Parameters<typeof inventionContext>[0]): Promise<(spec: InventedDesign) => PlannedOpening | { refused: string }> {
   const ctx = await inventionContext(input);
+  // The project's evidence, read once, so an invented design's links read it as a constructed one's do (W2b).
+  const knowledge = await loadCashKnowledge(input.projectId).catch(() => null);
+  const now = input.now ?? new Date();
   const otherPrices = ctx.priced.filter((o) => o.value.kind === 'POINT').map((o) => (o.value as { value: number }).value);
   return (spec) => {
     const made = composeInvented(spec, ctx);
     if ('refused' in made) return made;
-    return inventedFromArrangement(made, { projectId: input.projectId, currency: input.currency, beforeProofCents: ctx.limits.capitalBeforeProofCents, otherPrices });
+    return inventedFromArrangement(made, { projectId: input.projectId, currency: input.currency, beforeProofCents: ctx.limits.capitalBeforeProofCents, otherPrices, knowledge, now, daysLeft: ctx.limits.daysLeft });
   };
 }
 
@@ -951,7 +982,7 @@ function unknown(low: number, high: number, note: string): ModelInput {
  * fallback range when nothing bears on it. `scale` turns a share of the price
  * into money at this opening's price.
  */
-function inferOr(knowledge: CashKnowledge | null, quantity: CashQuantity, opportunity: CashOpportunity, now: Date, fallback: ModelInput, scale = 1, what = ''): ModelInput {
+function inferOr(knowledge: CashKnowledge | null, quantity: CashQuantity, opportunity: InferenceTarget, now: Date, fallback: ModelInput, scale = 1, what = ''): ModelInput {
   if (!knowledge) return fallback;
   let est: Estimate | null = null;
   try {

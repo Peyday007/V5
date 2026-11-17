@@ -38,6 +38,7 @@
 import type { PathFact, TransactionPathway } from './pathways.ts';
 import type { VariantReading } from './reconstruction.ts';
 import type { ConstructedArrangement } from '../cash/construct.ts';
+import type { ModelInput, ModelledOpportunity } from '../cash/goalScenario.ts';
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -361,9 +362,35 @@ export function candidateFromPathway(p: TransactionPathway, extra: Partial<Pick<
   };
 }
 
-/** A constructed arrangement as a candidate plan. Every part it has not established stays UNKNOWN. */
-export function candidateFromArrangement(a: ConstructedArrangement): PlanCandidate {
+/**
+ * A scenario input of an arrangement as a plan field (W2b): PROVEN only for a
+ * value evidence or this Brain's history states, ESTIMATED for a distribution
+ * the evidence justifies (`inferred.justified`), and otherwise UNKNOWN — a
+ * swept range or bounds-only inference is never shown as an estimate. Pure.
+ */
+export function fieldFromInput(input: ModelInput | null | undefined, what: string): ModelField | null {
+  if (!input) return null;
+  const evidenced = input.provenance === 'EVIDENCE' || input.provenance === 'HISTORICAL';
+  if (evidenced && input.value !== null) return { value: input.value, low: input.value, high: input.value, status: 'PROVEN', basis: `${what}: ${input.note}`.slice(0, 400) };
+  if (input.inferred?.justified) return { value: input.inferred.p50, low: input.inferred.p10, high: input.inferred.p90, status: 'ESTIMATED', basis: `${what}: ${input.note}`.slice(0, 400) };
+  return null;
+}
+
+/**
+ * A constructed arrangement as a candidate plan. Every part it has not
+ * established stays UNKNOWN. `modelled` is the arrangement's own scenario
+ * conversion (`estimatedFromArrangement` with the project's knowledge), so a
+ * cost, capital, timing or way to the buyer that accepted evidence establishes
+ * is read from it (W2b) rather than left unknown.
+ */
+export function candidateFromArrangement(a: ConstructedArrangement, modelled: ModelledOpportunity | null = null): PlanCandidate {
   const unknown = (what: string): ModelField => ({ value: null, low: null, high: null, status: 'UNKNOWN', basis: `${what} is not yet established for this construction` });
+  const costs = fieldFromInput(modelled?.directCost, 'direct cost per deal');
+  const capitalField = fieldFromInput(modelled?.capital, 'money tied up');
+  const days = fieldFromInput(modelled?.daysToCash, 'days to usable cash');
+  // The buyers are reached by outreach; the route counts as established only where their reply or agreement rate is evidenced.
+  const reached = fieldFromInput(modelled?.respond, 'these buyers\' reply rate') ?? fieldFromInput(modelled?.close, 'these buyers\' agreement rate');
+  const asNumber = (f: ModelField | null): number | null => (f === null ? null : typeof f.value === 'number' ? f.value : f.high);
   const known = (value: string, basis: string, evidenced: boolean): ModelField => ({ value, low: null, high: null, status: evidenced ? 'PROVEN' : 'ESTIMATED', basis });
   const buyer = a.demand.name;
   const supplier = a.supply?.name ?? null;
@@ -386,22 +413,23 @@ export function candidateFromArrangement(a: ConstructedArrangement): PlanCandida
     channels: [],
     suppliers: supplier ? [supplier] : [],
     model: {
-      acquisitionRoute: unknown('how buyers are reached'),
+      acquisitionRoute: reached ? { ...reached, value: 'outreach to these buyers', basis: reached.basis } : unknown('how buyers are reached'),
       fulfilmentRoute: supplier ? known(supplier, `supply: ${a.supply?.from ?? 'unknown'}`, a.supply?.claimId !== null && a.supply?.claimId !== undefined) : known('Brain', 'Brain fulfils it', true),
-      costs: unknown('direct cost'),
+      costs: costs ?? unknown('direct cost'),
       capital:
         a.stress.worstCaseCents !== null
           ? { value: a.stress.worstCaseCents / 100, low: null, high: a.stress.worstCaseCents / 100, status: 'ESTIMATED', basis: `worst case at risk (${exposure})` }
-          : unknown('capital at risk'),
-      timing: known(a.design.funding, 'when the buyer’s money moves, from the design', false),
+          : (capitalField ?? unknown('capital at risk')),
+      timing: days ?? known(a.design.funding, 'when the buyer’s money moves, from the design', false),
+      // No record states the rights a construction needs until a person grants them: nothing evidences this.
       controls: unknown('rights and controls'),
       evidence: { value: `${a.evidenced} evidenced part(s); unknown: ${a.unknownParts.join(', ') || 'none'}`, low: null, high: null, status: a.unknownParts.length > 0 ? 'UNKNOWN' : 'ESTIMATED', basis: 'the construction’s decomposition' },
     },
     modelled: a.value.p50 !== null && a.value.p10 !== null && a.value.p90 !== null ? { p10: a.value.p10, p50: a.value.p50, p90: a.value.p90 } : null,
     observedCollections: 0,
     enforceableCommitments: 0,
-    capitalRequired: a.stress.worstCaseCents !== null ? a.stress.worstCaseCents / 100 : null,
-    daysToCash: null,
+    capitalRequired: a.stress.worstCaseCents !== null ? a.stress.worstCaseCents / 100 : asNumber(capitalField),
+    daysToCash: asNumber(days),
     attempts: { researched: a.unknownParts.length === 0, authorized: false, executed: false },
     whyItWorks: a.properties.map((p) => String(p)).slice(0, 6),
     transfers: a.precedent ? [`the design of ${a.precedent.title}, carried to a different buyer`] : [],
