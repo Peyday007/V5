@@ -15,6 +15,7 @@ import {
   priceMeasure,
   quantityMeasure,
   reconcile,
+  recomputeAffected,
   scopeOf,
   type ExtractableItem,
 } from '../server/services/feeds/extract.ts';
@@ -133,5 +134,37 @@ describe('contradiction status is on each fact', () => {
     expect(run.facts.length).toBeGreaterThan(0);
     expect(run.facts.every((f) => f.contradictionStatus === 'STALE')).toBe(true);
     expect(reconcile(extractItem(old), NOW).every((r) => r.observations.every((o) => o.contradictionStatus === 'STALE'))).toBe(true);
+  });
+});
+
+describe('a changed record recomputes its keys against the stored observations of unchanged ones', () => {
+  const body = (amount: string) => `Seeking quotes from a supplier. Delivery in Austin, TX by 2026-12-15. Budget ${amount}.`;
+  const title = 'Request for quotes: 500 kg of packaging film';
+  const a = item({ id: 'itm_a', url: 'https://example.test/a', title, body: body('$6,500') });
+  const b = item({ id: 'itm_b', url: 'https://example.test/b', title, body: body('$4,000') });
+
+  it('is CONTESTED against an unchanged record that was not re-read', () => {
+    const read = extractItems([a], NOW);
+    const priceKey = read.facts.find((f) => f.field === 'price')!.key;
+    // Read alone, the changed record agrees with itself: the defect this recomputation removes.
+    expect(read.reconciled.find((r) => r.key === priceKey)!.status).toBe('OBSERVED');
+
+    const out = recomputeAffected(read.facts, extractItem(b), [], NOW);
+    const price = out.reconciled.find((r) => r.key === priceKey)!;
+    expect(price.status).toBe('CONTESTED');
+    expect(new Set(price.observations.map((o) => o.evidence.itemId))).toEqual(new Set(['itm_a', 'itm_b']));
+    expect(out.facts.find((f) => f.key === priceKey)!.contradictionStatus).toBe('CONTESTED');
+    // Only what was read is this pass's facts; the stored observation is not re-recorded.
+    expect(out.facts.every((f) => f.evidence.itemId === 'itm_a')).toBe(true);
+    expect(out.storedObservations.some((f) => f.evidence.itemId === 'itm_b' && f.key === priceKey)).toBe(true);
+  });
+
+  it('recomputes a key only the previous version produced, and leaves untouched keys alone', () => {
+    const stored = [...extractItem(b), ...extractItem(item({ id: 'itm_c', url: 'https://example.test/c', title: 'Lawn care now booking', body: 'Weekly mowing in Portland, OR for $45.' }))];
+    const bPrice = extractItem(b).find((f) => f.field === 'price')!.key;
+    const out = recomputeAffected([], stored, [bPrice], NOW);
+    expect(out.reconciled.map((r) => r.key)).toEqual([bPrice]);
+    expect(out.reconciled[0]!.status).toBe('OBSERVED');
+    expect(out.storedObservations.every((f) => f.evidence.itemId === 'itm_b')).toBe(true);
   });
 });
