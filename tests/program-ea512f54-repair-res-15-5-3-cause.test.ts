@@ -191,12 +191,38 @@ describe('a share that moves only by renormalization still carries its measured 
     expect(fixed.changes.length).toBeGreaterThan(0);
     for (const c of fixed.changes) expect(c.reasons.length).toBeGreaterThan(0);
     const self = fixed.changes.find((c) => c.purpose === 'SELF_IMPROVEMENT');
-    expect(self!.reasons[0]).toMatch(/0\.96× the measured average; moved only as the other purposes/);
+    expect(self!.reasons[0]).toMatch(/0\.96× the measured average; moved only as the shares were renormalized after these moved: /);
+    // It names the movers and their own reasons, not a presumed yield.
+    for (const m of fixed.changes.filter((c) => c !== self && !c.reasons[0]!.includes('renormalized'))) expect(self!.reasons[0]).toContain(`${m.purpose} (${m.reasons.join('; ')})`);
     expect(yieldAllocationHolds([{ fingerprint: 'fixed', held: false, changes: fixed.changes, costCountedOnce: { holds: true } }]).ok).toBe(true);
   });
 
   it('leaves a decision whose changes all have reasons untouched', () => {
     const d = { held: false, shares: input.currentShares, changes: [{ purpose: 'BROAD_DISCOVERY', from: 0.2, to: 0.25, reasons: ['x'] }], laneActions: [], capacity: [], notes: [] } as never;
     expect(withMeasuredReasons(d, input)).toBe(d);
+  });
+});
+
+describe('F2: a renormalized share names what actually moved the others', () => {
+  it('cites a deadline or floor as the cause when that, not yield, moved the other purpose', () => {
+    const d = {
+      held: false, shares: {}, laneActions: [], capacity: [], notes: [],
+      changes: [
+        { purpose: 'TRANSACTION_ROUTES', from: 0.2, to: 0.4, reasons: ['a deadline in 3 day(s)'] },
+        { purpose: 'FORWARD_EXPLORATION', from: 0.1, to: 0.12, reasons: ['held at its protected floor'] },
+        { purpose: 'SELF_IMPROVEMENT', from: 0.4, to: 0.2, reasons: [] },
+      ],
+    } as never;
+    const input = { purposes: [
+      { purpose: 'TRANSACTION_ROUTES', usefulResults: 10, cost: 10 },
+      { purpose: 'SELF_IMPROVEMENT', usefulResults: 10, cost: 10 },
+    ] } as unknown as AllocationInput;
+    const out = withMeasuredReasons(d, input);
+    const self = out.changes.find((c) => c.purpose === 'SELF_IMPROVEMENT')!;
+    expect(self.reasons).toHaveLength(1);
+    expect(self.reasons[0]).toContain('TRANSACTION_ROUTES (a deadline in 3 day(s))');
+    expect(self.reasons[0]).toContain('FORWARD_EXPLORATION (held at its protected floor)');
+    expect(self.reasons[0]).not.toMatch(/measured yields moved their shares/);
+    expect(yieldAllocationHolds([{ fingerprint: 'f2', held: false, changes: out.changes, costCountedOnce: { holds: true } }]).ok).toBe(true);
   });
 });

@@ -1539,9 +1539,10 @@ async function priorCostAudit(
  * and that no deadline, value, bottleneck or floor touched — still moved when
  * the shares around it were renormalized, and was recorded with no reason at
  * all. That is a measured reason, and it is now written down: its own yield
- * relative to the average, read from the same measurements, and that it moved
- * only because the other purposes' measured yields moved their shares. A change
- * that already has a reason is left as it is. Pure.
+ * relative to the average, read from the same measurements, and the purposes
+ * whose shares moved it on renormalization, each with its own recorded reasons
+ * (yield, deadline, decision value, bottleneck or floor) — never presumed to be
+ * yield. A change that already has a reason is left as it is. Pure.
  */
 export function withMeasuredReasons(decision: AllocationDecision, input: Pick<AllocationInput, 'purposes'>): AllocationDecision {
   if (!decision.changes.some((c) => c.reasons.length === 0)) return decision;
@@ -1553,13 +1554,19 @@ export function withMeasuredReasons(decision: AllocationDecision, input: Pick<Al
     if (y !== null) yields.set(m.purpose, y);
   }
   const mean = yields.size > 0 ? [...yields.values()].reduce((a, b) => a + b, 0) / yields.size : 0;
+  // What actually moved the others: each one's own recorded reasons — yield,
+  // a deadline, decision value, a bottleneck or a floor — never assumed to be yield.
+  const movers = decision.changes.filter((c) => c.reasons.length > 0);
+  const because = movers.length > 0
+    ? movers.map((c) => `${c.purpose} (${c.reasons.join('; ')})`).join(', ')
+    : 'no other purpose recorded a reason';
   return {
     ...decision,
     changes: decision.changes.map((c) => {
       if (c.reasons.length > 0) return c;
       const y = yields.get(c.purpose);
       const own = y !== undefined && mean > 0 ? `useful results per unit cost ${(y / mean).toFixed(2)}× the measured average` : 'its own yield gave no reason to move';
-      return { ...c, reasons: [`${own}; moved only as the other purposes' measured yields moved their shares`] };
+      return { ...c, reasons: [`${own}; moved only as the shares were renormalized after these moved: ${because}`] };
     }),
   };
 }
