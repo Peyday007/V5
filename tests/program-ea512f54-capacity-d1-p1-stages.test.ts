@@ -240,8 +240,9 @@ describe('allocateMarginal is not degenerate (finding F3)', () => {
     expect(byKind.get('ALGORITHM')!.gain.measured).toBe(false);
     for (const o of opts) if (o.kind !== 'LLM_JOB' && o.kind !== 'WORKER') expect(o.cost.measured).toBe(false);
     const a = allocateMarginal(opts);
-    // The LLM job (0.4 accepted/job at $0.2/job = 2/$) and the worker slot (1/h at $2/h = 0.5/$) are what is compared; the LLM wins.
-    expect(a.comparedLlmWithNonLlm).toBe(true);
+    // The LLM job (0.4 accepted/job at $0.2/job = 2/$) and the worker slot (1/h at $2/h = 0.5/$) are measured; the LLM wins.
+    // A free-lane slot runs model calls, so LLM-vs-slot is not an LLM-vs-non-LLM comparison (finding F3).
+    expect(a.comparedLlmWithNonLlm).toBe(false);
     expect(a.chosen!.kind).toBe('LLM_JOB');
     expect(a.unmeasured.map((u) => u.kind).sort()).toEqual(['ALGORITHM', 'INDEXING', 'SOURCE_CONNECTOR']);
   });
