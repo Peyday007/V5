@@ -83,6 +83,12 @@ export interface RouteWindowReading {
   until: string;
   pulls: number;
   failedPulls: number;
+  /**
+   * Pulls whose body reached the route's parser, and how many it read
+   * (`SourceYield.parseAttempts` / `parsed`); null when no yield read them.
+   * Parse success, never the screen's accepted share.
+   */
+  parse?: { attempts: number; parsed: number } | null;
   measures: RouteWindowMeasures;
 }
 
@@ -176,7 +182,8 @@ export function routeWindowReadings(input: {
         : input.storagePerGbMonth === null || input.storagePerGbMonth === undefined ? NOT('no storage unit price is configured (BRAIN_STORAGE_COST_PER_GB_MONTH), so stored bytes cannot be priced')
         : ok(round((a.bytes / 1024 ** 3) * input.storagePerGbMonth * windowMonths)),
     };
-    return { domain: g.domain, route: g.route, since: input.since, until: input.until, pulls: g.pulls, failedPulls: g.failed, measures };
+    const parse = y && typeof y.parseAttempts === 'number' ? { attempts: y.parseAttempts, parsed: y.parsed ?? 0 } : null;
+    return { domain: g.domain, route: g.route, since: input.since, until: input.until, pulls: g.pulls, failedPulls: g.failed, parse, measures };
   });
 }
 
@@ -279,7 +286,7 @@ const STAGE_KIND: Record<string, BottleneckKind> = {
 export interface LimitSignals {
   /** Failed or permission-refused pulls over all pulls. */
   accessFailureShare: Measured<number>;
-  /** Accepted over acquired records. */
+  /** Parse success: pulls whose body reached a parser that the parser read. Never the screen's accepted share. */
   parseCoverage: Measured<number>;
   /** The stage `chooseConstraint` named, or null. */
   constrainedStage: string | null;
@@ -308,7 +315,7 @@ export interface LimitVerdict {
 export function limitingStage(s: LimitSignals): LimitVerdict {
   const verdict = (kind: BottleneckKind, basis: string): LimitVerdict => ({ kind, basis, remedy: REMEDIES[kind].remedy, scaleServer: false });
   if (s.accessFailureShare.measured && s.accessFailureShare.value >= 0.5) return verdict('SOURCE_ACCESS', `${Math.round(s.accessFailureShare.value * 100)}% of pulls failed or were refused`);
-  if (s.parseCoverage.measured && s.parseCoverage.value < 0.25) return verdict('PARSING', `${Math.round(s.parseCoverage.value * 100)}% of acquired records parsed into accepted records`);
+  if (s.parseCoverage.measured && s.parseCoverage.value < 0.25) return verdict('PARSING', `the parser read ${Math.round(s.parseCoverage.value * 100)}% of the pulls whose body reached it`);
   if (s.constrainedStage && STAGE_KIND[s.constrainedStage]) return verdict(STAGE_KIND[s.constrainedStage]!, `stage-capacity names ${s.constrainedStage} the constraint`);
   if (s.dbWaiting.measured && s.dbWaiting.value > 0) return verdict('DATABASE', `${s.dbWaiting.value} workload(s) waiting on the database pool`);
   if (s.cpu.measured && s.cpu.value >= 0.85) return verdict('APP_CPU', `Brain CPU at ${Math.round(s.cpu.value * 100)}%`);
@@ -703,10 +710,12 @@ export function buildStageLimitReport(input: {
   const domains = new Map<string, { domain: string; routes: number; recordsConsidered: number; acceptedFacts: number }>();
   let pulls = 0;
   let failed = 0;
-  let acquired = 0;
   let accepted = 0;
   let usable = 0;
+  let parseAttempts = 0;
+  let parsed = 0;
   for (const r of input.routes) {
+    if (r.parse) { parseAttempts += r.parse.attempts; parsed += r.parse.parsed; }
     const d = domains.get(r.domain) ?? { domain: r.domain, routes: 0, recordsConsidered: 0, acceptedFacts: 0 };
     d.routes += 1;
     d.recordsConsidered += r.measures.recordsConsidered.measured ? r.measures.recordsConsidered.value : 0;
@@ -714,14 +723,15 @@ export function buildStageLimitReport(input: {
     domains.set(r.domain, d);
     pulls += r.pulls;
     failed += r.failedPulls;
-    acquired += r.measures.processedRecords.measured ? r.measures.processedRecords.value : 0;
     accepted += r.measures.acceptedFacts.measured ? r.measures.acceptedFacts.value : 0;
     usable += r.measures.candidatesImproved.measured ? r.measures.candidatesImproved.value : 0;
   }
   const dbWaiting = report?.process.dbPool.measured ? ok(report.process.dbPool.value.workloadWaiting) : NOT('no database pool reading');
   const limit = limitingStage({
     accessFailureShare: pulls > 0 ? ok(failed / pulls) : NOT('no pulls in the window'),
-    parseCoverage: acquired > 0 ? ok(accepted / acquired) : NOT('nothing acquired in the window'),
+    // Parse success: the pulls whose body reached a parser that the parser read. The screen's
+    // KEEP share (accepted / acquired) is commercial relevance, never parsing (S-0362).
+    parseCoverage: parseAttempts > 0 ? ok(parsed / parseAttempts) : NOT('no pull delivered a body to a parser in the window'),
     constrainedStage: report?.constrained.stage ?? null,
     dbWaiting,
     cpu: input.cpu,

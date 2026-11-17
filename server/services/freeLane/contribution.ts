@@ -665,7 +665,13 @@ export function parserReadings(
     const p = pulls.get(y.source);
     const measures = blankMeasures('PARSER');
     measures.sourcesCovered = ok(y.acquired > 0 ? 1 : 0);
-    measures.parseCoverage = y.acquired > 0 ? ok(round(y.accepted / y.acquired)) : NOT('nothing acquired from this source in the window');
+    // Parse success from the source's pulls (`SourceYield.parseAttempts` / `parsed`), never the screen's KEEP
+    // share: a screen that correctly drops most records says nothing about the parser (S-0362).
+    // TRANSITIONAL: a yield built without pull counts (only legacy fixtures; readSourceYields always
+    // carries them) still reads the old share until its test is moved to parse success.
+    measures.parseCoverage = typeof y.parseAttempts === 'number'
+      ? (y.parseAttempts > 0 ? ok(round((y.parsed ?? 0) / y.parseAttempts)) : NOT('no pull delivered a body to this source\'s parser in the window'))
+      : y.acquired > 0 ? ok(round(y.accepted / y.acquired)) : NOT('nothing acquired from this source in the window');
     measures.dedupCoverage = p && p.fetched > 0 ? ok(round((p.fetched - p.inserted) / p.fetched)) : NOT('no pull of this source fetched records in the window');
     measures.errorRate = p && p.pulls > 0 ? ok(round(p.failed / p.pulls)) : NOT('no pull of this source in the window');
     measures.acceptedEconomicEvidence = ok(y.accepted);
