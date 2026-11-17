@@ -30,6 +30,7 @@ import { listState, humanWhen } from './present.ts';
 import { cashPage, modeState, type CashPage } from './cashPage.ts';
 import { Api } from '../lib/api.ts';
 import { JourneyLessons, DealJourney, JourneyTotals } from './CashJourney.tsx';
+import { AddPlay } from './CashAddPlay.tsx';
 import {
   ActionableNow,
   DormantPieces,
@@ -2253,6 +2254,20 @@ function YourWork({ page, onChanged }: { page: CashPage; onChanged(): void }): J
     );
   }
 
+  /*
+   * Offered only where the server says this person may write the project, and
+   * only on a sprint that has a mode to add to. The route decides again.
+   */
+  const addPlay =
+    page.capabilities.mayAddPlay === true && view.mode ? (
+      <AddPlay
+        projectId={view.mode.projectId}
+        currency={view.myCash.position.currency}
+        existingTitles={frontier.opportunities.map((one) => one.title)}
+        onChanged={onChanged}
+      />
+    ) : null;
+
   const work = view.myCurrentWork;
   const acting = work.executeNow;
   const held = work.waiting;
@@ -2272,6 +2287,7 @@ function YourWork({ page, onChanged }: { page: CashPage; onChanged(): void }): J
             ? ` ${evidence.length} further ${evidence.length === 1 ? 'record is' : 'records are'} evidence about a market: Brain found ${evidence.length === 1 ? 'it' : 'them'} and cannot yet say how we would be paid from ${evidence.length === 1 ? 'it' : 'them'}.`
             : ''}
         </p>
+        {addPlay}
       </section>
     );
   }
@@ -2395,6 +2411,7 @@ function YourWork({ page, onChanged }: { page: CashPage; onChanged(): void }): J
             ) : null;
           })()
         : null}
+      {addPlay}
     </section>
   );
 }

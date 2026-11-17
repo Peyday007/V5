@@ -29,6 +29,7 @@ import { readFile } from 'node:fs/promises';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { act } from 'react';
 import { CashSection } from '../client/src/russell/Cash.tsx';
+import { CASH_PLAYS } from '../client/src/russell/cashPlays.ts';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -2939,5 +2940,78 @@ describe('standing: actionable, waiting, stopped and reconsidered', () => {
     const recent = within(document.querySelector('.rs-cash-reconsidered') as HTMLElement);
     expect(recent.getByText(/A piece looked at again/)).toBeTruthy();
     expect(recent.getByText(/moving now/)).toBeTruthy();
+  });
+});
+
+describe('adding a play', () => {
+  /*
+   * The capture route existed and had no control, so a sprint could hold only
+   * what discovery found. These pin the control's two halves: it is offered
+   * only where the server said this person may write the project, and pressing
+   * a prefilled play sends that play — and nothing about it involves a call.
+   */
+  const CAPTURE = `POST /api/projects/${PROJECT}/cash/opportunities`;
+  const withPlays = (): Record<string, unknown> => ({
+    ...view(),
+    capabilities: { ...ALL_CAPABILITIES, mayAddPlay: true },
+  });
+
+  it('is not offered when the server did not say it may be', async () => {
+    base();
+    await mount();
+    await waitFor(() => expect(document.querySelector('.rs-cash-work')).not.toBeNull());
+    expect(document.querySelector('.rs-cash-add-play')).toBeNull();
+  });
+
+  it('offers the four plays and sends the one pressed, with the sprint currency', async () => {
+    base({
+      [VIEW]: { body: withPlays() },
+      [CAPTURE]: {
+        body: {
+          opportunity: { id: 'cop_new', title: 'The Local Drop mailer — this season’s issue, sold city by city' },
+          message: 'Captured. Nothing has been spent and nobody has been contacted.',
+        },
+      },
+    });
+    await mount();
+    const panel = await waitFor(() => {
+      const found = document.querySelector('.rs-cash-add-play');
+      expect(found).not.toBeNull();
+      return found as HTMLElement;
+    });
+    const plays = panel.querySelectorAll('[data-play]');
+    expect(plays).toHaveLength(4);
+    // Every play's first step reaches buyers in writing, and none asks for a call.
+    for (const play of CASH_PLAYS) {
+      expect(play.nextAction).toMatch(/in writing/);
+      expect(`${play.nextAction} ${play.stopRule}`).not.toMatch(/\b(phone|video) call|\bcall (them|the|each|a)\b/i);
+    }
+
+    const drop = panel.querySelector('[data-play="local-drop"]') as HTMLElement;
+    await act(async () => {
+      fireEvent.click(within(drop).getByRole('button', { name: 'Add this play' }));
+    });
+    await waitFor(() => expect(calls).toContain(CAPTURE));
+    expect(bodies[CAPTURE]).toMatchObject({
+      mechanism: 'PRODUCTIZED_SERVICE',
+      currency: 'USD',
+      source: 'Added by a person as a play',
+    });
+    expect(String((bodies[CAPTURE] as Record<string, unknown>)['nextAction'])).toMatch(/in writing only/);
+    await waitFor(() => expect(within(panel).getByText(/added\. Captured\./)).toBeTruthy());
+  });
+
+  it('shows the route’s refusal as the server wrote it', async () => {
+    base({
+      [VIEW]: { body: withPlays() },
+      [CAPTURE]: { status: 422, body: { error: 'The sprint is winding down, so nothing new is captured.' } },
+    });
+    await mount();
+    const panel = await waitFor(() => document.querySelector('.rs-cash-add-play') as HTMLElement);
+    const leads = panel.querySelector('[data-play="seasonal-leads"]') as HTMLElement;
+    await act(async () => {
+      fireEvent.click(within(leads).getByRole('button', { name: 'Add this play' }));
+    });
+    await waitFor(() => expect(within(panel).getByText(/winding down/)).toBeTruthy());
   });
 });
