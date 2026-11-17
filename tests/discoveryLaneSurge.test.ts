@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { freshProject, type TestProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { LANE_GROW_STEP_MAX, LANE_LIFT_MAX, laneAdaptiveCeiling } from '../server/services/cash/discoveryAuthority.ts';
-import { freeLaneProvenSlots, freeLaneSpareSurfaces, provenSlots, SAFETY_CEILING } from '../server/services/freeLane/capacity.ts';
+import { freeLaneProvenSlots, freeLaneSpareSurfaces, provenSlots, SAFETY_CEILING, slotShare } from '../server/services/freeLane/capacity.ts';
 import { launchableInProject } from '../server/services/russell/loop.ts';
 
 /*
@@ -92,9 +92,28 @@ describe('the lane reading with a GPU configured', () => {
       "INSERT INTO free_lane_capacity (model, target, stable_high, updated_at, reason) VALUES ('runpod/openai/gpt-oss-120b', 3, 1, '2026-11-17T08:28:00Z', 'no research waiting'), ('auto/best-coding', 2, 1, '2026-11-17T08:28:00Z', 'no research waiting')",
       [],
     );
+    // The pool is a precondition, stated: the lane's room is also capped by its
+    // share of the database pool (`slotShare`), which Postgres measures (the test
+    // cluster's workload pool is 2) and SQLite does not. Read against an
+    // unmeasured pool, the GPU's served batch is the room.
     // Before: 3 + 2 slots of room, the most a reading opened was one surface.
-    expect(await freeLaneProvenSlots()).toBeGreaterThanOrEqual(32);
-    expect(await freeLaneSpareSurfaces()).toBe(8);
+    expect(await freeLaneProvenSlots({ poolMax: null })).toBeGreaterThanOrEqual(32);
+    expect(await freeLaneSpareSurfaces(Date.now(), { poolMax: null })).toBe(8);
+    // And against a production-sized pool (20 connections: 30 slots per model), still well past the decayed target.
+    expect(await freeLaneProvenSlots({ poolMax: 20 })).toBe(30 + 2);
+    expect(await freeLaneSpareSurfaces(Date.now(), { poolMax: 20 })).toBe(8);
+  });
+
+  it("caps the GPU's room at its share of a small database pool, never above what the controller could grant", async () => {
+    await getDb().run('DELETE FROM free_lane_capacity', []);
+    await getDb().run(
+      "INSERT INTO free_lane_capacity (model, target, stable_high, updated_at, reason) VALUES ('runpod/openai/gpt-oss-120b', 3, 1, '2026-11-17T08:28:00Z', 'no research waiting'), ('auto/best-coding', 2, 1, '2026-11-17T08:28:00Z', 'no research waiting')",
+      [],
+    );
+    // Two connections carry 6 slots, 3 per model: the GPU's room is its 3, the free model's its target 2.
+    expect(slotShare(2, 2)).toBe(3);
+    expect(await freeLaneProvenSlots({ poolMax: 2 })).toBe(3 + 2);
+    expect(await freeLaneSpareSurfaces(Date.now(), { poolMax: 2 })).toBe(1);
   });
 
   it('counts a project\'s launchable ideas with the launch predicate', async () => {

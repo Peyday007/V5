@@ -721,15 +721,25 @@ export function provenSlots(input: { target: number; stableHigh: number; served:
   return Math.max(input.target, input.stableHigh, served);
 }
 
+/**
+ * The lane's database-pool ceiling as `slotShare` reads it. A test seam: the
+ * pool the lane shares is measured on Postgres and absent on SQLite, so a
+ * reading that depends on it states which pool it was taken against.
+ */
+export interface PoolSeam {
+  /** The workload pool's ceiling; null for an unmeasured pool. Omitted, this process's own. */
+  poolMax?: number | null;
+}
+
 /** The lane's proven room in slots across its models now; 0 when there is no lane. */
-export async function freeLaneProvenSlots(): Promise<number> {
+export async function freeLaneProvenSlots(seam: PoolSeam = {}): Promise<number> {
   const config = laneConfig();
   if (!config) return 0;
   const recorded = await readCapacity();
   // The lane's models now; a row for a model no longer configured is history.
   const current = recorded.filter((r) => config.models.includes(r.model));
   const rows = current.length > 0 ? current : recorded;
-  const share = slotShare(Math.max(1, rows.length));
+  const share = 'poolMax' in seam ? slotShare(Math.max(1, rows.length), seam.poolMax ?? null) : slotShare(Math.max(1, rows.length));
   return (
     rows.reduce((sum, r) => {
       const served = config.runpod && isRunpodSlot(r.model) ? servedSequences(r.model) : null;
@@ -738,7 +748,7 @@ export async function freeLaneProvenSlots(): Promise<number> {
   );
 }
 
-export async function freeLaneSpareSurfaces(now = Date.now()): Promise<number> {
+export async function freeLaneSpareSurfaces(now = Date.now(), seam: PoolSeam = {}): Promise<number> {
   const config = laneConfig();
   if (!config) return 0;
   const db = getDb();
@@ -752,7 +762,7 @@ export async function freeLaneSpareSurfaces(now = Date.now()): Promise<number> {
    * openings. Room opened here is work queued, which raises the target again.
    * A GPU's served sequences count as proven too (`provenSlots`).
    */
-  const granted = await freeLaneProvenSlots();
+  const granted = await freeLaneProvenSlots(seam);
   const busy = await db.get<{ n: number | string }>(
     `SELECT COUNT(*) AS n FROM work_items WHERE state = 'LEASED' AND lease_expires_at > ?
        AND worker_id IN (SELECT k.id FROM workers k WHERE k.name IN ('free-lane-a', 'free-lane-b'))`,
