@@ -27,7 +27,7 @@ import {
   type LimitSignals,
   type StageLimitReport,
 } from '../server/services/freeLane/stageLimit.ts';
-import type { RecordedStageCapacity, StageCapacityReport, StageReading } from '../server/services/freeLane/stageCapacity.ts';
+import { STORED_MEASURES_MAX_BYTES, type RecordedStageCapacity, type StageCapacityReport, type StageReading } from '../server/services/freeLane/stageCapacity.ts';
 
 const ok = (value: number) => ({ measured: true as const, value });
 const NOT = (reason: string) => ({ measured: false as const, reason });
@@ -169,6 +169,27 @@ describe('blockages and stage pressure from a recorded reading', () => {
 });
 
 describe('recordStageLimit', () => {
+  it('stores a bounded row however many routes the window read, busiest routes first (finding F8)', async () => {
+    const rows: { measures?: Record<string, unknown> }[] = [];
+    const route = (i: number) => ({
+      domain: `d${i % 50}`, route: `r${i}`, since: 'a', until: 'b', pulls: 1, failedPulls: 0,
+      measures: { acceptedFacts: { measured: true, value: i }, processedRecords: { measured: true, value: i }, pad: 'x'.repeat(200) },
+    });
+    const routes = Array.from({ length: 3_000 }, (_, i) => route(i));
+    const report = {
+      since: 'a', until: 'b', routes,
+      domains: Array.from({ length: 50 }, (_, i) => ({ domain: `d${i}`, routes: 60, recordsConsidered: i, acceptedFacts: i })),
+      pressures: [], limit: { kind: 'PARSING', basis: 'b', remedy: 'r', scaleServer: false }, gate: { decision: 'ALLOW_THEN_MEASURE' }, allocation: { basis: 'a' },
+    } as unknown as StageLimitReport;
+    const returned = await recordStageLimit(new Date(), async (e) => { rows.push(e); }, async () => report);
+    expect(returned.routes).toHaveLength(3_000);
+    const stored = rows[0]!.measures!;
+    expect(JSON.stringify(stored).length).toBeLessThanOrEqual(STORED_MEASURES_MAX_BYTES);
+    expect((stored['routes'] as { route: string }[])[0]!.route).toBe('r2999');
+    expect(stored['totals']).toEqual({ routes: 3_000, domains: 50 });
+    expect(stored['limit']).toMatchObject({ kind: 'PARSING' });
+  });
+
   it('writes one STAGE_LIMIT row', async () => {
     const rows: { eventType: string; outcome?: string | null }[] = [];
     const report = { limit: { kind: 'PARSING', basis: 'b', remedy: 'r', scaleServer: false }, gate: { decision: 'ALLOW_THEN_MEASURE' }, allocation: { basis: 'a' } } as unknown as StageLimitReport;

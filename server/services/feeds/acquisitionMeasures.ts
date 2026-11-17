@@ -30,7 +30,7 @@
  */
 import { getDb } from '../../db/database.ts';
 import { recordBinEvent } from '../../repos/bins.ts';
-import { readStageCapacity, type Measured, type RecordedStageCapacity } from '../freeLane/stageCapacity.ts';
+import { boundMeasures, readStageCapacity, type Measured, type RecordedStageCapacity } from '../freeLane/stageCapacity.ts';
 import type { RouteFailureCause } from '../freeLane/worker.ts';
 import { CODE_SIGNAL_SOURCE, coveredItems } from './detectors.ts';
 import { extractItem } from './extract.ts';
@@ -75,8 +75,10 @@ export interface SourceAcquisitionMeasures {
   /** Records read again that storage already held (visited − stored). */
   refreshedRecords: Measured<number>;
   rawBytes: Measured<number>;
-  /** Share of stored items from which the deterministic extractor read at least one fact. */
+  /** Share of examined items from which the deterministic extractor read at least one fact. */
   parserCoverage: Measured<number | null>;
+  /** How many stored items the extractor examined (bounded by `EXTRACT_BUDGET`) of how many were stored. */
+  parserSample: { examined: number; stored: number };
   /** Facts the deterministic extractor read from the window's stored items. */
   structuredFacts: Measured<number>;
   acceptedEvidence: Measured<number>;
@@ -170,7 +172,6 @@ interface ItemRow {
   source: string;
   url: string;
   title: string;
-  body: string | null;
   organization: string | null;
   published_at: string | null;
   fetched_at: string;
@@ -194,8 +195,8 @@ export function failureRecovery(pulls: readonly { ok: boolean }[]): { failures: 
   return { failures, recoveries, pulls: pulls.length };
 }
 
-async function pagedPulls(since: string, until: string): Promise<PullRow[]> {
-  const out: PullRow[] = [];
+/** Walk [since, until) of `feed_pulls` a page at a time; nothing holds the window. */
+async function forEachPullPage(since: string, until: string, visit: (rows: readonly PullRow[]) => void): Promise<void> {
   let after: { at: string; id: string } | null = null;
   for (;;) {
     const rows: (PullRow & { id: string })[] = await getDb().all(
@@ -206,31 +207,43 @@ async function pagedPulls(since: string, until: string): Promise<PullRow[]> {
             WHERE created_at < ? AND created_at >= ? ORDER BY created_at, id LIMIT ${PAGE}`,
       after ? [until, after.at, after.at, after.id] : [until, since],
     );
-    out.push(...rows);
-    if (rows.length < PAGE) return out;
+    visit(rows);
+    if (rows.length < PAGE) return;
     const last = rows[rows.length - 1]!;
     after = { at: last.created_at, id: last.id };
   }
 }
 
-async function pagedItems(since: string, until: string): Promise<ItemRow[]> {
-  const out: ItemRow[] = [];
+/**
+ * Walk [since, until) of `feed_items` a page at a time, without bodies: a page
+ * is visited and dropped, so memory is one page however large the window.
+ */
+async function forEachItemPage(since: string, until: string, visit: (rows: readonly ItemRow[]) => Promise<void>): Promise<void> {
   let after: { at: string; id: string } | null = null;
   for (;;) {
     const rows: ItemRow[] = await getDb().all(
       after
-        ? `SELECT id, source, url, title, body, organization, published_at, fetched_at, shortlisted_round_id FROM feed_items
+        ? `SELECT id, source, url, title, organization, published_at, fetched_at, shortlisted_round_id FROM feed_items
             WHERE fetched_at < ? AND source <> ? AND source <> ? AND (fetched_at > ? OR (fetched_at = ? AND id > ?)) ORDER BY fetched_at, id LIMIT ${PAGE}`
-        : `SELECT id, source, url, title, body, organization, published_at, fetched_at, shortlisted_round_id FROM feed_items
+        : `SELECT id, source, url, title, organization, published_at, fetched_at, shortlisted_round_id FROM feed_items
             WHERE fetched_at < ? AND source <> ? AND source <> ? AND fetched_at >= ? ORDER BY fetched_at, id LIMIT ${PAGE}`,
       after ? [until, CODE_SIGNAL_SOURCE, SITE_SOURCE, after.at, after.at, after.id] : [until, CODE_SIGNAL_SOURCE, SITE_SOURCE, since],
     );
-    out.push(...rows);
-    if (rows.length < PAGE) return out;
+    await visit(rows);
+    if (rows.length < PAGE) return;
     const last = rows[rows.length - 1]!;
     after = { at: last.fetched_at, id: last.id };
   }
 }
+
+/**
+ * Items one window runs the deterministic extractor over, in total and per
+ * source. The extractor reads bodies in-process on the free lane's hourly tick,
+ * so its work is bounded rather than proportional to feed volume; beyond the
+ * budget parser coverage is a ratio over the items examined (recorded with its
+ * sample) and the fact count is not claimed (inv. 33).
+ */
+export const EXTRACT_BUDGET = { perWindow: 5_000, perSource: 1_000 } as const;
 
 /** The latest connector state each source has recorded up to `until`. */
 async function latestHealth(until: string): Promise<Map<string, ConnectorState>> {
@@ -260,86 +273,135 @@ export async function readAcquisitionMeasures(
   since: string,
   until: string,
   catalog: readonly FeedSource[] = FEED_SOURCES,
+  budget: { perWindow: number; perSource: number } = EXTRACT_BUDGET,
 ): Promise<SourceAcquisitionMeasures[]> {
   const db = getDb();
-  const pulls = await pagedPulls(since, until);
-  const items = await pagedItems(since, until);
   const health = await latestHealth(until);
 
-  const kept = new Set<string>();
-  const covered = new Set<string>();
-  const screened = new Set<string>();
-  const screenCallsBySubject = new Map<string, number>();
-  for (let at = 0; at < items.length; at += PAGE) {
-    const chunk = items.slice(at, at + PAGE).map((one) => one.id);
-    const marks = chunk.map(() => '?').join(',');
+  const pullsBy = new Map<string, { visited: number; inserted: number; pulls: number; failures: number; recoveries: number; throttled: number; lastFailed: boolean }>();
+  await forEachPullPage(since, until, (rows) => {
+    for (const p of rows) {
+      const acc = pullsBy.get(p.source) ?? { visited: 0, inserted: 0, pulls: 0, failures: 0, recoveries: 0, throttled: 0, lastFailed: false };
+      const ok = Number(p.ok) === 1;
+      acc.pulls += 1;
+      if (ok) {
+        acc.visited += Number(p.fetched ?? 0);
+        acc.inserted += Number(p.inserted ?? 0);
+        if (acc.lastFailed) acc.recoveries += 1;
+      } else {
+        acc.failures += 1;
+        if (isThrottled(p.error)) acc.throttled += 1;
+      }
+      acc.lastFailed = !ok;
+      pullsBy.set(p.source, acc);
+    }
+  });
+
+  type ItemAcc = { stored: number; useful: number; examined: number; parsed: number; facts: number; codeMatches: number; escalated: number; calls: number; shortlisted: number; avoided: number };
+  const itemsBy = new Map<string, ItemAcc>();
+  let examinedTotal = 0;
+  await forEachItemPage(since, until, async (page) => {
+    if (page.length === 0) return;
+    const ids = page.map((one) => one.id);
+    const marks = ids.map(() => '?').join(',');
+    const kept = new Set<string>();
+    const screened = new Set<string>();
+    const screenCalls = new Map<string, number>();
     const rows = await db.all<{ id: string; subject_id: string; ok: number | string; output: string | null }>(
       `SELECT id, subject_id, ok, output FROM cheap_results WHERE kind = 'SCREEN_LEAD' AND subject_id IN (${marks})`,
-      [...chunk],
+      [...ids],
     );
     for (const row of rows) {
       screened.add(row.subject_id);
       // A batched screen's per-record rows are its answers, not calls of their own.
-      if (!row.id.startsWith(BATCH_ROW_PREFIX)) screenCallsBySubject.set(row.subject_id, (screenCallsBySubject.get(row.subject_id) ?? 0) + 1);
+      if (!row.id.startsWith(BATCH_ROW_PREFIX)) screenCalls.set(row.subject_id, (screenCalls.get(row.subject_id) ?? 0) + 1);
       if (Number(row.ok) === 1 && (row.output ?? '').includes('"verdict":"KEEP"')) kept.add(row.subject_id);
     }
-    for (const id of await coveredItems(chunk)) covered.add(id);
-  }
+    const covered = new Set(await coveredItems(ids));
+
+    // Which of this page's items the extractor reads, inside the window's budget.
+    const toExamine: ItemRow[] = [];
+    const pending = new Map<string, number>();
+    for (const item of page) {
+      const examined = (itemsBy.get(item.source)?.examined ?? 0) + (pending.get(item.source) ?? 0);
+      if (examinedTotal + toExamine.length >= budget.perWindow || examined >= budget.perSource) continue;
+      toExamine.push(item);
+      pending.set(item.source, (pending.get(item.source) ?? 0) + 1);
+    }
+    const bodies = new Map<string, string | null>();
+    if (toExamine.length > 0) {
+      const bodyRows = await db.all<{ id: string; body: string | null }>(
+        `SELECT id, body FROM feed_items WHERE id IN (${toExamine.map(() => '?').join(',')})`,
+        toExamine.map((one) => one.id),
+      );
+      for (const row of bodyRows) bodies.set(row.id, row.body);
+    }
+    const examineIds = new Set(toExamine.map((one) => one.id));
+
+    for (const item of page) {
+      const acc = itemsBy.get(item.source) ?? { stored: 0, useful: 0, examined: 0, parsed: 0, facts: 0, codeMatches: 0, escalated: 0, calls: 0, shortlisted: 0, avoided: 0 };
+      acc.stored += 1;
+      if (kept.has(item.id) || covered.has(item.id) || item.shortlisted_round_id) acc.useful += 1;
+      if (covered.has(item.id)) acc.codeMatches += 1;
+      if (screened.has(item.id)) acc.escalated += 1;
+      if (covered.has(item.id) && !screened.has(item.id)) acc.avoided += 1;
+      if (item.shortlisted_round_id) acc.shortlisted += 1;
+      acc.calls += screenCalls.get(item.id) ?? 0;
+      if (examineIds.has(item.id)) {
+        const read = extractItem({
+          id: item.id,
+          source: item.source,
+          url: item.url,
+          title: item.title,
+          body: bodies.get(item.id) ?? null,
+          organization: item.organization,
+          publishedAt: item.published_at,
+          fetchedAt: item.fetched_at,
+        });
+        acc.examined += 1;
+        examinedTotal += 1;
+        if (read.length > 0) acc.parsed += 1;
+        acc.facts += read.length;
+      }
+      itemsBy.set(item.source, acc);
+    }
+  });
 
   const sources = new Set<string>(catalog.map((s) => s.id));
-  for (const p of pulls) sources.add(p.source);
-  for (const i of items) sources.add(i.source);
+  for (const source of pullsBy.keys()) sources.add(source);
+  for (const source of itemsBy.keys()) sources.add(source);
   const byId = new Map(catalog.map((s) => [s.id, s]));
 
   const out: SourceAcquisitionMeasures[] = [];
   for (const source of [...sources].sort()) {
-    const mine = pulls.filter((p) => p.source === source);
-    const okPulls = mine.filter((p) => Number(p.ok) === 1);
-    const visited = okPulls.reduce((n, p) => n + Number(p.fetched ?? 0), 0);
-    const insertedByPulls = okPulls.reduce((n, p) => n + Number(p.inserted ?? 0), 0);
-    const stored = items.filter((i) => i.source === source);
-    const useful = stored.filter((i) => kept.has(i.id) || covered.has(i.id) || i.shortlisted_round_id);
-    let parsed = 0;
-    let facts = 0;
-    for (const item of stored) {
-      const read = extractItem({
-        id: item.id,
-        source: item.source,
-        url: item.url,
-        title: item.title,
-        body: item.body,
-        organization: item.organization,
-        publishedAt: item.published_at,
-        fetchedAt: item.fetched_at,
-      });
-      if (read.length > 0) parsed += 1;
-      facts += read.length;
-    }
-    const codeMatches = stored.filter((i) => covered.has(i.id)).length;
-    const escalated = stored.filter((i) => screened.has(i.id)).length;
-    const calls = stored.reduce((n, i) => n + (screenCallsBySubject.get(i.id) ?? 0), 0);
-    const repeats = Math.max(0, visited - insertedByPulls);
+    const p = pullsBy.get(source) ?? { visited: 0, inserted: 0, pulls: 0, failures: 0, recoveries: 0, throttled: 0, lastFailed: false };
+    const i = itemsBy.get(source) ?? { stored: 0, useful: 0, examined: 0, parsed: 0, facts: 0, codeMatches: 0, escalated: 0, calls: 0, shortlisted: 0, avoided: 0 };
+    const repeats = Math.max(0, p.visited - p.inserted);
     const state = health.get(source) ?? null;
+    const complete = i.examined === i.stored;
     out.push({
       source,
-      recordsVisited: measured(visited),
-      newUniqueDocuments: measured(stored.length),
-      newUniqueUsefulDocuments: measured(useful.length),
+      recordsVisited: measured(p.visited),
+      newUniqueDocuments: measured(i.stored),
+      newUniqueUsefulDocuments: measured(i.useful),
       refreshedRecords: measured(repeats),
       rawBytes: notMeasured(UNMEASURED_REASONS.rawBytes),
-      parserCoverage: measured(stored.length > 0 ? round4(parsed / stored.length) : null),
-      structuredFacts: measured(facts),
+      parserCoverage: measured(i.examined > 0 ? round4(i.parsed / i.examined) : null),
+      parserSample: { examined: i.examined, stored: i.stored },
+      structuredFacts: complete
+        ? measured(i.facts)
+        : notMeasured(`the extractor read ${i.facts} fact(s) from ${i.examined} of ${i.stored} stored item(s); the window's extraction budget (${budget.perWindow} per window, ${budget.perSource} per source) stopped there, so the whole count is not claimed`),
       acceptedEvidence: notMeasured(UNMEASURED_REASONS.acceptedEvidence),
-      codeDerivedMatches: measured(codeMatches),
+      codeDerivedMatches: measured(i.codeMatches),
       verifiedBuyerPriceFulfillmentLinks: notMeasured(UNMEASURED_REASONS.verifiedLinks),
-      usableTransactionPaths: measured(stored.filter((i) => i.shortlisted_round_id).length),
+      usableTransactionPaths: measured(i.shortlisted),
       timeToGoalImpactMinutes: notMeasured(UNMEASURED_REASONS.timeToGoalImpact),
-      aiJobsAvoided: measured(repeats + stored.filter((i) => covered.has(i.id) && !screened.has(i.id)).length),
-      aiEscalations: measured(escalated),
-      aiCallsPerUsefulFinding: measured(useful.length > 0 ? round4(calls / useful.length) : null),
+      aiJobsAvoided: measured(repeats + i.avoided),
+      aiEscalations: measured(i.escalated),
+      aiCallsPerUsefulFinding: measured(i.useful > 0 ? round4(i.calls / i.useful) : null),
       dollarsPerUsefulFinding: notMeasured(UNMEASURED_REASONS.dollarsPerUsefulFinding),
-      failureRecovery: measured(failureRecovery(mine.map((p) => ({ ok: Number(p.ok) === 1 })))),
-      providerSaturation: measured({ throttled: mine.filter((p) => Number(p.ok) !== 1 && isThrottled(p.error)).length, latestHealth: state }),
+      failureRecovery: measured({ failures: p.failures, recoveries: p.recoveries, pulls: p.pulls }),
+      providerSaturation: measured({ throttled: p.throttled, latestHealth: state }),
       revenue: notMeasured(UNMEASURED_REASONS.revenue),
       repair: sourceRepair(state),
       placement: placementAdvice(byId.get(source) ?? null),
@@ -662,7 +724,18 @@ export async function recordAcquisitionMeasures(
     reason: `${constraint.basis} ${sources.length} source(s) measured ${since} to ${until}.${repairs.length ? ` Source repairs: ${repairs.join(', ')}.` : ''}`.slice(0, 480),
     evidenceClass: 'MEASURED',
     durationMs: Date.now() - started,
-    measures: reading as unknown as Record<string, unknown>,
+    measures: storedAcquisition(reading),
   });
   return reading;
+}
+
+/**
+ * The reading as one row stores it: `since`/`until` kept (the next window starts
+ * at `until`), sources needing a repair first and then by records visited, and
+ * every list cut to `boundMeasures`' size with what was cut counted. Pure.
+ */
+export function storedAcquisition(reading: AcquisitionMeasuresReading): Record<string, unknown> {
+  const visited = (s: SourceAcquisitionMeasures): number => (s.recordsVisited.measured ? s.recordsVisited.value : 0);
+  const sources = [...(reading.sources ?? [])].sort((a, b) => Number(Boolean(b.repair)) - Number(Boolean(a.repair)) || visited(b) - visited(a));
+  return boundMeasures({ ...reading, sources, totals: { sources: sources.length } } as unknown as Record<string, unknown>);
 }

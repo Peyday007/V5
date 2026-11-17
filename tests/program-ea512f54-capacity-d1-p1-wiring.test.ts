@@ -100,3 +100,19 @@ describe('the report CLI prints the three readings', () => {
     for (const f of json.followers) expect(f.at).not.toBeNull();
   });
 });
+
+describe('boundMeasures (finding F8)', () => {
+  it('leaves a small reading as it is and cuts long lists, counting what it cut', async () => {
+    const { boundMeasures, STORED_LIST_LIMIT, STORED_MEASURES_MAX_BYTES } = await import('../server/services/freeLane/stageCapacity.ts');
+    expect(boundMeasures({ a: 1, list: [1, 2] })).toEqual({ a: 1, list: [1, 2] });
+    const big = { since: 's', nested: { rows: Array.from({ length: 500 }, (_, i) => ({ i, pad: 'x'.repeat(400) })) } };
+    const out = boundMeasures(big);
+    expect(JSON.stringify(out).length).toBeLessThanOrEqual(STORED_MEASURES_MAX_BYTES);
+    expect((out['nested'] as { rows: unknown[] }).rows.length).toBeLessThanOrEqual(STORED_LIST_LIMIT);
+    expect((out['truncated'] as Record<string, { total: number }>)['nested.rows']!.total).toBe(500);
+    expect(out['since']).toBe('s');
+    const scalarOnly = boundMeasures({ until: 'u', blob: { s: 'y'.repeat(200_000) } });
+    expect(scalarOnly['until']).toBe('u');
+    expect(JSON.stringify(scalarOnly).length).toBeLessThanOrEqual(STORED_MEASURES_MAX_BYTES);
+  });
+});

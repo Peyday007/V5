@@ -25,10 +25,12 @@ import {
   readContribution,
   recordContribution,
   routeReadings,
+  storedContribution,
   type ComponentReading,
   type ContributionMeasures,
   type ContributionReport,
 } from '../server/services/freeLane/contribution.ts';
+import { STORED_MEASURES_MAX_BYTES } from '../server/services/freeLane/stageCapacity.ts';
 
 const ok = (value: number) => ({ measured: true as const, value });
 const NOT = (reason: string) => ({ measured: false as const, reason });
@@ -225,5 +227,28 @@ describe('recordContribution', () => {
       const row = await db.get<{ outcome: string }>(`SELECT outcome FROM bin_events WHERE event_type = ? ORDER BY at DESC LIMIT 1`, [CAPACITY_CONTRIBUTION_EVENT]);
       expect(row?.outcome).toBe('REPAIR_FIRST');
     });
+  });
+});
+
+describe('the hourly contribution row is bounded (finding F8)', () => {
+  it('stores a bounded row however many components the window read, repairs and scale calls first', async () => {
+    const components = Array.from({ length: 2_000 }, (_, i) => reading({ id: `route-${i}`, workWaiting: ok(0) }));
+    components.push(reading({ id: 'broken', failing: { cause: 'credentials', failures: 3 } }));
+    const report = buildContributionReport({
+      since: 'a', until: 'b', gaps: [],
+      system: { minutesToVerifiedCandidate: NOT('x'), offerReadyPathways: ok(1), cashOutcomes: NOT('x') },
+      components,
+    });
+    const recorded: { measures?: Record<string, unknown> }[] = [];
+    const returned = await recordContribution(new Date(), async (e) => { recorded.push(e); }, async () => report);
+    expect(returned.components).toHaveLength(2_001);
+    const stored = recorded[0]!.measures!;
+    expect(JSON.stringify(stored).length).toBeLessThanOrEqual(STORED_MEASURES_MAX_BYTES);
+    expect((stored['decisions'] as { id: string; verdict: string }[])[0]).toMatchObject({ id: 'broken', verdict: 'REPAIR' });
+    expect((stored['components'] as { id: string }[])[0]!.id).toBe('broken');
+    expect(stored['totals']).toMatchObject({ components: 2_001, decisions: 2_001 });
+    expect((stored['truncated'] as Record<string, { total: number }>)['components']!.total).toBe(2_001);
+    expect(stored['repairsFirst']).toEqual(['MODEL_ROUTE:broken']);
+    expect(storedContribution(report, { SCALE: 0, HOLD: 0, RETIRE: 0, REPAIR: 1, MEASURE: 0 })['counts']).toMatchObject({ REPAIR: 1 });
   });
 });

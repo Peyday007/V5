@@ -36,7 +36,7 @@
 import { getDb } from '../../db/database.ts';
 import { recordBinEvent } from '../../repos/bins.ts';
 import { readSourceYields, type SourceYield } from '../feeds/run.ts';
-import { readStageCapacity, STAGES, type Measured, type RecordedStageCapacity, type StageCapacityReport } from './stageCapacity.ts';
+import { boundMeasures, readStageCapacity, STAGES, type Measured, type RecordedStageCapacity, type StageCapacityReport } from './stageCapacity.ts';
 
 export const STAGE_LIMIT_EVENT = 'STAGE_LIMIT';
 
@@ -565,7 +565,25 @@ export async function recordStageLimit(
     outcome: report.limit.kind,
     reason: `${report.limit.kind}: ${report.limit.basis}. ${report.limit.remedy} Spend gate: ${report.gate.decision}. ${report.allocation.basis}`.slice(0, 480),
     evidenceClass: 'MEASURED',
-    measures: report as unknown as Record<string, unknown>,
+    measures: storedStageLimit(report),
   });
   return report;
+}
+
+/**
+ * The reading as one hourly row stores it: routes ordered by accepted facts and
+ * domains by records considered, so the routes that carry the window survive
+ * the list bound, and every list cut to `boundMeasures`' size with what was cut
+ * counted. The full report is still returned to the caller. Pure.
+ */
+export function storedStageLimit(report: StageLimitReport): Record<string, unknown> {
+  const facts = (r: RouteWindowReading): number => (r.measures.acceptedFacts.measured ? n(r.measures.acceptedFacts.value) : -1);
+  const routes = report.routes ?? [];
+  const domains = report.domains ?? [];
+  return boundMeasures({
+    ...report,
+    routes: [...routes].sort((a, b) => facts(b) - facts(a)),
+    domains: [...domains].sort((a, b) => b.recordsConsidered - a.recordsConsidered),
+    totals: { routes: routes.length, domains: domains.length },
+  } as unknown as Record<string, unknown>);
 }

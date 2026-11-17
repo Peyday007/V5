@@ -41,7 +41,7 @@ import { readPodSpend, type PodSpend } from '../cheap/runpodPod.ts';
 import { readSourceYields, type SourceYield } from '../feeds/run.ts';
 import { causeOfReason, type RouteFailureCause } from './worker.ts';
 import { waitingNow } from './capacity.ts';
-import { routeOfReason, usageOf, type Measured } from './stageCapacity.ts';
+import { boundMeasures, routeOfReason, usageOf, type Measured } from './stageCapacity.ts';
 
 export const CAPACITY_CONTRIBUTION_EVENT = 'CAPACITY_CONTRIBUTION';
 
@@ -602,7 +602,32 @@ export async function recordContribution(
         ? `Measured contribution justifies more for: ${report.hardwareJustifiedFor.join(', ')}.`
         : 'No component shows measured saturation of a working path or a marginal gain.').slice(0, 480),
     evidenceClass: 'MEASURED',
-    measures: { ...report, counts } as unknown as Record<string, unknown>,
+    measures: storedContribution(report, counts),
   });
   return report;
+}
+
+/** Verdicts in the order a stored reading keeps them: what asks for action first. */
+const VERDICT_ORDER: readonly ContributionVerdict[] = ['REPAIR', 'SCALE', 'RETIRE', 'MEASURE', 'HOLD'];
+
+/**
+ * The reading as one hourly row stores it: decisions ordered by verdict so the
+ * repairs and scale calls survive the list bound, components in the same order,
+ * and every list cut to `boundMeasures`' size with what was cut counted. The
+ * full report is still returned to the caller; only the row is bounded. Pure.
+ */
+export function storedContribution(report: ContributionReport, counts: Record<ContributionVerdict, number>): Record<string, unknown> {
+  const rank = (v: ContributionVerdict): number => VERDICT_ORDER.indexOf(v);
+  const decisions = [...(report.decisions ?? [])].sort((a, b) => rank(a.verdict) - rank(b.verdict));
+  const order = new Map(decisions.map((d, i) => [`${d.kind}:${d.id}`, i]));
+  const components = [...(report.components ?? [])].sort(
+    (a, b) => (order.get(`${a.kind}:${a.id}`) ?? Number.MAX_SAFE_INTEGER) - (order.get(`${b.kind}:${b.id}`) ?? Number.MAX_SAFE_INTEGER),
+  );
+  return boundMeasures({
+    ...report,
+    decisions,
+    components,
+    counts,
+    totals: { components: components.length, decisions: decisions.length, gaps: (report.gaps ?? []).length },
+  } as unknown as Record<string, unknown>);
 }
