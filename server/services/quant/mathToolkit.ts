@@ -597,3 +597,300 @@ export async function recordNumberProvenance(record: NumberProvenance, deps: Mat
     measures: { provenance: record },
   });
 }
+
+/* ------------------------------------------------------------------------- */
+/* Production consumers: the figures Brain actually states                    */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * The toolkit is not a library waiting for a caller: every material number
+ * the running Brain states goes through it where that number is made.
+ *
+ *  - The cash forecast (`cash/forecast.ts`, recorded by `ledger.ts
+ *    keepCashLedger`) — every version of its revenue, contribution and
+ *    most-cash-out-at-once figures is recorded with its provenance, the
+ *    method selection for that question is recorded beside it, and the
+ *    ledger's forecast-vs-realized bias is read on the same refresh: a
+ *    systematic error is recorded and carried into the figure's provenance as
+ *    the corrected alternative, so the next reader sees the correction.
+ *  - The intelligence sprint (`improvement/sprint.ts`) — the baseline's
+ *    probabilities are fitted base rates with provenance, and the general
+ *    method's probability is recorded with the evidence counts it multiplies.
+ */
+
+export const BIAS_EVENT = 'FORECAST_BIAS';
+
+/** A count read from rows, as a sourced figure. */
+export function countFigure(meaning: string, n: number, source: string, scope: string | null = null): Figure {
+  return {
+    meaning,
+    unit: 'count',
+    value: n,
+    source,
+    derivedFrom: [],
+    status: 'OBSERVED',
+    window: null,
+    geography: null,
+    scope,
+    bounds: null,
+    invalidatedBy: [],
+  };
+}
+
+/** An input nobody has evidence for: carried as unknown, never as a convenient figure. */
+export function unknownInput(key: string, meaning: string, unit: string): ProvenanceInput {
+  return {
+    key,
+    figure: { meaning, unit, value: null, source: null, derivedFrom: [], status: 'UNKNOWN', window: null, geography: null, scope: null, bounds: null, invalidatedBy: [] },
+    source: { ref: `unknown:${key}`, retrievedAt: new Date(0).toISOString() },
+  };
+}
+
+/**
+ * A rate k/n read from rows, as a claimed probability with provenance. With no
+ * rows the rate is unknown, not a default. The alternatives are the
+ * Laplace-smoothed rate and the rate if one more case had gone either way, so
+ * a reader sees how fragile a small sample is.
+ */
+export function rateProvenance(input: {
+  key: string;
+  definition: string;
+  hits: number;
+  considered: number;
+  source: string;
+  retrievedAt: string;
+  horizon: string;
+  applicability: { method: string; evidence: readonly string[] };
+  interdependence?: readonly string[];
+  calibration?: CalibrationBucket | null;
+}): ProvenanceResult {
+  const inputs: ProvenanceInput[] =
+    input.considered > 0
+      ? [
+          { key: 'hits', figure: countFigure(`cases where ${input.definition}`, input.hits, input.source), source: { ref: input.source, retrievedAt: input.retrievedAt } },
+          { key: 'considered', figure: countFigure('cases considered', input.considered, input.source), source: { ref: input.source, retrievedAt: input.retrievedAt } },
+        ]
+      : [unknownInput('hits', `cases where ${input.definition}`, 'count'), unknownInput('considered', 'cases considered', 'count')];
+  const k = input.hits;
+  const n = input.considered;
+  return buildNumberProvenance({
+    key: input.key,
+    quantity: { kind: 'PROBABILITY', definition: input.definition },
+    units: 'probability',
+    horizon: input.horizon,
+    formula: { op: '/', args: [{ ref: 'hits' }, { ref: 'considered' }] },
+    inputs,
+    alternatives: n > 0
+      ? [
+          { label: 'Laplace-smoothed (k+1)/(n+2)', parameters: { hits: k + 1, considered: n + 2 } },
+          { label: 'one more case succeeded', parameters: { hits: k + 1, considered: n + 1 } },
+          { label: 'one more case failed', parameters: { hits: k, considered: n + 1 } },
+        ]
+      : [{ label: 'no cases: unknown', parameters: {} }],
+    interdependence: input.interdependence ?? [],
+    applicability: input.applicability,
+    form: 'PROBABILITY',
+    calibration: input.calibration ?? null,
+  });
+}
+
+/** Which forecast figure, the quantity it is, and how its cents are named. */
+const CASH_FIGURES = {
+  revenue: { kind: 'GROSS_BILLED', definition: 'amount billed to the payer per deal, as the cash forecast states it' },
+  contribution: { kind: 'NET_CONTRIBUTION', definition: 'payments less refunds, costs and amounts owed per deal, as the cash forecast states it' },
+  upfrontCash: { kind: 'OTHER', definition: 'the most cash out at once before a deal pays, as the cash forecast states it' },
+} as const satisfies Record<string, { kind: QuantityKind; definition: string }>;
+export type CashFigureName = keyof typeof CASH_FIGURES;
+
+/** The part of a cash forecast's estimate provenance needs (structurally `cash/forecast.ts Estimate`). */
+export interface CashEstimate {
+  valueCents: number | null;
+  lowCents: number | null;
+  highCents: number | null;
+  fromRows: number;
+  basis: string;
+}
+
+/**
+ * The provenance of one cash-forecast figure. The forecast derives it from
+ * its opportunity rows (the source, with the rows' count), so it is an
+ * estimate over those rows; its spread is the uncertainty and the low and high
+ * rows are alternative parameterizations. A systematic forecast-vs-realized
+ * error on the same comparable bucket adds the corrected alternative and
+ * names the correction. A withheld estimate is recorded as unknown.
+ */
+export function cashFigureProvenance(input: {
+  projectId: string;
+  currency: string;
+  name: CashFigureName;
+  estimate: CashEstimate;
+  horizon: string;
+  retrievedAt: string;
+  claimId?: string | null;
+  bias?: BiasReading | null;
+}): ProvenanceResult {
+  const spec = CASH_FIGURES[input.name];
+  const est = input.estimate;
+  const units = `${input.currency.replace(/[^A-Za-z0-9_]/g, '') || 'currency'}_cents`;
+  const source = `cash_forecast:${input.projectId}:${input.currency}:${input.name} (${est.fromRows} opportunity row(s): ${est.basis})`.slice(0, 400);
+  const known = est.valueCents !== null && est.fromRows > 0;
+  const figure: Figure = {
+    meaning: spec.definition,
+    unit: units,
+    value: known ? est.valueCents : null,
+    source: known ? source : null,
+    derivedFrom: [],
+    status: known ? 'EVIDENCED' : 'UNKNOWN',
+    window: input.horizon,
+    geography: null,
+    scope: `${input.projectId}:${input.currency}`,
+    bounds: known && est.lowCents !== null && est.highCents !== null && est.highCents >= est.lowCents ? { low: est.lowCents, high: est.highCents } : null,
+    invalidatedBy: ['a change to any opportunity row the forecast read'],
+  };
+  const alternatives: { label: string; parameters: Record<string, number> }[] = [];
+  if (est.lowCents !== null) alternatives.push({ label: 'lowest row in the spread', parameters: { figure: est.lowCents } });
+  if (est.highCents !== null) alternatives.push({ label: 'highest row in the spread', parameters: { figure: est.highCents } });
+  const correction = input.bias?.verdict === 'SYSTEMATIC' ? input.bias.correction : null;
+  if (correction?.kind === 'SCALE_FIGURE' && est.valueCents !== null) {
+    alternatives.push({ label: `corrected for realized bias: ${correction.rationale}`.slice(0, 240), parameters: { figure: Math.round(est.valueCents * correction.amount) } });
+  }
+  if (alternatives.length === 0) alternatives.push({ label: 'no spread stated: unknown', parameters: {} });
+  const evidence = [source, ...(input.claimId ? [`ledger claim ${input.claimId}`] : [])];
+  if (input.bias && input.bias.verdict !== 'INSUFFICIENT') evidence.push(`forecast vs realized on ${input.bias.comparableKey}: ${input.bias.verdict} over ${input.bias.n} outcome(s)`);
+  return buildNumberProvenance({
+    key: `cash:${input.projectId}:${input.currency}:${input.name}`,
+    quantity: { kind: spec.kind, definition: spec.definition },
+    units,
+    horizon: input.horizon,
+    formula: { ref: 'figure' },
+    inputs: [{ key: 'figure', figure, source: { ref: source, retrievedAt: input.retrievedAt } }],
+    alternatives,
+    interdependence: [
+      `revenue, contribution and cash out are read from the same ${est.fromRows} opportunity row(s) and move together`,
+      ...(input.name === 'contribution' ? ['contribution = revenue − refunds − costs − owed (money.ts contributionFrom)'] : []),
+    ],
+    applicability: { method: 'cash-flow identities over sourced opportunity rows', evidence },
+    form: 'ESTIMATE',
+  });
+}
+
+/**
+ * The method selection for a cash-forecast question, judged from what the
+ * ledger actually holds: cash-flow identities fit when opportunity rows state
+ * the figure; calibration fits only with enough realized outcomes on the
+ * comparable bucket; forecast-error correction fits only when a bias reading
+ * says the error is systematic.
+ */
+export function selectCashMathematics(input: {
+  projectId: string;
+  currency: string;
+  estimate: CashEstimate;
+  name: CashFigureName;
+  bias: BiasReading | null;
+}): MathSelection {
+  const rowsRef = `cash_forecast:${input.projectId}:${input.currency}:${input.name}`;
+  const biasRef = input.bias ? `ledger:${input.bias.comparableKey}:${input.bias.basis}` : null;
+  const n = input.bias?.n ?? 0;
+  return selectMathematics({
+    question: `What ${input.name} will a ${input.currency} deal produce, and how far can the stated figure be trusted?`,
+    subject: `${input.projectId}:${input.currency}:${input.name}`,
+    candidates: [
+      {
+        family: 'cash_flow_identities',
+        purpose: 'state the figure exactly from the amounts the opportunity rows carry',
+        preconditions: [
+          input.estimate.fromRows > 0 && input.estimate.valueCents !== null
+            ? { condition: 'opportunity rows state the amounts', state: 'HOLDS', evidence: [rowsRef] }
+            : { condition: 'opportunity rows state the amounts', state: 'FAILS', evidence: [rowsRef] },
+        ],
+      },
+      {
+        family: 'statistical_estimation_calibration',
+        purpose: 'judge the stated range against realized deals',
+        preconditions: [
+          biasRef === null
+            ? { condition: `at least ${MIN_CALIBRATION_SAMPLE} realized outcomes on the comparable bucket`, state: 'UNKNOWN', evidence: [] }
+            : { condition: `at least ${MIN_CALIBRATION_SAMPLE} realized outcomes on the comparable bucket`, state: n >= MIN_CALIBRATION_SAMPLE ? 'HOLDS' : 'FAILS', evidence: [`${biasRef} n=${n}`] },
+        ],
+      },
+      {
+        family: 'forecasting_state_estimation',
+        purpose: 'correct the figure for systematic forecast error',
+        preconditions: [
+          biasRef === null || input.bias!.verdict === 'INSUFFICIENT'
+            ? { condition: 'a systematic forecast-vs-realized error is measured', state: 'UNKNOWN', evidence: [] }
+            : { condition: 'a systematic forecast-vs-realized error is measured', state: input.bias!.verdict === 'SYSTEMATIC' ? 'HOLDS' : 'FAILS', evidence: [`${biasRef} ${input.bias!.verdict}`] },
+        ],
+      },
+    ],
+  });
+}
+
+/** Record a forecast-vs-realized reading (only readings with enough outcomes to say anything). */
+export async function recordForecastBias(reading: BiasReading, deps: MathRecordDeps = {}): Promise<void> {
+  await (deps.record ?? recordBinEvent)({
+    eventType: BIAS_EVENT,
+    projectId: deps.projectId ?? null,
+    workloadClass: deps.caller ?? 'math-toolkit',
+    outcome: reading.verdict,
+    reason: `${reading.comparableKey} (${reading.basis}): bias ${reading.bias ?? 'unknown'} over ${reading.n}${reading.correction ? `; correction ${reading.correction.kind} ${reading.correction.amount}` : ''}`.slice(0, 480),
+    evidenceClass: 'MEASURED',
+    measures: { bias: reading },
+  });
+}
+
+export interface CashProvenanceReport {
+  provenance: number;
+  refused: string[];
+  selections: number;
+  biasReadings: number;
+  systematic: number;
+}
+
+/**
+ * The cash ledger's production consumer of the toolkit, run on every refresh
+ * that wrote something new (`ledger.ts keepCashLedger`): forecast-vs-realized
+ * bias over this project's ledger, then for each forecast figure that was
+ * recorded as a new version its method selection and its provenance —
+ * carrying the correction when the error is systematic. Readings that cannot
+ * say anything (too few outcomes) are not recorded; a refused provenance is
+ * named, never forced through.
+ */
+export async function keepCashNumberProvenance(input: {
+  projectId: string;
+  forecasts: readonly { currency: string; horizon: string; figures: readonly { name: CashFigureName; estimate: CashEstimate; claimId: string | null }[] }[];
+  ledger: { predictions: readonly PredictionRow[]; exposures: readonly ExposureRow[]; outcomes: readonly OutcomeRow[] };
+  /** Whether any outcome was recorded on this refresh: the bias is re-read only when it could have moved. */
+  newOutcomes: boolean;
+  retrievedAt: string;
+}, deps: MathRecordDeps = {}): Promise<CashProvenanceReport> {
+  const scoped: MathRecordDeps = { ...deps, projectId: input.projectId, caller: deps.caller ?? 'cash-ledger' };
+  const readings = forecastBias(input.ledger.predictions, input.ledger.exposures, input.ledger.outcomes);
+  const report: CashProvenanceReport = { provenance: 0, refused: [], selections: 0, biasReadings: 0, systematic: 0 };
+  const anyNew = input.forecasts.some((f) => f.figures.length > 0);
+  if (input.newOutcomes || anyNew) {
+    for (const r of readings) {
+      if (r.verdict === 'INSUFFICIENT') continue;
+      await recordForecastBias(r, scoped);
+      report.biasReadings += 1;
+      if (r.verdict === 'SYSTEMATIC') report.systematic += 1;
+    }
+  }
+  const figureBias = (currency: string, name: CashFigureName): BiasReading | null =>
+    readings.find((r) => r.basis === 'FIGURE' && r.comparableKey === `cash:${currency}:${name}`) ?? null;
+  for (const f of input.forecasts) {
+    for (const fig of f.figures) {
+      const bias = figureBias(f.currency, fig.name);
+      await recordMathSelection(selectCashMathematics({ projectId: input.projectId, currency: f.currency, estimate: fig.estimate, name: fig.name, bias }), scoped);
+      report.selections += 1;
+      const built = cashFigureProvenance({ projectId: input.projectId, currency: f.currency, name: fig.name, estimate: fig.estimate, horizon: f.horizon, retrievedAt: input.retrievedAt, claimId: fig.claimId, bias });
+      if (!built.ok) {
+        report.refused.push(`${f.currency}:${fig.name}: ${[...built.missing.map((m) => `missing ${m}`), ...built.problems].join('; ')}`.slice(0, 300));
+        continue;
+      }
+      await recordNumberProvenance(built.record, scoped);
+      report.provenance += 1;
+    }
+  }
+  return report;
+}

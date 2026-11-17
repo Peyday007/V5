@@ -65,7 +65,19 @@ import {
   type PriorDecision,
 } from '../research/reasoningController.ts';
 import { MECHANISM_ROLES, loadProjectKnowledge, mechanismFromOpening, type KnowledgeReading, type MechanismModel, type MechanismRole } from '../research/knowledgeModel.ts';
-import { buildNumberProvenance, recordNumberProvenance, type NumberProvenance, type ProvenanceInput } from '../quant/mathToolkit.ts';
+import {
+  buildNumberProvenance,
+  rateProvenance,
+  recordMathSelection,
+  recordNumberProvenance,
+  selectMathematics,
+  unknownInput,
+  countFigure,
+  type Expr,
+  type MathSelection,
+  type NumberProvenance,
+  type ProvenanceInput,
+} from '../quant/mathToolkit.ts';
 import type { Figure } from '../quant/graph.ts';
 import type { sendNeeds } from '../quant/needs.ts';
 
@@ -221,6 +233,57 @@ export interface MethodContext {
   knowledge?: KnowledgeReading | null;
   /** Layer 2: the opening's transaction modelled as a mechanism over that knowledge. */
   mechanism?: MechanismModel | null;
+  /** The baseline's base rates, fitted on the benchmark set alone (`fitBaselineRates`). */
+  baseRates?: BaseRates | null;
+}
+
+/** One fitted base rate: the probability the baseline states, and where it came from. */
+export interface BaseRate {
+  /** The fitted rate, or the uninformed 0.5 when the benchmark holds no case of this kind (stated in the provenance as unknown). */
+  probability: number;
+  provenance: NumberProvenance | null;
+  hits: number;
+  considered: number;
+}
+
+export interface BaseRates {
+  withPayerAndPrice: BaseRate;
+  without: BaseRate;
+}
+
+/**
+ * The baseline's probabilities are measured, not chosen: the share of
+ * benchmark openings of each kind (payer and price stated, or not) that
+ * production shows became actionable, each with its provenance. Fitted on the
+ * benchmark alone, so held-out sets never tune the baseline either. A kind
+ * the benchmark holds no case of is unknown, and the baseline says 0.5 —
+ * the uninformed prior — rather than a convenient figure.
+ */
+export function fitBaselineRates(benchmark: readonly SprintProblem[], retrievedAt: string): BaseRates {
+  const fit = (withFields: boolean): BaseRate => {
+    const cases = benchmark.filter((p) => (known(p, 'payer') && known(p, 'priceCents')) === withFields);
+    const hits = cases.filter(actionableInProduction).length;
+    const definition = withFields
+      ? 'a benchmark opening with payer and price stated became an actionable pathway'
+      : 'a benchmark opening without payer and price became an actionable pathway';
+    const built = rateProvenance({
+      key: `sprint-baseline:${withFields ? 'payer-and-price' : 'missing-payer-or-price'}`,
+      definition,
+      hits,
+      considered: cases.length,
+      source: `cash_opportunities:sprint-benchmark(${cases.length} row(s), state in ${[...ACTIONABLE_STATES].join('/')})`,
+      retrievedAt,
+      horizon: `production state as of ${retrievedAt}`,
+      applicability: {
+        method: 'base rate (frequency estimate) over the benchmark split',
+        evidence: [`${cases.length} benchmark opening(s) of this kind, ${hits} actionable in production`],
+      },
+      interdependence: ['the same benchmark rows also tune the general method’s threshold'],
+    });
+    const record = built.ok ? built.record : null;
+    return { probability: record?.value ?? 0.5, provenance: record, hits, considered: cases.length };
+  };
+  return { withPayerAndPrice: fit(true), without: fit(false) };
 }
 
 export interface SprintMethod {
@@ -237,20 +300,27 @@ function sourceOf(p: SprintProblem): string | null {
   return p.source?.trim() || (p.sourceClaimId ? `claim:${p.sourceClaimId}` : null);
 }
 
-/** The simpler baseline: a payer and a price make a pathway. */
+/**
+ * The simpler baseline: a payer and a price make a pathway. Its probability is
+ * the base rate fitted on the benchmark for that kind of opening
+ * (`fitBaselineRates`), carried with its provenance; without fitted rates it
+ * states the uninformed 0.5, never a chosen figure.
+ */
 export const BASELINE_METHOD: SprintMethod = {
   key: 'baseline:payer-and-price',
-  run(p) {
+  run(p, _threshold, context) {
     const started = performance.now();
     const actionable = known(p, 'payer') && known(p, 'priceCents');
+    const rate = context?.baseRates ? (actionable ? context.baseRates.withPayerAndPrice : context.baseRates.without) : null;
     return {
       problemId: p.id,
       actionable,
-      probability: actionable ? 0.6 : 0.2,
+      probability: rate?.probability ?? 0.5,
       needsPerson: !actionable,
       robust: actionable,
       findings: 0,
       elapsedMs: performance.now() - started,
+      provenance: rate?.provenance ?? null,
     };
   },
 };
@@ -346,6 +416,100 @@ export function grossBilledProvenance(p: SprintProblem): { record: NumberProvena
   });
   if (built.ok) return { record: built.record, findings: 0 };
   return { record: null, findings: built.missing.length + built.problems.length };
+}
+
+/**
+ * The provenance of the general method's probability for one opening. It is
+ * the controller's Laplace score of the mechanism holding, (s+1)/(s+r+2) over
+ * the sourced evidence that supports (s) or refutes (r) it, times, for each
+ * load-bearing role still unresolved, one minus the score of that role's
+ * counter-model. A role no counter-model reads is an unknown input — the
+ * method uses the uninformed 0.5 there, and the provenance says the
+ * probability is therefore unknown rather than presenting it as measured.
+ */
+export function generalProbabilityProvenance(p: SprintProblem, decision: ControllerDecision, retrievedAt: string): { record: NumberProvenance | null; findings: number } {
+  const inputs: ProvenanceInput[] = [];
+  const counts = (prefix: string, h: { id: string; supports: string[]; refutes: string[] }): Expr => {
+    const ref = `controller:${p.id}:${h.id}`;
+    const sup = `${prefix}.supports`;
+    const ref2 = `${prefix}.refutes`;
+    inputs.push({ key: sup, figure: countFigure(`sourced evidence supporting ${h.id}`, h.supports.length, `${ref} [${h.supports.join(', ')}]`.slice(0, 300), p.id), source: { ref, retrievedAt } });
+    inputs.push({ key: ref2, figure: countFigure(`sourced evidence refuting ${h.id}`, h.refutes.length, `${ref} [${h.refutes.join(', ')}]`.slice(0, 300), p.id), source: { ref, retrievedAt } });
+    return { op: '/', args: [{ op: '+', args: [{ ref: sup }, { const: 1, unit: 'count' }] }, { op: '+', args: [{ ref: sup }, { ref: ref2 }, { const: 2, unit: 'count' }] }] };
+  };
+  const factors: Expr[] = [];
+  const holds = decision.hypotheses.find((h) => h.id === MECHANISM_HOLDS) ?? null;
+  if (holds) factors.push(counts('holds', holds));
+  else {
+    inputs.push(unknownInput('holds', 'the mechanism-holds score', 'probability'));
+    factors.push({ ref: 'holds' });
+  }
+  const { unknowns } = profileOf(p);
+  for (const key of new Set(unknowns.map((f) => FIELD_ROLE[f] ?? f))) {
+    const counter = decision.hypotheses.find((h) => h.id === `fails:${key}`);
+    if (counter) factors.push({ op: '-', args: [{ const: 1 }, counts(`fails_${key}`, counter)] });
+    else {
+      inputs.push(unknownInput(`uninformed_${key}`, `whether ${key} holds, with no counter-model reading it`, 'probability'));
+      factors.push({ ref: `uninformed_${key}` });
+    }
+  }
+  const formula: Expr = factors.length === 1 ? factors[0]! : { op: '*', args: factors };
+  const supportKeys = inputs.filter((i) => i.key.endsWith('.supports')).map((i) => i.key);
+  const built = buildNumberProvenance({
+    key: `sprint-general-probability:${p.id}`,
+    quantity: { kind: 'PROBABILITY', definition: `that "${p.title}" is an actionable transaction pathway`.slice(0, 240) },
+    units: 'probability',
+    horizon: p.deadline ? `until ${p.deadline}` : 'until the opening is decided in production',
+    formula,
+    inputs,
+    alternatives: supportKeys.length > 0
+      ? [
+          { label: 'one more supporting source on each hypothesis', parameters: Object.fromEntries(supportKeys.map((k) => [k, (inputs.find((i) => i.key === k)!.figure.value ?? 0) + 1])) },
+          { label: 'no supporting source at all', parameters: Object.fromEntries(supportKeys.map((k) => [k, 0])) },
+        ]
+      : [{ label: 'no evidence read: unknown', parameters: {} }],
+    interdependence: ['the mechanism-holds and counter-model scores are read from the same research claims of the opening’s project'],
+    applicability: {
+      method: 'Laplace-smoothed evidence share per hypothesis (reasoningController), multiplied across independent load-bearing roles',
+      evidence: [`controller decision on ${p.id}: ${decision.hypotheses.length} hypothesis(es), ${decision.weakInferences.length} weak inference(s)`],
+    },
+    form: 'PROBABILITY',
+  });
+  if (built.ok) return { record: built.record, findings: 0 };
+  return { record: null, findings: built.missing.length + built.problems.length };
+}
+
+/**
+ * The method selection for the sprint's own question, judged from the
+ * benchmark it has: a base rate fits only with enough benchmark cases;
+ * evidence-weighted hypothesis scoring fits only when the controller read any
+ * sourced evidence; a cash-flow identity fits only when prices are sourced.
+ */
+export function sprintMathSelection(benchmark: readonly SprintProblem[], verdicts: readonly MethodVerdict[]): MathSelection {
+  const evidenced = verdicts.filter((v) => (v.decision?.hypotheses ?? []).some((h) => h.supports.length + h.refutes.length > 0)).length;
+  const priced = benchmark.filter((p) => known(p, 'priceCents') && sourceOf(p) !== null).length;
+  const ref = `cash_opportunities:sprint-benchmark(${benchmark.length})`;
+  return selectMathematics({
+    question: 'Is each real opening an actionable transaction pathway, and how probable is it?',
+    subject: 'intelligence sprint',
+    candidates: [
+      {
+        family: 'statistical_estimation_calibration',
+        purpose: 'fit base rates and score calibration (Brier) against production outcomes',
+        preconditions: [{ condition: `at least ${MIN_SAMPLE} benchmark openings with a production outcome`, state: benchmark.length >= MIN_SAMPLE ? 'HOLDS' : 'FAILS', evidence: [`${ref} n=${benchmark.length}`] }],
+      },
+      {
+        family: 'probability_bayesian_inference',
+        purpose: 'weigh each mechanism hypothesis on sourced evidence',
+        preconditions: [{ condition: 'the controller read sourced evidence on some opening', state: evidenced > 0 ? 'HOLDS' : 'FAILS', evidence: [`${evidenced} of ${verdicts.length} decision(s) with sourced evidence`] }],
+      },
+      {
+        family: 'cash_flow_identities',
+        purpose: 'carry the gross billed per transaction exactly from its sourced price',
+        preconditions: [{ condition: 'openings state a sourced price', state: priced > 0 ? 'HOLDS' : 'FAILS', evidence: [`${ref} priced=${priced}`] }],
+      },
+    ],
+  });
 }
 
 /**
@@ -590,6 +754,13 @@ export const SPRINT_EVENT = 'SPRINT_BENCHMARK';
 export const SPRINT_INTERVAL_MS = 24 * 3_600_000;
 /** How many real problems per run also leave their controller decision and provenance as rows. */
 export const DEMONSTRATED_PER_RUN = 5;
+/**
+ * Provenance is not a demonstration: every scored opening whose row is new or
+ * changed since the previous run has its gross billed and its probability
+ * recorded, up to this many openings per run (the rest are next run's, since
+ * an unrecorded row stays "changed").
+ */
+export const PROVENANCE_PER_RUN = 500;
 
 export interface SprintRun {
   ranAt: string;
@@ -620,6 +791,10 @@ export interface SprintLoop {
   mechanismsModelled: number;
   /** Information needs the knowledge and mechanism layers raised across those decisions. */
   informationNeeds: number;
+  /** Number provenance records written this run (baseline rates, gross billed, general probabilities). */
+  provenanceRecorded: number;
+  /** Method-selection judgments recorded this run. */
+  selectionsRecorded: number;
   errors: string[];
 }
 
@@ -629,6 +804,7 @@ export interface SprintDeps {
   record?: typeof recordImprovementEvent;
   recordDecision?: typeof recordControllerDecision;
   recordProvenance?: typeof recordNumberProvenance;
+  recordSelection?: typeof recordMathSelection;
   registerDirected?: (weakness: Weakness, now?: Date) => Promise<{ candidate: { id: string } }>;
   now?: () => Date;
   /** What the method library has learned: the catalogue, outcomes and procedures recorded so far. */
@@ -729,6 +905,7 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
   for (const p of problems) layersOf.set(p.id, await openingLayers(p, now, knowledgeCache, deps.knowledge));
   const contextOf = (p: SprintProblem): MethodContext => ({ ...learned, knowledge: layersOf.get(p.id)?.knowledge ?? null, mechanism: layersOf.get(p.id)?.mechanism ?? null });
   const threshold = chooseThreshold(split.BENCHMARK, GENERAL_METHOD, contextOf);
+  const baseRates = fitBaselineRates(split.BENCHMARK, now.toISOString());
 
   const readings: SetReading[] = [];
   const comparisons: BaselineComparison[] = [];
@@ -736,7 +913,7 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
   for (const set of ['BENCHMARK', 'HELD_OUT', 'NEW_HELD_OUT'] as const) {
     const ps = split[set];
     const g = ps.map((p) => GENERAL_METHOD.run(p, threshold, contextOf(p)));
-    const b = ps.map((p) => BASELINE_METHOD.run(p, threshold));
+    const b = ps.map((p) => BASELINE_METHOD.run(p, threshold, { baseRates }));
     generalVerdicts.push(...g);
     const gr = readSet(set, GENERAL_METHOD.key, ps, g);
     const br = readSet(set, BASELINE_METHOD.key, ps, b);
@@ -749,7 +926,7 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
   // a contradicted one changes the method — record the decision, and hand the next action to its owner.
   const verdictOf = new Map(generalVerdicts.map((v) => [v.problemId, v]));
   const history = await (deps.history ?? (() => readControllerHistory(SPRINT_CALLER)))();
-  const loop: SprintLoop = { resultsTracked: 0, decisions: 0, methodChanges: 0, capabilityGaps: 0, handOffs: {}, proceduresRecorded: 0, knowledgeRead: 0, mechanismsModelled: 0, informationNeeds: 0, errors: [] };
+  const loop: SprintLoop = { resultsTracked: 0, decisions: 0, methodChanges: 0, capabilityGaps: 0, handOffs: {}, proceduresRecorded: 0, knowledgeRead: 0, mechanismsModelled: 0, informationNeeds: 0, provenanceRecorded: 0, selectionsRecorded: 0, errors: [] };
   for (const { problem: p, result } of chooseDemonstrated(problems, history)) {
     const prior = history.get(p.id);
     const projectId = p.projectId ?? null;
@@ -804,14 +981,34 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
     } catch (error) {
       loop.errors.push(`${p.id}: ${String((error as Error).message ?? error).slice(0, 200)}`);
     }
-    const v = verdictOf.get(p.id);
-    if (v?.provenance) {
-      try {
-        await (deps.recordProvenance ?? recordNumberProvenance)(v.provenance, { projectId, caller: SPRINT_CALLER });
-      } catch {
-        // A record the toolkit refuses is a finding already counted in method quality, not a run failure.
-      }
+  }
+  // Per-number provenance for the run's own numbers: the baseline's fitted rates, the method selection, and
+  // for every opening new or changed since the previous run its gross billed and the general probability.
+  const recordProv = deps.recordProvenance ?? recordNumberProvenance;
+  const tryRecord = async (record: NumberProvenance | null | undefined, projectId: string | null): Promise<void> => {
+    if (!record) return;
+    try {
+      await recordProv(record, { projectId, caller: SPRINT_CALLER });
+      loop.provenanceRecorded += 1;
+    } catch {
+      // A record the toolkit refuses is a finding already counted in method quality, not a run failure.
     }
+  };
+  await tryRecord(baseRates.withPayerAndPrice.provenance, null);
+  await tryRecord(baseRates.without.provenance, null);
+  try {
+    await (deps.recordSelection ?? recordMathSelection)(sprintMathSelection(split.BENCHMARK, generalVerdicts), { caller: SPRINT_CALLER });
+    loop.selectionsRecorded += 1;
+  } catch (error) {
+    loop.errors.push(`selection: ${String((error as Error).message ?? error).slice(0, 200)}`);
+  }
+  const since = previous?.at ?? null;
+  const changed = problems.filter((p) => since === null || p.updatedAt > since || p.createdAt > since).slice(0, PROVENANCE_PER_RUN);
+  for (const p of changed) {
+    const v = verdictOf.get(p.id);
+    if (!v) continue;
+    await tryRecord(v.provenance, p.projectId ?? null);
+    if (v.decision) await tryRecord(generalProbabilityProvenance(p, v.decision, now.toISOString()).record, p.projectId ?? null);
   }
   try {
     loop.proceduresRecorded = (

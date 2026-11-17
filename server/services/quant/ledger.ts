@@ -29,6 +29,10 @@ import { getCashMode } from '../../repos/cashMode.ts';
 import type { CashOutcome } from '../../domain/cashJourney.ts';
 import { asReason, type OutcomeReason } from '../../domain/cashOutcomeReasons.ts';
 import { versionAt, type ExposureRow, type MissCause, type OutcomeRow, type PredictionRow } from './forecast.ts';
+import type { keepCashNumberProvenance } from './mathToolkit.ts';
+
+/** What the cash ledger hands the toolkit's provenance consumer. */
+export type CashProvenanceInput = Parameters<typeof keepCashNumberProvenance>[0];
 
 export const LEDGER_EVENTS = {
   PREDICTION: 'FORECAST_PREDICTION',
@@ -418,7 +422,13 @@ export function statesSame(held: PredictionRow, input: PredictionInput): boolean
 export async function keepCashLedger(
   projectId: string,
   currencies: readonly string[],
-  deps: LedgerDeps & { forecast?: typeof cashForecast; measured?: (projectId: string) => Promise<CashOutcome[]>; sprintHorizon?: typeof sprintHorizonOf } = {},
+  deps: LedgerDeps & {
+    forecast?: typeof cashForecast;
+    measured?: (projectId: string) => Promise<CashOutcome[]>;
+    sprintHorizon?: typeof sprintHorizonOf;
+    /** The toolkit's production consumer (`mathToolkit.ts keepCashNumberProvenance`); defaults to it. */
+    provenance?: (input: CashProvenanceInput) => Promise<unknown>;
+  } = {},
 ): Promise<{
   written: PredictionRow[];
   exposures: ExposureRow[];
@@ -434,6 +444,7 @@ export async function keepCashLedger(
   const ledger = await (deps.read ?? (() => readLedger(projectId)))();
   const held = async () => ({ predictions: [...ledger.predictions], exposures: [...ledger.exposures], outcomes: [...ledger.outcomes] });
   const scoped: LedgerDeps = { ...deps, projectId, read: held };
+  const stated: CashProvenanceInput['forecasts'][number][] = [];
   for (const currency of [...new Set(currencies.filter((c) => typeof c === 'string' && c.trim()))].sort()) {
     const forecast = await (deps.forecast ?? cashForecast)({ projectId, currency });
     const fresh = await recordCashForecast(projectId, forecast, { ...scoped, ...(deps.sprintHorizon ? { sprintHorizon: deps.sprintHorizon } : {}) });
@@ -444,12 +455,43 @@ export async function keepCashLedger(
       exposures.push(exposure);
       ledger.exposures.push(exposure);
     }
+    // Every figure this refresh stated as a new version keeps its provenance; so does the cash it puts at risk.
+    if (fresh.length > 0) {
+      const claimOf = (name: string) => fresh.find((p) => p.claimId.endsWith(`:${name}`))?.claimId ?? null;
+      const horizonDays = fresh[0]?.horizonDays ?? null;
+      stated.push({
+        currency,
+        horizon: horizonDays === null ? 'per deal; no horizon stated' : `per deal, within ${horizonDays} day(s)`,
+        figures: [
+          ...(['revenue', 'contribution'] as const).filter((name) => claimOf(name) !== null).map((name) => ({ name, estimate: forecast[name], claimId: claimOf(name) })),
+          { name: 'upfrontCash' as const, estimate: forecast.upfrontCash, claimId: null },
+        ],
+      });
+    }
   }
   // What actually happened: every deal that ended since a version was exposed is a measured draw of the
   // figure that version claimed, and it is recorded against that version once (the outcome producer).
   const measured = await (deps.measured ?? ((id: string) => outcomesFor({ projectId: id })))(projectId);
   const outcomes = await recordCashOutcomes(projectId, measured, scoped);
   ledger.outcomes.push(...outcomes);
+  // Per-number provenance, method selection and forecast-vs-realized correction (META-18-3), read from this
+  // ledger as held — only when this refresh stated a new figure or met a new outcome. Its own catch: a
+  // provenance that cannot be recorded never stops the cash ledger.
+  if (stated.length > 0 || outcomes.length > 0) {
+    const provenanceInput: CashProvenanceInput = {
+      projectId,
+      forecasts: stated,
+      ledger: { predictions: [...ledger.predictions], exposures: [...ledger.exposures], outcomes: [...ledger.outcomes] },
+      newOutcomes: outcomes.length > 0,
+      retrievedAt: (deps.now ?? (() => new Date().toISOString()))(),
+    };
+    await (deps.provenance
+      ? deps.provenance(provenanceInput)
+      : import('./mathToolkit.ts').then(({ keepCashNumberProvenance }) => keepCashNumberProvenance(provenanceInput, { projectId, caller: 'cash-ledger' }))
+    ).catch((error: unknown) => {
+      console.warn(`[quant] number provenance unrecorded for ${projectId}: ${String((error as Error)?.message ?? error)}`);
+    });
+  }
   // Which backups to prepare first, re-ranked on the same refresh from the project's real dependencies
   // and the failures on this ledger (FALL-37-6). Loaded when used: the ranking reads this ledger. Its own
   // catch: a ranking that cannot be made never stops the cash ledger.
