@@ -54,6 +54,11 @@ import { extractItem, extractItems, MODEL_BATCH_SIZE, type ExtractableItem, type
 import { addExtractedItems, currentEventGraph, syncEventGraph, type ExtractedItemsUpdate, type GraphHypothesis } from '../industry/eventGraph.ts';
 import { constructFromGraph, type MissingLinkQuestion } from '../cash/construct.ts';
 import type { Weakness } from '../../domain/improvement.ts';
+import { recordBinEvent } from '../../repos/bins.ts';
+import { recordCorporaEvaluation, type CorporaEvaluation, type CorpusNeed } from './corpora.ts';
+import { conditionalFetcher, contentHashOf, httpTransport, resolveAccess, type ConditionalResult, type Transport, type Validators } from './access.ts';
+import { feedIngestStore, ingestShards, type IngestStore, type ShardedSource } from './ingest.ts';
+import type { SourceAcquisition } from './sources.ts';
 
 export type Fetcher = (url: string, headers: Record<string, string>, timeoutMs?: number) => Promise<unknown>;
 
@@ -156,27 +161,434 @@ export interface FeedPullResult {
   duplicates: number;
   /** Whether the request was narrowed to what was published since the source's last success. */
   incremental: boolean;
+  /** The source answered that nothing changed (304, or the same content hash): nothing was ingested. */
+  notModified?: boolean;
+  /** Why the source was not asked at all this pass (its corpus evaluation skipped it, or no permitted access). */
+  skipped?: string | null;
+  /** Shards a previous, interrupted read had already checkpointed and this one did not fetch again. */
+  resumedPast?: string[];
+  /** The connector-health outcome recorded after the pull (`superviseConnector`). */
+  health?: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// The acquisition pipeline (ACQ-21-3, ACQ-21-4): every due source with
+// acquisition metadata is taken, in order, through corpus evaluation, access
+// resolution, a conditional and checkpointed ingest, provenance-bearing
+// records, connector health and yield ranking. Every stage is an existing
+// owner (`corpora.ts`, `access.ts`, `ingest.ts`, `health.ts`); this function
+// only puts them in order. No table, queue or scheduler is added.
+// ---------------------------------------------------------------------------
+
+/** The bin event one source's pull is recorded under: its validators, provenance and outcome. */
+export const FEED_ACQUISITION_EVENT = 'FEED_ACQUISITION';
+/** The bin event one window's per-source yield is recorded under. */
+export const FEED_SOURCE_YIELD_EVENT = 'FEED_SOURCE_YIELD';
+/** One yield reading per window. */
+export const SOURCE_YIELD_WINDOW_MS = 24 * 3_600_000;
+/** What a pull answered with a 304 or an unchanged hash is recorded as, so health never reads it as an empty parse. */
+export const NOT_MODIFIED_MARK = 'NOT_MODIFIED';
+/** The version of this pipeline's ordering, carried on every acquisition row. */
+export const ACQUISITION_PIPELINE_VERSION = 'feeds-acquisition/1';
+
+/** One source's yield over a window, read from rows. */
+export interface SourceYield {
+  source: string;
+  /** Items the source's pulls carried in the window. */
+  acquired: number;
+  /** Stored items the screen kept or a code rule accounted for: accepted information. */
+  accepted: number;
+  /** Stored items a shortlist round took: commercially usable leads. */
+  usable: number;
+  acceptedShare: number | null;
+  usableShare: number | null;
+  /** Marginal decision value per acquired item; null when nothing was acquired (unknown, never favourable). */
+  value: number | null;
+}
+
+/** Marginal decision value: a usable lead is worth twice an accepted record, and volume alone is worth nothing. Pure. */
+export function sourceYieldValue(y: Pick<SourceYield, 'acquired' | 'accepted' | 'usable'>): number | null {
+  if (y.acquired <= 0) return null;
+  return Math.round(((2 * y.usable + y.accepted) / y.acquired) * 10_000) / 10_000;
+}
+
+/**
+ * The order to pull sources in: highest marginal decision value first; a source
+ * with no reading ranks after every source with one, as if worth nothing
+ * (inv. 39); ties keep catalog order. Volume is not an input. Pure.
+ */
+export function orderByYield<T extends { id: string }>(sources: readonly T[], yields: ReadonlyMap<string, number | null>): T[] {
+  return sources
+    .map((source, i) => ({ source, i, value: yields.get(source.id) ?? null }))
+    .sort((a, b) => {
+      const av = a.value ?? -1;
+      const bv = b.value ?? -1;
+      return bv - av || a.i - b.i;
+    })
+    .map((one) => one.source);
+}
+
+/** Per-source yield over [since, until), read from `feed_pulls`, `feed_items` and the screen's rows. */
+export async function readSourceYields(since: string, until: string): Promise<SourceYield[]> {
+  const db = getDb();
+  const pulls = await db.all<{ source: string; fetched: number | string | null }>(
+    `SELECT source, SUM(fetched) AS fetched FROM feed_pulls WHERE ok = 1 AND created_at >= ? AND created_at < ? GROUP BY source`,
+    [since, until],
+  );
+  const items = await db.all<{ id: string; source: string; shortlisted_round_id: string | null }>(
+    `SELECT id, source, shortlisted_round_id FROM feed_items WHERE fetched_at >= ? AND fetched_at < ? AND source <> ? AND source <> ?`,
+    [since, until, CODE_SIGNAL_SOURCE, SITE_SOURCE],
+  );
+  const kept = new Set<string>();
+  for (let at = 0; at < items.length; at += SUBJECT_PAGE) {
+    const chunk = items.slice(at, at + SUBJECT_PAGE).map((one) => one.id);
+    const rows = await db.all<{ subject_id: string }>(
+      `SELECT DISTINCT subject_id FROM cheap_results
+        WHERE kind = 'SCREEN_LEAD' AND ok = 1 AND output LIKE ? AND subject_id IN (${chunk.map(() => '?').join(',')})`,
+      ['%"verdict":"KEEP"%', ...chunk],
+    );
+    for (const row of rows) kept.add(row.subject_id);
+    for (const id of await coveredItems(chunk)) kept.add(id);
+  }
+  const by = new Map<string, SourceYield>();
+  const at = (source: string): SourceYield => {
+    let y = by.get(source);
+    if (!y) {
+      y = { source, acquired: 0, accepted: 0, usable: 0, acceptedShare: null, usableShare: null, value: null };
+      by.set(source, y);
+    }
+    return y;
+  };
+  for (const row of pulls) at(row.source).acquired += Number(row.fetched ?? 0);
+  for (const item of items) {
+    const y = at(item.source);
+    if (kept.has(item.id) || item.shortlisted_round_id) y.accepted += 1;
+    if (item.shortlisted_round_id) y.usable += 1;
+  }
+  for (const y of by.values()) {
+    y.acceptedShare = y.acquired > 0 ? Math.round((y.accepted / y.acquired) * 10_000) / 10_000 : null;
+    y.usableShare = y.acquired > 0 ? Math.round((y.usable / y.acquired) * 10_000) / 10_000 : null;
+    y.value = sourceYieldValue(y);
+  }
+  return [...by.values()].sort((a, b) => a.source.localeCompare(b.source));
+}
+
+/** The values the latest recorded yield reading gave each source, and when that window ended. */
+export async function latestSourceYields(): Promise<{ until: string | null; values: Map<string, number | null> }> {
+  const row = await getDb().get<{ measures: string | null }>(
+    `SELECT measures FROM bin_events WHERE event_type = ? ORDER BY at DESC, id DESC LIMIT 1`,
+    [FEED_SOURCE_YIELD_EVENT],
+  );
+  const values = new Map<string, number | null>();
+  let until: string | null = null;
+  try {
+    const m = JSON.parse(row?.measures ?? '{}') as { until?: unknown; sources?: unknown };
+    if (typeof m.until === 'string') until = m.until;
+    if (Array.isArray(m.sources)) {
+      for (const one of m.sources as Partial<SourceYield>[]) {
+        if (one && typeof one.source === 'string') values.set(one.source, typeof one.value === 'number' ? one.value : null);
+      }
+    }
+  } catch {
+    // An unreadable reading ranks nothing: every source keeps catalog order.
+  }
+  return { until, values };
+}
+
+/**
+ * Record the yield of every source for the window since the last reading, once
+ * per window: the share of what each source acquired that became accepted
+ * information and commercially usable leads. The next pulls are ordered by it.
+ */
+export async function recordSourceYields(now: Date, record: typeof recordBinEvent = recordBinEvent): Promise<SourceYield[] | null> {
+  const last = await latestSourceYields();
+  const since = last.until ?? new Date(now.getTime() - SOURCE_YIELD_WINDOW_MS).toISOString();
+  if (last.until && now.getTime() - Date.parse(last.until) < SOURCE_YIELD_WINDOW_MS) return null;
+  const until = now.toISOString();
+  const yields = await readSourceYields(since, until);
+  await record({
+    eventType: FEED_SOURCE_YIELD_EVENT,
+    workloadClass: 'acquisition',
+    outcome: 'MEASURED',
+    reason: `Per-source yield ${since} to ${until}: ${yields.map((y) => `${y.source} ${y.accepted}/${y.usable} of ${y.acquired}`).join('; ')}`.slice(0, 480),
+    evidenceClass: 'MEASURED',
+    measures: { since, until, pipeline: ACQUISITION_PIPELINE_VERSION, sources: yields },
+  });
+  return yields;
+}
+
+/** The validators the last successful read of a source stored. */
+async function readValidators(source: string): Promise<Validators | null> {
+  const row = await getDb().get<{ measures: string | null }>(
+    `SELECT measures FROM bin_events WHERE event_type = ? AND provider = ? AND outcome IN ('INGESTED', 'NOT_MODIFIED')
+      ORDER BY at DESC, id DESC LIMIT 1`,
+    [FEED_ACQUISITION_EVENT, source],
+  );
+  try {
+    const v = (JSON.parse(row?.measures ?? '{}') as { validators?: Validators }).validators;
+    return v && typeof v === 'object' ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+/** A conditional read of a JSON resource, as the pipeline fetcher sees it. */
+export type ConditionalRead = (url: string, prior: Validators | null, headers: Record<string, string>, timeoutMs?: number) => Promise<ConditionalResult>;
+
+/** The dependencies of the acquisition stages. Production uses the real owners; tests inject. */
+export interface AcquisitionDeps {
+  /** The network call under the conditional reader. */
+  transport?: Transport;
+  /** Corpus evaluation, recorded (`recordCorporaEvaluation`). */
+  evaluate?: (need: CorpusNeed) => Promise<CorporaEvaluation>;
+  /** The store sharded reads checkpoint into; absent, a sharded source is read whole into `feed_items`. */
+  ingestStore?: IngestStore | null;
+  /** Connector supervision after each pull. */
+  supervise?: (source: string, intervalMs: number) => Promise<{ outcome: string }>;
+  validators?: (source: string) => Promise<Validators | null>;
+  record?: typeof recordBinEvent;
+  /** Per-source marginal decision values to order pulls by; absent, the latest recorded reading. */
+  yields?: () => Promise<ReadonlyMap<string, number | null>>;
+  /** Record the window's yield reading (default `recordSourceYields`). */
+  recordYields?: (now: Date) => Promise<unknown>;
+  sleep?: (ms: number) => Promise<void>;
+}
+
+const ACCEPT_JSON = { accept: 'application/json' };
+
+/** Parse a JSON body; a body that is not JSON throws the parser's own SyntaxError, which health reads as a broken parser. */
+function parseJsonBody(body: string): unknown {
+  return JSON.parse(body);
+}
+
+/** Resolve the real content behind a catalog listing. Null when every resource states a constraint. */
+async function resolvedUrl(read: ConditionalRead, listingUrl: string, headers: Record<string, string>, timeoutMs?: number): Promise<{ url: string | null; reason: string }> {
+  const listing = await read(listingUrl, null, headers, timeoutMs);
+  if (listing.status !== 'MODIFIED') return { url: null, reason: 'the listing returned no body' };
+  const access = resolveAccess(parseJsonBody(listing.body), listingUrl);
+  if (!access.preferred) return { url: null, reason: access.handoff ?? 'the listing names no resource that carries the data' };
+  return { url: access.preferred.url, reason: access.preferred.note };
+}
+
+/**
+ * Pull one due source through the pipeline. Returns its result; never throws
+ * for a source fault (the fault is the result, and health classifies it).
+ */
+async function acquireSource(
+  source: FeedSource & { acquisition: SourceAcquisition },
+  ask: { url: string; incremental: boolean },
+  now: Date,
+  deps: Required<Pick<AcquisitionDeps, 'evaluate' | 'supervise' | 'validators' | 'record'>> & { read: ConditionalRead; ingestStore: IngestStore | null; sleep: (ms: number) => Promise<void> },
+): Promise<FeedPullResult> {
+  const acq = source.acquisition;
+  const base: FeedPullResult = { source: source.id, inserted: 0, error: null, fetched: 0, duplicates: 0, incremental: ask.incremental };
+  const at = now.toISOString();
+
+  // 1. Corpus evaluation, before the source is asked: is this corpus (or domain class) the right one for the need?
+  const evaluation = await deps.evaluate({ purpose: `${source.label} (${source.id})`, factKinds: acq.factKinds, maxAgeDays: acq.maxAgeDays, intendedUse: 'commercial', connected: [source.id] });
+  const decision = evaluation.decisions.find((d) => d.corpusId === acq.corpus) ?? null;
+  if (!decision || decision.outcome !== 'APPLIED') {
+    const reason = decision ? decision.reason : `corpus ${acq.corpus} is not in the catalog`;
+    await deps.record({ eventType: FEED_ACQUISITION_EVENT, provider: source.id, workloadClass: 'acquisition', outcome: 'SKIPPED_BY_EVALUATION', reason: reason.slice(0, 480), evidenceClass: 'MEASURED', measures: { corpus: acq.corpus, pipeline: ACQUISITION_PIPELINE_VERSION } });
+    return { ...base, skipped: reason.slice(0, 300) };
+  }
+
+  // 2. Access: the real content, never a catalog listing; a stated constraint is honoured, never routed around.
+  const headers = { ...ACCEPT_JSON, ...(source.headers ?? {}) };
+  if (acq.access.authentication === 'REQUIRED') {
+    const reason = `${source.id} requires authentication: an authorized account or key must be granted; it is not read around`;
+    await deps.record({ eventType: FEED_ACQUISITION_EVENT, provider: source.id, workloadClass: 'acquisition', outcome: 'PERMISSION_NEED', reason, evidenceClass: 'MEASURED', measures: { corpus: acq.corpus } });
+    return { ...base, skipped: reason };
+  }
+
+  let outcome = 'INGESTED';
+  let result: FeedPullResult = base;
+  let validators: Validators | null = null;
+  let resolvedFrom: string | null = null;
+  try {
+    let url = ask.url;
+    if (acq.listingUrl) {
+      const resolved = await resolvedUrl(deps.read, acq.listingUrl, headers, source.timeoutMs);
+      if (!resolved.url) {
+        await deps.record({ eventType: FEED_ACQUISITION_EVENT, provider: source.id, workloadClass: 'acquisition', outcome: 'PERMISSION_NEED', reason: resolved.reason.slice(0, 480), evidenceClass: 'MEASURED', measures: { corpus: acq.corpus, listingUrl: acq.listingUrl } });
+        return { ...base, skipped: resolved.reason.slice(0, 300) };
+      }
+      resolvedFrom = acq.listingUrl;
+      url = resolved.url;
+    }
+
+    // 3. Conditional, checkpointed ingest.
+    if (source.shards) {
+      const plan = source.shards(now);
+      const sharded: ShardedSource = {
+        id: source.id,
+        snapshot: plan.snapshot,
+        shards: plan.keys,
+        spacingMs: source.spacingMs ?? 0,
+        fetchShard: async (key) => {
+          const got = await deps.read(plan.url(key), null, headers, source.timeoutMs);
+          return got.status === 'MODIFIED' ? source.parse(parseJsonBody(got.body)) : [];
+        },
+      };
+      const store: IngestStore = deps.ingestStore ?? {
+        checkpoints: async () => [],
+        saveCheckpoint: async () => undefined,
+        store: (id, items) => insertFeedItems(id, items),
+      };
+      const run = await ingestShards(sharded, store, { sleep: deps.sleep, now: () => now });
+      const fetched = run.completed.reduce((n, c) => n + c.read, 0);
+      const inserted = run.completed.reduce((n, c) => n + c.stored, 0);
+      if (run.interruptedAt) throw Object.assign(new Error(run.interruptedAt.error), { partial: { fetched, inserted, resumedPast: run.resumedPast } });
+      result = { ...base, fetched, inserted, duplicates: Math.max(0, fetched - inserted), resumedPast: run.resumedPast };
+      await recordFeedPull({ source: source.id, ok: true, fetched, inserted, error: null, at });
+    } else {
+      const prior = await deps.validators(source.id);
+      const got = await deps.read(url, prior, headers, source.timeoutMs);
+      validators = got.validators;
+      if (got.status === 'NOT_MODIFIED') {
+        outcome = 'NOT_MODIFIED';
+        result = { ...base, notModified: true };
+        await recordFeedPull({ source: source.id, ok: true, fetched: 0, inserted: 0, error: `${NOT_MODIFIED_MARK}: ${got.reason}`.slice(0, 300), at });
+      } else {
+        const items = source.parse(parseJsonBody(got.body));
+        const inserted = await insertFeedItems(source.id, items);
+        result = { ...base, fetched: items.length, inserted, duplicates: Math.max(0, items.length - inserted) };
+        await recordFeedPull({ source: source.id, ok: true, fetched: items.length, inserted, error: null, at });
+      }
+    }
+  } catch (error) {
+    const message = (error instanceof Error ? `${error.name === 'SyntaxError' ? 'SyntaxError: ' : ''}${error.message}` : String(error)).slice(0, 300);
+    const partial = (error as { partial?: { fetched: number; inserted: number; resumedPast: string[] } }).partial;
+    outcome = 'FAILED';
+    result = { ...base, error: message, fetched: partial?.fetched ?? 0, inserted: partial?.inserted ?? 0, ...(partial ? { resumedPast: partial.resumedPast } : {}) };
+    await recordFeedPull({ source: source.id, ok: false, fetched: partial?.fetched ?? 0, inserted: partial?.inserted ?? 0, error: message, at });
+  }
+
+  // 4. Provenance of the pull itself: where, when, which version, format, licence and parser — beside the per-fact provenance extraction attaches.
+  await deps.record({
+    eventType: FEED_ACQUISITION_EVENT,
+    provider: source.id,
+    workloadClass: 'acquisition',
+    outcome,
+    reason: `${source.id}: ${outcome === 'FAILED' ? result.error : `${result.fetched} read, ${result.inserted} stored${result.notModified ? ' (not modified)' : ''}`}`.slice(0, 480),
+    evidenceClass: 'MEASURED',
+    measures: {
+      corpus: acq.corpus,
+      corpusScore: decision.score,
+      location: ask.url,
+      resolvedFrom,
+      retrievedAt: at,
+      validators,
+      format: acq.access.format,
+      updateMechanism: acq.access.updateMechanism,
+      usage: acq.access.usage,
+      publisher: acq.provenance.publisher,
+      license: acq.provenance.license,
+      parserVersion: acq.provenance.parserVersion,
+      pipeline: ACQUISITION_PIPELINE_VERSION,
+      fetched: result.fetched,
+      inserted: result.inserted,
+      resumedPast: result.resumedPast ?? [],
+    },
+  });
+
+  // 5. Connector health: outage, broken parser, schema change and revoked permission are told apart and routed.
+  try {
+    result.health = (await deps.supervise(source.id, source.intervalMs)).outcome;
+  } catch (error) {
+    console.warn(`[feeds] connector health for ${source.id} could not be judged: ${String((error as Error)?.message ?? error)}`);
+    result.health = null;
+  }
+  return result;
+}
+
+/** Pull history for health, without the pulls that only learned nothing changed. */
+async function historyWithoutNotModified(source: string) {
+  const { readPullHistory } = await import('./health.ts');
+  return (await readPullHistory(source)).filter((p) => !(p.ok && (p.error ?? '').startsWith(NOT_MODIFIED_MARK)));
+}
+
+/** The production dependencies of the pipeline. */
+function productionDeps(): Required<Omit<AcquisitionDeps, 'transport' | 'ingestStore'>> & { transport: Transport; ingestStore: IngestStore | null } {
+  return {
+    transport: httpTransport,
+    evaluate: (need) => recordCorporaEvaluation(need, { caller: 'feeds' }),
+    ingestStore: null,
+    supervise: async (source, intervalMs) => (await import('./health.ts')).superviseConnector(source, intervalMs, { history: historyWithoutNotModified }),
+    validators: readValidators,
+    record: recordBinEvent,
+    yields: async () => (await latestSourceYields()).values,
+    recordYields: (now) => recordSourceYields(now),
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  };
 }
 
 /**
  * Pull every due source once. A source that takes a start date is asked only
  * for what was published since its own last success (`pullUrl`); every item is
  * stored once, by its source key, so a repeat costs no storage and no screen.
+ *
+ * Without a test `fetcher`, every source that declares its acquisition goes
+ * through the pipeline above, in yield order: corpus evaluation, access
+ * resolution, a conditional and checkpointed ingest, a provenance row, health
+ * classification; and the window's per-source yield is recorded. A `fetcher`
+ * alone keeps the plain path (one JSON request per source).
  */
 export async function pullDueFeeds(input: {
   now?: Date;
   fetcher?: Fetcher;
   sources?: readonly FeedSource[];
+  /** Run the acquisition pipeline with these dependencies (the production ones by default when no `fetcher` is given). */
+  acquisition?: AcquisitionDeps;
+  /** The project a sharded read checkpoints on; resolved from the shortlist project when absent. */
+  projectId?: string | null;
 } = {}): Promise<FeedPullResult[]> {
   const now = input.now ?? new Date();
   const out: FeedPullResult[] = [];
-  for (const source of input.sources ?? FEED_SOURCES) {
+  const pipelined = input.acquisition !== undefined || !input.fetcher;
+  const prod = pipelined ? productionDeps() : null;
+  const deps = prod ? { ...prod, ...(input.acquisition ?? {}) } : null;
+  let sources = input.sources ?? FEED_SOURCES;
+  if (deps) {
+    try {
+      sources = orderByYield(sources, await deps.yields());
+    } catch (error) {
+      console.warn(`[feeds] source yields unreadable; catalog order kept: ${String((error as Error)?.message ?? error)}`);
+    }
+  }
+  let ingestStore: IngestStore | null | undefined = deps?.ingestStore ?? undefined;
+  for (const source of sources) {
     const state = await pullState(source.id);
     if (now.getTime() < nextPullAt(source, state)) continue;
-    if (source.spacingMs && out.length > 0 && !input.fetcher) {
-      await new Promise((resolve) => setTimeout(resolve, source.spacingMs));
-    }
+    const spacing = source.spacingMs && out.length > 0;
+    if (spacing && deps) await deps.sleep(source.spacingMs!);
+    else if (spacing && !input.fetcher) await new Promise((resolve) => setTimeout(resolve, source.spacingMs));
     const ask = pullUrl(source, state.lastSuccessAt);
+    if (deps && source.acquisition) {
+      if (source.shards && ingestStore == null) {
+        const projectId = input.projectId ?? (await shortlistProject((await getDb().all<{ id: string }>('SELECT id FROM projects ORDER BY created_at')).map((p) => p.id)));
+        ingestStore = projectId ? feedIngestStore(projectId) : null;
+      }
+      const fetcherRead: ConditionalRead | null =
+        input.fetcher && !input.acquisition?.transport
+          ? async (url, _prior, headers, timeoutMs) => {
+              const body = JSON.stringify(await input.fetcher!(url, headers, timeoutMs));
+              return { status: 'MODIFIED', httpStatus: 200, body, validators: { contentHash: contentHashOf(body) }, contentHash: contentHashOf(body) };
+            }
+          : null;
+      out.push(
+        await acquireSource(source as FeedSource & { acquisition: SourceAcquisition }, ask, now, {
+          evaluate: deps.evaluate,
+          supervise: deps.supervise,
+          validators: deps.validators,
+          record: deps.record,
+          sleep: deps.sleep,
+          ingestStore: ingestStore ?? null,
+          read: fetcherRead ?? conditionalFetcher(deps.transport),
+        }),
+      );
+      continue;
+    }
     try {
       const body = await (input.fetcher ?? httpFetcher)(ask.url, source.headers ?? {}, source.timeoutMs);
       const items = source.parse(body);
@@ -187,6 +599,14 @@ export async function pullDueFeeds(input: {
       const message = (error instanceof Error ? error.message : String(error)).slice(0, 300);
       await recordFeedPull({ source: source.id, ok: false, fetched: 0, inserted: 0, error: message, at: now.toISOString() });
       out.push({ source: source.id, inserted: 0, error: message, fetched: 0, duplicates: 0, incremental: ask.incremental });
+    }
+  }
+  // 6. Yield, once per window: the share of what each source acquired that became accepted information and usable leads.
+  if (deps && out.length > 0) {
+    try {
+      await deps.recordYields(now);
+    } catch (error) {
+      console.warn(`[feeds] source yield could not be recorded: ${String((error as Error)?.message ?? error)}`);
     }
   }
   return out;
