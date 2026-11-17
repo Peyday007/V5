@@ -501,6 +501,41 @@ export function correctedEffectiveDateOf(body: string | null | undefined): strin
 const utcDay = (ms: number): number => Date.parse(`${new Date(ms).toISOString().slice(0, 10)}T00:00:00.000Z`);
 
 /**
+ * v3's label and hypothesis, worded against the day the rule runs. v3 keeps a
+ * member while its effective date is at or after the day Brain first held it,
+ * so on a later run a date may already be past; a signal then says the rule
+ * took effect on that date and never asserts "must comply by" a date that has
+ * gone. `dates` is sorted ascending. Pure.
+ */
+export function ruleEffectiveSoonWording(dates: readonly string[], now: Date): { label: string; hypothesis: string } {
+  const today = new Date(now.getTime()).toISOString().slice(0, 10);
+  const past = dates.filter((one) => one < today);
+  const upcoming = dates.filter((one) => one >= today);
+  const first = dates[0]!;
+  const last = dates[dates.length - 1]!;
+  if (past.length === 0) {
+    return {
+      label: `${dates.length} final rule(s) from one agency taking effect by ${last}`,
+      hypothesis: `Businesses this agency regulates must comply by ${first}; some may buy a plain compliance summary or checklist. Not established.`,
+    };
+  }
+  if (upcoming.length === 0) {
+    return {
+      label: `${dates.length} final rule(s) from one agency that took effect by ${last}`,
+      hypothesis:
+        `These rules took effect between ${first} and ${last}, before ${today}; businesses this agency regulates have had to comply since ${first}, ` +
+        'and some may buy a plain compliance summary or checklist after the fact. Not established.',
+    };
+  }
+  return {
+    label: `${dates.length} final rule(s) from one agency, ${past.length} in force since ${first} and ${upcoming.length} taking effect by ${last}`,
+    hypothesis:
+      `${past.length} of these rules took effect on or after ${first}, before ${today}; businesses this agency regulates must comply with the rest by ${upcoming[0]}; ` +
+      'some may buy a plain compliance summary or checklist. Not established.',
+  };
+}
+
+/**
  * RULE_EFFECTIVE_SOON, version 3 (SHADOW). Two causes of v2's recorded misses
  * (DETECTOR_MISSES:RULE_EFFECTIVE_SOON@2), each fixed without lowering a bar:
  *
@@ -520,6 +555,11 @@ const utcDay = (ms: number): number => Date.parse(`${new Date(ms).toISOString().
  *     ("Corrected rule effective YYYY-MM-DD."), and only then falls back to
  *     v2's lookup of the stored corrected record, so a correction whose rule
  *     was published before the lookback is no longer silently dropped.
+ *
+ * Because membership is anchored to the record, a later run can keep a rule
+ * whose date has passed; its label and hypothesis are worded against the run
+ * day (`ruleEffectiveSoonWording`), so no signal claims a business "must comply
+ * by" a date already gone.
  *
  * Grouping stays by issuing agency (the last listed). Free-text dates are still
  * not parsed: Coast Guard 2026-23047, enforced before it was published and
@@ -568,9 +608,10 @@ export const RULE_EFFECTIVE_SOON_V3: Detector = {
     const out: DetectedSignal[] = [];
     for (const [agency, group] of [...groups].sort((a, b) => a[0].localeCompare(b[0]))) {
       const dates = group.members.map((one) => one.effective).sort();
+      const wording = ruleEffectiveSoonWording(dates, now);
       out.push({
         groupKey: `agency:${agency}`,
-        label: `${group.members.length} final rule(s) from one agency taking effect by ${dates[dates.length - 1]}`,
+        label: wording.label,
         entityKey: agency,
         entityName: group.name,
         category: 'REGULATION',
@@ -583,9 +624,9 @@ export const RULE_EFFECTIVE_SOON_V3: Detector = {
           'a rule taking effect names who is regulated, not who will pay for help complying',
           'the effective date is the one the Federal Register states; a delay or stay is not read',
           'a correction carries the effective date of the rule it corrects, as the Federal Register API states it for that rule',
-          'judged against the day Brain first held the record, so a compliance date may already have passed when this is read',
+          'kept against the day Brain first held the record; the wording says which effective dates had passed on the day it ran',
         ],
-        hypothesis: `Businesses this agency regulates must comply by ${dates[0]}; some may buy a plain compliance summary or checklist. Not established.`,
+        hypothesis: wording.hypothesis,
         deliverable: 'DOCUMENT',
       });
     }

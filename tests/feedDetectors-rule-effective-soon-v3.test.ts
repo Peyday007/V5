@@ -17,6 +17,7 @@ import {
   RULE_EFFECTIVE_SOON_V2_LEAD_DAYS,
   RULE_EFFECTIVE_SOON_V3,
   correctedEffectiveDateOf,
+  ruleEffectiveSoonWording,
   effectiveDateOf,
   type DetectorRecord,
 } from '../server/services/feeds/detectors.ts';
@@ -108,6 +109,41 @@ describe('RULE_EFFECTIVE_SOON@3 reads them', () => {
     const corrected = fr('2026-21030', '2026-10-14', 'Nuclear Regulatory Commission', 'Direct final rule. Effective 2026-12-28.');
     expect(members(RULE_EFFECTIVE_SOON_V3.detect([bare, corrected], later))).toContain(bare.id);
     expect(members(RULE_EFFECTIVE_SOON_V3.detect([bare], later))).toEqual([]);
+  });
+});
+
+describe('RULE_EFFECTIVE_SOON@3 never asserts a compliance date that has passed', () => {
+  const faa = (run: string) =>
+    RULE_EFFECTIVE_SOON_V3.detect(missed, new Date(run)).find((s) => s.groupKey === 'agency:federal aviation administration')!;
+
+  it('says "must comply by" only while the date is still ahead of the run', () => {
+    const onTheDay = faa('2026-11-12T12:00:00.000Z');
+    expect(onTheDay.hypothesis).toContain('must comply by 2026-11-12');
+    expect(onTheDay.label).toContain('taking effect by 2026-11-12');
+  });
+
+  it('says the rule took effect, not "must comply by", once the date is behind the run', () => {
+    for (const run of ['2026-11-20T00:00:00.000Z', '2026-12-10T00:00:00.000Z']) {
+      const signal = faa(run);
+      expect(signal.memberIds.sort()).toEqual(['fi_2026-23072', 'fi_2026-23073']);
+      expect(signal.hypothesis).not.toMatch(/must comply by/);
+      expect(signal.hypothesis).toContain('took effect between 2026-11-12 and 2026-11-12');
+      expect(signal.label).toContain('took effect by 2026-11-12');
+      expect(signal.label).not.toContain('taking effect');
+    }
+  });
+
+  it('names only a future date after "must comply by" when some members have passed', () => {
+    const wording = ruleEffectiveSoonWording(['2026-11-12', '2026-12-28'], new Date('2026-11-20T00:00:00.000Z'));
+    expect(wording.hypothesis).toContain('must comply with the rest by 2026-12-28');
+    expect(wording.hypothesis).not.toContain('must comply by 2026-11-12');
+    expect(wording.label).toContain('1 in force since 2026-11-12');
+    expect(wording.label).toContain('1 taking effect by 2026-12-28');
+  });
+
+  it('keeps the NRC correction worded as upcoming while its date is ahead', () => {
+    const nrc = RULE_EFFECTIVE_SOON_V3.detect(missed, later).find((s) => s.groupKey === 'agency:nuclear regulatory commission')!;
+    expect(nrc.hypothesis).toContain('must comply by 2026-12-28');
   });
 });
 
