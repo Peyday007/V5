@@ -539,6 +539,46 @@ export interface YieldJob {
    * dropped and never given a guessed time (invariant 39).
    */
   timeMeasured?: boolean;
+  /**
+   * Why the rows give no readable run time, when they give none: what the
+   * loader actually read, so a failing window's cause is shown from its job
+   * rows rather than inferred from a sum (`JobTimeIssue`).
+   */
+  timeIssue?: JobTimeIssue | null;
+}
+
+/**
+ * What a job row's run time actually was when no measured time could be read
+ * from it:
+ *  - NO_DURATION: the row records no duration at all;
+ *  - NON_FINITE_DURATION: the duration is not a finite number (NaN, Infinity, text);
+ *  - NEGATIVE_DURATION: the duration is below zero;
+ *  - OVER_CAP: the duration is beyond `MAX_READABLE_JOB_MS`;
+ *  - UNREADABLE_TIMESTAMP: the job's start or end timestamp does not parse;
+ *  - NO_END: a bin's closing event gives no readable time.
+ */
+export const JOB_TIME_ISSUES = ['NO_DURATION', 'NON_FINITE_DURATION', 'NEGATIVE_DURATION', 'OVER_CAP', 'UNREADABLE_TIMESTAMP', 'NO_END'] as const;
+export type JobTimeIssue = (typeof JOB_TIME_ISSUES)[number];
+
+/**
+ * The job-time inputs of one window, as its job rows gave them: how many jobs
+ * had a readable run time, how many of those ran for zero time, how many had
+ * none and why, and a few job ids per reason so a reader can open the rows.
+ * Recorded on every decision row's cost record, and re-read for a failing row
+ * written before it was, so a counted-once failure's cause is shown from the
+ * job rows themselves (RES-15-5).
+ */
+export interface JobTimeInputs {
+  jobs: number;
+  measured: number;
+  /** Measured jobs whose readable run time is exactly zero. */
+  zeroMeasured: number;
+  unmeasured: number;
+  issues: Partial<Record<JobTimeIssue, number>>;
+  /** Up to five job ids per issue. */
+  examples: { jobId: string; issue: JobTimeIssue }[];
+  /** The longest readable run time among the window's jobs; null when none was readable. */
+  maxMeasuredMs: number | null;
 }
 
 export const YIELD_OUTPUT_KINDS = ['ACCEPTED_CLAIM', 'PACKET_FILED', 'NEW_MECHANISM', 'QUALIFIED_POSITION', 'EXECUTABLE_OFFER', 'PAID_TRANSACTION'] as const;
@@ -594,7 +634,7 @@ export interface ResearchYieldReading {
   lanes: Record<string, YieldBucket>;
   purposes: Record<PurposeKey, YieldBucket>;
   /** Distinct jobs, the job time and money they spent, and whether every purpose's share sums back to it. */
-  costCountedOnce: { jobs: number; totalJobMs: number; purposeJobMs: number; totalCostMinor: number | null; purposeCostMinor: number | null; holds: boolean; /** Jobs counted once whose run time no row gives (charged 0 measured time). */ unmeasuredJobs?: number; /** Which way the sums agree or disagree, read from the numbers themselves (`diagnoseCostCountedOnce`). */ cause?: CostOnceCause; /** |total − purposes| job time, when both are finite. */ jobMsGap?: number | null };
+  costCountedOnce: { jobs: number; totalJobMs: number; purposeJobMs: number; totalCostMinor: number | null; purposeCostMinor: number | null; holds: boolean; /** Jobs counted once whose run time no row gives (charged 0 measured time). */ unmeasuredJobs?: number; /** The window's job-time inputs as the rows gave them (`JobTimeInputs`). */ jobTimeInputs?: JobTimeInputs; /** Which way the sums agree or disagree, read from the numbers themselves (`diagnoseCostCountedOnce`). */ cause?: CostOnceCause; /** |total − purposes| job time, when both are finite. */ jobMsGap?: number | null };
   /** Each job's attribution basis, so "why is this job SELF_IMPROVEMENT" is answerable. */
   attributions: { jobId: string; lane: string; purposes: PurposeKey[]; basis: string[]; goalId?: string | null; jobMs?: number }[];
   notes: string[];
@@ -638,6 +678,19 @@ export function sanitizeYieldJob(job: YieldJob, windowStartMs: number): { job: Y
   const durationOk = finite(job.durationMs) && job.durationMs >= 0 && job.durationMs <= MAX_READABLE_JOB_MS;
   const startOk = finite(job.startMs);
   const unmeasured = job.timeMeasured === false || !durationOk || !startOk;
+  const timeIssue: JobTimeIssue | null = !unmeasured
+    ? null
+    : job.timeMeasured === false && job.timeIssue
+      ? job.timeIssue
+      : !finite(job.durationMs)
+        ? job.durationMs === null || job.durationMs === undefined ? 'NO_DURATION' : 'NON_FINITE_DURATION'
+        : job.durationMs < 0
+          ? 'NEGATIVE_DURATION'
+          : job.durationMs > MAX_READABLE_JOB_MS
+            ? 'OVER_CAP'
+            : !startOk
+              ? 'UNREADABLE_TIMESTAMP'
+              : job.timeIssue ?? 'NO_DURATION';
   const fallbackStart = finite(windowStartMs) ? windowStartMs : 0;
   const known = (job.purposes ?? []).filter((p): p is PurposeKey => (PURPOSE_KEYS as readonly string[]).includes(p));
   const distinct = [...new Set(known)];
@@ -653,7 +706,62 @@ export function sanitizeYieldJob(job: YieldJob, windowStartMs: number): { job: Y
       queueWaitMs: finite(job.queueWaitMs) ? Math.max(0, job.queueWaitMs) : null,
       costMinor: finite(job.costMinor) && job.costMinor >= 0 && job.costMinor <= MAX_READABLE_COST_MINOR ? job.costMinor : null,
       timeMeasured: !unmeasured,
+      timeIssue,
     },
+  };
+}
+
+/** An empty `JobTimeInputs`. */
+export function emptyJobTimeInputs(): JobTimeInputs {
+  return { jobs: 0, measured: 0, zeroMeasured: 0, unmeasured: 0, issues: {}, examples: [], maxMeasuredMs: null };
+}
+
+/** Fold one sanitized job into a window's `JobTimeInputs`. Mutates `into`. */
+export function countJobTimeInput(into: JobTimeInputs, job: YieldJob): void {
+  into.jobs += 1;
+  if (job.timeMeasured === false) {
+    const issue = job.timeIssue ?? 'NO_DURATION';
+    into.unmeasured += 1;
+    into.issues[issue] = (into.issues[issue] ?? 0) + 1;
+    if (into.examples.filter((e) => e.issue === issue).length < 5) into.examples.push({ jobId: job.id, issue });
+    return;
+  }
+  into.measured += 1;
+  if (job.durationMs === 0) into.zeroMeasured += 1;
+  into.maxMeasuredMs = into.maxMeasuredMs === null ? job.durationMs : Math.max(into.maxMeasuredMs, job.durationMs);
+}
+
+/**
+ * What a recorded counted-once failure's job inputs show caused it, when its
+ * own sums cannot tell (`diagnoseCostCountedOnce` says FLAG_DISAGREES or
+ * NON_FINITE_JOB_TIME). Read only from the window's job-time inputs — the
+ * job rows themselves — never from the row's shape:
+ *  - NON_FINITE_JOB_TIME: at least one job row's duration is non-finite or beyond the readable cap;
+ *  - ALL_JOBS_UNMEASURED: every job in the window had no readable run time, so both sums are 0 by construction;
+ *  - ALL_JOBS_ZERO_TIME: every job had a readable run time and every one was 0;
+ *  - NOT_SHOWN: the inputs were not read, or they do not account for the row's numbers.
+ * Pure.
+ */
+export type JobInputCause = 'NON_FINITE_JOB_TIME' | 'ALL_JOBS_UNMEASURED' | 'ALL_JOBS_ZERO_TIME' | 'NOT_SHOWN';
+
+export function causeFromJobInputs(inputs: JobTimeInputs | null | undefined): { cause: JobInputCause; basis: string } {
+  if (!inputs) return { cause: 'NOT_SHOWN', basis: "the window's job rows were not read" };
+  if (inputs.jobs === 0) return { cause: 'NOT_SHOWN', basis: "the window's job rows read no jobs" };
+  const ids = (issues: JobTimeIssue[]) => inputs.examples.filter((e) => issues.includes(e.issue)).map((e) => e.jobId).join(', ');
+  const nonFinite = (inputs.issues.NON_FINITE_DURATION ?? 0) + (inputs.issues.OVER_CAP ?? 0);
+  if (nonFinite > 0) {
+    return { cause: 'NON_FINITE_JOB_TIME', basis: `${nonFinite} of ${inputs.jobs} job row(s) give a non-finite or unreadably large duration (${ids(['NON_FINITE_DURATION', 'OVER_CAP'])})` };
+  }
+  const issues = Object.entries(inputs.issues).map(([k, n]) => `${k} ${n}`).join(', ');
+  if (inputs.measured === 0) {
+    return { cause: 'ALL_JOBS_UNMEASURED', basis: `all ${inputs.jobs} job row(s) give no readable run time (${issues}; e.g. ${ids([...JOB_TIME_ISSUES])}), so both sums are 0` };
+  }
+  if (inputs.maxMeasuredMs === 0) {
+    return { cause: 'ALL_JOBS_ZERO_TIME', basis: `all ${inputs.measured} readable job row(s) ran for 0 ms${inputs.unmeasured ? ` and ${inputs.unmeasured} give none (${issues})` : ''}, so both sums are 0` };
+  }
+  return {
+    cause: 'NOT_SHOWN',
+    basis: `${inputs.measured} of ${inputs.jobs} job row(s) give readable run time (longest ${inputs.maxMeasuredMs} ms)${issues ? `; unreadable: ${issues}` : ''}: the job rows do not account for the recorded sums`,
   };
 }
 
@@ -746,6 +854,7 @@ export function summarizeResearchYield(input: { since: string; until: string; jo
   const seen = new Set<string>();
   const kept: YieldJob[] = [];
   let unmeasuredJobs = 0;
+  const jobTimeInputs = emptyJobTimeInputs();
   // Each job's charge in exact integer thousandths: the total takes it whole,
   // every lane takes it whole, and its purposes take parts that sum back to it.
   // The purposes therefore sum to the total by construction — not within a
@@ -778,6 +887,7 @@ export function summarizeResearchYield(input: { since: string; until: string; jo
     seen.add(raw.id);
     const { job, unmeasured } = sanitizeYieldJob(raw, from);
     if (unmeasured) unmeasuredJobs += 1;
+    countJobTimeInput(jobTimeInputs, job);
     kept.push(job);
     const ms = toUnits(job.durationMs);
     const cost = job.costMinor === null ? null : toUnits(job.costMinor);
@@ -859,6 +969,7 @@ export function summarizeResearchYield(input: { since: string; until: string; jo
       purposeCostMinor,
       holds,
       unmeasuredJobs,
+      jobTimeInputs,
       cause: diagnosis.cause,
       jobMsGap: diagnosis.jobMsGap,
     },
@@ -1045,6 +1156,15 @@ export async function researchYieldByPurpose(input: { since: string; until?: str
     const atMs = Date.parse(String(row.at));
     // A duration or an end time the rows do not give is unmeasured, never guessed and never NaN.
     const measured = finite(ms) && ms >= 0 && finite(atMs);
+    const laneIssue: JobTimeIssue | null = measured
+      ? null
+      : row.ms === null || row.ms === undefined || row.ms === ''
+        ? 'NO_DURATION'
+        : !finite(ms)
+          ? 'NON_FINITE_DURATION'
+          : ms < 0
+            ? 'NEGATIVE_DURATION'
+            : 'UNREADABLE_TIMESTAMP';
     const duration = measured ? ms : 0;
     const start = finite(atMs) ? atMs - duration : windowStart;
     const queuedMs = row.queued_at ? Date.parse(String(row.queued_at)) : Number.NaN;
@@ -1059,6 +1179,7 @@ export async function researchYieldByPurpose(input: { since: string; until?: str
       startMs: start,
       durationMs: duration,
       timeMeasured: measured,
+      timeIssue: laneIssue,
       queueWaitMs: measured && finite(queuedMs) ? Math.max(0, start - queuedMs) : null,
       outcome: failed ? 'FAILED' : 'COMPLETED',
       failureCause: failed ? failureClass(row.reason) : null,
@@ -1092,6 +1213,7 @@ export async function researchYieldByPurpose(input: { since: string; until?: str
       startMs: at,
       durationMs: measured ? Math.max(0, endRead - at) : 0,
       timeMeasured: measured,
+      timeIssue: measured ? null : !atOk ? 'UNREADABLE_TIMESTAMP' : 'NO_END',
       queueWaitMs: atOk && queuedFrom && finite(queuedMs) ? Math.max(0, at - queuedMs) : null,
       outcome: !close ? 'IN_FLIGHT' : completed ? 'COMPLETED' : 'FAILED',
       failureCause: close && !completed ? reason : null,

@@ -57,7 +57,7 @@ import { reconcileRegisterIfDue, type RegisterPassReport } from './openQuestions
 import { recordDecisionsIfDue } from './decisionRecord.ts';
 import { reconcileCalibrationIfDue, type CalibrationPassReport } from './calibration.ts';
 import { reconcileFactChangesIfDue, type ReconsiderPassReport } from './reconsider.ts';
-import { diagnoseCostCountedOnce, type CostOnceCause, type LaneCapacityReading, type ResearchYieldReading } from './researchYield.ts';
+import { causeFromJobInputs, diagnoseCostCountedOnce, type CostOnceCause, type JobInputCause, type JobTimeInputs, type LaneCapacityReading, type ResearchYieldReading } from './researchYield.ts';
 import {
   APPLICABLE_REMEDIES,
   COMMERCIAL_FLOOR,
@@ -1243,6 +1243,7 @@ export function verifiedCostReading(once: unknown): ResearchYieldReading['costCo
     totalCostMinor: money(o.totalCostMinor),
     purposeCostMinor: money(o.purposeCostMinor),
     unmeasuredJobs: num(o.unmeasuredJobs),
+    ...(o.jobTimeInputs && typeof o.jobTimeInputs === 'object' ? { jobTimeInputs: o.jobTimeInputs } : {}),
     holds: o.holds === true && [o.totalJobMs, o.purposeJobMs].every((n) => typeof n === 'number' && Number.isFinite(n)),
   };
 }
@@ -1294,11 +1295,15 @@ export interface PriorCostFailure {
   /** The cause the row itself recorded, when the code that wrote it recorded one. */
   recordedCause: string | null;
   /**
-   * When the row's numbers cannot tell the cause apart and the row's shape
-   * can: equal zero sums over counted jobs with a false flag are what a
-   * non-finite sum looks like after an earlier recorder coerced it to 0.
+   * When the row's numbers cannot tell the cause apart (FLAG_DISAGREES or
+   * NON_FINITE_JOB_TIME), what the window's job rows show
+   * (`causeFromJobInputs`): read from the inputs the row recorded, or from
+   * its window's job rows re-read — never inferred from the row's shape. Null
+   * when the row's own numbers already show the cause.
    */
-  inferred: CostOnceCause | null;
+  shownByJobs: JobInputCause | null;
+  /** The job-time inputs that cause was read from, and where they came from. */
+  jobInputs: (JobTimeInputs & { source: 'RECORDED' | 'REREAD' }) | null;
   /** Which recorder wrote it: fingerprints without a leading `held` predate that change. */
   recorder: 'HELD_IN_FINGERPRINT' | 'BEFORE_HELD_IN_FINGERPRINT';
   jobMsGap: number | null;
@@ -1306,9 +1311,47 @@ export interface PriorCostFailure {
   basis: string;
 }
 
+/** The window a decision row recorded, as a key and a readable window; null when it recorded none. */
+export function recordedWindow(detail: Record<string, unknown> | null): { key: string; since: string; until: string } | null {
+  const w = detail?.window as { since?: unknown; until?: unknown } | undefined;
+  if (!w || typeof w.since !== 'string' || typeof w.until !== 'string') return null;
+  return { key: `${w.since}|${w.until}`, since: w.since, until: w.until };
+}
+
+/** How many failing windows one pass re-reads job rows for, earliest first: a bound on the reads, not on what is recorded. */
+export const PRIOR_WINDOW_REREADS = 6;
+
+/** Whether a failure's own numbers leave its cause to the job rows. */
+const needsJobInputs = (cause: CostOnceCause) => cause === 'FLAG_DISAGREES' || cause === 'NON_FINITE_JOB_TIME';
+
+/**
+ * The windows of the failing rows whose cause only their job rows can show
+ * and that recorded no job inputs themselves, earliest first, at most `limit`.
+ * Pure.
+ */
+export function priorWindowsToReread(rows: readonly { detail: Record<string, unknown> | null; at: string }[], limit = PRIOR_WINDOW_REREADS): { key: string; since: string; until: string }[] {
+  const out = new Map<string, { key: string; since: string; until: string }>();
+  for (const row of [...rows].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0))) {
+    const d = row.detail;
+    if (!d || d.held === true) continue;
+    const once = d.costCountedOnce as Record<string, unknown> | undefined;
+    if (once && once.holds === true) continue;
+    if (!needsJobInputs(diagnoseCostCountedOnce(once).cause)) continue;
+    if (once && once.jobTimeInputs && typeof once.jobTimeInputs === 'object') continue;
+    const w = recordedWindow(d);
+    if (w && !out.has(w.key)) out.set(w.key, w);
+    if (out.size >= limit) break;
+  }
+  return [...out.values()];
+}
+
 /**
  * The earliest cause of every recorded counted-once failure, read from the
  * production rows themselves rather than asserted by a repair (RES-15-5).
+ * Where a row's own sums cannot tell its cause, the cause is read from its
+ * window's job-time inputs — those the row recorded, or `reread` (its window's
+ * job rows read again, keyed by `recordedWindow`) — and is NOT_SHOWN when
+ * neither is available. Nothing is inferred from the row's shape.
  * Takes the decision rows newest first, keeps the measured ones (`held` is not
  * true — what the probe judges) whose `costCountedOnce.holds` is not true, and
  * diagnoses each from its own numbers. JSON writes NaN and Infinity as `null`,
@@ -1316,9 +1359,12 @@ export interface PriorCostFailure {
  * all reads as NOT_RECORDED. Oldest first, so the first entry is the earliest
  * failure on record. Pure.
  */
-export function diagnosePriorCostFailures(rows: readonly { detail: Record<string, unknown> | null; at: string }[]): {
+export function diagnosePriorCostFailures(
+  rows: readonly { detail: Record<string, unknown> | null; at: string }[],
+  reread: ReadonlyMap<string, JobTimeInputs> = new Map(),
+): {
   failures: PriorCostFailure[];
-  causes: Partial<Record<CostOnceCause, number>>;
+  causes: Partial<Record<CostOnceCause | JobInputCause, number>>;
   earliest: PriorCostFailure | null;
 } {
   const failures: PriorCostFailure[] = [];
@@ -1329,27 +1375,35 @@ export function diagnosePriorCostFailures(rows: readonly { detail: Record<string
     if (once && once.holds === true) continue;
     const diagnosis = diagnoseCostCountedOnce(once);
     const fingerprint = typeof d.fingerprint === 'string' ? d.fingerprint : '?';
-    const jobs = once && typeof once.jobs === 'number' ? once.jobs : 0;
-    const inferred =
-      diagnosis.cause === 'FLAG_DISAGREES' && once && once.totalJobMs === 0 && once.purposeJobMs === 0 && jobs > 0 ? ('NON_FINITE_JOB_TIME' as const) : null;
+    let shownByJobs: JobInputCause | null = null;
+    let jobInputs: PriorCostFailure['jobInputs'] = null;
+    let jobBasis = '';
+    if (needsJobInputs(diagnosis.cause)) {
+      const recorded = once && once.jobTimeInputs && typeof once.jobTimeInputs === 'object' ? (once.jobTimeInputs as JobTimeInputs) : null;
+      const w = recordedWindow(d);
+      const again = w ? reread.get(w.key) ?? null : null;
+      jobInputs = recorded ? { ...recorded, source: 'RECORDED' } : again ? { ...again, source: 'REREAD' } : null;
+      const shown = causeFromJobInputs(jobInputs);
+      shownByJobs = shown.cause;
+      jobBasis = `; job rows (${jobInputs ? jobInputs.source.toLowerCase() : w ? 'not re-read' : 'no window recorded'}): ${shown.basis}`;
+    }
     failures.push({
       at: row.at,
       fingerprint: fingerprint.slice(0, 400),
       cause: diagnosis.cause,
       recordedCause: once && typeof once.cause === 'string' ? once.cause : null,
-      inferred,
+      shownByJobs,
+      jobInputs,
       recorder: fingerprint.startsWith('{"held"') ? 'HELD_IN_FINGERPRINT' : 'BEFORE_HELD_IN_FINGERPRINT',
       jobMsGap: diagnosis.jobMsGap,
       costGap: diagnosis.costGap,
-      basis: inferred
-        ? `${diagnosis.detail}; ${jobs} job(s) counted with both sums 0 and holds false: a non-finite sum coerced to 0 by the recorder`
-        : diagnosis.detail,
+      basis: `${diagnosis.detail}${jobBasis}`,
     });
   }
   failures.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
-  const causes: Partial<Record<CostOnceCause, number>> = {};
+  const causes: Partial<Record<CostOnceCause | JobInputCause, number>> = {};
   for (const f of failures) {
-    const c = f.inferred ?? f.cause;
+    const c = f.shownByJobs && f.shownByJobs !== 'NOT_SHOWN' ? f.shownByJobs : f.cause;
     causes[c] = (causes[c] ?? 0) + 1;
   }
   return { failures, causes, earliest: failures[0] ?? null };
@@ -1407,7 +1461,14 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
   const fingerprint = allocationFingerprint({ ...decision, held: decision.held || heldForCost });
   const windowKey = allocationWindowKey(window.until);
   const history = ports.recentDecisions ? await ports.recentDecisions(ALLOCATION_AUDIT_ROWS) : previous ? [previous] : [];
-  const prior = diagnosePriorCostFailures(history);
+  // A failing row written before job inputs were recorded has its window's job
+  // rows read again (append-only event rows, so the same window reads the same jobs).
+  const reread = new Map<string, JobTimeInputs>();
+  for (const w of priorWindowsToReread(history)) {
+    const again = (await ports.readYield({ since: w.since, until: w.until })).costCountedOnce.jobTimeInputs;
+    if (again) reread.set(w.key, again);
+  }
+  const prior = diagnosePriorCostFailures(history, reread);
   const audit = { rowsRead: history.length, failing: prior.failures.length, causes: prior.causes, earliest: prior.earliest, failures: prior.failures.slice(-10) };
   const floors = {
     exploration: EXPLORATION_FLOOR,
