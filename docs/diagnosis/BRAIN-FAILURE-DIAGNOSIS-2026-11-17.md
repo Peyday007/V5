@@ -134,3 +134,28 @@ See F1–F7 above. Each one gives the cause, file:line, run IDs, the smallest ch
 - ~06:02Z: F1, F2, F3 sent to the repair owner (session_01QF5Tk7etm6MGmaFuHMd6eZ) by send_message (delivered, priority next).
 - ~06:05Z: the repair session has been stalled since 06:06Z on a "Send Message" permission prompt (its own reply). The owner was push-notified to approve or deny it. This blocks the repair work, not this diagnosis.
 - First-wave review (before the 30-min checkpoint): all three first-wave investigators finished (assignment, research yield, research→planner, surge/learning). The second wave is running: why the goal's research rounds end without a report, plus an independent adversarial review. Approach unchanged; evidence is being obtained.
+
+---
+
+# READINESS VERIFICATION — deadline 15:00Z (10 a.m. Detroit), owner message 07:30:51Z
+
+- Deadline trigger: trig_017oiQnAZANYV7fgBU8o9umk (15:00Z). Warning: trig_01H6qHPnSuWRfqC6FJmx5V7r (13:07Z). Both fire into this session, and the report is delivered here.
+- Division of work, agreed 07:36Z:
+  - The intelligence-recovery session (session_01QF5Tk7etm6MGmaFuHMd6eZ) is the integration owner. It merges in batches and runs the only Deploy dispatches.
+  - Workstreams W1–W8 are listed in docs/intelligence-recovery/surge-readiness-plan-2026-11-17.md on branch claude/brain-intelligence-recovery-s0dl4l.
+  - This session owns independent verification and the readiness decision.
+  - It does not push to production before the final release. A docs push would cancel the Postgres gate on the release candidate.
+
+## Verification checklist (owner §5), each closed only by a production reading
+
+| V | Owner §5 item | Check | Status |
+|---|---|---|---|
+| V1 | Eligible work reaches intended workers | runpod-report or capacity: gpt-oss-120b takes RESEARCH_FRAGMENT with no HELD BACK; the goal's rounds get missions (#1024) | pending eda04071 |
+| V2 | Research accepted and stored under the correct question/goal | cash report: monetization ANSWERED rises above 13 on snake_case lanes (#1023); the goal's accepted claims are above 0 | pending |
+| V3 | Parked work progresses | parked packets with accepted claims get a SYSTEM synthesis-spent-recovery item and reach HARVESTED (#1025) | pending |
+| V4 | Research reaches and influences plans | the goal plan shows arrangement members with justified inputs above 0 (W2), plus one traced decision | pending W2 |
+| V5 | Missing knowledge produces follow-up, not a dead end | BRAIN_PROPOSES attributes are not commissioned; unresolved questions get a replan or assumption (W3) | pending W3 |
+| V6 | Knowledge remains available | an accepted fact is read by a later plan reading (card fact → goalScenario inferOr) | pending |
+| V7 | Cost accounting and spending controls | budget-cap shutdown evidence (#1002+#1011, pod 5e8ks9cr2o8yml 03:01Z) stays valid unless budget code changes; the W6 GPU hours show RunPod-billed spend matching the cap | reuse; re-check code diff |
+| V8 | Sustained measured workload without a growing bottleneck | W6 stepped load test: accepted claims/h, queue drain, CPU/DB below saturation | pending W6 |
+| G | Production gate | Postgres suite green and Deploy success on the released SHA; arrangementLibrary:284 accounted for (W5) | eda04071: suite rerun green (44030756257); Deploy 44036476327 running |
