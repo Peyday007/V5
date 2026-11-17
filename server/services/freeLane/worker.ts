@@ -33,6 +33,7 @@ import { createHash } from 'node:crypto';
 import { getDb } from '../../db/database.ts';
 import { CONNECTOR_SCOPES, type ClaimedWork, type Principal, type WorkItemRow } from '../../domain/types.ts';
 import { findingTakesQualifier, isStructuralFinding } from '../../domain/industry.ts';
+import { isBrainProject } from '../../domain/binPurpose.ts';
 import { createWorker, getWorkerByName, grantMembership, listMembershipsForPrincipal } from '../../repos/identity.ts';
 import { CLAIMABLE_SQL, claimWork, queueNow } from '../../repos/workQueue.ts';
 import { completeUnleasedBin, getBin, recordBinEvent } from '../../repos/bins.ts';
@@ -354,6 +355,7 @@ async function owningPurpose(item: Pick<WorkItemRow, 'bin_id' | 'orchestration_i
 
 export function resetPurposeCache(): void {
   purposeCache.clear();
+  brainProjectCache.clear();
 }
 
 /**
@@ -361,12 +363,43 @@ export function resetPurposeCache(): void {
  * Brain's own only for the improvement loop's method research while its
  * activation gate is ACTIVE, within that gate's lease cap (§87, `activation.ts`).
  */
-export async function freeLaneAdmits(item: Pick<WorkItemRow, 'id' | 'bin_id' | 'orchestration_id'>): Promise<boolean> {
+export async function freeLaneAdmits(
+  item: Pick<WorkItemRow, 'id' | 'bin_id' | 'orchestration_id'> & { project_id?: string | null },
+): Promise<boolean> {
   const purpose = await owningPurpose(item);
   if (purpose !== null && (FREE_LANE_PURPOSES as readonly string[]).includes(purpose)) return true;
+  /*
+   * No purpose: no bin owns the item, or its bin was never tagged (the retag
+   * pass reads live bins only). Production, 2026-11-17 (cash report, Cash Mode
+   * 1): 28 research items, fragments and a plan, sat QUEUED at 0 attempts for
+   * up to two months under RESEARCHING packets with no mission and no bin.
+   * Routines refuse a bin-less item outside Brain's own projects
+   * (`workItemPurposeAdmits`), and this refused every bin-less item, so the two
+   * claimants together left one class of work to nobody. The project decides,
+   * the same deterministic rule `workItemPurposeAdmits` applies from the other
+   * side: Brain's own and technical projects are Claude's, and everything else
+   * is commercial research, which is the free lane's (§85). A bin that does
+   * carry a purpose still decides, and BLOCKED_LEGAL is never admitted.
+   */
+  if (purpose === null) return !(await brainProjectItem(item.project_id ?? null));
   if (purpose !== 'BRAIN_IMPROVEMENT') return false;
   const { freeLaneMayTakeImprovement } = await import('../improvement/activation.ts');
   return freeLaneMayTakeImprovement(item);
+}
+
+/** Whether an item's project is Brain's own (`isBrainProject`). Unknown counts as Brain's, so it is not taken. */
+const brainProjectCache = new Map<string, boolean>();
+async function brainProjectItem(projectId: string | null): Promise<boolean> {
+  if (!projectId) return true;
+  const hit = brainProjectCache.get(projectId);
+  if (hit !== undefined) return hit;
+  const project = await getDb().get<{ slug: string; purpose: string }>(
+    'SELECT slug, purpose FROM projects WHERE id = ?',
+    [projectId],
+  );
+  const brain = project ? isBrainProject(project) : true;
+  brainProjectCache.set(projectId, brain);
+  return brain;
 }
 
 /** Which worker takes which role, so verification is not done by the model that found the claim. */
