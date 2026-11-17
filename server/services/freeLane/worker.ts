@@ -485,10 +485,63 @@ export function firstJson(text: string): Record<string, unknown> | null {
   if (start < 0 || end <= start) return null;
   try {
     const parsed = JSON.parse(body.slice(start, end + 1)) as unknown;
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed as Record<string, unknown>;
   } catch {
-    return null;
+    // Braces outside the answer: read below.
   }
+  /*
+   * The first `{` to the last `}` is not one value when prose around the
+   * answer has braces of its own ("claim {clm_…}", a closing remark that
+   * quotes a field) or when a draft precedes it. Production, 2026-11-17:
+   * RESEARCH_VERIFY replies of 2–5k characters were read as "no JSON" and
+   * re-asked word for word. The answer is then the last whole JSON value;
+   * whatever it holds still meets every check after this.
+   */
+  return lastJsonValue(answer);
+}
+
+/**
+ * Why a reply held no JSON Brain could read, in words a report can group by.
+ * Pure. Only called on a reply `firstJson` returned null for.
+ */
+export function replyShape(text: string): string {
+  if (text.trim() === '') return 'empty';
+  let answer = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
+  const closed = answer.search(/<\/think>(?![\s\S]*<\/think>)/i);
+  if (closed >= 0) answer = answer.slice(closed + '</think>'.length);
+  if (/<think>/i.test(answer)) return 'reasoning never closed';
+  const from = answer.search(/[{[]/);
+  if (from < 0) return 'prose only';
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = from; i < answer.length; i += 1) {
+    const ch = answer[i]!;
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+    } else if (ch === '"') {
+      if (depth > 0) inString = true;
+    } else if (ch === '{' || ch === '[') depth += 1;
+    else if ((ch === '}' || ch === ']') && depth > 0) depth -= 1;
+  }
+  return depth > 0 || inString ? 'cut off inside its JSON' : 'JSON that does not parse';
+}
+
+/**
+ * The second ask after a reply that held no JSON. The same prompt again is
+ * the same reply again (temperature 0: production 2026-11-17 logged identical
+ * 4527-, 4082-, 4855- and 2329-character verify replies on every retry), so the
+ * second ask says what was wrong. Nothing about what the answer must contain changes.
+ */
+export function noJsonRepair(prompt: string, shape: string): string {
+  const cut = shape === 'cut off inside its JSON' || shape === 'reasoning never closed';
+  return (
+    `${prompt}\n\nYour previous reply held no JSON object Brain could read (${shape}). Reply again with ONLY ` +
+    'the one JSON object: no prose or reasoning before or after it, and no code fence.' +
+    (cut ? ' It ran out of room before the object closed, so keep every free-text field to one short sentence.' : '')
+  );
 }
 
 /** An object, or a non-empty list of objects as `{claims:[…]}`; anything else is not an answer. */
@@ -555,6 +608,22 @@ export function listedClaims(raw: Record<string, unknown>): Record<string, unkno
   if (isObject(value) && typeof value['claim'] === 'string') return [value];
   if (value === undefined && typeof raw['claim'] === 'string') return [raw];
   return [];
+}
+
+/**
+ * The verdicts a verification answer lists: under `verdicts`, or a bare list of
+ * them (which `firstJson` reads as `{claims:[…]}`). A verdict keyed `claimId` —
+ * the key the claims were shown to the model under — is read as `claim_id`.
+ * Every verdict read here is still judged by `brain_submit_verification` whole.
+ */
+export function verdictsOf(raw: Record<string, unknown>): Record<string, unknown>[] {
+  const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+  const list = Array.isArray(raw['verdicts']) ? raw['verdicts'] : Array.isArray(raw['claims']) ? raw['claims'] : [];
+  return (list as unknown[]).filter(isObject).map((v) => {
+    if (v['claim_id'] !== undefined || typeof v['claimId'] !== 'string') return v;
+    const { claimId, ...rest } = v;
+    return { claim_id: claimId, ...rest };
+  });
 }
 
 /**
@@ -649,11 +718,13 @@ async function ask(
   model: string,
   prompt: string,
   onFail: (why: string) => void = () => undefined,
+  options: { json?: boolean } = {},
 ): Promise<Record<string, unknown> | null> {
+  let asked = prompt;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     let text = '';
     try {
-      text = await completer({ ...config, timeoutMs: 180_000 }, model, SYSTEM, prompt, { maxTokens: 8000 });
+      text = await completer({ ...config, timeoutMs: 180_000 }, model, SYSTEM, asked, { maxTokens: 8000, ...(options.json ? { json: true } : {}) });
     } catch (error) {
       const message = String((error as Error).message ?? error);
       // On the GPU slot the error that reaches here is the fallback's: the GPU's
@@ -666,7 +737,10 @@ async function ask(
     }
     const parsed = firstJson(text);
     if (parsed) return parsed;
-    onFail(`no JSON in a ${text.length}-character reply`);
+    const shape = replyShape(text);
+    onFail(`no JSON in a ${text.length}-character reply: ${shape}`);
+    // An empty reply says nothing and is asked again as it was; a reply with words is told what was wrong.
+    if (shape !== 'empty') asked = noJsonRepair(prompt, shape);
   }
   return null;
 }
@@ -965,10 +1039,17 @@ export function meteredIo(
 }
 
 /** `ask` for one item, recording why on the item when the model gives nothing usable. */
-async function askFor(ctx: Ctx, prompt: string): Promise<Record<string, unknown> | null> {
-  return ask(ctx.completer, ctx.config, ctx.worker.model, prompt, (why) => {
-    ctx.why = why;
-  });
+async function askFor(ctx: Ctx, prompt: string, options: { json?: boolean } = {}): Promise<Record<string, unknown> | null> {
+  return ask(
+    ctx.completer,
+    ctx.config,
+    ctx.worker.model,
+    prompt,
+    (why) => {
+      ctx.why = why;
+    },
+    options,
+  );
 }
 
 /**
@@ -1431,15 +1512,17 @@ async function verify(ctx: Ctx, assignment: Record<string, unknown>): Promise<bo
     'For each claim decide from the page text alone whether the page supports it and whether its scope ' +
     'matches the fragment. An unreadable page supports nothing. Then judge sufficiency for the fragment and ' +
     `list missing lanes. Reply with one JSON object matching: ${JSON.stringify(schema)}`;
-  const answer = await askFor(ctx, prompt);
+  // A verification is one JSON object by definition: asked for as one (`response_format`), so a
+  // provider that honours it cannot wrap it in prose. One that refuses the field is asked plainly.
+  const answer = await askFor(ctx, prompt, { json: true });
   if (!answer) return false;
   const known = new Set(claims.map((c) => String(c['claimId'])));
   const finalize = (raw: Record<string, unknown>): Record<string, unknown> | null => {
-    const verdicts = (Array.isArray(raw['verdicts']) ? (raw['verdicts'] as Record<string, unknown>[]) : []).filter((v) =>
-      known.has(String(v['claim_id'])),
-    );
+    const verdicts = verdictsOf(raw).filter((v) => known.has(String(v['claim_id'])));
     if (verdicts.length === 0) return null;
-    return { ...raw, verdicts };
+    const out: Record<string, unknown> = { ...raw, verdicts };
+    delete out['claims'];
+    return out;
   };
   const ok = await submitWithRepair(
     ctx,
@@ -2456,7 +2539,25 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
     // failed audit read that way and the cause was unreadable from the rows).
     ctx.why = `threw: ${message}`;
   }
-  const transient = !ok && /^(model call failed|no JSON)/.test(ctx.why);
+  /*
+   * A verification the model answered in words, and answered again in words when
+   * told what was wrong, is that model's answer to this item: asking it again
+   * later is the same prompt at temperature 0 and the same reply. Production,
+   * 2026-11-17 01:37–07:37Z: 112 RESEARCH_VERIFY releases "no JSON in a
+   * N-character reply" (identical lengths on every retry) against 40 failures,
+   * and a release is not counted by `unfitPairs`, so the loop also hid the
+   * failures from the rule that routes the work to a model that can do it.
+   * It fails now — counted against the model — and this model leaves the item
+   * to another one. An empty reply or a failed call is still transient.
+   */
+  const answeredWithoutJson = !ok && one.workType === 'RESEARCH_VERIFY' && /^no JSON in a [1-9]\d*-character reply/.test(ctx.why);
+  const transient = !ok && /^(model call failed|no JSON)/.test(ctx.why) && !answeredWithoutJson;
+  if (answeredWithoutJson) {
+    const key = cooldownKey(worker.model, one.workItemId);
+    cooldown.set(key, Date.now() + 60 * 60_000);
+    // The item's own answer, not a route outage: a later success on the route does not end it.
+    routeCooled.delete(key);
+  }
   /*
    * A provider that is busy or rate-limiting (HTTP 429/5xx, a timeout, a reset)
    * said nothing about the work, however many times it says it. Production,
