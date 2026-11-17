@@ -193,11 +193,12 @@ describe('pod lifecycle through GraphQL when REST throws', () => {
     expect(q).toContain('podFindAndDeployOnDemand(input: { cloudType: COMMUNITY, gpuCount: 1, gpuTypeId: "NVIDIA A40", name: "brain-vllm", imageName: "vllm/vllm-openai:v0.11.0"');
     expect(q).toContain('volumeInGb: 0, ports: "8000/http"');
     expect(q).toContain('minCudaVersion: "12.8"');
-    // The 2026 image's own entrypoint is `vllm serve`: the model is positional, and the args are REST's start command.
+    // `--model <name>` works under either entrypoint the image may ship (production 2026-11-17 00:31Z:
+    // a positional-model pod crash-looped), followed by REST's start command.
     const args = JSON.parse(/dockerArgs: ("(?:[^"\\]|\\.)*")/.exec(q)![1]!) as string;
-    const expected = podSpec('secret', undefined, 'COMMUNITY', recipe, 'brain-vllm')['dockerStartCmd'];
-    expect(splitDockerArgs(args)).toEqual(expected);
-    expect(splitDockerArgs(args)[0]).toBe('Qwen/Qwen3-32B-AWQ');
+    const expected = podSpec('secret', undefined, 'COMMUNITY', recipe, 'brain-vllm')['dockerStartCmd'] as string[];
+    expect(splitDockerArgs(args)).toEqual(['--model', ...expected]);
+    expect(splitDockerArgs(args).slice(0, 2)).toEqual(['--model', 'Qwen/Qwen3-32B-AWQ']);
     expect(args).toContain('--api-key secret');
   });
 
