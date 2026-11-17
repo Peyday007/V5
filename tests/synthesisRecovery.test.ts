@@ -23,8 +23,10 @@ import {
   createFragments,
   createOrchestration,
   currentFragments,
+  finishPass,
   getOrchestration,
   insertClaims,
+  startPass,
   updateFragment,
   updateOrchestration,
 } from '../server/repos/research.ts';
@@ -44,8 +46,10 @@ import {
 } from '../server/repos/russellMissions.ts';
 import { storeFile } from '../server/services/storage.ts';
 import { initStorage, resetStorage } from '../server/services/storage/index.ts';
+import { recordEvent } from '../server/repos/events.ts';
 import {
   assessProjectSyntheses,
+  assessSynthesisRecovery,
   FILING_RECOVERY_ACTOR,
   FILING_REGRANT_REASON,
   recoverFailedSynthesis,
@@ -585,6 +589,95 @@ describe('the automatic recovery of a synthesis Brain could not file', () => {
     );
     await updateOrchestration(stuck.orchestrationId, { status: 'NEEDS_HUMAN' });
     expect(await recoverFilingFailures(10, { force: true })).toEqual([]);
+  });
+
+  it('reads the current round: a judge-resumed packet whose new synthesis ran out is reissued over the earlier report (W10)', async () => {
+    const tick = () => new Promise((resolve) => setTimeout(resolve, 5));
+    const stuck = await stuckPacket({ claims: 3 });
+    const before = await getOrchestration(stuck.orchestrationId);
+    // Round one: its synthesis succeeded, its pass completed, its filing operation succeeded.
+    await getDb().run(`UPDATE work_items SET state = 'SUCCEEDED' WHERE id = ?`, [stuck.workItemId]);
+    const pass = await startPass({
+      orchestrationId: stuck.orchestrationId,
+      passKey: 'SYNTHESIS',
+      ordinal: 4,
+      provider: 'WORKER',
+      prompt: 'synthesize',
+      promptSha256: 'sha',
+    } as Parameters<typeof startPass>[0]);
+    await finishPass(pass.id, { status: 'COMPLETE' } as Parameters<typeof finishPass>[1]);
+    const now = new Date().toISOString();
+    await getDb().run(
+      `INSERT INTO idempotency_operations
+         (id, scope_hash, key_fingerprint, namespace, namespace_version, project_id,
+          created_by_type, work_item_id, request_fingerprint, state, attempt_count,
+          reserved_at, completed_at, created_at, updated_at)
+       VALUES ('idop_round_one', 'scope-r1', 'key-r1', 'research.synthesis', 1, ?, 'WORKER', ?, 'fp',
+               'SUCCEEDED', 1, ?, ?, ?, ?)`,
+      [projectId, stuck.workItemId, now, now, now, now],
+    );
+    // The judge's corrected round began: document_id cleared, the history kept.
+    await tick();
+    await recordEvent({
+      projectId,
+      layerId,
+      entityType: 'RUN',
+      entityId: before!.runId,
+      eventType: 'RESEARCH_ROUND_RESUMED',
+      payload: { orchestrationId: stuck.orchestrationId, roundStartedAt: new Date().toISOString() },
+    });
+    await tick();
+    // Round two's synthesis ran out of attempts.
+    const second = await enqueueWork({
+      projectId,
+      workType: 'RESEARCH_SYNTHESIZE',
+      payload: { orchestrationId: stuck.orchestrationId },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId: stuck.orchestrationId,
+    });
+    await getDb().run(
+      `UPDATE work_items SET state = 'FAILED', failure_category = 'ATTEMPTS_EXHAUSTED',
+              attempt_count = 2, max_attempts = 2 WHERE id = ?`,
+      [second.id],
+    );
+
+    // The earlier round's item is not the one to reissue.
+    const earlier = await assessSynthesisRecovery(stuck.workItemId);
+    expect(earlier.eligible).toBe(false);
+    expect(!earlier.eligible && earlier.outcome.refusal).toBe('EARLIER_ROUND');
+
+    const out = await recoverFilingFailures(10, { force: true });
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ workItemId: second.id, outcome: 'RECOVERED' });
+    const replacement = (await listWorkItems(projectId, { limit: 50 })).find(
+      (item) => item.orchestrationId === stuck.orchestrationId && item.state === 'QUEUED',
+    )!;
+    expect(replacement.createdById).toBe(SPENT_RECOVERY_ACTOR);
+    // §5: round one's item and the spent round-two item are kept as they were.
+    expect((await getWorkItem(stuck.workItemId))!.state).toBe('SUCCEEDED');
+    expect((await getWorkItem(second.id))!).toMatchObject({ state: 'FAILED', attemptCount: 2 });
+    expect((await getOrchestration(stuck.orchestrationId))!.status).toBe('SYNTHESIZING');
+  });
+
+  it('still refuses a synthesis recorded in the current round', async () => {
+    const stuck = await stuckPacket();
+    await getDb().run(
+      `UPDATE work_items SET state = 'FAILED', failure_category = 'ATTEMPTS_EXHAUSTED',
+              attempt_count = 2, max_attempts = 2 WHERE id = ?`,
+      [stuck.workItemId],
+    );
+    const pass = await startPass({
+      orchestrationId: stuck.orchestrationId,
+      passKey: 'SYNTHESIS',
+      ordinal: 4,
+      provider: 'WORKER',
+      prompt: 'synthesize',
+      promptSha256: 'sha',
+    } as Parameters<typeof startPass>[0]);
+    await finishPass(pass.id, { status: 'COMPLETE' } as Parameters<typeof finishPass>[1]);
+    const assessed = await assessSynthesisRecovery(stuck.workItemId);
+    expect(!assessed.eligible && assessed.outcome.refusal).toBe('SYNTHESIS_RECORDED');
   });
 
   it('does not reissue a synthesis its worker failed as invalid input', async () => {

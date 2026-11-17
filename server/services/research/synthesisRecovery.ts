@@ -86,6 +86,7 @@ import {
   type OperationNamespace,
 } from '../effects/engine.ts';
 import { targetVersionForRun } from '../runArtifacts.ts';
+import { auditRoundStartedAt } from './auditRound.ts';
 
 /**
  * One intent per failed item, whoever asks.
@@ -110,6 +111,7 @@ export type RecoveryRefusal =
   | 'STILL_LIVE'
   | 'ALREADY_FILED'
   | 'SYNTHESIS_RECORDED'
+  | 'EARLIER_ROUND'
   | 'OPERATION_SUCCEEDED'
   | 'REPLACEMENT_EXISTS'
   | 'NO_CITABLE_EVIDENCE'
@@ -278,8 +280,32 @@ export async function assessSynthesisRecovery(workItemId: string): Promise<Asses
       orchestration.id,
     );
   }
+  /*
+   * Scoped to the packet's current round (W10, production 2026-11-17). A
+   * judge's corrected round (`judgeRound.ts`) clears `document_id` and keeps
+   * the previous round's synthesis pass, its SUCCEEDED filing operation and
+   * its document exactly as written (§5). The checks below read the whole
+   * packet, so a round-two synthesis that ran out of attempts was refused as
+   * SYNTHESIS_RECORDED over the round-one report. Five cash packets holding 55
+   * accepted claims parked that way with no path forward. What counts is the
+   * round the packet is in now, which is the same boundary the runner uses
+   * for its own synthesis items (`synthRoundFrom` in packetRunner.ts).
+   * A synthesis item from before that boundary belongs to an earlier round.
+   * Reissuing it would skip the new round's research, so it is refused.
+   */
+  const roundFrom = await auditRoundStartedAt(orchestration.id);
+  const inRound = (at: string | null | undefined): boolean => !roundFrom || (!!at && at > roundFrom);
+  if (!inRound(original.createdAt)) {
+    return refuseAssessment(
+      'EARLIER_ROUND',
+      `That synthesis belongs to an earlier round of this packet (the current one began ${roundFrom}), ` +
+        'so reissuing it would skip the research the new round was opened for.',
+      original.id,
+      orchestration.id,
+    );
+  }
   const passes = await listPasses(orchestration.id);
-  if (passes.some((pass) => pass.passKey === 'SYNTHESIS' && pass.completedAt)) {
+  if (passes.some((pass) => pass.passKey === 'SYNTHESIS' && pass.completedAt && inRound(pass.completedAt))) {
     return refuseAssessment(
       'SYNTHESIS_RECORDED',
       'A synthesis pass completed for this packet, so something was recorded and this is not the ' +
@@ -296,7 +322,7 @@ export async function assessSynthesisRecovery(workItemId: string): Promise<Asses
   const operations = await operationsForWorkItems(synthesisItems.map((item) => item.id));
   const succeeded = operations.find(
     (operation) =>
-      operation.namespace === 'research.synthesis' && operation.state === 'SUCCEEDED',
+      operation.namespace === 'research.synthesis' && operation.state === 'SUCCEEDED' && inRound(operation.createdAt),
   );
   if (succeeded) {
     return refuseAssessment(
@@ -826,6 +852,7 @@ const PERMANENT_REFUSALS = new Set<string>([
   'ALREADY_RECOVERED',
   'OPERATION_SUCCEEDED',
   'SYNTHESIS_RECORDED',
+  'EARLIER_ROUND',
 ]);
 const permanentlyRefused = new Set<string>();
 
