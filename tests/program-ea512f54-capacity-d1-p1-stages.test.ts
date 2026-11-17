@@ -22,6 +22,7 @@ import {
   preSpendGate,
   readStageLimit,
   recordStageLimit,
+  retriesByStageOf,
   routeWindowReadings,
   stagePressures,
   type LimitSignals,
@@ -82,6 +83,29 @@ describe('limitingStage maps each bottleneck to the quoted remedy, never a serve
 
   it('no remedy anywhere scales the server', () => {
     for (const r of Object.values(REMEDIES)) expect(r.scaleServer).toBe(false);
+  });
+});
+
+describe('retriesByStageOf counts re-attempts, not non-submitted items (finding F7)', () => {
+  it('a failed first attempt is not a retry; a second attempt on the same item is', () => {
+    const r = retriesByStageOf([
+      { workItemId: 'w1', workloadClass: 'RESEARCH_FRAGMENT', at: '2026-11-17T01:00:00.000Z' }, // first attempt, failed
+      { workItemId: 'w2', workloadClass: 'RESEARCH_FRAGMENT', at: '2026-11-17T01:05:00.000Z' }, // first attempt, never retried
+      { workItemId: 'w1', workloadClass: 'RESEARCH_FRAGMENT', at: '2026-11-17T02:00:00.000Z' }, // retry, submitted
+      { workItemId: 'w3', workloadClass: 'RESEARCH_AUDIT', at: '2026-11-17T02:10:00.000Z' }, // tried before the window
+      { workItemId: '', workloadClass: 'RESEARCH_AUDIT', at: '2026-11-17T02:20:00.000Z' }, // unattributable
+    ], new Set(['w3']));
+    expect(r.get('model-interpretation')).toBe(1);
+    expect(r.get('evidence-verification')).toBe(1);
+  });
+
+  it('order of rows does not matter, only their time', () => {
+    const r = retriesByStageOf([
+      { workItemId: 'w1', workloadClass: 'RESEARCH_PLAN', at: '2026-11-17T03:00:00.000Z' },
+      { workItemId: 'w1', workloadClass: 'RESEARCH_PLAN', at: '2026-11-17T01:00:00.000Z' },
+      { workItemId: 'w1', workloadClass: 'RESEARCH_PLAN', at: '2026-11-17T02:00:00.000Z' },
+    ], new Set());
+    expect(r.get('model-interpretation')).toBe(2);
   });
 });
 
@@ -194,6 +218,17 @@ describe('recordStageLimit', () => {
       await insert('FEED_ACQUISITION', 'src-a', 'FAILED', 'src-a: HTTP 403', { corpus: 'domain:open', fetched: 0, inserted: 0 });
       await insert('FEED_ACQUISITION', 'src-b', 'OK', 'src-b: 8 read, 3 stored', { corpus: 'corpus-y', fetched: 8, inserted: 3 });
       await insert('FREE_LANE_CAPACITY', null, 'GROW', '2 -> 4: waiting', { busy: 3, waiting: 5, cpu: 0.3 }, 'free/a');
+      // Lane attempts: one item failed once and was never retried, another failed and was retried, one was
+      // attempted before the window and again inside it. Only re-attempts are retries.
+      const attempt = (item: string, outcome: string, atIso: string) => db.run(
+        `INSERT INTO bin_events (id, event_type, at, work_item_id, outcome, reason, is_proxy, workload_class) VALUES (?, 'FREE_LANE_ITEM', ?, ?, ?, 'model m', 0, 'RESEARCH_FRAGMENT')`,
+        [newId('bev'), atIso, item, outcome],
+      );
+      await attempt('wi-once', 'FAILED_RETRYABLE', new Date(now - 50 * 60_000).toISOString());
+      await attempt('wi-twice', 'FAILED_RETRYABLE', new Date(now - 40 * 60_000).toISOString());
+      await attempt('wi-twice', 'SUBMITTED', new Date(now - 30 * 60_000).toISOString());
+      await attempt('wi-old', 'RELEASED_TRANSIENT', new Date(now - 30 * 3_600_000).toISOString());
+      await attempt('wi-old', 'SUBMITTED', new Date(now - 20 * 60_000).toISOString());
 
       const report = await readStageLimit({ now });
       expect(report.routes.map((r) => r.route).sort()).toEqual(['src-a', 'src-b']);
@@ -201,6 +236,7 @@ describe('recordStageLimit', () => {
       expect(report.limit.kind).toBe('SOURCE_ACCESS');
       expect(report.gate.decision).toBe('REFUSE_NO_HEALTHY_READING');
       expect(report.allocation.ranked.length + report.allocation.unmeasured.length).toBe(5);
+      expect(report.pressures.find((p) => p.stage === 'model-interpretation')!.retries).toEqual(ok(2));
 
       await recordStageLimit(new Date(now));
       const row = await db.get<{ outcome: string }>(`SELECT outcome FROM bin_events WHERE event_type = ? ORDER BY at DESC LIMIT 1`, [STAGE_LIMIT_EVENT]);

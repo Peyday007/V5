@@ -153,6 +153,34 @@ export function routeWindowReadings(input: {
 // ---------------------------------------------------------------------------
 // Per stage: queue depth, utilization, retries, backpressure.
 
+/** One free-lane attempt on a work item, as its FREE_LANE_ITEM row records it. */
+export interface LaneAttempt {
+  workItemId: string;
+  workloadClass: string | null;
+  at: string;
+}
+
+/**
+ * Retries per stage: an attempt on a work item the lane had already attempted
+ * (earlier in the window, or before it — `attemptedBefore`). A first attempt
+ * is not a retry whatever its outcome, and a failed attempt that is never
+ * tried again is a failure, not a retry. An attempt without a work item cannot
+ * be told from a first one and is not counted. Pure.
+ */
+export function retriesByStageOf(attempts: readonly LaneAttempt[], attemptedBefore: ReadonlySet<string>): Map<string, number> {
+  const seen = new Set(attemptedBefore);
+  const out = new Map<string, number>();
+  for (const a of [...attempts].sort((x, y) => x.at.localeCompare(y.at))) {
+    if (!a.workItemId) continue;
+    if (seen.has(a.workItemId)) {
+      const stage = STAGES.find((s) => s.workTypes.includes(a.workloadClass ?? ''));
+      if (stage) out.set(stage.id, (out.get(stage.id) ?? 0) + 1);
+    }
+    seen.add(a.workItemId);
+  }
+  return out;
+}
+
 export interface StagePressure {
   stage: string;
   queueDepth: Measured<number>;
@@ -521,14 +549,24 @@ export async function readStageLimit(options: { hours?: number; now?: number } =
   )).map((r) => r.provider ?? ''), [] as string[]));
   const yields = await safely(() => readSourceYields(since, until), [] as SourceYield[]);
 
-  const retriesByStage = new Map<string, number>();
-  const retryRows = await safely(() => db.all<{ workload_class: string | null; k: number | string }>(
-    `SELECT workload_class, COUNT(*) AS k FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND outcome <> 'SUBMITTED' GROUP BY workload_class`, [since],
-  ), [] as { workload_class: string | null; k: number | string }[]);
-  for (const row of retryRows) {
-    const stage = STAGES.find((s) => s.workTypes.includes(row.workload_class ?? ''));
-    if (stage) retriesByStage.set(stage.id, (retriesByStage.get(stage.id) ?? 0) + n(row.k));
+  const attemptRows = await safely(() => db.all<{ work_item_id: string | null; workload_class: string | null; at: string }>(
+    `SELECT work_item_id, workload_class, at FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND at <= ? AND work_item_id IS NOT NULL`,
+    [since, until],
+  ), [] as { work_item_id: string | null; workload_class: string | null; at: string }[]);
+  const windowItems = [...new Set(attemptRows.map((r) => r.work_item_id).filter((id): id is string => Boolean(id)))];
+  const attemptedBefore = new Set<string>();
+  for (let i = 0; i < windowItems.length; i += 500) {
+    const chunk = windowItems.slice(i, i + 500);
+    const prior = await safely(() => db.all<{ work_item_id: string | null }>(
+      `SELECT DISTINCT work_item_id FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND at < ? AND work_item_id IN (${chunk.map(() => '?').join(', ')})`,
+      [since, ...chunk],
+    ), [] as { work_item_id: string | null }[]);
+    for (const r of prior) if (r.work_item_id) attemptedBefore.add(r.work_item_id);
   }
+  const retriesByStage = retriesByStageOf(
+    attemptRows.map((r) => ({ workItemId: r.work_item_id ?? '', workloadClass: r.workload_class, at: r.at })),
+    attemptedBefore,
+  );
   const pools = await safely(() => db.all<{ reason: string | null; measures: string | null }>(
     `SELECT e.reason, e.measures FROM bin_events e WHERE e.event_type = 'FREE_LANE_CAPACITY' AND e.workload_class IS NOT NULL
         AND e.at = (SELECT MAX(x.at) FROM bin_events x WHERE x.event_type = 'FREE_LANE_CAPACITY' AND x.workload_class = e.workload_class)`,
