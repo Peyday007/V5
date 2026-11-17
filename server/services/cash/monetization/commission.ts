@@ -390,6 +390,39 @@ export interface CommissionInput {
    * (`statedBySource`). Absent is none, the behaviour before this.
    */
   unstated?: ReadonlySet<string>;
+  /**
+   * How many more hypothesis checks may open now (W3c): the project's bound
+   * less those already open, or zero while a goal round waits for a slot.
+   * Composed by the pass (`hypothesisRoom`). Absent is zero — deny by default,
+   * so a caller that forgets it cannot flood research with checks.
+   */
+  hypothesisRoom?: number;
+}
+
+/**
+ * The most hypothesis checks one project may have open at once (W3c): a
+ * quarter of the research grant's at-once slots, at least one while there is a
+ * grant at all. Each epoch gives every hypothesis its own check, and 11.5k
+ * possibilities would otherwise turn every leftover slot into one once the
+ * ceiling is raised — a minority share keeps the goal's rounds and the stated
+ * questions the majority of the grant whatever it is raised to.
+ */
+export function hypothesisCheckCap(grantMax: number | null): number {
+  if (grantMax === null || grantMax <= 0) return 0;
+  return Math.max(1, Math.floor(grantMax / 4));
+}
+
+/**
+ * How many more may open now: the cap less those already open, and none while
+ * a goal round is waiting to launch — the goal's own search keeps priority.
+ */
+export function hypothesisRoom(input: {
+  grantMax: number | null;
+  openChecks: number;
+  goalRoundsWaiting: number;
+}): number {
+  if (input.goalRoundsWaiting > 0) return 0;
+  return Math.max(0, hypothesisCheckCap(input.grantMax) - Math.max(0, input.openChecks));
 }
 
 /**
@@ -706,8 +739,19 @@ export function allocateCommissions(input: CommissionInput): CommissionAllocatio
 
   const asks: CommissionAsk[] = [];
   const takenPaths = new Set<string>();
-  const checkedOpenings = new Set<string>();
   const openingOf = new Map(input.entries.map((one) => [one.path.id, one.path.opportunityId]));
+  /*
+   * At most one open check per opening at a time, across passes (W3c): an
+   * opening with a check still being asked gets no second one until it
+   * settles.
+   */
+  const checkedOpenings = new Set<string>(
+    input.commissions
+      .filter((one) => one.state === 'OPEN' && one.ruleRank === HYPOTHESIS_RULE_RANK)
+      .map((one) => openingOf.get(one.pathId))
+      .filter((one): one is string => !!one),
+  );
+  let checksLeft = Math.max(0, Math.trunc(input.hypothesisRoom ?? 0));
   for (const one of candidates) {
     if (asks.length >= slots) {
       declined.push({
@@ -741,6 +785,16 @@ export function allocateCommissions(input: CommissionInput): CommissionAllocatio
         });
         continue;
       }
+      if (checksLeft <= 0) {
+        declined.push({
+          subject: `${one.subject} — ${ATTRIBUTE[one.attribute].label}`,
+          why:
+            'hypothesis checks are held to a small share of the research grant, and that share is ' +
+            'in use or a goal round is waiting for a slot; it is checked when one frees',
+        });
+        continue;
+      }
+      checksLeft -= 1;
       if (opening) checkedOpenings.add(opening);
     }
     takenPaths.add(one.pathId);

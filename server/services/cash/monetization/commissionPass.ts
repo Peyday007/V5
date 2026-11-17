@@ -53,9 +53,10 @@ import { readDays, readMoneyFigures } from '../figures.ts';
 import { discoveryAllowed } from '../lifecycle.ts';
 import { discoveryAuthority } from '../discoveryAuthority.ts';
 import { composeLedger, rankableOf } from './ledger.ts';
-import { allocateCommissions, HYPOTHESIS_RULE_RANK } from './commission.ts';
+import { allocateCommissions, HYPOTHESIS_RULE_RANK, hypothesisRoom } from './commission.ts';
+import { goalRoundsAwaitingLaunch } from '../../goals/goalWork.ts';
 import { statedBySource } from './enumerate.ts';
-import { offerToFamily, researchRoom, type ResearchRoom } from '../researchRoom.ts';
+import { offerToFamily, researchCapacity, researchRoom, type ResearchRoom } from '../researchRoom.ts';
 import { familyDeclarationFor } from '../familyPriority.ts';
 import { diveEpochStart } from '../diveStage.ts';
 import { discoveryBucketsByRound, intermediationOpening, payerEstablished } from '../validation.ts';
@@ -353,8 +354,20 @@ export async function runCommissions(input: {
       )
       .map((entry) => entry.path.id),
   );
-  const allocate = (entries: typeof live, slots: number) =>
-    allocateCommissions({ entries, rankable: entries.map(rankableOf), commissions, contradicted, slots, now: nowMs, epochStarts, unstated });
+  /*
+   * The hypothesis checks' share (W3c), spent across both allocations below so
+   * the family's and the rest's together never exceed it.
+   */
+  let checksRoom = hypothesisRoom({
+    grantMax: (await researchCapacity(input.projectId)).grantMax,
+    openChecks: open.filter((one) => one.ruleRank === HYPOTHESIS_RULE_RANK).length,
+    goalRoundsWaiting: await goalRoundsAwaitingLaunch(input.projectId),
+  });
+  const allocate = (entries: typeof live, slots: number) => {
+    const plan = allocateCommissions({ entries, rankable: entries.map(rankableOf), commissions, contradicted, slots, now: nowMs, epochStarts, unstated, hypothesisRoom: checksRoom });
+    checksRoom -= plan.asks.filter((one) => one.ruleRank === HYPOTHESIS_RULE_RANK).length;
+    return plan;
+  };
   const familyLive = live.filter(familyEntry);
   const familyPlan = familyLive.length > 0 ? allocate(familyLive, room.room) : null;
   const otherRoom = familyPlan

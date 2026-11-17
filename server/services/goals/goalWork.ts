@@ -1,3 +1,5 @@
+import { getDb } from '../../db/database.ts';
+
 /**
  * Which research is an approved goal's own (owner, 2026-11-03: the openings the
  * $10K goal's constructed rounds filed are researched first).
@@ -63,4 +65,21 @@ export function goalRoundSql(c: string): string {
  */
 export function goalFirstSql(c: string): string {
   return `CASE WHEN ${goalRoundSql(c)} THEN 0 WHEN ${goalIdeaSql(c)} THEN 1 ELSE 2 END`;
+}
+
+/**
+ * How many of a project's goal search rounds are waiting for a research slot:
+ * an idea still live with no mission yet. What a lower-priority producer reads
+ * to stand aside while the goal's own search is queued (W3c).
+ */
+export async function goalRoundsAwaitingLaunch(projectId: string): Promise<number> {
+  const rows = await getDb().all<{ n: number | string }>(
+    `SELECT COUNT(*) AS n FROM russell_candidates c
+      WHERE c.project_id = ?
+        AND ${goalRoundSql('c')}
+        AND c.state NOT IN ('REJECTED', 'PARKED', 'MERGED', 'DONE')
+        AND NOT EXISTS (SELECT 1 FROM russell_missions m WHERE m.candidate_id = c.id)`,
+    [projectId],
+  );
+  return Number(rows[0]?.n ?? 0);
 }
