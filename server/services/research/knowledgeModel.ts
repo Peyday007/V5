@@ -581,3 +581,49 @@ export function buildMechanismModel(input: MechanismInput): MechanismResult {
     },
   };
 }
+
+/* ------------------------------------------------------------------------- */
+/* An opening's card, modelled as a mechanism                                */
+/* ------------------------------------------------------------------------- */
+
+/** The fields of a commercial opening's evidence card that say how its transaction happens. */
+export interface OpeningCard {
+  id: string;
+  title: string;
+  payer: string | null;
+  reachableChannel: string | null;
+  buyingSignal: string | null;
+  paymentTerms: string | null;
+  priceCents: number | null;
+  currency: string;
+  fulfillmentOwner: string | null;
+  /** The research claim the card was drawn from, when one is named. */
+  sourceClaimId: string | null;
+}
+
+const stated = (v: string | null | undefined): v is string => typeof v === 'string' && v.trim() !== '';
+
+/**
+ * The mechanism of one opening, from its card and its project's knowledge.
+ * Each card field that is stated becomes a part of its role, evidenced by the
+ * claim the card was drawn from — so the role is KNOWN only when that claim is
+ * a supported claim in the project's knowledge, and an unstated field leaves
+ * its role unknown rather than assumed. The checklist roles the card does not
+ * speak to stay unknown: research that would establish them, never a default.
+ */
+export function mechanismFromOpening(card: OpeningCard, knowledge: KnowledgeReading): MechanismResult {
+  const evidence = card.sourceClaimId ? [card.sourceClaimId] : [];
+  const part = (role: string, label: string): MechanismPart => ({ id: `${card.id}:${role}`, label, evidence: [...evidence] });
+  const roles: MechanismInput['roles'] = {};
+  if (stated(card.payer)) roles.initiator = part('initiator', card.payer.trim());
+  if (stated(card.reachableChannel)) roles.access = part('access', card.reachableChannel.trim());
+  if (stated(card.buyingSignal)) roles.trigger = part('trigger', card.buyingSignal.trim());
+  if (stated(card.fulfillmentOwner)) roles.deliverer = part('deliverer', card.fulfillmentOwner.trim());
+  if (stated(card.paymentTerms) || card.priceCents !== null) {
+    roles.moneyMovement = {
+      ...part('moneyMovement', [stated(card.paymentTerms) ? card.paymentTerms.trim() : null, card.priceCents !== null ? `${card.priceCents / 100} ${card.currency}` : null].filter(Boolean).join(', ')),
+      ...(card.priceCents !== null ? { figure: { meaning: 'price of one transaction', unit: card.currency, value: card.priceCents / 100 } } : {}),
+    };
+  }
+  return buildMechanismModel({ subject: card.title, knowledge, roles });
+}

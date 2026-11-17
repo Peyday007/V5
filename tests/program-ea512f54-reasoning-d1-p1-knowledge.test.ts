@@ -10,8 +10,11 @@ import {
   buildMechanismModel,
   facetOf,
   KNOWLEDGE_FACETS,
+  mechanismFromOpening,
   type KnowledgeSourceClaim,
 } from '../server/services/research/knowledgeModel.ts';
+import { decideNext } from '../server/services/research/reasoningController.ts';
+import { controllerSnapshotOf, openingLayers, runSprintBenchmark, type SprintProblem } from '../server/services/improvement/sprint.ts';
 import { currentClaim } from '../server/services/quant/graph.ts';
 
 const NOW = new Date('2026-11-16T00:00:00Z');
@@ -246,5 +249,102 @@ describe('buildMechanismModel', () => {
       extraNodes: [{ id: 'z', label: 'Something', type: 'not_declared_type', evidence: [] }],
     });
     expect(result.ok).toBe(false);
+  });
+});
+
+describe('layers 1 and 2 on a production opening (repair F1)', () => {
+  const knowledge = acquireKnowledge({
+    subject: 'project',
+    claims: [claim('card', { structuralFinding: 'BUYER_TYPE', claim: 'Acme posted an RFQ for refurbished pumps' })],
+    now: NOW,
+  });
+  const opening = (over: Partial<SprintProblem> = {}): SprintProblem => ({
+    id: 'opp_f1',
+    projectId: 'prj_f1',
+    title: 'Refurbished pumps for Acme',
+    mechanism: 'RESALE',
+    industry: 'equipment',
+    source: 'https://example.org/card',
+    sourceClaimId: 'card',
+    payer: 'Acme',
+    reachableChannel: 'email',
+    buyingSignal: 'posted RFQ',
+    acceptanceCondition: 'delivered and inspected',
+    priceCents: 120000,
+    currency: 'USD',
+    paymentTerms: 'net 15',
+    fulfillmentOwner: 'supplier',
+    deadline: null,
+    humanHours: null,
+    state: 'NEW',
+    createdAt: '2026-11-10T00:00:00Z',
+    updatedAt: '2026-11-10T00:00:00Z',
+    ...over,
+  } as SprintProblem);
+
+  it('models the card as a mechanism: stated fields evidenced by a supported claim are known, the rest stay unknown', () => {
+    const result = mechanismFromOpening(opening(), knowledge);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const status = Object.fromEntries(result.model.roles.map((r) => [r.role, r.status]));
+    expect(status).toMatchObject({ initiator: 'KNOWN', access: 'KNOWN', trigger: 'KNOWN', deliverer: 'KNOWN', moneyMovement: 'KNOWN' });
+    expect(result.model.unknown).toEqual(['rights', 'riskBearer', 'failure', 'reusable']);
+    expect(currentClaim(result.model.graph, 'opp_f1:moneyMovement')?.value).toBe(1200);
+  });
+
+  it('leaves a stated field unknown when no supported claim backs the card', () => {
+    const result = mechanismFromOpening(opening({ sourceClaimId: null, payer: null }), knowledge);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.model.unknown).toContain('initiator');
+    expect(result.model.unknown).toContain('access');
+    expect(currentClaim(result.model.graph, 'opp_f1:moneyMovement')?.value ?? null).toBeNull();
+  });
+
+  it('reads each project once and hands both layers to the controller, whose information needs come from them', async () => {
+    const loads: string[] = [];
+    const cache = new Map();
+    const load = async (projectId: string) => {
+      loads.push(projectId);
+      return knowledge;
+    };
+    const a = await openingLayers(opening(), NOW, cache, load);
+    await openingLayers(opening({ id: 'opp_f1b' }), NOW, cache, load);
+    expect(loads).toEqual(['prj_f1']);
+    expect(a.knowledge).not.toBeNull();
+    expect(a.mechanism).not.toBeNull();
+    const without = decideNext(controllerSnapshotOf(opening()));
+    const withLayers = decideNext(controllerSnapshotOf(opening(), { knowledge: a.knowledge, mechanism: a.mechanism }));
+    expect(without.informationNeeds.some((n) => n.startsWith('mechanism:'))).toBe(false);
+    expect(withLayers.informationNeeds).toContain('mechanism:rights');
+  });
+
+  it('the production sprint loop runs both layers on the openings it decides', async () => {
+    const snapshots: string[][] = [];
+    const loaded: string[] = [];
+    const run = await runSprintBenchmark({
+      read: async () => [opening(), opening({ id: 'opp_f1c', projectId: 'prj_f1', createdAt: '2026-11-11T00:00:00Z' })],
+      previous: async () => null,
+      record: async () => {},
+      recordDecision: async (d) => {
+        snapshots.push(d.informationNeeds);
+      },
+      recordProvenance: async () => {},
+      registerDirected: async () => ({ candidate: { id: 'imc_x' } }),
+      learning: async () => ({ catalogue: [], outcomes: [], procedures: [] }),
+      history: async () => new Map(),
+      recordResult: async () => {},
+      recordProcedure: async () => {},
+      sendNeeds: (async () => ({ delivered: [], refused: [] })) as never,
+      knowledge: async (projectId) => {
+        loaded.push(projectId);
+        return knowledge;
+      },
+    });
+    expect(loaded).toEqual(['prj_f1']);
+    expect(run.loop.knowledgeRead).toBe(run.loop.decisions);
+    expect(run.loop.mechanismsModelled).toBe(run.loop.decisions);
+    expect(run.loop.decisions).toBeGreaterThan(0);
+    expect(snapshots.every((needs) => needs.includes('mechanism:rights'))).toBe(true);
   });
 });

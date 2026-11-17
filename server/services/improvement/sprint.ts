@@ -64,6 +64,7 @@ import {
   type EvidenceItem,
   type PriorDecision,
 } from '../research/reasoningController.ts';
+import { loadProjectKnowledge, mechanismFromOpening, type KnowledgeReading, type MechanismModel } from '../research/knowledgeModel.ts';
 import { buildNumberProvenance, recordNumberProvenance, type NumberProvenance, type ProvenanceInput } from '../quant/mathToolkit.ts';
 import type { Figure } from '../quant/graph.ts';
 import type { sendNeeds } from '../quant/needs.ts';
@@ -216,6 +217,10 @@ export interface MethodContext {
   prior?: PriorDecision | null;
   results?: readonly ActionResult[];
   now?: string;
+  /** Layer 1: the opening's project knowledge, read from its research claims. */
+  knowledge?: KnowledgeReading | null;
+  /** Layer 2: the opening's transaction modelled as a mechanism over that knowledge. */
+  mechanism?: MechanismModel | null;
 }
 
 export interface SprintMethod {
@@ -335,8 +340,8 @@ export function controllerSnapshotOf(p: SprintProblem, context: MethodContext = 
   const { profile, unknowns, evidence, actions } = profileOf(p);
   return {
     problem: profile,
-    knowledge: null,
-    mechanism: null,
+    knowledge: context.knowledge ?? null,
+    mechanism: context.mechanism ?? null,
     catalogue: context.catalogue ?? SEED_METHODS,
     outcomes: context.outcomes ?? [],
     hypotheses: [
@@ -564,6 +569,11 @@ export interface SprintLoop {
   capabilityGaps: number;
   handOffs: Record<string, number>;
   proceduresRecorded: number;
+  /** Openings the controller decided with their project's knowledge and a mechanism model in hand. */
+  knowledgeRead: number;
+  mechanismsModelled: number;
+  /** Information needs the knowledge and mechanism layers raised across those decisions. */
+  informationNeeds: number;
   errors: string[];
 }
 
@@ -583,6 +593,35 @@ export interface SprintDeps {
   recordProcedure?: (procedure: Procedure) => Promise<void>;
   /** The research owner the controller hands a RESEARCH action to. */
   sendNeeds?: typeof sendNeeds;
+  /** Layer 1: a project's knowledge from its research claims (default: `loadProjectKnowledge`). */
+  knowledge?: (projectId: string, subject: string, now: Date) => Promise<KnowledgeReading>;
+}
+
+/**
+ * Layers 1 and 2 for one opening: its project's knowledge (read once per
+ * project per run) and its card modelled as a mechanism over that knowledge.
+ * A project whose knowledge cannot be read leaves both null and says why.
+ */
+export async function openingLayers(
+  p: SprintProblem,
+  now: Date,
+  cache: Map<string, Promise<KnowledgeReading>>,
+  load: NonNullable<SprintDeps['knowledge']> = (projectId, subject, at) => loadProjectKnowledge(projectId, { subject, now: at }),
+): Promise<{ knowledge: KnowledgeReading | null; mechanism: MechanismModel | null; error: string | null }> {
+  if (!p.projectId) return { knowledge: null, mechanism: null, error: null };
+  let pending = cache.get(p.projectId);
+  if (!pending) {
+    pending = load(p.projectId, `project ${p.projectId}`, now);
+    cache.set(p.projectId, pending);
+  }
+  let knowledge: KnowledgeReading;
+  try {
+    knowledge = await pending;
+  } catch (error) {
+    return { knowledge: null, mechanism: null, error: `knowledge: ${String((error as Error).message ?? error).slice(0, 200)}` };
+  }
+  const modelled = mechanismFromOpening(p, { ...knowledge, subject: p.title });
+  return { knowledge, mechanism: modelled.ok ? modelled.model : null, error: modelled.ok ? null : `mechanism: ${modelled.reason.slice(0, 200)}` };
 }
 
 export const SPRINT_CALLER = 'intelligence-sprint';
@@ -658,7 +697,8 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
   // a contradicted one changes the method — record the decision, and hand the next action to its owner.
   const verdictOf = new Map(generalVerdicts.map((v) => [v.problemId, v]));
   const history = await (deps.history ?? (() => readControllerHistory(SPRINT_CALLER)))();
-  const loop: SprintLoop = { resultsTracked: 0, decisions: 0, methodChanges: 0, capabilityGaps: 0, handOffs: {}, proceduresRecorded: 0, errors: [] };
+  const loop: SprintLoop = { resultsTracked: 0, decisions: 0, methodChanges: 0, capabilityGaps: 0, handOffs: {}, proceduresRecorded: 0, knowledgeRead: 0, mechanismsModelled: 0, informationNeeds: 0, errors: [] };
+  const knowledgeCache = new Map<string, Promise<KnowledgeReading>>();
   for (const { problem: p, result } of chooseDemonstrated(problems, history)) {
     const prior = history.get(p.id);
     const projectId = p.projectId ?? null;
@@ -683,8 +723,14 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
           });
         }
       }
+      const layers = await openingLayers(p, now, knowledgeCache, deps.knowledge);
+      if (layers.error) loop.errors.push(`${p.id}: ${layers.error}`);
+      if (layers.knowledge) loop.knowledgeRead += 1;
+      if (layers.mechanism) loop.mechanismsModelled += 1;
       const snapshot = controllerSnapshotOf(p, {
         ...learned,
+        knowledge: layers.knowledge,
+        mechanism: layers.mechanism,
         prior: prior?.prior ?? null,
         results: [...(prior?.results ?? []), ...(result ? [result] : [])],
         now: now.toISOString(),
@@ -700,6 +746,7 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
         },
       );
       loop.decisions += 1;
+      loop.informationNeeds += decision.informationNeeds.length;
       if (decision.methodChange) loop.methodChanges += 1;
       if (decision.capabilityGap) loop.capabilityGaps += 1;
       loop.handOffs[handed.to] = (loop.handOffs[handed.to] ?? 0) + 1;
