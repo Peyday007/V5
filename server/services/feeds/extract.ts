@@ -205,7 +205,8 @@ export function readSiteDefect(item: Pick<ExtractableItem, 'source' | 'title' | 
     const lead = `${item.organization} in `;
     if (!head.startsWith(lead)) return null;
     const city = head.slice(lead.length).trim();
-    if (!/^[A-Z][A-Za-z.' -]{0,40}$/.test(city)) return null;
+    // Any script's letters (with combining marks), digits and the punctuation place names use: "San José", "Cañon City", "29 Palms".
+    if (!/^[\p{Lu}\p{Nd}][\p{L}\p{M}\p{Nd}.'\u2019 -]{0,40}$/u.test(city)) return null;
     return { problem, city: city.toLowerCase(), cityText: `in ${city}`, phraseText: phrase };
   }
   return null;

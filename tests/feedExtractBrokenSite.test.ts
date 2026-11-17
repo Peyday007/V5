@@ -112,4 +112,24 @@ describe('broken-site lead lines are read by code', () => {
     expect(otherFacts.some((f) => f.field === 'location')).toBe(false);
     expect(otherFacts.find((f) => f.field === 'deliverable')?.value).not.toMatch(/^website-repair:/);
   });
+  it('reads a city whose name has diacritics or digits, with its exact span', () => {
+    for (const [city, value] of [['San José', 'san josé'], ['Cañon City', 'cañon city'], ['29 Palms', '29 palms'], ['Coeur d\u2019Alene', 'coeur d\u2019alene']] as const) {
+      const item = lead(`fi_${city}`, 'Corner Shop', city, 'PARKED', 'http://corner.example/');
+      const facts = extractItem(item);
+      const loc = facts.filter((f) => f.field === 'location');
+      expect(loc).toHaveLength(1);
+      expect(loc[0]!.value).toBe(value);
+      expect(loc[0]!.evidence.text).toBe(`in ${city}`);
+      expect(item.title).toContain(loc[0]!.evidence.text);
+      expect(readable(item, facts)).toBe(true);
+      expect(facts.every((f) => f.demand === 'NOT_DEMAND')).toBe(true);
+    }
+  });
+
+  it('still refuses a city that is not a place name', () => {
+    for (const city of ['san antonio', 'Austin; DROP', 'Town <b>', 'A'.repeat(60)]) {
+      const item = lead(`fi_bad`, 'Corner Shop', city, 'PARKED', 'http://corner.example/');
+      expect(extractItem(item).some((f) => f.field === 'location')).toBe(false);
+    }
+  });
 });
