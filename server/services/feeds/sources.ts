@@ -40,6 +40,13 @@ export interface FeedSource {
   cursorUrl?: (since: string) => string;
   parse(body: unknown): FeedItem[];
   /**
+   * Complete parsed items with official fields the listing response does not
+   * carry, by asking the same provider for them (`getJson`). Optional; a
+   * follow-up that fails leaves its item exactly as parsed — nothing is
+   * inferred in its place.
+   */
+  complete?(items: FeedItem[], getJson: (url: string) => Promise<unknown>): Promise<FeedItem[]>;
+  /**
    * What the acquisition pipeline in `run.ts` reads about this source
    * (ACQ-21-3, ACQ-21-4): which corpus or open domain class it is an instance
    * of, the facts it is pulled for, how its real content is reached, and the
@@ -252,6 +259,54 @@ export function parseFederalRegister(body: unknown): FeedItem[] {
       organization: agencies.join(', ') || null,
       publishedAt: isoOrNull(row['publication_date']),
     });
+  }
+  return out;
+}
+
+/** How many corrections one Federal Register pull may look up; the rest stay as parsed. */
+export const FEDERAL_REGISTER_CORRECTION_LOOKUPS = 25;
+
+/** The API URL that states a Federal Register document's own effective_on. */
+export function federalRegisterEffectiveOnUrl(documentNumber: string): string {
+  return `https://www.federalregister.gov/api/v1/documents/${encodeURIComponent(documentNumber)}.json?fields%5B%5D=document_number&fields%5B%5D=effective_on`;
+}
+
+/**
+ * A correction states no effective date of its own (C1-2026-21030: effective_on,
+ * dates and action all null), and the rule it corrects may have been published
+ * long before anything Brain still holds. For each parsed correction with no
+ * Effective sentence, ask the Federal Register API for the corrected document's
+ * own effective_on (an official field, never prose) and record it as
+ * "Corrected rule effective YYYY-MM-DD." — deliberately not an "Effective"
+ * sentence, so a reader of the correction's own date is unchanged. A lookup
+ * that fails, or a document that states no date, leaves the item as parsed.
+ */
+export async function completeFederalRegisterCorrections(
+  items: FeedItem[],
+  getJson: (url: string) => Promise<unknown>,
+  limit = FEDERAL_REGISTER_CORRECTION_LOOKUPS,
+): Promise<FeedItem[]> {
+  const out: FeedItem[] = [];
+  let asked = 0;
+  for (const item of items) {
+    const body = item.body ?? '';
+    const corrects = /Corrects ([A-Za-z0-9-]+)\./.exec(body)?.[1] ?? null;
+    if (!corrects || /Effective \d{4}-\d{2}-\d{2}\./.test(body) || /Corrected rule effective /.test(body) || asked >= limit) {
+      out.push(item);
+      continue;
+    }
+    asked += 1;
+    let effective: string | null = null;
+    try {
+      const doc = await getJson(federalRegisterEffectiveOnUrl(corrects));
+      const row = doc && typeof doc === 'object' ? (doc as Record<string, unknown>) : null;
+      const stated = text(row?.['effective_on']);
+      const sameDocument = text(row?.['document_number']);
+      if (stated && /^\d{4}-\d{2}-\d{2}$/.test(stated) && (!sameDocument || sameDocument === corrects)) effective = stated;
+    } catch {
+      effective = null;
+    }
+    out.push(effective ? { ...item, body: `${body} Corrected rule effective ${effective}.`.trim() } : item);
   }
   return out;
 }
@@ -621,6 +676,7 @@ export const FEED_SOURCES: readonly FeedSource[] = [
     // The Federal Register filters by publication date: only rules published since the last read.
     cursorUrl: (since: string) => `${FEDERAL_REGISTER_RULES_URL}&conditions%5Bpublication_date%5D%5Bgte%5D=${since.slice(0, 10)}`,
     parse: parseFederalRegister,
+    complete: completeFederalRegisterCorrections,
     acquisition: jsonApi(
       'domain:regulatory-records',
       ['regulatory', 'compliance-deadline'],

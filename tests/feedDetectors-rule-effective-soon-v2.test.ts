@@ -178,8 +178,8 @@ describe('RULE_EFFECTIVE_SOON@2 lowers no bar', () => {
 });
 
 describe('installation', () => {
-  it('v2 is installed in SHADOW with the same id; v1 stays exported at version 1', () => {
-    expect(DETECTORS).toContain(RULE_EFFECTIVE_SOON_V2);
+  it('v2 stays exported in SHADOW with the same id (v3 is installed in its place); v1 stays exported at version 1', () => {
+    expect(DETECTORS.find((one) => one.id === 'RULE_EFFECTIVE_SOON')!.version).toBeGreaterThanOrEqual(2);
     expect(DETECTORS).not.toContain(RULE_EFFECTIVE_SOON);
     expect(RULE_EFFECTIVE_SOON_V2).toMatchObject({ id: 'RULE_EFFECTIVE_SOON', version: 2, mode: 'SHADOW' });
     expect(RULE_EFFECTIVE_SOON.version).toBe(1);
