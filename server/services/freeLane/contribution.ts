@@ -85,6 +85,14 @@ export interface ComponentReading {
   downstreamEffect: Measured<number>;
   /** Whether useful work is waiting for this component. */
   workWaiting: Measured<number>;
+  /**
+   * The queue `workWaiting` counts when it is not this component's own: every
+   * free-lane slot and route claims from one shared queue, so the same waiting
+   * items are waiting for each of them. Components naming the same queue
+   * compete for it — at most one of them is scaled on it (`compareContributions`).
+   * Absent or null when the count is the component's own.
+   */
+  sharedQueue?: string | null;
   /** The failure its own rows name now, if any. */
   failing: { cause: RouteFailureCause; failures: number } | null;
   measures: ContributionMeasures;
@@ -166,7 +174,7 @@ export function decideComponent(reading: ComponentReading, kindMedianPerDollar: 
     return {
       ...base, verdict: 'SCALE', hardwareJustified: true, contributionPerDollar: perDollar,
       basis: 'MEASURED_SATURATION',
-      recommendation: `${reading.id} is a working path at measured saturation ${round((reading.measures.saturation as { value: number }).value, 2)} with ${(reading.workWaiting as { value: number }).value} waiting; one more unit is justified, then re-measure accepted output.`,
+      recommendation: `${reading.id} is a working path at measured saturation ${round((reading.measures.saturation as { value: number }).value, 2)} with ${(reading.workWaiting as { value: number }).value} waiting${reading.sharedQueue ? ` in the ${reading.sharedQueue} queue it shares` : ''}; one more unit is justified, then re-measure accepted output.`,
     };
   }
   // A marginal gain is a measured contribution per dollar above the kind's median. A $0 component has no
@@ -199,14 +207,47 @@ export function contributionPerDollar(reading: ComponentReading): number | null 
   return reading.usefulOutput.value / reading.cost.value;
 }
 
-/** Every component compared against the others of its kind: the median accepted-per-dollar is the bar. Pure. */
+/**
+ * Every component compared against the others of its kind: the median
+ * accepted-per-dollar is the bar. A queue several components share is waiting
+ * for all of them at once, so it justifies one addition, not one per
+ * component: of the components scaled on the same shared queue, only the one
+ * with the most accepted output per dollar (then per slot held, then the most
+ * accepted output) keeps SCALE; the others HOLD on `SHARED_QUEUE_CLAIMED`
+ * until a re-measurement shows the queue still waiting. Pure.
+ */
 export function compareContributions(readings: readonly ComponentReading[]): ContributionDecision[] {
   const medians = new Map<ComponentKind, number | null>();
   for (const kind of new Set(readings.map((r) => r.kind))) {
     const values = readings.filter((r) => r.kind === kind).map(contributionPerDollar).filter((v): v is number => v !== null).sort((a, b) => a - b);
     medians.set(kind, values.length === 0 ? null : values[Math.floor((values.length - 1) / 2)]!);
   }
-  return readings.map((r) => decideComponent(r, medians.get(r.kind) ?? null));
+  const decisions = readings.map((r) => decideComponent(r, medians.get(r.kind) ?? null));
+  const claimants = new Map<string, number[]>();
+  decisions.forEach((d, i) => {
+    const queue = readings[i]!.sharedQueue;
+    if (d.verdict !== 'SCALE' || !queue) return;
+    claimants.set(queue, [...(claimants.get(queue) ?? []), i]);
+  });
+  for (const [queue, indexes] of claimants) {
+    if (indexes.length < 2) continue;
+    const useful = (i: number): number => (readings[i]!.usefulOutput.measured ? (readings[i]!.usefulOutput as { value: number }).value : 0);
+    const perSlot = (i: number): number => useful(i) / Math.max(1, readings[i]!.provisioned ?? 1);
+    const ranked = [...indexes].sort((a, b) =>
+      (decisions[b]!.contributionPerDollar ?? -1) - (decisions[a]!.contributionPerDollar ?? -1)
+      || perSlot(b) - perSlot(a)
+      || useful(b) - useful(a)
+      || `${decisions[a]!.kind}:${decisions[a]!.id}`.localeCompare(`${decisions[b]!.kind}:${decisions[b]!.id}`));
+    const winner = decisions[ranked[0]!]!;
+    for (const i of ranked.slice(1)) {
+      const d = decisions[i]!;
+      decisions[i] = {
+        ...d, verdict: 'HOLD', hardwareJustified: false, basis: 'SHARED_QUEUE_CLAIMED',
+        recommendation: `${d.id}'s waiting work is the ${queue} queue it shares with ${indexes.length - 1} other scaled component(s); ${winner.kind.toLowerCase().replace('_', ' ')} ${winner.id} contributes more and takes that one addition. Re-measure after it before adding here.`,
+      };
+    }
+  }
+  return decisions;
 }
 
 // ---------------------------------------------------------------------------
@@ -470,13 +511,18 @@ export interface LaneItemRow {
   measures: string | null;
 }
 
+/** The one queue every free-lane slot and route claims from. */
+export const FREE_LANE_QUEUE = 'free-lane';
+
 /**
  * Model-route readings from lane rows. GPU routes are priced at the pod's
- * measured spend; free providers are a measured $0. A route's work waiting is
- * its own pool's (`waitingByRoute`, from that model's latest capacity row) —
- * never the whole lane's queue, which every route would share. Pure.
+ * measured spend; free providers are a measured $0. No row records a route's
+ * own waiting work: every route claims from the free lane's one queue, so a
+ * route's work waiting is that queue as measured now (`laneQueue`), named as
+ * shared (`sharedQueue`) so the comparison lets it justify one addition, not
+ * one per route. Pure.
  */
-export function routeReadings(rows: readonly LaneItemRow[], podSpend: PodSpend | null, waitingByRoute: ReadonlyMap<string, number> | null): ComponentReading[] {
+export function routeReadings(rows: readonly LaneItemRow[], podSpend: PodSpend | null, laneQueue: Measured<number> | null): ComponentReading[] {
   const byRoute = new Map<string, { items: number; submitted: number; failures: number; causes: Map<RouteFailureCause, number>; modelCalls: number; avoided: number; cpuMicros: number; metered: number; elapsedMs: number }>();
   for (const row of rows) {
     const route = routeOfReason(row.reason);
@@ -523,37 +569,33 @@ export function routeReadings(rows: readonly LaneItemRow[], podSpend: PodSpend |
       kind: 'MODEL_ROUTE', id: route, provisioned: null,
       usefulOutput: ok(e.submitted), cost,
       downstreamEffect: e.metered > 0 ? ok(e.avoided) : NOT('no item on this route recorded model calls avoided'),
-      workWaiting: waitingByRoute === null
-        ? NOT('the route pools\' capacity rows were not read')
-        : waitingByRoute.has(route)
-          ? ok(waitingByRoute.get(route)!)
-          : NOT('no capacity row for this route\'s pool carries a waiting count; the lane-wide queue is not this route\'s'),
+      workWaiting: laneQueue ?? NOT('the free lane\'s queue was not counted'),
+      sharedQueue: FREE_LANE_QUEUE,
       failing: failingNow && ranked[0] ? { cause: ranked[0][0], failures: e.failures } : null,
       measures,
     };
   });
 }
 
-/** Each pool's own waiting count from its latest capacity row, by model. A row without one is absent, not 0. Pure. */
-export function waitingByPool(pools: readonly PoolRow[]): Map<string, number> {
-  const out = new Map<string, number>();
-  for (const pool of pools) {
-    let m: Record<string, unknown> = {};
-    try { m = JSON.parse(pool.measures ?? '{}') as Record<string, unknown>; } catch { m = {}; }
-    if (typeof m.waiting === 'number') out.set(pool.model, m.waiting);
-  }
-  return out;
-}
-
-/** One `FREE_LANE_CAPACITY` row, the latest per model. */
+/**
+ * One `FREE_LANE_CAPACITY` row: the latest per model inside the reading's
+ * window, so a retired model or a days-old step is never read as current. Its
+ * `waiting` is not read — the controller writes the lane-wide queue there, the
+ * same number on every model's row, which is not any pool's own.
+ */
 export interface PoolRow {
   model: string;
   reason: string | null;
   measures: string | null;
 }
 
-/** Worker-pool readings: provisioned slots beside the accepted output those slots produced. Pure. */
-export function poolReadings(pools: readonly PoolRow[], submittedByModel: ReadonlyMap<string, number>): ComponentReading[] {
+/**
+ * Worker-pool readings: provisioned slots beside the accepted output those
+ * slots produced. Saturation and idle share are the pool's own, from its
+ * in-window capacity row; its work waiting is the free lane's shared queue as
+ * measured now (`laneQueue`), named as shared. Pure.
+ */
+export function poolReadings(pools: readonly PoolRow[], submittedByModel: ReadonlyMap<string, number>, laneQueue: Measured<number> | null = null): ComponentReading[] {
   return pools.map((pool): ComponentReading => {
     let m: Record<string, unknown> = {};
     try { m = JSON.parse(pool.measures ?? '{}') as Record<string, unknown>; } catch { m = {}; }
@@ -561,7 +603,6 @@ export function poolReadings(pools: readonly PoolRow[], submittedByModel: Readon
     const slots = target !== undefined ? Number(target) : null;
     const busy = typeof m.busy === 'number' ? m.busy : null;
     const peak = typeof m.peakBusy === 'number' ? m.peakBusy : busy;
-    const waiting = typeof m.waiting === 'number' ? m.waiting : null;
     const measures = blankMeasures('WORKER');
     measures.saturation = slots && peak !== null ? ok(round(peak / slots)) : NOT('the pool\'s target or peak busy is not on its latest capacity row');
     measures.idleShare = slots && busy !== null ? ok(round(Math.max(0, slots - busy) / slots)) : NOT('the pool\'s target or busy count is not on its latest capacity row');
@@ -572,7 +613,8 @@ export function poolReadings(pools: readonly PoolRow[], submittedByModel: Readon
       usefulOutput: ok(submitted),
       cost: NOT('a worker slot\'s own cost is its route\'s, read on the MODEL_ROUTE component'),
       downstreamEffect: ok(submitted),
-      workWaiting: waiting === null ? NOT('the latest capacity row carries no waiting count') : ok(waiting),
+      workWaiting: laneQueue ?? NOT('the free lane\'s queue was not counted'),
+      sharedQueue: FREE_LANE_QUEUE,
       failing: null,
       measures,
     };
@@ -819,9 +861,17 @@ export async function readContribution(options: { hours?: number; now?: number }
   }
   const pools = await safely(async () => (await db.all<{ workload_class: string; reason: string | null; measures: string | null; at: string }>(
     `SELECT e.workload_class, e.reason, e.measures, e.at FROM bin_events e
-      WHERE e.event_type = 'FREE_LANE_CAPACITY' AND e.workload_class IS NOT NULL
-        AND e.at = (SELECT MAX(x.at) FROM bin_events x WHERE x.event_type = 'FREE_LANE_CAPACITY' AND x.workload_class = e.workload_class)`,
+      WHERE e.event_type = 'FREE_LANE_CAPACITY' AND e.workload_class IS NOT NULL AND e.at >= ? AND e.at <= ?
+        AND e.at = (SELECT MAX(x.at) FROM bin_events x
+                     WHERE x.event_type = 'FREE_LANE_CAPACITY' AND x.workload_class = e.workload_class AND x.at >= ? AND x.at <= ?)`,
+    [since, until, since, until],
   )).map((r) => ({ model: r.workload_class, reason: r.reason, measures: r.measures })), [] as PoolRow[]);
+
+  // The free lane's queue, counted now by its owner: claimable research every slot and route shares.
+  const laneQueue = await safely(
+    async (): Promise<Measured<number>> => ok(await (await import('./capacity.ts')).waitingNow()),
+    NOT('the free lane\'s queue could not be counted') as Measured<number>,
+  );
 
   const detectorRows = await safely(async () => (await db.all<{ rule_id: string; rule_version: number | string; mode: string; detections: number | string; covered: number | string; leads: number | string }>(
     `SELECT d.rule_id, d.rule_version, d.mode, COUNT(*) AS detections,
@@ -868,8 +918,8 @@ export async function readContribution(options: { hours?: number; now?: number }
     components: [
       ...parserReadings(yields, pulls),
       ...detectorReadings(detectorRows, uncovered),
-      ...poolReadings(pools, submittedByModel),
-      ...routeReadings(laneRows, podSpend, waitingByPool(pools)),
+      ...poolReadings(pools, submittedByModel, laneQueue),
+      ...routeReadings(laneRows, podSpend, laneQueue),
     ],
     gaps: (components) => gapsFromRows(components, { extraction, openings, permitted, permissionNeeds, providerContactPermitted }),
     system: await readSystemOutcomes(since, until),

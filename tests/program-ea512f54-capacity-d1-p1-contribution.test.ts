@@ -40,7 +40,7 @@ import {
   recordContribution,
   routeReadings,
   storedContribution,
-  waitingByPool,
+  FREE_LANE_QUEUE,
   type ComponentReading,
   type ContributionMeasures,
   type ContributionReport,
@@ -126,20 +126,43 @@ describe('a free route is not scaled on a priced peer and the lane-wide queue (f
     expect(d).toMatchObject({ verdict: 'SCALE', basis: 'MEASURED_SATURATION' });
   });
 
-  it('each route reads its own pool\'s waiting count, never the lane-wide queue', () => {
+  it('every route and pool reads the free lane\'s one shared queue as shared, never as its own count (review F1)', () => {
     const rows = [
       { outcome: 'SUBMITTED', reason: 'model free/a', durationMs: 10, measures: null },
       { outcome: 'SUBMITTED', reason: 'model free/c', durationMs: 10, measures: null },
     ];
-    const waiting = waitingByPool([
-      { model: 'free/a', reason: '2 -> 4', measures: JSON.stringify({ busy: 2, waiting: 0 }) },
-      { model: 'free/b', reason: '2 -> 4', measures: JSON.stringify({ busy: 2, waiting: 7 }) },
-      { model: 'free/c', reason: '2 -> 4', measures: JSON.stringify({ busy: 2 }) },
+    // The controller writes the lane-wide queue on every model's row; a per-pool figure there is not read.
+    const pools = [
+      { model: 'free/a', reason: '2 -> 4', measures: JSON.stringify({ busy: 4, peakBusy: 4, waiting: 0 }) },
+      { model: 'free/c', reason: '2 -> 4', measures: JSON.stringify({ busy: 4, peakBusy: 4, waiting: 7 }) },
+    ];
+    for (const r of [...routeReadings(rows, null, ok(5)), ...poolReadings(pools, new Map([['free/a', 1], ['free/c', 1]]), ok(5))]) {
+      expect(r.workWaiting).toEqual(ok(5));
+      expect(r.sharedQueue).toBe(FREE_LANE_QUEUE);
+    }
+    const unread = routeReadings(rows, null, null);
+    for (const r of unread) expect(r.workWaiting.measured).toBe(false);
+  });
+
+  it('a shared queue justifies one addition: of the components scaled on it, only the best contributor keeps SCALE (review F1)', () => {
+    const saturated = (id: string, kind: ComponentReading['kind'], useful: number, cost: ReturnType<typeof ok> | ReturnType<typeof NOT>) =>
+      reading({ id, kind, usefulOutput: ok(useful), cost, provisioned: 4, workWaiting: ok(5), sharedQueue: FREE_LANE_QUEUE, measures: measures({ saturation: ok(1) }) });
+    const decisions = compareContributions([
+      saturated('free/a', 'WORKER', 4, NOT('read on its route')),
+      saturated('free/c', 'WORKER', 12, NOT('read on its route')),
+      saturated('runpod/x', 'MODEL_ROUTE', 20, ok(2)),
     ]);
-    const r = routeReadings(rows, null, waiting);
-    expect(r.find((x) => x.id === 'free/a')!.workWaiting).toEqual(ok(0));
-    expect(r.find((x) => x.id === 'free/c')!.workWaiting.measured).toBe(false);
-    for (const x of r) expect(decideComponent(x, 1).hardwareJustified).toBe(false);
+    const scaled = decisions.filter((d) => d.verdict === 'SCALE');
+    expect(scaled.map((d) => d.id)).toEqual(['runpod/x']);
+    for (const d of decisions.filter((one) => one.id !== 'runpod/x')) {
+      expect(d).toMatchObject({ verdict: 'HOLD', basis: 'SHARED_QUEUE_CLAIMED', hardwareJustified: false });
+    }
+    // A component whose waiting count is its own is not merged with anything.
+    const own = compareContributions([
+      reading({ id: 'a', usefulOutput: ok(3), workWaiting: ok(2), measures: measures({ saturation: ok(1) }) }),
+      reading({ id: 'b', usefulOutput: ok(3), workWaiting: ok(2), measures: measures({ saturation: ok(1) }) }),
+    ]);
+    expect(own.map((d) => d.verdict)).toEqual(['SCALE', 'SCALE']);
   });
 });
 
@@ -265,7 +288,7 @@ describe('readings from rows', () => {
       ...Array.from({ length: 4 }, () => ({ outcome: 'SUBMITTED', reason: 'model free/a', durationMs: 1000, measures: JSON.stringify({ usage: { modelCalls: 2, modelCallsAvoided: 1, cpuMicros: 500_000 } }) })),
       ...Array.from({ length: 6 }, () => ({ outcome: 'FAILED_RETRYABLE', reason: 'model free/b: model call failed [provider availability] 503', durationMs: 100, measures: null })),
     ];
-    const r = routeReadings(rows, null, new Map([['free/a', 3]]));
+    const r = routeReadings(rows, null, ok(3));
     const a = r.find((x) => x.id === 'free/a')!;
     const b = r.find((x) => x.id === 'free/b')!;
     expect(a.measures.aiCallsPerUsefulFinding).toEqual(ok(2));
@@ -358,11 +381,38 @@ describe('recordContribution', () => {
       expect(report.decisions.find((d) => d.kind === 'WORKER' && d.id === 'free/a')).toBeDefined();
       expect(report.repairsFirst).toContain('MODEL_ROUTE:free/b');
       expect(report.hardwareJustifiedFor).toEqual([]);
-      expect(report.components.find((c) => c.kind === 'MODEL_ROUTE' && c.id === 'free/a')!.workWaiting).toEqual(ok(6));
+      // Work waiting is the lane's queue counted now (nothing queued here), not the 6 the capacity row carried.
+      expect(report.components.find((c) => c.kind === 'MODEL_ROUTE' && c.id === 'free/a')).toMatchObject({ workWaiting: ok(0), sharedQueue: FREE_LANE_QUEUE });
+      expect(report.components.find((c) => c.kind === 'WORKER' && c.id === 'free/a')).toMatchObject({ workWaiting: ok(0), sharedQueue: FREE_LANE_QUEUE });
 
       await recordContribution(new Date(now));
       const row = await db.get<{ outcome: string }>(`SELECT outcome FROM bin_events WHERE event_type = ? ORDER BY at DESC LIMIT 1`, [CAPACITY_CONTRIBUTION_EVENT]);
       expect(row?.outcome).toBe('REPAIR_FIRST');
+    });
+
+    it('reads a pool only from its capacity row inside the window: a days-old step or a retired model is not current (review F1)', async () => {
+      const db = getDb();
+      const now = Date.now();
+      const tag = Math.random().toString(36).slice(2, 8);
+      const insert = (msAgo: number, model: string, measures: object) =>
+        db.run(
+          `INSERT INTO bin_events (id, event_type, at, measures, outcome, reason, is_proxy, workload_class) VALUES (?, 'FREE_LANE_CAPACITY', ?, ?, 'GROW', '2 -> 4: useful work waiting', 0, ?)`,
+          [newId('bev'), new Date(now - msAgo).toISOString(), JSON.stringify(measures), model],
+        );
+      // Saturated three days ago, quiet since: no step inside the window.
+      await insert(3 * 24 * 3_600_000, `stale-${tag}`, { busy: 4, peakBusy: 4, waiting: 50 });
+      // A current pool: its in-window row wins over its older one.
+      await insert(3 * 24 * 3_600_000, `live-${tag}`, { busy: 4, peakBusy: 4, waiting: 50 });
+      await insert(60_000, `live-${tag}`, { busy: 1, peakBusy: 1, waiting: 50 });
+
+      const report = await readContribution({ now });
+      const workers = report.components.filter((c) => c.kind === 'WORKER');
+      expect(workers.find((c) => c.id === `stale-${tag}`)).toBeUndefined();
+      const live = workers.find((c) => c.id === `live-${tag}`)!;
+      expect(live.measures.saturation).toEqual(ok(0.25));
+      expect(live.workWaiting).toEqual(ok(0));
+      expect(report.decisions.find((d) => d.id === `stale-${tag}`)).toBeUndefined();
+      expect(report.hardwareJustifiedFor).toEqual([]);
     });
 
     it('exposes every gap subject from real rows: unread feed records and blank evidence cards (review F5)', async () => {
