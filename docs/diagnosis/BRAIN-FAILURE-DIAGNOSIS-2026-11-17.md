@@ -229,3 +229,5 @@ See F1–F7 above. Each one gives the cause, file:line, run IDs, the smallest ch
 - **08:13Z, final RC2 is 7cfcde99** (Deploy 44044888041). It adds #1035 (W11): `freeLaneAdmits` now admits bin-less work items in commercial projects. Free-lane show at 08:07Z found 23 such items in Cash Mode 1 waiting with no claimant.
 - Release 3 (W2b, W3b, W9, W10b) is due about 11:00Z.
 - **08:16Z, RC2 closed at 7ca851b6** (Deploy 44045317792). It adds #1034 (W9): RESEARCH_VERIFY now uses JSON mode and a targeted repair ask. A reply still in prose fails fast against that model instead of looping as a transient error. Release 3 holds W2b, W3b and W10b.
+- **08:21Z, RC2 is 00eb4962** (Deploy 44045962334). It adds #1036 (W10b): one automatic recovery per round, and a bounded +4 regrant per round for a bin exhausted by attempts. Release 3 is now W2b and W3b.
+  - Coordination risk: RC2 has been re-cut four times (74b0a3c3 → b46b757e → 7cfcde99 → 7ca851b6 → 00eb4962). Each new push restarts the Postgres gate.
