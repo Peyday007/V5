@@ -582,6 +582,39 @@ export function pendingResult(p: SprintProblem, history: ControllerHistory | und
   };
 }
 
+/**
+ * How far the leading hypothesis must stand above the next one for the
+ * controller's decision to count as settled. A structural constant, not a
+ * figure tuned on any problem set.
+ */
+export const SETTLED_MARGIN = 0.5;
+
+/**
+ * Whether the general method could not progress this opening without a person.
+ * A person is needed only when it is still not actionable and nothing the
+ * method can do itself would move it: the controller's next step is obtaining a
+ * method (METHOD_GAP), or it has no next step while research has nothing left
+ * to answer and the decision is not settled.
+ *
+ * A null `next` is not by itself a need for a person (reasoning-sprint:general-method).
+ * The controller leaves `next` null whenever no candidate action has positive
+ * value against the two hypotheses contesting the lead — which is every
+ * opening that reached the sprint without a mechanism model, because its
+ * research actions bear on `holds:mechanism`/`fails:<role>` and those
+ * hypotheses are then absent. Counting those as "needs a person" read
+ * modelledNeedsPerson 1 on held-out sets where research could still fill every
+ * unknown, and failed the baseline comparison on that alone. A settled
+ * decision with nothing worth doing is a rejection, which needs nobody.
+ */
+export function needsPersonOf(actionable: boolean, decision: Pick<ControllerDecision, 'next' | 'valued' | 'hypotheses'>): boolean {
+  if (actionable) return false;
+  if (decision.next) return decision.next.kind === 'METHOD_GAP';
+  const researchable = decision.valued.some((a) => a.kind === 'RESEARCH');
+  const [first, second] = decision.hypotheses;
+  const settled = first !== undefined && first.score - (second?.score ?? 0) >= SETTLED_MARGIN;
+  return !researchable && !settled;
+}
+
 /** The general method: the controller over the card, with the gross billed carried with its provenance. */
 export const GENERAL_METHOD: SprintMethod = {
   key: 'general:controller+provenance',
@@ -608,8 +641,7 @@ export const GENERAL_METHOD: SprintMethod = {
       problemId: p.id,
       actionable,
       probability,
-      // A person is needed only when no research or method action can move it and it is still not actionable.
-      needsPerson: !actionable && (decision.next === null || decision.next.kind === 'METHOD_GAP'),
+      needsPerson: needsPersonOf(actionable, decision),
       robust,
       findings: decision.weakInferences.length + provenanceFindings,
       elapsedMs: performance.now() - started,
@@ -659,7 +691,10 @@ export interface SetReading {
    * rows were not read for this reading.
    */
   humanInterventions: Measure;
-  /** Problems the method itself predicted it could not progress without a person, over the set: its own model, compared between methods. */
+  /**
+   * Problems the method itself predicted it could not progress without a person, over the set: its own model, compared between methods.
+   * For the general method that is `needsPersonOf`: a research action still open, or a settled rejection, needs nobody.
+   */
   modelledNeedsPerson: Measure;
   /** Brier score: summed squared error of the probability against what the market did, over resolved problems. Lower is better. */
   calibrationBrier: Measure;
