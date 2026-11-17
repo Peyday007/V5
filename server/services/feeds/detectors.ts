@@ -77,6 +77,21 @@ export interface Detector {
   sources: readonly string[];
   /** How far back the rule looks. */
   lookbackMs: number;
+  /**
+   * The entity key this rule groups an item's organization under. A rule that
+   * keys entities differently from `employerKey(organization)` declares it here,
+   * so `ruleReading` relates non-member items to the rule's entities exactly as
+   * the rule itself would; a reading keyed another way cannot see the rule's misses.
+   */
+  entityKeyOf?(organization: string | null): string | null;
+  /**
+   * How recently an item must have been published (its fetch time when it
+   * states none) for this rule to be able to keep it, when that is narrower
+   * than `lookbackMs`. A rule may read further back than it keeps — to hold
+   * the record a recent item refers to — and an item it could never keep is
+   * not a miss (`ruleReading`). Unset: every item the rule reads can be kept.
+   */
+  memberWindowMs?: number;
   detect(records: readonly DetectorRecord[], now: Date): DetectedSignal[];
 }
 
@@ -289,6 +304,17 @@ export const REPEATED_DEMAND: Detector = {
 // Rule 3: a federal rule taking effect soon
 // ---------------------------------------------------------------------------
 
+/**
+ * Whether an item is inside a rule's membership window: published (or, with no
+ * date, fetched) no earlier than `memberWindowMs` before now and not after now.
+ * A rule with no `memberWindowMs` can keep anything it reads. Pure.
+ */
+export function withinMemberWindow(detector: Pick<Detector, 'memberWindowMs'>, publishedAt: string | null, fetchedAt: string, now: Date): boolean {
+  if (detector.memberWindowMs === undefined) return true;
+  const at = Date.parse(publishedAt ?? fetchedAt);
+  return Number.isFinite(at) && at >= now.getTime() - detector.memberWindowMs && at <= now.getTime();
+}
+
 /** A rule whose stated effective date falls inside this many days of now. */
 export const RULE_EFFECTIVE_SOON_DAYS = 45;
 
@@ -345,13 +371,134 @@ export const RULE_EFFECTIVE_SOON: Detector = {
   },
 };
 
+/** How recently a rule must have been published for v2 to count it as news. */
+export const RULE_EFFECTIVE_SOON_PUBLISHED_DAYS = 30;
+
+/**
+ * v2's "soon": a rule takes effect no later than this many days (eight weeks)
+ * after its own publication. Measured from publication, not from the run, so a
+ * verdict does not depend on which day the detector happens to run.
+ */
+export const RULE_EFFECTIVE_SOON_V2_LEAD_DAYS = 56;
+
+/** The document a Federal Register correction corrects, as its record body states it ("Corrects 2026-21030."). Pure. */
+export function correctedDocumentOf(body: string | null | undefined): string | null {
+  const m = /Corrects ([A-Za-z0-9-]+)\./.exec(body ?? '');
+  return m ? m[1]! : null;
+}
+
+/**
+ * The most specific agency a record names. The Federal Register lists a
+ * document's agencies parent first ("Transportation Department, Federal
+ * Aviation Administration"), so the last one is the office that issued it.
+ */
+export function issuingAgencyOf(organization: string | null): string | null {
+  const parts = (organization ?? '').split(',').map((one) => one.trim()).filter(Boolean);
+  return parts.length > 0 ? parts[parts.length - 1]! : null;
+}
+
+/**
+ * RULE_EFFECTIVE_SOON, version 2 (SHADOW). Three causes of v1's recorded misses
+ * (DETECTOR_MISSES:RULE_EFFECTIVE_SOON@1), each fixed without lowering a bar:
+ *
+ *  1. The window is measured from the rule's own publication. A final rule
+ *     published in the last 30 days counts when it takes effect on or after its
+ *     publication date and no later than RULE_EFFECTIVE_SOON_V2_LEAD_DAYS (eight
+ *     weeks) after it. v1 measured both bounds from the run, so a rule
+ *     effective on its own publication day (FAA 2026-23073, FCC 2026-23041)
+ *     dropped out days later, and a correction effective 46 days after its
+ *     publication (C1-2026-21030) was missed on the day it was published and
+ *     kept only from the next. The upper bound now comes from the record.
+ *     A rule effective before it was published is still never kept, and
+ *     neither is one already in force: the lower bound is the later of its
+ *     publication day and one day before the run (v1's bar), so a rule that
+ *     took effect weeks ago is not "taking effect soon" and no signal asserts
+ *     a past compliance date. The upper bound alone comes from publication.
+ *  2. A correction inherits the effective date of the rule it corrects
+ *     ("Corrects <document_number>."), read from that stored record, and is
+ *     judged against the correction's own publication date (C1-2026-21030).
+ *     When the corrected record is not stored, nothing is inferred.
+ *  3. Members are grouped by the issuing agency, the last one listed, not by
+ *     the parent department the Federal Register lists first.
+ *
+ * Free-text dates are not parsed: picking the operative date out of prose is
+ * the known failure mode, so a notice whose only date is in its text (Coast
+ * Guard 2026-23047, enforced before it was published) stays out.
+ */
+export const RULE_EFFECTIVE_SOON_V2: Detector = {
+  id: 'RULE_EFFECTIVE_SOON',
+  version: 2,
+  label: RULE_EFFECTIVE_SOON.label,
+  mode: 'SHADOW',
+  sources: RULE_EFFECTIVE_SOON.sources,
+  // Long enough to hold the rule a recent correction corrects; membership stays at 30 days,
+  // and only an item inside it can be a miss (`memberWindowMs`, read by `ruleReading`).
+  lookbackMs: 90 * DAY,
+  entityKeyOf(organization) {
+    return employerKey(issuingAgencyOf(organization));
+  },
+  memberWindowMs: RULE_EFFECTIVE_SOON_PUBLISHED_DAYS * DAY,
+  detect(records, now) {
+    const ours = records.filter((record) => this.sources.includes(record.source));
+    const effectiveOfDocument = (documentNumber: string): string | null => {
+      const corrected = ours.find((record) => record.url.includes(`/${documentNumber}/`));
+      return corrected ? effectiveDateOf(corrected.body) : null;
+    };
+    const groups = new Map<string, { name: string; members: { record: DetectorRecord; effective: string }[] }>();
+    for (const record of ours) {
+      const name = issuingAgencyOf(record.organization);
+      const agency = this.entityKeyOf!(record.organization);
+      if (!agency || !name) continue;
+      if (!withinMemberWindow(this, record.publishedAt, record.fetchedAt, now)) continue;
+      const published = Date.parse(record.publishedAt ?? record.fetchedAt);
+      const corrects = correctedDocumentOf(record.body);
+      const effective = effectiveDateOf(record.body) ?? (corrects ? effectiveOfDocument(corrects) : null);
+      if (!effective) continue;
+      const at = Date.parse(`${effective}T00:00:00.000Z`);
+      const publishedDay = Date.parse(`${new Date(published).toISOString().slice(0, 10)}T00:00:00.000Z`);
+      // Lower bound: not before its own publication, and — v1's bar, kept — not already in force
+      // for more than a day when the rule runs. Upper bound: eight weeks after publication.
+      const from = Math.max(publishedDay, now.getTime() - DAY);
+      if (!Number.isFinite(at) || at < from || at > publishedDay + RULE_EFFECTIVE_SOON_V2_LEAD_DAYS * DAY) continue;
+      const group = groups.get(agency) ?? { name, members: [] };
+      group.members.push({ record, effective });
+      groups.set(agency, group);
+    }
+    const out: DetectedSignal[] = [];
+    for (const [agency, group] of [...groups].sort((a, b) => a[0].localeCompare(b[0]))) {
+      const dates = group.members.map((one) => one.effective).sort();
+      out.push({
+        groupKey: `agency:${agency}`,
+        label: `${group.members.length} final rule(s) from one agency taking effect by ${dates[dates.length - 1]}`,
+        entityKey: agency,
+        entityName: group.name,
+        category: 'REGULATION',
+        windowFrom: `${dates[0]}T00:00:00.000Z`,
+        windowTo: `${dates[dates.length - 1]}T00:00:00.000Z`,
+        memberIds: group.members.map((one) => one.record.id),
+        memberTitles: group.members.map((one) => one.record.title),
+        sourceUrls: [...new Set(group.members.map((one) => one.record.url))],
+        qualifiers: [
+          'a rule taking effect names who is regulated, not who will pay for help complying',
+          'the effective date is the one the Federal Register states; a delay or stay is not read',
+          'a correction carries the effective date of the rule it corrects, read from that stored record',
+        ],
+        hypothesis: `Businesses this agency regulates must comply by ${dates[0]}; some may buy a plain compliance summary or checklist. Not established.`,
+        deliverable: 'DOCUMENT',
+      });
+    }
+    return out;
+  },
+};
+
 /**
  * Every installed rule. Adding one is a new entry here and its tests — nothing else.
+ * RULE_EFFECTIVE_SOON v1 stays exported so its recorded rows and readings keep their key (@1).
  * A model may propose a rule only as a Factory objective (reviewed code, starting
  * in SHADOW); no model output installs, edits or promotes a rule at run time.
  * `proposeRuleRepair` is how a rule's repeated misses become that objective.
  */
-export const DETECTORS: readonly Detector[] = [CONCENTRATED_HIRING, REPEATED_DEMAND, RULE_EFFECTIVE_SOON];
+export const DETECTORS: readonly Detector[] = [CONCENTRATED_HIRING, REPEATED_DEMAND, RULE_EFFECTIVE_SOON_V2];
 
 // ---------------------------------------------------------------------------
 // SHADOW before ACTIVE: readings, promotion and rollback, from rows
@@ -517,12 +664,15 @@ export async function ruleReading(detector: Detector, now: Date = new Date()): P
   );
   const memberIds = [...new Set(rows.flatMap((row) => JSON.parse(row.member_ids) as string[]))];
   const since = new Date(now.getTime() - detector.lookbackMs - DAY).toISOString();
-  const items = await db.all<{ id: string; title: string; url: string; organization: string | null; published_at: string | null }>(
-    `SELECT id, title, url, organization, published_at FROM feed_items
+  const items = await db.all<{ id: string; title: string; url: string; organization: string | null; published_at: string | null; fetched_at: string }>(
+    `SELECT id, title, url, organization, published_at, fetched_at FROM feed_items
       WHERE source IN (${detector.sources.map(() => '?').join(',')}) AND fetched_at >= ? LIMIT 5000`,
     [...detector.sources, since],
   );
   const members = new Set(memberIds);
+  // Related items are keyed the way the rule keys its own entities, or its misses are invisible.
+  const entityKeyOf = (organization: string | null): string | null =>
+    detector.entityKeyOf ? detector.entityKeyOf(organization) : employerKey(organization);
   const memberRows = await (async () => {
     if (memberIds.length === 0) return [] as { id: string; organization: string | null; published_at: string | null }[];
     const out: { id: string; organization: string | null; published_at: string | null }[] = [];
@@ -537,8 +687,10 @@ export async function ruleReading(detector: Detector, now: Date = new Date()): P
   })();
   const entities = new Set(rows.map((row) => row.entity_key).filter((one): one is string => !!one));
   const categories = new Set(rows.filter((row) => !row.entity_key).map((row) => row.category).filter((one): one is string => !!one));
-  const related = items.filter((item) => !members.has(item.id) && (
-    entities.has(employerKey(item.organization) ?? '') || categories.has(jobFamily(item.title)?.key ?? '')
+  // A miss is an item the rule could have kept: one it reads only as context
+  // (outside its membership window) is never a miss, however far back it reads.
+  const related = items.filter((item) => !members.has(item.id) && withinMemberWindow(detector, item.published_at, item.fetched_at, now) && (
+    entities.has(entityKeyOf(item.organization) ?? '') || categories.has(jobFamily(item.title)?.key ?? '')
   ));
   const verdicts = await screenVerdicts([...memberIds, ...related.map((one) => one.id)]);
   const screened = memberIds.filter((id) => verdicts.has(id));
