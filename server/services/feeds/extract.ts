@@ -518,3 +518,34 @@ export function extractItems(items: readonly ExtractableItem[], now: Date = new 
   const status = new Map(reconciled.map((r) => [r.key, r.status]));
   return { facts: facts.map((f) => ({ ...f, contradictionStatus: status.get(f.key) ?? 'UNRECONCILED' })), reconciled, needsModel };
 }
+
+/**
+ * Recompute the fact keys a delta pass touched against every stored
+ * observation of those keys, not only the records read now (KNOW-25-1, "a
+ * changed record should trigger recomputation of affected facts"). `readFacts`
+ * are what this pass read; `storedFacts` are observations of records the pass
+ * did not re-read because they had not changed. Every affected key — what a
+ * changed record's previous version produced, plus what was read now — is
+ * reconciled over both, so a changed record is CONTESTED against an unchanged
+ * one from an earlier pass. A stored observation of a key nothing touched is
+ * left alone, and one from a record read now is superseded by that reading.
+ * Only the read facts are this pass's facts: nothing unchanged is re-recorded.
+ * Pure.
+ */
+export function recomputeAffected(
+  readFacts: readonly ExtractedFact[],
+  storedFacts: readonly ExtractedFact[],
+  affectedKeys: Iterable<string>,
+  now: Date,
+): { facts: ExtractedFact[]; reconciled: ReconciledFact[]; storedObservations: ExtractedFact[] } {
+  const keys = new Set([...affectedKeys, ...readFacts.map((f) => f.key)]);
+  const readIds = new Set(readFacts.map((f) => f.evidence.itemId));
+  const stored = storedFacts.filter((f) => keys.has(f.key) && !readIds.has(f.evidence.itemId));
+  const reconciled = reconcile([...readFacts, ...stored], now);
+  const status = new Map(reconciled.map((r) => [r.key, r.status]));
+  return {
+    facts: readFacts.map((f) => ({ ...f, contradictionStatus: status.get(f.key) ?? 'UNRECONCILED' })),
+    reconciled,
+    storedObservations: stored.map((f) => ({ ...f, contradictionStatus: status.get(f.key) ?? 'UNRECONCILED' })),
+  };
+}

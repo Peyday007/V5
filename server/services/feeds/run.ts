@@ -50,8 +50,8 @@ import { FEED_SOURCES, pullUrl, type FeedSource } from './sources.ts';
 import { FEED_SHORTLIST_BUCKET } from './bucket.ts';
 import { SITE_SOURCE } from './sites.ts';
 import { CODE_SIGNAL_SOURCE, coveredItems, detectionsForLeads } from './detectors.ts';
-import { EXTRACTOR_VERSION, extractItem, extractItems, MODEL_BATCH_SIZE, type ExtractableItem, type ExtractedFact } from './extract.ts';
-import { commitReadings, planDelta, readDeltaIndex, recordIdentity, type DeltaIndex, type DeltaPlan, type DeltaStatus, type RecordReading } from '../knowledge/delta.ts';
+import { EXTRACTOR_VERSION, extractItem, extractItems, MODEL_BATCH_SIZE, recomputeAffected, type ExtractableItem, type ExtractedFact } from './extract.ts';
+import { commitReadings, fingerprintOf, planDelta, readDeltaIndex, recordIdentity, type DeltaIndex, type DeltaPlan, type DeltaStatus, type RecordReading } from '../knowledge/delta.ts';
 import { nameKeyOf, resolveIdentities, type IdentityCollision, type IdentityLink, type IdentityRecord } from '../knowledge/identity.ts';
 import { selectForDeepening, type DeepeningCandidate, type DeepeningDecision, type DeepeningResult } from '../knowledge/deepening.ts';
 import { judgeStructure, plannedStage, planProcessing, type Executor, type PlannedStage, type ProcessingPlan, type RouteEvidence, type Stage } from '../knowledge/processingGraph.ts';
@@ -1004,8 +1004,17 @@ export interface ExtractionDelta {
   reparsedItems: string[];
   /** Fact keys recomputed this pass: what the previous versions of changed records produced, plus what was read now. */
   recomputedKeys: string[];
+  /**
+   * Stored items not re-read this pass whose observations of a recomputed key
+   * were reconciled with what was read: unchanged records in this batch, and
+   * records an earlier pass read at the version the index still holds.
+   */
+  recomputedAgainst: string[];
   affectedEntities: string[];
 }
+
+/** Stored records an affected key is recomputed against in one pass, most recently seen first, so a pass stays bounded. */
+export const DELTA_RECOMPUTE_MAX_RECORDS = 200;
 
 /** Records the carried fingerprint index keeps, most recently seen first, so one row stays a readable size. */
 export const DELTA_INDEX_MAX_RECORDS = 5000;
@@ -1024,6 +1033,74 @@ function boundDeltaIndex(index: DeltaIndex): DeltaIndex {
 }
 
 const errorText = (error: unknown) => String((error as Error)?.message ?? error);
+
+/**
+ * The stored observations of `keys` held by records this pass does not re-read.
+ * Which records hold a key is the delta index's own record (each version's
+ * factKeys); a record in this batch is read from the batch, any other from its
+ * stored `feed_items` row at exactly the version the index says was read (same
+ * fingerprint, read by the current parser). Bounded by
+ * DELTA_RECOMPUTE_MAX_RECORDS, most recently seen first. Code extraction only:
+ * nothing is re-recorded, and nothing spends a model.
+ */
+async function storedObservations(input: {
+  index: DeltaIndex;
+  keys: ReadonlySet<string>;
+  readIdentities: ReadonlySet<string>;
+  batch: readonly ExtractableItem[];
+  identityOf: (item: ExtractableItem) => string;
+}): Promise<{ facts: ExtractedFact[]; itemIds: string[] }> {
+  if (input.keys.size === 0) return { facts: [], itemIds: [] };
+  const holders = Object.values(input.index.records)
+    .filter((h) => !input.readIdentities.has(h.identity))
+    .map((h) => ({ identity: h.identity, latest: h.versions[h.versions.length - 1] }))
+    .filter((h): h is { identity: string; latest: NonNullable<typeof h.latest> } =>
+      !!h.latest && h.latest.parserVersion === EXTRACTOR_VERSION && h.latest.factKeys.some((k) => input.keys.has(k)),
+    )
+    .sort((a, b) => b.latest.seenAt.localeCompare(a.latest.seenAt) || a.identity.localeCompare(b.identity))
+    .slice(0, DELTA_RECOMPUTE_MAX_RECORDS);
+  const found = new Map<string, ExtractableItem>();
+  const batchByIdentity = new Map(input.batch.map((item) => [input.identityOf(item), item]));
+  const missing: { identity: string; fingerprint: string; source: string; recordId: string }[] = [];
+  for (const h of holders) {
+    const inBatch = batchByIdentity.get(h.identity);
+    if (inBatch && fingerprintOf(deltaRecordOf(inBatch).content) === h.latest.fingerprint) {
+      found.set(h.identity, inBatch);
+      continue;
+    }
+    const [source, recordId] = h.identity.split('\u0000');
+    if (source && recordId) missing.push({ identity: h.identity, fingerprint: h.latest.fingerprint, source, recordId });
+  }
+  const db = getDb();
+  for (let i = 0; i < missing.length; i += 50) {
+    const chunk = missing.slice(i, i + 50);
+    const marks = chunk.map(() => '?').join(', ');
+    const rows = await db.all<{ id: string; source: string; url: string; title: string; body: string | null; organization: string | null; published_at: string | null; fetched_at: string }>(
+      `SELECT id, source, url, title, body, organization, published_at, fetched_at FROM feed_items
+        WHERE url IN (${marks}) OR id IN (${marks})
+        ORDER BY fetched_at DESC, id DESC`,
+      [...chunk.map((m) => m.recordId), ...chunk.map((m) => m.recordId)],
+    );
+    const wanted = new Map(chunk.map((m) => [m.identity, m.fingerprint]));
+    for (const row of rows) {
+      const item: ExtractableItem = {
+        id: row.id,
+        source: row.source,
+        url: row.url,
+        title: row.title,
+        body: row.body,
+        organization: row.organization,
+        publishedAt: row.published_at,
+        fetchedAt: row.fetched_at,
+      };
+      const identity = input.identityOf(item);
+      if (found.has(identity) || wanted.get(identity) !== fingerprintOf(deltaRecordOf(item).content)) continue;
+      found.set(identity, item);
+    }
+  }
+  const items = [...found.values()];
+  return { facts: items.flatMap((item) => extractItem(item)).filter((f) => input.keys.has(f.key)), itemIds: items.map((item) => item.id).sort() };
+}
 
 /** What a record says, for its fingerprint: never when or where it was fetched. */
 function deltaRecordOf(item: ExtractableItem) {
@@ -1252,7 +1329,28 @@ export async function recordFeedExtraction(input: {
     ran(sourceId, 'CONTRADICTION_FRESHNESS', count);
     ran(sourceId, 'EVIDENCE_ATTACHMENT', count);
   }
-  const run = extractItems(readItems, now);
+  const extracted = extractItems(readItems, now);
+  // A changed record recomputes the facts it touches against the stored observations of the same keys,
+  // not only against what this pass read: the unchanged records in this batch, and the records earlier
+  // passes read at the version the index still holds (KNOW-25-1). Without them a changed record could
+  // never be CONTESTED against an unchanged one.
+  const stored = deltaPlan
+    ? await stage<Promise<{ facts: ExtractedFact[]; itemIds: string[] }>>('deltaRecompute', Promise.resolve({ facts: [], itemIds: [] }), () =>
+        storedObservations({
+          index: deltaPlan.index,
+          keys: new Set([...deltaPlan.affectedFactKeys, ...extracted.facts.map((f) => f.key)]),
+          readIdentities: new Set(readItems.map((item) => identityOfItem.get(item.id)!)),
+          batch: items.filter((item) => !readItems.includes(item)),
+          identityOf: (item) => recordIdentity(item.source, deltaRecordOf(item).recordId),
+        }),
+      ).catch((error: unknown) => {
+        stageFailures.push({ stage: 'deltaRecompute', error: errorText(error) });
+        return { facts: [] as ExtractedFact[], itemIds: [] as string[] };
+      })
+    : { facts: [] as ExtractedFact[], itemIds: [] as string[] };
+  const recomputed = recomputeAffected(extracted.facts, stored.facts, deltaPlan?.affectedFactKeys ?? [], now);
+  const run = { ...extracted, facts: recomputed.facts, reconciled: recomputed.reconciled };
+  const recomputedAgainst = [...new Set(recomputed.storedObservations.map((f) => f.evidence.itemId))].sort();
   // Structure feeds Connect: what was just read goes into the event graph that construction reads,
   // under the ids the graph's own sync gives these rows, so neither path makes a second fact. Only
   // records whose plan detects events are handed over; the graph's own sync still reads every row.
@@ -1369,6 +1467,7 @@ export async function recordFeedExtraction(input: {
         unchangedItems: items.filter((item) => !readItems.includes(item)).map((item) => item.id),
         reparsedItems: readWith('REPARSE'),
         recomputedKeys: [...new Set([...deltaPlan.affectedFactKeys, ...run.facts.map((f) => f.key)])].sort(),
+        recomputedAgainst,
         affectedEntities: deltaPlan.affectedEntities,
       }
     : undefined;
