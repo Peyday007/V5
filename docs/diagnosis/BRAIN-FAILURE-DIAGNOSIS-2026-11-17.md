@@ -295,3 +295,12 @@ See F1–F7 above. Each one gives the cause, file:line, run IDs, the smallest ch
     - An empty list with a stated reason is now neutral for fitness. A bare empty list still counts against the model.
   - W6 stage 2 runs on release 5.
   - Verification status: SUPPORTED, not CONFIRMED until W6 stage 2 shows the 120B with no HELD BACK on RESEARCH_FRAGMENT and accepted claims per GPU-hour well above stage 1's 2.
+- **09:49Z, release 5 (4cec7709) failed the Postgres gate.** Production is still on eda04071.
+  - Failure 1: res-15-5-1-cost-once, PG 22P02 on $5 in researchYieldByPurpose. It came from Factory's RES-15-5/META-18 merges #1026/#1027 (about 7.9k lines), which landed mid-release.
+  - Failure 2: the discoveryLaneSurge test from W12, "5 ≥ 32" on PG.
+  - Fix PRs are due 10:20Z, then release 6.
+- **Forecast:**
+  - gate about 10:55Z, live about 11:35Z, W6 stage 2 from 11:35 to 12:35Z, readings until 13:30Z, report 14:30Z;
+  - slack is about 30 min;
+  - risk: further Factory merges onto production during the release.
+- Recommended to the integration owner: a temporary hold on Factory merges into production until release 6 is live (owner §4: a stable release candidate).
