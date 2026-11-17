@@ -91,7 +91,13 @@ const sudoku = modelled(
   }),
   // Brain writes the puzzle itself: its direct cost is small next to the $50, not the generic $0–$100 sweep,
   // whose arithmetic centre (R-PORTFOLIO-COST) would net it nothing.
-  { price: assumed(50, 'its submission page'), daysToCash: unknown(1, 30), directCost: unknown(0, 10) },
+  // Every column answered by a gated claim (its submission page): filled alone would be estimated (W2).
+  {
+    price: assumed(50, 'its submission page'),
+    daysToCash: unknown(1, 30),
+    directCost: unknown(0, 10),
+    columns: { payer: 'EVIDENCE', reachableChannel: 'EVIDENCE', buyingSignal: 'EVIDENCE', offerScope: 'EVIDENCE', fulfillmentOwner: 'EVIDENCE' },
+  },
 );
 const constructed = modelled(opening({ id: 'arr_db8ca023bf0a', title: 'Constructed: Reverse: pool several buyers’ purchases with one supplier' }), {
   repeatable: true,
@@ -154,6 +160,17 @@ describe('a transaction model per opening', () => {
     expect(p.acquisitionCost.status).toBe('ESTIMATED');
     expect(p.counts.proven + p.counts.estimated + p.counts.unknown).toBe(14);
     expect(p.dependencies).toContain('CONTACT_BUYER');
+  });
+
+  it('a filled column is proven only by a gated claim: a proposal or a bare column is estimated (W2)', () => {
+    const bare = pathwayOf({ ...sudoku, columns: undefined }, null, ctx);
+    for (const f of [bare.buyer, bare.channel, bare.offer, bare.motivation, bare.fulfiller]) expect(f.status).toBe('ESTIMATED');
+    // Brain's proposal (a RECOMMENDATION card fact) reads as an ASSUMPTION through kindToProvenance: never proven.
+    const proposed = pathwayOf({ ...sudoku, columns: { payer: 'ASSUMPTION', reachableChannel: 'ASSUMPTION', offerScope: 'ASSUMPTION' } }, null, ctx);
+    expect([proposed.buyer.status, proposed.channel.status, proposed.offer.status]).toEqual(['ESTIMATED', 'ESTIMATED', 'ESTIMATED']);
+    expect(proposed.counts.proven).toBeLessThan(pathwayOf(sudoku, null, ctx).counts.proven);
+    // An empty column stays unknown whatever its provenance.
+    expect(pathwayOf({ ...rev, columns: { payer: 'EVIDENCE' } }, null, ctx).buyer.status).not.toBe('PROVEN');
   });
 
   it('a supplier\'s price page is supply without a buyer, and Brain constructs the buyer side against its price', () => {

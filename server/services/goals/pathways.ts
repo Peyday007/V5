@@ -58,6 +58,7 @@
  *     asked differently through the door that already exists.
  */
 import type { ModelInput, ModelledOpportunity } from '../cash/goalScenario.ts';
+import type { VariableProvenance } from '../../domain/scenario.ts';
 import type { GoalPortfolio } from './portfolio.ts';
 import type { TargetReading } from './target.ts';
 import type { ChainLink, ConsideredOpening } from './plan.ts';
@@ -457,7 +458,17 @@ function factOf(input: ModelInput): PathFact {
   return { value, low, high, status, basis: input.note.slice(0, 200) };
 }
 
-function textFact(value: string | null | undefined, basis: string, status: FactStatus = 'PROVEN'): PathFact {
+/**
+ * A card column as a fact. Filled is not proven (W2, 2026-11-17): it is PROVEN
+ * only when the column's card fact is a gated claim (`ModelledOpportunity.columns`,
+ * read through `kindToProvenance`); a proposal, a person's word or a bare column
+ * is ESTIMATED; an empty column is UNKNOWN.
+ */
+function columnStatus(provenance: VariableProvenance | undefined): FactStatus {
+  return provenance === 'EVIDENCE' || provenance === 'HISTORICAL' ? 'PROVEN' : 'ESTIMATED';
+}
+
+function textFact(value: string | null | undefined, basis: string, status: FactStatus = 'ESTIMATED'): PathFact {
   const text = value?.trim() ? value.trim().slice(0, 240) : null;
   return text ? { value: text, low: null, high: null, status, basis } : { value: null, low: null, high: null, status: 'UNKNOWN', basis: `nothing on the card says ${basis}` };
 }
@@ -630,15 +641,15 @@ export function pathwayOf(
   const o = one.opportunity;
   const constructed = !!one.estimated;
   const est = (text: string | null, basis: string) => textFact(text, basis, 'ESTIMATED');
-  const buyer = constructed ? est(o.title.replace(/^Constructed:\s*/i, ''), 'the constructed design names this buyer kind; no buyer has been found yet') : textFact(o.payer, 'who pays');
+  const buyer = constructed ? est(o.title.replace(/^Constructed:\s*/i, ''), 'the constructed design names this buyer kind; no buyer has been found yet') : textFact(o.payer, 'who pays', columnStatus(one.columns?.payer));
   const motivation = constructed
     ? { value: null, low: null, high: null, status: 'UNKNOWN' as const, basis: 'no dated buying signal yet: the design is a hypothesis about why they would buy' }
-    : textFact(o.buyingSignal ? `${o.buyingSignal}${o.signalObservedAt ? ` (observed ${o.signalObservedAt.slice(0, 10)})` : ''}` : null, 'why the buyer pays now');
-  const channel = textFact(o.reachableChannel, 'how the buyer is reached');
-  const offer = textFact(o.offerScope, 'the offer');
+    : textFact(o.buyingSignal ? `${o.buyingSignal}${o.signalObservedAt ? ` (observed ${o.signalObservedAt.slice(0, 10)})` : ''}` : null, 'why the buyer pays now', columnStatus(one.columns?.buyingSignal));
+  const channel = textFact(o.reachableChannel, 'how the buyer is reached', columnStatus(one.columns?.reachableChannel));
+  const offer = textFact(o.offerScope, 'the offer', columnStatus(one.columns?.offerScope));
   const named: PathFact = one.fulfilledBy
     ? { value: one.fulfilledBy.value.slice(0, 240), low: null, high: null, status: (one.fulfilledBy.provenance === 'EVIDENCE' || one.fulfilledBy.provenance === 'HISTORICAL' ? 'PROVEN' : 'ESTIMATED') as FactStatus, basis: 'the card names who does the work' }
-    : textFact(o.fulfillmentOwner, 'who does the work');
+    : textFact(o.fulfillmentOwner, 'who does the work', columnStatus(one.columns?.fulfillmentOwner));
   // The buyer is never its own fulfiller: a card naming the payer as who does the work names nobody (production, 2026-11-08).
   const payerWord = (o.payer ?? '').toLowerCase().split(/[^a-z0-9]+/).find((w) => w.length > 3 && !['market', 'payer', 'english', 'language'].includes(w)) ?? null;
   if (named.status !== 'UNKNOWN' && payerWord && String(named.value).toLowerCase().includes(payerWord)) {

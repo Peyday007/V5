@@ -107,6 +107,10 @@ export interface ModelInput {
   inferred?: { tier: EvidenceTier; justified: boolean; p10: number; p50: number; p90: number; observations: number } & Partial<InputSample>;
 }
 
+/** The card's text columns a transaction pathway shows, and the card fact each is answered by. */
+export const CARD_COLUMN_FACT = { payer: 'payer', buyingSignal: 'buyingEvidence', reachableChannel: 'access', offerScope: 'offer', fulfillmentOwner: 'fulfillment' } as const;
+export type CardColumn = keyof typeof CARD_COLUMN_FACT;
+
 export interface ModelledOpportunity {
   /**
    * A buyer-acquisition channel of its own, instead of the shared cold
@@ -160,6 +164,13 @@ export interface ModelledOpportunity {
    * logistics or resale opening.
    */
   fulfilledBy: { value: string; provenance: VariableProvenance; source: SourceRef | null } | null;
+  /**
+   * Where each text column of the card stands (W2, 2026-11-17): its card fact's
+   * kind through `kindToProvenance` — EVIDENCE only for a gated claim, a
+   * proposal or a person's word an ASSUMPTION, no fact UNKNOWN. A filled
+   * column is never proof by being filled. Absent on an arrangement, which has no card.
+   */
+  columns?: Partial<Record<CardColumn, VariableProvenance>>;
   /**
    * Money only comes after somebody else picks us: a bid, a tender, a
    * solicitation, a grant. That is a gate outside our control before any work,
@@ -1150,6 +1161,7 @@ export async function modelOpportunity(
     agreedValue: agreements.reduce((sum, one) => sum + one.amountCents, 0) / 100,
     agreedDeals: agreements.length,
     fulfilledBy,
+    columns: Object.fromEntries((Object.keys(CARD_COLUMN_FACT) as CardColumn[]).map((column) => [column, kindToProvenance(fact(CARD_COLUMN_FACT[column])).provenance])),
     competitiveAward: agreements.length === 0 && isCompetitiveAward(opportunity),
   };
 }
