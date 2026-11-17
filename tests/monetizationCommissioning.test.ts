@@ -95,7 +95,8 @@ import { profileFor } from '../server/services/russell/compilerProfiles.ts';
 import { recordCardFact } from '../server/repos/cashCardFacts.ts';
 import { DISQUALIFIED_FIELD } from '../server/services/cash/engineCard.ts';
 import { getApprovalEnvelope } from '../server/services/research/approvalEnvelope.ts';
-import { ATTRIBUTE } from '../server/domain/monetization.ts';
+import { ATTRIBUTE, laneForAttribute } from '../server/domain/monetization.ts';
+import { isLaneId } from '../server/domain/evidenceLanes.ts';
 import {
   MONETIZATION_ATTRIBUTES,
   type CashOpportunity,
@@ -331,7 +332,7 @@ describe('the whole causal chain, from a discovery to a rank that moved', () => 
     const asked = first.opened[0]!;
     expect(MONETIZATION_ATTRIBUTES).toContain(asked.attribute);
     expect(asked.reason.length).toBeGreaterThan(40);
-    expect(asked.question).toContain(asked.attribute);
+    expect(asked.question).toContain(laneForAttribute(asked.attribute));
 
     // 3. It went through the machinery that already exists: a candidate, an
     //    envelope resolved from Brain's own row, and a real compiler profile.
@@ -349,7 +350,7 @@ describe('the whole causal chain, from a discovery to a rank that moved', () => 
       claims: [
         {
           claim: `The published rate card lists USD 450.00 for this work.`,
-          lane: asked.attribute,
+          lane: laneForAttribute(asked.attribute),
         },
       ],
     });
@@ -453,7 +454,7 @@ describe('it enters the machinery that already exists, rather than beside it', (
     // complete answer and must not fail the fragment.
     expect(fragment.requiredEvidence.every((one) => one.necessity === 'CONDITIONAL')).toBe(true);
     // The attribute being asked is in the question a worker actually reads.
-    expect(fragment.question).toContain(asked.attribute);
+    expect(fragment.question).toContain(laneForAttribute(asked.attribute));
   });
 
   it('is judged by the plan validator the same way every other packet is', async () => {
@@ -567,7 +568,15 @@ describe('a question is fully identified before it is asked', () => {
     // verbatim rather than composed about the subject.
     expect(opened.question).toContain(ATTRIBUTE[opened.attribute].task.slice(0, 40));
     // The destination is the lane, which is a column rather than a reading.
-    expect(opened.question).toContain(`evidence lane "${opened.attribute}"`);
+    expect(opened.question).toContain(`evidence lane "${laneForAttribute(opened.attribute)}"`);
+  });
+
+  it('asks for a lane id the research schema accepts, and files an answer on it (2026-11-17)', () => {
+    for (const attribute of Object.keys(ATTRIBUTE) as (keyof typeof ATTRIBUTE)[]) {
+      expect(isLaneId(laneForAttribute(attribute))).toBe(true);
+    }
+    expect(laneForAttribute('timeToCash')).toBe('time_to_cash');
+    expect(commissionQuestion({ pathTitle: 'Direct sale', subjectTitle: null, attribute: 'expectedRevenue', round: 1 })).toContain('evidence lane "expected_revenue"');
   });
 
   it('names the allowed values of a choice question, which is all the filer reads (2026-11-17)', () => {
@@ -806,7 +815,7 @@ describe('adversarial: absence never becomes a negative answer', () => {
       claims: [
         {
           claim: 'No publisher states a figure for this.',
-          lane: asked.attribute,
+          lane: laneForAttribute(asked.attribute),
           claimType: 'NEGATIVE_EXISTENCE',
         },
       ],
@@ -833,7 +842,7 @@ describe('adversarial: absence never becomes a negative answer', () => {
     const asked = (await tick()).opened[0]!;
     await finishResearch({
       candidateId: asked.candidateId,
-      claims: [{ claim: 'It probably pays about USD 400.', lane: asked.attribute, sourceUrl: null }],
+      claims: [{ claim: 'It probably pays about USD 400.', lane: laneForAttribute(asked.attribute), sourceUrl: null }],
     });
     await tick();
     expect(await pathFact(asked.pathId, asked.attribute)).toBeNull();
@@ -989,7 +998,7 @@ describe('adversarial: contradiction, stale evidence and unsupported answers', (
       claims: [
         {
           claim: 'The published rate card lists USD 450.00 for this work.',
-          lane: asked.attribute,
+          lane: laneForAttribute(asked.attribute),
           contradicted: true,
         },
       ],
@@ -1029,7 +1038,7 @@ describe('adversarial: contradiction, stale evidence and unsupported answers', (
     const asked = (await tick()).opened[0]!;
     await finishResearch({
       candidateId: asked.candidateId,
-      claims: [{ claim: 'The published rate card lists USD 450.00.', lane: asked.attribute }],
+      claims: [{ claim: 'The published rate card lists USD 450.00.', lane: laneForAttribute(asked.attribute) }],
     });
     await tick();
     expect(await pathFact(asked.pathId, asked.attribute)).not.toBeNull();
@@ -1059,7 +1068,7 @@ describe('adversarial: contradiction, stale evidence and unsupported answers', (
     });
     await finishResearch({
       candidateId: second.commission.candidateId,
-      claims: [{ claim: 'A different publisher lists USD 600.00.', lane: asked.attribute }],
+      claims: [{ claim: 'A different publisher lists USD 600.00.', lane: laneForAttribute(asked.attribute) }],
     });
     await tick();
 
@@ -1272,7 +1281,7 @@ describe('bounded enumeration, and the wind-down', () => {
     await finishResearch({
       candidateId: asked.candidateId,
       claims: [
-        { claim: 'The published rate card lists USD 450.00.', lane: asked.attribute },
+        { claim: 'The published rate card lists USD 450.00.', lane: laneForAttribute(asked.attribute) },
       ],
     });
 
@@ -1337,7 +1346,7 @@ describe('the surface says what is happening, in one place', () => {
     const asked = (await tick()).opened[0]!;
     await finishResearch({
       candidateId: asked.candidateId,
-      claims: [{ claim: 'The published rate card lists USD 450.00.', lane: asked.attribute }],
+      claims: [{ claim: 'The published rate card lists USD 450.00.', lane: laneForAttribute(asked.attribute) }],
     });
 
     const midLedger = await composeLedger({ projectId });
@@ -1605,7 +1614,7 @@ describe('adversarial: research that finished before the possibility was put awa
       claims: [
         {
           claim: 'The published rate is 1.50 USD per minute.',
-          lane: asked.attribute,
+          lane: laneForAttribute(asked.attribute),
           sourceUrl: 'https://example.invalid/published-rate',
         },
       ],

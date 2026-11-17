@@ -859,6 +859,22 @@ export function mayAnswer(attribute: MonetizationAttribute, kind: FactKind): boo
   return ATTRIBUTE[attribute].kinds.includes(kind);
 }
 
+/**
+ * The evidence-lane id an attribute is researched under. A lane id is
+ * lowercase snake_case (`LANE_ID`), and ten of the attributes are camelCase,
+ * so asking for the attribute itself asked for an id the research schema
+ * refuses. Production, 2026-11-17: 515 questions asked, 13 answered.
+ */
+export function laneForAttribute(attribute: MonetizationAttribute): string {
+  return attribute.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
+}
+
+/** The attribute a claim's evidence lane names, by its lane id or (older rows) its own key. */
+export function attributeForLane(lane: string): MonetizationAttribute | null {
+  if (isMonetizationAttribute(lane)) return lane;
+  return MONETIZATION_ATTRIBUTES.find((one) => laneForAttribute(one) === lane) ?? null;
+}
+
 export function isMonetizationAttribute(value: unknown): value is MonetizationAttribute {
   return (
     typeof value === 'string' && (MONETIZATION_ATTRIBUTES as readonly string[]).includes(value)
