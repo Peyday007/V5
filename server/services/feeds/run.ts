@@ -53,7 +53,7 @@ import { CODE_SIGNAL_SOURCE, coveredItems, detectionsForLeads } from './detector
 import { EXTRACTOR_VERSION, extractItem, extractItems, MODEL_BATCH_SIZE, type ExtractableItem, type ExtractedFact } from './extract.ts';
 import { commitReadings, planDelta, readDeltaIndex, recordIdentity, type DeltaIndex, type DeltaPlan, type DeltaStatus, type RecordReading } from '../knowledge/delta.ts';
 import { resolveIdentities, type IdentityCollision, type IdentityLink, type IdentityRecord } from '../knowledge/identity.ts';
-import { selectForDeepening, type DeepeningCandidate, type DeepeningDecision } from '../knowledge/deepening.ts';
+import { selectForDeepening, type DeepeningCandidate, type DeepeningDecision, type DeepeningResult } from '../knowledge/deepening.ts';
 import { planProcessing, type ProcessingPlan, type RouteEvidence } from '../knowledge/processingGraph.ts';
 import { funnelGain, readFunnel, type FunnelReading, type FunnelRecord } from '../knowledge/funnel.ts';
 import { addExtractedItems, currentEventGraph, syncEventGraph, type ExtractedItemsUpdate, type GraphHypothesis } from '../industry/eventGraph.ts';
@@ -1691,17 +1691,71 @@ export function leadPassesRules(item: StoredFeedItem, screen: LeadOutput | null,
 }
 
 /**
- * The order the free-model screen takes items in. The model is the escalation
- * for what code cannot read: the extractor's needsModel batches go first, whole
- * and in order, and only then the records code could read, which still need the
- * lead judgement the shortlist gate asks for. Nothing is dropped, so no gate is
- * lost; under a tight pace the unreadable records are the ones a model sees.
- * The order alone saves no call: `screenFeedLeads` asks about each needsModel
- * batch in one call per model (`screenLeadBatch`). Pure.
+ * How the free-model screen routes a pass's records (KNOW-25-1, S-0358). The
+ * model is the escalation for what code cannot read, and an unreadable record
+ * reaches it only when selective deepening promotes it: each one is a
+ * deepening candidate scored by value of information, and `selectForDeepening`
+ * admits the highest-scoring within `capacity` — the reads the model lane can
+ * afford this pass (`lanePacing`), the same number the pass is cut to. A held
+ * record is not sent to a model this pass and is not marked either: it stays
+ * unscreened, so the next pass judges it again against that pass's capacity.
+ *
+ * Its value is the money its facts state (`statedValue`, 1 when none) times
+ * the share of its lead window still left to act in: a lead whose window has
+ * passed is worth no read, however many of them arrive. Code could not read it,
+ * so its uncertainty is whole, and nothing Brain holds understands it, so it is
+ * wholly novel. Wording never enters (§18.1).
+ *
+ * Readable records still need the lead judgement the shortlist gate asks for,
+ * so they follow the promoted ones; they are not deepening, since code already
+ * read them. Pure.
  */
-export function screenOrder<T extends ExtractableItem>(items: readonly T[], now: Date): T[] {
-  const unreadable = new Set(extractItems(items, now).needsModel.flat().map((one) => one.id));
-  return [...items.filter((one) => unreadable.has(one.id)), ...items.filter((one) => !unreadable.has(one.id))];
+export interface EscalationRoute<T> {
+  /** Unreadable records the deepening selection promoted, highest score first. */
+  promoted: T[];
+  /** Unreadable records it held, with the decision that held each. */
+  held: { item: T; decision: DeepeningDecision }[];
+  /** Records code could read. */
+  readable: T[];
+  deepening: DeepeningResult;
+}
+
+export function routeEscalation<T extends ExtractableItem>(items: readonly T[], now: Date, capacity: number): EscalationRoute<T> {
+  const run = extractItems(items, now);
+  const unreadable = new Set(run.needsModel.flat().map((one) => one.id));
+  const factsByItem = new Map<string, ExtractedFact[]>();
+  for (const f of run.facts) factsByItem.set(f.evidence.itemId, [...(factsByItem.get(f.evidence.itemId) ?? []), f]);
+  const candidates: DeepeningCandidate[] = items
+    .filter((one) => unreadable.has(one.id))
+    .map((one) => {
+      const published = Date.parse(one.publishedAt ?? one.fetchedAt);
+      const left = Number.isFinite(published) ? Math.min(1, Math.max(0, 1 - (now.getTime() - published) / LEAD_MAX_AGE_MS)) : 1;
+      return { id: one.id, decisionValue: statedValue(factsByItem.get(one.id) ?? []) * left, uncertainty: 1, novelty: 1 };
+    });
+  const deepening = selectForDeepening(candidates, { capacity });
+  const byId = new Map(items.map((one) => [one.id, one]));
+  const promotedDecisions = deepening.decisions
+    .map((decision, index) => ({ decision, index }))
+    .filter((one) => one.decision.promote)
+    .sort((a, b) => b.decision.score - a.decision.score || a.index - b.index);
+  return {
+    promoted: promotedDecisions.map((one) => byId.get(one.decision.id)!),
+    held: deepening.decisions.filter((d) => !d.promote).map((decision) => ({ item: byId.get(decision.id)!, decision })),
+    readable: items.filter((one) => !unreadable.has(one.id)),
+    deepening,
+  };
+}
+
+/**
+ * The order the free-model screen takes items in: the unreadable records
+ * selective deepening promotes (`routeEscalation`), highest value of
+ * information first, then the records code could read. A held unreadable
+ * record is left out — it waits for a pass with capacity for it. With the
+ * default capacity (every record) nothing is held. Pure.
+ */
+export function screenOrder<T extends ExtractableItem>(items: readonly T[], now: Date, capacity: number = items.length): T[] {
+  const route = routeEscalation(items, now, capacity);
+  return [...route.promoted, ...route.readable];
 }
 
 // ---------------------------------------------------------------------------
@@ -1886,6 +1940,8 @@ export async function screenLeadBatch(
 
 /**
  * Screen recent, unscreened leads with the free models. Bounded per pass.
+ * Unreadable records reach a model only when selective deepening promotes
+ * them within the pass's capacity (`screenOrder`, `routeEscalation`).
  * The needsModel batches among them are asked about whole first
  * (`screenLeadBatch`); every record then goes through the per-record screen,
  * which reads a batch answer as its cache and asks only what is still open.
@@ -1916,8 +1972,10 @@ export async function screenFeedLeads(input: {
   // so a subject a shortlist already took is not asked again under another record.
   const window = await subjectWindow(since);
   const settled = await screenedSubjects(window);
-  const todo = planScreens(todoAll, settled, now).ask.slice(0, pace.perPass);
-  // Escalation in batches: what the parser could not read is asked about together.
+  // Selective deepening routes the model reads: an unreadable record is escalated only when its
+  // value of information earns one of the reads this pass can afford; a held one waits unscreened.
+  const todo = screenOrder(planScreens(todoAll, settled, now).ask, now, pace.perPass).slice(0, pace.perPass);
+  // Escalation in batches: what the parser could not read, and deepening promoted, is asked about together.
   const batches = leadBatches(todo, now);
   let nextBatch = 0;
   const batchWorker = async (): Promise<void> => {

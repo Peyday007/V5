@@ -8,7 +8,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { insertFeedItems } from '../server/repos/feeds.ts';
 import { getDb } from '../server/db/database.ts';
-import { EXTRACTION_EVENT, recordFeedExtraction, type ExtractionPass } from '../server/services/feeds/run.ts';
+import { EXTRACTION_EVENT, LEAD_MAX_AGE_MS, recordFeedExtraction, routeEscalation, screenFeedLeads, screenOrder, SCREENS_PER_PASS, type ExtractionPass } from '../server/services/feeds/run.ts';
+import type { Completer, LaneConfig } from '../server/services/cheap/lane.ts';
 
 let projectId = '';
 beforeEach(async () => {
@@ -142,5 +143,84 @@ describe('recordFeedExtraction records the processing graph, delta, identity, de
     expect(row!.funnel).toBeDefined();
     const summary = await getDb().get<{ summary: string }>('SELECT summary FROM cash_events WHERE project_id = ? AND kind = ?', [projectId, EXTRACTION_EVENT]);
     expect(summary!.summary).toContain('identity');
+  });
+});
+
+describe('selective deepening routes the model reads (repair: deepening not consumed)', () => {
+  const vague = (id: string, ageHours: number) => ({
+    id,
+    source: 'any',
+    url: `https://example.test/${id}`,
+    title: `Musing ${id}`,
+    body: 'Something is happening and nobody knows what.',
+    organization: null,
+    publishedAt: hoursAgo(ageHours),
+    fetchedAt: hoursAgo(ageHours),
+  });
+  const readable = {
+    id: 'rfq',
+    source: 'any',
+    url: 'https://example.test/rfq',
+    title: 'Request for quotes: 500 kg of packaging film',
+    body: 'Seeking quotes from a supplier. Delivery in Austin, TX by 2026-12-15. Budget $4,000.',
+    organization: 'Acme Foods LLC',
+    publishedAt: hoursAgo(1),
+    fetchedAt: hoursAgo(1),
+  };
+
+  it('promotes unreadable records by value of information within capacity, and holds the rest from the model', () => {
+    const items = [vague('old', 24 * 15), vague('fresh', 1), readable, vague('mid', 24 * 5), vague('expired', LEAD_MAX_AGE_MS / 3_600_000 + 1)];
+    const route = routeEscalation(items, now, 2);
+    expect(route.promoted.map((one) => one.id)).toEqual(['fresh', 'mid']);
+    expect(route.held.map((one) => one.item.id).sort()).toEqual(['expired', 'old']);
+    expect(route.held.every((one) => !one.decision.promote && one.decision.reasons.length >= 3)).toBe(true);
+    expect(route.held.find((one) => one.item.id === 'expired')!.decision.reasons.at(-1)).toMatch(/cost of deepening/);
+    expect(route.readable.map((one) => one.id)).toEqual(['rfq']);
+    expect(route.deepening.capacity).toBe(2);
+    // The screen order is the routing: promoted first by score, readable after, held left out.
+    expect(screenOrder(items, now, 2).map((one) => one.id)).toEqual(['fresh', 'mid', 'rfq']);
+    // More capacity promotes more; an expired lead is worth no read at any capacity.
+    expect(screenOrder(items, now).map((one) => one.id)).toEqual(['fresh', 'mid', 'old', 'rfq']);
+  });
+
+  it('the screen pass sends only promoted unreadable records to the models; held ones wait for capacity', async () => {
+    const source = `dp${Math.random().toString(36).slice(2, 8)}`;
+    const fresh = Array.from({ length: SCREENS_PER_PASS }, (_, i) => ({
+      externalId: `${source}-f${i}`,
+      url: `https://example.test/${source}/f${i}`,
+      title: `Musing fresh ${i} ${source}`,
+      body: 'Something is happening and nobody knows what.',
+      organization: null,
+      publishedAt: new Date(now.getTime() - (60 + i) * 60_000).toISOString(),
+    }));
+    const old = Array.from({ length: 10 }, (_, i) => ({
+      externalId: `${source}-o${i}`,
+      url: `https://example.test/${source}/o${i}`,
+      title: `Musing old ${i} ${source}`,
+      body: 'Something is happening and nobody knows what.',
+      organization: null,
+      publishedAt: hoursAgo(24 * (10 + i)),
+    }));
+    await insertFeedItems(source, [...old, ...fresh]);
+    const config: LaneConfig = { url: 'http://cheap.test/v1', key: null, models: ['m1', 'm2'], dailyBudget: 10_000, timeoutMs: 1000 };
+    const drop = { verdict: 'DROP', window: 'UNKNOWN', deliverable: 'NONE', need: '', payer: '', reason: 'nothing to sell' };
+    const asked: string[] = [];
+    const completer: Completer = async (_c, _m, _s, prompt) => {
+      asked.push(prompt);
+      if (!prompt.includes('{"answers"')) return JSON.stringify(drop);
+      const posts = prompt.split(/\nPost \d+:\n/).slice(1);
+      return JSON.stringify({ answers: posts.map((_p, i) => ({ post: i + 1, ...drop })) });
+    };
+    await screenFeedLeads({ now, config, completer });
+    const first = asked.join('\n');
+    // Capacity is the pass's own model budget: the low-value old records were held, not read.
+    for (let i = 0; i < 10; i += 1) expect(first).not.toContain(`Musing old ${i} ${source}`);
+    expect(fresh.filter((one) => first.includes(one.title)).length).toBeGreaterThan(SCREENS_PER_PASS / 2);
+    // Held is not dropped: with the fresh ones answered, the next pass has capacity for them.
+    asked.length = 0;
+    await screenFeedLeads({ now, config, completer });
+    await screenFeedLeads({ now, config, completer });
+    const later = asked.join('\n');
+    for (let i = 0; i < 10; i += 1) expect(later).toContain(`Musing old ${i} ${source}`);
   });
 });
