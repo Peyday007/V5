@@ -10,6 +10,9 @@
  * "Corrected rule effective YYYY-MM-DD.").
  */
 import { describe, expect, it } from 'vitest';
+import { freshProject } from './helpers.ts';
+import { getDb } from '../server/db/database.ts';
+import { pullDueFeeds, type AcquisitionDeps } from '../server/services/feeds/run.ts';
 import {
   DETECTORS,
   RULE_EFFECTIVE_SOON,
@@ -26,6 +29,7 @@ import {
   completeFederalRegisterCorrections,
   federalRegisterEffectiveOnUrl,
   parseFederalRegister,
+  type FeedSource,
 } from '../server/services/feeds/sources.ts';
 
 const DAY = 86_400_000;
@@ -233,5 +237,125 @@ describe('Federal Register connector: the corrected rule’s effective date', ()
 
   it('is the Federal Register source’s completion step', () => {
     expect(FEED_SOURCES.find((s) => s.id === 'federal-register-rules')?.complete).toBe(completeFederalRegisterCorrections);
+  });
+});
+
+/**
+ * The completion step as a pull runs it: both call sites in run.ts (the
+ * acquisition pipeline's `deps.read`, and the plain `fetcher` pass) must ask
+ * the follow-up URL and store the marker in `feed_items.body`, where the
+ * detector reads it. Driven through `pullDueFeeds` against real rows.
+ */
+describe('a Federal Register pull stores the corrected rule’s effective date', () => {
+  const production = FEED_SOURCES.find((s) => s.id === 'federal-register-rules')!;
+  const listing = {
+    results: [
+      {
+        document_number: 'C1-2026-21030',
+        title: 'AP1000 Design Certification Renewal',
+        html_url: `${FR}/2026/11/12/C1-2026-21030/ap1000-design-certification-renewal`,
+        publication_date: '2026-11-12',
+        abstract: null,
+        effective_on: null,
+        agencies: [{ name: 'Nuclear Regulatory Commission' }],
+        correction_of: '2026-21030',
+      },
+      {
+        document_number: '2026-23041',
+        title: 'Television Broadcasting Services, St. George, Utah',
+        html_url: `${FR}/2026/11/12/2026-23041/television-broadcasting-services-st-george-utah`,
+        publication_date: '2026-11-12',
+        abstract: null,
+        effective_on: '2026-11-12',
+        agencies: [{ name: 'Federal Communications Commission' }],
+        correction_of: null,
+      },
+    ],
+  };
+  const lookup = federalRegisterEffectiveOnUrl('2026-21030');
+  /** The Federal Register API as the pull meets it: the listing, and the corrected rule's own record. */
+  const answer = (url: string): unknown => (url === lookup ? { document_number: '2026-21030', effective_on: '2026-12-28' } : listing);
+  /** The production source under a fresh id, so its pull schedule is this test's alone; its parse and completion are the real ones. */
+  const sourceFor = (id: string): FeedSource => ({ ...production, id, url: `https://www.federalregister.gov/api/v1/documents.json?test=${id}` });
+
+  async function stored(id: string): Promise<Map<string, string | null>> {
+    const rows = await getDb().all<{ external_id: string; body: string | null }>('SELECT external_id, body FROM feed_items WHERE source = ?', [id]);
+    return new Map(rows.map((r) => [r.external_id, r.body]));
+  }
+
+  async function expectMarked(id: string, asked: string[]): Promise<void> {
+    expect(asked).toContain(lookup);
+    const bodies = await stored(id);
+    expect(bodies.get('C1-2026-21030')).toBe('Corrects 2026-21030. Corrected rule effective 2026-12-28.');
+    expect(bodies.get('2026-23041')).toBe('Effective 2026-11-12.');
+    // What was stored is what v3 reads: the correction is kept under its corrected rule's date.
+    const rows = await getDb().all<{ id: string; source: string; url: string; title: string; organization: string | null; published_at: string | null; fetched_at: string; body: string | null }>(
+      'SELECT id, source, url, title, organization, published_at, fetched_at, body FROM feed_items WHERE source = ?',
+      [id],
+    );
+    const records: DetectorRecord[] = rows.map((r) => ({
+      id: r.id,
+      source: 'federal-register-rules',
+      url: r.url,
+      title: r.title,
+      organization: r.organization,
+      publishedAt: r.published_at,
+      fetchedAt: '2026-11-12T06:00:00.000Z',
+      body: r.body,
+    }));
+    const nrc = RULE_EFFECTIVE_SOON_V3.detect(records, later).find((s) => s.groupKey === 'agency:nuclear regulatory commission');
+    expect(nrc?.windowTo).toBe('2026-12-28T00:00:00.000Z');
+  }
+
+  it('through the acquisition pipeline (run.ts acquireSource, follow-up read through deps.read)', async () => {
+    await freshProject();
+    const id = `fr-acq-${Math.random().toString(36).slice(2, 8)}`;
+    const asked: string[] = [];
+    const deps: AcquisitionDeps = {
+      transport: async (url) => {
+        asked.push(url);
+        return { status: 200, headers: {}, body: JSON.stringify(answer(url)) };
+      },
+      validators: async () => null,
+      supervise: async () => ({ outcome: 'NONE' }),
+      record: async () => undefined,
+      yields: async () => new Map(),
+      recordYields: async () => undefined,
+      sleep: async () => undefined,
+    };
+    const out = await pullDueFeeds({ now: later, sources: [sourceFor(id)], acquisition: deps });
+    expect(out[0]).toMatchObject({ source: id, fetched: 2, inserted: 2, error: null });
+    await expectMarked(id, asked);
+  });
+
+  it('through the plain fetcher pass (run.ts pullDueFeeds, follow-up read through the fetcher)', async () => {
+    await freshProject();
+    const id = `fr-fetch-${Math.random().toString(36).slice(2, 8)}`;
+    const asked: string[] = [];
+    const out = await pullDueFeeds({
+      now: later,
+      sources: [sourceFor(id)],
+      fetcher: async (url) => {
+        asked.push(url);
+        return answer(url);
+      },
+    });
+    expect(out[0]).toMatchObject({ source: id, fetched: 2, inserted: 2, error: null });
+    await expectMarked(id, asked);
+  });
+
+  it('a failed follow-up keeps the pull and stores the correction as parsed', async () => {
+    await freshProject();
+    const id = `fr-fail-${Math.random().toString(36).slice(2, 8)}`;
+    const out = await pullDueFeeds({
+      now: later,
+      sources: [sourceFor(id)],
+      fetcher: async (url) => {
+        if (url === lookup) throw new Error('HTTP 503');
+        return listing;
+      },
+    });
+    expect(out[0]).toMatchObject({ source: id, fetched: 2, inserted: 2, error: null });
+    expect((await stored(id)).get('C1-2026-21030')).toBe('Corrects 2026-21030.');
   });
 });
