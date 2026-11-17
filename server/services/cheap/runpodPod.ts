@@ -23,8 +23,14 @@
  * `SAMPLE_MS`, so its running time and spend are measured, not assumed.
  *
  * A dollar budget binds all of it (`podBudget`): `BRAIN_RUNPOD_BUDGET_USD` per
- * rolling `BRAIN_RUNPOD_BUDGET_WINDOW_HOURS` (default 24), measured from those
- * same samples. Spent ≥ budget → the pod is stopped whatever it is doing, and
+ * rolling `BRAIN_RUNPOD_BUDGET_WINDOW_HOURS` (default 24), measured from what
+ * RunPod bills, not only from those samples (`windowSpendFromRows`): per pod,
+ * the larger of the sampled spend and the time RunPod says it has been running
+ * (its own start time or uptime, and the rows that started, moved and stopped
+ * it) × its price. Samples exist only while Brain is up and connected; RunPod
+ * bills from the moment the pod runs (production 2026-11-17: pod 6lsnbsnctavj2m
+ * billed ~$5.80 while the samples counted $3.09, and a $4 budget never bound).
+ * Spent ≥ budget → the pod is stopped whatever it is doing, and
  * no start or move happens until the window frees budget. A GPU in primary mode
  * with no budget set runs under `DEFAULT_PRIMARY_BUDGET_USD` ($10 per 24 h), so
  * continuous operation is never open-ended.
@@ -32,7 +38,7 @@
 import { getDb } from '../../db/database.ts';
 import { recordBinEvent, type RecordBinEventInput } from '../../repos/bins.ts';
 import { runpodConfig, runpodUrlOverride, setRunpodPaused, setRunpodUrlOverride, type Fetch } from './runpod.ts';
-import { createPod, deletePod, DEFAULT_MAX_USD_PER_HOUR, POD_NAME, podUrl, RECIPES, recipeFor, type PodRecipe } from './runpodRestore.ts';
+import { createPod, deletePod, DEFAULT_MAX_USD_PER_HOUR, graphql, POD_NAME, podUrl, RECIPES, recipeFor, type PodRecipe } from './runpodRestore.ts';
 
 const API = 'https://rest.runpod.io/v1';
 export const DEFAULT_IDLE_STOP_MS = 15 * 60_000;
@@ -109,14 +115,17 @@ export async function readPodBudget(now: number = Date.now(), env: NodeJS.Proces
   return readBudget(budget, now);
 }
 
-async function readBudget(budget: PodBudget, now: number): Promise<PodBudgetReading> {
-  let spent: number | null = null;
+async function readBudget(budget: PodBudget, now: number, live: LivePod | null = null, rows: (since: string) => Promise<PodRow[]> = readPodRows): Promise<PodBudgetReading & { spend: WindowSpend | null }> {
+  const since = now - budget.windowMs;
   try {
-    spent = (await readPodSpend(new Date(now - budget.windowMs).toISOString())).dollars;
+    // Rows from a window earlier too, so a pod started before the window and running into it is seen.
+    const spend = windowSpendFromRows(await rows(new Date(since - budget.windowMs).toISOString()), { since, now, live });
+    return { ...budgetReading(budget, spend.dollars, now), spend };
   } catch {
-    spent = null;
+    // The rows are unreadable; RunPod's own word on the running pod still binds when it alone exhausts the budget.
+    const own = windowSpendFromRows([], { since, now, live });
+    return { ...budgetReading(budget, own.dollars >= budget.usd ? own.dollars : null, now), spend: own.dollars >= budget.usd ? own : null };
   }
-  return budgetReading(budget, spent, now);
 }
 
 export type BudgetMark = 'BUDGET_EXHAUSTED' | 'BUDGET_AVAILABLE';
@@ -255,7 +264,7 @@ export async function viaGraphql(config: Pick<PodConfig, 'apiKey' | 'podId'>, me
   const id = JSON.stringify(config.podId);
   const query =
     method === 'GET' && path === ''
-      ? `query { pod(input: { podId: ${id} }) { desiredStatus costPerHr } }`
+      ? `query { pod(input: { podId: ${id} }) { desiredStatus costPerHr runtime { uptimeInSeconds } } }`
       : method === 'POST' && path === '/stop'
         ? `mutation { podStop(input: { podId: ${id} }) { desiredStatus } }`
         : method === 'POST' && path === '/start'
@@ -276,16 +285,54 @@ export async function viaGraphql(config: Pick<PodConfig, 'apiKey' | 'podId'>, me
   return new Response(JSON.stringify(value), { status: 200, headers: { 'content-type': 'application/json' } });
 }
 
-export async function readPod(config: PodConfig, fetchImpl: Fetch = fetch): Promise<{ status: PodStatus; costPerHr: number | null }> {
+export interface PodReading {
+  status: PodStatus;
+  costPerHr: number | null;
+  /** When RunPod started billing the running pod (epoch ms): its `lastStartedAt`, or now − its uptime. Null when not running or not said. */
+  startedAt: number | null;
+}
+
+/** RunPod's answer about one pod, REST- or GraphQL-shaped, as far as billing goes. */
+interface PodBody {
+  desiredStatus?: string;
+  costPerHr?: number | string;
+  adjustedCostPerHr?: number | string;
+  lastStartedAt?: string | null;
+  runtime?: { uptimeInSeconds?: number | null } | null;
+}
+
+/** Pure: when RunPod started billing a running pod, from its `lastStartedAt` or its runtime uptime. */
+export function billingStartOf(body: PodBody | null | undefined, now: number): number | null {
+  if (!body) return null;
+  const started = typeof body.lastStartedAt === 'string' ? Date.parse(body.lastStartedAt) : Number.NaN;
+  if (Number.isFinite(started) && started <= now) return started;
+  const uptime = Number(body.runtime?.uptimeInSeconds);
+  if (body.runtime && Number.isFinite(uptime) && uptime >= 0) return now - uptime * 1000;
+  return null;
+}
+
+/** The running pod's uptime from RunPod's GraphQL API: REST's pod answer carries no runtime. */
+async function billingStartViaGraphql(config: Pick<PodConfig, 'apiKey' | 'podId'>, fetchImpl: Fetch, now: number): Promise<number | null> {
+  const r = await graphql(config.apiKey, `query { pod(input: { podId: ${JSON.stringify(config.podId)} }) { runtime { uptimeInSeconds } } }`, fetchImpl);
+  const pod = r.ok ? (r.data?.['pod'] as PodBody | null | undefined) : null;
+  return billingStartOf(pod, now);
+}
+
+export async function readPod(config: PodConfig, fetchImpl: Fetch = fetch, now: number = Date.now()): Promise<PodReading> {
   try {
     const response = await api(config, 'GET', '', fetchImpl);
-    if (!response.ok) return { status: 'UNKNOWN', costPerHr: null };
-    const body = (await response.json()) as { desiredStatus?: string; costPerHr?: number | string; adjustedCostPerHr?: number | string };
+    if (!response.ok) return { status: 'UNKNOWN', costPerHr: null, startedAt: null };
+    const body = (await response.json()) as PodBody;
     const status = (['RUNNING', 'EXITED', 'TERMINATED'] as const).find((s) => s === body.desiredStatus) ?? 'UNKNOWN';
     const cost = Number(body.adjustedCostPerHr ?? body.costPerHr);
-    return { status, costPerHr: Number.isFinite(cost) ? cost : null };
+    let startedAt: number | null = null;
+    if (status === 'RUNNING') {
+      startedAt = billingStartOf(body, now);
+      if (startedAt === null) startedAt = await billingStartViaGraphql(config, fetchImpl, now).catch(() => null);
+    }
+    return { status, costPerHr: Number.isFinite(cost) ? cost : null, startedAt };
   } catch {
-    return { status: 'UNKNOWN', costPerHr: null };
+    return { status: 'UNKNOWN', costPerHr: null, startedAt: null };
   }
 }
 
@@ -540,8 +587,18 @@ export async function superviseRunpodPod(
     lastStartFailed?: (now: number) => Promise<boolean>;
     hostRefusals?: (podId: string) => Promise<number>;
     migrate?: MigrateDeps;
-    /** The window's spend in dollars (default: the sample rows); null when unreadable. */
+    /**
+     * The window's spend in dollars as the rows measure it; null when unreadable. RunPod's own
+     * billing of the running pod still counts beside it (the larger of the two binds).
+     */
     spend?: (since: string) => Promise<number | null>;
+    /** The `RUNPOD_POD` rows since an instant (default: `readPodRows`), when `spend` is not given. */
+    rows?: (since: string) => Promise<PodRow[]>;
+    /**
+     * Enforce the budget only: stop a pod that has exhausted it and change nothing else. Boot runs
+     * this at once, so a pod RUNNING when Brain starts is counted before the free lane's first step.
+     */
+    budgetOnly?: boolean;
     /** Where the supervisor's own events go (default: `recordBinEvent`). */
     record?: (event: RecordBinEventInput) => Promise<void>;
   } = {},
@@ -556,13 +613,24 @@ export async function superviseRunpodPod(
   const fetchImpl = deps.fetchImpl ?? fetch;
   const record = deps.record ?? recordBinEvent;
   try {
-    const pod = await readPod(config, fetchImpl);
+    const pod = await readPod(config, fetchImpl, now);
+    const live: LivePod = { podId: config.podId, status: pod.status, costPerHr: pod.costPerHr, startedAt: pod.startedAt };
+    // Every row written while the pod runs carries when RunPod started billing it, so a stopped
+    // pod's unsampled time (the model load, a Brain restart) is still in the window afterwards.
+    const billedFrom = pod.status === 'RUNNING' && pod.startedAt !== null ? { startedAt: new Date(pod.startedAt).toISOString() } : {};
     let budget: PodBudgetReading | null = null;
+    let spend: WindowSpend | null = null;
     if (config.budget) {
       if (deps.spend) {
-        const spent = await deps.spend(new Date(now - config.budget.windowMs).toISOString()).catch(() => null);
+        const sampled = await deps.spend(new Date(now - config.budget.windowMs).toISOString()).catch(() => null);
+        spend = windowSpendFromRows([], { since: now - config.budget.windowMs, now, live });
+        const spent = sampled === null ? (spend.dollars >= config.budget.usd ? spend.dollars : null) : Math.max(sampled, spend.dollars);
         budget = budgetReading(config.budget, spent, now);
-      } else budget = await readBudget(config.budget, now);
+      } else {
+        const read = await readBudget(config.budget, now, live, deps.rows);
+        spend = read.spend;
+        budget = budgetReading(config.budget, read.spent, now);
+      }
       if (state.budgetMark === undefined) state.budgetMark = await lastBudgetMark();
       const mark = budgetEvent(budget, state.budgetMark);
       if (mark) {
@@ -572,20 +640,33 @@ export async function superviseRunpodPod(
           provider: 'runpod',
           outcome: mark,
           reason: `GPU spend $${(budget.spent ?? 0).toFixed(2)} of $${budget.budget.toFixed(2)} in the last ${budget.windowHours} h${budget.defaulted ? ' (default budget: BRAIN_RUNPOD_BUDGET_USD unset)' : ''}`,
-          measures: { podId: config.podId, spent: budget.spent, budget: budget.budget, windowHours: budget.windowHours, since: budget.since, status: pod.status },
+          measures: {
+            podId: config.podId,
+            spent: budget.spent,
+            budget: budget.budget,
+            windowHours: budget.windowHours,
+            since: budget.since,
+            status: pod.status,
+            ...billedFrom,
+            ...(spend ? { sampled: round(spend.sampled), billed: round(spend.billed), pods: spend.pods } : {}),
+          },
           evidenceClass: 'MEASURED',
         }).catch(() => undefined);
       }
     }
     const busy = input.waiting > 0 || input.inFlight > 0;
-    if (busy || pod.status !== 'RUNNING') state.idleSince = null;
+    if (deps.budgetOnly) {
+      // No reading of the work here: the idle timer is the free lane's.
+    } else if (busy || pod.status !== 'RUNNING') state.idleSince = null;
     else if (state.idleSince === null) state.idleSince = now;
 
     const ready = pod.status === 'RUNNING' && (await vllmReady(config, fetchImpl));
     setRunpodPaused(pod.status === 'RUNNING' ? (ready ? null : 'vLLM still loading') : pod.status === 'UNKNOWN' ? null : `pod ${pod.status.toLowerCase()}`);
 
     const startFailedRecently = pod.status === 'RUNNING' && (await (deps.lastStartFailed ?? lastStartFailed)(now));
-    const decision = decidePod({ status: pod.status, waiting: input.waiting, inFlight: input.inFlight, idleSince: state.idleSince, lastActionAt: state.lastActionAt, now, idleStopMs: config.idleStopMs, startFailedRecently, budget });
+    const decided = decidePod({ status: pod.status, waiting: input.waiting, inFlight: input.inFlight, idleSince: state.idleSince, lastActionAt: state.lastActionAt, now, idleStopMs: config.idleStopMs, startFailedRecently, budget });
+    const decision: PodDecision =
+      deps.budgetOnly && !(decided.action === 'STOP' && budget?.exhausted) ? { action: 'NONE', reason: `budget check only: ${decided.reason}` } : decided;
     let acted = false;
     const refusals = decision.action === 'START' ? await (deps.hostRefusals ?? hostRefusalsSinceStart)(config.podId) : 0;
     if (decision.action === 'START' && shouldMigrate({ status: pod.status, waiting: input.waiting, hostRefusals: refusals })) {
@@ -626,7 +707,7 @@ export async function superviseRunpodPod(
         provider: 'runpod',
         outcome,
         reason: `${decision.reason}${detail}`.slice(0, 400),
-        measures: { podId: config.podId, waiting: input.waiting, inFlight: input.inFlight, status: pod.status, costPerHr: pod.costPerHr },
+        measures: { podId: config.podId, waiting: input.waiting, inFlight: input.inFlight, status: pod.status, costPerHr: pod.costPerHr, ...billedFrom },
         evidenceClass: 'MEASURED',
       }).catch(() => undefined);
     }
@@ -638,7 +719,7 @@ export async function superviseRunpodPod(
         outcome: `SAMPLE_${pod.status}`,
         reason: decision.reason.slice(0, 400),
         durationMs: SAMPLE_MS,
-        measures: { podId: config.podId, waiting: input.waiting, inFlight: input.inFlight, ready, costPerHr: pod.costPerHr },
+        measures: { podId: config.podId, waiting: input.waiting, inFlight: input.inFlight, ready, costPerHr: pod.costPerHr, ...billedFrom },
         evidenceClass: 'MEASURED',
       }).catch(() => undefined);
     }
@@ -723,4 +804,148 @@ export async function readPodSpend(since: string): Promise<PodSpend> {
       return { outcome: r.outcome ?? '', durationMs: duration !== null && Number.isFinite(duration) ? duration : null, measures };
     }),
   );
+}
+
+/* ------------------------------------------------------------------------- */
+/* Spend, as RunPod bills it                                                  */
+/* ------------------------------------------------------------------------- */
+
+/** One `RUNPOD_POD` row with its time, as far as billing is concerned. */
+export interface PodRow extends PodSpendRow {
+  /** Epoch ms. */
+  at: number;
+}
+
+/** RunPod's own reading of the pod the supervisor serves. */
+export interface LivePod {
+  podId: string;
+  status: PodStatus;
+  costPerHr: number | null;
+  /** When RunPod started billing it (epoch ms); null when not running or not said. */
+  startedAt: number | null;
+}
+
+export interface PodWindowSpend {
+  podId: string;
+  /** Dollars from this pod's own samples in the window. */
+  sampled: number;
+  /** Dollars from the time RunPod billed it in the window × its price. */
+  billed: number;
+  billedHours: number;
+  costPerHr: number | null;
+}
+
+export interface WindowSpend {
+  /** Σ over pods of the larger of sampled and billed: what the budget binds on. */
+  dollars: number;
+  sampled: number;
+  billed: number;
+  pods: PodWindowSpend[];
+}
+
+const round = (n: number): number => Math.round(n * 10_000) / 10_000;
+const podOf = (value: unknown): string | null => (typeof value === 'string' && value.trim() ? value.trim().toLowerCase() : null);
+const priceOf = (value: unknown): number | null => {
+  const n = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : Number.NaN;
+  return Number.isFinite(n) && n >= 0 ? n : null;
+};
+
+/** Rows that start a pod's billing, and rows that end it. */
+const BILLING_STARTS = new Set(['STARTED', 'SAMPLE_RUNNING']);
+const BILLING_ENDS = new Set(['STOPPED', 'OLD_POD_DELETED', 'SAMPLE_EXITED', 'SAMPLE_TERMINATED']);
+
+/**
+ * Pure: the GPU spend in the window `[since, now]`, per pod the larger of what
+ * Brain's samples counted and what RunPod billed. Billed time is reconstructed
+ * from the rows — a pod bills from `STARTED`, from the `MIGRATED` row that
+ * created it, from the `startedAt` RunPod reported on any row, or from its first
+ * RUNNING sample, until `STOPPED`, `OLD_POD_DELETED`, the `MIGRATED` row that
+ * moved off it, or a sample that saw it stopped — and, for the pod being
+ * served, from RunPod's own start time or uptime through now, so a RUNNING pod
+ * with no samples at all counts from when RunPod started billing it. A pod whose
+ * end nobody saw is closed one sample period after it was last seen running.
+ */
+export function windowSpendFromRows(rows: readonly PodRow[], input: { since: number; now: number; live?: LivePod | null }): WindowSpend {
+  const { since, now } = input;
+  const live = input.live ? { ...input.live, podId: input.live.podId.toLowerCase() } : null;
+  const intervals = new Map<string, [number, number][]>();
+  const open = new Map<string, number>();
+  const lastRunning = new Map<string, number>();
+  const price = new Map<string, number>();
+  const sampleRows = new Map<string, PodSpendRow[]>();
+  const add = (pod: string, from: number, to: number): void => {
+    if (to > from) intervals.set(pod, [...(intervals.get(pod) ?? []), [from, to]]);
+  };
+  const start = (pod: string | null, at: number): void => {
+    if (pod && (!open.has(pod) || open.get(pod)! > at)) open.set(pod, at);
+  };
+  const end = (pod: string | null, at: number): void => {
+    if (!pod || !open.has(pod)) return;
+    add(pod, open.get(pod)!, at);
+    open.delete(pod);
+  };
+  for (const row of [...rows].sort((a, b) => a.at - b.at)) {
+    const pod = podOf(row.measures['podId']);
+    const cost = priceOf(row.measures['costPerHr']);
+    if (pod && cost !== null) price.set(pod, cost);
+    if (row.outcome.startsWith('SAMPLE_') && row.at >= since) sampleRows.set(pod ?? '', [...(sampleRows.get(pod ?? '') ?? []), row]);
+    const reported = typeof row.measures['startedAt'] === 'string' ? Date.parse(row.measures['startedAt']) : Number.NaN;
+    if (pod && Number.isFinite(reported) && reported <= row.at) add(pod, reported, row.at);
+    if (row.outcome === 'MIGRATED') {
+      end(podOf(row.measures['from']), row.at);
+      start(pod, row.at);
+    } else if (BILLING_STARTS.has(row.outcome)) {
+      start(pod, row.outcome === 'SAMPLE_RUNNING' ? row.at - (row.durationMs ?? SAMPLE_MS) : row.at);
+      if (pod && row.outcome === 'SAMPLE_RUNNING') lastRunning.set(pod, row.at);
+    } else if (BILLING_ENDS.has(row.outcome)) end(pod, row.at);
+  }
+  for (const [pod, from] of open) {
+    if (live && live.podId === pod && live.status === 'RUNNING') add(pod, from, now);
+    else add(pod, from, Math.min(now, Math.max(from, lastRunning.get(pod) ?? from) + SAMPLE_MS));
+  }
+  if (live && live.status === 'RUNNING' && live.startedAt !== null) add(live.podId, live.startedAt, now);
+  if (live && live.costPerHr !== null) price.set(live.podId, live.costPerHr);
+
+  const pods = new Set<string>([...intervals.keys(), ...sampleRows.keys()]);
+  const out: PodWindowSpend[] = [];
+  let dollars = 0;
+  let sampledTotal = 0;
+  let billedTotal = 0;
+  for (const pod of pods) {
+    const merged = [...(intervals.get(pod) ?? [])]
+      .map(([a, b]): [number, number] => [Math.max(a, since), Math.min(b, now)])
+      .filter(([a, b]) => b > a)
+      .sort((x, y) => x[0] - y[0]);
+    let ms = 0;
+    let cursor = -Infinity;
+    for (const [a, b] of merged) {
+      const from = Math.max(a, cursor);
+      if (b > from) ms += b - from;
+      cursor = Math.max(cursor, b);
+    }
+    const cost = price.get(pod) ?? null;
+    const billedHours = ms / 3_600_000;
+    const billed = cost === null ? 0 : billedHours * cost;
+    const sampled = podSpendFromRows(sampleRows.get(pod) ?? []).dollars;
+    dollars += Math.max(sampled, billed);
+    sampledTotal += sampled;
+    billedTotal += billed;
+    out.push({ podId: pod, sampled: round(sampled), billed: round(billed), billedHours: round(billedHours), costPerHr: cost });
+  }
+  return { dollars, sampled: sampledTotal, billed: billedTotal, pods: out };
+}
+
+/** The `RUNPOD_POD` rows that bear on billing since `since` (ISO). */
+export async function readPodRows(since: string): Promise<PodRow[]> {
+  const rows = await getDb().all<{ at: string | Date; outcome: string | null; duration_ms: number | string | null; measures: unknown }>(
+    `SELECT at, outcome, duration_ms, measures FROM bin_events
+      WHERE event_type = 'RUNPOD_POD' AND at >= ?
+        AND (outcome LIKE 'SAMPLE_%' OR outcome IN ('STARTED', 'STOPPED', 'MIGRATED', 'OLD_POD_DELETED', 'BUDGET_EXHAUSTED', 'BUDGET_AVAILABLE'))
+      ORDER BY at`,
+    [since],
+  );
+  return rows.map((r) => {
+    const duration = r.duration_ms === null ? null : Number(r.duration_ms);
+    return { at: r.at instanceof Date ? r.at.getTime() : Date.parse(String(r.at)), outcome: r.outcome ?? '', durationMs: duration !== null && Number.isFinite(duration) ? duration : null, measures: eventMeasures(r.measures) };
+  });
 }

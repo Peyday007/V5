@@ -2454,6 +2454,17 @@ export function startFreeLaneLoop(_intervalMs = 30_000, delayMs = 3 * 60_000): v
       .then(({ startAdaptivePool }) => startAdaptivePool())
       .catch((error) => console.warn('[free-lane] pool did not start:', (error as Error).message));
   };
+  /*
+   * The GPU budget binds from boot, not from the pool's first step minutes later: a pod
+   * RUNNING when Brain starts (a deploy restarted it, production 2026-11-17 01:22Z) is
+   * counted at once from RunPod's own start time, and stopped if it has exhausted the budget.
+   */
+  const budgetCheck = setTimeout(() => {
+    void import('../cheap/runpodPod.ts')
+      .then(({ superviseRunpodPod }) => superviseRunpodPod({ waiting: 0, inFlight: 0 }, { budgetOnly: true }))
+      .catch((error) => console.warn('[runpod] boot budget check failed:', (error as Error).message));
+  }, Math.min(delayMs, BOOT_BUDGET_CHECK_MS));
+  budgetCheck.unref?.();
   const wait = setTimeout(() => {
     begin();
     measureStages();
@@ -2464,6 +2475,9 @@ export function startFreeLaneLoop(_intervalMs = 30_000, delayMs = 3 * 60_000): v
   wait.unref?.();
   timer = wait as unknown as NodeJS.Timeout;
 }
+
+/** How soon after boot the GPU budget is checked against RunPod's own billing. */
+export const BOOT_BUDGET_CHECK_MS = 15_000;
 
 /** How often the lane records its per-stage capacity reading (CAP-16-3). */
 export const STAGE_CAPACITY_INTERVAL_MS = 60 * 60_000;
