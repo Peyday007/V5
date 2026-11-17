@@ -34,7 +34,7 @@
  */
 
 import type { CategoryReading } from './readiness.ts';
-import type { AcquisitionCandidate, MachineCapitalRequirement } from '../../domain/types.ts';
+import type { AcquisitionCandidate, CategoryEvidenceEntry, MachineCapitalRequirement } from '../../domain/types.ts';
 
 export type StageMode = 'BUILD' | 'CONTRACT' | 'PARTNER' | 'LICENSE' | 'BUY';
 
@@ -167,6 +167,8 @@ export interface Challenge {
   kind: ChallengeKind;
   detail: string;
   stages: string[];
+  /** The sourced claims the challenge stands on, when it stands on recorded figures rather than on the graph alone. */
+  evidence?: string[];
 }
 
 export type Feasibility = 'FEASIBLE' | 'INFEASIBLE' | 'UNDETERMINED';
@@ -210,6 +212,14 @@ export function assessResources(input: {
 export interface VentureEconomics {
   /** What the venture is expected to return over the horizon, when established. */
   expectedReturn: Money | null;
+  /**
+   * The most any return could be, from what the evidence states buyers spend in
+   * the category (`economicsFromReading`). Never an expected return: it can only
+   * establish that a strategy is economically weak — a cost no smaller than all
+   * the buyer spending on record cannot be repaid by a share of it — and never
+   * that one is strong (invariant 39).
+   */
+  returnCeiling?: { money: Money; evidence: string[] } | null;
 }
 
 export interface VentureVerdict {
@@ -235,7 +245,21 @@ export function challengeVenture(
       stages: resting.map((n) => n.key),
     });
   }
-  if (economics.expectedReturn === null) {
+  const ceiling = economics.returnCeiling ?? null;
+  if (
+    economics.expectedReturn === null &&
+    ceiling &&
+    path.total &&
+    ceiling.money.currency === path.total.currency &&
+    ceiling.money.amountMinor <= path.total.amountMinor
+  ) {
+    challenges.push({
+      kind: 'ECONOMICALLY_WEAK',
+      detail: `the cost ${path.total.amountMinor} ${path.total.currency} is no less than ${ceiling.money.amountMinor}, all the buyer spending the evidence states, so no share of it can repay the cost`,
+      stages: [],
+      evidence: ceiling.evidence,
+    });
+  } else if (economics.expectedReturn === null) {
     challenges.push({ kind: 'BUILT_ON_UNKNOWNS', detail: 'the expected return is not established', stages: [] });
   } else if (path.total && economics.expectedReturn.currency === path.total.currency && economics.expectedReturn.amountMinor <= path.total.amountMinor) {
     challenges.push({
@@ -269,8 +293,17 @@ const MAX_SUBSTITUTION_VARIANTS = 64;
  *
  * Substitutions come only from alternatives the stages carry as evidence; the
  * validate-first variant funds the largest dependency-closed prefix the capital
- * covers and ends at a decision whether to proceed. Only FEASIBLE ones are
- * returned, and the original is never discarded by this call.
+ * covers and ends at a decision whether to proceed. The original is never
+ * discarded by this call.
+ *
+ * A substitution is returned when it is FEASIBLE, or when the original is
+ * INFEASIBLE and the substitution clears every blocking challenge (capital,
+ * capability, economic weakness) and is left only with unknowns. The second
+ * kind is recorded with its own UNDETERMINED verdict, so it never reads as
+ * ready or ranks above anything (invariant 39); dropping it would discard the
+ * one route the evidence shows around an impossible plan (invariant 47) — and
+ * since no row establishes an expected return, a FEASIBLE-only filter dropped
+ * every contracted, partnered, licensed or bought route in production.
  */
 export function alternativesFor(
   stages: readonly VentureStage[],
@@ -278,6 +311,8 @@ export function alternativesFor(
   economics: VentureEconomics = { expectedReturn: null },
 ): VentureAlternative[] {
   const out: VentureAlternative[] = [];
+  const original = buildVenturePath(stages);
+  const originalInfeasible = original.ok && challengeVenture(original, situation, economics).feasibility === 'INFEASIBLE';
   const options = stages.map((s) => [null, ...(s.alternatives ?? [])] as (StageAlternative | null)[]);
   let combos: (StageAlternative | null)[][] = [[]];
   for (const choice of options) {
@@ -302,7 +337,7 @@ export function alternativesFor(
     const path = buildVenturePath(variant);
     if (!path.ok) continue;
     const verdict = challengeVenture(path, situation, economics);
-    if (verdict.feasibility !== 'FEASIBLE') continue;
+    if (!(verdict.feasibility === 'FEASIBLE' || (verdict.feasibility === 'UNDETERMINED' && originalInfeasible))) continue;
     const differs = stages.flatMap((stage, i) => (combo[i] ? [`${stage.key}: ${stage.mode ?? 'BUILD'} → ${combo[i]!.mode} via ${combo[i]!.actor}`] : []));
     out.push({ kind: 'SUBSTITUTED', differs, stages: variant, path, verdict });
   }
@@ -369,6 +404,74 @@ function validateFirst(stages: readonly VentureStage[], situation: ResourceSitua
 }
 
 /* ------------------------------------------------------------------------- */
+/* Figures the evidence states                                                */
+/* ------------------------------------------------------------------------- */
+
+const SYMBOL_CURRENCY: Readonly<Record<string, string>> = { 'US$': 'USD', $: 'USD', '€': 'EUR', '£': 'GBP' };
+const SCALE: Readonly<Record<string, number>> = { thousand: 1e3, k: 1e3, million: 1e6, mn: 1e6, m: 1e6, billion: 1e9, bn: 1e9, b: 1e9 };
+const AMOUNT = /(US\$|\$|€|£|\b(?:USD|EUR|GBP)\s?)(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)(?:\s?(thousand|million|billion|bn|mn|k|m|b)\b)?/gi;
+
+/** Every money amount a sentence states, in minor units. Pure; an unrecognised figure is simply not read. */
+export function statedAmounts(text: string): Money[] {
+  const out: Money[] = [];
+  for (const match of text.matchAll(AMOUNT)) {
+    const marker = match[1]!.trim().toUpperCase();
+    const currency = SYMBOL_CURRENCY[marker] ?? marker;
+    const value = Number(match[2]!.replace(/,/g, ''));
+    const scale = match[3] ? (SCALE[match[3].toLowerCase()] ?? 1) : 1;
+    if (!Number.isFinite(value)) continue;
+    out.push({ currency, amountMinor: Math.round(value * scale * 100) });
+  }
+  return out;
+}
+
+/** The highest amount, when every amount is in one currency; null otherwise, because a mixed figure is not one. */
+function highest(amounts: readonly Money[]): Money | null {
+  if (amounts.length === 0 || amounts.some((one) => one.currency !== amounts[0]!.currency)) return null;
+  return amounts.reduce((a, b) => (b.amountMinor > a.amountMinor ? b : a));
+}
+
+/** Words that say a figure is what buyers spend in aggregate. */
+const SPEND_CUE = /\b(?:market|sales|revenues?|spend(?:s|ing)?|spent|turnover|bought|purchases?|purchased)\b/i;
+/** Words that say a figure is about one unit or a cost, which bounds no return. */
+const UNIT_CUE = /\b(?:per (?:unit|machine|item|piece)|each|apiece|unit price|retail price|list price|msrp|priced at|costs?|fee)\b/i;
+/** Words that say a figure is what a firm is offered, bought or valued at. */
+const PRICE_CUE = /\b(?:acquired for|acquisition price|purchase price|sold for|bought for|valued at|valuation|asking price|for sale at|price of|priced at)\b/i;
+
+/**
+ * The price a candidate's own sourced statement gives for buying it, high end;
+ * null when the statement gives none. Nothing is estimated (invariant 39).
+ */
+export function statedPrice(statement: string): Money | null {
+  if (!PRICE_CUE.test(statement)) return null;
+  return highest(statedAmounts(statement));
+}
+
+/**
+ * A category's economics, from what its evidence states. Pure.
+ *
+ * No row states what this company would earn, so `expectedReturn` stays null.
+ * What demand evidence can state is what buyers spend in aggregate, and that is
+ * a ceiling on any return: it lets the challenge name a strategy that costs no
+ * less than the whole buyer spending on record as economically weak, and it
+ * never makes one feasible. A statement about one unit's price or a cost bounds
+ * no return and is not read; figures in several currencies are not combined.
+ */
+export function economicsFromReading(
+  evidence: { demand: readonly Pick<CategoryEvidenceEntry, 'statement' | 'sourceClaimId'>[] },
+  currency: string | null,
+): VentureEconomics {
+  if (!currency) return { expectedReturn: null, returnCeiling: null };
+  const stating = evidence.demand
+    .filter((one) => SPEND_CUE.test(one.statement) && !UNIT_CUE.test(one.statement))
+    .map((one) => ({ claim: one.sourceClaimId, amounts: statedAmounts(one.statement).filter((m) => m.currency === currency) }))
+    .filter((one) => one.amounts.length > 0);
+  if (stating.length === 0) return { expectedReturn: null, returnCeiling: null };
+  const money = highest(stating.flatMap((one) => one.amounts))!;
+  return { expectedReturn: null, returnCeiling: { money, evidence: stating.map((one) => one.claim) } };
+}
+
+/* ------------------------------------------------------------------------- */
 /* A real venture's stages, from the ladder's rows                            */
 /* ------------------------------------------------------------------------- */
 
@@ -394,8 +497,8 @@ export function certificationPricesBarrier(barrierCount: number): boolean {
  * - stages that stand on a row: each capital requirement established under the
  *   scenario the reading prices (priced from its published high figure, or
  *   withheld), each required capability nobody holds (with the acquisition
- *   candidates on record as BUY alternatives, unpriced because no candidate row
- *   carries a price), and each entry barrier (priced by a certification figure
+ *   candidates on record as BUY alternatives, priced only when the candidate's
+ *   sourced statement gives its price, `statedPrice`), and each entry barrier (priced by a certification figure
  *   only when `certificationPricesBarrier` says so);
  * - the decisions and gates every venture passes through: market research,
  *   positioning, specification, unit economics, validation, pricing, channel,
@@ -553,7 +656,8 @@ export function stagesFromReading(
       alternatives: supplying.map((one) => ({
         mode: 'BUY' as const,
         actor: one.name,
-        budget: null,
+        // Priced only by a figure the candidate's own source states as its price; otherwise withheld.
+        budget: statedPrice(one.statement),
         requiresCapabilityIds: [],
         evidence: [one.sourceClaimId],
       })),

@@ -46,6 +46,7 @@ import {
   assessResources,
   buildVenturePath,
   challengeVenture,
+  economicsFromReading,
   stagesFromReading,
   type Challenge,
   type Feasibility,
@@ -279,10 +280,12 @@ export function reconsiderFrom(
       available: pathCurrency ? (availableByCurrency.get(pathCurrency) ?? null) : available,
       heldCapabilityIds: heldIds,
     };
-    const verdict = path.ok ? challengeVenture(path, situation) : null;
+    // The economics from the same rows: what buyers are stated to spend bounds any return, so a weak strategy is named.
+    const economics = economicsFromReading(reading.evidence, pathCurrency);
+    const verdict = path.ok ? challengeVenture(path, situation, economics) : null;
     const alternatives =
       path.ok && verdict && verdict.feasibility !== 'FEASIBLE'
-        ? alternativesFor(stages, situation).map((one) => ({ kind: one.kind, differs: one.differs, total: one.path.total, path: one.path, verdict: one.verdict }))
+        ? alternativesFor(stages, situation, economics).map((one) => ({ kind: one.kind, differs: one.differs, total: one.path.total, path: one.path, verdict: one.verdict }))
         : [];
     return {
       categoryId: reading.categoryId,

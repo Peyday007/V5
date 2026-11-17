@@ -13,6 +13,9 @@ import {
   alternativesFor,
   buildVenturePath,
   challengeVenture,
+  economicsFromReading,
+  statedAmounts,
+  statedPrice,
   type ResourceSituation,
   type VentureStage,
 } from '../server/services/manufacturing/venturePath.ts';
@@ -574,5 +577,168 @@ describe('VENT-24-2: the kernel revisits an earlier venture when capital or capa
   it('a project with no programme reports no ventures and does no work', async () => {
     const pass = await runManufacturingKernel(projectId);
     expect(pass.ventures).toEqual([]);
+  });
+});
+
+/* ------------------------------------------------------------------------- */
+/* Weakness and substitution are reachable from the kernel, not only by hand  */
+/* ------------------------------------------------------------------------- */
+
+describe('VENT-24-2: the kernel itself names a weak strategy and keeps the routes around an impossible one', () => {
+  it('reads money figures a sentence states, and only the ones it states', () => {
+    expect(statedAmounts('US buyers spent $4.2 billion and €30,000 elsewhere')).toEqual([
+      { currency: 'USD', amountMinor: 420_000_000_000 },
+      { currency: 'EUR', amountMinor: 3_000_000 },
+    ]);
+    expect(statedAmounts('Restoration contractors bought 40,000 commercial dehumidifiers last year')).toEqual([]);
+    expect(statedPrice('The integrator was acquired for $25,000 in 2025')).toEqual({ currency: 'USD', amountMinor: 25_000_00 });
+    expect(statedPrice('A drive integrator offers brushless integration as a service')).toBeNull();
+  });
+
+  it('bounds the return by stated buyer spending, never by a unit price, and never establishes a return', () => {
+    const spend = { statement: 'Buyers spent $40,000 on hand-built kilns last year', sourceClaimId: 'clm_spend' };
+    const unit = { statement: 'A kiln is priced at $900 each', sourceClaimId: 'clm_unit' };
+    expect(economicsFromReading({ demand: [spend, unit] }, 'USD')).toEqual({
+      expectedReturn: null,
+      returnCeiling: { money: usd(40_000_00), evidence: ['clm_spend'] },
+    });
+    expect(economicsFromReading({ demand: [unit] }, 'USD')).toEqual({ expectedReturn: null, returnCeiling: null });
+    expect(economicsFromReading({ demand: [spend] }, 'EUR')).toEqual({ expectedReturn: null, returnCeiling: null });
+    // A ceiling above the cost proves nothing favourable: the return is still not established.
+    const rich: ResourceSituation = { available: usd(1_000_000_00), heldCapabilityIds: new Set(['cap_cnc']) };
+    const path = buildVenturePath(venture);
+    if (!path.ok) throw new Error('expected a path');
+    const high = challengeVenture(path, rich, { expectedReturn: null, returnCeiling: { money: usd(10_000_000_00), evidence: ['clm_x'] } });
+    expect(high.feasibility).toBe('UNDETERMINED');
+    expect(high.challenges.map((c) => c.kind)).toEqual(['BUILT_ON_UNKNOWNS']);
+  });
+
+  it('keeps a substituted route that clears every blocking challenge when no return is established, with its own UNDETERMINED verdict', () => {
+    const alts = alternativesFor(venture, poor);
+    const contracted = alts.find((a) => a.kind === 'SUBSTITUTED');
+    expect(contracted?.differs).toEqual(['production: BUILD → CONTRACT via a contract manufacturer']);
+    expect(contracted!.verdict.feasibility).toBe('UNDETERMINED');
+    expect(contracted!.verdict.challenges.map((c) => c.kind)).toEqual(['BUILT_ON_UNKNOWNS']);
+    // A route that leaves the plan impossible is still not offered.
+    for (const a of alts) expect(a.verdict.feasibility).not.toBe('INFEASIBLE');
+    // And an original that is merely undetermined gets no undetermined substitutes: they would not be materially better.
+    const rich: ResourceSituation = { available: usd(1_000_000_00), heldCapabilityIds: new Set(['cap_cnc']) };
+    expect(alternativesFor(venture, rich).filter((a) => a.kind === 'SUBSTITUTED')).toEqual([]);
+  });
+
+  it('from the kernel: stated buyer spending below the cost raises ECONOMICALLY_WEAK on its evidence, and offers no substitute as a cure', async () => {
+    const started = await startProgramme({ projectId, ownerUserId: userId, actorUserId: userId, objective: 'Build machines only where demand and capability allow.' });
+    expect(started.ok).toBe(true);
+    const program = (await getProgram(projectId))!;
+    const seeded = await seedCategory({ projectId, name: 'Electric kilns', actorRef: userId, reason: 'test' });
+    if ('error' in seeded) throw new Error(seeded.error);
+    const category = seeded.category;
+
+    await recordCategoryCapital({
+      programId: program.id,
+      categoryId: category.id,
+      requirement: 'TOOLING_AND_EQUIPMENT',
+      scenario: 'SMALLEST_CREDIBLE_ENTRY',
+      amountLowMinor: 50_000_00,
+      amountHighMinor: 60_000_00,
+      currency: 'USD',
+      basis: 'PUBLISHED_PRICE_OR_SCHEDULE',
+      asOf: '2026-09-01',
+      statement: 'Kiln shell tooling costs $50,000–$60,000',
+      sourceClaimId: await acceptedClaim('Kiln shell tooling costs $50,000–$60,000'),
+    });
+    const spendClaim = await acceptedClaim('Studios spent $40,000 on electric kilns in the region last year');
+    await recordCategoryEvidence({
+      programId: program.id,
+      categoryId: category.id,
+      kind: 'DEMAND_EVIDENCE',
+      observedOn: '2026-09-01',
+      subject: 'pottery studios',
+      statement: 'Studios spent $40,000 on electric kilns in the region last year',
+      sourceClaimId: spendClaim,
+    });
+    await recordMoney({ projectId, kind: 'CAPITAL_IN', amountCents: 100_000_00, currency: 'USD', recordedBy: userId, idempotencyKey: `capital-weak-${projectId}` });
+
+    const weak = (await runManufacturingKernel(projectId)).ventures.find((v) => v.categoryId === category.id)!;
+    if (!weak.venture.path.ok) throw new Error('path refused');
+    expect(weak.venture.path.total).toEqual(usd(60_000_00));
+    const named = weak.venture.verdict!.challenges.find((c) => c.kind === 'ECONOMICALLY_WEAK');
+    expect(named).toBeDefined();
+    expect(named!.evidence).toEqual([spendClaim]);
+    expect(weak.venture.verdict!.feasibility).toBe('INFEASIBLE');
+    expect(ventureRecord(weak).verdict!.challenges.map((c) => c.kind)).toContain('ECONOMICALLY_WEAK');
+
+    // Nothing the rows admit makes it less than weak, so no substitute is offered as a cure.
+    expect(weak.venture.alternatives.filter((a) => a.kind === 'SUBSTITUTED')).toEqual([]);
+  });
+
+  it('from the kernel: a capability nobody holds, with a candidate whose own source states its price, yields a priced SUBSTITUTED (BUY) route', async () => {
+    const started = await startProgramme({ projectId, ownerUserId: userId, actorUserId: userId, objective: 'Build machines only where demand and capability allow.' });
+    expect(started.ok).toBe(true);
+    const program = (await getProgram(projectId))!;
+    const seeded = await seedCategory({ projectId, name: 'Glass annealing ovens', actorRef: userId, reason: 'test' });
+    if ('error' in seeded) throw new Error(seeded.error);
+    const category = seeded.category;
+    await recordCategoryCapital({
+      programId: program.id,
+      categoryId: category.id,
+      requirement: 'TOOLING_AND_EQUIPMENT',
+      scenario: 'SMALLEST_CREDIBLE_ENTRY',
+      amountLowMinor: 10_000_00,
+      amountHighMinor: 20_000_00,
+      currency: 'USD',
+      basis: 'PUBLISHED_PRICE_OR_SCHEDULE',
+      asOf: '2026-09-01',
+      statement: 'Oven shell tooling costs $10,000–$20,000',
+      sourceClaimId: await acceptedClaim('Oven shell tooling costs $10,000–$20,000'),
+    });
+    await recordCategoryEvidence({
+      programId: program.id,
+      categoryId: category.id,
+      kind: 'DEMAND_EVIDENCE',
+      observedOn: '2026-09-01',
+      subject: 'glass studios',
+      statement: 'Glass studios spent $500,000 on annealing ovens last year',
+      sourceClaimId: await acceptedClaim('Glass studios spent $500,000 on annealing ovens last year'),
+    });
+    const { capability } = await ensureCapability({ programId: program.id, projectId, name: 'Oven controller firmware', origin: 'SEED' });
+    await recordEdge({
+      programId: program.id,
+      categoryId: category.id,
+      capabilityId: capability.id,
+      relation: 'REQUIRES',
+      statement: 'An annealing oven needs programmable controller firmware',
+      sourceClaimId: await acceptedClaim('An annealing oven needs programmable controller firmware'),
+    });
+    const priceClaim = await acceptedClaim('A controller firmware studio was acquired for $5,000');
+    await recordAcquisitionCandidate({
+      programId: program.id,
+      categoryId: category.id,
+      capabilityId: capability.id,
+      name: 'A firmware studio',
+      contribution: 'CAPABILITY',
+      statement: 'A controller firmware studio was acquired for $5,000',
+      sourceClaimId: priceClaim,
+    });
+    await recordMoney({ projectId, kind: 'CAPITAL_IN', amountCents: 100_000_00, currency: 'USD', recordedBy: userId, idempotencyKey: `capital-buy-${projectId}` });
+
+    const reading = (await runManufacturingKernel(projectId)).ventures.find((v) => v.categoryId === category.id)!;
+    if (!reading.venture.path.ok) throw new Error('path refused');
+    const capabilityNode = reading.venture.path.nodes.find((n) => n.key === `capability:${capability.id}`)!;
+    expect(capabilityNode.alternatives).toEqual([expect.objectContaining({ mode: 'BUY', actor: 'A firmware studio', budget: usd(5_000_00), evidence: [priceClaim] })]);
+    expect(reading.venture.verdict!.feasibility).toBe('INFEASIBLE');
+    expect(reading.venture.verdict!.challenges.map((c) => c.kind)).toContain('CAPABILITY_NOT_HELD');
+
+    const bought = reading.venture.alternatives.find((a) => a.kind === 'SUBSTITUTED');
+    expect(bought).toBeDefined();
+    expect(bought!.differs).toEqual([`capability:${capability.id}: BUILD → BUY via A firmware studio`]);
+    expect(bought!.total).toEqual(usd(25_000_00));
+    const kinds = bought!.verdict.challenges.map((c) => c.kind);
+    expect(kinds).not.toContain('CAPABILITY_NOT_HELD');
+    expect(kinds).not.toContain('UNPRICED_STAGE');
+    expect(kinds).not.toContain('ECONOMICALLY_WEAK');
+    // The return is still nobody's established fact, so the route is recorded as UNDETERMINED, never as ready.
+    expect(bought!.verdict.feasibility).toBe('UNDETERMINED');
+    expect(ventureRecord(reading).alternatives.map((a) => a.kind)).toContain('SUBSTITUTED');
   });
 });

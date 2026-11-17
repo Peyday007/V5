@@ -189,7 +189,13 @@ describe('VENT-24-2: the venture graph is a production record', () => {
     expect(held.feasibility).toBe(verdict!.feasibility);
     // Each alternative with its own graph and verdict.
     expect(held.alternatives).toEqual(wire(alternatives.map((one) => ({ kind: one.kind, differs: one.differs, total: one.total, graph: one.path, verdict: one.verdict }))));
-    for (const one of held.alternatives) expect(one.verdict.feasibility).toBe('FEASIBLE');
+    // A validate-first prefix is funded only when FEASIBLE; a substitution that clears every blocker of an
+    // impossible original is recorded with its own UNDETERMINED verdict (no return is established). None is INFEASIBLE.
+    for (const one of held.alternatives) {
+      expect(one.verdict.feasibility).not.toBe('INFEASIBLE');
+      if (one.kind === 'VALIDATE_FIRST') expect(one.verdict.feasibility).toBe('FEASIBLE');
+    }
+    expect(held.alternatives.length).toBeGreaterThan(0);
     // The per-category resource reading travels beside the graph.
     expect(held.reading).toEqual(wire({ feasibility: live.feasibility, challenges: live.challenges, cost: live.cost, available: live.available }));
 
