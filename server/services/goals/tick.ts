@@ -920,7 +920,10 @@ async function researchInForce(): Promise<{ shares: SharesInForce; fingerprint: 
  *     down, and a bin no goal pursues is raised while a purpose it serves sits
  *     below a protected floor. That is what makes the shares move capacity.
  *
- * An unchanged decision writes nothing, so a quiet hour leaves no rows.
+ * Every measured window is recorded once (`allocationWindowKey`), so each
+ * consistent window's decision — its counted-once record, cause and per-lane
+ * capacity — is on production as soon as it is measured; a window with
+ * nothing measured is recorded only when it changes the decision on record.
  */
 export const RESEARCH_ALLOCATION_EVERY_MS = 60 * 60_000;
 /** The consistent window each decision is measured over. */
@@ -988,7 +991,7 @@ export interface ResearchAllocationPorts {
   applyRemedy?(input: { lane: string; remedy: LaneRemedy; ref: string; goalIds: string[] }): Promise<void>;
   /** The newest Brain-wide decision row, or null. */
   lastDecision(): Promise<{ detail: Record<string, unknown>; at: string } | null>;
-  /** Write the Brain-wide decision row: once per changed decision, never per goal. */
+  /** Write the Brain-wide decision row: once per measured window (or changed held decision), never per goal. */
   recordDecision(summary: string, detail: Record<string, unknown>): Promise<void>;
 }
 
@@ -1254,6 +1257,25 @@ export function sharesMeetFloors(shares: Record<ResearchPurpose, number>, urgent
   return true;
 }
 
+/**
+ * The allocation window a pass belongs to: the cadence slot its window ends
+ * in. Passes an hour apart measure consecutive windows of the same length, so
+ * each is recorded once, and a second pass inside the same slot (a restart, a
+ * forced pass) records nothing. Pure.
+ */
+export function allocationWindowKey(untilMs: number): number {
+  return Math.floor(untilMs / RESEARCH_ALLOCATION_EVERY_MS);
+}
+
+/** The window slot a recorded decision row belongs to, or null when it names none readable. Pure. */
+export function allocationWindowKeyOf(detail: Record<string, unknown> | null): number | null {
+  if (!detail) return null;
+  if (typeof detail.windowKey === 'number' && Number.isFinite(detail.windowKey)) return detail.windowKey;
+  const w = detail.window as { until?: unknown } | undefined;
+  const until = typeof w?.until === 'string' ? Date.parse(w.until) : NaN;
+  return Number.isFinite(until) ? allocationWindowKey(until) : null;
+}
+
 /** One allocation pass over the live goals. */
 export async function reallocateResearch(input: { goals: GoalView[]; now?: string }, ports: ResearchAllocationPorts): Promise<ResearchAllocationReport> {
   const untilMs = input.now ? Date.parse(input.now) : Date.now();
@@ -1360,7 +1382,20 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
     costCountedOnce,
     notes: [...decision.notes, ...reading.notes].slice(0, 20),
   };
-  const recorded = !(previous && previous.detail.fingerprint === fingerprint);
+  // `changed` is the decision itself moving (its fingerprint). What is recorded
+  // is every measured window, once: recording only on a changed fingerprint
+  // left a steady decision unrecorded for days, so the newest decision row on
+  // production was an old one — its window, counted-once record and capacity
+  // stale — and a failed window stayed among the newest rows instead of being
+  // followed by the windows measured after it (probe r01.res-15-5). A pass with
+  // nothing measured stays recorded as held, and only when that changes the
+  // decision on record. Never two rows for one window.
+  const changed = !(previous && previous.detail.fingerprint === fingerprint);
+  const windowKey = allocationWindowKey(untilMs);
+  const previousWindow = allocationWindowKeyOf(previous?.detail ?? null);
+  const sameWindow = previousWindow !== null && previousWindow === windowKey;
+  const recorded = !sameWindow && (!decision.held || changed);
+  detail.windowKey = windowKey;
   if (recorded) {
     const summary = heldForCost
       ? "Research allocation held: the window's cost reading does not show each job's cost counted once."
@@ -1382,7 +1417,7 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
     window,
     shares: decision.shares,
     floors,
-    changed: recorded,
+    changed,
     held: decision.held || heldForCost,
     laneActions: decision.laneActions,
     capacity: decision.capacity,
