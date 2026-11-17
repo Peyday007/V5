@@ -892,7 +892,7 @@ async function researchInForce(): Promise<{ shares: SharesInForce; fingerprint: 
  *
  * What the pass does with the decision, and what it never does:
  *
- *   * It records the decision once, as one append-only Brain-wide row
+ *   * It records each measured window's decision once, as one append-only Brain-wide row
  *     (`RESEARCH_ALLOCATION_DECIDED` in `improvement_events`, the Brain-wide
  *     operations log, with no candidate), carrying the five shares, what the
  *     window gave each, the floors that held, every reason, the lane remedies,
@@ -988,7 +988,7 @@ export interface ResearchAllocationPorts {
   applyRemedy?(input: { lane: string; remedy: LaneRemedy; ref: string; goalIds: string[] }): Promise<void>;
   /** The newest Brain-wide decision row, or null. */
   lastDecision(): Promise<{ detail: Record<string, unknown>; at: string } | null>;
-  /** Write the Brain-wide decision row: once per changed decision, never per goal. */
+  /** Write the Brain-wide decision row: once per measured window (or per changed unmeasured decision), never per goal. */
   recordDecision(summary: string, detail: Record<string, unknown>): Promise<void>;
 }
 
@@ -1254,6 +1254,27 @@ export function sharesMeetFloors(shares: Record<ResearchPurpose, number>, urgent
   return true;
 }
 
+/**
+ * The consistent allocation window a pass's reading ends in: the
+ * RESEARCH_ALLOCATION_WINDOW_MS period (a UTC day) containing its `until`.
+ * Every pass reads the same 24-hour length of yield; the period is what "one
+ * row per window" counts, so hourly passes over one day's yield are one window
+ * and the next day's is the next. Null for an unreadable time. Pure.
+ */
+export function allocationWindowKey(until: string | null): string | null {
+  const ms = until === null ? NaN : Date.parse(until);
+  if (!Number.isFinite(ms)) return null;
+  return new Date(Math.floor(ms / RESEARCH_ALLOCATION_WINDOW_MS) * RESEARCH_ALLOCATION_WINDOW_MS).toISOString();
+}
+
+/** The allocation window a recorded decision belongs to, or null. Pure. */
+export function recordedWindowKey(detail: Record<string, unknown> | null): string | null {
+  if (!detail) return null;
+  if (typeof detail.windowKey === 'string') return detail.windowKey;
+  const w = detail.window as { until?: unknown } | undefined;
+  return allocationWindowKey(w && typeof w.until === 'string' ? w.until : null);
+}
+
 /** One allocation pass over the live goals. */
 export async function reallocateResearch(input: { goals: GoalView[]; now?: string }, ports: ResearchAllocationPorts): Promise<ResearchAllocationReport> {
   const untilMs = input.now ? Date.parse(input.now) : Date.now();
@@ -1304,6 +1325,7 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
       }
     : decided;
   const fingerprint = allocationFingerprint({ ...decision, held: decision.held || heldForCost });
+  const windowKey = allocationWindowKey(window.until);
   const floors = {
     exploration: EXPLORATION_FLOOR,
     systemHealth: SYSTEM_HEALTH_FLOOR,
@@ -1313,6 +1335,7 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
   const detail: Record<string, unknown> = {
     fingerprint,
     window,
+    windowKey,
     shares: Object.fromEntries(RESEARCH_PURPOSES.map((p) => [p, round3(decision.shares[p])])),
     // What the window actually gave each purpose: what the goals tick compares the decided shares with.
     observed: Object.fromEntries(RESEARCH_PURPOSES.map((p) => [p, round3(observed[p])])),
@@ -1360,7 +1383,21 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
     costCountedOnce,
     notes: [...decision.notes, ...reading.notes].slice(0, 20),
   };
-  const recorded = !(previous && previous.detail.fingerprint === fingerprint);
+  // One row per measured window (RES-15-5: yield is recorded "over consistent
+  // windows"). Recording only on a changed fingerprint left a window whose
+  // decision repeated the last one with no row of its own, so the newest
+  // measured row could be days old and a failed counted-once row stayed the
+  // newest. Now a measured pass — shares decided from yield, or held because
+  // its cost was not shown counted once — records its window's decision the
+  // first time that window is measured, even when nothing changed. Within a
+  // window, a changed decision (a recovered cost reading, a new capacity
+  // verdict) is recorded the pass it is measured, and an unchanged one never
+  // twice. A pass with nothing measured is recorded only when it differs from
+  // the newest row. `changed` means the decision differs from the newest row.
+  const changed = !(previous && previous.detail.fingerprint === fingerprint);
+  const newWindow = windowKey === null || recordedWindowKey(previous?.detail ?? null) !== windowKey;
+  const measuredWindow = !decision.held || heldForCost;
+  const recorded = changed || (measuredWindow && newWindow);
   if (recorded) {
     const summary = heldForCost
       ? "Research allocation held: the window's cost reading does not show each job's cost counted once."
@@ -1382,7 +1419,7 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
     window,
     shares: decision.shares,
     floors,
-    changed: recorded,
+    changed,
     held: decision.held || heldForCost,
     laneActions: decision.laneActions,
     capacity: decision.capacity,
