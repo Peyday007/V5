@@ -14582,6 +14582,19 @@ planner, queue or monitor:
   (`coolingForEveryModel`), so a queue nothing will run does not keep the GPU
   billing.
 
+- **A withdrawn question is not the goal's work, and the goal rule is a set, not a join.**
+  Production, 2026-11-17 (`goals plan`, `runpod-report`): the $10K goal's nine
+  open rounds sat with their ideas QUEUED and no mission, four expired
+  ABANDONED in twelve hours, and the GPU ran other packets — this goal's jobs
+  were 32 of 682. The research grant was at its ceiling (26 live of 13), and
+  each slot that freed went to the goal tier of the launch order, where ~95
+  path questions the goal had already *withdrawn* (asked again a different
+  way, or their opening let go) still counted as goal work and, being older,
+  came first. `goalIdeaSql` now counts a question's idea only while its
+  question is OPEN, and each branch is an uncorrelated `IN (SELECT …)`: the
+  earlier per-idea join to `cash_needs` (no `candidate_id` index) timed out
+  the tick's judge pass ("canceling statement due to statement timeout").
+
 ## 90. Independent work does not wait for unrelated work, and evidence reaches the plan when it arrives.
 
 **Owner's order, 2026-11-05.** Make Brain run every independent part of an

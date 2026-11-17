@@ -154,6 +154,41 @@ describe('the goal’s own ideas are judged and launched first', () => {
   });
 });
 
+describe('a withdrawn question about a goal-found opening is no longer the goal’s work', () => {
+  it('counts an OPEN question’s idea as the goal’s, and the same idea after its question is withdrawn as ordinary', async () => {
+    const { goalFirstSql, goalIdeaSql } = await import('../server/services/goals/goalWork.ts');
+    const { createCandidate } = await import('../server/repos/russellCandidates.ts');
+    const { raiseNeed, closeNeed } = await import('../server/services/cash/needs.ts');
+    const w = (await getWorkstream(await goal()))!;
+    const round = await openConstructedRound({ goal: w, projectId, key: 'wd1', title: 'Constructed: gift brokerage', question: 'Which firms pay for year-end gift brokerage?' });
+    await answered(round!.candidateId, 'demand_pattern', 'Firms repeatedly pay brokers to send year-end client gifts.');
+    await harvest({ projectId });
+    const opening = (await listOpportunities({ projectId })).find((one) => (one.buyingSignal ?? '').startsWith('Firms repeatedly pay brokers'))!;
+    expect(opening).toBeTruthy();
+    const older = await createCandidate({ title: 'Older', statement: 'An older unrelated question about content pricing.', projectId });
+    const question = await createCandidate({ title: 'Price', statement: 'What do firms pay a gift broker per order?', projectId });
+    const need = await raiseNeed({
+      projectId, opportunityId: opening.id, actorRef: 'BRAIN', blockedAction: 'The path to money', whyItMatters: 'A goal plan rests on it.',
+      recommendedPath: 'Find the price.', setupEffort: 'One bounded look.', nextStep: 'Find the price.', completionCondition: 'The price is recorded on this card.',
+      blocksState: 'EXECUTING', requestKey: `question:${opening.id}:price`,
+    } as Parameters<typeof raiseNeed>[0]);
+    expect(need.ok).toBe(true);
+    if (!need.ok) return;
+    await getDb().run('UPDATE cash_needs SET candidate_id = ? WHERE id = ?', [question.id, need.value.id]);
+    const goalIdeas = async () =>
+      (await getDb().all<{ id: string }>(`SELECT c.id FROM russell_candidates c WHERE c.id IN (?, ?, ?) AND ${goalIdeaSql('c')} ORDER BY c.id`, [older.id, question.id, round!.candidateId])).map((one) => one.id);
+    expect(await goalIdeas()).toEqual([question.id, round!.candidateId].sort());
+    expect((await closeNeed({ needId: need.value.id, to: 'WITHDRAWN', resolution: 'Asked again a different way.', actorUserId: 'BRAIN' })).ok).toBe(true);
+    expect(await goalIdeas()).toEqual([round!.candidateId]);
+    // In the launch order the round now comes first, and the moot question waits with the ordinary work.
+    const order = await getDb().all<{ id: string }>(
+      `SELECT c.id FROM russell_candidates c WHERE c.id IN (?, ?, ?) ORDER BY ${goalFirstSql('c')}, c.created_at, c.rowid`,
+      [older.id, question.id, round!.candidateId],
+    );
+    expect(order.map((one) => one.id)).toEqual([round!.candidateId, older.id, question.id]);
+  });
+});
+
 describe('a tick judges several of the goal’s own ideas, beside the cycle’s own count', () => {
   it('judges every one of three goal rounds’ ideas in one tick when the cycle launches one', async () => {
     const { tick } = await import('../server/services/russell/loop.ts');
