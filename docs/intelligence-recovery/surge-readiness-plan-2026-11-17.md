@@ -85,3 +85,21 @@ Spending safeguard for W6: every GPU start goes through `runpod-launch` with a B
   - W14: source relevance for fragments; findings 13:55Z, PR 14:20Z.
   - W15: planner CPU stalls; findings 13:50Z, PR 14:15Z.
   GPU being measured for its second hour, then stopped.
+
+## Troubleshooting closeout — findings vs production (17:30Z, serving 56bc7f12)
+The 15:00Z deadline was missed, and that is preserved in the record. The coordinator's registered recovery deadline is 19:00Z. The execution coordinator is session_01QF5Tk6gJZ5UNMYcbPxbsu1.
+
+| Finding | Still active? | Repair (owner / PR) | Deployed in | Verification result | Next action |
+|---|---|---|---|---|---|
+| F6: commercial answers discarded at filing (lane-id mismatch) | No | #1023 (intelligence-recovery) | eda04071, 07:39Z; 56bc7f12 | Lane accepted claims for the goal went from 0/h at 05:45Z to 6.8/h at 08:50Z, and 13.4/h at 11–12Z | Closed |
+| F7: goal research not running (unlaunched rounds, parked syntheses) | No | #1024, #1025, #1032, #1036 | 8885038e, 10:45Z | Goal-tier missions 10/10 newest at 08:02Z; goal rounds 6+ ANSWERED at 12:03Z | Closed |
+| F2: constructed arrangements ignore research | No | #1031, #1038, #1042 | 8885038e | Plan model scm_b93979c3 has 68 inputs, 32 research-fed, with 12 distinct claims cited. Reach went 9% → 51% at 10:56Z, then 54% | Closed |
+| F1: GO signal could not move | No (evaluation) | Corrected by review; plan reach used as the readable metric | — | Reach moved 9% → 54% from research alone | Closed |
+| F3c: CHOICE answers need an exact token | No | #1020 | eda04071 | Goal rounds ANSWERED (above). A per-attribute ANSWERED share has not been re-read | Closed on the round evidence |
+| F3e: questions no publication answers loop forever | No | #1029, #1037, #1043, #1045 | 8885038e | Fragment answers now state none_because, and a declined question becomes an assumption or next action. Seen in the 16:17Z NOT ACCEPTED reasons | Closed |
+| F4: GPU research yield (accepted claims from the paid GPU) | **YES** | #1018, #1043/#1045, #1052, **#1057 (W16 source discovery)** | 56bc7f12, 17:24Z | 16:17Z (pre-#1057): **2** accepted/h, goal 0, with off-topic pages (arXiv, BLS, EDGAR search) | **Verifying now:** GO test run 44136684089 (cap $11, $8.50/h max), report around 18:10–18:15Z |
+| Capacity: event-loop stalls, pressure SHEDDING | **YES** | **#1058 (W15 planner CPU)** | 56bc7f12, 17:24Z | 16:17Z: SHEDDING (DB healthy, p90 19 ms; stalls in planSet/payerNamedIn/evaluatorPool) | **Verifying now:** the same GO-test report's pressure line |
+| Cost accounting and spend safeguards | No | #1001, #1005, #1011; Brain-enforced pod cap | live | The pod stopped at the cap and the balance was reconciled ($147.06 → $137.90 = $9.16 for the 16:17Z test) | Closed |
+| F5: retained commercial learning loop | Non-blocking | — | — | The capability the run is meant to build | Not a prerequisite |
+
+**The clearance depends on one thing:** the GO-test report on 56bc7f12. It needs GPU accepted claims ≥ 10/h, goal claims > 0, and pressure not SHEDDING. The intelligence-recovery session owns the run, and the pod stops automatically after the report.
