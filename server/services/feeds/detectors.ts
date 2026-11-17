@@ -77,6 +77,13 @@ export interface Detector {
   sources: readonly string[];
   /** How far back the rule looks. */
   lookbackMs: number;
+  /**
+   * The entity key this rule groups an item's organization under. A rule that
+   * keys entities differently from `employerKey(organization)` declares it here,
+   * so `ruleReading` relates non-member items to the rule's entities exactly as
+   * the rule itself would; a reading keyed another way cannot see the rule's misses.
+   */
+  entityKeyOf?(organization: string | null): string | null;
   detect(records: readonly DetectorRecord[], now: Date): DetectedSignal[];
 }
 
@@ -393,6 +400,9 @@ export const RULE_EFFECTIVE_SOON_V2: Detector = {
   sources: RULE_EFFECTIVE_SOON.sources,
   // Long enough to hold the rule a recent correction corrects; membership stays at 30 days.
   lookbackMs: 90 * DAY,
+  entityKeyOf(organization) {
+    return employerKey(issuingAgencyOf(organization));
+  },
   detect(records, now) {
     const until = now.getTime() + RULE_EFFECTIVE_SOON_DAYS * DAY;
     const since = now.getTime() - RULE_EFFECTIVE_SOON_PUBLISHED_DAYS * DAY;
@@ -404,7 +414,7 @@ export const RULE_EFFECTIVE_SOON_V2: Detector = {
     const groups = new Map<string, { name: string; members: { record: DetectorRecord; effective: string }[] }>();
     for (const record of ours) {
       const name = issuingAgencyOf(record.organization);
-      const agency = employerKey(name);
+      const agency = this.entityKeyOf!(record.organization);
       if (!agency || !name) continue;
       const published = Date.parse(record.publishedAt ?? record.fetchedAt);
       if (!Number.isFinite(published) || published < since || published > now.getTime()) continue;
@@ -624,6 +634,9 @@ export async function ruleReading(detector: Detector, now: Date = new Date()): P
     [...detector.sources, since],
   );
   const members = new Set(memberIds);
+  // Related items are keyed the way the rule keys its own entities, or its misses are invisible.
+  const entityKeyOf = (organization: string | null): string | null =>
+    detector.entityKeyOf ? detector.entityKeyOf(organization) : employerKey(organization);
   const memberRows = await (async () => {
     if (memberIds.length === 0) return [] as { id: string; organization: string | null; published_at: string | null }[];
     const out: { id: string; organization: string | null; published_at: string | null }[] = [];
@@ -639,7 +652,7 @@ export async function ruleReading(detector: Detector, now: Date = new Date()): P
   const entities = new Set(rows.map((row) => row.entity_key).filter((one): one is string => !!one));
   const categories = new Set(rows.filter((row) => !row.entity_key).map((row) => row.category).filter((one): one is string => !!one));
   const related = items.filter((item) => !members.has(item.id) && (
-    entities.has(employerKey(item.organization) ?? '') || categories.has(jobFamily(item.title)?.key ?? '')
+    entities.has(entityKeyOf(item.organization) ?? '') || categories.has(jobFamily(item.title)?.key ?? '')
   ));
   const verdicts = await screenVerdicts([...memberIds, ...related.map((one) => one.id)]);
   const screened = memberIds.filter((id) => verdicts.has(id));
