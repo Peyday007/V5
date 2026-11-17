@@ -1127,12 +1127,20 @@ export function allocationInputFrom(
   return { currentShares, purposes, lanes, bottlenecks, urgentCommercialGoal: context.urgentCommercialGoal, ...(context.remedyLevers ? { remedyLevers: context.remedyLevers } : {}) };
 }
 
-/** What makes two decisions the same: shares to a tenth of a percent, lane remedies and capacity verdicts. */
-export function allocationFingerprint(decision: AllocationDecision): string {
+/**
+ * What makes two decisions the same: shares to a tenth of a percent, lane
+ * remedies, capacity verdicts — and whether the window's cost was shown counted
+ * once. The last is part of what was decided: a pass whose reading now holds,
+ * after one recorded as held for cost, is a different decision even when its
+ * shares, lanes and capacity coincide, and leaving it out let the failing row
+ * stay the newest one indefinitely (RES-15-5, finding F1).
+ */
+export function allocationFingerprint(decision: AllocationDecision, costCountedOnce: { holds: boolean }): string {
   return JSON.stringify({
     shares: RESEARCH_PURPOSES.map((p) => round3(decision.shares[p])),
     lanes: decision.laneActions.map((a) => `${a.lane}:${a.kind}`).sort(),
     capacity: decision.capacity.map((c) => `${c.lane}:${c.kind}:${c.units}`).sort(),
+    costCountedOnce: costCountedOnce.holds,
   });
 }
 
@@ -1274,7 +1282,7 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
         notes: [`Held: the window's cost reading does not show each job's cost counted once (${diagnosis.cause}: ${diagnosis.detail}), so no share moves on it.`, ...decided.notes],
       }
     : decided;
-  const fingerprint = allocationFingerprint({ ...decision, held: decision.held || heldForCost });
+  const fingerprint = allocationFingerprint({ ...decision, held: decision.held || heldForCost }, costCountedOnce);
   const floors = {
     exploration: EXPLORATION_FLOOR,
     systemHealth: SYSTEM_HEALTH_FLOOR,
