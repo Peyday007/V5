@@ -21,6 +21,9 @@ import { createOpportunity, updateOpportunity } from '../server/repos/cashPortfo
 import { listPaths, pathFact } from '../server/repos/monetization.ts';
 import { recordCardFact } from '../server/repos/cashCardFacts.ts';
 import { raiseNeed } from '../server/services/cash/needs.ts';
+import { getDb } from '../server/db/database.ts';
+import { createCandidate } from '../server/repos/russellCandidates.ts';
+import { goalRoundsAwaitingLaunch } from '../server/services/goals/goalWork.ts';
 import {
   cardAnswers,
   enumeratePossibilities,
@@ -34,6 +37,8 @@ import {
   UNSTATED_WHY,
   HYPOTHESIS_ATTRIBUTE,
   HYPOTHESIS_RULE_RANK,
+  hypothesisCheckCap,
+  hypothesisRoom,
 } from '../server/services/cash/monetization/commission.ts';
 import { runCommissions } from '../server/services/cash/monetization/commissionPass.ts';
 import { ATTRIBUTE } from '../server/domain/monetization.ts';
@@ -42,6 +47,7 @@ import {
   MONETIZATION_ATTRIBUTES,
   type CashCardFact,
   type CashOpportunity,
+  type MonetizationCommission,
 } from '../server/domain/types.ts';
 
 let projectId = '';
@@ -328,5 +334,112 @@ describe('(c) an answer already on the card settles the question without researc
     expect(termDays('paid within 14 days')).toBe(14);
     expect(termDays('paid on approval')).toBeNull();
     expect(termDays('Network fees apply')).toBeNull();
+  });
+});
+
+/**
+ * W3c. Every hypothesis has its own check per epoch, and 11.5k possibilities
+ * would otherwise turn every leftover research slot into one once the ceiling
+ * is raised. One open check per opening, a small share of the grant, and none
+ * while a goal round is waiting for a slot.
+ */
+describe('hypothesis checks cannot flood research (W3c)', () => {
+  it('holds the checks to a minority share of the grant, and to none while a goal round waits', () => {
+    expect(hypothesisCheckCap(null)).toBe(0);
+    expect(hypothesisCheckCap(0)).toBe(0);
+    expect(hypothesisCheckCap(2)).toBe(1);
+    expect(hypothesisCheckCap(13)).toBe(3);
+    expect(hypothesisCheckCap(100)).toBe(25);
+    for (const grant of [1, 2, 3, 4, 8, 13, 40, 100]) {
+      expect(hypothesisCheckCap(grant)).toBeLessThanOrEqual(Math.max(1, grant / 4));
+    }
+    expect(hypothesisRoom({ grantMax: 13, openChecks: 1, goalRoundsWaiting: 0 })).toBe(2);
+    expect(hypothesisRoom({ grantMax: 13, openChecks: 5, goalRoundsWaiting: 0 })).toBe(0);
+    expect(hypothesisRoom({ grantMax: 13, openChecks: 0, goalRoundsWaiting: 1 })).toBe(0);
+  });
+
+  async function twoOpenings() {
+    const a = await discovery('A published request for transcription.');
+    const b = await discovery('A published request for translation.');
+    await enumeratePossibilities(projectId);
+    const ledger = await composeLedger({ projectId });
+    const unstated = new Set(
+      ledger.entries
+        .filter((one) => !statedBySource(one.path, one.path.opportunityId === a.id ? a : b, false))
+        .map((one) => one.path.id),
+    );
+    return { a, b, ledger, unstated };
+  }
+
+  it('opens none without a share, at most the share, and one per opening across passes', async () => {
+    const { a, ledger, unstated } = await twoOpenings();
+    const allocate = (hypothesisRoom: number | undefined, commissions: MonetizationCommission[] = []) =>
+      allocateCommissions({
+        entries: ledger.entries,
+        rankable: ledger.entries.map(rankableOf),
+        commissions,
+        contradicted: new Set(),
+        slots: 100,
+        now: Date.now(),
+        unstated,
+        ...(hypothesisRoom === undefined ? {} : { hypothesisRoom }),
+      });
+    const checks = (plan: ReturnType<typeof allocate>) =>
+      plan.asks.filter((one) => one.ruleRank === HYPOTHESIS_RULE_RANK);
+
+    // Deny by default: a caller that does not compose the share opens none.
+    expect(checks(allocate(undefined))).toHaveLength(0);
+    // The share bounds it, even with a hundred free slots and two openings.
+    expect(checks(allocate(1))).toHaveLength(1);
+    expect(checks(allocate(5))).toHaveLength(2);
+    const declined = allocate(1).declined.filter((one) => one.why.includes('small share of the research grant'));
+    expect(declined.length).toBeGreaterThan(0);
+
+    // A check still open on opening A blocks a second one on A in a later pass.
+    const onA = ledger.entries.find((one) => unstated.has(one.path.id) && one.path.opportunityId === a.id)!;
+    const open: MonetizationCommission = {
+      id: 'mco_open',
+      projectId,
+      cashModeId,
+      pathId: onA.path.id,
+      attribute: HYPOTHESIS_ATTRIBUTE,
+      round: 1,
+      candidateId: 'rcn_open',
+      reason: 'check',
+      ruleRank: HYPOTHESIS_RULE_RANK,
+      state: 'OPEN',
+      answered: 0,
+      outcome: null,
+      openedAt: new Date().toISOString(),
+      settledAt: null,
+    } as unknown as MonetizationCommission;
+    const later = checks(allocate(5, [open]));
+    expect(later).toHaveLength(1);
+    const openingOf = new Map(ledger.entries.map((one) => [one.path.id, one.path.opportunityId]));
+    expect(openingOf.get(later[0]!.pathId)).not.toBe(a.id);
+  });
+
+  it('opens no check while one of the goal\'s rounds is waiting for a slot', async () => {
+    await twoOpenings();
+    await registerResearchSurfaces(projectId, 3);
+    const round = await createCandidate({
+      projectId,
+      visibility: 'SHARED',
+      title: 'A goal round',
+      statement: 'Find buyers for the goal.',
+    });
+    const at = new Date().toISOString();
+    await getDb().run(
+      `INSERT INTO cash_discovery_rounds (id, project_id, cash_mode_id, bucket_id, mechanism, round, candidate_id, state, opened_at, found, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 1, ?, 'OPEN', ?, 0, ?, ?)`,
+      ['cdr_goal_waiting', projectId, cashModeId, 'goal-wst_x-lens-a', 'GOAL_MECHANISM', round.id, at, at, at],
+    );
+    expect(await goalRoundsAwaitingLaunch(projectId)).toBe(1);
+
+    const waiting = await tick();
+    expect(waiting.opened.some((one) => one.reason.includes('one bounded check'))).toBe(false);
+    expect(waiting.opened.length).toBeGreaterThan(0);
+    // The stated questions still run; only the checks stand aside.
+    expect(waiting.declined.some((one) => one.why.includes('a goal round is waiting'))).toBe(true);
   });
 });
