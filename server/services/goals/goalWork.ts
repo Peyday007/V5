@@ -42,7 +42,25 @@ export function goalIdeaSql(c: string): string {
                     WHERE gr3.bucket_id LIKE 'goal-%' AND gn.state = 'OPEN' AND gn.candidate_id IS NOT NULL))`;
 }
 
-/** An `ORDER BY` key: the goal's own ideas first. */
+/** A boolean SQL expression: this idea is one of a goal's own search rounds (`goal-…` bucket). No parameters. */
+export function goalRoundSql(c: string): string {
+  return `${c}.id IN (SELECT gr.candidate_id FROM cash_discovery_rounds gr
+                      WHERE gr.bucket_id LIKE 'goal-%' AND gr.candidate_id IS NOT NULL)`;
+}
+
+/**
+ * An `ORDER BY` key: the goal's own rounds first, then the rest of its ideas,
+ * then everything else.
+ *
+ * Production, 2026-11-17 05:35–06:18Z: with ended missions no longer holding
+ * slots, the grant turned over (missions 3588 → 3590) at 13 of 13, and every
+ * freed slot still went past the $10K goal's nine AWAITING_LAUNCH rounds. The
+ * goal tier was one rank, ordered inside by priority, ordinal and age, so the
+ * deep dives and questions about openings the goal had already found — older
+ * and often ranked higher — took each slot, and the rounds that find new
+ * openings (the search the goal is waiting on) never launched and expired.
+ * A round is the goal's search itself, so it goes first inside the tier.
+ */
 export function goalFirstSql(c: string): string {
-  return `CASE WHEN ${goalIdeaSql(c)} THEN 0 ELSE 1 END`;
+  return `CASE WHEN ${goalRoundSql(c)} THEN 0 WHEN ${goalIdeaSql(c)} THEN 1 ELSE 2 END`;
 }
