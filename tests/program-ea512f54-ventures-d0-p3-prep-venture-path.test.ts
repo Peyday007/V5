@@ -317,14 +317,38 @@ describe('VENT-24-2: the kernel revisits an earlier venture when capital or capa
     const { path, verdict, alternatives } = reading.venture;
     if (!path.ok) throw new Error(`path refused: ${path.detail}`);
 
-    // Prerequisites the rows name share the first layer; the entry decision depends on all of them.
+    // The graph is ordered by what each stage consumes, not a star of independent prerequisites under one decision (R4-F1).
     const capitalKey = 'capital:TOOLING_AND_EQUIPMENT';
     const capabilityKey = `capability:${capability.id}`;
-    expect(path.layers[0]).toEqual(expect.arrayContaining([capitalKey, capabilityKey]));
-    expect(path.layers[0]!.some((key) => key.startsWith('barrier:'))).toBe(true);
-    expect(path.layers[1]).toEqual(['enter']);
-    const enter = path.nodes.find((n) => n.key === 'enter')!;
-    expect(enter.dependsOn).toEqual(expect.arrayContaining([capitalKey, capabilityKey]));
+    const barrierKey = path.nodes.find((n) => n.key.startsWith('barrier:'))!.key;
+    const node = (key: string) => {
+      const found = path.nodes.find((n) => n.key === key);
+      if (!found) throw new Error(`no stage ${key}`);
+      return found;
+    };
+    // Every stage the clause names is produced from the rows, not only by a hand-built test venture.
+    for (const key of ['market-research', 'positioning', 'specification', 'unit-economics', 'validation', 'pricing', 'channel', 'production', 'enter', 'launch', 'scale']) node(key);
+    // Only market research starts the path; every other stage depends on another stage.
+    expect(path.layers[0]).toEqual(['market-research']);
+    for (const n of path.nodes.filter((one) => one.key !== 'market-research')) expect(n.dependsOn.length).toBeGreaterThan(0);
+    // Ancestors, so a test can say "comes after" without fixing the exact edges.
+    const before = (later: string, earlier: string): boolean => {
+      const seen = new Set<string>();
+      const walk = (key: string): boolean =>
+        node(key).dependsOn.some((dep) => dep === earlier || (!seen.has(dep) && (seen.add(dep), walk(dep))));
+      return walk(later);
+    };
+    expect(before(capitalKey, 'unit-economics')).toBe(true); // no money committed before the economics
+    expect(before(capitalKey, 'validation')).toBe(true); // tooling follows a validated design
+    expect(node('production').dependsOn).toEqual(expect.arrayContaining([capitalKey, capabilityKey, barrierKey]));
+    expect(before('channel', 'pricing')).toBe(true);
+    expect(node('enter').dependsOn).toEqual(expect.arrayContaining(['production', 'channel']));
+    expect(node('launch').dependsOn).toEqual(['enter']);
+    expect(node('scale').dependsOn).toEqual(['launch']);
+    expect(path.layers.length).toBeGreaterThan(6);
+    // Missing demand and distribution evidence sit on the stages that read them.
+    expect(node('market-research').unknowns).toEqual([expect.stringContaining('no demand evidence')]);
+    expect(node('channel').unknowns).toEqual([expect.stringContaining('no distribution channel')]);
 
     // Every node carries the seven fields, and evidence resolves to the rows it stands on.
     for (const node of path.nodes) {
@@ -422,6 +446,10 @@ describe('VENT-24-2: the kernel revisits an earlier venture when capital or capa
     const barrierNode = path.nodes.find((n) => n.key.startsWith('barrier:'))!;
     expect(barrierNode.budget).toEqual({ state: 'PRICED', money: { currency: 'USD', amountMinor: 12_000_00 } });
     expect(barrierNode.evidence).toEqual([barrierClaim, feeClaim]);
+    // A certification is of the validated design, and production waits for it and for the tooling (R4-F1).
+    expect(barrierNode.dependsOn).toEqual(['validation']);
+    expect(path.nodes.find((n) => n.key === 'production')!.dependsOn).toEqual(expect.arrayContaining([barrierNode.key, 'capital:TOOLING_AND_EQUIPMENT']));
+    expect(path.layers[0]).toEqual(['market-research']);
     expect(path.nodes.some((n) => n.key === 'capital:CERTIFICATION_AND_APPROVAL')).toBe(false);
     expect(path.unpriced).toEqual([]);
     expect(path.total).toEqual({ currency: 'USD', amountMinor: 52_000_00 });

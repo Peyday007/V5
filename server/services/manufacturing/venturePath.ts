@@ -34,7 +34,7 @@
  */
 
 import type { CategoryReading } from './readiness.ts';
-import type { AcquisitionCandidate } from '../../domain/types.ts';
+import type { AcquisitionCandidate, MachineCapitalRequirement } from '../../domain/types.ts';
 
 export type StageMode = 'BUILD' | 'CONTRACT' | 'PARTNER' | 'LICENSE' | 'BUY';
 
@@ -355,29 +355,6 @@ function validateFirst(stages: readonly VentureStage[], situation: ResourceSitua
 /* ------------------------------------------------------------------------- */
 
 /**
- * The stages of entering one category, derived from what the ladder has
- * recorded about it, and nothing else. Pure.
- *
- * Every stage stands on a row:
- * - each capital requirement established under the scenario the reading
- *   prices (the cheapest fully priced one, otherwise the smallest one anything
- *   was found for) is a stage, priced from its published high figure or
- *   withheld when no figure is published;
- * - each required capability nobody holds is a stage, with the acquisition
- *   candidates recorded as supplying it as BUY alternatives (unpriced, because
- *   no candidate row carries a price, so an alternative never reads as
- *   feasible on figures nobody published);
- * - each entry barrier established is a stage of its own, because a barrier is
- *   a thing to obtain and never an amount (`readiness.ts`).
- *
- * The rows state no dependency between two requirements, so none is invented:
- * they share the first layer and may run in parallel. What they all feed is
- * the entry decision, which depends on every one of them and is the owner's to
- * take, because entering commits money (invariant 38). Missing demand or
- * distribution evidence is carried on that decision as an unknown, so a
- * venture with none never reads as feasible (invariant 39).
- */
-/**
  * Whether a certification figure pays for the barrier on record.
  *
  * One rule, read by the venture path here and by the institutional plan
@@ -391,14 +368,58 @@ export function certificationPricesBarrier(barrierCount: number): boolean {
   return barrierCount === 1;
 }
 
+/**
+ * The stages of entering one category, derived from what the ladder has
+ * recorded about it, and ordered by what each stage actually consumes. Pure.
+ *
+ * Two kinds of stage, and neither invents a figure:
+ * - stages that stand on a row: each capital requirement established under the
+ *   scenario the reading prices (priced from its published high figure, or
+ *   withheld), each required capability nobody holds (with the acquisition
+ *   candidates on record as BUY alternatives, unpriced because no candidate row
+ *   carries a price), and each entry barrier (priced by a certification figure
+ *   only when `certificationPricesBarrier` says so);
+ * - the decisions and gates every venture passes through: market research,
+ *   positioning, specification, unit economics, validation, pricing, channel,
+ *   production readiness, the entry decision, launch and scale. They commit no
+ *   capital of their own (Brain does the work, or the gate is reached when its
+ *   prerequisites are), so they are priced at zero in the venture's currency
+ *   and withheld when no currency is on record; what they spend is priced on
+ *   the row-backed stages they depend on. Missing demand or distribution
+ *   evidence is an unknown on the stage that reads it, so a venture with none
+ *   never reads as feasible (invariant 39).
+ *
+ * The order is not a stored sequence: each stage names the stages whose output
+ * it consumes (`CONSUMES` for capital), and only stages that exist for this
+ * category are depended on, so the graph's layers emerge from the rows. Money
+ * is committed only after unit economics; tooling, stock and certification
+ * follow a validated design; production needs every capability, tool, part and
+ * barrier it uses; entry needs production and a channel; launch and scale
+ * follow the owner's entry decision, because entering commits money
+ * (invariant 38).
+ */
+/** What each capital requirement's commitment consumes, as stage keys; absent keys are ignored. */
+const CONSUMES: Readonly<Record<MachineCapitalRequirement, readonly string[]>> = {
+  ENGINEERING_AND_DEVELOPMENT: ['unit-economics'],
+  INTELLECTUAL_PROPERTY_OR_LICENCE: ['unit-economics'],
+  SUPPLIER_ONBOARDING: ['unit-economics'],
+  FACILITY: ['unit-economics'],
+  TEST_AND_VALIDATION: ['validation'],
+  TOOLING_AND_EQUIPMENT: ['validation', 'capital:TEST_AND_VALIDATION'],
+  CERTIFICATION_AND_APPROVAL: ['validation', 'capital:TEST_AND_VALIDATION'],
+  INVENTORY_AND_PARTS: ['validation', 'capital:TEST_AND_VALIDATION', 'capital:SUPPLIER_ONBOARDING'],
+  DISTRIBUTION_AND_SERVICE_NETWORK: ['pricing'],
+  WORKING_CAPITAL: ['pricing'],
+};
+
 export function stagesFromReading(
   reading: CategoryReading,
   candidates: readonly AcquisitionCandidate[] = [],
 ): VentureStage[] {
   const subject = reading.path.join(' → ') || reading.categoryId;
   const scenario = reading.capital.cheapestFullyPriced ?? reading.capital.scenarios[0] ?? null;
-  const stages: VentureStage[] = [];
   const barriers = reading.evidence.against.filter((one) => one.kind === 'ENTRY_BARRIER');
+  const incumbents = reading.evidence.against.filter((one) => one.kind === 'INCUMBENT_WEAKNESS');
   const entries = scenario ? [...scenario.priced, ...scenario.unpriced] : [];
   /*
    * A certification figure that prices the one barrier on record is that
@@ -411,16 +432,80 @@ export function stagesFromReading(
   const certification = certificationPricesBarrier(barriers.length)
     ? entries.filter((entry) => entry.requirement === 'CERTIFICATION_AND_APPROVAL')
     : [];
+  const committed = entries.filter((entry) => !certification.includes(entry));
+  const currency = entries.find((entry) => entry.amountHighMinor !== null && entry.currency !== null)?.currency ?? null;
+  // A decision or gate commits no capital of its own; with no currency on record nothing can be priced, so it is withheld.
+  const nothing: Money | null = currency ? { currency, amountMinor: 0 } : null;
+  const capitalKey = (requirement: string) => `capital:${requirement}`;
+  const capabilityKeys = reading.missing.map((gap) => `capability:${gap.capability.id}`);
+  const barrierKeys = barriers.map((barrier) => `barrier:${barrier.id}`);
+  const capitalKeys = committed.map((entry) => capitalKey(entry.requirement));
 
-  for (const entry of entries) {
-    if (certification.includes(entry)) continue;
+  const stages: VentureStage[] = [];
+  const gate = (stage: Omit<VentureStage, 'budget'>): void => {
+    stages.push({ ...stage, budget: nothing });
+  };
+
+  gate({
+    key: 'market-research',
+    title: `Market research for ${subject}`,
+    dependsOn: [],
+    decision: `Whether buyers for ${subject} exist in numbers worth serving`,
+    resource: 'Brain’s research allowance; no capital is committed',
+    artifact: 'The demand evidence on record for the category',
+    actor: 'Brain',
+    evidence: reading.evidence.demand.map((one) => one.sourceClaimId),
+    completion: 'Demand evidence is recorded against the category',
+    unknowns: reading.evidence.demand.length === 0 ? [`no demand evidence is on record for ${subject}`] : [],
+  });
+  gate({
+    key: 'positioning',
+    title: `Position against what is on the market for ${subject}`,
+    dependsOn: ['market-research'],
+    decision: 'Which buyers to serve and which weakness of the incumbents to answer',
+    resource: 'the demand evidence and the incumbent weaknesses on record',
+    artifact: 'A recorded positioning',
+    actor: 'Brain',
+    evidence: incumbents.map((one) => one.sourceClaimId),
+    completion: 'The positioning is recorded with the evidence it rests on',
+  });
+  gate({
+    key: 'specification',
+    title: `Specify the product for ${subject}`,
+    dependsOn: ['positioning'],
+    decision: 'What the product must do, which capabilities it needs and what is bought in',
+    resource: 'the positioning, the capability requirements and the bought-in components on record',
+    artifact: 'A product specification',
+    actor: 'Brain',
+    evidence: [
+      ...[...reading.missing.map((gap) => gap.capability), ...reading.held].flatMap((one) => (one.sourceClaimId ? [one.sourceClaimId] : [])),
+      ...reading.evidence.boughtIn.map((one) => one.sourceClaimId),
+    ],
+    completion: 'The specification is recorded',
+  });
+  gate({
+    key: 'unit-economics',
+    title: `Unit economics for ${subject}`,
+    dependsOn: ['specification'],
+    decision: 'Whether the specified product can be made and sold at a margin, before any money is committed',
+    resource: 'the published capital figures and the specification',
+    artifact: 'A unit-economics reading',
+    actor: 'Brain',
+    evidence: entries.map((one) => one.sourceClaimId),
+    completion: 'The unit economics are recorded',
+  });
+
+  const has = new Set<string>(['market-research', 'positioning', 'specification', 'unit-economics', 'validation', 'pricing', 'channel', 'production', 'enter', 'launch', ...capitalKeys, ...capabilityKeys, ...barrierKeys]);
+  const present = (keys: readonly string[]): string[] => [...new Set(keys.filter((key) => has.has(key)))];
+
+  for (const entry of committed) {
     const budget: Money | null =
       entry.amountHighMinor !== null && entry.currency !== null ? { currency: entry.currency, amountMinor: entry.amountHighMinor } : null;
     const requirement = entry.requirement.toLowerCase().replace(/_/g, ' ');
     stages.push({
-      key: `capital:${entry.requirement}`,
+      key: capitalKey(entry.requirement),
       title: `${requirement} for ${subject}`,
-      dependsOn: [],
+      dependsOn: present(CONSUMES[entry.requirement] ?? ['unit-economics']),
       decision: `Commit to the ${requirement} the ${entry.scenario.toLowerCase().replace(/_/g, ' ')} scenario requires`,
       resource: budget ? `${budget.amountMinor} ${budget.currency} (minor units), published ${entry.asOf}` : 'an amount nobody has published',
       artifact: entry.statement,
@@ -437,7 +522,8 @@ export function stagesFromReading(
     stages.push({
       key: `capability:${capability.id}`,
       title: `Hold ${capability.name}`,
-      dependsOn: [],
+      // The specification is what says the product needs it.
+      dependsOn: ['specification'],
       decision: `Develop ${capability.name}, or obtain it from someone who holds it`,
       resource: gap.taughtBy.length > 0 ? `taught by ${gap.taughtBy.map((one) => one.name).join(', ')}` : 'no category on the ladder teaches it yet',
       artifact: `A person's record that this company holds ${capability.name}`,
@@ -456,6 +542,19 @@ export function stagesFromReading(
     });
   }
 
+  gate({
+    key: 'validation',
+    title: `Prototype and validate the design for ${subject}`,
+    // A prototype is built to the specification, once its economics hold, with whatever engineering and rights it needs.
+    dependsOn: present(['specification', 'unit-economics', ...['ENGINEERING_AND_DEVELOPMENT', 'INTELLECTUAL_PROPERTY_OR_LICENCE'].map(capitalKey)]),
+    decision: 'Whether the prototype meets the specification, or the design changes',
+    resource: 'the artifacts of the specification, engineering and licensing stages; their spending is priced on those stages',
+    artifact: 'A recorded validation of the design',
+    actor: 'Brain, with whoever builds the prototype',
+    evidence: [],
+    completion: 'The design is recorded as validated',
+  });
+
   // The barrier's price, when a certification figure pays for it: every such row priced and in one currency, else withheld.
   const fees = certification.map((entry) =>
     entry.amountHighMinor !== null && entry.currency !== null ? { currency: entry.currency, amountMinor: entry.amountHighMinor } : null,
@@ -468,7 +567,13 @@ export function stagesFromReading(
     stages.push({
       key: `barrier:${barrier.id}`,
       title: `Obtain ${barrier.subject}`,
-      dependsOn: [],
+      /*
+       * What is certified is the product: a certification-priced barrier is
+       * obtained for the validated design, after its testing. A barrier no
+       * figure ties to certification still needs the specified offering it
+       * applies to, and no more is assumed.
+       */
+      dependsOn: certification.length > 0 ? present(['validation', capitalKey('TEST_AND_VALIDATION')]) : ['specification'],
       decision: `Pursue ${barrier.subject}, or find a holder of it to work through`,
       resource: fee
         ? `${fee.amountMinor} ${fee.currency} (minor units), the certification and approval figure published ${certification.map((one) => one.asOf).join(', ')}`
@@ -483,22 +588,78 @@ export function stagesFromReading(
     });
   }
 
-  const unknowns: string[] = [];
-  if (reading.evidence.demand.length === 0) unknowns.push(`no demand evidence is on record for ${subject}`);
-  if (reading.evidence.distribution.length === 0) unknowns.push(`no distribution channel is on record for ${subject}`);
-  const currency = stages.find((one) => one.budget)?.budget?.currency ?? null;
-  stages.push({
+  gate({
+    key: 'pricing',
+    title: `Price ${subject}`,
+    dependsOn: ['positioning', 'unit-economics'],
+    decision: 'The price, on the positioning and the unit economics',
+    resource: 'the positioning and the unit-economics reading',
+    artifact: 'A recorded price',
+    actor: 'Brain recommends; the owner sets it',
+    evidence: [],
+    completion: 'The price is recorded',
+  });
+  gate({
+    key: 'channel',
+    title: `Establish a channel for ${subject}`,
+    dependsOn: present(['pricing', capitalKey('DISTRIBUTION_AND_SERVICE_NETWORK')]),
+    decision: 'Which channel sells and services the product, on what terms',
+    resource: 'the distribution channels on record and the price',
+    artifact: 'A recorded channel arrangement',
+    actor: 'Brain prepares; the owner agrees terms',
+    evidence: reading.evidence.distribution.map((one) => one.sourceClaimId),
+    completion: 'A channel is recorded for the product',
+    unknowns: reading.evidence.distribution.length === 0 ? [`no distribution channel is on record for ${subject}`] : [],
+  });
+  gate({
+    key: 'production',
+    title: `Ready production of ${subject}`,
+    dependsOn: present([
+      'validation',
+      ...['TOOLING_AND_EQUIPMENT', 'FACILITY', 'SUPPLIER_ONBOARDING', 'INVENTORY_AND_PARTS', 'CERTIFICATION_AND_APPROVAL', 'TEST_AND_VALIDATION'].map(capitalKey),
+      ...capabilityKeys,
+      ...barrierKeys,
+    ]),
+    decision: 'Whether production can start with the tools, parts, capabilities and approvals in place',
+    resource: 'the artifacts of every production prerequisite; their spending is priced on those stages',
+    artifact: 'A recorded production-readiness check',
+    actor: 'Brain',
+    evidence: [],
+    completion: 'Production readiness is recorded',
+  });
+  gate({
     key: 'enter',
     title: `Enter ${subject}`,
-    dependsOn: stages.map((one) => one.key),
+    // Every capital, capability and barrier stage reaches the decision through production, the channel or working capital.
+    dependsOn: present(['production', 'channel', capitalKey('WORKING_CAPITAL')]),
     decision: `Enter ${subject} on what the prerequisite stages established, change the strategy, or stop`,
     resource: 'the artifacts of every prerequisite stage',
     artifact: 'A recorded entry decision with the evidence it rests on',
     actor: 'the owner, on Brain’s recommendation',
-    budget: currency ? { currency, amountMinor: 0 } : null,
     evidence: [...reading.evidence.demand, ...reading.evidence.distribution].map((one) => one.sourceClaimId),
     completion: 'The entry decision is recorded',
-    unknowns,
+  });
+  gate({
+    key: 'launch',
+    title: `Launch ${subject}`,
+    dependsOn: ['enter'],
+    decision: 'Release the first units through the channel',
+    resource: 'the production run and the channel the entry decision committed',
+    artifact: 'A recorded launch',
+    actor: 'Brain operates; the owner approves',
+    evidence: [],
+    completion: 'The first sales are recorded',
+  });
+  gate({
+    key: 'scale',
+    title: `Scale ${subject}`,
+    dependsOn: ['launch'],
+    decision: 'Grow volume, financing and service on what launch established, or hold',
+    resource: 'the launch results; any new money is a new commitment the owner makes',
+    artifact: 'A recorded scaling decision',
+    actor: 'the owner, on Brain’s recommendation',
+    evidence: [],
+    completion: 'The scaling decision is recorded',
   });
   return stages;
 }
