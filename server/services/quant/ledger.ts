@@ -434,8 +434,10 @@ export async function keepCashLedger(
   const ledger = await (deps.read ?? (() => readLedger(projectId)))();
   const held = async () => ({ predictions: [...ledger.predictions], exposures: [...ledger.exposures], outcomes: [...ledger.outcomes] });
   const scoped: LedgerDeps = { ...deps, projectId, read: held };
+  const forecasts: { currency: string; forecast: CashForecast }[] = [];
   for (const currency of [...new Set(currencies.filter((c) => typeof c === 'string' && c.trim()))].sort()) {
     const forecast = await (deps.forecast ?? cashForecast)({ projectId, currency });
+    forecasts.push({ currency, forecast });
     const fresh = await recordCashForecast(projectId, forecast, { ...scoped, ...(deps.sprintHorizon ? { sprintHorizon: deps.sprintHorizon } : {}) });
     written.push(...fresh);
     ledger.predictions.push(...fresh);
@@ -450,6 +452,22 @@ export async function keepCashLedger(
   const measured = await (deps.measured ?? ((id: string) => outcomesFor({ projectId: id })))(projectId);
   const outcomes = await recordCashOutcomes(projectId, measured, scoped);
   ledger.outcomes.push(...outcomes);
+  // The forecast's material numbers on the same refresh (META-18-3): per-figure provenance and the
+  // per-question method judgment when a claim got a new version, and the forecast-versus-realized bias,
+  // with the correction it proposes, when realized results arrived. It reads nothing beyond the ledger
+  // this refresh holds. Loaded when used and caught: a number it refuses never stops the cash ledger.
+  if (written.length > 0 || outcomes.length > 0) {
+    await import('./mathToolkit.ts')
+      .then(({ recordCashForecastMath }) =>
+        recordCashForecastMath(
+          { projectId, forecasts: forecasts.map((f) => ({ currency: f.currency, forecast: f.forecast as unknown as Record<string, unknown> })), written, outcomesWritten: outcomes.length, ledger, now: new Date().toISOString() },
+          { caller: 'cash-ledger' },
+        ),
+      )
+      .catch((error: unknown) => {
+        console.warn(`[quant] number provenance unrecorded for ${projectId}: ${String((error as Error)?.message ?? error)}`);
+      });
+  }
   // Which backups to prepare first, re-ranked on the same refresh from the project's real dependencies
   // and the failures on this ledger (FALL-37-6). Loaded when used: the ranking reads this ledger. Its own
   // catch: a ranking that cannot be made never stops the cash ledger.
