@@ -17,9 +17,17 @@
  * derived from its oldest member so it is the same on every run.
  *
  * A link becomes goal-relevant variables and a transaction hypothesis — said
- * to be a hypothesis — only when it joins records from more than one source
- * and one of them bears on a decision input the caller supplied. Every other
- * link is recorded as a link and nothing more.
+ * to be a hypothesis — only when it joins records from more than one source,
+ * because only then does it add evidence a decision did not already rest on.
+ * Every such link carries its own variables and hypotheses, so whoever stores
+ * the link stores them too. A decision input the caller supplies is the
+ * decision a hypothesis bears on when it covers a member of the link; a member
+ * no supplied input covers bears on the decision its own record already feeds
+ * (`record:<ref>`, whatever the caller decides from that record), so a caller
+ * that names no goal still gets the link turned into what it changes. The
+ * resolution's top-level `hypotheses` list only those bearing on supplied
+ * inputs. A link within one source adds no source and is recorded as a link
+ * and nothing more.
  *
  * No industry, category or name list gates anything here (R01-A1, §18.1).
  * Pure: nothing is read or stored.
@@ -60,6 +68,16 @@ export interface IdentityLink {
   corroboration: Corroboration[];
   /** True when this cluster's id came from an established mapping. */
   established: boolean;
+  /**
+   * What the link makes available to a decision, one per source joined and per corroborated attribute
+   * (`source:<id>@<entity>`, `<attribute>@<entity>=<value>`). Empty for a link within one source.
+   */
+  variables: string[];
+  /**
+   * The link as hypotheses, one per decision it bears on: a supplied decision input covering a member,
+   * or else the member's own record (`record:<ref>`). Empty for a link within one source.
+   */
+  hypotheses: LinkHypothesis[];
 }
 
 export interface IdentityCollision {
@@ -236,23 +254,52 @@ export function resolveIdentities(input: {
       sources: [...new Set(group.map((m) => m.source))].sort(),
       corroboration: corroboration.filter((c) => refs.includes(c.between[0]) && refs.includes(c.between[1])),
       established: !!held,
+      variables: [],
+      hypotheses: [],
     });
   }
 
   const hypotheses: LinkHypothesis[] = [];
+  const statementOf = (link: IdentityLink, bearing: readonly string[], added: readonly string[], variable: string, decision: string) =>
+    `If ${bearing.join(', ')} and ${added.join(', ')} are the same ${link.kind.toLowerCase()} (${[...new Set(link.corroboration.map((c) => `${c.attribute}: ${c.value}`))].join('; ')}), ` +
+    `${variable} for ${decision} can draw on ${link.sources.join(' and ')}. A hypothesis until a transaction shows it.`;
+  const sourceOf = new Map(records.map((r) => [r.ref, r.source]));
   for (const link of links) {
     if (link.sources.length < 2) continue;
+    link.variables = [
+      ...link.sources.map((s) => `source:${s}@${link.entityId}`),
+      ...[...new Set(link.corroboration.filter((c) => c.attribute !== 'sameAs').map((c) => `${c.attribute}@${link.entityId}=${c.value}`))].sort(),
+    ];
+    const covered = new Set<string>();
     for (const d of input.decisionInputs ?? []) {
       const bearing = link.refs.filter((r) => d.refs.includes(r));
       if (bearing.length === 0) continue;
+      for (const r of bearing) covered.add(r);
       const added = link.refs.filter((r) => !d.refs.includes(r));
       if (added.length === 0) continue;
-      hypotheses.push({
+      const h: LinkHypothesis = {
         label: 'HYPOTHESIS',
         decisionInput: d.id,
         entityId: link.entityId,
         variables: [`${d.variable}@${link.entityId}`],
-        statement: `If ${bearing.join(', ')} and ${added.join(', ')} are the same ${link.kind.toLowerCase()} (${link.corroboration.map((c) => `${c.attribute}: ${c.value}`).join('; ')}), ${d.variable} for ${d.id} can draw on ${link.sources.join(' and ')}. A hypothesis until a transaction shows it.`,
+        statement: statementOf(link, bearing, added, d.variable, d.id),
+      };
+      hypotheses.push(h);
+      link.hypotheses.push(h);
+    }
+    // A member no supplied input covers bears on the decision its own record feeds; the link adds the
+    // records of every other source, which that decision did not rest on.
+    for (const ref of link.refs) {
+      if (covered.has(ref)) continue;
+      const own = sourceOf.get(ref);
+      const added = link.refs.filter((r) => sourceOf.get(r) !== own);
+      if (added.length === 0) continue;
+      link.hypotheses.push({
+        label: 'HYPOTHESIS',
+        decisionInput: `record:${ref}`,
+        entityId: link.entityId,
+        variables: link.variables.filter((v) => !v.startsWith(`source:${own}@`)),
+        statement: statementOf(link, [ref], added, link.kind.toLowerCase(), `record:${ref}`),
       });
     }
   }
