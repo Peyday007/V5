@@ -394,6 +394,26 @@ export async function fillCard(input: {
 }
 
 /**
+ * Which states are the market's verdict on a piece, and which are Brain's own.
+ *
+ * READY is this module's gate (`markReady`): an assertion, checked against the
+ * card, that the piece is complete enough to test. EXECUTING is Brain pursuing
+ * it. Neither says a buyer wanted it — both are reached by reading the card
+ * and Brain's own standing authority. DELIVERING needs an agreement the buyer
+ * agreed to and COLLECTED needs money that arrived (`advance`), so
+ * only those two are the market saying yes, and a declined or archived piece
+ * is the answer no.
+ *
+ * Anything that measures how well Brain reasons about pieces must be scored
+ * against the market's verdict and never against the gate: a method that
+ * re-implements `readyToTest` agrees with READY by construction, so a "win"
+ * scored on READY is the gate reproducing itself (the sprint, repair F5).
+ */
+export const GATE_ASSERTED_STATES: readonly CashOpportunityState[] = ['READY', 'EXECUTING'];
+export const MARKET_CONFIRMED_STATES: readonly CashOpportunityState[] = ['DELIVERING', 'COLLECTED'];
+export const MARKET_REFUSED_STATES: readonly CashOpportunityState[] = ['DECLINED', 'ARCHIVED'];
+
+/**
  * Declare a card credible enough to test.
  *
  * Deliberately a person's or a worker's *assertion* that the card is complete,
