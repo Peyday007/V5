@@ -45,8 +45,18 @@ import {
   recordControllerDecision,
   type CandidateAction,
   type ControllerDecision,
-  type EvidenceItem,
+  type ControllerSnapshot,
 } from '../research/reasoningController.ts';
+import {
+  acquireKnowledge,
+  buildMechanismModel,
+  type KnowledgeReading,
+  type KnowledgeSourceClaim,
+  type MechanismModel,
+  type MechanismPart,
+  type MechanismRole,
+} from '../research/knowledgeModel.ts';
+import { claimsByIds } from '../../repos/research.ts';
 import { buildNumberProvenance, recordNumberProvenance, type NumberProvenance, type ProvenanceInput } from '../quant/mathToolkit.ts';
 import type { Figure } from '../quant/graph.ts';
 
@@ -75,6 +85,12 @@ export interface SprintProblem {
   state: string;
   createdAt: string;
   updatedAt: string;
+  /**
+   * The research claims the opening was filed from, as recorded. They are the
+   * only evidence the general method weighs; a card field is a statement of
+   * what the claims say, never evidence by itself.
+   */
+  claims: KnowledgeSourceClaim[];
 }
 
 /** The card fields a pathway cannot be acted on without. */
@@ -123,6 +139,11 @@ export async function readSprintProblems(limit = 2000): Promise<SprintProblem[]>
       LIMIT ?`,
     [Math.max(1, Math.floor(limit))],
   );
+  const claimIds = [...new Set(rows.map((r) => r.source_claim_id).filter((id): id is string => Boolean(id)))];
+  const claims = new Map<string, KnowledgeSourceClaim>();
+  for (let i = 0; i < claimIds.length; i += 500) {
+    for (const c of await claimsByIds(claimIds.slice(i, i + 500))) claims.set(c.id, c);
+  }
   return rows.map((r) => ({
     id: r.id,
     projectId: r.project_id,
@@ -144,6 +165,7 @@ export async function readSprintProblems(limit = 2000): Promise<SprintProblem[]>
     state: r.state,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+    claims: r.source_claim_id && claims.has(r.source_claim_id) ? [claims.get(r.source_claim_id)!] : [],
   }));
 }
 
@@ -223,11 +245,36 @@ export const BASELINE_METHOD: SprintMethod = {
   },
 };
 
-const HOLDS = 'pathway-holds';
-const FAILS = 'pathway-fails';
+/**
+ * Which mechanism role each load-bearing card field states. A field the card
+ * holds becomes a part of that role citing the opening's own claims; the
+ * mechanism model counts it KNOWN only when one of those claims is SUPPORTED.
+ */
+export const FIELD_ROLE: Readonly<Record<LoadBearing, MechanismRole>> = {
+  payer: 'initiator',
+  reachableChannel: 'access',
+  buyingSignal: 'trigger',
+  acceptanceCondition: 'failure',
+  priceCents: 'moneyMovement',
+  paymentTerms: 'moneyMovement',
+  fulfillmentOwner: 'deliverer',
+};
 
-/** The problem as the controller sees it: its evidenced features and its open unknowns. */
-export function profileOf(p: SprintProblem): { profile: ProblemProfile; unknowns: LoadBearing[]; evidence: EvidenceItem[]; actions: CandidateAction[] } {
+export interface ProblemModel {
+  profile: ProblemProfile;
+  unknowns: LoadBearing[];
+  knowledge: KnowledgeReading;
+  mechanism: MechanismModel | null;
+}
+
+/**
+ * The problem as the controller sees it: its features, the knowledge its own
+ * research claims hold, and the mechanism the card states on that knowledge.
+ * Nothing here is an evidence item or a hypothesis: the controller generates
+ * its hypotheses from the representations it selects and the failure modes
+ * the knowledge and mechanism show, and weighs them against the claims.
+ */
+export function profileOf(p: SprintProblem): ProblemModel {
   const source = sourceOf(p);
   const unknowns = LOAD_BEARING.filter((f) => !known(p, f));
   const features: ProblemProfile['features'] = [
@@ -239,22 +286,57 @@ export function profileOf(p: SprintProblem): { profile: ProblemProfile; unknowns
   if (p.industry) features.push({ feature: `industry:${p.industry}`, source });
   const available: string[] = [];
   if (known(p, 'paymentTerms')) available.push('payment-terms');
-  const evidence: EvidenceItem[] = LOAD_BEARING.filter((f) => known(p, f)).map((f) => ({ id: `${p.id}:${f}`, source, bears: { [HOLDS]: 'SUPPORTS' } }));
-  const actions: CandidateAction[] = unknowns.map((f) => ({
-    key: `${p.id}:${f}`,
-    kind: 'RESEARCH',
-    subject: `${f} of ${p.title}`.slice(0, 200),
-    question: `What is the ${f} for "${p.title}"?`.slice(0, 300),
-    resolves: f,
-    discriminates: [HOLDS, FAILS],
-    cost: 0.01,
-  }));
+
+  const knowledge = acquireKnowledge({ subject: p.id, claims: p.claims, now: new Date(p.updatedAt) });
+  const evidence = p.claims.map((c) => c.id);
+  const roles: Partial<Record<MechanismRole, MechanismPart[]>> = {};
+  for (const f of LOAD_BEARING) {
+    if (!known(p, f)) continue;
+    const role = FIELD_ROLE[f];
+    (roles[role] ??= []).push({ id: `${role}:${f}`, label: `${f}: ${String(p[f])}`.slice(0, 200), evidence });
+  }
+  // A role the card leaves empty stays UNKNOWN: a part with no claim would be refused, and a part that names none is not asserted.
+  for (const f of unknowns) {
+    const role = FIELD_ROLE[f];
+    if ((roles[role] ?? []).length > 0) roles[role]!.push({ id: `${role}:${f}`, label: `${f}: unknown`, evidence: [] });
+  }
+  const built = buildMechanismModel({ subject: p.id, knowledge, roles });
   return {
     profile: { id: p.id, domain: p.industry ?? p.mechanism, question: `Is "${p.title}" an actionable transaction pathway?`, features, available },
     unknowns,
-    evidence,
-    actions,
+    knowledge,
+    mechanism: built.ok ? built.model : null,
   };
+}
+
+/**
+ * One research action per counter-model the controller generated: each asks
+ * what current evidence says about the failure it names — a mechanism role
+ * nobody evidenced, or a facet whose research conflicts or has lapsed — and
+ * bears on that counter-model and on every representation's hypothesis.
+ */
+export function actionsFor(p: SprintProblem, hypotheses: readonly { id: string; basis: string }[]): CandidateAction[] {
+  const holds = hypotheses.filter((h) => h.basis.startsWith('representation:')).map((h) => h.id);
+  return hypotheses
+    .filter((h) => h.basis.startsWith('counter:'))
+    .map((h) => {
+      const subject = h.basis.slice('counter:'.length);
+      return {
+        key: `${p.id}:${subject}`,
+        kind: 'RESEARCH',
+        subject: `${subject} of ${p.title}`.slice(0, 200),
+        question: `What does current evidence say about the ${subject} of "${p.title}"?`.slice(0, 300),
+        resolves: subject,
+        discriminates: [...holds, h.id],
+        cost: 0.01,
+      };
+    });
+}
+
+/** The probability the controller gives the transaction working: its best-supported representation's score. */
+export function holdsProbability(decision: ControllerDecision): number {
+  const holds = decision.hypotheses.filter((h) => h.basis.startsWith('representation:'));
+  return holds.length === 0 ? 0 : Math.max(...holds.map((h) => h.score));
 }
 
 function priceFigure(p: SprintProblem): Figure {
@@ -303,23 +385,13 @@ export const GENERAL_METHOD: SprintMethod = {
   key: 'general:controller+provenance',
   run(p, threshold) {
     const started = performance.now();
-    const { profile, unknowns, evidence, actions } = profileOf(p);
-    const decision = decideNext({
-      problem: profile,
-      knowledge: null,
-      mechanism: null,
-      catalogue: SEED_METHODS,
-      outcomes: [],
-      hypotheses: [
-        { id: HOLDS, statement: `"${p.title}" is an actionable pathway`, basis: 'given:holds' },
-        { id: FAILS, statement: `"${p.title}" fails at an unknown load-bearing field`, basis: 'given:fails' },
-      ],
-      evidence: [...evidence, ...unknowns.map((f): EvidenceItem => ({ id: `${p.id}:${f}:unknown`, source: sourceOf(p), bears: { [FAILS]: 'SUPPORTS', [HOLDS]: 'REFUTES' } }))],
-      actions,
-      now: p.updatedAt,
-    });
+    const { profile, unknowns, knowledge, mechanism } = profileOf(p);
+    const base: ControllerSnapshot = { problem: profile, knowledge, mechanism, catalogue: SEED_METHODS, outcomes: [], evidence: [], actions: [], now: p.updatedAt };
+    // The actions name the hypotheses they bear on, so they are built from the hypotheses the controller generated.
+    const generated = decideNext(base).hypotheses;
+    const decision = decideNext({ ...base, actions: actionsFor(p, generated) });
     const { record, findings: provenanceFindings } = grossBilledProvenance(p);
-    const probability = decision.hypotheses.find((h) => h.id === HOLDS)?.score ?? 0;
+    const probability = holdsProbability(decision);
     const actionable = unknowns.length === 0 && record !== null && probability >= threshold;
     const robust = actionable && record !== null && record.alternatives.every((a) => a.value !== null && a.value > 0);
     return {

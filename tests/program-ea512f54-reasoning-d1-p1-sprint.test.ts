@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { listImprovementEvents } from '../server/repos/improvement.ts';
+import type { KnowledgeSourceClaim } from '../server/services/research/knowledgeModel.ts';
 import {
   BASELINE_METHOD,
   GENERAL_METHOD,
@@ -16,7 +17,41 @@ import {
   splitProblems,
   sprintIfDue,
   type SprintProblem,
+  profileOf,
+  holdsProbability,
 } from '../server/services/improvement/sprint.ts';
+import { decideNext } from '../server/services/research/reasoningController.ts';
+import { SEED_METHODS } from '../server/services/research/methodLibrary.ts';
+
+/** A gated research claim as the research repository returns it. */
+const researchClaim = (id: string, over: Partial<KnowledgeSourceClaim> = {}): KnowledgeSourceClaim => ({
+  id,
+  claim: `claim ${id}`,
+  claimType: 'SOURCED_FACT',
+  sourceUrl: `https://example.test/${id}`,
+  sourceTitle: `Source ${id}`,
+  sourcePublisher: 'Example Publisher',
+  sourceDate: '2026-10-01',
+  retrievedAt: '2026-10-20T00:00:00.000Z',
+  retrievalState: 'RETRIEVED',
+  evidenceLane: null,
+  geography: null,
+  timeframe: null,
+  population: null,
+  definition: null,
+  contradictionState: 'UNCHALLENGED',
+  contradictionNote: null,
+  contradictionKind: null,
+  reconciliation: null,
+  reconciledClaimId: null,
+  accepted: true,
+  sourced: true,
+  primarySource: true,
+  structuralFinding: 'BUYER_TYPE',
+  laborFinding: null,
+  createdAt: '2026-10-20T00:00:00.000Z',
+  ...over,
+});
 
 let seq = 0;
 const problem = (over: Partial<SprintProblem> = {}): SprintProblem => {
@@ -42,16 +77,25 @@ const problem = (over: Partial<SprintProblem> = {}): SprintProblem => {
     state: 'READY',
     createdAt: `2026-10-${String((seq % 28) + 1).padStart(2, '0')}T00:00:00.000Z`,
     updatedAt: '2026-11-01T00:00:00.000Z',
+    claims: [researchClaim(`rfq_${seq}`), researchClaim(`buyer_${seq}`, { structuralFinding: 'UNIT_ECONOMIC' })],
     ...over,
   };
 };
 
-/** A population where payer+price is present on dead openings too, so the baseline over-calls them. */
+/** The research behind an opening was true once and has since lapsed. */
+const lapsed = (): KnowledgeSourceClaim[] => [researchClaim(`lapsed_${seq}`, { structuralFinding: 'UNIT_ECONOMIC', validUntil: '2026-10-15' })];
+
+/**
+ * A population where payer+price is present on dead openings too, so the
+ * baseline over-calls them; what tells them apart is the research behind each
+ * opening — current on the live ones, lapsed on the dead ones, absent on the
+ * bare cards — never how many card fields are filled.
+ */
 const population = (): SprintProblem[] => {
   const out: SprintProblem[] = [];
   for (let i = 0; i < 40; i++) out.push(problem());
-  for (let i = 0; i < 40; i++) out.push(problem({ state: 'DISCOVERED', buyingSignal: null, paymentTerms: null, fulfillmentOwner: null }));
-  for (let i = 0; i < 20; i++) out.push(problem({ state: 'EVIDENCE_CARD', payer: null, priceCents: null, reachableChannel: null }));
+  for (let i = 0; i < 40; i++) out.push(problem({ state: 'DISCOVERED', buyingSignal: null, paymentTerms: null, fulfillmentOwner: null, claims: lapsed() }));
+  for (let i = 0; i < 20; i++) out.push(problem({ state: 'EVIDENCE_CARD', payer: null, priceCents: null, reachableChannel: null, claims: [] }));
   return out;
 };
 
@@ -80,6 +124,57 @@ describe('the benchmark measures every quantity per set, with numerator and deno
     expect(v.actionable).toBe(false);
     expect(v.provenance ?? null).toBeNull();
     expect(v.findings).toBeGreaterThan(0);
+  });
+});
+
+describe('the controller generates its own competing hypotheses and weighs them against real claims', () => {
+  it('holds no fixed hypothesis: every one is a representation it selected or a counter-model of a failure it found', () => {
+    for (const p of [problem(), problem({ claims: lapsed(), buyingSignal: null }), problem({ claims: [] })]) {
+      const d = GENERAL_METHOD.run(p, 0.5).decision!;
+      expect(d.hypotheses.length).toBeGreaterThanOrEqual(2);
+      for (const h of d.hypotheses) expect(h.basis).toMatch(/^(representation|counter):/);
+      expect(d.hypotheses.map((h) => h.id)).not.toContain('pathway-holds');
+      expect(d.hypotheses.map((h) => h.id)).not.toContain('pathway-fails');
+      expect(new Set(d.hypotheses.map((h) => h.basis)).size).toBe(d.hypotheses.length);
+    }
+  });
+
+  it('counts only the opening\'s sourced research claims as evidence, never a filled or empty card field', () => {
+    const full = problem();
+    const d = GENERAL_METHOD.run(full, 0.5).decision!;
+    const claimIds = new Set(full.claims.map((c) => c.id));
+    const cited = d.hypotheses.flatMap((h) => [...h.supports, ...h.refutes]);
+    expect(cited.length).toBeGreaterThan(0);
+    for (const id of cited) expect(claimIds.has(id)).toBe(true);
+    // Seven filled fields over the same two claims weigh exactly what three filled fields over them weigh.
+    const sparse = problem({ claims: full.claims, buyingSignal: null, paymentTerms: null, fulfillmentOwner: null, acceptanceCondition: null });
+    const d2 = (p: SprintProblem) => GENERAL_METHOD.run(p, 0.5).decision!;
+    const best = (p: SprintProblem) => d2(p).hypotheses.filter((h) => h.basis.startsWith('representation:')).map((h) => h.supports.length);
+    expect(Math.max(...best(sparse))).toBe(Math.max(...best(full)));
+    // A full card with no research behind it has no evidence at all: nothing supports or refutes anything.
+    const bare = d2(problem({ claims: [] }));
+    expect(bare.hypotheses.every((h) => h.supports.length === 0 && h.refutes.length === 0)).toBe(true);
+    expect(holdsProbability(bare)).toBe(0.5);
+  });
+
+  it('a lapsed claim becomes a counter-model it supports, and refutes the transaction working as modelled', () => {
+    const p = problem({ claims: lapsed() });
+    const { knowledge, mechanism } = profileOf(p);
+    expect(knowledge.claims.find((c) => c.id === p.claims[0]!.id)?.status).toBe('OUTDATED');
+    expect(mechanism?.unknown).toContain('initiator');
+    const d = GENERAL_METHOD.run(p, 0.5).decision!;
+    const counter = d.hypotheses.find((h) => h.id === 'fails:prices')!;
+    expect(counter.supports).toEqual([p.claims[0]!.id]);
+    for (const h of d.hypotheses.filter((one) => one.basis.startsWith('representation:'))) expect(h.refutes).toEqual([p.claims[0]!.id]);
+    expect(holdsProbability(d)).toBeLessThan(0.5);
+    expect(GENERAL_METHOD.run(p, 0.5).actionable).toBe(false);
+  });
+
+  it('is the same controller any caller gets: the sprint passes it no hypotheses and no evidence of its own', () => {
+    const p = problem();
+    const { profile, knowledge, mechanism } = profileOf(p);
+    const direct = decideNext({ problem: profile, knowledge, mechanism, catalogue: SEED_METHODS, outcomes: [], evidence: [], actions: [], now: p.updatedAt });
+    expect(direct.hypotheses.map((h) => [h.id, h.score])).toEqual(GENERAL_METHOD.run(p, 0.5).decision!.hypotheses.map((h) => [h.id, h.score]));
   });
 });
 

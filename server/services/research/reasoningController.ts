@@ -227,6 +227,52 @@ export function generateHypotheses(
   });
 }
 
+/**
+ * The evidence a knowledge reading and a mechanism model actually hold, as
+ * bearings on the controller's own hypotheses. One item per sourced claim,
+ * never one per field:
+ *
+ *   - a SUPPORTED claim cited by a mechanism role the model holds as KNOWN
+ *     supports every representation's "the transaction works as modelled";
+ *   - a CONFLICTING or OUTDATED claim supports the counter-model of its facet
+ *     (`fails:<facet>`, generated from that failure mode) and refutes every
+ *     representation's hypothesis.
+ *
+ * A missing facet, an unknown role, an empty card field or a claim with no
+ * source is an information need, not evidence for or against anything, so it
+ * yields no item. Two roles citing one claim are still one item.
+ */
+export function evidenceFromModel(
+  knowledge: KnowledgeReading | null,
+  mechanism: MechanismModel | null,
+  hypotheses: readonly Hypothesis[],
+): EvidenceItem[] {
+  const holds = hypotheses.filter((h) => h.basis.startsWith('representation:')).map((h) => h.id);
+  const ids = new Set(hypotheses.map((h) => h.id));
+  const cited = new Set<string>();
+  for (const role of mechanism?.roles ?? []) {
+    if (role.status !== 'KNOWN') continue;
+    for (const nodeId of role.nodes) {
+      const evidence = mechanism?.graph.nodes.get(nodeId)?.attributes['evidence'];
+      if (typeof evidence === 'string') for (const id of evidence.split(',')) if (id) cited.add(id);
+    }
+  }
+  const out: EvidenceItem[] = [];
+  for (const claim of knowledge?.claims ?? []) {
+    const source = claim.provenance?.sourceUrl ?? null;
+    if (!source) continue;
+    const bears: EvidenceItem['bears'] = {};
+    if (claim.status === 'SUPPORTED' && cited.has(claim.id)) {
+      for (const h of holds) bears[h] = 'SUPPORTS';
+    } else if (claim.status === 'CONFLICTING' || claim.status === 'OUTDATED') {
+      for (const h of holds) bears[h] = 'REFUTES';
+      if (ids.has(`fails:${claim.facet}`)) bears[`fails:${claim.facet}`] = 'SUPPORTS';
+    }
+    if (Object.keys(bears).length > 0) out.push({ id: claim.id, source, bears });
+  }
+  return out;
+}
+
 function failureModesOf(snapshot: ControllerSnapshot, weak: readonly WeakInference[]): FailureMode[] {
   const out: FailureMode[] = [];
   for (const claim of snapshot.knowledge?.claims ?? []) {
@@ -347,10 +393,14 @@ export function decideNext(snapshot: ControllerSnapshot): ControllerDecision {
     methodChange = { from: snapshot.prior?.methodId ?? null, to: method?.methodId ?? null, reason };
   }
 
+  const generated = generateHypotheses(snapshot.problem, representations, failureModes, snapshot.hypotheses ?? []);
+  const given = new Set(snapshot.evidence.map((e) => e.id));
   const hypotheses = scoreHypotheses(
-    generateHypotheses(snapshot.problem, representations, failureModes, snapshot.hypotheses ?? []),
+    generated,
     [
       ...snapshot.evidence,
+      // The snapshot's own claims bear on the hypotheses generated from them; a claim the caller already weighed is not counted twice.
+      ...evidenceFromModel(snapshot.knowledge, snapshot.mechanism, generated).filter((e) => !given.has(e.id)),
       // A tracked result is evidence too, once it names where it was observed.
       ...(snapshot.results ?? [])
         .filter((r) => r.outcome !== 'INCONCLUSIVE')
