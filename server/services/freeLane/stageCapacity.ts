@@ -1103,7 +1103,78 @@ export const STAGE_CAPACITY_EVENT = 'FREE_LANE_STAGE_CAPACITY';
  * a web request. A measurement that fails is recorded as failed, with its reason,
  * rather than skipped silently.
  */
-export async function recordStageCapacity(options: { hours?: number; now?: number } = {}): Promise<StageCapacityReport | null> {
+export async function recordStageCapacity(
+  options: { hours?: number; now?: number; followers?: readonly CapacityFollower[] } = {},
+): Promise<StageCapacityReport | null> {
+  const report = await recordStageCapacityOnly(options);
+  // The readings that build on this one run after it is written, so they read it.
+  await runCapacityFollowers(new Date(options.now ?? Date.now()), options.followers ?? defaultCapacityFollowers());
+  return report;
+}
+
+/**
+ * The bin events the hourly stage-capacity tick also records (CAP-19-5,
+ * CAP-21-7, CAP-25-2). Literal names, so this module does not import the
+ * readers that import it; the wiring test holds them equal to each owner's
+ * own constant.
+ */
+export const CAPACITY_FOLLOWER_EVENTS = ['CAPACITY_CONTRIBUTION', 'ACQUISITION_MEASURES', 'STAGE_LIMIT'] as const;
+
+/** One reading recorded on the stage-capacity tick: its event and how to record it. */
+export interface CapacityFollower {
+  event: string;
+  run: (now: Date) => Promise<unknown>;
+}
+
+/**
+ * The three readings, each loaded on first use: their modules read this one,
+ * so a static import would be a cycle. No new timer — they ride the free
+ * lane's existing hourly tick (`worker.ts`).
+ */
+export function defaultCapacityFollowers(): CapacityFollower[] {
+  return [
+    { event: 'CAPACITY_CONTRIBUTION', run: async (now) => (await import('./contribution.ts')).recordContribution(now) },
+    { event: 'ACQUISITION_MEASURES', run: async (now) => (await import('../feeds/acquisitionMeasures.ts')).recordAcquisitionMeasures(now) },
+    { event: 'STAGE_LIMIT', run: async (now) => (await import('./stageLimit.ts')).recordStageLimit(now) },
+  ];
+}
+
+export interface FollowerOutcome {
+  event: string;
+  ok: boolean;
+  error: string | null;
+}
+
+/**
+ * Record every follower reading, each isolated: one that throws is logged and
+ * recorded as `NOT_MEASURED` under its own event with the reason, and the
+ * others still run. Never throws.
+ */
+export async function runCapacityFollowers(now: Date, followers: readonly CapacityFollower[] = defaultCapacityFollowers()): Promise<FollowerOutcome[]> {
+  const out: FollowerOutcome[] = [];
+  for (const follower of followers) {
+    const started = Date.now();
+    try {
+      await follower.run(now);
+      out.push({ event: follower.event, ok: true, error: null });
+    } catch (error) {
+      const message = String((error as Error)?.message ?? error).slice(0, 400);
+      console.warn(`[free-lane] ${follower.event} reading failed: ${message}`);
+      out.push({ event: follower.event, ok: false, error: message });
+      await recordBinEvent({
+        eventType: follower.event,
+        workloadClass: 'capacity',
+        outcome: 'NOT_MEASURED',
+        reason: `${follower.event} reading failed: ${message}`.slice(0, 480),
+        durationMs: Date.now() - started,
+        evidenceClass: 'MEASURED',
+      });
+    }
+  }
+  return out;
+}
+
+async function recordStageCapacityOnly(options: { hours?: number; now?: number }): Promise<StageCapacityReport | null> {
   const started = Date.now();
   try {
     const report = await stageCapacity(options);
