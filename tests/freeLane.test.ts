@@ -499,6 +499,13 @@ describe('the free research lane', () => {
     expect(second.claimed).toBe(0);
   });
 
+  it('gives two passes that race to create the free workers the same rows, instead of a refused duplicate', async () => {
+    // Out of the way, not deleted: other rows may name these workers.
+    await getDb().run("UPDATE workers SET name = name || '-was-' || id WHERE name IN ('free-lane-a', 'free-lane-b')", []);
+    const [one, two] = await Promise.all([ensureFreeWorkers(CONFIG), ensureFreeWorkers(CONFIG)]);
+    expect(one.map((w) => w.workerId)).toEqual(two.map((w) => w.workerId));
+  });
+
   it('cools an item down for the model whose provider failed, not for the other model (RunPod GPU beside a free one)', async () => {
     const { orchestration, fragment } = await packet(play.project.id);
     await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);

@@ -215,12 +215,20 @@ export async function ensureFreeWorkers(config: LaneConfig): Promise<FreeWorker[
     const name = WORKER_NAMES[i]!;
     let worker = await getWorkerByName(name);
     if (!worker) {
-      worker = await createWorker({
-        name,
-        displayName: name,
-        createdByType: 'SYSTEM',
-        createdById: 'free research lane (§85)',
-      });
+      try {
+        worker = await createWorker({
+          name,
+          displayName: name,
+          createdByType: 'SYSTEM',
+          createdById: 'free research lane (§85)',
+        });
+      } catch (error) {
+        // Two passes of the pool that both read "no worker" race to write it, and the
+        // name is unique, so the second insert is refused (Postgres suite, 2026-11-17:
+        // "Key (name)=(free-lane-a) already exists"). The row the first one wrote is the worker.
+        worker = await getWorkerByName(name);
+        if (!worker) throw error;
+      }
     }
     out.push({ workerId: worker.id, label: workerIdentity(worker), model: models[i]! });
   }
