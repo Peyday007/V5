@@ -138,8 +138,16 @@ export function commissionQuestion(input: {
         'the platform’s own terms rather than an article about them. If the published ' +
         'sources still do not settle it, say so plainly — that is the answer.'
       : '';
+  // A CHOICE answer is filed only when it names exactly one allowed value
+  // (`matchChoice`), so the question must say what those values are.
+  // Production, 2026-11-17: 515 questions asked, 13 answered — choice answers
+  // were written in words the matcher could not file.
+  const choices =
+    declared.unit === 'CHOICE' && declared.choices?.length
+      ? ` State exactly one of ${declared.choices.join(', ')} in the claim text, with the source that supports it.`
+      : '';
   return (
-    `For ${about}: ${declared.question} ${declared.task}` +
+    `For ${about}: ${declared.question} ${declared.task}${choices}` +
     ` Record the answer under the evidence lane "${input.attribute}".${again}`
   );
 }

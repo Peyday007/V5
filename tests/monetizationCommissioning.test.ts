@@ -570,6 +570,13 @@ describe('a question is fully identified before it is asked', () => {
     expect(opened.question).toContain(`evidence lane "${opened.attribute}"`);
   });
 
+  it('names the allowed values of a choice question, which is all the filer reads (2026-11-17)', () => {
+    const question = commissionQuestion({ pathTitle: 'Direct sale', subjectTitle: null, attribute: 'competition', round: 1 });
+    expect(question).toContain('State exactly one of NONE_FOUND, FEW, MANY, SATURATED');
+    expect(matchChoice('Competition is FEW: three suppliers are listed.', ATTRIBUTE.competition.choices)).toBe('FEW');
+    expect(commissionQuestion({ pathTitle: 'Direct sale', subjectTitle: null, attribute: 'expectedRevenue', round: 1 })).not.toContain('State exactly one of');
+  });
+
   it('bounds the retry and says so on the second asking', async () => {
     const question = commissionQuestion({
       pathTitle: 'Direct sale',
