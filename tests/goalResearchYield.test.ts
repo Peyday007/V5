@@ -84,6 +84,13 @@ describe('why a goal’s research is not producing openings its plan can use', (
       'no readable source among N candidate page(s): {…} the site answered …',
     );
     expect(failureClass('model brain-a: the model returned no usable JSON')).toBe('the model returned no usable JSON');
+    // W13: an empty list is not a drop, and the model's stated reason is the class.
+    const head = "model runpod/openai/gpt-oss-120b: the answer did not survive Brain's own checks: 0 claim(s) offered, dropped {} from 5 source(s); ";
+    expect(failureClass(`${head}the reply was {"claims":[]}`)).toBe('listed no claims (no reason given)');
+    expect(failureClass(`${head}the model listed none because: all 5 pages are vendor pages`)).toBe('listed no claims because: all N pages are vendor pages');
+    expect(
+      failureClass("model auto/best-coding: the answer did not survive Brain's own checks: 3 claim(s) offered, dropped {\"citation not readable as sentence numbers\":3}"),
+    ).toBe("the answer did not survive Brain's own checks: N claim(s) offered, dropped {…}");
   });
 
   it('reads the model from a free-lane event’s reason', () => {

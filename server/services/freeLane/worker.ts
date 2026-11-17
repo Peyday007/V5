@@ -48,6 +48,7 @@ import { httpCompleter, laneConfig, type Completer, type LaneConfig } from '../c
 import { isRunpodSlot, runpodBreakerOpen, runpodCallWindow, runpodPaused } from '../cheap/runpod.ts';
 import type { SourceFetch } from '../sources/fetchForWorker.ts';
 import { readSource } from '../sources/access.ts';
+import { redactCredentials } from '../effects/failureDetail.ts';
 
 /** The research work types the free lane answers, and the tool that answers each. */
 export const FREE_LANE_WORK_TYPES = [
@@ -708,8 +709,41 @@ export function emptyListRepair(prompt: string, sources: number, lane: string): 
     `${prompt}\n\nYour previous answer listed no claims from the ${sources} source(s) above. Read them again for ` +
     'any sentence that bears on part of the brief. ' + PARTIAL_EVIDENCE +
     'Cite each by SOURCE and sentence numbers, e.g. {"claim":"…","source":2,"sentences":[4,5],"evidence_lane":"' + lane + '"}. ' +
-    'Reply {"claims":[]} only if no sentence in any source bears on the brief at all.'
+    'Reply {"claims":[],"none_because":"…"} only if no sentence in any source bears on the brief at all, and say in ' +
+    'none_because, in one sentence, which it is: the sources are about something else, or the brief rule (a source ' +
+    'type, the scope, a lane) that keeps out the sentences that are on the subject, naming the rule and the source.'
   );
+}
+
+/**
+ * Why a model listed no claims, in its own words, bounded, or null. Production,
+ * 2026-11-17 (W13): 20 of gpt-oss-120b's 21 refused fragments in an hour were
+ * `0 claim(s) offered, dropped {}` — no check dropped anything; the model listed
+ * none over five pages Brain had read, after #998's re-ask and #1014's page
+ * selection. Two fixes aimed at a cause nobody had read. The reason the model
+ * gives is recorded so the next fix is aimed at the one it states. Pure.
+ */
+export function noneBecause(raw: Record<string, unknown>): string | null {
+  for (const key of ['none_because', 'reason', 'why', 'explanation', 'note']) {
+    const value = raw[key];
+    if (typeof value === 'string' && value.trim() !== '') return redactCredentials(redactSecrets(value.replace(/\s+/g, ' ').trim())).slice(0, 240);
+  }
+  return null;
+}
+
+/**
+ * The failure recorded for an answer from which no claim survived. An empty
+ * list is said as one (`dropped {}`, then the model's stated reason or what it
+ * sent), so a report never reads a model that listed nothing as one whose
+ * claims Brain's checks dropped. Pure.
+ */
+export function droppedReason(listed: number, dropped: Record<string, number>, sources: number, raw: Record<string, unknown>): string {
+  const head = `the answer did not survive Brain's own checks: ${listed} claim(s) offered, dropped ${JSON.stringify(dropped)}`;
+  if (listed > 0) return head;
+  const because = noneBecause(raw);
+  return because
+    ? `${head} from ${sources} source(s); the model listed none because: ${because}`
+    : `${head} from ${sources} source(s); the reply was ${JSON.stringify(raw).slice(0, 200)}`;
 }
 
 async function ask(
@@ -1446,9 +1480,8 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
       drop(CITATION_KEYS.some((key) => c[key] !== undefined && key !== 'evidence_excerpt') ? citationFailure(c, numbered) : uncitedReason(c));
     }
     if (claims.length === 0) {
-      // With nothing listed, what the model sent instead is the only clue to why (2026-11-16: 28 of the GPU's 29 refusals in 2h).
-      const sent = listed.length === 0 ? ` from ${readable.length} source(s); the reply was ${JSON.stringify(raw).slice(0, 200)}` : '';
-      ctx.why = `the answer did not survive Brain's own checks: ${listed.length} claim(s) offered, dropped ${JSON.stringify(dropped)}${sent}`;
+      // With nothing listed, the model's stated reason, else what it sent, is the only clue to why (2026-11-16/17).
+      ctx.why = droppedReason(listed.length, dropped, readable.length, raw);
       return null;
     }
     return { claims: claims.slice(0, 25) };
