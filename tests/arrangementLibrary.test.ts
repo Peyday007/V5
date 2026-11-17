@@ -41,6 +41,7 @@ import {
   MAX_CONSTRUCTIONS,
   selectCandidates,
   type Candidate,
+  type ConstructedArrangement,
   type ConstructionJob,
   type Primitive,
 } from '../server/services/cash/construct.ts';
@@ -57,7 +58,7 @@ import {
 } from '../server/repos/monetization.ts';
 import { forgetKnowledge } from '../server/services/quant/knowledge.ts';
 import { CAPTURE_KEY } from '../server/services/cash/tier.ts';
-import { defaultDesign } from '../server/services/cash/properties.ts';
+import { defaultDesign, isDefaultDesign, STRUCTURES } from '../server/services/cash/properties.ts';
 import type { ClaimType, Layer, OpportunitySignal } from '../server/domain/types.ts';
 
 let projectId = '';
@@ -238,8 +239,23 @@ describe('research written to the arrangement', () => {
     const id = await goal(600_000);
     const w = (await getWorkstream(id))!;
     const reading = (await readGoalPlan({ goalId: id, now, evaluations: 500 }))!;
-    // A forward arrangement for the clinics, from the library.
-    const forward = (await listConstructedArrangements(projectId)).find((one) => one.constructionOrigin === 'FORWARD' && one.industryNodeId !== null)!;
+    /*
+     * A forward arrangement for the clinics, from the library — one the new evidence below can reach.
+     *
+     * That evidence is an opening sold to these buyers as a productized service, and construction
+     * then stops composing the *default* design of every structure that already holds that way:
+     * those buyers are "already held sold exactly this way" (`forEachCandidate`). Such an arrangement
+     * is never recomposed, so its stored digest cannot move however much evidence arrives. The library
+     * lists one pass's rows by one shared `created_at` and then a random id, so a bare `find` drew that
+     * arrangement about one run in fifty (Postgres suite, 2026-11-17, run 44029560078) and the test
+     * failed on a digest that was right not to change.
+     */
+    const SOLD_AS = 'PRODUCTIZED_SERVICE' as const;
+    const forward = (await listConstructedArrangements(projectId)).find((one) => {
+      const design = (one.design['arrangement'] as ConstructedArrangement).design;
+      const retired = isDefaultDesign(design) && (STRUCTURES[design.base].alreadyHeldAs as readonly string[]).includes(SOLD_AS);
+      return one.constructionOrigin === 'FORWARD' && one.industryNodeId !== null && !retired;
+    })!;
     const key = forward.legacyKey!;
     const ask = () => openConstructedRound({ goal: { id, title: w.title }, projectId, key, title: 'Constructed: clinics', question: 'Do clinics pay for this?', now: now.toISOString(), liveCap: 2 * MAX_LIVE_GOAL_ROUNDS });
     const first = await ask();
@@ -270,7 +286,7 @@ describe('research written to the arrangement', () => {
 
     // New evidence about its buyer arrives — a published price this population paid — so its inputs change and it may be asked again.
     const o = await createOpportunity({
-      projectId, cashModeId, ownerUserId: userId, title: 'Clinic report', mechanism: 'PRODUCTIZED_SERVICE', currency: 'USD',
+      projectId, cashModeId, ownerUserId: userId, title: 'Clinic report', mechanism: SOLD_AS, currency: 'USD',
       sourceClaimId: `clm_${Math.random().toString(36).slice(2, 12)}`, opportunitySignal: 'RECURRING_OUTSOURCED_WORK', source: 'A publisher', requiredCapabilities: [],
     });
     await recordCardFact({ projectId, opportunityId: o.id, field: CAPTURE_KEY, kind: 'EVIDENCE', value: 'Sell it.', claimId: `clm_c_${o.id}`, decidedBy: 'BRAIN' });
