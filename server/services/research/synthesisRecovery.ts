@@ -727,6 +727,34 @@ export async function assessProjectSyntheses(projectId: string): Promise<Synthes
  */
 export const FILING_RECOVERY_ACTOR = 'synthesis-filing-recovery';
 
+/**
+ * Who the second automatic recovery is recorded as: a synthesis whose own
+ * attempts the queue spent (F7, production 2026-11-17).
+ *
+ * Cash goal rounds parked NEEDS_HUMAN, or under a RUNNING mission, holding one
+ * to four accepted claims, because their synthesis items ran out of attempts
+ * on a small model that could not answer (ATTEMPTS_EXHAUSTED, the newest
+ * 2026-11-16 06:05Z). Synthesis has succeeded since, but nothing ever asked
+ * again: the runner's own replacement stops at the first ledger row, and this
+ * sweep selected only filing refusals. The research is intact and the cause
+ * was the attempt, not the evidence, so one fresh synthesis is issued — a new
+ * item, the spent one kept as it is (§5) — under every check
+ * `assessSynthesisRecovery` makes. The bound is the filing path's: one
+ * automatic recovery per packet, ever, whichever actor made it; a replacement
+ * that fails too leaves the packet for a person.
+ */
+export const SPENT_RECOVERY_ACTOR = 'synthesis-spent-recovery';
+
+/** Failure categories that say the queue spent the attempts, not that the input is wrong. */
+export const SPENT_SYNTHESIS_CATEGORIES = [
+  'ATTEMPTS_EXHAUSTED',
+  'LEASE_EXPIRED',
+  'TIMEOUT',
+  'DEPENDENCY_UNAVAILABLE',
+  'WORKER_ERROR',
+  'UNKNOWN',
+] as const;
+
 /** The reason a bin's spent budget is raised for this recovery, matched exactly. */
 export const FILING_REGRANT_REASON =
   'FILING_DEFECT: the dispatch attempts went on syntheses Brain could not file; the research survived';
@@ -766,8 +794,11 @@ export interface FilingRecovery {
  *     answering an upload** — an attempt row Brain wrote, in Brain's words,
  *     about Brain's half of the exchange. A worker that submitted nothing, or
  *     whose submission Brain judged, is not selected: those are about the work;
+ *     Or (F7, `SPENT_RECOVERY_ACTOR`) whose own attempts the queue spent —
+ *     ATTEMPTS_EXHAUSTED, a lapsed lease, a timeout, a transient cause — which
+ *     says nothing about the evidence. INVALID_INPUT is never selected;
  *   - with no live synthesis beside it, and no earlier automatic recovery on
- *     the same packet. One per packet, ever: if the replacement is refused by
+ *     the same packet, by either path. One per packet, ever: if the replacement is refused by
  *     the store again, the defect is not historical and a person should look.
  *
  * Everything after selection is `assessSynthesisRecovery` unchanged — every
@@ -825,8 +856,23 @@ export async function recoverFilingFailures(
    * packet's own id so a batch is stable, and filtered by the permanent refusals
    * this process has already met, so they cannot hold the front of the queue.
    */
-  const rows = await db.all<{ id: string; orchestration_id: string }>(
-    `SELECT w.id AS id, w.orchestration_id AS orchestration_id
+  const filingRefused = `EXISTS (
+          SELECT 1 FROM work_items f
+            JOIN idempotency_operations op ON op.work_item_id = f.id
+            JOIN effect_attempts a ON a.operation_id = op.id
+           WHERE f.orchestration_id = w.orchestration_id
+             AND f.work_type = 'RESEARCH_SYNTHESIZE'
+             AND op.namespace = 'research.synthesis'
+             AND a.outcome = 'FAILED'
+             AND (a.detail LIKE '%document store refused an upload%'
+                  OR a.detail LIKE '%Could not reach the document store%to store a document%')
+        )`;
+  // The newest stopped synthesis ran out of attempts (F7): see SPENT_RECOVERY_ACTOR.
+  const attemptsSpent = `((w.state = 'FAILED' AND w.failure_category IN (${SPENT_SYNTHESIS_CATEGORIES.map(() => '?').join(', ')}))
+          OR (w.state = 'CANCELLED' AND w.attempt_count >= w.max_attempts))`;
+  const rows = await db.all<{ id: string; orchestration_id: string; filing: number }>(
+    `SELECT w.id AS id, w.orchestration_id AS orchestration_id,
+            CASE WHEN ${filingRefused} THEN 1 ELSE 0 END AS filing
        FROM work_items w
        JOIN research_orchestrations o ON o.id = w.orchestration_id
       WHERE w.work_type = 'RESEARCH_SYNTHESIZE'
@@ -840,27 +886,22 @@ export async function recoverFilingFailures(
              AND newer.state IN ('FAILED','CANCELLED')
              AND (newer.updated_at > w.updated_at OR (newer.updated_at = w.updated_at AND newer.id > w.id))
         )
-        AND EXISTS (
-          SELECT 1 FROM work_items f
-            JOIN idempotency_operations op ON op.work_item_id = f.id
-            JOIN effect_attempts a ON a.operation_id = op.id
-           WHERE f.orchestration_id = w.orchestration_id
-             AND f.work_type = 'RESEARCH_SYNTHESIZE'
-             AND op.namespace = 'research.synthesis'
-             AND a.outcome = 'FAILED'
-             AND (a.detail LIKE '%document store refused an upload%'
-                  OR a.detail LIKE '%Could not reach the document store%to store a document%')
-        )
+        AND (${filingRefused} OR ${attemptsSpent})
         AND NOT EXISTS (
           SELECT 1 FROM work_items r
            WHERE r.orchestration_id = w.orchestration_id
              AND r.work_type = 'RESEARCH_SYNTHESIZE'
              AND (r.state IN ('QUEUED','LEASED')
-                  OR (r.created_by_type = 'SYSTEM' AND r.created_by_id = ?))
+                  OR (r.created_by_type = 'SYSTEM' AND r.created_by_id IN (?, ?)))
         )
       ORDER BY w.orchestration_id
       LIMIT ?`,
-    [FILING_RECOVERY_ACTOR, Math.max(1, limit) + permanentlyRefused.size],
+    [
+      ...SPENT_SYNTHESIS_CATEGORIES,
+      FILING_RECOVERY_ACTOR,
+      SPENT_RECOVERY_ACTOR,
+      Math.max(1, limit) + permanentlyRefused.size,
+    ],
   );
 
   const out: FilingRecovery[] = [];
@@ -908,7 +949,9 @@ export async function recoverFilingFailures(
     }
 
     let regranted: string | null = null;
-    if (!assessed.eligible && assessed.outcome.refusal === 'BIN_EXHAUSTED' && orchestrationId) {
+    const filing = Number(row.filing) === 1;
+    // The regrant answers budget spent on Brain's own filing defect, and nothing else.
+    if (filing && !assessed.eligible && assessed.outcome.refusal === 'BIN_EXHAUSTED' && orchestrationId) {
       const found = await binForOrchestration(orchestrationId);
       const bin = found ? await getBin(found.id) : null;
       if (bin) {
@@ -944,9 +987,11 @@ export async function recoverFilingFailures(
         const before = await getHumanRequest(request.id);
         const taken = await withdrawRequest({
           requestId: request.id,
-          reason:
-            'Withdrawn by Brain: this packet stopped because Brain could not file its report, and that is repaired. ' +
-            'The synthesis was reissued over the evidence that survived, so there is nothing here to decide.',
+          reason: filing
+            ? 'Withdrawn by Brain: this packet stopped because Brain could not file its report, and that is repaired. ' +
+              'The synthesis was reissued over the evidence that survived, so there is nothing here to decide.'
+            : 'Withdrawn by Brain: this packet stopped because its synthesis ran out of attempts, not because of its ' +
+              'evidence. The synthesis was reissued once over the accepted claims, so there is nothing here to decide.',
         });
         if (!taken || !before) {
           lostRace = true;
@@ -965,11 +1010,14 @@ export async function recoverFilingFailures(
       assessed.eligible || regranted
         ? await recoverFailedSynthesis({
             workItemId: row.id,
-            actor: { type: 'SYSTEM', id: FILING_RECOVERY_ACTOR },
-            reason:
-              'Brain could not file this synthesis (its document store refused the upload); the ' +
-              'filing path has since been repaired, so the synthesis is reissued over the evidence ' +
-              'that survived.',
+            actor: { type: 'SYSTEM', id: filing ? FILING_RECOVERY_ACTOR : SPENT_RECOVERY_ACTOR },
+            reason: filing
+              ? 'Brain could not file this synthesis (its document store refused the upload); the ' +
+                'filing path has since been repaired, so the synthesis is reissued over the evidence ' +
+                'that survived.'
+              : 'This synthesis ran out of attempts (the queue spent them; the evidence was not judged ' +
+                'wanting), and syntheses have succeeded since, so it is reissued once over the accepted ' +
+                'claims. A replacement that fails too is left for a person.',
           })
         : assessed.outcome;
     // A card withdrawn for a recovery that did not happen is asked again.
