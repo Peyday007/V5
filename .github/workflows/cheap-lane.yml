@@ -452,6 +452,14 @@ jobs:
             test)
               # One real question to each combo, timed, from outside the machine.
               [ -n "$OMNIROUTE_API_KEY" ] || { echo "::error::Set OMNIROUTE_API_KEY."; exit 1; }
+              python3 -c "import json;ctx=' '.join(['The quarterly report notes revenue of 4.2 million dollars from freelance design services across 37 clients.']*120);print(json.dumps({'model':'MODEL','max_tokens':4000,'reasoning_effort':'low','temperature':0,'response_format':{'type':'json_object'},'messages':[{'role':'system','content':'You extract facts. Answer in JSON.'},{'role':'user','content':ctx+' Return JSON {\\"claims\\":[...]} with three claims, each with text and quote.'}]}))" > big.json
+              for model in brain-a auto/best-coding auto brain-a auto/best-coding auto; do
+                start=$(date +%s)
+                sed "s#\"MODEL\"#\"$model\"#" big.json > req.json
+                code=$(curl -sS -o reply.json -w '%{http_code}' --max-time 120 -H "authorization: Bearer $OMNIROUTE_API_KEY" -H 'content-type: application/json' -d @req.json "https://$cheap.fly.dev/v1/chat/completions") || code=000
+                echo "BIG model $model: HTTP $code in $(( $(date +%s) - start ))s"
+                head -c 700 reply.json 2>/dev/null; echo
+              done
               for model in $(echo "${OMNIROUTE_MODEL:-auto},auto/best-coding,auto" | tr ',' ' '); do
                 start=$(date +%s)
                 code=$(curl -sS -o reply.json -w '%{http_code}' --max-time 120 \
