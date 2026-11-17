@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { listImprovementEvents } from '../server/repos/improvement.ts';
-import { readControllerHistory } from '../server/services/research/reasoningController.ts';
+import { MECHANISM_HOLDS, decideNext, readControllerHistory } from '../server/services/research/reasoningController.ts';
+import { acquireKnowledge, mechanismFromOpening, type KnowledgeReading, type KnowledgeSourceClaim } from '../server/services/research/knowledgeModel.ts';
 import {
   BASELINE_METHOD,
   GENERAL_METHOD,
@@ -12,6 +13,7 @@ import {
   SPRINT_EVENT,
   chooseDemonstrated,
   chooseThreshold,
+  controllerSnapshotOf,
   pendingResult,
   productionOutcome,
   compareWithBaseline,
@@ -20,6 +22,7 @@ import {
   runSprintBenchmark,
   splitProblems,
   sprintIfDue,
+  type MethodContext,
   type SprintProblem,
 } from '../server/services/improvement/sprint.ts';
 
@@ -33,7 +36,7 @@ const problem = (over: Partial<SprintProblem> = {}): SprintProblem => {
     mechanism: 'RESALE',
     industry: 'equipment',
     source: 'https://example.test/listing',
-    sourceClaimId: null,
+    sourceClaimId: `clm_${String(seq).padStart(4, '0')}`,
     payer: 'Acme',
     reachableChannel: 'email',
     buyingSignal: 'posted RFQ',
@@ -51,6 +54,51 @@ const problem = (over: Partial<SprintProblem> = {}): SprintProblem => {
   };
 };
 
+const NOW = new Date('2026-11-16T00:00:00.000Z');
+
+/** The research claim an opening's card was drawn from: a read, primary source unless overridden. */
+function researchClaim(id: string, over: Partial<KnowledgeSourceClaim> = {}): KnowledgeSourceClaim {
+  return {
+    id,
+    // One content word unique to the claim, so claims about different openings are not read as about the same thing.
+    claim: `${id.replace(/[^a-z0-9]/gi, '')}-request`,
+    claimType: 'SOURCED_FACT',
+    sourceUrl: `https://example.org/${id}`,
+    sourceTitle: `Source ${id}`,
+    sourcePublisher: 'Example Publisher',
+    sourceDate: '2026-10-01',
+    retrievedAt: '2026-11-01T10:00:00Z',
+    retrievalState: 'RETRIEVED',
+    evidenceLane: null,
+    geography: null,
+    timeframe: null,
+    population: null,
+    definition: null,
+    contradictionState: 'UNCHALLENGED',
+    contradictionNote: null,
+    contradictionKind: null,
+    reconciliation: null,
+    reconciledClaimId: null,
+    accepted: true,
+    sourced: true,
+    primarySource: true,
+    structuralFinding: null,
+    laborFinding: null,
+    createdAt: '2026-11-01T10:00:00Z',
+    ...over,
+  };
+}
+
+/** A project's knowledge holding the claim behind every given opening. */
+const knowledgeFor = (ps: readonly SprintProblem[], over: Partial<KnowledgeSourceClaim> = {}): KnowledgeReading =>
+  acquireKnowledge({ subject: 'project prj_1', claims: ps.filter((p) => p.sourceClaimId).map((p) => researchClaim(p.sourceClaimId!, over)), now: NOW });
+
+/** Layers 1 and 2 for one opening, as the sprint gives them to the general method. */
+const contextFor = (p: SprintProblem, knowledge: KnowledgeReading = knowledgeFor([p])): MethodContext => {
+  const m = mechanismFromOpening(p, knowledge);
+  return { knowledge, mechanism: m.ok ? m.model : null };
+};
+
 /** A population where payer+price is present on dead openings too, so the baseline over-calls them. */
 const population = (): SprintProblem[] => {
   const out: SprintProblem[] = [];
@@ -63,7 +111,7 @@ const population = (): SprintProblem[] => {
 describe('the benchmark measures every quantity per set, with numerator and denominator', () => {
   it('records pathway rate, method quality, decision time, interventions, calibration and robust coverage', () => {
     const ps = population();
-    const reading = readSet('BENCHMARK', GENERAL_METHOD.key, ps, ps.map((p) => GENERAL_METHOD.run(p, 0.7)));
+    const reading = readSet('BENCHMARK', GENERAL_METHOD.key, ps, ps.map((p) => GENERAL_METHOD.run(p, 0.6, contextFor(p))));
     for (const m of [reading.actionablePathwayRate, reading.methodQuality, reading.decisionTimeMs, reading.humanInterventions, reading.calibrationBrier, reading.robustTargetCoverage]) {
       expect(typeof m.numerator).toBe('number');
       expect(typeof m.denominator).toBe('number');
@@ -81,7 +129,8 @@ describe('the benchmark measures every quantity per set, with numerator and deno
   });
 
   it('keeps unknowns unknown: a price without a source yields no provenance and no actionable call', () => {
-    const v = GENERAL_METHOD.run(problem({ source: null }), 0.5);
+    const unsourced = problem({ source: null, sourceClaimId: null });
+    const v = GENERAL_METHOD.run(unsourced, 0.5, contextFor(unsourced));
     expect(v.actionable).toBe(false);
     expect(v.provenance ?? null).toBeNull();
     expect(v.findings).toBeGreaterThan(0);
@@ -104,9 +153,9 @@ describe('held-out problems never choose the method, and a rerun adds new held-o
   it('tunes its threshold on the benchmark alone: changing held-out outcomes does not move it', () => {
     const ps = population();
     const split = splitProblems(ps, null);
-    const t1 = chooseThreshold(split.BENCHMARK);
+    const t1 = chooseThreshold(split.BENCHMARK, GENERAL_METHOD, (p) => contextFor(p));
     const flipped = split.HELD_OUT.map((p) => ({ ...p, state: p.state === 'READY' ? 'DISCOVERED' : 'READY' }));
-    const t2 = chooseThreshold(splitProblems([...split.BENCHMARK, ...flipped], null).BENCHMARK);
+    const t2 = chooseThreshold(splitProblems([...split.BENCHMARK, ...flipped], null).BENCHMARK, GENERAL_METHOD, (p) => contextFor(p));
     expect(t2).toBe(t1);
   });
 });
@@ -114,15 +163,15 @@ describe('held-out problems never choose the method, and a rerun adds new held-o
 describe('the general method is compared with a simpler baseline on the same problems', () => {
   it('states whether the extra complexity earned its cost', () => {
     const ps = population();
-    const g = readSet('HELD_OUT', GENERAL_METHOD.key, ps, ps.map((p) => GENERAL_METHOD.run(p, 0.7)));
-    const b = readSet('HELD_OUT', BASELINE_METHOD.key, ps, ps.map((p) => BASELINE_METHOD.run(p, 0.7)));
+    const g = readSet('HELD_OUT', GENERAL_METHOD.key, ps, ps.map((p) => GENERAL_METHOD.run(p, 0.6, contextFor(p))));
+    const b = readSet('HELD_OUT', BASELINE_METHOD.key, ps, ps.map((p) => BASELINE_METHOD.run(p, 0.6)));
     const cmp = compareWithBaseline(g, b);
     expect(cmp.earned).toBe(true);
     expect(cmp.statement).toContain('earned its cost');
     // Where openings missing load-bearing fields closed anyway, the stricter method loses and says so.
     const surprising = population().map((p) => ({ ...p, state: p.payer ? 'COLLECTED' : p.state }));
-    const g2 = readSet('HELD_OUT', GENERAL_METHOD.key, surprising, surprising.map((p) => GENERAL_METHOD.run(p, 0.7)));
-    const b2 = readSet('HELD_OUT', BASELINE_METHOD.key, surprising, surprising.map((p) => BASELINE_METHOD.run(p, 0.7)));
+    const g2 = readSet('HELD_OUT', GENERAL_METHOD.key, surprising, surprising.map((p) => GENERAL_METHOD.run(p, 0.6, contextFor(p))));
+    const b2 = readSet('HELD_OUT', BASELINE_METHOD.key, surprising, surprising.map((p) => BASELINE_METHOD.run(p, 0.6)));
     const lost = compareWithBaseline(g2, b2);
     expect(lost.earned).toBe(false);
     expect(lost.statement).toContain('did not earn its cost');
@@ -134,9 +183,11 @@ describe('a run records its readings, feeds failure to the existing repair path,
     await freshProject();
     const decisions: string[] = [];
     const provenance: string[] = [];
+    const ps = population();
     const run = await runSprintBenchmark({
-      read: async () => population(),
+      read: async () => ps,
       previous: async () => null,
+      knowledge: async () => knowledgeFor(ps),
       recordDecision: async (d) => {
         decisions.push(d.problemId);
       },
@@ -164,6 +215,7 @@ describe('a run records its readings, feeds failure to the existing repair path,
     const run = await runSprintBenchmark({
       read: async () => ps,
       previous: async () => null,
+      knowledge: async () => knowledgeFor(ps),
       recordDecision: async () => {},
       recordProvenance: async () => {},
       registerDirected: async (w) => {
@@ -208,7 +260,8 @@ describe('the controller loop runs on real openings: results are tracked, the me
     expect(first.loop.handOffs['RESEARCH']).toBe(1);
     expect(sent).toHaveLength(1);
     const before = (await readControllerHistory(SPRINT_CALLER)).get('opp_loop');
-    expect(before?.prior.leadingHypothesis).toBe('pathway-fails');
+    // With no research claim behind it, the controller leads with one of its own counter-models, not a given hypothesis.
+    expect(before?.prior.leadingHypothesis).toMatch(/^fails:/);
     expect(before?.prior.methodId).not.toBeNull();
 
     // Run 2: production moved the opening to READY after that decision, which contradicts what it led with.
@@ -251,5 +304,89 @@ describe('the controller loop runs on real openings: results are tracked, the me
     expect(pendingResult({ ...p, updatedAt: '2026-10-31T00:00:00.000Z' }, history)).toBeNull();
     expect(pendingResult(p, { ...history, results: [{ actionKey: 'k', hypothesisId: 'pathway-holds', outcome: 'CONTRADICTED', evidence: 'e', at: 'x', decisionAt: history.decidedAt }] })).toBeNull();
     expect(chooseDemonstrated([p], new Map([['opp_x', history]]))).toHaveLength(1);
+  });
+});
+
+describe('competing hypotheses are generated from the mechanism and weighed only on sourced research claims (repair-F3)', () => {
+  it('a complete card with no research claim behind it has no evidence: card fields are not evidence', () => {
+    const p = problem({ sourceClaimId: null });
+    const ctx = contextFor(p, knowledgeFor([]));
+    const decision = decideNext(controllerSnapshotOf(p, ctx));
+    const holds = decision.hypotheses.find((h) => h.id === MECHANISM_HOLDS)!;
+    expect(holds.supports).toEqual([]);
+    expect(holds.refutes).toEqual([]);
+    expect(decision.hypotheses.map((h) => h.id)).not.toContain('pathway-holds');
+    expect(decision.hypotheses.map((h) => h.id)).not.toContain('pathway-fails');
+    const v = GENERAL_METHOD.run(p, 0.5, ctx);
+    expect(v.actionable).toBe(false);
+    expect(v.probability).toBe(0.5);
+    expect(controllerSnapshotOf(p, ctx).evidence).toEqual([]);
+  });
+
+  it('generates one counter-model per applicable mechanism role, and a supported claim refutes those it evidences', () => {
+    const p = problem();
+    const decision = decideNext(controllerSnapshotOf(p, contextFor(p)));
+    const ids = decision.hypotheses.map((h) => h.id);
+    for (const role of ['initiator', 'access', 'rights', 'riskBearer', 'trigger', 'deliverer', 'moneyMovement', 'failure', 'reusable']) {
+      expect(ids).toContain(`fails:${role}`);
+    }
+    const holds = decision.hypotheses.find((h) => h.id === MECHANISM_HOLDS)!;
+    expect(holds.supports).toEqual([`claim:${p.sourceClaimId}`]);
+    expect(decision.leadingHypothesis).toBe(MECHANISM_HOLDS);
+    const trigger = decision.hypotheses.find((h) => h.id === 'fails:trigger')!;
+    expect(trigger.refutes).toEqual([`claim:${p.sourceClaimId}`]);
+    // A role nothing evidences stays at its prior: unknown, not counted against.
+    const rights = decision.hypotheses.find((h) => h.id === 'fails:rights')!;
+    expect(rights.supports).toEqual([]);
+    expect(rights.refutes).toEqual([]);
+  });
+
+  it('the score is a function of distinct sourced claims, not of how many card fields are filled', () => {
+    const full = problem();
+    const sparse = problem({ reachableChannel: null, buyingSignal: null, fulfillmentOwner: null, paymentTerms: null });
+    const a = decideNext(controllerSnapshotOf(full, contextFor(full))).hypotheses.find((h) => h.id === MECHANISM_HOLDS)!;
+    const b = decideNext(controllerSnapshotOf(sparse, contextFor(sparse))).hypotheses.find((h) => h.id === MECHANISM_HOLDS)!;
+    expect(a.score).toBe(b.score);
+    expect(a.supports).toHaveLength(1);
+  });
+
+  it('a contested claim behind the card supports the counter-models and refutes the pathway', () => {
+    const p = problem();
+    const ctx = contextFor(p, knowledgeFor([p], { contradictionState: 'CONTESTED', contradictionNote: 'the buyer withdrew the request' }));
+    const decision = decideNext(controllerSnapshotOf(p, ctx));
+    const holds = decision.hypotheses.find((h) => h.id === MECHANISM_HOLDS)!;
+    expect(holds.refutes).toEqual([`claim:${p.sourceClaimId}`]);
+    expect(decision.hypotheses.find((h) => h.id === 'fails:initiator')!.supports).toEqual([`claim:${p.sourceClaimId}`]);
+    expect(decision.leadingHypothesis).not.toBe(MECHANISM_HOLDS);
+    expect(GENERAL_METHOD.run(p, 0.5, ctx).actionable).toBe(false);
+  });
+
+  it('an unsourced claim is not evidence, whatever it says', () => {
+    const p = problem();
+    const ctx = contextFor(p, knowledgeFor([p], { sourceUrl: null, sourced: false }));
+    const holds = decideNext(controllerSnapshotOf(p, ctx)).hypotheses.find((h) => h.id === MECHANISM_HOLDS)!;
+    expect(holds.supports).toEqual([]);
+    expect(GENERAL_METHOD.run(p, 0.5, ctx).actionable).toBe(false);
+  });
+
+  it('the production run weighs every scored opening on its project knowledge', async () => {
+    const ps = population();
+    const run = await runSprintBenchmark({
+      read: async () => ps,
+      previous: async () => null,
+      knowledge: async () => knowledgeFor([]),
+      record: async () => {},
+      recordDecision: async () => {},
+      recordProvenance: async () => {},
+      registerDirected: async () => ({ candidate: { id: 'imc_x' } }),
+      learning: async () => ({ catalogue: [], outcomes: [], procedures: [] }),
+      history: async () => new Map(),
+      recordResult: async () => {},
+      recordProcedure: async () => {},
+      sendNeeds: (async () => []) as never,
+      now: () => NOW,
+    });
+    // With no research claims at all, the general method calls nothing actionable, however complete the cards are.
+    for (const r of run.readings.filter((x) => x.method === GENERAL_METHOD.key)) expect(r.actionablePathwayRate.numerator).toBe(0);
   });
 });

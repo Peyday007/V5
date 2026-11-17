@@ -51,6 +51,7 @@ import {
   type ProblemProfile,
 } from '../research/methodLibrary.ts';
 import {
+  MECHANISM_HOLDS,
   decideNext,
   readControllerHistory,
   recordActionResult,
@@ -61,10 +62,9 @@ import {
   type ControllerDecision,
   type ControllerHistory,
   type ControllerSnapshot,
-  type EvidenceItem,
   type PriorDecision,
 } from '../research/reasoningController.ts';
-import { loadProjectKnowledge, mechanismFromOpening, type KnowledgeReading, type MechanismModel } from '../research/knowledgeModel.ts';
+import { MECHANISM_ROLES, loadProjectKnowledge, mechanismFromOpening, type KnowledgeReading, type MechanismModel, type MechanismRole } from '../research/knowledgeModel.ts';
 import { buildNumberProvenance, recordNumberProvenance, type NumberProvenance, type ProvenanceInput } from '../quant/mathToolkit.ts';
 import type { Figure } from '../quant/graph.ts';
 import type { sendNeeds } from '../quant/needs.ts';
@@ -255,11 +255,28 @@ export const BASELINE_METHOD: SprintMethod = {
   },
 };
 
-const HOLDS = 'pathway-holds';
-const FAILS = 'pathway-fails';
+/** Hypothesis ids decisions recorded before hypotheses were generated from the mechanism; still read from history. */
+const LEGACY_HOLDS = 'pathway-holds';
+const LEGACY_FAILS = 'pathway-fails';
 
-/** The problem as the controller sees it: its evidenced features and its open unknowns. */
-export function profileOf(p: SprintProblem): { profile: ProblemProfile; unknowns: LoadBearing[]; evidence: EvidenceItem[]; actions: CandidateAction[] } {
+/** The mechanism role each load-bearing card field states; acceptance has no checklist role. */
+export const FIELD_ROLE: Readonly<Record<LoadBearing, MechanismRole | null>> = {
+  payer: 'initiator',
+  reachableChannel: 'access',
+  buyingSignal: 'trigger',
+  acceptanceCondition: null,
+  priceCents: 'moneyMovement',
+  paymentTerms: 'moneyMovement',
+  fulfillmentOwner: 'deliverer',
+};
+
+/**
+ * The problem as the controller sees it: its features and its open unknowns,
+ * with one research action per unknown card field. A card field is not
+ * evidence: whether the transaction holds is weighed only on the research
+ * claims the mechanism model cites (`mechanismHypotheses` in the controller).
+ */
+export function profileOf(p: SprintProblem): { profile: ProblemProfile; unknowns: LoadBearing[]; actions: CandidateAction[] } {
   const source = sourceOf(p);
   const unknowns = LOAD_BEARING.filter((f) => !known(p, f));
   const features: ProblemProfile['features'] = [
@@ -271,20 +288,21 @@ export function profileOf(p: SprintProblem): { profile: ProblemProfile; unknowns
   if (p.industry) features.push({ feature: `industry:${p.industry}`, source });
   const available: string[] = [];
   if (known(p, 'paymentTerms')) available.push('payment-terms');
-  const evidence: EvidenceItem[] = LOAD_BEARING.filter((f) => known(p, f)).map((f) => ({ id: `${p.id}:${f}`, source, bears: { [HOLDS]: 'SUPPORTS' } }));
-  const actions: CandidateAction[] = unknowns.map((f) => ({
-    key: `${p.id}:${f}`,
-    kind: 'RESEARCH',
-    subject: `${f} of ${p.title}`.slice(0, 200),
-    question: `What is the ${f} for "${p.title}"?`.slice(0, 300),
-    resolves: f,
-    discriminates: [HOLDS, FAILS],
-    cost: 0.01,
-  }));
+  const actions: CandidateAction[] = unknowns.map((f) => {
+    const role = FIELD_ROLE[f];
+    return {
+      key: `${p.id}:${f}`,
+      kind: 'RESEARCH',
+      subject: `${f} of ${p.title}`.slice(0, 200),
+      question: `What is the ${f} for "${p.title}"?`.slice(0, 300),
+      resolves: f,
+      discriminates: role ? [MECHANISM_HOLDS, `fails:${role}`] : [MECHANISM_HOLDS],
+      cost: 0.01,
+    };
+  });
   return {
     profile: { id: p.id, domain: p.industry ?? p.mechanism, question: `Is "${p.title}" an actionable transaction pathway?`, features, available },
     unknowns,
-    evidence,
     actions,
   };
 }
@@ -337,19 +355,31 @@ export function grossBilledProvenance(p: SprintProblem): { record: NumberProvena
  * a contradicted result changes the method.
  */
 export function controllerSnapshotOf(p: SprintProblem, context: MethodContext = {}): ControllerSnapshot {
-  const { profile, unknowns, evidence, actions } = profileOf(p);
+  const { profile, actions } = profileOf(p);
+  const mechanism = context.mechanism ?? null;
+  // A mechanism role nothing evidences is research too, whether or not a card field names it.
+  const covered = new Set(actions.flatMap((a) => a.discriminates));
+  const roleActions: CandidateAction[] = (mechanism?.unknown ?? [])
+    .filter((role) => !covered.has(`fails:${role}`))
+    .map((role) => ({
+      key: `${p.id}:role:${role}`,
+      kind: 'RESEARCH',
+      subject: `${role} of ${p.title}`.slice(0, 200),
+      question: `${MECHANISM_ROLES[role].question} — for "${p.title}"`.slice(0, 300),
+      resolves: `mechanism:${role}`,
+      discriminates: [MECHANISM_HOLDS, `fails:${role}`],
+      cost: 0.01,
+    }));
   return {
     problem: profile,
     knowledge: context.knowledge ?? null,
-    mechanism: context.mechanism ?? null,
+    mechanism,
     catalogue: context.catalogue ?? SEED_METHODS,
     outcomes: context.outcomes ?? [],
-    hypotheses: [
-      { id: HOLDS, statement: `"${p.title}" is an actionable pathway`, basis: 'given:holds' },
-      { id: FAILS, statement: `"${p.title}" fails at an unknown load-bearing field`, basis: 'given:fails' },
-    ],
-    evidence: [...evidence, ...unknowns.map((f): EvidenceItem => ({ id: `${p.id}:${f}:unknown`, source: sourceOf(p), bears: { [FAILS]: 'SUPPORTS', [HOLDS]: 'REFUTES' } }))],
-    actions,
+    // No hypotheses or evidence are given: the controller generates them from the mechanism and weighs them on its cited claims.
+    hypotheses: [],
+    evidence: [],
+    actions: [...actions, ...roleActions],
     prior: context.prior ?? null,
     results: context.results ?? [],
     now: context.now ?? p.updatedAt,
@@ -365,8 +395,8 @@ export const DEAD_STATES: ReadonlySet<string> = new Set(['DECLINED', 'ARCHIVED']
  * Read from the row's state, never from either method's opinion.
  */
 export function productionOutcome(p: Pick<SprintProblem, 'state'>, hypothesisId: string): ActionResult['outcome'] | null {
-  const holds = hypothesisId === HOLDS || hypothesisId.startsWith('holds:');
-  const fails = hypothesisId === FAILS || hypothesisId.startsWith('fails:');
+  const holds = hypothesisId === LEGACY_HOLDS || hypothesisId.startsWith('holds:');
+  const fails = hypothesisId === LEGACY_FAILS || hypothesisId.startsWith('fails:');
   if (!holds && !fails) return null;
   if (ACTIONABLE_STATES.has(p.state)) return holds ? 'CONFIRMED' : 'CONTRADICTED';
   if (DEAD_STATES.has(p.state)) return holds ? 'CONTRADICTED' : 'CONFIRMED';
@@ -402,8 +432,19 @@ export const GENERAL_METHOD: SprintMethod = {
     const { unknowns } = profileOf(p);
     const decision = decideNext(controllerSnapshotOf(p, context));
     const { record, findings: provenanceFindings } = grossBilledProvenance(p);
-    const probability = decision.hypotheses.find((h) => h.id === HOLDS)?.score ?? 0;
-    const actionable = unknowns.length === 0 && record !== null && probability >= threshold;
+    const holds = decision.hypotheses.find((h) => h.id === MECHANISM_HOLDS) ?? null;
+    // Without a mechanism model there is nothing to weigh: the probability is the uninformed prior, never a favourable one.
+    // The pathway needs every load-bearing field, so each one still unknown multiplies in the controller's own reading of
+    // its counter-model (1 - score of fails:<role>), or the uninformed 0.5 where no role models it — never a convenient figure.
+    const unresolved = new Set(unknowns.map((f) => FIELD_ROLE[f] ?? f));
+    let probability = holds?.score ?? 0.5;
+    for (const key of unresolved) {
+      const counter = decision.hypotheses.find((h) => h.id === `fails:${key}`);
+      probability *= counter ? 1 - counter.score : 0.5;
+    }
+    probability = Math.round(probability * 1000) / 1000;
+    const evidenced = holds !== null && holds.supports.length > 0;
+    const actionable = unknowns.length === 0 && record !== null && evidenced && probability >= threshold;
     const robust = actionable && record !== null && record.alternatives.every((a) => a.value !== null && a.value > 0);
     return {
       problemId: p.id,
@@ -486,12 +527,17 @@ export function readSet(set: ProblemSet, method: string, problems: readonly Spri
  * The method's one tuned choice, made on the benchmark set only: the
  * probability threshold with the lowest misclassification there.
  */
-export function chooseThreshold(benchmark: readonly SprintProblem[], method: SprintMethod = GENERAL_METHOD, context?: MethodContext): number {
+export function chooseThreshold(
+  benchmark: readonly SprintProblem[],
+  method: SprintMethod = GENERAL_METHOD,
+  context?: MethodContext | ((p: SprintProblem) => MethodContext),
+): number {
+  const contextOf = typeof context === 'function' ? context : () => context;
   const candidates = [0.5, 0.6, 0.7, 0.8, 0.9];
   let best = candidates[0]!;
   let bestErrors = Infinity;
   for (const t of candidates) {
-    const errors = benchmark.filter((p) => method.run(p, t, context).actionable !== actionableInProduction(p)).length;
+    const errors = benchmark.filter((p) => method.run(p, t, contextOf(p)).actionable !== actionableInProduction(p)).length;
     if (errors < bestErrors) {
       best = t;
       bestErrors = errors;
@@ -676,14 +722,20 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
   const learning = await (deps.learning ?? readLearning)();
   const outcomes: MethodOutcome[] = [...learning.outcomes];
   const learned: MethodContext = { catalogue: learning.catalogue.length > 0 ? learning.catalogue : SEED_METHODS, outcomes };
-  const threshold = chooseThreshold(split.BENCHMARK, GENERAL_METHOD, learned);
+
+  // Layers 1 and 2 for every opening scored, so the general method weighs each one on its research claims (one read per project).
+  const knowledgeCache = new Map<string, Promise<KnowledgeReading>>();
+  const layersOf = new Map<string, Awaited<ReturnType<typeof openingLayers>>>();
+  for (const p of problems) layersOf.set(p.id, await openingLayers(p, now, knowledgeCache, deps.knowledge));
+  const contextOf = (p: SprintProblem): MethodContext => ({ ...learned, knowledge: layersOf.get(p.id)?.knowledge ?? null, mechanism: layersOf.get(p.id)?.mechanism ?? null });
+  const threshold = chooseThreshold(split.BENCHMARK, GENERAL_METHOD, contextOf);
 
   const readings: SetReading[] = [];
   const comparisons: BaselineComparison[] = [];
   const generalVerdicts: MethodVerdict[] = [];
   for (const set of ['BENCHMARK', 'HELD_OUT', 'NEW_HELD_OUT'] as const) {
     const ps = split[set];
-    const g = ps.map((p) => GENERAL_METHOD.run(p, threshold, learned));
+    const g = ps.map((p) => GENERAL_METHOD.run(p, threshold, contextOf(p)));
     const b = ps.map((p) => BASELINE_METHOD.run(p, threshold));
     generalVerdicts.push(...g);
     const gr = readSet(set, GENERAL_METHOD.key, ps, g);
@@ -698,7 +750,6 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
   const verdictOf = new Map(generalVerdicts.map((v) => [v.problemId, v]));
   const history = await (deps.history ?? (() => readControllerHistory(SPRINT_CALLER)))();
   const loop: SprintLoop = { resultsTracked: 0, decisions: 0, methodChanges: 0, capabilityGaps: 0, handOffs: {}, proceduresRecorded: 0, knowledgeRead: 0, mechanismsModelled: 0, informationNeeds: 0, errors: [] };
-  const knowledgeCache = new Map<string, Promise<KnowledgeReading>>();
   for (const { problem: p, result } of chooseDemonstrated(problems, history)) {
     const prior = history.get(p.id);
     const projectId = p.projectId ?? null;
@@ -723,7 +774,7 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
           });
         }
       }
-      const layers = await openingLayers(p, now, knowledgeCache, deps.knowledge);
+      const layers = layersOf.get(p.id) ?? (await openingLayers(p, now, knowledgeCache, deps.knowledge));
       if (layers.error) loop.errors.push(`${p.id}: ${layers.error}`);
       if (layers.knowledge) loop.knowledgeRead += 1;
       if (layers.mechanism) loop.mechanismsModelled += 1;

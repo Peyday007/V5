@@ -230,6 +230,68 @@ export function generateHypotheses(
   });
 }
 
+/** The hypothesis that the transaction works as its mechanism model says. */
+export const MECHANISM_HOLDS = 'holds:mechanism';
+
+/** Claim statuses that count against a role the claim was cited for. */
+const AGAINST: ReadonlySet<string> = new Set(['CONFLICTING', 'OUTDATED', 'LOCALLY_INAPPLICABLE']);
+
+/**
+ * Competing hypotheses read off the mechanism model, and the evidence that
+ * bears on them read off the knowledge layer — never off the shape of a card.
+ *
+ * One hypothesis that the transaction works as modelled, and one independent
+ * counter-model per applicable role ("it fails at who delivers", "it fails at
+ * how money moves", …), so the set grows and shrinks with the domain's own
+ * mechanism. Evidence is one item per distinct research claim the model cites:
+ * a supported claim supports the model and refutes the counter-model of every
+ * role it evidences; a conflicting, outdated or locally inapplicable one does
+ * the reverse. A claim the knowledge layer contests on its own (whatever
+ * facet) supports that facet's counter-model. Each item carries the claim's
+ * source URL, so an unsourced claim is ignored by `scoreHypotheses`, and a role
+ * nothing evidences is left at its prior rather than counted against.
+ */
+export function mechanismHypotheses(
+  problem: Pick<ProblemProfile, 'question'>,
+  knowledge: KnowledgeReading | null,
+  mechanism: MechanismModel | null,
+): { hypotheses: Hypothesis[]; evidence: EvidenceItem[] } {
+  if (!mechanism) return { hypotheses: [], evidence: [] };
+  const hypotheses: Hypothesis[] = [{ id: MECHANISM_HOLDS, statement: `${problem.question}: the transaction works as its mechanism model says`, basis: 'mechanism-model' }];
+  const claims = new Map((knowledge?.claims ?? []).map((c) => [c.id, c]));
+  const bears = new Map<string, Record<string, 'SUPPORTS' | 'REFUTES'>>();
+  const bear = (claimId: string, hypothesisId: string, how: 'SUPPORTS' | 'REFUTES'): void => {
+    const b = bears.get(claimId) ?? {};
+    if (!b[hypothesisId]) b[hypothesisId] = how;
+    bears.set(claimId, b);
+  };
+  for (const role of mechanism.roles) {
+    if (role.status === 'NOT_APPLICABLE') continue;
+    const counter = `fails:${role.role}`;
+    hypotheses.push({ id: counter, statement: `${problem.question}: the transaction fails at ${role.role} (${role.question})`, basis: `counter:${role.role}` });
+    for (const nodeId of role.nodes) {
+      const cited = mechanism.graph.nodes.get(nodeId)?.attributes['evidence'];
+      if (typeof cited !== 'string' || cited === '') continue;
+      for (const id of cited.split(',')) {
+        const claim = claims.get(id);
+        if (!claim) continue;
+        if (claim.status === 'SUPPORTED') {
+          bear(id, MECHANISM_HOLDS, 'SUPPORTS');
+          bear(id, counter, 'REFUTES');
+        } else if (AGAINST.has(claim.status)) {
+          bear(id, counter, 'SUPPORTS');
+          bear(id, MECHANISM_HOLDS, 'REFUTES');
+        }
+      }
+    }
+  }
+  for (const claim of claims.values()) {
+    if (claim.status === 'CONFLICTING' || claim.status === 'OUTDATED') bear(claim.id, `fails:${claim.facet}`, 'SUPPORTS');
+  }
+  const evidence: EvidenceItem[] = [...bears.entries()].map(([id, b]) => ({ id: `claim:${id}`, source: claims.get(id)?.provenance?.sourceUrl ?? null, bears: b }));
+  return { hypotheses, evidence };
+}
+
 function failureModesOf(snapshot: ControllerSnapshot, weak: readonly WeakInference[]): FailureMode[] {
   const out: FailureMode[] = [];
   for (const claim of snapshot.knowledge?.claims ?? []) {
@@ -350,10 +412,12 @@ export function decideNext(snapshot: ControllerSnapshot): ControllerDecision {
     methodChange = { from: snapshot.prior?.methodId ?? null, to: method?.methodId ?? null, reason };
   }
 
+  const modelled = mechanismHypotheses(snapshot.problem, snapshot.knowledge, snapshot.mechanism);
   const hypotheses = scoreHypotheses(
-    generateHypotheses(snapshot.problem, representations, failureModes, snapshot.hypotheses ?? []),
+    generateHypotheses(snapshot.problem, representations, failureModes, [...(snapshot.hypotheses ?? []), ...modelled.hypotheses]),
     [
       ...snapshot.evidence,
+      ...modelled.evidence.filter((e) => !snapshot.evidence.some((s) => s.id === e.id)),
       // A tracked result is evidence too, once it names where it was observed.
       ...(snapshot.results ?? [])
         .filter((r) => r.outcome !== 'INCONCLUSIVE')
