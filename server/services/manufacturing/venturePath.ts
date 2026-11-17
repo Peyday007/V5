@@ -320,6 +320,14 @@ function validateFirst(stages: readonly VentureStage[], situation: ResourceSitua
   for (const layer of full.layers) {
     for (const key of layer) {
       const stage = stages.find((s) => s.key === key)!;
+      /*
+       * A stage resting on a fact nobody has established is never funded, and
+       * so nothing that consumes it is either (its dependency is not chosen).
+       * Funding it would make the unknown look settled and let money be
+       * committed downstream of it — tooling or a facility before any demand
+       * is on record (invariant 39).
+       */
+      if ((stage.unknowns ?? []).length > 0) continue;
       if (!stage.dependsOn.every((dep) => chosen.some((c) => c.key === dep))) continue;
       if (!stage.budget || stage.budget.currency !== situation.available.currency) continue;
       if ((stage.requiresCapabilityIds ?? []).some((id) => !situation.heldCapabilityIds.has(id))) continue;
@@ -345,6 +353,16 @@ function validateFirst(stages: readonly VentureStage[], situation: ResourceSitua
   const path = buildVenturePath(variant);
   if (!path.ok) return null;
   const verdict = assessResources({ budget: path.total, missingCapabilities: [], situation });
+  // The funded prefix is judged on its own unknowns too, never on affordability alone.
+  const resting = path.nodes.filter((n) => (n.unknowns ?? []).length > 0);
+  if (resting.length > 0) {
+    verdict.challenges.push({
+      kind: 'BUILT_ON_UNKNOWNS',
+      detail: `${resting.length} funded stage(s) rest on facts nobody has established: ${resting.flatMap((n) => n.unknowns ?? []).join('; ')}`,
+      stages: resting.map((n) => n.key),
+    });
+    verdict.feasibility = 'UNDETERMINED';
+  }
   if (verdict.feasibility !== 'FEASIBLE') return null;
   const dropped = stages.filter((s) => !chosen.includes(s)).map((s) => s.key);
   return { kind: 'VALIDATE_FIRST', differs: [`funds ${chosen.map((c) => c.key).join(', ')} first; defers ${dropped.join(', ')}`], stages: variant, path, verdict };

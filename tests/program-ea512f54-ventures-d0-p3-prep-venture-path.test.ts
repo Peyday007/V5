@@ -368,11 +368,59 @@ describe('VENT-24-2: the kernel revisits an earlier venture when capital or capa
     const capabilityNode = path.nodes.find((n) => n.key === capabilityKey)!;
     expect(capabilityNode.alternatives).toEqual([expect.objectContaining({ mode: 'BUY', actor: 'A drive integrator', evidence: [supplierClaim] })]);
 
-    // The rebuilt alternative funds the priced, capability-free prefix the capital covers.
-    const first = alternatives.find((a) => a.kind === 'VALIDATE_FIRST');
+    // With no demand on record, market research rests on an unknown, so nothing past it is funded:
+    // no validate-first alternative commits the tooling money (invariant 39).
+    expect(alternatives.filter((a) => a.kind === 'VALIDATE_FIRST')).toEqual([]);
+
+    // Once demand is on record, the rebuilt alternative funds the priced, capability-free prefix the capital covers.
+    await recordCategoryEvidence({
+      programId: program.id,
+      categoryId: category.id,
+      kind: 'DEMAND_EVIDENCE',
+      observedOn: '2026-09-10',
+      subject: 'facility managers replacing scrubbers',
+      statement: 'Facility managers replace floor scrubbers every five years',
+      sourceClaimId: await acceptedClaim('Facility managers replace floor scrubbers every five years'),
+    });
+    const withDemand = (await runManufacturingKernel(projectId)).ventures.find((v) => v.categoryId === category.id)!;
+    const first = withDemand.venture.alternatives.find((a) => a.kind === 'VALIDATE_FIRST');
     expect(first).toBeDefined();
     expect(first!.differs[0]).toContain(capitalKey);
     expect(first!.total).toEqual({ currency: 'USD', amountMinor: 30_000_00 });
+    expect(first!.verdict.feasibility).toBe('FEASIBLE');
+    // What it funds rests on no unknown; the channel, still without a distribution channel on record, is deferred.
+    for (const n of first!.path.nodes) expect(n.unknowns ?? []).toEqual([]);
+    expect(first!.path.nodes.map((n) => n.key)).not.toContain('channel');
+  });
+
+  it('validate-first never funds a stage resting on an unknown, nor anything that consumes it (invariant 39)', () => {
+    const usdOf = (amountMinor: number) => ({ currency: 'USD', amountMinor });
+    const base = (key: string, dependsOn: string[], amountMinor: number, unknowns: string[] = []): VentureStage => ({
+      key,
+      title: key,
+      dependsOn,
+      decision: key,
+      resource: key,
+      artifact: key,
+      actor: 'Brain',
+      budget: usdOf(amountMinor),
+      evidence: [],
+      completion: key,
+      unknowns,
+    });
+    const stages = (researchUnknowns: string[]) => [
+      base('market-research', [], 0, researchUnknowns),
+      base('unit-economics', ['market-research'], 0),
+      base('capital:FACILITY', ['unit-economics'], 10_000_00),
+      base('enter', ['capital:FACILITY'], 0),
+      base('build', ['enter'], 900_000_00),
+    ];
+    const situation: ResourceSituation = { available: usdOf(50_000_00), heldCapabilityIds: new Set() };
+    const blind = alternativesFor(stages(['no demand evidence is on record']), situation).filter((a) => a.kind === 'VALIDATE_FIRST');
+    expect(blind).toEqual([]);
+    const known = alternativesFor(stages([]), situation).find((a) => a.kind === 'VALIDATE_FIRST');
+    expect(known?.verdict.feasibility).toBe('FEASIBLE');
+    expect(known?.path.total).toEqual(usdOf(10_000_00));
   });
 
   it('a category with an entry barrier priced by its certification row becomes FEASIBLE when capital arrives, and the institutional plan prices the same permit (R4-F2)', async () => {

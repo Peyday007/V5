@@ -3,7 +3,7 @@ import { freshProject } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { createRun } from '../server/repos/runs.ts';
 import { createFragments, createOrchestration, currentFragments, decideClaim, insertClaims, updateFragment } from '../server/repos/research.ts';
-import { ensureCapability, getProgram, recordAcquisitionCandidate, recordCategoryCapital, recordEdge } from '../server/repos/manufacturing.ts';
+import { ensureCapability, getProgram, recordAcquisitionCandidate, recordCategoryCapital, recordCategoryEvidence, recordEdge } from '../server/repos/manufacturing.ts';
 import { recordMoney } from '../server/repos/cashLedger.ts';
 import { startProgramme } from '../server/services/manufacturing/program.ts';
 import { declareHeld, seedCategory } from '../server/services/manufacturing/declare.ts';
@@ -152,6 +152,19 @@ describe('VENT-24-2: the venture graph is a production record', () => {
     const { category } = await seedVenture();
     // Enough capital for the priced stages, so the validate-first alternative the rows admit is affordable.
     await recordMoney({ projectId, kind: 'CAPITAL_IN', amountCents: 75_000_00, currency: 'USD', recordedBy: userId, idempotencyKey: `capital-graph-${projectId}` });
+    // With no demand on record nothing may be funded past market research, so no validate-first is admitted (invariant 39).
+    const blind = (await runManufacturingKernel(projectId)).ventures.find((one) => one.categoryId === category.id)!;
+    expect(blind.venture.alternatives.filter((one) => one.kind === 'VALIDATE_FIRST')).toEqual([]);
+    // Demand evidence is what lets the priced, validated prefix be funded first.
+    await recordCategoryEvidence({
+      programId: (await getProgram(projectId))!.id,
+      categoryId: category.id,
+      kind: 'DEMAND_EVIDENCE',
+      observedOn: '2026-09-10',
+      subject: 'rental fleets replacing washers',
+      statement: 'Rental fleets replace commercial pressure washers every three years',
+      sourceClaimId: await acceptedClaim('Rental fleets replace commercial pressure washers every three years'),
+    });
     const pass = await runManufacturingKernel(projectId);
     const live = pass.ventures.find((one) => one.categoryId === category.id)!;
     const { path, verdict, alternatives } = live.venture;
