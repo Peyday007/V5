@@ -230,6 +230,38 @@ export function generateHypotheses(
   });
 }
 
+/**
+ * The hypotheses a candidate action names that nothing else in the snapshot
+ * models. An action is offered because its answer bears on a hypothesis; when
+ * that hypothesis is absent from the set (no mechanism model, no failure mode
+ * yet), the controller used to value the action at zero and leave `next` null,
+ * which reads as "no research can move this". That claim was never measured:
+ * the hypothesis was simply not in the space. Each named but unmodelled
+ * hypothesis is therefore held at its uninformed prior, so the action that
+ * would test it is valued against the lead like any other, never above it
+ * (reasoning-sprint:general-method). Evidence still decides every score:
+ * `scoreHypotheses` gives an unevidenced hypothesis the same prior as any
+ * other, so nothing becomes more likely, ready or actionable because of this.
+ * Pure.
+ */
+export function unmodelledHypotheses(
+  problem: Pick<ProblemProfile, 'question'>,
+  actions: readonly CandidateAction[],
+  held: readonly Hypothesis[],
+): Hypothesis[] {
+  const known = new Set(held.map((h) => h.id));
+  const out: Hypothesis[] = [];
+  for (const a of actions) {
+    if (a.kind === 'METHOD_GAP') continue;
+    for (const id of a.discriminates) {
+      if (known.has(id)) continue;
+      known.add(id);
+      out.push({ id, statement: `${problem.question}: ${id} (named by ${a.key}; not yet modelled, held at its prior)`, basis: `unmodelled:${id}` });
+    }
+  }
+  return out;
+}
+
 /** The hypothesis that the transaction works as its mechanism model says. */
 export const MECHANISM_HOLDS = 'holds:mechanism';
 
@@ -413,8 +445,9 @@ export function decideNext(snapshot: ControllerSnapshot): ControllerDecision {
   }
 
   const modelled = mechanismHypotheses(snapshot.problem, snapshot.knowledge, snapshot.mechanism);
+  const generated = generateHypotheses(snapshot.problem, representations, failureModes, [...(snapshot.hypotheses ?? []), ...modelled.hypotheses]);
   const hypotheses = scoreHypotheses(
-    generateHypotheses(snapshot.problem, representations, failureModes, [...(snapshot.hypotheses ?? []), ...modelled.hypotheses]),
+    [...generated, ...unmodelledHypotheses(snapshot.problem, snapshot.actions, generated)],
     [
       ...snapshot.evidence,
       ...modelled.evidence.filter((e) => !snapshot.evidence.some((s) => s.id === e.id)),
