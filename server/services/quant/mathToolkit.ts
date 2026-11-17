@@ -504,12 +504,7 @@ export interface BiasReading {
 export function forecastBias(predictions: readonly PredictionRow[], exposures: readonly ExposureRow[], outcomes: readonly OutcomeRow[], windowDays = 90): BiasReading[] {
   const ledger = buildLedger(predictions, exposures, outcomes);
   const out: BiasReading[] = [];
-  const buckets = calibrate(ledger, windowDays);
-  const byKey = new Map<string, CalibrationBucket>();
-  for (const b of buckets) {
-    const held = byKey.get(b.comparableKey);
-    if (!held || (b.scope === 'POOLED' && held.scope !== 'POOLED') || (b.scope === held.scope && b.n > held.n)) byKey.set(b.comparableKey, b);
-  }
+  const byKey = calibrationByKey(predictions, exposures, outcomes, windowDays);
   for (const b of byKey.values()) {
     const systematic = b.verdict === 'MISCALIBRATED';
     out.push({
@@ -553,6 +548,148 @@ export function forecastBias(predictions: readonly PredictionRow[], exposures: r
     });
   }
   return out.sort((a, b) => a.comparableKey.localeCompare(b.comparableKey) || a.basis.localeCompare(b.basis));
+}
+
+/**
+ * The calibration bucket that judges each comparable key: the pooled bucket
+ * where one exists, else the largest window. `forecastBias` reads its verdict
+ * and a probability's provenance reads whether it is calibrated from it.
+ */
+export function calibrationByKey(predictions: readonly PredictionRow[], exposures: readonly ExposureRow[], outcomes: readonly OutcomeRow[], windowDays = 90): Map<string, CalibrationBucket> {
+  const byKey = new Map<string, CalibrationBucket>();
+  for (const b of calibrate(buildLedger(predictions, exposures, outcomes), windowDays)) {
+    const held = byKey.get(b.comparableKey);
+    if (!held || (b.scope === 'POOLED' && held.scope !== 'POOLED') || (b.scope === held.scope && b.n > held.n)) byKey.set(b.comparableKey, b);
+  }
+  return byKey;
+}
+
+/** A method's claimed probability, as the method produced it and where that output is recorded. */
+export interface ClaimedProbability {
+  key: string;
+  /** What the probability is of, in words. */
+  definition: string;
+  probability: number;
+  /** The method that produced it (a method key), and the row or rule its output is read from. */
+  method: string;
+  source: SourceRef;
+  horizon: string;
+  /** Evidence the method applies here: the rows the method read. */
+  evidence: readonly string[];
+  interdependence?: readonly string[];
+}
+
+/**
+ * The provenance of a claimed probability, corrected for the systematic error
+ * its own method has shown against realized results.
+ *
+ * The raw output is a MODELED figure from the method. When the method's
+ * forecasts have been compared with realized results (`forecastBias`) and the
+ * error is SYSTEMATIC, the correction is a second sourced input and the
+ * recorded value is `raw + shift` — the system corrects the error it measured
+ * rather than repeating it. Within the band, or with too few resolved
+ * forecasts, no correction is applied and none is invented. The probability
+ * is CALIBRATED only when its method's bucket says so; otherwise it says it is
+ * uncalibrated. A correction that would leave [0, 1] is refused by validation
+ * and the uncorrected value is kept with the refusal returned.
+ */
+export function probabilityProvenance(
+  claim: ClaimedProbability,
+  reading: { bias: BiasReading | null; bucket: CalibrationBucket | null; measuredAt: string },
+): { result: ProvenanceResult; corrected: boolean; refusedCorrection: string[] } {
+  const raw: Figure = {
+    meaning: claim.definition,
+    unit: 'probability',
+    value: claim.probability,
+    source: claim.source.ref || null,
+    derivedFrom: [],
+    status: claim.source.ref ? 'MODELED' : 'UNKNOWN',
+    window: null,
+    geography: null,
+    scope: claim.key,
+    bounds: null,
+    invalidatedBy: [],
+  };
+  const inputs: ProvenanceInput[] = [{ key: 'raw', figure: raw, source: claim.source }];
+  const bias = reading.bias;
+  const correction = bias?.verdict === 'SYSTEMATIC' && bias.correction?.kind === 'SHIFT_PROBABILITY' ? bias.correction : null;
+  const evidence = [...claim.evidence];
+  if (bias) evidence.push(`forecast-vs-realized ${bias.comparableKey}: ${bias.verdict} over ${bias.n} resolved forecast(s)`);
+  const common = {
+    key: claim.key,
+    quantity: { kind: 'PROBABILITY' as const, definition: claim.definition },
+    units: 'probability',
+    horizon: claim.horizon,
+    interdependence: [...(claim.interdependence ?? []), `method:${claim.method}`],
+    applicability: { method: claim.method, evidence },
+    form: 'PROBABILITY' as const,
+    calibration: reading.bucket,
+    alternatives: [
+      { label: 'raw method output', parameters: { raw: claim.probability } },
+      { label: 'midpoint (no information)', parameters: { raw: 0.5 } },
+    ],
+  };
+  if (correction) {
+    const shift: Figure = {
+      meaning: `systematic forecast error of ${bias!.comparableKey}`,
+      unit: 'probability',
+      value: correction.amount,
+      source: `forecast-bias:${bias!.comparableKey}@${reading.measuredAt}`,
+      derivedFrom: [],
+      status: 'EVIDENCED',
+      window: null,
+      geography: null,
+      scope: bias!.comparableKey,
+      bounds: null,
+      invalidatedBy: [],
+    };
+    const corrected = buildNumberProvenance({
+      ...common,
+      formula: { op: '+', args: [{ ref: 'raw' }, { ref: 'shift' }] },
+      inputs: [...inputs, { key: 'shift', figure: shift, source: { ref: shift.source!, retrievedAt: reading.measuredAt } }],
+      alternatives: [
+        { label: 'uncorrected', parameters: { shift: 0 } },
+        { label: 'half the measured correction', parameters: { shift: correction.amount / 2 } },
+      ],
+    });
+    if (corrected.ok) return { result: corrected, corrected: true, refusedCorrection: [] };
+    const refused = [...corrected.missing, ...corrected.problems];
+    return { result: buildNumberProvenance({ ...common, formula: { ref: 'raw' }, inputs }), corrected: false, refusedCorrection: refused };
+  }
+  return { result: buildNumberProvenance({ ...common, formula: { ref: 'raw' }, inputs }), corrected: false, refusedCorrection: [] };
+}
+
+/**
+ * The provenance of a bucket's observed rate — the realized figure a forecast
+ * is judged against — computed from its resolved outcomes. Null below the
+ * sample a judgment needs: an observed rate on too few outcomes is not shown.
+ */
+export function observedRateProvenance(bucket: CalibrationBucket, source: SourceRef): ProvenanceResult | null {
+  if (bucket.n <= 0 || bucket.observedRate === null) return null;
+  const occurred = Math.round(bucket.observedRate * bucket.n);
+  const fig = (meaning: string, value: number): Figure => ({
+    meaning, unit: 'count', value, source: source.ref, derivedFrom: [], status: 'OBSERVED',
+    window: bucket.windowStart && bucket.windowEnd ? `${bucket.windowStart}..${bucket.windowEnd}` : null,
+    geography: null, scope: bucket.comparableKey, bounds: null, invalidatedBy: [],
+  });
+  return buildNumberProvenance({
+    key: `observed-rate:${bucket.comparableKey}:${bucket.scope}`,
+    quantity: { kind: 'PROBABILITY', definition: `realized rate of the forecast outcome in ${bucket.comparableKey}` },
+    units: 'probability',
+    horizon: bucket.windowStart && bucket.windowEnd ? `${bucket.windowStart}..${bucket.windowEnd}` : 'all resolved forecasts',
+    formula: { op: '/', args: [{ ref: 'occurred' }, { ref: 'resolved' }] },
+    inputs: [
+      { key: 'occurred', figure: fig('resolved forecasts whose outcome occurred', occurred), source },
+      { key: 'resolved', figure: fig('resolved forecasts', bucket.n), source },
+    ],
+    alternatives: [
+      { label: 'one fewer occurrence', parameters: { occurred: Math.max(0, occurred - 1) } },
+      { label: 'one more occurrence', parameters: { occurred: Math.min(bucket.n, occurred + 1) } },
+    ],
+    interdependence: [`bucket:${bucket.comparableKey}`],
+    applicability: { method: 'statistical_estimation_calibration', evidence: [`${bucket.n} resolved forecast(s) in ${bucket.comparableKey} (${bucket.verdict})`] },
+    form: 'IDENTITY',
+  });
 }
 
 /* ------------------------------------------------------------------------- */
