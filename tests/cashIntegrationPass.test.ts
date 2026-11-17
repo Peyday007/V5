@@ -1067,11 +1067,17 @@ describe('one sprint, from activation to money in and winding down', () => {
      *
      * The assertion this scaffolds is about a display window not being an index,
      * and it is right. What was wrong was proving the precondition by racing the
-     * clock. One sleep makes every note strictly newer, so the ordering is
-     * decided by the column that means time rather than by the one that does
-     * not.
+     * clock — and a real sleep cannot win that race here: this journey fakes
+     * `Date` (`shouldAdvanceTime`), whose clock moves only when a real 20 ms
+     * interval fires and then jumps by 20 ms. A 5 ms sleep usually leaves the
+     * faked clock exactly where the opening event stamped it, and under load the
+     * interval fires later still, so the notes kept sharing its millisecond and
+     * the precondition failed again (Postgres suite, 2026-11-17, run
+     * 44030756257). Moving the faked clock itself makes every note strictly
+     * newer, so the ordering is decided by the column that means time rather
+     * than by the one that does not.
      */
-    await new Promise((resolve) => setTimeout(resolve, 5));
+    vi.advanceTimersByTime(5);
     for (let i = 0; i < 520; i += 1) {
       await recordCashEvent({
         projectId,
