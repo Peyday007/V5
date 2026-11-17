@@ -856,7 +856,8 @@ export function sharesInForceFrom(detail: Record<string, unknown> | null): (Shar
   return {
     shares,
     observed,
-    held: detail.held === true,
+    // A decision whose cost was not shown counted once is never applied.
+    held: detail.held === true || detail.heldForCost === true,
     urgentCommercialGoal: typeof floors?.commercial === 'number',
     fingerprint: typeof detail.fingerprint === 'string' ? detail.fingerprint : null,
   };
@@ -1252,19 +1253,23 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
   const decided = decideResearchAllocation(allocationInput);
   const observed = normalizeShares(allocationInput.currentShares);
   // Shares move only on a reading whose cost is shown counted once. A reading
-  // that cannot show it is recorded as a held decision — the observed shares,
-  // nothing moved — with the reason, never as a move on an unverified reading.
+  // that cannot show it moves nothing — the observed shares, no change — and
+  // is recorded as what it is: a measured window that failed the counted-once
+  // check (`heldForCost`), never as `held`, which means nothing was measured.
+  // Recording it as `held` hid a genuine double count from probe r01.res-15-5,
+  // which reads only measured decisions; recorded this way it fails the probe.
+  // The allocation stage still never applies it (`sharesInForceFrom`).
   const costCountedOnce = verifiedCostReading(reading.costCountedOnce);
-  const decision: AllocationDecision = costCountedOnce.holds
-    ? decided
-    : {
+  const heldForCost = !costCountedOnce.holds;
+  const decision: AllocationDecision = heldForCost
+    ? {
         ...decided,
-        held: true,
         shares: observed,
         changes: [],
         notes: [`Held: the window's cost reading does not show each job's cost counted once (total ${String(costCountedOnce.totalJobMs)} ms against ${String(costCountedOnce.purposeJobMs)} ms across purposes), so no share moves on it.`, ...decided.notes],
-      };
-  const fingerprint = allocationFingerprint(decision);
+      }
+    : decided;
+  const fingerprint = allocationFingerprint({ ...decision, held: decision.held || heldForCost });
   const floors = {
     exploration: EXPLORATION_FLOOR,
     systemHealth: SYSTEM_HEALTH_FLOOR,
@@ -1279,6 +1284,8 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
     observed: Object.fromEntries(RESEARCH_PURPOSES.map((p) => [p, round3(observed[p])])),
     floors,
     held: decision.held,
+    // A measured window whose cost was not shown counted once: nothing moved, and never applied.
+    heldForCost,
     changes: decision.changes.map((c) => ({ purpose: c.purpose, from: round3(c.from), to: round3(c.to), reasons: c.reasons })),
     laneActions: decision.laneActions.map((a) => ({
       ...a,
@@ -1321,7 +1328,7 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
   };
   const recorded = !(previous && previous.detail.fingerprint === fingerprint);
   if (recorded) {
-    const summary = !costCountedOnce.holds
+    const summary = heldForCost
       ? "Research allocation held: the window's cost reading does not show each job's cost counted once."
       : decision.held
       ? 'Research allocation held: nothing in the window was measured.'
@@ -1342,7 +1349,7 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
     shares: decision.shares,
     floors,
     changed: recorded,
-    held: decision.held,
+    held: decision.held || heldForCost,
     laneActions: decision.laneActions,
     capacity: decision.capacity,
     recorded,

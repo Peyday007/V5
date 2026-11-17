@@ -18,7 +18,7 @@ import {
   type ResearchYieldReading,
   type YieldJob,
 } from '../server/services/goals/researchYield.ts';
-import { reallocateResearch, verifiedCostReading, type ResearchAllocationPorts } from '../server/services/goals/tick.ts';
+import { reallocateResearch, sharesInForceFrom, verifiedCostReading, type ResearchAllocationPorts } from '../server/services/goals/tick.ts';
 import { RESEARCH_PURPOSES } from '../server/services/goals/researchAllocation.ts';
 import { yieldAllocationHolds } from '../server/services/factory/program/release01/researchGoalProbe.ts';
 import type { GoalView } from '../server/services/goals/model.ts';
@@ -181,11 +181,36 @@ describe('reallocateResearch records only decisions whose cost is counted once',
     const report = await reallocateResearch({ goals: [goalView('wst_a')], now: UNTIL }, ports);
     expect(report.held).toBe(true);
     const d = decisions[0]!;
-    expect(d.held).toBe(true);
+    // Measured, so not `held` (nothing measured): recorded as held for cost.
+    expect(d.held).toBe(false);
+    expect(d.heldForCost).toBe(true);
     expect(d.changes).toEqual([]);
+    expect(d.shares).toEqual(d.observed);
     expect((d.notes as string[])[0]).toMatch(/counted once/);
-    // No measured decision on record, so the probe has nothing false to read.
-    expect(yieldAllocationHolds(decisions as never).ok).not.toBe(false);
+    expect(String(d.summary)).toMatch(/counted once/);
+    // The allocation stage never applies it.
+    expect(sharesInForceFrom(d)?.held).toBe(true);
+  });
+
+  it('a genuine double count fails the probe instead of hiding as a held decision (finding F2)', async () => {
+    const doubled = (): ResearchYieldReading => {
+      const r = readingFrom(degenerateJobs());
+      return { ...r, costCountedOnce: { ...r.costCountedOnce, purposeJobMs: r.costCountedOnce.totalJobMs * 2, holds: false } };
+    };
+    const { ports, decisions } = memoryPorts(doubled);
+    await reallocateResearch({ goals: [goalView('wst_a')], now: UNTIL }, ports);
+    const verdict = yieldAllocationHolds(decisions as never);
+    expect(verdict.ok).toBe(false);
+    expect(verdict.detail).toMatch(/counted once/);
+    // Beside good decisions it still surfaces.
+    const good = memoryPorts(() => readingFrom(degenerateJobs()));
+    await reallocateResearch({ goals: [goalView('wst_a')], now: UNTIL }, good.ports);
+    expect(yieldAllocationHolds([...good.decisions, ...decisions] as never).ok).toBe(false);
+    // A window with nothing measured is still held and not read by the probe.
+    const empty = memoryPorts(() => summarizeResearchYield({ since: SINCE, until: UNTIL, jobs: [], outputs: [] }));
+    await reallocateResearch({ goals: [goalView('wst_a')], now: UNTIL }, empty.ports);
+    expect(empty.decisions[0]!.heldForCost).toBe(false);
+    expect(yieldAllocationHolds(empty.decisions as never).ok).not.toBe(false);
   });
 
   it('treats a missing, null or malformed cost record as not holding', () => {
@@ -207,10 +232,14 @@ describe('reallocateResearch records only decisions whose cost is counted once',
     });
     for (let i = 0; i < 4; i++) await reallocateResearch({ goals: [goalView('wst_a')], now: new Date(Date.parse(UNTIL) + i * 3_600_000).toISOString() }, ports);
     for (const d of decisions) {
-      if (d.held === true) continue;
+      if (d.held === true || d.heldForCost === true) continue;
       expect((d.costCountedOnce as { holds: unknown }).holds).toBe(true);
       for (const c of d.changes as { reasons: string[] }[]) expect(c.reasons.length).toBeGreaterThan(0);
     }
-    expect(yieldAllocationHolds(decisions as never).ok).not.toBe(false);
+    // Pass 3's reading cannot show its cost counted once: it is recorded measured and the probe flags it.
+    expect(decisions.some((d) => d.heldForCost === true && d.held === false)).toBe(true);
+    expect(yieldAllocationHolds(decisions as never).ok).toBe(false);
+    // Every decision whose cost was shown counted once passes the probe.
+    expect(yieldAllocationHolds(decisions.filter((d) => d.heldForCost !== true) as never).ok).not.toBe(false);
   });
 });
