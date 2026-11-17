@@ -5,8 +5,10 @@
  * with collisions, selective-deepening decisions and the intelligence funnel.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
-import { freshProject } from './helpers.ts';
-import { insertFeedItems } from '../server/repos/feeds.ts';
+import { freshProject, type TestProject } from './helpers.ts';
+import { insertFeedItems, markShortlisted } from '../server/repos/feeds.ts';
+import { createRun } from '../server/repos/runs.ts';
+import { createOrchestration } from '../server/repos/research.ts';
 import { getDb } from '../server/db/database.ts';
 import { recordCashEvent } from '../server/repos/cashMode.ts';
 import { EXTRACTION_EVENT, LEAD_MAX_AGE_MS, readParserHistory, recordFeedExtraction, routeEscalation, screenFeedLeads, screenOrder, SCREENS_PER_PASS, type ExtractionPass } from '../server/services/feeds/run.ts';
@@ -15,8 +17,10 @@ import { EXTRACTOR_VERSION } from '../server/services/feeds/extract.ts';
 import { judgeStructure, plannedStage, planProcessing } from '../server/services/knowledge/processingGraph.ts';
 
 let projectId = '';
+let play: TestProject;
 beforeEach(async () => {
-  projectId = (await freshProject()).project.id;
+  play = await freshProject();
+  projectId = play.project.id;
 });
 
 const now = new Date();
@@ -296,5 +300,97 @@ describe('selective deepening routes the model reads (repair: deepening not cons
     await screenFeedLeads({ now, config, completer });
     const later = asked.join('\n');
     for (let i = 0; i < 10; i += 1) expect(later).toContain(`Musing old ${i} ${source}`);
+  });
+});
+
+describe('the funnel reads evidence accepted and goal decisions from their own rows, and gains against the previous pass', () => {
+  async function orchestration(): Promise<string> {
+    const layerId = (await play.layerByName('Monetization Logic')).id;
+    const run = await createRun({ projectId, layerId, runType: 'FOUNDATION', status: 'PLANNED', provider: 'WORKER', prompt: 'p' });
+    return (await createOrchestration({ projectId, layerId, runId: run.id, title: 'pricing', assignment: 'What does it cost?', provider: 'WORKER', autoApprove: false })).id;
+  }
+  let claimSeq = 0;
+  async function claim(orchestrationId: string, hash: string, opts: { accepted?: boolean; contradiction?: string } = {}): Promise<void> {
+    claimSeq += 1;
+    await getDb().run(
+      `INSERT INTO research_claims
+         (id, orchestration_id, fragment_id, pass_id, pass_key, claim, source_url, confidence, contradiction_state,
+          validation_state, sourced, derived, derived_from, accepted, content_hash, created_at)
+       VALUES (?, ?, NULL, NULL, 'RESEARCH', ?, ?, 0.9, ?, 'SOURCED', 1, 0, '[]', ?, ?, ?)`,
+      [`clm_funnel_${claimSeq}`, orchestrationId, `Claim ${hash}`, 'https://acme-supply.com/pricing', opts.contradiction ?? 'UNCHALLENGED', opts.accepted === false ? 0 : 1, hash, new Date().toISOString()],
+    );
+  }
+  async function round(): Promise<string> {
+    const id = `cdr_funnel_${Math.random().toString(36).slice(2, 8)}`;
+    const at = new Date().toISOString();
+    await getDb().run(
+      `INSERT INTO cash_discovery_rounds (id, project_id, cash_mode_id, bucket_id, mechanism, round, candidate_id, state, opened_at, harvested_at, found, created_at, updated_at)
+       VALUES (?, ?, 'cm_test', ?, 'EXPLICIT_PAID_REQUEST', 1, ?, 'OPEN', ?, NULL, 0, ?, ?)`,
+      [id, projectId, `bucket-${id}`, `cand-${id}`, at, at, at],
+    );
+    return id;
+  }
+  const stageOf = (pass: ExtractionPass, name: string) => pass.funnel!.reading.stages.find((s) => s.stage === name)!;
+
+  it('counts gate-accepted claims and shortlist decisions, not empty literals', async () => {
+    const source = `w${Math.random().toString(36).slice(2, 8)}`;
+    await insertFeedItems(source, records(source, 'a'));
+    const orch = await orchestration();
+    await claim(orch, 'h-accepted');
+    await claim(orch, 'h-contested', { contradiction: 'CONTESTED' });
+    await claim(orch, 'h-rejected', { accepted: false });
+    const items = await getDb().all<{ id: string }>('SELECT id FROM feed_items WHERE source = ? ORDER BY id', [source]);
+    await markShortlisted([items[0]!.id], await round());
+    await tick();
+
+    const pass = (await recordFeedExtraction({ projectId, now: new Date(), capacity: 1 }))!;
+    const evidence = stageOf(pass, 'EVIDENCE_ACCEPTED');
+    // Only the gate's accepted claims are this stage's records; the contested one is held out under its reason.
+    expect(evidence.raw).toBe(2);
+    expect(evidence.usable).toBe(1);
+    expect(evidence.excluded.CONTESTED).toBe(1);
+    const decisions = stageOf(pass, 'GOAL_DECISIONS');
+    expect(decisions.raw).toBe(1);
+    expect(decisions.usable).toBe(1);
+    expect(pass.funnel!.against).toBe('FIRST_PASS');
+    expect(pass.funnel!.cumulative).toEqual(pass.funnel!.reading);
+    // The stored row carries the same reading.
+    const [row] = await rows();
+    expect(row!.funnel!.reading.stages.find((s) => s.stage === 'EVIDENCE_ACCEPTED')!.raw).toBe(2);
+  });
+
+  it('measures gain against the previous pass, so restated evidence and re-imports gain nothing', async () => {
+    const source = `w${Math.random().toString(36).slice(2, 8)}`;
+    await insertFeedItems(source, records(source, 'a'));
+    const orch = await orchestration();
+    await claim(orch, 'h-same');
+    await tick();
+    const first = (await recordFeedExtraction({ projectId, now: new Date(), capacity: 1 }))!;
+    expect(first.funnel!.gain.usableIntelligence).toBe(first.funnel!.reading.usableIntelligence);
+    await tick();
+
+    // The same claim restated after the first pass, and the same records republished.
+    await claim(orch, 'h-same');
+    await insertFeedItems(source, records(source, 'b'));
+    await tick();
+    const second = (await recordFeedExtraction({ projectId, now: new Date(), capacity: 1 }))!;
+    expect(second.funnel!.against).toBe('PREVIOUS_PASS');
+    const evidence = stageOf(second, 'EVIDENCE_ACCEPTED');
+    expect(evidence.raw).toBe(1);
+    expect(evidence.excluded.DUPLICATE).toBe(1);
+    // Cumulative is the previous cumulative plus this pass, and gain is the difference between them.
+    expect(second.funnel!.cumulative.raw).toBe(first.funnel!.cumulative.raw + second.funnel!.reading.raw);
+    expect(second.funnel!.gain.raw).toBe(second.funnel!.cumulative.raw - first.funnel!.cumulative.raw);
+    expect(second.funnel!.gain.usableIntelligence).toBe(0);
+    expect(second.funnel!.gain.falseSpeed).toBe(true);
+    expect(second.funnel!.window.since).toBe((await getDb().get<{ created_at: string }>('SELECT MIN(created_at) AS created_at FROM cash_events WHERE project_id = ? AND kind = ?', [projectId, EXTRACTION_EVENT]))!.created_at);
+  });
+
+  it('a pass whose evidence and decision rows cannot be read claims no funnel and names the stage', async () => {
+    const source = `w${Math.random().toString(36).slice(2, 8)}`;
+    await insertFeedItems(source, records(source, 'a'));
+    const pass = (await recordFeedExtraction({ projectId, now: new Date(), capacity: 1, failStages: ['funnelRecords'] }))!;
+    expect(pass.stageFailures!.map((f) => f.stage)).toEqual(['funnelRecords', 'funnel']);
+    expect(pass.funnel).toBeUndefined();
   });
 });

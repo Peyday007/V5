@@ -55,7 +55,7 @@ import { commitReadings, planDelta, readDeltaIndex, recordIdentity, type DeltaIn
 import { nameKeyOf, resolveIdentities, type IdentityCollision, type IdentityLink, type IdentityRecord } from '../knowledge/identity.ts';
 import { selectForDeepening, type DeepeningCandidate, type DeepeningDecision, type DeepeningResult } from '../knowledge/deepening.ts';
 import { judgeStructure, plannedStage, planProcessing, type Executor, type PlannedStage, type ProcessingPlan, type RouteEvidence, type Stage } from '../knowledge/processingGraph.ts';
-import { funnelGain, readFunnel, type FunnelReading, type FunnelRecord } from '../knowledge/funnel.ts';
+import { addReadings, funnelGain, parseFingerprintMemory, parseFunnelReading, readFunnel, rememberFingerprints, type FunnelReading, type FunnelRecord, type FunnelStage } from '../knowledge/funnel.ts';
 import { addExtractedItems, currentEventGraph, syncEventGraph, type ExtractedItemsUpdate, type GraphHypothesis } from '../industry/eventGraph.ts';
 import { constructFromGraph, type MissingLinkQuestion } from '../cash/construct.ts';
 import type { Weakness } from '../../domain/improvement.ts';
@@ -945,8 +945,24 @@ export interface ExtractionPass {
   identity?: { links: IdentityLink[]; collisions: IdentityCollision[]; uncorroborated: number };
   /** Selective deepening of the unreadable and contested candidates, against measured capacity. */
   deepening?: { capacity: number; threshold: number | null; promoted: DeepeningDecision[]; held: DeepeningDecision[] };
-  /** The intelligence funnel for this pass, and what it gained: raw intake beside usable intelligence. */
-  funnel?: { reading: FunnelReading; gain: { raw: number; usableIntelligence: number; falseSpeed: boolean } };
+  /**
+   * The intelligence funnel (KNOW-25-1, no false speed). `reading` is this pass, each stage read
+   * from its own records: feed items for intake and parsing, the pass's facts, the project's
+   * gate-accepted research claims, cross-source identity links, and the shortlist decisions
+   * that took feed items into the project's research rounds. `cumulative` is every pass so far;
+   * `gain` is measured against the previous pass's cumulative reading (`against: PREVIOUS_PASS`),
+   * or against nothing only on the first pass (`FIRST_PASS`). A record an earlier pass already
+   * counted (`seen`, bounded per stage) is a duplicate now, so a re-import gains nothing.
+   */
+  funnel?: {
+    reading: FunnelReading;
+    cumulative: FunnelReading;
+    against: 'PREVIOUS_PASS' | 'FIRST_PASS';
+    /** The interval the evidence and decision stages were read over: (since, until]. */
+    window: { since: string; until: string };
+    gain: { raw: number; usableIntelligence: number; falseSpeed: boolean };
+    seen: Record<FunnelStage, string[]>;
+  };
   /** A stage that failed this pass; the pass is still recorded and the stage is named. */
   stageFailures?: { stage: string; error: string }[];
   /** The fingerprint index the next pass classifies against (bounded to the most recently seen records). */
@@ -1009,6 +1025,45 @@ export interface ExtractionDelta {
 
 /** Records the carried fingerprint index keeps, most recently seen first, so one row stays a readable size. */
 export const DELTA_INDEX_MAX_RECORDS = 5000;
+
+/** Fingerprint keys the funnel carries per stage to the next pass, so a re-import is recognized as one. */
+export const FUNNEL_MEMORY_PER_STAGE = 1000;
+
+/** Rows one funnel stage reads per pass from its own table. */
+const FUNNEL_STAGE_ROW_LIMIT = 5000;
+
+/**
+ * The evidence and decision stages of the funnel, each from its own rows over (since, until]:
+ * research claims the gate accepted for this project, and the feed items a shortlist took into
+ * this project's discovery rounds. Neither is inferred from the extraction pass.
+ */
+async function funnelStageRecords(projectId: string, since: string, until: string): Promise<{ evidence: FunnelRecord[]; decisions: FunnelRecord[] }> {
+  const db = getDb();
+  const claims = await db.all<{ id: string; content_hash: string; source_date: string | null; contradiction_state: string; sourced: number | string }>(
+    `SELECT c.id, c.content_hash, c.source_date, c.contradiction_state, c.sourced FROM research_claims c
+      JOIN research_orchestrations o ON o.id = c.orchestration_id
+      WHERE o.project_id = ? AND c.accepted = 1 AND c.created_at > ? AND c.created_at <= ?
+      ORDER BY c.created_at, c.id LIMIT ?`,
+    [projectId, since, until, FUNNEL_STAGE_ROW_LIMIT],
+  );
+  const shortlisted = await db.all<{ id: string; shortlisted_round_id: string; published_at: string | null }>(
+    `SELECT i.id, i.shortlisted_round_id, i.published_at FROM feed_items i
+      JOIN cash_discovery_rounds r ON r.id = i.shortlisted_round_id
+      WHERE r.project_id = ? AND i.shortlisted_at > ? AND i.shortlisted_at <= ?
+      ORDER BY i.shortlisted_at, i.id LIMIT ?`,
+    [projectId, since, until, FUNNEL_STAGE_ROW_LIMIT],
+  );
+  return {
+    evidence: claims.map((c) => ({
+      id: c.id,
+      fingerprint: `claim:${c.content_hash}`,
+      observedAt: c.source_date,
+      status: c.contradiction_state === 'CONTESTED' || c.contradiction_state === 'REFUTED' ? 'CONTESTED' : null,
+      verified: Number(c.sourced) === 1,
+    })),
+    decisions: shortlisted.map((i) => ({ id: i.id, fingerprint: `shortlist:${i.shortlisted_round_id}:${i.id}`, observedAt: i.published_at })),
+  };
+}
 
 function boundDeltaIndex(index: DeltaIndex): DeltaIndex {
   const histories = Object.values(index.records);
@@ -1080,19 +1135,29 @@ export async function recordFeedExtraction(input: {
 }): Promise<ExtractionPass | null> {
   const now = input.now ?? new Date();
   const db = getDb();
-  const last = await db.get<{ detail: string | null }>(
-    `SELECT detail FROM cash_events WHERE project_id = ? AND kind = ? ORDER BY created_at DESC, id DESC LIMIT 1`,
+  const last = await db.get<{ detail: string | null; created_at: string }>(
+    `SELECT detail, created_at FROM cash_events WHERE project_id = ? AND kind = ? ORDER BY created_at DESC, id DESC LIMIT 1`,
     [input.projectId, EXTRACTION_EVENT],
   );
   let from: { fetchedAt: string; id: string } | null = null;
   let priorIndex: DeltaIndex = readDeltaIndex(null);
   let priorHistory: ParserHistory = {};
+  let priorCumulative: FunnelReading | null = null;
+  let priorSeen: Partial<Record<FunnelStage, string[]>> = {};
   try {
-    const parsed = JSON.parse(last?.detail ?? '{}') as { cursor?: { to?: { fetchedAt?: unknown; id?: unknown } }; deltaIndex?: unknown; parserHistory?: unknown };
+    const parsed = JSON.parse(last?.detail ?? '{}') as {
+      cursor?: { to?: { fetchedAt?: unknown; id?: unknown } };
+      deltaIndex?: unknown;
+      parserHistory?: unknown;
+      funnel?: { cumulative?: unknown; reading?: unknown; seen?: unknown };
+    };
     const to = parsed.cursor?.to;
     if (to && typeof to.fetchedAt === 'string' && typeof to.id === 'string') from = { fetchedAt: to.fetchedAt, id: to.id };
     priorIndex = readDeltaIndex(parsed.deltaIndex);
     priorHistory = readParserHistory(parsed.parserHistory, EXTRACTOR_VERSION);
+    // A pass recorded before the funnel was cumulative carries only its own reading: that is the earliest cumulative there is.
+    priorCumulative = parseFunnelReading(parsed.funnel?.cumulative) ?? parseFunnelReading(parsed.funnel?.reading);
+    priorSeen = parseFingerprintMemory(parsed.funnel?.seen);
   } catch {
     from = null;
   }
@@ -1373,28 +1438,45 @@ export async function recordFeedExtraction(input: {
       }
     : undefined;
 
-  // The funnel: raw intake beside what this pass actually understood.
+  // The funnel: raw intake beside what this pass actually understood. The evidence and decision
+  // stages are read from their own rows over the interval since the previous pass.
+  const funnelWindow = { since: last?.created_at ?? floor, until: nowIsoText };
+  let stageRecords: { evidence: FunnelRecord[]; decisions: FunnelRecord[] } | null = null;
+  try {
+    if (input.failStages?.includes('funnelRecords')) throw new Error('stage funnelRecords failed on request');
+    stageRecords = await funnelStageRecords(input.projectId, funnelWindow.since, funnelWindow.until);
+  } catch (error) {
+    stageFailures.push({ stage: 'funnelRecords', error: errorText(error) });
+  }
   const funnel = stage('funnel', undefined as ExtractionPass['funnel'], () => {
+    if (!stageRecords) throw new Error('the evidence and decision stages could not be read, so no funnel is claimed');
     const fingerprintOfItem = new Map((deltaPlan?.changes ?? []).map((c) => [c.identity, c.fingerprint]));
     const itemRecord = (item: ExtractableItem): FunnelRecord => ({ id: item.id, fingerprint: fingerprintOfItem.get(identityOfItem.get(item.id)!) ?? item.id, observedAt: item.publishedAt });
     const reconciledStatus = new Map(run.reconciled.map((r) => [r.key, r.status]));
-    const reading = readFunnel(
-      {
-        RAW_INTAKE: items.map(itemRecord),
-        PARSED: readItems.filter((item) => !unreadable.has(item.id)).map(itemRecord),
-        NORMALIZED_FACTS: run.facts.map((f) => ({
-          id: `${f.evidence.itemId}:${f.key}`,
-          fingerprint: `${f.key}=${String(f.value)}@${f.evidence.itemId}`,
-          observedAt: f.observedAt,
-          status: (reconciledStatus.get(f.key) ?? null) as FunnelRecord['status'],
-        })),
-        EVIDENCE_ACCEPTED: [],
-        RELATIONSHIPS_UPDATED: relationshipLinks.map((l) => ({ id: l.entityId, fingerprint: `${l.entityId}:${l.refs.join(',')}` })),
-        GOAL_DECISIONS: [],
-      },
-      { now },
-    );
-    return { reading, gain: funnelGain(readFunnel({}), reading) };
+    const funnelInput = {
+      RAW_INTAKE: items.map(itemRecord),
+      PARSED: readItems.filter((item) => !unreadable.has(item.id)).map(itemRecord),
+      NORMALIZED_FACTS: run.facts.map((f) => ({
+        id: `${f.evidence.itemId}:${f.key}`,
+        fingerprint: `${f.key}=${String(f.value)}@${f.evidence.itemId}`,
+        observedAt: f.observedAt,
+        status: (reconciledStatus.get(f.key) ?? null) as FunnelRecord['status'],
+      })),
+      EVIDENCE_ACCEPTED: stageRecords.evidence,
+      RELATIONSHIPS_UPDATED: relationshipLinks.map((l) => ({ id: l.entityId, fingerprint: `${l.entityId}:${l.refs.join(',')}` })),
+      GOAL_DECISIONS: stageRecords.decisions,
+    };
+    const reading = readFunnel(funnelInput, { now, seen: priorSeen });
+    const before = priorCumulative ?? readFunnel({});
+    const cumulative = addReadings(before, reading);
+    return {
+      reading,
+      cumulative,
+      against: priorCumulative ? ('PREVIOUS_PASS' as const) : ('FIRST_PASS' as const),
+      window: funnelWindow,
+      gain: funnelGain(before, cumulative),
+      seen: rememberFingerprints(priorSeen, funnelInput, FUNNEL_MEMORY_PER_STAGE),
+    };
   });
 
   const pass: ExtractionPass = {

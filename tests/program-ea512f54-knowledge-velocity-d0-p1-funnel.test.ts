@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { FUNNEL_STAGES, funnelGain, readFunnel, readStage, type FunnelInput, type FunnelRecord } from '../server/services/knowledge/funnel.ts';
+import {
+  FUNNEL_STAGES,
+  addReadings,
+  fingerprintKey,
+  funnelGain,
+  parseFingerprintMemory,
+  parseFunnelReading,
+  readFunnel,
+  readStage,
+  rememberFingerprints,
+  type FunnelInput,
+  type FunnelRecord,
+} from '../server/services/knowledge/funnel.ts';
 
 const now = new Date('2026-11-17T00:00:00Z');
 const rec = (id: string, extra: Partial<FunnelRecord> = {}): FunnelRecord => ({ id, fingerprint: `fp-${id}`, observedAt: '2026-11-16T00:00:00Z', ...extra });
@@ -80,5 +92,43 @@ describe('intelligence funnel (KNOW-25-1, no false speed)', () => {
     const before = readFunnel({ NORMALIZED_FACTS: [rec('n')] }, { now });
     const after = readFunnel({ NORMALIZED_FACTS: [rec('n'), rec('m')] }, { now });
     expect(funnelGain(before, after)).toEqual({ raw: 1, usableIntelligence: 1, falseSpeed: false });
+  });
+});
+
+describe('the funnel across readings (gain against the previous reading, not an empty one)', () => {
+  it('a record an earlier reading counted is a duplicate now', () => {
+    const first: FunnelInput = { NORMALIZED_FACTS: [rec('a'), rec('b')] };
+    const memory = rememberFingerprints({}, first, 10);
+    const again = readStage('NORMALIZED_FACTS', [rec('a2', { fingerprint: 'fp-a' }), rec('c')], { now, seen: memory });
+    expect(again.usable).toBe(1);
+    expect(again.excluded.DUPLICATE).toBe(1);
+  });
+
+  it('gain against the previous cumulative reading flags a re-import as false speed', () => {
+    const firstInput: FunnelInput = { RAW_INTAKE: [rec('a')], PARSED: [rec('a')], NORMALIZED_FACTS: [rec('fa')] };
+    const first = readFunnel(firstInput, { now });
+    const memory = rememberFingerprints({}, firstInput, 10);
+    const second = readFunnel({ RAW_INTAKE: [rec('a')], PARSED: [rec('a')], NORMALIZED_FACTS: [rec('fa')] }, { now, seen: memory });
+    const cumulative = addReadings(first, second);
+    expect(cumulative.raw).toBe(first.raw + second.raw);
+    expect(funnelGain(first, cumulative)).toEqual({ raw: 3, usableIntelligence: 0, falseSpeed: true });
+    // Against an empty reading the same pass would not be flagged: that was the defect.
+    expect(funnelGain(readFunnel({}), readFunnel({ NORMALIZED_FACTS: [rec('fa')] }, { now })).falseSpeed).toBe(false);
+  });
+
+  it('a stored reading round-trips, and an unreadable one is absent rather than zero', () => {
+    const reading = readFunnel({ RAW_INTAKE: [rec('a')], EVIDENCE_ACCEPTED: [rec('e', { status: 'CONTESTED' })] }, { now });
+    expect(parseFunnelReading(JSON.parse(JSON.stringify(reading)))).toEqual(reading);
+    expect(parseFunnelReading(null)).toBeNull();
+    expect(parseFunnelReading({ stages: [{ stage: 'RAW_INTAKE', raw: 1, usable: 1 }] })).toBeNull();
+    expect(parseFunnelReading({ stages: reading.stages.map((s) => ({ ...s, raw: -1 })) })).toBeNull();
+  });
+
+  it('the carried memory is bounded per stage and keeps the most recent', () => {
+    const many: FunnelInput = { PARSED: Array.from({ length: 5 }, (_, i) => rec(`p${i}`)) };
+    const memory = rememberFingerprints({ PARSED: [fingerprintKey('old')] }, many, 3);
+    expect(memory.PARSED).toEqual(['fp-p2', 'fp-p3', 'fp-p4'].map(fingerprintKey));
+    expect(parseFingerprintMemory(JSON.parse(JSON.stringify(memory)))).toEqual(memory);
+    expect(parseFingerprintMemory({ PARSED: [1, 'x'] })).toEqual({ PARSED: ['x'] });
   });
 });
