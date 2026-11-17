@@ -275,3 +275,13 @@ See F1–F7 above. Each one gives the cause, file:line, run IDs, the smallest ch
   - Plan runs: median 0.5 s, but event-loop stalls of 2–3 s in evaluatorPool.ts (W2c).
   - DB: NORMAL, p90 21 ms, 33 pool-checkout timeouts.
   - The GPU is stopped until bd5e0419 is live.
+- **09:01Z, correction.** The RC bd5e0419 Deploy FAILED its SQLite tests, so production is still on eda04071.
+  - Cause (#1029): carryFigures wrote card claim ids into path facts, whose `claim_id` must reference research_claims. The FOREIGN KEY failure was bisected to between eda04071 and 74b0a3c3.
+  - Fix #1041: the copied fact becomes a RECOMMENDATION with the cited id in its basis.
+- **Release 4 = f4eb5352** (Deploy 44051739781) is bd5e0419 plus:
+  - #1041, the FK fix;
+  - #1039, W12 mission ceiling: GPU room counted through provenSlots; growth when launchable ideas exceed free slots; bound of floor + max(48, proven slots);
+  - #1040, W3c hypothesis cap: one per opening, at most a quarter of the grant, none while a goal round waits.
+- W12 finding: one fragment per mission, so jobs scale about 1:1 with missions.
+- Still open: W2c (planner CPU), W13 (120B fragments dropped).
+- Integration lesson: a release candidate re-cut five times left the Deploy test on bd5e0419 as the first full SQLite run of #1029. That cost about 40 min.
