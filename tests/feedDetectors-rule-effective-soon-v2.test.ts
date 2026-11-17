@@ -12,6 +12,7 @@ import {
   DETECTORS,
   RULE_EFFECTIVE_SOON,
   RULE_EFFECTIVE_SOON_DAYS,
+  RULE_EFFECTIVE_SOON_LEAD_DAYS,
   RULE_EFFECTIVE_SOON_V2,
   correctedDocumentOf,
   employerKey,
@@ -106,7 +107,9 @@ describe('RULE_EFFECTIVE_SOON@2 reads them', () => {
 
 describe('RULE_EFFECTIVE_SOON@2 lowers no bar', () => {
   it('drops a rule effective before its publication, one beyond the window, and one published over 30 days ago', () => {
-    const beyond = new Date(now.getTime() + (RULE_EFFECTIVE_SOON_DAYS + 2) * 86_400_000).toISOString().slice(0, 10);
+    // Beyond both bounds: now + RULE_EFFECTIVE_SOON_DAYS and its publication day (2026-11-12) + RULE_EFFECTIVE_SOON_LEAD_DAYS.
+    const latest = Math.max(now.getTime() + RULE_EFFECTIVE_SOON_DAYS * 86_400_000, Date.parse('2026-11-12T00:00:00.000Z') + RULE_EFFECTIVE_SOON_LEAD_DAYS * 86_400_000);
+    const beyond = new Date(latest + 2 * 86_400_000).toISOString().slice(0, 10);
     const out = RULE_EFFECTIVE_SOON_V2.detect(
       [
         fr('2026-90001', '2026-11-12', 'Environmental Protection Agency', 'Effective 2026-11-10.'),
@@ -175,5 +178,27 @@ describe('RULE_EFFECTIVE_SOON@2 readings key items the way the rule keys its ent
     expect(reading.members).toBe(1);
     expect(reading.misses).toBe(1);
     expect(reading.missedSamples.join(' ')).toContain('FAA missed');
+  });
+});
+
+describe('RULE_EFFECTIVE_SOON@2 keeps a rule on its own publication day (the correction-on-publication-day miss)', () => {
+  const publicationDay = new Date('2026-11-12T12:00:00.000Z');
+
+  it('catches C1-2026-21030 on 2026-11-12, when its inherited effective date is 46 days out', () => {
+    const kept = members(RULE_EFFECTIVE_SOON_V2.detect([...missed, corrected], publicationDay));
+    expect(kept).toContain('fi_C1-2026-21030');
+    // The same membership on every day from publication until the published-in window closes.
+    for (let day = 0; day < 30; day += 1) {
+      const at = new Date(publicationDay.getTime() + day * 86_400_000);
+      expect(members(RULE_EFFECTIVE_SOON_V2.detect([...missed, corrected], at))).toContain('fi_C1-2026-21030');
+    }
+  });
+
+  it('holds the eight-week bound: a rule effective one day past it is still dropped on its publication day', () => {
+    const at = (days: number) => new Date(Date.parse('2026-11-12T00:00:00.000Z') + days * 86_400_000).toISOString().slice(0, 10);
+    const inside = fr('2026-90010', '2026-11-12', 'Environmental Protection Agency', `Effective ${at(RULE_EFFECTIVE_SOON_LEAD_DAYS)}.`);
+    const outside = fr('2026-90011', '2026-11-12', 'Environmental Protection Agency', `Effective ${at(RULE_EFFECTIVE_SOON_LEAD_DAYS + 1)}.`);
+    const kept = members(RULE_EFFECTIVE_SOON_V2.detect([inside, outside], publicationDay));
+    expect(kept).toEqual(['fi_2026-90010']);
   });
 });
