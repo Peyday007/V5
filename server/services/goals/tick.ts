@@ -57,7 +57,7 @@ import { reconcileRegisterIfDue, type RegisterPassReport } from './openQuestions
 import { recordDecisionsIfDue } from './decisionRecord.ts';
 import { reconcileCalibrationIfDue, type CalibrationPassReport } from './calibration.ts';
 import { reconcileFactChangesIfDue, type ReconsiderPassReport } from './reconsider.ts';
-import { diagnoseCostCountedOnce, type LaneCapacityReading, type ResearchYieldReading } from './researchYield.ts';
+import { diagnoseCostCountedOnce, type CostOnceCause, type LaneCapacityReading, type ResearchYieldReading } from './researchYield.ts';
 import {
   APPLICABLE_REMEDIES,
   COMMERCIAL_FLOOR,
@@ -988,6 +988,13 @@ export interface ResearchAllocationPorts {
   applyRemedy?(input: { lane: string; remedy: LaneRemedy; ref: string; goalIds: string[] }): Promise<void>;
   /** The newest Brain-wide decision row, or null. */
   lastDecision(): Promise<{ detail: Record<string, unknown>; at: string } | null>;
+  /**
+   * The newest Brain-wide decision rows, newest first, up to `limit`: the rows
+   * probe r01.res-15-5 judges. Each pass diagnoses the measured ones that do
+   * not show their cost counted once, from their own recorded numbers
+   * (`diagnosePriorCostFailures`). Absent means the history is not read.
+   */
+  recentDecisions?(limit: number): Promise<{ detail: Record<string, unknown>; at: string }[]>;
   /** Write the Brain-wide decision row: once per measured window (or per changed unmeasured decision), never per goal. */
   recordDecision(summary: string, detail: Record<string, unknown>): Promise<void>;
 }
@@ -1275,6 +1282,79 @@ export function recordedWindowKey(detail: Record<string, unknown> | null): strin
   return allocationWindowKey(w && typeof w.until === 'string' ? w.until : null);
 }
 
+/** The decision rows probe r01.res-15-5 reads: the newest fifty. */
+export const ALLOCATION_AUDIT_ROWS = 50;
+
+/** One recorded decision that does not show its cost counted once, and why, read from that row alone. */
+export interface PriorCostFailure {
+  at: string;
+  fingerprint: string;
+  /** The cause read from the row's own recorded numbers (`diagnoseCostCountedOnce`). */
+  cause: CostOnceCause;
+  /** The cause the row itself recorded, when the code that wrote it recorded one. */
+  recordedCause: string | null;
+  /**
+   * When the row's numbers cannot tell the cause apart and the row's shape
+   * can: equal zero sums over counted jobs with a false flag are what a
+   * non-finite sum looks like after an earlier recorder coerced it to 0.
+   */
+  inferred: CostOnceCause | null;
+  /** Which recorder wrote it: fingerprints without a leading `held` predate that change. */
+  recorder: 'HELD_IN_FINGERPRINT' | 'BEFORE_HELD_IN_FINGERPRINT';
+  jobMsGap: number | null;
+  costGap: number | null;
+  basis: string;
+}
+
+/**
+ * The earliest cause of every recorded counted-once failure, read from the
+ * production rows themselves rather than asserted by a repair (RES-15-5).
+ * Takes the decision rows newest first, keeps the measured ones (`held` is not
+ * true — what the probe judges) whose `costCountedOnce.holds` is not true, and
+ * diagnoses each from its own numbers. JSON writes NaN and Infinity as `null`,
+ * so a non-finite sum reads as NON_FINITE_JOB_TIME; a row with no record at
+ * all reads as NOT_RECORDED. Oldest first, so the first entry is the earliest
+ * failure on record. Pure.
+ */
+export function diagnosePriorCostFailures(rows: readonly { detail: Record<string, unknown> | null; at: string }[]): {
+  failures: PriorCostFailure[];
+  causes: Partial<Record<CostOnceCause, number>>;
+  earliest: PriorCostFailure | null;
+} {
+  const failures: PriorCostFailure[] = [];
+  for (const row of rows) {
+    const d = row.detail;
+    if (!d || d.held === true) continue;
+    const once = d.costCountedOnce as Record<string, unknown> | undefined;
+    if (once && once.holds === true) continue;
+    const diagnosis = diagnoseCostCountedOnce(once);
+    const fingerprint = typeof d.fingerprint === 'string' ? d.fingerprint : '?';
+    const jobs = once && typeof once.jobs === 'number' ? once.jobs : 0;
+    const inferred =
+      diagnosis.cause === 'FLAG_DISAGREES' && once && once.totalJobMs === 0 && once.purposeJobMs === 0 && jobs > 0 ? ('NON_FINITE_JOB_TIME' as const) : null;
+    failures.push({
+      at: row.at,
+      fingerprint: fingerprint.slice(0, 400),
+      cause: diagnosis.cause,
+      recordedCause: once && typeof once.cause === 'string' ? once.cause : null,
+      inferred,
+      recorder: fingerprint.startsWith('{"held"') ? 'HELD_IN_FINGERPRINT' : 'BEFORE_HELD_IN_FINGERPRINT',
+      jobMsGap: diagnosis.jobMsGap,
+      costGap: diagnosis.costGap,
+      basis: inferred
+        ? `${diagnosis.detail}; ${jobs} job(s) counted with both sums 0 and holds false: a non-finite sum coerced to 0 by the recorder`
+        : diagnosis.detail,
+    });
+  }
+  failures.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+  const causes: Partial<Record<CostOnceCause, number>> = {};
+  for (const f of failures) {
+    const c = f.inferred ?? f.cause;
+    causes[c] = (causes[c] ?? 0) + 1;
+  }
+  return { failures, causes, earliest: failures[0] ?? null };
+}
+
 /** One allocation pass over the live goals. */
 export async function reallocateResearch(input: { goals: GoalView[]; now?: string }, ports: ResearchAllocationPorts): Promise<ResearchAllocationReport> {
   const untilMs = input.now ? Date.parse(input.now) : Date.now();
@@ -1326,6 +1406,9 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
     : decided;
   const fingerprint = allocationFingerprint({ ...decision, held: decision.held || heldForCost });
   const windowKey = allocationWindowKey(window.until);
+  const history = ports.recentDecisions ? await ports.recentDecisions(ALLOCATION_AUDIT_ROWS) : previous ? [previous] : [];
+  const prior = diagnosePriorCostFailures(history);
+  const audit = { rowsRead: history.length, failing: prior.failures.length, causes: prior.causes, earliest: prior.earliest, failures: prior.failures.slice(-10) };
   const floors = {
     exploration: EXPLORATION_FLOOR,
     systemHealth: SYSTEM_HEALTH_FLOOR,
@@ -1381,6 +1464,8 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
     }])),
     liveGoals: live.length,
     costCountedOnce,
+    // Every recorded counted-once failure the probe still reads, with the cause its own numbers show.
+    priorCostFailures: audit,
     notes: [...decision.notes, ...reading.notes].slice(0, 20),
   };
   // One row per measured window (RES-15-5: yield is recorded "over consistent
@@ -1444,6 +1529,10 @@ export async function productionResearchAllocationPorts(): Promise<ResearchAlloc
     readYield: (window) => researchYieldByPurpose(window),
     readLaneCapacity: (until) => laneCapacityNow(until),
     lastDecision: () => latestResearchDecision(),
+    async recentDecisions(limit) {
+      const { listImprovementEvents } = await import('../../repos/improvement.ts');
+      return (await listImprovementEvents({ kinds: [RESEARCH_ALLOCATION_DECIDED], limit })).map((e) => ({ detail: e.detail, at: e.at }));
+    },
     async appliedRemedies(goalIds) {
       const out: AppliedRemedy[] = [];
       for (const goalId of goalIds) {
