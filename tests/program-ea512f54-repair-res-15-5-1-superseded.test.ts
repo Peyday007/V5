@@ -6,7 +6,9 @@
  * decided the same shares — the fingerprint ignored whether it was held, so a
  * held-for-cost row (observed shares) and the holding decision after it read
  * as one decision. These tests pin both: the holding decision is recorded,
- * and the probe judges the decisions in force while reporting the superseded one.
+ * and the owner's probe still fails on any measured decision in its window
+ * that does not hold — a failing row leaves the verdict only by leaving the
+ * window through normal operation, never by being judged superseded (R3-1).
  */
 import { describe, expect, it } from 'vitest';
 import { summarizeResearchYield, type PurposeKey, type ResearchYieldReading, type YieldJob } from '../server/services/goals/researchYield.ts';
@@ -64,8 +66,11 @@ describe('the holding decision after a failed counted-once window is recorded', 
     expect(report.recorded).toBe(true);
     expect(rows).toHaveLength(2);
     expect((rows[1]!.costCountedOnce as { holds: unknown }).holds).toBe(true);
-    // Read the way the probe reads production: newest first.
-    expect(yieldAllocationHolds([...rows].reverse() as never).ok).not.toBe(false);
+    // The recovered decision on its own holds ...
+    expect(yieldAllocationHolds([rows[1]] as never).ok).not.toBe(false);
+    // ... but read the way the probe reads production, newest first, the failed
+    // row is still in the window, and the owner's probe fails on it.
+    expect(yieldAllocationHolds([...rows].reverse() as never).ok).toBe(false);
     // And it fails again the moment a newer window double counts.
     failing = true;
     await reallocateResearch({ goals: [goal], now: new Date(Date.parse(UNTIL) + 7_200_000).toISOString() }, p);
@@ -74,7 +79,7 @@ describe('the holding decision after a failed counted-once window is recorded', 
   });
 });
 
-describe('probe r01.res-15-5 judges the decisions in force and reports superseded history', () => {
+describe('probe r01.res-15-5 fails on any measured decision in its window that does not hold', () => {
   const bad = measured({ fingerprint: 'old', costCountedOnce: { holds: false } });
   const moved = measured({ fingerprint: 'new', changes: [{ purpose: 'TRANSACTION_ROUTES', reasons: ['yield'] }] });
 
@@ -84,17 +89,22 @@ describe('probe r01.res-15-5 judges the decisions in force and reports supersede
     expect(yieldAllocationHolds([measured({ changes: [{ purpose: 'X', reasons: [] }] }), moved]).ok).toBe(false);
   });
 
-  it('passes on newer holding decisions and names the superseded failure', () => {
+  it('fails on an older failing decision even when newer decisions hold and moved shares', () => {
     const r = yieldAllocationHolds([moved, measured(), bad, moved, bad]);
-    expect(r.ok).toBe(true);
-    expect(r.detail).toMatch(/2 measured decision\(s\)/);
-    expect(r.detail).toMatch(/2 older decision\(s\) that did not hold are superseded \(newest: decision old does not show its cost counted once\)/);
+    expect(r.ok).toBe(false);
+    expect(r.detail).toBe('decision old does not show its cost counted once');
+    expect(yieldAllocationHolds([moved, measured({ changes: [{ purpose: 'X', reasons: [] }] })]).ok).toBe(false);
   });
 
-  it('is unknown, not passing, when no decision in force has moved a share yet', () => {
+  it('fails, rather than reporting unknown, when an older decision does not hold and none has moved a share', () => {
     const r = yieldAllocationHolds([measured(), bad]);
-    expect(r.ok).toBeNull();
-    expect(r.detail).toMatch(/superseded/);
+    expect(r.ok).toBe(false);
+    expect(r.detail).toMatch(/counted once/);
+  });
+
+  it('passes once the failing decision has left its window', () => {
+    expect(yieldAllocationHolds([moved, measured(), { held: true }]).ok).toBe(true);
+    expect(yieldAllocationHolds([measured(), { held: true }]).ok).toBeNull();
   });
 
   it('keeps every other answer it gave before', () => {
