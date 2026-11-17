@@ -15,7 +15,7 @@ import { createFragments, createOrchestration } from '../server/repos/research.t
 import { enqueueWork } from '../server/repos/workQueue.ts';
 import { workType } from '../server/services/queue/workTypes.ts';
 import { setBrainOnlyMode } from '../server/services/bins/brainOnly.ts';
-import { freeLaneTick, resetFreeLaneFitness, resetPurposeCache } from '../server/services/freeLane/worker.ts';
+import { freeLaneAdmits, freeLaneTick, resetFreeLaneFitness, resetPurposeCache } from '../server/services/freeLane/worker.ts';
 import { stageCapacity } from '../server/services/freeLane/stageCapacity.ts';
 import type { Completer, LaneConfig } from '../server/services/cheap/lane.ts';
 import type { SourceFetch } from '../server/services/sources/fetchForWorker.ts';
@@ -131,5 +131,97 @@ describe('free-lane purpose attribution (CAP-16-3)', () => {
     const byPurpose = Object.fromEntries(report.purposes.map((p) => [p.purpose, p.productiveJobs]));
     expect(byPurpose.PLAY_RESEARCH).toBe(1);
     expect(byPurpose.UNATTRIBUTED).toBeUndefined();
+  });
+});
+
+/**
+ * W11, production 2026-11-17: research items under a packet that has no bin
+ * sat QUEUED for weeks. Routines refuse a bin-less item outside Brain's own
+ * projects, and the free lane refused every bin-less item, so nobody could
+ * claim them. The project now decides, from the free lane's side as well.
+ */
+describe('a research item no bin owns', () => {
+  async function binlessFragment(): Promise<string> {
+    const projectId = play.project.id;
+    const title = 'AI receptionist pricing';
+    const run = await createRun({ projectId, layerId, runType: 'FOUNDATION', status: 'PLANNED', provider: 'WORKER', prompt: title });
+    const orchestration = await createOrchestration({
+      projectId, layerId, runId: run.id, title,
+      assignment: 'What does a human receptionist cost per hour in the US?',
+      provider: 'WORKER', autoApprove: false,
+    });
+    const [fragment] = await createFragments([
+      {
+        orchestrationId: orchestration.id, projectId, layerId, fragmentIndex: 0, fragmentKey: 'receptionist-wage',
+        question: 'What is the US median hourly wage of a receptionist?',
+        geography: 'United States', timeframe: '2024', population: 'Receptionists', definitions: 'Median hourly wage',
+        requiredEvidence: [{ id: 'wage', description: 'an official wage statistic', necessity: 'REQUIRED' }],
+        acceptableSourceTypes: ['official statistics'], excludedSourceTypes: [], completionCriteria: ['One official wage figure'],
+        dependsOn: [], minIndependentSources: 1, status: 'QUEUED',
+      },
+    ]);
+    const definition = workType('RESEARCH_FRAGMENT');
+    const item = await enqueueWork({
+      projectId, workType: 'RESEARCH_FRAGMENT', payload: definition.validate({}), requiredScopes: definition.requiredScopes,
+      orchestrationId: orchestration.id, fragmentId: fragment!.id, createdByType: 'SYSTEM',
+    });
+    expect(await getDb().get('SELECT id FROM bins WHERE orchestration_id = ?', [orchestration.id])).toBeUndefined();
+    // Another packet's live bin, as Cash Mode 1 always holds: the lane serves the project.
+    await createBin({
+      projectId, kind: 'RESEARCH_PACKET', title: 'another packet', objective: 'another packet',
+      manifest: {
+        objective: 'another packet', why: 'test', lineage: { projectId, layerId, goal: 'other', orchestrationId: null },
+        units: [], acceptableSources: [], excludedSources: [], evidence: [], outputs: [], authorizedActions: [], prohibitedActions: [],
+        budgetUnits: 1, retry: { maxAttempts: 3, backoffSeconds: 60 }, stoppingConditions: [],
+      },
+      completionContract: 'RESEARCH_PACKET_V1', createdByType: 'SYSTEM', createdById: 'test', ready: true,
+    } as Parameters<typeof createBin>[0]);
+    return item.id;
+  }
+
+  it('is the free lane’s in a commercial project, so it is claimed rather than left to nobody', async () => {
+    const itemId = await binlessFragment();
+    const tick = await freeLaneTick({ config: CONFIG, completer, fetchSource, search: async () => [] });
+    expect(tick.submitted).toBe(1);
+    const rows = await getDb().all<{ bin_id: string | null; outcome: string }>(
+      "SELECT bin_id, outcome FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND work_item_id = ?",
+      [itemId],
+    );
+    expect(rows).toEqual([{ bin_id: null, outcome: 'SUBMITTED' }]);
+  });
+
+  it('stays Claude’s in a Brain project, so the free lane does not take it', async () => {
+    await getDb().run(`UPDATE projects SET purpose = 'TECHNICAL' WHERE id = ?`, [play.project.id]);
+    const itemId = await binlessFragment();
+    const tick = await freeLaneTick({ config: CONFIG, completer, fetchSource, search: async () => [] });
+    expect(tick.submitted).toBe(0);
+    expect((await getDb().get<{ state: string }>('SELECT state FROM work_items WHERE id = ?', [itemId]))!.state).toBe('QUEUED');
+    const row = (await getDb().get<{ id: string; bin_id: string | null; orchestration_id: string | null; project_id: string }>(
+      'SELECT id, bin_id, orchestration_id, project_id FROM work_items WHERE id = ?',
+      [itemId],
+    ))!;
+    expect(await freeLaneAdmits(row)).toBe(false);
+  });
+
+  it('is still refused when a bin owns it with a purpose that is not the lane’s', async () => {
+    const itemId = await binlessFragment();
+    const row = (await getDb().get<{ id: string; bin_id: string | null; orchestration_id: string | null; project_id: string }>(
+      'SELECT id, bin_id, orchestration_id, project_id FROM work_items WHERE id = ?',
+      [itemId],
+    ))!;
+    expect(await freeLaneAdmits(row)).toBe(true);
+    await createBin({
+      projectId: play.project.id, kind: 'RESEARCH_PACKET', title: 'legal', objective: 'legal',
+      orchestrationId: row.orchestration_id,
+      manifest: {
+        objective: 'legal', why: 'test', lineage: { projectId: play.project.id, layerId, goal: 'g', orchestrationId: row.orchestration_id },
+        units: [], acceptableSources: [], excludedSources: [], evidence: [], outputs: [], authorizedActions: [], prohibitedActions: [],
+        budgetUnits: 1, retry: { maxAttempts: 3, backoffSeconds: 60 }, stoppingConditions: [],
+      },
+      completionContract: 'RESEARCH_PACKET_V1', createdByType: 'SYSTEM', createdById: 'test', ready: true,
+    } as Parameters<typeof createBin>[0]);
+    await getDb().run(`UPDATE bins SET purpose = 'BLOCKED_LEGAL' WHERE orchestration_id = ?`, [row.orchestration_id]);
+    resetPurposeCache();
+    expect(await freeLaneAdmits(row)).toBe(false);
   });
 });
