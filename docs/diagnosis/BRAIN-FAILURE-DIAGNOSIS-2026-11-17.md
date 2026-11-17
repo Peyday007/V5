@@ -231,3 +231,7 @@ See F1–F7 above. Each one gives the cause, file:line, run IDs, the smallest ch
 - **08:16Z, RC2 closed at 7ca851b6** (Deploy 44045317792). It adds #1034 (W9): RESEARCH_VERIFY now uses JSON mode and a targeted repair ask. A reply still in prose fails fast against that model instead of looping as a transient error. Release 3 holds W2b, W3b and W10b.
 - **08:21Z, RC2 is 00eb4962** (Deploy 44045962334). It adds #1036 (W10b): one automatic recovery per round, and a bounded +4 regrant per round for a bin exhausted by attempts. Release 3 is now W2b and W3b.
   - Coordination risk: RC2 has been re-cut four times (74b0a3c3 → b46b757e → 7cfcde99 → 7ca851b6 → 00eb4962). Each new push restarts the Postgres gate.
+- **08:27Z, RC LOCKED at bd5e0419** (Deploy 44046891820, live around 09:15Z). It carries #1028, #1029 and #1031–#1038, including W2b (#1038) and W3b (#1037).
+  - Verification against bd5e0419 starts once it is live.
+  - An independent review of #1037 and #1038 started at 08:28Z.
+- **08:28Z, recalculation:** critical path is bd5e0419 live (09:15Z) → Postgres gate green on bd5e0419 → V1–V8 readings plus the W6 GPU stages on bd5e0419 (09:15–12:30Z) → report (14:30Z). Slack is about 2 h.
