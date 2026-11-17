@@ -24,7 +24,12 @@
  * is returned, because each one may have filed claims the round asked for.
  *
  * - latest mission DONE → `HARVESTED`
- * - latest mission FAILED or CANCELLED → `ABANDONED`
+ * - latest mission FAILED on delivery (its lease or deadline ran out, so the
+ *   question was never answered) while the idea is still QUEUED and its one
+ *   redelivery is unspent → `null`: the launch pass relaunches the same
+ *   specification (`redeliveryDue`, read by `launch()` too), and the round
+ *   settles on that attempt instead of on a fault in the worker
+ * - latest mission FAILED otherwise, or CANCELLED → `ABANDONED`
  * - no mission, and the idea was REJECTED (the archive already answered it) →
  *   `ABANDONED`: a positive terminal row, not an absence, and nothing will
  *   ever launch for it
@@ -50,14 +55,60 @@ export interface RoundMissions {
   outcome: RoundOutcome | null;
 }
 
+/**
+ * A failure that is a fault in delivering the research, not a verdict on it.
+ *
+ * The same pattern `abandonedFailureClass` (cash/discovery.ts) files as
+ * `TRAIL_TIMEOUT`: a worker's lease or a deadline ran out before the packet
+ * reported. Nothing about the question was judged, so §15's "a retry is not a
+ * repair" does not reach it — there was no strategy that failed, only a run
+ * that never finished. Every other failure (a gate refusal, an unstated
+ * reason) is a verdict or an unknown, and an unknown is never read as the
+ * favourable case (invariant 39): those stay one mission per specification.
+ */
+const DELIVERY_FAULT = /lease expired|timed? ?out|timeout|deadline exceeded/i;
+
+/**
+ * How many times one specification may be relaunched after delivery faults.
+ * One: a second lease expiry on the same question is no longer bad luck, and
+ * the round settles ABANDONED with its class recorded as before.
+ */
+export const MAX_DELIVERY_REDOS = 1;
+
+export function failedOnDelivery(mission: Pick<RussellMission, 'state' | 'terminalReason'>): boolean {
+  return mission.state === 'FAILED' && !!mission.terminalReason && DELIVERY_FAULT.test(mission.terminalReason);
+}
+
+/**
+ * Whether the idea's latest mission failed on delivery and its specification
+ * still has its redelivery. `missions` is every mission of one idea, oldest
+ * attempt first (`missionsForCandidate`). Read by `launch()`, which performs
+ * the relaunch, and by `roundOutcome`, which keeps the round open for it — one
+ * rule, so the two cannot disagree about whether a relaunch is coming.
+ */
+export function redeliveryDue(
+  missions: readonly Pick<RussellMission, 'state' | 'terminalReason' | 'objective' | 'whyNow'>[],
+): boolean {
+  const latest = missions[missions.length - 1];
+  if (!latest || !failedOnDelivery(latest)) return false;
+  const faults = missions.filter(
+    (one) => one.objective === latest.objective && one.whyNow === latest.whyNow && failedOnDelivery(one),
+  ).length;
+  return faults <= MAX_DELIVERY_REDOS;
+}
+
 /** The pure half, so the rule can be read and tested without a database. */
 export function roundOutcome(input: {
   latest: RussellMission | null;
   candidateState: string | null;
+  /** `redeliveryDue` over the idea's missions; absent means none is due. */
+  redeliveryDue?: boolean;
 }): RoundOutcome | null {
   const { latest } = input;
   if (latest) {
     if (latest.state === 'DONE') return 'HARVESTED';
+    // The launch pass relaunches a QUEUED idea whose run failed on delivery; settle on that run.
+    if (latest.state === 'FAILED' && input.redeliveryDue === true && input.candidateState === 'QUEUED') return null;
     if (latest.state === 'FAILED' || latest.state === 'CANCELLED') return 'ABANDONED';
     return null;
   }
@@ -82,7 +133,7 @@ export async function missionsForRounds(
         .map((one) => one.orchestrationId)
         .filter((one): one is string => one !== null),
       latest,
-      outcome: roundOutcome({ latest, candidateState: states.get(candidateId) ?? null }),
+      outcome: roundOutcome({ latest, candidateState: states.get(candidateId) ?? null, redeliveryDue: redeliveryDue(list) }),
     });
   }
   return out;

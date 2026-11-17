@@ -83,7 +83,11 @@ import { createUser } from '../server/repos/identity.ts';
 import { getMission, launchMission, transitionMission } from '../server/repos/russellMissions.ts';
 import { activate } from '../server/services/cash/lifecycle.ts';
 import { openDiscovery } from '../server/services/cash/discovery.ts';
-import { missionsForRounds, roundOutcome } from '../server/services/russell/roundMissions.ts';
+import { MAX_DELIVERY_REDOS, missionsForRounds, redeliveryDue, roundOutcome } from '../server/services/russell/roundMissions.ts';
+import { launch } from '../server/services/russell/launch.ts';
+import { tick } from '../server/services/russell/loop.ts';
+import { getCandidate } from '../server/repos/russellCandidates.ts';
+import { listMissions, missionsForCandidate } from '../server/repos/russellMissions.ts';
 import {
   BARREN_ROUNDS_FOR_CAUSE,
   diagnoseGoalResearch,
@@ -574,5 +578,160 @@ describe(`${FAILURE_CLASS} — the next round is told why the rounds actually st
     expect(read).toHaveLength(3);
     expect(read.map((one) => one.failureClass).sort()).toEqual([null, 'ROUND_SETTLEMENT', 'TRAIL_TIMEOUT'].sort());
     expect(read.every((one) => one.state === 'ABANDONED' && one.found === 0)).toBe(true);
+  });
+});
+
+describe(`${FAILURE_CLASS} — a round whose run failed on delivery is relaunched, not abandoned (repair R2-F1)`, () => {
+  /*
+   * The cause the finding names. A goal round's mission that FAILED because its
+   * worker's lease ran out (TRAIL_TIMEOUT) answered nothing, yet `launch()`
+   * refused its specification as "already researched", the loop parked the
+   * idea, and the next settlement pass closed the round ABANDONED — no report,
+   * and a FAILED research job in RESEARCH_JOB_SUCCESS_RATE with no second one
+   * that could complete. Now the same specification gets one relaunch (a new
+   * mission, a new packet), and the round stays OPEN until that run settles,
+   * so it can end HARVESTED. Verdicts are untouched: a gate refusal or an
+   * unstated failure is still one mission per specification, and a second
+   * delivery fault ends the round ABANDONED exactly as before.
+   */
+  let projectId = '';
+
+  beforeEach(async () => {
+    forgetKnowledge();
+    forgetGoalReadings();
+    const fixture = await freshProject();
+    projectId = fixture.project.id;
+    const user = await createUser({
+      email: `redeliver-${Math.random().toString(36).slice(2, 10)}@example.test`,
+      displayName: 'Owner',
+      password: 'correct horse battery staple',
+    });
+    const outcome = await activate({
+      projectId,
+      ownerUserId: user.id,
+      actorUserId: user.id,
+      objective: 'Collect 10000 dollars of settled cash within 30 days using little up-front capital.',
+    });
+    expect(outcome.ok).toBe(true);
+  });
+
+  /**
+   * Production's own launch: the loop opens the discovery rounds and compiles
+   * their ideas, and each round's idea becomes a mission through `launch()`,
+   * the function the loop's launch pass calls. The grant's few slots are held
+   * by whatever the loop launched first, so they are freed for the rounds.
+   */
+  async function launchedRounds(): Promise<RussellMission[]> {
+    const launched: RussellMission[] = [];
+    for (let pass = 0; pass < 6 && launched.length < 2; pass += 1) {
+      await tick('autonomous');
+      for (const round of await listRounds(projectId)) {
+        if (launched.length >= 2 || launched.some((one) => one.candidateId === round.candidateId)) continue;
+        const candidate = await getCandidate(round.candidateId);
+        if (!candidate?.judgment['missionSpec']) continue;
+        const existing = await missionsForCandidate(round.candidateId);
+        const live = existing.find((one) => one.state === 'RUNNING');
+        if (live) {
+          launched.push(live);
+          continue;
+        }
+        await freeSlots(round.candidateId, launched.map((one) => one.candidateId!));
+        const outcome = await relaunch(round.candidateId);
+        if (outcome.ok && outcome.mission?.state === 'RUNNING') launched.push(outcome.mission);
+      }
+    }
+    expect(launched.length, 'two discovery rounds launched their research').toBe(2);
+    return launched;
+  }
+
+  /** Free the grant's slots the other rounds hold, so the relaunch is not refused for capacity. */
+  async function freeSlots(keep: string, alsoKeep: string[] = []): Promise<void> {
+    for (const other of await listMissions({ projectId, states: ['RUNNING'] })) {
+      if (other.candidateId === keep || (other.candidateId && alsoKeep.includes(other.candidateId))) continue;
+      await transitionMission({ missionId: other.id, from: 'RUNNING', to: 'CANCELLED', terminalReason: 'test: free a slot' });
+    }
+  }
+
+  async function relaunch(candidateId: string) {
+    const candidate = (await getCandidate(candidateId))!;
+    const spec = candidate.judgment['missionSpec'] as Record<string, unknown>;
+    expect(spec, 'the round idea carries its compiled specification').toBeTruthy();
+    return launch({ ...(spec as unknown as Omit<Parameters<typeof launch>[0], 'candidateId'>), candidateId });
+  }
+
+  const roundOf = async (candidateId: string) => (await listRounds(projectId)).find((one) => one.candidateId === candidateId)!;
+
+  it('the lease-expired round stays OPEN, its specification is relaunched as a new packet, and the round ends HARVESTED', async () => {
+    const [first] = await launchedRounds();
+    const candidateId = first!.candidateId!;
+    expect((await getCandidate(candidateId))!.state, 'a launched idea stays QUEUED, as launch() leaves it').toBe('QUEUED');
+
+    expect(await transitionMission({ missionId: first!.id, from: 'RUNNING', to: 'FAILED', terminalReason: 'worker lease expired' })).toBe(true);
+    expect(redeliveryDue(await missionsForCandidate(candidateId))).toBe(true);
+
+    // Before the repair this pass closed the round ABANDONED (TRAIL_TIMEOUT).
+    await harvest({ projectId, limit: 50 });
+    expect((await roundOf(candidateId)).state).toBe('OPEN');
+
+    await freeSlots(candidateId);
+    const redo = await relaunch(candidateId);
+    expect(redo.ok, redo.reason).toBe(true);
+    expect(redo.mission!.attempt).toBe(first!.attempt + 1);
+    expect(redo.mission!.supersedesMissionId).toBe(first!.id);
+    // A new research job, so its completion is counted beside the failed one.
+    expect(redo.mission!.orchestrationId).not.toBeNull();
+    expect(redo.mission!.orchestrationId).not.toBe(first!.orchestrationId);
+
+    // A repeated tick replays the relaunch rather than adding a third mission.
+    const again = await relaunch(candidateId);
+    expect(again.mission?.id).toBe(redo.mission!.id);
+    expect(await missionsForCandidate(candidateId)).toHaveLength(2);
+
+    expect(await transitionMission({ missionId: redo.mission!.id, from: 'RUNNING', to: 'DONE' })).toBe(true);
+    await harvest({ projectId, limit: 50 });
+    expect((await roundOf(candidateId)).state).toBe('HARVESTED');
+  });
+
+  it(`allows ${MAX_DELIVERY_REDOS} relaunch per specification: a second delivery fault settles the round ABANDONED and is refused`, async () => {
+    const [first] = await launchedRounds();
+    const candidateId = first!.candidateId!;
+    await transitionMission({ missionId: first!.id, from: 'RUNNING', to: 'FAILED', terminalReason: 'worker lease expired' });
+    await freeSlots(candidateId);
+    const redo = await relaunch(candidateId);
+    expect(redo.ok, redo.reason).toBe(true);
+    await transitionMission({ missionId: redo.mission!.id, from: 'RUNNING', to: 'FAILED', terminalReason: 'deadline exceeded' });
+
+    expect(redeliveryDue(await missionsForCandidate(candidateId))).toBe(false);
+    const third = await relaunch(candidateId);
+    expect(third.ok).toBe(false);
+    expect(third.kind).toBe('ALREADY_RESEARCHED');
+
+    await harvest({ projectId, limit: 50 });
+    expect((await roundOf(candidateId)).state).toBe('ABANDONED');
+  });
+
+  it('a verdict is not a delivery fault: a gate refusal or an unstated failure is still refused and the round ABANDONED', async () => {
+    const [gate, unstated] = await launchedRounds();
+    await transitionMission({ missionId: gate!.id, from: 'RUNNING', to: 'FAILED', terminalReason: 'No fragment cleared its evidence gate.' });
+    await transitionMission({ missionId: unstated!.id, from: 'RUNNING', to: 'FAILED', terminalReason: null });
+    for (const one of [gate!, unstated!]) {
+      expect(redeliveryDue(await missionsForCandidate(one.candidateId!)), one.id).toBe(false);
+    }
+    await freeSlots('', [gate!.candidateId!, unstated!.candidateId!]);
+    for (const one of [gate!, unstated!]) {
+      const refused = await relaunch(one.candidateId!);
+      expect(refused.ok).toBe(false);
+      expect(refused.kind).toBe('ALREADY_RESEARCHED');
+    }
+    await harvest({ projectId, limit: 50 });
+    for (const one of [gate!, unstated!]) expect((await roundOf(one.candidateId!)).state, one.id).toBe('ABANDONED');
+  });
+
+  it('roundOutcome keeps the round open only for a QUEUED idea with a redelivery due', () => {
+    const failed = { state: 'FAILED', terminalReason: 'worker lease expired' } as RussellMission;
+    expect(roundOutcome({ latest: failed, candidateState: 'QUEUED', redeliveryDue: true })).toBeNull();
+    expect(roundOutcome({ latest: failed, candidateState: 'PARKED', redeliveryDue: true })).toBe('ABANDONED');
+    expect(roundOutcome({ latest: failed, candidateState: 'QUEUED', redeliveryDue: false })).toBe('ABANDONED');
+    expect(roundOutcome({ latest: { state: 'CANCELLED' } as RussellMission, candidateState: 'QUEUED', redeliveryDue: true })).toBe('ABANDONED');
   });
 });

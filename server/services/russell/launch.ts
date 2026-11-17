@@ -40,12 +40,14 @@ import {
   countMissionsForCandidate,
   getMission,
   latestMissionForCandidate,
+  missionsForCandidate,
   specificationsTried,
   launchMission as insertMission,
   linkMission,
   transitionMission,
 } from '../../repos/russellMissions.ts';
 import { getCandidate, transitionCandidate } from '../../repos/russellCandidates.ts';
+import { redeliveryDue } from './roundMissions.ts';
 import {
   authorityNow,
   checkAuthority,
@@ -336,12 +338,31 @@ export async function launch(input: LaunchInput): Promise<LaunchOutcome> {
      * is a person's. `MAX_MISSION_ROWS` is underneath both as a runaway guard
      * and nothing else — it is not an evidence rule and it is not a budget.
      */
+    /*
+     * Unless the last run of it never finished. A mission that FAILED on
+     * delivery — its worker's lease or a deadline ran out before the packet
+     * reported — answered nothing, so relaunching its specification repeats no
+     * strategy (§15): there was no verdict to repeat. Production: goal rounds
+     * classed TRAIL_TIMEOUT were refused here as "already researched", parked,
+     * and their rounds settled ABANDONED with no report. `redeliveryDue` is the
+     * one rule, shared with `roundOutcome`, which keeps the round open for
+     * exactly this relaunch; it allows one per specification, and a gate
+     * refusal or an unstated failure is still refused as before.
+     */
+    let redelivery = false;
     if (tried.includes(spec)) {
-      return refuse(
-        'this specification has already been researched',
-        undefined,
-        'ALREADY_RESEARCHED',
-      );
+      const history = await missionsForCandidate(input.candidateId);
+      redelivery =
+        previous !== null &&
+        specificationKey(previous.objective, previous.whyNow) === spec &&
+        redeliveryDue(history);
+      if (!redelivery) {
+        return refuse(
+          'this specification has already been researched',
+          undefined,
+          'ALREADY_RESEARCHED',
+        );
+      }
     }
     const rows = await countMissionsForCandidate(input.candidateId);
     if (rows >= MAX_MISSION_ROWS) {
@@ -351,7 +372,7 @@ export async function launch(input: LaunchInput): Promise<LaunchOutcome> {
         'IN_TOTAL',
       );
     }
-    attempt = tried.length + 1;
+    attempt = redelivery && previous ? previous.attempt + 1 : tried.length + 1;
     /*
      * A new specification gets a key derived from it. The first one keeps the
      * plain key it has always had, so nothing already written is re-identified;
@@ -359,8 +380,10 @@ export async function launch(input: LaunchInput): Promise<LaunchOutcome> {
      * key is for — the same specification twice is the same mission, and a
      * different one is a different mission.
      */
-    key =
-      tried.length === 0
+    key = redelivery
+      ? // Keyed by the attempt it replaces, so a repeated tick replays this relaunch rather than adding one.
+        `russell:mission:${input.candidateId}:${authority.goal.id}:${specKey(spec)}:redelivery:${attempt}`
+      : tried.length === 0
         ? `russell:mission:${input.candidateId}:${authority.goal.id}`
         : `russell:mission:${input.candidateId}:${authority.goal.id}:${specKey(spec)}`;
     supersedes = previous?.id ?? null;
