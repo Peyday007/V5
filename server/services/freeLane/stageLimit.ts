@@ -36,6 +36,7 @@
 import { getDb } from '../../db/database.ts';
 import { recordBinEvent } from '../../repos/bins.ts';
 import { readSourceYields, type SourceYield } from '../feeds/run.ts';
+import { median, readRouteAttribution, type RouteAttribution } from '../feeds/acquisitionMeasures.ts';
 import { readStageCapacity, STAGES, type Measured, type RecordedStageCapacity, type StageCapacityReport } from './stageCapacity.ts';
 
 export const STAGE_LIMIT_EVENT = 'STAGE_LIMIT';
@@ -102,6 +103,19 @@ export interface AcquisitionRow {
  * time in the window is a newly discovered source; a figure the rows do not
  * carry says which row would have to carry it. Pure.
  */
+const EMPTY_ATTRIBUTION: RouteAttribution = {
+  source: '', bytes: 0, acceptedEvidence: 0, verifiedLinks: 0, economicRelationships: 0, correctedContradictions: 0,
+  variablesResolved: 0, minutesToGoalImpact: [], minutesToPlan: [], revenueCents: 0, computeDollars: 0,
+};
+
+/** The operator's storage unit price, in whole currency units per GB-month; null when unset or unreadable. */
+export function storageUnitPrice(env: NodeJS.ProcessEnv = process.env): number | null {
+  const raw = env['BRAIN_STORAGE_COST_PER_GB_MONTH'];
+  if (!raw) return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
 export function routeWindowReadings(input: {
   since: string;
   until: string;
@@ -109,7 +123,15 @@ export function routeWindowReadings(input: {
   /** Routes that had any acquisition row before `since`. */
   seenBefore: ReadonlySet<string>;
   yields: readonly SourceYield[];
+  /**
+   * What each route's records led to downstream (`readRouteAttribution`).
+   * Absent when it could not be read, and then each attributed measure says so.
+   */
+  attribution?: ReadonlyMap<string, RouteAttribution> | null;
+  /** The operator's storage unit price (`BRAIN_STORAGE_COST_PER_GB_MONTH`); null when none is configured. */
+  storagePerGbMonth?: number | null;
 }): RouteWindowReading[] {
+  const windowMonths = Math.max(0, Date.parse(input.until) - Date.parse(input.since)) / (30 * 86_400_000);
   const groups = new Map<string, { domain: string; route: string; pulls: number; failed: number; fetched: number; inserted: number; bytes: number; bytesSeen: number; ms: number; msSeen: number }>();
   for (const row of input.rows) {
     const domain = row.corpus ?? 'unclassified';
@@ -127,24 +149,32 @@ export function routeWindowReadings(input: {
   return [...groups.values()].map((g): RouteWindowReading => {
     const y = yieldOf.get(g.route);
     const notOnRow = (what: string) => NOT(`${what} is not on the route's FEED_ACQUISITION rows`);
+    const a = input.attribution === undefined || input.attribution === null ? null : (input.attribution.get(g.route) ?? EMPTY_ATTRIBUTION);
+    const unread = NOT('the route\'s downstream attribution (claims, path facts, openings, blueprint facts) could not be read');
+    const attributed = (read: (x: RouteAttribution) => number): Measured<number> => (a ? ok(read(a)) : unread);
+    const toPlan = a ? median(a.minutesToPlan) : null;
     const measures: RouteWindowMeasures = {
       newRelevantSources: ok(input.seenBefore.has(g.route) ? 0 : 1),
       recordsConsidered: ok(g.fetched),
       recordsNewlyFetched: ok(g.inserted),
-      bytes: g.bytesSeen > 0 ? ok(g.bytes) : notOnRow('raw bytes'),
+      // Bytes the pull rows carry when they carry them; otherwise the bytes of the records the route stored.
+      bytes: g.bytesSeen > 0 ? ok(g.bytes) : a ? ok(a.bytes) : notOnRow('raw bytes'),
       transferMs: g.msSeen > 0 ? ok(g.ms) : notOnRow('transfer time'),
       processedRecords: y ? ok(y.acquired) : NOT('no source-yield reading for the route in the window'),
       deduplicatedRecords: ok(Math.max(0, g.fetched - g.inserted)),
       acceptedFacts: y ? ok(y.accepted) : NOT('no source-yield reading for the route in the window'),
       evidenceQuality: y && y.acquired > 0 ? ok(round(y.accepted / y.acquired)) : NOT('nothing acquired to judge'),
-      economicRelationships: NOT('event-graph relationships are not attributed to the route that supplied them'),
-      correctedContradictions: NOT('contradiction corrections are not attributed to a route'),
-      variablesResolved: NOT('plan variables resolved are not attributed to a route'),
+      economicRelationships: attributed((x) => x.economicRelationships),
+      correctedContradictions: attributed((x) => x.correctedContradictions),
+      variablesResolved: attributed((x) => x.variablesResolved),
       candidatesImproved: y ? ok(y.usable) : NOT('no source-yield reading for the route in the window'),
-      minutesSourceChangeToPlan: NOT('no row stamps when a source change reached the blueprint and goal plan'),
-      computeCost: NOT('feed pulls record no CPU time'),
+      minutesSourceChangeToPlan: !a ? unread : toPlan === null ? NOT('no blueprint fact cites a record the route stored in the window yet') : ok(toPlan),
+      // The application server is a fixed cost no route changes; what a route is billed for is its screens' share of GPU pod time.
+      computeCost: !a ? unread : a.computeDollars === null ? NOT('the GPU pod ran while RunPod returned no price for part of it, so the route\'s compute dollars are not known') : ok(a.computeDollars),
       apiCost: ok(0),
-      storageCost: NOT('stored bytes per route are not recorded'),
+      storageCost: !a ? unread
+        : input.storagePerGbMonth === null || input.storagePerGbMonth === undefined ? NOT('no storage unit price is configured (BRAIN_STORAGE_COST_PER_GB_MONTH), so stored bytes cannot be priced')
+        : ok(round((a.bytes / 1024 ** 3) * input.storagePerGbMonth * windowMonths)),
     };
     return { domain: g.domain, route: g.route, since: input.since, until: input.until, pulls: g.pulls, failedPulls: g.failed, measures };
   });
@@ -699,6 +729,7 @@ export async function readStageLimit(options: { hours?: number; now?: number } =
     `SELECT DISTINCT provider FROM bin_events WHERE event_type = 'FEED_ACQUISITION' AND at < ?`, [since],
   )).map((r) => r.provider ?? ''), [] as string[]));
   const yields = await safely(() => readSourceYields(since, until), [] as SourceYield[]);
+  const attribution = await safely(() => readRouteAttribution(since, until), null as Map<string, RouteAttribution> | null);
 
   const attemptRows = await safely(() => db.all<{ work_item_id: string | null; workload_class: string | null; at: string }>(
     `SELECT work_item_id, workload_class, at FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND at <= ? AND work_item_id IS NOT NULL`,
@@ -737,7 +768,7 @@ export async function readStageLimit(options: { hours?: number; now?: number } =
 
   return buildStageLimitReport({
     since, until, hours,
-    routes: routeWindowReadings({ since, until, rows: acqRows, seenBefore, yields }),
+    routes: routeWindowReadings({ since, until, rows: acqRows, seenBefore, yields, attribution, storagePerGbMonth: storageUnitPrice() }),
     recorded, retriesByStage, utilization, cpu, change,
   });
 }

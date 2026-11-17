@@ -30,6 +30,7 @@ import {
   retriesByStageOf,
   routeWindowReadings,
   stagePressures,
+  storageUnitPrice,
   type LimitSignals,
   type RouteWindowReading,
   type StageLimitReport,
@@ -67,6 +68,58 @@ describe('routeWindowReadings', () => {
     expect(a.measures.acceptedFacts).toEqual(ok(2));
     expect(a.failedPulls).toBe(1);
     for (const r of readings) for (const k of ROUTE_MEASURE_KEYS) expect(r.measures[k]).toHaveProperty('measured');
+  });
+});
+
+describe('routeWindowReadings attributes the downstream measures to the route (review F6)', () => {
+  const window = { since: '2026-11-16T00:00:00.000Z', until: '2026-11-17T00:00:00.000Z' };
+  const rows = [
+    { source: 'src-a', outcome: 'OK', at: 'x', corpus: 'domain:any', fetched: 10, inserted: 4 },
+    { source: 'src-c', outcome: 'OK', at: 'y', corpus: 'domain:any', fetched: 2, inserted: 2 },
+  ];
+  const attribution = new Map([
+    ['src-a', {
+      source: 'src-a', bytes: 3 * 1024 ** 3, acceptedEvidence: 5, verifiedLinks: 2, economicRelationships: 3, correctedContradictions: 1,
+      variablesResolved: 4, minutesToGoalImpact: [10], minutesToPlan: [30, 90, 60], revenueCents: 0, computeDollars: 1.25,
+    }],
+  ]);
+  const ATTRIBUTED = ['economicRelationships', 'correctedContradictions', 'variablesResolved', 'minutesSourceChangeToPlan', 'computeCost', 'storageCost', 'bytes'] as const;
+
+  it('measures every quantity review F6 named from the attribution rows', () => {
+    const [a] = routeWindowReadings({ ...window, rows: rows.slice(0, 1), seenBefore: new Set(), yields: [], attribution, storagePerGbMonth: 0.02 });
+    expect(a!.measures.bytes).toEqual(ok(3 * 1024 ** 3));
+    expect(a!.measures.economicRelationships).toEqual(ok(3));
+    expect(a!.measures.correctedContradictions).toEqual(ok(1));
+    expect(a!.measures.variablesResolved).toEqual(ok(4));
+    expect(a!.measures.minutesSourceChangeToPlan).toEqual(ok(60));
+    expect(a!.measures.computeCost).toEqual(ok(1.25));
+    // 3 GB for one day at $0.02 per GB-month.
+    expect(a!.measures.storageCost).toEqual(ok(0.002));
+  });
+
+  it('reads a route nothing downstream has cited as measured zeros, not unknowns', () => {
+    const c = routeWindowReadings({ ...window, rows: rows.slice(1), seenBefore: new Set(), yields: [], attribution, storagePerGbMonth: 0.02 })[0]!;
+    expect(c.measures.economicRelationships).toEqual(ok(0));
+    expect(c.measures.correctedContradictions).toEqual(ok(0));
+    expect(c.measures.variablesResolved).toEqual(ok(0));
+    expect(c.measures.computeCost).toEqual(ok(0));
+    expect(c.measures.storageCost).toEqual(ok(0));
+    expect(c.measures.minutesSourceChangeToPlan.measured).toBe(false);
+  });
+
+  it('says which input is missing when attribution or a price is absent, never a guess', () => {
+    const none = routeWindowReadings({ ...window, rows: rows.slice(0, 1), seenBefore: new Set(), yields: [], attribution: null })[0]!;
+    for (const k of ATTRIBUTED) expect(none.measures[k].measured, k).toBe(false);
+    const unpriced = routeWindowReadings({ ...window, rows: rows.slice(0, 1), seenBefore: new Set(), yields: [], attribution, storagePerGbMonth: null })[0]!;
+    expect(unpriced.measures.storageCost).toEqual(NOT('no storage unit price is configured (BRAIN_STORAGE_COST_PER_GB_MONTH), so stored bytes cannot be priced'));
+    const podUnpriced = routeWindowReadings({ ...window, rows: rows.slice(0, 1), seenBefore: new Set(), yields: [], attribution: new Map([['src-a', { ...attribution.get('src-a')!, computeDollars: null }]]) })[0]!;
+    expect(podUnpriced.measures.computeCost.measured).toBe(false);
+  });
+
+  it('reads the storage unit price the operator configured, and nothing else', () => {
+    expect(storageUnitPrice({ BRAIN_STORAGE_COST_PER_GB_MONTH: '0.023' })).toBe(0.023);
+    expect(storageUnitPrice({})).toBeNull();
+    expect(storageUnitPrice({ BRAIN_STORAGE_COST_PER_GB_MONTH: 'abc' })).toBeNull();
   });
 });
 

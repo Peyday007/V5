@@ -643,8 +643,10 @@ export function parserReadings(
 
 /** System-wide commercial outcomes: not attributable per component, so reported once, measured or not. */
 export interface SystemOutcomes {
+  /** Median minutes from an opening's observed signal to its deep dive settling COMPLETE, in the window. */
   minutesToVerifiedCandidate: Measured<number>;
   offerReadyPathways: Measured<number>;
+  /** Verified customer payments net of refunds that occurred in the window, in cents (`cash_money_entries`). */
   cashOutcomes: Measured<number>;
 }
 
@@ -689,16 +691,65 @@ async function safely<T>(read: () => Promise<T>, fallback: T): Promise<T> {
   }
 }
 
-async function readSystemOutcomes(since: string): Promise<SystemOutcomes> {
+/** Minutes from when an opening's buying signal was observed (or it was opened) to when its deep dive settled COMPLETE. Pure. */
+export function minutesToVerified(rows: readonly { signal_observed_at: string | null; created_at: string; validation_settled_at: string }[]): number[] {
+  const out: number[] = [];
+  for (const row of rows) {
+    const from = Date.parse(row.signal_observed_at ?? row.created_at);
+    const to = Date.parse(row.validation_settled_at);
+    if (Number.isFinite(from) && Number.isFinite(to) && to >= from) out.push(Math.round((to - from) / 60_000));
+  }
+  return out;
+}
+
+/** Verified customer payments net of refunds, in cents. A payment without a provider reference is pipeline, not cash. Pure. */
+export function netCashCents(rows: readonly { kind: string; amount_cents: number | string; verified_reference: string | null }[]): number {
+  let cents = 0;
+  for (const row of rows) {
+    if (row.kind === 'CUSTOMER_PAYMENT' && row.verified_reference) cents += n(row.amount_cents);
+    else if (row.kind === 'REFUND') cents -= n(row.amount_cents);
+  }
+  return cents;
+}
+
+const medianOf = (values: readonly number[]): number | null => {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 1 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
+};
+
+async function readSystemOutcomes(since: string, until: string): Promise<SystemOutcomes> {
   const db = getDb();
   const opened = await safely(
     async () => ok(n((await db.get<{ k: number | string }>(`SELECT COUNT(*) AS k FROM cash_opportunities WHERE created_at >= ?`, [since]))?.k)),
     NOT('cash_opportunities could not be read') as Measured<number>,
   );
+  // A candidate is verified when its deep dive settles COMPLETE; the clock starts at the signal that found it.
+  const verified = await safely(
+    async (): Promise<Measured<number>> => {
+      const rows = await db.all<{ signal_observed_at: string | null; created_at: string; validation_settled_at: string }>(
+        `SELECT signal_observed_at, created_at, validation_settled_at FROM cash_opportunities
+          WHERE validation_state = 'COMPLETE' AND validation_settled_at >= ? AND validation_settled_at < ?`,
+        [since, until],
+      );
+      const median = medianOf(minutesToVerified(rows));
+      return median === null ? NOT('no candidate\'s deep dive settled COMPLETE in the window') : ok(median);
+    },
+    NOT('cash_opportunities could not be read') as Measured<number>,
+  );
+  const cash = await safely(
+    async (): Promise<Measured<number>> => ok(netCashCents(await db.all<{ kind: string; amount_cents: number | string; verified_reference: string | null }>(
+      `SELECT kind, amount_cents, verified_reference FROM cash_money_entries
+        WHERE occurred_at >= ? AND occurred_at < ? AND kind IN ('CUSTOMER_PAYMENT', 'REFUND')`,
+      [since, until],
+    ))),
+    NOT('cash_money_entries could not be read') as Measured<number>,
+  );
   return {
-    minutesToVerifiedCandidate: NOT('no row stamps when a candidate was verified against when its first source arrived'),
+    minutesToVerifiedCandidate: verified,
     offerReadyPathways: opened,
-    cashOutcomes: NOT('cash outcomes are read only where the owner authorized the deal; no per-window outcome row is attributed here'),
+    cashOutcomes: cash,
   };
 }
 
@@ -821,7 +872,7 @@ export async function readContribution(options: { hours?: number; now?: number }
       ...routeReadings(laneRows, podSpend, waitingByPool(pools)),
     ],
     gaps: (components) => gapsFromRows(components, { extraction, openings, permitted, permissionNeeds, providerContactPermitted }),
-    system: await readSystemOutcomes(since),
+    system: await readSystemOutcomes(since, until),
   });
 }
 
