@@ -50,7 +50,12 @@ import { FEED_SOURCES, pullUrl, type FeedSource } from './sources.ts';
 import { FEED_SHORTLIST_BUCKET } from './bucket.ts';
 import { SITE_SOURCE } from './sites.ts';
 import { CODE_SIGNAL_SOURCE, coveredItems, detectionsForLeads } from './detectors.ts';
-import { extractItem, extractItems, MODEL_BATCH_SIZE, type ExtractableItem, type ExtractedFact } from './extract.ts';
+import { EXTRACTOR_VERSION, extractItem, extractItems, MODEL_BATCH_SIZE, type ExtractableItem, type ExtractedFact } from './extract.ts';
+import { commitReadings, planDelta, readDeltaIndex, recordIdentity, type DeltaIndex, type DeltaPlan, type DeltaStatus, type RecordReading } from '../knowledge/delta.ts';
+import { resolveIdentities, type IdentityCollision, type IdentityLink, type IdentityRecord } from '../knowledge/identity.ts';
+import { selectForDeepening, type DeepeningCandidate, type DeepeningDecision } from '../knowledge/deepening.ts';
+import { planProcessing, type ProcessingPlan, type RouteEvidence } from '../knowledge/processingGraph.ts';
+import { funnelGain, readFunnel, type FunnelReading, type FunnelRecord } from '../knowledge/funnel.ts';
 import { addExtractedItems, currentEventGraph, syncEventGraph, type ExtractedItemsUpdate, type GraphHypothesis } from '../industry/eventGraph.ts';
 import { constructFromGraph, type MissingLinkQuestion } from '../cash/construct.ts';
 import type { Weakness } from '../../domain/improvement.ts';
@@ -932,6 +937,85 @@ export interface ExtractionPass {
    * the same tick. Null when the graph could not take them; the pass is still recorded.
    */
   graph: ExtractedItemsUpdate | null;
+  /** The processing graph Brain judged for each source in the pass (KNOW-25-1): which stages, CODE or LLM, and why. */
+  processingGraph?: ProcessingPlan[];
+  /** Delta classification against the fingerprint index the previous pass carried: only NEW, CHANGED and REPARSE records are read. */
+  delta?: ExtractionDelta;
+  /** Identity resolution of the pass's entities: corroborated links, and collisions kept apart. */
+  identity?: { links: IdentityLink[]; collisions: IdentityCollision[]; uncorroborated: number };
+  /** Selective deepening of the unreadable and contested candidates, against measured capacity. */
+  deepening?: { capacity: number; threshold: number | null; promoted: DeepeningDecision[]; held: DeepeningDecision[] };
+  /** The intelligence funnel for this pass, and what it gained: raw intake beside usable intelligence. */
+  funnel?: { reading: FunnelReading; gain: { raw: number; usableIntelligence: number; falseSpeed: boolean } };
+  /** A stage that failed this pass; the pass is still recorded and the stage is named. */
+  stageFailures?: { stage: string; error: string }[];
+  /** The fingerprint index the next pass classifies against (bounded to the most recently seen records). */
+  deltaIndex?: DeltaIndex;
+}
+
+export interface ExtractionDelta {
+  parserVersion: string;
+  counts: Record<DeltaStatus, number>;
+  /** Item ids per status. */
+  newItems: string[];
+  changedItems: string[];
+  unchangedItems: string[];
+  reparsedItems: string[];
+  /** Fact keys recomputed this pass: what the previous versions of changed records produced, plus what was read now. */
+  recomputedKeys: string[];
+  affectedEntities: string[];
+}
+
+/** Records the carried fingerprint index keeps, most recently seen first, so one row stays a readable size. */
+export const DELTA_INDEX_MAX_RECORDS = 5000;
+
+function boundDeltaIndex(index: DeltaIndex): DeltaIndex {
+  const histories = Object.values(index.records);
+  if (histories.length <= DELTA_INDEX_MAX_RECORDS) return index;
+  const lastSeen = (h: (typeof histories)[number]) => h.versions[h.versions.length - 1]?.seenAt ?? '';
+  const kept = histories.sort((a, b) => lastSeen(b).localeCompare(lastSeen(a)) || a.identity.localeCompare(b.identity)).slice(0, DELTA_INDEX_MAX_RECORDS);
+  const keep = new Set(kept.map((h) => h.identity));
+  return {
+    schema: index.schema,
+    records: Object.fromEntries(kept.map((h) => [h.identity, h])),
+    entityMappings: Object.fromEntries(Object.entries(index.entityMappings).filter(([, m]) => keep.has(m.setBy))),
+  };
+}
+
+const errorText = (error: unknown) => String((error as Error)?.message ?? error);
+
+/** What a record says, for its fingerprint: never when or where it was fetched. */
+function deltaRecordOf(item: ExtractableItem) {
+  return {
+    source: item.source,
+    recordId: item.url || item.id,
+    content: { title: item.title, body: item.body, organization: item.organization, publishedAt: item.publishedAt },
+  };
+}
+
+/** The route a stored source is pulled through, as the processing graph reads it. */
+function routeOf(sourceId: string, items: readonly ExtractableItem[]): RouteEvidence {
+  const source = FEED_SOURCES.find((s) => s.id === sourceId);
+  if (!source) return { url: items[0]?.url ?? sourceId, kind: 'DOCUMENT', updateMechanism: 'UNKNOWN', automatable: true };
+  if (source.shards) return { url: source.url, kind: 'BULK', updateMechanism: 'BULK_SNAPSHOT', automatable: true };
+  return { url: source.url, kind: source.cursorUrl ? 'API' : 'FEED', updateMechanism: 'CONDITIONAL_FETCH', automatable: true };
+}
+
+/** The largest money figure an item's facts state, in major units: the decision value at stake, or 1 when none is stated. */
+function statedValue(facts: readonly ExtractedFact[]): number {
+  let best = 0;
+  for (const f of facts) if (f.currency && typeof f.value === 'number' && f.value > best) best = f.value;
+  return best > 0 ? best / 100 : 1;
+}
+
+/** Measured idle research capacity for the project; unknown is zero, never a favourable assumption. */
+async function measuredDeepeningCapacity(projectId: string): Promise<number> {
+  try {
+    const { spareResearchSurfaces } = await import('../cash/researchRoom.ts');
+    return (await spareResearchSurfaces(projectId)) ?? 0;
+  } catch {
+    return 0;
+  }
 }
 
 /**
@@ -944,7 +1028,15 @@ export interface ExtractionPass {
  * code: it runs when every model provider is down. Returns the pass written, or
  * null when nothing new arrived.
  */
-export async function recordFeedExtraction(input: { projectId: string; now?: Date; limit?: number }): Promise<ExtractionPass | null> {
+export async function recordFeedExtraction(input: {
+  projectId: string;
+  now?: Date;
+  limit?: number;
+  /** Deepening capacity to use instead of measuring it (tests). */
+  capacity?: number;
+  /** Stages to fail on purpose (tests of the stage-failure record). */
+  failStages?: readonly string[];
+}): Promise<ExtractionPass | null> {
   const now = input.now ?? new Date();
   const db = getDb();
   const last = await db.get<{ detail: string | null }>(
@@ -952,9 +1044,12 @@ export async function recordFeedExtraction(input: { projectId: string; now?: Dat
     [input.projectId, EXTRACTION_EVENT],
   );
   let from: { fetchedAt: string; id: string } | null = null;
+  let priorIndex: DeltaIndex = readDeltaIndex(null);
   try {
-    const to = (JSON.parse(last?.detail ?? '{}') as { cursor?: { to?: { fetchedAt?: unknown; id?: unknown } } }).cursor?.to;
+    const parsed = JSON.parse(last?.detail ?? '{}') as { cursor?: { to?: { fetchedAt?: unknown; id?: unknown } }; deltaIndex?: unknown };
+    const to = parsed.cursor?.to;
     if (to && typeof to.fetchedAt === 'string' && typeof to.id === 'string') from = { fetchedAt: to.fetchedAt, id: to.id };
+    priorIndex = readDeltaIndex(parsed.deltaIndex);
   } catch {
     from = null;
   }
@@ -991,21 +1086,185 @@ export async function recordFeedExtraction(input: { projectId: string; now?: Dat
     publishedAt: row.published_at,
     fetchedAt: row.fetched_at,
   }));
-  const run = extractItems(items, now);
+  const nowIsoText = now.toISOString();
+  const stageFailures: { stage: string; error: string }[] = [];
+  const stage = <T,>(name: string, fallback: T, fn: () => T): T => {
+    try {
+      if (input.failStages?.includes(name)) throw new Error(`stage ${name} failed on request`);
+      return fn();
+    } catch (error) {
+      stageFailures.push({ stage: name, error: errorText(error) });
+      return fallback;
+    }
+  };
+
+  // Delta: classify the batch against the index the previous pass carried; only what is new,
+  // changed or read by an older parser is read again, and only its facts are recomputed.
+  const identityOfItem = new Map(items.map((item) => [item.id, recordIdentity(item.source, deltaRecordOf(item).recordId)]));
+  const deltaPlan = stage<DeltaPlan | null>('delta', null, () =>
+    planDelta({ index: priorIndex, batch: items.map(deltaRecordOf), parserVersion: EXTRACTOR_VERSION, now: nowIsoText }),
+  );
+  const statusOfIdentity = new Map((deltaPlan?.changes ?? []).map((c) => [c.identity, c.status]));
+  const toRead = deltaPlan ? new Set(deltaPlan.toRead) : null;
+  const claimed = new Set<string>();
+  const readItems = toRead
+    ? items.filter((item) => {
+        const identity = identityOfItem.get(item.id)!;
+        if (!toRead.has(identity) || claimed.has(identity)) return false;
+        claimed.add(identity);
+        return true;
+      })
+    : items;
+
+  const run = extractItems(readItems, now);
   // Structure feeds Connect: what was just read goes into the event graph that construction reads,
   // under the ids the graph's own sync gives these rows, so neither path makes a second fact.
   let graph: ExtractedItemsUpdate | null = null;
   try {
-    graph = addExtractedItems(items);
+    graph = readItems.length > 0 ? addExtractedItems(readItems) : null;
   } catch (error) {
     console.warn(`[feeds] extraction pass could not reach the event graph: ${String((error as Error)?.message ?? error)}`);
   }
   const lastRow = rows[rows.length - 1]!;
   const needsModel = run.needsModel.map((batch) => batch.map((one) => one.id));
+  const unreadable = new Set(needsModel.flat());
+  const factsByItem = new Map<string, ExtractedFact[]>();
+  for (const f of run.facts) factsByItem.set(f.evidence.itemId, [...(factsByItem.get(f.evidence.itemId) ?? []), f]);
+
+  // Identity: the pass's named entities, linked only when an attribute corroborates it; collisions are kept apart.
+  const identityRecords: IdentityRecord[] = readItems
+    .filter((item) => (item.organization ?? '').trim() !== '')
+    .map((item) => {
+      const place = (factsByItem.get(item.id) ?? []).map((f) => f.scope.jurisdiction).find((j): j is string => !!j) ?? null;
+      return { ref: item.id, source: item.source, kind: 'ENTITY' as const, name: item.organization!, location: place };
+    });
+  const established: Record<string, string> = {};
+  for (const r of identityRecords) {
+    const held = priorIndex.entityMappings[identityOfItem.get(r.ref)!];
+    if (held) established[r.ref] = held.entityId;
+  }
+  const resolution = stage('identity', null as ReturnType<typeof resolveIdentities> | null, () => resolveIdentities({ records: identityRecords, established }));
+
+  // Selective deepening: unreadable items and contested keys, promoted by value of information within measured capacity.
+  const capacity = input.capacity ?? (await measuredDeepeningCapacity(input.projectId));
+  const noveltyOf = (itemId: string) => {
+    const status = statusOfIdentity.get(identityOfItem.get(itemId) ?? '');
+    return status === 'NEW' ? 1 : status === 'CHANGED' ? 0.5 : status === 'REPARSE' ? 0.25 : 0;
+  };
+  const candidates: DeepeningCandidate[] = [
+    ...readItems.filter((item) => unreadable.has(item.id)).map((item) => ({ id: `item:${item.id}`, decisionValue: 1, uncertainty: 1, novelty: noveltyOf(item.id) })),
+    ...run.reconciled
+      .filter((r) => r.status === 'CONTESTED')
+      .map((r) => {
+        const ids = [...new Set(r.observations.map((o) => o.evidence.itemId))];
+        return {
+          id: `key:${r.key}`,
+          decisionValue: statedValue(ids.flatMap((id) => factsByItem.get(id) ?? [])),
+          uncertainty: 0.5,
+          novelty: Math.max(0, ...ids.map(noveltyOf)),
+          contradicted: true,
+        };
+      }),
+  ];
+  const deepened = stage('deepening', null as ReturnType<typeof selectForDeepening> | null, () => selectForDeepening(candidates, { capacity }));
+
+  // Processing graph: one judgment per source in the pass, from that source's own evidence.
+  const bySource = new Map<string, ExtractableItem[]>();
+  for (const item of items) bySource.set(item.source, [...(bySource.get(item.source) ?? []), item]);
+  const collidingRefs = new Set([...(resolution?.collisions ?? []).flatMap((c) => c.refs), ...(resolution?.uncorroborated ?? []).flatMap((u) => u.refs)]);
+  const crossSourceRefs = new Set((resolution?.links ?? []).filter((l) => l.sources.length > 1).flatMap((l) => l.refs));
+  const plans = stage<ProcessingPlan[] | null>('processingGraph', null, () =>
+    [...bySource.entries()].map(([sourceId, sourceItems]) => {
+      const read = sourceItems.filter((item) => readItems.includes(item));
+      const readable = read.filter((item) => !unreadable.has(item.id)).length;
+      const facts = read.flatMap((item) => factsByItem.get(item.id) ?? []);
+      const hasCheckpoint = Object.values(priorIndex.records).some((h) => h.identity.startsWith(`${sourceId}\u0000`));
+      const statuses = sourceItems.map((item) => statusOfIdentity.get(identityOfItem.get(item.id) ?? ''));
+      return planProcessing(
+        {
+          sourceId,
+          structure: 'SEMI_STRUCTURED',
+          authoritative: false,
+          routes: [routeOf(sourceId, sourceItems)],
+          hasCheckpoint,
+          contentChanged: deltaPlan ? statuses.some((st) => st !== 'UNCHANGED') : null,
+          priorParserRuns: read.length,
+          priorParserSuccesses: readable,
+          establishedEntityMappings: Object.values(priorIndex.entityMappings).some((m) => m.setBy.startsWith(`${sourceId}\u0000`)),
+          identityCollisionsSuspected: sourceItems.some((item) => collidingRefs.has(item.id)),
+          timeSeries: sourceItems.some((item) => !!item.publishedAt),
+        },
+        {
+          questionId: `feed-extraction:${sourceId}`,
+          decision: 'which stored records reach research through the shortlist',
+          decisionValue: statedValue(facts),
+          uncertainty: read.length === 0 ? 0 : (read.length - readable) / read.length,
+          needsReconstruction: facts.some((f) => f.measureKind !== null),
+          needsRelationships: sourceItems.some((item) => crossSourceRefs.has(item.id)),
+          novel: !hasCheckpoint,
+        },
+        { llmIdleShare: capacity > 0 ? 1 : 0 },
+      );
+    }),
+  );
+
+  // Commit what was read to the index the next pass classifies against.
+  const readings: RecordReading[] = readItems.map((item) => {
+    const facts = factsByItem.get(item.id) ?? [];
+    const entityId = resolution?.mappings[item.id];
+    const identity = identityOfItem.get(item.id)!;
+    return {
+      identity,
+      parserVersion: EXTRACTOR_VERSION,
+      factKeys: facts.map((f) => f.key),
+      entities: entityId ? [entityId] : [],
+      dependents: graph?.affected ?? [],
+      entityMappings: entityId ? { [identity]: entityId } : {},
+    };
+  });
+  const nextIndex = deltaPlan ? stage<DeltaIndex | null>('deltaCommit', null, () => boundDeltaIndex(commitReadings(deltaPlan.index, readings, nowIsoText))) : null;
+  const readWith = (status: DeltaStatus) => readItems.filter((item) => statusOfIdentity.get(identityOfItem.get(item.id)!) === status).map((item) => item.id);
+  const delta: ExtractionDelta | undefined = deltaPlan
+    ? {
+        parserVersion: EXTRACTOR_VERSION,
+        counts: deltaPlan.counts,
+        newItems: readWith('NEW'),
+        changedItems: readWith('CHANGED'),
+        unchangedItems: items.filter((item) => !readItems.includes(item)).map((item) => item.id),
+        reparsedItems: readWith('REPARSE'),
+        recomputedKeys: [...new Set([...deltaPlan.affectedFactKeys, ...run.facts.map((f) => f.key)])].sort(),
+        affectedEntities: deltaPlan.affectedEntities,
+      }
+    : undefined;
+
+  // The funnel: raw intake beside what this pass actually understood.
+  const funnel = stage('funnel', undefined as ExtractionPass['funnel'], () => {
+    const fingerprintOfItem = new Map((deltaPlan?.changes ?? []).map((c) => [c.identity, c.fingerprint]));
+    const itemRecord = (item: ExtractableItem): FunnelRecord => ({ id: item.id, fingerprint: fingerprintOfItem.get(identityOfItem.get(item.id)!) ?? item.id, observedAt: item.publishedAt });
+    const reconciledStatus = new Map(run.reconciled.map((r) => [r.key, r.status]));
+    const reading = readFunnel(
+      {
+        RAW_INTAKE: items.map(itemRecord),
+        PARSED: readItems.filter((item) => !unreadable.has(item.id)).map(itemRecord),
+        NORMALIZED_FACTS: run.facts.map((f) => ({
+          id: `${f.evidence.itemId}:${f.key}`,
+          fingerprint: `${f.key}=${String(f.value)}@${f.evidence.itemId}`,
+          observedAt: f.observedAt,
+          status: (reconciledStatus.get(f.key) ?? null) as FunnelRecord['status'],
+        })),
+        EVIDENCE_ACCEPTED: [],
+        RELATIONSHIPS_UPDATED: (resolution?.links ?? []).filter((l) => l.sources.length > 1).map((l) => ({ id: l.entityId, fingerprint: `${l.entityId}:${l.refs.join(',')}` })),
+        GOAL_DECISIONS: [],
+      },
+      { now },
+    );
+    return { reading, gain: funnelGain(readFunnel({}), reading) };
+  });
+
   const pass: ExtractionPass = {
     cursor: { from, to: { fetchedAt: lastRow.fetched_at, id: lastRow.id } },
     items: items.length,
-    readable: items.length - needsModel.flat().length,
+    readable: readItems.length - unreadable.size,
     facts: run.facts,
     reconciled: run.reconciled.map((r) => ({
       key: r.key,
@@ -1019,6 +1278,16 @@ export async function recordFeedExtraction(input: { projectId: string; now?: Dat
       notDemand: run.facts.filter((f) => f.demand === 'NOT_DEMAND').length,
     },
     graph,
+    processingGraph: plans ?? [],
+    ...(delta ? { delta } : {}),
+    identity: resolution ? { links: resolution.links, collisions: resolution.collisions, uncorroborated: resolution.uncorroborated.length } : { links: [], collisions: [], uncorroborated: 0 },
+    deepening: deepened
+      ? { capacity, threshold: deepened.threshold, promoted: deepened.decisions.filter((d) => d.promote), held: deepened.decisions.filter((d) => !d.promote) }
+      : { capacity, threshold: null, promoted: [], held: [] },
+    ...(funnel ? { funnel } : {}),
+    stageFailures,
+    // Carried forward unchanged when this pass could not commit, so the next pass still classifies against something.
+    deltaIndex: nextIndex ?? priorIndex,
   };
   const contested = pass.reconciled.filter((r) => r.status === 'CONTESTED').length;
   const stale = pass.reconciled.filter((r) => r.status === 'STALE').length;
@@ -1035,7 +1304,12 @@ export async function recordFeedExtraction(input: { projectId: string; now?: Dat
       `${pass.demand.statedRequest} fact(s) from a record stating a request; none is a confirmed buyer. ` +
       (graph
         ? `${graph.facts} graph fact(s) handed to the event graph, ${graph.added} new, ${graph.affected.length} neighborhood(s) recomputed; every hypothesis is still only a hypothesis.`
-        : 'The event graph could not take them this pass; its own sync reads the same rows.'),
+        : 'The event graph could not take them this pass; its own sync reads the same rows.') +
+      (delta ? ` Delta: ${delta.counts.NEW} new, ${delta.counts.CHANGED} changed, ${delta.counts.REPARSE} re-parsed, ${delta.unchangedItems.length} unchanged and not re-read; ${delta.recomputedKeys.length} fact key(s) recomputed.` : '') +
+      ` Identity: ${pass.identity!.links.length} link(s), ${pass.identity!.collisions.length} collision(s) kept apart.` +
+      ` Deepening: ${pass.deepening!.promoted.length} promoted, ${pass.deepening!.held.length} held at capacity ${capacity}.` +
+      (funnel ? ` Usable intelligence gained: ${funnel.gain.usableIntelligence} from ${funnel.reading.stages[0]!.raw} raw record(s)${funnel.gain.falseSpeed ? ' (raw intake without usable gain)' : ''}.` : '') +
+      (stageFailures.length > 0 ? ` Stage(s) failed and named: ${stageFailures.map((f) => f.stage).join(', ')}.` : ''),
     detail: { ...pass },
   });
   return pass;
