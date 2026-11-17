@@ -1,6 +1,6 @@
 # Surge readiness report — deadline 2026-11-17 15:00Z (10 a.m. Detroit)
 
-Written at 13:58Z by the integration owner, the intelligence-recovery session. Every number below names its production reading. Anything not measured says so.
+Written at 13:58Z and updated at 14:35Z by the integration owner, the intelligence-recovery session. Every number below names its production reading. Anything not measured says so.
 
 ## READY FOR THE LARGE RUN: **NO**
 
@@ -33,7 +33,9 @@ The cause has been found, and its fix (#1052) was merged at 13:52Z and is deploy
 | #1028 | Queue, pressure, plan-derivation and trace readings | The readings used throughout this report |
 | #1033, #1046 | Postgres-suite flakes fixed at the root (in the tests) | Gates green on release 6 |
 
-**Merged, not yet verified:** #1052 (W14) — a fetched page must bear on the question; contact, login and search pages are opened last; prompts ask for the subject's pricing and terms page. Deploy 44097071502.
+**Merged, not yet verified:** #1052 (W14). A fetched page must bear on the question; contact, login and search pages are opened last; prompts ask for the subject's pricing and terms page.
+
+**Deploy 44097071502:** every test shard and the Postgres gate passed. The Fly step failed at 14:21Z on a Fly API error (`api.machines.dev … stream error INTERNAL_ERROR`), so no new image was released. **Production serves 53f54667**: release 6 plus Factory merges #1049–#1051/#1053; healthz 200. The Fly step was re-run at 14:32Z.
 
 ## SURGE CAPACITY (measured; configuration: free lane + gpt-oss-120b on one H200 SXM, recipe gpt-oss-120b-big)
 
@@ -42,7 +44,7 @@ The cause has been found, and its fix (#1052) was merged at 13:52Z and is deploy
 | GPU slots busy (average) | 4.22 | 7.86 | 8.62 |
 | Lane jobs at once (average / peak) | 4.96 / 14 | 8.39 / 14 | — |
 | GPU jobs submitted / not accepted | 221 / 24 | 108 / 111 | — |
-| Accepted claims per hour, lane | 20.4 | 13.4 | 14 (free lane) |
+| Accepted claims per hour, lane | 20.4 | 13.4 | **2** while the GPU ran (the same report's second window reads 14) |
 | Accepted GPU claims | 2 | **0** | **0** |
 | Queue arrived / finished per hour | — | 189 / 222 (draining) | 131 / 174 (draining) |
 | Ineffective retries | — | 59 (54 fragments) | 9 |
