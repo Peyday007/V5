@@ -3,7 +3,9 @@ import { freshProject } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { createRun } from '../server/repos/runs.ts';
 import { createFragments, createOrchestration, currentFragments, decideClaim, insertClaims, updateFragment } from '../server/repos/research.ts';
-import { getProgram, recordCategoryEvidence } from '../server/repos/manufacturing.ts';
+import { ensureCapability, getProgram, recordCategoryCapital, recordCategoryEvidence, recordEdge } from '../server/repos/manufacturing.ts';
+import { recordMoney } from '../server/repos/cashLedger.ts';
+import { declareHeld } from '../server/services/manufacturing/declare.ts';
 import { startProgramme } from '../server/services/manufacturing/program.ts';
 import { seedCategory } from '../server/services/manufacturing/declare.ts';
 import { runManufacturingKernel } from '../server/services/manufacturing/kernel.ts';
@@ -13,6 +15,7 @@ import { COMPETITIVE_READ_EVENT, recordedManufacturingReadings, recordManufactur
 import {
   MECHANISM_PROMPTS,
   claimFromEvidence,
+  productClaims,
   reconstructCompetitiveSystem,
   statedMode,
   type CompetitiveClaim,
@@ -421,5 +424,87 @@ describe('VENT-24-1: profit pools, advantage and every acquisition mode reach pr
     expect(held.system.profitPools).toEqual(JSON.parse(JSON.stringify(live.profitPools)));
     expect(held.system.advantages.map((a) => a.resource)).toEqual(['UL certification']);
     expect(new Set(held.system.activities.map((a) => a.mode))).toEqual(new Set(['PARTNER', 'LICENSE', 'RENT', 'OWN_OR_DEVELOP']));
+  });
+});
+
+/*
+ * Review finding R6-F2: PRODUCT could only ever be UNKNOWN on production rows, because the reconstruction was fed
+ * category evidence alone and no evidence kind bore on making the product. These drive PRODUCT from the ladder's
+ * own rows — a bought-in component, a REQUIRES capability (held or not) and entry capital against deployable money —
+ * through the real kernel, so all three readings are distinct on production records.
+ */
+describe('VENT-24-1: making the product is read from real rows (R6-F2)', () => {
+  it('maps a bought-in component, a held or missing capability and costed capital to PRODUCT conditions', () => {
+    const component = claimFromEvidence(
+      { id: 'cev_pump', programId: 'prg', categoryId: 'cat', kind: 'BOUGHT_IN_COMPONENT', subject: 'pump', statement: 'Pumps come from two makers', observedOn: null, sourceClaimId: 'clm_pump', createdAt: '2026-11-01T00:00:00.000Z', updatedAt: '2026-11-01T00:00:00.000Z' },
+      src(1),
+    );
+    expect(component.condition).toEqual({ level: 'PRODUCT', requirement: 'a source for the component: pump', met: true });
+
+    const edge = (capabilityId: string, sourceClaimId: string) => ({ id: `e_${capabilityId}`, programId: 'prg', categoryId: 'cat', capabilityId, relation: 'REQUIRES' as const, statement: `needs ${capabilityId}`, sourceClaimId, createdAt: '', updatedAt: '' });
+    const capitalRow = { id: 'mcap', programId: 'prg', categoryId: 'cat', requirement: 'TOOLING_AND_EQUIPMENT' as const, scenario: 'SMALLEST_CREDIBLE_ENTRY' as const, amountLowMinor: 1, amountHighMinor: 2, currency: 'USD', basis: 'PUBLISHED_PRICE_OR_SCHEDULE' as const, asOf: '2026-09-01', statement: 'tooling', sourceClaimId: 'clm_cap', createdAt: '', updatedAt: '' };
+    const read = (costed: Parameters<typeof productClaims>[0]['costed']) =>
+      productClaims({
+        edges: [edge('held', 'clm_h'), edge('missing', 'clm_m'), { ...edge('taught', 'clm_t'), relation: 'TEACHES' as const }],
+        capabilities: [{ id: 'held', name: 'welding', heldAt: '2026-10-01' }, { id: 'missing', name: 'firmware', heldAt: null }, { id: 'taught', name: 'x', heldAt: null }],
+        capital: [capitalRow],
+        costed,
+        sourceOf: (id) => `https://example.org/${id}`,
+      });
+    const conditions = (costed: Parameters<typeof productClaims>[0]['costed']) => read(costed).map((c) => c.condition);
+    const usd = (amountMinor: number) => ({ currency: 'USD', amountMinor });
+    expect(conditions({ cost: usd(100), available: usd(500) })).toEqual([
+      { level: 'PRODUCT', requirement: 'the capability: welding', met: true },
+      { level: 'PRODUCT', requirement: 'the capability: firmware', met: false },
+      { level: 'PRODUCT', requirement: 'the capital entering takes, within deployable capital', met: true },
+    ]);
+    // A TEACHES edge is not a condition of making the product.
+    expect(read(null).some((c) => c.mechanism === 'x')).toBe(false);
+    expect(conditions({ cost: usd(1000), available: usd(500) })[2]!.met).toBe(false);
+    // Not fully priced, unreadable ledger, or a different currency: unknown, never favourable (invariant 39).
+    expect(conditions({ cost: null, available: usd(500) })[2]!.met).toBeNull();
+    expect(conditions({ cost: usd(100), available: null })[2]!.met).toBeNull();
+    expect(conditions({ cost: usd(100), available: { currency: 'EUR', amountMinor: 900 } })[2]!.met).toBeNull();
+    expect(conditions(null)[2]!.met).toBeNull();
+    // No capital rows: no capital condition is invented.
+    expect(productClaims({ edges: [], capabilities: [], capital: [], costed: { cost: usd(1), available: usd(1) }, sourceOf: () => null })).toEqual([]);
+  });
+
+  it('the kernel reads PRODUCT as NOT_MET, then ESTABLISHED, from rows alone, separately from the other two levels', async () => {
+    const fixture = await freshProject();
+    const projectId = fixture.project.id;
+    const layer = await fixture.layerByName('Discovery Logic');
+    const user = await createUser({ email: `competitive-product-${Math.random().toString(36).slice(2, 10)}@example.test`, displayName: 'Owner', password: 'correct horse battery staple', isBrainAdmin: true });
+    expect((await startProgramme({ projectId, ownerUserId: user.id, actorUserId: user.id, objective: 'Build machines only where demand and capability allow.' })).ok).toBe(true);
+    const program = (await getProgram(projectId))!;
+    const seeded = await seedCategory({ projectId, name: 'Floor scrubbers', actorRef: user.id, reason: 'test' });
+    if ('error' in seeded) throw new Error(seeded.error);
+    const categoryId = seeded.category.id;
+
+    await recordCategoryEvidence({ programId: program.id, categoryId, kind: 'BOUGHT_IN_COMPONENT', subject: 'brush motor', statement: 'Brush motors come from two makers', sourceClaimId: await acceptedClaim(projectId, layer, 'Brush motors come from two makers') });
+    await recordCategoryEvidence({ programId: program.id, categoryId, kind: 'DEMAND_EVIDENCE', subject: 'facility tenders', statement: 'Facilities publish cleaning-equipment tenders', observedOn: '2026-09-01', sourceClaimId: await acceptedClaim(projectId, layer, 'Facilities publish cleaning-equipment tenders') });
+    const { capability } = await ensureCapability({ programId: program.id, projectId, name: 'Squeegee assembly', origin: 'SEED' });
+    await recordEdge({ programId: program.id, categoryId, capabilityId: capability.id, relation: 'REQUIRES', statement: 'A scrubber needs squeegee assembly', sourceClaimId: await acceptedClaim(projectId, layer, 'A scrubber needs squeegee assembly') });
+    await recordCategoryCapital({ programId: program.id, categoryId, requirement: 'TOOLING_AND_EQUIPMENT', scenario: 'SMALLEST_CREDIBLE_ENTRY', amountLowMinor: 20_000_00, amountHighMinor: 30_000_00, currency: 'USD', basis: 'PUBLISHED_PRICE_OR_SCHEDULE', asOf: '2026-09-01', statement: 'A small assembly line costs $20,000 to $30,000', sourceClaimId: await acceptedClaim(projectId, layer, 'A small assembly line costs $20,000 to $30,000') });
+
+    const before = (await runManufacturingKernel(projectId)).competitive.find((one) => one.subject === 'Floor scrubbers')!;
+    expect(before.readings.PRODUCT.verdict).toBe('NOT_MET');
+    expect(before.readings.PRODUCT.met.map((m) => m.requirement)).toEqual(['a source for the component: brush motor']);
+    expect(before.readings.PRODUCT.unmet.map((m) => m.requirement).sort()).toEqual(
+      ['the capability: Squeegee assembly', 'the capital entering takes, within deployable capital'].sort(),
+    );
+    expect(before.readings.SELLING_COMPANY.verdict).toBe('ESTABLISHED');
+    expect(before.readings.DURABLE_POSITION.verdict).toBe('UNKNOWN');
+
+    await recordMoney({ projectId, kind: 'CAPITAL_IN', amountCents: 40_000_00, currency: 'USD', recordedBy: user.id, idempotencyKey: `capital-product-${projectId}` });
+    const held = await declareHeld({ projectId, capabilityId: capability.id, note: 'Our line assembles squeegees', actorRef: user.id });
+    expect('error' in held).toBe(false);
+
+    const after = (await runManufacturingKernel(projectId)).competitive.find((one) => one.subject === 'Floor scrubbers')!;
+    expect(after.readings.PRODUCT.verdict).toBe('ESTABLISHED');
+    expect(after.readings.PRODUCT.met).toHaveLength(3);
+    // Three different answers to three different questions, all from production rows.
+    expect(new Set([after.readings.PRODUCT.verdict, after.readings.SELLING_COMPANY.verdict, after.readings.DURABLE_POSITION.verdict]).size).toBe(2);
+    expect(after.readings.DURABLE_POSITION.verdict).toBe('UNKNOWN');
   });
 });

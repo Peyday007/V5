@@ -171,7 +171,11 @@ export async function runManufacturingKernel(projectId: string): Promise<KernelP
   const prerequisites = new Map(institutions.map((one) => [one.categoryId, pathPrerequisites(one)]));
   const ventures = await reconsiderVentures(projectId, readings, snapshot.capabilities, snapshot.candidates, prerequisites);
 
-  const competitive = await competitiveSystemsFor(snapshot);
+  // PRODUCT is read from the same costing the venture path uses, so making the product and the venture agree (R6-F2).
+  const competitive = await competitiveSystemsFor(
+    snapshot,
+    new Map(ventures.map((one) => [one.categoryId, { cost: one.cost, available: one.available }])),
+  );
 
   const gate = await programmeMayAsk(projectId);
   if (!gate.allowed) {
