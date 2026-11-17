@@ -1415,6 +1415,58 @@ export function diagnosePriorCostFailures(
 }
 
 /**
+ * Where the counted-once failures stand in the rows probe r01.res-15-5 reads
+ * (RES-15-5, episode 3). The probe judges the newest `ALLOCATION_AUDIT_ROWS`
+ * decision rows, newest first, and reports the first measured one whose cost
+ * is not shown counted once. Production showed that row to be one whose
+ * fingerprint has no leading `held` — written by a recorder older than the
+ * one running now — so every row newer than it already held. This says that
+ * from the rows: how many failing rows each recorder wrote, whether any row
+ * the current recorder wrote fails, and how many more decision rows the
+ * ordinary once-per-window recording must write before the newest failing
+ * row leaves the probe's window. Append-only history is never edited or
+ * judged superseded to get there (§5, R3-1). Takes rows newest first. Pure.
+ */
+export function probeWindowStanding(
+  rows: readonly { detail: Record<string, unknown> | null; at: string }[],
+  window = ALLOCATION_AUDIT_ROWS,
+): {
+  rowsRead: number;
+  failingByRecorder: Record<PriorCostFailure['recorder'], number>;
+  currentRecorderFailing: number;
+  /** 0-based position, newest first, of the newest failing row; null when none fails. */
+  newestFailingIndex: number | null;
+  newestFailingRecorder: PriorCostFailure['recorder'] | null;
+  /** Further decision rows before every failing row has left the probe's window; 0 when none fails. */
+  rowsUntilClear: number;
+} {
+  const read = rows.slice(0, window);
+  const failingByRecorder: Record<PriorCostFailure['recorder'], number> = { HELD_IN_FINGERPRINT: 0, BEFORE_HELD_IN_FINGERPRINT: 0 };
+  let newestFailingIndex: number | null = null;
+  let newestFailingRecorder: PriorCostFailure['recorder'] | null = null;
+  read.forEach((row, i) => {
+    const d = row.detail;
+    if (!d || d.held === true) return;
+    if ((d.costCountedOnce as { holds?: unknown } | undefined)?.holds === true) return;
+    const fp = typeof d.fingerprint === 'string' ? d.fingerprint : '';
+    const recorder: PriorCostFailure['recorder'] = fp.startsWith('{"held"') ? 'HELD_IN_FINGERPRINT' : 'BEFORE_HELD_IN_FINGERPRINT';
+    failingByRecorder[recorder] += 1;
+    if (newestFailingIndex === null) {
+      newestFailingIndex = i;
+      newestFailingRecorder = recorder;
+    }
+  });
+  return {
+    rowsRead: read.length,
+    failingByRecorder,
+    currentRecorderFailing: failingByRecorder.HELD_IN_FINGERPRINT,
+    newestFailingIndex,
+    newestFailingRecorder,
+    rowsUntilClear: newestFailingIndex === null ? 0 : window - newestFailingIndex,
+  };
+}
+
+/**
  * The job-time inputs an earlier pass re-read for failing windows, as the
  * newest decision row carries them (`priorCostFailures.reread`), keyed by
  * `recordedWindow`. A window's job rows are append-only, so what one pass read
@@ -1471,10 +1523,44 @@ async function priorCostAudit(
   return {
     rowsRead: history.length,
     failing: prior.failures.length,
+    standing: probeWindowStanding(history),
     causes: prior.causes,
     earliest: prior.earliest,
     failures: prior.failures.slice(-10),
     reread: Object.fromEntries([...reread.entries()].filter(([key]) => stillFailing.has(key))),
+  };
+}
+
+/**
+ * Every share change carries the measured reason it moved (RES-15-5: probe
+ * r01.res-15-5 fails a decision that "moves X without a measured reason").
+ * `decideResearchAllocation` names a purpose's yield only when it is more than
+ * 5% off the measured average, so a purpose whose yield sat near the average —
+ * and that no deadline, value, bottleneck or floor touched — still moved when
+ * the shares around it were renormalized, and was recorded with no reason at
+ * all. That is a measured reason, and it is now written down: its own yield
+ * relative to the average, read from the same measurements, and that it moved
+ * only because the other purposes' measured yields moved their shares. A change
+ * that already has a reason is left as it is. Pure.
+ */
+export function withMeasuredReasons(decision: AllocationDecision, input: Pick<AllocationInput, 'purposes'>): AllocationDecision {
+  if (!decision.changes.some((c) => c.reasons.length === 0)) return decision;
+  const yieldOf = (m: PurposeMeasurement | undefined): number | null =>
+    m && typeof m.usefulResults === 'number' && Number.isFinite(m.usefulResults) && typeof m.cost === 'number' && Number.isFinite(m.cost) && m.cost > 0 && m.usefulResults >= 0 ? m.usefulResults / m.cost : null;
+  const yields = new Map<string, number>();
+  for (const m of input.purposes) {
+    const y = yieldOf(m);
+    if (y !== null) yields.set(m.purpose, y);
+  }
+  const mean = yields.size > 0 ? [...yields.values()].reduce((a, b) => a + b, 0) / yields.size : 0;
+  return {
+    ...decision,
+    changes: decision.changes.map((c) => {
+      if (c.reasons.length > 0) return c;
+      const y = yields.get(c.purpose);
+      const own = y !== undefined && mean > 0 ? `useful results per unit cost ${(y / mean).toFixed(2)}× the measured average` : 'its own yield gave no reason to move';
+      return { ...c, reasons: [`${own}; moved only as the other purposes' measured yields moved their shares`] };
+    }),
   };
 }
 
@@ -1498,7 +1584,7 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
   const laneCapacity = ports.readLaneCapacity ? await ports.readLaneCapacity(window.until) : [];
   const capacity = new Map(laneCapacity.map((one) => [one.lane, one]));
   const allocationInput = allocationInputFrom(reading, { urgentCommercialGoal, nearestDeadlineDays: deadlines.length ? Math.min(...deadlines) : null, triedRemedies: tried, measuringRemedies: measuring, pressure, capacity, remedyLevers: APPLICABLE_REMEDIES });
-  const decided = decideResearchAllocation(allocationInput);
+  const decided = withMeasuredReasons(decideResearchAllocation(allocationInput), allocationInput);
   const observed = normalizeShares(allocationInput.currentShares);
   // Shares move only on a reading whose cost is shown counted once. A reading
   // that cannot show it moves nothing — the shares in force, no change — and
