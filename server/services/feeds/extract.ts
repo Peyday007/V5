@@ -503,8 +503,22 @@ export function reconcile(facts: readonly ExtractedFact[], now: Date, staleAfter
   return out;
 }
 
+/**
+ * What a delta pass reconciles against besides what it reads now: records it
+ * did not re-read (unchanged, already read by this parser) and the fact keys
+ * the previous versions of re-read records produced. Their observations of the
+ * keys being recomputed are reconciled with the new ones, so a changed record
+ * is contested against an unchanged one, and a key a changed record stopped
+ * stating is re-derived from the observations that remain.
+ */
+export interface StoredObservations {
+  items: readonly ExtractableItem[];
+  /** Keys recomputed even when nothing read now states them (what changed records' previous versions produced). */
+  affectedKeys?: readonly string[];
+}
+
 /** Extract every item, reconcile the facts, and batch the unreadable items for model assistance. */
-export function extractItems(items: readonly ExtractableItem[], now: Date = new Date()): ExtractionRun {
+export function extractItems(items: readonly ExtractableItem[], now: Date = new Date(), stored?: StoredObservations): ExtractionRun {
   const facts: ExtractedFact[] = [];
   const unreadable: ExtractableItem[] = [];
   for (const item of items) {
@@ -514,7 +528,14 @@ export function extractItems(items: readonly ExtractableItem[], now: Date = new 
   }
   const needsModel: ExtractableItem[][] = [];
   for (let i = 0; i < unreadable.length; i += MODEL_BATCH_SIZE) needsModel.push(unreadable.slice(i, i + MODEL_BATCH_SIZE));
-  const reconciled = reconcile(facts, now);
+  // Only the keys being recomputed take stored observations: an unchanged key is not re-derived.
+  const recomputed = new Set([...facts.map((f) => f.key), ...(stored?.affectedKeys ?? [])]);
+  const readIds = new Set(items.map((item) => item.id));
+  const storedFacts = (stored?.items ?? [])
+    .filter((item) => !readIds.has(item.id))
+    .flatMap((item) => extractItem(item))
+    .filter((f) => recomputed.has(f.key));
+  const reconciled = reconcile([...facts, ...storedFacts], now);
   const status = new Map(reconciled.map((r) => [r.key, r.status]));
   return { facts: facts.map((f) => ({ ...f, contradictionStatus: status.get(f.key) ?? 'UNRECONCILED' })), reconciled, needsModel };
 }
