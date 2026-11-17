@@ -78,12 +78,15 @@ import {
   recordActionResult,
   recordControllerDecision,
   runController,
+  scoreHypotheses,
   type ActionResult,
   type CandidateAction,
   type ControllerDecision,
   type ControllerHistory,
   type ControllerSnapshot,
   type PriorDecision,
+  type ScoredHypothesis,
+  type ValuedAction,
 } from '../research/reasoningController.ts';
 import { MECHANISM_ROLES, loadProjectKnowledge, mechanismFromOpening, type KnowledgeReading, type MechanismModel, type MechanismRole } from '../research/knowledgeModel.ts';
 import {
@@ -582,6 +585,112 @@ export function pendingResult(p: SprintProblem, history: ControllerHistory | und
   };
 }
 
+/** A hypothesis's score under the controller's own scorer, given how many sourced items support and refute it. */
+export function scoreUnder(supports: number, refutes: number): number {
+  const evidence = [
+    ...Array.from({ length: supports }, (_, i) => ({ id: `s${i}`, source: 'margin-scale', bears: { h: 'SUPPORTS' as const } })),
+    ...Array.from({ length: refutes }, (_, i) => ({ id: `r${i}`, source: 'margin-scale', bears: { h: 'REFUTES' as const } })),
+  ];
+  const [scored] = scoreHypotheses([{ id: 'h', statement: 'margin scale', basis: 'margin-scale' }], evidence);
+  if (!scored) throw new Error('scoreHypotheses returned nothing for one hypothesis');
+  return scored.score;
+}
+
+/**
+ * How far the leading hypothesis must stand above the next one for the
+ * controller's decision to count as settled.
+ *
+ * It is read off `scoreHypotheses`' own scale rather than typed as a figure:
+ * the margin is the score of a hypothesis no sourced evidence bears on — the
+ * uninformed prior. "Settled" therefore means evidence has moved the leader
+ * above the runner-up by as much as the whole prior, on whatever scale the
+ * scorer uses; under its Laplace smoothing that is 0.5. If the scorer is ever
+ * rescaled the margin follows it, and `assertSettledMarginScale` below refuses
+ * to load a margin that no longer separates the evidence patterns it exists to
+ * separate. Not tuned on any problem set.
+ */
+export const SETTLED_MARGIN = scoreUnder(0, 0);
+
+/**
+ * The margin's contract with the scorer, checked when this module loads so
+ * every test and every boot that imports the sprint reproduces a mismatch:
+ *  - one unopposed sourced item either way is a lean, not a settlement;
+ *  - the margin is no more than the uninformed prior, so a lone hypothesis
+ *    (its absent runner-up reads 0 in `needsPersonOf`) is settled only on the
+ *    scorer's own reading of it, never by a margin nothing can reach;
+ *  - three sourced items for the leader against three refuting the runner-up
+ *    is settled;
+ *  - the margin is reachable: below the scorer's widest possible gap.
+ */
+export function assertSettledMarginScale(margin: number = SETTLED_MARGIN): void {
+  const gap = (a: [number, number], b: [number, number]) => scoreUnder(...a) - scoreUnder(...b);
+  const failures: string[] = [];
+  if (!(margin > 0)) failures.push(`margin ${margin} is not positive`);
+  if (gap([1, 0], [0, 1]) >= margin) failures.push(`one item each way (gap ${gap([1, 0], [0, 1])}) already settles at margin ${margin}`);
+  if (gap([1, 0], [0, 0]) >= margin) failures.push(`one unopposed item (gap ${gap([1, 0], [0, 0])}) already settles at margin ${margin}`);
+  if (gap([3, 0], [0, 3]) < margin) failures.push(`three items each way (gap ${gap([3, 0], [0, 3])}) does not settle at margin ${margin}`);
+  if (margin > scoreUnder(0, 0)) failures.push(`margin ${margin} exceeds the uninformed prior ${scoreUnder(0, 0)}`);
+  if (failures.length > 0) throw new Error(`SETTLED_MARGIN does not fit scoreHypotheses' scale: ${failures.join('; ')}`);
+}
+assertSettledMarginScale();
+
+/**
+ * Whether the general method could not progress this opening without a person.
+ * A person is needed only when it is still not actionable and nothing the
+ * method can do itself would move it: the controller's next step is obtaining a
+ * method (METHOD_GAP), or it has no next step while research has nothing left
+ * to answer and the decision is not settled.
+ *
+ * A null `next` is not by itself a need for a person (reasoning-sprint:general-method).
+ * The controller leaves `next` null whenever no candidate action has positive
+ * value against the two hypotheses contesting the lead — which is every
+ * opening that reached the sprint without a mechanism model, because its
+ * research actions bear on `holds:mechanism`/`fails:<role>` and those
+ * hypotheses are then absent. Counting those as "needs a person" read
+ * modelledNeedsPerson 1 on held-out sets where research could still fill every
+ * unknown, and failed the baseline comparison on that alone. A settled
+ * decision with nothing worth doing is a rejection, which needs nobody.
+ */
+export function needsPersonOf(actionable: boolean, decision: Pick<ControllerDecision, 'next' | 'valued' | 'hypotheses'>): boolean {
+  if (actionable) return false;
+  if (decision.next) return decision.next.kind === 'METHOD_GAP';
+  const researchable = decision.valued.some((a) => a.kind === 'RESEARCH');
+  const [first, second] = decision.hypotheses;
+  const settled = first !== undefined && first.score - (second?.score ?? 0) >= SETTLED_MARGIN;
+  return !researchable && !settled;
+}
+
+/**
+ * The needs-a-person rule's contract, checked when this module loads (as
+ * `assertSettledMarginScale` is) so every test and every boot that imports the
+ * sprint reproduces the recorded failure class if the rule regresses:
+ * reasoning-sprint:general-method attempt 1 lost to baseline:payer-and-price on
+ * "people" because a general-method opening with a null next step and research
+ * candidates still open was read as needing a person. Each case below is one
+ * shape of opening; `rule` is injectable so the check can be shown to refuse a
+ * regressed rule.
+ */
+export function assertNeedsPersonRule(rule: typeof needsPersonOf = needsPersonOf): void {
+  const action = (kind: ValuedAction['kind']): ValuedAction => ({
+    key: `contract:${kind}`, kind, subject: 'contract', question: 'contract', resolves: 'contract',
+    discriminates: [], cost: 0, value: 0, net: 0, valueBasis: 'HYPOTHESIS_DISCRIMINATION',
+  });
+  const hypothesis = (id: string, score: number): ScoredHypothesis => ({ id, statement: id, basis: 'contract', score, supports: [], refutes: [] });
+  const lean = SETTLED_MARGIN / 2;
+  const cases: Array<{ name: string; actionable: boolean; decision: Pick<ControllerDecision, 'next' | 'valued' | 'hypotheses'>; expected: boolean }> = [
+    { name: 'null next with research still open (the recorded failure)', actionable: false, decision: { next: null, valued: [action('RESEARCH')], hypotheses: [] }, expected: false },
+    { name: 'null next with research open and no mechanism hypotheses', actionable: false, decision: { next: null, valued: [action('EXPERIMENT'), action('RESEARCH')], hypotheses: [hypothesis('a', 0.5), hypothesis('b', 0.5)] }, expected: false },
+    { name: 'next step is obtaining a method', actionable: false, decision: { next: action('METHOD_GAP'), valued: [action('METHOD_GAP')], hypotheses: [] }, expected: true },
+    { name: 'next step is research', actionable: false, decision: { next: action('RESEARCH'), valued: [action('RESEARCH')], hypotheses: [] }, expected: false },
+    { name: 'nothing researchable and the decision unsettled', actionable: false, decision: { next: null, valued: [action('EXPERIMENT')], hypotheses: [hypothesis('a', 0.5 + lean), hypothesis('b', 0.5)] }, expected: true },
+    { name: 'nothing researchable and the decision settled (a rejection)', actionable: false, decision: { next: null, valued: [], hypotheses: [hypothesis('a', 0.9), hypothesis('b', 0.9 - SETTLED_MARGIN)] }, expected: false },
+    { name: 'actionable', actionable: true, decision: { next: action('METHOD_GAP'), valued: [], hypotheses: [] }, expected: false },
+  ];
+  const failures = cases.filter((c) => rule(c.actionable, c.decision) !== c.expected).map((c) => `${c.name}: expected needsPerson ${c.expected}`);
+  if (failures.length > 0) throw new Error(`needsPersonOf breaks its contract: ${failures.join('; ')}`);
+}
+assertNeedsPersonRule();
+
 /** The general method: the controller over the card, with the gross billed carried with its provenance. */
 export const GENERAL_METHOD: SprintMethod = {
   key: 'general:controller+provenance',
@@ -608,8 +717,7 @@ export const GENERAL_METHOD: SprintMethod = {
       problemId: p.id,
       actionable,
       probability,
-      // A person is needed only when no research or method action can move it and it is still not actionable.
-      needsPerson: !actionable && (decision.next === null || decision.next.kind === 'METHOD_GAP'),
+      needsPerson: needsPersonOf(actionable, decision),
       robust,
       findings: decision.weakInferences.length + provenanceFindings,
       elapsedMs: performance.now() - started,
@@ -659,8 +767,20 @@ export interface SetReading {
    * rows were not read for this reading.
    */
   humanInterventions: Measure;
-  /** Problems the method itself predicted it could not progress without a person, over the set: its own model, compared between methods. */
+  /**
+   * Problems the method itself predicted it could not progress without a person, over the set: its own model, compared between methods.
+   * For the general method that is `needsPersonOf`: a research action still open, or a settled rejection, needs nobody.
+   */
   modelledNeedsPerson: Measure;
+  /**
+   * Problems left needing a person under ONE rule applied to every method's
+   * verdicts alike (`needsPersonUnderOneRule`), over the set. This — never a
+   * method's own model — is what methods are compared on, so no method can
+   * clear the comparison by redefining what it counts. Optional only so a
+   * reading stored before it existed still parses; a comparison missing it on
+   * either side has too little data to say.
+   */
+  needsPersonComparable?: Measure;
   /** Brier score: summed squared error of the probability against what the market did, over resolved problems. Lower is better. */
   calibrationBrier: Measure;
   /** Actually actionable problems the method called actionable robustly, over actually actionable problems. */
@@ -684,6 +804,8 @@ export function readSet(
   const clean = verdicts.filter((v) => v.findings === 0).length;
   const time = verdicts.reduce((s, v) => s + v.elapsedMs, 0);
   const people = verdicts.filter((v) => v.needsPerson).length;
+  const byId = new Map(problems.map((p) => [p.id, p]));
+  const comparablePeople = verdicts.filter((v) => needsPersonUnderOneRule(byId.get(v.problemId), v)).length;
   // Real interventions are read from rows; when they were not read, the measure says so rather than reading zero.
   const intervened = interventions ? verdicts.filter((v) => (interventions.get(v.problemId) ?? 0) > 0).length : 0;
   const brier = scored.reduce((s, v) => s + (v.probability - (truth.get(v.problemId) ? 1 : 0)) ** 2, 0);
@@ -699,11 +821,52 @@ export function readSet(
     decisionTimeMs: measure(time, n, 1),
     humanInterventions: interventions ? measure(intervened, n) : measure(0, 0),
     modelledNeedsPerson: measure(people, n),
+    needsPersonComparable: measure(comparablePeople, n),
     calibrationBrier: measure(brier, scored.length),
     robustTargetCoverage: measure(covered, targets.length),
     falsePositives: scored.filter((v) => v.actionable && !truth.get(v.problemId)).map((v) => v.problemId),
   };
 }
+
+/**
+ * Whether an opening was left needing a person, by one rule applied to every
+ * method's verdict alike — general or baseline — so no method can clear the
+ * comparison by redefining what it counts. It reads the opening and the
+ * verdict, never a method's own `needsPerson` model:
+ *  - an actionable verdict needs nobody;
+ *  - a verdict that names a missing method as its next step (METHOD_GAP) needs
+ *    a person to supply it;
+ *  - a verdict that names any other next step of its own (research, an
+ *    experiment) progresses without one — a baseline that names none gets no
+ *    such credit, because it has no step, not because it is counted otherwise;
+ *  - an opening with a load-bearing field still unknown needs research, not a
+ *    person, whichever method looked at it;
+ *  - otherwise the verdict needs a person unless it is decisive: its
+ *    probability stands at least SETTLED_MARGIN from its complement, so it is
+ *    a decision (a rejection) rather than a shrug. The same margin
+ *    `needsPersonOf` settles the controller's hypotheses by, read off the same
+ *    scorer's scale.
+ * An opening not found among the set's problems is counted as needing a
+ * person: not knowing it is never read as favourable (invariant 39).
+ */
+export function needsPersonUnderOneRule(problem: SprintProblem | undefined, verdict: Pick<MethodVerdict, 'actionable' | 'probability' | 'decision'>): boolean {
+  if (verdict.actionable) return false;
+  const next = verdict.decision?.next;
+  if (next) return next.kind === 'METHOD_GAP';
+  if (!problem) return true;
+  if (profileOf(problem).unknowns.length > 0) return false;
+  return Math.abs(verdict.probability - (1 - verdict.probability)) < SETTLED_MARGIN;
+}
+
+/**
+ * Extra decision time per opening, beyond the baseline's, that a method may
+ * spend and still earn its cost. A ratio cannot be the ceiling — a two-field
+ * baseline decides in microseconds, so any reasoning is thousands of times
+ * slower — so the budget is absolute: one second per opening, well inside
+ * what a sprint pass over a few hundred openings can afford. Structural, not
+ * tuned on any problem set.
+ */
+export const DECISION_TIME_BUDGET_MS = 1000;
 
 /**
  * The method's one tuned choice, made on the benchmark set only: the
@@ -743,13 +906,18 @@ const num = (m: Measure): number | null => (m.value === 'INSUFFICIENT_DATA' ? nu
 
 /**
  * Whether the general method's extra cost earned its keep on one set: it must
- * find at least as many confirmed pathways, be no worse calibrated, and need
- * people no more often, for the decision time it spends beyond the baseline.
+ * find at least as many confirmed pathways, be no worse calibrated, and leave
+ * people needed no more often — counted by one rule for both methods — and be
+ * strictly better on an outcome the market judged (pathway rate or
+ * calibration), within DECISION_TIME_BUDGET_MS of extra decision time per
+ * opening. Needing people less often alone does not pay for extra time: that
+ * figure is a model, the outcomes are the market's.
  */
 export function compareWithBaseline(general: SetReading, baseline: SetReading): BaselineComparison {
-  // Both methods meet the same real interventions on the same problems, so methods are compared on what each predicted it needs a person for.
-  const g = { rate: num(general.actionablePathwayRate), brier: num(general.calibrationBrier), people: num(general.modelledNeedsPerson) };
-  const b = { rate: num(baseline.actionablePathwayRate), brier: num(baseline.calibrationBrier), people: num(baseline.modelledNeedsPerson) };
+  // Both sides are counted by the same rule (needsPersonUnderOneRule); a method's own needsPerson model is reported, never compared.
+  const people = (r: SetReading): number | null => (r.needsPersonComparable ? num(r.needsPersonComparable) : null);
+  const g = { rate: num(general.actionablePathwayRate), brier: num(general.calibrationBrier), people: people(general) };
+  const b = { rate: num(baseline.actionablePathwayRate), brier: num(baseline.calibrationBrier), people: people(baseline) };
   const costRatio = baseline.decisionTimeMs.numerator > 0 ? general.decisionTimeMs.numerator / baseline.decisionTimeMs.numerator : null;
   if (g.rate === null || b.rate === null || g.brier === null || b.brier === null || g.people === null || b.people === null) {
     return {
@@ -762,8 +930,14 @@ export function compareWithBaseline(general: SetReading, baseline: SetReading): 
       baseline,
     };
   }
-  const earned = g.rate >= b.rate && g.brier <= b.brier && g.people <= b.people && (g.rate > b.rate || g.brier < b.brier || g.people < b.people);
-  const cost = costRatio === null ? 'unmeasured extra time' : `${costRatio.toFixed(1)}x the baseline's decision time`;
+  const perOpening = (r: SetReading): number => (r.decisionTimeMs.denominator > 0 ? r.decisionTimeMs.numerator / r.decisionTimeMs.denominator : 0);
+  const extraMsPerOpening = Math.max(0, perOpening(general) - perOpening(baseline));
+  const withinBudget = extraMsPerOpening <= DECISION_TIME_BUDGET_MS;
+  const better = g.rate >= b.rate && g.brier <= b.brier && g.people <= b.people && (g.rate > b.rate || g.brier < b.brier);
+  const earned = better && withinBudget;
+  const cost =
+    (costRatio === null ? 'unmeasured extra time' : `${costRatio.toFixed(1)}x the baseline's decision time`) +
+    ` (${Math.round(extraMsPerOpening)} ms extra per opening, budget ${DECISION_TIME_BUDGET_MS} ms${withinBudget ? '' : ', exceeded'})`;
   return {
     set: general.set,
     earned,
@@ -774,6 +948,52 @@ export function compareWithBaseline(general: SetReading, baseline: SetReading): 
     baseline,
   };
 }
+
+/**
+ * The comparison's contract, checked when this module loads so every test and
+ * every boot that imports the sprint reproduces a regression of either
+ * recorded failure class (reasoning-sprint:general-method):
+ *  - asymmetric counting: a method that only redefines its own `needsPerson`
+ *    model — here, claiming it needs nobody — must not change `earned`;
+ *    only the one-rule count is compared;
+ *  - unearned cost: a method better on every outcome but spending more than
+ *    DECISION_TIME_BUDGET_MS extra per opening has not earned it, and neither
+ *    has one whose only advantage is needing people less often.
+ */
+export function assertComparisonContract(): void {
+  const m = (numerator: number, denominator = 20): Measure => measure(numerator, denominator);
+  const reading = (over: Partial<SetReading>): SetReading => ({
+    set: 'HELD_OUT',
+    method: 'contract',
+    problems: 20,
+    unresolved: 0,
+    actionablePathwayRate: m(5),
+    methodQuality: m(20),
+    decisionTimeMs: measure(20, 20, 1),
+    humanInterventions: measure(0, 0),
+    modelledNeedsPerson: m(10),
+    needsPersonComparable: m(10),
+    calibrationBrier: m(4),
+    robustTargetCoverage: m(5),
+    falsePositives: [],
+    ...over,
+  });
+  const failures: string[] = [];
+  const baseline = reading({});
+  // Worse on the one-rule count; its own model claims nobody is needed.
+  const relabelled = reading({ calibrationBrier: m(1), modelledNeedsPerson: m(0), needsPersonComparable: m(18) });
+  if (compareWithBaseline(relabelled, baseline).earned !== false) failures.push('a method that only relabels its own needsPerson model earned its cost');
+  const fast = reading({ calibrationBrier: m(1) });
+  if (compareWithBaseline(fast, baseline).earned !== true) failures.push('a method better on calibration within the time budget did not earn its cost');
+  const slow = reading({ calibrationBrier: m(1), decisionTimeMs: measure(20 * (DECISION_TIME_BUDGET_MS + 2), 20, 1) });
+  if (compareWithBaseline(slow, baseline).earned !== false) failures.push('a method over the decision-time budget earned its cost');
+  const peopleOnly = reading({ needsPersonComparable: m(0) });
+  if (compareWithBaseline(peopleOnly, baseline).earned !== false) failures.push('needing people less often alone paid for extra time');
+  const unread = reading({ needsPersonComparable: undefined });
+  if (compareWithBaseline(unread, baseline).earned !== null) failures.push('a reading without the one-rule count was compared');
+  if (failures.length > 0) throw new Error(`compareWithBaseline broke its contract: ${failures.join('; ')}`);
+}
+assertComparisonContract();
 
 /* ------------------------------------------------------------------------- */
 /* The highest-leverage missing capability, and whether shipping it helped    */
