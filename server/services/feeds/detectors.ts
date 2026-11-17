@@ -345,13 +345,114 @@ export const RULE_EFFECTIVE_SOON: Detector = {
   },
 };
 
+/** How recently a rule must have been published for v2 to count it as news. */
+export const RULE_EFFECTIVE_SOON_PUBLISHED_DAYS = 30;
+
+/** The document a Federal Register correction corrects, as its record body states it ("Corrects 2026-21030."). Pure. */
+export function correctedDocumentOf(body: string | null | undefined): string | null {
+  const m = /Corrects ([A-Za-z0-9-]+)\./.exec(body ?? '');
+  return m ? m[1]! : null;
+}
+
+/**
+ * The most specific agency a record names. The Federal Register lists a
+ * document's agencies parent first ("Transportation Department, Federal
+ * Aviation Administration"), so the last one is the office that issued it.
+ */
+export function issuingAgencyOf(organization: string | null): string | null {
+  const parts = (organization ?? '').split(',').map((one) => one.trim()).filter(Boolean);
+  return parts.length > 0 ? parts[parts.length - 1]! : null;
+}
+
+/**
+ * RULE_EFFECTIVE_SOON, version 2 (SHADOW). Three causes of v1's recorded misses
+ * (DETECTOR_MISSES:RULE_EFFECTIVE_SOON@1), each fixed without lowering a bar:
+ *
+ *  1. The window is measured from the rule's own publication. A final rule
+ *     published in the last 30 days counts when it takes effect on or after its
+ *     publication date and no later than now + RULE_EFFECTIVE_SOON_DAYS. v1
+ *     measured the lower bound from the run, so a rule effective on its own
+ *     publication day (FAA 2026-23073, FCC 2026-23041) dropped out days later.
+ *     A rule effective before it was published is still never kept.
+ *  2. A correction inherits the effective date of the rule it corrects
+ *     ("Corrects <document_number>."), read from that stored record, and is
+ *     judged against the correction's own publication date (C1-2026-21030).
+ *     When the corrected record is not stored, nothing is inferred.
+ *  3. Members are grouped by the issuing agency, the last one listed, not by
+ *     the parent department the Federal Register lists first.
+ *
+ * Free-text dates are not parsed: picking the operative date out of prose is
+ * the known failure mode, so a notice whose only date is in its text (Coast
+ * Guard 2026-23047, enforced before it was published) stays out.
+ */
+export const RULE_EFFECTIVE_SOON_V2: Detector = {
+  id: 'RULE_EFFECTIVE_SOON',
+  version: 2,
+  label: RULE_EFFECTIVE_SOON.label,
+  mode: 'SHADOW',
+  sources: RULE_EFFECTIVE_SOON.sources,
+  // Long enough to hold the rule a recent correction corrects; membership stays at 30 days.
+  lookbackMs: 90 * DAY,
+  detect(records, now) {
+    const until = now.getTime() + RULE_EFFECTIVE_SOON_DAYS * DAY;
+    const since = now.getTime() - RULE_EFFECTIVE_SOON_PUBLISHED_DAYS * DAY;
+    const ours = records.filter((record) => this.sources.includes(record.source));
+    const effectiveOfDocument = (documentNumber: string): string | null => {
+      const corrected = ours.find((record) => record.url.includes(`/${documentNumber}/`));
+      return corrected ? effectiveDateOf(corrected.body) : null;
+    };
+    const groups = new Map<string, { name: string; members: { record: DetectorRecord; effective: string }[] }>();
+    for (const record of ours) {
+      const name = issuingAgencyOf(record.organization);
+      const agency = employerKey(name);
+      if (!agency || !name) continue;
+      const published = Date.parse(record.publishedAt ?? record.fetchedAt);
+      if (!Number.isFinite(published) || published < since || published > now.getTime()) continue;
+      const corrects = correctedDocumentOf(record.body);
+      const effective = effectiveDateOf(record.body) ?? (corrects ? effectiveOfDocument(corrects) : null);
+      if (!effective) continue;
+      const at = Date.parse(`${effective}T00:00:00.000Z`);
+      const publishedDay = Date.parse(`${new Date(published).toISOString().slice(0, 10)}T00:00:00.000Z`);
+      if (!Number.isFinite(at) || at < publishedDay || at > until) continue;
+      const group = groups.get(agency) ?? { name, members: [] };
+      group.members.push({ record, effective });
+      groups.set(agency, group);
+    }
+    const out: DetectedSignal[] = [];
+    for (const [agency, group] of [...groups].sort((a, b) => a[0].localeCompare(b[0]))) {
+      const dates = group.members.map((one) => one.effective).sort();
+      out.push({
+        groupKey: `agency:${agency}`,
+        label: `${group.members.length} final rule(s) from one agency taking effect by ${dates[dates.length - 1]}`,
+        entityKey: agency,
+        entityName: group.name,
+        category: 'REGULATION',
+        windowFrom: `${dates[0]}T00:00:00.000Z`,
+        windowTo: `${dates[dates.length - 1]}T00:00:00.000Z`,
+        memberIds: group.members.map((one) => one.record.id),
+        memberTitles: group.members.map((one) => one.record.title),
+        sourceUrls: [...new Set(group.members.map((one) => one.record.url))],
+        qualifiers: [
+          'a rule taking effect names who is regulated, not who will pay for help complying',
+          'the effective date is the one the Federal Register states; a delay or stay is not read',
+          'a correction carries the effective date of the rule it corrects, read from that stored record',
+        ],
+        hypothesis: `Businesses this agency regulates must comply by ${dates[0]}; some may buy a plain compliance summary or checklist. Not established.`,
+        deliverable: 'DOCUMENT',
+      });
+    }
+    return out;
+  },
+};
+
 /**
  * Every installed rule. Adding one is a new entry here and its tests — nothing else.
+ * RULE_EFFECTIVE_SOON v1 stays exported so its recorded rows and readings keep their key (@1).
  * A model may propose a rule only as a Factory objective (reviewed code, starting
  * in SHADOW); no model output installs, edits or promotes a rule at run time.
  * `proposeRuleRepair` is how a rule's repeated misses become that objective.
  */
-export const DETECTORS: readonly Detector[] = [CONCENTRATED_HIRING, REPEATED_DEMAND, RULE_EFFECTIVE_SOON];
+export const DETECTORS: readonly Detector[] = [CONCENTRATED_HIRING, REPEATED_DEMAND, RULE_EFFECTIVE_SOON_V2];
 
 // ---------------------------------------------------------------------------
 // SHADOW before ACTIVE: readings, promotion and rollback, from rows
