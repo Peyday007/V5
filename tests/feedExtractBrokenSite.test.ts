@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { extractItem, extractItems, readable, recordKindOf, type ExtractableItem } from '../server/services/feeds/extract.ts';
-import { PROBLEM_TITLE, SITE_SOURCE, type SiteProblem } from '../server/services/feeds/sites.ts';
+import { METROS, PROBLEM_TITLE, SITE_SOURCE, type SiteProblem } from '../server/services/feeds/sites.ts';
 
 const CONFIRMED = '2026-11-16T12:00:00.000Z';
 
@@ -82,7 +82,7 @@ describe('broken-site lead lines are read by code', () => {
   it('reads the city with its exact span, and one deliverable key per problem class', () => {
     const facts = RECORDED.map((i) => extractItem(i));
     const loc = facts.map((fs) => fs.filter((f) => f.field === 'location'));
-    for (const [i, city, text] of [[0, 'san antonio', 'in San Antonio'], [1, 'san antonio', 'in San Antonio'], [2, 'san antonio', 'in San Antonio'], [3, 'san antonio', 'in San Antonio'], [4, 'las vegas', 'in Las Vegas']] as const) {
+    for (const [i, city, text] of [[0, 'metro:san-antonio', 'in San Antonio'], [1, 'metro:san-antonio', 'in San Antonio'], [2, 'metro:san-antonio', 'in San Antonio'], [3, 'metro:san-antonio', 'in San Antonio'], [4, 'metro:las-vegas', 'in Las Vegas']] as const) {
       expect(loc[i]).toHaveLength(1);
       expect(loc[i]![0]!.value).toBe(city);
       expect(loc[i]![0]!.evidence.text).toBe(text);
@@ -111,5 +111,26 @@ describe('broken-site lead lines are read by code', () => {
     const otherFacts = extractItem(other);
     expect(otherFacts.some((f) => f.field === 'location')).toBe(false);
     expect(otherFacts.find((f) => f.field === 'deliverable')?.value).not.toMatch(/^website-repair:/);
+  });
+
+  it('never lets a same-named city in another state share a site-defect location value (F2)', () => {
+    // Each METROS city names exactly one bounding box, so the metro identity is unambiguous.
+    expect(new Set(METROS.map((m) => m.city)).size).toBe(METROS.length);
+    const vegasLead = extractItem(RECORDED[4]!).find((f) => f.field === 'location')!;
+    // Las Vegas, New Mexico, read from another source's "City, ST" text.
+    const nm: ExtractableItem = { id: 'fi_nm', source: 'craigslist', url: 'https://example.test/nm', title: 'Need a website fixed', body: 'Shop located in Las Vegas, NM needs help', organization: null, publishedAt: CONFIRMED, fetchedAt: CONFIRMED };
+    const nmPlace = extractItem(nm).find((f) => f.field === 'location')!;
+    expect(nmPlace.value).toBe('las vegas, nm');
+    expect(vegasLead.value).toBe('metro:las-vegas');
+    expect(vegasLead.value).not.toBe(nmPlace.value);
+    expect(vegasLead.value).not.toBe('las vegas');
+    expect(vegasLead.evidence.text).toBe('in Las Vegas');
+  });
+
+  it('reads no location from a city the site checker does not map, rather than a bare ambiguous one', () => {
+    const elsewhere: ExtractableItem = { ...RECORDED[4]!, id: 'fi_z', title: `El y Ella Beauty Salon in Springfield: ${PROBLEM_TITLE.NO_DNS}` };
+    const facts = extractItem(elsewhere);
+    expect(facts.some((f) => f.field === 'location')).toBe(false);
+    expect(facts.some((f) => f.value === 'springfield')).toBe(false);
   });
 });

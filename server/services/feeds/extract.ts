@@ -31,7 +31,7 @@
 import { employerKey, titleKey } from './detectors.ts';
 import { readMoneyFigures } from '../cash/figures.ts';
 import { readQuantities } from '../cash/volume.ts';
-import { PROBLEM_TITLE, SITE_SOURCE, type SiteProblem } from './sites.ts';
+import { METROS, PROBLEM_TITLE, SITE_SOURCE, type SiteProblem } from './sites.ts';
 
 /** The stored item fields extraction reads: `StoredFeedItem`'s shape, nothing more. */
 export interface ExtractableItem {
@@ -192,9 +192,16 @@ export function readPlaces(text: string): { place: string; text: string }[] {
 
 /**
  * A broken-site lead line, `<organization> in <City>: <problem phrase>`, read
- * only when the phrase is exactly one of the site checker's own problem titles
- * and the organization is the one the record names. Anything else is null:
- * nothing is guessed. Each span is the exact text of the title.
+ * only when the phrase is exactly one of the site checker's own problem titles,
+ * the organization is the one the record names, and the city is one of the
+ * checker's own METROS. Anything else is null: nothing is guessed. Each span is
+ * the exact text of the title.
+ *
+ * The line names no state, so a bare city would let two same-named cities in
+ * different states share one location value. The checker only ever writes a
+ * METROS city, and each METROS entry is one bounding box, so the location is
+ * that entry's identity (`metro:<id>`), a namespace no "City, ST" reading
+ * shares; a city the registry does not hold is not read at all.
  */
 export function readSiteDefect(item: Pick<ExtractableItem, 'source' | 'title' | 'organization'>): { problem: SiteProblem; city: string; cityText: string; phraseText: string } | null {
   if (item.source !== SITE_SOURCE || !item.organization) return null;
@@ -204,9 +211,10 @@ export function readSiteDefect(item: Pick<ExtractableItem, 'source' | 'title' | 
     const head = item.title.slice(0, item.title.length - tail.length);
     const lead = `${item.organization} in `;
     if (!head.startsWith(lead)) return null;
-    const city = head.slice(lead.length).trim();
-    if (!/^[A-Z][A-Za-z.' -]{0,40}$/.test(city)) return null;
-    return { problem, city: city.toLowerCase(), cityText: `in ${city}`, phraseText: phrase };
+    const city = head.slice(lead.length);
+    const metros = METROS.filter((m) => m.city === city);
+    if (metros.length !== 1) return null;
+    return { problem, city: `metro:${metros[0]!.id}`, cityText: `in ${city}`, phraseText: phrase };
   }
   return null;
 }
