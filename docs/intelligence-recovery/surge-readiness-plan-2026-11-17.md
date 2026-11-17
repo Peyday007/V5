@@ -64,3 +64,7 @@ Spending safeguard for W6: every GPU start goes through `runpod-launch` with a B
   - #1043, W13: an empty claim list states why.
   - #1045, W13b: a gap fragment keeps its requirement's source rules, and a stated empty list is neutral for fitness.
   W13 root cause: the 120B's fragment failures were empty lists under official-only source rules, which search could not satisfy. Brain's checks were not dropping valid claims.
+- 09:47Z: release 5 (4cec7709) FAILED the Postgres gate. Factory's campaign merges #1026/#1027 (RES-15-5, META-18; about 7.9k lines) landed on production at about 09:30Z, inside the release. Two failures:
+  - res-15-5-1-cost-once, PG 22P02, from Factory's code. Owner: a new engineer.
+  - discoveryLaneSurge, PG 5 ≥ 32, from W12's test. Owner: W12.
+  Both reproduce locally. Fix PRs due 10:20Z, then release 6. Production is still on eda04071, and the stage-2 GPU is not launched.
