@@ -268,3 +268,10 @@ See F1–F7 above. Each one gives the cause, file:line, run IDs, the smallest ch
   - V1–V8 and W6 re-measure on release 4 from 11:00 to 13:00Z;
   - report by 14:30Z.
   - Slack is about 30–60 min. The checks on bd5e0419 between 09:15 and 11:00Z de-risk the path: anything already verified there and untouched by release 4 does not need re-verifying.
+- **08:54Z, W6 stage 1 result** (07:50–08:50Z on eda04071, SECURE H200 at $5.29/h):
+  - GPU: 221 jobs, 11% not accepted, 4.22 slots busy on average, but only **2 accepted claims**, about $2.20 each.
+  - The 120B model is **still HELD BACK on RESEARCH_FRAGMENT**: 20 of its fragment answers were dropped by "did not survive Brain's own checks". That is ACTIVE BLOCKER A1 for the surge. Owner: W13.
+  - Lane-wide: 20.4 accepted claims/h. **The goal: 6.8 claims/h, up from 0**, with up to 7 goal jobs at once. So V1 (goal work reaches workers) is verified on eda04071.
+  - Plan runs: median 0.5 s, but event-loop stalls of 2–3 s in evaluatorPool.ts (W2c).
+  - DB: NORMAL, p90 21 ms, 33 pool-checkout timeouts.
+  - The GPU is stopped until bd5e0419 is live.
