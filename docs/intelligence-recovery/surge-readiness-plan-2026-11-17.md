@@ -68,3 +68,8 @@ Spending safeguard for W6: every GPU start goes through `runpod-launch` with a B
   - res-15-5-1-cost-once, PG 22P02, from Factory's code. Owner: a new engineer.
   - discoveryLaneSurge, PG 5 ≥ 32, from W12's test. Owner: W12.
   Both reproduce locally. Fix PRs due 10:20Z, then release 6. Production is still on eda04071, and the stage-2 GPU is not launched.
+- 09:56Z: release 6 = 8885038e, deploy 44060012669. It adds:
+  - #1046, from another session: fixes for the two tests that fail only on Postgres;
+  - #1048, W12: pool-precondition cases for its test.
+  #1047 closed as superseded. Both tests pass on both backends locally.
+- DECIDED: no Factory merge hold. No merge-only hold exists; the only lever, pausing workers, would break the standing order "do not disconnect Factory". Mitigation: re-dispatch Deploy on any superseding commit, and fix any breakage it brings.
