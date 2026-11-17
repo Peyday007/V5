@@ -1085,6 +1085,33 @@ describe('a model keeps only the kinds of work Brain accepts from it', () => {
     expect(heldBackFor('gpu', 'RESEARCH_FRAGMENT', ['gpu'], unfit, healthy)).toBe(false);
     expect(heldBackFor('free', 'RESEARCH_FRAGMENT', ['gpu', 'free'], unfit, healthy)).toBe(false);
   });
+
+  it('judges a pair on its latest answers, so rejections from before a fix stop holding it back (2026-11-17)', async () => {
+    const { recentAnswers, unfitPairs, RECENT_ANSWERS } = await import('../server/services/freeLane/worker.ts');
+    const ok = { reason: 'model gpu: 3 claims', work_type: 'RESEARCH_FRAGMENT', outcome: 'SUBMITTED' };
+    const bad = { reason: 'model gpu: answers rejected', work_type: 'RESEARCH_FRAGMENT', outcome: 'FAILED_RETRYABLE' };
+    const outage = { reason: 'model gpu: model call failed', work_type: 'RESEARCH_FRAGMENT', outcome: 'FAILED_RETRYABLE' };
+    // Newest first: two accepted answers after the fix, thirty rejections before it.
+    const after = [ok, ok, ...Array(30).fill(bad)];
+    expect(unfitPairs(recentAnswers(Array(30).fill(bad)), ['gpu', 'free']).has('gpu|RESEARCH_FRAGMENT')).toBe(true);
+    expect(unfitPairs(recentAnswers(after), ['gpu', 'free']).size).toBe(0);
+    const judged = recentAnswers(after).reduce((n, r) => n + r.n, 0);
+    expect(judged).toBe(RECENT_ANSWERS);
+    // An outage is not the model's answer and does not use up the window.
+    const withOutage = recentAnswers([outage, outage, ok, ok, ...Array(30).fill(bad)]);
+    expect(withOutage.reduce((n, r) => n + r.n, 0)).toBe(RECENT_ANSWERS + 2);
+  });
+
+  it('gives a held pair one re-probe item per interval', async () => {
+    const { pairProbeDue, takePairProbe, resetFreeLaneFitness, PAIR_REPROBE_MS } = await import('../server/services/freeLane/worker.ts');
+    resetFreeLaneFitness();
+    const t = 1_000_000_000_000;
+    expect(pairProbeDue('gpu', 'RESEARCH_FRAGMENT', t)).toBe(true);
+    takePairProbe('gpu', 'RESEARCH_FRAGMENT', t);
+    expect(pairProbeDue('gpu', 'RESEARCH_FRAGMENT', t + 60_000)).toBe(false);
+    expect(pairProbeDue('gpu', 'RESEARCH_AUDIT', t + 60_000)).toBe(true);
+    expect(pairProbeDue('gpu', 'RESEARCH_FRAGMENT', t + PAIR_REPROBE_MS)).toBe(true);
+  });
 });
 
 describe('gpt-oss-120b refusals (production, 2026-11-16)', () => {
