@@ -15,11 +15,53 @@ import {
   runSprintBenchmark,
   splitProblems,
   sprintIfDue,
+  profileOf,
+  type SprintFact,
   type SprintProblem,
 } from '../server/services/improvement/sprint.ts';
+import type { AtomicClaim, KnowledgeReading } from '../server/services/research/knowledgeModel.ts';
+
+/** Card field → the card fact that evidences it, as production stores it. */
+const FACT_OF: Record<string, string> = {
+  payer: 'payer',
+  reachableChannel: 'access',
+  buyingSignal: 'buyingEvidence',
+  acceptanceCondition: 'acceptance',
+  priceCents: 'price',
+  paymentTerms: 'cashDates',
+  fulfillmentOwner: 'fulfillment',
+};
+
+const claim = (id: string, status: AtomicClaim['status'] = 'SUPPORTED', sourceUrl: string | null = `https://example.test/${id}`): AtomicClaim => ({
+  id,
+  facet: 'buyer_behavior',
+  text: `claim ${id}`,
+  status,
+  reason: status,
+  provenance: { sourceUrl, sourceTitle: null, publisher: null, publishedAt: null, retrievedAt: '2026-11-01T00:00:00.000Z', retrievalState: 'READ', lane: null, primary: true },
+  scope: { geography: null, timeframe: null, population: null, definition: null },
+  related: [],
+});
+
+const reading = (claims: AtomicClaim[]): KnowledgeReading => ({
+  subject: 'prj_1',
+  claims,
+  facets: [],
+  needs: [],
+  evidence: { claims: claims.length, sources: claims.length, primary: claims.length, byRetrieval: {} },
+});
+
+/** Every field's card fact cites one supported, sourced claim. */
+const KNOWLEDGE = reading(Object.keys(FACT_OF).map((f) => claim(`clm_${f}`)));
+
+/** The EVIDENCE facts a filled card carries, citing KNOWLEDGE's claims. */
+const factsFor = (p: SprintProblem): SprintFact[] =>
+  Object.entries(FACT_OF)
+    .filter(([f]) => (p as unknown as Record<string, unknown>)[f] !== null)
+    .map(([f, fact]) => ({ field: fact, kind: 'EVIDENCE' as const, claimId: `clm_${f}` }));
 
 let seq = 0;
-const problem = (over: Partial<SprintProblem> = {}): SprintProblem => {
+const bare = (over: Partial<SprintProblem> = {}): SprintProblem => {
   seq += 1;
   return {
     id: `opp_${String(seq).padStart(4, '0')}`,
@@ -42,8 +84,14 @@ const problem = (over: Partial<SprintProblem> = {}): SprintProblem => {
     state: 'READY',
     createdAt: `2026-10-${String((seq % 28) + 1).padStart(2, '0')}T00:00:00.000Z`,
     updatedAt: '2026-11-01T00:00:00.000Z',
+    knowledge: KNOWLEDGE,
     ...over,
   };
+};
+/** A problem whose filled fields are each backed by a cited claim, unless the override says otherwise. */
+const problem = (over: Partial<SprintProblem> = {}): SprintProblem => {
+  const p = bare(over);
+  return { ...p, facts: over.facts ?? factsFor(p) };
 };
 
 /** A population where payer+price is present on dead openings too, so the baseline over-calls them. */
@@ -183,5 +231,79 @@ describe('a run records its readings, feeds failure to the existing repair path,
 
   it('is run by the improvement tick', () => {
     expect(readFileSync('server/services/improvement/loop.ts', 'utf8')).toContain("import('./sprint.ts')");
+  });
+});
+
+describe('the controller weighs competing hypotheses against cited research claims, never against field counts (repair F3)', () => {
+  it('a filled card with no cited claim is not evidence: nothing supports it and it is not called actionable', () => {
+    const p = problem({ facts: [] });
+    const { evidence } = profileOf(p);
+    expect(evidence).toEqual([]);
+    const v = GENERAL_METHOD.run(p, 0.6);
+    expect(v.actionable).toBe(false);
+    expect(v.probability).toBeLessThan(0.5);
+    // Every role the card fills is unevidenced, so the controller holds a counter-model at each.
+    expect(v.decision!.hypotheses.map((h) => h.id)).toEqual(expect.arrayContaining(['fails:initiator', 'fails:access', 'fails:trigger', 'fails:moneyMovement', 'fails:deliverer']));
+  });
+
+  it('every evidence item is a cited research claim carrying its own source', () => {
+    const p = problem();
+    const { evidence } = profileOf(p);
+    expect(evidence.map((e) => e.id).sort()).toEqual(Object.keys(FACT_OF).map((f) => `clm_${f}`).sort());
+    for (const e of evidence) expect(e.source).toBe(`https://example.test/${e.id}`);
+  });
+
+  it('a recommendation, an unknown claim id or an unsourced claim adds no evidence', () => {
+    const p = problem({
+      knowledge: reading([claim('clm_payer', 'SUPPORTED', null)]),
+      facts: [
+        { field: 'payer', kind: 'EVIDENCE', claimId: 'clm_payer' },
+        { field: 'access', kind: 'RECOMMENDATION', claimId: null },
+        { field: 'price', kind: 'EVIDENCE', claimId: 'clm_not_in_knowledge' },
+      ],
+    });
+    expect(profileOf(p).evidence).toEqual([]);
+  });
+
+  it('generates competing counter-hypotheses from the mechanism, not from a fixed pair', () => {
+    const full = GENERAL_METHOD.run(problem(), 0.6).decision!;
+    const partial = GENERAL_METHOD.run(problem({ buyingSignal: null, acceptanceCondition: null, fulfillmentOwner: null }), 0.6).decision!;
+    const ids = (d: typeof full) => d.hypotheses.map((h) => h.id);
+    expect(ids(full)).not.toContain('pathway-fails');
+    expect(ids(partial)).toEqual(expect.arrayContaining(['pathway-holds', 'fails:trigger', 'fails:deliverer']));
+    expect(ids(full)).not.toContain('fails:deliverer');
+    expect(ids(partial).length).toBeGreaterThan(ids(full).length - 1);
+    for (const d of [full, partial]) expect(d.hypotheses.filter((h) => h.basis.startsWith('counter:')).length).toBeGreaterThan(0);
+  });
+
+  it('a conflicting cited claim refutes the pathway and supports the counter-model at its role', () => {
+    const claims = Object.keys(FACT_OF).map((f) => claim(`clm_${f}`, f === 'payer' ? 'CONFLICTING' : 'SUPPORTED'));
+    const p = problem({ knowledge: reading(claims) });
+    const d = GENERAL_METHOD.run(p, 0.6).decision!;
+    const holds = d.hypotheses.find((h) => h.id === 'pathway-holds')!;
+    const counter = d.hypotheses.find((h) => h.id === 'fails:initiator')!;
+    expect(holds.refutes).toContain('clm_payer');
+    expect(counter.supports).toContain('clm_payer');
+  });
+
+  it('a run attaches each project\'s knowledge reading once, from the knowledge owner', async () => {
+    await freshProject();
+    const loaded: string[] = [];
+    const seen: (KnowledgeReading | null | undefined)[] = [];
+    await runSprintBenchmark({
+      read: async () => [bare({ knowledge: undefined, projectId: 'prj_a' }), bare({ knowledge: undefined, projectId: 'prj_a' }), bare({ knowledge: undefined, projectId: 'prj_b' })],
+      previous: async () => null,
+      knowledge: async (projectId) => {
+        loaded.push(projectId);
+        return KNOWLEDGE;
+      },
+      recordDecision: async (d) => {
+        seen.push(d.hypotheses.length > 0 ? KNOWLEDGE : null);
+      },
+      recordProvenance: async () => {},
+      registerDirected: async () => ({ candidate: { id: 'imc_x' } }),
+    });
+    expect(loaded).toEqual(['prj_a', 'prj_b']);
+    expect(seen.length).toBeGreaterThan(0);
   });
 });

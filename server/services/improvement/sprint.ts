@@ -49,6 +49,15 @@ import {
 } from '../research/reasoningController.ts';
 import { buildNumberProvenance, recordNumberProvenance, type NumberProvenance, type ProvenanceInput } from '../quant/mathToolkit.ts';
 import type { Figure } from '../quant/graph.ts';
+import {
+  buildMechanismModel,
+  loadProjectKnowledge,
+  type KnowledgeReading,
+  type MechanismModel,
+  type MechanismPart,
+  type MechanismRole,
+} from '../research/knowledgeModel.ts';
+import type { CashCardFact } from '../../domain/types.ts';
 
 /* ------------------------------------------------------------------------- */
 /* Problems                                                                   */
@@ -75,7 +84,16 @@ export interface SprintProblem {
   state: string;
   createdAt: string;
   updatedAt: string;
+  /** The opening's card facts: which field is backed by which research claim, if any. */
+  facts?: SprintFact[];
+  /**
+   * The project's knowledge reading (`loadProjectKnowledge`): the sourced claims
+   * a card fact may cite. Undefined until loaded; null when it could not be read.
+   */
+  knowledge?: KnowledgeReading | null;
 }
+
+export type SprintFact = Pick<CashCardFact, 'field' | 'kind' | 'claimId'>;
 
 /** The card fields a pathway cannot be acted on without. */
 export const LOAD_BEARING = ['payer', 'reachableChannel', 'buyingSignal', 'acceptanceCondition', 'priceCents', 'paymentTerms', 'fulfillmentOwner'] as const;
@@ -123,6 +141,18 @@ export async function readSprintProblems(limit = 2000): Promise<SprintProblem[]>
       LIMIT ?`,
     [Math.max(1, Math.floor(limit))],
   );
+  const factRows = await getDb().all<{ opportunity_id: string; field: string; kind: string; claim_id: string | null }>(
+    `SELECT opportunity_id, field, kind, claim_id
+       FROM cash_card_facts
+      WHERE opportunity_id IN (SELECT id FROM cash_opportunities WHERE duplicate_of_id IS NULL)`,
+    [],
+  );
+  const facts = new Map<string, SprintFact[]>();
+  for (const f of factRows) {
+    const list = facts.get(f.opportunity_id) ?? [];
+    list.push({ field: f.field, kind: f.kind as CashCardFact['kind'], claimId: f.claim_id });
+    facts.set(f.opportunity_id, list);
+  }
   return rows.map((r) => ({
     id: r.id,
     projectId: r.project_id,
@@ -144,6 +174,7 @@ export async function readSprintProblems(limit = 2000): Promise<SprintProblem[]>
     state: r.state,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+    facts: facts.get(r.id) ?? [],
   }));
 }
 
@@ -224,9 +255,60 @@ export const BASELINE_METHOD: SprintMethod = {
 };
 
 const HOLDS = 'pathway-holds';
-const FAILS = 'pathway-fails';
 
-/** The problem as the controller sees it: its evidenced features and its open unknowns. */
+/**
+ * Where each load-bearing field sits in the transaction's mechanism, and the
+ * card fact (`CARD_COLUMN` key) that carries its evidence. Payment terms have
+ * no card fact of their own; the cash-dates fact is the one that states when
+ * and on what terms money moves.
+ */
+const FIELD_MECHANISM: Record<LoadBearing, { role: MechanismRole; fact: string }> = {
+  payer: { role: 'initiator', fact: 'payer' },
+  reachableChannel: { role: 'access', fact: 'access' },
+  buyingSignal: { role: 'trigger', fact: 'buyingEvidence' },
+  acceptanceCondition: { role: 'trigger', fact: 'acceptance' },
+  priceCents: { role: 'moneyMovement', fact: 'price' },
+  paymentTerms: { role: 'moneyMovement', fact: 'cashDates' },
+  fulfillmentOwner: { role: 'deliverer', fact: 'fulfillment' },
+};
+
+/** The counter-hypothesis id the controller generates for a mechanism role nothing evidences. */
+const failsAt = (role: MechanismRole): string => `fails:${role}`;
+
+/** The counter-models that bear on whether this card's pathway holds: one per role a load-bearing field fills. */
+const LOAD_BEARING_COUNTERS: ReadonlySet<string> = new Set(Object.values(FIELD_MECHANISM).map((m) => failsAt(m.role)));
+
+/** The research claim a field's card fact cites, as the knowledge reading holds it; null when none does. */
+function citedClaim(p: SprintProblem, field: LoadBearing): KnowledgeReading['claims'][number] | null {
+  const fact = (p.facts ?? []).find((f) => f.field === FIELD_MECHANISM[field].fact && f.kind === 'EVIDENCE' && f.claimId);
+  if (!fact || !p.knowledge) return null;
+  return p.knowledge.claims.find((c) => c.id === fact.claimId) ?? null;
+}
+
+/**
+ * The opening's mechanism on the causal graph, each part evidenced only by the
+ * research claim its card fact cites. A role no field fills, or whose claim is
+ * not supported, stays UNKNOWN, and the controller generates a counter-model for it.
+ */
+export function mechanismOf(p: SprintProblem): MechanismModel | null {
+  if (!p.knowledge) return null;
+  const roles: Partial<Record<MechanismRole, MechanismPart[]>> = {};
+  for (const field of LOAD_BEARING) {
+    if (!known(p, field)) continue;
+    const { role } = FIELD_MECHANISM[field];
+    const claim = (p.facts ?? []).find((f) => f.field === FIELD_MECHANISM[field].fact && f.kind === 'EVIDENCE' && f.claimId)?.claimId ?? null;
+    (roles[role] ??= []).push({ id: `${p.id}:${field}`, label: field, evidence: claim ? [claim] : [] });
+  }
+  const built = buildMechanismModel({ subject: p.title, knowledge: p.knowledge, roles });
+  return built.ok ? built.model : null;
+}
+
+/**
+ * The problem as the controller sees it: its evidenced features, its open
+ * unknowns, and the evidence that bears on it — only research claims a card
+ * fact cites, each carrying its own source. A filled field with no cited,
+ * supported claim is an assertion, not evidence, and contributes nothing.
+ */
 export function profileOf(p: SprintProblem): { profile: ProblemProfile; unknowns: LoadBearing[]; evidence: EvidenceItem[]; actions: CandidateAction[] } {
   const source = sourceOf(p);
   const unknowns = LOAD_BEARING.filter((f) => !known(p, f));
@@ -239,14 +321,34 @@ export function profileOf(p: SprintProblem): { profile: ProblemProfile; unknowns
   if (p.industry) features.push({ feature: `industry:${p.industry}`, source });
   const available: string[] = [];
   if (known(p, 'paymentTerms')) available.push('payment-terms');
-  const evidence: EvidenceItem[] = LOAD_BEARING.filter((f) => known(p, f)).map((f) => ({ id: `${p.id}:${f}`, source, bears: { [HOLDS]: 'SUPPORTS' } }));
-  const actions: CandidateAction[] = unknowns.map((f) => ({
+
+  const evidence: EvidenceItem[] = [];
+  const seen = new Set<string>();
+  const unevidenced: LoadBearing[] = [];
+  for (const field of LOAD_BEARING) {
+    const claim = known(p, field) ? citedClaim(p, field) : null;
+    const url = claim?.provenance?.sourceUrl ?? null;
+    if (!claim || !url) {
+      unevidenced.push(field);
+      continue;
+    }
+    if (claim.status !== 'SUPPORTED') unevidenced.push(field);
+    if (seen.has(claim.id)) continue;
+    seen.add(claim.id);
+    const role = FIELD_MECHANISM[field].role;
+    evidence.push(
+      claim.status === 'SUPPORTED'
+        ? { id: claim.id, source: url, bears: { [HOLDS]: 'SUPPORTS', [failsAt(role)]: 'REFUTES' } }
+        : { id: claim.id, source: url, bears: { [HOLDS]: 'REFUTES', [failsAt(role)]: 'SUPPORTS' } },
+    );
+  }
+  const actions: CandidateAction[] = unevidenced.map((f) => ({
     key: `${p.id}:${f}`,
     kind: 'RESEARCH',
     subject: `${f} of ${p.title}`.slice(0, 200),
-    question: `What is the ${f} for "${p.title}"?`.slice(0, 300),
+    question: (known(p, f) ? `What source establishes the ${f} stated for "${p.title}"?` : `What is the ${f} for "${p.title}"?`).slice(0, 300),
     resolves: f,
-    discriminates: [HOLDS, FAILS],
+    discriminates: [HOLDS, failsAt(FIELD_MECHANISM[f].role)],
     cost: 0.01,
   }));
   return {
@@ -304,22 +406,26 @@ export const GENERAL_METHOD: SprintMethod = {
   run(p, threshold) {
     const started = performance.now();
     const { profile, unknowns, evidence, actions } = profileOf(p);
+    const mechanism = mechanismOf(p);
+    // One hypothesis is the card's own claim; every competing one is generated by the
+    // controller from the mechanism's unevidenced roles and the knowledge's conflicts.
     const decision = decideNext({
       problem: profile,
-      knowledge: null,
-      mechanism: null,
+      knowledge: p.knowledge ?? null,
+      mechanism,
       catalogue: SEED_METHODS,
       outcomes: [],
-      hypotheses: [
-        { id: HOLDS, statement: `"${p.title}" is an actionable pathway`, basis: 'given:holds' },
-        { id: FAILS, statement: `"${p.title}" fails at an unknown load-bearing field`, basis: 'given:fails' },
-      ],
-      evidence: [...evidence, ...unknowns.map((f): EvidenceItem => ({ id: `${p.id}:${f}:unknown`, source: sourceOf(p), bears: { [FAILS]: 'SUPPORTS', [HOLDS]: 'REFUTES' } }))],
+      hypotheses: [{ id: HOLDS, statement: `"${p.title}" works as its evidenced mechanism describes`, basis: `mechanism:${p.id}` }],
+      evidence,
       actions,
       now: p.updatedAt,
     });
     const { record, findings: provenanceFindings } = grossBilledProvenance(p);
-    const probability = decision.hypotheses.find((h) => h.id === HOLDS)?.score ?? 0;
+    // The pathway holds only if no counter-model at a load-bearing role does: its probability is
+    // the card's own hypothesis discounted by each generated counter-model's standing there.
+    const holds = decision.hypotheses.find((h) => h.id === HOLDS)?.score ?? 0;
+    const counters = decision.hypotheses.filter((h) => LOAD_BEARING_COUNTERS.has(h.id));
+    const probability = Math.round(counters.reduce((q, h) => q * (1 - h.score), holds) * 1000) / 1000;
     const actionable = unknowns.length === 0 && record !== null && probability >= threshold;
     const robust = actionable && record !== null && record.alternatives.every((a) => a.value !== null && a.value > 0);
     return {
@@ -483,7 +589,32 @@ export interface SprintDeps {
   recordDecision?: typeof recordControllerDecision;
   recordProvenance?: typeof recordNumberProvenance;
   registerDirected?: (weakness: Weakness, now?: Date) => Promise<{ candidate: { id: string } }>;
+  /** A project's knowledge reading; defaults to `loadProjectKnowledge`. */
+  knowledge?: (projectId: string) => Promise<KnowledgeReading>;
   now?: () => Date;
+}
+
+/** Attach each project's knowledge reading, once per project, to the problems that lack one. */
+async function withKnowledge(problems: SprintProblem[], load?: (projectId: string) => Promise<KnowledgeReading>): Promise<SprintProblem[]> {
+  const cache = new Map<string, KnowledgeReading | null>();
+  const read = load ?? ((projectId: string) => loadProjectKnowledge(projectId, { subject: projectId }));
+  const out: SprintProblem[] = [];
+  for (const p of problems) {
+    if (p.knowledge !== undefined) {
+      out.push(p);
+      continue;
+    }
+    if (!cache.has(p.projectId)) {
+      try {
+        cache.set(p.projectId, await read(p.projectId));
+      } catch {
+        // Unreadable knowledge is no evidence, never a favourable assumption.
+        cache.set(p.projectId, null);
+      }
+    }
+    out.push({ ...p, knowledge: cache.get(p.projectId) ?? null });
+  }
+  return out;
 }
 
 export const SPRINT_DISCLAIMER =
@@ -499,7 +630,7 @@ async function previousRun(): Promise<{ at: string; cutoff: string | null } | nu
 /** Run the benchmark once: split, tune on the benchmark only, score every set, compare, record. */
 export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintRun> {
   const now = (deps.now ?? (() => new Date()))();
-  const problems = await (deps.read ?? readSprintProblems)();
+  const problems = await withKnowledge(await (deps.read ?? readSprintProblems)(), deps.knowledge);
   const previous = await (deps.previous ?? previousRun)();
   const previousCutoff = previous?.cutoff ?? null;
   const split = splitProblems(problems, previousCutoff);
