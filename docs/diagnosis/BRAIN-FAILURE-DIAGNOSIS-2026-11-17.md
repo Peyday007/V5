@@ -380,3 +380,14 @@ Lane-wide accepted claims fell from 14/h to 2/h as concurrency rose (runpod-repo
 # T4 VERIFICATION, 56bc7f12 (coordinator session_01QF5Tk6gJZ5UNMYcbPxbsu1; new deadline 19:00Z, readings due 18:45Z)
 
 - 17:23Z: Deploy 44127191670 (56bc7f12 = W15 #1058 + W16 #1057) is still in progress. Readings use read-only reports only; no paid compute from this session.
+- 17:24Z: Deploy 44127191670 succeeded, and 56bc7f12 is serving. Four read-only reports were dispatched at 17:39Z: cheap-lane runpod-report 44139331832, connection-report 44139339578, cash-report 44139346478 and admin free-lane show 44139352481.
+
+## T4b — pressure and stalls (connection-report 44139339578, read 17:39Z)
+| process | revision | lifetime | pressure | stalls ≥2 s |
+|---|---|---|---|---|
+| proc_82375841 | 246aa613 (before W15) | 16:16–17:17Z | **SHEDDING** since 16:40:53Z (14 s of the last 120 s stalled) | 41 in russell:project-kernels, 104 s total, max 4.18 s |
+| proc_73330acb | 56bc7f12 (W15) | 17:25–17:39Z (14 min) | **NORMAL** since start, p90 21 ms, 0 overload failures | 1 (2.0 s at 17:36:23Z), worst loop 2.2 s |
+
+- Before W15, the CPU profile was dominated by `planSet canonical` (12.7 s self per 60 s window), `payerNamedIn`, `statesNamedIn` and `postMessage`. After W15, none of these appear in the profile window. The top frames are pg I/O and GC.
+- Pools are unchanged: workload 8, waiting 0, pool-wait p95 0 ms.
+- Caveat: the 56bc7f12 window is 14 minutes long. Two short-lived processes on 56bc7f12 (17:17Z and 17:21Z, the deploy's restart steps) also read NORMAL with no stalls.
