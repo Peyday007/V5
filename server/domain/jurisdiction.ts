@@ -124,7 +124,13 @@ export function stateFromPlace(value: unknown): UsState | null {
  * rather than something to pick between — the caller refuses rather than
  * choosing.
  */
+let STATE_PATTERNS_LONGEST_FIRST_CACHE: Array<[UsState, RegExp]> | null = null;
+function statePatternsLongestFirst(): Array<[UsState, RegExp]> {
+  return (STATE_PATTERNS_LONGEST_FIRST_CACHE ??= [...US_STATES].sort((a, b) => b.length - a.length).map((state): [UsState, RegExp] => [state, new RegExp(`\\b${state}\\b`, 'gi')]));
+}
+
 export function statesNamedIn(text: string): UsState[] {
+  const STATE_PATTERNS_LONGEST_FIRST = statePatternsLongestFirst();
   const found = new Set<UsState>();
   /*
    * Names overlap: `west virginia` contains `virginia`, and `Washington, DC`
@@ -139,8 +145,9 @@ export function statesNamedIn(text: string): UsState[] {
     found.add('district of columbia');
     working = working.replace(districtForms, ' ');
   }
-  for (const state of [...US_STATES].sort((a, b) => b.length - a.length)) {
-    const pattern = new RegExp(`\\b${state}\\b`, 'gi');
+  for (const [state, pattern] of STATE_PATTERNS_LONGEST_FIRST) {
+    // Compiled once (W15): a fresh RegExp per state per call was ~50 compilations a reading, on the planner's hot path.
+    pattern.lastIndex = 0;
     if (pattern.test(working)) {
       found.add(state);
       working = working.replace(pattern, ' ');

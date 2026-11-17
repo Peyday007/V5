@@ -328,9 +328,12 @@ const AGENCY_NOUNS: Readonly<Record<string, string>> = {
   administration: 'administrations',
 };
 const AGENCY = Object.keys(AGENCY_NOUNS).join('|');
-const STATES_LONGEST_FIRST = [...US_STATES].sort((a, b) => b.length - a.length);
+const STATE_PATTERNS_LONGEST_FIRST = [...US_STATES].sort((a, b) => b.length - a.length).map((state) => new RegExp(`\\b${state}\\b`, 'gi'));
+const AGENCY_OF = new RegExp(`^(.*?)\\b(${AGENCY}) of (?:the )?(.+)$`, 'i');
+const AGENCY_AFTER = new RegExp(`^(.+?)\\s+(${AGENCY})$`, 'i');
+const AGENCY_ANY = new RegExp(`\\b(?:${AGENCY})\\b`, 'i');
 const withoutStates = (text: string): string =>
-  STATES_LONGEST_FIRST.reduce((rest, state) => rest.replace(new RegExp(`\\b${state}\\b`, 'gi'), ' '), text)
+  STATE_PATTERNS_LONGEST_FIRST.reduce((rest, pattern) => rest.replace(pattern, ' '), text)
     .replace(/\b(?:state|commonwealth)(?: of)?\b/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -360,6 +363,29 @@ const withoutStates = (text: string): string =>
  * type made of prose.
  */
 export function payerNamedIn(payer: string | null | undefined): string | null {
+  return remembered(payerNamedInMemo, payer ?? '', readPayerNamedIn);
+}
+
+/**
+ * Both payer readings are pure in one string and cost dozens of regular
+ * expressions each, and the planner asks them of the same few hundred payers
+ * once per arrangement (W15, production 2026-11-17: `payerNamedIn` and
+ * `statesNamedIn` among the heaviest frames of 10–20 s event-loop stalls). A
+ * payer is read once; the table is bounded and simply emptied when full.
+ */
+const PAYER_MEMO_MAX = 8_192;
+const payerNamedInMemo = new Map<string, string | null>();
+const buyerPopulationMemo = new Map<string, string | null>();
+function remembered(memo: Map<string, string | null>, key: string, read: (key: string) => string | null): string | null {
+  const hit = memo.get(key);
+  if (hit !== undefined) return hit;
+  const value = read(key);
+  if (memo.size >= PAYER_MEMO_MAX) memo.clear();
+  memo.set(key, value);
+  return value;
+}
+
+function readPayerNamedIn(payer: string): string | null {
   const unbracketed = (payer ?? '')
     // An abbreviation's full stop does not end a name ("St. Louis", "GitHub, Inc.").
     .replace(/\b(St|Mt|Ft|Inc|Co|Corp|Ltd|LLC|Dept|Univ|Assn|Bros|No|U\.S|Dr|Jr|Sr)\./g, '$1')
@@ -432,6 +458,10 @@ const NOT_A_PAYER = /^(?:it|its|they|them|this|that|these|those|he|she|we|you|so
 const GENERIC_PAYER: ReadonlySet<string> = new Set(['buyer', 'payer', 'customer', 'client', 'purchaser', 'user', 'end user']);
 
 export function buyerPopulationName(payer: string | null | undefined): string | null {
+  return remembered(buyerPopulationMemo, payer ?? '', readBuyerPopulationName);
+}
+
+function readBuyerPopulationName(payer: string): string | null {
   const named = payerNamedIn(payer);
   if (!named) return null;
   let text = named.replace(/\s+/g, ' ').trim();
@@ -448,7 +478,7 @@ export function buyerPopulationName(payer: string | null | undefined): string | 
   // "PA PUC Bureau of …": a leading postal code is the state its agency belongs to.
   const code = /^([A-Z]{2})\s+(.+)$/.exec(text);
   const coded = code ? stateFromField(code[1]) : null;
-  if (code && coded && new RegExp(`\\b(?:${AGENCY})\\b`, 'i').test(code[2]!)) text = `${coded} ${code[2]!}`;
+  if (code && coded && AGENCY_ANY.test(code[2]!)) text = `${coded} ${code[2]!}`;
   if (/\b(?:school district|public schools|school board|board of education|unified school)\b/i.test(text)) return 'school districts';
   if (/\b(?:universit(?:y|ies)|colleges?)\b/i.test(text)) return 'universities and colleges';
   if (/^(?:city|town|village|borough|township) of\b/i.test(text) || /\b(?:city|town|borough|township) (?:council|government)\b/i.test(text)) return 'municipal governments';
@@ -456,10 +486,10 @@ export function buyerPopulationName(payer: string | null | undefined): string | 
   if (statesNamedIn(text).length > 0) {
     if (/^(?:state|commonwealth) of [a-z ]+$/i.test(text)) return 'state governments';
     // "<State> Department of <X>" -> "state <x> departments".
-    const of = new RegExp(`^(.*?)\\b(${AGENCY}) of (?:the )?(.+)$`, 'i').exec(text);
+    const of = AGENCY_OF.exec(text);
     if (of && statesNamedIn(of[1]!).length > 0 && statesNamedIn(of[3]!).length === 0) return `state ${of[3]!.toLowerCase()} ${AGENCY_NOUNS[of[2]!.toLowerCase()]}`.slice(0, 90);
     // "<State> Environmental Protection Department" -> "state environmental protection departments".
-    const after = new RegExp(`^(.+?)\\s+(${AGENCY})$`, 'i').exec(text);
+    const after = AGENCY_AFTER.exec(text);
     const rest = after && statesNamedIn(after[1]!).length > 0 ? withoutStates(after[1]!) : '';
     if (after && rest) return `state ${rest.toLowerCase()} ${AGENCY_NOUNS[after[2]!.toLowerCase()]}`.slice(0, 90);
     text = withoutStates(text).replace(/^(?:the|of|in)\s+/i, '').trim();
