@@ -3,7 +3,7 @@
 - Start: 2026-11-17T05:56:35Z. Deadline: 2026-11-17T07:56:35Z (trigger trig_01XynxgeaR3Cqux3E2cXqdPx; warning/90-min trig_016hxUVCfPFjDjRjWYCsbPvK; 30/60-min checkpoints trig_01X4grJFbeiFQAWDY7C5gvFH, trig_01VW48zhUGaqV9hWPxVDZaEe). Delivery: this session's final message (owner reads it in the Claude app), plus this file on branch `claude/brain-failure-diagnosis-4yjquv`.
 - Main project: session "the end?" (session_01QF5Tk7etm6MGmaFuHMd6eZ) — owner's "FINAL PREPARATION DIRECTIVE — FIVE-HOUR HARD DEADLINE" (03:21:49Z): prepare Brain for a 12-hour paid intelligence run (part of the $250 acceleration), resolve blockers (refused research, CPU, concurrency/queue limits, research not reaching planning/learning, cost accounting), A–G report starting "READY: YES/NO". Deadline **08:21Z** (trig_01AN2Lp5Gch4ZJrsb3EGwiJy; checks trig_01Epq4rX4XYoYATMndH3SicM 07:21Z, trig_01WuAFXNR9Z4W26vGVCcZBRE 07:51Z; backstop trig_01BbiRcqUbbP5u6VRmfMMiTh 08:26Z reads docs/intelligence-recovery/major-run-decision-2026-11-17.md on claude/brain-intelligence-recovery-s0dl4l). Not changed by this mission. It is the repair owner.
 - Its latest measured state (capped H200 hour, pod byvgxskr1db92q, $3.59/h, 04:38–05:49:58Z; runpod-report 44026244200; stopped by 44026723215): gpt-oss-120b took 27 jobs, **1 accepted claim**; GPU 0.28 slots busy; lane-wide 51–52 accepted claims/h mostly from free `auto/best-coding`; **$10K goal 0 accepted/h**; "RESEARCH_NOT_FINISHING: 3 of the goal's last 3 settled rounds ended without a report"; 120B held "unfit" for fragments (fix #1018 merged 05:54Z, Deploy 44027365881 running); free providers brain-a/brain-b 100% failing (Cerebras 402 credits exhausted, Groq daily limit, a 404 model). Verdict NO-GO. Already fixed by it: GPU routing (#984), scheduling deadlock (#992/#995), refusal accounting (#989/#990), cost accounting (#1001/#1005), budget cap verified (#1002+#1011, pod 5e8ks9cr2o8yml auto-stopped 03:01Z), one-dispatch launch (#1013), #1014–#1017.
-- Status: IN PROGRESS. Updated as findings land.
+- Status: DELIVERED 06:45Z (before the 07:56Z deadline).
 
 ## Production readings taken (05:52–05:58Z, serving a10cc63)
 
@@ -61,21 +61,63 @@ Research can, in code, evidence all six portfolio inputs, including close and re
 - This is the capability the run is meant to build; it is not a precondition, but the run needs a metric that records what it learned (see F1).
 
 
-## FINAL REPORT (draft, 06:20Z — refined at delivery)
+## FINAL REPORT (06:45Z)
 
-**Brain has not achieved the goal because** the run is being judged on a signal research cannot move, and the research it does do is mostly spent on questions that cannot be answered. Specifically:
-1. The readiness and success test is "the $10K plan becomes ACCEPTED or reaches 90%". That test requires measured buyer conversion, which needs contact, and contact is forbidden (F1).
-2. Most of Brain's plans are built in a way that ignores research entirely (F2).
-3. About 95% of its commercial research questions ask about hypothetical arrangements, or about judgements no publication answers (F3).
-4. The paid GPU model was held out of research work, so it produced 1 accepted claim in its last hour (F4).
-5. Nothing that is learned is written back where later plans read it (F5).
+**Brain has not achieved the goal because** its commercial research cannot reach its plans or be measured. Three defects cause this:
+- **Answers are dropped when they are filed.** 10 of the 13 question attributes ask for lane ids the schema forbids (F6). Choice answers also need an exact token that is never stated (F3c).
+- **The $10K goal's own research is not running.** Its rounds die at synthesis on the small model or never launch (F7). The GPU model was held out of research until #1018 (F4).
+- **Plans built by construction never read research** (F2).
+
+On top of these, the readiness test used for GO/NO-GO, "the $10K plan is accepted or reaches 90%", is a test no research volume can pass in the run's window (F1). So the NO-GO is correct, but it cannot tell a fixed Brain from a broken one. Nothing learned is written back where future plans read it (F5). That loop is the capability the run is meant to build, not a precondition for it.
 
 **To correct that, change these, in this order:**
-1. (Owner of the run's acceptance criteria: the main session) Measure the run on what research can move: answered-question share, evidence-backed plan inputs, the goal's accepted claims per hour, and the feasibility and transfer suites. Keep the 90% rule for commitments only.
-2. (Main session, already in flight) Verify #1018 un-holds gpt-oss-120b on RESEARCH_FRAGMENT, in one capped GPU hour.
-3. Fix question generation: allowed values in the question text, no judgement attributes asked as research, only methods a source states, reuse card facts (F3).
-4. Route research into constructed arrangements' inputs (F2).
-5. Then run the paid improvement run, and build the plan-outcome → calibration and evolution loops as the run's capability work (F5).
+1. **F6 lane fix** (commissionPass.ts:143 and :723-725): ask for and accept the snake_case lane. This is the smallest and highest-yield change.
+2. **Verify #1018 (deployed 06:06Z)** in one capped GPU hour: gpt-oss-120b takes RESEARCH_FRAGMENT work.
+3. **F7:** retry a parked goal-round synthesis on another model, and name abandoned-round causes correctly. Steps 2 and 3 can run in the same hour.
+4. **F3c/F3e question hygiene:** state the allowed values; do not ask judgement attributes as research; ask only about methods a source states; reuse card facts.
+5. **F2:** feed constructed arrangements' inputs through `inferOr(knowledge, …)`.
+6. **Then run the paid improvement run.** Judge it on research-movable metrics: claims filed per attribute, the ANSWERED share, justified plan inputs, the goal's accepted claims per hour, the feasibility suite and a transfer case. Build the F5 loops (plan outcome → calibration; approach statistics read by planning) as the run's capability work.
+
+### A. Ranked causes
+| rank | finding | status | type |
+|---|---|---|---|
+| 1 | F6 lane-id mismatch discards commercial answers | CONFIRMED (code + reproduction) | active blocker |
+| 2 | F7 goal research not running (synthesis parks, unlaunched rounds, misnamed cause) | CONFIRMED | active blocker |
+| 3 | F4 GPU model held from fragment research; free providers dead | CONFIRMED; fix #1018 deployed, unverified | active blocker, repair in flight |
+| 4 | F1 GO signal (plan acceptance) cannot move in the run's window | CONFIRMED (corrected by review) | evaluation/task interpretation |
+| 5 | F2 constructed arrangements ignore research | CONFIRMED | active blocker for B |
+| 6 | F3c CHOICE answers need an unstated exact token | CONFIRMED | active blocker |
+| 7 | F3e questions about hypothetical arrangements and judgement attributes | SUPPORTED, unconfirmed | likely blocker |
+| 8 | F5 no retained commercial learning loop; evolution engine 0 cycles; narrow suites | CONFIRMED | capability the run should build |
+| — | budget cap, cost accounting, CPU, research ceiling of 13, "too busy" reading | FIXED / NOT BINDING / RULED OUT | not blockers |
+
+### B. Evidence and repair detail
+See F1–F7 above. Each one gives the cause, file:line, run IDs, the smallest change and the verification.
+
+### C. Readiness implications
+- **Barriers to a productive run** (fix first): F6, F7, F4 (verify #1018), F3c. Without these, GPU hours on commercial work produce ~1 accepted claim/h, as measured at 05:45Z, and the goal gets 0/h.
+- **Evaluation barrier:** F1. The run needs a metric research can move, or its result cannot be read.
+- **Capabilities the run is meant to develop** (not preconditions): F2/F3e plan construction quality, F5 retained learning and calibration, the evolution engine's first cycle, transfer to new objectives.
+
+### D. Remaining work and resources
+- **No new paid resources are needed for steps 1–5:** code changes plus one capped GPU verification hour. The main session already plans a $5-capped hour. The measured price is an H200 COMMUNITY pod at $3.59/h; RunPod balance is $75.46.
+- **Sequence:** step 1 can start immediately, in parallel with steps 2–3. Step 4 is independent. Step 5 is independent of the others. Step 6 follows 1–3 and needs their verification.
+- **Not estimated:** time to complete. There is no supported basis for it.
+- **Open checks:**
+  - F3e: group `monetization_commissions` by attribute and method. This needs a DB read; no read-only report prints it today.
+  - F7: run `diagnoseAbandonedRounds` for the goal's bucket to split synthesis, never-launched and verification failures.
+  - F4: the post-#1018 GPU hour.
+
+### E. Handoff status
+- **06:09Z:** F1–F3 sent to the repair owner, "the end?" (session_01QF5Tk7etm6MGmaFuHMd6eZ).
+- **06:4xZ:** F6, F7 and the F1 correction sent to the same session. Both messages were delivered.
+- **Blocker:** that session has been waiting on its own "Send Message" permission prompt since 06:06Z. The owner was push-notified.
+- No repair has started from these findings yet. The repair session's own #1018 was deployed at 06:06Z.
+
+### F. Diagnostic spending
+- **Paid compute:** $0. No GPU or pod was started, and no workflow that spends money was dispatched.
+- **Inference:** 7 read-only Claude subagents, about 1.2M subagent tokens in total, all completed. Nothing is still running.
+- **Scheduled tasks left in place:** the deadline triggers (trig_01XynxgeaR3Cqux3E2cXqdPx, trig_016hxUVCfPFjDjRjWYCsbPvK) and the 60-minute checkpoint. They fire into this session only and cost nothing material.
 
 ### Ruled out / fixed (not blockers now)
 - Budget cap: FIXED and not invalidated (last budget change #1011; later #1013/#1014/#1018 do not touch it; boot check worker.ts:2595-2604).
