@@ -199,3 +199,11 @@ See F1–F7 above. Each one gives the cause, file:line, run IDs, the smallest ch
   - RESEARCH_VERIFY: auto and auto/best-coding are HELD BACK on it after 152 "no JSON" replies. brain-a and brain-b fail at the provider.
   - GPU: 30 jobs, 1 accepted claim, $7.05 over 80 min at $5.29/h. All of it is pre-#1018.
   - Plan: 3.3 evaluations/h with no new reading row since 00:02Z, because unchanged readings write no row.
+- **08:04Z, release candidate 2 = 74b0a3c3** (Deploy 44043605015; Fly expected around 08:45–09:00Z). It carries:
+  - #1028: W4 instrumentation.
+  - #1029: W3, F3e.
+  - #1031: W2, F2 (arrangements read research through inferOr; textFact provenance comes from kindToProvenance).
+  - #1032: W10 (synthesis recovery scoped to the current round, so the 5 judge-resumed packets are reissued).
+- Still open on the repair side: W5 (Postgres flakes), W9 (RESEARCH_VERIFY "no JSON"), W11 (research items QUEUED since 11-11 and never claimed).
+- W6 GPU stage 1 is running: SECURE H200 c316n2e7hp4up4, $5.29/h, cap $12/2.5 h. Readings at 08:50Z.
+- An independent code review of #1029, #1031 and #1032 against 74b0a3c3 started at 08:05Z.
