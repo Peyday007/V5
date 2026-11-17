@@ -21,7 +21,7 @@ import {
 } from '../server/services/goals/researchYield.ts';
 import { RESEARCH_ALLOCATION_WINDOW_MS, reallocateResearch, sharesInForceFrom, verifiedCostReading, type ResearchAllocationPorts } from '../server/services/goals/tick.ts';
 import { RESEARCH_PURPOSES } from '../server/services/goals/researchAllocation.ts';
-import { yieldAllocationHolds } from '../server/services/factory/program/release01/researchGoalProbe.ts';
+import { continuousResearchHolds, yieldAllocationHolds } from '../server/services/factory/program/release01/researchGoalProbe.ts';
 import type { GoalView } from '../server/services/goals/model.ts';
 
 const SINCE = '2026-11-16T00:00:00.000Z';
@@ -186,7 +186,8 @@ describe('reallocateResearch records only decisions whose cost is counted once',
     expect(d.held).toBe(false);
     expect(d.heldForCost).toBe(true);
     expect(d.changes).toEqual([]);
-    expect(d.shares).toEqual(d.observed);
+    // The shares recorded are the ones in force with their floors, never raw usage (that is `observed`).
+    expect(continuousResearchHolds(decisions as never).ok).not.toBe(false);
     expect((d.notes as string[])[0]).toMatch(/counted once/);
     expect(String(d.summary)).toMatch(/counted once/);
     // The allocation stage never applies it.
@@ -324,5 +325,47 @@ describe('a decision row demonstrates why its cost is or is not counted once', (
     });
     await reallocateResearch({ goals: [goalView('wst_a')], now: UNTIL }, doubled.ports);
     expect((doubled.decisions[0]!.costCountedOnce as { cause: unknown }).cause).toBe('DOUBLE_COUNT');
+  });
+});
+
+/**
+ * Review finding: a held-for-cost row recorded `shares = observed`, raw usage
+ * with no floor, and `held: false`, so probe r01.res-07 judged shares Brain
+ * never decided. It must record the shares in force, floors restored.
+ */
+describe('a held-for-cost decision records shares Brain decided, so RES-07 holds', () => {
+  const doubled = (r: ResearchYieldReading): ResearchYieldReading => ({ ...r, costCountedOnce: { ...r.costCountedOnce, purposeJobMs: r.costCountedOnce.totalJobMs * 2, holds: false } });
+  // Usage that puts FORWARD_EXPLORATION, OPERATING_SUPPORT and SELF_IMPROVEMENT at 0: every floor broken.
+  const lopsided = (): ResearchYieldReading => readingFrom(Array.from({ length: 50 }, (_, i) => job(`tr${i}`, { purposes: ['TRANSACTION_ROUTES'] })));
+
+  it('with no earlier decision: floors restored, raw usage kept in observed', async () => {
+    const { ports, decisions } = memoryPorts(() => doubled(lopsided()));
+    await reallocateResearch({ goals: [goalView('wst_a')], now: UNTIL }, ports);
+    const d = decisions[0]!;
+    expect(d.heldForCost).toBe(true);
+    expect(d.held).toBe(false);
+    expect((d.observed as Record<string, number>).SELF_IMPROVEMENT).toBe(0);
+    const verdict = continuousResearchHolds(decisions as never);
+    expect(verdict.ok).not.toBe(false);
+    expect(verdict.detail).not.toMatch(/under/);
+    // RES-15-5 still flags the cost reading.
+    expect(yieldAllocationHolds(decisions as never).ok).toBe(false);
+    expect(sharesInForceFrom(d)?.held).toBe(true);
+  });
+
+  it('after a measured decision: carries the decided shares forward unchanged', async () => {
+    let n = 0;
+    const { ports, decisions } = memoryPorts(() => (++n === 1 ? readingFrom(degenerateJobs()) : doubled(lopsided())));
+    await reallocateResearch({ goals: [goalView('wst_a')], now: UNTIL }, ports);
+    await reallocateResearch({ goals: [goalView('wst_a')], now: new Date(Date.parse(UNTIL) + 3_600_000).toISOString() }, ports);
+    expect(decisions).toHaveLength(2);
+    const [first, second] = decisions as [Record<string, unknown>, Record<string, unknown>];
+    expect(first.heldForCost).toBe(false);
+    expect(second.heldForCost).toBe(true);
+    for (const p of RESEARCH_PURPOSES) {
+      expect((second.shares as Record<string, number>)[p]).toBeCloseTo((first.shares as Record<string, number>)[p]!, 2);
+    }
+    expect(second.shares).not.toEqual(second.observed);
+    expect(continuousResearchHolds(decisions as never).ok).not.toBe(false);
   });
 });
