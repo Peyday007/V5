@@ -34,8 +34,9 @@
  */
 
 import { claimsByIds } from '../../repos/research.ts';
-import type { CategoryEvidenceEntry } from '../../domain/types.ts';
+import type { Capability, CapabilityEdge, CategoryCapitalEntry, CategoryEvidenceEntry } from '../../domain/types.ts';
 import type { LadderSnapshot } from './ladder.ts';
+import type { Money } from './venturePath.ts';
 
 /** How an activity can be obtained. */
 export const ACQUISITION_MODES = ['RENT', 'CONTRACT', 'LICENSE', 'PARTNER', 'OWN_OR_DEVELOP'] as const;
@@ -331,8 +332,10 @@ export function statedMode(text: string): AcquisitionMode | null {
  * What one category-evidence row says, as a competitive claim.
  *
  * The row's own subject names the mechanism, in the claim's words, and the row
- * kind says which reading a row bears on: published demand and a route to
- * buyers are conditions of a company that can sell; an incumbent's weakness is
+ * kind says which reading a row bears on: a bought-in component is a
+ * condition of making the product that the row shows is met (a source sells
+ * it); published demand and a route to buyers are conditions of a company
+ * that can sell; an incumbent's weakness is
  * a condition of a durable position; an entry barrier is a durable-position
  * condition nobody has yet shown this company clears (met: null — invariant
  * 39), and — being what keeps entrants out — a resource that confers advantage
@@ -371,33 +374,126 @@ export function claimFromEvidence(entry: CategoryEvidenceEntry, sourceUrl: strin
       return { ...base, condition: { level: 'DURABLE_POSITION', requirement: `an incumbent weakness to win on: ${entry.subject}`, met: true } };
     case 'ENTRY_BARRIER':
       return { ...base, condition: { level: 'DURABLE_POSITION', requirement: `clears the entry barrier: ${entry.subject}`, met: null } };
+    case 'BOUGHT_IN_COMPONENT':
+      // The row records that a source sells the component, so obtaining it is a met condition of making the product.
+      return { ...base, condition: { level: 'PRODUCT', requirement: `a source for the component: ${entry.subject}`, met: true } };
     default:
       return base;
   }
 }
 
+/** Entry capital for one category, as the venture reading costed it (kernel.ts). */
+export interface ProductCapital {
+  /** The cheapest fully priced entry, high end; null when not fully priced. */
+  cost: Money | null;
+  /** Deployable capital from the money ledger; null when unreadable. */
+  available: Money | null;
+}
+
+/**
+ * The conditions of *making the product*, read from the ladder's own rows
+ * (review finding R6-F2: with only category evidence fed in, PRODUCT could
+ * never be anything but UNKNOWN on production records).
+ *
+ * - Each capability the category is established to REQUIRE: met when a person
+ *   has declared it held, not met otherwise — a missing capability is a fact
+ *   about this company, never an unknown read favourably (invariant 39).
+ * - The capital entering takes, when any capital row exists: met when the
+ *   cheapest fully priced entry is within deployable capital in its currency,
+ *   not met when it is beyond it, and unknown when the entry is not fully
+ *   priced or deployable capital could not be read.
+ *
+ * Bought-in components are conditions too; `claimFromEvidence` carries them.
+ * A claim whose source row has no source URL is ignored downstream, as any
+ * other unsourced claim is.
+ */
+export function productClaims(input: {
+  edges: readonly CapabilityEdge[];
+  capabilities: readonly Pick<Capability, 'id' | 'name' | 'heldAt'>[];
+  capital: readonly CategoryCapitalEntry[];
+  costed: ProductCapital | null;
+  sourceOf: (claimId: string) => string | null;
+}): CompetitiveClaim[] {
+  const out: CompetitiveClaim[] = [];
+  const byId = new Map(input.capabilities.map((one) => [one.id, one]));
+  for (const edge of input.edges) {
+    if (edge.relation !== 'REQUIRES') continue;
+    const capability = byId.get(edge.capabilityId);
+    if (!capability) continue;
+    out.push({
+      id: edge.sourceClaimId,
+      accepted: true,
+      sourceUrl: input.sourceOf(edge.sourceClaimId),
+      mechanism: capability.name,
+      statement: edge.statement,
+      condition: { level: 'PRODUCT', requirement: `the capability: ${capability.name}`, met: capability.heldAt !== null },
+    });
+  }
+  if (input.capital.length > 0) {
+    const cost = input.costed?.cost ?? null;
+    const available = input.costed?.available ?? null;
+    const met =
+      cost === null || available === null || available.currency !== cost.currency ? null : available.amountMinor >= cost.amountMinor;
+    for (const entry of input.capital) {
+      out.push({
+        id: entry.sourceClaimId,
+        accepted: true,
+        sourceUrl: input.sourceOf(entry.sourceClaimId),
+        mechanism: 'entry capital',
+        statement: entry.statement,
+        condition: { level: 'PRODUCT', requirement: 'the capital entering takes, within deployable capital', met },
+      });
+    }
+  }
+  return out;
+}
+
 /**
  * The competitive system of every live category on the ladder, reconstructed
- * from the category evidence its research filed. Each row's own claim supplies
- * the source URL and its words; a claim with no URL is ignored by `reconstructCompetitiveSystem`,
+ * from the category evidence its research filed, the capabilities it is
+ * established to require, and what entering it costs against deployable
+ * capital (`productClaims`). Each row's own claim supplies the source URL and
+ * its words; a claim with no URL is ignored by `reconstructCompetitiveSystem`,
  * never counted. A category with no evidence yet gets its open questions only.
  * Read on every manufacturing kernel pass (kernel.ts), so the reconstruction
  * exists on production records without a second store.
  */
-export async function competitiveSystemsFor(snapshot: Pick<LadderSnapshot, 'categories' | 'evidence'>): Promise<CompetitiveSystem[]> {
+export async function competitiveSystemsFor(
+  snapshot: Pick<LadderSnapshot, 'categories' | 'evidence'> & Partial<Pick<LadderSnapshot, 'capabilities' | 'edges' | 'capital'>>,
+  costed: ReadonlyMap<string, ProductCapital> = new Map(),
+): Promise<CompetitiveSystem[]> {
   const live = snapshot.categories.filter((one) => one.retiredAt === null);
   if (live.length === 0) return [];
-  const claimIds = [...new Set(snapshot.evidence.map((one) => one.sourceClaimId))];
+  const edges = snapshot.edges ?? [];
+  const capital = snapshot.capital ?? [];
+  const capabilities = snapshot.capabilities ?? [];
+  const claimIds = [
+    ...new Set([
+      ...snapshot.evidence.map((one) => one.sourceClaimId),
+      ...edges.filter((one) => one.relation === 'REQUIRES').map((one) => one.sourceClaimId),
+      ...capital.map((one) => one.sourceClaimId),
+    ]),
+  ];
   const sources = new Map((claimIds.length > 0 ? await claimsByIds(claimIds) : []).map((one) => [one.id, one]));
+  const sourceOf = (claimId: string) => sources.get(claimId)?.sourceUrl ?? null;
   return live.map((category) =>
     reconstructCompetitiveSystem({
       subjectPath: [category.name],
-      claims: snapshot.evidence
-        .filter((one) => one.categoryId === category.id)
-        .map((one) => {
-          const source = sources.get(one.sourceClaimId);
-          return claimFromEvidence(one, source?.sourceUrl ?? null, source?.claim ?? null);
+      claims: [
+        ...snapshot.evidence
+          .filter((one) => one.categoryId === category.id)
+          .map((one) => {
+            const source = sources.get(one.sourceClaimId);
+            return claimFromEvidence(one, source?.sourceUrl ?? null, source?.claim ?? null);
+          }),
+        ...productClaims({
+          edges: edges.filter((one) => one.categoryId === category.id),
+          capabilities,
+          capital: capital.filter((one) => one.categoryId === category.id),
+          costed: costed.get(category.id) ?? null,
+          sourceOf,
         }),
+      ],
     }),
   );
 }

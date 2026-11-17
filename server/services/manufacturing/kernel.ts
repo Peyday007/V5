@@ -166,7 +166,11 @@ export async function runManufacturingKernel(projectId: string): Promise<KernelP
   const readings = readLadder(snapshot);
   const ventures = await reconsiderVentures(projectId, readings, snapshot.capabilities, snapshot.candidates);
 
-  const competitive = await competitiveSystemsFor(snapshot);
+  // PRODUCT is read from the same costing the venture path uses, so making the product and the venture agree (R6-F2).
+  const competitive = await competitiveSystemsFor(
+    snapshot,
+    new Map(ventures.map((one) => [one.categoryId, { cost: one.cost, available: one.available }])),
+  );
   // The same readings the venture path is costed from, so both read one scenario and one set of figures.
   const institutions = institutionsForLadder(snapshot, readings);
 
