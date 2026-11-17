@@ -863,13 +863,30 @@ function subjectsOf(
 
   const owners = units.filter((unit) => owns(unit.ownedPaths, test));
   const context = new Set<string>();
+  const singles = new Set<string>();
   for (const owner of owners) {
     const scope = [owner, ...units.filter((unit) => (owner.dependsOn ?? []).includes(unit.unitKey))];
+    const own = new Set<string>();
     for (const unit of scope) {
-      for (const path of unit.ownedPaths) if (isConcrete(path) && !isTestPath(path)) context.add(path);
+      for (const path of unit.ownedPaths) if (isConcrete(path) && !isTestPath(path)) own.add(path);
     }
+    for (const path of own) context.add(path);
+    if (own.size === 1) singles.add([...own][0]!);
   }
   if (context.size === 1) return [...context].filter(accept);
+  /*
+   * A review's repair units each own every file a finding touched, so once a
+   * campaign has been reviewed the test has several owners and the union of
+   * their files says nothing. The unit that wrote the test still owns exactly
+   * one source file, and that file is the test's subject when every such unit
+   * agrees (production 2026-11-17, ventures-d0-p3-prep: inst-machinery owned
+   * institutions.ts and its test, repair-F1…F5 owned nine files, and naming
+   * the file in the scope could not unblock it because the scope named two).
+   */
+  if (singles.size === 1) {
+    const one = [...singles].filter(accept);
+    if (one.length === 1) return one;
+  }
   /*
    * Otherwise the answer the refusal asks a person for: the one source file
    * named exactly in the scope (production 2026-11-11, acquisition-d0: the

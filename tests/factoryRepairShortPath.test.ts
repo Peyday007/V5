@@ -69,6 +69,26 @@ describe('a short path in a finding', () => {
     if (after.ok) expect(after.rootCauseFiles).toEqual(['server/services/sources/acquisition.ts']);
   });
 
+  it('reads a test\'s subject from the one unit that owns a single source file when review repairs also own the test', () => {
+    const test = 'tests/program-x-ventures-institutions.test.ts';
+    const shared = ['server/services/manufacturing/institutions.ts', test, 'server/services/manufacturing/kernel.ts', 'server/services/manufacturing/venturePath.ts', 'tests/program-x-ventures-path.test.ts'];
+    const scope = resolveRepairScope({
+      suggested: [test],
+      statement: `R3-F1: ${test} shows a venture with no recorded structure is read as an institution`,
+      evidence: '',
+      category: 'BEHAVIOR',
+      mutationScope: ['server/services/manufacturing/**', 'server/services/manufacturing/institutions.ts', 'server/services/manufacturing/kernel.ts', 'tests/program-x-ventures*.test.ts'],
+      forbiddenPaths: [],
+      units: [
+        { unitKey: 'inst-machinery', ownedPaths: ['server/services/manufacturing/institutions.ts', test] },
+        { unitKey: 'repair-F1', ownedPaths: shared },
+        { unitKey: 'repair-F2', ownedPaths: shared },
+      ],
+    });
+    expect(scope.ok).toBe(true);
+    if (scope.ok) expect(scope.rootCauseFiles).toEqual(['server/services/manufacturing/institutions.ts']);
+  });
+
   it('keeps a root path the running image does not carry, such as a test', () => {
     const scope = resolveRepairScope({
       suggested: ['tests/someEngineThatIsNotOnDisk.test.ts'],
