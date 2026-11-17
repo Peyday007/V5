@@ -179,3 +179,23 @@ See F1–F7 above. Each one gives the cause, file:line, run IDs, the smallest ch
   - Not read: the revenueRange claim's full text, and whether the discovery claim was accepted.
   - Non-blocking defect: `textFact` marks any non-empty column PROVEN (pathways.ts:460-462). In this example buyer and channel do trace to accepted claims.
 - **V4/V6 gap:** the goal-plan reading still carries readAt 00:02:39Z, because unchanged readings write no row. Fresh-derivation evidence has been requested from W4.
+- **07:44Z, V3 (parked work progresses): PARTLY verified.** Source: admin `packets syntheses cash-mode-1`, run 44040994934 on eda04071.
+  - Working: #1025 recovery. orc_39d6874b has replacement wki_ab38e84c QUEUED, and orc_a724b479 is ELIGIBLE.
+  - Not working: 5 packets are NEEDS_HUMAN with accepted claims, no filed report, and their bin READY at 0/5. The recovery refuses each as SYNTHESIS_RECORDED. They hold 55 accepted claims that reach no report and no plan:
+
+    | Packet | Accepted claims |
+    |---|---|
+    | orc_2539f7fb | 20 |
+    | orc_c24e9e6c | 10 |
+    | orc_1fa39ac9 | 9 |
+    | orc_140bfeb8 | 8 |
+    | orc_0053bbe0 | 8 |
+
+  - Sent to the integration owner for an owner.
+- **07:50Z, runpod report (run 44041674247, serving eda04071; 6 h window, mostly before the fixes):**
+  - Lane throughput: accepted claims 31.3/h lane-wide, 0/h on the goal, 0 jobs on the goal.
+  - Goal rounds: 9 abandoned in 6 h; RESEARCH_NOT_FINISHING 10/10.
+  - Free lane: idle with work queued about 120 min. Average concurrency 1.63, peak 4.
+  - RESEARCH_VERIFY: auto and auto/best-coding are HELD BACK on it after 152 "no JSON" replies. brain-a and brain-b fail at the provider.
+  - GPU: 30 jobs, 1 accepted claim, $7.05 over 80 min at $5.29/h. All of it is pre-#1018.
+  - Plan: 3.3 evaluations/h with no new reading row since 00:02Z, because unchanged readings write no row.
