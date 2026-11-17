@@ -15,11 +15,11 @@ import { CONNECTOR_HEALTH_EVENT } from '../server/services/feeds/health.ts';
 import type { FeedSource } from '../server/services/feeds/sources.ts';
 import {
   ACQUISITION_MEASURES_EVENT,
-  LANE_FLOOR,
+  LANE_OF_PURPOSE,
   RESOURCE_CLASSES,
   UNMEASURED_REASONS,
   WORK_LANES,
-  allocateWork,
+  allocationInForce,
   classifyConstraint,
   failureRecovery,
   laneReadings,
@@ -304,11 +304,11 @@ describe('which resource class is constrained', () => {
       totalProductiveJobs: 0,
       purposesSumToTotal: true,
       attribution: [
-        { category: 'IMMEDIATE_COMMERCIAL_DISCOVERY', productiveJobs: 6, bases: {} },
-        { category: 'DEAL_COMPLETION', productiveJobs: 2, bases: {} },
-        { category: 'BROADER_WORLD_RESEARCH', productiveJobs: 4, bases: {} },
-        { category: 'SELF_IMPROVEMENT', productiveJobs: 0, bases: {} },
-        { category: 'FUTURE_GOAL_PREPARATION', productiveJobs: 0, bases: {} },
+        { category: 'IMMEDIATE_COMMERCIAL_DISCOVERY', productiveJobs: 6, jobs: 30, bases: {} },
+        { category: 'DEAL_COMPLETION', productiveJobs: 2, jobs: 2, bases: {} },
+        { category: 'BROADER_WORLD_RESEARCH', productiveJobs: 4, jobs: 5, bases: {} },
+        { category: 'SELF_IMPROVEMENT', productiveJobs: 0, jobs: 4, bases: {} },
+        { category: 'FUTURE_GOAL_PREPARATION', productiveJobs: 0, jobs: 0, bases: {} },
       ],
       attributionSumsToTotal: true,
       process: { scope: 'process', cpuSecondsSinceStart: 1, rssBytes: 1, heapUsedBytes: 1, dbPool: m({ workloadWaiting: 0 }), network: nm('x') },
@@ -343,18 +343,75 @@ describe('which resource class is constrained', () => {
     expect(classifyConstraint(resourceSignals(null)).constrained).toBeNull();
   });
 
-  it('allocates across goal demand, exploration, capability building and future planning without a quota', () => {
-    const shares = allocateWork(laneReadings(recorded()));
+  it('measures each lane by its own jobs, not by its share of every lane\'s productive jobs (review F2)', () => {
+    const by = Object.fromEntries(laneReadings(recorded()).map((r) => [r.lane, r]));
+    // Goal demand spent 32 jobs for 8 accepted; exploration 5 for 4. Shares of the 12 productive jobs would rank them the other way.
+    expect(by.ACTIVE_GOAL_DEMAND!.jobs).toEqual(m(32));
+    expect(by.ACTIVE_GOAL_DEMAND!.useful).toEqual(m(8));
+    expect(by.ACTIVE_GOAL_DEMAND!.usefulPerJob).toEqual(m(0.25));
+    expect(by.OPEN_WORLD_EXPLORATION!.usefulPerJob).toEqual(m(0.8));
+    expect(by.CAPABILITY_BUILDING!.usefulPerJob).toEqual(m(0));
+    // A lane that spent nothing has no yield, measured as such, never a favourable one.
+    expect(by.FUTURE_PLANNING!.jobs).toEqual(m(0));
+    expect(by.FUTURE_PLANNING!.usefulPerJob.measured).toBe(false);
+  });
+
+  it('says nothing about yield from a reading that counted accepted jobs only, or from no reading', () => {
+    const old = recorded();
+    old.report!.attribution = old.report!.attribution.map(({ jobs: _jobs, ...rest }) => rest);
+    for (const r of [...laneReadings(old), ...laneReadings(null), ...laneReadings(recorded({}, true))]) {
+      expect(r.usefulPerJob.measured).toBe(false);
+      expect(r.jobs.measured).toBe(false);
+    }
+  });
+
+  const decision = {
+    shares: { BROAD_DISCOVERY: 0.2, TRANSACTION_ROUTES: 0.35, OPERATING_SUPPORT: 0.1, SELF_IMPROVEMENT: 0.15, FORWARD_EXPLORATION: 0.2 },
+    observed: { BROAD_DISCOVERY: 0.1, TRANSACTION_ROUTES: 0.5, OPERATING_SUPPORT: 0.1, SELF_IMPROVEMENT: 0.2, FORWARD_EXPLORATION: 0.1 },
+    held: false,
+    urgentCommercialGoal: true,
+    fingerprint: 'fp-test',
+  };
+
+  it('reports the allocation the free lane and the goals tick apply, per lane, with no quota and no shares of its own (review F2)', () => {
+    const shares = allocationInForce(decision, laneReadings(recorded()));
     expect(shares.map((s) => s.lane)).toEqual([...WORK_LANES]);
-    const total = shares.reduce((n, s) => n + s.share, 0);
-    expect(total).toBeCloseTo(1, 3);
-    const by = Object.fromEntries(shares.map((s) => [s.lane, s.share]));
-    expect(by.ACTIVE_GOAL_DEMAND).toBeGreaterThan(by.OPEN_WORLD_EXPLORATION!);
-    expect(by.OPEN_WORLD_EXPLORATION).toBeGreaterThan(by.CAPABILITY_BUILDING!);
-    for (const s of shares) expect(s.share).toBeGreaterThanOrEqual(LANE_FLOOR);
-    // Unmeasured lanes get the floor only, never a favourable share.
-    const unknown = allocateWork(laneReadings(null));
-    for (const s of unknown) expect(s.share).toBe(LANE_FLOOR);
+    const by = Object.fromEntries(shares.map((s) => [s.lane, s]));
+    expect(by.ACTIVE_GOAL_DEMAND!.decided).toEqual(m(0.45));
+    expect(by.ACTIVE_GOAL_DEMAND!.observed).toEqual(m(0.6));
+    expect(by.OPEN_WORLD_EXPLORATION!.decided).toEqual(m(0.2));
+    expect(by.CAPABILITY_BUILDING!.decided).toEqual(m(0.15));
+    expect(by.FUTURE_PLANNING!.decided).toEqual(m(0.2));
+    expect(by.OPEN_WORLD_EXPLORATION!.usefulPerJob).toEqual(m(0.8));
+    expect(shares.reduce((n, s) => n + (s.decided.measured ? s.decided.value : 0), 0)).toBeCloseTo(1, 6);
+    for (const s of shares) expect(s.basis).toContain('fp-test');
+    // Every research purpose belongs to exactly one lane, so no decided share is lost or counted twice.
+    expect(new Set(Object.keys(LANE_OF_PURPOSE))).toEqual(new Set(Object.keys(decision.shares)));
+  });
+
+  it('claims no share when no decision is in force, rather than inventing one', () => {
+    for (const none of [null, { ...decision, held: true }]) {
+      for (const s of allocationInForce(none, laneReadings(recorded()))) {
+        expect(s.decided.measured).toBe(false);
+        expect(s.basis).toContain('stored priority');
+      }
+    }
+  });
+});
+
+describe('jobs per category, over real rows', () => {
+  it('counts every job a category spent and only accepted ones as productive; a refunded hand-back is no job', async () => {
+    const { recordBinEvent } = await import('../server/repos/bins.ts');
+    const { stageCapacity } = await import('../server/services/freeLane/stageCapacity.ts');
+    const broad = async () => (await stageCapacity({ hours: 1 })).attribution.find((a) => a.category === 'BROADER_WORLD_RESEARCH')!;
+    const before = await broad();
+    for (const outcome of ['SUBMITTED', 'FAILED_RETRYABLE', 'FAILED_RETRYABLE', 'RELEASED_TRANSIENT']) {
+      await recordBinEvent({ eventType: 'FREE_LANE_ITEM', outcome, reason: `model jobs-${tag}` });
+    }
+    const after = await broad();
+    expect(after.jobs! - before.jobs!).toBe(3);
+    expect(after.productiveJobs - before.productiveJobs).toBe(1);
+    expect((await stageCapacity({ hours: 1 })).attributionSumsToTotal).toBe(true);
   });
 });
 
@@ -381,5 +438,34 @@ describe('the recorded reading', () => {
     const next = await recordAcquisitionMeasures(new Date(NOW.getTime() + 25 * HOUR), record, { readStageCapacity: async () => null, catalog: [] });
     expect(next!.since).toBe(NOW.toISOString());
     expect(events).toHaveLength(2);
+  });
+
+  it('records the research allocation decision row in force, read as the free lane reads it (review F2)', async () => {
+    const { recordImprovementEvent } = await import('../server/repos/improvement.ts');
+    const { RESEARCH_ALLOCATION_DECIDED } = await import('../server/services/goals/tick.ts');
+    const fingerprint = `fp-${tag}`;
+    await recordImprovementEvent({
+      candidateId: null,
+      kind: RESEARCH_ALLOCATION_DECIDED,
+      at: '2030-01-01T00:00:00.000Z',
+      detail: {
+        fingerprint,
+        shares: { BROAD_DISCOVERY: 0.25, TRANSACTION_ROUTES: 0.3, OPERATING_SUPPORT: 0.05, SELF_IMPROVEMENT: 0.2, FORWARD_EXPLORATION: 0.2 },
+        observed: { BROAD_DISCOVERY: 0.2, TRANSACTION_ROUTES: 0.4, OPERATING_SUPPORT: 0.1, SELF_IMPROVEMENT: 0.2, FORWARD_EXPLORATION: 0.1 },
+      },
+    });
+    const events: RecordBinEventInput[] = [];
+    const later = new Date(NOW.getTime() + 200 * 24 * HOUR);
+    const reading = await recordAcquisitionMeasures(later, async (e) => { events.push(e); }, { readStageCapacity: async () => null, catalog: [] });
+    const by = Object.fromEntries(reading!.allocation.map((s) => [s.lane, s]));
+    expect(by.ACTIVE_GOAL_DEMAND!.decided).toEqual(m(0.35));
+    expect(by.OPEN_WORLD_EXPLORATION!.decided).toEqual(m(0.25));
+    expect(by.ACTIVE_GOAL_DEMAND!.basis).toContain(fingerprint);
+    expect((events[0]!.measures as { allocation: unknown }).allocation).toEqual(reading!.allocation);
+    // An unreadable decision records no share, and the reading is still written.
+    const failed = await recordAcquisitionMeasures(new Date(later.getTime() + 25 * HOUR), async () => {}, {
+      readStageCapacity: async () => null, catalog: [], readAllocation: async () => { throw new Error('unreadable'); },
+    });
+    for (const s of failed!.allocation) expect(s.decided.measured).toBe(false);
   });
 });

@@ -150,6 +150,14 @@ export function attributeJob(facts: AttributionFacts): { category: AttributionCa
 export interface CategoryAttribution {
   category: AttributionCategory;
   productiveJobs: number;
+  /**
+   * Every job the lane spent on the category in the window — accepted
+   * (`SUBMITTED`) or answered and not accepted (`FAILED_RETRYABLE`). A
+   * `RELEASED_TRANSIENT` hand-back is not a job spent: its attempt is refunded.
+   * Absent on a reading recorded before it was measured, which then says
+   * nothing about a category's yield per job.
+   */
+  jobs?: number;
   /** How many of those jobs each rule decided. */
   bases: Record<string, number>;
 }
@@ -640,18 +648,19 @@ async function readPurposes(since: string): Promise<PurposeAttribution[]> {
 const DISCOVERY_DEAL_ROUNDS = "('SEED_EQUIPMENT', 'ADJACENT')";
 
 /**
- * Each productive (SUBMITTED) job, with the row facts `attributeJob` decides
- * on. The job's orchestration is the one its event row names, else its bin's,
+ * Each job the lane spent (SUBMITTED or FAILED_RETRYABLE), with the row facts
+ * `attributeJob` decides on; a category's `productiveJobs` counts only the
+ * SUBMITTED ones and its `jobs` counts both, so its yield per job is measured. The job's orchestration is the one its event row names, else its bin's,
  * else its work item's; every fact is
  * an EXISTS over the rows that consume that orchestration, so a job is one row
  * here however many consumers match, and is attributed once.
  */
 async function readCategories(since: string): Promise<CategoryAttribution[]> {
   const rows = await getDb().all<{
-    bin_purpose: string | null; brain_project: number | string | null; validates_opening: number | string;
+    outcome: string | null; bin_purpose: string | null; brain_project: number | string | null; validates_opening: number | string;
     deal_round: number | string; future_goal: number | string; commercial: number | string;
   }>(
-    `SELECT j.bin_purpose,
+    `SELECT j.outcome, j.bin_purpose,
             CASE WHEN p.slug = 'brain-architecture' OR p.purpose = 'TECHNICAL' THEN 1 ELSE 0 END AS brain_project,
             CASE WHEN j.orch IS NOT NULL AND EXISTS (
               SELECT 1 FROM cash_opportunities o WHERE o.validation_orchestration_id = j.orch) THEN 1 ELSE 0 END AS validates_opening,
@@ -672,18 +681,18 @@ async function readCategories(since: string): Promise<CategoryAttribution[]> {
                      OR EXISTS (SELECT 1 FROM russell_missions m JOIN deal_rounds d ON d.candidate_id = m.candidate_id
                                  WHERE m.orchestration_id = j.orch AND d.purpose IN ${DISCOVERY_DEAL_ROUNDS})))
                  THEN 1 ELSE 0 END AS commercial
-       FROM (SELECT e.id, e.at, b.purpose AS bin_purpose,
+       FROM (SELECT e.id, e.at, e.outcome, b.purpose AS bin_purpose,
                     COALESCE(e.project_id, b.project_id, w.project_id) AS project_id,
                     COALESCE(e.orchestration_id, b.orchestration_id, w.orchestration_id) AS orch
                FROM bin_events e
                LEFT JOIN bins b ON b.id = e.bin_id
                LEFT JOIN work_items w ON w.id = e.work_item_id
-              WHERE e.event_type = 'FREE_LANE_ITEM' AND e.outcome = 'SUBMITTED' AND e.at >= ?) j
+              WHERE e.event_type = 'FREE_LANE_ITEM' AND e.outcome IN ('SUBMITTED', 'FAILED_RETRYABLE') AND e.at >= ?) j
        LEFT JOIN projects p ON p.id = j.project_id`,
     [since],
   );
   const byCategory = new Map<AttributionCategory, CategoryAttribution>(
-    ATTRIBUTION_CATEGORIES.map((category) => [category, { category, productiveJobs: 0, bases: {} }]),
+    ATTRIBUTION_CATEGORIES.map((category) => [category, { category, productiveJobs: 0, jobs: 0, bases: {} }]),
   );
   for (const row of rows) {
     const { category, basis } = attributeJob({
@@ -695,6 +704,9 @@ async function readCategories(since: string): Promise<CategoryAttribution[]> {
       commercialDiscovery: n(row.commercial) === 1,
     });
     const entry = byCategory.get(category)!;
+    entry.jobs = (entry.jobs ?? 0) + 1;
+    // Only an accepted job is productive; the attribution of productive jobs sums to the window's total.
+    if (row.outcome !== 'SUBMITTED') continue;
     entry.productiveJobs += 1;
     entry.bases[basis] = (entry.bases[basis] ?? 0) + 1;
   }
