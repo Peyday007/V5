@@ -681,6 +681,20 @@ function stallsFeedPressure(): boolean {
   return !process.env['VITEST'];
 }
 
+/**
+ * The part of one probe's lateness the pressure gate is fed (2026-11-17).
+ *
+ * The profiler's restart is Brain's own diagnostics walking the heap, not
+ * load: on 04b754ce one real 8.4 s stall plus the ~3.5 s restart it caused
+ * read as "stalled 12s of the last 120s" and put the process into SHEDDING.
+ * So the restart time overlapping the probe is subtracted, and what remains
+ * counts only if it is still a recordable stall. Pure; exported for tests.
+ */
+export function pressureStallMs(lateMs: number, profilerRestartMs: number): number {
+  const ms = lateMs - Math.max(0, profilerRestartMs);
+  return ms >= STALL_RECORD_MS ? ms : 0;
+}
+
 function ensureStallProbe(): void {
   if (stallTimer) return;
   stallLast = Date.now();
@@ -696,7 +710,8 @@ function ensureStallProbe(): void {
     const active = [...activeActivities.keys(), ...(restart > 0 ? [PROFILER_RESTART_LABEL] : [])].sort();
     recentStalls.push({ ms: late, at: new Date(now).toISOString(), active });
     if (recentStalls.length > 20) recentStalls.shift();
-    if (stallsFeedPressure()) noteStall(late, now);
+    const loadMs = pressureStallMs(late, restart);
+    if (loadMs > 0 && stallsFeedPressure()) noteStall(loadMs, now);
     for (const label of active.length > 0 ? active : ['(nothing labelled)']) {
       const t = stallTotals.get(label) ?? { stalls: 0, totalMs: 0, maxMs: 0 };
       t.stalls += 1;
@@ -895,6 +910,13 @@ function ensureStallProfiler(): void {
  * next window's stall.
  */
 const PROFILE_MAX_SPAN_MS = 30 * 60_000;
+/*
+ * And never sooner than this after the last start, stall or not (2026-11-17):
+ * at a 1.7 GB heap a restart is a ~3.5 s stall of its own, and restarting after
+ * every real stall turned a run of stalls into a run of restarts. A stall held
+ * meanwhile stays in `profileWindowStallMs` and is kept at the next rotation.
+ */
+const PROFILE_MIN_SPAN_MS = 5 * 60_000;
 const PROFILER_RESTART_LABEL = 'stall-profiler:restart';
 let profileStartedAt = Date.now();
 let profilerRestartMs = 0;
@@ -907,6 +929,7 @@ function takeProfilerRestartMs(): number {
 
 /** Whether a window's end should close the running profile. Pure; exported for tests. */
 export function profileRotationDue(input: { windowStallMs: number; spanMs: number }): boolean {
+  if (input.spanMs < PROFILE_MIN_SPAN_MS) return false;
   return input.windowStallMs >= STALL_RECORD_MS || input.spanMs >= PROFILE_MAX_SPAN_MS;
 }
 
