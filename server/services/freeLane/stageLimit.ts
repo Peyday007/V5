@@ -266,47 +266,81 @@ export type AdditionKind = 'LLM_JOB' | 'ALGORITHM' | 'WORKER' | 'SOURCE_CONNECTO
 export interface AdditionOption {
   kind: AdditionKind;
   id: string;
-  /** Accepted, commercially useful output per hour one more of this would add. */
+  /**
+   * Accepted, commercially useful output per hour one more of this would add,
+   * measured from an addition of the same kind that already ran — never an
+   * extrapolation of what an addition that does not exist would do.
+   */
   gain: Measured<number>;
-  /** Its cost per hour (dollars; a code path is a measured 0). */
+  /**
+   * Its ongoing cost per hour, in dollars, as rows recorded it. A code path is
+   * not assumed to be free: it consumes compute and storage, and until a row
+   * prices them its cost is unmeasured.
+   */
   cost: Measured<number>;
 }
 
 export interface Allocation {
   chosen: AdditionOption | null;
-  ranked: { kind: AdditionKind; id: string; gainPerCost: number }[];
+  /**
+   * Measured options, best first. `gainPerCost` is accepted output per dollar,
+   * or null for an option whose measured cost is $0 (those are ranked by gain
+   * among themselves, ahead of priced options — never by an infinite ratio).
+   */
+  ranked: { kind: AdditionKind; id: string; gain: number; cost: number; gainPerCost: number | null }[];
   unmeasured: { kind: AdditionKind; id: string; reason: string }[];
   /** True when an LLM job and at least one non-LLM option were both measured and compared. */
   comparedLlmWithNonLlm: boolean;
   basis: string;
 }
 
-const gainPerCost = (gain: number, cost: number): number => (cost <= 0 ? (gain > 0 ? Number.POSITIVE_INFINITY : 0) : gain / cost);
+/**
+ * Order two measured options by marginal gain against cost. A measured $0
+ * (recorded, never assumed) dominates any priced option with a gain, and two
+ * $0 options are ordered by their gain; priced options by gain per dollar.
+ * No score is infinite, so every kind — an LLM job included — can win on its
+ * measurements. Ties prefer the non-LLM option (it needs no model call).
+ */
+function compareOptions(a: AdditionOption & { gain: { measured: true; value: number }; cost: { measured: true; value: number } }, b: typeof a): number {
+  const freeA = a.cost.value <= 0 && a.gain.value > 0;
+  const freeB = b.cost.value <= 0 && b.gain.value > 0;
+  if (freeA !== freeB) return freeA ? -1 : 1;
+  const score = (o: typeof a): number => (freeA ? o.gain.value : o.cost.value > 0 ? o.gain.value / o.cost.value : 0);
+  return score(b) - score(a)
+    || Number(a.kind === 'LLM_JOB') - Number(b.kind === 'LLM_JOB')
+    || a.id.localeCompare(b.id);
+}
 
 /**
  * Compare another LLM job with another algorithm, worker, connector or indexing
- * improvement and pick the larger measured gain per cost. Ties prefer the
- * non-LLM option (it needs no model call). Unmeasured options are never chosen. Pure.
+ * improvement and pick the larger measured marginal gain per cost. An option
+ * whose gain or cost is unmeasured is listed with the reason and never chosen. Pure.
  */
 export function allocateMarginal(options: readonly AdditionOption[]): Allocation {
+  type MeasuredOption = AdditionOption & { gain: { measured: true; value: number }; cost: { measured: true; value: number } };
   const unmeasured: Allocation['unmeasured'] = [];
-  const measured: { option: AdditionOption; score: number }[] = [];
+  const measured: MeasuredOption[] = [];
   for (const o of options) {
     if (!o.gain.measured) unmeasured.push({ kind: o.kind, id: o.id, reason: o.gain.reason });
     else if (!o.cost.measured) unmeasured.push({ kind: o.kind, id: o.id, reason: o.cost.reason });
-    else measured.push({ option: o, score: gainPerCost(o.gain.value, o.cost.value) });
+    else if (!Number.isFinite(o.gain.value) || !Number.isFinite(o.cost.value) || o.cost.value < 0) {
+      unmeasured.push({ kind: o.kind, id: o.id, reason: `gain ${o.gain.value} or cost ${o.cost.value} is not a finite, non-negative measurement` });
+    } else measured.push(o as MeasuredOption);
   }
-  measured.sort((a, b) => b.score - a.score || Number(a.option.kind === 'LLM_JOB') - Number(b.option.kind === 'LLM_JOB') || a.option.id.localeCompare(b.option.id));
-  const best = measured.find((m) => m.option.gain.measured && m.option.gain.value > 0) ?? null;
-  const compared = measured.some((m) => m.option.kind === 'LLM_JOB') && measured.some((m) => m.option.kind !== 'LLM_JOB');
+  measured.sort(compareOptions);
+  const best = measured.find((m) => m.gain.value > 0) ?? null;
+  const compared = measured.some((m) => m.kind === 'LLM_JOB') && measured.some((m) => m.kind !== 'LLM_JOB');
   return {
-    chosen: best?.option ?? null,
-    ranked: measured.map((m) => ({ kind: m.option.kind, id: m.option.id, gainPerCost: Number.isFinite(m.score) ? round(m.score) : Number.MAX_SAFE_INTEGER })),
+    chosen: best,
+    ranked: measured.map((m) => ({
+      kind: m.kind, id: m.id, gain: m.gain.value, cost: m.cost.value,
+      gainPerCost: m.cost.value > 0 ? round(m.gain.value / m.cost.value) : null,
+    })),
     unmeasured,
     comparedLlmWithNonLlm: compared,
     basis: best
-      ? `${best.option.kind} ${best.option.id} adds the most accepted output per cost${compared ? ' (an LLM job and a non-LLM option were both measured)' : ''}.`
-      : 'No option has a measured positive gain; add nothing.',
+      ? `${best.kind} ${best.id} adds the most accepted output per cost${compared ? ' (an LLM job and a non-LLM option were both measured)' : ''}.`
+      : 'No option has a measured positive gain at a measured cost; add nothing.',
   };
 }
 
@@ -399,31 +433,68 @@ export interface StageLimitReport {
   gate: SpendGate;
 }
 
-/** The addition options the rows can price: one more LLM job vs one more code path per kind. Pure. */
+/**
+ * A set of routes' ongoing cost per hour, from what their rows priced. Every
+ * cost component of every route must be measured; one that is not makes the
+ * total unmeasured, with that route's reason. Pure.
+ */
+export function routesCostPerHour(routes: readonly RouteWindowReading[], hours: number): Measured<number> {
+  if (routes.length === 0) return NOT('no route to price');
+  let dollars = 0;
+  for (const r of routes) {
+    for (const key of ['computeCost', 'apiCost', 'storageCost'] as const) {
+      const m = r.measures[key];
+      if (!m.measured) return NOT(`${r.route}'s ${key} is not measured: ${m.reason}`);
+      dollars += m.value;
+    }
+  }
+  return ok(round(dollars / Math.max(1, hours)));
+}
+
+/**
+ * The addition options the rows can measure: one more LLM job against one more
+ * code path of each kind. A gain is the measured contribution of an addition of
+ * that kind that actually ran in the window, and a cost is what the rows
+ * priced; anything else is unmeasured with its reason — never extrapolated
+ * from a different component, and never a code path assumed to cost $0. Pure.
+ */
 export function additionOptions(report: StageCapacityReport | null, routes: readonly RouteWindowReading[], hours: number): AdditionOption[] {
   const out: AdditionOption[] = [];
   const interp = report?.stages.find((s) => s.stage === 'model-interpretation');
   if (interp && interp.itemsProcessedPerHour.measured && interp.itemsProcessedPerHour.value > 0) {
+    // One more job per hour adds the accepted output a job measurably yields, at what a job measurably cost.
     const perJob = interp.acceptedPerHour / interp.itemsProcessedPerHour.value;
     out.push({ kind: 'LLM_JOB', id: 'model-interpretation', gain: ok(round(perJob)), cost: interp.incrementalDollars.measured ? ok(round(interp.incrementalDollars.value / Math.max(1, interp.itemsProcessedPerHour.value * hours))) : interp.incrementalDollars });
   } else {
     out.push({ kind: 'LLM_JOB', id: 'model-interpretation', gain: NOT('the interpretation stage processed nothing measured in the window'), cost: NOT('no reading') });
   }
-  // Another connector: the best route's accepted facts per hour, at a code path's $0.
-  const best = [...routes].sort((a, b) => n((b.measures.acceptedFacts as { value?: number }).value) - n((a.measures.acceptedFacts as { value?: number }).value))[0];
-  out.push(best && best.measures.acceptedFacts.measured
-    ? { kind: 'SOURCE_CONNECTOR', id: `like ${best.route}`, gain: ok(round(best.measures.acceptedFacts.value / Math.max(1, hours))), cost: ok(0) }
-    : { kind: 'SOURCE_CONNECTOR', id: 'connector', gain: NOT('no route accepted facts in the window'), cost: ok(0) });
-  // A parser/algorithm: the unread records a code parser would turn into accepted records at the parsed share.
-  const totals = routes.reduce((t, r) => ({
-    considered: t.considered + (r.measures.processedRecords.measured ? r.measures.processedRecords.value : 0),
-    accepted: t.accepted + (r.measures.acceptedFacts.measured ? r.measures.acceptedFacts.value : 0),
-  }), { considered: 0, accepted: 0 });
-  out.push(totals.considered > 0
-    ? { kind: 'ALGORITHM', id: 'code parser for unread records', gain: ok(round((totals.considered - totals.accepted) * (totals.accepted / totals.considered) / Math.max(1, hours))), cost: ok(0) }
-    : { kind: 'ALGORITHM', id: 'code parser', gain: NOT('no records considered in the window'), cost: ok(0) });
+  // Another connector: what the connectors first pulled in this window measurably added — not the best existing route's rate.
+  const added = routes.filter((r) => r.measures.newRelevantSources.measured && r.measures.newRelevantSources.value > 0);
+  if (added.length === 0) {
+    out.push({ kind: 'SOURCE_CONNECTOR', id: 'connector', gain: NOT('no connector was added in the window, so the gain of one more is not measured'), cost: NOT('no connector was added in the window to price') });
+  } else {
+    const ids = `added: ${added.map((r) => r.route).sort().join(', ')}`;
+    const unread = added.find((r) => !r.measures.acceptedFacts.measured);
+    const accepted = added.reduce((t, r) => t + (r.measures.acceptedFacts.measured ? r.measures.acceptedFacts.value : 0), 0);
+    out.push({
+      kind: 'SOURCE_CONNECTOR', id: ids,
+      gain: unread && !unread.measures.acceptedFacts.measured
+        ? NOT(`${unread.route}'s accepted facts are not measured: ${unread.measures.acceptedFacts.reason}`)
+        : ok(round(accepted / added.length / Math.max(1, hours))),
+      cost: (() => {
+        const c = routesCostPerHour(added, hours);
+        return c.measured ? ok(round(c.value / added.length)) : c;
+      })(),
+    });
+  }
+  // A parser/algorithm: no row records a code parser's addition and the accepted output it changed.
+  out.push({
+    kind: 'ALGORITHM', id: 'code parser',
+    gain: NOT('no row records a parser or algorithm being added and the accepted output it changed; unread records converting at the current accepted share is an extrapolation, not a measurement'),
+    cost: NOT('no row records the compute a parser or algorithm consumes'),
+  });
   out.push({ kind: 'WORKER', id: 'free-lane slot', gain: report?.constrained.expectedGain.measured ? ok(round(report.constrained.expectedGain.value.acceptedFactsPerHour)) : NOT(report?.constrained.expectedGain.measured === false ? report.constrained.expectedGain.reason : 'no recorded stage-capacity reading'), cost: report?.constrained.expectedGain.measured ? ok(round(report.constrained.expectedGain.value.dollars)) : NOT('no reading') });
-  out.push({ kind: 'INDEXING', id: 'index improvement', gain: NOT('no row measures a query or index improvement\'s effect on accepted output'), cost: ok(0) });
+  out.push({ kind: 'INDEXING', id: 'index improvement', gain: NOT('no row measures a query or index improvement\'s effect on accepted output'), cost: NOT('no row records an index improvement\'s cost') });
   return out;
 }
 

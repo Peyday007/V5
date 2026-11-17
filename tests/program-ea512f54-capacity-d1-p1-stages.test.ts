@@ -16,6 +16,7 @@ import {
   ROUTE_MEASURE_KEYS,
   SCALING_OPTIONS,
   STAGE_LIMIT_EVENT,
+  additionOptions,
   allocateMarginal,
   blockagesOf,
   limitingStage,
@@ -25,6 +26,7 @@ import {
   routeWindowReadings,
   stagePressures,
   type LimitSignals,
+  type RouteWindowReading,
   type StageLimitReport,
 } from '../server/services/freeLane/stageLimit.ts';
 import type { RecordedStageCapacity, StageCapacityReport, StageReading } from '../server/services/freeLane/stageCapacity.ts';
@@ -108,6 +110,68 @@ describe('allocateMarginal', () => {
 
   it('nothing measured means nothing is added', () => {
     expect(allocateMarginal([{ kind: 'LLM_JOB', id: 'llm', gain: NOT('x'), cost: ok(1) }]).chosen).toBeNull();
+  });
+});
+
+describe('allocateMarginal is not degenerate (finding F3)', () => {
+  it('no score is infinite: a $0 option is ranked by gain, and an LLM job at a measured $0 can win', () => {
+    const a = allocateMarginal([
+      { kind: 'LLM_JOB', id: 'llm', gain: ok(5), cost: ok(0) },
+      { kind: 'WORKER', id: 'slot', gain: ok(2), cost: ok(0) },
+      { kind: 'SOURCE_CONNECTOR', id: 'conn', gain: ok(9), cost: ok(1) },
+    ]);
+    expect(a.chosen!.kind).toBe('LLM_JOB');
+    for (const r of a.ranked) expect(r.gainPerCost === null || Number.isFinite(r.gainPerCost)).toBe(true);
+    expect(a.ranked.find((r) => r.id === 'llm')!.gainPerCost).toBeNull();
+    expect(a.ranked.find((r) => r.id === 'conn')!.gainPerCost).toBe(9);
+  });
+
+  it('an LLM job beats priced non-LLM options on gain per dollar', () => {
+    const a = allocateMarginal([
+      { kind: 'LLM_JOB', id: 'llm', gain: ok(6), cost: ok(1) },
+      { kind: 'SOURCE_CONNECTOR', id: 'conn', gain: ok(3), cost: ok(1) },
+      { kind: 'ALGORITHM', id: 'parser', gain: ok(1), cost: ok(0.5) },
+    ]);
+    expect(a.chosen!.kind).toBe('LLM_JOB');
+    expect(a.comparedLlmWithNonLlm).toBe(true);
+  });
+
+  const route = (name: string, isNew: boolean, accepted: number): RouteWindowReading => ({
+    domain: 'd', route: name, since: 's', until: 'u', pulls: 1, failedPulls: 0,
+    measures: {
+      newRelevantSources: ok(isNew ? 1 : 0), recordsConsidered: ok(100), recordsNewlyFetched: ok(50), bytes: NOT('x'), transferMs: NOT('x'),
+      processedRecords: ok(100), deduplicatedRecords: ok(50), acceptedFacts: ok(accepted), evidenceQuality: ok(0.5),
+      economicRelationships: NOT('x'), correctedContradictions: NOT('x'), variablesResolved: NOT('x'), candidatesImproved: ok(1),
+      minutesSourceChangeToPlan: NOT('x'), computeCost: NOT('feed pulls record no CPU time'), apiCost: ok(0), storageCost: NOT('x'),
+    },
+  });
+  const interpReport = {
+    stages: [stage('model-interpretation', { itemsProcessedPerHour: ok(10), acceptedPerHour: 4, incrementalDollars: ok(12) })],
+    constrained: { stage: 'model-interpretation', basis: 'b', expectedGain: { measured: true, value: { acceptedFactsPerHour: 1, dollars: 2 } }, recommendation: 'r' },
+  } as unknown as StageCapacityReport;
+
+  it('code paths are never assumed to cost $0 and gains are never extrapolated', () => {
+    const opts = additionOptions(interpReport, [route('existing-big', false, 900)], 6);
+    const byKind = new Map(opts.map((o) => [o.kind, o]));
+    // No connector was added in the window: the best existing route is not a measured marginal gain.
+    expect(byKind.get('SOURCE_CONNECTOR')!.gain.measured).toBe(false);
+    // Unread records converting at the accepted share is an extrapolation.
+    expect(byKind.get('ALGORITHM')!.gain.measured).toBe(false);
+    for (const o of opts) if (o.kind !== 'LLM_JOB' && o.kind !== 'WORKER') expect(o.cost.measured).toBe(false);
+    const a = allocateMarginal(opts);
+    // The LLM job (0.4 accepted/job at $0.2/job = 2/$) and the worker slot (1/h at $2/h = 0.5/$) are what is compared; the LLM wins.
+    expect(a.comparedLlmWithNonLlm).toBe(true);
+    expect(a.chosen!.kind).toBe('LLM_JOB');
+    expect(a.unmeasured.map((u) => u.kind).sort()).toEqual(['ALGORITHM', 'INDEXING', 'SOURCE_CONNECTOR']);
+  });
+
+  it('a connector added in the window has a measured gain, and stays unchosen until its cost is priced', () => {
+    const opts = additionOptions(interpReport, [route('existing-big', false, 900), route('new-src', true, 12)], 6);
+    const conn = opts.find((o) => o.kind === 'SOURCE_CONNECTOR')!;
+    expect(conn.id).toBe('added: new-src');
+    expect(conn.gain).toEqual(ok(2));
+    expect(conn.cost.measured).toBe(false);
+    expect(allocateMarginal(opts).unmeasured.some((u) => u.kind === 'SOURCE_CONNECTOR')).toBe(true);
   });
 });
 
