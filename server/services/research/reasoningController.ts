@@ -620,14 +620,19 @@ export function foldControllerHistory(
 
 /** Read one caller's controller history from `bin_events`, the rows the existing writer appended. */
 export async function readControllerHistory(caller: string, limit = 5000): Promise<Map<string, ControllerHistory>> {
-  const rows = await getDb().all<{ event_type: string; measures: string | null }>(
+  const rows = await getDb().all<{ event_type: string; measures: string | null; at: string }>(
     `SELECT event_type, measures, at, id FROM bin_events
       WHERE workload_class = ? AND event_type IN (?, ?)
       ORDER BY at DESC, id DESC LIMIT ?`,
     [caller, CONTROLLER_EVENTS.DECISION, CONTROLLER_EVENTS.RESULT, Math.max(1, Math.floor(limit))],
   );
+  // Ids are random, so rows written in the same millisecond tie on `at` in no particular order. A result is
+  // only ever recorded after the decision it answers, so within one instant the decision is folded first;
+  // otherwise the decision would reset the results it was meant to carry.
+  const rank = (t: string) => (t === CONTROLLER_EVENTS.DECISION ? 0 : 1);
+  const ordered = rows.reverse().sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : rank(a.event_type) - rank(b.event_type)));
   const parsed: { eventType: string; measures: Record<string, unknown> }[] = [];
-  for (const row of rows.reverse()) {
+  for (const row of ordered) {
     try {
       const m: unknown = row.measures ? JSON.parse(row.measures) : null;
       if (m && typeof m === 'object') parsed.push({ eventType: row.event_type, measures: m as Record<string, unknown> });
