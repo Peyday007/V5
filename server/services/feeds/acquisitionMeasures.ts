@@ -19,8 +19,10 @@
  * application server is not a resource class here at all.
  *
  * Work is shared between active goal demand, open-world exploration,
- * capability building and future planning by measured marginal value, with no
- * owner-set quota.
+ * capability building and future planning by the research allocation already
+ * in force (the goals tick decides it, the free lane's claim order applies it),
+ * reported here per lane beside each lane's own measured yield per job, with
+ * no owner-set quota.
  *
  * Nothing here schedules, queues or stores anything new: it reads `feed_pulls`,
  * `feed_items`, `feed_item_coverage`, `cheap_results` and `bin_events`, and
@@ -32,6 +34,7 @@ import { getDb } from '../../db/database.ts';
 import { recordBinEvent } from '../../repos/bins.ts';
 import { readStageCapacity, type Measured, type RecordedStageCapacity } from '../freeLane/stageCapacity.ts';
 import type { RouteFailureCause } from '../freeLane/worker.ts';
+import { RESEARCH_PURPOSES, type ResearchPurpose, type SharesInForce } from '../goals/researchAllocation.ts';
 import { CODE_SIGNAL_SOURCE, coveredItems } from './detectors.ts';
 import { extractItem } from './extract.ts';
 import { CONNECTOR_HEALTH_EVENT, type ConnectorState } from './health.ts';
@@ -538,78 +541,133 @@ export function resourceSignals(recorded: RecordedStageCapacity | null, sources:
 // Dynamic allocation across purposes, with no owner quota
 // ---------------------------------------------------------------------------
 
+/*
+ * S-0304: "Allocate work dynamically between active goal demands, open-world
+ * exploration, capability building and future planning; don't require the
+ * owner to assign a quota to every category."
+ *
+ * Brain already has the one allocation that moves real work: the goals tick
+ * decides the research purposes' shares from measured marginal outcome per
+ * unit of cost (`goals/researchAllocation.ts` decideResearchAllocation),
+ * records it as `GOAL_RESEARCH_REALLOCATED`, steps live bins' priority by it,
+ * and the free lane orders the packets it claims by the same decision
+ * (`freeLane/worker.ts` researchShiftsInForce). This reading reports that
+ * decision in S-0304's four lanes — it never computes shares of its own that
+ * nothing applies (§10.3, §20.4) — beside each lane's own measured yield per
+ * job, so the two can be compared on the record.
+ */
+
 export const WORK_LANES = ['ACTIVE_GOAL_DEMAND', 'OPEN_WORLD_EXPLORATION', 'CAPABILITY_BUILDING', 'FUTURE_PLANNING'] as const;
 export type WorkLane = (typeof WORK_LANES)[number];
 
+/** Which S-0304 lane each research purpose serves; every purpose is in exactly one. */
+export const LANE_OF_PURPOSE: Record<ResearchPurpose, WorkLane> = {
+  TRANSACTION_ROUTES: 'ACTIVE_GOAL_DEMAND',
+  OPERATING_SUPPORT: 'ACTIVE_GOAL_DEMAND',
+  BROAD_DISCOVERY: 'OPEN_WORLD_EXPLORATION',
+  SELF_IMPROVEMENT: 'CAPABILITY_BUILDING',
+  FORWARD_EXPLORATION: 'FUTURE_PLANNING',
+};
+
+/** Which S-0304 lane each stage-capacity attribution category served. */
+const LANE_OF_CATEGORY: Record<string, WorkLane> = {
+  IMMEDIATE_COMMERCIAL_DISCOVERY: 'ACTIVE_GOAL_DEMAND',
+  DEAL_COMPLETION: 'ACTIVE_GOAL_DEMAND',
+  BROADER_WORLD_RESEARCH: 'OPEN_WORLD_EXPLORATION',
+  SELF_IMPROVEMENT: 'CAPABILITY_BUILDING',
+  FUTURE_GOAL_PREPARATION: 'FUTURE_PLANNING',
+};
+
 export interface LaneReading {
   lane: WorkLane;
-  /** Jobs spent on the lane in the window. */
-  jobs: number;
-  /** Useful output those jobs produced. */
+  /** Jobs the lane itself spent in the window (accepted or not). */
+  jobs: Measured<number>;
+  /** Useful (accepted) output those jobs produced. */
   useful: Measured<number>;
+  /** Useful output per job the lane spent: its own yield, never its share of another lane's work. */
+  usefulPerJob: Measured<number>;
+}
+
+/**
+ * Each lane's own jobs and useful output from the stage-capacity attribution:
+ * a lane's useful-per-job is its accepted jobs over the jobs it spent, so a
+ * lane that spent ten jobs for two accepted reads 0.2 whatever the other lanes
+ * did. A reading recorded before jobs per category were measured says nothing
+ * about yield (inv. 39). Pure.
+ */
+export function laneReadings(recorded: RecordedStageCapacity | null): LaneReading[] {
+  const attribution = recorded && !recorded.stale ? recorded.report?.attribution ?? null : null;
+  const none = (reason: string): LaneReading[] =>
+    WORK_LANES.map((lane) => ({ lane, jobs: notMeasured(reason), useful: notMeasured(reason), usefulPerJob: notMeasured(reason) }));
+  if (!attribution) return none('no current stage-capacity attribution');
+  if (attribution.some((one) => typeof one.jobs !== 'number')) {
+    return none('the stage-capacity reading counts accepted jobs only, not the jobs each category spent');
+  }
+  const jobs = new Map<WorkLane, number>();
+  const productive = new Map<WorkLane, number>();
+  for (const one of attribution) {
+    const lane = LANE_OF_CATEGORY[one.category];
+    if (!lane) continue;
+    jobs.set(lane, (jobs.get(lane) ?? 0) + (one.jobs ?? 0));
+    productive.set(lane, (productive.get(lane) ?? 0) + one.productiveJobs);
+  }
+  return WORK_LANES.map((lane) => {
+    const spent = jobs.get(lane) ?? 0;
+    const useful = productive.get(lane) ?? 0;
+    return {
+      lane,
+      jobs: measured(spent),
+      useful: measured(useful),
+      usefulPerJob: spent > 0 ? measured(round4(useful / spent)) : notMeasured('the lane spent no job in the window'),
+    };
+  });
 }
 
 export interface LaneShare {
   lane: WorkLane;
-  share: number;
-  marginalValue: number | null;
+  /** The share the decision in force gives the lane, or not measured when no decision is in force. */
+  decided: Measured<number>;
+  /** The share of job time the lane actually received in the decision's window. */
+  observed: Measured<number>;
+  /** The lane's own measured useful output per job (`laneReadings`). */
+  usefulPerJob: Measured<number>;
   basis: string;
 }
 
-/** The smallest share any lane keeps, so a lane with no reading yet still earns one. */
-export const LANE_FLOOR = 0.05;
+/** The research allocation in force as the free lane and the goals tick read it, or null when none is. */
+export type AllocationInForce = (SharesInForce & { fingerprint: string | null }) | null;
 
 /**
- * Share of the next window's work per lane, from measured marginal value
- * (useful output per job). Every lane keeps a floor so an unmeasured one can
- * earn a reading; an unmeasured lane gets only the floor, never more (inv. 39);
- * the rest follows measured value. No owner-set quota is an input. Pure.
+ * The work allocation in force, in S-0304's four lanes: the shares the goals
+ * tick decided and the free lane's claim order applies, summed over the
+ * purposes each lane serves, beside what each lane received and its own yield.
+ * No decision in force (none recorded, or held for want of a measurement)
+ * claims no share: the lane then claims by stored priority, and the record
+ * says so rather than inventing one (inv. 39). No owner quota is an input. Pure.
  */
-export function allocateWork(readings: readonly LaneReading[]): LaneShare[] {
-  const value = new Map<WorkLane, number | null>();
-  for (const lane of WORK_LANES) {
-    const r = readings.find((one) => one.lane === lane);
-    value.set(lane, r && r.useful.measured && r.jobs > 0 ? r.useful.value / r.jobs : null);
-  }
-  const total = [...value.values()].reduce<number>((n, v) => n + (v ?? 0), 0);
-  const rest = 1 - LANE_FLOOR * WORK_LANES.length;
-  const measuredLanes = [...value.values()].filter((v) => v !== null).length;
+export function allocationInForce(decision: AllocationInForce, readings: readonly LaneReading[]): LaneShare[] {
+  const sum = (shares: Record<ResearchPurpose, number>, lane: WorkLane): number =>
+    round4(RESEARCH_PURPOSES.filter((p) => LANE_OF_PURPOSE[p] === lane).reduce((n, p) => n + shares[p], 0));
   return WORK_LANES.map((lane) => {
-    const v = value.get(lane) ?? null;
-    let share = LANE_FLOOR;
-    let basis: string;
-    if (v === null) basis = 'no measured value: the floor only';
-    else if (total > 0) {
-      share += rest * (v / total);
-      basis = `measured ${round4(v)} useful per job`;
-    } else {
-      // Every measured lane produced nothing: none outranks another, so the rest is split evenly among them.
-      share += measuredLanes > 0 ? rest / measuredLanes : 0;
-      basis = 'measured, but no lane produced useful output: an even split of the remainder';
+    const usefulPerJob = readings.find((r) => r.lane === lane)?.usefulPerJob ?? notMeasured<number>('no lane reading');
+    if (!decision || decision.held) {
+      const why = !decision ? 'no research allocation decision is recorded' : 'the research allocation decision in force is held (nothing measured to move it)';
+      return { lane, decided: notMeasured(why), observed: notMeasured(why), usefulPerJob, basis: `${why}; the free lane claims by stored priority` };
     }
-    return { lane, share: round4(share), marginalValue: v === null ? null : round4(v), basis };
+    return {
+      lane,
+      decided: measured(sum(decision.shares, lane)),
+      observed: measured(sum(decision.observed, lane)),
+      usefulPerJob,
+      basis: `GOAL_RESEARCH_REALLOCATED ${decision.fingerprint ?? '(unfingerprinted)'}: decided by marginal useful outcome per unit of cost, applied by the goals tick's bin priority and the free lane's claim order`,
+    };
   });
 }
 
-/** Lane readings from the stage-capacity attribution: each productive job is useful output of the lane it served. Pure. */
-export function laneReadings(recorded: RecordedStageCapacity | null): LaneReading[] {
-  const attribution = recorded && !recorded.stale ? recorded.report?.attribution ?? null : null;
-  if (!attribution) return WORK_LANES.map((lane) => ({ lane, jobs: 0, useful: notMeasured('no current stage-capacity attribution') }));
-  const laneOf: Record<string, WorkLane> = {
-    IMMEDIATE_COMMERCIAL_DISCOVERY: 'ACTIVE_GOAL_DEMAND',
-    DEAL_COMPLETION: 'ACTIVE_GOAL_DEMAND',
-    BROADER_WORLD_RESEARCH: 'OPEN_WORLD_EXPLORATION',
-    SELF_IMPROVEMENT: 'CAPABILITY_BUILDING',
-    FUTURE_GOAL_PREPARATION: 'FUTURE_PLANNING',
-  };
-  const productive = new Map<WorkLane, number>();
-  for (const one of attribution) {
-    const lane = laneOf[one.category];
-    if (lane) productive.set(lane, (productive.get(lane) ?? 0) + one.productiveJobs);
-  }
-  const total = [...productive.values()].reduce((n, v) => n + v, 0);
-  // Jobs are the window's productive jobs; a lane's useful output is its own productive jobs, so its value is its share of them.
-  return WORK_LANES.map((lane) => ({ lane, jobs: total, useful: measured(productive.get(lane) ?? 0) }));
+/** The decision in force, read exactly as the free lane reads it (`researchShiftsInForce`). */
+async function readAllocationInForce(): Promise<AllocationInForce> {
+  const tick = await import('../goals/tick.ts');
+  return tick.sharesInForceFrom((await (await tick.productionResearchAllocationPorts()).lastDecision())?.detail ?? null);
 }
 
 // ---------------------------------------------------------------------------
@@ -632,7 +690,11 @@ export interface AcquisitionMeasuresReading {
 export async function recordAcquisitionMeasures(
   now: Date,
   record: typeof recordBinEvent = recordBinEvent,
-  deps: { readStageCapacity?: (now: number) => Promise<RecordedStageCapacity | null>; catalog?: readonly FeedSource[] } = {},
+  deps: {
+    readStageCapacity?: (now: number) => Promise<RecordedStageCapacity | null>;
+    catalog?: readonly FeedSource[];
+    readAllocation?: () => Promise<AllocationInForce>;
+  } = {},
 ): Promise<AcquisitionMeasuresReading | null> {
   const last = await getDb().get<{ measures: string | null }>(
     `SELECT measures FROM bin_events WHERE event_type = ? ORDER BY at DESC, id DESC LIMIT 1`,
@@ -652,7 +714,9 @@ export async function recordAcquisitionMeasures(
   const sources = await readAcquisitionMeasures(since, until, deps.catalog);
   const recorded = await (deps.readStageCapacity ?? readStageCapacity)(now.getTime());
   const constraint = classifyConstraint(resourceSignals(recorded, sources));
-  const allocation = allocateWork(laneReadings(recorded));
+  // An unreadable decision is no decision: the reading still records, and says so.
+  const decision = await (deps.readAllocation ?? readAllocationInForce)().catch(() => null);
+  const allocation = allocationInForce(decision, laneReadings(recorded));
   const reading: AcquisitionMeasuresReading = { since, until, sources, constraint, allocation };
   const repairs = sources.filter((s) => s.repair).map((s) => `${s.source} ${s.repair!.kind}`);
   await record({
