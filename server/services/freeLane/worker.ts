@@ -737,13 +737,31 @@ export function noneBecause(raw: Record<string, unknown>): string | null {
  * sent), so a report never reads a model that listed nothing as one whose
  * claims Brain's checks dropped. Pure.
  */
-export function droppedReason(listed: number, dropped: Record<string, number>, sources: number, raw: Record<string, unknown>): string {
+export function droppedReason(listed: number, dropped: Record<string, number>, pages: readonly string[], raw: Record<string, unknown>): string {
   const head = `the answer did not survive Brain's own checks: ${listed} claim(s) offered, dropped ${JSON.stringify(dropped)}`;
   if (listed > 0) return head;
+  // The class of each page it read, so a reading can set the evidence offered against the source types the brief asks for.
+  const classes = pages.reduce<Record<string, number>>((acc, url) => ({ ...acc, [hostClass(url)]: (acc[hostClass(url)] ?? 0) + 1 }), {});
+  const from = `${head} from ${pages.length} source(s) ${JSON.stringify(classes)}`;
   const because = noneBecause(raw);
-  return because
-    ? `${head} from ${sources} source(s); the model listed none because: ${because}`
-    : `${head} from ${sources} source(s); the reply was ${JSON.stringify(raw).slice(0, 200)}`;
+  return because ? `${from}; the model listed none because: ${because}` : `${from}; the reply was ${JSON.stringify(raw).slice(0, 200)}`;
+}
+
+/**
+ * What kind of page a URL is, by its host alone: an official body, a
+ * reference work, or a commercial or other site. Coarse, and only a reading:
+ * it never decides whether a claim is accepted (W13). Pure.
+ */
+export function hostClass(url: string): 'official' | 'reference' | 'commercial' | 'unknown' {
+  let host = '';
+  try {
+    host = new URL(url).hostname.toLowerCase();
+  } catch {
+    return 'unknown';
+  }
+  if (/(^|\.)(gov|mil|int)$|(^|\.)gov\.[a-z]{2}$|(^|\.)(gc\.ca|europa\.eu|un\.org|oecd\.org|worldbank\.org)$/.test(host)) return 'official';
+  if (/(^|\.)edu$|(^|\.)ac\.[a-z]{2}$|(^|\.)(wikipedia\.org|wikidata\.org|britannica\.com)$/.test(host)) return 'reference';
+  return 'commercial';
 }
 
 async function ask(
@@ -1481,7 +1499,7 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
     }
     if (claims.length === 0) {
       // With nothing listed, the model's stated reason, else what it sent, is the only clue to why (2026-11-16/17).
-      ctx.why = droppedReason(listed.length, dropped, readable.length, raw);
+      ctx.why = droppedReason(listed.length, dropped, readable.map((one) => one.url), raw);
       return null;
     }
     return { claims: claims.slice(0, 25) };
@@ -1893,10 +1911,17 @@ export function answerTally(
  * GPU]", stale pod routing, fixed in #984) and pages no model could open ("no
  * readable source": 404s and DNS failures every model met alike). A model that
  * never answered, or that Brain gave nothing to read, is not judged by it.
+ *
+ * Nor is one that read the pages and said, in words, why none of them states
+ * what the brief asks (W13, 2026-11-17): gpt-oss-120b was held back from every
+ * fragment for 20 empty lists in an hour while the model the work went to wrote
+ * claims from the brief instead of a page. Declining to invent is the evidence
+ * bar working; it is not accepted either, so it never makes a model look fit.
+ * A bare empty list with no stated reason still counts against the model.
  */
-function notTheAnswer(reason: string): boolean {
+export function notTheAnswer(reason: string): boolean {
   return (
-    /threw:|refused: .*(?:connection|timeout|not queryable)|: model call failed|: no readable source among/i.test(reason) ||
+    /threw:|refused: .*(?:connection|timeout|not queryable)|: model call failed|: no readable source among|; the model listed none because: \S/i.test(reason) ||
     BRAIN_UNAVAILABLE.test(reason) ||
     PROVIDER_BUSY.test(reason)
   );

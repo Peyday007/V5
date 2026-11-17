@@ -1127,18 +1127,20 @@ describe('gpt-oss-120b refusals (production, 2026-11-16)', () => {
     const prompt = emptyListRepair('BRIEF', 5, 'L1');
     expect(prompt).toContain('{"claims":[],"none_because":"…"}');
     expect(prompt).toContain('the sources are about something else');
-    // Production 2026-11-17 08:50Z, verbatim: the reply after #998's re-ask over five read pages.
-    expect(droppedReason(0, {}, 5, { claims: [] })).toBe(
-      'the answer did not survive Brain\'s own checks: 0 claim(s) offered, dropped {} from 5 source(s); the reply was {"claims":[]}',
+    // Production 2026-11-17 08:50Z: the reply after #998's re-ask over five read pages, now with each page's class.
+    const pages = ['https://www.agriculture.pa.gov/x', 'https://acme-farm-supply.com/pricing', 'https://en.wikipedia.org/wiki/Farm', 'https://blog.example.com/a', 'https://shop.example.net/b'];
+    expect(droppedReason(0, {}, pages, { claims: [] })).toBe(
+      'the answer did not survive Brain\'s own checks: 0 claim(s) offered, dropped {} from 5 source(s) ' +
+        '{"official":1,"commercial":3,"reference":1}; the reply was {"claims":[]}',
     );
     const stated = { claims: [], none_because: 'SOURCE 1-5 are vendor\n pricing pages; the brief excludes vendor marketing pages.' };
-    expect(droppedReason(0, {}, 5, stated)).toBe(
-      'the answer did not survive Brain\'s own checks: 0 claim(s) offered, dropped {} from 5 source(s); ' +
+    expect(droppedReason(0, {}, pages.slice(1, 2), stated)).toBe(
+      'the answer did not survive Brain\'s own checks: 0 claim(s) offered, dropped {} from 1 source(s) {"commercial":1}; ' +
         'the model listed none because: SOURCE 1-5 are vendor pricing pages; the brief excludes vendor marketing pages.',
     );
     // A model that listed claims the checks dropped is reported as before, with the reasons by count.
     const dropped = { 'citation not readable as sentence numbers (evidence_locator="Entire site content")': 1 };
-    expect(droppedReason(1, dropped, 3, stated)).toBe(
+    expect(droppedReason(1, dropped, pages, stated)).toBe(
       `the answer did not survive Brain's own checks: 1 claim(s) offered, dropped ${JSON.stringify(dropped)}`,
     );
   });

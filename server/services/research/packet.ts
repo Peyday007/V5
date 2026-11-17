@@ -380,6 +380,44 @@ export const MAX_COVERAGE_ROUNDS = 2;
  * missing — which is why each fragment here is built from one failed check and
  * one requirement, and carries that check as its reason for existing.
  */
+/** The source rules a coverage fragment falls back to when nothing earlier in the packet set any for its requirement. */
+export const GAP_DEFAULT_SOURCE_RULES = {
+  acceptableSourceTypes: ['government statistics', 'regulatory filings', 'official registries'],
+  excludedSourceTypes: ['vendor marketing pages', 'unattributed summaries'],
+  preferredSourceTypes: ['official statistics', 'regulatory filings'],
+  prohibitedEvidence: [] as string[],
+};
+
+/**
+ * The source rules a coverage fragment for one requirement is held to: those
+ * of the latest earlier fragment the planner wrote for that same requirement,
+ * else the official-only defaults. Pure.
+ *
+ * W13, 2026-11-17. Every coverage fragment was given the official-only rules
+ * whatever its requirement asked: government statistics, filings or registries,
+ * with vendor pages excluded. The planner had already set rules that fit the
+ * requirement (a vendor's own price list is primary evidence of that vendor's
+ * price), so the repair was judged by a standard that does not fit what it
+ * claims (invariant 15). gpt-oss-120b, which follows a brief's source rules,
+ * then listed no claims over the commercial pages search had found. The
+ * planner's rules apply again here, and so do every check and the audit.
+ */
+export function gapSourceRules(
+  existing: readonly Pick<ResearchFragment, 'fragmentKey' | 'requirementIds' | 'acceptableSourceTypes' | 'excludedSourceTypes' | 'preferredSourceTypes' | 'prohibitedEvidence'>[],
+  requirementId: string,
+): typeof GAP_DEFAULT_SOURCE_RULES {
+  const planned = [...existing]
+    .reverse()
+    .find((f) => !f.fragmentKey.startsWith('coverage-') && f.requirementIds.includes(requirementId) && f.acceptableSourceTypes.length > 0);
+  if (!planned) return { ...GAP_DEFAULT_SOURCE_RULES };
+  return {
+    acceptableSourceTypes: [...planned.acceptableSourceTypes],
+    excludedSourceTypes: [...planned.excludedSourceTypes],
+    preferredSourceTypes: [...planned.preferredSourceTypes],
+    prohibitedEvidence: [...planned.prohibitedEvidence],
+  };
+}
+
 export async function planCoverageFragments(input: {
   orchestrationId: string;
   coverage: PacketCoverage;
@@ -440,8 +478,7 @@ export async function planCoverageFragments(input: {
                   necessity: 'REQUIRED' as const,
                 },
               ],
-        acceptableSourceTypes: ['government statistics', 'regulatory filings', 'official registries'],
-        excludedSourceTypes: ['vendor marketing pages', 'unattributed summaries'],
+        ...gapSourceRules(existing, requirement.id),
         completionCriteria:
           requirement.completionCriteria.length > 0
             ? requirement.completionCriteria
@@ -455,7 +492,6 @@ export async function planCoverageFragments(input: {
         missingEvidence: check.detail,
         whyExistingInsufficient: `The packet failed this check before synthesis: ${check.check}.`,
         expectedClaimTypes: ['SOURCED_FACT'],
-        preferredSourceTypes: ['official statistics', 'regulatory filings'],
         failureConditions: ['No source addresses this on the terms the assignment requires.'],
         estimatedEffort: 'MEDIUM',
         maxRepairs: 1,
