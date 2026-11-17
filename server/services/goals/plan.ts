@@ -3283,24 +3283,38 @@ const lastReadAt = new Map<string, number>();
  * update one), their value layers, the money ledger and the goal's own terms.
  */
 export async function planInputsFingerprint(projectId: string, goalId: string): Promise<string> {
-  const row = await getDb().get<{ o: number | string; ou: string | null; oc: string | null; v: number | string; vu: string | null; m: number | string; g: string | null }>(
+  const row = await getDb().get<{ o: number | string; ou: string | null; oc: string | null; v: number | string; vu: string | null; m: number | string; g: string | null; f: number | string; fc: string | null; k: number | string; ku: string | null }>(
     `SELECT (SELECT COUNT(*) FROM cash_opportunities WHERE project_id = ?) AS o,
             (SELECT MAX(updated_at) FROM cash_opportunities WHERE project_id = ?) AS ou,
             (SELECT MAX(created_at) FROM cash_opportunities WHERE project_id = ?) AS oc,
             (SELECT COUNT(*) FROM cash_value_layers WHERE project_id = ?) AS v,
             (SELECT MAX(updated_at) FROM cash_value_layers WHERE project_id = ?) AS vu,
             (SELECT COUNT(*) FROM cash_money_entries WHERE project_id = ?) AS m,
-            (SELECT updated_at FROM workstreams WHERE id = ?) AS g`,
-    [projectId, projectId, projectId, projectId, projectId, projectId, goalId],
+            (SELECT updated_at FROM workstreams WHERE id = ?) AS g,
+            (SELECT COUNT(*) FROM construction_facts WHERE source_claim_id IS NOT NULL AND (project_id = ? OR workstream_id = ?)) AS f,
+            (SELECT MAX(created_at) FROM construction_facts WHERE source_claim_id IS NOT NULL AND (project_id = ? OR workstream_id = ?)) AS fc,
+            (SELECT COUNT(*) FROM cash_card_facts WHERE project_id = ?) AS k,
+            (SELECT MAX(updated_at) FROM cash_card_facts WHERE project_id = ?) AS ku`,
+    [projectId, projectId, projectId, projectId, projectId, projectId, goalId, projectId, goalId, projectId, goalId, projectId, projectId],
   );
-  return [row?.o, row?.ou, row?.oc, row?.v, row?.vu, row?.m, row?.g].map((one) => String(one ?? '')).join('|');
+  return [row?.o, row?.ou, row?.oc, row?.v, row?.vu, row?.m, row?.g, row?.f, row?.fc, row?.k, row?.ku].map((one) => String(one ?? '')).join('|');
 }
 
 /**
- * The parts of `planInputsFingerprint` only a new opening moves: the project's
- * opening count and the newest opening's `created_at` (positions 0 and 2).
+ * The parts of `planInputsFingerprint` only arriving evidence moves: the
+ * project's opening count and the newest opening's `created_at` (positions 0
+ * and 2), and the count and newest `created_at` of construction facts filed
+ * from research claims (positions 7 and 8). The plan pass files neither, so
+ * one filed while a reading runs still reads as new on the next pass.
+ *
+ * Before 2026-11-17 the fingerprint saw only openings, value layers, money and
+ * the goal row, so a research claim that became a construction fact or a card
+ * fact — what `construct.ts` builds the plan from — never moved it, and
+ * accepted research waited out the half-hour refresh (or, on a goal held
+ * NOT_SUPPORTED, was never read at all): production's runpod-report on
+ * 04b754ce traced 5 accepted goal claims with "no plan evaluation since".
  */
-const ARRIVAL_PARTS = new Set([0, 2]);
+const ARRIVAL_PARTS = new Set([0, 2, 7, 8]);
 
 /**
  * The inputs a reading was actually taken over. Pure.

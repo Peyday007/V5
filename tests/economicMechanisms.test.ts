@@ -274,6 +274,14 @@ describe('forward construction and transfer', () => {
     expect(route.properties).toEqual(expect.arrayContaining(['SHARED_FIXED_COST', 'NO_CAPITAL_AT_RISK', 'REUSABLE_INFRASTRUCTURE']));
     expect(route.unknownParts).toEqual(expect.arrayContaining(['fixed_cost', 'min_participants', 'prepay_share', 'repeat_rate']));
     expect(route.question).toMatch(/fell short of their minimum/);
+    // A confirm-or-refute round asks for its prices as declared unit economics,
+    // naming the buyer type exactly as the map holds it, so the construction
+    // backfill can file them (2026-11-17: accepted prices reached no table).
+    for (const one of homeowners) {
+      expect(one.question).toMatch(/needs the world to confirm or refute it/);
+      expect(one.question).toContain('structural_finding UNIT_ECONOMIC');
+      expect(one.question).toContain('structural_qualifier "Suburban homeowners"');
+    }
     // No two arrangements share a key.
     expect(new Set(built.map((one) => one.key)).size).toBe(built.length);
   });

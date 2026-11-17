@@ -20,8 +20,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import {
+  noteStall,
+  pressureStallMs,
   profileRotationDue,
+  resetStallLog,
   resetStallProfilerState,
+  stalledMsSince,
   rotateStallProfile,
   stallProfileReading,
   type ProfilerSession,
@@ -261,7 +265,10 @@ describe('the stall profiler restarts only when it has something to keep', () =>
     const t0 = Date.parse('2026-11-17T18:00:00.000Z');
     resetStallProfilerState(t0, 2_500);
     const fake = fakeSession();
-    rotateStallProfile(fake.session, t0 + 60_000);
+    // Within five minutes of the last start the stall is held, not restarted for.
+    for (let minute = 1; minute < 5; minute++) rotateStallProfile(fake.session, t0 + minute * 60_000);
+    expect(fake.stops).toBe(0);
+    rotateStallProfile(fake.session, t0 + 5 * 60_000);
     expect(fake.stops).toBe(1);
     expect(fake.starts).toBe(1);
     expect(stallProfileReading()).toHaveLength(1);
@@ -275,7 +282,40 @@ describe('the stall profiler restarts only when it has something to keep', () =>
   it('decides on the window stall and the span alone', () => {
     expect(profileRotationDue({ windowStallMs: 0, spanMs: 60_000 })).toBe(false);
     expect(profileRotationDue({ windowStallMs: 1_999, spanMs: 60_000 })).toBe(false);
-    expect(profileRotationDue({ windowStallMs: 2_000, spanMs: 60_000 })).toBe(true);
+    // A stall right after a restart waits out the minimum span (a restart is itself a stall).
+    expect(profileRotationDue({ windowStallMs: 8_400, spanMs: 60_000 })).toBe(false);
+    expect(profileRotationDue({ windowStallMs: 8_400, spanMs: 5 * 60_000 - 1 })).toBe(false);
+    expect(profileRotationDue({ windowStallMs: 2_000, spanMs: 5 * 60_000 })).toBe(true);
+    expect(profileRotationDue({ windowStallMs: 0, spanMs: 5 * 60_000 })).toBe(false);
     expect(profileRotationDue({ windowStallMs: 0, spanMs: 30 * 60_000 })).toBe(true);
+  });
+});
+
+/*
+ * 04b754ce, 2026-11-17: one real 8.4 s stall and the ~3.5 s profiler restart it
+ * caused were both fed to the pressure gate — "stalled 12s of the last 120s",
+ * SHEDDING. The restart is Brain's diagnostics, not load.
+ */
+describe('the pressure gate is fed the stall without the profiler restart', () => {
+  it('subtracts the restart overlapping the probe', () => {
+    expect(pressureStallMs(8_400, 0)).toBe(8_400);
+    expect(pressureStallMs(9_000, 3_500)).toBe(5_500);
+  });
+
+  it('feeds nothing when the restart was the stall', () => {
+    expect(pressureStallMs(3_600, 3_500)).toBe(0);
+    expect(pressureStallMs(5_400, 3_500)).toBe(0);
+    expect(pressureStallMs(1_999, 0)).toBe(0);
+  });
+
+  it('keeps the real stall below the SHEDDING reading', () => {
+    resetStallLog();
+    const now = Date.parse('2026-11-17T18:00:00.000Z');
+    const real = pressureStallMs(8_400, 0);
+    const restart = pressureStallMs(3_600, 3_500);
+    if (real > 0) noteStall(real, now - 60_000);
+    if (restart > 0) noteStall(restart, now);
+    expect(stalledMsSince(now - 120_000)).toBe(8_400);
+    resetStallLog();
   });
 });

@@ -16,6 +16,8 @@ import { activate } from '../server/services/cash/lifecycle.ts';
 import { getCashMode } from '../server/repos/cashMode.ts';
 import { createOpportunity, updateOpportunity } from '../server/repos/cashPortfolio.ts';
 import { recordCardFact } from '../server/repos/cashCardFacts.ts';
+import { recordClaimFact } from '../server/repos/construction.ts';
+import { FACT_KEY_LIST } from '../server/domain/construction.ts';
 import { createWorkstream, getWorkstream } from '../server/repos/register.ts';
 import { setTerms } from '../server/services/goals/decide.ts';
 import { setTarget } from '../server/services/goals/target.ts';
@@ -173,6 +175,33 @@ describe('an opening filed while the plan is being read reaches the plan', () =>
  * own rounds finds later is evidence the reading never saw. These tests drive
  * that production order rather than filing an opening inside the round's insert.
  */
+/*
+ * Production, 2026-11-17, release 04b754ce: 5 accepted claims on the $10K
+ * goal's research, "no plan evaluation since". A research claim reaches the
+ * plan as a construction fact (or a card fact), and the fingerprint saw
+ * neither, so it waited out the half-hour refresh.
+ */
+describe('a research claim filed as a construction fact reaches the plan', () => {
+  it('re-reads on the next pass past the floor, inside the half-hour, as evidence', async () => {
+    await play({ title: 'Monthly owner reports', priceCents: 50_000, days: 7, capitalCents: 0, hours: 3, costCents: 2_000 });
+    const id = await goal(100_000);
+    const start = new Date();
+    const at = (minutes: number) => new Date(start.getTime() + minutes * 60_000);
+    expect((await advanceGoalPlans(start)).read).toBe(1);
+
+    const minutes = (PLAN_EVIDENCE_FLOOR_MS + 8 * 60_000) / 60_000;
+    expect((await advanceGoalPlans(at(minutes - 1))).read).toBe(0);
+    const filed = await recordClaimFact({
+      projectId, nodeId: null, claimId: `clm_${Math.random().toString(36).slice(2, 12)}`, key: FACT_KEY_LIST[0]!, segment: null,
+      low: 47, high: 47, status: 'OBSERVED', measures: 'cents per postcard', sourceTitle: 'A price page', sourceUrl: 'https://example.test/price',
+      sourceKind: 'PRIMARY', observedAt: new Date().toISOString(),
+    });
+    expect(filed).not.toBeNull();
+    expect(await advanceGoalPlans(at(minutes))).toMatchObject({ read: 1, onEvidence: 1 });
+    expect((await advanceGoalPlans(at(minutes + 3))).read).toBe(0);
+  });
+});
+
 describe("the goal's own rounds and the openings they find", () => {
   async function openings(): Promise<number> {
     const row = await getDb().get<{ n: number | string }>('SELECT COUNT(*) AS n FROM cash_opportunities WHERE project_id = ?', [projectId]);
@@ -262,7 +291,7 @@ describe('the inputs a reading was taken over (pure)', () => {
     const id = await goal(100_000);
     const f = await planInputsFingerprint(projectId, id);
     expect(inputsTakenOver(f, f)).toBe(f);
-    expect(f.split('|')).toHaveLength(7);
+    expect(f.split('|')).toHaveLength(11);
   });
 });
 

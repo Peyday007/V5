@@ -1832,6 +1832,7 @@ function compose(args: {
         `Establish whether such buyers actually pay for this and whether ${def.needsSupply ? 'such suppliers would take the work on these terms' : 'the deliverable is what they buy'}.${why} ` +
         `For each part, find a published source: ${asks}.${established}${reliesText}${failureText}${exclusionSentence(args.exclusions)} ` +
         OPENING_SENTENCE +
+        unitEconomicSentence(demand.name) +
         'Where no source shows buyers pay for this, say so plainly — that refutes the arrangement and is a useful answer.';
   /*
    * The positions are asked in the round itself (RES-15-4; S-0148, S-0150).
@@ -2091,6 +2092,32 @@ export const OPENING_SENTENCE =
   'ACTIVE_BUYER_DEMAND where a named buyer is published as paying for it now, or ' +
   'SUPPLY_DEMAND_MISMATCH where published demand and a published supply are not yet connected. ' +
   'A claim with no opportunity_signal is kept as evidence and never becomes an opening. ';
+
+/**
+ * How a confirm-or-refute round's price and cost answers reach the plan.
+ *
+ * Production, 2026-11-17 (release 04b754ce): a constructed round on the $10K
+ * goal returned accepted claims with published prices ("$0.47 per postcard
+ * piece for a 10,000-home run") that reached no table, because a claim with no
+ * opportunity_signal is kept only as evidence and the construction backfill
+ * (`backfillClaimFacts`) files a claim only when it declares UNIT_ECONOMIC.
+ * The industry kernel's questions ask for that declaration
+ * (`unitEconomicsAsk`, industry/questions.ts); the constructed round never did.
+ * The buyer is the arrangement's own demand, which is a buyer type on the map,
+ * so the backfill can file it. Inlined rather than imported: questions.ts
+ * reaches this module through cash/discovery.ts. It lowers no bar — the
+ * declared figure passes the same gate and the backfill's own rules.
+ */
+export function unitEconomicSentence(buyer: string): string {
+  // The qualifier is the buyer's name exactly as the map holds it: a clipped name matches no buyer type.
+  const name = buyer.replace(/\s+/g, ' ').trim();
+  return (
+    `Where a source publishes what "${name}" pay per unit of work, what an independent operator ` +
+    'accepts per unit, or how many units one account buys a month, declare it on its claim: structural_finding UNIT_ECONOMIC, ' +
+    'structural_subject the fact key (price_per_unit, contractor_rate_per_unit or account_units_per_month), ' +
+    `structural_qualifier "${name}", and structural_amount_cents the figure in hundredths of its unit. `
+  );
+}
 
 /** The design every structure had before §82, for callers that still name a structure. */
 export { defaultDesign };
