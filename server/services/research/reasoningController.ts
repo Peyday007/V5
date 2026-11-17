@@ -647,19 +647,40 @@ function isActionResult(v: unknown): v is ActionResult {
   return typeof r['actionKey'] === 'string' && typeof r['hypothesisId'] === 'string' && typeof r['outcome'] === 'string' && typeof r['at'] === 'string';
 }
 
+/** The `at` of the decision a result row scores, from the result itself or the row beside it. */
+function resultDecisionAt(measures: Record<string, unknown>, result: ActionResult): string | null {
+  if (typeof result.decisionAt === 'string') return result.decisionAt;
+  const beside = measures['decisionAt'];
+  return typeof beside === 'string' ? beside : null;
+}
+
 /**
- * Fold decision and result rows, oldest first, into each problem's history. A
- * decision resets the pending results, because the decision that followed a
- * result already consumed it. Pure, so the fold is testable without rows.
+ * Fold decision and result rows into each problem's history. A decision resets
+ * the pending results, because the decision that followed a result already
+ * consumed it. Pure, so the fold is testable without rows.
+ *
+ * The fold does not trust row order. Rows written in the same millisecond carry
+ * the same `at`, and the row id is random, so storage cannot say which came
+ * first. The latest decision is the one with the greatest `decision.at`; a
+ * result is pending only when its `decisionAt` names that decision, so a result
+ * the next decision already consumed is never fed back, whatever order its row
+ * comes back in. Only a legacy result that names no decision falls back to row
+ * order (it is pending when it follows the latest decision's row).
  */
 export function foldControllerHistory(
   rows: readonly { eventType: string; measures: Record<string, unknown> }[],
 ): Map<string, ControllerHistory> {
   const out = new Map<string, ControllerHistory>();
-  for (const row of rows) {
+  const latestIndex = new Map<string, number>();
+  const results: { index: number; problemId: string; decisionAt: string | null; result: ActionResult }[] = [];
+  rows.forEach((row, index) => {
     if (row.eventType === CONTROLLER_EVENTS.DECISION) {
       const d = row.measures['decision'] as Partial<ControllerDecision> | undefined;
-      if (!d || typeof d.problemId !== 'string' || typeof d.at !== 'string') continue;
+      if (!d || typeof d.problemId !== 'string' || typeof d.at !== 'string') return;
+      const current = out.get(d.problemId);
+      // Ties on `at` keep the later row: two decisions in one millisecond are not ordered by anything better.
+      if (current && current.decidedAt > d.at) return;
+      latestIndex.set(d.problemId, index);
       out.set(d.problemId, {
         problemId: d.problemId,
         decidedAt: d.at,
@@ -674,10 +695,15 @@ export function foldControllerHistory(
     } else if (row.eventType === CONTROLLER_EVENTS.RESULT) {
       const problemId = row.measures['problemId'];
       const result = row.measures['result'];
-      if (typeof problemId !== 'string' || !isActionResult(result)) continue;
-      const h = out.get(problemId);
-      if (h) h.results.push(result);
+      if (typeof problemId !== 'string' || !isActionResult(result)) return;
+      results.push({ index, problemId, decisionAt: resultDecisionAt(row.measures, result), result });
     }
+  });
+  for (const r of results) {
+    const h = out.get(r.problemId);
+    if (!h) continue;
+    const pending = r.decisionAt !== null ? r.decisionAt === h.decidedAt : r.index > (latestIndex.get(r.problemId) ?? Infinity);
+    if (pending) h.results.push(r.result);
   }
   return out;
 }

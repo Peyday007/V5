@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import {
@@ -207,6 +207,10 @@ describe('it adds no store or engine: rows go through the existing writer, actio
 });
 
 describe('the controller reads its own history back, so a later decision consumes earlier results', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('folds decisions and results per problem, a later decision resetting the results it consumed', async () => {
     await freshProject();
     const first = decideNext(snapshot());
@@ -230,6 +234,46 @@ describe('the controller reads its own history back, so a later decision consume
     ]);
     expect(folded.get(problem.id)?.results).toEqual([]);
     expect(folded.get(problem.id)?.prior.excludedMethods).toContain(first.method!.methodId);
+  });
+
+  it('folds the same history whatever order rows written in one millisecond come back in', () => {
+    const first = decideNext(snapshot());
+    const result = { actionKey: 'ask-terms', hypothesisId: first.leadingHypothesis!, outcome: 'CONTRADICTED' as const, evidence: 'e', at: first.at, decisionAt: first.at };
+    const second = decideNext(snapshot({ prior: priorOf(first), results: [result], now: '2026-11-16T04:00:00.000Z' }));
+    const D1 = { eventType: 'REASONING_CONTROLLER_DECISION', measures: { decision: first } };
+    const R1 = { eventType: 'REASONING_CONTROLLER_RESULT', measures: { problemId: problem.id, result, decisionAt: first.at } };
+    const D2 = { eventType: 'REASONING_CONTROLLER_DECISION', measures: { decision: second } };
+    // The result belongs to the first decision even when its row precedes it.
+    for (const order of [[D1, R1], [R1, D1]]) {
+      const h = foldControllerHistory(order).get(problem.id);
+      expect(h?.decidedAt).toBe(first.at);
+      expect(h?.results).toEqual([result]);
+    }
+    // Once the second decision exists, the consumed result is never pending again, in any order.
+    for (const order of [[D1, R1, D2], [D1, D2, R1], [R1, D2, D1], [D2, R1, D1], [D2, D1, R1], [R1, D1, D2]]) {
+      const h = foldControllerHistory(order).get(problem.id);
+      expect(h?.decidedAt).toBe(second.at);
+      expect(h?.results).toEqual([]);
+    }
+  });
+
+  it('reads rows that share one millisecond back deterministically from the store', async () => {
+    await freshProject();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-16T06:00:00.000Z'));
+    const first = decideNext(snapshot({ now: '2026-11-16T06:00:00.000Z' }));
+    const result = { actionKey: 'ask-terms', hypothesisId: first.leadingHypothesis!, outcome: 'CONTRADICTED' as const, evidence: 'e', at: '2026-11-16T06:00:00.000Z', decisionAt: first.at };
+    const second = decideNext(snapshot({ prior: priorOf(first), results: [result], now: '2026-11-16T06:00:00.001Z' }));
+    await recordControllerDecision(first, { caller: 'tie-test' });
+    await recordActionResult(result, first, problem, { caller: 'tie-test' });
+    const before = (await readControllerHistory('tie-test')).get(problem.id);
+    expect(before?.results).toEqual([result]);
+    await recordControllerDecision(second, { caller: 'tie-test' });
+    const rows = await getDb().all<{ at: string }>(`SELECT DISTINCT at FROM bin_events WHERE workload_class = 'tie-test'`);
+    expect(rows).toHaveLength(1);
+    const after = (await readControllerHistory('tie-test')).get(problem.id);
+    expect(after?.decidedAt).toBe(second.at);
+    expect(after?.results).toEqual([]);
   });
 
   it('records the absent capability when a result invalidates the method, whatever the next action is', async () => {
