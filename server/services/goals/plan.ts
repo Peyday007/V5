@@ -64,7 +64,8 @@ function planAuthority(projectId: string, action: string): ReturnType<typeof che
 }
 import { composeBuyerMessage } from '../cash/outreach.ts';
 import { evidenceCard } from '../cash/card.ts';
-import { ARRANGEMENT_ID_PREFIX, isArrangementId, bestCaseReach, composeGoalModel, inventedDesigner, planTrace, dealsForGoal, OUTREACH_MULTIPLE, priceSupported, volumeEstablished, wilson, type ModelInput, type ModelledOpportunity } from '../cash/goalScenario.ts';
+import { ARRANGEMENT_ID_PREFIX, isArrangementId, bestCaseReach, composeGoalModel, estimatedFromArrangement, inventedDesigner, planTrace, dealsForGoal, OUTREACH_MULTIPLE, priceSupported, volumeEstablished, wilson, type ModelInput, type ModelledOpportunity } from '../cash/goalScenario.ts';
+import { cachedCashKnowledge } from '../quant/knowledge.ts';
 import { achievedFrom, readTarget, type TargetReading } from './target.ts';
 import { constructedShare, executionFrame, MAX_LIVE_GOAL_ROUNDS, openConstructedRound, openGoalDiscovery, roundsStillResearching } from '../cash/discovery.ts';
 import { constructArrangements, lastConstructionReport, type ConstructedArrangement } from '../cash/construct.ts';
@@ -1242,6 +1243,25 @@ export function combinationDaysToCash(memberIds: readonly string[], pathways: re
  * what the plan pass already composed. Pure: it reads, it decides nothing the
  * plan's own acceptance decides, and it owns no store, scheduler or authority.
  */
+/**
+ * Each arrangement's scenario conversion, for its plan candidate (W2b): the
+ * one the goal model entered when it entered it, else the same conversion on
+ * the project knowledge the model just read (`cachedCashKnowledge`, no new
+ * read). Without knowledge the conversion sweeps, so nothing unestablished
+ * becomes a candidate's field. Pure but for that cache.
+ */
+export function arrangementModels(arrangements: readonly ConstructedArrangement[], estimates: readonly ModelledOpportunity[], target: Pick<TargetReading, 'projectId' | 'currency' | 'daysLeft' | 'capitalBeforeProofCents'>, now = new Date()): Map<string, ModelledOpportunity> {
+  const out = new Map<string, ModelledOpportunity>();
+  for (const one of estimates) if (one.estimated?.arrangementKey) out.set(one.estimated.arrangementKey, one);
+  const knowledge = cachedCashKnowledge(target.projectId);
+  for (const a of arrangements) {
+    if (out.has(a.key)) continue;
+    const one = estimatedFromArrangement(a, { projectId: target.projectId, currency: target.currency, beforeProofCents: target.capitalBeforeProofCents, knowledge, now, daysLeft: target.daysLeft });
+    if (one) out.set(a.key, one);
+  }
+  return out;
+}
+
 export function composeGoalReadings(input: {
   objective: GoalObjective;
   target: TargetReading;
@@ -1252,6 +1272,8 @@ export function composeGoalReadings(input: {
   acceptance: PlanAcceptance;
   /** Each opening's own ledger rows (`readOpeningLedger`): observed collections and executed sales, never modelled ones. */
   ledger?: ReadonlyMap<string, OpeningLedger> | null;
+  /** Each arrangement's own scenario conversion, by arrangement key (`arrangementModels`): what its plan candidate reads its inputs from (W2b). */
+  arrangementModels?: ReadonlyMap<string, ModelledOpportunity> | null;
 }): { timelines: TimelineReading; objective: ObjectiveReading; planSet: GoalPlanSet } {
   const { objective, target, portfolio, acceptance } = input;
   const calibration = planCalibration(acceptance);
@@ -1341,7 +1363,7 @@ export function composeGoalReadings(input: {
     const c = candidateFromStrategy(v, byId);
     if (c) fromStrategies.push(c);
   }
-  const candidates = [...fromPathways, ...input.arrangements.map((a) => candidateFromArrangement(a)), ...fromStrategies];
+  const candidates = [...fromPathways, ...input.arrangements.map((a) => candidateFromArrangement(a, input.arrangementModels?.get(a.key) ?? null)), ...fromStrategies];
   const condition: AcceptanceCondition = {
     amount: remaining,
     daysLeft: target.daysLeft,
@@ -1499,7 +1521,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     const permissions = target.achieved ? [] : await missingPermissions(target.projectId);
     const qualify: NextTest = { link: 'OFFER_AND_PRICE', test: 'Qualify at least one opening: establish who pays, an offer and a price, so there is a plan to judge.', by: 'BRAIN', blocker: null };
     const refusedSteps = target.achieved || refusedInfeasible ? [] : planSteps({ adoption: refusedPlan.adoption, reconstruction: refusedReconstruction, sales: [], nextTest: qualify, permissionsMissing: permissions });
-    const refusedReadings = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways: null, arrangements, reconstruction: refusedReconstruction, acceptance: refusedAcceptance });
+    const refusedReadings = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways: null, arrangements, reconstruction: refusedReconstruction, acceptance: refusedAcceptance, arrangementModels: arrangementModels(arrangements, model.estimates ?? [], target) });
     const refusedContinuation = continuationOf({
       achieved: target.achieved,
       daysLeft: target.daysLeft,
@@ -1899,7 +1921,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   } catch (error) {
     degraded.push(`opening ledger: ${errorText(error)} (the plan set reads no observed collections or executed sales)`);
   }
-  const readings = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways, arrangements, reconstruction, acceptance, ledger });
+  const readings = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways, arrangements, reconstruction, acceptance, ledger, arrangementModels: arrangementModels(arrangements, model.estimates ?? [], target) });
   const continuation = continuationOf({
     achieved: target.achieved,
     daysLeft: target.daysLeft,
