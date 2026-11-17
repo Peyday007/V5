@@ -316,7 +316,15 @@ export async function reconstructPlan(input: ReconstructionInput): Promise<Recon
 
 async function reconstructPlanOn(input: ReconstructionInput, evaluator: Evaluator): Promise<Reconstruction> {
   // Arrangements the compose's screen cut ride with the plan's inputs; only an INCLUDE move reads them, never the engine (S-6).
-  const { reserve: reserveIn, ...portfolioIn } = input.portfolio;
+  /*
+   * The project's knowledge is read only by the causal reading, and every evaluation here is `causal: false`
+   * (W15): carried along, the whole knowledge — every opening, fact, lesson and source — was structured-cloned
+   * onto a pool thread on the server's own loop for each of a search's hundreds of evaluations, and again for
+   * the sweep (production 2026-11-17: `evaluatorPool`, `postMessage` and `structuredClone` frames in 10–20 s
+   * stalls, RSS 2.4–3.2 GB). It is passed as null, so the engine never falls back to its cache either.
+   */
+  const { reserve: reserveIn, knowledge: _causalOnly, ...portfolioRest } = input.portfolio;
+  const portfolioIn = { ...portfolioRest, knowledge: null };
   const { movable, held } = partitionOpenings(input.openings, input.baseline);
   // The cut arrangements first (strongest first), then the held openings outside the bounded set, strongest first.
   const reserve: PlannedOpening[] = [...(reserveIn ?? []).filter((r) => !input.openings.some((o) => o.opportunity.id === r.opportunity.id)), ...held];

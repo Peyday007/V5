@@ -488,6 +488,25 @@ const FILLER = new Set(['a', 'an', 'the', 'and', 'or', 'of', 'to', 'for', 'via',
 
 /** Canonical form of one dimension: case, punctuation, word order, filler and plural endings removed. */
 export function canonical(text: string): string {
+  const hit = canonicalMemo.get(text);
+  if (hit !== undefined) return hit;
+  const value = readCanonical(text);
+  if (canonicalMemo.size >= CANONICAL_MEMO_MAX) canonicalMemo.clear();
+  canonicalMemo.set(text, value);
+  return value;
+}
+
+/**
+ * `buildPlanSet` compares every candidate with every group, and each
+ * comparison re-canonicalised the same few thousand phrases (W15, production
+ * 2026-11-17: `canonical` and `overlap` were the heaviest planner frames in
+ * 10–20 s event-loop stalls). Canonical form is pure in its text, so each
+ * phrase is read once; the table is bounded and emptied when full.
+ */
+const CANONICAL_MEMO_MAX = 16_384;
+const canonicalMemo = new Map<string, string>();
+
+function readCanonical(text: string): string {
   const words = text
     .toLowerCase()
     .replace(/[^a-z0-9+ ]+/g, ' ')
@@ -590,9 +609,9 @@ function scoreOf(c: PlanCandidate, amount: number, objective: PlanObjective | un
 /* Building the set                                                    */
 /* ------------------------------------------------------------------ */
 
-function overlap(a: string[], b: string[]): string | null {
-  const set = new Set(a.map(canonical));
-  for (const x of b) if (set.has(canonical(x))) return x;
+/** The first of `b` whose canonical form is in `a`'s canonical set. */
+function overlap(a: ReadonlySet<string>, b: string[]): string | null {
+  for (const x of b) if (a.has(canonical(x))) return x;
   return null;
 }
 
@@ -607,14 +626,20 @@ export function buildPlanSet(candidates: readonly PlanCandidate[], condition: Ac
   const groups: { lead: PlanCandidate; members: PlanCandidate[] }[] = [];
   const collapses: Collapse[] = [];
   const doubleCounted: PlanSet['doubleCounted'] = [];
+  // Each candidate's signature once, not once per group it is compared with (W15).
+  const signatures = new Map(ordered.map((c) => [c, signatureOf(c.dimensions)]));
+  // And each member's customer and cash sets once, not once per later candidate.
+  const customerSets = new Map(ordered.map((c) => [c, new Set(c.customers.map(canonical))]));
+  const cashSets = new Map(ordered.map((c) => [c, new Set(c.cashSources.map(canonical))]));
   for (const c of ordered) {
     let joined = false;
+    const signature = signatures.get(c)!;
     for (const g of groups) {
-      if (signatureOf(g.lead.dimensions) === signatureOf(c.dimensions)) {
+      if (signatures.get(g.lead) === signature) {
         collapses.push({ kept: g.lead.id, folded: c.id, why: 'PARAPHRASE', detail: 'equal on mechanism, channel, fulfilment, risk and revenue' });
       } else {
-        const customers = g.members.map((m) => overlap(m.customers, c.customers)).find((x) => x !== null) ?? null;
-        const cash = customers ? null : (g.members.map((m) => overlap(m.cashSources, c.cashSources)).find((x) => x !== null) ?? null);
+        const customers = g.members.map((m) => overlap(customerSets.get(m)!, c.customers)).find((x) => x !== null) ?? null;
+        const cash = customers ? null : (g.members.map((m) => overlap(cashSets.get(m)!, c.cashSources)).find((x) => x !== null) ?? null);
         if (!customers && !cash) continue;
         const kind = customers ? 'CUSTOMERS' : 'CASH';
         const key = (customers ?? cash) as string;

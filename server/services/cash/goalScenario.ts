@@ -553,6 +553,23 @@ export const COMPARABLE_SPREAD_MAX = 10;
  * price at all the set is empty, and the sweep refuses. Never a price for
  * these buyers — a bound. Pure.
  */
+/**
+ * A payer's two buyer keys — as named, and the population it is filed under —
+ * read once per payer (W15): `comparablePricesFor` runs once per arrangement
+ * over every published price, so the same few hundred payers were re-keyed
+ * hundreds of times a plan pass. Pure in the payer; bounded, emptied when full.
+ */
+const BUYER_KEYS_MAX = 8_192;
+const buyerKeys = new Map<string, readonly [string, string]>();
+function buyerKeysOf(payer: string): readonly [string, string] {
+  const hit = buyerKeys.get(payer);
+  if (hit) return hit;
+  const keys = [payerKey(payer), payerKey(buyerPopulationName(payer))] as const;
+  if (buyerKeys.size >= BUYER_KEYS_MAX) buyerKeys.clear();
+  buyerKeys.set(payer, keys);
+  return keys;
+}
+
 export function comparablePricesFor(
   one: Pick<ConstructedArrangement, 'sector'> & Partial<Pick<ConstructedArrangement, 'structure' | 'demand'>>,
   prices: readonly ComparablePrice[],
@@ -572,7 +589,7 @@ export function comparablePricesFor(
   // The same kind of buyer by the map's identity: plurals folded (`payerKey`), and a named
   // organisation read as the population the map files it under (`buyerPopulationName`).
   const buyer = payerKey(one.demand?.name);
-  const sameBuyer = (payer: string | null | undefined) => !!payer && (payerKey(payer) === buyer || payerKey(buyerPopulationName(payer)) === buyer);
+  const sameBuyer = (payer: string | null | undefined) => !!payer && buyerKeysOf(payer).includes(buyer);
   const buyers = buyer ? valid.filter((p) => sameBuyer(p.payer)).map((p) => p.value) : [];
   if (buyers.length >= SECTOR_PRICES_MIN && tight(buyers)) return { prices: buyers, scope: `paid by the same kind of buyer (${one.demand!.name})` };
   const all = valid.map((p) => p.value);
