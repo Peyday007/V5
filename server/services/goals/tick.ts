@@ -70,6 +70,7 @@ import {
   SYSTEM_HEALTH_FLOOR,
   decideResearchAllocation,
   binPriorityShift,
+  enforceFloors,
   normalizeShares,
   purposePriorityShifts,
   purposesBelowFloor,
@@ -1230,6 +1231,22 @@ export function verifiedCostReading(once: unknown): ResearchYieldReading['costCo
   };
 }
 
+/**
+ * The shares a previous decision row keeps in force when a window moves
+ * nothing: its recorded shares, unless it was held because nothing was
+ * measured (then it decided nothing). A held-for-cost row carries the shares it
+ * kept in force, so a run of them carries the last measured decision forward.
+ * Null when there is no such row or its shares are unreadable. Pure.
+ */
+export function sharesHeldInForce(detail: Record<string, unknown> | null): Record<ResearchPurpose, number> | null {
+  if (!detail || detail.held === true) return null;
+  const v = detail.shares as Record<string, unknown> | null | undefined;
+  if (!v || typeof v !== 'object') return null;
+  if (!RESEARCH_PURPOSES.every((p) => typeof v[p] === 'number' && Number.isFinite(v[p] as number) && (v[p] as number) >= 0)) return null;
+  const shares = Object.fromEntries(RESEARCH_PURPOSES.map((p) => [p, v[p] as number])) as Record<ResearchPurpose, number>;
+  return RESEARCH_PURPOSES.some((p) => shares[p] > 0) ? shares : null;
+}
+
 /** One allocation pass over the live goals. */
 export async function reallocateResearch(input: { goals: GoalView[]; now?: string }, ports: ResearchAllocationPorts): Promise<ResearchAllocationReport> {
   const untilMs = input.now ? Date.parse(input.now) : Date.now();
@@ -1266,10 +1283,17 @@ export async function reallocateResearch(input: { goals: GoalView[]; now?: strin
   const diagnosis = diagnoseCostCountedOnce(reading.costCountedOnce);
   const costCountedOnce = { ...verifiedCostReading(reading.costCountedOnce), cause: diagnosis.cause, jobMsGap: diagnosis.jobMsGap };
   const heldForCost = !costCountedOnce.holds;
+  // A held-for-cost row's `shares` are what stays in force — the last measured
+  // decision's shares (or, with none, what the window gave), with every floor
+  // restored — never raw usage. Raw usage is `observed`. Recording raw usage as
+  // `shares` put a purpose the window under-served below its protected floor in
+  // a row RES-07 reads as decided (`continuousResearchHolds`), for shares Brain
+  // never decided.
+  const inForce = heldForCost ? sharesHeldInForce(previous?.detail ?? null) : null;
   const decision: AllocationDecision = heldForCost
     ? {
         ...decided,
-        shares: observed,
+        shares: enforceFloors(inForce ?? observed, urgentCommercialGoal),
         changes: [],
         notes: [`Held: the window's cost reading does not show each job's cost counted once (${diagnosis.cause}: ${diagnosis.detail}), so no share moves on it.`, ...decided.notes],
       }
