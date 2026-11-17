@@ -286,3 +286,12 @@ See F1–F7 above. Each one gives the cause, file:line, run IDs, the smallest ch
 - Still open: W2c (planner CPU), W13 (120B fragments dropped).
 - Integration lesson: a release candidate re-cut five times left the Deploy test on bd5e0419 as the first full SQLite run of #1029. That cost about 40 min.
 - **09:06Z, release 4 is now 72008cd2** (Deploy 44052412701, live about 09:50Z). It adds #1042 (W2c): the planner index cut the fixture with 400 arrangements, 1k openings and 3k facts from 19.6 s to 0.9 s, and 754/754 impacted tests pass. Only W13 (120B fragment drops) remains open.
+- **09:21Z, release 5 is 4cec7709** (Deploy 44054816761, live about 10:05Z).
+  - Release 4 (72008cd2) passed every test and the Postgres gate, but Fly skipped it because #1043 landed first.
+  - Release 5 adds #1043 and #1045 (W13).
+  - **W13 root cause, reported by the integration owner:** 20 of the 120B's 21 "drops" were empty claim lists.
+    - planCoverageFragments overwrote the planner's source rules for gap fragments with official-only sources. Vendor pages were excluded, so the model correctly listed nothing.
+    - Fix: gapSourceRules copies the planner's rules for that requirement.
+    - An empty list with a stated reason is now neutral for fitness. A bare empty list still counts against the model.
+  - W6 stage 2 runs on release 5.
+  - Verification status: SUPPORTED, not CONFIRMED until W6 stage 2 shows the 120B with no HELD BACK on RESEARCH_FRAGMENT and accepted claims per GPU-hour well above stage 1's 2.
