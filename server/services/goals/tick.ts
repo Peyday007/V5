@@ -1127,9 +1127,18 @@ export function allocationInputFrom(
   return { currentShares, purposes, lanes, bottlenecks, urgentCommercialGoal: context.urgentCommercialGoal, ...(context.remedyLevers ? { remedyLevers: context.remedyLevers } : {}) };
 }
 
-/** What makes two decisions the same: shares to a tenth of a percent, lane remedies and capacity verdicts. */
+/**
+ * What makes two decisions the same: shares to a tenth of a percent, lane
+ * remedies, capacity verdicts, and whether the decision was held. `held` is
+ * part of it because a window that failed the counted-once check is recorded
+ * with the observed shares, and the next window that holds can decide those
+ * very shares: without `held` the two fingerprints matched, the holding
+ * decision was never recorded, and the failing row stayed the newest measured
+ * one forever (probe r01.res-15-5).
+ */
 export function allocationFingerprint(decision: AllocationDecision): string {
   return JSON.stringify({
+    held: decision.held === true,
     shares: RESEARCH_PURPOSES.map((p) => round3(decision.shares[p])),
     lanes: decision.laneActions.map((a) => `${a.lane}:${a.kind}`).sort(),
     capacity: decision.capacity.map((c) => `${c.lane}:${c.kind}:${c.units}`).sort(),
