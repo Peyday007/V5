@@ -38,6 +38,7 @@
 import type { PathFact, TransactionPathway } from './pathways.ts';
 import type { VariantReading } from './reconstruction.ts';
 import type { ConstructedArrangement } from '../cash/construct.ts';
+import { memoText } from '../../domain/textMemo.ts';
 import type { ModelInput, ModelledOpportunity } from '../cash/goalScenario.ts';
 
 /* ------------------------------------------------------------------ */
@@ -488,6 +489,13 @@ const FILLER = new Set(['a', 'an', 'the', 'and', 'or', 'of', 'to', 'for', 'via',
 
 /** Canonical form of one dimension: case, punctuation, word order, filler and plural endings removed. */
 export function canonical(text: string): string {
+  return canonicalMemo(text);
+}
+
+// Pure in its string, and asked about the same names for every pair of candidates (W15).
+const canonicalMemo = memoText('canonical', readCanonical);
+
+function readCanonical(text: string): string {
   const words = text
     .toLowerCase()
     .replace(/[^a-z0-9+ ]+/g, ' ')
@@ -590,9 +598,18 @@ function scoreOf(c: PlanCandidate, amount: number, objective: PlanObjective | un
 /* Building the set                                                    */
 /* ------------------------------------------------------------------ */
 
-function overlap(a: string[], b: string[]): string | null {
-  const set = new Set(a.map(canonical));
-  for (const x of b) if (set.has(canonical(x))) return x;
+/** A candidate's distinctness read once (W15): its signature and the canonical names it would count. */
+interface Read {
+  signature: string;
+  customers: ReadonlySet<string>;
+  cashSources: ReadonlySet<string>;
+}
+function readOf(c: PlanCandidate): Read {
+  return { signature: signatureOf(c.dimensions), customers: new Set(c.customers.map(canonical)), cashSources: new Set(c.cashSources.map(canonical)) };
+}
+/** The first of `b` that `a` (already canonical) also names, or null. */
+function overlapRead(a: ReadonlySet<string>, b: string[]): string | null {
+  for (const x of b) if (a.has(canonical(x))) return x;
   return null;
 }
 
@@ -604,17 +621,20 @@ function richness(c: PlanCandidate): number {
 
 export function buildPlanSet(candidates: readonly PlanCandidate[], condition: AcceptanceCondition, calibration: Calibration | null = null): PlanSet {
   const ordered = [...candidates].sort((a, b) => richness(b) - richness(a) || a.id.localeCompare(b.id));
+  // Each candidate's signature and canonical names, once: the pairwise comparison below only looks them up (W15).
+  const reads = new Map<PlanCandidate, Read>(ordered.map((c) => [c, readOf(c)]));
   const groups: { lead: PlanCandidate; members: PlanCandidate[] }[] = [];
   const collapses: Collapse[] = [];
   const doubleCounted: PlanSet['doubleCounted'] = [];
   for (const c of ordered) {
     let joined = false;
+    const read = reads.get(c)!;
     for (const g of groups) {
-      if (signatureOf(g.lead.dimensions) === signatureOf(c.dimensions)) {
+      if (reads.get(g.lead)!.signature === read.signature) {
         collapses.push({ kept: g.lead.id, folded: c.id, why: 'PARAPHRASE', detail: 'equal on mechanism, channel, fulfilment, risk and revenue' });
       } else {
-        const customers = g.members.map((m) => overlap(m.customers, c.customers)).find((x) => x !== null) ?? null;
-        const cash = customers ? null : (g.members.map((m) => overlap(m.cashSources, c.cashSources)).find((x) => x !== null) ?? null);
+        const customers = g.members.map((m) => overlapRead(reads.get(m)!.customers, c.customers)).find((x) => x !== null) ?? null;
+        const cash = customers ? null : (g.members.map((m) => overlapRead(reads.get(m)!.cashSources, c.cashSources)).find((x) => x !== null) ?? null);
         if (!customers && !cash) continue;
         const kind = customers ? 'CUSTOMERS' : 'CASH';
         const key = (customers ?? cash) as string;
@@ -640,7 +660,7 @@ export function buildPlanSet(candidates: readonly PlanCandidate[], condition: Ac
       title: lead.title,
       source: lead.source,
       dimensions: lead.dimensions,
-      signature: signatureOf(lead.dimensions),
+      signature: reads.get(lead)!.signature,
       channels: union((m) => m.channels),
       suppliers: union((m) => m.suppliers),
       customers: union((m) => m.customers),

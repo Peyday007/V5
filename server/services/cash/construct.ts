@@ -49,6 +49,7 @@ import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
 import { paidOpportunityIds } from '../../repos/cashLedger.ts';
 import { statesNamedIn } from '../../domain/jurisdiction.ts';
 import { buyerNameKey } from '../../domain/industry.ts';
+import { memoText } from '../../domain/textMemo.ts';
 import { APPROVAL_ENVELOPES } from '../research/approvalEnvelope.ts';
 import { describesOwnAction } from '../research/actorScope.ts';
 import { composeArrangement, type Arrangement, type Levers, type Part } from '../quant/mechanism.ts';
@@ -354,7 +355,9 @@ const norm = (text: string | null | undefined) => (text ?? '').toLowerCase().rep
  * already-normalised payer reads the same as the raw name. A qualifier is
  * still a different population (PRICE-POOL holds).
  */
-export const payerKey = (text: string | null | undefined): string => buyerNameKey(norm(text));
+// Remembered per string (W15): every arrangement compares its buyer with every held price's payer.
+const payerKeyMemo = memoText('payerKey', (text: string) => buyerNameKey(norm(text)));
+export const payerKey = (text: string | null | undefined): string => payerKeyMemo(text ?? '');
 
 function rootOf(node: IndustryNode, byId: Map<string, IndustryNode>): IndustryNode {
   let at = node;

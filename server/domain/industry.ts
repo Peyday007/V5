@@ -16,6 +16,7 @@
  * become a place to put everything — at which point "what is underneath
  * animation" stops having an answer.
  */
+import { memoText } from './textMemo.ts';
 import {
   CAPITAL_MECHANISMS,
   CAPITAL_REQUIREMENTS,
@@ -360,6 +361,13 @@ const withoutStates = (text: string): string =>
  * type made of prose.
  */
 export function payerNamedIn(payer: string | null | undefined): string | null {
+  return payerNamedInMemo(payer ?? '');
+}
+
+// Pure in its one string, and asked about the same payers over and over by every plan read (W15).
+const payerNamedInMemo = memoText('payerNamedIn', readPayerNamedIn);
+
+function readPayerNamedIn(payer: string): string | null {
   const unbracketed = (payer ?? '')
     // An abbreviation's full stop does not end a name ("St. Louis", "GitHub, Inc.").
     .replace(/\b(St|Mt|Ft|Inc|Co|Corp|Ltd|LLC|Dept|Univ|Assn|Bros|No|U\.S|Dr|Jr|Sr)\./g, '$1')
@@ -432,6 +440,12 @@ const NOT_A_PAYER = /^(?:it|its|they|them|this|that|these|those|he|she|we|you|so
 const GENERIC_PAYER: ReadonlySet<string> = new Set(['buyer', 'payer', 'customer', 'client', 'purchaser', 'user', 'end user']);
 
 export function buyerPopulationName(payer: string | null | undefined): string | null {
+  return buyerPopulationNameMemo(payer ?? '');
+}
+
+const buyerPopulationNameMemo = memoText('buyerPopulationName', readBuyerPopulationName);
+
+function readBuyerPopulationName(payer: string): string | null {
   const named = payerNamedIn(payer);
   if (!named) return null;
   let text = named.replace(/\s+/g, ' ').trim();
