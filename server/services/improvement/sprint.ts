@@ -26,6 +26,18 @@
  * decision time, required human interventions, calibration and robust target
  * coverage, each with its numerator and denominator, or INSUFFICIENT_DATA
  * below a minimum sample (§77: a number nobody can check is not shown).
+ * Required human interventions are real owner requests (`russell_human_requests`
+ * naming the opening), never the method's model of needing a person; that
+ * model is kept apart (`modelledNeedsPerson`) and is what methods compare on.
+ *
+ * It does not only measure. Each run attributes the general method's
+ * benchmark misses to the capability it lacked, and ships the highest-leverage
+ * one to the Factory through `registerDirected` (the one path from a weakness
+ * to an objective). The next run is the rerun: it measures the same sets again
+ * and links the held-out delta to the change that candidate delivered in
+ * between (`compareRuns`); a delivered change that did not improve held-out
+ * results goes back to repair. The general method's held-out false positives
+ * are fed to repair even when it beats the baseline.
  *
  * Owners reused, none added: rows go to `improvement_events` (the loop's
  * append-only record) and, for the controller and provenance it produced on
@@ -489,8 +501,15 @@ export interface SetReading {
   methodQuality: Measure;
   /** Total decision milliseconds over decisions. */
   decisionTimeMs: Measure;
-  /** Problems the method could not progress without a person, over the set. */
+  /**
+   * Problems a real owner intervention was recorded for, over the set: a
+   * Needs-You request (`russell_human_requests`) that names the opening. A
+   * count of rows, never a model; INSUFFICIENT_DATA (denominator 0) when the
+   * rows were not read for this reading.
+   */
   humanInterventions: Measure;
+  /** Problems the method itself predicted it could not progress without a person, over the set: its own model, compared between methods. */
+  modelledNeedsPerson: Measure;
   /** Brier score: summed squared error of the probability against what happened, over the set. Lower is better. */
   calibrationBrier: Measure;
   /** Actually actionable problems the method called actionable robustly, over actually actionable problems. */
@@ -499,13 +518,21 @@ export interface SetReading {
   falsePositives: string[];
 }
 
-export function readSet(set: ProblemSet, method: string, problems: readonly SprintProblem[], verdicts: readonly MethodVerdict[]): SetReading {
+export function readSet(
+  set: ProblemSet,
+  method: string,
+  problems: readonly SprintProblem[],
+  verdicts: readonly MethodVerdict[],
+  interventions?: ReadonlyMap<string, number> | null,
+): SetReading {
   const truth = new Map(problems.map((p) => [p.id, actionableInProduction(p)]));
   const n = verdicts.length;
   const tp = verdicts.filter((v) => v.actionable && truth.get(v.problemId)).length;
   const clean = verdicts.filter((v) => v.findings === 0).length;
   const time = verdicts.reduce((s, v) => s + v.elapsedMs, 0);
   const people = verdicts.filter((v) => v.needsPerson).length;
+  // Real interventions are read from rows; when they were not read, the measure says so rather than reading zero.
+  const intervened = interventions ? verdicts.filter((v) => (interventions.get(v.problemId) ?? 0) > 0).length : 0;
   const brier = verdicts.reduce((s, v) => s + (v.probability - (truth.get(v.problemId) ? 1 : 0)) ** 2, 0);
   const targets = verdicts.filter((v) => truth.get(v.problemId));
   const covered = targets.filter((v) => v.actionable && v.robust).length;
@@ -516,7 +543,8 @@ export function readSet(set: ProblemSet, method: string, problems: readonly Spri
     actionablePathwayRate: measure(tp, n),
     methodQuality: measure(clean, n),
     decisionTimeMs: measure(time, n, 1),
-    humanInterventions: measure(people, n),
+    humanInterventions: interventions ? measure(intervened, n) : measure(0, 0),
+    modelledNeedsPerson: measure(people, n),
     calibrationBrier: measure(brier, n),
     robustTargetCoverage: measure(covered, targets.length),
     falsePositives: verdicts.filter((v) => v.actionable && !truth.get(v.problemId)).map((v) => v.problemId),
@@ -563,8 +591,9 @@ const num = (m: Measure): number | null => (m.value === 'INSUFFICIENT_DATA' ? nu
  * people no more often, for the decision time it spends beyond the baseline.
  */
 export function compareWithBaseline(general: SetReading, baseline: SetReading): BaselineComparison {
-  const g = { rate: num(general.actionablePathwayRate), brier: num(general.calibrationBrier), people: num(general.humanInterventions) };
-  const b = { rate: num(baseline.actionablePathwayRate), brier: num(baseline.calibrationBrier), people: num(baseline.humanInterventions) };
+  // Both methods meet the same real interventions on the same problems, so methods are compared on what each predicted it needs a person for.
+  const g = { rate: num(general.actionablePathwayRate), brier: num(general.calibrationBrier), people: num(general.modelledNeedsPerson) };
+  const b = { rate: num(baseline.actionablePathwayRate), brier: num(baseline.calibrationBrier), people: num(baseline.modelledNeedsPerson) };
   const costRatio = baseline.decisionTimeMs.numerator > 0 ? general.decisionTimeMs.numerator / baseline.decisionTimeMs.numerator : null;
   if (g.rate === null || b.rate === null || g.brier === null || b.brier === null || g.people === null || b.people === null) {
     return { set: general.set, earned: null, statement: `${general.set}: too few problems (${general.problems}) to say whether the general method earned its cost`, general, baseline };
@@ -580,6 +609,222 @@ export function compareWithBaseline(general: SetReading, baseline: SetReading): 
     general,
     baseline,
   };
+}
+
+/* ------------------------------------------------------------------------- */
+/* The highest-leverage missing capability, and whether shipping it helped    */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * A general reasoning capability the method lacked, read from its misses: the
+ * problems production says were (or were not) pathways that the general
+ * method called the other way, attributed to what it could not do on each.
+ * Leverage is how many misses the capability explains. It is selected on the
+ * BENCHMARK set only — held-out problems verify it at the rerun and never
+ * choose it, exactly as they never choose the threshold.
+ */
+export interface CapabilityGap {
+  key: string;
+  title: string;
+  /** Misses it explains, over the misses read. */
+  explains: number;
+  of: number;
+  problems: string[];
+  /** Where the capability lives: the paths a Factory objective for it may change. */
+  ownerPaths: string[];
+  question: string;
+}
+
+const CAPABILITY_SPECS: Record<string, { title: string; ownerPaths: string[]; question: string }> = {
+  'knowledge-acquisition': {
+    title: 'acquire a sourced research claim behind an opening before judging it',
+    ownerPaths: ['server/services/research/**'],
+    question: 'how does Brain reach a sourced research claim for an opening whose card has none behind it',
+  },
+  'number-provenance': {
+    title: 'build a material number with its provenance when the card states it',
+    ownerPaths: ['server/services/quant/**'],
+    question: 'which provenance a stated price lacks, and how Brain obtains it rather than refusing the number',
+  },
+  calibration: {
+    title: 'calibrate the pathway probability against realized outcomes',
+    ownerPaths: ['server/services/research/**', 'server/services/quant/**'],
+    question: 'why evidenced pathways score under the tuned threshold, and which calibration corrects it',
+  },
+  'counter-model': {
+    title: 'refute a pathway with an explicit counter-model before calling it actionable',
+    ownerPaths: ['server/services/research/**'],
+    question: 'which adversarial check would have refuted the pathways the method called actionable that production did not',
+  },
+};
+
+function capabilitySpec(key: string): { title: string; ownerPaths: string[]; question: string } {
+  const known = CAPABILITY_SPECS[key];
+  if (known) return known;
+  const role = key.startsWith('mechanism-role:') ? key.slice('mechanism-role:'.length) : key;
+  return {
+    title: `resolve the ${role} of a transaction from research rather than leave it unknown`,
+    ownerPaths: ['server/services/research/**'],
+    question: `how does Brain establish the ${role} of an opening's transaction from sourced evidence`,
+  };
+}
+
+/** What the general method could not do on one miss. Pure. */
+export function capabilitiesOfMiss(p: SprintProblem, v: MethodVerdict): string[] {
+  const truth = actionableInProduction(p);
+  if (v.actionable && !truth) return ['counter-model'];
+  if (v.actionable || !truth) return [];
+  const holds = v.decision?.hypotheses.find((h) => h.id === MECHANISM_HOLDS) ?? null;
+  if (!holds || holds.supports.length === 0) return ['knowledge-acquisition'];
+  const { unknowns } = profileOf(p);
+  if (unknowns.length > 0) return [...new Set(unknowns.map((f) => `mechanism-role:${FIELD_ROLE[f] ?? f}`))];
+  if (!v.provenance) return ['number-provenance'];
+  return ['calibration'];
+}
+
+/** Rank the capabilities the general method's misses point to, highest leverage first. Pure. */
+export function rankCapabilityGaps(problems: readonly SprintProblem[], verdicts: readonly MethodVerdict[]): CapabilityGap[] {
+  const byId = new Map(problems.map((p) => [p.id, p]));
+  const found = new Map<string, string[]>();
+  let misses = 0;
+  for (const v of verdicts) {
+    const p = byId.get(v.problemId);
+    if (!p) continue;
+    const caps = capabilitiesOfMiss(p, v);
+    if (caps.length === 0) continue;
+    misses += 1;
+    for (const c of caps) found.set(c, [...(found.get(c) ?? []), p.id]);
+  }
+  return [...found.entries()]
+    .map(([key, ids]) => ({ key, ...capabilitySpec(key), explains: ids.length, of: misses, problems: ids.slice(0, 10) }))
+    .sort((a, b) => b.explains - a.explains || a.key.localeCompare(b.key));
+}
+
+/** The fewest misses a capability must explain before a run ships it. */
+export const MIN_CAPABILITY_MISSES = 2;
+
+/** What a run shipped to the Factory, so the next run can say whether it helped. */
+export interface ShippedCapability {
+  capability: string | null;
+  candidateId: string;
+  shippedAt: string;
+}
+
+export interface MeasureDelta {
+  set: ProblemSet;
+  measure: 'actionablePathwayRate' | 'calibrationBrier' | 'robustTargetCoverage' | 'methodQuality' | 'humanInterventions';
+  before: number | null;
+  after: number | null;
+  /** after − before, or null when either side lacks data. */
+  delta: number | null;
+}
+
+export type RerunVerdict = 'IMPROVED' | 'NOT_IMPROVED' | 'NO_CHANGE_DELIVERED' | 'INSUFFICIENT_DATA';
+
+/** The rerun: the same sets measured again, linked to the change shipped since, with its verdict. */
+export interface RerunReading {
+  previousRunAt: string;
+  shipped: ShippedCapability | null;
+  /** The delivered change the deltas are linked to: the candidate's delivered ref. */
+  deliveredRef: string | null;
+  deliveredAt: string | null;
+  deltas: MeasureDelta[];
+  verdict: RerunVerdict;
+  statement: string;
+}
+
+export interface CandidateState {
+  id: string;
+  weaknessKey: string;
+  deliveredAt: string | null;
+  deliveredRef: string | null;
+  decision: string | null;
+}
+
+const DELTA_MEASURES: MeasureDelta['measure'][] = ['actionablePathwayRate', 'calibrationBrier', 'robustTargetCoverage', 'methodQuality', 'humanInterventions'];
+/** Lower is better for these. */
+const LOWER_BETTER = new Set<MeasureDelta['measure']>(['calibrationBrier', 'humanInterventions']);
+
+function measureValue(r: unknown, key: MeasureDelta['measure']): number | null {
+  const m = (r as Record<string, unknown> | null | undefined)?.[key] as { value?: unknown } | undefined;
+  return typeof m?.value === 'number' && Number.isFinite(m.value) ? m.value : null;
+}
+
+/**
+ * Compare this run's general-method readings with the previous run's on the
+ * same sets, and link the change to the capability shipped in between. Only
+ * the held-out set decides the verdict — the benchmark chose the capability,
+ * so its improvement there is not evidence. Pure.
+ */
+export function compareRuns(input: {
+  previousRunAt: string;
+  previousReadings: readonly unknown[];
+  readings: readonly SetReading[];
+  shipped: ShippedCapability | null;
+  candidate: CandidateState | null;
+  now: string;
+}): RerunReading {
+  const general = (rs: readonly unknown[], set: ProblemSet) =>
+    rs.find((r) => (r as { set?: unknown; method?: unknown }).set === set && (r as { method?: unknown }).method === GENERAL_METHOD.key) ?? null;
+  const deltas: MeasureDelta[] = [];
+  for (const set of ['BENCHMARK', 'HELD_OUT'] as const) {
+    const before = general(input.previousReadings, set);
+    const after = general(input.readings, set);
+    for (const measureKey of DELTA_MEASURES) {
+      const b = measureValue(before, measureKey);
+      const a = measureValue(after, measureKey);
+      deltas.push({ set, measure: measureKey, before: b, after: a, delta: a === null || b === null ? null : Math.round((a - b) * 10000) / 10000 });
+    }
+  }
+  const delivered = input.candidate?.deliveredAt && input.candidate.deliveredAt > input.previousRunAt && input.candidate.deliveredAt <= input.now ? input.candidate : null;
+  const base = { previousRunAt: input.previousRunAt, shipped: input.shipped, deliveredRef: delivered?.deliveredRef ?? null, deliveredAt: delivered?.deliveredAt ?? null, deltas };
+  if (!input.shipped || !delivered) {
+    return { ...base, verdict: 'NO_CHANGE_DELIVERED', statement: input.shipped ? `capability ${input.shipped.capability ?? '(general method)'} (candidate ${input.shipped.candidateId}) is not delivered yet; the rerun links no change` : 'no capability was shipped since the previous run' };
+  }
+  const held = deltas.filter((d) => d.set === 'HELD_OUT' && (d.measure === 'actionablePathwayRate' || d.measure === 'calibrationBrier' || d.measure === 'robustTargetCoverage'));
+  const readable = held.filter((d) => d.delta !== null);
+  if (readable.length === 0) {
+    return { ...base, verdict: 'INSUFFICIENT_DATA', statement: `change ${delivered.deliveredRef ?? delivered.id} delivered, but the held-out set is too small on one side to say whether it helped` };
+  }
+  const better = (d: MeasureDelta) => (LOWER_BETTER.has(d.measure) ? d.delta! < 0 : d.delta! > 0);
+  const worse = (d: MeasureDelta) => (LOWER_BETTER.has(d.measure) ? d.delta! > 0 : d.delta! < 0);
+  const improved = readable.some(better) && !readable.some(worse);
+  const parts = readable.map((d) => `${d.measure} ${d.before} → ${d.after}`).join(', ');
+  return {
+    ...base,
+    verdict: improved ? 'IMPROVED' : 'NOT_IMPROVED',
+    statement: `held-out after change ${delivered.deliveredRef ?? delivered.id} (capability ${input.shipped.capability ?? '(general method)'}): ${parts} — ${improved ? 'improved with no measure worse' : 'did not improve'}`,
+  };
+}
+
+/**
+ * Real owner interventions per opening: Needs-You requests on the opening's
+ * project, opened after the opening was, that name it. Read from rows; an
+ * opening no request names has none, and a project nobody asked about adds
+ * nothing.
+ */
+export async function readOwnerInterventions(problems: readonly SprintProblem[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  const byProject = new Map<string, SprintProblem[]>();
+  for (const p of problems) if (p.projectId) byProject.set(p.projectId, [...(byProject.get(p.projectId) ?? []), p]);
+  if (byProject.size === 0) return out;
+  const since = problems.reduce((m, p) => (p.createdAt < m ? p.createdAt : m), problems[0]!.createdAt);
+  const ids = [...byProject.keys()];
+  for (let i = 0; i < ids.length; i += 400) {
+    const chunk = ids.slice(i, i + 400);
+    const rows = await getDb().all<{ project_id: string; resume_key: string | null; why_not_russell: string | null; recommendation: string | null; authority_needed: string | null; created_at: string }>(
+      `SELECT project_id, resume_key, why_not_russell, recommendation, authority_needed, created_at FROM russell_human_requests
+        WHERE project_id IN (${chunk.map(() => '?').join(', ')}) AND created_at >= ? LIMIT 5000`,
+      [...chunk, since],
+    );
+    for (const row of rows) {
+      const text = [row.resume_key, row.why_not_russell, row.recommendation, row.authority_needed].filter(Boolean).join(' ');
+      for (const p of byProject.get(row.project_id) ?? []) {
+        if (row.created_at >= p.createdAt && text.includes(p.id)) out.set(p.id, (out.get(p.id) ?? 0) + 1);
+      }
+    }
+  }
+  return out;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -601,6 +846,14 @@ export interface SprintRun {
   comparisons: BaselineComparison[];
   /** The candidate a failed held-out comparison was registered as, when one was. */
   repairCandidateId: string | null;
+  /** The general method's missing capabilities this run, highest leverage first (selected on the benchmark set). */
+  capabilities: CapabilityGap[];
+  /** The capability shipped to the Factory and awaiting its rerun verdict: this run's, or an earlier one still undelivered. */
+  shipped: ShippedCapability | null;
+  /** The general method's held-out false positives fed to repair although it beat the baseline. */
+  falsePositiveCandidateId: string | null;
+  /** This run against the previous one, linked to the change delivered in between. Null on the first run. */
+  rerun: RerunReading | null;
   /** The controller's operational loop on real openings this run. */
   loop: SprintLoop;
   /** Always present: what the reading is not evidence of. */
@@ -625,7 +878,7 @@ export interface SprintLoop {
 
 export interface SprintDeps {
   read?: () => Promise<SprintProblem[]>;
-  previous?: () => Promise<{ at: string; cutoff: string | null } | null>;
+  previous?: () => Promise<PreviousRun | null>;
   record?: typeof recordImprovementEvent;
   recordDecision?: typeof recordControllerDecision;
   recordProvenance?: typeof recordNumberProvenance;
@@ -641,6 +894,18 @@ export interface SprintDeps {
   sendNeeds?: typeof sendNeeds;
   /** Layer 1: a project's knowledge from its research claims (default: `loadProjectKnowledge`). */
   knowledge?: (projectId: string, subject: string, now: Date) => Promise<KnowledgeReading>;
+  /** Real owner interventions per opening (default: `readOwnerInterventions`). */
+  interventions?: (problems: readonly SprintProblem[]) => Promise<Map<string, number>>;
+  /** A shipped candidate's state, to link a rerun to the change it delivered (default: the improvement repository). */
+  candidate?: (id: string) => Promise<CandidateState | null>;
+}
+
+/** The previous run as recorded: when, its cutoff, and — when the row carries them — its readings and what it shipped. */
+export interface PreviousRun {
+  at: string;
+  cutoff: string | null;
+  readings?: unknown[];
+  shipped?: ShippedCapability | null;
 }
 
 /**
@@ -705,11 +970,24 @@ export function chooseDemonstrated(
 export const SPRINT_DISCLAIMER =
   'A comparison of two reasoning methods on these production rows. It is not evidence that a general superintelligence can be created, in seven days or otherwise.';
 
-async function previousRun(): Promise<{ at: string; cutoff: string | null } | null> {
+function shippedFrom(v: unknown): ShippedCapability | null {
+  const o = v as { capability?: unknown; candidateId?: unknown; shippedAt?: unknown } | null | undefined;
+  if (!o || typeof o.candidateId !== 'string' || typeof o.shippedAt !== 'string') return null;
+  return { capability: typeof o.capability === 'string' ? o.capability : null, candidateId: o.candidateId, shippedAt: o.shippedAt };
+}
+
+async function previousRun(): Promise<PreviousRun | null> {
   const [last] = await listImprovementEvents({ kinds: [SPRINT_EVENT], limit: 1 });
   if (!last) return null;
   const cutoff = typeof last.detail['cutoff'] === 'string' ? (last.detail['cutoff'] as string) : null;
-  return { at: last.at, cutoff };
+  const readings = Array.isArray(last.detail['readings']) ? (last.detail['readings'] as unknown[]) : [];
+  return { at: last.at, cutoff, readings, shipped: shippedFrom(last.detail['shipped']) };
+}
+
+async function candidateState(id: string): Promise<CandidateState | null> {
+  const { getCandidate } = await import('../../repos/improvement.ts');
+  const c = await getCandidate(id);
+  return c ? { id: c.id, weaknessKey: c.weaknessKey, deliveredAt: c.deliveredAt, deliveredRef: c.deliveredRef, decision: c.decision } : null;
 }
 
 /** Run the benchmark once: split, tune on the benchmark only, score every set, compare, record. */
@@ -729,17 +1007,27 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
   for (const p of problems) layersOf.set(p.id, await openingLayers(p, now, knowledgeCache, deps.knowledge));
   const contextOf = (p: SprintProblem): MethodContext => ({ ...learned, knowledge: layersOf.get(p.id)?.knowledge ?? null, mechanism: layersOf.get(p.id)?.mechanism ?? null });
   const threshold = chooseThreshold(split.BENCHMARK, GENERAL_METHOD, contextOf);
+  let interventions: Map<string, number> | null = null;
+  const readErrors: string[] = [];
+  try {
+    interventions = await (deps.interventions ?? readOwnerInterventions)(problems);
+  } catch (error) {
+    // Unread is not zero: the measure says INSUFFICIENT_DATA rather than claim nobody intervened.
+    readErrors.push(`interventions: ${String((error as Error).message ?? error).slice(0, 200)}`);
+  }
 
   const readings: SetReading[] = [];
   const comparisons: BaselineComparison[] = [];
   const generalVerdicts: MethodVerdict[] = [];
+  let benchmarkVerdicts: MethodVerdict[] = [];
   for (const set of ['BENCHMARK', 'HELD_OUT', 'NEW_HELD_OUT'] as const) {
     const ps = split[set];
     const g = ps.map((p) => GENERAL_METHOD.run(p, threshold, contextOf(p)));
     const b = ps.map((p) => BASELINE_METHOD.run(p, threshold));
     generalVerdicts.push(...g);
-    const gr = readSet(set, GENERAL_METHOD.key, ps, g);
-    const br = readSet(set, BASELINE_METHOD.key, ps, b);
+    if (set === 'BENCHMARK') benchmarkVerdicts = g;
+    const gr = readSet(set, GENERAL_METHOD.key, ps, g, interventions);
+    const br = readSet(set, BASELINE_METHOD.key, ps, b, interventions);
     readings.push(gr, br);
     comparisons.push(compareWithBaseline(gr, br));
   }
@@ -749,7 +1037,7 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
   // a contradicted one changes the method — record the decision, and hand the next action to its owner.
   const verdictOf = new Map(generalVerdicts.map((v) => [v.problemId, v]));
   const history = await (deps.history ?? (() => readControllerHistory(SPRINT_CALLER)))();
-  const loop: SprintLoop = { resultsTracked: 0, decisions: 0, methodChanges: 0, capabilityGaps: 0, handOffs: {}, proceduresRecorded: 0, knowledgeRead: 0, mechanismsModelled: 0, informationNeeds: 0, errors: [] };
+  const loop: SprintLoop = { resultsTracked: 0, decisions: 0, methodChanges: 0, capabilityGaps: 0, handOffs: {}, proceduresRecorded: 0, knowledgeRead: 0, mechanismsModelled: 0, informationNeeds: 0, errors: [...readErrors] };
   for (const { problem: p, result } of chooseDemonstrated(problems, history)) {
     const prior = history.get(p.id);
     const projectId = p.projectId ?? null;
@@ -823,33 +1111,99 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
   } catch (error) {
     loop.errors.push(`procedures: ${String((error as Error).message ?? error).slice(0, 200)}`);
   }
-  // Held-out failure feeds the existing repair path, once per weakness family (registerDirected refreshes an open one).
+  // The rerun: the same sets measured again, linked to the change shipped since the previous run.
+  let rerun: RerunReading | null = null;
+  let carried: ShippedCapability | null = previous?.shipped ?? null;
+  if (previous) {
+    let candidate: CandidateState | null = null;
+    if (carried) {
+      try {
+        candidate = await (deps.candidate ?? candidateState)(carried.candidateId);
+      } catch (error) {
+        loop.errors.push(`candidate: ${String((error as Error).message ?? error).slice(0, 200)}`);
+      }
+    }
+    rerun = compareRuns({ previousRunAt: previous.at, previousReadings: previous.readings ?? [], readings, shipped: carried, candidate, now: now.toISOString() });
+    // A shipped capability stays linked until a rerun measures its delivered change.
+    if (rerun.verdict !== 'NO_CHANGE_DELIVERED') carried = null;
+  }
+
+  // The highest-leverage missing capability, chosen on the benchmark set only; the held-out sets verify it at the rerun.
+  const capabilities = split.BENCHMARK.length >= MIN_SAMPLE ? rankCapabilityGaps(split.BENCHMARK, benchmarkVerdicts) : [];
+  const top = capabilities.find((c) => c.explains >= MIN_CAPABILITY_MISSES) ?? null;
+  const register = async (weakness: Weakness): Promise<string> =>
+    (await (deps.registerDirected ?? (await import('./loop.ts')).registerDirected)(weakness, now)).candidate.id;
+  const capabilityWeakness = (cap: CapabilityGap, extra: string | null): Weakness => ({
+    key: `reasoning-sprint:capability:${cap.key}`,
+    kind: 'REASONING_CAPABILITY',
+    title: `The general reasoning method cannot ${cap.title}`.slice(0, 200),
+    problem: (`${cap.explains} of ${cap.of} benchmark misses come from this missing capability` + (extra ? ` | ${extra}` : '')).slice(0, 1000),
+    metric: 'READY_OPPORTUNITIES_PER_DAY',
+    downstreamMetric: null,
+    ownerComponent: 'improvement/sprint',
+    mutationScope: [...cap.ownerPaths, 'server/services/improvement/sprint.ts'],
+    frequency: cap.explains,
+    denominator: Math.max(cap.of, 1),
+    scope: 'GENERAL',
+    severity: 'MEDIUM',
+    researchQuestion: cap.question,
+    samples: cap.problems.slice(0, 5),
+    knownCause: null,
+  });
+
+  // Held-out failure feeds the existing repair path, once per weakness family (registerDirected refreshes an open one),
+  // and names the capability to build; otherwise the highest-leverage capability is shipped on its own.
   let repairCandidateId: string | null = null;
+  let shipped: ShippedCapability | null = carried;
   const failed = comparisons.filter((c) => c.set !== 'BENCHMARK' && c.earned === false);
   if (failed.length > 0) {
-    const register = deps.registerDirected ?? (await import('./loop.ts')).registerDirected;
     const fp = failed.flatMap((c) => c.general.falsePositives).slice(0, 5);
-    const { candidate } = await register(
-      {
-        key: 'reasoning-sprint:general-method',
-        kind: 'REASONING_CAPABILITY',
-        title: 'The general reasoning method did not beat the simple baseline on held-out commercial problems',
-        problem: failed.map((c) => c.statement).join(' | ').slice(0, 1000),
-        metric: 'READY_OPPORTUNITIES_PER_DAY',
-        downstreamMetric: null,
-        ownerComponent: 'improvement/sprint',
-        mutationScope: ['server/services/research/**', 'server/services/quant/**', 'server/services/improvement/sprint.ts'],
-        frequency: failed.reduce((s, c) => s + c.general.problems, 0),
-        denominator: problems.length,
-        scope: 'GENERAL',
-        severity: 'MEDIUM',
-        researchQuestion: 'which general reasoning capability would turn more real openings into actionable pathways than a payer-and-price rule',
-        samples: fp,
-        knownCause: null,
-      },
-      now,
-    );
-    repairCandidateId = candidate.id;
+    repairCandidateId = await register({
+      key: 'reasoning-sprint:general-method',
+      kind: 'REASONING_CAPABILITY',
+      title: 'The general reasoning method did not beat the simple baseline on held-out commercial problems',
+      problem: (failed.map((c) => c.statement).join(' | ') + (top ? ` | highest-leverage missing capability: ${top.key} (${top.explains} of ${top.of} benchmark misses)` : '')).slice(0, 1000),
+      metric: 'READY_OPPORTUNITIES_PER_DAY',
+      downstreamMetric: null,
+      ownerComponent: 'improvement/sprint',
+      mutationScope: [...new Set([...(top?.ownerPaths ?? []), 'server/services/research/**', 'server/services/quant/**', 'server/services/improvement/sprint.ts'])],
+      frequency: failed.reduce((s, c) => s + c.general.problems, 0),
+      denominator: problems.length,
+      scope: 'GENERAL',
+      severity: 'MEDIUM',
+      researchQuestion: top ? top.question : 'which general reasoning capability would turn more real openings into actionable pathways than a payer-and-price rule',
+      samples: fp,
+      knownCause: null,
+    });
+    shipped = { capability: top?.key ?? null, candidateId: repairCandidateId, shippedAt: now.toISOString() };
+  } else if (top && !carried) {
+    const notImproved = rerun?.verdict === 'NOT_IMPROVED' ? `the previous change did not improve held-out results: ${rerun.statement}` : null;
+    const id = await register(capabilityWeakness(top, notImproved));
+    shipped = { capability: top.key, candidateId: id, shippedAt: now.toISOString() };
+  }
+
+  // Per-method findings reach repair even when the general method wins: its held-out false positives are its own errors.
+  let falsePositiveCandidateId: string | null = null;
+  const fpWins = comparisons.filter((c) => c.set !== 'BENCHMARK' && c.earned !== false && c.general.falsePositives.length > 0);
+  if (fpWins.length > 0) {
+    const ids = fpWins.flatMap((c) => c.general.falsePositives);
+    falsePositiveCandidateId = await register({
+      key: 'reasoning-sprint:false-positives',
+      kind: 'REASONING_CAPABILITY',
+      title: 'The general reasoning method called held-out openings actionable that production did not',
+      problem: fpWins.map((c) => `${c.set}: ${c.general.falsePositives.length} of ${c.general.problems} called actionable and not confirmed (${c.statement})`).join(' | ').slice(0, 1000),
+      metric: 'READY_OPPORTUNITIES_PER_DAY',
+      downstreamMetric: null,
+      ownerComponent: 'improvement/sprint',
+      mutationScope: [...CAPABILITY_SPECS['counter-model']!.ownerPaths, 'server/services/improvement/sprint.ts'],
+      frequency: ids.length,
+      denominator: fpWins.reduce((s, c) => s + c.general.problems, 0),
+      scope: 'GENERAL',
+      severity: 'MEDIUM',
+      researchQuestion: CAPABILITY_SPECS['counter-model']!.question,
+      samples: ids.slice(0, 5),
+      knownCause: null,
+    });
   }
 
   const cutoff = problems.reduce<string | null>((m, p) => (m === null || p.createdAt > m ? p.createdAt : m), previousCutoff);
@@ -862,6 +1216,10 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
     readings,
     comparisons: comparisons.map((c) => ({ ...c, general: { ...c.general }, baseline: { ...c.baseline } })),
     repairCandidateId,
+    capabilities: capabilities.slice(0, 5),
+    shipped,
+    falsePositiveCandidateId,
+    rerun,
     loop,
     disclaimer: SPRINT_DISCLAIMER,
   };
@@ -876,6 +1234,10 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
       sets: run.sets,
       readings: run.readings,
       comparisons: run.comparisons.map((c) => ({ set: c.set, earned: c.earned, statement: c.statement })),
+      capabilities: run.capabilities,
+      shipped: run.shipped,
+      falsePositiveCandidateId: run.falsePositiveCandidateId,
+      rerun: run.rerun,
       loop: run.loop,
       disclaimer: run.disclaimer,
     },
