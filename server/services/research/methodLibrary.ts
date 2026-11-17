@@ -561,6 +561,7 @@ export interface MethodRowDeps {
   record?: typeof recordBinEvent;
   projectId?: string | null;
   caller?: string;
+  recordProcedure?: (procedure: Procedure, deps?: MethodRowDeps) => Promise<void>;
 }
 
 async function write(eventType: string, outcome: string, reason: string, measures: Record<string, unknown>, deps: MethodRowDeps): Promise<void> {
@@ -636,6 +637,38 @@ function isMethod(value: unknown): value is MethodSpec {
   if (!value || typeof value !== 'object') return false;
   const v = value as Record<string, unknown>;
   return typeof v['id'] === 'string' && Array.isArray(v['fitsWhen']) && Array.isArray(v['misleadsWhen']) && Array.isArray(v['requires']);
+}
+
+function isProcedure(value: unknown): value is Procedure {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return typeof v['id'] === 'string' && typeof v['methodId'] === 'string' && typeof v['successes'] === 'number' && typeof v['failures'] === 'number';
+}
+
+/** Every recorded procedure, oldest first (a procedure re-recorded with new counts appears again). */
+export async function readProcedures(projectId: string | null = null, limit = 5000): Promise<Procedure[]> {
+  return (await readMeasures(METHOD_EVENTS.PROCEDURE, projectId, limit)).map((m) => m['procedure']).filter(isProcedure);
+}
+
+/**
+ * Learn procedures from the outcomes and record each one that is new or whose
+ * counts moved since it was last recorded. Returns what was recorded.
+ */
+export async function learnAndRecordProcedures(
+  outcomes: readonly MethodOutcome[],
+  known: readonly Procedure[],
+  deps: MethodRowDeps = {},
+): Promise<Procedure[]> {
+  const last = new Map<string, Procedure>();
+  for (const p of known) last.set(p.id, p);
+  const recorded: Procedure[] = [];
+  for (const p of learnProcedures(outcomes)) {
+    const before = last.get(p.id);
+    if (before && before.successes === p.successes && before.failures === p.failures) continue;
+    await (deps.recordProcedure ?? recordProcedure)(p, deps);
+    recorded.push(p);
+  }
+  return recorded;
 }
 
 /** Every recorded method outcome, oldest first. */

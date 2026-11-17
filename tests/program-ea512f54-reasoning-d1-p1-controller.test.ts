@@ -3,9 +3,12 @@ import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import {
   decideNext,
+  foldControllerHistory,
   handOff,
   priorOf,
+  readControllerHistory,
   recordActionResult,
+  recordControllerDecision,
   runController,
   valueActions,
   type CandidateAction,
@@ -200,5 +203,43 @@ describe('it adds no store or engine: rows go through the existing writer, actio
       { event_type: 'METHOD_OUTCOME', outcome: 'FAILED' },
       { event_type: 'REASONING_CONTROLLER_RESULT', outcome: 'CONTRADICTED' },
     ]);
+  });
+});
+
+describe('the controller reads its own history back, so a later decision consumes earlier results', () => {
+  it('folds decisions and results per problem, a later decision resetting the results it consumed', async () => {
+    await freshProject();
+    const first = decideNext(snapshot());
+    await recordControllerDecision(first, { caller: 'history-test' });
+    const result = { actionKey: 'ask-terms', hypothesisId: first.leadingHypothesis!, outcome: 'CONTRADICTED' as const, evidence: 'e', at: '2026-11-16T03:00:00.000Z', decisionAt: first.at };
+    await recordActionResult(result, first, problem, { caller: 'history-test' });
+    const history = await readControllerHistory('history-test');
+    const h = history.get(problem.id);
+    expect(h?.prior).toEqual(priorOf(first));
+    expect(h?.decidedAt).toBe(first.at);
+    expect(h?.results).toEqual([result]);
+    expect((await readControllerHistory('another-caller')).size).toBe(0);
+
+    // The decision taken with that result changes method, and its own row resets what is pending.
+    const second = decideNext(snapshot({ prior: h!.prior, results: h!.results, now: '2026-11-16T04:00:00.000Z' }));
+    expect(second.methodChange).not.toBeNull();
+    const folded = foldControllerHistory([
+      { eventType: 'REASONING_CONTROLLER_DECISION', measures: { decision: first } },
+      { eventType: 'REASONING_CONTROLLER_RESULT', measures: { problemId: problem.id, result } },
+      { eventType: 'REASONING_CONTROLLER_DECISION', measures: { decision: second } },
+    ]);
+    expect(folded.get(problem.id)?.results).toEqual([]);
+    expect(folded.get(problem.id)?.prior.excludedMethods).toContain(first.method!.methodId);
+  });
+
+  it('records the absent capability when a result invalidates the method, whatever the next action is', async () => {
+    await freshProject();
+    const first = decideNext(snapshot());
+    const results = [{ actionKey: 'ask-terms', hypothesisId: first.leadingHypothesis!, outcome: 'CONTRADICTED' as const, evidence: 'e', at: '2026-11-16T05:00:00.000Z' }];
+    const { decision } = await runController(snapshot({ prior: priorOf(first), results }), { projectId: null, actorRef: 't' });
+    expect(decision.methodChange).not.toBeNull();
+    expect(decision.next?.kind).not.toBe('METHOD_GAP');
+    const rows = await getDb().all<{ event_type: string }>(`SELECT event_type FROM bin_events WHERE event_type = 'METHOD_CAPABILITY_GAP'`);
+    expect(rows).toHaveLength(1);
   });
 });

@@ -3,12 +3,17 @@ import { readFileSync } from 'node:fs';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { listImprovementEvents } from '../server/repos/improvement.ts';
+import { readControllerHistory } from '../server/services/research/reasoningController.ts';
 import {
   BASELINE_METHOD,
   GENERAL_METHOD,
   SPRINT_DISCLAIMER,
+  SPRINT_CALLER,
   SPRINT_EVENT,
+  chooseDemonstrated,
   chooseThreshold,
+  pendingResult,
+  productionOutcome,
   compareWithBaseline,
   readSet,
   readSprintProblems,
@@ -183,5 +188,68 @@ describe('a run records its readings, feeds failure to the existing repair path,
 
   it('is run by the improvement tick', () => {
     expect(readFileSync('server/services/improvement/loop.ts', 'utf8')).toContain("import('./sprint.ts')");
+  });
+});
+
+describe('the controller loop runs on real openings: results are tracked, the method changes, actions are handed off', () => {
+  it('tracks what production said about an earlier decision, changes method, and the library learns from it', async () => {
+    await freshProject();
+    const sent: string[] = [];
+    const sendNeeds = async (input: { needs: readonly { subject: string }[] }) => {
+      sent.push(input.needs[0]!.subject);
+      return [{ subject: input.needs[0]!.subject, sent: true as const, to: 'RESEARCH_UNCERTAINTY' as const, ref: 'unc_1', created: true }];
+    };
+    const open = problem({ id: 'opp_loop', state: 'DISCOVERED', buyingSignal: null, paymentTerms: null, updatedAt: '2026-11-10T00:00:00.000Z' });
+
+    // Run 1: the opening is undecided; the controller decides on it and hands its next action to research.
+    const first = await runSprintBenchmark({ read: async () => [open], previous: async () => null, sendNeeds, now: () => new Date('2026-11-15T00:00:00.000Z') });
+    expect(first.loop.decisions).toBe(1);
+    expect(first.loop.resultsTracked).toBe(0);
+    expect(first.loop.handOffs['RESEARCH']).toBe(1);
+    expect(sent).toHaveLength(1);
+    const before = (await readControllerHistory(SPRINT_CALLER)).get('opp_loop');
+    expect(before?.prior.leadingHypothesis).toBe('pathway-fails');
+    expect(before?.prior.methodId).not.toBeNull();
+
+    // Run 2: production moved the opening to READY after that decision, which contradicts what it led with.
+    const ready = { ...open, state: 'READY', updatedAt: '2026-11-16T00:00:00.000Z' };
+    const second = await runSprintBenchmark({ read: async () => [ready], previous: async () => null, sendNeeds, now: () => new Date('2026-11-17T00:00:00.000Z') });
+    expect(second.loop.resultsTracked).toBe(1);
+    expect(second.loop.methodChanges).toBe(1);
+    expect(second.loop.capabilityGaps).toBe(1);
+    expect(second.loop.errors).toEqual([]);
+
+    const rows = await getDb().all<{ event_type: string; outcome: string; measures: string }>(
+      `SELECT event_type, outcome, measures FROM bin_events WHERE workload_class = ? ORDER BY at ASC, id ASC`,
+      [SPRINT_CALLER],
+    );
+    const types = rows.map((r) => r.event_type);
+    expect(types).toContain('REASONING_CONTROLLER_RESULT');
+    expect(types).toContain('METHOD_OUTCOME');
+    expect(types).toContain('METHOD_CAPABILITY_GAP');
+    expect(rows.find((r) => r.event_type === 'METHOD_OUTCOME')?.outcome).toBe('FAILED');
+    const changed = rows.filter((r) => r.event_type === 'REASONING_CONTROLLER_DECISION').map((r) => JSON.parse(r.measures).decision);
+    expect(changed).toHaveLength(2);
+    expect(changed[1].methodChange.from).toBe(before!.prior.methodId);
+    expect(changed[1].capabilityGap).not.toBeNull();
+    expect(changed[1].excludedMethods).toContain(before!.prior.methodId);
+
+    // The result is tracked once: a third run with nothing new tracks nothing and decides nothing again.
+    const third = await runSprintBenchmark({ read: async () => [ready], previous: async () => null, sendNeeds, now: () => new Date('2026-11-18T00:00:00.000Z') });
+    expect(third.loop.resultsTracked).toBe(0);
+    expect(third.loop.decisions).toBe(0);
+    const [event] = await listImprovementEvents({ kinds: [SPRINT_EVENT], limit: 1 });
+    expect(event?.detail['loop']).toBeDefined();
+  });
+
+  it('reads a result only from the row changing after the decision, and only once production has said', () => {
+    const p = problem({ id: 'opp_x', state: 'DECLINED', updatedAt: '2026-11-02T00:00:00.000Z' });
+    const history = { problemId: 'opp_x', decidedAt: '2026-11-01T00:00:00.000Z', prior: { methodId: 'm', representation: 'm', leadingHypothesis: 'pathway-holds', excludedMethods: [] }, results: [] };
+    expect(productionOutcome(p, 'pathway-holds')).toBe('CONTRADICTED');
+    expect(productionOutcome({ state: 'EVIDENCE_CARD' }, 'pathway-holds')).toBeNull();
+    expect(pendingResult(p, history)?.outcome).toBe('CONTRADICTED');
+    expect(pendingResult({ ...p, updatedAt: '2026-10-31T00:00:00.000Z' }, history)).toBeNull();
+    expect(pendingResult(p, { ...history, results: [{ actionKey: 'k', hypothesisId: 'pathway-holds', outcome: 'CONTRADICTED', evidence: 'e', at: 'x', decisionAt: history.decidedAt }] })).toBeNull();
+    expect(chooseDemonstrated([p], new Map([['opp_x', history]]))).toHaveLength(1);
   });
 });

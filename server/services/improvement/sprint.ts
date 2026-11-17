@@ -39,16 +39,34 @@ import { createHash } from 'node:crypto';
 import { getDb } from '../../db/database.ts';
 import { listImprovementEvents, recordImprovementEvent } from '../../repos/improvement.ts';
 import type { Weakness } from '../../domain/improvement.ts';
-import { SEED_METHODS, type ProblemProfile } from '../research/methodLibrary.ts';
+import {
+  SEED_METHODS,
+  learnAndRecordProcedures,
+  readCatalogue,
+  readMethodOutcomes,
+  readProcedures,
+  type MethodOutcome,
+  type MethodSpec,
+  type Procedure,
+  type ProblemProfile,
+} from '../research/methodLibrary.ts';
 import {
   decideNext,
+  readControllerHistory,
+  recordActionResult,
   recordControllerDecision,
+  runController,
+  type ActionResult,
   type CandidateAction,
   type ControllerDecision,
+  type ControllerHistory,
+  type ControllerSnapshot,
   type EvidenceItem,
+  type PriorDecision,
 } from '../research/reasoningController.ts';
 import { buildNumberProvenance, recordNumberProvenance, type NumberProvenance, type ProvenanceInput } from '../quant/mathToolkit.ts';
 import type { Figure } from '../quant/graph.ts';
+import type { sendNeeds } from '../quant/needs.ts';
 
 /* ------------------------------------------------------------------------- */
 /* Problems                                                                   */
@@ -191,9 +209,18 @@ export interface MethodVerdict {
   provenance?: NumberProvenance | null;
 }
 
+/** What the general method has learned so far, and — for a problem it decided before — that decision and its results. */
+export interface MethodContext {
+  catalogue?: readonly MethodSpec[];
+  outcomes?: readonly MethodOutcome[];
+  prior?: PriorDecision | null;
+  results?: readonly ActionResult[];
+  now?: string;
+}
+
 export interface SprintMethod {
   key: string;
-  run(problem: SprintProblem, threshold: number): MethodVerdict;
+  run(problem: SprintProblem, threshold: number, context?: MethodContext): MethodVerdict;
 }
 
 const known = (p: SprintProblem, field: LoadBearing): boolean => {
@@ -298,26 +325,77 @@ export function grossBilledProvenance(p: SprintProblem): { record: NumberProvena
   return { record: null, findings: built.missing.length + built.problems.length };
 }
 
+/**
+ * The controller's snapshot of one opening: the card's evidence, the learned
+ * catalogue and method outcomes, and — when the controller decided this
+ * opening before — its prior decision and the results tracked against it, so
+ * a contradicted result changes the method.
+ */
+export function controllerSnapshotOf(p: SprintProblem, context: MethodContext = {}): ControllerSnapshot {
+  const { profile, unknowns, evidence, actions } = profileOf(p);
+  return {
+    problem: profile,
+    knowledge: null,
+    mechanism: null,
+    catalogue: context.catalogue ?? SEED_METHODS,
+    outcomes: context.outcomes ?? [],
+    hypotheses: [
+      { id: HOLDS, statement: `"${p.title}" is an actionable pathway`, basis: 'given:holds' },
+      { id: FAILS, statement: `"${p.title}" fails at an unknown load-bearing field`, basis: 'given:fails' },
+    ],
+    evidence: [...evidence, ...unknowns.map((f): EvidenceItem => ({ id: `${p.id}:${f}:unknown`, source: sourceOf(p), bears: { [FAILS]: 'SUPPORTS', [HOLDS]: 'REFUTES' } }))],
+    actions,
+    prior: context.prior ?? null,
+    results: context.results ?? [],
+    now: context.now ?? p.updatedAt,
+  };
+}
+
+/** States that mean the opening will not become a pathway. */
+export const DEAD_STATES: ReadonlySet<string> = new Set(['DECLINED', 'ARCHIVED']);
+
+/**
+ * What production now says about a hypothesis the controller led with: the
+ * opening became a pathway, or it died. Null while production has not said.
+ * Read from the row's state, never from either method's opinion.
+ */
+export function productionOutcome(p: Pick<SprintProblem, 'state'>, hypothesisId: string): ActionResult['outcome'] | null {
+  const holds = hypothesisId === HOLDS || hypothesisId.startsWith('holds:');
+  const fails = hypothesisId === FAILS || hypothesisId.startsWith('fails:');
+  if (!holds && !fails) return null;
+  if (ACTIONABLE_STATES.has(p.state)) return holds ? 'CONFIRMED' : 'CONTRADICTED';
+  if (DEAD_STATES.has(p.state)) return holds ? 'CONTRADICTED' : 'CONFIRMED';
+  return null;
+}
+
+/**
+ * The result to track for a problem the controller decided before: only when
+ * the row changed after that decision and production has now said, and only
+ * once per decision.
+ */
+export function pendingResult(p: SprintProblem, history: ControllerHistory | undefined): ActionResult | null {
+  if (!history?.prior.leadingHypothesis) return null;
+  if (!(p.updatedAt > history.decidedAt)) return null;
+  if (history.results.some((r) => r.decisionAt === history.decidedAt)) return null;
+  const outcome = productionOutcome(p, history.prior.leadingHypothesis);
+  if (!outcome) return null;
+  return {
+    actionKey: `production-state:${p.id}`,
+    hypothesisId: history.prior.leadingHypothesis,
+    outcome,
+    evidence: `cash_opportunities:${p.id}#state=${p.state}`,
+    at: p.updatedAt,
+    decisionAt: history.decidedAt,
+  };
+}
+
 /** The general method: the controller over the card, with the gross billed carried with its provenance. */
 export const GENERAL_METHOD: SprintMethod = {
   key: 'general:controller+provenance',
-  run(p, threshold) {
+  run(p, threshold, context) {
     const started = performance.now();
-    const { profile, unknowns, evidence, actions } = profileOf(p);
-    const decision = decideNext({
-      problem: profile,
-      knowledge: null,
-      mechanism: null,
-      catalogue: SEED_METHODS,
-      outcomes: [],
-      hypotheses: [
-        { id: HOLDS, statement: `"${p.title}" is an actionable pathway`, basis: 'given:holds' },
-        { id: FAILS, statement: `"${p.title}" fails at an unknown load-bearing field`, basis: 'given:fails' },
-      ],
-      evidence: [...evidence, ...unknowns.map((f): EvidenceItem => ({ id: `${p.id}:${f}:unknown`, source: sourceOf(p), bears: { [FAILS]: 'SUPPORTS', [HOLDS]: 'REFUTES' } }))],
-      actions,
-      now: p.updatedAt,
-    });
+    const { unknowns } = profileOf(p);
+    const decision = decideNext(controllerSnapshotOf(p, context));
     const { record, findings: provenanceFindings } = grossBilledProvenance(p);
     const probability = decision.hypotheses.find((h) => h.id === HOLDS)?.score ?? 0;
     const actionable = unknowns.length === 0 && record !== null && probability >= threshold;
@@ -403,12 +481,12 @@ export function readSet(set: ProblemSet, method: string, problems: readonly Spri
  * The method's one tuned choice, made on the benchmark set only: the
  * probability threshold with the lowest misclassification there.
  */
-export function chooseThreshold(benchmark: readonly SprintProblem[], method: SprintMethod = GENERAL_METHOD): number {
+export function chooseThreshold(benchmark: readonly SprintProblem[], method: SprintMethod = GENERAL_METHOD, context?: MethodContext): number {
   const candidates = [0.5, 0.6, 0.7, 0.8, 0.9];
   let best = candidates[0]!;
   let bestErrors = Infinity;
   for (const t of candidates) {
-    const errors = benchmark.filter((p) => method.run(p, t).actionable !== actionableInProduction(p)).length;
+    const errors = benchmark.filter((p) => method.run(p, t, context).actionable !== actionableInProduction(p)).length;
     if (errors < bestErrors) {
       best = t;
       bestErrors = errors;
@@ -472,8 +550,21 @@ export interface SprintRun {
   comparisons: BaselineComparison[];
   /** The candidate a failed held-out comparison was registered as, when one was. */
   repairCandidateId: string | null;
+  /** The controller's operational loop on real openings this run. */
+  loop: SprintLoop;
   /** Always present: what the reading is not evidence of. */
   disclaimer: string;
+}
+
+/** What the controller's loop did this run: results tracked, decisions taken, methods changed, actions handed off. */
+export interface SprintLoop {
+  resultsTracked: number;
+  decisions: number;
+  methodChanges: number;
+  capabilityGaps: number;
+  handOffs: Record<string, number>;
+  proceduresRecorded: number;
+  errors: string[];
 }
 
 export interface SprintDeps {
@@ -484,6 +575,46 @@ export interface SprintDeps {
   recordProvenance?: typeof recordNumberProvenance;
   registerDirected?: (weakness: Weakness, now?: Date) => Promise<{ candidate: { id: string } }>;
   now?: () => Date;
+  /** What the method library has learned: the catalogue, outcomes and procedures recorded so far. */
+  learning?: () => Promise<{ catalogue: MethodSpec[]; outcomes: MethodOutcome[]; procedures: Procedure[] }>;
+  /** The controller's own earlier decisions and results on these openings. */
+  history?: () => Promise<Map<string, ControllerHistory>>;
+  recordResult?: typeof recordActionResult;
+  recordProcedure?: (procedure: Procedure) => Promise<void>;
+  /** The research owner the controller hands a RESEARCH action to. */
+  sendNeeds?: typeof sendNeeds;
+}
+
+export const SPRINT_CALLER = 'intelligence-sprint';
+
+async function readLearning(): Promise<{ catalogue: MethodSpec[]; outcomes: MethodOutcome[]; procedures: Procedure[] }> {
+  const [catalogue, outcomes, procedures] = await Promise.all([readCatalogue(), readMethodOutcomes(), readProcedures()]);
+  return { catalogue, outcomes, procedures };
+}
+
+/**
+ * Which openings the loop runs on this time: every one with a result to track
+ * first (so the loop closes), then undecided openings the controller has not
+ * decided yet, newest first, up to the per-run demonstration count.
+ */
+export function chooseDemonstrated(
+  problems: readonly SprintProblem[],
+  history: ReadonlyMap<string, ControllerHistory>,
+  limit = DEMONSTRATED_PER_RUN,
+): { problem: SprintProblem; result: ActionResult | null }[] {
+  const out: { problem: SprintProblem; result: ActionResult | null }[] = [];
+  for (const p of problems) {
+    const result = pendingResult(p, history.get(p.id));
+    if (result) out.push({ problem: p, result });
+  }
+  const open = problems
+    .filter((p) => !history.has(p.id) && !ACTIONABLE_STATES.has(p.state) && !DEAD_STATES.has(p.state))
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : a.id.localeCompare(b.id)));
+  for (const p of open) {
+    if (out.length >= Math.max(limit, 0)) break;
+    out.push({ problem: p, result: null });
+  }
+  return out;
 }
 
 export const SPRINT_DISCLAIMER =
@@ -503,14 +634,17 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
   const previous = await (deps.previous ?? previousRun)();
   const previousCutoff = previous?.cutoff ?? null;
   const split = splitProblems(problems, previousCutoff);
-  const threshold = chooseThreshold(split.BENCHMARK);
+  const learning = await (deps.learning ?? readLearning)();
+  const outcomes: MethodOutcome[] = [...learning.outcomes];
+  const learned: MethodContext = { catalogue: learning.catalogue.length > 0 ? learning.catalogue : SEED_METHODS, outcomes };
+  const threshold = chooseThreshold(split.BENCHMARK, GENERAL_METHOD, learned);
 
   const readings: SetReading[] = [];
   const comparisons: BaselineComparison[] = [];
   const generalVerdicts: MethodVerdict[] = [];
   for (const set of ['BENCHMARK', 'HELD_OUT', 'NEW_HELD_OUT'] as const) {
     const ps = split[set];
-    const g = ps.map((p) => GENERAL_METHOD.run(p, threshold));
+    const g = ps.map((p) => GENERAL_METHOD.run(p, threshold, learned));
     const b = ps.map((p) => BASELINE_METHOD.run(p, threshold));
     generalVerdicts.push(...g);
     const gr = readSet(set, GENERAL_METHOD.key, ps, g);
@@ -519,20 +653,78 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
     comparisons.push(compareWithBaseline(gr, br));
   }
 
-  // The controller and provenance on real problems leave their own rows, through their own recorders.
-  const byId = new Map(problems.map((p) => [p.id, p]));
-  for (const v of generalVerdicts.slice(0, DEMONSTRATED_PER_RUN)) {
-    const projectId = byId.get(v.problemId)?.projectId ?? null;
-    if (v.decision) await (deps.recordDecision ?? recordControllerDecision)(v.decision, { projectId, caller: 'intelligence-sprint' });
-    if (v.provenance) {
+  // The controller's operational loop on real openings: track what production said about an earlier
+  // decision (a row, and a method outcome the library learns from), decide again with that result —
+  // a contradicted one changes the method — record the decision, and hand the next action to its owner.
+  const verdictOf = new Map(generalVerdicts.map((v) => [v.problemId, v]));
+  const history = await (deps.history ?? (() => readControllerHistory(SPRINT_CALLER)))();
+  const loop: SprintLoop = { resultsTracked: 0, decisions: 0, methodChanges: 0, capabilityGaps: 0, handOffs: {}, proceduresRecorded: 0, errors: [] };
+  for (const { problem: p, result } of chooseDemonstrated(problems, history)) {
+    const prior = history.get(p.id);
+    const projectId = p.projectId ?? null;
+    try {
+      if (result && prior) {
+        await (deps.recordResult ?? recordActionResult)(
+          result,
+          { problemId: p.id, method: prior.prior.methodId ? { methodId: prior.prior.methodId } : null },
+          profileOf(p).profile,
+          { projectId, caller: SPRINT_CALLER },
+        );
+        loop.resultsTracked += 1;
+        if (prior.prior.methodId && result.outcome !== 'INCONCLUSIVE') {
+          outcomes.push({
+            methodId: prior.prior.methodId,
+            problemId: p.id,
+            domain: profileOf(p).profile.domain,
+            features: profileOf(p).profile.features.map((f) => f.feature),
+            succeeded: result.outcome === 'CONFIRMED',
+            errorClass: result.outcome === 'CONTRADICTED' ? 'hypothesis-contradicted' : null,
+            at: result.at,
+          });
+        }
+      }
+      const snapshot = controllerSnapshotOf(p, {
+        ...learned,
+        prior: prior?.prior ?? null,
+        results: [...(prior?.results ?? []), ...(result ? [result] : [])],
+        now: now.toISOString(),
+      });
+      const { decision, handOff: handed } = await runController(
+        snapshot,
+        { projectId, actorRef: SPRINT_CALLER },
+        {
+          caller: SPRINT_CALLER,
+          projectId,
+          recordDecision: deps.recordDecision,
+          sendNeeds: deps.sendNeeds,
+        },
+      );
+      loop.decisions += 1;
+      if (decision.methodChange) loop.methodChanges += 1;
+      if (decision.capabilityGap) loop.capabilityGaps += 1;
+      loop.handOffs[handed.to] = (loop.handOffs[handed.to] ?? 0) + 1;
+    } catch (error) {
+      loop.errors.push(`${p.id}: ${String((error as Error).message ?? error).slice(0, 200)}`);
+    }
+    const v = verdictOf.get(p.id);
+    if (v?.provenance) {
       try {
-        await (deps.recordProvenance ?? recordNumberProvenance)(v.provenance, { projectId, caller: 'intelligence-sprint' });
+        await (deps.recordProvenance ?? recordNumberProvenance)(v.provenance, { projectId, caller: SPRINT_CALLER });
       } catch {
         // A record the toolkit refuses is a finding already counted in method quality, not a run failure.
       }
     }
   }
-
+  try {
+    loop.proceduresRecorded = (
+      await learnAndRecordProcedures(outcomes, learning.procedures, {
+        caller: SPRINT_CALLER,
+        recordProcedure: deps.recordProcedure ? async (p) => deps.recordProcedure!(p) : undefined,
+      })
+    ).length;
+  } catch (error) {
+    loop.errors.push(`procedures: ${String((error as Error).message ?? error).slice(0, 200)}`);
+  }
   // Held-out failure feeds the existing repair path, once per weakness family (registerDirected refreshes an open one).
   let repairCandidateId: string | null = null;
   const failed = comparisons.filter((c) => c.set !== 'BENCHMARK' && c.earned === false);
@@ -572,6 +764,7 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
     readings,
     comparisons: comparisons.map((c) => ({ ...c, general: { ...c.general }, baseline: { ...c.baseline } })),
     repairCandidateId,
+    loop,
     disclaimer: SPRINT_DISCLAIMER,
   };
   await (deps.record ?? recordImprovementEvent)({
@@ -585,6 +778,7 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
       sets: run.sets,
       readings: run.readings,
       comparisons: run.comparisons.map((c) => ({ set: c.set, earned: c.earned, statement: c.statement })),
+      loop: run.loop,
       disclaimer: run.disclaimer,
     },
   });

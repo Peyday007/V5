@@ -32,6 +32,7 @@
  * contest between the two leading hypotheses. An action whose answer cannot
  * change the decision is never chosen (§79).
  */
+import { getDb } from '../../db/database.ts';
 import { recordBinEvent } from '../../repos/bins.ts';
 import { informationValue, type InformationAction, type InformationInput } from '../quant/value.ts';
 import { sendNeeds, type Need, type NeedDelivery } from '../quant/needs.ts';
@@ -93,6 +94,8 @@ export interface ActionResult {
   outcome: 'CONFIRMED' | 'CONTRADICTED' | 'INCONCLUSIVE';
   evidence: string | null;
   at: string;
+  /** The `at` of the decision this result scores, so a result is tracked once against the decision it bears on. */
+  decisionAt?: string | null;
 }
 
 /** The decision the controller made last time, as recorded. */
@@ -433,6 +436,7 @@ export interface ControllerDeps {
   registerDirected?: (weakness: import('../../domain/improvement.ts').Weakness, now?: Date) => Promise<{ candidate: { id: string }; created: boolean }>;
   recordCapabilityGap?: typeof recordCapabilityGap;
   recordDeclaredMethod?: typeof recordDeclaredMethod;
+  recordDecision?: typeof recordControllerDecision;
 }
 
 /** Append the decision through the existing writer. */
@@ -450,7 +454,7 @@ export async function recordControllerDecision(decision: ControllerDecision, dep
 /** Track a result: one row, and one method outcome so the library learns from it. */
 export async function recordActionResult(
   result: ActionResult,
-  decision: Pick<ControllerDecision, 'problemId' | 'method'>,
+  decision: { problemId: string; method: Pick<MethodJudgment, 'methodId'> | null },
   problem: ProblemProfile,
   deps: ControllerDeps = {},
 ): Promise<void> {
@@ -460,7 +464,7 @@ export async function recordActionResult(
     workloadClass: deps.caller ?? 'reasoning-controller',
     outcome: result.outcome,
     reason: `${result.actionKey} → ${result.hypothesisId}`.slice(0, 480),
-    measures: { result, problemId: decision.problemId, methodId: decision.method?.methodId ?? null },
+    measures: { result, problemId: decision.problemId, methodId: decision.method?.methodId ?? null, decisionAt: result.decisionAt ?? null },
   });
   if (decision.method && result.outcome !== 'INCONCLUSIVE') {
     await recordMethodOutcome(
@@ -548,7 +552,88 @@ export async function runController(
 ): Promise<{ decision: ControllerDecision; handOff: HandOff }> {
   const decision = decideNext(snapshot);
   const rowDeps = { ...deps, projectId: deps.projectId ?? ctx.projectId };
-  await recordControllerDecision(decision, rowDeps);
+  await (deps.recordDecision ?? recordControllerDecision)(decision, rowDeps);
+  // A method a result invalidated names the capability that was absent, whatever the next action is:
+  // the gap is the library's to obtain or derive, not a request for more facts about this one case.
+  if (decision.methodChange && decision.capabilityGap && decision.next?.kind !== 'METHOD_GAP') {
+    const gapDeps = { record: rowDeps.record, projectId: rowDeps.projectId ?? null, caller: rowDeps.caller ?? 'reasoning-controller' };
+    await (deps.recordCapabilityGap ?? recordCapabilityGap)(decision.capabilityGap, gapDeps);
+    if (decision.capabilityGap.remedy === 'DERIVE') await (deps.recordDeclaredMethod ?? recordDeclaredMethod)(decision.capabilityGap.proposedMethod, gapDeps);
+  }
   const handed = await handOff(decision, ctx, rowDeps);
   return { decision, handOff: handed };
+}
+
+/* ------------------------------------------------------------------------- */
+/* History: the controller's own rows, read back                              */
+/* ------------------------------------------------------------------------- */
+
+/** One problem's latest recorded decision, and the results tracked against it since. */
+export interface ControllerHistory {
+  problemId: string;
+  decidedAt: string;
+  prior: PriorDecision;
+  /** Results recorded after the latest decision: the ones the next decision has not yet consumed. */
+  results: ActionResult[];
+}
+
+function isActionResult(v: unknown): v is ActionResult {
+  if (!v || typeof v !== 'object') return false;
+  const r = v as Record<string, unknown>;
+  return typeof r['actionKey'] === 'string' && typeof r['hypothesisId'] === 'string' && typeof r['outcome'] === 'string' && typeof r['at'] === 'string';
+}
+
+/**
+ * Fold decision and result rows, oldest first, into each problem's history. A
+ * decision resets the pending results, because the decision that followed a
+ * result already consumed it. Pure, so the fold is testable without rows.
+ */
+export function foldControllerHistory(
+  rows: readonly { eventType: string; measures: Record<string, unknown> }[],
+): Map<string, ControllerHistory> {
+  const out = new Map<string, ControllerHistory>();
+  for (const row of rows) {
+    if (row.eventType === CONTROLLER_EVENTS.DECISION) {
+      const d = row.measures['decision'] as Partial<ControllerDecision> | undefined;
+      if (!d || typeof d.problemId !== 'string' || typeof d.at !== 'string') continue;
+      out.set(d.problemId, {
+        problemId: d.problemId,
+        decidedAt: d.at,
+        prior: {
+          methodId: d.method?.methodId ?? null,
+          representation: d.representation?.id ?? null,
+          leadingHypothesis: d.leadingHypothesis ?? null,
+          excludedMethods: Array.isArray(d.excludedMethods) ? d.excludedMethods.filter((m): m is string => typeof m === 'string') : [],
+        },
+        results: [],
+      });
+    } else if (row.eventType === CONTROLLER_EVENTS.RESULT) {
+      const problemId = row.measures['problemId'];
+      const result = row.measures['result'];
+      if (typeof problemId !== 'string' || !isActionResult(result)) continue;
+      const h = out.get(problemId);
+      if (h) h.results.push(result);
+    }
+  }
+  return out;
+}
+
+/** Read one caller's controller history from `bin_events`, the rows the existing writer appended. */
+export async function readControllerHistory(caller: string, limit = 5000): Promise<Map<string, ControllerHistory>> {
+  const rows = await getDb().all<{ event_type: string; measures: string | null }>(
+    `SELECT event_type, measures, at, id FROM bin_events
+      WHERE workload_class = ? AND event_type IN (?, ?)
+      ORDER BY at DESC, id DESC LIMIT ?`,
+    [caller, CONTROLLER_EVENTS.DECISION, CONTROLLER_EVENTS.RESULT, Math.max(1, Math.floor(limit))],
+  );
+  const parsed: { eventType: string; measures: Record<string, unknown> }[] = [];
+  for (const row of rows.reverse()) {
+    try {
+      const m: unknown = row.measures ? JSON.parse(row.measures) : null;
+      if (m && typeof m === 'object') parsed.push({ eventType: row.event_type, measures: m as Record<string, unknown> });
+    } catch {
+      // A row that does not parse is skipped, never guessed.
+    }
+  }
+  return foldControllerHistory(parsed);
 }
