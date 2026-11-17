@@ -157,7 +157,7 @@ export function failureClass(reason: string | null): string {
    * its stated reason is the class: the boilerplate before it filled all 110
    * characters, so runpod-report showed 20 empty lists as "dropped {…}" (W13).
    */
-  const none = /claim\(s\) offered, dropped \{\} from \d+ source\(s\); the model listed none because: (.*)$/s.exec(why);
+  const none = /claim\(s\) offered, dropped \{\} from \d+ source\(s\)(?: \{[^}]*\})?; the model listed none because: (.*)$/s.exec(why);
   if (none) return `listed no claims because: ${none[1]!.replace(/\d+/g, 'N')}`.slice(0, 110).trim();
   if (/ 0 claim\(s\) offered, dropped \{\}/.test(why)) return 'listed no claims (no reason given)';
   return why

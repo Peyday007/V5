@@ -60,7 +60,7 @@
  *   npm run admin -- cash seed-industry <project> "<subject name>" --admin someone@example.com
  *   npm run admin -- cash constraints <project> ["<additions, empty clears>"] --admin someone@example.com
  */
-import { freeLaneReading, freeLaneThroughput } from '../server/services/freeLane/coverage.ts';
+import { fragmentYieldByKind, freeLaneReading, freeLaneThroughput } from '../server/services/freeLane/coverage.ts';
 import { freeLaneTick } from '../server/services/freeLane/worker.ts';
 import { accessWindow, compareReaders, failedUrlSample, laneWindow } from '../server/services/sources/accessReport.ts';
 import { binPurposeReading, brainOnlyReading, setBrainOnlyMode } from '../server/services/bins/brainOnly.ts';
@@ -1457,6 +1457,13 @@ async function main(): Promise<void> {
       console.log(`  claims            ${reading.claimsAccepted} accepted of ${reading.claimsSubmitted} submitted by free workers`);
       console.log(`  packets filed     ${reading.documentsFiled}`);
       for (const failure of reading.recentFailures) console.log(`  failed            ${failure}`);
+      // W13: fragments by kind (the packet gap template against the rest), and whether they reach an accepted claim.
+      for (const k of await fragmentYieldByKind(new Date(Date.now() - 86_400_000).toISOString())) {
+        console.log(
+          `  fragment yield    ${k.kind.padEnd(5)} worked=${k.fragments} with an accepted claim=${k.yielded} ` +
+            `accepted claims by page class ${JSON.stringify(k.acceptedByHost)} free-lane outcomes ${JSON.stringify(k.outcomes)} (24h)`,
+        );
+      }
       // What hands work back without spending it: invisible above, and what kept audits cycling.
       const released = await getDb().all<{ at: string; workload_class: string; reason: string }>(
         `SELECT at, workload_class, reason FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND outcome = 'RELEASED_TRANSIENT'

@@ -88,6 +88,9 @@ describe('why a goal’s research is not producing openings its plan can use', (
     const head = "model runpod/openai/gpt-oss-120b: the answer did not survive Brain's own checks: 0 claim(s) offered, dropped {} from 5 source(s); ";
     expect(failureClass(`${head}the reply was {"claims":[]}`)).toBe('listed no claims (no reason given)');
     expect(failureClass(`${head}the model listed none because: all 5 pages are vendor pages`)).toBe('listed no claims because: all N pages are vendor pages');
+    const classed = head.replace('source(s); ', 'source(s) {"commercial":5}; ');
+    expect(failureClass(`${classed}the model listed none because: all 5 pages are vendor pages`)).toBe('listed no claims because: all N pages are vendor pages');
+    expect(failureClass(`${classed}the reply was {"claims":[]}`)).toBe('listed no claims (no reason given)');
     expect(
       failureClass("model auto/best-coding: the answer did not survive Brain's own checks: 3 claim(s) offered, dropped {\"citation not readable as sentence numbers\":3}"),
     ).toBe("the answer did not survive Brain's own checks: N claim(s) offered, dropped {…}");

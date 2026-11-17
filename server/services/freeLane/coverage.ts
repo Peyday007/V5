@@ -23,7 +23,7 @@ import { laneConfig } from '../cheap/lane.ts';
 import { recordBinEvent } from '../../repos/bins.ts';
 import { redactCredentials } from '../effects/failureDetail.ts';
 import { failureClass } from '../goals/researchYield.ts';
-import { FREE_LANE_WORK_TYPES, answerRows, answerTally, isFailing, routeHold } from './worker.ts';
+import { FREE_LANE_WORK_TYPES, answerRows, answerTally, hostClass, isFailing, routeHold } from './worker.ts';
 import { readStageCapacity, recordedCause, stageCapacityLines, type RecordedStageCapacity } from './stageCapacity.ts';
 
 export interface LaneCoverage {
@@ -497,4 +497,73 @@ export async function freeLaneThroughput(now = new Date()): Promise<{
     last10Min: { completed: completed10, perMinute: Number((count(ten, 'SUBMITTED') / 10).toFixed(2)) },
     recentScaling: scaling.map((s) => `${s.at} ${s.workload_class ?? '?'} ${s.reason ?? ''}`),
   };
+}
+
+/** Whether a fragment is a packet's coverage repair (`research/packet.ts` planCoverageFragments): the gap template. Pure. */
+export function isGapFragment(fragmentKey: string): boolean {
+  return fragmentKey.startsWith('coverage-');
+}
+
+export interface FragmentYieldKind {
+  kind: 'gap' | 'other';
+  /** Fragments the free lane worked in the window. */
+  fragments: number;
+  /** Of those, fragments holding at least one accepted claim, from any worker. */
+  yielded: number;
+  /** Accepted claims on them, by the class of page they cite. */
+  acceptedByHost: Record<string, number>;
+  /** Free-lane outcomes on them, by outcome. */
+  outcomes: Record<string, number>;
+}
+
+/**
+ * Fragments the free lane worked since `since`, the gap template against every
+ * other kind: how many reached an accepted claim, and from what class of page.
+ * Read-only. W13, 2026-11-17: gpt-oss-120b listed no claims on most of its
+ * fragments; whether that is a template asking for evidence search does not
+ * supply is this reading's question.
+ */
+export async function fragmentYieldByKind(since: string): Promise<FragmentYieldKind[]> {
+  const db = getDb();
+  const worked = await db.all<{ id: string; fragment_key: string; outcome: string; n: number | string }>(
+    `SELECT f.id, f.fragment_key, e.outcome, COUNT(*) AS n FROM bin_events e
+       JOIN work_items w ON w.id = e.work_item_id
+       JOIN research_fragments f ON f.id = w.fragment_id
+      WHERE e.event_type = 'FREE_LANE_ITEM' AND w.work_type = 'RESEARCH_FRAGMENT' AND e.at >= ?
+      GROUP BY f.id, f.fragment_key, e.outcome`,
+    [since],
+  );
+  const kinds = new Map<'gap' | 'other', FragmentYieldKind>();
+  const kindOf = new Map<string, 'gap' | 'other'>();
+  const entry = (kind: 'gap' | 'other'): FragmentYieldKind => {
+    const found = kinds.get(kind) ?? { kind, fragments: 0, yielded: 0, acceptedByHost: {}, outcomes: {} };
+    kinds.set(kind, found);
+    return found;
+  };
+  for (const row of worked) {
+    const kind = isGapFragment(row.fragment_key) ? 'gap' : 'other';
+    const e = entry(kind);
+    if (!kindOf.has(row.id)) e.fragments += 1;
+    kindOf.set(row.id, kind);
+    e.outcomes[row.outcome] = (e.outcomes[row.outcome] ?? 0) + Number(row.n);
+  }
+  const ids = [...kindOf.keys()];
+  const yielded = new Set<string>();
+  for (let i = 0; i < ids.length; i += 200) {
+    const chunk = ids.slice(i, i + 200);
+    const claims = await db.all<{ fragment_id: string; source_url: string | null }>(
+      `SELECT fragment_id, source_url FROM research_claims WHERE accepted = 1 AND fragment_id IN (${chunk.map(() => '?').join(', ')})`,
+      chunk,
+    );
+    for (const c of claims) {
+      const kind = kindOf.get(c.fragment_id);
+      if (!kind) continue;
+      const e = entry(kind);
+      if (!yielded.has(c.fragment_id)) e.yielded += 1;
+      yielded.add(c.fragment_id);
+      const cls = hostClass(c.source_url ?? '');
+      e.acceptedByHost[cls] = (e.acceptedByHost[cls] ?? 0) + 1;
+    }
+  }
+  return [...kinds.values()].sort((a, b) => a.kind.localeCompare(b.kind));
 }
