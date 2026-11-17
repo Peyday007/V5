@@ -1227,6 +1227,120 @@ export interface RecordedStageCapacity {
   report: StageCapacityReport | null;
   queuedNow: number | null;
   queueAdvance: QueueAdvance | null;
+  /**
+   * The latest decisions the readings recorded on the same tick reached
+   * (CAP-19-5 CAPACITY_CONTRIBUTION, CAP-25-2 STAGE_LIMIT, CAP-21-7
+   * ACQUISITION_MEASURES), each only while current. `gateGrowth` acts on them.
+   */
+  decisions?: CapacityDecisions;
+}
+
+/** The parts of the follower readings the growth gate acts on; each is null when absent or stale. */
+export interface CapacityDecisions {
+  contribution: {
+    at: string;
+    decisions: { kind: string; id: string; verdict: string; basis: string; recommendation: string }[];
+  } | null;
+  stageLimit: { at: string; kind: string; basis: string; remedy: string; gate: string; gateReason: string } | null;
+  acquisition: { at: string; recommendations: { resource: string; action: string; reason: string }[] } | null;
+}
+
+/** ACQUISITION_MEASURES is a daily reading; it is current for one window plus the hourly staleness bound. */
+export const ACQUISITION_DECISION_STALE_MS = 24 * 3_600_000 + STAGE_CAPACITY_STALE_MS;
+
+/** Bottleneck kinds whose remedy is not more model slots (CAP-25-2's remedies). */
+const NOT_RELIEVED_BY_MODEL_SLOTS = new Set(['SOURCE_ACCESS', 'PARSING', 'RECONCILIATION', 'DATABASE', 'APP_CPU', 'COMMERCIAL_RELEVANCE']);
+
+/**
+ * Why the recorded follower decisions refuse one model's growth past proven
+ * capacity, or null when none does. Pure; read by `gateGrowth`.
+ *
+ *  - CAPACITY_CONTRIBUTION: the model's own WORKER or MODEL_ROUTE component
+ *    judged REPAIR, RETIRE, or provisioned-but-not-productive is not grown —
+ *    a failing provider is repaired, not out-scaled, and provisioned
+ *    concurrency is not throughput.
+ *  - STAGE_LIMIT: a limiting stage whose remedy is not model capacity (access,
+ *    parsing, reconciliation, database, CPU, commercial relevance) is not
+ *    relieved by more slots; and a GPU — hardware spend — is not grown while
+ *    the pre-spend gate refuses or a measured increase earned nothing.
+ *  - ACQUISITION_MEASURES: a REPAIR on the resource class these slots are
+ *    (LLM_WORKERS, or GPU) is a fault capacity cannot fix.
+ */
+export function decisionHold(input: { model: string; gpu: boolean; decisions: CapacityDecisions | null | undefined }): string | null {
+  const d = input.decisions;
+  if (!d) return null;
+  const own = d.contribution?.decisions.filter((one) => one.id === input.model && (one.kind === 'WORKER' || one.kind === 'MODEL_ROUTE')) ?? [];
+  const repair = own.find((one) => one.verdict === 'REPAIR');
+  if (repair) return `contribution reading (${d.contribution!.at}) says repair ${repair.kind.toLowerCase()} ${input.model} first: ${repair.basis}`;
+  const retire = own.find((one) => one.verdict === 'RETIRE');
+  if (retire) return `contribution reading (${d.contribution!.at}) says ${input.model} produced no accepted output: ${retire.basis}`;
+  const idle = own.find((one) => one.verdict === 'HOLD' && one.basis === 'PROVISIONED_NOT_PRODUCTIVE');
+  if (idle) return `contribution reading (${d.contribution!.at}): ${input.model}'s provisioned slots accepted nothing; provisioned concurrency is not throughput`;
+  if (d.stageLimit && NOT_RELIEVED_BY_MODEL_SLOTS.has(d.stageLimit.kind)) {
+    return `stage-limit reading (${d.stageLimit.at}) names ${d.stageLimit.kind} the limit (${d.stageLimit.basis}): ${d.stageLimit.remedy}`;
+  }
+  if (input.gpu && d.stageLimit && (d.stageLimit.gate.startsWith('REFUSE') || d.stageLimit.gate === 'NO_GAIN_REVERT')) {
+    return `pre-spend gate (${d.stageLimit.at}) ${d.stageLimit.gate}: ${d.stageLimit.gateReason}`;
+  }
+  const resource = input.gpu ? 'GPU' : 'LLM_WORKERS';
+  const fault = d.acquisition?.recommendations.find((one) => one.resource === resource && one.action === 'REPAIR');
+  if (fault) return `acquisition reading (${d.acquisition!.at}) says repair ${resource}: ${fault.reason}`;
+  return null;
+}
+
+const asRecord = (value: unknown): Record<string, unknown> | null =>
+  value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+const str = (value: unknown): string => (typeof value === 'string' ? value : '');
+
+/** The latest current row of one follower event, parsed; null when none, stale, or unreadable. */
+async function latestFollower(eventType: string, now: number, staleMs: number): Promise<{ at: string; measures: Record<string, unknown> } | null> {
+  const row = await getDb().get<{ at: string; measures: string | null }>(
+    'SELECT at, measures FROM bin_events WHERE event_type = ? ORDER BY at DESC, id DESC LIMIT 1',
+    [eventType],
+  );
+  if (!row || now - Date.parse(row.at) > staleMs) return null;
+  try {
+    const measures = asRecord(JSON.parse(row.measures ?? 'null'));
+    return measures ? { at: row.at, measures } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The follower decisions `gateGrowth` acts on, read from their latest current rows. Never throws. */
+export async function readCapacityDecisions(now = Date.now()): Promise<CapacityDecisions> {
+  const safe = async <T>(read: () => Promise<T | null>): Promise<T | null> => {
+    try {
+      return await read();
+    } catch {
+      return null;
+    }
+  };
+  const contribution = await safe(async () => {
+    const row = await latestFollower('CAPACITY_CONTRIBUTION', now, STAGE_CAPACITY_STALE_MS);
+    if (!row || !Array.isArray(row.measures['decisions'])) return null;
+    const decisions = (row.measures['decisions'] as unknown[]).map(asRecord).filter((one): one is Record<string, unknown> => !!one).map((one) => ({
+      kind: str(one['kind']), id: str(one['id']), verdict: str(one['verdict']), basis: str(one['basis']), recommendation: str(one['recommendation']),
+    }));
+    return { at: row.at, decisions };
+  });
+  const stageLimit = await safe(async () => {
+    const row = await latestFollower('STAGE_LIMIT', now, STAGE_CAPACITY_STALE_MS);
+    const limit = asRecord(row?.measures['limit']);
+    if (!row || !limit) return null;
+    const gate = asRecord(row.measures['gate']);
+    return { at: row.at, kind: str(limit['kind']), basis: str(limit['basis']), remedy: str(limit['remedy']), gate: str(gate?.['decision']), gateReason: str(gate?.['reason']) };
+  });
+  const acquisition = await safe(async () => {
+    const row = await latestFollower('ACQUISITION_MEASURES', now, ACQUISITION_DECISION_STALE_MS);
+    const constraint = asRecord(row?.measures['constraint']);
+    if (!row || !constraint || !Array.isArray(constraint['recommendations'])) return null;
+    const recommendations = (constraint['recommendations'] as unknown[]).map(asRecord).filter((one): one is Record<string, unknown> => !!one).map((one) => ({
+      resource: str(one['resource']), action: str(one['action']), reason: str(one['reason']),
+    }));
+    return { at: row.at, recommendations };
+  });
+  return { contribution, stageLimit, acquisition };
 }
 
 /**
@@ -1260,6 +1374,7 @@ export async function readStageCapacity(now = Date.now()): Promise<RecordedStage
     report,
     queuedNow: measures && typeof measures['queuedNow'] === 'number' ? measures['queuedNow'] : null,
     queueAdvance: (measures?.['queueAdvance'] as QueueAdvance | undefined) ?? null,
+    decisions: await readCapacityDecisions(now),
   };
 }
 
@@ -1396,6 +1511,9 @@ export function gateGrowth(input: {
   if (failing && failing.route === input.model && !input.answering) {
     return hold(`restore model route ${failing.route} first (${failing.cause}, ${failing.failures} failure(s))`);
   }
+  // What the contribution, stage-limit and acquisition readings decided (CAP-19-5, CAP-25-2, CAP-21-7).
+  const decided = decisionHold({ model: input.model, gpu: input.gpu, decisions: recorded.decisions });
+  if (decided && !(input.answering && /^contribution reading .* says repair/.test(decided))) return hold(decided);
   const constrained = report.constrained;
   const laneIds = LANE_STAGES().map((s) => s.id);
   if (!constrained.stage) return hold('no measured stage has work waiting');

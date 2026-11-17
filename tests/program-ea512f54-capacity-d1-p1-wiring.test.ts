@@ -8,8 +8,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import {
+  ACQUISITION_DECISION_STALE_MS,
   CAPACITY_FOLLOWER_EVENTS,
   STAGE_CAPACITY_EVENT,
+  STAGE_CAPACITY_STALE_MS,
+  decisionHold,
+  gateGrowth,
+  readCapacityDecisions,
+  readStageCapacity,
+  type CapacityDecisions,
+  type RecordedStageCapacity,
+  type StageCapacityReport,
   defaultCapacityFollowers,
   recordStageCapacity,
   runCapacityFollowers,
@@ -19,6 +28,7 @@ import { capacityFollowerLines, readCapacityFollowers, stageCapacityReport } fro
 import { CAPACITY_CONTRIBUTION_EVENT } from '../server/services/freeLane/contribution.ts';
 import { STAGE_LIMIT_EVENT } from '../server/services/freeLane/stageLimit.ts';
 import { ACQUISITION_MEASURES_EVENT } from '../server/services/feeds/acquisitionMeasures.ts';
+import { recordBinEvent } from '../server/repos/bins.ts';
 
 beforeEach(async () => {
   await freshProject();
@@ -98,5 +108,102 @@ describe('the report CLI prints the three readings', () => {
     expect(typeof json.at).toBe('string');
     expect(json.followers.map((f) => f.event)).toEqual([...CAPACITY_FOLLOWER_EVENTS]);
     for (const f of json.followers) expect(f.at).not.toBeNull();
+  });
+});
+
+/*
+ * F1 (review round 1): the decisions were written and only printed. The free
+ * lane's capacity controller (`capacity.ts` controlStep) reads the recorded
+ * stage capacity through `readStageCapacity` and asks `gateGrowth` before any
+ * growth past proven capacity; both now carry and act on the three readings.
+ */
+describe('the capacity controller acts on the recorded decisions', () => {
+  const none: CapacityDecisions = { contribution: null, stageLimit: null, acquisition: null };
+  // A current reading that, on its own, allows a GPU slot to grow: a lane stage is constrained with a measured gain.
+  const allowing = (decisions: CapacityDecisions): RecordedStageCapacity => ({
+    at: '2026-11-17T12:00:00.000Z', outcome: 'MEASURED', reason: 'r', ageMinutes: 5, stale: false, queuedNow: 3, queueAdvance: null,
+    report: {
+      windowHours: 6, since: '2026-11-17T06:00:00.000Z', stages: [],
+      diagnosis: { routes: [], gpu: { samples: {}, startFailures: 0, lastStartFailure: null, notRunning: false }, primary: null, restored: [] },
+      constrained: { stage: 'model-interpretation', expectedGain: { measured: true, value: { acceptedFactsPerHour: 4, dollars: 0.5 } } },
+    } as unknown as StageCapacityReport,
+    decisions,
+  });
+  const model = 'runpod/Org/A';
+  const grow = (decisions: CapacityDecisions, answering = false) =>
+    gateGrowth({ model, gpu: true, current: 2, stableHigh: 2, proposed: 4, recorded: allowing(decisions), answering });
+  const contribution = (verdict: string, basis: string, id = model): CapacityDecisions => ({
+    ...none, contribution: { at: 't', decisions: [{ kind: 'MODEL_ROUTE', id, verdict, basis, recommendation: 'r' }] },
+  });
+
+  it('grows when no reading objects', () => {
+    expect(grow(none)).toMatchObject({ held: false, target: 4 });
+  });
+
+  it('holds growth of a component the contribution reading says to repair, retire, or that holds idle slots', () => {
+    expect(grow(contribution('REPAIR', 'FAILING:provider availability'))).toMatchObject({ held: true, target: 2 });
+    expect(grow(contribution('RETIRE', 'COST_WITHOUT_OUTPUT')).reason).toContain('no accepted output');
+    expect(grow(contribution('HOLD', 'PROVISIONED_NOT_PRODUCTIVE')).reason).toContain('provisioned concurrency is not throughput');
+    // Another component's verdict, or a verdict that is not a hold, does not bind this one.
+    expect(grow(contribution('REPAIR', 'FAILING:credentials', 'brain-b'))).toMatchObject({ held: false });
+    expect(grow(contribution('SCALE', 'MEASURED_SATURATION'))).toMatchObject({ held: false });
+    // A route that has answered since the reading is restored, as for the stage reading's own failing route.
+    expect(grow(contribution('REPAIR', 'FAILING:provider availability'), true)).toMatchObject({ held: false });
+  });
+
+  it('holds growth while the stage-limit reading names a limit more model slots do not relieve, or its spend gate refuses', () => {
+    const limit = (kind: string, gate = 'ALLOW_THEN_MEASURE'): CapacityDecisions => ({
+      ...none, stageLimit: { at: 't', kind, basis: 'b', remedy: 'Improve access or source selection.', gate, gateReason: 'Remove the reversible blockage first.' },
+    });
+    for (const kind of ['SOURCE_ACCESS', 'PARSING', 'RECONCILIATION', 'DATABASE', 'APP_CPU', 'COMMERCIAL_RELEVANCE']) {
+      expect(grow(limit(kind)), kind).toMatchObject({ held: true, target: 2 });
+    }
+    for (const kind of ['MODEL_INTERPRETATION', 'VERIFICATION', 'NONE']) expect(grow(limit(kind)), kind).toMatchObject({ held: false });
+    expect(grow(limit('NONE', 'REFUSE_REMOVE_BLOCKAGE_FIRST')).reason).toContain('pre-spend gate');
+    expect(grow(limit('NONE', 'NO_GAIN_REVERT'))).toMatchObject({ held: true });
+    // The spend gate binds hardware: a free provider's slot is not hardware spend.
+    expect(decisionHold({ model: 'brain-a', gpu: false, decisions: limit('NONE', 'REFUSE_REMOVE_BLOCKAGE_FIRST') })).toBeNull();
+  });
+
+  it('holds growth of the resource class the acquisition reading says to repair', () => {
+    const acq = (resource: string, action: string): CapacityDecisions => ({ ...none, acquisition: { at: 't', recommendations: [{ resource, action, reason: 'outage in front of it' }] } });
+    expect(grow(acq('GPU', 'REPAIR'))).toMatchObject({ held: true });
+    expect(grow(acq('LLM_WORKERS', 'REPAIR'))).toMatchObject({ held: false });
+    expect(decisionHold({ model: 'brain-a', gpu: false, decisions: acq('LLM_WORKERS', 'REPAIR') })).toContain('repair LLM_WORKERS');
+    expect(grow(acq('GPU', 'INCREASE'))).toMatchObject({ held: false });
+  });
+
+  it('readStageCapacity carries the current decisions from their real rows, and drops stale ones', async () => {
+    await recordStageCapacity({ hours: 1, followers: [] });
+    await recordBinEvent({
+      eventType: CAPACITY_CONTRIBUTION_EVENT, workloadClass: 'capacity', outcome: 'REPAIR_FIRST', reason: 'r', evidenceClass: 'MEASURED',
+      measures: { decisions: [{ kind: 'MODEL_ROUTE', id: model, verdict: 'REPAIR', basis: 'FAILING:broken GPU', recommendation: 'Repair it.' }] },
+    });
+    await recordBinEvent({
+      eventType: STAGE_LIMIT_EVENT, workloadClass: 'capacity', outcome: 'PARSING', reason: 'r', evidenceClass: 'MEASURED',
+      measures: { limit: { kind: 'PARSING', basis: '10% parsed', remedy: 'Add efficient code workers for parsing.' }, gate: { decision: 'ALLOW_THEN_MEASURE', reason: 'ok' } },
+    });
+    await recordBinEvent({
+      eventType: ACQUISITION_MEASURES_EVENT, workloadClass: 'acquisition', outcome: 'MEASURED', reason: 'r', evidenceClass: 'MEASURED',
+      measures: { constraint: { recommendations: [{ resource: 'GPU', action: 'REPAIR', reason: 'outage' }] } },
+    });
+    const recorded = await readStageCapacity();
+    expect(recorded?.decisions?.contribution?.decisions).toEqual([{ kind: 'MODEL_ROUTE', id: model, verdict: 'REPAIR', basis: 'FAILING:broken GPU', recommendation: 'Repair it.' }]);
+    expect(recorded?.decisions?.stageLimit).toMatchObject({ kind: 'PARSING', gate: 'ALLOW_THEN_MEASURE' });
+    expect(recorded?.decisions?.acquisition?.recommendations).toEqual([{ resource: 'GPU', action: 'REPAIR', reason: 'outage' }]);
+    expect(decisionHold({ model, gpu: true, decisions: recorded!.decisions })).toContain('repair model_route');
+
+    const later = Date.now() + STAGE_CAPACITY_STALE_MS + 60_000;
+    const aged = await readCapacityDecisions(later);
+    expect(aged.contribution).toBeNull();
+    expect(aged.stageLimit).toBeNull();
+    expect(aged.acquisition).not.toBeNull();
+    expect((await readCapacityDecisions(Date.now() + ACQUISITION_DECISION_STALE_MS + 60_000)).acquisition).toBeNull();
+  });
+
+  it('an absent or unreadable follower row decides nothing', async () => {
+    expect(await readCapacityDecisions()).toEqual(none);
+    await recordBinEvent({ eventType: STAGE_LIMIT_EVENT, workloadClass: 'capacity', outcome: 'X', reason: 'r', evidenceClass: 'MEASURED', measures: { nothing: true } });
+    expect((await readCapacityDecisions()).stageLimit).toBeNull();
   });
 });
