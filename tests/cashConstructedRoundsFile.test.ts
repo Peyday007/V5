@@ -15,6 +15,7 @@
  * answer the question now asks for is filed and counted — also on a round that
  * closed ABANDONED first — and that a payer-less pattern still files nothing.
  */
+import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
@@ -179,5 +180,25 @@ describe('a constructed round asks a repeating-buyer pattern to say who pays (CO
     await p.end('DONE', 'NEEDS_HUMAN');
     await harvest({ projectId });
     expect(await settled(round.bucketId)).toEqual([['ABANDONED', 1]]);
+  });
+});
+
+describe('each question sentence keeps its own documentation (R1-F1)', () => {
+  /** The doc comment immediately above `export const NAME`, or null when none is directly attached. */
+  const docOf = (source: string, name: string): string | null => {
+    const at = source.indexOf(`export const ${name} =`);
+    const before = source.slice(0, at).trimEnd();
+    if (at < 0 || !before.endsWith('*/')) return null;
+    return before.slice(before.lastIndexOf('/**'));
+  };
+  it('OPENING_SENTENCE and PATTERN_PAYER_SENTENCE are each documented by their own comment, and no comment is left detached', () => {
+    const source = readFileSync(new URL('../server/services/cash/construct.ts', import.meta.url), 'utf8');
+    expect(docOf(source, 'OPENING_SENTENCE')).toMatch(/How a constructed round's answer becomes an opening/);
+    expect(docOf(source, 'PATTERN_PAYER_SENTENCE')).toMatch(/A repeating-buyer pattern says who pays/);
+    // Neither comment has another doc block stacked directly above it, which would document nothing.
+    for (const name of ['OPENING_SENTENCE', 'PATTERN_PAYER_SENTENCE']) {
+      const doc = docOf(source, name)!;
+      expect(source.slice(0, source.indexOf(doc)).trimEnd().endsWith('*/')).toBe(false);
+    }
   });
 });

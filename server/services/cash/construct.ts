@@ -2070,21 +2070,6 @@ export function positionDecomposition(questions: readonly PositionResearchQuesti
 }
 
 /**
- * How a constructed round's answer becomes an opening, said in the question.
- *
- * The harvest files only a claim whose reader set `opportunity_signal`
- * (`signalledClaims`), and the question used to say "report an opening" without
- * naming the field. Production, 2026-11-02: ten constructed rounds finished
- * with accepted claims — orc_d083edfc645c47e6b99d's fragment was ACCEPTED with
- * a demand_pattern claim and two economics claims — and every one read
- * "found 0", because a constructed arrangement is not a published opening and
- * the profile asks for a signal only on "a concrete opening". The worker still
- * decides whether a claim is one; this only names the field and the three
- * kinds a constructed design can be. It lowers no bar: a signalled claim passes
- * the same gate, and the harvested piece starts as evidence and is qualified
- * like any other.
- */
-/**
  * A repeating-buyer pattern says who pays, in its own sentence
  * (CAPABILITY:GOAL_PLAN.CONSTRUCTION.ROUNDS_FILE, 2026-11-17).
  *
@@ -2108,6 +2093,21 @@ export const PATTERN_PAYER_SENTENCE =
   '(for example "Independent dental clinics pay outside firms USD 300 per month for appointment reminders"), ' +
   'not only list the examples; a pattern that names no payer is context, not an opening. ';
 
+/**
+ * How a constructed round's answer becomes an opening, said in the question.
+ *
+ * The harvest files only a claim whose reader set `opportunity_signal`
+ * (`signalledClaims`), and the question used to say "report an opening" without
+ * naming the field. Production, 2026-11-02: ten constructed rounds finished
+ * with accepted claims — orc_d083edfc645c47e6b99d's fragment was ACCEPTED with
+ * a demand_pattern claim and two economics claims — and every one read
+ * "found 0", because a constructed arrangement is not a published opening and
+ * the profile asks for a signal only on "a concrete opening". The worker still
+ * decides whether a claim is one; this only names the field and the three
+ * kinds a constructed design can be. It lowers no bar: a signalled claim passes
+ * the same gate, and the harvested piece starts as evidence and is qualified
+ * like any other.
+ */
 export const OPENING_SENTENCE =
   'Report an opening only where a source shows a payer, a price and a published way to reach them, ' +
   'and report it by setting opportunity_signal on the claim that names those buyers: ' +
