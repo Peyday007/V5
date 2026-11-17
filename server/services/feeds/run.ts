@@ -50,8 +50,8 @@ import { FEED_SOURCES, pullUrl, type FeedSource } from './sources.ts';
 import { FEED_SHORTLIST_BUCKET } from './bucket.ts';
 import { SITE_SOURCE } from './sites.ts';
 import { CODE_SIGNAL_SOURCE, coveredItems, detectionsForLeads } from './detectors.ts';
-import { EXTRACTOR_VERSION, extractItem, extractItems, MODEL_BATCH_SIZE, type ExtractableItem, type ExtractedFact } from './extract.ts';
-import { commitReadings, planDelta, readDeltaIndex, recordIdentity, type DeltaIndex, type DeltaPlan, type DeltaStatus, type RecordReading } from '../knowledge/delta.ts';
+import { EXTRACTOR_VERSION, extractItem, extractItems, MODEL_BATCH_SIZE, recomputeAffected, type ExtractableItem, type ExtractedFact } from './extract.ts';
+import { commitReadings, fingerprintOf, planDelta, readDeltaIndex, recordIdentity, type DeltaIndex, type DeltaPlan, type DeltaStatus, type RecordReading } from '../knowledge/delta.ts';
 import { resolveIdentities, type IdentityCollision, type IdentityLink, type IdentityRecord } from '../knowledge/identity.ts';
 import { selectForDeepening, type DeepeningCandidate, type DeepeningDecision } from '../knowledge/deepening.ts';
 import { planProcessing, type ProcessingPlan, type RouteEvidence } from '../knowledge/processingGraph.ts';
@@ -963,6 +963,8 @@ export interface ExtractionDelta {
   reparsedItems: string[];
   /** Fact keys recomputed this pass: what the previous versions of changed records produced, plus what was read now. */
   recomputedKeys: string[];
+  /** Stored items not re-read whose observations of a recomputed key were reconciled with this pass's facts. */
+  recomputedAgainst?: string[];
   affectedEntities: string[];
 }
 
@@ -991,6 +993,67 @@ function deltaRecordOf(item: ExtractableItem) {
     recordId: item.url || item.id,
     content: { title: item.title, body: item.body, organization: item.organization, publishedAt: item.publishedAt },
   };
+}
+
+/** Stored records a recomputation may load per pass, so one pass stays bounded. */
+export const RECOMPUTE_MAX_STORED_RECORDS = 200;
+
+/**
+ * The stored observations of `keys` from records this pass did not re-read:
+ * the unchanged records in the batch, and records the index says produced one
+ * of the keys in an earlier pass. A record out of the batch is loaded from
+ * `feed_items` only at the version the index says was read (its fingerprint
+ * matches), and read by the same parser, so the observation is exactly what
+ * was understood before — never a newer, unread version.
+ */
+async function storedObservationsOf(input: {
+  index: DeltaIndex;
+  keys: ReadonlySet<string>;
+  batch: readonly ExtractableItem[];
+  read: ReadonlySet<string>;
+  identityOfItem: ReadonlyMap<string, string>;
+}): Promise<{ items: ExtractableItem[]; facts: ExtractedFact[] }> {
+  const latestOf = (identity: string) => {
+    const versions = input.index.records[identity]?.versions ?? [];
+    return versions[versions.length - 1];
+  };
+  const touches = (identity: string) => {
+    const latest = latestOf(identity);
+    return !!latest && latest.parserVersion === EXTRACTOR_VERSION && latest.factKeys.some((k) => input.keys.has(k));
+  };
+  const chosen = new Map<string, ExtractableItem>();
+  for (const item of input.batch) {
+    const identity = input.identityOfItem.get(item.id)!;
+    if (input.read.has(identity) || chosen.has(identity) || !touches(identity)) continue;
+    if (chosen.size >= RECOMPUTE_MAX_STORED_RECORDS) break;
+    chosen.set(identity, item);
+  }
+  const elsewhere = Object.keys(input.index.records)
+    .filter((identity) => !input.read.has(identity) && !chosen.has(identity) && touches(identity))
+    .sort()
+    .slice(0, Math.max(0, RECOMPUTE_MAX_STORED_RECORDS - chosen.size));
+  const db = getDb();
+  for (const identity of elsewhere) {
+    const cut = identity.indexOf('\u0000');
+    if (cut < 0) continue;
+    const source = identity.slice(0, cut);
+    const recordId = identity.slice(cut + 1);
+    const candidates = await db.all<{ id: string; source: string; url: string; title: string; body: string | null; organization: string | null; published_at: string | null; fetched_at: string }>(
+      `SELECT id, source, url, title, body, organization, published_at, fetched_at FROM feed_items
+        WHERE source = ? AND (url = ? OR id = ?) ORDER BY fetched_at DESC, id DESC LIMIT 5`,
+      [source, recordId, recordId],
+    );
+    const want = latestOf(identity)!.fingerprint;
+    for (const row of candidates) {
+      const item: ExtractableItem = { id: row.id, source: row.source, url: row.url, title: row.title, body: row.body, organization: row.organization, publishedAt: row.published_at, fetchedAt: row.fetched_at };
+      if (recordIdentity(item.source, deltaRecordOf(item).recordId) !== identity) continue;
+      if (fingerprintOf(deltaRecordOf(item).content) !== want) continue;
+      chosen.set(identity, item);
+      break;
+    }
+  }
+  const items = [...chosen.values()];
+  return { items, facts: items.flatMap((item) => extractItem(item)) };
 }
 
 /** The route a stored source is pulled through, as the processing graph reads it. */
@@ -1116,7 +1179,15 @@ export async function recordFeedExtraction(input: {
       })
     : items;
 
-  const run = extractItems(readItems, now);
+  const read = extractItems(readItems, now);
+  // Recompute: every affected key is reconciled against the stored observations of the records this
+  // pass did not re-read, so a changed record is contested against an unchanged one from any pass.
+  const affectedKeys = new Set([...(deltaPlan?.affectedFactKeys ?? []), ...read.facts.map((f) => f.key)]);
+  const stored = deltaPlan && affectedKeys.size > 0
+    ? await storedObservationsOf({ index: priorIndex, keys: affectedKeys, batch: items, read: new Set(readItems.map((item) => identityOfItem.get(item.id)!)), identityOfItem })
+    : { items: [] as ExtractableItem[], facts: [] as ExtractedFact[] };
+  const recomputed = recomputeAffected(read.facts, stored.facts, affectedKeys, now);
+  const run = { ...read, facts: recomputed.facts, reconciled: recomputed.reconciled };
   // Structure feeds Connect: what was just read goes into the event graph that construction reads,
   // under the ids the graph's own sync gives these rows, so neither path makes a second fact.
   let graph: ExtractedItemsUpdate | null = null;
@@ -1159,7 +1230,7 @@ export async function recordFeedExtraction(input: {
         const ids = [...new Set(r.observations.map((o) => o.evidence.itemId))];
         return {
           id: `key:${r.key}`,
-          decisionValue: statedValue(ids.flatMap((id) => factsByItem.get(id) ?? [])),
+          decisionValue: statedValue(r.observations),
           uncertainty: 0.5,
           novelty: Math.max(0, ...ids.map(noveltyOf)),
           contradicted: true,
@@ -1232,7 +1303,8 @@ export async function recordFeedExtraction(input: {
         changedItems: readWith('CHANGED'),
         unchangedItems: items.filter((item) => !readItems.includes(item)).map((item) => item.id),
         reparsedItems: readWith('REPARSE'),
-        recomputedKeys: [...new Set([...deltaPlan.affectedFactKeys, ...run.facts.map((f) => f.key)])].sort(),
+        recomputedKeys: [...affectedKeys].sort(),
+        recomputedAgainst: stored.items.map((item) => item.id),
         affectedEntities: deltaPlan.affectedEntities,
       }
     : undefined;

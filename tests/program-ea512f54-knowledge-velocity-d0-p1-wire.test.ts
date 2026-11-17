@@ -143,4 +143,41 @@ describe('recordFeedExtraction records the processing graph, delta, identity, de
     const summary = await getDb().get<{ summary: string }>('SELECT summary FROM cash_events WHERE project_id = ? AND kind = ?', [projectId, EXTRACTION_EVENT]);
     expect(summary!.summary).toContain('identity');
   });
+
+  describe('a changed record is contested against an unchanged one from an earlier pass', () => {
+    const rfq = (source: string, tag: string, path: string, amount: string) => ({
+      externalId: `${source}-${path}-${tag}`,
+      url: `https://example.test/${source}/${path}`,
+      title: 'Request for quotes: 500 kg of packaging film',
+      body: `Seeking quotes from a supplier. Delivery in Austin, TX by 2026-12-15. Budget ${amount}.`,
+      organization: 'Acme Foods LLC',
+      publishedAt: hoursAgo(5),
+    });
+    const priceKeyOf = (pass: ExtractionPass) => pass.facts.find((f) => f.field === 'price' && f.evidence.text.includes('$'))!.key;
+
+    for (const republished of [true, false]) {
+      it(republished ? 'when the unchanged record is in the batch' : 'when the unchanged record is only in the store', async () => {
+        const source = `w${Math.random().toString(36).slice(2, 8)}`;
+        await insertFeedItems(source, [rfq(source, 'a', 'one', '$4,000'), rfq(source, 'a', 'two', '$4,000')]);
+        const first = (await recordFeedExtraction({ projectId, now: new Date(), capacity: 0 }))!;
+        const key = priceKeyOf(first);
+        expect(first.reconciled.find((r) => r.key === key)!.status).toBe('OBSERVED');
+        await tick();
+        await insertFeedItems(source, [rfq(source, 'b', 'one', '$6,500'), ...(republished ? [rfq(source, 'b', 'two', '$4,000')] : [])]);
+        const second = (await recordFeedExtraction({ projectId, now: new Date(), capacity: 0 }))!;
+        expect(second.delta!.counts.CHANGED).toBe(1);
+        expect(second.delta!.counts.UNCHANGED).toBe(republished ? 1 : 0);
+        // Only the changed record is re-read and recorded as this pass's facts...
+        expect(second.facts.every((f) => f.evidence.itemId === second.delta!.changedItems[0])).toBe(true);
+        // ...but its keys are recomputed against the unchanged record's stored observation.
+        const price = second.reconciled.find((r) => r.key === key)!;
+        expect(price.status).toBe('CONTESTED');
+        expect(price.itemIds.length).toBe(2);
+        expect(second.facts.find((f) => f.key === key)!.contradictionStatus).toBe('CONTESTED');
+        expect(second.delta!.recomputedKeys).toContain(key);
+        expect(second.delta!.recomputedAgainst!.length).toBe(1);
+        expect(second.deepening!.held.some((d) => d.id === `key:${key}`)).toBe(true);
+      });
+    }
+  });
 });
