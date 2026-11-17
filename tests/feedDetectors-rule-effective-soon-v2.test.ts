@@ -18,7 +18,8 @@ import {
   type DetectorRecord,
 } from '../server/services/feeds/detectors.ts';
 
-const now = new Date('2026-11-17T12:00:00.000Z');
+/** The run after the five were published, when v1 left them out (published 2026-11-12). */
+const now = new Date('2026-11-13T12:00:00.000Z');
 const FR = 'https://www.federalregister.gov/documents';
 
 function fr(documentNumber: string, published: string, organization: string, body: string | null, title = documentNumber): DetectorRecord {
@@ -111,6 +112,22 @@ describe('RULE_EFFECTIVE_SOON@2 lowers no bar', () => {
       now,
     );
     expect(out).toEqual([]);
+  });
+
+  it('does not keep a rule already in force before yesterday, even one published within 30 days', () => {
+    const later = new Date('2026-11-17T12:00:00.000Z');
+    const fcc = fr('2026-80000', '2026-10-20', 'Federal Communications Commission', 'Effective 2026-10-20.');
+    expect(RULE_EFFECTIVE_SOON_V2.detect([fcc], later)).toEqual([]);
+    // The recorded misses, effective 2026-11-12, are in force by 2026-11-17 and drop out then.
+    const kept = members(RULE_EFFECTIVE_SOON_V2.detect([...missed, corrected], later));
+    for (const id of ['fi_2026-23073', 'fi_2026-23072', 'fi_2026-23041']) expect(kept).not.toContain(id);
+    // A rule effective yesterday or today is still taking effect; the correction's 2026-12-28 still counts.
+    expect(kept).toContain('fi_C1-2026-21030');
+    const onDay = members(RULE_EFFECTIVE_SOON_V2.detect([fr('2026-80001', '2026-11-16', 'Federal Communications Commission', 'Effective 2026-11-16.')], later));
+    expect(onDay).toEqual(['fi_2026-80001']);
+    for (const signal of RULE_EFFECTIVE_SOON_V2.detect([...missed, corrected], later)) {
+      expect(Date.parse(signal.windowFrom)).toBeGreaterThanOrEqual(Date.parse('2026-11-16T00:00:00.000Z'));
+    }
   });
 
   it('reads only its own source', () => {
