@@ -71,8 +71,11 @@ describe('RULE_EFFECTIVE_SOON@1 misses the recorded items (the failure class)', 
   });
 });
 
+/** The day the five were published and the free screen kept them. */
+const published = new Date('2026-11-12T12:00:00.000Z');
+
 describe('RULE_EFFECTIVE_SOON@2 reads them', () => {
-  const signals = RULE_EFFECTIVE_SOON_V2.detect([...missed, corrected], now);
+  const signals = RULE_EFFECTIVE_SOON_V2.detect([...missed, corrected], published);
   const byKey = new Map(signals.map((s) => [s.groupKey, s]));
 
   it('groups the FAA amendments under the issuing agency, not the parent department', () => {
@@ -91,7 +94,7 @@ describe('RULE_EFFECTIVE_SOON@2 reads them', () => {
     expect(nrc?.memberIds).toEqual(['fi_C1-2026-21030']);
     expect(nrc?.windowFrom).toBe('2026-12-28T00:00:00.000Z');
     // Without the corrected record stored, nothing is inferred.
-    expect(members(RULE_EFFECTIVE_SOON_V2.detect(missed, now))).not.toContain('fi_C1-2026-21030');
+    expect(members(RULE_EFFECTIVE_SOON_V2.detect(missed, published))).not.toContain('fi_C1-2026-21030');
   });
 
   it('keeps the correction on its own publication day, and on every later day inside the window', () => {
@@ -104,10 +107,12 @@ describe('RULE_EFFECTIVE_SOON@2 reads them', () => {
     expect(members(RULE_EFFECTIVE_SOON_V2.detect([...missed, corrected], new Date('2026-12-13T12:00:00.000Z')))).not.toContain('fi_C1-2026-21030');
   });
 
-  it('the same items get the same verdict whichever day inside the window the rule runs', () => {
+  it('keeps the same-day rules on their publication day, and drops them once they are already in force', () => {
     const verdict = (at: string) => members(RULE_EFFECTIVE_SOON_V2.detect([...missed, corrected], new Date(at))).sort();
-    expect(verdict('2026-11-12T12:00:00.000Z')).toEqual(verdict('2026-11-17T12:00:00.000Z'));
+    expect(verdict('2026-11-12T00:00:00.000Z')).toEqual(['fi_2026-23041', 'fi_2026-23072', 'fi_2026-23073', 'fi_C1-2026-21030']);
     expect(verdict('2026-11-12T12:00:00.000Z')).toEqual(['fi_2026-23041', 'fi_2026-23072', 'fi_2026-23073', 'fi_C1-2026-21030']);
+    // In force for days by 2026-11-17: not taking effect soon. The correction (effective 2026-12-28) still is.
+    expect(verdict('2026-11-17T12:00:00.000Z')).toEqual(['fi_C1-2026-21030']);
   });
 
   it('does not flag a notice whose only date is in its text, enforced before it was published', () => {
@@ -150,6 +155,19 @@ describe('RULE_EFFECTIVE_SOON@2 lowers no bar', () => {
         ),
       );
       expect(kept).toEqual(['fi_2026-90005']);
+    }
+  });
+
+  it('never keeps a rule already in force, so no signal asserts a past compliance date', () => {
+    // Finding repair-lower-bound-admits-past-effective: published and effective 2026-10-20,
+    // read on 2026-11-17 — inside the 30-day membership window, but in force for four weeks.
+    const inForce = fr('2026-80000', '2026-10-20', 'Federal Communications Commission', 'Effective 2026-10-20.');
+    expect(RULE_EFFECTIVE_SOON_V2.detect([inForce], now)).toEqual([]);
+    // In force since two days before the run is past v1's one-day bar; in force since the run's own day is not.
+    expect(RULE_EFFECTIVE_SOON_V2.detect([fr('2026-80001', '2026-11-15', 'Federal Communications Commission', 'Effective 2026-11-15.')], now)).toEqual([]);
+    expect(members(RULE_EFFECTIVE_SOON_V2.detect([fr('2026-80002', '2026-11-17', 'Federal Communications Commission', 'Effective 2026-11-17.')], now))).toEqual(['fi_2026-80002']);
+    for (const s of RULE_EFFECTIVE_SOON_V2.detect([...missed, corrected, inForce], now)) {
+      expect(Date.parse(s.windowFrom)).toBeGreaterThanOrEqual(now.getTime() - 86_400_000);
     }
   });
 

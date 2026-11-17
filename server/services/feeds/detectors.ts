@@ -408,9 +408,12 @@ export function issuingAgencyOf(organization: string | null): string | null {
  *     effective on its own publication day (FAA 2026-23073, FCC 2026-23041)
  *     dropped out days later, and a correction effective 46 days after its
  *     publication (C1-2026-21030) was missed on the day it was published and
- *     kept only from the next. Both bounds now come from the record, so the
- *     verdict is the same on every run inside the membership window.
- *     A rule effective before it was published is still never kept.
+ *     kept only from the next. The upper bound now comes from the record.
+ *     A rule effective before it was published is still never kept, and
+ *     neither is one already in force: the lower bound is the later of its
+ *     publication day and one day before the run (v1's bar), so a rule that
+ *     took effect weeks ago is not "taking effect soon" and no signal asserts
+ *     a past compliance date. The upper bound alone comes from publication.
  *  2. A correction inherits the effective date of the rule it corrects
  *     ("Corrects <document_number>."), read from that stored record, and is
  *     judged against the correction's own publication date (C1-2026-21030).
@@ -453,7 +456,10 @@ export const RULE_EFFECTIVE_SOON_V2: Detector = {
       if (!effective) continue;
       const at = Date.parse(`${effective}T00:00:00.000Z`);
       const publishedDay = Date.parse(`${new Date(published).toISOString().slice(0, 10)}T00:00:00.000Z`);
-      if (!Number.isFinite(at) || at < publishedDay || at > publishedDay + RULE_EFFECTIVE_SOON_V2_LEAD_DAYS * DAY) continue;
+      // Lower bound: not before its own publication, and — v1's bar, kept — not already in force
+      // for more than a day when the rule runs. Upper bound: eight weeks after publication.
+      const from = Math.max(publishedDay, now.getTime() - DAY);
+      if (!Number.isFinite(at) || at < from || at > publishedDay + RULE_EFFECTIVE_SOON_V2_LEAD_DAYS * DAY) continue;
       const group = groups.get(agency) ?? { name, members: [] };
       group.members.push({ record, effective });
       groups.set(agency, group);
