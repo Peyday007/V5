@@ -688,9 +688,12 @@ function ensureStallProbe(): void {
     const now = Date.now();
     const late = now - stallLast - STALL_PROBE_MS;
     stallLast = now;
+    const restart = takeProfilerRestartMs();
     if (late < STALL_RECORD_MS) return;
-    profileWindowStallMs = Math.max(profileWindowStallMs, late);
-    const active = [...activeActivities.keys()].sort();
+    // The profiler's own restart is not a stall the window should be kept for:
+    // counting it is what made every window "hold a stall" and restart again.
+    profileWindowStallMs = Math.max(profileWindowStallMs, late - restart);
+    const active = [...activeActivities.keys(), ...(restart > 0 ? [PROFILER_RESTART_LABEL] : [])].sort();
     recentStalls.push({ ms: late, at: new Date(now).toISOString(), active });
     if (recentStalls.length > 20) recentStalls.shift();
     if (stallsFeedPressure()) noteStall(late, now);
@@ -734,7 +737,6 @@ const PROFILE_FRAMES = 10;
 let profileSession: InspectorSession | null = null;
 let profileTimer: ReturnType<typeof setInterval> | null = null;
 let profileWindowStallMs = 0;
-let profileWindowStartedAt = Date.now();
 const stallProfiles: StallProfile[] = [];
 
 export interface StallProfileFrame {
@@ -862,33 +864,85 @@ function ensureStallProfiler(): void {
     session.post('Profiler.setSamplingInterval', { interval: PROFILE_SAMPLING_US });
     session.post('Profiler.start');
     profileSession = session;
-    profileWindowStartedAt = Date.now();
+    profileStartedAt = Date.now();
     profileWindowStallMs = 0;
-    profileTimer = setInterval(rotateStallProfile, PROFILE_WINDOW_MS);
+    profileTimer = setInterval(() => rotateStallProfile(), PROFILE_WINDOW_MS);
     profileTimer.unref?.();
   } catch {
     profileSession = null;
   }
 }
 
-function rotateStallProfile(): void {
-  const session = profileSession;
+/*
+ * The profiler is restarted only when there is something to keep.
+ *
+ * `Profiler.start` is not free: V8 walks the whole heap to log every compiled
+ * function before it samples, synchronously, on the event loop. Measured
+ * 1.5–1.6 s at a 1.2 GB heap on a development machine; production (56bc7f12,
+ * 2026-11-17, heap 1.6 GB of 2.6 GB on a shared 2-vCPU host) stalled 2.0–2.8 s
+ * at :09 of every minute — two to three seconds after each 60-second rotation —
+ * and those stalls were charged to whatever was in flight
+ * (`russell:project-kernels`, `cash:runMonetizationLedger`), drove the process
+ * into SHEDDING ("stalled 12s of the last 120s"), and halved the free lane. The
+ * instrument was the stall it reported, and because the restart's own stall
+ * landed in the next window, every window then "held a stall" and was kept.
+ *
+ * So a window with no stall keeps sampling into the same profile rather than
+ * paying a heap walk to start a new one, and the profile is closed when a
+ * window did hold a stall (that profile is the one worth reading) or when it
+ * has run `PROFILE_MAX_SPAN_MS`, which bounds what V8 accumulates. The restart
+ * that follows is measured, charged to its own label, and not counted as the
+ * next window's stall.
+ */
+const PROFILE_MAX_SPAN_MS = 30 * 60_000;
+const PROFILER_RESTART_LABEL = 'stall-profiler:restart';
+let profileStartedAt = Date.now();
+let profilerRestartMs = 0;
+
+function takeProfilerRestartMs(): number {
+  const ms = profilerRestartMs;
+  profilerRestartMs = 0;
+  return ms;
+}
+
+/** Whether a window's end should close the running profile. Pure; exported for tests. */
+export function profileRotationDue(input: { windowStallMs: number; spanMs: number }): boolean {
+  return input.windowStallMs >= STALL_RECORD_MS || input.spanMs >= PROFILE_MAX_SPAN_MS;
+}
+
+/** What `rotateStallProfile` needs of an inspector session. */
+export interface ProfilerSession {
+  post(method: 'Profiler.stop', callback: (err: Error | null, result?: { profile?: unknown }) => void): void;
+  post(method: 'Profiler.start'): void;
+}
+
+/**
+ * Close a profiler window. Exported for tests, which drive it with a fake
+ * session; production calls it from the window timer.
+ */
+export function rotateStallProfile(session: ProfilerSession | null = profileSession as ProfilerSession | null, now = Date.now()): void {
   if (!session) return;
   const stallMs = profileWindowStallMs;
-  const startedAt = profileWindowStartedAt;
+  if (!profileRotationDue({ windowStallMs: stallMs, spanMs: now - profileStartedAt })) {
+    // Nothing to keep: the profile runs on, and no heap walk is paid.
+    return;
+  }
+  const startedAt = profileStartedAt;
   profileWindowStallMs = 0;
-  profileWindowStartedAt = Date.now();
   try {
     session.post('Profiler.stop', (err, result) => {
       try {
         if (!err && stallMs >= STALL_RECORD_MS && result?.profile) {
-          const summary = summarizeCpuProfile(result.profile as unknown as CpuProfile);
+          const summary = summarizeCpuProfile(result.profile as CpuProfile);
           stallProfiles.push({ at: new Date().toISOString(), windowMs: Date.now() - startedAt, stallMs, ...summary });
           if (stallProfiles.length > PROFILES_KEPT) stallProfiles.shift();
         }
       } finally {
         try {
+          const began = Date.now();
           session.post('Profiler.start');
+          profileStartedAt = Date.now();
+          profilerRestartMs += profileStartedAt - began;
         } catch {
           /* the next rotation tries again */
         }
@@ -897,6 +951,14 @@ function rotateStallProfile(): void {
   } catch {
     /* an inspector that will not answer leaves the labels as the only reading */
   }
+}
+
+/** Tests only: the profiler's window state, as a fresh process has it. */
+export function resetStallProfilerState(now = Date.now(), windowStallMs = 0): void {
+  profileWindowStallMs = windowStallMs;
+  profileStartedAt = now;
+  profilerRestartMs = 0;
+  stallProfiles.length = 0;
 }
 
 /** The profiles of the latest windows that held a stall, newest last. */

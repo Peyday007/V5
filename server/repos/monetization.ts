@@ -16,6 +16,7 @@
  * backfill that cannot reach what a later tick produced.
  */
 import { getDb } from '../db/database.ts';
+import type { SqlParam } from '../db/types.ts';
 import { mayAnswer } from '../domain/monetization.ts';
 import { mayReplace } from './cashCardFacts.ts';
 import { newId, nowIso } from './util.ts';
@@ -729,6 +730,57 @@ export async function recordSnapshot(input: {
   );
   if (!rows[0]) throw new Error('The rank snapshot disappeared immediately after being written.');
   return mapSnapshot(rows[0]);
+}
+
+/**
+ * Many snapshots in a few statements, and none of them read back.
+ *
+ * `recordSnapshot` is an insert and a read per row. A movement pass over a
+ * ledger where one new possibility near the top shifts everything beneath it
+ * records thousands of movements (production, 2026-11-17: 8 948 inserts and
+ * 8 946 read-backs in one process's window), and every one of those round trips
+ * allocated and parsed a row nothing used. The rows are identical; only the
+ * number of statements changes. Chunked so a chunk stays well inside both
+ * drivers' parameter limits, and a pass that dies between chunks leaves the
+ * paths it reached recorded, exactly as the row-at-a-time loop did.
+ */
+const SNAPSHOT_CHUNK = 500;
+export async function recordSnapshots(
+  inputs: readonly {
+    projectId: string;
+    pathId: string;
+    rank: number;
+    previousRank: number | null;
+    reason: RankMovementReason;
+    status: MonetizationStatus;
+    criterion: string | null;
+    evaluatedAt: string;
+  }[],
+): Promise<number> {
+  for (let start = 0; start < inputs.length; start += SNAPSHOT_CHUNK) {
+    const chunk = inputs.slice(start, start + SNAPSHOT_CHUNK);
+    const params: SqlParam[] = [];
+    for (const input of chunk) {
+      params.push(
+        newId('mrs'),
+        input.projectId,
+        input.pathId,
+        input.rank,
+        input.previousRank,
+        input.reason,
+        input.status,
+        input.criterion,
+        input.evaluatedAt,
+      );
+    }
+    await getDb().run(
+      `INSERT INTO monetization_rank_snapshots
+         (id, project_id, path_id, rank, previous_rank, reason, status, criterion, evaluated_at)
+       VALUES ${chunk.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ')}`,
+      params,
+    );
+  }
+  return inputs.length;
 }
 
 /**
