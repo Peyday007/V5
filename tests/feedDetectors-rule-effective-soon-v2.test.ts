@@ -12,6 +12,7 @@ import {
   DETECTORS,
   RULE_EFFECTIVE_SOON,
   RULE_EFFECTIVE_SOON_DAYS,
+  RULE_EFFECTIVE_SOON_LEAD_DAYS,
   RULE_EFFECTIVE_SOON_V2,
   correctedDocumentOf,
   issuingAgencyOf,
@@ -100,7 +101,12 @@ describe('RULE_EFFECTIVE_SOON@2 reads them', () => {
 
 describe('RULE_EFFECTIVE_SOON@2 lowers no bar', () => {
   it('drops a rule effective before its publication, one beyond the window, and one published over 30 days ago', () => {
-    const beyond = new Date(now.getTime() + (RULE_EFFECTIVE_SOON_DAYS + 2) * 86_400_000).toISOString().slice(0, 10);
+    // Past both upper bounds: now + RULE_EFFECTIVE_SOON_DAYS and publication + RULE_EFFECTIVE_SOON_LEAD_DAYS.
+    const beyond = new Date(
+      Math.max(now.getTime() + (RULE_EFFECTIVE_SOON_DAYS + 2) * 86_400_000, Date.parse('2026-11-12T00:00:00.000Z') + (RULE_EFFECTIVE_SOON_LEAD_DAYS + 1) * 86_400_000),
+    )
+      .toISOString()
+      .slice(0, 10);
     const out = RULE_EFFECTIVE_SOON_V2.detect(
       [
         fr('2026-90001', '2026-11-12', 'Environmental Protection Agency', 'Effective 2026-11-10.'),
@@ -116,6 +122,43 @@ describe('RULE_EFFECTIVE_SOON@2 lowers no bar', () => {
   it('reads only its own source', () => {
     const other = { ...missed[2]!, source: 'remoteok' };
     expect(RULE_EFFECTIVE_SOON_V2.detect([other], now)).toEqual([]);
+  });
+});
+
+describe('RULE_EFFECTIVE_SOON@2 does not depend on which day it runs', () => {
+  const publicationDay = new Date('2026-11-12T12:00:00.000Z');
+
+  it('keeps the correction C1-2026-21030 on its own publication day (effective 46 days later)', () => {
+    // now + RULE_EFFECTIVE_SOON_DAYS alone ends 2026-12-27 on that day, one short of 2026-12-28.
+    expect(new Date(publicationDay.getTime() + RULE_EFFECTIVE_SOON_DAYS * 86_400_000).toISOString().slice(0, 10)).toBe('2026-12-27');
+    const nrc = RULE_EFFECTIVE_SOON_V2.detect([...missed, corrected], publicationDay).find(
+      (s) => s.groupKey === 'agency:nuclear regulatory commission',
+    );
+    expect(nrc?.memberIds).toEqual(['fi_C1-2026-21030']);
+    expect(nrc?.windowFrom).toBe('2026-12-28T00:00:00.000Z');
+  });
+
+  it('keeps the same members on every day from publication to the end of the 30-day window', () => {
+    const expected = members(RULE_EFFECTIVE_SOON_V2.detect([...missed, corrected], publicationDay)).sort();
+    expect(expected).toEqual(['fi_2026-23041', 'fi_2026-23072', 'fi_2026-23073', 'fi_C1-2026-21030']);
+    for (let day = 1; day <= 29; day++) {
+      const at = new Date(publicationDay.getTime() + day * 86_400_000);
+      expect(members(RULE_EFFECTIVE_SOON_V2.detect([...missed, corrected], at)).sort()).toEqual(expected);
+    }
+  });
+
+  it('counts the eight-week lead from publication inclusively, and no further', () => {
+    const day = (offset: number) => new Date(Date.parse('2026-11-12T00:00:00.000Z') + offset * 86_400_000).toISOString().slice(0, 10);
+    const out = members(
+      RULE_EFFECTIVE_SOON_V2.detect(
+        [
+          fr('2026-91001', '2026-11-12', 'Environmental Protection Agency', `Effective ${day(RULE_EFFECTIVE_SOON_LEAD_DAYS)}.`),
+          fr('2026-91002', '2026-11-12', 'Environmental Protection Agency', `Effective ${day(RULE_EFFECTIVE_SOON_LEAD_DAYS + 1)}.`),
+        ],
+        publicationDay,
+      ),
+    );
+    expect(out).toEqual(['fi_2026-91001']);
   });
 });
 

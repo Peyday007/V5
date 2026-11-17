@@ -348,6 +348,15 @@ export const RULE_EFFECTIVE_SOON: Detector = {
 /** How recently a rule must have been published for v2 to count it as news. */
 export const RULE_EFFECTIVE_SOON_PUBLISHED_DAYS = 30;
 
+/**
+ * v2's lead from a rule's own publication: eight weeks. A rule effective within
+ * this many days of the day it was published counts even when that date lies
+ * past now + RULE_EFFECTIVE_SOON_DAYS, so the same rule is kept on its
+ * publication day as on the days after it (C1-2026-21030: published 2026-11-12,
+ * effective 2026-12-28, 46 days).
+ */
+export const RULE_EFFECTIVE_SOON_LEAD_DAYS = 56;
+
 /** The document a Federal Register correction corrects, as its record body states it ("Corrects 2026-21030."). Pure. */
 export function correctedDocumentOf(body: string | null | undefined): string | null {
   const m = /Corrects ([A-Za-z0-9-]+)\./.exec(body ?? '');
@@ -370,7 +379,10 @@ export function issuingAgencyOf(organization: string | null): string | null {
  *
  *  1. The window is measured from the rule's own publication. A final rule
  *     published in the last 30 days counts when it takes effect on or after its
- *     publication date and no later than now + RULE_EFFECTIVE_SOON_DAYS. v1
+ *     publication date and no later than the later of now +
+ *     RULE_EFFECTIVE_SOON_DAYS and its publication day +
+ *     RULE_EFFECTIVE_SOON_LEAD_DAYS, so whether a rule is kept does not
+ *     depend on which day the run happens to fall. v1
  *     measured the lower bound from the run, so a rule effective on its own
  *     publication day (FAA 2026-23073, FCC 2026-23041) dropped out days later.
  *     A rule effective before it was published is still never kept.
@@ -413,7 +425,8 @@ export const RULE_EFFECTIVE_SOON_V2: Detector = {
       if (!effective) continue;
       const at = Date.parse(`${effective}T00:00:00.000Z`);
       const publishedDay = Date.parse(`${new Date(published).toISOString().slice(0, 10)}T00:00:00.000Z`);
-      if (!Number.isFinite(at) || at < publishedDay || at > until) continue;
+      const latest = Math.max(until, publishedDay + RULE_EFFECTIVE_SOON_LEAD_DAYS * DAY);
+      if (!Number.isFinite(at) || at < publishedDay || at > latest) continue;
       const group = groups.get(agency) ?? { name, members: [] };
       group.members.push({ record, effective });
       groups.set(agency, group);
