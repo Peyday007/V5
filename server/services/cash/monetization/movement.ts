@@ -36,12 +36,16 @@ import {
   latestSnapshots,
   listJudgments,
   markEvaluated,
-  recordSnapshot,
+  recordSnapshots,
 } from '../../../repos/monetization.ts';
 import { pathFactsForProject } from '../../../repos/monetization.ts';
 import { composeLedger, rankableOf, type Ledger } from './ledger.ts';
 import { CRITERIA, explainRanking, type RankableEntry } from './rank.ts';
 import type { RankMovementReason } from '../../../domain/types.ts';
+
+/** The walk explains every moved path against its neighbour; give the loop back as it goes. */
+const YIELD_EVERY = 250;
+const yieldToLoop = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
 export interface Movement {
   pathId: string;
@@ -102,8 +106,11 @@ export async function recordMovements(input: {
 
   const ranked = ledger.entries.map(rankableOf);
   const movements: Movement[] = [];
+  const snapshots: Parameters<typeof recordSnapshots>[0][number][] = [];
 
+  let walked = 0;
   for (const entry of ledger.entries) {
+    if (++walked % YIELD_EVERY === 0) await yieldToLoop();
     const before = previous.get(entry.path.id) ?? null;
     if (before && before.rank === entry.rank) continue;
 
@@ -125,7 +132,7 @@ export async function recordMovements(input: {
       criterion: before ? criterionAgainstNeighbour(entry.rank, before.rank, ranked) : null,
     };
     movements.push(movement);
-    await recordSnapshot({
+    snapshots.push({
       projectId: input.projectId,
       pathId: entry.path.id,
       rank: movement.rank,
@@ -136,6 +143,12 @@ export async function recordMovements(input: {
       evaluatedAt: at,
     });
   }
+  /*
+   * Written together after the walk rather than one insert and one read-back
+   * per movement inside it: on a ledger where everything below a new entry
+   * shifted, that was thousands of sequential round trips per pass.
+   */
+  await recordSnapshots(snapshots);
 
   await markEvaluated(
     ledger.entries.map((one) => one.path.id),

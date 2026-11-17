@@ -288,8 +288,30 @@ export const CRITERIA: readonly Criterion[] = Object.freeze([
 ]);
 
 /** Sorted best first, and every path that was handed in comes back. */
+/*
+ * Each entry's readings are computed once and the sort compares those, rather
+ * than calling every criterion's `order` again inside the comparator. The
+ * comparator runs ~n·log₂n times on both sides, and the criteria allocate
+ * (`EVIDENCE_DEPTH` spreads the facts, `DISCOVERED` parses a date), so at the
+ * ledger's production size (12 840 possibilities, 2026-11-17) the old sort made
+ * millions of `order` calls in one synchronous `Array.prototype.sort` — no
+ * yield is possible inside it — and was the largest block of
+ * `cash:runMonetizationLedger`'s 2–3 s event-loop stalls. `order` is a pure
+ * function of the entry, so reading it once is the same order exactly.
+ */
 export function rankLedger(entries: readonly RankableEntry[]): RankableEntry[] {
-  return [...entries].sort(compareEntries);
+  const keyed = entries.map((entry) => ({
+    entry,
+    readings: CRITERIA.map((criterion) => criterion.order(entry)),
+  }));
+  keyed.sort((a, b) => {
+    for (let at = 0; at < a.readings.length; at++) {
+      const decided = compareReadings(a.readings[at] ?? null, b.readings[at] ?? null);
+      if (decided !== 0) return decided;
+    }
+    return a.entry.path.id < b.entry.path.id ? -1 : a.entry.path.id > b.entry.path.id ? 1 : 0;
+  });
+  return keyed.map((one) => one.entry);
 }
 
 export function compareEntries(a: RankableEntry, b: RankableEntry): number {
@@ -311,8 +333,11 @@ export function compareEntries(a: RankableEntry, b: RankableEntry): number {
  * defect this repository records more than any other.
  */
 export function compareOn(criterion: Criterion, a: RankableEntry, b: RankableEntry): number {
-  const left = criterion.order(a);
-  const right = criterion.order(b);
+  return compareReadings(criterion.order(a), criterion.order(b));
+}
+
+/** Two readings of one criterion: lower first, a null last. The one rule `compareOn` and `rankLedger` share. */
+function compareReadings(left: number | null, right: number | null): number {
   if (left === right) return 0;
   if (left === null) return 1;
   if (right === null) return -1;
