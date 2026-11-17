@@ -83,6 +83,7 @@ import {
   type Structure,
 } from './properties.ts';
 import { excludedBy, exclusionSentence, type ExclusionClass } from './exclusions.ts';
+import { syncEventGraph, currentEventGraph, type EventGraphSync, type GraphHypothesis, type RuleId } from '../industry/eventGraph.ts';
 import {
   ENTRY_POINTS,
   EVIDENCE_FIELDS,
@@ -102,7 +103,7 @@ export interface Primitive {
   name: string;
   /** A gated claim behind it, or null for a proved capability, an opening's own words, or a part reverse construction asks the world for. */
   claimId: string | null;
-  from: 'INDUSTRY_MAP' | 'OPENING' | 'CAPABILITY' | 'REVERSE';
+  from: 'INDUSTRY_MAP' | 'OPENING' | 'CAPABILITY' | 'REVERSE' | 'EVENT_GRAPH';
   ref: string;
   /**
    * What this part *is*, independent of any row id (K-7): a map node's kind and
@@ -481,6 +482,46 @@ function addSignalDemand(
 }
 
 /**
+ * Kept event-graph constructions as construction parts (R3-F1, ALGO-16-1 item
+ * 4): the graph's prune has already chosen which hypotheses deserve costly
+ * investigation, and this hands exactly those to the composition every other
+ * part goes through — so a graph construction reaches the goal's ranked
+ * arrangements, its portfolio and the research questions asked about them.
+ *
+ * Per kept construction, in its neighborhood's sector: each named actor on
+ * the wanting side (a stated buyer, or a record whose role is unknown) is a
+ * buyer population, the neighborhood is the need, and each named supplier or
+ * partner is a supply part. An actor its record does not name is not a part —
+ * an item id is not a buyer anyone can ask about. Every part is `EVENT_GRAPH`
+ * with no claim, so composition asks for its payer and supplier rather than
+ * reading them as established (invariant 39). The same part from two
+ * constructions is one part; bounded per sector like signal demand. Mutates
+ * the sectors it is handed; reads nothing.
+ */
+export function addGraphParts(
+  kept: readonly Pick<GraphConstruction, 'neighborhood' | 'hypothesisKey' | 'actors'>[],
+  allowed: (text: string | null | undefined) => boolean,
+  sector: (name: string | null) => { demand: Primitive[]; needs: Primitive[]; supply: Primitive[] },
+): void {
+  for (const one of kept) {
+    const hood = norm(one.neighborhood);
+    if (!hood || !safeName(one.neighborhood) || !allowed(one.neighborhood)) continue;
+    const s = sector(one.neighborhood);
+    const push = (list: Primitive[], name: string, path: string): void => {
+      if (list.length >= SIGNAL_PARTS_PER_SECTOR || list.some((p) => p.path === path)) return;
+      list.push({ name: clean(name), claimId: null, from: 'EVENT_GRAPH', ref: one.hypothesisKey, path });
+    };
+    push(s.needs, one.neighborhood, `GRAPH_NEED:${hood}`);
+    for (const actor of one.actors) {
+      const name = actor.name?.trim();
+      if (!name || !safeName(name) || !allowed(name)) continue;
+      if (actor.role === 'SUPPLIER' || actor.role === 'PARTNER') push(s.supply, name, `GRAPH_SUPPLY:${hood}>${norm(name)}`);
+      else push(s.demand, name, `GRAPH_BUYER:${hood}>${norm(name)}`);
+    }
+  }
+}
+
+/**
  * Compose every arrangement the project's own rows support — forward from its
  * parts, transferred from designs held openings show working, and in reverse
  * from the properties the goal needs — decompose each, stress it, and rank
@@ -569,6 +610,25 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
    * rather than recomposed — after a restart, a deploy or by another goal.
    */
   const { known, reuse } = await libraryFor(input.projectId);
+  /*
+   * The relational event graph (ALGO-16-1 items 3–4): brought up to date with
+   * the durable detection rows changed since the last pass — only their
+   * neighborhoods recompute — and its hypotheses joined with the structures
+   * they can be paid through, pruned on the goal's hard constraints. Every
+   * result stays a hypothesis; it is reported beside this pass, never read as
+   * a found opening.
+   */
+  const graphReport = await graphPass(input, exclusions, now);
+  graphReports.set(input.projectId, graphReport);
+  /*
+   * The kept graph constructions are construction inputs, not a report beside
+   * it (R3-F1): their buyers, need and suppliers become parts in their own
+   * neighborhood's sector, so the same composition, ranking, portfolio and
+   * research questions (`askConstructedArrangements`) that every other part
+   * reaches, reach them. A part carries no gated claim, so its payer and
+   * supplier stay questions for research to answer, never facts.
+   */
+  addGraphParts(graphReport.result.kept, allowed, sector);
   // What the rows state about each lever's parts, each payer's contract limit, and the real limits leverage is judged against (S-0103).
   const { leverEvidence, contractLimits } = await leverInputs(input, opportunities, facts, allowed);
   const constraints = await leverageConstraints(input, limits);
@@ -836,6 +896,37 @@ export interface ConstructionReport {
 const constructionReports = new Map<string, ConstructionReport>();
 export function lastConstructionReport(projectId: string): ConstructionReport | null {
   return constructionReports.get(projectId) ?? null;
+}
+
+/** What the last construction pass for a project read from the event graph and built from it. */
+export interface GraphConstructionReport {
+  /** The graph sync this pass ran: rows read since the cursor and neighborhoods recomputed. Null when it could not run. */
+  sync: EventGraphSync | null;
+  /** Hypotheses the graph holds after the sync. */
+  hypotheses: number;
+  /** The ranked graph constructions (each a hypothesis) and the pruned ones with their reasons. */
+  result: GraphConstructionResult;
+  /** Why the graph could not be read this pass, when it could not; construction from the map and openings goes on. */
+  error: string | null;
+  at: string;
+}
+const graphReports = new Map<string, GraphConstructionReport>();
+export function lastGraphConstruction(projectId: string): GraphConstructionReport | null {
+  return graphReports.get(projectId) ?? null;
+}
+
+/** One graph pass for a construction: sync the durable rows into the process graph, then construct from its hypotheses. */
+export async function graphPass(input: Pick<ConstructionInput, 'capitalCeilingCents' | 'delivers'>, exclusions: readonly ExclusionClass[], now: Date): Promise<GraphConstructionReport> {
+  let sync: EventGraphSync | null = null;
+  let error: string | null = null;
+  try {
+    sync = await syncEventGraph(now);
+  } catch (err) {
+    error = err instanceof Error ? err.message : String(err);
+  }
+  const hypotheses = currentEventGraph().hypotheses();
+  const result = constructFromGraph(hypotheses, { capitalCeilingCents: input.capitalCeilingCents, delivers: input.delivers, exclusions });
+  return { sync, hypotheses: hypotheses.length, result, error, at: now.toISOString() };
 }
 
 /** What the library holds for construction to rank by and reuse. */
@@ -1988,3 +2079,272 @@ export const OPENING_SENTENCE =
 
 /** The design every structure had before §82, for callers that still name a structure. */
 export { defaultDesign };
+
+
+// ---------------------------------------------------------------------------
+// Construction from the event graph (ALGO-16-1 item 4, ALGO-19-4 "derive")
+// ---------------------------------------------------------------------------
+
+/**
+ * The structures each graph rule's relationship can be paid through. A rule
+ * names a relationship (a buyer's request against a supplier, demand against
+ * short supply, a renewal against capacity, a spread, requests a partner could
+ * serve); the structures are the closed table above, so nothing here is a
+ * per-industry template and a relationship in any industry reads the same way.
+ */
+const GRAPH_ROLES: Record<RuleId, readonly Structure[]> = {
+  BUYER_REQUEST_AGAINST_SUPPLIER: ['BROKER', 'REFERRAL', 'SUBCONTRACT', 'PRODUCE'],
+  REPEATED_DEMAND_LIMITED_SUPPLY: ['POOL', 'BROKER', 'PRODUCE'],
+  RENEWAL_AGAINST_CAPACITY: ['BROKER', 'REFERRAL', 'SUBCONTRACT'],
+  SPREAD_AFTER_COSTS: ['SUBCONTRACT', 'BROKER'],
+  PARTNER_SERVABLE_CONCENTRATION: ['REFERRAL', 'BROKER', 'SUBCONTRACT'],
+};
+
+/** What the goal allows, for the cheap hard-constraint prune. Unknown is never read as allowed-and-proven. */
+export interface GraphConstructionContext {
+  /** The goal's capital ceiling; 0 means none may be committed, null that the owner set none. */
+  capitalCeilingCents: number | null;
+  /** Deliverable kinds Brain proved it can produce, as people read them. */
+  delivers: readonly string[];
+  exclusions?: readonly ExclusionClass[];
+}
+
+/** One candidate built from a graph hypothesis. Still a hypothesis: the type has no other status. */
+export interface GraphConstruction {
+  status: 'HYPOTHESIS';
+  /** Stable: structure plus the hypothesis it came from. */
+  key: string;
+  /** Near-identical designs share this; distinct mechanisms never do. */
+  signature: string;
+  structure: Structure;
+  structureLabel: string;
+  rule: RuleId;
+  neighborhood: string;
+  hypothesisKey: string;
+  /** The hypothesis's missing conditions, carried, plus what this structure itself still lacks. */
+  missingConditions: string[];
+  evidence: GraphHypothesis['evidence'];
+  /** Price and margin bounds in minor units, where the hypothesis states figures; null where nothing does. */
+  marginCents: { low: number | null; high: number | null };
+  /** Deals the relationship shows room for; null when nothing counts them. */
+  availableDeals: number | null;
+  /** The stated cost at which the margin vanishes, where one is computable. */
+  breakEvenCostCents: number | null;
+  /** Other hypotheses' near-identical designs this one stands for. */
+  collapsed: string[];
+  /** The actors the hypothesis joined, as its records name them: the buyer and supplier sides construction composes. */
+  actors: GraphHypothesis['actors'];
+}
+
+export interface GraphPruned {
+  key: string;
+  structure: Structure;
+  hypothesisKey: string;
+  /** The hard constraint that failed, in a sentence. */
+  reason: string;
+  /**
+   * What of the failed design stays worth a later one: the relationship the
+   * graph found (its actors, facts and neighborhood) is unchanged by one
+   * structure failing, and another structure, or the same one once the
+   * constraint lifts, can still use it.
+   */
+  salvage: { rule: RuleId; actorKeys: string[]; factIds: string[]; neighborhood: string };
+}
+
+export interface GraphConstructionResult {
+  /** Ranked: what most deserves costly investigation first. */
+  kept: GraphConstruction[];
+  pruned: GraphPruned[];
+}
+
+function hardConstraintFailure(structure: Structure, h: GraphHypothesis, ctx: GraphConstructionContext): string | null {
+  const def = STRUCTURES[structure];
+  if (def.capital !== 'NONE' && ctx.capitalCeilingCents === 0) {
+    return `${def.label} commits capital per deal, and the goal allows none`;
+  }
+  if (def.needsDeliverable && !ctx.delivers.some((kind) => norm(kind) === norm(h.neighborhood))) {
+    return `Brain has not proved it can produce ${h.neighborhood}, which ${def.label} requires`;
+  }
+  if (def.needsSupply && h.rule === 'REPEATED_DEMAND_LIMITED_SUPPLY' && !h.figures['supplied']) {
+    return `${def.label} needs a supplier, and none is recorded in this place`;
+  }
+  const excluded = ctx.exclusions?.length ? excludedBy(`${h.neighborhood} ${h.summary}`, ctx.exclusions) : null;
+  if (excluded) return `the goal's owner excluded this class (${excluded})`;
+  return null;
+}
+
+function structureGaps(structure: Structure, h: GraphHypothesis, ctx: GraphConstructionContext): string[] {
+  const def = STRUCTURES[structure];
+  const gaps: string[] = [];
+  if (def.capture === 'COMMISSION') gaps.push('the commission share the supplier would pay is not established');
+  if (def.capture === 'FEE' && def.needsSupply) gaps.push('the referral fee the supplier would pay is not established');
+  if (def.capital !== 'NONE' && ctx.capitalCeilingCents === null) gaps.push('the capital per deal is not established against any ceiling');
+  if (def.capital !== 'NONE' && h.figures['netCents'] === undefined && h.figures['grossCents'] === undefined) gaps.push('the margin per deal is not established');
+  return gaps;
+}
+
+function boundsOf(h: GraphHypothesis): Pick<GraphConstruction, 'marginCents' | 'availableDeals' | 'breakEvenCostCents'> {
+  const gross = h.figures['grossCents'];
+  const net = h.figures['netCents'];
+  const demanded = h.figures['demanded'];
+  const supplied = h.figures['supplied'];
+  const buyers = h.figures['buyers'];
+  return {
+    marginCents: { low: net ?? null, high: gross ?? net ?? null },
+    availableDeals: demanded !== undefined && supplied !== undefined ? Math.max(0, demanded - supplied) : buyers ?? (h.rule === 'BUYER_REQUEST_AGAINST_SUPPLIER' || h.rule === 'RENEWAL_AGAINST_CAPACITY' ? 1 : null),
+    breakEvenCostCents: gross ?? null,
+  };
+}
+
+/** Lexicographic, as the rest of this module ranks: fewer unknowns, then a larger margin bound, then more room, then the key. */
+function decisionOrder(a: GraphConstruction, b: GraphConstruction): number {
+  return (
+    a.missingConditions.length - b.missingConditions.length ||
+    (b.marginCents.high ?? -Infinity) - (a.marginCents.high ?? -Infinity) ||
+    (b.availableDeals ?? -1) - (a.availableDeals ?? -1) ||
+    a.key.localeCompare(b.key)
+  );
+}
+
+/**
+ * Event-graph hypotheses as construction inputs, beside the industry map,
+ * openings and capabilities the rest of this module composes from.
+ *
+ * Each hypothesis is joined with every structure its relationship can be paid
+ * through (the transaction roles). A cheap prune drops a candidate whose hard
+ * constraint fails — capital the goal does not allow, a deliverable Brain has
+ * not proved, a supplier nobody recorded, a class the owner excluded — before
+ * anything costly is spent on it, recording why, and keeps the side of it that
+ * is still worth a later design. Near-identical designs (one structure, one
+ * neighborhood, one relationship, other actors) collapse into the strongest;
+ * different structures are different mechanisms and all stay. What is left is
+ * ranked by what most deserves costly investigation. Every result is a
+ * hypothesis carrying the graph's missing conditions plus its own. Pure.
+ */
+export function constructFromGraph(hypotheses: readonly GraphHypothesis[], ctx: GraphConstructionContext): GraphConstructionResult {
+  const pruned: GraphPruned[] = [];
+  const bySignature = new Map<string, GraphConstruction>();
+  for (const h of [...hypotheses].sort((a, b) => a.key.localeCompare(b.key))) {
+    if (h.status !== 'HYPOTHESIS') continue;
+    for (const structure of GRAPH_ROLES[h.rule]) {
+      const key = `${structure}:${h.key}`;
+      const failure = hardConstraintFailure(structure, h, ctx);
+      if (failure) {
+        pruned.push({
+          key,
+          structure,
+          hypothesisKey: h.key,
+          reason: failure,
+          salvage: { rule: h.rule, actorKeys: h.actorKeys, factIds: h.factIds, neighborhood: h.neighborhood },
+        });
+        continue;
+      }
+      const candidate: GraphConstruction = {
+        status: 'HYPOTHESIS',
+        key,
+        signature: digestOf(['graph-construction/v1', structure, h.rule, h.neighborhood].join('|')),
+        structure,
+        structureLabel: STRUCTURES[structure].label,
+        rule: h.rule,
+        neighborhood: h.neighborhood,
+        hypothesisKey: h.key,
+        missingConditions: [...new Set([...h.missingConditions, ...structureGaps(structure, h, ctx)])],
+        evidence: h.evidence,
+        ...boundsOf(h),
+        collapsed: [],
+        actors: h.actors,
+      };
+      const held = bySignature.get(candidate.signature);
+      if (!held) {
+        bySignature.set(candidate.signature, candidate);
+      } else if (decisionOrder(candidate, held) < 0) {
+        bySignature.set(candidate.signature, { ...candidate, collapsed: [...held.collapsed, held.key] });
+      } else {
+        held.collapsed.push(candidate.key);
+      }
+    }
+  }
+  return { kept: [...bySignature.values()].sort(decisionOrder), pruned };
+}
+
+// ---------------------------------------------------------------------------
+// Missing-link questions (ALGO-19-4 "derive … rank possible transactions and missing-link questions")
+// ---------------------------------------------------------------------------
+
+/**
+ * One question derived from the constructions: a condition nobody has
+ * established, in one neighborhood, that stands between one or more ranked
+ * constructions and an opening. It is a research question, never an answer:
+ * the condition is unestablished until a source a person or an audit can read
+ * says otherwise.
+ */
+export interface MissingLinkQuestion {
+  /** Stable across cycles: the neighborhood and the condition, so the same gap is asked once. */
+  key: string;
+  neighborhood: string;
+  /** The unestablished condition, verbatim from the construction that carries it. */
+  condition: string;
+  /** The question as it is put to research. */
+  question: string;
+  /** The constructions that would move if it were answered, strongest first. */
+  constructionKeys: string[];
+  /** Distinct mechanisms it bears on: an answer that settles several structures is worth more. */
+  structures: Structure[];
+  /** Source records the constructions were read from, so research starts where the graph did. */
+  evidenceUrls: string[];
+  /**
+   * Expected decision value, ordinal: for each construction it bears on, one
+   * over that construction's unknowns — closing one of two gaps moves a design
+   * further than closing one of six — plus a unit when the design states a
+   * margin, so a gap in front of a priced design ranks above one in front of
+   * an unpriced one.
+   */
+  value: number;
+}
+
+/** Questions one cycle carries forward; the rest wait for the next cycle's ranking. */
+export const MISSING_LINK_QUESTIONS = 10;
+
+/**
+ * The missing-link questions a construction result implies, ranked by what an
+ * answer would move. Pure.
+ *
+ * Each kept construction names what it still lacks; the same condition in the
+ * same neighborhood is one question however many constructions carry it, so a
+ * gap shared by a broker, a referral and a subcontract design is asked once
+ * and ranks by all three. Pruned designs contribute nothing here: their hard
+ * constraint failed, and asking about their soft gaps would spend research on
+ * a design that cannot run.
+ */
+export function missingLinkQuestions(result: Pick<GraphConstructionResult, 'kept'>, limit: number = MISSING_LINK_QUESTIONS): MissingLinkQuestion[] {
+  const byKey = new Map<string, MissingLinkQuestion>();
+  // In the construction ranking, whatever order the caller holds them in: the same result asks the same questions.
+  for (const one of [...result.kept].sort(decisionOrder)) {
+    const weight = 1 / Math.max(1, one.missingConditions.length) + (one.marginCents.high !== null ? 1 : 0);
+    for (const condition of one.missingConditions) {
+      const key = digestOf(['missing-link/v1', one.neighborhood, norm(condition)].join('|'));
+      let q = byKey.get(key);
+      if (!q) {
+        q = {
+          key,
+          neighborhood: one.neighborhood,
+          condition,
+          question: `For ${one.neighborhood}, nobody has established this yet: ${condition}. Find what a source says about it, quoting the source, or report it unanswered.`,
+          constructionKeys: [],
+          structures: [],
+          evidenceUrls: [],
+          value: 0,
+        };
+        byKey.set(key, q);
+      }
+      q.constructionKeys.push(one.key);
+      if (!q.structures.includes(one.structure)) q.structures.push(one.structure);
+      for (const link of one.evidence) if (link.url && !q.evidenceUrls.includes(link.url) && q.evidenceUrls.length < 3) q.evidenceUrls.push(link.url);
+      q.value += weight;
+    }
+  }
+  return [...byKey.values()]
+    .map((q) => ({ ...q, value: Math.round(q.value * 1000) / 1000 }))
+    .sort((a, b) => b.value - a.value || b.structures.length - a.structures.length || a.key.localeCompare(b.key))
+    .slice(0, Math.max(0, limit));
+}

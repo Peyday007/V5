@@ -14,6 +14,8 @@
  * trigger that never produces a candidate is visible as such.
  */
 import type { SearchBucket } from './discovery.ts';
+import { getDb } from '../../db/database.ts';
+import { effectiveDateOf } from '../feeds/detectors.ts';
 
 /**
  * On once the free-model lane is connected, because the lane is what sorts
@@ -117,3 +119,149 @@ export const TRIGGER_BUCKETS: readonly SearchBucket[] = Object.freeze([
       `visibly behind on the same page or listing? ${ASK}`,
   },
 ]);
+
+// ---------------------------------------------------------------------------
+// Code-composed trigger searches
+// ---------------------------------------------------------------------------
+
+/**
+ * One stored observation a trigger's search can name: the business, the
+ * event, its date and the published source that shows it — all already held
+ * in Brain's feed rows, so nobody has to be asked to find them.
+ */
+export interface TriggerSubject {
+  name: string;
+  event: string;
+  date: string;
+  url: string;
+}
+
+export interface TriggerQuery {
+  bucketId: string;
+  /** CODE: composed from stored rows, no model-written prompt. PROMPT: no stored signal, the bucket's own question. */
+  origin: 'CODE' | 'PROMPT';
+  subjects: TriggerSubject[];
+  question: string;
+}
+
+const DAY = 86_400_000;
+/** At most this many named subjects in one search: enough to work, small enough to verify each one. */
+export const TRIGGER_MAX_SUBJECTS = 12;
+
+type SignalReader = (now: Date) => Promise<TriggerSubject[]>;
+
+function iso(at: number): string {
+  return new Date(at).toISOString();
+}
+
+/** One subject per business: the first (most recent) row for a name wins. */
+function distinctByName(subjects: TriggerSubject[]): TriggerSubject[] {
+  const seen = new Set<string>();
+  return subjects.filter((one) => {
+    const key = one.name.trim().toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, TRIGGER_MAX_SUBJECTS);
+}
+
+/**
+ * Which stored rows a trigger reads. A bucket absent here has no source Brain
+ * already parses deterministically, and keeps its own question.
+ */
+const SIGNAL_READERS: Readonly<Record<string, SignalReader>> = {
+  // A posting first seen 45–120 days ago. Still open is not known from the row; the search asks it.
+  'trigger-stale-job-post': async (now) => {
+    const rows = await getDb().all<{ organization: string; title: string; published_at: string; url: string }>(
+      `SELECT organization, title, published_at, url FROM feed_items
+        WHERE source IN ('remoteok', 'remotive') AND organization IS NOT NULL AND organization <> ''
+          AND published_at IS NOT NULL AND published_at <= ? AND published_at >= ?
+        ORDER BY published_at DESC LIMIT 200`,
+      [iso(now.getTime() - 45 * DAY), iso(now.getTime() - 120 * DAY)],
+    );
+    return distinctByName(rows.map((row) => ({ name: row.organization, event: `posted "${row.title}"`, date: row.published_at.slice(0, 10), url: row.url })));
+  },
+  // A code detection of concentrated sales hiring by one named employer.
+  'trigger-funded-hiring-sales': async (now) => {
+    const rows = await getDb().all<{ label: string; entity_key: string; window_to: string; source_urls: string; member_ids: string }>(
+      `SELECT label, entity_key, window_to, source_urls, member_ids FROM feed_detections
+        WHERE category = 'SALES' AND entity_key IS NOT NULL AND window_to >= ?
+        ORDER BY window_to DESC LIMIT 100`,
+      [iso(now.getTime() - 30 * DAY)],
+    );
+    const out: TriggerSubject[] = [];
+    for (const row of rows) {
+      const first = (JSON.parse(row.member_ids) as string[])[0];
+      const named = first
+        ? await getDb().get<{ organization: string | null }>('SELECT organization FROM feed_items WHERE id = ?', [first])
+        : undefined;
+      const url = (JSON.parse(row.source_urls) as string[])[0];
+      if (!url) continue;
+      out.push({ name: named?.organization?.trim() || row.entity_key, event: row.label, date: row.window_to.slice(0, 10), url });
+    }
+    return distinctByName(out);
+  },
+  // A final rule whose stated effective date is within the next 60 days, named by its agency.
+  'trigger-new-rule': async (now) => {
+    const rows = await getDb().all<{ organization: string | null; title: string; body: string | null; url: string }>(
+      `SELECT organization, title, body, url FROM feed_items
+        WHERE source = 'federal-register-rules' AND body LIKE '%Effective %' AND fetched_at >= ?
+        ORDER BY fetched_at DESC LIMIT 300`,
+      [iso(now.getTime() - 90 * DAY)],
+    );
+    const out: TriggerSubject[] = [];
+    for (const row of rows) {
+      const effective = effectiveDateOf(row.body);
+      if (!effective) continue;
+      const at = Date.parse(`${effective}T00:00:00.000Z`);
+      if (!Number.isFinite(at) || at < now.getTime() - DAY || at > now.getTime() + 60 * DAY) continue;
+      out.push({ name: row.title, event: `final rule from ${row.organization?.trim() || 'a federal agency'} taking effect`, date: effective, url: row.url });
+    }
+    // A rule is the subject here, not a business: distinct by title.
+    return distinctByName(out);
+  },
+};
+
+/** The buckets whose search code can compose from stored rows. */
+export const CODE_COMPOSED_TRIGGERS: readonly string[] = Object.freeze(Object.keys(SIGNAL_READERS));
+
+const VERIFY =
+  'For each one, confirm from a published, dated source that the event is real and current, name the ' +
+  'exact job it now implies, and give a business email or contact page the business itself publishes. ' +
+  'Say plainly where a listed item does not hold up. Only work deliverable by email as documents, ' +
+  'spreadsheets, data, simple websites or graphics.';
+
+/** The search text for stored subjects. Pure: the same rows always give the same words. */
+export function composeTriggerQuestion(bucket: SearchBucket, subjects: readonly TriggerSubject[]): string {
+  const lead =
+    bucket.id === 'trigger-new-rule'
+      ? 'Brain holds these newly published rules with a stated effective date. Which specific businesses, by name, each one requires to publish a document, notice, policy page or data file by that date, and which have not yet?'
+      : `Brain already holds these observations for "${bucket.title}".`;
+  const lines = subjects.map((one) => `\n- ${one.name}: ${one.event} (${one.date}) — ${one.url}`).join('');
+  return `${lead}${lines}\n${VERIFY}`;
+}
+
+/**
+ * A trigger's search for this pass. With stored signals it is composed by code
+ * from them — no model-written prompt; without any it is the bucket's own
+ * question, exactly as before. A failed read is the fallback, never an error:
+ * a trigger keeps working when the feed tables cannot answer.
+ */
+export async function triggerQuery(bucket: SearchBucket, now: Date = new Date()): Promise<TriggerQuery> {
+  const reader = SIGNAL_READERS[bucket.id];
+  const subjects = reader ? await reader(now).catch(() => [] as TriggerSubject[]) : [];
+  if (subjects.length === 0) return { bucketId: bucket.id, origin: 'PROMPT', subjects: [], question: bucket.question };
+  return { bucketId: bucket.id, origin: 'CODE', subjects, question: composeTriggerQuestion(bucket, subjects) };
+}
+
+/**
+ * The trigger buckets for one discovery pass, each carrying the question
+ * `triggerQuery` chose. Same ids, mechanisms and deliverables as
+ * `TRIGGER_BUCKETS`, so rounds, the scoreboard and the evidence gate read
+ * them unchanged; nothing is scheduled or stored by this.
+ */
+export async function triggerBucketsFor(now: Date = new Date()): Promise<SearchBucket[]> {
+  const out: SearchBucket[] = [];
+  for (const bucket of TRIGGER_BUCKETS) out.push({ ...bucket, question: (await triggerQuery(bucket, now)).question });
+  return out;
+}
