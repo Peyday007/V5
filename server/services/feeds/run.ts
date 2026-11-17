@@ -50,7 +50,12 @@ import { FEED_SOURCES, pullUrl, type FeedSource } from './sources.ts';
 import { FEED_SHORTLIST_BUCKET } from './bucket.ts';
 import { SITE_SOURCE } from './sites.ts';
 import { CODE_SIGNAL_SOURCE, coveredItems, detectionsForLeads } from './detectors.ts';
-import { extractItem, extractItems, MODEL_BATCH_SIZE, type ExtractableItem, type ExtractedFact } from './extract.ts';
+import { EXTRACTOR_VERSION, extractItem, extractItems, MODEL_BATCH_SIZE, type ExtractableItem, type ExtractedFact } from './extract.ts';
+import { commitReadings, emptyDeltaIndex, fingerprintOf, foldSlices, planDelta, recordIdentity, sliceOf, type DeltaIndex, type DeltaPlan, type DeltaStatus, type RecordReading } from '../knowledge/delta.ts';
+import { nameKeyOf, resolveIdentities, type IdentityCollision, type IdentityLink, type IdentityRecord } from '../knowledge/identity.ts';
+import { selectForDeepening, type DeepeningCandidate, type DeepeningDecision, type DeepeningResult } from '../knowledge/deepening.ts';
+import { judgeStructure, plannedStage, planProcessing, type Executor, type PlannedStage, type ProcessingPlan, type RouteEvidence, type Stage } from '../knowledge/processingGraph.ts';
+import { addFunnelReadings, funnelGain, readFunnel, readStoredFunnel, type FunnelReading, type FunnelRecord } from '../knowledge/funnel.ts';
 import { addExtractedItems, currentEventGraph, syncEventGraph, type ExtractedItemsUpdate, type GraphHypothesis } from '../industry/eventGraph.ts';
 import { constructFromGraph, type MissingLinkQuestion } from '../cash/construct.ts';
 import type { Weakness } from '../../domain/improvement.ts';
@@ -932,6 +937,254 @@ export interface ExtractionPass {
    * the same tick. Null when the graph could not take them; the pass is still recorded.
    */
   graph: ExtractedItemsUpdate | null;
+  /** The processing graph Brain judged for each source in the pass (KNOW-25-1): which stages, CODE or LLM, and why. */
+  processingGraph?: ProcessingPlan[];
+  /** Delta classification against the fingerprint index the previous pass carried: only NEW, CHANGED and REPARSE records are read. */
+  delta?: ExtractionDelta;
+  /** Identity resolution of the pass's entities: corroborated links, and collisions kept apart. */
+  identity?: { links: IdentityLink[]; collisions: IdentityCollision[]; uncorroborated: number };
+  /** Selective deepening of the unreadable and contested candidates, against measured capacity. */
+  deepening?: {
+    capacity: number;
+    threshold: number | null;
+    promoted: DeepeningDecision[];
+    held: DeepeningDecision[];
+    /**
+     * The promoted contested keys, entity collisions and cross-source links, each as the verification
+     * question the next feed shortlist round puts to research (`pendingDeepeningQuestions`). A promoted
+     * unreadable record is not here: the free-model screen reads it (`routeEscalation`).
+     */
+    questions?: MissingLinkQuestion[];
+  };
+  /** The intelligence funnel for this pass, and what it gained: raw intake beside usable intelligence. */
+  funnel?: {
+    /** This pass alone: its records at each stage, with evidence and decisions recorded since the previous pass. */
+    reading: FunnelReading;
+    /** The previous pass's cumulative reading plus this one: what Brain has understood across passes. */
+    cumulative: FunnelReading;
+    /** Start of the window the downstream stages (evidence accepted, goal decisions) were read over. */
+    since: string;
+    /** `cumulative` against the previous pass's cumulative reading. */
+    gain: { raw: number; usableIntelligence: number; falseSpeed: boolean };
+  };
+  /** A stage that failed this pass; the pass is still recorded and the stage is named. */
+  stageFailures?: { stage: string; error: string }[];
+  /**
+   * This pass's slice of the fingerprint index (`sliceOf`): the records the batch presented, each at its
+   * latest version, and the mappings they set — never the whole index. The row is append-only, so a full
+   * copy here would be written again on every pass; the next pass folds the recent slices instead
+   * (`foldSlices`, over at most `DELTA_LOOKBACK_PASSES` rows and `DELTA_INDEX_MAX_RECORDS` records).
+   */
+  deltaIndex?: DeltaIndex;
+  /**
+   * What each source's plan actually ran this pass, with the executor the plan gave it and how many
+   * records it ran over: the plan decides, and this is the record that it did. `planned` is false only
+   * when the planner failed and the source ran as code.
+   */
+  stagesRun?: StageRun[];
+  /** The parser's measured record per source under one parser version, which the next pass's plans read. */
+  parserHistory?: { parserVersion: string; sources: ParserHistory };
+}
+
+export interface StageRun {
+  sourceId: string;
+  stage: Stage;
+  executor: Executor;
+  records: number;
+  planned: boolean;
+}
+
+/** Per source: records the parser read, records it could read, the value they put at stake, and whether they carried quantities. */
+export type ParserHistory = Record<string, { runs: number; successes: number; decisionValue: number; reconstructs: boolean }>;
+
+/**
+ * The carried parser history, or empty when it is absent, malformed or from another parser version:
+ * a new parser has no record yet, and an old parser's record is never credited to it.
+ */
+export function readParserHistory(raw: unknown, parserVersion: string): ParserHistory {
+  if (!raw || typeof raw !== 'object') return {};
+  const { parserVersion: version, sources } = raw as { parserVersion?: unknown; sources?: unknown };
+  if (version !== parserVersion || !sources || typeof sources !== 'object') return {};
+  const out: ParserHistory = {};
+  for (const [id, one] of Object.entries(sources as Record<string, unknown>)) {
+    const h = one as { runs?: unknown; successes?: unknown; decisionValue?: unknown; reconstructs?: unknown };
+    if (typeof h?.runs !== 'number' || typeof h.successes !== 'number' || h.runs < 0 || h.successes < 0 || h.successes > h.runs) continue;
+    out[id] = {
+      runs: h.runs,
+      successes: h.successes,
+      decisionValue: typeof h.decisionValue === 'number' && h.decisionValue > 0 ? h.decisionValue : 1,
+      reconstructs: h.reconstructs === true,
+    };
+  }
+  return out;
+}
+
+export interface ExtractionDelta {
+  parserVersion: string;
+  counts: Record<DeltaStatus, number>;
+  /** Item ids per status. */
+  newItems: string[];
+  changedItems: string[];
+  unchangedItems: string[];
+  reparsedItems: string[];
+  /** Fact keys recomputed this pass: what the previous versions of changed records produced, plus what was read now. */
+  recomputedKeys: string[];
+  /**
+   * Stored records (not re-read this pass) whose observations of a recomputed key were reconciled with
+   * what was read: the recomputation ran against them, so a contradiction across passes is seen.
+   */
+  reconciledAgainst?: string[];
+  affectedEntities: string[];
+}
+
+/** Stored records a pass reloads to recompute its affected keys against; bounded so a pass never reads the store. */
+export const STORED_OBSERVATIONS_MAX = 500;
+
+/**
+ * The records whose observations a recomputation needs and this pass did not re-read: the batch's own
+ * unchanged records, and earlier passes' records the index says produced one of the keys, each at the
+ * exact version the index holds (same fingerprint, read by the current parser). A record being re-read
+ * now is never its own context: its previous version is superseded, not contradicted.
+ */
+async function storedObservationsFor(input: {
+  items: readonly ExtractableItem[];
+  identityOfItem: ReadonlyMap<string, string>;
+  toRead: ReadonlySet<string>;
+  priorIndex: DeltaIndex;
+  keys: ReadonlySet<string>;
+}): Promise<ExtractableItem[]> {
+  const out: ExtractableItem[] = [];
+  const taken = new Set<string>();
+  for (const item of input.items) {
+    const identity = input.identityOfItem.get(item.id)!;
+    if (input.toRead.has(identity) || taken.has(identity)) continue;
+    taken.add(identity);
+    out.push(item);
+  }
+  const wanted = Object.values(input.priorIndex.records)
+    .filter((h) => !taken.has(h.identity) && !input.toRead.has(h.identity))
+    .map((h) => ({ identity: h.identity, latest: h.versions[h.versions.length - 1] }))
+    .filter((r): r is { identity: string; latest: NonNullable<typeof r.latest> } =>
+      !!r.latest && r.latest.parserVersion === EXTRACTOR_VERSION && r.latest.factKeys.some((k) => input.keys.has(k)),
+    )
+    .slice(0, Math.max(0, STORED_OBSERVATIONS_MAX - out.length));
+  out.push(...(await storedAtIndexedVersion(wanted, taken)));
+  return out;
+}
+
+/**
+ * The stored rows of indexed records, each at exactly the version the index holds (same fingerprint):
+ * a row with other content is a version that reading never saw. `taken` identities are skipped and
+ * filled in as rows are taken.
+ */
+async function storedAtIndexedVersion(
+  wanted: readonly { identity: string; latest: { fingerprint: string } }[],
+  taken: Set<string>,
+): Promise<ExtractableItem[]> {
+  const bySource = new Map<string, Map<string, string>>();
+  for (const r of wanted) {
+    const at = r.identity.indexOf('\u0000');
+    if (at < 0) continue;
+    const source = r.identity.slice(0, at);
+    bySource.set(source, new Map([...(bySource.get(source) ?? []), [r.identity.slice(at + 1), r.latest.fingerprint]]));
+  }
+  const out: ExtractableItem[] = [];
+  const db = getDb();
+  for (const [source, records] of bySource) {
+    const ids = [...records.keys()];
+    for (let i = 0; i < ids.length; i += 100) {
+      const chunk = ids.slice(i, i + 100);
+      const marks = chunk.map(() => '?').join(', ');
+      const rows = await db.all<{ id: string; source: string; url: string; title: string; body: string | null; organization: string | null; published_at: string | null; fetched_at: string }>(
+        `SELECT id, source, url, title, body, organization, published_at, fetched_at FROM feed_items
+          WHERE source = ? AND (url IN (${marks}) OR id IN (${marks}))
+          ORDER BY fetched_at DESC, id DESC`,
+        [source, ...chunk, ...chunk],
+      );
+      for (const row of rows) {
+        const item: ExtractableItem = {
+          id: row.id, source: row.source, url: row.url, title: row.title, body: row.body,
+          organization: row.organization, publishedAt: row.published_at, fetchedAt: row.fetched_at,
+        };
+        const record = deltaRecordOf(item);
+        const identity = recordIdentity(record.source, record.recordId);
+        if (taken.has(identity) || records.get(record.recordId) !== fingerprintOf(record.content)) continue;
+        taken.add(identity);
+        out.push(item);
+      }
+    }
+  }
+  return out;
+}
+
+/** Stored records a pass re-presents because an older parser read them; bounded so a parser change is absorbed over passes. */
+export const REPARSE_PER_PASS = 100;
+
+/**
+ * Records the index says an older parser read, re-presented from their stored rows at exactly the
+ * version that parser read (same fingerprint), so the delta classifies them REPARSE and the current
+ * parser reads them again (KNOW-25-1: "a parser change re-reads exactly the records that parser read").
+ * Intake never brings an unchanged record back, so without this a parser change would re-read nothing.
+ * A record the cursor batch already carries is not re-presented twice.
+ */
+async function storedForReparse(input: {
+  priorIndex: DeltaIndex;
+  exclude: ReadonlySet<string>;
+  limit: number;
+}): Promise<ExtractableItem[]> {
+  const wanted = Object.values(input.priorIndex.records)
+    .filter((h) => !input.exclude.has(h.identity))
+    .map((h) => ({ identity: h.identity, latest: h.versions[h.versions.length - 1] }))
+    .filter((r): r is { identity: string; latest: NonNullable<typeof r.latest> } =>
+      !!r.latest && r.latest.parserVersion !== null && r.latest.parserVersion !== EXTRACTOR_VERSION,
+    )
+    .slice(0, Math.max(0, input.limit));
+  return storedAtIndexedVersion(wanted, new Set());
+}
+
+/** Records the folded fingerprint index keeps, most recently seen first. */
+export const DELTA_INDEX_MAX_RECORDS = 5000;
+/**
+ * Extraction rows the next pass folds its index from. Each row holds only its own pass's slice, so the
+ * read is bounded by this many passes of at most `EXTRACTION_ITEMS_PER_PASS` records each, and nothing
+ * is rewritten.
+ */
+export const DELTA_LOOKBACK_PASSES = Math.ceil(DELTA_INDEX_MAX_RECORDS / EXTRACTION_ITEMS_PER_PASS);
+
+const errorText = (error: unknown) => String((error as Error)?.message ?? error);
+
+/** What a record says, for its fingerprint: never when or where it was fetched. */
+function deltaRecordOf(item: ExtractableItem) {
+  return {
+    source: item.source,
+    recordId: item.url || item.id,
+    content: { title: item.title, body: item.body, organization: item.organization, publishedAt: item.publishedAt },
+  };
+}
+
+/** The route a stored source is pulled through, as the processing graph reads it. */
+function routeOf(sourceId: string, items: readonly ExtractableItem[]): RouteEvidence {
+  const source = FEED_SOURCES.find((s) => s.id === sourceId);
+  if (!source) return { url: items[0]?.url ?? sourceId, kind: 'DOCUMENT', updateMechanism: 'UNKNOWN', automatable: true };
+  if (source.shards) return { url: source.url, kind: 'BULK', updateMechanism: 'BULK_SNAPSHOT', automatable: true };
+  return { url: source.url, kind: source.cursorUrl ? 'API' : 'FEED', updateMechanism: 'CONDITIONAL_FETCH', automatable: true };
+}
+
+/** The largest money figure an item's facts state, in major units: the decision value at stake, or 1 when none is stated. */
+function statedValue(facts: readonly ExtractedFact[]): number {
+  let best = 0;
+  for (const f of facts) if (f.currency && typeof f.value === 'number' && f.value > best) best = f.value;
+  return best > 0 ? best / 100 : 1;
+}
+
+/** Measured idle research capacity for the project; unknown is zero, never a favourable assumption. */
+async function measuredDeepeningCapacity(projectId: string): Promise<number> {
+  try {
+    const { spareResearchSurfaces } = await import('../cash/researchRoom.ts');
+    return (await spareResearchSurfaces(projectId)) ?? 0;
+  } catch {
+    return 0;
+  }
 }
 
 /**
@@ -944,20 +1197,91 @@ export interface ExtractionPass {
  * code: it runs when every model provider is down. Returns the pass written, or
  * null when nothing new arrived.
  */
-export async function recordFeedExtraction(input: { projectId: string; now?: Date; limit?: number }): Promise<ExtractionPass | null> {
+/** Rows read per downstream funnel stage per pass; a longer window is read on the next pass. */
+export const FUNNEL_DOWNSTREAM_LIMIT = 5_000;
+
+/**
+ * The funnel's downstream stages, each from its own rows over (since, until]:
+ * evidence accepted is a lead screen's answer (verified only when a model said
+ * KEEP) or a detector's coverage, one record per item; a goal-impacting
+ * decision is a shortlist round taking a stored record into research.
+ */
+export async function downstreamFunnelRecords(since: string, until: string): Promise<{ evidence: FunnelRecord[]; decisions: FunnelRecord[] }> {
+  const db = getDb();
+  const screens = await db.all<{ subject_id: string; output: string | null; created_at: string }>(
+    `SELECT subject_id, output, created_at FROM cheap_results
+      WHERE kind = 'SCREEN_LEAD' AND ok = 1 AND subject_id IS NOT NULL AND created_at > ? AND created_at <= ?
+      ORDER BY created_at, id LIMIT ?`,
+    [since, until, FUNNEL_DOWNSTREAM_LIMIT],
+  );
+  const covered = await db.all<{ item_id: string; covered_at: string }>(
+    `SELECT item_id, covered_at FROM feed_item_coverage WHERE covered_at > ? AND covered_at <= ? ORDER BY covered_at, item_id LIMIT ?`,
+    [since, until, FUNNEL_DOWNSTREAM_LIMIT],
+  );
+  const byItem = new Map<string, { observedAt: string; verified: boolean }>();
+  const accept = (id: string, at: string, verified: boolean) => {
+    const held = byItem.get(id);
+    byItem.set(id, { observedAt: held && held.observedAt > at ? held.observedAt : at, verified: (held?.verified ?? false) || verified });
+  };
+  for (const row of screens) accept(row.subject_id, row.created_at, (row.output ?? '').includes('"verdict":"KEEP"'));
+  for (const row of covered) accept(row.item_id, row.covered_at, true);
+  const evidence: FunnelRecord[] = [...byItem.entries()].map(([id, e]) => ({ id, fingerprint: `evidence:${id}`, observedAt: e.observedAt, verified: e.verified }));
+  const shortlisted = await db.all<{ id: string; shortlisted_round_id: string; shortlisted_at: string }>(
+    `SELECT id, shortlisted_round_id, shortlisted_at FROM feed_items
+      WHERE shortlisted_round_id IS NOT NULL AND shortlisted_at > ? AND shortlisted_at <= ?
+      ORDER BY shortlisted_at, id LIMIT ?`,
+    [since, until, FUNNEL_DOWNSTREAM_LIMIT],
+  );
+  const decisions: FunnelRecord[] = shortlisted.map((row) => ({
+    id: row.id,
+    fingerprint: `${row.shortlisted_round_id}:${row.id}`,
+    observedAt: row.shortlisted_at,
+  }));
+  return { evidence, decisions };
+}
+
+export async function recordFeedExtraction(input: {
+  projectId: string;
+  now?: Date;
+  limit?: number;
+  /** Deepening capacity to use instead of measuring it (tests). */
+  capacity?: number;
+  /** Stages to fail on purpose (tests of the stage-failure record). */
+  failStages?: readonly string[];
+}): Promise<ExtractionPass | null> {
   const now = input.now ?? new Date();
   const db = getDb();
-  const last = await db.get<{ detail: string | null }>(
-    `SELECT detail FROM cash_events WHERE project_id = ? AND kind = ? ORDER BY created_at DESC, id DESC LIMIT 1`,
-    [input.projectId, EXTRACTION_EVENT],
+  const recent = await db.all<{ detail: string | null; created_at: string }>(
+    `SELECT detail, created_at FROM cash_events WHERE project_id = ? AND kind = ? ORDER BY created_at DESC, id DESC LIMIT ?`,
+    [input.projectId, EXTRACTION_EVENT, DELTA_LOOKBACK_PASSES],
   );
   let from: { fetchedAt: string; id: string } | null = null;
-  try {
-    const to = (JSON.parse(last?.detail ?? '{}') as { cursor?: { to?: { fetchedAt?: unknown; id?: unknown } } }).cursor?.to;
-    if (to && typeof to.fetchedAt === 'string' && typeof to.id === 'string') from = { fetchedAt: to.fetchedAt, id: to.id };
-  } catch {
-    from = null;
+  let priorHistory: ParserHistory = {};
+  // The funnel the previous pass ended at (cumulative), and when it was recorded: this pass's gain is measured against it.
+  let priorFunnel: FunnelReading = readFunnel({});
+  const priorPassAt: string | null = recent[0]?.created_at ?? null;
+  const slices: unknown[] = [];
+  for (const [i, row] of recent.entries()) {
+    try {
+      const parsed = JSON.parse(row.detail ?? '{}') as {
+        cursor?: { to?: { fetchedAt?: unknown; id?: unknown } };
+        deltaIndex?: unknown;
+        parserHistory?: unknown;
+        funnel?: { reading?: unknown; cumulative?: unknown };
+      };
+      slices.push(parsed.deltaIndex);
+      if (i !== 0) continue;
+      const to = parsed.cursor?.to;
+      if (to && typeof to.fetchedAt === 'string' && typeof to.id === 'string') from = { fetchedAt: to.fetchedAt, id: to.id };
+      priorHistory = readParserHistory(parsed.parserHistory, EXTRACTOR_VERSION);
+      // A row from before the cumulative reading existed carries only its own pass: that is where the total starts.
+      priorFunnel = readStoredFunnel(parsed.funnel?.cumulative) ?? readStoredFunnel(parsed.funnel?.reading) ?? priorFunnel;
+    } catch {
+      // An unreadable row contributes no slice; when it is the newest, the cursor starts again at the lead window.
+    }
   }
+  // The index is folded from the recent passes' slices, newest first; no row holds the whole of it.
+  const priorIndex: DeltaIndex = foldSlices(slices, DELTA_INDEX_MAX_RECORDS);
   const floor = new Date(now.getTime() - LEAD_MAX_AGE_MS).toISOString();
   const rows = await db.all<{
     id: string;
@@ -980,8 +1304,7 @@ export async function recordFeedExtraction(input: { projectId: string; now?: Dat
       ? [CODE_SIGNAL_SOURCE, from.fetchedAt, from.fetchedAt, from.id, input.limit ?? EXTRACTION_ITEMS_PER_PASS]
       : [CODE_SIGNAL_SOURCE, floor, input.limit ?? EXTRACTION_ITEMS_PER_PASS],
   );
-  if (rows.length === 0) return null;
-  const items: ExtractableItem[] = rows.map((row) => ({
+  const fromRows: ExtractableItem[] = rows.map((row) => ({
     id: row.id,
     source: row.source,
     url: row.url,
@@ -991,21 +1314,382 @@ export async function recordFeedExtraction(input: { projectId: string; now?: Dat
     publishedAt: row.published_at,
     fetchedAt: row.fetched_at,
   }));
-  const run = extractItems(items, now);
+  // Records an older parser read come back from their stored rows: intake never re-sends an unchanged
+  // record, so this is the only way a parser change reaches what that parser read.
+  const reparse = await storedForReparse({
+    priorIndex,
+    exclude: new Set(fromRows.map((item) => recordIdentity(item.source, deltaRecordOf(item).recordId))),
+    limit: REPARSE_PER_PASS,
+  });
+  if (fromRows.length === 0 && reparse.length === 0) return null;
+  const items: ExtractableItem[] = [...fromRows, ...reparse];
+  const nowIsoText = now.toISOString();
+  const stageFailures: { stage: string; error: string }[] = [];
+  const stage = <T,>(name: string, fallback: T, fn: () => T): T => {
+    try {
+      if (input.failStages?.includes(name)) throw new Error(`stage ${name} failed on request`);
+      return fn();
+    } catch (error) {
+      stageFailures.push({ stage: name, error: errorText(error) });
+      return fallback;
+    }
+  };
+
+  // Delta: classify the batch against the index the previous pass carried; only what is new,
+  // changed or read by an older parser is read again, and only its facts are recomputed.
+  const identityOfItem = new Map(items.map((item) => [item.id, recordIdentity(item.source, deltaRecordOf(item).recordId)]));
+  const deltaPlan = stage<DeltaPlan | null>('delta', null, () =>
+    planDelta({ index: priorIndex, batch: items.map(deltaRecordOf), parserVersion: EXTRACTOR_VERSION, now: nowIsoText }),
+  );
+  const statusOfIdentity = new Map((deltaPlan?.changes ?? []).map((c) => [c.identity, c.status]));
+  const toRead = deltaPlan ? new Set(deltaPlan.toRead) : null;
+  const claimed = new Set<string>();
+  const deltaItems = toRead
+    ? items.filter((item) => {
+        const identity = identityOfItem.get(item.id)!;
+        if (!toRead.has(identity) || claimed.has(identity)) return false;
+        claimed.add(identity);
+        return true;
+      })
+    : items;
+
+  // Processing graph, judged before anything is read: one plan per source, from that source's own
+  // evidence (its declared format and route, its checkpoint and delta, its parser's measured history,
+  // the names its records carry), and the plan decides which stages run on its records and whether a
+  // stage goes to code or to the model (KNOW-25-1). A source the planner could not judge runs as code
+  // did before, and the failure is named.
+  const capacity = input.capacity ?? (await measuredDeepeningCapacity(input.projectId));
+  const bySource = new Map<string, ExtractableItem[]>();
+  for (const item of items) bySource.set(item.source, [...(bySource.get(item.source) ?? []), item]);
+  const nameOf = (item: ExtractableItem) => ((item.organization ?? '').trim() === '' ? '' : nameKeyOf('ENTITY', item.organization!));
+  const recordsByName = new Map<string, number>();
+  const sourcesByName = new Map<string, Set<string>>();
+  for (const item of deltaItems) {
+    const key = nameOf(item);
+    if (!key) continue;
+    recordsByName.set(key, (recordsByName.get(key) ?? 0) + 1);
+    sourcesByName.set(key, new Set([...(sourcesByName.get(key) ?? []), item.source]));
+  }
+  const plans = stage<ProcessingPlan[] | null>('processingGraph', null, () =>
+    [...bySource.entries()].map(([sourceId, sourceItems]) => {
+      const feed = FEED_SOURCES.find((s) => s.id === sourceId);
+      const pending = sourceItems.filter((item) => deltaItems.includes(item));
+      const hasCheckpoint = Object.values(priorIndex.records).some((h) => h.identity.startsWith(`${sourceId}\u0000`));
+      const statuses = sourceItems.map((item) => statusOfIdentity.get(identityOfItem.get(item.id) ?? ''));
+      const history = priorHistory[sourceId] ?? null;
+      const establishedEntityMappings = Object.values(priorIndex.entityMappings).some((m) => m.setBy.startsWith(`${sourceId}\u0000`));
+      const names = pending.map(nameOf).filter((key) => key !== '');
+      return planProcessing(
+        {
+          sourceId,
+          structure: judgeStructure(feed?.acquisition?.access.format, sourceItems),
+          // The publisher is the authority for what it states only when the source names it and the terms it publishes under.
+          authoritative: !!(feed?.acquisition?.provenance.publisher && feed.acquisition.provenance.license),
+          routes: [routeOf(sourceId, sourceItems)],
+          hasCheckpoint,
+          contentChanged: deltaPlan ? statuses.some((st) => st !== 'UNCHANGED') : null,
+          // The parser's measured record on this source under the current parser version, never this pass's own result.
+          priorParserRuns: history?.runs ?? 0,
+          priorParserSuccesses: history?.successes ?? 0,
+          establishedEntityMappings,
+          // One name on several records must be told apart or joined before anything is matched.
+          identityCollisionsSuspected: names.some((key) => (recordsByName.get(key) ?? 0) > 1),
+          timeSeries: sourceItems.some((item) => !!item.publishedAt),
+        },
+        {
+          questionId: `feed-extraction:${sourceId}`,
+          decision: 'which stored records reach research through the shortlist',
+          // What this source's records last put at stake; with no history, the unit value, never a favourable guess.
+          decisionValue: history?.decisionValue ?? 1,
+          uncertainty: history && history.runs > 0 ? 1 - history.successes / history.runs : 1,
+          needsReconstruction: history ? history.reconstructs : (feed?.acquisition?.factKinds.length ?? 0) > 0,
+          needsRelationships: names.some((key) => (sourcesByName.get(key)?.size ?? 0) > 1),
+          novel: !hasCheckpoint,
+        },
+        { llmIdleShare: capacity > 0 ? 1 : 0 },
+      );
+    }),
+  );
+  const planOf = new Map((plans ?? []).map((p) => [p.sourceId, p]));
+  /** The stage as the source's plan runs it; UNPLANNED when the planner failed; null when the plan leaves it out. */
+  const planned = (sourceId: string, name: Stage): PlannedStage | 'UNPLANNED' | null => {
+    if (!plans) return 'UNPLANNED';
+    const plan = planOf.get(sourceId);
+    return plan ? plannedStage(plan, name) : null;
+  };
+  const executorOf = (sourceId: string, name: Stage): Executor | null => {
+    const one = planned(sourceId, name);
+    return one === null ? null : one === 'UNPLANNED' ? 'CODE' : one.executor;
+  };
+  const stagesRun: StageRun[] = [];
+  const ran = (sourceId: string, name: Stage, count: number) => {
+    if (count === 0) return;
+    const executor = executorOf(sourceId, name) ?? 'CODE';
+    const plan = planOf.get(sourceId);
+    stagesRun.push({ sourceId, stage: name, executor, records: count, planned: !!plan });
+  };
+  const countBy = (list: readonly ExtractableItem[]) => {
+    const counts = new Map<string, number>();
+    for (const item of list) counts.set(item.source, (counts.get(item.source) ?? 0) + 1);
+    return counts;
+  };
+  for (const plan of plans ?? []) {
+    if (plan.status === 'UNCHANGED') ran(plan.sourceId, 'CHANGE_DATA_CAPTURE', bySource.get(plan.sourceId)!.length);
+  }
+
+  // Parse and normalize only the records whose source's plan runs that stage; the rest are not read.
+  const readItems = deltaItems.filter((item) => planned(item.source, 'PARSE_NORMALIZE') !== null);
+  for (const [sourceId, count] of countBy(readItems)) {
+    if (planned(sourceId, 'CHANGE_DATA_CAPTURE') !== null && plans) ran(sourceId, 'CHANGE_DATA_CAPTURE', count);
+    ran(sourceId, 'PARSE_NORMALIZE', count);
+    // Code extraction reconciles every fact against the others and keeps its exact span: the next two stages.
+    ran(sourceId, 'CONTRADICTION_FRESHNESS', count);
+    ran(sourceId, 'EVIDENCE_ATTACHMENT', count);
+  }
+  // Recompute the affected keys against stored observations, not only against what was read now: the
+  // records this pass did not re-read (unchanged, already read by this parser) — in this batch, and from
+  // earlier passes through the index — are reloaded for exactly the keys being recomputed, so a changed
+  // record is contested against an unchanged one, and a key a changed record stopped stating is
+  // re-derived from the observations that remain. Nothing else is reloaded.
+  let stored: ExtractableItem[] = [];
+  const recomputing = new Set([...(deltaPlan?.affectedFactKeys ?? []), ...readItems.flatMap((item) => extractItem(item)).map((f) => f.key)]);
+  if (deltaPlan && toRead && recomputing.size > 0) {
+    try {
+      if (input.failStages?.includes('storedObservations')) throw new Error('stage storedObservations failed on request');
+      stored = await storedObservationsFor({ items, identityOfItem, toRead, priorIndex, keys: recomputing });
+    } catch (error) {
+      stageFailures.push({ stage: 'storedObservations', error: errorText(error) });
+    }
+  }
+  const run = extractItems(readItems, now, { items: stored, affectedKeys: deltaPlan?.affectedFactKeys ?? [] });
   // Structure feeds Connect: what was just read goes into the event graph that construction reads,
-  // under the ids the graph's own sync gives these rows, so neither path makes a second fact.
+  // under the ids the graph's own sync gives these rows, so neither path makes a second fact. Only
+  // records whose plan detects events are handed over; the graph's own sync still reads every row.
+  const eventItems = readItems.filter((item) => planned(item.source, 'EVENT_DETECTION') !== null);
   let graph: ExtractedItemsUpdate | null = null;
+  // Per record, the neighborhoods its own facts recomputed: what the delta index carries as that
+  // record's dependents, so a record never carries the batch's whole set.
+  const dependentsOfItem = new Map<string, string[]>();
   try {
-    graph = addExtractedItems(items);
+    if (eventItems.length > 0) {
+      // One record at a time, in order: the graph takes the same facts in the same order as one batch call.
+      const affected = new Set<string>();
+      let facts = 0;
+      let added = 0;
+      for (const item of eventItems) {
+        const one = addExtractedItems([item]);
+        facts += one.facts;
+        added += one.added;
+        dependentsOfItem.set(item.id, one.affected);
+        for (const hood of one.affected) affected.add(hood);
+      }
+      graph = { facts, added, affected: [...affected].sort() };
+    }
+    if (graph) for (const [sourceId, count] of countBy(eventItems)) ran(sourceId, 'EVENT_DETECTION', count);
   } catch (error) {
     console.warn(`[feeds] extraction pass could not reach the event graph: ${String((error as Error)?.message ?? error)}`);
   }
-  const lastRow = rows[rows.length - 1]!;
-  const needsModel = run.needsModel.map((batch) => batch.map((one) => one.id));
+  // The cursor moves over the rows intake brought; a pass that only re-read records stays where it was.
+  const lastRow = rows[rows.length - 1];
+  const cursorTo = lastRow ? { fetchedAt: lastRow.fetched_at, id: lastRow.id } : (from ?? { fetchedAt: floor, id: '' });
+  const unreadable = new Set(run.needsModel.flat().map((one) => one.id));
+  // A record the code parser could not read goes to the model only when its source's plan gives parsing to
+  // the model (no tested parser for content that needs interpreting). Under a tested parser of structured
+  // content, an unreadable record carries no signal the model would add, and it is held, not spent on.
+  const needsModel = run.needsModel
+    .map((batch) => batch.filter((one) => executorOf(one.source, 'PARSE_NORMALIZE') === 'LLM').map((one) => one.id))
+    .filter((batch) => batch.length > 0);
+  const toModel = new Set(needsModel.flat());
+  const factsByItem = new Map<string, ExtractedFact[]>();
+  for (const f of run.facts) factsByItem.set(f.evidence.itemId, [...(factsByItem.get(f.evidence.itemId) ?? []), f]);
+
+  // Identity: the named entities of records whose plan identifies entities, linked only when an attribute
+  // corroborates it; collisions are kept apart.
+  const identityRecords: IdentityRecord[] = readItems
+    .filter((item) => (item.organization ?? '').trim() !== '' && planned(item.source, 'ENTITY_IDENTIFICATION') !== null)
+    .map((item) => {
+      const place = (factsByItem.get(item.id) ?? []).map((f) => f.scope.jurisdiction).find((j): j is string => !!j) ?? null;
+      return { ref: item.id, source: item.source, kind: 'ENTITY' as const, name: item.organization!, location: place };
+    });
+  const established: Record<string, string> = {};
+  for (const r of identityRecords) {
+    const held = priorIndex.entityMappings[identityOfItem.get(r.ref)!];
+    if (held) established[r.ref] = held.entityId;
+  }
+  const resolution = stage('identity', null as ReturnType<typeof resolveIdentities> | null, () => resolveIdentities({ records: identityRecords, established }));
+  if (resolution) for (const [sourceId, count] of countBy(readItems.filter((item) => identityRecords.some((r) => r.ref === item.id)))) ran(sourceId, 'ENTITY_IDENTIFICATION', count);
+  const sourceOfItem = new Map(readItems.map((item) => [item.id, item.source]));
+  // A cross-source link is a relationship update only for a source whose plan extracts relationships.
+  const relationshipLinks = (resolution?.links ?? []).filter(
+    (l) => l.sources.length > 1 && l.refs.some((ref) => planned(sourceOfItem.get(ref) ?? '', 'RELATIONSHIP_EXTRACTION') !== null),
+  );
+  for (const [sourceId, count] of countBy(readItems.filter((item) => relationshipLinks.some((l) => l.refs.includes(item.id))))) ran(sourceId, 'RELATIONSHIP_EXTRACTION', count);
+
+  // Selective deepening: what the plans gave the model — unreadable records under a model parse, identity
+  // the plan judged ambiguous, relationships the plan judged consequential — and contested keys, promoted
+  // by value of information within measured capacity.
+  const noveltyOf = (itemId: string) => {
+    const status = statusOfIdentity.get(identityOfItem.get(itemId) ?? '');
+    return status === 'NEW' ? 1 : status === 'CHANGED' ? 0.5 : status === 'REPARSE' ? 0.25 : 0;
+  };
+  const llmFor = (refs: readonly string[], name: Stage) => refs.some((ref) => executorOf(sourceOfItem.get(ref) ?? '', name) === 'LLM');
+  const candidates: DeepeningCandidate[] = [
+    ...readItems.filter((item) => toModel.has(item.id)).map((item) => ({ id: `item:${item.id}`, decisionValue: 1, uncertainty: 1, novelty: noveltyOf(item.id) })),
+    ...(resolution?.collisions ?? [])
+      .filter((c) => llmFor(c.refs, 'ENTITY_IDENTIFICATION'))
+      .map((c) => ({ id: `entity:${c.refs.join('+')}`, decisionValue: 1, uncertainty: 0.5, novelty: Math.max(...c.refs.map(noveltyOf)), contradicted: true })),
+    ...relationshipLinks
+      .filter((l) => llmFor(l.refs, 'RELATIONSHIP_EXTRACTION'))
+      .map((l) => ({ id: `link:${l.entityId}`, decisionValue: statedValue(l.refs.flatMap((id) => factsByItem.get(id) ?? [])), uncertainty: 0.5, novelty: Math.max(0, ...l.refs.map(noveltyOf)) })),
+    ...run.reconciled
+      .filter((r) => r.status === 'CONTESTED')
+      .map((r) => {
+        const ids = [...new Set(r.observations.map((o) => o.evidence.itemId))];
+        return {
+          id: `key:${r.key}`,
+          decisionValue: statedValue(ids.flatMap((id) => factsByItem.get(id) ?? [])),
+          uncertainty: 0.5,
+          novelty: Math.max(0, ...ids.map(noveltyOf)),
+          contradicted: true,
+        };
+      }),
+  ];
+  const deepened = stage('deepening', null as ReturnType<typeof selectForDeepening> | null, () => selectForDeepening(candidates, { capacity }));
+  // What deepening promoted beyond the unreadable records goes to costly verification: each promoted
+  // contested key, entity collision and cross-source link becomes a question the next shortlist round
+  // puts to research, with the records it rests on. The question is built from code's own structure
+  // (the fact's field, the attribute that kept two names apart, the sources) and the records' URLs,
+  // never from a record's words.
+  const urlOfItem = new Map([...stored, ...readItems].map((item) => [item.id, item.url]));
+  const refsOfCandidate = new Map<string, { refs: string[]; condition: string; question: string }>();
+  for (const c of resolution?.collisions ?? []) {
+    refsOfCandidate.set(`entity:${c.refs.join('+')}`, {
+      refs: [...c.refs],
+      condition: `two records carry the same name but differ on ${c.attribute}`,
+      question: `Two records carry the same organization name but differ on ${c.attribute}. Open both pages and report whether they are one organization or two, quoting what decides it.`,
+    });
+  }
+  for (const l of relationshipLinks) {
+    refsOfCandidate.set(`link:${l.entityId}`, {
+      refs: [...l.refs],
+      condition: `records from ${l.sources.length} sources were linked as one entity`,
+      question: `Records from ${l.sources.length} different sources were linked as one organization. Open each page and confirm or refute that they describe the same organization, quoting the page.`,
+    });
+  }
+  for (const r of run.reconciled) {
+    if (r.status !== 'CONTESTED') continue;
+    const field = r.observations[0]?.field ?? 'value';
+    refsOfCandidate.set(`key:${r.key}`, {
+      refs: [...new Set(r.observations.map((o) => o.evidence.itemId))],
+      condition: `records state different values for one ${field}`,
+      question: `Records state different values for the same ${field}. Open each page and report which value the page itself states, quoting it, or say that it cannot be settled.`,
+    });
+  }
+  const deepeningQuestions: MissingLinkQuestion[] = (deepened?.decisions ?? [])
+    .filter((d) => d.promote && refsOfCandidate.has(d.id))
+    .map((d) => {
+      const one = refsOfCandidate.get(d.id)!;
+      return {
+        key: `deepen:${d.id}`,
+        neighborhood: d.id,
+        condition: one.condition,
+        question: one.question,
+        constructionKeys: [],
+        structures: [],
+        evidenceUrls: [...new Set(one.refs.map((ref) => urlOfItem.get(ref)).filter((u): u is string => !!u))],
+        value: d.score,
+      };
+    })
+    // One question per candidate: the same pair can be found as a collision more than once.
+    .filter((q, i, all) => all.findIndex((other) => other.key === q.key) === i)
+    .sort((a, b) => b.value - a.value || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+
+  // The parser's record on each source, carried to the next pass's plan: what it read, what it could read,
+  // and what the records put at stake.
+  const parserHistory: ParserHistory = { ...priorHistory };
+  for (const [sourceId, count] of countBy(readItems)) {
+    const read = readItems.filter((item) => item.source === sourceId);
+    const facts = read.flatMap((item) => factsByItem.get(item.id) ?? []);
+    const before = priorHistory[sourceId];
+    parserHistory[sourceId] = {
+      runs: (before?.runs ?? 0) + count,
+      successes: (before?.successes ?? 0) + read.filter((item) => !unreadable.has(item.id)).length,
+      decisionValue: statedValue(facts),
+      reconstructs: facts.some((f) => f.measureKind !== null),
+    };
+  }
+
+  // Commit what was read to the index the next pass classifies against.
+  const readings: RecordReading[] = readItems.map((item) => {
+    const facts = factsByItem.get(item.id) ?? [];
+    const entityId = resolution?.mappings[item.id];
+    const identity = identityOfItem.get(item.id)!;
+    return {
+      identity,
+      parserVersion: EXTRACTOR_VERSION,
+      factKeys: facts.map((f) => f.key),
+      entities: entityId ? [entityId] : [],
+      dependents: dependentsOfItem.get(item.id) ?? [],
+      entityMappings: entityId ? { [identity]: entityId } : {},
+    };
+  });
+  const nextIndex = deltaPlan ? stage<DeltaIndex | null>('deltaCommit', null, () => commitReadings(deltaPlan.index, readings, nowIsoText)) : null;
+  const readWith = (status: DeltaStatus) => readItems.filter((item) => statusOfIdentity.get(identityOfItem.get(item.id)!) === status).map((item) => item.id);
+  const delta: ExtractionDelta | undefined = deltaPlan
+    ? {
+        parserVersion: EXTRACTOR_VERSION,
+        counts: deltaPlan.counts,
+        newItems: readWith('NEW'),
+        changedItems: readWith('CHANGED'),
+        unchangedItems: items.filter((item) => !readItems.includes(item)).map((item) => item.id),
+        reparsedItems: readWith('REPARSE'),
+        recomputedKeys: [...new Set([...deltaPlan.affectedFactKeys, ...run.reconciled.map((r) => r.key)])].sort(),
+        reconciledAgainst: [...new Set(run.reconciled.flatMap((r) => r.observations.map((o) => o.evidence.itemId)))].filter((id) => stored.some((item) => item.id === id)).sort(),
+        affectedEntities: deltaPlan.affectedEntities,
+      }
+    : undefined;
+
+  // Evidence accepted and goal-impacting decisions are read from their own rows, recorded since the previous
+  // pass: a screen's verdict or a detector's coverage, and a shortlist round taking a record into research.
+  const sinceFunnel = priorPassAt ?? floor;
+  let downstream: { evidence: FunnelRecord[]; decisions: FunnelRecord[] } | null = null;
+  try {
+    if (input.failStages?.includes('funnelRecords')) throw new Error('stage funnelRecords failed on request');
+    downstream = await downstreamFunnelRecords(sinceFunnel, nowIsoText);
+  } catch (error) {
+    stageFailures.push({ stage: 'funnelRecords', error: errorText(error) });
+  }
+
+  // The funnel: raw intake beside what this pass actually understood.
+  const funnel = stage('funnel', undefined as ExtractionPass['funnel'], () => {
+    const fingerprintOfItem = new Map((deltaPlan?.changes ?? []).map((c) => [c.identity, c.fingerprint]));
+    const itemRecord = (item: ExtractableItem): FunnelRecord => ({ id: item.id, fingerprint: fingerprintOfItem.get(identityOfItem.get(item.id)!) ?? item.id, observedAt: item.publishedAt });
+    const reconciledStatus = new Map(run.reconciled.map((r) => [r.key, r.status]));
+    const reading = readFunnel(
+      {
+        RAW_INTAKE: items.map(itemRecord),
+        PARSED: readItems.filter((item) => !unreadable.has(item.id)).map(itemRecord),
+        NORMALIZED_FACTS: run.facts.map((f) => ({
+          id: `${f.evidence.itemId}:${f.key}`,
+          fingerprint: `${f.key}=${String(f.value)}@${f.evidence.itemId}`,
+          observedAt: f.observedAt,
+          status: (reconciledStatus.get(f.key) ?? null) as FunnelRecord['status'],
+        })),
+        EVIDENCE_ACCEPTED: downstream?.evidence ?? [],
+        RELATIONSHIPS_UPDATED: relationshipLinks.map((l) => ({ id: l.entityId, fingerprint: `${l.entityId}:${l.refs.join(',')}` })),
+        GOAL_DECISIONS: downstream?.decisions ?? [],
+      },
+      { now },
+    );
+    // Gain is measured against the reading the previous pass ended at, never against nothing.
+    const cumulative = addFunnelReadings(priorFunnel, reading);
+    return { reading, cumulative, since: sinceFunnel, gain: funnelGain(priorFunnel, cumulative) };
+  });
+
   const pass: ExtractionPass = {
-    cursor: { from, to: { fetchedAt: lastRow.fetched_at, id: lastRow.id } },
+    cursor: { from, to: cursorTo },
     items: items.length,
-    readable: items.length - needsModel.flat().length,
+    readable: readItems.length - unreadable.size,
     facts: run.facts,
     reconciled: run.reconciled.map((r) => ({
       key: r.key,
@@ -1019,6 +1703,25 @@ export async function recordFeedExtraction(input: { projectId: string; now?: Dat
       notDemand: run.facts.filter((f) => f.demand === 'NOT_DEMAND').length,
     },
     graph,
+    processingGraph: plans ?? [],
+    stagesRun,
+    ...(delta ? { delta } : {}),
+    identity: resolution ? { links: resolution.links, collisions: resolution.collisions, uncorroborated: resolution.uncorroborated.length } : { links: [], collisions: [], uncorroborated: 0 },
+    deepening: deepened
+      ? {
+          capacity,
+          threshold: deepened.threshold,
+          promoted: deepened.decisions.filter((d) => d.promote),
+          held: deepened.decisions.filter((d) => !d.promote),
+          questions: deepeningQuestions,
+        }
+      : { capacity, threshold: null, promoted: [], held: [], questions: [] },
+    ...(funnel ? { funnel } : {}),
+    stageFailures,
+    // Only this pass's slice: the records it saw, at their latest version. When the commit failed nothing new
+    // is written, and the earlier slices still within the lookback carry the index.
+    deltaIndex: nextIndex ? sliceOf(nextIndex, (deltaPlan?.changes ?? []).map((c) => c.identity)) : emptyDeltaIndex(),
+    parserHistory: { parserVersion: EXTRACTOR_VERSION, sources: parserHistory },
   };
   const contested = pass.reconciled.filter((r) => r.status === 'CONTESTED').length;
   const stale = pass.reconciled.filter((r) => r.status === 'STALE').length;
@@ -1029,13 +1732,19 @@ export async function recordFeedExtraction(input: { projectId: string; now?: Dat
     summary:
       `Deterministic extraction over ${pass.items} stored item(s): ${pass.facts.length} normalized fact(s), each linked to its item and text; ` +
       `${pass.reconciled.length} fact key(s), ${contested} contested and ${stale} stale; ${pass.readable} item(s) read by code, ` +
-      `${needsModel.flat().length} the parser could not read, in ${needsModel.length} batch(es) of up to ${MODEL_BATCH_SIZE}: ` +
+      `${unreadable.size} the parser could not read, ${needsModel.flat().length} of them given to the model by their source's processing graph, in ${needsModel.length} batch(es) of up to ${MODEL_BATCH_SIZE}: ` +
       'the free-model screen takes those first, one call per batch and model for every batch of two or more, ' +
       'and asks record by record only about what a batch answer left unanswered. ' +
       `${pass.demand.statedRequest} fact(s) from a record stating a request; none is a confirmed buyer. ` +
       (graph
         ? `${graph.facts} graph fact(s) handed to the event graph, ${graph.added} new, ${graph.affected.length} neighborhood(s) recomputed; every hypothesis is still only a hypothesis.`
-        : 'The event graph could not take them this pass; its own sync reads the same rows.'),
+        : 'The event graph could not take them this pass; its own sync reads the same rows.') +
+      (delta ? ` Delta: ${delta.counts.NEW} new, ${delta.counts.CHANGED} changed, ${delta.counts.REPARSE} re-parsed, ${delta.unchangedItems.length} unchanged and not re-read; ${delta.recomputedKeys.length} fact key(s) recomputed.` : '') +
+      ` Identity: ${pass.identity!.links.length} link(s), ${pass.identity!.collisions.length} collision(s) kept apart.` +
+      ` Deepening: ${pass.deepening!.promoted.length} promoted, ${pass.deepening!.held.length} held at capacity ${capacity}; ` +
+      `${deepeningQuestions.length} contested fact(s), identity collision(s) or cross-source link(s) queued for verification in the next shortlist round.` +
+      (funnel ? ` Usable intelligence gained: ${funnel.gain.usableIntelligence} from ${funnel.reading.stages[0]!.raw} raw record(s)${funnel.gain.falseSpeed ? ' (raw intake without usable gain)' : ''}.` : '') +
+      (stageFailures.length > 0 ? ` Stage(s) failed and named: ${stageFailures.map((f) => f.stage).join(', ')}.` : ''),
     detail: { ...pass },
   });
   return pass;
@@ -1095,6 +1804,62 @@ export async function pendingLoopQuestions(projectId: string, now: Date = new Da
     }
   }
   return questions.filter((q) => !taken.has(q.key)).slice(0, Math.max(0, limit));
+}
+
+/** Records whose words would narrow a round or read as Brain's own action are kept out of a question. */
+function safeQuestion(q: MissingLinkQuestion): boolean {
+  const rendered = `- verify: ${q.question} Start from: ${q.evidenceUrls.join(', ')}.`;
+  if (statesNamedIn(rendered).length > 0) return false;
+  return Object.values(APPROVAL_ENVELOPES).every((envelope) => !describesOwnAction(rendered, envelope.forbiddenActions));
+}
+
+/**
+ * The verification questions selective deepening promoted in the recent
+ * extraction passes (KNOW-25-1, S-0358) that no round has taken recently,
+ * highest value of information first. Read from the `FEED_EXTRACTION` rows'
+ * `deepening.questions` and the `FEED_LOOP_QUESTIONS_ASKED` rows the shortlist
+ * wrote, so a promotion is consumed once and an unsettled one may be asked
+ * again after `LOOP_QUESTION_REASK_MS`. Writes nothing.
+ */
+export async function pendingDeepeningQuestions(projectId: string, now: Date = new Date(), limit: number = LOOP_QUESTIONS_PER_ROUND): Promise<MissingLinkQuestion[]> {
+  const db = getDb();
+  const passes = await db.all<{ detail: string | null }>(
+    `SELECT detail FROM cash_events WHERE project_id = ? AND kind = ? ORDER BY created_at DESC, id DESC LIMIT ?`,
+    [projectId, EXTRACTION_EVENT, DELTA_LOOKBACK_PASSES],
+  );
+  const byKey = new Map<string, MissingLinkQuestion>();
+  for (const row of passes) {
+    try {
+      const questions = (JSON.parse(row.detail ?? '{}') as { deepening?: { questions?: unknown } }).deepening?.questions;
+      if (!Array.isArray(questions)) continue;
+      for (const q of questions as MissingLinkQuestion[]) {
+        if (!q || typeof q.key !== 'string' || typeof q.question !== 'string' || !Array.isArray(q.evidenceUrls) || typeof q.value !== 'number') continue;
+        // Newest pass first: a key promoted again keeps its newest reading.
+        if (!byKey.has(q.key)) byKey.set(q.key, q);
+      }
+    } catch {
+      // An unreadable row promotes nothing.
+    }
+  }
+  if (byKey.size === 0) return [];
+  const since = new Date(now.getTime() - LOOP_QUESTION_REASK_MS).toISOString();
+  const asked = await db.all<{ detail: string | null }>(
+    `SELECT detail FROM cash_events WHERE project_id = ? AND kind = ? AND created_at >= ?`,
+    [projectId, LOOP_QUESTIONS_ASKED_EVENT, since],
+  );
+  const taken = new Set<string>();
+  for (const row of asked) {
+    try {
+      const keys = (JSON.parse(row.detail ?? '{}') as { keys?: unknown }).keys;
+      if (Array.isArray(keys)) for (const key of keys) if (typeof key === 'string') taken.add(key);
+    } catch {
+      // An unreadable row takes nothing.
+    }
+  }
+  return [...byKey.values()]
+    .filter((q) => !taken.has(q.key) && safeQuestion(q))
+    .sort((a, b) => b.value - a.value || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
+    .slice(0, Math.max(0, limit));
 }
 
 /** The corpora the connected feed sources are instances of: what Brain can already read. */
@@ -1417,17 +2182,71 @@ export function leadPassesRules(item: StoredFeedItem, screen: LeadOutput | null,
 }
 
 /**
- * The order the free-model screen takes items in. The model is the escalation
- * for what code cannot read: the extractor's needsModel batches go first, whole
- * and in order, and only then the records code could read, which still need the
- * lead judgement the shortlist gate asks for. Nothing is dropped, so no gate is
- * lost; under a tight pace the unreadable records are the ones a model sees.
- * The order alone saves no call: `screenFeedLeads` asks about each needsModel
- * batch in one call per model (`screenLeadBatch`). Pure.
+ * How the free-model screen routes a pass's records (KNOW-25-1, S-0358). The
+ * model is the escalation for what code cannot read, and an unreadable record
+ * reaches it only when selective deepening promotes it: each one is a
+ * deepening candidate scored by value of information, and `selectForDeepening`
+ * admits the highest-scoring within `capacity` — the reads the model lane can
+ * afford this pass (`lanePacing`), the same number the pass is cut to. A held
+ * record is not sent to a model this pass and is not marked either: it stays
+ * unscreened, so the next pass judges it again against that pass's capacity.
+ *
+ * Its value is the money its facts state (`statedValue`, 1 when none) times
+ * the share of its lead window still left to act in: a lead whose window has
+ * passed is worth no read, however many of them arrive. Code could not read it,
+ * so its uncertainty is whole, and nothing Brain holds understands it, so it is
+ * wholly novel. Wording never enters (§18.1).
+ *
+ * Readable records still need the lead judgement the shortlist gate asks for,
+ * so they follow the promoted ones; they are not deepening, since code already
+ * read them. Pure.
  */
-export function screenOrder<T extends ExtractableItem>(items: readonly T[], now: Date): T[] {
-  const unreadable = new Set(extractItems(items, now).needsModel.flat().map((one) => one.id));
-  return [...items.filter((one) => unreadable.has(one.id)), ...items.filter((one) => !unreadable.has(one.id))];
+export interface EscalationRoute<T> {
+  /** Unreadable records the deepening selection promoted, highest score first. */
+  promoted: T[];
+  /** Unreadable records it held, with the decision that held each. */
+  held: { item: T; decision: DeepeningDecision }[];
+  /** Records code could read. */
+  readable: T[];
+  deepening: DeepeningResult;
+}
+
+export function routeEscalation<T extends ExtractableItem>(items: readonly T[], now: Date, capacity: number): EscalationRoute<T> {
+  const run = extractItems(items, now);
+  const unreadable = new Set(run.needsModel.flat().map((one) => one.id));
+  const factsByItem = new Map<string, ExtractedFact[]>();
+  for (const f of run.facts) factsByItem.set(f.evidence.itemId, [...(factsByItem.get(f.evidence.itemId) ?? []), f]);
+  const candidates: DeepeningCandidate[] = items
+    .filter((one) => unreadable.has(one.id))
+    .map((one) => {
+      const published = Date.parse(one.publishedAt ?? one.fetchedAt);
+      const left = Number.isFinite(published) ? Math.min(1, Math.max(0, 1 - (now.getTime() - published) / LEAD_MAX_AGE_MS)) : 1;
+      return { id: one.id, decisionValue: statedValue(factsByItem.get(one.id) ?? []) * left, uncertainty: 1, novelty: 1 };
+    });
+  const deepening = selectForDeepening(candidates, { capacity });
+  const byId = new Map(items.map((one) => [one.id, one]));
+  const promotedDecisions = deepening.decisions
+    .map((decision, index) => ({ decision, index }))
+    .filter((one) => one.decision.promote)
+    .sort((a, b) => b.decision.score - a.decision.score || a.index - b.index);
+  return {
+    promoted: promotedDecisions.map((one) => byId.get(one.decision.id)!),
+    held: deepening.decisions.filter((d) => !d.promote).map((decision) => ({ item: byId.get(decision.id)!, decision })),
+    readable: items.filter((one) => !unreadable.has(one.id)),
+    deepening,
+  };
+}
+
+/**
+ * The order the free-model screen takes items in: the unreadable records
+ * selective deepening promotes (`routeEscalation`), highest value of
+ * information first, then the records code could read. A held unreadable
+ * record is left out — it waits for a pass with capacity for it. With the
+ * default capacity (every record) nothing is held. Pure.
+ */
+export function screenOrder<T extends ExtractableItem>(items: readonly T[], now: Date, capacity: number = items.length): T[] {
+  const route = routeEscalation(items, now, capacity);
+  return [...route.promoted, ...route.readable];
 }
 
 // ---------------------------------------------------------------------------
@@ -1612,6 +2431,8 @@ export async function screenLeadBatch(
 
 /**
  * Screen recent, unscreened leads with the free models. Bounded per pass.
+ * Unreadable records reach a model only when selective deepening promotes
+ * them within the pass's capacity (`screenOrder`, `routeEscalation`).
  * The needsModel batches among them are asked about whole first
  * (`screenLeadBatch`); every record then goes through the per-record screen,
  * which reads a batch answer as its cache and asks only what is still open.
@@ -1642,8 +2463,10 @@ export async function screenFeedLeads(input: {
   // so a subject a shortlist already took is not asked again under another record.
   const window = await subjectWindow(since);
   const settled = await screenedSubjects(window);
-  const todo = planScreens(todoAll, settled, now).ask.slice(0, pace.perPass);
-  // Escalation in batches: what the parser could not read is asked about together.
+  // Selective deepening routes the model reads: an unreadable record is escalated only when its
+  // value of information earns one of the reads this pass can afford; a held one waits unscreened.
+  const todo = screenOrder(planScreens(todoAll, settled, now).ask, now, pace.perPass).slice(0, pace.perPass);
+  // Escalation in batches: what the parser could not read, and deepening promoted, is asked about together.
   const batches = leadBatches(todo, now);
   let nextBatch = 0;
   const batchWorker = async (): Promise<void> => {
@@ -1818,7 +2641,13 @@ export async function openFeedShortlist(input: { projectId: string; now?: Date; 
       console.warn(`[feeds] corpus discovery failed for ${input.projectId}: ${String((error as Error)?.message ?? error)}`);
     });
   }
-  if (chosen.length === 0 && questions.length === 0) return null;
+  // What selective deepening promoted in the extraction passes (contested facts, identity collisions,
+  // cross-source links) is verified in the same round: the costly read deepening selected them for.
+  const verify = await pendingDeepeningQuestions(input.projectId, now).catch((error: unknown) => {
+    console.warn(`[feeds] deepening questions unreadable for ${input.projectId}: ${String((error as Error)?.message ?? error)}`);
+    return [] as MissingLinkQuestion[];
+  });
+  if (chosen.length === 0 && questions.length === 0 && verify.length === 0) return null;
 
   const frame = await executionFrame(input.projectId, mode.currency);
   const statement = [
@@ -1834,6 +2663,11 @@ export async function openFeedShortlist(input: { projectId: string; now?: Date; 
         'Answer each from a source you can quote; an unanswered gap is reported as unanswered, never assumed.'
       : '',
     ...questions.map((q) => `\n- missing link: ${q.question}${q.evidenceUrls.length ? ` Start from: ${q.evidenceUrls.join(', ')}.` : ''}`),
+    verify.length
+      ? '\nCode found these records disagreeing or linked across sources, and judged settling them worth a read. ' +
+        'Settle each from the pages themselves, quoting them; one that cannot be settled is reported as unsettled.'
+      : '',
+    ...verify.map((q) => `\n- verify: ${q.question}${q.evidenceUrls.length ? ` Start from: ${q.evidenceUrls.join(', ')}.` : ''}`),
   ]
     .filter(Boolean)
     .join(' ');
@@ -1864,20 +2698,29 @@ export async function openFeedShortlist(input: { projectId: string; now?: Date; 
   });
   if (!round) return null;
   await markShortlisted(chosen.map(({ item }) => item.id), round.id);
-  if (questions.length) {
+  if (questions.length || verify.length) {
+    const asked = [...questions, ...verify];
     await recordCashEvent({
       projectId: input.projectId,
       kind: LOOP_QUESTIONS_ASKED_EVENT,
       actorRef: 'BRAIN',
-      summary: `Feed loop: ${questions.length} derived missing-link question(s) put to research in shortlist round ${roundNo}; each stays open until a quoted source answers it.`,
-      detail: { roundId: round.id, candidateId: round.candidateId, keys: questions.map((q) => q.key), questions: questions.map((q) => ({ key: q.key, neighborhood: q.neighborhood, condition: q.condition, constructionKeys: q.constructionKeys, value: q.value })) },
+      summary:
+        `Feed loop: ${questions.length} derived missing-link question(s) and ${verify.length} deepening verification question(s) put to research in shortlist round ${roundNo}; ` +
+        'each stays open until a quoted source answers it.',
+      detail: {
+        roundId: round.id,
+        candidateId: round.candidateId,
+        keys: asked.map((q) => q.key),
+        questions: asked.map((q) => ({ key: q.key, neighborhood: q.neighborhood, condition: q.condition, constructionKeys: q.constructionKeys, value: q.value })),
+        deepening: verify.map((q) => q.key),
+      },
     });
   }
   await recordCashEvent({
     projectId: input.projectId,
     kind: 'CASH_DISCOVERY_OPENED',
     actorRef: 'BRAIN',
-    summary: `Feed shortlist opened: ${chosen.length} lead(s) for Claude to verify${questions.length ? ` and ${questions.length} missing-link question(s) to answer` : ''} (round ${roundNo}).`,
+    summary: `Feed shortlist opened: ${chosen.length} lead(s) for Claude to verify${questions.length ? ` and ${questions.length} missing-link question(s) to answer` : ''}${verify.length ? `, ${verify.length} deepening question(s) to settle` : ''} (round ${roundNo}).`,
     detail: {
       bucketId: FEED_SHORTLIST_BUCKET.id,
       candidateId: round.candidateId,
@@ -1885,6 +2728,7 @@ export async function openFeedShortlist(input: { projectId: string; now?: Date; 
       round: roundNo,
       leads: chosen.map(({ item }) => item.id),
       questions: questions.map((q) => q.key),
+      deepening: verify.map((q) => q.key),
     },
   });
   return round.id;

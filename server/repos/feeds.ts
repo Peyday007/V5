@@ -38,29 +38,68 @@ const toItem = (row: Row): StoredFeedItem => ({
   shortlistedRoundId: row.shortlisted_round_id,
 });
 
-/** Insert what is new; an item already held is left exactly as it was. */
+/** Versions of one record a source re-sends with new content; beyond this a further edit is not stored. */
+export const FEED_ITEM_MAX_VERSIONS = 50;
+
+/** The external id a record's `n`th version (n >= 2) is held under; the first keeps the source's own id. */
+export const feedItemVersionId = (externalId: string, n: number): string => (n <= 1 ? externalId : `${externalId}#v${n}`);
+
+type HeldContent = Pick<Row, 'title' | 'body' | 'organization' | 'published_at'>;
+
+/** What a record says, as stored: the same truncation the insert applies, so an unedited record compares equal. */
+const contentOf = (item: FeedItem): HeldContent => ({
+  title: item.title.slice(0, 300),
+  body: item.body,
+  organization: item.organization?.slice(0, 200) ?? null,
+  published_at: item.publishedAt,
+});
+
+const sameContent = (a: HeldContent, b: HeldContent): boolean =>
+  a.title === b.title && (a.body ?? null) === (b.body ?? null) && (a.organization ?? null) === (b.organization ?? null) && (a.published_at ?? null) === (b.published_at ?? null);
+
+/**
+ * Insert what is new, and a new version of what changed. A record the source sends again with the same
+ * content is left exactly as it was. One it sends again with different content is a new version: a new
+ * row under `feedItemVersionId(externalId, n)`, at the same url, fetched now. The earlier version's row is
+ * never rewritten (it is that version's provenance), and the new row is what makes the edit reach
+ * extraction, whose cursor reads rows by when they were fetched and whose delta index then classifies
+ * the record CHANGED against the version it read before (KNOW-25-1). Returns the rows added, versions
+ * included.
+ */
 export async function insertFeedItems(source: string, items: readonly FeedItem[]): Promise<number> {
   let inserted = 0;
   const at = nowIso();
-  for (const item of items) {
-    const result = await getDb().run(
+  const db = getDb();
+  const insert = async (externalId: string, item: FeedItem): Promise<number> => {
+    const content = contentOf(item);
+    const result = await db.run(
       `INSERT INTO feed_items
          (id, source, external_id, url, title, body, organization, published_at, fetched_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (source, external_id) DO NOTHING`,
-      [
-        newId('fdi'),
-        source,
-        item.externalId,
-        item.url,
-        item.title.slice(0, 300),
-        item.body,
-        item.organization?.slice(0, 200) ?? null,
-        item.publishedAt,
-        at,
-      ],
+      [newId('fdi'), source, externalId, item.url, content.title, content.body, content.organization, content.published_at, at],
     );
-    inserted += result.changes ?? 0;
+    return result.changes ?? 0;
+  };
+  for (const item of items) {
+    const added = await insert(item.externalId, item);
+    if (added > 0) {
+      inserted += added;
+      continue;
+    }
+    // Held already: find its latest version by the unique key, one equality probe per version.
+    let latest: HeldContent | null = null;
+    let n = 1;
+    for (; n <= FEED_ITEM_MAX_VERSIONS; n += 1) {
+      const row = await db.get<HeldContent>(
+        'SELECT title, body, organization, published_at FROM feed_items WHERE source = ? AND external_id = ?',
+        [source, feedItemVersionId(item.externalId, n)],
+      );
+      if (!row) break;
+      latest = row;
+    }
+    if (!latest || sameContent(latest, contentOf(item)) || n > FEED_ITEM_MAX_VERSIONS) continue;
+    inserted += await insert(feedItemVersionId(item.externalId, n), item);
   }
   return inserted;
 }
