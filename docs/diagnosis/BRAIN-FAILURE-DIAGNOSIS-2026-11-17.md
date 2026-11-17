@@ -221,3 +221,8 @@ See F1–F7 above. Each one gives the cause, file:line, run IDs, the smallest ch
   - **#1029 (F3e)**:
     - CONFIRMED: requiredCapability is still asked; only executionDifficulty and scalability are dropped.
     - CONCERN, medium: a declined path gets only a reason (commissionPass.ts:355, :369). There is no assumption, replan or next action, so the owner's §3 "no dead end" is unmet. The unstated-path filter also declines answerable attributes.
+- **08:08Z, owners for the review findings** (PRs due 10:45Z, ship in release 3):
+  - W2b: the rest of F2.
+  - W10b: the #1032 holes.
+  - W3b: the #1029 dead end.
+- RC2 is now b46b757e (Deploy 44044038066). It adds #1033, the W5 test-only fix for the Postgres flakes (arrangementLibrary:284, cashIntegrationPass:1087).
