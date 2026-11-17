@@ -84,11 +84,15 @@ describe('observed construction facts price the arrangements for their own buyer
     expect(admitted.has(practices.node.id) || admitted.has(practice.node.id)).toBe(true);
     for (const one of got.openings) {
       expect(one.estimated?.tier).not.toBe('MECHANISM');
-      expect(one.price.provenance).toBe('ASSUMPTION');
+      // F2 (2026-11-17): two gated observations of these buyers' own price are a justified
+      // distribution, so the price is that evidence — before, it was hard-coded an ASSUMPTION.
+      expect(one.price.provenance).toBe('EVIDENCE');
+      expect(one.price.inferred?.justified).toBe(true);
+      expect(one.price.distribution?.kind).toBe('EMPIRICAL');
       expect(one.price.value).toBeNull();
       expect(one.price.note).toMatch(/obs\. of these buyers: claim:clm_dental_a, claim:clm_dental_b/);
-      // Still never certifiable: an estimate establishes no link.
-      for (const field of ['price', 'close', 'respond', 'volume', 'daysToCash', 'directCost', 'capital'] as const) expect(inputEvidence(one[field], field).establishes, field).toBe(false);
+      // Every link nothing speaks to still establishes nothing, so the arrangement is never certifiable on its price alone.
+      for (const field of ['close', 'respond', 'volume', 'daysToCash', 'directCost', 'capital'] as const) expect(inputEvidence(one[field], field).establishes, field).toBe(false);
     }
     // Buyers nothing prices stay out with the reason, and the wide project pool is still no comparable price (F4).
     const groomerCuts = got.selection.cut.filter((one) => one.population === groomers.node.id);

@@ -54,6 +54,7 @@ import { describesOwnAction } from '../research/actorScope.ts';
 import { composeArrangement, type Arrangement, type Levers, type Part } from '../quant/mechanism.ts';
 import { leverageOfYielding, type ArrangementLeverage, type LeverageConstraints } from '../quant/leverage.ts';
 import { reconstruct } from '../quant/reconstruct.ts';
+import { inputSample, toScenarioInput, type InputSample } from '../quant/export.ts';
 import { emptyLeverEvidence, leverEvidenceFrom, type LeverEvidence, type LeverPart } from '../quant/leverEvidence.ts';
 import { claimSources, claimsByIds } from '../../repos/research.ts';
 import type { CashCardFact, CashOpportunity, IndustryNode } from '../../domain/types.ts';
@@ -233,6 +234,13 @@ export interface ConstructedArrangement {
     observations: number;
     /** The lineage of the observations the value was reconstructed from (`claim:…`, `fact:…`, `opp:…`): its provenance. */
     sources?: string[];
+    /**
+     * Present only when the reconstruction justifies a distribution (F2, 2026-11-17): the
+     * engine's draw of what these buyers pay and the evidence it is worth, exported the one way
+     * every inferred input is (`toScenarioInput`, `inputSample`). Without it the price stays an
+     * ASSUMPTION swept over the range; with it, accepted price evidence reaches the plan.
+     */
+    evidence?: { values: number[]; low: number; high: number } & InputSample;
   };
   /** Parts nothing establishes yet: what the research round asks. */
   unknownParts: string[];
@@ -1619,6 +1627,13 @@ export function interleaveByPopulation(sorted: ConstructedArrangement[], exposur
 }
 
 /** The lineage of the observations a value was reconstructed from: the claim a fact or a price was filed from. Pure. */
+/** The value's drawn distribution, only where its evidence justifies one: never for bounds alone. Pure. */
+export function valueEvidence(value: Estimate): { evidence?: NonNullable<ConstructedArrangement['value']['evidence']> } {
+  const exported = toScenarioInput(value);
+  if (exported.provenance !== 'EVIDENCE' || exported.spec.kind !== 'EMPIRICAL') return {};
+  return { evidence: { values: exported.spec.values, low: value.p05, high: value.p95, ...inputSample(value) } };
+}
+
 function valueSources(value: Estimate, observations: readonly Observation[]): string[] {
   const byId = new Map(observations.map((one) => [one.id, one]));
   return [...new Set(value.used.flatMap((id) => byId.get(id)?.lineage ?? [id]))].sort();
@@ -1846,7 +1861,7 @@ function compose(args: {
     emergent,
     stress,
     evidenced,
-    value: value ? { tier: value.tier, p10: value.p10, p50: value.p50, p90: value.p90, observations: value.used.length, sources: valueSources(value, valueObs) } : { tier: 'UNKNOWN', p10: 0, p50: 0, p90: 0, observations: 0 },
+    value: value ? { tier: value.tier, p10: value.p10, p50: value.p50, p90: value.p90, observations: value.used.length, sources: valueSources(value, valueObs), ...valueEvidence(value) } : { tier: 'UNKNOWN', p10: 0, p50: 0, p90: 0, observations: 0 },
     unknownParts,
     relatedOpenings: args.related.map((one) => one.id),
     question: asked,
