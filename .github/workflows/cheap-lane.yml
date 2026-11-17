@@ -74,6 +74,10 @@ on:
         description: 'For runpod-diagnose: a vLLM image to check imports on instead of the recipe image (import check only).'
         required: false
         default: ''
+      models:
+        description: 'For connect/test: the switchboard routes for slots A,B (comma-separated, e.g. auto/best-coding,auto) instead of the OMNIROUTE_MODEL secret. Lets Brain move off a dead combo without a person retyping the secret.'
+        required: false
+        default: ''
       tool_score:
         description: 'For runpod-upgrade: the director-task score (0-1) the new recipe measured in runpod-bench; ranks the GPU in Hermes model chain (BRAIN_RUNPOD_TOOL_SCORE).'
         required: false
@@ -125,7 +129,7 @@ jobs:
           FLY_ORG_TOKEN: ${{ secrets.FLY_ORG_TOKEN }}
           OMNIROUTE_PASSWORD: ${{ secrets.OMNIROUTE_PASSWORD }}
           OMNIROUTE_API_KEY: ${{ secrets.OMNIROUTE_API_KEY }}
-          OMNIROUTE_MODEL: ${{ secrets.OMNIROUTE_MODEL }}
+          OMNIROUTE_MODEL: ${{ inputs.models || secrets.OMNIROUTE_MODEL }}
           RUNPOD_VLLM_URL: ${{ secrets.RUNPOD_VLLM_URL }}
           RUNPOD_VLLM_KEY: ${{ secrets.RUNPOD_VLLM_KEY }}
           RUNPOD_VLLM_MODEL: ${{ secrets.RUNPOD_VLLM_MODEL }}
