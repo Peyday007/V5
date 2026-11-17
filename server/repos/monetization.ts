@@ -440,6 +440,57 @@ export async function recordPathFact(input: NewPathFact): Promise<MonetizationPa
   return found;
 }
 
+/**
+ * Bring an answer carried from the opening's card into line with the card, in
+ * one guarded statement (W3b).
+ *
+ * Only for a fact the caller read as a card copy, and only while it is still the
+ * row the caller read (`id` and `updated_at`), so a person's or research's own
+ * answer written since is never touched and two ticks correct it once. It
+ * follows the card whatever the kind, because the card is the authority the
+ * copy rests on: when the card's evidence is withdrawn and replaced, the copy
+ * of the withdrawn claim must not outlive it. Nothing is deleted — the old
+ * claim keeps its row in `research_claims`, and the caller records the
+ * correction as an event. `mayAnswer` still refuses what it always refuses.
+ */
+export async function replaceCarriedFact(input: {
+  id: string;
+  expectUpdatedAt: string;
+  attribute: MonetizationAttribute;
+  kind: FactKind;
+  value: string;
+  amountCents: number | null;
+  days: number | null;
+  claimId: string | null;
+  basis: string | null;
+  assumptions: string | null;
+  uncertainty: string | null;
+  decidedBy: string;
+}): Promise<boolean> {
+  if (!mayAnswer(input.attribute, input.kind)) return false;
+  const result = await getDb().run(
+    `UPDATE monetization_path_facts
+        SET kind = ?, value = ?, amount_cents = ?, days = ?, claim_id = ?, basis = ?,
+            assumptions = ?, uncertainty = ?, decided_by = ?, updated_at = ?
+      WHERE id = ? AND updated_at = ?`,
+    [
+      input.kind,
+      input.value,
+      input.amountCents,
+      input.days,
+      input.claimId,
+      input.basis,
+      input.assumptions,
+      input.uncertainty,
+      input.decidedBy,
+      nowIso(),
+      input.id,
+      input.expectUpdatedAt,
+    ],
+  );
+  return (result.changes ?? 0) > 0;
+}
+
 export async function pathFact(
   pathId: string,
   attribute: MonetizationAttribute,

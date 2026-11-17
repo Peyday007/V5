@@ -20,6 +20,7 @@ import { activate } from '../server/services/cash/lifecycle.ts';
 import { createOpportunity, updateOpportunity } from '../server/repos/cashPortfolio.ts';
 import { listPaths, pathFact } from '../server/repos/monetization.ts';
 import { recordCardFact } from '../server/repos/cashCardFacts.ts';
+import { raiseNeed } from '../server/services/cash/needs.ts';
 import {
   cardAnswers,
   enumeratePossibilities,
@@ -31,6 +32,8 @@ import {
   allocateCommissions,
   NEVER_COMMISSIONED,
   UNSTATED_WHY,
+  HYPOTHESIS_ATTRIBUTE,
+  HYPOTHESIS_RULE_RANK,
 } from '../server/services/cash/monetization/commission.ts';
 import { runCommissions } from '../server/services/cash/monetization/commissionPass.ts';
 import { ATTRIBUTE } from '../server/domain/monetization.ts';
@@ -135,13 +138,67 @@ describe('(b) a hypothetical arrangement is not a research subject', () => {
     expect(stated.map((one) => one.method)).toEqual(['DIRECT_SALE']);
 
     const pass = await tick();
-    expect(pass.opened.length).toBeGreaterThan(0);
-    for (const one of pass.opened) expect(one.pathId).toBe(stated[0]!.id);
-    // Every hypothetical path is declined once, with what would make it askable.
-    expect(pass.declined.filter((one) => one.why === UNSTATED_WHY)).toHaveLength(paths.length - 1);
+    // The stated path is asked its ordinary questions; a hypothesis is asked
+    // only its bounded existence check, one opening's hypothesis at a time.
+    const onStated = pass.opened.filter((one) => one.pathId === stated[0]!.id);
+    const checks = pass.opened.filter((one) => one.pathId !== stated[0]!.id);
+    expect(onStated.length).toBe(1);
+    expect(checks).toHaveLength(1);
+    expect(checks[0]!.attribute).toBe(HYPOTHESIS_ATTRIBUTE);
+    expect(checks[0]!.question).toContain('Does any published source state');
+    // Every other hypothesis is declined with a reason, never silently.
+    const others = pass.declined.filter(
+      (one) => one.why.includes('same opening is being checked first') || one.why === UNSTATED_WHY,
+    );
+    expect(others.length).toBeGreaterThanOrEqual(paths.length - 2);
     // And kept: nothing is archived or deleted for being hypothetical.
     const ledger = await composeLedger({ projectId });
     expect(ledger.entries).toHaveLength(paths.length);
+  });
+
+  it('asks a capability blocker on the opening once, on the stated path — or on a hypothesis when none is stated', async () => {
+    const opening = await discovery('A published request for transcription.');
+    await raiseNeed({
+      projectId,
+      opportunityId: opening.id,
+      actorRef: 'BRAIN',
+      blockedAction: 'Contact the buyer',
+      whyItMatters: 'w',
+      recommendedPath: 'r',
+      setupEffort: 's',
+      nextStep: 'n',
+      completionCondition: 'SEND_A_MESSAGE reads PRESENT.',
+      requestKey: `capability:${opening.id}:SEND_A_MESSAGE`,
+    });
+    await enumeratePossibilities(projectId);
+    const ledger = await composeLedger({ projectId });
+    expect(ledger.entries.every((one) => one.status === 'BLOCKED')).toBe(true);
+    const stated = ledger.entries.find((one) => statedBySource(one.path, opening, false))!;
+    const hypotheses = ledger.entries.filter((one) => one.path.id !== stated.path.id);
+    const allocate = (unstated: Set<string>) =>
+      allocateCommissions({
+        entries: ledger.entries,
+        rankable: ledger.entries.map(rankableOf),
+        commissions: [],
+        contradicted: new Set(),
+        slots: 100,
+        now: Date.now(),
+        unstated,
+      });
+
+    // A stated path exists: the opening's blocker is asked there, and the
+    // hypotheses wait with the opening rather than asking it again.
+    const withStated = allocate(new Set(hypotheses.map((one) => one.path.id)));
+    expect(withStated.asks.map((one) => [one.pathId, one.attribute])).toEqual([
+      [stated.path.id, 'requiredCapability'],
+    ]);
+    expect(withStated.declined.some((one) => one.why.includes('The opening is blocked'))).toBe(true);
+
+    // None is stated: the blocker is still asked, on a hypothesis, and only it.
+    const noneStated = allocate(new Set(ledger.entries.map((one) => one.path.id)));
+    expect(noneStated.asks.length).toBeGreaterThan(0);
+    expect(noneStated.asks.every((one) => one.attribute === 'requiredCapability')).toBe(true);
+    expect(noneStated.asks.every((one) => one.ruleRank !== HYPOTHESIS_RULE_RANK)).toBe(true);
   });
 
   it('becomes askable once a source names it or a person judges it', () => {
@@ -223,7 +280,11 @@ describe('(c) an answer already on the card settles the question without researc
     await registerResearchSurfaces(projectId, 3);
     const pass = await tick();
     expect(
-      pass.opened.some((one) => ['timeToCash', 'directCosts', 'requiredRelationships'].includes(one.attribute)),
+      pass.opened.some(
+        (one) =>
+          one.pathId === primary.id &&
+          ['timeToCash', 'directCosts', 'requiredRelationships'].includes(one.attribute),
+      ),
     ).toBe(false);
   });
 

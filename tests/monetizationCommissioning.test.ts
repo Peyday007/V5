@@ -67,7 +67,7 @@ import {
   settleCommission,
 } from '../server/repos/monetization.ts';
 import { judgePath } from '../server/services/cash/monetization/decisions.ts';
-import { enumeratePossibilities } from '../server/services/cash/monetization/enumerate.ts';
+import { enumeratePossibilities, statedBySource } from '../server/services/cash/monetization/enumerate.ts';
 import { composeLedger, rankableOf } from '../server/services/cash/monetization/ledger.ts';
 import {
   allocateCommissions,
@@ -75,6 +75,9 @@ import {
   MAX_COMMISSION_ROUNDS,
   COMMISSION_COOL_OFF_MS,
   NEAR_THE_TOP,
+  HYPOTHESIS_ATTRIBUTE,
+  HYPOTHESIS_RULE_RANK,
+  UNSTATED_CHECKED_WHY,
 } from '../server/services/cash/monetization/commission.ts';
 import { commissionCapacity } from '../server/services/cash/monetization/commissionPass.ts';
 import { registerResearchSurfaces } from './helpers/researchSurfaces.ts';
@@ -1682,5 +1685,116 @@ describe('a question about an opening that can no longer be pursued', () => {
     expect(asked.length).toBeGreaterThan(0);
     expect(asked).not.toContain(ruledOut.id);
     expect(asked).toContain(live.id);
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+/**
+ * W3b. A hypothesis is never a dead end: its next action is one bounded check,
+ * recorded as a commission row, whose answer states the path. And a copy of a
+ * card answer follows the card when the card is corrected.
+ */
+describe('a hypothetical path gets one bounded check, and its answer states it (W3b)', () => {
+  async function openCheck() {
+    await discovery('PAID_TASK_OR_CONTRACT', 'A published request for transcription.');
+    await enumeratePossibilities(projectId);
+    await registerResearchSurfaces(projectId, MAX_OPEN_COMMISSIONS);
+    const pass = await tick();
+    const check = pass.opened.find((one) => one.reason.includes('one bounded check'))!;
+    expect(check).toBeTruthy();
+    expect(check.attribute).toBe(HYPOTHESIS_ATTRIBUTE);
+    const row = (await listCommissions({ projectId })).find((one) => one.id === check.commissionId)!;
+    expect(row.ruleRank).toBe(HYPOTHESIS_RULE_RANK);
+    return check;
+  }
+
+  it('a source naming who pays this way states the path, and its other questions become askable', async () => {
+    const check = await openCheck();
+    await finishResearch({
+      candidateId: check.candidateId,
+      claims: [
+        {
+          claim: 'The marketplace pays a referral fee to whoever introduces the buyer.',
+          lane: laneForAttribute(HYPOTHESIS_ATTRIBUTE),
+        },
+      ],
+    });
+    await tick();
+    const row = (await listCommissions({ projectId })).find((one) => one.id === check.commissionId)!;
+    expect(row.state).toBe('ANSWERED');
+    const path = (await listPaths({ projectId })).find((one) => one.id === check.pathId)!;
+    expect(path.sourceClaimId).toBeTruthy();
+    expect(statedBySource(path, null, false)).toBe(true);
+  });
+
+  it('no source stating it settles UNRESOLVED with that reason, and is not re-checked inside the epoch', async () => {
+    const check = await openCheck();
+    await finishResearch({ candidateId: check.candidateId, claims: [] });
+    await tick();
+    const row = (await listCommissions({ projectId })).find((one) => one.id === check.commissionId)!;
+    expect(row.state).toBe('UNRESOLVED');
+    expect(row.outcome).toContain('stays a hypothesis');
+    const path = (await listPaths({ projectId })).find((one) => one.id === check.pathId)!;
+    expect(path.sourceClaimId).toBeNull();
+
+    const later = await tick();
+    expect(later.opened.some((one) => one.pathId === check.pathId)).toBe(false);
+    expect(
+      later.declined.some((one) => one.subject === path.title && one.why === UNSTATED_CHECKED_WHY),
+    ).toBe(true);
+  });
+});
+
+describe('a copy of a card answer follows the card (W3b)', () => {
+  it('replaces the copy when the card\'s evidence is corrected, and leaves a researched answer alone', async () => {
+    const opening = await discovery('PAID_TASK_OR_CONTRACT', 'A published request for transcription.');
+    const candidate = await createCandidate({
+      projectId,
+      visibility: 'SHARED',
+      title: 'card evidence',
+      statement: 'what the published sources say about the payer',
+    });
+    const { claimIds } = await finishResearch({
+      candidateId: candidate.id,
+      claims: [
+        { claim: 'Payment is Net 30 from invoice.', lane: 'cash_dates' },
+        { claim: 'Payment is Net 45 from acceptance.', lane: 'cash_dates' },
+        { claim: 'Delivery is by a contracted transcriber.', lane: 'delivery' },
+      ],
+    });
+    const [first, second, other] = claimIds as [string, string, string];
+    const card = (field: string, value: string, claimId: string) =>
+      recordCardFact({ projectId, opportunityId: opening.id, field, kind: 'EVIDENCE', value, claimId, decidedBy: 'BRAIN' });
+    await card('cashDates', 'Net 30 from invoice', first);
+    await enumeratePossibilities(projectId);
+    const primary = (await listPaths({ projectId })).find((one) => one.method === 'DIRECT_SALE')!;
+    const copied = await pathFact(primary.id, 'timeToCash');
+    expect(copied).toMatchObject({ kind: 'EVIDENCE', claimId: first, days: 30 });
+
+    // The card's evidence is corrected: its claim withdrawn and another recorded.
+    await card('cashDates', 'Net 45 from acceptance', second);
+    await enumeratePossibilities(projectId);
+    const followed = await pathFact(primary.id, 'timeToCash');
+    expect(followed).toMatchObject({ kind: 'EVIDENCE', claimId: second, days: 45 });
+    const events = await getDb().all<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM cash_events WHERE project_id = ? AND kind = 'MONETIZATION_CARD_ANSWER_CORRECTED'",
+      [projectId],
+    );
+    expect(Number(events[0]!.n)).toBe(1);
+
+    // An answer research filed on the path itself is never moved by the card.
+    await recordPathFact({
+      projectId,
+      pathId: primary.id,
+      attribute: 'requiredCapability',
+      kind: 'EVIDENCE',
+      value: 'A contracted transcriber.',
+      claimId: other,
+      decidedBy: 'BRAIN',
+    });
+    await card('delivery', 'Delivered by staff.', first);
+    await enumeratePossibilities(projectId);
+    expect(await pathFact(primary.id, 'requiredCapability')).toMatchObject({ claimId: other });
   });
 });
