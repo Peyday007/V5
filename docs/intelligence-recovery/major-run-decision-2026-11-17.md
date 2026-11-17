@@ -137,17 +137,43 @@ The path runs objective → research question → accepted claim → plan input 
 
 **Second attempt, 15:05Z:** relaunched with a $8.50/h ceiling and an $11 cap. A 12-hour run at that price would be 12.25 h × $7.99 = **$97.88**, which is still inside the ~$120.57 left under the $250 ceiling and inside the $147.06 balance. The measurement and stop follow automatically one hour after serving.
 
+## GO TEST RESULT (16:17Z): **NO-GO**
+
+The pod was bejuv0zx9vwirg, gpt-oss-120b-big on a SECURE B200 at $7.99/h, ready in 345 s. It served for 55 minutes on release 7 plus #1052, then Brain stopped it at 16:17Z. Spend is now $0/h.
+
+| GO criterion | Required | Measured | Result |
+|---|---|---|---|
+| GPU accepted claims in the hour | ≥ 10 | **2** | fail |
+| Goal accepted claims | > 0 | **0** (this goal 0/h) | fail |
+| Pressure | not SHEDDING | **SHEDDING** (statement p90 19 ms, 0 overload failures; event-loop stalls) | fail |
+
+**Cost:** the GPU is $7.32 measured, or $3.66 per accepted claim. The RunPod balance went from $147.06 to $137.90, which is $9.16 including the load time.
+
+**Why it failed:** #1052 ranked candidate pages but did not change what the search returns. Every non-accepted fragment is one of two kinds:
+- an honest empty list saying the pages are off-topic (arXiv astrophysics, MaxSAT, machine translation, BLS occupational tables, the SEC EDGAR search UI, a mine-supply contact page);
+- "no readable source among N candidate pages".
+
+The defect is upstream of the model: the source discovery for a fragment's question returns the wrong pages. A larger GPU only multiplies off-topic reading.
+
+**Decision:** the 12-hour run is **not launched**, and paid compute stays off. The free lane continues at $0.
+
+**Owners:**
+- **W16:** fragment source discovery, which query is built and which providers return arXiv for commercial questions.
+- **W15:** planner CPU stalls (planSet canonical, payerNamedIn, evaluatorPool), redispatched.
+
+The GO test is repeated only after W16 is live and a free-lane reading shows on-topic sources. Its cap is ≤ $11.
+
 ## HANDOFF
 
 The session runs this itself when deploy 44097071502 shows "Deploy to Fly: success". Nothing here needs the owner.
 
 ```
-# 1. GO test, hard cap $6 (Brain stops the pod itself at the cap)
-gh workflow run cheap-lane.yml -R peyday007/v5 --ref production -f action=runpod-launch -f budget_usd=6 -f budget_window_hours=1.5 -f recipes=gpt-oss-120b-big -f max_usd_per_hour=5.5 -f runway_hours=1 -f tool_score=0.79
+# 1. GO test (after W16 is live), hard cap $11 (Brain stops the pod itself at the cap)
+gh workflow run cheap-lane.yml -R peyday007/v5 --ref production -f action=runpod-launch -f budget_usd=11 -f budget_window_hours=1.5 -f recipes=gpt-oss-120b-big -f max_usd_per_hour=8.5 -f runway_hours=1 -f tool_score=0.79
 # after 60 min of serving:
 gh workflow run cheap-lane.yml -R peyday007/v5 --ref production -f action=runpod-report -f hours=1
-# 2. GO (GPU accepted claims >= 10 in the hour, goal claims > 0, pressure not SHEDDING), then the 12-hour run, hard cap $66:
-gh workflow run cheap-lane.yml -R peyday007/v5 --ref production -f action=runpod-launch -f budget_usd=66 -f budget_window_hours=12.5 -f recipes=gpt-oss-120b-big -f max_usd_per_hour=5.5 -f runway_hours=12 -f tool_score=0.79
+# 2. GO (GPU accepted claims >= 10 in the hour, goal claims > 0, pressure not SHEDDING), then the 12-hour run, hard cap $99 (12.25 h x $7.99 = $97.88):
+gh workflow run cheap-lane.yml -R peyday007/v5 --ref production -f action=runpod-launch -f budget_usd=99 -f budget_window_hours=12.5 -f recipes=gpt-oss-120b-big -f max_usd_per_hour=8.5 -f runway_hours=12 -f tool_score=0.79
 # NO-GO, then stop paid compute; the free lane continues at $0:
 gh workflow run cheap-lane.yml -R peyday007/v5 --ref production -f action=runpod-stop
 ```
