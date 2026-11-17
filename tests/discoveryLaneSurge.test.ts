@@ -8,12 +8,23 @@
  * spare), and "the grant is full" was an instant (13 of 16 held between
  * launch ticks) rather than the demand it stands for.
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { freshProject, type TestProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { LANE_GROW_STEP_MAX, LANE_LIFT_MAX, laneAdaptiveCeiling } from '../server/services/cash/discoveryAuthority.ts';
 import { freeLaneProvenSlots, freeLaneSpareSurfaces, provenSlots, SAFETY_CEILING } from '../server/services/freeLane/capacity.ts';
 import { launchableInProject } from '../server/services/russell/loop.ts';
+
+/*
+ * The subject here is the GPU's served room, not the database pool's share of
+ * it — `provenSlots` above pins the share. A test Postgres keeps a small pool,
+ * which would make the share bind where production's does not, so the pool is
+ * read as unknown on both backends.
+ */
+vi.mock('../server/db/database.ts', async (original) => ({
+  ...(await original<typeof import('../server/db/database.ts')>()),
+  databasePoolReadings: () => null,
+}));
 
 const lane = (spare: number, waiting: number, slots?: number, pressure: { db: boolean; cpu: number } | null = { db: false, cpu: 0.5 }) => ({
   spare,

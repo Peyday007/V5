@@ -107,7 +107,9 @@ describe('researchYieldByPurpose on degenerate production rows', () => {
     // Free-lane items: a good one, a null duration, a non-numeric duration and an unreadable time.
     await ev(`fl1_${tag}`, 'FREE_LANE_ITEM', '2026-11-16T10:00:00.000Z', { ms: 30_000, outcome: 'SUBMITTED', reason: 'runpod/m' });
     await ev(`fl2_${tag}`, 'FREE_LANE_ITEM', '2026-11-16T10:05:00.000Z', { ms: null, outcome: 'SUBMITTED', reason: 'runpod/m' });
-    await ev(`fl3_${tag}`, 'FREE_LANE_ITEM', '2026-11-16T10:06:00.000Z', { ms: 'not-a-number', outcome: 'FAILED', reason: 'boom' });
+    // A non-numeric duration exists only where the column's type does not refuse it: SQLite
+    // stores the text, Postgres's integer column rejects it at insert, so there it is a null.
+    await ev(`fl3_${tag}`, 'FREE_LANE_ITEM', '2026-11-16T10:06:00.000Z', { ms: db.dialect === 'postgres' ? null : 'not-a-number', outcome: 'FAILED', reason: 'boom' });
     await ev(`fl4_${tag}`, 'FREE_LANE_ITEM', '2026-11-16T99:99:99.000Z', { ms: 5_000, outcome: 'SUBMITTED', reason: 'runpod/m' });
     // Bins: one assigned at an unreadable time, one whose close time is unreadable.
     await ev(`ba1_${tag}`, 'BIN_ASSIGNED', '2026-11-16T25:00:00.000Z', { bin_id: `bin_a_${tag}` });
