@@ -65,7 +65,22 @@ import {
   type PriorDecision,
 } from '../research/reasoningController.ts';
 import { MECHANISM_ROLES, loadProjectKnowledge, mechanismFromOpening, type KnowledgeReading, type MechanismModel, type MechanismRole } from '../research/knowledgeModel.ts';
-import { buildNumberProvenance, recordNumberProvenance, type NumberProvenance, type ProvenanceInput } from '../quant/mathToolkit.ts';
+import {
+  buildNumberProvenance,
+  calibrationByKey,
+  forecastBias,
+  observedRateProvenance,
+  probabilityProvenance,
+  recordMathSelection,
+  recordNumberProvenance,
+  selectMathematics,
+  type BiasReading,
+  type MathQuestion,
+  type MathSelection,
+  type NumberProvenance,
+  type ProvenanceInput,
+} from '../quant/mathToolkit.ts';
+import { MIN_CALIBRATION_SAMPLE, type CalibrationBucket, type OutcomeRow, type PredictionRow } from '../quant/forecast.ts';
 import type { Figure } from '../quant/graph.ts';
 import type { sendNeeds } from '../quant/needs.ts';
 
@@ -348,6 +363,142 @@ export function grossBilledProvenance(p: SprintProblem): { record: NumberProvena
   return { record: null, findings: built.missing.length + built.problems.length };
 }
 
+/* ------------------------------------------------------------------------- */
+/* Per-question mathematics, forecasts against realized results               */
+/* ------------------------------------------------------------------------- */
+
+/** method key -> opening id -> the probability that method gave the opening on one run. */
+export type SprintForecasts = Record<string, Record<string, number>>;
+
+export interface PriorForecastRun {
+  at: string;
+  forecasts: SprintForecasts;
+}
+
+/** Whether production has settled an opening: true it became actionable, false it died, null not yet. */
+export function resolutionOf(p: Pick<SprintProblem, 'state'>): boolean | null {
+  if (actionableInProduction(p)) return true;
+  if (DEAD_STATES.has(p.state)) return false;
+  return null;
+}
+
+/** Each method's probability for every opening production has not settled yet: next run's forecasts to resolve. */
+export function forecastsOf(problems: readonly SprintProblem[], verdicts: Readonly<Record<string, readonly MethodVerdict[]>>): SprintForecasts {
+  const open = new Set(problems.filter((p) => resolutionOf(p) === null).map((p) => p.id));
+  const out: SprintForecasts = {};
+  for (const [method, list] of Object.entries(verdicts)) {
+    const one: Record<string, number> = {};
+    for (const v of list) if (open.has(v.problemId)) one[v.problemId] = v.probability;
+    out[method] = one;
+  }
+  return out;
+}
+
+/** The outcome every sprint forecast is a claim about. */
+export const SPRINT_FORECAST_OUTCOME = 'the opening becomes an actionable transaction pathway in production';
+
+/**
+ * The sprint's own forecasts as ledger rows: each method's earliest forecast on
+ * an opening that was open when it was made, resolved by what production did to
+ * that opening since. Comparable bucket = the method, so each method is judged
+ * against realized results on its own record.
+ */
+export function sprintForecastLedger(
+  prior: readonly PriorForecastRun[],
+  problems: readonly SprintProblem[],
+  now: Date,
+): { predictions: PredictionRow[]; outcomes: OutcomeRow[] } {
+  const byId = new Map(problems.map((p) => [p.id, p]));
+  const earliest = new Map<string, { method: string; problemId: string; probability: number; at: string }>();
+  for (const run of prior) {
+    for (const [method, list] of Object.entries(run.forecasts ?? {})) {
+      for (const [problemId, probability] of Object.entries(list ?? {})) {
+        if (typeof probability !== 'number' || !(probability >= 0 && probability <= 1)) continue;
+        const claimId = `${method}|${problemId}`;
+        const held = earliest.get(claimId);
+        if (!held || run.at < held.at) earliest.set(claimId, { method, problemId, probability, at: run.at });
+      }
+    }
+  }
+  const predictions: PredictionRow[] = [];
+  const outcomes: OutcomeRow[] = [];
+  for (const [claimId, f] of [...earliest].sort(([a], [b]) => a.localeCompare(b))) {
+    const id = `${claimId}|${f.at}`;
+    predictions.push({
+      id,
+      claimId,
+      version: 1,
+      outcome: SPRINT_FORECAST_OUTCOME,
+      horizonDays: null,
+      population: 'cash_opportunities',
+      data: [`cash_opportunities:${f.problemId}`],
+      assumptions: [],
+      probability: f.probability,
+      comparableKey: f.method,
+      madeAt: f.at,
+    });
+    const p = byId.get(f.problemId);
+    const occurred = p ? resolutionOf(p) : null;
+    if (occurred !== null) outcomes.push({ predictionId: id, observedAt: now.toISOString(), occurred, evidence: `cash_opportunities:${f.problemId}` });
+  }
+  return { predictions, outcomes };
+}
+
+/**
+ * The economic question one opening poses, with the candidate mathematics and
+ * what the opening's own row and the sprint's resolved forecasts say about each
+ * method's preconditions. The families are the ones these questions touch; the
+ * toolkit judges fitness per case, and an unknown never makes one fit.
+ */
+export function mathQuestionOf(p: SprintProblem, resolvedForecasts: number): MathQuestion {
+  const row = `cash_opportunities:${p.id}`;
+  const source = sourceOf(p);
+  const unknowns = LOAD_BEARING.filter((f) => !known(p, f));
+  return {
+    question: `What does one transaction bill, and how likely is "${p.title}" to become an actionable pathway?`.slice(0, 300),
+    subject: row,
+    candidates: [
+      {
+        family: 'cash_flow_identities',
+        purpose: 'gross billed per transaction as an identity over the sourced price',
+        preconditions: [
+          { condition: 'a price is stated', state: known(p, 'priceCents') ? 'HOLDS' : 'UNKNOWN', evidence: known(p, 'priceCents') ? [`${row}:priceCents`] : [] },
+          { condition: 'the price has a source', state: source ? 'HOLDS' : 'FAILS', evidence: [source ?? `${row}:no source`] },
+        ],
+      },
+      {
+        family: 'statistical_estimation_calibration',
+        purpose: "judge the method's probability against realized outcomes of comparable forecasts",
+        preconditions: [
+          {
+            condition: `at least ${MIN_CALIBRATION_SAMPLE} comparable forecasts have resolved`,
+            state: resolvedForecasts >= MIN_CALIBRATION_SAMPLE ? 'HOLDS' : 'FAILS',
+            evidence: [`sprint-forecasts:${resolvedForecasts} resolved`],
+          },
+        ],
+      },
+      {
+        family: 'value_of_information_experimental_design',
+        purpose: 'which unknown is worth researching before deciding',
+        preconditions: [
+          {
+            condition: 'a load-bearing input is unknown',
+            state: unknowns.length > 0 ? 'HOLDS' : 'FAILS',
+            evidence: unknowns.length > 0 ? unknowns.map((f) => `${row}:${f} unknown`) : [`${row}: every load-bearing field stated`],
+          },
+        ],
+      },
+      {
+        family: 'time_to_event_settlement',
+        purpose: 'when the cash arrives under the stated terms',
+        preconditions: [
+          { condition: 'payment terms are stated', state: known(p, 'paymentTerms') ? 'HOLDS' : 'UNKNOWN', evidence: known(p, 'paymentTerms') ? [`${row}:paymentTerms`] : [] },
+        ],
+      },
+    ],
+  };
+}
+
 /**
  * The controller's snapshot of one opening: the card's evidence, the learned
  * catalogue and method outcomes, and — when the controller decided this
@@ -603,9 +754,33 @@ export interface SprintRun {
   repairCandidateId: string | null;
   /** The controller's operational loop on real openings this run. */
   loop: SprintLoop;
+  /** The per-question mathematics and per-number provenance this run recorded. */
+  math: SprintMath;
   /** Always present: what the reading is not evidence of. */
   disclaimer: string;
 }
+
+/** What the run did with the toolkit: selections judged, numbers recorded with provenance, forecasts compared with results. */
+export interface SprintMath {
+  /** Openings whose numbers are material this run: demonstrated, or actionable by either method or in production. */
+  material: number;
+  /** Material openings beyond the per-run bound, counted rather than silently dropped. */
+  materialSkipped: number;
+  selections: number;
+  provenanceRecorded: number;
+  provenanceRefused: number;
+  /** Forecasts from earlier runs that production has since settled. */
+  forecastsResolved: number;
+  /** Probabilities recorded with the measured systematic error corrected. */
+  correctionsApplied: number;
+  bias: BiasReading[];
+  errors: string[];
+}
+
+/** The most openings one run records selections and provenance for. */
+export const MAX_MATERIAL_PER_RUN = 500;
+/** How many earlier runs' forecasts are compared with what happened since. */
+export const FORECAST_RUNS_READ = 30;
 
 /** What the controller's loop did this run: results tracked, decisions taken, methods changed, actions handed off. */
 export interface SprintLoop {
@@ -629,6 +804,9 @@ export interface SprintDeps {
   record?: typeof recordImprovementEvent;
   recordDecision?: typeof recordControllerDecision;
   recordProvenance?: typeof recordNumberProvenance;
+  recordSelection?: typeof recordMathSelection;
+  /** Earlier runs' forecasts, to compare with what production did since. */
+  priorForecasts?: () => Promise<PriorForecastRun[]>;
   registerDirected?: (weakness: Weakness, now?: Date) => Promise<{ candidate: { id: string } }>;
   now?: () => Date;
   /** What the method library has learned: the catalogue, outcomes and procedures recorded so far. */
@@ -705,6 +883,14 @@ export function chooseDemonstrated(
 export const SPRINT_DISCLAIMER =
   'A comparison of two reasoning methods on these production rows. It is not evidence that a general superintelligence can be created, in seven days or otherwise.';
 
+async function readPriorForecasts(): Promise<PriorForecastRun[]> {
+  const events = await listImprovementEvents({ kinds: [SPRINT_EVENT], limit: FORECAST_RUNS_READ });
+  return events
+    .map((e) => ({ at: e.at, forecasts: e.detail['forecasts'] }))
+    .filter((r): r is PriorForecastRun => !!r.forecasts && typeof r.forecasts === 'object')
+    .map((r) => ({ at: r.at, forecasts: r.forecasts }));
+}
+
 async function previousRun(): Promise<{ at: string; cutoff: string | null } | null> {
   const [last] = await listImprovementEvents({ kinds: [SPRINT_EVENT], limit: 1 });
   if (!last) return null;
@@ -733,11 +919,13 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
   const readings: SetReading[] = [];
   const comparisons: BaselineComparison[] = [];
   const generalVerdicts: MethodVerdict[] = [];
+  const baselineVerdicts: MethodVerdict[] = [];
   for (const set of ['BENCHMARK', 'HELD_OUT', 'NEW_HELD_OUT'] as const) {
     const ps = split[set];
     const g = ps.map((p) => GENERAL_METHOD.run(p, threshold, contextOf(p)));
     const b = ps.map((p) => BASELINE_METHOD.run(p, threshold));
     generalVerdicts.push(...g);
+    baselineVerdicts.push(...b);
     const gr = readSet(set, GENERAL_METHOD.key, ps, g);
     const br = readSet(set, BASELINE_METHOD.key, ps, b);
     readings.push(gr, br);
@@ -748,9 +936,11 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
   // decision (a row, and a method outcome the library learns from), decide again with that result —
   // a contradicted one changes the method — record the decision, and hand the next action to its owner.
   const verdictOf = new Map(generalVerdicts.map((v) => [v.problemId, v]));
+  const baselineOf = new Map(baselineVerdicts.map((v) => [v.problemId, v]));
   const history = await (deps.history ?? (() => readControllerHistory(SPRINT_CALLER)))();
   const loop: SprintLoop = { resultsTracked: 0, decisions: 0, methodChanges: 0, capabilityGaps: 0, handOffs: {}, proceduresRecorded: 0, knowledgeRead: 0, mechanismsModelled: 0, informationNeeds: 0, errors: [] };
-  for (const { problem: p, result } of chooseDemonstrated(problems, history)) {
+  const demonstrated = chooseDemonstrated(problems, history);
+  for (const { problem: p, result } of demonstrated) {
     const prior = history.get(p.id);
     const projectId = p.projectId ?? null;
     try {
@@ -804,15 +994,18 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
     } catch (error) {
       loop.errors.push(`${p.id}: ${String((error as Error).message ?? error).slice(0, 200)}`);
     }
-    const v = verdictOf.get(p.id);
-    if (v?.provenance) {
-      try {
-        await (deps.recordProvenance ?? recordNumberProvenance)(v.provenance, { projectId, caller: SPRINT_CALLER });
-      } catch {
-        // A record the toolkit refuses is a finding already counted in method quality, not a run failure.
-      }
-    }
   }
+
+  // Per-question mathematics and per-number provenance on every material opening, with each
+  // method's probabilities judged against what production did to its earlier forecasts.
+  const math = await recordSprintMathematics({
+    problems,
+    demonstrated: demonstrated.map((d) => d.problem),
+    general: verdictOf,
+    baseline: baselineOf,
+    now,
+    deps,
+  });
   try {
     loop.proceduresRecorded = (
       await learnAndRecordProcedures(outcomes, learning.procedures, {
@@ -863,6 +1056,7 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
     comparisons: comparisons.map((c) => ({ ...c, general: { ...c.general }, baseline: { ...c.baseline } })),
     repairCandidateId,
     loop,
+    math,
     disclaimer: SPRINT_DISCLAIMER,
   };
   await (deps.record ?? recordImprovementEvent)({
@@ -877,10 +1071,125 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
       readings: run.readings,
       comparisons: run.comparisons.map((c) => ({ set: c.set, earned: c.earned, statement: c.statement })),
       loop: run.loop,
+      math: { ...run.math, bias: run.math.bias.map((b) => ({ ...b })) },
+      forecasts: forecastsOf(problems, { [GENERAL_METHOD.key]: generalVerdicts, [BASELINE_METHOD.key]: baselineVerdicts }),
       disclaimer: run.disclaimer,
     },
   });
   return run;
+}
+
+/**
+ * Judge the mathematics each material opening's question needs and record the
+ * judgment; record, with provenance, the gross billed where the cash-flow
+ * identity was judged fit and both methods' probabilities corrected for the
+ * systematic error their earlier forecasts showed against realized results;
+ * and record each judged bucket's observed rate. A record the toolkit refuses
+ * is counted, never written and never a run failure.
+ */
+export async function recordSprintMathematics(input: {
+  problems: readonly SprintProblem[];
+  demonstrated: readonly SprintProblem[];
+  general: ReadonlyMap<string, MethodVerdict>;
+  baseline: ReadonlyMap<string, MethodVerdict>;
+  now: Date;
+  deps: SprintDeps;
+}): Promise<SprintMath> {
+  const { problems, general, baseline, now, deps } = input;
+  const at = now.toISOString();
+  const math: SprintMath = {
+    material: 0, materialSkipped: 0, selections: 0, provenanceRecorded: 0, provenanceRefused: 0,
+    forecastsResolved: 0, correctionsApplied: 0, bias: [], errors: [],
+  };
+  let prior: PriorForecastRun[] = [];
+  try {
+    prior = await (deps.priorForecasts ?? readPriorForecasts)();
+  } catch (error) {
+    math.errors.push(`forecasts: ${String((error as Error).message ?? error).slice(0, 200)}`);
+  }
+  const { predictions, outcomes } = sprintForecastLedger(prior, problems, now);
+  math.forecastsResolved = outcomes.length;
+  math.bias = forecastBias(predictions, [], outcomes);
+  const buckets: Map<string, CalibrationBucket> = calibrationByKey(predictions, [], outcomes);
+  const biasOf = new Map(math.bias.filter((b) => b.basis === 'PROBABILITY').map((b) => [b.comparableKey, b]));
+  const resolvedBy = new Map<string, number>();
+  for (const pr of predictions) if (outcomes.some((o) => o.predictionId === pr.id)) resolvedBy.set(pr.comparableKey, (resolvedBy.get(pr.comparableKey) ?? 0) + 1);
+
+  const record = deps.recordProvenance ?? recordNumberProvenance;
+  const write = async (built: { ok: true; record: NumberProvenance } | { ok: false; missing: string[]; problems: string[] } | null, projectId: string | null): Promise<void> => {
+    if (!built) return;
+    if (!built.ok) {
+      math.provenanceRefused += 1;
+      return;
+    }
+    try {
+      await record(built.record, { projectId, caller: SPRINT_CALLER });
+      math.provenanceRecorded += 1;
+    } catch {
+      math.provenanceRefused += 1;
+    }
+  };
+
+  const material: SprintProblem[] = [];
+  const seen = new Set<string>();
+  const consider = (p: SprintProblem): void => {
+    if (seen.has(p.id)) return;
+    seen.add(p.id);
+    if (material.length >= MAX_MATERIAL_PER_RUN) math.materialSkipped += 1;
+    else material.push(p);
+  };
+  for (const p of input.demonstrated) consider(p);
+  for (const p of problems) {
+    if (general.get(p.id)?.actionable || baseline.get(p.id)?.actionable || actionableInProduction(p)) consider(p);
+  }
+  math.material = material.length;
+
+  for (const p of material) {
+    const projectId = p.projectId ?? null;
+    let selection: MathSelection;
+    try {
+      selection = selectMathematics(mathQuestionOf(p, resolvedBy.get(GENERAL_METHOD.key) ?? 0));
+      await (deps.recordSelection ?? recordMathSelection)(selection, { projectId, caller: SPRINT_CALLER });
+      math.selections += 1;
+    } catch (error) {
+      math.errors.push(`${p.id}: ${String((error as Error).message ?? error).slice(0, 200)}`);
+      continue;
+    }
+    const v = general.get(p.id);
+    if (selection.selected.includes('cash_flow_identities')) {
+      const billed = v?.provenance ?? grossBilledProvenance(p).record;
+      if (billed) await write({ ok: true, record: billed }, projectId);
+      else math.provenanceRefused += 1;
+    }
+    const calibrated = selection.selected.includes('statistical_estimation_calibration');
+    const horizon = p.deadline ? `until ${p.deadline}` : 'until production settles the opening';
+    for (const [method, verdict, ref] of [
+      [GENERAL_METHOD.key, v, `controller-decision:${p.id}@${at}`],
+      [BASELINE_METHOD.key, baseline.get(p.id), `rule:${BASELINE_METHOD.key}@${at}`],
+    ] as const) {
+      if (!verdict) continue;
+      const { result, corrected } = probabilityProvenance(
+        {
+          key: `p-actionable:${method}:${p.id}`,
+          definition: `probability that ${p.id} ${SPRINT_FORECAST_OUTCOME}, by ${method}`,
+          probability: verdict.probability,
+          method: calibrated ? 'statistical_estimation_calibration' : method,
+          source: { ref, retrievedAt: at },
+          horizon,
+          evidence: [`cash_opportunities:${p.id}`, `method:${method}`],
+          interdependence: p.payer ? [`payer:${p.payer}`] : [],
+        },
+        { bias: biasOf.get(method) ?? null, bucket: buckets.get(method) ?? null, measuredAt: at },
+      );
+      if (corrected) math.correctionsApplied += 1;
+      await write(result, projectId);
+    }
+  }
+  for (const bucket of buckets.values()) {
+    if (bucket.n < MIN_CALIBRATION_SAMPLE) continue;
+    await write(observedRateProvenance(bucket, { ref: `sprint-forecasts:${bucket.comparableKey}@${at}`, retrievedAt: at }), null);
+  }
+  return math;
 }
 
 /** The tick's entry: run when the last run is older than the interval. */
