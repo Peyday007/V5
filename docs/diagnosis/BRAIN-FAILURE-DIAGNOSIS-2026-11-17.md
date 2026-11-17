@@ -69,3 +69,8 @@
 - "Too busy to derive": cold-cache artifact (F0).
 
 - F0 RULED OUT — "Brain was too busy to derive the goal": a cold-cache light reading (`server/services/operator/snapshot.ts:52-56`, full derivation bounded at 150 s, 25-min TTL). A second call at 05:58Z returned the full derivation. Not a cause.
+
+## Handoff log
+- 06:09Z: F1, F2, F3 sent to the repair owner (session_01QF5Tk7etm6MGmaFuHMd6eZ) by send_message (delivered, priority next).
+- 06:3xZ: the repair session has been stalled since 06:06Z on a "Send Message" permission prompt (its own reply). The owner was push-notified to approve or deny it. This blocks the repair work, not this diagnosis.
+- 30-minute checkpoint: all three first-wave investigators finished (assignment, research yield, research→planner, surge/learning). The second wave is running: why the goal's research rounds end without a report, plus an independent adversarial review. Approach unchanged; evidence is being obtained.
