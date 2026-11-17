@@ -294,7 +294,7 @@ export const BASELINE_METHOD: SprintMethod = {
       problemId: p.id,
       actionable,
       probability: actionable ? 0.6 : 0.2,
-      needsPerson: !actionable,
+      needsPerson: needsPersonOf(actionable, researchOpen(p)),
       robust: actionable,
       findings: 0,
       elapsedMs: performance.now() - started,
@@ -317,7 +317,7 @@ export const GATE_METHOD: SprintMethod = {
       problemId: p.id,
       actionable,
       probability: actionable ? 0.6 : 0.2,
-      needsPerson: !actionable,
+      needsPerson: needsPersonOf(actionable, researchOpen(p)),
       robust: actionable,
       findings: 0,
       elapsedMs: performance.now() - started,
@@ -583,36 +583,37 @@ export function pendingResult(p: SprintProblem, history: ControllerHistory | und
 }
 
 /**
- * How far the leading hypothesis must stand above the next one for the
- * controller's decision to count as settled. A structural constant, not a
- * figure tuned on any problem set.
+ * Whether research still has something to answer on this opening: a
+ * load-bearing card field is unknown, and every unknown field is a research
+ * action (`profileOf`). A property of the problem, never of the method reading
+ * it, so every method is asked the same question about it.
  */
-export const SETTLED_MARGIN = 0.5;
+export function researchOpen(p: SprintProblem): boolean {
+  return LOAD_BEARING.some((f) => !known(p, f));
+}
 
 /**
- * Whether the general method could not progress this opening without a person.
- * A person is needed only when it is still not actionable and nothing the
- * method can do itself would move it: the controller's next step is obtaining a
- * method (METHOD_GAP), or it has no next step while research has nothing left
- * to answer and the decision is not settled.
+ * Whether a method could not progress this opening without a person — ONE
+ * rule, applied to the general method and to every baseline alike
+ * (reasoning-sprint:general-method). An opening the method did not call
+ * actionable needs a person when the method's next step is obtaining a method
+ * (METHOD_GAP), or when it can do nothing more itself: research has nothing
+ * left to answer and the method has no other step of its own.
  *
- * A null `next` is not by itself a need for a person (reasoning-sprint:general-method).
- * The controller leaves `next` null whenever no candidate action has positive
- * value against the two hypotheses contesting the lead — which is every
- * opening that reached the sprint without a mechanism model, because its
- * research actions bear on `holds:mechanism`/`fails:<role>` and those
- * hypotheses are then absent. Counting those as "needs a person" read
- * modelledNeedsPerson 1 on held-out sets where research could still fill every
- * unknown, and failed the baseline comparison on that alone. A settled
- * decision with nothing worth doing is a rejection, which needs nobody.
+ * It was once loosened for the general method alone (a null controller step
+ * with research open counted as needing nobody) while both baselines kept
+ * `needsPerson = !actionable`. That cleared the recorded failure (people 1 vs
+ * 0.9032) by changing what the general method counted, not by its reasoning
+ * progressing more openings — a lowered gate. Now an opening research can
+ * still fill needs nobody under every method, so the general method reads
+ * fewer people than a baseline only where it actually called more openings
+ * actionable (or found a step a baseline has no way to take), and more where
+ * it stops at a METHOD_GAP.
  */
-export function needsPersonOf(actionable: boolean, decision: Pick<ControllerDecision, 'next' | 'valued' | 'hypotheses'>): boolean {
+export function needsPersonOf(actionable: boolean, canResearch: boolean, step: Pick<ControllerDecision, 'next'> | null = null): boolean {
   if (actionable) return false;
-  if (decision.next) return decision.next.kind === 'METHOD_GAP';
-  const researchable = decision.valued.some((a) => a.kind === 'RESEARCH');
-  const [first, second] = decision.hypotheses;
-  const settled = first !== undefined && first.score - (second?.score ?? 0) >= SETTLED_MARGIN;
-  return !researchable && !settled;
+  if (step?.next?.kind === 'METHOD_GAP') return true;
+  return !canResearch && !step?.next;
 }
 
 /** The general method: the controller over the card, with the gross billed carried with its provenance. */
@@ -641,7 +642,7 @@ export const GENERAL_METHOD: SprintMethod = {
       problemId: p.id,
       actionable,
       probability,
-      needsPerson: needsPersonOf(actionable, decision),
+      needsPerson: needsPersonOf(actionable, researchOpen(p), decision),
       robust,
       findings: decision.weakInferences.length + provenanceFindings,
       elapsedMs: performance.now() - started,
@@ -693,7 +694,7 @@ export interface SetReading {
   humanInterventions: Measure;
   /**
    * Problems the method itself predicted it could not progress without a person, over the set: its own model, compared between methods.
-   * For the general method that is `needsPersonOf`: a research action still open, or a settled rejection, needs nobody.
+   * Every method answers it with the same `needsPersonOf`, so the comparison measures progress, not definitions.
    */
   modelledNeedsPerson: Measure;
   /** Brier score: summed squared error of the probability against what the market did, over resolved problems. Lower is better. */
@@ -775,11 +776,25 @@ export interface BaselineComparison {
 }
 
 const num = (m: Measure): number | null => (m.value === 'INSUFFICIENT_DATA' ? null : m.value);
+/** Mean milliseconds per decision; NaN when no decision was timed. */
+const perDecision = (m: Measure): number => (m.denominator > 0 ? m.numerator / m.denominator : Number.NaN);
+
+/**
+ * The most extra decision time per opening the general method may spend beyond
+ * a baseline and still be said to have earned its cost. A structural ceiling,
+ * not a figure tuned on any problem set: a decision the sprint makes once per
+ * opening per run may take up to a second longer than the baseline's, and no
+ * more. A ratio cannot be the ceiling — a baseline that reads two card fields
+ * takes microseconds, so every real method is thousands of times slower.
+ */
+export const DECISION_TIME_BUDGET_MS = 1000;
 
 /**
  * Whether the general method's extra cost earned its keep on one set: it must
- * find at least as many confirmed pathways, be no worse calibrated, and need
- * people no more often, for the decision time it spends beyond the baseline.
+ * find at least as many confirmed pathways, be no worse calibrated, need
+ * people no more often, be strictly better on one of them, and spend no more
+ * than DECISION_TIME_BUDGET_MS per opening beyond the baseline to do it. The
+ * time it spends is part of the verdict, never only its caption.
  */
 export function compareWithBaseline(general: SetReading, baseline: SetReading): BaselineComparison {
   // Both methods meet the same real interventions on the same problems, so methods are compared on what each predicted it needs a person for.
@@ -797,14 +812,24 @@ export function compareWithBaseline(general: SetReading, baseline: SetReading): 
       baseline,
     };
   }
-  const earned = g.rate >= b.rate && g.brier <= b.brier && g.people <= b.people && (g.rate > b.rate || g.brier < b.brier || g.people < b.people);
-  const cost = costRatio === null ? 'unmeasured extra time' : `${costRatio.toFixed(1)}x the baseline's decision time`;
+  const better = g.rate >= b.rate && g.brier <= b.brier && g.people <= b.people && (g.rate > b.rate || g.brier < b.brier || g.people < b.people);
+  const extraMs = perDecision(general.decisionTimeMs) - perDecision(baseline.decisionTimeMs);
+  const affordable = Number.isFinite(extraMs) && extraMs <= DECISION_TIME_BUDGET_MS;
+  const earned = better && affordable;
+  const cost =
+    (costRatio === null ? 'unmeasured extra time' : `${costRatio.toFixed(1)}x the baseline's decision time`) +
+    (Number.isFinite(extraMs) ? ` (${Math.round(extraMs * 10) / 10}ms more per opening, budget ${DECISION_TIME_BUDGET_MS}ms)` : '');
+  const verdict = earned
+    ? 'the extra complexity earned its cost'
+    : better && !affordable
+      ? 'the extra complexity did not earn its cost on this set: better, but over the decision-time budget'
+      : 'the extra complexity did not earn its cost on this set';
   return {
     set: general.set,
     earned,
     statement:
       `${general.set} vs ${baseline.method}: pathway rate ${g.rate} vs ${b.rate}, Brier ${g.brier} vs ${b.brier}, people ${g.people} vs ${b.people}, at ${cost} — ` +
-      (earned ? 'the extra complexity earned its cost' : 'the extra complexity did not earn its cost on this set'),
+      verdict,
     general,
     baseline,
   };
