@@ -7,6 +7,7 @@ import { MECHANISM_HOLDS, decideNext, readControllerHistory } from '../server/se
 import { acquireKnowledge, mechanismFromOpening, type KnowledgeReading, type KnowledgeSourceClaim } from '../server/services/research/knowledgeModel.ts';
 import {
   BASELINE_METHOD,
+  GATE_METHOD,
   GENERAL_METHOD,
   SPRINT_DISCLAIMER,
   SPRINT_CALLER,
@@ -19,6 +20,8 @@ import {
   compareWithBaseline,
   readSet,
   readSprintProblems,
+  actionableInProduction,
+  resolvedInProduction,
   runSprintBenchmark,
   splitProblems,
   sprintIfDue,
@@ -47,7 +50,8 @@ const problem = (over: Partial<SprintProblem> = {}): SprintProblem => {
     fulfillmentOwner: 'supplier',
     deadline: null,
     humanHours: 1,
-    state: 'READY',
+    // The market's yes: money was collected. READY is Brain's own gate and is not an outcome (repair F5).
+    state: 'COLLECTED',
     createdAt: `2026-10-${String((seq % 28) + 1).padStart(2, '0')}T00:00:00.000Z`,
     updatedAt: '2026-11-01T00:00:00.000Z',
     ...over,
@@ -89,9 +93,17 @@ function researchClaim(id: string, over: Partial<KnowledgeSourceClaim> = {}): Kn
   };
 }
 
+/** Openings whose research says the buyer withdrew: the evidence a reasoning method can use and the gate cannot. */
+const WITHDRAWN = new Set<string>();
+const WITHDRAWN_CLAIM: Partial<KnowledgeSourceClaim> = { contradictionState: 'CONTESTED', contradictionNote: 'the buyer withdrew the request' };
+
 /** A project's knowledge holding the claim behind every given opening. */
 const knowledgeFor = (ps: readonly SprintProblem[], over: Partial<KnowledgeSourceClaim> = {}): KnowledgeReading =>
-  acquireKnowledge({ subject: 'project prj_1', claims: ps.filter((p) => p.sourceClaimId).map((p) => researchClaim(p.sourceClaimId!, over)), now: NOW });
+  acquireKnowledge({
+    subject: 'project prj_1',
+    claims: ps.filter((p) => p.sourceClaimId).map((p) => researchClaim(p.sourceClaimId!, WITHDRAWN.has(p.id) ? { ...WITHDRAWN_CLAIM, ...over } : over)),
+    now: NOW,
+  });
 
 /** Layers 1 and 2 for one opening, as the sprint gives them to the general method. */
 const contextFor = (p: SprintProblem, knowledge: KnowledgeReading = knowledgeFor([p])): MethodContext => {
@@ -99,12 +111,23 @@ const contextFor = (p: SprintProblem, knowledge: KnowledgeReading = knowledgeFor
   return { knowledge, mechanism: m.ok ? m.model : null };
 };
 
-/** A population where payer+price is present on dead openings too, so the baseline over-calls them. */
+/**
+ * Every opening the market resolved passed the readiness gate — complete cards
+ * all — so the gate (and payer-and-price) calls every one of them actionable.
+ * Forty collected; forty were declined after READY, and the research behind
+ * those says the buyer withdrew. The rest the market has not resolved: ten sit
+ * at Brain's own READY, ten are undecided with incomplete cards.
+ */
 const population = (): SprintProblem[] => {
   const out: SprintProblem[] = [];
   for (let i = 0; i < 40; i++) out.push(problem());
-  for (let i = 0; i < 40; i++) out.push(problem({ state: 'DISCOVERED', buyingSignal: null, paymentTerms: null, fulfillmentOwner: null }));
-  for (let i = 0; i < 20; i++) out.push(problem({ state: 'EVIDENCE_CARD', payer: null, priceCents: null, reachableChannel: null }));
+  for (let i = 0; i < 40; i++) {
+    const p = problem({ state: 'DECLINED' });
+    WITHDRAWN.add(p.id);
+    out.push(p);
+  }
+  for (let i = 0; i < 10; i++) out.push(problem({ state: 'READY' }));
+  for (let i = 0; i < 10; i++) out.push(problem({ state: 'DISCOVERED', buyingSignal: null, paymentTerms: null, fulfillmentOwner: null }));
   return out;
 };
 
@@ -116,7 +139,10 @@ describe('the benchmark measures every quantity per set, with numerator and deno
       expect(typeof m.numerator).toBe('number');
       expect(typeof m.denominator).toBe('number');
     }
-    expect(reading.actionablePathwayRate).toMatchObject({ numerator: 40, denominator: 100, value: 0.4 });
+    // Only the eighty the market resolved are scored; the twenty it has not are counted, not read as failures.
+    expect(reading.unresolved).toBe(20);
+    expect(reading.actionablePathwayRate).toMatchObject({ numerator: 40, denominator: 80, value: 0.5 });
+    expect(reading.calibrationBrier.denominator).toBe(80);
     expect(reading.robustTargetCoverage).toMatchObject({ numerator: 40, denominator: 40 });
     expect(reading.falsePositives).toEqual([]);
   });
@@ -154,27 +180,96 @@ describe('held-out problems never choose the method, and a rerun adds new held-o
     const ps = population();
     const split = splitProblems(ps, null);
     const t1 = chooseThreshold(split.BENCHMARK, GENERAL_METHOD, (p) => contextFor(p));
-    const flipped = split.HELD_OUT.map((p) => ({ ...p, state: p.state === 'READY' ? 'DISCOVERED' : 'READY' }));
+    const flipped = split.HELD_OUT.map((p) => ({ ...p, state: p.state === 'COLLECTED' ? 'DECLINED' : 'COLLECTED' }));
     const t2 = chooseThreshold(splitProblems([...split.BENCHMARK, ...flipped], null).BENCHMARK, GENERAL_METHOD, (p) => contextFor(p));
     expect(t2).toBe(t1);
   });
 });
 
 describe('the general method is compared with a simpler baseline on the same problems', () => {
-  it('states whether the extra complexity earned its cost', () => {
+  it('states whether the extra complexity earned its cost, against payer-and-price and against the readiness gate', () => {
     const ps = population();
     const g = readSet('HELD_OUT', GENERAL_METHOD.key, ps, ps.map((p) => GENERAL_METHOD.run(p, 0.6, contextFor(p))));
-    const b = readSet('HELD_OUT', BASELINE_METHOD.key, ps, ps.map((p) => BASELINE_METHOD.run(p, 0.6)));
-    const cmp = compareWithBaseline(g, b);
-    expect(cmp.earned).toBe(true);
-    expect(cmp.statement).toContain('earned its cost');
-    // Where openings missing load-bearing fields closed anyway, the stricter method loses and says so.
-    const surprising = population().map((p) => ({ ...p, state: p.payer ? 'COLLECTED' : p.state }));
+    for (const baseline of [BASELINE_METHOD, GATE_METHOD]) {
+      const b = readSet('HELD_OUT', baseline.key, ps, ps.map((p) => baseline.run(p, 0.6)));
+      const cmp = compareWithBaseline(g, b);
+      expect(cmp.earned).toBe(true);
+      expect(cmp.statement).toContain('earned its cost');
+      expect(cmp.statement).toContain(baseline.key);
+    }
+    // Where the openings whose research said the buyer withdrew closed anyway, the general method loses and says so.
+    const surprising = population().map((p) => (WITHDRAWN.has(p.id) ? { ...p, state: 'COLLECTED' } : p));
     const g2 = readSet('HELD_OUT', GENERAL_METHOD.key, surprising, surprising.map((p) => GENERAL_METHOD.run(p, 0.6, contextFor(p))));
     const b2 = readSet('HELD_OUT', BASELINE_METHOD.key, surprising, surprising.map((p) => BASELINE_METHOD.run(p, 0.6)));
     const lost = compareWithBaseline(g2, b2);
     expect(lost.earned).toBe(false);
     expect(lost.statement).toContain('did not earn its cost');
+  });
+});
+
+describe('the ground truth is the market, never the readiness gate the general method shares (repair F5)', () => {
+  it('READY and EXECUTING are Brain\'s own gate and pursuit, not outcomes; DELIVERING, COLLECTED, DECLINED and ARCHIVED are', () => {
+    for (const state of ['READY', 'EXECUTING', 'DISCOVERED', 'EVIDENCE_CARD']) expect(resolvedInProduction({ state })).toBe(false);
+    for (const state of ['DELIVERING', 'COLLECTED']) expect(actionableInProduction({ state })).toBe(true);
+    for (const state of ['DECLINED', 'ARCHIVED']) {
+      expect(resolvedInProduction({ state })).toBe(true);
+      expect(actionableInProduction({ state })).toBe(false);
+    }
+    expect(actionableInProduction({ state: 'READY' })).toBe(false);
+    expect(productionOutcome({ state: 'READY' }, MECHANISM_HOLDS)).toBeNull();
+    expect(productionOutcome({ state: 'EXECUTING' }, MECHANISM_HOLDS)).toBeNull();
+  });
+
+  it('a method that re-implements the gate scores nothing on openings only the gate has judged', () => {
+    // Every opening at READY: the gate replica would be perfect if READY were the truth. It is not an outcome, so nothing is scored.
+    const ps = Array.from({ length: 12 }, () => problem({ state: 'READY' }));
+    const r = readSet('HELD_OUT', GATE_METHOD.key, ps, ps.map((p) => GATE_METHOD.run(p, 0.6)));
+    expect(r.unresolved).toBe(12);
+    expect(r.actionablePathwayRate).toMatchObject({ value: 'INSUFFICIENT_DATA', numerator: 0, denominator: 0 });
+    expect(r.calibrationBrier.value).toBe('INSUFFICIENT_DATA');
+    expect(r.falsePositives).toEqual([]);
+    expect(chooseThreshold(ps, GATE_METHOD)).toBe(0.5);
+  });
+
+  it('matching the gate earns nothing: without research evidence the general method does not beat the gate it shares', () => {
+    const ps = population();
+    const none = knowledgeFor([]);
+    const g = readSet('HELD_OUT', GENERAL_METHOD.key, ps, ps.map((p) => GENERAL_METHOD.run(p, 0.6, contextFor(p, none))));
+    const gate = readSet('HELD_OUT', GATE_METHOD.key, ps, ps.map((p) => GATE_METHOD.run(p, 0.6)));
+    expect(compareWithBaseline(g, gate).earned).toBe(false);
+    // And the gate itself is no better than payer-and-price on what the market resolved: every resolved card passed it.
+    const payer = readSet('HELD_OUT', BASELINE_METHOD.key, ps, ps.map((p) => BASELINE_METHOD.run(p, 0.6)));
+    expect(gate.actionablePathwayRate).toEqual(payer.actionablePathwayRate);
+    expect(gate.calibrationBrier).toEqual(payer.calibrationBrier);
+    expect(compareWithBaseline(gate, payer).earned).toBe(false);
+  });
+
+  it('a run compares the general method with both baselines on every set, and a loss to the gate is a held-out loss', async () => {
+    await freshProject();
+    const ps = population();
+    const registered: string[] = [];
+    const run = await runSprintBenchmark({
+      read: async () => ps,
+      previous: async () => null,
+      knowledge: async () => knowledgeFor([]),
+      record: async () => {},
+      recordDecision: async () => {},
+      recordProvenance: async () => {},
+      registerDirected: async (w) => {
+        registered.push(w.key);
+        return { candidate: { id: `imc_${w.key}` } };
+      },
+      learning: async () => ({ catalogue: [], outcomes: [], procedures: [] }),
+      history: async () => new Map(),
+      recordResult: async () => {},
+      recordProcedure: async () => {},
+      sendNeeds: (async () => []) as never,
+      now: () => NOW,
+    });
+    expect(new Set(run.comparisons.map((c) => c.baseline.method))).toEqual(new Set([BASELINE_METHOD.key, GATE_METHOD.key]));
+    expect(run.comparisons.filter((c) => c.baseline.method === GATE_METHOD.key).map((c) => c.set).sort()).toEqual(['BENCHMARK', 'HELD_OUT', 'NEW_HELD_OUT']);
+    expect(run.comparisons.some((c) => c.set === 'HELD_OUT' && c.baseline.method === GATE_METHOD.key && c.earned === false)).toBe(true);
+    expect(registered).toContain('reasoning-sprint:general-method');
   });
 });
 
@@ -198,20 +293,20 @@ describe('a run records its readings, feeds failure to the existing repair path,
         throw new Error('the general method should not lose on this population');
       },
     });
-    expect(run.readings).toHaveLength(6);
+    expect(run.readings).toHaveLength(9);
     expect(run.disclaimer).toBe(SPRINT_DISCLAIMER);
     expect(decisions.length).toBeGreaterThan(0);
     expect(provenance.length).toBeGreaterThan(0);
     const [event] = await listImprovementEvents({ kinds: [SPRINT_EVENT], limit: 1 });
     expect(event?.detail['disclaimer']).toBe(SPRINT_DISCLAIMER);
-    expect((event?.detail['readings'] as unknown[]).length).toBe(6);
+    expect((event?.detail['readings'] as unknown[]).length).toBe(9);
   });
 
   it('registers a held-out loss through registerDirected and not anywhere else', async () => {
     await freshProject();
     const registered: string[] = [];
-    // The general method demands every load-bearing field; here dead-looking openings did close, so it loses.
-    const ps = [...population().map((p) => ({ ...p, state: p.payer ? 'COLLECTED' : p.state }))];
+    // The general method weighs the research; here the openings it said the buyer withdrew from did close, so it loses.
+    const ps = population().map((p) => (WITHDRAWN.has(p.id) ? { ...p, state: 'COLLECTED' } : p));
     const run = await runSprintBenchmark({
       read: async () => ps,
       previous: async () => null,
@@ -264,8 +359,8 @@ describe('the controller loop runs on real openings: results are tracked, the me
     expect(before?.prior.leadingHypothesis).toMatch(/^fails:/);
     expect(before?.prior.methodId).not.toBeNull();
 
-    // Run 2: production moved the opening to READY after that decision, which contradicts what it led with.
-    const ready = { ...open, state: 'READY', updatedAt: '2026-11-16T00:00:00.000Z' };
+    // Run 2: the market took it after that decision — delivery of an agreed sale began — which contradicts what it led with.
+    const ready = { ...open, state: 'DELIVERING', updatedAt: '2026-11-16T00:00:00.000Z' };
     const second = await runSprintBenchmark({ read: async () => [ready], previous: async () => null, sendNeeds, now: () => new Date('2026-11-17T00:00:00.000Z') });
     expect(second.loop.resultsTracked).toBe(1);
     expect(second.loop.methodChanges).toBe(1);

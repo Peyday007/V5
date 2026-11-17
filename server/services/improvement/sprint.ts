@@ -14,8 +14,16 @@
  *
  * The problems are production rows: `cash_opportunities`, each a concrete
  * opening with an evidence card. Whether one was an actionable pathway is
- * read from what happened to it — it reached READY or went further — never
- * from either method's opinion. The split is a hash of the row id, so the
+ * the market's verdict on it — a buyer agreed and delivery began, or money
+ * was collected; or it was declined or archived — never either method's
+ * opinion, and never Brain's own readiness gate. READY is `markReady`
+ * checking the card's load-bearing fields, which is what the general method
+ * checks too, so scoring against READY would score the gate reproducing
+ * itself (repair F5). READY and EXECUTING are therefore unresolved: they are
+ * left out of every measure that needs an outcome, and counted as such. And
+ * because a method can still "win" by re-implementing that gate, the general
+ * method is compared with the gate itself as well as with the payer-and-price
+ * baseline, and earns its cost only by beating both. The split is a hash of the row id, so the
  * benchmark set is the same on every rerun, and the method's one tuned
  * choice (the probability above which it calls a pathway actionable) is made
  * on the benchmark set alone: held-out rows are only ever scored. A rerun
@@ -97,6 +105,7 @@ import {
 import { MIN_CALIBRATION_SAMPLE, buildLedger, calibrate, type CalibrationBucket, type ExposureRow, type OutcomeRow, type PredictionRow } from '../quant/forecast.ts';
 import type { Figure } from '../quant/graph.ts';
 import type { sendNeeds } from '../quant/needs.ts';
+import { GATE_ASSERTED_STATES, MARKET_CONFIRMED_STATES, MARKET_REFUSED_STATES } from '../cash/opportunities.ts';
 
 /* ------------------------------------------------------------------------- */
 /* Problems                                                                   */
@@ -129,9 +138,17 @@ export interface SprintProblem {
 export const LOAD_BEARING = ['payer', 'reachableChannel', 'buyingSignal', 'acceptanceCondition', 'priceCents', 'paymentTerms', 'fulfillmentOwner'] as const;
 type LoadBearing = (typeof LOAD_BEARING)[number];
 
-/** States that mean the opening became an economically supported, actionable pathway. */
-export const ACTIONABLE_STATES: ReadonlySet<string> = new Set(['READY', 'EXECUTING', 'DELIVERING', 'COLLECTED']);
+/**
+ * States in which the market said yes: an agreement the buyer agreed to is
+ * being delivered, or money was collected (`cash/opportunities.ts`). Not READY
+ * or EXECUTING — those are Brain's own gate and Brain's own pursuit.
+ */
+export const ACTIONABLE_STATES: ReadonlySet<string> = new Set(MARKET_CONFIRMED_STATES);
 
+/** States Brain's readiness gate or its own pursuit put the opening in: no verdict from the market yet. */
+export const GATE_STATES: ReadonlySet<string> = new Set(GATE_ASSERTED_STATES);
+
+/** The market made it an economically supported, actionable pathway. */
 export function actionableInProduction(p: Pick<SprintProblem, 'state'>): boolean {
   return ACTIONABLE_STATES.has(p.state);
 }
@@ -284,6 +301,32 @@ export const BASELINE_METHOD: SprintMethod = {
   },
 };
 
+/**
+ * The second baseline: Brain's own readiness gate, re-implemented — every
+ * load-bearing card field known. It is what the general method's structural
+ * requirement amounts to, so a general method that only matches it has
+ * reproduced the gate rather than reasoned, and is not credited for it.
+ */
+export const GATE_METHOD: SprintMethod = {
+  key: 'baseline:readiness-gate',
+  run(p) {
+    const started = performance.now();
+    const actionable = LOAD_BEARING.every((f) => known(p, f));
+    return {
+      problemId: p.id,
+      actionable,
+      probability: actionable ? 0.6 : 0.2,
+      needsPerson: !actionable,
+      robust: actionable,
+      findings: 0,
+      elapsedMs: performance.now() - started,
+    };
+  },
+};
+
+/** Every simpler method the general one must beat to earn its cost. */
+export const BASELINES: readonly SprintMethod[] = [BASELINE_METHOD, GATE_METHOD];
+
 /** Hypothesis ids decisions recorded before hypotheses were generated from the mechanism; still read from history. */
 const LEGACY_HOLDS = 'pathway-holds';
 const LEGACY_FAILS = 'pathway-fails';
@@ -416,7 +459,7 @@ export function controllerSnapshotOf(p: SprintProblem, context: MethodContext = 
 }
 
 /** States that mean the opening will not become a pathway. */
-export const DEAD_STATES: ReadonlySet<string> = new Set(['DECLINED', 'ARCHIVED']);
+export const DEAD_STATES: ReadonlySet<string> = new Set(MARKET_REFUSED_STATES);
 
 /**
  * What production now says about a hypothesis the controller led with: the
@@ -512,7 +555,12 @@ export interface SetReading {
   set: ProblemSet;
   method: string;
   problems: number;
-  /** Method called it actionable and production confirmed it, over the set. */
+  /**
+   * Problems the market has not resolved (still undecided, or only at Brain's
+   * own READY/EXECUTING): left out of every measure that needs an outcome.
+   */
+  unresolved: number;
+  /** Method called it actionable and the market confirmed it, over the problems the market resolved. */
   actionablePathwayRate: Measure;
   /** Decisions free of weak-inference and provenance findings, over the set. */
   methodQuality: Measure;
@@ -527,7 +575,7 @@ export interface SetReading {
   humanInterventions: Measure;
   /** Problems the method itself predicted it could not progress without a person, over the set: its own model, compared between methods. */
   modelledNeedsPerson: Measure;
-  /** Brier score: summed squared error of the probability against what happened, over the set. Lower is better. */
+  /** Brier score: summed squared error of the probability against what the market did, over resolved problems. Lower is better. */
   calibrationBrier: Measure;
   /** Actually actionable problems the method called actionable robustly, over actually actionable problems. */
   robustTargetCoverage: Measure;
@@ -542,35 +590,39 @@ export function readSet(
   verdicts: readonly MethodVerdict[],
   interventions?: ReadonlyMap<string, number> | null,
 ): SetReading {
-  const truth = new Map(problems.map((p) => [p.id, actionableInProduction(p)]));
+  // Only the market's verdict is an outcome: an opening it has not resolved is neither a hit nor a miss.
+  const truth = new Map(problems.filter(resolvedInProduction).map((p) => [p.id, actionableInProduction(p)]));
   const n = verdicts.length;
-  const tp = verdicts.filter((v) => v.actionable && truth.get(v.problemId)).length;
+  const scored = verdicts.filter((v) => truth.has(v.problemId));
+  const tp = scored.filter((v) => v.actionable && truth.get(v.problemId)).length;
   const clean = verdicts.filter((v) => v.findings === 0).length;
   const time = verdicts.reduce((s, v) => s + v.elapsedMs, 0);
   const people = verdicts.filter((v) => v.needsPerson).length;
   // Real interventions are read from rows; when they were not read, the measure says so rather than reading zero.
   const intervened = interventions ? verdicts.filter((v) => (interventions.get(v.problemId) ?? 0) > 0).length : 0;
-  const brier = verdicts.reduce((s, v) => s + (v.probability - (truth.get(v.problemId) ? 1 : 0)) ** 2, 0);
-  const targets = verdicts.filter((v) => truth.get(v.problemId));
+  const brier = scored.reduce((s, v) => s + (v.probability - (truth.get(v.problemId) ? 1 : 0)) ** 2, 0);
+  const targets = scored.filter((v) => truth.get(v.problemId));
   const covered = targets.filter((v) => v.actionable && v.robust).length;
   return {
     set,
     method,
     problems: n,
-    actionablePathwayRate: measure(tp, n),
+    unresolved: n - scored.length,
+    actionablePathwayRate: measure(tp, scored.length),
     methodQuality: measure(clean, n),
     decisionTimeMs: measure(time, n, 1),
     humanInterventions: interventions ? measure(intervened, n) : measure(0, 0),
     modelledNeedsPerson: measure(people, n),
-    calibrationBrier: measure(brier, n),
+    calibrationBrier: measure(brier, scored.length),
     robustTargetCoverage: measure(covered, targets.length),
-    falsePositives: verdicts.filter((v) => v.actionable && !truth.get(v.problemId)).map((v) => v.problemId),
+    falsePositives: scored.filter((v) => v.actionable && !truth.get(v.problemId)).map((v) => v.problemId),
   };
 }
 
 /**
  * The method's one tuned choice, made on the benchmark set only: the
- * probability threshold with the lowest misclassification there.
+ * probability threshold with the lowest misclassification there, against the
+ * market's verdict on the openings it resolved.
  */
 export function chooseThreshold(
   benchmark: readonly SprintProblem[],
@@ -582,7 +634,8 @@ export function chooseThreshold(
   let best = candidates[0]!;
   let bestErrors = Infinity;
   for (const t of candidates) {
-    const errors = benchmark.filter((p) => method.run(p, t, contextOf(p)).actionable !== actionableInProduction(p)).length;
+    // Scored only where the market has spoken: an unresolved opening is not an error either way.
+    const errors = benchmark.filter((p) => resolvedInProduction(p) && method.run(p, t, contextOf(p)).actionable !== actionableInProduction(p)).length;
     if (errors < bestErrors) {
       best = t;
       bestErrors = errors;
@@ -613,7 +666,15 @@ export function compareWithBaseline(general: SetReading, baseline: SetReading): 
   const b = { rate: num(baseline.actionablePathwayRate), brier: num(baseline.calibrationBrier), people: num(baseline.modelledNeedsPerson) };
   const costRatio = baseline.decisionTimeMs.numerator > 0 ? general.decisionTimeMs.numerator / baseline.decisionTimeMs.numerator : null;
   if (g.rate === null || b.rate === null || g.brier === null || b.brier === null || g.people === null || b.people === null) {
-    return { set: general.set, earned: null, statement: `${general.set}: too few problems (${general.problems}) to say whether the general method earned its cost`, general, baseline };
+    return {
+      set: general.set,
+      earned: null,
+      statement:
+        `${general.set} vs ${baseline.method}: too few problems the market resolved (${general.problems - general.unresolved} of ${general.problems}; ` +
+        `${general.unresolved} undecided or only at Brain's own READY/EXECUTING) to say whether the general method earned its cost`,
+      general,
+      baseline,
+    };
   }
   const earned = g.rate >= b.rate && g.brier <= b.brier && g.people <= b.people && (g.rate > b.rate || g.brier < b.brier || g.people < b.people);
   const cost = costRatio === null ? 'unmeasured extra time' : `${costRatio.toFixed(1)}x the baseline's decision time`;
@@ -621,7 +682,7 @@ export function compareWithBaseline(general: SetReading, baseline: SetReading): 
     set: general.set,
     earned,
     statement:
-      `${general.set}: pathway rate ${g.rate} vs ${b.rate}, Brier ${g.brier} vs ${b.brier}, people ${g.people} vs ${b.people}, at ${cost} — ` +
+      `${general.set} vs ${baseline.method}: pathway rate ${g.rate} vs ${b.rate}, Brier ${g.brier} vs ${b.brier}, people ${g.people} vs ${b.people}, at ${cost} — ` +
       (earned ? 'the extra complexity earned its cost' : 'the extra complexity did not earn its cost on this set'),
     general,
     baseline,
@@ -688,6 +749,7 @@ function capabilitySpec(key: string): { title: string; ownerPaths: string[]; que
 
 /** What the general method could not do on one miss. Pure. */
 export function capabilitiesOfMiss(p: SprintProblem, v: MethodVerdict): string[] {
+  if (!resolvedInProduction(p)) return [];
   const truth = actionableInProduction(p);
   if (v.actionable && !truth) return ['counter-model'];
   if (v.actionable || !truth) return [];
@@ -848,7 +910,7 @@ export async function readOwnerInterventions(problems: readonly SprintProblem[])
 /* The numbers the run states                                                 */
 /* ------------------------------------------------------------------------- */
 
-/** Whether production has resolved an opening either way: only those are outcomes a probability can be judged on. */
+/** Whether the market has resolved an opening either way: only those are outcomes a method can be judged on. READY and EXECUTING are not. */
 export function resolvedInProduction(p: Pick<SprintProblem, 'state'>): boolean {
   return ACTIONABLE_STATES.has(p.state) || DEAD_STATES.has(p.state);
 }
@@ -1223,7 +1285,7 @@ export function chooseDemonstrated(
     if (result) out.push({ problem: p, result });
   }
   const open = problems
-    .filter((p) => !history.has(p.id) && !ACTIONABLE_STATES.has(p.state) && !DEAD_STATES.has(p.state))
+    .filter((p) => !history.has(p.id) && !ACTIONABLE_STATES.has(p.state) && !GATE_STATES.has(p.state) && !DEAD_STATES.has(p.state))
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : a.id.localeCompare(b.id)));
   for (const p of open) {
     if (out.length >= Math.max(limit, 0)) break;
@@ -1289,14 +1351,18 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
   for (const set of ['BENCHMARK', 'HELD_OUT', 'NEW_HELD_OUT'] as const) {
     const ps = split[set];
     const g = ps.map((p) => GENERAL_METHOD.run(p, threshold, contextOf(p)));
-    const b = ps.map((p) => BASELINE_METHOD.run(p, threshold));
     generalVerdicts.push(...g);
-    baselineVerdicts.push(...b);
     if (set === 'BENCHMARK') benchmarkVerdicts = g;
     const gr = readSet(set, GENERAL_METHOD.key, ps, g, interventions);
-    const br = readSet(set, BASELINE_METHOD.key, ps, b, interventions);
-    readings.push(gr, br);
-    comparisons.push(compareWithBaseline(gr, br));
+    readings.push(gr);
+    // Against every simpler method, the readiness gate included: matching the gate is not reasoning.
+    for (const baseline of BASELINES) {
+      const b = ps.map((p) => baseline.run(p, threshold));
+      if (baseline === BASELINE_METHOD) baselineVerdicts.push(...b);
+      const br = readSet(set, baseline.key, ps, b, interventions);
+      readings.push(br);
+      comparisons.push(compareWithBaseline(gr, br));
+    }
   }
 
   // The controller's operational loop on real openings: track what production said about an earlier
@@ -1423,7 +1489,7 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
     repairCandidateId = await register({
       key: 'reasoning-sprint:general-method',
       kind: 'REASONING_CAPABILITY',
-      title: 'The general reasoning method did not beat the simple baseline on held-out commercial problems',
+      title: 'The general reasoning method did not beat a simpler baseline (payer-and-price, or the readiness gate itself) on held-out commercial problems',
       problem: (failed.map((c) => c.statement).join(' | ') + (top ? ` | highest-leverage missing capability: ${top.key} (${top.explains} of ${top.of} benchmark misses)` : '')).slice(0, 1000),
       metric: 'READY_OPPORTUNITIES_PER_DAY',
       downstreamMetric: null,
@@ -1496,7 +1562,7 @@ export async function runSprintBenchmark(deps: SprintDeps = {}): Promise<SprintR
       threshold: run.threshold,
       sets: run.sets,
       readings: run.readings,
-      comparisons: run.comparisons.map((c) => ({ set: c.set, earned: c.earned, statement: c.statement })),
+      comparisons: run.comparisons.map((c) => ({ set: c.set, baseline: c.baseline.method, earned: c.earned, statement: c.statement })),
       capabilities: run.capabilities,
       shipped: run.shipped,
       falsePositiveCandidateId: run.falsePositiveCandidateId,

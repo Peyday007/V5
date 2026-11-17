@@ -52,7 +52,8 @@ const problem = (over: Partial<SprintProblem> = {}): SprintProblem => {
     fulfillmentOwner: 'supplier',
     deadline: null,
     humanHours: 1,
-    state: 'READY',
+    // The market's yes. READY is Brain's own readiness gate and is not an outcome (repair F5).
+    state: 'COLLECTED',
     createdAt: `2026-10-${String((seq % 28) + 1).padStart(2, '0')}T00:00:00.000Z`,
     updatedAt: '2026-11-01T00:00:00.000Z',
     ...over,
@@ -91,8 +92,20 @@ function researchClaim(id: string): KnowledgeSourceClaim {
   };
 }
 
+/** Openings whose research says the buyer withdrew: evidence a reasoning method can use and the readiness gate cannot. */
+const WITHDRAWN = new Set<string>();
+
 const knowledgeFor = (ps: readonly SprintProblem[]): KnowledgeReading =>
-  acquireKnowledge({ subject: 'project prj_1', claims: ps.filter((p) => p.sourceClaimId).map((p) => researchClaim(p.sourceClaimId!)), now: NOW });
+  acquireKnowledge({
+    subject: 'project prj_1',
+    claims: ps
+      .filter((p) => p.sourceClaimId)
+      .map((p) => ({
+        ...researchClaim(p.sourceClaimId!),
+        ...(WITHDRAWN.has(p.id) ? { contradictionState: 'CONTESTED' as const, contradictionNote: 'the buyer withdrew the request' } : {}),
+      })),
+    now: NOW,
+  });
 
 const contextFor = (p: SprintProblem, knowledge: KnowledgeReading = knowledgeFor([p])): MethodContext => {
   const m = mechanismFromOpening(p, knowledge);
@@ -152,7 +165,7 @@ describe('the sprint selects the highest-leverage missing capability, on the ben
   });
 
   it('ships the top capability through registerDirected when the general method still wins, with its leverage and paths', async () => {
-    // Every READY opening lacks a sourced claim: the general method misses them all and the capability is knowledge acquisition.
+    // Every collected opening lacks a sourced claim: the general method misses them all and the capability is knowledge acquisition.
     const ps = population();
     const registered: Weakness[] = [];
     const run = await runSprintBenchmark(isolated({
@@ -164,7 +177,7 @@ describe('the sprint selects the highest-leverage missing capability, on the ben
       },
     }));
     const split = splitProblems(ps, null);
-    const benchmarkReady = split.BENCHMARK.filter((p) => p.state === 'READY').length;
+    const benchmarkReady = split.BENCHMARK.filter((p) => p.state === 'COLLECTED').length;
     expect(run.capabilities[0]).toMatchObject({ key: 'knowledge-acquisition', explains: benchmarkReady });
     const shippedKeys = registered.map((w) => w.key);
     expect(shippedKeys).toContain(run.comparisons.some((c) => c.set !== 'BENCHMARK' && c.earned === false) ? 'reasoning-sprint:general-method' : 'reasoning-sprint:capability:knowledge-acquisition');
@@ -176,7 +189,7 @@ describe('the sprint selects the highest-leverage missing capability, on the ben
   it('does not let held-out outcomes choose the capability', async () => {
     const ps = population();
     const split = splitProblems(ps, null);
-    const flipped = [...split.BENCHMARK, ...split.HELD_OUT.map((p) => ({ ...p, state: p.state === 'READY' ? 'DECLINED' : 'READY' }))];
+    const flipped = [...split.BENCHMARK, ...split.HELD_OUT.map((p) => ({ ...p, state: p.state === 'COLLECTED' ? 'DECLINED' : 'COLLECTED' }))];
     const read = async (input: SprintProblem[]) =>
       (await runSprintBenchmark(isolated({ read: async () => input, knowledge: async () => knowledgeFor([]), registerDirected: async () => ({ candidate: { id: 'imc_x' } }) }))).capabilities;
     expect(await read(flipped)).toEqual(await read(ps));
@@ -188,6 +201,7 @@ describe('the rerun links its held-out delta to the change delivered since', () 
     set,
     method: GENERAL_METHOD.key,
     problems: 20,
+    unresolved: 0,
     actionablePathwayRate: { value: rate, numerator: rate * 20, denominator: 20 },
     methodQuality: { value: 1, numerator: 20, denominator: 20 },
     decisionTimeMs: { value: 1, numerator: 20, denominator: 20 },
@@ -277,8 +291,15 @@ describe('the rerun links its held-out delta to the change delivered since', () 
 describe('per-method findings reach repair even when the general method wins', () => {
   it('registers the general method held-out false positives although it beat the baseline', async () => {
     const ps = population();
-    // Complete, evidenced cards that production declined: the general method calls them actionable, as does the baseline.
+    // Complete, evidenced cards the market declined: the general method calls them actionable, as do both baselines.
     for (let i = 0; i < 30; i++) ps.push(problem({ state: 'DECLINED' }));
+    // And declined openings whose research said the buyer withdrew: the general method gets these right where
+    // payer-and-price and the readiness gate cannot, so it wins on what the market resolved — and still has false positives.
+    for (let i = 0; i < 30; i++) {
+      const p = problem({ state: 'DECLINED' });
+      WITHDRAWN.add(p.id);
+      ps.push(p);
+    }
     const registered: Weakness[] = [];
     const run = await runSprintBenchmark(isolated({
       read: async () => ps,
@@ -293,13 +314,16 @@ describe('per-method findings reach repair even when the general method wins', (
     const fp = registered.find((w) => w.key === 'reasoning-sprint:false-positives');
     expect(fp).toBeDefined();
     expect(fp!.samples.every((id) => ps.find((p) => p.id === id)?.state === 'DECLINED')).toBe(true);
+    // The wins it was credited with are wins over the readiness gate as well, not only over payer-and-price.
+    expect(wins.some((c) => c.baseline.method === 'baseline:readiness-gate')).toBe(true);
     expect(run.falsePositiveCandidateId).toBe('imc_reasoning-sprint:false-positives');
   });
 });
 
 describe('required human interventions are real owner requests, not the method model', () => {
   it('readSet counts problems a real request named, and says INSUFFICIENT_DATA when none were read', () => {
-    const ps = Array.from({ length: 6 }, () => problem({ state: 'DISCOVERED', payer: null }));
+    // Declined by the market, so the outcome measures are readable and the comparison states its people figure.
+    const ps = Array.from({ length: 6 }, () => problem({ state: 'DECLINED', payer: null }));
     const verdicts = ps.map((p) => GENERAL_METHOD.run(p, 0.5, contextFor(p)));
     const unread = readSet('HELD_OUT', GENERAL_METHOD.key, ps, verdicts);
     expect(unread.humanInterventions.value).toBe('INSUFFICIENT_DATA');
