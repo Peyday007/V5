@@ -128,6 +128,32 @@ describe('VENT-24-2: impossible combinations are challenged, weak strategies reb
     expect(first!.verdict.feasibility).toBe('FEASIBLE');
     for (const a of alts) expect(a.verdict.feasibility).toBe('FEASIBLE');
   });
+
+  it('offers a substitution with no expected return supplied, exactly as the kernel calls it, and keeps the unknown named', () => {
+    // The kernel passes no economics: the return is unknown, and that must not drop the contract alternative.
+    const path = buildVenturePath(venture);
+    if (!path.ok) throw new Error('expected a path');
+    const original = challengeVenture(path, poor);
+    expect(original.feasibility).toBe('INFEASIBLE');
+    const contracted = alternativesFor(venture, poor).find((a) => a.kind === 'SUBSTITUTED');
+    expect(contracted).toBeDefined();
+    expect(contracted!.differs).toEqual(['production: BUILD → CONTRACT via a contract manufacturer']);
+    expect(contracted!.resolves).toEqual(expect.arrayContaining(['CAPITAL_EXCEEDED', 'CAPABILITY_NOT_HELD']));
+    // Never called feasible on an unknown (invariant 39): UNDETERMINED, naming only what the original already lacked.
+    expect(contracted!.verdict.feasibility).toBe('UNDETERMINED');
+    expect(contracted!.verdict.challenges.map((c) => c.detail)).toEqual(['the expected return is not established']);
+  });
+
+  it('refuses a substitution that swaps a priced stage for an unpriced one, or leaves a blocker', () => {
+    const blank = venture.map((s) =>
+      s.key === 'production' ? { ...s, alternatives: [{ mode: 'PARTNER' as const, actor: 'a partner with no published terms', budget: null, requiresCapabilityIds: [], evidence: ['clm_partner'] }] } : s,
+    );
+    expect(alternativesFor(blank, poor).filter((a) => a.kind === 'SUBSTITUTED')).toEqual([]);
+    const stillNeeds = venture.map((s) =>
+      s.key === 'production' ? { ...s, alternatives: [{ mode: 'LICENSE' as const, actor: 'a licensor', budget: usd(6_000_00), requiresCapabilityIds: ['cap_cnc'], evidence: ['clm_licence'] }] } : s,
+    );
+    expect(alternativesFor(stillNeeds, poor).filter((a) => a.kind === 'SUBSTITUTED')).toEqual([]);
+  });
 });
 
 /* ------------------------------------------------------------------------- */
@@ -371,6 +397,14 @@ describe('VENT-24-2: the kernel revisits an earlier venture when capital or capa
     // With no demand on record, market research rests on an unknown, so nothing past it is funded:
     // no validate-first alternative commits the tooling money (invariant 39).
     expect(alternatives.filter((a) => a.kind === 'VALIDATE_FIRST')).toEqual([]);
+
+    // From the kernel's own call, with no expected return on any row, buying the capability is offered
+    // rather than dropped: it removes the blocker and adds no unknown the original lacked.
+    const bought = alternatives.find((a) => a.kind === 'SUBSTITUTED');
+    expect(bought).toBeDefined();
+    expect(bought!.differs).toEqual([`${capabilityKey}: BUILD → BUY via A drive integrator`]);
+    expect(bought!.verdict.feasibility).toBe('UNDETERMINED');
+    expect(bought!.verdict.challenges.map((c) => c.kind)).not.toContain('CAPABILITY_NOT_HELD');
 
     // Once demand is on record, the rebuilt alternative funds the priced, capability-free prefix the capital covers.
     await recordCategoryEvidence({

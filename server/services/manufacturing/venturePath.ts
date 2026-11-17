@@ -257,6 +257,8 @@ export interface VentureAlternative {
   kind: 'SUBSTITUTED' | 'VALIDATE_FIRST';
   /** What differs from the original, stage by stage. */
   differs: string[];
+  /** The original's blocking challenges this alternative removes, by kind. */
+  resolves?: ChallengeKind[];
   stages: VentureStage[];
   path: Extract<VenturePath, { ok: true }>;
   verdict: VentureVerdict;
@@ -264,13 +266,57 @@ export interface VentureAlternative {
 
 const MAX_SUBSTITUTION_VARIANTS = 64;
 
+const BLOCKING: ReadonlySet<ChallengeKind> = new Set(['CAPABILITY_NOT_HELD', 'CAPITAL_EXCEEDED', 'ECONOMICALLY_WEAK']);
+
+function blockersOf(verdict: VentureVerdict): ChallengeKind[] {
+  return [...new Set(verdict.challenges.filter((c) => BLOCKING.has(c.kind)).map((c) => c.kind))];
+}
+
+/**
+ * The blocking challenges a substitution removes from an INFEASIBLE original,
+ * or null when it is not a material improvement: it leaves a blocker, or it
+ * rests on an unknown the original did not (an unpriced stage the original
+ * priced, or any other unknown not already named on the original).
+ */
+function resolvedBlockers(
+  base: VentureVerdict,
+  original: Extract<VenturePath, { ok: true }>,
+  verdict: VentureVerdict,
+  path: Extract<VenturePath, { ok: true }>,
+): ChallengeKind[] | null {
+  if (base.feasibility !== 'INFEASIBLE' || verdict.feasibility !== 'UNDETERMINED') return null;
+  if (verdict.challenges.some((c) => BLOCKING.has(c.kind))) return null;
+  const wasUnpriced = new Set(original.unpriced);
+  for (const c of verdict.challenges) {
+    if (c.kind === 'UNPRICED_STAGE') {
+      if (!path.unpriced.every((key) => wasUnpriced.has(key))) return null;
+      continue;
+    }
+    if (!base.challenges.some((b) => b.kind === c.kind && b.detail === c.detail)) return null;
+  }
+  return blockersOf(base);
+}
+
 /**
  * Materially different alternatives to a weak or infeasible venture. Pure.
  *
  * Substitutions come only from alternatives the stages carry as evidence; the
  * validate-first variant funds the largest dependency-closed prefix the capital
- * covers and ends at a decision whether to proceed. Only FEASIBLE ones are
- * returned, and the original is never discarded by this call.
+ * covers and ends at a decision whether to proceed. The original is never
+ * discarded by this call.
+ *
+ * A substitution is returned when it is FEASIBLE, or when it removes every
+ * challenge that makes the original INFEASIBLE (capital beyond what is
+ * deployable, a capability not held, a return that does not cover the cost)
+ * and leaves only unknowns the original already had. The second kind is the
+ * one real rows produce: no row states a venture's expected return and no
+ * acquisition candidate carries a price, so requiring FEASIBLE dropped every
+ * rent, contract, partner, license or buy alternative before anyone saw it.
+ * Its verdict stays UNDETERMINED and names those unknowns — a shared unknown
+ * never becomes a favourable assumption (invariant 39), and an alternative
+ * that adds an unknown of its own (an unpriced stage the original had priced)
+ * is still refused, because swapping a known cost for a blank is not a
+ * cheaper plan.
  */
 export function alternativesFor(
   stages: readonly VentureStage[],
@@ -278,6 +324,8 @@ export function alternativesFor(
   economics: VentureEconomics = { expectedReturn: null },
 ): VentureAlternative[] {
   const out: VentureAlternative[] = [];
+  const original = buildVenturePath(stages);
+  const base = original.ok ? challengeVenture(original, situation, economics) : null;
   const options = stages.map((s) => [null, ...(s.alternatives ?? [])] as (StageAlternative | null)[]);
   let combos: (StageAlternative | null)[][] = [[]];
   for (const choice of options) {
@@ -302,9 +350,10 @@ export function alternativesFor(
     const path = buildVenturePath(variant);
     if (!path.ok) continue;
     const verdict = challengeVenture(path, situation, economics);
-    if (verdict.feasibility !== 'FEASIBLE') continue;
+    const resolves = base && original.ok ? resolvedBlockers(base, original, verdict, path) : null;
+    if (verdict.feasibility !== 'FEASIBLE' && resolves === null) continue;
     const differs = stages.flatMap((stage, i) => (combo[i] ? [`${stage.key}: ${stage.mode ?? 'BUILD'} → ${combo[i]!.mode} via ${combo[i]!.actor}`] : []));
-    out.push({ kind: 'SUBSTITUTED', differs, stages: variant, path, verdict });
+    out.push({ kind: 'SUBSTITUTED', differs, stages: variant, path, verdict, resolves: resolves ?? (base ? blockersOf(base) : []) });
   }
 
   const first = validateFirst(stages, situation);
