@@ -271,17 +271,36 @@ async function hiringAutomationOnRecord(snapshot: LaborSnapshot): Promise<Automa
   return hiringAutomationOf(keys, results);
 }
 
-/** Engagement routes that are not employment and not software: the ones a contractor is engaged through. */
-const EMPLOYMENT_OR_TOOL_CHANNELS: ReadonlySet<LaborChannel> = new Set<LaborChannel>(['DOMESTIC_EMPLOYEE', 'OFFSHORE_EMPLOYEE', 'SOFTWARE_TOOL']);
+/**
+ * The contractor routes a person's allocation to a production layer actually
+ * chooses. An allocation names a layer, never a channel or a counterparty, so
+ * the only market options it can be read as approving are the non-employment
+ * routes *of that layer*: putting a task on DOMESTIC_HUMAN approves a domestic
+ * contractor, and never an offshore contractor, an agency or a managed
+ * service that merely published a rate for the same task. Brain and software
+ * engage no contractor; employment is never a contractor route (hiring needs
+ * its own authorisation). A layer with no entry approves nobody.
+ */
+export const CONTRACTOR_CHANNELS_BY_LAYER: Readonly<Record<ProductionLayer, readonly LaborChannel[]>> = Object.freeze({
+  BRAIN: [],
+  SOFTWARE_TOOL: [],
+  EXTERNAL_SERVICE: ['AGENCY_OR_VENDOR', 'MANAGED_SERVICE'],
+  OFFSHORE_HUMAN: ['OFFSHORE_CONTRACTOR'],
+  DOMESTIC_HUMAN: ['DOMESTIC_CONTRACTOR'],
+  SPECIALIST_PROFESSIONAL: ['SPECIALIST_FREELANCER', 'LICENSED_PROFESSIONAL', 'FRACTIONAL_SPECIALIST'],
+  PHYSICAL_OPERATOR: ['ON_DEMAND_OPERATOR'],
+});
 
 /**
  * The contractors a person has already approved, read from the labour rows: a
- * task whose live allocation a **person** decided onto a layer that is not
- * Brain or software, and whose market options on record name a non-employment
- * engagement route. The person's allocation is the approval; each such route
- * is a contractor Brain may coordinate without further authorisation. An
- * allocation Brain made for itself approves nobody, and a person's allocation
- * with no contractor route on record names no contractor. Pure.
+ * task whose live allocation a **person** decided, and a market option on
+ * record whose channel is a contractor route of the very layer the person
+ * chose (`CONTRACTOR_CHANNELS_BY_LAYER`). The person's allocation is the
+ * approval, so it reaches only what it chose: an option in any other channel
+ * — however cheap, and whatever layer it would belong to — is a published
+ * rate nobody approved, and its task keeps its role. An allocation Brain made
+ * for itself approves nobody, and a person's allocation with no matching
+ * route on record names no contractor. Pure.
  */
 export function approvedContractorsOf(snapshot: Pick<LaborSnapshot, 'coverage'>): ApprovedContractor[] {
   const out: ApprovedContractor[] = [];
@@ -289,9 +308,9 @@ export function approvedContractorsOf(snapshot: Pick<LaborSnapshot, 'coverage'>)
     const allocation = one.allocation;
     if (one.task.retiredAt !== null || !allocation || allocation.supersededAt !== null) continue;
     if (allocation.decidedBy !== 'PERSON') continue;
-    if (allocation.productionLayer === 'BRAIN' || allocation.productionLayer === 'SOFTWARE_TOOL') continue;
+    const chosen = CONTRACTOR_CHANNELS_BY_LAYER[allocation.productionLayer] ?? [];
     for (const option of one.options) {
-      if (EMPLOYMENT_OR_TOOL_CHANNELS.has(option.channel)) continue;
+      if (!chosen.includes(option.channel)) continue;
       out.push({
         taskId: one.task.id,
         contractorRef: `${option.channel} option ${option.id}`,
