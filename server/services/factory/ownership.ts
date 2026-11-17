@@ -131,6 +131,9 @@ export function siblingSubjectOf(testPath: string): string | null {
  * nothing about `server/routes/index.ts`. A heuristic's own limit rather than a
  * list of files — same-directory siblings still pair whatever the stem.
  */
+/** A reviewer's abbreviation: the text before and after an ellipsis. */
+const ELLIPSIS = /^(.*?)(?:\.\.\.|…)(.*)$/;
+
 const AMBIGUOUS_STEMS = new Set(['index', 'main', 'mod', 'types', 'type', 'utils', 'util', 'helpers', 'helper', 'constants', 'config']);
 
 /**
@@ -695,7 +698,10 @@ export function resolveRepairScope(input: RepairScopeInput): RepairScope {
     ...new Set([
       ...input.units.flatMap((unit) => unit.ownedPaths),
       ...input.mutationScope,
-    ].filter(isConcrete)),
+    // An abbreviation granted literally into the scope (production 2026-11-17: the
+    // scope came to name `tests/...venture-path.test.ts`) is not a file anyone owns,
+    // and as a known path it would short-circuit its own expansion below.
+    ].filter((path) => isConcrete(path) && !ELLIPSIS.test(path))),
   ];
   // The leading directories of every glob a unit owns or the scope grants, so
   // `repos/x.ts` can also resolve against `server/repos/cash*.ts`.
@@ -726,7 +732,7 @@ export function resolveRepairScope(input: RepairScopeInput): RepairScope {
      * what precedes it and ends with what follows it is the file meant; none, or two, and
      * it stays as written.
      */
-    const gap = path.match(/^(.*?)(?:\.\.\.|…)(.*)$/);
+    const gap = path.match(ELLIPSIS);
     if (gap) {
       const [, head = '', tail = ''] = gap;
       const fits = knownPaths.filter((known) => known.length > head.length + tail.length && known.startsWith(head) && known.endsWith(tail));
