@@ -394,12 +394,14 @@ export function issuingAgencyOf(organization: string | null): string | null {
  * RULE_EFFECTIVE_SOON, version 2 (SHADOW). Three causes of v1's recorded misses
  * (DETECTOR_MISSES:RULE_EFFECTIVE_SOON@1), each fixed without lowering a bar:
  *
- *  1. The window is measured from the rule's own publication. A final rule
- *     published in the last 30 days counts when it takes effect on or after its
- *     publication date and no later than now + RULE_EFFECTIVE_SOON_DAYS. v1
- *     measured the lower bound from the run, so a rule effective on its own
- *     publication day (FAA 2026-23073, FCC 2026-23041) dropped out days later.
- *     A rule effective before it was published is still never kept.
+ *  1. Effective dates are compared as days. A final rule published in the
+ *     last 30 days counts when it takes effect no earlier than the later of its
+ *     own publication day and yesterday (UTC), and no later than
+ *     now + RULE_EFFECTIVE_SOON_DAYS. v1 compared a day-precision date with the
+ *     run's instant minus 24 hours, so a rule effective on its own publication
+ *     day (FAA 2026-23073, FCC 2026-23041) fell out within hours. v1's bar
+ *     still holds: a rule already in force for more than a day is not "taking
+ *     effect soon", and one effective before it was published is never kept.
  *  2. A correction inherits the effective date of the rule it corrects
  *     ("Corrects <document_number>."), read from that stored record, and is
  *     judged against the correction's own publication date (C1-2026-21030).
@@ -426,6 +428,7 @@ export const RULE_EFFECTIVE_SOON_V2: Detector = {
   memberWindowMs: RULE_EFFECTIVE_SOON_PUBLISHED_DAYS * DAY,
   detect(records, now) {
     const until = now.getTime() + RULE_EFFECTIVE_SOON_DAYS * DAY;
+    const yesterday = Date.parse(`${now.toISOString().slice(0, 10)}T00:00:00.000Z`) - DAY;
     const ours = records.filter((record) => this.sources.includes(record.source));
     const effectiveOfDocument = (documentNumber: string): string | null => {
       const corrected = ours.find((record) => record.url.includes(`/${documentNumber}/`));
@@ -443,7 +446,8 @@ export const RULE_EFFECTIVE_SOON_V2: Detector = {
       if (!effective) continue;
       const at = Date.parse(`${effective}T00:00:00.000Z`);
       const publishedDay = Date.parse(`${new Date(published).toISOString().slice(0, 10)}T00:00:00.000Z`);
-      if (!Number.isFinite(at) || at < publishedDay || at > until) continue;
+      // v1's bar, at day precision: effective yesterday or later, and never before its own publication.
+      if (!Number.isFinite(at) || at < Math.max(publishedDay, yesterday) || at > until) continue;
       const group = groups.get(agency) ?? { name, members: [] };
       group.members.push({ record, effective });
       groups.set(agency, group);

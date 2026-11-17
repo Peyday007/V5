@@ -25,7 +25,8 @@ import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { insertFeedItems } from '../server/repos/feeds.ts';
 
-const now = new Date('2026-11-17T12:00:00.000Z');
+/** The day after the five were published: when the screen kept them and v1 had already dropped the same-day rules. */
+const now = new Date('2026-11-13T12:00:00.000Z');
 const FR = 'https://www.federalregister.gov/documents';
 
 function fr(documentNumber: string, published: string, organization: string, body: string | null, title = documentNumber): DetectorRecord {
@@ -118,6 +119,34 @@ describe('RULE_EFFECTIVE_SOON@2 lowers no bar', () => {
       now,
     );
     expect(out).toEqual([]);
+  });
+
+  it('a rule already in force for days is not taking effect soon, and no signal asserts a past compliance date', () => {
+    // The same same-day rules, read five days after they took effect.
+    const later = new Date('2026-11-17T12:00:00.000Z');
+    const kept = members(RULE_EFFECTIVE_SOON_V2.detect([...missed, corrected], later));
+    for (const id of ['fi_2026-23073', 'fi_2026-23072', 'fi_2026-23041']) expect(kept).not.toContain(id);
+    // The correction still counts: the rule it corrects takes effect 2026-12-28.
+    expect(kept).toContain('fi_C1-2026-21030');
+    // A rule published and effective weeks ago is not a member at all.
+    expect(RULE_EFFECTIVE_SOON_V2.detect([fr('2026-80000', '2026-10-20', 'Federal Communications Commission', 'Effective 2026-10-20.')], later)).toEqual([]);
+    for (const signal of RULE_EFFECTIVE_SOON_V2.detect([...missed, corrected], later)) {
+      const complyBy = /comply by (\d{4}-\d{2}-\d{2})/.exec(signal.hypothesis ?? "")![1]!;
+      expect(Date.parse(`${complyBy}T00:00:00.000Z`)).toBeGreaterThanOrEqual(Date.parse('2026-11-16T00:00:00.000Z'));
+    }
+  });
+
+  it('keeps a rule effective yesterday, as v1 did, and drops one effective the day before', () => {
+    const out = members(
+      RULE_EFFECTIVE_SOON_V2.detect(
+        [
+          fr('2026-90010', '2026-11-10', 'Environmental Protection Agency', 'Effective 2026-11-12.'),
+          fr('2026-90011', '2026-11-10', 'Environmental Protection Agency', 'Effective 2026-11-11.'),
+        ],
+        now,
+      ),
+    );
+    expect(out).toEqual(['fi_2026-90010']);
   });
 
   it('reads only its own source', () => {
