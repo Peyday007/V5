@@ -52,3 +52,4 @@ while (Date.now() - started < 50 * 60_000) {
 }
 console.log(`FAIL start: ${pod.id} did not serve within 50 min`);
 process.exit(1);
+export {};

@@ -34,3 +34,4 @@ for (const pod of pods) {
   const r = await gql(`mutation { podStop(input: { podId: "${pod.id}" }) { id desiredStatus } }`);
   console.log(`STOP ${pod.id} was ${pod.desiredStatus} -> ${r.errors?.length ? `ERROR ${r.errors.map((e) => e.message).join('; ')}` : JSON.stringify(r.data?.['podStop'])}`);
 }
+export {};
