@@ -11,6 +11,7 @@ import {
   activeObjectivesOf,
   approvedContractorsOf,
   composeView,
+  CONTRACTOR_CHANNELS_BY_LAYER,
   HIRING_AUTOMATION_TOOL,
   hiringAutomationSuite,
   laborView,
@@ -22,6 +23,7 @@ import type { TaskCoverage } from '../server/services/labor/map.ts';
 import type { Bottleneck } from '../server/services/labor/view.ts';
 import type { NecessityReading } from '../server/services/labor/necessity.ts';
 import type { HumanNecessityReason, LaborAllocation, LaborMarketOption } from '../server/domain/types.ts';
+import { LABOR_CHANNELS } from '../server/domain/types.ts';
 
 function coverage(input: {
   id: string;
@@ -297,6 +299,44 @@ describe('VENT-24-3 — approved contractors are read from the rows the view com
     expect(approvedContractorsOf({ coverage: [allocated(base, { supersededAt: '2026-11-01T00:00:00.000Z' })] })).toEqual([]);
     expect(approvedContractorsOf({ coverage: [allocated(base, { productionLayer: 'BRAIN', necessityReason: null })] })).toEqual([]);
     expect(approvedContractorsOf({ coverage: [base] })).toEqual([]);
+  });
+
+  it('a person\'s allocation approves only contractor routes of the layer it chose; other channels stay unapproved (R7-F1)', () => {
+    // A domestic allocation, with published rates from routes of other layers and from employment.
+    const crossLayer = () =>
+      expanding.map((row) =>
+        row.task.id === 't-pack'
+          ? allocated(
+              coverage({
+                id: 't-pack', workflow: 'Fulfilment', output: 'packed orders', verdict: 'HUMAN_REQUIRED', reason: 'PHYSICAL_EXECUTION',
+                options: [{ channel: 'OFFSHORE_CONTRACTOR' }, { channel: 'AGENCY_OR_VENDOR' }, { channel: 'MANAGED_SERVICE' }, { channel: 'ON_DEMAND_OPERATOR' }, { channel: 'DOMESTIC_EMPLOYEE' }],
+              }),
+              { productionLayer: 'DOMESTIC_HUMAN' },
+            )
+          : row,
+      );
+    expect(approvedContractorsOf({ coverage: crossLayer() })).toEqual([]);
+    const view = composeView(snapshotOf(crossLayer(), { Fulfilment: 'cop_fulfil' }), { asks: [], declined: [] });
+    expect(view.organization.coordination).toEqual([]);
+    // Nothing was approved for it, so the task keeps its role.
+    expect(view.organization.roles.some((role) => role.taskAllocation.includes('t-pack'))).toBe(true);
+
+    // The same allocation with a route of its own layer approves exactly that route and nothing else.
+    const withOwn = crossLayer().map((row) =>
+      row.task.id === 't-pack' ? { ...row, options: [...row.options, { ...row.options[0]!, id: 'o-t-pack-own', channel: 'DOMESTIC_CONTRACTOR' as const }] } : row,
+    );
+    expect(approvedContractorsOf({ coverage: withOwn })).toEqual([{ taskId: 't-pack', contractorRef: 'DOMESTIC_CONTRACTOR option o-t-pack-own', approvedByRef: 'person:owner' }]);
+
+    // Every layer approves only its own routes, and Brain and software approve none.
+    for (const [layer, channels] of Object.entries(CONTRACTOR_CHANNELS_BY_LAYER)) {
+      const all = coverage({
+        id: 't-pack', workflow: 'Fulfilment', output: 'packed orders', verdict: 'HUMAN_REQUIRED', reason: 'PHYSICAL_EXECUTION',
+        options: LABOR_CHANNELS.map((channel) => ({ channel })),
+      });
+      const approved = approvedContractorsOf({ coverage: [allocated(all, { productionLayer: layer as LaborAllocation['productionLayer'] })] });
+      expect(approved.map((one) => one.contractorRef.split(' ')[0]).sort()).toEqual([...channels].sort());
+      expect(approved.some((one) => /EMPLOYEE|SOFTWARE_TOOL/.test(one.contractorRef))).toBe(false);
+    }
   });
 
   it('composeView coordinates the approved contractor and proposes no role for its task', () => {
