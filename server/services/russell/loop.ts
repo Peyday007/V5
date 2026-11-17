@@ -3000,6 +3000,15 @@ export interface ProjectLaunchSlots {
   free: number;
 }
 
+/** How many ideas in one project could launch now, by `nextLaunchable`'s own predicate. */
+export async function launchableInProject(projectId: string): Promise<number> {
+  const row = await getDb().get<{ n: number | string }>(
+    `SELECT COUNT(*) AS n FROM ${LAUNCHABLE_CANDIDATES} AND c.project_id = ?`,
+    [projectId],
+  );
+  return Number(row?.n ?? 0);
+}
+
 /**
  * Every project with a launchable idea, and how many of its grant's slots are
  * free. The one reading both the launch window and the capacity reader

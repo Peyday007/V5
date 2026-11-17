@@ -703,14 +703,45 @@ export function stopAdaptivePool(): void {
 export const SLOTS_PER_SURFACE = 4;
 const MAX_SPARE_SURFACES = 8;
 
-export async function freeLaneSpareSurfaces(now = Date.now()): Promise<number> {
+/**
+ * One model's proven room in slots. Pure.
+ *
+ * What it has proven it runs (`stable_high`) or holds now (`target`), and for a
+ * GPU slot also the sequences its pod batches at once (`servedSequences`) —
+ * the same "proven" `controlStep`'s growth gate already reads. Without it a
+ * GPU's room was its own decayed target: production, 2026-11-17 08:28Z, an
+ * H200 serving gpt-oss-120b (up to 128 sequences) read as 3 slots with 3 busy,
+ * no spare, so the discovery grant could not grow and 568 ideas waited beside
+ * a GPU running two jobs. The served room is still bounded by the GPU's
+ * runaway guard and the lane's share of the database pool, so it never claims
+ * more than the controller could actually grant.
+ */
+export function provenSlots(input: { target: number; stableHigh: number; served: number | null; share: number | null; ceiling?: number }): number {
+  const served = input.served === null ? 0 : Math.min(input.served, input.ceiling ?? SAFETY_CEILING, input.share ?? Number.POSITIVE_INFINITY);
+  return Math.max(input.target, input.stableHigh, served);
+}
+
+/** The lane's proven room in slots across its models now; 0 when there is no lane. */
+export async function freeLaneProvenSlots(): Promise<number> {
   const config = laneConfig();
   if (!config) return 0;
-  const db = getDb();
   const recorded = await readCapacity();
   // The lane's models now; a row for a model no longer configured is history.
   const current = recorded.filter((r) => config.models.includes(r.model));
   const rows = current.length > 0 ? current : recorded;
+  const share = slotShare(Math.max(1, rows.length));
+  return (
+    rows.reduce((sum, r) => {
+      const served = config.runpod && isRunpodSlot(r.model) ? servedSequences(r.model) : null;
+      return sum + provenSlots({ target: r.target, stableHigh: r.stableHigh, served, share, ceiling: gpuCeiling(process.env, served) });
+    }, 0) || START_TARGET * 2
+  );
+}
+
+export async function freeLaneSpareSurfaces(now = Date.now()): Promise<number> {
+  const config = laneConfig();
+  if (!config) return 0;
+  const db = getDb();
   /*
    * The room is what each model has proven it runs (`stable_high`), not its
    * current target. The controller lowers a target when nothing is waiting, so
@@ -719,8 +750,9 @@ export async function freeLaneSpareSurfaces(now = Date.now()): Promise<number> {
    * the $10K goal could open no new round over seven still open, and the GPU
    * reported "no research waiting" while the plan lacked evidence on 17 of 19
    * openings. Room opened here is work queued, which raises the target again.
+   * A GPU's served sequences count as proven too (`provenSlots`).
    */
-  const granted = rows.reduce((sum, r) => sum + Math.max(r.target, r.stableHigh), 0) || START_TARGET * 2;
+  const granted = await freeLaneProvenSlots();
   const busy = await db.get<{ n: number | string }>(
     `SELECT COUNT(*) AS n FROM work_items WHERE state = 'LEASED' AND lease_expires_at > ?
        AND worker_id IN (SELECT k.id FROM workers k WHERE k.name IN ('free-lane-a', 'free-lane-b'))`,
