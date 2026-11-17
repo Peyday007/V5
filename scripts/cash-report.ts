@@ -1149,6 +1149,26 @@ async function researchAccounting(projectId: string): Promise<void> {
   }
   try {
     console.log('');
+    console.log('LIVE MISSION HOLDS (unexpired HELD reservations) by mission state and packet status');
+    const holds = await db.all<{ m_state: string | null; o_status: string | null; n: number }>(
+      `SELECT m.state AS m_state, o.status AS o_status, COUNT(*) AS n
+         FROM russell_budget_reservations r
+         JOIN russell_goals g ON g.id = r.goal_id
+         LEFT JOIN russell_missions m ON m.reservation_id = r.id
+         LEFT JOIN research_orchestrations o ON o.id = m.orchestration_id
+        WHERE g.project_id = ? AND r.kind = 'MISSION' AND r.state = 'HELD' AND r.expires_at > ?
+        GROUP BY m.state, o.status ORDER BY COUNT(*) DESC`,
+      [projectId, now],
+    );
+    if (holds.length === 0) console.log('  none');
+    for (const h of holds) {
+      console.log(`  ${String(Number(h.n)).padStart(4)}  mission ${h.m_state ?? '(none)'}  packet ${h.o_status ?? '(none)'}`);
+    }
+  } catch (error) {
+    console.log(`  (could not be read: ${error instanceof Error ? error.message.split('\n')[0] : String(error)})`);
+  }
+  try {
+    console.log('');
     console.log("MISSIONS FAILED 'left RESEARCHING with nothing queued' — what cancelled their work");
     const reasons = await db.all<{ work_type: string; reason: string | null; n: number; example: string }>(
       `SELECT w.work_type, SUBSTR(COALESCE(w.cancelled_reason, ''), 1, 110) AS reason, COUNT(*) AS n,

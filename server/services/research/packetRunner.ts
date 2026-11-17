@@ -356,6 +356,32 @@ async function mayReplace(
 }
 
 /**
+ * Whether a fragment whose research items were all spent by the queue may be
+ * given one more, instead of being blocked "finished without recording anything".
+ *
+ * Production, 2026-11-17 (Cash Mode 1): most goal-round fragments that blocked
+ * did so as WORK_FAULTED — their research item ran out of attempts on lapsed
+ * leases and on free-lane answers Brain could not accept, which says nothing
+ * about the question — and the round then ended with no fragment through its
+ * gate. The repair ladder's re-attempt is spent on evidence, not on outages.
+ *
+ * Safe for the reason `mayReplace` gives for a verification: the fragment is
+ * still QUEUED and has no claim, so no ledger exists to duplicate. Bounded by
+ * MAX_ITEMS_PER_TARGET, and only when every earlier item was spent by the
+ * queue (`allSpent`): a worker that failed it as not retryable, or a person or
+ * an ended round that cancelled it, still blocks it.
+ */
+async function mayReplaceResearch(
+  items: WorkItem[],
+  predicate: (item: WorkItem) => boolean,
+  fragment: ResearchFragment,
+): Promise<boolean> {
+  if (items.filter(predicate).length >= MAX_ITEMS_PER_TARGET) return false;
+  if (!allSpent(items, predicate)) return false;
+  return (await listClaimsForFragment(fragment.id)).length === 0;
+}
+
+/**
  * Did this research item actually record the thing it exists to record?
  *
  * Asked per type, against the rows, because that is the only honest answer. An
@@ -2176,7 +2202,7 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
     const researchItem = (item: WorkItem): boolean =>
       item.workType === 'RESEARCH_FRAGMENT' && item.fragmentId === fragment.id;
     if (stillRunning(items, researchItem)) continue;
-    if (alreadyCreated(items, researchItem)) {
+    if (alreadyCreated(items, researchItem) && !(await mayReplaceResearch(items, researchItem, fragment))) {
       await faultedFragment({ orchestration, fragment, what: 'research' });
       faulted += 1;
       continue;

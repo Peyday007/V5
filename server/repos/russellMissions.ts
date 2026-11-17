@@ -451,6 +451,27 @@ const STALLED_PACKET = `(
 )`;
 
 /**
+ * A live mission whose packet has already ended — COMPLETE, COMPLETE_WITH_GAPS,
+ * FAILED or CANCELLED (`TERMINAL_ORCHESTRATION`). Its work is over; only the
+ * writeback that moves the mission to its own terminal state is outstanding.
+ *
+ * Production, 2026-11-17 (Cash Mode 1): 41 missions RUNNING beside 24 packets
+ * in flight with a mission, and the research grant at 22–26 live holds against
+ * an at-once ceiling of 13 while the $10K goal's nine rounds waited for a
+ * slot. A finished packet kept its mission's hold renewed every tick until the
+ * writeback reached it, and the writeback window was read oldest-first over
+ * every live mission, so the missions whose packets had ended waited behind the
+ * ones still running — and a packet that ended stops being updated, so the
+ * six-hour stall rule was the only thing that ever let its slot go.
+ */
+const PACKET_ENDED = `(
+  m.state IN ('PLANNED','LAUNCHING','RUNNING','WAITING')
+  AND EXISTS (SELECT 1 FROM research_orchestrations eo
+               WHERE eo.id = m.orchestration_id
+                 AND eo.status IN ('COMPLETE','COMPLETE_WITH_GAPS','FAILED','CANCELLED'))
+)`;
+
+/**
  * Keep a live mission's reservation from expiring underneath it.
  *
  * A reservation is `HELD` with a two-hour TTL, and both ceilings ignore an
@@ -518,6 +539,23 @@ export async function renewLiveMissionReservations(limit: number): Promise<strin
    * questions on one-off openings held all thirteen slots for 13–21 hours with
    * no pass, renewed every tick, while four eligible goal dives waited.
    */
+  /*
+   * A mission whose packet has ended holds nothing either: its slot is given
+   * back now rather than after the writeback, which may be ticks away. The hold
+   * stays HELD (lapsed) and the writeback settles it as it always has, so the
+   * mission's spend is still counted in full and nothing is rewritten.
+   */
+  await getDb().run(
+    `UPDATE russell_budget_reservations
+        SET expires_at = ?
+      WHERE state = 'HELD'
+        AND expires_at > ?
+        AND id IN (
+          SELECT m.reservation_id FROM russell_missions m
+           WHERE m.reservation_id IS NOT NULL AND ${PACKET_ENDED}
+        )`,
+    [nowIso(), nowIso()],
+  );
   const stalledBefore = new Date(Date.now() - STALLED_HOLD_HOURS * 3_600_000).toISOString();
   await getDb().run(
     `UPDATE russell_budget_reservations
@@ -539,6 +577,7 @@ export async function renewLiveMissionReservations(limit: number): Promise<strin
         AND m.reservation_id IS NOT NULL
         AND r.state = 'HELD'
         AND NOT ${WAITING_ON_A_PERSON}
+        AND NOT ${PACKET_ENDED}
         AND NOT ${STALLED_PACKET}
       ORDER BY r.expires_at
       LIMIT ?`,
@@ -560,6 +599,50 @@ export async function renewLiveMissionReservations(limit: number): Promise<strin
     if (ok) renewed.push(row.reservation_id);
   }
   return renewed;
+}
+
+/** How long a claimed writeback may go unfinished before the mission is closed without it. */
+export const STRANDED_WRITEBACK_MINUTES = 30;
+
+/**
+ * Close a mission whose writeback was claimed and never finished.
+ *
+ * `claimWriteback` is once-only, so a writeback that threw (or a process that
+ * died) after claiming it left the mission live for ever: no later tick may
+ * write it back, and `missionsAwaitingWriteback` selects `writeback_at IS
+ * NULL`. Its packet has ended, so the mission is moved to the terminal state
+ * its packet's outcome names, through `transitionMission` (which settles the
+ * hold), with the reason recorded on the row. Nothing is deleted and no effect
+ * the writeback was to perform is repeated or invented.
+ */
+export async function closeStrandedWritebacks(limit: number, now = new Date()): Promise<string[]> {
+  const before = new Date(now.getTime() - STRANDED_WRITEBACK_MINUTES * 60_000).toISOString();
+  const rows = await getDb().all<{ id: string; state: string; status: string; writeback_at: string }>(
+    `SELECT m.id AS id, m.state AS state, o.status AS status, m.writeback_at AS writeback_at
+       FROM russell_missions m
+       JOIN research_orchestrations o ON o.id = m.orchestration_id
+      WHERE m.writeback_at IS NOT NULL AND m.writeback_at < ?
+        AND m.state IN ('PLANNED','LAUNCHING','RUNNING','WAITING')
+        AND o.status IN ('COMPLETE','COMPLETE_WITH_GAPS','FAILED','CANCELLED')
+      ORDER BY m.writeback_at, m.rowid
+      LIMIT ?`,
+    [before, Math.max(1, limit)],
+  );
+  const closed: string[] = [];
+  for (const row of rows) {
+    const done = row.status === 'COMPLETE' || row.status === 'COMPLETE_WITH_GAPS';
+    const moved = await transitionMission({
+      missionId: row.id,
+      from: row.state as MissionState,
+      to: done ? 'DONE' : 'FAILED',
+      terminalReason:
+        `Its packet ended ${row.status} and its writeback, claimed at ${row.writeback_at}, never finished, ` +
+        'so the mission is closed here and its research slot released. The packet, its fragments and ' +
+        'its claims keep every row.',
+    });
+    if (moved) closed.push(row.id);
+  }
+  return closed;
 }
 
 /**

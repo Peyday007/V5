@@ -14595,6 +14595,23 @@ planner, queue or monitor:
   earlier per-idea join to `cash_needs` (no `candidate_id` index) timed out
   the tick's judge pass ("canceling statement due to statement timeout").
 
+- **A research slot is held by a packet that is running, and by nothing else.**
+  Same morning (`brain_operator_capacity`, `cash-report`): 22–26 live holds
+  against the grant's ceiling of 13 while 41 missions read RUNNING beside 24
+  in-flight packets with a mission. A mission whose packet had *ended* kept its
+  hold renewed until the writeback reached it, and the writeback window was the
+  oldest live missions Brain-wide — the ones still running — so ended missions
+  waited behind them, released only by the six-hour stall rule. Now
+  `renewLiveMissionReservations` lapses the hold of a live mission whose packet
+  is terminal (the row stays HELD; the writeback settles it), the writeback
+  window reads only ended packets, one mission's failing writeback no longer
+  stops the rest, and a writeback claimed and unfinished for 30 minutes closes
+  its mission with the reason recorded (`closeStrandedWritebacks`). The ceiling
+  is unchanged. And a QUEUED fragment whose research items the queue spent
+  (lapsed leases, attempts exhausted) with no claim recorded gets another item,
+  up to `MAX_ITEMS_PER_TARGET`, instead of blocking WORK_FAULTED "finished
+  without recording anything" — the outage, not the question, had spent it.
+
 ## 90. Independent work does not wait for unrelated work, and evidence reaches the plan when it arrives.
 
 **Owner's order, 2026-11-05.** Make Brain run every independent part of an
