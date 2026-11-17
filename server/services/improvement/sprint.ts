@@ -78,6 +78,7 @@ import {
   recordActionResult,
   recordControllerDecision,
   runController,
+  scoreHypotheses,
   type ActionResult,
   type CandidateAction,
   type ControllerDecision,
@@ -582,12 +583,54 @@ export function pendingResult(p: SprintProblem, history: ControllerHistory | und
   };
 }
 
+/** A hypothesis's score under the controller's own scorer, given how many sourced items support and refute it. */
+export function scoreUnder(supports: number, refutes: number): number {
+  const evidence = [
+    ...Array.from({ length: supports }, (_, i) => ({ id: `s${i}`, source: 'margin-scale', bears: { h: 'SUPPORTS' as const } })),
+    ...Array.from({ length: refutes }, (_, i) => ({ id: `r${i}`, source: 'margin-scale', bears: { h: 'REFUTES' as const } })),
+  ];
+  const [scored] = scoreHypotheses([{ id: 'h', statement: 'margin scale', basis: 'margin-scale' }], evidence);
+  if (!scored) throw new Error('scoreHypotheses returned nothing for one hypothesis');
+  return scored.score;
+}
+
 /**
  * How far the leading hypothesis must stand above the next one for the
- * controller's decision to count as settled. A structural constant, not a
- * figure tuned on any problem set.
+ * controller's decision to count as settled.
+ *
+ * It is read off `scoreHypotheses`' own scale rather than typed as a figure:
+ * the margin is the score of a hypothesis no sourced evidence bears on — the
+ * uninformed prior. "Settled" therefore means evidence has moved the leader
+ * above the runner-up by as much as the whole prior, on whatever scale the
+ * scorer uses; under its Laplace smoothing that is 0.5. If the scorer is ever
+ * rescaled the margin follows it, and `assertSettledMarginScale` below refuses
+ * to load a margin that no longer separates the evidence patterns it exists to
+ * separate. Not tuned on any problem set.
  */
-export const SETTLED_MARGIN = 0.5;
+export const SETTLED_MARGIN = scoreUnder(0, 0);
+
+/**
+ * The margin's contract with the scorer, checked when this module loads so
+ * every test and every boot that imports the sprint reproduces a mismatch:
+ *  - one unopposed sourced item either way is a lean, not a settlement;
+ *  - the margin is no more than the uninformed prior, so a lone hypothesis
+ *    (its absent runner-up reads 0 in `needsPersonOf`) is settled only on the
+ *    scorer's own reading of it, never by a margin nothing can reach;
+ *  - three sourced items for the leader against three refuting the runner-up
+ *    is settled;
+ *  - the margin is reachable: below the scorer's widest possible gap.
+ */
+export function assertSettledMarginScale(margin: number = SETTLED_MARGIN): void {
+  const gap = (a: [number, number], b: [number, number]) => scoreUnder(...a) - scoreUnder(...b);
+  const failures: string[] = [];
+  if (!(margin > 0)) failures.push(`margin ${margin} is not positive`);
+  if (gap([1, 0], [0, 1]) >= margin) failures.push(`one item each way (gap ${gap([1, 0], [0, 1])}) already settles at margin ${margin}`);
+  if (gap([1, 0], [0, 0]) >= margin) failures.push(`one unopposed item (gap ${gap([1, 0], [0, 0])}) already settles at margin ${margin}`);
+  if (gap([3, 0], [0, 3]) < margin) failures.push(`three items each way (gap ${gap([3, 0], [0, 3])}) does not settle at margin ${margin}`);
+  if (margin > scoreUnder(0, 0)) failures.push(`margin ${margin} exceeds the uninformed prior ${scoreUnder(0, 0)}`);
+  if (failures.length > 0) throw new Error(`SETTLED_MARGIN does not fit scoreHypotheses' scale: ${failures.join('; ')}`);
+}
+assertSettledMarginScale();
 
 /**
  * Whether the general method could not progress this opening without a person.
