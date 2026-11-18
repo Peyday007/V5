@@ -77,6 +77,11 @@ function amountOf(raw: string): number | null {
     if (tail.length === 2) {
       whole = cleaned.slice(0, last);
       minor = tail;
+    } else if (tail.length === 3 && /^0+$/.test(cleaned.slice(0, cleaned.search(/[.,]/)))) {
+      // `$0.259` is a fraction of a cent, never 259 thousands-grouped: no
+      // grouped number starts with a zero group. Production filed USPS's
+      // "$0.259 per piece" as a $259 price (2026-11-18). Refused, not rounded.
+      return null;
     } else if (tail.length !== 3) {
       // Neither a thousands group nor minor units. Two separators of different
       // kinds, a stray decimal, a version number: not a figure worth guessing.

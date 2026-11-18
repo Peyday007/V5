@@ -1230,6 +1230,27 @@ export async function unfiledConstructedRoundClaims(projectId: string, afterId: 
   return rows.map((row) => ({ claim: mapClaim(row), bucketId: row.round_bucket_id }));
 }
 
+/**
+ * The constructed-arrangement round each claim answered (the same choice
+ * `unfiledConstructedRoundClaims` makes), for claims already filed: a fact's
+ * meaning depends on which side of that arrangement its claim priced.
+ */
+export async function constructedRoundBuckets(projectId: string, claimIds: readonly string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (claimIds.length === 0) return out;
+  const rows = await getDb().all<{ id: string; round_bucket_id: string | null }>(
+    `SELECT c.id,
+            (SELECT MIN(r.bucket_id) FROM russell_missions m
+               JOIN cash_discovery_rounds r ON r.candidate_id = m.candidate_id
+              WHERE m.orchestration_id = c.orchestration_id AND r.project_id = ? AND r.bucket_id LIKE ?) AS round_bucket_id
+       FROM research_claims c
+      WHERE c.id IN (${claimIds.map(() => '?').join(', ')})`,
+    [projectId, 'goal-%-mx-%', ...claimIds],
+  );
+  for (const row of rows) if (row.round_bucket_id) out.set(row.id, row.round_bucket_id);
+  return out;
+}
+
 export async function getClaim(id: string): Promise<ResearchClaim | null> {
   const row = await getDb().get<ResearchClaimRow>('SELECT * FROM research_claims WHERE id = ?', [id]);
   return row ? mapClaim(row) : null;
