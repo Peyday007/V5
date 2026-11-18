@@ -225,6 +225,10 @@ export function parseRemotive(body: unknown): FeedItem[] {
  * The document a Federal Register correction corrects. A correction (C1-2026-21030) carries no
  * effective_on, dates or action of its own; its `correction_of` names the rule it corrects, either
  * as a document number, a documents URL (its final path segment) or an object with document_number.
+ *
+ * Every correction this parser stores carries "Corrects N." in its body. A stored copy without
+ * it is legacy data: a row written before c5d6416 began carrying correction_of into the body,
+ * not something the connector produces now, and not the recorded cause of a current miss.
  */
 function correctedDocumentNumber(value: unknown): string | null {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
@@ -242,6 +246,47 @@ function correctedDocumentNumber(value: unknown): string | null {
   }
 }
 
+/**
+ * A Federal Register document's agencies as one organization string, parent
+ * department first and the issuing office last ("Transportation Department,
+ * Federal Aviation Administration" for FAA 2026-23073, whose API record lists
+ * DOT id 492 and FAA id 159 with parent_id 492).
+ *
+ * Every listed agency is kept. An entry the API states only by raw_name (an
+ * agency outside its own directory) is named by that raw_name rather than
+ * dropped, so a stored copy never lists the parent department alone when the
+ * source also named the office beneath it. The order is read from parent_id,
+ * not from the list's position: an agency whose parent is also listed comes
+ * after that parent, and the API's order is kept otherwise. So the last name
+ * is the most specific agency the source stated, whatever order it sent.
+ * Pure.
+ */
+export function federalRegisterAgencies(value: unknown): string[] {
+  const listed = records(value)
+    .map((agency, index) => ({
+      index,
+      id: agency['id'] == null ? null : String(agency['id']),
+      parent: agency['parent_id'] == null ? null : String(agency['parent_id']),
+      name: text(agency['name']) ?? text(agency['raw_name']),
+    }))
+    .filter((agency): agency is { index: number; id: string | null; parent: string | null; name: string } => !!agency.name);
+  const byId = new Map(listed.filter((agency) => agency.id).map((agency) => [agency.id!, agency]));
+  const depth = (agency: (typeof listed)[number]): number => {
+    let d = 0;
+    const seen = new Set<string>();
+    for (let up = agency.parent; up && byId.has(up) && !seen.has(up); up = byId.get(up)!.parent) {
+      seen.add(up);
+      d += 1;
+    }
+    return d;
+  };
+  const names: string[] = [];
+  for (const agency of [...listed].sort((a, b) => depth(a) - depth(b) || a.index - b.index)) {
+    if (!names.includes(agency.name)) names.push(agency.name);
+  }
+  return names;
+}
+
 /** The Federal Register's documents API: newly published final rules. */
 export function parseFederalRegister(body: unknown): FeedItem[] {
   const results = body && typeof body === 'object' ? (body as Record<string, unknown>)['results'] : null;
@@ -251,9 +296,7 @@ export function parseFederalRegister(body: unknown): FeedItem[] {
     const title = text(row['title']);
     const url = text(row['html_url']);
     if (!id || !title || !isHttpUrl(url)) continue;
-    const agencies = records(row['agencies'])
-      .map((agency) => text(agency['name']))
-      .filter((name): name is string => !!name);
+    const agencies = federalRegisterAgencies(row['agencies']);
     const effective = text(row['effective_on']);
     const abstract = plain(row['abstract']);
     const corrects = correctedDocumentNumber(row['correction_of']);
