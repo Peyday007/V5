@@ -51,6 +51,7 @@ import { bundleKeyFor } from './bundling.ts';
 import { RESEARCH_METHOD_SUMMARY, RESEARCH_METHOD_VERSION } from './method.ts';
 import { laneIds } from '../../domain/evidenceLanes.ts';
 import type {
+  WorkLease,
   EvidenceLane,
   DependencyKind,
   FragmentDependency,
@@ -69,12 +70,79 @@ import {
 } from '../../repos/research.ts';
 import { getLayer } from '../../repos/layers.ts';
 import { getProject } from '../../repos/projects.ts';
-import { listCheckpoints } from '../../repos/workQueue.ts';
+import { listCheckpoints, listLeases } from '../../repos/workQueue.ts';
 import { guidanceFor } from './guidance.ts';
 import type { ResearchGuidance } from './prompts.ts';
 
 /** How much of a dependency's ledger travels with the assignment. */
 export const MAX_DEPENDENCY_CLAIMS = 40;
+
+/**
+ * How an earlier attempt of this same work item ended, when it did not succeed.
+ *
+ * Read from `work_leases`, the queue's append-only record of every attempt —
+ * nothing new is stored; it was simply never shown to the attempt that follows.
+ */
+export interface EarlierAttemptView {
+  attemptNumber: number;
+  leaseGeneration: number;
+  /** `FAILED` (the worker reported it) or `EXPIRED` (the lease ran out with nothing recorded). */
+  outcome: 'FAILED' | 'EXPIRED';
+  /** The failing worker's own words, or the queue's, verbatim. */
+  detail: string | null;
+  /** Heartbeats the attempt sent: zero on an expiry means it never reported progress at all. */
+  heartbeats: number;
+  claimedAt: string;
+  endedAt: string | null;
+}
+
+/**
+ * The rule a re-run of a failed item works under (CAPABILITY:RESEARCH.RECOVERY.RETRY).
+ *
+ * `AUTO_RECOVERY_RATE` counts exactly one path: a work item re-run by the queue
+ * after an attempt failed or expired (`attempt_count > 1`). Every one of those
+ * re-runs was handed the identical assignment the failed attempt had, with no
+ * word of how it ended — the plain re-execution Ammann and Knight distinguish
+ * from a retry block, and the recorded cause "retry repeating the same
+ * strategy". A retry block changes the execution conditions deliberately; here
+ * the condition that changes is what the attempt knows about the one before it.
+ */
+export const RETRY_RULE =
+  'This item has been attempted before and did not finish; earlier_attempts says how each ' +
+  'attempt ended. Do not repeat what an earlier attempt did: change the approach that ended ' +
+  'it. An attempt that EXPIRED ran out of time with nothing recorded — checkpoint each ' +
+  'finding as you establish it and submit what you have established before your lease ends ' +
+  'rather than redoing the whole search. An attempt that FAILED says why in its detail — ' +
+  'address that cause before anything else.';
+
+/**
+ * Every earlier attempt of this item that ended without succeeding, oldest first.
+ *
+ * Pure, so the selection is testable against the rows the queue writes. Only
+ * ended leases from generations before the current one count: the current lease
+ * is this attempt, and a `RELEASED` lease handed its attempt back having tried
+ * nothing (`releaseWork`), so it is not a failure to avoid repeating.
+ */
+export function earlierFailedAttempts(
+  leases: readonly WorkLease[],
+  currentGeneration: number,
+): EarlierAttemptView[] {
+  const out: EarlierAttemptView[] = [];
+  for (const lease of [...leases].sort((a, b) => a.leaseGeneration - b.leaseGeneration)) {
+    if (lease.leaseGeneration >= currentGeneration) continue;
+    if (lease.outcome !== 'FAILED' && lease.outcome !== 'EXPIRED') continue;
+    out.push({
+      attemptNumber: lease.attemptNumber,
+      leaseGeneration: lease.leaseGeneration,
+      outcome: lease.outcome,
+      detail: lease.detail,
+      heartbeats: lease.heartbeatCount,
+      claimedAt: lease.claimedAt,
+      endedAt: lease.endedAt,
+    });
+  }
+  return out;
+}
 
 export interface AssignmentView {
   orchestration: {
@@ -94,6 +162,15 @@ export interface AssignmentView {
   siblings: { key: string; question: string; status: string; index: number }[];
   dependencies: DependencyView[];
   checkpoints: { attemptNumber: number; leaseGeneration: number; note: string; createdAt: string }[];
+  /**
+   * How each earlier attempt of this same item ended, when it failed or
+   * expired. Empty on a first attempt. The checkpoints say what an attempt
+   * found; this says what stopped it, which is what the next one must not
+   * repeat.
+   */
+  earlierAttempts: EarlierAttemptView[];
+  /** `RETRY_RULE` when there is an earlier failed attempt; null on a first attempt. */
+  retryRule: string | null;
   /**
    * The claims this item must return a verdict on, on a `RESEARCH_VERIFY` item;
    * null on every other kind, where they would be the fragment's own working
@@ -410,6 +487,7 @@ export async function assignmentFor(item: WorkItem): Promise<AssignmentView | nu
   const layer = await getLayer(orchestration.layerId);
   const project = await getProject(orchestration.projectId);
   const checkpoints = await listCheckpoints(item.id);
+  const earlierAttempts = earlierFailedAttempts(await listLeases(item.id), item.leaseGeneration);
 
   return {
     orchestration: {
@@ -504,6 +582,8 @@ export async function assignmentFor(item: WorkItem): Promise<AssignmentView | nu
       note: checkpoint.note,
       createdAt: checkpoint.createdAt,
     })),
+    earlierAttempts,
+    retryRule: earlierAttempts.length > 0 ? RETRY_RULE : null,
   };
 }
 

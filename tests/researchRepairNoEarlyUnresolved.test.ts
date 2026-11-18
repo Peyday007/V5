@@ -11,6 +11,11 @@
  * fragment whose repairPlan names the strategies it used) reproduces it.
  */
 import { describe, expect, it } from 'vitest';
+import { getDb } from '../server/db/database.ts';
+import { createWorker } from '../server/repos/identity.ts';
+import { claimWork, enqueueWork, failWork, listLeases } from '../server/repos/workQueue.ts';
+import { RETRY_RULE, earlierFailedAttempts } from '../server/services/research/assignment.ts';
+import { freshProject } from './helpers.ts';
 import {
   MAX_RUNGS_PER_ATTEMPT,
   buildRepairPlan,
@@ -330,5 +335,74 @@ describe('repair plan: no rung stranded by a fixed width', () => {
     expect(scenarios).toBe(CONDITION_SETS.length * 4);
     expect(rungsTriedNow).toBeGreaterThan(rungsTriedBefore);
     expect(strandedNow).toBeLessThan(strandedBefore);
+  });
+});
+
+/**
+ * The re-run the metric counts is told how the run before it ended.
+ *
+ * AUTO_RECOVERY_RATE ("Failures recovered automatically") reads one path only:
+ * a work item the queue re-ran after an attempt failed or expired
+ * (`work_items.attempt_count > 1`). A better repair plan never reaches it —
+ * repairs mint new fragments and new items at attempt 1 — so the change that
+ * can move it is on the re-run itself. Before this, the second claimant of a
+ * failed item received the identical assignment with no word of the failure,
+ * and repeated the same strategy ("retry repeating the same strategy",
+ * "repeated failure"). The assignment now carries each earlier attempt's end,
+ * read from the queue's own lease record.
+ */
+describe('a re-run of a failed work item carries how each earlier attempt ended', () => {
+  async function readyNow(id: string): Promise<void> {
+    await getDb().run("UPDATE work_items SET available_at = '2000-01-01T00:00:00.000Z' WHERE id = ?", [id]);
+  }
+
+  it('reproduces the recorded failure class: a FAILED then EXPIRED item, re-claimed a third time', async () => {
+    const { project } = await freshProject();
+    const worker = (await createWorker({ name: 'retry-worker', createdByType: 'SYSTEM', createdById: 'test' })).id;
+    const scopes = [{ projectId: project.id, scopes: ['queue:claim' as const] }];
+    const item = await enqueueWork({
+      projectId: project.id,
+      workType: 'SYNTHETIC_ECHO',
+      payload: { note: 'hello' },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      maxAttempts: 3,
+    });
+
+    // Attempt 1 fails with the worker's own reason; the queue re-queues it.
+    const [first] = await claimWork({ workerId: worker, scopes });
+    expect(first?.attemptNumber).toBe(1);
+    // A first attempt has nothing to avoid repeating.
+    expect(earlierFailedAttempts(await listLeases(item.id), first!.leaseGeneration)).toEqual([]);
+    const failed = await failWork(
+      { workItemId: item.id, workerId: worker, leaseId: first!.leaseId, leaseGeneration: first!.leaseGeneration },
+      { category: 'DEPENDENCY_UNAVAILABLE', detail: 'sec.gov refused the proxy (403)' },
+    );
+    expect(failed.ok && failed.item.state).toBe('QUEUED');
+    await readyNow(item.id);
+
+    // Attempt 2 runs out its lease with nothing recorded, and is reclaimed.
+    const [second] = await claimWork({ workerId: worker, scopes });
+    expect(second?.attemptNumber).toBe(2);
+    await getDb().run("UPDATE work_items SET lease_expires_at = '2000-01-01T00:00:00.000Z' WHERE id = ?", [item.id]);
+    const [third] = await claimWork({ workerId: worker, scopes });
+    expect(third?.attemptNumber).toBe(3);
+
+    const earlier = earlierFailedAttempts(await listLeases(item.id), third!.leaseGeneration);
+    expect(earlier.map((a) => [a.attemptNumber, a.outcome])).toEqual([
+      [1, 'FAILED'],
+      [2, 'EXPIRED'],
+    ]);
+    // Verbatim, so the next attempt can address the cause rather than guess it.
+    expect(earlier[0]!.detail).toBe('sec.gov refused the proxy (403)');
+    expect(earlier[1]!.heartbeats).toBe(0);
+    // The current attempt is never reported as one of its own predecessors.
+    expect(earlier.every((a) => a.leaseGeneration < third!.leaseGeneration)).toBe(true);
+  });
+
+  it('names both ways an attempt ends in the rule handed to the re-run', () => {
+    expect(RETRY_RULE).toMatch(/Do not repeat/);
+    expect(RETRY_RULE).toMatch(/EXPIRED/);
+    expect(RETRY_RULE).toMatch(/FAILED/);
   });
 });
