@@ -156,3 +156,11 @@ Launch configuration, updated:
 - **Repair H2** (code-only, claude/gh2-price-transfer) replaces H, which was stuck on an owner permission prompt and has been stopped.
 - **Gate after H2:** a plan input from an accepted claim with matching mechanism and population; candidate economics not resting on misapplied prices.
 - **Release-candidate cutoff:** 12:45Z.
+
+## 10:45Z
+- H2 (#1098, 0e175d87) passed every gate, but its Fly step was SKIPPED. Factory merged #1097 (62c38137) at 10:40:55Z and dispatched **Deploy 44287710010**, which contains H2. That deploy is the one being followed now.
+- **Launch decision rule, fixed now to avoid another cycle:**
+  - when 62c38137 is live, the goal plan's candidate no longer rests on misapplied price evidence (price input not SINGLE_COMPARABLE from another mechanism);
+  - and the researched supply cost is composed into its arrangement's economics with claim lineage, which the 10:09Z probe already proved on 8579d2d5 and is unchanged since;
+  - THEN launch.
+  - Unproven, and to be stated in the report: research changing the goal-level plan's choice. That needs a researched slot or selling price, which is the run's own work.
