@@ -72,7 +72,8 @@ import { enqueueExtraction } from '../documents/queue.ts';
 import { isAuditable } from '../documents/quality.ts';
 import { registerRunArtifact, targetVersionForRun } from '../runArtifacts.ts';
 import { selectRelevantSegments } from '../sources/ingest.ts';
-import { classifyBlock, fragmentPasses, isUnresolvedRetrievalReason, type GateResult } from './gate.ts';
+import { classifyBlock, fragmentPasses, isUnresolvedRetrievalReason, unresolvedRetrievalReason, type GateResult } from './gate.ts';
+import { getDb } from '../../db/database.ts';
 import { guidanceFor } from './guidance.ts';
 import { gateFragment, recordFragmentClaims, type ClaimVerification } from './submission.ts';
 // One ledger builder, so a packet filed by a worker and one filed in process
@@ -586,6 +587,75 @@ async function dependencyClaims(
   return out.slice(0, 40);
 }
 
+/**
+ * A fragment that ends BLOCKED without the evidence gate having decided every
+ * claim on it — a worker's own blocker, a work item that finished having
+ * recorded nothing, a judgement that threw, a dependency that never arrived, a
+ * job that failed — used to leave those claims at `accepted = 0` with no
+ * `rejection_reason`: "a rejection with no reason" on VERIFICATION.REASONS
+ * (selfmodel REJECTIONS_EXPLAINED counts exactly that, over ACCEPTED and BLOCKED
+ * fragments). `gateFragment` explains every claim it judges; this is the same
+ * promise for every other path that makes a fragment terminal, kept in one place
+ * so a new BLOCKED writer cannot forget it — every one goes through
+ * `blockFragment`.
+ *
+ * One primary reason per claim, code first (`CODE: message`), the way the gate
+ * writes its own: an unread source keeps the gate's exact UNRESOLVED_RETRIEVAL
+ * reason (P4 accepts nothing else on an unread claim), and anything else reads
+ * FRAGMENT_ENDED_UNJUDGED with the fragment's own cause. Neither is a judgement
+ * — nothing is refuted, `accepted` is untouched, and a reason the gate already
+ * stored is never overwritten. A repair's rejected history skips both.
+ */
+export const FRAGMENT_ENDED_UNJUDGED = 'FRAGMENT_ENDED_UNJUDGED';
+
+/** The reason stored on an undecided claim of a fragment that ended BLOCKED. */
+export function fragmentEndedUnjudgedReason(cause: string | null | undefined): string {
+  const text = (cause ?? '').replace(/\s+/g, ' ').trim().slice(0, 300);
+  return (
+    `${FRAGMENT_ENDED_UNJUDGED}: the fragment ended BLOCKED before the evidence gate judged this claim` +
+    `${text ? ` (${text})` : ''}; it is neither confirmed nor refuted.`
+  );
+}
+
+/** True when a stored reason records a fragment that ended before judging the claim. */
+export function isFragmentEndedUnjudgedReason(reason: string | null | undefined): boolean {
+  return (reason ?? '').startsWith(`${FRAGMENT_ENDED_UNJUDGED}:`);
+}
+
+/** Give every undecided, unexplained claim of a terminal fragment its reason. Returns how many. */
+export async function explainUndecidedClaims(fragmentId: string, cause: string | null | undefined): Promise<number> {
+  let explained = 0;
+  for (const claim of await listClaimsForFragment(fragmentId)) {
+    if (claim.accepted || (claim.rejectionReason ?? '').trim().length > 0) continue;
+    const reason =
+      claim.retrievalState !== 'RETRIEVED'
+        ? unresolvedRetrievalReason(claim.retrievalState)
+        : fragmentEndedUnjudgedReason(cause);
+    // Only the reason, and only while it is still empty: a decision the gate
+    // makes concurrently is never overwritten, and `accepted` is not touched.
+    const result = await getDb().run(
+      `UPDATE research_claims SET rejection_reason = ?
+        WHERE id = ? AND accepted = 0 AND (rejection_reason IS NULL OR rejection_reason = '')`,
+      [reason, claim.id],
+    );
+    explained += result.changes;
+  }
+  return explained;
+}
+
+/** End a fragment BLOCKED, and explain every claim on it the gate never decided. */
+export async function blockFragment(
+  fragmentId: string,
+  input: { blockedReason: string; completedAt?: string },
+): Promise<void> {
+  await updateFragment(fragmentId, {
+    status: 'BLOCKED',
+    blockedReason: input.blockedReason,
+    completedAt: input.completedAt ?? new Date().toISOString(),
+  });
+  await explainUndecidedClaims(fragmentId, input.blockedReason);
+}
+
 /** Everything a repair must not repeat, from every earlier attempt at this fragment. */
 async function rejectedHistory(
   orchestrationId: string,
@@ -595,7 +665,13 @@ async function rejectedHistory(
   for (const fragment of await listAttempts(orchestrationId, fragmentKey)) {
     for (const claim of await listClaimsForFragment(fragment.id)) {
       // An unread source was never judged, so it is not a refusal to avoid repeating.
-      if (!claim.accepted && claim.rejectionReason && !isUnresolvedRetrievalReason(claim.rejectionReason)) {
+      // Nor is a claim its fragment ended without judging.
+      if (
+        !claim.accepted &&
+        claim.rejectionReason &&
+        !isUnresolvedRetrievalReason(claim.rejectionReason) &&
+        !isFragmentEndedUnjudgedReason(claim.rejectionReason)
+      ) {
         out.push({ claim: claim.claim, why: claim.rejectionReason });
       }
     }
@@ -723,11 +799,7 @@ async function runBundle(input: {
     });
     for (const fragment of bundle.fragments) {
       await recordFragmentOutcome(job.id, fragment.id, 'FAILED', message);
-      await updateFragment(fragment.id, {
-        status: 'BLOCKED',
-        blockedReason: message,
-        completedAt: new Date().toISOString(),
-      });
+      await blockFragment(fragment.id, { blockedReason: message });
       results.set(fragment.id, failedGate(message));
     }
     return results;
@@ -771,11 +843,7 @@ async function runBundle(input: {
       if (error instanceof ResearchCancelled) throw error;
       // One fragment failing inside a shared job is that fragment's problem.
       const message = error instanceof Error ? error.message : String(error);
-      await updateFragment(fragment.id, {
-        status: 'BLOCKED',
-        blockedReason: message,
-        completedAt: new Date().toISOString(),
-      });
+      await blockFragment(fragment.id, { blockedReason: message });
       await recordFragmentOutcome(job.id, fragment.id, 'FAILED', message);
       results.set(fragment.id, failedGate(message));
     }
