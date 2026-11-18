@@ -46,7 +46,7 @@ import {
   type AdmissionPolicy,
   type FactoryQueueEntry,
 } from '../../repos/factoryLine.ts';
-import { listBins, listDispatchesForBin } from '../../repos/bins.ts';
+import { binPurposeAdmits, isDispatchable, listBins, listDispatchesForBin } from '../../repos/bins.ts';
 import { approveObjective } from './contract.ts';
 import { campaignSpecFor } from './remote.ts';
 import { INITIAL_LANE_TARGET } from './scheduler.ts';
@@ -332,6 +332,12 @@ export interface LineBin {
   workerId: string | null;
   lastSentAt: string | null;
   lastRoutine: string | null;
+  /**
+   * Why the dispatcher is deliberately not starting a session for this bin
+   * right now, in its own terms; null when it would fire it on its next pass
+   * (or a worker holds it). See `dispatcherWait`.
+   */
+  waiting: string | null;
 }
 
 /**
@@ -429,6 +435,12 @@ export interface LineReading {
     readyBins: number;
     total: number;
   };
+  /**
+   * READY factory bins the dispatcher is deliberately not firing yet — a fire
+   * backoff, a deferred intent, no attempts left, a goal hold, Brain-only mode —
+   * each with the dispatcher's own reason. A wait with a reason, never idle work.
+   */
+  waiting?: { bins: number; reasons: string[] };
   active: {
     leasedBins: number;
     /** READY bins whose fire was sent recently enough that a worker may still be arriving. */
@@ -467,6 +479,41 @@ function nextFor(campaign: FactoryCampaign, bins: LineBin[], blocked: LineCampai
       : `The ${ready.kind.toLowerCase()} stage is fired at the next free surface.`;
   }
   return 'The next tick derives the next stage from what the last one recorded.';
+}
+
+/**
+ * Why the dispatcher will not start a session for this unleased bin now, or
+ * null when it would.
+ *
+ * The line used to count every READY factory bin as executable, while the
+ * dispatcher — rightly — waits on a fire backoff (`dispatch_not_before`, which
+ * the refire guard and unrouted deferrals set), on an intent it deferred to a
+ * later attempt, on a bin out of attempts, a goal's hold or Brain-only mode. So
+ * the line read "executable work, free surfaces, nothing running: a fault"
+ * over a dispatcher that was correctly waiting, and the operator filed that as
+ * a recurring failure (OPERATOR:RECURRING_OPERATIONAL_FAILURE:3f6ee83968764da2).
+ * The predicates are the dispatcher's own (`isDispatchable`, `binPurposeAdmits`)
+ * and its intent row, so there is no second definition of "fireable" here.
+ */
+async function dispatcherWait(
+  bin: Bin,
+  dispatches: Awaited<ReturnType<typeof listDispatchesForBin>>,
+  nowIso: string,
+): Promise<string | null> {
+  if (bin.heldByWorkstreamId !== null) return `held by goal ${bin.heldByWorkstreamId}`;
+  if (bin.attemptCount >= bin.maxAttempts) {
+    return `out of attempts (${bin.attemptCount} of ${bin.maxAttempts}); it waits for a decision, not a surface`;
+  }
+  if (bin.dispatchNotBefore !== null && bin.dispatchNotBefore > nowIso) {
+    return `fire backoff until ${bin.dispatchNotBefore}`;
+  }
+  if (!isDispatchable(bin, nowIso)) return 'not dispatchable in its current state';
+  if (!(await binPurposeAdmits(bin.id))) return 'Brain-only mode does not admit its purpose';
+  const intent = dispatches.filter((row) => row.leaseGeneration === bin.leaseGeneration).at(-1);
+  if (intent && intent.state === 'PENDING' && intent.lastErrorKind && intent.nextAttemptAt > nowIso) {
+    return `dispatch deferred (${intent.lastErrorKind}) until ${intent.nextAttemptAt}`;
+  }
+  return null;
 }
 
 /**
@@ -510,10 +557,14 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
   let readyBins = 0;
   let leasedBins = 0;
   let arriving = 0;
+  const waitReasons: string[] = [];
   for (const bin of factoryBins) {
-    const sent = newestSent(await listDispatchesForBin(bin.id));
+    const dispatches = await listDispatchesForBin(bin.id);
+    const sent = newestSent(dispatches);
     const leaseLive = bin.state === 'LEASED' && bin.leaseExpiresAt !== null && bin.leaseExpiresAt > nowIso;
+    const waiting = leaseLive ? null : await dispatcherWait(bin, dispatches, nowIso);
     if (leaseLive) leasedBins += 1;
+    else if (waiting) waitReasons.push(`${bin.kind.toLowerCase()} bin ${bin.id}: ${waiting}`);
     else {
       readyBins += 1;
       if (sent && now.getTime() - new Date(sent.sentAt).getTime() < ARRIVAL_GRACE_MS) arriving += 1;
@@ -529,6 +580,7 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
       workerId: bin.workerId,
       lastSentAt: sent?.sentAt ?? null,
       lastRoutine: sent?.routine ?? null,
+      waiting,
     });
   }
 
@@ -653,6 +705,9 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
     because = `${leasedBins} stage(s) running and ${arriving} worker(s) arriving.`;
   else if (executableTotal > 0)
     because = `${executableTotal} piece(s) of executable work, but no Factory surface is free to take it.`;
+  else if (waitReasons.length > 0)
+    because =
+      `${waitReasons.length} stage bin(s) waiting on the dispatcher, not on a surface: ` + waitReasons.join('; ') + '.';
   else if (queue.length > 0)
     because = `${queue.length} objective(s) queued behind ${workingCampaigns} working campaign(s), the limit being ${policy.maxActive}.`;
   else because = 'Nothing is queued and no campaign has a stage waiting.';
@@ -662,6 +717,7 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
     policy,
     auto: policy.maxActive > 0,
     executable: { queued: admissibleQueued, readyBins, total: executableTotal },
+    waiting: { bins: waitReasons.length, reasons: waitReasons },
     active: { leasedBins, arriving, workingCampaigns },
     capacity: { freeSurfaces, surfaces },
     unexplainedIdle,
