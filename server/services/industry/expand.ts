@@ -59,6 +59,7 @@ import { ARRANGEMENT_BUCKET_MARK, arrangementKeyOfBucket } from '../cash/arrange
 import { planBuyerType } from '../cash/construct.ts';
 import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
 import { readMoneyFigures } from '../cash/figures.ts';
+import { readShareOrCount } from './shareCountFacts.ts';
 import {
   closeIndustryRound,
   countFiledFromOrchestration,
@@ -1234,6 +1235,32 @@ async function constructedRoundBuyer(projectId: string, bucketId: string, nodes:
   return buyer ? { buyer } : { buyer: null, reason: 'round’s arrangement buyers are no live map buyer type, so the plan reads no fact for them', unmatchedBuyer: demand };
 }
 
+/**
+ * A constructed round's claim the price readers refused, read for a close
+ * rate or a buyer count (R3, `readShareOrCount`): the plan reads
+ * `account_win_rate` as the arrangement's conversion and `accounts_reachable`
+ * as its buyers (`constructionObservations`, cash/construct.ts). Filed only
+ * from an OBSERVED claim that states no money, against the round's own buyer;
+ * a percentage or a count that is neither keeps its refusal with why appended.
+ * A decision that already files something, or whose round has no buyer, is
+ * returned as it is.
+ */
+function shareOrCountDecision(decision: BackfillDecision, claim: ResearchClaim, buyer: IndustryNode | null): BackfillDecision {
+  if (decision.candidate || !buyer || decision.claimId !== claim.id) return decision;
+  if (readMoneyFigures(claim.claim, 'USD').some((one) => one.cents > 0)) return decision;
+  const read = readShareOrCount(claim.claim, buyer.name);
+  if (read === null) return decision;
+  if ('refused' in read) return { ...decision, reason: `${decision.reason ?? 'refused'}; ${read.refused}` };
+  if (claimFactStatus(claim) !== 'OBSERVED') return { ...decision, reason: `${decision.reason ?? 'refused'}; it states ${read.key} but is not an observation a source reports` };
+  return {
+    source: 'CONSTRUCTED_ROUND',
+    claimId: claim.id,
+    candidate: { source: 'CONSTRUCTED_ROUND', claim, buyer, key: read.key, amount: read.low, high: read.high, measures: `${read.measures}, from a constructed arrangement's research: ${claim.claim}` },
+    reason: null,
+    countsAsSkipped: true,
+  };
+}
+
 async function constructedRoundDecisions(
   projectId: string,
   nodes: readonly IndustryNode[],
@@ -1271,7 +1298,7 @@ async function constructedRoundDecisions(
       countsAsSkipped: true,
     });
   }
-  return out;
+  return out.map((decision, i) => shareOrCountDecision(decision, rows[i]!.claim, buyerByBucket.get(rows[i]!.bucketId)?.buyer ?? null));
 }
 
 /**

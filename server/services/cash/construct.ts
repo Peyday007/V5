@@ -242,6 +242,15 @@ export interface ConstructedArrangement {
      */
     evidence?: { values: number[]; low: number; high: number } & InputSample;
   };
+  /**
+   * The share of these buyers approached who agree, reconstructed from close
+   * rates filed for them (`account_win_rate`, R3): the plan's close rate for
+   * this arrangement. `evidence` only where the reconstruction justifies a
+   * distribution — a published rate with no stated sample locates the rate and
+   * never does (quant/pool.ts), so it is swept over its range as bounds.
+   * Absent, nothing filed bears on it.
+   */
+  conversion?: Pick<Estimate, 'tier' | 'p10' | 'p50' | 'p90'> & { observations: number; sources: string[]; evidence?: NonNullable<ConstructedArrangement['value']['evidence']> };
   /** Parts nothing establishes yet: what the research round asks. */
   unknownParts: string[];
   /** Openings sharing this buyer, for the novelty check and the value evidence. */
@@ -737,7 +746,7 @@ async function heldEvidence(input: ConstructionInput, opportunities: CashOpportu
       measures: `money tied up on "${one.title.slice(0, 60)}"`,
     }));
   const capability: Primitive | null = input.delivers.length > 0 ? { name: input.delivers.join(', '), claimId: null, from: 'CAPABILITY', ref: 'deliverables', path: `CAPABILITY:${input.delivers.map(norm).sort().join('>')}` } : null;
-  return { priced, tiedUp, facts: { unitCost: facts.unitCost, volume: facts.volume }, capability };
+  return { priced, tiedUp, facts: { unitCost: facts.unitCost, volume: facts.volume, conversion: facts.conversion, buyers: facts.buyers }, capability };
 }
 
 /**
@@ -767,18 +776,32 @@ async function leverInputs(
   return { leverEvidence, contractLimits };
 }
 
-/** Construction facts that bear on a composition beyond its price: what supply costs per unit, and how much one buyer buys. */
+/** Construction facts that bear on a composition beyond its price: what supply costs per unit, how much one buyer buys, how many there are and what share agree. */
 export interface FactObservations {
   /** What supply is paid per unit for these buyers' work: a margin design's supply cost. */
   unitCost: Observation[];
   /** Units one of these buyers buys in the goal window: the demand side's need rate. */
   volume: Observation[];
+  /**
+   * The share of these buyers approached who bought (`account_win_rate`): the
+   * demand side's `conversion`, "share of reached buyers who agree"
+   * (quant/mechanism.ts). Absent reads as none filed (R3).
+   */
+  conversion?: Observation[];
+  /**
+   * How many buyers of this kind a stated market holds (`accounts_reachable`):
+   * the demand side's `buyers`, "buyers who have the need" — a count, never the
+   * `reach` share, which stays unknown until outreach measures it (R3).
+   */
+  buyers?: Observation[];
 }
 
-/** Fact keys read as a price these buyers pay, a unit cost of serving them, and a volume they buy. */
+/** Fact keys read as a price these buyers pay, a unit cost of serving them, a volume they buy, a share who agree and how many there are. */
 const FACT_PRICE_KEYS: readonly FactKey[] = ['price_per_unit'];
 const FACT_COST_KEYS: readonly FactKey[] = ['contractor_rate_per_unit'];
 const FACT_VOLUME_KEYS: readonly FactKey[] = ['account_units_per_month'];
+const FACT_CONVERSION_KEYS: readonly FactKey[] = ['account_win_rate'];
+const FACT_BUYERS_KEYS: readonly FactKey[] = ['accounts_reachable'];
 /** Only what was seen: a sourced claim that reports its source (OBSERVED) or a person's attestation (VERIFIED). */
 const FACT_EVIDENCE_STATUSES: readonly FactStatus[] = ['OBSERVED', 'VERIFIED'];
 
@@ -801,8 +824,8 @@ const FACT_EVIDENCE_STATUSES: readonly FactStatus[] = ['OBSERVED', 'VERIFIED'];
 export async function constructionObservations(
   input: Pick<ConstructionInput, 'projectId' | 'currency' | 'daysLeft'>,
   allowed: (text: string | null | undefined) => boolean = () => true,
-): Promise<{ priced: Observation[]; unitCost: Observation[]; volume: Observation[] }> {
-  const out = { priced: [] as Observation[], unitCost: [] as Observation[], volume: [] as Observation[] };
+): Promise<{ priced: Observation[]; unitCost: Observation[]; volume: Observation[]; conversion: Observation[]; buyers: Observation[] }> {
+  const out = { priced: [] as Observation[], unitCost: [] as Observation[], volume: [] as Observation[], conversion: [] as Observation[], buyers: [] as Observation[] };
   const facts = (await listProjectConstructionFacts(input.projectId)).filter((one) => FACT_EVIDENCE_STATUSES.includes(one.status) && one.segment?.startsWith('map_'));
   if (facts.length === 0) return out;
   const all = await listNodes(input.projectId);
@@ -814,13 +837,27 @@ export async function constructionObservations(
     if (!node || node.retiredAt || node.kind !== 'BUYER_TYPE' || !safeName(node.name) || !allowed(node.name)) continue;
     const root = rootOf(node, byId);
     if (!allowed(root.name)) continue;
-    const kind = FACT_PRICE_KEYS.includes(fact.key) ? 'priced' : FACT_COST_KEYS.includes(fact.key) ? 'unitCost' : FACT_VOLUME_KEYS.includes(fact.key) ? 'volume' : null;
+    const kind = FACT_PRICE_KEYS.includes(fact.key)
+      ? 'priced'
+      : FACT_COST_KEYS.includes(fact.key)
+        ? 'unitCost'
+        : FACT_VOLUME_KEYS.includes(fact.key)
+          ? 'volume'
+          : FACT_CONVERSION_KEYS.includes(fact.key)
+            ? 'conversion'
+            : FACT_BUYERS_KEYS.includes(fact.key)
+              ? 'buyers'
+              : null;
     if (!kind) continue;
-    if (kind !== 'volume' && !usd) continue;
+    // Only money is in USD; a share and a count mean the same in any goal's currency.
+    if ((kind === 'priced' || kind === 'unitCost') && !usd) continue;
+    // A volume is per month, read over the window; a share and a count are not per anything.
     const scale = kind === 'volume' ? windowMonths : 1;
     const low = Math.min(fact.low, fact.high) * scale;
     const high = Math.max(fact.low, fact.high) * scale;
     if (!(high > 0)) continue;
+    // A share above the whole is no share (the filer refuses one; a person's attestation is held to the same).
+    if (kind === 'conversion' && high > 1) continue;
     out[kind].push({
       id: `fact:${fact.id}`,
       value: low === high ? { kind: 'POINT', value: low } : { kind: 'RANGE', low, high },
@@ -1500,7 +1537,7 @@ export function compositionPlan(job: ConstructionJob): CompositionStep[] {
   const reuse = new Map(job.reuse ?? []);
   // Everything a composition reads besides its own parts, once per pass. Fact observations only when
   // there are any, so a digest stored before they existed is still the same composition's.
-  const facts = job.facts && (job.facts.unitCost.length > 0 || job.facts.volume.length > 0) ? job.facts : undefined;
+  const facts = job.facts && (job.facts.unitCost.length > 0 || job.facts.volume.length > 0 || (job.facts.conversion?.length ?? 0) > 0 || (job.facts.buyers?.length ?? 0) > 0) ? job.facts : undefined;
   // The lever evidence and contract limits a composition reads (S-0103), likewise only when the rows state any.
   const leverEvidence = job.leverEvidence && Object.values(job.leverEvidence).some((one) => one.length > 0) ? job.leverEvidence : undefined;
   const contractLimits = job.contractLimits && job.contractLimits.length > 0 ? job.contractLimits : undefined;
@@ -1734,6 +1771,9 @@ function compose(args: {
   // What research observed supply is paid per unit for these buyers' work, and how much one of them buys (F2).
   const unitCostObs = (args.facts?.unitCost ?? []).filter(ownBuyer).map((one) => ({ ...one, broad: false }));
   const volumeObs = (args.facts?.volume ?? []).filter(ownBuyer).map((one) => ({ ...one, broad: false }));
+  // What share of these buyers approached bought, and how many of them a stated market holds (R3): the demand side's conversion and buyers.
+  const conversionObs = (args.facts?.conversion ?? []).filter(ownBuyer).map((one) => ({ ...one, broad: false }));
+  const buyersObs = (args.facts?.buyers ?? []).filter(ownBuyer).map((one) => ({ ...one, broad: false }));
   const context = { payer: norm(demand.name), industry: norm(args.sector), arrangement: key };
   const captureFor = (): Parameters<typeof composeArrangement>[0]['capture'] =>
     def.capture === 'COMMISSION'
@@ -1746,7 +1786,12 @@ function compose(args: {
     label: demand.name,
     period: `${input.daysLeft} days`,
     currency: input.currency,
-    demand: { buyers: unknownCount(0, 10_000_000), needRate: volumeObs.length > 0 ? { min: 0, max: 400, context, material: [], observations: volumeObs } : unknownCount(0, 400), reach: unknownShare, conversion: unknownShare },
+    demand: {
+      buyers: buyersObs.length > 0 ? { min: 0, max: 10_000_000, context, material: [], observations: buyersObs } : unknownCount(0, 10_000_000),
+      needRate: volumeObs.length > 0 ? { min: 0, max: 400, context, material: [], observations: volumeObs } : unknownCount(0, 400),
+      reach: unknownShare,
+      conversion: conversionObs.length > 0 ? { min: 0, max: 1, context, material: [], observations: conversionObs } : unknownShare,
+    },
     supply: def.needsSupply ? { units: unknownCount(0, 10_000_000), acceptance: unknownShare } : undefined,
     // The arrangement itself is new, so even the same payer's price is comparable rather than direct.
     value: { min: 0, max: 1_000_000, context, material: [], observations: valueObs },
@@ -1790,13 +1835,14 @@ function compose(args: {
      * against buyer populations, and every PRODUCE arrangement for those very
      * buyers (360 of 404) still read value UNKNOWN, so the plan admitted 0.
      */
-    for (const leaf of ['a_value', 'a_prepay_share', 'a_repeat_rate']) {
+    for (const leaf of ['a_value', 'a_conversion', 'a_prepay_share', 'a_repeat_rate']) {
       if (!estimates[leaf] && composed.graph.nodes.some((n) => n.key === leaf)) estimates = { ...estimates, ...reconstruct(composed.graph, leaf, args.now).estimates };
     }
   } catch {
     estimates = {};
   }
   const value = estimates['a_value'];
+  const conversion = estimates['a_conversion'];
   const core = ['buyers', 'need_rate', 'conversion', 'value', def.capture === 'COMMISSION' ? 'commission' : def.capture === 'FEE' ? 'fee' : 'supply_cost', ...(def.needsSupply ? ['supply_units'] : []), 'cost'];
   const leaves = [...core, ...designParts(design).filter((part) => !core.includes(part))];
   const unknownParts = leaves.filter((leaf) => {
@@ -1884,6 +1930,9 @@ function compose(args: {
     stress,
     evidenced,
     value: value ? { tier: value.tier, p10: value.p10, p50: value.p50, p90: value.p90, observations: value.used.length, sources: valueSources(value, valueObs), ...valueEvidence(value) } : { tier: 'UNKNOWN', p10: 0, p50: 0, p90: 0, observations: 0 },
+    ...(conversion && conversion.used.length > 0 && conversionObs.length > 0 && conversion.tier !== 'UNKNOWN'
+      ? { conversion: { tier: conversion.tier, p10: conversion.p10, p50: conversion.p50, p90: conversion.p90, observations: conversion.used.length, sources: valueSources(conversion, conversionObs), ...valueEvidence(conversion) } }
+      : {}),
     unknownParts,
     relatedOpenings: args.related.map((one) => one.id),
     question: asked,
@@ -1895,7 +1944,8 @@ function compose(args: {
       arrangementSignature(design, demand, need, supply),
       [demand, need, supply].map((one) => (one ? [one.ref, one.claimId] : null)),
       args.precedent?.id ?? null,
-      [...valueObs, ...riskObs].filter((one) => !one.broad).map((one) => one.id).sort(),
+      // A filed close rate or buyer count is new evidence too, and reopens a refutation (R3); none filed adds nothing.
+      [...valueObs, ...riskObs, ...conversionObs, ...buyersObs].filter((one) => !one.broad).map((one) => one.id).sort(),
     ]),
     ...(positionQuestions ? { positionQuestions: positionQuestions.map(carriedPositionQuestion) } : {}),
   };
@@ -2134,9 +2184,11 @@ export function unitEconomicSentence(buyer: string): string {
   const name = buyer.replace(/\s+/g, ' ').trim();
   return (
     `Where a source publishes what "${name}" pay per unit of work, what an independent operator ` +
-    'accepts per unit, or how many units one account buys a month, declare it on its claim: structural_finding UNIT_ECONOMIC, ' +
-    'structural_subject the fact key (price_per_unit, contractor_rate_per_unit or account_units_per_month), ' +
-    `structural_qualifier "${name}", and structural_amount_cents the figure in hundredths of its unit. `
+    'accepts per unit, how many units one account buys a month, what share of such buyers approached bought, or how many ' +
+    'such buyers a named market holds, declare it on its claim: structural_finding UNIT_ECONOMIC, ' +
+    'structural_subject the fact key (price_per_unit, contractor_rate_per_unit, account_units_per_month, account_win_rate ' +
+    'or accounts_reachable), ' +
+    `structural_qualifier "${name}", and structural_amount_cents the figure in hundredths of its unit (a share of one: 18% is 18). `
   );
 }
 
