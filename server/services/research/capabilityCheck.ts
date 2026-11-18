@@ -21,6 +21,7 @@ import type {
   WorkItem,
 } from '../../domain/types.ts';
 import { TERMINAL_ORCHESTRATION } from './outcome.ts';
+import { isUnresolvedRetrievalReason, unresolvedRetrievalReason } from './gate.ts';
 
 export interface Clause {
   id: string;
@@ -216,12 +217,28 @@ export function evaluateCapability(input: CapabilityInput): Clause[] {
   // A source nobody could read is not a rejected claim. It must be recorded as
   // unresolved, and it must not carry a rejection reason blaming the research.
   const unread = claims.filter((claim) => claim.retrievalState !== 'RETRIEVED');
-  const misblamed = unread.filter((claim) => (claim.rejectionReason ?? '').length > 0);
+  // The one honest reason on an unread claim is the record the gate itself
+  // writes for that claim's own structured retrieval state
+  // (`unresolvedRetrievalReason(retrievalState)`), compared whole. A prefix is
+  // free text any writer of rejection_reason can produce, so it proves
+  // nothing: "UNRESOLVED_RETRIEVAL: quote not in source" on a PAYWALLED claim
+  // is still blame, and so is the gate's sentence for a different state.
+  const misblamed = unread.filter(
+    (claim) =>
+      (claim.rejectionReason ?? '').length > 0 &&
+      claim.rejectionReason !== unresolvedRetrievalReason(claim.retrievalState),
+  );
+  // And the code is never worn by a claim whose source was read: a judged
+  // claim saying it was "not judged" hides the real reason it was refused.
+  const mislabelled = claims.filter(
+    (claim) => claim.retrievalState === 'RETRIEVED' && isUnresolvedRetrievalReason(claim.rejectionReason),
+  );
   check(
     'P4',
     'unreadable sources are recorded as unresolved, not rejected',
-    misblamed.length === 0,
-    `${unread.length} claim(s) with an unread source; ${misblamed.length} wrongly carry a rejection reason`,
+    misblamed.length === 0 && mislabelled.length === 0,
+    `${unread.length} claim(s) with an unread source; ${misblamed.length} wrongly carry a rejection reason; ` +
+      `${mislabelled.length} read claim(s) wrongly marked unresolved`,
     // Nothing recorded a blocked source, so nothing exercised the rule. On a
     // packet from before the column existed every row reads RETRIEVED, which
     // would otherwise be a pass meaning "the question was never asked".

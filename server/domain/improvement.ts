@@ -284,10 +284,29 @@ export function classifyFreeLaneFailure(reason: string | null): FreeLaneFailureC
   return 'OTHER';
 }
 
+/**
+ * Classes of a stored `rejection_reason` that record a claim nobody judged:
+ * a source that could not be read (the gate's `UNRESOLVED_RETRIEVAL: …`) or a
+ * fragment that ended BLOCKED before the gate reached the claim
+ * (`FRAGMENT_ENDED_UNJUDGED: …`). They explain why the claim was not accepted,
+ * but they are not blame on the research, so they never become a
+ * CLAIM_REJECTION weakness about how research is written.
+ */
+export const UNJUDGED_CLAIM_CLASSES: ReadonlySet<string> = new Set(['UNRESOLVED_RETRIEVAL', 'FRAGMENT_ENDED_UNJUDGED']);
+
 /** How a research claim's rejection reads, from `research_claims.rejection_reason`. */
 export function classifyClaimRejection(reason: string | null): string {
   const text = reason ?? '';
   if (!text.trim()) return 'NO_REASON_RECORDED';
+  // A reason that leads with a code is read by its code, before any wording match: the
+  // unread-source sentence names "the source", which the wording below would otherwise read
+  // as a SOURCE_PROBLEM — blame on research for a source nobody could open.
+  if (text.startsWith('UNRESOLVED_RETRIEVAL:')) return 'UNRESOLVED_RETRIEVAL';
+  if (text.startsWith('FRAGMENT_ENDED_UNJUDGED:')) return 'FRAGMENT_ENDED_UNJUDGED';
+  // A judged failure that arrived with no sentence of its own is named by the condition it
+  // failed (`GATE_CONDITION <C>: …`), not guessed at from the condition's description.
+  const condition = /^GATE_CONDITION ([A-Z_]+):/.exec(text)?.[1];
+  if (condition) return `GATE_CONDITION_${condition}`;
   // First: its wording names "the source", which would otherwise read as a source problem.
   if (/\blane asks\b/i.test(text)) return 'LANE_FIT';
   if (/scope does not match/i.test(text)) return 'SCOPE_MISMATCH';
@@ -454,6 +473,8 @@ export function claimRejectionWeaknesses(rejections: FailureCount[], claims: num
   const out: Weakness[] = [];
   for (const rejection of rejections) {
     if (rejection.cls === 'OTHER' || rejection.cls === 'NO_REASON_RECORDED') continue;
+    // Not a judgement on the research: an unread source or a fragment that ended first.
+    if (UNJUDGED_CLAIM_CLASSES.has(rejection.cls)) continue;
     if (rejection.n < WEAKNESS_MIN_COUNT * 2 || claims <= 0 || rejection.n / claims < WEAKNESS_MIN_SHARE) continue;
     out.push({
       key: `CLAIMS:${rejection.cls}`,

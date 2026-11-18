@@ -51,6 +51,55 @@ export const GATE_CONDITIONS = {
 
 export type GateCondition = keyof typeof GATE_CONDITIONS;
 
+/**
+ * Why a claim the gate did not accept was not accepted — the closed set of
+ * reason codes a stored `rejection_reason` opens with when it was not one of
+ * the seven conditions above.
+ *
+ * Every `accepted = 0` claim of a judged fragment carries a reason, one primary
+ * reason per claim (the first that applies), so a rejection can be learned
+ * from. Before this, a claim whose source nobody could read was skipped by the
+ * gate and stored `accepted = 0` with no reason at all — "a rejection with no
+ * reason" — which is exactly what VERIFICATION.REASONS measures.
+ *
+ * The code is the stable, machine-readable part and leads the sentence
+ * (`CODE: message`), the way a status condition pairs a programmatic reason
+ * with a human message.
+ *
+ * - `UNRESOLVED_RETRIEVAL` — the source could not be read. Not judged, so not
+ *   refuted: it is still kept out of the rejection count, the rejection rate
+ *   and the failed conditions. The reason records *why it was not accepted*,
+ *   and says in so many words that it is not blame on the research.
+ * - `GATE_CONDITION` — a judgement that failed a condition but arrived with no
+ *   sentence of its own (an empty verifier note, an empty validation detail);
+ *   the reason names the condition it failed.
+ */
+export const NOT_ACCEPTED_REASON_CODES = {
+  UNRESOLVED_RETRIEVAL: 'The source could not be read, so the claim was not judged',
+  GATE_CONDITION: 'The claim failed a gate condition that recorded no sentence of its own',
+} as const;
+
+export type NotAcceptedReasonCode = keyof typeof NOT_ACCEPTED_REASON_CODES;
+
+/** The reason stored on a claim whose source could not be read. */
+export function unresolvedRetrievalReason(state: string): string {
+  return (
+    `UNRESOLVED_RETRIEVAL: the source could not be read (retrieval state ${state}), ` +
+    'so this claim was not judged; it is neither confirmed nor refuted.'
+  );
+}
+
+/** True when a stored reason records an unread source rather than a judgement. */
+export function isUnresolvedRetrievalReason(reason: string | null | undefined): boolean {
+  return (reason ?? '').startsWith('UNRESOLVED_RETRIEVAL:');
+}
+
+/** A failed judgement's reason, never empty: an empty one names its condition. */
+export function reasonForCondition(condition: GateCondition, reason: string | null | undefined): string {
+  const text = (reason ?? '').trim();
+  return text.length > 0 ? text : `GATE_CONDITION ${condition}: ${GATE_CONDITIONS[condition]} — not met.`;
+}
+
 export interface ClaimJudgement {
   claimId: string;
   accepted: boolean;
@@ -112,7 +161,19 @@ export interface GateResult {
    * was not checked. Neither accepted nor rejected: the gate has no verdict on
    * evidence nobody could open.
    */
-  unresolvedRetrieval: { claimId: string; claim: string; sourceUrl: string | null; state: string }[];
+  unresolvedRetrieval: {
+    claimId: string;
+    claim: string;
+    sourceUrl: string | null;
+    state: string;
+    /**
+     * Why it was not accepted, from `NOT_ACCEPTED_REASON_CODES`. Stored as the
+     * claim's `rejection_reason` so no unaccepted claim is left unexplained; it
+     * is not a rejection and is counted as none. Optional because a verdict
+     * stored before it existed has none.
+     */
+    reason?: string;
+  }[];
   claims: ClaimJudgement[];
   acceptedClaims: number;
   rejectedClaims: number;
@@ -317,7 +378,12 @@ export function applyGate(input: {
     });
   };
   const reject = (claim: ResearchClaim, condition: GateCondition, reason: string): void => {
-    judgements.set(claim.id, { claimId: claim.id, accepted: false, failedCondition: condition, reason });
+    judgements.set(claim.id, {
+      claimId: claim.id,
+      accepted: false,
+      failedCondition: condition,
+      reason: reasonForCondition(condition, reason),
+    });
   };
 
   const direct = claims.filter((claim) => !claim.derived);
@@ -807,6 +873,7 @@ export function applyGate(input: {
       claim: claim.claim,
       sourceUrl: claim.sourceUrl,
       state: claim.retrievalState,
+      reason: unresolvedRetrievalReason(claim.retrievalState),
     })),
     claims: results,
     acceptedClaims: acceptedList.length,

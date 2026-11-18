@@ -55,7 +55,13 @@ import type {
   WorkItem,
   WorkerScope,
 } from '../../domain/types.ts';
-import { blockCauseOf, exampleIdentity, laneFloor, type BlockCause } from './gate.ts';
+import {
+  blockCauseOf,
+  exampleIdentity,
+  laneFloor,
+  unresolvedRetrievalReason,
+  type BlockCause,
+} from './gate.ts';
 import type { ClaimJudgement, GateCondition, GateResult, LaneCoverage } from './gate.ts';
 import type { BuildRepairPlanInput } from './repair.ts';
 import { countIndependentSources, duplicateGroups } from './standards.ts';
@@ -95,6 +101,7 @@ import {
 } from '../../repos/workQueue.ts';
 import { createHash } from 'node:crypto';
 import { getDb } from '../../db/database.ts';
+import { blockFragment } from './orchestrator.ts';
 import { parseJson } from '../../repos/util.ts';
 import { workType, AUDIT_ROLES, type AuditRole } from '../queue/workTypes.ts';
 import { recordEvent } from '../../repos/events.ts';
@@ -504,11 +511,7 @@ async function faultedFragment(input: {
   const reason =
     `A ${input.what} work item for this fragment finished without recording anything. ` +
     'Its research is kept; reissue the verification or give the fragment another attempt.';
-  await updateFragment(input.fragment.id, {
-    status: 'BLOCKED',
-    blockedReason: reason,
-    completedAt: new Date().toISOString(),
-  });
+  await blockFragment(input.fragment.id, { blockedReason: reason });
   await recordEvent({
     projectId: input.orchestration.projectId,
     layerId: input.orchestration.layerId,
@@ -632,11 +635,7 @@ async function faultedOut(input: {
       ? recorded
       : (lastItemFailure(input.items, input.predicate) ?? faultedOutReason(input.what));
   if (input.fragment) {
-    await updateFragment(input.fragment.id, {
-      status: 'BLOCKED',
-      blockedReason: reason,
-      completedAt: new Date().toISOString(),
-    });
+    await blockFragment(input.fragment.id, { blockedReason: reason });
   }
   await parkOrchestration(input.orchestration.id, reason, { stampCompleted: true });
   return {
@@ -885,11 +884,7 @@ async function blockOnFailedDependency(input: {
       `${DEPENDENCY_DOOM_PREFIX} ${detail}, and that never arrives. ` +
       'Answering it would rest on a foundation nobody established. Repair the dependency ' +
       'and this fragment can be retried.';
-    await updateFragment(fragment.id, {
-      status: 'BLOCKED',
-      blockedReason: reason,
-      completedAt: at,
-    });
+    await blockFragment(fragment.id, { blockedReason: reason, completedAt: at });
     await recordEvent({
       projectId: orchestration.projectId,
       layerId: orchestration.layerId,
@@ -1367,6 +1362,7 @@ export function gateShapeFor(fragment: ResearchFragment, claims: ResearchClaim[]
         claim: claim.claim,
         sourceUrl: claim.sourceUrl,
         state: claim.retrievalState,
+        reason: claim.rejectionReason ?? unresolvedRetrievalReason(claim.retrievalState),
       })),
     claims: results,
     acceptedClaims: accepted.length,
