@@ -12,8 +12,11 @@
  *
  *  - a copy of a correction stored without "Corrects N." (C1-2026-21030): v4
  *    saw no corrected rule, though the correction's own number names it;
- *  - a rule effective on its publication day whose stored copy carries no
- *    publishedAt, or one with an offset, so v4 measured from the wrong day;
+ *  - (defensive, not a recorded cause) a stored copy with no publishedAt or
+ *    one stated with an offset: parseFederalRegister never writes either —
+ *    isoOrNull always emits a UTC "Z" timestamp and publication_date is always
+ *    present — so these are kept in their own describe block below and v4 is
+ *    never said to have missed a production record because of them;
  *  - a rule whose copies list different agencies (Transportation Department
  *    alone, then with the Federal Aviation Administration): v4 split one
  *    document across the parent department and the issuing office;
@@ -43,6 +46,7 @@ import {
   type DetectedSignal,
   type DetectorRecord,
 } from '../server/services/feeds/detectors.ts';
+import { parseFederalRegister } from '../server/services/feeds/sources.ts';
 
 const DAY = 86_400_000;
 const FR = 'https://www.federalregister.gov/documents';
@@ -89,13 +93,17 @@ const correctionCompleted = fr(
 /** FAA: the first copy lists only the parent department; the edit lists the issuing office. */
 const faa73 = fr('2026-23073', '2026-11-12', DOT, 'Amends SIAPs. Effective 2026-11-12.', SIAP);
 const faa73Edit = fr('2026-23073', '2026-11-12', FAA, 'Amends SIAPs. Effective 2026-11-12.', SIAP, '2026-11-13T06:00:00.000Z', 'fi_2026-23073#v2');
-/** FAA: publication date stated with an offset east of UTC; effective on the last day of the eight-week bound. */
 const lastDay = new Date(Date.parse('2026-11-12T00:00:00.000Z') + RULE_EFFECTIVE_SOON_V2_LEAD_DAYS * DAY).toISOString().slice(0, 10);
-const faa72 = fr('2026-23072', '2026-11-12', FAA, `Amends SIAPs. Effective ${lastDay}.`, SIAP, undefined, undefined, '2026-11-12T00:00:00+01:00');
-/** FCC: effective on its publication day, stored the next day with no publishedAt. */
+/**
+ * FAA 2026-23072 and FCC 2026-23041, as the connector stores them: effective on
+ * their publication day (lead 0, per the API records), publishedAt the UTC
+ * timestamp isoOrNull writes, first stored two days after publication — the
+ * same recorded cause as FCC 2026-23040.
+ */
+const faa72 = fr('2026-23072', '2026-11-12', FAA, 'Amends SIAPs. Effective 2026-11-12.', SIAP, '2026-11-14T06:00:00.000Z');
 const fcc41 = fr(
   '2026-23041', '2026-11-12', FCC, 'Amends the Table of Allotments. Effective 2026-11-12.',
-  'Television Broadcasting Services; St. George, Utah', '2026-11-13T06:00:00.000Z', undefined, null,
+  'Television Broadcasting Services; St. George, Utah', '2026-11-14T06:00:00.000Z',
 );
 /** Effective on publication, first stored by Brain two days later (a pull that ran late): the screen kept each. */
 const fcc40 = fr('2026-23040', '2026-11-12', FCC, 'Effective 2026-11-12.', 'National Television Multiple Ownership Rule', '2026-11-14T06:00:00.000Z');
@@ -139,20 +147,12 @@ describe('RULE_EFFECTIVE_SOON@4 misses the recorded items (the failure class)', 
     expect(kept).not.toContain(correctionBare.id);
   });
 
-  it('drops a lead-0 rule stored the next day without a publishedAt', () => {
-    expect(kept).not.toContain(fcc41.id);
-  });
-
-  it('drops a rule effective on the last day of the bound when publishedAt carries an offset', () => {
-    expect(kept).not.toContain(faa72.id);
-  });
-
-  it('drops a lead-0 rule Brain first stored two days after publication (FCC 2026-23040, USCG 2026-23027, ACF 2026-23279)', () => {
-    for (const late of [fcc40, uscg27, acf79]) expect(kept).not.toContain(late.id);
+  it('drops a lead-0 rule Brain first stored two days after publication (FCC 2026-23040 and 2026-23041, FAA 2026-23072, USCG 2026-23027, ACF 2026-23279)', () => {
+    for (const late of [fcc40, fcc41, faa72, uscg27, acf79]) expect(kept).not.toContain(late.id);
   });
 
   it('keeps the very same records when Brain stored them on their publication day: the fetch day decided it', () => {
-    const onTime = [fcc40, uscg27, acf79].map((one) => ({ ...one, fetchedAt: `${one.publishedAt!.slice(0, 10)}T12:00:00.000Z` }));
+    const onTime = [fcc40, fcc41, faa72, uscg27, acf79].map((one) => ({ ...one, fetchedAt: `${one.publishedAt!.slice(0, 10)}T12:00:00.000Z` }));
     expect(members(RULE_EFFECTIVE_SOON_V4.detect(onTime, now)).sort()).toEqual(onTime.map((one) => one.id).sort());
   });
 
@@ -191,6 +191,42 @@ describe('RULE_EFFECTIVE_SOON@5 keeps them, each in its agency group', () => {
 
   it('infers nothing for a correction whose corrected rule is not stored and states no date', () => {
     expect(members(RULE_EFFECTIVE_SOON_V5.detect([correctionBare], now))).toEqual([]);
+  });
+});
+
+describe('the fixtures are what the connector stores', () => {
+  const apiRow = (record: DetectorRecord, effective: string, agencies: { id: number; name: string; parent_id: number | null }[]) => ({
+    document_number: record.id.replace(/^fi_/, ''),
+    title: record.title,
+    html_url: record.url,
+    publication_date: federalRegisterPublishedDayOf(record.url),
+    effective_on: effective,
+    abstract: record.body!.replace(/\s*Effective \d{4}-\d{2}-\d{2}\.$/, ''),
+    agencies,
+  });
+  const dot = { id: 492, name: 'Transportation Department', parent_id: null };
+  const faaAgency = { id: 159, name: 'Federal Aviation Administration', parent_id: 492 };
+  const fccAgency = { id: 161, name: FCC, parent_id: null };
+
+  it('parseFederalRegister produces each lead-0 fixture exactly: UTC publishedAt, never null, every listed agency', () => {
+    for (const [record, agencies] of [
+      [faa72, [faaAgency, dot]],
+      [faa73Edit, [dot, faaAgency]],
+      [fcc41, [fccAgency]],
+      [fcc40, [fccAgency]],
+    ] as const) {
+      const [parsed] = parseFederalRegister({ results: [apiRow(record, '2026-11-12', [...agencies])] });
+      expect(parsed).toMatchObject({ url: record.url, title: record.title, body: record.body, organization: record.organization, publishedAt: record.publishedAt });
+      expect(parsed!.publishedAt).toMatch(/^\d{4}-\d{2}-\d{2}T00:00:00\.000Z$/);
+    }
+  });
+});
+
+describe('defensive: stored shapes the connector does not write (no recorded miss rests on them)', () => {
+  it('v5 still reads the day from the URL when publishedAt is missing or carries an offset', () => {
+    const offset = fr('2026-23900', '2026-11-12', FAA, `Amends SIAPs. Effective ${lastDay}.`, SIAP, undefined, undefined, '2026-11-12T00:00:00+01:00');
+    const missing = fr('2026-23901', '2026-11-12', FCC, 'Effective 2026-11-12.', '2026-23901', '2026-11-13T06:00:00.000Z', undefined, null);
+    expect(members(RULE_EFFECTIVE_SOON_V5.detect([offset, missing], now)).sort()).toEqual([offset.id, missing.id].sort());
   });
 });
 
