@@ -52,6 +52,7 @@ import type { McpTool } from './toolkit.ts';
 import { RESEARCH_TOOLS } from './researchTools.ts';
 import { BIN_TOOLS } from './binTools.ts';
 import { ENGINEERING_TOOLS } from './engineeringTools.ts';
+import { DEADLINE_TOOLS } from './deadlineTools.ts';
 import { OPERATOR_TOOLS } from './operatorTools.ts';
 import { OWNER_NOTICE_TOOLS } from './ownerNoticeTools.ts';
 import { fetchSourceTool } from './sourceTools.ts';
@@ -1025,6 +1026,7 @@ export const TOOLS: readonly McpTool[] = [
   // evidence, test policy, existing owners, next action, blockers. Same array,
   // same reason as the two above.
   ...ENGINEERING_TOOLS,
+  ...DEADLINE_TOOLS,
   // §106 — the operator directs every goal through these. Same array, same
   // reason: who may *succeed* with them is `operator:act`, decided at execution.
   ...OPERATOR_TOOLS,

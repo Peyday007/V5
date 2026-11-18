@@ -476,6 +476,37 @@ describe('a deadline is an externally enforced delivery commitment (owner rule, 
     expect(cli('deadline', 'set', '--at', at(600)).out).toContain('deadline is closed');
   });
 
+  it('§113: accepting a deadline is a forecast; parallel work is sized in workers, not summed; a delivery leaves measured history', () => {
+    env.FINISH_JOB_NOW = at(0);
+    assign(JOB);
+    expect(cli('deadline', 'set', '--at', at(240), '--deliverable', 'the importer fix released', '--accept', 'R1,R2').out).toMatch(/set to [^ ]+\. FEASIBLE: ~\d+ min on 1 worker/);
+    expect(cli('deadline', 'register', '--trigger', 'trig_D', '--at', at(240), '--warn', 'trig_W', '--warn-at', at(180)).code).toBe(0);
+    cli('deadline', 'estimate', 'R1', '--min', '200');
+    cli('deadline', 'estimate', 'R2', '--min', '200');
+    // One worker: 430 minutes of independent work does not fit 240, and the risk names the staffing that would.
+    let res = cli('check').out;
+    expect(res).toMatch(/AT RISK — critical path R1, R2, R3 needs ~430 min[^\n]*2 worker\(s\) would fit/);
+    expect(cli('deadline', 'workers', '--n', '0').code).toBe(1);
+    expect(cli('deadline', 'workers', '--n', '2').code).toBe(0);
+    // Two workers: R1 and R2 run side by side; the elapsed path is 230, not the 430 the work sums to.
+    res = cli('check').out;
+    expect(res).toMatch(/\[DONE\s*\] DEADLINE:[^\n]*critical path ~230 min/);
+    expect(ledger().deadline.staffing).toEqual([expect.objectContaining({ workers: 2 })]);
+
+    sh('echo "release notes: importer fix" > NOTES.md');
+    env.FINISH_JOB_NOW = at(30);
+    expect(cli('evidence', 'R2', '--file', 'NOTES.md', '--contains', 'importer fix').code).toBe(0);
+    cli('check');
+    env.FINISH_JOB_NOW = at(241);
+    const out = cli('deadline', 'deliver').out;
+    expect(out).toContain('call brain_deadline_record');
+    const history = fs.readFileSync(path.join(work, '.claude/finish-job/durations.jsonl'), 'utf8').trim().split('\n').map((x) => JSON.parse(x));
+    expect(history).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'R2', kind: 'REQUIREMENT', minutes: 30, source: 'finish-job' }),
+      expect.objectContaining({ type: 'review', kind: 'DEADLINE', met: false, unfinished: expect.arrayContaining(['R1', 'R3']) }),
+    ]));
+  });
+
   it('the scheduler fires independently: its prompt is not the owner, adds no requirement, and revives the ledger in a fresh container', () => {
     setUp();
     const fire = '[DEADLINE SCHEDULER] DEADLINE reached for: the importer fix released.\n1. one\n2. two';

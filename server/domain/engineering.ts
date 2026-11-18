@@ -923,6 +923,7 @@ export function factoryEnvelope(input: {
       'brain_evidence_lookup before proving anything again',
       'brain_test_policy before running tests',
       'brain_next_engineering_action before stopping or waiting',
+      'brain_deadline_plan when the work has a deadline: before accepting it and after every material event',
     ],
   };
 }

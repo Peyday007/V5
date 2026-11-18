@@ -16652,3 +16652,90 @@ second loop, scheduler or ledger.
 Tests: `tests/finishJob.test.ts` ("a deadline is an externally enforced delivery
 commitment"), run as the processes Claude Code spawns, with the clock set by
 `FINISH_JOB_NOW`.
+
+## 113. A deadline is estimated from measured history, staffed from the work, and every deadline teaches the next.
+
+**Owner's permanent operating rule, 2026-11-18 ("Permanent deadline intelligence
+upgrade").** When the owner gives an outcome and a deadline, Brain determines the
+work, organizes the resources, manages execution and delivers as close to the
+requested time as is realistically possible — without being told to add
+workers, change models, diagnose dependencies or accelerate a slipping
+assignment. Applies to Hermes, Factory, research, engineering and every other
+deadline-bound workflow.
+
+**What was wrong.** §112 enforced a deadline and could not estimate one. Every
+open item cost a session-typed guess (30 minutes by default); the items were
+*summed*, as if one person did them in a row; nothing compared an estimate with
+what happened. The GPU-readiness deadlines of 2026-11-17 were missed by exactly
+those gaps, measured afterwards:
+
+- a verification cycle (diagnose → fix → Postgres gate → deploy → model load →
+  paid GPU window → report) took 2–2.5 h; it was forecast as a handful of
+  30-minute items;
+- `deploy.yml`, 100 runs from 2026-11-15: median 30 min, p80 40, 15 % failed,
+  12 % cancelled; `postgres-suite.yml`: median 26, p80 38, 10 % failed and
+  **35 % cancelled** — releases replacing one another before their gate ran;
+- four blockers diagnosed one after another by two sessions, each paid GPU
+  window exposing the next hidden failure that a free report or a database query
+  could have found first.
+
+**The shape.** One pure module, `server/domain/deadlinePlan.ts`, written in
+erasable TypeScript so the server and the finish-the-job hook (plain `node`)
+import the same code. No second scheduler: the independent scheduler is still
+§112's, Factory's lane tuning is still `tuneLaneTarget`, and the calibrator for
+probabilistic forecasts is still `quant/forecast.ts`.
+
+- **Estimates (point 1).** `estimateKind` takes the p80 of a kind's successful
+  runs and multiplies it by the attempts its failure rate implies (capped at 3);
+  fewer than five samples widen it; a kind with none is flagged `UNMEASURED` and
+  costed ×1.5 — never presented as history. Samples come from
+  `deadline_task_outcomes`, `factory_sessions` (by role: PLAN, CODE, REVIEW,
+  INTEGRATE, VERIFY) and `factory_release_runs` (RELEASE), the last 30 days
+  (`repos/deadlines.ts`), plus any the caller measured (e.g. workflow durations).
+- **Schedule and staffing (points 1–2).** `schedule` list-schedules the
+  dependency graph on W workers, longest-remaining-path first, with exclusive
+  resources (one `DEPLOY_PIPELINE`, one `GPU`) so overlapping releases and
+  verifications cannot be planned. It reports work (sum) and elapsed (makespan)
+  separately, and the critical path. `staffing` gives the fewest workers that fit
+  the window and the point past which another worker shortens nothing.
+- **Acceptance and escalation (point 6).** `assessDeadline` answers FEASIBLE
+  (commit enough workers, more while more still shortens it), NEEDS_RESOURCES
+  (how many, within the authorized maximum) or INFEASIBLE — the limiting chain,
+  the earliest evidence-supported completion, and the alternatives (descope
+  nonessential work, the owner moves the deadline, shorten the chain itself). A
+  likelihood is stated only when every kind is measured.
+- **Failure discovery and release (points 3–4).** `lintPlan` turns 2026-11-17
+  into hazards: a paid test of a deployed version with no cheap check of *that*
+  version before it; deploys off the single pipeline; a measurement unordered
+  with a deploy (no stable release candidate); serialized diagnosis; unmeasured
+  kinds; and any cause two past reviews share.
+- **During execution (point 5).** `reforecast` recomputes from where the work
+  is: overruns and stalls (past 2× plan), blocked work, utilization, the new
+  forecast, and actions in the owner's order — reassign stalled work, add
+  workers, the strongest model on a slipping critical task, start what only a
+  busy worker holds, clear blockers, descope — and escalate only when even the
+  most useful staffing misses. The deadline report is still delivered at the
+  deadline (§112); the completion forecast is separate.
+- **Learning (point 7).** `brain_deadline_record` stores each finished task as
+  estimate vs actual (keyed by deadline and task, so a retry is one row) and one
+  review per deadline: forecast, completion, blockers, avoidable waiting,
+  allocation mistakes, delays, improvements, and short causes. A cause in two
+  reviews is a recurring pattern every later plan is warned about.
+
+**Where it runs.**
+- The engineering connector serves `brain_deadline_plan` (read-only) and
+  `brain_deadline_record` to every worker — Hermes, Factory, Russell, a Claude
+  Code session — and `consult` in every worker brief names the first.
+- The finish-the-job hook schedules a session's own deadline with the same code:
+  owner requirements in parallel on `deadline workers --n N` workers, then
+  commit → push → merge → CI → deploy. `deadline set` answers FEASIBLE / NEEDS
+  RESOURCES / INFEASIBLE AT ACCEPTANCE at once; an AT RISK detail names the
+  staffing that would fit; each item's open and done times are stamped, and a
+  delivery appends them to the checkout's `durations.jsonl` beside the ledger
+  (read as history by the next deadline there) and asks for
+  `brain_deadline_record` so the measurement outlives the container.
+
+Tests: `tests/deadlinePlan.test.ts` (the arithmetic; a replay of the
+2026-11-17 deadline on the measured GitHub and GPU-window durations; both tools
+against the database) and `tests/finishJob.test.ts` ("§113: accepting a
+deadline is a forecast…").

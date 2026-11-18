@@ -11659,3 +11659,39 @@ export interface InboxPurchaseOutcomeRow {
   receipt: string;
   created_at: string;
 }
+
+// ---------------------------------------------------------------------------
+// Deadline intelligence (§113). The vocabulary is server/domain/deadlinePlan.ts.
+// ---------------------------------------------------------------------------
+
+export interface DeadlineTaskOutcomeRow {
+  id: string;
+  deadline_ref: string;
+  task_id: string;
+  kind: string;
+  estimate_min: number | null;
+  actual_min: number;
+  failed: number;
+  cause: string | null;
+  source: string;
+  recorded_by: string;
+  recorded_at: string;
+}
+
+export interface DeadlineReviewRow {
+  id: string;
+  deadline_ref: string;
+  deadline_at: string;
+  forecast_at: string | null;
+  completed_at: string | null;
+  met: number;
+  verdict_at_accept: string | null;
+  blockers: string;
+  avoidable_wait_min: number;
+  allocation_mistakes: string;
+  delays: string;
+  improvements: string;
+  causes: string;
+  recorded_by: string;
+  recorded_at: string;
+}
