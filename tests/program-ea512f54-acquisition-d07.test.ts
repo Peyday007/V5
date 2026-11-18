@@ -303,6 +303,12 @@ describe('end to end on the database', () => {
     expect(cli.code).toBe(0);
     expect(cli.out).toContain('walled-registry.example');
     expect(cli.out).toContain('seek:');
+    // `bin_events.at` has millisecond resolution, and a route recorded in the same millisecond
+    // as the stop does not settle it (`openHandoffsFromRows`: answered <= opened stays open).
+    // The reads above take a few ms locally and can share the handoff's millisecond on a fast
+    // runner (Deploy 44219896863, shard 2), so the later read is made in a later millisecond.
+    const openedAt = Date.parse(open[0]!.openedAt);
+    while (Date.now() <= openedAt) await new Promise((r) => setTimeout(r, 1));
     await recordAcquisitionJudgment({ kind: 'ACQUIRE', purpose: 'p', host: 'walled-registry.example' }, { existingBulkSources: ['https://walled-registry.example/export.csv'] }, { caller, repeatedUse: async () => ({ repeatedUses: 0, repeatedUsesNeedingFallback: 0 }) });
     expect(await readOpenHandoffs()).toEqual([]);
     expect((await runAcquisitionCommand(['handoffs'])).out).toMatch(/No open access handoffs/);
