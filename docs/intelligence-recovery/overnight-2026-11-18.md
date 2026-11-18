@@ -164,3 +164,9 @@ Launch configuration, updated:
   - and the researched supply cost is composed into its arrangement's economics with claim lineage, which the 10:09Z probe already proved on 8579d2d5 and is unchanged since;
   - THEN launch.
   - Unproven, and to be stated in the report: research changing the goal-level plan's choice. That needs a researched slot or selling price, which is the run's own work.
+
+## 15:01Z: LAUNCH DISPATCHED
+- **62c38137 live** at 11:25:29Z; it carries H2 (#1098).
+- **Plan read at 14:57Z:** both candidate prices are ASSUMED. They no longer rest on misapplied price evidence. The researched supply cost is composed with lineage (shown at 10:09Z).
+- **Launch rule met.** Launch run **44330728704** dispatched at 15:01:09Z: H200, $66 cap, window 12.5 h, max $5.50/h.
+- **Late:** the session's worker restarted around 11:30Z, so the launch and report came at 15:01Z instead of right after 11:25Z.
