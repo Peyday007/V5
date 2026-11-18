@@ -611,3 +611,31 @@ export async function touchSharedFindingsForFragment(fragmentId: string): Promis
     [nowIso(), fragmentId],
   );
 }
+
+/**
+ * Which of these claims are eligible findings right now — promoted, active,
+ * inside any horizon, and passing `ELIGIBLE_SQL` on the live claim — for a
+ * reader that holds structured rows filed from claims (a construction fact)
+ * and must reuse only the validated ones (§31). Read in chunks; the same rule
+ * `eligibleFindings` applies, never a copy of it.
+ */
+export async function eligibleClaimIds(claimIds: readonly string[], now: string = nowIso()): Promise<Set<string>> {
+  const out = new Set<string>();
+  const unique = [...new Set(claimIds)];
+  for (let i = 0; i < unique.length; i += 400) {
+    const chunk = unique.slice(i, i + 400);
+    const rows = await getDb().all<{ claim_id: string }>(
+      `SELECT f.claim_id
+         FROM shared_findings f
+         JOIN research_claims c ON c.id = f.claim_id
+         JOIN research_fragments fr ON fr.id = c.fragment_id
+        WHERE f.claim_id IN (${chunk.map(() => '?').join(',')})
+          AND f.state = 'ACTIVE'
+          AND (f.valid_until IS NULL OR f.valid_until > ?)
+          AND ${ELIGIBLE_SQL}`,
+      [...chunk, now] as never[],
+    );
+    for (const row of rows) out.add(row.claim_id);
+  }
+  return out;
+}

@@ -48,7 +48,7 @@
  */
 import type { DetectedSignal } from '../feeds/detectors.ts';
 import { CODE_SIGNAL_SOURCE } from '../feeds/detectors.ts';
-import { PARTNER_OFFER_WORDING, extractItem, recordKindOf, type ExtractableItem, type ExtractedFact } from '../feeds/extract.ts';
+import { AUTHOR_HANDLE_SOURCES, PARTNER_OFFER_WORDING, extractItem, recordKindOf, type ExtractableItem, type ExtractedFact } from '../feeds/extract.ts';
 import { getDb } from '../../db/database.ts';
 
 /** The version every hypothesis is stamped with, so a rule change is traceable to what it produced. */
@@ -589,7 +589,8 @@ export function factsFromItem(item: ExtractableItem): GraphFact[] {
   if (!deliverable) return [];
   const subject = itemSubject(String(deliverable.value));
   const actorKey = extracted.find((f) => f.entityKey)?.entityKey ?? `item:${item.id}`;
-  const actorName = item.organization?.trim() || null;
+  // A forum handle is attribution, not a name a buyer or supplier is known by (`AUTHOR_HANDLE_SOURCES`).
+  const actorName = AUTHOR_HANDLE_SOURCES.has(item.source) ? null : item.organization?.trim() || null;
   const place = single(extracted, 'location');
   const quantity = single(extracted, 'quantity');
   const price = single(extracted, 'price');

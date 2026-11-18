@@ -171,3 +171,54 @@ export function statesNamedIn(text: string): UsState[] {
   }
   return US_STATES.filter((state) => found.has(state));
 }
+
+/*
+ * A place standing alone, said by itself: a country or territory (the
+ * runtime's own English region names, so no list here can fall behind one), a
+ * US state, or a region or work-mode label people write where a place goes.
+ */
+const REGION_LABELS = [
+  'europe', 'eu', 'usa', 'us', 'uk', 'america', 'americas', 'north america', 'south america', 'latin america', 'latam',
+  'central america', 'asia', 'apac', 'emea', 'africa', 'middle east', 'oceania', 'scandinavia', 'nordics', 'dach', 'benelux',
+  'remote', 'worldwide', 'anywhere', 'global', 'international', 'onsite', 'on site', 'hybrid',
+];
+let PLACE_NAMES: Set<string> | null = null;
+const placeKey = (text: string) => text.toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim();
+function placeNames(): Set<string> {
+  if (PLACE_NAMES) return PLACE_NAMES;
+  const out = new Set<string>([...US_STATES, ...REGION_LABELS]);
+  try {
+    const regions = new Intl.DisplayNames(['en'], { type: 'region' });
+    for (let a = 65; a <= 90; a += 1) {
+      for (let b = 65; b <= 90; b += 1) {
+        const code = String.fromCharCode(a, b);
+        try {
+          const name = regions.of(code);
+          if (name && name !== code) out.add(placeKey(name));
+        } catch {
+          // Not a region code this runtime knows.
+        }
+      }
+    }
+  } catch {
+    // A runtime without region names still knows the states and the labels.
+  }
+  return (PLACE_NAMES = out);
+}
+
+/**
+ * Whether a text is nothing but where — "Germany", "EU only", "Remote / USA" —
+ * and so names no work and no buyer. Every piece separated by a comma, slash,
+ * bar, parenthesis, "or" or "and" must be a place or a qualifier ("only",
+ * "based"), and at least one must be a place. A text that names a place
+ * beside anything else ("German manufacturers", "Texas dental practices") is
+ * not only a place. Pure.
+ */
+export function namesOnlyAPlace(text: string): boolean {
+  const names = placeNames();
+  const pieces = text
+    .split(/[,/|()[\]·;]+|\s+(?:or|and|\+)\s+/i)
+    .map((one) => placeKey(one).replace(/\b(?:only|based|preferred|time ?zones?|tz|ok|friendly|location)\b/g, ' ').replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+  return pieces.length > 0 && pieces.every((one) => names.has(one));
+}

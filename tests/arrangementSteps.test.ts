@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest';
 import type { ConstructedArrangement } from '../server/services/cash/construct.ts';
 import type { ModelledOpportunity } from '../server/services/cash/goalScenario.ts';
 import { arrangementSteps } from '../server/services/goals/arrangementSteps.ts';
-import { leadingArrangement, planSteps, type NextTest } from '../server/services/goals/plan.ts';
+import { leadingArrangement, planSteps, unestimatedLead, type NextTest } from '../server/services/goals/plan.ts';
 import type { GoalPortfolio } from '../server/services/goals/portfolio.ts';
 
 function arrangement(over: Partial<ConstructedArrangement>): ConstructedArrangement {
@@ -170,5 +170,20 @@ describe('a leading arrangement becomes executable steps', () => {
     const demand = { best: null, demand: [{ opportunityId: 'arr_bookkeeping-sub', refused: false, revenue: { p50: 5_000 } }, { opportunityId: 'arr_postcard-pool', refused: false, revenue: { p50: 8_000 } }] } as unknown as GoalPortfolio;
     expect(leadingArrangement([subcontract, postcard], { portfolio: demand })!.key).toBe('postcard-pool');
     expect(leadingArrangement([], { portfolio: null })).toBeNull();
+  });
+
+  it('a lead nothing estimated says so on its first step: it is not presented as an estimated plan (production, 2026-11-18: 0 of 208 estimated)', () => {
+    // Nothing estimated: construction's first rank leads, and the reading says that is all it is.
+    expect(leadingArrangement([postcard, subcontract], { portfolio: null })!.key).toBe('postcard-pool');
+    const none = unestimatedLead(postcard, 208, new Map());
+    expect(none).toMatch(/^Not an estimated plan: none of the 208 constructed arrangement\(s\) could be estimated/);
+    const steps = arrangementSteps(postcard, { ...ctx, unestimated: none });
+    expect(steps[0]!.detail.startsWith(none!)).toBe(true);
+    expect(steps.slice(1).every((s) => !s.detail.includes('Not an estimated plan'))).toBe(true);
+    // Another arrangement estimated, this one not.
+    expect(unestimatedLead(postcard, 208, new Map([['bookkeeping-sub', {}]]))).toMatch(/this arrangement holds no estimate/);
+    // An estimated lead reads as before.
+    expect(unestimatedLead(postcard, 208, new Map([['postcard-pool', {}]]))).toBeNull();
+    expect(arrangementSteps(postcard, { ...ctx, unestimated: null })[0]!.detail).toBe(arrangementSteps(postcard, ctx)[0]!.detail);
   });
 });
