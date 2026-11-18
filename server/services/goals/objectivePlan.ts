@@ -37,7 +37,7 @@ import { getDb } from '../../db/database.ts';
 import { getWorkstream, listLinks, recordWorkstreamEvent } from '../../repos/register.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { getObjectiveReadingByKey, insertObjectiveReading, type ObjectiveReadingRecord, type ObjectiveVerdict } from '../../repos/objectiveReadings.ts';
-import { interpretIntent, readCapital, readGeography } from '../industry/construction/intent.ts';
+import { interpretIntent, readGeography } from '../industry/construction/intent.ts';
 import { goalConstruction } from '../industry/construction/service.ts';
 import type { Workstream } from '../../domain/register.ts';
 
@@ -94,7 +94,9 @@ export function objectiveIndustry(text: string): string | null {
 export function interpretObjective(goal: Pick<Workstream, 'title' | 'intent' | 'outcome' | 'dueAt'>, now: Date = new Date()): ObjectiveInterpretation {
   const text = [goal.title, goal.intent, goal.outcome].filter((one): one is string => !!one && !!one.trim()).join('. ').replace(/\s+/g, ' ').trim();
   const constraints: ObjectiveConstraint[] = [];
-  const capital = readCapital(text);
+  const intent = interpretIntent(text);
+  // The objective reader's capital, never the bare first figure: "Collect $10,000 …" is $10,000 to make, not to spend.
+  const capital = intent.capital;
   if (capital) constraints.push({ id: 'budget', kind: 'BUDGET', statement: `spend at most $${Math.round(capital.high).toLocaleString('en-US')}`, value: capital.high, unit: 'USD' });
   const deadline = /\b(?:in|within|over|by|inside)\s+(\d+|a|an|one|two|three|four|five|six|seven|eight|nine|ten|twelve)\s+(day|week|month|year)s?\b/i.exec(text);
   if (deadline) {
@@ -111,7 +113,6 @@ export function interpretObjective(goal: Pick<Workstream, 'title' | 'intent' | '
   }
   const rate = /\b(below|under|above|over|at least|at most|less than|more than)\s+(\d+(?:\.\d+)?)\s?%/i.exec(text);
   if (rate) constraints.push({ id: 'rate', kind: 'RATE', statement: rate[0], value: Number(rate[2]), unit: '%' });
-  const intent = interpretIntent(text);
   // §92's HARD requirements beyond the budget, which is read above.
   for (const r of intent.requirements.filter((one) => one.from === 'OPERATOR' && one.kind === 'HARD' && one.id !== 'capital').slice(0, 4)) {
     constraints.push({ id: `rule_${r.id}`.slice(0, 40), kind: 'STATED_RULE', statement: r.statement, value: null, unit: null });

@@ -9,6 +9,7 @@ import { createWorkstream, getWorkstream, listWorkstreamEvents } from '../server
 import { createUser } from '../server/repos/identity.ts';
 import { interpretIntent, readObjective } from '../server/services/industry/construction/intent.ts';
 import { cancel, createGoal } from '../server/services/goals/decide.ts';
+import { interpretObjective } from '../server/services/goals/objectivePlan.ts';
 import { setTarget, setTargetLimits } from '../server/services/goals/target.ts';
 
 const NOW = new Date('2026-11-14T12:00:00.000Z');
@@ -54,6 +55,21 @@ describe('readObjective', () => {
       capitalCeiling: null,
       deadline: '2027-01-14T12:00:00.000Z',
     });
+  });
+
+  it('reads "Turn $1,000 into $10,000 within 30 days." as a $1,000 stake and a $10,000 amount', () => {
+    expect(readObjective('Turn $1,000 into $10,000 within 30 days.', NOW)).toMatchObject({ kind: 'CASH', amount: 10_000, capitalCeiling: 1_000, deadlineHours: 720, unread: [] });
+    expect(readObjective('Grow $10k into $100k within 90 days', NOW)).toMatchObject({ amount: 100_000, capitalCeiling: 10_000, deadlineHours: 90 * 24, unread: [] });
+  });
+
+  it('never reads a figure to be made as capital: the amount, its repeat in a goal\'s title and intent, or a monthly figure', () => {
+    const live = 'Collect $10,000 of settled cash within 30 days using little up-front capital.';
+    // A goal made from words carries them as both title and intent; the planner reads the two together.
+    expect(interpretIntent(`${live}. ${live}`).capital).toBeNull();
+    expect(interpretObjective({ title: live, intent: live, outcome: null, dueAt: null }, NOW).constraints.filter((c) => c.kind === 'BUDGET')).toEqual([]);
+    const mrr = 'Earn $5,000 a month in recurring revenue within 60 days with no more than 10 hours a week of owner time.';
+    expect(interpretIntent(mrr).capital).toBeNull();
+    expect(interpretObjective({ title: 'Turn $1,000 into $10,000 within 30 days.', intent: 'Turn $1,000 into $10,000 within 30 days.', outcome: null, dueAt: null }, NOW).constraints.find((c) => c.kind === 'BUDGET')?.value).toBe(1_000);
   });
 
   it('never guesses: what it cannot place is null and named', () => {

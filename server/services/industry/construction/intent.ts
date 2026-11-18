@@ -165,7 +165,7 @@ export interface ObjectiveReading {
   unread: string[];
 }
 
-type TokenRole = 'AMOUNT' | 'CAPITAL' | 'BEFORE_PROOF' | 'PER_WEEK' | 'RANGE' | 'DEADLINE';
+type TokenRole = 'AMOUNT' | 'CAPITAL' | 'BEFORE_PROOF' | 'PER_WEEK' | 'RANGE' | 'DEADLINE' | 'MADE';
 
 interface MoneyToken {
   start: number;
@@ -191,6 +191,8 @@ const CODE_SRC = String.raw`(?:usd|eur|gbp|dollars?|euros?|pounds?|bucks)\b`;
 /** One figure with whatever marks it as money, for embedding in a phrase. */
 const MP = String.raw`(?:US\$|\$|€|£|USD\s?|EUR\s?|GBP\s?)?\s?${NUMBER_SRC}(?:\s?${SUFFIX_SRC})?(?:\s?${CODE_SRC})?`;
 const LIMIT = String.raw`(?:at most|no more than|not more than|up to|under|less than|below|a maximum of|maximum of|max(?:imum)?|only|just|about|around|roughly)`;
+/** The verbs of "turn $1,000 into $10,000". */
+const GROW = String.raw`(?:turn|turning|grow|growing|convert|converting|multiply|multiplying|compound|compounding)`;
 const NUMBER_WORDS: Record<string, number> = {
   a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
   eleven: 11, twelve: 12, fourteen: 14, fifteen: 15, eighteen: 18, twenty: 20, thirty: 30, forty: 40,
@@ -240,6 +242,11 @@ function endOfDay(year: number, monthIndex: number, day: number): Date | null {
 interface ObjectiveDetail {
   reading: ObjectiveReading;
   amountSpan: { start: number; end: number } | null;
+  /**
+   * Every other figure the words say is to be made: a second statement of the amount (a goal's title and
+   * intent both carry it) and a figure per period ("$5,000 a month in recurring revenue"). Never capital.
+   */
+  madeSpans: { start: number; end: number }[];
 }
 
 function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
@@ -347,6 +354,8 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
     { role: 'CAPITAL', re: new RegExp(String.raw`\b${spend}\s+(?:${LIMIT}\s+)?${MP}`, 'gi') },
     { role: 'CAPITAL', re: new RegExp(String.raw`\b(?:I|we)\s+(?:only\s+)?(?:have|has|got|own|can (?:spend|invest|put in|afford))\s+(?:${LIMIT}\s+)?${MP}`, 'gi') },
     { role: 'CAPITAL', re: new RegExp(String.raw`\bwith\s+(?:${LIMIT}\s+)?(?:an?\s+)?${MP}(?!\s*(?:in|of)\s+(?:revenue|sales|profit|income))`, 'gi') },
+    // "Turn $1,000 into $10,000": the first figure is the stake the plan may use; the second is the amount (step 5).
+    { role: 'CAPITAL', re: new RegExp(String.raw`\b${GROW}\s+${MP}(?=\s+into\s)`, 'gi') },
   ];
   const figures: Record<'CAPITAL' | 'BEFORE_PROOF' | 'PER_WEEK', MoneyToken[]> = { CAPITAL: [], BEFORE_PROOF: [], PER_WEEK: [] };
   for (const { role, re } of moneyPhrases) {
@@ -375,15 +384,19 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
     const before = text.slice(Math.max(0, t.start - 60), t.start);
     const after = text.slice(t.end);
     const beforeDeadline = consumed.some((s) => s.start >= t.end && /^\s*$/.test(text.slice(t.end, s.start)) && /^(?:in|within|inside|over|during|by)\b/i.test(s.text));
-    if (!(verbBefore.test(before) || nounAfter.test(after) || beforeDeadline)) {
+    // The figure a stake is turned into: the stake's own phrase (step 4) ends right before "into".
+    const turnedInto = constraintSpans.some((s) => new RegExp(String.raw`^${GROW}\s`, 'i').test(s.text) && /^\s+into\s+$/i.test(text.slice(s.end, t.start)));
+    if (!(verbBefore.test(before) || nounAfter.test(after) || beforeDeadline || turnedInto)) {
       unread.push(`"${t.raw}": a figure the reader could not place`);
       continue;
     }
     if (/^\s*(?:(?:in|of)\s+\w+\s+)?(?:per|a|each|every)\s+(?:day|week|month|year)\b/i.test(after)) {
+      t.role = 'MADE';
       unread.push(`"${t.raw}${after.match(/^\s*(?:(?:in|of)\s+\w+\s+)?(?:per|a|each|every)\s+(?:day|week|month|year)/i)![0]}": a rate, not a total`);
       continue;
     }
     if (amountToken) {
+      t.role = 'MADE';
       unread.push(`"${t.raw}": a second amount`);
       continue;
     }
@@ -421,6 +434,7 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
       unread,
     },
     amountSpan: amountToken ? { start: amountToken.start, end: amountToken.end } : null,
+    madeSpans: tokens.filter((t) => t.role === 'MADE').map((t) => ({ start: t.start, end: t.end })),
   };
 }
 
@@ -442,8 +456,11 @@ export function readObjective(text: string, now: Date = new Date()): ObjectiveRe
 function capitalFromWords(text: string, objective: ObjectiveDetail): { low: number; high: number } | null {
   const ceiling = objective.reading.capitalCeiling;
   if (ceiling !== null) return { low: ceiling, high: ceiling };
-  const span = objective.amountSpan;
-  const rest = span ? `${text.slice(0, span.start)}${' '.repeat(span.end - span.start)}${text.slice(span.end)}` : text;
+  // The amount, a repeat of it, and any figure to bring in per period are money to make, never money to spend.
+  let rest = text;
+  for (const span of [objective.amountSpan, ...objective.madeSpans]) {
+    if (span) rest = `${rest.slice(0, span.start)}${' '.repeat(span.end - span.start)}${rest.slice(span.end)}`;
+  }
   return readCapital(rest);
 }
 
