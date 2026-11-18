@@ -287,7 +287,39 @@ export function federalRegisterAgencies(value: unknown): string[] {
   return names;
 }
 
-/** The Federal Register's documents API: newly published final rules. */
+const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+
+/**
+ * The earliest calendar date the Federal Register's own `dates` field states,
+ * written "Month D, YYYY" ("... will be enforced from 5 p.m. through 8 p.m. on
+ * December 13, 2026."), as YYYY-MM-DD. Only that pattern is read, only from
+ * that official field, and an impossible day is no date. Null when it states
+ * none. Pure.
+ */
+export function federalRegisterStatedDate(dates: unknown): string | null {
+  const source = text(dates);
+  if (!source) return null;
+  const found: string[] = [];
+  for (const m of source.matchAll(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),\s+(\d{4})\b/g)) {
+    const month = MONTHS.indexOf(m[1]!.toLowerCase()) + 1;
+    const day = Number(m[2]);
+    const iso = `${m[3]}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const at = new Date(`${iso}T00:00:00.000Z`);
+    if (Number.isNaN(at.getTime()) || at.getUTCDate() !== day || at.getUTCMonth() + 1 !== month) continue;
+    found.push(iso);
+  }
+  return found.sort()[0] ?? null;
+}
+
+/**
+ * The Federal Register's documents API: newly published final rules.
+ *
+ * A rule whose effective_on is null but whose official `dates` field states a
+ * date (a Coast Guard notification of enforcement, 2026-23047 or 2026-23230)
+ * carries the earliest such date as "Stated effective YYYY-MM-DD." — never as
+ * an "Effective" sentence, which stays effective_on's alone. A correction and a
+ * row with effective_on are stored exactly as before.
+ */
 export function parseFederalRegister(body: unknown): FeedItem[] {
   const results = body && typeof body === 'object' ? (body as Record<string, unknown>)['results'] : null;
   const out: FeedItem[] = [];
@@ -300,12 +332,13 @@ export function parseFederalRegister(body: unknown): FeedItem[] {
     const effective = text(row['effective_on']);
     const abstract = plain(row['abstract']);
     const corrects = correctedDocumentNumber(row['correction_of']);
+    const stated = !effective && !corrects ? federalRegisterStatedDate(row['dates']) : null;
     out.push({
       externalId: id,
       url,
       title,
       body:
-        [abstract, effective ? `Effective ${effective}.` : null, corrects ? `Corrects ${corrects}.` : null]
+        [abstract, effective ? `Effective ${effective}.` : null, corrects ? `Corrects ${corrects}.` : null, stated ? `Stated effective ${stated}.` : null]
           .filter(Boolean)
           .join(' ') || null,
       organization: agencies.join(', ') || null,
@@ -710,7 +743,7 @@ const FEDERAL_REGISTER_RULES_URL =
   '&conditions%5Btype%5D%5B%5D=RULE' +
   '&fields%5B%5D=document_number&fields%5B%5D=title&fields%5B%5D=abstract&fields%5B%5D=html_url' +
   '&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies' +
-  '&fields%5B%5D=correction_of';
+  '&fields%5B%5D=correction_of&fields%5B%5D=dates&fields%5B%5D=action';
 
 export const FEED_SOURCES: readonly FeedSource[] = [
   {
