@@ -32,6 +32,7 @@ import {
   federalRegisterDocumentOf,
   type DetectorRecord,
 } from '../server/services/feeds/detectors.ts';
+import { parseFederalRegister } from '../server/services/feeds/sources.ts';
 
 const DAY = 86_400_000;
 const FR = 'https://www.federalregister.gov/documents';
@@ -171,6 +172,74 @@ describe('RULE_EFFECTIVE_SOON@4 keeps them', () => {
     const fcc = byKey.get('agency:federal communications commission')!;
     expect(fcc.hypothesis).not.toMatch(/must comply by/);
     expect(fcc.label).toContain('took effect by 2026-11-12');
+  });
+});
+
+/**
+ * The FAA and FCC items the objective names, built as the Federal Register API returns them and
+ * read through the connector's own parser: effective_on equal to publication_date (lead 0 days),
+ * and for the FAA an agencies list whose first entry is the parent department.
+ */
+describe('RULE_EFFECTIVE_SOON@4 on lead-0 rules and a parent/child agency list (FAA 2026-23073, 2026-23072; FCC 2026-23041)', () => {
+  const transportation = { id: 492, name: 'Transportation Department', parent_id: null };
+  const faa = { id: 159, name: 'Federal Aviation Administration', parent_id: 492 };
+  const fcc = { id: 161, name: 'Federal Communications Commission', parent_id: null };
+  const api = (document_number: string, title: string, agencies: object[]) => ({
+    document_number,
+    title,
+    type: 'Rule',
+    html_url: `${FR}/2026/11/12/${document_number}/${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+    publication_date: '2026-11-12',
+    effective_on: '2026-11-12',
+    agencies,
+    abstract: null,
+    correction_of: null,
+  });
+  const parsed = parseFederalRegister({
+    results: [
+      api('2026-23073', 'Standard Instrument Approach Procedures, and Takeoff Minimums and Obstacle Departure Procedures; Miscellaneous Amendments', [transportation, faa]),
+      api('2026-23072', 'Standard Instrument Approach Procedures, and Takeoff Minimums and Obstacle Departure Procedures; Miscellaneous Amendments', [transportation, faa]),
+      api('2026-23041', 'Television Broadcasting Services St. George, Utah', [fcc]),
+    ],
+  });
+  const stored: DetectorRecord[] = parsed.map((item) => ({
+    id: `fi_${item.externalId}`,
+    source: 'federal-register-rules',
+    url: item.url,
+    title: item.title,
+    organization: item.organization,
+    publishedAt: item.publishedAt,
+    fetchedAt: '2026-11-12T06:00:00.000Z',
+    body: item.body,
+  }));
+  const run = new Date('2026-11-13T12:00:00.000Z');
+  const signals = RULE_EFFECTIVE_SOON_V4.detect(stored, run);
+  const byKey = new Map(signals.map((one) => [one.groupKey, one]));
+
+  it('the connector stores the parent department first and the effective date in the body', () => {
+    expect(parsed.map((one) => one.organization)).toEqual([
+      'Transportation Department, Federal Aviation Administration',
+      'Transportation Department, Federal Aviation Administration',
+      'Federal Communications Commission',
+    ]);
+    expect(parsed.every((one) => one.body === 'Effective 2026-11-12.')).toBe(true);
+  });
+
+  it('keeps all three rules effective on their own publication day (lead 0 is not excluded)', () => {
+    expect(members(signals).sort()).toEqual(['fi_2026-23041', 'fi_2026-23072', 'fi_2026-23073']);
+  });
+
+  it('groups the FAA rules under the FAA, the last-listed issuing agency, never the parent department', () => {
+    const faaSignal = byKey.get('agency:federal aviation administration');
+    expect(faaSignal?.memberIds.sort()).toEqual(['fi_2026-23072', 'fi_2026-23073']);
+    expect(faaSignal?.entityName).toBe('Federal Aviation Administration');
+    expect(byKey.has('agency:transportation department')).toBe(false);
+    expect(signals.some((one) => one.entityName === 'Transportation Department')).toBe(false);
+  });
+
+  it('groups the FCC rule under the FCC alone', () => {
+    expect(byKey.get('agency:federal communications commission')?.memberIds).toEqual(['fi_2026-23041']);
+    expect(signals).toHaveLength(2);
   });
 });
 
