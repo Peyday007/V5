@@ -635,13 +635,138 @@ export const RULE_EFFECTIVE_SOON_V3: Detector = {
 };
 
 /**
+ * The Federal Register document number a stored record is, read from the
+ * html_url the connector stores (".../documents/2026/11/12/C1-2026-21030/slug").
+ * Exact, so "2026-21030" never matches the correction "C1-2026-21030". Pure.
+ */
+export function federalRegisterDocumentOf(url: string): string | null {
+  const m = /\/documents\/\d{4}\/\d{2}\/\d{2}\/([A-Za-z0-9-]+)(?:[/?#]|$)/.exec(url);
+  return m ? m[1]! : null;
+}
+
+/**
+ * RULE_EFFECTIVE_SOON, version 4 (SHADOW). Two causes of v3's recorded misses
+ * (DETECTOR_MISSES:RULE_EFFECTIVE_SOON@3), each fixed without lowering a bar:
+ *
+ *  1. One document, many stored copies. The connector stores each edit of a
+ *     record as a new feed item ("<id>#v<n>", a later fetched_at), and a
+ *     correction is completed — "Corrected rule effective YYYY-MM-DD." — only
+ *     on the copy the completion wrote. v3 read each copy's date from that
+ *     copy alone, so the copy stored as bare "Corrects 2026-21030."
+ *     (C1-2026-21030) stayed out while its completed copy was kept, and looked
+ *     the corrected rule up by URL substring. v4 resolves a document's dates
+ *     from every stored copy of it, matched by document number
+ *     (`federalRegisterDocumentOf`): its own "Effective" sentence, else the
+ *     corrected rule's date recorded on any copy of the correction, else the
+ *     "Effective" sentence of any stored copy of the corrected document.
+ *  2. A verdict does not depend on when Brain fetched the record. v3's lower
+ *     bound was the later of publication and the copy's fetch day less one day,
+ *     so a rule effective on (or soon after) its publication day whose copy was
+ *     first stored by a later cursor pull, a backfill or an edit (a new version
+ *     carries a new fetched_at) was dropped, while the free screen kept it.
+ *     The fetch day is Brain's clock, not a property of the rule. v4 judges the
+ *     rule by its own dates only: effective on or after its publication day and
+ *     no later than RULE_EFFECTIVE_SOON_V2_LEAD_DAYS (eight weeks) after it —
+ *     both bounds unchanged. The 30-day membership window from publication is
+ *     unchanged, so nothing older than v3 could read is kept, and the wording
+ *     (`ruleEffectiveSoonWording`) still says a passed date took effect rather
+ *     than "must comply by".
+ *
+ * Grouping stays by issuing agency (the last listed). Free-text dates are still
+ * not parsed: Coast Guard 2026-23047, enforced the day before it was published
+ * and dated only in prose, stays out — a correct exclusion, not a miss. A rule
+ * effective before its publication (a temporary rule enforced on actual notice)
+ * also stays out.
+ */
+export const RULE_EFFECTIVE_SOON_V4: Detector = {
+  id: 'RULE_EFFECTIVE_SOON',
+  version: 4,
+  label: RULE_EFFECTIVE_SOON.label,
+  mode: 'SHADOW',
+  sources: RULE_EFFECTIVE_SOON.sources,
+  lookbackMs: RULE_EFFECTIVE_SOON_V3.lookbackMs,
+  entityKeyOf(organization) {
+    return employerKey(issuingAgencyOf(organization));
+  },
+  memberWindowMs: RULE_EFFECTIVE_SOON_PUBLISHED_DAYS * DAY,
+  detect(records, now) {
+    const ours = records.filter((record) => this.sources.includes(record.source));
+    // Every stored copy of a document, by document number: the earliest stated date wins only if
+    // copies disagree, which the Federal Register's own fields do not; sorting keeps it deterministic.
+    const own = new Map<string, string>();
+    const correctedRule = new Map<string, string>();
+    for (const record of ours) {
+      const documentNumber = federalRegisterDocumentOf(record.url);
+      if (!documentNumber) continue;
+      const stated = effectiveDateOf(record.body);
+      if (stated && (!own.has(documentNumber) || stated < own.get(documentNumber)!)) own.set(documentNumber, stated);
+      const marker = correctedEffectiveDateOf(record.body);
+      if (marker && (!correctedRule.has(documentNumber) || marker < correctedRule.get(documentNumber)!)) correctedRule.set(documentNumber, marker);
+    }
+    const effectiveOf = (record: DetectorRecord): string | null => {
+      const documentNumber = federalRegisterDocumentOf(record.url);
+      const stated = effectiveDateOf(record.body) ?? (documentNumber ? own.get(documentNumber) ?? null : null);
+      if (stated) return stated;
+      const corrects = correctedDocumentOf(record.body);
+      if (!corrects) return null;
+      return correctedEffectiveDateOf(record.body) ?? (documentNumber ? correctedRule.get(documentNumber) ?? null : null) ?? own.get(corrects) ?? null;
+    };
+    const groups = new Map<string, { name: string; members: { record: DetectorRecord; effective: string }[] }>();
+    for (const record of ours) {
+      const name = issuingAgencyOf(record.organization);
+      const agency = this.entityKeyOf!(record.organization);
+      if (!agency || !name) continue;
+      if (!withinMemberWindow(this, record.publishedAt, record.fetchedAt, now)) continue;
+      const published = Date.parse(record.publishedAt ?? record.fetchedAt);
+      if (!Number.isFinite(published)) continue;
+      const effective = effectiveOf(record);
+      if (!effective) continue;
+      const at = Date.parse(`${effective}T00:00:00.000Z`);
+      const publishedDay = utcDay(published);
+      // The rule's own dates only: not before its publication day, at most eight weeks after it.
+      if (!Number.isFinite(at) || at < publishedDay || at > publishedDay + RULE_EFFECTIVE_SOON_V2_LEAD_DAYS * DAY) continue;
+      const group = groups.get(agency) ?? { name, members: [] };
+      group.members.push({ record, effective });
+      groups.set(agency, group);
+    }
+    const out: DetectedSignal[] = [];
+    for (const [agency, group] of [...groups].sort((a, b) => a[0].localeCompare(b[0]))) {
+      const dates = group.members.map((one) => one.effective).sort();
+      const wording = ruleEffectiveSoonWording(dates, now);
+      out.push({
+        groupKey: `agency:${agency}`,
+        label: wording.label,
+        entityKey: agency,
+        entityName: group.name,
+        category: 'REGULATION',
+        windowFrom: `${dates[0]}T00:00:00.000Z`,
+        windowTo: `${dates[dates.length - 1]}T00:00:00.000Z`,
+        memberIds: group.members.map((one) => one.record.id),
+        memberTitles: group.members.map((one) => one.record.title),
+        sourceUrls: [...new Set(group.members.map((one) => one.record.url))],
+        qualifiers: [
+          'a rule taking effect names who is regulated, not who will pay for help complying',
+          'the effective date is the one the Federal Register states; a delay or stay is not read',
+          'a correction carries the effective date of the rule it corrects, as the Federal Register API states it for that rule',
+          'every stored copy of a document is read for its stated dates, matched by document number',
+          'judged by the rule’s own publication and effective dates; the wording says which effective dates had passed on the day it ran',
+        ],
+        hypothesis: wording.hypothesis,
+        deliverable: 'DOCUMENT',
+      });
+    }
+    return out;
+  },
+};
+
+/**
  * Every installed rule. Adding one is a new entry here and its tests — nothing else.
- * RULE_EFFECTIVE_SOON v1 and v2 stay exported so their recorded rows and readings keep their keys (@1, @2).
+ * RULE_EFFECTIVE_SOON v1, v2 and v3 stay exported so their recorded rows and readings keep their keys (@1, @2, @3).
  * A model may propose a rule only as a Factory objective (reviewed code, starting
  * in SHADOW); no model output installs, edits or promotes a rule at run time.
  * `proposeRuleRepair` is how a rule's repeated misses become that objective.
  */
-export const DETECTORS: readonly Detector[] = [CONCENTRATED_HIRING, REPEATED_DEMAND, RULE_EFFECTIVE_SOON_V3];
+export const DETECTORS: readonly Detector[] = [CONCENTRATED_HIRING, REPEATED_DEMAND, RULE_EFFECTIVE_SOON_V4];
 
 // ---------------------------------------------------------------------------
 // SHADOW before ACTIVE: readings, promotion and rollback, from rows
