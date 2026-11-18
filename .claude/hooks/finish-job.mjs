@@ -44,6 +44,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { humanMessages } from './restore-objective.mjs';
+// The one deadline arithmetic (§113), shared with the server: plain node strips its types.
+import { estimateKind, schedule, staffing } from '../../server/domain/deadlinePlan.ts';
 
 export const RALPH_FILE = '.claude/ralph-loop.local.md';
 export const LEDGER_DIR = '.claude/finish-job';
@@ -398,6 +400,7 @@ export function check(l, { fetch = true } = {}) {
     const hint = a.pending ? ` — watch it (Monitor) and \`npm run finish -- wait ${a.id} --on "${a.pending}" --wake ${a.pending}\`` : '';
     judge(a.id, a.text, [{ ok: a.ok, detail: `${a.detail}${hint}` }], l.autoMarks[a.id]);
   }
+  stampItems(l, rows);
   const dl = deadlineState(l, clock(), done);
   if (dl && dl.phase !== 'DELIVERED') {
     trackRisk(l, dl);
@@ -499,6 +502,44 @@ export function deadlineIn(text) {
 
 const AUTO_IDS = ['GIT-COMMIT', 'GIT-PUSH', 'MERGE', 'CI', 'DEPLOY'];
 
+/** Kinds the ledger's own ids are measured as; an owner requirement is REQUIREMENT. */
+const ID_KIND = { 'GIT-COMMIT': 'GIT', 'GIT-PUSH': 'GIT', MERGE: 'MERGE', CI: 'CI', DEPLOY: 'DEPLOY' };
+/** Where every finished deadline's per-item minutes are appended, and read back as history (§113). */
+export const DURATIONS_FILE = path.join('.claude', 'finish-job', 'durations.jsonl');
+
+function durationHistory() {
+  try {
+    return fs.readFileSync(path.join(root(), DURATIONS_FILE), 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The open items as a dependency graph — owner requirements in parallel, then
+ * commit → push → merge → CI → deploy, which wait on all of them — scheduled
+ * on the deadline's workers. An item's minutes are its explicit estimate, else
+ * its kind's measured history, else DEFAULT_ESTIMATE_MIN.
+ */
+export function deadlinePath(d, open, remaining) {
+  const history = durationHistory();
+  const owners = open.filter((id) => !AUTO_IDS.includes(id));
+  const autos = AUTO_IDS.filter((id) => open.includes(id));
+  const tasks = [
+    ...owners.map((id) => ({ id, kind: 'REQUIREMENT', deps: [] })),
+    ...autos.map((id, i) => ({ id, kind: ID_KIND[id], deps: i === 0 ? owners : [autos[i - 1]] })),
+  ];
+  const minutes = (t) => {
+    if (d.estimates?.[t.id]) return d.estimates[t.id];
+    const e = estimateKind(t.kind, history, DEFAULT_ESTIMATE_MIN);
+    return e.measured ? e.plannedMin : DEFAULT_ESTIMATE_MIN;
+  };
+  const workers = Math.max(1, Number(d.workers) || 1);
+  const plan = schedule(tasks, workers, minutes);
+  const staff = staffing(tasks, remaining, Math.max(workers, 10), minutes);
+  return { needed: Math.ceil(plan.elapsedMin), work: Math.ceil(plan.workMin), workers, fitWorkers: staff.minimumWorkers, usefulWorkers: staff.usefulWorkers, chain: plan.criticalPath };
+}
+
 /**
  * Where the deadline stands now. `done` is the set of verified ids (the last
  * check's, unless a fresher one is given). `gate` names what must happen before
@@ -520,9 +561,13 @@ export function deadlineState(l, now = clock(), done = null) {
   const verified = done ?? new Set((l.lastCheck?.rows ?? []).filter((r) => r.status === 'done').map((r) => r.id));
   const ids = [...new Set([...l.requirements.map((r) => r.id), ...(l.lastCheck?.rows ?? []).map((r) => r.id).filter((id) => AUTO_IDS.includes(id))])];
   const path_ = ids.filter((id) => !verified.has(id) && !d.deferred?.[id]);
-  const needed = path_.reduce((s, id) => s + (d.estimates?.[id] ?? DEFAULT_ESTIMATE_MIN), 0);
+  const { needed, work, workers, fitWorkers, usefulWorkers, chain } = deadlinePath(d, path_, remaining);
   const failingAccept = (d.accept ?? []).filter((id) => !verified.has(id));
-  const risk = needed > remaining ? `critical path ${path_.join(', ')} needs ~${needed} min; ${remaining} min remain` : null;
+  const staffNote = workers > 1 || work !== needed ? ` (work ~${work} min over ${workers} worker(s); chain ${chain.join(' → ')})` : '';
+  const helpNote = fitWorkers && fitWorkers > workers
+    ? ` — ${fitWorkers} worker(s) would fit: \`npm run finish -- deadline workers --n ${fitWorkers}\` and staff them`
+    : usefulWorkers > workers ? ` — more workers would not fit it; ${usefulWorkers} is the most that still shortens it` : '';
+  const risk = needed > remaining ? `critical path ${path_.join(', ')} needs ~${needed} min${staffNote}; ${remaining} min remain${helpNote}` : null;
   const escalated = !!risk && !!d.riskSince && (d.escalations ?? []).some((e) => Date.parse(e.at) >= Date.parse(d.riskSince));
   return {
     phase: risk ? 'AT_RISK' : 'ON_TRACK', remaining, needed, path: path_, failingAccept, risk, escalated,
@@ -644,6 +689,45 @@ export function deliveryReport(l, res, now = clock()) {
   ].join('\n');
 }
 
+/** Each item's first-open and first-done times, so a delivery can say what each actually took (§113). */
+function stampItems(l, rows, now = clock()) {
+  const d = l.deadline;
+  if (!d?.at || d.delivered) return;
+  const t = new Date(now).toISOString();
+  d.openedAt ??= {};
+  d.doneAt ??= {};
+  for (const r of rows) {
+    if (r.id === 'DEADLINE') continue;
+    d.openedAt[r.id] ??= t;
+    if (r.status === 'done') d.doneAt[r.id] ??= t;
+  }
+}
+
+/** Appends what each finished item took, and how the deadline went, to the history the next estimate reads. */
+function learnFromDeadline(l, res, now = clock()) {
+  const d = l.deadline;
+  const lines = [];
+  for (const [id, done] of Object.entries(d.doneAt ?? {})) {
+    const opened = d.openedAt?.[id];
+    if (!opened) continue;
+    const minutes = Math.round((Date.parse(done) - Date.parse(opened)) / 6_000) / 10;
+    lines.push({ kind: AUTO_IDS.includes(id) ? ID_KIND[id] : 'REQUIREMENT', minutes, failed: false, source: 'finish-job', id, deadline: d.at, session: l.sessionId });
+  }
+  const unfinished = res.rows.filter((r) => r.id !== 'DEADLINE' && r.status !== 'done').map((r) => r.id);
+  lines.push({
+    type: 'review', kind: 'DEADLINE', deadline: d.at, session: l.sessionId, acceptance: d.acceptance ?? null,
+    deliveredAt: new Date(now).toISOString(), met: now <= Date.parse(d.at), unfinished,
+    escalations: (d.escalations ?? []).length, staffing: d.staffing ?? [],
+  });
+  // A review line is not a duration sample: estimateKind only reads rows whose kind it was asked for.
+  try {
+    fs.mkdirSync(path.dirname(path.join(root(), DURATIONS_FILE)), { recursive: true });
+    fs.appendFileSync(path.join(root(), DURATIONS_FILE), lines.map((x) => JSON.stringify(x)).join('\n') + '\n');
+  } catch {
+    /* learning is best-effort; the delivery itself must not fail on it */
+  }
+}
+
 function deadlineCli(l, sub, id, flags, now = clock()) {
   const fail = (m) => ({ code: 1, out: `FINISH-JOB DEADLINE: ${m}` });
   const d = l.deadline;
@@ -688,8 +772,18 @@ function deadlineCli(l, sub, id, flags, now = clock()) {
     const moved = next.at && Date.parse(next.at) !== at;
     Object.assign(next, { at: new Date(at).toISOString(), setAt: new Date(now).toISOString(), deliverable, accept, estimates: next.estimates ?? {}, deferred: next.deferred ?? {}, escalations: next.escalations ?? [] });
     if (moved || !next.scheduler) next.scheduler = null;
+    // Accepting a deadline is a forecast (§113): what the open work needs, on how many workers, against the window.
+    const window = Math.floor((at - now) / 60_000);
+    const open = [...new Set([...l.requirements.map((r) => r.id), ...AUTO_IDS])].filter((x) => !(l.lastCheck?.rows ?? []).some((r) => r.id === x && r.status === 'done') && !next.deferred?.[x]);
+    const f = deadlinePath(next, open, window);
+    next.acceptance = { at: new Date(now).toISOString(), windowMin: window, neededMin: f.needed, workMin: f.work, workers: f.workers, fitWorkers: f.fitWorkers };
     saveLedger(l);
-    return { code: 0, out: `FINISH-JOB DEADLINE: set to ${next.at}.\n${deadlineCli(l, 'status', null, {}, now).out}` };
+    const verdict = f.needed <= window
+      ? `FEASIBLE: ~${f.needed} min on ${f.workers} worker(s) (work ~${f.work} min) in a ${window}-min window.`
+      : f.fitWorkers
+        ? `NEEDS RESOURCES: ~${f.needed} min on ${f.workers} worker(s) misses the ${window}-min window; ${f.fitWorkers} worker(s) fit — \`npm run finish -- deadline workers --n ${f.fitWorkers}\` and staff them.`
+        : `INFEASIBLE AT ACCEPTANCE: ~${f.needed} min even on ${f.usefulWorkers} worker(s) (chain ${f.chain.join(' → ')}); the window is ${window} min. Tell the owner now — the limiting chain, the earliest completion, the alternatives — with \`npm run finish -- deadline escalate\`.`;
+    return { code: 0, out: `FINISH-JOB DEADLINE: set to ${next.at}. ${verdict}\n${deadlineCli(l, 'status', null, {}, now).out}` };
   }
   if (!d?.at) return fail('no deadline is set (`npm run finish -- deadline set …`).');
   if (sub === 'register') {
@@ -704,6 +798,13 @@ function deadlineCli(l, sub, id, flags, now = clock()) {
     }
     d.scheduler = { trigger: flags.trigger, at: d.at, warn: p.warn ? flags.warn : null, warnAt: p.warn ? new Date(Date.parse(String(flags['warn-at']))).toISOString() : null, registeredAt: new Date(now).toISOString() };
     return ok(`registered — ${d.scheduler.trigger} fires at ${d.at}${d.scheduler.warn ? `, ${d.scheduler.warn} warns at ${d.scheduler.warnAt}` : ''}. Neither may be moved or removed by the session.`);
+  }
+  if (sub === 'workers') {
+    const n = Number(flags.n);
+    if (!(Number.isInteger(n) && n >= 1 && n <= 50)) return fail('workers needs --n <1-50>: how many workers (sessions, agents, Factory lanes) are on this deadline now.');
+    d.workers = n;
+    (d.staffing ??= []).push({ at: new Date(now).toISOString(), workers: n });
+    return ok(`${n} worker(s). ${deadlineState(l, now).detail}`);
   }
   if (sub === 'estimate') {
     const min = Number(flags.min);
@@ -732,12 +833,13 @@ function deadlineCli(l, sub, id, flags, now = clock()) {
     const file = path.join(LEDGER_DIR, `${l.sessionId}.delivery.md`);
     fs.writeFileSync(path.join(root(), file), body);
     d.delivered = { at: new Date(now).toISOString(), met: now <= Date.parse(d.at), file };
+    learnFromDeadline(l, res, now);
     l.status = res.word === 'DONE' ? 'DONE' : 'DELIVERED';
     disarm(l);
     saveLedger(l);
-    return { code: 0, out: `FINISH-JOB DELIVERED — written to ${file}. Send this to the owner as your final message now:\n\n${body}` };
+    return { code: 0, out: `FINISH-JOB DELIVERED — written to ${file}. Send this to the owner as your final message now:\n\n${body}\n\nThen record it in Brain so the next estimate is measured (§113): call brain_deadline_record with deadline_ref "${l.sessionId}:${d.at}", each finished task's kind, started_at and finished_at, and a review (forecast ${d.acceptance ? `~${d.acceptance.neededMin} min at acceptance` : 'none'}, met ${d.delivered.met}, causes).` };
   }
-  return fail(`unknown deadline command ${sub}. Use status, set, register, estimate, defer, escalate or deliver.`);
+  return fail(`unknown deadline command ${sub}. Use status, set, register, workers, estimate, defer, escalate or deliver.`);
 }
 
 // ---------------------------------------------------------------- recovery

@@ -301,7 +301,7 @@ There must be no workflow where the user has to remember "now go update the data
     time to revenue and whether it can be done, and a goal's constraint binds
     that goal, only while it runs.
 
-## 8–112. The architecture record
+## 8–113. The architecture record
 
 Sections 8 onward — why each subsystem is shaped as it is, and the production
 defects that shaped it — are in **`docs/ARCHITECTURE-RECORD.md`**, verbatim and
@@ -415,6 +415,7 @@ resolves. Read the section for the area you are changing before you change it
 - §110. Sending inboxes are bought with money the owner put in, priced by the seller first, and never bought twice.
 - §111. Brain improves itself by comparing alternatives, and an evaluator it cannot see decides.
 - §112. A deadline is a delivery commitment: an independent scheduler enforces it, and the session cannot move it.
+- §113. A deadline is estimated from measured history, staffed from the work, and every deadline teaches the next.
 
 ## Conventions
 
