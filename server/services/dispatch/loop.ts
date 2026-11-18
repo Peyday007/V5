@@ -1171,10 +1171,22 @@ export async function writeDispatchIntents(
    * fires through the ordinary path once it may.
    * A bin out of attempts gets no intent — it can never be fired, which is a
    * real fault rather than a wait — and is named once in an event instead.
+   *
+   * And it is turned into the decision it is, here rather than on some later
+   * tick. Left READY at max/max, the Factory line still counted it as
+   * "executable work and a free surface, and nothing is running or arriving"
+   * until `reconcileBins` reached it on the Russell tick — the same false fault
+   * the backoff above produced, from the one hold this pass only named. So the
+   * projects that hold one are reconciled at once, through the existing owner
+   * of that decision (`reconcileBins`: forge-only regrant, else NEEDS_HUMAN
+   * with the contract's outstanding reasons), and the line then reads the
+   * campaign as parked on a person (`parkedStageBin`), which is what it is.
    */
+  const exhaustedProjects = new Set<string>();
   for (const held of await listHeldBinHeads(options.limit ?? 200)) {
     if (options.projectIds && !options.projectIds.includes(held.projectId)) continue;
     if (held.holdReason === 'ATTEMPTS_EXHAUSTED') {
+      exhaustedProjects.add(held.projectId);
       await recordBinEvent({
         eventType: 'DISPATCH_UNROUTED',
         binId: held.id,
@@ -1213,6 +1225,17 @@ export async function writeDispatchIntents(
       nextAttemptAt: held.dispatchNotBefore,
     });
     written.deferred += 1;
+  }
+  if (exhaustedProjects.size > 0) {
+    // Dynamic: the bin service already imports this module lazily.
+    const { reconcileBins } = await import('../bins/service.ts');
+    for (const projectId of exhaustedProjects) {
+      try {
+        await reconcileBins(projectId);
+      } catch {
+        // The Russell tick's own reconcile pass still reaches it; firing must not stop here.
+      }
+    }
   }
   return written;
 }
