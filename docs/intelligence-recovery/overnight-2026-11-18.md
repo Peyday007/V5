@@ -185,3 +185,12 @@ Launch configuration, updated:
 - **#1100 merged** (c0d64efb): free-lane jobs renew their lease every 5 min while running. The cause of the "lease no longer current" audit refusals was a fixed 20 min lease with no renewal.
 - **Deploy 44341970245** dispatched. The run continues across the restart; the budget is rebuilt from the database.
 - **Run check** scheduled for 17:00Z (trig_0176oTkcHizot2JDx6bdVUPc).
+
+## 17:05Z: GPU STOPPED (not productive), fix not yet live
+- **Run check** (report 44353886005, 1h): GPU submitted 9 jobs, 29 not accepted, 0 accepted claims. 22 were audits refused with "lease no longer current". Cost $3.29 that hour.
+- **#1100's Deploy 44341970245 did not go live:** Postgres suite 44341948043 failed shard 2. The cause is tests/systemSelfModel.test.ts, two 30 s timeouts under load, unrelated to #1100. Failed jobs rerun at about 17:03Z.
+- **GPU paused:**
+  - runpod-stop 44354582559 put pod qe5u6nhdv69ofl into EXITED.
+  - runpod-disconnect 44354793244 stops the supervisor restarting it.
+  - Account $106.40, spending $0/h. Run spend so far $7.38.
+- **Next:** after the Postgres rerun passes → Deploy → once #1100 is live, runpod-connect. That reuses the same launch window and budget, so the $66 cap is not re-armed, then yield is verified.
