@@ -610,6 +610,53 @@ describe('the free research lane', () => {
     expect((await takeOne(base)).claimed).toBeNull();
   });
 
+  it('renews the lease while a long model call runs, so a slow GPU answer is still current at submit (production 2026-11-18: audits refused "This lease is no longer current")', async () => {
+    const { takeOne } = await import('../server/services/freeLane/worker.ts');
+    const { orchestration, fragment } = await packet(play.project.id);
+    const itemId = await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);
+    const workers = await ensureFreeWorkers(CONFIG);
+    const working = model().completer;
+    // Every model call is slow, as the GPU's ~671 s calls were; heartbeats are 20 ms apart here.
+    const slow: Completer = async (...args) => {
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      return working(...args);
+    };
+    const before = await getDb().get<{ lease_expires_at: string | null }>('SELECT lease_expires_at FROM work_items WHERE id = ?', [itemId]);
+    expect(before?.lease_expires_at ?? null).toBeNull();
+    const taken = await takeOne({ workers, worker: workers[0]!, index: 0, completer: slow, fetchSource, search: async () => [], config: CONFIG, heartbeatMs: 20 });
+    expect(taken.claimed?.workItemId).toBe(itemId);
+    expect(taken.ok).toBe(true);
+    const lease = await getDb().get<{ heartbeat_count: number; outcome: string | null }>(
+      'SELECT heartbeat_count, outcome FROM work_leases WHERE work_item_id = ? AND lease_generation = ?',
+      [itemId, taken.claimed!.leaseGeneration],
+    );
+    expect(Number(lease?.heartbeat_count)).toBeGreaterThan(0);
+    expect(lease?.outcome).toBe('SUCCEEDED');
+  });
+
+  it('stops renewing at the first refusal, and never renews after it is stopped (\u00a724: a heartbeat proves ownership, it does not take it)', async () => {
+    const { keepLeaseAlive } = await import('../server/services/freeLane/worker.ts');
+    const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+    let refused = 0;
+    const stopRefused = keepLeaseAlive(async () => {
+      refused += 1;
+      throw new Error('This lease is no longer current.');
+    }, 5);
+    await wait(60);
+    expect(refused).toBe(1);
+    stopRefused();
+    let renewed = 0;
+    const stop = keepLeaseAlive(async () => {
+      renewed += 1;
+    }, 5);
+    await wait(40);
+    stop();
+    const atStop = renewed;
+    expect(atStop).toBeGreaterThan(1);
+    await wait(40);
+    expect(renewed).toBe(atStop);
+  });
+
   it('asks for the most important waiting work first, so a revenue goal\u2019s research does not wait behind unrelated later stages', () => {
     const asks = claimAsks([{ model: 'a' }], 0);
     // A goal fragment boosted to 7 outranks an ordinary synthesis at 5.

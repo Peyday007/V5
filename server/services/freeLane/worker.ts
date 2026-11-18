@@ -2473,7 +2473,49 @@ export interface TakeInput {
   config: LaneConfig;
   /** Take a job whose role prefers the other model, when that model is saturated. */
   spillover?: boolean;
+  /** How often the held lease is renewed while the item is worked. Tests shorten it. */
+  heartbeatMs?: number;
 }
+
+/**
+ * Renew the lease every `everyMs` until stopped, through `brain_heartbeat_work`:
+ * the queue's guarded UPDATE that moves the expiry only while this exact lease
+ * generation is still current (§19, §24), so a heartbeat can never take back an
+ * item another worker has since claimed. The first refusal ends the renewals;
+ * the submit then reports the lost lease as before.
+ *
+ * Production 62c38137, 2026-11-18 15:01–15:50Z (paid RunPod H200 run): the lane
+ * claimed with a fixed 20-minute lease and never renewed it, while RunPod jobs
+ * averaged ~671 s and auto/best-coding audits ~1,164 s. Four GPU audits and one
+ * auto/best-coding audit finished past expiry and were refused at submit, "This
+ * lease is no longer current" — paid work discarded.
+ */
+export function keepLeaseAlive(renew: () => Promise<unknown>, everyMs: number): () => void {
+  let stopped = false;
+  let inFlight = false;
+  const timer = setInterval(() => {
+    if (stopped || inFlight) return;
+    inFlight = true;
+    renew()
+      .catch((error) => {
+        // Not current any more (expired, reclaimed or ended): stop asking.
+        stopped = true;
+        clearInterval(timer);
+        console.warn('[free-lane] lease heartbeat refused:', String((error as Error)?.message ?? error).slice(0, 200));
+      })
+      .finally(() => {
+        inFlight = false;
+      });
+  }, Math.max(1, everyMs));
+  timer.unref?.();
+  return () => {
+    stopped = true;
+    clearInterval(timer);
+  };
+}
+
+/** A renewal well inside the lease, so one slow or missed heartbeat does not lose it. */
+const HEARTBEAT_MS = Math.floor(LEASE_MS / 4);
 
 /**
  * Claim one free-lane job and answer it. The unit every slot repeats.
@@ -2854,6 +2896,12 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
     usage,
   };
   let ok = false;
+  // The lease is renewed for as long as the item is worked, not sized to a guess
+  // at how long a model takes (see `keepLeaseAlive`).
+  const stopHeartbeat = keepLeaseAlive(
+    () => call(ctx, 'brain_heartbeat_work', { ...proof(ctx), lease_ms: LEASE_MS }),
+    input.heartbeatMs ?? HEARTBEAT_MS,
+  );
   try {
     ok = await answerItem(ctx);
   } catch (error) {
@@ -2862,6 +2910,8 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
     // The failure is the exception, not the default "no usable JSON" (2026-11-05: every
     // failed audit read that way and the cause was unreadable from the rows).
     ctx.why = `threw: ${message}`;
+  } finally {
+    stopHeartbeat();
   }
   /*
    * A verification the model answered in words, and answered again in words when
