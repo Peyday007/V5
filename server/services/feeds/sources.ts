@@ -281,16 +281,6 @@ export function federalRegisterEffectiveOnUrl(documentNumber: string): string {
 }
 
 /**
- * A correction states no effective date of its own (C1-2026-21030: effective_on,
- * dates and action all null), and the rule it corrects may have been published
- * long before anything Brain still holds. For each parsed correction with no
- * Effective sentence, ask the Federal Register API for the corrected document's
- * own effective_on (an official field, never prose) and record it as
- * "Corrected rule effective YYYY-MM-DD." — deliberately not an "Effective"
- * sentence, so a reader of the correction's own date is unchanged. A lookup
- * that fails, or a document that states no date, leaves the item as parsed.
- */
-/**
  * A stored or parsed Federal Register item that names the document it corrects
  * ("Corrects N.") but carries neither its own "Effective" sentence nor a
  * "Corrected rule effective" one: what `completeFederalRegisterCorrections`
@@ -301,6 +291,16 @@ export function federalRegisterCorrectionIncomplete(item: Pick<FeedItem, 'body'>
   return /Corrects [A-Za-z0-9-]+\./.test(body) && !/Effective \d{4}-\d{2}-\d{2}\./.test(body) && !/Corrected rule effective /.test(body);
 }
 
+/**
+ * A correction states no effective date of its own (C1-2026-21030: effective_on,
+ * dates and action all null), and the rule it corrects may have been published
+ * long before anything Brain still holds. For each parsed correction with no
+ * Effective sentence, ask the Federal Register API for the corrected document's
+ * own effective_on (an official field, never prose) and record it as
+ * "Corrected rule effective YYYY-MM-DD." — deliberately not an "Effective"
+ * sentence, so a reader of the correction's own date is unchanged. A lookup
+ * that fails, or a document that states no date, leaves the item as parsed.
+ */
 export async function completeFederalRegisterCorrections(
   items: FeedItem[],
   getJson: (url: string) => Promise<unknown>,
