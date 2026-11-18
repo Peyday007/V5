@@ -202,3 +202,11 @@ Launch configuration, updated:
   - Their fix in progress makes runpod-stop set MODE=off first.
 - **Postgres rerun:** 44341948043 passed. **Deploy 44357471351** (#1100) is in progress, run by the release owner.
 - **Resume:** runpod-start (not connect), which keeps the fixed window 15:01:34Z–03:31:34Z and the $66 cap.
+
+## 18:55Z: independent yield check
+- **Report 44374055664** (1h): GPU cost $0.00, pod EXITED, 0 accepted GPU claims. **The run is not producing; it is not billing either.**
+- **runpod-start 44363419602 FAILED:** "not enough free GPUs on the host machine". Runs 44363720651 and 44367656032 also failed. #1100 has been live since 17:48Z but is unverified, because the GPU never ran after it.
+- **Flags:**
+  - The report says "auto stop/start is off without BRAIN_RUNPOD_API_KEY", so the supervisor, which enforces the fixed $66 cap and the idle stop, may not be active.
+  - Pressure SHEDDING.
+- **Sent to the release owner:** move the pod to a new host (restore, same window and cap) only after confirming the API key.
