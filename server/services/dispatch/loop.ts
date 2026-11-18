@@ -169,8 +169,37 @@ export const DISPATCH_BURST = 5;
  */
 export function endsBurst(bin: Pick<Bin, 'pinnedRoutineId'>, refusal: RoutingRefusal): boolean {
   if (bin.pinnedRoutineId) return false;
+  if (refusal === RESEARCH_CEILING) return false;
   return refusalEndsBurst(refusal);
 }
+
+/**
+ * The research/general ceiling, which the router never applies to a Factory bin.
+ *
+ * `REFUSAL_SCOPE` calls `FLEET_TARGET_REACHED` fleet-wide, and for the intent
+ * that met it that is true of every *research* intent behind it. It is not true
+ * of a Factory intent: `routeBin` exempts the FACTORY family from the fleet
+ * target and bounds it by its own surfaces' targets instead. Ending the burst
+ * here (and spending a burst slot on the deferral) therefore let any due
+ * research intent at or above a Factory bin's priority end every tick before the
+ * Factory intent was claimed — and with hundreds of research intents cycling
+ * through their deferrals, that was every tick. Production, 2026-11-18
+ * (operator deficiency RECURRING_OPERATIONAL_FAILURE aded8afab9854a88): "1
+ * piece(s) of executable work and 1 free surface(s), and nothing is running or
+ * arriving", while extra dispatch passes requested from the factory tick only
+ * re-ran the same pass into the same wall.
+ */
+const RESEARCH_CEILING: RoutingRefusal = 'FLEET_TARGET_REACHED';
+
+/**
+ * How many intents one tick may claim, fired or not.
+ *
+ * `DISPATCH_BURST` bounds activations. A deferral is not an activation, so it no
+ * longer spends a burst slot when it is the research ceiling; this bounds the
+ * rows one tick may write while walking past such deferrals to the work that can
+ * still fire.
+ */
+export const DISPATCH_CLAIM_LIMIT = 50;
 
 export interface TickResult {
   superseded: number;
@@ -640,9 +669,11 @@ export async function dispatchTick(
   const burst = Math.max(1, options.burst ?? DISPATCH_BURST);
   const config = fireConfig();
 
-  for (let sent = 0; sent < burst; sent += 1) {
+  let claims = 0;
+  for (let sent = 0; sent < burst && claims < DISPATCH_CLAIM_LIMIT; sent += 1) {
     const intent = await claimDispatchIntent();
     if (!intent) break;
+    claims += 1;
 
     // Re-read the bin between claiming the intent and firing. The supersede
     // pass ran at the top of this tick, but a worker may have taken the bin in
@@ -836,6 +867,12 @@ export async function dispatchTick(
        * `REFUSAL_WAIT` is.
        */
       if (endsBurst(bin, decision.refusal)) break;
+      /*
+       * The research ceiling is not this tick's spend: no activation was
+       * started, and a Factory intent behind it may still fire (see
+       * `RESEARCH_CEILING`). `DISPATCH_CLAIM_LIMIT` bounds the walk.
+       */
+      if (decision.refusal === RESEARCH_CEILING) sent -= 1;
       continue;
     }
 
