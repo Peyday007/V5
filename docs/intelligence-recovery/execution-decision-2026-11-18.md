@@ -114,3 +114,19 @@ The executive answers are in the chat message of the same time. This file holds 
 - larger construction budgets;
 - a 2nd Factory surface;
 - Hermes run-history visibility.
+
+## 20:27Z: first Final-Crusade planning batch released
+**Deploy 44391060795 on 87847cc7** contains:
+- **#1107** merge hold;
+- **#1106 + #1109** objective reading, and sales obey the goal's limits;
+- **#1104** one blocking input per research question;
+- **#1105** deterministic, evidence-first construction;
+- **#1108** executable steps from the leading arrangement;
+- **#1110** one economic model:
+  - an unknown price is a variable with break-even (the postcard needs ≥ $389.58 per slot at 12 slots, $1,222.92 per slot for $10K);
+  - one coherent verdict;
+  - the $38.7M aggregate is fixed.
+
+**Still running:** P6 (the plan obeys the objective: capital, industry, recurring, deadline).
+
+**Next:** once the batch is live, free production reads of the live goal check finish-line items 1, 3, 4 and 5.
