@@ -732,7 +732,16 @@ export const RULE_EFFECTIVE_SOON_V4: Detector = {
     const out: DetectedSignal[] = [];
     for (const [agency, group] of [...groups].sort((a, b) => a[0].localeCompare(b[0]))) {
       const dates = group.members.map((one) => one.effective).sort();
-      const wording = ruleEffectiveSoonWording(dates, now);
+      // Every stored copy is a member (each is a feed item the screen would otherwise read), but the
+      // wording counts rules: one date per document, so a correction's bare and completed copies, or a
+      // rule and its edit, are one rule taking effect, not two.
+      const perDocument = new Map<string, string>();
+      for (const one of group.members) {
+        const key = federalRegisterDocumentOf(one.record.url) ?? one.record.id;
+        const held = perDocument.get(key);
+        if (!held || one.effective < held) perDocument.set(key, one.effective);
+      }
+      const wording = ruleEffectiveSoonWording([...perDocument.values()].sort(), now);
       out.push({
         groupKey: `agency:${agency}`,
         label: wording.label,

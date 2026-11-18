@@ -141,6 +141,20 @@ describe('RULE_EFFECTIVE_SOON@4 keeps them', () => {
     }
   });
 
+  it('counts rules, not stored copies: two copies of one document are one rule, both still members', () => {
+    const nrc = byKey.get('agency:nuclear regulatory commission')!;
+    expect(nrc.memberIds).toHaveLength(2);
+    expect(nrc.label).toBe('1 final rule(s) from one agency taking effect by 2026-12-28');
+    expect(nrc.label).not.toMatch(/^2 final rule/);
+    // Two different documents from one agency are still two.
+    const a = fr('2026-90010', '2026-11-12', FCC, 'Effective 2026-11-20.');
+    const aEdit = fr('2026-90010', '2026-11-12', FCC, 'Final rule. Effective 2026-11-20.', '2026-90010', '2026-11-13T06:00:00.000Z', 'fi_2026-90010#v2');
+    const b = fr('2026-90011', '2026-11-12', FCC, 'Effective 2026-11-25.');
+    const [fcc] = RULE_EFFECTIVE_SOON_V4.detect([a, aEdit, b], new Date('2026-11-13T12:00:00.000Z'));
+    expect(fcc!.memberIds).toHaveLength(3);
+    expect(fcc!.label).toBe('2 final rule(s) from one agency taking effect by 2026-11-25');
+  });
+
   it('never says "must comply by" a date already gone', () => {
     const fcc = byKey.get('agency:federal communications commission')!;
     expect(fcc.hypothesis).not.toMatch(/must comply by/);
