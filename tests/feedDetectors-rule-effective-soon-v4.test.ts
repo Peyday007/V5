@@ -11,8 +11,12 @@
  *  - a copy of a correction stored bare ("Corrects N.") while the corrected
  *    rule's date was recorded on another copy, or on a stored copy of the
  *    corrected rule whose URL the substring lookup did not match;
- *  - a rule effective on its publication day whose copy Brain first stored
- *    days later (a later cursor pull, a backfill, an edit).
+ *  - an edit of a rule effective on its publication day: Brain held the
+ *    document from that day, but the edit is a new stored copy ("<id>#v2")
+ *    with a later fetched_at, and v3 measured "first held" from that copy.
+ *
+ * v3's bar is kept: a document Brain first stored after it was already in
+ * force for more than a day (a late backfill) is still not "taking effect soon".
  *
  * Coast Guard 2026-23047 (enforced the day before publication, dated only in
  * prose) is a correct exclusion for both versions, not a miss.
@@ -66,18 +70,26 @@ const correctionCompleted = fr(
   'C1-2026-21030', '2026-11-12', NRC, 'Corrects 2026-21030. Corrected rule effective 2026-12-28.', AP1000,
   '2026-11-14T06:00:00.000Z', 'fi_C1-2026-21030#v2',
 );
-/** Rules effective on their publication day, first stored by Brain days later. */
-const lateHeld: DetectorRecord[] = [
-  fr('2026-23040', '2026-11-12', FCC, 'Effective 2026-11-12.', 'National Television Multiple Ownership Rule', '2026-11-14T06:00:00.000Z'),
-  fr('2026-23027', '2026-11-12', USCG, 'Effective 2026-11-12.', 'Safety Zone; Sector Mobile Captain of the Port Zone, Mobile, AL', '2026-11-15T06:00:00.000Z', 'fi_2026-23027#v2'),
-  fr('2026-23279', '2026-11-16', ACF, 'Effective 2026-11-16.', 'Restoring Flexibility To Support Head Start Program Access', '2026-11-18T06:00:00.000Z'),
+/**
+ * Rules effective on their publication day, held by Brain from that day (a first copy that
+ * stated no date yet) and edited days later: the edit is a new stored copy with a later fetched_at.
+ */
+const editedRule = (documentNumber: string, published: string, organization: string, title: string, editedAt: string): DetectorRecord[] => [
+  fr(documentNumber, published, organization, 'Final rule.', title),
+  fr(documentNumber, published, organization, `Final rule. Effective ${published}.`, title, editedAt, `fi_${documentNumber}#v2`),
 ];
+const editedRules: DetectorRecord[] = [
+  ...editedRule('2026-23040', '2026-11-12', FCC, 'National Television Multiple Ownership Rule', '2026-11-14T06:00:00.000Z'),
+  ...editedRule('2026-23027', '2026-11-12', USCG, 'Safety Zone; Sector Mobile Captain of the Port Zone, Mobile, AL', '2026-11-15T06:00:00.000Z'),
+  ...editedRule('2026-23279', '2026-11-16', ACF, 'Restoring Flexibility To Support Head Start Program Access', '2026-11-18T06:00:00.000Z'),
+];
+const lateHeld = editedRules.filter((one) => one.id.endsWith('#v2'));
 const fleetWeek = fr(
   '2026-23047', '2026-11-12', USCG,
   'The Coast Guard will enforce a special local regulation on November 11, 2026.',
   'Special Local Regulation; San Diego Fleet Week Veterans Day Boat Parade',
 );
-const records = [correctionBare, correctionCompleted, ...lateHeld, fleetWeek];
+const records = [correctionBare, correctionCompleted, ...editedRules, fleetWeek];
 const trueMisses = [correctionBare, ...lateHeld].map((one) => one.id);
 
 const later = new Date('2026-11-18T12:00:00.000Z');
@@ -113,10 +125,10 @@ describe('RULE_EFFECTIVE_SOON@4 keeps them', () => {
   it('groups each under the issuing (last-listed) agency, never the parent department', () => {
     expect(byKey.get('agency:nuclear regulatory commission')?.memberIds.sort()).toEqual([correctionBare.id, correctionCompleted.id].sort());
     expect(byKey.get('agency:nuclear regulatory commission')?.windowTo).toBe('2026-12-28T00:00:00.000Z');
-    expect(byKey.get('agency:federal communications commission')?.memberIds).toEqual(['fi_2026-23040']);
-    expect(byKey.get('agency:coast guard')?.memberIds).toEqual(['fi_2026-23027#v2']);
+    expect(byKey.get('agency:federal communications commission')?.memberIds).toEqual(['fi_2026-23040', 'fi_2026-23040#v2']);
+    expect(byKey.get('agency:coast guard')?.memberIds).toEqual(['fi_2026-23027', 'fi_2026-23027#v2']);
     expect(byKey.get('agency:coast guard')?.entityName).toBe('Coast Guard');
-    expect(byKey.get('agency:children and families administration')?.memberIds).toEqual(['fi_2026-23279']);
+    expect(byKey.get('agency:children and families administration')?.memberIds).toEqual(['fi_2026-23279', 'fi_2026-23279#v2']);
     expect(byKey.has('agency:homeland security department')).toBe(false);
     expect(byKey.has('agency:health and human services department')).toBe(false);
   });
@@ -161,6 +173,20 @@ describe('RULE_EFFECTIVE_SOON@4 lowers no bar', () => {
   it('never keeps a rule effective before its publication', () => {
     const early = fr('2026-90001', '2026-11-12', FCC, 'Effective 2026-11-11.', 't', '2026-11-12T06:00:00.000Z');
     expect(RULE_EFFECTIVE_SOON_V4.detect([early], later)).toEqual([]);
+  });
+
+  it('keeps v3’s bar: a document Brain first held after it was in force for more than a day stays out', () => {
+    // A late backfill: one copy, first stored three days after the rule took effect on publication.
+    const backfilled = fr('2026-90002', '2026-11-12', FCC, 'Effective 2026-11-12.', 't', '2026-11-15T06:00:00.000Z');
+    expect(RULE_EFFECTIVE_SOON_V4.detect([backfilled], later)).toEqual([]);
+    expect(RULE_EFFECTIVE_SOON_V3.detect([backfilled], later)).toEqual([]);
+    // First held within a day of taking effect: kept — each stored copy, as v4 reads every copy of a document.
+    const held = fr('2026-90002', '2026-11-12', FCC, 'Final rule.', 't', '2026-11-13T06:00:00.000Z');
+    const edit = { ...backfilled, id: 'fi_2026-90002#v2' };
+    expect(members(RULE_EFFECTIVE_SOON_V4.detect([held, edit], later)).sort()).toEqual(['fi_2026-90002', 'fi_2026-90002#v2']);
+    // Matched by document number only: another document's early copy never lends its fetch day.
+    const other = fr('2026-90009', '2026-11-12', FCC, 'Final rule.', 't', '2026-11-12T06:00:00.000Z');
+    expect(RULE_EFFECTIVE_SOON_V4.detect([other, backfilled], later)).toEqual([]);
   });
 
   it('holds the eight-week upper bound from publication', () => {

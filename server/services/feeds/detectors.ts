@@ -659,18 +659,20 @@ export function federalRegisterDocumentOf(url: string): string | null {
  *     (`federalRegisterDocumentOf`): its own "Effective" sentence, else the
  *     corrected rule's date recorded on any copy of the correction, else the
  *     "Effective" sentence of any stored copy of the corrected document.
- *  2. A verdict does not depend on when Brain fetched the record. v3's lower
- *     bound was the later of publication and the copy's fetch day less one day,
- *     so a rule effective on (or soon after) its publication day whose copy was
- *     first stored by a later cursor pull, a backfill or an edit (a new version
- *     carries a new fetched_at) was dropped, while the free screen kept it.
- *     The fetch day is Brain's clock, not a property of the rule. v4 judges the
- *     rule by its own dates only: effective on or after its publication day and
- *     no later than RULE_EFFECTIVE_SOON_V2_LEAD_DAYS (eight weeks) after it —
- *     both bounds unchanged. The 30-day membership window from publication is
- *     unchanged, so nothing older than v3 could read is kept, and the wording
- *     (`ruleEffectiveSoonWording`) still says a passed date took effect rather
- *     than "must comply by".
+ *  2. "When Brain first held the record" is the document's first stored copy,
+ *     not this copy. v3's lower bound was the later of publication and the
+ *     copy's own fetch day less one day, so an edit of a rule (a new version
+ *     "<id>#v<n>" carries a new fetched_at) or a completed copy of a correction
+ *     was dropped once it was stored a day or more after the rule took effect,
+ *     although Brain had held the document since before then. v4 keeps v3's
+ *     bar unchanged — not before publication, and not already in force for
+ *     more than a day when Brain first held the document — but measures "first
+ *     held" from the earliest fetched_at of any stored copy with the same
+ *     document number. A rule Brain first stored after it was already in force
+ *     (a late backfill) is still not "taking effect soon". The eight-week upper
+ *     bound and the 30-day membership window from publication are unchanged,
+ *     and the wording (`ruleEffectiveSoonWording`) still says a passed date
+ *     took effect rather than "must comply by".
  *
  * Grouping stays by issuing agency (the last listed). Free-text dates are still
  * not parsed: Coast Guard 2026-23047, enforced the day before it was published
@@ -695,9 +697,12 @@ export const RULE_EFFECTIVE_SOON_V4: Detector = {
     // copies disagree, which the Federal Register's own fields do not; sorting keeps it deterministic.
     const own = new Map<string, string>();
     const correctedRule = new Map<string, string>();
+    const firstHeld = new Map<string, number>();
     for (const record of ours) {
       const documentNumber = federalRegisterDocumentOf(record.url);
       if (!documentNumber) continue;
+      const fetched = Date.parse(record.fetchedAt);
+      if (Number.isFinite(fetched) && (!firstHeld.has(documentNumber) || fetched < firstHeld.get(documentNumber)!)) firstHeld.set(documentNumber, fetched);
       const stated = effectiveDateOf(record.body);
       if (stated && (!own.has(documentNumber) || stated < own.get(documentNumber)!)) own.set(documentNumber, stated);
       const marker = correctedEffectiveDateOf(record.body);
@@ -718,13 +723,17 @@ export const RULE_EFFECTIVE_SOON_V4: Detector = {
       if (!agency || !name) continue;
       if (!withinMemberWindow(this, record.publishedAt, record.fetchedAt, now)) continue;
       const published = Date.parse(record.publishedAt ?? record.fetchedAt);
-      if (!Number.isFinite(published)) continue;
+      const documentNumber = federalRegisterDocumentOf(record.url);
+      const fetched = (documentNumber ? firstHeld.get(documentNumber) : undefined) ?? Date.parse(record.fetchedAt);
+      if (!Number.isFinite(published) || !Number.isFinite(fetched)) continue;
       const effective = effectiveOf(record);
       if (!effective) continue;
       const at = Date.parse(`${effective}T00:00:00.000Z`);
       const publishedDay = utcDay(published);
-      // The rule's own dates only: not before its publication day, at most eight weeks after it.
-      if (!Number.isFinite(at) || at < publishedDay || at > publishedDay + RULE_EFFECTIVE_SOON_V2_LEAD_DAYS * DAY) continue;
+      // v3's bar, unchanged: not before its own publication, and not in force for more than a day when
+      // Brain first held the document (its earliest stored copy). Upper bound: eight weeks after publication.
+      const from = Math.max(publishedDay, utcDay(fetched) - DAY);
+      if (!Number.isFinite(at) || at < from || at > publishedDay + RULE_EFFECTIVE_SOON_V2_LEAD_DAYS * DAY) continue;
       const group = groups.get(agency) ?? { name, members: [] };
       group.members.push({ record, effective });
       groups.set(agency, group);
@@ -749,7 +758,7 @@ export const RULE_EFFECTIVE_SOON_V4: Detector = {
           'the effective date is the one the Federal Register states; a delay or stay is not read',
           'a correction carries the effective date of the rule it corrects, as the Federal Register API states it for that rule',
           'every stored copy of a document is read for its stated dates, matched by document number',
-          'judged by the rule’s own publication and effective dates; the wording says which effective dates had passed on the day it ran',
+          'kept against the day Brain first held the document (its earliest stored copy); the wording says which effective dates had passed on the day it ran',
         ],
         hypothesis: wording.hypothesis,
         deliverable: 'DOCUMENT',
