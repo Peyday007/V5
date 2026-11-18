@@ -130,3 +130,28 @@ The executive answers are in the chat message of the same time. This file holds 
 **Still running:** P6 (the plan obeys the objective: capital, industry, recurring, deadline).
 
 **Next:** once the batch is live, free production reads of the live goal check finish-line items 1, 3, 4 and 5.
+
+## 21:53Z: production verification of the planning batch
+Release 9d110770, live 21:44:40Z. Reading of goal wst_7b4fcbb5f2384f31b6c3 at 21:53:43Z.
+
+**Passing:**
+- **One coherent verdict:** NEEDS_EVIDENCE. Before, NOT_VIABLE sat beside a 56% candidate.
+- **Aggregate:** modelledP50 is $39,260 (= the candidate's, modelledOf named). Before it was $38.7M.
+- **Research changes plan economics on production (finish-line item 6, verified):** `priceVariables` for the postcard arrangements (2821cce3c372, acd11bf7f80f) carry the run cost $4,675 sourced to claim **clm_9cf1f15cc99846198399**.
+  - Break-even per slot: 6 slots → $779, 12 → $390, 24 → $195, 48 → $97.
+  - For $10K: 12 slots at $1,223 each.
+  - "Price is the blocking assumption."
+- **Executable steps (item 4):** 12 typed steps instead of 1 generic line. Each has its kind (RESEARCH, EXECUTE, VALIDATE), a question, dependencies, permissions needed and kill criteria:
+  1. research buyers, price, supply, settlement, cost per deal, repeat;
+  2. reach the buyers;
+  3. validate as a refundable presale;
+  4. collect at the minimum;
+  5. deliver;
+  6. run the next group.
+- **Honesty:** both candidate prices read ASSUMED; nothing is certified.
+
+**Weak:**
+- The leading candidate is the generic "anonymous members of the public: Brain produces a spreadsheet/document…". The postcard arrangement, which holds real researched cost, is not the leader, because its price is unknown.
+- The steps are generic because the leader is generic.
+- P4 (stable selection) is reverted and being reworked.
+- P6 (the plan obeys the objective) is next to release.
