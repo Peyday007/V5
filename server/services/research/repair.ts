@@ -232,6 +232,30 @@ const ECOSYSTEMS = [
   'web archives of sources that have moved',
 ];
 
+/** The fewest rungs one repair attempt is given while it has a choice. */
+export const MIN_RUNGS_PER_ATTEMPT = 2;
+/** The most rungs one attempt is asked to work through; past this the instruction dilutes. */
+export const MAX_RUNGS_PER_ATTEMPT = 3;
+
+/**
+ * How many fresh rungs this attempt is given.
+ *
+ * A flat two per attempt left rungs stranded: a fragment's last automatic
+ * repair (remaining budget 2 — the next failure plans MARK_UNRESOLVED, see
+ * `outcome.ts` `repairable`) was handed two of three fresh rungs, the third was
+ * never tried, and the fragment ended unresolved with an untried alternate in
+ * hand (CAPABILITY:RESEARCH.RECOVERY.RETRY, "repeated failure"). Randell's
+ * recovery block enters every alternate before the block is declared failed,
+ * so the last automatic repair takes the rungs left, up to three in one
+ * instruction; an earlier repair keeps two, so the ladder's order still
+ * decides what is tried first and later attempts still have alternates.
+ */
+export function rungsForAttempt(freshRungs: number, remainingBudget: number): number {
+  const lastAutomaticRepair = remainingBudget === 2;
+  if (!lastAutomaticRepair) return MIN_RUNGS_PER_ATTEMPT;
+  return Math.min(MAX_RUNGS_PER_ATTEMPT, Math.max(MIN_RUNGS_PER_ATTEMPT, freshRungs));
+}
+
 export interface BuildRepairPlanInput {
   fragment: ResearchFragment;
   gate: GateResult;
@@ -286,7 +310,10 @@ export function buildRepairPlan(input: BuildRepairPlanInput): RepairPlan {
       (strategy) =>
         strategy !== 'MARK_UNRESOLVED' && !used.has(strategy) && rungAuthorized(strategy, input.envelope),
     );
-    strategies = input.remainingBudget <= 1 || fresh.length === 0 ? ['MARK_UNRESOLVED'] : fresh.slice(0, 2);
+    strategies =
+      input.remainingBudget <= 1 || fresh.length === 0
+        ? ['MARK_UNRESOLVED']
+        : fresh.slice(0, rungsForAttempt(fresh.length, input.remainingBudget));
   } else {
     const candidates = input.gate.failedConditions.flatMap(
       (condition) => LADDER[condition] ?? [],
@@ -307,7 +334,7 @@ export function buildRepairPlan(input: BuildRepairPlanInput): RepairPlan {
     strategies =
       input.remainingBudget <= 1 || fresh.length === 0
         ? ['MARK_UNRESOLVED']
-        : fresh.slice(0, 2);
+        : fresh.slice(0, rungsForAttempt(fresh.length, input.remainingBudget));
   }
 
   const tried = ecosystemsTried(input.claims);
