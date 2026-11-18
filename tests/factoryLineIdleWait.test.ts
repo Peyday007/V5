@@ -13,23 +13,41 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+/*
+ * The one Factory surface the fleet holds: free, enabled, bound to an active
+ * worker, and serving whichever projects `fleet.servesProjects` names — the
+ * fixture's own by default, so the dispatcher's router would place its bins.
+ */
+const fleet = vi.hoisted(() => ({ servesProjects: [] as string[] }));
 vi.mock('../server/services/dispatch/candidates.ts', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../server/services/dispatch/candidates.ts')>();
-  const surface = {
-    routine: {
-      id: 'rtn_line_idle',
-      name: 'Factory surface',
-      routineRef: 'trig_line_idle',
-      capabilities: ['repository'],
-      state: 'ENABLED',
-    },
-    account: { name: 'Factory account', state: 'ENABLED' },
-    routineInFlight: 0,
-    routineTarget: 1,
-    accountInFlight: 0,
-    accountTarget: 1,
-  };
-  const snapshot = async () => ({ candidates: [surface], missingSecrets: [] });
+  const snapshot = async () => ({
+    candidates: [
+      {
+        routine: {
+          id: 'rtn_line_idle',
+          name: 'Factory surface',
+          routineRef: 'trig_line_idle',
+          capabilities: ['repository'],
+          state: 'ENABLED',
+          workerId: 'wkr_line_idle',
+          retryAt: null,
+        },
+        account: { name: 'Factory account', state: 'ENABLED', retryAt: null },
+        workerActive: true,
+        servesProjects: fleet.servesProjects,
+        servesFamilies: null,
+        routineInFlight: 0,
+        routineTarget: 1,
+        accountInFlight: 0,
+        accountTarget: 1,
+      },
+    ],
+    fleetPolicy: null,
+    fleetInFlight: 0,
+    factoryInFlight: 0,
+    missingSecrets: [],
+  });
   return { ...actual, fleetSnapshot: snapshot, sharedFleetSnapshot: snapshot };
 });
 vi.mock('../server/services/dispatch/router.ts', async (importOriginal) => {
@@ -65,6 +83,7 @@ let adminId = '';
 
 beforeEach(async () => {
   fixture = await freshProject();
+  fleet.servesProjects = [fixture.project.id];
   resetIdleObservation();
   const admin = await createUser({
     email: `line-idle-${Math.random().toString(36).slice(2, 10)}@test.local`,
@@ -246,5 +265,41 @@ describe('a READY factory bin whose intent is past PENDING', () => {
     expect(line.unexplainedIdle).toBe(true);
     expect(line.stranded?.bins).toBe(1);
     expect(line.because).toContain('its only intent at this generation was superseded');
+  });
+});
+
+/*
+ * Repair F1: "one in flight per key" is the router's question, not the
+ * intent's. A surface the fleet counts as free can still be one the router
+ * will not place this bin on — another project's surface, a repository it is
+ * not authorized for, a provisional delivery already in flight. The line used
+ * to read that as the fault until the dispatcher had claimed the intent and
+ * deferred it; it now asks `routeBin` itself and reads the refusal as the wait.
+ */
+describe('a READY factory bin the router would not place on the free surface', () => {
+  it('reads a free surface that serves only another project as a wait with the router refusal, and opens no idle interval', async () => {
+    await campaignWithReadyStage();
+    fleet.servesProjects = ['prj_someone_else'];
+
+    const line = await readLine();
+    expect(line.capacity.freeSurfaces).toBe(1);
+    expect(line.active.leasedBins).toBe(0);
+    expect(line.executable.readyBins).toBe(0);
+    expect(line.unexplainedIdle).toBe(false);
+    expect(line.because).not.toMatch(/That is a fault, not a wait/);
+    expect(line.because).toMatch(/no surface the router would place it on now \([A-Z_]+\): /);
+    expect(line.waiting?.bins).toBe(1);
+
+    const t0 = new Date();
+    await observeIdle(line, t0);
+    await observeIdle(line, new Date(t0.getTime() + IDLE_REPORT_AFTER_MS + 1000));
+    expect(await listFactoryEvents(null, { kinds: [LINE_EVENT_KINDS.idleStarted] })).toHaveLength(0);
+  });
+
+  it('still reads the same bin as the fault once the free surface serves its project', async () => {
+    await campaignWithReadyStage();
+    const line = await readLine();
+    expect(line.executable.readyBins).toBe(1);
+    expect(line.unexplainedIdle).toBe(true);
   });
 });
