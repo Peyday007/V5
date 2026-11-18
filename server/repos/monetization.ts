@@ -1375,18 +1375,18 @@ export async function recordArrangementEvaluations(input: {
  * new. Signatures, sorted, so the result is the same in both dialects.
  */
 export async function recentLeaderSignatures(goalId: string, readings = 2, topPerReading = 3): Promise<string[]> {
-  const recent = await getDb().all<{ reading_id: string; at: string }>(
-    `SELECT reading_id, MAX(evaluated_at) AS at FROM monetization_path_evaluations
-      WHERE goal_id = ? GROUP BY reading_id ORDER BY at DESC, reading_id DESC LIMIT ?`,
-    [goalId, readings],
-  );
-  if (recent.length === 0) return [];
+  // One statement: a plan read is counted in statements (goalPlan's bounded-read test).
   const rows = await getDb().all<{ reading_id: string; design_signature: string; picked: number; contribution_cents: number | null }>(
     `SELECT e.reading_id, p.design_signature, e.picked, e.contribution_cents
        FROM monetization_path_evaluations e JOIN monetization_paths p ON p.id = e.path_id
       WHERE e.goal_id = ? AND e.refused = 0 AND p.design_signature IS NOT NULL
-        AND e.reading_id IN (${recent.map(() => '?').join(', ')})`,
-    [goalId, ...recent.map((one) => one.reading_id)],
+        AND e.reading_id IN (
+          SELECT recent.reading_id FROM (
+            SELECT reading_id, MAX(evaluated_at) AS last_at FROM monetization_path_evaluations
+             WHERE goal_id = ? GROUP BY reading_id ORDER BY last_at DESC, reading_id DESC LIMIT ?
+          ) recent
+        )`,
+    [goalId, goalId, readings],
   );
   const out = new Set<string>();
   const byReading = new Map<string, typeof rows>();
