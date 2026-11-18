@@ -30,6 +30,7 @@
  */
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import { waitForReleaseLane } from './release-wait.ts';
 
 type State = 'GATING' | 'MERGED' | 'DEPLOYING' | 'VERIFYING';
 
@@ -192,6 +193,20 @@ async function mergeGated(action: Action): Promise<{ mergeSha: string; deploySha
   if (!/^[0-9a-f]{40}$/.test(gated)) {
     advance(action.runId, 'FAILED', { stage: 'INFRA', detail: 'the gate job left no tested commit' });
     return null;
+  }
+  if (process.env.GATE_ALREADY_MERGED !== 'true') {
+    // A merge now would supersede a Deploy of production's tip still in its
+    // gate (39 of 113 Deploy runs, 2026-11-15..18). Hold — bounded, never
+    // cancelling it — until that run reaches Fly; the next Deploy ships both.
+    await waitForReleaseLane({
+      get: async (path) => {
+        const reply = await gh('GET', path);
+        return reply.status === 200 ? reply.body : null;
+      },
+      repo: REPO,
+      branch: 'production',
+      log,
+    });
   }
   const permission = mayMerge(action);
   if (!permission.ok) {
