@@ -11,6 +11,21 @@
  * fragment whose repairPlan names the strategies it used) reproduces it.
  */
 import { describe, expect, it } from 'vitest';
+import { getDb } from '../server/db/database.ts';
+import { createWorker } from '../server/repos/identity.ts';
+import { createRun } from '../server/repos/runs.ts';
+import { createFragments, createOrchestration } from '../server/repos/research.ts';
+import {
+  claimWork,
+  completeWork,
+  enqueueWork,
+  failWork,
+  getWorkItem,
+  type OwnershipProof,
+} from '../server/repos/workQueue.ts';
+import { readMetric } from '../server/services/improvement/scoreboard.ts';
+import { assignmentFor } from '../server/services/research/assignment.ts';
+import { freshProject } from './helpers.ts';
 import {
   MAX_RUNGS_PER_ATTEMPT,
   buildRepairPlan,
@@ -18,7 +33,7 @@ import {
   rungsForAttempt,
 } from '../server/services/research/repair.ts';
 import type { GateResult } from '../server/services/research/gate.ts';
-import type { RepairPlan, RepairStrategy, ResearchFragment } from '../server/domain/types.ts';
+import type { ClaimedWork, RepairPlan, RepairStrategy, ResearchFragment } from '../server/domain/types.ts';
 
 /**
  * Every fixture below is a complete value of its declared type, with no cast,
@@ -330,5 +345,91 @@ describe('repair plan: no rung stranded by a fixed width', () => {
     expect(scenarios).toBe(CONDITION_SETS.length * 4);
     expect(rungsTriedNow).toBeGreaterThan(rungsTriedBefore);
     expect(strandedNow).toBeLessThan(strandedBefore);
+  });
+});
+
+/**
+ * The recorded failure class as the metric reads it.
+ *
+ * AUTO_RECOVERY_RATE counts `work_items` with `attempt_count > 1` that settled
+ * SUCCEEDED or FAILED — an item the queue handed out again after it failed.
+ * This drives one research fragment item through exactly that, on the real
+ * queue and the real assignment a worker reads: attempt 1 fails, the queue
+ * requeues it, attempt 2 reads its assignment and completes. Before the change
+ * attempt 2's assignment was identical to attempt 1's — nothing in it said the
+ * first attempt failed or why — so the retry could only repeat the strategy
+ * that had just failed.
+ */
+describe('a failed research work item recovered on a later attempt', () => {
+  it('tells the retry why the earlier attempt failed, and the metric counts the recovery', async () => {
+    const fixture = await freshProject();
+    const layer = await fixture.layerByName('Monetization Logic');
+    const projectId = fixture.project.id;
+    const run = await createRun({
+      projectId, layerId: layer.id, runType: 'FOUNDATION',
+      status: 'PLANNED', provider: 'WORKER', prompt: 'x',
+    });
+    const orchestration = await createOrchestration({
+      projectId, layerId: layer.id, runId: run.id,
+      title: 'Market size', assignment: 'Size the market.', provider: 'WORKER', autoApprove: false,
+    });
+    const [frag] = await createFragments([{
+      orchestrationId: orchestration.id, projectId, layerId: layer.id,
+      fragmentIndex: 0, fragmentKey: 'market-size',
+      question: 'What is the market size?', geography: null, timeframe: '2026',
+      population: null, definitions: null,
+      requiredEvidence: [{ id: 'figure', description: 'a sourced figure', necessity: 'REQUIRED' }],
+      acceptableSourceTypes: ['report'], excludedSourceTypes: [],
+      completionCriteria: ['One sourced figure.'], dependsOn: [], minIndependentSources: 1,
+      maxRepairs: 2, status: 'QUEUED',
+    }]);
+    const queued = await enqueueWork({
+      projectId,
+      workType: 'RESEARCH_FRAGMENT',
+      payload: {},
+      requiredScopes: ['queue:claim'],
+      maxAttempts: 3,
+      orchestrationId: orchestration.id,
+      fragmentId: frag!.id,
+      createdByType: 'SYSTEM',
+    });
+    const workerId = (await createWorker({ name: 'retry-worker', createdByType: 'SYSTEM', createdById: 'test' })).id;
+    const claim = async (): Promise<OwnershipProof> => {
+      const [won] = await claimWork({
+        workerId,
+        scopes: [{ projectId, scopes: ['queue:read', 'queue:claim', 'queue:heartbeat', 'queue:complete'] }],
+        limit: 1,
+      });
+      expect(won?.workItemId).toBe(queued.id);
+      const c = won as ClaimedWork;
+      return { workItemId: c.workItemId, workerId, leaseId: c.leaseId, leaseGeneration: c.leaseGeneration };
+    };
+
+    // Attempt 1: the worker's search fails and it says what it hit.
+    const first = await claim();
+    const firstView = await assignmentFor((await getWorkItem(queued.id))!);
+    expect(firstView?.earlierAttempts).toEqual([]);
+    const why = 'Every market report found was paywalled; the trade-association route returned nothing.';
+    expect(await failWork(first, { category: 'DEPENDENCY_UNAVAILABLE', detail: why })).toMatchObject({ ok: true });
+    expect((await getWorkItem(queued.id))?.state).toBe('QUEUED');
+
+    // The queue's backoff, without waiting for real time.
+    await getDb().run("UPDATE work_items SET available_at = '2000-01-01T00:00:00.000Z' WHERE id = ?", [queued.id]);
+
+    // Attempt 2: the same item, handed out again — and told what stopped attempt 1.
+    const second = await claim();
+    const retryView = await assignmentFor((await getWorkItem(queued.id))!);
+    expect(retryView?.earlierAttempts).toEqual([
+      { attemptNumber: 1, outcome: 'FAILED', detail: why, endedAt: expect.any(String) },
+    ]);
+    expect(retryView).not.toEqual(firstView);
+
+    expect(await completeWork(second, { summary: 'figure from the statistical agency' })).toMatchObject({ ok: true });
+    const settled = await getWorkItem(queued.id);
+    expect(settled).toMatchObject({ state: 'SUCCEEDED', attemptCount: 2 });
+
+    // And it is exactly what the capability's metric reads as one recovery.
+    const metric = await readMetric('AUTO_RECOVERY_RATE', '2000-01-01T00:00:00.000Z', '2999-01-01T00:00:00.000Z');
+    expect(metric).toMatchObject({ numerator: 1, denominator: 1, value: 1 });
   });
 });

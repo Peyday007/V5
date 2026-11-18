@@ -59,6 +59,7 @@ import type {
   ResearchOrchestration,
   WorkItem,
   WorkItemCheckpoint,
+  WorkLease,
 } from '../../domain/types.ts';
 import {
   citableClaims,
@@ -69,12 +70,38 @@ import {
 } from '../../repos/research.ts';
 import { getLayer } from '../../repos/layers.ts';
 import { getProject } from '../../repos/projects.ts';
-import { listCheckpoints } from '../../repos/workQueue.ts';
+import { listCheckpoints, listLeases } from '../../repos/workQueue.ts';
 import { guidanceFor } from './guidance.ts';
 import type { ResearchGuidance } from './prompts.ts';
 
 /** How much of a dependency's ledger travels with the assignment. */
 export const MAX_DEPENDENCY_CLAIMS = 40;
+
+/** One ended, unsuccessful attempt at the item a worker now holds. */
+export interface EarlierAttemptView {
+  attemptNumber: number;
+  outcome: 'FAILED' | 'EXPIRED' | 'RELEASED';
+  /** The detail the queue recorded when the attempt ended, bounded there. */
+  detail: string | null;
+  endedAt: string;
+}
+
+/**
+ * An item's ended attempts that did not succeed. The lease held now has not
+ * ended, so it is never among them, and an item read between attempts still
+ * shows the attempt that just failed. A CANCELLED lease is the queue withdrawing the item, not an
+ * attempt that failed at the work, so it teaches the next attempt nothing.
+ */
+export function earlierAttemptsOf(leases: readonly WorkLease[]): EarlierAttemptView[] {
+  const out: EarlierAttemptView[] = [];
+  for (const lease of leases) {
+    if (!lease.endedAt) continue;
+    const outcome = lease.outcome;
+    if (outcome !== 'FAILED' && outcome !== 'EXPIRED' && outcome !== 'RELEASED') continue;
+    out.push({ attemptNumber: lease.attemptNumber, outcome, detail: lease.detail, endedAt: lease.endedAt });
+  }
+  return out;
+}
 
 export interface AssignmentView {
   orchestration: {
@@ -94,6 +121,22 @@ export interface AssignmentView {
   siblings: { key: string; question: string; status: string; index: number }[];
   dependencies: DependencyView[];
   checkpoints: { attemptNumber: number; leaseGeneration: number; note: string; createdAt: string }[];
+  /**
+   * How every earlier attempt at this same work item ended, oldest first:
+   * failed, expired or given back, with the detail recorded when it ended.
+   *
+   * CAPABILITY:RESEARCH.RECOVERY.RETRY ("repeated failure", "retry repeating
+   * the same strategy"). The queue retries a failed item by handing it out
+   * again (`failWork` requeues while attempts remain), and the metric that
+   * reads this capability counts exactly those items (`work_items` with
+   * `attempt_count > 1`). The assignment a retry received was byte-for-byte
+   * the one the failed attempt received — checkpoints travel only if the
+   * failed attempt happened to write one — so the alternate was a replica of
+   * the primary, entered blind to what stopped it. Randell's alternate is of
+   * independent design; the least the queue can do is tell it what the
+   * primary hit. Empty on a first attempt.
+   */
+  earlierAttempts: EarlierAttemptView[];
   /**
    * The claims this item must return a verdict on, on a `RESEARCH_VERIFY` item;
    * null on every other kind, where they would be the fragment's own working
@@ -410,6 +453,7 @@ export async function assignmentFor(item: WorkItem): Promise<AssignmentView | nu
   const layer = await getLayer(orchestration.layerId);
   const project = await getProject(orchestration.projectId);
   const checkpoints = await listCheckpoints(item.id);
+  const earlierAttempts = earlierAttemptsOf(await listLeases(item.id));
 
   return {
     orchestration: {
@@ -504,6 +548,7 @@ export async function assignmentFor(item: WorkItem): Promise<AssignmentView | nu
       note: checkpoint.note,
       createdAt: checkpoint.createdAt,
     })),
+    earlierAttempts,
   };
 }
 
