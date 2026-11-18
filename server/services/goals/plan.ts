@@ -1586,7 +1586,9 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   const constructionCut = lastConstructionReport(target.projectId);
   // A cap that left candidates uncomposed is said, never silent (K-2): they stay in the space, ranked below the cut.
   if (constructionCut && constructionCut.cut > 0) {
-    degraded.push(`construction cap: ${constructionCut.composed} of ${constructionCut.considered} candidate arrangements composed this pass; ${constructionCut.cut} ranked below the cap were not (${constructionCut.reused} reused from the library)`);
+    degraded.push(
+      `construction cap: ${constructionCut.composed} of ${constructionCut.considered} candidate arrangements composed this pass — ${constructionCut.held} held as the plan's leaders, ${constructionCut.evidenced} on observed or verified evidence${constructionCut.evidencedCut > 0 ? ` (${constructionCut.evidencedCut} more evidenced beyond the cap)` : ''}, ${constructionCut.rotated} in rotation; ${constructionCut.cut} ranked below the cap were not, ${constructionCut.neverComposed} never composed yet (${constructionCut.reused} reused from the library)`,
+    );
   }
   const model = await composeGoalModel({ goal, target, now, arrangements });
   trace('composed');
@@ -3812,6 +3814,7 @@ async function constructionInputFor(goal: Workstream, target: TargetReading, now
     limits: { daysLeft, remainingCents: target.remainingCents, capitalCeilingCents: target.capitalCeilingCents, capitalBeforeProofCents: target.capitalBeforeProofCents, bestReachCents },
     exclusions: await goalExclusions(goal),
     now,
+    goalId: goal.id,
   };
 }
 

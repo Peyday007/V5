@@ -1366,6 +1366,43 @@ export async function recordArrangementEvaluations(input: {
   return written;
 }
 
+/**
+ * The structures a goal's last plan readings led with: every arrangement the
+ * best combination picked, and the few that contributed most, in each of the
+ * goal's `readings` most recent readings that weighed a constructed
+ * arrangement. Construction always composes these (P4, 2026-11-18), so a
+ * leader is never dropped by the cap between two passes that learned nothing
+ * new. Signatures, sorted, so the result is the same in both dialects.
+ */
+export async function recentLeaderSignatures(goalId: string, readings = 2, topPerReading = 3): Promise<string[]> {
+  const recent = await getDb().all<{ reading_id: string; at: string }>(
+    `SELECT reading_id, MAX(evaluated_at) AS at FROM monetization_path_evaluations
+      WHERE goal_id = ? GROUP BY reading_id ORDER BY at DESC, reading_id DESC LIMIT ?`,
+    [goalId, readings],
+  );
+  if (recent.length === 0) return [];
+  const rows = await getDb().all<{ reading_id: string; design_signature: string; picked: number; contribution_cents: number | null }>(
+    `SELECT e.reading_id, p.design_signature, e.picked, e.contribution_cents
+       FROM monetization_path_evaluations e JOIN monetization_paths p ON p.id = e.path_id
+      WHERE e.goal_id = ? AND e.refused = 0 AND p.design_signature IS NOT NULL
+        AND e.reading_id IN (${recent.map(() => '?').join(', ')})`,
+    [goalId, ...recent.map((one) => one.reading_id)],
+  );
+  const out = new Set<string>();
+  const byReading = new Map<string, typeof rows>();
+  for (const row of rows) byReading.set(row.reading_id, [...(byReading.get(row.reading_id) ?? []), row]);
+  for (const group of byReading.values()) {
+    for (const row of group) if (Number(row.picked) === 1) out.add(row.design_signature);
+    const top = [...group].sort(
+      (a, b) =>
+        (b.contribution_cents === null ? -Infinity : Number(b.contribution_cents)) - (a.contribution_cents === null ? -Infinity : Number(a.contribution_cents)) ||
+        a.design_signature.localeCompare(b.design_signature),
+    );
+    for (const row of top.slice(0, topPerReading)) out.add(row.design_signature);
+  }
+  return [...out].sort();
+}
+
 export interface ArrangementEvaluation {
   id: string;
   pathId: string;
