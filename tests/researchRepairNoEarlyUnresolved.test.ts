@@ -210,12 +210,12 @@ describe('repair plan: no rung stranded by a fixed width', () => {
     expect(next.strategies).toEqual(ordered);
   });
 
-  it('spreads rungs over the automatic attempts left, between two and three', () => {
+  it('widens only the last automatic repair, to at most three', () => {
     expect(rungsForAttempt(3, 2)).toBe(3);
     expect(rungsForAttempt(1, 2)).toBe(2);
     expect(rungsForAttempt(9, 2)).toBe(MAX_RUNGS_PER_ATTEMPT);
     expect(rungsForAttempt(4, 3)).toBe(2);
-    expect(rungsForAttempt(5, 3)).toBe(3);
+    expect(rungsForAttempt(5, 3)).toBe(2);
     expect(rungsForAttempt(2, 5)).toBe(2);
   });
 
@@ -245,8 +245,10 @@ describe('repair plan: no rung stranded by a fixed width', () => {
         strandedBefore += automaticRepairs > 0 ? length - before : 0;
         strandedNow += automaticRepairs > 0 ? length - tried.length : 0;
         expect(tried.length).toBeGreaterThanOrEqual(before);
-        // A ladder the automatic attempts can cover at the cap is covered whole.
-        if (length <= MAX_RUNGS_PER_ATTEMPT * automaticRepairs) expect(tried.length).toBe(length);
+        // A ladder the automatic attempts can cover — two per earlier repair,
+        // up to the cap on the last — is covered whole.
+        const reach = automaticRepairs > 0 ? 2 * (automaticRepairs - 1) + MAX_RUNGS_PER_ATTEMPT : 0;
+        if (length <= reach) expect(tried.length).toBe(length);
       }
     }
     // The measured reach of the change across the runner's whole state space

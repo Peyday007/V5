@@ -246,13 +246,14 @@ export const MAX_RUNGS_PER_ATTEMPT = 3;
  * never tried, and the fragment ended unresolved with an untried alternate in
  * hand (CAPABILITY:RESEARCH.RECOVERY.RETRY, "repeated failure"). Randell's
  * recovery block enters every alternate before the block is declared failed,
- * so the rungs left are spread over the automatic attempts left — never fewer
- * than two while there is a choice, never more than three in one instruction.
+ * so the last automatic repair takes the rungs left, up to three in one
+ * instruction; an earlier repair keeps two, so the ladder's order still
+ * decides what is tried first and later attempts still have alternates.
  */
 export function rungsForAttempt(freshRungs: number, remainingBudget: number): number {
-  const automaticAttemptsLeft = Math.max(1, remainingBudget - 1);
-  const spread = Math.ceil(freshRungs / automaticAttemptsLeft);
-  return Math.min(MAX_RUNGS_PER_ATTEMPT, Math.max(MIN_RUNGS_PER_ATTEMPT, spread));
+  const lastAutomaticRepair = remainingBudget === 2;
+  if (!lastAutomaticRepair) return MIN_RUNGS_PER_ATTEMPT;
+  return Math.min(MAX_RUNGS_PER_ATTEMPT, Math.max(MIN_RUNGS_PER_ATTEMPT, freshRungs));
 }
 
 export interface BuildRepairPlanInput {
