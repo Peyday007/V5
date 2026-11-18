@@ -311,9 +311,70 @@ export function diagLines(one: DiagProject): string[] {
   return lines;
 }
 
+
+/** One-off B1d trace (diagnostic branch only, never merged). */
+async function traceB1d(): Promise<void> {
+  const db = getDb();
+  const show = (label: string, value: unknown) => console.log(`TRACE ${label} ${JSON.stringify(value, (_k, v) => (typeof v === 'string' && v.length > 300 ? `${v.slice(0, 300)}…` : v))}`);
+  const q = async (label: string, sql: string, params: unknown[]) => {
+    try {
+      const rows = (await db.all(sql, params as string[])) as Record<string, unknown>[];
+      show(`${label} n=${rows.length}`, rows);
+      return rows;
+    } catch (error) {
+      show(`${label} ERROR`, message(error));
+      return [];
+    }
+  };
+  const P = 'prj_22fb4fec295f403a8a22';
+  const KEY = '2821cce3c372';
+  const claims = await q('claims', `SELECT id, orchestration_id, accepted, source_url IS NOT NULL AS has_url, structural_finding, structural_amount_cents, created_at, claim FROM research_claims WHERE claim LIKE ? ORDER BY id LIMIT 20`, ['%Oppizi%']);
+  const orchIds = [...new Set(claims.map((c) => String(c.orchestration_id)))];
+  for (const o of orchIds) {
+    await q(`orch ${o}`, `SELECT * FROM research_orchestrations WHERE id = ?`, [o]);
+    const missions = await q(`missions ${o}`, `SELECT * FROM russell_missions WHERE orchestration_id = ?`, [o]);
+    for (const m of missions) await q(`roundsByCandidate ${String(m.candidate_id)}`, `SELECT * FROM cash_discovery_rounds WHERE candidate_id = ?`, [String(m.candidate_id)]);
+  }
+  for (const c of claims) await q(`facts ${String(c.id)}`, `SELECT id, node_id, fact_key, low, high, status, created_at FROM construction_facts WHERE source_claim_id = ?`, [String(c.id)]);
+  await q('roundsByKey', `SELECT * FROM cash_discovery_rounds WHERE bucket_id LIKE ? ORDER BY opened_at`, [`%${KEY}%`]);
+  const paths = await q('pathsByKey', `SELECT id, project_id, opportunity_id, industry_node_id, legacy_key, design_signature IS NOT NULL AS has_sig, updated_at FROM monetization_paths WHERE legacy_key = ? ORDER BY updated_at DESC`, [KEY]);
+  for (const one of paths) if (one.industry_node_id) await q(`node ${String(one.industry_node_id)}`, `SELECT id, kind, name, retired_at FROM industry_nodes WHERE id = ?`, [String(one.industry_node_id)]);
+  await q('planArrangements', `SELECT id, opportunity_id, industry_node_id, legacy_key, design_signature IS NOT NULL AS has_sig FROM monetization_paths WHERE id IN (?, ?, ?) OR legacy_key IN (?, ?, ?)`, ['arr_9b8b17b801cb', 'arr_86da3f1661d1', 'arr_4cbbf91e4df7', '9b8b17b801cb', '86da3f1661d1', '4cbbf91e4df7']);
+  await q('pathsWithNode', `SELECT COUNT(*) AS n, SUM(CASE WHEN industry_node_id IS NOT NULL THEN 1 ELSE 0 END) AS with_node FROM monetization_paths WHERE project_id = ? AND design_signature IS NOT NULL`, [P]);
+  await q('priceFacts', `SELECT fact_key, status, COUNT(*) AS n, MAX(created_at) AS latest FROM construction_facts WHERE project_id = ? GROUP BY fact_key, status ORDER BY fact_key`, [P]);
+  await q('absorbedEvents24h', `SELECT COUNT(*) AS n, MAX(created_at) AS latest FROM cash_events WHERE project_id = ? AND kind = ? AND created_at >= ?`, [P, 'INDUSTRY_FACT_ABSORBED', new Date(Date.now() - 24 * 3600_000).toISOString()]);
+  try {
+    const { unfiledConstructedRoundClaims } = await import('../server/repos/research.ts');
+    const rows = await unfiledConstructedRoundClaims(P, '', 200);
+    show('unfiledConstructed', { n: rows.length, oppizi: rows.filter((r) => /Oppizi/.test(r.claim.claim)).map((r) => ({ id: r.claim.id, bucket: r.bucketId })), buckets: [...new Set(rows.map((r) => r.bucketId))].slice(0, 20) });
+    const { backfillCandidates } = await import('../server/services/industry/expand.ts');
+    const pool = await backfillCandidates(P);
+    const mine = pool.decisions.filter((d) => d.source === 'CONSTRUCTED_ROUND');
+    const reasons: Record<string, number> = {};
+    for (const d of mine) reasons[d.reason ?? 'CANDIDATE'] = (reasons[d.reason ?? 'CANDIDATE'] ?? 0) + 1;
+    show('constructedDecisions', { total: pool.decisions.length, constructed: mine.length, reasons, oppizi: mine.filter((d) => rows.some((r) => r.claim.id === d.claimId && /Oppizi/.test(r.claim.claim))).map((d) => ({ claimId: d.claimId, reason: d.reason, amount: d.candidate?.amount ?? null })) });
+    const bySource: Record<string, { cand: number; skip: number }> = {};
+    for (const d of pool.decisions) { const b = (bySource[d.source] ??= { cand: 0, skip: 0 }); if (d.candidate) b.cand += 1; else b.skip += 1; }
+    show('decisionsBySource', bySource);
+  } catch (error) {
+    show('backfill ERROR', message(error));
+  }
+  await q('workItems', `SELECT id, work_type, state, attempt_count, max_attempts, failure_category, lease_expires_at, updated_at, completed_at, orchestration_id FROM work_items WHERE id LIKE ? OR id LIKE ? OR id LIKE ?`, ['wki_4d8c4039%', 'wki_89af110a%', 'wki_0242ea8f%']);
+  const wi = (await db.all(`SELECT DISTINCT orchestration_id FROM work_items WHERE (id LIKE ? OR id LIKE ? OR id LIKE ?) AND orchestration_id IS NOT NULL`, ['wki_4d8c4039%', 'wki_89af110a%', 'wki_0242ea8f%'])) as { orchestration_id: string }[];
+  for (const { orchestration_id: o } of wi) {
+    await q(`wiOrch ${o}`, `SELECT * FROM research_orchestrations WHERE id = ?`, [o]);
+    await q(`wiOrchItems ${o}`, `SELECT id, work_type, state, attempt_count, failure_category, created_at, updated_at FROM work_items WHERE orchestration_id = ? AND created_at >= ? ORDER BY created_at`, [o, '2026-11-17T00:00:00Z']);
+    const ms = await q(`wiMissions ${o}`, `SELECT * FROM russell_missions WHERE orchestration_id = ?`, [o]);
+    for (const m of ms) await q(`wiRounds ${String(m.candidate_id)}`, `SELECT * FROM cash_discovery_rounds WHERE candidate_id = ?`, [String(m.candidate_id)]);
+  }
+}
+
 async function main(): Promise<void> {
   await initDatabase();
   try {
+    await traceB1d();
+    console.log('GOALS: OK');
+    if (process.argv.length > 0) return;
     const lines = await census();
     console.log(`CENSUS at ${new Date().toISOString()} revision ${process.env.BRAIN_REVISION ?? '<unstamped>'}`);
     for (const one of lines) console.log(`CENSUS ${one.layer.padEnd(9)} ${one.key.padEnd(28)} ${one.value === null ? '-' : String(one.value).padStart(8)}  ${one.label}${one.note ? ` — ${one.note}` : ''}`);
