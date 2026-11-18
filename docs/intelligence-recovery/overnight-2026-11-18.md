@@ -117,3 +117,20 @@ Launch configuration, updated:
   - **Owner F (agent):** verifier race or real defect?
 - **Launch:** waits for E (gate evidence) and F (no material defect).
 - **Persistent wake:** 07:55Z already fired. Next wake to be set.
+
+## 08:15Z: gate FAILS on economic use. Repairs G and H started
+- **F, done:** the hosted-verification failure was a verifier race. The same process passed all three checks after the restart. Verifier fix in #1094, not a blocker.
+- **E, done.** The 4 "stored / in_plan" claims are the postcard claims. #1091's supersession ran at 08:00:58Z:
+  - Oppizi: now a 4,675 supply cost, but under a per-unit key and expired.
+  - USPS: 0.26 cost ×2, correct.
+  - $0.259 is still 259, as an ASSUMPTION.
+  - **None is used by any plan.** For pooled designs the planner reads fixed run cost only from openings.
+- **The 57.3% plan change is NOT research-driven.** It is sampler rotation plus a 5-week-old $500 Puzzle Society per-submission fee, misapplied as the price of a pooled presale and also filed as its cost.
+- **Gate verdict:**
+  - Accepted research is stored and economically classified, but **not used in plan economics**.
+  - The plan's headline reach rests on a misapplied price.
+  - **NOT PASSED → REPAIRING.**
+- **G (agent, claude/gg-supply-cost-used):** file the per-run supply quote as fixed run cost; the planner reads it for pooled designs; correct 259 → 0.259. Pass condition: arr_2821's economics carry cost 4675 from clm_9cf1, with no positive score.
+- **H (agent, claude/gh-price-transfer):** a price from a different mechanism or population must not count as SINGLE_COMPARABLE evidence, and one fact must not serve as both price and cost.
+- **Next release:** G + H + #1094, then a free gate.
+- **Release-candidate cutoff:** 12:45Z.
