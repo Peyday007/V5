@@ -16,6 +16,7 @@ import { recordClaimFact } from '../server/repos/construction.ts';
 import { readMoneyFigures, readSubCentRates } from '../server/services/cash/figures.ts';
 import { composeInvented, constructionObservations, inventionContext } from '../server/services/cash/construct.ts';
 import { planInputsFingerprint } from '../server/services/goals/plan.ts';
+import { estimatedFromArrangement, MAX_BUYERS_OFFERED } from '../server/services/cash/goalScenario.ts';
 import { supplyQuote } from '../server/services/industry/expand.ts';
 import type { Layer } from '../server/domain/types.ts';
 
@@ -247,5 +248,79 @@ describe('B1j: an accepted per-run supply quote is the pooled arrangement’s fi
     expect(await planInputsFingerprint(projectId, GOAL)).not.toBe(fingerprintBefore);
     // Idempotent.
     expect((await backfillClaimFacts(projectId)).refiled).toEqual([]);
+  });
+});
+
+/**
+ * D4, production 2026-11-18: arrangement 2821cce3c372 carried its researched
+ * fixed run cost (cfa_ca236ebb, 4675, from clm_9cf1f15c), and no goal-model
+ * input read it. Driven here end to end — two accepted claims of the round,
+ * filed by the back-fill, composed, converted to the goal model — the way the
+ * plan reads them. Before the fix a researched slot price made the
+ * arrangement a model candidate whose per-slot cost was the blind "nothing to
+ * 60% of the top price" sweep, a margin of at least 40% on every slot whatever
+ * the run costs.
+ */
+describe('D4: a pooled arrangement’s researched run cost reaches the goal model once its price does', () => {
+  const SLOT = 'Local businesses pay $395 per slot on a shared direct-mail postcard mailed to 10,000 homes.';
+  const input = { projectId: '', currency: 'USD', delivers: [], capitalCeilingCents: 300_000, daysLeft: 22, now: new Date('2026-11-18T12:00:00.000Z') };
+  const spec = { design: { base: 'BROKER', funding: 'THRESHOLD_PRESALE', aggregation: 'POOLED_BUYERS', repeat: 'SUBSCRIPTION' } as const, population: 'Local service businesses', need: null };
+  const composeIt = async () => {
+    const made = composeInvented(spec, await inventionContext({ ...input, projectId }));
+    if ('refused' in made) throw new Error(made.refused);
+    return made;
+  };
+
+  it('with the run cost alone the value stays unknown and the arrangement stays out of the model (no manufactured score)', async () => {
+    const { orchestrationId, fragmentId } = await openArrangementRound();
+    await accepted(orchestrationId, fragmentId, [OPPIZI]);
+    await backfillClaimFacts(projectId);
+    const arrangement = await composeIt();
+    expect(arrangement.fixedCost?.p50).toBeCloseTo(4675, 3);
+    expect(arrangement.value.tier).toBe('UNKNOWN');
+    expect(estimatedFromArrangement(arrangement, { projectId, currency: 'USD', daysLeft: 22, beforeProofCents: null })).toBeNull();
+  });
+
+  it('with a researched slot price, the per-slot cost is the run cost shared by an unestablished number of buyers, citing the run-cost claim', async () => {
+    const { buyerId, orchestrationId, fragmentId } = await openArrangementRound();
+    const [oppizi, slot] = (await accepted(orchestrationId, fragmentId, [OPPIZI, SLOT])) as [string, string];
+    await backfillClaimFacts(projectId);
+    const facts = await listProjectConstructionFacts(projectId);
+    expect(facts.map((one) => [one.sourceClaimId, one.key, one.low, one.segment]).sort()).toEqual(
+      [[oppizi, 'fixed_cost_per_run', 4675, `map_${buyerId}`], [slot, 'price_per_unit', 395, `map_${buyerId}`]].sort(),
+    );
+    const arrangement = await composeIt();
+    expect(arrangement.value).toMatchObject({ tier: 'COMPARABLE', observations: 1, sources: [`claim:${slot}`] });
+    expect(arrangement.fixedCost).toMatchObject({ observations: 1, sources: [`claim:${oppizi}`] });
+
+    const modelled = estimatedFromArrangement(arrangement, { projectId, currency: 'USD', daysLeft: 22, beforeProofCents: null })!;
+    expect(modelled).not.toBeNull();
+    // The slot price enters, as an assumption (one pooled-run observation establishes nothing, GH2).
+    expect(modelled.price.inferred).toMatchObject({ tier: 'ASSUMED', justified: false });
+    expect(modelled.price.inferred!.p50).toBeCloseTo(395, 3);
+    // The per-slot cost is read from the run's cost, never capped at 60% of the price.
+    const cost = modelled.directCost;
+    expect(cost.provenance).toBe('ASSUMPTION');
+    expect(cost.inferred).toMatchObject({ tier: 'ASSUMED', justified: false });
+    expect(cost.source?.note).toContain(`claim:${oppizi}`);
+    expect(cost.low!).toBeCloseTo(arrangement.fixedCost!.p10 / MAX_BUYERS_OFFERED, 6);
+    expect(cost.high!).toBeCloseTo(arrangement.fixedCost!.p90, 6);
+    expect(cost.high!).toBeGreaterThan(modelled.price.high!);
+    // Swept log-uniformly: half its draws lie below the geometric middle, and a slot can cost more than it sells for.
+    const values = cost.distribution?.kind === 'EMPIRICAL' ? cost.distribution.values : [];
+    expect(values.length).toBeGreaterThan(10);
+    expect(values.filter((v) => v > 395).length).toBeGreaterThan(0);
+    expect(values.filter((v) => v < 395).length).toBeGreaterThan(0);
+  });
+
+  it('leaves a design that is not pooled, or a pooled one with no researched run cost, exactly as before', async () => {
+    const { orchestrationId, fragmentId } = await openArrangementRound();
+    await accepted(orchestrationId, fragmentId, [SLOT]);
+    await backfillClaimFacts(projectId);
+    const arrangement = await composeIt();
+    expect(arrangement.fixedCost).toBeUndefined();
+    const modelled = estimatedFromArrangement(arrangement, { projectId, currency: 'USD', daysLeft: 22, beforeProofCents: null })!;
+    expect(modelled.directCost).toMatchObject({ provenance: 'UNKNOWN', low: 0 });
+    expect(modelled.directCost.high!).toBeCloseTo(modelled.price.high! * 0.6, 6);
   });
 });
