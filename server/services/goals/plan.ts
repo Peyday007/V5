@@ -69,6 +69,7 @@ import { cachedCashKnowledge } from '../quant/knowledge.ts';
 import { achievedFrom, readTarget, type TargetReading } from './target.ts';
 import { constructedShare, executionFrame, MAX_LIVE_GOAL_ROUNDS, openConstructedRound, openGoalDiscovery, roundsStillResearching } from '../cash/discovery.ts';
 import { constructArrangements, lastConstructionReport, nextInputQuestion, type ConstructedArrangement } from '../cash/construct.ts';
+import { arrangementSteps, type ArrangementStepContext } from './arrangementSteps.ts';
 import { arrangementKeyOfBucket, recordReadingEvaluations, refutedUnderSameInputs, rememberArrangements } from '../cash/arrangementLibrary.ts';
 import { arrangementVerdicts } from '../../repos/monetization.ts';
 import { exclusionSentence, goalExclusions } from '../cash/exclusions.ts';
@@ -506,6 +507,18 @@ export interface PlanStep {
    * constructing or evaluating the plan.
    */
   execution: string[];
+  /**
+   * RESEARCH: establishes a part nobody has yet, by `question`. VALIDATE: an
+   * action whose first results answer `question` (a first batch of offers
+   * measures conversion). EXECUTE: the work itself. Absent on steps read from
+   * a reconstruction or a sale, which are EXECUTE.
+   */
+  kind?: 'RESEARCH' | 'VALIDATE' | 'EXECUTE';
+  question?: string;
+  /** The research steps, by `order`, whose answers this step needs first. */
+  requires?: number[];
+  /** Whether its cost and timing are known to fit the goal's limits; null when what decides it is unknown. */
+  withinLimits?: boolean | null;
 }
 
 export interface InfeasibleConclusion {
@@ -1534,8 +1547,12 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     if (refusedInfeasible) refusedAcceptance = notSupported(refusedAcceptance, refusedInfeasible);
     const permissions = target.achieved ? [] : await missingPermissions(target.projectId);
     const qualify: NextTest = { link: 'OFFER_AND_PRICE', test: 'Qualify at least one opening: establish who pays, an offer and a price, so there is a plan to judge.', by: 'BRAIN', blocker: null };
-    const refusedSteps = target.achieved || refusedInfeasible ? [] : planSteps({ adoption: refusedPlan.adoption, reconstruction: refusedReconstruction, sales: [], nextTest: qualify, permissionsMissing: permissions });
-    const refusedReadings = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways: null, arrangements, reconstruction: refusedReconstruction, acceptance: refusedAcceptance, arrangementModels: arrangementModels(arrangements, model.estimates ?? [], target, undefined, model.arrangementConversions ?? null) });
+    const refusedModels = arrangementModels(arrangements, model.estimates ?? [], target, undefined, model.arrangementConversions ?? null);
+    const refusedLead = leadingArrangement(arrangements, { portfolio: model.portfolio, candidateIds: refusedAcceptance.candidate?.opportunityIds ?? [] });
+    const refusedSteps = target.achieved || refusedInfeasible
+      ? []
+      : planSteps({ adoption: refusedPlan.adoption, reconstruction: refusedReconstruction, sales: [], nextTest: qualify, permissionsMissing: permissions, arrangement: refusedLead ? { arrangement: refusedLead, context: arrangementStepContext(target, refusedModels.get(refusedLead.key) ?? null) } : null });
+    const refusedReadings = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways: null, arrangements, reconstruction: refusedReconstruction, acceptance: refusedAcceptance, arrangementModels: refusedModels });
     const refusedContinuation = continuationOf({
       achieved: target.achieved,
       daysLeft: target.daysLeft,
@@ -1896,7 +1913,11 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     remaining: target.remainingCents / 100,
     currency: target.currency,
   });
-  const steps = infeasible || target.achieved ? [] : planSteps({ adoption: plan.adoption, reconstruction, sales, nextTest: legacyNext, permissionsMissing });
+  const models = arrangementModels(arrangements, model.estimates ?? [], target, undefined, model.arrangementConversions ?? null);
+  const lead = leadingArrangement(arrangements, { portfolio: model.portfolio, candidateIds: acceptance.candidate?.opportunityIds ?? [] });
+  const steps = infeasible || target.achieved
+    ? []
+    : planSteps({ adoption: plan.adoption, reconstruction, sales, nextTest: legacyNext, permissionsMissing, arrangement: lead ? { arrangement: lead, context: arrangementStepContext(target, models.get(lead.key) ?? null) } : null });
   const verdict: PlanVerdict =
     acceptance.status === 'ACCEPTED' ? 'RECOMMENDABLE' : infeasible ? 'NOT_VIABLE' : plan.adoption.source === 'RECONSTRUCTED' ? 'NEEDS_EVIDENCE' : (chosen?.verdict ?? 'NEEDS_EVIDENCE');
   const hypotheticalNote = plan.adoption.hypothetical ? ` The reconstruction is hypothetical, not the plan: ${plan.adoption.reason}.` : '';
@@ -1935,7 +1956,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   } catch (error) {
     degraded.push(`opening ledger: ${errorText(error)} (the plan set reads no observed collections or executed sales)`);
   }
-  const readings = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways, arrangements, reconstruction, acceptance, ledger, arrangementModels: arrangementModels(arrangements, model.estimates ?? [], target, undefined, model.arrangementConversions ?? null) });
+  const readings = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways, arrangements, reconstruction, acceptance, ledger, arrangementModels: models });
   const continuation = continuationOf({
     achieved: target.achieved,
     daysLeft: target.daysLeft,
@@ -2443,6 +2464,12 @@ export function planSteps(input: {
   sales: MarketTest[];
   nextTest: NextTest | null;
   permissionsMissing: string[];
+  /**
+   * The leading constructed arrangement, when the plan adopts no
+   * reconstruction and has no sale: its structure becomes the steps instead of
+   * the goal's generic next step alone (`arrangementSteps`).
+   */
+  arrangement?: { arrangement: ConstructedArrangement; context: Omit<ArrangementStepContext, 'send' | 'collect'> } | null;
 }): PlanStep[] {
   const send = input.permissionsMissing.filter((one) => /CONTACT_BUYER|messag/i.test(one));
   const collect = input.permissionsMissing.filter((one) => /QUOTE_AND_INVOICE|ACCEPT_PAYMENT|billing/i.test(one));
@@ -2500,10 +2527,14 @@ export function planSteps(input: {
         execution: [...send, ...collect],
         });
     }
-    if (steps.length === 0 && input.nextTest) {
+    if (steps.length === 0 && input.arrangement) {
+      steps.push(...arrangementSteps(input.arrangement.arrangement, { ...input.arrangement.context, send, collect }));
+    }
+    if ((steps.length === 0 || input.arrangement) && input.nextTest) {
       const t = input.nextTest;
+      const beside = steps.length > 0;
       steps.push({
-        order: 1,
+        order: steps.length + 1,
         label: CHAIN_LABEL[t.link],
         detail: t.test,
         startDay: { low: 0, high: 0 },
@@ -2514,6 +2545,8 @@ export function planSteps(input: {
         dependsOn: null,
         kill: t.link === 'CONVERSION' ? replyKill(r) : 'the research returns no sourced answer twice → ask a different way, then re-plan without this opening',
         execution: t.link === 'CONVERSION' ? [...send, ...collect] : [],
+        // Beside a leading arrangement's steps, the goal's own search keeps running in parallel.
+        ...(beside ? { kind: t.link === 'CONVERSION' ? ('VALIDATE' as const) : ('RESEARCH' as const), question: t.test, requires: [], withinLimits: null } : {}),
       });
     }
   }
@@ -3758,6 +3791,44 @@ export function arrangementContribution(reading: Pick<PlanReading, 'portfolio'>)
     out.set(key, (best.has(one.opportunityId) ? 1e9 : 0) + (one.refused ? 0 : one.revenue.p50));
   }
   return out;
+}
+
+/**
+ * The constructed arrangement the plan leads with, when its steps are read
+ * from one (`planSteps`): a member of the candidate or of the best
+ * combination first, then the one contributing most to the last model, then
+ * construction's own first-ranked. Null when nothing was constructed. Pure.
+ */
+export function leadingArrangement(
+  arrangements: readonly ConstructedArrangement[],
+  reading: Pick<PlanReading, 'portfolio'> & { candidateIds?: readonly string[] },
+): ConstructedArrangement | null {
+  if (arrangements.length === 0) return null;
+  const byKey = new Map(arrangements.map((a) => [a.key, a]));
+  for (const id of [...(reading.candidateIds ?? []), ...(reading.portfolio?.best?.members.map((m) => m.opportunityId) ?? [])]) {
+    if (!isArrangementId(id)) continue;
+    const hit = byKey.get(id.slice(ARRANGEMENT_ID_PREFIX.length));
+    if (hit) return hit;
+  }
+  let best: ConstructedArrangement | null = null;
+  let score = 0;
+  for (const [key, value] of arrangementContribution(reading)) {
+    const hit = byKey.get(key);
+    if (hit && value > score) {
+      best = hit;
+      score = value;
+    }
+  }
+  return best ?? arrangements[0]!;
+}
+
+/** The goal's limits as an arrangement's steps read them. */
+export function arrangementStepContext(
+  target: Pick<TargetReading, 'currency' | 'daysLeft' | 'capitalBeforeProofCents' | 'capitalCeilingCents'>,
+  modelled: ModelledOpportunity | null,
+): Omit<ArrangementStepContext, 'send' | 'collect'> {
+  const before = target.capitalBeforeProofCents ?? target.capitalCeilingCents;
+  return { currency: target.currency, daysLeft: target.daysLeft, capitalBeforeProof: before === null ? null : before / 100, modelled };
 }
 
 export async function askConstructedArrangements(goal: Workstream, reading: PlanReading, now: Date, max: number, liveCap: number): Promise<string[]> {

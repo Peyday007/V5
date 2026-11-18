@@ -456,7 +456,7 @@ export function arrangementSignature(design: Design, demand: Primitive, need: Pr
 }
 
 /** The parts of a structure, in the words a researcher reads. */
-const PART_ASK: Record<string, string> = {
+export const PART_ASK: Record<string, string> = {
   buyers: 'how many buyers of exactly this kind exist and can be reached through a published directory, register or list, with its number',
   need_rate: 'how often one of them buys this (weekly, monthly, yearly or once)',
   conversion: 'what share of buyers approached in comparable published cases agreed',
