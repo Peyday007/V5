@@ -1004,6 +1004,8 @@ const constructedCursor = new Map<string, string>();
 
 export interface Backfilled {
   filed: RecordedFact[];
+  /** Facts filed this pass that supersede one filed under an older figure rule (`rederiveClaimFacts`). */
+  refiled: RecordedFact[];
   /** Claims read and left unfiled: a buyer the map does not hold, no figure, not gated. */
   skipped: number;
 }
@@ -1341,6 +1343,99 @@ export function dealLevelFigures<T extends { perUnit: boolean }>(figures: readon
   return totals.length > 0 ? totals : [...figures];
 }
 
+/** Superseding facts one pass writes, at most (its own bound, apart from the filing batch). */
+export const REDERIVE_BATCH = BACKFILL_BATCH;
+/** Where each project's re-derivation scan stopped (by fact id), so a long fact list is read across ticks. */
+const rederiveCursor = new Map<string, string>();
+/** The fact keys a figure read out of claim prose is filed under, and the end of a claim's figures each takes. */
+const REDERIVE_ENDS: Readonly<Partial<Record<FactKey, 'LOW' | 'HIGH'>>> = { price_per_unit: 'LOW', contractor_rate_per_unit: 'HIGH' };
+
+/**
+ * The figure the current rule files from a claim for a fact filed from it, or
+ * null when the fact already holds it (B1h, 2026-11-18).
+ *
+ * `dealLevelFigures` changed what is filed from a claim that states both a
+ * rate and a total, but a fact is filed once per claim, so production kept
+ * "Oppizi charges $0.47 per postcard piece for a 10,000-home EDDM run, total
+ * $4,675" as a $0.47 deal and the arrangement 2821cce3c372 was worth 0 cents.
+ * A fact is re-derived only when its value is a per-unit figure the claim
+ * states and the current rule now reads a different, deal-level one from the
+ * same claim: a figure a claim declared (source 1) or a claim that states
+ * rates alone is never touched.
+ */
+export function rederivedAmount(fact: Pick<RecordedFact, 'key' | 'low' | 'high'>, claimText: string): number | null {
+  const end = REDERIVE_ENDS[fact.key];
+  if (!end) return null;
+  const stated = readMoneyFigures(claimText, 'USD').filter((one) => one.cents > 0);
+  const deal = dealLevelFigures(stated);
+  if (deal.length === stated.length) return null;
+  const held = Math.round(Math.min(fact.low, fact.high) * 100);
+  if (deal.some((one) => one.cents === held)) return null;
+  if (!stated.some((one) => one.perUnit && one.cents === held)) return null;
+  const cents = end === 'LOW' ? Math.min(...deal.map((one) => one.cents)) : Math.max(...deal.map((one) => one.cents));
+  return cents / 100;
+}
+
+/**
+ * Supersede claim facts the back-fill filed under an older figure rule (B1h).
+ * The old fact is never written: a new fact names it (`supersedes_fact_id`)
+ * and readers resolve the current one (`listProjectFacts`), so the
+ * $0.47 stays as history and the plan reads $4,675. Bounded (`BACKFILL_SCAN`
+ * facts read from a cursor, `REDERIVE_BATCH` writes) and idempotent: a fact is
+ * superseded at most once, and a re-derived fact already holds the current
+ * rule's figure, so a replay writes nothing.
+ */
+export async function rederiveClaimFacts(projectId: string, batch = REDERIVE_BATCH): Promise<RecordedFact[]> {
+  const out: RecordedFact[] = [];
+  const after = rederiveCursor.get(projectId) ?? '';
+  const scan = (await listProjectFacts(projectId))
+    .filter((one) => one.sourceClaimId && one.recordedBy === 'BRAIN' && REDERIVE_ENDS[one.key] && one.id > after)
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .slice(0, BACKFILL_SCAN);
+  if (scan.length === 0) {
+    rederiveCursor.set(projectId, '');
+    return out;
+  }
+  const claims = new Map((await claimsByIds([...new Set(scan.map((one) => one.sourceClaimId!))])).map((one) => [one.id, one]));
+  let reached = '';
+  for (const fact of scan) {
+    if (out.length >= batch) break;
+    reached = fact.id;
+    const claim = claims.get(fact.sourceClaimId!);
+    if (!claim || !claim.accepted || !claim.sourceUrl) continue;
+    const amount = rederivedAmount(fact, claim.claim);
+    if (amount === null) continue;
+    const recorded = await recordClaimFact({
+      projectId,
+      nodeId: fact.nodeId ?? null,
+      claimId: claim.id,
+      key: fact.key,
+      segment: fact.segment,
+      low: amount,
+      high: amount,
+      status: claimFactStatus(claim),
+      measures: `${fact.key === 'price_per_unit' ? 'what these buyers pay per deal (the stated total)' : 'the direct cost of one deal (the stated total)'}, re-derived from the claim: ${claim.claim}`.slice(0, 500),
+      sourceTitle: claim.sourceTitle ?? claim.sourcePublisher ?? claim.sourceUrl ?? 'research claim',
+      sourceUrl: claim.sourceUrl,
+      sourceKind: claim.primarySource ? 'PRIMARY' : 'SECONDARY',
+      observedAt: claimObservedAt(claim),
+      supersedesFactId: fact.id,
+    });
+    if (!recorded) continue;
+    out.push(recorded);
+    await recordCashEvent({
+      projectId,
+      kind: 'INDUSTRY_FACT_ABSORBED',
+      actorRef: 'BRAIN',
+      summary: `${fact.key} re-derived from its claim as ${amount} (was ${fact.low}); the earlier fact is kept as history.`,
+      detail: { factId: recorded.id, supersedes: fact.id, claimId: claim.id, key: fact.key, segment: recorded.segment, status: recorded.status, previous: fact.low, amount, rederived: true },
+    });
+  }
+  // Everything read: start over next pass. Otherwise resume after the last one read.
+  rederiveCursor.set(projectId, reached === scan[scan.length - 1]!.id && scan.length < BACKFILL_SCAN ? '' : reached);
+  return out;
+}
+
 /** What a dry run of the back-fill found: its pool, as the writer computes it, and nothing written. */
 export interface BackfillPool {
   /** False when the map holds no live buyer type, and the back-fill reads nothing. */
@@ -1412,13 +1507,16 @@ export function backfillConstructedShare(batch: number): number {
  * reports, so the census's dry run is this selection.
  */
 export async function backfillClaimFacts(projectId: string, batch = BACKFILL_BATCH): Promise<Backfilled> {
-  const out: Backfilled = { filed: [], skipped: 0 };
+  const out: Backfilled = { filed: [], refiled: [], skipped: 0 };
   // Sources 1 and 2 stop short of source 3's share, so they cannot starve it; source 3 then has the whole remainder.
   const reserved = backfillConstructedShare(batch);
   let limit = batch - reserved;
   const room = () => limit - out.filed.length;
   const nodes = await listNodes(projectId);
   if (!nodes.some((one) => one.kind === 'BUYER_TYPE' && !one.retiredAt)) return out;
+
+  // 0. Facts filed under an older figure rule, re-derived first: a pass that files nothing new still corrects them.
+  out.refiled.push(...(await rederiveClaimFacts(projectId)));
 
   const fileOne = async (input: BackfillCandidate): Promise<void> => {
     const { claim } = input;
