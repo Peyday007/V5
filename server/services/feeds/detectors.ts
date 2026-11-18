@@ -967,14 +967,83 @@ export const RULE_EFFECTIVE_SOON_V5: Detector = {
   },
 };
 
+/** The connector's marker for an effective date the source states outside effective_on ("Stated effective YYYY-MM-DD."). Pure. */
+export function statedEffectiveDateOf(body: string | null | undefined): string | null {
+  const m = /Stated effective (\d{4}-\d{2}-\d{2})\./.exec(body ?? '');
+  return m ? m[1]! : null;
+}
+
+/**
+ * RULE_EFFECTIVE_SOON, version 6 (SHADOW). One cause of v5's recorded misses
+ * (DETECTOR_MISSES:RULE_EFFECTIVE_SOON@5) that a detector can remove without
+ * lowering a bar:
+ *
+ *  A date stated outside effective_on. When no stored copy of a document
+ *  carries an "Effective YYYY-MM-DD." sentence (the source's effective_on was
+ *  null when the connector read it) and the document is not a correction, v6
+ *  reads the connector's "Stated effective YYYY-MM-DD." marker as the stated
+ *  date. It is a structured marker, never prose: the detector still parses no
+ *  free-text date, and a correction still takes only the corrected rule's date.
+ *
+ * The reproduction (tests/feedDetectors-rule-effective-soon-v6.test.ts) found
+ * no other detector cause: every other stored shape of the recorded items —
+ * fetched days late, publishedAt missing, a copy listing only the parent
+ * department, a bare copy beside one that states "Effective", a correction
+ * whose rule was stored 35 days earlier (v5 already reads 90 days back) — is
+ * kept by v5 when a stated date exists, and v6 keeps it unchanged.
+ *
+ * Everything else is v5's, reused rather than restated: grouping by the most
+ * specific agency any copy lists (FAA 2026-23073/23072 stay under the Federal
+ * Aviation Administration whatever copy lists only the Transportation
+ * Department), the publication day the Federal Register states, never
+ * effective before its own publication (Coast Guard 2026-23047, enforced
+ * 2026-11-11 and published 2026-11-12, stays out), the eight-week upper
+ * bound, the 30-day membership window, and the wording.
+ */
+export const RULE_EFFECTIVE_SOON_V6: Detector = {
+  id: 'RULE_EFFECTIVE_SOON',
+  version: 6,
+  label: RULE_EFFECTIVE_SOON.label,
+  mode: 'SHADOW',
+  sources: RULE_EFFECTIVE_SOON.sources,
+  lookbackMs: RULE_EFFECTIVE_SOON_V5.lookbackMs,
+  entityKeyOf: RULE_EFFECTIVE_SOON_V5.entityKeyOf,
+  memberWindowMs: RULE_EFFECTIVE_SOON_V5.memberWindowMs,
+  detect(records, now) {
+    const ours = records.filter((record) => this.sources.includes(record.source));
+    // Per document: does any copy state "Effective", is it a correction, and the earliest stated marker.
+    const effective = new Set<string>();
+    const correction = new Set<string>();
+    const stated = new Map<string, string>();
+    for (const record of ours) {
+      const documentNumber = federalRegisterDocumentOf(record.url);
+      if (!documentNumber) continue;
+      if (effectiveDateOf(record.body)) effective.add(documentNumber);
+      if (correctedDocumentOfNumber(documentNumber) || correctedDocumentOf(record.body)) correction.add(documentNumber);
+      const marker = statedEffectiveDateOf(record.body);
+      if (marker && (!stated.has(documentNumber) || marker < stated.get(documentNumber)!)) stated.set(documentNumber, marker);
+    }
+    const read = ours.map((record): DetectorRecord => {
+      const documentNumber = federalRegisterDocumentOf(record.url);
+      if (!documentNumber || effective.has(documentNumber) || correction.has(documentNumber)) return record;
+      const marker = stated.get(documentNumber);
+      return marker ? { ...record, body: `${record.body ?? ''} Effective ${marker}.`.trim() } : record;
+    });
+    return RULE_EFFECTIVE_SOON_V5.detect.call(this, read, now).map((signal) => ({
+      ...signal,
+      qualifiers: [...signal.qualifiers, 'a date stated outside effective_on is read only from the connector’s "Stated effective" marker, never from prose'],
+    }));
+  },
+};
+
 /**
  * Every installed rule. Adding one is a new entry here and its tests — nothing else.
- * RULE_EFFECTIVE_SOON v1..v4 stay exported so their recorded rows and readings keep their keys (@1..@4).
+ * RULE_EFFECTIVE_SOON v1..v5 stay exported so their recorded rows and readings keep their keys (@1..@5).
  * A model may propose a rule only as a Factory objective (reviewed code, starting
  * in SHADOW); no model output installs, edits or promotes a rule at run time.
  * `proposeRuleRepair` is how a rule's repeated misses become that objective.
  */
-export const DETECTORS: readonly Detector[] = [CONCENTRATED_HIRING, REPEATED_DEMAND, RULE_EFFECTIVE_SOON_V5];
+export const DETECTORS: readonly Detector[] = [CONCENTRATED_HIRING, REPEATED_DEMAND, RULE_EFFECTIVE_SOON_V6];
 
 // ---------------------------------------------------------------------------
 // SHADOW before ACTIVE: readings, promotion and rollback, from rows
