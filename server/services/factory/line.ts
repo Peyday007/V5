@@ -439,6 +439,13 @@ export interface LineReading {
     freeSurfaces: number;
     surfaces: LineCapacitySurface[];
   };
+  /**
+   * READY stages the dispatcher will not fire for, and why: under a fire
+   * backoff (`dispatch_not_before` in the future — a wait with its own end) or
+   * out of attempts (a decision, never a wait). Neither is executable work.
+   * Always set by `readLine`; optional only so a hand-built reading stays one.
+   */
+  held?: { backoff: number; exhausted: number; backoffUntil: string | null };
   unexplainedIdle: boolean;
   /** The sentence that says why the line is or is not moving. */
   because: string;
@@ -510,11 +517,24 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
   let readyBins = 0;
   let leasedBins = 0;
   let arriving = 0;
+  let backoffBins = 0;
+  let exhaustedBins = 0;
+  let backoffUntil: string | null = null;
   for (const bin of factoryBins) {
     const sent = newestSent(await listDispatchesForBin(bin.id));
     const leaseLive = bin.state === 'LEASED' && bin.leaseExpiresAt !== null && bin.leaseExpiresAt > nowIso;
     if (leaseLive) leasedBins += 1;
-    else {
+    else if (bin.attemptCount >= bin.maxAttempts) {
+      // The same refusal as `DISPATCHABLE_SQL`: no session will ever be fired
+      // for it, so it is a decision for the bin's owner, not executable work.
+      exhaustedBins += 1;
+    } else if (bin.dispatchNotBefore !== null && bin.dispatchNotBefore > nowIso) {
+      // The same refusal as `FIREABLE_SQL` (the dispatcher's `BIN_REFIRE_GUARD`):
+      // the dispatcher is correctly waiting for the backoff to lapse, and
+      // counting it here is what read a deliberate wait as "a fault, not a wait".
+      backoffBins += 1;
+      if (backoffUntil === null || bin.dispatchNotBefore < backoffUntil) backoffUntil = bin.dispatchNotBefore;
+    } else {
       readyBins += 1;
       if (sent && now.getTime() - new Date(sent.sentAt).getTime() < ARRIVAL_GRACE_MS) arriving += 1;
     }
@@ -653,6 +673,17 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
     because = `${leasedBins} stage(s) running and ${arriving} worker(s) arriving.`;
   else if (executableTotal > 0)
     because = `${executableTotal} piece(s) of executable work, but no Factory surface is free to take it.`;
+  else if (backoffBins > 0 || exhaustedBins > 0)
+    because = [
+      backoffBins > 0
+        ? `${backoffBins} stage(s) under a fire backoff; the dispatcher fires again from ${backoffUntil}.`
+        : null,
+      exhaustedBins > 0
+        ? `${exhaustedBins} stage(s) out of attempts, waiting on a regrant or a decision rather than a surface.`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(' ');
   else if (queue.length > 0)
     because = `${queue.length} objective(s) queued behind ${workingCampaigns} working campaign(s), the limit being ${policy.maxActive}.`;
   else because = 'Nothing is queued and no campaign has a stage waiting.';
@@ -664,6 +695,7 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
     executable: { queued: admissibleQueued, readyBins, total: executableTotal },
     active: { leasedBins, arriving, workingCampaigns },
     capacity: { freeSurfaces, surfaces },
+    held: { backoff: backoffBins, exhausted: exhaustedBins, backoffUntil },
     unexplainedIdle,
     because,
     campaigns,
