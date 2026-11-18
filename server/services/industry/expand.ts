@@ -58,7 +58,7 @@ import { arrangementForLegacyKey } from '../../repos/monetization.ts';
 import { ARRANGEMENT_BUCKET_MARK, arrangementKeyOfBucket } from '../cash/arrangementLibrary.ts';
 import { planBuyerType } from '../cash/construct.ts';
 import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
-import { readMoneyFigures } from '../cash/figures.ts';
+import { readMoneyFigures, readSubCentRates } from '../cash/figures.ts';
 import { readShareOrCount } from './shareCountFacts.ts';
 import {
   closeIndustryRound,
@@ -1337,29 +1337,23 @@ async function constructedRoundDecisions(
     }
     const buyer = resolved.buyer;
     const stated = readMoneyFigures(claim.claim, 'USD').filter((one) => one.cents > 0);
-    if (!stated.some((one) => one.perUnit)) {
-      out.push(nonPriceDecision(claim, buyer, refuse));
-      continue;
-    }
-    const figures = dealLevelFigures(stated);
-    if (claimPricesSupply(claim.claim, resolved.sides)) {
-      // What the arrangement pays its supplier: the direct cost, at its unfavourable (high) end.
+    const supply = claimPricesSupply(claim.claim, resolved.sides) ? supplyQuote(claim.claim) : null;
+    if (supply && supply.basis !== 'TOTAL') {
+      // What the arrangement pays its supplier: a run's total as its fixed cost, a rate as a per-unit cost, at the unfavourable (high) end.
       out.push({
         source: 'CONSTRUCTED_ROUND',
         claimId: claim.id,
-        candidate: {
-          source: 'CONSTRUCTED_ROUND',
-          claim,
-          buyer,
-          key: 'contractor_rate_per_unit',
-          amount: Math.max(...figures.map((one) => one.cents)) / 100,
-          measures: `what the arrangement's supplier charges ${figures[0]!.perUnit ? 'per unit' : 'per run (the stated total)'} — a direct cost, never these buyers' price — from a constructed arrangement's research: ${claim.claim}`,
-        },
+        candidate: { source: 'CONSTRUCTED_ROUND', claim, buyer, key: supply.key, amount: supply.amount, measures: `${supply.why}, from a constructed arrangement's research: ${claim.claim}` },
         reason: null,
         countsAsSkipped: true,
       });
       continue;
     }
+    if (!stated.some((one) => one.perUnit)) {
+      out.push(nonPriceDecision(claim, buyer, refuse));
+      continue;
+    }
+    const figures = dealLevelFigures(stated);
     out.push({
       source: 'CONSTRUCTED_ROUND',
       claimId: claim.id,
@@ -1452,26 +1446,63 @@ export function rederivedAmount(fact: Pick<RecordedFact, 'key' | 'low' | 'high'>
 }
 
 /**
+ * What a claim that prices an arrangement's SUPPLY states that supply costs
+ * (B1j, production 2026-11-18), at the unfavourable (high) end, or null when
+ * it states no figure the readers accept.
+ *
+ * "Oppizi charges $0.47 per postcard piece for a 10,000-home EDDM run, total
+ * $4,675" states a per-unit rate AND the total for the quantity it names: the
+ * total is what one whole run costs whether one buyer or many share it, the
+ * mechanism's `fixed_cost`, filed as `fixed_cost_per_run` (#1091 filed it as
+ * `contractor_rate_per_unit` 4675, which a pooled design never reads, so the
+ * plan's fixed cost stayed unknown). A rate alone ("$0.26 per piece") is a
+ * per-unit cost, and so is a sub-cent rate ("$0.259 per piece",
+ * `readSubCentRates`), which `readMoneyFigures` refuses and #1085 had read as
+ * $259. A total with no rate beside it states no quantity, and keeps #1091's
+ * reading (`basis: 'TOTAL'`) for the facts already filed that way.
+ */
+export function supplyQuote(claimText: string): { key: 'fixed_cost_per_run' | 'contractor_rate_per_unit'; amount: number; basis: 'RUN' | 'UNIT' | 'TOTAL'; why: string } | null {
+  const stated = readMoneyFigures(claimText, 'USD').filter((one) => one.cents > 0);
+  const rates = stated.filter((one) => one.perUnit);
+  const totals = stated.filter((one) => !one.perUnit);
+  const high = (figures: readonly { cents: number }[]) => Math.max(...figures.map((one) => one.cents)) / 100;
+  if (rates.length > 0 && totals.length > 0) {
+    return { key: 'fixed_cost_per_run', amount: high(totals), basis: 'RUN', why: "what the arrangement's supplier charges for one whole run (the stated total for the stated quantity) — the fixed cost of one shared run, never these buyers' price" };
+  }
+  const fine = rates.length > 0 ? rates.map((one) => one.cents / 100) : readSubCentRates(claimText, 'USD');
+  if (fine.length > 0) return { key: 'contractor_rate_per_unit', amount: Math.max(...fine), basis: 'UNIT', why: "what the arrangement's supplier charges per unit — a direct cost, never these buyers' price" };
+  if (totals.length > 0) return { key: 'contractor_rate_per_unit', amount: high(totals), basis: 'TOTAL', why: "what the arrangement's supplier charges per run (the stated total) — a direct cost, never these buyers' price" };
+  return null;
+}
+
+/** The fact keys a claim pricing an arrangement's supply may have been filed under, rightly or not. */
+const SUPPLY_FILED_KEYS: readonly FactKey[] = ['price_per_unit', 'contractor_rate_per_unit'];
+
+/**
  * What a filed claim fact means under the current rules, or null when it
- * already means that. A `price_per_unit` filed from a constructed round's
- * claim that prices the arrangement's supply (`claimPricesSupply`, B1i) is the
- * arrangement's direct cost, `contractor_rate_per_unit` at the claim's
- * deal-level high end; when the claim no longer states a figure the reader
- * accepts (`$0.259`, once read as $259) the price is withdrawn as an
- * ASSUMPTION, which no plan reads as evidence. Otherwise the B1h rule.
+ * already means that. A `price_per_unit` or `contractor_rate_per_unit` filed
+ * from a constructed round's claim that prices the arrangement's supply
+ * (`claimPricesSupply`, B1i) is what `supplyQuote` reads from the claim: a
+ * run's total as `fixed_cost_per_run`, a rate (a sub-cent one included) as
+ * `contractor_rate_per_unit`. A `price_per_unit` whose claim states no figure
+ * the readers accept is withdrawn as an ASSUMPTION, which no plan reads as
+ * evidence. Otherwise the B1h rule.
  */
 export function rederivedMeaning(
   fact: Pick<RecordedFact, 'key' | 'low' | 'high'> & { status?: RecordedFact['status'] },
   claimText: string,
   sides: ArrangementSides | undefined,
 ): { key: FactKey; amount: number; status?: 'ASSUMPTION'; why: string } | null {
-  if (fact.key === 'price_per_unit' && claimPricesSupply(claimText, sides)) {
-    // Already withdrawn: nothing reads it as evidence, and withdrawing it again would chain forever.
-    if (fact.status === 'ASSUMPTION') return null;
-    const deal = dealLevelFigures(readMoneyFigures(claimText, 'USD').filter((one) => one.cents > 0));
-    if (deal.length === 0) return { key: 'price_per_unit', amount: Math.min(fact.low, fact.high), status: 'ASSUMPTION', why: 'withdrawn: the claim prices the arrangement’s supply and states no figure the reader accepts' };
-    const amount = Math.max(...deal.map((one) => one.cents)) / 100;
-    return { key: 'contractor_rate_per_unit', amount, why: `what the arrangement's supplier charges ${deal[0]!.perUnit ? 'per unit' : 'per run (the stated total)'}, a direct cost and never these buyers' price` };
+  if (SUPPLY_FILED_KEYS.includes(fact.key) && claimPricesSupply(claimText, sides)) {
+    const quote = supplyQuote(claimText);
+    if (!quote) {
+      // Already withdrawn, or a cost with nothing to replace it: withdrawing again would chain forever.
+      if (fact.key !== 'price_per_unit' || fact.status === 'ASSUMPTION') return null;
+      return { key: 'price_per_unit', amount: Math.min(fact.low, fact.high), status: 'ASSUMPTION', why: 'withdrawn: the claim prices the arrangement’s supply and states no figure the reader accepts' };
+    }
+    const held = Math.min(fact.low, fact.high);
+    if (quote.key === fact.key && Math.abs(quote.amount - held) < 1e-9 && fact.status !== 'ASSUMPTION') return null;
+    return { key: quote.key, amount: quote.amount, why: quote.why };
   }
   const amount = rederivedAmount(fact, claimText);
   if (amount === null) return null;
@@ -1517,7 +1548,7 @@ export async function rederiveClaimFacts(projectId: string, batch = REDERIVE_BAT
     return out;
   }
   const claims = new Map((await claimsByIds([...new Set(scan.map((one) => one.sourceClaimId!))])).map((one) => [one.id, one]));
-  const sides = await supplySidesOf(projectId, scan.filter((one) => one.key === 'price_per_unit').map((one) => one.sourceClaimId!));
+  const sides = await supplySidesOf(projectId, scan.filter((one) => SUPPLY_FILED_KEYS.includes(one.key)).map((one) => one.sourceClaimId!));
   let reached = '';
   for (const fact of scan) {
     if (out.length >= batch) break;

@@ -13,8 +13,10 @@ import { recordConstructedArrangements } from '../server/repos/monetization.ts';
 import { seedSubject } from '../server/services/industry/seed.ts';
 import { backfillCandidates, backfillClaimFacts, claimPricesSupply, rederivedMeaning } from '../server/services/industry/expand.ts';
 import { recordClaimFact } from '../server/repos/construction.ts';
-import { readMoneyFigures } from '../server/services/cash/figures.ts';
-import { constructionObservations } from '../server/services/cash/construct.ts';
+import { readMoneyFigures, readSubCentRates } from '../server/services/cash/figures.ts';
+import { composeInvented, constructionObservations, inventionContext } from '../server/services/cash/construct.ts';
+import { planInputsFingerprint } from '../server/services/goals/plan.ts';
+import { supplyQuote } from '../server/services/industry/expand.ts';
 import type { Layer } from '../server/domain/types.ts';
 
 const KEY = '2821cce3c372';
@@ -114,22 +116,23 @@ describe('B1i: a supplier quote on a constructed round is the arrangement’s co
     expect(claimPricesSupply(OPPIZI, undefined)).toBe(false);
   });
 
-  it('files Oppizi as contractor_rate_per_unit 4675 and no buyer price, so the plan reads a cost and no value', async () => {
+  it('files Oppizi as a run’s fixed cost 4675 and no buyer price, so the plan reads a cost and no value', async () => {
     const { buyerId, orchestrationId, fragmentId } = await openArrangementRound();
     const [oppizi, usps] = await accepted(orchestrationId, fragmentId, [OPPIZI, 'USPS lists EDDM Retail flats price at $0.26 per piece on its postage prices page.']);
     const pool = (await backfillCandidates(projectId)).decisions.filter((one) => one.source === 'CONSTRUCTED_ROUND');
-    expect(pool.find((one) => one.claimId === oppizi)?.candidate).toMatchObject({ key: 'contractor_rate_per_unit', amount: 4675 });
+    expect(pool.find((one) => one.claimId === oppizi)?.candidate).toMatchObject({ key: 'fixed_cost_per_run', amount: 4675 });
     expect(pool.find((one) => one.claimId === usps)?.candidate).toMatchObject({ key: 'contractor_rate_per_unit', amount: 0.26 });
     await backfillClaimFacts(projectId);
     const facts = await listProjectConstructionFacts(projectId);
-    expect(facts.map((one) => [one.sourceClaimId, one.key, one.low]).sort()).toEqual([[oppizi, 'contractor_rate_per_unit', 4675], [usps, 'contractor_rate_per_unit', 0.26]].sort());
+    expect(facts.map((one) => [one.sourceClaimId, one.key, one.low]).sort()).toEqual([[oppizi, 'fixed_cost_per_run', 4675], [usps, 'contractor_rate_per_unit', 0.26]].sort());
     expect(facts.every((one) => one.segment === `map_${buyerId}`)).toBe(true);
     const read = await constructionObservations({ projectId, currency: 'USD', daysLeft: 22 });
     expect(read.priced).toEqual([]);
-    expect(read.unitCost.map((one) => one.value).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)))).toEqual([{ kind: 'POINT', value: 0.26 }, { kind: 'POINT', value: 4675 }]);
+    expect(read.unitCost.map((one) => one.value)).toEqual([{ kind: 'POINT', value: 0.26 }]);
+    expect(read.runCost.map((one) => one.value)).toEqual([{ kind: 'POINT', value: 4675 }]);
   });
 
-  it('supersedes the production facts: $0.47 and $4,675 prices become a $4,675 cost, and a $259 misreading is withdrawn', async () => {
+  it('supersedes the production facts: $0.47 and $4,675 prices become a $4,675 run cost, and a $259 misreading becomes a $0.259 unit cost', async () => {
     const { buyerId, orchestrationId, fragmentId } = await openArrangementRound();
     const [oppizi, bmeu] = (await accepted(orchestrationId, fragmentId, [OPPIZI, USPS_BMEU])) as [string, string];
     const file = (claimId: string, amount: number) =>
@@ -143,14 +146,106 @@ describe('B1i: a supplier quote on a constructed round is the arrangement’s co
 
     const pass = await backfillClaimFacts(projectId);
     expect(pass.refiled.map((one) => [one.supersedesFactId, one.key, one.low, one.status]).sort()).toEqual(
-      [[wrongPrice.id, 'contractor_rate_per_unit', 4675, 'OBSERVED'], [misread.id, 'price_per_unit', 259, 'ASSUMPTION']].sort(),
+      [[wrongPrice.id, 'fixed_cost_per_run', 4675, 'OBSERVED'], [misread.id, 'contractor_rate_per_unit', 0.259, 'OBSERVED']].sort(),
     );
     const read = await constructionObservations({ projectId, currency: 'USD', daysLeft: 22 });
     expect(read.priced).toEqual([]);
-    expect(read.unitCost.map((one) => one.value)).toEqual([{ kind: 'POINT', value: 4675 }]);
+    expect(read.unitCost.map((one) => one.value)).toEqual([{ kind: 'POINT', value: 0.259 }]);
+    expect(read.runCost.map((one) => one.value)).toEqual([{ kind: 'POINT', value: 4675 }]);
     // Idempotent: nothing is superseded twice, and a withdrawn fact is not withdrawn again.
     expect((await backfillClaimFacts(projectId)).refiled).toEqual([]);
-    expect(rederivedMeaning({ key: 'price_per_unit', low: 0.47, high: 0.47 }, OPPIZI, SIDES)).toMatchObject({ key: 'contractor_rate_per_unit', amount: 4675 });
-    expect(rederivedMeaning({ key: 'price_per_unit', low: 259, high: 259, status: 'ASSUMPTION' }, USPS_BMEU, SIDES)).toBeNull();
+    expect(rederivedMeaning({ key: 'price_per_unit', low: 0.47, high: 0.47 }, OPPIZI, SIDES)).toMatchObject({ key: 'fixed_cost_per_run', amount: 4675 });
+    expect(rederivedMeaning({ key: 'price_per_unit', low: 259, high: 259, status: 'ASSUMPTION' }, USPS_BMEU, SIDES)).toMatchObject({ key: 'contractor_rate_per_unit', amount: 0.259 });
+    expect(rederivedMeaning({ key: 'contractor_rate_per_unit', low: 0.259, high: 0.259, status: 'OBSERVED' }, USPS_BMEU, SIDES)).toBeNull();
+  });
+});
+
+/**
+ * B1j, production 2026-11-18 (d4732f8d, probes 44264538191 / 44264848784):
+ * after #1091 the accepted Oppizi claim sat as `contractor_rate_per_unit`
+ * 4675 (cfa_d740c475), which a pooled design never reads — its fixed run cost
+ * came only from an opening's `peakFundingCents` — and USPS's "$0.259 per
+ * piece" sat withdrawn as `price_per_unit` 259 (cfa_8cc776d4). Neither reached
+ * the plan of arrangement 2821cce3c372 (BROKER, pooled buyers, threshold
+ * presale).
+ */
+describe('B1j: an accepted per-run supply quote is the pooled arrangement’s fixed run cost', () => {
+  const USPS_RETAIL = 'USPS lists EDDM Retail flats price at $0.26 per piece on its postage prices page.';
+  const USPS_RETAIL_2 = 'USPS EDDM Retail postage is $0.26 per piece for flats.';
+
+  it('reads a per-run total as the run’s fixed cost and a per-piece quote, sub-cent included, as a unit cost', () => {
+    expect(supplyQuote(OPPIZI)).toMatchObject({ key: 'fixed_cost_per_run', amount: 4675, basis: 'RUN' });
+    expect(supplyQuote(USPS_RETAIL)).toMatchObject({ key: 'contractor_rate_per_unit', amount: 0.26, basis: 'UNIT' });
+    expect(supplyQuote(USPS_BMEU)).toMatchObject({ key: 'contractor_rate_per_unit', amount: 0.259, basis: 'UNIT' });
+    expect(readSubCentRates(USPS_BMEU, 'USD')).toEqual([0.259]);
+    // Only a rate stated per something, in this currency: never a bare or a foreign figure.
+    expect(readSubCentRates('a total of $0.259', 'USD')).toEqual([]);
+    expect(readSubCentRates('C$0.259 per piece', 'USD')).toEqual([]);
+    expect(supplyQuote('EDDM mailings are popular with printers.')).toBeNull();
+  });
+
+  it('supersedes the production facts into the arrangement’s economics: fixed run cost 4675 from the Oppizi claim, unit costs 0.26 and 0.259, and no value', async () => {
+    const { buyerId, orchestrationId, fragmentId } = await openArrangementRound();
+    const [oppizi, retail, retail2, bmeu] = (await accepted(orchestrationId, fragmentId, [OPPIZI, USPS_RETAIL, USPS_RETAIL_2, USPS_BMEU])) as [string, string, string, string];
+    const file = (claimId: string, key: 'contractor_rate_per_unit' | 'price_per_unit', amount: number, status: 'OBSERVED' | 'ASSUMPTION') =>
+      recordClaimFact({
+        projectId, nodeId: buyerId, claimId, key, segment: `map_${buyerId}`, low: amount, high: amount, status,
+        measures: 'as #1091 filed it', sourceTitle: 'EDDM', sourceUrl: 'https://eddm.com/', sourceKind: 'SECONDARY', observedAt: '2026-01-01T00:00:00.000Z',
+      });
+    // Production as d4732f8d holds it: cfa_d740c475, cfa_7ebd701a, cfa_ffeb589f and cfa_8cc776d4. The first is past its validity (2026-06-30).
+    const d740 = (await file(oppizi, 'contractor_rate_per_unit', 4675, 'OBSERVED'))!;
+    const ebd7 = (await file(retail, 'contractor_rate_per_unit', 0.26, 'OBSERVED'))!;
+    const ffeb = (await file(retail2, 'contractor_rate_per_unit', 0.26, 'OBSERVED'))!;
+    const cc77 = (await file(bmeu, 'price_per_unit', 259, 'ASSUMPTION'))!;
+    expect(d740.validUntil?.slice(0, 10)).toBe('2026-06-30');
+
+    const input = { projectId, currency: 'USD', delivers: [], capitalCeilingCents: 300_000, daysLeft: 22, now: new Date('2026-11-18T12:00:00.000Z') };
+    const spec = { design: { base: 'BROKER', funding: 'THRESHOLD_PRESALE', aggregation: 'POOLED_BUYERS', repeat: 'SUBSCRIPTION' } as const, population: 'Local service businesses', need: null };
+    const composeIt = async () => {
+      const made = composeInvented(spec, await inventionContext(input));
+      if ('refused' in made) throw new Error(made.refused);
+      return made;
+    };
+    const before = await composeIt();
+    expect(before.fixedCost).toBeUndefined();
+    expect(before.unknownParts).toContain('fixed_cost');
+    const fingerprintBefore = await planInputsFingerprint(projectId, GOAL);
+
+    const pass = await backfillClaimFacts(projectId);
+    expect(pass.refiled.map((one) => [one.supersedesFactId, one.key, one.low, one.status]).sort()).toEqual(
+      [[d740.id, 'fixed_cost_per_run', 4675, 'OBSERVED'], [cc77.id, 'contractor_rate_per_unit', 0.259, 'OBSERVED']].sort(),
+    );
+    // The two correct per-piece postage costs are left as they are.
+    expect(pass.refiled.some((one) => one.supersedesFactId === ebd7.id || one.supersedesFactId === ffeb.id)).toBe(false);
+    // §5: superseded, never overwritten — the old rows are history.
+    expect((await listProjectConstructionFacts(projectId)).some((one) => one.id === d740.id)).toBe(false);
+    expect(await getDb().get('SELECT id FROM construction_facts WHERE id = ?', [d740.id])).toBeTruthy();
+
+    const read = await constructionObservations({ projectId, currency: 'USD', daysLeft: 22 });
+    expect(read.priced).toEqual([]);
+    expect(read.runCost.map((one) => [one.value, one.lineage])).toEqual([[{ kind: 'POINT', value: 4675 }, [`claim:${oppizi}`]]]);
+    expect(read.unitCost.map((one) => one.value).sort((a, b) => (a.kind === 'POINT' && b.kind === 'POINT' ? a.value - b.value : 0))).toEqual([
+      { kind: 'POINT', value: 0.259 }, { kind: 'POINT', value: 0.26 }, { kind: 'POINT', value: 0.26 },
+    ]);
+
+    const after = await composeIt();
+    // The arrangement's composed economics carry the run's fixed cost, resting on the Oppizi claim.
+    // One supplier's total for a new arrangement is a comparable observation: it locates the run's cost
+    // (p50 4675) and bounds it, and, alone, does not yet justify a distribution, so research still asks for it.
+    expect(after.fixedCost).toMatchObject({ tier: 'COMPARABLE', observations: 1, sources: [`claim:${oppizi}`] });
+    expect(after.fixedCost!.p50).toBeCloseTo(4675, 3);
+    expect(after.fixedCost!.p10).toBeLessThan(4675);
+    expect(after.fixedCost!.p90).toBeGreaterThan(4675);
+    expect(after.inputsDigest).not.toBe(before.inputsDigest);
+    // A cost manufactures no value: what a slot buyer pays is still unknown, and nothing is at risk before the presale.
+    expect(after.value).toMatchObject({ tier: 'UNKNOWN', observations: 0 });
+    expect(after.value).toEqual(before.value);
+    expect(after.value.evidence).toBeUndefined();
+    expect(after.unknownParts).toContain('value');
+    expect(after.stress).toMatchObject({ exposure: 'SAFE', worstCaseCents: 0 });
+    // The plan sees new evidence.
+    expect(await planInputsFingerprint(projectId, GOAL)).not.toBe(fingerprintBefore);
+    // Idempotent.
+    expect((await backfillClaimFacts(projectId)).refiled).toEqual([]);
   });
 });
