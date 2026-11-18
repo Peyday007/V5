@@ -292,7 +292,18 @@ export function buildRepairPlan(input: BuildRepairPlanInput): RepairPlan {
       (condition) => LADDER[condition] ?? [],
     );
     const ordered = [...new Set([...candidates, ...DEFAULT_LADDER])];
-    const fresh = ordered.filter((strategy) => !used.has(strategy));
+    /*
+     * MARK_UNRESOLVED is a terminal answer, never a rung beside a search.
+     *
+     * DEFAULT_LADDER ends with it, so when one search rung was left the plan
+     * read [<rung>, 'MARK_UNRESOLVED'] and a non-final attempt was told both to
+     * search and to "say so and stop" — an attempt planned to give up, which
+     * then failed again (CAPABILITY:RESEARCH.RECOVERY.RETRY, "repeated
+     * failure"). The unreadable branch above already excluded it; both branches
+     * now share the rule: it is offered only alone, when the budget is down to
+     * its last attempt or no search rung is left.
+     */
+    const fresh = ordered.filter((strategy) => strategy !== 'MARK_UNRESOLVED' && !used.has(strategy));
     strategies =
       input.remainingBudget <= 1 || fresh.length === 0
         ? ['MARK_UNRESOLVED']
