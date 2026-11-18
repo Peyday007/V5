@@ -112,7 +112,7 @@ jobs:
           # Every mutating command names who it is recorded against. A creation
           # with no author is the thing `--admin` exists to prevent.
           case "$ADMIN_COMMAND" in
-            *create|'memory sweep'|'improvement tick'|'improvement on'|'improvement off'|'free-lane run'|'brain-only on'|'brain-only off'|'people rename'|'capacity adopt'|'factory invite'|'connectors derive'|'connectors attach'|'connectors reconnect'|'connectors probe'|'connectors repoint-worker'|'access grant'|'research start'|'cash seed-industry'|'cash retire-industry'|'cash constraints'|'packets recover-synthesis'|'deadline record')
+            *create|'memory sweep'|'improvement tick'|'improvement on'|'improvement off'|'free-lane run'|'brain-only on'|'brain-only off'|'people rename'|'capacity adopt'|'factory invite'|'connectors derive'|'connectors attach'|'connectors reconnect'|'connectors probe'|'connectors repoint-worker'|'access grant'|'research start'|'cash seed-industry'|'cash retire-industry'|'cash constraints'|'packets recover-synthesis')
               if [ -z "$ADMIN_ADMIN" ]; then
                 echo "::error::'$ADMIN_COMMAND' changes something, so it needs --admin <email>."
                 exit 1

@@ -472,7 +472,7 @@ const HELP = `Usage: npm run admin -- <area> <command> [...] [--admin someone@ex
             quote|buy --kind prewarmed|new --count <mailboxes> [--provider instantly|inboxkit] [--first F --last L --seed domain.com]
   brain-only show [<bin_…> …] | on | off   (Claude routines take only Brain-improvement work, §84)
   utilization show | run   (every capacity pool: waiting, running, capacity, idle beside work, §98)
-  deadline  history | plan --text-b64 <json> | record --text-b64 <json>   (§113: measured estimates, staffing, learning)
+  deadline  history | plan --text-b64 <json> | record --text-b64 <json>   (§113: measured estimates, staffing, learning; record is attributed to the terminal)
   free-lane show | run [ticks]             (free models do the displaced research, §85)
   sources   show [hours] | compare [n]     (how research reads public pages, and what each route recovered)
   capacity  show | adopt <user|email> <trig_…>
@@ -1423,9 +1423,10 @@ async function main(): Promise<void> {
       const request = JSON.parse(Buffer.from(encoded, 'base64').toString('utf8')) as Record<string, unknown>;
       const { DEADLINE_TOOLS } = await import('../server/mcp/deadlineTools.ts');
       const tool = DEADLINE_TOOLS.find((t) => t.name === (command === 'plan' ? 'brain_deadline_plan' : 'brain_deadline_record'))!;
-      const principal = command === 'record'
-        ? { type: 'USER', id: (await administrator()).id }
-        : { type: 'USER', id: 'terminal' };
+      // A deadline outcome is a measurement, not a decision: it is attributed to the
+      // terminal that recorded it (reaching the shell is the authentication, §35),
+      // so recording one needs no person's address in a workflow input.
+      const principal = { type: 'TERMINAL', id: 'admin-terminal' };
       const answer = await tool.run(request, { principal } as never);
       console.log(JSON.stringify(answer.value, null, 1));
       break;
