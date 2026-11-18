@@ -53,7 +53,7 @@ import { createFragments, getOrchestration, insertClaims, updateOrchestration } 
 import { capture } from '../server/services/russell/judgment.ts';
 import { launch } from '../server/services/russell/launch.ts';
 import { JUDGE_ROUND_STALL_PREFIX, parkStoppedMissions } from '../server/services/russell/needsHuman.ts';
-import { JUDGE_ROUND_EVENT } from '../server/services/research/judgeRound.ts';
+import { JUDGE_ROUND_EVENT, assessJudgeRound } from '../server/services/research/judgeRound.ts';
 import { answerUnaskedParks, fileWithGapsUnderStandingGrant, ROUTINE_DECISION_GRACE_MS } from '../server/services/russell/routineDecisions.ts';
 
 const ACCEPTS_A_REPORT = 'Deciding whether this project accepts a report with unresolved questions in it';
@@ -236,16 +236,17 @@ describe('parkStoppedMissions decides before it asks', () => {
     expect((await decisionsFor(resuming.missionId)).map((p) => p['declinedBecause']).sort()).toEqual(['JUDGE_ROUND_RESUMING', 'NO_LIVE_GRANT']);
   });
 
-  it('asks at once when a corrected round on this audit was refused by the research budget, rather than waiting out the round ceiling', async () => {
+  it('asks at once when a corrected round on this audit was refused by the research budget, read through the real assessment', async () => {
     /*
-     * `resumeJudgeRound` records the round, then learns the research budget a
-     * person set refuses the follow-ups, and re-parks the packet on the same
-     * audit. `assessJudgeRound` reads no budget, so it still says RESUME. The
-     * round is not coming: only a person can raise that ceiling, so the park
-     * asks now instead of after MAX_JUDGE_ROUNDS refused passes.
+     * The state production leaves behind: `resumeJudgeRound` records the round
+     * (naming the audit), learns the research budget a person set refuses the
+     * follow-ups, and re-parks the packet on the same audit with its own
+     * failure reason. Nothing here is mocked: the real `assessJudgeRound` must
+     * not read that as a judge park still "about to" resume, so the park never
+     * takes the no-card JUDGE_ROUND_RESUMING branch and the ceiling only a
+     * person can raise is asked at once, not after MAX_JUDGE_ROUNDS passes.
      */
     await grant();
-    judge.resume = true;
     const refused = await stoppedMission(['ACCEPTED', 'BLOCKED']);
     const audit = await createAudit({
       projectId, layerId,
@@ -257,41 +258,28 @@ describe('parkStoppedMissions decides before it asks', () => {
     });
     await updateOrchestration(refused.orchestrationId, {
       auditId: audit.id,
+      verdict: 'MORE_RESEARCH',
       failureReason: 'The judge asked for more research and the research budget a person set refuses it: spent',
     });
-    // What the refused round left behind: its own record, naming the audit the packet is still parked on.
     await recordEvent({
       projectId, entityType: 'RUN', entityId: null, eventType: JUDGE_ROUND_EVENT,
       payload: { orchestrationId: refused.orchestrationId, round: 1, previousAuditId: audit.id, verdict: 'MORE_RESEARCH', followUpFragments: [] },
     });
+    const parked = (await getOrchestration(refused.orchestrationId))!;
+    expect(parked.verdict).toBe('MORE_RESEARCH');
+    expect(parked.auditId).toBe(audit.id);
+    expect((await assessJudgeRound(parked)).kind).toBe('NOT_PARKED');
 
+    // No live grant, so Brain cannot file it short itself: the only answer left is a person's.
+    await getDb().run(`UPDATE russell_goals SET state = 'REVOKED' WHERE project_id = ?`, [projectId]);
     await parkStoppedMissions(10);
 
     const card = await cardFor(refused.missionId);
     expect(card?.authorityNeeded).toContain(ACCEPTS_A_REPORT);
     expect((await getMission(refused.missionId))!.state).toBe('NEEDS_HUMAN');
-    expect(await decisionsFor(refused.missionId)).toMatchObject([
-      { declinedBecause: 'JUDGE_ROUND_REFUSED', decidedBy: 'PENDING_PERSON', choice: null },
-    ]);
-
-    // A round that ran on an earlier audit is not this one: a packet parked on a new audit is still about to be corrected.
-    const ran = await stoppedMission(['ACCEPTED', 'BLOCKED']);
-    const later = await createAudit({
-      projectId, layerId,
-      result: {
-        verdict: 'PATCH', summary: 'The re-audit asked for corrections.', failures: [], missingDocuments: [],
-        requiredResearchRuns: [], requiredPatches: [], synthesisRequired: false, freezeEligible: false,
-        nextVersion: null, nextAction: 'Correct it.',
-      },
-    });
-    await updateOrchestration(ran.orchestrationId, { auditId: later.id });
-    await recordEvent({
-      projectId, entityType: 'RUN', entityId: null, eventType: JUDGE_ROUND_EVENT,
-      payload: { orchestrationId: ran.orchestrationId, round: 1, previousAuditId: audit.id, verdict: 'MORE_RESEARCH', followUpFragments: ['f9'] },
-    });
-    await parkStoppedMissions(10);
-    expect(await cardFor(ran.missionId)).toBeUndefined();
-    expect(await decisionsFor(ran.missionId)).toMatchObject([{ declinedBecause: 'JUDGE_ROUND_RESUMING', decidedBy: 'BRAIN' }]);
+    const decisions = await decisionsFor(refused.missionId);
+    expect(decisions.map((p) => p['declinedBecause'])).not.toContain('JUDGE_ROUND_RESUMING');
+    expect(decisions).toMatchObject([{ declinedBecause: 'NO_LIVE_GRANT', decidedBy: 'PENDING_PERSON', choice: null }]);
   });
 
   it('says what a packet waits on when no corrected round can start, without asking anyone', async () => {
