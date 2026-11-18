@@ -49,7 +49,7 @@ import { DELIVERABLE_LABEL } from '../cash/deliverables/spec.ts';
 import { FEED_SOURCES, pullUrl, type FeedItem, type FeedSource } from './sources.ts';
 import { FEED_SHORTLIST_BUCKET } from './bucket.ts';
 import { SITE_SOURCE } from './sites.ts';
-import { CODE_SIGNAL_SOURCE, coveredItems, detectionsForLeads } from './detectors.ts';
+import { CODE_SIGNAL_SOURCE, DETECTORS, coveredItems, detectionsForLeads } from './detectors.ts';
 import { EXTRACTOR_VERSION, extractItem, extractItems, MODEL_BATCH_SIZE, type ExtractableItem, type ExtractedFact } from './extract.ts';
 import { commitReadings, emptyDeltaIndex, fingerprintOf, foldSlices, planDelta, recordIdentity, sliceOf, type DeltaIndex, type DeltaPlan, type DeltaStatus, type RecordReading } from '../knowledge/delta.ts';
 import { nameKeyOf, resolveIdentities, type IdentityCollision, type IdentityLink, type IdentityRecord } from '../knowledge/identity.ts';
@@ -401,6 +401,66 @@ async function completeParsed(source: FeedSource, items: FeedItem[], getJson: (u
   }
 }
 
+/**
+ * Stored items of `source` its completion would still fill in (`FeedSource.incomplete`):
+ * the latest stored version of each record fetched inside the lookback of the
+ * detectors that read this source (the window they read, `fetched_at` minus a
+ * day), less the records this pull parsed again (those are completed as
+ * parsed). An item stored before the completion existed — C1-2026-21030,
+ * fetched 2026-11-12 as "Corrects 2026-21030." — is otherwise never completed,
+ * because the cursor never lists it again. Empty for a source no detector reads.
+ */
+async function storedToComplete(source: FeedSource, parsed: readonly FeedItem[], now: Date): Promise<FeedItem[]> {
+  if (!source.complete || !source.incomplete) return [];
+  const lookbackMs = Math.max(0, ...DETECTORS.filter((d) => d.sources.includes(source.id)).map((d) => d.lookbackMs));
+  if (lookbackMs === 0) return [];
+  const since = new Date(now.getTime() - lookbackMs - 86_400_000).toISOString();
+  const rows = await getDb().all<{ external_id: string; url: string; title: string; body: string | null; organization: string | null; published_at: string | null }>(
+    `SELECT external_id, url, title, body, organization, published_at FROM feed_items
+      WHERE source = ? AND fetched_at >= ? ORDER BY fetched_at, id`,
+    [source.id, since],
+  );
+  // One record, many versions (`feedItemVersionId`: "<id>#v<n>"); only the latest says what the record holds now.
+  const latest = new Map<string, { n: number; item: FeedItem }>();
+  for (const row of rows) {
+    const m = /^(.*)#v(\d+)$/.exec(row.external_id);
+    const externalId = m ? m[1]! : row.external_id;
+    const n = m ? Number(m[2]) : 1;
+    const held = latest.get(externalId);
+    if (held && held.n >= n) continue;
+    latest.set(externalId, { n, item: { externalId, url: row.url, title: row.title, body: row.body, organization: row.organization, publishedAt: row.published_at } });
+  }
+  const again = new Set(parsed.map((item) => item.externalId));
+  return [...latest.values()].map((one) => one.item).filter((item) => !again.has(item.externalId) && source.incomplete!(item));
+}
+
+/**
+ * Complete what a pull parsed and, in the same call and under the same per-pull
+ * lookup limit, what this source stored earlier and still lacks. A stored item
+ * the completion changed is recorded the way any edit is (`insertFeedItems`: a
+ * new version row; the earlier row is never rewritten). Returns the parsed
+ * items, completed. Never fails the pull.
+ */
+async function completePull(source: FeedSource, parsed: FeedItem[], now: Date, getJson: (url: string) => Promise<unknown>): Promise<FeedItem[]> {
+  let pending: FeedItem[] = [];
+  try {
+    pending = await storedToComplete(source, parsed, now);
+  } catch (error) {
+    console.warn(`[feeds] ${source.id}: stored items unreadable for completion: ${String((error as Error)?.message ?? error)}`);
+  }
+  const completed = await completeParsed(source, [...parsed, ...pending], getJson);
+  if (completed.length !== parsed.length + pending.length) return completeParsed(source, parsed, getJson);
+  const changed = completed.slice(parsed.length).filter((item, i) => (item.body ?? null) !== (pending[i]!.body ?? null));
+  if (changed.length > 0) {
+    try {
+      await insertFeedItems(source.id, changed);
+    } catch (error) {
+      console.warn(`[feeds] ${source.id}: completed stored items not recorded: ${String((error as Error)?.message ?? error)}`);
+    }
+  }
+  return completed.slice(0, parsed.length);
+}
+
 /** Parse a JSON body; a body that is not JSON throws the parser's own SyntaxError, which health reads as a broken parser. */
 function parseJsonBody(body: string): unknown {
   return JSON.parse(body);
@@ -525,7 +585,7 @@ async function acquireSource(
         await recordFeedPull({ source: source.id, ok: true, fetched: 0, inserted: 0, error: `${NOT_MODIFIED_MARK}: ${got.reason}`.slice(0, 300), at });
       } else {
         const body = parseJsonBody(got.body);
-        const items = await completeParsed(source, source.parse(body), async (followUp) => {
+        const items = await completePull(source, source.parse(body), now, async (followUp) => {
           const more = await deps.read(followUp, null, headers, source.timeoutMs);
           if (more.status !== 'MODIFIED') throw new Error(`no body for ${followUp}`);
           return parseJsonBody(more.body);
@@ -677,7 +737,7 @@ export async function pullDueFeeds(input: {
     try {
       const fetcher = input.fetcher ?? httpFetcher;
       const body = await fetcher(ask.url, source.headers ?? {}, source.timeoutMs);
-      const items = await completeParsed(source, source.parse(body), (followUp) => fetcher(followUp, source.headers ?? {}, source.timeoutMs));
+      const items = await completePull(source, source.parse(body), now, (followUp) => fetcher(followUp, source.headers ?? {}, source.timeoutMs));
       const inserted = await insertFeedItems(source.id, items);
       await recordFeedPull({ source: source.id, ok: true, fetched: items.length, inserted, error: null, at: now.toISOString() });
       out.push({ source: source.id, inserted, error: null, fetched: items.length, duplicates: Math.max(0, items.length - inserted), incremental: ask.incremental });

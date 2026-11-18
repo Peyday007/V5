@@ -47,6 +47,15 @@ export interface FeedSource {
    */
   complete?(items: FeedItem[], getJson: (url: string) => Promise<unknown>): Promise<FeedItem[]>;
   /**
+   * Whether an item this source already stored still lacks what `complete`
+   * fills in — an item stored before the completion existed, or one whose
+   * lookup failed. A pull hands such items (inside the lookback of the
+   * detectors that read this source) to `complete` together with what it
+   * parsed, under the same per-pull lookup limit. Absent: stored items are
+   * never completed again.
+   */
+  incomplete?(item: FeedItem): boolean;
+  /**
    * What the acquisition pipeline in `run.ts` reads about this source
    * (ACQ-21-3, ACQ-21-4): which corpus or open domain class it is an instance
    * of, the facts it is pulled for, how its real content is reached, and the
@@ -272,6 +281,17 @@ export function federalRegisterEffectiveOnUrl(documentNumber: string): string {
 }
 
 /**
+ * A stored or parsed Federal Register item that names the document it corrects
+ * ("Corrects N.") but carries neither its own "Effective" sentence nor a
+ * "Corrected rule effective" one: what `completeFederalRegisterCorrections`
+ * would still look up. Pure.
+ */
+export function federalRegisterCorrectionIncomplete(item: Pick<FeedItem, 'body'>): boolean {
+  const body = item.body ?? '';
+  return /Corrects [A-Za-z0-9-]+\./.test(body) && !/Effective \d{4}-\d{2}-\d{2}\./.test(body) && !/Corrected rule effective /.test(body);
+}
+
+/**
  * A correction states no effective date of its own (C1-2026-21030: effective_on,
  * dates and action all null), and the rule it corrects may have been published
  * long before anything Brain still holds. For each parsed correction with no
@@ -291,7 +311,7 @@ export async function completeFederalRegisterCorrections(
   for (const item of items) {
     const body = item.body ?? '';
     const corrects = /Corrects ([A-Za-z0-9-]+)\./.exec(body)?.[1] ?? null;
-    if (!corrects || /Effective \d{4}-\d{2}-\d{2}\./.test(body) || /Corrected rule effective /.test(body) || asked >= limit) {
+    if (!corrects || !federalRegisterCorrectionIncomplete(item) || asked >= limit) {
       out.push(item);
       continue;
     }
@@ -677,6 +697,7 @@ export const FEED_SOURCES: readonly FeedSource[] = [
     cursorUrl: (since: string) => `${FEDERAL_REGISTER_RULES_URL}&conditions%5Bpublication_date%5D%5Bgte%5D=${since.slice(0, 10)}`,
     parse: parseFederalRegister,
     complete: completeFederalRegisterCorrections,
+    incomplete: federalRegisterCorrectionIncomplete,
     acquisition: jsonApi(
       'domain:regulatory-records',
       ['regulatory', 'compliance-deadline'],
