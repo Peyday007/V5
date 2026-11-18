@@ -195,16 +195,45 @@ describe('parkStoppedMissions decides before it asks', () => {
     expect(await decisionsFor(missionId)).toHaveLength(1);
   });
 
-  it('leaves a judge round about to resume, a packet with nothing accepted, and a plan awaiting approval as before', async () => {
+  it('opens no card for a packet Brain is about to correct in a judge round, and asks once that round is no longer coming', async () => {
+    /*
+     * The recorded failure class (OWNER:DECIDING_WHETHER_THIS_PROJECT_ACCEPTS_A_REPORT_WITH_UNRESOLV#3):
+     * the park opened "accepts a report with unresolved questions" for a packet
+     * whose judge round was about to resume, and the round then withdrew it —
+     * "Withdrawn by Brain: the judge's MORE_RESEARCH named what to correct ...
+     * Nothing here needs deciding." A question about to be withdrawn is not asked.
+     */
     await grant();
-
     judge.resume = true;
     const resuming = await stoppedMission(['ACCEPTED', 'BLOCKED']);
     await parkStoppedMissions(10);
-    expect((await cardFor(resuming.missionId))?.authorityNeeded).toContain(ACCEPTS_A_REPORT);
+
+    const everAsked = await getDb().all<{ state: string }>(
+      'SELECT state FROM russell_human_requests WHERE mission_id = ?', [resuming.missionId],
+    );
+    expect(everAsked).toEqual([]);
+    expect((await getMission(resuming.missionId))!.state).not.toBe('NEEDS_HUMAN');
     expect((await getOrchestration(resuming.orchestrationId))!.unresolvedGapPolicy).not.toBe('RECORD_GAPS');
-    expect(await decisionsFor(resuming.missionId)).toMatchObject([{ declinedBecause: 'JUDGE_ROUND_RESUMING' }]);
+    expect(await decisionsFor(resuming.missionId)).toMatchObject([{ declinedBecause: 'JUDGE_ROUND_RESUMING', decidedBy: 'BRAIN', choice: null }]);
+
+    // Recorded once per judged audit, not once per tick.
+    await parkStoppedMissions(10);
+    expect(await cardFor(resuming.missionId)).toBeUndefined();
+    expect(await decisionsFor(resuming.missionId)).toHaveLength(1);
+
+    // The round is no longer coming and Brain cannot file it (no live grant): it asks exactly as before.
     judge.resume = false;
+    await getDb().run(`UPDATE russell_goals SET state = 'REVOKED' WHERE project_id = ?`, [projectId]);
+    await parkStoppedMissions(10);
+    const card = await cardFor(resuming.missionId);
+    expect(card?.authorityNeeded).toContain(ACCEPTS_A_REPORT);
+    expect(card?.choices.map((c) => c.key)).toEqual(['RECORD_GAPS', 'STOP']);
+    expect((await getMission(resuming.missionId))!.state).toBe('NEEDS_HUMAN');
+    expect((await decisionsFor(resuming.missionId)).map((p) => p['declinedBecause']).sort()).toEqual(['JUDGE_ROUND_RESUMING', 'NO_LIVE_GRANT']);
+  });
+
+  it('leaves a packet with nothing accepted and a plan awaiting approval as before', async () => {
+    await grant();
 
     // Researched, nothing accepted: one answer (STOP) is no decision, so it fails as before — no card, no filing.
     const nothing = await stoppedMission(['BLOCKED', 'BLOCKED']);

@@ -545,6 +545,48 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
     // Decided now, or already decided and only being carried out: either way no question is left for a person.
     if (decision.decided || decision.because === 'ALREADY_FILED_WITH_GAPS') continue;
 
+    /*
+     * About to be corrected by Brain itself: nothing to ask.
+     *
+     * `assessJudgeRound` said RESUME, so `resumeJudgeParkedPackets` (which
+     * selects by the packet's status, not the mission's) runs a corrected
+     * round and withdraws any open card with "Nothing here needs deciding".
+     * Opening one here put that withdrawn question in front of the owner
+     * first, and those withdrawn cards were most of the recorded
+     * "accepts a report with unresolved questions" requests
+     * (OWNER:DECIDING_WHETHER_THIS_PROJECT_ACCEPTS_A_REPORT_WITH_UNRESOLV#3).
+     * The mission keeps its state. If the assessment later turns to PERSON,
+     * for example after the round ceiling or a budget refusal, the next pass
+     * reaches `decideAtPark` again and asks as before. Brain records this once
+     * per judged audit, not once per tick.
+     */
+    if (decision.because === 'JUDGE_ROUND_RESUMING') {
+      const recorded = await getDb().get<{ n: number }>(
+        `SELECT COUNT(*) AS n FROM project_events
+          WHERE project_id = ? AND entity_id = ? AND event_type = 'RUSSELL_ROUTINE_DECISION'
+            AND payload LIKE ? AND payload LIKE ?`,
+        [mission.projectId, mission.id, '%"declinedBecause":"JUDGE_ROUND_RESUMING"%', `%"auditId":${JSON.stringify(orchestration.auditId)}%`],
+      );
+      if (Number(recorded?.n ?? 0) === 0) {
+        await recordEvent({
+          projectId: mission.projectId,
+          entityType: 'RUSSELL_MISSION',
+          entityId: mission.id,
+          eventType: 'RUSSELL_ROUTINE_DECISION',
+          payload: {
+            orchestrationId: orchestration.id,
+            missionId: mission.id,
+            auditId: orchestration.auditId,
+            choice: null,
+            decidedBy: 'BRAIN',
+            declinedBecause: decision.because,
+            reason: `Brain asked nobody: ${decision.reason}, and that round is where the judge's corrections go.`,
+          },
+        });
+      }
+      continue;
+    }
+
     const moved = await transitionMission({
       missionId: mission.id,
       from: mission.state,
