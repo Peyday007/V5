@@ -145,6 +145,7 @@ import { classifyInfraFailure, withActivity } from '../../db/infra.ts';
 import { compileMission } from './compiler.ts';
 import { specificationKey } from './launch.ts';
 import {
+  JUDGE_ROUND_STALL_PREFIX,
   concludeAbandonedParks,
   restoreWronglyConcludedParks,
   parkStoppedMissions,
@@ -872,6 +873,39 @@ export async function runFeedLoopCycle(
 export const PASS_FAILURE_PREFIX = 'passes: ';
 
 /**
+ * Clear a judge-round capacity stall once the round it waited on has started.
+ *
+ * `parkStoppedMissions` writes the WAITING line ("a corrected judge round that
+ * Brain starts itself as soon as research capacity allows …") and is the only
+ * pass that would take it back, but it selects missions whose packet is
+ * `NEEDS_HUMAN`. In tick order the judge-rounds pass runs first, so once a slot
+ * frees the packet leaves `NEEDS_HUMAN` before the park pass looks, and the
+ * mission stayed WAITING — counted as waiting, not working, and telling the
+ * surface the database was shedding — for the whole corrected round. Run right
+ * after `resumeJudgeParkedPackets`, this reads the rows that pass just moved:
+ * a mission still carrying the stall line whose packet is no longer parked and
+ * not ended goes back to RUNNING. Guarded on the mission's current state and
+ * line, so a mission a person or another pass has moved is never touched, and
+ * an ended packet is left to writeback.
+ */
+export async function releaseStartedJudgeRoundStalls(limit = 200): Promise<string[]> {
+  const rows = await getDb().all<{ id: string; status: string }>(
+    `SELECT m.id, o.status FROM russell_missions m
+       JOIN research_orchestrations o ON o.id = m.orchestration_id
+      WHERE m.state = 'WAITING' AND m.waiting_on LIKE ? AND o.status <> 'NEEDS_HUMAN'
+      ORDER BY m.updated_at ASC LIMIT ?`,
+    [`${JUDGE_ROUND_STALL_PREFIX}%`, limit],
+  );
+  const released: string[] = [];
+  for (const row of rows) {
+    if (TERMINAL_ORCHESTRATION.has(row.status)) continue;
+    const moved = await transitionMission({ missionId: row.id, from: 'WAITING', to: 'RUNNING', waitingOn: null });
+    if (moved) released.push(row.id);
+  }
+  return released;
+}
+
+/**
  * Run one pass as its own failure domain.
  *
  * Every pass on this tick derives from rows and is idempotent by them, so a
@@ -1476,6 +1510,7 @@ async function tickOnce(owner: string): Promise<TickReport> {
      */
     await runPass(report, 'judge-rounds', async () => {
       report.judgeRounds = await resumeJudgeParkedPackets();
+      await releaseStartedJudgeRoundStalls();
     });
 
     /*
