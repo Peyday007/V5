@@ -15,67 +15,63 @@ async function q(sql: string, args: unknown[] = []): Promise<any[]> {
 }
 const slim = (m: any) => { if (!m) return m; const { distribution, ...rest } = m; return { ...rest, distN: distribution?.values?.length ?? null }; };
 
+const SINCE = '2026-11-18T19:11:52.000Z';
 async function main() {
   await initDatabase();
   try {
     out('NOW', new Date().toISOString());
+    out('SINCE', SINCE);
     const P = 'prj_22fb4fec295f403a8a22';
     const bucket = `goal-${G}-%`;
-    const { readMoneyFigures } = await import('../server/services/cash/figures.ts');
-    const { arrangementKeyOfBucket } = await import('../server/services/cash/arrangementLibrary.ts');
-    // Every accepted constructed-round claim not yet filed, with its bucket, read through the filer's own reasons.
-    let cursor = '';
-    const byReason = new Map<string, { n: number; money: number; perUnit: number; buckets: Map<string, number>; moneySamples: string[] }>();
-    const unmatched = new Map<string, number>();
-    const all: { claimId: string; reason: string }[] = [];
-    for (let i = 0; i < 25; i++) {
-      const pool = await backfillCandidates(P, { unitEconomic: 'zzzz', constructed: cursor });
-      const mine = pool.decisions.filter((d) => d.source === 'CONSTRUCTED_ROUND');
-      if (mine.length === 0) break;
-      for (const d of mine) all.push({ claimId: d.claimId ?? '', reason: d.candidate ? 'FILE' : (d.reason ?? '').slice(0, 60) });
-      for (const d of mine) if (d.unmatchedBuyer) unmatched.set(d.unmatchedBuyer.slice(0, 80), (unmatched.get(d.unmatchedBuyer.slice(0, 80)) ?? 0) + 1);
-      cursor = mine[mine.length - 1]!.claimId ?? cursor;
-    }
-    const ids = all.map((a) => a.claimId).filter(Boolean);
-    const rows = new Map<string, any>();
-    for (let i = 0; i < ids.length; i += 300) {
-      const chunk = ids.slice(i, i + 300);
-      for (const r of await q(`SELECT c.id, c.claim, (SELECT MIN(r.bucket_id) FROM russell_missions m JOIN cash_discovery_rounds r ON r.candidate_id = m.candidate_id WHERE m.orchestration_id = c.orchestration_id AND r.bucket_id LIKE 'goal-%-mx-%') AS b FROM research_claims c WHERE c.id IN (${chunk.map(() => '?').join(',')})`, chunk)) rows.set(r.id, r);
-    }
-    for (const a of all) {
-      const r = rows.get(a.claimId);
-      const money = r ? readMoneyFigures(String(r.claim), 'USD').filter((f: any) => f.cents > 0) : [];
-      const e = byReason.get(a.reason) ?? { n: 0, money: 0, perUnit: 0, buckets: new Map(), moneySamples: [] };
-      e.n++;
-      if (money.length) e.money++;
-      if (money.some((f: any) => f.perUnit)) { e.perUnit++; if (e.moneySamples.length < 8) e.moneySamples.push(`${a.claimId}: ${String(r.claim).slice(0, 200)}`); }
-      const b = String(r?.b ?? '').replace(/^goal-[^-]+-/, '').replace(/^wst_[0-9a-f]+-/, '');
-      e.buckets.set(b, (e.buckets.get(b) ?? 0) + 1);
-      byReason.set(a.reason, e);
-    }
-    for (const [k, e] of byReason) out('REASON', { k, n: e.n, statesUsd: e.money, statesPerUnitUsd: e.perUnit, buckets: [...e.buckets].sort((x, y) => y[1] - x[1]).slice(0, 12) });
-    for (const [k, e] of byReason) for (const s of e.moneySamples) out('PERUNIT_SAMPLE', `${k.slice(0, 30)} | ${s}`);
-    out('UNMATCHED', [...unmatched].sort((a, b) => b[1] - a[1]).slice(0, 15));
-    // Is each not-in-library key anywhere in monetization_paths (any project, any signature)?
-    const keys = new Set<string>();
-    for (const r of rows.values()) { const k = r.b ? arrangementKeyOfBucket(String(r.b)) : null; if (k) keys.add(k); }
-    for (const k of keys) {
-      const lib = await q(`SELECT project_id, origin, construction_origin, design_signature IS NOT NULL AS sig, updated_at FROM monetization_paths WHERE legacy_key = ? LIMIT 3`, [k]);
-      const rounds = await q(`SELECT MIN(opened_at) AS first, COUNT(*) AS n FROM cash_discovery_rounds WHERE bucket_id LIKE ?`, [`%-mx-${k}`]);
-      out('KEY', { k, lib, rounds: rounds[0] });
-    }
-    // Openings the latest reading names, and whether their source claim is one of the goal's rounds' claims.
-    const latest = (await q(`SELECT strategies, forecast FROM goal_plan_readings WHERE workstream_id = ? ORDER BY created_at DESC, id DESC LIMIT 1`, [G]))[0];
-    const text = `${latest?.strategies ?? ''}${latest?.forecast ?? ''}`;
-    const oppIds = [...new Set([...text.matchAll(/\b(cop_[0-9a-f]{8,}|opp_[0-9a-f]{8,})/g)].map((m) => m[1]!))].slice(0, 40);
-    out('READING_OPP_IDS', oppIds.length);
+    const goalClaim = `SELECT c.id FROM research_claims c WHERE c.orchestration_id IN (SELECT m.orchestration_id FROM russell_missions m JOIN cash_discovery_rounds r ON r.candidate_id = m.candidate_id WHERE r.bucket_id LIKE ?)`;
+    // (1) openings created since the deploy, and which rest on a goal-round claim.
+    for (const r of await q(`SELECT COUNT(*) AS n FROM cash_opportunities WHERE project_id = ? AND created_at >= ?`, [P, SINCE])) out('OPPS_SINCE_ALL', r);
+    const fromGoal = await q(`SELECT id, substr(title, 1, 110) AS title, price_cents, mechanism, state, source_claim_id, created_at FROM cash_opportunities WHERE project_id = ? AND created_at >= ? AND source_claim_id IN (${goalClaim}) ORDER BY created_at`, [P, SINCE, bucket]);
+    out('OPPS_SINCE_FROM_GOAL_N', fromGoal.length);
+    for (const o of fromGoal) out('OPP_FROM_GOAL', o);
+    for (const r of await q(`SELECT MAX(created_at) AS last, COUNT(*) AS n FROM cash_opportunities WHERE project_id = ? AND source_claim_id IN (${goalClaim})`, [P, bucket])) out('OPPS_FROM_GOAL_ALLTIME', r);
+    for (const r of await q(`SELECT COUNT(*) AS n FROM construction_facts WHERE project_id = ? AND created_at >= ?`, [P, SINCE])) out('FACTS_SINCE', r);
+    for (const f of await q(`SELECT id, fact_key, low, status, source_claim_id, segment FROM construction_facts WHERE project_id = ? AND created_at >= ? ORDER BY created_at LIMIT 20`, [P, SINCE])) out('FACT_SINCE', f);
+    // (2) the newest reading.
+    const readings = await q(`SELECT id, created_at, verdict, chosen_strategy, strategies, forecast, next_test FROM goal_plan_readings WHERE workstream_id = ? ORDER BY created_at DESC, id DESC LIMIT 3`, [G]);
+    for (const r of readings) out('READING_ROW', { id: r.id, at: r.created_at, verdict: r.verdict, chosen: r.chosen_strategy, afterDeploy: r.created_at >= SINCE });
+    const latest = readings[0];
+    const text = latest ? `${latest.strategies ?? ''}${latest.forecast ?? ''}${latest.next_test ?? ''}` : '';
+    let forecast: any = null;
+    try { forecast = latest?.forecast ? JSON.parse(latest.forecast) : null; } catch { forecast = null; }
+    const acc = forecast?.acceptance ?? null;
+    out('ACCEPTANCE', acc ? { status: acc.status, verdict: acc.verdict, candidate: acc.candidate, evidence: acc.construction?.evidence } : { keys: forecast ? Object.keys(forecast) : null });
+    const goalIds = new Set((await q(goalClaim, [bucket])).map((r) => r.id));
+    const claimIds = [...new Set([...text.matchAll(/clm_[0-9a-f]{20}/g)].map((m) => m[0]))];
+    out('READING_CLAIMS', claimIds.map((id) => `${id}${goalIds.has(id) ? ':GOAL_ROUND' : ''}`));
+    const oppIds = [...new Set([...text.matchAll(/cop_[0-9a-f]{20}/g)].map((m) => m[0]))];
     for (const id of oppIds) {
-      const o = (await q(`SELECT id, substr(title, 1, 90) AS title, price_cents, source_claim_id, created_at FROM cash_opportunities WHERE id = ?`, [id]))[0];
-      const inGoal = o?.source_claim_id ? (await q(`SELECT 1 AS x FROM research_claims c WHERE c.id = ? AND c.orchestration_id IN (SELECT m.orchestration_id FROM russell_missions m JOIN cash_discovery_rounds r ON r.candidate_id = m.candidate_id WHERE r.bucket_id LIKE ?)`, [o.source_claim_id, bucket])).length > 0 : false;
-      out('READING_OPP', { ...o, claimFromGoalRounds: inGoal });
+      const o = (await q(`SELECT id, substr(title, 1, 80) AS title, price_cents, source_claim_id, created_at FROM cash_opportunities WHERE id = ?`, [id]))[0];
+      out('READING_OPP', { ...o, goalSourced: o?.source_claim_id ? goalIds.has(o.source_claim_id) : false });
     }
-    // Openings created from this goal's rounds' claims at all.
-    for (const r of await q(`SELECT COUNT(*) AS n, MAX(o.created_at) AS last FROM cash_opportunities o WHERE o.project_id = ? AND o.source_claim_id IN (SELECT c.id FROM research_claims c WHERE c.orchestration_id IN (SELECT m.orchestration_id FROM russell_missions m JOIN cash_discovery_rounds r ON r.candidate_id = m.candidate_id WHERE r.bucket_id LIKE ?))`, [P, bucket])) out('OPPS_FROM_GOAL_CLAIMS', r);
+    // Each candidate arrangement's model inputs and the claims they cite.
+    const target: any = await readTarget((await getWorkstream(G)) as any);
+    const daysLeft = target?.daysLeft ?? 21;
+    const knowledge = await loadCashKnowledge(P);
+    const gs: any = await import('../server/services/cash/goalScenario.ts');
+    const arrKeys = [...new Set([...text.matchAll(/arr_([0-9a-f]{12})/g)].map((m) => m[1]!)), '2821cce3c372'];
+    for (const key of arrKeys) {
+      const rec: any = await arrangementForLegacyKey(P, key);
+      const a = rec?.design?.arrangement;
+      if (!a) { out('ARR_MISSING', key); continue; }
+      out('ARR', { key, updatedAt: rec.updatedAt, label: String(a.label).slice(0, 90), value: { ...a.value, evidence: undefined }, fixedCost: a.fixedCost ?? null });
+      if (typeof gs.pooledRunCostPerDeal === 'function') {
+        const per = gs.pooledRunCostPerDeal(a);
+        out(`RUNCOST_PER_DEAL_${key}`, per ? { prov: per.provenance, low: per.low, high: per.high, source: per.source, note: per.note } : null);
+      } else out('RUNCOST_FN', 'pooledRunCostPerDeal not in running code');
+      const m: any = gs.estimatedFromArrangement(a, { projectId: P, currency: 'USD', knowledge, now: new Date(), daysLeft, beforeProofCents: null });
+      if (!m) { out('MODEL_NULL', key); continue; }
+      for (const k of ['price', 'directCost', 'daysToCash', 'hours', 'capital', 'volume', 'close', 'respond']) {
+        const s: any = m[k];
+        const cites = [...new Set(JSON.stringify(s ?? {}).match(/clm_[0-9a-f]{20}/g) ?? [])];
+        out(`MODEL_${key}_${k}`, { prov: s?.provenance, low: s?.low, high: s?.high, tier: s?.inferred?.tier, cites: cites.map((id) => `${id}${goalIds.has(id) ? ':GOAL_ROUND' : ''}`), note: String(s?.note ?? '').slice(0, 200) });
+      }
+    }
   } finally {
     await closeDatabase();
     console.log('GOALS: OK');
