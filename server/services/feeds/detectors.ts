@@ -867,7 +867,32 @@ export const RULE_EFFECTIVE_SOON_V5: Detector = {
   },
   memberWindowMs: RULE_EFFECTIVE_SOON_PUBLISHED_DAYS * DAY,
   detect(records, now) {
-    const ours = records.filter((record) => this.sources.includes(record.source));
+    return detectRuleEffectiveSoonV5(this, records, now, { readStatedEffective: false, extraQualifiers: [] });
+  },
+};
+
+/**
+ * The date the Federal Register connector recorded from a document's own DATES
+ * field when its effective_on is null ("Stated effective 2026-12-13."), written
+ * by `parseFederalRegister` only for a record that is not a correction. Read
+ * as a marker, exactly like "Effective": the detector parses no prose. Pure.
+ */
+export function statedEffectiveDateOf(body: string | null | undefined): string | null {
+  const m = /Stated effective (\d{4}-\d{2}-\d{2})\./.exec(body ?? '');
+  return m ? m[1]! : null;
+}
+
+/**
+ * RULE_EFFECTIVE_SOON v5's detection, shared with v6. With `readStatedEffective`
+ * off it is v5 exactly; v6 turns it on (see RULE_EFFECTIVE_SOON_V6). Pure.
+ */
+function detectRuleEffectiveSoonV5(
+  detector: Detector,
+  records: readonly DetectorRecord[],
+  now: Date,
+  options: { readStatedEffective: boolean; extraQualifiers: readonly string[] },
+): DetectedSignal[] {
+    const ours = records.filter((record) => detector.sources.includes(record.source));
     const keep = (map: Map<string, string>, key: string, value: string | null): void => {
       if (value && (!map.has(key) || value < map.get(key)!)) map.set(key, value);
     };
@@ -876,10 +901,12 @@ export const RULE_EFFECTIVE_SOON_V5: Detector = {
     const correctedRule = new Map<string, string>();
     const corrects = new Map<string, Set<string>>();
     const agencies = new Map<string, string[]>();
+    const statedOwn = new Map<string, string>();
     for (const record of ours) {
       const documentNumber = federalRegisterDocumentOf(record.url);
       if (!documentNumber) continue;
       keep(own, documentNumber, effectiveDateOf(record.body));
+      if (options.readStatedEffective) keep(statedOwn, documentNumber, statedEffectiveDateOf(record.body));
       keep(correctedRule, documentNumber, correctedEffectiveDateOf(record.body));
       const targets = corrects.get(documentNumber) ?? new Set<string>();
       const stated = correctedDocumentOf(record.body);
@@ -900,7 +927,12 @@ export const RULE_EFFECTIVE_SOON_V5: Detector = {
       const targets = new Set<string>(documentNumber ? corrects.get(documentNumber) ?? [] : []);
       const fromBody = correctedDocumentOf(record.body);
       if (fromBody && FEDERAL_REGISTER_DOCUMENT_NUMBER.test(fromBody)) targets.add(correctedDocumentOfNumber(fromBody) ?? fromBody);
-      if (targets.size === 0) return null;
+      if (targets.size === 0) {
+        // v6: no "Effective" sentence on any copy and not a correction — the date the Federal
+        // Register's own DATES field states, as the connector recorded it on any copy.
+        if (!options.readStatedEffective) return null;
+        return statedEffectiveDateOf(record.body) ?? (documentNumber ? statedOwn.get(documentNumber) ?? null : null);
+      }
       const marker = correctedEffectiveDateOf(record.body) ?? (documentNumber ? correctedRule.get(documentNumber) ?? null : null);
       if (marker) return marker;
       const dates = [...targets].map((one) => own.get(one)).filter((one): one is string => !!one).sort();
@@ -917,7 +949,7 @@ export const RULE_EFFECTIVE_SOON_V5: Detector = {
       const name = listed ? listed[listed.length - 1]! : issuingAgencyOf(record.organization);
       const agency = employerKey(name);
       if (!agency || !name) continue;
-      if (!withinMemberWindow(this, record.publishedAt, record.fetchedAt, now)) continue;
+      if (!withinMemberWindow(detector, record.publishedAt, record.fetchedAt, now)) continue;
       const publishedDay = publishedDayOf(record);
       if (!Number.isFinite(publishedDay)) continue;
       const effective = effectiveOf(record, documentNumber);
@@ -958,23 +990,74 @@ export const RULE_EFFECTIVE_SOON_V5: Detector = {
           'every stored copy of a document is read for its stated dates and agencies, matched by document number',
           'the publication day is the one the Federal Register states in the document URL',
           'kept against the publication day the Federal Register states, not the day Brain fetched it; the wording says which effective dates had passed on the day it ran',
+          ...options.extraQualifiers,
         ],
         hypothesis: wording.hypothesis,
         deliverable: 'DOCUMENT',
       });
     }
     return out;
+}
+
+/**
+ * RULE_EFFECTIVE_SOON, version 6 (SHADOW). One cause of v5's recorded misses
+ * (DETECTOR_MISSES:RULE_EFFECTIVE_SOON@5), fixed without lowering a bar:
+ *
+ *  1. A final rule whose effective_on is null states its date only in the
+ *     Federal Register's own DATES field. Since 41d72ad the connector records
+ *     that date as "Stated effective YYYY-MM-DD." — deliberately not an
+ *     "Effective" sentence, which stays effective_on's alone — and v5 read only
+ *     "Effective", so every such record had no date and dropped out, though
+ *     the free screen, reading the same record, kept it. The established
+ *     instance of that shape is the Coast Guard's notification of enforcement
+ *     (2026-23047: action "Notification of enforcement of regulation",
+ *     effective_on null, its date only in DATES); 2026-23230, a recorded miss
+ *     of the same kind of document, is modelled on it. No shape is asserted
+ *     here for FCC 2026-23040, Coast Guard 2026-23027 or ACF 2026-23279: the
+ *     record states them only as "Effective <publication day>." stored late
+ *     (v5's cause 4), and v6 keeps them in that shape and in this one alike. v6 reads that marker, from any stored copy of the document, when no
+ *     copy states an "Effective" sentence and the document is not a
+ *     correction. "Effective" still wins wherever any copy carries it, and a
+ *     correction still takes the corrected rule's date exactly as in v5.
+ *
+ * Everything else is v5's, shared code (`detectRuleEffectiveSoonV5`): copies
+ * read together by document number, grouping by the issuing agency of the copy
+ * that lists the most agencies, the publication day the Federal Register states
+ * in the URL. Kept unchanged: the bar that a rule is never effective before its
+ * own publication (Coast Guard 2026-23047, enforced 2026-11-11 and published
+ * 2026-11-12, now carries "Stated effective 2026-11-11." and still stays out —
+ * a correct exclusion), the eight-week upper bound
+ * (RULE_EFFECTIVE_SOON_V2_LEAD_DAYS), the 30-day membership window, the
+ * wording, and no free-text date parsing in the detector: the date is the one
+ * the connector read from an official field.
+ */
+export const RULE_EFFECTIVE_SOON_V6: Detector = {
+  id: 'RULE_EFFECTIVE_SOON',
+  version: 6,
+  label: RULE_EFFECTIVE_SOON.label,
+  mode: 'SHADOW',
+  sources: RULE_EFFECTIVE_SOON.sources,
+  lookbackMs: RULE_EFFECTIVE_SOON_V5.lookbackMs,
+  entityKeyOf(organization) {
+    return employerKey(issuingAgencyOf(organization));
+  },
+  memberWindowMs: RULE_EFFECTIVE_SOON_PUBLISHED_DAYS * DAY,
+  detect(records, now) {
+    return detectRuleEffectiveSoonV5(this, records, now, {
+      readStatedEffective: true,
+      extraQualifiers: ["with no effective_on, the date the Federal Register's own DATES field states, as the connector recorded it"],
+    });
   },
 };
 
 /**
  * Every installed rule. Adding one is a new entry here and its tests — nothing else.
- * RULE_EFFECTIVE_SOON v1..v4 stay exported so their recorded rows and readings keep their keys (@1..@4).
+ * RULE_EFFECTIVE_SOON v1..v5 stay exported so their recorded rows and readings keep their keys (@1..@5).
  * A model may propose a rule only as a Factory objective (reviewed code, starting
  * in SHADOW); no model output installs, edits or promotes a rule at run time.
  * `proposeRuleRepair` is how a rule's repeated misses become that objective.
  */
-export const DETECTORS: readonly Detector[] = [CONCENTRATED_HIRING, REPEATED_DEMAND, RULE_EFFECTIVE_SOON_V5];
+export const DETECTORS: readonly Detector[] = [CONCENTRATED_HIRING, REPEATED_DEMAND, RULE_EFFECTIVE_SOON_V6];
 
 // ---------------------------------------------------------------------------
 // SHADOW before ACTIVE: readings, promotion and rollback, from rows

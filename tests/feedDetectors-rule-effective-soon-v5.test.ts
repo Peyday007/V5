@@ -290,9 +290,9 @@ describe('helpers', () => {
 });
 
 describe('installation', () => {
-  it('v5 is installed in SHADOW in place of v4; v1..v4 stay exported unchanged', () => {
+  it('v5 stays exported in SHADOW (v6 is installed in its place); v1..v4 stay exported unchanged', () => {
     expect(RULE_EFFECTIVE_SOON_V5).toMatchObject({ id: 'RULE_EFFECTIVE_SOON', version: 5, mode: 'SHADOW' });
-    expect(DETECTORS).toContain(RULE_EFFECTIVE_SOON_V5);
+    expect(DETECTORS).not.toContain(RULE_EFFECTIVE_SOON_V5);
     for (const old of [RULE_EFFECTIVE_SOON, RULE_EFFECTIVE_SOON_V2, RULE_EFFECTIVE_SOON_V3, RULE_EFFECTIVE_SOON_V4]) expect(DETECTORS).not.toContain(old);
     expect(DETECTORS.filter((one) => one.id === 'RULE_EFFECTIVE_SOON')).toHaveLength(1);
     expect(RULE_EFFECTIVE_SOON_V4).toMatchObject({ id: 'RULE_EFFECTIVE_SOON', version: 4, mode: 'SHADOW' });
