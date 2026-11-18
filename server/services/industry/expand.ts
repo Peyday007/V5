@@ -1148,7 +1148,7 @@ async function cardEvidenceDecisions(projectId: string, nodes: readonly Industry
     else if (used.has(claim.id)) out.push(refuse('claim already used by another card field'));
     else {
       used.add(claim.id);
-      const figures = readMoneyFigures(claim.claim, 'USD').filter((one) => one.cents > 0);
+      const figures = dealLevelFigures(readMoneyFigures(claim.claim, 'USD').filter((one) => one.cents > 0));
       if (figures.length === 0) out.push(refuse('claim states no positive USD figure'));
       else {
         const cents = spec.end === 'LOW' ? Math.min(...figures.map((one) => one.cents)) : Math.max(...figures.map((one) => one.cents));
@@ -1189,11 +1189,12 @@ async function cardEvidenceDecisions(projectId: string, nodes: readonly Industry
  *
  * The round asked about one arrangement whose buyers are a map buyer type
  * (`monetization_paths.industry_node_id`, by the round's 12-hex key), so the
- * buyer is the round's own, never read from the prose. The figure is the
- * lowest USD figure the claim states per unit (`perUnit`), filed as
- * `price_per_unit` — the unfavourable end, the card rule's own. A claim that
- * declares a structural finding is source 1's; one with no per-unit figure,
- * or on an arrangement whose buyers are not a live map buyer type, is skipped.
+ * buyer is the round's own, never read from the prose. A claim qualifies by
+ * stating a USD figure per unit (`perUnit`); what is filed is the deal-level
+ * figure (`dealLevelFigures`) at its lowest — the unfavourable end, the card
+ * rule's own — as `price_per_unit`. A claim that declares a structural finding
+ * is source 1's; one with no per-unit figure, or on an arrangement whose
+ * buyers are not a live map buyer type, is skipped.
  */
 async function constructedRoundDecisions(
   projectId: string,
@@ -1215,11 +1216,12 @@ async function constructedRoundDecisions(
       out.push(refuse('round’s arrangement names no live map buyer type'));
       continue;
     }
-    const figures = readMoneyFigures(claim.claim, 'USD').filter((one) => one.cents > 0 && one.perUnit);
-    if (figures.length === 0) {
+    const stated = readMoneyFigures(claim.claim, 'USD').filter((one) => one.cents > 0);
+    if (!stated.some((one) => one.perUnit)) {
       out.push(refuse('claim states no positive USD figure per unit'));
       continue;
     }
+    const figures = dealLevelFigures(stated);
     out.push({
       source: 'CONSTRUCTED_ROUND',
       claimId: claim.id,
@@ -1229,13 +1231,32 @@ async function constructedRoundDecisions(
         buyer,
         key: 'price_per_unit',
         amount: Math.min(...figures.map((one) => one.cents)) / 100,
-        measures: `what these buyers are published paying per unit, from a constructed arrangement's research: ${claim.claim}`,
+        measures: `what these buyers are published paying ${figures[0]!.perUnit ? 'per unit' : 'per deal (the stated total)'}, from a constructed arrangement's research: ${claim.claim}`,
       },
       reason: null,
       countsAsSkipped: true,
     });
   }
   return out;
+}
+
+/**
+ * The figures a claim states at the level of one deal (B1f, 2026-11-18).
+ *
+ * The plan reads a `price_per_unit` fact as `value`, "what a buyer pays per
+ * transaction" (`composeArrangement`, quant/mechanism.ts), multiplied by how
+ * many transactions a buyer makes (`need_rate`). A figure per postcard piece is
+ * not one transaction: production filed "Oppizi charges $0.47 per postcard
+ * piece for a 10,000-home EDDM run, total $4,675" as a $0.47 deal, so the
+ * arrangement 2821cce3c372 was worth 0 cents. When a claim states both a rate
+ * and a figure that is not per anything — the total for the quantity it names
+ * — the total is what one buyer pays for one deal, and only it is returned. A
+ * claim that states rates alone keeps them: nothing here multiplies a rate by a
+ * quantity read from prose.
+ */
+export function dealLevelFigures<T extends { perUnit: boolean }>(figures: readonly T[]): T[] {
+  const totals = figures.filter((one) => !one.perUnit);
+  return totals.length > 0 ? totals : [...figures];
 }
 
 /** What a dry run of the back-fill found: its pool, as the writer computes it, and nothing written. */
