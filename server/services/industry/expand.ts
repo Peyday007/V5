@@ -1379,7 +1379,7 @@ export function rederivedAmount(fact: Pick<RecordedFact, 'key' | 'low' | 'high'>
 /**
  * Supersede claim facts the back-fill filed under an older figure rule (B1h).
  * The old fact is never written: a new fact names it (`supersedes_fact_id`)
- * and readers resolve the current one (`listProjectConstructionFacts`), so the
+ * and readers resolve the current one (`listProjectFacts`), so the
  * $0.47 stays as history and the plan reads $4,675. Bounded (`BACKFILL_SCAN`
  * facts read from a cursor, `REDERIVE_BATCH` writes) and idempotent: a fact is
  * superseded at most once, and a re-derived fact already holds the current
