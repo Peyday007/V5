@@ -472,6 +472,7 @@ const HELP = `Usage: npm run admin -- <area> <command> [...] [--admin someone@ex
             quote|buy --kind prewarmed|new --count <mailboxes> [--provider instantly|inboxkit] [--first F --last L --seed domain.com]
   brain-only show [<bin_…> …] | on | off   (Claude routines take only Brain-improvement work, §84)
   utilization show | run   (every capacity pool: waiting, running, capacity, idle beside work, §98)
+  deadline  history | plan --text-b64 <json> | record --text-b64 <json>   (§113: measured estimates, staffing, learning)
   free-lane show | run [ticks]             (free models do the displaced research, §85)
   sources   show [hours] | compare [n]     (how research reads public pages, and what each route recovered)
   capacity  show | adopt <user|email> <trig_…>
@@ -1401,6 +1402,34 @@ async function main(): Promise<void> {
      * whether it is idle beside waiting work, with the interventions recorded
      * in the last day. `run` also continues what is idle.
      */
+    /*
+     * Deadline intelligence (§113), from the terminal: `history` prints the
+     * measured durations each kind of work is estimated from; `plan` runs
+     * brain_deadline_plan on a JSON request (--text-b64); `record` runs
+     * brain_deadline_record, attributed to an administrator.
+     */
+    case 'deadline history': {
+      const { durationSamples } = await import('../server/repos/deadlines.ts');
+      const { estimateKind } = await import('../server/domain/deadlinePlan.ts');
+      const samples = await durationSamples();
+      const kinds = [...new Set(samples.map((s) => s.kind))].sort();
+      console.log(`  ${samples.length} measured sample(s), last 30 days`);
+      for (const kind of kinds) console.log(`  ${kind.padEnd(12)} ${estimateKind(kind, samples).basis}`);
+      break;
+    }
+    case 'deadline plan':
+    case 'deadline record': {
+      const encoded = flag('text-b64') ?? fail('Pass --text-b64: the request, JSON, base64.');
+      const request = JSON.parse(Buffer.from(encoded, 'base64').toString('utf8')) as Record<string, unknown>;
+      const { DEADLINE_TOOLS } = await import('../server/mcp/deadlineTools.ts');
+      const tool = DEADLINE_TOOLS.find((t) => t.name === (command === 'plan' ? 'brain_deadline_plan' : 'brain_deadline_record'))!;
+      const principal = command === 'record'
+        ? { type: 'USER', id: (await administrator()).id }
+        : { type: 'USER', id: 'terminal' };
+      const answer = await tool.run(request, { principal } as never);
+      console.log(JSON.stringify(answer.value, null, 1));
+      break;
+    }
     case 'utilization show':
     case 'utilization run': {
       const { brainUtilization, watchUtilization } = await import('../server/services/engineering/watchdog.ts');
