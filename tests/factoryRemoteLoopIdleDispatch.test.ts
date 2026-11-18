@@ -1,7 +1,54 @@
-import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
-import { dispatchAfterLinePass } from '../server/services/factory/remoteLoop.ts';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LineReading } from '../server/services/factory/line.ts';
+
+/*
+ * The loop itself is driven below, so the three seams it crosses are stubbed:
+ * the line pass (which reading the tick sees), the program step (nothing to do)
+ * and the dispatcher's guarded pass (what the tick asked for). Everything else —
+ * the campaign tick over a real, empty database, the decision, the control flow
+ * between them — is the code production runs.
+ */
+const seams = vi.hoisted(() => ({
+  reading: null as unknown,
+  lineThrows: false,
+  linePasses: 0,
+  dispatches: [] as unknown[],
+}));
+
+vi.mock('../server/services/factory/line.ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../server/services/factory/line.ts')>();
+  return {
+    ...actual,
+    runLinePass: async () => {
+      seams.linePasses += 1;
+      if (seams.lineThrows) throw new Error('the line could not be read');
+      return { admission: { admitted: [] }, reading: seams.reading };
+    },
+  };
+});
+
+vi.mock('../server/services/factory/program/loop.ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../server/services/factory/program/loop.ts')>();
+  return { ...actual, tickAllProgramsIfDue: async () => [] };
+});
+
+vi.mock('../server/services/dispatch/loop.ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../server/services/dispatch/loop.ts')>();
+  return {
+    ...actual,
+    dispatchTickIfIdle: async (options: unknown) => {
+      seams.dispatches.push(options);
+      return true;
+    },
+  };
+});
+
+import { freshProject, teardown } from './helpers.ts';
+import {
+  dispatchAfterLinePass,
+  startFactoryRemoteLoop,
+  stopFactoryRemoteLoop,
+} from '../server/services/factory/remoteLoop.ts';
 
 /*
  * The recorded failure (2026-11-18T16:47:13): the FACTORY line read
@@ -73,12 +120,63 @@ describe('remote loop dispatches when the line reads unexplained idle', () => {
     expect(dispatchAfterLinePass([], null)).toBe(false);
   });
 
-  it('is the decision the loop actually uses, through the dispatcher guard', () => {
-    const source = readFileSync(new URL('../server/services/factory/remoteLoop.ts', import.meta.url), 'utf8');
-    const loop = source.slice(source.indexOf('export function startFactoryRemoteLoop'));
-    expect(loop).toContain('reading = pass.reading;');
-    expect(loop).toContain('if (!dispatchAfterLinePass(reports, reading)) return;');
-    expect(loop).toContain('await dispatchTickIfIdle({});');
-    expect(loop).not.toContain('if (!reports.some((report) => report.created.length > 0)) return;');
+});
+
+/**
+ * Run the real loop until two line passes have begun. The loop never overlaps
+ * its own passes, so the second one starting proves the first ran to its end —
+ * including whatever it decided about the dispatcher.
+ */
+async function runOneFullPass(): Promise<void> {
+  startFactoryRemoteLoop(5);
+  try {
+    await vi.waitFor(() => expect(seams.linePasses).toBeGreaterThanOrEqual(2), { timeout: 10_000, interval: 5 });
+  } finally {
+    stopFactoryRemoteLoop();
+  }
+}
+
+describe('startFactoryRemoteLoop acts on the line reading it was handed', () => {
+  beforeEach(async () => {
+    await freshProject();
+    seams.reading = null;
+    seams.lineThrows = false;
+    seams.linePasses = 0;
+    seams.dispatches = [];
+  });
+
+  afterEach(async () => {
+    stopFactoryRemoteLoop();
+    await teardown();
+  });
+
+  it('asks the dispatcher, through its guard, on a pass that created nothing but read unexplained idle', async () => {
+    // The recorded failure: waiting=1, running=0, capacity=1, and no campaign
+    // tick created a bin (the database holds no campaign at all).
+    seams.reading = reading();
+    await runOneFullPass();
+    expect(seams.dispatches.length).toBeGreaterThanOrEqual(1);
+    expect(seams.dispatches[0]).toEqual({});
+  });
+
+  it('does not ask the dispatcher on a quiet, a running or an arriving line', async () => {
+    for (const quiet of [
+      reading({ executable: { queued: 0, readyBins: 0, total: 0 } }),
+      reading({ active: { leasedBins: 1, arriving: 0, workingCampaigns: 1 } }),
+      reading({ active: { leasedBins: 0, arriving: 1, workingCampaigns: 1 } }),
+      reading({ capacity: { freeSurfaces: 0, surfaces: [] } }),
+    ]) {
+      seams.reading = quiet;
+      seams.linePasses = 0;
+      seams.dispatches = [];
+      await runOneFullPass();
+      expect(seams.dispatches).toEqual([]);
+    }
+  });
+
+  it('keeps the creation-only rule when the line pass threw', async () => {
+    seams.lineThrows = true;
+    await runOneFullPass();
+    expect(seams.dispatches).toEqual([]);
   });
 });
