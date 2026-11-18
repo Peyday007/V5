@@ -657,6 +657,38 @@ describe('the free research lane', () => {
     expect(renewed).toBe(atStop);
   });
 
+  it('keeps renewing through a heartbeat that did not reach Brain, and stops only when the lease itself is refused (production 2026-11-18 16:31–16:51Z: "Brain database saturated")', async () => {
+    const { keepLeaseAlive, leaseRefused } = await import('../server/services/freeLane/worker.ts');
+    const { ToolError } = await import('../server/mcp/errors.ts');
+    const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+    let beats = 0;
+    const stop = keepLeaseAlive(async () => {
+      beats += 1;
+      if (beats <= 2) throw new Error('Brain is temporarily busy; the database did not answer in time.');
+      if (beats === 4) throw new ToolError('FENCE_LOST', 'This lease is not current for that work item.');
+    }, 5);
+    await wait(120);
+    stop();
+    // Two busy beats did not end it; the fourth, a lease refusal, did.
+    expect(beats).toBe(4);
+    expect(leaseRefused(new Error('Brain is temporarily busy'))).toBe(false);
+    expect(leaseRefused(new ToolError('FENCE_LOST', 'This lease is no longer current.'))).toBe(true);
+    expect(leaseRefused(new Error('This lease is no longer current.'))).toBe(true);
+  });
+
+  it('does not judge a model by answers the queue refused for an expired lease (production 2026-11-18: gpt-oss-120b HELD BACK from audits by 27 lease refusals)', async () => {
+    const { notTheAnswer, recentAnswers, unfitPairs } = await import('../server/services/freeLane/worker.ts');
+    const refused = 'model gpu: brain_submit_audit refused: This lease is no longer current.';
+    expect(notTheAnswer(refused)).toBe(true);
+    // A refusal of the answer itself still counts.
+    expect(notTheAnswer('model gpu: brain_submit_audit refused: the verdict cites no passage')).toBe(false);
+    const rows = [
+      ...Array.from({ length: 8 }, () => ({ reason: refused, work_type: 'RESEARCH_AUDIT', outcome: 'FAILED_RETRYABLE' })),
+      { reason: 'model gpu', work_type: 'RESEARCH_AUDIT', outcome: 'SUBMITTED' },
+    ];
+    expect([...unfitPairs(recentAnswers(rows), ['gpu', 'other'])]).toEqual([]);
+  });
+
   it('asks for the most important waiting work first, so a revenue goal\u2019s research does not wait behind unrelated later stages', () => {
     const asks = claimAsks([{ model: 'a' }], 0);
     // A goal fragment boosted to 7 outranks an ordinary synthesis at 5.
