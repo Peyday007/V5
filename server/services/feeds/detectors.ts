@@ -883,14 +883,15 @@ export function statedEffectiveDateOf(body: string | null | undefined): string |
 }
 
 /**
- * RULE_EFFECTIVE_SOON v5's detection, shared with v6. With `readStatedEffective`
- * off it is v5 exactly; v6 turns it on (see RULE_EFFECTIVE_SOON_V6). Pure.
+ * RULE_EFFECTIVE_SOON v5's detection, shared with v6 and v7. With `readStatedEffective`
+ * off it is v5 exactly; v6 turns it on (see RULE_EFFECTIVE_SOON_V6); v7 also turns on
+ * `readCorrectedStated` (see RULE_EFFECTIVE_SOON_V7). Pure.
  */
 function detectRuleEffectiveSoonV5(
   detector: Detector,
   records: readonly DetectorRecord[],
   now: Date,
-  options: { readStatedEffective: boolean; extraQualifiers: readonly string[] },
+  options: { readStatedEffective: boolean; readCorrectedStated?: boolean; extraQualifiers: readonly string[] },
 ): DetectedSignal[] {
     const ours = records.filter((record) => detector.sources.includes(record.source));
     const keep = (map: Map<string, string>, key: string, value: string | null): void => {
@@ -936,7 +937,12 @@ function detectRuleEffectiveSoonV5(
       const marker = correctedEffectiveDateOf(record.body) ?? (documentNumber ? correctedRule.get(documentNumber) ?? null : null);
       if (marker) return marker;
       const dates = [...targets].map((one) => own.get(one)).filter((one): one is string => !!one).sort();
-      return dates[0] ?? null;
+      if (dates[0]) return dates[0];
+      // v7: the corrected rule states its date only in its own DATES field (effective_on null) — the
+      // date the connector recorded on any stored copy of that rule, exactly as v6 reads it for the rule itself.
+      if (!options.readStatedEffective || !options.readCorrectedStated) return null;
+      const statedDates = [...targets].map((one) => statedOwn.get(one)).filter((one): one is string => !!one).sort();
+      return statedDates[0] ?? null;
     };
     const publishedDayOf = (record: DetectorRecord): number => {
       const stated = federalRegisterPublishedDayOf(record.url) ?? /^(\d{4}-\d{2}-\d{2})/.exec(record.publishedAt ?? '')?.[1] ?? null;
@@ -1051,13 +1057,69 @@ export const RULE_EFFECTIVE_SOON_V6: Detector = {
 };
 
 /**
+ * RULE_EFFECTIVE_SOON, version 7 (SHADOW). Two causes of v6's recorded misses
+ * (DETECTOR_MISSES:RULE_EFFECTIVE_SOON@6), each fixed without lowering a bar:
+ *
+ *  1. A correction of a rule dated only in its DATES field. v6 gave a
+ *     correction the corrected rule's "Effective" date (or the connector's
+ *     "Corrected rule effective" marker, which is that rule's effective_on) and
+ *     nothing else, so a correction of a rule whose effective_on is null — its
+ *     date recorded on the rule's own copy as "Stated effective" — had no date
+ *     and dropped out, although v6 keeps the rule itself on that very marker.
+ *     v7 reads it for the correction too, from any stored copy of a corrected
+ *     document, after every date v6 reads. A correction's own "Stated
+ *     effective" marker is still never read: the date is the corrected rule's.
+ *  2. (In the connector, `completeFederalRegisterCorrections`.) A stored
+ *     correction whose copy carries no "Corrects N." sentence (C1-2026-21030
+ *     stored bare: effective_on, dates and action all null) was never
+ *     completed, because the completer found its target only in the body; so
+ *     when the corrected rule's own copy was not among the records (published
+ *     before the lookback, or never stored), no copy stated any date. The
+ *     completer now also reads the target from the Register's own numbering
+ *     ("C<n>-" before the corrected document's number) and writes the
+ *     corrected rule's effective_on as "Corrected rule effective", which v5..v7
+ *     already read.
+ *
+ * Everything else is v6's, shared code (`detectRuleEffectiveSoonV5`): lead-0
+ * rules kept (the lower bound is the publication day, inclusive), copies
+ * grouped under the issuing agency of the copy that lists the most agencies
+ * (FAA, never Transportation Department), the publication day the URL states.
+ * Kept unchanged: never effective before publication (Coast Guard 2026-23047,
+ * enforced 2026-11-11 and published 2026-11-12, stays out), the eight-week
+ * upper bound (RULE_EFFECTIVE_SOON_V2_LEAD_DAYS), the 30-day membership
+ * window, the wording, and no free-text date parsing in the detector.
+ */
+export const RULE_EFFECTIVE_SOON_V7: Detector = {
+  id: 'RULE_EFFECTIVE_SOON',
+  version: 7,
+  label: RULE_EFFECTIVE_SOON.label,
+  mode: 'SHADOW',
+  sources: RULE_EFFECTIVE_SOON.sources,
+  lookbackMs: RULE_EFFECTIVE_SOON_V6.lookbackMs,
+  entityKeyOf(organization) {
+    return employerKey(issuingAgencyOf(organization));
+  },
+  memberWindowMs: RULE_EFFECTIVE_SOON_PUBLISHED_DAYS * DAY,
+  detect(records, now) {
+    return detectRuleEffectiveSoonV5(this, records, now, {
+      readStatedEffective: true,
+      readCorrectedStated: true,
+      extraQualifiers: [
+        "with no effective_on, the date the Federal Register's own DATES field states, as the connector recorded it",
+        "a correction of a rule with no effective_on carries the date that rule's own DATES field states",
+      ],
+    });
+  },
+};
+
+/**
  * Every installed rule. Adding one is a new entry here and its tests — nothing else.
- * RULE_EFFECTIVE_SOON v1..v5 stay exported so their recorded rows and readings keep their keys (@1..@5).
+ * RULE_EFFECTIVE_SOON v1..v6 stay exported so their recorded rows and readings keep their keys (@1..@6).
  * A model may propose a rule only as a Factory objective (reviewed code, starting
  * in SHADOW); no model output installs, edits or promotes a rule at run time.
  * `proposeRuleRepair` is how a rule's repeated misses become that objective.
  */
-export const DETECTORS: readonly Detector[] = [CONCENTRATED_HIRING, REPEATED_DEMAND, RULE_EFFECTIVE_SOON_V6];
+export const DETECTORS: readonly Detector[] = [CONCENTRATED_HIRING, REPEATED_DEMAND, RULE_EFFECTIVE_SOON_V7];
 
 // ---------------------------------------------------------------------------
 // SHADOW before ACTIVE: readings, promotion and rollback, from rows

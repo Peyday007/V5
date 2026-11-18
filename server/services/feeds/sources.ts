@@ -401,13 +401,25 @@ export function federalRegisterEffectiveOnUrl(documentNumber: string): string {
 
 /**
  * A stored or parsed Federal Register item that names the document it corrects
- * ("Corrects N.") but carries neither its own "Effective" sentence nor a
+ * ("Corrects N.", or by its own "C<n>-" number: `federalRegisterCorrectionTarget`) but carries neither its own "Effective" sentence nor a
  * "Corrected rule effective" one: what `completeFederalRegisterCorrections`
  * would still look up. Pure.
  */
-export function federalRegisterCorrectionIncomplete(item: Pick<FeedItem, 'body'>): boolean {
+export function federalRegisterCorrectionIncomplete(item: Pick<FeedItem, 'body'> & Partial<Pick<FeedItem, 'externalId'>>): boolean {
   const body = item.body ?? '';
-  return /Corrects [A-Za-z0-9-]+\./.test(body) && !/Effective \d{4}-\d{2}-\d{2}\./.test(body) && !/Corrected rule effective /.test(body);
+  return !!federalRegisterCorrectionTarget(item) && !/Effective \d{4}-\d{2}-\d{2}\./.test(body) && !/Corrected rule effective /.test(body);
+}
+
+/**
+ * The document a stored Federal Register correction corrects: the "Corrects N."
+ * sentence its body carries, else the Register's own numbering — a correction
+ * is numbered "C<n>-" before the document it corrects (C1-2026-21030 corrects
+ * 2026-21030), so a copy stored bare still names its target. Pure.
+ */
+export function federalRegisterCorrectionTarget(item: Pick<FeedItem, 'body'> & Partial<Pick<FeedItem, 'externalId'>>): string | null {
+  const stated = /Corrects ([A-Za-z0-9-]+)\./.exec(item.body ?? '')?.[1];
+  if (stated) return stated;
+  return /^C\d+-(\d{4}-\d+)$/.exec(item.externalId ?? '')?.[1] ?? null;
 }
 
 /**
@@ -499,7 +511,7 @@ export async function completeFederalRegisterCorrections(
   let asked = 0;
   for (const [index, item] of items.entries()) {
     const body = item.body ?? '';
-    const corrects = /Corrects ([A-Za-z0-9-]+)\./.exec(body)?.[1] ?? null;
+    const corrects = federalRegisterCorrectionTarget(item);
     if (!corrects && index >= storedFrom && federalRegisterStatedDateUnread(item) && asked < limit) {
       // A rule stored before the parser read DATES: ask for the document's own fields once, and
       // write exactly what `parseFederalRegister` would write for them today (stored items only —
