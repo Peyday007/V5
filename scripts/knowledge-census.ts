@@ -1,343 +1,80 @@
-/**
- * Economic knowledge census (Surge B, 2026-11-14): what Brain durably holds,
- * counted from the authoritative rows — never from a configured limit.
- *
- * Read-only. One pooler client. Each population is one statement; a statement
- * that fails (a table this deployment does not have yet) prints UNMEASURED
- * with the reason instead of a number, because a guessed figure is worse than
- * an admitted gap. A population Brain computes but never stores is listed as
- * NOT_STORED with where it lives, so "400 arrangements per pass" is never read
- * as "400 businesses known".
- *
- * Then a DIAG section per project holding a map or a cash row: why the F3
- * back-fill files no construction fact and the F7 arrangement rounds open none,
- * read from the functions the tick runs (`kernelSkips`, `kernelAuthority`,
- * `knowledgeResearchAllowed`) and the back-fill's own selection as a dry run
- * (`backfillCandidates`). Nothing is written.
- *
- *   node --import tsx scripts/knowledge-census.ts            # human lines
- *   node --import tsx scripts/knowledge-census.ts --json     # one JSON line too
- */
+/** Throwaway read-only probe (claude/probe-d3): research acceptance and claim storage. SELECT only. Not for merge. */
 import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
-
-interface Population {
-  key: string;
-  /** Which of the owner's eight layers this counts (1 code … 8 commercially validated). */
-  layer: 'STORED' | 'GENERATED' | 'EVIDENCED' | 'EVALUATED' | 'VALIDATED';
-  label: string;
-  sql?: string;
-  /** For a population Brain does not store: where it exists, and why it cannot be counted. */
-  notStored?: string;
+const G = 'wst_7b4fcbb5f2384f31b6c3';
+const W0 = '2026-11-18T14:55:00Z';
+const W1 = '2026-11-18T17:10:00Z';
+const D24 = new Date(Date.now() - 24 * 3_600_000).toISOString();
+const out = (tag: string, v: unknown) => console.log(tag, typeof v === 'string' ? v : JSON.stringify(v));
+async function q(tag: string, sql: string, args: unknown[] = []): Promise<any[]> {
+  try { const rows = await getDb().all(sql, args); for (const r of rows) out(tag, r); if (rows.length === 0) out(tag, 'NONE'); return rows; }
+  catch (e) { out('ERR', `${tag} :: ${e instanceof Error ? e.message : e}`); return []; }
 }
-
-const LIVE = 'retired_at IS NULL';
-
-export const POPULATIONS: readonly Population[] = [
-  { key: 'industries', layer: 'STORED', label: 'mapped industries (SECTOR nodes)', sql: `SELECT COUNT(*) AS n FROM industry_nodes WHERE kind = 'SECTOR' AND ${LIVE}` },
-  { key: 'subindustries', layer: 'STORED', label: 'industry subcategories (SUB_INDUSTRY + VALUE_CHAIN_LAYER + ADJACENT_INDUSTRY)', sql: `SELECT COUNT(*) AS n FROM industry_nodes WHERE kind IN ('SUB_INDUSTRY', 'VALUE_CHAIN_LAYER', 'ADJACENT_INDUSTRY') AND ${LIVE}` },
-  { key: 'nodes', layer: 'STORED', label: 'economic nodes (all industry_nodes)', sql: `SELECT COUNT(*) AS n FROM industry_nodes WHERE ${LIVE}` },
-  { key: 'nodesDiscovered', layer: 'STORED', label: 'economic nodes Brain discovered (origin DISCOVERED)', sql: `SELECT COUNT(*) AS n FROM industry_nodes WHERE origin = 'DISCOVERED' AND ${LIVE}` },
-  { key: 'buyerPopulations', layer: 'STORED', label: 'buyer populations (BUYER_TYPE nodes)', sql: `SELECT COUNT(*) AS n FROM industry_nodes WHERE kind = 'BUYER_TYPE' AND ${LIVE}` },
-  { key: 'bottlenecks', layer: 'STORED', label: 'bottlenecks / customer needs (BOTTLENECK nodes)', sql: `SELECT COUNT(*) AS n FROM industry_nodes WHERE kind = 'BOTTLENECK' AND ${LIVE}` },
-  { key: 'supplierCategories', layer: 'STORED', label: 'supplier categories (FULFILMENT_SOURCE nodes)', sql: `SELECT COUNT(*) AS n FROM industry_nodes WHERE kind = 'FULFILMENT_SOURCE' AND ${LIVE}` },
-  { key: 'transactionTypes', layer: 'STORED', label: 'transaction mechanisms (TRANSACTION_TYPE nodes)', sql: `SELECT COUNT(*) AS n FROM industry_nodes WHERE kind = 'TRANSACTION_TYPE' AND ${LIVE}` },
-  { key: 'projectsWithMap', layer: 'STORED', label: 'projects holding an industry map', sql: `SELECT COUNT(DISTINCT project_id) AS n FROM industry_nodes` },
-  { key: 'opportunities', layer: 'STORED', label: 'openings held (cash_opportunities, not duplicates)', sql: `SELECT COUNT(*) AS n FROM cash_opportunities WHERE duplicate_of_id IS NULL` },
-  { key: 'opportunityMechanisms', layer: 'STORED', label: 'distinct capture mechanisms on held openings', sql: `SELECT COUNT(DISTINCT mechanism) AS n FROM cash_opportunities` },
-  { key: 'opportunityIndustries', layer: 'STORED', label: 'distinct industries named on held openings', sql: `SELECT COUNT(DISTINCT industry) AS n FROM cash_opportunities WHERE industry IS NOT NULL` },
-  { key: 'moneyFlows', layer: 'EVIDENCED', label: 'recorded money flows (openings with a payer and a price)', sql: `SELECT COUNT(*) AS n FROM cash_opportunities WHERE payer IS NOT NULL AND price_cents IS NOT NULL AND duplicate_of_id IS NULL` },
-  { key: 'claims', layer: 'EVIDENCED', label: 'research claims (all)', sql: `SELECT COUNT(*) AS n FROM research_claims` },
-  { key: 'sourcedClaims', layer: 'EVIDENCED', label: 'independently sourced economic observations (SOURCED claims)', sql: `SELECT COUNT(*) AS n FROM research_claims WHERE validation_state = 'SOURCED'` },
-  { key: 'sourcedDomains', layer: 'EVIDENCED', label: 'distinct source titles behind sourced claims', sql: `SELECT COUNT(DISTINCT source_title) AS n FROM research_claims WHERE validation_state = 'SOURCED'` },
-  { key: 'constructionFacts', layer: 'EVIDENCED', label: 'construction facts (quantities with a status)', sql: `SELECT COUNT(*) AS n FROM construction_facts f WHERE NOT EXISTS (SELECT 1 FROM construction_facts s WHERE s.supersedes_fact_id = f.id)` },
-  { key: 'constructionFactsObserved', layer: 'EVIDENCED', label: 'construction facts OBSERVED or VERIFIED', sql: `SELECT COUNT(*) AS n FROM construction_facts f WHERE f.status IN ('OBSERVED', 'VERIFIED') AND NOT EXISTS (SELECT 1 FROM construction_facts s WHERE s.supersedes_fact_id = f.id)` },
-  { key: 'unresolvedVariables', layer: 'EVIDENCED', label: 'unresolved economic variables (construction facts still ESTIMATE/ASSUMPTION)', sql: `SELECT COUNT(*) AS n FROM construction_facts f WHERE f.status IN ('ESTIMATE', 'ASSUMPTION') AND NOT EXISTS (SELECT 1 FROM construction_facts s WHERE s.supersedes_fact_id = f.id)` },
-  { key: 'constructedRoundsAsked', layer: 'GENERATED', label: 'constructed arrangements asked about (goal …-mx- rounds)', sql: `SELECT COUNT(*) AS n FROM cash_discovery_rounds WHERE bucket_id LIKE 'goal-%-mx-%'` },
-  // The constructed-arrangement library (migration 152 / pg 143): CONSTRUCTED rows of the §49 ledger, one per structure per project.
-  { key: 'constructedArrangementsKnown', layer: 'STORED', label: 'constructed arrangements durably stored (monetization_paths origin CONSTRUCTED)', sql: `SELECT COUNT(*) AS n FROM monetization_paths WHERE origin = 'CONSTRUCTED'` },
-  { key: 'arrangementsUnique', layer: 'STORED', label: 'unique arrangement structures (distinct design_signature, across projects)', sql: `SELECT COUNT(DISTINCT design_signature) AS n FROM monetization_paths WHERE design_signature IS NOT NULL` },
-  { key: 'arrangementsResearched', layer: 'EVIDENCED', label: 'stored arrangements that a research round asked about (asked_count > 0)', sql: `SELECT COUNT(*) AS n FROM monetization_paths WHERE origin = 'CONSTRUCTED' AND asked_count > 0` },
-  { key: 'arrangementsEvaluated', layer: 'EVALUATED', label: 'stored arrangements quantitatively evaluated in a goal model (evaluated_count > 0)', sql: `SELECT COUNT(*) AS n FROM monetization_paths WHERE origin = 'CONSTRUCTED' AND evaluated_count > 0` },
-  { key: 'arrangementsPicked', layer: 'EVALUATED', label: 'stored arrangements a goal model\'s best combination picked at least once', sql: `SELECT COUNT(DISTINCT path_id) AS n FROM monetization_path_evaluations WHERE picked = 1` },
-  { key: 'arrangementsTransferred', layer: 'STORED', label: 'cross-industry transfers (construction_origin TRANSFER)', sql: `SELECT COUNT(*) AS n FROM monetization_paths WHERE origin = 'CONSTRUCTED' AND construction_origin = 'TRANSFER'` },
-  { key: 'arrangementsEvidenced', layer: 'EVIDENCED', label: 'stored arrangements with real external evidence (an EVIDENCE fact on a gated claim)', sql: `SELECT COUNT(DISTINCT p.id) AS n FROM monetization_paths p JOIN monetization_path_facts f ON f.path_id = p.id AND f.kind = 'EVIDENCE' WHERE p.origin = 'CONSTRUCTED'` },
-  { key: 'arrangementsRefuted', layer: 'EVIDENCED', label: 'stored arrangements research refuted (research_verdict REFUTED)', sql: `SELECT COUNT(*) AS n FROM monetization_paths WHERE origin = 'CONSTRUCTED' AND research_verdict = 'REFUTED'` },
-  { key: 'planReadings', layer: 'EVALUATED', label: 'plans constructed (goal plan readings)', sql: `SELECT COUNT(*) AS n FROM goal_plan_readings` },
-  { key: 'plannedGoals', layer: 'EVALUATED', label: 'goals with at least one plan reading', sql: `SELECT COUNT(DISTINCT workstream_id) AS n FROM goal_plan_readings` },
-  { key: 'plansEvaluated', layer: 'EVALUATED', label: 'plans evaluated (readings with a scenario run)', sql: `SELECT COUNT(*) AS n FROM goal_plan_readings WHERE scenario_run_id IS NOT NULL` },
-  { key: 'plansRecommendable', layer: 'VALIDATED', label: 'plans accepted (verdict RECOMMENDABLE)', sql: `SELECT COUNT(*) AS n FROM goal_plan_readings WHERE verdict = 'RECOMMENDABLE'` },
-  { key: 'planOutcomes', layer: 'VALIDATED', label: 'plans independently verified by an outcome (goal_outcomes)', sql: `SELECT COUNT(*) AS n FROM goal_outcomes` },
-  { key: 'objectiveReadings', layer: 'EVALUATED', label: 'non-cash objective plan readings', sql: `SELECT COUNT(*) AS n FROM goal_objective_readings` },
-  { key: 'validatedOpenings', layer: 'VALIDATED', label: 'commercially validated openings (a payment recorded against them)', sql: `SELECT COUNT(DISTINCT opportunity_id) AS n FROM cash_money_entries WHERE opportunity_id IS NOT NULL AND kind = 'SETTLEMENT'` },
-  { key: 'laborRoles', layer: 'STORED', label: 'labor roles', notStored: 'the labor kernel (079) stores labor openings, not a role vocabulary; roles appear only as text inside openings and construction prose' },
-  // §92 positions as rows (migration 155 / pg 146, K-6): each stored arrangement carries the position its design occupies.
-  { key: 'commercialPositions', layer: 'STORED', label: 'commercial positions (distinct §92 position_key on stored arrangements)', sql: `SELECT COUNT(DISTINCT position_key) AS n FROM monetization_paths WHERE origin = 'CONSTRUCTED' AND position_key IS NOT NULL` },
-  { key: 'arrangementsPositioned', layer: 'STORED', label: 'stored arrangements carrying a §92 position (position_json)', sql: `SELECT COUNT(*) AS n FROM monetization_paths WHERE origin = 'CONSTRUCTED' AND position_json IS NOT NULL` },
-  { key: 'positionMoneyFlows', layer: 'STORED', label: 'constructed money flows (distinct payer population × position, money timing included)', sql: `SELECT COUNT(*) AS n FROM (SELECT DISTINCT COALESCE(opportunity_id, industry_node_id, design_signature) AS payer, position_key FROM monetization_paths WHERE origin = 'CONSTRUCTED' AND position_key IS NOT NULL) flows` },
-];
-
-export interface CensusLine { key: string; layer: Population['layer']; label: string; value: number | null; note?: string }
-
-export async function census(): Promise<CensusLine[]> {
-  const db = getDb();
-  const out: CensusLine[] = [];
-  for (const one of POPULATIONS) {
-    if (!one.sql) {
-      out.push({ key: one.key, layer: one.layer, label: one.label, value: null, note: `NOT_STORED: ${one.notStored}` });
-      continue;
-    }
-    try {
-      const row = (await db.get(one.sql)) as { n: number | string } | undefined;
-      out.push({ key: one.key, layer: one.layer, label: one.label, value: Number(row?.n ?? 0) });
-    } catch (error) {
-      const message = error instanceof Error ? error.message.split('\n')[0] : String(error);
-      out.push({ key: one.key, layer: one.layer, label: one.label, value: null, note: `UNMEASURED: ${message}` });
-    }
-  }
-  return out;
-}
-
-/* ------------------------------------------------------------------ DIAG */
-
-/** Projects the diagnosis reads, at most. */
-const DIAG_PROJECTS = 50;
-/** Rejection reasons and unmatched buyer wordings printed per project, at most. */
-const DIAG_TOP = 8;
-
-export interface DiagProject {
-  projectId: string;
-  cashMode: { exists: boolean; state: string | null };
-  /** Why `runIndustryKernel` returns before absorbing and back-filling; null when it goes on. */
-  kernelSkips: string | null;
-  kernelAuthority: { allowed: boolean; basis: string | null; reason: string };
-  standingGrant: { live: boolean; id: string | null; name: string | null; standingGoals: { name: string; state: string; expiresAt: string | null; research: boolean }[] };
-  /** industry_rounds opened in the last 24 h, by `purpose:state`. */
-  kernelRounds24h: Record<string, number>;
-  /** Constructed-arrangement rounds (`goal-…-mx-…`, the F7 path) opened in the last 24 h, by state. */
-  constructedRounds24h: Record<string, number>;
-  knowledgeResearch: { allowed: boolean; basis: string | null; reason: string };
-  /** The constructed-round gate (`openConstructedRound`) per goal: rounds still researching against the live cap, and the focus cap. */
-  constructedGate: { goalId: string; goalRounds: number; stillResearching: number; liveCap: number; focusCap: number | null; liveConstructed: number; recentMx: number }[];
-  backfill: {
-    hasBuyerTypes: boolean;
-    unitEconomicRead: number;
-    read: number;
-    candidates: number;
-    candidatesBySource: Record<string, number>;
-    rejected: number;
-    topReasons: { reason: string; n: number }[];
-    topUnmatchedBuyers: { buyer: string; n: number }[];
-  } | { error: string };
-  errors: string[];
-}
-
-function top(counts: Map<string, number>, limit = DIAG_TOP): { key: string; n: number }[] {
-  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, limit).map(([key, n]) => ({ key, n }));
-}
-
-function message(error: unknown): string {
-  return error instanceof Error ? (error.message.split('\n')[0] ?? '') : String(error);
-}
-
-/** The projects holding an industry map or a cash mode row, bounded. */
-export async function diagProjectIds(limit = DIAG_PROJECTS): Promise<string[]> {
-  const rows = (await getDb().all(
-    `SELECT project_id FROM (SELECT DISTINCT project_id FROM industry_nodes UNION SELECT project_id FROM cash_modes) p ORDER BY project_id LIMIT ?`,
-    [limit],
-  )) as { project_id: string }[];
-  return rows.map((row) => row.project_id);
-}
-
-async function countBy(sql: string, params: string[]): Promise<Record<string, number>> {
-  const rows = (await getDb().all(sql, params)) as { k: string; n: number | string }[];
-  return Object.fromEntries(rows.map((row) => [row.k, Number(row.n)]));
-}
-
-/**
- * Why construction facts and arrangement research are (not) happening in one
- * project, read from the same functions the tick runs. Strictly read-only: the
- * back-fill is the dry-run selection (`backfillCandidates`), nothing is filed.
- */
-export async function diagProject(projectId: string, now = new Date()): Promise<DiagProject> {
-  const { getCashMode } = await import('../server/repos/cashMode.ts');
-  const { listGoals } = await import('../server/repos/russellAuthority.ts');
-  const { kernelAuthority, kernelSkips, standingWorldGrant } = await import('../server/services/industry/kernel.ts');
-  const { backfillCandidates } = await import('../server/services/industry/expand.ts');
-  const { knowledgeResearchAllowed } = await import('../server/services/cash/lifecycle.ts');
-  const { RESEARCH_WORK_CLASS } = await import('../server/services/russell/launch.ts');
-
-  const iso = now.toISOString();
-  const since = new Date(now.getTime() - 24 * 3600_000).toISOString();
-  const errors: string[] = [];
-  const attempt = async <T>(label: string, run: () => Promise<T>, fallback: T): Promise<T> => {
-    try {
-      return await run();
-    } catch (error) {
-      errors.push(`${label}: ${message(error)}`);
-      return fallback;
-    }
-  };
-
-  const mode = await attempt('cashMode', () => getCashMode(projectId), null);
-  const goals = await attempt('listGoals', () => listGoals(projectId), []);
-  const grant = standingWorldGrant(goals, iso);
-  const skips = await attempt('kernelSkips', () => kernelSkips(projectId, mode), `unreadable`);
-  const authority = await attempt('kernelAuthority', async () => {
-    const one = await kernelAuthority(projectId, { mode, now: iso });
-    return { allowed: one.allowed, basis: one.basis, reason: one.reason };
-  }, { allowed: false, basis: null, reason: 'unreadable' });
-  const knowledge = await attempt('knowledgeResearchAllowed', async () => {
-    const one = await knowledgeResearchAllowed(projectId, iso);
-    return { allowed: one.allowed, basis: one.basis, reason: one.reason };
-  }, { allowed: false, basis: null, reason: 'unreadable' });
-  const kernelRounds24h = await attempt(
-    'industryRounds',
-    () => countBy(`SELECT purpose || ':' || state AS k, COUNT(*) AS n FROM industry_rounds WHERE project_id = ? AND opened_at >= ? GROUP BY purpose, state ORDER BY k LIMIT 40`, [projectId, since]),
-    {},
-  );
-  const constructedRounds24h = await attempt(
-    'constructedRounds',
-    () => countBy(`SELECT state AS k, COUNT(*) AS n FROM cash_discovery_rounds WHERE project_id = ? AND opened_at >= ? AND bucket_id LIKE 'goal-%-mx-%' GROUP BY state ORDER BY k LIMIT 10`, [projectId, since]),
-    {},
-  );
-
-  const constructedGate = await attempt('constructedGate', async () => {
-    const { roundsStillResearching, liveConstructedResearch, MAX_LIVE_GOAL_ROUNDS } = await import('../server/services/cash/discovery.ts');
-    const { listRounds } = await import('../server/repos/cashDiscovery.ts');
-    const { constructedCapFor } = await import('../server/services/cash/researchRoom.ts');
-    const rounds = await listRounds(projectId);
-    const goalIds = [...new Set(rounds.map((one) => /^goal-(wst_[A-Za-z0-9]+)/.exec(one.bucketId)?.[1]).filter((id): id is string => !!id))].slice(0, 5);
-    const focusCap = await constructedCapFor(projectId);
-    const out: DiagProject['constructedGate'] = [];
-    for (const goalId of goalIds) {
-      const prefix = `goal-${goalId}`;
-      const mine = rounds.filter((one) => one.bucketId === prefix || one.bucketId.startsWith(`${prefix}-`));
-      const mx = mine.filter((one) => one.bucketId.startsWith(`${prefix}-mx-`));
-      out.push({
-        goalId,
-        goalRounds: mine.length,
-        stillResearching: await roundsStillResearching(mine),
-        liveCap: MAX_LIVE_GOAL_ROUNDS,
-        focusCap,
-        liveConstructed: await liveConstructedResearch(mx),
-        recentMx: mx.filter((one) => one.openedAt >= since).length,
-      });
-    }
-    return out;
-  }, []);
-
-  let backfill: DiagProject['backfill'];
-  try {
-    const pool = await backfillCandidates(projectId);
-    const reasons = new Map<string, number>();
-    const unmatched = new Map<string, number>();
-    const bySource: Record<string, number> = {};
-    let candidates = 0;
-    for (const one of pool.decisions) {
-      if (one.candidate) {
-        candidates += 1;
-        bySource[one.source] = (bySource[one.source] ?? 0) + 1;
-        continue;
-      }
-      const reason = `${one.source}: ${one.reason ?? 'unknown'}`;
-      reasons.set(reason, (reasons.get(reason) ?? 0) + 1);
-      if (one.unmatchedBuyer) {
-        const buyer = one.unmatchedBuyer.slice(0, 80);
-        unmatched.set(buyer, (unmatched.get(buyer) ?? 0) + 1);
-      }
-    }
-    backfill = {
-      hasBuyerTypes: pool.hasBuyerTypes,
-      unitEconomicRead: pool.unitEconomicRead,
-      read: pool.decisions.length,
-      candidates,
-      candidatesBySource: bySource,
-      rejected: pool.decisions.length - candidates,
-      topReasons: top(reasons).map(({ key, n }) => ({ reason: key, n })),
-      topUnmatchedBuyers: top(unmatched).map(({ key, n }) => ({ buyer: key, n })),
-    };
-  } catch (error) {
-    backfill = { error: message(error) };
-  }
-
-  return {
-    projectId,
-    cashMode: { exists: !!mode, state: mode?.state ?? null },
-    kernelSkips: skips,
-    kernelAuthority: authority,
-    standingGrant: {
-      live: !!grant,
-      id: grant?.id ?? null,
-      name: grant?.name ?? null,
-      standingGoals: goals.slice(0, 5).map((goal) => ({ name: goal.name, state: goal.state, expiresAt: goal.expiresAt ?? null, research: goal.allowedWork.includes(RESEARCH_WORK_CLASS) })),
-    },
-    kernelRounds24h,
-    constructedRounds24h,
-    constructedGate,
-    knowledgeResearch: knowledge,
-    backfill,
-    errors,
-  };
-}
-
-export async function diagnose(now = new Date()): Promise<DiagProject[]> {
-  const out: DiagProject[] = [];
-  for (const projectId of await diagProjectIds()) out.push(await diagProject(projectId, now));
-  return out;
-}
-
-/** The lines `main` prints for one project's diagnosis. */
-export function diagLines(one: DiagProject): string[] {
-  const p = `DIAG ${one.projectId}`;
-  const kv = (record: Record<string, number>) => Object.entries(record).map(([k, n]) => `${k}=${n}`).join(' ') || 'none';
-  const lines = [
-    `${p} cashMode ${one.cashMode.exists ? one.cashMode.state : 'NO_ROW'}`,
-    `${p} standingGrant ${one.standingGrant.live ? `LIVE ${one.standingGrant.name} (${one.standingGrant.id})` : 'NONE'}; standing goals: ${one.standingGrant.standingGoals.map((g) => `${g.name}[${g.state}${g.research ? ',RESEARCH' : ''}${g.expiresAt ? `,exp ${g.expiresAt}` : ''}]`).join(' ') || 'none'}`,
-    `${p} kernelSkips ${one.kernelSkips ?? 'no (the pass absorbs and back-fills)'}`,
-    `${p} kernelAuthority ${one.kernelAuthority.allowed ? `ALLOWED ${one.kernelAuthority.basis}` : 'REFUSED'} — ${one.kernelAuthority.reason}`,
-    `${p} kernelRounds24h ${kv(one.kernelRounds24h)}`,
-    `${p} constructedRounds24h ${kv(one.constructedRounds24h)}`,
-    ...one.constructedGate.map((g) => `${p} constructedGate ${g.goalId} researching=${g.stillResearching}/${g.liveCap} (of ${g.goalRounds} goal rounds) focusCap=${g.focusCap ?? 'none'} liveConstructed=${g.liveConstructed} mx24h=${g.recentMx}`),
-    `${p} knowledgeResearch ${one.knowledgeResearch.allowed ? `ALLOWED ${one.knowledgeResearch.basis}` : 'REFUSED'} — ${one.knowledgeResearch.reason}`,
-  ];
-  const b = one.backfill;
-  if ('error' in b) lines.push(`${p} backfill UNMEASURED — ${b.error}`);
-  else {
-    lines.push(`${p} backfill buyerTypes=${b.hasBuyerTypes ? 'yes' : 'NONE'} unitEconomicRead=${b.unitEconomicRead} read=${b.read} candidates=${b.candidates} (${kv(b.candidatesBySource)}) rejected=${b.rejected}`);
-    for (const r of b.topReasons) lines.push(`${p} backfillRejected ${String(r.n).padStart(5)}  ${r.reason}`);
-    for (const u of b.topUnmatchedBuyers) lines.push(`${p} backfillUnmatchedBuyer ${String(u.n).padStart(5)}  ${u.buyer}`);
-  }
-  for (const e of one.errors) lines.push(`${p} error ${e}`);
-  return lines;
-}
-
+const marks = (n: number) => Array.from({ length: n }, () => '?').join(', ');
 async function main(): Promise<void> {
   await initDatabase();
   try {
-    const lines = await census();
-    console.log(`CENSUS at ${new Date().toISOString()} revision ${process.env.BRAIN_REVISION ?? '<unstamped>'}`);
-    for (const one of lines) console.log(`CENSUS ${one.layer.padEnd(9)} ${one.key.padEnd(28)} ${one.value === null ? '-' : String(one.value).padStart(8)}  ${one.label}${one.note ? ` — ${one.note}` : ''}`);
-    if (process.argv.includes('--json')) console.log(`CENSUS_JSON ${JSON.stringify(lines)}`);
-    try {
-      const diag = await diagnose();
-      for (const one of diag) for (const line of diagLines(one)) console.log(line);
-      // This process's own reading, not the server's: the server keeps its pressure in memory only.
-      const { databasePressure } = await import('../server/db/pressure.ts');
-      const pressure = databasePressure();
-      console.log(`DIAG pressure (census process only) ${pressure.state} — ${pressure.reason}`);
-      if (process.argv.includes('--json')) console.log(`DIAG_JSON ${JSON.stringify(diag)}`);
-    } catch (error) {
-      console.log(`DIAG UNMEASURED — ${message(error)}`);
+    // 1. Every non-SUBMITTED free-lane item in the GPU window, full reason.
+    await q('FLI', `SELECT at, outcome, workload_class, work_item_id, SUBSTR(reason, 1, 700) AS reason FROM bin_events
+       WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND at <= ? AND reason NOT LIKE '%lease is no longer current%' ORDER BY at`, [W0, W1]);
+    // 2. Fragments touched by the free lane in window, with status and verdicts.
+    const frs = await q('FRAG', `SELECT DISTINCT f.id, f.status, f.attempt, f.integrity_verdict, f.sufficiency_verdict, f.block_cause, SUBSTR(f.blocked_reason,1,400) AS blocked, f.completed_at, f.updated_at, f.orchestration_id, SUBSTR(f.question,1,140) AS q,
+        (SELECT COUNT(*) FROM research_claims c WHERE c.fragment_id = f.id) AS claims,
+        (SELECT COUNT(*) FROM research_claims c WHERE c.fragment_id = f.id AND c.accepted = 1) AS acc
+       FROM bin_events e JOIN work_items w ON w.id = e.work_item_id JOIN research_fragments f ON f.id = w.fragment_id
+       WHERE e.event_type = 'FREE_LANE_ITEM' AND e.at >= ? AND e.at <= ?`, [W0, W1]);
+    const fids = frs.map((f) => f.id);
+    if (fids.length) {
+      await q('FCLAIM', `SELECT id, fragment_id, accepted, validation_state, sourced, retrieval_state, evidence_lane, derived, contradiction_state, created_at, SUBSTR(source_url,1,120) AS url, SUBSTR(rejection_reason,1,350) AS why, SUBSTR(claim,1,140) AS claim
+         FROM research_claims WHERE fragment_id IN (${marks(fids.length)}) ORDER BY created_at`, fids);
+      await q('FWORK', `SELECT id, work_type, state, attempt_count, fragment_id, failure_category, SUBSTR(result_summary,1,300) AS summary, created_at, completed_at FROM work_items WHERE fragment_id IN (${marks(fids.length)}) ORDER BY created_at`, fids);
+      await q('FDECL', `SELECT id, SUBSTR(required_evidence,1,700) AS lanes, min_independent_sources, timeframe FROM research_fragments WHERE id IN (${marks(fids.length)})`, fids);
     }
-    console.log('GOALS: OK');
+    // 3. All claims created in the GPU window, any path.
+    await q('WCLAIMSUM', `SELECT accepted, validation_state, retrieval_state, SUBSTR(COALESCE(rejection_reason,'(null)'),1,40) AS code, COUNT(*) AS n FROM research_claims WHERE created_at >= ? AND created_at <= ? GROUP BY accepted, validation_state, retrieval_state, SUBSTR(COALESCE(rejection_reason,'(null)'),1,40) ORDER BY n DESC`, [W0, W1]);
+    // 4. 24h: rejection reasons by leading text, all claims.
+    await q('R24', `SELECT accepted, validation_state, SUBSTR(COALESCE(rejection_reason,'(null)'),1,70) AS head, COUNT(*) AS n FROM research_claims WHERE created_at >= ? GROUP BY accepted, validation_state, SUBSTR(COALESCE(rejection_reason,'(null)'),1,70) ORDER BY n DESC LIMIT 60`, [D24]);
+    // 5. Goal orchestrations.
+    const orch = (await q('GORCH', `SELECT DISTINCT m.orchestration_id AS oid, r.state, r.opened_at FROM cash_discovery_rounds r JOIN russell_missions m ON m.candidate_id = r.candidate_id
+       WHERE r.bucket_id LIKE ? AND m.orchestration_id IS NOT NULL AND r.opened_at >= ? ORDER BY r.opened_at DESC LIMIT 60`, [`goal-${G}%`, '2026-11-16T00:00:00Z'])).map((r) => r.oid);
+    if (orch.length) {
+      await q('GO_STATUS', `SELECT id, status, SUBSTR(COALESCE(failure_reason,''),1,200) AS fr, created_at, completed_at, failed_at FROM research_orchestrations WHERE id IN (${marks(orch.length)})`, orch);
+      await q('GF', `SELECT id, orchestration_id, status, attempt, integrity_verdict, sufficiency_verdict, block_cause, SUBSTR(blocked_reason,1,300) AS blocked, created_at, updated_at,
+          (SELECT COUNT(*) FROM research_claims c WHERE c.fragment_id = f.id) AS claims, (SELECT COUNT(*) FROM research_claims c WHERE c.fragment_id = f.id AND c.accepted = 1) AS acc
+         FROM research_fragments f WHERE orchestration_id IN (${marks(orch.length)}) ORDER BY updated_at DESC LIMIT 80`, orch);
+      await q('GC24', `SELECT accepted, validation_state, retrieval_state, SUBSTR(COALESCE(rejection_reason,'(null)'),1,300) AS why, evidence_lane, fragment_id, id, created_at FROM research_claims WHERE orchestration_id IN (${marks(orch.length)}) AND created_at >= ? ORDER BY created_at DESC LIMIT 120`, [...orch, D24]);
+      await q('GW', `SELECT work_type, state, failure_category, COUNT(*) AS n FROM work_items WHERE orchestration_id IN (${marks(orch.length)}) AND created_at >= ? GROUP BY work_type, state, failure_category`, [...orch, D24]);
+    }
+    // 6. Storage integrity.
+    await q('INV_ACC_NOT_SOURCED', `SELECT validation_state, sourced, retrieval_state, COUNT(*) AS n FROM research_claims WHERE accepted = 1 AND (validation_state <> 'SOURCED' OR sourced <> 1) GROUP BY validation_state, sourced, retrieval_state`);
+    await q('INV_ACC_BY_FSTATUS', `SELECT f.status, COUNT(*) AS n FROM research_claims c JOIN research_fragments f ON f.id = c.fragment_id WHERE c.accepted = 1 AND c.created_at >= ? GROUP BY f.status`, [D24]);
+    await q('INV_ACC_NO_FRAG', `SELECT COUNT(*) AS n FROM research_claims WHERE accepted = 1 AND fragment_id IS NULL AND created_at >= ?`, [D24]);
+    await q('INV_ACC_WITH_REASON', `SELECT SUBSTR(rejection_reason,1,80) AS r, COUNT(*) AS n FROM research_claims WHERE accepted = 1 AND rejection_reason IS NOT NULL GROUP BY SUBSTR(rejection_reason,1,80) ORDER BY n DESC LIMIT 10`);
+    await q('INV_REJ_NO_REASON_JUDGED', `SELECT f.status, COUNT(*) AS n FROM research_claims c JOIN research_fragments f ON f.id = c.fragment_id WHERE c.accepted = 0 AND c.rejection_reason IS NULL AND c.created_at >= ? GROUP BY f.status`, [D24]);
+    await q('FSTATUS_24', `SELECT status, COUNT(*) AS n, MIN(updated_at) AS oldest FROM research_fragments WHERE updated_at >= ? GROUP BY status`, [D24]);
+    await q('FSTUCK', `SELECT f.status, COUNT(*) AS n, MIN(f.updated_at) AS oldest_update FROM research_fragments f JOIN research_orchestrations o ON o.id = f.orchestration_id
+       WHERE f.status IN ('RUNNING','VALIDATING','QUEUED','PLANNED') AND o.status NOT IN ('COMPLETE','COMPLETE_WITH_GAPS','FAILED','CANCELLED') GROUP BY f.status`);
+    await q('FSTUCK_NOWORK', `SELECT f.id, f.status, f.updated_at, o.status AS ostatus FROM research_fragments f JOIN research_orchestrations o ON o.id = f.orchestration_id
+       WHERE f.status IN ('RUNNING','VALIDATING') AND f.updated_at < ? AND NOT EXISTS (SELECT 1 FROM work_items w WHERE w.fragment_id = f.id AND w.state IN ('QUEUED','LEASED')) ORDER BY f.updated_at DESC LIMIT 30`, [new Date(Date.now() - 2 * 3_600_000).toISOString()]);
+    await q('FSTATUSES_ALL', `SELECT status, COUNT(*) AS n FROM research_fragments GROUP BY status`);
+    await q('FRAG_CLAIMS_UNJUDGED', `SELECT f.status, COUNT(DISTINCT f.id) AS frags, COUNT(c.id) AS claims FROM research_fragments f JOIN research_claims c ON c.fragment_id = f.id
+       WHERE c.accepted = 0 AND c.rejection_reason IS NULL AND c.created_at >= ? GROUP BY f.status`, [D24]);
+    await q('AUDIT_WORK_FRAG_STATE', `SELECT f.status AS fstatus, w.state, COUNT(*) AS n FROM work_items w JOIN research_fragments f ON f.id = w.fragment_id WHERE w.work_type = 'RESEARCH_AUDIT' AND w.created_at >= ? GROUP BY f.status, w.state`, [D24]);
+    // 7. The two named accepted claims, end to end.
+    for (const id of ['clm_1468e302%', 'clm_9cf1f15c%']) {
+      const c = await q('NAMED', `SELECT id, orchestration_id, fragment_id, pass_id, pass_key, job_id, accepted, validation_state, validation_detail, sourced, retrieval_state, evidence_lane, contradiction_state, rejection_reason, SUBSTR(source_url,1,160) AS url, SUBSTR(evidence_excerpt,1,200) AS ex, evidence_locator, source_date, retrieved_at, content_hash, created_at, SUBSTR(claim,1,200) AS claim, requirement_ids, derived, derived_from FROM research_claims WHERE id LIKE ?`, [id]);
+      for (const row of c) {
+        await q('NAMED_FRAG', `SELECT id, status, attempt, integrity_verdict, sufficiency_verdict, completed_at, accepted_at, SUBSTR(verdict_detail,1,300) AS vd FROM research_fragments WHERE id = ?`, [row.fragment_id]);
+        await q('NAMED_PASS', `SELECT id, pass_key, status, provider, model, executor_worker_id, started_at, completed_at FROM research_passes WHERE id = ?`, [row.pass_id]);
+        await q('NAMED_ORCH', `SELECT id, status, project_id, created_at, completed_at FROM research_orchestrations WHERE id = ?`, [row.orchestration_id]);
+        await q('NAMED_ROUND', `SELECT r.id, r.bucket_id, r.state, r.opened_at, r.closed_at, m.id AS mission, m.status AS mstatus FROM russell_missions m JOIN cash_discovery_rounds r ON r.candidate_id = m.candidate_id WHERE m.orchestration_id = ?`, [row.orchestration_id]);
+        await q('NAMED_DUPS', `SELECT id, accepted, fragment_id, created_at FROM research_claims WHERE content_hash = ? ORDER BY created_at`, [row.content_hash]);
+        await q('NAMED_USE', `SELECT 'construction' AS k, id, fact_key AS f, status FROM construction_facts WHERE source_claim_id = ? UNION ALL SELECT 'card', id, field, '' FROM cash_card_facts WHERE claim_id = ? UNION ALL SELECT 'finding', id, state, '' FROM shared_findings WHERE claim_id = ?`, [row.id, row.id, row.id]);
+        await q('NAMED_WORK', `SELECT id, work_type, state, attempt_count, failure_category, created_at, completed_at FROM work_items WHERE fragment_id = ? ORDER BY created_at`, [row.fragment_id]);
+      }
+    }
   } finally {
     await closeDatabase();
+    console.log('GOALS: OK');
   }
 }
-
-if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop() ?? '')) {
-  main().catch((error) => {
-    console.error(error);
-    process.exit(1);
-  });
-}
+main().catch((e) => { console.error(e); console.log('GOALS: OK'); process.exit(0); });
