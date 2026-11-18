@@ -1366,6 +1366,53 @@ export async function recordArrangementEvaluations(input: {
   return written;
 }
 
+/**
+ * The structures a goal's last plan readings led with, and how many readings
+ * have weighed its constructed arrangements: every arrangement the best
+ * combination picked, and the few that contributed most, in each of the goal's
+ * `readings` most recent readings. Construction always composes these (P4,
+ * 2026-11-18), so a leader is never dropped by the cap between two passes that
+ * learned nothing new; the count is the pass counter the rotation window
+ * advances on, which a re-read that stores no reading does not move. One
+ * statement (a plan read is counted in statements: goalPlan's bounded-read
+ * test); signatures sorted, so the result is the same in both dialects.
+ */
+export async function recentLeaderSignatures(goalId: string, readings = 2, topPerReading = 3): Promise<{ leaders: string[]; readings: number }> {
+  const rows = await getDb().all<{ reading_id: string; design_signature: string; picked: number | string; contribution_cents: number | string | null }>(
+    `SELECT e.reading_id, p.design_signature, e.picked, e.contribution_cents
+       FROM monetization_path_evaluations e JOIN monetization_paths p ON p.id = e.path_id
+      WHERE e.goal_id = ? AND e.refused = 0 AND p.design_signature IS NOT NULL
+        AND e.reading_id IN (
+          SELECT recent.reading_id FROM (
+            SELECT reading_id, MAX(evaluated_at) AS last_at FROM monetization_path_evaluations
+             WHERE goal_id = ? GROUP BY reading_id ORDER BY last_at DESC, reading_id DESC LIMIT ?
+          ) recent
+        )
+     UNION ALL
+     SELECT '#readings', '', COUNT(DISTINCT reading_id), NULL FROM monetization_path_evaluations WHERE goal_id = ?`,
+    [goalId, goalId, readings, goalId],
+  );
+  let count = 0;
+  const out = new Set<string>();
+  const byReading = new Map<string, typeof rows>();
+  for (const row of rows) {
+    if (row.reading_id === '#readings' && row.design_signature === '') {
+      count = Number(row.picked);
+      continue;
+    }
+    const lane = byReading.get(row.reading_id);
+    if (lane) lane.push(row);
+    else byReading.set(row.reading_id, [row]);
+  }
+  const cents = (row: (typeof rows)[number]): number => (row.contribution_cents === null ? -Infinity : Number(row.contribution_cents));
+  for (const group of byReading.values()) {
+    for (const row of group) if (Number(row.picked) === 1) out.add(row.design_signature);
+    const top = [...group].sort((a, b) => cents(b) - cents(a) || a.design_signature.localeCompare(b.design_signature));
+    for (const row of top.slice(0, topPerReading)) out.add(row.design_signature);
+  }
+  return { leaders: [...out].sort(), readings: count };
+}
+
 export interface ArrangementEvaluation {
   id: string;
   pathId: string;
