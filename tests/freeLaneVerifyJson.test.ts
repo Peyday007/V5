@@ -21,6 +21,7 @@ import {
   noJsonRepair,
   replyShape,
   resetFreeLaneFitness,
+  verdictMissReason,
   verdictsOf,
 } from '../server/services/freeLane/worker.ts';
 import type { Completer, LaneConfig } from '../server/services/cheap/lane.ts';
@@ -68,6 +69,20 @@ describe('reading a verification reply', () => {
     expect(verdictsOf(firstJson(JSON.stringify([verdict(id)]))!)).toEqual([verdict(id)]);
     const { claim_id: _drop, ...rest } = verdict(id);
     expect(verdictsOf({ verdicts: [{ claimId: id, ...rest }] })).toEqual([verdict(id)]);
+  });
+
+  it('reads a verdict wherever a JSON answer put it: one object, a map by claim id, a bare verdict, inside the schema', () => {
+    const v = verdict(id);
+    const { claim_id: _drop, ...rest } = v;
+    expect(verdictsOf({ verdicts: v, sufficiency: 'SUFFICIENT' })).toEqual([v]);
+    expect(verdictsOf({ verdicts: { [id]: rest }, sufficiency: 'SUFFICIENT' })).toEqual([v]);
+    expect(verdictsOf(v)).toEqual([v]);
+    expect(verdictsOf({ type: 'object', properties: { verdicts: [v], sufficiency: 'SUFFICIENT' } })).toEqual([v]);
+    expect(verdictsOf({ verdicts: { type: 'array', items: [v] } })).toEqual([v]);
+    // Nothing is invented: no verdict stated is none read, and the reason names what was there.
+    expect(verdictsOf({ sufficiency: 'SUFFICIENT' })).toEqual([]);
+    expect(verdictMissReason({ sufficiency: 'SUFFICIENT' }, [id])).toMatch(/listed no verdicts \(keys \["sufficiency"\]\)/);
+    expect(verdictMissReason({ verdicts: [verdict('clm_other')] }, [id])).toMatch(/named \["clm_other"\], asked \["clm_0f3a9c"\]/);
   });
 
   it('accepts no reply that does not state a verdict, and says why', () => {
@@ -277,6 +292,39 @@ describe('a verification whose reply held no JSON', () => {
     await freeLaneTick({ config: CONFIG, completer: again.completer, fetchSource, search: async () => [] });
     const takers = (await verifyEvents(orchestrationId)).slice(1).map((e) => e.reason.replace(/^model /, '').split(':')[0]);
     expect(takers).not.toContain(events[0]!.reason.replace(/^model /, '').split(':')[0]);
+  });
+
+  it('records a verdict given inside the schema it was shown, judged by the gate as any other', async () => {
+    const { verifyId, fragmentId } = await verificationQueued();
+    const lane = model((_prompt, id) => JSON.stringify({ type: 'object', properties: { verdicts: [verdict(id)], sufficiency: 'SUFFICIENT' } }));
+    await freeLaneTick({ config: CONFIG, completer: lane.completer, fetchSource, search: async () => [] });
+    expect(lane.verifyPrompts).toHaveLength(1);
+    expect((await getWorkItem(verifyId))?.state).toBe('SUCCEEDED');
+    expect((await listClaimsForFragment(fragmentId))[0]!.accepted).toBe(true);
+  });
+
+  it('tells a model whose verdicts named no claim asked about which ids to answer, and records the corrected answer', async () => {
+    const { verifyId, fragmentId } = await verificationQueued();
+    const lane = model((prompt, id) =>
+      prompt.includes('Brain could not use your previous answer') ? answer(id) : answer('claim-1'),
+    );
+    await freeLaneTick({ config: CONFIG, completer: lane.completer, fetchSource, search: async () => [] });
+    expect(lane.verifyPrompts).toHaveLength(2);
+    expect(lane.verifyPrompts[1]).toMatch(/no verdict named a claim it was asked about; 1 verdict\(s\) named \["claim-1"\]/);
+    expect((await getWorkItem(verifyId))?.state).toBe('SUCCEEDED');
+    expect((await listClaimsForFragment(fragmentId))[0]!.accepted).toBe(true);
+  });
+
+  it('fails a verification that still names no claim after being told, with the reason, and accepts nothing', async () => {
+    const { verifyId, fragmentId, orchestrationId } = await verificationQueued();
+    const lane = model(() => answer('claim-1'));
+    await freeLaneTick({ config: CONFIG, completer: lane.completer, fetchSource, search: async () => [] });
+    expect(lane.verifyPrompts).toHaveLength(2);
+    const events = await verifyEvents(orchestrationId);
+    expect(events.map((e) => e.outcome)).toEqual(['FAILED_RETRYABLE']);
+    expect(events[0]!.reason).toMatch(/no verdict named a claim it was asked about/);
+    expect((await getWorkItem(verifyId))?.state).not.toBe('SUCCEEDED');
+    expect((await listClaimsForFragment(fragmentId))[0]!.accepted).not.toBe(true);
   });
 
   it('still hands back an empty reply, which says nothing about the work', async () => {

@@ -627,12 +627,53 @@ export function listedClaims(raw: Record<string, unknown>): Record<string, unkno
  */
 export function verdictsOf(raw: Record<string, unknown>): Record<string, unknown>[] {
   const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
-  const list = Array.isArray(raw['verdicts']) ? raw['verdicts'] : Array.isArray(raw['claims']) ? raw['claims'] : [];
-  return (list as unknown[]).filter(isObject).map((v) => {
+  const named = (v: Record<string, unknown>): boolean => typeof v['claim_id'] === 'string' || typeof v['claimId'] === 'string';
+  /*
+   * Where a reply puts its verdicts. Production, 2026-11-18 03:17–06:57Z (after
+   * #1077): 42 of 55 free-lane attempts that burned an attempt were
+   * RESEARCH_VERIFY answers that parsed as JSON and still listed no verdict
+   * Brain could read. A verdict under `verdicts` as one object or as a map by
+   * claim id, a bare verdict, or one inside the JSON Schema the model was shown
+   * (`properties`) is the same verdict wherever it sits; the server judges it whole.
+   */
+  const listIn = (node: Record<string, unknown>): unknown[] | null => {
+    for (const key of ['verdicts', 'claims', 'items']) {
+      const value = node[key];
+      if (Array.isArray(value)) return value;
+      if (isObject(value)) {
+        if (named(value)) return [value];
+        const entries = Object.entries(value);
+        if (entries.length > 0 && entries.every(([, v]) => isObject(v))) {
+          return entries.map(([id, v]) => (named(v as Record<string, unknown>) ? v : { claim_id: id, ...(v as Record<string, unknown>) }));
+        }
+      }
+    }
+    return named(node) ? [node] : null;
+  };
+  let list = listIn(raw);
+  // One wrapper deep: the schema's own `properties`, or a single key holding the answer.
+  if (!list) {
+    for (const value of Object.values(raw)) {
+      if (isObject(value) && (list = listIn(value))) break;
+    }
+  }
+  return ((list ?? []) as unknown[]).filter(isObject).map((v) => {
     if (v['claim_id'] !== undefined || typeof v['claimId'] !== 'string') return v;
     const { claimId, ...rest } = v;
     return { claim_id: claimId, ...rest };
   });
+}
+
+/**
+ * Why a verification reply carried no verdict on a claim Brain asked about, in
+ * words a report can group by: what it listed and which ids it named. Pure.
+ */
+export function verdictMissReason(raw: Record<string, unknown>, asked: readonly string[]): string {
+  const read = verdictsOf(raw);
+  const head = "the answer did not survive Brain's own checks: no verdict named a claim it was asked about";
+  if (read.length === 0) return `${head}; listed no verdicts (keys ${JSON.stringify(Object.keys(raw).slice(0, 8))})`;
+  const ids = read.map((v) => String(v['claim_id'] ?? '')).slice(0, 4);
+  return `${head}; ${read.length} verdict(s) named ${JSON.stringify(ids)}, asked ${JSON.stringify(asked.slice(0, 4))}`.slice(0, 400);
 }
 
 /**
@@ -1779,9 +1820,15 @@ async function verify(ctx: Ctx, assignment: Record<string, unknown>): Promise<bo
   const known = new Set(claims.map((c) => String(c['claimId'])));
   const finalize = (raw: Record<string, unknown>): Record<string, unknown> | null => {
     const verdicts = verdictsOf(raw).filter((v) => known.has(String(v['claim_id'])));
-    if (verdicts.length === 0) return null;
-    const out: Record<string, unknown> = { ...raw, verdicts };
-    delete out['claims'];
+    if (verdicts.length === 0) {
+      ctx.why = verdictMissReason(raw, [...known]);
+      return null;
+    }
+    // The tool's own top-level fields only, read beside the verdicts: a schema's `type`/`properties` is not the answer.
+    const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+    const holder = 'sufficiency' in raw ? raw : Object.values(raw).find((v): v is Record<string, unknown> => isObject(v) && 'sufficiency' in v) ?? raw;
+    const out: Record<string, unknown> = { verdicts };
+    for (const key of ['sufficiency', 'missing_lanes', 'unresolved_gaps']) if (holder[key] !== undefined) out[key] = holder[key];
     return out;
   };
   const ok = await submitWithRepair(
@@ -1790,6 +1837,16 @@ async function verify(ctx: Ctx, assignment: Record<string, unknown>): Promise<bo
     answer,
     (error, previous) => `${prompt}\n\nBrain refused your previous answer: ${error}\nPrevious: ${JSON.stringify(previous).slice(0, 4000)}\nCorrect it.`,
     finalize,
+    /*
+     * Told once what was missing, as a fragment answer has been since 2026-11-05:
+     * the ids to answer and the shape, not the schema. The second answer meets the
+     * same checks, and the server still judges every verdict.
+     */
+    (why, previous) =>
+      `${prompt}\n\nBrain could not use your previous answer: ${why.replace(/^the answer did not survive Brain's own checks: /, '')}. ` +
+      'Reply with ONE object {"verdicts":[...],"sufficiency":"SUFFICIENT" or "INSUFFICIENT","missing_lanes":[...]} — the answer ' +
+      'itself, not a schema — with one verdict per claim, each naming its claim by "claim_id" exactly as given: ' +
+      `${JSON.stringify([...known])}.\nPrevious: ${JSON.stringify(previous).slice(0, 3000)}`,
   );
   if (ok) await complete(ctx, `free lane: ${claims.length} claim(s) verified against pages Brain fetched`);
   return ok;
