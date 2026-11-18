@@ -421,7 +421,7 @@ function arrangementOpening(one: ConstructedArrangement, input: ArrangementInput
     capital,
     hours: infer('hours', unknown(1, 40, 'nobody has established the hours; swept from 1 to 40 per deal')),
     daysToCash: infer('daysToCash', unknown(3, 60, 'nobody has established when the money would settle; swept from 3 to 60 days')),
-    close: infer('close', unknown(0.02, 0.5, 'no buyer has been asked yet; swept from 2% to 50% of buyers agreeing')),
+    close: arrangementClose(one, ref) ?? infer('close', unknown(0.02, 0.5, 'no buyer has been asked yet; swept from 2% to 50% of buyers agreeing')),
     respond: infer('respond', unknown(0.002, 0.15, 'nobody has established how many prospects of this kind reply; swept from 0.2% to 15%')),
     directCost: infer('costShare', unknown(0, Math.max(0.01, high * 0.6), 'nobody has established the direct cost; swept from nothing to 60% of the top price'), high, ' as a share of the top price'),
     // A repeating design's deals in the window, from these buyers' own stated volume only (a market's size never transfers).
@@ -439,6 +439,45 @@ function arrangementOpening(one: ConstructedArrangement, input: ArrangementInput
     fulfilledBy: null,
     competitiveAward: false,
     estimated: { arrangementKey: one.key, tier: price.inferred?.tier ?? one.value.tier, observations: price.inferred?.observations ?? one.value.observations, ...(transfer ? { transfer } : {}), ...(invented ? { invented: true } : {}) },
+  };
+}
+
+/**
+ * The close rate a constructed arrangement's own buyers are published at (R3):
+ * the `account_win_rate` facts filed for them, reconstructed into its demand
+ * side's `conversion`. A distribution the reconstruction justifies (a sized
+ * rate) is evidence, entered as the price evidence is; published rates with no
+ * stated sample locate it, so it is swept over their reconstructed p10–p90 as
+ * an assumption, never as a probability. Null when none is filed: the close
+ * rate is then inferred or swept as before. Pure.
+ */
+function arrangementClose(one: ConstructedArrangement, ref: SourceRef): ModelInput | null {
+  const c = one.conversion;
+  if (!c) return null;
+  const from = c.sources.length ? `: ${c.sources.slice(0, 6).join(', ')}` : '';
+  const stated = `close rate filed for these buyers (${c.tier}, ${c.observations} obs.${from}): p10 ${c.p10} p50 ${c.p50} p90 ${c.p90}`;
+  if (c.evidence) {
+    const { values, low, high, ...sample } = c.evidence;
+    return {
+      value: null,
+      low: Math.max(0, low),
+      high: Math.min(1, Math.max(low + 0.0001, high)),
+      provenance: 'EVIDENCE',
+      source: ref,
+      note: stated,
+      distribution: { kind: 'EMPIRICAL', values },
+      inferred: { tier: c.tier as EvidenceTier, justified: true, p10: c.p10, p50: c.p50, p90: c.p90, observations: c.observations, ...sample },
+    };
+  }
+  const low = Math.max(0.0001, Math.min(1, c.p10));
+  return {
+    value: null,
+    low,
+    high: Math.min(1, Math.max(low + 0.0001, c.p90)),
+    provenance: 'ASSUMPTION',
+    source: ref,
+    note: `${stated}; published without a sample, so swept over that range`,
+    inferred: { tier: c.tier as EvidenceTier, justified: false, p10: c.p10, p50: c.p50, p90: c.p90, observations: c.observations },
   };
 }
 

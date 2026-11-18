@@ -107,9 +107,9 @@ describe('R2: the reader files only a figure the plan reads per buyer, as stated
     expect(readNonPriceFact(SOLARIZE.contractor)).toEqual({ refused: expect.stringMatching(/percentage change in a price or cost/) });
   });
 
-  it('recognises a close or reply rate and refuses it, because the plan reads no fact for either', () => {
-    expect(readNonPriceFact('Solarize campaigns report a close rate of 18% among homeowners who requested a site assessment.')).toEqual({ refused: expect.stringMatching(/plan reads no fact for either/) });
-    expect(readNonPriceFact('About 3% of the businesses contacted replied to the cold email.')).toEqual({ refused: expect.stringMatching(/plan reads no fact for either/) });
+  it('recognises a close or reply rate and refuses it as a volume (a close rate is shareCountFacts.ts’s to file, R3)', () => {
+    expect(readNonPriceFact('Solarize campaigns report a close rate of 18% among homeowners who requested a site assessment.')).toEqual({ refused: expect.stringMatching(/reply or close rate, which is no volume/) });
+    expect(readNonPriceFact('About 3% of the businesses contacted replied to the cold email.')).toEqual({ refused: expect.stringMatching(/a reply rate has no fact the plan reads/) });
   });
 
   it('files a per-buyer monthly count exactly as stated, a range as a range, and never a market total or money', () => {
