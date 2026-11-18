@@ -97,11 +97,30 @@ describe('federalRegisterStatedDate', () => {
 });
 
 describe('the request', () => {
-  it('asks the API for dates and action alongside the existing fields', () => {
-    const source = FEED_SOURCES.find((one) => one.id === 'federal-register-rules');
+  const source = FEED_SOURCES.find((one) => one.id === 'federal-register-rules');
+  const requested = [...new URL(source!.url).searchParams.getAll('fields[]')];
+
+  it('asks the API for dates alongside the existing fields', () => {
     expect(source?.url).toContain('fields%5B%5D=dates');
-    expect(source?.url).toContain('fields%5B%5D=action');
     expect(source?.url).toContain('fields%5B%5D=effective_on');
     expect(source?.url).toContain('fields%5B%5D=correction_of');
+  });
+
+  /**
+   * Every field the connector asks for has a consumer: dropping it from a row
+   * changes what parseFederalRegister stores, for a row with effective_on and a
+   * correction, or for one dated only in DATES. A field requested and never
+   * read (as `action` once was) fails here.
+   */
+  it('requests only fields parseFederalRegister reads', () => {
+    expect(requested.length).toBeGreaterThan(0);
+    const dated = row({ effective_on: '2026-11-20', correction_of: 'https://www.federalregister.gov/api/v1/documents/2026-21030' });
+    const statedOnly = row({});
+    const unread = requested.filter((field) => [dated, statedOnly].every((one) => {
+      const without: Record<string, unknown> = { ...one };
+      delete without[field];
+      return JSON.stringify(parseFederalRegister({ results: [without] })) === JSON.stringify(parseFederalRegister({ results: [one] }));
+    }));
+    expect(unread).toEqual([]);
   });
 });
