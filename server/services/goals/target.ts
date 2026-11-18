@@ -24,6 +24,7 @@ import { totalsByKind } from '../../repos/cashLedger.ts';
 import { getProject } from '../../repos/projects.ts';
 import { getWorkstream } from '../../repos/register.ts';
 import { GOAL_METRICS, type GoalMetric, type GoalTarget, type Workstream } from '../../domain/register.ts';
+import { readObjective } from '../industry/construction/intent.ts';
 
 export const GOAL_METRIC_LABEL: Record<GoalMetric, string> = {
   SETTLED_CASH: 'settled cash',
@@ -55,9 +56,52 @@ export interface TargetReading {
   capitalPerWeekCents: number | null;
   /** Whether a verified customer payment has arrived since the target was set. */
   proven: boolean;
+  /** What the goal's own words confine its plan to (`goalScope`); absent on a reading built by hand. */
+  scope?: GoalScope;
 }
 
 const DAY = 86_400_000;
+
+/** A monthly recurring target is counted over this trailing window: its run-rate. */
+export const RUN_RATE_DAYS = 30;
+
+/**
+ * What a goal's own words confine its plan to, read from them on every read
+ * (they are the goal's intent, so nothing is stored that can be read, §43):
+ *
+ *   * `recurring` — the amount is a monthly recurring run-rate, so only
+ *     recurring revenue counts toward it and only recurring lines are planned;
+ *   * `industry` — the one industry the plan may work (§105: it binds this goal
+ *     only, and only while it runs);
+ *   * `hoursPerWeek` — the owner's weekly hours, of which `hoursCeiling` is the
+ *     window's total;
+ *   * `capitalAssumed` — an up-front capital limit the words state without
+ *     a figure ("little up-front capital"), planned as an assumed low ceiling
+ *     on what is tied up before money comes in (`capitalBeforeProofCents`)
+ *     and flagged as an assumption. Present only when nobody set a capital
+ *     figure of either kind; a set figure always wins.
+ *
+ * It only ever narrows what the plan works and what may be tied up; it grants
+ * nothing (spending stays the commercial authority's, `spending.ts`).
+ */
+export interface GoalScope {
+  recurring: 'MONTHLY' | null;
+  industry: string | null;
+  hoursPerWeek: number | null;
+  capitalAssumed: { cents: number; phrase: string; basis: string } | null;
+}
+
+export function goalScope(goal: Pick<Workstream, 'intent' | 'title' | 'target'>, now: Date = new Date()): GoalScope {
+  const words = goal.intent?.trim() ? goal.intent : goal.title;
+  const read = readObjective(words ?? '', now);
+  const assumed = goal.target && goal.target.capitalCeilingCents === null && goal.target.capitalBeforeProofCents === null && read.capitalAssumed ? read.capitalAssumed : null;
+  return {
+    recurring: read.recurring,
+    industry: read.industry,
+    hoursPerWeek: read.hoursPerWeek,
+    capitalAssumed: assumed ? { cents: Math.round(assumed.amount * 100), phrase: assumed.phrase, basis: assumed.basis } : null,
+  };
+}
 
 /**
  * The one statement of what each metric adds up. `counted` and the arithmetic
@@ -112,7 +156,11 @@ export function achievedFrom(metric: GoalMetric, totals: Record<string, number>)
 export async function readTarget(goal: Workstream, now: Date = new Date()): Promise<TargetReading | null> {
   const target = goal.target;
   if (!target) return null;
-  const totals = await totalsByKind({ projectId: target.projectId, currency: target.currency, since: target.setAt });
+  const scope = goalScope(goal, now);
+  // A monthly run-rate is what the ledger settled over the trailing month, never everything since the target was set.
+  const trailing = new Date(now.getTime() - RUN_RATE_DAYS * DAY).toISOString();
+  const since = scope.recurring === 'MONTHLY' && trailing > target.setAt ? trailing : target.setAt;
+  const totals = await totalsByKind({ projectId: target.projectId, currency: target.currency, since });
   const t = (kind: string) => Number((totals as Record<string, number>)[kind] ?? 0);
   const refunds = t('REFUND');
   const payments = t('CUSTOMER_PAYMENT');
@@ -140,13 +188,15 @@ export async function readTarget(goal: Workstream, now: Date = new Date()): Prom
     daysLeft: goal.dueAt ? Math.ceil((Date.parse(goal.dueAt) - now.getTime()) / DAY) : null,
     counted,
     notCounted,
-    since: target.setAt,
+    since,
     capitalCeilingCents: target.capitalCeilingCents,
     hoursCeiling: target.hoursCeiling,
     resources: target.resources,
-    capitalBeforeProofCents: target.capitalBeforeProofCents,
+    // "Little up-front capital" limits what is tied up before money comes in: planned at its assumed figure, flagged on `scope`.
+    capitalBeforeProofCents: target.capitalBeforeProofCents ?? scope.capitalAssumed?.cents ?? null,
     capitalPerWeekCents: target.capitalPerWeekCents,
     proven: payments - refunds > 0,
+    scope,
   };
 }
 

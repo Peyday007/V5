@@ -146,7 +146,19 @@ export async function createGoal(input: {
     detail: { reading },
     actorRef: input.actorRef,
   });
-  const outcome = target ? `${target.metric} of at least ${target.amountCents / 100} ${target.currency}, verified on the ledger` : undefined;
+  /*
+   * A monthly recurring target ("$5,000 a month in recurring revenue") is the
+   * same target row: the ledger counts settled cash, not subscriptions, so the
+   * amount is the monthly run-rate and `readTarget` counts it over the trailing
+   * month (`RUN_RATE_DAYS`) for a goal whose words say so. The words are the
+   * goal's intent, so nothing new is stored to remember it (§43).
+   */
+  const recurring = !input.target && reading.recurring === 'MONTHLY';
+  const outcome = target
+    ? recurring
+      ? `a monthly recurring run-rate of at least ${target.amountCents / 100} ${target.currency}: ${target.metric} over the trailing month, verified on the ledger`
+      : `${target.metric} of at least ${target.amountCents / 100} ${target.currency}, verified on the ledger`
+    : undefined;
   if (dueAt || outcome || input.userId) {
     await setTerms(goal.id, { outcome, dueAt: dueAt ? new Date(dueAt).toISOString() : undefined, ownerUserId: input.userId ?? undefined }, input.actorRef);
   }
@@ -174,7 +186,8 @@ export async function createGoal(input: {
     await recordWorkstreamEvent({
       workstreamId: goal.id,
       kind: 'GOAL_TARGET_SET',
-      summary: `Target: ${target.metric} ${target.amountCents / 100} ${target.currency}${set.capitalCeilingCents !== null ? `, at most ${set.capitalCeilingCents / 100} tied up` : ''}${set.hoursCeiling !== null ? `, at most ${set.hoursCeiling} hours` : ''}. Counted from now.`,
+      summary: `Target: ${target.metric} ${target.amountCents / 100} ${target.currency}${recurring ? ' a month (run-rate over the trailing month)' : ''}${set.capitalCeilingCents !== null ? `, at most ${set.capitalCeilingCents / 100} tied up` : ''}${set.hoursCeiling !== null ? `, at most ${set.hoursCeiling} hours${reading.hoursPerWeek !== null && !input.target ? ` (${reading.hoursPerWeek} a week)` : ''}` : ''}${reading.industry && !input.target ? `, only in ${reading.industry}` : ''}${reading.capitalAssumed && set.capitalCeilingCents === null && !input.target ? `; capital stated without a figure, so at most ${reading.capitalAssumed.amount} is assumed (${reading.capitalAssumed.basis})` : ''}. Counted from now.`,
+      detail: { recurring: recurring ? 'MONTHLY' : null, hoursPerWeek: reading.hoursPerWeek, industry: reading.industry, capitalAssumed: set.capitalCeilingCents === null ? reading.capitalAssumed : null },
       actorRef: input.actorRef,
     });
   }

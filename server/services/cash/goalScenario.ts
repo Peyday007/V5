@@ -1520,6 +1520,111 @@ function variable(key: string, label: string, unit: string, input: ModelInput): 
 }
 
 /** Compose the model, or say exactly why there is nothing to model. */
+/* ------------------------------------------------------------------------ *
+ * What the goal's own words confine its plan to (`goalScope`, target.ts).   *
+ * ------------------------------------------------------------------------ */
+
+const SCOPE_STOP = new Set(['and', 'the', 'for', 'of', 'in', 'services', 'service', 'industry', 'sector', 'market', 'business']);
+
+/** The words that name an industry: "commercial cleaning" → ["commercial", "cleaning"]. */
+function industryWords(industry: string): string[] {
+  return industry.toLowerCase().split(/[^a-z]+/).filter((w) => w.length >= 3 && !SCOPE_STOP.has(w));
+}
+
+/**
+ * Whether a text names the goal's industry: every word of the industry's name
+ * appears in it. Pure. An opening's own `industry` decides when it has one;
+ * only an opening with none is read from its title and buyer.
+ */
+export function namesIndustry(industry: string, text: string | null | undefined): boolean {
+  const words = industryWords(industry);
+  if (!text || words.length === 0) return false;
+  const have = new Set(text.toLowerCase().split(/[^a-z]+/).filter(Boolean));
+  return words.every((w) => have.has(w) || have.has(`${w}s`) || (w.endsWith('s') && have.has(w.slice(0, -1))));
+}
+
+/** A price stated per period, or a retainer or subscription: revenue that recurs from the same buyer. Pure. */
+const RECURRING_PRICE = /\b(?:a|per|each|every)\s+(?:month|year|quarter|week)\b|\/\s?(?:mo|month|yr|year)\b|\bmonthly\b|\bquarterly\b|\bannual(?:ly)?\b|\bretainer\b|\bsubscription\b|\brecurring\b/i;
+export function recurringRevenue(priceStatement: string | null | undefined, title: string | null | undefined): boolean {
+  return RECURRING_PRICE.test(priceStatement ?? '') || /\b(?:retainer|subscription|monthly)\b/i.test(title ?? '');
+}
+
+/**
+ * Why a goal's scope leaves an opening out of its plan, or null when it is in.
+ * A required industry keeps only that industry's openings; a monthly
+ * recurring target keeps only openings whose revenue recurs, because a
+ * one-off sale adds nothing to a run-rate. Neither is an exclusion anywhere
+ * else (§105): the opening stays in the project, and every other goal reads it.
+ */
+export function outOfGoalScope(
+  scope: TargetReading['scope'],
+  opening: { industry: string | null; title: string; payer: string | null },
+  recurring: boolean,
+): string | null {
+  if (!scope) return null;
+  if (scope.industry) {
+    const named = opening.industry ? namesIndustry(scope.industry, opening.industry) : namesIndustry(scope.industry, `${opening.title} ${opening.payer ?? ''}`);
+    if (!named) return `outside the one industry this goal names (${scope.industry})${opening.industry ? `: it is ${opening.industry}` : ''}`;
+  }
+  if (scope.recurring === 'MONTHLY' && !recurring) {
+    return 'pays once: this goal counts a monthly recurring run-rate, which a one-off sale does not move';
+  }
+  return null;
+}
+
+/** What the goal's scope reads of a held opening: its industry, whether its price recurs, and its own stated days to cash. */
+export interface HeldTerms {
+  industry: string | null;
+  title: string;
+  recurring: boolean;
+  days: number | null;
+  /** What its own card says one deal ties up before it pays (major units), or null. */
+  capital: number | null;
+}
+
+/** The same scope over a constructed arrangement: its sector and buyers for an industry, its design or what it sells for recurrence. */
+export function arrangementOutOfScope(
+  scope: TargetReading['scope'],
+  arrangement: ConstructedArrangement,
+  openings: ReadonlyMap<string, HeldTerms>,
+  daysLeft: number | null = null,
+  upFront: number | null = null,
+): string | null {
+  /*
+   * The deadline: what it sells is a held opening whose own card says the
+   * money takes longer than the days left. Selling it under another design
+   * does not make the lot arrive sooner (rehearsal, 2026-11-18: a 7-day goal's
+   * plan brought in a fee on a 21-day equipment resale).
+   */
+  const need = arrangement.need?.from === 'OPENING' ? openings.get(arrangement.need.ref) : undefined;
+  if (daysLeft !== null && need?.days != null && need.days > daysLeft) return `what it sells ("${need.title.slice(0, 60)}") takes ${need.days} days to cash, after the ${daysLeft} left`;
+  // Up-front money: a design in which Brain delivers that need itself buys what the need's own card says it ties up.
+  if (upFront !== null && need?.capital != null && need.capital > upFront && !STRUCTURES[arrangement.design.base].needsSupply) {
+    return `delivering what it sells ("${need.title.slice(0, 60)}") ties up ${Math.round(need.capital)} before money comes in, more than the ${Math.round(upFront)} this goal allows`;
+  }
+  if (!scope) return null;
+  const sources = [arrangement.need, arrangement.demand, arrangement.supply].filter((p): p is NonNullable<typeof p> => !!p && p.from === 'OPENING').map((p) => openings.get(p.ref)).filter((o): o is NonNullable<typeof o> => !!o);
+  if (scope.industry) {
+    const named =
+      namesIndustry(scope.industry, arrangement.sector) ||
+      sources.some((o) => namesIndustry(scope.industry!, o.industry ?? o.title)) ||
+      namesIndustry(scope.industry, `${arrangement.label} ${arrangement.demand.name}`);
+    if (!named) return `outside the one industry this goal names (${scope.industry})`;
+  }
+  if (scope.recurring === 'MONTHLY') {
+    /*
+     * What it sells decides: a held opening's own price says whether its buyers
+     * pay again. Renaming a one-off's design a subscription evidences nothing
+     * about those buyers paying monthly (its price was paid once, GH2), so only
+     * a need no held opening prices is read from the design.
+     */
+    const sold = arrangement.need?.from === 'OPENING' ? openings.get(arrangement.need.ref) : undefined;
+    const recurs = sold ? sold.recurring : arrangement.design.repeat === 'SUBSCRIPTION';
+    if (!recurs) return 'its revenue does not recur from the same buyer: this goal counts a monthly recurring run-rate';
+  }
+  return null;
+}
+
 export async function composeGoalModel(input: { goal: Workstream; target: TargetReading; now?: Date; arrangements?: readonly ConstructedArrangement[] }): Promise<GoalModel> {
   const { goal, target } = input;
   const excluded: GoalModel['excluded'] = [];
@@ -1578,8 +1683,21 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
   const included: ModelledOpportunity[] = [];
   // What the goal's owner said to leave out (§82): an excluded opening takes no slot, and says why.
   const exclusions = await goalExclusions(input.goal);
+  // What the goal's own words confine it to (an industry, recurring revenue): this goal's plan only (§105).
+  const scope = target.scope;
+  const scoped = new Map<string, HeldTerms>();
+  for (const opportunity of live) {
+    const fact = await cardFactMap(opportunity.id, opportunity.projectId ?? undefined);
+    const ttc = fact('timeToFirstCash')?.value;
+    scoped.set(opportunity.id, { industry: opportunity.industry ?? null, title: opportunity.title, recurring: recurringRevenue(fact('price')?.value ?? null, opportunity.title), days: ttc ? readDays(ttc) : null, capital: opportunity.peakFundingCents !== null ? opportunity.peakFundingCents / 100 : null });
+  }
   for (const opportunity of ordered) {
     const tier = tierOf.get(opportunity.id) ?? 'SIGNAL';
+    const outOfScope = IN_FLIGHT.has(opportunity.state) ? null : outOfGoalScope(scope, opportunity, scoped.get(opportunity.id)?.recurring ?? false);
+    if (outOfScope) {
+      excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: `left out by the goal's own terms: ${outOfScope}` });
+      continue;
+    }
     // A harvested opening's title is its structured name; what the source said
     // it is lives in its buying signal, so both are what the opening is.
     const excludedClass = IN_FLIGHT.has(opportunity.state) ? null : excludedBy(`${opportunity.title} ${opportunity.buyingSignal ?? ''} ${opportunity.payer ?? ''} ${opportunity.industry ?? ''}`, exclusions);
@@ -1644,8 +1762,11 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
   let arrangementSelection: ArrangementSelection | null = null;
   let arrangementConversions: Map<string, ModelledOpportunity | null> | null = null;
   let reserve: PlannedOpening[] = [];
-  if (input.arrangements?.length) {
-    const selected = selectEstimatedArrangements(input.arrangements, {
+  const upFrontCents = target.capitalBeforeProofCents ?? target.capitalCeilingCents;
+  const upFrontLimit = upFrontCents === null ? null : upFrontCents / 100;
+  const inScope = (input.arrangements ?? []).filter((one) => !arrangementOutOfScope(scope, one, scoped, target.daysLeft, upFrontLimit));
+  if (inScope.length) {
+    const selected = selectEstimatedArrangements(inScope, {
       projectId: target.projectId,
       currency: target.currency,
       beforeProofCents: target.capitalBeforeProofCents,
@@ -1670,7 +1791,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       why.set(reason, (why.get(reason) ?? 0) + 1);
     }
     trace(
-      `estimated arrangements: ${selected.openings.length} of ${input.arrangements.length} (${selected.selection.cutCount} cut, ${reserve.length} in reserve)` +
+      `estimated arrangements: ${selected.openings.length} of ${inScope.length} in the goal's scope (of ${input.arrangements?.length ?? 0}) (${selected.selection.cutCount} cut, ${reserve.length} in reserve)` +
         (why.size ? `; recorded cuts: ${[...why].map(([r, n]) => `${n}× ${r}`).join(' · ')}` : ''),
     );
   }

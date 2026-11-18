@@ -94,6 +94,12 @@ export const CONTACTS_PER_DAY_BOUNDS = { low: 10, high: 60 } as const;
  * from the database; each is set only by an operator in `reconstruction.ts`.
  */
 export type PlannedOpening = ModelledOpportunity & {
+  /**
+   * The most deals the goal's stake can carry (`stakeCycles`): the lots the
+   * capital ceiling holds at once, times the cycles its days to cash fit in
+   * the window. Set by the portfolio, never on a card.
+   */
+  stakeDeals?: number;
   /** A deposit at signing: this share of the price (assumed) arrives `days` after the sale; the balance keeps the opening's own timing. */
   deposit?: { low: number; high: number; days: number };
   /**
@@ -697,7 +703,7 @@ const drawn = (x: ModelInput) => [x.value, x.low, x.high, x.distribution ?? null
  */
 export function demandWorlds(one: PlannedOpening, share: number, daysLeft: number, contactsPerDay: ModelInput, worlds: number, seed: number): Worlds {
   const key = JSON.stringify([
-    one.index, one.repeatable, one.agreedValue, one.deposit ?? null, one.opportunity.paymentTerms ?? null,
+    one.index, one.repeatable, one.agreedValue, one.deposit ?? null, one.opportunity.paymentTerms ?? null, one.stakeDeals ?? null,
     drawn(one.price), drawn(one.daysToCash), drawn(one.respond), drawn(one.close), drawn(one.directCost), drawn(one.volume),
     share, daysLeft, drawn(contactsPerDay), worlds, seed,
   ]);
@@ -774,7 +780,7 @@ function drawDemandWorlds(one: PlannedOpening, share: number, daysLeft: number, 
       // The order of draws is the engine's own, so an opening without a deposit reads exactly as it did.
       const won = binomial(interested, close, rng);
       volume = Math.max(0, Math.floor(draw.volume()));
-      deals = Math.min(won, volume);
+      deals = Math.min(won, volume, one.stakeDeals ?? Number.POSITIVE_INFINITY);
       balanceDeals = deposit ? (depositDays > 0 ? (deals * sellingDays) / depositDays : 0) : deals;
       if (deposit) {
         const paid = deposit.low + depositRng!() * (deposit.high - deposit.low);
@@ -832,6 +838,29 @@ export function capitalOwnEvidence(one: ModelledOpportunity): boolean {
 }
 
 /** The money an opening ties up when it starts: established, or the top of its range (invariant 39). */
+/**
+ * How a goal's stake carries a capital-using repeatable line (rehearsal,
+ * 2026-11-18: "Turn $10,000 into $100,000" never put the $10,000 to work).
+ * The line's own evidence says what one deal ties up; the ceiling holds
+ * `lots` of them at once, and each lot comes back with its cash after the
+ * line's days to cash, so the window fits `cycles` turns. The line may sell at
+ * most `lots × cycles` deals, ties up the lots at its start, and the direct
+ * cost of every later turn is paid from the turn before it — the owner's
+ * money at risk is the lots, which the starting capital already holds it to,
+ * never the gross cost of goods recycled through it (the same reason a cost a
+ * buyer's prepayment funds is exempt from the spending ceiling, §99). Null
+ * when the stake cannot hold one lot, or nothing about the line is established. Pure.
+ */
+export function stakeCycles(one: ModelledOpportunity, capital: { amount: number; established: boolean }, ceiling: number | null, daysLeft: number): { lots: number; cycles: number; deals: number; tiedUp: number } | null {
+  if (ceiling === null || !one.repeatable || one.agreedValue > 0 || !capital.established || !capitalOwnEvidence(one) || !(capital.amount > 0)) return null;
+  const lots = Math.floor((ceiling + 1e-9) / capital.amount);
+  if (lots < 1) return null;
+  // The slowest the line's own figures say a turn takes: a lot is not reused before it has come back.
+  const turn = Math.max(1, one.daysToCash.value ?? one.daysToCash.high ?? daysLeft);
+  const cycles = Math.max(1, Math.floor(daysLeft / turn));
+  return { lots, cycles, deals: lots * cycles, tiedUp: lots * capital.amount };
+}
+
 export function capitalAtStart(one: ModelledOpportunity): { amount: number; established: boolean } {
   if (one.capital.value !== null) return { amount: one.capital.value, established: true };
   if (one.capital.inferred?.justified) return { amount: one.capital.inferred.p50, established: true };
@@ -942,15 +971,38 @@ export function evaluateGoalPortfolio(input: {
     // The market's own historical record, acquired from the research and outcomes the project holds.
     const knowledge = input.causal === false ? null : knowledgeFor(replied.opportunity.projectId);
     const history = knowledge ? acquireMarketHistory(knowledge, replied.opportunity) : null;
-    const one = withHistoryClose(replied, history);
-    const id = one.opportunity.id;
-    const capital = capitalAtStart(one);
+    const held = withHistoryClose(replied, history);
+    const id = held.opportunity.id;
+    const capital = capitalAtStart(held);
+    /*
+     * The goal's stake, put to work (rehearsal, 2026-11-18): a line whose own
+     * evidence says it ties up more than the whole ceiling can never start, so
+     * it is refused like one over the per-arrangement limit; one the stake can
+     * hold is sold as many times as the stake can turn over in the window, its
+     * lots tied up at its start (`stakeCycles`).
+     */
+    const stake = stakeCycles(held, capital, input.capitalCeiling, input.daysLeft);
+    const one: PlannedOpening = stake ? { ...held, stakeDeals: stake.deals } : held;
+    if (stake) capital.amount = stake.tiedUp;
     const unestablished = INPUT_NAMES.filter(([key]) => !established(one[key] as ModelInput)).map(([, name]) => name);
     if (!capital.established) unestablished.push('money tied up');
     if (one.channel) {
       if (!established(one.channel.perDay)) unestablished.push(`${one.channel.label} a day`);
     } else if (one.repeatable && stated === null && !(input.contactsPerDay && established(input.contactsPerDay))) unestablished.push('outreach a day');
     let refused: string | null = null;
+    if (input.capitalCeiling !== null && capital.established && capitalOwnEvidence(one) && capital.amount > input.capitalCeiling + 1e-9) {
+      refused = `ties up ${Math.round(capital.amount)} at its start, more than the ${Math.round(input.capitalCeiling)} this goal may tie up in all`;
+    }
+    /*
+     * The same for what one deal costs: the spending ceiling counts every
+     * direct cost the buyer does not fund (`activityOf`), so a line whose own
+     * evidence says a single deal costs more than all the goal may spend can
+     * never sell inside it, and is not this goal's line.
+     */
+    const oneDeal = one.directCost.value;
+    if (!refused && spendCeiling !== null && !one.fundedByBuyer && !stake && established(one.directCost) && oneDeal !== null && oneDeal > spendCeiling + 1e-9) {
+      refused = `one deal costs ${Math.round(oneDeal)} directly, more than the ${Math.round(spendCeiling)} this goal may spend in all`;
+    }
     /*
      * An established outlay over the per-arrangement limit is refused. An
      * unestablished one is not: production, 2026-11-06, refused every opening
@@ -962,7 +1014,7 @@ export function evaluateGoalPortfolio(input: {
      * held to), and "money tied up" stays unestablished. Spending itself is
      * still held to the limits by the commercial authority (`spending.ts`).
      */
-    if (input.beforeProof !== null && capital.amount > input.beforeProof + 1e-9) {
+    if (!refused && input.beforeProof !== null && capital.amount > input.beforeProof + 1e-9) {
       /*
        * F6, production 2026-11-15: three of 11 openings were refused on an
        * outlay inferred from *other* openings (a 15 000 grant "tying up"
@@ -1017,7 +1069,7 @@ export function evaluateGoalPortfolio(input: {
     for (const share of shares) {
       const key = `${id}@${share}`;
       memberOf.set(key, { opportunityId: id, title: one.opportunity.title, share: share > 0 ? share : null });
-      const recipe: Recipe = { one, share, key, keys, reach, capacityGate, ownGate, capital: capital.amount, justified: unestablished.length === 0, sampleSize, history, unverifiable, needs: needsOf(one) };
+      const recipe: Recipe = { one, share, key, keys, reach, capacityGate, ownGate, capital: capital.amount, justified: unestablished.length === 0, sampleSize, history, unverifiable, needs: needsOf(one), stakeCycled: !!stake };
       recipes.set(key, recipe);
       activities.push(activityOf(recipe, share === 1 ? full : demandWorlds(one, share, input.daysLeft, reach, worlds, seed), (r) => demandWorlds(one, share, input.daysLeft, r, worlds, seed)));
     }
@@ -1199,6 +1251,8 @@ interface Recipe {
   history: MarketHistory | null;
   unverifiable: string[];
   needs: string[];
+  /** Its later turns are paid from its earlier ones (`stakeCycles`). */
+  stakeCycled?: boolean;
 }
 
 /** The portfolio activity for one opening at one share, from its demand worlds. */
@@ -1218,7 +1272,8 @@ function activityOf(r: Recipe, w: Worlds, withReach: (reach: ModelInput) => Worl
     label: one.opportunity.title.slice(0, 80),
     ...base,
     // A cost the buyer's prepayment funds still leaves the cash kept; it is exempt only from the owner's spending ceiling (§99).
-    ceilingExempt: !!one.fundedByBuyer,
+    // A stake-cycled line's later turns are paid from its own earlier cash; its lots are held to the starting capital instead (`stakeCycles`).
+    ceilingExempt: !!one.fundedByBuyer || !!r.stakeCycled,
     market: one.marketKey ?? one.opportunity.id,
     marketVolume: w.volume,
     ...(gated ? { gated } : {}),

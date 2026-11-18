@@ -15727,6 +15727,42 @@ Recorded in the plans that state the old exclusion
 `tests/goalDiscoveryBreadth.test.ts`, `tests/economicMechanisms.test.ts`,
 `tests/goalEstimatedArrangements.test.ts`.
 
+**The objective obeyed (rehearsal, 2026-11-18).** Six objectives run through
+`createGoal → readGoalPlan` on one world (`tests/objectiveRehearsal.test.ts`)
+showed the candidate built on the same no-capital line whatever the words said.
+What the words confine a plan to is now read and reaches it, binding that goal
+only:
+
+- **Read once, on every read.** `readObjective` reads a monthly recurring
+  target ("$5,000 a month in recurring revenue", "$5k MRR") as the amount with
+  `recurring: MONTHLY`, an hours rate inside a stated window as `hoursPerWeek`
+  and its window total `hoursCeiling`, the one industry the words confine the
+  work to (`readRequiredIndustry`), and an up-front capital limit with no figure
+  ("little up-front capital") as `capitalAssumed` — 10% of the amount
+  (`LITTLE_CAPITAL_SHARE`), never `capitalCeiling`. `goalScope` derives them from
+  the goal's own intent on every `readTarget` (nothing stored that can be read,
+  §43).
+- **Recurring revenue has no new subsystem.** The ledger counts settled cash,
+  not subscriptions, so a recurring goal is the same `SETTLED_CASH` target whose
+  amount is the monthly run-rate, counted over the trailing `RUN_RATE_DAYS` (30)
+  rather than since the target was set; its outcome says so.
+- **The assumption narrows, never grants.** `capitalAssumed` is applied as the
+  before-proof limit (`capitalBeforeProofCents`, "up-front") when nobody set a
+  capital figure of either kind; it is flagged on `scope`, and a plan that ties
+  money up still asks the owner (`askCapital`).
+- **The plan obeys it.** `composeGoalModel` leaves out, with a reason, a found
+  opening outside the named industry or one that pays once under a recurring
+  target (`outOfGoalScope`), and a constructed arrangement whose sold need is
+  out of scope, takes longer than the days left, or — when Brain delivers it —
+  ties up more than the up-front limit (`arrangementOutOfScope`). A stated stake
+  is put to work: a repeatable line whose own evidence says what a deal ties up
+  is sold as many times as the stake turns over in the window (`stakeCycles`),
+  its later turns paid from its earlier cash; a line whose own outlay, or one
+  deal's direct cost, exceeds what the goal may tie up or spend in all is
+  refused. Sales the goal pursues beside an adopted reconstruction are steps.
+
+Tests: `tests/objectiveScope.test.ts`, `tests/objectiveRehearsal.test.ts`.
+
 ## 106. Brain has one general operator, and its hands are Brain's own operations.
 
 **Owner's order, 2026-11-12.** "Give Brain an autonomous AI operator that directs
