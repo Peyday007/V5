@@ -890,7 +890,7 @@ function detectRuleEffectiveSoonV5(
   detector: Detector,
   records: readonly DetectorRecord[],
   now: Date,
-  options: { readStatedEffective: boolean; extraQualifiers: readonly string[] },
+  options: { readStatedEffective: boolean; extraQualifiers: readonly string[]; readCorrectedStated?: boolean },
 ): DetectedSignal[] {
     const ours = records.filter((record) => detector.sources.includes(record.source));
     const keep = (map: Map<string, string>, key: string, value: string | null): void => {
@@ -936,7 +936,11 @@ function detectRuleEffectiveSoonV5(
       const marker = correctedEffectiveDateOf(record.body) ?? (documentNumber ? correctedRule.get(documentNumber) ?? null : null);
       if (marker) return marker;
       const dates = [...targets].map((one) => own.get(one)).filter((one): one is string => !!one).sort();
-      return dates[0] ?? null;
+      if (dates[0] || !options.readCorrectedStated) return dates[0] ?? null;
+      // v7: no copy of any corrected document states an "Effective" sentence — the date the
+      // corrected rule's own DATES field states, as the connector recorded it on any stored copy.
+      const statedDates = [...targets].map((one) => statedOwn.get(one)).filter((one): one is string => !!one).sort();
+      return statedDates[0] ?? null;
     };
     const publishedDayOf = (record: DetectorRecord): number => {
       const stated = federalRegisterPublishedDayOf(record.url) ?? /^(\d{4}-\d{2}-\d{2})/.exec(record.publishedAt ?? '')?.[1] ?? null;
@@ -1046,6 +1050,52 @@ export const RULE_EFFECTIVE_SOON_V6: Detector = {
     return detectRuleEffectiveSoonV5(this, records, now, {
       readStatedEffective: true,
       extraQualifiers: ["with no effective_on, the date the Federal Register's own DATES field states, as the connector recorded it"],
+    });
+  },
+};
+
+/**
+ * RULE_EFFECTIVE_SOON, version 7 (SHADOW). One cause of v6's recorded misses
+ * (DETECTOR_MISSES:RULE_EFFECTIVE_SOON@6), fixed without lowering a bar:
+ *
+ *  1. A correction of a rule whose only date is the one its DATES field states.
+ *     v6 reads the "Stated effective" marker for a document that is not a
+ *     correction, but a correction still took its date only from the
+ *     corrected rule's "Effective" sentence (or the connector's "Corrected rule
+ *     effective" marker, which reads effective_on alone). So a correction of a
+ *     Coast Guard notification of enforcement — effective_on null, its date
+ *     only in DATES (the shape of 2026-23230) — had no date and dropped out,
+ *     though the corrected rule itself was kept. v7 falls back, only when no
+ *     copy of any corrected document carries an "Effective" sentence and no
+ *     copy of the correction carries "Corrected rule effective", to the
+ *     corrected rule's "Stated effective" marker on any stored copy.
+ *
+ * Everything else is v6's, shared code (`detectRuleEffectiveSoonV5`). Kept
+ * unchanged: the bar that a rule is never effective before its own
+ * publication (Coast Guard 2026-23047 stays out, and so does a correction
+ * published after the corrected rule took effect), the eight-week upper bound
+ * (RULE_EFFECTIVE_SOON_V2_LEAD_DAYS), the 30-day membership window, the
+ * wording, and no free-text date parsing in the detector.
+ */
+export const RULE_EFFECTIVE_SOON_V7: Detector = {
+  id: 'RULE_EFFECTIVE_SOON',
+  version: 7,
+  label: RULE_EFFECTIVE_SOON.label,
+  mode: 'SHADOW',
+  sources: RULE_EFFECTIVE_SOON.sources,
+  lookbackMs: RULE_EFFECTIVE_SOON_V6.lookbackMs,
+  entityKeyOf(organization) {
+    return employerKey(issuingAgencyOf(organization));
+  },
+  memberWindowMs: RULE_EFFECTIVE_SOON_PUBLISHED_DAYS * DAY,
+  detect(records, now) {
+    return detectRuleEffectiveSoonV5(this, records, now, {
+      readStatedEffective: true,
+      readCorrectedStated: true,
+      extraQualifiers: [
+        "with no effective_on, the date the Federal Register's own DATES field states, as the connector recorded it",
+        "a correction of a rule with no effective_on carries the date that rule's DATES field states, as the connector recorded it",
+      ],
     });
   },
 };
