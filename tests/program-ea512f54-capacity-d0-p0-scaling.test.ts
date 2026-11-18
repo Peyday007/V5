@@ -279,7 +279,30 @@ describe('the adaptive pool consults the measured constraint before it scales', 
     await drive(recorded(CONSTRAINED_AT_MODEL), 12);
     const rows = await readCapacity();
     expect(Math.max(...rows.map((r) => r.target))).toBeGreaterThan(2);
-    const grew = await getDb().get<{ reason: string }>("SELECT reason FROM bin_events WHERE event_type = 'FREE_LANE_CAPACITY' AND outcome = 'GROW' ORDER BY at DESC LIMIT 1", []);
-    expect(grew?.reason ?? '').toMatch(/constrained at model-interpretation; measured gain/);
+    /*
+     * Every step that took a model past the most it had reached was the gate's,
+     * and named the measured constraint. Not "the latest GROW": on a slow runner
+     * (Deploy 44236050783, 2026-11-18) the queue read empty while every item was
+     * leased, the pool shrank 4 -> 3 on "no research waiting", and the latest
+     * GROW was the 3 -> 4 that regained it — restoring proven capacity, which
+     * the gate deliberately does not hold or annotate.
+     */
+    const events = await getDb().all<{ workload_class: string; reason: string }>(
+      "SELECT workload_class, reason FROM bin_events WHERE event_type = 'FREE_LANE_CAPACITY' AND outcome IN ('GROW', 'SHRINK') ORDER BY at, id", [],
+    );
+    const reached = new Map<string, number>();
+    let pastProven = 0;
+    for (const event of events) {
+      const step = /^(\d+) -> (\d+):/.exec(event.reason);
+      expect(step, event.reason).not.toBeNull();
+      const to = Number(step![2]);
+      const most = reached.get(event.workload_class) ?? Number(step![1]);
+      if (to > most) {
+        pastProven += 1;
+        expect(event.reason).toMatch(/constrained at model-interpretation; measured gain/);
+      }
+      reached.set(event.workload_class, Math.max(most, to));
+    }
+    expect(pastProven).toBeGreaterThan(0);
   }, 60_000);
 });

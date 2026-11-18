@@ -427,6 +427,29 @@ describe('reconstruction draws each key once', () => {
   });
 });
 
+/**
+ * The bound a pool-thread computation's longest loop stall is held to: a
+ * quarter of what the same computation holds the loop for when it runs on it.
+ *
+ * An absolute wall-clock limit measured the runner, not the property. Deploy
+ * 44236050783 (2026-11-18, shard 2) read a 152 ms stall against a 100 ms limit
+ * while a 2,000-world evaluation — itself ~100 ms of work on an idle machine —
+ * ran on the thread: a contended runner deschedules the main thread for that
+ * long whatever it is doing. Measured against the inline hold on the same
+ * runner, the two scale together, and a computation that regressed onto the
+ * loop still fails, because its stall is the whole inline hold.
+ */
+function offLoopBound(inlineMs: number): number {
+  return Math.max(100, inlineMs / 4);
+}
+
+/** How long `work` holds the loop when it runs on it, synchronously. */
+async function inlineHold<T>(work: () => T | Promise<T>): Promise<{ value: T; ms: number }> {
+  const started = performance.now();
+  const value = await work();
+  return { value, ms: performance.now() - started };
+}
+
 /** How long the loop was held, at worst, while `work` ran. */
 async function worstStall<T>(work: () => Promise<T>): Promise<{ value: T; worst: number }> {
   let last = performance.now();
@@ -479,7 +502,8 @@ function constructionJob(): ConstructionJob {
 describe('the plan read\'s quant work runs beside the server\'s loop, never on it', () => {
   it('the construction pass runs on a pool thread, reads the same as inline, and never holds the loop', async () => {
     const job = constructionJob();
-    const inline = await composeConstruction(job);
+    // No yield interval: the pass holds the loop from start to finish, which is the reference.
+    const { value: inline, ms: inlineMs } = await inlineHold(() => composeConstruction(job));
     expect(inline.length).toBeGreaterThan(50);
     const pool = openEvaluator(1);
     try {
@@ -487,7 +511,7 @@ describe('the plan read\'s quant work runs beside the server\'s loop, never on i
       await pool.construct!(constructionJob());
       const { value, worst } = await worstStall(() => pool.construct!(job));
       expect(value).toEqual(inline);
-      expect(worst).toBeLessThan(100);
+      expect(worst).toBeLessThan(offLoopBound(inlineMs));
     } finally {
       await pool.close();
     }
@@ -502,13 +526,16 @@ describe('the plan read\'s quant work runs beside the server\'s loop, never on i
   }, 120_000);
 
   it('a goal\'s portfolio evaluation on the pool never holds the loop', async () => {
-    const input = { ...GOAL_10K_LIMITS, measuredRates: GOAL_10K_RECORD, seed: 11, openings: GOAL_10K_OPENINGS, worlds: 2_000 };
+    // 10,000 worlds: about a second on the loop on an idle machine, so holding it is
+    // unmistakable beside the descheduling a shared runner adds to any stall.
+    const input = { ...GOAL_10K_LIMITS, measuredRates: GOAL_10K_RECORD, seed: 11, openings: GOAL_10K_OPENINGS, worlds: 10_000 };
     const pool = openEvaluator(1);
     try {
       await pool.evaluate({ ...input, worlds: 200 });
       const { value, worst } = await worstStall(() => pool.evaluate(input));
-      expect(value.best).toEqual(evaluateGoalPortfolio(input).best);
-      expect(worst).toBeLessThan(100);
+      const { value: inline, ms: inlineMs } = await inlineHold(() => evaluateGoalPortfolio(input));
+      expect(value.best).toEqual(inline.best);
+      expect(worst).toBeLessThan(offLoopBound(inlineMs));
     } finally {
       await pool.close();
     }
