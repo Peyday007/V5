@@ -70,3 +70,14 @@ Launch configuration, updated:
   1. The gate evidence comes from release 44252210701.
   2. #1089, together with A and B if they are ready, ships in the NEXT release.
   3. The launch happens only once #1089 is live.
+
+## 07:0xZ updates
+- **C, done:** #1089 now also tries the cheapest GPU within the price ceiling first and never creates a pod above it.
+- **B, done:** #1092. The free lane was held at 2 slots per model.
+  - **Cause:** stageCapacity.chooseConstraint names commercial execution as the constraint. Its rate is 0 with no grant, so its time to clear reads as infinite, and that blocks all research growth.
+  - **Effect:** goal fragments wait for hours, so missions don't end and rounds stay OPEN.
+  - **Fix:** skip a stage that is not run by the free lane and processed nothing.
+  - **Not yet fixed:** two never-claimed items (orc_83fa…, orc_f96e…) and the low evidence-gate pass rate.
+- **Next release:** #1089 and #1092 merge automatically at 44252210701's Fly step, then one Deploy.
+- **D (new, agent GD / claude/gd-fragment-faults):** WORK_FAULTED, 1,143 over 7 days. Diagnose after #1077 and fix the dominant mechanical cause.
+- **A (postcard economic meaning):** still running.
