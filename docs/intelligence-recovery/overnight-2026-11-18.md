@@ -170,3 +170,13 @@ Launch configuration, updated:
 - **Plan read at 14:57Z:** both candidate prices are ASSUMED. They no longer rest on misapplied price evidence. The researched supply cost is composed with lineage (shown at 10:09Z).
 - **Launch rule met.** Launch run **44330728704** dispatched at 15:01:09Z: H200, $66 cap, window 12.5 h, max $5.50/h.
 - **Late:** the session's worker restarted around 11:30Z, so the launch and report came at 15:01Z instead of right after 11:25Z.
+
+## 15:50Z: RUN STARTED
+- **Launch 44330728704 succeeded:** pod qe5u6nhdv69ofl, H200 SXM COMMUNITY at $3.59/h, gpt-oss-120b-big, served after 268 s. RESULT PASS. Account $113.78 before launch.
+- **First-hour report 44340092905:**
+  - GPU cost $2.39 for 40 min.
+  - 11 GPU jobs, 0 accepted claims.
+  - Failures: 5 audits "lease no longer current" (jobs take about 671–1,164 s); 6 off-topic sources; 6 gate drops.
+  - Pressure NORMAL.
+- **Repair started:** agent on claude/gpu-lease-heartbeat (audit lease expiry).
+- **Cap:** $66, fixed window (#1089). Expected end about 03:10Z on 11-19, or earlier at the cap.
