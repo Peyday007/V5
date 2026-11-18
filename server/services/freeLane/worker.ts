@@ -43,7 +43,7 @@ import { findTool } from '../../mcp/tools.ts';
 import { MAX_LIST_ITEMS } from '../../mcp/researchTools.ts';
 import { workerIdentity } from '../identity/authenticate.ts';
 import { auditAdmission } from '../research/auditAdmission.ts';
-import { webSearch } from '../sources/discover.ts';
+import { webSearch, webSearchRefusing } from '../sources/discover.ts';
 import { httpCompleter, laneConfig, type Completer, type LaneConfig } from '../cheap/lane.ts';
 import { isRunpodSlot, runpodBreakerOpen, runpodCallWindow, runpodPaused } from '../cheap/runpod.ts';
 import type { SourceFetch } from '../sources/fetchForWorker.ts';
@@ -2844,14 +2844,25 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
    */
   const brainUnavailable = !ok && BRAIN_UNAVAILABLE.test(ctx.why);
   const providerFailure = !ok && ((/^model call failed/.test(ctx.why) && PROVIDER_BUSY.test(ctx.why)) || brainUnavailable);
-  const strikes = transient || brainUnavailable ? (transientStrikes.get(one.workItemId) ?? 0) + 1 : 0;
+  /*
+   * Nor does a fragment that found no readable source while web search was
+   * refusing. Production 0ba2eb30, 2026-11-18 01:00–01:45Z: DuckDuckGo refused
+   * for longer than a fragment waits, 27 fragments failed "no readable source
+   * … none from web search", each spending one of its two attempts (31 of 40
+   * fragments failed, every retry ineffective), and a goal's rounds ended
+   * without a report. Refunded and cooled like a provider outage, so research
+   * resumes with its work when search answers again.
+   */
+  const searchOutage = !ok && one.workType === 'RESEARCH_FRAGMENT' && /^no readable source among/.test(ctx.why) && webSearchRefusing();
+  const strikes = transient || brainUnavailable || searchOutage ? (transientStrikes.get(one.workItemId) ?? 0) + 1 : 0;
+  const refund = (transient || brainUnavailable || searchOutage) && (strikes < 3 || providerFailure || searchOutage);
   // Recorded before the cooldowns are touched: one answer from a route whose recent calls still
   // mostly failed is its re-probe, and does not reopen it to every cooled item (CAP-16-3).
   const routeOpen = recordRouteOutcome(worker.model, { ok, why: ctx.why });
   if (ok) {
     transientStrikes.delete(one.workItemId);
     if (routeOpen) clearRouteCooldowns(worker.model);
-  } else if ((transient || brainUnavailable) && (strikes < 3 || providerFailure)) {
+  } else if (refund) {
     /*
      * The model or its provider failed, not the work: hand the item back with
      * its attempt refunded, and leave it alone for a while so a provider outage
@@ -2894,7 +2905,7 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
     workerId: worker.workerId,
     sessionRef: session,
     workloadClass: one.workType,
-    outcome: ok ? 'SUBMITTED' : (transient || brainUnavailable) && (strikes < 3 || providerFailure) ? 'RELEASED_TRANSIENT' : 'FAILED_RETRYABLE',
+    outcome: ok ? 'SUBMITTED' : refund ? 'RELEASED_TRANSIENT' : 'FAILED_RETRYABLE',
     reason: ok ? `model ${worker.model}` : `model ${worker.model}: ${ctx.why}`.slice(0, 480),
     durationMs: ms,
     evidenceClass: 'MEASURED',

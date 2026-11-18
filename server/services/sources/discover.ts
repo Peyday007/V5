@@ -119,6 +119,16 @@ export function setSearchRefusalRecorder(fn: ((endpoint: string, status: number)
   onRefusal = fn;
 }
 
+/**
+ * Whether web search is refusing now: every endpoint's last answer was a
+ * refusal. A fragment that found no readable source in that time says nothing
+ * about its question (production 0ba2eb30, 2026-11-18 01:00–01:45Z), and the
+ * free lane hands it back with its attempt refunded instead of spending it.
+ */
+export function webSearchRefusing(): boolean {
+  return ENDPOINTS.every((one) => (refusalStreak.get(one.name) ?? 0) > 0);
+}
+
 /** The current spacing between searches, for tests and `sources search`. */
 export function searchSpacingMs(): number {
   return spacingMs;
