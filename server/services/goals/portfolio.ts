@@ -981,7 +981,9 @@ export function evaluateGoalPortfolio(input: {
      * hold is sold as many times as the stake can turn over in the window, its
      * lots tied up at its start (`stakeCycles`).
      */
-    const stake = stakeCycles(held, capital, input.capitalCeiling, input.daysLeft);
+    // The stake a line may hold at once: no more than the ceiling, the week's pace or one arrangement's before-proof limit allow.
+    const holdable = [input.capitalCeiling, input.perWeek, input.beforeProof].filter((x): x is number => x !== null);
+    const stake = stakeCycles(held, capital, input.capitalCeiling === null ? null : Math.min(...holdable), input.daysLeft);
     const one: PlannedOpening = stake ? { ...held, stakeDeals: stake.deals } : held;
     if (stake) capital.amount = stake.tiedUp;
     const unestablished = INPUT_NAMES.filter(([key]) => !established(one[key] as ModelInput)).map(([, name]) => name);
