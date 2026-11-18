@@ -837,7 +837,6 @@ export function capitalOwnEvidence(one: ModelledOpportunity): boolean {
   return one.capital.inferred?.justified === true && one.capital.inferred.tier === 'DIRECT';
 }
 
-/** The money an opening ties up when it starts: established, or the top of its range (invariant 39). */
 /**
  * How a goal's stake carries a capital-using repeatable line (rehearsal,
  * 2026-11-18: "Turn $10,000 into $100,000" never put the $10,000 to work).
@@ -861,6 +860,7 @@ export function stakeCycles(one: ModelledOpportunity, capital: { amount: number;
   return { lots, cycles, deals: lots * cycles, tiedUp: lots * capital.amount };
 }
 
+/** The money an opening ties up when it starts: established, or the top of its range (invariant 39). */
 export function capitalAtStart(one: ModelledOpportunity): { amount: number; established: boolean } {
   if (one.capital.value !== null) return { amount: one.capital.value, established: true };
   if (one.capital.inferred?.justified) return { amount: one.capital.inferred.p50, established: true };
