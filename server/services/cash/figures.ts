@@ -46,6 +46,13 @@ export interface MoneyFigure {
    * total, and a rate read as a total is wrong by however many units there are.
    */
   perUnit: boolean;
+  /**
+   * The figure is one participant's share of something many buy together: a
+   * slot, a spot, a seat, a placement, an ad on a shared piece (`$395 for a
+   * slot`, `$250 per spot`). Always also `perUnit`. Never set for a figure
+   * stated for a whole run, a campaign or a total.
+   */
+  perParticipant?: boolean;
 }
 
 /** A scale word after a figure, which this module refuses rather than applies. */
@@ -53,6 +60,16 @@ const SCALE_WORD = /^\s*(?:thousand|million|billion|trillion|bn|mn|mm|m|k)\b/i;
 
 /** A figure stated per something: `per hour`, `an hour`, `/hr`, `a month`. */
 const PER_UNIT = /^\s*(?:\/\s*[a-z]|per\b|an?\s+(?:hour|day|week|month|year|minute|word|page|unit|item|piece|seat|user|head)\b|each\b|hourly\b|monthly\b|weekly\b|daily\b|annually\b|yearly\b)/i;
+
+/**
+ * A figure stated as one participant's share of a shared purchase (F5,
+ * 2026-11-18): `per slot`, `for a spot`, `for each seat`, `a participant`,
+ * `per ad`, optionally with an ad word before the unit (`for an ad slot`).
+ * "$395 for a slot" states a price per slot exactly as "$395 per slot" does,
+ * and was refused as no per-unit figure. A run, a campaign or a mailing is
+ * never a participant's unit, so a whole-run total never matches.
+ */
+const PER_PARTICIPANT = /^\s*(?:per|for\s+(?:a|an|one|each)|an?|each)\s+(?:(?:ad|advert|advertis(?:ing|ement)|advertiser|listing|postcard|mailer|shared)\s+)?(?:slot|spot|seat|participant|placement|ad|advertiser)s?\b(?!\s+(?:click|impression|view|lead|call|run|campaign|mailing))/i;
 
 function escape(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -140,7 +157,8 @@ export function readMoneyFigures(text: string, currency: string): MoneyFigure[] 
       const cents = amountOf(raw);
       if (cents === null || seen.has(cents)) continue;
       seen.add(cents);
-      found.push({ cents, currency: code, text: match[0].trim(), perUnit: PER_UNIT.test(rest) });
+      const perParticipant = PER_PARTICIPANT.test(rest);
+      found.push({ cents, currency: code, text: match[0].trim(), perUnit: perParticipant || PER_UNIT.test(rest), ...(perParticipant ? { perParticipant } : {}) });
     }
   }
   return found.sort((a, b) => a.cents - b.cents);

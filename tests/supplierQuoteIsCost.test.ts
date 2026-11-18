@@ -14,9 +14,10 @@ import { seedSubject } from '../server/services/industry/seed.ts';
 import { backfillCandidates, backfillClaimFacts, claimPricesSupply, rederivedMeaning } from '../server/services/industry/expand.ts';
 import { recordClaimFact } from '../server/repos/construction.ts';
 import { readMoneyFigures, readSubCentRates } from '../server/services/cash/figures.ts';
-import { composeInvented, constructionObservations, inventionContext } from '../server/services/cash/construct.ts';
+import { composeInvented, constructionObservations, inventionContext, statesParticipantShare } from '../server/services/cash/construct.ts';
 import { planInputsFingerprint } from '../server/services/goals/plan.ts';
 import { estimatedFromArrangement, MAX_BUYERS_OFFERED } from '../server/services/cash/goalScenario.ts';
+import { inputEvidence } from '../server/services/goals/portfolio.ts';
 import { supplyQuote } from '../server/services/industry/expand.ts';
 import type { Layer } from '../server/domain/types.ts';
 
@@ -295,8 +296,8 @@ describe('D4: a pooled arrangement’s researched run cost reaches the goal mode
 
     const modelled = estimatedFromArrangement(arrangement, { projectId, currency: 'USD', daysLeft: 22, beforeProofCents: null })!;
     expect(modelled).not.toBeNull();
-    // The slot price enters, as an assumption (one pooled-run observation establishes nothing, GH2).
-    expect(modelled.price.inferred).toMatchObject({ tier: 'ASSUMED', justified: false });
+    // The slot price enters as what it is: one comparable observation of these buyers' own unit (F4), which locates the price and establishes nothing.
+    expect(modelled.price.inferred).toMatchObject({ tier: 'COMPARABLE', justified: false });
     expect(modelled.price.inferred!.p50).toBeCloseTo(395, 3);
     // The per-slot cost is read from the run's cost, never capped at 60% of the price.
     const cost = modelled.directCost;
@@ -322,5 +323,77 @@ describe('D4: a pooled arrangement’s researched run cost reaches the goal mode
     const modelled = estimatedFromArrangement(arrangement, { projectId, currency: 'USD', daysLeft: 22, beforeProofCents: null })!;
     expect(modelled.directCost).toMatchObject({ provenance: 'UNKNOWN', low: 0 });
     expect(modelled.directCost.high!).toBeCloseTo(modelled.price.high! * 0.6, 6);
+  });
+});
+
+/**
+ * F4/F5, 2026-11-18: research could reach a pooled plan but never make it
+ * acceptable. "$395 for a slot" was refused as no per-unit figure (F5), and a
+ * price filed for a pooled design was always "a different payment mechanism"
+ * (GH2), even when its source states it per slot for these very buyers (F4).
+ */
+describe('F4/F5: a slot price these buyers’ sources state is a pooled design’s own price', () => {
+  const SLOT = 'Local businesses pay $395 for a slot on a shared direct-mail postcard mailed to 10,000 homes.';
+  const input = { projectId: '', currency: 'USD', delivers: [], capitalCeilingCents: 300_000, daysLeft: 22, now: new Date('2026-11-18T12:00:00.000Z') };
+  const spec = { design: { base: 'BROKER', funding: 'THRESHOLD_PRESALE', aggregation: 'POOLED_BUYERS', repeat: 'SUBSCRIPTION' } as const, population: 'Local service businesses', need: null };
+
+  it('reads a participant’s unit, and nothing else, as a per-participant figure', () => {
+    for (const text of [SLOT, 'Advertisers pay $250 per spot on the shared mailer.', 'Each business pays $199 for an ad slot.', 'A seat costs $95 per participant.', 'Valpak charges $395 per ad on a shared envelope.']) {
+      expect(readMoneyFigures(text, 'USD').some((one) => one.perUnit && one.perParticipant), text).toBe(true);
+    }
+    for (const text of [OPPIZI, 'A sample EDDM budget is about $2,000 for 4,120 homes across 6 routes', 'Google charges $2 per ad click.', 'The Puzzle Society pays $500 for each accepted puzzle.', 'A shared run costs $4,675 for a 10,000-home run.']) {
+      expect(readMoneyFigures(text, 'USD').some((one) => one.perParticipant), text).toBe(false);
+    }
+    expect(statesParticipantShare(SLOT, 395, 395)).toBe(true);
+    expect(statesParticipantShare(SLOT, 4675, 4675)).toBe(false);
+    expect(statesParticipantShare(OPPIZI, 0.47, 0.47)).toBe(false);
+    expect(statesParticipantShare(null, 395, 395)).toBe(false);
+  });
+
+  it('files "$395 for a slot" through the real path into a non-transferred price input with its claim, beside the run cost, establishing nothing', async () => {
+    const { buyerId, orchestrationId, fragmentId } = await openArrangementRound();
+    const [oppizi, slot] = (await accepted(orchestrationId, fragmentId, [OPPIZI, SLOT])) as [string, string];
+    await backfillClaimFacts(projectId);
+    expect((await listProjectConstructionFacts(projectId)).map((one) => [one.sourceClaimId, one.key, one.low, one.segment]).sort()).toEqual(
+      [[oppizi, 'fixed_cost_per_run', 4675, `map_${buyerId}`], [slot, 'price_per_unit', 395, `map_${buyerId}`]].sort(),
+    );
+    const read = await constructionObservations({ projectId, currency: 'USD', daysLeft: 22 });
+    expect(read.priced.map((one) => [one.value, one.unit, one.lineage])).toEqual([[{ kind: 'POINT', value: 395 }, 'PARTICIPANT_SHARE', [`claim:${slot}`]]]);
+    // Oppizi stays a run cost and never a price.
+    expect(read.runCost.map((one) => [one.value, one.unit])).toEqual([[{ kind: 'POINT', value: 4675 }, undefined]]);
+
+    const made = composeInvented(spec, await inventionContext({ ...input, projectId }));
+    if ('refused' in made) throw new Error(made.refused);
+    expect(made.value).toMatchObject({ tier: 'COMPARABLE', observations: 1, sources: [`claim:${slot}`], perParticipant: true });
+    expect(made.value.notEvidence).toBeUndefined();
+
+    // Even on a design transferred from a precedent, the slot price is these buyers' own, not carried across.
+    const transferred = { ...made, origin: 'TRANSFER' as const, precedent: { opportunityId: 'cop_precedent', title: 'A shared mailer elsewhere' } };
+    for (const arrangement of [made, transferred]) {
+      const modelled = estimatedFromArrangement(arrangement, { projectId, currency: 'USD', daysLeft: 22, beforeProofCents: null })!;
+      expect(modelled.price.inferred).toMatchObject({ tier: 'COMPARABLE', justified: false, observations: 1 });
+      expect(modelled.price.inferred!.p50).toBeCloseTo(395, 3);
+      expect(modelled.price.source?.note).toContain(`claim:${slot}`);
+      expect(modelled.price.note).not.toContain('different payment mechanism');
+      expect(modelled.price.note).not.toContain('transferred from');
+      expect(modelled.price.low).toBeCloseTo(made.value.p10, 6);
+      expect(modelled.price.high).toBeCloseTo(made.value.p90, 6);
+      // §39/§14: one comparable observation locates the price and never establishes it.
+      expect(inputEvidence(modelled.price, 'price')).toMatchObject({ tier: 'SINGLE_COMPARABLE', establishes: false });
+      expect(modelled.directCost.source?.note).toContain(`claim:${oppizi}`);
+    }
+    expect(estimatedFromArrangement(transferred, { projectId, currency: 'USD', daysLeft: 22, beforeProofCents: null })!.estimated?.transfer).toBeTruthy();
+  });
+
+  it('keeps a price stated per anything else on a pooled design as a different payment mechanism', async () => {
+    const { orchestrationId, fragmentId } = await openArrangementRound();
+    await accepted(orchestrationId, fragmentId, ['Local businesses pay $395 per month for the service.']);
+    await backfillClaimFacts(projectId);
+    const made = composeInvented(spec, await inventionContext({ ...input, projectId }));
+    if ('refused' in made) throw new Error(made.refused);
+    expect(made.value.observations).toBe(1);
+    expect(made.value.perParticipant).toBeUndefined();
+    expect(made.value.notEvidence).toContain('different payment mechanism');
+    expect(estimatedFromArrangement(made, { projectId, currency: 'USD', daysLeft: 22, beforeProofCents: null })!.price.inferred).toMatchObject({ tier: 'ASSUMED' });
   });
 });

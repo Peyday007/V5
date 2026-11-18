@@ -311,13 +311,17 @@ export function estimatedFromArrangement(one: ConstructedArrangement, input: Arr
   // A transfer carries a design to buyers who differ from the precedent's on every material dimension
   // nobody has bridged: until a sourced adjustment bridges one, its price range is widened, never narrowed (S-12).
   const transfer = transferOf(one);
-  const widen = transfer && transfer.unbridged.length > 0 ? Math.exp(SPREAD_FLOOR.COMPARABLE * Z90) : 1;
+  // F4: a price these very buyers' sources state per slot was observed for this design's own unit, not carried
+  // from the precedent, so the precedent's unbridged differences neither widen it nor disqualify it. The other
+  // links keep the transfer (it is still carried on the opening).
+  const priceTransfer = one.value.perParticipant ? null : transfer;
+  const widen = priceTransfer && priceTransfer.unbridged.length > 0 ? Math.exp(SPREAD_FLOOR.COMPARABLE * Z90) : 1;
   const low = Math.max(0.01, p10 / widen);
   const high = Math.max(low + 0.01, p90 * widen);
   // Accepted evidence about what these buyers pay, justified as a distribution by the reconstruction (F2): the
   // price is that evidence. A transfer nobody has bridged, a price paid under another payment mechanism (GH2), or
   // bounds alone, stays the assumption swept below.
-  const unbridged = transfer && transfer.unbridged.length ? `transferred from "${transfer.precedent}" with ${transfer.unbridged.join(', ')} not bridged` : null;
+  const unbridged = priceTransfer && priceTransfer.unbridged.length ? `transferred from "${priceTransfer.precedent}" with ${priceTransfer.unbridged.join(', ')} not bridged` : null;
   const notEvidence = [one.value.notEvidence ?? null, unbridged].filter((why): why is string => !!why);
   const evidence = notEvidence.length === 0 ? one.value.evidence : undefined;
   if (evidence) {

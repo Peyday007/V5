@@ -95,6 +95,12 @@ export interface Observation {
   /** A note a reader can check: what exactly the figure measures. */
   measures?: string;
   /**
+   * The unit the figure is stated in, when the source states it as one
+   * participant's share of a shared purchase (`$395 per slot`, F4): a pooled
+   * design's own unit. Absent, the unit is whatever one payer bought.
+   */
+  unit?: 'PARTICIPANT_SHARE';
+  /**
    * A demand rate somebody chose to publish (a vendor's case study, a
    * benchmark page) rather than one this Brain measured: read through the
    * selection discount (`pool.ts` `PUBLISHED_RATE_SELECTION`).
