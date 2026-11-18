@@ -173,3 +173,13 @@ Finish-line status:
 - **Pace:** 6 lanes delivered items 1–4 and 6 as code in about 3.5 h. That is faster than the 10–16 h estimate, so the critical path is now **release cycles plus the production test (item 7)**.
 - **Revised fastest completion:** about **12–24 h** from now, down from 24–72 h. The remaining risk is that the plan's leading candidate stays generic until targeted research returns a real slot price.
 - **Cost:** unchanged. $0 required; GPU optional.
+
+## 23:55Z — release 7e927515 live; finish-line item 7 run on production
+
+- Deploy 44417799307 (7e927515: #1112 objective obedience, #1114 reverted by #1116) reached Fly 23:38:29Z.
+- $10K goal (wst_7b4fcbb5f2384f31b6c3) on 7e927515: the reading carries the objective's limits — "at most USD 375 before any money comes in; at most USD 750 newly tied up a week; at most USD 3000 in all"; candidate reach 54.1% (coverage), p50 $28,546, NEEDS_EVIDENCE.
+- Item 7: two unfamiliar objectives created in separate projects through the Goals console (runs 44418875326, 44418892413):
+  - wst_66311cabe7e5442faa98 (Cash Mode 3): "Turn 10,000 dollars of starting capital into 100,000 dollars within 90 days".
+  - wst_db2e2e0e5204477692d5 (Cash Mode 4): "Earn 5,000 dollars a month in recurring revenue within 60 days, ≤10 owner hours a week, ≤1,500 dollars capital".
+- **Result: FAIL.** Both plans are NO_CANDIDATE and identical in shape: lead arrangement buyer "viktorrria", offer "germany" (freelance-marketplace residue); every constructed arrangement cut ("the project holds no published price"; on 7e927515: 68 of 208 in the goal's scope, all cut); "5,000 dollars a month" read as a 5,000 total.
+- Defects D1 (junk construction labels), D2 (a fresh project sees no Brain-level price evidence), D3 (monthly-rate objective read as a total) assigned to a code agent on branch claude/fresh-goal-plans.
