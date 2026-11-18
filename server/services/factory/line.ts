@@ -46,12 +46,12 @@ import {
   type AdmissionPolicy,
   type FactoryQueueEntry,
 } from '../../repos/factoryLine.ts';
-import { listBins, listDispatchesForBin } from '../../repos/bins.ts';
+import { dispatchReadiness, listBins, listDispatchesForBin } from '../../repos/bins.ts';
 import { approveObjective } from './contract.ts';
 import { campaignSpecFor } from './remote.ts';
 import { INITIAL_LANE_TARGET } from './scheduler.ts';
 import { fleetSnapshot, sharedFleetSnapshot } from '../dispatch/candidates.ts';
-import { isFactorySurface, surfaceIneligibility } from '../dispatch/router.ts';
+import { isFactorySurface, surfaceIneligibility, type RoutingRefusal } from '../dispatch/router.ts';
 
 /** The ledger kinds this module writes. */
 export const LINE_EVENT_KINDS = {
@@ -455,6 +455,65 @@ function newestSent(dispatches: Awaited<ReturnType<typeof listDispatchesForBin>>
   return best;
 }
 
+/**
+ * Every refusal the dispatch loop records through `markDispatchDeferred`: the
+ * loop's own work, audit-fit, refire and slot gates, and every routing refusal.
+ * A closed set, because the same `PENDING` + `last_error_kind` + future
+ * `next_attempt_at` shape is also left by things that are not a decision to
+ * wait — a fire nobody answered (the `NO_SHOW` reopen) and a fire the provider
+ * refused (`markDispatchFailed`). Those are faults with a backoff, and reading
+ * them as a named wait would hide exactly the failure the line exists to raise.
+ * The routing half is typed against `RoutingRefusal`, so a refusal added there
+ * cannot be forgotten here.
+ */
+const ROUTING_DEFERRALS = {
+  NO_ROUTINES_REGISTERED: true,
+  FLEET_PAUSED: true,
+  FLEET_TARGET_REACHED: true,
+  ALL_SURFACES_INELIGIBLE: true,
+  ALL_SURFACES_RATE_LIMITED: true,
+  NO_CAPABLE_SURFACE: true,
+  NO_SURFACE_SERVES_THIS_FAMILY: true,
+  NO_SURFACE_SERVES_THIS_REPOSITORY: true,
+  NO_SURFACE_SERVES_THIS_PROJECT: true,
+  PINNED_SURFACE_UNAVAILABLE: true,
+  ACCOUNT_TARGETS_REACHED: true,
+  ACCOUNT_SESSIONS_UNPRODUCTIVE: true,
+} satisfies Record<RoutingRefusal, true>;
+export const DISPATCH_DEFERRAL_KINDS: ReadonlySet<string> = new Set([
+  'NO_CLAIMABLE_WORK',
+  'NO_ELIGIBLE_AUDIT_SESSION',
+  'BIN_REFIRE_GUARD',
+  'SLOT_LOST',
+  ...Object.keys(ROUTING_DEFERRALS),
+]);
+
+/**
+ * The deferral the bin's newest dispatch intent is waiting out, if it is live.
+ *
+ * The dispatch loop answers a bin it will not fire yet — no claimable work, no
+ * eligible audit session, the refire cool-off, a routing refusal — by putting
+ * its intent back to `PENDING` with the refusal named and a `next_attempt_at`
+ * in the future (`markDispatchDeferred`). Until that instant the bin is not
+ * executable: the loop has recorded why it is waiting and when it will ask
+ * again. Counting it as executable raised "a fault, not a wait" over a wait
+ * Brain had already explained, and the operator turned that into a recurring
+ * operational failure. Only a *live* deferral counts — once it lapses with
+ * nothing having moved, the bin is executable again and the fault returns.
+ */
+export function liveDeferral(
+  dispatches: Awaited<ReturnType<typeof listDispatchesForBin>>,
+  nowIso: string,
+): { kind: string; message: string | null; until: string } | null {
+  // One intent per (bin, generation), listed by generation: the last is newest.
+  const newest = dispatches[dispatches.length - 1];
+  if (!newest || newest.state !== 'PENDING' || !newest.lastErrorKind) return null;
+  // Only a decision to wait; a no-show or a refused fire is a fault on a backoff.
+  if (!DISPATCH_DEFERRAL_KINDS.has(newest.lastErrorKind)) return null;
+  if (!(newest.nextAttemptAt > nowIso)) return null;
+  return { kind: newest.lastErrorKind, message: newest.lastError, until: newest.nextAttemptAt };
+}
+
 function nextFor(campaign: FactoryCampaign, bins: LineBin[], blocked: LineCampaign['blocked']): string {
   if (blocked) return blocked.remedy;
   if (campaign.state === 'COMPLETE') return 'A person merges the pull request.';
@@ -510,11 +569,28 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
   let readyBins = 0;
   let leasedBins = 0;
   let arriving = 0;
+  const deferred: { kind: string; until: string }[] = [];
+  /*
+   * Executable is the dispatcher's own predicate, not "READY and not deferred".
+   * A bin it will never fire for — under a fire backoff, out of attempts, held
+   * by a goal, or with nothing a session could start — earned no intent and so
+   * no deferral, and counting it raised "a fault, not a wait" over a wait the
+   * dispatcher was keeping correctly. Asked once for the page, with the same
+   * fragments the dispatcher and the engineering watchdog use.
+   */
+  const readiness = await dispatchReadiness(factoryBins.map((bin) => bin.id));
+  const held: { kind: string; until: string | null }[] = [];
   for (const bin of factoryBins) {
-    const sent = newestSent(await listDispatchesForBin(bin.id));
+    const dispatches = await listDispatchesForBin(bin.id);
+    const sent = newestSent(dispatches);
     const leaseLive = bin.state === 'LEASED' && bin.leaseExpiresAt !== null && bin.leaseExpiresAt > nowIso;
+    const deferral = leaseLive ? null : liveDeferral(dispatches, nowIso);
+    const ready = readiness.get(bin.id) ?? 'EXECUTABLE';
     if (leaseLive) leasedBins += 1;
-    else {
+    else if (deferral) deferred.push(deferral);
+    else if (ready !== 'EXECUTABLE') {
+      held.push({ kind: ready, until: ready === 'FIRE_BACKOFF' ? bin.dispatchNotBefore : null });
+    } else {
       readyBins += 1;
       if (sent && now.getTime() - new Date(sent.sentAt).getTime() < ARRIVAL_GRACE_MS) arriving += 1;
     }
@@ -653,6 +729,20 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
     because = `${leasedBins} stage(s) running and ${arriving} worker(s) arriving.`;
   else if (executableTotal > 0)
     because = `${executableTotal} piece(s) of executable work, but no Factory surface is free to take it.`;
+  else if (deferred.length > 0) {
+    const soonest = deferred.reduce((a, b) => (b.until < a.until ? b : a));
+    const kinds = [...new Set(deferred.map((one) => one.kind))].join(', ');
+    because =
+      `${deferred.length} stage(s) waiting out a recorded dispatch deferral (${kinds}); ` +
+      `the earliest lapses at ${soonest.until}, when the dispatcher asks again.`;
+  } else if (held.length > 0) {
+    const kinds = [...new Set(held.map((one) => one.kind))].join(', ');
+    const ends = held.map((one) => one.until).filter((until): until is string => until !== null);
+    because =
+      `${held.length} stage(s) the dispatcher is holding by its own predicate (${kinds}), so none is ` +
+      'executable now' +
+      (ends.length > 0 ? `; the earliest fire backoff ends at ${ends.reduce((a, b) => (b < a ? b : a))}.` : '.');
+  }
   else if (queue.length > 0)
     because = `${queue.length} objective(s) queued behind ${workingCampaigns} working campaign(s), the limit being ${policy.maxActive}.`;
   else because = 'Nothing is queued and no campaign has a stage waiting.';

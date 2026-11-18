@@ -3002,6 +3002,29 @@ export async function recordTickFailure(campaignId: string, message: string): Pr
 /* ------------------------------------------------------------------------- */
 
 const DEFAULT_INTERVAL_MS = 20_000;
+
+/**
+ * Whether the factory tick should ask the dispatcher for a pass now.
+ *
+ * Edge-driven alone it was not enough: the tick asked only when it had just
+ * created a bin, so a READY bin that already existed — re-armed, revived, or
+ * left behind by a wake that never came — sat beside a free surface while the
+ * line read "executable work and a free surface, and nothing is running or
+ * arriving. That is a fault, not a wait." (operator deficiency
+ * RECURRING_OPERATIONAL_FAILURE, production 2026-11-18). The line's own reading
+ * is the level signal: when it says the idle is unexplained, ask for the pass.
+ * The same pattern as a queue's periodic poll behind its event wakeups — a
+ * missed edge never strands work. It goes through `dispatchTickIfIdle`, so it
+ * can never run beside the dispatcher's own pass, and every fire still takes
+ * its surface with a compare-and-swap.
+ */
+export function shouldDispatchAfterTick(
+  reports: ReadonlyArray<Pick<RemoteTickReport, 'created'>>,
+  lineReading: { unexplainedIdle: boolean } | null,
+): boolean {
+  if (reports.some((report) => report.created.length > 0)) return true;
+  return lineReading?.unexplainedIdle === true;
+}
 let timer: NodeJS.Timeout | null = null;
 let running = false;
 
@@ -3029,9 +3052,11 @@ export function startFactoryRemoteLoop(intervalMs = DEFAULT_INTERVAL_MS): void {
          * its queue must never stop the campaigns already running.
          */
         const reports = [...ticked];
+        let lineIdle: { unexplainedIdle: boolean } | null = null;
         try {
           const { runLinePass } = await import('./line.ts');
           const pass = await runLinePass();
+          lineIdle = pass.reading;
           for (const started of pass.admission.admitted) {
             reports.push(await tickRemoteCampaign(started.campaignId));
           }
@@ -3064,7 +3089,7 @@ export function startFactoryRemoteLoop(intervalMs = DEFAULT_INTERVAL_MS): void {
          * is two indexed reads, and one already in flight cannot double-fire:
          * every fire takes the surface with a compare-and-swap.
          */
-        if (!reports.some((report) => report.created.length > 0)) return;
+        if (!shouldDispatchAfterTick(reports, lineIdle)) return;
         // Through the dispatcher's own guard, so this pass and the loop's never
         // run side by side over the same intents.
         const { dispatchTickIfIdle } = await import('../dispatch/loop.ts');
