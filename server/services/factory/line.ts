@@ -46,7 +46,14 @@ import {
   type AdmissionPolicy,
   type FactoryQueueEntry,
 } from '../../repos/factoryLine.ts';
-import { binPurposeAdmits, isDispatchable, listBins, listDispatchesForBin } from '../../repos/bins.ts';
+import {
+  ABANDONED_REVIVE_AFTER_MS,
+  binPurposeAdmits,
+  isDispatchable,
+  listBins,
+  listDispatchesForBin,
+} from '../../repos/bins.ts';
+import { STRANDED_REARM_AFTER_MS, STRANDED_REARM_CEILING } from '../dispatch/rearm.ts';
 import { approveObjective } from './contract.ts';
 import { campaignSpecFor } from './remote.ts';
 import { INITIAL_LANE_TARGET } from './scheduler.ts';
@@ -441,6 +448,12 @@ export interface LineReading {
    * each with the dispatcher's own reason. A wait with a reason, never idle work.
    */
   waiting?: { bins: number; reasons: string[] };
+  /**
+   * Of `executable.readyBins`, those whose only intent at their generation no
+   * dispatcher pass will create, claim or re-arm (`strandedIntent`). Still idle
+   * work, and still a fault; only a person or a new generation moves them.
+   */
+  stranded?: { bins: number; reasons: string[] };
   active: {
     leasedBins: number;
     /** READY bins whose fire was sent recently enough that a worker may still be arriving. */
@@ -497,7 +510,7 @@ function nextFor(campaign: FactoryCampaign, bins: LineBin[], blocked: LineCampai
  */
 async function dispatcherWait(
   bin: Bin,
-  dispatches: Awaited<ReturnType<typeof listDispatchesForBin>>,
+  dispatches: BinDispatches,
   nowIso: string,
 ): Promise<string | null> {
   if (bin.heldByWorkstreamId !== null) return `held by goal ${bin.heldByWorkstreamId}`;
@@ -509,9 +522,54 @@ async function dispatcherWait(
   }
   if (!isDispatchable(bin, nowIso)) return 'not dispatchable in its current state';
   if (!(await binPurposeAdmits(bin.id))) return 'Brain-only mode does not admit its purpose';
-  const intent = dispatches.filter((row) => row.leaseGeneration === bin.leaseGeneration).at(-1);
+  const intent = currentIntent(bin, dispatches);
   if (intent && intent.state === 'PENDING' && intent.lastErrorKind && intent.nextAttemptAt > nowIso) {
     return `dispatch deferred (${intent.lastErrorKind}) until ${intent.nextAttemptAt}`;
+  }
+  // A fire the dispatcher has claimed and is sending: its claim lapses at
+  // `next_attempt_at`, after which the intent is a candidate again.
+  if (intent && intent.state === 'SENDING' && intent.nextAttemptAt > nowIso) {
+    return `a fire is being sent (claim held until ${intent.nextAttemptAt})`;
+  }
+  // An intent that gave up while the bin stayed executable is re-armed by the
+  // dispatcher's own tick (`reviveAbandonedNoShowDispatches` for unanswered
+  // fires, `rearmStrandedIntents` for the rest) once its cool-off has passed
+  // and while it is under the shared ceiling. Until then that is the
+  // dispatcher's wait, with its time; at the ceiling it is `strandedIntent`.
+  if (intent && intent.state === 'ABANDONED' && intent.maxAttempts < STRANDED_REARM_CEILING) {
+    const coolOff = intent.lastErrorKind === 'NO_SHOW' ? ABANDONED_REVIVE_AFTER_MS : STRANDED_REARM_AFTER_MS;
+    const rearmAt = new Date(Date.parse(intent.updatedAt) + coolOff).toISOString();
+    if (rearmAt > nowIso) {
+      return `its intent gave up (${intent.lastErrorKind ?? 'unknown'}); the dispatcher re-arms it after ${rearmAt}`;
+    }
+  }
+  return null;
+}
+
+type BinDispatches = Awaited<ReturnType<typeof listDispatchesForBin>>;
+
+/** The bin's intent at its current lease generation — the only one the dispatcher acts on. */
+function currentIntent(bin: Bin, dispatches: BinDispatches): BinDispatches[number] | undefined {
+  return dispatches.filter((row) => row.leaseGeneration === bin.leaseGeneration).at(-1);
+}
+
+/**
+ * Why nothing in the dispatcher will ever fire this executable bin again, or
+ * null when a dispatch pass can still act on it.
+ *
+ * The dispatcher keeps one intent per (bin, lease generation) and inserts it
+ * `ON CONFLICT DO NOTHING`, so once that intent is SUPERSEDED, or ABANDONED at
+ * the re-arm ceiling, no tick creates, claims or re-arms anything for the bin
+ * at that generation. It is still idle executable work — a fault, and the line
+ * keeps saying so — but asking the dispatcher for a pass on its account every
+ * twenty seconds buys nothing, so the remote loop does not (`dispatchAfterLinePass`).
+ */
+function strandedIntent(bin: Bin, dispatches: BinDispatches): string | null {
+  const intent = currentIntent(bin, dispatches);
+  if (!intent) return null;
+  if (intent.state === 'SUPERSEDED') return 'its only intent at this generation was superseded';
+  if (intent.state === 'ABANDONED' && intent.maxAttempts >= STRANDED_REARM_CEILING) {
+    return `its only intent gave up (${intent.lastErrorKind ?? 'unknown'}) at the re-arm ceiling of ${STRANDED_REARM_CEILING} fires`;
   }
   return null;
 }
@@ -558,6 +616,7 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
   let leasedBins = 0;
   let arriving = 0;
   const waitReasons: string[] = [];
+  const strandedReasons: string[] = [];
   for (const bin of factoryBins) {
     const dispatches = await listDispatchesForBin(bin.id);
     const sent = newestSent(dispatches);
@@ -567,6 +626,8 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
     else if (waiting) waitReasons.push(`${bin.kind.toLowerCase()} bin ${bin.id}: ${waiting}`);
     else {
       readyBins += 1;
+      const stranded = strandedIntent(bin, dispatches);
+      if (stranded) strandedReasons.push(`${bin.kind.toLowerCase()} bin ${bin.id}: ${stranded}`);
       if (sent && now.getTime() - new Date(sent.sentAt).getTime() < ARRIVAL_GRACE_MS) arriving += 1;
     }
     lineBins.push({
@@ -700,7 +761,12 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
   else if (unexplainedIdle)
     because =
       `${executableTotal} piece(s) of executable work and ${freeSurfaces} free surface(s), ` +
-      'and nothing is running or arriving. That is a fault, not a wait.';
+      'and nothing is running or arriving. That is a fault, not a wait.' +
+      (strandedReasons.length > 0
+        ? ` ${strandedReasons.length} of them nothing in the dispatcher will fire again: ` +
+          strandedReasons.join('; ') +
+          '.'
+        : '');
   else if (leasedBins > 0 || arriving > 0)
     because = `${leasedBins} stage(s) running and ${arriving} worker(s) arriving.`;
   else if (executableTotal > 0)
@@ -718,6 +784,7 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
     auto: policy.maxActive > 0,
     executable: { queued: admissibleQueued, readyBins, total: executableTotal },
     waiting: { bins: waitReasons.length, reasons: waitReasons },
+    stranded: { bins: strandedReasons.length, reasons: strandedReasons },
     active: { leasedBins, arriving, workingCampaigns },
     capacity: { freeSurfaces, surfaces },
     unexplainedIdle,
