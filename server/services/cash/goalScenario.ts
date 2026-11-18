@@ -1777,6 +1777,10 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
   const upFrontLimit = upFrontCents === null ? null : upFrontCents / 100;
   const inScope = (input.arrangements ?? []).filter((one) => !arrangementOutOfScope(scope, one, scoped, target.daysLeft, upFrontLimit));
   if (inScope.length) {
+    // What construction reads as held prices (`heldEvidence`), from the openings already loaded: no new query.
+    const ownPrices = live
+      .filter((one) => one.payer && one.priceCents !== null && one.priceCents > 0 && !excludedBy(`${one.title} ${one.payer ?? ''} ${one.industry ?? ''}`, exclusions))
+      .map((one) => ({ value: one.priceCents! / 100, industry: one.industry, mechanism: one.mechanism, payer: one.payer }));
     const selected = selectEstimatedArrangements(inScope, {
       projectId: target.projectId,
       currency: target.currency,
@@ -1787,14 +1791,10 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       // The evidence the found openings were just inferred from: an arrangement's links read it the same way (F2).
       knowledge,
       now: input.now ?? new Date(),
-      // What construction reads as held prices (`heldEvidence`), from the openings already loaded: no new query.
-      otherPrices: [
-        ...live
-          .filter((one) => one.payer && one.priceCents !== null && one.priceCents > 0 && !excludedBy(`${one.title} ${one.payer ?? ''} ${one.industry ?? ''}`, exclusions))
-          .map((one) => ({ value: one.priceCents! / 100, industry: one.industry, mechanism: one.mechanism, payer: one.payer })),
-        // Read only when the project holds none of its own (`comparablePricesFor`): a fresh project's goal is not blind to what the Brain validated (§31).
-        ...(await brainComparablePrices({ projectId: target.projectId, currency: target.currency }, (text) => !excludedBy(text, exclusions)).catch(() => [])),
-      ],
+      otherPrices: ownPrices.length > 0
+        ? ownPrices
+        : // Read only when the project holds none of its own (`comparablePricesFor`): a fresh project's goal is not blind to what the Brain validated (§31).
+          await brainComparablePrices({ projectId: target.projectId, currency: target.currency }, (text) => !excludedBy(text, exclusions)).catch(() => []),
     });
     estimates.push(...selected.openings);
     arrangementSelection = selected.selection;
