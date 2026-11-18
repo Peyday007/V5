@@ -672,7 +672,7 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
    * arrangement stored under exactly this composition's inputs is reused
    * rather than recomposed — after a restart, a deploy or by another goal.
    */
-  const { known, reuse, held: leaders } = await libraryFor(input.projectId, input.goalId);
+  const { known, reuse, held: leaders, rotation } = await libraryFor(input.projectId, input.goalId);
   /*
    * The relational event graph (ALGO-16-1 items 3–4): brought up to date with
    * the durable detection rows changed since the last pass — only their
@@ -696,11 +696,11 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
   const { leverEvidence, contractLimits } = await leverInputs(input, opportunities, facts, allowed);
   const constraints = await leverageConstraints(input, limits);
   const memoKey = createHash('sha256')
-    .update(JSON.stringify({ day: now.toISOString().slice(0, 10), input: { ...input, now: undefined, limits: undefined }, limits, targets, exclusions, sectors: [...sectors.values()], precedent: [...precedentByBase.entries()].map(([k, o]) => [k, o.id]), priced, tiedUp, factObs, leverEvidence, contractLimits, constraints, openings: opportunities.map((o) => [o.id, o.payer, o.mechanism, o.state, o.updatedAt]), known, leaders }))
+    .update(JSON.stringify({ day: now.toISOString().slice(0, 10), input: { ...input, now: undefined, limits: undefined }, limits, targets, exclusions, sectors: [...sectors.values()], precedent: [...precedentByBase.entries()].map(([k, o]) => [k, o.id]), priced, tiedUp, factObs, leverEvidence, contractLimits, constraints, openings: opportunities.map((o) => [o.id, o.payer, o.mechanism, o.state, o.updatedAt]), known, leaders, rotation }))
     .digest('hex');
   const held = constructionMemo.get(memoKey);
   if (held && Date.now() - held.at < CONSTRUCTION_MEMO_MS) return structuredClone(held.result);
-  const job: ConstructionJob = { sectors: [...sectors.values()], opportunities, precedent: [...precedentByBase.entries()], capability, priced, tiedUp, facts: factObs, leverEvidence, contractLimits, input, limits, targets, exclusions, now, constraints, known, reuse, held: leaders };
+  const job: ConstructionJob = { sectors: [...sectors.values()], opportunities, precedent: [...precedentByBase.entries()], capability, priced, tiedUp, facts: factObs, leverEvidence, contractLimits, input, limits, targets, exclusions, now, constraints, known, reuse, held: leaders, rotation };
   // How many candidates the parts support, against how many are composed, and why each composed one was: the cut is reported, never silent (K-2).
   const selection = selectCandidates(job);
   const { considered } = selection;
@@ -1063,7 +1063,7 @@ export async function graphPass(input: Pick<ConstructionInput, 'capitalCeilingCe
 }
 
 /** What the library holds for construction to rank by and reuse. */
-async function libraryFor(projectId: string, goalId: string | undefined): Promise<{ known: NonNullable<ConstructionJob['known']>; reuse: NonNullable<ConstructionJob['reuse']>; held: string[] }> {
+async function libraryFor(projectId: string, goalId: string | undefined): Promise<{ known: NonNullable<ConstructionJob['known']>; reuse: NonNullable<ConstructionJob['reuse']>; held: string[]; rotation: number }> {
   const { listConstructedArrangements, recentLeaderSignatures } = await import('../../repos/monetization.ts');
   const known: NonNullable<ConstructionJob['known']> = [];
   const reuse: NonNullable<ConstructionJob['reuse']> = [];
@@ -1074,9 +1074,9 @@ async function libraryFor(projectId: string, goalId: string | undefined): Promis
     if (stored && typeof stored.composedUnder === 'string' && stored.signature === one.signature) reuse.push([stored.composedUnder, stored]);
   }
   known.sort((a, b) => a[0].localeCompare(b[0]));
-  // The goal's current and previous leaders (P4): composed every pass, whatever the cap.
-  const held = goalId ? await recentLeaderSignatures(goalId) : [];
-  return { known, reuse, held };
+  // The goal's current and previous leaders (P4), composed every pass whatever the cap, and its pass counter.
+  const { leaders: held, readings: rotation } = goalId ? await recentLeaderSignatures(goalId) : { leaders: [], readings: 0 };
+  return { known, reuse, held, rotation };
 }
 
 /**
@@ -1137,6 +1137,8 @@ export interface ConstructionJob {
   known?: Array<[string, { verdict: 'CONFIRMED' | 'REFUTED' | null; p50: number; composedAt?: string | null }]>;
   /** Signatures of the goal's current and previous leaders: always composed (P4). */
   held?: string[];
+  /** The pass counter the rotation window advances on: readings of this goal that weighed constructed arrangements (P4). Absent is 0. */
+  rotation?: number;
   /** Stored arrangements by the composition digest they were composed under: reused, not recomposed. */
   reuse?: Array<[string, ConstructedArrangement]>;
   /** The real limits leverage is judged against, read from the ledger and the live authority; absent is unknown. */
@@ -1210,21 +1212,20 @@ export function forEachCandidate(job: ConstructionJob, visit: (one: Candidate) =
 /**
  * Of `MAX_CONSTRUCTIONS`, the slots a pass keeps for rotation (P4): a window
  * over every candidate that is not evidenced, in a fixed order read from the
- * candidates alone, that moves one window per `ROTATION_PERIOD_MS`. The whole
- * space is composed in about considered / ROTATION_SLOTS periods. 64 of 400
- * keeps fresh composition near 64 designs a pass (the rest reuse the library),
- * against the ~400 a pass the CPU guard was written for (§102).
+ * candidates alone, that moves one window per pass of the goal
+ * (`ConstructionJob.rotation`, the readings that weighed its constructed
+ * arrangements). The whole space is composed in about considered /
+ * ROTATION_SLOTS passes. 64 of 400 keeps fresh composition near 64 designs a
+ * pass (the rest reuse the library), against the ~400 a pass the CPU guard was
+ * written for (§102).
+ *
+ * The window is the pass counter's, never the library's or the clock's: a
+ * re-read that stores no reading composes the same window, whatever the first
+ * read stored (Deploy 44391060795: a window read from "never composed" moved
+ * on the re-read, because the first read had composed it), and two goals
+ * planned at different minutes are compared on the same footing.
  */
 export const ROTATION_SLOTS = 64;
-/**
- * How long one rotation window holds: the goal plan's own cadence (it composes
- * at most once per ten minutes, `ARRANGEMENTS_FRESH_MS`). The window is the
- * clock's, never the library's: a re-read with the same inputs at the same time
- * composes the same window, whatever the first read stored (Deploy
- * 44391060795: a window read from "never composed" moved on the re-read,
- * because the first read had composed it).
- */
-export const ROTATION_PERIOD_MS = 10 * 60_000;
 
 /** Which candidates a pass composes, and why. */
 export interface CandidateSelection {
@@ -1237,7 +1238,7 @@ export interface CandidateSelection {
   evidenced: number;
   /** Evidenced but beyond the evidenced share of the cap (`MAX_CONSTRUCTIONS - ROTATION_SLOTS`). */
   evidencedCut: number;
-  /** Composed in this period's rotation window. */
+  /** Composed in this pass's rotation window. */
   rotated: number;
   /** Candidates the library had never composed before this pass (reported, never read by the selection's rotation). */
   neverComposed: number;
@@ -1254,14 +1255,14 @@ export interface CandidateSelection {
  * what the evidence said. Arrangements on accepted research facts were not
  * guaranteed a slot. So:
  *
- *  - ROTATION — `ROTATION_SLOTS` candidates are this period's window: every
+ *  - ROTATION — `ROTATION_SLOTS` candidates are this pass's window: every
  *    candidate that is not evidenced, in a fixed order read from the
  *    candidates alone (target properties, precedent, gated parts, published
- *    prices, original design, fewer parts, enumeration order), cut into
- *    windows, the window `floor(now / ROTATION_PERIOD_MS)` mod their number.
- *    Nothing the library holds moves it, so a re-read with unchanged inputs
- *    composes the same window, and every candidate is reached within one
- *    cycle of windows.
+ *    prices, original design, fewer parts, enumeration order) and interleaved
+ *    by buyer population, cut into windows, the window `job.rotation` mod
+ *    their number. Nothing the library holds moves it, so a re-read with
+ *    unchanged inputs composes the same window, and every candidate is
+ *    reached within one cycle of windows.
  *  - The other slots, in order, from the candidates outside the window:
  *    1. HELD — what the goal's last two readings picked or led with
  *       (`ConstructionJob.held`): a leader is never cut between two passes
@@ -1326,7 +1327,7 @@ export function selectCandidates(job: ConstructionJob): CandidateSelection {
   if (all.length <= MAX_CONSTRUCTIONS) {
     return { selected: all, considered, held: keyed.filter((one) => held.has(one.signature)).length, evidenced: keyed.filter((one) => one.evidence).length, evidencedCut: 0, rotated: 0, neverComposed };
   }
-  // The rotation window: a fixed order over what the candidates carry themselves, and a window the clock picks.
+  // The rotation window: a fixed order over what the candidates carry themselves, and a window the pass counter picks.
   const fixed = (a: Keyed, b: Keyed): number =>
     b.met - a.met || b.precedent - a.precedent || b.evidenced - a.evidenced || b.priced - a.priced || a.variant - b.variant || a.parts - b.parts || a.one.order - b.one.order;
   // Interleaved by buyer population, so each window keeps the cap's breadth.
@@ -1341,7 +1342,7 @@ export function selectCandidates(job: ConstructionJob): CandidateSelection {
   const turningQueues = [...turningLanes.values()];
   for (let depth = 0; turningQueues.some((lane) => lane.length > depth); depth += 1) for (const lane of turningQueues) if (lane[depth]) turning.push(lane[depth]!);
   const windows = Math.max(1, Math.ceil(turning.length / ROTATION_SLOTS));
-  const at = (Math.floor(job.now.getTime() / ROTATION_PERIOD_MS) % windows) * ROTATION_SLOTS;
+  const at = ((Math.max(0, Math.floor(job.rotation ?? 0)) % windows) * ROTATION_SLOTS);
   const window = new Set(turning.slice(at, at + ROTATION_SLOTS));
   keyed.sort(
     (a, b) =>
@@ -1386,14 +1387,14 @@ export function selectCandidates(job: ConstructionJob): CandidateSelection {
     }
   };
   const outside = keyed.filter((one) => !window.has(one));
-  // 1. The goal's leaders, whatever else ranks above them (a leader in this period's window is composed there).
+  // 1. The goal's leaders, whatever else ranks above them (a leader in this pass's window is composed there).
   for (const one of outside) if (held.has(one.signature) && dealt.length < budget) take(one);
   const heldCount = dealt.length + keyed.filter((one) => held.has(one.signature) && window.has(one)).length;
   // 2. Evidence first.
   deal(outside.filter((one) => one.evidence), budget);
   // 3. The existing rank.
   deal(outside, budget);
-  // 4. This period's window.
+  // 4. This pass's window.
   for (const one of keyed) if (window.has(one)) take(one);
   return {
     selected: dealt,

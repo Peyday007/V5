@@ -18,7 +18,6 @@ import {
   arrangementSignature,
   forEachCandidate,
   MAX_CONSTRUCTIONS,
-  ROTATION_PERIOD_MS,
   ROTATION_SLOTS,
   selectCandidates,
   type Candidate,
@@ -102,18 +101,19 @@ describe('the construction cap is evidence-first', () => {
 
   it('holds the goal\'s leader on every pass, and a re-read with unchanged inputs composes the same set whatever the first read stored', () => {
     const T = new Date('2026-11-18T19:00:00.000Z');
-    // The cold read: an empty library.
-    const cold = selectCandidates(job({ now: T }));
+    // The cold read: an empty library, the goal's third pass.
+    const cold = selectCandidates(job({ now: T, rotation: 3 }));
     // It stores what it composed, each with a value (the library's p50 ranks), and its reading picks two leaders —
     // one from the rotation window, one from the ranked slots (planningSpeed's re-read, Deploy 44391060795).
     const known = new Map<string, { verdict: null; p50: number; composedAt: string }>();
     for (const one of cold.selected) known.set(sig(one), { verdict: null, p50: (one.order % 7) * 100, composedAt: T.toISOString() });
     const leaders = [sig(cold.selected[0]!), sig(cold.selected[cold.selected.length - 1]!)];
-    const reread = selectCandidates(job({ now: T, known: [...known.entries()], held: leaders }));
+    // A re-read that stores no reading: the same pass counter, minutes later.
+    const reread = selectCandidates(job({ now: new Date(T.getTime() + 25 * 60_000), rotation: 3, known: [...known.entries()], held: leaders }));
     expect(new Set(reread.selected.map(sig))).toEqual(new Set(cold.selected.map(sig)));
     expect(reread.held).toBe(2);
     // And again, in a fresh process that reads the same rows.
-    expect(selectCandidates(job({ now: T, known: [...known.entries()], held: leaders })).selected.map(sig)).toEqual(reread.selected.map(sig));
+    expect(selectCandidates(job({ now: T, rotation: 3, known: [...known.entries()], held: leaders })).selected.map(sig)).toEqual(reread.selected.map(sig));
 
     // A leader neither the rank nor this window reached (found weeks ago, as mpx_e6ed1e7dbbe54c08a26d was) is composed on every pass.
     const all: Candidate[] = [];
@@ -121,15 +121,15 @@ describe('the construction cap is evidence-first', () => {
     const seen = new Set(cold.selected.map(sig));
     const leader = sig(all.filter((one) => !seen.has(sig(one))).at(-1)!);
     for (let pass = 0; pass < 3; pass += 1) {
-      const now = new Date(T.getTime() + pass * ROTATION_PERIOD_MS);
-      const selection = selectCandidates(job({ now, known: [...known.entries()], held: [leader] }));
+      const now = new Date(T.getTime() + pass * 10 * 60_000);
+      const selection = selectCandidates(job({ now, rotation: 4 + pass, known: [...known.entries()], held: [leader] }));
       expect(selection.selected.map(sig)).toContain(leader);
       expect(selection.held).toBe(1);
       for (const one of selection.selected) known.set(sig(one), { verdict: null, p50: known.get(sig(one))?.p50 ?? 0, composedAt: now.toISOString() });
     }
   });
 
-  it('reaches every candidate within considered / ROTATION_SLOTS periods, by a clock window rather than a draw', () => {
+  it('reaches every candidate within considered / ROTATION_SLOTS passes, by a pass-counter window rather than a draw', () => {
     const known = new Map<string, { verdict: null; p50: number; composedAt: string }>();
     const composed = new Set<string>();
     const { considered } = selectCandidates(job({}, 6));
@@ -137,8 +137,8 @@ describe('the construction cap is evidence-first', () => {
     const start = Date.UTC(2026, 10, 18, 0, 0);
     let passes = 0;
     while (composed.size < considered && passes <= bound) {
-      const now = new Date(start + passes * ROTATION_PERIOD_MS);
-      const selection = selectCandidates(job({ now, known: [...known.entries()] }, 6));
+      const now = new Date(start + passes * 10 * 60_000);
+      const selection = selectCandidates(job({ now, rotation: passes, known: [...known.entries()] }, 6));
       expect(selection.selected).toHaveLength(MAX_CONSTRUCTIONS);
       expect(selection.rotated).toBe(ROTATION_SLOTS);
       expect(selection.neverComposed).toBe(considered - composed.size);
@@ -148,10 +148,11 @@ describe('the construction cap is evidence-first', () => {
     }
     expect(composed.size).toBe(considered);
     expect(passes).toBeLessThanOrEqual(bound);
-    // Within one period the window does not move.
-    const at = new Date(start + 3 * ROTATION_PERIOD_MS);
-    const later = new Date(at.getTime() + ROTATION_PERIOD_MS - 1);
-    expect(selectCandidates(job({ now: later, known: [...known.entries()] }, 6)).selected.map(sig)).toEqual(selectCandidates(job({ now: at, known: [...known.entries()] }, 6)).selected.map(sig));
+    // The clock does not move the window; only a pass does.
+    const at = new Date(start);
+    const later = new Date(start + 7 * 3_600_000);
+    expect(selectCandidates(job({ now: later, rotation: 3, known: [...known.entries()] }, 6)).selected.map(sig)).toEqual(selectCandidates(job({ now: at, rotation: 3, known: [...known.entries()] }, 6)).selected.map(sig));
+    expect(selectCandidates(job({ now: at, rotation: 4, known: [...known.entries()] }, 6)).selected.map(sig)).not.toEqual(selectCandidates(job({ now: at, rotation: 3, known: [...known.entries()] }, 6)).selected.map(sig));
   });
 });
 
@@ -186,8 +187,8 @@ describe('the leaders are read from the goal\'s own readings', () => {
     await read('gpr_old', '2026-11-17T00:00:00.000Z', [[1, true, 900_000]]);
     await read('gpr_prev', '2026-11-18T00:00:00.000Z', [[2, true, 500_000], [5, false, 1]]);
     await read('gpr_now', '2026-11-18T01:00:00.000Z', [[3, true, 400_000], [4, false, 800_000], [5, false, 2], [6, false, null]]);
-    const leaders = await recentLeaderSignatures('wst_goal', 2, 1);
-    expect(leaders).toEqual(['sig_2', 'sig_3', 'sig_4']);
-    expect(await recentLeaderSignatures('wst_other')).toEqual([]);
+    // Three readings weighed the goal's arrangements: the pass counter the rotation window advances on.
+    expect(await recentLeaderSignatures('wst_goal', 2, 1)).toEqual({ leaders: ['sig_2', 'sig_3', 'sig_4'], readings: 3 });
+    expect(await recentLeaderSignatures('wst_other')).toEqual({ leaders: [], readings: 0 });
   });
 });
