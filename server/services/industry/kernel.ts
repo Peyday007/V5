@@ -270,7 +270,8 @@ export async function runIndustryKernel(projectId: string): Promise<KernelPass> 
       failures.push(`map payers: ${error instanceof Error ? error.message : String(error)}`);
     }
     try {
-      backfilled = (await backfillClaimFacts(projectId)).filed.length;
+      const pass = await backfillClaimFacts(projectId);
+      backfilled = pass.filed.length + pass.refiled.length;
       if (backfilled === 0 && payersMapped === 0) backfillIdleAt.set(projectId, Date.now());
       else backfillIdleAt.delete(projectId);
     } catch (error) {

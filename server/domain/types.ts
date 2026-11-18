@@ -978,6 +978,8 @@ export interface ConstructionFactRow {
   /** When the figure was observed, and when it stops being current (W-10). */
   observed_at: string | null;
   valid_until: string | null;
+  /** The fact this row supersedes (migration 158): set on the new row only; the old row is never written. */
+  supersedes_fact_id?: string | null;
 }
 
 export interface IndustryNodeRow {
