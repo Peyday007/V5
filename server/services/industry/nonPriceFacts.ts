@@ -11,10 +11,12 @@
  * three construction fact keys: `price_per_unit` (value), `contractor_rate_per_unit`
  * (a margin design's supply cost) and `account_units_per_month` (the demand
  * side's `need_rate`: what ONE of these buyers buys a month). It reads none
- * for a reply rate, a close rate (`demand.conversion` is always unknown), the
- * number of buyers or the deals a market takes, so a claim stating one of those
+ * for a reply rate or the deals a market takes, so a claim stating one of those
  * is refused with that named — never filed under a key nobody reads, and never
- * under one that means something else.
+ * under one that means something else. A close rate and a count of buyers in
+ * a market are not volumes either: this reader refuses them, and
+ * `shareCountFacts.ts` (R3) files the unambiguous ones as `account_win_rate`
+ * and `accounts_reachable`, which the plan reads as `conversion` and `buyers`.
  *
  * So the one non-price kind this files is a per-buyer monthly volume, read
  * conservatively: a count stated per month, in a sentence that says it is what
@@ -57,7 +59,7 @@ export function readNonPriceFact(text: string): NonPriceReading {
   const sentence = text.replace(/\s+/g, ' ').trim();
   if (PERCENT.test(sentence)) {
     if (PRICE_CHANGE.test(sentence)) return { refused: 'it states a percentage change in a price or cost, which is not a close rate and no figure the plan reads' };
-    if (APPROACHED_RATE.test(sentence)) return { refused: 'it states a reply or close rate, and the plan reads no fact for either (an arrangement’s conversion is unknown until outcomes measure it)' };
+    if (APPROACHED_RATE.test(sentence)) return { refused: 'it states a reply or close rate, which is no volume: a reply rate has no fact the plan reads, and a close rate is filed only as a stated share of buyers approached who bought (shareCountFacts.ts)' };
     return { refused: 'it states a percentage that is no share of buyers approached who agreed, and no figure the plan reads' };
   }
   const match = MONTHLY_COUNT.exec(sentence);
