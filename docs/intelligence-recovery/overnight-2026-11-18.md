@@ -103,3 +103,17 @@ Launch configuration, updated:
   - #1091: supplier quote filed as cost.
   - #1093: verify replies read.
 - **Launch waits for d4732f8d to be live**, expected about 08:00Z. The spend-safety fix is mandatory.
+
+## 08:10Z
+- **Gate reports on 1b805f3e** (runs 44259750902 h=3, 44260466650 h=12), on goal wst_7b4fcbb5f2384f31b6c3:
+  - **3h:** claims 18, stored 0.
+  - **12h:** claims 58, stored 4, in_plan 4, retained 57.
+  - **Pressure:** NORMAL.
+- **Plan change:** the candidate is now arr_9c291f2760f2 ("Puzzle Society…") + arr_4cbbf91e4df7, reach 57.3%, p50 $31,024. Before it was 50.1%.
+  - Postcard arr_2821cce3c372 is NOT in the candidate. Good: no manufactured score.
+- **Owner E (agent):** identify the 4 claims, check their economic meaning, and check whether the plan change is research-driven.
+- **Safety release d4732f8d is LIVE** (Fly 07:58:40Z), carrying #1089, #1092, #1091 and #1093.
+  - Hosted verification FAILED 258/261: 3 quant-slot checks, starting with a 50k run that returned 429 busy.
+  - **Owner F (agent):** verifier race or real defect?
+- **Launch:** waits for E (gate evidence) and F (no material defect).
+- **Persistent wake:** 07:55Z already fired. Next wake to be set.
