@@ -151,8 +151,8 @@ All three run in parallel, owned by the intelligence-recovery session, with a me
 
 - **Expected yield.** T1 measured 16 accepted GPU claims in 25 min at a mean of 6 busy slots, about 38/h. Over 12 h that projects to roughly 450 GPU claims at about $0.14 each, plus the free lane at about 10/h. This is projected, not tested beyond 25 min.
 - **Usable balance.** RunPod $131.88 at 18:33Z, still spending $5.325/h. Stop dispatched 18:36Z.
-- **Remaining under the $250 ceiling.** About $105: $138.59 spent before T1, plus T1 at about $6.
-- **Additional cash required.** None. Both $64.80 and $97.88 fit inside the balance and the ceiling.
+- **Spending authority.** The $250 additional-infrastructure ceiling was removed by the owner on 2026-11-18 ("just make sure you are spending properly"). Per-run caps and the pod supervisor's auto-stop remain; the funded RunPod balance is the real bound.
+- **Additional cash required.** None. Both $64.80 and $97.88 fit inside the funded balance.
 - **Launch instruction, after B1 is closed.** One dispatch. The pod supervisor stops the pod at the cap:
   `cheap-lane.yml action=runpod-launch budget_usd=66 budget_window_hours=12.5 recipes=gpt-oss-120b-big max_usd_per_hour=5.5 runway_hours=12 tool_score=0.79`
   If H200 is unavailable: `budget_usd=99 max_usd_per_hour=8.5`.
@@ -178,3 +178,21 @@ Runs: launch 44187098347 (H200 $5.29/h, 50 min) · report 44195685485 · disconn
 | B1 research → plan | plan re-derived 6 times in 2 h (21:13 … 22:50), so the plan does re-read; but the cash goal got 0 accepted claims in the window (5 jobs, 3 refused), 0 rounds opened or harvested, 6 open; its 15 research bins have sat READY at priority 8 since 2026-11-14 waiting on "the next free Routine" | UNPROVEN: no new research reached the goal to trace |
 
 Remaining blocker: the cash goal's own research does not run. Its bins wait on Claude Routines (reserved for Brain improvement by §84) instead of being served by the free lane / GPU, so a 12 h run would spend most GPU time on other projects' audits and verifies and would not feed this goal's plan. Next fix: serve the goal's READY bins on the free lane, then re-run the capped window and require TRACE stored > 0 and in_plan > 0.
+
+
+## 2026-11-18: corrections and what followed
+
+- **The "remaining blocker" above was wrong.** The goal's READY bins are not the cause: under §85 the free lane claims research items without leasing bins, and that status line is misleading text. The actual causes, found and fixed by the intelligence-recovery session, were:
+  - **B1c (#1072):** open-round claims had no route into the plan.
+  - **Lease fix (#1073):** items at max attempts with expired leases were never reclaimed.
+  - **B1f (#1076):** a per-piece price was filed as the deal price.
+  - **B1g (#1078):** constructed-round back-fill.
+  - **R1 (#1085):** already-filed prices superseded.
+  - **R2/R3 (#1082, #1086):** conversion, volume and buyer counts filed.
+- **Verification windows.**
+  - **0ba2eb30:** B200 at $7.99/h, $4.66, pod EXITED; web-search refusals regressed (S1b, fixed in #1075).
+  - **8a111494:** free 2 h report; goal claims rose to 7.5/h; B1 proven on real claims (cfa_b20e6370 filed and read).
+  - **#1078:** the 3 h gate failed because 13 qualitative claims had no fileable price, which R1–R3 address.
+- **Spending.** The $250 ceiling was removed by the owner. Launch: H200 `budget_usd=66 max_usd_per_hour=5.5`; B200 fallback `budget_usd=99 max_usd_per_hour=8.5`. RunPod balance $114.17 at 01:47Z.
+- **Coordination.** Since 2026-11-18 06:34Z the intelligence-recovery session is the accountable coordinator and release owner until 15:00Z. The current record is `docs/intelligence-recovery/overnight-2026-11-18.md` on its branch.
+- **Deadline intelligence (§113)** is live on production: brain_deadline_plan / brain_deadline_record. The missed 19:00Z deadline is recorded as `readiness-mission-2026-11-17T19:00Z`. Replayed, it answers INFEASIBLE at acceptance, with an earliest completion of 22:54Z.
