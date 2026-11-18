@@ -72,7 +72,7 @@ import { enqueueExtraction } from '../documents/queue.ts';
 import { isAuditable } from '../documents/quality.ts';
 import { registerRunArtifact, targetVersionForRun } from '../runArtifacts.ts';
 import { selectRelevantSegments } from '../sources/ingest.ts';
-import { classifyBlock, fragmentPasses, type GateResult } from './gate.ts';
+import { classifyBlock, fragmentPasses, isUnresolvedRetrievalReason, type GateResult } from './gate.ts';
 import { guidanceFor } from './guidance.ts';
 import { gateFragment, recordFragmentClaims, type ClaimVerification } from './submission.ts';
 // One ledger builder, so a packet filed by a worker and one filed in process
@@ -594,7 +594,8 @@ async function rejectedHistory(
   const out: { claim: string; why: string }[] = [];
   for (const fragment of await listAttempts(orchestrationId, fragmentKey)) {
     for (const claim of await listClaimsForFragment(fragment.id)) {
-      if (!claim.accepted && claim.rejectionReason) {
+      // An unread source was never judged, so it is not a refusal to avoid repeating.
+      if (!claim.accepted && claim.rejectionReason && !isUnresolvedRetrievalReason(claim.rejectionReason)) {
         out.push({ claim: claim.claim, why: claim.rejectionReason });
       }
     }

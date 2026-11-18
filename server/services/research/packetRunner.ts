@@ -55,7 +55,13 @@ import type {
   WorkItem,
   WorkerScope,
 } from '../../domain/types.ts';
-import { blockCauseOf, exampleIdentity, laneFloor, type BlockCause } from './gate.ts';
+import {
+  blockCauseOf,
+  exampleIdentity,
+  laneFloor,
+  unresolvedRetrievalReason,
+  type BlockCause,
+} from './gate.ts';
 import type { ClaimJudgement, GateCondition, GateResult, LaneCoverage } from './gate.ts';
 import type { BuildRepairPlanInput } from './repair.ts';
 import { countIndependentSources, duplicateGroups } from './standards.ts';
@@ -1367,6 +1373,7 @@ export function gateShapeFor(fragment: ResearchFragment, claims: ResearchClaim[]
         claim: claim.claim,
         sourceUrl: claim.sourceUrl,
         state: claim.retrievalState,
+        reason: claim.rejectionReason ?? unresolvedRetrievalReason(claim.retrievalState),
       })),
     claims: results,
     acceptedClaims: accepted.length,

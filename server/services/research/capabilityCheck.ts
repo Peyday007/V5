@@ -21,6 +21,7 @@ import type {
   WorkItem,
 } from '../../domain/types.ts';
 import { TERMINAL_ORCHESTRATION } from './outcome.ts';
+import { isUnresolvedRetrievalReason } from './gate.ts';
 
 export interface Clause {
   id: string;
@@ -216,7 +217,12 @@ export function evaluateCapability(input: CapabilityInput): Clause[] {
   // A source nobody could read is not a rejected claim. It must be recorded as
   // unresolved, and it must not carry a rejection reason blaming the research.
   const unread = claims.filter((claim) => claim.retrievalState !== 'RETRIEVED');
-  const misblamed = unread.filter((claim) => (claim.rejectionReason ?? '').length > 0);
+  // An `UNRESOLVED_RETRIEVAL` reason says the source could not be read and the
+  // claim was not judged — that is the honest record, not blame.
+  const misblamed = unread.filter(
+    (claim) =>
+      (claim.rejectionReason ?? '').length > 0 && !isUnresolvedRetrievalReason(claim.rejectionReason),
+  );
   check(
     'P4',
     'unreadable sources are recorded as unresolved, not rejected',
