@@ -35,7 +35,7 @@ import { ARCHITECTURE_SLUG } from '../capability/ingest.ts';
 import { createHash } from 'node:crypto';
 import { getDb } from '../../db/database.ts';
 import { nowIso } from '../../repos/util.ts';
-import { askHuman } from '../../repos/russellMissions.ts';
+import { askHuman, withdrawRequest } from '../../repos/russellMissions.ts';
 import { listCoverage, listRequirements } from '../../repos/reconciliation.ts';
 import { coverBeforeWork } from '../russell/coverage.ts';
 import { inventoryProject } from '../reconcile/plan.ts';
@@ -52,6 +52,8 @@ export const MAX_GOALS_PER_PASS = 5;
 export interface GoalContinuationReport {
   considered: number;
   started: { goalId: string; packetKey: string; orchestrationId: string }[];
+  /** Ceiling requests on Brain's own goals that Brain took back and decided itself. */
+  withdrawn: { goalId: string; requestIds: string[] }[];
   /** Goals whose assignment the archive already answers. */
   answeredByArchive: string[];
   /** Goals a ceiling stopped, and which one. */
@@ -307,6 +309,47 @@ async function askAboutCeiling(
   return created;
 }
 
+/** Is this goal in Brain's own project, where a ceiling stop is Brain's to decide? */
+async function isOwnResearchGoal(goal: GoalRow): Promise<boolean> {
+  const project = await getDb().get<{ slug: string }>('SELECT slug FROM projects WHERE id = ?', [goal.project_id]);
+  return project?.slug === ARCHITECTURE_SLUG;
+}
+
+/**
+ * Take back a ceiling question already put to a person about one of Brain's
+ * own research goals.
+ *
+ * `decideOwnCeiling` stops new ones, but a request opened before it existed
+ * stayed OPEN in front of the owner — and `advanceOne` skips a goal with an
+ * open ceiling request before it ever reaches the decision, so nothing would
+ * have closed it (OWNER:RAISING_THE_RESEARCH_GOALS_PACKETS_CEILING: the 19
+ * already asked). Each one is withdrawn, not answered: no person chose, and
+ * `withdrawRequest` is guarded on OPEN so an answer somebody already gave is
+ * never reached back through. The goal then continues through the pass, where
+ * the ceiling stop is decided and recorded by `decideOwnCeiling`.
+ *
+ * Returns the ids withdrawn.
+ */
+async function withdrawOwnCeilingRequests(goal: GoalRow): Promise<string[]> {
+  if (!(await isOwnResearchGoal(goal))) return [];
+  const open = await getDb().all<{ id: string }>(
+    `SELECT id FROM russell_human_requests
+      WHERE project_id = ? AND state = 'OPEN' AND resume_key LIKE ?`,
+    [goal.project_id, `goal-budget:${goal.id}:%`],
+  );
+  const withdrawn: string[] = [];
+  for (const request of open) {
+    const done = await withdrawRequest({
+      requestId: request.id,
+      reason:
+        `Brain decides this itself: "${goal.name}" is Brain's own improvement research goal, nothing is spent, ` +
+        'and leaving it stopped loses no accepted work, so no ceiling is raised and no person is asked.',
+    });
+    if (done) withdrawn.push(request.id);
+  }
+  return withdrawn;
+}
+
 /**
  * A ceiling stop on one of Brain's own research goals is Brain's to decide.
  *
@@ -331,8 +374,7 @@ async function askAboutCeiling(
  * Returns true when Brain decided, false when the question is a person's.
  */
 async function decideOwnCeiling(goal: GoalRow, ceiling: Ceiling, detail: string): Promise<boolean> {
-  const project = await getDb().get<{ slug: string }>('SELECT slug FROM projects WHERE id = ?', [goal.project_id]);
-  if (project?.slug !== ARCHITECTURE_SLUG) return false;
+  if (!(await isOwnResearchGoal(goal))) return false;
   const key = ceilingRequestKey(goal.id, ceiling, goal);
   const recorded = await getDb().get<{ n: number | string }>(
     `SELECT COUNT(*) AS n FROM project_events
@@ -411,6 +453,8 @@ async function advanceOne(goal: GoalRow, report: GoalContinuationReport): Promis
     report.skipped.push({ goalId: goal.id, reason: 'the goal names no layer to file under' });
     return;
   }
+  const withdrawn = await withdrawOwnCeilingRequests(goal);
+  if (withdrawn.length > 0) report.withdrawn.push({ goalId: goal.id, requestIds: withdrawn });
   if (await hasOpenCeilingRequest(goal)) {
     report.skipped.push({ goalId: goal.id, reason: 'waiting on a person about a ceiling' });
     return;
@@ -554,6 +598,7 @@ export async function advanceResearchGoals(): Promise<GoalContinuationReport> {
   const report: GoalContinuationReport = {
     considered: 0,
     started: [],
+    withdrawn: [],
     answeredByArchive: [],
     stopped: [],
     binned: [],

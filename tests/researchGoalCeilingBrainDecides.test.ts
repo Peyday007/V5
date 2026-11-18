@@ -20,6 +20,7 @@ import { getDb } from '../server/db/database.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { createResearchGoal } from '../server/repos/russellAuthority.ts';
 import { updateOrchestration } from '../server/repos/research.ts';
+import { answerHumanRequest } from '../server/repos/russellMissions.ts';
 import { advanceResearchGoals } from '../server/services/research/goalContinuation.ts';
 import { ARCHITECTURE_SLUG } from '../server/services/capability/ingest.ts';
 import type { Layer } from '../server/domain/types.ts';
@@ -124,6 +125,50 @@ describe("a ceiling on Brain's own improvement research goal", () => {
   });
 });
 
+describe("a ceiling request already open on Brain's own goal", () => {
+  it('is withdrawn by Brain, decided once, and nothing is raised or asked again', async () => {
+    // The request as production holds it: opened by the pass before Brain
+    // decided its own ceilings. The goal is asked about while its project is
+    // not yet Brain's, which is exactly the row the old path wrote.
+    const goal = await newGoal('Improve: GOAL_PLAN capability broken: Turn a goal’s research rounds into filed openings');
+    await spendOnePacket(goal.id);
+    expect((await advanceResearchGoals()).stopped).toEqual([{ goalId: goal.id, ceiling: 'PACKETS', asked: true }]);
+    const [open] = await requestsFor(goal.id);
+    expect(open!.state).toBe('OPEN');
+    await getDb().run('UPDATE projects SET slug = ? WHERE id = ?', [ARCHITECTURE_SLUG, fixture.project.id]);
+    const before = await ceilings(goal.id);
+
+    const report = await advanceResearchGoals();
+    expect(report.withdrawn).toEqual([{ goalId: goal.id, requestIds: [open!.id] }]);
+    expect(report.stopped).toEqual([{ goalId: goal.id, ceiling: 'PACKETS', asked: false, decidedBy: 'BRAIN' }]);
+    const after = await requestsFor(goal.id);
+    expect(after).toHaveLength(1);
+    expect(after[0]!.state).toBe('WITHDRAWN');
+    expect(await decisionsFor(goal.id)).toHaveLength(1);
+
+    // Later ticks withdraw nothing more, decide nothing new and ask nobody.
+    const again = await advanceResearchGoals();
+    expect(again.withdrawn).toEqual([]);
+    expect((await requestsFor(goal.id)).map((r) => r.state)).toEqual(['WITHDRAWN']);
+    expect(await decisionsFor(goal.id)).toHaveLength(1);
+    expect(await ceilings(goal.id)).toEqual(before);
+  });
+
+  it('never reaches back through a request a person already answered', async () => {
+    const goal = await newGoal('Improve: Goal research rounds end without a report');
+    await spendOnePacket(goal.id);
+    await advanceResearchGoals();
+    const [open] = await requestsFor(goal.id);
+    const answered = await answerHumanRequest({ requestId: open!.id, actorUserId: userId, choice: 'LEAVE_STOPPED' });
+    expect(answered.ok).toBe(true);
+    await getDb().run('UPDATE projects SET slug = ? WHERE id = ?', [ARCHITECTURE_SLUG, fixture.project.id]);
+
+    const report = await advanceResearchGoals();
+    expect(report.withdrawn).toEqual([]);
+    expect((await requestsFor(goal.id)).map((r) => r.state)).toEqual(['ANSWERED']);
+  });
+});
+
 describe('a ceiling on a research goal in any other project', () => {
   it('still asks a person exactly once, as before', async () => {
     const goal = await newGoal('Telemarketing employment');
@@ -132,7 +177,7 @@ describe('a ceiling on a research goal in any other project', () => {
 
     const report = await advanceResearchGoals();
     expect(report.stopped).toEqual([{ goalId: goal.id, ceiling: 'PACKETS', asked: true }]);
-    await advanceResearchGoals();
+    expect((await advanceResearchGoals()).withdrawn).toEqual([]);
 
     const requests = await requestsFor(goal.id);
     expect(requests).toHaveLength(1);
