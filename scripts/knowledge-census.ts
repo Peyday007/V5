@@ -21,61 +21,61 @@ async function main() {
     out('NOW', new Date().toISOString());
     const P = 'prj_22fb4fec295f403a8a22';
     const bucket = `goal-${G}-%`;
-    // Accepted claims of the goal's rounds, by round kind (mx- arrangement, ind- industry, pw pathway, other) and structural flag.
-    for (const r of await q(
-      `SELECT CASE WHEN r.bucket_id LIKE ? THEN 'mx' WHEN r.bucket_id LIKE ? THEN 'ind' ELSE substr(r.bucket_id, 1, 60) END AS kind,
-              COUNT(DISTINCT c.id) AS n, COUNT(DISTINCT CASE WHEN c.structural_finding IS NOT NULL THEN c.id END) AS structural,
-              COUNT(DISTINCT CASE WHEN EXISTS (SELECT 1 FROM construction_facts f WHERE f.source_claim_id = c.id) THEN c.id END) AS filed
-         FROM research_claims c JOIN russell_missions m ON m.orchestration_id = c.orchestration_id JOIN cash_discovery_rounds r ON r.candidate_id = m.candidate_id
-        WHERE r.bucket_id LIKE ? AND c.accepted = 1 GROUP BY 1 ORDER BY n DESC LIMIT 20`,
-      [`goal-${G}-mx-%`, `goal-${G}-ind-%`, bucket],
-    )) out('ACC_BY_KIND', r);
-    for (const r of await q(`SELECT c.structural_finding AS sf, COUNT(*) AS n FROM research_claims c WHERE c.accepted = 1 AND c.orchestration_id IN (SELECT m.orchestration_id FROM russell_missions m JOIN cash_discovery_rounds r ON r.candidate_id = m.candidate_id WHERE r.bucket_id LIKE ?) GROUP BY 1 ORDER BY n DESC LIMIT 10`, [bucket])) out('STRUCTURAL', r);
-    // Dry-run back-fill over every unfiled constructed-round claim of the project (nothing is filed).
-    const reasons = new Map<string, number>();
-    const filedKeys = new Map<string, number>();
-    const samples = new Map<string, string[]>();
+    const { readMoneyFigures } = await import('../server/services/cash/figures.ts');
+    const { arrangementKeyOfBucket } = await import('../server/services/cash/arrangementLibrary.ts');
+    // Every accepted constructed-round claim not yet filed, with its bucket, read through the filer's own reasons.
     let cursor = '';
-    let read = 0;
-    const goalMx = new Set((await q(`SELECT DISTINCT c.id FROM research_claims c WHERE c.orchestration_id IN (SELECT m.orchestration_id FROM russell_missions m JOIN cash_discovery_rounds r ON r.candidate_id = m.candidate_id WHERE r.bucket_id LIKE ?)`, [`goal-${G}-mx-%`])).map((r) => r.id));
-    out('GOAL_MX_CLAIMS', goalMx.size);
+    const byReason = new Map<string, { n: number; money: number; perUnit: number; buckets: Map<string, number>; moneySamples: string[] }>();
+    const unmatched = new Map<string, number>();
+    const all: { claimId: string; reason: string }[] = [];
     for (let i = 0; i < 25; i++) {
       const pool = await backfillCandidates(P, { unitEconomic: 'zzzz', constructed: cursor });
       const mine = pool.decisions.filter((d) => d.source === 'CONSTRUCTED_ROUND');
-      if (i === 0) {
-        const other = pool.decisions.filter((d) => d.source !== 'CONSTRUCTED_ROUND');
-        const oc = new Map<string, number>();
-        for (const d of other) oc.set(`${d.source}|${d.candidate ? 'FILE:' + d.candidate.key : (d.reason ?? '').slice(0, 90)}`, (oc.get(`${d.source}|${d.candidate ? 'FILE:' + d.candidate.key : (d.reason ?? '').slice(0, 90)}`) ?? 0) + 1);
-        out('OTHER_SOURCES', [...oc].sort((a, b) => b[1] - a[1]).slice(0, 15));
-      }
       if (mine.length === 0) break;
-      for (const d of mine) {
-        read++;
-        const k = d.candidate ? `FILE:${d.candidate.key}` : (d.reason ?? '').replace(/"[^"]*"/g, '"…"').slice(0, 110);
-        if (d.candidate) filedKeys.set(d.candidate.key, (filedKeys.get(d.candidate.key) ?? 0) + 1);
-        reasons.set(k, (reasons.get(k) ?? 0) + 1);
-        const l = samples.get(k) ?? [];
-        if (l.length < 4 && d.claimId) l.push(d.claimId);
-        samples.set(k, l);
-      }
+      for (const d of mine) all.push({ claimId: d.claimId ?? '', reason: d.candidate ? 'FILE' : (d.reason ?? '').slice(0, 60) });
+      for (const d of mine) if (d.unmatchedBuyer) unmatched.set(d.unmatchedBuyer.slice(0, 80), (unmatched.get(d.unmatchedBuyer.slice(0, 80)) ?? 0) + 1);
       cursor = mine[mine.length - 1]!.claimId ?? cursor;
     }
-    out('MX_READ', read);
-    for (const [k, n] of [...reasons].sort((a, b) => b[1] - a[1]).slice(0, 25)) out('MX_REASON', { n, k, samples: samples.get(k) });
-    // Every sample's text, so a reader can judge whether a refused claim stated a price.
-    const ids = [...samples.values()].flat();
-    if (ids.length) for (const c of await q(`SELECT id, substr(claim, 1, 260) AS claim FROM research_claims WHERE id IN (${ids.map(() => '?').join(',')})`, ids)) out('SAMPLE', c);
-    // The 2821cce3c372 round's accepted claims, each with its dry-run decision.
-    const r2821 = await q(`SELECT c.id, substr(c.claim, 1, 320) AS claim, c.structural_finding AS sf, (SELECT MIN(f.fact_key || ':' || CAST(f.low AS TEXT)) FROM construction_facts f WHERE f.source_claim_id = c.id) AS facts FROM research_claims c WHERE c.accepted = 1 AND c.orchestration_id IN (SELECT m.orchestration_id FROM russell_missions m JOIN cash_discovery_rounds r ON r.candidate_id = m.candidate_id WHERE r.bucket_id LIKE ?) ORDER BY c.id`, [`goal-${G}-mx-2821cce3c372%`]);
-    for (const c of r2821) out('C2821', c);
-    // Every claim in the goal's rounds that states a dollar figure with slot/ad/spot/advertis wording.
-    for (const c of await q(`SELECT c.id, c.accepted, substr(c.claim, 1, 260) AS claim, (SELECT MIN(f.fact_key || ':' || CAST(f.low AS TEXT)) FROM construction_facts f WHERE f.source_claim_id = c.id) AS facts FROM research_claims c WHERE c.orchestration_id IN (SELECT m.orchestration_id FROM russell_missions m JOIN cash_discovery_rounds r ON r.candidate_id = m.candidate_id WHERE r.bucket_id LIKE ?) AND c.claim LIKE '%$%' AND (lower(c.claim) LIKE '%slot%' OR lower(c.claim) LIKE '%advertis%' OR lower(c.claim) LIKE '% ad %' OR lower(c.claim) LIKE '%spot%' OR lower(c.claim) LIKE '%postcard%' OR lower(c.claim) LIKE '%mailer%') ORDER BY c.id LIMIT 40`, [bucket])) out('SLOTLIKE', c);
-    // Open rounds now, and what their fragments ask.
-    for (const r of await q(`SELECT r.id, r.bucket_id, r.state, r.opened_at, r.candidate_id FROM cash_discovery_rounds r WHERE r.bucket_id LIKE ? AND r.state = 'OPEN'`, [bucket])) {
-      const frags = await q(`SELECT f.fragment_key, f.status, f.question AS q FROM research_fragments f WHERE f.orchestration_id IN (SELECT orchestration_id FROM russell_missions WHERE candidate_id = ?) ORDER BY f.fragment_index LIMIT 6`, [r.candidate_id]);
-      const cand = await q(`SELECT substr(statement, 1, 1500) AS s FROM russell_candidates WHERE id = ?`, [r.candidate_id]);
-      out('OPEN_ROUND', { id: r.id, bucket: r.bucket_id.replace(`goal-${G}-`, ''), at: r.opened_at, statement: cand[0]?.s, frags: frags.map((f) => `${f.fragment_key}|${f.status}|${String(f.q).slice(0, 700)}`) });
+    const ids = all.map((a) => a.claimId).filter(Boolean);
+    const rows = new Map<string, any>();
+    for (let i = 0; i < ids.length; i += 300) {
+      const chunk = ids.slice(i, i + 300);
+      for (const r of await q(`SELECT c.id, c.claim, (SELECT MIN(r.bucket_id) FROM russell_missions m JOIN cash_discovery_rounds r ON r.candidate_id = m.candidate_id WHERE m.orchestration_id = c.orchestration_id AND r.bucket_id LIKE 'goal-%-mx-%') AS b FROM research_claims c WHERE c.id IN (${chunk.map(() => '?').join(',')})`, chunk)) rows.set(r.id, r);
     }
+    for (const a of all) {
+      const r = rows.get(a.claimId);
+      const money = r ? readMoneyFigures(String(r.claim), 'USD').filter((f: any) => f.cents > 0) : [];
+      const e = byReason.get(a.reason) ?? { n: 0, money: 0, perUnit: 0, buckets: new Map(), moneySamples: [] };
+      e.n++;
+      if (money.length) e.money++;
+      if (money.some((f: any) => f.perUnit)) { e.perUnit++; if (e.moneySamples.length < 8) e.moneySamples.push(`${a.claimId}: ${String(r.claim).slice(0, 200)}`); }
+      const b = String(r?.b ?? '').replace(/^goal-[^-]+-/, '').replace(/^wst_[0-9a-f]+-/, '');
+      e.buckets.set(b, (e.buckets.get(b) ?? 0) + 1);
+      byReason.set(a.reason, e);
+    }
+    for (const [k, e] of byReason) out('REASON', { k, n: e.n, statesUsd: e.money, statesPerUnitUsd: e.perUnit, buckets: [...e.buckets].sort((x, y) => y[1] - x[1]).slice(0, 12) });
+    for (const [k, e] of byReason) for (const s of e.moneySamples) out('PERUNIT_SAMPLE', `${k.slice(0, 30)} | ${s}`);
+    out('UNMATCHED', [...unmatched].sort((a, b) => b[1] - a[1]).slice(0, 15));
+    // Is each not-in-library key anywhere in monetization_paths (any project, any signature)?
+    const keys = new Set<string>();
+    for (const r of rows.values()) { const k = r.b ? arrangementKeyOfBucket(String(r.b)) : null; if (k) keys.add(k); }
+    for (const k of keys) {
+      const lib = await q(`SELECT project_id, origin, construction_origin, design_signature IS NOT NULL AS sig, updated_at FROM monetization_paths WHERE legacy_key = ? LIMIT 3`, [k]);
+      const rounds = await q(`SELECT MIN(opened_at) AS first, COUNT(*) AS n FROM cash_discovery_rounds WHERE bucket_id LIKE ?`, [`%-mx-${k}`]);
+      out('KEY', { k, lib, rounds: rounds[0] });
+    }
+    // Openings the latest reading names, and whether their source claim is one of the goal's rounds' claims.
+    const latest = (await q(`SELECT strategies, forecast FROM goal_plan_readings WHERE workstream_id = ? ORDER BY created_at DESC, id DESC LIMIT 1`, [G]))[0];
+    const text = `${latest?.strategies ?? ''}${latest?.forecast ?? ''}`;
+    const oppIds = [...new Set([...text.matchAll(/\b(cop_[0-9a-f]{8,}|opp_[0-9a-f]{8,})/g)].map((m) => m[1]!))].slice(0, 40);
+    out('READING_OPP_IDS', oppIds.length);
+    for (const id of oppIds) {
+      const o = (await q(`SELECT id, substr(title, 1, 90) AS title, price_cents, source_claim_id, created_at FROM cash_opportunities WHERE id = ?`, [id]))[0];
+      const inGoal = o?.source_claim_id ? (await q(`SELECT 1 AS x FROM research_claims c WHERE c.id = ? AND c.orchestration_id IN (SELECT m.orchestration_id FROM russell_missions m JOIN cash_discovery_rounds r ON r.candidate_id = m.candidate_id WHERE r.bucket_id LIKE ?)`, [o.source_claim_id, bucket])).length > 0 : false;
+      out('READING_OPP', { ...o, claimFromGoalRounds: inGoal });
+    }
+    // Openings created from this goal's rounds' claims at all.
+    for (const r of await q(`SELECT COUNT(*) AS n, MAX(o.created_at) AS last FROM cash_opportunities o WHERE o.project_id = ? AND o.source_claim_id IN (SELECT c.id FROM research_claims c WHERE c.orchestration_id IN (SELECT m.orchestration_id FROM russell_missions m JOIN cash_discovery_rounds r ON r.candidate_id = m.candidate_id WHERE r.bucket_id LIKE ?))`, [P, bucket])) out('OPPS_FROM_GOAL_CLAIMS', r);
   } finally {
     await closeDatabase();
     console.log('GOALS: OK');
