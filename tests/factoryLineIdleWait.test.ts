@@ -58,6 +58,7 @@ import {
   markDispatchDeferred,
 } from '../server/repos/bins.ts';
 import { getDb } from '../server/db/database.ts';
+import { STRANDED_REARM_CEILING } from '../server/services/dispatch/rearm.ts';
 
 let fixture: TestProject;
 let adminId = '';
@@ -175,5 +176,75 @@ describe('a READY factory bin the dispatcher is waiting on is a wait, not idle',
     expect(line.capacity.freeSurfaces).toBe(1);
     expect(line.unexplainedIdle).toBe(true);
     expect(line.because).toMatch(/That is a fault, not a wait/);
+  });
+});
+
+/*
+ * Repair F3 of the same campaign: a bin whose current-generation intent is
+ * past PENDING. Some of those the dispatcher is still working on (a claimed
+ * send, an abandonment inside its re-arm cool-off) — a wait with its time. The
+ * rest no dispatcher pass will ever fire again (superseded, or abandoned at the
+ * re-arm ceiling) — still the fault, now named, and not a reason for the remote
+ * loop to ask the dispatcher for a pass every twenty seconds.
+ */
+async function intentFor(binId: string, set: string, params: unknown[]): Promise<void> {
+  const bin = (await getBin(binId))!;
+  await ensureDispatchIntent(bin);
+  const intent = (await listDispatchesForBin(binId)).at(-1)!;
+  await getDb().run(`UPDATE bin_dispatch SET ${set} WHERE id = ?`, [...params, intent.id] as never[]);
+}
+
+describe('a READY factory bin whose intent is past PENDING', () => {
+  it('reads an abandonment inside its re-arm cool-off as the dispatcher waiting, with the re-arm time', async () => {
+    const binId = await campaignWithReadyStage();
+    await intentFor(binId, `state = 'ABANDONED', last_error_kind = 'SERVER', max_attempts = 5, updated_at = ?`, [
+      new Date().toISOString(),
+    ]);
+    const line = await readLine();
+    expect(line.executable.readyBins).toBe(0);
+    expect(line.unexplainedIdle).toBe(false);
+    expect(line.because).toMatch(/its intent gave up \(SERVER\); the dispatcher re-arms it after \d{4}-/);
+  });
+
+  it('reads an abandonment whose cool-off has passed as work the dispatcher will act on', async () => {
+    const binId = await campaignWithReadyStage();
+    await intentFor(binId, `state = 'ABANDONED', last_error_kind = 'SERVER', max_attempts = 5, updated_at = ?`, [
+      new Date(Date.now() - 24 * 3_600_000).toISOString(),
+    ]);
+    const line = await readLine();
+    expect(line.unexplainedIdle).toBe(true);
+    expect(line.stranded?.bins).toBe(0);
+  });
+
+  it('reads a claimed send as the dispatcher waiting on its own fire', async () => {
+    const binId = await campaignWithReadyStage();
+    await intentFor(binId, `state = 'SENDING', next_attempt_at = ?`, [new Date(Date.now() + 60_000).toISOString()]);
+    const line = await readLine();
+    expect(line.unexplainedIdle).toBe(false);
+    expect(line.because).toMatch(/a fire is being sent \(claim held until \d{4}-/);
+  });
+
+  it('names an intent abandoned at the re-arm ceiling as stranded, and keeps reading it as the fault', async () => {
+    const binId = await campaignWithReadyStage();
+    await intentFor(binId, `state = 'ABANDONED', last_error_kind = 'NO_SHOW', max_attempts = ?, updated_at = ?`, [
+      STRANDED_REARM_CEILING,
+      new Date(Date.now() - 24 * 3_600_000).toISOString(),
+    ]);
+    const line = await readLine();
+    expect(line.executable.readyBins).toBe(1);
+    expect(line.unexplainedIdle).toBe(true);
+    expect(line.stranded?.bins).toBe(1);
+    expect(line.because).toMatch(/That is a fault, not a wait/);
+    expect(line.because).toContain('1 of them nothing in the dispatcher will fire again');
+    expect(line.because).toContain(`re-arm ceiling of ${STRANDED_REARM_CEILING} fires`);
+  });
+
+  it('names a superseded intent as stranded', async () => {
+    const binId = await campaignWithReadyStage();
+    await intentFor(binId, `state = 'SUPERSEDED'`, []);
+    const line = await readLine();
+    expect(line.unexplainedIdle).toBe(true);
+    expect(line.stranded?.bins).toBe(1);
+    expect(line.because).toContain('its only intent at this generation was superseded');
   });
 });

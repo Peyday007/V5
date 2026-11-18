@@ -120,6 +120,22 @@ describe('remote loop dispatches when the line reads unexplained idle', () => {
     expect(dispatchAfterLinePass([], null)).toBe(false);
   });
 
+  it('adds no dispatch pass when every idle bin is stranded, and does when one is not', () => {
+    const allStranded = { ...reading(), stranded: { bins: 1, reasons: ['factory_plan bin b: superseded'] } };
+    expect(allStranded.unexplainedIdle).toBe(true);
+    expect(dispatchAfterLinePass(nothingCreated, allStranded)).toBe(false);
+
+    const oneFireable = {
+      ...reading({ executable: { queued: 0, readyBins: 2, total: 2 } }),
+      stranded: { bins: 1, reasons: ['factory_plan bin b: superseded'] },
+    };
+    expect(dispatchAfterLinePass(nothingCreated, oneFireable)).toBe(true);
+
+    const noneStranded = { ...reading(), stranded: { bins: 0, reasons: [] } };
+    expect(dispatchAfterLinePass(nothingCreated, noneStranded)).toBe(true);
+    // A creation still always dispatches.
+    expect(dispatchAfterLinePass([{ created: ['bin_1'] }], allStranded)).toBe(true);
+  });
 });
 
 /**
@@ -176,6 +192,12 @@ describe('startFactoryRemoteLoop acts on the line reading it was handed', () => 
 
   it('keeps the creation-only rule when the line pass threw', async () => {
     seams.lineThrows = true;
+    await runOneFullPass();
+    expect(seams.dispatches).toEqual([]);
+  });
+
+  it('does not ask the dispatcher when every idle bin is stranded', async () => {
+    seams.reading = { ...reading(), stranded: { bins: 1, reasons: ['factory_plan bin b: superseded'] } };
     await runOneFullPass();
     expect(seams.dispatches).toEqual([]);
   });
