@@ -1474,46 +1474,59 @@ async function scenarioChecks(fixtures: Fixtures, cookie: string): Promise<void>
     // The run, with /healthz asked every 100 ms while it is in flight and a
     // second run sent while it holds the slot.
     // The process has one scenario slot, and Brain's own goal plan reads use
-    // it too. A refusal as busy and retryable (429) before this run starts is
-    // production work holding the slot, not the engine failing: Deploys 1088
-    // and 1090 met it within 251 ms of a boot whose new evidence set plan
-    // reads going. Wait for the slot — a refused run writes no row — and say
-    // how long it took; past 120 s the 429 stands and the check fails.
+    // it too. A refusal as busy and retryable (429) of this run is production
+    // work holding the slot, not the engine failing: Deploys 1088 and 1090 met
+    // it within 251 ms of a boot whose new evidence set plan reads going. Wait
+    // for the slot — a refused run writes no row — and say how long it took;
+    // past 120 s the 429 stands and the check fails.
+    //
+    // The refusal is recognised by what it says, never by how fast it came.
+    // Deploy 44256547569 (d4732f8d) was refused in 480 ms on a loaded machine:
+    // past the 250 ms probe, so the pass took the refusal for a run in flight,
+    // sent the 1,000-evaluation "second" run into the slot the plan read had
+    // just released (200), and failed all three checks against a slot that was
+    // legitimately busy. A pass whose run is refused at any point is discarded
+    // whole and sent again, and the row count is taken at the start of the pass
+    // that counts, so a discarded pass's second run is not read as a leak.
+    const isBusy = (r: Awaited<ReturnType<typeof call>>) =>
+      r.status === 429 && ((r.json ?? {}) as { detail?: { retryable?: unknown } }).detail?.retryable === true;
     let t0 = Date.now();
     let settled = false;
-    let first!: ReturnType<typeof call>;
     let slotWaits = 0;
+    let runsBefore = 0;
+    let ran!: Awaited<ReturnType<typeof call>>;
+    let busy: Awaited<ReturnType<typeof call>> | null = null;
+    let health: number[] = [];
+    let healthFailures = 0;
     const waitStarted = Date.now();
     for (;;) {
+      runsBefore = await runsOf();
       t0 = Date.now();
       settled = false;
       const attempt = call(`${root}/${demoId}/runs`, {
         method: 'POST', cookie, origin: base, body: { options: { evaluations: 50_000 }, label: 'hosted verification' },
       });
-      first = attempt;
       void attempt.finally(() => { settled = true; });
       await new Promise((r) => setTimeout(r, 250));
-      if (!settled) break;
-      const early = await attempt;
-      const retryable = ((early.json ?? {}) as { detail?: { retryable?: unknown } }).detail?.retryable === true;
-      if (early.status !== 429 || !retryable || Date.now() - waitStarted > 120_000) break;
+      // The second run is sent while the first is still in flight.
+      const second = settled ? null : call(`${root}/${demoId}/runs`, { method: 'POST', cookie, origin: base, body: { options: { evaluations: 1_000 } } });
+      health = [];
+      healthFailures = 0;
+      while (!settled && Date.now() - t0 < 60_000) {
+        const h0 = Date.now();
+        const h = await call('/healthz');
+        health.push(Date.now() - h0);
+        if (h.status !== 200) healthFailures++;
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      ran = await attempt;
+      busy = second ? await second : null;
+      if (!isBusy(ran) || Date.now() - waitStarted > 120_000) break;
       slotWaits++;
       await new Promise((r) => setTimeout(r, 3_000));
     }
     if (slotWaits > 0) console.log(`  (the scenario slot was held by Brain's own work: waited ${Math.round((Date.now() - waitStarted) / 1000)} s over ${slotWaits} refusal(s) before the run started)`);
-    const second = settled ? null : call(`${root}/${demoId}/runs`, { method: 'POST', cookie, origin: base, body: { options: { evaluations: 1_000 } } });
-    const health: number[] = [];
-    let healthFailures = 0;
-    while (!settled && Date.now() - t0 < 60_000) {
-      const h0 = Date.now();
-      const h = await call('/healthz');
-      health.push(Date.now() - h0);
-      if (h.status !== 200) healthFailures++;
-      await new Promise((r) => setTimeout(r, 100));
-    }
-    const ran = await first;
     const wall = Date.now() - t0;
-    const busy = second ? await second : null;
     const run = ((ran.json ?? {}) as { run?: Record<string, unknown> }).run ?? {};
     const result = (run['result'] ?? {}) as Record<string, unknown>;
     record(
@@ -1528,7 +1541,7 @@ async function scenarioChecks(fixtures: Fixtures, cookie: string): Promise<void>
       busy?.status === 429 && busyDetail?.retryable === true,
       busy ? `status=${busy.status} retryable=${String(busyDetail?.retryable)}` : 'the first run finished before the second could be sent',
     );
-    const runs = await runsOf();
+    const runs = (await runsOf()) - runsBefore;
     record('and the refused run wrote no row', runs === 1, `runs=${runs}`);
     const maxHealth = health.length ? Math.max(...health) : NaN;
     record(
