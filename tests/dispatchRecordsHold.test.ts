@@ -14,6 +14,8 @@
  *     until exactly its own `dispatch_not_before`, and nothing is fired;
  *   - once the backoff passes, the ordinary path fires it;
  *   - a bin out of attempts gets no intent, and one event names it;
+ *   - and it is turned into a person's decision on that same tick, so the line
+ *     reads its campaign as a PERSON wait rather than as executable work;
  *   - the query that finds them reuses the dispatcher's own fragments.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -32,6 +34,7 @@ import { dispatchTick } from '../server/services/dispatch/loop.ts';
 import { resetNetworkBlockCache } from '../server/services/dispatch/candidates.ts';
 import { getDb } from '../server/db/database.ts';
 import { recordDeliveryProven } from './helpers/deliveryProven.ts';
+import { readLine } from '../server/services/factory/line.ts';
 
 const REPOSITORY = 'peyday007/v5';
 const SECRET = 'DISPATCH_HOLD_TOKEN';
@@ -229,6 +232,45 @@ describe('a claimable bin out of attempts', () => {
     // Once per generation, not once per tick.
     expect(named).toHaveLength(1);
     expect(named[0]!.leaseGeneration).toBe((await getBin(binId))!.leaseGeneration);
+  });
+});
+
+describe('a claimable factory bin out of attempts, as the line reads it', () => {
+  it('was counted as executable work beside a free surface: the recorded failure class', async () => {
+    const binId = await readyFactoryBin('exhausted-line-before');
+    await getDb().run('UPDATE bins SET attempt_count = max_attempts WHERE id = ?', [binId]);
+    // Before the dispatcher has looked at it, the READY row is all there is.
+    const reading = await readLine(new Date(Date.now() + 5_000), { projectId: fixture.project.id });
+    expect(reading.executable.readyBins).toBe(1);
+  });
+
+  it('is a PERSON wait after one dispatch tick, and no longer executable work', async () => {
+    const binId = await readyFactoryBin('exhausted-line');
+    await getDb().run('UPDATE bins SET attempt_count = max_attempts WHERE id = ?', [binId]);
+
+    await dispatchTick({ burst: 4, projectIds: [fixture.project.id] });
+
+    expect(fires).toBe(0);
+    expect(await listDispatchesForBin(binId)).toHaveLength(0);
+    const bin = (await getBin(binId))!;
+    expect(bin.state).toBe('NEEDS_HUMAN');
+    // Nothing reset: the spent budget is the reason a person is asked.
+    expect(bin.attemptCount).toBe(bin.maxAttempts);
+
+    const reading = await readLine(new Date(Date.now() + 5_000), { projectId: fixture.project.id });
+    expect(reading.executable.readyBins).toBe(0);
+    expect(reading.because).not.toMatch(/That is a fault, not a wait/);
+    const campaign = reading.campaigns.find((one) => one.blocked !== null);
+    expect(campaign?.blocked?.wait).toBe('PERSON');
+    expect(campaign?.blocked?.kind).toBe('STAGE_BIN_NEEDS_HUMAN');
+
+    // A later tick does not name it again or fire for it.
+    await dispatchTick({ burst: 4, projectIds: [fixture.project.id] });
+    expect(fires).toBe(0);
+    const named = (await listBinEvents(binId)).filter(
+      (e) => e.eventType === 'DISPATCH_UNROUTED' && e.outcome === 'ATTEMPTS_EXHAUSTED',
+    );
+    expect(named).toHaveLength(1);
   });
 });
 
