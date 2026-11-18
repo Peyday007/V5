@@ -455,6 +455,30 @@ function newestSent(dispatches: Awaited<ReturnType<typeof listDispatchesForBin>>
   return best;
 }
 
+/**
+ * The deferral the bin's newest dispatch intent is waiting out, if it is live.
+ *
+ * The dispatch loop answers a bin it will not fire yet — no claimable work, no
+ * eligible audit session, the refire cool-off, a routing refusal — by putting
+ * its intent back to `PENDING` with the refusal named and a `next_attempt_at`
+ * in the future (`markDispatchDeferred`). Until that instant the bin is not
+ * executable: the loop has recorded why it is waiting and when it will ask
+ * again. Counting it as executable raised "a fault, not a wait" over a wait
+ * Brain had already explained, and the operator turned that into a recurring
+ * operational failure. Only a *live* deferral counts — once it lapses with
+ * nothing having moved, the bin is executable again and the fault returns.
+ */
+export function liveDeferral(
+  dispatches: Awaited<ReturnType<typeof listDispatchesForBin>>,
+  nowIso: string,
+): { kind: string; message: string | null; until: string } | null {
+  // One intent per (bin, generation), listed by generation: the last is newest.
+  const newest = dispatches[dispatches.length - 1];
+  if (!newest || newest.state !== 'PENDING' || !newest.lastErrorKind) return null;
+  if (!(newest.nextAttemptAt > nowIso)) return null;
+  return { kind: newest.lastErrorKind, message: newest.lastError, until: newest.nextAttemptAt };
+}
+
 function nextFor(campaign: FactoryCampaign, bins: LineBin[], blocked: LineCampaign['blocked']): string {
   if (blocked) return blocked.remedy;
   if (campaign.state === 'COMPLETE') return 'A person merges the pull request.';
@@ -510,10 +534,14 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
   let readyBins = 0;
   let leasedBins = 0;
   let arriving = 0;
+  const deferred: { kind: string; until: string }[] = [];
   for (const bin of factoryBins) {
-    const sent = newestSent(await listDispatchesForBin(bin.id));
+    const dispatches = await listDispatchesForBin(bin.id);
+    const sent = newestSent(dispatches);
     const leaseLive = bin.state === 'LEASED' && bin.leaseExpiresAt !== null && bin.leaseExpiresAt > nowIso;
+    const deferral = leaseLive ? null : liveDeferral(dispatches, nowIso);
     if (leaseLive) leasedBins += 1;
+    else if (deferral) deferred.push(deferral);
     else {
       readyBins += 1;
       if (sent && now.getTime() - new Date(sent.sentAt).getTime() < ARRIVAL_GRACE_MS) arriving += 1;
@@ -653,6 +681,13 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
     because = `${leasedBins} stage(s) running and ${arriving} worker(s) arriving.`;
   else if (executableTotal > 0)
     because = `${executableTotal} piece(s) of executable work, but no Factory surface is free to take it.`;
+  else if (deferred.length > 0) {
+    const soonest = deferred.reduce((a, b) => (b.until < a.until ? b : a));
+    const kinds = [...new Set(deferred.map((one) => one.kind))].join(', ');
+    because =
+      `${deferred.length} stage(s) waiting out a recorded dispatch deferral (${kinds}); ` +
+      `the earliest lapses at ${soonest.until}, when the dispatcher asks again.`;
+  }
   else if (queue.length > 0)
     because = `${queue.length} objective(s) queued behind ${workingCampaigns} working campaign(s), the limit being ${policy.maxActive}.`;
   else because = 'Nothing is queued and no campaign has a stage waiting.';
