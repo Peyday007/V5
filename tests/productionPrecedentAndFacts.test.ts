@@ -196,7 +196,7 @@ describe('F2: an observed construction fact prices the arrangement for its own b
     expect(own.some((one) => one.value.tier !== 'UNKNOWN' && one.value.observations >= 1 && one.value.p50 > 100 && one.value.p50 < 1000)).toBe(true);
     // Never pooled onto another population.
     expect(after.filter((one) => one.demand.name === 'Hotel kitchens' && one.origin !== 'REVERSE').every((one) => one.value.tier === 'UNKNOWN')).toBe(true);
-  });
+  }, 90_000); // ~12 s alone (composes the full arrangement library); CI shard load pushed it past the 30 s default on Deploy 44247254003.
 });
 
 describe('F3: facts are asked for, matched and back-filed', () => {
