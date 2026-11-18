@@ -1849,6 +1849,62 @@ export async function listDispatchableBinHeads(
   return heads.filter((head) => !holding.has(head.id));
 }
 
+/** Why a claimable bin is not being fired for, in the words the dispatcher records. */
+export type DispatchHoldReason = 'FIRE_BACKOFF' | 'NO_CLAIMABLE_WORK' | 'ATTEMPTS_EXHAUSTED';
+
+export interface HeldBinHead extends BinHead {
+  holdReason: DispatchHoldReason;
+  /** The fire backoff's end, for `FIRE_BACKOFF`; the column as read otherwise. */
+  dispatchNotBefore: string | null;
+}
+
+/**
+ * Claimable bins the dispatcher will not fire for, with no dispatch intent at
+ * their generation, and why.
+ *
+ * `listDispatchableBinHeads` is the set the dispatcher fires for, and a bin it
+ * leaves out left no row anywhere: no intent, no deferral, no event. The
+ * Factory line then counted a READY factory bin under a fire backoff as
+ * "executable work and a free surface, and nothing is running or arriving.
+ * That is a fault, not a wait." — twice a day, each needing the owner — while
+ * the dispatcher was correctly waiting for the backoff to lapse. The wait was
+ * real; it was only unwritten.
+ *
+ * So this is the complement of that page, asked with the same three fragments
+ * (`DISPATCHABLE_SQL`, `FIREABLE_SQL`, `workReadySql`) rather than a copy of
+ * them, inside `claimableStateSql` so a held, paused or taken bin is not
+ * listed. The reason is the first fragment that refuses: out of attempts (the
+ * only way a claimable bin fails `DISPATCHABLE_SQL`), then the fire backoff,
+ * then no claimable work. An exhausted bin whose `ATTEMPTS_EXHAUSTED` event is
+ * already recorded at this generation is not listed again, so the dispatcher
+ * names it once rather than every tick. Bounded like the dispatchable page.
+ */
+export async function listHeldBinHeads(limit = 200): Promise<HeldBinHead[]> {
+  const now = binNow();
+  const rows = await getDb().all<BinRow & { hold_reason: string }>(
+    `SELECT ${BIN_HEAD_COLUMNS}, dispatch_not_before,
+            CASE WHEN NOT ${DISPATCHABLE_SQL} THEN 'ATTEMPTS_EXHAUSTED'
+                 WHEN NOT ${FIREABLE_SQL} THEN 'FIRE_BACKOFF'
+                 ELSE 'NO_CLAIMABLE_WORK' END AS hold_reason
+       FROM bins
+      WHERE ${claimableStateSql('')}
+        AND NOT (${DISPATCHABLE_SQL} AND ${FIREABLE_SQL} AND ${workReadySql('bins.')})
+        AND NOT EXISTS (SELECT 1 FROM bin_dispatch d
+                         WHERE d.bin_id = bins.id AND d.lease_generation = bins.lease_generation)
+        AND (${DISPATCHABLE_SQL} OR NOT EXISTS (SELECT 1 FROM bin_events e
+              WHERE e.bin_id = bins.id AND e.event_type = 'DISPATCH_UNROUTED'
+                AND e.outcome = 'ATTEMPTS_EXHAUSTED' AND e.lease_generation = bins.lease_generation))
+      ORDER BY priority DESC, created_at, rowid
+      LIMIT ?`,
+    [now, now, now, now, now, now, now, now, Math.min(500, Math.max(1, limit))],
+  );
+  return rows.map((row) => ({
+    ...mapBinHead(row),
+    holdReason: row.hold_reason as DispatchHoldReason,
+    dispatchNotBefore: row.dispatch_not_before,
+  }));
+}
+
 /**
  * Every bin that deserves an activation, in the order a worker would be given
  * them. Bounded: the dispatcher reads a page, not the world.
@@ -4216,12 +4272,18 @@ export const DISPATCH_DEFER_MS = 60_000;
  */
 export async function markDispatchDeferred(
   id: string,
-  input: { refusal: string; message: string; retryAfterMs?: number | null },
+  input: {
+    refusal: string;
+    message: string;
+    retryAfterMs?: number | null;
+    /** An exact instant to ask again at, when the hold has one (a bin's own fire backoff). */
+    nextAttemptAt?: string | null;
+  },
 ): Promise<void> {
   const at = binNow();
   const current = await getDispatch(id);
   if (!current) return;
-  const next = plusMs(at, input.retryAfterMs ?? DISPATCH_DEFER_MS);
+  const next = input.nextAttemptAt ?? plusMs(at, input.retryAfterMs ?? DISPATCH_DEFER_MS);
   await getDb().run(
     `UPDATE bin_dispatch
         SET state = 'PENDING',
