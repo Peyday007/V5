@@ -84,6 +84,7 @@ import {
   transactionParties,
 } from '../../domain/industry.ts';
 import { listProjectFacts, recordClaimFact, type RecordedFact } from '../../repos/construction.ts';
+import { readNonPriceFact } from './nonPriceFacts.ts';
 import { FACT_KEYS, isFactKey, type FactKey } from '../../domain/construction.ts';
 import {
   bootstrapQuestion,
@@ -1023,6 +1024,8 @@ export interface BackfillCandidate {
   newBuyer?: { population: string; opening: PricedOpening; payerClaimId: string };
   key: FactKey;
   amount: number;
+  /** The top of a stated range; absent, the fact is the point `amount`. */
+  high?: number;
   measures: string;
 }
 
@@ -1249,7 +1252,7 @@ async function constructedRoundDecisions(
     const buyer = resolved.buyer;
     const stated = readMoneyFigures(claim.claim, 'USD').filter((one) => one.cents > 0);
     if (!stated.some((one) => one.perUnit)) {
-      out.push(refuse('claim states no positive USD figure per unit'));
+      out.push(nonPriceDecision(claim, buyer, refuse));
       continue;
     }
     const figures = dealLevelFigures(stated);
@@ -1269,6 +1272,27 @@ async function constructedRoundDecisions(
     });
   }
   return out;
+}
+
+/**
+ * A constructed round's claim that states no per-unit price, read for the one
+ * non-price figure the plan reads per buyer (R2, `readNonPriceFact`): what one
+ * of these buyers buys a month, filed as `account_units_per_month` exactly as
+ * stated, only from an OBSERVED claim. Everything else — a close or reply rate,
+ * a market's total over a period, a percentage price cut — is refused naming
+ * why, because the plan reads no fact for it.
+ */
+function nonPriceDecision(claim: ResearchClaim, buyer: IndustryNode, refuse: (reason: string) => BackfillDecision): BackfillDecision {
+  const read = readNonPriceFact(claim.claim);
+  if ('refused' in read) return refuse(`claim states no positive USD figure per unit, and ${read.refused}`);
+  if (claimFactStatus(claim) !== 'OBSERVED') return refuse('claim states a volume per buyer but is not an observation a source reports');
+  return {
+    source: 'CONSTRUCTED_ROUND',
+    claimId: claim.id,
+    candidate: { source: 'CONSTRUCTED_ROUND', claim, buyer, key: read.key, amount: read.low, high: read.high, measures: `${read.measures}, from a constructed arrangement's research: ${claim.claim}` },
+    reason: null,
+    countsAsSkipped: true,
+  };
 }
 
 /**
@@ -1384,7 +1408,7 @@ export async function backfillClaimFacts(projectId: string, batch = BACKFILL_BAT
       key: input.key,
       segment: `map_${buyer.id}`,
       low: input.amount,
-      high: input.amount,
+      high: input.high ?? input.amount,
       status: claimFactStatus(claim),
       measures: input.measures.slice(0, 500),
       sourceTitle: claim.sourceTitle ?? claim.sourcePublisher ?? claim.sourceUrl ?? 'research claim',
