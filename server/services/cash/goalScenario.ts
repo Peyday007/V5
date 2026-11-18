@@ -193,6 +193,13 @@ export interface ModelledOpportunity {
     /** A design Brain's reasoning model invented (S-11): a hypothesis about structure, every input of it unestablished. */
     invented?: boolean;
   };
+  /**
+   * The arrangement's price is the plan's decision variable (`priceAsVariable`):
+   * nothing establishes what its buyers pay, but its supply cost was observed, so
+   * the break-even and the price the target needs are computed and the price is
+   * swept between them as an assumption. Absent on everything else.
+   */
+  priceVariable?: PriceVariable;
 }
 
 /** The id an estimated arrangement takes in a goal model. Never a row. */
@@ -215,6 +222,8 @@ export interface ArrangementInput {
   now?: Date;
   /** Days the goal has left: what an inferred monthly deal volume is scaled to (30 when unstated). */
   daysLeft?: number | null;
+  /** What the goal still needs, in major units: what a price-variable arrangement's required price is read against. */
+  remaining?: number | null;
 }
 
 /**
@@ -300,11 +309,13 @@ export function arrangementTarget(one: ConstructedArrangement, knowledge: Pick<C
  */
 export function estimatedFromArrangement(one: ConstructedArrangement, input: ArrangementInput & { beforeProofCents: number | null }): ModelledOpportunity | null {
   const { p10, p50, p90 } = one.value;
+  if (one.stress.exposure === 'EXCEEDS') return null;
   // A MECHANISM value is a pool of other buyers' prices, not these buyers': it
   // is no price, and a cost or capital swept from its top would be borrowed too
-  // (PRICE-POOL, 2026-11-14). Like UNKNOWN, it stays a research target only.
-  if (one.value.tier === 'UNKNOWN' || one.value.tier === 'MECHANISM' || !(p50 > 0) || !(p90 >= p10)) return null;
-  if (one.stress.exposure === 'EXCEEDS') return null;
+  // (PRICE-POOL, 2026-11-14). Like UNKNOWN, it stays a research target — unless
+  // the supply cost was observed, when the price becomes the plan's decision
+  // variable, bounded by the break-even and the target (`priceAsVariable`).
+  if (one.value.tier === 'UNKNOWN' || one.value.tier === 'MECHANISM' || !(p50 > 0) || !(p90 >= p10)) return priceAsVariable(one, input);
   // Provenance: the claims (or facts, or openings) the reconstruction read, carried on the note.
   const from = one.value.sources?.length ? `: ${one.value.sources.slice(0, 6).join(', ')}${one.value.sources.length > 6 ? ', …' : ''}` : '';
   const ref: SourceRef = { kind: 'OTHER', ref: `arrangement:${one.key}`, note: `${one.value.tier} reconstruction from ${one.value.observations} observation(s) of these buyers${from}` };
@@ -354,6 +365,110 @@ export function estimatedFromArrangement(one: ConstructedArrangement, input: Arr
     inferred: { tier: notEvidence.length ? 'ASSUMED' : (one.value.tier as EvidenceTier), justified: false, p10, p50, p90, observations: one.value.observations },
   };
   return arrangementOpening(one, input, price, high, transfer);
+}
+
+/** Participants one shared run is read at: a run's size is a decision nobody has made, so each is reported, none assumed. */
+export const RUN_SLOT_GRID = [6, 12, 24, 48] as const;
+
+/** One participant count of a shared run and what each participant must pay at it. */
+export interface PriceAtSlots {
+  slots: number;
+  /** The price per slot that only covers the run's observed cost. */
+  breakEven: number;
+  /** The price per slot one run of this many needs to collect the remaining amount over its cost; null when the remaining amount is not known. */
+  forTarget: number | null;
+}
+
+/** An arrangement whose price is the decision variable: what its observed cost and the target require of the price. */
+export interface PriceVariable {
+  arrangementKey: string;
+  label: string;
+  /** The observed fixed cost of one shared run, and the claims it rests on. */
+  runCost: { p10: number; p50: number; p90: number; tier: string; observations: number; sources: string[] };
+  remaining: number | null;
+  /** Per participant count of one run. */
+  prices: PriceAtSlots[];
+  /** The swept price range: the break-even at the most participants to the target price at the fewest. */
+  swept: { low: number; high: number };
+  /** Always the price: the one input that decides whether the arrangement covers its cost and reaches the target. */
+  blocking: 'PRICE';
+  /** Price is assumed and swept; nothing about it is certified. */
+  basis: 'ASSUMPTION';
+  sentence: string;
+}
+
+/**
+ * A pooled arrangement nobody has priced for its own buyers, but whose shared
+ * run's cost was observed (production 2026-11-18: the postcard broker
+ * 2821cce3c372, `fixed_cost_per_run` 4675 from clm_9cf1f15c), as a model
+ * candidate with its price as the decision variable — or null when nothing
+ * prices it and no cost was observed, which stays a research question.
+ *
+ * Before, an UNKNOWN value dropped the arrangement from the goal model, so
+ * the one observed number about it — what a run costs — was never read. A
+ * competent planner treats the unknown price as the variable: the break-even
+ * price (run cost ÷ participants) and the price one run needs for the target
+ * ((remaining + run cost) ÷ participants) are computed at each participant
+ * count (`RUN_SLOT_GRID`), and the price is swept log-uniformly from the
+ * break-even at the most participants to the target price at the fewest. It is
+ * an ASSUMPTION, tier ASSUMED, never justified: the arrangement competes on
+ * what it would contribute at a price research has not found, and certifies
+ * nothing (`inputEvidence`). The price is the blocking unknown, named as such.
+ * Pure.
+ */
+export function priceAsVariable(one: ConstructedArrangement, input: ArrangementInput): ModelledOpportunity | null {
+  const run = one.fixedCost;
+  if (one.design.aggregation !== 'POOLED_BUYERS' || !run || !(run.p50 > 0)) return null;
+  if (one.stress.exposure === 'EXCEEDS') return null;
+  const remaining = input.remaining !== undefined && input.remaining !== null && input.remaining > 0 ? input.remaining : null;
+  const cents = (x: number) => Math.round(x * 100) / 100;
+  const prices: PriceAtSlots[] = RUN_SLOT_GRID.map((slots) => ({
+    slots,
+    breakEven: cents(run.p50 / slots),
+    forTarget: remaining === null ? null : cents((remaining + run.p50) / slots),
+  }));
+  const most = RUN_SLOT_GRID[RUN_SLOT_GRID.length - 1]!;
+  const fewest = RUN_SLOT_GRID[0]!;
+  const low = Math.max(0.01, run.p50 / most);
+  const high = Math.max(low + 0.01, remaining === null ? Math.max(run.p50, run.p90) / fewest : (remaining + run.p50) / fewest);
+  const a = Math.log(low);
+  const b = Math.log(high);
+  const values = Array.from({ length: LOG_GRID_POINTS }, (_, i) => Math.exp(a + ((i + 0.5) / LOG_GRID_POINTS) * (b - a)));
+  const from = run.sources.length ? ` (${run.sources.slice(0, 6).join(', ')})` : '';
+  const money = (x: number) => `${input.currency === 'USD' ? '$' : `${input.currency} `}${Math.round(x).toLocaleString('en-US')}`;
+  const ref = prices.find((p) => p.slots === 12) ?? prices[0]!;
+  const sentence =
+    `Price is the blocking assumption: nothing establishes what these buyers pay. One shared run costs ${money(run.p50)} (${run.tier.toLowerCase()}, ${run.observations} obs.${from}), ` +
+    `so ${prices.map((p) => `${p.slots} slots need ≥ ${money(p.breakEven)}`).join(', ')} per slot just to cover the run` +
+    (remaining === null
+      ? '.'
+      : `; to collect the ${money(remaining)} still needed from one run, ${ref.slots} slots need ${money(ref.forTarget!)} each (${prices.filter((p) => p !== ref).map((p) => `${p.slots}: ${money(p.forTarget!)}`).join(', ')}).`) +
+    ` The price is swept ${money(low)}–${money(high)} as an assumption; nothing is certified until a buyer's price is.`;
+  const price: ModelInput = {
+    value: null,
+    low,
+    high,
+    provenance: 'ASSUMPTION',
+    source: { kind: 'OTHER', ref: `arrangement:${one.key}`, note: `price as the decision variable over an observed run cost${from}` },
+    note: sentence,
+    distribution: { kind: 'EMPIRICAL', values },
+    inferred: { tier: 'ASSUMED', justified: false, p10: low, p50: Math.sqrt(low * high), p90: high, observations: 0 },
+  };
+  const opening = arrangementOpening(one, input, price, high, transferOf(one));
+  return {
+    ...opening,
+    priceVariable: {
+      arrangementKey: one.key,
+      label: one.label,
+      runCost: { p10: run.p10, p50: run.p50, p90: run.p90, tier: run.tier, observations: run.observations, sources: [...run.sources] },
+      remaining,
+      prices,
+      swept: { low: cents(low), high: cents(high) },
+      blocking: 'PRICE',
+      basis: 'ASSUMPTION',
+      sentence,
+    },
+  };
 }
 
 /**
@@ -832,7 +947,7 @@ export interface ArrangementPick {
   population: string;
   screen: number;
   upside: number;
-  /** `STRUCTURE:<base>` or `PAID:<funding>/<repeat>` (the strongest of its kind), `UPSIDE`, or `SCREEN`. */
+  /** `STRUCTURE:<base>` or `PAID:<funding>/<repeat>` (the strongest of its kind), `PRICE_VARIABLE`, `UPSIDE`, or `SCREEN`. */
   slot: string;
   basis: string;
 }
@@ -915,6 +1030,13 @@ export function selectEstimatedArrangements(
     conversions.set(arrangement.key, one);
     let value: Value = arrangement.value;
     let screenValue: Value | null = null;
+    if (one?.priceVariable) {
+      // Price is the decision variable: the screen reads it at its break-even floor, never inside the
+      // range (invariant 39), and the upside at the price the target needs.
+      const inf = one.price.inferred!;
+      value = { tier: 'ASSUMED', p10: inf.p10, p50: inf.p50, p90: inf.p90, observations: 0 };
+      screenValue = { ...value, p50: inf.p10 };
+    }
     if (!one) {
       /*
        * Nothing prices it for its own buyers (UNKNOWN, or a MECHANISM pool
@@ -971,6 +1093,10 @@ export function selectEstimatedArrangements(
     perPopulation.set(r.population, (perPopulation.get(r.population) ?? 0) + 1);
     return true;
   };
+  // 1b. The strongest arrangement whose price is the decision variable over an observed supply cost: the
+  // only kind holding an observed number about itself, so its break-even is always read by the engine.
+  const variable = candidates.find((r) => r.one.priceVariable);
+  if (variable) take(variable, 'PRICE_VARIABLE');
   // 2. One design per kind first, leaving the upside slots free.
   const diversityRoom = Math.max(0, limit - UPSIDE_SLOTS);
   const kinds: Array<[string, (a: ConstructedArrangement) => string]> = [
@@ -1021,7 +1147,7 @@ export function selectEstimatedArrangements(
     conversions,
     selection: {
       considered: arrangements.length,
-      picked: picked.map((r) => ({ arrangementKey: r.arrangement.key, label: r.arrangement.label, population: r.population, screen: r.screen.value, upside: r.screen.upside, slot: taken.get(r)!, basis: r.screen.basis })),
+      picked: picked.map((r) => ({ arrangementKey: r.arrangement.key, label: r.arrangement.label, population: r.population, screen: r.screen.value, upside: r.screen.upside, slot: taken.get(r)!, basis: r.one.priceVariable ? `${r.screen.basis}. ${r.one.priceVariable.sentence}` : r.screen.basis })),
       cut: cut.slice(0, CUT_RECORDED),
       cutCount: cut.length,
     },

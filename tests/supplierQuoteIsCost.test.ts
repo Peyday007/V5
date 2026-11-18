@@ -272,14 +272,22 @@ describe('D4: a pooled arrangement’s researched run cost reaches the goal mode
     return made;
   };
 
-  it('with the run cost alone the value stays unknown and the arrangement stays out of the model (no manufactured score)', async () => {
+  it('with the run cost alone the value stays unknown, and the arrangement enters the model with price as its variable (P5): break-even read, price assumed, nothing certified', async () => {
     const { orchestrationId, fragmentId } = await openArrangementRound();
     await accepted(orchestrationId, fragmentId, [OPPIZI]);
     await backfillClaimFacts(projectId);
     const arrangement = await composeIt();
     expect(arrangement.fixedCost?.p50).toBeCloseTo(4675, 3);
     expect(arrangement.value.tier).toBe('UNKNOWN');
-    expect(estimatedFromArrangement(arrangement, { projectId, currency: 'USD', daysLeft: 22, beforeProofCents: null })).toBeNull();
+    const modelled = estimatedFromArrangement(arrangement, { projectId, currency: 'USD', daysLeft: 22, beforeProofCents: null, remaining: 10_000 })!;
+    expect(modelled).not.toBeNull();
+    expect(modelled.price).toMatchObject({ value: null, provenance: 'ASSUMPTION' });
+    expect(modelled.price.inferred).toMatchObject({ tier: 'ASSUMED', justified: false });
+    expect(inputEvidence(modelled.price, 'price').establishes).toBe(false);
+    const twelve = modelled.priceVariable!.prices.find((p) => p.slots === 12)!;
+    expect(twelve.breakEven).toBeCloseTo(4675 / 12, 1);
+    expect(twelve.forTarget).toBeCloseTo((10_000 + 4675) / 12, 1);
+    expect(modelled.priceVariable!.sentence).toMatch(/^Price is the blocking assumption/);
   });
 
   it('with a researched slot price, the per-slot cost is the run cost shared by an unestablished number of buyers, citing the run-cost claim', async () => {

@@ -126,7 +126,9 @@ describe('distinct plan set (GOAL-23)', () => {
     );
     expect(set.attempts).toEqual({ researched: 3, authorized: 2, executed: 1 });
     expect(set.collections.observed).toBe(1_500);
-    expect(set.collections.modelledP50).toBe(54_000);
+    // The plans are alternatives: the set reports its leading plan's median, never their sum (P5).
+    expect(set.collections.modelledP50).toBe(18_000);
+    expect(set.collections.modelledOf).toBe(set.plans[0]!.id);
   });
 
   it('shows which plans survive a shared channel or supplier failing', () => {

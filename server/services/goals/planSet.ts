@@ -253,7 +253,15 @@ export interface PlanSet {
   doubleCounted: { kind: 'CUSTOMERS' | 'CASH'; key: string; candidates: string[] }[];
   resilience: Resilience[];
   attempts: { researched: number; authorized: number; executed: number };
-  collections: { observed: number; modelledP50: number };
+  /**
+   * Observed: money the ledger holds, once per plan. Modelled: ONE plan's median
+   * (`modelledOf`), never a sum — the plans are alternatives to one another, and
+   * adding their medians counted the same buyers and the same goal dozens of
+   * times (production 2026-11-18: 82 alternatives summed to 38,735,256 on a
+   * $10,000 goal). The leading plan's here; the reading puts the adopted
+   * candidate's in its place (`composeGoalReadings`).
+   */
+  collections: { observed: number; modelledP50: number; modelledOf: string | null };
   confidence: PublishedConfidence;
   /** The goal's breadth requirement, when it states one, and whether accepted distinct plans meet it. */
   breadth: { required: number | null; met: boolean | null };
@@ -692,7 +700,9 @@ export function buildPlanSet(candidates: readonly PlanCandidate[], condition: Ac
 
   const accepted = plans.filter((p) => p.acceptance === 'ACCEPTED').length;
   const required = condition.breadth ?? null;
-  const modelledP50 = plans.reduce((s, p) => s + (p.modelled?.p50 ?? 0), 0);
+  // The plans are alternatives: the set's modelled median is its leading modelled plan's, never their sum.
+  const leading = plans.find((p) => p.modelled !== null) ?? null;
+  const modelledP50 = leading?.modelled?.p50 ?? 0;
   return {
     amount: condition.amount,
     candidates: candidates.length,
@@ -708,7 +718,7 @@ export function buildPlanSet(candidates: readonly PlanCandidate[], condition: Ac
       authorized: plans.filter((p) => p.attempts.authorized).length,
       executed: plans.filter((p) => p.attempts.executed).length,
     },
-    collections: { observed: plans.reduce((s, p) => s + p.observedCollections, 0), modelledP50 },
+    collections: { observed: plans.reduce((s, p) => s + p.observedCollections, 0), modelledP50, modelledOf: leading?.id ?? null },
     confidence: calibration?.calibrated
       ? { value: null, withheld: true, reason: 'a set-level probability needs the plans’ joint distribution; read each plan’s own' }
       : { value: null, withheld: true, reason: 'withheld: the model is not calibrated against resolved outcomes' },
