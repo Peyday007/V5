@@ -28,6 +28,14 @@
  *
  * Every bar stays: Coast Guard 2026-23047 (enforced 2026-11-11, published
  * 2026-11-12) is excluded by v6 and v7 alike.
+ *
+ * Coast Guard 2026-23230 is a recorded miss, but no record Brain holds states
+ * its DATES text, so no fixture here claims one. What is recorded (its number,
+ * title, publication day and agency) is used as recorded, and the test asserts
+ * only what holds whatever date production states: v7 keeps it exactly when
+ * that date falls in the rule's window, under the Coast Guard. The kept
+ * notification of enforcement among the misses is a synthetic number
+ * (2026-92000) in 2026-23047's established shape, claiming no production date.
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -129,9 +137,23 @@ const acf79 = stored(
   apiRow('2026-23279', '2026-11-16', 'Restoring Flexibility To Support Head Start Program Access', [HHS, ACF_AGENCY], { effective_on: '2026-11-16' }),
   late('2026-11-16'),
 );
-/** Coast Guard 2026-23230: a notification of enforcement in 2026-23047's shape; the DATES text is illustrative. */
-const miami = stored(
-  apiRow('2026-23230', '2026-11-16', 'Special Local Regulation: Marine Events Within the Captain of the Port Miami, Seminole Hard Rock Winterfest Holiday Boat Parade', [DHS, USCG_AGENCY], {
+/**
+ * Coast Guard 2026-23230 as recorded: number, title, publication day and agency.
+ * Its DATES text is not in any record, so it is a parameter: `miami(dates)`
+ * builds the row for whatever DATES text production holds.
+ */
+const MIAMI_TITLE = 'Special Local Regulation: Marine Events Within the Captain of the Port Miami, Seminole Hard Rock Winterfest Holiday Boat Parade';
+const miami = (dates: string) => stored(
+  apiRow('2026-23230', '2026-11-16', MIAMI_TITLE, [DHS, USCG_AGENCY], { action: 'Notification of enforcement of regulation.', dates }),
+  late('2026-11-16'),
+);
+/**
+ * A notification of enforcement in 2026-23047's established shape (effective_on
+ * null, date only in DATES), enforced after its publication (synthetic number
+ * 2026-92000: no production shape or date claimed).
+ */
+const enforcement = stored(
+  apiRow('2026-92000', '2026-11-16', 'Synthetic Coast Guard notification of enforcement', [DHS, USCG_AGENCY], {
     action: 'Notification of enforcement of regulation.',
     dates: 'The regulations in 33 CFR 100.1101 will be enforced from 5 p.m. through 8 p.m. on December 13, 2026.',
   }),
@@ -225,12 +247,12 @@ describe('the connector completes a bare stored correction from its own number',
 
 describe('RULE_EFFECTIVE_SOON@6 misses the recorded class; @7 keeps every true miss', async () => {
   const ap1000Completed = await completedAp1000();
-  const records = [fcc40, uscg27, acf79, miami, fcc41, faa73, faa72, faa72ParentOnly, ap1000Bare, ap1000Completed, datesOnlyRule, correctionOfDatesOnly, fleetWeek];
+  const records = [fcc40, uscg27, acf79, enforcement, fcc41, faa73, faa72, faa72ParentOnly, ap1000Bare, ap1000Completed, datesOnlyRule, correctionOfDatesOnly, fleetWeek];
   const expected: [DetectorRecord, string][] = [
     [fcc40, 'agency:federal communications commission'],
     [uscg27, 'agency:coast guard'],
     [acf79, 'agency:children and families administration'],
-    [miami, 'agency:coast guard'],
+    [enforcement, 'agency:coast guard'],
     [fcc41, 'agency:federal communications commission'],
     [faa73, 'agency:federal aviation administration'],
     [faa72, 'agency:federal aviation administration'],
@@ -277,6 +299,32 @@ describe('RULE_EFFECTIVE_SOON@6 misses the recorded class; @7 keeps every true m
   it('2026-23047 (enforced the day before publication) stays excluded by v6 and v7', () => {
     expect(members(RULE_EFFECTIVE_SOON_V6.detect(records, now))).not.toContain(fleetWeek.id);
     expect(members(RULE_EFFECTIVE_SOON_V7.detect(records, now))).not.toContain(fleetWeek.id);
+  });
+});
+
+describe('Coast Guard 2026-23230: decided by whatever date its DATES text states, never by a date assumed here', () => {
+  const on = (day: string) => `The regulations in 33 CFR 100.1101 will be enforced from 5 p.m. through 8 p.m. on ${day}.`;
+  const cases: [string, string, boolean][] = [
+    ['before publication', 'November 15, 2026', false],
+    ['on the publication day', 'November 16, 2026', true],
+    ['four weeks after', 'December 14, 2026', true],
+    ['eight weeks after', 'January 11, 2027', true],
+    ['more than eight weeks after', 'January 20, 2027', false],
+  ];
+  for (const [label, day, kept] of cases) {
+    it(`a date ${label} is ${kept ? 'kept under the Coast Guard' : 'not kept'} by v7, as by v6`, () => {
+      const record = miami(on(day));
+      const v7 = RULE_EFFECTIVE_SOON_V7.detect([record], now);
+      expect(members(v7).includes(record.id)).toBe(kept);
+      expect(members(RULE_EFFECTIVE_SOON_V6.detect([record], now)).includes(record.id)).toBe(kept);
+      if (kept) expect(groupOf(v7, record.id)).toBe('agency:coast guard');
+    });
+  }
+
+  it('with no DATES text it states no date, and is not kept', () => {
+    const record = miami('');
+    expect(record.body ?? '').not.toMatch(/Stated effective/);
+    expect(members(RULE_EFFECTIVE_SOON_V7.detect([record], now))).toEqual([]);
   });
 });
 
