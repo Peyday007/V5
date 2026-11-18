@@ -194,3 +194,11 @@ Launch configuration, updated:
   - runpod-disconnect 44354793244 stops the supervisor restarting it.
   - Account $106.40, spending $0/h. Run spend so far $7.38.
 - **Next:** after the Postgres rerun passes → Deploy → once #1100 is live, runpod-connect. That reuses the same launch window and budget, so the $66 cap is not re-armed, then yield is verified.
+
+## 17:27Z: release ownership handed to session_01QF5Tk5PWzBxNPixWvFTPEd
+- **My mistake:** runpod-stop came before runpod-disconnect. The supervisor restarted pod qe5u6nhdv69ofl 23 s later, at 17:05:38Z.
+  - It ran until the release owner's runpod-stop 44358481650 at 17:25:43Z, about $1.20.
+  - Balance $105.21. Run spend about $8.57.
+  - Their fix in progress makes runpod-stop set MODE=off first.
+- **Postgres rerun:** 44341948043 passed. **Deploy 44357471351** (#1100) is in progress, run by the release owner.
+- **Resume:** runpod-start (not connect), which keeps the fixed window 15:01:34Z–03:31:34Z and the $66 cap.
