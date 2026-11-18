@@ -180,3 +180,8 @@ Launch configuration, updated:
   - Pressure NORMAL.
 - **Repair started:** agent on claude/gpu-lease-heartbeat (audit lease expiry).
 - **Cap:** $66, fixed window (#1089). Expected end about 03:10Z on 11-19, or earlier at the cap.
+
+## 16:00Z
+- **#1100 merged** (c0d64efb): free-lane jobs renew their lease every 5 min while running. The cause of the "lease no longer current" audit refusals was a fixed 20 min lease with no renewal.
+- **Deploy 44341970245** dispatched. The run continues across the restart; the budget is rebuilt from the database.
+- **Run check** scheduled for 17:00Z (trig_0176oTkcHizot2JDx6bdVUPc).
