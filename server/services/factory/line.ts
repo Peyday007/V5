@@ -46,7 +46,7 @@ import {
   type AdmissionPolicy,
   type FactoryQueueEntry,
 } from '../../repos/factoryLine.ts';
-import { listBins, listDispatchesForBin } from '../../repos/bins.ts';
+import { dispatchReadiness, listBins, listDispatchesForBin } from '../../repos/bins.ts';
 import { approveObjective } from './contract.ts';
 import { campaignSpecFor } from './remote.ts';
 import { INITIAL_LANE_TARGET } from './scheduler.ts';
@@ -570,14 +570,27 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
   let leasedBins = 0;
   let arriving = 0;
   const deferred: { kind: string; until: string }[] = [];
+  /*
+   * Executable is the dispatcher's own predicate, not "READY and not deferred".
+   * A bin it will never fire for — under a fire backoff, out of attempts, held
+   * by a goal, or with nothing a session could start — earned no intent and so
+   * no deferral, and counting it raised "a fault, not a wait" over a wait the
+   * dispatcher was keeping correctly. Asked once for the page, with the same
+   * fragments the dispatcher and the engineering watchdog use.
+   */
+  const readiness = await dispatchReadiness(factoryBins.map((bin) => bin.id));
+  const held: { kind: string; until: string | null }[] = [];
   for (const bin of factoryBins) {
     const dispatches = await listDispatchesForBin(bin.id);
     const sent = newestSent(dispatches);
     const leaseLive = bin.state === 'LEASED' && bin.leaseExpiresAt !== null && bin.leaseExpiresAt > nowIso;
     const deferral = leaseLive ? null : liveDeferral(dispatches, nowIso);
+    const ready = readiness.get(bin.id) ?? 'EXECUTABLE';
     if (leaseLive) leasedBins += 1;
     else if (deferral) deferred.push(deferral);
-    else {
+    else if (ready !== 'EXECUTABLE') {
+      held.push({ kind: ready, until: ready === 'FIRE_BACKOFF' ? bin.dispatchNotBefore : null });
+    } else {
       readyBins += 1;
       if (sent && now.getTime() - new Date(sent.sentAt).getTime() < ARRIVAL_GRACE_MS) arriving += 1;
     }
@@ -722,6 +735,13 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
     because =
       `${deferred.length} stage(s) waiting out a recorded dispatch deferral (${kinds}); ` +
       `the earliest lapses at ${soonest.until}, when the dispatcher asks again.`;
+  } else if (held.length > 0) {
+    const kinds = [...new Set(held.map((one) => one.kind))].join(', ');
+    const ends = held.map((one) => one.until).filter((until): until is string => until !== null);
+    because =
+      `${held.length} stage(s) the dispatcher is holding by its own predicate (${kinds}), so none is ` +
+      'executable now' +
+      (ends.length > 0 ? `; the earliest fire backoff ends at ${ends.reduce((a, b) => (b < a ? b : a))}.` : '.');
   }
   else if (queue.length > 0)
     because = `${queue.length} objective(s) queued behind ${workingCampaigns} working campaign(s), the limit being ${policy.maxActive}.`;

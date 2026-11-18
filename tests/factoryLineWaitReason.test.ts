@@ -224,3 +224,73 @@ describe('a deferred READY stage is a wait, not idle work', () => {
     expect(line.unexplainedIdle).toBe(true);
   });
 });
+
+/*
+ * A READY stage the dispatcher will never fire for earned no intent and so no
+ * deferral, and the line counted it as executable work beside a free surface —
+ * the recorded fault — while the dispatcher was correctly holding it by its own
+ * predicate (`DISPATCHABLE_SQL AND FIREABLE_SQL AND workReadySql`). These are
+ * that failure class: each failed before the line asked the dispatcher's own
+ * question.
+ */
+describe('a READY stage the dispatcher holds by its own predicate is a wait, not idle work', () => {
+  it('reads a stage under a fire backoff as a named wait with its end', async () => {
+    const binId = await readyStage('backoff');
+    const until = new Date(Date.now() + 20 * 60_000).toISOString();
+    await getDb().run('UPDATE bins SET dispatch_not_before = ? WHERE id = ?', [until, binId]);
+    const line = await reading();
+    expect(line.capacity.freeSurfaces).toBe(1);
+    expect(line.executable.readyBins).toBe(0);
+    expect(line.unexplainedIdle).toBe(false);
+    expect(line.because).toMatch(/FIRE_BACKOFF/);
+    expect(line.because).toContain(until);
+    expect(line.because).not.toMatch(/fault, not a wait/);
+  });
+
+  it('reads a stage out of attempts as held, not executable', async () => {
+    const binId = await readyStage('exhausted');
+    await getDb().run('UPDATE bins SET attempt_count = max_attempts WHERE id = ?', [binId]);
+    const line = await reading();
+    expect(line.executable.readyBins).toBe(0);
+    expect(line.unexplainedIdle).toBe(false);
+    expect(line.because).toMatch(/ATTEMPTS_EXHAUSTED/);
+    expect(line.because).not.toMatch(/fault, not a wait/);
+  });
+
+  it('counts a stage again once its fire backoff has passed', async () => {
+    const binId = await readyStage('backoff-passed');
+    await getDb().run('UPDATE bins SET dispatch_not_before = ? WHERE id = ?', [
+      new Date(Date.now() - 60_000).toISOString(),
+      binId,
+    ]);
+    const line = await reading();
+    expect(line.executable.readyBins).toBe(1);
+    expect(line.unexplainedIdle).toBe(true);
+    expect(line.because).toMatch(/That is a fault, not a wait\./);
+  });
+
+  it('keeps the fault when one stage is held and another is executable', async () => {
+    const held = await readyStage('one-held');
+    await getDb().run('UPDATE bins SET dispatch_not_before = ? WHERE id = ?', [
+      new Date(Date.now() + 20 * 60_000).toISOString(),
+      held,
+    ]);
+    await readyStage('one-free');
+    const line = await reading();
+    expect(line.executable.readyBins).toBe(1);
+    expect(line.unexplainedIdle).toBe(true);
+  });
+
+  it('asks the dispatcher’s fragments rather than restating them', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const source = await readFile(new URL('../server/repos/bins.ts', import.meta.url), 'utf8');
+    const start = source.indexOf('export async function dispatchReadiness');
+    const body = source.slice(start, source.indexOf('\n}\n', start));
+    expect(body).toContain('${DISPATCHABLE_SQL}');
+    expect(body).toContain('${FIREABLE_SQL}');
+    expect(body).toContain("${workReadySql('bins.')}");
+    expect(body).toContain("${claimableStateSql('')}");
+    expect(body).not.toMatch(/attempt_count\s*</);
+    expect(body).not.toMatch(/dispatch_not_before\s*(<=|IS NULL)/);
+  });
+});

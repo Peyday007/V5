@@ -1650,6 +1650,55 @@ export const DISPATCHABLE_SQL = `(${claimableStateSql('')} AND attempt_count < m
  */
 export const FIREABLE_SQL = '(dispatch_not_before IS NULL OR dispatch_not_before <= ?)';
 
+/** Why the dispatcher would or would not fire for a bin, asked with its own predicate. */
+export type DispatchReadiness =
+  | 'EXECUTABLE'
+  | 'NOT_CLAIMABLE'
+  | 'ATTEMPTS_EXHAUSTED'
+  | 'FIRE_BACKOFF'
+  | 'NO_CLAIMABLE_WORK';
+
+/**
+ * For each of these bins, whether the dispatcher would fire for it now and, if
+ * not, the first of its own fragments that refuses.
+ *
+ * The Factory line counted every READY or lapsed-lease factory bin without a
+ * live deferral as executable work, while the dispatcher only ever fires for
+ * bins passing `DISPATCHABLE_SQL AND FIREABLE_SQL AND workReadySql` — so a bin
+ * under a fire backoff, out of attempts, held by a paused goal or with nothing
+ * claimable read as "executable work and a free surface, and nothing is running
+ * or arriving. That is a fault, not a wait." while the dispatcher was correctly
+ * waiting. The engineering watchdog already counts with that predicate; this is
+ * the same predicate for a reader that holds bin rows rather than a count, so
+ * there is still one definition of "executable" and no copy of it.
+ *
+ * Composed from the fragments, never restating them. The order is the
+ * dispatcher's: not claimable at all (a live lease, a goal hold, a purpose the
+ * mode refuses), then out of attempts, then the fire backoff, then no work a
+ * session could start.
+ */
+export async function dispatchReadiness(binIds: string[]): Promise<Map<string, DispatchReadiness>> {
+  const out = new Map<string, DispatchReadiness>();
+  if (binIds.length === 0) return out;
+  const now = binNow();
+  for (let start = 0; start < binIds.length; start += 200) {
+    const page = binIds.slice(start, start + 200);
+    const rows = await getDb().all<{ id: string; readiness: string }>(
+      `SELECT id,
+              CASE WHEN NOT ${claimableStateSql('')} THEN 'NOT_CLAIMABLE'
+                   WHEN NOT ${DISPATCHABLE_SQL} THEN 'ATTEMPTS_EXHAUSTED'
+                   WHEN NOT ${FIREABLE_SQL} THEN 'FIRE_BACKOFF'
+                   WHEN NOT ${workReadySql('bins.')} THEN 'NO_CLAIMABLE_WORK'
+                   ELSE 'EXECUTABLE' END AS readiness
+         FROM bins
+        WHERE id IN (${page.map(() => '?').join(', ')})`,
+      [now, now, now, now, now, ...page],
+    );
+    for (const row of rows) out.set(row.id, row.readiness as DispatchReadiness);
+  }
+  return out;
+}
+
 /**
  * Whether a bin has work a fired session could actually start, right now.
  *
