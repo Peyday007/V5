@@ -392,10 +392,10 @@ export interface AcquisitionDeps {
 const ACCEPT_JSON = { accept: 'application/json' };
 
 /** A source's own completion of its parsed items (`FeedSource.complete`); never fails the pull — a source without one, or one that throws, keeps what it parsed. */
-async function completeParsed(source: FeedSource, items: FeedItem[], getJson: (url: string) => Promise<unknown>): Promise<FeedItem[]> {
+async function completeParsed(source: FeedSource, items: FeedItem[], getJson: (url: string) => Promise<unknown>, storedFrom = items.length): Promise<FeedItem[]> {
   if (!source.complete || items.length === 0) return items;
   try {
-    return await source.complete(items, getJson);
+    return await source.complete(items, getJson, undefined, storedFrom);
   } catch {
     return items;
   }
@@ -448,7 +448,7 @@ async function completePull(source: FeedSource, parsed: FeedItem[], now: Date, g
   } catch (error) {
     console.warn(`[feeds] ${source.id}: stored items unreadable for completion: ${String((error as Error)?.message ?? error)}`);
   }
-  const completed = await completeParsed(source, [...parsed, ...pending], getJson);
+  const completed = await completeParsed(source, [...parsed, ...pending], getJson, parsed.length);
   if (completed.length !== parsed.length + pending.length) return completeParsed(source, parsed, getJson);
   const changed = completed.slice(parsed.length).filter((item, i) => (item.body ?? null) !== (pending[i]!.body ?? null));
   if (changed.length > 0) {
