@@ -4041,6 +4041,13 @@ export const DISPATCH_CLAIM_MS = 120_000;
  * being a candidate again once its deadline passes — so recovery needs no
  * sweeper and no process staying alive.
  */
+/**
+ * The intent rows `claimDispatchIntent` may take: the dispatcher's whole
+ * per-bin "one in flight" rule, in one place. One `?`, bound to now.
+ */
+const CLAIMABLE_INTENT_SQL = (prefix: string): string =>
+  `((${prefix}state = 'PENDING' OR ${prefix}state = 'SENDING') AND ${prefix}next_attempt_at <= ?)`;
+
 export async function claimDispatchIntent(): Promise<BinDispatch | null> {
   const db = getDb();
   const now = binNow();
@@ -4053,7 +4060,7 @@ export async function claimDispatchIntent(): Promise<BinDispatch | null> {
      * waited a tick; the bin's own priority now leads, time breaks ties.
      */
     `SELECT d.* FROM bin_dispatch d LEFT JOIN bins b ON b.id = d.bin_id
-      WHERE (d.state = 'PENDING' OR d.state = 'SENDING') AND d.next_attempt_at <= ?
+      WHERE ${CLAIMABLE_INTENT_SQL('d.')}
       ORDER BY COALESCE(b.priority, 0) DESC, d.next_attempt_at, d.rowid LIMIT 10`,
     [now],
   );
@@ -4073,6 +4080,50 @@ export async function claimDispatchIntent(): Promise<BinDispatch | null> {
     }
   }
   return null;
+}
+
+/**
+ * Why the dispatcher's per-bin "one in flight" rule is holding this bin back
+ * at its current generation, or null when it is not.
+ *
+ * An intent is one row per `(bin_id, lease_generation)`, and the dispatcher
+ * fires a bin only by creating that row (when none exists) or by claiming it
+ * (`CLAIMABLE_INTENT_SQL`). Every other state of that row is a hold on that one
+ * key: a claim mid-call (`SENDING`), a fire whose worker may still arrive until
+ * the no-show reopen (`SENT`), a deferral or failure backoff (`PENDING` with a
+ * future `next_attempt_at`, with or without an error kind), an exhausted intent
+ * waiting on revival or a decision (`ABANDONED`), or one replaced by a newer
+ * dispatch (`SUPERSEDED`). A reader that copies only some of these — a deferred
+ * `PENDING` and `dispatch_not_before`, as the Factory line did — reads the rest
+ * as "executable work, free surface, nothing running: a fault" over a
+ * dispatcher that is correctly waiting. So the rule is asked here, of the same
+ * predicate the claim uses, and nowhere else.
+ */
+export async function dispatchIntentHold(
+  bin: Pick<Bin, 'id' | 'leaseGeneration'>,
+  now: string = binNow(),
+): Promise<string | null> {
+  const intent = await getDb().get<BinDispatchRow & { claimable: number | null }>(
+    `SELECT d.*, CASE WHEN ${CLAIMABLE_INTENT_SQL('d.')} THEN 1 ELSE 0 END AS claimable
+       FROM bin_dispatch d
+      WHERE d.bin_id = ? AND d.lease_generation = ?
+      ORDER BY d.rowid DESC LIMIT 1`,
+    [now, bin.id, bin.leaseGeneration],
+  );
+  if (!intent || Number(intent.claimable) === 1) return null;
+  const why = intent.last_error_kind ? ` (${intent.last_error_kind})` : '';
+  switch (intent.state) {
+    case 'SENDING':
+      return `a fire is being sent; the claim is held until ${intent.next_attempt_at}`;
+    case 'SENT':
+      return `fired at ${intent.sent_at ?? intent.updated_at}; one session in flight for this bin until it arrives or is reopened as a no-show`;
+    case 'PENDING':
+      return `dispatch deferred${why} until ${intent.next_attempt_at}`;
+    case 'ABANDONED':
+      return `dispatch abandoned after ${intent.attempt_count} of ${intent.max_attempts} attempt(s)${why}; it waits on revival or a decision`;
+    default:
+      return `dispatch ${String(intent.state).toLowerCase()} at generation ${bin.leaseGeneration}`;
+  }
 }
 
 /**
