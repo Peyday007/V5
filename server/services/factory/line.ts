@@ -48,6 +48,7 @@ import {
 } from '../../repos/factoryLine.ts';
 import {
   ABANDONED_REVIVE_AFTER_MS,
+  binNeedsWeb,
   binPurposeAdmits,
   isDispatchable,
   listBins,
@@ -58,7 +59,7 @@ import { approveObjective } from './contract.ts';
 import { campaignSpecFor } from './remote.ts';
 import { INITIAL_LANE_TARGET } from './scheduler.ts';
 import { fleetSnapshot, sharedFleetSnapshot } from '../dispatch/candidates.ts';
-import { isFactorySurface, surfaceIneligibility } from '../dispatch/router.ts';
+import { isFactorySurface, routeBin, surfaceIneligibility } from '../dispatch/router.ts';
 
 /** The ledger kinds this module writes. */
 export const LINE_EVENT_KINDS = {
@@ -512,6 +513,7 @@ async function dispatcherWait(
   bin: Bin,
   dispatches: BinDispatches,
   nowIso: string,
+  fleet: FleetReading,
 ): Promise<string | null> {
   if (bin.heldByWorkstreamId !== null) return `held by goal ${bin.heldByWorkstreamId}`;
   if (bin.attemptCount >= bin.maxAttempts) {
@@ -543,7 +545,43 @@ async function dispatcherWait(
       return `its intent gave up (${intent.lastErrorKind ?? 'unknown'}); the dispatcher re-arms it after ${rearmAt}`;
     }
   }
-  return null;
+  return routerWait(bin, fleet, nowIso);
+}
+
+type FleetReading = Awaited<ReturnType<typeof fleetSnapshot>>;
+
+/**
+ * Whether the dispatcher's router would place this bin on a surface now, asked
+ * of the router itself over the snapshot this reading already holds.
+ *
+ * "A free surface" is a fleet-wide count; whether *this* bin may use one is
+ * the router's question — the fleet and Factory in-flight ceilings, the
+ * project, family, repository, capability, web and connector filters, one
+ * activation per surface up to its target. The line used to learn that answer
+ * only after the dispatcher had claimed the intent, been refused and deferred
+ * it, so between that refusal's backoffs (and before the first claim) a bin no
+ * surface could take read as "executable work beside a free surface: a fault".
+ * Asked here with `routeBin` and the same inputs `dispatchTick` passes, the
+ * refusal is the wait, in the router's own words, and there is no second
+ * definition of where a bin may go. With no candidate at all the line already
+ * counts no free surface, so there is nothing to ask.
+ */
+async function routerWait(bin: Bin, fleet: FleetReading, nowIso: string): Promise<string | null> {
+  if (fleet.candidates.length === 0) return null;
+  const needsWeb = fleet.candidates.some((candidate) => candidate.webBlocked)
+    ? await binNeedsWeb(bin).catch(() => true)
+    : true;
+  const decision = routeBin({
+    bin,
+    candidates: fleet.candidates,
+    fleetPolicy: fleet.fleetPolicy,
+    fleetInFlight: fleet.fleetInFlight,
+    factoryInFlight: fleet.factoryInFlight,
+    now: nowIso,
+    needsWeb,
+  });
+  if (decision.ok) return null;
+  return `no surface the router would place it on now (${decision.refusal}): ${decision.reason}`;
 }
 
 type BinDispatches = Awaited<ReturnType<typeof listDispatchesForBin>>;
@@ -621,7 +659,7 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
     const dispatches = await listDispatchesForBin(bin.id);
     const sent = newestSent(dispatches);
     const leaseLive = bin.state === 'LEASED' && bin.leaseExpiresAt !== null && bin.leaseExpiresAt > nowIso;
-    const waiting = leaseLive ? null : await dispatcherWait(bin, dispatches, nowIso);
+    const waiting = leaseLive ? null : await dispatcherWait(bin, dispatches, nowIso, snapshot);
     if (leaseLive) leasedBins += 1;
     else if (waiting) waitReasons.push(`${bin.kind.toLowerCase()} bin ${bin.id}: ${waiting}`);
     else {
