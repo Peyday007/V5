@@ -7,7 +7,7 @@
  * regulation", effective_on null) and C1-2026-21030 (dates null).
  */
 import { describe, expect, it } from 'vitest';
-import { FEED_SOURCES, federalRegisterStatedDate, parseFederalRegister } from '../server/services/feeds/sources.ts';
+import { FEED_SOURCES, federalRegisterActionStatesEffect, federalRegisterStatedDate, parseFederalRegister } from '../server/services/feeds/sources.ts';
 
 const USCG = [
   { id: 227, name: 'Homeland Security Department', parent_id: null },
@@ -93,6 +93,56 @@ describe('federalRegisterStatedDate', () => {
     expect(federalRegisterStatedDate('on February 30, 2026.')).toBeNull();
     expect(federalRegisterStatedDate('on 2026-12-13.')).toBeNull();
     expect(federalRegisterStatedDate(null)).toBeNull();
+  });
+});
+
+describe('a DATES field that also names dates that are not effective dates', () => {
+  it('never reads a comment deadline as the stated effective date', () => {
+    expect(federalRegisterStatedDate('Comments must be received by December 1, 2026.')).toBeNull();
+    expect(federalRegisterStatedDate('This rule is effective December 15, 2026. Comments must be received by December 1, 2026.')).toBe('2026-12-15');
+    expect(federalRegisterStatedDate('This rule is effective December 15, 2026; comments must be received by December 1, 2026.')).toBe('2026-12-15');
+    expect(federalRegisterStatedDate('This rule is effective December 15, 2026, and comments must be received on or before December 1, 2026.')).toBe('2026-12-15');
+  });
+
+  it('never reads an earlier publication date as the stated effective date', () => {
+    expect(federalRegisterStatedDate('The rule published March 3, 2025, will be enforced on December 13, 2026.')).toBe('2026-12-13');
+    expect(federalRegisterStatedDate('This document corrects the rule published March 3, 2025.')).toBeNull();
+  });
+
+  it('reads no date a meeting cue introduces, and a bare date as before', () => {
+    expect(federalRegisterStatedDate('A public meeting will be held on December 2, 2026.')).toBeNull();
+    expect(federalRegisterStatedDate('A public meeting will be held on December 2, 2026. The rule is effective December 20, 2026.')).toBe('2026-12-20');
+    expect(federalRegisterStatedDate('December 13, 2026.')).toBe('2026-12-13');
+  });
+
+  it('keeps every enforcement date of one sentence, from 5 p.m. through 8 p.m. included', () => {
+    expect(federalRegisterStatedDate('The regulations in 33 CFR 100.1101 will be enforced from 5 p.m. through 8 p.m. on December 13, 2026.')).toBe('2026-12-13');
+  });
+
+  it('writes no marker from a row whose DATES names only a comment deadline', () => {
+    const [item] = parseFederalRegister({ results: [row({ dates: 'Comments must be received by December 1, 2026.' })] });
+    expect(item!.body).not.toContain('Stated effective');
+  });
+});
+
+describe('federalRegisterActionStatesEffect: the action field limits who carries a stated date', () => {
+  it('admits rules and notifications of enforcement', () => {
+    expect(federalRegisterActionStatesEffect('Notification of enforcement of regulation.')).toBe(true);
+    expect(federalRegisterActionStatesEffect('Final rule.')).toBe(true);
+    expect(federalRegisterActionStatesEffect('Temporary final rule.')).toBe(true);
+    expect(federalRegisterActionStatesEffect('Interim final rule; request for comments.')).toBe(true);
+  });
+
+  it('refuses a proposed rule, a notice, a correction and a missing action', () => {
+    expect(federalRegisterActionStatesEffect('Proposed rule.')).toBe(false);
+    expect(federalRegisterActionStatesEffect('Notice.')).toBe(false);
+    expect(federalRegisterActionStatesEffect('Final rule; correction.')).toBe(false);
+    expect(federalRegisterActionStatesEffect(null)).toBe(false);
+  });
+
+  it('writes no marker for a row whose action is a proposed rule, even when DATES states an effective date', () => {
+    const [item] = parseFederalRegister({ results: [row({ action: 'Proposed rule.', dates: 'This rule will be enforced on December 13, 2026.' })] });
+    expect(item!.body).not.toContain('Stated effective');
   });
 });
 
