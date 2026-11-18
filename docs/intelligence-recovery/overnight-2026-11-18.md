@@ -61,3 +61,12 @@ Launch configuration, updated:
 - **Fallback, used only if no H200 is offered:** B200, `budget_usd=99 max_usd_per_hour=8.5`, which is 12.25 h × $7.99 = $97.88.
   - The B200 was refused before only because of the $250 ceiling.
   - It fits the $114.17 balance and leaves $16 for one verification window.
+
+## C. Spend-safety finding (07:0xZ): a launch blocker, fixed in PR #1089 (not yet merged)
+- **The defect:** the supervisor in the Brain server (runpodPod.ts) caps a ROLLING 12.5 h window. After $66 is spent it frees budget minute by minute and restarts the pod. In simulation, 20 h with research waiting billed $105.54 against a $66 cap. `runway_hours` does not stop anything at 12 h. This breaks §38.
+- **The fix, #1089:** `runpod-launch` sets BRAIN_RUNPOD_BUDGET_FROM, which fixes the window from the launch time. When the window ends the pod stops and nothing restarts it.
+- **Second defect, same branch:** B200 is tried before H200. An over-ceiling B200 is created and then deleted, and the H200 is never tried.
+- **Sequencing:**
+  1. The gate evidence comes from release 44252210701.
+  2. #1089, together with A and B if they are ready, ships in the NEXT release.
+  3. The launch happens only once #1089 is live.
