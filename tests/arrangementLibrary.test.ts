@@ -30,7 +30,7 @@ import { listRounds } from '../server/repos/cashDiscovery.ts';
 import { createWorkstream, getWorkstream } from '../server/repos/register.ts';
 import { setTerms } from '../server/services/goals/decide.ts';
 import { setTarget } from '../server/services/goals/target.ts';
-import { askConstructedArrangements, forgetGoalReadings, openingsToPursue, readGoalPlan } from '../server/services/goals/plan.ts';
+import { askConstructedArrangements, awaitsPriceWithKnownCost, forgetGoalReadings, openingsToPursue, PRICE_REASK_ASKINGS, priceReaskQuestion, readGoalPlan } from '../server/services/goals/plan.ts';
 import { getDb } from '../server/db/database.ts';
 import {
   arrangementSignature,
@@ -45,7 +45,7 @@ import {
   type ConstructionJob,
   type Primitive,
 } from '../server/services/cash/construct.ts';
-import { harvest, MAX_LIVE_GOAL_ROUNDS, openConstructedRound, SIGNAL_LANE } from '../server/services/cash/discovery.ts';
+import { harvest, MAX_LIVE_GOAL_ROUNDS, openConstructedRound, priceReaskRound, SIGNAL_LANE } from '../server/services/cash/discovery.ts';
 import { arrangementKeyOfBucket, recordReadingEvaluations, rememberArrangements } from '../server/services/cash/arrangementLibrary.ts';
 import { createProject } from '../server/repos/projects.ts';
 import {
@@ -404,5 +404,62 @@ describe('the construction cap ranks before it cuts', () => {
     expect(ranked.selected[0]!.order).toBe(last.order);
     expect(ranked.selected.filter((one) => one.need?.claimId === 'clm_late').length).toBeGreaterThan(0);
     expect(ranked.considered - ranked.selected.length).toBe(plain.considered - MAX_CONSTRUCTIONS);
+  });
+});
+
+describe('an arrangement whose cost is known and price is not is re-asked for the price (production 2026-11-18, 2821cce3c372)', () => {
+  it('opens before the barren backoff ends, a bounded number of times, never while one is open or just settled', () => {
+    const at = (h: number) => new Date(now.getTime() - h * 3_600_000).toISOString();
+    const round = (n: number, harvestedHoursAgo: number, state = 'HARVESTED') =>
+      ({ id: `cdr_${n}`, round: n, state, found: 0, openedAt: at(harvestedHoursAgo + 5), harvestedAt: state === 'OPEN' ? null : at(harvestedHoursAgo) }) as unknown as Parameters<typeof priceReaskRound>[0][number];
+    const t = now.toISOString();
+    expect(priceReaskRound([round(1, 16)], t, PRICE_REASK_ASKINGS)).toBe(2);
+    expect(priceReaskRound([round(1, 2)], t, PRICE_REASK_ASKINGS)).toBeNull();
+    expect(priceReaskRound([round(1, 40), round(2, 1, 'OPEN')], t, PRICE_REASK_ASKINGS)).toBeNull();
+    expect(priceReaskRound([round(1, 40), round(2, 10)], t, PRICE_REASK_ASKINGS)).toBe(3);
+    expect(priceReaskRound([round(1, 40), round(2, 30), round(3, 10)], t, PRICE_REASK_ASKINGS)).toBeNull();
+  });
+
+  it('is selected only with an unknown price and an observed cost, and is asked differently the second time', () => {
+    const base = { label: 'pooled postcards', demand: { name: 'local service businesses' }, value: { tier: 'UNKNOWN' as const, p10: 0, p50: 0, p90: 0, observations: 0 } };
+    const cost = { tier: 'COMPARABLE' as const, p10: 4675, p50: 4675, p90: 4675, observations: 1, sources: ['claim:clm_9cf1f15c'] };
+    expect(awaitsPriceWithKnownCost({ ...base, fixedCost: cost } as never)).toBe(true);
+    expect(awaitsPriceWithKnownCost({ ...base } as never)).toBe(false);
+    expect(awaitsPriceWithKnownCost({ ...base, value: { ...base.value, tier: 'COMPARABLE' }, fixedCost: cost } as never)).toBe(false);
+    const q = priceReaskQuestion({ ...base, fixedCost: cost } as never, 'USD');
+    expect(q).toMatch(/per slot/);
+    expect(q).toMatch(/4,675/);
+    expect(q).toMatch(/reconstruct/);
+  });
+
+  it('openConstructedRound re-asks inside the backoff only when told the price is the missing input, and stops at the bound', async () => {
+    await sector('Veterinary care', VET);
+    const id = await goal(600_000);
+    const w = (await getWorkstream(id))!;
+    await readGoalPlan({ goalId: id, now, evaluations: 500 });
+    const key = (await listConstructedArrangements(projectId)).find((one) => one.constructionOrigin === 'FORWARD')!.legacyKey!;
+    const ask = (priceReaskUpTo?: number) =>
+      openConstructedRound({ goal: { id, title: w.title }, projectId, key, title: 'Constructed: clinics', question: 'What does one clinic pay per slot?', now: now.toISOString(), liveCap: 2 * MAX_LIVE_GOAL_ROUNDS, ...(priceReaskUpTo ? { priceReaskUpTo } : {}) });
+    const settleBarren = async (candidateId: string) => {
+      await finishedMission(candidateId, [{ claim: 'Clinics answer phones after hours.', lane: 'structure', sourceUrl: `https://example.test/${candidateId}` }]);
+      await harvest({ projectId });
+      const r = (await listRounds(projectId)).find((one) => one.candidateId === candidateId)!;
+      expect(r.state).toBe('HARVESTED');
+      const ago = new Date(now.getTime() - 10 * 3_600_000).toISOString();
+      await getDb().run('UPDATE cash_discovery_rounds SET opened_at = ?, harvested_at = ? WHERE id = ?', [ago, ago, r.id]);
+    };
+    const first = (await ask())!;
+    expect(first).not.toBeNull();
+    await settleBarren(first.candidateId);
+    // Ten hours after a barren round the ordinary backoff (a day, doubling) holds it…
+    expect(await ask()).toBeNull();
+    // …a price re-ask does not, and is bounded.
+    const second = (await ask(PRICE_REASK_ASKINGS))!;
+    expect(second).not.toBeNull();
+    await settleBarren(second.candidateId);
+    const third = (await ask(PRICE_REASK_ASKINGS))!;
+    expect(third).not.toBeNull();
+    await settleBarren(third.candidateId);
+    expect(await ask(PRICE_REASK_ASKINGS)).toBeNull();
   });
 });

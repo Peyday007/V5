@@ -3907,6 +3907,30 @@ export function arrangementStepContext(
   return { currency: target.currency, daysLeft: target.daysLeft, capitalBeforeProof: before === null ? null : before / 100, modelled };
 }
 
+/** At most this many askings of one arrangement in all, counting the first, when it is re-asked for its price. */
+export const PRICE_REASK_ASKINGS = 3;
+
+/** Whether an arrangement's price is unknown while research has established its cost. Pure. */
+export function awaitsPriceWithKnownCost(one: Pick<ConstructedArrangement, 'value' | 'fixedCost'>): boolean {
+  return one.value.tier === 'UNKNOWN' && !!one.fixedCost && one.fixedCost.observations > 0;
+}
+
+/**
+ * The question a later price re-ask puts (§15: asked a different way, not
+ * repeated). The first re-ask is P2's one-input question, a published price
+ * per slot (`nextInputQuestion`); when that too found nothing, the price is
+ * reconstructed from what buyers pay alone and what comparable shared offers
+ * charge each participant. Pure.
+ */
+export function priceReaskQuestion(one: Pick<ConstructedArrangement, 'label' | 'demand' | 'fixedCost'>, currency: string): string {
+  const cost = one.fixedCost ? ` Research has already established the cost of one shared run (about ${currency} ${Math.round(one.fixedCost.p50).toLocaleString('en-US')}, from ${one.fixedCost.observations} source(s)); that is not what is asked.` : '';
+  return (
+    `Brain holds an arrangement whose price is the one missing number: ${one.label}.${cost} ` +
+    `Earlier rounds found no published price per slot, so reconstruct what one participant (one slot buyer) pays per slot a different way: find what buyers described as "${one.demand.name}" pay, in ${currency}, to buy the same deliverable alone (a single-buyer price per unit), and published co-op, shared-mailer or shared-run offers in any market with their price per participant and the number of participants per run — each with its page and date, one price per claim — so the per-slot price can be derived. ` +
+    'Where neither is published, say so plainly.'
+  );
+}
+
 export async function askConstructedArrangements(goal: Workstream, reading: PlanReading, now: Date, max: number, liveCap: number): Promise<string[]> {
   const t = reading.target;
   if (t.daysLeft === null || t.daysLeft <= 0 || t.remainingCents <= 0) return [];
@@ -3941,16 +3965,33 @@ export async function askConstructedArrangements(goal: Workstream, reading: Plan
     .map((one, at) => ({ one, at }))
     .sort((a, b) => (contribution.get(b.one.key) ?? -1) - (contribution.get(a.one.key) ?? -1) || a.at - b.at)
     .map(({ one }) => one);
-  const order = constructedOrder(byContribution, openMx.map((r) => r.bucketId.slice(r.bucketId.lastIndexOf('-mx-') + 4)));
+  /*
+   * An arrangement whose cost research has established but whose price nobody
+   * has is one answer from entering the plan's economics (production,
+   * 2026-11-18: 2821cce3c372 carried the observed $4,675 run cost and stayed
+   * out of every reading, its one round barren and its backoff two days
+   * long). It is asked first, for the price by name, a bounded number of times.
+   */
+  const priceFirst = arrangements.filter(awaitsPriceWithKnownCost);
+  const order = [
+    ...priceFirst,
+    ...constructedOrder(byContribution, openMx.map((r) => r.bucketId.slice(r.bucketId.lastIndexOf('-mx-') + 4))).filter((one) => !priceFirst.includes(one)),
+  ];
   const exclusions = await goalExclusions(goal);
   const thisPass = new Set<string>();
   for (const one of order) {
     if (opened.length >= max) break;
     // One buyer population per pass: a population that opened a round this pass waits for the next.
     if (thisPass.has(one.demand.ref)) continue;
+    const priced = awaitsPriceWithKnownCost(one);
+    const prior = priced ? askedBefore.filter((r) => arrangementKeyOfBucket(r.bucketId) === one.key).length : 0;
     // The one plan input that holds this arrangement back, asked alone in its filer's unit (P2); the full question once none does.
-    const question = nextInputQuestion(one, t.currency, exclusions)?.question ?? one.question;
-    const round = await openConstructedRound({ goal, projectId: t.projectId, key: one.key, title: `Constructed: ${one.label}`, question, now: now.toISOString(), liveCap });
+    // A price asked that way and still missing is asked once more, reconstructed rather than repeated (§15).
+    const question = priced && prior >= 2 ? priceReaskQuestion(one, t.currency) : (nextInputQuestion(one, t.currency, exclusions)?.question ?? one.question);
+    const round = await openConstructedRound({
+      goal, projectId: t.projectId, key: one.key, title: `Constructed: ${one.label}`, question, now: now.toISOString(), liveCap,
+      ...(priced ? { priceReaskUpTo: PRICE_REASK_ASKINGS } : {}),
+    });
     // Null is this arrangement's cool-off, the live cap or a closed gate: the next one is tried.
     if (round) {
       opened.push(round.candidateId);
