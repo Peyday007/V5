@@ -3012,16 +3012,22 @@ const DEFAULT_INTERVAL_MS = 20_000;
  * bin handed back, a reopened no-show, a revived intent — would otherwise wait
  * for the dispatcher's own wake, and while that wake is busy or skipped the line
  * reads waiting=1, running=0, capacity=1 indefinitely. A pass whose line reading
- * failed (`reading` null) keeps the creation-only rule. The dispatch itself goes
+ * failed (`reading` null) keeps the creation-only rule, and a reading whose idle
+ * bins are all stranded (no dispatcher pass can fire them) adds no pass. The dispatch itself goes
  * through the dispatcher's single-flight guard either way, so this never runs a
  * second pass beside the dispatcher's own.
  */
 export function dispatchAfterLinePass(
   reports: readonly Pick<RemoteTickReport, 'created'>[],
-  reading: Pick<LineReading, 'unexplainedIdle'> | null,
+  reading: (Pick<LineReading, 'unexplainedIdle'> & Partial<Pick<LineReading, 'executable' | 'stranded'>>) | null,
 ): boolean {
   if (reports.some((report) => report.created.length > 0)) return true;
-  return reading?.unexplainedIdle === true;
+  if (reading?.unexplainedIdle !== true) return false;
+  // Idle bins whose only intent the dispatcher will never fire again
+  // (`stranded`) are a fault for a person, not work a dispatch pass can place:
+  // ask the dispatcher only when some idle bin is one it can still act on.
+  if (reading.stranded && reading.executable) return reading.executable.readyBins > reading.stranded.bins;
+  return true;
 }
 
 let timer: NodeJS.Timeout | null = null;
