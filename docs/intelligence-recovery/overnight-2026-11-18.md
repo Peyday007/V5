@@ -81,3 +81,16 @@ Launch configuration, updated:
 - **Next release:** #1089 and #1092 merge automatically at 44252210701's Fly step, then one Deploy.
 - **D (new, agent GD / claude/gd-fragment-faults):** WORK_FAULTED, 1,143 over 7 days. Diagnose after #1077 and fix the dominant mechanical cause.
 - **A (postcard economic meaning):** still running.
+
+## A, done (07:1xZ): the postcard figure is a supply cost, not a buyer price. Fix: PR #1091
+- **The arrangement** mpx_a8f5f34d435f48af9a57 is a BROKER presale, pooled. Slot buyers pay the operator, and the operator buys the run from a printer.
+- **The round asked two things:** (1) what slot buyers pay; (2) the fixed cost of one shared run.
+- **The answer** "Oppizi $4,675 for 10,000 homes, all-in" answers (2).
+- **Consequence:** the 4675 that #1085 files as price_per_unit, now live on 1b805f3e, would overstate revenue. **Any positive score for 2821cce3c372 on 1b805f3e is NOT gate evidence.**
+- **#1091 fixes it:**
+  - supplier quotes are filed as contractor_rate_per_unit (cost);
+  - wrong facts are superseded;
+  - the $0.259 → $259 parse bug is fixed.
+- **The plan after #1091:** value unknown, run cost $4,675, no positive score. That is correct. The next research needed is a published slot price.
+- **Next release:** #1089 (spend safety), #1092 (capacity gate) and #1091 (supply cost), merged at 44252210701's Fly step.
+- **Gate evidence must come from a claim whose economic meaning is correct**, for example clm_1468e302 ("days to usable cash"), which entered plan inputs at about 00:54Z.
