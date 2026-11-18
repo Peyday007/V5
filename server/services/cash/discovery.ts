@@ -1352,7 +1352,15 @@ export async function openConstructedRound(input: {
    * Counted together alone, queued lens rounds held every slot and no
    * arrangement was ever asked (2026-11-15, `constructedShare`).
    */
-  if ((await roundsStillResearching(mx)) >= constructedShare(liveCap) && (await roundsStillResearching(mine)) >= liveCap) return null;
+  /*
+   * A price re-ask is not held back by a round that never launched: one whose
+   * idea has waited past `UNLAUNCHED_YIELDS_AFTER_MS` with no mission is
+   * waiting for the research grant, not researching, and the grant's own cap
+   * still decides every launch (production 2026-11-18: cdr_8c45a2cc unlaunched
+   * ten hours held the goal's one constructed slot from 2821cce3c372).
+   */
+  const yielded = async (rs: readonly CashDiscoveryRound[]): Promise<number> => (input.priceReaskUpTo ? staleUnlaunchedRounds(rs, now) : 0);
+  if ((await roundsStillResearching(mx)) - (await yielded(mx)) >= constructedShare(liveCap) && (await roundsStillResearching(mine)) - (await yielded(mine)) >= liveCap) return null;
   /*
    * Focus keeps exactly this search (§83): an approved goal's constructed
    * arrangements, inside an ACTIVE sprint or the standing grant (the gate above), at most
@@ -1366,7 +1374,7 @@ export async function openConstructedRound(input: {
    * round already closed, not only OPEN rounds (§83): a park closes a round
    * while its research goes on, and that research is still a Routine's.
    */
-  if (focusCap !== null && (await liveConstructedResearch(mx)) >= focusCap) return null;
+  if (focusCap !== null && (await liveConstructedResearch(mx)) - (await yielded(mx)) >= focusCap) return null;
   const lens = `mx-${input.key}`;
   const id = `${prefix}-${lens}`;
   const history = mine.filter((one) => one.bucketId === id);
@@ -1407,6 +1415,21 @@ export async function openConstructedRound(input: {
   });
   if (round) await noteConstructedRoundOpened(input.projectId, input.key, now).catch(() => false);
   return round ? { bucketId: id, candidateId: round.candidateId, round: next } : null;
+}
+
+/** How long a goal round may wait with no mission before it stops holding a slot from a price re-ask. */
+export const UNLAUNCHED_YIELDS_AFTER_MS = 60 * 60 * 1000;
+
+/**
+ * OPEN rounds whose idea has never become a mission for at least
+ * `UNLAUNCHED_YIELDS_AFTER_MS`: a healthy tick launches one within minutes, so
+ * such a round is queued for the research grant and researches nothing.
+ */
+export async function staleUnlaunchedRounds(rounds: readonly CashDiscoveryRound[], now: string): Promise<number> {
+  const waiting = rounds.filter((one) => one.state === 'OPEN' && Date.parse(now) - Date.parse(one.openedAt) >= UNLAUNCHED_YIELDS_AFTER_MS);
+  if (waiting.length === 0) return 0;
+  const missions = await missionsForRounds(waiting.map((one) => one.candidateId));
+  return waiting.filter((one) => !missions.get(one.candidateId)?.latest).length;
 }
 
 /** How long after its last round settled an arrangement may be re-asked for its missing price. */

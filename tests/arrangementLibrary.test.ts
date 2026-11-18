@@ -45,7 +45,7 @@ import {
   type ConstructionJob,
   type Primitive,
 } from '../server/services/cash/construct.ts';
-import { harvest, MAX_LIVE_GOAL_ROUNDS, openConstructedRound, priceReaskRound, SIGNAL_LANE } from '../server/services/cash/discovery.ts';
+import { harvest, MAX_LIVE_GOAL_ROUNDS, openConstructedRound, priceReaskRound, SIGNAL_LANE, staleUnlaunchedRounds } from '../server/services/cash/discovery.ts';
 import { arrangementKeyOfBucket, recordReadingEvaluations, rememberArrangements } from '../server/services/cash/arrangementLibrary.ts';
 import { createProject } from '../server/repos/projects.ts';
 import {
@@ -461,5 +461,38 @@ describe('an arrangement whose cost is known and price is not is re-asked for th
     expect(third).not.toBeNull();
     await settleBarren(third.candidateId);
     expect(await ask(PRICE_REASK_ASKINGS)).toBeNull();
+  });
+});
+
+describe('a round that never launched does not hold a price re-ask out (production 2026-11-18, cdr_8c45a2cc held 2821cce3c372 out ten hours)', () => {
+  it('a price re-ask opens past rounds unlaunched for an hour, an ordinary ask does not, and a fresh unlaunched round still counts', async () => {
+    await sector('Veterinary care', VET);
+    const id = await goal(600_000);
+    const w = (await getWorkstream(id))!;
+    await readGoalPlan({ goalId: id, now, evaluations: 500 });
+    const keys = [...new Set((await listConstructedArrangements(projectId)).map((one) => one.legacyKey!).filter(Boolean))];
+    expect(keys.length).toBeGreaterThanOrEqual(4);
+    const [k1, k2, k3, priced] = keys as [string, string, string, string];
+    const ask = (key: string, priceReaskUpTo?: number) =>
+      openConstructedRound({ goal: { id, title: w.title }, projectId, key, title: 'Constructed: clinics', question: 'What does one clinic pay per slot?', now: now.toISOString(), liveCap: MAX_LIVE_GOAL_ROUNDS, ...(priceReaskUpTo ? { priceReaskUpTo } : {}) });
+    // The goal's whole live cap is taken by rounds whose ideas never became missions.
+    for (const key of [k1, k2, k3]) expect(await ask(key)).not.toBeNull();
+    const held = (await listRounds(projectId)).filter((r) => r.state === 'OPEN' && r.bucketId.includes('-mx-'));
+    expect(held).toHaveLength(3);
+    // Just opened, they may still launch on the next tick: nothing yields.
+    expect(await staleUnlaunchedRounds(held, now.toISOString())).toBe(0);
+    expect(await ask(priced, PRICE_REASK_ASKINGS)).toBeNull();
+    // Two hours unlaunched, they are queued for the grant, not researching.
+    const ago = new Date(now.getTime() - 2 * 3_600_000).toISOString();
+    for (const r of held) await getDb().run('UPDATE cash_discovery_rounds SET opened_at = ? WHERE id = ?', [ago, r.id]);
+    expect(await staleUnlaunchedRounds(held.map((r) => ({ ...r, openedAt: ago })), now.toISOString())).toBe(3);
+    expect(await ask(priced)).toBeNull();
+    const reask = await ask(priced, PRICE_REASK_ASKINGS);
+    expect(reask).not.toBeNull();
+    // The waiting rounds keep their rows and their ideas: nothing is launched or retired for them.
+    for (const r of held) {
+      expect((await listRounds(projectId)).find((x) => x.id === r.id)!.state).toBe('OPEN');
+      expect((await getDb().get<{ n: number }>('SELECT COUNT(*) AS n FROM russell_missions WHERE candidate_id = ?', [r.candidateId]))!.n).toBe(0);
+    }
   });
 });

@@ -67,7 +67,7 @@ import { evidenceCard } from '../cash/card.ts';
 import { ARRANGEMENT_ID_PREFIX, isArrangementId, bestCaseReach, composeGoalModel, estimatedFromArrangement, inventedDesigner, planTrace, dealsForGoal, OUTREACH_MULTIPLE, priceSupported, volumeEstablished, wilson, type ModelInput, type ModelledOpportunity, type PriceVariable } from '../cash/goalScenario.ts';
 import { cachedCashKnowledge } from '../quant/knowledge.ts';
 import { achievedFrom, readTarget, type TargetReading } from './target.ts';
-import { constructedShare, executionFrame, MAX_LIVE_GOAL_ROUNDS, openConstructedRound, openGoalDiscovery, roundsStillResearching } from '../cash/discovery.ts';
+import { constructedShare, executionFrame, MAX_LIVE_GOAL_ROUNDS, openConstructedRound, openGoalDiscovery, roundsStillResearching, staleUnlaunchedRounds } from '../cash/discovery.ts';
 import { constructArrangements, lastConstructionReport, nextInputQuestion, type ConstructedArrangement } from '../cash/construct.ts';
 import { arrangementSteps, type ArrangementStepContext } from './arrangementSteps.ts';
 import { arrangementKeyOfBucket, recordReadingEvaluations, refutedUnderSameInputs, rememberArrangements } from '../cash/arrangementLibrary.ts';
@@ -3973,7 +3973,15 @@ export async function askConstructedArrangements(goal: Workstream, reading: Plan
    * lenses would never run, so construction holds at most half of it — and
    * that half is reserved: lens rounds cannot take it (`constructedShare`).
    */
-  const room = constructedShare(liveCap) - (await roundsStillResearching(openMx));
+  const researching = await roundsStillResearching(openMx);
+  let room = constructedShare(liveCap) - researching;
+  /*
+   * A full share may still take a price re-ask (below) when what fills it is
+   * rounds that never launched (`staleUnlaunchedRounds`): only that ask, and
+   * only into the slots they hold.
+   */
+  const priceOnly = room <= 0;
+  if (priceOnly) room = constructedShare(liveCap) - (researching - (await staleUnlaunchedRounds(openMx, now.toISOString())));
   if (room <= 0) return [];
   max = Math.min(max, room);
   // Every goal's askings about an arrangement count (K-5): the same structure asked by another goal is not new.
@@ -3995,7 +4003,7 @@ export async function askConstructedArrangements(goal: Workstream, reading: Plan
    * long). It is asked first, for the price by name, a bounded number of times.
    */
   const priceFirst = arrangements.filter(awaitsPriceWithKnownCost);
-  const order = [
+  const order = priceOnly ? priceFirst : [
     ...priceFirst,
     ...constructedOrder(byContribution, openMx.map((r) => r.bucketId.slice(r.bucketId.lastIndexOf('-mx-') + 4))).filter((one) => !priceFirst.includes(one)),
   ];
