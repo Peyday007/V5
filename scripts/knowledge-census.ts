@@ -97,46 +97,27 @@ async function main() {
   await initDatabase();
   try {
     out('NOW', new Date().toISOString());
-    const windows: [string, string, string][] = [
-      ['RUN', '2026-11-18T15:00:00Z', '2026-11-18T17:05:00Z'],
-      ['MORN', '2026-11-18T06:00:00Z', '2026-11-18T12:00:00Z'],
-      ['NIGHT', '2026-11-17T18:00:00Z', '2026-11-18T06:00:00Z'],
-    ];
-    for (const [label, from, to] of windows) {
-      const reads = await q(`SELECT outcome, measures FROM bin_events WHERE event_type = 'SOURCE_ACCESS' AND at >= ? AND at < ?`, [from, to]);
-      const hosts = new Map<string, number>();
-      for (const r of reads) count(hosts, `${r.outcome}|${String(json(r.measures).host ?? '?').includes('wikipedia') ? 'WIKIPEDIA' : 'OTHER'}`);
-      out(`${label}_READ_SPLIT`, top(hosts));
-      const lane = await q(`SELECT at, work_item_id, outcome, reason, measures FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND workload_class = 'RESEARCH_FRAGMENT' AND at >= ? AND at < ? ORDER BY at`, [from, to]);
-      const cls = new Map<string, number>();
-      for (const r of lane) {
-        const m = /from (\d+) source\(s\) (\{[^}]*\})/.exec(String(r.reason ?? ''));
-        if (m) for (const [k, v] of Object.entries(json(m[2]))) count(cls, k, Number(v));
-        const d = json(r.measures).discovery ?? {};
-        count(cls, `disc:searched=${Math.min(9, d.searched ?? -1)}`);
-      }
-      out(`${label}_FAILED_SOURCE_CLASSES`, top(cls, 30));
-      const claims = await q(`SELECT source_url, validation_state FROM research_claims WHERE retrieved_at >= ? AND retrieved_at < ?`, [from, to]);
-      const ch = new Map<string, number>();
-      for (const c of claims) count(ch, `${String(c.source_url ?? '').includes('wikipedia.org') ? 'WIKIPEDIA' : 'OTHER'}|${c.validation_state}`);
-      out(`${label}_CLAIM_SOURCES`, top(ch));
-      if (label === 'RUN') for (const r of lane) out('RUN_FRAG', { at: r.at, item: r.work_item_id, o: r.outcome, reason: String(r.reason ?? '').slice(0, 330), disc: json(r.measures).discovery ?? null });
+    const rows = await q(`SELECT at, provider, outcome, reason FROM bin_events WHERE event_type = 'SOURCE_SEARCH' AND at >= ? ORDER BY at`, [iso(48 * 3600_000)]);
+    const hour = new Map<string, number>();
+    for (const r of rows) count(hour, `${String(r.at).slice(0, 13)}|${r.provider}|${String(r.reason ?? '').replace(/^.*answered (\d+).*$/, '$1')}`);
+    for (const [k, v] of [...hour.entries()].sort()) out('SEARCH_REFUSED_HOUR', `${k} ${v}`);
+    const run = rows.filter((r) => r.at >= '2026-11-18T15:00:00Z' && r.at < '2026-11-18T17:05:00Z');
+    out('SEARCH_REFUSED_RUN', { n: run.length, first: run[0]?.at ?? null, last: run[run.length - 1]?.at ?? null });
+    // gaps: longest stretch in the run with no refusal
+    // Lane fragment items per hour and their discovery, last 24h
+    const lane = await q(`SELECT at, outcome, reason, measures FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND workload_class = 'RESEARCH_FRAGMENT' AND at >= ?`, [iso(24 * 3600_000)]);
+    const h = new Map<string, number>();
+    for (const r of lane) {
+      const d = json(r.measures).discovery ?? {};
+      const cls = r.outcome === 'SUBMITTED' ? 'OK' : /listed none because/.test(String(r.reason)) ? 'LISTED_NONE' : /no readable source/.test(String(r.reason)) ? 'NO_READABLE' : /did not survive/.test(String(r.reason)) ? 'DROPPED' : 'OTHER';
+      count(h, `${String(r.at).slice(0, 13)}|${cls}`);
+      count(h, `${String(r.at).slice(0, 13)}|searched0=${(d.searched ?? 0) === 0}`);
     }
-    // Questions of the run's failing fragments.
-    const items = await q(
-      `SELECT DISTINCT e.work_item_id AS id, w.fragment_id AS fid, w.attempt_count AS ac, w.max_attempts AS ma, w.state AS st FROM bin_events e JOIN work_items w ON w.id = e.work_item_id WHERE e.event_type = 'FREE_LANE_ITEM' AND e.workload_class = 'RESEARCH_FRAGMENT' AND e.at >= '2026-11-18T15:00:00Z' AND e.at < '2026-11-18T17:05:00Z'`,
-    );
-    const seen = new Set<string>();
-    for (const it of items) {
-      out('RUN_ITEM', it);
-      if (!it.fid || seen.has(it.fid)) continue;
-      seen.add(it.fid);
-      const f = (await q(`SELECT id, status, attempt, parent_fragment_id, substr(question, 1, 260) AS question, substr(blocked_reason, 1, 160) AS blocked FROM research_fragments WHERE id = ?`, [it.fid]))[0];
-      const sib = await q(`SELECT id, state, attempt_count, failure_category, created_at FROM work_items WHERE fragment_id = ? AND work_type = 'RESEARCH_FRAGMENT' ORDER BY created_at`, [it.fid]);
-      out('RUN_FRAGMENT', { ...f, items: sib });
-    }
-    // Search-refusal rows: does anything record them?
-    out('SEARCH_EVENT_TYPES', await q(`SELECT event_type, COUNT(*) AS n FROM bin_events WHERE at >= ? AND (event_type LIKE '%SEARCH%' OR provider LIKE '%duck%') GROUP BY event_type`, [iso(7 * 24 * 3600_000)]));
+    for (const [k, v] of [...h.entries()].sort()) out('LANE_HOUR', `${k} ${v}`);
+    const reads = await q(`SELECT at, outcome, measures FROM bin_events WHERE event_type = 'SOURCE_ACCESS' AND at >= ?`, [iso(24 * 3600_000)]);
+    const rh = new Map<string, number>();
+    for (const r of reads) count(rh, `${String(r.at).slice(0, 13)}|${r.outcome}|${String(json(r.measures).host ?? '').includes('wikipedia') ? 'WIKI' : 'OTHER'}`);
+    for (const [k, v] of [...rh.entries()].sort()) out('READ_HOUR', `${k} ${v}`);
   } finally {
     await closeDatabase();
     console.log('GOALS: OK');
