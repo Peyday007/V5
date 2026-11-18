@@ -94,3 +94,12 @@ Launch configuration, updated:
 - **The plan after #1091:** value unknown, run cost $4,675, no positive score. That is correct. The next research needed is a published slot price.
 - **Next release:** #1089 (spend safety), #1092 (capacity gate) and #1091 (supply cost), merged at 44252210701's Fly step.
 - **Gate evidence must come from a claim whose economic meaning is correct**, for example clm_1468e302 ("days to usable cash"), which entered plan inputs at about 00:54Z.
+
+## 07:08Z
+- Release **1b805f3e** went live at 07:07:56Z (Deploy 44252210701). Gate reports run at about 07:33Z.
+- **Safety release:** **Deploy 44256547569 on d4732f8d**, dispatched 07:08Z. Contents:
+  - #1089: fixed-window spend cap, cheapest GPU within the ceiling.
+  - #1092: capacity gate.
+  - #1091: supplier quote filed as cost.
+  - #1093: verify replies read.
+- **Launch waits for d4732f8d to be live**, expected about 08:00Z. The spend-safety fix is mandatory.
