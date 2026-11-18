@@ -592,79 +592,9 @@ export async function dispatchTick(
     result.autoProbe = null;
   }
 
-  // Ensure intent for everything a worker could be given — which is not the
-  // same set as "READY". A bin whose worker died is claimable the moment its
-  // lease runs out, and `listDispatchableBins` is the assigner's own predicate
-  // rather than a second opinion about it. Bounded: a page, not the world.
-  //
-  // The intent is keyed at the bin's *current* generation, so a takeover that
-  // advances the generation supersedes this one through the ordinary path.
-  // Bins out of attempts are excluded by the same query, because firing at a
-  // bin no worker is allowed to take burns an activation for nothing.
-  for (const bin of await listDispatchableBinHeads(200, { onlyWithoutIntent: true })) {
-    if (options.projectIds && !options.projectIds.includes(bin.projectId)) continue;
-    if (await ensureDispatchIntent(bin)) result.intentsCreated += 1;
-  }
-
-  /*
-   * And a claimable bin the page above leaves out is given its wait in writing.
-   *
-   * A bin under a fire backoff, or with nothing a session could start, earned
-   * no intent and so left no row saying why it was idle — and the Factory line
-   * read a READY factory bin beside a free surface as "executable work and a
-   * free surface, and nothing is running or arriving. That is a fault, not a
-   * wait." (production, twice a day, each needing the owner). The dispatcher was
-   * right to wait; it simply never said so.
-   *
-   * So a bin under a fire backoff gets its intent now, deferred at once with
-   * the refusal the fire loop below gives a backoff (`BIN_REFIRE_GUARD`), until
-   * exactly its own `dispatch_not_before`. It cannot fire before then, and
-   * fires through the ordinary path once it may.
-   * A bin out of attempts gets no intent — it can never be fired, which is a
-   * real fault rather than a wait — and is named once in an event instead.
-   */
-  for (const held of await listHeldBinHeads(200)) {
-    if (options.projectIds && !options.projectIds.includes(held.projectId)) continue;
-    if (held.holdReason === 'ATTEMPTS_EXHAUSTED') {
-      await recordBinEvent({
-        eventType: 'DISPATCH_UNROUTED',
-        binId: held.id,
-        projectId: held.projectId,
-        leaseGeneration: held.leaseGeneration,
-        outcome: 'ATTEMPTS_EXHAUSTED',
-        reason:
-          `This bin is claimable but has used all ${held.maxAttempts} of its attempts, so no session ` +
-          'will be started for it. It needs its attempts regranted or a decision, not a wait.',
-        evidenceClass: 'OPERATOR_POLICY',
-        measures: { attemptCount: held.attemptCount, maxAttempts: held.maxAttempts },
-      });
-      continue;
-    }
-    /*
-     * A research packet with nothing claimable keeps earning no intent: its
-     * wait is re-derived every tick, so the first tick after an item becomes
-     * claimable creates the intent and fires (dispatchHandbackLoop holds this).
-     * An intent deferred for it here would make that bin wait out a deferral
-     * after its work arrived. Only the fire backoff, which has its own end,
-     * is written down.
-     */
-    if (held.holdReason !== 'FIRE_BACKOFF' || held.dispatchNotBefore === null) continue;
-    if (!(await ensureDispatchIntent(held))) continue;
-    result.intentsCreated += 1;
-    const intent = (await listDispatchesForBin(held.id)).find(
-      (one) => one.leaseGeneration === held.leaseGeneration && one.state === 'PENDING',
-    );
-    if (!intent) continue;
-    await markDispatchDeferred(intent.id, {
-      refusal: 'BIN_REFIRE_GUARD',
-      message:
-        `This bin is under a fire backoff until ${held.dispatchNotBefore}. No session is started ` +
-        'for it before then; it fires through the ordinary path once the backoff passes.',
-      retryAfterMs: Math.max(0, Date.parse(held.dispatchNotBefore) - Date.now()),
-      nextAttemptAt: held.dispatchNotBefore,
-    });
-    result.deferred += 1;
-  }
+  const intents = await writeDispatchIntents({ projectIds: options.projectIds });
+  result.intentsCreated += intents.intentsCreated;
+  result.deferred += intents.deferred;
 
   // Nothing configured is a normal state, not an error: a deployment without a
   // trigger still runs, still accepts workers that arrive by other means, and
@@ -1194,6 +1124,99 @@ export async function dispatchTick(
   return result;
 }
 
+/**
+ * Write the dispatch intent, or the written wait, for every claimable bin.
+ *
+ * The one implementation of "which bins deserve an activation, and which are
+ * waiting and why", shared by the tick and by boot recovery. Boot recovery used
+ * to carry its own copy (`listDispatchableBinHeads` + `ensureDispatchIntent`),
+ * and the copy drifted: it never wrote a held bin's wait, so after a restart a
+ * READY bin under a fire backoff sat with no intent and no row saying why
+ * until the first tick, and the Factory line read that window as "executable
+ * work and a free surface, and nothing is running or arriving. That is a fault,
+ * not a wait." (F1, the redundant dispatch trigger). One function, two callers,
+ * so the two can no longer disagree. It writes rows only; it fires nothing.
+ */
+export async function writeDispatchIntents(
+  options: { projectIds?: string[]; limit?: number } = {},
+): Promise<{ intentsCreated: number; deferred: number }> {
+  const written = { intentsCreated: 0, deferred: 0 };
+  // Ensure intent for everything a worker could be given — which is not the
+  // same set as "READY". A bin whose worker died is claimable the moment its
+  // lease runs out, and `listDispatchableBins` is the assigner's own predicate
+  // rather than a second opinion about it. Bounded: a page, not the world.
+  //
+  // The intent is keyed at the bin's *current* generation, so a takeover that
+  // advances the generation supersedes this one through the ordinary path.
+  // Bins out of attempts are excluded by the same query, because firing at a
+  // bin no worker is allowed to take burns an activation for nothing.
+  for (const bin of await listDispatchableBinHeads(options.limit ?? 200, { onlyWithoutIntent: true })) {
+    if (options.projectIds && !options.projectIds.includes(bin.projectId)) continue;
+    if (await ensureDispatchIntent(bin)) written.intentsCreated += 1;
+  }
+
+  /*
+   * And a claimable bin the page above leaves out is given its wait in writing.
+   *
+   * A bin under a fire backoff, or with nothing a session could start, earned
+   * no intent and so left no row saying why it was idle — and the Factory line
+   * read a READY factory bin beside a free surface as "executable work and a
+   * free surface, and nothing is running or arriving. That is a fault, not a
+   * wait." (production, twice a day, each needing the owner). The dispatcher was
+   * right to wait; it simply never said so.
+   *
+   * So a bin under a fire backoff gets its intent now, deferred at once with
+   * the refusal the fire loop below gives a backoff (`BIN_REFIRE_GUARD`), until
+   * exactly its own `dispatch_not_before`. It cannot fire before then, and
+   * fires through the ordinary path once it may.
+   * A bin out of attempts gets no intent — it can never be fired, which is a
+   * real fault rather than a wait — and is named once in an event instead.
+   */
+  for (const held of await listHeldBinHeads(options.limit ?? 200)) {
+    if (options.projectIds && !options.projectIds.includes(held.projectId)) continue;
+    if (held.holdReason === 'ATTEMPTS_EXHAUSTED') {
+      await recordBinEvent({
+        eventType: 'DISPATCH_UNROUTED',
+        binId: held.id,
+        projectId: held.projectId,
+        leaseGeneration: held.leaseGeneration,
+        outcome: 'ATTEMPTS_EXHAUSTED',
+        reason:
+          `This bin is claimable but has used all ${held.maxAttempts} of its attempts, so no session ` +
+          'will be started for it. It needs its attempts regranted or a decision, not a wait.',
+        evidenceClass: 'OPERATOR_POLICY',
+        measures: { attemptCount: held.attemptCount, maxAttempts: held.maxAttempts },
+      });
+      continue;
+    }
+    /*
+     * A research packet with nothing claimable keeps earning no intent: its
+     * wait is re-derived every tick, so the first tick after an item becomes
+     * claimable creates the intent and fires (dispatchHandbackLoop holds this).
+     * An intent deferred for it here would make that bin wait out a deferral
+     * after its work arrived. Only the fire backoff, which has its own end,
+     * is written down.
+     */
+    if (held.holdReason !== 'FIRE_BACKOFF' || held.dispatchNotBefore === null) continue;
+    if (!(await ensureDispatchIntent(held))) continue;
+    written.intentsCreated += 1;
+    const intent = (await listDispatchesForBin(held.id)).find(
+      (one) => one.leaseGeneration === held.leaseGeneration && one.state === 'PENDING',
+    );
+    if (!intent) continue;
+    await markDispatchDeferred(intent.id, {
+      refusal: 'BIN_REFIRE_GUARD',
+      message:
+        `This bin is under a fire backoff until ${held.dispatchNotBefore}. No session is started ` +
+        'for it before then; it fires through the ordinary path once the backoff passes.',
+      retryAfterMs: Math.max(0, Date.parse(held.dispatchNotBefore) - Date.now()),
+      nextAttemptAt: held.dispatchNotBefore,
+    });
+    written.deferred += 1;
+  }
+  return written;
+}
+
 let timer: ReturnType<typeof setInterval> | null = null;
 let running = false;
 
@@ -1267,14 +1290,11 @@ export async function recoverDispatchAtBoot(): Promise<number> {
   // expired while the process was down become claimable, and those bins need
   // an activation just as much as the ones that were merely waiting.
   const dispatchable = await listDispatchableBinHeads(500);
-  let created = 0;
-  for (const bin of dispatchable) {
-    if (await ensureDispatchIntent(bin)) created += 1;
-  }
+  const { intentsCreated: created, deferred } = await writeDispatchIntents({ limit: 500 });
   await recordBinEvent({
     eventType: 'DISPATCH_BOOT_RECOVERY',
     outcome: 'REDRIVEN',
-    measures: { dispatchableBins: dispatchable.length, intentsCreated: created },
+    measures: { dispatchableBins: dispatchable.length, intentsCreated: created, heldWaitsWritten: deferred },
   });
   return created;
 }

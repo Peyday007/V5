@@ -793,22 +793,38 @@ async function continueBoot(migrations: MigrationReport): Promise<void> {
       });
     });
 
+    /*
+     * The dispatcher itself, started before the boot re-drive rather than behind it.
+     *
+     * A plain interval, no model, and nothing waiting on a socket: it reads two
+     * indexed tables and occasionally makes one HTTP call. An idle Brain spends
+     * essentially nothing here.
+     *
+     * It used to start only after `await`ing the re-drive below — a second,
+     * partial copy of the tick's own intent pass that could hold the boot up to
+     * BOOT_STEP_WAIT_MS on a slow database. For that whole window nothing fired,
+     * and the Factory line read the ready bins beside free surfaces as "nothing
+     * is running or arriving. That is a fault, not a wait." (F1, the redundant
+     * dispatch trigger; production, twice a day, each needing the owner). Both
+     * now write intents through `writeDispatchIntents`, the database refuses a
+     * second intent per bin generation, and the tick is guarded against
+     * overlapping itself, so starting it first cannot fire anything twice.
+     * Still after the restart window above, so no fire predates it.
+     */
+    startDispatcher();
+
     // Dispatch intent the last shutdown never sent.
     //
     // The outbox is the reason a crash between "this bin is ready" and "a worker
     // was started for it" loses nothing: the intent is a row, it is still there,
     // and the first tick after boot sends it. This call only makes that visible
     // in the telemetry, so a restart appears in the record rather than being
-    // inferred from a gap in it.
-    const redriven = (await afterListenStep('re-drive dispatch', recoverDispatchAtBoot)) ?? 0;
-    if (redriven > 0) {
-      console.log(`  ${redriven} ready bin(s) had no dispatch intent and now do`);
-    }
-
-    // The dispatcher itself. A plain interval, no model, and nothing waiting on a
-    // socket: it reads two indexed tables and occasionally makes one HTTP call.
-    // An idle Brain spends essentially nothing here.
-    startDispatcher();
+    // inferred from a gap in it — which is why nothing waits on it.
+    void afterListenStep('re-drive dispatch', recoverDispatchAtBoot).then((redriven) => {
+      if ((redriven ?? 0) > 0) {
+        console.log(`  ${redriven} ready bin(s) had no dispatch intent and now do`);
+      }
+    });
 
     /*
      * The factory's own loop, beside the dispatcher.
