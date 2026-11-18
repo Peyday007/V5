@@ -129,3 +129,21 @@ The original 15:00Z deadline was missed, and so was the closeout deadline of 19:
 - **B1 (owner: this session; gated on E1):** the same capped window, with a round settling and a plan evaluation inside it.
   - Pass: stored > 0 and in_plan > 0.
 - **12h run:** not cleared; it stays held under the coordinator's gate.
+
+## Final two blockers: verified on production 8a111494 (2026-11-18, 03:46Z). Verdict: GREEN
+
+**Accepted research reaches the plan.**
+- Claim clm_9cf1f15c, the Oppizi price of $0.47 per piece, was filed as construction fact cfa_b20e6370 at 00:34:47Z (#1072). The 01:33Z plan evaluation read it.
+- The 6h trace on run 44220011655 shows 27 claims: 2 stored, 2 in the plan, 27 retained.
+- Research on synthesis items no longer stalls: the lease fix #1073 moved 3 items to LEASE_EXPIRED and their runs are redoing.
+
+**Web search and recovery.**
+- #1075 adds a Wikipedia full-text OR fallback.
+- #1077 makes a search outage leave a fragment's attempt intact.
+- 2h report, run 44232281776: 6 "none from web search" failures out of 62 jobs, against 27 in 1h before the fix.
+- Pressure NORMAL. The goal accepts 7.5 claims/h, against 0/h before.
+
+**Limits**
+- Only about 7% of the goal's accepted claims reach a plan input; the rest are retained as shared findings.
+- #1078 (deploying, run 44229389335) widens which constructed-round claims are filed.
+- Filing is retroactive, so research collected during the run is filed when coverage widens.
