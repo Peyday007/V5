@@ -848,10 +848,15 @@ export function capitalOwnEvidence(one: ModelledOpportunity): boolean {
  * money at risk is the lots, which the starting capital already holds it to,
  * never the gross cost of goods recycled through it (the same reason a cost a
  * buyer's prepayment funds is exempt from the spending ceiling, §99). Null
- * when the stake cannot hold one lot, or nothing about the line is established. Pure.
+ * when the stake cannot hold one lot, nothing about the line is established, or
+ * its deal does not consume what it ties up. Pure.
  */
 export function stakeCycles(one: ModelledOpportunity, capital: { amount: number; established: boolean }, ceiling: number | null, daysLeft: number): { lots: number; cycles: number; deals: number; tiedUp: number } | null {
   if (ceiling === null || !one.repeatable || one.agreedValue > 0 || !capital.established || !capitalOwnEvidence(one) || !(capital.amount > 0)) return null;
+  // Only a line whose deal consumes its outlay (a lot bought and sold: the direct cost is at least what it ties up)
+  // turns its stake over; money tied up beside a cheaper deal (a deposit, a tool) is not spent by selling.
+  const cost = one.directCost.value ?? one.directCost.low;
+  if (cost === null || cost < capital.amount - 1e-9) return null;
   const lots = Math.floor((ceiling + 1e-9) / capital.amount);
   if (lots < 1) return null;
   // The slowest the line's own figures say a turn takes: a lot is not reused before it has come back.
@@ -985,6 +990,13 @@ export function evaluateGoalPortfolio(input: {
     const holdable = [input.capitalCeiling, input.perWeek, input.beforeProof].filter((x): x is number => x !== null);
     const stake = stakeCycles(held, capital, input.capitalCeiling === null ? null : Math.min(...holdable), input.daysLeft);
     const one: PlannedOpening = stake ? { ...held, stakeDeals: stake.deals } : held;
+    /*
+     * Only a cost that is the lot itself is recycled stake: when one deal's direct cost is no more than
+     * what it ties up (an equipment lot bought and resold), its later turns are paid from the turn before.
+     * A cost beyond the lot (a crew, a service) is still spent each deal and still counts.
+     */
+    const lotCost = held.directCost.value ?? held.directCost.high;
+    const stakeFunded = !!stake && lotCost !== null && lotCost <= capital.amount + 1e-9;
     if (stake) capital.amount = stake.tiedUp;
     const unestablished = INPUT_NAMES.filter(([key]) => !established(one[key] as ModelInput)).map(([, name]) => name);
     if (!capital.established) unestablished.push('money tied up');
@@ -1002,7 +1014,7 @@ export function evaluateGoalPortfolio(input: {
      * never sell inside it, and is not this goal's line.
      */
     const oneDeal = one.directCost.value;
-    if (!refused && spendCeiling !== null && !one.fundedByBuyer && !stake && established(one.directCost) && oneDeal !== null && oneDeal > spendCeiling + 1e-9) {
+    if (!refused && spendCeiling !== null && !one.fundedByBuyer && !stakeFunded && established(one.directCost) && oneDeal !== null && oneDeal > spendCeiling + 1e-9) {
       refused = `one deal costs ${Math.round(oneDeal)} directly, more than the ${Math.round(spendCeiling)} this goal may spend in all`;
     }
     /*
@@ -1071,7 +1083,7 @@ export function evaluateGoalPortfolio(input: {
     for (const share of shares) {
       const key = `${id}@${share}`;
       memberOf.set(key, { opportunityId: id, title: one.opportunity.title, share: share > 0 ? share : null });
-      const recipe: Recipe = { one, share, key, keys, reach, capacityGate, ownGate, capital: capital.amount, justified: unestablished.length === 0, sampleSize, history, unverifiable, needs: needsOf(one), stakeCycled: !!stake };
+      const recipe: Recipe = { one, share, key, keys, reach, capacityGate, ownGate, capital: capital.amount, justified: unestablished.length === 0, sampleSize, history, unverifiable, needs: needsOf(one), stakeCycled: stakeFunded };
       recipes.set(key, recipe);
       activities.push(activityOf(recipe, share === 1 ? full : demandWorlds(one, share, input.daysLeft, reach, worlds, seed), (r) => demandWorlds(one, share, input.daysLeft, r, worlds, seed)));
     }
@@ -1253,7 +1265,7 @@ interface Recipe {
   history: MarketHistory | null;
   unverifiable: string[];
   needs: string[];
-  /** Its later turns are paid from its earlier ones (`stakeCycles`). */
+  /** Its direct cost is the lot its stake buys, so later turns are paid from earlier ones (`stakeCycles`). */
   stakeCycled?: boolean;
 }
 

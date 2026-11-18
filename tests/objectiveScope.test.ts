@@ -99,11 +99,13 @@ describe('the goal scope reaches the plan', () => {
   });
 
   it('puts a stated stake to work: a capital-using line turns the stake over inside the window', () => {
-    const line = { repeatable: true, agreedValue: 0, capital: { value: 8_000, low: null, high: null, provenance: 'EVIDENCE' }, daysToCash: { value: 21, low: null, high: null, provenance: 'EVIDENCE' } } as unknown as ModelledOpportunity;
+    const line = { repeatable: true, agreedValue: 0, capital: { value: 8_000, low: null, high: null, provenance: 'EVIDENCE' }, directCost: { value: 8_000, low: null, high: null, provenance: 'EVIDENCE' }, daysToCash: { value: 21, low: null, high: null, provenance: 'EVIDENCE' } } as unknown as ModelledOpportunity;
     expect(stakeCycles(line, { amount: 8_000, established: true }, 10_000, 90)).toEqual({ lots: 1, cycles: 4, deals: 4, tiedUp: 8_000 });
     expect(stakeCycles(line, { amount: 8_000, established: true }, 1_000, 90)).toBeNull();
     expect(stakeCycles(line, { amount: 8_000, established: true }, null, 90)).toBeNull();
     expect(stakeCycles({ ...line, repeatable: false } as ModelledOpportunity, { amount: 8_000, established: true }, 10_000, 90)).toBeNull();
+    // Money tied up beside a cheaper deal is not spent by selling, so nothing turns over.
+    expect(stakeCycles({ ...line, directCost: { value: 10, low: null, high: null, provenance: 'EVIDENCE' } } as unknown as ModelledOpportunity, { amount: 60, established: true }, 3_000, 24)).toBeNull();
   });
 });
 
