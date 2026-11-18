@@ -306,6 +306,49 @@ export interface ParkResult {
  * key derived from the mission — so a second tick, a redelivery or two
  * dispatchers running at once produce one park and one request.
  */
+/** How every capacity-stall line begins, so the pass that wrote one can recognise it later. */
+export const JUDGE_ROUND_STALL_PREFIX = 'a corrected judge round that Brain starts itself as soon as research capacity allows';
+
+/**
+ * Why a corrected judge round cannot start now, or null when one can.
+ *
+ * Read from the same two facts `resumeJudgeParkedPackets` reads: the cap
+ * (`liveJudgeRoundCap`, zero while the database is shedding) and how many
+ * resumed rounds are still live. A reading that fails says nothing, so it is
+ * null and the park behaves exactly as it did before this existed.
+ */
+export async function judgeRoundStall(): Promise<string | null> {
+  try {
+    const { liveJudgeRoundCap, JUDGE_ROUND_EVENT } = await import('../research/judgeRound.ts');
+    const cap = await liveJudgeRoundCap();
+    if (cap <= 0) {
+      return `${JUDGE_ROUND_STALL_PREFIX} — when it was last checked the database was shedding optional work, so no round could start. Nothing here needs a person`;
+    }
+    const rows = await getDb().all<{ payload: string }>(
+      `SELECT payload FROM project_events WHERE event_type = ? ORDER BY created_at DESC LIMIT 500`,
+      [JUDGE_ROUND_EVENT],
+    );
+    const ids = [...new Set(rows.map((row) => {
+      try {
+        return (JSON.parse(row.payload) as Record<string, unknown>)['orchestrationId'];
+      } catch {
+        return undefined;
+      }
+    }))].filter((id): id is string => typeof id === 'string');
+    if (ids.length < cap) return null;
+    const live = await getDb().get<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM research_orchestrations
+        WHERE id IN (${ids.map(() => '?').join(', ')})
+          AND status NOT IN ('COMPLETE','COMPLETE_WITH_GAPS','FAILED','CANCELLED','NEEDS_HUMAN')`,
+      ids,
+    );
+    if (Number(live?.n ?? 0) < cap) return null;
+    return `${JUDGE_ROUND_STALL_PREFIX} — when it was last checked all ${cap} corrected-round slots were in use. Nothing here needs a person`;
+  } catch {
+    return null;
+  }
+}
+
 export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> {
   const rows = await getDb().all<{ id: string }>(
     /*
@@ -544,6 +587,76 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
     });
     // Decided now, or already decided and only being carried out: either way no question is left for a person.
     if (decision.decided || decision.because === 'ALREADY_FILED_WITH_GAPS') continue;
+
+    /*
+     * About to be corrected by Brain itself: nothing to ask.
+     *
+     * `assessJudgeRound` said RESUME, so `resumeJudgeParkedPackets` (which
+     * selects by the packet's status, not the mission's) runs a corrected
+     * round and withdraws any open card with "Nothing here needs deciding".
+     * Opening one here put that withdrawn question in front of the owner
+     * first, and those withdrawn cards were most of the recorded
+     * "accepts a report with unresolved questions" requests
+     * (OWNER:DECIDING_WHETHER_THIS_PROJECT_ACCEPTS_A_REPORT_WITH_UNRESOLV#3).
+     * The mission keeps its state. If the assessment later turns to PERSON,
+     * for example at the round ceiling, the next pass reaches `decideAtPark`
+     * again and asks as before. Brain records this once per judged audit, not
+     * once per tick.
+     *
+     * A round the research budget refused never reaches this branch: that
+     * refusal re-parks the packet with its own failure reason, which
+     * `isJudgePark` does not read as a judge park, so `assessJudgeRound` says
+     * NOT_PARKED and the park asks at once below, exactly as for any other
+     * question only a person can answer.
+     */
+    if (decision.because === 'JUDGE_ROUND_RESUMING') {
+      const recorded = await getDb().get<{ n: number }>(
+        `SELECT COUNT(*) AS n FROM project_events
+          WHERE project_id = ? AND entity_id = ? AND event_type = 'RUSSELL_ROUTINE_DECISION'
+            AND payload LIKE ? AND payload LIKE ?`,
+        [mission.projectId, mission.id, '%"declinedBecause":"JUDGE_ROUND_RESUMING"%', `%"auditId":${JSON.stringify(orchestration.auditId)}%`],
+      );
+      if (Number(recorded?.n ?? 0) === 0) {
+        await recordEvent({
+          projectId: mission.projectId,
+          entityType: 'RUSSELL_MISSION',
+          entityId: mission.id,
+          eventType: 'RUSSELL_ROUTINE_DECISION',
+          payload: {
+            orchestrationId: orchestration.id,
+            missionId: mission.id,
+            auditId: orchestration.auditId,
+            choice: null,
+            decidedBy: 'BRAIN',
+            declinedBecause: decision.because,
+            reason: `Brain asked nobody: ${decision.reason}, and that round is where the judge's corrections go.`,
+          },
+        });
+      }
+
+      /*
+       * "About to" is only true while a round can start.
+       *
+       * `resumeJudgeParkedPackets` starts nothing while the database is
+       * shedding (`liveJudgeRoundCap()` is 0) or every corrected-round slot is
+       * live, so such a packet sat with no card and no progress, its mission
+       * still reading RUNNING, and only `judgeParkReadings` — an operator
+       * reading — showed it. No person is needed and no card is opened: the
+       * mission is moved to WAITING with what it is waiting for, which is what
+       * Russell's own surface names ("Russell is waiting on …"), and the move
+       * refreshes `updated_at` so this unchanged row stops holding the front
+       * of the window above. Once a slot is free the packet resumes exactly as
+       * before; a waiting line that is still current is not rewritten.
+       */
+      const stall = await judgeRoundStall();
+      if (stall && !(mission.state === 'WAITING' && mission.waitingOn === stall)) {
+        await transitionMission({ missionId: mission.id, from: mission.state, to: 'WAITING', waitingOn: stall });
+      } else if (!stall && mission.state === 'WAITING' && mission.waitingOn?.startsWith(JUDGE_ROUND_STALL_PREFIX)) {
+        // A slot is free again: the line this pass wrote is no longer true.
+        await transitionMission({ missionId: mission.id, from: 'WAITING', to: 'RUNNING', waitingOn: null });
+      }
+      continue;
+    }
 
     const moved = await transitionMission({
       missionId: mission.id,

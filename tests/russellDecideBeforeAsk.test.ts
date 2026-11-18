@@ -12,7 +12,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const judge = vi.hoisted(() => ({ resume: false }));
+const judge = vi.hoisted(() => ({ resume: false, cap: undefined as number | undefined }));
 vi.mock('../server/services/research/judgeRound.ts', async (importOriginal) => {
   const original = await importOriginal<typeof import('../server/services/research/judgeRound.ts')>();
   return {
@@ -21,6 +21,7 @@ vi.mock('../server/services/research/judgeRound.ts', async (importOriginal) => {
       judge.resume
         ? ({ kind: 'RESUME', verdict: 'PATCH', auditId: 'aud_x', round: 1, judgeSummary: '', judgeNextAction: null, corrections: [], followUps: [] } as const)
         : original.assessJudgeRound(orchestration),
+    liveJudgeRoundCap: async () => judge.cap ?? original.liveJudgeRoundCap(),
   };
 });
 
@@ -45,12 +46,14 @@ import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { createGoal } from '../server/repos/russellAuthority.ts';
-import { listEvents } from '../server/repos/events.ts';
+import { listEvents, recordEvent } from '../server/repos/events.ts';
+import { createAudit } from '../server/repos/audits.ts';
 import { getMission, listOpenRequests, withdrawRequest } from '../server/repos/russellMissions.ts';
 import { createFragments, getOrchestration, insertClaims, updateOrchestration } from '../server/repos/research.ts';
 import { capture } from '../server/services/russell/judgment.ts';
 import { launch } from '../server/services/russell/launch.ts';
-import { parkStoppedMissions } from '../server/services/russell/needsHuman.ts';
+import { JUDGE_ROUND_STALL_PREFIX, parkStoppedMissions } from '../server/services/russell/needsHuman.ts';
+import { JUDGE_ROUND_EVENT, assessJudgeRound } from '../server/services/research/judgeRound.ts';
 import { answerUnaskedParks, fileWithGapsUnderStandingGrant, ROUTINE_DECISION_GRACE_MS } from '../server/services/russell/routineDecisions.ts';
 
 const ACCEPTS_A_REPORT = 'Deciding whether this project accepts a report with unresolved questions in it';
@@ -62,6 +65,7 @@ let userId = '';
 
 beforeEach(async () => {
   judge.resume = false;
+  judge.cap = undefined;
   advance.failNext = 0;
   advance.calls = [];
   const fixture = await freshProject();
@@ -195,16 +199,145 @@ describe('parkStoppedMissions decides before it asks', () => {
     expect(await decisionsFor(missionId)).toHaveLength(1);
   });
 
-  it('leaves a judge round about to resume, a packet with nothing accepted, and a plan awaiting approval as before', async () => {
+  it('opens no card for a packet Brain is about to correct in a judge round, and asks once that round is no longer coming', async () => {
+    /*
+     * The recorded failure class (OWNER:DECIDING_WHETHER_THIS_PROJECT_ACCEPTS_A_REPORT_WITH_UNRESOLV#3):
+     * the park opened "accepts a report with unresolved questions" for a packet
+     * whose judge round was about to resume, and the round then withdrew it —
+     * "Withdrawn by Brain: the judge's MORE_RESEARCH named what to correct ...
+     * Nothing here needs deciding." A question about to be withdrawn is not asked.
+     */
     await grant();
-
     judge.resume = true;
     const resuming = await stoppedMission(['ACCEPTED', 'BLOCKED']);
     await parkStoppedMissions(10);
-    expect((await cardFor(resuming.missionId))?.authorityNeeded).toContain(ACCEPTS_A_REPORT);
+
+    const everAsked = await getDb().all<{ state: string }>(
+      'SELECT state FROM russell_human_requests WHERE mission_id = ?', [resuming.missionId],
+    );
+    expect(everAsked).toEqual([]);
+    expect((await getMission(resuming.missionId))!.state).not.toBe('NEEDS_HUMAN');
     expect((await getOrchestration(resuming.orchestrationId))!.unresolvedGapPolicy).not.toBe('RECORD_GAPS');
-    expect(await decisionsFor(resuming.missionId)).toMatchObject([{ declinedBecause: 'JUDGE_ROUND_RESUMING' }]);
+    expect(await decisionsFor(resuming.missionId)).toMatchObject([{ declinedBecause: 'JUDGE_ROUND_RESUMING', decidedBy: 'BRAIN', choice: null }]);
+
+    // Recorded once per judged audit, not once per tick.
+    await parkStoppedMissions(10);
+    expect(await cardFor(resuming.missionId)).toBeUndefined();
+    expect(await decisionsFor(resuming.missionId)).toHaveLength(1);
+
+    // The round is no longer coming and Brain cannot file it (no live grant): it asks exactly as before.
     judge.resume = false;
+    await getDb().run(`UPDATE russell_goals SET state = 'REVOKED' WHERE project_id = ?`, [projectId]);
+    await parkStoppedMissions(10);
+    const card = await cardFor(resuming.missionId);
+    expect(card?.authorityNeeded).toContain(ACCEPTS_A_REPORT);
+    expect(card?.choices.map((c) => c.key)).toEqual(['RECORD_GAPS', 'STOP']);
+    expect((await getMission(resuming.missionId))!.state).toBe('NEEDS_HUMAN');
+    expect((await decisionsFor(resuming.missionId)).map((p) => p['declinedBecause']).sort()).toEqual(['JUDGE_ROUND_RESUMING', 'NO_LIVE_GRANT']);
+  });
+
+  it('asks at once when a corrected round on this audit was refused by the research budget, read through the real assessment', async () => {
+    /*
+     * The state production leaves behind: `resumeJudgeRound` records the round
+     * (naming the audit), learns the research budget a person set refuses the
+     * follow-ups, and re-parks the packet on the same audit with its own
+     * failure reason. Nothing here is mocked: the real `assessJudgeRound` must
+     * not read that as a judge park still "about to" resume, so the park never
+     * takes the no-card JUDGE_ROUND_RESUMING branch and the ceiling only a
+     * person can raise is asked at once, not after MAX_JUDGE_ROUNDS passes.
+     */
+    await grant();
+    const refused = await stoppedMission(['ACCEPTED', 'BLOCKED']);
+    const audit = await createAudit({
+      projectId, layerId,
+      result: {
+        verdict: 'MORE_RESEARCH', summary: 'The judge asked for more research.', failures: [], missingDocuments: [],
+        requiredResearchRuns: [], requiredPatches: [], synthesisRequired: false, freezeEligible: false,
+        nextVersion: null, nextAction: 'Research the named question.',
+      },
+    });
+    await updateOrchestration(refused.orchestrationId, {
+      auditId: audit.id,
+      verdict: 'MORE_RESEARCH',
+      failureReason: 'The judge asked for more research and the research budget a person set refuses it: spent',
+    });
+    await recordEvent({
+      projectId, entityType: 'RUN', entityId: null, eventType: JUDGE_ROUND_EVENT,
+      payload: { orchestrationId: refused.orchestrationId, round: 1, previousAuditId: audit.id, verdict: 'MORE_RESEARCH', followUpFragments: [] },
+    });
+    const parked = (await getOrchestration(refused.orchestrationId))!;
+    expect(parked.verdict).toBe('MORE_RESEARCH');
+    expect(parked.auditId).toBe(audit.id);
+    expect((await assessJudgeRound(parked)).kind).toBe('NOT_PARKED');
+
+    // No live grant, so Brain cannot file it short itself: the only answer left is a person's.
+    await getDb().run(`UPDATE russell_goals SET state = 'REVOKED' WHERE project_id = ?`, [projectId]);
+    await parkStoppedMissions(10);
+
+    const card = await cardFor(refused.missionId);
+    expect(card?.authorityNeeded).toContain(ACCEPTS_A_REPORT);
+    expect((await getMission(refused.missionId))!.state).toBe('NEEDS_HUMAN');
+    const decisions = await decisionsFor(refused.missionId);
+    expect(decisions.map((p) => p['declinedBecause'])).not.toContain('JUDGE_ROUND_RESUMING');
+    expect(decisions).toMatchObject([{ declinedBecause: 'NO_LIVE_GRANT', decidedBy: 'PENDING_PERSON', choice: null }]);
+  });
+
+  it('says what a packet waits on when no corrected round can start, without asking anyone', async () => {
+    /*
+     * Reviewer finding (repair-park-stall-while-shedding): while
+     * `liveJudgeRoundCap()` is 0 (database SHEDDING) or every corrected-round
+     * slot is live, `resumeJudgeParkedPackets` starts nothing, and a RESUME
+     * packet sat with no card, its mission still RUNNING, visible only through
+     * `judgeParkReadings`. It must say what it waits on, on Russell's own
+     * surface, and still never become a question for a person.
+     */
+    await grant();
+    judge.resume = true;
+    judge.cap = 0;
+    const resuming = await stoppedMission(['ACCEPTED', 'BLOCKED']);
+    await parkStoppedMissions(10);
+
+    const shedding = (await getMission(resuming.missionId))!;
+    expect(shedding.state).toBe('WAITING');
+    expect(shedding.waitingOn?.startsWith(JUDGE_ROUND_STALL_PREFIX)).toBe(true);
+    expect(shedding.waitingOn).toContain('shedding');
+    expect(shedding.waitingOn).toContain('Nothing here needs a person');
+    expect(await cardFor(resuming.missionId)).toBeUndefined();
+
+    // Unchanged on the next pass: the line is not rewritten and nothing is asked.
+    await parkStoppedMissions(10);
+    expect((await getMission(resuming.missionId))!.updatedAt).toBe(shedding.updatedAt);
+    expect(await decisionsFor(resuming.missionId)).toHaveLength(1);
+
+    // Every slot live: still waiting, and now it says so instead.
+    judge.cap = 1;
+    const other = await stoppedMission(['ACCEPTED']);
+    await updateOrchestration(other.orchestrationId, { status: 'SYNTHESIZING' });
+    await recordEvent({
+      projectId, entityType: 'RESEARCH_ORCHESTRATION', entityId: other.orchestrationId,
+      eventType: JUDGE_ROUND_EVENT, payload: { orchestrationId: other.orchestrationId, round: 2 },
+    });
+    await parkStoppedMissions(10);
+    const full = (await getMission(resuming.missionId))!;
+    expect(full.state).toBe('WAITING');
+    expect(full.waitingOn).toContain('all 1 corrected-round slots were in use');
+
+    // Capacity returns: the waiting line is no longer true, and the mission is live again.
+    judge.cap = undefined;
+    await parkStoppedMissions(10);
+    const back = (await getMission(resuming.missionId))!;
+    expect(back.state).toBe('RUNNING');
+    expect(back.waitingOn).toBeNull();
+
+    const everAsked = await getDb().all<{ state: string }>(
+      'SELECT state FROM russell_human_requests WHERE mission_id = ?', [resuming.missionId],
+    );
+    expect(everAsked).toEqual([]);
+    expect((await getOrchestration(resuming.orchestrationId))!.unresolvedGapPolicy).not.toBe('RECORD_GAPS');
+  });
+
+  it('leaves a packet with nothing accepted and a plan awaiting approval as before', async () => {
+    await grant();
 
     // Researched, nothing accepted: one answer (STOP) is no decision, so it fails as before — no card, no filing.
     const nothing = await stoppedMission(['BLOCKED', 'BLOCKED']);
