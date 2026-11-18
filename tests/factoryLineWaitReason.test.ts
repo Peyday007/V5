@@ -16,10 +16,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { freshProject, teardown, type TestProject } from './helpers.ts';
 import { ensureCampaign, ensureChangeRequest, patchCampaign } from '../server/repos/factory.ts';
 import { createWorker, grantMembership, setWorkerRouting } from '../server/repos/identity.ts';
-import { bindRoutineWorker, createAccount, createRoutine, credentialDigest } from '../server/repos/fleet.ts';
+import { bindRoutineWorker, createAccount, createRoutine, credentialDigest, setPolicy } from '../server/repos/fleet.ts';
 import { createBin, ensureDispatchIntent, getBin, markDispatchDeferred, markDispatchFailed } from '../server/repos/bins.ts';
 import { DISPATCH_DEFERRAL_KINDS, readLine, resetIdleObservation } from '../server/services/factory/line.ts';
 import { getDb } from '../server/db/database.ts';
+import { DISPATCH_BURST, DISPATCH_CLAIM_LIMIT, dispatchTick, endsBurst } from '../server/services/dispatch/loop.ts';
 import { recordDeliveryProven } from './helpers/deliveryProven.ts';
 
 const REPOSITORY = 'peyday007/v5';
@@ -292,5 +293,149 @@ describe('a READY stage the dispatcher holds by its own predicate is a wait, not
     expect(body).toContain("${claimableStateSql('')}");
     expect(body).not.toMatch(/attempt_count\s*</);
     expect(body).not.toMatch(/dispatch_not_before\s*(<=|IS NULL)/);
+  });
+});
+
+/*
+ * The dispatcher's half of the same fault (5c1166f). `FLEET_TARGET_REACHED` is
+ * classified fleet-wide, but `routeBin` exempts the Factory family from the
+ * fleet target. When it ended the burst — and spent a burst slot on each such
+ * deferral — any due research intent at or above a Factory stage's priority
+ * stopped every tick before the Factory intent was claimed, and the line read
+ * the READY stage beside its free surface as the fault. These drive the real
+ * `dispatchTick` against the real router; only the provider's fire endpoint is
+ * stubbed, and every fire it receives is counted.
+ */
+describe('the research ceiling does not stop a tick before Factory work', () => {
+  let realFetch: typeof globalThis.fetch;
+  let fired: string[];
+
+  beforeEach(() => {
+    fired = [];
+    realFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: unknown): Promise<Response> => {
+      const url = String(input);
+      if (url.includes('/fire')) {
+        fired.push(url);
+        return new Response(JSON.stringify({ claude_code_session_id: `cse_ceiling_${fired.length}` }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify({ message: 'Not Found' }), { status: 404 });
+    }) as typeof globalThis.fetch;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  /** The fleet target the research family has already met: none may start. */
+  async function researchCeilingReached(): Promise<void> {
+    await setPolicy({ scope: 'FLEET', target: 0, actor: 'test', reason: 'research ceiling reached' });
+  }
+
+  /** A due research intent, at a priority at or above the Factory stage's. */
+  async function dueResearchIntents(count: number, priority: number): Promise<string[]> {
+    const ids: string[] = [];
+    for (let index = 0; index < count; index += 1) {
+      const bin = await createBin({
+        projectId: fixture.project.id,
+        kind: 'GENERAL',
+        title: `research ${index}`,
+        objective: 'Answer a question.',
+        manifest: {
+          objective: 'Answer a question.',
+          why: 'research-ceiling test',
+          lineage: { projectId: fixture.project.id, layerId: null, goal: null, orchestrationId: null },
+          units: [{ key: 'u1', establishes: 'an answer', input: '{}', transform: 'sha256', dependsOn: [] }],
+          acceptableSources: [],
+          excludedSources: [],
+          evidence: ['an answer'],
+          outputs: ['one answer'],
+          authorizedActions: ['answer'],
+          prohibitedActions: ['anything else'],
+          budgetUnits: null,
+          retry: { maxAttempts: 2, backoffSeconds: 60 },
+          stoppingConditions: ['an answer'],
+        },
+        completionContract: 'DETERMINISTIC_UNITS_V1',
+        createdByType: 'SYSTEM',
+        createdById: 'test',
+        ready: true,
+        priority,
+      });
+      await ensureDispatchIntent((await getBin(bin.id))!);
+      ids.push(bin.id);
+    }
+    return ids;
+  }
+
+  async function intentState(binId: string): Promise<{ state: string; last_error_kind: string | null } | undefined> {
+    return getDb().get<{ state: string; last_error_kind: string | null }>(
+      'SELECT state, last_error_kind FROM bin_dispatch WHERE bin_id = ? ORDER BY created_at DESC LIMIT 1',
+      [binId],
+    );
+  }
+
+  it('fires a Factory stage queued behind more due research intents than one burst, in one tick', async () => {
+    await researchCeilingReached();
+    const factoryBinId = await readyStage('behind-research');
+    await getDb().run('UPDATE bins SET priority = 1 WHERE id = ?', [factoryBinId]);
+    await ensureDispatchIntent((await getBin(factoryBinId))!);
+    const research = await dueResearchIntents(DISPATCH_BURST + 3, 9);
+
+    const result = await dispatchTick({ projectIds: [fixture.project.id] });
+
+    // Every research intent met the ceiling and was deferred, not fired …
+    for (const id of research) expect((await intentState(id))?.last_error_kind).toBe('FLEET_TARGET_REACHED');
+    // … and the walk went past all of them to the Factory stage in this same tick.
+    expect(fired).toHaveLength(1);
+    expect(fired[0]).toContain('trig_line_wait');
+    expect((await intentState(factoryBinId))?.state).not.toBe('PENDING');
+    expect(result.deferred).toBeGreaterThanOrEqual(research.length);
+  });
+
+  it('stops at DISPATCH_CLAIM_LIMIT when every due intent is research at the ceiling', async () => {
+    await researchCeilingReached();
+    await dueResearchIntents(DISPATCH_CLAIM_LIMIT + 5, 5);
+
+    await dispatchTick({ projectIds: [fixture.project.id] });
+
+    expect(fired).toHaveLength(0);
+    const deferred = await getDb().get<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM bin_dispatch WHERE last_error_kind = 'FLEET_TARGET_REACHED'`,
+    );
+    // The walk is bounded: it claimed exactly the limit and left the rest due.
+    expect(Number(deferred?.n)).toBe(DISPATCH_CLAIM_LIMIT);
+    const stillDue = await getDb().get<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM bin_dispatch WHERE state = 'PENDING' AND last_error_kind IS NULL`,
+    );
+    expect(Number(stillDue?.n)).toBe(5);
+  });
+
+  it('still ends the burst on a fleet-wide refusal that binds the Factory too', () => {
+    const unpinned = { pinnedRoutineId: null };
+    expect(endsBurst(unpinned, 'FLEET_TARGET_REACHED')).toBe(false);
+    expect(endsBurst(unpinned, 'NO_ROUTINES_REGISTERED')).toBe(true);
+    expect(endsBurst(unpinned, 'FLEET_PAUSED')).toBe(true);
+    // A pinned bin's refusal is about its own surface, never the fleet's.
+    expect(endsBurst({ pinnedRoutineId: 'rtn_pinned' }, 'FLEET_PAUSED')).toBe(false);
+  });
+
+  it('ends the tick at a paused fleet: neither research nor the Factory stage is fired', async () => {
+    await setPolicy({ scope: 'FLEET', target: 5, paused: true, actor: 'test', reason: 'paused' });
+    const factoryBinId = await readyStage('paused');
+    await ensureDispatchIntent((await getBin(factoryBinId))!);
+    await dueResearchIntents(3, 9);
+
+    await dispatchTick({ projectIds: [fixture.project.id] });
+
+    expect(fired).toHaveLength(0);
+    // The first intent claimed met the pause and ended the burst: nothing else was walked.
+    const refused = await getDb().get<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM bin_dispatch WHERE last_error_kind = 'FLEET_PAUSED'`,
+    );
+    expect(Number(refused?.n)).toBe(1);
   });
 });
