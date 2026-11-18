@@ -1,7 +1,5 @@
 /** Throwaway read-only probe (claude/probe-d5): rounds, missions, plan freshness, learning records. SELECT only. Not for merge. */
 import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
-import { signalledClaims } from '../server/repos/research.ts';
-import { observationExpiry } from '../server/domain/opportunitySignals.ts';
 const G = 'wst_7b4fcbb5f2384f31b6c3';
 const P = 'prj_22fb4fec295f403a8a22';
 const out = (tag: string, v: unknown) => console.log(tag, typeof v === 'string' ? v : JSON.stringify(v));
@@ -15,38 +13,15 @@ async function main() {
   
   try {
     out('NOW', new Date().toISOString());
-    const now = new Date();
-    const t0 = Date.now();
-    let sig: any[] = [];
-    try { sig = await signalledClaims({ projectId: P, limit: 40, staleBefore: new Date(now.getTime() - 30 * 86_400_000).toISOString() }); }
-    catch (e) { out('SIGNALLED_ERR', `${Date.now() - t0}ms ${e instanceof Error ? e.message : e}`); }
-    out('SIGNALLED', { n: sig.length, ms: Date.now() - t0, oldest: sig[0]?.claim.createdAt ?? null, newest: sig[sig.length - 1]?.claim.createdAt ?? null });
-    const reasons: Record<string, number> = {};
-    for (const e of sig) {
-      const c = e.claim;
-      let why = 'WOULD_FILE';
-      if (!c.opportunitySignal) why = 'no_signal';
-      else if (!c.sourceUrl) why = 'no_url';
-      else if (c.claimType === 'NEGATIVE_EXISTENCE') why = 'negative';
-      else {
-        const timing = observationExpiry({ signal: c.opportunitySignal, closesOn: c.closesOn ?? null, sourceDate: c.sourceDate, freshDays: 30, now });
-        if (timing.stale) why = 'stale';
-      }
-      reasons[why] = (reasons[why] ?? 0) + 1;
-      out('SIG_ROW', { id: c.id, at: c.createdAt, sig: c.opportunitySignal, lane: c.evidenceLane, src: c.sourceDate, closes: c.closesOn, why });
-    }
-    out('SIG_REASONS', reasons);
-    // unrestricted page count: how many rows the SQL alone would return (no stale filter), to see if 20 pages x 40 is exhausted
-    const t1 = Date.now();
-    let sig2: any[] = [];
-    try { sig2 = await signalledClaims({ projectId: P, limit: 400, staleBefore: new Date(now.getTime() - 30 * 86_400_000).toISOString() }); } catch (e) { out('SIGNALLED2_ERR', String(e)); }
-    out('SIGNALLED_400', { n: sig2.length, ms: Date.now() - t1, newest: sig2[sig2.length - 1]?.claim.createdAt ?? null });
-    const r2: Record<string, number> = {};
-    for (const e of sig2) { const c = e.claim; const timing = c.opportunitySignal ? observationExpiry({ signal: c.opportunitySignal, closesOn: c.closesOn ?? null, sourceDate: c.sourceDate, freshDays: 30, now }) : { stale: true }; const k = timing.stale ? 'stale' : 'fresh'; r2[k] = (r2[k] ?? 0) + 1; }
-    out('SIG400_REASONS', r2);
-    await q('CYCLE', `SELECT last_ran_at, substr(COALESCE(last_error,''),1,1500) AS err FROM russell_cycle`);
-    await q('CASH_EVENTS_72H', `SELECT kind, COUNT(*) AS n, MAX(created_at) AS last FROM cash_events WHERE project_id = ? AND created_at >= ? GROUP BY kind ORDER BY n DESC LIMIT 25`, [P, new Date(Date.now() - 96 * 3600e3).toISOString()]);
-    await q('CASH_EVENT_OPP', `SELECT kind, created_at, substr(summary,1,200) AS s FROM cash_events WHERE project_id = ? AND (kind LIKE '%OPPORTUNITY%' OR kind LIKE '%HARVEST%' OR kind LIKE '%ROUND%') ORDER BY created_at DESC LIMIT 10`, [P]);
+    const nowIso = new Date().toISOString();
+    await q('GRANT', `SELECT id, project_id, state, max_concurrent, max_missions, expires_at FROM russell_goals WHERE id = 'rgl_2b3bcf1aa24f443382cf'`);
+    await q('HELD', `SELECT r.id, r.amount, r.expires_at, m.id AS mission, m.state AS mstate, m.updated_at AS mupd, o.status AS ostatus, (SELECT b.purpose || ':' || b.state FROM bins b WHERE b.id = m.bin_id) AS bin FROM russell_budget_reservations r LEFT JOIN russell_missions m ON m.reservation_id = r.id LEFT JOIN research_orchestrations o ON o.id = m.orchestration_id WHERE r.goal_id = 'rgl_2b3bcf1aa24f443382cf' AND r.kind = 'MISSION' AND r.state = 'HELD' AND r.expires_at > ? ORDER BY r.expires_at`, [nowIso]);
+    await q('HELD_BY_STATE', `SELECT m.state AS mstate, o.status AS ostatus, COUNT(*) AS n FROM russell_budget_reservations r LEFT JOIN russell_missions m ON m.reservation_id = r.id LEFT JOIN research_orchestrations o ON o.id = m.orchestration_id WHERE r.goal_id = 'rgl_2b3bcf1aa24f443382cf' AND r.kind = 'MISSION' AND r.state = 'HELD' AND r.expires_at > ? GROUP BY m.state, o.status`, [nowIso]);
+    await q('BLOCKED_BINS', `SELECT b.id, b.purpose, b.state, b.orchestration_id, b.updated_at FROM bins b WHERE b.project_id = ? AND b.orchestration_id IN ('orc_f96ea5caa5d9466f8e30','orc_83fa14145d5343a79330') ORDER BY b.created_at`, [P]);
+    await q('CAND_EVENTS', `SELECT entity_id, event_type, created_at, substr(payload,1,300) AS p FROM project_events WHERE entity_id IN ('rcn_8bf0215b80e9445cbc68','rcn_8be62682e4d04545a955') ORDER BY created_at DESC LIMIT 12`);
+    await q('CAND_ROWS', `SELECT id, state, priority, ordinal, updated_at FROM russell_candidates WHERE id IN ('rcn_8bf0215b80e9445cbc68','rcn_8be62682e4d04545a955')`);
+    await q('CAND_CASH_EVENTS', `SELECT kind, created_at, substr(summary,1,300) AS s FROM cash_events WHERE project_id = ? AND (summary LIKE '%rcn_8bf0215b%' OR summary LIKE '%rcn_8be62682%' OR detail LIKE '%rcn_8bf0215b%' OR detail LIKE '%rcn_8be62682%') ORDER BY created_at DESC LIMIT 8`, [P]);
+    await q('ROUTINE_DECISIONS', `SELECT created_at, substr(payload,1,400) AS p FROM project_events WHERE project_id = ? AND event_type = 'RUSSELL_ROUTINE_DECISION' ORDER BY created_at DESC LIMIT 4`, [P]);
   } finally {
     await closeDatabase();
     console.log('GOALS: OK');
