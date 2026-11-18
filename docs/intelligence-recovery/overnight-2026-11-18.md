@@ -210,3 +210,15 @@ Launch configuration, updated:
   - The report says "auto stop/start is off without BRAIN_RUNPOD_API_KEY", so the supervisor, which enforces the fixed $66 cap and the idle stop, may not be active.
   - Pressure SHEDDING.
 - **Sent to the release owner:** move the pod to a new host (restore, same window and cap) only after confirming the API key.
+
+## 19:00Z: FINAL CRUSADE, planning development (owner order: stop waiting on infrastructure)
+Infrastructure stays with release owner session_01QF5Tk5PWzBxNPixWvFTPEd: the GPU host is full, BRAIN_RUNPOD_API_KEY supervision is to be confirmed, and #1100 is live but unverified.
+
+Planning work runs in parallel. Each lane opens PRs and hands them to the release owner.
+
+| Lane | Branch | Defect it attacks | Pass criterion |
+|---|---|---|---|
+| P1 | claude/p1-executable-steps | The plan has 1 step and `execution: []`. The 81 candidate plans lack acquisition, fulfilment, settlement, costs, controls and evidence. | The leading candidate becomes sequenced executable steps; unknowns become explicit research steps. |
+| P2 | claude/p2-research-unknowns | Research is not aimed at the input blocking the model (e.g. postcard slot price); questions bundle inputs. | The next question asks for the one blocking input, in the filer's units. |
+| P3 | claude/p3-objective-eval | No evidence across objectives. | REHEARSAL on 5 objectives ($1K→$10K, $10K→$100K, $5K/mo recurring, a single-industry goal, a 7-day deadline); the most common failure is fixed. |
+| P4 | claude/p4-construction-cap | 400 of 15,962 composed per pass, so the leader swaps by sampling. | Evidenced arrangements are always composed; the leader is stable; there is fair rotation. |
