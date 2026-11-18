@@ -1007,11 +1007,15 @@ function detectRuleEffectiveSoonV5(
  *     Federal Register's own DATES field. Since 41d72ad the connector records
  *     that date as "Stated effective YYYY-MM-DD." — deliberately not an
  *     "Effective" sentence, which stays effective_on's alone — and v5 read only
- *     "Effective", so every such record (Coast Guard 2026-23230, the Miami
- *     Winterfest boat parade enforced December 13, and any FCC, Coast Guard or
- *     ACF rule stored that way: 2026-23040, 2026-23027, 2026-23279) had no date
- *     and dropped out, though the free screen, reading the same record, kept
- *     it. v6 reads that marker, from any stored copy of the document, when no
+ *     "Effective", so every such record had no date and dropped out, though
+ *     the free screen, reading the same record, kept it. The established
+ *     instance of that shape is the Coast Guard's notification of enforcement
+ *     (2026-23047: action "Notification of enforcement of regulation",
+ *     effective_on null, its date only in DATES); 2026-23230, a recorded miss
+ *     of the same kind of document, is modelled on it. No shape is asserted
+ *     here for FCC 2026-23040, Coast Guard 2026-23027 or ACF 2026-23279: the
+ *     record states them only as "Effective <publication day>." stored late
+ *     (v5's cause 4), and v6 keeps them in that shape and in this one alike. v6 reads that marker, from any stored copy of the document, when no
  *     copy states an "Effective" sentence and the document is not a
  *     correction. "Effective" still wins wherever any copy carries it, and a
  *     correction still takes the corrected rule's date exactly as in v5.

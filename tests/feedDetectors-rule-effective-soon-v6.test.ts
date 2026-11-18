@@ -13,13 +13,24 @@
  *
  * What v5 drops, and why (asserted below):
  *
- *  - every record whose only date is the "Stated effective" marker — Coast
- *    Guard 2026-23230 (Miami Winterfest, enforced December 13, 2026), and FCC
- *    2026-23040, Coast Guard 2026-23027 and ACF 2026-23279 stored with
- *    effective_on null — because v5 reads only "Effective" and so finds no date.
- *    That holds however the copies are shaped: a bare copy with no body,
- *    publishedAt missing, a copy fetched days late, or one listing only the
- *    parent department.
+ *  - every record whose only date is the "Stated effective" marker, because
+ *    v5 reads only "Effective" and so finds no date. The shape is the one the
+ *    accepted research establishes for Coast Guard 2026-23047 (action
+ *    "Notification of enforcement of regulation", effective_on null, the date
+ *    only in DATES). Coast Guard 2026-23230 (Miami Winterfest), a recorded miss
+ *    of the same kind of document, is modelled on that shape; its DATES text
+ *    is illustrative, not read from the API. The other stated-date fixtures
+ *    carry synthetic document numbers (2026-9xxxx) so that no test claims a
+ *    production shape the record does not state. That holds however the
+ *    copies are shaped: a bare copy with no body, publishedAt missing, a copy
+ *    fetched days late, or one listing only the parent department.
+ *
+ * FCC 2026-23040, Coast Guard 2026-23027 and ACF 2026-23279 are recorded
+ * misses whose stored shape no evidence in this objective establishes; the
+ * earlier record (RULE_EFFECTIVE_SOON@4) states them as "Effective <publication
+ * day>." stored late. They are asserted separately below in BOTH shapes —
+ * effective_on set, and effective_on null with a DATES date — and v6 must keep
+ * each in either, so the verdict does not depend on which one production holds.
  *
  * What v5 already keeps and v6 must keep identically (no regression): FAA
  * 2026-23073 and 2026-23072 (lead 0; a copy listing only Transportation
@@ -113,7 +124,7 @@ const SIAP = 'Standard Instrument Approach Procedures, and Takeoff Minimums and 
 
 // --- The records v5 misses: their only date is the connector's "Stated effective" marker. ---
 
-/** Coast Guard 2026-23230: notification of enforcement, effective_on null, DATES "December 13, 2026"; stored two days late. */
+/** Coast Guard 2026-23230: a notification of enforcement in 2026-23047's established shape (effective_on null, date only in DATES); the DATES text is illustrative; stored two days late. */
 const miami = stored(
   apiRow(
     '2026-23230', '2026-11-16',
@@ -124,25 +135,25 @@ const miami = stored(
   ),
   '2026-11-18T06:00:00.000Z',
 );
-/** FCC 2026-23040 with effective_on null, stated on publication day; first stored two days late. */
+/** Synthetic: an FCC final rule with effective_on null, stated on publication day; first stored two days late. */
 const fcc40 = stored(
-  apiRow('2026-23040', '2026-11-12', 'National Television Multiple Ownership Rule', [FCC_AGENCY], 'This rule is effective November 12, 2026.'),
+  apiRow('2026-90040', '2026-11-12', 'Synthetic FCC rule dated only in DATES', [FCC_AGENCY], 'This rule is effective November 12, 2026.'),
   '2026-11-14T06:00:00.000Z',
 );
-/** Coast Guard 2026-23027 safety zone, effective_on null, stated on publication day. */
+/** Synthetic: a Coast Guard temporary safety zone with effective_on null, stated on publication day. */
 const uscg27 = stored(
-  apiRow('2026-23027', '2026-11-12', 'Safety Zone; Sector Mobile Captain of the Port Zone, Mobile, AL', [DHS, USCG_AGENCY], 'This rule is effective without actual notice from November 12, 2026.', { action: 'Temporary final rule.' }),
+  apiRow('2026-90027', '2026-11-12', 'Synthetic Coast Guard safety zone dated only in DATES', [DHS, USCG_AGENCY], 'This rule is effective without actual notice from November 12, 2026.', { action: 'Temporary final rule.' }),
   '2026-11-14T06:00:00.000Z',
 );
-/** ACF 2026-23279, effective_on null, stated on publication day; stored two days late. */
+/** Synthetic: an ACF final rule with effective_on null, stated on publication day; stored two days late. */
 const acf79 = stored(
-  apiRow('2026-23279', '2026-11-16', 'Restoring Flexibility To Support Head Start Program Access', [HHS, ACF_AGENCY], 'This final rule is effective November 16, 2026.'),
+  apiRow('2026-90279', '2026-11-16', 'Synthetic ACF rule dated only in DATES', [HHS, ACF_AGENCY], 'This final rule is effective November 16, 2026.'),
   '2026-11-18T06:00:00.000Z',
 );
-/** ACF 2026-23279 again: a bare earlier copy (no body) with publishedAt missing, listing the parent department only. */
+/** The same synthetic ACF rule again: a bare earlier copy (no body) with publishedAt missing, listing the parent department only. */
 const acf79Bare = fr(
-  '2026-23279', '2026-11-16', 'Health and Human Services Department', null,
-  'Restoring Flexibility To Support Head Start Program Access', '2026-11-17T06:00:00.000Z', 'fi_2026-23279#v0', null,
+  '2026-90279', '2026-11-16', 'Health and Human Services Department', null,
+  'Synthetic ACF rule dated only in DATES', '2026-11-17T06:00:00.000Z', 'fi_2026-90279#v0', null,
 );
 
 // --- The records v5 already keeps (lead 0, corrections, parent-only copies): v6 must keep them identically. ---
@@ -263,6 +274,51 @@ describe('RULE_EFFECTIVE_SOON@6 keeps them, each in its agency group', () => {
     const v5 = members(RULE_EFFECTIVE_SOON_V5.detect(records, now)).sort();
     const v6 = members(signals).sort();
     expect(v6).toEqual([...v5, ...statedMisses.map((one) => one.id)].sort());
+  });
+});
+
+/**
+ * The three recorded misses whose stored shape this objective does not
+ * establish. Each is built in both shapes production could hold — effective_on
+ * set to the publication day (as the RULE_EFFECTIVE_SOON@4 record states them),
+ * and effective_on null with that date only in DATES — stored two days late,
+ * as recorded. v6 must keep each in either shape, so its verdict on them does
+ * not rest on an unestablished fixture.
+ */
+describe('FCC 2026-23040, Coast Guard 2026-23027 and ACF 2026-23279: kept whichever shape production stored', () => {
+  const ACF = 'Health and Human Services Department, Children and Families Administration';
+  const recorded: [string, string, string, string, unknown[], string][] = [
+    ['2026-23040', '2026-11-12', 'National Television Multiple Ownership Rule', FCC, [FCC_AGENCY], 'agency:federal communications commission'],
+    ['2026-23027', '2026-11-12', 'Safety Zone; Sector Mobile Captain of the Port Zone, Mobile, AL', USCG, [DHS, USCG_AGENCY], 'agency:coast guard'],
+    ['2026-23279', '2026-11-16', 'Restoring Flexibility To Support Head Start Program Access', ACF, [HHS, ACF_AGENCY], 'agency:children and families administration'],
+  ];
+  const lateBy2 = (published: string) => new Date(Date.parse(`${published}T06:00:00.000Z`) + 2 * DAY).toISOString();
+  const withEffective = recorded.map(([n, p, t, , agencies]) =>
+    stored(apiRow(n, p, t, agencies, `This rule is effective ${p}.`, { effective_on: p }), lateBy2(p)));
+  const statedOnly = recorded.map(([n, p, t, , agencies]) => {
+    const [y, m, d] = p.split('-');
+    const month = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][Number(m) - 1];
+    return stored(apiRow(n, p, t, agencies, `This rule is effective ${month} ${Number(d)}, ${y}.`), lateBy2(p));
+  });
+
+  it('the two shapes are what the connector stores: an "Effective" sentence, or only the "Stated effective" marker', () => {
+    for (const [i, one] of withEffective.entries()) expect(one.body).toBe(`Effective ${recorded[i]![1]}.`);
+    for (const [i, one] of statedOnly.entries()) expect(one.body).toBe(`Stated effective ${recorded[i]![1]}.`);
+  });
+
+  it('keeps each, in its issuing agency’s group, when effective_on is set', () => {
+    const signals = RULE_EFFECTIVE_SOON_V6.detect(withEffective, now);
+    for (const [i, one] of withEffective.entries()) expect({ id: one.id, group: groupOf(signals, one.id) }).toEqual({ id: one.id, group: recorded[i]![5] });
+  });
+
+  it('keeps each, in its issuing agency’s group, when effective_on is null and the date is only in DATES', () => {
+    const signals = RULE_EFFECTIVE_SOON_V6.detect(statedOnly, now);
+    for (const [i, one] of statedOnly.entries()) expect({ id: one.id, group: groupOf(signals, one.id) }).toEqual({ id: one.id, group: recorded[i]![5] });
+  });
+
+  it('v5 keeps the effective_on shape and drops only the DATES-only shape: the latter is the class v6 adds', () => {
+    expect(members(RULE_EFFECTIVE_SOON_V5.detect(withEffective, now)).sort()).toEqual(withEffective.map((one) => one.id).sort());
+    expect(members(RULE_EFFECTIVE_SOON_V5.detect(statedOnly, now))).toEqual([]);
   });
 });
 
