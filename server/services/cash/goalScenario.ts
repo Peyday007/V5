@@ -429,7 +429,7 @@ function arrangementOpening(one: ConstructedArrangement, input: ArrangementInput
     daysToCash: infer('daysToCash', unknown(3, 60, 'nobody has established when the money would settle; swept from 3 to 60 days')),
     close: arrangementClose(one, ref) ?? infer('close', unknown(0.02, 0.5, 'no buyer has been asked yet; swept from 2% to 50% of buyers agreeing')),
     respond: infer('respond', unknown(0.002, 0.15, 'nobody has established how many prospects of this kind reply; swept from 0.2% to 15%')),
-    directCost: infer('costShare', unknown(0, Math.max(0.01, high * 0.6), 'nobody has established the direct cost; swept from nothing to 60% of the top price'), high, ' as a share of the top price'),
+    directCost: pooledRunCostPerDeal(one) ?? infer('costShare', unknown(0, Math.max(0.01, high * 0.6), 'nobody has established the direct cost; swept from nothing to 60% of the top price'), high, ' as a share of the top price'),
     // A repeating design's deals in the window, from these buyers' own stated volume only (a market's size never transfers).
     volume: repeatable
       ? infer(
@@ -445,6 +445,49 @@ function arrangementOpening(one: ConstructedArrangement, input: ArrangementInput
     fulfilledBy: null,
     competitiveAward: false,
     estimated: { arrangementKey: one.key, tier: price.inferred?.tier ?? one.value.tier, observations: price.inferred?.observations ?? one.value.observations, ...(transfer ? { transfer } : {}), ...(invented ? { invented: true } : {}) },
+  };
+}
+
+/**
+ * What one participant's deal costs in a pooled design whose shared run's
+ * fixed cost research established (B1j's `arrangement.fixedCost`), or null.
+ *
+ * Production 2026-11-18 (D4): arrangement 2821cce3c372 carried fixed run cost
+ * p50 4675 from the accepted claim clm_9cf1f15c, and no goal-model input read
+ * it. A model deal is one buyer's slot, so its direct cost was the blind
+ * "nothing to 60% of the top price" sweep — a margin of at least 40% assumed
+ * on every slot, whatever the run costs. The moment a slot price is filed, the
+ * plan would have modelled a $395 slot as earning $158–$395 while one $4,675
+ * run shared by ten buyers costs each $467.
+ *
+ * A participant's share is the run's cost over however many share the run,
+ * and nobody has established that count: swept log-uniformly (a share is a
+ * magnitude) from the run's low cost spread over the most buyers the model
+ * ever offers to (`MAX_BUYERS_OFFERED`) up to its high cost borne by one. An
+ * assumption with the run cost's claims as its source, never evidence, so it
+ * establishes nothing and the share stays a research question. Pure.
+ */
+export function pooledRunCostPerDeal(one: Pick<ConstructedArrangement, 'key' | 'design' | 'fixedCost'>): ModelInput | null {
+  const run = one.fixedCost;
+  if (one.design.aggregation !== 'POOLED_BUYERS' || !run || !(run.p50 > 0)) return null;
+  const top = Math.max(run.p50, run.p90);
+  const low = Math.max(0.01, Math.min(run.p50, run.p10 > 0 ? run.p10 : run.p50) / MAX_BUYERS_OFFERED);
+  const high = Math.max(low + 0.01, top);
+  const a = Math.log(low);
+  const b = Math.log(high);
+  const values = Array.from({ length: LOG_GRID_POINTS }, (_, i) => Math.exp(a + ((i + 0.5) / LOG_GRID_POINTS) * (b - a)));
+  const from = run.sources.length ? `: ${run.sources.slice(0, 6).join(', ')}` : '';
+  return {
+    value: null,
+    low,
+    high,
+    provenance: 'ASSUMPTION',
+    source: { kind: 'OTHER', ref: `arrangement:${one.key}`, note: `fixed cost of one shared run (${run.tier}, ${run.observations} obs.${from})` },
+    note:
+      `one shared run costs p10 ${Math.round(run.p10)} p50 ${Math.round(run.p50)} p90 ${Math.round(run.p90)} (${run.tier}, ${run.observations} obs.${from}); ` +
+      `a participant pays a share of it, and nobody has established how many share one run, so swept log-uniformly ${Math.round(low * 100) / 100}–${Math.round(high)} per deal`,
+    distribution: { kind: 'EMPIRICAL', values },
+    inferred: { tier: 'ASSUMED', justified: false, p10: low, p50: Math.sqrt(low * high), p90: high, observations: run.observations },
   };
 }
 
