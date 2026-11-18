@@ -743,7 +743,7 @@ const FEDERAL_REGISTER_RULES_URL =
   '&conditions%5Btype%5D%5B%5D=RULE' +
   '&fields%5B%5D=document_number&fields%5B%5D=title&fields%5B%5D=abstract&fields%5B%5D=html_url' +
   '&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies' +
-  '&fields%5B%5D=correction_of&fields%5B%5D=dates&fields%5B%5D=action';
+  '&fields%5B%5D=correction_of&fields%5B%5D=dates';
 
 export const FEED_SOURCES: readonly FeedSource[] = [
   {
