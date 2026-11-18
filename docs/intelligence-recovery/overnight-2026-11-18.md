@@ -141,3 +141,18 @@ Launch configuration, updated:
   - Factory is not to be disconnected, so the gate now follows 44272284255.
   - Expected live about 09:55Z; gate about 10:20Z.
 - **H:** no PR yet. Its agent is waiting on an MCP permission prompt only the owner can answer.
+
+## 10:15Z: gate on 8579d2d5 (live 09:34Z) still FAILS, now for a narrower reason
+- **Probe:** census run 44282625106, branch claude/gate-probe.
+- **What works:**
+  - cfa_ca236ebb is fixed_cost_per_run 4675 from clm_9cf1f15c, OBSERVED, superseding cfa_d740c475.
+  - cfa_c64c203b is contractor_rate 0.259, superseding the 259.
+  - constructionObservations / constructArrangements compose 2821cce3c372 with fixedCost p50 4675 (1 obs, COMPARABLE) and lineage clm_9cf1f15c. The stored arrangement record (09:33Z) carries it.
+- **Not yet in the plan:**
+  - The goal model (estimatedFromArrangement) drops any arrangement whose value is UNKNOWN. The slot price is unresearched, so no goal reading uses the cost.
+  - A single COMPARABLE observation keeps fixed_cost on the unknown list.
+  - No positive score, so nothing is manufactured.
+- **Plan inputs it does read** rest on transfers across mechanisms or populations: the Puzzle Society $500 per-submission fee taken as the price of a pooled presale, and Houzz / Freelancer days and costs.
+- **Repair H2** (code-only, claude/gh2-price-transfer) replaces H, which was stuck on an owner permission prompt and has been stopped.
+- **Gate after H2:** a plan input from an accepted claim with matching mechanism and population; candidate economics not resting on misapplied prices.
+- **Release-candidate cutoff:** 12:45Z.
