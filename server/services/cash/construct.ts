@@ -60,6 +60,7 @@ import { claimSources, claimsByIds } from '../../repos/research.ts';
 import type { CashCardFact, CashOpportunity, IndustryNode } from '../../domain/types.ts';
 import type { Estimate, Observation } from '../../domain/quant.ts';
 import { repeatBusinessObservations } from './deliverables/realization.ts';
+import { readMoneyFigures } from './figures.ts';
 import { combineTimings, openingTiming, timingOfText, type PaymentTimingReading } from './paymentTiming.ts';
 
 import {
@@ -248,6 +249,13 @@ export interface ConstructedArrangement {
      * plan sweeps the value as an ASSUMPTION and never as evidence.
      */
     notEvidence?: string;
+    /**
+     * Every observation the value rests on was stated by its source as one
+     * participant's share of a shared purchase (`per slot`), for these very
+     * buyers (F4): a pooled design's own unit, observed rather than carried
+     * from a precedent. Absent, the value rests on anything else.
+     */
+    perParticipant?: true;
   };
   /**
    * The share of these buyers approached who agree, reconstructed from close
@@ -855,6 +863,10 @@ export async function constructionObservations(
   const byId = new Map(all.map((one) => [one.id, one]));
   const usd = input.currency.toUpperCase() === 'USD';
   const windowMonths = Math.max(1, input.daysLeft) / 30;
+  // The source claims of the price facts, read once: whether each states its figure per participant (F4).
+  const priceClaims = new Map(
+    (await claimsByIds([...new Set(facts.filter((one) => FACT_PRICE_KEYS.includes(one.key) && one.sourceClaimId).map((one) => one.sourceClaimId!))])).map((one) => [one.id, one.claim]),
+  );
   for (const fact of facts) {
     const node = byId.get(fact.segment!.slice('map_'.length));
     if (!node || node.retiredAt || node.kind !== 'BUYER_TYPE' || !safeName(node.name) || !allowed(node.name)) continue;
@@ -892,9 +904,21 @@ export async function constructionObservations(
       observedAt: fact.observedAt ?? null,
       validUntil: fact.validUntil ?? null,
       measures: `${fact.key}${kind === 'volume' ? ` over ${Math.round(windowMonths * 10) / 10} month(s)` : ''}: ${fact.measures.slice(0, 120)}`,
+      ...(kind === 'priced' && statesParticipantShare(fact.sourceClaimId ? priceClaims.get(fact.sourceClaimId) : undefined, low, high) ? { unit: 'PARTICIPANT_SHARE' as const } : {}),
     });
   }
   return out;
+}
+
+/**
+ * Whether a price fact's own source claim states that very figure as one
+ * participant's share of a shared purchase (`$395 for a slot`, F4). Only the
+ * claim's words decide, and only a figure inside the fact's range: a
+ * whole-run total, a supply quote or a campaign price never states it. Pure.
+ */
+export function statesParticipantShare(claim: string | null | undefined, low: number, high: number): boolean {
+  if (!claim) return false;
+  return readMoneyFigures(claim, 'USD').some((one) => one.perParticipant === true && one.cents / 100 >= low - 0.005 && one.cents / 100 <= high + 0.005);
 }
 
 // ---------------------------------------------------------------- designs a model invents (lens S, S-11)
@@ -1746,10 +1770,18 @@ export function withoutPriceCostOverlap<T extends Pick<Observation, 'lineage'>>(
  * puzzle", a publisher's fee per accepted submission, was the SINGLE_COMPARABLE
  * price of a pooled presale design). Pure.
  */
-export function priceBasisOf(design: Pick<Design, 'aggregation'>, observations: number): { notEvidence?: string } {
+export function priceBasisOf(design: Pick<Design, 'aggregation'>, observations: number, perParticipant = false): { notEvidence?: string; perParticipant?: true } {
+  // F4: a price each of these buyers' sources states per slot is a participant's share of a pooled run: the design's own unit.
+  if (observations > 0 && perParticipant) return design.aggregation === 'POOLED_BUYERS' ? { perParticipant: true } : {};
   if (observations > 0 && design.aggregation === 'POOLED_BUYERS')
     return { notEvidence: "observed as one payer's price for a unit it bought, not a participant's share of a pooled run, so a different payment mechanism" };
   return {};
+}
+
+/** Whether every observation a value used is stated per participant (F4). Pure. */
+function participantOnly(value: Estimate, observations: readonly Observation[]): boolean {
+  const byId = new Map(observations.map((one) => [one.id, one]));
+  return value.used.length > 0 && value.used.every((id) => byId.get(id)?.unit === 'PARTICIPANT_SHARE');
 }
 
 function valueSources(value: Estimate, observations: readonly Observation[]): string[] {
@@ -2002,7 +2034,7 @@ function compose(args: {
     stress,
     evidenced,
     value: value
-      ? { tier: value.tier, p10: value.p10, p50: value.p50, p90: value.p90, observations: value.used.length, sources: valueSources(value, valueObs), ...valueEvidence(value), ...priceBasisOf(design, value.used.length) }
+      ? { tier: value.tier, p10: value.p10, p50: value.p50, p90: value.p90, observations: value.used.length, sources: valueSources(value, valueObs), ...valueEvidence(value), ...priceBasisOf(design, value.used.length, participantOnly(value, valueObs)) }
       : { tier: 'UNKNOWN', p10: 0, p50: 0, p90: 0, observations: 0 },
     ...(conversion && conversion.used.length > 0 && conversionObs.length > 0 && conversion.tier !== 'UNKNOWN'
       ? { conversion: { tier: conversion.tier, p10: conversion.p10, p50: conversion.p50, p90: conversion.p90, observations: conversion.used.length, sources: valueSources(conversion, conversionObs), ...valueEvidence(conversion) } }

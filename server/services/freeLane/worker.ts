@@ -43,7 +43,7 @@ import { findTool } from '../../mcp/tools.ts';
 import { MAX_LIST_ITEMS } from '../../mcp/researchTools.ts';
 import { workerIdentity } from '../identity/authenticate.ts';
 import { auditAdmission } from '../research/auditAdmission.ts';
-import { webSearch, webSearchRefusing } from '../sources/discover.ts';
+import { isEncyclopediaPage, readWithoutAnswerFor, rememberReadWithoutAnswer, webSearch, webSearchRefusing } from '../sources/discover.ts';
 import { httpCompleter, laneConfig, type Completer, type LaneConfig } from '../cheap/lane.ts';
 import { isRunpodSlot, runpodBreakerOpen, runpodCallWindow, runpodPaused } from '../cheap/runpod.ts';
 import type { SourceFetch } from '../sources/fetchForWorker.ts';
@@ -1277,6 +1277,13 @@ interface Ctx {
   why: string;
   /** How sources were found for a fragment: search results, and which of the read pages came from them. */
   discovery?: { searched: number; readFromSearch: number; readFromModel: number };
+  /**
+   * The fragment's model listed no claim from the pages it was shown while web
+   * search was refusing and none of those pages came from a web search result
+   * (only Wikipedia or remembered URLs): like "no readable source" in an outage,
+   * it says nothing about the question, so the attempt is refunded.
+   */
+  searchStarved?: boolean;
   /** What the item used while it ran (itemMeter.ts); recorded on its `FREE_LANE_ITEM` row. */
   usage?: ItemUsage;
 }
@@ -1332,6 +1339,9 @@ async function askFor(ctx: Ctx, prompt: string, options: { json?: boolean } = {}
  * Nothing ran, so asking again cannot repeat an effect (invariant 26 — a
  * statement timeout, whose outcome is unknown, is deliberately not here).
  */
+/** The queue's words for a lease that is gone: `refuseLease` and the effect fence. */
+export const LEASE_LOST = /lease is (?:no longer current|not current for that work item)/i;
+
 export const BRAIN_NOT_REACHED = /database pool had no free connection|Connection terminated due to connection timeout|too many clients/i;
 /** Waits between attempts when Brain's database was not reached. Exported for tests. */
 export const NOT_REACHED_BACKOFF_MS = [1_000, 3_000, 9_000];
@@ -1576,7 +1586,9 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
   const failedUrls: string[] = [];
   const fetchReasons: string[] = [];
   const fetchDetails: string[] = [];
-  const readable: { url: string; text: string }[] = [];
+  const readable: { url: string; text: string; asked: string }[] = [];
+  // Pages an earlier attempt at this question read and got no claim from (§15): not shown again.
+  const readBefore = readWithoutAnswerFor(question);
   /*
    * Pages are opened in waves rather than one after another: each wave opens as
    * many as are still needed at once, one per host, and results are taken in
@@ -1610,7 +1622,7 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
         const read = fetched.readable && fetched.text.trim().length > 200;
         const onTopic = read && pageBearsOn(fetched.text.slice(0, PAGE_READ_CHARS), subject);
         if (onTopic && readable.length < MAX_SOURCES) {
-          readable.push({ url: fetched.finalUrl, text: fetched.text.slice(0, PAGE_READ_CHARS) });
+          readable.push({ url: fetched.finalUrl, text: fetched.text.slice(0, PAGE_READ_CHARS), asked: url });
         } else if (!onTopic) {
           failedUrls.push(url);
           fetchReasons.push(read ? 'OFF_TOPIC' : fetched.readable ? 'EMPTY' : String(fetched.reason));
@@ -1621,11 +1633,11 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
   };
   // Pages that cannot answer are not opened at all, and the reason is kept for `none_because`.
   const keep = (urls: string[]): string[] => {
-    const kept = candidateOrder(urls, { academic });
+    const kept = candidateOrder(urls, { academic }).filter((url) => !readBefore.has(url));
     for (const url of urls) {
       if (kept.includes(url) || tried.has(url) || failedUrls.includes(url)) continue;
       failedUrls.push(url);
-      fetchReasons.push(isNavigationPage(url) ? 'NAVIGATION_PAGE' : 'ACADEMIC_OFF_SCOPE');
+      fetchReasons.push(readBefore.has(url) ? 'READ_BEFORE_NO_CLAIM' : isNavigationPage(url) ? 'NAVIGATION_PAGE' : 'ACADEMIC_OFF_SCOPE');
     }
     return kept;
   };
@@ -1771,6 +1783,11 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
       `if no sentence states anything the brief asks, reply {"claims":[]}.\nPrevious: ${JSON.stringify(previous).slice(0, 3000)}`,
   );
   if (ok) await complete(ctx, `free lane: claims submitted from ${readable.length} source(s)`);
+  else if (/: 0 claim\(s\) offered/.test(ctx.why)) {
+    // The model read these pages and listed nothing: the next attempt at this question opens others (§15).
+    rememberReadWithoutAnswer(question, readable.flatMap((one) => [one.asked, one.url]));
+    ctx.searchStarved = webSearchRefusing() && !readable.some((one) => fromSearch.has(one.asked) && !isEncyclopediaPage(one.asked));
+  }
   return ok;
 }
 
@@ -2076,6 +2093,8 @@ async function failingModels(now = Date.now()): Promise<Set<string>> {
   );
   const byModel = new Map<string, { ok: number; bad: number }>();
   for (const row of rows) {
+    // A model that answered and was refused for an expired lease reached its route (`notTheAnswer`).
+    if (row.outcome !== 'SUBMITTED' && row.reason && LEASE_LOST.test(row.reason)) continue;
     const model = String(row.reason ?? '').replace(/^model /, '').split(':')[0]!;
     const entry = byModel.get(model) ?? { ok: 0, bad: 0 };
     if (row.outcome === 'SUBMITTED') entry.ok += Number(row.n);
@@ -2184,10 +2203,19 @@ export function answerTally(
  * claims from the brief instead of a page. Declining to invent is the evidence
  * bar working; it is not accepted either, so it never makes a model look fit.
  * A bare empty list with no stated reason still counts against the model.
+ *
+ * Nor is an answer the queue refused because its lease had run out ("This
+ * lease is no longer current"): the queue's clock, not the model's answer.
+ * Production 62c38137, 2026-11-18 15:00–17:10Z: 27 GPU and 5 auto/best-coding
+ * audit answers were refused that way against 14 accepted, the refusals counted
+ * as rejected answers, and runpod/openai/gpt-oss-120b|RESEARCH_AUDIT was HELD
+ * BACK (report 44353886005) — so the GPU took audits only on its 30-minute
+ * re-probe while 14 audits waited up to 103 min with the pod billing.
  */
 export function notTheAnswer(reason: string): boolean {
   return (
     /threw:|refused: .*(?:connection|timeout|not queryable)|: model call failed|: no readable source among|; the model listed none because: \S/i.test(reason) ||
+    LEASE_LOST.test(reason) ||
     BRAIN_UNAVAILABLE.test(reason) ||
     PROVIDER_BUSY.test(reason)
   );
@@ -2481,14 +2509,22 @@ export interface TakeInput {
  * Renew the lease every `everyMs` until stopped, through `brain_heartbeat_work`:
  * the queue's guarded UPDATE that moves the expiry only while this exact lease
  * generation is still current (§19, §24), so a heartbeat can never take back an
- * item another worker has since claimed. The first refusal ends the renewals;
- * the submit then reports the lost lease as before.
+ * item another worker has since claimed. The first *lease refusal* ends the
+ * renewals; the submit then reports the lost lease as before.
  *
  * Production 62c38137, 2026-11-18 15:01–15:50Z (paid RunPod H200 run): the lane
  * claimed with a fixed 20-minute lease and never renewed it, while RunPod jobs
  * averaged ~671 s and auto/best-coding audits ~1,164 s. Four GPU audits and one
  * auto/best-coding audit finished past expiry and were refused at submit, "This
  * lease is no longer current" — paid work discarded.
+ *
+ * Only a refusal of the lease itself ends the renewals. A heartbeat that did not
+ * reach Brain — "Brain is temporarily busy", "database did not answer in time",
+ * a pool still full after `call`'s backoff — says nothing about the lease, and
+ * the same window (16:31–16:51Z) had the lane's controller shrinking for
+ * "Brain database saturated" three times. Stopping there would have left a live
+ * lease to run out under a job still working, which is the loss this exists to
+ * prevent; the next beat, a quarter-lease later, asks again.
  */
 export function keepLeaseAlive(renew: () => Promise<unknown>, everyMs: number): () => void {
   let stopped = false;
@@ -2498,10 +2534,15 @@ export function keepLeaseAlive(renew: () => Promise<unknown>, everyMs: number): 
     inFlight = true;
     renew()
       .catch((error) => {
+        const message = String((error as Error)?.message ?? error).slice(0, 200);
+        if (!leaseRefused(error)) {
+          console.warn('[free-lane] lease heartbeat did not reach Brain; renewing at the next beat:', message);
+          return;
+        }
         // Not current any more (expired, reclaimed or ended): stop asking.
         stopped = true;
         clearInterval(timer);
-        console.warn('[free-lane] lease heartbeat refused:', String((error as Error)?.message ?? error).slice(0, 200));
+        console.warn('[free-lane] lease heartbeat refused:', message);
       })
       .finally(() => {
         inFlight = false;
@@ -2512,6 +2553,17 @@ export function keepLeaseAlive(renew: () => Promise<unknown>, everyMs: number): 
     stopped = true;
     clearInterval(timer);
   };
+}
+
+/**
+ * Whether a heartbeat's error is the queue refusing this lease (`refuseLease`:
+ * FENCE_LOST, or NOT_FOUND for an item this principal no longer reaches), as
+ * opposed to a heartbeat that never got an answer. Exported for tests.
+ */
+export function leaseRefused(error: unknown): boolean {
+  const category = (error as { category?: unknown } | null)?.category;
+  if (category === 'FENCE_LOST' || category === 'NOT_FOUND') return true;
+  return LEASE_LOST.test(String((error as Error)?.message ?? error));
 }
 
 /** A renewal well inside the lease, so one slow or missed heartbeat does not lose it. */
@@ -2960,7 +3012,10 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
    * without a report. Refunded and cooled like a provider outage, so research
    * resumes with its work when search answers again.
    */
-  const searchOutage = !ok && one.workType === 'RESEARCH_FRAGMENT' && /^no readable source among/.test(ctx.why) && webSearchRefusing();
+  const searchOutage =
+    !ok &&
+    one.workType === 'RESEARCH_FRAGMENT' &&
+    ((/^no readable source among/.test(ctx.why) && webSearchRefusing()) || ctx.searchStarved === true);
   const strikes = transient || brainUnavailable || searchOutage ? (transientStrikes.get(one.workItemId) ?? 0) + 1 : 0;
   const refund = (transient || brainUnavailable || searchOutage) && (strikes < 3 || providerFailure || searchOutage);
   // Recorded before the cooldowns are touched: one answer from a route whose recent calls still

@@ -7,7 +7,7 @@
  * claimed, and on what basis, cannot be quietly revised afterwards.
  */
 import { parseLanes, serializeLanes } from '../domain/evidenceLanes.ts';
-import { isOpportunitySignal, POINT_IN_TIME_SIGNALS, sellersOwnPage } from '../domain/opportunitySignals.ts';
+import { isOpportunitySignal, observationExpiry, POINT_IN_TIME_SIGNALS, sellersOwnPage } from '../domain/opportunitySignals.ts';
 import { isCapabilityFinding } from '../domain/manufacturing.ts';
 import { isStructuralFinding } from '../domain/industry.ts';
 import { isMonetizationMethod } from '../domain/monetization.ts';
@@ -1333,6 +1333,67 @@ export async function listClaimsForFragment(fragmentId: string): Promise<Researc
     .map(mapClaim);
 }
 
+/** One free-lane model's research claims, as `claimQualityByModel` counts them. */
+export interface ModelClaimQuality {
+  /** The `FREE_LANE_ITEM` event's reason, `model <slot>`. */
+  reason: string | null;
+  claims: number;
+  sourced: number;
+  refuted: number;
+  accepted: number;
+  acceptedRefuted: number;
+}
+
+/**
+ * The claims on the fragments each free-lane model submitted, for a window
+ * that ends now — counted where the evidence gate ruled in the window, not
+ * only where the claim was written in it.
+ *
+ * A claim is stored at submission and judged later, by a separate
+ * verification item, and on the free lane that later is often the next hour
+ * (production, 2026-11-18: the GPU's 16 claims were submitted 15:22–15:24Z and
+ * all 16 accepted at 16:25Z). Windowed by submission alone, the hourly report
+ * read them as unjudged in the first hour and did not see them in the second,
+ * so it printed "no accepted GPU claims" for two hours in which every GPU
+ * claim the gate judged was accepted. A fragment counts when its submission or
+ * its gate (`completed_at`, which `gateFragment` writes with the verdict) falls
+ * in the window; a submission older than `lookbackHours` is not looked for.
+ * Each claim counts once per model however many times its fragment was
+ * submitted.
+ */
+export async function claimQualityByModel(since: string, lookbackHours = 24): Promise<ModelClaimQuality[]> {
+  const earliest = new Date(Date.parse(since) - lookbackHours * 3_600_000).toISOString();
+  const rows = await getDb().all<{
+    reason: string | null; claims: number | string; sourced: number | string | null; refuted: number | string | null;
+    accepted: number | string | null; accepted_refuted: number | string | null;
+  }>(
+    `SELECT one.reason AS reason, COUNT(*) AS claims,
+            SUM(CASE WHEN one.sourced = 1 THEN 1 ELSE 0 END) AS sourced,
+            SUM(CASE WHEN one.contradiction_state = 'REFUTED' THEN 1 ELSE 0 END) AS refuted,
+            SUM(CASE WHEN one.accepted = 1 THEN 1 ELSE 0 END) AS accepted,
+            SUM(CASE WHEN one.accepted = 1 AND one.contradiction_state = 'REFUTED' THEN 1 ELSE 0 END) AS accepted_refuted
+       FROM (SELECT DISTINCT e.reason AS reason, c.id AS id, c.sourced AS sourced,
+                    c.contradiction_state AS contradiction_state, c.accepted AS accepted
+               FROM bin_events e
+               JOIN work_items w ON w.id = e.work_item_id
+               JOIN research_fragments f ON f.id = w.fragment_id
+               JOIN research_claims c ON c.fragment_id = f.id
+              WHERE e.event_type = 'FREE_LANE_ITEM' AND e.outcome = 'SUBMITTED'
+                AND e.workload_class = 'RESEARCH_FRAGMENT' AND e.at >= ?
+                AND (e.at >= ? OR f.completed_at >= ?)) one
+      GROUP BY one.reason`,
+    [earliest, since, since],
+  );
+  return rows.map((row) => ({
+    reason: row.reason,
+    claims: Number(row.claims),
+    sourced: Number(row.sourced ?? 0),
+    refuted: Number(row.refuted ?? 0),
+    accepted: Number(row.accepted ?? 0),
+    acceptedRefuted: Number(row.accepted_refuted ?? 0),
+  }));
+}
+
 /**
  * The claims a synthesis is allowed to see.
  *
@@ -1738,11 +1799,29 @@ export async function signalledClaims(input: {
   const pointSignals = [...POINT_IN_TIME_SIGNALS];
   const staleSql = input.staleBefore
     ? // Every operand is non-null, so a NULL can never turn NOT (…) into "not read".
-      `AND NOT (c.closes_on IS NULL AND c.source_date IS NOT NULL AND c.source_date LIKE '____-__%' AND c.source_date < ?
+      // A date known only to its year or month is compared at that precision: its last moment is what
+      // `observationExpiry` holds it to, so "2026" is not stale in 2026 and "2025" is.
+      `AND NOT (c.closes_on IS NULL AND c.source_date IS NOT NULL
+             AND ((c.source_date LIKE '____-__-__%' AND c.source_date < ?)
+                  OR (c.source_date LIKE '____-__' AND c.source_date < ?)
+                  OR (c.source_date LIKE '____' AND c.source_date < ?))
              AND (COALESCE(c.opportunity_signal, '') IN (${pointSignals.map(() => '?').join(', ')})
                   OR (c.opportunity_signal IS NULL AND COALESCE(c.evidence_lane, '') = ?)))`
     : '';
-  const staleParams = input.staleBefore ? [input.staleBefore, ...pointSignals, GOAL_REQUEST_LANE] : [];
+  const staleParams = input.staleBefore
+    ? [input.staleBefore, input.staleBefore.slice(0, 7), input.staleBefore.slice(0, 4), ...pointSignals, GOAL_REQUEST_LANE]
+    : [];
+  /*
+   * And what is stale in a form the SQL cannot compare (a date in any other
+   * shape `Date.parse` reads) is dropped here, before it counts toward
+   * `limit`, by the same rule the harvest applies. Production, 2026-11-18:
+   * the harvest read 40 rows, every one stale, skipped them all and filed
+   * nothing, while 59 fresh signalled claims sat behind them.
+   */
+  const staleAt = input.staleBefore ? new Date(input.staleBefore) : null;
+  const isStale = (claim: ResearchClaim): boolean =>
+    staleAt !== null && claim.opportunitySignal !== null &&
+    observationExpiry({ signal: claim.opportunitySignal, closesOn: claim.closesOn ?? null, sourceDate: claim.sourceDate, freshDays: 0, now: staleAt }).stale;
   /*
    * Paged until `limit` claims survive the checks below, not one window.
    *
@@ -1759,7 +1838,7 @@ export async function signalledClaims(input: {
   for (let page = 0; page < SIGNALLED_MAX_PAGES && out.length < want; page += 1) {
     const rows = await signalledPage(input.projectId, staleSql, staleParams, want, page * want);
     for (const one of keepSignalled(rows)) {
-      if (out.length < want) out.push(one);
+      if (out.length < want && !isStale(one.claim)) out.push(one);
     }
     if (rows.length < want) break;
   }

@@ -265,9 +265,34 @@ export function observationExpiry(input: {
   const observedAt = Number.isNaN(parsed) ? null : new Date(parsed).toISOString();
   if (input.closesOn) return { stale: false, expiresAt: input.closesOn, observedAt };
   if (!POINT_IN_TIME_SIGNALS.has(input.signal) || observedAt === null) return { stale: false, expiresAt: null, observedAt };
+  /*
+   * A source dated only to a year or a month states no day (production,
+   * 2026-11-18: workers file "2026" for a page that names only its year).
+   * `Date.parse("2026")` is 1 January, so every such observation read as
+   * stale from 31 January on, and the harvest dropped all of them: 137 of the
+   * goal's 196 signalled claims, and no opening filed for four days. The
+   * period's last moment is the latest the page can have been true at: the
+   * observation is stale only once that has passed the window, and otherwise
+   * it has no observation day, exactly as an undated source has none.
+   */
+  const coarse = coarsePeriodEnd(input.sourceDate!);
+  if (coarse !== null) {
+    const until = coarse + input.freshDays * 86_400_000;
+    if (until < input.now.getTime()) return { stale: true, observedAt };
+    return { stale: false, expiresAt: new Date(until).toISOString().slice(0, 10), observedAt: null };
+  }
   const until = parsed + input.freshDays * 86_400_000;
   if (until < input.now.getTime()) return { stale: true, observedAt };
   return { stale: false, expiresAt: new Date(until).toISOString().slice(0, 10), observedAt };
+}
+
+/** The last millisecond of a year-only (`2026`) or year-month (`2026-08`) date; null for any finer or other date. */
+function coarsePeriodEnd(sourceDate: string): number | null {
+  const year = /^\s*(\d{4})\s*$/.exec(sourceDate);
+  if (year) return Date.UTC(Number(year[1]) + 1, 0, 1) - 1;
+  const month = /^\s*(\d{4})-(\d{2})\s*$/.exec(sourceDate);
+  if (month) return Date.UTC(Number(month[1]), Number(month[2]), 1) - 1;
+  return null;
 }
 
 /** How an opening of each kind is named: what it is, never a sentence a source wrote. */

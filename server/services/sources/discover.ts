@@ -144,6 +144,7 @@ export function resetSearchState(): void {
   pausedUntil.clear();
   refusalStreak.clear();
   remembered.clear();
+  readWithoutAnswer.clear();
   for (const key of Object.keys(searchStats) as (keyof typeof searchStats)[]) searchStats[key] = 0;
 }
 
@@ -272,6 +273,60 @@ export async function webSearch(query: string, deps: SearchDeps = {}): Promise<s
     return await run;
   } finally {
     waiting -= 1;
+  }
+}
+
+/**
+ * Pages Brain read for a question and the model then said state nothing it
+ * asks, so a later attempt at the same question opens other pages (§15: a
+ * retry is not a repair).
+ *
+ * Production, 2026-11-18 15:00–17:00Z (GPU run, release 62c38137): DuckDuckGo
+ * answered 202 on both endpoints every hour (`SOURCE_SEARCH` REFUSED rows), so
+ * each fragment's candidates were Wikipedia's (91 of 116 pages read). Fragment
+ * frg_a3abc1519bfb4c0197ae and its repair frg_8fdaeab3271f49359197 ran six
+ * work items, twelve attempts, on the same four encyclopedia pages — every one
+ * "None of the provided sources contain any sentence about GitHub's bug bounty
+ * program" — and blocked WORK_FAULTED; the overnight dive on the same opening
+ * did the same twelve times on one GitHub press page. Same question, same
+ * cached search, same pages, same answer.
+ *
+ * Keyed by the question's own words, so a replacement item and a repair
+ * fragment (same question) both see it. In memory and bounded: it steers which
+ * pages are opened, and nothing is concluded from it.
+ */
+const READ_WITHOUT_ANSWER_TTL_MS = 6 * 60 * 60_000;
+const READ_WITHOUT_ANSWER_MAX = 1000;
+const readWithoutAnswer = new Map<string, { at: number; urls: Set<string> }>();
+
+function questionKey(question: string): string {
+  return question.replace(/\s+/g, ' ').trim().toLowerCase().slice(0, 600);
+}
+
+/** Record pages the model read for `question` and listed no claim from. */
+export function rememberReadWithoutAnswer(question: string, urls: readonly string[], now = Date.now()): void {
+  const key = questionKey(question);
+  if (!key || urls.length === 0) return;
+  const known = readWithoutAnswer.get(key);
+  const fresh = known && now - known.at < READ_WITHOUT_ANSWER_TTL_MS ? known.urls : new Set<string>();
+  for (const url of urls) fresh.add(url);
+  readWithoutAnswer.delete(key);
+  readWithoutAnswer.set(key, { at: now, urls: fresh });
+  while (readWithoutAnswer.size > READ_WITHOUT_ANSWER_MAX) readWithoutAnswer.delete(readWithoutAnswer.keys().next().value!);
+}
+
+/** Pages already read for `question` that answered nothing, within the last six hours. */
+export function readWithoutAnswerFor(question: string, now = Date.now()): ReadonlySet<string> {
+  const known = readWithoutAnswer.get(questionKey(question));
+  return known && now - known.at < READ_WITHOUT_ANSWER_TTL_MS ? known.urls : new Set<string>();
+}
+
+/** Wikipedia: what Brain falls back to when web search gives nothing. Pure. */
+export function isEncyclopediaPage(url: string): boolean {
+  try {
+    return /(^|\.)wikipedia\.org$/.test(new URL(url).hostname.toLowerCase());
+  } catch {
+    return false;
   }
 }
 
