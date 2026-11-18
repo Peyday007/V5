@@ -356,6 +356,27 @@ const norm = (text: string | null | undefined) => (text ?? '').toLowerCase().rep
  */
 export const payerKey = (text: string | null | undefined): string => buyerNameKey(norm(text));
 
+/**
+ * The live map buyer type whose construction facts the plan reads as evidence
+ * about the buyers `demandName` names (B1g, 2026-11-18): exactly the read
+ * `constructionObservations` and `compose` make — a fact segmented to
+ * `map_<node>` reaches an arrangement when the node is a live, safely named
+ * BUYER_TYPE and `payerKey(node.name) === payerKey(demand.name)` — so a fact
+ * filed against what this returns is one the plan holds for that arrangement,
+ * whatever the arrangement's demand came from (the map, an opening, a model).
+ * Null when no such node exists: then no fact the plan reads is about these
+ * buyers, and none should be filed. The exact name first, then the oldest.
+ */
+export function planBuyerType(demandName: string | null | undefined, nodes: readonly IndustryNode[]): IndustryNode | null {
+  const key = payerKey(demandName);
+  if (!key) return null;
+  const want = (demandName ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const pool = nodes
+    .filter((one) => one.kind === 'BUYER_TYPE' && !one.retiredAt && safeName(one.name) && payerKey(one.name) === key)
+    .sort((a, b) => Number(b.name.toLowerCase() === want) - Number(a.name.toLowerCase() === want) || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+  return pool[0] ?? null;
+}
+
 function rootOf(node: IndustryNode, byId: Map<string, IndustryNode>): IndustryNode {
   let at = node;
   const seen = new Set<string>();

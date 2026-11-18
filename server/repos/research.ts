@@ -1202,26 +1202,32 @@ export async function unfiledUnitEconomicClaims(projectId: string, afterId: stri
  * round may never file a report.
  */
 export async function unfiledConstructedRoundClaims(projectId: string, afterId: string, limit: number): Promise<{ claim: ResearchClaim; bucketId: string }[]> {
+  /*
+   * One row per claim before LIMIT counts it (B1g): joining the rounds made a
+   * claim one row per mission and round its orchestration is linked to, and the
+   * duplicates were dropped after LIMIT had counted them, so a pass read fewer
+   * than `limit` claims. The claim is selected once (`IN`), and its round is
+   * one bucket chosen in the statement — the least, so an arrangement's 12-hex
+   * key sorts before a pathway round's `pw…` when both asked it.
+   */
   const rows = await getDb().all<ResearchClaimRow & { round_bucket_id: string }>(
-    `SELECT c.*, r.bucket_id AS round_bucket_id FROM research_claims c
-       JOIN russell_missions m ON m.orchestration_id = c.orchestration_id
-       JOIN cash_discovery_rounds r ON r.candidate_id = m.candidate_id
-      WHERE r.project_id = ? AND r.bucket_id LIKE ?
+    `SELECT c.*,
+            (SELECT MIN(r.bucket_id) FROM russell_missions m
+               JOIN cash_discovery_rounds r ON r.candidate_id = m.candidate_id
+              WHERE m.orchestration_id = c.orchestration_id AND r.project_id = ? AND r.bucket_id LIKE ?) AS round_bucket_id
+       FROM research_claims c
+      WHERE c.orchestration_id IN (
+              SELECT m.orchestration_id FROM russell_missions m
+                JOIN cash_discovery_rounds r ON r.candidate_id = m.candidate_id
+               WHERE r.project_id = ? AND r.bucket_id LIKE ? AND m.orchestration_id IS NOT NULL)
         AND c.accepted = 1 AND c.source_url IS NOT NULL AND c.structural_finding IS NULL
         AND c.id > ?
         AND NOT EXISTS (SELECT 1 FROM construction_facts f WHERE f.source_claim_id = c.id)
       ORDER BY c.id
       LIMIT ?`,
-    [projectId, 'goal-%-mx-%', afterId, Math.max(1, Math.trunc(limit))],
+    [projectId, 'goal-%-mx-%', projectId, 'goal-%-mx-%', afterId, Math.max(1, Math.trunc(limit))],
   );
-  const seen = new Set<string>();
-  const out: { claim: ResearchClaim; bucketId: string }[] = [];
-  for (const row of rows) {
-    if (seen.has(row.id)) continue;
-    seen.add(row.id);
-    out.push({ claim: mapClaim(row), bucketId: row.round_bucket_id });
-  }
-  return out;
+  return rows.map((row) => ({ claim: mapClaim(row), bucketId: row.round_bucket_id }));
 }
 
 export async function getClaim(id: string): Promise<ResearchClaim | null> {
