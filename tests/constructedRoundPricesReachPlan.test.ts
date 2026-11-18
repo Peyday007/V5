@@ -23,7 +23,9 @@ import { createFragments, createOrchestration, insertClaims } from '../server/re
 import { listProjectConstructionFacts } from '../server/repos/construction.ts';
 import { recordConstructedArrangements } from '../server/repos/monetization.ts';
 import { seedSubject } from '../server/services/industry/seed.ts';
-import { backfillCandidates, backfillClaimFacts } from '../server/services/industry/expand.ts';
+import { backfillCandidates, backfillClaimFacts, backfillConstructedShare } from '../server/services/industry/expand.ts';
+import { unfiledConstructedRoundClaims } from '../server/repos/research.ts';
+import { createOpportunity } from '../server/repos/cashPortfolio.ts';
 import { constructionObservations } from '../server/services/cash/construct.ts';
 import { planInputsFingerprint } from '../server/services/goals/plan.ts';
 import type { Layer } from '../server/domain/types.ts';
@@ -34,6 +36,7 @@ const GOAL = 'wst_7b4fcbb5f2384f31b6c3';
 let projectId = '';
 let layer: Layer;
 let modeId = '';
+let ownerId = '';
 
 beforeEach(async () => {
   const fixture = await freshProject();
@@ -43,6 +46,7 @@ beforeEach(async () => {
   const started = await activate({ projectId, ownerUserId: owner.id, actorUserId: owner.id, objective: 'Collect 10000 dollars of settled cash.' });
   if (!started.ok) throw new Error('could not activate');
   modeId = started.mode.id;
+  ownerId = owner.id;
 });
 
 /** The map buyer, the arrangement the plan composed for it, and an OPEN round asking about it. */
@@ -133,5 +137,116 @@ describe('B1c: a priced claim on an OPEN constructed round reaches the plan', ()
     await accepted(orchestrationId, fragmentId, ['Oppizi charges $0.47 per postcard piece.']);
     expect((await backfillClaimFacts(projectId)).filed).toEqual([]);
     expect(await listProjectConstructionFacts(projectId)).toEqual([]);
+  });
+});
+
+
+/**
+ * B1g, production 2026-11-18, project prj_22fb4fec295f403a8a22: of 200
+ * constructed-round claims, 185 were refused "round's arrangement names no
+ * live map buyer type" — `industry_node_id` is set only when the demand came
+ * from the map (297 of 1,316 arrangements). The plan reads a `map_<node>` fact
+ * for any arrangement whose demand name is that node's population, so that is
+ * the buyer a claim is filed against.
+ */
+describe('B1g: a constructed round files against the buyer the plan reads, from its own share and cursor', () => {
+  /** Drop the map column and give the arrangement a demand from somewhere else. */
+  async function unmapped(design: unknown, opportunityId: string | null = null): Promise<void> {
+    await getDb().run('UPDATE monetization_paths SET industry_node_id = NULL, opportunity_id = ?, design_json = ? WHERE project_id = ?', [opportunityId, JSON.stringify(design), projectId]);
+  }
+
+  it('(a) files an opening-demand arrangement’s price against the map buyer type the plan matches by population, and the plan reads it for that demand', async () => {
+    const { buyerId, orchestrationId, fragmentId } = await openArrangementRound();
+    // The demand came from an opening: its payer, singular, is the map node "Local service businesses" by the plan's own key.
+    await unmapped({ version: 1, arrangement: { demand: { name: 'Local service business', from: 'OPENING', ref: 'cop_x' } } });
+    const [priced] = await accepted(orchestrationId, fragmentId, ['Oppizi charges $0.47 per postcard piece for a 10,000-home EDDM run.']);
+    const pool = await backfillCandidates(projectId);
+    const decision = pool.decisions.find((one) => one.claimId === priced)!;
+    expect(decision.reason).toBeNull();
+    expect(decision.candidate?.buyer?.id).toBe(buyerId);
+    expect((await backfillClaimFacts(projectId)).filed.map((one) => one.segment)).toEqual([`map_${buyerId}`]);
+    const read = await constructionObservations({ projectId, currency: 'USD', daysLeft: 22 });
+    expect(read.priced.map((one) => one.lineage)).toEqual([[`claim:${priced}`]]);
+  });
+
+  it('(a) reads the demand from the arrangement’s opening when its stored design names none', async () => {
+    const { buyerId, orchestrationId, fragmentId } = await openArrangementRound();
+    const opening = await createOpportunity({
+      projectId, cashModeId: modeId, ownerUserId: ownerId, title: 'EDDM for local service businesses', mechanism: 'PRODUCTIZED_SERVICE',
+      currency: 'USD', sourceClaimId: null, opportunitySignal: 'RECURRING_OUTSOURCED_WORK', source: 'A printer', requiredCapabilities: [],
+    } as Parameters<typeof createOpportunity>[0]);
+    await getDb().run('UPDATE cash_opportunities SET payer = ? WHERE id = ?', ['The local service businesses', opening.id]);
+    await unmapped({}, opening.id);
+    const [priced] = await accepted(orchestrationId, fragmentId, ['Oppizi charges $0.47 per postcard piece.']);
+    const pool = await backfillCandidates(projectId);
+    expect(pool.decisions.find((one) => one.claimId === priced)?.candidate?.buyer?.id).toBe(buyerId);
+  });
+
+  it('(a) refuses, naming the population, when the map holds no buyer type the plan would read for it — and invents none', async () => {
+    const { orchestrationId, fragmentId } = await openArrangementRound();
+    await unmapped({ version: 1, arrangement: { demand: { name: 'Regional dental chains', from: 'REVERSE', ref: 'x' } } });
+    const [priced] = await accepted(orchestrationId, fragmentId, ['Oppizi charges $0.47 per postcard piece.']);
+    const decision = (await backfillCandidates(projectId)).decisions.find((one) => one.claimId === priced)!;
+    expect(decision.candidate).toBeNull();
+    expect(decision.reason).toMatch(/plan reads no fact/);
+    expect(decision.unmatchedBuyer).toBe('Regional dental chains');
+    const nodesBefore = (await getDb().get<{ n: number }>('SELECT COUNT(*) AS n FROM industry_nodes WHERE project_id = ?', [projectId]))!.n;
+    expect((await backfillClaimFacts(projectId)).filed).toEqual([]);
+    expect((await getDb().get<{ n: number }>('SELECT COUNT(*) AS n FROM industry_nodes WHERE project_id = ?', [projectId]))!.n).toBe(nodesBefore);
+  });
+
+  it('(a) says a pathway round names no arrangement', async () => {
+    const { orchestrationId, fragmentId } = await openArrangementRound();
+    await getDb().run('UPDATE cash_discovery_rounds SET bucket_id = ? WHERE id = ?', [`goal-${GOAL}-mx-pwabcdef0123`, `cdr_${KEY}`]);
+    const [priced] = await accepted(orchestrationId, fragmentId, ['Oppizi charges $0.47 per postcard piece.']);
+    expect((await backfillCandidates(projectId)).decisions.find((one) => one.claimId === priced)?.reason).toMatch(/pathway construction/);
+  });
+
+  it('(b) sources 1 and 2 cannot starve source 3: it keeps its own share of the batch', async () => {
+    const { buyerId, orchestrationId, fragmentId } = await openArrangementRound();
+    // Four declared unit economics, each fileable by source 1, and one constructed-round price.
+    const declared = await accepted(orchestrationId, fragmentId, [1, 2, 3, 4].map((n) => `Local service businesses pay $${n}.00 per flyer delivered (declared ${n}).`));
+    for (const [i, id] of declared.entries()) {
+      await getDb().run(
+        `UPDATE research_claims SET structural_finding = 'UNIT_ECONOMIC', structural_subject = 'price_per_unit', structural_qualifier = 'Local service businesses', structural_amount_cents = ? WHERE id = ?`,
+        [(i + 1) * 100, id],
+      );
+    }
+    const [roundPrice] = await accepted(orchestrationId, fragmentId, ['Oppizi charges $0.47 per postcard piece (round).']);
+    expect(backfillConstructedShare(2)).toBe(1);
+    const filed = await backfillClaimFacts(projectId, 2);
+    expect(filed.filed).toHaveLength(2);
+    expect(filed.filed.map((one) => one.sourceClaimId)).toContain(roundPrice);
+    expect(filed.filed.every((one) => one.segment === `map_${buyerId}`)).toBe(true);
+  });
+
+  it('(c) the dry run reads source 3 from its own cursor, never source 1’s', async () => {
+    const { orchestrationId, fragmentId } = await openArrangementRound();
+    const [priced] = await accepted(orchestrationId, fragmentId, ['Oppizi charges $0.47 per postcard piece.']);
+    // A source-1 cursor past every claim does not hide source 3's claims.
+    const past = await backfillCandidates(projectId, { unitEconomic: '~' });
+    expect(past.decisions.filter((one) => one.source === 'CONSTRUCTED_ROUND').map((one) => one.claimId)).toEqual([priced]);
+    // Source 3's own cursor does.
+    const after = await backfillCandidates(projectId, { constructed: '~' });
+    expect(after.decisions.filter((one) => one.source === 'CONSTRUCTED_ROUND')).toEqual([]);
+  });
+
+  it('(d) LIMIT counts distinct claims: an orchestration linked to two rounds does not halve the scan', async () => {
+    const { orchestrationId, fragmentId } = await openArrangementRound();
+    // A second round (a pathway round) whose mission is linked to the same orchestration.
+    const candidate = await createCandidate({ projectId, visibility: 'SHARED', title: 'Pathway', statement: 'Brain constructed a transaction; confirm or refute it.' });
+    const at = new Date().toISOString();
+    await getDb().run(
+      `INSERT INTO cash_discovery_rounds (id, project_id, cash_mode_id, bucket_id, mechanism, round, candidate_id, state, opened_at, found, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 1, ?, 'OPEN', ?, 0, ?, ?)`,
+      ['cdr_pw', projectId, modeId, `goal-${GOAL}-mx-pwabcdef0123`, 'GOAL_MECHANISM', candidate.id, at, at, at],
+    );
+    const { mission } = await launchMission({ projectId, visibility: 'SHARED', objective: 'pw', whyNow: 'test', idempotencyKey: 'pw:1', candidateId: candidate.id });
+    await linkMission({ missionId: mission.id, orchestrationId });
+    const ids = await accepted(orchestrationId, fragmentId, ['Oppizi charges $0.47 per postcard piece.', 'A printer charges $0.52 per postcard piece.', 'Another charges $0.61 per postcard piece.']);
+    const two = await unfiledConstructedRoundClaims(projectId, '', 2);
+    expect(two.map((one) => one.claim.id)).toEqual([...ids].sort().slice(0, 2));
+    // The arrangement's round, not the pathway round, is the one a claim is read under.
+    expect(new Set(two.map((one) => one.bucketId))).toEqual(new Set([`goal-${GOAL}-mx-${KEY}`]));
   });
 });

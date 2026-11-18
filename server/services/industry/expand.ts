@@ -55,7 +55,8 @@ import { createCandidate } from '../../repos/russellCandidates.ts';
 import { byClaimTime, everyPage, missionsForRounds } from '../russell/roundMissions.ts';
 import { claimsByIds, structuralClaims, unfiledConstructedRoundClaims, unfiledUnitEconomicClaims } from '../../repos/research.ts';
 import { arrangementForLegacyKey } from '../../repos/monetization.ts';
-import { arrangementKeyOfBucket } from '../cash/arrangementLibrary.ts';
+import { ARRANGEMENT_BUCKET_MARK, arrangementKeyOfBucket } from '../cash/arrangementLibrary.ts';
+import { planBuyerType } from '../cash/construct.ts';
 import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
 import { readMoneyFigures } from '../cash/figures.ts';
 import {
@@ -1196,26 +1197,56 @@ async function cardEvidenceDecisions(projectId: string, nodes: readonly Industry
  * is source 1's; one with no per-unit figure, or on an arrangement whose
  * buyers are not a live map buyer type, is skipped.
  */
+type RoundBuyer = { buyer: IndustryNode; reason?: undefined; unmatchedBuyer?: undefined } | { buyer: null; reason: string; unmatchedBuyer?: string };
+
+/**
+ * Whose price a constructed round's claim is (B1g, production 2026-11-18): of
+ * 200 constructed-round claims, 185 were refused because their arrangement's
+ * `industry_node_id` was null — set only when the demand came from the map,
+ * on 297 of 1,316 arrangements. The plan never reads facts by that column: it
+ * reads a `map_<node>` fact for every arrangement whose demand name is that
+ * node's population (`planBuyerType`, construct.ts). So the buyer is the map
+ * node when the arrangement names one, else the plan's own match for the
+ * arrangement's demand (its stored design, else its opening's payer). When
+ * the map holds no such population there is no key the plan reads, and the
+ * claim is refused with the population named — never filed against a guess.
+ * A pathway round (`mx-pw…`, `PATHWAY_KEY_PREFIX` in goals/plan.ts) is keyed by a hash of an opening and a gap and
+ * names no arrangement, so it has no buyer to file against.
+ */
+async function constructedRoundBuyer(projectId: string, bucketId: string, nodes: readonly IndustryNode[]): Promise<RoundBuyer> {
+  const key = arrangementKeyOfBucket(bucketId);
+  if (!key) {
+    return { buyer: null, reason: bucketId.includes(`${ARRANGEMENT_BUCKET_MARK}pw`) ? 'round is a pathway construction, which names no arrangement' : 'round names no arrangement key' };
+  }
+  const arrangement = await arrangementForLegacyKey(projectId, key);
+  if (!arrangement) return { buyer: null, reason: 'round’s arrangement is not in the library' };
+  const mapped = arrangement.industryNodeId ? nodes.find((one) => one.id === arrangement.industryNodeId) : undefined;
+  if (mapped && mapped.kind === 'BUYER_TYPE' && !mapped.retiredAt) return { buyer: mapped };
+  const designed = (arrangement.design['arrangement'] as { demand?: { name?: unknown } } | undefined)?.demand?.name;
+  let demand = typeof designed === 'string' && designed.trim() ? designed : null;
+  if (!demand && arrangement.opportunityId) demand = (await getOpportunity(arrangement.opportunityId))?.payer ?? null;
+  if (!demand && mapped) demand = mapped.name;
+  if (!demand) return { buyer: null, reason: 'round’s arrangement names no buyers' };
+  const buyer = planBuyerType(demand, nodes);
+  return buyer ? { buyer } : { buyer: null, reason: 'round’s arrangement buyers are no live map buyer type, so the plan reads no fact for them', unmatchedBuyer: demand };
+}
+
 async function constructedRoundDecisions(
   projectId: string,
   nodes: readonly IndustryNode[],
   rows: readonly { claim: ResearchClaim; bucketId: string }[],
 ): Promise<BackfillDecision[]> {
-  const buyerByKey = new Map<string, IndustryNode | null>();
+  const buyerByBucket = new Map<string, RoundBuyer>();
   const out: BackfillDecision[] = [];
   for (const { claim, bucketId } of rows) {
-    const refuse = (reason: string): BackfillDecision => ({ source: 'CONSTRUCTED_ROUND', claimId: claim.id, candidate: null, reason, countsAsSkipped: true });
-    const key = arrangementKeyOfBucket(bucketId) ?? '';
-    if (!buyerByKey.has(key)) {
-      const arrangement = key ? await arrangementForLegacyKey(projectId, key) : null;
-      const node = arrangement?.industryNodeId ? nodes.find((one) => one.id === arrangement.industryNodeId) : undefined;
-      buyerByKey.set(key, node && node.kind === 'BUYER_TYPE' && !node.retiredAt ? node : null);
-    }
-    const buyer = buyerByKey.get(key) ?? null;
-    if (!buyer) {
-      out.push(refuse('round’s arrangement names no live map buyer type'));
+    const refuse = (reason: string, unmatchedBuyer?: string): BackfillDecision => ({ source: 'CONSTRUCTED_ROUND', claimId: claim.id, candidate: null, reason, countsAsSkipped: true, ...(unmatchedBuyer ? { unmatchedBuyer } : {}) });
+    if (!buyerByBucket.has(bucketId)) buyerByBucket.set(bucketId, await constructedRoundBuyer(projectId, bucketId, nodes));
+    const resolved = buyerByBucket.get(bucketId)!;
+    if (!resolved.buyer) {
+      out.push(refuse(resolved.reason, resolved.unmatchedBuyer));
       continue;
     }
+    const buyer = resolved.buyer;
     const stated = readMoneyFigures(claim.claim, 'USD').filter((one) => one.cents > 0);
     if (!stated.some((one) => one.perUnit)) {
       out.push(refuse('claim states no positive USD figure per unit'));
@@ -1273,19 +1304,39 @@ export interface BackfillPool {
  * census): both sources, every decision with its reason. `backfillClaimFacts`
  * files from exactly these judgements.
  */
-export async function backfillCandidates(projectId: string, afterId = ''): Promise<BackfillPool> {
+export async function backfillCandidates(projectId: string, cursors: BackfillCursors = {}): Promise<BackfillPool> {
   const nodes = await listNodes(projectId);
   if (!nodes.some((one) => one.kind === 'BUYER_TYPE' && !one.retiredAt)) return { hasBuyerTypes: false, unitEconomicRead: 0, decisions: [] };
-  const declared = await unfiledUnitEconomicClaims(projectId, afterId, BACKFILL_SCAN);
+  // Each source from its own cursor, as the writer reads it: source 3's is never source 1's (B1g).
+  const declared = await unfiledUnitEconomicClaims(projectId, cursors.unitEconomic ?? unitEconomicCursor.get(projectId) ?? '', BACKFILL_SCAN);
+  const asked = await unfiledConstructedRoundClaims(projectId, cursors.constructed ?? constructedCursor.get(projectId) ?? '', BACKFILL_SCAN);
   return {
     hasBuyerTypes: true,
     unitEconomicRead: declared.length,
     decisions: [
       ...declared.map((claim) => judgeUnitEconomic(claim, nodes)),
       ...(await cardEvidenceDecisions(projectId, nodes)),
-      ...(await constructedRoundDecisions(projectId, nodes, await unfiledConstructedRoundClaims(projectId, afterId, BACKFILL_SCAN))),
+      ...(await constructedRoundDecisions(projectId, nodes, asked)),
     ],
   };
+}
+
+/** Where each source's scan starts; a source left out starts where the writer's own cursor for it stands. */
+export interface BackfillCursors {
+  /** Source 1: UNIT_ECONOMIC claims after this id. */
+  unitEconomic?: string;
+  /** Source 3: constructed-round claims after this id. */
+  constructed?: string;
+}
+
+/**
+ * Writes a pass keeps for source 3 (constructed rounds), out of its batch
+ * (B1g): it ran only in whatever room sources 1 and 2 left, so a project with
+ * twenty unfiled declared or card figures never read a constructed round.
+ * Sources 1 and 2 share the rest; source 3 also takes whatever they leave.
+ */
+export function backfillConstructedShare(batch: number): number {
+  return Math.floor(Math.max(0, batch) / 2);
 }
 
 /**
@@ -1311,7 +1362,10 @@ export async function backfillCandidates(projectId: string, afterId = ''): Promi
  */
 export async function backfillClaimFacts(projectId: string, batch = BACKFILL_BATCH): Promise<Backfilled> {
   const out: Backfilled = { filed: [], skipped: 0 };
-  const room = () => batch - out.filed.length;
+  // Sources 1 and 2 stop short of source 3's share, so they cannot starve it; source 3 then has the whole remainder.
+  const reserved = backfillConstructedShare(batch);
+  let limit = batch - reserved;
+  const room = () => limit - out.filed.length;
   const nodes = await listNodes(projectId);
   if (!nodes.some((one) => one.kind === 'BUYER_TYPE' && !one.retiredAt)) return out;
 
@@ -1363,13 +1417,15 @@ export async function backfillClaimFacts(projectId: string, batch = BACKFILL_BAT
   }
   // Everything read: start over next pass (a buyer added since may now match). Otherwise resume after the last one read.
   unitEconomicCursor.set(projectId, reached === declared[declared.length - 1]?.id && declared.length < BACKFILL_SCAN ? '' : reached);
-  if (room() <= 0) return out;
 
   // 2. Prices and costs cards hold as evidence, for payers the map names.
-  for (const decision of await cardEvidenceDecisions(projectId, nodes)) {
-    if (room() <= 0) break;
-    await consume(decision);
+  if (room() > 0) {
+    for (const decision of await cardEvidenceDecisions(projectId, nodes)) {
+      if (room() <= 0) break;
+      await consume(decision);
+    }
   }
+  limit = batch;
   if (room() <= 0) return out;
 
   // 3. Per-unit prices a constructed-arrangement round found, for its own buyers, settled or not.
