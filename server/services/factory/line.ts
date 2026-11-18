@@ -51,7 +51,7 @@ import { approveObjective } from './contract.ts';
 import { campaignSpecFor } from './remote.ts';
 import { INITIAL_LANE_TARGET } from './scheduler.ts';
 import { fleetSnapshot, sharedFleetSnapshot } from '../dispatch/candidates.ts';
-import { isFactorySurface, surfaceIneligibility } from '../dispatch/router.ts';
+import { isFactorySurface, surfaceIneligibility, type RoutingRefusal } from '../dispatch/router.ts';
 
 /** The ledger kinds this module writes. */
 export const LINE_EVENT_KINDS = {
@@ -456,6 +456,39 @@ function newestSent(dispatches: Awaited<ReturnType<typeof listDispatchesForBin>>
 }
 
 /**
+ * Every refusal the dispatch loop records through `markDispatchDeferred`: the
+ * loop's own work, audit-fit, refire and slot gates, and every routing refusal.
+ * A closed set, because the same `PENDING` + `last_error_kind` + future
+ * `next_attempt_at` shape is also left by things that are not a decision to
+ * wait — a fire nobody answered (the `NO_SHOW` reopen) and a fire the provider
+ * refused (`markDispatchFailed`). Those are faults with a backoff, and reading
+ * them as a named wait would hide exactly the failure the line exists to raise.
+ * The routing half is typed against `RoutingRefusal`, so a refusal added there
+ * cannot be forgotten here.
+ */
+const ROUTING_DEFERRALS = {
+  NO_ROUTINES_REGISTERED: true,
+  FLEET_PAUSED: true,
+  FLEET_TARGET_REACHED: true,
+  ALL_SURFACES_INELIGIBLE: true,
+  ALL_SURFACES_RATE_LIMITED: true,
+  NO_CAPABLE_SURFACE: true,
+  NO_SURFACE_SERVES_THIS_FAMILY: true,
+  NO_SURFACE_SERVES_THIS_REPOSITORY: true,
+  NO_SURFACE_SERVES_THIS_PROJECT: true,
+  PINNED_SURFACE_UNAVAILABLE: true,
+  ACCOUNT_TARGETS_REACHED: true,
+  ACCOUNT_SESSIONS_UNPRODUCTIVE: true,
+} satisfies Record<RoutingRefusal, true>;
+export const DISPATCH_DEFERRAL_KINDS: ReadonlySet<string> = new Set([
+  'NO_CLAIMABLE_WORK',
+  'NO_ELIGIBLE_AUDIT_SESSION',
+  'BIN_REFIRE_GUARD',
+  'SLOT_LOST',
+  ...Object.keys(ROUTING_DEFERRALS),
+]);
+
+/**
  * The deferral the bin's newest dispatch intent is waiting out, if it is live.
  *
  * The dispatch loop answers a bin it will not fire yet — no claimable work, no
@@ -475,6 +508,8 @@ export function liveDeferral(
   // One intent per (bin, generation), listed by generation: the last is newest.
   const newest = dispatches[dispatches.length - 1];
   if (!newest || newest.state !== 'PENDING' || !newest.lastErrorKind) return null;
+  // Only a decision to wait; a no-show or a refused fire is a fault on a backoff.
+  if (!DISPATCH_DEFERRAL_KINDS.has(newest.lastErrorKind)) return null;
   if (!(newest.nextAttemptAt > nowIso)) return null;
   return { kind: newest.lastErrorKind, message: newest.lastError, until: newest.nextAttemptAt };
 }

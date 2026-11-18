@@ -17,8 +17,8 @@ import { freshProject, teardown, type TestProject } from './helpers.ts';
 import { ensureCampaign, ensureChangeRequest, patchCampaign } from '../server/repos/factory.ts';
 import { createWorker, grantMembership, setWorkerRouting } from '../server/repos/identity.ts';
 import { bindRoutineWorker, createAccount, createRoutine, credentialDigest } from '../server/repos/fleet.ts';
-import { createBin, ensureDispatchIntent, getBin, markDispatchDeferred } from '../server/repos/bins.ts';
-import { readLine, resetIdleObservation } from '../server/services/factory/line.ts';
+import { createBin, ensureDispatchIntent, getBin, markDispatchDeferred, markDispatchFailed } from '../server/repos/bins.ts';
+import { DISPATCH_DEFERRAL_KINDS, readLine, resetIdleObservation } from '../server/services/factory/line.ts';
 import { getDb } from '../server/db/database.ts';
 import { recordDeliveryProven } from './helpers/deliveryProven.ts';
 
@@ -178,6 +178,41 @@ describe('a deferred READY stage is a wait, not idle work', () => {
     const line = await reading();
     expect(line.executable.readyBins).toBe(1);
     expect(line.unexplainedIdle).toBe(true);
+  });
+
+  it('still raises the fault for a no-show reopen: an unanswered fire is not a deferral', async () => {
+    const binId = await readyStage('no-show');
+    await ensureDispatchIntent((await getBin(binId))!);
+    // The shape the in-flight sweep leaves (bins.ts reopen): PENDING, NO_SHOW, a future retry.
+    await getDb().run(
+      `UPDATE bin_dispatch SET state = 'PENDING', next_attempt_at = ?, last_error_kind = 'NO_SHOW',
+              last_error = 'Fired, and no worker ever claimed the bin before the in-flight window closed.'
+        WHERE bin_id = ?`,
+      [new Date(Date.now() + 30 * 60_000).toISOString(), binId],
+    );
+    const line = await reading();
+    expect(line.executable.readyBins).toBe(1);
+    expect(line.unexplainedIdle).toBe(true);
+    expect(line.because).toMatch(/That is a fault, not a wait\./);
+    expect(line.because).not.toMatch(/NO_SHOW/);
+  });
+
+  it('still raises the fault for a fire the provider refused, on its backoff', async () => {
+    const binId = await readyStage('fire-failed');
+    await ensureDispatchIntent((await getBin(binId))!);
+    const intent = await getDb().get<{ id: string }>(`SELECT id FROM bin_dispatch WHERE bin_id = ?`, [binId]);
+    await markDispatchFailed(intent!.id, { kind: 'HTTP_503', message: 'provider unavailable', retryAfterMs: 30 * 60_000 });
+    const line = await reading();
+    expect(line.executable.readyBins).toBe(1);
+    expect(line.unexplainedIdle).toBe(true);
+    expect(line.because).not.toMatch(/HTTP_503/);
+  });
+
+  it('names every refusal the dispatch loop defers with, and nothing else', () => {
+    for (const kind of ['NO_CLAIMABLE_WORK', 'NO_ELIGIBLE_AUDIT_SESSION', 'BIN_REFIRE_GUARD', 'SLOT_LOST', 'NO_CAPABLE_SURFACE', 'ACCOUNT_SESSIONS_UNPRODUCTIVE']) {
+      expect(DISPATCH_DEFERRAL_KINDS.has(kind)).toBe(true);
+    }
+    for (const kind of ['NO_SHOW', 'SUPERSEDED', 'HTTP_503', 'NOT_CONFIGURED']) expect(DISPATCH_DEFERRAL_KINDS.has(kind)).toBe(false);
   });
 
   it('keeps the fault when one stage is deferred and another is executable', async () => {
