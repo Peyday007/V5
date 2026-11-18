@@ -241,6 +241,13 @@ export interface ConstructedArrangement {
      * ASSUMPTION swept over the range; with it, accepted price evidence reaches the plan.
      */
     evidence?: { values: number[]; low: number; high: number } & InputSample;
+    /**
+     * Why the observations the value was read from are no evidence of what
+     * these buyers pay under this design (GH2): they were paid under another
+     * payment mechanism — who pays, for what unit, how often. Present, the
+     * plan sweeps the value as an ASSUMPTION and never as evidence.
+     */
+    notEvidence?: string;
   };
   /**
    * The share of these buyers approached who agree, reconstructed from close
@@ -1710,6 +1717,41 @@ export function valueEvidence(value: Estimate): { evidence?: NonNullable<Constru
   return { evidence: { values: exported.spec.values, low: value.p05, high: value.p95, ...inputSample(value) } };
 }
 
+/**
+ * The price observations and the cost observations of one composition, with
+ * every observation whose lineage (the claim, or the fact) appears on both
+ * sides removed from both (GH2). One fact is never an arrangement's price and
+ * its cost at once: a figure filed as both is ambiguous, so it is neither, and
+ * what it would have said stays unestablished. Money tied up is not a cost and
+ * is not compared: an opening's price and its peak funding share the opening's
+ * claim by construction. Pure.
+ */
+export function withoutPriceCostOverlap<T extends Pick<Observation, 'lineage'>>(obs: { value: T[]; unitCost: T[]; runCost: T[] }): { value: T[]; unitCost: T[]; runCost: T[] } {
+  const priced = new Set(obs.value.flatMap((one) => one.lineage));
+  const costed = new Set([...obs.unitCost, ...obs.runCost].flatMap((one) => one.lineage));
+  const both = new Set([...priced].filter((one) => costed.has(one)));
+  if (both.size === 0) return obs;
+  const clean = (one: T) => !one.lineage.some((l) => both.has(l));
+  return { value: obs.value.filter(clean), unitCost: obs.unitCost.filter(clean), runCost: obs.runCost.filter(clean) };
+}
+
+/**
+ * Why a value read from these buyers' published prices is no evidence of what
+ * they pay under this design (GH2), or nothing. Every price the construction
+ * reads — an opening's price, a `price_per_unit` fact, repeat business — is
+ * what one payer paid for one unit it bought. A pooled design is paid
+ * differently: many buyers each pay a share of one shared run. Who pays and
+ * for what unit differ, so the figure locates the price and never evidences
+ * it (production 2026-11-18: The Puzzle Society's "$500 for each accepted
+ * puzzle", a publisher's fee per accepted submission, was the SINGLE_COMPARABLE
+ * price of a pooled presale design). Pure.
+ */
+export function priceBasisOf(design: Pick<Design, 'aggregation'>, observations: number): { notEvidence?: string } {
+  if (observations > 0 && design.aggregation === 'POOLED_BUYERS')
+    return { notEvidence: "observed as one payer's price for a unit it bought, not a participant's share of a pooled run, so a different payment mechanism" };
+  return {};
+}
+
 function valueSources(value: Estimate, observations: readonly Observation[]): string[] {
   const byId = new Map(observations.map((one) => [one.id, one]));
   return [...new Set(value.used.flatMap((id) => byId.get(id)?.lineage ?? [id]))].sort();
@@ -1784,12 +1826,21 @@ function compose(args: {
   // "Dental practices" is evidence about an opening's payer "Dental practice", and nothing wider.
   const buyerKey = payerKey(demand.name);
   const ownBuyer = (one: Observation) => payerKey(String(one.context['payer'] ?? '')) === buyerKey;
-  const valueObs = args.priced.filter(ownBuyer).map((one) => ({ ...one, broad: false }));
+  const pricedObs = args.priced.filter(ownBuyer).map((one) => ({ ...one, broad: false }));
   const riskObs = args.tiedUp.filter(ownBuyer).map((one) => ({ ...one, broad: false }));
   // What research observed supply is paid per unit for these buyers' work, and how much one of them buys (F2).
-  const unitCostObs = (args.facts?.unitCost ?? []).filter(ownBuyer).map((one) => ({ ...one, broad: false }));
+  const unitCostObsAll = (args.facts?.unitCost ?? []).filter(ownBuyer).map((one) => ({ ...one, broad: false }));
   // What supply charges for one whole run for these buyers (B1j): a pooled run's fixed cost, or a single-buyer deal's supply cost.
-  const runCostObs = (args.facts?.runCost ?? []).filter(ownBuyer).map((one) => ({ ...one, broad: false }));
+  const runCostObsAll = (args.facts?.runCost ?? []).filter(ownBuyer).map((one) => ({ ...one, broad: false }));
+  /*
+   * One fact never supplies both what these buyers pay and what serving them
+   * costs (GH2, production 2026-11-18: The Puzzle Society's "$500 for each
+   * accepted puzzle", clm_51df38793dfe46f6b16e, was filed as its price_per_unit
+   * and as its contractor_rate_per_unit). A figure read as both is neither: it
+   * is dropped from the price and from the cost, which then stay what nothing
+   * else establishes.
+   */
+  const { value: valueObs, unitCost: unitCostObs, runCost: runCostObs } = withoutPriceCostOverlap({ value: pricedObs, unitCost: unitCostObsAll, runCost: runCostObsAll });
   const volumeObs = (args.facts?.volume ?? []).filter(ownBuyer).map((one) => ({ ...one, broad: false }));
   // What share of these buyers approached bought, and how many of them a stated market holds (R3): the demand side's conversion and buyers.
   const conversionObs = (args.facts?.conversion ?? []).filter(ownBuyer).map((one) => ({ ...one, broad: false }));
@@ -1950,7 +2001,9 @@ function compose(args: {
     emergent,
     stress,
     evidenced,
-    value: value ? { tier: value.tier, p10: value.p10, p50: value.p50, p90: value.p90, observations: value.used.length, sources: valueSources(value, valueObs), ...valueEvidence(value) } : { tier: 'UNKNOWN', p10: 0, p50: 0, p90: 0, observations: 0 },
+    value: value
+      ? { tier: value.tier, p10: value.p10, p50: value.p50, p90: value.p90, observations: value.used.length, sources: valueSources(value, valueObs), ...valueEvidence(value), ...priceBasisOf(design, value.used.length) }
+      : { tier: 'UNKNOWN', p10: 0, p50: 0, p90: 0, observations: 0 },
     ...(conversion && conversion.used.length > 0 && conversionObs.length > 0 && conversion.tier !== 'UNKNOWN'
       ? { conversion: { tier: conversion.tier, p10: conversion.p10, p50: conversion.p50, p90: conversion.p90, observations: conversion.used.length, sources: valueSources(conversion, conversionObs), ...valueEvidence(conversion) } }
       : {}),
