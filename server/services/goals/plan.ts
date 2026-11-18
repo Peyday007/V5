@@ -2681,8 +2681,25 @@ async function salesFor(
 ): Promise<MarketTest[]> {
   const best = new Set(adopted && adopted.size > 0 ? adopted : (portfolio?.best?.members.map((one) => one.opportunityId) ?? []));
   const settled = new Map((portfolio?.demand ?? []).map((one) => [one.opportunityId, one.refused ? -1 : one.revenue.p50]));
+  /*
+   * A sale this goal cannot count is not this goal's step (rehearsal, 2026-11-18:
+   * a 7-day goal's steps sold a 21-day resale and a 30-day retainer). Dropped
+   * only when the goal's own limits rule it out: the quant engine refused its
+   * outlay, or even its earliest settlement lands after the deadline and the
+   * engine settles nothing from it in nine worlds of ten (a deposit or a
+   * milestone inside the window keeps it). It stays on the goal's considered
+   * list; only the sales order leaves it out.
+   */
+  const demandOf = new Map((portfolio?.demand ?? []).map((one) => [one.opportunityId, one]));
+  const outsideLimits = (id: string): boolean => {
+    const d = demandOf.get(id);
+    if (d?.refused) return true;
+    const days = byId.get(id)?.daysToCash;
+    const earliest = days ? (days.low ?? days.value) : null;
+    return target.daysLeft !== null && earliest !== null && earliest > target.daysLeft && d !== undefined && d.revenue.p90 <= 0;
+  };
   const ranked = considered
-    .filter((one) => SELLABLE.has(one.stage) && !isArrangementId(one.opportunityId) && byId.has(one.opportunityId))
+    .filter((one) => SELLABLE.has(one.stage) && !isArrangementId(one.opportunityId) && byId.has(one.opportunityId) && !outsideLimits(one.opportunityId))
     .sort(
       (a, b) =>
         Number(best.has(b.opportunityId)) - Number(best.has(a.opportunityId)) ||
