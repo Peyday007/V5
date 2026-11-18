@@ -87,3 +87,30 @@ Status: DRAFT, maintained continuously, and delivered by 22:55Z whatever its sta
 - **Critical path:** objective reading → the candidate obeys constraints → **one economic model** (bottleneck) → executable steps → targeted research plus capacity → research changes the plan on production → production test on 2 or more unfamiliar objectives → (owner's commercial grant) → calibration and learning from outcomes.
 - **Strong-model comparison:** the gap is integration and procedure, not model competence.
 - **Started at 20:0xZ:** P5 "one economic model" (claude/p5-one-model), the critical-path item.
+
+---
+# FINAL REPORT (delivered about 19:50Z, before the 23:00Z deadline)
+The executive answers are in the chat message of the same time. This file holds the supporting evidence, sections R-A, R-B and R-C above.
+
+## Finish line
+**Mandatory, all verified on production:**
+1. **Objective reading:** amount, deadline, capital, hours and industry are read correctly for unfamiliar objectives.
+2. **Constraint-obeying selection:** the candidate changes with the objective (capital, industry, recurring vs one-off, deadline).
+3. **One coherent economic model:** an arrangement with an unknown price is modelled with the price as its variable, with a break-even and a required price. There are no contradictory models and no impossible aggregates.
+4. **Executable steps** from the chosen candidate: buyer route, fulfilment, settlement, costs, kill criteria, and each unknown as an explicit research step.
+5. **Targeted research:** research asks for the single blocking input, and the research capacity actually runs.
+6. **Research changes a plan on production:** an accepted answer moves a goal-level economic figure or choice, with lineage.
+7. **Transfer:** items 1–6 hold on at least 3 objectives on production (the $10K live goal plus 2 unfamiliar ones in separate projects).
+
+**Accelerators, not mandatory:**
+- the merge hold during in-flight releases (O1);
+- flaky-test hardening;
+- pre-approving the read-only Brain tools for agents (permission stalls);
+- stable construction sampling (P4);
+- GPU research capacity.
+
+**Optional or later:**
+- calibrated 90% acceptance and learning from real outcomes. These need the owner's commercial grant and weeks of real market tests. Code cannot finish them.
+- larger construction budgets;
+- a 2nd Factory surface;
+- Hermes run-history visibility.
