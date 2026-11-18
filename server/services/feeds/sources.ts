@@ -43,9 +43,11 @@ export interface FeedSource {
    * Complete parsed items with official fields the listing response does not
    * carry, by asking the same provider for them (`getJson`). Optional; a
    * follow-up that fails leaves its item exactly as parsed — nothing is
-   * inferred in its place.
+   * inferred in its place. Items from index `storedFrom` on were stored by an
+   * earlier pull (`incomplete` chose them); before it, this pull parsed them.
+   * Absent, every item was parsed in this pull.
    */
-  complete?(items: FeedItem[], getJson: (url: string) => Promise<unknown>): Promise<FeedItem[]>;
+  complete?(items: FeedItem[], getJson: (url: string) => Promise<unknown>, limit?: number, storedFrom?: number): Promise<FeedItem[]>;
   /**
    * Whether an item this source already stored still lacks what `complete`
    * fills in — an item stored before the completion existed, or one whose
@@ -368,6 +370,69 @@ export function federalRegisterCorrectionIncomplete(item: Pick<FeedItem, 'body'>
 }
 
 /**
+ * A stored Federal Register item that is not a correction and carries no date
+ * of either kind and no record that its DATES field was read: no "Effective"
+ * sentence, no "Stated effective" marker, no "No stated date." — the shape of
+ * every rule stored before the parser read the official `dates` field
+ * (41d72ad), e.g. 2026-23230, 2026-23040, 2026-23027 and 2026-23279 fetched
+ * 2026-11-12..16. The parser writes its markers only on a new fetch and the
+ * cursor never lists those documents again, so without a lookup no reader of
+ * stored history could see the date the Federal Register states for them. Pure.
+ */
+export function federalRegisterStatedDateUnread(item: Pick<FeedItem, 'body' | 'externalId'>): boolean {
+  const body = item.body ?? '';
+  if (/^C\d+-/.test(item.externalId) || /Corrects [A-Za-z0-9-]+\./.test(body)) return false;
+  return !/Effective \d{4}-\d{2}-\d{2}\./.test(body) && !/Stated effective \d{4}-\d{2}-\d{2}\./.test(body) && !/No stated date\./.test(body);
+}
+
+/** What a stored Federal Register item still lacks that a pull completes: a correction's date, or a rule's DATES field. Pure. */
+export function federalRegisterItemIncomplete(item: FeedItem): boolean {
+  return federalRegisterCorrectionIncomplete(item) || federalRegisterStatedDateUnread(item);
+}
+
+/** The API URL that states a Federal Register document's own effective_on, DATES field and correction_of. */
+export function federalRegisterDatesUrl(documentNumber: string): string {
+  return (
+    `https://www.federalregister.gov/api/v1/documents/${encodeURIComponent(documentNumber)}.json` +
+    '?fields%5B%5D=document_number&fields%5B%5D=effective_on&fields%5B%5D=dates&fields%5B%5D=correction_of'
+  );
+}
+
+/**
+ * One stored rule, re-read from the Federal Register API's own fields and
+ * completed with the sentence `parseFederalRegister` writes for them today:
+ * "Effective" for an effective_on, "Corrects" for a correction_of, else
+ * "Stated effective" for the earliest date the DATES field states, else
+ * "No stated date." (the field was read and states none, so it is not asked
+ * again). Appended, never replacing what was stored. A failed lookup, or an
+ * answer about another document, leaves the item exactly as stored.
+ */
+async function rereadStoredFederalRegisterRule(item: FeedItem, getJson: (url: string) => Promise<unknown>): Promise<FeedItem> {
+  let row: Record<string, unknown> | null = null;
+  try {
+    const doc = await getJson(federalRegisterDatesUrl(item.externalId));
+    row = doc && typeof doc === 'object' && !Array.isArray(doc) ? (doc as Record<string, unknown>) : null;
+  } catch {
+    return item;
+  }
+  if (!row) return item;
+  const sameDocument = text(row['document_number']);
+  if (sameDocument && sameDocument !== item.externalId) return item;
+  const effectiveOn = text(row['effective_on']);
+  const effective = effectiveOn && /^\d{4}-\d{2}-\d{2}$/.test(effectiveOn) ? effectiveOn : null;
+  const corrects = correctedDocumentNumber(row['correction_of']);
+  const stated = !effective && !corrects ? federalRegisterStatedDate(row['dates']) : null;
+  const added = effective
+    ? `Effective ${effective}.`
+    : corrects
+      ? `Corrects ${corrects}.`
+      : stated
+        ? `Stated effective ${stated}.`
+        : 'No stated date.';
+  return { ...item, body: [item.body, added].filter(Boolean).join(' ') };
+}
+
+/**
  * A correction states no effective date of its own (C1-2026-21030: effective_on,
  * dates and action all null), and the rule it corrects may have been published
  * long before anything Brain still holds. For each parsed correction with no
@@ -376,17 +441,31 @@ export function federalRegisterCorrectionIncomplete(item: Pick<FeedItem, 'body'>
  * "Corrected rule effective YYYY-MM-DD." — deliberately not an "Effective"
  * sentence, so a reader of the correction's own date is unchanged. A lookup
  * that fails, or a document that states no date, leaves the item as parsed.
+ *
+ * Under the same lookup limit, a rule an earlier pull stored before the parser
+ * read the DATES field (`federalRegisterStatedDateUnread`, items from
+ * `storedFrom` on) is re-read once for its own fields and completed with the
+ * marker the parser writes today (`rereadStoredFederalRegisterRule`).
  */
 export async function completeFederalRegisterCorrections(
   items: FeedItem[],
   getJson: (url: string) => Promise<unknown>,
   limit = FEDERAL_REGISTER_CORRECTION_LOOKUPS,
+  storedFrom = items.length,
 ): Promise<FeedItem[]> {
   const out: FeedItem[] = [];
   let asked = 0;
-  for (const item of items) {
+  for (const [index, item] of items.entries()) {
     const body = item.body ?? '';
     const corrects = /Corrects ([A-Za-z0-9-]+)\./.exec(body)?.[1] ?? null;
+    if (!corrects && index >= storedFrom && federalRegisterStatedDateUnread(item) && asked < limit) {
+      // A rule stored before the parser read DATES: ask for the document's own fields once, and
+      // write exactly what `parseFederalRegister` would write for them today (stored items only —
+      // a parsed item already had its DATES field read by the parser).
+      asked += 1;
+      out.push(await rereadStoredFederalRegisterRule(item, getJson));
+      continue;
+    }
     if (!corrects || !federalRegisterCorrectionIncomplete(item) || asked >= limit) {
       out.push(item);
       continue;
@@ -773,7 +852,7 @@ export const FEED_SOURCES: readonly FeedSource[] = [
     cursorUrl: (since: string) => `${FEDERAL_REGISTER_RULES_URL}&conditions%5Bpublication_date%5D%5Bgte%5D=${since.slice(0, 10)}`,
     parse: parseFederalRegister,
     complete: completeFederalRegisterCorrections,
-    incomplete: federalRegisterCorrectionIncomplete,
+    incomplete: federalRegisterItemIncomplete,
     acquisition: jsonApi(
       'domain:regulatory-records',
       ['regulatory', 'compliance-deadline'],
