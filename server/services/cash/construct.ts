@@ -251,6 +251,14 @@ export interface ConstructedArrangement {
    * Absent, nothing filed bears on it.
    */
   conversion?: Pick<Estimate, 'tier' | 'p10' | 'p50' | 'p90'> & { observations: number; sources: string[]; evidence?: NonNullable<ConstructedArrangement['value']['evidence']> };
+  /**
+   * A pooled design's fixed cost of one shared run, reconstructed from what
+   * supply was observed charging for a whole run (`fixed_cost_per_run`, B1j)
+   * and what runs for these buyers tied up, with the claims it rests on.
+   * Absent, no run cost is filed for these buyers. A cost, never value: it
+   * lowers the contribution and raises nothing.
+   */
+  fixedCost?: Pick<Estimate, 'tier' | 'p10' | 'p50' | 'p90'> & { observations: number; sources: string[] };
   /** Parts nothing establishes yet: what the research round asks. */
   unknownParts: string[];
   /** Openings sharing this buyer, for the novelty check and the value evidence. */
@@ -746,7 +754,7 @@ async function heldEvidence(input: ConstructionInput, opportunities: CashOpportu
       measures: `money tied up on "${one.title.slice(0, 60)}"`,
     }));
   const capability: Primitive | null = input.delivers.length > 0 ? { name: input.delivers.join(', '), claimId: null, from: 'CAPABILITY', ref: 'deliverables', path: `CAPABILITY:${input.delivers.map(norm).sort().join('>')}` } : null;
-  return { priced, tiedUp, facts: { unitCost: facts.unitCost, volume: facts.volume, conversion: facts.conversion, buyers: facts.buyers }, capability };
+  return { priced, tiedUp, facts: { unitCost: facts.unitCost, volume: facts.volume, conversion: facts.conversion, buyers: facts.buyers, ...(facts.runCost.length > 0 ? { runCost: facts.runCost } : {}) }, capability };
 }
 
 /**
@@ -794,11 +802,19 @@ export interface FactObservations {
    * `reach` share, which stays unknown until outreach measures it (R3).
    */
   buyers?: Observation[];
+  /**
+   * What supply charges for one whole run (`fixed_cost_per_run`, B1j): a pooled
+   * design's `fixed_cost` — what the run costs whether one buyer or many share
+   * it — and, for a design that buys one run per deal, what supply is paid per
+   * deal. Absent reads as none filed.
+   */
+  runCost?: Observation[];
 }
 
 /** Fact keys read as a price these buyers pay, a unit cost of serving them, a volume they buy, a share who agree and how many there are. */
 const FACT_PRICE_KEYS: readonly FactKey[] = ['price_per_unit'];
 const FACT_COST_KEYS: readonly FactKey[] = ['contractor_rate_per_unit'];
+const FACT_RUN_COST_KEYS: readonly FactKey[] = ['fixed_cost_per_run'];
 const FACT_VOLUME_KEYS: readonly FactKey[] = ['account_units_per_month'];
 const FACT_CONVERSION_KEYS: readonly FactKey[] = ['account_win_rate'];
 const FACT_BUYERS_KEYS: readonly FactKey[] = ['accounts_reachable'];
@@ -824,8 +840,8 @@ const FACT_EVIDENCE_STATUSES: readonly FactStatus[] = ['OBSERVED', 'VERIFIED'];
 export async function constructionObservations(
   input: Pick<ConstructionInput, 'projectId' | 'currency' | 'daysLeft'>,
   allowed: (text: string | null | undefined) => boolean = () => true,
-): Promise<{ priced: Observation[]; unitCost: Observation[]; volume: Observation[]; conversion: Observation[]; buyers: Observation[] }> {
-  const out = { priced: [] as Observation[], unitCost: [] as Observation[], volume: [] as Observation[], conversion: [] as Observation[], buyers: [] as Observation[] };
+): Promise<{ priced: Observation[]; unitCost: Observation[]; runCost: Observation[]; volume: Observation[]; conversion: Observation[]; buyers: Observation[] }> {
+  const out = { priced: [] as Observation[], unitCost: [] as Observation[], runCost: [] as Observation[], volume: [] as Observation[], conversion: [] as Observation[], buyers: [] as Observation[] };
   const facts = (await listProjectConstructionFacts(input.projectId)).filter((one) => FACT_EVIDENCE_STATUSES.includes(one.status) && one.segment?.startsWith('map_'));
   if (facts.length === 0) return out;
   const all = await listNodes(input.projectId);
@@ -841,7 +857,9 @@ export async function constructionObservations(
       ? 'priced'
       : FACT_COST_KEYS.includes(fact.key)
         ? 'unitCost'
-        : FACT_VOLUME_KEYS.includes(fact.key)
+        : FACT_RUN_COST_KEYS.includes(fact.key)
+          ? 'runCost'
+          : FACT_VOLUME_KEYS.includes(fact.key)
           ? 'volume'
           : FACT_CONVERSION_KEYS.includes(fact.key)
             ? 'conversion'
@@ -850,7 +868,7 @@ export async function constructionObservations(
               : null;
     if (!kind) continue;
     // Only money is in USD; a share and a count mean the same in any goal's currency.
-    if ((kind === 'priced' || kind === 'unitCost') && !usd) continue;
+    if ((kind === 'priced' || kind === 'unitCost' || kind === 'runCost') && !usd) continue;
     // A volume is per month, read over the window; a share and a count are not per anything.
     const scale = kind === 'volume' ? windowMonths : 1;
     const low = Math.min(fact.low, fact.high) * scale;
@@ -1537,7 +1555,7 @@ export function compositionPlan(job: ConstructionJob): CompositionStep[] {
   const reuse = new Map(job.reuse ?? []);
   // Everything a composition reads besides its own parts, once per pass. Fact observations only when
   // there are any, so a digest stored before they existed is still the same composition's.
-  const facts = job.facts && (job.facts.unitCost.length > 0 || job.facts.volume.length > 0 || (job.facts.conversion?.length ?? 0) > 0 || (job.facts.buyers?.length ?? 0) > 0) ? job.facts : undefined;
+  const facts = job.facts && (job.facts.unitCost.length > 0 || job.facts.volume.length > 0 || (job.facts.conversion?.length ?? 0) > 0 || (job.facts.buyers?.length ?? 0) > 0 || (job.facts.runCost?.length ?? 0) > 0) ? job.facts : undefined;
   // The lever evidence and contract limits a composition reads (S-0103), likewise only when the rows state any.
   const leverEvidence = job.leverEvidence && Object.values(job.leverEvidence).some((one) => one.length > 0) ? job.leverEvidence : undefined;
   const contractLimits = job.contractLimits && job.contractLimits.length > 0 ? job.contractLimits : undefined;
@@ -1770,6 +1788,8 @@ function compose(args: {
   const riskObs = args.tiedUp.filter(ownBuyer).map((one) => ({ ...one, broad: false }));
   // What research observed supply is paid per unit for these buyers' work, and how much one of them buys (F2).
   const unitCostObs = (args.facts?.unitCost ?? []).filter(ownBuyer).map((one) => ({ ...one, broad: false }));
+  // What supply charges for one whole run for these buyers (B1j): a pooled run's fixed cost, or a single-buyer deal's supply cost.
+  const runCostObs = (args.facts?.runCost ?? []).filter(ownBuyer).map((one) => ({ ...one, broad: false }));
   const volumeObs = (args.facts?.volume ?? []).filter(ownBuyer).map((one) => ({ ...one, broad: false }));
   // What share of these buyers approached bought, and how many of them a stated market holds (R3): the demand side's conversion and buyers.
   const conversionObs = (args.facts?.conversion ?? []).filter(ownBuyer).map((one) => ({ ...one, broad: false }));
@@ -1780,7 +1800,7 @@ function compose(args: {
       ? { kind: 'COMMISSION', rate: unknownShare }
       : def.capture === 'FEE'
         ? { kind: 'FEE', fee: { min: 0, max: 100_000 } }
-        : { kind: 'MARGIN', supplyCost: { min: 0, max: 100_000, context, material: [], observations: pooled ? [] : [...riskObs, ...unitCostObs] } };
+        : { kind: 'MARGIN', supplyCost: { min: 0, max: 100_000, context, material: [], observations: pooled ? [] : [...riskObs, ...unitCostObs, ...runCostObs] } };
   const base: Arrangement = {
     key: 'a',
     label: demand.name,
@@ -1797,7 +1817,7 @@ function compose(args: {
     value: { min: 0, max: 1_000_000, context, material: [], observations: valueObs },
     capture: captureFor(),
     cost: { min: 0, max: 100_000 },
-    pooling: pooled ? { fixedCost: { min: 0, max: 1_000_000, context, material: [], observations: riskObs }, minParticipants: unknownCount(1, 10_000), threshold: design.funding === 'THRESHOLD_PRESALE' } : undefined,
+    pooling: pooled ? { fixedCost: { min: 0, max: 1_000_000, context, material: [], observations: [...riskObs, ...runCostObs] }, minParticipants: unknownCount(1, 10_000), threshold: design.funding === 'THRESHOLD_PRESALE' } : undefined,
     funding: design.funding !== 'ON_DELIVERY' ? { prepayShare: unknownShare } : undefined,
     repeat: design.repeat !== 'ONE_OFF' ? { rate: unknownShare } : undefined,
   };
@@ -1835,7 +1855,7 @@ function compose(args: {
      * against buyer populations, and every PRODUCE arrangement for those very
      * buyers (360 of 404) still read value UNKNOWN, so the plan admitted 0.
      */
-    for (const leaf of ['a_value', 'a_conversion', 'a_prepay_share', 'a_repeat_rate']) {
+    for (const leaf of ['a_value', 'a_conversion', 'a_prepay_share', 'a_repeat_rate', 'a_fixed_cost']) {
       if (!estimates[leaf] && composed.graph.nodes.some((n) => n.key === leaf)) estimates = { ...estimates, ...reconstruct(composed.graph, leaf, args.now).estimates };
     }
   } catch {
@@ -1843,6 +1863,7 @@ function compose(args: {
   }
   const value = estimates['a_value'];
   const conversion = estimates['a_conversion'];
+  const fixedCost = pooled ? estimates['a_fixed_cost'] : undefined;
   const core = ['buyers', 'need_rate', 'conversion', 'value', def.capture === 'COMMISSION' ? 'commission' : def.capture === 'FEE' ? 'fee' : 'supply_cost', ...(def.needsSupply ? ['supply_units'] : []), 'cost'];
   const leaves = [...core, ...designParts(design).filter((part) => !core.includes(part))];
   const unknownParts = leaves.filter((leaf) => {
@@ -1933,6 +1954,9 @@ function compose(args: {
     ...(conversion && conversion.used.length > 0 && conversionObs.length > 0 && conversion.tier !== 'UNKNOWN'
       ? { conversion: { tier: conversion.tier, p10: conversion.p10, p50: conversion.p50, p90: conversion.p90, observations: conversion.used.length, sources: valueSources(conversion, conversionObs), ...valueEvidence(conversion) } }
       : {}),
+    ...(fixedCost && fixedCost.used.length > 0 && runCostObs.length > 0 && fixedCost.tier !== 'UNKNOWN'
+      ? { fixedCost: { tier: fixedCost.tier, p10: fixedCost.p10, p50: fixedCost.p50, p90: fixedCost.p90, observations: fixedCost.used.length, sources: valueSources(fixedCost, [...riskObs, ...runCostObs]) } }
+      : {}),
     unknownParts,
     relatedOpenings: args.related.map((one) => one.id),
     question: asked,
@@ -1945,7 +1969,7 @@ function compose(args: {
       [demand, need, supply].map((one) => (one ? [one.ref, one.claimId] : null)),
       args.precedent?.id ?? null,
       // A filed close rate or buyer count is new evidence too, and reopens a refutation (R3); none filed adds nothing.
-      [...valueObs, ...riskObs, ...conversionObs, ...buyersObs].filter((one) => !one.broad).map((one) => one.id).sort(),
+      [...valueObs, ...riskObs, ...conversionObs, ...buyersObs, ...(pooled ? runCostObs : [])].filter((one) => !one.broad).map((one) => one.id).sort(),
     ]),
     ...(positionQuestions ? { positionQuestions: positionQuestions.map(carriedPositionQuestion) } : {}),
   };

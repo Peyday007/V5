@@ -146,6 +146,34 @@ export function readMoneyFigures(text: string, currency: string): MoneyFigure[] 
   return found.sort((a, b) => a.cents - b.cents);
 }
 
+/**
+ * Sub-cent rates `text` states per something (`$0.259 per piece`), in whole
+ * currency units (0.259), smallest first.
+ *
+ * `readMoneyFigures` refuses `$0.259` because its minor units are integer cents
+ * and a card's price is never a fraction of one; that refusal stays. A supply
+ * rate is legitimately quoted in tenths of a cent (USPS EDDM postage), and only
+ * the caller filing a per-unit cost asks for it here: the figure must be marked
+ * with this currency, start with a zero whole part, carry three or four
+ * decimals, and be stated per something — anything else is not read.
+ */
+export function readSubCentRates(text: string, currency: string): number[] {
+  const code = currency.toUpperCase();
+  const out = new Set<number>();
+  for (const marker of [code, ...(SYMBOLS[code] ?? [])]) {
+    const mark = escape(marker);
+    const boundary = /^[A-Z]{3}$/.test(marker) ? '\\b' : '';
+    for (const match of text.matchAll(new RegExp(`${boundary}${mark}${boundary}\\s?(0\\.\\d{3,4})(?![\\d.,]\\d)`, 'gi'))) {
+      const before = text.slice(Math.max(0, match.index - 1), match.index);
+      if (/^\p{L}$/u.test(before) && !/^[A-Z]{3}$/i.test(match[0].trim().slice(0, 3))) continue;
+      if (!PER_UNIT.test(text.slice(match.index + match[0].length))) continue;
+      const value = Number(match[1]);
+      if (value > 0) out.add(value);
+    }
+  }
+  return [...out].sort((a, b) => a - b);
+}
+
 /** Format minor units the way the card does, so one figure reads one way. */
 export function formatMoney(cents: number, currency: string): string {
   return `${currency} ${(cents / 100).toLocaleString('en-US', {

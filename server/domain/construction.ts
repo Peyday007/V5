@@ -217,6 +217,12 @@ export const FACT_KEYS = {
   units_per_capacity_day: { label: 'Units one capacity unit completes per working day', unit: 'units/day', segment: true, kind: 'POSITIVE' },
   pooled_units_per_capacity_day: { label: 'Units per capacity-day when several buyers share the capacity', unit: 'units/day', segment: true, kind: 'POSITIVE' },
   contractor_rate_per_unit: { label: 'What an independent operator with its own equipment accepts per unit', unit: 'USD/unit', segment: true, kind: 'POSITIVE' },
+  /*
+   * A supplier's total for one run of a stated quantity ("$0.47 per piece for a
+   * 10,000-home run, total $4,675"): what a pooled design pays whether one
+   * buyer or many take part — the mechanism's `fixed_cost` (quant/mechanism.ts).
+   */
+  fixed_cost_per_run: { label: 'What supply charges for one whole run of the stated quantity', unit: 'USD/run', segment: true, kind: 'POSITIVE' },
   contractor_day_rate: { label: 'What an independent operator with its own equipment accepts per day', unit: 'USD/day', segment: false, kind: 'POSITIVE' },
   labor_cost_per_day: { label: 'Fully loaded cost of one employed worker-day', unit: 'USD/day', segment: false, kind: 'POSITIVE' },
   asset_lease_per_day: { label: 'Leasing or renting one capacity unit per day', unit: 'USD/day', segment: false, kind: 'POSITIVE' },
@@ -297,6 +303,7 @@ export const FACT_FRESHNESS: Record<FactKey, FreshnessClass> = {
   units_per_capacity_day: 'VOLUME',
   pooled_units_per_capacity_day: 'VOLUME',
   contractor_rate_per_unit: 'PRICE',
+  fixed_cost_per_run: 'PRICE',
   contractor_day_rate: 'PRICE',
   labor_cost_per_day: 'PRICE',
   asset_lease_per_day: 'PRICE',
