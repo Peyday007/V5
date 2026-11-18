@@ -94,6 +94,7 @@ Only the rule-11 reasons (`SPEND_OVER_CEILING`, `IRREVERSIBLE_PRODUCTION_LOSS`,
 `LEGAL_RISK`, `SECRET_EXPOSED`, `MAJOR_NEWS`, `MISSING_AUTHORITY`):
 `npm run finish -- block R9 --code MISSING_AUTHORITY --detail "needs the Square login"`.
 A merge, a deploy or a routine decision is never a blocker — it is yours.
+Run `npm run release-wait` immediately before merging into the canonical branch: it holds (≤75 min, never cancels) while a Deploy of the tip is in its gate, so your merge does not supersede it.
 
 ## Rules the checker cannot see, so you keep them
 
