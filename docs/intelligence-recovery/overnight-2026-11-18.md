@@ -47,3 +47,17 @@ Measured durations:
 | Required verification start | **13:40Z** |
 | Final evidence | **14:30Z** |
 | Report delivery | **14:50Z** |
+
+## Owner decision 06:4xZ: the $250 additional-infrastructure ceiling is removed
+Owner's words: "Get rid of the $250 shit, just make sure you are spending properly."
+
+Spending rules that still apply:
+- Every paid run has its own cap and automatic shutdown (§38).
+- Spend is bounded by the funded RunPod balance ($114.17).
+- Nothing runs idle.
+
+Launch configuration, updated:
+- **Primary:** H200, `budget_usd=66 max_usd_per_hour=5.5`, which is 12.25 h × $5.29 = $64.80.
+- **Fallback, used only if no H200 is offered:** B200, `budget_usd=99 max_usd_per_hour=8.5`, which is 12.25 h × $7.99 = $97.88.
+  - The B200 was refused before only because of the $250 ceiling.
+  - It fits the $114.17 balance and leaves $16 for one verification window.
