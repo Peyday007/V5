@@ -13,38 +13,33 @@ const marks = (n: number) => Array.from({ length: n }, () => '?').join(', ');
 async function main(): Promise<void> {
   await initDatabase();
   try {
-    // A. accepted claims (24h) by fragment status and block cause, and whether each reached anything downstream.
-    await q('ACC_BLOCKED_CAUSE', `SELECT f.status, COALESCE(f.block_cause,'-') AS cause, COUNT(*) AS n,
-        SUM(CASE WHEN EXISTS (SELECT 1 FROM cash_card_facts x WHERE x.claim_id = c.id) OR EXISTS (SELECT 1 FROM construction_facts y WHERE y.source_claim_id = c.id) OR EXISTS (SELECT 1 FROM cash_opportunities o WHERE o.source_claim_id = c.id) THEN 1 ELSE 0 END) AS used,
-        SUM(CASE WHEN EXISTS (SELECT 1 FROM shared_findings s WHERE s.claim_id = c.id AND s.state = 'ACTIVE') THEN 1 ELSE 0 END) AS finding
-       FROM research_claims c JOIN research_fragments f ON f.id = c.fragment_id WHERE c.accepted = 1 AND c.created_at >= ? GROUP BY f.status, COALESCE(f.block_cause,'-') ORDER BY n DESC`, [D24]);
-    await q('ACC_BLOCKED_ORCH', `SELECT o.status AS ostatus, f.block_cause AS cause, COUNT(*) AS n FROM research_claims c JOIN research_fragments f ON f.id = c.fragment_id JOIN research_orchestrations o ON o.id = c.orchestration_id
-       WHERE c.accepted = 1 AND f.status = 'BLOCKED' AND c.created_at >= ? GROUP BY o.status, f.block_cause ORDER BY n DESC`, [D24]);
-    await q('MOSTLY_REJ_SAMPLE', `SELECT f.id, f.orchestration_id, SUBSTR(f.question,1,160) AS q, f.geography, SUBSTR(f.blocked_reason,1,260) AS br,
-        (SELECT COUNT(*) FROM research_claims c WHERE c.fragment_id = f.id AND c.accepted = 1) AS acc, (SELECT COUNT(*) FROM research_claims c WHERE c.fragment_id = f.id) AS n, f.updated_at
-       FROM research_fragments f WHERE f.status = 'BLOCKED' AND f.block_cause = 'MOSTLY_REJECTED' AND f.updated_at >= ? ORDER BY f.updated_at DESC LIMIT 25`, [D24]);
-    await q('MOSTLY_REJ_REASONS', `SELECT SUBSTR(COALESCE(c.rejection_reason,'(null)'),1,60) AS head, COUNT(*) AS n FROM research_claims c JOIN research_fragments f ON f.id = c.fragment_id
-       WHERE f.status = 'BLOCKED' AND f.block_cause = 'MOSTLY_REJECTED' AND f.updated_at >= ? AND c.accepted = 0 GROUP BY SUBSTR(COALESCE(c.rejection_reason,'(null)'),1,60) ORDER BY n DESC LIMIT 25`, [D24]);
-    // B. 21 unexplained rejections on BLOCKED fragments.
-    await q('NOREASON', `SELECT f.id, f.block_cause, f.updated_at, SUBSTR(f.blocked_reason,1,200) AS br, COUNT(c.id) AS n, MIN(c.created_at) AS c0 FROM research_claims c JOIN research_fragments f ON f.id = c.fragment_id
-       WHERE c.accepted = 0 AND c.rejection_reason IS NULL AND c.created_at >= ? GROUP BY f.id, f.block_cause, f.updated_at, f.blocked_reason`, [D24]);
-    // C. Scope refusals: placeholder market and UNKNOWN geography, with what was judged.
-    await q('SCOPE_ANY', `SELECT c.id, c.fragment_id, SUBSTR(c.claim,1,220) AS claim, SUBSTR(c.source_url,1,120) AS url, SUBSTR(c.scope_match,1,400) AS sm, SUBSTR(f.question,1,200) AS q, f.geography
-       FROM research_claims c JOIN research_fragments f ON f.id = c.fragment_id WHERE c.rejection_reason LIKE 'Scope does not match on geography (mismatch vs "the market%' AND c.created_at >= ? LIMIT 10`, [D24]);
-    await q('SCOPE_UNK', `SELECT c.id, c.fragment_id, SUBSTR(c.claim,1,220) AS claim, SUBSTR(c.source_url,1,120) AS url, SUBSTR(c.scope_match,1,400) AS sm, f.geography
-       FROM research_claims c JOIN research_fragments f ON f.id = c.fragment_id WHERE c.rejection_reason LIKE 'Scope does not match on geography (unknown%' AND c.created_at >= ? ORDER BY c.created_at DESC LIMIT 12`, [D24]);
-    await q('SCOPE_MIS_PA', `SELECT c.id, SUBSTR(c.claim,1,200) AS claim, SUBSTR(c.source_url,1,100) AS url, SUBSTR(c.scope_match,1,300) AS sm
-       FROM research_claims c WHERE c.rejection_reason LIKE 'Scope does not match on geography (mismatch vs "Pennsylvania")%' AND c.created_at >= ? ORDER BY c.created_at DESC LIMIT 8`, [D24]);
-    await q('UNREAD_REJ', `SELECT c.id, c.fragment_id, c.retrieval_state, SUBSTR(c.source_url,1,120) AS url, SUBSTR(c.rejection_reason,1,200) AS why, SUBSTR(c.scope_match,1,200) AS sm FROM research_claims c
-       WHERE c.accepted = 0 AND (c.rejection_reason LIKE '%unreadable%' OR c.rejection_reason LIKE '%could not be read%' OR c.rejection_reason LIKE '%network error%' OR c.rejection_reason LIKE '%could not be fetched%' OR c.rejection_reason LIKE '%UNREADABLE%') AND c.created_at >= ? LIMIT 20`, [new Date(Date.now() - 7 * 86_400_000).toISOString()]);
-    await q('UNREAD_REJ7', `SELECT COUNT(*) AS n FROM research_claims c WHERE c.accepted = 0 AND c.retrieval_state = 'RETRIEVED' AND (c.rejection_reason LIKE '%unreadable%' OR c.rejection_reason LIKE '%network error%' OR c.rejection_reason LIKE '%could not be fetched%' OR c.rejection_reason LIKE '%could not be opened%' OR c.rejection_reason LIKE '%UNREADABLE%' OR c.rejection_reason LIKE '%not load%') AND c.created_at >= ?`, [new Date(Date.now() - 7 * 86_400_000).toISOString()]);
-    // D. 7-day picture of fragment outcomes by block cause.
-    await q('BLOCK7', `SELECT COALESCE(block_cause,'-') AS cause, COUNT(*) AS n FROM research_fragments WHERE status = 'BLOCKED' AND updated_at >= ? GROUP BY COALESCE(block_cause,'-') ORDER BY n DESC`, [new Date(Date.now() - 7 * 86_400_000).toISOString()]);
-    await q('BLOCK24', `SELECT COALESCE(block_cause,'-') AS cause, COUNT(*) AS n FROM research_fragments WHERE status = 'BLOCKED' AND updated_at >= ? GROUP BY COALESCE(block_cause,'-') ORDER BY n DESC`, [D24]);
-    // E. Mostly-rejected with the placeholder market.
-    await q('ANYMKT_FRAGS', `SELECT f.status, f.block_cause, COUNT(*) AS n FROM research_fragments f WHERE f.geography = 'the market this question names' AND f.updated_at >= ? GROUP BY f.status, f.block_cause`, [new Date(Date.now() - 7 * 86_400_000).toISOString()]);
-    await q('ANYMKT_CLAIMS', `SELECT c.accepted, SUBSTR(COALESCE(c.rejection_reason,'(null)'),1,70) AS head, COUNT(*) AS n FROM research_claims c JOIN research_fragments f ON f.id = c.fragment_id WHERE f.geography = 'the market this question names' AND c.created_at >= ? GROUP BY c.accepted, SUBSTR(COALESCE(c.rejection_reason,'(null)'),1,70) ORDER BY n DESC LIMIT 15`, [new Date(Date.now() - 7 * 86_400_000).toISOString()]);
-    await q('ROUND_COLS', `SELECT * FROM cash_discovery_rounds WHERE bucket_id LIKE ? ORDER BY opened_at DESC LIMIT 1`, [`goal-${G}%`]);
+    const QUALITY = `SELECT one.reason AS reason, COUNT(*) AS claims,
+            SUM(CASE WHEN one.sourced = 1 THEN 1 ELSE 0 END) AS sourced,
+            SUM(CASE WHEN one.contradiction_state = 'REFUTED' THEN 1 ELSE 0 END) AS refuted,
+            SUM(CASE WHEN one.accepted = 1 THEN 1 ELSE 0 END) AS accepted,
+            SUM(CASE WHEN one.accepted = 1 AND one.contradiction_state = 'REFUTED' THEN 1 ELSE 0 END) AS accepted_refuted
+       FROM (SELECT DISTINCT e.reason AS reason, c.id AS id, c.sourced AS sourced,
+                    c.contradiction_state AS contradiction_state, c.accepted AS accepted
+               FROM bin_events e
+               JOIN work_items w ON w.id = e.work_item_id
+               JOIN research_fragments f ON f.id = w.fragment_id
+               JOIN research_claims c ON c.fragment_id = f.id
+              WHERE e.event_type = 'FREE_LANE_ITEM' AND e.outcome = 'SUBMITTED'
+                AND e.workload_class = 'RESEARCH_FRAGMENT' AND e.at >= ?
+                AND (e.at >= ? OR f.completed_at >= ?)) one
+      GROUP BY one.reason`;
+    for (const [tag, since] of [['NEW_H1', '2026-11-18T14:50:00Z'], ['NEW_H2', '2026-11-18T16:01:00Z']] as const) {
+      const earliest = new Date(Date.parse(since) - 24 * 3_600_000).toISOString();
+      await q(tag, QUALITY, [earliest, since, since]);
+    }
+    await q('OLD_H2', `SELECT e.reason AS reason, COUNT(c.id) AS claims, SUM(CASE WHEN c.accepted = 1 THEN 1 ELSE 0 END) AS accepted
+       FROM bin_events e JOIN work_items w ON w.id = e.work_item_id JOIN research_claims c ON c.fragment_id = w.fragment_id
+      WHERE e.event_type = 'FREE_LANE_ITEM' AND e.outcome = 'SUBMITTED' AND e.workload_class = 'RESEARCH_FRAGMENT' AND e.at >= ? AND w.fragment_id IS NOT NULL GROUP BY e.reason`, ['2026-11-18T16:01:00Z']);
+    await q('TRACE_NEW', `SELECT COUNT(*) AS n FROM research_claims c LEFT JOIN research_fragments f ON f.id = c.fragment_id WHERE c.accepted = 1 AND COALESCE(f.completed_at, c.created_at) >= ?`, ['2026-11-18T16:01:00Z']);
+    await q('TRACE_OLD', `SELECT COUNT(*) AS n FROM research_claims c WHERE c.accepted = 1 AND c.created_at >= ?`, ['2026-11-18T16:01:00Z']);
+    // Verify lag: fragment submission to gate, 24h, free lane.
+    await q('VERIFY_LAG', `SELECT f.id, MIN(e.at) AS submitted, f.completed_at FROM bin_events e JOIN work_items w ON w.id = e.work_item_id JOIN research_fragments f ON f.id = w.fragment_id
+      WHERE e.event_type = 'FREE_LANE_ITEM' AND e.outcome = 'SUBMITTED' AND e.workload_class = 'RESEARCH_FRAGMENT' AND e.at >= ? AND f.integrity_verdict IS NOT NULL GROUP BY f.id, f.completed_at ORDER BY MIN(e.at) DESC LIMIT 40`, [D24]);
   } finally {
     await closeDatabase();
     console.log('GOALS: OK');
