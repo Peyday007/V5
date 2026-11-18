@@ -14,3 +14,14 @@ Status: DRAFT, maintained continuously, and delivered by 22:55Z whatever its sta
 ## Known facts (already measured)
 - **Money:** RunPod balance about $105.21; run spend about $8.57; GPU at $0/h now. Engineering runs on subscriptions; no per-hour cash cost is recorded.
 - **Live goal:** NOT_VIABLE. Steps: 1. Reach 55–59% (coverage).
+
+## Capacity reading, live, 19:26Z (brain_operator_capacity)
+| Pool | Waiting | Running | Capacity | Brain's own verdict |
+|---|---|---|---|---|
+| ROUTINES (Claude subscription Routines) | 1 | **0** | 12 | "capacity is unexplainedly idle" |
+| FREE_LANE | 5 | 4 | 4 | Growth past 2 per model held: "measured gain at model-interpretation is 0 accepted facts/h" |
+| RESEARCH_SLOTS | 724 | 14 | 13 | 723 ideas are capped by the project grant's at-once ceiling |
+| FACTORY | 1 | **0** | 1 | "executable work and a free surface, nothing running: that is a fault" |
+
+- **Allocation (24 h):** the $10K goal has share 1, stance EXPAND, reach 56% (coverage); every other goal is on HOLD.
+- **Permission stalls:** two report agents (R-B, R-C) blocked on MCP permission prompts at about 19:30Z. Earlier today agent H was blocked for about 2 h the same way.
