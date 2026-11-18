@@ -24,7 +24,10 @@
  *     ceiling on a question already being asked.
  *   - A ceiling that stops a packet is not a failure. It raises exactly one
  *     request for a person, naming the ceiling, because raising one is their
- *     decision and never this code's. Everything accepted stays.
+ *     decision and never this code's. Everything accepted stays. The one
+ *     exception is Brain's own improvement research (the brain-architecture
+ *     project): there Brain leaves the goal stopped itself and records why
+ *     (`decideOwnCeiling`), raising nothing.
  *   - Money is not here at all. `startPacket` pins it at zero and refuses a
  *     claim otherwise.
  */
@@ -40,6 +43,7 @@ import { TERMINAL_ORCHESTRATION } from './outcome.ts';
 import { GoalBudgetExhausted, startPacket } from './startPacket.ts';
 import { binForOrchestration, createBin } from '../../repos/bins.ts';
 import { packetMayHaveAnotherBin } from '../russell/launch.ts';
+import { recordEvent } from '../../repos/events.ts';
 
 /** How many goals one pass looks at. A pass is bounded; the next tick takes the rest. */
 export const MAX_GOALS_PER_PASS = 5;
@@ -51,7 +55,13 @@ export interface GoalContinuationReport {
   /** Goals whose assignment the archive already answers. */
   answeredByArchive: string[];
   /** Goals a ceiling stopped, and which one. */
-  stopped: { goalId: string; ceiling: 'PACKETS' | 'FRAGMENTS' | 'DEADLINE'; asked: boolean }[];
+  stopped: {
+    goalId: string;
+    ceiling: 'PACKETS' | 'FRAGMENTS' | 'DEADLINE';
+    asked: boolean;
+    /** Present when Brain decided the stop itself instead of asking (`decideOwnCeiling`). */
+    decidedBy?: 'BRAIN';
+  }[];
   /** Packets of a goal that were given the bin that carries them to a worker. */
   binned: { goalId: string; orchestrationId: string; binId: string }[];
   /** Goals that could not be advanced, with a reason. Left exactly as they were. */
@@ -298,6 +308,61 @@ async function askAboutCeiling(
 }
 
 /**
+ * A ceiling stop on one of Brain's own research goals is Brain's to decide.
+ *
+ * The improvement loop (`improvement/loop.ts`, `openResearch`) opens a research
+ * goal in the brain-architecture project for each weakness it studies: one
+ * packet, money pinned at zero, a deadline. When that packet ends and the
+ * archive still does not answer the assignment, the PACKETS ceiling stops the
+ * goal. Asking a person whether to raise it put a Needs-You request in front of
+ * the owner for every such goal (OWNER:RAISING_THE_RESEARCH_GOALS_PACKETS_CEILING:
+ * 19 of 184 in seven days). None of the rule-11 reasons applies: nothing is
+ * spent, nothing is irreversible, and the improvement loop that opened the goal
+ * goes on with whatever research it produced.
+ *
+ * So Brain applies a rule fixed here in advance, in the manner of an error
+ * budget policy: the goal is left stopped. No ceiling is raised (that would
+ * widen what the goal was approved with, and stays a person's act on the goal
+ * row), no request is opened, and the decision is recorded once per ceiling
+ * value as an append-only `RUSSELL_ROUTINE_DECISION` event, under the same key
+ * the question would have had. A goal in any other project asks exactly as
+ * before.
+ *
+ * Returns true when Brain decided, false when the question is a person's.
+ */
+async function decideOwnCeiling(goal: GoalRow, ceiling: Ceiling, detail: string): Promise<boolean> {
+  const project = await getDb().get<{ slug: string }>('SELECT slug FROM projects WHERE id = ?', [goal.project_id]);
+  if (project?.slug !== ARCHITECTURE_SLUG) return false;
+  const key = ceilingRequestKey(goal.id, ceiling, goal);
+  const recorded = await getDb().get<{ n: number | string }>(
+    `SELECT COUNT(*) AS n FROM project_events
+      WHERE project_id = ? AND entity_id = ? AND event_type = 'RUSSELL_ROUTINE_DECISION' AND payload LIKE ?`,
+    [goal.project_id, goal.id, `%${JSON.stringify(key)}%`],
+  );
+  if (Number(recorded?.n ?? 0) === 0) {
+    await recordEvent({
+      projectId: goal.project_id,
+      layerId: goal.research_layer_id,
+      entityType: 'research_goal',
+      entityId: goal.id,
+      eventType: 'RUSSELL_ROUTINE_DECISION',
+      payload: {
+        goalId: goal.id,
+        ceiling,
+        ceilingKey: key,
+        choice: 'LEAVE_STOPPED',
+        decidedBy: 'BRAIN_OWN_RESEARCH_GOAL',
+        reason:
+          `Brain's own improvement research goal "${goal.name}" reached its ${ceiling} ceiling. ${detail} ` +
+          'Brain leaves it stopped: the goal is Brain\'s, nothing is spent, no ceiling is raised, and the ' +
+          'improvement loop continues with the research already accepted.',
+      },
+    });
+  }
+  return true;
+}
+
+/**
  * What the archive looked like when it was asked, from narrow indexed reads and
  * from state that already moves when the inputs to `coverBeforeWork` move: the
  * project's newest event (every import, extraction and filing records one), the
@@ -466,6 +531,10 @@ async function advanceOne(goal: GoalRow, report: GoalContinuationReport): Promis
     }
   } catch (error) {
     if (error instanceof GoalBudgetExhausted) {
+      if (await decideOwnCeiling(goal, error.ceiling, error.message)) {
+        report.stopped.push({ goalId: goal.id, ceiling: error.ceiling, asked: false, decidedBy: 'BRAIN' });
+        return;
+      }
       const asked = await askAboutCeiling(goal, error.ceiling, error.message);
       report.stopped.push({ goalId: goal.id, ceiling: error.ceiling, asked });
       return;
