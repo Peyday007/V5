@@ -86,9 +86,13 @@ describe('observed construction facts price the arrangements for their own buyer
       expect(one.estimated?.tier).not.toBe('MECHANISM');
       // F2 (2026-11-17): two gated observations of these buyers' own price are a justified
       // distribution, so the price is that evidence — before, it was hard-coded an ASSUMPTION.
-      expect(one.price.provenance).toBe('EVIDENCE');
-      expect(one.price.inferred?.justified).toBe(true);
-      expect(one.price.distribution?.kind).toBe('EMPIRICAL');
+      // GH2 (2026-11-18): a pooled design's participants pay a share of a shared run, not the
+      // per-report price one practice paid, so there the same figures are ASSUMED, never evidence.
+      const pooled = forward.find((a) => `arr_${a.key}` === one.opportunity.id)?.design.aggregation === 'POOLED_BUYERS';
+      expect(one.price.provenance).toBe(pooled ? 'ASSUMPTION' : 'EVIDENCE');
+      expect(one.price.inferred?.justified).toBe(!pooled);
+      if (pooled) expect(inputEvidence(one.price, 'price').tier).toBe('ASSUMED');
+      else expect(one.price.distribution?.kind).toBe('EMPIRICAL');
       expect(one.price.value).toBeNull();
       expect(one.price.note).toMatch(/obs\. of these buyers: claim:clm_dental_a, claim:clm_dental_b/);
       // Every link nothing speaks to still establishes nothing, so the arrangement is never certifiable on its price alone.

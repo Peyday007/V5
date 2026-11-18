@@ -315,8 +315,11 @@ export function estimatedFromArrangement(one: ConstructedArrangement, input: Arr
   const low = Math.max(0.01, p10 / widen);
   const high = Math.max(low + 0.01, p90 * widen);
   // Accepted evidence about what these buyers pay, justified as a distribution by the reconstruction (F2): the
-  // price is that evidence. A transfer nobody has bridged, or bounds alone, stays the assumption swept below.
-  const evidence = !(transfer && transfer.unbridged.length) ? one.value.evidence : undefined;
+  // price is that evidence. A transfer nobody has bridged, a price paid under another payment mechanism (GH2), or
+  // bounds alone, stays the assumption swept below.
+  const unbridged = transfer && transfer.unbridged.length ? `transferred from "${transfer.precedent}" with ${transfer.unbridged.join(', ')} not bridged` : null;
+  const notEvidence = [one.value.notEvidence ?? null, unbridged].filter((why): why is string => !!why);
+  const evidence = notEvidence.length === 0 ? one.value.evidence : undefined;
   if (evidence) {
     const { values, low: eLow, high: eHigh, ...sample } = evidence;
     const evidenced: ModelInput = {
@@ -339,9 +342,12 @@ export function estimatedFromArrangement(one: ConstructedArrangement, input: Arr
     source: ref,
     note:
       `reconstructed (${one.value.tier}, ${one.value.observations} obs. of these buyers${from}), not shown paid: p10 ${p10} p50 ${p50} p90 ${p90}` +
-      (transfer && transfer.unbridged.length ? `; transferred from "${transfer.precedent}" with ${transfer.unbridged.join(', ')} not bridged, so swept ${Math.round(low)}–${Math.round(high)}` : ''),
-    // Swept over the reconstruction's range: an estimate carries no distribution (only evidence may).
-    inferred: { tier: one.value.tier as EvidenceTier, justified: false, p10, p50, p90, observations: one.value.observations },
+      (one.value.notEvidence ? `; ${one.value.notEvidence}` : '') +
+      (unbridged ? `; ${unbridged}, so swept ${Math.round(low)}–${Math.round(high)}` : ''),
+    // Swept over the reconstruction's range: an estimate carries no distribution (only evidence may). A price
+    // that is not evidence of these buyers under this design is ASSUMED, never a comparable (GH2): the
+    // reconstruction's tier described its observations, not what they establish here.
+    inferred: { tier: notEvidence.length ? 'ASSUMED' : (one.value.tier as EvidenceTier), justified: false, p10, p50, p90, observations: one.value.observations },
   };
   return arrangementOpening(one, input, price, high, transfer);
 }
