@@ -1165,20 +1165,54 @@ export async function discoverCandidates(query: string): Promise<string[]> {
   return [...web.slice(0, 6), ...wiki];
 }
 
-/** Free, keyless public search: Wikipedia's own API. Candidates only; Brain reads each page itself. */
-export async function wikipediaCandidates(query: string): Promise<string[]> {
+/**
+ * Wikipedia's full-text search query for a search phrase: its words joined by
+ * `OR`, so a page matching most of them ranks first and one matching only some
+ * still answers. Pure.
+ *
+ * Until 2026-11-18 this was `action=opensearch`, which matches page *titles* by
+ * prefix, so a topic phrase ("PA DEP abandoned mine reclamation contractor
+ * rates") matched no title and returned nothing. With DuckDuckGo refusing for
+ * longer than a fragment waits (production 0ba2eb30, 01:00–01:45Z, 27 fragments
+ * "none from web search"), that left a fragment with no search candidate at all.
+ * Full-text search with the words ANDed (its default) is no better for these
+ * phrases: both measured queries had 0 hits. ORed, they returned "Pennsylvania
+ * Department of Environmental Protection" and "Mine reclamation", and
+ * "Variable data printing" and "Postcard".
+ */
+export function wikipediaSearchQuery(query: string): string {
+  const words = query
+    .slice(0, 200)
+    .replace(/[^\p{L}\p{N}\s'-]+/gu, ' ')
+    .split(/\s+/)
+    .map((w) => w.replace(/^['-]+|['-]+$/g, ''))
+    .filter((w) => w.length > 0 && !/^(or|and|not)$/i.test(w));
+  return [...new Set(words)].slice(0, 12).join(' OR ');
+}
+
+/** Free, keyless public search: Wikipedia's full-text search API. Candidates only; Brain reads each page itself. */
+export async function wikipediaCandidates(
+  query: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<string[]> {
+  const search = wikipediaSearchQuery(query);
+  if (!search) return [];
   try {
     const url =
-      'https://en.wikipedia.org/w/api.php?action=opensearch&limit=3&namespace=0&format=json&search=' +
-      encodeURIComponent(query.slice(0, 200));
-    const response = await fetch(url, {
+      'https://en.wikipedia.org/w/api.php?action=query&list=search&srnamespace=0&srlimit=3&srprop=&format=json&srsearch=' +
+      encodeURIComponent(search);
+    const response = await fetchImpl(url, {
       headers: { 'user-agent': 'Brain research lane (public API)' },
       signal: AbortSignal.timeout(10_000),
     });
     if (!response.ok) return [];
-    const body = (await response.json()) as unknown[];
-    const links = Array.isArray(body[3]) ? (body[3] as unknown[]) : [];
-    return links.filter((one): one is string => typeof one === 'string').slice(0, 2);
+    const body = (await response.json()) as { query?: { search?: Array<{ title?: unknown }> } };
+    const hits = Array.isArray(body?.query?.search) ? body.query.search : [];
+    return hits
+      .map((hit) => hit?.title)
+      .filter((title): title is string => typeof title === 'string' && title.length > 0)
+      .map((title) => 'https://en.wikipedia.org/wiki/' + encodeURIComponent(title.replace(/ /g, '_')))
+      .slice(0, 3);
   } catch {
     return [];
   }
@@ -1474,7 +1508,7 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
     const hosts = rememberedUnreachableHosts();
     return hosts.length > 0 ? `Brain cannot reach these hosts at all, so name no page on them: ${JSON.stringify(hosts)}. ` : '';
   };
-  // 1. Candidates: the model names primary pages it knows; Wikipedia's API adds two. Brain opens them all.
+  // 1. Candidates: the model names primary pages it knows; Wikipedia's search adds up to three. Brain opens them all.
   const plan = await ask(
     ctx.completer,
     ctx.config,
