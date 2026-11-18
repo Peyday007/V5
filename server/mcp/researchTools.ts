@@ -41,6 +41,7 @@ import type {
 } from '../domain/types.ts';
 import { outcomeFor, TERMINAL_ORCHESTRATION } from '../services/research/outcome.ts';
 import { currentFragments as currentFragmentsForOutcome } from '../repos/research.ts';
+import { blockFragment } from '../services/research/orchestrator.ts';
 import {
   ASSIGNMENT_VERDICTS,
   AUDIT_VERDICTS,
@@ -2674,8 +2675,9 @@ const reportBlockerTool: McpTool = {
         payload: { workItemId: item.id, operation: 'report-blocker' },
       },
       async () => {
-        await updateFragment(fragment.id, {
-          status: 'BLOCKED',
+        // Through `blockFragment`, so a claim the worker already submitted is
+        // not left at accepted = 0 with no reason when its fragment ends here.
+        await blockFragment(fragment.id, {
           // The reason is kept whole, including where the worker looked. §14's
           // rule about claimed absences applies to a blocked fragment too: "the
           // sources do not exist" means something only when it says where it
@@ -2687,7 +2689,6 @@ const reportBlockerTool: McpTool = {
           ]
             .filter((part): part is string => part !== null)
             .join(' '),
-          completedAt: new Date().toISOString(),
         });
 
         return {
