@@ -9,6 +9,8 @@
  * version could ever see a date for it. A pull now also completes such stored
  * items, under the same per-pull lookup limit, as a new version of the record.
  */
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
@@ -191,5 +193,28 @@ describe('a Federal Register pull completes a correction stored before the looku
       [SOURCE],
     );
     expect(Number(completed[0]!.n)).toBe(FEDERAL_REGISTER_CORRECTION_LOOKUPS - 1);
+  });
+});
+
+describe('the correction helpers in sources.ts keep their own doc comments', () => {
+  const source = readFileSync(fileURLToPath(new URL('../server/services/feeds/sources.ts', import.meta.url)), 'utf8');
+  /** The JSDoc block that ends immediately above `export … function name(`. */
+  function docAbove(name: string): string {
+    const at = source.search(new RegExp(`export (async )?function ${name}\\(`));
+    expect(at).toBeGreaterThan(0);
+    const before = source.slice(0, at);
+    expect(before.trimEnd().endsWith('*/')).toBe(true);
+    return before.slice(before.lastIndexOf('/**'));
+  }
+
+  it('no doc comment is left orphaned directly above another doc comment', () => {
+    expect(/\*\/\s*\n\s*\/\*\*/.test(source)).toBe(false);
+  });
+
+  it('each correction helper is described by the comment above it', () => {
+    expect(docAbove('completeFederalRegisterCorrections')).toContain('Corrected rule effective YYYY-MM-DD.');
+    expect(docAbove('completeFederalRegisterCorrections')).toContain('leaves the item as parsed');
+    expect(docAbove('federalRegisterCorrectionIncomplete')).toContain('would still look up');
+    expect(docAbove('federalRegisterCorrectionIncomplete')).not.toContain('ask the Federal Register API');
   });
 });
