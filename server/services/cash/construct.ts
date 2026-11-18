@@ -1208,15 +1208,23 @@ export function forEachCandidate(job: ConstructionJob, visit: (one: Candidate) =
 }
 
 /**
- * Of `MAX_CONSTRUCTIONS`, the slots a pass keeps for rotation (P4): candidates
- * the library never composed, then those composed longest ago, in rank order.
- * A candidate composed in rotation is stored with today's `last_composed_at`
- * and goes to the back of the rotation, so the whole space is composed in
- * about considered / ROTATION_SLOTS passes — deterministically, never by a draw.
- * 64 of 400 keeps fresh composition near 64 designs a pass (the rest reuse the
- * library), against the ~400 a pass the CPU guard was written for (§102).
+ * Of `MAX_CONSTRUCTIONS`, the slots a pass keeps for rotation (P4): a window
+ * over every candidate that is not evidenced, in a fixed order read from the
+ * candidates alone, that moves one window per `ROTATION_PERIOD_MS`. The whole
+ * space is composed in about considered / ROTATION_SLOTS periods. 64 of 400
+ * keeps fresh composition near 64 designs a pass (the rest reuse the library),
+ * against the ~400 a pass the CPU guard was written for (§102).
  */
 export const ROTATION_SLOTS = 64;
+/**
+ * How long one rotation window holds: the goal plan's own cadence (it composes
+ * at most once per ten minutes, `ARRANGEMENTS_FRESH_MS`). The window is the
+ * clock's, never the library's: a re-read with the same inputs at the same time
+ * composes the same window, whatever the first read stored (Deploy
+ * 44391060795: a window read from "never composed" moved on the re-read,
+ * because the first read had composed it).
+ */
+export const ROTATION_PERIOD_MS = 10 * 60_000;
 
 /** Which candidates a pass composes, and why. */
 export interface CandidateSelection {
@@ -1229,9 +1237,9 @@ export interface CandidateSelection {
   evidenced: number;
   /** Evidenced but beyond the evidenced share of the cap (`MAX_CONSTRUCTIONS - ROTATION_SLOTS`). */
   evidencedCut: number;
-  /** Composed in the rotation slots. */
+  /** Composed in this period's rotation window. */
   rotated: number;
-  /** Candidates the library had never composed before this pass. */
+  /** Candidates the library had never composed before this pass (reported, never read by the selection's rotation). */
   neverComposed: number;
 }
 
@@ -1244,27 +1252,30 @@ export interface CandidateSelection {
  * arrangements over 38 readings, and a five-week-old arrangement led the
  * moment it was first weighed — the plan followed which 400 were composed, not
  * what the evidence said. Arrangements on accepted research facts were not
- * guaranteed a slot. So the slots are filled in this order:
+ * guaranteed a slot. So:
  *
- *  1. HELD — the structures the goal's last two readings picked or led with
- *     (`ConstructionJob.held`): a leader is never cut between two passes
- *     that learned nothing new.
- *  2. EVIDENCED — a candidate whose buyers carry an OBSERVED or VERIFIED
- *     construction fact (price, unit or run cost, volume, win rate, buyer
- *     count), a published price or money tied up on a held opening, or that
- *     research CONFIRMED. Dealt by buyer population in rank order, up to
- *     `MAX_CONSTRUCTIONS - ROTATION_SLOTS`; any beyond are counted, never
- *     silent.
- *  3. RANKED — the rest by the existing rank, dealt by population, up to the
- *     same line: lexicographically, CONFIRMED before unasked before REFUTED;
- *     more of the goal's target properties; a design a held opening shows
- *     working; more parts on gated claims; more published prices from this
- *     very buyer; the library's own value; the original design before a
- *     variant; fewer parts to establish; enumeration order. Never a weighted
- *     score, never an id.
- *  4. ROTATION — the remaining `ROTATION_SLOTS`: never composed first, then
- *     the longest since composed, each in rank order. Every candidate is
- *     reached within about considered / ROTATION_SLOTS passes.
+ *  - ROTATION — `ROTATION_SLOTS` candidates are this period's window: every
+ *    candidate that is not evidenced, in a fixed order read from the
+ *    candidates alone (target properties, precedent, gated parts, published
+ *    prices, original design, fewer parts, enumeration order), cut into
+ *    windows, the window `floor(now / ROTATION_PERIOD_MS)` mod their number.
+ *    Nothing the library holds moves it, so a re-read with unchanged inputs
+ *    composes the same window, and every candidate is reached within one
+ *    cycle of windows.
+ *  - The other slots, in order, from the candidates outside the window:
+ *    1. HELD — what the goal's last two readings picked or led with
+ *       (`ConstructionJob.held`): a leader is never cut between two passes
+ *       that learned nothing new.
+ *    2. EVIDENCED — buyers carrying an OBSERVED or VERIFIED construction fact
+ *       (price, unit or run cost, volume, win rate, buyer count), a published
+ *       price or money tied up on a held opening, or research CONFIRMED.
+ *    3. RANKED — the existing rank: CONFIRMED before unasked before REFUTED;
+ *       more target properties; a precedent; more gated parts; more published
+ *       prices from this buyer; the library's own value; the original design;
+ *       fewer parts; enumeration order. Never a weighted score, never an id.
+ *    Steps 2 and 3 are dealt one buyer population at a time over the whole
+ *    ranked list, a candidate already taken keeping its place in its lane, so
+ *    taking a leader first never changes which others the deal reaches.
  */
 export function selectCandidates(job: ConstructionJob): CandidateSelection {
   const all: Candidate[] = [];
@@ -1310,11 +1321,28 @@ export function selectCandidates(job: ConstructionJob): CandidateSelection {
       parts: partsByDesign.get(dk)!,
     };
   });
+  type Keyed = (typeof keyed)[number];
   const neverComposed = keyed.filter((one) => !one.stored).length;
-  const evidencedAll = keyed.filter((one) => one.evidence).length;
   if (all.length <= MAX_CONSTRUCTIONS) {
-    return { selected: all, considered, held: keyed.filter((one) => held.has(one.signature)).length, evidenced: evidencedAll, evidencedCut: 0, rotated: 0, neverComposed };
+    return { selected: all, considered, held: keyed.filter((one) => held.has(one.signature)).length, evidenced: keyed.filter((one) => one.evidence).length, evidencedCut: 0, rotated: 0, neverComposed };
   }
+  // The rotation window: a fixed order over what the candidates carry themselves, and a window the clock picks.
+  const fixed = (a: Keyed, b: Keyed): number =>
+    b.met - a.met || b.precedent - a.precedent || b.evidenced - a.evidenced || b.priced - a.priced || a.variant - b.variant || a.parts - b.parts || a.one.order - b.one.order;
+  // Interleaved by buyer population, so each window keeps the cap's breadth.
+  const turningLanes = new Map<string, Keyed[]>();
+  for (const one of keyed.filter((k) => !k.evidence).sort(fixed)) {
+    const k = `${norm(one.one.sector)}|${partPath(one.one.demand)}`;
+    const lane = turningLanes.get(k);
+    if (lane) lane.push(one);
+    else turningLanes.set(k, [one]);
+  }
+  const turning: Keyed[] = [];
+  const turningQueues = [...turningLanes.values()];
+  for (let depth = 0; turningQueues.some((lane) => lane.length > depth); depth += 1) for (const lane of turningQueues) if (lane[depth]) turning.push(lane[depth]!);
+  const windows = Math.max(1, Math.ceil(turning.length / ROTATION_SLOTS));
+  const at = (Math.floor(job.now.getTime() / ROTATION_PERIOD_MS) % windows) * ROTATION_SLOTS;
+  const window = new Set(turning.slice(at, at + ROTATION_SLOTS));
   keyed.sort(
     (a, b) =>
       a.verdict - b.verdict ||
@@ -1327,14 +1355,19 @@ export function selectCandidates(job: ConstructionJob): CandidateSelection {
       a.parts - b.parts ||
       a.one.order - b.one.order,
   );
-  type Keyed = (typeof keyed)[number];
   const taken = new Set<Keyed>();
   const dealt: Candidate[] = [];
   const take = (one: Keyed): void => {
     taken.add(one);
     dealt.push(one.one);
   };
-  // One buyer population at a time, so the cap keeps breadth (production, 2026-11-02: one sector filled the list).
+  const budget = MAX_CONSTRUCTIONS - window.size;
+  /*
+   * One buyer population at a time, so the cap keeps breadth (production,
+   * 2026-11-02: one sector filled the list). A candidate already taken keeps
+   * its place in its lane and is passed over, so a leader taken first leaves
+   * the deal reaching exactly the candidates it reached without it.
+   */
   const deal = (from: readonly Keyed[], upTo: number): void => {
     const lanes = new Map<string, Keyed[]>();
     for (const one of from) {
@@ -1348,37 +1381,28 @@ export function selectCandidates(job: ConstructionJob): CandidateSelection {
       for (const lane of queues) {
         if (dealt.length >= upTo) break;
         const one = lane[depth];
-        if (one) take(one);
+        if (one && !taken.has(one)) take(one);
       }
     }
   };
-  const line = MAX_CONSTRUCTIONS - ROTATION_SLOTS;
-  // 1. The goal's leaders, whatever else ranks above them.
-  for (const one of keyed) if (held.has(one.signature) && dealt.length < MAX_CONSTRUCTIONS) take(one);
-  const heldCount = dealt.length;
+  const outside = keyed.filter((one) => !window.has(one));
+  // 1. The goal's leaders, whatever else ranks above them (a leader in this period's window is composed there).
+  for (const one of outside) if (held.has(one.signature) && dealt.length < budget) take(one);
+  const heldCount = dealt.length + keyed.filter((one) => held.has(one.signature) && window.has(one)).length;
   // 2. Evidence first.
-  deal(keyed.filter((one) => one.evidence && !taken.has(one)), Math.max(line, heldCount));
+  deal(outside.filter((one) => one.evidence), budget);
   // 3. The existing rank.
-  deal(keyed.filter((one) => !taken.has(one)), Math.max(line, dealt.length));
-  // 4. Rotation: never composed first, then composed longest ago, each in rank order and dealt by population for breadth.
-  const beforeRotation = dealt.length;
-  deal(keyed.filter((one) => !one.stored && !taken.has(one)), MAX_CONSTRUCTIONS);
-  const age = (one: Keyed): string => one.stored?.composedAt ?? '';
-  const aged = keyed
-    .map((one, at) => ({ one, at }))
-    .filter(({ one }) => !taken.has(one))
-    .sort((a, b) => age(a.one).localeCompare(age(b.one)) || a.at - b.at)
-    .map(({ one }) => one);
-  deal(aged, MAX_CONSTRUCTIONS);
-  const rotated = dealt.length - beforeRotation;
+  deal(outside, budget);
+  // 4. This period's window.
+  for (const one of keyed) if (window.has(one)) take(one);
   return {
     selected: dealt,
     considered,
     held: heldCount,
-    // Every evidenced candidate composed, by whichever step took it, and every one left out.
+    // Every evidenced candidate composed, and every one left out.
     evidenced: keyed.filter((one) => one.evidence && taken.has(one)).length,
     evidencedCut: keyed.filter((one) => one.evidence && !taken.has(one)).length,
-    rotated,
+    rotated: window.size,
     neverComposed,
   };
 }

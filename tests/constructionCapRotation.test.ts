@@ -18,6 +18,7 @@ import {
   arrangementSignature,
   forEachCandidate,
   MAX_CONSTRUCTIONS,
+  ROTATION_PERIOD_MS,
   ROTATION_SLOTS,
   selectCandidates,
   type Candidate,
@@ -99,60 +100,58 @@ describe('the construction cap is evidence-first', () => {
     expect(smallSelection.selected.slice(0, lateSmall.length).every((one) => one.demand.name === 'late buyer')).toBe(true);
   });
 
-  it('holds the goal\'s leader on every pass, and two passes with no new evidence compose the same ranked set', () => {
+  it('holds the goal\'s leader on every pass, and a re-read with unchanged inputs composes the same set whatever the first read stored', () => {
+    const T = new Date('2026-11-18T19:00:00.000Z');
+    // The cold read: an empty library.
+    const cold = selectCandidates(job({ now: T }));
+    // It stores what it composed, each with a value (the library's p50 ranks), and its reading picks two leaders —
+    // one from the rotation window, one from the ranked slots (planningSpeed's re-read, Deploy 44391060795).
     const known = new Map<string, { verdict: null; p50: number; composedAt: string }>();
-    const first = selectCandidates(job({ known: [...known.entries()] }));
-    remember(known, first.selected, '2026-11-18T00:00:00.000Z');
-    // The plan led with a candidate neither the rank nor this pass's rotation reached (found weeks ago, as mpx_e6ed1e7dbbe54c08a26d was).
-    const probe = selectCandidates(job({ known: [...known.entries()] }));
-    const seen = new Set([...first.selected, ...probe.selected].map(sig));
+    for (const one of cold.selected) known.set(sig(one), { verdict: null, p50: (one.order % 7) * 100, composedAt: T.toISOString() });
+    const leaders = [sig(cold.selected[0]!), sig(cold.selected[cold.selected.length - 1]!)];
+    const reread = selectCandidates(job({ now: T, known: [...known.entries()], held: leaders }));
+    expect(new Set(reread.selected.map(sig))).toEqual(new Set(cold.selected.map(sig)));
+    expect(reread.held).toBe(2);
+    // And again, in a fresh process that reads the same rows.
+    expect(selectCandidates(job({ now: T, known: [...known.entries()], held: leaders })).selected.map(sig)).toEqual(reread.selected.map(sig));
+
+    // A leader neither the rank nor this window reached (found weeks ago, as mpx_e6ed1e7dbbe54c08a26d was) is composed on every pass.
     const all: Candidate[] = [];
     forEachCandidate(job(), (one) => all.push(one));
-    const outside = all.filter((one) => !seen.has(sig(one)));
-    expect(outside.length).toBeGreaterThan(0);
-    const leader = sig(outside[outside.length - 1]!);
-
-    const passes: string[][] = [];
+    const seen = new Set(cold.selected.map(sig));
+    const leader = sig(all.filter((one) => !seen.has(sig(one))).at(-1)!);
     for (let pass = 0; pass < 3; pass += 1) {
-      const at = `2026-11-18T0${pass + 1}:00:00.000Z`;
-      const selection = selectCandidates(job({ known: [...known.entries()], held: [leader] }));
+      const now = new Date(T.getTime() + pass * ROTATION_PERIOD_MS);
+      const selection = selectCandidates(job({ now, known: [...known.entries()], held: [leader] }));
       expect(selection.selected.map(sig)).toContain(leader);
-      expect(selection.selected[0] && sig(selection.selected[0])).toBe(leader);
       expect(selection.held).toBe(1);
-      passes.push(selection.selected.slice(0, MAX_CONSTRUCTIONS - ROTATION_SLOTS).map(sig));
-      remember(known, selection.selected, at);
+      for (const one of selection.selected) known.set(sig(one), { verdict: null, p50: known.get(sig(one))?.p50 ?? 0, composedAt: now.toISOString() });
     }
-    // Nothing new was learned between passes: the held, evidenced and ranked slots are identical; only rotation moves.
-    expect(passes[1]).toEqual(passes[0]);
-    expect(passes[2]).toEqual(passes[1]);
-    // And the same inputs select the same candidates, in the same order.
-    const again = selectCandidates(job({ known: [...known.entries()], held: [leader] }));
-    expect(again.selected.map(sig)).toEqual(selectCandidates(job({ known: [...known.entries()], held: [leader] })).selected.map(sig));
   });
 
-  it('reaches every candidate within considered / ROTATION_SLOTS passes, by rotation rather than a draw', () => {
+  it('reaches every candidate within considered / ROTATION_SLOTS periods, by a clock window rather than a draw', () => {
     const known = new Map<string, { verdict: null; p50: number; composedAt: string }>();
     const composed = new Set<string>();
     const { considered } = selectCandidates(job({}, 6));
-    const bound = Math.ceil((considered - (MAX_CONSTRUCTIONS - ROTATION_SLOTS)) / ROTATION_SLOTS) + 1;
+    const bound = Math.ceil(considered / ROTATION_SLOTS);
+    const start = Date.UTC(2026, 10, 18, 0, 0);
     let passes = 0;
     while (composed.size < considered && passes <= bound) {
-      const at = new Date(Date.UTC(2026, 10, 18, 0, passes * 10)).toISOString();
-      const selection = selectCandidates(job({ known: [...known.entries()] }, 6));
+      const now = new Date(start + passes * ROTATION_PERIOD_MS);
+      const selection = selectCandidates(job({ now, known: [...known.entries()] }, 6));
       expect(selection.selected).toHaveLength(MAX_CONSTRUCTIONS);
       expect(selection.rotated).toBe(ROTATION_SLOTS);
       expect(selection.neverComposed).toBe(considered - composed.size);
       for (const one of selection.selected) composed.add(sig(one));
-      remember(known, selection.selected, at);
+      remember(known, selection.selected, now.toISOString());
       passes += 1;
     }
     expect(composed.size).toBe(considered);
     expect(passes).toBeLessThanOrEqual(bound);
-    // After every candidate was composed once, rotation turns to the one composed longest ago.
-    const next = selectCandidates(job({ known: [...known.entries()] }, 6));
-    const rotated = next.selected.slice(MAX_CONSTRUCTIONS - ROTATION_SLOTS);
-    const oldest = [...known.values()].map((one) => one.composedAt).sort()[0]!;
-    expect(rotated.some((one) => known.get(sig(one))!.composedAt === oldest)).toBe(true);
+    // Within one period the window does not move.
+    const at = new Date(start + 3 * ROTATION_PERIOD_MS);
+    const later = new Date(at.getTime() + ROTATION_PERIOD_MS - 1);
+    expect(selectCandidates(job({ now: later, known: [...known.entries()] }, 6)).selected.map(sig)).toEqual(selectCandidates(job({ now: at, known: [...known.entries()] }, 6)).selected.map(sig));
   });
 });
 
