@@ -54,7 +54,8 @@ describe('W15: planner hot paths', () => {
     // Before: 1,345 ms (every candidate re-canonicalised every group's signature and lists). After: ~60 ms.
     expect(ms).toBeLessThan(700);
     expect([set.distinct, set.collapses.length]).toEqual([120, 280]);
-    expect(sha1([set, rebuild])).toBe('a4af70d4b5ad0b9ba3d732d1c69f69e97f489103');
+    // P5: `collections` is one plan's median with `modelledOf`, never the sum of alternatives.
+    expect(sha1([set, rebuild])).toBe('2453ae142cf13775e4c2383dad61fe439ce8dfdf');
   });
 
   it("never sends the project's knowledge to an evaluation thread, and reads the same plan without it", async () => {

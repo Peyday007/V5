@@ -161,6 +161,9 @@ describe('P5-2: one reading, one economic picture', () => {
     const s = candidateStrategyReading(acceptance(), [notViable])!;
     expect(s).toMatchObject({ key: 'candidate:quant_portfolio', verdict: 'NEEDS_EVIDENCE', chainComplete: false, constraintsFailed: [] });
     expect(s.sweep).toMatchObject({ goalMetShare: 0.5585, settledP50: 27_409.95, probabilistic: false });
+    // Arrangements are estimates, not rows a decision record reads back.
+    expect(s.opportunityIds).toEqual([]);
+    expect(s.arrangementIds).toEqual(['arr_da6aaea7f4cc', 'arr_f4b3a07f6715']);
     expect(s.basis).toContain('55.9% of worlds, coverage of assumed inputs, not a probability');
     expect(s.basis).toContain('assumed, not established: price, reply rate');
   });

@@ -184,6 +184,8 @@ export interface StrategyReading {
    * shown to pay, or the adopted candidate on the inputs it assumes (P5).
    */
   basis?: string;
+  /** The constructed arrangements among its members (`arr_…`): estimates, never openings, so never in `opportunityIds`. */
+  arrangementIds?: string[];
 }
 
 /**
@@ -1186,7 +1188,8 @@ export function candidateStrategyReading(acceptance: PlanAcceptance, strategies:
   if (!c || acceptance.status === 'ACCEPTED') return null;
   const ids = [...c.opportunityIds].sort();
   if (ids.length === 0) return null;
-  if (strategies.some((s) => s.opportunityIds.length === ids.length && [...s.opportunityIds].sort().every((id, i) => id === ids[i]))) return null;
+  const membersOf = (s: StrategyReading) => [...s.opportunityIds, ...(s.arrangementIds ?? [])].sort();
+  if (strategies.some((s) => membersOf(s).length === ids.length && membersOf(s).every((id, i) => id === ids[i]))) return null;
   const assumed = [...new Set((acceptance.construction?.evidence ?? []).filter((e) => !e.establishes).map((e) => e.input))];
   const pct = (x: number) => `${Math.round(x * 1000) / 10}%`;
   const blocking = priceVariables.filter((p) => ids.includes(`${ARRANGEMENT_ID_PREFIX}${p.arrangementKey}`));
@@ -1200,7 +1203,9 @@ export function candidateStrategyReading(acceptance: PlanAcceptance, strategies:
     key: `candidate:${c.source.toLowerCase()}`,
     label: c.label,
     verdict: 'NEEDS_EVIDENCE',
-    opportunityIds: [...c.opportunityIds],
+    // Rows only: a constructed arrangement is no opening a decision record can read back (`readingOpportunityIds`).
+    opportunityIds: c.opportunityIds.filter((id) => !isArrangementId(id)),
+    arrangementIds: c.opportunityIds.filter((id) => isArrangementId(id)),
     links: [],
     constraintsFailed: [],
     sweep: { goalMetShare: c.reach, settledP50: c.settledP50, settledP90: null, infeasibleShare: null, probabilistic: c.reachBasis === 'PROBABILITY' },
@@ -2039,7 +2044,8 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     verdict,
     summary,
     acceptance,
-    chosen: superseded ? candidateStrategy!.key : (chosen?.key ?? null),
+    // The evidence gate's choice among the found openings' strategies; the candidate stands beside it in `strategies`.
+    chosen: chosen?.key ?? null,
     strategies,
     priceVariables,
     // A SQUEEZE goal's next step is a sale when one can be offered; evidence work runs beside it.
@@ -2096,7 +2102,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   };
   if (input.persist) {
     await recordDegraded(goal.id, target.projectId, degraded);
-    await persistReading(goal, reading, superseded ? candidateStrategy : chosen);
+    await persistReading(goal, reading, chosen);
     await pursueSales(goal, reading);
   }
   return reading;
