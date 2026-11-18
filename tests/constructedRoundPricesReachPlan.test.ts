@@ -104,21 +104,22 @@ describe('B1c: a priced claim on an OPEN constructed round reaches the plan', ()
     // The census's dry run reports the same selection the writer files.
     const pool = await backfillCandidates(projectId);
     const mine = pool.decisions.filter((one) => one.source === 'CONSTRUCTED_ROUND');
-    expect(mine.find((one) => one.claimId === priced)?.candidate?.amount).toBe(0.47);
+    // B1f: the claim's stated total is one deal; $0.47 is one postcard piece, not a transaction the plan can count.
+    expect(mine.find((one) => one.claimId === priced)?.candidate?.amount).toBe(4675);
     expect(mine.find((one) => one.claimId === unpriced)?.reason).toMatch(/per unit/);
 
     const filed = await backfillClaimFacts(projectId);
     expect(filed.filed.map((one) => one.sourceClaimId)).toEqual([priced]);
     const facts = await listProjectConstructionFacts(projectId);
     expect(facts).toHaveLength(1);
-    expect(facts[0]).toMatchObject({ key: 'price_per_unit', segment: `map_${buyerId}`, low: 0.47, high: 0.47, status: 'OBSERVED', sourceClaimId: priced });
+    expect(facts[0]).toMatchObject({ key: 'price_per_unit', segment: `map_${buyerId}`, low: 4675, high: 4675, status: 'OBSERVED', sourceClaimId: priced });
 
     // The round never settled.
     expect((await getDb().get<{ state: string }>('SELECT state FROM cash_discovery_rounds WHERE id = ?', [`cdr_${KEY}`]))?.state).toBe('OPEN');
     // The plan's construction read holds it, and the plan's fingerprint moved, so the next pass re-derives.
     const read = await constructionObservations({ projectId, currency: 'USD', daysLeft: 22 });
     expect(read.priced.map((one) => one.lineage)).toEqual([[`claim:${priced}`]]);
-    expect(read.priced[0]!.value).toEqual({ kind: 'POINT', value: 0.47 });
+    expect(read.priced[0]!.value).toEqual({ kind: 'POINT', value: 4675 });
     expect(await planInputsFingerprint(projectId, GOAL)).not.toBe(before);
 
     // Idempotent: a replay files nothing twice.
