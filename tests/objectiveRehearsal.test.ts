@@ -92,9 +92,6 @@ const KNOWN_GAPS: Record<string, Record<string, string>> = {
     'M1 every member is in commercial cleaning': 'no industry constraint reaches the plan, so every held opening is sold',
     'M3 the plan differs from the live goal\'s plan': 'same sales steps as the live goal: every held opening, in the same order',
   },
-  'LIVE-10K-7d': {
-    'M1 no member settles after the 7-day deadline, or the goal is reported infeasible': 'the sales steps sell openings whose cash lands after the deadline (21- and 30-day lines)',
-  },
 };
 
 function rehearsal(id: string) {
