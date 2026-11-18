@@ -134,3 +134,10 @@ Launch configuration, updated:
 - **H (agent, claude/gh-price-transfer):** a price from a different mechanism or population must not count as SINGLE_COMPARABLE evidence, and one fact must not serve as both price and cost.
 - **Next release:** G + H + #1094, then a free gate.
 - **Release-candidate cutoff:** 12:45Z.
+
+## 09:05Z
+- Deploy 44266978600 (86a76a42: G #1095 + #1094) passed its gates but its Fly step was SKIPPED.
+  - **Cause:** Factory merged #1096 (8579d2d5) at 09:02:55Z and dispatched **Deploy 44272284255**, which contains 86a76a42.
+  - Factory is not to be disconnected, so the gate now follows 44272284255.
+  - Expected live about 09:55Z; gate about 10:20Z.
+- **H:** no PR yet. Its agent is waiting on an MCP permission prompt only the owner can answer.
