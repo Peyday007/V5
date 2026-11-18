@@ -43,7 +43,7 @@ import { findTool } from '../../mcp/tools.ts';
 import { MAX_LIST_ITEMS } from '../../mcp/researchTools.ts';
 import { workerIdentity } from '../identity/authenticate.ts';
 import { auditAdmission } from '../research/auditAdmission.ts';
-import { webSearch, webSearchRefusing } from '../sources/discover.ts';
+import { isEncyclopediaPage, readWithoutAnswerFor, rememberReadWithoutAnswer, webSearch, webSearchRefusing } from '../sources/discover.ts';
 import { httpCompleter, laneConfig, type Completer, type LaneConfig } from '../cheap/lane.ts';
 import { isRunpodSlot, runpodBreakerOpen, runpodCallWindow, runpodPaused } from '../cheap/runpod.ts';
 import type { SourceFetch } from '../sources/fetchForWorker.ts';
@@ -1277,6 +1277,13 @@ interface Ctx {
   why: string;
   /** How sources were found for a fragment: search results, and which of the read pages came from them. */
   discovery?: { searched: number; readFromSearch: number; readFromModel: number };
+  /**
+   * The fragment's model listed no claim from the pages it was shown while web
+   * search was refusing and none of those pages came from a web search result
+   * (only Wikipedia or remembered URLs): like "no readable source" in an outage,
+   * it says nothing about the question, so the attempt is refunded.
+   */
+  searchStarved?: boolean;
   /** What the item used while it ran (itemMeter.ts); recorded on its `FREE_LANE_ITEM` row. */
   usage?: ItemUsage;
 }
@@ -1579,7 +1586,9 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
   const failedUrls: string[] = [];
   const fetchReasons: string[] = [];
   const fetchDetails: string[] = [];
-  const readable: { url: string; text: string }[] = [];
+  const readable: { url: string; text: string; asked: string }[] = [];
+  // Pages an earlier attempt at this question read and got no claim from (§15): not shown again.
+  const readBefore = readWithoutAnswerFor(question);
   /*
    * Pages are opened in waves rather than one after another: each wave opens as
    * many as are still needed at once, one per host, and results are taken in
@@ -1613,7 +1622,7 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
         const read = fetched.readable && fetched.text.trim().length > 200;
         const onTopic = read && pageBearsOn(fetched.text.slice(0, PAGE_READ_CHARS), subject);
         if (onTopic && readable.length < MAX_SOURCES) {
-          readable.push({ url: fetched.finalUrl, text: fetched.text.slice(0, PAGE_READ_CHARS) });
+          readable.push({ url: fetched.finalUrl, text: fetched.text.slice(0, PAGE_READ_CHARS), asked: url });
         } else if (!onTopic) {
           failedUrls.push(url);
           fetchReasons.push(read ? 'OFF_TOPIC' : fetched.readable ? 'EMPTY' : String(fetched.reason));
@@ -1624,11 +1633,11 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
   };
   // Pages that cannot answer are not opened at all, and the reason is kept for `none_because`.
   const keep = (urls: string[]): string[] => {
-    const kept = candidateOrder(urls, { academic });
+    const kept = candidateOrder(urls, { academic }).filter((url) => !readBefore.has(url));
     for (const url of urls) {
       if (kept.includes(url) || tried.has(url) || failedUrls.includes(url)) continue;
       failedUrls.push(url);
-      fetchReasons.push(isNavigationPage(url) ? 'NAVIGATION_PAGE' : 'ACADEMIC_OFF_SCOPE');
+      fetchReasons.push(readBefore.has(url) ? 'READ_BEFORE_NO_CLAIM' : isNavigationPage(url) ? 'NAVIGATION_PAGE' : 'ACADEMIC_OFF_SCOPE');
     }
     return kept;
   };
@@ -1774,6 +1783,11 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
       `if no sentence states anything the brief asks, reply {"claims":[]}.\nPrevious: ${JSON.stringify(previous).slice(0, 3000)}`,
   );
   if (ok) await complete(ctx, `free lane: claims submitted from ${readable.length} source(s)`);
+  else if (/: 0 claim\(s\) offered/.test(ctx.why)) {
+    // The model read these pages and listed nothing: the next attempt at this question opens others (§15).
+    rememberReadWithoutAnswer(question, readable.flatMap((one) => [one.asked, one.url]));
+    ctx.searchStarved = webSearchRefusing() && !readable.some((one) => fromSearch.has(one.asked) && !isEncyclopediaPage(one.asked));
+  }
   return ok;
 }
 
@@ -2998,7 +3012,10 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
    * without a report. Refunded and cooled like a provider outage, so research
    * resumes with its work when search answers again.
    */
-  const searchOutage = !ok && one.workType === 'RESEARCH_FRAGMENT' && /^no readable source among/.test(ctx.why) && webSearchRefusing();
+  const searchOutage =
+    !ok &&
+    one.workType === 'RESEARCH_FRAGMENT' &&
+    ((/^no readable source among/.test(ctx.why) && webSearchRefusing()) || ctx.searchStarved === true);
   const strikes = transient || brainUnavailable || searchOutage ? (transientStrikes.get(one.workItemId) ?? 0) + 1 : 0;
   const refund = (transient || brainUnavailable || searchOutage) && (strikes < 3 || providerFailure || searchOutage);
   // Recorded before the cooldowns are touched: one answer from a route whose recent calls still

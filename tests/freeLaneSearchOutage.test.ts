@@ -17,7 +17,7 @@ import { enqueueWork, getWorkItem } from '../server/repos/workQueue.ts';
 import { workType } from '../server/services/queue/workTypes.ts';
 import { setBrainOnlyMode } from '../server/services/bins/brainOnly.ts';
 import { freeLaneTick, resetFreeLaneFitness } from '../server/services/freeLane/worker.ts';
-import { resetSearchState, webSearch, webSearchRefusing } from '../server/services/sources/discover.ts';
+import { readWithoutAnswerFor, resetSearchState, webSearch, webSearchRefusing } from '../server/services/sources/discover.ts';
 import type { Completer, LaneConfig } from '../server/services/cheap/lane.ts';
 import type { SourceFetch } from '../server/services/sources/fetchForWorker.ts';
 
@@ -157,5 +157,70 @@ describe('a fragment with no readable source', () => {
     const seen = await events(id);
     expect(seen.map((e) => e.outcome)).toEqual(['FAILED_RETRYABLE']);
     expect((await getWorkItem(id))?.attemptCount).toBe(1);
+  });
+});
+
+/*
+ * Production, 2026-11-18 15:00–17:00Z: with DuckDuckGo refusing, every candidate
+ * was a Wikipedia page; the model read them and listed nothing ("None of the
+ * provided sources contain any sentence about GitHub's bug bounty program"), and
+ * the fragment and its repair spent twelve attempts on the same four pages.
+ */
+const WIKI = ['https://en.wikipedia.org/wiki/Mine_reclamation', 'https://en.wikipedia.org/wiki/Pennsylvania_Department_of_Environmental_Protection'];
+const PAGE =
+  'Abandoned mine reclamation in Pennsylvania is overseen by the PA DEP. ' +
+  'Reclamation contractors restore land disturbed by mining, and the history of abandoned mine lands goes back two centuries. '.repeat(4);
+const readWiki = async (url: string): Promise<SourceFetch> => ({
+  readable: true,
+  requestedUrl: url,
+  finalUrl: url,
+  status: 200,
+  contentType: 'text/html',
+  retrievedAt: new Date().toISOString(),
+  sha256: 'x',
+  text: PAGE,
+  truncated: false,
+  totalChars: PAGE.length,
+});
+const listsNone: Completer = async (_config, _name, _system, prompt) =>
+  prompt.includes('Name up to')
+    ? JSON.stringify({ urls: [] })
+    : JSON.stringify({ claims: [], none_because: 'the sources are about something else: none states a contractor payment' });
+
+describe('a fragment whose model read only encyclopedia pages and listed nothing', () => {
+  it('is handed back with its attempt refunded while web search is refusing', async () => {
+    await searchRefuses();
+    const id = await fragmentQueued();
+    await freeLaneTick({ config: CONFIG, completer: listsNone, fetchSource: readWiki, search: async () => WIKI });
+    const seen = await events(id);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.reason).toMatch(/0 claim\(s\) offered.*listed none because/);
+    expect(seen[0]!.outcome).toBe('RELEASED_TRANSIENT');
+    expect((await getWorkItem(id))?.attemptCount).toBe(0);
+  });
+
+  it('spends its attempt when web search answered, and the next attempt at the question does not reopen those pages', async () => {
+    const id = await fragmentQueued();
+    await freeLaneTick({ config: CONFIG, completer: listsNone, fetchSource: readWiki, search: async () => WIKI });
+    expect((await events(id)).map((e) => e.outcome)).toEqual(['FAILED_RETRYABLE']);
+    expect((await getWorkItem(id))?.attemptCount).toBe(1);
+    const question = 'What does PA DEP pay abandoned mine reclamation contractors per job?';
+    expect([...readWithoutAnswerFor(question)].sort()).toEqual([...WIKI].sort());
+
+    // A replacement item for the same question (§15): the same search answers the same pages, and they are not opened.
+    const again = await fragmentQueued();
+    const opened: string[] = [];
+    await freeLaneTick({
+      config: CONFIG,
+      completer: listsNone,
+      fetchSource: async (url) => {
+        opened.push(url);
+        return readWiki(url);
+      },
+      search: async () => WIKI,
+    });
+    expect(opened.filter((url) => WIKI.includes(url))).toEqual([]);
+    const [row] = await events(again);
+    expect(row?.reason).toMatch(/no readable source among 0 candidate page\(s\).*READ_BEFORE_NO_CLAIM/);
   });
 });
