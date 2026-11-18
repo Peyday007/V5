@@ -25,3 +25,23 @@ Status: DRAFT, maintained continuously, and delivered by 22:55Z whatever its sta
 
 - **Allocation (24 h):** the $10K goal has share 1, stance EXPAND, reach 56% (coverage); every other goal is on HOLD.
 - **Permission stalls:** two report agents (R-B, R-C) blocked on MCP permission prompts at about 19:30Z. Earlier today agent H was blocked for about 2 h the same way.
+
+## R-A: engineering throughput, measured (2026-11-15 19Z to 11-18 19:24Z, about 67 h)
+- **PRs merged into production:** 149, i.e. 2.2/h; 61 on 11-17.
+  - 117 from Claude sessions, median size 69 lines.
+  - 18 from Factory, median 757 lines.
+- **Deploy runs:** 113.
+  - **44 went live (39%).** 39 superseded, 16 failed, 14 cancelled.
+  - **Wasted: 61% of runs**, and 63% in the last 48 h.
+- **Times:**
+  - median dispatch to live: **36 min**;
+  - median merge to live: **66 min** (p75 104, max 207);
+  - Postgres suite median: 22 min.
+- **Release-lane hours lost in 48 h:** collisions about 7.1 h, flakes 1.9–3.7 h. That is **about 9–11 h out of 48 h**.
+  - Superseded by sessions 29, by Factory 6, by others 4.
+  - Factory and sessions supersede each other in both directions.
+- **Flaky tests seen:**
+  - systemSelfModel, productionPrecedentAndFacts F2, packet invariant;
+  - arrangementLibrary, cashIntegrationPass, capacity-d0-p0-scaling, acquisition-d07;
+  - quantOffLoop (wall-time).
+- **Postgres compute on failed attempts:** 26.5 shard-hours in 48 h.
