@@ -155,3 +155,21 @@ Release 9d110770, live 21:44:40Z. Reading of goal wst_7b4fcbb5f2384f31b6c3 at 21
 - The steps are generic because the leader is generic.
 - P4 (stable selection) is reverted and being reworked.
 - P6 (the plan obeys the objective) is next to release.
+
+## 22:35Z: closing addendum to the 19:50Z report
+Finish-line status:
+
+| # | Item | Status |
+|---|---|---|
+| 1 | Objective reading | #1106 LIVE on 9d110770. #1112 (recurring, industry, hours, "little capital" = an assumed $1,000 up-front ceiling) is releasing in Deploy 44410753096 on be9cf998. REHEARSAL: all 6 objectives pass every check. |
+| 2 | Plan obeys the objective | #1112 releasing. REHEARSAL 6/6. |
+| 3 | One economic model | **VERIFIED ON PRODUCTION**, 21:53Z: one verdict; no $38.7M; price as a variable with break-even. |
+| 4 | Executable steps | **VERIFIED ON PRODUCTION**, 21:53Z: 12 typed steps with kill criteria. The leader is still generic. |
+| 5 | Targeted research | #1104 and #1111 LIVE. The research run has not yet been observed asking for the slot price. The GPU is unavailable within the price ceiling; the free lane continues. |
+| 6 | Research changes plan economics | **VERIFIED ON PRODUCTION**, 21:53Z: priceVariables carry the run cost $4,675 from claim clm_9cf1f15cc99846198399. |
+| 7 | Production test on 2 or more unfamiliar objectives | NOT STARTED. It needs goals created in separate projects, after be9cf998 is live. |
+
+- Also releasing: #1114, stable selection (rotation by pass counter).
+- **Pace:** 6 lanes delivered items 1–4 and 6 as code in about 3.5 h. That is faster than the 10–16 h estimate, so the critical path is now **release cycles plus the production test (item 7)**.
+- **Revised fastest completion:** about **12–24 h** from now, down from 24–72 h. The remaining risk is that the plan's leading candidate stays generic until targeted research returns a real slot price.
+- **Cost:** unchanged. $0 required; GPU optional.
