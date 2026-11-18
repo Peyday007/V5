@@ -326,16 +326,10 @@ async function traceB1d(): Promise<void> {
       return [];
     }
   };
-  const P = 'prj_22fb4fec295f403a8a22';
-  await q('paths4', `SELECT legacy_key, industry_node_id, last_composed_at, last_evaluated_at, evaluated_count, last_evaluation_goal_id, last_evaluation_reading_id, last_evaluation_contribution_cents, last_evaluation_picked, research_verdict, asked_count FROM monetization_paths WHERE project_id = ? AND legacy_key IN (?, ?, ?, ?)`, [P, '2821cce3c372', '9b8b17b801cb', '86da3f1661d1', '4cbbf91e4df7']);
-  const readings = (await db.all(`SELECT id, created_at, strategies, forecast FROM goal_plan_readings WHERE workstream_id = ? ORDER BY created_at DESC LIMIT 4`, ['wst_7b4fcbb5f2384f31b6c3'])) as { id: string; created_at: string; strategies: string; forecast: string | null }[];
-  for (const r of readings) {
-    const text = `${r.strategies} ${r.forecast ?? ''}`;
-    const around = (needle: string) => { const at = text.indexOf(needle); return at < 0 ? null : text.slice(Math.max(0, at - 250), at + 250); };
-    show(`reading ${r.id} ${r.created_at}`, { len: text.length, key: around('2821cce3c372'), fact: around('cfa_b20e6370575347e8881a'), claim: around('clm_9cf1f15cc99846198399'), node: around('shared direct-mail postcard') });
+  for (const o of ['orc_cc7bd31f96984884885b', 'orc_a728ef59b948444d8676', 'orc_bc841fb5500546a1b31c']) {
+    await q(`orch ${o}`, `SELECT status, current_pass, updated_at, failed_at, failure_reason FROM research_orchestrations WHERE id = ?`, [o]);
+    await q(`items ${o}`, `SELECT id, work_type, state, attempt_count, failure_category, created_at, updated_at FROM work_items WHERE orchestration_id = ? AND created_at >= ? ORDER BY created_at`, [o, '2026-11-17T20:55:00Z']);
   }
-  await q('nodeFacts', `SELECT id, fact_key, low, status, segment, created_at FROM construction_facts WHERE node_id IN (?, ?, ?) ORDER BY created_at`, ['ind_d7e777c4879f4b9b921a', 'ind_ea30f6597acd4a9587e8', 'ind_1d19cbca862144a6a1ef']);
-  await q('nodes', `SELECT id, kind, name, retired_at FROM industry_nodes WHERE id IN (?, ?)`, ['ind_ea30f6597acd4a9587e8', 'ind_1d19cbca862144a6a1ef']);
 }
 
 async function main(): Promise<void> {
