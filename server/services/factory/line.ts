@@ -426,7 +426,12 @@ export interface LineReading {
   auto: boolean;
   executable: {
     queued: number;
+    /** Every factory stage whose row is READY (or whose lease lapsed): what the rows say. */
     readyBins: number;
+    /**
+     * What the dispatcher would actually fire now: `readyBins` less the stages in
+     * `held`, plus the admissible queue. Idle is judged on this, never on the rows.
+     */
     total: number;
   };
   active: {
@@ -439,6 +444,15 @@ export interface LineReading {
     freeSurfaces: number;
     surfaces: LineCapacitySurface[];
   };
+  /**
+   * READY stages the dispatcher deliberately does not fire, and why: under a
+   * fire backoff (`dispatch_not_before` in the future, the `BIN_REFIRE_GUARD`
+   * wait, which has its own end) or out of attempts (a regrant or a decision,
+   * which no surface can supply). Neither is executable work beside a free
+   * surface. Always set by `readLine`; optional only so a hand-built reading
+   * stays one.
+   */
+  held?: { backoff: number; exhausted: number; backoffUntil: string | null };
   unexplainedIdle: boolean;
   /** The sentence that says why the line is or is not moving. */
   because: string;
@@ -510,13 +524,25 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
   let readyBins = 0;
   let leasedBins = 0;
   let arriving = 0;
+  let backoffBins = 0;
+  let exhaustedBins = 0;
+  let backoffUntil: string | null = null;
   for (const bin of factoryBins) {
     const sent = newestSent(await listDispatchesForBin(bin.id));
     const leaseLive = bin.state === 'LEASED' && bin.leaseExpiresAt !== null && bin.leaseExpiresAt > nowIso;
     if (leaseLive) leasedBins += 1;
     else {
       readyBins += 1;
-      if (sent && now.getTime() - new Date(sent.sentAt).getTime() < ARRIVAL_GRACE_MS) arriving += 1;
+      // The dispatcher's own two refusals, read from the same columns it reads
+      // (`DISPATCHABLE_SQL`: attempts; `FIREABLE_SQL`: the fire backoff). A
+      // stage it will not fire is a wait with a reason, not idle work, and
+      // counting it as executable is what reported a deliberate wait as "a
+      // fault, not a wait" (production, twice a day, each needing the owner).
+      if (bin.attemptCount >= bin.maxAttempts) exhaustedBins += 1;
+      else if (bin.dispatchNotBefore !== null && bin.dispatchNotBefore > nowIso) {
+        backoffBins += 1;
+        if (backoffUntil === null || bin.dispatchNotBefore < backoffUntil) backoffUntil = bin.dispatchNotBefore;
+      } else if (sent && now.getTime() - new Date(sent.sentAt).getTime() < ARRIVAL_GRACE_MS) arriving += 1;
     }
     lineBins.push({
       binId: bin.id,
@@ -639,7 +665,7 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
   // Only what admission would actually start counts as executable: an entry
   // waiting on an overlapping campaign is a wait with a reason, not idle work.
   const admissibleQueued = queued.filter((row) => row.executableNow).length;
-  const executableTotal = readyBins + admissibleQueued;
+  const executableTotal = readyBins - backoffBins - exhaustedBins + admissibleQueued;
   const unexplainedIdle =
     executableTotal > 0 && freeSurfaces > 0 && leasedBins === 0 && arriving === 0;
 
@@ -653,6 +679,17 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
     because = `${leasedBins} stage(s) running and ${arriving} worker(s) arriving.`;
   else if (executableTotal > 0)
     because = `${executableTotal} piece(s) of executable work, but no Factory surface is free to take it.`;
+  else if (backoffBins > 0 || exhaustedBins > 0)
+    because = [
+      backoffBins > 0
+        ? `${backoffBins} stage(s) under a fire backoff; the dispatcher fires again from ${backoffUntil}.`
+        : null,
+      exhaustedBins > 0
+        ? `${exhaustedBins} stage(s) out of attempts, waiting on a regrant or a decision rather than a surface.`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(' ');
   else if (queue.length > 0)
     because = `${queue.length} objective(s) queued behind ${workingCampaigns} working campaign(s), the limit being ${policy.maxActive}.`;
   else because = 'Nothing is queued and no campaign has a stage waiting.';
@@ -664,6 +701,7 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
     executable: { queued: admissibleQueued, readyBins, total: executableTotal },
     active: { leasedBins, arriving, workingCampaigns },
     capacity: { freeSurfaces, surfaces },
+    held: { backoff: backoffBins, exhausted: exhaustedBins, backoffUntil },
     unexplainedIdle,
     because,
     campaigns,
