@@ -601,9 +601,60 @@ export async function deletePod(apiKey: string, podId: string, fetchImpl?: Fetch
   }
 }
 
+type Cloud = 'SECURE' | 'COMMUNITY';
+
 /**
- * Create one pod from a recipe, on each cloud in the recipe's order, and keep it
- * only when RunPod prices it within the ceiling — a dearer one is deleted at once.
+ * RunPod's listed on-demand price per GPU type and cloud (`gpuTypes`), or null
+ * when it cannot be read. A price of zero or none means "not listed there".
+ */
+export async function gpuPrices(apiKey: string, fetchImpl?: Fetch): Promise<Map<string, Record<Cloud, number | null>> | null> {
+  try {
+    const r = await graphql(apiKey, '{ gpuTypes { id securePrice communityPrice } }', fetchImpl);
+    const types = r.ok ? (r.data?.['gpuTypes'] as { id?: unknown; securePrice?: unknown; communityPrice?: unknown }[] | undefined) : undefined;
+    if (!Array.isArray(types)) return null;
+    const listed = (v: unknown): number | null => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : null);
+    const out = new Map<string, Record<Cloud, number | null>>();
+    for (const t of types) if (typeof t.id === 'string') out.set(t.id, { SECURE: listed(t.securePrice), COMMUNITY: listed(t.communityPrice) });
+    return out;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Pure: the order to try a recipe's GPUs in. With RunPod's list prices, one
+ * attempt per (cloud, GPU) listed within the ceiling, cheapest first, and types
+ * missing from the list after them; a type listed above the ceiling, or not on
+ * that cloud, is never
+ * created (production 2026-11-18 00:55Z: a B200 was always taken before an
+ * in-ceiling H200, so a $5.50 ceiling created and deleted a $7.99 B200 and never
+ * asked for the H200). Without prices, the recipe's order per cloud, as before.
+ */
+export function creationPlan(
+  recipe: Pick<PodRecipe, 'gpus' | 'clouds'>,
+  ceiling: number,
+  prices: Map<string, Record<Cloud, number | null>> | null,
+): { attempts: { cloud: Cloud; gpus: string[]; listed: number | null }[]; skipped: string[] } {
+  if (!prices) return { attempts: recipe.clouds.map((cloud) => ({ cloud, gpus: [...recipe.gpus], listed: null })), skipped: [] };
+  const skipped: string[] = [];
+  const attempts: { cloud: Cloud; gpus: string[]; listed: number | null; order: number }[] = [];
+  recipe.clouds.forEach((cloud, c) =>
+    recipe.gpus.forEach((gpu, g) => {
+      const type = prices.get(gpu);
+      const listed = type?.[cloud] ?? null;
+      if (type && listed === null) skipped.push(`${cloud} ${gpu}: not listed on this cloud; not created`);
+      else if (listed !== null && listed > ceiling + 1e-9) skipped.push(`${cloud} ${gpu}: listed at ${listed}/h, over the ${ceiling}/h ceiling; not created`);
+      else attempts.push({ cloud, gpus: [gpu], listed, order: c * recipe.gpus.length + g });
+    }),
+  );
+  attempts.sort((a, b) => (a.listed ?? Infinity) - (b.listed ?? Infinity) || a.order - b.order);
+  return { attempts: attempts.map(({ cloud, gpus, listed }) => ({ cloud, gpus, listed })), skipped };
+}
+
+/**
+ * Create one pod from a recipe, trying its GPUs in `creationPlan`'s order, and
+ * keep it only when RunPod prices it within the ceiling — a dearer one is
+ * deleted at once and the next type is tried.
  */
 export async function createPod(input: {
   apiKey: string;
@@ -616,21 +667,23 @@ export async function createPod(input: {
 }): Promise<EnsureResult> {
   const call = caller(input.apiKey, input.fetchImpl);
   const log: string[] = [];
-  const refusals: string[] = [];
-  for (const cloud of input.recipe.clouds) {
-    const spec = podSpec(input.vllmKey, input.model ?? POD_MODEL, cloud, input.recipe, input.name);
+  const plan = creationPlan(input.recipe, input.maxUsdPerHour, await gpuPrices(input.apiKey, input.fetchImpl));
+  const refusals: string[] = [...plan.skipped];
+  for (const { cloud, gpus } of plan.attempts) {
+    const recipe = { ...input.recipe, gpus };
+    const spec = podSpec(input.vllmKey, input.model ?? POD_MODEL, cloud, recipe, input.name);
     let pod: Pod;
     let via = '';
     try {
       const made = await call('POST', '/pods', spec);
       if (!made.ok) {
-        refusals.push(`${cloud}: HTTP ${made.status} ${made.text.replace(/\s+/g, ' ').slice(0, 700)}`);
+        refusals.push(`${cloud} ${gpus.join('/')}: HTTP ${made.status} ${made.text.replace(/\s+/g, ' ').slice(0, 700)}`);
         continue;
       }
       pod = JSON.parse(made.text) as Pod;
     } catch (error) {
       // REST unreachable (a thrown request, not an answer): the same pod through GraphQL.
-      const viaGql = await createViaGraphql(input.apiKey, spec, input.recipe, input.fetchImpl).catch((e: Error) => ({ pod: null, refusals: [`GraphQL: ${e.message}`] }));
+      const viaGql = await createViaGraphql(input.apiKey, spec, recipe, input.fetchImpl).catch((e: Error) => ({ pod: null, refusals: [`GraphQL: ${e.message}`] }));
       if (!viaGql.pod) {
         refusals.push(`${cloud}: REST ${(error as Error)?.message ?? error}; GraphQL ${viaGql.refusals.join('; ')}`);
         continue;
@@ -644,7 +697,7 @@ export async function createPod(input: {
       refusals.push(`${cloud}: priced ${cost ?? 'unknown'}/h, over the ${input.maxUsdPerHour}/h ceiling; deleted (HTTP ${gone})`);
       continue;
     }
-    log.push(`created pod ${pod.id} (${input.name}, ${input.recipe.key}) on ${cloud}${via} at $${cost}/h (${pod.gpu?.displayName ?? input.recipe.gpus[0]})`);
+    log.push(`created pod ${pod.id} (${input.name}, ${input.recipe.key}) on ${cloud}${via} at $${cost}/h (${pod.gpu?.displayName ?? gpus[0]})`);
     return { podId: pod.id, url: podUrl(pod.id), status: pod.desiredStatus ?? 'RUNNING', costPerHr: cost, created: true, log };
   }
   throw new Error(`no pod within $${input.maxUsdPerHour}/h could be created: ${refusals.join(' | ')}`);

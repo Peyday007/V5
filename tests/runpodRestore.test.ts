@@ -8,6 +8,8 @@ function runpod(pods: unknown[], createdCost: number[]) {
   let made = 0;
   const fetchImpl = (async (url: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET';
+    // RunPod's GPU price list (GraphQL) unread here: creation keeps the recipe's order.
+    if (String(url).includes('graphql')) return new Response(JSON.stringify({ errors: [{ message: 'not in this test' }] }), { status: 200 });
     calls.push({ method, url, body: init?.body ? JSON.parse(String(init.body)) : undefined });
     if (method === 'GET') return new Response(JSON.stringify(pods), { status: 200 });
     if (method === 'POST') {
@@ -188,8 +190,9 @@ describe('pod lifecycle through GraphQL when REST throws', () => {
     );
     const pod = await createPod({ apiKey: 'k', vllmKey: 'secret', recipe, name: 'brain-vllm', maxUsdPerHour: 0.4, fetchImpl });
     expect(pod).toMatchObject({ podId: 'g1', created: true, costPerHr: 0.35, url: 'https://g1-8000.proxy.runpod.net/v1' });
-    expect(gql).toHaveLength(2);
-    const q = gql[1]!.query;
+    const made = gql.filter((g) => g.query.includes('podFindAndDeployOnDemand'));
+    expect(made).toHaveLength(2);
+    const q = made[1]!.query;
     expect(q).toContain('podFindAndDeployOnDemand(input: { cloudType: COMMUNITY, gpuCount: 1, gpuTypeId: "NVIDIA A40", name: "brain-vllm", imageName: "vllm/vllm-openai:v0.11.0"');
     expect(q).toContain('volumeInGb: 0, ports: "8000/http"');
     expect(q).toContain('minCudaVersion: "12.8"');
@@ -206,7 +209,7 @@ describe('pod lifecycle through GraphQL when REST throws', () => {
     const { createPod, RECIPES, splitDockerArgs } = await import('../server/services/cheap/runpodRestore.ts');
     const { gql, fetchImpl } = restDown(() => ({ data: { podFindAndDeployOnDemand: { id: 'g2', desiredStatus: 'RUNNING', costPerHr: 0.2 } } }));
     await createPod({ apiKey: 'k', vllmKey: 'v', recipe: RECIPES['qwen3-4b-awq-tools']!, name: 'brain-vllm', maxUsdPerHour: 0.24, fetchImpl });
-    const args = JSON.parse(/dockerArgs: ("(?:[^"\\]|\\.)*")/.exec(gql[0]!.query)![1]!) as string;
+    const args = JSON.parse(/dockerArgs: ("(?:[^"\\]|\\.)*")/.exec(gql.find((g) => g.query.includes('podFindAndDeployOnDemand'))!.query)![1]!) as string;
     const cmd = splitDockerArgs(args);
     expect(cmd.slice(0, 2)).toEqual(['--model', 'Qwen/Qwen3-4B-AWQ']);
     expect(JSON.parse(cmd[cmd.indexOf('--rope-scaling') + 1]!)).toMatchObject({ rope_type: 'yarn' });
@@ -224,6 +227,43 @@ describe('pod lifecycle through GraphQL when REST throws', () => {
     const terminated = gql.filter((g) => g.query.includes('podTerminate')).length;
     expect(created).toBe(2); // one per cloud: a priced-over pod ends that cloud, as on REST
     expect(terminated).toBe(created);
+  });
+
+  it('tries GPUs by RunPod\'s list price within the ceiling, cheapest first, and never creates one listed above it', async () => {
+    const { createPod, creationPlan, RECIPES } = await import('../server/services/cheap/runpodRestore.ts');
+    const recipe = RECIPES['gpt-oss-120b-big']!;
+    const gpuTypes = [
+      { id: 'NVIDIA B200', securePrice: 7.99, communityPrice: 0 },
+      { id: 'NVIDIA H200', securePrice: 5.29, communityPrice: 4.99 },
+    ];
+    // Production 2026-11-18 00:55Z: B200 in stock first in the recipe; at $5.50 it was created and deleted, H200 never asked for.
+    const { gql, fetchImpl } = restDown((q) =>
+      q.includes('gpuTypes') ? { data: { gpuTypes } }
+      : q.includes('"NVIDIA B200"') ? { data: { podFindAndDeployOnDemand: { id: 'b200', desiredStatus: 'RUNNING', costPerHr: 7.99 } } }
+      : q.includes('cloudType: COMMUNITY') ? { data: { podFindAndDeployOnDemand: null }, errors: [{ message: 'There are no longer any instances available with the requested specifications.' }] }
+      : { data: { podFindAndDeployOnDemand: { id: 'h200', desiredStatus: 'RUNNING', costPerHr: 5.29 } } },
+    );
+    const pod = await createPod({ apiKey: 'k', vllmKey: 'v', recipe, name: 'brain-vllm', maxUsdPerHour: 5.5, fetchImpl });
+    expect(pod).toMatchObject({ podId: 'h200', costPerHr: 5.29 });
+    const made = gql.filter((g) => g.query.includes('podFindAndDeployOnDemand')).map((g) => g.query);
+    expect(made).toHaveLength(2); // community H200 ($4.99) first, then secure H200; no B200
+    expect(made[0]).toContain('cloudType: COMMUNITY, gpuCount: 1, gpuTypeId: "NVIDIA H200"');
+    expect(made[1]).toContain('cloudType: SECURE, gpuCount: 1, gpuTypeId: "NVIDIA H200"');
+    expect(gql.some((g) => g.query.includes('podTerminate'))).toBe(false);
+
+    // The owner's fallback: max 8.5 puts the B200 within the ceiling, after the cheaper H200s.
+    const prices = new Map(gpuTypes.map((t) => [t.id, { SECURE: t.securePrice || null, COMMUNITY: t.communityPrice || null }]));
+    expect(creationPlan(recipe, 8.5, prices).attempts.map((a) => `${a.cloud} ${a.gpus.join()}`)).toEqual([
+      'COMMUNITY NVIDIA H200', 'SECURE NVIDIA H200', 'SECURE NVIDIA B200',
+    ]);
+    expect(creationPlan(recipe, 5.5, prices).skipped).toEqual([
+      'SECURE NVIDIA B200: listed at 7.99/h, over the 5.5/h ceiling; not created',
+      'COMMUNITY NVIDIA B200: not listed on this cloud; not created',
+    ]);
+    // Nothing listed within the ceiling: nothing is created, and the refusal says why.
+    const none = restDown((q) => (q.includes('gpuTypes') ? { data: { gpuTypes } } : { data: { podFindAndDeployOnDemand: { id: 'x', costPerHr: 9 } } }));
+    await expect(createPod({ apiKey: 'k', vllmKey: 'v', recipe, name: 'brain-vllm', maxUsdPerHour: 4, fetchImpl: none.fetchImpl })).rejects.toThrow(/H200: listed at 4.99\/h, over the 4\/h ceiling; not created/);
+    expect(none.gql.some((g) => g.query.includes('podFindAndDeployOnDemand'))).toBe(false);
   });
 
   it('never sweeps a bench pod whose age GraphQL cannot tell', async () => {
