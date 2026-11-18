@@ -8,7 +8,7 @@
  * completed with "Corrected rule effective YYYY-MM-DD."; an edit of a record is
  * a new stored copy "<id>#v<n>" with a later fetched_at). The document numbers,
  * titles, agencies and publication days are the recorded misses. v4 dropped or
- * mis-grouped them for one of three reasons, which each fixture isolates:
+ * mis-grouped them for one of four reasons, which each fixture isolates:
  *
  *  - a copy of a correction stored without "Corrects N." (C1-2026-21030): v4
  *    saw no corrected rule, though the correction's own number names it;
@@ -16,12 +16,18 @@
  *    publishedAt, or one with an offset, so v4 measured from the wrong day;
  *  - a rule whose copies list different agencies (Transportation Department
  *    alone, then with the Federal Aviation Administration): v4 split one
- *    document across the parent department and the issuing office.
+ *    document across the parent department and the issuing office;
+ *  - a rule effective on its publication day that Brain first stored two or
+ *    more days after publication (FCC 2026-23040, Coast Guard 2026-23027, ACF
+ *    2026-23279): v4 measured "already in force" from Brain's fetch day, not
+ *    the Federal Register's publication day, and dropped it — although the
+ *    free screen, reading the same record, kept it.
  *
  * Every v4 bar stays: Coast Guard 2026-23047 (enforced the day before
  * publication, dated only in prose) is a correct exclusion, and so are a rule
  * effective more than eight weeks after publication, one effective before it,
- * and a late backfill already in force when Brain first held it.
+ * and one published outside the 30-day membership window however late Brain
+ * stored it.
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -91,9 +97,10 @@ const fcc41 = fr(
   '2026-23041', '2026-11-12', FCC, 'Amends the Table of Allotments. Effective 2026-11-12.',
   'Television Broadcasting Services; St. George, Utah', '2026-11-13T06:00:00.000Z', undefined, null,
 );
-const fcc40 = fr('2026-23040', '2026-11-12', FCC, 'Effective 2026-11-12.', 'National Television Multiple Ownership Rule');
-const uscg27 = fr('2026-23027', '2026-11-12', USCG, 'Effective 2026-11-12.', 'Safety Zone; Sector Mobile Captain of the Port Zone, Mobile, AL');
-const acf79 = fr('2026-23279', '2026-11-16', ACF, 'Effective 2026-11-16.', 'Restoring Flexibility To Support Head Start Program Access');
+/** Effective on publication, first stored by Brain two days later (a pull that ran late): the screen kept each. */
+const fcc40 = fr('2026-23040', '2026-11-12', FCC, 'Effective 2026-11-12.', 'National Television Multiple Ownership Rule', '2026-11-14T06:00:00.000Z');
+const uscg27 = fr('2026-23027', '2026-11-12', USCG, 'Effective 2026-11-12.', 'Safety Zone; Sector Mobile Captain of the Port Zone, Mobile, AL', '2026-11-14T06:00:00.000Z');
+const acf79 = fr('2026-23279', '2026-11-16', ACF, 'Effective 2026-11-16.', 'Restoring Flexibility To Support Head Start Program Access', '2026-11-18T06:00:00.000Z');
 
 const fleetWeek = fr(
   '2026-23047', '2026-11-12', USCG,
@@ -102,11 +109,10 @@ const fleetWeek = fr(
 );
 const tooFar = fr('2026-23100', '2026-11-12', FCC, `Effective ${new Date(Date.parse(`${lastDay}T00:00:00.000Z`) + DAY).toISOString().slice(0, 10)}.`);
 const beforePublication = fr('2026-23101', '2026-11-12', USCG, 'Temporary final rule. Effective 2026-11-10.');
-const lateBackfill = fr('2026-23102', '2026-11-12', FCC, 'Effective 2026-11-12.', '2026-23102', '2026-11-16T06:00:00.000Z');
 
 const records = [
   correctedRule, correctionBare, correctionCompleted, faa73, faa73Edit, faa72, fcc41, fcc40, uscg27, acf79,
-  fleetWeek, tooFar, beforePublication, lateBackfill,
+  fleetWeek, tooFar, beforePublication,
 ];
 /** Each true miss and the agency group it belongs in. */
 const expected: [DetectorRecord, string][] = [
@@ -139,6 +145,15 @@ describe('RULE_EFFECTIVE_SOON@4 misses the recorded items (the failure class)', 
 
   it('drops a rule effective on the last day of the bound when publishedAt carries an offset', () => {
     expect(kept).not.toContain(faa72.id);
+  });
+
+  it('drops a lead-0 rule Brain first stored two days after publication (FCC 2026-23040, USCG 2026-23027, ACF 2026-23279)', () => {
+    for (const late of [fcc40, uscg27, acf79]) expect(kept).not.toContain(late.id);
+  });
+
+  it('keeps the very same records when Brain stored them on their publication day: the fetch day decided it', () => {
+    const onTime = [fcc40, uscg27, acf79].map((one) => ({ ...one, fetchedAt: `${one.publishedAt!.slice(0, 10)}T12:00:00.000Z` }));
+    expect(members(RULE_EFFECTIVE_SOON_V4.detect(onTime, now)).sort()).toEqual(onTime.map((one) => one.id).sort());
   });
 
   it('groups one FAA document under the parent department for one copy and the FAA for the other', () => {
@@ -194,13 +209,34 @@ describe('every v4 bar is kept', () => {
     expect(kept).not.toContain(beforePublication.id);
   });
 
-  it('leaves out a late backfill already in force when Brain first held it', () => {
-    expect(kept).not.toContain(lateBackfill.id);
+  it('leaves out a rule effective before its publication however early Brain stored it', () => {
+    const early = { ...beforePublication, id: 'fi_early', fetchedAt: '2026-11-12T00:00:01.000Z' };
+    expect(members(RULE_EFFECTIVE_SOON_V5.detect([early], now))).toEqual([]);
+  });
+
+  it('leaves out a rule published outside the 30-day window however late Brain stored it', () => {
+    const backfilled = fr('2026-20001', '2026-10-17', FCC, 'Effective 2026-11-20.', '2026-20001', '2026-11-18T06:00:00.000Z');
+    expect(members(RULE_EFFECTIVE_SOON_V5.detect([backfilled], now))).toEqual([]);
   });
 
   it('leaves out a rule published outside the 30-day membership window', () => {
     const old = fr('2026-20000', '2026-10-01', FCC, 'Effective 2026-10-01.');
     expect(members(RULE_EFFECTIVE_SOON_V5.detect([old], now))).toEqual([]);
+  });
+});
+
+describe('the verdict is a property of the record, not of when Brain fetched it', () => {
+  it('keeps or drops each record identically whatever day inside the window Brain first stored it', () => {
+    const subjects = [fcc40, uscg27, acf79, fcc41, faa72, tooFar, beforePublication, fleetWeek];
+    const baseline = members(RULE_EFFECTIVE_SOON_V5.detect(subjects, now)).sort();
+    for (const lagDays of [0, 1, 2, 5]) {
+      const shifted = subjects.map((one) => ({
+        ...one,
+        fetchedAt: new Date(Math.min(now.getTime(), Date.parse(federalRegisterPublishedDayOf(one.url)!) + lagDays * DAY + 6 * 3_600_000)).toISOString(),
+      }));
+      expect({ lagDays, kept: members(RULE_EFFECTIVE_SOON_V5.detect(shifted, now)).sort() }).toEqual({ lagDays, kept: baseline });
+    }
+    expect(baseline).toEqual([fcc40, uscg27, acf79, fcc41, faa72].map((one) => one.id).sort());
   });
 });
 
