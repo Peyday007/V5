@@ -2222,6 +2222,15 @@ async function closeEndedRounds(input: {
     const mission = missions?.latest ?? null;
     let to: 'HARVESTED' | 'ABANDONED' | null =
       missions?.outcome ?? (mission?.state === 'NEEDS_HUMAN' ? 'ABANDONED' : null);
+    /*
+     * A mission whose bin is parked as a legal call (`BLOCKED_LEGAL`) is never
+     * handed to a worker, so its research never runs and its round would hold
+     * the goal's slot for ever (production 2026-11-18: cdr_fbb0fd60 OPEN six
+     * days on orc_f96ea5ca, bin_6c97106a). Closed exactly like a mission parked
+     * for a person: the mission, its bin and its items are left where they are.
+     */
+    const legal = !to && mission ? await parkedAsLegal(mission.binId) : false;
+    if (legal) to = 'ABANDONED';
     const expired = !to && !mission && (await expireUnlaunchedGoalRound(entry.round, candidateId));
     if (expired) to = 'ABANDONED';
     if (!to) continue;
@@ -2234,9 +2243,11 @@ async function closeEndedRounds(input: {
       console.warn(`arrangement outcome for round ${entry.round.id} not recorded: ${String((error as Error)?.message ?? error)}`),
     );
     if (to === 'HARVESTED') continue;
-    const cause = abandonedRoundCause({ mission, expired });
+    const cause = legal ? PARKED_LEGAL_CAUSE : abandonedRoundCause({ mission, expired });
     const failureClass = abandonedFailureClass(cause);
-    const why = mission
+    const why = legal
+      ? 'its research is parked as a legal call no worker may be handed'
+      : mission
       ? `its research is ${mission.state.toLowerCase()}` +
         (mission.terminalReason || mission.waitingOn ? `: ${mission.waitingOn ?? mission.terminalReason}` : ', with no reason recorded')
       : expired
@@ -2298,6 +2309,16 @@ export function abandonedRoundCause(input: {
   return 'ARCHIVE_ANSWERED';
 }
 
+/** The cause a round closed because its mission's bin is parked as a legal call records. */
+export const PARKED_LEGAL_CAUSE = 'BIN_PARKED_LEGAL';
+
+/** Whether a mission's bin is parked as a legal call, which no lane ever admits. */
+async function parkedAsLegal(binId: string | null): Promise<boolean> {
+  if (!binId) return false;
+  const { getBin } = await import('../../repos/bins.ts');
+  return (await getBin(binId))?.purpose === 'BLOCKED_LEGAL';
+}
+
 /**
  * The fixed failure classes an ABANDONED round is sorted into (dfx_2b21d109a13d).
  *
@@ -2331,7 +2352,7 @@ export type AbandonedFailureClass = (typeof ABANDONED_FAILURE_CLASSES)[number];
  * a guessed class. Order matters — the most specific reading wins.
  */
 export function abandonedFailureClass(cause: string): AbandonedFailureClass {
-  if (cause === 'ARCHIVE_ANSWERED') return 'ROUND_SETTLEMENT';
+  if (cause === 'ARCHIVE_ANSWERED' || cause === PARKED_LEGAL_CAUSE) return 'ROUND_SETTLEMENT';
   if (cause.startsWith('ROUND_CAP_UNLAUNCHED_')) return 'ROUND_CAP_LOGIC';
   const split = cause.indexOf(':');
   const state = split < 0 ? cause : cause.slice(0, split);

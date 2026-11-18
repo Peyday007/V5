@@ -22,6 +22,7 @@ import { createUser } from '../server/repos/identity.ts';
 import { cashEventsOfKindInProject } from '../server/repos/cashMode.ts';
 import { listRounds } from '../server/repos/cashDiscovery.ts';
 import { launchMission, transitionMission } from '../server/repos/russellMissions.ts';
+import { createBin, getBin } from '../server/repos/bins.ts';
 import { activate } from '../server/services/cash/lifecycle.ts';
 import * as discovery from '../server/services/cash/discovery.ts';
 import {
@@ -276,6 +277,39 @@ describe('the abandoned rounds are classified by Brain, not only by the report',
       await transitionMission({ missionId: mission.id, from: 'PLANNED', to: 'RUNNING' });
       await transitionMission({ missionId: mission.id, from: 'RUNNING', to: 'FAILED', terminalReason });
     }
+
+    it('closes a round whose mission is parked as a legal call, leaving the mission and its bin where they are (production cdr_fbb0fd60)', async () => {
+      const [legalRound] = await openDiscovery({ projectId, limit: 1 });
+      expect(legalRound).toBeTruthy();
+      seq += 1;
+      const { mission } = await launchMission({
+        projectId, visibility: 'SHARED', objective: 'a discovery bucket', whyNow: 'the sprint is active',
+        idempotencyKey: `legal-${legalRound!.candidateId}-${seq}`, candidateId: legalRound!.candidateId,
+      });
+      await transitionMission({ missionId: mission.id, from: 'PLANNED', to: 'RUNNING' });
+      const bin = await createBin({
+        projectId, kind: 'RESEARCH_PACKET', title: 'a legal question', objective: 'q', completionContract: 'RESEARCH_PACKET_V1',
+        createdByType: 'SYSTEM', createdById: 'test', ready: true,
+        manifest: {
+          objective: 'q', why: 'q', lineage: { projectId, layerId: null, goal: null, orchestrationId: null }, units: [],
+          acceptableSources: ['a'], excludedSources: ['b'], evidence: ['c'], outputs: ['d'], authorizedActions: ['e'], prohibitedActions: ['f'],
+          budgetUnits: 1, retry: { maxAttempts: 3, backoffSeconds: 30 }, stoppingConditions: ['g'],
+        },
+      });
+      await getDb().run('UPDATE bins SET purpose = ? WHERE id = ?', ['BLOCKED_LEGAL', bin.id]);
+      await getDb().run('UPDATE russell_missions SET bin_id = ? WHERE id = ?', [bin.id, mission.id]);
+
+      await harvest({ projectId, limit: 50 });
+
+      const round = (await listRounds(projectId)).find((r) => r.bucketId === legalRound!.bucketId)!;
+      expect(round.state).toBe('ABANDONED');
+      const stop = (await cashEventsOfKindInProject(projectId, 'CASH_DISCOVERY_ROUND_STOPPED'))
+        .map((e) => e.detail as Record<string, unknown>).find((d) => d.roundId === round.id)!;
+      expect(stop).toMatchObject({ cause: 'BIN_PARKED_LEGAL', failureClass: 'ROUND_SETTLEMENT', missionState: 'RUNNING' });
+      // Nothing about the parked work is changed: it waits for its person.
+      expect((await getDb().get<{ state: string }>('SELECT state FROM russell_missions WHERE id = ?', [mission.id]))!.state).toBe('RUNNING');
+      expect((await getBin(bin.id))!.state).toBe(bin.state);
+    });
 
     it('classifies every ABANDONED round from its rows, recording the class on the stop event and reconstructing an older one', async () => {
       const opened = await openDiscovery({ projectId, limit: 5 });

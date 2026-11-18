@@ -205,6 +205,35 @@ describe('O-2: an observation of a moment expires', () => {
     expect(landlord.signalObservedAt).toBeNull();
   });
 
+  it('reads a year- or month-only source date at its own precision (production 2026-11-18: "2026" read as 1 January)', () => {
+    const now = new Date('2026-11-18T17:00:00.000Z');
+    const at = (sourceDate: string) => observationExpiry({ signal: 'ACTIVE_BUYER_DEMAND', closesOn: null, sourceDate, freshDays: 30, now });
+    // A page dated only "2026" may be from today: it has no observation day, and expires once the year plus the window is past.
+    expect(at('2026')).toEqual({ stale: false, expiresAt: '2027-01-30', observedAt: null });
+    expect(at('2026-11')).toEqual({ stale: false, expiresAt: '2026-12-30', observedAt: null });
+    // A period that ended more than the window ago is still stale.
+    expect(at('2025')).toMatchObject({ stale: true });
+    expect(at('2026-09')).toMatchObject({ stale: true });
+  });
+
+  it('files a current-year request behind a window of stale ones, never letting them fill the read', async () => {
+    const year = String(new Date().getUTCFullYear());
+    const stale = Array.from({ length: 6 }, (_, i) => ({
+      claim: `An agency asked for a vendor list, budget $${400 + i}.`, sourceUrl: `https://jobs.example.test/old-${i}`, sourceDate: String(Number(year) - 1), population: 'Agencies',
+    }));
+    await goalRoundWith([
+      ...stale,
+      { claim: 'A transit authority has a live opening for snow removal services.', sourceUrl: 'https://bids.example.test/snow', sourceDate: year, population: 'Transit authorities' },
+    ]);
+    // A bounded read of 3 reaches the fresh row although 6 stale ones are older.
+    const read = await signalledClaims({ projectId, limit: 3, staleBefore: new Date(Date.now() - 30 * DAY).toISOString() });
+    expect(read.map((one) => one.claim.sourceUrl)).toEqual(['https://bids.example.test/snow']);
+    await harvest({ projectId, limit: 1 });
+    const filed = (await listOpportunities({ projectId })).filter((one) => one.discoveryRoundId !== null);
+    expect(filed.map((one) => one.title)).toEqual(['Buyer request: Transit authorities — A marketplace']);
+    expect(filed[0]!.signalObservedAt).toBeNull();
+  });
+
   it('leaves a one-off opening with a stale signal and no expiry out of the goal model', async () => {
     const cashModeId = (await getCashMode(projectId))!.id;
     const make = async (title: string, observed: string) => {

@@ -7,7 +7,7 @@
  * claimed, and on what basis, cannot be quietly revised afterwards.
  */
 import { parseLanes, serializeLanes } from '../domain/evidenceLanes.ts';
-import { isOpportunitySignal, POINT_IN_TIME_SIGNALS, sellersOwnPage } from '../domain/opportunitySignals.ts';
+import { isOpportunitySignal, observationExpiry, POINT_IN_TIME_SIGNALS, sellersOwnPage } from '../domain/opportunitySignals.ts';
 import { isCapabilityFinding } from '../domain/manufacturing.ts';
 import { isStructuralFinding } from '../domain/industry.ts';
 import { isMonetizationMethod } from '../domain/monetization.ts';
@@ -1799,11 +1799,29 @@ export async function signalledClaims(input: {
   const pointSignals = [...POINT_IN_TIME_SIGNALS];
   const staleSql = input.staleBefore
     ? // Every operand is non-null, so a NULL can never turn NOT (…) into "not read".
-      `AND NOT (c.closes_on IS NULL AND c.source_date IS NOT NULL AND c.source_date LIKE '____-__%' AND c.source_date < ?
+      // A date known only to its year or month is compared at that precision: its last moment is what
+      // `observationExpiry` holds it to, so "2026" is not stale in 2026 and "2025" is.
+      `AND NOT (c.closes_on IS NULL AND c.source_date IS NOT NULL
+             AND ((c.source_date LIKE '____-__-__%' AND c.source_date < ?)
+                  OR (c.source_date LIKE '____-__' AND c.source_date < ?)
+                  OR (c.source_date LIKE '____' AND c.source_date < ?))
              AND (COALESCE(c.opportunity_signal, '') IN (${pointSignals.map(() => '?').join(', ')})
                   OR (c.opportunity_signal IS NULL AND COALESCE(c.evidence_lane, '') = ?)))`
     : '';
-  const staleParams = input.staleBefore ? [input.staleBefore, ...pointSignals, GOAL_REQUEST_LANE] : [];
+  const staleParams = input.staleBefore
+    ? [input.staleBefore, input.staleBefore.slice(0, 7), input.staleBefore.slice(0, 4), ...pointSignals, GOAL_REQUEST_LANE]
+    : [];
+  /*
+   * And what is stale in a form the SQL cannot compare (a date in any other
+   * shape `Date.parse` reads) is dropped here, before it counts toward
+   * `limit`, by the same rule the harvest applies. Production, 2026-11-18:
+   * the harvest read 40 rows, every one stale, skipped them all and filed
+   * nothing, while 59 fresh signalled claims sat behind them.
+   */
+  const staleAt = input.staleBefore ? new Date(input.staleBefore) : null;
+  const isStale = (claim: ResearchClaim): boolean =>
+    staleAt !== null && claim.opportunitySignal !== null &&
+    observationExpiry({ signal: claim.opportunitySignal, closesOn: claim.closesOn ?? null, sourceDate: claim.sourceDate, freshDays: 0, now: staleAt }).stale;
   /*
    * Paged until `limit` claims survive the checks below, not one window.
    *
@@ -1820,7 +1838,7 @@ export async function signalledClaims(input: {
   for (let page = 0; page < SIGNALLED_MAX_PAGES && out.length < want; page += 1) {
     const rows = await signalledPage(input.projectId, staleSql, staleParams, want, page * want);
     for (const one of keepSignalled(rows)) {
-      if (out.length < want) out.push(one);
+      if (out.length < want && !isStale(one.claim)) out.push(one);
     }
     if (rows.length < want) break;
   }
