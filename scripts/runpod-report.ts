@@ -32,6 +32,7 @@ import { BENCH_PREFIX, listPods } from '../server/services/cheap/runpodRestore.t
 import { listReadings, planProgress, readGoalPlan } from '../server/services/goals/plan.ts';
 import { failureClass, goalPipelineSpeed, goalResearchProgress, percentile, waitsUntilNext } from '../server/services/goals/researchYield.ts';
 import { resetFreeLaneFitness, unfitNow } from '../server/services/freeLane/worker.ts';
+import { claimQualityByModel } from '../server/repos/research.ts';
 
 const argv = process.argv.slice(2);
 const at = argv.indexOf('--hours');
@@ -87,21 +88,9 @@ async function main(): Promise<void> {
   resetFreeLaneFitness();
   const held = await unfitNow(models, Date.now(), null);
   console.log(`HELD BACK ${held.size === 0 ? 'none' : [...held].join(', ')} (model|kind whose answers Brain rejected, 24h; among ${models.join(', ') || 'no models'})`);
-  const quality = await getDb().all<{ reason: string | null; claims: number | string; sourced: number | string | null; refuted: number | string | null; accepted: number | string | null; accepted_refuted: number | string | null }>(
-    `SELECT e.reason AS reason, COUNT(c.id) AS claims,
-            SUM(CASE WHEN c.sourced = 1 THEN 1 ELSE 0 END) AS sourced,
-            SUM(CASE WHEN c.contradiction_state = 'REFUTED' THEN 1 ELSE 0 END) AS refuted,
-            SUM(CASE WHEN c.accepted = 1 THEN 1 ELSE 0 END) AS accepted,
-            SUM(CASE WHEN c.accepted = 1 AND c.contradiction_state = 'REFUTED' THEN 1 ELSE 0 END) AS accepted_refuted
-       FROM bin_events e
-       JOIN work_items w ON w.id = e.work_item_id
-       JOIN research_claims c ON c.fragment_id = w.fragment_id
-      WHERE e.event_type = 'FREE_LANE_ITEM' AND e.outcome = 'SUBMITTED'
-        AND e.workload_class = 'RESEARCH_FRAGMENT' AND e.at >= ? AND w.fragment_id IS NOT NULL
-      GROUP BY e.reason`,
-    [since],
-  );
-  console.log('RESEARCH QUALITY (claims on fragments each model submitted)');
+  // Windowed by submission or by the gate's ruling: a claim judged an hour after it was submitted still counts (2026-11-18).
+  const quality = await claimQualityByModel(since);
+  console.log('RESEARCH QUALITY (claims on fragments each model submitted, or the gate judged, in the window)');
   if (quality.length === 0) console.log('  none');
   // Accepted and surviving (accepted, not refuted) claims per model, summed across
   // the reasons one model's rows carry, for the GPU's cost per claim below.
@@ -109,15 +98,15 @@ async function main(): Promise<void> {
   for (const row of quality) {
     const model = String(row.reason ?? '').replace(/^model /, '').split(':')[0] || '(unknown)';
     const a = accepted.get(model) ?? { accepted: 0, surviving: 0 };
-    a.accepted += Number(row.accepted ?? 0);
-    a.surviving += Number(row.accepted ?? 0) - Number(row.accepted_refuted ?? 0);
+    a.accepted += row.accepted;
+    a.surviving += row.accepted - row.acceptedRefuted;
     accepted.set(model, a);
   }
   for (const row of quality) {
     const model = String(row.reason ?? '').replace(/^model /, '').split(':')[0] || '(unknown)';
-    const claims = Number(row.claims);
-    const pct = (x: number | string | null) => (claims ? `${Math.round((100 * Number(x ?? 0)) / claims)}%` : '-');
-    console.log(`  ${model.padEnd(40)} claims ${claims} · sourced ${pct(row.sourced)} · refuted ${pct(row.refuted)}`);
+    const claims = row.claims;
+    const pct = (x: number) => (claims ? `${Math.round((100 * x) / claims)}%` : '-');
+    console.log(`  ${model.padEnd(40)} claims ${claims} · sourced ${pct(row.sourced)} · refuted ${pct(row.refuted)} · accepted ${row.accepted}`);
   }
   const gpuRow = [...table].find(([m]) => m.startsWith('runpod/'));
   const gpuJobs = gpuRow ? gpuRow[1].submitted : 0;
@@ -491,9 +480,11 @@ async function traceSection(goalId: string, reading: NonNullable<Awaited<ReturnT
     const chunk = orchestrations.slice(i, i + 200);
     claims.push(
       ...(await db.all<(typeof claims)[number]>(
-        `SELECT id, orchestration_id, fragment_id, claim, created_at, opportunity_signal FROM research_claims
-          WHERE accepted = 1 AND created_at >= ? AND orchestration_id IN (${marks(chunk.length)})
-          ORDER BY created_at DESC LIMIT 200`,
+        // Accepted in the window: by the gate's ruling, not only by when the claim was written (2026-11-18).
+        `SELECT c.id, c.orchestration_id, c.fragment_id, c.claim, c.created_at, c.opportunity_signal FROM research_claims c
+           LEFT JOIN research_fragments f ON f.id = c.fragment_id
+          WHERE c.accepted = 1 AND COALESCE(f.completed_at, c.created_at) >= ? AND c.orchestration_id IN (${marks(chunk.length)})
+          ORDER BY c.created_at DESC LIMIT 200`,
         [since, ...chunk],
       )),
     );

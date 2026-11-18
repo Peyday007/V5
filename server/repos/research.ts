@@ -1333,6 +1333,67 @@ export async function listClaimsForFragment(fragmentId: string): Promise<Researc
     .map(mapClaim);
 }
 
+/** One free-lane model's research claims, as `claimQualityByModel` counts them. */
+export interface ModelClaimQuality {
+  /** The `FREE_LANE_ITEM` event's reason, `model <slot>`. */
+  reason: string | null;
+  claims: number;
+  sourced: number;
+  refuted: number;
+  accepted: number;
+  acceptedRefuted: number;
+}
+
+/**
+ * The claims on the fragments each free-lane model submitted, for a window
+ * that ends now — counted where the evidence gate ruled in the window, not
+ * only where the claim was written in it.
+ *
+ * A claim is stored at submission and judged later, by a separate
+ * verification item, and on the free lane that later is often the next hour
+ * (production, 2026-11-18: the GPU's 16 claims were submitted 15:22–15:24Z and
+ * all 16 accepted at 16:25Z). Windowed by submission alone, the hourly report
+ * read them as unjudged in the first hour and did not see them in the second,
+ * so it printed "no accepted GPU claims" for two hours in which every GPU
+ * claim the gate judged was accepted. A fragment counts when its submission or
+ * its gate (`completed_at`, which `gateFragment` writes with the verdict) falls
+ * in the window; a submission older than `lookbackHours` is not looked for.
+ * Each claim counts once per model however many times its fragment was
+ * submitted.
+ */
+export async function claimQualityByModel(since: string, lookbackHours = 24): Promise<ModelClaimQuality[]> {
+  const earliest = new Date(Date.parse(since) - lookbackHours * 3_600_000).toISOString();
+  const rows = await getDb().all<{
+    reason: string | null; claims: number | string; sourced: number | string | null; refuted: number | string | null;
+    accepted: number | string | null; accepted_refuted: number | string | null;
+  }>(
+    `SELECT one.reason AS reason, COUNT(*) AS claims,
+            SUM(CASE WHEN one.sourced = 1 THEN 1 ELSE 0 END) AS sourced,
+            SUM(CASE WHEN one.contradiction_state = 'REFUTED' THEN 1 ELSE 0 END) AS refuted,
+            SUM(CASE WHEN one.accepted = 1 THEN 1 ELSE 0 END) AS accepted,
+            SUM(CASE WHEN one.accepted = 1 AND one.contradiction_state = 'REFUTED' THEN 1 ELSE 0 END) AS accepted_refuted
+       FROM (SELECT DISTINCT e.reason AS reason, c.id AS id, c.sourced AS sourced,
+                    c.contradiction_state AS contradiction_state, c.accepted AS accepted
+               FROM bin_events e
+               JOIN work_items w ON w.id = e.work_item_id
+               JOIN research_fragments f ON f.id = w.fragment_id
+               JOIN research_claims c ON c.fragment_id = f.id
+              WHERE e.event_type = 'FREE_LANE_ITEM' AND e.outcome = 'SUBMITTED'
+                AND e.workload_class = 'RESEARCH_FRAGMENT' AND e.at >= ?
+                AND (e.at >= ? OR f.completed_at >= ?)) one
+      GROUP BY one.reason`,
+    [earliest, since, since],
+  );
+  return rows.map((row) => ({
+    reason: row.reason,
+    claims: Number(row.claims),
+    sourced: Number(row.sourced ?? 0),
+    refuted: Number(row.refuted ?? 0),
+    accepted: Number(row.accepted ?? 0),
+    acceptedRefuted: Number(row.accepted_refuted ?? 0),
+  }));
+}
+
 /**
  * The claims a synthesis is allowed to see.
  *
