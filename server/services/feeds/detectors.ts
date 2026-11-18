@@ -777,14 +777,193 @@ export const RULE_EFFECTIVE_SOON_V4: Detector = {
   },
 };
 
+/** A Federal Register document number: "2026-21030", or a correction's "C1-2026-21030". */
+const FEDERAL_REGISTER_DOCUMENT_NUMBER = /^(?:C\d+-)?\d{4}-\d+$/;
+
+/**
+ * The publication day the Federal Register itself states for a stored record:
+ * the date in its html_url (".../documents/2026/11/12/<number>/slug"). A
+ * structured field of the source, not prose. Null when the URL carries none. Pure.
+ */
+export function federalRegisterPublishedDayOf(url: string): string | null {
+  const m = /\/documents\/(\d{4})\/(\d{2})\/(\d{2})\/[A-Za-z0-9-]+(?:[/?#]|$)/.exec(url);
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : null;
+}
+
+/**
+ * The rule a Federal Register document number corrects, by the Register's own
+ * numbering: a correction is numbered "C<n>-" before the document it corrects
+ * (C1-2026-21030 corrects 2026-21030). Null for a document that is not one. Pure.
+ */
+export function correctedDocumentOfNumber(documentNumber: string | null | undefined): string | null {
+  const m = /^C\d+-(\d{4}-\d+)$/.exec(documentNumber ?? '');
+  return m ? m[1]! : null;
+}
+
+/**
+ * RULE_EFFECTIVE_SOON, version 5 (SHADOW). Three causes of v4's recorded misses
+ * (DETECTOR_MISSES:RULE_EFFECTIVE_SOON@4), each fixed without lowering a bar:
+ *
+ *  1. A correction is known by its own number, not only by its body. v4 read
+ *     "Corrects N." from the copy at hand and gave up when that copy did not
+ *     carry it — a copy stored bare, before the connector read correction_of,
+ *     or one whose correction_of named something other than a document number
+ *     — although another copy of the same correction, or its own number
+ *     (C1-2026-21030 corrects 2026-21030), names the rule. v5 collects every
+ *     corrected document any copy names (a "C<n>-" prefix on that name is
+ *     dropped, so a target that differs from the correction's number only by
+ *     the prefix still resolves) together with the one its own number names,
+ *     and takes the date from: the "Effective" sentence of any copy, else the
+ *     corrected rule's date recorded on any copy of the correction, else the
+ *     "Effective" sentence of any stored copy of a corrected document. Every
+ *     date is still a field the Federal Register API states; nothing is inferred.
+ *  2. The publication day is the one the Federal Register states for the
+ *     document — the date in its html_url — before the stored publishedAt, and
+ *     publishedAt is read as the calendar day it states, not shifted by its
+ *     offset. v4 fell back to the fetch time when publishedAt was missing, so
+ *     a rule effective on its publication day (lead 0: FAA 2026-23073 and
+ *     2026-23072, FCC 2026-23041) and stored the next day measured both bounds
+ *     from the wrong day and dropped out; an offset east of UTC moved the day
+ *     back and cut a day off the eight-week bound.
+ *  3. One document, one agency. v4 grouped each stored copy by the agencies
+ *     that copy listed, so a copy listing only the parent department
+ *     (Transportation Department) and an edit listing it with the issuing
+ *     office (Federal Aviation Administration) landed in two groups. v5 groups
+ *     every copy of a document under the issuing (last-listed) agency of the
+ *     copy that lists the most agencies — the most specific the source stated.
+ *
+ * Kept unchanged: no free-text date parsing (Coast Guard 2026-23047, enforced
+ * the day before publication and dated only in prose, stays out — a correct
+ * exclusion), the eight-week upper bound from publication
+ * (RULE_EFFECTIVE_SOON_V2_LEAD_DAYS), the 30-day membership window, the lower
+ * bound — not before publication, and not in force for more than a day when
+ * Brain first held the document (its earliest stored copy) — and the wording.
+ */
+export const RULE_EFFECTIVE_SOON_V5: Detector = {
+  id: 'RULE_EFFECTIVE_SOON',
+  version: 5,
+  label: RULE_EFFECTIVE_SOON.label,
+  mode: 'SHADOW',
+  sources: RULE_EFFECTIVE_SOON.sources,
+  lookbackMs: RULE_EFFECTIVE_SOON_V4.lookbackMs,
+  entityKeyOf(organization) {
+    return employerKey(issuingAgencyOf(organization));
+  },
+  memberWindowMs: RULE_EFFECTIVE_SOON_PUBLISHED_DAYS * DAY,
+  detect(records, now) {
+    const ours = records.filter((record) => this.sources.includes(record.source));
+    const keep = (map: Map<string, string>, key: string, value: string | null): void => {
+      if (value && (!map.has(key) || value < map.get(key)!)) map.set(key, value);
+    };
+    // Every stored copy of a document, by document number.
+    const own = new Map<string, string>();
+    const correctedRule = new Map<string, string>();
+    const corrects = new Map<string, Set<string>>();
+    const firstHeld = new Map<string, number>();
+    const agencies = new Map<string, string[]>();
+    for (const record of ours) {
+      const documentNumber = federalRegisterDocumentOf(record.url);
+      if (!documentNumber) continue;
+      const fetched = Date.parse(record.fetchedAt);
+      if (Number.isFinite(fetched) && (!firstHeld.has(documentNumber) || fetched < firstHeld.get(documentNumber)!)) firstHeld.set(documentNumber, fetched);
+      keep(own, documentNumber, effectiveDateOf(record.body));
+      keep(correctedRule, documentNumber, correctedEffectiveDateOf(record.body));
+      const targets = corrects.get(documentNumber) ?? new Set<string>();
+      const stated = correctedDocumentOf(record.body);
+      if (stated && FEDERAL_REGISTER_DOCUMENT_NUMBER.test(stated)) targets.add(correctedDocumentOfNumber(stated) ?? stated);
+      const byNumber = correctedDocumentOfNumber(documentNumber);
+      if (byNumber) targets.add(byNumber);
+      targets.delete(documentNumber);
+      corrects.set(documentNumber, targets);
+      const listed = (record.organization ?? '').split(',').map((one) => one.trim()).filter(Boolean);
+      const held = agencies.get(documentNumber);
+      if (listed.length > 0 && (!held || listed.length > held.length || (listed.length === held.length && listed.join(', ') < held.join(', ')))) {
+        agencies.set(documentNumber, listed);
+      }
+    }
+    const effectiveOf = (record: DetectorRecord, documentNumber: string | null): string | null => {
+      const stated = effectiveDateOf(record.body) ?? (documentNumber ? own.get(documentNumber) ?? null : null);
+      if (stated) return stated;
+      const targets = new Set<string>(documentNumber ? corrects.get(documentNumber) ?? [] : []);
+      const fromBody = correctedDocumentOf(record.body);
+      if (fromBody && FEDERAL_REGISTER_DOCUMENT_NUMBER.test(fromBody)) targets.add(correctedDocumentOfNumber(fromBody) ?? fromBody);
+      if (targets.size === 0) return null;
+      const marker = correctedEffectiveDateOf(record.body) ?? (documentNumber ? correctedRule.get(documentNumber) ?? null : null);
+      if (marker) return marker;
+      const dates = [...targets].map((one) => own.get(one)).filter((one): one is string => !!one).sort();
+      return dates[0] ?? null;
+    };
+    const publishedDayOf = (record: DetectorRecord): number => {
+      const stated = federalRegisterPublishedDayOf(record.url) ?? /^(\d{4}-\d{2}-\d{2})/.exec(record.publishedAt ?? '')?.[1] ?? null;
+      return stated ? Date.parse(`${stated}T00:00:00.000Z`) : utcDay(Date.parse(record.fetchedAt));
+    };
+    const groups = new Map<string, { name: string; members: { record: DetectorRecord; effective: string }[] }>();
+    for (const record of ours) {
+      const documentNumber = federalRegisterDocumentOf(record.url);
+      const listed = documentNumber ? agencies.get(documentNumber) : undefined;
+      const name = listed ? listed[listed.length - 1]! : issuingAgencyOf(record.organization);
+      const agency = employerKey(name);
+      if (!agency || !name) continue;
+      if (!withinMemberWindow(this, record.publishedAt, record.fetchedAt, now)) continue;
+      const fetched = (documentNumber ? firstHeld.get(documentNumber) : undefined) ?? Date.parse(record.fetchedAt);
+      const publishedDay = publishedDayOf(record);
+      if (!Number.isFinite(publishedDay) || !Number.isFinite(fetched)) continue;
+      const effective = effectiveOf(record, documentNumber);
+      if (!effective) continue;
+      const at = Date.parse(`${effective}T00:00:00.000Z`);
+      // v3's bar, unchanged: not before its own publication, and not in force for more than a day when
+      // Brain first held the document (its earliest stored copy). Upper bound: eight weeks after publication.
+      const from = Math.max(publishedDay, utcDay(fetched) - DAY);
+      if (!Number.isFinite(at) || at < from || at > publishedDay + RULE_EFFECTIVE_SOON_V2_LEAD_DAYS * DAY) continue;
+      const group = groups.get(agency) ?? { name, members: [] };
+      group.members.push({ record, effective });
+      groups.set(agency, group);
+    }
+    const out: DetectedSignal[] = [];
+    for (const [agency, group] of [...groups].sort((a, b) => a[0].localeCompare(b[0]))) {
+      const dates = group.members.map((one) => one.effective).sort();
+      const perDocument = new Map<string, string>();
+      for (const one of group.members) {
+        const key = federalRegisterDocumentOf(one.record.url) ?? one.record.id;
+        const held = perDocument.get(key);
+        if (!held || one.effective < held) perDocument.set(key, one.effective);
+      }
+      const wording = ruleEffectiveSoonWording([...perDocument.values()].sort(), now);
+      out.push({
+        groupKey: `agency:${agency}`,
+        label: wording.label,
+        entityKey: agency,
+        entityName: group.name,
+        category: 'REGULATION',
+        windowFrom: `${dates[0]}T00:00:00.000Z`,
+        windowTo: `${dates[dates.length - 1]}T00:00:00.000Z`,
+        memberIds: group.members.map((one) => one.record.id),
+        memberTitles: group.members.map((one) => one.record.title),
+        sourceUrls: [...new Set(group.members.map((one) => one.record.url))],
+        qualifiers: [
+          'a rule taking effect names who is regulated, not who will pay for help complying',
+          'the effective date is the one the Federal Register states; a delay or stay is not read',
+          'a correction carries the effective date of the rule it corrects, as the Federal Register API states it for that rule',
+          'every stored copy of a document is read for its stated dates and agencies, matched by document number',
+          'the publication day is the one the Federal Register states in the document URL',
+          'kept against the day Brain first held the document (its earliest stored copy); the wording says which effective dates had passed on the day it ran',
+        ],
+        hypothesis: wording.hypothesis,
+        deliverable: 'DOCUMENT',
+      });
+    }
+    return out;
+  },
+};
+
 /**
  * Every installed rule. Adding one is a new entry here and its tests — nothing else.
- * RULE_EFFECTIVE_SOON v1, v2 and v3 stay exported so their recorded rows and readings keep their keys (@1, @2, @3).
+ * RULE_EFFECTIVE_SOON v1..v4 stay exported so their recorded rows and readings keep their keys (@1..@4).
  * A model may propose a rule only as a Factory objective (reviewed code, starting
  * in SHADOW); no model output installs, edits or promotes a rule at run time.
  * `proposeRuleRepair` is how a rule's repeated misses become that objective.
  */
-export const DETECTORS: readonly Detector[] = [CONCENTRATED_HIRING, REPEATED_DEMAND, RULE_EFFECTIVE_SOON_V4];
+export const DETECTORS: readonly Detector[] = [CONCENTRATED_HIRING, REPEATED_DEMAND, RULE_EFFECTIVE_SOON_V5];
 
 // ---------------------------------------------------------------------------
 // SHADOW before ACTIVE: readings, promotion and rollback, from rows

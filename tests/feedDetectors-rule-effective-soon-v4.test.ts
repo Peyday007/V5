@@ -293,8 +293,8 @@ describe('RULE_EFFECTIVE_SOON@4 lowers no bar', () => {
 });
 
 describe('installation', () => {
-  it('v4 is installed in SHADOW in place of v3; v1, v2 and v3 stay exported with their versions', () => {
-    expect(DETECTORS).toContain(RULE_EFFECTIVE_SOON_V4);
+  it('v4 stays exported in SHADOW (v5 replaced it in DETECTORS); v1, v2 and v3 stay exported with their versions', () => {
+    expect(DETECTORS.find((one) => one.id === 'RULE_EFFECTIVE_SOON')!.version).toBeGreaterThanOrEqual(4);
     for (const old of [RULE_EFFECTIVE_SOON, RULE_EFFECTIVE_SOON_V2, RULE_EFFECTIVE_SOON_V3]) expect(DETECTORS).not.toContain(old);
     expect(RULE_EFFECTIVE_SOON_V4).toMatchObject({ id: 'RULE_EFFECTIVE_SOON', version: 4, mode: 'SHADOW' });
     expect([RULE_EFFECTIVE_SOON.version, RULE_EFFECTIVE_SOON_V2.version, RULE_EFFECTIVE_SOON_V3.version]).toEqual([1, 2, 3]);
