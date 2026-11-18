@@ -66,3 +66,24 @@ Status: DRAFT, maintained continuously, and delivered by 22:55Z whatever its sta
   3. the Fly event loop (about 6 GPU slots);
   4. research yield.
 - **Stalls today:** agent H about 2 h on a permission prompt; the release owner since 19:30Z; 2 supersessions by Factory; a worker restart lost about 3.5 h (11:25→15:01Z); the stop/disconnect ordering cost about $1.20; probe pods leaked.
+
+## R-C: capability status (production 4730acd7, reading 19:20Z, REHEARSALS labelled)
+- **None of the 13 capabilities is verified on production as a whole.** Only sub-parts are: library retrieval, gap identification, fact supersession, and rebuild-after-failure.
+- **MISSING/DEFECTIVE:**
+  - #1 objective reading: the planner budget equals the target in 6/6 objectives;
+  - #4 research targeting;
+  - #10 executable plan: 1 generic step; F3 is the cause, in plan.ts planSteps;
+  - #13 adaptation: same candidate for every objective.
+- **PARTIAL:** #2, 3, 5, 6, 7, 8, 9, 11, 12.
+- **New defects:**
+  - F2: two models contradict each other, and a $38.7M modelledP50 appears;
+  - F4: 15 research bins READY and unworked since 11-14;
+  - F5: no commercial grant, so calibration and acceptance are impossible without the owner.
+- **REHEARSALS:**
+  - evaluator 69/70 (61/76 at the 11-14 baseline);
+  - P3 objectives: production fails every objective; the P3 branch passes 2/6 cleanly;
+  - P2 6/6, P4 4/4.
+- **Remaining code work:** about **20–38 agent-hours**, about **10–16 h wall-clock** at 4 lanes with about 2 release cycles per item.
+- **Critical path:** objective reading → the candidate obeys constraints → **one economic model** (bottleneck) → executable steps → targeted research plus capacity → research changes the plan on production → production test on 2 or more unfamiliar objectives → (owner's commercial grant) → calibration and learning from outcomes.
+- **Strong-model comparison:** the gap is integration and procedure, not model competence.
+- **Started at 20:0xZ:** P5 "one economic model" (claude/p5-one-model), the critical-path item.
