@@ -1322,8 +1322,17 @@ export async function openConstructedRound(input: {
    */
   origins?: readonly OpportunityOrigin[];
   seedKeys?: readonly string[];
+  /**
+   * The arrangement's price is unknown while research has since established
+   * its cost, and `question` asks for the missing price itself: the round may
+   * open before the barren backoff ends (`priceReaskRound`), at most until the
+   * arrangement has been asked this many times in all. Every other guard holds.
+   */
+  priceReaskUpTo?: number;
 }): Promise<OpenedDiscovery | null> {
   const now = input.now ?? new Date().toISOString();
+  const nextFor = (rounds: CashDiscoveryRound[]): number | null =>
+    nextGoalRoundFor(rounds, now) ?? (input.priceReaskUpTo ? priceReaskRound(rounds, now, input.priceReaskUpTo) : null);
   /*
    * Knowledge work (F7): an ACTIVE sprint, or the standing research grant the
    * industry kernel maps under (§40, §52). Winding a sprint down ends the
@@ -1361,7 +1370,7 @@ export async function openConstructedRound(input: {
   const lens = `mx-${input.key}`;
   const id = `${prefix}-${lens}`;
   const history = mine.filter((one) => one.bucketId === id);
-  const next = nextGoalRoundFor(history, now);
+  const next = nextFor(history);
   if (next === null) return null;
   /*
    * The arrangement's history across every goal in the project (K-5): a
@@ -1372,7 +1381,7 @@ export async function openConstructedRound(input: {
    * asks — so its `inputs_digest` is the arrangement's inputs now.
    */
   const everyGoal = (await listRounds(input.projectId)).filter((one) => one.bucketId.startsWith(GOAL_BUCKET_PREFIX) && one.bucketId.endsWith(`-${lens}`));
-  if (nextGoalRoundFor(asOneHistory(everyGoal), now) === null) return null;
+  if (nextFor(asOneHistory(everyGoal)) === null) return null;
   const stored = await arrangementForLegacyKey(input.projectId, input.key);
   if (stored?.verdict?.verdict === 'REFUTED' && stored.verdict.inputsDigest === stored.inputsDigest) return null;
   /*
@@ -1398,6 +1407,27 @@ export async function openConstructedRound(input: {
   });
   if (round) await noteConstructedRoundOpened(input.projectId, input.key, now).catch(() => false);
   return round ? { bucketId: id, candidateId: round.candidateId, round: next } : null;
+}
+
+/** How long after its last round settled an arrangement may be re-asked for its missing price. */
+export const PRICE_REASK_AFTER_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * The round number a price re-ask may open as, or null. Pure. Nothing open,
+ * fewer than `upTo` askings in all (§15: a bounded number of differently
+ * worded attempts, never a loop), and the last one settled at least
+ * `PRICE_REASK_AFTER_MS` ago. Production, 2026-11-18: arrangement
+ * 2821cce3c372 gained a researched run cost after its one round found
+ * nothing, and the barren backoff held it two days with its price unknown.
+ */
+export function priceReaskRound(history: CashDiscoveryRound[], now: string, upTo: number): number | null {
+  if (history.length === 0) return 1;
+  if (history.some((one) => one.state === 'OPEN')) return null;
+  if (history.length >= upTo) return null;
+  const last = [...history].sort((a, b) => a.round - b.round)[history.length - 1]!;
+  const settledAt = last.harvestedAt ?? last.openedAt;
+  if (Date.parse(now) - Date.parse(settledAt) < PRICE_REASK_AFTER_MS) return null;
+  return last.round + 1;
 }
 
 /**
