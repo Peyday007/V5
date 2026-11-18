@@ -15,7 +15,13 @@ import { buildRepairPlan, describeRepairPlan } from '../server/services/research
 import type { GateResult } from '../server/services/research/gate.ts';
 import type { RepairPlan, RepairStrategy, ResearchFragment } from '../server/domain/types.ts';
 
-const GATE = {
+/**
+ * Every fixture below is a complete value of its declared type, with no cast,
+ * so a change to GateResult, ResearchFragment or RepairPlan fails the type
+ * check here instead of leaving this test exercising a shape production no
+ * longer has.
+ */
+const GATE: GateResult = {
   integrity: 'PASS',
   sufficiency: 'INSUFFICIENT',
   unresolvedRetrieval: [],
@@ -28,7 +34,7 @@ const GATE = {
   failedConditions: ['COVERAGE'],
   reasons: ['no coverage'],
   unresolvedGaps: [],
-} as unknown as GateResult;
+};
 
 /** Every rung the COVERAGE ladder plus the default ladder offers, except the last search rung. */
 const ALL_BUT_ONE: RepairStrategy[] = [
@@ -42,17 +48,85 @@ const ALL_BUT_ONE: RepairStrategy[] = [
   'NARROW_THE_CLAIM',
 ];
 
+/** The plan an earlier attempt stored: only the strategies it used matter to the next plan. */
+function storedPlan(strategies: RepairStrategy[]): RepairPlan {
+  return {
+    failedRequirement: 'What is the market size?',
+    affectedClaims: [],
+    missingEvidence: 'A sourced market-size figure.',
+    rejectedEvidence: [],
+    unresolvedContradiction: null,
+    ecosystemsAttempted: [],
+    alternativeEcosystems: [],
+    alternativeTerminology: [],
+    alternativeClassifications: [],
+    narrowerQuestion: null,
+    splitRequired: false,
+    remainingBudget: 2,
+    strategies,
+  };
+}
+
 function fragment(strategies: RepairStrategy[] | null): ResearchFragment {
   return {
+    requirementIds: [],
+    evidenceLane: null,
+    whyItMatters: null,
+    missingEvidence: null,
+    whyExistingInsufficient: null,
+    existingClaimIds: [],
+    excludedScope: null,
+    expectedClaimTypes: [],
+    preferredSourceTypes: [],
+    prohibitedEvidence: [],
+    requiredComparisons: [],
+    requiredCalculations: [],
+    contradictionTargets: [],
+    failureConditions: [],
+    uncertaintyTolerance: null,
+    priority: 5,
+    estimatedEffort: null,
+    maxRepairs: 2,
+    splitFromId: null,
+    repairPlan: strategies ? storedPlan(strategies) : null,
+    cancelledReason: null,
+    id: 'frg_market_size',
+    orchestrationId: 'orch_1',
+    projectId: 'proj_1',
+    layerId: 'layer_1',
+    fragmentIndex: 0,
     fragmentKey: 'market-size',
     question: 'What is the market size?',
     geography: null,
     timeframe: null,
-    missingEvidence: null,
-    blockedReason: null,
+    population: null,
+    definitions: null,
+    requiredEvidence: [],
+    acceptableSourceTypes: [],
+    excludedSourceTypes: [],
+    completionCriteria: [],
+    dependsOn: [],
     minIndependentSources: 1,
-    repairPlan: strategies ? ({ strategies } as unknown as RepairPlan) : null,
-  } as unknown as ResearchFragment;
+    nextRetryAt: null,
+    blockCause: null,
+    blockHost: null,
+    archiveMarker: null,
+    status: 'BLOCKED',
+    attempt: 1,
+    parentFragmentId: null,
+    repairReason: null,
+    repairStrategy: null,
+    integrityVerdict: 'PASS',
+    sufficiencyVerdict: 'INSUFFICIENT',
+    verdictDetail: null,
+    blockedReason: null,
+    queuedAt: null,
+    startedAt: null,
+    completedAt: null,
+    acceptedAt: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  };
 }
 
 function plan(
@@ -83,7 +157,7 @@ describe('repair plan: no early MARK_UNRESOLVED', () => {
   });
 
   it('never pairs MARK_UNRESOLVED with a search on the default ladder either', () => {
-    const noConditions = { ...GATE, failedConditions: [] } as unknown as GateResult;
+    const noConditions: GateResult = { ...GATE, failedConditions: [] };
     const next = buildRepairPlan({
       fragment: fragment(['FIND_PRIMARY_DATA', 'TRY_DIFFERENT_REPOSITORIES', 'CHANGE_TERMINOLOGY']),
       gate: noConditions,
