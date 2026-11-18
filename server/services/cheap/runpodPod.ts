@@ -34,6 +34,14 @@
  * no start or move happens until the window frees budget. A GPU in primary mode
  * with no budget set runs under `DEFAULT_PRIMARY_BUDGET_USD` ($10 per 24 h), so
  * continuous operation is never open-ended.
+ *
+ * A bounded run (`runpod-launch`) also sets `BRAIN_RUNPOD_BUDGET_FROM`: the
+ * window is then fixed — `[from, from + window]` — rather than rolling, so the
+ * dollars are a ceiling on the run, not a rate a clock keeps releasing
+ * (invariant 38). With a rolling 12.5 h window a $66 run that reached its cap
+ * at hour 12.5 had budget freed minute by minute from then on, and the pod was
+ * started again and again for as long as the account had money. Once a fixed
+ * window has ended the run is over: the pod is stopped and nothing starts it.
  */
 import { getDb } from '../../db/database.ts';
 import { recordBinEvent, type RecordBinEventInput } from '../../repos/bins.ts';
@@ -61,6 +69,18 @@ export interface PodBudget {
   windowMs: number;
   /** True when `DEFAULT_PRIMARY_BUDGET_USD` applies because no budget was set. */
   defaulted: boolean;
+  /** A bounded run's start (epoch ms, `BRAIN_RUNPOD_BUDGET_FROM`): the window is fixed at `[from, from + windowMs]`. Absent, it rolls. */
+  from?: number;
+}
+
+/** The start of the window spend is measured over: a bounded run's own start, else `windowMs` before now. */
+export function budgetWindowStart(budget: PodBudget, now: number): number {
+  return budget.from !== undefined ? Math.min(budget.from, now) : now - budget.windowMs;
+}
+
+/** Pure: a bounded run's window has passed. A rolling window never ends. */
+export function budgetWindowEnded(budget: PodBudget, now: number): boolean {
+  return budget.from !== undefined && now >= budget.from + budget.windowMs;
 }
 
 /**
@@ -73,7 +93,9 @@ export function podBudget(env: NodeJS.ProcessEnv = process.env): PodBudget | nul
   const windowMs = (Number.isFinite(hours) && hours > 0 ? hours : DEFAULT_BUDGET_WINDOW_HOURS) * 3_600_000;
   const raw = env['BRAIN_RUNPOD_BUDGET_USD']?.trim();
   const usd = raw ? Number(raw) : Number.NaN;
-  if (Number.isFinite(usd) && usd >= 0) return { usd, windowMs, defaulted: false };
+  const fromRaw = env['BRAIN_RUNPOD_BUDGET_FROM']?.trim();
+  const from = fromRaw ? Date.parse(fromRaw) : Number.NaN;
+  if (Number.isFinite(usd) && usd >= 0) return { usd, windowMs, defaulted: false, ...(Number.isFinite(from) ? { from } : {}) };
   if ((env['BRAIN_RUNPOD_MODE'] ?? '').trim().toLowerCase() === 'primary') return { usd: DEFAULT_PRIMARY_BUDGET_USD, windowMs, defaulted: true };
   return null;
 }
@@ -84,8 +106,10 @@ export interface PodBudgetReading {
   budget: number;
   /** Budget left in the window; null when spend is unknown. */
   remaining: number | null;
-  /** Spent ≥ budget. An unreadable spend is not exhausted, but it is not `known` either. */
+  /** Spent ≥ budget, or a bounded run's window has ended. An unreadable spend is not exhausted, but it is not `known` either. */
   exhausted: boolean;
+  /** A bounded run's fixed window has passed: the run is over whatever was spent. */
+  ended: boolean;
   known: boolean;
   windowHours: number;
   /** The window's start (ISO). */
@@ -96,14 +120,16 @@ export interface PodBudgetReading {
 /** Pure: the budget reading for a measured (or unreadable) spend. */
 export function budgetReading(budget: PodBudget, spent: number | null, now: number): PodBudgetReading {
   const known = spent !== null && Number.isFinite(spent);
+  const ended = budgetWindowEnded(budget, now);
   return {
     spent: known ? spent : null,
     budget: budget.usd,
-    remaining: known ? Math.max(0, budget.usd - spent) : null,
-    exhausted: known && spent >= budget.usd,
+    remaining: ended ? 0 : known ? Math.max(0, budget.usd - spent) : null,
+    exhausted: ended || (known && spent >= budget.usd),
+    ended,
     known,
     windowHours: budget.windowMs / 3_600_000,
-    since: new Date(now - budget.windowMs).toISOString(),
+    since: new Date(budgetWindowStart(budget, now)).toISOString(),
     defaulted: budget.defaulted,
   };
 }
@@ -116,7 +142,7 @@ export async function readPodBudget(now: number = Date.now(), env: NodeJS.Proces
 }
 
 async function readBudget(budget: PodBudget, now: number, live: LivePod | null = null, rows: (since: string) => Promise<PodRow[]> = readPodRows): Promise<PodBudgetReading & { spend: WindowSpend | null }> {
-  const since = now - budget.windowMs;
+  const since = budgetWindowStart(budget, now);
   try {
     // Rows from a window earlier too, so a pod started before the window and running into it is seen.
     const spend = windowSpendFromRows(await rows(new Date(since - budget.windowMs).toISOString()), { since, now, live });
@@ -136,7 +162,7 @@ export type BudgetMark = 'BUDGET_EXHAUSTED' | 'BUDGET_AVAILABLE';
  * and one `BUDGET_AVAILABLE` when the window frees budget again.
  */
 export function budgetEvent(reading: PodBudgetReading | null, lastMark: BudgetMark | null): BudgetMark | null {
-  if (!reading || !reading.known) return null;
+  if (!reading || (!reading.known && !reading.ended)) return null;
   if (reading.exhausted) return lastMark === 'BUDGET_EXHAUSTED' ? null : 'BUDGET_EXHAUSTED';
   return lastMark === 'BUDGET_EXHAUSTED' ? 'BUDGET_AVAILABLE' : null;
 }
@@ -212,7 +238,9 @@ export function decidePod(input: {
 }): PodDecision {
   const { status, waiting, inFlight, idleSince, lastActionAt, now, idleStopMs, budget } = input;
   const settled = now - lastActionAt >= MIN_ACTION_GAP_MS;
-  const overBudget = budget?.exhausted
+  const overBudget = budget?.ended
+    ? `GPU run over: its fixed ${budget.windowHours} h budget window from ${budget.since} has ended ($${(budget.spent ?? 0).toFixed(2)} of $${budget.budget.toFixed(2)} spent)`
+    : budget?.exhausted
     ? `GPU budget exhausted: $${(budget.spent ?? 0).toFixed(2)} of $${budget.budget.toFixed(2)} spent in ${budget.windowHours} h`
     : null;
   if (status === 'TERMINATED') return { action: 'NONE', reason: 'pod terminated; a new one must be created' };
@@ -622,8 +650,9 @@ export async function superviseRunpodPod(
     let spend: WindowSpend | null = null;
     if (config.budget) {
       if (deps.spend) {
-        const sampled = await deps.spend(new Date(now - config.budget.windowMs).toISOString()).catch(() => null);
-        spend = windowSpendFromRows([], { since: now - config.budget.windowMs, now, live });
+        const since = budgetWindowStart(config.budget, now);
+        const sampled = await deps.spend(new Date(since).toISOString()).catch(() => null);
+        spend = windowSpendFromRows([], { since, now, live });
         const spent = sampled === null ? (spend.dollars >= config.budget.usd ? spend.dollars : null) : Math.max(sampled, spend.dollars);
         budget = budgetReading(config.budget, spent, now);
       } else {
@@ -639,13 +668,14 @@ export async function superviseRunpodPod(
           eventType: 'RUNPOD_POD',
           provider: 'runpod',
           outcome: mark,
-          reason: `GPU spend $${(budget.spent ?? 0).toFixed(2)} of $${budget.budget.toFixed(2)} in the last ${budget.windowHours} h${budget.defaulted ? ' (default budget: BRAIN_RUNPOD_BUDGET_USD unset)' : ''}`,
+          reason: `${budget.ended ? `bounded run's ${budget.windowHours} h window ended; ` : ''}GPU spend $${(budget.spent ?? 0).toFixed(2)} of $${budget.budget.toFixed(2)} in the last ${budget.windowHours} h${budget.defaulted ? ' (default budget: BRAIN_RUNPOD_BUDGET_USD unset)' : ''}`,
           measures: {
             podId: config.podId,
             spent: budget.spent,
             budget: budget.budget,
             windowHours: budget.windowHours,
             since: budget.since,
+            ...(budget.ended ? { ended: true } : {}),
             status: pod.status,
             ...billedFrom,
             ...(spend ? { sampled: round(spend.sampled), billed: round(spend.billed), pods: spend.pods } : {}),

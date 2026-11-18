@@ -296,8 +296,11 @@ jobs:
               b=$(printf '%s' "${BUDGET_USD_INPUT:-}" | tr -cd '0-9.'); w=$(printf '%s' "${BUDGET_WINDOW_INPUT:-}" | tr -cd '0-9.')
               [ -n "$b" ] && [ -n "$w" ] || { echo "::error::runpod-launch needs budget_usd and budget_window_hours."; exit 1; }
               [ -n "$RECIPES_INPUT" ] || { echo "::error::runpod-launch needs recipes (e.g. gpt-oss-120b-big)."; exit 1; }
-              flyctl secrets set --app "$brain" BRAIN_RUNPOD_BUDGET_USD="$b" BRAIN_RUNPOD_BUDGET_WINDOW_HOURS="$w" >/dev/null
-              echo "::notice title=runpod launch::Budget \$$b per $w h set; creating the pod."
+              # A bounded run: the window is fixed from now (BRAIN_RUNPOD_BUDGET_FROM), not rolling, so the
+              # dollars cap the run and no clock frees more of them; when the window ends the pod stops for good.
+              from=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+              flyctl secrets set --app "$brain" BRAIN_RUNPOD_BUDGET_USD="$b" BRAIN_RUNPOD_BUDGET_WINDOW_HOURS="$w" BRAIN_RUNPOD_BUDGET_FROM="$from" >/dev/null
+              echo "::notice title=runpod launch::Budget \$$b for the $w h from $from (fixed, not rolling) set; creating the pod."
               ;&
             runpod-upgrade)
               # Move the GPU to another recipe with no gap (§108): new pod beside the old, probe
@@ -346,6 +349,8 @@ jobs:
               b=$(printf '%s' "${BUDGET_USD_INPUT:-}" | tr -cd '0-9.'); w=$(printf '%s' "${BUDGET_WINDOW_INPUT:-}" | tr -cd '0-9.')
               [ -n "$b" ] || { echo "::error::runpod-budget needs budget_usd."; exit 1; }
               flyctl secrets set --app "$brain" BRAIN_RUNPOD_BUDGET_USD="$b" ${w:+BRAIN_RUNPOD_BUDGET_WINDOW_HOURS="$w"} >/dev/null
+              # A rolling budget again: a bounded run's fixed window (runpod-launch) no longer applies.
+              flyctl secrets unset --app "$brain" BRAIN_RUNPOD_BUDGET_FROM >/dev/null 2>&1 || true
               echo "::notice title=runpod budget::BRAIN_RUNPOD_BUDGET_USD=$b per ${w:-24} h set."
               ;;
             runpod-score)

@@ -538,6 +538,61 @@ describe('the budget is measured from what RunPod bills, not only from Brain\'s 
     expect(posts).toEqual([]);
   });
 
+  /**
+   * A bounded run (runpod-launch, $66 for 12.5 h at $5.29/h) with research waiting the whole time.
+   * A rolling window frees budget minute by minute once the cap is reached, and the pod is started
+   * again for as long as the account has money (invariant 38: no commitment released by a clock).
+   * A fixed window (BRAIN_RUNPOD_BUDGET_FROM) stops it once and nothing starts it again.
+   */
+  async function boundedRun(from: number | undefined) {
+    const runBudget = { usd: 66, windowMs: 12.5 * H, defaulted: false, ...(from !== undefined ? { from } : {}) };
+    const conf: PodConfig = { ...podConf, budget: runBudget };
+    const launched = Date.parse('2026-11-18T12:00:00Z');
+    let t = launched;
+    let startedAt = launched;
+    const pod = { status: 'RUNNING', uptimeSeconds: 0 as number | null };
+    const { posts, fetchImpl } = graphqlRunpod(pod);
+    const rows: PodRow[] = [];
+    const record = async (e: { outcome?: string | null; measures?: Record<string, unknown>; durationMs?: number | null }) => {
+      rows.push({ at: t, outcome: e.outcome ?? '', durationMs: e.durationMs ?? null, measures: e.measures ?? {} });
+    };
+    for (; t <= launched + 20 * H; t += M) {
+      const before = pod.status;
+      pod.uptimeSeconds = pod.status === 'RUNNING' ? (t - startedAt) / 1000 : null;
+      await superviseRunpodPod({ waiting: 20, inFlight: 8 }, { config: conf, fetchImpl, now: () => t, force: true, lastStartFailed: async () => false, hostRefusals: async () => 0, rows: async () => rows, record });
+      if (before !== 'RUNNING' && pod.status === 'RUNNING') startedAt = t;
+    }
+    const billed = windowSpendFromRows(rows, { since: launched, now: t, live: null }).dollars;
+    return { posts, billed };
+  }
+
+  it('a bounded run stops at its dollars and is never started again; a rolling window keeps restarting it', async () => {
+    const launched = Date.parse('2026-11-18T12:00:00Z');
+    const fixed = await boundedRun(launched);
+    expect(fixed.posts).toEqual(['stop']);
+    // At most a couple of supervision steps past the cap.
+    expect(fixed.billed).toBeLessThanOrEqual(66 + (2 * PRICE) / 60);
+    expect(fixed.billed).toBeGreaterThan(65);
+
+    resetPodSupervisor();
+    const rolling = await boundedRun(undefined);
+    expect(rolling.posts.filter((p) => p === 'start').length).toBeGreaterThan(0);
+    expect(rolling.billed).toBeGreaterThan(66 + 5);
+  });
+
+  it('a bounded run whose window has ended is over: a RUNNING pod is stopped and nothing starts, whatever was spent', () => {
+    const from = 0;
+    const runBudget = { usd: 66, windowMs: 12.5 * H, defaulted: false, from };
+    expect(podBudget({ BRAIN_RUNPOD_BUDGET_USD: '66', BRAIN_RUNPOD_BUDGET_WINDOW_HOURS: '12.5', BRAIN_RUNPOD_BUDGET_FROM: '2026-11-18T12:00:00Z' })).toEqual({ usd: 66, windowMs: 12.5 * H, defaulted: false, from: Date.parse('2026-11-18T12:00:00Z') });
+    const during = budgetReading(runBudget, 10, 6 * H);
+    expect(during).toMatchObject({ exhausted: false, ended: false, since: new Date(0).toISOString() });
+    const after = budgetReading(runBudget, 10, 13 * H);
+    expect(after).toMatchObject({ exhausted: true, ended: true, remaining: 0 });
+    expect(budgetEvent(budgetReading(runBudget, null, 13 * H), null)).toBe('BUDGET_EXHAUSTED');
+    expect(decidePod({ ...base, now: 13 * H, inFlight: 4, waiting: 9, budget: after })).toMatchObject({ action: 'STOP', reason: expect.stringMatching(/run over/) });
+    expect(decidePod({ ...base, now: 13 * H, status: 'EXITED', waiting: 9, budget: after }).action).toBe('NONE');
+  });
+
   it('counts a pod created and deleted in the window from its rows, clipped to the window, and never twice', () => {
     const now = 10 * H;
     const since = now - 2 * H;
