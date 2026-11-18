@@ -45,3 +45,24 @@ Status: DRAFT, maintained continuously, and delivered by 22:55Z whatever its sta
   - arrangementLibrary, cashIntegrationPass, capacity-d0-p0-scaling, acquisition-d07;
   - quantOffLoop (wall-time).
 - **Postgres compute on failed attempts:** 26.5 shard-hours in 48 h.
+
+## R-B: workforce audit (19:24–19:33Z)
+| Class | Identities | Slots | Executing | Output | Cash |
+|---|---|---|---|---|---|
+| Claude Routines | 3 real accounts (A Max, Caleb, Airyn), 12 research Routines | the account targets add up to **9** (124k ACCOUNT_TARGETS_REACHED refusals) | **0** | about 0 today; 1,253 READY bins are policy-parked under §84 | $0 (sunk) |
+| Factory | 3 surfaces; 2 quarantined | **1** | 0 (1 waiting) | 6 PRs in 24 h; a campaign repeated 4× (RULE_EFFECTIVE_SOON @2–@5) | $0 |
+| Hermes | 1 hourly one-shot run (northline-operator) | 1 | history not readable from this credential | unmeasured | $0 |
+| Free lane | 2 OmniRoute routes | 4 (held) | 4 | **1.9 accepted claims/h** last hour, against 28.7/h overnight with the GPU | $0 |
+| GPU | 1 pod, H200 COMMUNITY | 12 seq configured, about 6 effective (Fly event loop) | 0 (EXITED; host full) | today $8.57 for 0 claims; overnight $0.21/claim | $3.59–7.99/h |
+| Claude Code sessions | 2 live (coordinator + release owner) | not measured | the release owner has been **blocked on a Bash permission prompt since 19:30Z** | 33 PRs/24 h (about 1.4/h; about 0.5 PRs per session-hour [inferred]) | $0 (sunk; the API-equivalent figure for the coordinator is $923) |
+
+- **Utilization:** no single defensible %.
+  - Routines 0%, Factory 0/1, GPU 0%.
+  - Free lane full but low-yield.
+  - Release pipeline busy 55% of today.
+- **Binding constraints:**
+  1. the release pipeline, one at a time at about 45–60 min merge-to-live;
+  2. permission prompts;
+  3. the Fly event loop (about 6 GPU slots);
+  4. research yield.
+- **Stalls today:** agent H about 2 h on a permission prompt; the release owner since 19:30Z; 2 supersessions by Factory; a worker restart lost about 3.5 h (11:25→15:01Z); the stop/disconnect ordering cost about $1.20; probe pods leaked.
