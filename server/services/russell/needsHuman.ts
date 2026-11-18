@@ -299,6 +299,30 @@ export interface ParkResult {
 }
 
 /**
+ * A corrected judge round was already started against the audit this packet is
+ * parked on, and the packet never left it: the round was refused before it ran
+ * (a research budget a person set), so another one is not "about to" happen.
+ * A round that ran re-audits the packet, which moves it to a new audit.
+ */
+async function roundAlreadyStalledOn(orchestration: { id: string; projectId: string; auditId: string | null }): Promise<boolean> {
+  if (!orchestration.auditId) return false;
+  const { JUDGE_ROUND_EVENT } = await import('../research/judgeRound.ts');
+  const rows = await getDb().all<{ payload: string }>(
+    `SELECT payload FROM project_events WHERE project_id = ? AND event_type = ? AND payload LIKE ?`,
+    [orchestration.projectId, JUDGE_ROUND_EVENT, `%${orchestration.id}%`],
+  );
+  return rows.some((row) => {
+    let payload: Record<string, unknown> = {};
+    try {
+      payload = JSON.parse(row.payload) as Record<string, unknown>;
+    } catch {
+      return false;
+    }
+    return payload['orchestrationId'] === orchestration.id && payload['previousAuditId'] === orchestration.auditId;
+  });
+}
+
+/**
  * Park every mission whose packet has stopped for a person.
  *
  * Re-entrant by construction. `transitionMission` is guarded on the state it
@@ -556,11 +580,20 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
      * "accepts a report with unresolved questions" requests
      * (OWNER:DECIDING_WHETHER_THIS_PROJECT_ACCEPTS_A_REPORT_WITH_UNRESOLV#3).
      * The mission keeps its state. If the assessment later turns to PERSON,
-     * for example after the round ceiling or a budget refusal, the next pass
-     * reaches `decideAtPark` again and asks as before. Brain records this once
-     * per judged audit, not once per tick.
+     * for example at the round ceiling, the next pass reaches `decideAtPark`
+     * again and asks as before. Brain records this once per judged audit, not
+     * once per tick.
+     *
+     * Only while the round is still coming. A corrected round already started
+     * against this very audit that left the packet parked on it did not run:
+     * `resumeJudgeRound` records the round before it learns the research
+     * budget a person set refuses the follow-ups, then re-parks the packet on
+     * the same audit. `assessJudgeRound` does not read the budget, so it still
+     * says RESUME, and without this the ceiling only a person can raise would
+     * sit behind no card until the round count reached its ceiling. Read from
+     * rows (the round's own `previousAuditId`), never from the packet's prose.
      */
-    if (decision.because === 'JUDGE_ROUND_RESUMING') {
+    if (decision.because === 'JUDGE_ROUND_RESUMING' && !(await roundAlreadyStalledOn(orchestration))) {
       const recorded = await getDb().get<{ n: number }>(
         `SELECT COUNT(*) AS n FROM project_events
           WHERE project_id = ? AND entity_id = ? AND event_type = 'RUSSELL_ROUTINE_DECISION'
@@ -587,6 +620,15 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
       continue;
     }
 
+    // Reaching here with JUDGE_ROUND_RESUMING means the round already stalled on this audit (above).
+    const declined =
+      decision.because === 'JUDGE_ROUND_RESUMING'
+        ? {
+            because: 'JUDGE_ROUND_REFUSED',
+            reason: 'a corrected round was already started on this audit and did not run, because the research budget a person set refused it',
+          }
+        : decision;
+
     const moved = await transitionMission({
       missionId: mission.id,
       from: mission.state,
@@ -609,8 +651,8 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
         // any person had given one. The answer itself is recorded when it
         // arrives, by whichever writer moves the mission.
         decidedBy: 'PENDING_PERSON',
-        declinedBecause: decision.because,
-        reason: `Brain did not decide this park itself: ${decision.reason}.`,
+        declinedBecause: declined.because,
+        reason: `Brain did not decide this park itself: ${declined.reason}.`,
       },
     });
 
