@@ -1,343 +1,80 @@
-/**
- * Economic knowledge census (Surge B, 2026-11-14): what Brain durably holds,
- * counted from the authoritative rows — never from a configured limit.
- *
- * Read-only. One pooler client. Each population is one statement; a statement
- * that fails (a table this deployment does not have yet) prints UNMEASURED
- * with the reason instead of a number, because a guessed figure is worse than
- * an admitted gap. A population Brain computes but never stores is listed as
- * NOT_STORED with where it lives, so "400 arrangements per pass" is never read
- * as "400 businesses known".
- *
- * Then a DIAG section per project holding a map or a cash row: why the F3
- * back-fill files no construction fact and the F7 arrangement rounds open none,
- * read from the functions the tick runs (`kernelSkips`, `kernelAuthority`,
- * `knowledgeResearchAllowed`) and the back-fill's own selection as a dry run
- * (`backfillCandidates`). Nothing is written.
- *
- *   node --import tsx scripts/knowledge-census.ts            # human lines
- *   node --import tsx scripts/knowledge-census.ts --json     # one JSON line too
- */
+/** Throwaway read-only probe (claude/probe-d1): leases, renewals, expiries, reclaims. SELECT only. Not for merge. */
 import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
-
-interface Population {
-  key: string;
-  /** Which of the owner's eight layers this counts (1 code … 8 commercially validated). */
-  layer: 'STORED' | 'GENERATED' | 'EVIDENCED' | 'EVALUATED' | 'VALIDATED';
-  label: string;
-  sql?: string;
-  /** For a population Brain does not store: where it exists, and why it cannot be counted. */
-  notStored?: string;
+const G = 'wst_7b4fcbb5f2384f31b6c3';
+const A = '2026-11-18T15:00:00Z';
+const B = '2026-11-18T17:10:00Z';
+const out = (tag: string, v: unknown) => console.log(tag, typeof v === 'string' ? v : JSON.stringify(v));
+async function q(sql: string, args: unknown[] = []): Promise<any[]> {
+  try { return await getDb().all(sql, args); } catch (e) { out('ERR', `${sql.slice(0, 100)} :: ${e instanceof Error ? e.message : e}`); return []; }
 }
-
-const LIVE = 'retired_at IS NULL';
-
-export const POPULATIONS: readonly Population[] = [
-  { key: 'industries', layer: 'STORED', label: 'mapped industries (SECTOR nodes)', sql: `SELECT COUNT(*) AS n FROM industry_nodes WHERE kind = 'SECTOR' AND ${LIVE}` },
-  { key: 'subindustries', layer: 'STORED', label: 'industry subcategories (SUB_INDUSTRY + VALUE_CHAIN_LAYER + ADJACENT_INDUSTRY)', sql: `SELECT COUNT(*) AS n FROM industry_nodes WHERE kind IN ('SUB_INDUSTRY', 'VALUE_CHAIN_LAYER', 'ADJACENT_INDUSTRY') AND ${LIVE}` },
-  { key: 'nodes', layer: 'STORED', label: 'economic nodes (all industry_nodes)', sql: `SELECT COUNT(*) AS n FROM industry_nodes WHERE ${LIVE}` },
-  { key: 'nodesDiscovered', layer: 'STORED', label: 'economic nodes Brain discovered (origin DISCOVERED)', sql: `SELECT COUNT(*) AS n FROM industry_nodes WHERE origin = 'DISCOVERED' AND ${LIVE}` },
-  { key: 'buyerPopulations', layer: 'STORED', label: 'buyer populations (BUYER_TYPE nodes)', sql: `SELECT COUNT(*) AS n FROM industry_nodes WHERE kind = 'BUYER_TYPE' AND ${LIVE}` },
-  { key: 'bottlenecks', layer: 'STORED', label: 'bottlenecks / customer needs (BOTTLENECK nodes)', sql: `SELECT COUNT(*) AS n FROM industry_nodes WHERE kind = 'BOTTLENECK' AND ${LIVE}` },
-  { key: 'supplierCategories', layer: 'STORED', label: 'supplier categories (FULFILMENT_SOURCE nodes)', sql: `SELECT COUNT(*) AS n FROM industry_nodes WHERE kind = 'FULFILMENT_SOURCE' AND ${LIVE}` },
-  { key: 'transactionTypes', layer: 'STORED', label: 'transaction mechanisms (TRANSACTION_TYPE nodes)', sql: `SELECT COUNT(*) AS n FROM industry_nodes WHERE kind = 'TRANSACTION_TYPE' AND ${LIVE}` },
-  { key: 'projectsWithMap', layer: 'STORED', label: 'projects holding an industry map', sql: `SELECT COUNT(DISTINCT project_id) AS n FROM industry_nodes` },
-  { key: 'opportunities', layer: 'STORED', label: 'openings held (cash_opportunities, not duplicates)', sql: `SELECT COUNT(*) AS n FROM cash_opportunities WHERE duplicate_of_id IS NULL` },
-  { key: 'opportunityMechanisms', layer: 'STORED', label: 'distinct capture mechanisms on held openings', sql: `SELECT COUNT(DISTINCT mechanism) AS n FROM cash_opportunities` },
-  { key: 'opportunityIndustries', layer: 'STORED', label: 'distinct industries named on held openings', sql: `SELECT COUNT(DISTINCT industry) AS n FROM cash_opportunities WHERE industry IS NOT NULL` },
-  { key: 'moneyFlows', layer: 'EVIDENCED', label: 'recorded money flows (openings with a payer and a price)', sql: `SELECT COUNT(*) AS n FROM cash_opportunities WHERE payer IS NOT NULL AND price_cents IS NOT NULL AND duplicate_of_id IS NULL` },
-  { key: 'claims', layer: 'EVIDENCED', label: 'research claims (all)', sql: `SELECT COUNT(*) AS n FROM research_claims` },
-  { key: 'sourcedClaims', layer: 'EVIDENCED', label: 'independently sourced economic observations (SOURCED claims)', sql: `SELECT COUNT(*) AS n FROM research_claims WHERE validation_state = 'SOURCED'` },
-  { key: 'sourcedDomains', layer: 'EVIDENCED', label: 'distinct source titles behind sourced claims', sql: `SELECT COUNT(DISTINCT source_title) AS n FROM research_claims WHERE validation_state = 'SOURCED'` },
-  { key: 'constructionFacts', layer: 'EVIDENCED', label: 'construction facts (quantities with a status)', sql: `SELECT COUNT(*) AS n FROM construction_facts f WHERE NOT EXISTS (SELECT 1 FROM construction_facts s WHERE s.supersedes_fact_id = f.id)` },
-  { key: 'constructionFactsObserved', layer: 'EVIDENCED', label: 'construction facts OBSERVED or VERIFIED', sql: `SELECT COUNT(*) AS n FROM construction_facts f WHERE f.status IN ('OBSERVED', 'VERIFIED') AND NOT EXISTS (SELECT 1 FROM construction_facts s WHERE s.supersedes_fact_id = f.id)` },
-  { key: 'unresolvedVariables', layer: 'EVIDENCED', label: 'unresolved economic variables (construction facts still ESTIMATE/ASSUMPTION)', sql: `SELECT COUNT(*) AS n FROM construction_facts f WHERE f.status IN ('ESTIMATE', 'ASSUMPTION') AND NOT EXISTS (SELECT 1 FROM construction_facts s WHERE s.supersedes_fact_id = f.id)` },
-  { key: 'constructedRoundsAsked', layer: 'GENERATED', label: 'constructed arrangements asked about (goal …-mx- rounds)', sql: `SELECT COUNT(*) AS n FROM cash_discovery_rounds WHERE bucket_id LIKE 'goal-%-mx-%'` },
-  // The constructed-arrangement library (migration 152 / pg 143): CONSTRUCTED rows of the §49 ledger, one per structure per project.
-  { key: 'constructedArrangementsKnown', layer: 'STORED', label: 'constructed arrangements durably stored (monetization_paths origin CONSTRUCTED)', sql: `SELECT COUNT(*) AS n FROM monetization_paths WHERE origin = 'CONSTRUCTED'` },
-  { key: 'arrangementsUnique', layer: 'STORED', label: 'unique arrangement structures (distinct design_signature, across projects)', sql: `SELECT COUNT(DISTINCT design_signature) AS n FROM monetization_paths WHERE design_signature IS NOT NULL` },
-  { key: 'arrangementsResearched', layer: 'EVIDENCED', label: 'stored arrangements that a research round asked about (asked_count > 0)', sql: `SELECT COUNT(*) AS n FROM monetization_paths WHERE origin = 'CONSTRUCTED' AND asked_count > 0` },
-  { key: 'arrangementsEvaluated', layer: 'EVALUATED', label: 'stored arrangements quantitatively evaluated in a goal model (evaluated_count > 0)', sql: `SELECT COUNT(*) AS n FROM monetization_paths WHERE origin = 'CONSTRUCTED' AND evaluated_count > 0` },
-  { key: 'arrangementsPicked', layer: 'EVALUATED', label: 'stored arrangements a goal model\'s best combination picked at least once', sql: `SELECT COUNT(DISTINCT path_id) AS n FROM monetization_path_evaluations WHERE picked = 1` },
-  { key: 'arrangementsTransferred', layer: 'STORED', label: 'cross-industry transfers (construction_origin TRANSFER)', sql: `SELECT COUNT(*) AS n FROM monetization_paths WHERE origin = 'CONSTRUCTED' AND construction_origin = 'TRANSFER'` },
-  { key: 'arrangementsEvidenced', layer: 'EVIDENCED', label: 'stored arrangements with real external evidence (an EVIDENCE fact on a gated claim)', sql: `SELECT COUNT(DISTINCT p.id) AS n FROM monetization_paths p JOIN monetization_path_facts f ON f.path_id = p.id AND f.kind = 'EVIDENCE' WHERE p.origin = 'CONSTRUCTED'` },
-  { key: 'arrangementsRefuted', layer: 'EVIDENCED', label: 'stored arrangements research refuted (research_verdict REFUTED)', sql: `SELECT COUNT(*) AS n FROM monetization_paths WHERE origin = 'CONSTRUCTED' AND research_verdict = 'REFUTED'` },
-  { key: 'planReadings', layer: 'EVALUATED', label: 'plans constructed (goal plan readings)', sql: `SELECT COUNT(*) AS n FROM goal_plan_readings` },
-  { key: 'plannedGoals', layer: 'EVALUATED', label: 'goals with at least one plan reading', sql: `SELECT COUNT(DISTINCT workstream_id) AS n FROM goal_plan_readings` },
-  { key: 'plansEvaluated', layer: 'EVALUATED', label: 'plans evaluated (readings with a scenario run)', sql: `SELECT COUNT(*) AS n FROM goal_plan_readings WHERE scenario_run_id IS NOT NULL` },
-  { key: 'plansRecommendable', layer: 'VALIDATED', label: 'plans accepted (verdict RECOMMENDABLE)', sql: `SELECT COUNT(*) AS n FROM goal_plan_readings WHERE verdict = 'RECOMMENDABLE'` },
-  { key: 'planOutcomes', layer: 'VALIDATED', label: 'plans independently verified by an outcome (goal_outcomes)', sql: `SELECT COUNT(*) AS n FROM goal_outcomes` },
-  { key: 'objectiveReadings', layer: 'EVALUATED', label: 'non-cash objective plan readings', sql: `SELECT COUNT(*) AS n FROM goal_objective_readings` },
-  { key: 'validatedOpenings', layer: 'VALIDATED', label: 'commercially validated openings (a payment recorded against them)', sql: `SELECT COUNT(DISTINCT opportunity_id) AS n FROM cash_money_entries WHERE opportunity_id IS NOT NULL AND kind = 'SETTLEMENT'` },
-  { key: 'laborRoles', layer: 'STORED', label: 'labor roles', notStored: 'the labor kernel (079) stores labor openings, not a role vocabulary; roles appear only as text inside openings and construction prose' },
-  // §92 positions as rows (migration 155 / pg 146, K-6): each stored arrangement carries the position its design occupies.
-  { key: 'commercialPositions', layer: 'STORED', label: 'commercial positions (distinct §92 position_key on stored arrangements)', sql: `SELECT COUNT(DISTINCT position_key) AS n FROM monetization_paths WHERE origin = 'CONSTRUCTED' AND position_key IS NOT NULL` },
-  { key: 'arrangementsPositioned', layer: 'STORED', label: 'stored arrangements carrying a §92 position (position_json)', sql: `SELECT COUNT(*) AS n FROM monetization_paths WHERE origin = 'CONSTRUCTED' AND position_json IS NOT NULL` },
-  { key: 'positionMoneyFlows', layer: 'STORED', label: 'constructed money flows (distinct payer population × position, money timing included)', sql: `SELECT COUNT(*) AS n FROM (SELECT DISTINCT COALESCE(opportunity_id, industry_node_id, design_signature) AS payer, position_key FROM monetization_paths WHERE origin = 'CONSTRUCTED' AND position_key IS NOT NULL) flows` },
-];
-
-export interface CensusLine { key: string; layer: Population['layer']; label: string; value: number | null; note?: string }
-
-export async function census(): Promise<CensusLine[]> {
-  const db = getDb();
-  const out: CensusLine[] = [];
-  for (const one of POPULATIONS) {
-    if (!one.sql) {
-      out.push({ key: one.key, layer: one.layer, label: one.label, value: null, note: `NOT_STORED: ${one.notStored}` });
-      continue;
-    }
-    try {
-      const row = (await db.get(one.sql)) as { n: number | string } | undefined;
-      out.push({ key: one.key, layer: one.layer, label: one.label, value: Number(row?.n ?? 0) });
-    } catch (error) {
-      const message = error instanceof Error ? error.message.split('\n')[0] : String(error);
-      out.push({ key: one.key, layer: one.layer, label: one.label, value: null, note: `UNMEASURED: ${message}` });
-    }
-  }
-  return out;
-}
-
-/* ------------------------------------------------------------------ DIAG */
-
-/** Projects the diagnosis reads, at most. */
-const DIAG_PROJECTS = 50;
-/** Rejection reasons and unmatched buyer wordings printed per project, at most. */
-const DIAG_TOP = 8;
-
-export interface DiagProject {
-  projectId: string;
-  cashMode: { exists: boolean; state: string | null };
-  /** Why `runIndustryKernel` returns before absorbing and back-filling; null when it goes on. */
-  kernelSkips: string | null;
-  kernelAuthority: { allowed: boolean; basis: string | null; reason: string };
-  standingGrant: { live: boolean; id: string | null; name: string | null; standingGoals: { name: string; state: string; expiresAt: string | null; research: boolean }[] };
-  /** industry_rounds opened in the last 24 h, by `purpose:state`. */
-  kernelRounds24h: Record<string, number>;
-  /** Constructed-arrangement rounds (`goal-…-mx-…`, the F7 path) opened in the last 24 h, by state. */
-  constructedRounds24h: Record<string, number>;
-  knowledgeResearch: { allowed: boolean; basis: string | null; reason: string };
-  /** The constructed-round gate (`openConstructedRound`) per goal: rounds still researching against the live cap, and the focus cap. */
-  constructedGate: { goalId: string; goalRounds: number; stillResearching: number; liveCap: number; focusCap: number | null; liveConstructed: number; recentMx: number }[];
-  backfill: {
-    hasBuyerTypes: boolean;
-    unitEconomicRead: number;
-    read: number;
-    candidates: number;
-    candidatesBySource: Record<string, number>;
-    rejected: number;
-    topReasons: { reason: string; n: number }[];
-    topUnmatchedBuyers: { buyer: string; n: number }[];
-  } | { error: string };
-  errors: string[];
-}
-
-function top(counts: Map<string, number>, limit = DIAG_TOP): { key: string; n: number }[] {
-  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, limit).map(([key, n]) => ({ key, n }));
-}
-
-function message(error: unknown): string {
-  return error instanceof Error ? (error.message.split('\n')[0] ?? '') : String(error);
-}
-
-/** The projects holding an industry map or a cash mode row, bounded. */
-export async function diagProjectIds(limit = DIAG_PROJECTS): Promise<string[]> {
-  const rows = (await getDb().all(
-    `SELECT project_id FROM (SELECT DISTINCT project_id FROM industry_nodes UNION SELECT project_id FROM cash_modes) p ORDER BY project_id LIMIT ?`,
-    [limit],
-  )) as { project_id: string }[];
-  return rows.map((row) => row.project_id);
-}
-
-async function countBy(sql: string, params: string[]): Promise<Record<string, number>> {
-  const rows = (await getDb().all(sql, params)) as { k: string; n: number | string }[];
-  return Object.fromEntries(rows.map((row) => [row.k, Number(row.n)]));
-}
-
-/**
- * Why construction facts and arrangement research are (not) happening in one
- * project, read from the same functions the tick runs. Strictly read-only: the
- * back-fill is the dry-run selection (`backfillCandidates`), nothing is filed.
- */
-export async function diagProject(projectId: string, now = new Date()): Promise<DiagProject> {
-  const { getCashMode } = await import('../server/repos/cashMode.ts');
-  const { listGoals } = await import('../server/repos/russellAuthority.ts');
-  const { kernelAuthority, kernelSkips, standingWorldGrant } = await import('../server/services/industry/kernel.ts');
-  const { backfillCandidates } = await import('../server/services/industry/expand.ts');
-  const { knowledgeResearchAllowed } = await import('../server/services/cash/lifecycle.ts');
-  const { RESEARCH_WORK_CLASS } = await import('../server/services/russell/launch.ts');
-
-  const iso = now.toISOString();
-  const since = new Date(now.getTime() - 24 * 3600_000).toISOString();
-  const errors: string[] = [];
-  const attempt = async <T>(label: string, run: () => Promise<T>, fallback: T): Promise<T> => {
-    try {
-      return await run();
-    } catch (error) {
-      errors.push(`${label}: ${message(error)}`);
-      return fallback;
-    }
-  };
-
-  const mode = await attempt('cashMode', () => getCashMode(projectId), null);
-  const goals = await attempt('listGoals', () => listGoals(projectId), []);
-  const grant = standingWorldGrant(goals, iso);
-  const skips = await attempt('kernelSkips', () => kernelSkips(projectId, mode), `unreadable`);
-  const authority = await attempt('kernelAuthority', async () => {
-    const one = await kernelAuthority(projectId, { mode, now: iso });
-    return { allowed: one.allowed, basis: one.basis, reason: one.reason };
-  }, { allowed: false, basis: null, reason: 'unreadable' });
-  const knowledge = await attempt('knowledgeResearchAllowed', async () => {
-    const one = await knowledgeResearchAllowed(projectId, iso);
-    return { allowed: one.allowed, basis: one.basis, reason: one.reason };
-  }, { allowed: false, basis: null, reason: 'unreadable' });
-  const kernelRounds24h = await attempt(
-    'industryRounds',
-    () => countBy(`SELECT purpose || ':' || state AS k, COUNT(*) AS n FROM industry_rounds WHERE project_id = ? AND opened_at >= ? GROUP BY purpose, state ORDER BY k LIMIT 40`, [projectId, since]),
-    {},
-  );
-  const constructedRounds24h = await attempt(
-    'constructedRounds',
-    () => countBy(`SELECT state AS k, COUNT(*) AS n FROM cash_discovery_rounds WHERE project_id = ? AND opened_at >= ? AND bucket_id LIKE 'goal-%-mx-%' GROUP BY state ORDER BY k LIMIT 10`, [projectId, since]),
-    {},
-  );
-
-  const constructedGate = await attempt('constructedGate', async () => {
-    const { roundsStillResearching, liveConstructedResearch, MAX_LIVE_GOAL_ROUNDS } = await import('../server/services/cash/discovery.ts');
-    const { listRounds } = await import('../server/repos/cashDiscovery.ts');
-    const { constructedCapFor } = await import('../server/services/cash/researchRoom.ts');
-    const rounds = await listRounds(projectId);
-    const goalIds = [...new Set(rounds.map((one) => /^goal-(wst_[A-Za-z0-9]+)/.exec(one.bucketId)?.[1]).filter((id): id is string => !!id))].slice(0, 5);
-    const focusCap = await constructedCapFor(projectId);
-    const out: DiagProject['constructedGate'] = [];
-    for (const goalId of goalIds) {
-      const prefix = `goal-${goalId}`;
-      const mine = rounds.filter((one) => one.bucketId === prefix || one.bucketId.startsWith(`${prefix}-`));
-      const mx = mine.filter((one) => one.bucketId.startsWith(`${prefix}-mx-`));
-      out.push({
-        goalId,
-        goalRounds: mine.length,
-        stillResearching: await roundsStillResearching(mine),
-        liveCap: MAX_LIVE_GOAL_ROUNDS,
-        focusCap,
-        liveConstructed: await liveConstructedResearch(mx),
-        recentMx: mx.filter((one) => one.openedAt >= since).length,
-      });
-    }
-    return out;
-  }, []);
-
-  let backfill: DiagProject['backfill'];
-  try {
-    const pool = await backfillCandidates(projectId);
-    const reasons = new Map<string, number>();
-    const unmatched = new Map<string, number>();
-    const bySource: Record<string, number> = {};
-    let candidates = 0;
-    for (const one of pool.decisions) {
-      if (one.candidate) {
-        candidates += 1;
-        bySource[one.source] = (bySource[one.source] ?? 0) + 1;
-        continue;
-      }
-      const reason = `${one.source}: ${one.reason ?? 'unknown'}`;
-      reasons.set(reason, (reasons.get(reason) ?? 0) + 1);
-      if (one.unmatchedBuyer) {
-        const buyer = one.unmatchedBuyer.slice(0, 80);
-        unmatched.set(buyer, (unmatched.get(buyer) ?? 0) + 1);
-      }
-    }
-    backfill = {
-      hasBuyerTypes: pool.hasBuyerTypes,
-      unitEconomicRead: pool.unitEconomicRead,
-      read: pool.decisions.length,
-      candidates,
-      candidatesBySource: bySource,
-      rejected: pool.decisions.length - candidates,
-      topReasons: top(reasons).map(({ key, n }) => ({ reason: key, n })),
-      topUnmatchedBuyers: top(unmatched).map(({ key, n }) => ({ buyer: key, n })),
-    };
-  } catch (error) {
-    backfill = { error: message(error) };
-  }
-
-  return {
-    projectId,
-    cashMode: { exists: !!mode, state: mode?.state ?? null },
-    kernelSkips: skips,
-    kernelAuthority: authority,
-    standingGrant: {
-      live: !!grant,
-      id: grant?.id ?? null,
-      name: grant?.name ?? null,
-      standingGoals: goals.slice(0, 5).map((goal) => ({ name: goal.name, state: goal.state, expiresAt: goal.expiresAt ?? null, research: goal.allowedWork.includes(RESEARCH_WORK_CLASS) })),
-    },
-    kernelRounds24h,
-    constructedRounds24h,
-    constructedGate,
-    knowledgeResearch: knowledge,
-    backfill,
-    errors,
-  };
-}
-
-export async function diagnose(now = new Date()): Promise<DiagProject[]> {
-  const out: DiagProject[] = [];
-  for (const projectId of await diagProjectIds()) out.push(await diagProject(projectId, now));
-  return out;
-}
-
-/** The lines `main` prints for one project's diagnosis. */
-export function diagLines(one: DiagProject): string[] {
-  const p = `DIAG ${one.projectId}`;
-  const kv = (record: Record<string, number>) => Object.entries(record).map(([k, n]) => `${k}=${n}`).join(' ') || 'none';
-  const lines = [
-    `${p} cashMode ${one.cashMode.exists ? one.cashMode.state : 'NO_ROW'}`,
-    `${p} standingGrant ${one.standingGrant.live ? `LIVE ${one.standingGrant.name} (${one.standingGrant.id})` : 'NONE'}; standing goals: ${one.standingGrant.standingGoals.map((g) => `${g.name}[${g.state}${g.research ? ',RESEARCH' : ''}${g.expiresAt ? `,exp ${g.expiresAt}` : ''}]`).join(' ') || 'none'}`,
-    `${p} kernelSkips ${one.kernelSkips ?? 'no (the pass absorbs and back-fills)'}`,
-    `${p} kernelAuthority ${one.kernelAuthority.allowed ? `ALLOWED ${one.kernelAuthority.basis}` : 'REFUSED'} — ${one.kernelAuthority.reason}`,
-    `${p} kernelRounds24h ${kv(one.kernelRounds24h)}`,
-    `${p} constructedRounds24h ${kv(one.constructedRounds24h)}`,
-    ...one.constructedGate.map((g) => `${p} constructedGate ${g.goalId} researching=${g.stillResearching}/${g.liveCap} (of ${g.goalRounds} goal rounds) focusCap=${g.focusCap ?? 'none'} liveConstructed=${g.liveConstructed} mx24h=${g.recentMx}`),
-    `${p} knowledgeResearch ${one.knowledgeResearch.allowed ? `ALLOWED ${one.knowledgeResearch.basis}` : 'REFUSED'} — ${one.knowledgeResearch.reason}`,
-  ];
-  const b = one.backfill;
-  if ('error' in b) lines.push(`${p} backfill UNMEASURED — ${b.error}`);
-  else {
-    lines.push(`${p} backfill buyerTypes=${b.hasBuyerTypes ? 'yes' : 'NONE'} unitEconomicRead=${b.unitEconomicRead} read=${b.read} candidates=${b.candidates} (${kv(b.candidatesBySource)}) rejected=${b.rejected}`);
-    for (const r of b.topReasons) lines.push(`${p} backfillRejected ${String(r.n).padStart(5)}  ${r.reason}`);
-    for (const u of b.topUnmatchedBuyers) lines.push(`${p} backfillUnmatchedBuyer ${String(u.n).padStart(5)}  ${u.buyer}`);
-  }
-  for (const e of one.errors) lines.push(`${p} error ${e}`);
-  return lines;
-}
-
-async function main(): Promise<void> {
+const ms = (a: string | null, b: string | null) => (a && b ? Date.parse(b) - Date.parse(a) : null);
+const tally = (m: Map<string, any>, k: string, f: (x: any) => void, init: () => any) => { const v = m.get(k) ?? init(); f(v); m.set(k, v); };
+async function main() {
   await initDatabase();
   try {
-    const lines = await census();
-    console.log(`CENSUS at ${new Date().toISOString()} revision ${process.env.BRAIN_REVISION ?? '<unstamped>'}`);
-    for (const one of lines) console.log(`CENSUS ${one.layer.padEnd(9)} ${one.key.padEnd(28)} ${one.value === null ? '-' : String(one.value).padStart(8)}  ${one.label}${one.note ? ` — ${one.note}` : ''}`);
-    if (process.argv.includes('--json')) console.log(`CENSUS_JSON ${JSON.stringify(lines)}`);
-    try {
-      const diag = await diagnose();
-      for (const one of diag) for (const line of diagLines(one)) console.log(line);
-      // This process's own reading, not the server's: the server keeps its pressure in memory only.
-      const { databasePressure } = await import('../server/db/pressure.ts');
-      const pressure = databasePressure();
-      console.log(`DIAG pressure (census process only) ${pressure.state} — ${pressure.reason}`);
-      if (process.argv.includes('--json')) console.log(`DIAG_JSON ${JSON.stringify(diag)}`);
-    } catch (error) {
-      console.log(`DIAG UNMEASURED — ${message(error)}`);
+    out('NOW', new Date().toISOString());
+    // 1. Leases claimed in the window, per work type / worker / outcome.
+    const leases = await q(`SELECT l.work_item_id, l.lease_generation, l.worker_id, l.claimed_at, l.expires_at, l.last_heartbeat_at, l.heartbeat_count, l.ended_at, l.outcome, substr(l.detail,1,160) AS detail, l.attempt_number,
+        w.work_type, w.state, w.attempt_count, w.max_attempts, w.orchestration_id, wk.name AS worker
+      FROM work_leases l JOIN work_items w ON w.id = l.work_item_id LEFT JOIN workers wk ON wk.id = l.worker_id
+      WHERE l.claimed_at >= ? AND l.claimed_at < ? ORDER BY l.claimed_at LIMIT 20000`, [A, B]);
+    out('LEASES_N', leases.length);
+    const agg = new Map<string, any>();
+    for (const l of leases) {
+      const key = `${l.worker}|${l.work_type}`;
+      tally(agg, key, (v) => {
+        v.claims += 1; v[`out_${l.outcome ?? 'OPEN'}`] = (v[`out_${l.outcome ?? 'OPEN'}`] ?? 0) + 1;
+        if (Number(l.heartbeat_count) > 0) v.renewed += 1;
+        v.hb += Number(l.heartbeat_count ?? 0);
+        if (Number(l.lease_generation) > 1) v.reclaimGen += 1;
+        const d = ms(l.claimed_at, l.ended_at); if (d !== null) { v.dur.push(Math.round(d / 1000)); }
+        const leaseLen = ms(l.claimed_at, l.expires_at); if (leaseLen !== null) v.leaseLen.add(Math.round(leaseLen / 60000));
+        if (l.ended_at && l.expires_at && l.ended_at > l.expires_at) v.endedAfterExpiry += 1;
+      }, () => ({ claims: 0, renewed: 0, hb: 0, reclaimGen: 0, endedAfterExpiry: 0, dur: [] as number[], leaseLen: new Set<number>() }));
     }
-    console.log('GOALS: OK');
+    for (const [k, v] of agg) { const d = v.dur.sort((a: number, b: number) => a - b); out('LEASE_AGG', { k, ...v, dur: undefined, leaseLenMin: [...v.leaseLen], durN: d.length, durMed: d[Math.floor(d.length / 2)] ?? null, durP90: d[Math.floor(d.length * 0.9)] ?? null, durMax: d[d.length - 1] ?? null }); }
+    const det = new Map<string, number>();
+    for (const l of leases) { const k = `${l.work_type}|${l.outcome}|${String(l.detail ?? '').slice(0, 90)}`; det.set(k, (det.get(k) ?? 0) + 1); }
+    for (const [k, n] of [...det].sort((a, b) => b[1] - a[1]).slice(0, 60)) out('LEASE_DETAIL', { k, n });
+    // Leases on items the same item was later re-leased (generation chains)
+    for (const r of await q(`SELECT w.work_type, l.outcome, COUNT(*) AS n FROM work_leases l JOIN work_items w ON w.id = l.work_item_id WHERE l.ended_at >= ? AND l.ended_at < ? AND l.outcome = 'EXPIRED' GROUP BY w.work_type, l.outcome`, [A, B])) out('EXPIRED_ENDED_IN_WINDOW', r);
+    // 2. Free-lane item outcomes in window.
+    const evs = await q(`SELECT e.at, e.outcome, substr(e.reason,1,220) AS reason, e.work_item_id, w.work_type, e.worker_id FROM bin_events e LEFT JOIN work_items w ON w.id = e.work_item_id WHERE e.event_type = 'FREE_LANE_ITEM' AND e.at >= ? AND e.at < ? ORDER BY e.at LIMIT 20000`, [A, B]);
+    out('FLI_N', evs.length);
+    const ev = new Map<string, number>();
+    for (const e of evs) { const r = String(e.reason ?? '').replace(/wki_[0-9a-f]+/g, 'wki_*').replace(/\d+/g, 'N').slice(0, 130); const k = `${e.work_type}|${e.outcome}|${r}`; ev.set(k, (ev.get(k) ?? 0) + 1); }
+    for (const [k, n] of [...ev].sort((a, b) => b[1] - a[1]).slice(0, 80)) out('FLI', { k, n });
+    for (const e of evs.filter((x: any) => /no longer current|FENCE|lease/i.test(x.reason ?? '')).slice(0, 40)) out('FLI_LEASE', e);
+    // For lease-refused items: their lease history.
+    const refused = [...new Set(evs.filter((x: any) => /no longer current|FENCE|lease/i.test(x.reason ?? '')).map((x: any) => x.work_item_id))].slice(0, 30);
+    for (const id of refused) for (const l of await q(`SELECT l.work_item_id, l.lease_generation, wk.name AS worker, l.claimed_at, l.expires_at, l.heartbeat_count, l.ended_at, l.outcome, substr(l.detail,1,120) AS detail FROM work_leases l LEFT JOIN workers wk ON wk.id = l.worker_id WHERE l.work_item_id = ? ORDER BY l.lease_generation`, [id])) out('REFUSED_HIST', l);
+    // 3. Stuck: LEASED with expired lease now.
+    const now = new Date().toISOString();
+    for (const r of await q(`SELECT work_type, CASE WHEN attempt_count >= max_attempts THEN 'EXHAUSTED' ELSE 'RECLAIMABLE' END AS k, COUNT(*) AS n, MIN(lease_expires_at) AS oldest FROM work_items WHERE state = 'LEASED' AND lease_expires_at <= ? GROUP BY work_type, CASE WHEN attempt_count >= max_attempts THEN 'EXHAUSTED' ELSE 'RECLAIMABLE' END`, [now])) out('STUCK_EXPIRED_LEASED', r);
+    for (const r of await q(`SELECT id, work_type, attempt_count, max_attempts, lease_expires_at, orchestration_id, project_id FROM work_items WHERE state = 'LEASED' AND lease_expires_at <= ? ORDER BY lease_expires_at LIMIT 15`, [now])) out('STUCK_ROW', r);
+    for (const r of await q(`SELECT work_type, state, failure_category, COUNT(*) AS n FROM work_items WHERE updated_at >= ? AND updated_at < ? GROUP BY work_type, state, failure_category ORDER BY n DESC LIMIT 60`, [A, B])) out('ITEMS_UPDATED', r);
+    for (const r of await q(`SELECT work_type, failure_category, COUNT(*) AS n FROM work_items WHERE state = 'FAILED' AND updated_at >= ? GROUP BY work_type, failure_category`, ['2026-11-18T00:00:00Z'])) out('FAILED_TODAY', r);
+    // 4. Never-claimed packets.
+    for (const o of await q(`SELECT id, project_id, status, current_pass, goal_id, goal_packet_key, auto_approve, approved_at, created_at, updated_at, provider, model FROM research_orchestrations WHERE id LIKE 'orc_83fa%' OR id LIKE 'orc_f96e%'`)) {
+      out('ORC', o);
+      for (const w of await q(`SELECT id, work_type, state, priority, available_at, attempt_count, max_attempts, lease_generation, target_worker_id, required_scopes, bin_id, bundle_key, failure_category, created_at, updated_at, substr(payload,1,300) AS payload FROM work_items WHERE orchestration_id = ? ORDER BY created_at`, [o.id])) out('ORC_ITEM', w);
+      for (const b of await q(`SELECT id, status, worker_id, lease_expires_at, created_at FROM bins WHERE orchestration_id = ? ORDER BY created_at`, [o.id])) out('ORC_BIN', b);
+      for (const e of await q(`SELECT at, event_type, outcome, substr(reason,1,200) AS reason FROM bin_events WHERE orchestration_id = ? ORDER BY at DESC LIMIT 15`, [o.id])) out('ORC_EV', e);
+    }
+    // 5. Goal's research items: what's queued/claimable now and why not.
+    const orcs = await q(`SELECT id, status, project_id, goal_packet_key, created_at FROM research_orchestrations WHERE goal_id = ? ORDER BY created_at DESC LIMIT 60`, [G]);
+    out('GOAL_ORCS_N', orcs.length);
+    for (const o of orcs.slice(0, 25)) out('GOAL_ORC', o);
+    for (const r of await q(`SELECT w.work_type, w.state, CASE WHEN w.available_at > ? THEN 'FUTURE' ELSE 'NOW' END AS avail, CASE WHEN w.attempt_count >= w.max_attempts THEN 'SPENT' ELSE 'OK' END AS att, (w.target_worker_id IS NOT NULL) AS targeted, COUNT(*) AS n, MIN(w.created_at) AS oldest
+        FROM work_items w JOIN research_orchestrations o ON o.id = w.orchestration_id WHERE o.goal_id = ? GROUP BY w.work_type, w.state, CASE WHEN w.available_at > ? THEN 'FUTURE' ELSE 'NOW' END, CASE WHEN w.attempt_count >= w.max_attempts THEN 'SPENT' ELSE 'OK' END, (w.target_worker_id IS NOT NULL)`, [now, G, now])) out('GOAL_ITEMS', r);
+    for (const r of await q(`SELECT w.id, w.work_type, w.state, w.priority, w.available_at, w.attempt_count, w.max_attempts, w.target_worker_id, w.required_scopes, w.created_at, w.orchestration_id, o.status AS orc_status, (SELECT COUNT(*) FROM work_leases l WHERE l.work_item_id = w.id) AS leases
+        FROM work_items w JOIN research_orchestrations o ON o.id = w.orchestration_id WHERE o.goal_id = ? AND w.state = 'QUEUED' ORDER BY w.created_at LIMIT 40`, [G])) out('GOAL_QUEUED', r);
+    // Queued items anywhere never leased, older than 1h, per type
+    for (const r of await q(`SELECT w.work_type, w.project_id, COUNT(*) AS n, MIN(w.created_at) AS oldest FROM work_items w WHERE w.state = 'QUEUED' AND w.created_at < ? AND w.lease_generation = 0 GROUP BY w.work_type, w.project_id ORDER BY n DESC LIMIT 30`, [new Date(Date.now() - 3600_000).toISOString()])) out('NEVER_LEASED_QUEUED', r);
+    for (const r of await q(`SELECT id, name, worker_type, status FROM workers WHERE name LIKE '%free%' OR name LIKE '%lane%' OR name LIKE '%runpod%' OR name LIKE '%gpu%'`)) out('WORKER', r);
   } finally {
     await closeDatabase();
   }
+  console.log('GOALS: OK');
 }
-
-if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop() ?? '')) {
-  main().catch((error) => {
-    console.error(error);
-    process.exit(1);
-  });
-}
+main().catch((e) => { console.error(e); process.exit(1); });
