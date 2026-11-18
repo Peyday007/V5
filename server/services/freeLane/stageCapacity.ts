@@ -750,21 +750,40 @@ export function chooseConstraint(
     'Restore the failing provider, credential, route or verification path first and watch whether queued work advances; ' +
     'scale independent workers only after a measured gain. Do not enlarge the web process because a queue is long.';
   let worst: { stage: StageReading; waiting: number; rate: number; hours: number } | null = null;
+  const stopped: string[] = [];
   for (const stage of stages) {
     if (!stage.queueSize.measured || !stage.itemsProcessedPerHour.measured) continue;
     const waiting = stage.queueSize.value;
     if (waiting <= 0) continue;
     const processed = stage.itemsProcessedPerHour.value;
+    /*
+     * A stage the lane does not run that processed nothing in the window is
+     * stopped, not slow: nothing executed it, so no capacity relieves it, and
+     * its "never cleared" outranked every stage that was actually working.
+     * Production, 2026-11-18 (goal wst_7b4fcbb5f2384f31b6c3): commercial
+     * execution — OPEN cash_needs against no cash_actions, on a project with no
+     * commercial grant — was named the constraint on every reading, so
+     * `gateGrowth` held every free model at its proven 2 slots ("the
+     * constrained stage is commercial-execution, which more model slots do not
+     * serve") while the goal's research fragments queued for hours and its
+     * rounds stayed OPEN. It is still named in the basis, never dropped.
+     */
+    if (processed === 0 && !LANE_STAGES().some((one) => one.id === stage.stage)) {
+      stopped.push(`${stage.stage} (${waiting} waiting, nothing processed in the window)`);
+      continue;
+    }
     const rate = processed > 0 ? stage.acceptedPerHour / processed : 0;
     const hours = hoursToClear(waiting, stage.acceptedPerHour);
     if (!worst || hours > worst.hours || (hours === worst.hours && waiting > worst.waiting)) worst = { stage, waiting, rate, hours };
   }
+  const stoppedNote = stopped.length > 0 ? ` Stopped, not capacity-bound: ${stopped.join(', ')}.` : '';
   if (!worst) {
     return {
       stage: null,
-      basis: failing
-        ? `No measured stage has work waiting; model route ${failing.route} is failing (${failing.cause}).`
-        : 'No measured stage has work waiting, so none is shown to be constraining.',
+      basis:
+        (failing
+          ? `No measured stage has work waiting; model route ${failing.route} is failing (${failing.cause}).`
+          : 'No measured stage has work waiting, so none is shown to be constraining.') + stoppedNote,
       expectedGain: NOT('no constrained stage'),
       recommendation,
     };
@@ -777,7 +796,8 @@ export function chooseConstraint(
       (Number.isFinite(worst.hours)
         ? `${round2(worst.hours)} h to clear at ${round2(stage.acceptedPerHour)} accepted/h.`
         : 'never cleared at its current accepted rate (0 accepted/h).') +
-      (failing ? ` Failing route ${failing.route}: ${failing.cause}.` : ''),
+      (failing ? ` Failing route ${failing.route}: ${failing.cause}.` : '') +
+      stoppedNote,
     expectedGain: projectedGain(stage, windowHours),
     recommendation,
   };

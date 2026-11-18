@@ -127,6 +127,21 @@ describe('gateGrowth: restore first, then scale only the measured constraint', (
     expect(v.reason).toMatch(/commercial-execution, which more model slots do not serve/);
   });
 
+  it('a stage the lane does not run that processed nothing is stopped, not the constraint (goal wst_7b4fcbb5f2384f31b6c3, 2026-11-18)', () => {
+    // 800 OPEN needs and no commercial action in the window: "never cleared" named it the
+    // constraint on every reading and held every free model while research queued for hours.
+    const stages = [stage('commercial-execution', 800, 0, 0), ...CONSTRAINED_AT_MODEL];
+    const chosen = chooseConstraint(stages, null, 6);
+    expect(chosen.stage).toBe('model-interpretation');
+    expect(chosen.basis).toMatch(/Stopped, not capacity-bound: commercial-execution \(800 waiting/);
+    const v = gateGrowth({ ...base, proposed: 16, recorded: recorded(stages) });
+    expect(v.held).toBe(false);
+    expect(v.reason).toMatch(/constrained at model-interpretation/);
+    // Alone, a stopped stage constrains nothing, and growth stays held for want of a measured constraint.
+    expect(chooseConstraint([stage('commercial-execution', 800, 0, 0)], null, 6).stage).toBeNull();
+    expect(gateGrowth({ ...base, proposed: 16, recorded: recorded([stage('commercial-execution', 800, 0, 0)]) }).reason).toMatch(/no measured stage has work waiting/);
+  });
+
   it('holds when no stage has work waiting, when the reading is stale, and when the measured gain is zero', () => {
     expect(gateGrowth({ ...base, proposed: 16, recorded: recorded([stage('model-interpretation', 0, 20, 10)]) }).reason).toMatch(/no measured stage has work waiting/);
     expect(gateGrowth({ ...base, proposed: 16, recorded: recorded(CONSTRAINED_AT_MODEL, { stale: true }) }).reason).toMatch(/300 min old/);
