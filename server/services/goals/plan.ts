@@ -64,7 +64,7 @@ function planAuthority(projectId: string, action: string): ReturnType<typeof che
 }
 import { composeBuyerMessage } from '../cash/outreach.ts';
 import { evidenceCard } from '../cash/card.ts';
-import { ARRANGEMENT_ID_PREFIX, isArrangementId, bestCaseReach, composeGoalModel, estimatedFromArrangement, inventedDesigner, planTrace, dealsForGoal, OUTREACH_MULTIPLE, priceSupported, volumeEstablished, wilson, type ModelInput, type ModelledOpportunity } from '../cash/goalScenario.ts';
+import { ARRANGEMENT_ID_PREFIX, isArrangementId, bestCaseReach, composeGoalModel, estimatedFromArrangement, inventedDesigner, planTrace, dealsForGoal, OUTREACH_MULTIPLE, priceSupported, volumeEstablished, wilson, type ModelInput, type ModelledOpportunity, type PriceVariable } from '../cash/goalScenario.ts';
 import { cachedCashKnowledge } from '../quant/knowledge.ts';
 import { achievedFrom, readTarget, type TargetReading } from './target.ts';
 import { constructedShare, executionFrame, MAX_LIVE_GOAL_ROUNDS, openConstructedRound, openGoalDiscovery, roundsStillResearching } from '../cash/discovery.ts';
@@ -179,6 +179,13 @@ export interface StrategyReading {
    */
   chainComplete: boolean;
   nextTest: NextTest | null;
+  /**
+   * What the reading rests on, in one line: found openings at prices buyers are
+   * shown to pay, or the adopted candidate on the inputs it assumes (P5).
+   */
+  basis?: string;
+  /** The constructed arrangements among its members (`arr_…`): estimates, never openings, so never in `opportunityIds`. */
+  arrangementIds?: string[];
 }
 
 /**
@@ -301,6 +308,12 @@ export interface PlanReading {
    * evidence instead of sweeping blind (§79), with how far it climbed.
    */
   inferred: InferredInput[];
+  /**
+   * Arrangements in the model whose price is the decision variable over an
+   * observed supply cost (`priceAsVariable`): the break-even and the price the
+   * target needs at each run size. The price is assumed and swept; it certifies nothing.
+   */
+  priceVariables?: PriceVariable[];
   /**
    * Which unknowns could change the choice of strategy, measured on the run's
    * own worlds, and what to do about each given the calendar (§79). Empty when
@@ -1158,6 +1171,52 @@ export function candidateSentence(candidate: PlanAcceptance['candidate'], requir
 }
 
 /**
+ * The adopted candidate as a strategy of the reading (P5, production
+ * 2026-11-18, goal wst_7b4fcbb5f2384f31b6c3): the found openings' strategies
+ * read NOT_VIABLE ("at most 265") while the acceptance's candidate — two
+ * constructed arrangements on ASSUMED prices — reported 55.85% coverage and a
+ * p50 of $27,410, and nothing in the reading related the two. The candidate
+ * now stands in the strategies list with its basis stated: which inputs of
+ * its members are assumed, that its reach is coverage (never a probability
+ * unless the acceptance says so), and, for an arrangement whose price is the
+ * decision variable, its break-even. NEEDS_EVIDENCE, never more: it certifies
+ * nothing. Null when there is no candidate or a strategy already holds exactly
+ * its openings. Pure.
+ */
+export function candidateStrategyReading(acceptance: PlanAcceptance, strategies: readonly StrategyReading[], priceVariables: readonly PriceVariable[] = []): StrategyReading | null {
+  const c = acceptance.candidate;
+  if (!c || acceptance.status === 'ACCEPTED') return null;
+  const ids = [...c.opportunityIds].sort();
+  if (ids.length === 0) return null;
+  const membersOf = (s: StrategyReading) => [...s.opportunityIds, ...(s.arrangementIds ?? [])].sort();
+  if (strategies.some((s) => membersOf(s).length === ids.length && membersOf(s).every((id, i) => id === ids[i]))) return null;
+  const assumed = [...new Set((acceptance.construction?.evidence ?? []).filter((e) => !e.establishes).map((e) => e.input))];
+  const pct = (x: number) => `${Math.round(x * 1000) / 10}%`;
+  const blocking = priceVariables.filter((p) => ids.includes(`${ARRANGEMENT_ID_PREFIX}${p.arrangementKey}`));
+  const basis =
+    `The candidate "${c.label.slice(0, 160)}" (${c.source.toLowerCase().replace('_', ' ')})` +
+    (c.reach !== null ? ` reaches the target in ${pct(c.reach)} of worlds, ${c.reachBasis === 'PROBABILITY' ? 'a probability' : 'coverage of assumed inputs, not a probability'}` : '') +
+    (c.settledP50 !== null ? `, median ${Math.round(c.settledP50).toLocaleString('en-US')}` : '') +
+    (assumed.length ? `; assumed, not established: ${assumed.join(', ')}` : '') +
+    (blocking.length ? `. ${blocking.map((p) => p.sentence).join(' ')}` : '');
+  return {
+    key: `candidate:${c.source.toLowerCase()}`,
+    label: c.label,
+    verdict: 'NEEDS_EVIDENCE',
+    // Rows only: a constructed arrangement is no opening a decision record can read back (`readingOpportunityIds`).
+    opportunityIds: c.opportunityIds.filter((id) => !isArrangementId(id)),
+    arrangementIds: c.opportunityIds.filter((id) => isArrangementId(id)),
+    links: [],
+    constraintsFailed: [],
+    sweep: { goalMetShare: c.reach, settledP50: c.settledP50, settledP90: null, infeasibleShare: null, probabilistic: c.reachBasis === 'PROBABILITY' },
+    conservativeSettled: null,
+    chainComplete: false,
+    nextTest: null,
+    basis,
+  };
+}
+
+/**
  * The smallest evidence sample the engine's assurance read its bound over, or
  * 0 when it states none. Read from the assurance's structured sample (Q2-12),
  * never parsed out of its prose.
@@ -1423,7 +1482,11 @@ export function composeGoalReadings(input: {
       }
     : null;
   const unattributedObserved = Math.max(0, Math.round((held - set.collections.observed) * 100) / 100);
-  return { timelines, objective: objectiveReading, planSet: { ...set, rebuild, unattributedObserved } };
+  // One reading, one modelled figure: the plan the acceptance adopted, when it has a median (P5).
+  const adopted = input.acceptance?.candidate ?? null;
+  const collections =
+    adopted && adopted.settledP50 !== null ? { ...set.collections, modelledP50: adopted.settledP50, modelledOf: adopted.label.slice(0, 200) } : set.collections;
+  return { timelines, objective: objectiveReading, planSet: { ...set, collections, rebuild, unattributedObserved } };
 }
 
 /** Compact readings stored on a persisted reading's forecast, so the production record shows them (GOAL-13-6, GOAL-18-4, GOAL-23). */
@@ -1807,6 +1870,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       conservativeSettled: cons.settled,
       chainComplete: verdict === 'RECOMMENDABLE',
       nextTest,
+      basis: 'the openings found, judged at prices buyers are shown to pay',
     });
   }
 
@@ -1918,8 +1982,15 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   const steps = infeasible || target.achieved
     ? []
     : planSteps({ adoption: plan.adoption, reconstruction, sales, nextTest: legacyNext, permissionsMissing, arrangement: lead ? { arrangement: lead, context: arrangementStepContext(target, models.get(lead.key) ?? null) } : null });
-  const verdict: PlanVerdict =
+  const openingsVerdict: PlanVerdict =
     acceptance.status === 'ACCEPTED' ? 'RECOMMENDABLE' : infeasible ? 'NOT_VIABLE' : plan.adoption.source === 'RECONSTRUCTED' ? 'NEEDS_EVIDENCE' : (chosen?.verdict ?? 'NEEDS_EVIDENCE');
+  // One reading, one picture (P5): the candidate the acceptance adopted is a strategy of the reading, and a
+  // NOT_VIABLE read only off the found openings does not stand beside it.
+  const priceVariables = (model.estimates ?? []).flatMap((one) => (one.priceVariable ? [one.priceVariable] : []));
+  const candidateStrategy = candidateStrategyReading(acceptance, strategies, priceVariables);
+  if (candidateStrategy) strategies.push(candidateStrategy);
+  const superseded = !infeasible && openingsVerdict === 'NOT_VIABLE' && candidateStrategy !== null && (candidateStrategy.sweep.goalMetShare ?? 0) > 0;
+  const verdict: PlanVerdict = superseded ? 'NEEDS_EVIDENCE' : openingsVerdict;
   const hypotheticalNote = plan.adoption.hypothetical ? ` The reconstruction is hypothetical, not the plan: ${plan.adoption.reason}.` : '';
   const summary =
     verdict === 'RECOMMENDABLE'
@@ -1928,7 +1999,9 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
         ? acceptance.sentence
         : plan.adoption.source === 'RECONSTRUCTED'
           ? `The plan is the reconstruction: ${acceptance.candidate!.label.slice(0, 200)} — ${plan.adoption.reason}. First step: ${steps[0] ? `${steps[0].label} (${steps[0].owner})` : 'sell'}. ${acceptance.sentence}`
-          : chosen?.chainComplete
+          : superseded
+            ? `${candidateStrategy!.basis}; the openings found cannot reach the target at prices buyers are shown to pay (at most ${Math.round(bestReach)} ${target.currency}). ${acceptance.sentence}${hypotheticalNote}`
+            : chosen?.chainComplete
             ? `"${chosen.label}" is a qualified candidate, not an accepted plan: ${acceptance.sentence}${hypotheticalNote}`
             : verdict === 'NOT_VIABLE'
               ? `No modelled strategy can work under the current limits: ${chosen?.constraintsFailed[0] ?? 'every one fails a limit'}.${hypotheticalNote}`
@@ -1941,7 +2014,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       ? (ownerDecision ?? stepAsNextTest(steps[0], reconstruction))
       : goalNextStep({
           policy,
-          verdict,
+          verdict: openingsVerdict,
           chosen: chosen?.nextTest ?? null,
           sales: sales.map((one) => one.test),
           marketTest: marketTests[0]?.test ?? null,
@@ -1971,8 +2044,10 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     verdict,
     summary,
     acceptance,
+    // The evidence gate's choice among the found openings' strategies; the candidate stands beside it in `strategies`.
     chosen: chosen?.key ?? null,
     strategies,
+    priceVariables,
     // A SQUEEZE goal's next step is a sale when one can be offered; evidence work runs beside it.
     // An owner's open decision (how much may be committed) still comes first: it is theirs, and it binds the sale.
     nextTest,
@@ -3186,6 +3261,7 @@ async function persistReading(goal: Workstream, reading: PlanReading, chosen: St
     steps: reading.steps,
     infeasible: reading.infeasible,
     degraded: reading.degraded,
+    priceVariables: reading.priceVariables ?? [],
     // GOAL-13-6, GOAL-18-4, GOAL-23 and the continuation rule (S-0199), compact, on the production record.
     ...readingsSummary(reading),
   };
