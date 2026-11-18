@@ -75,23 +75,8 @@ type FailureClass = 'WRONG_READING' | 'SAME_PLAN' | 'CONSTRAINT_IGNORED' | 'MISS
  * to match the code: a gap is listed, never hidden.
  */
 const KNOWN_GAPS: Record<string, Record<string, string>> = {
-  'LIVE-10K-30d': {
-    'M2 "little up-front capital": the $8,000 resale is not worked': 'a capital limit stated without a figure ("little") is read as no limit, and the sales steps sell every held opening',
-  },
-  '10K-to-100K-90d': {
-    'M1 the plan uses the stated $10,000 (a capital-using line is among its members) and stays within it': 'the candidate is the same no-capital line as the $1,000 goal; the stake is never put to work',
-  },
-  '5K-MRR-60d': {
-    'R1 amount read correctly': 'a monthly recurring-revenue target is not a goal kind: the reader names "$5,000 a month" a rate and makes a goal with no figure',
-    'R4 the recurring monthly figure and the 10 h/week limit are read': 'no recurring metric, and an hours rate is not a goal limit',
-    'M2 the plan is not a one-off plan (no one-off line is the plan)': 'the planner has no recurring objective, so one-off lines are sold beside the retainer',
-    'M3 the plan differs from the live goal\'s plan': 'same sales steps as the live goal: every held opening, in the same order',
-  },
-  '20K-45d-cleaning': {
-    'R4 the named industry is read': '"in a single industry the owner names: commercial cleaning" is not read as an industry constraint',
-    'M1 every member is in commercial cleaning': 'no industry constraint reaches the plan, so every held opening is sold',
-    'M3 the plan differs from the live goal\'s plan': 'same sales steps as the live goal: every held opening, in the same order',
-  },
+  // Closed 2026-11-18 (objective obeyed): SAME_PLAN for $10K→$100K, the recurring and the cleaning goals;
+  // the recurring target and its weekly hours; the named industry; "little up-front capital" as an assumed ceiling.
 };
 
 function rehearsal(id: string) {
@@ -272,8 +257,10 @@ const OBJECTIVES: Array<{ id: string; words: string; expect: Expect }> = [
  * never by the random id an arrangement got on this read.
  */
 function planLines(p: PlanReading, byId: Map<string, Held>): { candidate: Held[]; sold: Held[]; unnamed: string[] } {
-  const titleOf = new Map(p.considered.map((c) => [c.opportunityId, c.title]));
-  const byTitle = (t: string): Held | undefined => WORLD.find((h) => t.startsWith(h.title.slice(0, 40)) || t.includes(h.title.slice(0, 40)) || h.title.startsWith(t.slice(0, 40)));
+  // Every line the plan read has a title: a found opening's, or a constructed arrangement's in the portfolio's demand.
+  const titleOf = new Map([...(p.portfolio?.demand ?? []).map((d) => [d.opportunityId, d.title] as const), ...p.considered.map((c) => [c.opportunityId, c.title] as const)]);
+  // An empty title names nothing (it once matched every held opening, so an unresolved arrangement read as the first one).
+  const byTitle = (t: string): Held | undefined => (t ? WORLD.find((h) => t.startsWith(h.title.slice(0, 40)) || t.includes(h.title.slice(0, 40)) || h.title.startsWith(t.slice(0, 40))) : undefined);
   const unnamed: string[] = [];
   const candidate: Held[] = [];
   for (const id of p.acceptance.candidate?.opportunityIds ?? []) {
@@ -392,6 +379,26 @@ describe('REHEARSAL — Brain plans unfamiliar objectives from their words (offl
         signature: sig,
         planMs,
       });
+
+      e.measure({ scope: plan.target.scope ?? null, beforeProof: plan.target.capitalBeforeProofCents });
+      // What the plan was told to obey: the scope the words set, read on the plan's own target.
+      if (o.expect.shape === 'LIVE' || o.expect.shape === 'SHORT_DEADLINE') {
+        await e.check('R5 "little up-front capital" is planned at an assumed low ceiling, flagged as an assumption', 'WRONG_READING', () => {
+          expect(plan.target.scope?.capitalAssumed?.cents).toBe(100_000);
+          expect(plan.target.capitalBeforeProofCents).toBe(100_000);
+          expect(plan.target.capitalCeilingCents).toBeNull();
+        });
+      }
+      if (o.expect.shape === 'RECURRING') {
+        await e.check('R5 the plan counts a monthly recurring run-rate within 10 h/week', 'WRONG_READING', () => {
+          expect(plan.target.scope?.recurring).toBe('MONTHLY');
+          expect(plan.target.scope?.hoursPerWeek).toBe(10);
+          expect(plan.target.hoursCeiling).toBe(86);
+        });
+      }
+      if (o.expect.shape === 'INDUSTRY') {
+        await e.check('R5 the named industry reaches the plan', 'CONSTRAINT_IGNORED', () => expect(plan.target.scope?.industry).toBe('commercial cleaning'));
+      }
 
       // M — the candidate differs as the objective demands.
       switch (o.expect.shape) {

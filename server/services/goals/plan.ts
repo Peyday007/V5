@@ -1829,8 +1829,9 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
      * not permission to spend once answered: the commercial authority still
      * decides that.
      */
+    // An assumed ceiling ("little up-front capital", no figure) is still a question for the owner, never their answer.
     const askCapital =
-      verdict === 'RECOMMENDABLE' && target.capitalCeilingCents === null && (cons.exposure ?? 0) > 0;
+      verdict === 'RECOMMENDABLE' && (target.capitalCeilingCents === null || !!target.scope?.capitalAssumed) && (cons.exposure ?? 0) > 0;
     if (askCapital) verdict = 'NEEDS_EVIDENCE';
     let nextTest: NextTest | null = null;
     if (askCapital) {
@@ -1979,7 +1980,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   const lead = leadingArrangement(arrangements, { portfolio: model.portfolio, candidateIds: acceptance.candidate?.opportunityIds ?? [] });
   const steps = infeasible || target.achieved
     ? []
-    : planSteps({ adoption: plan.adoption, reconstruction, sales, nextTest: legacyNext, permissionsMissing, arrangement: lead ? { arrangement: lead, context: arrangementStepContext(target, models.get(lead.key) ?? null) } : null });
+    : planSteps({ adoption: plan.adoption, reconstruction, sales, nextTest: legacyNext, permissionsMissing, arrangement: lead ? { arrangement: lead, context: arrangementStepContext(target, models.get(lead.key) ?? null) } : null, ...(adopted ? { adoptedIds: adopted } : {}) });
   const openingsVerdict: PlanVerdict =
     acceptance.status === 'ACCEPTED' ? 'RECOMMENDABLE' : infeasible ? 'NOT_VIABLE' : plan.adoption.source === 'RECONSTRUCTED' ? 'NEEDS_EVIDENCE' : (chosen?.verdict ?? 'NEEDS_EVIDENCE');
   // One reading, one picture (P5): the candidate the acceptance adopted is a strategy of the reading, and a
@@ -2543,6 +2544,8 @@ export function planSteps(input: {
    * the goal's generic next step alone (`arrangementSteps`).
    */
   arrangement?: { arrangement: ConstructedArrangement; context: Omit<ArrangementStepContext, 'send' | 'collect'> } | null;
+  /** The reconstruction's own members, whose sale its "Sell and collect" step already is. */
+  adoptedIds?: ReadonlySet<string>;
 }): PlanStep[] {
   const send = input.permissionsMissing.filter((one) => /CONTACT_BUYER|messag/i.test(one));
   const collect = input.permissionsMissing.filter((one) => /QUOTE_AND_INVOICE|ACCEPT_PAYMENT|billing/i.test(one));
@@ -2584,6 +2587,28 @@ export function planSteps(input: {
       kill: replyKill(r),
       execution: [...send, ...collect],
     });
+    /*
+     * What the goal sells beside the reconstruction is part of the plan: every
+     * sale the reading holds is pursued (`pursueSales`) whichever plan is
+     * adopted, so the execution sequence names it (rehearsal, 2026-11-18: the
+     * steps of a 7-day and a 30-day goal read the same while their sales differed).
+     */
+    const adopted = input.adoptedIds ?? new Set<string>();
+    for (const sale of input.sales.filter((one) => !adopted.has(one.opportunityId))) {
+      steps.push({
+        order: steps.length + 1,
+        label: `Sell "${sale.title.slice(0, 80)}"`,
+        detail: `Beside the reconstructed plan, inside the goal's limits: ${sale.test.test}`,
+        startDay: { low: 0, high: 0 },
+        cost: 0,
+        basis: 'ESTIMATE',
+        owner: 'BRAIN',
+        ownerReason: null,
+        dependsOn: null,
+        kill: replyKill(r),
+        execution: [...send, ...collect],
+      });
+    }
   } else {
     for (const sale of input.sales) {
       steps.push({

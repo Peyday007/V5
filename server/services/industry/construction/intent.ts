@@ -108,8 +108,32 @@ export function readCapital(text: string): { low: number; high: number } | null 
   return null;
 }
 
-/** The industry phrase: what follows "enter", "start", "get into", "build a … company". */
+/**
+ * An industry the words *confine* the work to, not one they merely mention:
+ * "in a single industry the owner names: commercial cleaning", "only in
+ * commercial cleaning", "in the commercial cleaning industry only". Pure. A
+ * goal's industry binds that goal only (§105); this reads it, it excludes
+ * nothing anywhere else.
+ */
+export function readRequiredIndustry(text: string): string | null {
+  const patterns = [
+    /\b(?:industry|sector|market|niche)\s+(?:(?:that\s+)?(?:the\s+owner|I|we)\s+(?:names?|chooses?|picks?|specif(?:y|ies))\s*)?:\s*([a-z][a-z\- ]{2,60}?)\s*(?=[,.;!]|$)/i,
+    /\b(?:only|solely|exclusively|strictly)\s+(?:in|within)\s+(?:the\s+)?([a-z][a-z\- ]{2,60}?)(?:\s+(?:industry|sector|market|business|space))?\s*(?=[,.;!]|$|\s+(?:and|with|within|in|by|using)\b)/i,
+    /\b(?:in|within)\s+(?:the\s+)?([a-z][a-z\- ]{2,60}?)\s+(?:industry|sector|market|business|space)\s+(?:only|alone|exclusively)\b/i,
+    /\b(?:in|within)\s+(?:the\s+)?([a-z][a-z\- ]{2,60}?)\s+only\b/i,
+  ];
+  for (const re of patterns) {
+    const m = re.exec(text);
+    const phrase = m?.[1]?.trim().replace(/\s+(?:industry|sector|market|business|space)$/i, '').toLowerCase();
+    if (phrase && !/^(?:(?:a|an|the|one|single)\b|\d)/.test(phrase) && !/\b(?:days?|weeks?|months?|years?|hours?|revenue|cash|capital)\b/.test(phrase)) return phrase;
+  }
+  return null;
+}
+
+/** The industry phrase: what the words confine the work to, else what follows "enter", "start", "get into", "build a … company". */
 export function readIndustry(text: string): string | null {
+  const required = readRequiredIndustry(text);
+  if (required) return required;
   const m =
     /\b(?:enter|entering|get into|getting into|break into|start in|go into|start an?|build an?|launch an?)\s+(?:the\s+)?([a-z][a-z\- ]{2,60}?)(?=\s+(?:in|around|across|near|business|company|industry|market|space|sector|and|with|,|\.|$)|[,.]|$)/i.exec(text);
   if (!m) return null;
@@ -159,6 +183,24 @@ export interface ObjectiveReading {
   beforeProof: number | null;
   /** Major units: the most newly tied up in any week. */
   capitalPerWeek: number | null;
+  /**
+   * MONTHLY when the amount is a recurring monthly figure ("$5,000 a month in
+   * recurring revenue", "$5k MRR"): the amount is then the monthly run-rate to
+   * reach by the deadline, not a total. Null for a one-off total.
+   */
+  recurring: 'MONTHLY' | null;
+  /** A limit on the owner's hours per week ("no more than 10 hours a week"); `hoursCeiling` is it over the window. */
+  hoursPerWeek: number | null;
+  /** The one industry the words confine the work to (`readRequiredIndustry`), or null. */
+  industry: string | null;
+  /**
+   * An up-front capital limit the words state without a figure ("using little
+   * up-front capital"). Never `capitalCeiling` or `beforeProof`, which are only
+   * figures somebody said: this is the low ceiling the plan assumes in their
+   * place on what is tied up before money comes in, flagged as an assumption
+   * wherever it is read (`goalScope`).
+   */
+  capitalAssumed: { amount: number; phrase: string; basis: string } | null;
   /** The constraint phrases, verbatim. */
   constraints: string[];
   /** Phrases the reader saw and could not interpret, and required fields it could not find. */
@@ -317,7 +359,7 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
     }
   }
 
-  // 3. Hours a person will put in. A rate ("10 hours a week") is kept as a constraint, never multiplied out.
+  // 3. Hours a person will put in. A rate ("10 hours a week") is a per-week limit, bounded over a stated window only (below).
   let hoursCeiling: number | null = null;
   const hourPatterns = [
     new RegExp(String.raw`(?:\b${LIMIT}\s+)?(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)\s+of\s+(?:(?:my|our|own|total)\s+)*(?:time|work|effort|labou?r)\b(?!\s+(?:per|a|each|every)\s+(?:day|week|month))`, 'gi'),
@@ -334,13 +376,30 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
       else unread.push(`"${m[0]}": a second hours limit`);
     }
   }
-  for (const m of text.matchAll(/\b(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)\s+(?:of\s+\w+\s+)?(?:per|a|each|every)\s+(?:day|week|month)\b/gi)) {
+  /*
+   * An hours rate ("no more than 10 hours a week of owner time") is a limit per
+   * week. With a deadline it also bounds the window's total — the per-week
+   * figure times the weeks left — which is what the plan's hours check reads
+   * (`hoursCeiling`); the per-week figure is kept as stated (`hoursPerWeek`).
+   * With no deadline there is no window to bound, so it stays unread.
+   */
+  let hoursPerWeek: number | null = null;
+  const PER_WEEK: Record<string, number> = { day: 7, week: 1, month: 7 / 30 };
+  for (const m of text.matchAll(/\b(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)\s+(?:of\s+\w+\s+)?(?:per|a|each|every)\s+(day|week|month)\b/gi)) {
     const span = { start: m.index!, end: m.index! + m[0].length, text: m[0] };
     if (overlaps(span, consumed)) continue;
     consumed.push(span);
     constraintSpans.push(span);
     for (const t of tokensIn(span)) t.role = 'DEADLINE';
-    unread.push(`"${m[0]}": an hours rate, not a total`);
+    const window = deadline as Date | null;
+    if (window === null) {
+      unread.push(`"${m[0]}": an hours rate, not a total`);
+    } else if (hoursPerWeek !== null || hoursCeiling !== null) {
+      unread.push(`"${m[0]}": a second hours limit`);
+    } else {
+      hoursPerWeek = Math.round(Number(m[1]) * PER_WEEK[m[2]!.toLowerCase()]! * 100) / 100;
+      hoursCeiling = Math.round((hoursPerWeek * (window.getTime() - now.getTime())) / (7 * 86_400_000));
+    }
   }
 
   // 4. Money the plan may use: before proof, per week, then the overall ceiling.
@@ -379,6 +438,7 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
   const verbBefore = /\b(?:generate|generating|make|making|earn|earning|collect|collecting|net|netting|bring in|bringing in|clear|clearing|gross|grossing|produce|producing|reach|reaching|hit|get to|book|bank|pull in|realize|realise|profit|create)\s+(?:(?:at least|over|more than|about|around|roughly|approximately|an? (?:extra|additional)|another|a minimum of|minimum of|a total of)\s+)*$/i;
   const nounAfter = /^\s*(?:(?:in|of)\s+)?(?:(?:settled|collected|net|gross|new|recurring|monthly|total)\s+)*(?:revenue|sales|profit|income|cash flow|cash|payments)\b/i;
   let amountToken: MoneyToken | null = null;
+  let recurring: ObjectiveReading['recurring'] = null;
   for (const t of tokens) {
     if (t.role !== null || !t.marked) continue;
     const before = text.slice(Math.max(0, t.start - 60), t.start);
@@ -388,6 +448,16 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
     const turnedInto = constraintSpans.some((s) => new RegExp(String.raw`^${GROW}\s`, 'i').test(s.text) && /^\s+into\s+$/i.test(text.slice(s.end, t.start)));
     if (!(verbBefore.test(before) || nounAfter.test(after) || beforeDeadline || turnedInto)) {
       unread.push(`"${t.raw}": a figure the reader could not place`);
+      continue;
+    }
+    // "$5,000 a month in recurring revenue", "$5k MRR", "$5,000 in monthly recurring revenue": a monthly run-rate is the amount.
+    const monthlyRecurring =
+      /^\s*(?:(?:per|a|each|every)\s+month|\/\s?mo(?:nth)?)\s+(?:(?:in|of)\s+)?(?:(?:new|net|gross|monthly)\s+)*(?:recurring|subscription|retainer)\s+(?:revenue|income|sales|billings?)\b/i.test(after) ||
+      /^\s*(?:(?:in|of)\s+)?(?:(?:new|net|gross)\s+)*(?:monthly\s+recurring\s+(?:revenue|income|sales)|MRR)\b/i.test(after);
+    if (monthlyRecurring && !amountToken) {
+      t.role = 'AMOUNT';
+      amountToken = t;
+      recurring = 'MONTHLY';
       continue;
     }
     if (/^\s*(?:(?:in|of)\s+\w+\s+)?(?:per|a|each|every)\s+(?:day|week|month|year)\b/i.test(after)) {
@@ -417,6 +487,7 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
     if (!deadline) unread.push('deadline: none stated');
   }
   const at = deadline as Date | null;
+  const capitalCeiling = single(figures.CAPITAL, 'capital limit');
   return {
     reading: {
       text,
@@ -426,16 +497,40 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
       currency,
       deadline: at ? at.toISOString() : null,
       deadlineHours: at ? Math.round((at.getTime() - now.getTime()) / 3_600_000) : null,
-      capitalCeiling: single(figures.CAPITAL, 'capital limit'),
+      capitalCeiling,
       hoursCeiling,
       beforeProof: single(figures.BEFORE_PROOF, 'before-proof limit'),
       capitalPerWeek: single(figures.PER_WEEK, 'per-week limit'),
+      recurring,
+      hoursPerWeek,
+      industry: readRequiredIndustry(text),
+      capitalAssumed: capitalCeiling === null && amountToken ? assumedLittleCapital(text, amountToken.value) : null,
       constraints: constraintSpans.sort((a, b) => a.start - b.start).map((s) => s.text),
       unread,
     },
     amountSpan: amountToken ? { start: amountToken.start, end: amountToken.end } : null,
     madeSpans: tokens.filter((t) => t.role === 'MADE').map((t) => ({ start: t.start, end: t.end })),
   };
+}
+
+/**
+ * The share of the amount a capital limit stated without a figure ("little
+ * up-front capital") is assumed to allow: a tenth — $1,000 on a $10,000 goal.
+ * A low ceiling, because an unstated limit read as no limit is an unknown read
+ * favourably (invariant 39): the owner said *little*, and the plan must not
+ * buy an $8,000 lot on that word. It is an assumption, never a figure anybody
+ * set, so it is carried apart from `capitalCeiling`, applied as the limit on
+ * what is tied up before money comes in ("up-front"), and only ever narrows
+ * what the plan works (spending is still the commercial authority's, `spending.ts`).
+ */
+export const LITTLE_CAPITAL_SHARE = 0.1;
+const LITTLE_CAPITAL = /\b(?:very\s+)?(?:little|minimal|minimum|low|small|modest|limited|not much|hardly any)\s+(?:amounts?\s+of\s+)?(?:(?:up-?front|upfront|starting|initial|start-?up|seed|own|working)\s+)*(?:capital|money|cash|investment|funding|budget|outlay)\b/i;
+
+function assumedLittleCapital(text: string, amount: number): ObjectiveReading['capitalAssumed'] {
+  const m = LITTLE_CAPITAL.exec(text);
+  if (!m || !(amount > 0)) return null;
+  const figure = Math.max(1, Math.round(amount * LITTLE_CAPITAL_SHARE));
+  return { amount: figure, phrase: m[0], basis: `"${m[0]}" states no figure; assumed ${LITTLE_CAPITAL_SHARE * 100}% of the ${amount.toLocaleString('en-US')} to be made` };
 }
 
 /**
