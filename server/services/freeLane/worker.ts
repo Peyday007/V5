@@ -1517,7 +1517,8 @@ export function searchQueries(question: string, modelPhrases: unknown): string[]
   const phrases = (Array.isArray(modelPhrases) ? modelPhrases : [modelPhrases]).filter(
     (one): one is string => typeof one === 'string' && carriesSubject(one),
   );
-  const quoted = [...question.matchAll(/["“]([^"”]{4,120})["”]/g)].map((m) => m[1]!);
+  // A subject quoted twice (a buyer named in the ask and again as a declared qualifier) is one subject, searched once.
+  const quoted = [...new Set([...question.matchAll(/["“]([^"”]{4,120})["”]/g)].map((m) => m[1]!))];
   // As many searches as before (two): the model's best phrase, then the question's own subject.
   if (phrases[0]) add(phrases[0]);
   add(quoted.length > 0 ? quoted.slice(0, 2).join(' ') : (question.split(/(?<=[.?!])\s/)[0] ?? question));

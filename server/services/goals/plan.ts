@@ -68,7 +68,7 @@ import { ARRANGEMENT_ID_PREFIX, isArrangementId, bestCaseReach, composeGoalModel
 import { cachedCashKnowledge } from '../quant/knowledge.ts';
 import { achievedFrom, readTarget, type TargetReading } from './target.ts';
 import { constructedShare, executionFrame, MAX_LIVE_GOAL_ROUNDS, openConstructedRound, openGoalDiscovery, roundsStillResearching } from '../cash/discovery.ts';
-import { constructArrangements, lastConstructionReport, type ConstructedArrangement } from '../cash/construct.ts';
+import { constructArrangements, lastConstructionReport, nextInputQuestion, type ConstructedArrangement } from '../cash/construct.ts';
 import { arrangementKeyOfBucket, recordReadingEvaluations, refutedUnderSameInputs, rememberArrangements } from '../cash/arrangementLibrary.ts';
 import { arrangementVerdicts } from '../../repos/monetization.ts';
 import { exclusionSentence, goalExclusions } from '../cash/exclusions.ts';
@@ -3792,12 +3792,15 @@ export async function askConstructedArrangements(goal: Workstream, reading: Plan
     .sort((a, b) => (contribution.get(b.one.key) ?? -1) - (contribution.get(a.one.key) ?? -1) || a.at - b.at)
     .map(({ one }) => one);
   const order = constructedOrder(byContribution, openMx.map((r) => r.bucketId.slice(r.bucketId.lastIndexOf('-mx-') + 4)));
+  const exclusions = await goalExclusions(goal);
   const thisPass = new Set<string>();
   for (const one of order) {
     if (opened.length >= max) break;
     // One buyer population per pass: a population that opened a round this pass waits for the next.
     if (thisPass.has(one.demand.ref)) continue;
-    const round = await openConstructedRound({ goal, projectId: t.projectId, key: one.key, title: `Constructed: ${one.label}`, question: one.question, now: now.toISOString(), liveCap });
+    // The one plan input that holds this arrangement back, asked alone in its filer's unit (P2); the full question once none does.
+    const question = nextInputQuestion(one, t.currency, exclusions)?.question ?? one.question;
+    const round = await openConstructedRound({ goal, projectId: t.projectId, key: one.key, title: `Constructed: ${one.label}`, question, now: now.toISOString(), liveCap });
     // Null is this arrangement's cool-off, the live cap or a closed gate: the next one is tried.
     if (round) {
       opened.push(round.candidateId);

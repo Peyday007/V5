@@ -2301,6 +2301,121 @@ export function unitEconomicSentence(buyer: string): string {
   );
 }
 
+/**
+ * The plan inputs a constructed round can ask for one at a time, in the order
+ * they hold an arrangement out of the goal model or weaken it most, each with
+ * the fact key its existing filer writes (`constructedRoundDecisions`,
+ * industry/expand.ts; `readNonPriceFact`; `readShareOrCount`; `supplyQuote`).
+ * A part no filer reads (commission, fee, minimum participants, prepay share…)
+ * is not asked this way: its answer would reach no plan input. A value the
+ * model cannot read is asked before all of them (`nextInputQuestion`); a value
+ * it reads from an observation but not yet as a distribution comes after the
+ * demand-side links, which without a filed fact are swept from nothing.
+ */
+const FILED_INPUTS = ['conversion', 'buyers', 'need_rate', 'value', 'fixed_cost', 'supply_cost'] as const;
+export type FiledInput = (typeof FILED_INPUTS)[number];
+const FILED_KEY: Record<FiledInput, FactKey> = {
+  value: 'price_per_unit',
+  conversion: 'account_win_rate',
+  buyers: 'accounts_reachable',
+  need_rate: 'account_units_per_month',
+  fixed_cost: 'fixed_cost_per_run',
+  supply_cost: 'contractor_rate_per_unit',
+};
+
+/**
+ * The one plan input a constructed arrangement's next round asks for, and the
+ * question that asks it (P2, production 2026-11-18, goal wst_7b4fcbb5f2384f31b6c3).
+ *
+ * The arrangement's own `question` asks for every unknown part at once — seven
+ * or more asks, then a decomposition over eleven positions — and research
+ * answers whichever is easiest: round cdr_4c03f5a51e57411d8f67 on the postcard
+ * arrangement 2821cce3c372 asked for the slot price and the run cost together
+ * and came back with the run cost alone ($4,675, cfa_ca236ebb), so the
+ * arrangement's value stayed UNKNOWN and `estimatedFromArrangement` kept it out
+ * of the goal model. Of 80 claims accepted in the next twelve hours, 3 filled a
+ * plan input.
+ *
+ * So a forward arrangement's round asks exactly one input: what these buyers
+ * pay whenever the model cannot read the value (UNKNOWN, or a MECHANISM pool of
+ * other buyers' prices), else the first part nothing establishes in
+ * `FILED_INPUTS` order (close rate, buyer count, volume, price, run cost, supply rate) — the one its filer can file, stated in that filer's
+ * unit and wording, for the arrangement's own buyer, declared under its fact
+ * key. Null when the arrangement was reverse-constructed (it has no buyer yet
+ * to ask about) or every filed input is established: the full question then
+ * asks the rest, positions included. Pure.
+ */
+export function nextInputQuestion(
+  one: Pick<ConstructedArrangement, 'origin' | 'design' | 'demand' | 'need' | 'supply' | 'value' | 'unknownParts'>,
+  currency: string,
+  exclusions: readonly ExclusionClass[] = [],
+): { part: FiledInput; factKey: FactKey; question: string } | null {
+  if (one.origin === 'REVERSE') return null;
+  const pooled = one.design.aggregation === 'POOLED_BUYERS';
+  const valueBlocks = one.value.tier === 'UNKNOWN' || one.value.tier === 'MECHANISM';
+  const part: FiledInput | undefined = valueBlocks
+    ? 'value'
+    : FILED_INPUTS.find(
+        (p) =>
+          one.unknownParts.includes(p) &&
+          // A pooled design's cost is its run's fixed cost; it files no per-deal supply cost.
+          !(p === 'supply_cost' && pooled) &&
+          // A run cost or a supply rate names the supplier, so there must be one to name.
+          !((p === 'fixed_cost' || p === 'supply_cost') && !one.supply),
+      );
+  if (!part) return null;
+  const buyer = one.demand.name.replace(/\s+/g, ' ').trim();
+  const supplier = one.supply ? one.supply.name.replace(/\s+/g, ' ').trim() : null;
+  const what = one.need ? `what deals with "${one.need.name}"` : 'it';
+  const sym = currency === 'USD' ? '$' : `${currency} `;
+  const ask: Record<FiledInput, string> = {
+    value: pooled
+      ? `What does one buyer described as "${buyer}" pay, in ${currency}, for one slot — that one buyer's own place in a shared run, not the whole run? ` +
+        'Look for published rate cards and price lists of sellers who already sell such slots to these buyers. ' +
+        `Quote each price as one of these buyers pays it, in the form ‘${sym}N per slot’, one price per claim, with its source and date. ` +
+        'What producing or delivering the run costs whoever organises it is a different question: leave it out.'
+      : `What does one buyer described as "${buyer}" pay, in ${currency}, for one purchase of ${what}? ` +
+        'Look for published price lists, rate cards and quoted prices of sellers who already sell this to these buyers. ' +
+        `Quote each price as one of these buyers pays it — ‘${sym}N per <unit>’ for a rate, or the total for one purchase — one price per claim, with its source and date. ` +
+        'What supplying it costs the seller is a different question: leave it out.',
+    conversion:
+      `What share of buyers described as "${buyer}" who were approached or offered ${what} bought it? ` +
+      'Look for published case studies, campaign reports and surveys. ' +
+      'Quote it as ‘N% of the businesses contacted signed’ or ‘a close rate of N%’, one percentage per claim and no other percentage in that claim, with its source and date. ' +
+      'A reply, open or click rate is not this figure.',
+    buyers:
+      `How many buyers described as "${buyer}" does one named market hold — a country, a state or a metro area? ` +
+      'Look for published directories, registers, censuses and trade-body counts. ' +
+      'Quote it as ‘There are N <buyers> in <market>’, one count per claim, naming the market, with its source and date. ' +
+      'A count of sales, installs or sign-ups over a period is not this figure.',
+    need_rate:
+      `How many times a month does one buyer described as "${buyer}" buy ${what}? ` +
+      "Look for published industry reports, surveys and sellers' own statements of order frequency. " +
+      'Quote it as ‘each <buyer> buys N <units> per month’, one figure per claim, with its source and date.',
+    fixed_cost:
+      `What does one whole shared run cost, in ${currency}, from suppliers described as "${supplier ?? 'the supplier'}", however many buyers take part? ` +
+      'Look for published price lists and quotes. ' +
+      `Quote the supplier's total for a stated quantity together with its rate, in the form ‘<supplier> charges ${sym}R per <unit> for a Q-unit run, total ${sym}T’, one quote per claim, with its source and date.`,
+    supply_cost:
+      `What does a supplier described as "${supplier ?? 'the supplier'}" charge, in ${currency}, for one unit of this work? ` +
+      'Look for published price lists and rate cards. ' +
+      `Quote it as ‘<supplier> charges ${sym}N per <unit>’, naming the supplier, one price per claim, with its source and date.`,
+  };
+  const factKey = FILED_KEY[part];
+  // A run's total is read from the quote's own wording (`supplyQuote`); the declared path files the other keys.
+  const declare =
+    part === 'fixed_cost'
+      ? ''
+      : ` Declare each figure on its claim: structural_finding UNIT_ECONOMIC, structural_subject ${factKey}, structural_qualifier "${buyer}", and structural_amount_cents the figure in hundredths of its unit (a share of one: 18% is 18).`;
+  const question =
+    // The supplier is named only when its own price is asked: a buyer's price quoted in the supply's words is filed as a cost (`claimPricesSupply`).
+    `Brain is pricing one arrangement for these buyers, designed as: ${describeDesign(one.design)}, ` +
+    `and asks for one figure only; the arrangement's other parts are asked separately. ${ask[part]}${declare}${exclusionSentence(exclusions)} ` +
+    OPENING_SENTENCE +
+    (part === 'value' ? 'Where no source shows these buyers pay for this, say so plainly — that refutes the arrangement and is a useful answer.' : 'Where no source states this figure, say so plainly — that is a useful answer.');
+  return { part, factKey, question };
+}
+
 /** The design every structure had before §82, for callers that still name a structure. */
 export { defaultDesign };
 
