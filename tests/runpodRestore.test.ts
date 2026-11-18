@@ -92,6 +92,20 @@ describe('recipes, benchmark pods and the account (§108)', () => {
     expect(yml).toMatch(/RUNPOD_MAX_TOTAL_USD_PER_HOUR=\$\(awk -v c="\$ceil_in"/);
   });
 
+  it('runpod-stop takes the GPU out of the lane before it stops the pod, so the Brain cannot start it again', async () => {
+    const { readFileSync } = await import('node:fs');
+    const yml = readFileSync('.github/workflows/cheap-lane.yml', 'utf8');
+    const branch = yml.slice(yml.indexOf('            runpod-stop)'), yml.indexOf('            runpod-survey)'));
+    const off = branch.indexOf('BRAIN_RUNPOD_MODE=off');
+    const stop = branch.indexOf('npx tsx scripts/runpod-stop.ts');
+    expect(off).toBeGreaterThan(0);
+    expect(stop).toBeGreaterThan(off);
+    // And runpod-connect names runpod-start for a stopped pod, before a probe that can only read its 404.
+    const connect = yml.slice(yml.indexOf('            runpod-connect)'), yml.indexOf('            runpod-disconnect)'));
+    expect(connect.indexOf('Dispatch runpod-start')).toBeGreaterThan(0);
+    expect(connect.indexOf('Dispatch runpod-start')).toBeLessThan(connect.indexOf('probe ||'));
+  });
+
   it('the 80 GB recipe is a challenger above every default ceiling, with tool calls and 128K', async () => {
     const { RECIPES, podSpec, DEFAULT_MAX_USD_PER_HOUR } = await import('../server/services/cheap/runpodRestore.ts');
     const recipe = RECIPES['gpt-oss-120b-80']!;

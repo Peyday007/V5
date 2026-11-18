@@ -249,6 +249,12 @@ jobs:
             runpod-connect)
               [ -n "$RUNPOD_VLLM_URL" ] || { echo "::error::Set the RUNPOD_VLLM_URL and RUNPOD_VLLM_KEY repository secrets."; exit 1; }
               restore
+              # A stopped pod's proxy answers 404, so the probe below can only fail on it: say what to run instead.
+              pod_state=$(grep '^POD ' restore.txt 2>/dev/null | head -1 | cut -d' ' -f3 || true)
+              if [ -n "$pod_state" ] && [ "$pod_state" != "RUNNING" ]; then
+                echo "::error title=runpod::Pod $pod_id is $pod_state; runpod-connect never starts a pod. Dispatch runpod-start: it resumes the pod and connects it under the budget already set. Nothing on the Brain changed."
+                exit 1
+              fi
               probe || { echo "::error::The GPU did not pass the probe; nothing on the Brain changed."; exit 1; }
               gpu_connect
               ;;
@@ -261,9 +267,15 @@ jobs:
               ;;
             runpod-stop)
               # Stop (not delete) every Brain pod: a stopped pod bills no GPU, and runpod-auto
-              # recreates a deleted pod but never starts a stopped one. Run runpod-disconnect first,
-              # or Brain starts the pod again when research arrives. Owner cost control, 2026-11-16.
+              # recreates a deleted pod but never starts a stopped one. Owner cost control, 2026-11-16.
+              # The GPU leaves the lane first (what runpod-disconnect does), and only then is the pod
+              # stopped: while the mode is primary the Brain's supervisor starts a stopped pod for
+              # waiting research within its next 60 s tick. Production 2026-11-18: stopped 17:05:15Z,
+              # started again by the Brain 17:05:38Z (13 items waiting), disconnected 17:06:40Z, and
+              # it then billed $3.59/h with no supervisor until a second stop at 17:25:43Z.
               [ -n "${RUNPOD_API_KEY:-}" ] || { echo "::error::Set the RUNPOD_API_KEY repository secret."; exit 1; }
+              flyctl secrets set --app "$brain" BRAIN_RUNPOD_MODE=off >/dev/null
+              echo "::notice title=runpod::The GPU is out of the lane (mode off) before the stop; run runpod-start to resume it under the same budget."
               npx tsx scripts/runpod-stop.ts
               sleep 20
               npx tsx scripts/runpod-survey.ts | grep -E '^(ACCOUNT|POD) '
