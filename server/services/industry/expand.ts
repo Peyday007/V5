@@ -53,7 +53,7 @@ import { getDb } from '../../db/database.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { createCandidate } from '../../repos/russellCandidates.ts';
 import { byClaimTime, everyPage, missionsForRounds } from '../russell/roundMissions.ts';
-import { claimsByIds, structuralClaims, unfiledConstructedRoundClaims, unfiledUnitEconomicClaims } from '../../repos/research.ts';
+import { claimsByIds, constructedRoundBuckets, structuralClaims, unfiledConstructedRoundClaims, unfiledUnitEconomicClaims } from '../../repos/research.ts';
 import { arrangementForLegacyKey } from '../../repos/monetization.ts';
 import { ARRANGEMENT_BUCKET_MARK, arrangementKeyOfBucket } from '../cash/arrangementLibrary.ts';
 import { planBuyerType } from '../cash/construct.ts';
@@ -1203,7 +1203,15 @@ async function cardEvidenceDecisions(projectId: string, nodes: readonly Industry
  * is source 1's; one with no per-unit figure, or on an arrangement whose
  * buyers are not a live map buyer type, is skipped.
  */
-type RoundBuyer = { buyer: IndustryNode; reason?: undefined; unmatchedBuyer?: undefined } | { buyer: null; reason: string; unmatchedBuyer?: string };
+type RoundBuyer =
+  | { buyer: IndustryNode; reason?: undefined; unmatchedBuyer?: undefined; sides: ArrangementSides }
+  | { buyer: null; reason: string; unmatchedBuyer?: string; sides?: undefined };
+
+/** Who an arrangement sells to and who it buys fulfilment from, as its stored design names them. */
+export interface ArrangementSides {
+  demand: string | null;
+  supply: string | null;
+}
 
 /**
  * Whose price a constructed round's claim is (B1g, production 2026-11-18): of
@@ -1227,14 +1235,63 @@ async function constructedRoundBuyer(projectId: string, bucketId: string, nodes:
   const arrangement = await arrangementForLegacyKey(projectId, key);
   if (!arrangement) return { buyer: null, reason: 'round’s arrangement is not in the library' };
   const mapped = arrangement.industryNodeId ? nodes.find((one) => one.id === arrangement.industryNodeId) : undefined;
-  if (mapped && mapped.kind === 'BUYER_TYPE' && !mapped.retiredAt) return { buyer: mapped };
-  const designed = (arrangement.design['arrangement'] as { demand?: { name?: unknown } } | undefined)?.demand?.name;
+  const sides = arrangementSides(arrangement.design);
+  if (mapped && mapped.kind === 'BUYER_TYPE' && !mapped.retiredAt) return { buyer: mapped, sides };
+  const designed = sides.demand;
   let demand = typeof designed === 'string' && designed.trim() ? designed : null;
   if (!demand && arrangement.opportunityId) demand = (await getOpportunity(arrangement.opportunityId))?.payer ?? null;
   if (!demand && mapped) demand = mapped.name;
   if (!demand) return { buyer: null, reason: 'round’s arrangement names no buyers' };
   const buyer = planBuyerType(demand, nodes);
-  return buyer ? { buyer } : { buyer: null, reason: 'round’s arrangement buyers are no live map buyer type, so the plan reads no fact for them', unmatchedBuyer: demand };
+  return buyer ? { buyer, sides } : { buyer: null, reason: 'round’s arrangement buyers are no live map buyer type, so the plan reads no fact for them', unmatchedBuyer: demand };
+}
+
+function arrangementSides(design: Record<string, unknown>): ArrangementSides {
+  const arrangement = design['arrangement'] as { demand?: { name?: unknown }; supply?: { name?: unknown } | null } | undefined;
+  const name = (value: unknown) => (typeof value === 'string' && value.trim() ? value : null);
+  return { demand: name(arrangement?.demand?.name), supply: name(arrangement?.supply?.name) };
+}
+
+/** Words that name no particular side of a trade, so sharing one says nothing about whose price a claim states. */
+const SIDE_STOPWORDS = new Set(
+  'the and that this with for from who which their them they per each one any all are was were has have had its into onto upon order orders on-order commercial local small business businesses buyer buyers buying company companies firm firms provider providers service services work works other new own'.split(' '),
+);
+
+function sideTerms(text: string): Set<string> {
+  const out = new Set<string>();
+  for (const raw of text.toLowerCase().match(/[a-z][a-z0-9]+/g) ?? []) {
+    if (raw.length < 3 || SIDE_STOPWORDS.has(raw)) continue;
+    out.add(raw.length > 4 && raw.endsWith('s') && !raw.endsWith('ss') ? raw.slice(0, -1) : raw);
+  }
+  return out;
+}
+
+/**
+ * Whether a constructed round's claim prices the arrangement's SUPPLY rather
+ * than what its buyers pay (B1i, production 2026-11-18).
+ *
+ * Arrangement 2821cce3c372 sells slots on a shared EDDM postcard to local
+ * businesses and buys the run from "Commercial printers and mail houses that
+ * print and enter EDDM mailings on order". Its round returned "Oppizi charges
+ * $0.47 per postcard piece for a 10,000-home EDDM run, total $4,675" and three
+ * USPS EDDM postage rates — every one a price the operator PAYS for the run —
+ * and all four were filed as `price_per_unit`, what a slot buyer pays, which
+ * #1085 then raised to $4,675 per slot. The round's own question asks for
+ * these as "the fixed cost of one shared run".
+ *
+ * A claim prices the supply when it names a term of the arrangement's supply
+ * that its demand does not use (here: printer, print, mail house, EDDM,
+ * mailing). That errs toward cost: a slot price stated in the supply's words
+ * is held back as a cost rather than read as revenue, and no unknown is ever
+ * read as a buyer's payment (invariant 39).
+ */
+export function claimPricesSupply(claimText: string, sides: ArrangementSides | undefined): boolean {
+  if (!sides?.supply) return false;
+  const demand = sideTerms(sides.demand ?? '');
+  const supplyOnly = [...sideTerms(sides.supply)].filter((one) => !demand.has(one));
+  if (supplyOnly.length === 0) return false;
+  const claim = sideTerms(claimText);
+  return supplyOnly.some((one) => claim.has(one));
 }
 
 /**
@@ -1285,6 +1342,24 @@ async function constructedRoundDecisions(
       continue;
     }
     const figures = dealLevelFigures(stated);
+    if (claimPricesSupply(claim.claim, resolved.sides)) {
+      // What the arrangement pays its supplier: the direct cost, at its unfavourable (high) end.
+      out.push({
+        source: 'CONSTRUCTED_ROUND',
+        claimId: claim.id,
+        candidate: {
+          source: 'CONSTRUCTED_ROUND',
+          claim,
+          buyer,
+          key: 'contractor_rate_per_unit',
+          amount: Math.max(...figures.map((one) => one.cents)) / 100,
+          measures: `what the arrangement's supplier charges ${figures[0]!.perUnit ? 'per unit' : 'per run (the stated total)'} — a direct cost, never these buyers' price — from a constructed arrangement's research: ${claim.claim}`,
+        },
+        reason: null,
+        countsAsSkipped: true,
+      });
+      continue;
+    }
     out.push({
       source: 'CONSTRUCTED_ROUND',
       claimId: claim.id,
@@ -1377,6 +1452,51 @@ export function rederivedAmount(fact: Pick<RecordedFact, 'key' | 'low' | 'high'>
 }
 
 /**
+ * What a filed claim fact means under the current rules, or null when it
+ * already means that. A `price_per_unit` filed from a constructed round's
+ * claim that prices the arrangement's supply (`claimPricesSupply`, B1i) is the
+ * arrangement's direct cost, `contractor_rate_per_unit` at the claim's
+ * deal-level high end; when the claim no longer states a figure the reader
+ * accepts (`$0.259`, once read as $259) the price is withdrawn as an
+ * ASSUMPTION, which no plan reads as evidence. Otherwise the B1h rule.
+ */
+export function rederivedMeaning(
+  fact: Pick<RecordedFact, 'key' | 'low' | 'high'> & { status?: RecordedFact['status'] },
+  claimText: string,
+  sides: ArrangementSides | undefined,
+): { key: FactKey; amount: number; status?: 'ASSUMPTION'; why: string } | null {
+  if (fact.key === 'price_per_unit' && claimPricesSupply(claimText, sides)) {
+    // Already withdrawn: nothing reads it as evidence, and withdrawing it again would chain forever.
+    if (fact.status === 'ASSUMPTION') return null;
+    const deal = dealLevelFigures(readMoneyFigures(claimText, 'USD').filter((one) => one.cents > 0));
+    if (deal.length === 0) return { key: 'price_per_unit', amount: Math.min(fact.low, fact.high), status: 'ASSUMPTION', why: 'withdrawn: the claim prices the arrangement’s supply and states no figure the reader accepts' };
+    const amount = Math.max(...deal.map((one) => one.cents)) / 100;
+    return { key: 'contractor_rate_per_unit', amount, why: `what the arrangement's supplier charges ${deal[0]!.perUnit ? 'per unit' : 'per run (the stated total)'}, a direct cost and never these buyers' price` };
+  }
+  const amount = rederivedAmount(fact, claimText);
+  if (amount === null) return null;
+  return { key: fact.key, amount, why: fact.key === 'price_per_unit' ? 'what these buyers pay per deal (the stated total)' : 'the direct cost of one deal (the stated total)' };
+}
+
+/** Each claim's constructed arrangement's two sides, for the claims a round answered. */
+async function supplySidesOf(projectId: string, claimIds: readonly string[]): Promise<Map<string, ArrangementSides>> {
+  const out = new Map<string, ArrangementSides>();
+  const buckets = await constructedRoundBuckets(projectId, [...new Set(claimIds)]);
+  const byKey = new Map<string, ArrangementSides | null>();
+  for (const [claimId, bucketId] of buckets) {
+    const key = arrangementKeyOfBucket(bucketId);
+    if (!key) continue;
+    if (!byKey.has(key)) {
+      const arrangement = await arrangementForLegacyKey(projectId, key);
+      byKey.set(key, arrangement ? arrangementSides(arrangement.design) : null);
+    }
+    const sides = byKey.get(key);
+    if (sides) out.set(claimId, sides);
+  }
+  return out;
+}
+
+/**
  * Supersede claim facts the back-fill filed under an older figure rule (B1h).
  * The old fact is never written: a new fact names it (`supersedes_fact_id`)
  * and readers resolve the current one (`listProjectFacts`), so the
@@ -1397,24 +1517,26 @@ export async function rederiveClaimFacts(projectId: string, batch = REDERIVE_BAT
     return out;
   }
   const claims = new Map((await claimsByIds([...new Set(scan.map((one) => one.sourceClaimId!))])).map((one) => [one.id, one]));
+  const sides = await supplySidesOf(projectId, scan.filter((one) => one.key === 'price_per_unit').map((one) => one.sourceClaimId!));
   let reached = '';
   for (const fact of scan) {
     if (out.length >= batch) break;
     reached = fact.id;
     const claim = claims.get(fact.sourceClaimId!);
     if (!claim || !claim.accepted || !claim.sourceUrl) continue;
-    const amount = rederivedAmount(fact, claim.claim);
-    if (amount === null) continue;
+    const meaning = rederivedMeaning(fact, claim.claim, sides.get(claim.id));
+    if (meaning === null) continue;
+    const { key, amount, status } = meaning;
     const recorded = await recordClaimFact({
       projectId,
       nodeId: fact.nodeId ?? null,
       claimId: claim.id,
-      key: fact.key,
+      key,
       segment: fact.segment,
       low: amount,
       high: amount,
-      status: claimFactStatus(claim),
-      measures: `${fact.key === 'price_per_unit' ? 'what these buyers pay per deal (the stated total)' : 'the direct cost of one deal (the stated total)'}, re-derived from the claim: ${claim.claim}`.slice(0, 500),
+      status: status ?? claimFactStatus(claim),
+      measures: `${meaning.why}, re-derived from the claim: ${claim.claim}`.slice(0, 500),
       sourceTitle: claim.sourceTitle ?? claim.sourcePublisher ?? claim.sourceUrl ?? 'research claim',
       sourceUrl: claim.sourceUrl,
       sourceKind: claim.primarySource ? 'PRIMARY' : 'SECONDARY',
@@ -1427,8 +1549,8 @@ export async function rederiveClaimFacts(projectId: string, batch = REDERIVE_BAT
       projectId,
       kind: 'INDUSTRY_FACT_ABSORBED',
       actorRef: 'BRAIN',
-      summary: `${fact.key} re-derived from its claim as ${amount} (was ${fact.low}); the earlier fact is kept as history.`,
-      detail: { factId: recorded.id, supersedes: fact.id, claimId: claim.id, key: fact.key, segment: recorded.segment, status: recorded.status, previous: fact.low, amount, rederived: true },
+      summary: `${fact.key} re-derived from its claim as ${key} ${amount}${status ? ` (${status.toLowerCase()}, not evidence)` : ''} (was ${fact.low}); the earlier fact is kept as history.`,
+      detail: { factId: recorded.id, supersedes: fact.id, claimId: claim.id, key, previousKey: fact.key, segment: recorded.segment, status: recorded.status, previous: fact.low, amount, rederived: true },
     });
   }
   // Everything read: start over next pass. Otherwise resume after the last one read.
