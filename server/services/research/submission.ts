@@ -39,7 +39,14 @@ import {
   updateFragment,
 } from '../../repos/research.ts';
 import { reconcileAcceptedFragment } from './replan.ts';
-import { applyGate, fragmentPasses, type GateResult, type VerificationInput } from './gate.ts';
+import {
+  applyGate,
+  fragmentPasses,
+  recordedRejectionReason,
+  unresolvedRetrievalReason,
+  type GateResult,
+  type VerificationInput,
+} from './gate.ts';
 import { validateClaim } from './sources.ts';
 import type { ClaimScopeBasis, ClaimScopeMatch, ParsedClaim } from './schema.ts';
 import { independenceGroup } from './standards.ts';
@@ -321,11 +328,12 @@ export async function gateFragment(input: {
     }
   }
 
+  // Re-read rather than reuse: markContradiction just changed some of these,
+  // and the gate's fifth condition is about exactly that column.
+  const claims = await listClaimsForFragment(fragment.id);
   const gate = applyGate({
     fragment,
-    // Re-read rather than reuse: markContradiction just changed some of these,
-    // and the gate's fifth condition is about exactly that column.
-    claims: await listClaimsForFragment(fragment.id),
+    claims,
     verification: {
       verdicts,
       sufficiency: input.sufficiency,
@@ -340,7 +348,7 @@ export async function gateFragment(input: {
       // Kept forever. This is what stops a rejected claim reappearing through a
       // later attempt's synthesis: acceptance was decided once, and the reason
       // it was refused travels with it.
-      rejectionReason: judgement.reason,
+      rejectionReason: recordedRejectionReason(judgement),
       // The verdict and what it was judged against, together. A reader of a
       // rejection needs both: "population does not match" answers nothing
       // without the population it was compared with.
@@ -353,6 +361,19 @@ export async function gateFragment(input: {
           : verdict.scopeMatch;
       })(),
     });
+  }
+
+  /*
+   * Every claim of a judged fragment that the gate gave no verdict carries a
+   * reason too (VERIFICATION.REASONS): its source could not be read, so it was
+   * skipped before judgement and otherwise kept accepted = 0 with no reason —
+   * "a rejection with no reason". The reason says it was not judged; nothing
+   * here adds it to a count, a rate or a verdict.
+   */
+  const judged = new Set(gate.claims.map((judgement) => judgement.claimId));
+  for (const claim of claims) {
+    if (judged.has(claim.id)) continue;
+    await decideClaim(claim.id, { accepted: false, rejectionReason: unresolvedRetrievalReason(claim.retrievalState) });
   }
 
   const passed = fragmentPasses(gate);

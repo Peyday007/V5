@@ -51,6 +51,49 @@ export const GATE_CONDITIONS = {
 
 export type GateCondition = keyof typeof GATE_CONDITIONS;
 
+/**
+ * The recorded reason for a claim the gate did not accept but gave no verdict:
+ * its cited page could not be read (paywall, robots, dead link, JavaScript
+ * shell). One primary reason per claim, from a closed set with a stable code
+ * prefix, so a reader of `research_claims.rejection_reason` can learn from
+ * every unaccepted claim (VERIFICATION.REASONS) — "a rejection with no reason"
+ * was every such claim, because the gate skips it before judging it.
+ *
+ * It is deliberately not a rejection: the claim stays out of `claims`, the
+ * rejection count, the rejection rate and `failedConditions`, so no verdict
+ * and no bar moves. The wording says the research was not judged and is not
+ * blamed, which is what capability check P4 asks of an unread claim. Pure.
+ */
+export const UNRESOLVED_RETRIEVAL_REASON_CODE = 'UNRESOLVED_RETRIEVAL';
+
+export function unresolvedRetrievalReason(state: string | null | undefined): string {
+  return (
+    `${UNRESOLVED_RETRIEVAL_REASON_CODE}: not judged \u2014 the cited page could not be read ` +
+    `(retrieval state ${state || 'UNKNOWN'}); neither confirmed nor refuted.`
+  );
+}
+
+/** Whether a recorded reason is the unresolved-retrieval one rather than a rejection. Pure. */
+export function isUnresolvedRetrievalReason(reason: string | null | undefined): boolean {
+  return (reason ?? '').startsWith(`${UNRESOLVED_RETRIEVAL_REASON_CODE}:`);
+}
+
+/**
+ * The reason to record for a judgement that did not accept a claim. Every
+ * rejection names its failed condition, so a judgement whose own sentence is
+ * empty (a verifier note left blank) still records which condition it failed
+ * rather than nothing. An accepted claim records none. Pure.
+ */
+export function recordedRejectionReason(judgement: ClaimJudgement): string | null {
+  if (judgement.accepted) return null;
+  const stated = (judgement.reason ?? '').trim();
+  if (stated) return judgement.reason;
+  const condition = judgement.failedCondition;
+  return condition
+    ? `${condition}: ${GATE_CONDITIONS[condition]} \u2014 the gate recorded no further detail.`
+    : 'REJECTED: the gate did not accept this claim and recorded no further detail.';
+}
+
 export interface ClaimJudgement {
   claimId: string;
   accepted: boolean;
