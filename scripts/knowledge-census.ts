@@ -50,10 +50,10 @@ async function main() {
       const nf = (h: any[]) => nextGoalRoundFor(h, now) ?? priceReaskRound(h, now, 3);
       return { own: own.map((r) => ({ id: r.id, state: r.state, round: r.round, found: r.found, harvestedAt: r.harvestedAt })), every: every.length, nextOwn: nf(own), nextEvery: nf(asOne), plainNext: nextGoalRoundFor(own, now) };
     });
-    await q('MISSIONS_RUNNING', `SELECT m.id, m.state, m.candidate_id, m.created_at FROM russell_missions m WHERE m.state NOT IN ('DONE','FAILED','CANCELLED') ORDER BY m.created_at DESC LIMIT 20`);
-    await q('LIB_ROW', `SELECT legacy_key, asked_count, last_asked_at, updated_at FROM constructed_arrangements WHERE project_id = ? AND legacy_key = '2821cce3c372'`, [P]);
-    await q('WS_EVENTS', `SELECT kind, created_at, substr(summary,1,260) AS s FROM workstream_events WHERE workstream_id = ? AND created_at >= ? AND kind NOT IN ('GOAL_DECISION_RECORDED') ORDER BY created_at DESC LIMIT 20`, [G, '2026-11-19T01:07:00.000Z']);
-    await q('PLAN_JSON', `SELECT id, created_at, substr(COALESCE(next_step, ''),1,400) AS next FROM goal_plan_readings WHERE workstream_id = ? ORDER BY created_at DESC LIMIT 1`, [G]);
+    for (const m of ['rms_cba833c0165241ee8423','rms_f9e1515cc9cb411aa8e8','rms_f84b517f58a2464aa61e']) {
+      await q('FRAGS_'+m.slice(4,12), `SELECT f.status, COUNT(*) AS n, MIN(f.created_at) AS first, MAX(f.updated_at) AS last FROM russell_missions mm JOIN research_fragments f ON f.orchestration_id = mm.orchestration_id WHERE mm.id = ? GROUP BY f.status`, [m]);
+    }
+    await q('FL_QUEUE', `SELECT status, COUNT(*) AS n FROM research_fragments WHERE updated_at >= ? GROUP BY status`, [new Date(Date.now() - 6 * 3600e3).toISOString()]);
   } finally {
     await closeDatabase();
     console.log('GOALS: OK');
