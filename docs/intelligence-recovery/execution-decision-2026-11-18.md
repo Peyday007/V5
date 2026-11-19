@@ -261,3 +261,34 @@ Repeated reads are now stable.
 - 05:35:32Z: round cdr_df62f598e6044e029644 asks "$N per slot" (UNIT_ECONOMIC price_per_unit) for arr_1ccdb59e0206. It took the slot from an hour-stale pathway round (#1117).
 - 2821 is eligible and next in line.
 - The candidate is QUEUED: grant rgl_2b3bcf1a holds 13 of 13 live mission slots (6 RESEARCHING, 7 AUDITING), with 914 ideas waiting. This is a capacity limit.
+
+## 12:00Z — Planning releases #1129, #1133, #1139 (#1134 + #1136); transfer test on six goals
+
+**Releases:**
+- **#1129 (f47f1aef):** leader identity survives deliverables-list changes. The $10K lead re-signed once, then was stable for 3 reads (arr_ed03111d5938).
+- **#1133 (51e2f47b):** steps scheduled, costed and owned; single organisations refused as populations; one lead; replyKill uses the measured reply rate. Its deploy, 44508099073, failed one test (`priceMechanismTransfer` seeded a single organisation as a pooled population). Fixed in #1139.
+- **#1139 (e1daa132):** goal-fitted arrangements (capital, hours, deadline; specific deliverable; reconstruction COST probe) and the ≤10× comparable-price spread in the same-sector scope. Deploy 44512605059 passed and is on Fly.
+
+**Production reads on e1daa132.** Every goal is CANDIDATE_ONLY.
+
+| Goal | Reach | Lead | State of the steps |
+|---|---|---|---|
+| wst_7b4f $10K/30d | 6.2% (was 84.9% on the pooled $2,569 price) | cop_8015 | Steps describe GitHub: mismatch |
+| wst_6631 $100K/90d | 0% | arr_53ae "GitHub" + 2 | |
+| wst_db2e $5K/mo | 42.9% | RECONSTRUCTED arr_53ae | Steps labelled with internal keys ("bundle", "price×4.00@ALL") |
+| wst_deede $3K, $0 capital | 0% | arr_53ae | |
+| wst_fa47 $2K/14d | 5% | arr_53ae | 2 internal-key steps |
+| wst_4f0c $50K, $25K capital | 0% | arr_53ae + 2 | |
+
+**Reading:**
+- The fake pooled price is gone. 300+ of 307 designs per goal are now refused with "no comparable price … the design stays a research question".
+- Price is the binding unknown everywhere.
+- Plans are more honest and less executable.
+
+**Open defects:**
+- "GitHub" (a single organisation) leads every goal.
+- Internal keys appear as step labels.
+- The lead and the steps disagree.
+- Costs are still 0; Renew has no day.
+
+Agent round 2 is on these, on branch claude/plan-exec-round2. The release owner session is asked to make the price-refused designs launch pricing research.
