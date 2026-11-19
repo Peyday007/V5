@@ -1003,7 +1003,7 @@ export function buildOperators(ctx: { input: ReconstructionInput; levers?: reado
       return {
         ...s,
         openings: [...s.openings, clone],
-        changes: [...s.changes, { dimension: 'PARTNER', op: 'partner:referral-partner', clone: cloneId, label: `referral-partner${ctx.target ? `>${target.opportunity.id}` : ''}`, detail: `sell ${target.opportunity.title.slice(0, 50)} through a partner who already serves its buyers (a supplier or complementary vendor), paying ${Math.round(PARTNER_TERMS.commission.low * 100)}–${Math.round(PARTNER_TERMS.commission.high * 100)}% (${PARTNER_TERMS.commission.source}); ${PARTNER_TERMS.referralsPerDay.low}–${PARTNER_TERMS.referralsPerDay.high} referrals a day assumed until a partner is signed`, cost: 0, basis: 'ASSUMPTION', startDay: PARTNER_TERMS.setupDays }],
+        changes: [...s.changes, { dimension: 'PARTNER', op: 'partner:referral-partner', clone: cloneId, label: `referral-partner${ctx.target ? `>${target.opportunity.id}` : ''}`, detail: `sell "${target.opportunity.title.slice(0, 80)}" through a partner who already serves its buyers (a supplier or complementary vendor), paying ${Math.round(PARTNER_TERMS.commission.low * 100)}–${Math.round(PARTNER_TERMS.commission.high * 100)}% (${PARTNER_TERMS.commission.source}); ${PARTNER_TERMS.referralsPerDay.low}–${PARTNER_TERMS.referralsPerDay.high} referrals a day assumed until a partner is signed`, cost: 0, basis: 'ASSUMPTION', startDay: PARTNER_TERMS.setupDays }],
       };
     },
   });

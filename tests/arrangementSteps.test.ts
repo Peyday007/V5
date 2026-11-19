@@ -104,9 +104,8 @@ describe('a leading arrangement becomes executable steps', () => {
       'EXECUTE:Collect payment',
       'EXECUTE:Order the run from Commercial printers',
       'EXECUTE:Deliver and confirm',
-      'RESEARCH:Establish an offer and a price',
     ]);
-    const [buyers, settlement, reach, supply, offer, collect, order, deliver, search] = steps;
+    const [buyers, settlement, reach, supply, offer, collect, order, deliver] = steps;
     // Unknown parts are questions, each with its own words.
     expect(buyers!.question).toMatch(/how many buyers of exactly this kind exist/);
     expect(buyers!.question).toMatch(/how many buyers must join one shared run/);
@@ -126,10 +125,22 @@ describe('a leading arrangement becomes executable steps', () => {
     expect(collect!.detail).toMatch(/not yet established/);
     expect(order).toMatchObject({ cost: 0, owner: 'PERSON', withinLimits: true });
     expect(deliver!.detail).toMatch(/"Commercial printers" delivers/);
-    // The goal's own search keeps running beside it.
-    expect(search).toMatchObject({ kind: 'RESEARCH', dependsOn: null, startDay: { low: 0, high: 0 } });
-    expect(search!.detail).toMatch(/^The goal's own search, run in parallel with the steps above/);
+    // The goal's generic "Establish an offer and a price" is not appended: the arrangement's offer step establishes it (production, 2026-11-19).
+    expect(steps.some((s) => s.label.startsWith('Establish'))).toBe(false);
     expect(steps.every((s) => s.kill.length > 0)).toBe(true);
+  });
+
+  it('a goal step the arrangement does not establish runs beside it from day 0, listed first, the sequence renumbered behind it', () => {
+    const demand: NextTest = { link: 'CURRENT_DEMAND', test: 'Find a dated sign that local businesses need postcards now.', by: 'BRAIN', blocker: null };
+    const steps = planSteps({ adoption: baseline, reconstruction: null, sales: [], nextTest: demand, permissionsMissing: [], arrangement: { arrangement: postcard, context: { currency: 'USD', daysLeft: 30, capitalBeforeProof: 375 } } });
+    expect(steps[0]).toMatchObject({ order: 1, label: 'Establish a dated sign they need it now', kind: 'RESEARCH', startDay: { low: 0, high: 0 }, cost: 0 });
+    expect(steps[0]!.detail).toMatch(/^The goal's own search, run in parallel with the plan's other steps/);
+    expect(steps.map((s) => s.order)).toEqual(steps.map((_, i) => i + 1));
+    const reach = steps.find((s) => s.label.startsWith('Reach'))!;
+    expect(reach.requires).toEqual([steps.find((s) => s.label === 'Research the buyers')!.order]);
+    // A person's own decision about the goal is never dropped, whatever the arrangement establishes.
+    const owner: NextTest = { ...generic, by: 'PERSON', blocker: 'the owner decides how much may be committed' };
+    expect(planSteps({ adoption: baseline, reconstruction: null, sales: [], nextTest: owner, permissionsMissing: [], arrangement: { arrangement: postcard, context: { currency: 'USD', daysLeft: 30, capitalBeforeProof: 375 } } })[0]!.owner).toBe('PERSON');
   });
 
   it('a non-pooled subcontract: invoiced on delivery, the order over the before-proof limit, cash timing against the deadline', () => {
@@ -290,7 +301,9 @@ describe('a leading arrangement\'s steps can be followed on a schedule', () => {
     const offer = steps.find((s) => s.label.startsWith('Validate'))!;
     expect(reach.dependsOn).toBeNull();
     expect(offer.dependsOn).toBe(reach.order);
-    expect(steps.at(-1)!.label).toBe('Establish an offer and a price');
+    // The arrangement's own research and offer establish the offer and its price: no trailing "Establish an offer and a price".
+    expect(steps.at(-1)!.label).toBe('Run the next group');
+    expect(steps.some((s) => s.label === 'Establish an offer and a price')).toBe(false);
   });
 });
 

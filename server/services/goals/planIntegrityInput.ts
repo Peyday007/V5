@@ -80,9 +80,10 @@ export function integrityInput(reading: IntegrityReading): PlanIntegrityInput {
       dependsOn: s.dependsOn,
       kind: s.kind ?? 'EXECUTE',
       arrangementKey: s.arrangement?.key ?? null,
-      stage: s.arrangement?.stage ?? null,
-      costSource: s.arrangement?.costSource ?? null,
-      unscheduled: s.arrangement?.unscheduled ?? null,
+      // An arrangement's step carries its stage with the arrangement; a reconstruction's or a sale's carries it alone.
+      stage: s.arrangement?.stage ?? s.stage?.stage ?? null,
+      costSource: s.arrangement?.costSource ?? s.stage?.costSource ?? null,
+      unscheduled: s.arrangement?.unscheduled ?? s.stage?.unscheduled ?? null,
     })),
     lead: reading.lead ?? null,
     unpriced: reading.unpriced ?? [],

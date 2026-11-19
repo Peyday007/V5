@@ -495,6 +495,19 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
 
 type Day = { low: number; high: number };
 
+/**
+ * An opening's days to usable cash as the model holds them, read exactly as an
+ * arrangement's Collect step reads them: established or justified first, else
+ * the range the model swept, labelled an assumption. Null when it holds none.
+ */
+export function modelledCashSpan(modelled: Pick<ModelledOpportunity, 'daysToCash'> | null | undefined): { span: Day; standing: string } | null {
+  const days = fieldFromInput(modelled?.daysToCash, 'days to usable cash');
+  const held = spanOf(days);
+  if (held && days) return { span: held, standing: days.status.toLowerCase() };
+  const swept = sweptSpan(modelled?.daysToCash);
+  return swept ? { span: swept, standing: 'the range the model swept: an assumption, not established' } : null;
+}
+
 /** A model input's range as the model swept it when nothing established it, or null when it holds none. */
 function sweptSpan(input: ModelInput | null | undefined): Day | null {
   if (!input) return null;
