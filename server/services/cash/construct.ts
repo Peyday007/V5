@@ -316,6 +316,14 @@ export interface ConstructedArrangement {
   /** Everything its composition read, hashed: a stored arrangement composed under the same is reused rather than recomposed. */
   composedUnder?: string;
   /**
+   * The goal's last readings picked it or led with it (`recentLeaderSignatures`,
+   * P4). Construction composes it whatever the cap; the model's estimated
+   * slots (`selectEstimatedArrangements`) admit it first, so a pass that
+   * learned nothing new cannot drop it on a tie the rest of the pass decided.
+   * Per pass and per goal: never stored in the library.
+   */
+  leader?: boolean;
+  /**
    * Commercial leverage (S-0103, COM-13-2), on the `LEVERAGE_TRACED`
    * best-ranked arrangements: the levers the design uses — AI labor or a
    * supplier fulfilling, buyer prepayment where the design takes money early —
@@ -766,6 +774,12 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
     } finally {
       await evaluator.close();
     }
+  }
+  // The goal's leaders are marked, so the model's few slots hold them as construction did (P4).
+  const leading = new Set(leaders);
+  for (const one of ranked) {
+    if (one.signature && leading.has(one.signature)) one.leader = true;
+    else delete one.leader;
   }
   constructionMemo.set(memoKey, { at: Date.now(), result: structuredClone(ranked) });
   while (constructionMemo.size > CONSTRUCTION_MEMO_MAX) constructionMemo.delete(constructionMemo.keys().next().value!);
