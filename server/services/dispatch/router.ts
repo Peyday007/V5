@@ -563,8 +563,11 @@ function requiredCapabilities(bin: Bin): string[] {
  * `services/bins/contracts.ts` now records, for every bin that ends with no
  * render, which surface each attempt was fired at and whether it declared
  * `repository` — the evidence that decides between routing and a missing
- * browser on capable surfaces. If it shows routing, the fix is the opener
- * declaring the capability, not a special case here.
+ * browser on capable surfaces. If it shows routing, a capability alone is not
+ * the fix: a render bin is GENERAL by `familyOf`, and every surface with a
+ * checkout serves FACTORY only through an explicit routing row, so declaring
+ * `repository` would refuse every surface until a GENERAL-serving surface
+ * declares one (tests/designRenderRouting.test.ts pins that fleet shape).
  */
 
 /**
