@@ -241,3 +241,23 @@ Still open:
 Repeated reads are now stable.
 
 **Open:** the $10K goal's previous lead (arr_19a99390e28b homeowner, 55.3%) was not held across the release. An agent is establishing whether that is a held-leader defect or a lead that existed only because of the stored-p50 ranking.
+
+## 07:05Z — Held leaders at model entry (#1125, release cb6d27b5) and item 5
+
+**#1125:**
+- Deploy 44470197803 passed all 4 SQLite shards, Postgres and Fly.
+- Production reads on cb6d27b5:
+
+| Goal | Reads | Lead | Reach (coverage) | p50 |
+|---|---|---|---|---|
+| wst_7b4f… ($10K/30d) | 2 (06:49, 06:54), identical | RECONSTRUCTED arr_1ccdb59e0206 + cop_880e5bc7 | 70.1% | $30,664 |
+| wst_6631… ($100K/90d) | 1 | arr_1c912684db66, unchanged | 0.4% | |
+| wst_db2e… ($5K/mo) | 1 | arr_88ba66b2ee5c, unchanged | 0.3% | |
+
+- On the $10K goal, an implausible combination (median 2118× capital) was flagged and refused.
+- The plan output does not print the model's slot names, so the LEADER slot itself is not directly visible on production. What is visible is "4 held as the plan's leaders" and a stable lead.
+
+**Item 5, the price re-ask (verified by the release owner, probes 44471115583 and 44471399871):**
+- 05:35:32Z: round cdr_df62f598e6044e029644 asks "$N per slot" (UNIT_ECONOMIC price_per_unit) for arr_1ccdb59e0206. It took the slot from an hour-stale pathway round (#1117).
+- 2821 is eligible and next in line.
+- The candidate is QUEUED: grant rgl_2b3bcf1a holds 13 of 13 live mission slots (6 RESEARCHING, 7 AUDITING), with 914 ideas waiting. This is a capacity limit.
