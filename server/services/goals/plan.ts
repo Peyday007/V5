@@ -512,8 +512,13 @@ export interface PlanStep {
    * a reconstruction's own.
    */
   when?: string;
-  /** Money it commits before any opening pays, major units. */
-  cost: number;
+  /**
+   * Money it commits before any opening pays, major units: the figure the
+   * plan's model used for that stage. Null when the model holds no cost for
+   * the stage — unestablished, never written as 0 (production, 2026-11-19:
+   * every step of a leading arrangement read "cost 0").
+   */
+  cost: number | null;
   basis: StepBasis;
   /** PERSON only for a rule-11 kind: a payment, a credential, a legal commitment. */
   owner: 'BRAIN' | 'PERSON';
@@ -2700,9 +2705,11 @@ export function planSteps(input: {
    * never assumed; it is stated on the first step.
    */
   if (input.capital && input.capital.allowed !== null && input.capital.allowed > 0 && steps[0]) {
-    const deployed = steps.reduce((sum, one) => sum + Math.max(0, one.cost), 0);
+    const deployed = steps.reduce((sum, one) => sum + Math.max(0, one.cost ?? 0), 0);
+    const unpriced = steps.filter((one) => one.cost === null).length;
     const cur = input.capital.currency;
-    const line = `This plan commits ${cur} ${Math.round(deployed).toLocaleString('en-US')} of the ${cur} ${Math.round(input.capital.allowed).toLocaleString('en-US')} the goal allows${deployed === 0 ? ': none of its steps spends money' : ''}${deployed > input.capital.allowed ? ' — OVER the limit' : ''}.`;
+    const rest = unpriced > 0 ? `, plus ${unpriced} step(s) whose cost the model does not establish` : deployed === 0 ? ': none of its steps spends money' : '';
+    const line = `This plan commits ${cur} ${Math.round(deployed).toLocaleString('en-US')} of the ${cur} ${Math.round(input.capital.allowed).toLocaleString('en-US')} the goal allows${rest}${deployed > input.capital.allowed ? ' — OVER the limit' : ''}.`;
     steps[0] = { ...steps[0], detail: `${line} ${steps[0].detail}` };
   }
   // A step that starts later needs the latest step that starts before it. An arrangement's steps (`requires` set) carry their own sequence.
