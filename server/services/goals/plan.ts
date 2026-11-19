@@ -2553,7 +2553,7 @@ function killFor(change: { dimension: string; label: string; cost: number; start
       return `no signed partner by day ${(change.startDay?.high ?? 0) + 14}, or no referred buyer within 30 days of signing → drop the partner and re-plan`;
     case 'TRANSACTION':
     case 'PRICE':
-      return `fewer than 1 in 10 offered buyers accepts "${change.label}" → revert to the unit sale at the listed price and re-plan`;
+      return `fewer than 1 in 10 offered buyers accepts "${changeTitle(change)}" → revert to the unit sale at the listed price and re-plan`;
     case 'CASH_TIMING':
       return 'fewer than half of signing buyers pay the deposit at signing → re-plan cash timing';
     case 'CAPITAL':
