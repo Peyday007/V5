@@ -92,8 +92,8 @@ export interface CorrectionSwitch {
 export interface FallbackWatch {
   /** One dependency per forecast claim with a measured outcome. */
   dependencies: Dependency[];
-  /** Each miss recorded, and whether this refresh wrote it. */
-  failures: { occurrence: string; claimId: string; failureClass: string; recovered: boolean | null; written: boolean }[];
+  /** Each miss recorded, the pathway of its own claim family, and whether this refresh wrote it. */
+  failures: { occurrence: string; claimId: string; pathway: string; failureClass: string; recovered: boolean | null; written: boolean }[];
   warnings: { actions: PreventiveAction[]; unjudged: { dependency: string; kind: string; why: string }[] };
   /** Goals whose plans were handed back by a preventive action. */
   replanned: string[];
@@ -359,6 +359,29 @@ async function defaultReplan(goalId: string, why: string): Promise<void> {
   requestGoalPlanPass(goalId, why);
 }
 
+/**
+ * The family a claim belongs to: the prefix before the first ':' of its id (`cash`, `operator`, ...).
+ * A claim id with no prefix is the cash forecast's own, as every claim this watch read before families existed.
+ */
+export function claimFamily(claimId: string): string {
+  const at = claimId.indexOf(':');
+  return at > 0 ? claimId.slice(0, at) : 'cash';
+}
+
+/**
+ * The pathway a claim's failures sit on: a cash claim on `cash-forecast:<project>`, as the plans read it; any
+ * other family (an operator decision, `operator:<id>`) on its own family's path, never on the cash forecast's.
+ */
+export function claimPathway(projectId: string, claimId: string): string {
+  const family = claimFamily(claimId);
+  return family === 'cash' ? `cash-forecast:${projectId}` : `${family}:${projectId}`;
+}
+
+/** A method `forecastFailures` names is owned by Factory when its owner suffix says so (`forecast.ts CAUSE_OWNER`). */
+function factoryOwned(method: string): boolean {
+  return method.endsWith('(FACTORY)');
+}
+
 /** Run the watch on one project's forecast reading. */
 export async function watchForecastPath(projectId: string, reading: ModelLearningReading, deps: FallbackWatchDeps = {}): Promise<FallbackWatch> {
   const dependencies = forecastDependencies(reading);
@@ -370,7 +393,7 @@ export async function watchForecastPath(projectId: string, reading: ModelLearnin
   for (const input of forecastFailures(reading)) {
     const { record, written } = await recordFailureRecovery(input, { projectId, caller: 'fallback-watch', read: async () => held, ...(deps.record ? { record: deps.record } : {}) });
     if (written) held = [...held.filter((r) => r.occurrence !== record.occurrence), record];
-    failures.push({ occurrence: record.occurrence, claimId: input.dependency, failureClass: record.failureClass, recovered: record.recovered, written });
+    failures.push({ occurrence: record.occurrence, claimId: input.dependency, pathway: claimPathway(projectId, input.dependency), failureClass: record.failureClass, recovered: record.recovered, written });
   }
 
   // 2. Early warning: drift beyond the calibrator's bar re-reads the plans resting on the claim before the next miss.
@@ -404,17 +427,26 @@ export async function watchForecastPath(projectId: string, reading: ModelLearnin
   const reliability = readReliability({ pathways: [{ key: pathway, dependencies }], goalPortfolios, sampleSize });
   const safeguards = correctionSafeguards(pathway, dependencies);
 
-  // 5. A recurring failure class with a method to improve becomes a Factory improvement objective.
+  // 5. A recurring failure class with a method to improve becomes a Factory improvement objective — when a
+  // repository change can remove it. That is the cash forecast path this module owns (Brain's own forecast
+  // code), or any path whose named methods include a software cause (`CAUSE_OWNER` FACTORY). A class that
+  // recurs only on another claim family (an operator decision) with only research or commercial causes is
+  // not a defect in the forecast path: it stays in `recurring`, and its own owners already receive those
+  // corrections (`knowledge.ts learnFromCashLedger`).
   const recurring = recurringFailureClasses(held);
   const improvements: FallbackWatch['improvements'] = [];
   const toFactory = deps.toFactory ?? upsertCandidate;
   for (const cls of recurring) {
     if (cls.methodsToImprove.length === 0) continue;
+    const families = [...new Set(held.filter((r) => r.failureClass === cls.failureClass).map((r) => claimFamily(r.dependency)))].sort();
+    const onForecastPath = families.includes('cash');
+    if (!onForecastPath && !cls.methodsToImprove.some(factoryOwned)) continue;
+    const path = onForecastPath ? 'the cash forecast path' : `the ${families.join(', ')} claim path`;
     const weaknessKey = `FALLBACK:${cls.failureClass}`.slice(0, 200);
     const { created } = await toFactory({
       weaknessKey,
       kind: 'RECURRING_FAILURE_CLASS',
-      title: `A failure recurs on the cash forecast path: ${cls.failureClass.toLowerCase().replace(/_/g, ' ')}`,
+      title: `A failure recurs on ${path}: ${cls.failureClass.toLowerCase().replace(/_/g, ' ')}`,
       problem: `${cls.occurrences} recorded failure(s) of class ${cls.failureClass}: ${cls.recovered} recovered, ${cls.notRecovered} did not, ${cls.untimelyDetections} detected late. Methods named for improvement: ${cls.methodsToImprove.join('; ')}.`.slice(0, 1000),
       metric: 'READY_OPPORTUNITIES_PER_DAY',
       downstreamMetric: null,
