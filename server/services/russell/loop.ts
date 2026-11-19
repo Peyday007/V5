@@ -2717,9 +2717,13 @@ async function tickOnce(owner: string): Promise<TickReport> {
           continue;
         }
         if (!outcome.settled) {
-          // The mission may have moved while the resume ran: still moot, never re-asked.
-          const reason = (await answeredRequestIsMoot(request)) ? MISSION_LEFT_NEEDS_YOU : outcome.reason;
-          await settleUnresolvedAnswer(report, request, reason);
+          /*
+           * The resume's own refusal is kept as the reason, whatever happened
+           * to the mission meanwhile: `reopenAnswered` withdraws the card as
+           * moot by the mission's state, so a mission that moved during the
+           * resume is never re-asked, and the refusal is not overwritten.
+           */
+          await settleUnresolvedAnswer(report, request, outcome.reason);
           continue;
         }
         if (await markResumed(request.id)) report.resumed.push(request.id);
