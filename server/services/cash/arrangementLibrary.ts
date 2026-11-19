@@ -96,7 +96,8 @@ export async function rememberArrangements(
     const own = parts(one);
     // What a pass derives — its leverage trace against that pass's limits, and the per-position
     // research questions — is recomposed each pass and is not part of the design the library keeps.
-    const { leverage: _leverage, positionQuestions: _positions, ...kept } = one;
+    // Whether it led this goal's last readings (`leader`) is per goal and per pass, never part of the design.
+    const { leverage: _leverage, positionQuestions: _positions, leader: _leader, ...kept } = one;
     const design = {
       version: 1,
       arrangement: kept,

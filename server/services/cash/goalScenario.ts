@@ -885,6 +885,8 @@ const TIER_RANK: Record<string, number> = { DIRECT: 0, COMPARABLE: 1, COMPONENT:
 const EXPOSURE_RANK: Record<string, number> = { SAFE: 0, BOUNDED: 1, UNKNOWN: 2, EXCEEDS: 3 };
 /** Of the model's arrangement slots, this many are held for the largest reconstructed upside. */
 export const UPSIDE_SLOTS = 2;
+/** Of the model's arrangement slots, at most this many go to the goal's held leaders first (P4). */
+export const LEADER_SLOTS = 4;
 /** At most this many structurally different designs of one buyer population, sharing one market. */
 export const DESIGNS_PER_POPULATION = 3;
 /** The next-best arrangements the cut leaves out, kept for a reasoning move that brings one in (§101 INCLUDE). */
@@ -958,7 +960,7 @@ export interface ArrangementPick {
   population: string;
   screen: number;
   upside: number;
-  /** `STRUCTURE:<base>` or `PAID:<funding>/<repeat>` (the strongest of its kind), `PRICE_VARIABLE`, `UPSIDE`, or `SCREEN`. */
+  /** `LEADER` (held from the goal's last readings), `STRUCTURE:<base>` or `PAID:<funding>/<repeat>` (the strongest of its kind), `PRICE_VARIABLE`, `UPSIDE`, or `SCREEN`. */
   slot: string;
   basis: string;
 }
@@ -1084,9 +1086,11 @@ export function selectEstimatedArrangements(
     (EXPOSURE_RANK[a.arrangement.stress.exposure] ?? 9) - (EXPOSURE_RANK[b.arrangement.stress.exposure] ?? 9) ||
     a.order - b.order;
   rows.sort(byScreen);
-  // The same design over the same buyers is one estimate: only its strongest reading competes.
-  const designs = new Set<string>();
+  // The same design over the same buyers is one estimate: only its strongest reading competes —
+  // or the goal's leader, which the last readings picked over the rest (P4).
+  const designs = new Set<string>(rows.filter((r) => r.arrangement.leader).map((r) => `${r.population}|${designKey(r.arrangement)}`));
   const candidates = rows.filter((r) => {
+    if (r.arrangement.leader) return true;
     const key = `${r.population}|${designKey(r.arrangement)}`;
     if (!designs.has(key)) {
       designs.add(key);
@@ -1104,6 +1108,14 @@ export function selectEstimatedArrangements(
     perPopulation.set(r.population, (perPopulation.get(r.population) ?? 0) + 1);
     return true;
   };
+  // 1a. The goal's leaders (P4): what its last readings picked or led with enters first, strongest first,
+  // within `LEADER_SLOTS`. Construction already holds them through the cap; without this the model's few
+  // slots dropped them on screens saturated at the remaining amount, decided by which others were composed.
+  let leaders = 0;
+  for (const r of candidates) {
+    if (leaders >= LEADER_SLOTS) break;
+    if (r.arrangement.leader && take(r, 'LEADER')) leaders += 1;
+  }
   // 1b. The strongest arrangement whose price is the decision variable over an observed supply cost: the
   // only kind holding an observed number about itself, so its break-even is always read by the engine.
   const variable = candidates.find((r) => r.one.priceVariable);
