@@ -183,3 +183,8 @@ Finish-line status:
   - wst_db2e2e0e5204477692d5 (Cash Mode 4): "Earn 5,000 dollars a month in recurring revenue within 60 days, ≤10 owner hours a week, ≤1,500 dollars capital".
 - **Result: FAIL.** Both plans are NO_CANDIDATE and identical in shape: lead arrangement buyer "viktorrria", offer "germany" (freelance-marketplace residue); every constructed arrangement cut ("the project holds no published price"; on 7e927515: 68 of 208 in the goal's scope, all cut); "5,000 dollars a month" read as a 5,000 total.
 - Defects D1 (junk construction labels), D2 (a fresh project sees no Brain-level price evidence), D3 (monthly-rate objective read as a total) assigned to a code agent on branch claude/fresh-goal-plans.
+
+## 01:15Z 11-19 — #1118 live (a5a0adf9, Fly 01:07:32Z); item 7 re-read
+
+- Fixed on production: no "viktorrria"/"germany" (HN author handles and place names no longer become buyers or offers); the monthly goal reads "5000 USD settled cash a month (a recurring run-rate, counted over the trailing 30 days, to be reached by the deadline)"; borrowed prices now reach a fresh project ("among the Brain's validated findings").
+- Still failing: both fresh-project goals construct only 4 arrangements (the 204 others were the junk) and cut all 4 (borrowed prices too dispersed to compare). NO_CANDIDATE. Root cause under investigation: construction reads only the goal's own project's map, so a new project cannot reach the 16,262-arrangement map Brain holds in Cash Mode 1. Assigned to branch claude/fresh-goal-knowledge.
