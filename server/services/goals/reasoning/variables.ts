@@ -70,6 +70,26 @@ export const SWEEP_DIRECTIONS = 14;
  * engine decides world by world whether proof came.
  */
 export const PROOF_SHARE = 0.5;
+/**
+ * The largest multiple of a condition's evidenced middle the backward search reads, and the largest it reports the
+ * evidence reaching. Production, 2026-11-19 (goals plan on three new goals): a supplier cost evidenced from $0 had its
+ * reach computed as middle ÷ max(1e-9, 0) and printed "evidence reaches ×47021304453333.80".
+ */
+export const REQUIREMENT_BOUND = 20;
+
+/**
+ * How far an input's evidenced range reaches past its middle, as a multiple in the favourable direction: the top over
+ * the middle, or for a cost or delay (`inverse`) the middle over the bottom. A range that runs to zero or beyond the
+ * bound reaches the bound, never a figure past it.
+ */
+export function evidenceMultiple(x: ModelInput, inverse: boolean): number {
+  const m = mid(x) ?? 0;
+  if (!(m > 0)) return 1;
+  const bottom = lo(x);
+  const r = inverse ? (bottom > 0 ? m / bottom : Infinity) : hi(x) / m;
+  return Number.isFinite(r) ? Math.min(REQUIREMENT_BOUND, r) : REQUIREMENT_BOUND;
+}
+
 /** Factors a condition is read at: the range the evidence states, and then outside it (mathematical only). */
 export const CONDITION_FACTORS = [0.5, 1, 2] as const;
 
@@ -241,9 +261,9 @@ export interface Strategy {
 export interface Requirement {
   condition: string;
   family: Family;
-  /** The multiple of the evidenced middle the requirement needs; null when no multiple up to ×20 reaches it. */
+  /** The multiple of the evidenced middle the requirement needs; null when no multiple up to ×REQUIREMENT_BOUND reaches it. */
   needed: number | null;
-  /** The top of what the evidence states, as a multiple of its middle. */
+  /** The top of what the evidence states, as a multiple of its middle, at most REQUIREMENT_BOUND. */
   evidencedTop: number;
   inEvidence: boolean;
 }
@@ -277,6 +297,8 @@ export interface VariableSweep {
   directions: Direction[];
   /** Questions only the world can answer, from the requirements outside evidence. */
   asks: string[];
+  /** The engine direction that carries `bestDecision`, so a render can show the engine's reading beside the fast one. */
+  bestDecisionSignature?: string;
   sentence: string;
 }
 
@@ -1097,11 +1119,7 @@ export async function sweepVariables(ctx: SweepContext): Promise<VariableSweep> 
       if (c.field === 'days') return 1;
       const xs = ctx.base.openings.filter((o) => o.agreedValue === 0 && rows.some((r) => r.id === o.opportunity.id) && (c.scope === 'ALL' || o.opportunity.id === c.scope));
       const key = c.field as keyof ModelledOpportunity;
-      const ratios = xs.map((o) => {
-        const x = o[key] as ModelInput;
-        const m = mid(x) ?? 0;
-        return m > 0 ? (c.field === 'daysToCash' || c.field === 'directCost' ? m / Math.max(1e-9, lo(x)) : hi(x) / m) : 1;
-      });
+      const ratios = xs.map((o) => evidenceMultiple(o[key] as ModelInput, inverse(c)));
       return ratios.length ? Math.min(...ratios) : 1;
     };
     for (const c of globalConds) {
@@ -1112,9 +1130,9 @@ export async function sweepVariables(ctx: SweepContext): Promise<VariableSweep> 
       };
       let needed: number | null = null;
       if (at(1) >= ctx.required) needed = 1;
-      else if (at(20) >= ctx.required) {
+      else if (at(REQUIREMENT_BOUND) >= ctx.required) {
         let a = 1;
-        let b = 20;
+        let b = REQUIREMENT_BOUND;
         for (let i = 0; i < 24; i++) {
           const m = Math.sqrt(a * b);
           if (at(m) >= ctx.required) b = m;
@@ -1166,6 +1184,7 @@ export async function sweepVariables(ctx: SweepContext): Promise<VariableSweep> 
   };
   pushDir(bestSupported, 'SUPPORTED');
   pushDir(bestDecision, 'BEST');
+  const bestDecisionSignature = bestDecision ? toDirection(materialize(bestDecision), 'BEST')?.signature : undefined;
   for (const [a, s] of best) pushDir(s, a);
   // Then the ranking, skipping a strategy that reads the same as one already handed over: the engine's reads go to different plans.
   const handed: FastReading[] = [bestSupported, bestDecision, ...best.values()].filter((s): s is Strategy => !!s).map((s) => s.reading);
@@ -1189,7 +1208,7 @@ export async function sweepVariables(ctx: SweepContext): Promise<VariableSweep> 
     `${variations.toLocaleString('en-US')} variation(s) of ${variables.length} decision variable(s) (space ${space.toLocaleString('en-US')}) and ${conditions.length} condition(s), ${equivalent.toLocaleString('en-US')} equivalent combination(s) not re-read; ` +
     `fast reading: as held mean ${money(baseline.reading.mean)}, reach ${pct(baseline.reading.reach)}; §99's plan ${money(greedy.reading.mean)}, ${pct(greedy.reading.reach)}; ` +
     `strongest supported ${bestSupported ? `${money(bestSupported.reading.mean)}, ${pct(bestSupported.reading.reach)} (${bestSupported.label})` : 'none'}; ` +
-    `strongest overall ${bestDecision ? `${money(bestDecision.reading.mean)}, ${pct(bestDecision.reading.reach)}, ${bestDecision.assumptions.length} assumption(s)` : 'none'}; ` +
+    `strongest overall (fast ranking, before the engine) ${bestDecision ? `${money(bestDecision.reading.mean)}, ${pct(bestDecision.reading.reach)}, ${bestDecision.assumptions.length} assumption(s)` : 'none'}; ` +
     `${bottleneck.toLowerCase()} binds; ${requirements.filter((r) => r.inEvidence).length}/${requirements.length} condition(s) could carry the requirement inside evidence.`;
   return {
     variables: variables.map((v) => ({ key: v.key, family: v.family, kind: v.kind, discoveredFrom: v.discoveredFrom, effect: v.effect, fixed: v.fixed, levels: v.levels.length })),
@@ -1215,6 +1234,7 @@ export async function sweepVariables(ctx: SweepContext): Promise<VariableSweep> 
     directions: dirs.slice(0, SWEEP_DIRECTIONS),
     asks,
     sentence,
+    ...(bestDecisionSignature ? { bestDecisionSignature } : {}),
   };
 }
 
@@ -1223,14 +1243,16 @@ export function renderSweep(x: VariableSweep, engine?: Map<string, { reach: numb
   const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
   const money = (v: number) => `$${Math.round(v).toLocaleString('en-US')}`;
   const lines: string[] = [];
-  lines.push(`  variables ${x.sentence}`);
+  // The sentence's figures are the closed-form ranking; the engine's reading of the strongest overall is what the plan weighs.
+  const decided = engine && x.bestDecisionSignature ? engine.get(x.bestDecisionSignature) : undefined;
+  lines.push(`  variables ${x.sentence}${decided ? ` The engine reads the strongest overall at reach ${pct(decided.reach)}, p50 ${money(decided.settledP50)}.` : ''}`);
   lines.push(`    counts  screened ${x.screened.toLocaleString('en-US')} · factorial ${x.factorial.toLocaleString('en-US')} · local ${x.local.toLocaleString('en-US')} · conditions ${x.conditionReads.toLocaleString('en-US')} · ${Math.round(x.elapsedMs / 1000)} s · ${x.stopped.toLowerCase()}`);
   for (const v of x.variables) lines.push(`    var     ${v.kind.toLowerCase().padEnd(9)} ${v.family.padEnd(15)} ${String(v.levels).padStart(3)} level(s) effect ${v.effect.toFixed(3)}${v.fixed ? ' (fixed: no effect)' : ''} · ${v.discoveredFrom.slice(0, 90)}`);
   lines.push(`    conds   ${x.conditions.length} condition(s): ${x.conditions.filter((c) => c.scope === 'ALL').map((c) => c.key).join(', ')} + ${x.conditions.filter((c) => c.scope !== 'ALL').length} discovered on openings`);
   for (const a of x.approaches) lines.push(`    approach ${a.approach.padEnd(20)} ${String(a.evaluated).padStart(6)} local read(s), improved ${a.improved}×, best score ${a.best.toFixed(3)}`);
   for (const s of x.strategies.slice(0, 8)) lines.push(`    strategy [${s.approach}${s.supported ? '' : ' · assumed'}] ${s.label.slice(0, 110)} → mean ${money(s.reading.mean)}, p10 ${money(s.reading.p10)}, reach ${pct(s.reading.reach)}, halved ${pct(s.challenged.reach)}, commits ${money(s.reading.committed)}`);
   if (x.bestMathematical) lines.push(`    math    only if the world differs: ${x.bestMathematical.label.slice(0, 140)} → reach ${pct(x.bestMathematical.reading.reach)}, mean ${money(x.bestMathematical.reading.mean)}`);
-  for (const r of x.requirements) lines.push(`    needs   ${r.condition.padEnd(18)} ${r.needed === null ? 'no multiple up to ×20 reaches the requirement' : `×${r.needed.toFixed(2)}`} · evidence reaches ×${r.evidencedTop.toFixed(2)} · ${r.inEvidence ? 'SUPPORTED' : 'needs evidence (mathematical only)'}`);
+  for (const r of x.requirements) lines.push(`    needs   ${r.condition.padEnd(18)} ${r.needed === null ? `no multiple up to ×${REQUIREMENT_BOUND} reaches the requirement` : `×${r.needed.toFixed(2)}`} · evidence reaches ${r.evidencedTop >= REQUIREMENT_BOUND ? `×${REQUIREMENT_BOUND} or beyond` : `×${r.evidencedTop.toFixed(2)}`} · ${r.inEvidence ? 'SUPPORTED' : 'needs evidence (mathematical only)'}`);
   for (const s of x.sensitive.slice(0, 5)) lines.push(`    evidence ${s.condition.padEnd(40)} swings mean by ${money(s.swing)} across its range`);
   if (engine) for (const d of x.directions) {
     const e = engine.get(d.signature);
