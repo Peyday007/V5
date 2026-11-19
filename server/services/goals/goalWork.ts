@@ -31,6 +31,17 @@ import { getDb } from '../../db/database.ts';
  * `IN (SELECT …)` each set is computed once per statement on both dialects.
  */
 
+/**
+ * The request-key prefix of a goal's own price questions (`sendPortfolioNeeds`):
+ * what buyers of a population its refused designs share pay. Such a need has
+ * no opening row — its design was refused for want of the very price it asks
+ * — so the opening branches below never reached it, and its idea waited
+ * unjudged behind the ordinary backlog (production 2026-11-19: 14,737 unjudged
+ * ideas, the oldest from 2026-11-15). It is the goal's research, so it is the
+ * goal's idea while the need is OPEN.
+ */
+export const GOAL_PRICE_KEY_PREFIX = 'goal-price';
+
 /** A boolean SQL expression over a `russell_candidates` row aliased `c`; true for the goal's own ideas. No parameters. */
 export function goalIdeaSql(c: string): string {
   return `(${c}.id IN (SELECT gr.candidate_id FROM cash_discovery_rounds gr
@@ -41,7 +52,9 @@ export function goalIdeaSql(c: string): string {
     OR ${c}.id IN (SELECT gn.candidate_id FROM cash_needs gn
                      JOIN cash_opportunities gop3 ON gop3.id = gn.opportunity_id
                      JOIN cash_discovery_rounds gr3 ON gr3.id = gop3.discovery_round_id
-                    WHERE gr3.bucket_id LIKE 'goal-%' AND gn.state = 'OPEN' AND gn.candidate_id IS NOT NULL))`;
+                    WHERE gr3.bucket_id LIKE 'goal-%' AND gn.state = 'OPEN' AND gn.candidate_id IS NOT NULL)
+    OR ${c}.id IN (SELECT gp.candidate_id FROM cash_needs gp
+                    WHERE gp.request_key LIKE '${GOAL_PRICE_KEY_PREFIX}-%' AND gp.state = 'OPEN' AND gp.candidate_id IS NOT NULL))`;
 }
 
 /** A boolean SQL expression: this idea is one of a goal's own search rounds (`goal-…` bucket). No parameters. */

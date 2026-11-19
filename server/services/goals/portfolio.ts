@@ -243,6 +243,32 @@ export interface GoalPortfolio {
   searched: number;
   /** The measured reply interval cold-outreach openings were sampled in, when one was passed. */
   measuredRates?: MeasuredRatesReading | null;
+  /**
+   * The buyer populations whose constructed designs were kept out of this
+   * reading because nothing prices them (`selectEstimatedArrangements`): what
+   * the plan could not establish, sent to research by the goal tick
+   * (`sendPortfolioNeeds`). Most designs first.
+   */
+  unpriced?: UnpricedPopulation[];
+}
+
+/**
+ * One buyer population every refused-for-price design over it shares: a price
+ * filed for these buyers prices each of those designs at once, so it is asked
+ * once per population, not once per design.
+ */
+export interface UnpricedPopulation {
+  /** The population's ref (`ConstructedArrangement.demand.ref`). */
+  population: string;
+  /** The buyers as the construction names them. */
+  buyer: string;
+  /** Designs over these buyers refused for want of a price in this reading. */
+  designs: number;
+  /** The design the question is asked about: the constructor's first-ranked of them. */
+  arrangementKey: string;
+  label: string;
+  /** The construction's own one-figure price question for that design, declaring the fact it files (`nextInputQuestion`). */
+  question: string;
 }
 
 /**

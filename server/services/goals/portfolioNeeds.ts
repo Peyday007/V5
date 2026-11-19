@@ -26,7 +26,8 @@
 import { getOpportunity } from '../../repos/cashPortfolio.ts';
 import { sendNeeds, type Need } from '../quant/needs.ts';
 import { requestMarketHistory } from '../quant/history.ts';
-import type { DecisionUnknown, GoalPortfolio } from './portfolio.ts';
+import type { DecisionUnknown, GoalPortfolio, UnpricedPopulation } from './portfolio.ts';
+import { GOAL_PRICE_KEY_PREFIX } from './goalWork.ts';
 
 /**
  * Asking a counterparty is contacting the buyer: the commercial authority an
@@ -124,6 +125,30 @@ export async function sendPortfolioNeeds(
     }
   }
 
+  /*
+   * What the plan could not price at all: the buyer populations whose designs
+   * were refused for want of a price (production 2026-11-19, ~304 of 307 per
+   * goal). One question per population, keyed by the project and the
+   * population — a price filed for those buyers prices every design over
+   * them, whichever goal asked — and at most `PRICE_ASKS_PER_READ` new ones a
+   * read, walking past those already open so a population nobody can price
+   * never holds the rest back.
+   */
+  let priceAsked = 0;
+  for (const one of portfolio.unpriced ?? []) {
+    if (priceAsked >= PRICE_ASKS_PER_READ) break;
+    const delivered = await send({ projectId: input.projectId, actorRef, graphScope: priceScope(one.population), keyPrefix: GOAL_PRICE_KEY_PREFIX, needs: [priceNeedOf(one)] });
+    for (const d of delivered) {
+      if (d.sent) {
+        out.sent += 1;
+        if (d.created) {
+          out.created += 1;
+          priceAsked += 1;
+        }
+      } else out.refused.push(`${d.subject}: ${d.reason}`);
+    }
+  }
+
   // The history the best combination lacks is what assurance.researchNeeds names.
   const best = new Set(portfolio.best?.members.map((one) => one.opportunityId) ?? []);
   for (const history of portfolio.marketHistory ?? []) {
@@ -137,6 +162,30 @@ export async function sendPortfolioNeeds(
     for (const one of result.refused) out.refused.push(`market history ${one.kind} for ${opportunity.id}: ${one.reason}`);
   }
   return out;
+}
+
+/** At most this many new price questions are sent per plan read; the rest wait for the next read. */
+export const PRICE_ASKS_PER_READ = 3;
+
+/** The scope a population's price question is keyed in: the project's buyers, not one goal's graph. */
+export function priceScope(population: string): string {
+  return `price:${population}`;
+}
+
+/**
+ * A refused population's price as a research need: the construction's own
+ * one-figure question (`nextInputQuestion`), which names the buyers, the
+ * deliverable and the fact its answer files, and asks how they pay it.
+ */
+export function priceNeedOf(one: UnpricedPopulation): Need {
+  return {
+    subject: `what buyers described as "${one.buyer}" pay`.slice(0, 300),
+    question:
+      `${one.question} For each price, also say by what payment mechanism these buyers pay it (per purchase, subscription, retainer, deposit or prepayment, commission or revenue share) and when the money moves. ` +
+      `${one.designs} design(s) Brain constructed for these buyers wait on this one figure.`,
+    route: 'RESEARCH',
+    permissions: [],
+  };
 }
 
 /** At most this many of the adopted plan's own questions are sent per plan read (C-9). */
