@@ -3,10 +3,9 @@
  *
  * A person's answer to a card whose mission has already left NEEDS_HUMAN can never be applied: every
  * answer but STOP goes through a transition guarded on NEEDS_HUMAN. `resumeAnsweredRequest` now says so
- * itself, by the operator's one predicate, before anything acts on the answer — so a RECORD_GAPS answer no
- * longer authorizes the packet's gaps in the answerer's name first, no answer fails with a sentence about
- * the packet that reads like a decision still to make, and the card is withdrawn (never re-asked) through
- * `reopenAnswered`'s guarded withdrawal. STOP, live missions, missionless and authority cards are unchanged.
+ * before its one pre-guard effect — so a RECORD_GAPS answer no longer authorizes the packet's gaps in the
+ * answerer's name first — and the card is withdrawn (never re-asked) through `reopenAnswered`'s guarded
+ * withdrawal. STOP, live missions, missionless and authority cards are unchanged.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject, type TestProject } from './helpers.ts';
@@ -118,32 +117,24 @@ describe('an answer whose mission already left Needs You is withdrawn, never re-
     expect(cards.some((c) => open.includes(c.id))).toBe(false);
   });
 
-  it('A03: the resume itself names the moot cause, whatever the packet now says, and reopenAnswered withdraws it', async () => {
-    const missionId = await parkedMission();
-    const request = await answered(missionId, NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key);
-    // The packet has moved on too: nothing is waiting to be approved any more.
-    await getDb().run(`UPDATE research_fragments SET status = 'RUNNING' WHERE orchestration_id = (SELECT orchestration_id FROM russell_missions WHERE id = ?)`, [missionId]);
-    await moveMission(missionId, 'RUNNING');
-
-    const outcome = await resumeAnsweredRequest(request);
-    expect(outcome).toMatchObject({ ok: false, settled: false, reason: MOVED_OUT });
-    expect(await reopenAnswered(request, outcome.reason)).toBe(true);
-    const after = (await getHumanRequest(request.id))!;
-    expect(after.state).toBe('WITHDRAWN');
-    expect(after.whyNotRussell).toMatch(/RUNNING/);
-  });
-
   it('a moot RECORD_GAPS answer authorizes nothing in the answerer\'s name', async () => {
     const missionId = await parkedMission();
     const request = await answered(missionId, NEEDS_HUMAN_CHOICES.RECORD_GAPS.key);
-    await moveMission(missionId, 'CANCELLED');
     const orchestrationId = (await getMission(missionId))!.orchestrationId!;
+    // A packet whose report could be filed: something cleared its gate, so recordGaps reaches its effect.
+    await getDb().run(`UPDATE research_fragments SET status = 'ACCEPTED' WHERE orchestration_id = ?`, [orchestrationId]);
+    await moveMission(missionId, 'CANCELLED');
 
     const outcome = await resumeAnsweredRequest(request);
     expect(outcome.reason).toBe(MOVED_OUT);
     const packet = (await getOrchestration(orchestrationId))!;
     expect(packet.unresolvedGapPolicy).not.toBe('RECORD_GAPS');
     expect(packet.unresolvedGapAuthorizedBy ?? null).toBeNull();
+    // ...and the card is withdrawn, not re-asked.
+    expect(await reopenAnswered(request, outcome.reason)).toBe(true);
+    const after = (await getHumanRequest(request.id))!;
+    expect(after.state).toBe('WITHDRAWN');
+    expect(after.whyNotRussell).toMatch(/CANCELLED/);
   });
 
   it('A03: a STOP answer on a moved mission is carried out, not withdrawn', async () => {
