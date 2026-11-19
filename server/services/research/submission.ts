@@ -39,14 +39,7 @@ import {
   updateFragment,
 } from '../../repos/research.ts';
 import { reconcileAcceptedFragment } from './replan.ts';
-import {
-  applyGate,
-  fragmentPasses,
-  reasonForCondition,
-  unresolvedRetrievalReason,
-  type GateResult,
-  type VerificationInput,
-} from './gate.ts';
+import { applyGate, fragmentPasses, type GateResult, type VerificationInput } from './gate.ts';
 import { validateClaim } from './sources.ts';
 import type { ClaimScopeBasis, ClaimScopeMatch, ParsedClaim } from './schema.ts';
 import { independenceGroup } from './standards.ts';
@@ -347,11 +340,7 @@ export async function gateFragment(input: {
       // Kept forever. This is what stops a rejected claim reappearing through a
       // later attempt's synthesis: acceptance was decided once, and the reason
       // it was refused travels with it.
-      // A refusal always says why: an empty sentence names the condition it failed.
-      rejectionReason:
-        judgement.accepted || !judgement.failedCondition
-          ? judgement.reason
-          : reasonForCondition(judgement.failedCondition, judgement.reason),
+      rejectionReason: judgement.reason,
       // The verdict and what it was judged against, together. A reader of a
       // rejection needs both: "population does not match" answers nothing
       // without the population it was compared with.
@@ -363,20 +352,6 @@ export async function gateFragment(input: {
           ? { ...verdict.scopeMatch, basis }
           : verdict.scopeMatch;
       })(),
-    });
-  }
-
-  /*
-   * A claim whose source nobody could read was not judged, so it is in none of
-   * the judgements above — and left alone it would sit at `accepted = 0` with
-   * no reason, a rejection nobody can learn from. It is not accepted, and the
-   * row says why: an unread source, not a refutation. It stays out of every
-   * count the verdict is made of; only the row is explained.
-   */
-  for (const unread of gate.unresolvedRetrieval) {
-    await decideClaim(unread.claimId, {
-      accepted: false,
-      rejectionReason: unread.reason ?? unresolvedRetrievalReason(unread.state),
     });
   }
 
