@@ -17,6 +17,7 @@ import { createAccount, createRoutine, bindRoutineWorker } from '../server/repos
 import { createBin, ensureDispatchIntent, getBin, listDispatchesForBin, markDispatchDeferred } from '../server/repos/bins.ts';
 import { IDLE_RECORD_WINDOW_MS, watchIdle, watchUtilization } from '../server/services/engineering/watchdog.ts';
 import { resetNetworkBlockCache } from '../server/services/dispatch/candidates.ts';
+import { SENT_EXPLAINS_FOR_MS } from '../server/services/dispatch/conservation.ts';
 import { getDb } from '../server/db/database.ts';
 import type { BinManifest } from '../server/domain/types.ts';
 
@@ -137,6 +138,31 @@ describe('the recorded idle class, read and continued by the watchdog', () => {
     expect(reading.reason).not.toMatch(/unexplainedly idle/);
     expect(reading.held).toMatch(/DEFERRED \(NO_SURFACE_SERVES_THIS_PROJECT\)/);
     expect(reading.reason).toMatch(/Held, not idle: 1 DEFERRED \(NO_SURFACE_SERVES_THIS_PROJECT\)/);
+    expect(fires).toBe(0);
+  });
+
+  it('holds a young unanswered fire as a wait, and reads one past the in-flight window as idle', async () => {
+    // A fire that never arrived and that the no-show pass never reopened. While
+    // it is young it explains the wait; once it is older than the in-flight
+    // window it holds no slot anywhere, and calling it a hold would hide the
+    // continuation path stalling.
+    const binId = await deferredBin('ACCOUNT_TARGETS_REACHED');
+    const sentAt = new Date(Date.now() - 5 * 60_000).toISOString();
+    await getDb().run(
+      "UPDATE bin_dispatch SET state = 'SENT', sent_at = ?, next_attempt_at = ?, last_error_kind = NULL WHERE bin_id = ?",
+      [sentAt, sentAt, binId],
+    );
+
+    const young = await watchIdle({ continueWork: false });
+    expect(young.executableWork).toBe(0);
+    expect(young.idle).toBe(false);
+    expect(young.held).toMatch(/SENT_AWAITING_ARRIVAL/);
+
+    const stale = new Date(Date.parse(sentAt) + SENT_EXPLAINS_FOR_MS + 60_000);
+    const old = await watchIdle({ continueWork: false, now: stale });
+    expect(old.executableWork).toBe(1);
+    expect(old.idle).toBe(true);
+    expect(old.held).not.toMatch(/SENT/);
     expect(fires).toBe(0);
   });
 
