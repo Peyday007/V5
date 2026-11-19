@@ -470,27 +470,37 @@ export async function watchForecastPath(projectId: string, reading: ModelLearnin
   const toFactory = deps.toFactory ?? upsertCandidate;
   for (const cls of recurring) {
     if (cls.methodsToImprove.length === 0) continue;
-    const families = [...new Set(held.filter((r) => r.failureClass === cls.failureClass).map((r) => claimFamily(r.dependency)))].sort();
+    const ofClass = held.filter((r) => r.failureClass === cls.failureClass);
+    const families = [...new Set(ofClass.map((r) => claimFamily(r.dependency)))].sort();
     const onForecastPath = families.includes('cash');
     if (!onForecastPath && !cls.methodsToImprove.some(factoryOwned)) continue;
     const path = onForecastPath ? 'the cash forecast path' : `the ${families.join(', ')} claim path`;
+    // Every figure describes the path the title names: once the class also occurs on a cash claim the
+    // candidate is the cash forecast path's, so its counts, methods and samples are the cash claims' own,
+    // and the other families' occurrences are named beside them rather than counted as the forecast's.
+    const onPath = (r: FailureRecoveryRecord) => !onForecastPath || claimFamily(r.dependency) === 'cash';
+    const named = recurringFailureClasses(ofClass.filter(onPath), 1)[0] ?? cls;
+    const elsewhere = ofClass.filter((r) => !onPath(r));
+    const others = elsewhere.length
+      ? ` A further ${elsewhere.length} of this class sit on the ${[...new Set(elsewhere.map((r) => claimFamily(r.dependency)))].sort().join(', ')} claim path and are not counted here.`
+      : '';
     const weaknessKey = `FALLBACK:${cls.failureClass}`.slice(0, 200);
     const { created } = await toFactory({
       weaknessKey,
       kind: 'RECURRING_FAILURE_CLASS',
       title: `A failure recurs on ${path}: ${cls.failureClass.toLowerCase().replace(/_/g, ' ')}`,
-      problem: `${cls.occurrences} recorded failure(s) of class ${cls.failureClass}: ${cls.recovered} recovered, ${cls.notRecovered} did not, ${cls.untimelyDetections} detected late. Methods named for improvement: ${cls.methodsToImprove.join('; ')}.`.slice(0, 1000),
+      problem: `${named.occurrences} recorded failure(s) of class ${cls.failureClass} on ${path}: ${named.recovered} recovered, ${named.notRecovered} did not, ${named.untimelyDetections} detected late. Methods named for improvement: ${named.methodsToImprove.join('; ')}.${others}`.slice(0, 1000),
       metric: 'READY_OPPORTUNITIES_PER_DAY',
       downstreamMetric: null,
       ownerComponent: 'server/services/quant/fallbackWatch.ts',
-      frequency: cls.occurrences,
-      denominator: held.length,
+      frequency: named.occurrences,
+      denominator: held.filter(onPath).length,
       scope: 'LOCAL',
-      severity: cls.notRecovered > 0 || cls.untimelyDetections > 0 ? 'HIGH' : 'MEDIUM',
+      severity: named.notRecovered > 0 || named.untimelyDetections > 0 ? 'HIGH' : 'MEDIUM',
       evidence: {
-        samples: held.filter((r) => r.failureClass === cls.failureClass).map((r) => r.occurrence).slice(0, 20),
+        samples: ofClass.filter(onPath).map((r) => r.occurrence).slice(0, 20),
         mutationScope: ['server/services/quant/**', 'server/services/cash/forecast.ts', 'tests/**'],
-        knownCause: cls.methodsToImprove.join('; '),
+        knownCause: named.methodsToImprove.join('; '),
         observedAt: new Date().toISOString(),
       },
     });
