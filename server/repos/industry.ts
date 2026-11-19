@@ -121,6 +121,23 @@ export async function listNodes(projectId: string): Promise<IndustryNode[]> {
   return rows.map(mapNode);
 }
 
+/**
+ * Every other project's live map nodes, oldest first and bounded: the rows a
+ * Brain-level reader (`brainMapNodes`) narrows to the shared root's discovery
+ * and to subjects a validated finding evidences (§31, §34). Read only for a
+ * project whose own map names too few buyers to construct from.
+ */
+export async function listOtherProjectsLiveNodes(excludeProjectId: string, limit = 5000): Promise<IndustryNode[]> {
+  const rows = await getDb().all<IndustryNodeRow>(
+    `SELECT * FROM industry_nodes
+      WHERE project_id <> ? AND retired_at IS NULL
+      ORDER BY created_at ASC, id ASC
+      LIMIT ?`,
+    [excludeProjectId, limit],
+  );
+  return rows.map(mapNode);
+}
+
 /** How many live subjects the map holds: one indexed read, for the tick's early exit. */
 export async function countLiveNodes(projectId: string): Promise<number> {
   const row = await getDb().get<{ n: number | string }>(
