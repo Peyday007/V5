@@ -14,7 +14,9 @@ import {
   CAPACITY_ASSUMPTION,
   MECHANISM_ASSUMPTION_INSTRUCTION,
   CAPACITY_ASSUMPTION_INSTRUCTION,
+  type CapacityRows,
   bucketCorrectionFrom,
+  capacityAssumptionProblem,
   correctedProbability,
   decide,
   operatorCalibration,
@@ -65,7 +67,16 @@ describe('an operator decision on a bucket whose misses were CAPACITY', () => {
   beforeEach(async () => {
     projectId = (await freshProject()).project.id;
   });
-  const ctx = () => ({ runId: 'opr_t', projectIds: [projectId], models: [] });
+  /** The measured pools, as brain_operator_capacity serves them: research slots with room, the Factory full. */
+  const measured: CapacityRows = {
+    source: 'LIVE',
+    readAt: '2026-11-19T20:00:00.000Z',
+    pools: [
+      { pool: 'RESEARCH_SLOTS', running: 1, capacity: 4 },
+      { pool: 'FACTORY', running: 3, capacity: 3 },
+    ],
+  };
+  const ctx = (rows: CapacityRows = measured) => ({ runId: 'opr_t', projectIds: [projectId], models: [], readCapacity: async () => rows });
 
   it('reproduces the failure class: the bucket reading names every CAPACITY miss', async () => {
     const missed = await seedCapacityBucket(projectId, 'RESEARCH', { n: 24, occurred: 4, capacityShortfall: true });
@@ -89,7 +100,7 @@ describe('an operator decision on a bucket whose misses were CAPACITY', () => {
   it('commits one that names its capacity, at the corrected probability', async () => {
     await seedCapacityBucket(projectId, 'RESEARCH', { n: 24, occurred: 4, capacityShortfall: true });
     const quoted = /beginning "([^"]+)"/.exec(CAPACITY_ASSUMPTION_INSTRUCTION)![1]!;
-    const written = `${quoted} one free research worker, shown idle on the fleet capacity row for the next 2 days`;
+    const written = `${quoted} one RESEARCH_SLOTS slot for the next 2 days`;
     expect(CAPACITY_ASSUMPTION.test(written)).toBe(true);
     const d = await decide({ ...base, assumptions: [...base.assumptions, written] }, ctx());
     expect(d.verdict).toBe('COMMITTED');
@@ -97,6 +108,31 @@ describe('an operator decision on a bucket whose misses were CAPACITY', () => {
     const recorded = (await readLedger(null)).predictions.find((p) => p.id === decision!.predictionId)!;
     expect(recorded.probability).toBe(correctedProbability(0.8, d.correction!));
     expect(recorded.probability!).toBeLessThan(0.3);
+  });
+
+  it('holds a "capacity:" assumption to the measured pools, not to its text (review F1)', async () => {
+    await seedCapacityBucket(projectId, 'RESEARCH', { n: 24, occurred: 4, capacityShortfall: true });
+    const before = (await readLedger(null)).predictions.length;
+    const attempts: Array<[string, CapacityRows]> = [
+      // Free text that names no measured pool: the recorded way past the old gate.
+      ['capacity: one free research worker, shown idle on the fleet capacity row', measured],
+      // A real pool with no headroom on the reading.
+      ['capacity: one FACTORY slot to build it', measured],
+      // No reading at all.
+      ['capacity: one RESEARCH_SLOTS slot', { source: 'NONE', readAt: null, pools: null }],
+      // A pool the reading does not carry.
+      ['capacity: one FREE_LANE turn', measured],
+    ];
+    for (const [written, rows] of attempts) {
+      const d = await decide({ ...base, assumptions: [...base.assumptions, written] }, ctx(rows));
+      expect(d).toMatchObject({ committed: false, verdict: 'REVISE', decisionId: null });
+      expect(d.problems).toHaveLength(2);
+      expect(d.problems[1]).toBe(capacityAssumptionProblem([written], rows));
+      expect(d.next).toContain(CAPACITY_ASSUMPTION_INSTRUCTION);
+    }
+    expect((await readLedger(null)).predictions.length).toBe(before);
+    expect(capacityAssumptionProblem(['capacity: one FACTORY slot'], measured)).toMatch(/FACTORY holds 3 of 3, no room/);
+    expect(capacityAssumptionProblem(['capacity: one research_slots slot'], measured)).toBeNull();
   });
 
   it('leaves a thin or calibrated bucket alone, and another kind does not leak', async () => {
@@ -124,7 +160,7 @@ describe('an operator decision on a bucket whose misses were CAPACITY', () => {
     expect(first.next).toContain(CAPACITY_ASSUMPTION_INSTRUCTION);
     // One revision that answers both commits; there is no second REVISE waiting behind the first.
     const answered = await decide(
-      { ...bare, assumptions: [...bare.assumptions, 'mechanism: the supplier is reached through its listed sales inbox', 'capacity: one free research worker shown idle on the fleet row'] },
+      { ...bare, assumptions: [...bare.assumptions, 'mechanism: the supplier is reached through its listed sales inbox', 'capacity: one RESEARCH_SLOTS slot for the next 2 days'] },
       ctx(),
     );
     expect(answered.verdict).toBe('COMMITTED');
