@@ -16779,3 +16779,46 @@ Tests: `tests/deadlinePlan.test.ts` (the arithmetic; a replay of the
 2026-11-17 deadline on the measured GitHub and GPU-window durations; both tools
 against the database) and `tests/finishJob.test.ts` ("§113: accepting a
 deadline is a forecast…").
+
+## Plan integrity: a plan that breaks a planning rule is never accepted
+
+*(Unnumbered until CLAUDE.md's index carries it: `tests/claudeMdBudget.test.ts`
+requires every numbered section here to be indexed there.)*
+
+Every commercial-planning failure confirmed on production on 2026-11-19 broke
+a general rule, and each rule is now checked on every plan reading by one pure
+checker, `server/domain/planIntegrity.ts`, over a slice of the reading
+(`server/services/goals/planIntegrityInput.ts`) that the planner writes where
+it builds the steps and the lead — never read back out of the prose.
+
+| rule | the production failure | what the reading must show |
+|---|---|---|
+| `PAYER_IS_POPULATION` | "GitHub", "Dutch cleaning company De Po…", "the production committee's investo…" sold to as populations | the buyers an arrangement's steps sell to name a population (`namesABuyerPopulation`) |
+| `LEAD_STEPS_AGREE` | lead cop_8015, steps "Reach GitHub" from arr_53ae6fed770b | steps built from an arrangement come from one in the lead the plan names, and inside the goal's own scope (`GoalModel.arrangementsInScope`) |
+| `NO_INTERNAL_KEYS` | "focus:4", "price×2.50@SMALL_TICKET", "referral-partner>arr_…", "bundle" | no step label or detail, summary, acceptance sentence or label, or next test carries an `arr_`/`cop_`/`opp_`/`wst_` id or a reconstruction key |
+| `NO_FABRICATED_FIGURE` | every step cost 0 while the model held none | a stage that commits money carries the model's figure or null (`PlanStep.arrangement.costSource`) |
+| `STEPS_SCHEDULED` | Collect, Deliver, Renew had no day | a non-research step has a day, follows a step with one, or names why it cannot be scheduled (`unscheduled`) |
+| `PRICE_GROUNDED` | $2,569 pooled from a 47× spread | a comparable price spans at most `COMPARABLE_SPREAD_MAX`, or the price is unestablished |
+| `UNKNOWN_BECOMES_RESEARCH` | no portfolio, no price research | an unpriced lead population is in `reading.unpriced`, which the goal tick sends as `goal-price-` research |
+
+Only what the reading proves is flagged: an unknown the plan states and sends
+to research is the honest state, not a violation.
+
+**The gate.** `readGoalPlan` checks every reading before returning it
+(`gateIntegrity`) and always exposes `reading.integrity`. A reading ACCEPTED
+with any violation is refused (`refuseForIntegrity`): a candidate at most, each
+violation a shortfall, no probability and no accepted plan, its verdict no
+longer RECOMMENDABLE, and its horizons, objective, plan set and continuation
+read again from the refused acceptance. `planReady` refuses it too
+(`PLAN_INTEGRITY`). A plan with a violation is never accepted.
+
+**The release check.** `sh /app/scripts/goals.sh check [goalIds…]` reads each
+active cash goal's plan without persisting and prints `INTEGRITY <goal> OK
+<status> reach <x%>` or one `VIOLATED` line per violation (`ERROR` when the read
+throws), then `GOALS: OK` or `GOALS: INTEGRITY FAILED`.
+
+Tests: `tests/planIntegrityRegressions.test.ts` (each production failure: the
+checker flags the old output, the pipeline no longer produces it) and
+`tests/planTransfer.test.ts` (a matrix of goals across capital, revenue unit,
+deadline, industry — one of them a sector whose only buyer is one company — and
+owner time, each reading free of violations).
