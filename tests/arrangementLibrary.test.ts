@@ -400,7 +400,7 @@ describe('the construction cap ranks before it cuts', () => {
     expect(plain.selected.some((one) => one.order === last.order)).toBe(false);
     const confirmed = arrangementSignature(last.design, last.demand, last.need, last.supply);
     const evidencedNeed = { ...needs[14]!, claimId: 'clm_late' };
-    const ranked = selectCandidates({ ...job, sectors: [{ ...job.sectors[0]!, needs: [...needs.slice(0, 14), evidencedNeed] }], known: [[confirmed, { verdict: 'CONFIRMED', p50: 0 }]] });
+    const ranked = selectCandidates({ ...job, sectors: [{ ...job.sectors[0]!, needs: [...needs.slice(0, 14), evidencedNeed] }], known: [[confirmed, { verdict: 'CONFIRMED' }]] });
     expect(ranked.selected[0]!.order).toBe(last.order);
     expect(ranked.selected.filter((one) => one.need?.claimId === 'clm_late').length).toBeGreaterThan(0);
     expect(ranked.considered - ranked.selected.length).toBe(plain.considered - MAX_CONSTRUCTIONS);
