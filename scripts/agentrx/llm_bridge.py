@@ -26,6 +26,8 @@ import urllib.error
 import urllib.request
 
 VERSION = "brain-agentrx-bridge 1"
+# A free provider that has not answered in 120 s rarely does (run 44477024134: answers in 2-93 s,
+# six reads timed out at 300 s); retrying sooner reaches a healthy provider.
 # The switchboard's free providers cap a request near 64K tokens (operator.ts);
 # a prompt larger than this is refused here rather than truncated, because a
 # truncated trajectory would be diagnosed as if it were the whole one.
@@ -72,7 +74,7 @@ def call(prompt: str) -> str:
         )
         status = 0
         try:
-            with urllib.request.urlopen(req, timeout=300) as resp:
+            with urllib.request.urlopen(req, timeout=120) as resp:
                 status = resp.status
                 data = json.loads(resp.read().decode("utf-8"))
             text = ((data.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
