@@ -2712,9 +2712,9 @@ async function tickOnce(owner: string): Promise<TickReport> {
           continue;
         }
         if (!outcome.settled) {
-          // The resume may itself have moved the mission (or raced a writer that did): a moot answer is
-          // withdrawn as moot, never re-asked with the resume's own failure words.
-          await settleUnresolvedAnswer(report, request, (await answerIsMoot(request)) ? MISSION_LEFT_NEEDS_YOU : outcome.reason);
+          // A resume that itself moved the mission out of NEEDS_HUMAN is still withdrawn as moot
+          // (`reopenAnswered` decides by the same predicate), but keeps the refusal it met as its reason.
+          await settleUnresolvedAnswer(report, request, outcome.reason);
           continue;
         }
         if (await markResumed(request.id)) report.resumed.push(request.id);
