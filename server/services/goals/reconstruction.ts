@@ -38,7 +38,7 @@
  * evaluated once. It never relabels coverage as probability, and an assumed
  * input stays assumed however good the number it produces.
  */
-import { priceSupported, type ModelInput, type ModelledOpportunity } from '../cash/goalScenario.ts';
+import { losesMoneyPerDeal, priceSupported, type ModelInput, type ModelledOpportunity } from '../cash/goalScenario.ts';
 import { modelledTiming, type PaymentTimingReading } from '../cash/paymentTiming.ts';
 import { evaluateGoalPortfolio, type GateInput, type GoalPortfolio, type PlannedOpening } from './portfolio.ts';
 import { ACQUISITION_LEVERS, DAYS_TO_FIRST_PROOF, PARTNER_TERMS, budgetsAllowed, purchaseCapacity, buyInbound, dailyVolumePlan, type AcquisitionLever, type VolumePlan } from './acquisitionLevers.ts';
@@ -146,7 +146,7 @@ export interface VariantReading {
   implausible?: PlausibilityFlag[];
 }
 
-export type Factor = 'VOLUME' | 'REPLY' | 'CLOSE' | 'PRICE' | 'CASH_TIMING' | 'MARKET_SIZE' | 'CAPITAL';
+export type Factor = 'VOLUME' | 'REPLY' | 'CLOSE' | 'PRICE' | 'CASH_TIMING' | 'MARKET_SIZE' | 'CAPITAL' | 'COST';
 
 export interface FactorTest {
   factor: Factor;
@@ -432,14 +432,24 @@ async function reconstructPlanOn(input: ReconstructionInput, evaluator: Evaluato
   const outreachOpenings = input.openings.filter(sellsThroughOutreach);
   const factorStates: Array<{ factor: Factor; moved: string; state: StrategyState }> = [];
   const allOpen = (f: (o: ModelledOpportunity) => ModelledOpportunity): ModelledOpportunity[] => input.openings.map((o) => (o.agreedValue > 0 ? o : f(o)));
+  /*
+   * More deals are favourable only where a deal earns money. Production
+   * transfer test (release ca2efe4d, arr_0a5793917577): a $2,569 p50 price
+   * against a direct cost p50 $47,021 lost about $44K a deal, so "close ×2"
+   * and "market ×3" read worse than the baseline (1.2% against 2.2%) and the
+   * headroom probe, which never moved the cost, understated what the openings
+   * held could do. A losing opening keeps its close, reply and volume.
+   */
+  const earns = (o: ModelledOpportunity): boolean => losesMoneyPerDeal(o) === null;
   factorStates.push({ factor: 'VOLUME', moved: 'outreach a day ×3', state: { ...base, contactsPerDay: scale(currentContacts(limits, input.baseline), 3) } });
-  factorStates.push({ factor: 'REPLY', moved: 'reply rate at the top of its range (×3 if fixed)', state: { ...base, openings: allOpen((o) => (sellsThroughOutreach(o) ? { ...o, respond: favourable(o.respond, 'HIGH', 3, 1) } : o)) } });
-  factorStates.push({ factor: 'CLOSE', moved: 'close rate at the top of its range (×2 if fixed)', state: { ...base, openings: allOpen((o) => ({ ...o, close: favourable(o.close, 'HIGH', 2, 1) })) } });
+  factorStates.push({ factor: 'REPLY', moved: 'reply rate at the top of its range (×3 if fixed)', state: { ...base, openings: allOpen((o) => (sellsThroughOutreach(o) && earns(o) ? { ...o, respond: favourable(o.respond, 'HIGH', 3, 1) } : o)) } });
+  factorStates.push({ factor: 'CLOSE', moved: 'close rate at the top of its range (×2 if fixed)', state: { ...base, openings: allOpen((o) => (earns(o) ? { ...o, close: favourable(o.close, 'HIGH', 2, 1) } : o)) } });
   // A price is never moved alone: the demand curve takes close rate and the deals the market takes down with it (Q-2).
   factorStates.push({ factor: 'PRICE', moved: `price ×2, close rate and market volume ×${Math.pow(2, -PRICE_ELASTICITY).toFixed(2)} (elasticity ${PRICE_ELASTICITY}, assumed)`, state: { ...base, openings: allOpen((o) => repriceOpening(o, 2).opening) } });
   factorStates.push({ factor: 'CASH_TIMING', moved: 'days to cash at the bottom of its range (÷2 if fixed)', state: { ...base, openings: allOpen((o) => ({ ...o, daysToCash: favourable(o.daysToCash, 'LOW', 2) })) } });
   factorStates.push({ factor: 'CAPITAL', moved: 'money limits ×2 (starting capital and spending ceiling)', state: { ...base, committed: -Math.max(allowedFor(limits).ceiling, 0) } });
-  factorStates.push({ factor: 'MARKET_SIZE', moved: 'deals the market can take ×3', state: { ...base, openings: allOpen((o) => ({ ...o, volume: scale(o.volume, 3) })) } });
+  factorStates.push({ factor: 'MARKET_SIZE', moved: 'deals the market can take ×3', state: { ...base, openings: allOpen((o) => (earns(o) ? { ...o, volume: scale(o.volume, 3) } : o)) } });
+  factorStates.push({ factor: 'COST', moved: 'direct cost at the bottom of its range (÷2 if fixed)', state: { ...base, openings: allOpen((o) => ({ ...o, directCost: favourable(o.directCost, 'LOW', 2) })) } });
   const diagnosis: FactorTest[] = [];
   for (const { factor, moved, state } of factorStates) {
     const r = await evaluate({ ...state, changes: [{ dimension: 'EVIDENCE', label: `test:${factor}`, detail: moved, cost: 0, basis: 'ASSUMPTION' }] });
@@ -449,14 +459,19 @@ async function reconstructPlanOn(input: ReconstructionInput, evaluator: Evaluato
   const all: StrategyState = {
     ...base,
     contactsPerDay: scale(currentContacts(limits, input.baseline), 3),
-    openings: allOpen((o) => ({
-      ...o,
-      respond: sellsThroughOutreach(o) ? favourable(o.respond, 'HIGH', 3, 1) : o.respond,
-      close: favourable(o.close, 'HIGH', 2, 1),
-      // No price: under the demand curve a higher price takes as much from close and volume as it adds, so it is not a favourable end.
-      daysToCash: favourable(o.daysToCash, 'LOW', 2),
-      volume: scale(o.volume, 3),
-    })),
+    openings: allOpen((o) => {
+      // The cost moves first: whether more deals are favourable is read at the favourable cost.
+      const cheap = { ...o, directCost: favourable(o.directCost, 'LOW', 2) };
+      const more = earns(cheap);
+      return {
+        ...cheap,
+        respond: more && sellsThroughOutreach(o) ? favourable(o.respond, 'HIGH', 3, 1) : o.respond,
+        close: more ? favourable(o.close, 'HIGH', 2, 1) : o.close,
+        // No price: under the demand curve a higher price takes as much from close and volume as it adds, so it is not a favourable end.
+        daysToCash: favourable(o.daysToCash, 'LOW', 2),
+        volume: more ? scale(o.volume, 3) : o.volume,
+      };
+    }),
     changes: [{ dimension: 'EVIDENCE', label: 'test:ALL', detail: 'every factor at its favourable end at once', cost: 0, basis: 'ASSUMPTION' }],
   };
   const headroomReading = await evaluate(all);
