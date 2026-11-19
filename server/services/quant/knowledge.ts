@@ -568,6 +568,59 @@ function words(s: string): string {
 }
 
 /**
+ * The family a ledger claim belongs to: `cash` for the cash forecast's own claims, otherwise the prefix
+ * before the first `:` (`operator:opd_…` is `operator`, written by `operator/decisions.ts`).
+ */
+export function claimFamily(claimId: string): string {
+  if (parseCashClaim(claimId)) return 'cash';
+  const i = claimId.indexOf(':');
+  return i > 0 ? claimId.slice(0, i) : claimId;
+}
+
+/**
+ * Where a correction on each claim family is made, and what a person reads it as. The project ledger is
+ * shared: the operator's decisions are recorded on it beside the cash forecast (§108), so a correction on
+ * them is the operator's, never the cash forecast's — production, 2026-11-19: twelve `operator:opd_*`
+ * misses were registered as "the cash forecast is systematically miscalibrated", owned by
+ * `cash/forecast.ts`, which no change there could correct.
+ */
+const FAMILY_OWNER: Readonly<Record<string, { component: string; subject: string }>> = {
+  cash: { component: 'server/services/cash/forecast.ts', subject: 'The cash forecast' },
+  operator: { component: 'server/services/operator/decisions.ts', subject: "The operator's decision forecasts" },
+};
+
+function familyOwner(family: string): { component: string; subject: string } {
+  return FAMILY_OWNER[family] ?? { component: 'server/services/quant/ledger.ts', subject: `The ${family} forecasts on the ledger` };
+}
+
+/**
+ * One correction per claim family. `smallestReusableCauses` groups by cause across the whole ledger, so one
+ * correction can span the cash forecast and the operator's decisions; each family is corrected by its own
+ * owner, so each is routed as its own correction, its misses counted from its own systematic diagnoses.
+ */
+export function correctionsByFamily(
+  corrections: readonly Correction[],
+  diagnoses: ModelLearningReading['diagnoses'],
+): (Correction & { family: string })[] {
+  const out: (Correction & { family: string })[] = [];
+  for (const correction of corrections) {
+    const families = new Map<string, string[]>();
+    for (const claimId of correction.claimIds) {
+      const family = claimFamily(claimId);
+      families.set(family, [...(families.get(family) ?? []), claimId]);
+    }
+    for (const [family, claimIds] of families) {
+      const misses =
+        families.size === 1
+          ? correction.misses
+          : diagnoses.filter((d) => d.kind === 'SYSTEMATIC' && d.causes.includes(correction.cause) && claimIds.includes(d.claimId)).length;
+      out.push({ ...correction, claimIds, misses, family });
+    }
+  }
+  return out;
+}
+
+/**
  * Open the work a non-software correction needs, with the owner that does it
  * (LEARN-15-1: "research and commercial operations own nonsoftware corrections").
  *
@@ -712,7 +765,7 @@ export async function learnFromCashLedger(projectId: string, currencies: readonl
       const { requestGoalPlanPass } = await import('../goals/plan.ts');
       requestGoalPlanPass(goalId, why);
     });
-  for (const correction of reading.corrections) {
+  for (const correction of correctionsByFamily(reading.corrections, reading.diagnoses)) {
     // The next observations after this correction's revision, compared with the misses that exposed it. A
     // NOT_IMPROVED verdict makes this a new round of the correction (`correctionKey`), routed again in full.
     const current = verdictsFor(correction, reading, correctedAt, rows.predictions);
@@ -778,30 +831,34 @@ export async function learnFromCashLedger(projectId: string, currencies: readonl
     // measurement or correction it needs. A systematic miss always produces work, never nothing.
     if (correction.owner === 'FACTORY' || !reachedGoal) {
       const software = correction.owner === 'FACTORY';
+      // The cash forecast keeps its keys; any other family is keyed, titled and owned as itself.
+      const cash = correction.family === 'cash';
+      const owner = familyOwner(correction.family);
+      const scope = cash ? '' : `${correction.family}:`;
       // Idempotent by weakness key: the register refreshes a live candidate and never reopens a decided one.
       // A correction that did not improve the next observations is a new weakness: the register never reopens a
       // decided candidate, so the failed round is its own key and Factory or the owner sees it again.
       await (deps.toFactory ?? upsertCandidate)({
-        weaknessKey: failed.length ? `FORECAST:${correction.cause}:not-improved:${failed.map((v) => `${v.comparableKey}@${v.correctedAt}`).sort().join(',')}`.slice(0, 200) : `FORECAST:${correction.cause}`,
+        weaknessKey: failed.length ? `FORECAST:${scope}${correction.cause}:not-improved:${failed.map((v) => `${v.comparableKey}@${v.correctedAt}`).sort().join(',')}`.slice(0, 200) : `FORECAST:${scope}${correction.cause}`,
         kind: 'FORECAST_MISCALIBRATION',
         title: software
-          ? 'The cash forecast is systematically miscalibrated by its own implementation'
-          : `The cash forecast is systematically miscalibrated: ${correction.cause.toLowerCase().replace(/_/g, ' ')} (${correction.owner.toLowerCase().replace(/_/g, ' ')})`,
+          ? `${owner.subject} ${cash ? 'is' : 'are'} systematically miscalibrated by ${cash ? 'its' : 'their'} own implementation`
+          : `${owner.subject} ${cash ? 'is' : 'are'} systematically miscalibrated: ${correction.cause.toLowerCase().replace(/_/g, ' ')} (${correction.owner.toLowerCase().replace(/_/g, ' ')})`,
         problem: (software
           ? `${correction.misses} systematic miss(es) on ${correction.claimIds.join(', ')}: the same inputs run through the model do not reproduce what the claim stated.`
           : `${correction.misses} systematic miss(es) on ${correction.claimIds.join(', ')} and no goal plan rests on them to carry the correction. ${why}`
         ).slice(0, 1000),
         metric: 'READY_OPPORTUNITIES_PER_DAY',
         downstreamMetric: null,
-        ownerComponent: 'server/services/cash/forecast.ts',
+        ownerComponent: owner.component,
         frequency: correction.misses,
         denominator: reading.ledger.filter((e) => e.outcome && correction.claimIds.includes(e.prediction.claimId)).length,
         scope: 'LOCAL',
         severity: correction.misses >= 5 ? 'HIGH' : 'MEDIUM',
         evidence: {
           samples: correction.claimIds,
-          mutationScope: ['server/services/cash/forecast.ts', 'server/services/quant/**', 'tests/**'],
-          researchQuestion: software ? 'forecast calibration model implementation' : `forecast calibration ${correction.cause.toLowerCase().replace(/_/g, ' ')}`,
+          mutationScope: [owner.component, 'server/services/quant/**', 'tests/**'],
+          researchQuestion: `${cash ? '' : `${correction.family} `}${software ? 'forecast calibration model implementation' : `forecast calibration ${correction.cause.toLowerCase().replace(/_/g, ' ')}`}`,
           knownCause: `${correction.cause} on ${correction.claimIds.join(', ')} (forecast ledger)`,
           correctionOwner: correction.owner,
           calibration: evidence.calibration,
