@@ -97,6 +97,7 @@ import {
   readDeliveryReport,
   readIntegrationReport,
   readPlanProposal,
+  implementingSessions,
   reviewLineage,
   readReviewReport,
   readUnitReports,
@@ -2466,6 +2467,27 @@ async function runRemoteTick(
        * patience.
        */
       const reviewBin = liveBinOfKind(liveBins, 'FACTORY_REVIEW');
+      /*
+       * Unless no reviewer can ever be admitted. An implementing row with no
+       * session and no recoverable connector refuses every reviewer
+       * (`reviewLineage`), so the bin is not waiting for an arrival: it is a
+       * decision. Production, fcp_03a8a0ad / bin_53bf8c50, 2026-11-11 to 11-19:
+       * 3,656 arrivals refused, the bin READY at nought attempts, and the Factory
+       * line and the watchdog reading it as executable work beside a free
+       * surface — "a fault, not a wait" — every ten minutes. Parked as
+       * NEEDS_HUMAN, the next pass blocks the stage through `stalledStage`, and
+       * every reader (line, watchdog, dispatcher, assigner) stops offering it.
+       */
+      if (reviewBin && reviewBin.state === 'READY' && (await implementingSessions(fresh.id)).unknownSessionUnresolved) {
+        const reason =
+          'No reviewer can be admitted: part of this campaign was implemented under a session and ' +
+          'connector Brain never recorded, so every reviewer could be that implementer. Re-implement ' +
+          'the unattributed units, review the integrated change outside the fleet, or retire the campaign.';
+        if (await terminateUnleasedBin(reviewBin.id, reviewBin.leaseGeneration, 'NEEDS_HUMAN', reason)) {
+          report.notes.push(`review bin ${reviewBin.id} parked: ${reason}`);
+          return await blockStage(fresh, 'review', { detail: `Bin ${reviewBin.id} (FACTORY_REVIEW): ${reason}` }, report);
+        }
+      }
       const { listSessionRefusals } = await import('../../repos/bins.ts');
       const refusals = reviewBin && reviewBin.state === 'READY' ? await listSessionRefusals(reviewBin.id) : [];
       const detail =

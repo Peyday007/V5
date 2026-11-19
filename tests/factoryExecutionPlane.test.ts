@@ -4853,6 +4853,45 @@ describe('a completed delivery bin that could not be ingested says so in the led
     expect((await getCampaign(campaignId))?.state).toBe('REVIEWING');
   });
 
+  /*
+   * Production, fcp_03a8a0ad / bin_53bf8c50 (2026-11-11 to 11-19): an implementing
+   * row with no session and no recoverable connector refuses every reviewer, so
+   * the review bin sat READY at nought attempts through 3,656 refused arrivals
+   * while the Factory line and the watchdog read it as executable work beside a
+   * free surface. It is a decision, not a wait: parked, and the stage blocked.
+   */
+  it('parks a review bin no reviewer can ever be admitted to, and blocks the stage', async () => {
+    const repaired = 'e'.repeat(40);
+    const { patchCampaign } = await import('../server/repos/factory.ts');
+    await patchCampaign(campaignId, { integrationSha: repaired });
+    stubForge({
+      branches: { [integrationBranch]: repaired },
+      compares: { [`${BASE}...${repaired}`]: { files: ['test/only.test.js'], status: 'ahead' } },
+    });
+    const created = await tickRemoteCampaign(campaignId);
+    const reviewBinId = created.created.find((entry) => entry.startsWith('review:'))?.slice('review:'.length);
+    expect(reviewBinId).toBeTruthy();
+
+    await recordFactoryEvent({
+      campaignId,
+      kind: 'INTEGRATION_MERGED',
+      evidenceClass: 'MEASURED',
+      sessionId: null,
+      workerId: 'unknown-worker',
+      detail: { units: ['only-unit'] },
+    });
+
+    const parked = await tickRemoteCampaign(campaignId);
+    expect((await getBin(reviewBinId!))?.state).toBe('NEEDS_HUMAN');
+    expect((await getCampaign(campaignId))?.state).toBe('BLOCKED');
+    expect(parked.created.some((entry) => entry.startsWith('review:'))).toBe(false);
+
+    // And the next pass makes no second review bin beside it.
+    const again = await tickRemoteCampaign(campaignId);
+    expect(again.created.some((entry) => entry.startsWith('review:'))).toBe(false);
+    expect((await getCampaign(campaignId))?.state).toBe('BLOCKED');
+  });
+
   it('delivers the commit the passing review read, with no second review', async () => {
     forgeConfirms();
     const report = await tickRemoteCampaign(campaignId);
