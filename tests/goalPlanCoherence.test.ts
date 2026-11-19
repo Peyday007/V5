@@ -232,7 +232,7 @@ describe('C-8: the adopted plan is a sequence of steps', () => {
 
   it('states the measurement that kills each step, from the reply rate the plan needs', () => {
     expect(steps[0]!.kill).toMatch(/reply rate under 1\.2% after \d[\d,]* sends → stop and re-plan/);
-    expect(steps[1]!.kill).toMatch(/fewer than 1 in 10 offered buyers accepts "bundle ×9"/);
+    expect(steps[1]!.kill).toMatch(/fewer than 1 in 10 offered buyers accepts "Sell nine units as one bundle"/);
     expect(steps[2]!.kill).toMatch(/deposit/);
   });
 
