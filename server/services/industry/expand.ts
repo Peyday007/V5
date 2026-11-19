@@ -75,6 +75,7 @@ import { getOpportunity, listOpportunities } from '../../repos/cashPortfolio.ts'
 import {
   buyerNameKey,
   buyerPopulationName,
+  namesABuyerPopulation,
   isCapitalMechanism,
   isCapitalRequirement,
   isConstraintKind,
@@ -708,6 +709,11 @@ async function file(input: {
   if (!finding || !subject) return false;
 
   const kind = nodeKindForFinding(finding);
+  if (kind === 'BUYER_TYPE' && !(round.purpose === 'BOOTSTRAP' && !round.nodeId) && !namesABuyerPopulation(subject)) {
+    // "therefore an unidentified individual", "paying": a buyer node is a population a list can be built of (production, 2026-11-19).
+    out.refused.push({ claimId: claim.id, why: `"${subject}" is a sentence fragment or an unknown party, not a kind of buyer a list can be built of.` });
+    return false;
+  }
   if (kind) {
     const created = await createNode({
       projectId: input.projectId,
