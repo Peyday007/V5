@@ -239,7 +239,11 @@ describe('one predicate for executable work', () => {
     await deferOn(deferred, 'ACCOUNT_TARGETS_REACHED');
     const sent = await readyBin();
     const sentIntent = await deferOn(sent, 'ACCOUNT_TARGETS_REACHED');
-    await getDb().run("UPDATE bin_dispatch SET state = 'SENT' WHERE id = ?", [sentIntent]);
+    // As `markDispatchSent` writes it: a SENT intent always carries its send time.
+    await getDb().run("UPDATE bin_dispatch SET state = 'SENT', sent_at = ? WHERE id = ?", [
+      new Date().toISOString(),
+      sentIntent,
+    ]);
     const abandoned = await readyBin();
     const abandonedIntent = await deferOn(abandoned, 'ACCOUNT_TARGETS_REACHED');
     await getDb().run("UPDATE bin_dispatch SET state = 'ABANDONED', last_error_kind = 'SERVER' WHERE id = ?", [

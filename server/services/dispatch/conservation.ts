@@ -62,6 +62,21 @@ import {
   type RoutingRefusal,
   type RoutingResult,
 } from './router.ts';
+import { IN_FLIGHT_WINDOW_MS } from './candidates.ts';
+
+/**
+ * How long a sent fire explains a dispatchable bin waiting beside free capacity.
+ *
+ * A fire whose session took the lease leaves the dispatchable set, so a SENT
+ * intent beside a bin that is still dispatchable is one nobody answered. While
+ * it is young that is a wait: the session may still be starting, and the
+ * no-show pass (`reopenNoShowDispatches`, at `NO_SHOW_WINDOW_MS`) is what puts
+ * it back. Past the in-flight window the fire holds no slot anywhere — the
+ * router has already stopped counting it — and the no-show pass has had every
+ * tick since to reopen it, so a fire still SENT then is a stalled continuation
+ * path, not a wait, and is read as idle capacity rather than masked by the hold.
+ */
+export const SENT_EXPLAINS_FOR_MS = IN_FLIGHT_WINDOW_MS;
 
 /** A routing refusal this recent is a named wait, not idle capacity (the watchdog's window). */
 export const RECENTLY_UNROUTED_MS = 15 * 60_000;
@@ -99,6 +114,7 @@ export type DispatchHoldKind =
   | 'DEFERRED'
   | 'SENDING'
   | 'SENT_AWAITING_ARRIVAL'
+  | 'SENT_UNANSWERED'
   | 'ABANDONED'
   | 'SUPERSEDED'
   | 'PINNED_SURFACE_UNAVAILABLE'
@@ -134,6 +150,7 @@ interface IntentRow {
   state: string;
   next_attempt_at: string | null;
   last_error_kind: string | null;
+  sent_at: string | null;
 }
 
 /**
@@ -161,7 +178,7 @@ export async function dispatchReadiness(now = new Date(), limit = 500): Promise<
   const marks = ids.map(() => '?').join(', ');
   const intents = new Map<string, IntentRow>();
   for (const row of await getDb().all<IntentRow>(
-    `SELECT bin_id, lease_generation, state, next_attempt_at, last_error_kind
+    `SELECT bin_id, lease_generation, state, next_attempt_at, last_error_kind, sent_at
        FROM bin_dispatch WHERE bin_id IN (${marks})`,
     ids,
   )) {
@@ -169,6 +186,7 @@ export async function dispatchReadiness(now = new Date(), limit = 500): Promise<
     if (bin && Number(bin.lease_generation) === Number(row.lease_generation)) intents.set(row.bin_id, row);
   }
   const unroutedSince = new Date(now.getTime() - RECENTLY_UNROUTED_MS).toISOString();
+  const sentExplainsSince = new Date(now.getTime() - SENT_EXPLAINS_FOR_MS).toISOString();
   const unrouted = new Map<string, string | null>();
   for (const row of await getDb().all<{ bin_id: string; outcome: string | null; at: string }>(
     `SELECT bin_id, outcome, at FROM bin_events
@@ -217,7 +235,14 @@ export async function dispatchReadiness(now = new Date(), limit = 500): Promise<
         else out.held.push({ ...base, kind: 'SENDING', cause: null, until: intent.next_attempt_at });
         break;
       case 'SENT':
-        out.held.push({ ...base, kind: 'SENT_AWAITING_ARRIVAL', cause: null, until: null });
+        // A fire with no recorded send time cannot show it is young, so it is
+        // read as unanswered rather than given an open-ended hold.
+        if (intent.sent_at !== null && intent.sent_at > sentExplainsSince) {
+          const until = new Date(Date.parse(intent.sent_at) + SENT_EXPLAINS_FOR_MS).toISOString();
+          out.held.push({ ...base, kind: 'SENT_AWAITING_ARRIVAL', cause: null, until });
+        } else {
+          out.held.push({ ...base, kind: 'SENT_UNANSWERED', cause: null, until: null });
+        }
         break;
       case 'ABANDONED':
         out.held.push({ ...base, kind: 'ABANDONED', cause: intent.last_error_kind, until: null });

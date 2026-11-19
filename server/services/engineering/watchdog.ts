@@ -61,18 +61,22 @@ export async function idleCounts(now = new Date()): Promise<Omit<IdleReading, 'i
    *
    * Which holds are explained is decided here and stated. A wait with its own
    * end — a deferral on a rate limit's retry time, a paused fleet, an operator
-   * write, an audit session or the refire guard; a fire sent and awaiting its
-   * session; a pinned surface under repair; a fresh routing refusal — is not
-   * idle capacity. Everything else still counts, so no bar is lowered: a
-   * deferral only because every surface was at its target is idle the moment a
-   * surface is free (and the conserving pass ends it), and an abandoned or
-   * superseded intent beside a READY bin is a stall, exactly as before.
+   * write, an audit session or the refire guard; a fire sent inside the
+   * in-flight window and awaiting its session; a pinned surface under repair; a
+   * fresh routing refusal — is not idle capacity. Everything else still counts,
+   * so no bar is lowered: a deferral only because every surface was at its
+   * target is idle the moment a surface is free (and the conserving pass ends
+   * it), an abandoned or superseded intent beside a READY bin is a stall,
+   * exactly as before, and so is a fire still SENT past the in-flight window
+   * (`SENT_UNANSWERED`): the no-show pass should have reopened it long since,
+   * and a hold with no age limit would hide that path stalling.
    */
   const readiness = await dispatchReadiness(now);
   const unexplained = readiness.held.filter(
     (hold) =>
       hold.kind === 'ABANDONED' ||
       hold.kind === 'SUPERSEDED' ||
+      hold.kind === 'SENT_UNANSWERED' ||
       (hold.kind === 'DEFERRED' && hold.cause !== null && (CAPACITY_ENDED_REFUSALS as readonly string[]).includes(hold.cause)),
   );
   const explained = readiness.held.filter((hold) => !unexplained.includes(hold));
