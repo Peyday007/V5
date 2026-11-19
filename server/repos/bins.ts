@@ -383,6 +383,29 @@ export async function itemLeasesClaimedUnder(binId: string, binLeaseId: string):
   return out;
 }
 
+/**
+ * The most recent reason a worker gave when it handed this bin back.
+ *
+ * A worker that cannot finish says why through `brain_bin_release`, and that
+ * reason is kept on the `BIN_RELEASED` event and nowhere else. A contract that
+ * refuses a bin for having no result reads it from here, so the refusal — and
+ * the escalation built from it — carries what each attempt actually ran into
+ * (no browser, a product that would not start) instead of only "nothing came
+ * back". Null when no worker said anything.
+ */
+export async function latestWorkerReleaseReason(
+  binId: string,
+): Promise<{ reason: string; at: string; leaseGeneration: number | null } | null> {
+  const row = await getDb().get<{ reason: string; at: string; lease_generation: number | null }>(
+    `SELECT reason, at, lease_generation FROM bin_events
+      WHERE bin_id = ? AND event_type = 'BIN_RELEASED' AND reason IS NOT NULL AND reason <> ''
+      ORDER BY at DESC, id DESC LIMIT 1`,
+    [binId],
+  );
+  if (!row || !row.reason.trim()) return null;
+  return { reason: row.reason.trim(), at: row.at, leaseGeneration: row.lease_generation ?? null };
+}
+
 export async function countBinEvents(binId: string, eventType: string): Promise<number> {
   const row = await getDb().get<{ n: number }>(
     `SELECT COUNT(*) AS n FROM bin_events WHERE bin_id = ? AND event_type = ?`,
