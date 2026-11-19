@@ -318,3 +318,29 @@ Agent round 2 is on these, on branch claude/plan-exec-round2. The release owner 
   - `goals.sh check` runs on production after every Deploy, by workflow_run or by the hand-off. A test keeps that wiring.
 - **#1152 (d695a964).** Each goal's read in the release check is bounded, so a stuck goal (C) is that goal's ERROR, not a check with no verdict.
 - **Next.** The reconstruction-path steps: cost 0, day 0, duplicate moves, the "(ALL)" token and the trailing "Establish an offer" step. Then find out why C's read is slow.
+
+## 2026-11-19 20:50Z — first release check on production: GOALS: OK
+
+- **#1153 (41ba6369), live 19:54Z.** Reconstructed-plan steps:
+  - costs come from the model or are left unestablished;
+  - collection is dated from days to cash;
+  - repeated moves are merged into one step;
+  - no scope tokens or ids in step text;
+  - no trailing duplicate step.
+- **#1154 (0974f3d6), merged; Deploy 44603224314 is being re-run** after a Postgres timing flake.
+  - A step's owner is judged by its act, not by names in it.
+  - A step's own dependency is kept (this de-flakes planTransfer).
+  - Plan reads and the check print a heartbeat and construction-stage traces.
+- **Release check `goals.sh check`, run by hand as goals run 44607203611 on 41ba6369:** `GOALS: OK`. All six goals pass every integrity rule.
+
+  | Goal | Status | Reach |
+  |---|---|---|
+  | wst_4f0c (C) | CANDIDATE_ONLY | 8% |
+  | wst_6631 ($100K) | CANDIDATE_ONLY | 0% |
+  | wst_7b4f ($10K) | CANDIDATE_ONLY | 6.2% |
+  | wst_db2e ($5K/mo) | CANDIDATE_ONLY | 44.1% |
+  | wst_deede (A) | CANDIDATE_ONLY | 0% |
+  | wst_fa47 (B) | CANDIDATE_ONLY | 4.9% |
+
+  C read within its 6-minute bound; its earlier 30-minute hangs did not recur.
+- **What remains to an accepted plan is evidence, not plan defects.** The price research raised at 13:36Z must return before any goal can clear the defensible 90%.
