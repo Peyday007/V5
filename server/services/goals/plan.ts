@@ -3923,7 +3923,15 @@ export async function goalArrangements(goal: Workstream, target: TargetReading, 
   if (target.daysLeft === null || target.daysLeft <= 0 || target.remainingCents <= 0) return [];
   const held = lastArrangements.get(goal.id);
   if (held && arrangementsFresh(held, now)) return held.arrangements;
-  const arrangements = await constructArrangements(await constructionInputFor(goal, target, now, bestReachCents));
+  /*
+   * Only arrangements over a buyer population reach a goal (production,
+   * 2026-11-19: arr_53ae6fed770b over "GitHub" led almost every plan). One
+   * organisation is a payer an opening models as that one buyer, never a
+   * population to list, pool and sell to again; one read back from the
+   * library, composed before `namesABuyerPopulation` refused it, stops here
+   * for every reader — the model, the plan's lead and its readings, the asks.
+   */
+  const arrangements = (await constructArrangements(await constructionInputFor(goal, target, now, bestReachCents))).filter((one) => namesABuyerPopulation(one.demand.name));
   lastArrangements.set(goal.id, { at: now.getTime(), composedAt: Date.now(), arrangements });
   // The library keeps what was composed: a restart, a deploy or another goal reads it back (K-1).
   await rememberArrangements(target.projectId, goal.id, arrangements, now.toISOString()).catch((error: unknown) =>
