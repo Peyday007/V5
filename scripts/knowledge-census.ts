@@ -53,6 +53,10 @@ async function main() {
     for (const m of ['rms_cba833c0165241ee8423','rms_f9e1515cc9cb411aa8e8','rms_f84b517f58a2464aa61e']) {
       await q('FRAGS_'+m.slice(4,12), `SELECT f.status, COUNT(*) AS n, MIN(f.created_at) AS first, MAX(f.updated_at) AS last FROM russell_missions mm JOIN research_fragments f ON f.orchestration_id = mm.orchestration_id WHERE mm.id = ? GROUP BY f.status`, [m]);
     }
+    await q('R2821', `SELECT r.id, r.state, r.round, r.found, r.opened_at, r.harvested_at, c.state AS cand, c.statement AS question FROM cash_discovery_rounds r LEFT JOIN russell_candidates c ON c.id = r.candidate_id WHERE r.project_id = ? AND r.bucket_id LIKE '%-mx-2821cce3c372' ORDER BY r.created_at`, [P]);
+    await q('PLAN_LAST', `SELECT id, verdict, created_at FROM goal_plan_readings WHERE workstream_id = ? ORDER BY created_at DESC LIMIT 3`, [G]);
+    await q('PLAN_EVT', `SELECT kind, created_at, substr(summary,1,400) AS s FROM workstream_events WHERE workstream_id = ? AND kind = 'GOAL_PLAN_READ' ORDER BY created_at DESC LIMIT 2`, [G]);
+    await q('FRAG_Q', `SELECT f.id, f.status, f.created_at, f.updated_at, f.lease_owner, f.attempt_count FROM russell_missions mm JOIN research_fragments f ON f.orchestration_id = mm.orchestration_id WHERE mm.id = 'rms_f9e1515cc9cb411aa8e8'`);
     await q('FL_QUEUE', `SELECT status, COUNT(*) AS n FROM research_fragments WHERE updated_at >= ? GROUP BY status`, [new Date(Date.now() - 6 * 3600e3).toISOString()]);
   } finally {
     await closeDatabase();
