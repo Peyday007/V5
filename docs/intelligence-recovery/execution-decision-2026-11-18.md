@@ -201,3 +201,19 @@ Finish-line status:
 - Low reach on the two new goals is an honest reading: their inputs are borrowed MECHANISM bounds, not evidence.
 - Remaining defect: buyer labels are often not reachable populations ("Crucinova itself", "paying", "therefore an unidentified individual", "individual account of unknown business"). Assigned to branch claude/buyer-names.
 - Also seen: the 100K reconstruction reports p50 $705,442 beside a 1.4% reach. That is a heavy-tailed sweep (p10/p50/p90 $1,011/$16,621/$542,162 at baseline), not an error, but it reads badly. Noted, not yet changed.
+
+## 03:40Z 11-19 — #1122 live (0565698b, Fly 03:23:38Z; also carries Factory #1121)
+
+Fragment buyers are gone from all three plans. Leads now:
+
+| Goal | Lead buyer | Reach (coverage) | p50 | Scope |
+|---|---|---|---|---|
+| $10K/30d (Cash Mode 1) | homeowner | 55.3% | $16,939 | 404 constructed, 12 estimated |
+| $10K→$100K/90d (fresh) | state technical utility services bureaus | 0.4% | $185,840 | 404, 12 estimated |
+| $5K/month/60d (fresh) | Artisanal Sudoku | 0.3% | $39,595 | 147 of 404 in scope, 12 estimated |
+
+Other buyers in the plans: VA, employer, small business operators, St Louis Development Corporation, Puzzle Society. Each plan has 9–12 typed steps with kill criteria. All three are CANDIDATE_ONLY, which is correct: their inputs are assumptions, not evidence.
+
+Still open:
+- The lead changes from read to read (Puzzle Society → homeowner on the same goal). This is the parked P4 stable-selection defect.
+- Item 5 (a research round asks the slot price) is not yet verified; I asked the release owner for the round id.
