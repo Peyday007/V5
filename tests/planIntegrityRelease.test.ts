@@ -39,4 +39,13 @@ describe('the release checks the plans it released', () => {
     expect(goals).toContain('[ "$G_COMMAND" != check ]');
     expect(goals).toContain("grep -q '^GOALS: OK' goals.txt");
   });
+
+  it('ends the check process once its verdict is printed, so a pass is never reported as a timeout', () => {
+    // 2026-11-19 22:22: GOALS: OK printed, then background work held the process to the 30-minute step timeout.
+    const script = read('scripts/goals.ts');
+    const body = script.slice(script.indexOf('async function check()'), script.indexOf('async function construct()'));
+    const ok = body.lastIndexOf("console.log('GOALS: OK')");
+    expect(ok).toBeGreaterThan(0);
+    expect(body.slice(ok)).toMatch(/process\.exit\(0\)/);
+  });
 });
