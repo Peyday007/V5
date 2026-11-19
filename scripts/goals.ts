@@ -681,6 +681,10 @@ async function plan(): Promise<void> {
  * cash target. Reads only, so it needs no administrator. A plan read that
  * throws is an ERROR line and fails the check, exactly as a violation does.
  */
+/** One goal's plan read inside the release check, and the whole check, kept inside goals.yml's 30-minute step. */
+const CHECK_PER_GOAL_MS = 6 * 60_000;
+const CHECK_TOTAL_MS = 26 * 60_000;
+
 async function check(): Promise<void> {
   const [, ...ids] = words();
   const goalIds = ids.length > 0
@@ -692,9 +696,29 @@ async function check(): Promise<void> {
         )
       ).map((one) => one.id);
   let failed = 0;
+  /*
+   * Bounded, so one goal whose plan cannot be read in time is reported as that
+   * goal's ERROR rather than taking the whole release check past the
+   * workflow's own timeout with nothing printed (goal C on 2026-11-19 ran a
+   * plan read past 30 minutes). A read that cannot finish is a failure of the
+   * planner for that goal, never a pass.
+   */
+  const perGoalMs = CHECK_PER_GOAL_MS;
+  const deadline = Date.now() + CHECK_TOTAL_MS;
   for (const goalId of goalIds) {
+    if (Date.now() + perGoalMs > deadline) {
+      failed += 1;
+      console.log(`INTEGRITY ${goalId} ERROR not reached: the check's ${Math.round(CHECK_TOTAL_MS / 60000)}-minute budget was spent on the goals before it`);
+      continue;
+    }
     try {
-      const reading = await readGoalPlan({ goalId, persist: false });
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const reading = await Promise.race([
+        readGoalPlan({ goalId, persist: false }),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error(`the plan read did not finish within ${Math.round(perGoalMs / 1000)}s`)), perGoalMs);
+        }),
+      ]).finally(() => clearTimeout(timer));
       if (!reading) {
         failed += 1;
         console.log(`INTEGRITY ${goalId} ERROR no targeted goal with this id`);
@@ -708,10 +732,11 @@ async function check(): Promise<void> {
       console.log(`INTEGRITY ${goalId} ERROR ${String((error as Error)?.message ?? error).replace(/\s+/g, ' ').slice(0, 300)}`);
     }
   }
+  // A read abandoned at its timeout is still running; the verdict is printed, so end the process rather than wait for it.
   if (failed > 0) {
-    process.exitCode = 1;
     console.log('GOALS: INTEGRITY FAILED');
-    return;
+    await closeDatabase().catch(() => undefined);
+    process.exit(1);
   }
   console.log('GOALS: OK');
 }
