@@ -272,3 +272,42 @@ describe('one predicate for executable work', () => {
     expect(executable.size + held.size).toBe(all.length);
   });
 });
+
+describe('the readiness read answers the whole queue, not its first page', () => {
+  /*
+   * Review finding F2: `dispatchReadiness` read at most 500 bins, where the
+   * watchdog's earlier `COUNT(*)` had no bound. When the highest-ranked page is
+   * all held and a lower-ranked bin is fireable, a one-page read says "nothing
+   * executable" beside work the dispatcher would fire. A page size of 2 stands
+   * in for 500 so the boundary is crossed with a handful of rows.
+   */
+  it('finds a fireable bin ranked below a full page of held ones', async () => {
+    const heldIds: string[] = [];
+    for (let i = 0; i < 3; i += 1) {
+      const id = await readyBin();
+      await deferOn(id, 'ACCOUNT_TARGETS_REACHED');
+      await getDb().run('UPDATE bins SET priority = ? WHERE id = ?', [9, id]);
+      heldIds.push(id);
+    }
+    const fireable = await readyBin(); // no intent: the tick creates and claims one
+    await getDb().run('UPDATE bins SET priority = ? WHERE id = ?', [0, fireable]);
+
+    const paged = await dispatchReadiness(new Date(), 2);
+    const whole = await dispatchReadiness();
+    expect(paged.executable.map((one) => one.binId)).toContain(fireable);
+    for (const id of heldIds) expect(paged.held.find((one) => one.binId === id)?.kind).toBe('DEFERRED');
+
+    // Paging changes nothing about the answer: no bin skipped, none repeated.
+    const ids = (r: typeof paged) => [...r.executable.map((one) => one.binId), ...r.held.map((one) => one.binId)];
+    expect(new Set(ids(paged)).size).toBe(ids(paged).length);
+    expect([...ids(paged)].sort()).toEqual([...ids(whole)].sort());
+
+    const now = new Date().toISOString();
+    const { DISPATCHABLE_SQL, FIREABLE_SQL, workReadySql } = await import('../server/repos/bins.ts');
+    const count = await getDb().get<{ n: number | string }>(
+      `SELECT COUNT(*) AS n FROM bins WHERE ${DISPATCHABLE_SQL} AND ${FIREABLE_SQL} AND ${workReadySql('bins.')}`,
+      [now, now, now, now],
+    );
+    expect(ids(paged).length).toBe(Number(count?.n ?? 0));
+  });
+});
