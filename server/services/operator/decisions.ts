@@ -129,6 +129,8 @@ export interface BucketCorrection {
   rationale: string;
   /** Claims whose systematic miss named MISSING_MECHANISM: the step from decision to outcome was not in the claim. */
   missingMechanismClaims: string[];
+  /** Claims whose systematic miss named CAPACITY: the outcome needed capacity the decision assumed and did not have. */
+  capacityShortfallClaims: string[];
 }
 
 /**
@@ -143,6 +145,19 @@ export const MECHANISM_ASSUMPTION_INSTRUCTION =
 
 /** An assumption that names the mechanism step, written as MECHANISM_ASSUMPTION_INSTRUCTION tells the operator to write it. */
 export const MECHANISM_ASSUMPTION = /^\s*mechanism\s*:\s*\S/i;
+
+/**
+ * The same correction for a bucket whose systematic misses named CAPACITY
+ * (FORECAST:operator:CAPACITY): the decision assumed capacity — a free worker,
+ * a sending inbox, a delivery slot — that was not there within the horizon. The
+ * next decision of that kind states which capacity it needs and the row showing
+ * it is available, so a forecast never again rests on capacity nobody measured.
+ */
+export const CAPACITY_ASSUMPTION_INSTRUCTION =
+  'Add an assumption beginning "capacity:" naming the capacity the predicted outcome needs and the measured row showing it is available within the horizon';
+
+/** An assumption that names the capacity, written as CAPACITY_ASSUMPTION_INSTRUCTION tells the operator to write it. */
+export const CAPACITY_ASSUMPTION = /^\s*capacity\s*:\s*\S/i;
 
 /**
  * Read the bucket's own record off the ledger (§108): forecast.ts's calibration
@@ -164,11 +179,20 @@ export function bucketCorrectionFrom(
   const entries = buildLedger(predictions, exposures, outcomes);
   const buckets = calibrate(entries);
   const missing = new Set<string>();
+  const capacity = new Set<string>();
   for (const entry of entries) {
     const d = diagnose(entry, buckets, entries);
-    if (d.kind === 'SYSTEMATIC' && d.causes.includes('MISSING_MECHANISM')) missing.add(d.claimId);
+    if (d.kind !== 'SYSTEMATIC') continue;
+    if (d.causes.includes('MISSING_MECHANISM')) missing.add(d.claimId);
+    if (d.causes.includes('CAPACITY')) capacity.add(d.claimId);
   }
-  return { comparableKey, shift: reading.correction.amount, rationale: reading.correction.rationale, missingMechanismClaims: [...missing] };
+  return {
+    comparableKey,
+    shift: reading.correction.amount,
+    rationale: reading.correction.rationale,
+    missingMechanismClaims: [...missing],
+    capacityShortfallClaims: [...capacity],
+  };
 }
 
 /** Rows fetched per round trip of `readComparableLedger`: a page size, never a cap. */
@@ -280,6 +304,21 @@ export async function decide(
       challenge: null,
       correction,
       next: `${MECHANISM_ASSUMPTION_INSTRUCTION}, then call again.`,
+    };
+  }
+  if (correction && correction.capacityShortfallClaims.length > 0 && !input.assumptions.some((a) => CAPACITY_ASSUMPTION.test(a))) {
+    const claims = correction.capacityShortfallClaims;
+    return {
+      committed: false,
+      decisionId: null,
+      verdict: 'REVISE',
+      problems: [
+        `${comparableKey} is miscalibrated (${correction.rationale}) and ${claims.length} of its systematic misses were CAPACITY (${claims.slice(0, 12).join(', ')}${claims.length > 12 ? ', …' : ''}): the outcome needed capacity the decision assumed and did not have`,
+      ],
+      review,
+      challenge: null,
+      correction,
+      next: `${CAPACITY_ASSUMPTION_INSTRUCTION}, then call again.`,
     };
   }
   let challenge: Challenge | null = null;
@@ -430,6 +469,12 @@ export function operatorCalibration(
   for (const x of judged) if (!x.o.occurred) for (const c of x.o.observedCauses ?? []) causes.set(c, (causes.get(c) ?? 0) + 1);
   const enough = n >= 10;
   const mechanismMisses = causes.get('MISSING_MECHANISM') ?? 0;
+  const capacityMisses = causes.get('CAPACITY') ?? 0;
+  const kindName = comparableKey.replace(/^operator:/, '');
+  const instructions = [
+    ...(mechanismMisses > 0 ? [`${mechanismMisses} miss(es) of ${comparableKey} lacked the step from decision to outcome (MISSING_MECHANISM). In every further ${kindName} decision: ${MECHANISM_ASSUMPTION_INSTRUCTION}.`] : []),
+    ...(capacityMisses > 0 ? [`${capacityMisses} miss(es) of ${comparableKey} assumed capacity that was not there (CAPACITY). In every further ${kindName} decision: ${CAPACITY_ASSUMPTION_INSTRUCTION}.`] : []),
+  ];
   return {
     comparableKey,
     judged: n,
@@ -438,9 +483,7 @@ export function operatorCalibration(
     brier,
     missCauses: Object.fromEntries(causes),
     // Told here, where the miss is recorded, rather than first in a REVISE that costs the next decision a round-trip.
-    ...(mechanismMisses > 0
-      ? { nextDecisionOfThisKind: `${mechanismMisses} miss(es) of ${comparableKey} lacked the step from decision to outcome (MISSING_MECHANISM). In every further ${comparableKey.replace(/^operator:/, '')} decision: ${MECHANISM_ASSUMPTION_INSTRUCTION}.` }
-      : {}),
+    ...(instructions.length > 0 ? { nextDecisionOfThisKind: instructions.join(' ') } : {}),
     reading: !enough
       ? `${n} judged decision(s) of this kind — too few to call the operator's probabilities calibrated or not; investigate each miss by its cause instead`
       : Math.abs((meanForecast ?? 0) - (hitRate ?? 0)) > 0.15
