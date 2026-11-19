@@ -90,7 +90,7 @@ import type { ScenarioResult } from '../../domain/scenario.ts';
 import type { Workstream } from '../../domain/register.ts';
 import { decideResearch, type ResearchDecision } from '../quant/deadline.ts';
 import { goalExecutionPolicy, MAX_CONCURRENT_SALES, type GoalExecutionPolicy } from '../../domain/goalPolicy.ts';
-import { inputEvidence, type GoalPortfolio, type InputEvidence } from './portfolio.ts';
+import { inputEvidence, type GoalPortfolio, type InputEvidence, type UnpricedPopulation } from './portfolio.ts';
 import { sendPlanQuestions, sendPortfolioNeeds } from './portfolioNeeds.ts';
 import { diagnoseGoalResearch, diagnosisInstructions, recentGoalRounds, type ResearchDiagnosis } from './researchYield.ts';
 import type { EvidenceTier } from '../../domain/quant.ts';
@@ -358,6 +358,13 @@ export interface PlanReading {
    */
   portfolio: GoalPortfolio | null;
   /**
+   * The buyer populations whose designs this reading could not price, the
+   * leading arrangement's first (`unpricedForPlan`): what the goal tick sends
+   * as `goal-price-` research (`sendPortfolioNeeds`) whether or not a
+   * portfolio was evaluated. Absent when nothing was left unpriced.
+   */
+  unpriced?: UnpricedPopulation[];
+  /**
    * Why the goal's research is not yet producing openings this plan can use,
    * read from the openings it judged and the goal's recent rounds
    * (`researchYield.ts`). The next goal round is asked differently for each.
@@ -512,8 +519,13 @@ export interface PlanStep {
    * a reconstruction's own.
    */
   when?: string;
-  /** Money it commits before any opening pays, major units. */
-  cost: number;
+  /**
+   * Money it commits before any opening pays, major units: the figure the
+   * plan's model used for that stage. Null when the model holds no cost for
+   * the stage — unestablished, never written as 0 (production, 2026-11-19:
+   * every step of a leading arrangement read "cost 0").
+   */
+  cost: number | null;
   basis: StepBasis;
   /** PERSON only for a rule-11 kind: a payment, a credential, a legal commitment. */
   owner: 'BRAIN' | 'PERSON';
@@ -1679,6 +1691,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       executionPolicy: goalExecutionPolicy(target),
       sales: [],
       portfolio: model.portfolio,
+      ...unpricedForPlan(model.arrangementSelection?.unpriced, refusedLead),
       researchDiagnosis: [
         ...reconstructionDiagnosis(refusedReconstruction, { remaining: target.remainingCents / 100, daysLeft: target.daysLeft }),
         ...diagnoseGoalResearch({
@@ -2100,6 +2113,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     executionPolicy: policy,
     sales,
     portfolio: model.portfolio,
+    ...unpricedForPlan(model.arrangementSelection?.unpriced, lead),
     // The method's own failures first: they change how Brain searches, not one opening (§93).
     researchDiagnosis: mergeDiagnosis(
       [...reconstructionDiagnosis(reconstruction, { remaining: target.remainingCents / 100, daysLeft: target.daysLeft }), ...pathways.failures],
@@ -2700,9 +2714,11 @@ export function planSteps(input: {
    * never assumed; it is stated on the first step.
    */
   if (input.capital && input.capital.allowed !== null && input.capital.allowed > 0 && steps[0]) {
-    const deployed = steps.reduce((sum, one) => sum + Math.max(0, one.cost), 0);
+    const deployed = steps.reduce((sum, one) => sum + Math.max(0, one.cost ?? 0), 0);
+    const unpriced = steps.filter((one) => one.cost === null).length;
     const cur = input.capital.currency;
-    const line = `This plan commits ${cur} ${Math.round(deployed).toLocaleString('en-US')} of the ${cur} ${Math.round(input.capital.allowed).toLocaleString('en-US')} the goal allows${deployed === 0 ? ': none of its steps spends money' : ''}${deployed > input.capital.allowed ? ' — OVER the limit' : ''}.`;
+    const rest = unpriced > 0 ? `, plus ${unpriced} step(s) whose cost the model does not establish` : deployed === 0 ? ': none of its steps spends money' : '';
+    const line = `This plan commits ${cur} ${Math.round(deployed).toLocaleString('en-US')} of the ${cur} ${Math.round(input.capital.allowed).toLocaleString('en-US')} the goal allows${rest}${deployed > input.capital.allowed ? ' — OVER the limit' : ''}.`;
     steps[0] = { ...steps[0], detail: `${line} ${steps[0].detail}` };
   }
   // A step that starts later needs the latest step that starts before it. An arrangement's steps (`requires` set) carry their own sequence.
@@ -3923,7 +3939,15 @@ export async function goalArrangements(goal: Workstream, target: TargetReading, 
   if (target.daysLeft === null || target.daysLeft <= 0 || target.remainingCents <= 0) return [];
   const held = lastArrangements.get(goal.id);
   if (held && arrangementsFresh(held, now)) return held.arrangements;
-  const arrangements = await constructArrangements(await constructionInputFor(goal, target, now, bestReachCents));
+  /*
+   * Only arrangements over a buyer population reach a goal (production,
+   * 2026-11-19: arr_53ae6fed770b over "GitHub" led almost every plan). One
+   * organisation is a payer an opening models as that one buyer, never a
+   * population to list, pool and sell to again; one read back from the
+   * library, composed before `namesABuyerPopulation` refused it, stops here
+   * for every reader — the model, the plan's lead and its readings, the asks.
+   */
+  const arrangements = (await constructArrangements(await constructionInputFor(goal, target, now, bestReachCents))).filter((one) => namesABuyerPopulation(one.demand.name));
   lastArrangements.set(goal.id, { at: now.getTime(), composedAt: Date.now(), arrangements });
   // The library keeps what was composed: a restart, a deploy or another goal reads it back (K-1).
   await rememberArrangements(target.projectId, goal.id, arrangements, now.toISOString()).catch((error: unknown) =>
@@ -3951,9 +3975,11 @@ export function arrangementContribution(reading: Pick<PlanReading, 'portfolio'>)
 
 /**
  * The constructed arrangement the plan leads with, when its steps are read
- * from one (`planSteps`): a member of the candidate or of the best
- * combination first, then the one contributing most to the last model, then
- * construction's own first-ranked. Null when nothing was constructed. Pure.
+ * from one (`planSteps`): a member of the candidate, else of the best
+ * combination; null when that lead names members and none is an arrangement.
+ * Only when the plan names no lead, the one contributing most to the last
+ * model, then construction's own first-ranked. Null when nothing was
+ * constructed. Pure.
  */
 export function leadingArrangement(
   arrangements: readonly ConstructedArrangement[],
@@ -3968,11 +3994,22 @@ export function leadingArrangement(
   const leaders = arrangements.filter((a) => namesABuyerPopulation(a.demand.name));
   if (leaders.length === 0) return null;
   const byKey = new Map(leaders.map((a) => [a.key, a]));
-  for (const id of [...(reading.candidateIds ?? []), ...(reading.portfolio?.best?.members.map((m) => m.opportunityId) ?? [])]) {
+  /*
+   * The plan's lead is its candidate, else its best combination. When that
+   * lead names members and none is a constructed arrangement held here, the
+   * steps are not an arrangement's (production, 2026-11-19, goal wst_7b4f:
+   * the plan led with cop_8015, a Pennsylvania opening, while its steps read
+   * "Reach GitHub" from an arrangement that was not in the lead at all). The
+   * plan's sales and next step then carry the lead.
+   */
+  const candidateIds = reading.candidateIds ?? [];
+  const named = candidateIds.length > 0 ? [...candidateIds] : (reading.portfolio?.best?.members.map((m) => m.opportunityId) ?? []);
+  for (const id of named) {
     if (!isArrangementId(id)) continue;
     const hit = byKey.get(id.slice(ARRANGEMENT_ID_PREFIX.length));
     if (hit) return hit;
   }
+  if (named.length > 0) return null;
   let best: ConstructedArrangement | null = null;
   let score = 0;
   for (const [key, value] of arrangementContribution(reading)) {
@@ -3983,6 +4020,23 @@ export function leadingArrangement(
     }
   }
   return best ?? leaders[0]!;
+}
+
+/**
+ * The populations a reading could not price, as the goal tick sends them: the
+ * leading arrangement's population first, so the plan's own lead is the first
+ * price question asked (`PRICE_ASKS_PER_READ` per read), then the rest, most
+ * designs first. Production, 2026-11-19: a goal with no portfolio carried its
+ * unpriced populations only on the portfolio it did not have, so no price
+ * research ever launched for the population its plan led with. Pure.
+ */
+export function unpricedForPlan(
+  unpriced: readonly UnpricedPopulation[] | null | undefined,
+  lead: Pick<ConstructedArrangement, 'demand'> | null,
+): { unpriced?: UnpricedPopulation[] } {
+  if (!unpriced || unpriced.length === 0) return {};
+  const first = lead ? unpriced.filter((one) => one.population === lead.demand.ref) : [];
+  return { unpriced: [...first, ...unpriced.filter((one) => !first.includes(one))] };
 }
 
 /**
@@ -4256,9 +4310,10 @@ export async function advanceGoalPlans(
     // decision unknowns to research or an authorized action, missing history to research.
     // Keyed per goal, opening and unknown, so a re-read raises nothing new.
     // Reaching the target does not end this: the threshold is a minimum, and the continuation rule decides (S-0199).
-    if (reading?.portfolio && reading.needsMoreOpenings) {
+    // A goal with no portfolio still sends its unpriced populations' price questions (production, 2026-11-19).
+    if (reading?.needsMoreOpenings && (reading.portfolio || reading.unpriced?.length)) {
       try {
-        await sendPortfolioNeeds({ goalId: id, projectId: reading.target.projectId, portfolio: reading.portfolio });
+        await sendPortfolioNeeds({ goalId: id, projectId: reading.target.projectId, portfolio: reading.portfolio, unpriced: reading.unpriced ?? null });
       } catch (error) {
         console.warn(`goal ${id}: sending the portfolio's needs failed: ${String((error as Error)?.message ?? error)}`);
         await recordDegraded(id, reading.target.projectId, [`portfolio needs: ${errorText(error)}`]);

@@ -31,7 +31,7 @@
 import { namesOneOrganisation } from '../../domain/industry.ts';
 import type { ConstructedArrangement } from '../cash/construct.ts';
 import { PART_ASK } from '../cash/construct.ts';
-import type { ModelledOpportunity } from '../cash/goalScenario.ts';
+import type { ModelInput, ModelledOpportunity } from '../cash/goalScenario.ts';
 import { designFacts, STRUCTURES } from '../cash/properties.ts';
 import { fieldFromInput, type ModelField } from './planSet.ts';
 import { RESEARCH_TURNAROUND_DAYS, type PlanStep } from './plan.ts';
@@ -187,8 +187,20 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
   const days = fieldFromInput(ctx.modelled?.daysToCash, 'days to usable cash');
   const daysSpan = spanOf(days);
   const simulated = !daysSpan && ctx.simulatedDays ? { low: ctx.simulatedDays.p10, high: ctx.simulatedDays.p90 } : null;
-  const cashSpan = daysSpan ?? simulated;
-  const cashStanding = days ? days.status.toLowerCase() : 'swept by the plan\'s simulation: an assumption, not established';
+  /*
+   * Production, 2026-11-19: with no portfolio there is no simulated draw, and
+   * a model whose days nothing established still screened the arrangement on
+   * its swept range — so Collect, Deliver and Renew carried no day although
+   * the plan was read on one. That range is what the model used: it is read
+   * here, as an assumption, exactly as the screen read it.
+   */
+  const sweptDays = !daysSpan && !simulated ? sweptSpan(ctx.modelled?.daysToCash) : null;
+  const cashSpan = daysSpan ?? simulated ?? sweptDays;
+  const cashStanding = days
+    ? days.status.toLowerCase()
+    : simulated
+      ? 'swept by the plan\'s simulation: an assumption, not established'
+      : 'the range the model swept: an assumption, not established';
   /*
    * A presale over buyers stated to pay in arrears contradicts itself
    * (transfer test, 2026-11-19, goal wst_fa4761773e4441b89e5a: step 8 presold
@@ -197,10 +209,13 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
    */
   const conflict = prepaid && a.buyerTerms?.timing === 'ARREARS';
   const arrears = conflict ? ` "${buyers}" are stated to pay in arrears (${a.buyerTerms!.basis})` : '';
+  // A cost the model used is carried, established or swept; one it never held stays null (unestablished), never 0.
   const direct = fieldFromInput(ctx.modelled?.directCost, 'direct cost per deal');
-  const directSpan = spanOf(direct);
+  const directSpan = spanOf(direct) ?? sweptSpan(ctx.modelled?.directCost);
+  const directStanding = direct ? direct.status.toLowerCase() : 'the range the model swept: an assumption, not established';
   const tiedUp = fieldFromInput(ctx.modelled?.capital, 'money tied up');
-  const tiedUpSpan = spanOf(tiedUp);
+  const tiedUpSpan = spanOf(tiedUp) ?? sweptSpan(ctx.modelled?.capital);
+  const tiedUpStanding = tiedUp ? tiedUp.status.toLowerCase() : 'the range the model swept: an assumption, not established';
 
   // 2. Who to reach, and how.
   const reachNeeds = needs('BUYERS');
@@ -216,7 +231,7 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
       ' The model prices no outreach cost for these sends.',
     startDay: reachDay,
     when: startWhen(reachNeeds, reachDay),
-    cost: 0,
+    cost: null,
     basis: basisOf('BUYERS'),
     owner: 'BRAIN',
     ownerReason: null,
@@ -281,10 +296,10 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
   const agreeDay = startOf(offerNeeds);
   const agreeOrder = next({
     label: conversionKnown && !conflict ? `Offer it to ${buyers}` : `Validate the offer with ${buyers}`,
-    detail: `Offer ${a.need ? `"${a.need.name}" ` : ''}${def.needsSupply ? `fulfilled by ${supplier ? `"${supplier}"` : 'the supplier'} ` : ''}${price}, ${funding}.${conversionKnown ? '' : ` The first batch measures what share agree: ${conversionQuestion}.`}${conflict ? ` This contradicts their terms:${arrears}, so the first batch first measures whether they will pay in advance at all.` : ''}`,
+    detail: `Offer ${a.need ? `"${a.need.name}" ` : ''}${def.needsSupply ? `fulfilled by ${supplier ? `"${supplier}"` : 'the supplier'} ` : ''}${price}, ${funding}.${conversionKnown ? '' : ` The first batch measures what share agree: ${conversionQuestion}.`}${conflict ? ` This contradicts their terms:${arrears}, so the first batch first measures whether they will pay in advance at all.` : ''} The model prices no cost for sending the offer.`,
     startDay: agreeDay,
     when: startWhen(offerNeeds, agreeDay),
-    cost: 0,
+    cost: null,
     basis: priced && conversionKnown ? 'ESTIMATE' : 'ASSUMPTION',
     owner: 'BRAIN',
     ownerReason: null,
@@ -325,8 +340,9 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
       detail: `${detail}${terms}${when}`,
       startDay: cashDay,
       when: cashWhen,
-      cost: 0,
-      basis: simulated || conflict ? 'ASSUMPTION' : basisOf('SETTLEMENT'),
+      // The model holds no cost of collecting (a payment provider's fee): unestablished, not free.
+      cost: null,
+      basis: simulated || sweptDays || conflict ? 'ASSUMPTION' : basisOf('SETTLEMENT'),
       owner: account.length > 0 ? 'PERSON' : 'BRAIN',
       ownerReason: account.length > 0 ? `a payment account in the owner's name (${account.join(', ')}), which only the owner can open; Brain collects once it is connected` : null,
       kill: `cash would not be usable by day ${ctx.daysLeft ?? 'the deadline'} → re-plan this arrangement's payment terms (a deposit or a presale) or drop it`,
@@ -339,9 +355,9 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
   // 6. Ordering supply: money paid out, so the owner's; funded by buyers when the design presells.
   const stressed = a.stress.worstCaseCents !== null ? a.stress.worstCaseCents / 100 : null;
   const atRisk = stressed ?? tiedUpSpan?.high ?? null;
-  const atRiskFrom = stressed !== null ? 'the arrangement\'s stress test' : tiedUp ? `the model's money tied up (${tiedUp.status.toLowerCase()})` : null;
+  const atRiskFrom = stressed !== null ? 'the arrangement\'s stress test' : tiedUpSpan ? `the model's money tied up (${tiedUpStanding})` : null;
   const order = () => {
-    const committed = prepaid ? 0 : (atRisk ?? 0);
+    const committed = prepaid ? 0 : atRisk;
     const within = prepaid ? true : atRisk === null || ctx.capitalBeforeProof === null ? null : atRisk <= ctx.capitalBeforeProof;
     const costText = prepaid
       ? 'paid from what buyers already paid, so nothing of the owner\'s is tied up first'
@@ -358,7 +374,7 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
       cost: committed,
       basis: basisOf('SUPPLY', 'COST'),
       owner: 'PERSON',
-      ownerReason: prepaid ? 'a payment to the supplier, from the money buyers paid in' : `a payment${committed > 0 ? ` of ${money(committed, cur)}` : ''} from the owner's account, inside the goal's limits`,
+      ownerReason: prepaid ? 'a payment to the supplier, from the money buyers paid in' : `a payment${committed !== null && committed > 0 ? ` of ${money(committed, cur)}` : ''} from the owner's account, inside the goal's limits`,
       kill: `the order would tie up more than ${ctx.capitalBeforeProof !== null ? money(ctx.capitalBeforeProof, cur) : 'the goal allows'} before buyers pay, or the supplier's price leaves no margin → refund buyers and re-plan`,
       execution: [],
       kind: 'EXECUTE',
@@ -382,19 +398,21 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
     const paysFirst = ownCost && !prepaid;
     const costLine = !ownCost
       ? ''
-      : directSpan && direct
-        ? ` Direct cost per deal about ${range(directSpan.low, directSpan.high, cur)} (${direct.status.toLowerCase()})${prepaid ? ', paid from the buyer\'s payment' : `, paid before the buyer pays${ctx.capitalBeforeProof !== null ? `, ${directSpan.high <= ctx.capitalBeforeProof ? 'inside' : 'OVER'} the ${money(ctx.capitalBeforeProof, cur)} allowed before proof` : ''}`}.`
+      : directSpan
+        ? ` Direct cost per deal about ${range(directSpan.low, directSpan.high, cur)} (${directStanding})${prepaid ? ', paid from the buyer\'s payment' : `, paid before the buyer pays${ctx.capitalBeforeProof !== null ? `, ${directSpan.high <= ctx.capitalBeforeProof ? 'inside' : 'OVER'} the ${money(ctx.capitalBeforeProof, cur)} allowed before proof` : ''}`}.`
         : ` Direct cost per deal is not yet established: ${establishedBy('COST', 'the first delivery measures it')}.`;
-    const cost = paysFirst && directSpan ? directSpan.high : 0;
+    // Paid by the order above, the supplier or the buyer's own money: nothing of the owner's. Paid first by the owner: the model's direct cost, or unestablished.
+    const cost = paysFirst ? (directSpan ? directSpan.high : null) : 0;
+    const paid = cost !== null && cost > 0;
     next({
       label: 'Deliver and confirm',
       detail: `${facts.fulfiller === 'BRAIN' ? `Brain produces ${supplier ? `"${supplier}"` : 'the deliverable'} for each buyer and records delivery.` : `${supplier ? `"${supplier}"` : 'The supplier'} delivers to each buyer; Brain confirms delivery with each buyer and records it.`}${costLine}`,
       startDay: day,
       when: deliverWhen,
       cost,
-      basis: paysFirst && !directSpan ? 'ASSUMPTION' : 'ESTIMATE',
-      owner: cost > 0 ? 'PERSON' : 'BRAIN',
-      ownerReason: cost > 0 ? `a payment of up to ${money(cost, cur)} per deal from the owner's account before the buyer pays, inside the goal's limits` : null,
+      basis: paysFirst && (!directSpan || !direct) ? 'ASSUMPTION' : 'ESTIMATE',
+      owner: paid ? 'PERSON' : 'BRAIN',
+      ownerReason: paid ? `a payment of up to ${money(cost ?? 0, cur)} per deal from the owner's account before the buyer pays, inside the goal's limits` : null,
       kill: 'a buyer reports non-delivery or a defect → hold collection for that buyer, refund under the stated terms, and re-plan the supply',
       execution: [],
       kind: 'EXECUTE',
@@ -419,19 +437,28 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
   // 7. A design that repeats asks for the next run or renewal.
   if (a.design.repeat !== 'ONE_OFF') {
     const subscription = a.design.repeat === 'SUBSCRIPTION';
-    // A next group follows one cycle of the model's days to usable cash; a renewal's period is not in the model.
-    const day = subscription ? null : cashDay;
+    /*
+     * A next group follows one cycle of the model's days to usable cash. A
+     * renewal falls one cycle after the first payment: the model holds no
+     * subscription period, and a repeatable line turns at its days to usable
+     * cash (`stakeCycles`), so that is the cycle it is read at — an assumption.
+     */
+    const renewal: Day | null = cashDay && cashSpan ? { low: Math.round(cashDay.low + cashSpan.low), high: Math.round(cashDay.high + cashSpan.high) } : null;
+    const day = subscription ? renewal : cashDay;
     next({
       label: subscription ? 'Renew' : 'Run the next group',
       detail: subscription ? `Renew the same "${buyers}" for the next period.` : `Offer the next run to a fresh group of "${buyers}".`,
       startDay: day,
       when: subscription
-        ? `not yet scheduled: the renewal falls at the end of the subscription period, which the model does not hold; ${establishedBy('REPEAT', 'the first period')} establishes it`
+        ? renewal
+          ? `${dayText(renewal)}: one cycle after the first payment, read at the model's days to usable cash (${cashStanding}); the model holds no subscription period, which ${establishedBy('REPEAT', 'the first period')} establishes`
+          : `one cycle after the first payment: ${pending}`
         : cashDay
           ? `${dayText(cashDay)}: one cycle after the offer, the first group's days to usable cash`
           : `one cycle after the offer: ${pending}`,
-      cost: 0,
-      basis: basisOf('REPEAT'),
+      // Asking again is outreach, which the model prices nothing for: unestablished.
+      cost: null,
+      basis: subscription ? 'ASSUMPTION' : basisOf('REPEAT'),
       owner: 'BRAIN',
       ownerReason: null,
       kill: 'fewer buyers return or join than the first run needed → stop repeating and re-plan',
@@ -452,6 +479,15 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
 }
 
 type Day = { low: number; high: number };
+
+/** A model input's range as the model swept it when nothing established it, or null when it holds none. */
+function sweptSpan(input: ModelInput | null | undefined): Day | null {
+  if (!input) return null;
+  const high = input.high ?? input.value;
+  const low = input.low ?? input.value ?? high;
+  if (high === null || low === null || !Number.isFinite(high) || !Number.isFinite(low)) return null;
+  return { low: Math.min(low, high), high: Math.max(low, high) };
+}
 
 /** A model field's numeric range, or null when the model holds no number for it. */
 function spanOf(field: ModelField | null): Day | null {

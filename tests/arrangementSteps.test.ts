@@ -222,7 +222,9 @@ describe('a leading arrangement\'s steps can be followed on a schedule', () => {
       expect(by(label).when).toMatch(/days to usable cash, which Research settlement \(step \d\) establishes/);
     }
     expect(by('Deliver and confirm').detail).toMatch(/Direct cost per deal is not yet established: Research the cost per deal \(step \d\)/);
-    expect(steps.every((s) => s.cost === 0)).toBe(true);
+    // No cost is pretended either: a stage the model holds no cost for is unestablished (null), never 0 (production, 2026-11-19).
+    expect(steps.every((s) => s.cost === null || s.cost === 0)).toBe(true);
+    for (const label of ['Reach', 'Validate the offer', 'Collect payment', 'Run the next group']) expect(by(label).cost, label).toBeNull();
   });
 
   it('(a)(b) with the model holding days to usable cash and direct cost, every step has a day and a cost from those same values', () => {
@@ -342,7 +344,7 @@ describe('steps agree with the settlement terms, the window, the capital and the
     const steps = planSteps({ adoption: baseline, reconstruction: null, sales: [], nextTest: generic, permissionsMissing: [], capital: { allowed: 25_000, currency: 'USD' } });
     expect(steps[0]!.detail).toMatch(/^This plan commits USD 0 of the USD 25,000 the goal allows: none of its steps spends money\./);
     const withOrder = planSteps({ adoption: baseline, reconstruction: null, sales: [], nextTest: generic, permissionsMissing: [], arrangement: { arrangement: subcontract, context: { currency: 'USD', daysLeft: 90, capitalBeforeProof: 375 } }, capital: { allowed: 375, currency: 'USD' } });
-    expect(withOrder[0]!.detail).toMatch(/^This plan commits USD 600 of the USD 375 the goal allows — OVER the limit\./);
+    expect(withOrder[0]!.detail).toMatch(/^This plan commits USD 600 of the USD 375 the goal allows, plus \d+ step\(s\) whose cost the model does not establish — OVER the limit\./);
   });
 
   it('a reply kill criterion compares a reply rate with the measured reply rate, never with a reach', () => {
@@ -358,7 +360,9 @@ describe('steps agree with the settlement terms, the window, the capital and the
 
   it('(1) one named organisation never leads: it is its opening\'s buyer, not a population', () => {
     const one = arrangement({ key: 'one', demand: { name: 'St Louis Development Corporation', claimId: null, from: 'INDUSTRY_MAP', ref: 'n' } });
-    expect(leadingArrangement([one, postcard], { portfolio: null, candidateIds: ['arr_one'] })!.key).toBe('postcard-pool');
+    // Nor does another arrangement stand in for it: the steps are the lead's own or none (goal wst_7b4f, 2026-11-19).
+    expect(leadingArrangement([one, postcard], { portfolio: null, candidateIds: ['arr_one'] })).toBeNull();
+    expect(leadingArrangement([one, postcard], { portfolio: null })!.key).toBe('postcard-pool');
     expect(leadingArrangement([one], { portfolio: null })).toBeNull();
   });
 });
