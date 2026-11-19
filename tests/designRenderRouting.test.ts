@@ -34,7 +34,14 @@ import {
   DESIGN_RENDER_REQUIRED_CAPABILITIES,
   DESIGN_RENDER_WORKLOAD_CLASS,
   openDesignRender,
+  renderRoutingShape,
+  renderRunnability,
 } from '../server/services/design/render.ts';
+import { runDesignKernel, seedDesignKernel } from '../server/services/design/kernel.ts';
+import { requestDesignCycle } from '../server/services/design/route.ts';
+import { binRequestFor } from '../server/repos/design.ts';
+import { createProject } from '../server/repos/projects.ts';
+import { registerResearchSurfaces } from './helpers/researchSurfaces.ts';
 import {
   classesForFamilies,
   decideBinRouting,
@@ -237,5 +244,61 @@ describe('other classes are unchanged on the same fleet', () => {
     }
     expect(binScopeRefusal(factory, make('FACTORY_UNITS'))).toBeNull();
     expect(binScopeRefusal(general, make('FACTORY_UNITS'))).toBe('FAMILY');
+  });
+});
+
+describe('a render is not asked for when no surface in the fleet can run it', () => {
+  it('asks the router’s own question, over the bin that would be opened', async () => {
+    const bin = await productionRenderBin();
+    const shape = renderRoutingShape(bin.projectId);
+    expect(familyOf(shape)).toBe(familyOf(bin));
+    expect(repositoryIdOf(shape)).toBe(repositoryIdOf(bin));
+    expect(shape.requiredCapabilities).toEqual(bin.requiredCapabilities);
+    const { general, factory } = fleet(bin.projectId);
+    const other = surface('rtn_other', bin.projectId, ['repository'], ['FACTORY'], ['someone/else']);
+    for (const candidate of [general, factory, other]) {
+      expect(binScopeRefusal(candidate, shape)).toBe(binScopeRefusal(candidate, bin));
+    }
+  });
+
+  it('refuses a fleet of surfaces with no checkout, and names why', () => {
+    const { general } = fleet('prj_render');
+    const other = surface('rtn_other', 'prj_render', ['repository'], ['FACTORY'], ['someone/else']);
+    const elsewhere = surface('rtn_elsewhere', 'prj_elsewhere', ['repository'], ['FACTORY'], [BRAIN_REPOSITORY_ID]);
+    const verdict = renderRunnability([general, other, elsewhere], 'prj_render');
+    expect(verdict.runnable).toBe(false);
+    if (!verdict.runnable) {
+      expect(verdict.refusals).toEqual({ FAMILY: 1, REPOSITORY: 1, PROJECT: 1 });
+      expect(verdict.reason).toContain('no surface in the fleet can run a render');
+    }
+  });
+
+  it('accepts a fleet holding a checkout of Brain’s repository for the project', () => {
+    const { general, factory } = fleet('prj_render');
+    expect(renderRunnability([general, factory], 'prj_render')).toEqual({
+      runnable: true,
+      surfaces: ['rtn_factory'],
+    });
+  });
+
+  it('opens no render bin from the kernel over a fleet that cannot run one — the recorded class', async () => {
+    await freshProject();
+    await seedDesignKernel();
+    const architecture = await createProject({ name: 'Brain architecture', purpose: 'TECHNICAL' });
+    // Research surfaces only: what the fleet held when 7 of 11 render bins ended NEEDS_HUMAN.
+    await registerResearchSurfaces(architecture.id, 2);
+    const routed = await requestDesignCycle({
+      triggerKind: 'UI_IMPACT',
+      triggerRef: 'cmp_render_routing',
+      changedPaths: ['client/src/russell/Home.tsx'],
+      description: 'Rework how the conversation list is grouped',
+      revision: 'b'.repeat(40),
+    });
+    const cycleId = routed.cycle!.id;
+
+    const pass = await runDesignKernel();
+    expect(pass.asked.filter((one) => one.cycleId === cycleId && one.kind === 'RENDER')).toEqual([]);
+    expect(await binRequestFor({ cycleId, pass: 0, kind: 'RENDER' })).toBeNull();
+    expect(pass.problems.some((one) => one.includes(cycleId) && one.includes('no surface in the fleet can run a render'))).toBe(true);
   });
 });
