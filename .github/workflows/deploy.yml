@@ -1164,3 +1164,12 @@ jobs:
         run: |
           gh workflow run factory-release.yml -R "$GITHUB_REPOSITORY" --ref production -f reason="$REASON" \
             || echo "::warning::The Factory release pass could not be dispatched; the next Deploy or the schedule asks again."
+      # The released plans are checked end to end (goals.yml `check`). A bot's
+      # Deploy raises no workflow_run, so this is the only way that check hears of it.
+      - name: Ask for the plan integrity check on the released commit
+        if: ${{ needs.deploy.result == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run goals.yml -R "$GITHUB_REPOSITORY" --ref production -f command=check \
+            || echo "::warning::The plan integrity check could not be dispatched; run goals.yml with command=check."
