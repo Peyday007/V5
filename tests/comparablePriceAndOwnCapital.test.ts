@@ -144,6 +144,16 @@ describe('F6: only the opening’s own evidence refuses it for the money it ties
     expect(d.capitalAtStart).toBe(GOAL_10K_LIMITS.beforeProof / 2);
     expect(d.unestablished).toContain('money tied up');
     expect(d.justified).toBe(false);
+    // NO_FAVOURABLE_UNKNOWN (2026-11-19): that midpoint is exploration only. An estimate held over the limit is never a member.
+    expect(d.heldOut).toMatch(/^held out of every combination/);
+  });
+
+  it('an estimate held inside the limit is the floor of the range it enters in, never entered below it', () => {
+    const inside: ModelInput = { ...inferredCapital('COMPARABLE'), provenance: 'UNKNOWN', low: 280, high: 600, distribution: undefined, inferred: { tier: 'COMPARABLE', justified: false, p10: 300, p50: 420, p90: 600, observations: 3 } };
+    const d = read(inside);
+    expect(d.heldOut).toBeNull();
+    expect(d.refused).toBeNull();
+    expect(d.capitalAtStart).toBe((300 + GOAL_10K_LIMITS.beforeProof) / 2);
   });
 
   it("refuses on the opening's own evidence: its own facts (DIRECT) or a figure on its card", () => {

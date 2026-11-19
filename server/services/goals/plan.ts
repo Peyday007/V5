@@ -3176,7 +3176,8 @@ async function salesFor(
   const demandOf = new Map((portfolio?.demand ?? []).map((one) => [one.opportunityId, one]));
   const outsideLimits = (id: string): boolean => {
     const d = demandOf.get(id);
-    if (d?.refused) return true;
+    // Refused, or held out because an estimate it rests on breaks the goal's limits (NO_FAVOURABLE_UNKNOWN): not sold until restructured.
+    if (d?.refused || d?.heldOut) return true;
     const days = byId.get(id)?.daysToCash;
     const earliest = days ? (days.low ?? days.value) : null;
     return target.daysLeft !== null && earliest !== null && earliest > target.daysLeft && d !== undefined && d.revenue.p90 <= 0;

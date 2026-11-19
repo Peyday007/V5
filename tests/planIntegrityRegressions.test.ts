@@ -19,6 +19,9 @@
  *      NO_FABRICATED_FIGURE      "Sell and collect · cost 0"
  *      NO_DUPLICATE_STEPS        `Bring in "Constructed` six times
  *      STEPS_SCHEDULED           "Establish an offer and a price · day 0" after "Run the next group · day 12–56"
+ *   9  WITHIN_LIMITS             wst_7b4fcbb5 ($3,000 capital, $375 before money comes in) led at 6.2%
+ *      NO_FAVOURABLE_UNKNOWN     with a $15,000 grant service held at "capital E 14985", entered at 187.5
+ *                                (20:51Z, 0974f3d6)
  *
  * And the gate: a reading that breaks any rule is never ACCEPTED, and planReady
  * refuses it.
@@ -36,7 +39,8 @@ import type { Reconstruction, StrategyChange, VariantReading } from '../server/s
 import { applyProgram, scopeWords, type Transform } from '../server/services/goals/reasoning/directions.ts';
 import { buildOperators, type StrategyState } from '../server/services/goals/reconstruction.ts';
 import { GOAL_10K_LIMITS, GOAL_10K_OPENINGS, GOAL_10K_RECORD } from './fixtures/goal10k.ts';
-import { evaluateGoalPortfolio } from '../server/services/goals/portfolio.ts';
+import { BUYER_FUNDED, evaluateGoalPortfolio } from '../server/services/goals/portfolio.ts';
+import { pathwayOf } from '../server/services/goals/pathways.ts';
 import type { NextTest } from '../server/services/goals/plan.ts';
 
 /* ------------------------------------------------------------------ */
@@ -462,6 +466,106 @@ describe('8. a reconstructed plan: its scope in words, its sale and collection c
     expect(steps[0]).toMatchObject({ label: 'Establish an offer and a price', startDay: { low: 0, high: 0 }, cost: 0, dependsOn: null, stage: { stage: 'RESEARCH', costSource: 'NOT_SPENT' } });
     const acceptance = { status: 'CANDIDATE_ONLY', required: 0.9, probability: null, accepted: null, shortfalls: [], sentence: 'A candidate.', candidate: { label: 'Pennsylvania opening', opportunityIds: ['cop_8015'], source: 'QUANT_PORTFOLIO', settledP50: null, reach: null, reachBasis: null } } as PlanAcceptance;
     expect(planIntegrity(fromSteps(steps, { acceptance })).violations).toEqual([]);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* 9. WITHIN_LIMITS                                                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Production, 20:51Z on 0974f3d6: goal wst_7b4fcbb5f2384f31b6c3 ($10,000 in
+ * 20 days; capital 3000, at most 375 out before any money comes in, at most
+ * 750 newly tied up a week). Its QUANT_PORTFOLIO candidate (reach 6.2%) was
+ * cop_8015b46dd2384dd783e0, a $15,000 planning service for a Pennsylvania Farm
+ * Vitality Planning Grant, whose money line read
+ *   price E 15000 | fulfil E 3000 | net E 12000 | convert ? 0–0.08 | cash E 5.82d | capital E 14985
+ * and whose gaps read "ties up more than one arrangement may". The line prints
+ * the estimate's middle (14985) and the gap fires on its low bound, so the low
+ * bound is over 375; the 9,000 below is this fixture's low bound, not a
+ * production figure.
+ */
+describe('9. WITHIN_LIMITS and NO_FAVOURABLE_UNKNOWN: every member of the lead fits the goal\'s limits as modelled, entered at no better figure than the model holds, or carries a cash structure that does', () => {
+  const GRANT_ID = 'cop_8015b46dd2384dd783e0';
+  const GRANT_TITLE = 'Pennsylvania Farm Vitality Planning Grant: planning service';
+  const PRODUCTION_LIMITS = { ...GOAL_10K_LIMITS, daysLeft: 20, capitalCeiling: 3000, beforeProof: 375, perWeek: 750 };
+  const est = (value: number) => ({ value, low: value, high: value, provenance: 'ASSUMPTION', source: null, note: 'the card' });
+  const grant = {
+    ...GOAL_10K_OPENINGS[6]!,
+    opportunity: { id: GRANT_ID, title: GRANT_TITLE, requiredCapabilities: [] },
+    index: 9,
+    repeatable: false,
+    price: est(15_000),
+    directCost: est(3_000),
+    daysToCash: est(5.82),
+    close: { value: null, low: 0, high: 0.08, provenance: 'UNKNOWN', source: null, note: 'swept' },
+    // Inferred as a share of the top price from comparable openings: ESTIMATED, not the opening's own evidence.
+    capital: { value: null, low: 8_000, high: 15_000, provenance: 'UNKNOWN', source: null, note: 'inferred as a share of the top price', inferred: { tier: 'COMPARABLE', justified: false, p10: 9_000, p50: 14_985, p90: 15_000, observations: 3 } },
+  } as unknown as ModelledOpportunity;
+  const candidate = (ids: string[], source: 'QUANT_PORTFOLIO' | 'RECONSTRUCTED' = 'QUANT_PORTFOLIO') =>
+    ({ status: 'CANDIDATE_ONLY', required: 0.9, probability: null, accepted: null, shortfalls: [], sentence: 'A candidate.', candidate: { label: 'The grant service', opportunityIds: ids, source, settledP50: null, reach: 0.062, reachBasis: 'COVERAGE' } }) as PlanAcceptance;
+
+  it('the checker flags the production lead: 14985 against a 3000 ceiling and a 375 pre-revenue limit, entered at 187.5, with no cash structure', () => {
+    const limits = { capitalCeiling: 3000, beforeProof: 375, spendCeiling: 3000 };
+    const flagged = planIntegrity(checked([], { leadIds: [GRANT_ID], limits, members: [{ title: GRANT_TITLE, capitalLow: 14_985, capitalEntered: 187.5, cashStructure: null }] })).violations;
+    expect(flagged.map((v) => v.rule)).toEqual(['WITHIN_LIMITS', 'NO_FAVOURABLE_UNKNOWN']);
+    expect(flagged[0]!.detail).toMatch(/capital ceiling of 3000 and limit before any money comes in of 375/);
+    expect(flagged[1]!.detail).toMatch(/entered at 188 of capital while the model holds at least 14985/);
+    // An unestablished cost of one deal over the spending ceiling is the same unknown read favourably; at the ceiling it is not over it.
+    expect(rules(checked([], { limits, members: [{ title: 'A crew', capitalLow: null, cashStructure: null, unestablishedCostLow: 3_500 }] }))).toEqual(['NO_FAVOURABLE_UNKNOWN']);
+    expect(rules(checked([], { limits, members: [{ title: 'A crew', capitalLow: null, cashStructure: null, unestablishedCostLow: 3_000 }] }))).toEqual([]);
+    // Carried by the buyer's prepayment, an assumption the reading states, it fits; a member inside both limits is no violation.
+    expect(rules(checked([], { limits, members: [{ title: GRANT_TITLE, capitalLow: 14_985, cashStructure: BUYER_FUNDED }] }))).toEqual([]);
+    expect(rules(checked([], { limits, members: [{ title: 'Trigger lists', capitalLow: 200, cashStructure: null }, { title: 'Unknown outlay', capitalLow: null, cashStructure: null }] }))).toEqual([]);
+  });
+
+  it('the checker reads it from the reading: the candidate\'s member, its held capital and the portfolio\'s limits', () => {
+    const portfolio = {
+      best: { members: [{ opportunityId: GRANT_ID }] },
+      demand: [{ opportunityId: GRANT_ID, title: GRANT_TITLE, capitalAtStart: 187.5, capitalHeld: { low: 9_000, high: 15_000, own: false }, cashStructure: null, refused: null }],
+      limits: { target: 10_000, deadlineDays: 20, startingCapital: 750, perArrangement: 375, capitalCeiling: 3000, spendCeiling: 3000, contactsPerDay: { value: null, low: 10, high: 60, source: 's' }, correlation: 0.5 },
+    } as unknown as GoalPortfolio;
+    const r = reading({ acceptance: candidate([GRANT_ID]), portfolio });
+    expect(rules(integrityInput(r))).toEqual(['WITHIN_LIMITS', 'NO_FAVOURABLE_UNKNOWN']);
+    // A reconstructed candidate whose reconstruction had the buyer fund the supplier states that structure, as an assumption.
+    const recon = { best: { changes: [{ dimension: 'CAPITAL', op: 'capital:prepaid-fulfilment', label: 'prepaid-fulfilment', detail: '', cost: 0, basis: 'ASSUMPTION' }] } } as unknown as Reconstruction;
+    expect(rules(integrityInput(reading({ acceptance: candidate([GRANT_ID], 'RECONSTRUCTED'), portfolio, reconstruction: recon })))).toEqual([]);
+  });
+
+  it('the pipeline: the portfolio holds the grant out of every combination (F6 still refuses nothing), names the blocker, and its pathway raises "Restructure the cash"', () => {
+    const p = evaluateGoalPortfolio({ ...PRODUCTION_LIMITS, openings: [...GOAL_10K_OPENINGS, grant], worlds: 400, seed: 3 });
+    // Production's engine made it a member, entered at 187.5 of capital.
+    expect(p.best?.members.map((m) => m.opportunityId) ?? []).not.toContain(GRANT_ID);
+    const d = p.demand.find((one) => one.opportunityId === GRANT_ID)!;
+    expect(d.capitalHeld).toEqual({ low: 9_000, high: 15_000, own: false });
+    // F6 stands: an outlay inferred from other openings refuses nothing; it is read at the in-limit midpoint for exploration only.
+    expect(d.refused).toBeNull();
+    expect(d.capitalAtStart).toBe(187.5);
+    expect(d.heldOut).toMatch(/^held out of every combination: the model estimates it ties up 9000–15000 at its start \(not established\), more than the 3000 this goal may tie up in all — restructure the cash/);
+    expect(p.missing.some((m) => m.startsWith(`${GRANT_TITLE}: held out`))).toBe(true);
+    for (const alt of p.alternatives) expect(alt.members.map((m) => m.opportunityId)).not.toContain(GRANT_ID);
+    expect(p.limits.capitalCeiling).toBe(3000);
+    // The plan reading over this portfolio is within limits.
+    const ids = [...new Set((p.best?.members ?? []).map((m) => m.opportunityId))];
+    expect(rules(integrityInput(reading({ acceptance: candidate(ids), portfolio: p })))).not.toContain('WITHIN_LIMITS');
+    // The same opening's pathway names the capital gap and the existing research that answers it.
+    const path = pathwayOf(grant, null, { remaining: 10_000, daysLeft: 20, currency: 'USD', perArrangement: 375, outreachPerDay: 60, permissionsMissing: [], now: new Date('2026-11-19T20:51:00Z') });
+    expect(path.gaps).toContain('OVER_CAPITAL');
+    expect(path.moves.find((m) => m.gap === 'OVER_CAPITAL')).toMatchObject({ action: 'RESEARCH', field: 'requiredCapital' });
+    expect(path.moves.find((m) => m.gap === 'OVER_CAPITAL')!.construct).toMatch(/^Restructure the cash/);
+  });
+
+  it('the pipeline: carried by the buyer\'s prepayment (a reconstruction\'s assumption), it may be a member, nothing of ours tied up, and says so', () => {
+    const funded = { ...grant, fundedByBuyer: true } as ModelledOpportunity;
+    const p = evaluateGoalPortfolio({ ...PRODUCTION_LIMITS, openings: [...GOAL_10K_OPENINGS, funded], worlds: 400, seed: 3 });
+    const d = p.demand.find((one) => one.opportunityId === GRANT_ID)!;
+    expect(d.refused).toBeNull();
+    expect(d.capitalAtStart).toBe(0);
+    expect(d.cashStructure).toBe(BUYER_FUNDED);
+    expect(d.cashStructure).toMatch(/^ASSUMPTION/);
+    expect(d.unestablished).toContain('money tied up');
+    const ids = [...new Set((p.best?.members ?? []).map((m) => m.opportunityId))];
+    expect(rules(integrityInput(reading({ acceptance: candidate(ids), portfolio: p })))).not.toContain('WITHIN_LIMITS');
   });
 });
 

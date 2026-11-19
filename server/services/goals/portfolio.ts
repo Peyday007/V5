@@ -148,6 +148,18 @@ export interface DemandEstimate {
   close: Spread;
   /** Money tied up when it starts. */
   capitalAtStart: number;
+  /** The money the model holds it ties up, before any limit truncates it (`capitalHeldOf`); null when it holds no figure. */
+  capitalHeld?: { low: number; high: number; own: boolean } | null;
+  /** What the model holds one deal costs directly (`costHeldOf`); null when it holds no figure. */
+  costHeld?: { low: number; high: number; own: boolean } | null;
+  /** The cash structure that carries a held figure over a limit (`BUYER_FUNDED`), when one does. */
+  cashStructure?: string | null;
+  /**
+   * Why it is held out of every combination although not refused: an estimate
+   * the model holds breaks a limit and no cash structure carries it
+   * (NO_FAVOURABLE_UNKNOWN). It is read, and researched, but is never a member.
+   */
+  heldOut?: string | null;
   /** Every input rests on evidence or on this Brain's own measurements. */
   justified: boolean;
   /** Each input that does not, by name. */
@@ -210,6 +222,8 @@ export interface GoalPortfolio {
     deadlineDays: number;
     startingCapital: number | null;
     perArrangement: number | null;
+    /** The money the goal may tie up in all, as the owner set it (before anything was committed). */
+    capitalCeiling?: number | null;
     spendCeiling: number | null;
     contactsPerDay: { value: number | null; low: number; high: number; source: string };
     correlation: number;
@@ -891,6 +905,37 @@ export function stakeCycles(one: ModelledOpportunity, capital: { amount: number;
   return { lots, cycles, deals: lots * cycles, tiedUp: lots * capital.amount };
 }
 
+/**
+ * The money the model holds an opening ties up at its start, as a range,
+ * before any limit truncates it: its own figure, or an estimate it holds (an
+ * inference the pathway reads as ESTIMATED, from its p10). Null when the model
+ * holds no figure (a sweep from nothing, or an inference only other
+ * mechanisms speak to, `ownMechanismCapital`). Pure.
+ */
+export function capitalHeldOf(one: ModelledOpportunity): { low: number; high: number; own: boolean } | null {
+  if (one.capital.value !== null) return { low: one.capital.value, high: one.capital.value, own: true };
+  const inf = one.capital.inferred;
+  if (!inf || inf.tier === 'MECHANISM') return null;
+  return { low: inf.p10, high: inf.p90, own: capitalOwnEvidence(one) };
+}
+
+/** What the model holds one deal costs directly, the same way (`capitalHeldOf`); `own` when the figure is established. Pure. */
+export function costHeldOf(one: ModelledOpportunity): { low: number; high: number; own: boolean } | null {
+  const c = one.directCost;
+  if (c.value !== null) return { low: c.value, high: c.value, own: established(c) };
+  const inf = c.inferred;
+  if (!inf || inf.tier === 'MECHANISM') return null;
+  return { low: inf.p10, high: inf.p90, own: established(c) };
+}
+
+/** The cash structure that carries an estimate over a limit: always an assumption, set only where a reconstruction stated it (`fundedByBuyer`). */
+export const BUYER_FUNDED = 'ASSUMPTION: the buyer pays before the supplier is paid, so nothing of ours is tied up first';
+
+const overLimit = (held: { low: number; high: number }, limit: number, what: string): string =>
+  `held out of every combination: the model estimates it ties up ${Math.round(held.low)}–${Math.round(held.high)} at its start (not established), more than the ${Math.round(limit)} ${what} — restructure the cash (the buyer's prepayment or deposit before the supplier is paid) or establish what it ties up`;
+const overSpend = (held: { low: number; high: number }, limit: number): string =>
+  `held out of every combination: the model estimates one deal costs ${Math.round(held.low)}–${Math.round(held.high)} directly (not established), more than the ${Math.round(limit)} this goal may spend in all — have the buyer fund the supplier or establish the cost`;
+
 /** The money an opening ties up when it starts: established, or the top of its range (invariant 39). */
 export function capitalAtStart(one: ModelledOpportunity): { amount: number; established: boolean } {
   if (one.capital.value !== null) return { amount: one.capital.value, established: true };
@@ -1034,6 +1079,41 @@ export function evaluateGoalPortfolio(input: {
       refused = `ties up ${Math.round(capital.amount)} at its start, more than the ${Math.round(input.capitalCeiling)} this goal may tie up in all`;
     }
     /*
+     * NO_FAVOURABLE_UNKNOWN (production 2026-11-19, wst_7b4fcbb5): a $15,000
+     * grant service the model held at "capital E 14985" — its pathway reads
+     * the same estimate and names the gap OVER_CAPITAL — led the plan at 6.2%
+     * reach against a $375 pre-revenue limit and a $3,000 ceiling, because
+     * F6 (below) entered it at 187.5, the middle of what the limit allows.
+     * F6 stands: an outlay inferred from other openings refuses nothing and
+     * floors nothing, and the opening is still read here, at that midpoint,
+     * for exploration. What changes is that an unknown is never favourable to
+     * the plan (invariant 39): an opening whose held estimate breaks a limit
+     * is held out of every combination — never a member, never counted in
+     * reach — until a cash structure the reading already holds carries it
+     * (the buyer pays before the supplier, `fundedByBuyer`, an assumption a
+     * reconstruction states, `BUYER_FUNDED`) or its outlay is established.
+     * Its pathway's "Restructure the cash" research is the way back in. The
+     * same holds for an unestablished cost of one deal against the spending
+     * ceiling (an established one is refused, below).
+     */
+    const heldCapital = capitalHeldOf(one);
+    const heldCost = costHeldOf(one);
+    const capitalLimits = ([[input.capitalCeiling, 'this goal may tie up in all'], [input.beforeProof, 'one arrangement may before it proves itself']] as Array<[number | null, string]>)
+      .filter((l): l is [number, string] => l[0] !== null && !!heldCapital && !heldCapital.own && heldCapital.low > l[0] + 1e-9);
+    const costOver = spendCeiling !== null && !stakeFunded && !!heldCost && !heldCost.own && heldCost.low > spendCeiling + 1e-9;
+    let heldOut: string | null = null;
+    let cashStructure: string | null = null;
+    if (!refused && (capitalLimits.length > 0 || costOver)) {
+      if (one.fundedByBuyer) {
+        // Carried by the buyer's money: nothing of ours tied up first, and its cost outside the ceiling (`ceilingExempt`).
+        cashStructure = BUYER_FUNDED;
+        if (capitalLimits.length > 0) capital.amount = 0;
+      } else {
+        heldOut = capitalLimits.length > 0 ? overLimit(heldCapital!, capitalLimits[0]![0], capitalLimits[0]![1]) : overSpend(heldCost!, spendCeiling!);
+      }
+      if (capitalLimits.length > 0 && !unestablished.includes('money tied up')) unestablished.push('money tied up');
+    }
+    /*
      * The same for what one deal costs: the spending ceiling counts every
      * direct cost the buyer does not fund (`activityOf`), so a line whose own
      * evidence says a single deal costs more than all the goal may spend can
@@ -1059,11 +1139,19 @@ export function evaluateGoalPortfolio(input: {
        * F6, production 2026-11-15: three of 11 openings were refused on an
        * outlay inferred from *other* openings (a 15 000 grant "tying up"
        * 14 985). Only the opening's own evidence refuses it; an inference from
-       * other openings is not this opening's outlay, so it neither refuses nor
-       * sets a floor, and "money tied up" is unestablished.
+       * other openings is not this opening's outlay, so it never refuses it,
+       * and "money tied up" is unestablished. How this coexists with
+       * NO_FAVOURABLE_UNKNOWN (2026-11-19): an estimate over the limit enters
+       * here at the midpoint for exploration only — it is held out of every
+       * combination (`heldOut`, above), so the midpoint never makes it a member
+       * or counts toward reach; an estimate inside the limit is the floor of
+       * the range it enters in, so it is never entered below what the model
+       * holds.
        */
       const own = capitalOwnEvidence(one);
-      const floor = one.capital.inferred && !own ? 0 : (one.capital.low ?? one.capital.inferred?.p10 ?? 0);
+      // An estimate the model holds inside the limit is its floor all the same: entering below it would read the unknown in the plan's favour.
+      const inside = heldCapital && !heldCapital.own && heldCapital.low <= input.beforeProof + 1e-9 ? heldCapital.low : 0;
+      const floor = one.capital.inferred && !own ? inside : (one.capital.low ?? one.capital.inferred?.p10 ?? 0);
       if (capital.established && !own && !unestablished.includes('money tied up')) unestablished.push('money tied up');
       if (capital.established && own) {
         refused = `ties up ${Math.round(capital.amount)} at its start, more than the ${Math.round(input.beforeProof)} one arrangement may before it proves itself`;
@@ -1090,12 +1178,16 @@ export function evaluateGoalPortfolio(input: {
       respond: spread(full.respond),
       close: spread(full.close),
       capitalAtStart: capital.amount,
+      capitalHeld: heldCapital,
+      costHeld: heldCost,
+      cashStructure,
+      heldOut,
       justified: unestablished.length === 0,
       unestablished,
       inputs: INPUT_NAMES.map(([key, name]) => ({ name, ...inputEvidence(one[key] as ModelInput, key) })),
       refused,
     });
-    if (refused) continue;
+    if (refused || heldOut) continue;
     const shares: number[] = one.channel ? [1] : one.repeatable && one.agreedValue === 0 ? [...OUTREACH_SHARES] : [0];
     // The outreach a day is drawn too: unless the owner stated it, it states no sample.
     const sampleSize = one.repeatable && one.agreedValue === 0 && stated === null ? undefined : sampleSizeOf(one);
@@ -1178,6 +1270,8 @@ export function evaluateGoalPortfolio(input: {
     missing.push(`the best combination reaches the target in ${(best.reach * 100).toFixed(0)}% of worlds, which is not a defensible 90%: ${assurance.reason}`);
   }
   if (!best) missing.push('no combination of the openings held can run inside the limits');
+  // An opening held out on a limit its estimate breaks is named: its capital or cost is the blocker, and its research the way in.
+  for (const one of demand) if (one.heldOut && !one.refused) missing.push(`${one.title.slice(0, 60)}: ${one.heldOut}`);
   if (measuredRates && measuredRates.applied === 'AS_IS_FLOOR_ONLY' && !input.forceMeasured) {
     // The record answers one question: what if the new campaign does no better than the old ones?
     const floor = evaluateGoalPortfolio({ ...input, forceMeasured: true, causal: false, worlds: Math.min(worlds, 600) });
@@ -1205,6 +1299,7 @@ export function evaluateGoalPortfolio(input: {
       deadlineDays: input.daysLeft,
       startingCapital,
       perArrangement: input.beforeProof,
+      capitalCeiling: input.capitalCeiling,
       spendCeiling,
       contactsPerDay: { value: stated, low: contactsPerDay.low ?? 0, high: contactsPerDay.high ?? 0, source: stated !== null ? 'stated by the owner on the goal' : input.measuredCapacity && input.measuredCapacity.perDay > CONTACTS_PER_DAY_BOUNDS.low ? `measured: up to ${input.measuredCapacity.perDay}/day on ${input.measuredCapacity.accounts} healthy Instantly accounts (shared); swept` : 'not stated; swept' },
       correlation: SHARED_OUTREACH_CORRELATION,
