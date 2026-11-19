@@ -279,6 +279,32 @@ function scaleInput(input: ModelledOpportunity['price'], k: number, cap = Infini
   return { ...input, value: f(input.value), low: f(input.low), high: f(input.high), distribution: undefined, inferred: undefined };
 }
 
+/**
+ * A scope as a person reads it in a change's description: the opening's own
+ * title for `id:…`, words for the rest. The scope stays the change's key
+ * (`drop@id:…`); its description is what a plan's step and candidate read
+ * (transfer test, 2026-11-19: a step read "Leave out 1 opening(s)
+ * (id:arr_71e8904fcb7c)" — NO_INTERNAL_KEYS, `planIntegrity`). Pure.
+ */
+export function scopeWords(scope: Scope, openings: readonly ModelledOpportunity[]): string {
+  if (scope.startsWith('id:')) {
+    const id = scope.slice(3);
+    const hit = openings.find((o) => o.opportunity.id === id || o.opportunity.id.startsWith(`${id}~`));
+    return hit ? `"${hit.opportunity.title.slice(0, 80)}"` : 'one named opening';
+  }
+  const words: Record<string, string> = {
+    ALL: 'all of them',
+    OUTREACH: 'those sold by outreach',
+    SMALL_TICKET: 'the small tickets',
+    LARGE_TICKET: 'the large tickets',
+    FAST_CASH: 'those that pay soonest',
+    SLOW_CASH: 'those that pay latest',
+    TOP: 'the strongest third',
+    REST: 'all but the strongest third',
+  };
+  return words[scope] ?? 'a group of them';
+}
+
 /** The openings a scope names, among those a strategy may still change (agreed money is never touched). */
 export function inScope(openings: ModelledOpportunity[], scope: Scope, remaining: number): Set<string> {
   const open = openings.filter((o) => o.agreedValue === 0);
@@ -491,7 +517,7 @@ export function applyProgram(
         {
           ...s,
           openings,
-          changes: [...s.changes, change('PRICE', `price×${k.toFixed(2)}@${t.scope}`, `${k > 1 ? 'raise' : 'lower'} price ×${k.toFixed(2)} on ${moved} opening(s) (${t.scope}), each held within ×0.25–×4 of its card's unit price; close rate and the deals the market takes assumed to move ×${demandK.toFixed(2)} until selling measures it`, 'ASSUMPTION')],
+          changes: [...s.changes, change('PRICE', `price×${k.toFixed(2)}@${t.scope}`, `${k > 1 ? 'raise' : 'lower'} price ×${k.toFixed(2)} on ${moved} opening(s) (${scopeWords(t.scope, s.openings)}), each held within ×0.25–×4 of its card's unit price; close rate and the deals the market takes assumed to move ×${demandK.toFixed(2)} until selling measures it`, 'ASSUMPTION')],
         },
         t,
       );
@@ -545,7 +571,7 @@ export function applyProgram(
         {
           ...s,
           openings: s.openings.filter((o) => !ids.has(o.opportunity.id)),
-          changes: [...s.changes, change('PORTFOLIO', `drop@${t.scope}`, `leave out ${ids.size} opening(s) (${t.scope}), freeing the capacity and money they held`, 'ESTIMATE')],
+          changes: [...s.changes, change('PORTFOLIO', `drop@${t.scope}`, `leave out ${ids.size} opening(s) (${scopeWords(t.scope, s.openings)}), freeing the capacity and money they held`, 'ESTIMATE')],
         },
         t,
       );
@@ -562,7 +588,7 @@ export function applyProgram(
     s = {
       ...s,
       openings: s.openings.map((o) => (ids.has(o.opportunity.id) ? { ...o, [t.field]: scaleInput(o[t.field], against, t.field === 'close' || t.field === 'respond' ? 1 : Infinity) } : o)),
-      changes: [...s.changes, change('EVIDENCE', `stress:${t.field}×${against.toFixed(2)}@${t.scope}`, `challenge: ${t.field} ×${against.toFixed(2)} on ${t.scope}`, 'ASSUMPTION')],
+      changes: [...s.changes, change('EVIDENCE', `stress:${t.field}×${against.toFixed(2)}@${t.scope}`, `challenge: ${t.field} ×${against.toFixed(2)} on ${scopeWords(t.scope, s.openings)}`, 'ASSUMPTION')],
     };
   }
   return { state: s, skipped };
