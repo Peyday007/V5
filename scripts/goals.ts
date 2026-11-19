@@ -35,6 +35,7 @@
  * currency, and optionally the money and hours a plan may use.
  */
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
+import { lastPlanTrace } from '../server/services/cash/goalScenario.ts';
 import { describePoolerRefusal } from '../server/db/adapters/postgres.ts';
 import { getUserByEmail } from '../server/repos/identity.ts';
 import { createWorkstream, getWorkstream, linkWorkstream, listLinks, recordWorkstreamEvent, supersedeLink } from '../server/repos/register.ts';
@@ -657,12 +658,33 @@ function round(x: number): string {
   return Math.abs(x) < 1 ? x.toFixed(3) : x < 100 ? x.toFixed(1) : String(Math.round(x));
 }
 
+/**
+ * A line every 30 seconds while a plan read runs: where its trace last was, and
+ * whether the event loop is turning (a tick far later than 30s means a
+ * synchronous loop held it; on time with no new stage means it waits on I/O).
+ * Goal C's read on 2026-11-19 printed nothing for 30 minutes, so nobody could
+ * say which.
+ */
+function heartbeat(label: string): () => void {
+  const started = Date.now();
+  let last = started;
+  const timer = setInterval(() => {
+    const now = Date.now();
+    const t = lastPlanTrace();
+    console.error(`  alive ${label} +${Math.round((now - started) / 1000)}s · tick ${Math.round((now - last) / 1000)}s after the last · last stage ${t ? `${t.scope}: ${t.label.slice(0, 80)} ${Math.round((now - t.at) / 1000)}s ago` : 'none'}`);
+    last = now;
+  }, 30_000);
+  timer.unref();
+  return () => clearInterval(timer);
+}
+
 async function plan(): Promise<void> {
   const [, goalId] = words();
   if (!goalId) fail('plan needs a goal id.');
   const started = Date.now();
   process.env['BRAIN_PLAN_TRACE'] ??= '1';
-  const reading = await readGoalPlan({ goalId, persist: false });
+  const stopBeat = heartbeat(goalId);
+  const reading = await readGoalPlan({ goalId, persist: false }).finally(stopBeat);
   if (!reading) fail(`No targeted goal ${goalId}.`);
   await printPlan(reading);
   console.log(`  timing      plan read in ${Date.now() - started} ms; ${reading.inferred.length} inferred input(s), ${reading.researchPriority.length} ranked question(s)`);
@@ -712,13 +734,18 @@ async function check(): Promise<void> {
       continue;
     }
     try {
+      process.env['BRAIN_PLAN_TRACE'] ??= '1';
+      const stopBeat = heartbeat(goalId);
       let timer: ReturnType<typeof setTimeout> | undefined;
       const reading = await Promise.race([
         readGoalPlan({ goalId, persist: false }),
         new Promise<never>((_, reject) => {
           timer = setTimeout(() => reject(new Error(`the plan read did not finish within ${Math.round(perGoalMs / 1000)}s`)), perGoalMs);
         }),
-      ]).finally(() => clearTimeout(timer));
+      ]).finally(() => {
+        clearTimeout(timer);
+        stopBeat();
+      });
       if (!reading) {
         failed += 1;
         console.log(`INTEGRITY ${goalId} ERROR no targeted goal with this id`);

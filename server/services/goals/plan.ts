@@ -2586,9 +2586,23 @@ const SENDS = new Set(['CAPACITY', 'ACQUISITION', 'PARTNER', 'MARKET', 'EVIDENCE
 const CREDENTIAL = /\b(credentials?|api key|password|log ?in|sign[- ]?in|oauth|account access)\b/i;
 const LEGAL = /\b(contracts?|legal|licen[cs]es?|agreements?|terms of service|compliance|signature|signed)\b/i;
 
-/** Who executes a change: Brain, unless it is a rule-11 kind only the owner can do. */
-function ownerOf(change: { label: string; detail: string; cost: number }): { owner: 'BRAIN' | 'PERSON'; reason: string | null } {
-  const text = `${change.label} ${change.detail}`;
+/**
+ * The act a change asks for, with every name it mentions taken out. A step's
+ * owner is decided by what the step does, never by the words in an opening's
+ * or a buyer's name: production plan tests, 2026-11-19, made "Bring in …" a
+ * PERSON step (a legal commitment in the owner's name) because the opening's
+ * title contained "compliance". Quoted text is a name, and so is any title the
+ * reading knows. Pure.
+ */
+export function actOfChange(change: { label: string; detail: string }, names: Iterable<string> = []): string {
+  let text = `${change.label} ${change.detail}`.replace(/"[^"]*"|“[^”]*”/g, ' ');
+  for (const name of names) if (name.trim().length >= 3) text = text.split(name).join(' ');
+  return text;
+}
+
+/** Who executes a change: Brain, unless it is a rule-11 kind only the owner can do — judged on the act, not on names. */
+export function ownerOf(change: { label: string; detail: string; cost: number }, names: Iterable<string> = []): { owner: 'BRAIN' | 'PERSON'; reason: string | null } {
+  const text = actOfChange(change, names);
   if (change.cost > 0) return { owner: 'PERSON', reason: `a payment of ${moneyOf(change.cost)} from the owner's account, inside the goal's limits` };
   if (CREDENTIAL.test(text)) return { owner: 'PERSON', reason: 'a credential or sign-in only the owner holds' };
   if (LEGAL.test(text)) return { owner: 'PERSON', reason: 'a legal commitment in the owner\'s name' };
@@ -2784,7 +2798,7 @@ export function planSteps(input: {
       const days = move.changes.map((c) => c.startDay).filter((d): d is Span => !!d);
       const cost = move.changes.reduce((sum, c) => sum + c.cost, 0);
       const basis = move.changes.map((c) => c.basis).sort((a, b) => (BASIS_RANK[b] ?? 2) - (BASIS_RANK[a] ?? 2))[0]!;
-      const who = ownerOf({ label: move.label, detail: move.detail, cost });
+      const who = ownerOf({ label: move.label, detail: move.detail, cost }, input.titles?.values() ?? []);
       steps.push({
         order: steps.length + 1,
         label: move.label,
@@ -2926,10 +2940,11 @@ export function planSteps(input: {
     const line = `This plan commits ${cur} ${Math.round(deployed).toLocaleString('en-US')} of the ${cur} ${Math.round(input.capital.allowed).toLocaleString('en-US')} the goal allows${rest}${deployed > input.capital.allowed ? ' — OVER the limit' : ''}.`;
     steps[0] = { ...steps[0], detail: `${line} ${steps[0].detail}` };
   }
-  // A step that starts later needs the latest step that starts before it. An arrangement's steps (`requires` set) carry their own sequence.
+  // A step that starts later needs the latest step that starts before it. An arrangement's steps (`requires` set) carry their own sequence,
+  // and a step built with its own dependency keeps it: collection follows its sale, not whichever move happens to start just before it.
   for (const step of steps) {
     const low = step.startDay?.low ?? 0;
-    if (low <= 0 || step.requires) continue;
+    if (low <= 0 || step.requires || step.dependsOn !== null) continue;
     const before = steps.filter((one) => one.order < step.order && (one.startDay?.low ?? 0) < low);
     step.dependsOn = before.length > 0 ? before[before.length - 1]!.order : null;
   }
@@ -4256,12 +4271,19 @@ export async function goalArrangements(goal: Workstream, target: TargetReading, 
    * library, composed before `namesABuyerPopulation` refused it, stops here
    * for every reader — the model, the plan's lead and its readings, the asks.
    */
-  const arrangements = (await constructArrangements(await constructionInputFor(goal, target, now, bestReachCents))).filter((one) => namesABuyerPopulation(one.demand.name));
+  const trace = planTrace('construct');
+  const constructionInput = await constructionInputFor(goal, target, now, bestReachCents);
+  trace('construction input');
+  const constructed = await constructArrangements(constructionInput);
+  trace(`composed ${constructed.length}`);
+  const arrangements = constructed.filter((one) => namesABuyerPopulation(one.demand.name));
+  trace(`over a population ${arrangements.length}`);
   lastArrangements.set(goal.id, { at: now.getTime(), composedAt: Date.now(), arrangements });
   // The library keeps what was composed: a restart, a deploy or another goal reads it back (K-1).
   await rememberArrangements(target.projectId, goal.id, arrangements, now.toISOString()).catch((error: unknown) =>
     console.warn(`goal ${goal.id}: constructed arrangements not stored: ${errorText(error)}`),
   );
+  trace('remembered');
   return arrangements;
 }
 
