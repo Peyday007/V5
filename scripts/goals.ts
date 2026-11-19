@@ -766,6 +766,14 @@ async function check(): Promise<void> {
     process.exit(1);
   }
   console.log('GOALS: OK');
+  /*
+   * The verdict is printed; end the process. Work a plan read started in the
+   * background (a model call, a timer) otherwise keeps the event loop alive,
+   * and the release check that printed GOALS: OK on 2026-11-19 at 22:22 ran on
+   * to the workflow's 30-minute timeout and was reported as failed.
+   */
+  await closeDatabase().catch(() => undefined);
+  process.exit(0);
 }
 
 /** Open this pass's constructed rounds now, exactly as the tick would (§81). */
