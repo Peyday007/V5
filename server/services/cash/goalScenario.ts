@@ -59,14 +59,23 @@ export { TRANSFER_MATERIAL };
  * 25-opening plan locally in 0.7 s — only a timing taken where it is slow can
  * say which phase it is.
  */
+let lastTrace: { scope: string; label: string; at: number } | null = null;
+
+/** The last stage any plan trace reached, for a heartbeat that says where a long read is (goal C, 2026-11-19). */
+export function lastPlanTrace(): { scope: string; label: string; at: number } | null {
+  return lastTrace;
+}
+
 export function planTrace(scope: string, env = process.env): (label: string) => void {
   if (!env['BRAIN_PLAN_TRACE']) return () => {};
   const start = Date.now();
   let last = start;
+  lastTrace = { scope, label: 'start', at: start };
   return (label) => {
     const now = Date.now();
     console.error(`  trace ${scope} +${now - last}ms (${now - start}ms) ${label}`);
     last = now;
+    lastTrace = { scope, label, at: now };
   };
 }
 
