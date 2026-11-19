@@ -406,6 +406,44 @@ export async function latestWorkerReleaseReason(
   return { reason: row.reason.trim(), at: row.at, leaseGeneration: row.lease_generation ?? null };
 }
 
+/**
+ * Where Brain fired each attempt of this bin, and whether that surface has a
+ * checkout.
+ *
+ * One entry per `bin_dispatch` intent the provider accepted (`SENT`), oldest
+ * first, with the capabilities its routine declared *now* — `hasCheckout` is
+ * whether they include `repository`, and null when the intent names no routine
+ * row (a scheduled arrival, or a routine since deleted), because then nobody
+ * can say. A contract that refuses a bin for having no result reads this so the
+ * escalation says whether the attempts were aimed at surfaces able to do the
+ * work at all — the evidence that separates a routing fault from a capability
+ * the capable surfaces lack.
+ */
+export async function dispatchSurfacesForBin(
+  binId: string,
+): Promise<{ leaseGeneration: number; routineId: string | null; hasCheckout: boolean | null }[]> {
+  const rows = await getDb().all<{
+    lease_generation: number;
+    routine_id: string | null;
+    capabilities: string | null;
+  }>(
+    `SELECT d.lease_generation, d.routine_id, r.capabilities
+       FROM bin_dispatch d
+       LEFT JOIN fleet_routines r ON r.id = d.routine_id
+      WHERE d.bin_id = ? AND d.state = 'SENT'
+      ORDER BY d.lease_generation ASC, d.id ASC`,
+    [binId],
+  );
+  return rows.map((row) => ({
+    leaseGeneration: Number(row.lease_generation),
+    routineId: row.routine_id ?? null,
+    hasCheckout:
+      row.routine_id && row.capabilities !== null
+        ? parseJson<string[]>(row.capabilities, []).includes('repository')
+        : null,
+  }));
+}
+
 export async function countBinEvents(binId: string, eventType: string): Promise<number> {
   const row = await getDb().get<{ n: number }>(
     `SELECT COUNT(*) AS n FROM bin_events WHERE bin_id = ? AND event_type = ?`,

@@ -1,17 +1,19 @@
 /**
- * A render bin is fired only at a surface that can run the render
- * (ORIGINATED:FAILURE_PATTERN:design-render, attempt 2).
+ * A design render routes on what its bin declares — no unproven class rule
+ * (ORIGINATED:FAILURE_PATTERN:design-render, repair of attempt 2).
  *
  * The recorded class: 7 of 11 DESIGN_RENDER bins in 7 days ended NEEDS_HUMAN
  * with "The bin used all 3 attempts without satisfying DESIGN_RENDER_V1 v1.
- * Outstanding: No render was submitted". `openDesignRender` declares no
- * capability, so the router fired those bins at surfaces with no checkout, whose
- * sessions could submit nothing, and each fire spent an attempt. The router now
- * derives the `repository` capability from the render workload class.
+ * Outstanding: No render was submitted". An earlier commit asserted the cause
+ * was routing to surfaces with no checkout and made the router imply
+ * `repository` for the render class; a reviewer found no production row
+ * showing it. That rule is withdrawn: the contract now records where each
+ * attempt was fired (tests/designRenderContract.test.ts), and routing is
+ * decided from that. Until then a render routes like every other bin — and a
+ * capability its opener does declare is still honoured exactly.
  */
 import { describe, expect, it } from 'vitest';
 import {
-  CAPABILITIES_IMPLIED_BY_CLASS,
   REFUSAL_SCOPE,
   binScopeRefusal,
   routeBin,
@@ -67,23 +69,25 @@ function route(target: Bin, candidates: RoutingCandidate[]) {
   return routeBin({ bin: target, candidates, fleetPolicy: null, fleetInFlight: 0, now: NOW });
 }
 
-describe('a design render is routed to a surface with a checkout', () => {
-  it('names the render lane’s own workload class', () => {
-    expect(CAPABILITIES_IMPLIED_BY_CLASS[DESIGN_RENDER_WORKLOAD_CLASS]).toEqual(['repository']);
+describe('a design render routes on its declared capabilities', () => {
+  it('adds no capability the bin did not declare, so no surface is refused on an unproven cause', () => {
+    const decision = route(bin(DESIGN_RENDER_WORKLOAD_CLASS), [research]);
+    expect(decision.ok).toBe(true);
+    if (decision.ok) expect(decision.routine.id).toBe('rtn_research');
+    expect(binScopeRefusal(research, bin(DESIGN_RENDER_WORKLOAD_CLASS))).toBeNull();
   });
 
-  it('never chooses a surface without a checkout for a render, whichever is listed first', () => {
+  it('honours `repository` when the render bin declares it, whichever surface is listed first', () => {
     for (const candidates of [[research, checkout], [checkout, research]]) {
-      const decision = route(bin(DESIGN_RENDER_WORKLOAD_CLASS), candidates);
+      const decision = route(bin(DESIGN_RENDER_WORKLOAD_CLASS, ['repository']), candidates);
       expect(decision.ok).toBe(true);
       if (decision.ok) expect(decision.routine.id).toBe('rtn_checkout');
     }
-    expect(binScopeRefusal(research, bin(DESIGN_RENDER_WORKLOAD_CLASS))).toBe('CAPABILITY');
-    expect(binScopeRefusal(checkout, bin(DESIGN_RENDER_WORKLOAD_CLASS))).toBeNull();
+    expect(binScopeRefusal(research, bin(DESIGN_RENDER_WORKLOAD_CLASS, ['repository']))).toBe('CAPABILITY');
   });
 
-  it('refuses a render at routing, naming the capability, when no surface has a checkout', () => {
-    const decision = route(bin(DESIGN_RENDER_WORKLOAD_CLASS), [research]);
+  it('refuses a declared `repository` render at routing, naming it, when no surface has a checkout', () => {
+    const decision = route(bin(DESIGN_RENDER_WORKLOAD_CLASS, ['repository']), [research]);
     expect(decision.ok).toBe(false);
     if (!decision.ok) {
       expect(decision.refusal).toBe('NO_CAPABLE_SURFACE');
@@ -93,7 +97,7 @@ describe('a design render is routed to a surface with a checkout', () => {
     }
   });
 
-  it('keeps a declared requirement and adds the implied one once', () => {
+  it('keeps every declared requirement', () => {
     const decision = route(bin(DESIGN_RENDER_WORKLOAD_CLASS, ['repository', 'egress:example.org']), [
       checkout,
       surface('rtn_both', ['repository', 'egress:example.org']),

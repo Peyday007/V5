@@ -23,7 +23,7 @@
  */
 import { createHash } from 'node:crypto';
 import type { Bin, BinManifest, BinUnitSpec } from '../../domain/types.ts';
-import { latestWorkerReleaseReason, listBinUnitResults } from '../../repos/bins.ts';
+import { dispatchSurfacesForBin, latestWorkerReleaseReason, listBinUnitResults } from '../../repos/bins.ts';
 import { getOrchestration } from '../../repos/research.ts';
 import { listWorkItemsForOrchestration } from '../../repos/workQueue.ts';
 import { getDocument } from '../../repos/documents.ts';
@@ -974,13 +974,39 @@ async function evaluateDesignRender(bin: Bin): Promise<ContractVerdict> {
     const blocker = await latestWorkerReleaseReason(bin.id);
     const reasons = ['No render was submitted, so Brain still has no picture of what it built.'];
     if (blocker) reasons.push(`The last worker to hand it back reported: ${blocker.reason}`);
-    return refuse(
-      'RETRY',
-      reasons,
-      blocker
-        ? { ...observed, workerBlocker: blocker.reason, workerBlockerAt: blocker.at }
-        : observed,
-    );
+    /*
+     * And say where the attempts were aimed. Whether these bins fail because
+     * they were fired at surfaces with no checkout, or because surfaces with
+     * one have no browser, was asserted once and never read from a row; this
+     * is that row, carried into the escalation so the next decision about
+     * routing is made from evidence. Unknown surfaces are counted as unknown,
+     * never as either answer.
+     */
+    const fires = await dispatchSurfacesForBin(bin.id);
+    let extra: Record<string, unknown> = blocker
+      ? { workerBlocker: blocker.reason, workerBlockerAt: blocker.at }
+      : {};
+    if (fires.length > 0) {
+      const withoutCheckout = fires.filter((f) => f.hasCheckout === false).length;
+      const withCheckout = fires.filter((f) => f.hasCheckout === true).length;
+      const unknown = fires.length - withoutCheckout - withCheckout;
+      reasons.push(
+        `Brain fired it ${fires.length} time(s): ${withoutCheckout} at a surface that declares no ` +
+          `checkout (\`repository\`), ${withCheckout} at one that does, ${unknown} where the surface is unknown.`,
+      );
+      extra = {
+        ...extra,
+        firedAt: fires.map((f) => ({
+          leaseGeneration: f.leaseGeneration,
+          routineId: f.routineId,
+          hasCheckout: f.hasCheckout,
+        })),
+        firedWithoutCheckout: withoutCheckout,
+        firedWithCheckout: withCheckout,
+        firedSurfaceUnknown: unknown,
+      };
+    }
+    return refuse('RETRY', reasons, Object.keys(extra).length > 0 ? { ...observed, ...extra } : observed);
   }
   let parsed: unknown;
   try {

@@ -12,6 +12,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { createWorker } from '../server/repos/identity.ts';
+import { createAccount, createRoutine } from '../server/repos/fleet.ts';
+import { getDb } from '../server/db/database.ts';
 import {
   assignNextBin,
   createBin,
@@ -140,6 +142,85 @@ describe('DESIGN_RENDER_V1 with no render submitted', () => {
     expect(after.state).toBe('NEEDS_HUMAN');
     expect(after.terminalReason).toContain('without satisfying DESIGN_RENDER_V1');
     expect(after.terminalReason).toContain(BLOCKER);
+  });
+});
+
+/** A `SENT` dispatch intent for one generation, aimed at `routineId`. */
+async function fired(binId: string, leaseGeneration: number, routineId: string | null): Promise<void> {
+  const at = new Date().toISOString();
+  await getDb().run(
+    `INSERT INTO bin_dispatch (id, bin_id, lease_generation, state, attempt_count, max_attempts,
+       next_attempt_at, created_at, updated_at, routine_id, sent_at)
+     VALUES (?, ?, ?, 'SENT', 1, 5, ?, ?, ?, ?, ?)`,
+    [`bdp_${Math.random().toString(36).slice(2, 10)}`, binId, leaseGeneration, at, at, at, routineId, at],
+  );
+}
+
+async function routine(capabilities: string[]): Promise<string> {
+  const tag = Math.random().toString(36).slice(2, 8);
+  const account = await createAccount({ name: `acct-${tag}` });
+  return (
+    await createRoutine({
+      accountId: account.id,
+      routineRef: `trig_${tag}`,
+      name: `r-${tag}`,
+      tokenSecretName: `S_${tag}`,
+      capabilities,
+    })
+  ).id;
+}
+
+describe('DESIGN_RENDER_V1 with no render says where each attempt was fired', () => {
+  it('counts fires at surfaces with and without a checkout, and unknown ones, from the rows', async () => {
+    const binId = await renderBin(3);
+    const research = await routine([]);
+    const checkout = await routine(['repository']);
+    await fired(binId, 0, research);
+    await fired(binId, 1, checkout);
+    await fired(binId, 2, null);
+    expect(await releaseBin(await lease(binId), BLOCKER)).toBe('OK');
+
+    const verdict = await evaluateContract((await getBin(binId))!);
+    expect(verdict.disposition).toBe('RETRY');
+    expect(verdict.reasons[0]).toBe(NO_RENDER);
+    expect(verdict.observed['workerBlocker']).toBe(BLOCKER);
+    expect(verdict.observed['firedWithoutCheckout']).toBe(1);
+    expect(verdict.observed['firedWithCheckout']).toBe(1);
+    expect(verdict.observed['firedSurfaceUnknown']).toBe(1);
+    expect(verdict.observed['firedAt']).toEqual([
+      { leaseGeneration: 0, routineId: research, hasCheckout: false },
+      { leaseGeneration: 1, routineId: checkout, hasCheckout: true },
+      { leaseGeneration: 2, routineId: null, hasCheckout: null },
+    ]);
+    expect(verdict.reasons.join(' ')).toContain('1 at a surface that declares no checkout');
+  });
+
+  it('carries the fired surfaces into the NEEDS_HUMAN escalation', async () => {
+    const binId = await renderBin(1);
+    await fired(binId, 0, await routine([]));
+    expect(await releaseBin(await lease(binId), null)).toBe('OK');
+
+    await reconcileBins();
+    const after = (await getBin(binId))!;
+    expect(after.state).toBe('NEEDS_HUMAN');
+    expect(after.terminalReason).toContain('without satisfying DESIGN_RENDER_V1');
+    expect(after.terminalReason).toContain('Brain fired it 1 time(s): 1 at a surface that declares no checkout');
+  });
+
+  it('ignores intents the provider never accepted', async () => {
+    const binId = await renderBin();
+    const at = new Date().toISOString();
+    await getDb().run(
+      `INSERT INTO bin_dispatch (id, bin_id, lease_generation, state, attempt_count, max_attempts,
+         next_attempt_at, created_at, updated_at)
+       VALUES (?, ?, 0, 'PENDING', 0, 5, ?, ?, ?)`,
+      [`bdp_${Math.random().toString(36).slice(2, 10)}`, binId, at, at, at],
+    );
+    expect(await releaseBin(await lease(binId), null)).toBe('OK');
+
+    const verdict = await evaluateContract((await getBin(binId))!);
+    expect(verdict.reasons).toEqual([NO_RENDER]);
+    expect(verdict.observed).toEqual({ unitsSubmitted: 0, hasRender: false });
   });
 });
 
