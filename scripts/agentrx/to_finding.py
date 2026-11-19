@@ -112,15 +112,23 @@ def ask_model(bridge, meta, verdict, found):
         'Answer with ONLY JSON: {"correction": "<what to change, 2-4 sentences>", '
         '"verification": "<a measurable check on Brain rows after the change, 1-3 sentences>"}'
     )
-    try:
-        result = subprocess.run([sys.executable, bridge], input=prompt, capture_output=True, text=True, timeout=900)
-        text = result.stdout.strip()
-        start, end = text.find("{"), text.rfind("}")
-        parsed = json.loads(text[start:end + 1]) if start >= 0 and end > start else {}
-        return (parsed.get("correction") or "").strip(), (parsed.get("verification") or "").strip()
-    except Exception as e:  # the finding is still filed, without a proposal
-        print(f"correction call failed: {e}", file=sys.stderr)
-        return "", ""
+    # The switchboard routes each call to whichever free provider answers, and a small one can answer
+    # with text that is not the JSON asked for (run 44486006267: allam-2-7b, so no correction was
+    # filed). An unusable answer is asked again rather than filed as "no correction proposed".
+    for attempt in range(1, 4):
+        try:
+            result = subprocess.run([sys.executable, bridge], input=prompt, capture_output=True, text=True, timeout=900)
+            text = result.stdout.strip()
+            start, end = text.find("{"), text.rfind("}")
+            parsed = json.loads(text[start:end + 1]) if start >= 0 and end > start else {}
+            correction = (parsed.get("correction") or "").strip() if isinstance(parsed, dict) else ""
+            verification = (parsed.get("verification") or "").strip() if isinstance(parsed, dict) else ""
+            if correction and verification:
+                return correction, verification
+            print(f"correction answer unusable (attempt {attempt})", file=sys.stderr)
+        except Exception as e:  # the finding is still filed, without a proposal
+            print(f"correction call failed (attempt {attempt}): {e}", file=sys.stderr)
+    return "", ""
 
 
 def main():
