@@ -22,6 +22,8 @@ import { getWorkstream } from '../../repos/register.ts';
 import { challengePrompt, parseChallenge, reviewDecision, type Challenge, type DecisionInput, type DecisionReview } from '../../domain/decision.ts';
 import { chatFor, firstJson } from '../cheap/modelBench.ts';
 import type { OperatorModel } from '../../domain/operator.ts';
+import { buildLedger, calibrate, diagnose, type ExposureRow, type OutcomeRow, type PredictionRow } from '../quant/forecast.ts';
+import { forecastBias } from '../quant/mathToolkit.ts';
 
 export interface DecisionRecord {
   id: string;
@@ -35,6 +37,8 @@ export interface DecisionRecord {
 
 export interface DecideResult {
   committed: boolean;
+  /** The measured correction applied to the stated probability, when the comparable bucket is miscalibrated. */
+  correction?: BucketCorrection | null;
   decisionId: string | null;
   verdict: 'COMMITTED' | 'REVISE' | 'REFUSED';
   problems: string[];
@@ -117,6 +121,52 @@ export async function challengeDecision(
   return null;
 }
 
+/** What the ledger has measured about one comparable bucket of operator decisions. */
+export interface BucketCorrection {
+  comparableKey: string;
+  /** Observed rate minus mean forecast over the bucket's resolved decisions (negative: overconfident). */
+  shift: number;
+  rationale: string;
+  /** Claims whose systematic miss named MISSING_MECHANISM: the step from decision to outcome was not in the claim. */
+  missingMechanismClaims: string[];
+}
+
+/** An assumption that names the mechanism step, the way the operator is told to write it. */
+export const MECHANISM_ASSUMPTION = /^\s*mechanism\s*:\s*\S/i;
+
+/**
+ * Read the bucket's own record off the ledger (§108): forecast.ts's calibration
+ * and miss diagnosis, applied to the operator's comparable key. Null when the
+ * bucket is calibrated or has too few outcomes to be judged — then a decision
+ * commits exactly as stated. Pure over the rows it is given.
+ */
+export function bucketCorrectionFrom(
+  ledger: { predictions: readonly PredictionRow[]; exposures: readonly ExposureRow[]; outcomes: readonly OutcomeRow[] },
+  comparableKey: string,
+): BucketCorrection | null {
+  const predictions = ledger.predictions.filter((p) => p.comparableKey === comparableKey);
+  if (predictions.length === 0) return null;
+  const ids = new Set(predictions.map((p) => p.id));
+  const exposures = ledger.exposures.filter((e) => ids.has(e.predictionId));
+  const outcomes = ledger.outcomes.filter((o) => ids.has(o.predictionId));
+  const reading = forecastBias(predictions, exposures, outcomes).find((b) => b.comparableKey === comparableKey && b.basis === 'PROBABILITY');
+  if (!reading || reading.verdict !== 'SYSTEMATIC' || reading.correction?.kind !== 'SHIFT_PROBABILITY') return null;
+  const entries = buildLedger(predictions, exposures, outcomes);
+  const buckets = calibrate(entries);
+  const missing = new Set<string>();
+  for (const entry of entries) {
+    const d = diagnose(entry, buckets, entries);
+    if (d.kind === 'SYSTEMATIC' && d.causes.includes('MISSING_MECHANISM')) missing.add(d.claimId);
+  }
+  return { comparableKey, shift: reading.correction.amount, rationale: reading.correction.rationale, missingMechanismClaims: [...missing] };
+}
+
+/** The stated probability moved by the bucket's measured gap, kept strictly inside (0, 1). */
+export function correctedProbability(stated: number, correction: BucketCorrection | null): number {
+  if (!correction) return stated;
+  return Math.round(Math.min(0.99, Math.max(0.01, stated + correction.shift)) * 1000) / 1000;
+}
+
 async function projectFor(goalId: string | null, fallback: string): Promise<string> {
   if (!goalId) return fallback;
   const goal = await getWorkstream(goalId);
@@ -140,6 +190,25 @@ export async function decide(
       return { committed: false, decisionId: null, verdict: 'REFUSED', problems: ['no such goal in a project the operator directs'], review, challenge: null, next: 'Use a goal id from brain_operator_goals.' };
     }
   }
+  // The bucket's own record decides how far the stated probability can be taken at its word (FORECAST:operator:*).
+  const comparableKey = `operator:${input.kind}`;
+  const { readLedger, recordPrediction } = await import('../quant/ledger.ts');
+  const correction = bucketCorrectionFrom(await readLedger(null), comparableKey);
+  if (correction && correction.missingMechanismClaims.length > 0 && !input.assumptions.some((a) => MECHANISM_ASSUMPTION.test(a))) {
+    const claims = correction.missingMechanismClaims;
+    return {
+      committed: false,
+      decisionId: null,
+      verdict: 'REVISE',
+      problems: [
+        `${comparableKey} is miscalibrated (${correction.rationale}) and ${claims.length} of its systematic misses were MISSING_MECHANISM (${claims.slice(0, 12).join(', ')}${claims.length > 12 ? ', …' : ''}): the step from this decision to its outcome was not in the claim`,
+      ],
+      review,
+      challenge: null,
+      correction,
+      next: 'Add an assumption beginning "mechanism:" that names the step from this decision to the predicted outcome the earlier misses lacked (who acts, how they are reached, what makes them say yes), then call again.',
+    };
+  }
   let challenge: Challenge | null = null;
   if (review.highImpact) {
     challenge = await challengeDecision(input, review, ctx.models, ctx.fetchImpl);
@@ -157,7 +226,10 @@ export async function decide(
   }
   const id = `opd_${randomBytes(8).toString('hex')}`;
   const projectId = await projectFor(input.goalId, ctx.projectIds[0] ?? '');
-  const { recordPrediction } = await import('../quant/ledger.ts');
+  const probability = correctedProbability(input.prediction.probability, correction);
+  const correctionNote = correction
+    ? `forecast correction: ${comparableKey} is miscalibrated (${correction.rationale}); stated ${input.prediction.probability} shifted by ${correction.shift.toFixed(3)} to ${probability}`
+    : null;
   const prediction = await recordPrediction(
     {
       claimId: `operator:${id}`,
@@ -165,9 +237,9 @@ export async function decide(
       horizonDays: input.prediction.horizonDays,
       population: `operator decisions of kind ${input.kind}`,
       data: (review.options[input.chosen]?.evidence ?? []).slice(0, 10),
-      assumptions: input.assumptions.slice(0, 10),
-      probability: input.prediction.probability,
-      comparableKey: `operator:${input.kind}`,
+      assumptions: correctionNote ? [...input.assumptions.slice(0, 9), correctionNote] : input.assumptions.slice(0, 10),
+      probability,
+      comparableKey,
     },
     { projectId, caller: 'operator-decision' },
   );
@@ -177,7 +249,7 @@ export async function decide(
     entityType: 'PROJECT',
     entityId: id,
     eventType: 'OPERATOR_DECISION',
-    payload: { id, runId: ctx.runId, input, review, challenge: challenge ?? (review.highImpact ? 'no challenger model answered' : 'not high impact'), predictionId: prediction.id, committedAt },
+    payload: { id, runId: ctx.runId, input, review, challenge: challenge ?? (review.highImpact ? 'no challenger model answered' : 'not high impact'), predictionId: prediction.id, correction: correction ? { ...correction, statedProbability: input.prediction.probability, recordedProbability: probability } : null, committedAt },
   });
   return {
     committed: true,
@@ -186,6 +258,7 @@ export async function decide(
     problems: [],
     review,
     challenge,
+    correction,
     next: `Act on it now, then verify it with brain_operator_verify {decision_id: "${id}"} once ${input.prediction.horizonDays} day(s) have passed or the outcome is observable.`,
   };
 }
