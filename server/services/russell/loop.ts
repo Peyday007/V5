@@ -151,6 +151,7 @@ import {
   parkStoppedMissions,
   unparkResolvedMissions,
   reaskRefusedPlans,
+  withdrawMootBacklog,
   NEEDS_HUMAN_CHOICES,
   answeredRequestIsMoot,
   reopenAnswered,
@@ -473,6 +474,8 @@ export interface TickReport {
    * finished rather than re-asked.
    */
   withdrawnMootAnswers: { requestId: string; missionState: string | null; reason: string }[];
+  /** OPEN cards withdrawn by the tick's own moot-card pass: their mission had already left NEEDS_HUMAN. */
+  withdrawnMootCards?: string[];
   /** Research parks Brain answered under the standing grant (§80). */
   routineDecisions: { requestId: string; missionId: string | null; choice: string | null; reason: string }[];
   /**
@@ -1191,6 +1194,7 @@ async function tickOnce(owner: string): Promise<TickReport> {
     needsHuman: [],
     unresolvedAnswers: [],
     withdrawnMootAnswers: [],
+    withdrawnMootCards: [],
     routineDecisions: [],
     renewedReservations: [],
     frontier: [],
@@ -1252,6 +1256,30 @@ async function tickOnce(owner: string): Promise<TickReport> {
       // Not cheap after all (INF-6c): the walk is skipped while nothing has been
       // decided since the last one, for up to ten minutes. See the function.
       report.sharedPromoted = await promoteEligibleClaims(200, { quietReuseMs: 10 * 60_000 });
+    });
+
+    /*
+     * 0b. Withdraw the OPEN cards whose mission already left NEEDS_HUMAN.
+     *
+     * Production, 2026-11-09..19: Brain's operator withdrew 43 such cards by
+     * hand in a week, although the loop has a sweep for them
+     * (`withdrawMootBacklog`). That sweep only ran at the tail of
+     * `unparkResolvedMissions`, inside the 'unpark-resolved' pass, behind
+     * `reaskRefusedPlans(500)` and every mission unpark: one packet whose
+     * re-ask threw, a pass that hung past its limit (then skipped while it
+     * settles), or a tick that ran out before reaching step 2b, and no moot
+     * card was withdrawn that tick — so they piled up for the operator to find.
+     *
+     * Its own pass, at the head of the tick, with the whole backlog: a failure
+     * elsewhere cannot starve it, and a bound later in the tick cannot reach
+     * it. The same function, the same guarded `OPEN -> WITHDRAWN` transition
+     * and the operator's one `moot` predicate, so a card a person answered
+     * first, or whose mission still waits, is never touched. The call inside
+     * `unparkResolvedMissions` stays: it settles the cards that pass itself
+     * made moot within the same tick.
+     */
+    await runPass(report, 'moot-cards', async () => {
+      report.withdrawnMootCards = await withdrawMootBacklog(500, 'ANY');
     });
 
     // 1. Finish what ended — but only where the loop can say something true.

@@ -31,6 +31,8 @@ import { tick } from '../server/services/russell/loop.ts';
 
 // Count the resumes the loop tries, while still running the real one.
 const resumed: string[] = [];
+// When set, the 'unpark-resolved' pass fails the way one bad packet re-ask makes it fail.
+const unparkFails = { on: false };
 vi.mock('../server/services/russell/needsHuman.ts', async (importOriginal) => {
   const real = await importOriginal<typeof import('../server/services/russell/needsHuman.ts')>();
   return {
@@ -38,6 +40,10 @@ vi.mock('../server/services/russell/needsHuman.ts', async (importOriginal) => {
     resumeAnsweredRequest: async (request: Parameters<typeof real.resumeAnsweredRequest>[0]) => {
       resumed.push(request.id);
       return real.resumeAnsweredRequest(request);
+    },
+    reaskRefusedPlans: async (limit: number) => {
+      if (unparkFails.on) throw new Error('a packet re-ask threw');
+      return real.reaskRefusedPlans(limit);
     },
   };
 });
@@ -50,6 +56,7 @@ let userId: string;
 
 beforeEach(async () => {
   resumed.length = 0;
+  unparkFails.on = false;
   fixture = await freshProject();
   userId = (
     await createUser({
@@ -188,5 +195,45 @@ describe("the loop's answered-requests pass and a mission that left Needs You", 
     expect(resumed).toContain(request.id);
     expect((await getHumanRequest(request.id))!.state).toBe('RESUMED');
     expect(report.withdrawnMootAnswers.map((e) => e.requestId)).not.toContain(request.id);
+  });
+});
+
+describe('an OPEN card whose mission left Needs You, when the unpark pass fails', () => {
+  async function openRequest(missionId: string) {
+    const { request } = await askHuman({
+      projectId: fixture.project.id,
+      visibility: 'SHARED',
+      missionId,
+      authorityNeeded: 'Authorize the plan.',
+      whyNotRussell: 'Only a person can authorize research.',
+      choices: [NEEDS_HUMAN_CHOICES.APPROVE_PLAN, NEEDS_HUMAN_CHOICES.STOP],
+      resumeKey: `skip-moot-open:${missionId}`,
+    });
+    return request;
+  }
+
+  it('is withdrawn by its own pass, never left for the operator, and a card whose mission waits stays open', async () => {
+    unparkFails.on = true;
+    const gone = await parkedMission();
+    const goneCard = await openRequest(gone);
+    expect(await transitionMission({ missionId: gone, from: 'NEEDS_HUMAN', to: 'CANCELLED', terminalReason: 'cancelled elsewhere' })).toBe(true);
+    const waiting = await parkedMission();
+    const waitingCard = await openRequest(waiting);
+
+    const report = await tick('skip-moot-open-unpark-fails');
+    // The recorded failure class: the pass the sweep used to live in did not complete.
+    expect(report.passFailures.map((f) => f.pass)).toContain('unpark-resolved');
+
+    const after = (await getHumanRequest(goneCard.id))!;
+    expect(after.state).toBe('WITHDRAWN');
+    expect(after.whyNotRussell).toContain('CANCELLED');
+    expect(report.withdrawnMootCards).toContain(goneCard.id);
+    expect(await operatorWithdrawals(goneCard.id)).toEqual([]);
+    expect(
+      (await listEventsByEntity('RUSSELL_HUMAN_REQUEST', goneCard.id)).filter((e) => e.eventType === 'RUSSELL_ROUTINE_DECISION'),
+    ).toHaveLength(1);
+
+    expect((await getHumanRequest(waitingCard.id))!.state).toBe('OPEN');
+    expect(report.withdrawnMootCards).not.toContain(waitingCard.id);
   });
 });
