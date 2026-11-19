@@ -23,7 +23,7 @@
  */
 import { createHash } from 'node:crypto';
 import type { Bin, BinManifest, BinUnitSpec } from '../../domain/types.ts';
-import { listBinUnitResults } from '../../repos/bins.ts';
+import { latestWorkerReleaseReason, listBinUnitResults } from '../../repos/bins.ts';
 import { getOrchestration } from '../../repos/research.ts';
 import { listWorkItemsForOrchestration } from '../../repos/workQueue.ts';
 import { getDocument } from '../../repos/documents.ts';
@@ -963,10 +963,23 @@ async function evaluateDesignRender(bin: Bin): Promise<ContractVerdict> {
   const observed = { unitsSubmitted: results.length, hasRender: Boolean(submitted) };
 
   if (!submitted) {
+    /*
+     * Nothing came back, so say what the workers said stopped them. Seven of
+     * eleven render bins escalated in one week reading only "No render was
+     * submitted", which tells the person deciding nothing and leaves the
+     * improvement loop unable to tell a fleet with no browser from a command
+     * that does not work. The verdict is unchanged — still RETRY, still
+     * refused — only the reason now names the worker's own recorded blocker.
+     */
+    const blocker = await latestWorkerReleaseReason(bin.id);
+    const reasons = ['No render was submitted, so Brain still has no picture of what it built.'];
+    if (blocker) reasons.push(`The last worker to hand it back reported: ${blocker.reason}`);
     return refuse(
       'RETRY',
-      ['No render was submitted, so Brain still has no picture of what it built.'],
-      observed,
+      reasons,
+      blocker
+        ? { ...observed, workerBlocker: blocker.reason, workerBlockerAt: blocker.at }
+        : observed,
     );
   }
   let parsed: unknown;
