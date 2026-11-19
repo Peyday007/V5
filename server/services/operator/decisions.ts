@@ -153,12 +153,28 @@ export function bucketCorrectionFrom(
   if (!reading || reading.verdict !== 'SYSTEMATIC' || reading.correction?.kind !== 'SHIFT_PROBABILITY') return null;
   const entries = buildLedger(predictions, exposures, outcomes);
   const buckets = calibrate(entries);
+  // A MISSING_MECHANISM miss is answered once a later decision of this kind carried a mechanism line: it
+  // re-arms the gate only if it was made after the latest such decision, or if it named a mechanism itself
+  // and still missed for want of one (review F3). Otherwise the old misses held the gate armed for the
+  // whole calibration window after the correction had already been carried.
+  const answeredThrough = mechanismCarriedThrough(predictions);
   const missing = new Set<string>();
   for (const entry of entries) {
     const d = diagnose(entry, buckets, entries);
-    if (d.kind === 'SYSTEMATIC' && d.causes.includes('MISSING_MECHANISM')) missing.add(d.claimId);
+    if (d.kind !== 'SYSTEMATIC' || !d.causes.includes('MISSING_MECHANISM')) continue;
+    const carriedOwnMechanism = entry.prediction.assumptions.some((a) => MECHANISM_ASSUMPTION.test(a));
+    if (carriedOwnMechanism || answeredThrough === null || entry.prediction.madeAt > answeredThrough) missing.add(d.claimId);
   }
   return { comparableKey, shift: reading.correction.amount, rationale: reading.correction.rationale, missingMechanismClaims: [...missing] };
+}
+
+/** When the latest decision in the bucket that named its mechanism step was made, or null when none has. */
+export function mechanismCarriedThrough(predictions: readonly PredictionRow[]): string | null {
+  let latest: string | null = null;
+  for (const p of predictions) {
+    if (p.assumptions.some((a) => MECHANISM_ASSUMPTION.test(a)) && (latest === null || p.madeAt > latest)) latest = p.madeAt;
+  }
+  return latest;
 }
 
 /** The stated probability moved by the bucket's measured gap, kept strictly inside (0, 1). */

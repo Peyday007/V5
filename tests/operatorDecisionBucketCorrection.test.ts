@@ -83,6 +83,32 @@ describe('an operator decision reads its comparable bucket before committing', (
     expect(decision!.input.prediction.probability).toBe(0.8);
   });
 
+  it('stops holding the gate once a later decision of the kind carried a mechanism line, and re-arms on a new miss (review F3)', async () => {
+    await seedMiscalibratedBucket(projectId, 'RESEARCH', { n: 24, occurred: 4, mechanismMissing: true });
+    const withMechanism = { ...base, assumptions: [...base.assumptions, 'mechanism: the supplier is reached through its listed sales inbox and pays on the quoted invoice'] };
+    const carried = await decide(withMechanism, ctx());
+    expect(carried.verdict).toBe('COMMITTED');
+    // Before the change every earlier miss still counted inside the 90-day window, so this was sent back.
+    const after = bucketCorrectionFrom(await readLedger(null), 'operator:RESEARCH');
+    expect(after).not.toBeNull();
+    expect(after!.shift).toBeLessThan(-0.5);
+    expect(after!.missingMechanismClaims).toEqual([]);
+    const next = await decide(base, ctx());
+    expect(next.verdict).toBe('COMMITTED');
+    // The probability correction is untouched: only the answered mechanism demand is lifted.
+    const recorded = (await readLedger(null)).predictions.find((p) => p.claimId === `operator:${next.decisionId}`)!;
+    expect(recorded.probability!).toBeLessThan(0.3);
+    // A claim that named a mechanism and still missed for want of one re-arms the gate: the step it named did not carry.
+    const failed = await recordPrediction(
+      { claimId: 'operator:opd_seedmechfail', outcome: 'an actionable opportunity is found', horizonDays: 2, population: 'operator decisions of kind RESEARCH', data: ['row'], assumptions: ['mechanism: the owner answers a cold email'], probability: 0.9, comparableKey: 'operator:RESEARCH' },
+      { projectId, caller: 'test' },
+    );
+    await recordOutcome(failed.id, false, { mechanismMissing: true }, { projectId, evidence: 'mechanism did not carry', caller: 'test' });
+    const rearmed = bucketCorrectionFrom(await readLedger(null), 'operator:RESEARCH');
+    expect(rearmed!.missingMechanismClaims).toEqual(['operator:opd_seedmechfail']);
+    expect((await decide(base, ctx())).verdict).toBe('REVISE');
+  });
+
   it('corrects the probability without asking for a mechanism when the misses name another cause', async () => {
     await seedMiscalibratedBucket(projectId, 'RESEARCH', { n: 24, occurred: 4, mechanismMissing: false });
     const d = await decide(base, ctx());
