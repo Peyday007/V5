@@ -151,9 +151,11 @@ import {
   parkStoppedMissions,
   unparkResolvedMissions,
   reaskRefusedPlans,
+  NEEDS_HUMAN_CHOICES,
   reopenAnswered,
   resumeAnsweredRequest,
 } from './needsHuman.ts';
+import { moot } from '../../domain/operator.ts';
 import type { RussellHumanRequest } from '../../domain/types.ts';
 import { parseJson } from '../../repos/util.ts';
 import { cashNow, getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
@@ -700,6 +702,32 @@ async function settleUnresolvedAnswer(
     const mission = request.missionId ? await getMission(request.missionId) : null;
     report.withdrawnMootAnswers.push({ requestId: request.id, missionState: mission?.state ?? null, reason });
   }
+}
+
+/**
+ * Whether an answered card can no longer be carried out, read before any
+ * resume is attempted.
+ *
+ * Decided by the operator's one predicate (`moot`, domain/operator.ts) from the
+ * rows as they are now — the request's resume key and mission, the mission's
+ * state and its packet's status — so the loop, the backlog sweep and the
+ * operator cannot disagree about which card is moot. STOP is never moot here:
+ * `stop()` applies from any mission state, so that answer is always carried
+ * out. A card not about a mission, a mission that is gone, and a mission still
+ * at NEEDS_HUMAN all read not-moot and keep their path exactly as before.
+ */
+async function answeredRequestIsMoot(request: RussellHumanRequest): Promise<boolean> {
+  if (request.answeredChoice === NEEDS_HUMAN_CHOICES.STOP.key) return false;
+  if (!request.missionId) return false;
+  const mission = await getMission(request.missionId);
+  if (!mission) return false;
+  const packet = mission.orchestrationId ? await getOrchestration(mission.orchestrationId) : null;
+  return moot({
+    resumeKey: request.resumeKey,
+    missionId: request.missionId,
+    missionState: mission.state,
+    packetStatus: packet?.status ?? null,
+  }).moot;
 }
 
 /** The event one observe→structure→connect→derive→reason→codify→act cycle over the feeds is recorded under (ALGO-19-4). */
@@ -2656,6 +2684,19 @@ async function tickOnce(owner: string): Promise<TickReport> {
       // research slot keeps its place, and a window that size would hide a
       // newer answer behind it for ever.
       for (const request of await listAnsweredRequests(500)) {
+        /*
+         * An answer whose mission already left NEEDS_HUMAN can never be carried
+         * out (every answer but STOP is applied through a transition guarded
+         * on NEEDS_HUMAN), so it is settled as moot before any resume is
+         * attempted: no admission check, no half-applied decision, and never
+         * a card put back in front of the person for a decision nobody can
+         * make. The withdrawal itself is `reopenAnswered`'s guarded moot
+         * branch, reached through `settleUnresolvedAnswer` — not a second one.
+         */
+        if (await answeredRequestIsMoot(request)) {
+          await settleUnresolvedAnswer(report, request, MISSION_LEFT_NEEDS_YOU);
+          continue;
+        }
         const outcome = await resumeAnsweredRequest(request);
         if (outcome.deferred) {
           /*
@@ -2668,8 +2709,7 @@ async function tickOnce(owner: string): Promise<TickReport> {
            * Settled as moot instead, through `reopenAnswered`'s guarded
            * withdrawal and the operator's one `moot` predicate.
            */
-          const mission = request.missionId ? await getMission(request.missionId) : null;
-          if (mission && mission.state !== 'NEEDS_HUMAN') {
+          if (await answeredRequestIsMoot(request)) {
             await settleUnresolvedAnswer(report, request, MISSION_LEFT_NEEDS_YOU);
             continue;
           }
@@ -2677,7 +2717,9 @@ async function tickOnce(owner: string): Promise<TickReport> {
           continue;
         }
         if (!outcome.settled) {
-          await settleUnresolvedAnswer(report, request, outcome.reason);
+          // The mission may have moved while the resume ran: still moot, never re-asked.
+          const reason = (await answeredRequestIsMoot(request)) ? MISSION_LEFT_NEEDS_YOU : outcome.reason;
+          await settleUnresolvedAnswer(report, request, reason);
           continue;
         }
         if (await markResumed(request.id)) report.resumed.push(request.id);
