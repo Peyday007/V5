@@ -3959,9 +3959,11 @@ export function arrangementContribution(reading: Pick<PlanReading, 'portfolio'>)
 
 /**
  * The constructed arrangement the plan leads with, when its steps are read
- * from one (`planSteps`): a member of the candidate or of the best
- * combination first, then the one contributing most to the last model, then
- * construction's own first-ranked. Null when nothing was constructed. Pure.
+ * from one (`planSteps`): a member of the candidate, else of the best
+ * combination; null when that lead names members and none is an arrangement.
+ * Only when the plan names no lead, the one contributing most to the last
+ * model, then construction's own first-ranked. Null when nothing was
+ * constructed. Pure.
  */
 export function leadingArrangement(
   arrangements: readonly ConstructedArrangement[],
@@ -3976,11 +3978,22 @@ export function leadingArrangement(
   const leaders = arrangements.filter((a) => namesABuyerPopulation(a.demand.name));
   if (leaders.length === 0) return null;
   const byKey = new Map(leaders.map((a) => [a.key, a]));
-  for (const id of [...(reading.candidateIds ?? []), ...(reading.portfolio?.best?.members.map((m) => m.opportunityId) ?? [])]) {
+  /*
+   * The plan's lead is its candidate, else its best combination. When that
+   * lead names members and none is a constructed arrangement held here, the
+   * steps are not an arrangement's (production, 2026-11-19, goal wst_7b4f:
+   * the plan led with cop_8015, a Pennsylvania opening, while its steps read
+   * "Reach GitHub" from an arrangement that was not in the lead at all). The
+   * plan's sales and next step then carry the lead.
+   */
+  const candidateIds = reading.candidateIds ?? [];
+  const named = candidateIds.length > 0 ? [...candidateIds] : (reading.portfolio?.best?.members.map((m) => m.opportunityId) ?? []);
+  for (const id of named) {
     if (!isArrangementId(id)) continue;
     const hit = byKey.get(id.slice(ARRANGEMENT_ID_PREFIX.length));
     if (hit) return hit;
   }
+  if (named.length > 0) return null;
   let best: ConstructedArrangement | null = null;
   let score = 0;
   for (const [key, value] of arrangementContribution(reading)) {
