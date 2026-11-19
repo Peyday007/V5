@@ -73,10 +73,42 @@ function ledger(opts: { operator: boolean; cash: boolean }) {
   return { predictions, exposures: [], outcomes };
 }
 
+/**
+ * The register as production holds it after the misrouting: one live `FORECAST:CAPACITY` row, owned by
+ * `cash/forecast.ts`, naming the given claims. Records every decision and event made against it.
+ */
+type Registry = ReturnType<typeof registry>;
+function registry(legacy: { samples: string[]; campaignId?: string | null; decision?: string | null }) {
+  const decisions: { id: string; decision: string; reason: string; into: unknown }[] = [];
+  const events: { candidateId: string | null; kind: string; detail?: Record<string, unknown> }[] = [];
+  const row = {
+    id: 'imp_legacy',
+    weaknessKey: 'FORECAST:CAPACITY',
+    ownerComponent: 'server/services/cash/forecast.ts',
+    evidence: { samples: legacy.samples },
+    decision: legacy.decision ?? null,
+    changeRequestId: null,
+    campaignId: legacy.campaignId ?? null,
+  };
+  const deps = {
+    get: (async (key: string) => (key === row.weaknessKey ? row : null)) as never,
+    decide: (async (id: string, decision: string, reason: string, extra: { combinedIntoId?: string | null } = {}) => {
+      decisions.push({ id, decision, reason, into: extra.combinedIntoId });
+      return true;
+    }) as never,
+    event: (async (e: { candidateId: string | null; kind: string; detail?: Record<string, unknown> }) => {
+      events.push(e);
+    }) as never,
+  };
+  return { deps, decisions, events };
+}
+
+const operatorClaims = Array.from({ length: 9 }, (_, i) => `operator:opd_${String(i + 1).padStart(16, '0')}`);
+
 type Candidate = { weaknessKey: string; title: string; ownerComponent: string; problem: string; evidence: Record<string, unknown> };
 
 /** Run the learning pass with no goal resting on any claim, capturing what reaches the register. */
-async function register(rows: ReturnType<typeof ledger>) {
+async function register(rows: ReturnType<typeof ledger>, registry?: Registry) {
   const out: Candidate[] = [];
   const needs: unknown[] = [];
   await learnFromCashLedger('p', ['USD'], {
@@ -92,8 +124,9 @@ async function register(rows: ReturnType<typeof ledger>) {
     }) as never,
     toFactory: (async (c: Candidate) => {
       out.push(c);
-      return { candidate: {}, created: true };
+      return { candidate: registry ? { id: `imp_${c.weaknessKey}`, weaknessKey: c.weaknessKey } : {}, created: true };
     }) as never,
+    ...(registry ? { register: registry.deps } : {}),
   });
   return { candidates: out, needs };
 }
@@ -146,5 +179,40 @@ describe('a CAPACITY miss on the operator\'s decisions is the operator\'s correc
     expect(operator.problem).not.toMatch(/cash:/);
     expect(cash.ownerComponent).toBe('server/services/cash/forecast.ts');
     expect(operator.ownerComponent).toBe('server/services/operator/decisions.ts');
+  });
+
+  describe('the FORECAST:CAPACITY row production already registered on the operator\'s misses', () => {
+    it('is COMBINED into FORECAST:operator:CAPACITY when every claim it names is the operator\'s and nothing engineers it yet', async () => {
+      const reg = registry({ samples: operatorClaims });
+      await register(ledger({ operator: true, cash: false }), reg);
+      expect(reg.decisions).toEqual([
+        { id: 'imp_legacy', decision: 'COMBINED', reason: expect.stringMatching(/FORECAST:operator:CAPACITY.*operator\/decisions\.ts/), into: 'imp_FORECAST:operator:CAPACITY' },
+      ]);
+      expect(reg.events).toEqual([{ candidateId: 'imp_legacy', kind: 'COMBINED', detail: { into: 'imp_FORECAST:operator:CAPACITY', reason: 'MISROUTED_FAMILY', family: 'operator' } }]);
+    });
+
+    it('is left alone when it names a cash claim: then it is the cash forecast\'s own', async () => {
+      const reg = registry({ samples: [...operatorClaims, 'cash:p:USD:revenue'] });
+      await register(ledger({ operator: true, cash: false }), reg);
+      expect(reg.decisions).toEqual([]);
+    });
+
+    it('is left alone when a campaign already carries it: that work ends it through its own measured decision', async () => {
+      const reg = registry({ samples: operatorClaims, campaignId: 'fcp_in_flight' });
+      await register(ledger({ operator: true, cash: false }), reg);
+      expect(reg.decisions).toEqual([]);
+    });
+
+    it('is never decided again once decided', async () => {
+      const reg = registry({ samples: operatorClaims, decision: 'KEPT' });
+      await register(ledger({ operator: true, cash: false }), reg);
+      expect(reg.decisions).toEqual([]);
+    });
+
+    it("is never touched by the cash forecast's own CAPACITY correction", async () => {
+      const reg = registry({ samples: operatorClaims });
+      await register(ledger({ operator: false, cash: true }), reg);
+      expect(reg.decisions).toEqual([]);
+    });
   });
 });

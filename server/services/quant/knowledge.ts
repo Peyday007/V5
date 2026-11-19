@@ -49,7 +49,7 @@ import { compareAfterCorrection, impliedProbability, MIN_CALIBRATION_SAMPLE } fr
 import type { Correction, CorrectionComparison, ExposureRow, OutcomeRow, PredictionRow } from './forecast.ts';
 import { getDb } from '../../db/database.ts';
 import { listWorkstreamEvents, recordWorkstreamEvent } from '../../repos/register.ts';
-import { upsertCandidate } from '../../repos/improvement.ts';
+import { decideCandidate, getCandidateByKey, recordImprovementEvent, upsertCandidate, type ImprovementCandidate } from '../../repos/improvement.ts';
 import { raiseNeed } from '../cash/needs.ts';
 import { questionKey } from '../cash/conditions.ts';
 import { parseBlockerKey } from '../../domain/types.ts';
@@ -535,6 +535,40 @@ export interface LearningDeps {
   raise?: typeof raiseNeed;
   /** The openings whose card figures a cash claim was computed from; defaults to `listOpportunities`. */
   openings?: (projectId: string) => Promise<CashOpportunity[]>;
+  /** The register, read and decided, for a candidate keyed under the wrong family; defaults to `repos/improvement.ts`. */
+  register?: {
+    get: typeof getCandidateByKey;
+    decide: typeof decideCandidate;
+    event: typeof recordImprovementEvent;
+  };
+}
+
+/**
+ * Fold a candidate registered under the cash forecast's key for another family's misses into that family's
+ * own candidate. Before the claim-family split, an `operator:opd_*` miss was registered as
+ * `FORECAST:<cause>` owned by `cash/forecast.ts` (production, 2026-11-19: nine CAPACITY misses); the split
+ * routes the same misses to `FORECAST:<family>:<cause>`, but the misrouted row stayed live and could still
+ * be sent to Factory against an owner no change can correct. It is COMBINED into the family's candidate only
+ * when every claim it names is that family's (a cash claim among them makes it the cash forecast's own) and
+ * it has not been engineered — one already carried by a change request or campaign ends through that work's
+ * own measured decision, never by this reading. Returns whether the row was decided here.
+ */
+export async function retireMisroutedCandidate(
+  legacyKey: string,
+  family: string,
+  into: Pick<ImprovementCandidate, 'id' | 'weaknessKey'>,
+  register: NonNullable<LearningDeps['register']> = { get: getCandidateByKey, decide: decideCandidate, event: recordImprovementEvent },
+): Promise<boolean> {
+  if (family === 'cash' || legacyKey === into.weaknessKey) return false;
+  const legacy = await register.get(legacyKey);
+  if (!legacy || legacy.decision || legacy.changeRequestId || legacy.campaignId || legacy.id === into.id) return false;
+  const samples = legacy.evidence['samples'];
+  if (!Array.isArray(samples) || samples.length === 0) return false;
+  if (!samples.every((c) => typeof c === 'string' && claimFamily(c) === family)) return false;
+  const reason = `Combined into ${into.weaknessKey}: every claim it names (${samples.length}) is the ${family} family's, owned by ${familyOwner(family).component}, not the cash forecast's.`;
+  if (!(await register.decide(legacy.id, 'COMBINED', reason.slice(0, 1000), { combinedIntoId: into.id }))) return false;
+  await register.event({ candidateId: legacy.id, kind: 'COMBINED', detail: { into: into.id, reason: 'MISROUTED_FAMILY', family } });
+  return true;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -853,7 +887,7 @@ export async function learnFromCashLedger(projectId: string, currencies: readonl
       // Idempotent by weakness key: the register refreshes a live candidate and never reopens a decided one.
       // A correction that did not improve the next observations is a new weakness: the register never reopens a
       // decided candidate, so the failed round is its own key and Factory or the owner sees it again.
-      await (deps.toFactory ?? upsertCandidate)({
+      const registered = await (deps.toFactory ?? upsertCandidate)({
         weaknessKey: failed.length ? `FORECAST:${scope}${correction.cause}:not-improved:${failed.map((v) => `${v.comparableKey}@${v.correctedAt}`).sort().join(',')}`.slice(0, 200) : `FORECAST:${scope}${correction.cause}`,
         kind: 'FORECAST_MISCALIBRATION',
         title: software
@@ -882,6 +916,10 @@ export async function learnFromCashLedger(projectId: string, currencies: readonl
           observedAt: new Date().toISOString(),
         },
       });
+      // The same misses registered under the cash forecast's key before the family split are this candidate's.
+      if (!cash && !failed.length && registered.candidate?.id) {
+        await retireMisroutedCandidate(`FORECAST:${correction.cause}`, correction.family, registered.candidate, deps.register);
+      }
     }
   }
   return reading;
