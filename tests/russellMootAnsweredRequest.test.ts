@@ -254,8 +254,12 @@ describe('the answered-requests pass and a mission that left Needs You', () => {
       // Running again on its own (a terminal move would release the hold, and the resume would not defer).
       await transitionMission({ missionId, from: 'NEEDS_HUMAN', to: 'RUNNING' }),
     ).toBe(true);
-    // The resume alone defers it: that is the state the pass used to keep for ever.
-    expect((await resumeAnsweredRequest(request)).deferred).toBe(true);
+    // The resume used to defer it, the state the pass kept for ever. It is decided moot before the
+    // admission now: no wait for a slot it could never use, and the lapsed hold is not touched.
+    const resumed = await resumeAnsweredRequest(request);
+    expect(resumed.deferred ?? false).toBe(false);
+    expect(resumed.reason).toBe(MOVED_OUT);
+    expect((await getDb().all<{ expires_at: string }>('SELECT expires_at FROM russell_budget_reservations WHERE id = ?', [lapsed]))[0]!.expires_at).toBe(past);
 
     const report = await tick('moot-deferred');
     const after = (await getHumanRequest(request.id))!;

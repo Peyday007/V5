@@ -1146,9 +1146,20 @@ export async function resumeAnsweredRequest(
    * and meets the grant's `maxConcurrent` like any launch. With no free slot
    * the answer waits, recorded, rather than pushing live research over the
    * ceiling a person set.
+   *
+   * Only an answer that can still apply is admitted. Both are applied through
+   * a transition guarded on `NEEDS_HUMAN`, so once the mission has left it
+   * (the operator's one predicate, `mootByState`) no slot can make either
+   * apply: admitting would readmit a lapsed `HELD` hold for research nothing
+   * will restart, and a full ceiling would defer the answer for a slot it can
+   * never use. A moot answer skips the admission and goes straight to its
+   * function, which keeps the packet's own refusals and otherwise fails with
+   * the sentence `reopenAnswered` withdraws on (`recordGaps` before its
+   * pre-guard effect, `authorizePlan` at its guarded transition).
    */
   if (
     (choice === NEEDS_HUMAN_CHOICES.RECORD_GAPS.key || choice === NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key) &&
+    !(await mootByState(request, mission)) &&
     !(choice === NEEDS_HUMAN_CHOICES.RECORD_GAPS.key && (await filingOnly(mission.orchestrationId))) &&
     !(await admitResume(mission.reservationId))
   ) {

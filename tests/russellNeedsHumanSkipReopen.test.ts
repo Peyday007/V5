@@ -14,6 +14,7 @@ import { newId, nowIso } from '../server/repos/util.ts';
 import { createRun } from '../server/repos/runs.ts';
 import { createFragments, createOrchestration, getOrchestration } from '../server/repos/research.ts';
 import { createUser } from '../server/repos/identity.ts';
+import { createGoal, getReservation } from '../server/repos/russellAuthority.ts';
 import { listEventsByEntity } from '../server/repos/events.ts';
 import {
   answerHumanRequest,
@@ -188,6 +189,74 @@ describe('an answer whose mission already left Needs You is withdrawn, never re-
     await tick('skip-reopen-authority');
     expect((await getHumanRequest(authority.id))!.state).not.toBe('WITHDRAWN');
     expect((await getHumanRequest(missionless.id))!.state).not.toBe('WITHDRAWN');
+  });
+});
+
+describe('skip-reopen: a moot answer is decided before the research-slot admission', () => {
+  /*
+   * F2: the moot check sat inside recordGaps, after resumeAnsweredRequest had already admitted the
+   * resume — so a moot APPROVE_PLAN or RECORD_GAPS answer readmitted the mission's lapsed HELD hold
+   * (taking a research slot for work nothing will restart), or was deferred waiting for a slot it could
+   * never use, before it was classed moot. A free slot and a lapsed hold make the readmission observable.
+   */
+  async function withLapsedHold(missionId: string): Promise<{ reservationId: string; past: string }> {
+    const goal = await createGoal({
+      projectId: fixture.project.id, ownerUserId: userId, createdByUserId: userId, name: 'Free slot',
+      allowedWork: ['RESEARCH'], maxMissions: 5, maxFragments: 20, maxConcurrent: 3, maxProbes: 5,
+    });
+    const past = new Date(Date.now() - 3_600_000).toISOString();
+    const reservationId = newId('rsv');
+    await getDb().run(
+      `INSERT INTO russell_budget_reservations (id, goal_id, kind, amount, idempotency_key, state, expires_at, created_at)
+       VALUES (?, ?, 'MISSION', 1, ?, 'HELD', ?, ?)`,
+      [reservationId, goal.id, `skip-reopen-slot-${reservationId}`, past, nowIso()],
+    );
+    await getDb().run(`UPDATE russell_missions SET reservation_id = ? WHERE id = ?`, [reservationId, missionId]);
+    return { reservationId, past };
+  }
+
+  for (const choice of [NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key, NEEDS_HUMAN_CHOICES.RECORD_GAPS.key]) {
+    it(`a moot ${choice} answer readmits no hold and is withdrawn`, async () => {
+      const missionId = await parkedMission();
+      const request = await answered(missionId, choice);
+      if (choice === NEEDS_HUMAN_CHOICES.RECORD_GAPS.key) {
+        // One accepted fragment beside one still planned: research is left to restart, so this is not
+        // filing-only and the resume would take a slot.
+        const orchestrationId = (await getMission(missionId))!.orchestrationId!;
+        await getDb().run(`UPDATE research_fragments SET status = 'ACCEPTED' WHERE orchestration_id = ?`, [orchestrationId]);
+        await createFragments([
+          {
+            orchestrationId, projectId: fixture.project.id, layerId: (await getMission(missionId))!.layerId, geography: 'United States',
+            requiredEvidence: [{ id: 'published_price', description: 'a price', necessity: 'REQUIRED' }],
+            acceptableSourceTypes: ['the platform itself'], excludedSourceTypes: ['a blog about it'], completionCriteria: ['one dated price'],
+            minIndependentSources: 1, maxRepairs: 2, fragmentIndex: 1, fragmentKey: 'terms', question: 'What terms does each publish?',
+            dependsOn: [], attempt: 1, status: 'PLANNED',
+          },
+        ] as unknown as Parameters<typeof createFragments>[0]);
+      }
+      const { reservationId, past } = await withLapsedHold(missionId);
+      // Running again on its own: a terminal move would release the hold.
+      await moveMission(missionId, 'RUNNING');
+
+      const outcome = await resumeAnsweredRequest(request);
+      expect(outcome.deferred ?? false).toBe(false);
+      expect(outcome.reason).toBe(MOVED_OUT);
+      const hold = (await getReservation(reservationId))!;
+      expect(hold.state).toBe('HELD');
+      expect(hold.expiresAt).toBe(past);
+
+      expect(await reopenAnswered(request, outcome.reason)).toBe(true);
+      expect((await getHumanRequest(request.id))!.state).toBe('WITHDRAWN');
+    });
+  }
+
+  it('an answer whose mission still waits is still admitted', async () => {
+    const missionId = await parkedMission();
+    const request = await answered(missionId, NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key);
+    const { reservationId, past } = await withLapsedHold(missionId);
+    const outcome = await resumeAnsweredRequest(request);
+    expect(outcome.reason).not.toBe(MOVED_OUT);
+    expect((await getReservation(reservationId))!.expiresAt > past).toBe(true);
   });
 });
 
