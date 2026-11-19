@@ -92,8 +92,16 @@ async function moveMission(missionId: string, to: 'CANCELLED' | 'RUNNING') {
 }
 
 describe('an answer whose mission already left Needs You is withdrawn, never re-asked', () => {
-  it('A01: several moot answers end WITHDRAWN after one tick, none OPEN or ANSWERED', async () => {
-    const cards: { id: string; state: string }[] = [];
+  it('A01: several moot answers end WITHDRAWN after one tick, none OPEN or ANSWERED, and none authorizes anything', async () => {
+    /*
+     * The recorded failure class, end to end through the loop that produced it. Withdrawal alone already
+     * held before this variant; what did not hold is that a moot RECORD_GAPS answer on a packet with an
+     * accepted fragment authorized the packet's gaps in the answerer's name *before* the guarded
+     * transition refused it — an effect recorded for a decision nobody was waiting on. So every
+     * RECORD_GAPS card here sits on a packet whose report could be filed, and the tick must leave each
+     * packet unauthorized as well as each card withdrawn.
+     */
+    const cards: { id: string; state: string; orchestrationId: string | null }[] = [];
     for (const [choice, to] of [
       [NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key, 'CANCELLED'],
       [NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key, 'RUNNING'],
@@ -102,8 +110,13 @@ describe('an answer whose mission already left Needs You is withdrawn, never re-
     ] as const) {
       const missionId = await parkedMission();
       const request = await answered(missionId, choice);
+      let orchestrationId: string | null = null;
+      if (choice === NEEDS_HUMAN_CHOICES.RECORD_GAPS.key) {
+        orchestrationId = (await getMission(missionId))!.orchestrationId!;
+        await getDb().run(`UPDATE research_fragments SET status = 'ACCEPTED' WHERE orchestration_id = ?`, [orchestrationId]);
+      }
       await moveMission(missionId, to);
-      cards.push({ id: request.id, state: to });
+      cards.push({ id: request.id, state: to, orchestrationId });
     }
 
     const report = await tick('skip-reopen');
@@ -112,12 +125,17 @@ describe('an answer whose mission already left Needs You is withdrawn, never re-
       expect(after.state, card.id).toBe('WITHDRAWN');
       expect(after.whyNotRussell).toMatch(new RegExp(card.state));
       expect(report.withdrawnMootAnswers.map((w) => w.requestId)).toContain(card.id);
+      if (card.orchestrationId) {
+        const packet = (await getOrchestration(card.orchestrationId))!;
+        expect(packet.unresolvedGapPolicy, card.id).not.toBe('RECORD_GAPS');
+        expect(packet.unresolvedGapAuthorizedBy ?? null, card.id).toBeNull();
+      }
     }
     const open = (await listOpenRequests(fixture.project.id)).map((r) => r.id);
     expect(cards.some((c) => open.includes(c.id))).toBe(false);
   });
 
-  it('a moot RECORD_GAPS answer authorizes nothing in the answerer\'s name', async () => {
+  it('A01: a moot RECORD_GAPS answer authorizes nothing in the answerer\'s name', async () => {
     const missionId = await parkedMission();
     const request = await answered(missionId, NEEDS_HUMAN_CHOICES.RECORD_GAPS.key);
     const orchestrationId = (await getMission(missionId))!.orchestrationId!;
