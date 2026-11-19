@@ -129,6 +129,8 @@ export interface BucketCorrection {
   rationale: string;
   /** Claims whose systematic miss named MISSING_MECHANISM: the step from decision to outcome was not in the claim. */
   missingMechanismClaims: string[];
+  /** Claims whose systematic miss named CAPACITY: the outcome needed capacity the decision assumed and did not have. */
+  capacityShortfallClaims: string[];
 }
 
 /**
@@ -143,6 +145,58 @@ export const MECHANISM_ASSUMPTION_INSTRUCTION =
 
 /** An assumption that names the mechanism step, written as MECHANISM_ASSUMPTION_INSTRUCTION tells the operator to write it. */
 export const MECHANISM_ASSUMPTION = /^\s*mechanism\s*:\s*\S/i;
+
+/**
+ * The same correction for a bucket whose systematic misses named CAPACITY
+ * (FORECAST:operator:CAPACITY): the decision assumed capacity — a free worker,
+ * a sending inbox, a delivery slot — that was not there within the horizon. The
+ * next decision of that kind states which capacity it needs and the row showing
+ * it is available, so a forecast never again rests on capacity nobody measured.
+ */
+export const CAPACITY_ASSUMPTION_INSTRUCTION =
+  'Add an assumption beginning "capacity:" naming the pool the predicted outcome needs, exactly as brain_operator_capacity reports it (ROUTINES, FREE_LANE, RESEARCH_SLOTS or FACTORY), and what it needs from that pool within the horizon';
+
+/** An assumption that names the capacity, written as CAPACITY_ASSUMPTION_INSTRUCTION tells the operator to write it. */
+export const CAPACITY_ASSUMPTION = /^\s*capacity\s*:\s*\S/i;
+
+/** The pools Brain measures capacity in (`engineering/watchdog.ts` PoolReading). */
+const CAPACITY_POOLS = ['ROUTINES', 'FREE_LANE', 'RESEARCH_SLOTS', 'FACTORY'] as const;
+type CapacityPool = (typeof CAPACITY_POOLS)[number];
+
+/** The measured reading of one pool, as `brain_operator_capacity` serves it. */
+export interface CapacityPoolRow {
+  pool: CapacityPool;
+  running: number;
+  capacity: number;
+}
+
+/** The pools as `utilizationWithin` served them: null pools when Brain holds no reading. */
+export interface CapacityRows {
+  pools: readonly CapacityPoolRow[] | null;
+  source: string;
+  readAt: string | null;
+}
+
+/**
+ * Hold a "capacity:" assumption to the measured rows (review F1): text alone
+ * does not show capacity is there. Every pool the assumptions name must be in
+ * the reading and hold less than it may; naming no pool, a pool with no
+ * headroom, or having no reading at all is a problem. Null when it holds.
+ */
+export function capacityAssumptionProblem(assumptions: readonly string[], rows: CapacityRows): string | null {
+  const stated = assumptions.filter((a) => CAPACITY_ASSUMPTION.test(a));
+  const named = new Set<CapacityPool>();
+  for (const a of stated) for (const pool of CAPACITY_POOLS) if (new RegExp(`\\b${pool}\\b`, 'i').test(a)) named.add(pool);
+  if (named.size === 0) return `the "capacity:" assumption names none of Brain's measured pools (${CAPACITY_POOLS.join(', ')}), so nothing shows the capacity is there`;
+  if (!rows.pools) return `Brain holds no capacity reading (${rows.source}) to show ${[...named].join(', ')} has room`;
+  const short: string[] = [];
+  for (const pool of named) {
+    const row = rows.pools.find((r) => r.pool === pool);
+    if (!row) short.push(`${pool} is not in the capacity reading`);
+    else if (row.running >= row.capacity) short.push(`${pool} holds ${row.running} of ${row.capacity}, no room`);
+  }
+  return short.length > 0 ? `the capacity the decision names is not available on the reading taken ${rows.readAt ?? 'now'} (${rows.source}): ${short.join('; ')}` : null;
+}
 
 /**
  * Read the bucket's own record off the ledger (§108): forecast.ts's calibration
@@ -164,11 +218,20 @@ export function bucketCorrectionFrom(
   const entries = buildLedger(predictions, exposures, outcomes);
   const buckets = calibrate(entries);
   const missing = new Set<string>();
+  const capacity = new Set<string>();
   for (const entry of entries) {
     const d = diagnose(entry, buckets, entries);
-    if (d.kind === 'SYSTEMATIC' && d.causes.includes('MISSING_MECHANISM')) missing.add(d.claimId);
+    if (d.kind !== 'SYSTEMATIC') continue;
+    if (d.causes.includes('MISSING_MECHANISM')) missing.add(d.claimId);
+    if (d.causes.includes('CAPACITY')) capacity.add(d.claimId);
   }
-  return { comparableKey, shift: reading.correction.amount, rationale: reading.correction.rationale, missingMechanismClaims: [...missing] };
+  return {
+    comparableKey,
+    shift: reading.correction.amount,
+    rationale: reading.correction.rationale,
+    missingMechanismClaims: [...missing],
+    capacityShortfallClaims: [...capacity],
+  };
 }
 
 /** Rows fetched per round trip of `readComparableLedger`: a page size, never a cap. */
@@ -251,7 +314,7 @@ async function projectFor(goalId: string | null, fallback: string): Promise<stri
  */
 export async function decide(
   input: DecisionInput & { answeredChallenge?: string | null },
-  ctx: { runId: string | null; projectIds: string[]; models: OperatorModel[]; fetchImpl?: typeof fetch },
+  ctx: { runId: string | null; projectIds: string[]; models: OperatorModel[]; fetchImpl?: typeof fetch; readCapacity?: () => Promise<CapacityRows> },
 ): Promise<DecideResult> {
   const review = reviewDecision(input);
   if (!review.ok) return { committed: false, decisionId: null, verdict: 'REFUSED', problems: review.problems, review, challenge: null, next: 'Fix the problems and call again.' };
@@ -267,20 +330,45 @@ export async function decide(
   // One read, scoped to this bucket, serves both the correction and the version `recordPrediction` assigns.
   const bucket = await readComparableLedger(comparableKey);
   const correction = bucketCorrectionFrom(bucket, comparableKey);
-  if (correction && correction.missingMechanismClaims.length > 0 && !input.assumptions.some((a) => MECHANISM_ASSUMPTION.test(a))) {
-    const claims = correction.missingMechanismClaims;
-    return {
-      committed: false,
-      decisionId: null,
-      verdict: 'REVISE',
-      problems: [
-        `${comparableKey} is miscalibrated (${correction.rationale}) and ${claims.length} of its systematic misses were MISSING_MECHANISM (${claims.slice(0, 12).join(', ')}${claims.length > 12 ? ', …' : ''}): the step from this decision to its outcome was not in the claim`,
-      ],
-      review,
-      challenge: null,
-      correction,
-      next: `${MECHANISM_ASSUMPTION_INSTRUCTION}, then call again.`,
-    };
+  // Every gap the bucket names is returned in one REVISE: a decision missing both a
+  // mechanism and a capacity assumption is told both at once, not one per round-trip.
+  if (correction) {
+    const problems: string[] = [];
+    const instructions: string[] = [];
+    const listed = (claims: string[]): string => `${claims.slice(0, 12).join(', ')}${claims.length > 12 ? ', …' : ''}`;
+    if (correction.missingMechanismClaims.length > 0 && !input.assumptions.some((a) => MECHANISM_ASSUMPTION.test(a))) {
+      const claims = correction.missingMechanismClaims;
+      problems.push(
+        `${comparableKey} is miscalibrated (${correction.rationale}) and ${claims.length} of its systematic misses were MISSING_MECHANISM (${listed(claims)}): the step from this decision to its outcome was not in the claim`,
+      );
+      instructions.push(MECHANISM_ASSUMPTION_INSTRUCTION);
+    }
+    if (correction.capacityShortfallClaims.length > 0) {
+      const claims = correction.capacityShortfallClaims;
+      const stated = input.assumptions.some((a) => CAPACITY_ASSUMPTION.test(a));
+      // A stated assumption is held to the measured pools; the read is bounded like brain_operator_capacity's own.
+      const readCapacity = ctx.readCapacity ?? (async () => (await import('../engineering/watchdog.ts')).utilizationWithin());
+      const unmet = stated ? capacityAssumptionProblem(input.assumptions, await readCapacity()) : null;
+      if (!stated || unmet) {
+        problems.push(
+          `${comparableKey} is miscalibrated (${correction.rationale}) and ${claims.length} of its systematic misses were CAPACITY (${listed(claims)}): the outcome needed capacity the decision assumed and did not have`,
+          ...(unmet ? [unmet] : []),
+        );
+        instructions.push(CAPACITY_ASSUMPTION_INSTRUCTION);
+      }
+    }
+    if (problems.length > 0) {
+      return {
+        committed: false,
+        decisionId: null,
+        verdict: 'REVISE',
+        problems,
+        review,
+        challenge: null,
+        correction,
+        next: `${instructions.join('; and ')}, then call again.`,
+      };
+    }
   }
   let challenge: Challenge | null = null;
   if (review.highImpact) {
@@ -430,6 +518,12 @@ export function operatorCalibration(
   for (const x of judged) if (!x.o.occurred) for (const c of x.o.observedCauses ?? []) causes.set(c, (causes.get(c) ?? 0) + 1);
   const enough = n >= 10;
   const mechanismMisses = causes.get('MISSING_MECHANISM') ?? 0;
+  const capacityMisses = causes.get('CAPACITY') ?? 0;
+  const kindName = comparableKey.replace(/^operator:/, '');
+  const instructions = [
+    ...(mechanismMisses > 0 ? [`${mechanismMisses} miss(es) of ${comparableKey} lacked the step from decision to outcome (MISSING_MECHANISM). In every further ${kindName} decision: ${MECHANISM_ASSUMPTION_INSTRUCTION}.`] : []),
+    ...(capacityMisses > 0 ? [`${capacityMisses} miss(es) of ${comparableKey} assumed capacity that was not there (CAPACITY). In every further ${kindName} decision: ${CAPACITY_ASSUMPTION_INSTRUCTION}.`] : []),
+  ];
   return {
     comparableKey,
     judged: n,
@@ -438,9 +532,7 @@ export function operatorCalibration(
     brier,
     missCauses: Object.fromEntries(causes),
     // Told here, where the miss is recorded, rather than first in a REVISE that costs the next decision a round-trip.
-    ...(mechanismMisses > 0
-      ? { nextDecisionOfThisKind: `${mechanismMisses} miss(es) of ${comparableKey} lacked the step from decision to outcome (MISSING_MECHANISM). In every further ${comparableKey.replace(/^operator:/, '')} decision: ${MECHANISM_ASSUMPTION_INSTRUCTION}.` }
-      : {}),
+    ...(instructions.length > 0 ? { nextDecisionOfThisKind: instructions.join(' ') } : {}),
     reading: !enough
       ? `${n} judged decision(s) of this kind — too few to call the operator's probabilities calibrated or not; investigate each miss by its cause instead`
       : Math.abs((meanForecast ?? 0) - (hitRate ?? 0)) > 0.15
