@@ -217,3 +217,27 @@ Other buyers in the plans: VA, employer, small business operators, St Louis Deve
 Still open:
 - The lead changes from read to read (Puzzle Society → homeowner on the same goal). This is the parked P4 stable-selection defect.
 - Item 5 (a research round asks the slot price) is not yet verified; I asked the release owner for the round id.
+
+## 05:55Z — P4 stable selection live (#1123, release 1a4ea56e)
+
+**Root cause:** every plan read stores what it composed in the arrangement library (`rememberArrangements`), and `selectCandidates` ranked candidates by that stored p50. So a read reordered the next read's candidates.
+
+**Fix:**
+- The selection reads only research verdicts.
+- Rotation advances by the hour.
+- The goal's recent leaders are held.
+- Evidenced candidates come first.
+
+**Deploy 44461261520:** all 4 SQLite shards passed, including shard 4, which failed #1105 and #1114. Postgres passed. Fly passed.
+
+**Production, sequential reads on 1a4ea56e:**
+
+| Goal | Reads | Lead (identical on every read) |
+|---|---|---|
+| wst_7b4f… ($10K/30d) | 3 (05:30, 05:33, 05:38) | arr_ed03111d5938 "Small and mid-size firms sending year-end client and employee gifts", reach 24.5%, p50 $2,610 |
+| wst_6631… ($100K/90d) | 2 | arr_1c912684db66, reach 0.4%, p50 $185,840 |
+| wst_db2e… ($5K/mo) | 2 | arr_88ba66b2ee5c, reach 0.3%, p50 $39,595 |
+
+Repeated reads are now stable.
+
+**Open:** the $10K goal's previous lead (arr_19a99390e28b homeowner, 55.3%) was not held across the release. An agent is establishing whether that is a held-leader defect or a lead that existed only because of the stored-p50 ranking.
