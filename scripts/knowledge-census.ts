@@ -1,19 +1,17 @@
 /**
- * PROBE (claude/probe-idle-dispatch, never merged): why the one executable
- * Factory bin and the one executable routine bin are not dispatched.
- * SELECT-only, plus the read-only readers the capacity tool itself calls.
+ * PROBE 2 (claude/probe-idle-dispatch, never merged): the review lineage of
+ * fcp_03a8a0adfdb943a29171 and who its refused reviewers were. SELECT-only.
  */
 import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
 
-function show(label: string, value: unknown): void {
-  console.log(`== ${label}`);
-  console.log(JSON.stringify(value, null, 0)?.slice(0, 12_000));
-}
+const CAMPAIGN = 'fcp_03a8a0adfdb943a29171';
+const BIN = 'bin_53bf8c50d59b4af2ab6a';
 
-async function q(label: string, sql: string, params: unknown[] = []): Promise<unknown[]> {
+async function q(label: string, sql: string, params: unknown[] = []): Promise<Record<string, unknown>[]> {
   try {
     const rows = await getDb().all<Record<string, unknown>>(sql, params as never);
-    show(`${label} (${rows.length})`, rows);
+    console.log(`== ${label} (${rows.length})`);
+    console.log(JSON.stringify(rows).slice(0, 12_000));
     return rows;
   } catch (error) {
     console.log(`== ${label} UNMEASURED: ${(error as Error).message}`);
@@ -23,116 +21,66 @@ async function q(label: string, sql: string, params: unknown[] = []): Promise<un
 
 async function main(): Promise<void> {
   await initDatabase();
-  const now = new Date();
-  const iso = now.toISOString();
-  console.log(`NOW ${iso}`);
-
   try {
-    const { DISPATCHABLE_SQL, FIREABLE_SQL, workReadySql } = await import('../server/repos/bins.ts');
-    await q(
-      'executable bins (watchdog predicate, before unrouted/pin filters)',
-      `SELECT id, kind, state, project_id, workload_class, priority, factory_campaign_id, orchestration_id, completion_contract,
-              attempt_count, max_attempts, dispatch_not_before, lease_expires_at, lease_generation, pinned_routine_id, ready_at, created_at, updated_at
-         FROM bins WHERE ${DISPATCHABLE_SQL} AND ${FIREABLE_SQL} AND ${workReadySql('bins.')}`,
-      [iso, iso, iso, iso],
+    const { implementingSessions } = await import('../server/services/factory/remote.ts');
+    const r = await implementingSessions(CAMPAIGN);
+    console.log('== implementingSessions');
+    console.log(
+      JSON.stringify({
+        sessions: [...r.sessions],
+        workers: [...r.workers],
+        unknownWorker: r.unknownWorker,
+        unknownSessionCredentials: [...r.unknownSessionCredentials],
+        unknownSessionUnresolved: r.unknownSessionUnresolved,
+      }),
     );
   } catch (error) {
-    console.log(`executable bins failed: ${(error as Error).message}`);
+    console.log(`implementingSessions failed: ${(error as Error).message}`);
   }
-
-  const binRows = (await q(
-    'READY/LEASED bins',
-    `SELECT id, kind, state, project_id, workload_class, priority, factory_campaign_id, orchestration_id, completion_contract,
-            attempt_count, max_attempts, dispatch_not_before, lease_expires_at, lease_generation, pinned_routine_id, ready_at, leased_at, updated_at
-       FROM bins WHERE state IN ('READY','LEASED') ORDER BY updated_at DESC LIMIT 40`,
-  )) as Array<{ id: string }>;
-
-  for (const bin of binRows.slice(0, 12)) {
-    await q(`dispatch rows for ${bin.id}`, `SELECT * FROM bin_dispatch WHERE bin_id = ? ORDER BY created_at DESC LIMIT 6`, [bin.id]);
+  const impl = await q(
+    'implementing events',
+    `SELECT id, kind, at, session_id, worker_id, detail FROM factory_events
+      WHERE campaign_id = ? AND kind IN ('UNIT_IMPLEMENTED','INTEGRATION_MERGED') ORDER BY at`,
+    [CAMPAIGN],
+  );
+  const binIds = new Set<string>();
+  for (const row of impl) {
+    try {
+      const detail = typeof row['detail'] === 'string' ? JSON.parse(row['detail'] as string) : row['detail'];
+      if (detail && typeof detail.binId === 'string') binIds.add(detail.binId);
+    } catch {
+      /* ignore */
+    }
+  }
+  for (const id of binIds) {
+    await q(`bin ${id}`, `SELECT id, kind, state, lease_generation, worker_id, lease_session_ref FROM bins WHERE id = ?`, [id]);
     await q(
-      `events for ${bin.id}`,
-      `SELECT event_type, at, outcome, reason, routine_ref, lease_generation FROM bin_events WHERE bin_id = ? ORDER BY at DESC LIMIT 12`,
-      [bin.id],
+      `assign events ${id}`,
+      `SELECT event_type, at, lease_generation, worker_id, session_ref, measures FROM bin_events
+        WHERE bin_id = ? AND event_type IN ('BIN_ASSIGNED','BIN_TAKEOVER') ORDER BY at`,
+      [id],
     );
   }
-
-  await q('dispatch rows by state', `SELECT state, COUNT(*) AS n, MIN(next_attempt_at) AS min_next, MAX(updated_at) AS last_upd FROM bin_dispatch GROUP BY state`);
-  await q('pending/sending intents', `SELECT * FROM bin_dispatch WHERE state IN ('PENDING','SENDING') ORDER BY next_attempt_at LIMIT 20`);
-  await q('last sent dispatches', `SELECT id, bin_id, sent_at, routine_ref, session_ref FROM bin_dispatch WHERE sent_at IS NOT NULL ORDER BY sent_at DESC LIMIT 8`);
+  await q('campaign bins', `SELECT id, kind, state, lease_generation, attempt_count, max_attempts, created_at, completed_at FROM bins WHERE factory_campaign_id = ? ORDER BY created_at`, [CAMPAIGN]);
   await q(
-    'recent dispatch-level events',
-    `SELECT event_type, COUNT(*) AS n, MAX(at) AS last FROM bin_events WHERE at > ? GROUP BY event_type ORDER BY last DESC LIMIT 40`,
-    [new Date(now.getTime() - 6 * 3600_000).toISOString()],
+    'refusals on the review bin',
+    `SELECT at, worker_id, session_ref, outcome, measures FROM bin_events WHERE bin_id = ? AND event_type = 'BIN_ASSIGNMENT_REFUSED' ORDER BY at DESC LIMIT 25`,
+    [BIN],
   );
   await q(
-    'recent tick failures / boot',
-    `SELECT event_type, at, outcome, reason FROM bin_events WHERE event_type IN ('DISPATCH_TICK_FAILED','DISPATCH_BOOT_RECOVERY') ORDER BY at DESC LIMIT 10`,
+    'refusal stats',
+    `SELECT worker_id, COUNT(*) AS n, MIN(at) AS first, MAX(at) AS last FROM bin_events WHERE bin_id = ? AND event_type = 'BIN_ASSIGNMENT_REFUSED' GROUP BY worker_id`,
+    [BIN],
   );
+  await q('session refusal rows', `SELECT * FROM bin_session_refusals WHERE bin_id = ? ORDER BY last_at DESC LIMIT 10`, [BIN]);
+  await q('reviews', `SELECT * FROM factory_reviews WHERE campaign_id = ? ORDER BY created_at DESC LIMIT 10`, [CAMPAIGN]);
   await q(
-    'recent unrouted',
-    `SELECT bin_id, at, outcome, reason FROM bin_events WHERE event_type = 'DISPATCH_UNROUTED' ORDER BY at DESC LIMIT 10`,
+    'dispatch events for review bin',
+    `SELECT event_type, at, outcome, reason, routine_ref FROM bin_events WHERE bin_id = ? AND event_type LIKE 'DISPATCH%' ORDER BY at DESC LIMIT 30`,
+    [BIN],
   );
-  await q(
-    'fleet routines',
-    `SELECT r.id, r.name, r.state, r.state_reason, r.capabilities, r.account_id, a.state AS account_state, r.updated_at
-       FROM fleet_routines r LEFT JOIN fleet_accounts a ON a.id = r.account_id ORDER BY r.name`,
-  );
-  await q('fleet accounts', `SELECT * FROM fleet_accounts`);
-  await q('factory queue', `SELECT * FROM factory_queue_entries WHERE state = 'QUEUED'`);
-  await q(
-    'live campaigns',
-    `SELECT id, state, blocker_kind, blocker_detail, change_request_id, updated_at FROM factory_campaigns WHERE state NOT IN ('COMPLETE','CANCELLED','FAILED','DONE') ORDER BY updated_at DESC LIMIT 15`,
-  );
-  await q(
-    'interventions',
-    `SELECT kind, attempted_action, replacement_action, created_at FROM engineering_interventions WHERE kind = 'IDLE_WITH_EXECUTABLE_WORK' ORDER BY created_at DESC LIMIT 10`,
-  );
-  await q('factory idle events', `SELECT kind, at, detail FROM factory_events WHERE kind LIKE '%IDLE%' ORDER BY at DESC LIMIT 6`);
-
-  try {
-    const { idleCounts } = await import('../server/services/engineering/watchdog.ts');
-    show('idleCounts', await idleCounts(now));
-  } catch (error) {
-    console.log(`idleCounts failed: ${(error as Error).message}`);
-  }
-  try {
-    const { readLine } = await import('../server/services/factory/line.ts');
-    const line = await readLine(now);
-    show('line.summary', {
-      executable: line.executable,
-      active: line.active,
-      freeSurfaces: line.capacity.freeSurfaces,
-      because: line.because,
-      surfaces: line.capacity.surfaces,
-      queue: line.queue.map((one) => ({ id: one.entry.id, why: one.why, executableNow: one.executableNow })),
-      campaigns: line.campaigns.map((one) => ({ id: one.campaign.id, state: one.campaign.state, working: one.working, blocked: one.blocked, next: one.next, bins: one.bins })),
-    });
-  } catch (error) {
-    console.log(`readLine failed: ${(error as Error).message}`);
-  }
-  try {
-    const { fleetSnapshot } = await import('../server/services/dispatch/candidates.ts');
-    const snap = await fleetSnapshot(now);
-    show('snapshot', {
-      fleetPolicy: snap.fleetPolicy,
-      fleetInFlight: snap.fleetInFlight,
-      factoryInFlight: snap.factoryInFlight,
-      missingSecrets: snap.missingSecrets,
-      candidates: snap.candidates.map((c) => ({
-        routine: c.routine.name,
-        id: c.routine.id,
-        caps: c.routine.capabilities,
-        state: c.routine.state,
-        rIn: c.routineInFlight,
-        rT: c.routineTarget,
-        aIn: c.accountInFlight,
-        aT: c.accountTarget,
-        webBlocked: c.webBlocked,
-      })),
-    });
-  } catch (error) {
-    console.log(`snapshot failed: ${(error as Error).message}`);
-  }
+  await q('routines by ref', `SELECT id, name, routine_ref, worker_id, state FROM fleet_routines`);
+  await q('connectors', `SELECT c.id, c.account_id, c.worker_id, c.label, cc.client_id FROM connectors c LEFT JOIN connector_clients cc ON cc.connector_id = c.id`);
 }
 
 main()
