@@ -131,7 +131,17 @@ export interface BucketCorrection {
   missingMechanismClaims: string[];
 }
 
-/** An assumption that names the mechanism step, the way the operator is told to write it. */
+/**
+ * How the operator is told to name the mechanism step: one sentence, used
+ * wherever it reaches the operator. It reaches it the moment a verified miss
+ * names MISSING_MECHANISM — `operatorCalibration`, which brain_operator_verify
+ * returns — so the next decision of that kind is written right the first time,
+ * and again in decide()'s REVISE should one still arrive without it.
+ */
+export const MECHANISM_ASSUMPTION_INSTRUCTION =
+  'Add an assumption beginning "mechanism:" that names the step from this decision to the predicted outcome the earlier misses lacked (who acts, how they are reached, what makes them say yes)';
+
+/** An assumption that names the mechanism step, written as MECHANISM_ASSUMPTION_INSTRUCTION tells the operator to write it. */
 export const MECHANISM_ASSUMPTION = /^\s*mechanism\s*:\s*\S/i;
 
 /**
@@ -269,7 +279,7 @@ export async function decide(
       review,
       challenge: null,
       correction,
-      next: 'Add an assumption beginning "mechanism:" that names the step from this decision to the predicted outcome the earlier misses lacked (who acts, how they are reached, what makes them say yes), then call again.',
+      next: `${MECHANISM_ASSUMPTION_INSTRUCTION}, then call again.`,
     };
   }
   let challenge: Challenge | null = null;
@@ -419,6 +429,7 @@ export function operatorCalibration(
   const causes = new Map<string, number>();
   for (const x of judged) if (!x.o.occurred) for (const c of x.o.observedCauses ?? []) causes.set(c, (causes.get(c) ?? 0) + 1);
   const enough = n >= 10;
+  const mechanismMisses = causes.get('MISSING_MECHANISM') ?? 0;
   return {
     comparableKey,
     judged: n,
@@ -426,6 +437,10 @@ export function operatorCalibration(
     hitRate,
     brier,
     missCauses: Object.fromEntries(causes),
+    // Told here, where the miss is recorded, rather than first in a REVISE that costs the next decision a round-trip.
+    ...(mechanismMisses > 0
+      ? { nextDecisionOfThisKind: `${mechanismMisses} miss(es) of ${comparableKey} lacked the step from decision to outcome (MISSING_MECHANISM). In every further ${comparableKey.replace(/^operator:/, '')} decision: ${MECHANISM_ASSUMPTION_INSTRUCTION}.` }
+      : {}),
     reading: !enough
       ? `${n} judged decision(s) of this kind — too few to call the operator's probabilities calibrated or not; investigate each miss by its cause instead`
       : Math.abs((meanForecast ?? 0) - (hitRate ?? 0)) > 0.15

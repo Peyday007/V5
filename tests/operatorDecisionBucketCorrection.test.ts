@@ -9,7 +9,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import type { DecisionInput } from '../server/domain/decision.ts';
-import { bucketCorrectionFrom, correctedProbability, decide, readDecision } from '../server/services/operator/decisions.ts';
+import { MECHANISM_ASSUMPTION, MECHANISM_ASSUMPTION_INSTRUCTION, bucketCorrectionFrom, correctedProbability, decide, operatorCalibration, readDecision, verify } from '../server/services/operator/decisions.ts';
 import { readLedger, recordOutcome, recordPrediction } from '../server/services/quant/ledger.ts';
 
 const base: DecisionInput = {
@@ -104,5 +104,32 @@ describe('an operator decision reads its comparable bucket before committing', (
     // Another kind's miscalibration does not leak into this one.
     await seedMiscalibratedBucket(projectId, 'PAUSE_GOAL', { n: 24, occurred: 2, mechanismMissing: true });
     expect(bucketCorrectionFrom(await readLedger(null), 'operator:SUBMIT_FIX')).toBeNull();
+  });
+
+  it('tells the operator the "mechanism:" convention when the miss is verified, before its next decision of that kind', async () => {
+    // Review F2: the convention reached the operator only in a REVISE, so every affected kind paid one wasted decide call.
+    await seedMiscalibratedBucket(projectId, 'RESEARCH', { n: 24, occurred: 4, mechanismMissing: true });
+    const first = await decide({ ...base, assumptions: [...base.assumptions, 'mechanism: the supplier answers its listed sales inbox'] }, ctx());
+    expect(first.verdict).toBe('COMMITTED');
+    const verified = await verify({ decisionId: first.decisionId!, occurred: false, evidence: 'no supplier replied', signals: { mechanismMissing: true } }, ctx());
+    expect(verified['ok']).toBe(true);
+    const told = String(verified['nextDecisionOfThisKind'] ?? '');
+    expect(told).toContain(MECHANISM_ASSUMPTION_INSTRUCTION);
+    expect(told).toMatch(/RESEARCH/);
+    // The REVISE says the same sentence, so the operator reads one convention, not two.
+    const revise = await decide(base, ctx());
+    expect(revise.verdict).toBe('REVISE');
+    expect(revise.next).toContain(MECHANISM_ASSUMPTION_INSTRUCTION);
+    // An assumption written as the instruction says satisfies the gate on the first call: no extra round-trip.
+    const quoted = /beginning "([^"]+)"/.exec(MECHANISM_ASSUMPTION_INSTRUCTION)![1]!;
+    const written = `${quoted} the buyer is reached at its listed inbox and says yes to a quoted price`;
+    expect(MECHANISM_ASSUMPTION.test(written)).toBe(true);
+    expect((await decide({ ...base, assumptions: [...base.assumptions, written] }, ctx())).verdict).toBe('COMMITTED');
+  });
+
+  it('says nothing about a mechanism when no miss of the kind named MISSING_MECHANISM', () => {
+    const preds = [{ id: 'p1', comparableKey: 'operator:RESEARCH', probability: 0.9 }];
+    expect(operatorCalibration({ predictions: preds, outcomes: [{ predictionId: 'p1', occurred: false, observedCauses: ['ASSUMPTION_BROKE'] }] }, 'operator:RESEARCH')).not.toHaveProperty('nextDecisionOfThisKind');
+    expect(operatorCalibration({ predictions: preds, outcomes: [{ predictionId: 'p1', occurred: false, observedCauses: ['MISSING_MECHANISM'] }] }, 'operator:RESEARCH')['nextDecisionOfThisKind']).toMatch(/mechanism:/);
   });
 });
