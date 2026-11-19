@@ -502,6 +502,8 @@ export interface ConstructionInput {
   /** Classes the goal's owner excluded (§82). */
   exclusions?: readonly ExclusionClass[];
   now?: Date;
+  /** The goal this pass plans for: its last readings' leaders are always composed (P4). */
+  goalId?: string;
 }
 
 const TIER_ORDER = ['DIRECT', 'COMPARABLE', 'COMPONENT', 'MECHANISM', 'ASSUMED', 'UNKNOWN'];
@@ -704,11 +706,12 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
    */
   /*
    * What the library already holds about these structures (migration 152): a
-   * research verdict and a value rank candidates before the cap cuts, and an
+   * research verdict ranks candidates before the cap cuts, and an
    * arrangement stored under exactly this composition's inputs is reused
    * rather than recomposed — after a restart, a deploy or by another goal.
    */
-  const { known, reuse } = await libraryFor(input.projectId);
+  const { known, reuse, held: leaders } = await libraryFor(input.projectId, input.goalId);
+  const rotation = rotationWindow(now);
   /*
    * The relational event graph (ALGO-16-1 items 3–4): brought up to date with
    * the durable detection rows changed since the last pass — only their
@@ -732,13 +735,14 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
   const { leverEvidence, contractLimits } = await leverInputs(input, opportunities, facts, allowed);
   const constraints = await leverageConstraints(input, limits);
   const memoKey = createHash('sha256')
-    .update(JSON.stringify({ day: now.toISOString().slice(0, 10), input: { ...input, now: undefined, limits: undefined }, limits, targets, exclusions, sectors: [...sectors.values()], precedent: [...precedentByBase.entries()].map(([k, o]) => [k, o.id]), priced, tiedUp, factObs, leverEvidence, contractLimits, constraints, openings: opportunities.map((o) => [o.id, o.payer, o.mechanism, o.state, o.updatedAt]), known }))
+    .update(JSON.stringify({ day: now.toISOString().slice(0, 10), input: { ...input, now: undefined, limits: undefined }, limits, targets, exclusions, sectors: [...sectors.values()], precedent: [...precedentByBase.entries()].map(([k, o]) => [k, o.id]), priced, tiedUp, factObs, leverEvidence, contractLimits, constraints, openings: opportunities.map((o) => [o.id, o.payer, o.mechanism, o.state, o.updatedAt]), known, leaders, rotation }))
     .digest('hex');
   const held = constructionMemo.get(memoKey);
   if (held && Date.now() - held.at < CONSTRUCTION_MEMO_MS) return structuredClone(held.result);
-  const job: ConstructionJob = { sectors: [...sectors.values()], opportunities, precedent: [...precedentByBase.entries()], capability, priced, tiedUp, facts: factObs, leverEvidence, contractLimits, input, limits, targets, exclusions, now, constraints, known, reuse };
-  // How many candidates the parts support, against how many are composed: the cut is reported, never silent (K-2).
-  const considered = forEachCandidate(job, () => undefined);
+  const job: ConstructionJob = { sectors: [...sectors.values()], opportunities, precedent: [...precedentByBase.entries()], capability, priced, tiedUp, facts: factObs, leverEvidence, contractLimits, input, limits, targets, exclusions, now, constraints, known, reuse, held: leaders, rotation };
+  // How many candidates the parts support, against how many are composed, and why each composed one was: the cut is reported, never silent (K-2).
+  const selection = selectCandidates(job);
+  const { considered } = selection;
   /*
    * Composing is synchronous quantitative work — several reconstructions per
    * design, up to `MAX_CONSTRUCTIONS` designs. Run in one stretch it held
@@ -751,7 +755,7 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
    * start. Either way it is the one `composeConstruction`.
    */
   let ranked: ConstructedArrangement[];
-  const plan = compositionPlan(job);
+  const plan = compositionPlan(job, selection);
   if (plan.filter((one) => !one.stored).length + MAX_REVERSE <= INLINE_COMPOSITIONS) {
     ranked = await composeConstruction(job, YIELD_EVERY_MS, plan);
   } else {
@@ -768,8 +772,13 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
   const reusable = new Set(reuse.map(([under]) => under));
   constructionReports.set(input.projectId, {
     considered,
-    composed: Math.min(considered, MAX_CONSTRUCTIONS),
-    cut: Math.max(0, considered - MAX_CONSTRUCTIONS),
+    composed: selection.selected.length,
+    cut: Math.max(0, considered - selection.selected.length),
+    held: selection.held,
+    evidenced: selection.evidenced,
+    evidencedCut: selection.evidencedCut,
+    rotated: selection.rotated,
+    neverComposed: selection.neverComposed,
     reused: ranked.filter((one) => one.composedUnder !== undefined && reusable.has(one.composedUnder)).length,
     at: now.toISOString(),
   });
@@ -1148,6 +1157,16 @@ export interface ConstructionReport {
   cut: number;
   /** Taken from the library because their composition inputs had not changed. */
   reused: number;
+  /** Composed because the goal's current or previous plan led with them (P4). */
+  held: number;
+  /** Composed because they hold observed or verified evidence for their buyers or supply, or a research confirmation (P4). */
+  evidenced: number;
+  /** Evidenced, but beyond the evidenced share of the cap: reported, never silent. */
+  evidencedCut: number;
+  /** Composed in this hour's rotation window (P4). */
+  rotated: number;
+  /** Candidates the library has never composed, before this pass. */
+  neverComposed: number;
   at: string;
 }
 const constructionReports = new Map<string, ConstructionReport>();
@@ -1186,19 +1205,29 @@ export async function graphPass(input: Pick<ConstructionInput, 'capitalCeilingCe
   return { sync, hypotheses: hypotheses.length, result, error, at: now.toISOString() };
 }
 
-/** What the library holds for construction to rank by and reuse. */
-async function libraryFor(projectId: string): Promise<{ known: NonNullable<ConstructionJob['known']>; reuse: NonNullable<ConstructionJob['reuse']> }> {
-  const { listConstructedArrangements } = await import('../../repos/monetization.ts');
+/**
+ * What the library holds for construction to rank by and reuse.
+ *
+ * Only what research and stored readings wrote reaches the selection: a
+ * verdict, and the goal's leaders. Never the value a composition stored
+ * (`value.p50`): every plan read stores what it composed
+ * (`rememberArrangements`, persisted or not), so a rank on it let a read
+ * reorder the next read's candidates — Deploy 44391060795 and 44410753096,
+ * `planningSpeed`'s re-read composed a different 400 and its plan changed.
+ */
+async function libraryFor(projectId: string, goalId: string | undefined): Promise<{ known: NonNullable<ConstructionJob['known']>; reuse: NonNullable<ConstructionJob['reuse']>; held: string[] }> {
+  const { listConstructedArrangements, recentLeaderSignatures } = await import('../../repos/monetization.ts');
   const known: NonNullable<ConstructionJob['known']> = [];
   const reuse: NonNullable<ConstructionJob['reuse']> = [];
   for (const one of await listConstructedArrangements(projectId)) {
     const stored = one.design['arrangement'] as ConstructedArrangement | undefined;
-    const p50 = stored?.value && typeof stored.value.p50 === 'number' ? stored.value.p50 : 0;
-    known.push([one.signature, { verdict: one.verdict?.verdict ?? null, p50 }]);
+    known.push([one.signature, { verdict: one.verdict?.verdict ?? null, composedAt: one.lastComposedAt ?? null }]);
     if (stored && typeof stored.composedUnder === 'string' && stored.signature === one.signature) reuse.push([stored.composedUnder, stored]);
   }
   known.sort((a, b) => a[0].localeCompare(b[0]));
-  return { known, reuse };
+  // The goal's current and previous leaders (P4), composed every pass whatever the cap.
+  const held = goalId ? await recentLeaderSignatures(goalId) : [];
+  return { known, reuse, held };
 }
 
 /**
@@ -1256,7 +1285,11 @@ export interface ConstructionJob {
   exclusions: readonly ExclusionClass[];
   now: Date;
   /** The library's verdict and value per signature, for ranking before the cap (migration 152). */
-  known?: Array<[string, { verdict: 'CONFIRMED' | 'REFUTED' | null; p50: number }]>;
+  known?: Array<[string, { verdict: 'CONFIRMED' | 'REFUTED' | null; composedAt?: string | null }]>;
+  /** Signatures of the goal's current and previous leaders: always composed (P4). */
+  held?: string[];
+  /** The rotation window this pass composes (`rotationWindow` of the pass's `now`, P4). Absent is 0. */
+  rotation?: number;
   /** Stored arrangements by the composition digest they were composed under: reused, not recomposed. */
   reuse?: Array<[string, ConstructedArrangement]>;
   /** The real limits leverage is judged against, read from the ledger and the live authority; absent is unknown. */
@@ -1328,27 +1361,100 @@ export function forEachCandidate(job: ConstructionJob, visit: (one: Candidate) =
 }
 
 /**
- * The candidates a pass composes: every one the parts support, ranked by a
- * cheap closed form on what each already carries, dealt one buyer population
- * at a time, then cut at `MAX_CONSTRUCTIONS` (K-2).
+ * Of `MAX_CONSTRUCTIONS`, the slots a pass keeps for rotation (P4): a window
+ * over every candidate that is not evidenced, in a fixed order read from the
+ * candidates alone, that moves one window an hour (`rotationWindow`). The
+ * whole space is composed in about considered / ROTATION_SLOTS hours. 64 of
+ * 400 keeps fresh composition near 64 designs a pass (the rest reuse the
+ * library), against the ~400 a pass the CPU guard was written for (§102).
  *
- * The cap was a CPU guard applied in enumeration order — designs outermost,
- * sectors in map order — so later designs and later sectors were never
- * composed and nothing said so. Now what is cut is what ranks lowest:
- * lexicographically, a structure research CONFIRMED before one nobody asked
- * about before one research REFUTED; then more of the goal's target
- * properties; a design a held opening shows working; more parts on gated
- * claims; more published prices from this very buyer; the library's own value
- * for it; the original design before a variant; fewer parts to establish.
- * Never a weighted score.
+ * The window is read from the pass's `now`, never from a row a read writes.
+ * The library's "never composed" (#1105) moved on the re-read because the
+ * first read had composed it (Deploy 44391060795); the goal's reading counter
+ * (#1114) moved on every persisted reading, so the read that stored a plan
+ * changed the next read's window, and stood still once the plan stopped
+ * changing. An hour moves for neither: two reads in the same hour compose the
+ * same window whatever either stored, and the rotation still advances when
+ * the plan is stable. Across an hour the goal's leaders are held (`held`), so
+ * a newly composed arrangement displaces the leader only by beating it.
  */
-export function selectCandidates(job: ConstructionJob): { selected: Candidate[]; considered: number } {
+export const ROTATION_SLOTS = 64;
+
+/** How long one rotation window stands (P4). */
+export const ROTATION_WINDOW_MS = 3_600_000;
+
+/** The rotation window a pass at `now` composes: whole hours since the epoch. Pure. */
+export function rotationWindow(now: Date): number {
+  return Math.floor(now.getTime() / ROTATION_WINDOW_MS);
+}
+
+/** Which candidates a pass composes, and why. */
+export interface CandidateSelection {
+  selected: Candidate[];
+  /** Forward and transfer candidates the parts support. */
+  considered: number;
+  /** Composed because the goal's current or previous plan led with them. */
+  held: number;
+  /** Composed because they hold observed or verified evidence, or a research confirmation. */
+  evidenced: number;
+  /** Evidenced but beyond the evidenced share of the cap (`MAX_CONSTRUCTIONS - ROTATION_SLOTS`). */
+  evidencedCut: number;
+  /** Composed in this pass's rotation window. */
+  rotated: number;
+  /** Candidates the library had never composed before this pass (reported, never read by the selection's rotation). */
+  neverComposed: number;
+}
+
+/**
+ * The candidates a pass composes: deterministic and evidence-first (P4,
+ * 2026-11-18), then cut at `MAX_CONSTRUCTIONS` (K-2).
+ *
+ * Production (goal wst_7b4fcbb5f2384f31b6c3, 11-17 to 11-18): 400 of ~16,000
+ * candidates composed a pass, the plan's leader swapped among seven
+ * arrangements over 38 readings, and a five-week-old arrangement led the
+ * moment it was first weighed — the plan followed which 400 were composed, not
+ * what the evidence said. Arrangements on accepted research facts were not
+ * guaranteed a slot. So:
+ *
+ *  - ROTATION — `ROTATION_SLOTS` candidates are this pass's window: every
+ *    candidate that is not evidenced, in a fixed order read from the
+ *    candidates alone (target properties, precedent, gated parts, published
+ *    prices, original design, fewer parts, enumeration order) and interleaved
+ *    by buyer population, cut into windows, the window `job.rotation` (the
+ *    pass's hour) mod their number. Nothing a read writes moves it, so a
+ *    re-read with unchanged inputs composes the same window, and every
+ *    candidate is reached within one cycle of windows.
+ *  - The other slots, in order, from the candidates outside the window:
+ *    1. HELD — what the goal's last two readings picked or led with
+ *       (`ConstructionJob.held`): a leader is never cut between two passes
+ *       that learned nothing new.
+ *    2. EVIDENCED — buyers carrying an OBSERVED or VERIFIED construction fact
+ *       (price, unit or run cost, volume, win rate, buyer count), a published
+ *       price or money tied up on a held opening, or research CONFIRMED.
+ *    3. RANKED — the existing rank: CONFIRMED before unasked before REFUTED;
+ *       more target properties; a precedent; more gated parts; more published
+ *       prices from this buyer; the original design; fewer parts;
+ *       enumeration order. Never a weighted score, never an id, and never
+ *       the value the library stored for a composition, which every read
+ *       writes (`libraryFor`).
+ *    Steps 2 and 3 are dealt one buyer population at a time over the whole
+ *    ranked list, a candidate already taken keeping its place in its lane, so
+ *    taking a leader first never changes which others the deal reaches.
+ */
+export function selectCandidates(job: ConstructionJob): CandidateSelection {
   const all: Candidate[] = [];
   const considered = forEachCandidate(job, (one) => {
     if (all.length < MAX_CANDIDATES) all.push(one);
   });
-  if (all.length <= MAX_CONSTRUCTIONS) return { selected: all, considered };
   const known = new Map(job.known ?? []);
+  const held = new Set(job.held ?? []);
+  // Every buyer population an observation is about: research's construction facts and the openings' own prices and money tied up.
+  const evidencedPayers = new Set<string>();
+  const facts = job.facts;
+  for (const one of [...job.priced, ...job.tiedUp, ...(facts ? [...facts.unitCost, ...facts.volume, ...(facts.conversion ?? []), ...(facts.buyers ?? []), ...(facts.runCost ?? [])] : [])]) {
+    const payer = payerKey(String(one.context['payer'] ?? ''));
+    if (payer) evidencedPayers.add(payer);
+  }
   const pricedByPayer = new Map<string, number>();
   for (const one of job.priced) {
     const payer = payerKey(String(one.context['payer'] ?? ''));
@@ -1362,19 +1468,44 @@ export function selectCandidates(job: ConstructionJob): { selected: Candidate[];
       metByDesign.set(dk, propertiesOf(one.design).filter((p) => job.targets.includes(p)).length);
       partsByDesign.set(dk, designParts(one.design).length);
     }
-    const held = known.get(arrangementSignature(one.design, one.demand, one.need, one.supply));
+    const signature = arrangementSignature(one.design, one.demand, one.need, one.supply);
+    const stored = known.get(signature);
     return {
       one,
-      verdict: held?.verdict === 'CONFIRMED' ? 0 : held?.verdict === 'REFUTED' ? 2 : 1,
+      signature,
+      stored,
+      evidence: stored?.verdict === 'CONFIRMED' || evidencedPayers.has(payerKey(one.demand.name)),
+      verdict: stored?.verdict === 'CONFIRMED' ? 0 : stored?.verdict === 'REFUTED' ? 2 : 1,
       met: metByDesign.get(dk)!,
       precedent: one.transfer ? 1 : 0,
       evidenced: [one.demand, one.need, one.supply].filter((p) => p?.claimId).length,
       priced: pricedByPayer.get(payerKey(one.demand.name)) ?? 0,
-      p50: held?.p50 ?? 0,
       variant: isDefaultDesign(one.design) ? 0 : 1,
       parts: partsByDesign.get(dk)!,
     };
   });
+  type Keyed = (typeof keyed)[number];
+  const neverComposed = keyed.filter((one) => !one.stored).length;
+  if (all.length <= MAX_CONSTRUCTIONS) {
+    return { selected: all, considered, held: keyed.filter((one) => held.has(one.signature)).length, evidenced: keyed.filter((one) => one.evidence).length, evidencedCut: 0, rotated: 0, neverComposed };
+  }
+  // The rotation window: a fixed order over what the candidates carry themselves, and a window the pass's hour picks.
+  const fixed = (a: Keyed, b: Keyed): number =>
+    b.met - a.met || b.precedent - a.precedent || b.evidenced - a.evidenced || b.priced - a.priced || a.variant - b.variant || a.parts - b.parts || a.one.order - b.one.order;
+  // Interleaved by buyer population, so each window keeps the cap's breadth.
+  const turningLanes = new Map<string, Keyed[]>();
+  for (const one of keyed.filter((k) => !k.evidence).sort(fixed)) {
+    const k = `${norm(one.one.sector)}|${partPath(one.one.demand)}`;
+    const lane = turningLanes.get(k);
+    if (lane) lane.push(one);
+    else turningLanes.set(k, [one]);
+  }
+  const turning: Keyed[] = [];
+  const turningQueues = [...turningLanes.values()];
+  for (let depth = 0; turningQueues.some((lane) => lane.length > depth); depth += 1) for (const lane of turningQueues) if (lane[depth]) turning.push(lane[depth]!);
+  const windows = Math.max(1, Math.ceil(turning.length / ROTATION_SLOTS));
+  const at = ((Math.max(0, Math.floor(job.rotation ?? 0)) % windows) * ROTATION_SLOTS);
+  const window = new Set(turning.slice(at, at + ROTATION_SLOTS));
   keyed.sort(
     (a, b) =>
       a.verdict - b.verdict ||
@@ -1382,28 +1513,60 @@ export function selectCandidates(job: ConstructionJob): { selected: Candidate[];
       b.precedent - a.precedent ||
       b.evidenced - a.evidenced ||
       b.priced - a.priced ||
-      b.p50 - a.p50 ||
       a.variant - b.variant ||
       a.parts - b.parts ||
       a.one.order - b.one.order,
   );
-  // One buyer population at a time, so the cap keeps breadth (production, 2026-11-02: one sector filled the list).
-  const lanes = new Map<string, Candidate[]>();
-  for (const { one } of keyed) {
-    const k = `${norm(one.sector)}|${partPath(one.demand)}`;
-    const lane = lanes.get(k);
-    if (lane) lane.push(one);
-    else lanes.set(k, [one]);
-  }
+  const taken = new Set<Keyed>();
   const dealt: Candidate[] = [];
-  const queues = [...lanes.values()];
-  for (let depth = 0; dealt.length < MAX_CONSTRUCTIONS && queues.some((lane) => lane.length > depth); depth += 1) {
-    for (const lane of queues) {
-      if (dealt.length >= MAX_CONSTRUCTIONS) break;
-      if (lane[depth]) dealt.push(lane[depth]!);
+  const take = (one: Keyed): void => {
+    taken.add(one);
+    dealt.push(one.one);
+  };
+  const budget = MAX_CONSTRUCTIONS - window.size;
+  /*
+   * One buyer population at a time, so the cap keeps breadth (production,
+   * 2026-11-02: one sector filled the list). A candidate already taken keeps
+   * its place in its lane and is passed over, so a leader taken first leaves
+   * the deal reaching exactly the candidates it reached without it.
+   */
+  const deal = (from: readonly Keyed[], upTo: number): void => {
+    const lanes = new Map<string, Keyed[]>();
+    for (const one of from) {
+      const k = `${norm(one.one.sector)}|${partPath(one.one.demand)}`;
+      const lane = lanes.get(k);
+      if (lane) lane.push(one);
+      else lanes.set(k, [one]);
     }
-  }
-  return { selected: dealt, considered };
+    const queues = [...lanes.values()];
+    for (let depth = 0; dealt.length < upTo && queues.some((lane) => lane.length > depth); depth += 1) {
+      for (const lane of queues) {
+        if (dealt.length >= upTo) break;
+        const one = lane[depth];
+        if (one && !taken.has(one)) take(one);
+      }
+    }
+  };
+  const outside = keyed.filter((one) => !window.has(one));
+  // 1. The goal's leaders, whatever else ranks above them (a leader in this pass's window is composed there).
+  for (const one of outside) if (held.has(one.signature) && dealt.length < budget) take(one);
+  const heldCount = dealt.length + keyed.filter((one) => held.has(one.signature) && window.has(one)).length;
+  // 2. Evidence first.
+  deal(outside.filter((one) => one.evidence), budget);
+  // 3. The existing rank.
+  deal(outside, budget);
+  // 4. This pass's window.
+  for (const one of keyed) if (window.has(one)) take(one);
+  return {
+    selected: dealt,
+    considered,
+    held: heldCount,
+    // Every evidenced candidate composed, and every one left out.
+    evidenced: keyed.filter((one) => one.evidence && taken.has(one)).length,
+    evidencedCut: keyed.filter((one) => one.evidence && !taken.has(one)).length,
+    rotated: window.size,
+    neverComposed,
+  };
 }
 
 /**
@@ -1723,7 +1886,7 @@ export interface CompositionStep {
 }
 
 /** The candidates a pass composes, each with its composition digest and what the library already composed under it. Pure. */
-export function compositionPlan(job: ConstructionJob): CompositionStep[] {
+export function compositionPlan(job: ConstructionJob, selection: CandidateSelection = selectCandidates(job)): CompositionStep[] {
   const { priced, tiedUp, input, limits, targets, exclusions, now } = job;
   const reuse = new Map(job.reuse ?? []);
   // Everything a composition reads besides its own parts, once per pass. Fact observations only when
@@ -1734,7 +1897,7 @@ export function compositionPlan(job: ConstructionJob): CompositionStep[] {
   const contractLimits = job.contractLimits && job.contractLimits.length > 0 ? job.contractLimits : undefined;
   // `composition` names the composer's own version: a stored arrangement composed by an earlier one is recomposed, not reused.
   const context = digestOf({ composition: COMPOSITION_VERSION, day: now.toISOString().slice(0, 10), currency: input.currency, daysLeft: input.daysLeft, limits, targets, exclusions, priced, tiedUp, ...(facts ? { facts } : {}), ...(leverEvidence ? { leverEvidence } : {}), ...(contractLimits ? { contractLimits } : {}) });
-  return selectCandidates(job).selected.map((one) => {
+  return selection.selected.map((one) => {
     const under = digestOf([context, designKey(one.design), one.transfer?.id ?? '-', one.sector ?? '-', one.demand, one.need, one.supply, one.related.map((o) => o.id)]);
     const stored = reuse.get(under);
     /*
