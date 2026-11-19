@@ -94,6 +94,7 @@ import { inputEvidence, type GoalPortfolio, type InputEvidence } from './portfol
 import { sendPlanQuestions, sendPortfolioNeeds } from './portfolioNeeds.ts';
 import { diagnoseGoalResearch, diagnosisInstructions, recentGoalRounds, type ResearchDiagnosis } from './researchYield.ts';
 import type { EvidenceTier } from '../../domain/quant.ts';
+import { namesABuyerPopulation } from '../../domain/industry.ts';
 import { readPathways, requiredStructures, type BrainCapabilities, type GoalStructures, type PathwayReading } from './pathways.ts';
 import { MATERIAL_P50, MATERIAL_REACH, reconstructPlan, type Reconstruction } from './reconstruction.ts';
 import { recordEvent } from '../../repos/events.ts';
@@ -504,6 +505,12 @@ export interface PlanStep {
   label: string;
   detail: string;
   startDay: { low: number; high: number } | null;
+  /**
+   * What the start day is read from (the model value and its standing), or,
+   * when `startDay` is null, what establishes it. Absent on steps whose day is
+   * a reconstruction's own.
+   */
+  when?: string;
   /** Money it commits before any opening pays, major units. */
   cost: number;
   basis: StepBasis;
@@ -1608,13 +1615,23 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     const refusedInfeasible =
       refusedAcceptance.status === 'ACCEPTED' ? null : judgeFeasibility(feasibilityInput(refusedReconstruction, null, model.portfolio, target, refusedAcceptance.required));
     if (refusedInfeasible) refusedAcceptance = notSupported(refusedAcceptance, refusedInfeasible);
+    /*
+     * One lead (transfer test, 2026-11-19, goal wst_4f0c312400e1425dab2e): the
+     * candidate was the adopted reconstruction while the construction still
+     * described the best combination as held, so the reading named two leads.
+     * The construction follows the candidate, exactly as the main path's does.
+     */
+    refusedAcceptance = {
+      ...refusedAcceptance,
+      construction: refusedAcceptance.candidate?.source === 'RECONSTRUCTED' ? constructionOf(refusedAcceptance.candidate, null, []) : (refusedAcceptance.construction ?? constructionOf(refusedAcceptance.candidate, null, [])),
+    };
     const permissions = target.achieved ? [] : await missingPermissions(target.projectId);
     const qualify: NextTest = { link: 'OFFER_AND_PRICE', test: 'Qualify at least one opening: establish who pays, an offer and a price, so there is a plan to judge.', by: 'BRAIN', blocker: null };
     const refusedModels = arrangementModels(arrangements, model.estimates ?? [], target, undefined, model.arrangementConversions ?? null);
     const refusedLead = leadingArrangement(arrangements, { portfolio: model.portfolio, candidateIds: refusedAcceptance.candidate?.opportunityIds ?? [] });
     const refusedSteps = target.achieved || refusedInfeasible
       ? []
-      : planSteps({ adoption: refusedPlan.adoption, reconstruction: refusedReconstruction, sales: [], nextTest: qualify, permissionsMissing: permissions, arrangement: refusedLead ? { arrangement: refusedLead, context: arrangementStepContext(target, refusedModels.get(refusedLead.key) ?? null) } : null });
+      : planSteps({ adoption: refusedPlan.adoption, reconstruction: refusedReconstruction, sales: [], nextTest: qualify, permissionsMissing: permissions, arrangement: refusedLead ? { arrangement: refusedLead, context: { ...arrangementStepContext(target, refusedModels.get(refusedLead.key) ?? null, { key: refusedLead.key, portfolio: model.portfolio }), unestimated: unestimatedLead(refusedLead, arrangements.length, refusedModels) } } : null, capital: capitalOf(target), measuredReply: measuredReplyOf(model.portfolio) });
     const refusedReadings = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways: null, arrangements, reconstruction: refusedReconstruction, acceptance: refusedAcceptance, arrangementModels: refusedModels });
     const refusedContinuation = continuationOf({
       achieved: target.achieved,
@@ -1982,7 +1999,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   const lead = leadingArrangement(arrangements, { portfolio: model.portfolio, candidateIds: acceptance.candidate?.opportunityIds ?? [] });
   const steps = infeasible || target.achieved
     ? []
-    : planSteps({ adoption: plan.adoption, reconstruction, sales, nextTest: legacyNext, permissionsMissing, arrangement: lead ? { arrangement: lead, context: { ...arrangementStepContext(target, models.get(lead.key) ?? null), unestimated: unestimatedLead(lead, arrangements.length, models) } } : null, ...(adopted ? { adoptedIds: adopted } : {}) });
+    : planSteps({ adoption: plan.adoption, reconstruction, sales, nextTest: legacyNext, permissionsMissing, arrangement: lead ? { arrangement: lead, context: { ...arrangementStepContext(target, models.get(lead.key) ?? null, { key: lead.key, portfolio: model.portfolio }), unestimated: unestimatedLead(lead, arrangements.length, models) } } : null, capital: capitalOf(target), measuredReply: measuredReplyOf(model.portfolio), ...(adopted ? { adoptedIds: adopted } : {}) });
   const openingsVerdict: PlanVerdict =
     acceptance.status === 'ACCEPTED' ? 'RECOMMENDABLE' : infeasible ? 'NOT_VIABLE' : plan.adoption.source === 'RECONSTRUCTED' ? 'NEEDS_EVIDENCE' : (chosen?.verdict ?? 'NEEDS_EVIDENCE');
   // One reading, one picture (P5): the candidate the acceptance adopted is a strategy of the reading, and a
@@ -2501,17 +2518,35 @@ function ownerOf(change: { label: string; detail: string; cost: number }): { own
   return { owner: 'BRAIN', reason: null };
 }
 
-/** The measurement that says the reply assumption failed. */
-function replyKill(r: Reconstruction | null): string {
+/** The outreach reply rate this Brain measured: its 90% interval over the sends recorded (`portfolio.measuredRates`). */
+export type MeasuredReply = { sent: number; low: number; high: number };
+
+/** A reply rate to two decimals where it is under 1% (0.11%, not 0.1%). */
+const replyPctOf = (x: number) => `${x < 0.01 ? Math.round(x * 10_000) / 100 : Math.round(x * 1000) / 10}%`;
+
+/**
+ * The measurement that says the reply assumption failed. Production,
+ * 2026-11-19: the criterion read "do no better than the measured record
+ * (as-is floor 5.6%)", and 5.6% was the as-is plan's reach — the share of
+ * worlds reaching the target — printed as if it were a reply rate, while the
+ * measured reply rate was 0.11–0.70% over 4,970 sends. A reply criterion
+ * compares replies with replies: the plan's required reply rate, else the
+ * measured record's low end, else it says it is an assumption.
+ */
+export function replyKill(r: Reconstruction | null, measured: MeasuredReply | null = null): string {
+  const record = measured ? `the measured record is ${replyPctOf(measured.low)}–${replyPctOf(measured.high)} over ${measured.sent.toLocaleString('en-US')} sends` : 'no reply rate has been measured for this outreach';
   if (r?.requiredReply) {
     const sends = Math.min(5_000, Math.max(50, Math.ceil(10 / r.requiredReply)));
-    return `reply rate under ${pctOf(r.requiredReply)} after ${sends.toLocaleString('en-US')} sends → stop and re-plan (the plan needs ${pctOf(r.requiredReply)} to reach ${pctOf(r.required)})`;
+    return `reply rate under ${replyPctOf(r.requiredReply)} after ${sends.toLocaleString('en-US')} sends → stop and re-plan (the plan needs ${replyPctOf(r.requiredReply)} to reach ${pctOf(r.required)}; ${record})`;
   }
-  if (r?.floor) return `the first 500 sends do no better than the measured record (as-is floor ${pctOf(r.floor.reach)}) → stop and re-plan`;
-  return 'no interested reply in the first 200 sends → stop and re-plan';
+  if (measured && measured.low > 0) {
+    const sends = Math.min(5_000, Math.max(500, Math.ceil(10 / measured.low)));
+    return `reply rate under ${replyPctOf(measured.low)} after ${sends.toLocaleString('en-US')} sends, the low end of the measured record (${record}) → stop and re-plan`;
+  }
+  return `no interested reply in the first 200 sends → stop and re-plan (an assumption: ${record})`;
 }
 
-function killFor(change: { dimension: string; label: string; cost: number; startDay?: { low: number; high: number } }, r: Reconstruction | null): string {
+function killFor(change: { dimension: string; label: string; cost: number; startDay?: { low: number; high: number } }, r: Reconstruction | null, measured: MeasuredReply | null): string {
   switch (change.dimension) {
     case 'PARTNER':
       return `no signed partner by day ${(change.startDay?.high ?? 0) + 14}, or no referred buyer within 30 days of signing → drop the partner and re-plan`;
@@ -2523,7 +2558,7 @@ function killFor(change: { dimension: string; label: string; cost: number; start
     case 'CAPITAL':
       return `the supplier will not ship against the buyer's payment, or the money committed passes ${moneyOf(change.cost)} → stop and re-plan`;
     default:
-      return replyKill(r);
+      return replyKill(r, measured);
   }
 }
 
@@ -2548,7 +2583,12 @@ export function planSteps(input: {
   arrangement?: { arrangement: ConstructedArrangement; context: Omit<ArrangementStepContext, 'send' | 'collect'> } | null;
   /** The reconstruction's own members, whose sale its "Sell and collect" step already is. */
   adoptedIds?: ReadonlySet<string>;
+  /** What the goal allows to be spent, major units: the steps say how much of it the plan deploys. */
+  capital?: { allowed: number | null; currency: string } | null;
+  /** The outreach reply rate measured over the sends recorded: what a reply kill criterion compares against. */
+  measuredReply?: MeasuredReply | null;
 }): PlanStep[] {
+  const measured = input.measuredReply ?? null;
   const send = input.permissionsMissing.filter((one) => /CONTACT_BUYER|messag/i.test(one));
   const collect = input.permissionsMissing.filter((one) => /QUOTE_AND_INVOICE|ACCEPT_PAYMENT|billing/i.test(one));
   const r = input.reconstruction;
@@ -2571,7 +2611,7 @@ export function planSteps(input: {
         owner: who.owner,
         ownerReason: who.reason,
         dependsOn: null,
-        kill: killFor(c, r),
+        kill: killFor(c, r, measured),
         execution: SENDS.has(c.dimension) ? send : collect,
       });
     }
@@ -2586,7 +2626,7 @@ export function planSteps(input: {
       owner: 'BRAIN',
       ownerReason: null,
       dependsOn: null,
-      kill: replyKill(r),
+      kill: replyKill(r, measured),
       execution: [...send, ...collect],
     });
     /*
@@ -2607,7 +2647,7 @@ export function planSteps(input: {
         owner: 'BRAIN',
         ownerReason: null,
         dependsOn: null,
-        kill: replyKill(r),
+        kill: replyKill(r, measured),
         execution: [...send, ...collect],
       });
     }
@@ -2623,7 +2663,7 @@ export function planSteps(input: {
         owner: 'BRAIN',
         ownerReason: null,
         dependsOn: null,
-        kill: replyKill(r),
+        kill: replyKill(r, measured),
         execution: [...send, ...collect],
         });
     }
@@ -2635,25 +2675,39 @@ export function planSteps(input: {
       const beside = steps.length > 0;
       steps.push({
         order: steps.length + 1,
-        label: CHAIN_LABEL[t.link],
-        detail: t.test,
+        // CHAIN_LABEL names the missing link ("an offer and a price"), not an act; a step is something done.
+        label: `Establish ${CHAIN_LABEL[t.link]}`,
+        detail: beside ? `The goal's own search, run in parallel with the steps above rather than after them: ${t.test}` : t.test,
         startDay: { low: 0, high: 0 },
+        ...(beside ? { when: 'day 0: the goal\'s search runs now, beside the arrangement' } : {}),
         cost: 0,
         basis: 'ESTIMATE',
         owner: t.by,
         ownerReason: t.by === 'PERSON' ? t.blocker : null,
         dependsOn: null,
-        kill: t.link === 'CONVERSION' ? replyKill(r) : 'the research returns no sourced answer twice → ask a different way, then re-plan without this opening',
+        kill: t.link === 'CONVERSION' ? replyKill(r, measured) : 'the research returns no sourced answer twice → ask a different way, then re-plan without this opening',
         execution: t.link === 'CONVERSION' ? [...send, ...collect] : [],
         // Beside a leading arrangement's steps, the goal's own search keeps running in parallel.
         ...(beside ? { kind: t.link === 'CONVERSION' ? ('VALIDATE' as const) : ('RESEARCH' as const), question: t.test, requires: [], withinLimits: null } : {}),
       });
     }
   }
-  // A step that starts later needs the latest step that starts before it.
+  /*
+   * The capital the plan deploys, against what the goal allows (transfer test,
+   * 2026-11-19, goal wst_4f0c312400e1425dab2e: two steps and none of the
+   * USD 25,000 allowed, and nothing said so). Read from the steps' own costs,
+   * never assumed; it is stated on the first step.
+   */
+  if (input.capital && input.capital.allowed !== null && input.capital.allowed > 0 && steps[0]) {
+    const deployed = steps.reduce((sum, one) => sum + Math.max(0, one.cost), 0);
+    const cur = input.capital.currency;
+    const line = `This plan commits ${cur} ${Math.round(deployed).toLocaleString('en-US')} of the ${cur} ${Math.round(input.capital.allowed).toLocaleString('en-US')} the goal allows${deployed === 0 ? ': none of its steps spends money' : ''}${deployed > input.capital.allowed ? ' — OVER the limit' : ''}.`;
+    steps[0] = { ...steps[0], detail: `${line} ${steps[0].detail}` };
+  }
+  // A step that starts later needs the latest step that starts before it. An arrangement's steps (`requires` set) carry their own sequence.
   for (const step of steps) {
     const low = step.startDay?.low ?? 0;
-    if (low <= 0) continue;
+    if (low <= 0 || step.requires) continue;
     const before = steps.filter((one) => one.order < step.order && (one.startDay?.low ?? 0) < low);
     step.dependsOn = before.length > 0 ? before[before.length - 1]!.order : null;
   }
@@ -3904,8 +3958,15 @@ export function leadingArrangement(
   arrangements: readonly ConstructedArrangement[],
   reading: Pick<PlanReading, 'portfolio'> & { candidateIds?: readonly string[] },
 ): ConstructedArrangement | null {
-  if (arrangements.length === 0) return null;
-  const byKey = new Map(arrangements.map((a) => [a.key, a]));
+  /*
+   * Only an arrangement over a buyer population can lead: one named
+   * organisation (an arrangement read back from the library, built before
+   * `namesABuyerPopulation` refused them) is that organisation's opening, not a
+   * population to list, pool and run again (transfer test, 2026-11-19: "Constructed: VA").
+   */
+  const leaders = arrangements.filter((a) => namesABuyerPopulation(a.demand.name));
+  if (leaders.length === 0) return null;
+  const byKey = new Map(leaders.map((a) => [a.key, a]));
   for (const id of [...(reading.candidateIds ?? []), ...(reading.portfolio?.best?.members.map((m) => m.opportunityId) ?? [])]) {
     if (!isArrangementId(id)) continue;
     const hit = byKey.get(id.slice(ARRANGEMENT_ID_PREFIX.length));
@@ -3920,7 +3981,7 @@ export function leadingArrangement(
       score = value;
     }
   }
-  return best ?? arrangements[0]!;
+  return best ?? leaders[0]!;
 }
 
 /**
@@ -3936,13 +3997,28 @@ export function unestimatedLead(lead: Pick<ConstructedArrangement, 'key'>, const
     : 'Not an estimated plan: this arrangement holds no estimate, so these steps are the research that would make it estimable.';
 }
 
+/** The measured outreach reply interval the portfolio was read with, or null when nothing is measured. */
+export function measuredReplyOf(portfolio: Pick<GoalPortfolio, 'measuredRates'> | null | undefined): MeasuredReply | null {
+  const m = portfolio?.measuredRates;
+  return m && m.sent > 0 ? { sent: m.sent, low: m.low, high: m.high } : null;
+}
+
+/** What the goal allows to be spent, major units, as the steps report it: the ceiling, else the before-proof limit. */
+export function capitalOf(target: Pick<TargetReading, 'currency' | 'capitalBeforeProofCents' | 'capitalCeilingCents'>): { allowed: number | null; currency: string } {
+  const cents = target.capitalCeilingCents ?? target.capitalBeforeProofCents;
+  return { allowed: cents === null ? null : cents / 100, currency: target.currency };
+}
+
 /** The goal's limits as an arrangement's steps read them. */
 export function arrangementStepContext(
   target: Pick<TargetReading, 'currency' | 'daysLeft' | 'capitalBeforeProofCents' | 'capitalCeilingCents'>,
   modelled: ModelledOpportunity | null,
+  lead?: { key: string; portfolio: Pick<GoalPortfolio, 'demand'> | null } | null,
 ): Omit<ArrangementStepContext, 'send' | 'collect'> {
   const before = target.capitalBeforeProofCents ?? target.capitalCeilingCents;
-  return { currency: target.currency, daysLeft: target.daysLeft, capitalBeforeProof: before === null ? null : before / 100, modelled };
+  // The days to usable cash the plan's simulation drew for this arrangement: what its reach was scored on.
+  const simulated = lead ? (lead.portfolio?.demand ?? []).find((d) => d.opportunityId === `${ARRANGEMENT_ID_PREFIX}${lead.key}`)?.days ?? null : null;
+  return { currency: target.currency, daysLeft: target.daysLeft, capitalBeforeProof: before === null ? null : before / 100, modelled, simulatedDays: simulated };
 }
 
 /** At most this many askings of one arrangement in all, counting the first, when it is re-asked for its price. */

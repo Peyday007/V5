@@ -412,7 +412,7 @@ function readPayerNamedIn(payer: string): string | null {
     name = name.replace(/\s+(?:itself|themselves|himself|herself)$/i, '').trim();
     // A money amount or a price word is what is listed, not who pays ("Fragment brand page lists resale prices from $180").
     if (/[$€£¥]|\b(?:prices?|pricing|fees?|costs?)\b/i.test(name)) return null;
-    return name && words(name) <= 8 && !NOT_A_PAYER.test(name) && !GENERIC_PAYER.has(buyerNameKey(name)) && namesABuyerPopulation(name) ? name : null;
+    return name && words(name) <= 8 && !NOT_A_PAYER.test(name) && !GENERIC_PAYER.has(buyerNameKey(name)) && namesABuyer(bareName(name)) ? name : null;
   };
   // "A homeowner (the payer) can hire …": the bracket is the only thing that says who pays, so it is read before brackets are dropped.
   const bracketed = /(?:^|[.;:]\s+)([^.;:()]+?)\s*\((?:is\s+)?(?:the|as)\s+(?:payer|buyer|purchaser)s?\)/i.exec(unbracketed);
@@ -446,7 +446,7 @@ function readPayerNamedIn(payer: string): string | null {
   // A short noun phrase with no verb of reporting is itself a name.
   if (words(text) <= 8 && !/\b(?:is|are|was|were|reports?|says?|pays?|book|receive|tested|runs?|name)\b/i.test(text)) {
     const name = restore(text.replace(/[.,;:]+$/, '').replace(/^(?:the|a|an)\s+/i, ''));
-    return NOT_A_PAYER.test(name) || GENERIC_PAYER.has(buyerNameKey(name)) || !namesABuyerPopulation(name) ? null : name;
+    return NOT_A_PAYER.test(name) || GENERIC_PAYER.has(buyerNameKey(name)) || !namesABuyer(bareName(name)) ? null : name;
   }
   return null;
 }
@@ -470,6 +470,19 @@ const UNKNOWN_PARTY = /\b(?:unknown|unidentified|unspecified|unnamed|undisclosed
 /** A named fellowship whose name holds one of those words is a real organisation ("Alcoholics Anonymous"). */
 const NAMED_ANONYMOUS = /\b(?:alcoholics|narcotics|overeaters|gamblers|debtors|sex addicts|cocaine|al-anon) anonymous\b/i;
 
+/** The name with its article and closing punctuation removed, as every buyer-name rule reads it. */
+const bareName = (name: string | null | undefined): string => (name ?? '').replace(/\s+/g, ' ').trim().replace(/^(?:the|a|an)\s+/i, '').replace(/[.,;:!?]+$/, '').trim();
+
+/** Whether a name names any buyer at all: not a sentence's leftovers, and not a party nobody knows. */
+function namesABuyer(text: string): boolean {
+  if (!/[a-z]/i.test(text)) return false;
+  // An acronym is a name, not a pronoun ("IT departments", "WHO").
+  const acronym = /^[A-Z]{2,}\b/.test(text);
+  if ((!acronym && FRAGMENT_START.test(text)) || FRAGMENT_END.test(text) || BARE_VERB.test(text)) return false;
+  if (UNKNOWN_PARTY.test(text) && !NAMED_ANONYMOUS.test(text)) return false;
+  return true;
+}
+
 /**
  * Whether a buyer name names a kind of buyer someone could build a list of
  * (production, 2026-11-19): plans said "Build the list of <buyer> from a
@@ -478,18 +491,52 @@ const NAMED_ANONYMOUS = /\b(?:alcoholics|narcotics|overeaters|gamblers|debtors|s
  * a payer sentence, or a statement that the payer is not known. Refused: a
  * name that opens on a connective, pronoun or adverb, ends on a reflexive, is
  * a bare verb form, or describes an unknown, anonymous or unidentified party.
- * Kept: everything else, a single named organisation ("Puzzle Society", "VA")
- * included — one organisation can be a real buyer, and a false refusal loses
- * it. A closed set of rules, never a reading (§8). Pure.
+ *
+ * Refused too, since the same day's transfer test: one named organisation
+ * (`namesOneOrganisation`). Plans led with "Constructed: VA", "St Louis
+ * Development Corporation" and "Artisanal Sudoku" as buyer populations, and
+ * their steps built a list of one organisation, pooled it into shared runs and
+ * offered "the next run to a fresh group" of it. One organisation is a buyer —
+ * an opening names it as its payer and is modelled as that one buyer — but it
+ * is not a population an arrangement can be constructed over. A closed set of
+ * rules, never a reading (§8). Pure.
  */
 export function namesABuyerPopulation(name: string | null | undefined): boolean {
-  const text = (name ?? '').replace(/\s+/g, ' ').trim().replace(/^(?:the|a|an)\s+/i, '').replace(/[.,;:!?]+$/, '').trim();
-  if (!/[a-z]/i.test(text)) return false;
-  // An acronym is a name, not a pronoun ("IT departments", "WHO").
-  const acronym = /^[A-Z]{2,}\b/.test(text);
-  if ((!acronym && FRAGMENT_START.test(text)) || FRAGMENT_END.test(text) || BARE_VERB.test(text)) return false;
-  if (UNKNOWN_PARTY.test(text) && !NAMED_ANONYMOUS.test(text)) return false;
-  return true;
+  const text = bareName(name);
+  return namesABuyer(text) && !isOneOrganisation(text);
+}
+
+/** Words a proper name keeps in lower case ("Society of Actuaries", "Bank of the West"). */
+const NAME_PARTICLE = /^(?:of|the|and|for|in|on|at|de|du|la|le|von|van|&)$/i;
+/** Acronyms that name a kind of buyer, not one organisation ("SMB", "HOA"). A closed set. */
+const KIND_ACRONYM: ReadonlySet<string> = new Set(['SMB', 'SME', 'MSP', 'MSSP', 'HOA', 'ISV', 'VAR', 'OEM', 'CPA', 'RIA', 'NGO', 'NPO', 'DSO', 'MSO', 'REIT', 'LLC', 'DTC', 'B2B', 'B2C', 'SAAS', 'PE', 'VC', 'GC']);
+
+function isOneOrganisation(text: string): boolean {
+  const words = text.split(' ').filter((w) => !NAME_PARTICLE.test(w));
+  if (words.length === 0 || !words.every((w) => /^[A-Z0-9]/.test(w))) return false;
+  // In "<X> of <Y>" the head is X ("Society of Actuaries" is a society).
+  const before = text.split(/\s+of\s+/i)[0]!.split(' ').filter((w) => !NAME_PARTICLE.test(w));
+  const headOf = before.length > 0 ? before : words;
+  const head = headOf[headOf.length - 1]!;
+  // An all-capitals head is an acronym ("VA", "PA DEP"), never a plural, unless it names a kind ("SMB").
+  if (/^[A-Z0-9&.-]{2,}$/.test(head)) return !KIND_ACRONYM.has(head.replace(/[.&-]/g, '').toUpperCase());
+  // One capitalised word is as often a sentence's first common noun ("Homeowner") as a name: not read as one organisation.
+  if (words.length === 1) return false;
+  // A title-cased plural head is a kind of buyer written as a heading; a head ending in -ss is singular ("Business Class").
+  return !/[^s]s$/i.test(head);
+}
+
+/**
+ * Whether a buyer name names one organisation rather than a kind of buyer: a
+ * proper name in title case ("Artisanal Sudoku", "St Louis Development
+ * Corporation", "Society of Actuaries") or an acronym ("VA", "PA DEP"). A
+ * population is a common noun phrase ("Dental practices", "IT departments"),
+ * a title-cased plural ("Senior Living Communities") or a kind acronym ("SMB").
+ * Pure.
+ */
+export function namesOneOrganisation(name: string | null | undefined): boolean {
+  const text = bareName(name);
+  return namesABuyer(text) && isOneOrganisation(text);
 }
 
 export function buyerPopulationName(payer: string | null | undefined): string | null {
@@ -530,7 +577,8 @@ function readBuyerPopulationName(payer: string): string | null {
     text = withoutStates(text).replace(/^(?:the|of|in)\s+/i, '').trim();
   }
   if (!/[a-z]/i.test(text) || statesNamedIn(text).length > 0) return null;
-  return text.slice(0, 90);
+  // One organisation no rule above generalised ("VA", "St Louis Development Corporation") is a payer, not a population to map.
+  return namesABuyerPopulation(text) ? text.slice(0, 90) : null;
 }
 
 /**
