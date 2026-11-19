@@ -408,9 +408,11 @@ function readPayerNamedIn(payer: string): string | null {
     // A list too long to be one name is read by its first member ("universities, research institutions, …").
     if (words(name) > 8) name = name.split(/,|\s+(?:such as|including|like)\s+/i)[0]!.trim();
     name = restore(name);
+    // "paid by Crucinova itself": the reflexive points back at the name, which is the payer.
+    name = name.replace(/\s+(?:itself|themselves|himself|herself)$/i, '').trim();
     // A money amount or a price word is what is listed, not who pays ("Fragment brand page lists resale prices from $180").
     if (/[$€£¥]|\b(?:prices?|pricing|fees?|costs?)\b/i.test(name)) return null;
-    return name && words(name) <= 8 && !NOT_A_PAYER.test(name) && !GENERIC_PAYER.has(buyerNameKey(name)) ? name : null;
+    return name && words(name) <= 8 && !NOT_A_PAYER.test(name) && !GENERIC_PAYER.has(buyerNameKey(name)) && namesABuyerPopulation(name) ? name : null;
   };
   // "A homeowner (the payer) can hire …": the bracket is the only thing that says who pays, so it is read before brackets are dropped.
   const bracketed = /(?:^|[.;:]\s+)([^.;:()]+?)\s*\((?:is\s+)?(?:the|as)\s+(?:payer|buyer|purchaser)s?\)/i.exec(unbracketed);
@@ -444,7 +446,7 @@ function readPayerNamedIn(payer: string): string | null {
   // A short noun phrase with no verb of reporting is itself a name.
   if (words(text) <= 8 && !/\b(?:is|are|was|were|reports?|says?|pays?|book|receive|tested|runs?|name)\b/i.test(text)) {
     const name = restore(text.replace(/[.,;:]+$/, '').replace(/^(?:the|a|an)\s+/i, ''));
-    return NOT_A_PAYER.test(name) || GENERIC_PAYER.has(buyerNameKey(name)) ? null : name;
+    return NOT_A_PAYER.test(name) || GENERIC_PAYER.has(buyerNameKey(name)) || !namesABuyerPopulation(name) ? null : name;
   }
   return null;
 }
@@ -456,6 +458,39 @@ const INNER_DOT = '․';
 const NOT_A_PAYER = /^(?:it|its|they|them|this|that|these|those|he|she|we|you|someone|anyone|whoever|unknown|unclear|unspecified|not|none|no|n\/a|listing|posting|request|rfp|rfq|solicitation|advert|advertisement|notice)\b/i;
 /** A role word alone says there is a payer, not who it is (as `buyerNameKey` writes it). */
 const GENERIC_PAYER: ReadonlySet<string> = new Set(['buyer', 'payer', 'customer', 'client', 'purchaser', 'user', 'end user']);
+
+/** A name that opens on a connective, a pronoun or an adverb is the rest of a sentence, not who buys ("therefore an unidentified individual"). */
+const FRAGMENT_START = /^(?:therefore|thus|hence|so|then|also|however|moreover|furthermore|accordingly|consequently|i\.?e\.?|e\.?g\.?|itself|themselves|himself|herself|it|its|this|that|which|these|those|they|them|he|she|we|you|someone|anyone|whoever|whom|who)\b/i;
+/** A name that ends on a reflexive points back at a sentence's subject ("Crucinova itself"). */
+const FRAGMENT_END = /\b(?:itself|themselves|himself|herself)$/i;
+/** A bare verb form names an act, not anyone who acts ("paying"): the participles payer prose leaves behind. */
+const BARE_VERB = /^(?:pay|paying|paid|pays|buy|buying|bought|buys|purchas(?:e|es|ed|ing)|hir(?:e|es|ed|ing)|us(?:e|es|ed|ing)|sell(?:s|ing)?|sold|order(?:s|ed|ing)?|seek(?:s|ing)?|want(?:s|ed|ing)?|need(?:s|ed|ing)?|request(?:s|ed|ing)|post(?:s|ed|ing)|contract(?:s|ed|ing)|subscrib(?:e|es|ed|ing)|book(?:s|ed|ing)|spend(?:s|ing)?|spent|fund(?:s|ed|ing)|commission(?:s|ed|ing))$/i;
+/** A party described as not known is nobody a list can be built of ("anonymous members of the public", "… of unknown business"). */
+const UNKNOWN_PARTY = /\b(?:unknown|unidentified|unspecified|unnamed|undisclosed|anonymous|unclear|not (?:known|identified|specified|named|disclosed))\b/i;
+/** A named fellowship whose name holds one of those words is a real organisation ("Alcoholics Anonymous"). */
+const NAMED_ANONYMOUS = /\b(?:alcoholics|narcotics|overeaters|gamblers|debtors|sex addicts|cocaine|al-anon) anonymous\b/i;
+
+/**
+ * Whether a buyer name names a kind of buyer someone could build a list of
+ * (production, 2026-11-19): plans said "Build the list of <buyer> from a
+ * published directory" over "paying", "therefore an unidentified individual",
+ * "Crucinova itself" and "anonymous members of the public" — the leftovers of
+ * a payer sentence, or a statement that the payer is not known. Refused: a
+ * name that opens on a connective, pronoun or adverb, ends on a reflexive, is
+ * a bare verb form, or describes an unknown, anonymous or unidentified party.
+ * Kept: everything else, a single named organisation ("Puzzle Society", "VA")
+ * included — one organisation can be a real buyer, and a false refusal loses
+ * it. A closed set of rules, never a reading (§8). Pure.
+ */
+export function namesABuyerPopulation(name: string | null | undefined): boolean {
+  const text = (name ?? '').replace(/\s+/g, ' ').trim().replace(/^(?:the|a|an)\s+/i, '').replace(/[.,;:!?]+$/, '').trim();
+  if (!/[a-z]/i.test(text)) return false;
+  // An acronym is a name, not a pronoun ("IT departments", "WHO").
+  const acronym = /^[A-Z]{2,}\b/.test(text);
+  if ((!acronym && FRAGMENT_START.test(text)) || FRAGMENT_END.test(text) || BARE_VERB.test(text)) return false;
+  if (UNKNOWN_PARTY.test(text) && !NAMED_ANONYMOUS.test(text)) return false;
+  return true;
+}
 
 export function buyerPopulationName(payer: string | null | undefined): string | null {
   return remembered(buyerPopulationMemo, payer ?? '', readBuyerPopulationName);

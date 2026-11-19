@@ -49,7 +49,7 @@ import { listOpportunities } from '../../repos/cashPortfolio.ts';
 import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
 import { paidOpportunityIds } from '../../repos/cashLedger.ts';
 import { namesOnlyAPlace, statesNamedIn } from '../../domain/jurisdiction.ts';
-import { buyerNameKey } from '../../domain/industry.ts';
+import { buyerNameKey, namesABuyerPopulation } from '../../domain/industry.ts';
 import { APPROVAL_ENVELOPES } from '../research/approvalEnvelope.ts';
 import { describesOwnAction } from '../research/actorScope.ts';
 import { composeArrangement, type Arrangement, type Levers, type Part } from '../quant/mechanism.ts';
@@ -383,6 +383,17 @@ function safeName(text: string): boolean {
   return Object.values(APPROVAL_ENVELOPES).every((envelope) => !describesOwnAction(`a buyer population: ${text}`, envelope.forbiddenActions));
 }
 
+/**
+ * A name construction may build an arrangement's buyers from: safe, and a kind
+ * of buyer a list can be built of (`namesABuyerPopulation`) — never the
+ * leftover of a payer sentence ("paying", "Crucinova itself") or a party
+ * nobody knows ("anonymous members of the public"), production 2026-11-19.
+ * Read where the name is used, so rows already written are covered too.
+ */
+function safeBuyer(text: string): boolean {
+  return safeName(text) && namesABuyerPopulation(text);
+}
+
 function clean(text: string): string {
   return text.replace(/[.,;:!?—–\n"]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 90);
 }
@@ -413,7 +424,7 @@ export function planBuyerType(demandName: string | null | undefined, nodes: read
   if (!key) return null;
   const want = (demandName ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
   const pool = nodes
-    .filter((one) => one.kind === 'BUYER_TYPE' && !one.retiredAt && safeName(one.name) && payerKey(one.name) === key)
+    .filter((one) => one.kind === 'BUYER_TYPE' && !one.retiredAt && safeBuyer(one.name) && payerKey(one.name) === key)
     .sort((a, b) => Number(b.name.toLowerCase() === want) - Number(a.name.toLowerCase() === want) || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
   return pool[0] ?? null;
 }
@@ -538,7 +549,7 @@ function addSignalDemand(
     const count = added.get(key) ?? { demand: 0, needs: 0 };
     const s = sector(o.industry);
     const payer = (o.payer && o.payer.trim()) || payerFact.get(o.id) || null;
-    if (payer && safeName(payer) && allowed(payer) && count.demand < SIGNAL_PARTS_PER_SECTOR && !s.demand.some((one) => norm(one.name) === norm(payer))) {
+    if (payer && safeBuyer(payer) && allowed(payer) && count.demand < SIGNAL_PARTS_PER_SECTOR && !s.demand.some((one) => norm(one.name) === norm(payer))) {
       s.demand.push({ name: clean(payer), claimId: o.sourceClaimId, from: 'OPENING', ref: o.id, path: `OPENING_PAYER:${norm(o.industry)}>${norm(payer)}`, ...termsOfOpening(o) });
       count.demand += 1;
     }
@@ -585,6 +596,7 @@ export function addGraphParts(
     for (const actor of one.actors) {
       const name = actor.name?.trim();
       if (!name || !safeName(name) || !allowed(name)) continue;
+      if (actor.role !== 'SUPPLIER' && actor.role !== 'PARTNER' && !namesABuyerPopulation(name)) continue;
       if (actor.role === 'SUPPLIER' || actor.role === 'PARTNER') push(s.supply, name, `GRAPH_SUPPLY:${hood}>${norm(name)}`);
       else push(s.demand, name, `GRAPH_BUYER:${hood}>${norm(name)}`);
     }
@@ -639,6 +651,7 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
   );
   const addNode = (node: IndustryNode, tree: Map<string, IndustryNode>, from: 'INDUSTRY_MAP' | 'BRAIN_MAP', claimId: string | null): void => {
     if (!safeName(node.name) || !allowed(node.name)) return;
+    if (node.kind === 'BUYER_TYPE' && !namesABuyerPopulation(node.name)) return;
     const root = rootOf(node, tree);
     if (!allowed(root.name)) return;
     const list = node.kind === 'BUYER_TYPE' ? 'demand' : node.kind === 'BOTTLENECK' ? 'needs' : node.kind === 'FULFILMENT_SOURCE' ? 'supply' : null;
@@ -659,7 +672,7 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
   // A payer research established is a buyer population too, with what it pays for as its need.
   const byPayer = new Map<string, CashOpportunity[]>();
   for (const o of opportunities) {
-    if (!o.payer || !evidencedPayer.has(o.id) || !safeName(o.payer)) continue;
+    if (!o.payer || !evidencedPayer.has(o.id) || !safeBuyer(o.payer)) continue;
     if (!allowed(o.payer) || !allowed(o.title) || !allowed(o.industry)) continue;
     const k = `${norm(o.industry)}|${norm(o.payer)}`;
     byPayer.set(k, [...(byPayer.get(k) ?? []), o]);
@@ -894,7 +907,7 @@ export async function constructionObservations(
   );
   for (const fact of facts) {
     const node = byId.get(fact.segment!.slice('map_'.length));
-    if (!node || node.retiredAt || node.kind !== 'BUYER_TYPE' || !safeName(node.name) || !allowed(node.name)) continue;
+    if (!node || node.retiredAt || node.kind !== 'BUYER_TYPE' || !safeBuyer(node.name) || !allowed(node.name)) continue;
     const root = rootOf(node, byId);
     if (!allowed(root.name)) continue;
     const kind = FACT_PRICE_KEYS.includes(fact.key)
@@ -971,7 +984,7 @@ export async function brainComparablePrices(
       nodesOf.set(fact.projectId!, byId);
     }
     const node = byId.get(fact.segment!.slice('map_'.length));
-    if (!node || node.retiredAt || node.kind !== 'BUYER_TYPE' || !safeName(node.name) || !allowed(node.name)) continue;
+    if (!node || node.retiredAt || node.kind !== 'BUYER_TYPE' || !safeBuyer(node.name) || !allowed(node.name)) continue;
     const root = rootOf(node, byId);
     if (!allowed(root.name)) continue;
     const low = Math.min(fact.low, fact.high);
@@ -1114,6 +1127,7 @@ export function composeInvented(spec: InventedDesign, ctx: InventionContext): Co
   const need = spec.need ? clean(spec.need) : null;
   if (population.length < 3) return { refused: 'it names no buyer population' };
   if (!safeName(population) || (need !== null && !safeName(need))) return { refused: 'its buyers or need name a jurisdiction or an action Brain may not take' };
+  if (!namesABuyerPopulation(population)) return { refused: 'its buyers are a sentence fragment or an unknown party, not a kind of buyer a list can be built of' };
   if (excludedBy(population, ctx.exclusions) || excludedBy(need, ctx.exclusions)) return { refused: "the goal's owner excluded what it is" };
   if (!def.needsSupply && need && breaksOperatingModel(operatingFit({ title: need }))) return { refused: 'Brain would have to produce physical work itself' };
   const related = ctx.opportunities.filter((one) => norm(one.payer) === norm(population));
