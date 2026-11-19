@@ -9,12 +9,15 @@
  * from the change's own description, which already says what to do in words.
  */
 
-/** The first clause of `text`: up to the first `:`, `;` or `, ` outside parentheses. */
+/** The first clause of `text`: up to the first `:`, `;` or `, ` outside parentheses and double quotes. */
 function firstClause(text: string): string {
   let depth = 0;
+  let quoted = false;
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
-    if (ch === '(') depth++;
+    if (ch === '"') quoted = !quoted;
+    else if (quoted) continue;
+    else if (ch === '(') depth++;
     else if (ch === ')') depth = Math.max(0, depth - 1);
     else if (depth === 0 && (ch === ':' || ch === ';' || (ch === ',' && text[i + 1] === ' '))) return text.slice(0, i);
   }
