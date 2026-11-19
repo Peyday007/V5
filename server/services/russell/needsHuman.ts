@@ -1516,6 +1516,21 @@ async function recordGaps(
     };
   }
 
+  /*
+   * The authorization below is an effect, recorded in the answerer's name,
+   * and it happens *before* the transition guarded on `NEEDS_HUMAN`. So a
+   * mission that has already left Needs You is decided here, by the
+   * operator's one predicate (`mootByState`), before anything is written: the
+   * answer can never apply, and authorizing the packet's gaps for a decision
+   * nobody is waiting on any more would record a person's choice that had no
+   * effect. It fails with the one sentence `reopenAnswered` withdraws on, so
+   * the card is withdrawn through the module's one guarded withdrawal and
+   * never put back in front of the person.
+   */
+  if (await mootByState(request, mission)) {
+    return { ok: false, reason: MOVED_OUT_OF_NEEDS_YOU, missionId: mission.id, settled: false };
+  }
+
   await authorizeUnresolvedGaps({
     orchestrationId: mission.orchestrationId,
     authorizedBy: { id: answeredBy.id, email: answeredBy.email },
