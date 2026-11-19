@@ -16800,9 +16800,31 @@ it builds the steps and the lead — never read back out of the prose.
 | `STEPS_SCHEDULED` | Collect, Deliver, Renew had no day | a non-research step has a day, follows a step with one, or names why it cannot be scheduled (`unscheduled`) |
 | `PRICE_GROUNDED` | $2,569 pooled from a 47× spread | a comparable price spans at most `COMPARABLE_SPREAD_MAX`, or the price is unestablished |
 | `UNKNOWN_BECOMES_RESEARCH` | no portfolio, no price research | an unpriced lead population is in `reading.unpriced`, which the goal tick sends as `goal-price-` research |
+| `NO_DUPLICATE_STEPS` | goal B: `Bring in "Constructed` six times | no two steps carry the same label: one move made on several openings is one step naming each (`movesOfChanges`) |
 
 Only what the reading proves is flagged: an unknown the plan states and sends
 to research is the honest state, not a violation.
+
+**A reconstructed plan is read the same way** (production, 18:00Z on
+62214360). Its steps come from the reconstruction's changes rather than an
+arrangement, and every one carried cost 0 and day 0 or 10 with nothing saying
+why: "Raise price ×4.00 on 4 opening(s) (ALL)", "Sell Constructed", "Sell and
+collect · cost 0", and — after an arrangement's full sequence — a trailing
+"Establish an offer and a price · day 0" behind "Run the next group · day
+12–56". Now each step records its stage and cost source (`PlanStep.stage`,
+read by the checker like `PlanStep.arrangement`): a change carries the
+reconstruction's own figure (`StrategyChange.cost`, source MODEL); the sale and
+the collection carry null (the model prices neither); the collection lands on
+the sale's day plus the members' days to usable cash as the model holds them
+(`modelledCashSpan`, as an arrangement's Collect reads them), or names why it
+has no day. A scope token is spoken (`spokenScope`), the same move on several
+openings is one step, the steps are listed in the order they start, and the
+goal's own next step is dropped beside an arrangement whose steps establish its
+link (kept, first, when they do not; kept alone when it is the honest first
+step). `STEPS_SCHEDULED` also refuses a step listed after a later-dated one
+that names no step it follows; `NO_FABRICATED_FIGURE` reads every step that
+records a stage, whoever built it; `NO_INTERNAL_KEYS` reads a scope token
+(`(ALL)`, `(SMALL_TICKET)`…) as a key.
 
 **The gate.** `readGoalPlan` checks every reading before returning it
 (`gateIntegrity`) and always exposes `reading.integrity`. A reading ACCEPTED
