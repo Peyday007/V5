@@ -151,6 +151,8 @@ import {
   parkStoppedMissions,
   unparkResolvedMissions,
   reaskRefusedPlans,
+  NEEDS_HUMAN_CHOICES,
+  answeredRequestIsMoot,
   reopenAnswered,
   resumeAnsweredRequest,
 } from './needsHuman.ts';
@@ -2656,6 +2658,21 @@ async function tickOnce(owner: string): Promise<TickReport> {
       // research slot keeps its place, and a window that size would hide a
       // newer answer behind it for ever.
       for (const request of await listAnsweredRequests(500)) {
+        /*
+         * An answer whose mission already left NEEDS_HUMAN can never apply:
+         * every answer but STOP is carried out through a transition guarded on
+         * NEEDS_HUMAN. Trying it anyway ran the resume's pre-guard work (a slot
+         * admission, a packet read) for nothing and handed its failure to the
+         * re-ask path — 43 moot cards the operator withdrew by hand in a week.
+         * So it is recognised first, by the operator's one predicate
+         * (`answeredRequestIsMoot`), and settled through `needsHuman.ts`'s
+         * guarded withdrawal, never put back in front of the person. STOP is
+         * still resumed: `stop()` applies from any mission state.
+         */
+        if (request.answeredChoice !== NEEDS_HUMAN_CHOICES.STOP.key && (await answeredRequestIsMoot(request))) {
+          await settleUnresolvedAnswer(report, request, MISSION_LEFT_NEEDS_YOU);
+          continue;
+        }
         const outcome = await resumeAnsweredRequest(request);
         if (outcome.deferred) {
           /*

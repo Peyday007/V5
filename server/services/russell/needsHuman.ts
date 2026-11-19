@@ -961,6 +961,18 @@ async function mootByState(request: RussellHumanRequest, mission: RussellMission
   }).moot;
 }
 
+/**
+ * Whether an answered card can no longer apply, read now: the same reading
+ * `reopenAnswered` withdraws by (`mootByState`), for a caller that has only
+ * the request. A card not about a mission, or whose mission is gone, is not
+ * moot here — `resumeAnsweredRequest` settles those on its own terms.
+ */
+export async function answeredRequestIsMoot(request: RussellHumanRequest): Promise<boolean> {
+  if (!request.missionId) return false;
+  const mission = await getMission(request.missionId);
+  return mission ? mootByState(request, mission) : false;
+}
+
 export interface ResumeResult {
   ok: boolean;
   /** What the answer actually did, in words the loop reports and a person reads. */
