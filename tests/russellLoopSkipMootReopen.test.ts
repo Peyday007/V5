@@ -7,7 +7,10 @@
  * `resumeAnsweredRequest`, and every failure from it to the reopen path —
  * including cards whose mission had already left NEEDS_HUMAN, where no answer
  * but STOP can ever apply. Pinned here: such a card is settled as moot through
- * needsHuman.ts's guarded withdrawal without the resume being tried, a STOP
+ * needsHuman.ts's guarded withdrawal without the resume being tried — so a
+ * "record the gaps" answer no longer writes the person's authorization onto
+ * the packet before the guard refuses it (the outcome the baseline gets
+ * wrong) — a STOP
  * answer is still resumed, and a missionless card or one whose mission still
  * waits behaves as before.
  */
@@ -19,6 +22,7 @@ import { createRun } from '../server/repos/runs.ts';
 import { createFragments, createOrchestration } from '../server/repos/research.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { listEventsByEntity } from '../server/repos/events.ts';
+import { getOrchestration } from '../server/repos/research.ts';
 import {
   answerHumanRequest,
   askHuman,
@@ -60,8 +64,12 @@ beforeEach(async () => {
   ).id;
 });
 
-/** A mission parked at NEEDS_HUMAN on a packet with one plan awaiting approval. */
-async function parkedMission(): Promise<string> {
+/**
+ * A mission parked at NEEDS_HUMAN on a packet with one fragment — PLANNED (a
+ * plan awaiting approval) by default, or ACCEPTED (research that cleared its
+ * gate, so recording the unresolved gaps would file a report).
+ */
+async function parkedMission(fragmentStatus: 'PLANNED' | 'ACCEPTED' = 'PLANNED'): Promise<string> {
   const layer = await fixture.layerByName('World Model');
   const run = await createRun({
     projectId: fixture.project.id, layerId: layer.id, runType: 'FOUNDATION', status: 'PLANNED', provider: 'WORKER', prompt: 'p',
@@ -76,7 +84,7 @@ async function parkedMission(): Promise<string> {
       requiredEvidence: [{ id: 'published_price', description: 'a price', necessity: 'REQUIRED' }],
       acceptableSourceTypes: ['the platform itself'], excludedSourceTypes: ['a blog about it'], completionCriteria: ['one dated price'],
       minIndependentSources: 1, maxRepairs: 2, fragmentIndex: 0, fragmentKey: 'prices', question: 'What does each platform publish?',
-      dependsOn: [], attempt: 1, status: 'PLANNED',
+      dependsOn: [], attempt: 1, status: fragmentStatus,
     },
   ] as unknown as Parameters<typeof createFragments>[0]);
   const missionId = newId('rms');
@@ -98,7 +106,7 @@ async function answeredRequest(missionId: string | null, choice: string, resumeK
     missionId,
     authorityNeeded: 'Authorize the plan.',
     whyNotRussell: 'Only a person can authorize research.',
-    choices: [NEEDS_HUMAN_CHOICES.APPROVE_PLAN, NEEDS_HUMAN_CHOICES.STOP],
+    choices: [NEEDS_HUMAN_CHOICES.APPROVE_PLAN, NEEDS_HUMAN_CHOICES.RECORD_GAPS, NEEDS_HUMAN_CHOICES.STOP],
     resumeKey: resumeKey ?? `skip-moot-test:${missionId ?? newId('none')}`,
   });
   const answered = await answerHumanRequest({ requestId: request.id, actorUserId: userId, choice });
@@ -150,6 +158,41 @@ describe("the loop's answered-requests pass and a mission that left Needs You", 
       ).toHaveLength(1);
     }
   });
+
+  /*
+   * The recorded failure class at the level of what a person's answer did to
+   * the packet. Trying a moot answer was not free: `recordGaps` records the
+   * person's authorization of unresolved gaps on the packet before its
+   * NEEDS_HUMAN-guarded transition, so a "record the gaps" answer on a mission
+   * that had already moved on wrote that person's name onto the packet as
+   * having authorized a report with open questions — a decision that, by the
+   * card's own withdrawal, never applied. Recognising the card as moot first
+   * leaves the packet exactly as it was.
+   */
+  for (const to of ['RUNNING', 'CANCELLED'] as const) {
+    it(`A01: a "record the gaps" answer on a mission moved to ${to} authorizes nothing in the person's name`, async () => {
+      const missionId = await parkedMission('ACCEPTED');
+      const orchestrationId = (await getMission(missionId))!.orchestrationId!;
+      const request = await answeredRequest(missionId, NEEDS_HUMAN_CHOICES.RECORD_GAPS.key);
+      expect(
+        await transitionMission({ missionId, from: 'NEEDS_HUMAN', to, ...(to === 'CANCELLED' ? { terminalReason: 'cancelled elsewhere' } : {}) }),
+      ).toBe(true);
+
+      const report = await tick(`skip-moot-gaps-${to}`);
+
+      expect((await getHumanRequest(request.id))!.state).toBe('WITHDRAWN');
+      expect(report.withdrawnMootAnswers.map((e) => e.requestId)).toContain(request.id);
+      const packet = (await getOrchestration(orchestrationId))!;
+      expect(packet.unresolvedGapPolicy).not.toBe('RECORD_GAPS');
+      expect(packet.unresolvedGapAuthorizedBy).toBeNull();
+      expect(packet.unresolvedGapAuthorizedAt).toBeNull();
+      const authorized = (await listEventsByEntity('RUN', packet.runId)).filter(
+        (event) => event.eventType === 'RESEARCH_PLAN_REVIEWED' && (event.payload as { decision?: string } | null)?.decision === 'UNRESOLVED_GAP_POLICY_AUTHORIZED',
+      );
+      expect(authorized).toEqual([]);
+      expect((await getMission(missionId))!.state).toBe(to);
+    });
+  }
 
   it('A03: a STOP answer on a mission that moved is resumed, not withdrawn', async () => {
     const missionId = await parkedMission();

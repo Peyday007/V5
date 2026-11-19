@@ -2661,9 +2661,10 @@ async function tickOnce(owner: string): Promise<TickReport> {
         /*
          * An answer whose mission already left NEEDS_HUMAN can never apply:
          * every answer but STOP is carried out through a transition guarded on
-         * NEEDS_HUMAN. Trying it anyway ran the resume's pre-guard work (a slot
-         * admission, a packet read) for nothing and handed its failure to the
-         * re-ask path — 43 moot cards the operator withdrew by hand in a week.
+         * NEEDS_HUMAN. Trying it anyway ran the resume's pre-guard work for
+         * nothing — a slot admission, and for "record the gaps" the person's
+         * authorization written onto the packet for a decision that never
+         * applied — and handed its failure to the re-ask path — 43 moot cards the operator withdrew by hand in a week.
          * So it is recognised first, by the operator's one predicate
          * (`answeredRequestIsMoot`), and settled through `needsHuman.ts`'s
          * guarded withdrawal, never put back in front of the person. STOP is
