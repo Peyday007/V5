@@ -1,73 +1,76 @@
-# Reading and deciding goals on the deployed Brain, without a terminal.
+# Failed executions, diagnosed by Microsoft AgentRx, filed for Hermes.
 #
-# `show` is read-only: it opens the database, prints every goal's derived
-# reading — what happened, what is happening now, what happens next, what needs
-# a person — and closes. The decisions (`file`, `pause`, `resume`, `cancel`,
-# `reinstate`, `depends`, `terms`) each need `--admin`, resolved against the
-# database rather than trusted, and each calls the same function the HTTP route
-# calls, so there is one writer per decision.
+# AgentRx (github.com/microsoft/AgentRx, MIT) localizes the critical failure
+# step in an agent trajectory and classifies it. This workflow is the isolated
+# environment it runs in — a runner of its own, not the Brain's machine — and
+# the bridge between it and the diagnosis loop Brain already has (§109):
 #
-# Nothing here starts work, approves a plan, spends anything or fires a worker.
-# A pause or a resume changes a decision column; what that means for the work
-# is the durable goal tick's, on its next pass, which is the point: the proof
-# that a resume needs no stage button is that this workflow does not press one.
+#   1. export   scripts/agentrx/export.ts runs inside the Brain, read-only,
+#               and writes each failed work item as a trajectory from rows Brain
+#               already keeps (work_items, work_leases, bin_events,
+#               project_events). No new trace store.
+#   2. diagnose AgentRx, pinned to one commit, runs every stage (IR, invariants,
+#               checker, judge) with its model calls sent through
+#               scripts/agentrx/llm_bridge.py to the free-provider switchboard
+#               the free lane and Hermes already use — no new provider or key.
+#   3. convert  scripts/agentrx/to_finding.py states the result in the
+#               inventory's fields: CONFIRMED only when AgentRx's judge and a
+#               code-evaluated invariant agree on one step, otherwise SUSPECTED.
+#   4. file     scripts/agentrx/file.ts writes it through upsertInventory, the
+#               owner of Hermes' findings register. Hermes reads unclaimed
+#               findings every run (inventoryDeficiencies) and the director
+#               decides: engineering only on an established cause.
 #
-# Its own concurrency group, and it waits for a release rather than racing
-# one — see `.github/actions/await-release` for why a shared group was worse.
-name: Goals
+# Scheduled, so a new failure is diagnosed without anybody asking; a class
+# diagnosed in the last day is skipped (export.ts), so the schedule spends its
+# model calls on failures nobody has looked at. Dispatch it for one item, one
+# packet or a window, with `file: false` to look without writing.
+#
+# Nothing here starts work, deploys, restarts the Brain or spends money: the
+# switchboard's providers are free, and the only write is the inventory row.
+name: AgentRx
 
 on:
+  schedule:
+    - cron: '41 */6 * * *'
   workflow_dispatch:
     inputs:
-      command:
-        description: 'show | file | pause | resume | cancel | reinstate | depends | terms | create | target | plan | construct | industry | census'
+      target:
+        description: 'wki_... (one work item), orc_... (a packet''s failed items) or recent:HOURS'
         required: true
-        default: show
-      goal:
-        description: 'The goal (wst_...), for every command but show and file'
-        required: false
-        default: ''
-      other:
-        description: 'For depends: the goal it waits on. For file: the row to file from. For create/target: METRIC-AMOUNT_CENTS-CURRENCY[-CAPITAL_CENTS[-HOURS]], e.g. SETTLED_CASH-1000000-USD-50000-120'
-        required: false
-        default: ''
-      purpose:
-        description: 'For file: REVENUE_DIRECT | REVENUE_ENABLING | CAPABILITY | LONG_TERM'
-        required: false
-        default: ''
-      reason:
-        description: 'For pause and cancel: why. For create: the goal in plain words. For industry: the operator ambition to construct from (letters, digits, spaces and . , - _)'
-        required: false
-        default: ''
-      commitment:
-        description: 'For terms: NONE | INTERNAL | CUSTOMER'
-        required: false
-        default: ''
-      due:
-        description: 'For terms and create: a date, YYYY-MM-DD'
-        required: false
-        default: ''
-      project:
-        description: 'For show: optionally one project. For create/target: the project whose ledger counts (prj_...)'
-        required: false
-        default: ''
-      admin:
-        description: '--admin <email>: required by every command but show and plan'
-        required: false
-        default: ''
-      resources:
-        description: 'For create/target: what the owner has to work with (people, equipment, relationships, licences), in plain words. Not permission to spend.'
-        required: false
-        default: ''
+        default: 'recent:24'
+      limit:
+        description: 'At most this many trajectories (1-5)'
+        required: true
+        default: '2'
+      file:
+        description: 'File the findings into the operator inventory (true) or only report them (false)'
+        required: true
+        default: 'true'
+      model:
+        description: 'Switchboard route for AgentRx''s model calls'
+        required: true
+        default: 'auto/best-coding'
 
 concurrency:
-  group: brain-console-goals
+  group: brain-diagnose-agentrx
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
+env:
+  # One commit of AgentRx, so a diagnosis is reproducible and an upstream change is a reviewed edit here.
+  AGENTRX_REPO: https://github.com/microsoft/AgentRx.git
+  AGENTRX_SHA: 7a18c79708e7671be15124460f4f7296107c2a55
+  # The switchboard (cheap-lane.yml `cheap=northline-cheap`): the free lane's and Hermes' endpoint.
+  AGENTRX_LLM_URL: https://northline-cheap.fly.dev/v1
+
 jobs:
-  goals:
-    name: Goals
+  diagnose:
+    name: Diagnose failed executions
     runs-on: ubuntu-latest
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
 
@@ -75,109 +78,143 @@ jobs:
 
       - uses: ./.github/actions/await-release
 
-      - name: Run
-        # An SSH session a deploy restarts under hangs until GitHub's six-hour job
-        # limit and holds every later read behind it (2026-11-02, twice). admin.yml
-        # bounds the same step the same way.
-        # `plan` composes the goal's 400 constructed arrangements and its portfolio over one connection (~11 min on 2026-11-06).
-        timeout-minutes: 30
+      - name: Export failed executions (read-only)
+        timeout-minutes: 15
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          G_COMMAND: ${{ inputs.command }}
-          G_GOAL: ${{ inputs.goal }}
-          G_OTHER: ${{ inputs.other }}
-          G_PURPOSE: ${{ inputs.purpose }}
-          G_REASON: ${{ inputs.reason }}
-          G_COMMITMENT: ${{ inputs.commitment }}
-          G_DUE: ${{ inputs.due }}
-          G_PROJECT: ${{ inputs.project }}
-          G_ADMIN: ${{ inputs.admin }}
-          G_RESOURCES: ${{ inputs.resources }}
+          RX_TARGET: ${{ inputs.target || 'recent:24' }}
+          RX_LIMIT: ${{ inputs.limit || '2' }}
         run: |
           set -eu
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
-
-          # The allowlist is the control; the input's description is a label.
-          case "$G_COMMAND" in
-            show|file|pause|resume|cancel|reinstate|depends|terms|create|target|plan|construct|industry|census) ;;
-            *) echo "::error::Refusing '$G_COMMAND'."; exit 1 ;;
+          case "$RX_LIMIT" in [1-5]) ;; *) echo "::error::limit is 1-5"; exit 1 ;; esac
+          case "$RX_TARGET" in
+            wki_*) args="--work-item $RX_TARGET" ;;
+            orc_*) args="--packet $RX_TARGET" ;;
+            recent:*) args="--recent ${RX_TARGET#recent:}" ;;
+            *) echo "::error::target is wki_..., orc_... or recent:HOURS"; exit 1 ;;
           esac
-
-          # Ids and enums: letters, digits, underscore, dash. Refused rather
-          # than escaped — a value a shell could act on is a way to run
-          # something else inside the container.
-          for value in "$G_GOAL" "$G_OTHER" "$G_PURPOSE" "$G_COMMITMENT" "$G_DUE" "$G_PROJECT"; do
-            case "$value" in
-              '') ;;
-              *[!A-Za-z0-9_-]*) echo "::error::Refusing an id that is not letters, digits, underscore or dash."; exit 1 ;;
-            esac
-          done
-          case "$G_REASON" in
-            *[!A-Za-z0-9\ .,_-]*) echo "::error::Refusing the reason: letters, digits, spaces and . , - _ only."; exit 1 ;;
-          esac
-          case "$G_RESOURCES" in
-            *[!A-Za-z0-9\ .,_-]*) echo "::error::Refusing the resources: letters, digits, spaces and . , - _ only."; exit 1 ;;
-          esac
-          case "$G_ADMIN" in
-            '') ;;
-            *[!A-Za-z0-9_.@+-]*) echo "::error::Refusing the administrator address."; exit 1 ;;
-          esac
-          if [ "$G_COMMAND" != show ] && [ "$G_COMMAND" != plan ] && [ "$G_COMMAND" != industry ] && [ "$G_COMMAND" != census ] && [ -z "$G_ADMIN" ]; then
-            echo "::error::'$G_COMMAND' changes something, so it needs an administrator."
-            exit 1
-          fi
-
-          args="$G_COMMAND"
-          [ -n "$G_GOAL" ] && args="$args $G_GOAL"
-          if [ "$G_COMMAND" = file ]; then
-            [ -n "$G_OTHER" ] && args="$args --from $G_OTHER"
-          else
-            [ -n "$G_OTHER" ] && args="$args $G_OTHER"
-          fi
-          [ -n "$G_PURPOSE" ] && args="$args --purpose $G_PURPOSE"
-          [ -n "$G_REASON" ] && args="$args --reason \"$G_REASON\""
-          [ -n "$G_COMMITMENT" ] && args="$args --commitment $G_COMMITMENT"
-          [ -n "$G_DUE" ] && args="$args --due $G_DUE"
-          [ -n "$G_PROJECT" ] && args="$args --project $G_PROJECT"
-          [ -n "$G_ADMIN" ] && args="$args --admin $G_ADMIN"
-          [ -n "$G_RESOURCES" ] && args="$args --resources \"$G_RESOURCES\""
-
-          echo "goals $args"
+          # Letters, digits, underscore, dash and the flag words only: a value a shell could act on is refused.
+          case "$args" in *[!A-Za-z0-9_\ -]*) echo "::error::Refusing the target."; exit 1 ;; esac
+          args="$args --limit $RX_LIMIT"
+          ex=$(base64 -w0 scripts/agentrx/export.ts)
+          fi=$(base64 -w0 scripts/agentrx/filing.ts)
           set +e
-          if [ "$G_COMMAND" = census ]; then
-            # The economic knowledge census (Surge B): read-only counts of what
-            # Brain durably holds, from the rows (scripts/knowledge-census.ts).
-            # The script is sent with the command, so a census measures the
-            # running Brain before the script itself has been released.
-            census_b64=$(base64 -w0 scripts/knowledge-census.ts)
-            flyctl ssh console --app "$app" \
-              -C "env BRAIN_DATABASE_POOL_SIZE=1 sh -c 'cd /app && echo $census_b64 | base64 -d > scripts/.knowledge-census-run.ts && nice -n 19 node --import tsx scripts/.knowledge-census-run.ts --json; rm -f scripts/.knowledge-census-run.ts'" \
-              2>&1 | tee goals.txt
-          else
-            flyctl ssh console --app "$app" \
-              -C "env BRAIN_DATABASE_POOL_SIZE=1 sh /app/scripts/goals.sh $args" \
-              2>&1 | tee goals.txt
-          fi
+          flyctl ssh console --app "$app" \
+            -C "env BRAIN_DATABASE_POOL_SIZE=1 sh -c 'cd /app && mkdir -p scripts/agentrx-run && echo $ex | base64 -d > scripts/agentrx-run/export.ts && echo $fi | base64 -d > scripts/agentrx-run/filing.ts && nice -n 19 node --import tsx scripts/agentrx-run/export.ts $args; rm -rf scripts/agentrx-run'" \
+            2>&1 | tee export.txt
           set -e
-          # The verdict is a line the script printed, never an exit code that
-          # had to survive an SSH session, a shell and a CLI.
-          grep -q '^GOALS: OK' goals.txt
+          grep -q '^AGENTRX: OK' export.txt
+          python3 - <<'PY'
+          import base64, json, os
+          line = next((l for l in open('export.txt', encoding='utf-8', errors='replace') if l.startswith('AGENTRX_EXPORT ')), None)
+          items = json.loads(base64.b64decode(line.split(' ', 1)[1].strip())) if line else []
+          os.makedirs('rx/traj', exist_ok=True)
+          for t in items:
+              open(f"rx/traj/{t['workItemId']}.md", 'w', encoding='utf-8').write(t['markdown'])
+              json.dump(t, open(f"rx/traj/{t['workItemId']}.json", 'w', encoding='utf-8'))
+          print(f"{len(items)} trajectory(ies) to diagnose")
+          PY
 
-      # The output, published as notices, so it can be read without the log.
-      - name: Publish the output as annotations
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install AgentRx (isolated, pinned)
+        run: |
+          set -eu
+          [ -n "$(ls rx/traj/*.md 2>/dev/null)" ] || { echo "Nothing failed that needs a diagnosis."; exit 0; }
+          git init -q agentrx && cd agentrx
+          git fetch -q --depth 1 "$AGENTRX_REPO" "$AGENTRX_SHA" && git checkout -q FETCH_HEAD
+          python -m venv ../rx/venv
+          ../rx/venv/bin/pip install -q -e .
+          ../rx/venv/bin/python -c 'import agentrx; print("agentrx", "'"$AGENTRX_SHA"'")'
+
+      - name: Diagnose with AgentRx
+        timeout-minutes: 90
+        env:
+          AGENT_VERIFY_COPILOT_BIN: ${{ github.workspace }}/scripts/agentrx/llm_bridge.py
+          AGENTRX_LLM_KEY: ${{ secrets.OMNIROUTE_API_KEY }}
+          AGENTRX_LLM_MODEL: ${{ inputs.model || 'auto/best-coding' }}
+          AGENTRX_USAGE_LOG: ${{ github.workspace }}/rx/usage.jsonl
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -eu
+          [ -n "$(ls rx/traj/*.md 2>/dev/null)" ] || exit 0
+          [ -n "$AGENTRX_LLM_KEY" ] || { echo "::error::OMNIROUTE_API_KEY is not set: AgentRx has no model to call."; exit 1; }
+          chmod +x scripts/agentrx/llm_bridge.py
+          : > rx/usage.jsonl
+          echo '[]' > rx/findings.json
+          for md in rx/traj/*.md; do
+            id=$(basename "$md" .md)
+            echo "::group::AgentRx on $id"
+            # Every stage; one-shot dynamic invariants keep the model calls per trajectory bounded.
+            (cd agentrx && ../rx/venv/bin/python run.py "../$md" --domain flash --endpoint copilot \
+                --dynamic-mode oneshot --run-dir "../rx/runs/$id") || echo "::warning::AgentRx did not finish every stage on $id"
+            python3 scripts/agentrx/to_finding.py --run-dir "rx/runs/$id" --meta "rx/traj/$id.json" \
+              --bridge scripts/agentrx/llm_bridge.py --run-url "$RUN_URL" > "rx/runs/$id.finding.json"
+            python3 - "$id" <<'PY'
+          import json, sys
+          one = json.load(open(f"rx/runs/{sys.argv[1]}.finding.json"))
+          all_ = json.load(open('rx/findings.json')); all_.append(one)
+          json.dump(all_, open('rx/findings.json', 'w'), indent=2)
+          print(f"{one['id']}: {one['confidence']} — {one.get('root_cause') or 'no cause named'}")
+          PY
+            echo "::endgroup::"
+          done
+
+      - name: File into the operator inventory
+        if: ${{ github.event_name == 'schedule' || inputs.file == 'true' }}
+        timeout-minutes: 15
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -eu
+          [ -s rx/findings.json ] || exit 0
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          fi=$(base64 -w0 scripts/agentrx/filing.ts)
+          fl=$(base64 -w0 scripts/agentrx/file.ts)
+          python3 -c 'import json; [print(i) for i in range(len(json.load(open("rx/findings.json"))))]' | while read -r i; do
+            one=$(python3 -c 'import base64, json, sys; print(base64.b64encode(json.dumps([json.load(open("rx/findings.json"))[int(sys.argv[1])]]).encode()).decode())' "$i")
+            set +e
+            flyctl ssh console --app "$app" \
+              -C "env BRAIN_DATABASE_POOL_SIZE=1 sh -c 'cd /app && mkdir -p scripts/agentrx-run && echo $fi | base64 -d > scripts/agentrx-run/filing.ts && echo $fl | base64 -d > scripts/agentrx-run/file.ts && nice -n 19 node --import tsx scripts/agentrx-run/file.ts --findings $one; rm -rf scripts/agentrx-run'" \
+              2>&1 | tee -a file.txt
+            set -e
+          done
+          grep -q '^AGENTRX: OK' file.txt
+          grep '^AGENTRX_FILED' file.txt || true
+
+      - name: Report
         if: always()
         run: |
-          [ -f goals.txt ] || exit 0
           python3 - <<'PY'
-          text = open('goals.txt', encoding='utf-8', errors='replace').read()
+          import json, os
+          usage = [json.loads(l) for l in open('rx/usage.jsonl')] if os.path.exists('rx/usage.jsonl') else []
+          ok = [u for u in usage if u.get('status') == 200]
+          tokens = sum((u.get('prompt_tokens') or 0) + (u.get('completion_tokens') or 0) for u in ok)
+          findings = json.load(open('rx/findings.json')) if os.path.exists('rx/findings.json') else []
+          lines = [f"## AgentRx", f"Model calls: {len(usage)} ({len(ok)} answered), {tokens} tokens on the free switchboard — $0.",
+                   f"Findings: {len(findings)}"]
+          for f in findings:
+              v = (f.get('agentrx') or {}).get('verdict') or {}
+              lines.append(f"- **{f['id']}** {f['confidence']} — step {v.get('step')} {v.get('category','')}: {(f.get('root_cause') or 'no cause named')[:400]}")
+          text = '\n'.join(lines)
+          print(text)
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as s: s.write(text + '\n')
           enc = lambda s: s.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
-          chunks = [text[i:i + 3500] for i in range(0, len(text), 3500)][:10]
-          for n, chunk in enumerate(chunks, 1):
-              print(f'::notice title=goals {n}/{len(chunks)}::{enc(chunk)}')
+          print(f"::notice title=AgentRx::{enc(text[:3500])}")
           PY
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: goals
-          path: goals.txt
+          name: agentrx
+          path: |
+            export.txt
+            file.txt
+            rx/traj
+            rx/runs
+            rx/findings.json
+            rx/usage.jsonl
+          if-no-files-found: ignore
