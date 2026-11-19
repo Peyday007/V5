@@ -1427,6 +1427,12 @@ export interface GoalModel {
   arrangementSelection?: ArrangementSelection | null;
   /** Each arrangement's conversion as selection read it, null where it has none: what plan candidates reuse (W2c). */
   arrangementConversions?: ReadonlyMap<string, ModelledOpportunity | null> | null;
+  /**
+   * The keys of the constructed arrangements inside the goal's own scope
+   * (`arrangementOutOfScope`: its one industry, its recurring unit, its days
+   * and up-front money). A plan never leads with one outside it (plan integrity, `planIntegrity`).
+   */
+  arrangementsInScope?: string[];
   /** Why nothing could be modelled, when nothing could. */
   refusal: string | null;
   /**
@@ -2137,6 +2143,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       estimates,
       arrangementSelection,
       arrangementConversions,
+      arrangementsInScope: inScope.map((one) => one.key),
     };
   }
 
@@ -2318,6 +2325,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     estimates,
     arrangementSelection,
     arrangementConversions,
+    arrangementsInScope: inScope.map((one) => one.key),
     refusal: null,
     portfolio,
     portfolioInput,

@@ -151,6 +151,7 @@ export async function planReadyFacts(goalId: string, reading: PlanReading): Prom
     hermes: await adoption(goalId),
     acceptedSince: accepted ? await acceptedSince(goalId, accepted.opportunityIds) : null,
     capitalCeiling: reading.target.capitalCeilingCents !== null ? reading.target.capitalCeilingCents / 100 : null,
+    integrity: reading.integrity ?? [],
   };
 }
 

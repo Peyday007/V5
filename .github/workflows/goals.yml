@@ -17,10 +17,18 @@
 name: Goals
 
 on:
+  # Every released commit has its live plans checked (owner, 2026-11-19: "add
+  # end-to-end acceptance checks to the existing release process, using real
+  # planning outputs"). A Deploy a person dispatched raises workflow_run; a
+  # Deploy the bot dispatched raises none, and its hand-off job dispatches
+  # `check` instead — the same split factory-release.yml uses (FAC-4).
+  workflow_run:
+    workflows: [Deploy]
+    types: [completed]
   workflow_dispatch:
     inputs:
       command:
-        description: 'show | file | pause | resume | cancel | reinstate | depends | terms | create | target | plan | construct | industry | census'
+        description: 'show | file | pause | resume | cancel | reinstate | depends | terms | create | target | plan | check | construct | industry | census'
         required: true
         default: show
       goal:
@@ -67,6 +75,8 @@ concurrency:
 jobs:
   goals:
     name: Goals
+    # A Deploy that did not release on the canonical branch released nothing to check.
+    if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'production') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -83,7 +93,7 @@ jobs:
         timeout-minutes: 30
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          G_COMMAND: ${{ inputs.command }}
+          G_COMMAND: ${{ inputs.command || 'check' }}
           G_GOAL: ${{ inputs.goal }}
           G_OTHER: ${{ inputs.other }}
           G_PURPOSE: ${{ inputs.purpose }}
@@ -99,7 +109,7 @@ jobs:
 
           # The allowlist is the control; the input's description is a label.
           case "$G_COMMAND" in
-            show|file|pause|resume|cancel|reinstate|depends|terms|create|target|plan|construct|industry|census) ;;
+            show|file|pause|resume|cancel|reinstate|depends|terms|create|target|plan|check|construct|industry|census) ;;
             *) echo "::error::Refusing '$G_COMMAND'."; exit 1 ;;
           esac
 
@@ -122,7 +132,7 @@ jobs:
             '') ;;
             *[!A-Za-z0-9_.@+-]*) echo "::error::Refusing the administrator address."; exit 1 ;;
           esac
-          if [ "$G_COMMAND" != show ] && [ "$G_COMMAND" != plan ] && [ "$G_COMMAND" != industry ] && [ "$G_COMMAND" != census ] && [ -z "$G_ADMIN" ]; then
+          if [ "$G_COMMAND" != show ] && [ "$G_COMMAND" != plan ] && [ "$G_COMMAND" != check ] && [ "$G_COMMAND" != industry ] && [ "$G_COMMAND" != census ] && [ -z "$G_ADMIN" ]; then
             echo "::error::'$G_COMMAND' changes something, so it needs an administrator."
             exit 1
           fi

@@ -35,6 +35,7 @@ import type { ModelInput, ModelledOpportunity } from '../cash/goalScenario.ts';
 import { designFacts, STRUCTURES } from '../cash/properties.ts';
 import { fieldFromInput, type ModelField } from './planSet.ts';
 import { RESEARCH_TURNAROUND_DAYS, type PlanStep } from './plan.ts';
+import type { ArrangementStage, StepCostSource, UnscheduledReason } from '../../domain/planIntegrity.ts';
 
 /** Which part of the transaction an unknown part belongs to: the research step that asks it. */
 type Link = 'BUYERS' | 'PRICE' | 'SUPPLY' | 'SETTLEMENT' | 'COST' | 'REPEAT';
@@ -115,6 +116,10 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
   const unit = pooled ? 'slot in a shared run' : 'unit';
   const cur = ctx.currency;
   const steps: PlanStep[] = [];
+  /** What the integrity check reads of a step: this arrangement, the stage, where its cost comes from, and why it has no day. */
+  const meta = (stage: ArrangementStage, costSource: StepCostSource, day: Day | null, unscheduled?: UnscheduledReason): Pick<PlanStep, 'arrangement'> => ({
+    arrangement: { key: a.key, stage, costSource, ...(day === null && unscheduled ? { unscheduled } : {}) },
+  });
   const push = (step: Omit<PlanStep, 'order'>): number => {
     const order = startAt + steps.length;
     steps.push({ order, ...step });
@@ -160,6 +165,7 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
         question,
         requires: [],
         withinLimits: null,
+        ...meta('RESEARCH', 'NOT_SPENT', { low: 0, high: 0 }),
       }),
     );
   }
@@ -240,6 +246,7 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
     kind: 'EXECUTE',
     requires: reachNeeds,
     withinLimits: null,
+    ...meta('REACH', 'NONE_HELD', reachDay, 'NO_MODEL_DAYS'),
   });
 
   // 3. Supply, lined up before anything is sold.
@@ -271,6 +278,7 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
       kind: 'EXECUTE',
       requires: supplyNeeds,
       withinLimits: null,
+      ...meta('SUPPLY_TERMS', 'NOT_SPENT', supplyDay, 'NO_MODEL_DAYS'),
     });
   }
 
@@ -313,6 +321,7 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
         : { question: `For "${buyers}": ${conversionQuestion}.` }),
     requires: offerNeeds,
     withinLimits: null,
+    ...meta('OFFER', 'NONE_HELD', agreeDay, 'NO_MODEL_DAYS'),
   });
 
   // 5. Settlement, and when cash lands against the deadline: the offer's day plus the model's days to usable cash.
@@ -327,6 +336,8 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
     : late
       ? `not scheduled: cash would be usable on ${dayText(settleSpan!)} (${cashStanding}), after the ${ctx.daysLeft} days left`
       : `not yet scheduled: set by ${daysUnknown}`;
+  // Why a step that waits on usable cash has no day: named, never left blank (STEPS_SCHEDULED).
+  const unscheduled: UnscheduledReason = conflict ? 'TERMS_CONFLICT' : late ? 'AFTER_DEADLINE' : 'NO_MODEL_DAYS';
   const cashWhen = cashDay ? `${dayText(cashDay)}: the offer's day plus ${Math.round(cashSpan!.low)}–${Math.round(cashSpan!.high)} days to usable cash (${cashStanding})` : pending;
   const inTime = ctx.daysLeft === null || conflict || settleSpan === null ? null : settleSpan.high <= ctx.daysLeft;
   const when = cashSpan ? ` Cash is usable about ${Math.round(cashSpan.low)}–${Math.round(cashSpan.high)} days after agreement (${cashStanding})${ctx.daysLeft !== null && inTime !== null ? `, ${inTime ? 'inside' : 'OUTSIDE'} the ${ctx.daysLeft} days left` : ''}.` : ' When cash is usable is not yet established.';
@@ -350,6 +361,7 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
       kind: 'EXECUTE',
       requires: needs('SETTLEMENT'),
       withinLimits: inTime,
+      ...meta('COLLECT', 'NONE_HELD', cashDay, unscheduled),
     });
 
   // 6. Ordering supply: money paid out, so the owner's; funded by buyers when the design presells.
@@ -380,6 +392,7 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
       kind: 'EXECUTE',
       requires: needs('SUPPLY', 'COST'),
       withinLimits: within,
+      ...meta('ORDER', prepaid ? 'NOT_OWNERS' : committed === null ? 'NONE_HELD' : 'MODEL', day, unscheduled),
     });
   };
   const ordersSupply = a.design.base === 'SUBCONTRACT' || a.design.base === 'POOL';
@@ -417,6 +430,7 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
       execution: [],
       kind: 'EXECUTE',
       requires: paysFirst ? needs('COST') : [],
+      ...meta('DELIVER', !paysFirst ? 'NOT_OWNERS' : cost === null ? 'NONE_HELD' : 'MODEL', day, unscheduled),
       withinLimits: paysFirst ? (directSpan && ctx.capitalBeforeProof !== null ? directSpan.high <= ctx.capitalBeforeProof : null) : null,
     });
   };
@@ -466,6 +480,7 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
       kind: 'EXECUTE',
       requires: needs('REPEAT'),
       withinLimits: day && ctx.daysLeft !== null ? day.high <= ctx.daysLeft : null,
+      ...meta('REPEAT', 'NONE_HELD', day, unscheduled),
     });
   }
   const notice = conflict
