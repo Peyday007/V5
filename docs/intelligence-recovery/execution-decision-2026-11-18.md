@@ -292,3 +292,29 @@ Repeated reads are now stable.
 - Costs are still 0; Renew has no day.
 
 Agent round 2 is on these, on branch claude/plan-exec-round2. The release owner session is asked to make the price-refused designs launch pricing research.
+
+## 2026-11-19 18:45Z — round 2 live; plan integrity made permanent
+
+- **#1149 (62214360), live 17:50Z.** It does four things:
+  - a single organisation is never a buyer population;
+  - steps are built from the lead the plan names;
+  - step costs come from the model or are left unestablished, never a written 0, and Renew is scheduled;
+  - price research is raised without a portfolio.
+- **Plan reads on 62214360.** All six goals are CANDIDATE_ONLY. GitHub no longer leads any goal.
+
+  | Goal | Reach | Lead | Steps |
+  |---|---|---|---|
+  | $10K | 6.2% (stable over 2 reads) | cop_8015 | One honest step |
+  | $100K | 0% | Three arrangements | 11 coherent steps on the postcard population: research → reach → validate → deliver/collect, days 2–56, costs established or "not established" |
+  | $5K/mo | 44.1% | Reconstructed | Steps cost 0 and carry an "(ALL)" token |
+  | A | 0% | arr_241c | Coherent 10-step plan |
+  | B | 4.9% | Reconstructed | 6× repeated "Bring in", day 0 / cost 0 |
+  | C | — | — | Read timed out at 30 minutes |
+
+- **#1151 (70007ed4), the owner's order of 2026-11-19 for permanent planning reliability.**
+  - A pure `planIntegrity` checker of seven general rules runs on every reading. A plan with any violation is never accepted, and `planReady` refuses it.
+  - Regression tests for each production failure, each shown to fail on its pre-fix commit.
+  - A 16-variant transfer matrix: capital, revenue unit, deadline, industry, owner time.
+  - `goals.sh check` runs on production after every Deploy, by workflow_run or by the hand-off. A test keeps that wiring.
+- **#1152 (d695a964).** Each goal's read in the release check is bounded, so a stuck goal (C) is that goal's ERROR, not a check with no verdict.
+- **Next.** The reconstruction-path steps: cost 0, day 0, duplicate moves, the "(ALL)" token and the trailing "Establish an offer" step. Then find out why C's read is slow.
