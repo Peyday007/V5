@@ -70,6 +70,8 @@ import {
 } from '../../repos/bins.ts';
 import { openBinRequest, recordCapture } from '../../repos/design.ts';
 import { BRAIN_REPOSITORY_ID } from '../../domain/binPurpose.ts';
+import type { Bin } from '../../domain/types.ts';
+import { binScopeRefusal, type BinScopeRefusal, type RoutingCandidate } from '../dispatch/router.ts';
 import type { CaptureReadings, DesignCapture, DesignCycle, DesignSurface } from '../../domain/design.ts';
 import { coerceReadings } from './observe.ts';
 import { measurePass } from './operate.ts';
@@ -304,6 +306,89 @@ export async function openDesignRender(input: OpenRenderInput): Promise<string> 
 
   await markBinReady(bin.id);
   return bin.id;
+}
+
+/* =========================================================================
+ * Whether anybody can answer
+ * ====================================================================== */
+
+/**
+ * The render bin `openDesignRender` would build, in the fields the router reads.
+ *
+ * Built from the same constants the bin is, so this cannot say "a surface can
+ * run it" about a bin shaped differently from the one that would be opened.
+ */
+export function renderRoutingShape(projectId: string): Bin {
+  return {
+    id: 'bin_design_render_probe',
+    projectId,
+    kind: DESIGN_RENDER_KIND,
+    completionContract: DESIGN_RENDER_CONTRACT,
+    workloadClass: DESIGN_RENDER_WORKLOAD_CLASS,
+    requiredCapabilities: [...DESIGN_RENDER_REQUIRED_CAPABILITIES],
+    pinnedRoutineId: null,
+    manifest: {
+      repository: {
+        remote: DESIGN_RENDER_REPOSITORY.remote,
+        ref: DESIGN_RENDER_REPOSITORY.ref,
+        baseSha: '',
+        integrationBranch: '',
+        pullRequest: null,
+      },
+    },
+  } as unknown as Bin;
+}
+
+export type RenderRunnability =
+  | { runnable: true; surfaces: string[] }
+  | { runnable: false; reason: string; refusals: Partial<Record<BinScopeRefusal, number>> };
+
+/**
+ * Can any surface in this fleet run a render for this project?
+ *
+ * A render needs a checkout of Brain's repository (`DESIGN_RENDER_REQUIRED_
+ * CAPABILITIES`, `DESIGN_RENDER_REPOSITORY`). The recorded failure class — 7 of
+ * 11 render bins ending NEEDS_HUMAN with "No render was submitted" — was a
+ * producer with no consumer: bins opened whatever the fleet could do, and every
+ * attempt was spent somewhere `npm run design -- render` cannot run. Routing
+ * now refuses those surfaces; this is the other half, so a bin is not opened
+ * at all when the fleet holds no surface the router would fire it at.
+ *
+ * Asked with `binScopeRefusal`, the router's own predicate, over the bin shape
+ * that would be opened — one decision, so this and the fire cannot disagree
+ * about which surfaces could take the work. Health, cooldowns and targets are
+ * deliberately not asked: a surface that is busy now is a consumer later.
+ *
+ * A fleet with no surface at all is not a refusal. The fleet is then not how
+ * this Brain is worked (a worker checks in on its own), and the assigner still
+ * refuses a worker that does not serve FACTORY work for this repository.
+ */
+export function renderRunnability(
+  candidates: readonly RoutingCandidate[],
+  projectId: string,
+): RenderRunnability {
+  if (candidates.length === 0) return { runnable: true, surfaces: [] };
+  const shape = renderRoutingShape(projectId);
+  const surfaces: string[] = [];
+  const refusals: Partial<Record<BinScopeRefusal, number>> = {};
+  for (const candidate of candidates) {
+    const refusal = binScopeRefusal(candidate, shape);
+    if (refusal === null) surfaces.push(candidate.routine.id);
+    else refusals[refusal] = (refusals[refusal] ?? 0) + 1;
+  }
+  if (surfaces.length > 0) return { runnable: true, surfaces };
+  const counted = Object.entries(refusals)
+    .map(([refusal, count]) => `${count} ${refusal}`)
+    .join(', ');
+  return {
+    runnable: false,
+    refusals,
+    reason:
+      `no surface in the fleet can run a render: it needs a checkout of ${BRAIN_REPOSITORY_ID} ` +
+      `(capability ${DESIGN_RENDER_REQUIRED_CAPABILITIES.join(', ')}, family FACTORY) serving this ` +
+      `project, and all ${candidates.length} were refused (${counted}). Opening a bin here would ` +
+      'spend its attempts where no render can be taken; connecting such a surface is the remedy.',
+  };
 }
 
 /* =========================================================================
