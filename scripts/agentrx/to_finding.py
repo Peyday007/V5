@@ -117,7 +117,7 @@ def ask_model(bridge, meta, verdict, found):
     # filed). An unusable answer is asked again rather than filed as "no correction proposed".
     for attempt in range(1, 4):
         try:
-            result = subprocess.run([sys.executable, bridge], input=prompt, capture_output=True, text=True, timeout=900)
+            result = subprocess.run([sys.executable, bridge], input=prompt, capture_output=True, text=True, timeout=420)
             text = result.stdout.strip()
             start, end = text.find("{"), text.rfind("}")
             parsed = json.loads(text[start:end + 1]) if start >= 0 and end > start else {}
