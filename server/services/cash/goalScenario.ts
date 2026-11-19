@@ -489,7 +489,20 @@ export function inheritedTerms(one: Pick<ConstructedArrangement, 'buyerTerms'>):
  * links nobody has established swept exactly as for an opening with nothing on
  * its card. Shared by the estimated and the invented conversions. Pure.
  */
-function arrangementOpening(one: ConstructedArrangement, input: ArrangementInput, price: ModelInput, high: number, transfer: ReturnType<typeof transferOf>, invented = false): ModelledOpportunity {
+function arrangementOpening(
+  one: ConstructedArrangement,
+  input: ArrangementInput,
+  price: ModelInput,
+  high: number,
+  transfer: ReturnType<typeof transferOf>,
+  invented = false,
+  /**
+   * The price a blind direct cost is a share of, and what the note calls it.
+   * Defaults to the top of the price's range; a price swept over other buyers'
+   * prices passes its own geometric middle instead (`sweptOverOtherPrices`).
+   */
+  costScale: { value: number; what: string } = { value: high, what: 'the top price' },
+): ModelledOpportunity {
   const ref: SourceRef = price.source ?? { kind: 'OTHER', ref: `arrangement:${one.key}` };
   const worst = one.stress.worstCaseCents === null ? null : one.stress.worstCaseCents / 100;
   /*
@@ -548,7 +561,9 @@ function arrangementOpening(one: ConstructedArrangement, input: ArrangementInput
     daysToCash: infer('daysToCash', unknown(3, 60, 'nobody has established when the money would settle; swept from 3 to 60 days')),
     close: arrangementClose(one, ref) ?? infer('close', unknown(0.02, 0.5, 'no buyer has been asked yet; swept from 2% to 50% of buyers agreeing')),
     respond: infer('respond', unknown(0.002, 0.15, 'nobody has established how many prospects of this kind reply; swept from 0.2% to 15%')),
-    directCost: pooledRunCostPerDeal(one) ?? infer('costShare', unknown(0, Math.max(0.01, high * 0.6), 'nobody has established the direct cost; swept from nothing to 60% of the top price'), high, ' as a share of the top price'),
+    directCost:
+      pooledRunCostPerDeal(one) ??
+      infer('costShare', unknown(0, Math.max(0.01, costScale.value * 0.6), `nobody has established the direct cost; swept from nothing to 60% of ${costScale.what}`), costScale.value, ` as a share of ${costScale.what}`),
     // A repeating design's deals in the window, from these buyers' own stated volume only (a market's size never transfers).
     volume: repeatable
       ? infer(
@@ -718,7 +733,19 @@ function sweptOverOtherPrices(
     distribution: { kind: 'EMPIRICAL', values },
     inferred: { tier: 'MECHANISM', justified: false, p10: low, p50, p90: high, observations: prices.length },
   };
-  return { ...arrangementOpening(one, input, price, high, null, invented), marketKey: populationMarket(one.demand.ref) };
+  /*
+   * Production 2026-11-19: the blind direct cost was "nothing to 60% of the
+   * top price", and the top of a swept price is the p90 of other buyers'
+   * prices. The engine draws price and cost independently, so a world at a
+   * low price paid a cost scaled to the pool's top: $42–$156,737 swept gave a
+   * price p50 of $2,569 against a cost p50 of $47,021. The cost is a share of
+   * this arrangement's own price, so its scale is the price's geometric middle
+   * — the sweep's median — and at the median the cost reads at the same
+   * nothing-to-60% share as any opening's (PRICE-POOL: a cost swept from a
+   * pool's top is borrowed). Capital keeps the top: it bounds exposure.
+   */
+  const costScale = { value: p50, what: "the swept price's geometric middle" };
+  return { ...arrangementOpening(one, input, price, high, null, invented, costScale), marketKey: populationMarket(one.demand.ref) };
 }
 
 /** The `q` quantile of sorted positive values, interpolated on the log scale. Pure. */
@@ -756,8 +783,8 @@ export const COMPARABLE_SPREAD_MAX = 10;
  * across, or why there are none (Surge B, F4). Comparable means comparable:
  * the same sector; else the same structure (openings of a mechanism the
  * arrangement's structure is already held as); else the same kind of buyer;
- * else the project's prices — and outside the sector, only a set within one
- * order of magnitude (`COMPARABLE_SPREAD_MAX`). A wider pool is no comparable
+ * else the project's prices — and in every scope, the sector included, only a
+ * set within one order of magnitude (`COMPARABLE_SPREAD_MAX`). A wider pool is no comparable
  * price, and the arrangement stays out with that reason. With no published
  * price at all the set is empty, and the sweep refuses. Never a price for
  * these buyers — a bound. Pure.
@@ -798,9 +825,25 @@ export function comparablePricesFor(
     const sorted = [...xs].sort((a, b) => a - b);
     return logQuantile(sorted, 0.9) / logQuantile(sorted, 0.1) <= COMPARABLE_SPREAD_MAX;
   };
+  const money = (x: number) => `${currency === 'USD' ? '$' : `${currency} `}${Math.round(x).toLocaleString('en-US')}`;
+  const span = (xs: readonly number[]) => {
+    const sorted = [...xs].sort((a, b) => a - b);
+    return `${money(sorted[0]!)}–${money(sorted[sorted.length - 1]!)}`;
+  };
+  /*
+   * The same sector is held to the same order of magnitude as every other
+   * scope. Production 2026-11-19: one sector's published prices ran $42 to
+   * $156,737 (p10–p90), and every unpriced arrangement in it was swept across
+   * them — a price p50 of $2,569 that belongs to no buyer, and a plan reading
+   * p50 $185,840 at 0.4% reach for a $100K goal. A sector label names an
+   * industry, not a deal: a $40 consumable and a $150K contract share one. A
+   * wider set is no comparable price; the narrower scopes below are tried, and
+   * with none the price stays the research question.
+   */
   const sector = normSector(one.sector);
   const same = sector ? valid.filter((p) => normSector(p.industry) === sector).map((p) => p.value) : [];
-  if (same.length >= SECTOR_PRICES_MIN) return { prices: same, scope: `in the same sector (${one.sector})${where}` };
+  if (same.length >= SECTOR_PRICES_MIN && tight(same)) return { prices: same, scope: `in the same sector (${one.sector})${where}` };
+  const wideSector = same.length >= SECTOR_PRICES_MIN ? `; in the same sector (${one.sector}) they span ${span(same)}` : '';
   const held: readonly string[] = one.structure ? (STRUCTURES[one.structure]?.alreadyHeldAs ?? []) : [];
   const structure = held.length ? valid.filter((p) => p.mechanism && held.includes(p.mechanism)).map((p) => p.value) : [];
   if (structure.length >= SECTOR_PRICES_MIN && tight(structure)) return { prices: structure, scope: `with the same structure (${one.structure})${where}` };
@@ -812,9 +855,7 @@ export function comparablePricesFor(
   if (buyers.length >= SECTOR_PRICES_MIN && tight(buyers)) return { prices: buyers, scope: `paid by the same kind of buyer (${one.demand!.name})${where}` };
   const all = valid.map((p) => p.value);
   if (all.length === 0 || tight(all)) return { prices: all, scope: fromBrain ? "in the Brain's validated findings (other projects' sourced claims)" : 'in this project' };
-  const sorted = [...all].sort((a, b) => a - b);
-  const money = (x: number) => `${currency === 'USD' ? '$' : `${currency} `}${Math.round(x).toLocaleString('en-US')}`;
-  return { refused: `no comparable price: published prices for other buyers${where} span ${money(sorted[0]!)}–${money(sorted[sorted.length - 1]!)}` };
+  return { refused: `no comparable price: published prices for other buyers${where} span ${span(all)}${wideSector}` };
 }
 
 /**

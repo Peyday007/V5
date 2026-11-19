@@ -68,7 +68,8 @@ describe('F4: an unpriced arrangement is admitted only on comparable prices, swe
   });
 
   it('admits on same-sector prices, sampled log-uniformly with its median at the geometric middle, never certifiable', () => {
-    const sector: ComparablePrice[] = [100, 200, 400, 800, 1_600, 10_000].map((value) => ({ value, industry: 'pet care services' }));
+    // Within one order of magnitude (p10 ≈ 122, p90 ≈ 949): a sector wider than that is no comparable either (sameSectorSpread.test.ts).
+    const sector: ComparablePrice[] = [100, 150, 300, 600, 900, 1_000].map((value) => ({ value, industry: 'pet care services' }));
     const selected = selectEstimatedArrangements([arrangement()], { ...input, otherPrices: [...production, ...sector] });
     const one = selected.openings[0]!;
     expect(one.estimated?.tier).toBe('MECHANISM');
@@ -77,7 +78,7 @@ describe('F4: an unpriced arrangement is admitted only on comparable prices, swe
     for (const field of ['price', 'close', 'respond', 'volume', 'daysToCash', 'directCost', 'capital'] as const) expect(inputEvidence(one[field], field).establishes, field).toBe(false);
     const { low, high } = one.price as { low: number; high: number };
     expect(low).toBeGreaterThan(100);
-    expect(high).toBeLessThan(10_000);
+    expect(high).toBeLessThan(1_000);
     const geometric = Math.sqrt(low * high);
     let seed = 7;
     const rng = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
@@ -87,7 +88,7 @@ describe('F4: an unpriced arrangement is admitted only on comparable prices, swe
     expect(median / geometric).toBeGreaterThan(0.9);
     expect(median / geometric).toBeLessThan(1.1);
     // A uniform sweep's median would sit at the arithmetic middle, far above.
-    expect(median).toBeLessThan((low + high) / 2 / 2);
+    expect(median).toBeLessThan(((low + high) / 2) * 0.75);
     expect(Math.min(...draws)).toBeGreaterThanOrEqual(low - 1e-9);
     expect(Math.max(...draws)).toBeLessThanOrEqual(high + 1e-9);
   });
