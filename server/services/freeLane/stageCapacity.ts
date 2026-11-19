@@ -321,6 +321,14 @@ async function readStage(def: StageDefinition, since: string, hours: number, now
   // verification item's pass records verdicts, not claims, so it produces no
   // fact here and the gate's acceptance is counted once, at its producer.
   // Usable means the gate accepted it; `sourced` only says a URL was valid.
+  //
+  // The pass id is on the submission's own record, `idempotency_operations`
+  // (keyed by the work item), not only on `work_items.result_ref`: the free lane
+  // completes its items with `brain_complete_work` and no `result_ref`, so the
+  // work item's column is NULL for every lane item. Production, 2026-11-19
+  // 07:50Z: reading only that column measured model-interpretation at 0 accepted
+  // facts/h while 127 of its claims in the window had been gated accepted, and
+  // `gateGrowth` held every free model at its proven 2 slots with 16 waiting.
   const facts = await db.get<{ n: number | string }>(
     `SELECT COUNT(DISTINCT c.id) AS n
        FROM research_claims c
@@ -328,8 +336,12 @@ async function readStage(def: StageDefinition, since: string, hours: number, now
         AND c.pass_id IN (
           SELECT w.result_ref FROM bin_events e JOIN work_items w ON w.id = e.work_item_id
            WHERE e.event_type = 'FREE_LANE_ITEM' AND e.outcome = 'SUBMITTED' AND e.at >= ?
-             AND w.result_ref IS NOT NULL AND e.workload_class IN (${placeholders(types)}))`,
-    [since, ...types],
+             AND w.result_ref IS NOT NULL AND e.workload_class IN (${placeholders(types)})
+          UNION
+          SELECT o.result_ref FROM bin_events e JOIN idempotency_operations o ON o.work_item_id = e.work_item_id
+           WHERE e.event_type = 'FREE_LANE_ITEM' AND e.outcome = 'SUBMITTED' AND e.at >= ?
+             AND o.state = 'SUCCEEDED' AND o.namespace LIKE 'research.%' AND o.result_ref IS NOT NULL AND e.workload_class IN (${placeholders(types)}))`,
+    [since, ...types, since, ...types],
   );
   const metered = await db.all<{ measures: string | Record<string, unknown> | null }>(
     `SELECT measures FROM bin_events
