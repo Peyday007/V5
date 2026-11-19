@@ -215,13 +215,16 @@ describe('C-8: the adopted plan is a sequence of steps', () => {
   const permissionsMissing = ['CONTACT_BUYER', 'QUOTE_AND_INVOICE', 'Instantly connected (messaging)', 'a billing provider'];
   const steps = planSteps({ adoption, reconstruction: r, sales: [], nextTest: null, permissionsMissing });
 
-  it('orders the changes by start day, ends with the sale, and names each step\'s basis, cost and dependency', () => {
+  it('orders the changes by start day, ends with the sale and the collection, and names each step\'s basis, cost and dependency', () => {
     // A step is titled by what the change does, never by the reconstruction's key (stepTitle.ts).
-    expect(steps.map((s) => s.label)).toEqual(['Buy qualified marketplace leads', 'Sell nine units as one bundle', 'Take 50% at signing', 'Sell and collect']);
+    expect(steps.map((s) => s.label)).toEqual(['Buy qualified marketplace leads', 'Sell nine units as one bundle', 'Take 50% at signing', "Sell the plan's openings", 'Collect payment']);
     expect(steps[0]).toMatchObject({ order: 1, cost: 300, basis: 'ESTIMATE', dependsOn: null });
     expect(steps[1]).toMatchObject({ basis: 'ASSUMPTION', dependsOn: 1 });
     expect(steps[2]).toMatchObject({ dependsOn: 2 });
-    expect(steps[3]).toMatchObject({ dependsOn: 3 });
+    // Selling starts once the changes are in place; the model prices no cost of selling or collecting, so neither is 0.
+    expect(steps[3]).toMatchObject({ dependsOn: 3, startDay: { low: 5, high: 5 }, cost: null });
+    // No member's days to usable cash are held: the collection names what sets its day.
+    expect(steps[4]).toMatchObject({ dependsOn: 4, startDay: null, cost: null, stage: { stage: 'COLLECT', costSource: 'NONE_HELD', unscheduled: 'NO_MODEL_DAYS' } });
   });
 
   it('gives a person only rule-11 kinds: a payment is the owner\'s, the rest is Brain\'s', () => {
@@ -239,7 +242,8 @@ describe('C-8: the adopted plan is a sequence of steps', () => {
   it('lists contact permission, invoicing and billing as execution dependencies, never as owners or blockers of the plan', () => {
     expect(steps[0]!.execution).toEqual(['CONTACT_BUYER', 'Instantly connected (messaging)']);
     expect(steps[1]!.execution).toEqual(['QUOTE_AND_INVOICE', 'a billing provider']);
-    expect(steps[3]!.execution).toHaveLength(4);
+    expect(steps[3]!.execution).toEqual(['CONTACT_BUYER', 'Instantly connected (messaging)']);
+    expect(steps[4]!.execution).toEqual(['QUOTE_AND_INVOICE', 'a billing provider']);
     expect(steps[3]!.owner).toBe('BRAIN');
     // The plan's next step is its first step, carried with its kill criterion.
     const next = stepAsNextTest(steps[1]!, r);

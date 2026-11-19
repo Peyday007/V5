@@ -14,6 +14,11 @@
  *   5  STEPS_SCHEDULED           Collect, Deliver and Renew had no day
  *   6  PRICE_GROUNDED            $2,569 pooled from a 47× spread of unrelated prices
  *   7  UNKNOWN_BECOMES_RESEARCH  a goal with no portfolio raised no price research
+ *   8  reconstructed plans (plan reads at 18:00Z on 62214360):
+ *      NO_INTERNAL_KEYS          "Raise price ×4.00 on 4 opening(s) (ALL)"
+ *      NO_FABRICATED_FIGURE      "Sell and collect · cost 0"
+ *      NO_DUPLICATE_STEPS        `Bring in "Constructed` six times
+ *      STEPS_SCHEDULED           "Establish an offer and a price · day 0" after "Run the next group · day 12–56"
  *
  * And the gate: a reading that breaks any rule is never ACCEPTED, and planReady
  * refuses it.
@@ -28,7 +33,11 @@ import { adoptReconstruction, gateIntegrity, inGoalScope, leadingArrangement, pl
 import { integrityInput, integrityLines, leadOf, leadPrice } from '../server/services/goals/planIntegrityInput.ts';
 import type { GoalPortfolio } from '../server/services/goals/portfolio.ts';
 import type { Reconstruction, StrategyChange, VariantReading } from '../server/services/goals/reconstruction.ts';
-import { scopeWords } from '../server/services/goals/reasoning/directions.ts';
+import { applyProgram, scopeWords, type Transform } from '../server/services/goals/reasoning/directions.ts';
+import { buildOperators, type StrategyState } from '../server/services/goals/reconstruction.ts';
+import { GOAL_10K_LIMITS, GOAL_10K_OPENINGS, GOAL_10K_RECORD } from './fixtures/goal10k.ts';
+import { evaluateGoalPortfolio } from '../server/services/goals/portfolio.ts';
+import type { NextTest } from '../server/services/goals/plan.ts';
 
 /* ------------------------------------------------------------------ */
 /* Fixtures                                                            */
@@ -196,17 +205,18 @@ describe('3. NO_INTERNAL_KEYS: no text a person reads carries an internal id or 
 
   it('the pipeline (#1144): a reconstruction\'s steps are titled by what the change does, never by its key', () => {
     const steps = planSteps({ adoption: { source: 'RECONSTRUCTED', hypothetical: false, reason: 'beats the plan as held' }, reconstruction: productionReconstruction(), sales: [], nextTest: null, permissionsMissing: [] });
-    expect(steps).toHaveLength(PRODUCTION_CHANGES.length + 1);
+    // Each change, then the sale and the collection.
+    expect(steps).toHaveLength(PRODUCTION_CHANGES.length + 2);
     for (const s of steps) expect(s.label, s.label).not.toMatch(/focus:4|×2\.50@|>arr_|^bundle$/);
     expect(planIntegrity(checked(steps.map((s) => step(s.order, s.label)))).violations).toEqual([]);
   });
 
-  it('the pipeline (this branch): its "Sell and collect" step, its candidate and its reason name openings and changes by title', () => {
+  it('the pipeline: its sale step, its candidate and its reason name openings and changes by title', () => {
     const r = productionReconstruction();
     const titles = new Map([['cop_8015', 'Pennsylvania permit filings'], ['arr_53ae6fed770b', 'Homeowner move-out checklists']]);
     const steps = planSteps({ adoption: { source: 'RECONSTRUCTED', hypothetical: false, reason: 'beats the plan as held' }, reconstruction: r, sales: [], nextTest: null, permissionsMissing: [], titles });
     for (const s of steps) expect(`${s.label} ${s.detail}`).not.toMatch(/\b(?:arr|cop)_[0-9a-z]{4,}/);
-    expect(steps.find((s) => s.label === 'Sell and collect')!.detail).toContain('Pennsylvania permit filings; Homeowner move-out checklists');
+    expect(steps.find((s) => s.label === "Sell the plan's openings")!.detail).toContain('Pennsylvania permit filings; Homeowner move-out checklists');
     expect(planIntegrity(fromSteps(steps)).violations).toEqual([]);
     const adopted = adoptReconstruction({
       reconstruction: r,
@@ -326,6 +336,132 @@ describe('7. UNKNOWN_BECOMES_RESEARCH: an unpriced lead population is sent as pr
     const { unpriced } = unpricedForPlan(selected.selection.unpriced, a);
     expect(unpriced?.[0]?.population).toBe('pop_homes');
     expect(rules(checked(steps, { lead: leadOf(a, null), unpriced: unpriced ?? [] }))).toEqual([]);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* 8. Reconstructed plans                                              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Production plan reads, 18:00Z on 62214360. A reconstructed plan's steps
+ * come from the reconstruction's changes, not from an arrangement, and none
+ * of them said where its cost or its day came from.
+ */
+describe('8. a reconstructed plan: its scope in words, its sale and collection costed and scheduled, one step per move, read in order', () => {
+  const recon = (changes: StrategyChange[], members: string[]): Reconstruction => {
+    const r = productionReconstruction();
+    return { ...r, best: { ...r.best, changes, members } } as Reconstruction;
+  };
+  const adoption = { source: 'RECONSTRUCTED' as const, hypothetical: false, reason: 'beats the plan as held' };
+  const titles = new Map(GOAL_10K_OPENINGS.map((o) => [o.opportunity.id, o.opportunity.title]));
+  /** Days to usable cash as the model holds them: the fixture's swept ranges (`modelledCashSpan` reads the same). */
+  const daysOf = (o: ModelledOpportunity) => ({ span: { low: o.daysToCash.low!, high: o.daysToCash.high! }, standing: 'the range the model swept: an assumption, not established' });
+  const cashDays = new Map(GOAL_10K_OPENINGS.map((o) => [o.opportunity.id, daysOf(o)]));
+  const base: StrategyState = { openings: GOAL_10K_OPENINGS, committed: 0, changes: [] };
+  const limits = { ...GOAL_10K_LIMITS, measuredRates: GOAL_10K_RECORD, worlds: 50, seed: 3 };
+  const input = { openings: GOAL_10K_OPENINGS, portfolio: limits, baseline: evaluateGoalPortfolio({ ...limits, openings: GOAL_10K_OPENINGS }), required: 0.9 };
+  const moves = (program: Transform[], reserve: ModelledOpportunity[] = []) =>
+    applyProgram(base, program, { operators: buildOperators({ input, base }), operatorsFor: (t: string) => buildOperators({ input, base, target: t }), remaining: 10_000, reserve: reserve as never }).state.changes;
+  const days = (l: number, h = l) => ({ startDay: { low: l, high: h } });
+
+  it('the checker flags goal $5K\'s steps: the scope key, and "Sell and collect" costed 0 with nothing holding it', () => {
+    const old = [
+      step(1, 'Raise price ×4.00 on 4 opening(s) (ALL)', { cost: 0, stage: 'OFFER', costSource: 'MODEL' }),
+      step(2, 'Sell Constructed', { cost: 0, ...days(3, 10), stage: 'REACH', costSource: 'MODEL' }),
+      step(3, 'Sell and collect', { cost: 0, ...days(10), dependsOn: 2, stage: 'COLLECT' }),
+    ];
+    expect(rules(checked(old))).toEqual(['NO_INTERNAL_KEYS', 'NO_FABRICATED_FIGURE']);
+    expect(planIntegrity(checked(old)).violations.find((v) => v.rule === 'NO_FABRICATED_FIGURE')!.detail).toMatch(/^step 3 \("Sell and collect"\)/);
+    // A null where the model holds nothing is no figure.
+    expect(rules(checked([{ ...old[2]!, cost: null, costSource: 'NONE_HELD' }]))).toEqual([]);
+  });
+
+  it('the checker flags goal B\'s steps: `Bring in "Constructed` six times, and "Sell and collect" costed 0', () => {
+    const old = [
+      step(1, 'Ask for a deposit of 30–50% at signing (assumed accepted)', { cost: 0, stage: 'OFFER', costSource: 'MODEL' }),
+      ...[2, 3, 4, 5, 6, 7].map((n) => step(n, 'Bring in "Constructed', { cost: 0, stage: 'OFFER', costSource: 'MODEL' })),
+      step(8, 'Sell and collect', { cost: 0, stage: 'COLLECT' }),
+    ];
+    expect(rules(checked(old))).toEqual(['NO_FABRICATED_FIGURE', 'NO_DUPLICATE_STEPS']);
+    expect(planIntegrity(checked(old)).violations.filter((v) => v.rule === 'NO_DUPLICATE_STEPS').map((v) => v.detail.match(/^step (\d)/)![1])).toEqual(['3', '4', '5', '6', '7']);
+  });
+
+  it('the checker flags goals $100K and A: "Establish an offer and a price · day 0" after "Run the next group · day 12–56", depending on nothing', () => {
+    const old = [
+      step(1, 'Research the buyers', { kind: 'RESEARCH', cost: 0, arrangementKey: 'k', stage: 'RESEARCH', costSource: 'NOT_SPENT' }),
+      step(2, 'Reach Dental practices', { ...days(2), arrangementKey: 'k', stage: 'REACH', costSource: 'NONE_HELD' }),
+      step(3, 'Validate the offer with Dental practices', { ...days(2), dependsOn: 2, kind: 'VALIDATE', arrangementKey: 'k', stage: 'OFFER', costSource: 'NONE_HELD' }),
+      step(10, 'Run the next group', { ...days(12, 56), dependsOn: 3, arrangementKey: 'k', stage: 'REPEAT', costSource: 'NONE_HELD' }),
+      step(11, 'Establish an offer and a price', { kind: 'RESEARCH', cost: 0 }),
+    ];
+    expect(rules(checked(old))).toEqual(['STEPS_SCHEDULED']);
+    expect(planIntegrity(checked(old)).violations[0]!.detail).toMatch(/^step 11 \("Establish an offer and a price", day 0\) comes after step 10 \("Run the next group", day 12\)/);
+    // The same step first, or naming the step it follows, is in order.
+    expect(rules(checked([{ ...old[4]!, order: 0 }, ...old.slice(0, 4)]))).toEqual([]);
+    expect(rules(checked([...old.slice(0, 4), { ...old[4]!, dependsOn: 10 }]))).toEqual([]);
+  });
+
+  it('the pipeline, goal $5K: the price move\'s scope in words, the partner titled by its opening, the sale and collection costed null and dated from days to usable cash', () => {
+    const changes = moves([{ op: 'PRICE', factor: 4, scope: 'ALL' }, { op: 'OPERATOR', key: 'partner:', target: 'arr_ai_reception' }]);
+    expect(changes.map((c) => c.dimension)).toEqual(['PRICE', 'PARTNER']);
+    // A change written before the move wrote words (production: "(ALL)") reads the same.
+    const held = { ...changes[0]!, detail: changes[0]!.detail.replace('(all of them)', '(ALL)') };
+    for (const c of [changes, [held, changes[1]!]]) {
+      const steps = planSteps({ adoption, reconstruction: recon(c, ['arr_ai_reception', 'arr_gifts']), sales: [], nextTest: null, permissionsMissing: [], titles, cashDays, daysLeft: 30 });
+      expect(steps.map((s) => s.label)).toEqual([
+        'Raise price ×4.00 on 8 opening(s) (all of them)',
+        'Sell "Constructed: AI receptionist setups for home-service firms" through a partner who already serves its buyers (a…',
+        "Sell the plan's openings",
+        'Collect payment',
+      ]);
+      const [price, partner, sell, collect] = steps;
+      // A move that commits nothing carries the reconstruction's own 0; selling and collecting, which the model prices nothing for, carry null.
+      expect(price).toMatchObject({ cost: 0, startDay: { low: 0, high: 0 }, stage: { stage: 'OFFER', costSource: 'MODEL' } });
+      // The partner's setup, 3–10 days, as production read it.
+      expect(partner).toMatchObject({ cost: 0, startDay: { low: 3, high: 10 } });
+      expect(sell).toMatchObject({ cost: null, startDay: { low: 10, high: 10 }, dependsOn: 2, stage: { stage: 'OFFER', costSource: 'NONE_HELD' } });
+      // The sale's day plus the members' swept days to usable cash (5–15 and 10–20), as an arrangement's Collect reads them.
+      expect(collect).toMatchObject({ cost: null, startDay: { low: 15, high: 30 }, dependsOn: 3, withinLimits: true, stage: { stage: 'COLLECT', costSource: 'NONE_HELD' } });
+      expect(collect!.when).toMatch(/^day 15–30: the sale's day plus 5–20 days to usable cash \(the range the model swept: an assumption, not established\)/);
+      expect(planIntegrity(fromSteps(steps)).violations).toEqual([]);
+    }
+  });
+
+  it('the pipeline, goal B: six openings brought in are one step naming each, and nothing is pinned to day 0 that settles later', () => {
+    const reserve = Array.from({ length: 6 }, (_, i) => ({ ...GOAL_10K_OPENINGS[i % 3]!, opportunity: { id: `arr_b${i}`, title: `Constructed: ${['VA', 'school', 'clinic', 'county', 'library', 'port'][i]} reports for public buyers` } })) as ModelledOpportunity[];
+    const changes = moves([{ op: 'OPERATOR', key: 'timing:deposit' }, ...reserve.map((o) => ({ op: 'INCLUDE' as const, key: o.opportunity.id }))], reserve);
+    expect(changes.filter((c) => c.label.startsWith('include:'))).toHaveLength(6);
+    const t = new Map([...titles, ...reserve.map((o) => [o.opportunity.id, o.opportunity.title] as const)]);
+    const steps = planSteps({ adoption, reconstruction: recon(changes, reserve.map((o) => o.opportunity.id)), sales: [], nextTest: null, permissionsMissing: [], titles: t, cashDays: new Map(reserve.map((o) => [o.opportunity.id, daysOf(o)])), daysLeft: 60 });
+    expect(steps.map((s) => s.label)).toEqual(['Ask for a deposit of 30–50% at signing (assumed accepted)', 'Bring in 6 openings', "Sell the plan's openings", 'Collect payment']);
+    const bring = steps[1]!;
+    for (const o of reserve) expect(bring.detail).toContain(`"${o.opportunity.title}"`);
+    expect(bring).toMatchObject({ cost: 0, startDay: { low: 0, high: 0 } });
+    // Selling starts now; cash does not: it lands on the members' days to usable cash.
+    expect(steps[2]).toMatchObject({ startDay: { low: 0, high: 0 }, cost: null });
+    // (5–15, 10–20 and 10–25 days: the three constructed cards the reserve was cut from.)
+    expect(steps[3]).toMatchObject({ startDay: { low: 5, high: 25 }, cost: null });
+    expect(planIntegrity(fromSteps(steps)).violations).toEqual([]);
+  });
+
+  it('the pipeline, goals $100K and A: an arrangement\'s full sequence ends with its own last step, not a repeated "Establish an offer and a price"', () => {
+    const a = arrangement('k', 'Dental practices', { design: { base: 'PRODUCE', funding: 'ON_DELIVERY', aggregation: 'SINGLE', repeat: 'RECURRING_COHORT' }, unknownParts: ['buyers', 'value', 'conversion'] } as never);
+    const generic: NextTest = { link: 'OFFER_AND_PRICE', test: 'Discover, construct and research openings that can reach the 100000 USD still needed — the openings held reach at most 9000 USD — and establish each one\'s buyer, price, fulfilment, costs and settlement so the quant engine can combine them.', by: 'BRAIN', blocker: null };
+    const steps = planSteps({ adoption: { source: 'BASELINE', hypothetical: false, reason: 'held' }, reconstruction: null, sales: [], nextTest: generic, permissionsMissing: [], arrangement: { arrangement: a, context: { ...ctx, modelled: { daysToCash: swept(10, 54) } as unknown as ModelledOpportunity } } });
+    expect(steps.at(-1)).toMatchObject({ label: 'Run the next group', startDay: { low: 12, high: 56 } });
+    expect(steps.filter((s) => s.label === 'Establish an offer and a price')).toEqual([]);
+    expect(steps.map((s) => s.label)).toContain('Research the price');
+    expect(planIntegrity({ ...fromSteps(steps, { lead: leadOf(a, null) }), unpriced: [{ population: 'pop_k' }] }).violations).toEqual([]);
+  });
+
+  it('the pipeline, goal $10K: an opening with no price leads with "Establish an offer and a price", research that spends nothing, and it is no violation', () => {
+    const generic: NextTest = { link: 'OFFER_AND_PRICE', test: 'Discover, construct and research openings that can reach the 10000 USD still needed — the openings held reach at most 3249 USD — and establish each one\'s buyer, price, fulfilment, costs and settlement so the quant engine can combine them.', by: 'BRAIN', blocker: null };
+    const steps = planSteps({ adoption: { source: 'BASELINE', hypothetical: false, reason: 'held' }, reconstruction: null, sales: [], nextTest: generic, permissionsMissing: [], arrangement: null });
+    expect(steps).toHaveLength(1);
+    expect(steps[0]).toMatchObject({ label: 'Establish an offer and a price', startDay: { low: 0, high: 0 }, cost: 0, dependsOn: null, stage: { stage: 'RESEARCH', costSource: 'NOT_SPENT' } });
+    const acceptance = { status: 'CANDIDATE_ONLY', required: 0.9, probability: null, accepted: null, shortfalls: [], sentence: 'A candidate.', candidate: { label: 'Pennsylvania opening', opportunityIds: ['cop_8015'], source: 'QUANT_PORTFOLIO', settledP50: null, reach: null, reachBasis: null } } as PlanAcceptance;
+    expect(planIntegrity(fromSteps(steps, { acceptance })).violations).toEqual([]);
   });
 });
 

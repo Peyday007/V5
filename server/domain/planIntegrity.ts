@@ -20,10 +20,20 @@
  *                            text a person reads carries an internal id or key.
  *   NO_FABRICATED_FIGURE     Every step cost 0 while the model held no cost. A
  *                            stage that commits money carries the model's
- *                            figure or null (unestablished), never a written 0.
+ *                            figure or null (unestablished), never a written 0
+ *                            — an arrangement's step or a reconstruction's
+ *                            ("Sell and collect · cost 0"), whichever built it.
  *   STEPS_SCHEDULED          Collect, Deliver and Renew had no day. Every step
  *                            that is not research has a day, follows a step
  *                            that has one, or names why it cannot be scheduled.
+ *                            And a plan is read in order: "Establish an offer
+ *                            and a price · day 0" sat after "Run the next group
+ *                            · day 12–56", depending on nothing. A step placed
+ *                            after a later-dated step either names the step it
+ *                            follows or is out of order.
+ *   NO_DUPLICATE_STEPS       Goal B's steps read `Bring in "Constructed` six
+ *                            times. One move is one step: no two steps of a
+ *                            plan carry the same label.
  *   PRICE_GROUNDED           A pooled $2,569 was swept over a 47× spread of
  *                            unrelated prices. A comparable price spans at most
  *                            `spreadMax`, or the price is unestablished.
@@ -45,6 +55,7 @@ export const PLAN_INTEGRITY_RULES = [
   'STEPS_SCHEDULED',
   'PRICE_GROUNDED',
   'UNKNOWN_BECOMES_RESEARCH',
+  'NO_DUPLICATE_STEPS',
 ] as const;
 export type PlanIntegrityRule = (typeof PLAN_INTEGRITY_RULES)[number];
 
@@ -82,6 +93,7 @@ export interface IntegrityStep {
   kind: 'RESEARCH' | 'VALIDATE' | 'EXECUTE';
   /** Set on a step built from a constructed arrangement. */
   arrangementKey?: string | null;
+  /** The stage of a transaction the step is, and where its cost comes from: set by whichever builder made it (an arrangement's, a reconstruction's, a sale). */
   stage?: ArrangementStage | null;
   costSource?: StepCostSource | null;
   unscheduled?: UnscheduledReason | null;
@@ -127,6 +139,8 @@ const INTERNAL_KEY: readonly { what: string; re: RegExp }[] = [
   { what: 'a reconstruction key', re: /\b[a-z][a-z-]*:\d+\b/ },
   { what: 'a price change key', re: /×\s*\d+(?:\.\d+)?\s*@/ },
   { what: 'a partner key', re: />\s*arr_/ },
+  // A reasoning move's scope token as written into its key (production, 2026-11-18: "Raise price ×4.00 on 4 opening(s) (ALL)").
+  { what: 'a scope key', re: /\((?:ALL|OUTREACH|SMALL_TICKET|LARGE_TICKET|FAST_CASH|SLOW_CASH|TOP|REST)\)/ },
 ];
 /** A label that is a bare lower-case identifier ("bundle", "deposit", "referral-partner") is a key, not a title. */
 const BARE_KEY_LABEL = /^[a-z][a-z0-9]*(?:[-_][a-z0-9]+)*$/;
@@ -178,8 +192,8 @@ export function planIntegrity(input: PlanIntegrityInput): { violations: PlanInte
     if (hit) add('NO_INTERNAL_KEYS', `${t.where} carries ${hit}`);
   }
 
-  // NO_FABRICATED_FIGURE: a number on a stage that commits money needs a source.
-  for (const s of fromArrangement) {
+  // NO_FABRICATED_FIGURE: a number on a stage that commits money needs a source, whoever built the step.
+  for (const s of input.steps.filter((one) => one.stage)) {
     if (s.cost === null) continue;
     const money = s.stage ? MONEY_STAGES.has(s.stage) : false;
     if (s.costSource === 'NONE_HELD' || (money && (!s.costSource || s.costSource === 'NOT_SPENT'))) {
@@ -194,6 +208,22 @@ export function planIntegrity(input: PlanIntegrityInput): { violations: PlanInte
     const before = s.dependsOn !== null ? byOrder.get(s.dependsOn) : undefined;
     if (before?.startDay) continue;
     add('STEPS_SCHEDULED', `step ${s.order} ("${clip(s.label, 60)}") has no day, follows no scheduled step, and states no reason it cannot be scheduled`);
+  }
+  // ...and read in order: a step after a later-dated one names the step it follows, or it is out of order.
+  const ordered = [...input.steps].sort((a, b) => a.order - b.order);
+  for (const [at, s] of ordered.entries()) {
+    if (!s.startDay || s.dependsOn !== null) continue;
+    const later = ordered.slice(0, at).filter((p) => p.startDay && p.startDay.low > s.startDay!.low).sort((a, b) => b.startDay!.low - a.startDay!.low)[0];
+    if (later) add('STEPS_SCHEDULED', `step ${s.order} ("${clip(s.label, 60)}", day ${s.startDay.low}) comes after step ${later.order} ("${clip(later.label, 60)}", day ${later.startDay!.low}) and names no step it follows: it is out of order`);
+  }
+
+  // NO_DUPLICATE_STEPS: one move is one step.
+  const seen = new Map<string, number>();
+  for (const s of ordered) {
+    const label = s.label.replace(/\s+/g, ' ').trim().toLowerCase();
+    const first = seen.get(label);
+    if (first !== undefined) add('NO_DUPLICATE_STEPS', `step ${s.order} repeats the label of step ${first} ("${clip(s.label, 60)}")`);
+    else seen.set(label, s.order);
   }
 
   // PRICE_GROUNDED and UNKNOWN_BECOMES_RESEARCH: the price of the arrangement the steps sell.

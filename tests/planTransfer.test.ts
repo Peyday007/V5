@@ -234,6 +234,8 @@ function texts(p: PlanReading): string[] {
 }
 
 const results: Record<string, unknown>[] = [];
+/** Each variant's reading, by its id: what the reconstructed-plan check reads after the matrix. */
+const readings = new Map<string, PlanReading>();
 
 describe('plan integrity holds across varied goals', () => {
   for (const v of VARIANTS) {
@@ -241,12 +243,16 @@ describe('plan integrity holds across varied goals', () => {
       const goalId = await goalFor(v);
       const p = (await readGoalPlan({ goalId, evaluations: 400 }))!;
       expect(p).not.toBeNull();
+      readings.set(v.id, p);
       const reach = p.acceptance.probability?.value ?? p.acceptance.candidate?.reach ?? null;
       results.push({
         variant: v.id, capital: v.capital, unit: v.unit, deadline: v.deadline, industry: v.industry, autonomy: v.autonomy,
-        status: p.acceptance.status, reach: reach === null ? null : Math.round(reach * 1000) / 10,
+        status: p.acceptance.status, adoption: p.adoption?.source ?? null, candidate: p.acceptance.candidate?.source ?? null, reach: reach === null ? null : Math.round(reach * 1000) / 10,
         lead: p.lead ? `${p.lead.buyers} (${p.lead.price.basis})` : null,
-        steps: p.steps.map((s) => `${s.label}${s.owner === 'PERSON' ? ' [PERSON]' : ''}${s.arrangement ? ` {${s.arrangement.stage} cost=${s.cost} day=${s.startDay ? s.startDay.low : s.arrangement.unscheduled ?? '-'}}` : ''}`).slice(0, 14),
+        steps: p.steps.map((s) => {
+          const meta = s.arrangement ?? s.stage;
+          return `${s.label}${s.owner === 'PERSON' ? ' [PERSON]' : ''}${meta ? ` {${meta.stage} cost=${s.cost} day=${s.startDay ? `${s.startDay.low}–${s.startDay.high}` : meta.unscheduled ?? '-'}}` : ''}`;
+        }).slice(0, 14),
         unpriced: (p.unpriced ?? []).map((u) => u.buyer).slice(0, 4),
         integrity: p.integrity,
       });
@@ -269,6 +275,38 @@ describe('plan integrity holds across varied goals', () => {
       if (v.id === 'map-industry-one-company') expect(p.steps.some((s) => s.arrangement)).toBe(false);
     });
   }
+
+  /*
+   * Production plan reads, 18:00Z on 62214360: a reconstructed plan's steps
+   * read "(ALL)", `Bring in "Constructed` six times, and "Sell and collect ·
+   * day 0 · cost 0". At least two variants of the matrix adopt a
+   * reconstruction; each reads clean, one step per move, its sale and
+   * collection costed by the model or null, in the order they start.
+   */
+  it('at least two variants read as reconstructed plans, each with empty integrity', () => {
+    const reconstructed = [...readings.entries()].filter(([, p]) => p.adoption?.source === 'RECONSTRUCTED' && p.acceptance.candidate?.source === 'RECONSTRUCTED');
+    expect(reconstructed.map(([id]) => id).length, [...readings.keys()].join(', ')).toBeGreaterThanOrEqual(2);
+    for (const [id, p] of reconstructed) {
+      expect(p.integrity, id).toEqual([]);
+      expect(planIntegrity(integrityInput(p)).violations, id).toEqual([]);
+      const labels = p.steps.map((s) => s.label);
+      expect(new Set(labels).size, `${id}: ${labels.join(' | ')}`).toBe(labels.length);
+      const sell = p.steps.find((s) => s.label === "Sell the plan's openings");
+      const collect = p.steps.find((s) => s.label === 'Collect payment');
+      expect(sell, id).toMatchObject({ cost: null, stage: { stage: 'OFFER', costSource: 'NONE_HELD' } });
+      expect(collect, id).toMatchObject({ cost: null, dependsOn: sell!.order, stage: { stage: 'COLLECT', costSource: 'NONE_HELD' } });
+      // Cash lands no sooner than the sale starts, on the members' days to usable cash, or says why it has no day.
+      if (collect!.startDay) {
+        expect(collect!.startDay.low, id).toBeGreaterThanOrEqual(sell!.startDay!.low);
+        expect(collect!.startDay.high, id).toBeGreaterThan(sell!.startDay!.high);
+      }
+      else expect(collect!.stage!.unscheduled, id).toBeDefined();
+      for (const s of p.steps) {
+        expect(s.stage ?? s.arrangement, `${id}: ${s.label}`).toBeDefined();
+        expect(s.label, id).not.toMatch(/\((?:ALL|OUTREACH|SMALL_TICKET|LARGE_TICKET|FAST_CASH|SLOW_CASH|TOP|REST)\)/);
+      }
+    }
+  });
 
   afterAll(() => {
     for (const r of results) console.log(`TRANSFER ${JSON.stringify(r)}`);
