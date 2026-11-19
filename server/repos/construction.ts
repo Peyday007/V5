@@ -179,6 +179,24 @@ export async function recordClaimFact(input: {
 /** A fact is current unless another row supersedes it (migration 158); the superseded row is history. */
 const CURRENT = 'NOT EXISTS (SELECT 1 FROM construction_facts s WHERE s.supersedes_fact_id = f.id)';
 
+/**
+ * Other projects' current project-level facts of these keys that were filed
+ * from a claim, newest first: the rows a Brain-level reader narrows to
+ * validated findings (`eligibleClaimIds`, §31). Bounded.
+ */
+export async function listOtherProjectsClaimFacts(excludeProjectId: string, keys: readonly string[], limit = 2000): Promise<RecordedFact[]> {
+  if (keys.length === 0) return [];
+  const rows = await getDb().all<ConstructionFactRow>(
+    `SELECT f.* FROM construction_facts f
+      WHERE f.workstream_id IS NULL AND f.project_id <> ? AND f.source_claim_id IS NOT NULL
+        AND f.fact_key IN (${keys.map(() => '?').join(',')}) AND ${CURRENT}
+      ORDER BY f.created_at DESC, f.id DESC
+      LIMIT ?`,
+    [excludeProjectId, ...keys, limit],
+  );
+  return rows.map(mapConstructionFact).filter((f): f is RecordedFact => f !== null);
+}
+
 /** A claim's current fact(s): its original, or the newest re-derivation of it. */
 export async function listCurrentClaimFacts(claimId: string): Promise<RecordedFact[]> {
   const rows = await getDb().all<ConstructionFactRow>(`SELECT f.* FROM construction_facts f WHERE f.source_claim_id = ? AND ${CURRENT} ORDER BY f.created_at ASC, f.id ASC`, [claimId]);

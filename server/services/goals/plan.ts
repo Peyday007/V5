@@ -1980,7 +1980,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   const lead = leadingArrangement(arrangements, { portfolio: model.portfolio, candidateIds: acceptance.candidate?.opportunityIds ?? [] });
   const steps = infeasible || target.achieved
     ? []
-    : planSteps({ adoption: plan.adoption, reconstruction, sales, nextTest: legacyNext, permissionsMissing, arrangement: lead ? { arrangement: lead, context: arrangementStepContext(target, models.get(lead.key) ?? null) } : null, ...(adopted ? { adoptedIds: adopted } : {}) });
+    : planSteps({ adoption: plan.adoption, reconstruction, sales, nextTest: legacyNext, permissionsMissing, arrangement: lead ? { arrangement: lead, context: { ...arrangementStepContext(target, models.get(lead.key) ?? null), unestimated: unestimatedLead(lead, arrangements.length, models) } } : null, ...(adopted ? { adoptedIds: adopted } : {}) });
   const openingsVerdict: PlanVerdict =
     acceptance.status === 'ACCEPTED' ? 'RECOMMENDABLE' : infeasible ? 'NOT_VIABLE' : plan.adoption.source === 'RECONSTRUCTED' ? 'NEEDS_EVIDENCE' : (chosen?.verdict ?? 'NEEDS_EVIDENCE');
   // One reading, one picture (P5): the candidate the acceptance adopted is a strategy of the reading, and a
@@ -3918,6 +3918,19 @@ export function leadingArrangement(
     }
   }
   return best ?? arrangements[0]!;
+}
+
+/**
+ * Why the leading arrangement's steps are research rather than an estimated
+ * plan, or null when the plan holds an estimate of it. When nothing was
+ * estimated, `leadingArrangement` falls back to construction's own first
+ * rank, which no figure in the plan reads from. Pure.
+ */
+export function unestimatedLead(lead: Pick<ConstructedArrangement, 'key'>, constructed: number, models: ReadonlyMap<string, unknown>): string | null {
+  if (models.has(lead.key)) return null;
+  return models.size === 0
+    ? `Not an estimated plan: none of the ${constructed} constructed arrangement(s) could be estimated (nothing prices what their buyers pay), so this is construction's highest-ranked one and these steps are the research that would make it estimable.`
+    : 'Not an estimated plan: this arrangement holds no estimate, so these steps are the research that would make it estimable.';
 }
 
 /** The goal's limits as an arrangement's steps read them. */

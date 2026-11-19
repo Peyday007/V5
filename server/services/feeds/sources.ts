@@ -11,6 +11,7 @@
  * named business in the news. Every source names a real organisation; anonymous
  * forums are left out because nothing proves a business or a budget behind them. It is a raw lead, never evidence.
  */
+import { namesOnlyAPlace } from '../../domain/jurisdiction.ts';
 
 export interface FeedItem {
   externalId: string;
@@ -591,7 +592,8 @@ export function parseHnFreelance(side: HnFreelanceSide): (body: unknown) => Feed
       if (!id || !comment || !heading || !tag.test(heading)) continue;
       const rest = heading.replace(tag, '');
       const segments = rest.split(/\s*\|\s*/).map((one) => one.trim()).filter(Boolean);
-      const what = segments.find((one) => one.length >= 3 && one.length <= 120 && !WHERE_ONLY.test(one) && !PLACE_ONLY.test(one));
+      // A segment that is only a place ("Germany", "EU only") says where, never what: production read "germany" as the work (2026-11-18).
+      const what = segments.find((one) => one.length >= 3 && one.length <= 120 && !WHERE_ONLY.test(one) && !PLACE_ONLY.test(one) && !namesOnlyAPlace(one));
       if (!what) continue;
       out.push({
         externalId: id,

@@ -42,12 +42,13 @@
 import { breaksOperatingModel, operatingFit } from '../../domain/operatingModel.ts';
 import { createHash } from 'node:crypto';
 import { listNodes } from '../../repos/industry.ts';
-import { listProjectConstructionFacts } from '../../repos/construction.ts';
+import { listOtherProjectsClaimFacts, listProjectConstructionFacts } from '../../repos/construction.ts';
+import { eligibleClaimIds } from '../../repos/sharedFindings.ts';
 import type { FactKey, FactStatus } from '../../domain/construction.ts';
 import { listOpportunities } from '../../repos/cashPortfolio.ts';
 import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
 import { paidOpportunityIds } from '../../repos/cashLedger.ts';
-import { statesNamedIn } from '../../domain/jurisdiction.ts';
+import { namesOnlyAPlace, statesNamedIn } from '../../domain/jurisdiction.ts';
 import { buyerNameKey } from '../../domain/industry.ts';
 import { APPROVAL_ENVELOPES } from '../research/approvalEnvelope.ts';
 import { describesOwnAction } from '../research/actorScope.ts';
@@ -371,6 +372,8 @@ export const YIELD_EVERY_MS = 25;
 function safeName(text: string): boolean {
   if (!text || text.length > 240) return false;
   if (statesNamedIn(text).length > 0) return false;
+  // A place alone ("germany") is where, never a population of buyers or what they buy (production, 2026-11-18).
+  if (namesOnlyAPlace(text)) return false;
   return Object.values(APPROVAL_ENVELOPES).every((envelope) => !describesOwnAction(`a buyer population: ${text}`, envelope.forbiddenActions));
 }
 
@@ -906,6 +909,53 @@ export async function constructionObservations(
       measures: `${fact.key}${kind === 'volume' ? ` over ${Math.round(windowMonths * 10) / 10} month(s)` : ''}: ${fact.measures.slice(0, 120)}`,
       ...(kind === 'priced' && statesParticipantShare(fact.sourceClaimId ? priceClaims.get(fact.sourceClaimId) : undefined, low, high) ? { unit: 'PARTICIPANT_SHARE' as const } : {}),
     });
+  }
+  return out;
+}
+
+/**
+ * What other projects' validated findings say buyers pay (§31): a
+ * `price_per_unit` construction fact another project filed about one of its
+ * map's buyer types, OBSERVED or VERIFIED, whose source claim is an eligible
+ * shared finding right now (`eligibleClaimIds`). A validated finding belongs
+ * to the Brain; the row another project filed from it is only its structured
+ * reading, so nothing that project decided (an opening, a quote, a price it
+ * would charge — §34's private commercial terms) is read here.
+ *
+ * Read only as comparable prices a project with no published price of its own
+ * sweeps an unpriced arrangement across (`comparablePricesFor`): mechanism
+ * bounds, provenance UNKNOWN, never a price for any arrangement's own buyers
+ * and never anything that certifies. Production, 2026-11-18: two goals in
+ * fresh projects cut all 208 arrangements because "the project holds no
+ * published price" while the Brain held validated ones. USD only, as every
+ * money fact is filed (a figure is never converted at a rate nobody chose).
+ * A range is read at its geometric middle (a price is a magnitude).
+ */
+export async function brainComparablePrices(
+  input: Pick<ConstructionInput, 'projectId' | 'currency'>,
+  allowed: (text: string | null | undefined) => boolean = () => true,
+): Promise<{ value: number; industry: string | null; payer: string; brain: true }[]> {
+  if (input.currency.toUpperCase() !== 'USD') return [];
+  const facts = (await listOtherProjectsClaimFacts(input.projectId, FACT_PRICE_KEYS)).filter((one) => FACT_EVIDENCE_STATUSES.includes(one.status) && one.segment?.startsWith('map_') && one.projectId);
+  if (facts.length === 0) return [];
+  const eligible = await eligibleClaimIds(facts.map((one) => one.sourceClaimId!));
+  const out: { value: number; industry: string | null; payer: string; brain: true }[] = [];
+  const nodesOf = new Map<string, Map<string, IndustryNode>>();
+  for (const fact of facts) {
+    if (!eligible.has(fact.sourceClaimId!)) continue;
+    let byId = nodesOf.get(fact.projectId!);
+    if (!byId) {
+      byId = new Map((await listNodes(fact.projectId!)).map((one) => [one.id, one]));
+      nodesOf.set(fact.projectId!, byId);
+    }
+    const node = byId.get(fact.segment!.slice('map_'.length));
+    if (!node || node.retiredAt || node.kind !== 'BUYER_TYPE' || !safeName(node.name) || !allowed(node.name)) continue;
+    const root = rootOf(node, byId);
+    if (!allowed(root.name)) continue;
+    const low = Math.min(fact.low, fact.high);
+    const high = Math.max(fact.low, fact.high);
+    if (!(low > 0)) continue;
+    out.push({ value: low === high ? low : Math.sqrt(low * high), industry: root.name, payer: node.name, brain: true });
   }
   return out;
 }

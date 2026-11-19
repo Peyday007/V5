@@ -178,7 +178,8 @@ export async function readTarget(goal: Workstream, now: Date = new Date()): Prom
   ].filter((one) => one.cents > 0);
   return {
     metric: target.metric,
-    metricLabel: GOAL_METRIC_LABEL[target.metric],
+    // A monthly run-rate is not a total: every reader of the label (the plan, status, the operator) says so (2026-11-18).
+    metricLabel: scope.recurring === 'MONTHLY' ? `${GOAL_METRIC_LABEL[target.metric]} a month (a recurring run-rate, counted over the trailing ${RUN_RATE_DAYS} days, to be reached by the deadline)` : GOAL_METRIC_LABEL[target.metric],
     currency: target.currency,
     projectId: target.projectId,
     targetCents: target.amountCents,

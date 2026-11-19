@@ -62,6 +62,14 @@ export interface ArrangementStepContext {
   capitalBeforeProof: number | null;
   /** The arrangement's own scenario conversion, when one was made: what its timing and costs read from. */
   modelled?: ModelledOpportunity | null;
+  /**
+   * Set when the plan holds no estimate of this arrangement (`plan.ts`): why,
+   * in one sentence. Its steps are then the work that would make it one, and
+   * the first step says so — a construction nothing priced is never presented
+   * as an estimated plan's subject (production, 2026-11-18: 0 of 208 estimated,
+   * and the steps read as the plan).
+   */
+  unestimated?: string | null;
   /** Permissions a send needs and a collection needs: execution dependencies, never blocks on the plan. */
   send: string[];
   collect: string[];
@@ -316,5 +324,6 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
       withinLimits: null,
     });
   }
+  if (ctx.unestimated && steps[0]) steps[0] = { ...steps[0], detail: `${ctx.unestimated} ${steps[0].detail}` };
   return steps;
 }

@@ -48,7 +48,7 @@ import { CONTACTS_PER_DAY_BOUNDS, evaluateGoalPortfolio, heldEvaluation, measure
 import { SPREAD_FLOOR } from '../quant/pool.ts';
 import type { Estimate, EvidenceTier } from '../../domain/quant.ts';
 import type { VariableSpec } from '../../domain/scenario.ts';
-import { composeInvented, inventionContext, payerKey, TRANSFER_MATERIAL, type ConstructedArrangement, type InventedDesign } from './construct.ts';
+import { brainComparablePrices, composeInvented, inventionContext, payerKey, TRANSFER_MATERIAL, type ConstructedArrangement, type InventedDesign } from './construct.ts';
 import { buyerPopulationName } from '../../domain/industry.ts';
 export { TRANSFER_MATERIAL };
 
@@ -699,7 +699,7 @@ function sweptOverOtherPrices(
 ): PlannedOpening | { refused: string } {
   const prices = otherPrices.filter((x) => Number.isFinite(x) && x > 0).sort((a, b) => a - b);
   const what = invented ? 'the design' : 'the arrangement';
-  if (prices.length === 0) return { refused: `nothing bounds what these buyers pay: the project holds no published price, so ${what} stays a research question` };
+  if (prices.length === 0) return { refused: `nothing bounds what these buyers pay: neither the project nor the Brain's validated findings hold a published price, so ${what} stays a research question` };
   const low = logQuantile(prices, 0.1);
   const high = Math.max(low + 0.01, logQuantile(prices, 0.9));
   const p50 = Math.sqrt(low * high);
@@ -737,6 +737,8 @@ export interface ComparablePrice {
   industry: string | null;
   mechanism?: CashMechanism | null;
   payer?: string | null;
+  /** A price from the Brain's validated findings rather than this project's rows (`brainComparablePrices`, §31). */
+  brain?: boolean;
 }
 const normSector = (text: string | null | undefined) => (text ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 /** A comparable set needs at least this many prices of the same kind. */
@@ -782,28 +784,37 @@ export function comparablePricesFor(
   prices: readonly ComparablePrice[],
   currency = 'USD',
 ): { prices: number[]; scope: string } | { refused: string } {
-  const valid = prices.filter((p) => Number.isFinite(p.value) && p.value > 0);
+  const usable = prices.filter((p) => Number.isFinite(p.value) && p.value > 0);
+  /*
+   * The project's own prices first, by the chain below. Only a project that
+   * holds none reads the Brain's validated findings (§31), by the same chain,
+   * each scope saying where its prices came from.
+   */
+  const own = usable.filter((p) => !p.brain);
+  const fromBrain = own.length === 0 && usable.some((p) => p.brain);
+  const valid = fromBrain ? usable : own;
+  const where = fromBrain ? " among the Brain's validated findings" : '';
   const tight = (xs: readonly number[]) => {
     const sorted = [...xs].sort((a, b) => a - b);
     return logQuantile(sorted, 0.9) / logQuantile(sorted, 0.1) <= COMPARABLE_SPREAD_MAX;
   };
   const sector = normSector(one.sector);
   const same = sector ? valid.filter((p) => normSector(p.industry) === sector).map((p) => p.value) : [];
-  if (same.length >= SECTOR_PRICES_MIN) return { prices: same, scope: `in the same sector (${one.sector})` };
+  if (same.length >= SECTOR_PRICES_MIN) return { prices: same, scope: `in the same sector (${one.sector})${where}` };
   const held: readonly string[] = one.structure ? (STRUCTURES[one.structure]?.alreadyHeldAs ?? []) : [];
   const structure = held.length ? valid.filter((p) => p.mechanism && held.includes(p.mechanism)).map((p) => p.value) : [];
-  if (structure.length >= SECTOR_PRICES_MIN && tight(structure)) return { prices: structure, scope: `with the same structure (${one.structure})` };
+  if (structure.length >= SECTOR_PRICES_MIN && tight(structure)) return { prices: structure, scope: `with the same structure (${one.structure})${where}` };
   // The same kind of buyer by the map's identity: plurals folded (`payerKey`), and a named
   // organisation read as the population the map files it under (`buyerPopulationName`).
   const buyer = payerKey(one.demand?.name);
   const sameBuyer = (payer: string | null | undefined) => !!payer && buyerKeysOf(payer).includes(buyer);
   const buyers = buyer ? valid.filter((p) => sameBuyer(p.payer)).map((p) => p.value) : [];
-  if (buyers.length >= SECTOR_PRICES_MIN && tight(buyers)) return { prices: buyers, scope: `paid by the same kind of buyer (${one.demand!.name})` };
+  if (buyers.length >= SECTOR_PRICES_MIN && tight(buyers)) return { prices: buyers, scope: `paid by the same kind of buyer (${one.demand!.name})${where}` };
   const all = valid.map((p) => p.value);
-  if (all.length === 0 || tight(all)) return { prices: all, scope: 'in this project' };
+  if (all.length === 0 || tight(all)) return { prices: all, scope: fromBrain ? "in the Brain's validated findings (other projects' sourced claims)" : 'in this project' };
   const sorted = [...all].sort((a, b) => a - b);
   const money = (x: number) => `${currency === 'USD' ? '$' : `${currency} `}${Math.round(x).toLocaleString('en-US')}`;
-  return { refused: `no comparable price: published prices for other buyers span ${money(sorted[0]!)}–${money(sorted[sorted.length - 1]!)}` };
+  return { refused: `no comparable price: published prices for other buyers${where} span ${money(sorted[0]!)}–${money(sorted[sorted.length - 1]!)}` };
 }
 
 /**
@@ -1766,6 +1777,10 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
   const upFrontLimit = upFrontCents === null ? null : upFrontCents / 100;
   const inScope = (input.arrangements ?? []).filter((one) => !arrangementOutOfScope(scope, one, scoped, target.daysLeft, upFrontLimit));
   if (inScope.length) {
+    // What construction reads as held prices (`heldEvidence`), from the openings already loaded: no new query.
+    const ownPrices = live
+      .filter((one) => one.payer && one.priceCents !== null && one.priceCents > 0 && !excludedBy(`${one.title} ${one.payer ?? ''} ${one.industry ?? ''}`, exclusions))
+      .map((one) => ({ value: one.priceCents! / 100, industry: one.industry, mechanism: one.mechanism, payer: one.payer }));
     const selected = selectEstimatedArrangements(inScope, {
       projectId: target.projectId,
       currency: target.currency,
@@ -1776,10 +1791,10 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       // The evidence the found openings were just inferred from: an arrangement's links read it the same way (F2).
       knowledge,
       now: input.now ?? new Date(),
-      // What construction reads as held prices (`heldEvidence`), from the openings already loaded: no new query.
-      otherPrices: live
-        .filter((one) => one.payer && one.priceCents !== null && one.priceCents > 0 && !excludedBy(`${one.title} ${one.payer ?? ''} ${one.industry ?? ''}`, exclusions))
-        .map((one) => ({ value: one.priceCents! / 100, industry: one.industry, mechanism: one.mechanism, payer: one.payer })),
+      otherPrices: ownPrices.length > 0
+        ? ownPrices
+        : // Read only when the project holds none of its own (`comparablePricesFor`): a fresh project's goal is not blind to what the Brain validated (§31).
+          await brainComparablePrices({ projectId: target.projectId, currency: target.currency }, (text) => !excludedBy(text, exclusions)).catch(() => []),
     });
     estimates.push(...selected.openings);
     arrangementSelection = selected.selection;

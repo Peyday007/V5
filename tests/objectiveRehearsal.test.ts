@@ -243,6 +243,17 @@ const OBJECTIVES: Array<{ id: string; words: string; expect: Expect }> = [
     words: 'Generate $20,000 within 45 days in a single industry the owner names: commercial cleaning.',
     expect: { amount: [20_000], days: 45, capital: null, shape: 'INDUSTRY', fallback: { amountCents: 2_000_000, capitalCeilingCents: null, hoursCeiling: null } },
   },
+  // Production's own words, 2026-11-18 (goals wst_66311cabe7e5442faa98 and wst_db2e2e0e5204477692d5): figures in "dollars".
+  {
+    id: 'PROD-10K-to-100K-90d',
+    words: 'Turn 10,000 dollars of starting capital into 100,000 dollars within 90 days',
+    expect: { amount: [90_000, 100_000], days: 90, capital: 10_000, shape: 'CAPITAL_HEAVY', fallback: { amountCents: 10_000_000, capitalCeilingCents: 1_000_000, hoursCeiling: null } },
+  },
+  {
+    id: 'PROD-5K-MRR-60d',
+    words: 'Earn 5,000 dollars a month in recurring revenue within 60 days, with no more than 10 hours a week of owner time and at most 1,500 dollars of starting capital',
+    expect: { amount: [5_000], days: 60, capital: 1_500, shape: 'RECURRING', fallback: { amountCents: 500_000, capitalCeilingCents: 150_000, hoursCeiling: 86 } },
+  },
   {
     id: 'LIVE-10K-7d',
     words: 'Collect $10,000 of settled cash within 7 days using little up-front capital.',
@@ -394,6 +405,8 @@ describe('REHEARSAL — Brain plans unfamiliar objectives from their words (offl
           expect(plan.target.scope?.recurring).toBe('MONTHLY');
           expect(plan.target.scope?.hoursPerWeek).toBe(10);
           expect(plan.target.hoursCeiling).toBe(86);
+          // The target a person reads is a monthly run-rate, never a one-off total (production, 2026-11-18).
+          expect(plan.target.metricLabel).toMatch(/a month \(a recurring run-rate/);
         });
       }
       if (o.expect.shape === 'INDUSTRY') {

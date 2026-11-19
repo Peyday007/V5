@@ -232,6 +232,15 @@ export const PARTNER_OFFER_WORDING =
 /** Sources whose titles are roles (a job, a freelancer wanted or offered): read the way job titles are, so both sides of one role share a deliverable. */
 const ROLE_TITLE_SOURCES = new Set(['remoteok', 'remotive', 'hn-seeking-freelancer', 'hn-seeking-work']);
 
+/**
+ * Sources whose `organization` is the poster's forum handle ("viktorrria"),
+ * not an organisation: the handle stays the record's attribution and its
+ * entity key, but it names no buyer population or supplier anyone can be
+ * asked about, so the event graph gives the actor no name (production,
+ * 2026-11-18: a fresh goal's plan said "Reach viktorrria").
+ */
+export const AUTHOR_HANDLE_SOURCES: ReadonlySet<string> = new Set(['hn-seeking-freelancer', 'hn-seeking-work']);
+
 const WORDING: Array<[RegExp, RecordKind]> = [
   [/\b(request for (?:proposals?|quotes?|bids?)|rfp|rfq|invitation to bid|seeking (?:quotes|bids|a contractor|a vendor|a supplier)|looking for (?:a )?(?:contractor|vendor|supplier|provider)|need(?:s|ed)? (?:a )?(?:contractor|vendor|supplier))\b/i, 'STATED_REQUEST'],
   [/\b(we(?:'re| are) hiring|now hiring|job opening|apply now|full[- ]time|part[- ]time|salary|position)\b/i, 'JOB_POSTING'],
