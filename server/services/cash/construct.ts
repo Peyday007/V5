@@ -313,6 +313,14 @@ export interface ConstructedArrangement {
    * refutation holds while this is unchanged; new evidence reopens it.
    */
   inputsDigest?: string;
+  /**
+   * The `inputsDigest` this composition had under the signature spelt from the
+   * whole deliverables list (before the capability's identity was made
+   * list-independent), present only when Brain produces it. Read once, by
+   * `rememberArrangements`, to carry a verdict reached under the old spelling
+   * onto the new one; never stored in the library.
+   */
+  legacyInputsDigest?: string;
   /** Everything its composition read, hashed: a stored arrangement composed under the same is reused rather than recomposed. */
   composedUnder?: string;
   /**
@@ -474,13 +482,47 @@ function partPath(part: Primitive | null): string {
 }
 
 /**
+ * What "Brain produces it" is, as a part's identity: one capability, whatever
+ * else the project's deliverables list holds. The list is the capability's
+ * words (`name`), never its identity.
+ *
+ * Spelt from the whole list (`CAPABILITY:a>b>c`) until 2026-11-19, every
+ * arrangement Brain produces took a new signature the moment an unrelated
+ * deliverable was added: the goal's held leaders (`recentLeaderSignatures`)
+ * stopped matching, research verdicts were left on a row nothing composed any
+ * more, and the library's reuse missed. Forward, reverse and invented
+ * composition all use this one part for every design Brain produces — none of
+ * them picks a single deliverable — so the capability actually used is the
+ * same one whichever deliverables sit beside it.
+ */
+export const BRAIN_CAPABILITY_PATH = 'CAPABILITY:BRAIN';
+
+/** The capability part every design Brain produces is composed with, or null when no deliverable is proved. */
+export function capabilityPart(delivers: readonly string[]): Primitive | null {
+  return delivers.length > 0 ? { name: delivers.join(', '), claimId: null, from: 'CAPABILITY', ref: 'deliverables', path: BRAIN_CAPABILITY_PATH } : null;
+}
+
+/** The capability's path as it was spelt from the whole list, before 2026-11-19: only to recognise what was stored under it. */
+function legacyCapabilityPath(delivers: readonly string[]): string {
+  return `CAPABILITY:${delivers.map(norm).sort().join('>')}`;
+}
+
+/** A part's identity in a signature: its path, and for Brain's capability the one capability (`BRAIN_CAPABILITY_PATH`), however it was stored. */
+function identityPath(part: Primitive | null): string {
+  return part?.from === 'CAPABILITY' ? BRAIN_CAPABILITY_PATH : partPath(part);
+}
+
+/**
  * An arrangement's identity by structure (K-7): the design and, for buyer,
  * need and supply, what each part is — never a row id and never the label.
  * How it was found (forward, transferred, reversed) is not part of it: the
- * same mechanism reached two ways is one mechanism.
+ * same mechanism reached two ways is one mechanism. A part Brain produces is
+ * the one capability, never the deliverables list beside it, so a stored
+ * arrangement whose capability was spelt from an older list re-signs to the
+ * same signature (`libraryFor`).
  */
 export function arrangementSignature(design: Design, demand: Primitive, need: Primitive | null, supply: Primitive | null): string {
-  return digestOf(['arrangement/v1', designKey(design), partPath(demand), partPath(need), partPath(supply)].join('|'));
+  return digestOf(['arrangement/v1', designKey(design), identityPath(demand), identityPath(need), identityPath(supply)].join('|'));
 }
 
 /** The parts of a structure, in the words a researcher reads. */
@@ -829,7 +871,7 @@ async function heldEvidence(input: ConstructionInput, opportunities: CashOpportu
       source: one.sourceClaimId ? { kind: 'CLAIM', ref: one.sourceClaimId } : { kind: 'CASH_OPPORTUNITY', ref: one.id },
       measures: `money tied up on "${one.title.slice(0, 60)}"`,
     }));
-  const capability: Primitive | null = input.delivers.length > 0 ? { name: input.delivers.join(', '), claimId: null, from: 'CAPABILITY', ref: 'deliverables', path: `CAPABILITY:${input.delivers.map(norm).sort().join('>')}` } : null;
+  const capability = capabilityPart(input.delivers);
   return { priced, tiedUp, facts: { unitCost: facts.unitCost, volume: facts.volume, conversion: facts.conversion, buyers: facts.buyers, ...(facts.runCost.length > 0 ? { runCost: facts.runCost } : {}) }, capability };
 }
 
@@ -1231,17 +1273,59 @@ export async function graphPass(input: Pick<ConstructionInput, 'capitalCeilingCe
  */
 async function libraryFor(projectId: string, goalId: string | undefined): Promise<{ known: NonNullable<ConstructionJob['known']>; reuse: NonNullable<ConstructionJob['reuse']>; held: string[] }> {
   const { listConstructedArrangements, recentLeaderSignatures } = await import('../../repos/monetization.ts');
-  const known: NonNullable<ConstructionJob['known']> = [];
-  const reuse: NonNullable<ConstructionJob['reuse']> = [];
-  for (const one of await listConstructedArrangements(projectId)) {
-    const stored = one.design['arrangement'] as ConstructedArrangement | undefined;
-    known.push([one.signature, { verdict: one.verdict?.verdict ?? null, composedAt: one.lastComposedAt ?? null }]);
-    if (stored && typeof stored.composedUnder === 'string' && stored.signature === one.signature) reuse.push([stored.composedUnder, stored]);
+  const rows = await listConstructedArrangements(projectId);
+  /*
+   * Each stored signature's current spelling: a row an arrangement Brain
+   * produces was stored under while its capability was spelt from the whole
+   * deliverables list re-signs to its structure's signature now
+   * (`arrangementSignature`). One row per structure is re-signed in place, so
+   * its verdict, evaluations and asked count stay on the row the next pass
+   * composes; any other row stored under an older list is read as the same
+   * structure (its leader and verdict), never as a second one.
+   */
+  const current = new Map<string, string>();
+  for (const one of rows) current.set(one.signature, canonicalSignature(one.signature, one.design['arrangement']));
+  const moving = rows.filter((one) => current.get(one.signature) !== one.signature);
+  if (moving.length > 0) {
+    const { resignArrangements } = await import('./arrangementLibrary.ts');
+    const moved = await resignArrangements(projectId, rows, (one) => current.get(one.signature)!);
+    for (const one of rows) {
+      const to = moved.get(one.pathId);
+      if (to) {
+        current.set(to, to);
+        one.signature = to;
+      }
+    }
   }
-  known.sort((a, b) => a[0].localeCompare(b[0]));
-  // The goal's current and previous leaders (P4), composed every pass whatever the cap.
-  const held = goalId ? await recentLeaderSignatures(goalId) : [];
+  const knownBy = new Map<string, { verdict: 'CONFIRMED' | 'REFUTED' | null; composedAt?: string | null }>();
+  const reuse: NonNullable<ConstructionJob['reuse']> = [];
+  for (const one of rows) {
+    const stored = one.design['arrangement'] as ConstructedArrangement | undefined;
+    const signature = current.get(one.signature) ?? one.signature;
+    const mine = one.verdict?.verdict ?? null;
+    const prior = knownBy.get(signature);
+    // The row under the current signature speaks for its structure; a row left under an older spelling fills only what it lacks.
+    const verdict = !prior ? mine : one.signature === signature && mine !== null ? mine : (prior.verdict ?? mine);
+    const composedAt = [one.lastComposedAt, prior?.composedAt].filter((at): at is string => !!at).sort().pop() ?? null;
+    knownBy.set(signature, { verdict, composedAt });
+    if (stored && typeof stored.composedUnder === 'string' && stored.signature === one.signature && one.signature === signature) reuse.push([stored.composedUnder, stored]);
+  }
+  const known: NonNullable<ConstructionJob['known']> = [...knownBy.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  // The goal's current and previous leaders (P4), composed every pass whatever the cap — by their structure's current signature.
+  const held = goalId ? [...new Set((await recentLeaderSignatures(goalId)).map((one) => current.get(one) ?? one))].sort() : [];
   return { known, reuse, held };
+}
+
+/**
+ * A stored arrangement's signature as `arrangementSignature` spells it now,
+ * read from the parts it was stored with; the stored signature when its
+ * design cannot be read. Pure.
+ */
+export function canonicalSignature(storedSignature: string, stored: unknown): string {
+  const one = stored as Partial<ConstructedArrangement> | undefined;
+  if (!one || typeof one !== 'object' || !one.design || !one.demand) return storedSignature;
+  if (one.supply?.from !== 'CAPABILITY' && one.need?.from !== 'CAPABILITY') return storedSignature;
+  return arrangementSignature(one.design, one.demand, one.need ?? null, one.supply ?? null);
 }
 
 /**
@@ -2336,6 +2420,22 @@ function compose(args: {
    */
   const positionQuestions = def.needsSupply ? positionResearchQuestions({ demand, need, supply, estimates, exclusions: args.exclusions }) : null;
   const asked = positionQuestions ? `${question} ${positionDecomposition(positionQuestions)}` : question;
+  const signature = arrangementSignature(design, demand, need, supply);
+  // What research about it depends on, under an identity: the evidence beside the signature.
+  const inputsDigestOf = (identity: string): string =>
+    digestOf([
+      'inputs/v1',
+      identity,
+      [demand, need, supply].map((one) => (one ? [one.ref, one.claimId] : null)),
+      args.precedent?.id ?? null,
+      // A filed close rate or buyer count is new evidence too, and reopens a refutation (R3); none filed adds nothing.
+      [...valueObs, ...riskObs, ...conversionObs, ...buyersObs, ...(pooled ? runCostObs : [])].filter((one) => !one.broad).map((one) => one.id).sort(),
+    ]);
+  // The signature this arrangement had while Brain's capability was spelt from the whole deliverables list, so a verdict reached under it carries over.
+  const legacySignature =
+    supply?.from === 'CAPABILITY' && input.delivers.length > 0
+      ? digestOf(['arrangement/v1', designKey(design), partPath(demand), partPath(need), legacyCapabilityPath(input.delivers)].join('|'))
+      : null;
   const arrangement: ConstructedArrangement = {
     key,
     structure,
@@ -2367,15 +2467,9 @@ function compose(args: {
     question: asked,
     ...buyerTermsOf(demand, args.related),
     repeatBusiness,
-    signature: arrangementSignature(design, demand, need, supply),
-    inputsDigest: digestOf([
-      'inputs/v1',
-      arrangementSignature(design, demand, need, supply),
-      [demand, need, supply].map((one) => (one ? [one.ref, one.claimId] : null)),
-      args.precedent?.id ?? null,
-      // A filed close rate or buyer count is new evidence too, and reopens a refutation (R3); none filed adds nothing.
-      [...valueObs, ...riskObs, ...conversionObs, ...buyersObs, ...(pooled ? runCostObs : [])].filter((one) => !one.broad).map((one) => one.id).sort(),
-    ]),
+    signature,
+    inputsDigest: inputsDigestOf(signature),
+    ...(legacySignature ? { legacyInputsDigest: inputsDigestOf(legacySignature) } : {}),
     ...(positionQuestions ? { positionQuestions: positionQuestions.map(carriedPositionQuestion) } : {}),
   };
   return { arrangement, levered };

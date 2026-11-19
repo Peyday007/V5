@@ -97,7 +97,8 @@ export async function rememberArrangements(
     // What a pass derives — its leverage trace against that pass's limits, and the per-position
     // research questions — is recomposed each pass and is not part of the design the library keeps.
     // Whether it led this goal's last readings (`leader`) is per goal and per pass, never part of the design.
-    const { leverage: _leverage, positionQuestions: _positions, leader: _leader, ...kept } = one;
+    // The signature-transition digest (`legacyInputsDigest`) is read below, never stored: it is spelt from the deliverables list.
+    const { leverage: _leverage, positionQuestions: _positions, leader: _leader, legacyInputsDigest: _legacy, ...kept } = one;
     const design = {
       version: 1,
       arrangement: kept,
@@ -127,7 +128,91 @@ export async function rememberArrangements(
       positionKey: positionKey(position),
     };
   });
-  return recordConstructedArrangements(projectId, goalId, records, at);
+  const report = await recordConstructedArrangements(projectId, goalId, records, at);
+  await carryLegacyVerdicts(projectId, stored, at);
+  return report;
+}
+
+/**
+ * Carry a research verdict reached under an arrangement's list-spelt
+ * signature onto its current one (`BRAIN_CAPABILITY_PATH`, 2026-11-19). A
+ * verdict holds while `verdict_inputs_digest` equals the row's inputs digest;
+ * the digest names the arrangement's signature, so re-signing alone would
+ * reopen every refutation of an arrangement Brain produces although nothing
+ * about its evidence changed. Where the verdict's digest is exactly what this
+ * composition's digest was under the old spelling (`legacyInputsDigest`), the
+ * evidence is the same and the verdict is rewritten to the new digest; any
+ * other verdict is left as it is. One read, and a write per carried verdict:
+ * once carried, no verdict names a legacy digest and the read finds nothing.
+ */
+async function carryLegacyVerdicts(projectId: string, arrangements: readonly ConstructedArrangement[], at: string): Promise<number> {
+  const byLegacy = new Map<string, ConstructedArrangement>();
+  for (const one of arrangements) if (one.legacyInputsDigest && one.inputsDigest && one.legacyInputsDigest !== one.inputsDigest) byLegacy.set(one.legacyInputsDigest, one);
+  if (byLegacy.size === 0) return 0;
+  const legacy = [...byLegacy.keys()];
+  let carried = 0;
+  for (let i = 0; i < legacy.length; i += 500) {
+    const chunk = legacy.slice(i, i + 500);
+    for (const row of await getDb().all<{ id: string; design_signature: string; verdict_inputs_digest: string }>(
+      `SELECT id, design_signature, verdict_inputs_digest FROM monetization_paths
+        WHERE project_id = ? AND research_verdict IS NOT NULL AND verdict_inputs_digest IN (${placeholders(chunk.length)})`,
+      [projectId, ...chunk],
+    )) {
+      const one = byLegacy.get(row.verdict_inputs_digest);
+      if (!one || one.signature !== row.design_signature) continue;
+      const result = await getDb().run(
+        'UPDATE monetization_paths SET verdict_inputs_digest = ?, updated_at = ? WHERE id = ? AND verdict_inputs_digest = ?',
+        [one.inputsDigest!, at, row.id, row.verdict_inputs_digest],
+      );
+      carried += result.changes ?? 0;
+    }
+  }
+  return carried;
+}
+
+/**
+ * Re-sign stored arrangements to their structure's current signature
+ * (`canonicalSignature` in construct.ts), in place, so the row keeps its id —
+ * and with it its verdict, its readings' evaluations (the goal's held
+ * leaders), its asked count and its facts. Of several rows one structure was
+ * stored under (one per deliverables list it was composed with), the one with
+ * a verdict, then the most weighed, then the most recently written moves; the
+ * rest stay where they are and are read as the same structure. Nothing moves
+ * onto a signature a row already holds, and the statement is guarded on the
+ * row's old signature, so two passes cannot move one row twice. Returns the
+ * moved rows' new signatures by path id.
+ */
+export async function resignArrangements(
+  projectId: string,
+  rows: readonly ConstructedArrangementRecord[],
+  target: (one: ConstructedArrangementRecord) => string,
+  at: string = new Date().toISOString(),
+): Promise<Map<string, string>> {
+  const held = new Set(rows.map((one) => one.signature));
+  const groups = new Map<string, ConstructedArrangementRecord[]>();
+  for (const one of rows) {
+    const to = target(one);
+    if (to === one.signature || held.has(to)) continue;
+    groups.set(to, [...(groups.get(to) ?? []), one]);
+  }
+  const moved = new Map<string, string>();
+  for (const [to, group] of [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+    const [chosen] = [...group].sort(
+      (a, b) =>
+        Number(b.verdict !== null) - Number(a.verdict !== null) ||
+        b.evaluatedCount - a.evaluatedCount ||
+        b.updatedAt.localeCompare(a.updatedAt) ||
+        a.pathId.localeCompare(b.pathId),
+    );
+    const result = await getDb().run(
+      `UPDATE monetization_paths SET design_signature = ?, updated_at = ?
+        WHERE id = ? AND project_id = ? AND design_signature = ?
+          AND NOT EXISTS (SELECT 1 FROM monetization_paths existing WHERE existing.project_id = ? AND existing.design_signature = ?)`,
+      [to, at, chosen!.pathId, projectId, chosen!.signature, projectId, to],
+    );
+    if ((result.changes ?? 0) > 0) moved.set(chosen!.pathId, to);
+  }
+  return moved;
 }
 
 /**
