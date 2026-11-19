@@ -358,7 +358,9 @@ describe('steps agree with the settlement terms, the window, the capital and the
 
   it('(1) one named organisation never leads: it is its opening\'s buyer, not a population', () => {
     const one = arrangement({ key: 'one', demand: { name: 'St Louis Development Corporation', claimId: null, from: 'INDUSTRY_MAP', ref: 'n' } });
-    expect(leadingArrangement([one, postcard], { portfolio: null, candidateIds: ['arr_one'] })!.key).toBe('postcard-pool');
+    // Nor does another arrangement stand in for it: the steps are the lead's own or none (goal wst_7b4f, 2026-11-19).
+    expect(leadingArrangement([one, postcard], { portfolio: null, candidateIds: ['arr_one'] })).toBeNull();
+    expect(leadingArrangement([one, postcard], { portfolio: null })!.key).toBe('postcard-pool');
     expect(leadingArrangement([one], { portfolio: null })).toBeNull();
   });
 });
