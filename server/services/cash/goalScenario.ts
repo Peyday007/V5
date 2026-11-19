@@ -49,7 +49,7 @@ import { SPREAD_FLOOR } from '../quant/pool.ts';
 import type { Estimate, EvidenceTier } from '../../domain/quant.ts';
 import type { VariableSpec } from '../../domain/scenario.ts';
 import { brainComparablePrices, composeInvented, inventionContext, nextInputQuestion, payerKey, TRANSFER_MATERIAL, type ConstructedArrangement, type InventedDesign } from './construct.ts';
-import { buyerPopulationName } from '../../domain/industry.ts';
+import { buyerPopulationName, namesABuyerPopulation } from '../../domain/industry.ts';
 export { TRANSFER_MATERIAL };
 
 /**
@@ -1227,6 +1227,14 @@ export function selectEstimatedArrangements(
     // which carries Brain's own instructions ("leave out government contracts", "the owner does no
     // physical work") and so matched every exclusion: production read 0 of 404 (2026-11-06).
     const what = `${arrangement.label} ${arrangement.sector ?? ''} ${arrangement.demand.name}`;
+    /*
+     * One organisation is a payer, not a population (production, 2026-11-19:
+     * arr_53ae6fed770b, built over "GitHub", led almost every goal's plan). An
+     * arrangement read back from the library, constructed before
+     * `namesABuyerPopulation` refused such names, is cut here with the reason,
+     * so it can never take a slot, lead a candidate or name a plan's steps.
+     */
+    if (!namesABuyerPopulation(arrangement.demand.name)) return no(`its buyers ("${arrangement.demand.name.slice(0, 80)}") name one organisation or no buyer at all, not a population a list can be built of`);
     if (excludedBy(what, input.exclusions)) return no("the goal's owner excluded what it is");
     if (breaksOperatingModel(operatingFit({ title: arrangement.label, offerScope: arrangement.demand.name }))) return no('it breaks the operating model');
     if (arrangement.stress.exposure === 'EXCEEDS') return no('its known worst case exceeds the limits');

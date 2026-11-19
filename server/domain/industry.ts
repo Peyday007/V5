@@ -511,7 +511,36 @@ const NAME_PARTICLE = /^(?:of|the|and|for|in|on|at|de|du|la|le|von|van|&)$/i;
 /** Acronyms that name a kind of buyer, not one organisation ("SMB", "HOA"). A closed set. */
 const KIND_ACRONYM: ReadonlySet<string> = new Set(['SMB', 'SME', 'MSP', 'MSSP', 'HOA', 'ISV', 'VAR', 'OEM', 'CPA', 'RIA', 'NGO', 'NPO', 'DSO', 'MSO', 'REIT', 'LLC', 'DTC', 'B2B', 'B2C', 'SAAS', 'PE', 'VC', 'GC']);
 
+/**
+ * Single-word names of well-known companies and platforms, which a sentence
+ * leaves capitalised like any common noun ("Amazon", "Upwork"). A closed set:
+ * a camel-cased or domain-shaped word ("GitHub", "Freelancer.com") is read as
+ * a brand by `ONE_BRAND_WORD` without needing to be listed.
+ */
+const KNOWN_COMPANY: ReadonlySet<string> = new Set([
+  'github', 'gitlab', 'google', 'alphabet', 'amazon', 'microsoft', 'apple', 'meta', 'facebook', 'instagram', 'twitter', 'netflix',
+  'upwork', 'fiverr', 'etsy', 'ebay', 'shopify', 'stripe', 'salesforce', 'oracle', 'adobe', 'uber', 'airbnb', 'reddit', 'walmart',
+  'tesla', 'spotify', 'substack', 'patreon', 'kickstarter', 'indiegogo', 'thumbtack', 'yelp', 'angi', 'craigslist', 'canva', 'atlassian',
+  'zapier', 'hubspot', 'mailchimp', 'squarespace', 'wix', 'godaddy', 'notion', 'figma', 'dropbox', 'openai', 'anthropic', 'nvidia', 'intel',
+]);
+/** One word that is a brand by its shape: an inner capital after a lower-case letter ("GitHub", "eBay"), or a domain ("Freelancer.com"). */
+const ONE_BRAND_WORD = /^(?:[A-Za-z0-9]*[a-z][A-Z][A-Za-z0-9]*|[A-Za-z0-9-]+\.(?:com|io|org|net|co|ai|app|dev))$/;
+/**
+ * A singular organisation noun followed by a capitalised name ("Dutch cleaning
+ * company De Poetsfee", "the software firm Acme"): a description of one
+ * named company, never the kind it belongs to ("cleaning companies").
+ */
+const DESCRIBED_COMPANY = /\b(?:company|firm|agency|business|corporation|startup|start-up|brand|publisher|platform|retailer|manufacturer|provider|vendor|studio|consultancy|organi[sz]ation|bank|school|hospital|clinic|charity|foundation|nonprofit|non-profit|website|marketplace|newspaper|magazine|newsletter)\s+(?:called\s+|named\s+)?[A-Z0-9]/;
+/** One governing or investing body as the head of the name ("the production committee", "a school board"). */
+const ONE_BODY = /\b(?:committee|commission|consortium|syndicate|board|council|panel|jury|tribunal|cabinet|senate|parliament)$/i;
+/** The members of one body ("Production committee investors"); the investor noun may be cut short by a display. */
+const ONE_BODYS_MEMBERS = /\b(?:committee|commission|consortium|syndicate|panel|jury|tribunal)\s+(?:members?|investo\w*|backers?|shareholders?|funders?|donors?|partners?|chairs?|officers?)\b/i;
+/** The people belonging to one named party ("Toei's investors", "the committee's members"). */
+const ONES_PEOPLE = /['’]s\s+(?:investo\w*|shareholders?|backers?|funders?|donors?|members?|board|founders?|owners?|employees?|staff|team|partners?|stakeholders?|executives?|management)\b/i;
+
 function isOneOrganisation(text: string): boolean {
+  if (ONE_BODY.test(text) || ONE_BODYS_MEMBERS.test(text) || ONES_PEOPLE.test(text) || DESCRIBED_COMPANY.test(text)) return true;
+  if (!/\s/.test(text) && (ONE_BRAND_WORD.test(text) || KNOWN_COMPANY.has(text.toLowerCase()))) return true;
   const words = text.split(' ').filter((w) => !NAME_PARTICLE.test(w));
   if (words.length === 0 || !words.every((w) => /^[A-Z0-9]/.test(w))) return false;
   // In "<X> of <Y>" the head is X ("Society of Actuaries" is a society).
@@ -532,7 +561,12 @@ function isOneOrganisation(text: string): boolean {
  * Corporation", "Society of Actuaries") or an acronym ("VA", "PA DEP"). A
  * population is a common noun phrase ("Dental practices", "IT departments"),
  * a title-cased plural ("Senior Living Communities") or a kind acronym ("SMB").
- * Pure.
+ *
+ * Production plan reads, 2026-11-19, added: a one-word brand ("GitHub",
+ * "Freelancer.com", a listed well-known company), a singular organisation
+ * noun before a capitalised name ("Dutch cleaning company De Poetsfee"), and
+ * one body or its people ("the production committee", "Production committee
+ * investors", "Toei's investors"). Pure.
  */
 export function namesOneOrganisation(name: string | null | undefined): boolean {
   const text = bareName(name);
