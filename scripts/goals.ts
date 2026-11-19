@@ -541,6 +541,7 @@ async function printPlan(reading: PlanReading): Promise<void> {
   for (const s of reading.steps ?? []) {
     console.log(`  step ${String(s.order).padStart(2)}     [${s.owner}] ${s.label}${s.startDay ? ` · day ${s.startDay.low}${s.startDay.high !== s.startDay.low ? `–${s.startDay.high}` : ''}` : ''} · cost ${Math.round(s.cost)} · ${s.basis}${s.dependsOn ? ` · after step ${s.dependsOn}` : ''}`);
     console.log(`    what      ${s.detail.slice(0, 240)}`);
+    if (s.when) console.log(`    when      ${s.when}`);
     if (s.ownerReason) console.log(`    owner     ${s.ownerReason}`);
     console.log(`    kill      ${s.kill}`);
     if (s.execution.length) console.log(`    execution ${s.execution.join('; ')} (needed to execute, never to plan)`);

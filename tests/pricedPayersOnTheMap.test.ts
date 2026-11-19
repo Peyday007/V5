@@ -113,12 +113,13 @@ async function productionMap(): Promise<void> {
 }
 
 describe('a priced payer the map does not name becomes a buyer population', () => {
-  it('generalises a single named organisation, keeps a general population, and never leaves a state in the name', () => {
+  it('generalises a named organisation of a kind (a school district, a city), refuses one organisation of no kind, keeps a general population, and never leaves a state in the name', () => {
     expect(buyerPopulationName('Pennsylvania Department of Agriculture')).toBe('state agriculture departments');
     expect(buyerPopulationName('New Jersey Department of Agriculture')).toBe('state agriculture departments');
     expect(buyerPopulationName('School District of Philadelphia')).toBe('school districts');
     expect(buyerPopulationName('US residential homeowners (Mechanicsburg, PA)')).toBe('US residential homeowners');
-    expect(buyerPopulationName('NEH Division of Preservation and Access')).toBe('NEH Division of Preservation and Access');
+    // One named organisation is its opening's payer, not a population to map (transfer test, 2026-11-19: "VA", "St Louis Development Corporation").
+    expect(buyerPopulationName('NEH Division of Preservation and Access')).toBeNull();
     expect(buyerPopulationName('City of Pittsburgh')).toBe('municipal governments');
     expect(buyerPopulationName('Pennsylvania farmers')).toBe('farmers');
     expect(buyerPopulationName('  ')).toBeNull();
@@ -234,8 +235,9 @@ describe('the back-fill reads the payer production stores, and maps a population
     expect(payerNamedIn('It pays $2,500 per application.')).toBeNull();
     expect(payerNamedIn('The payer is unknown.')).toBeNull();
     expect(payerNamedIn('Buyers pay $40 per hour.')).toBeNull();
-    // A company suffix is not a list.
-    expect(populationOf('GitHub, Inc. is the payer: it runs the bug bounty program')).toBe('GitHub, Inc');
+    // A company suffix is not a list, and one company is its own payer, not a population.
+    expect(payerNamedIn('GitHub, Inc. is the payer: it runs the bug bounty program')).toBe('GitHub, Inc');
+    expect(populationOf('GitHub, Inc. is the payer: it runs the bug bounty program')).toBeNull();
   });
 
   it('files each priced opening against its payer population, adding the population first, and keeps honest refusals', async () => {

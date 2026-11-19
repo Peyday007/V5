@@ -258,9 +258,14 @@ describe('D3: a monthly recurring target is read and labelled as a run-rate', ()
  */
 describe('D5: a buyer population is a kind of buyer a list can be built of', () => {
   const REFUSED = ['Crucinova itself', 'paying', 'therefore an unidentified individual', 'individual account of unknown business', 'anonymous members of the public'];
+  /*
+   * One named organisation is a payer, not a population (transfer test,
+   * 2026-11-19: plans led with "Constructed: VA", "St Louis Development
+   * Corporation" and "Artisanal Sudoku", and their steps built a list of one
+   * organisation). Its opening keeps it as that one buyer.
+   */
+  const ORGANISATIONS = ['Puzzle Society', 'VA', 'St Louis Development Corporation', 'Artisanal Sudoku'];
   const KEPT = [
-    'Puzzle Society',
-    'VA',
     'homeowner',
     'employer',
     'small business operators',
@@ -271,9 +276,14 @@ describe('D5: a buyer population is a kind of buyer a list can be built of', () 
     'Dental practices',
   ];
 
-  it('refuses the fragments and unknown parties production constructed, and keeps real buyers, a single organisation and an acronym included', () => {
+  it('refuses the fragments, unknown parties and single organisations production constructed, and keeps real buyer populations', () => {
     expect(REFUSED.filter((one) => namesABuyerPopulation(one))).toEqual([]);
+    expect(ORGANISATIONS.filter((one) => namesABuyerPopulation(one))).toEqual([]);
     expect(KEPT.filter((one) => !namesABuyerPopulation(one))).toEqual([]);
+    // The organisation is still the payer its sentence names; it is only not a population to map.
+    expect(payerNamedIn('The payer is Artisanal Sudoku')).toBe('Artisanal Sudoku');
+    expect(buyerPopulationName('Artisanal Sudoku, editor jwsinclair')).toBeNull();
+    expect(buyerPopulationName('St Louis Development Corporation')).toBeNull();
   });
 
   it('a payer sentence yields the payer it names, never its leftovers', () => {
@@ -284,7 +294,7 @@ describe('D5: a buyer population is a kind of buyer a list can be built of', () 
     expect(buyerPopulationName('The payer is a homeowner')).toBe('homeowner');
   });
 
-  it('construction builds no arrangement around a fragment or an unknown party already on the map, and keeps a named organisation', async () => {
+  it('construction builds no arrangement around a fragment, an unknown party or one organisation already on the map', async () => {
     const projectId = (await freshProject()).project.id;
     const owner = (await createUser({ email: `bn-${Math.random().toString(36).slice(2, 10)}@example.test`, displayName: 'Owner', password: 'a-long-enough-password' })).id;
     const puzzles = await seedSubject({ projectId, name: 'Puzzles', actorRef: owner });
@@ -293,7 +303,7 @@ describe('D5: a buyer population is a kind of buyer a list can be built of', () 
     const built = await constructArrangements({ projectId, currency: 'USD', delivers: ['puzzle book'], capitalCeilingCents: 1_000_000, daysLeft: 90 });
     const buyers = new Set(built.map((one) => one.demand.name));
     expect(REFUSED.filter((one) => buyers.has(one))).toEqual([]);
-    expect(buyers.has('Puzzle Society')).toBe(true);
+    expect(buyers.has('Puzzle Society')).toBe(false);
     expect(buyers.has('homeowner')).toBe(true);
   }, 60_000);
 });
