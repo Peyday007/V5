@@ -1290,16 +1290,33 @@ async function withdrawMootAnswer(
   mission: RussellMission | null,
   reason: string,
 ): Promise<boolean> {
-  const reopened = await reopenRequest({
-    requestId: request.id,
-    choices: request.choices,
-    recommendation: reason,
-    authorityNeeded: request.authorityNeeded,
-    whyNotRussell: request.whyNotRussell,
-  });
-  if (!reopened) return false;
-  const withdrawn = await withdrawRequest({ requestId: request.id, reason: mootWhy(mission, reason) });
-  if (!withdrawn) return false;
+  /*
+   * Straight from ANSWERED to WITHDRAWN, in one guarded statement — never by
+   * way of OPEN. The earlier route (`reopenRequest`, then `withdrawRequest`)
+   * put the card back in front of the person between its two statements: a
+   * person could answer it again in that window, the withdrawal then found it
+   * ANSWERED and failed, and the same moot answer came round on the next tick
+   * — the loop this function exists to end. A crash between the two left the
+   * moot card OPEN for the backlog sweep to find. And `reopenRequest` clears
+   * the answer, so the withdrawn row no longer said who decided what.
+   *
+   * The guard is in the statement that makes the change: the row must still be
+   * the ANSWERED one we read (a concurrent writer that moved it first wins),
+   * and its mission must still be out of NEEDS_HUMAN — a mission that came back
+   * to Needs You meanwhile is waiting on this answer again, so it is left for
+   * the next resume rather than withdrawn. The answer, its author and its time
+   * stay on the row (history is never destroyed).
+   */
+  const withdrawn = await getDb().run(
+    `UPDATE russell_human_requests
+        SET state = 'WITHDRAWN', recommendation = ?, why_not_russell = ?, updated_at = ?
+      WHERE id = ? AND state = 'ANSWERED'
+        AND (mission_id IS NULL
+             OR NOT EXISTS (SELECT 1 FROM russell_missions m
+                             WHERE m.id = russell_human_requests.mission_id AND m.state = 'NEEDS_HUMAN'))`,
+    [reason, mootWhy(mission, reason).slice(0, 1_000), nowIso(), request.id],
+  );
+  if (withdrawn.changes !== 1) return false;
   await recordMootWithdrawal(request, mission, reason);
   return true;
 }

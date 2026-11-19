@@ -14,6 +14,7 @@ import { newId, nowIso } from '../server/repos/util.ts';
 import { createRun } from '../server/repos/runs.ts';
 import { createFragments, createOrchestration, getOrchestration } from '../server/repos/research.ts';
 import { createUser } from '../server/repos/identity.ts';
+import { listEventsByEntity } from '../server/repos/events.ts';
 import {
   answerHumanRequest,
   askHuman,
@@ -169,5 +170,39 @@ describe('an answer whose mission already left Needs You is withdrawn, never re-
     await tick('skip-reopen-authority');
     expect((await getHumanRequest(authority.id))!.state).not.toBe('WITHDRAWN');
     expect((await getHumanRequest(missionless.id))!.state).not.toBe('WITHDRAWN');
+  });
+});
+
+describe('skip-reopen: a moot answer is withdrawn straight from ANSWERED, never by way of OPEN', () => {
+  it('the withdrawn card keeps who answered and what they chose, and was never put back OPEN', async () => {
+    const missionId = await parkedMission();
+    const request = await answered(missionId, NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key);
+    await moveMission(missionId, 'CANCELLED');
+
+    const report = await tick('skip-reopen-history');
+    const after = (await getHumanRequest(request.id))!;
+    expect(after.state).toBe('WITHDRAWN');
+    // The reopen route cleared these on its way through OPEN; the row is the history.
+    expect(after.answeredChoice).toBe(NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key);
+    expect(after.answeredByUserId).toBe(userId);
+    expect(after.answeredAt).toBe(request.answeredAt);
+    expect(after.recommendation).toBe(MOVED_OUT);
+    expect(after.whyNotRussell).toMatch(/CANCELLED/);
+    expect(report.withdrawnMootAnswers.map((w) => w.requestId)).toContain(request.id);
+    // Exactly one decision recorded, by Brain, carrying the answer that could not apply.
+    const decisions = (await listEventsByEntity('RUSSELL_HUMAN_REQUEST', request.id)).filter(
+      (event) => event.eventType === 'RUSSELL_ROUTINE_DECISION',
+    );
+    expect(decisions).toHaveLength(1);
+  });
+
+  it('a moot answer whose mission came back to Needs You is not withdrawn', async () => {
+    const missionId = await parkedMission();
+    const request = await answered(missionId, NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key);
+    await moveMission(missionId, 'RUNNING');
+    expect(await transitionMission({ missionId, from: 'RUNNING', to: 'NEEDS_HUMAN', waitingOn: 'a person' })).toBe(true);
+    const outcome = await resumeAnsweredRequest(request);
+    expect(outcome.reason).not.toBe(MOVED_OUT);
+    expect((await getHumanRequest(request.id))!.state).not.toBe('WITHDRAWN');
   });
 });
