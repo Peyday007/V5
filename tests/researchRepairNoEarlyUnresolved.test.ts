@@ -13,7 +13,8 @@
 import { describe, expect, it } from 'vitest';
 import { getDb } from '../server/db/database.ts';
 import { createWorker } from '../server/repos/identity.ts';
-import { claimWork, enqueueWork, failWork, listLeases } from '../server/repos/workQueue.ts';
+import { claimWork, completeWork, enqueueWork, failWork, getWorkItem, listLeases } from '../server/repos/workQueue.ts';
+import { readMetric } from '../server/services/improvement/scoreboard.ts';
 import { RETRY_RULE, earlierFailedAttempts } from '../server/services/research/assignment.ts';
 import { freshProject } from './helpers.ts';
 import {
@@ -398,6 +399,86 @@ describe('a re-run of a failed work item carries how each earlier attempt ended'
     expect(earlier[1]!.heartbeats).toBe(0);
     // The current attempt is never reported as one of its own predecessors.
     expect(earlier.every((a) => a.leaseGeneration < third!.leaseGeneration)).toBe(true);
+  });
+
+  /**
+   * The class the metric reads, end to end: AUTO_RECOVERY_RATE counts a work
+   * item that failed at least once and then SUCCEEDED (numerator) against every
+   * item that failed at least once and settled (denominator). Each item below is
+   * driven through the queue's own operations, and the reading is taken from
+   * `readMetric`, the function production's scoreboard calls — so this measures
+   * the outcome the capability map names ("work_items SUCCEEDED after attempt
+   * 1"), not a proxy for it.
+   */
+  it('a failed item re-run with its earlier failure in hand succeeds, and AUTO_RECOVERY_RATE counts it recovered', async () => {
+    const { project } = await freshProject();
+    const worker = (await createWorker({ name: 'recovery-worker', createdByType: 'SYSTEM', createdById: 'test' })).id;
+    const scopes = [{ projectId: project.id, scopes: ['queue:claim' as const] }];
+    const from = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const to = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const before = await readMetric('AUTO_RECOVERY_RATE', from, to);
+
+    async function enqueue(note: string) {
+      return await enqueueWork({
+        projectId: project.id,
+        workType: 'SYNTHETIC_ECHO',
+        payload: { note },
+        createdByType: 'SYSTEM',
+        requiredScopes: ['queue:claim'],
+        maxAttempts: 2,
+      });
+    }
+    async function claim(id: string) {
+      await readyNow(id);
+      const claimed = await claimWork({ workerId: worker, scopes, limit: 10 });
+      const mine = claimed.find((c) => c.workItemId === id);
+      expect(mine).toBeDefined();
+      return mine!;
+    }
+    const proofOf = (id: string, c: { leaseId: string; leaseGeneration: number }) => ({
+      workItemId: id,
+      workerId: worker,
+      leaseId: c.leaseId,
+      leaseGeneration: c.leaseGeneration,
+    });
+
+    // Recovered: attempt 1 fails, attempt 2 is handed that failure verbatim and succeeds.
+    const recovered = await enqueue('recovered');
+    const r1 = await claim(recovered.id);
+    const r1Failed = await failWork(proofOf(recovered.id, r1), {
+      category: 'DEPENDENCY_UNAVAILABLE',
+      detail: 'sec.gov refused the proxy (403)',
+    });
+    expect(r1Failed.ok && r1Failed.item.state).toBe('QUEUED');
+    const r2 = await claim(recovered.id);
+    expect(r2.attemptNumber).toBe(2);
+    const handed = earlierFailedAttempts(await listLeases(recovered.id), r2.leaseGeneration);
+    expect(handed.map((a) => [a.attemptNumber, a.outcome, a.detail])).toEqual([
+      [1, 'FAILED', 'sec.gov refused the proxy (403)'],
+    ]);
+    const done = await completeWork(proofOf(recovered.id, r2), { summary: 'read through brain_fetch_source' });
+    expect(done.ok && done.item.state).toBe('SUCCEEDED');
+    const settled = await getWorkItem(recovered.id);
+    expect(settled?.state).toBe('SUCCEEDED');
+    expect(settled?.attemptCount).toBe(2);
+
+    // Repeated failure: both attempts fail, the item settles FAILED.
+    const exhausted = await enqueue('exhausted');
+    const e1 = await claim(exhausted.id);
+    await failWork(proofOf(exhausted.id, e1), { category: 'DEPENDENCY_UNAVAILABLE', detail: 'refused' });
+    const e2 = await claim(exhausted.id);
+    const e2Failed = await failWork(proofOf(exhausted.id, e2), { category: 'DEPENDENCY_UNAVAILABLE', detail: 'refused again' });
+    expect(e2Failed.ok && e2Failed.item.state).toBe('FAILED');
+
+    // First-attempt success: never failed, so the metric must not count it at all.
+    const clean = await enqueue('clean');
+    const c1 = await claim(clean.id);
+    const cleanDone = await completeWork(proofOf(clean.id, c1));
+    expect(cleanDone.ok && cleanDone.item.state).toBe('SUCCEEDED');
+
+    const after = await readMetric('AUTO_RECOVERY_RATE', from, to);
+    expect(after.numerator - before.numerator).toBe(1);
+    expect(after.denominator - before.denominator).toBe(2);
   });
 
   it('names both ways an attempt ends in the rule handed to the re-run', () => {
