@@ -63,7 +63,7 @@ import {
   type FailureRecoveryRecord,
   type RecurringFailureClass,
 } from './ledger.ts';
-import { upsertCandidate } from '../../repos/improvement.ts';
+import { decideCandidate, getCandidateByKey, recordImprovementEvent, upsertCandidate } from '../../repos/improvement.ts';
 import { getDb } from '../../db/database.ts';
 
 const DAY_MS = 86_400_000;
@@ -80,6 +80,10 @@ export interface FallbackWatchDeps {
   toFactory?: typeof upsertCandidate;
   /** The goals' portfolios as their latest plan readings state them; defaults to `goal_plan_readings`. */
   goalPortfolios?: (goalIds: readonly string[]) => Promise<GoalPortfolioReach[]>;
+  /** The register's candidate for a weakness key; defaults to `repos/improvement.ts getCandidateByKey`. */
+  findCandidate?: typeof getCandidateByKey;
+  /** Retire a candidate this watch raised but Factory cannot correct; defaults to `decideCandidate` REJECTED plus its DECIDED event. */
+  retireCandidate?: (candidateId: string, reason: string) => Promise<boolean>;
 }
 
 export interface CorrectionSwitch {
@@ -105,6 +109,11 @@ export interface FallbackWatch {
   recurring: RecurringFailureClass[];
   /** Recurring classes handed to Factory, by weakness key. */
   improvements: { weaknessKey: string; created: boolean }[];
+  /**
+   * Open candidates this watch raised for a class Factory cannot correct (raised before the family rule),
+   * retired from the register so they stop becoming Factory jobs no repository change can satisfy.
+   */
+  retired: { weaknessKey: string; retired: boolean }[];
 }
 
 function measuredProbability(meaning: string, value: number, source: string): Figure {
@@ -354,6 +363,12 @@ export function correctionSafeguards(pathway: string, dependencies: readonly Dep
   return out;
 }
 
+async function defaultRetire(candidateId: string, reason: string): Promise<boolean> {
+  const decided = await decideCandidate(candidateId, 'REJECTED', reason.slice(0, 1000));
+  if (decided) await recordImprovementEvent({ candidateId, kind: 'DECIDED', detail: { decision: 'REJECTED', owner: 'server/services/quant/fallbackWatch.ts', reason: reason.slice(0, 1000) } });
+  return decided;
+}
+
 async function defaultReplan(goalId: string, why: string): Promise<void> {
   const { requestGoalPlanPass } = await import('../goals/plan.ts');
   requestGoalPlanPass(goalId, why);
@@ -467,13 +482,32 @@ export async function watchForecastPath(projectId: string, reading: ModelLearnin
   // corrections (`knowledge.ts learnFromCashLedger`).
   const recurring = recurringFailureClasses(held);
   const improvements: FallbackWatch['improvements'] = [];
+  const retired: FallbackWatch['retired'] = [];
   const toFactory = deps.toFactory ?? upsertCandidate;
   for (const cls of recurring) {
     if (cls.methodsToImprove.length === 0) continue;
     const ofClass = held.filter((r) => r.failureClass === cls.failureClass);
     const families = [...new Set(ofClass.map((r) => claimFamily(r.dependency)))].sort();
     const onForecastPath = families.includes('cash');
-    if (!onForecastPath && !cls.methodsToImprove.some(factoryOwned)) continue;
+    const weaknessKey = `FALLBACK:${cls.failureClass}`.slice(0, 200);
+    if (!onForecastPath && !cls.methodsToImprove.some(factoryOwned)) {
+      // Not Factory's to correct. A candidate this watch raised for it before the family rule (still open,
+      // never sent to a campaign, never delivered) would keep becoming Factory jobs no repository change can
+      // satisfy; it is retired once, and the class stays in `recurring` for the owners its methods name.
+      const existing = await (deps.findCandidate ?? getCandidateByKey)(weaknessKey);
+      if (
+        existing &&
+        existing.decision === null &&
+        existing.kind === 'RECURRING_FAILURE_CLASS' &&
+        existing.ownerComponent === 'server/services/quant/fallbackWatch.ts' &&
+        existing.campaignId === null &&
+        existing.deliveredAt === null
+      ) {
+        const reason = `Not a Factory correction: ${cls.failureClass} recurs only on the ${families.join(', ')} claim path, and every method it names is owned outside the repository (${cls.methodsToImprove.join('; ')}). Those owners keep it.`;
+        retired.push({ weaknessKey, retired: await (deps.retireCandidate ?? defaultRetire)(existing.id, reason) });
+      }
+      continue;
+    }
     const path = onForecastPath ? 'the cash forecast path' : `the ${families.join(', ')} claim path`;
     // Every figure describes the path the title names: once the class also occurs on a cash claim the
     // candidate is the cash forecast path's, so its counts, methods and samples are the cash claims' own,
@@ -484,7 +518,6 @@ export async function watchForecastPath(projectId: string, reading: ModelLearnin
     const others = elsewhere.length
       ? ` A further ${elsewhere.length} of this class sit on the ${[...new Set(elsewhere.map((r) => claimFamily(r.dependency)))].sort().join(', ')} claim path and are not counted here.`
       : '';
-    const weaknessKey = `FALLBACK:${cls.failureClass}`.slice(0, 200);
     const { created } = await toFactory({
       weaknessKey,
       kind: 'RECURRING_FAILURE_CLASS',
@@ -507,5 +540,5 @@ export async function watchForecastPath(projectId: string, reading: ModelLearnin
     improvements.push({ weaknessKey, created });
   }
 
-  return { dependencies, failures, warnings, replanned: [...replanned], switches, reliability, safeguards, recurring, improvements };
+  return { dependencies, failures, warnings, replanned: [...replanned], switches, reliability, safeguards, recurring, improvements, retired };
 }
