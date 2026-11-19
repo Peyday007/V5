@@ -69,7 +69,17 @@ export function needOf(one: DecisionUnknown): Need {
  * missing market history to their owners.
  */
 export async function sendPortfolioNeeds(
-  input: { goalId: string; projectId: string; portfolio: GoalPortfolio | null; actorRef?: string },
+  input: {
+    goalId: string;
+    projectId: string;
+    portfolio: GoalPortfolio | null;
+    /**
+     * The reading's unpriced populations, its lead's first (`unpricedForPlan`):
+     * sent even when no portfolio was evaluated. Absent, the portfolio's own.
+     */
+    unpriced?: readonly UnpricedPopulation[] | null;
+    actorRef?: string;
+  },
   deps: PortfolioNeedsDeps = {},
 ): Promise<PortfolioNeedsSent> {
   const send = deps.sendNeeds ?? sendNeeds;
@@ -78,6 +88,13 @@ export async function sendPortfolioNeeds(
   const actorRef = input.actorRef ?? 'BRAIN';
   const out: PortfolioNeedsSent = { sent: 0, created: 0, historyRequested: 0, refused: [] };
   const portfolio = input.portfolio;
+  /*
+   * What the plan could not price, sent first and with or without a
+   * portfolio: production, 2026-11-19, a goal whose arrangements were all
+   * unpriced evaluated no portfolio, so its populations — the plan's lead
+   * among them — were never asked about, and nothing could ever price them.
+   */
+  await sendPriceNeeds(input.unpriced ?? portfolio?.unpriced ?? [], input.projectId, actorRef, send, out);
   if (!portfolio) return out;
 
   const byOpening = new Map<string, DecisionUnknown[]>();
@@ -125,30 +142,6 @@ export async function sendPortfolioNeeds(
     }
   }
 
-  /*
-   * What the plan could not price at all: the buyer populations whose designs
-   * were refused for want of a price (production 2026-11-19, ~304 of 307 per
-   * goal). One question per population, keyed by the project and the
-   * population — a price filed for those buyers prices every design over
-   * them, whichever goal asked — and at most `PRICE_ASKS_PER_READ` new ones a
-   * read, walking past those already open so a population nobody can price
-   * never holds the rest back.
-   */
-  let priceAsked = 0;
-  for (const one of portfolio.unpriced ?? []) {
-    if (priceAsked >= PRICE_ASKS_PER_READ) break;
-    const delivered = await send({ projectId: input.projectId, actorRef, graphScope: priceScope(one.population), keyPrefix: GOAL_PRICE_KEY_PREFIX, needs: [priceNeedOf(one)] });
-    for (const d of delivered) {
-      if (d.sent) {
-        out.sent += 1;
-        if (d.created) {
-          out.created += 1;
-          priceAsked += 1;
-        }
-      } else out.refused.push(`${d.subject}: ${d.reason}`);
-    }
-  }
-
   // The history the best combination lacks is what assurance.researchNeeds names.
   const best = new Set(portfolio.best?.members.map((one) => one.opportunityId) ?? []);
   for (const history of portfolio.marketHistory ?? []) {
@@ -162,6 +155,38 @@ export async function sendPortfolioNeeds(
     for (const one of result.refused) out.refused.push(`market history ${one.kind} for ${opportunity.id}: ${one.reason}`);
   }
   return out;
+}
+
+/*
+ * What the plan could not price at all: the buyer populations whose designs
+ * were refused for want of a price (production 2026-11-19, ~304 of 307 per
+ * goal). One question per population, keyed by the project and the
+ * population — a price filed for those buyers prices every design over
+ * them, whichever goal asked — and at most `PRICE_ASKS_PER_READ` new ones a
+ * read, walking past those already open so a population nobody can price
+ * never holds the rest back.
+ */
+async function sendPriceNeeds(
+  unpriced: readonly UnpricedPopulation[],
+  projectId: string,
+  actorRef: string,
+  send: NonNullable<PortfolioNeedsDeps['sendNeeds']>,
+  out: PortfolioNeedsSent,
+): Promise<void> {
+  let priceAsked = 0;
+  for (const one of unpriced) {
+    if (priceAsked >= PRICE_ASKS_PER_READ) break;
+    const delivered = await send({ projectId, actorRef, graphScope: priceScope(one.population), keyPrefix: GOAL_PRICE_KEY_PREFIX, needs: [priceNeedOf(one)] });
+    for (const d of delivered) {
+      if (d.sent) {
+        out.sent += 1;
+        if (d.created) {
+          out.created += 1;
+          priceAsked += 1;
+        }
+      } else out.refused.push(`${d.subject}: ${d.reason}`);
+    }
+  }
 }
 
 /** At most this many new price questions are sent per plan read; the rest wait for the next read. */

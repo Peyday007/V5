@@ -90,7 +90,7 @@ import type { ScenarioResult } from '../../domain/scenario.ts';
 import type { Workstream } from '../../domain/register.ts';
 import { decideResearch, type ResearchDecision } from '../quant/deadline.ts';
 import { goalExecutionPolicy, MAX_CONCURRENT_SALES, type GoalExecutionPolicy } from '../../domain/goalPolicy.ts';
-import { inputEvidence, type GoalPortfolio, type InputEvidence } from './portfolio.ts';
+import { inputEvidence, type GoalPortfolio, type InputEvidence, type UnpricedPopulation } from './portfolio.ts';
 import { sendPlanQuestions, sendPortfolioNeeds } from './portfolioNeeds.ts';
 import { diagnoseGoalResearch, diagnosisInstructions, recentGoalRounds, type ResearchDiagnosis } from './researchYield.ts';
 import type { EvidenceTier } from '../../domain/quant.ts';
@@ -357,6 +357,13 @@ export interface PlanReading {
    * outreach counted as one risk. A probability only when its basis says so.
    */
   portfolio: GoalPortfolio | null;
+  /**
+   * The buyer populations whose designs this reading could not price, the
+   * leading arrangement's first (`unpricedForPlan`): what the goal tick sends
+   * as `goal-price-` research (`sendPortfolioNeeds`) whether or not a
+   * portfolio was evaluated. Absent when nothing was left unpriced.
+   */
+  unpriced?: UnpricedPopulation[];
   /**
    * Why the goal's research is not yet producing openings this plan can use,
    * read from the openings it judged and the goal's recent rounds
@@ -1684,6 +1691,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       executionPolicy: goalExecutionPolicy(target),
       sales: [],
       portfolio: model.portfolio,
+      ...unpricedForPlan(model.arrangementSelection?.unpriced, refusedLead),
       researchDiagnosis: [
         ...reconstructionDiagnosis(refusedReconstruction, { remaining: target.remainingCents / 100, daysLeft: target.daysLeft }),
         ...diagnoseGoalResearch({
@@ -2105,6 +2113,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     executionPolicy: policy,
     sales,
     portfolio: model.portfolio,
+    ...unpricedForPlan(model.arrangementSelection?.unpriced, lead),
     // The method's own failures first: they change how Brain searches, not one opening (§93).
     researchDiagnosis: mergeDiagnosis(
       [...reconstructionDiagnosis(reconstruction, { remaining: target.remainingCents / 100, daysLeft: target.daysLeft }), ...pathways.failures],
@@ -4014,6 +4023,23 @@ export function leadingArrangement(
 }
 
 /**
+ * The populations a reading could not price, as the goal tick sends them: the
+ * leading arrangement's population first, so the plan's own lead is the first
+ * price question asked (`PRICE_ASKS_PER_READ` per read), then the rest, most
+ * designs first. Production, 2026-11-19: a goal with no portfolio carried its
+ * unpriced populations only on the portfolio it did not have, so no price
+ * research ever launched for the population its plan led with. Pure.
+ */
+export function unpricedForPlan(
+  unpriced: readonly UnpricedPopulation[] | null | undefined,
+  lead: Pick<ConstructedArrangement, 'demand'> | null,
+): { unpriced?: UnpricedPopulation[] } {
+  if (!unpriced || unpriced.length === 0) return {};
+  const first = lead ? unpriced.filter((one) => one.population === lead.demand.ref) : [];
+  return { unpriced: [...first, ...unpriced.filter((one) => !first.includes(one))] };
+}
+
+/**
  * Why the leading arrangement's steps are research rather than an estimated
  * plan, or null when the plan holds an estimate of it. When nothing was
  * estimated, `leadingArrangement` falls back to construction's own first
@@ -4284,9 +4310,10 @@ export async function advanceGoalPlans(
     // decision unknowns to research or an authorized action, missing history to research.
     // Keyed per goal, opening and unknown, so a re-read raises nothing new.
     // Reaching the target does not end this: the threshold is a minimum, and the continuation rule decides (S-0199).
-    if (reading?.portfolio && reading.needsMoreOpenings) {
+    // A goal with no portfolio still sends its unpriced populations' price questions (production, 2026-11-19).
+    if (reading?.needsMoreOpenings && (reading.portfolio || reading.unpriced?.length)) {
       try {
-        await sendPortfolioNeeds({ goalId: id, projectId: reading.target.projectId, portfolio: reading.portfolio });
+        await sendPortfolioNeeds({ goalId: id, projectId: reading.target.projectId, portfolio: reading.portfolio, unpriced: reading.unpriced ?? null });
       } catch (error) {
         console.warn(`goal ${id}: sending the portfolio's needs failed: ${String((error as Error)?.message ?? error)}`);
         await recordDegraded(id, reading.target.projectId, [`portfolio needs: ${errorText(error)}`]);
