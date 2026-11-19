@@ -25,4 +25,8 @@ describe('a reconstruction change reads as words in a plan step', () => {
     expect(t).not.toContain('>');
     expect(t).toBe('Referral-partner arr 53ae6fed770b');
   });
+  it('does not split inside a quoted title (production goal B: \'Bring in "Constructed\')', () => {
+    expect(changeTitle({ label: 'include:arr_778f31caa2a9', detail: 'bring in "Constructed: Local businesses buying a slot on a shared direct-mail postcard", a constructed arrangement the first cut left out, on its reconstructed estimates' }))
+      .toBe('Bring in "Constructed: Local businesses buying a slot on a shared direct-mail postcard"');
+  });
 });
