@@ -44,11 +44,11 @@ import type { Workstream } from '../../domain/register.ts';
 import type { TargetReading } from '../goals/target.ts';
 import { inferCashQuantity, loadCashKnowledge, type CashKnowledge, type CashQuantity, type InferenceTarget } from '../quant/knowledge.ts';
 import { inputSample, toScenarioInput, toScenarioInputScaled, type InputSample } from '../quant/export.ts';
-import { CONTACTS_PER_DAY_BOUNDS, evaluateGoalPortfolio, heldEvaluation, measuredRateInput, type GoalPortfolio, type PlannedOpening } from '../goals/portfolio.ts';
+import { CONTACTS_PER_DAY_BOUNDS, evaluateGoalPortfolio, heldEvaluation, measuredRateInput, type GoalPortfolio, type PlannedOpening, type UnpricedPopulation } from '../goals/portfolio.ts';
 import { SPREAD_FLOOR } from '../quant/pool.ts';
 import type { Estimate, EvidenceTier } from '../../domain/quant.ts';
 import type { VariableSpec } from '../../domain/scenario.ts';
-import { brainComparablePrices, composeInvented, inventionContext, payerKey, TRANSFER_MATERIAL, type ConstructedArrangement, type InventedDesign } from './construct.ts';
+import { brainComparablePrices, composeInvented, inventionContext, nextInputQuestion, payerKey, TRANSFER_MATERIAL, type ConstructedArrangement, type InventedDesign } from './construct.ts';
 import { buyerPopulationName } from '../../domain/industry.ts';
 export { TRANSFER_MATERIAL };
 
@@ -1132,6 +1132,8 @@ export interface ArrangementSelection {
   /** The strongest cut ones first, at most `CUT_RECORDED`. */
   cut: ArrangementCut[];
   cutCount: number;
+  /** The buyer populations of the designs refused for want of a price, most designs first (`UnpricedPopulation`). */
+  unpriced: UnpricedPopulation[];
 }
 
 const designKey = (a: ConstructedArrangement) => `${a.design.base}/${a.design.funding}/${a.design.aggregation}/${a.design.repeat}`;
@@ -1200,6 +1202,24 @@ export function selectEstimatedArrangements(
   type Value = ConstructedArrangement['value'];
   type Row = { arrangement: ConstructedArrangement; one: PlannedOpening; screen: ArrangementScreen; order: number; population: string; value: Value };
   const rows: Row[] = [];
+  /*
+   * Production 2026-11-19 (release e1daa132): once comparable pools were held
+   * to one order of magnitude (#1136), ~304 of 307 designs per goal were cut
+   * here as "no comparable price", and the cut was the only record — nothing
+   * turned it into a question, so price bound every goal and no plan reading
+   * carried a research row about it. Each refused design's buyers are noted
+   * with the construction's own price question; the goal tick sends one per
+   * population (`sendPortfolioNeeds`), whose declared answer files the price
+   * every design over those buyers reads.
+   */
+  const unpriced = new Map<string, UnpricedPopulation>();
+  const noteUnpriced = (arrangement: ConstructedArrangement) => {
+    const held = unpriced.get(arrangement.demand.ref);
+    if (held) return void (held.designs += 1);
+    const ask = nextInputQuestion(arrangement, input.currency, input.exclusions);
+    if (!ask || ask.part !== 'value') return;
+    unpriced.set(arrangement.demand.ref, { population: arrangement.demand.ref, buyer: arrangement.demand.name, designs: 1, arrangementKey: arrangement.key, label: arrangement.label, question: ask.question });
+  };
   arrangements.forEach((arrangement, order) => {
     const population = arrangement.demand.ref;
     const no = (reason: string) => cut.push({ arrangementKey: arrangement.key, label: arrangement.label, population, screen: null, upside: null, reason });
@@ -1235,9 +1255,15 @@ export function selectEstimatedArrangements(
        * invented designs. With no published price anywhere, it stays out.
        */
       const comparable = comparablePricesFor(arrangement, input.otherPrices ?? [], input.currency);
-      if ('refused' in comparable) return no(`nothing reconstructs its value, and ${comparable.refused}`);
+      if ('refused' in comparable) {
+        noteUnpriced(arrangement);
+        return no(`nothing reconstructs its value, and ${comparable.refused}`);
+      }
       const swept = sweptOverOtherPrices(arrangement, input, comparable.prices, false, comparable.scope);
-      if ('refused' in swept) return no(`nothing reconstructs its value, and ${swept.refused}`);
+      if ('refused' in swept) {
+        noteUnpriced(arrangement);
+        return no(`nothing reconstructs its value, and ${swept.refused}`);
+      }
       one = swept;
       const inf = swept.price.inferred!;
       value = { tier: 'MECHANISM', p10: inf.p10, p50: inf.p50, p90: inf.p90, observations: inf.observations };
@@ -1354,6 +1380,8 @@ export function selectEstimatedArrangements(
       picked: picked.map((r) => ({ arrangementKey: r.arrangement.key, label: r.arrangement.label, population: r.population, screen: r.screen.value, upside: r.screen.upside, slot: taken.get(r)!, basis: [r.screen.basis, r.screen.flag, r.one.priceVariable?.sentence].filter(Boolean).join('. ') })),
       cut: cut.slice(0, CUT_RECORDED),
       cutCount: cut.length,
+      // Stable: most designs first, then the constructor's order (a Map keeps insertion order and sort is stable).
+      unpriced: [...unpriced.values()].sort((a, b) => b.designs - a.designs).slice(0, CUT_RECORDED),
     },
   };
 }
@@ -2063,6 +2091,8 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       }
     });
     trace('quant portfolio');
+    // What the plan could not price, beside what it could read, for the goal tick to send (`sendPortfolioNeeds`).
+    if (portfolio && arrangementSelection?.unpriced.length) portfolio = { ...portfolio, unpriced: arrangementSelection.unpriced };
   }
   const inBest = new Set(portfolio?.best?.members.map((one) => one.opportunityId) ?? []);
   const demandP50 = new Map((portfolio?.demand ?? []).map((one) => [one.opportunityId, one.refused ? -1 : one.revenue.p50]));

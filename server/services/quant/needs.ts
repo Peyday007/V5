@@ -72,6 +72,12 @@ export interface SendNeedsInput {
   needs: readonly Need[];
   /** A research orchestration of this project that a RESEARCH need should be asked on. */
   orchestrationId?: string | null;
+  /**
+   * The request key's prefix (`needKeyOf`); `causal` unless the caller's needs
+   * are a class another selector must recognise by their key, such as a goal's
+   * own price questions (`GOAL_PRICE_KEY_PREFIX`, `goalIdeaSql`).
+   */
+  keyPrefix?: string;
 }
 
 export interface SendNeedsDeps {
@@ -95,6 +101,9 @@ async function readNeedCandidate(needId: string): Promise<string | null> {
   return need?.candidateId ?? null;
 }
 
+/** The longest research statement an idea is opened with. */
+const STATEMENT_MAX = 4000;
+
 /** How `raiseNeed` says it read an open need back instead of writing one. */
 const ALREADY_RAISED = 'This need was already raised';
 
@@ -103,8 +112,8 @@ function digest(text: string): string {
 }
 
 /** A key that is the same for the same need of the same graph, and fits every owner's key rules. */
-export function needKeyOf(graphScope: string, need: Need): string {
-  return `causal-${digest(`${graphScope}\u0000${need.route}\u0000${need.subject}`)}`;
+export function needKeyOf(graphScope: string, need: Need, prefix = 'causal'): string {
+  return `${prefix}-${digest(`${graphScope}\u0000${need.route}\u0000${need.subject}`)}`;
 }
 
 /** A permission as a blocker-key argument: the characters the key grammar allows, nothing else. */
@@ -138,7 +147,7 @@ export async function sendNeeds(input: SendNeedsInput, deps: SendNeedsDeps = {})
   const out: NeedDelivery[] = [];
   const seen = new Set<string>();
   for (const need of input.needs) {
-    const key = needKeyOf(input.graphScope, need);
+    const key = needKeyOf(input.graphScope, need, input.keyPrefix);
     if (seen.has(key)) continue;
     seen.add(key);
 
@@ -201,7 +210,9 @@ export async function sendNeeds(input: SendNeedsInput, deps: SendNeedsDeps = {})
       const candidate = await propose({
         projectId: input.projectId,
         title: `Causal unknown: ${need.subject}`.slice(0, 200),
-        statement: `For causal graph ${input.graphScope}, establish from sourced evidence: ${need.question}`.slice(0, 2000),
+        // Room for a construction's own price question (`nextInputQuestion`, ~1,800 characters with its filing
+        // instructions) and its scope: cut at 2,000, the instructions that make its answer file were lost.
+        statement: `For causal graph ${input.graphScope}, establish from sourced evidence: ${need.question}`.slice(0, STATEMENT_MAX),
       });
       if (await attach(result.value.id, candidate.id)) {
         candidateId = candidate.id;
