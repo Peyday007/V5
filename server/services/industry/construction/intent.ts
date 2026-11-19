@@ -435,8 +435,9 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
   };
 
   // 5. The amount: a figure the words say is to be brought in.
-  const verbBefore = /\b(?:generate|generating|make|making|earn|earning|collect|collecting|net|netting|bring in|bringing in|clear|clearing|gross|grossing|produce|producing|reach|reaching|hit|get to|book|bank|pull in|realize|realise|profit|create)\s+(?:(?:at least|over|more than|about|around|roughly|approximately|an? (?:extra|additional)|another|a minimum of|minimum of|a total of)\s+)*$/i;
-  const nounAfter = /^\s*(?:(?:in|of)\s+)?(?:(?:settled|collected|net|gross|new|recurring|monthly|total)\s+)*(?:revenue|sales|profit|income|cash flow|cash|payments)\b/i;
+  // Every person of the verb: "a business that collects $50,000" names the amount as surely as "collect $50,000".
+  const verbBefore = /\b(?:generates?|generating|makes?|making|earns?|earning|collects?|collecting|nets?|netting|brings? in|bringing in|clears?|clearing|gross(?:es)?|grossing|produces?|producing|reach(?:es)?|reaching|hits?|gets? to|books?|banks?|pulls? in|realizes?|realises?|profits?|creates?)\s+(?:(?:at least|over|more than|about|around|roughly|approximately|an? (?:extra|additional)|another|a minimum of|minimum of|a total of)\s+)*$/i;
+  const nounAfter = /^\s*(?:(?:in|of)\s+)?(?:(?:settled|collected|net|gross|new|recurring|monthly|total|customer|client)\s+)*(?:revenue|sales|profit|income|cash flow|cash|payments)\b/i;
   let amountToken: MoneyToken | null = null;
   let recurring: ObjectiveReading['recurring'] = null;
   for (const t of tokens) {
