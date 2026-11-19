@@ -70,7 +70,7 @@ jobs:
   diagnose:
     name: Diagnose failed executions
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
 
@@ -131,11 +131,15 @@ jobs:
           ../rx/venv/bin/python -c 'import agentrx; print("agentrx", "'"$AGENTRX_SHA"'")'
 
       - name: Diagnose with AgentRx
-        timeout-minutes: 90
+        # 70 minutes of AgentRx shared across the trajectories, plus each one's correction call.
+        timeout-minutes: 110
         env:
           AGENT_VERIFY_COPILOT_BIN: ${{ github.workspace }}/scripts/agentrx/llm_bridge.py
           AGENTRX_LLM_KEY: ${{ secrets.OMNIROUTE_API_KEY }}
           AGENTRX_LLM_MODEL: ${{ inputs.model || 'auto/best-coding' }}
+          # The retry route when the auto route does not answer (llm_bridge.py): the model that answered
+          # most of run 44492818674's calls.
+          AGENTRX_LLM_FALLBACK_MODEL: nvidia/nemotron-3-ultra-550b-a55b
           AGENTRX_USAGE_LOG: ${{ github.workspace }}/rx/usage.jsonl
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
@@ -145,14 +149,19 @@ jobs:
           chmod +x scripts/agentrx/llm_bridge.py
           : > rx/usage.jsonl
           echo '[]' > rx/findings.json
+          # Each trajectory gets an equal share of the step's time, so a slow provider costs that
+          # trajectory's diagnosis and never the others' (run 44492818674 spent all 90 minutes on the
+          # first of three and filed nothing). A finding is written for whatever AgentRx produced.
+          n=$(ls rx/traj/*.md | wc -l)
+          share=$(( 70 / n ))
           for md in rx/traj/*.md; do
             id=$(basename "$md" .md)
-            echo "::group::AgentRx on $id"
+            echo "::group::AgentRx on $id (${share} min)"
             # Every stage, step-by-step dynamic invariants: at the pinned commit the one-shot mode has no
             # IR entry point (OneShotDynamicInvariantGenerator.run_from_ir_data, run 44476654177). The
             # exporter caps a trajectory at 24 steps, which bounds the per-step calls.
-            (cd agentrx && ../rx/venv/bin/python run.py "../$md" --domain flash --endpoint copilot \
-                --run-dir "../rx/runs/$id") || echo "::warning::AgentRx did not finish every stage on $id"
+            (cd agentrx && timeout "${share}m" ../rx/venv/bin/python run.py "../$md" --domain flash --endpoint copilot \
+                --run-dir "../rx/runs/$id") || echo "::warning::AgentRx did not finish every stage on $id within ${share} min"
             python3 scripts/agentrx/to_finding.py --run-dir "rx/runs/$id" --meta "rx/traj/$id.json" \
               --bridge scripts/agentrx/llm_bridge.py --run-url "$RUN_URL" > "rx/runs/$id.finding.json"
             python3 - "$id" <<'PY'
@@ -166,7 +175,7 @@ jobs:
           done
 
       - name: File into the operator inventory
-        if: ${{ github.event_name == 'schedule' || inputs.file == 'true' }}
+        if: ${{ always() && (github.event_name == 'schedule' || inputs.file == 'true') }}
         timeout-minutes: 15
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

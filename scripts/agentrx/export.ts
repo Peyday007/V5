@@ -61,6 +61,7 @@ const clip = (s: string | null | undefined, n = 600): string => (s ?? '').replac
 const QUEUE_CONTRACT =
   'Brain work-queue contract: a worker claims an item and holds a lease with an expiry; while it is still working it must renew the lease (heartbeat) before the expiry; ' +
   'a completion or failure is accepted only under the lease that is current; a lease that expires is reclaimed and the attempt counts against the item\'s maximum attempts; ' +
+  'a lease the worker RELEASES (a transient problem such as no usable source) returns the item without using an attempt, so the next claim repeats the same attempt number; ' +
   'an item whose attempts are exhausted fails, and the research packet it served continues without it.';
 
 async function rows<T>(sql: string, args: unknown[]): Promise<T[]> {

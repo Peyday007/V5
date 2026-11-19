@@ -50,6 +50,9 @@ def call(prompt: str) -> str:
     url = os.environ.get("AGENTRX_LLM_URL", "").rstrip("/")
     key = os.environ.get("AGENTRX_LLM_KEY", "")
     model = os.environ.get("AGENTRX_LLM_MODEL", "auto/best-coding")
+    # The auto route can sit on a provider that never answers (run 44492818674: 33 of 48 reads timed
+    # out at 120 s). A retry goes to a named model instead, so a hung route costs one attempt.
+    fallback = os.environ.get("AGENTRX_LLM_FALLBACK_MODEL", "").strip()
     if not url:
         print("AGENTRX_LLM_URL is not set", file=sys.stderr)
         return ""
@@ -57,14 +60,17 @@ def call(prompt: str) -> str:
         print(f"prompt of {len(prompt)} chars exceeds {MAX_PROMPT_CHARS}; refused", file=sys.stderr)
         log_usage({"status": "REFUSED_TOO_LARGE", "prompt_chars": len(prompt), "model": model})
         return ""
-    body = json.dumps({
-        "model": model,
-        "max_tokens": 4000,
-        "temperature": 0,
-        "messages": [{"role": "user", "content": prompt}],
-    }).encode("utf-8")
+    def body_for(name: str) -> bytes:
+        return json.dumps({
+            "model": name,
+            "max_tokens": 4000,
+            "temperature": 0,
+            "messages": [{"role": "user", "content": prompt}],
+        }).encode("utf-8")
     delay = 5.0
     for attempt in range(1, 6):
+        model = fallback if fallback and attempt > 1 else os.environ.get("AGENTRX_LLM_MODEL", "auto/best-coding")
+        body = body_for(model)
         start = time.time()
         req = urllib.request.Request(
             f"{url}/chat/completions",
