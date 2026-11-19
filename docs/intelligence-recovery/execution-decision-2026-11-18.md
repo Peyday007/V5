@@ -188,3 +188,16 @@ Finish-line status:
 
 - Fixed on production: no "viktorrria"/"germany" (HN author handles and place names no longer become buyers or offers); the monthly goal reads "5000 USD settled cash a month (a recurring run-rate, counted over the trailing 30 days, to be reached by the deadline)"; borrowed prices now reach a fresh project ("among the Brain's validated findings").
 - Still failing: both fresh-project goals construct only 4 arrangements (the 204 others were the junk) and cut all 4 (borrowed prices too dispersed to compare). NO_CANDIDATE. Root cause under investigation: construction reads only the goal's own project's map, so a new project cannot reach the 16,262-arrangement map Brain holds in Cash Mode 1. Assigned to branch claude/fresh-goal-knowledge.
+
+## 02:15Z 11-19 — #1120 live (a56a65fb, Fly 02:07:22Z); all three objectives now plan
+
+| Goal | Constructed | Estimated | Candidate | Reach (coverage) | p50 | Steps |
+|---|---|---|---|---|---|---|
+| $10K in 30 days, ≤$3K (wst_7b4f…, Cash Mode 1, own map) | 404 | 12 | Puzzle Society (quant portfolio) | 53.3% | $27,907 | 12 typed steps |
+| $10K → $100K in 90 days (wst_6631…, fresh) | 404 (888 candidates) | 12 | retainer on Crucinova (reconstructed) | 1.4% | $705,442 | 2 (retainer; sell and collect) |
+| $5K/month recurring in 60 days, ≤10 h/week, ≤$1.5K (wst_db2e…, fresh) | 404; 165 in scope | 12 | VA (quant portfolio) | 1% | $11,378 | 12, ending "Renew the same VA for the next period" |
+
+- Item 7 moves from NO_CANDIDATE to CANDIDATE_ONLY on both unfamiliar objectives, scoped to each objective (165 of 404 in scope for the monthly goal; a renewal step for a run-rate). The $10K goal is unchanged by #1120 (own map).
+- Low reach on the two new goals is an honest reading: their inputs are borrowed MECHANISM bounds, not evidence.
+- Remaining defect: buyer labels are often not reachable populations ("Crucinova itself", "paying", "therefore an unidentified individual", "individual account of unknown business"). Assigned to branch claude/buyer-names.
+- Also seen: the 100K reconstruction reports p50 $705,442 beside a 1.4% reach. That is a heavy-tailed sweep (p10/p50/p90 $1,011/$16,621/$542,162 at baseline), not an error, but it reads badly. Noted, not yet changed.
