@@ -152,7 +152,7 @@ import {
   unparkResolvedMissions,
   reaskRefusedPlans,
   NEEDS_HUMAN_CHOICES,
-  answeredRequestIsMoot,
+  mootAnswerReason,
   reopenAnswered,
   resumeAnsweredRequest,
 } from './needsHuman.ts';
@@ -2665,13 +2665,19 @@ async function tickOnce(owner: string): Promise<TickReport> {
          * admission, a packet read) for nothing and handed its failure to the
          * re-ask path — 43 moot cards the operator withdrew by hand in a week.
          * So it is recognised first, by the operator's one predicate
-         * (`answeredRequestIsMoot`), and settled through `needsHuman.ts`'s
-         * guarded withdrawal, never put back in front of the person. STOP is
-         * still resumed: `stop()` applies from any mission state.
+         * (`mootAnswerReason`), and settled through `needsHuman.ts`'s guarded
+         * withdrawal, never put back in front of the person. The reason kept on
+         * the card and its event is the packet's own refusal ("nothing in this
+         * packet is waiting to be approved", "no fragments", …), read without
+         * attempting the resume — not one generic sentence for every card. STOP
+         * is still resumed: `stop()` applies from any mission state.
          */
-        if (request.answeredChoice !== NEEDS_HUMAN_CHOICES.STOP.key && (await answeredRequestIsMoot(request))) {
-          await settleUnresolvedAnswer(report, request, MISSION_LEFT_NEEDS_YOU);
-          continue;
+        if (request.answeredChoice !== NEEDS_HUMAN_CHOICES.STOP.key) {
+          const moot = await mootAnswerReason(request);
+          if (moot) {
+            await settleUnresolvedAnswer(report, request, moot);
+            continue;
+          }
         }
         const outcome = await resumeAnsweredRequest(request);
         if (outcome.deferred) {
@@ -2687,7 +2693,7 @@ async function tickOnce(owner: string): Promise<TickReport> {
            */
           const mission = request.missionId ? await getMission(request.missionId) : null;
           if (mission && mission.state !== 'NEEDS_HUMAN') {
-            await settleUnresolvedAnswer(report, request, MISSION_LEFT_NEEDS_YOU);
+            await settleUnresolvedAnswer(report, request, (await mootAnswerReason(request)) ?? MISSION_LEFT_NEEDS_YOU);
             continue;
           }
           report.unresolvedAnswers.push({ requestId: request.id, reason: outcome.reason });
