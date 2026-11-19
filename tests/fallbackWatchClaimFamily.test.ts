@@ -103,6 +103,43 @@ describe('the fallback watch keeps a claim family on its own path and hands Fact
     expect(watch.failures.filter((f) => f.claimId === 'operator:opd_1').every((f) => f.pathway === `operator:${project.id}`)).toBe(true);
   });
 
+  it('a class that also occurs on a cash claim is the cash forecast path\'s, and its figures count only the cash claims', async () => {
+    const { project } = await freshProject();
+    const cashClaim = `cash:${project.id}:USD:revenue`;
+    const r = reading(
+      claimHistory(cashClaim, 'cash', ['MISSING_MECHANISM']),
+      claimHistory('operator:opd_586fc8e2bb8cb60c', 'operator:EVIDENCE', ['MISSING_MECHANISM', 'CHANGED_CONDITIONS', 'CAPACITY']),
+      claimHistory('operator:opd_e9f961cedc09e6ff', 'operator:EVIDENCE', ['MISSING_MECHANISM', 'CHANGED_CONDITIONS']),
+    );
+    const toFactory = factorySpy();
+    const watch = await watchForecastPath(project.id, r, { ...quiet, toFactory });
+
+    const failureClass = 'FORECAST_MISS:SYSTEMATIC:MISSING_MECHANISM';
+    const ofClass = watch.failures.filter((f) => f.failureClass === failureClass);
+    const cash = ofClass.filter((f) => f.pathway === `cash-forecast:${project.id}`);
+    const operator = ofClass.filter((f) => f.pathway === `operator:${project.id}`);
+    // The failure class this reproduces: the same class on both paths.
+    expect(cash.length).toBeGreaterThan(0);
+    expect(operator.length).toBeGreaterThan(0);
+    expect(watch.recurring.find((c) => c.failureClass === failureClass)!.occurrences).toBe(cash.length + operator.length);
+
+    const call = toFactory.mock.calls.find(([c]) => c.weaknessKey === `FALLBACK:${failureClass}`);
+    expect(call).toBeTruthy();
+    const candidate = call![0];
+    expect(candidate.title).toContain('the cash forecast path');
+    // Every figure is the named path's own: the cash claims' occurrences, never the operator decisions'.
+    expect(candidate.frequency).toBe(cash.length);
+    expect(candidate.problem).toMatch(new RegExp(`^${cash.length} recorded failure\\(s\\) of class ${failureClass} on the cash forecast path:`));
+    expect(candidate.problem).not.toMatch(new RegExp(`^${cash.length + operator.length} recorded`));
+    // The cash claims named only MISSING_MECHANISM; the operator-only methods are not the forecast's.
+    expect(candidate.problem).not.toMatch(/CHANGED_CONDITIONS|CAPACITY/);
+    // The operator occurrences are named beside the count, not hidden and not counted.
+    expect(candidate.problem).toContain(`A further ${operator.length} of this class sit on the operator claim path and are not counted here.`);
+    const samples = (candidate.evidence as { samples: string[] }).samples;
+    expect(samples.length).toBe(Math.min(cash.length, 20));
+    expect(samples.every((o) => cash.some((f) => f.occurrence === o))).toBe(true);
+  });
+
   it("reads each family's reliability on its own pathway: operator misses are not pooled into the cash forecast's", async () => {
     const { project } = await freshProject();
     const cashClaim = `cash:${project.id}:USD:revenue`;
