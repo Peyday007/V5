@@ -57,6 +57,10 @@ async function main() {
     await q('PLAN_LAST', `SELECT id, verdict, created_at FROM goal_plan_readings WHERE workstream_id = ? ORDER BY created_at DESC LIMIT 3`, [G]);
     await q('PLAN_EVT', `SELECT kind, created_at, substr(summary,1,400) AS s FROM workstream_events WHERE workstream_id = ? AND kind = 'GOAL_PLAN_READ' ORDER BY created_at DESC LIMIT 2`, [G]);
     await q('FRAG_Q', `SELECT f.id, f.status, f.created_at, f.updated_at, f.lease_owner, f.attempt_count FROM russell_missions mm JOIN research_fragments f ON f.orchestration_id = mm.orchestration_id WHERE mm.id = 'rms_f9e1515cc9cb411aa8e8'`);
+    await q('NEWROUND', `SELECT r.id, r.bucket_id, r.state, r.round, r.opened_at, c.id AS cand_id, c.state AS cand, substr(c.statement,1,1600) AS question FROM cash_discovery_rounds r LEFT JOIN russell_candidates c ON c.id = r.candidate_id WHERE r.id IN ('cdr_df62f598e6044e029644','cdr_5074b6364ca641a6b2bc')`);
+    await q('HIST_1ccd', `SELECT id, round, state, found, opened_at, harvested_at FROM cash_discovery_rounds WHERE project_id = ? AND bucket_id LIKE '%-mx-1ccdb59e0206' ORDER BY created_at`, [P]);
+    await q('LAUNCH_EVT', `SELECT kind, created_at, substr(summary,1,300) AS s FROM cash_events WHERE project_id = ? AND created_at >= ? AND (summary LIKE '%cdr_df62%' OR summary LIKE '%1ccdb59e0206%' OR summary LIKE '%cdr_5074%') ORDER BY created_at DESC LIMIT 10`, [P, '2026-11-19T04:00:00.000Z']);
+    await q('MISSIONS_OPEN', `SELECT state, COUNT(*) AS n FROM russell_missions WHERE state NOT IN ('DONE','FAILED','CANCELLED') GROUP BY state`);
     await q('FL_QUEUE', `SELECT status, COUNT(*) AS n FROM research_fragments WHERE updated_at >= ? GROUP BY status`, [new Date(Date.now() - 6 * 3600e3).toISOString()]);
   } finally {
     await closeDatabase();
