@@ -78,6 +78,10 @@ async function main(): Promise<void> {
       await q('CANDS', "SELECT c.id, c.state, c.created_at, substr(c.title,1,80) AS t, substr(COALESCE(c.reason,''),1,160) AS why FROM russell_candidates c WHERE c.project_id = ? AND c.created_at > '2026-11-19T00:00' ORDER BY c.created_at DESC LIMIT 15", [p]);
       await q('EVENTS', "SELECT kind, created_at, substr(summary,1,300) AS s FROM workstream_events WHERE workstream_id = ? ORDER BY created_at DESC LIMIT 25", [g]);
       await q('READINGS', "SELECT created_at, verdict, substr(next_test,1,300) AS nt FROM goal_plan_readings WHERE workstream_id = ? ORDER BY created_at DESC LIMIT 3", [g]);
+      await q('MX_ASKED', "SELECT r.bucket_id, r.state, c.state AS cs, substr(c.statement,1,1400) AS st, m.construction_origin AS origin, m.last_evaluation_picked AS picked, m.last_evaluation_contribution_cents AS contrib, m.asked_count AS asked, substr(m.design_json,1,600) AS design FROM cash_discovery_rounds r LEFT JOIN russell_candidates c ON c.id = r.candidate_id LEFT JOIN monetization_paths m ON m.project_id = r.project_id AND m.legacy_key = substr(r.bucket_id, length(r.bucket_id) - 11) AND m.design_signature IS NOT NULL WHERE r.project_id = ? AND r.bucket_id LIKE ? ORDER BY r.opened_at DESC LIMIT 6", [p, `goal-${g}-mx-%`]);
+      await q('LIB_ORIGIN', "SELECT construction_origin AS o, last_evaluation_picked AS picked, COUNT(*) AS n FROM monetization_paths WHERE project_id = ? AND design_signature IS NOT NULL GROUP BY o, picked", [p]);
+      await q('CAUSAL', "SELECT state, substr(title,1,60) AS t, COUNT(*) AS n, MIN(created_at) AS first FROM russell_candidates WHERE project_id = ? AND title LIKE 'Causal unknown:%' GROUP BY state, t ORDER BY n DESC LIMIT 12", [p]);
+      await q('READ_DETAIL', "SELECT substr(detail,1,3000) AS d FROM workstream_events WHERE workstream_id = ? AND kind = 'GOAL_PLAN_READ' ORDER BY created_at DESC LIMIT 1", [g]);
       await q('LIB', "SELECT COUNT(*) AS n, SUM(CASE WHEN last_asked_at IS NOT NULL THEN 1 ELSE 0 END) AS asked, MAX(last_asked_at) AS last FROM monetization_paths WHERE project_id = ? AND design_signature IS NOT NULL", [p]);
     }
   } finally {
