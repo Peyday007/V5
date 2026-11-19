@@ -40,6 +40,10 @@ async function main(): Promise<void> {
     const room = await import('../server/services/cash/researchRoom.ts');
     const { listRounds } = await import('../server/repos/cashDiscovery.ts');
     const { missionsForRounds } = await import('../server/services/russell/roundMissions.ts');
+    await q('UNJUDGED_ALL', "SELECT COUNT(*) AS n, MIN(created_at) AS oldest, MAX(created_at) AS newest FROM russell_candidates WHERE priority IS NULL AND state <> 'MERGED' AND project_id IS NOT NULL", []);
+    await q('UNJUDGED_BY_PROJECT', "SELECT project_id, COUNT(*) AS n, MIN(created_at) AS oldest FROM russell_candidates WHERE priority IS NULL AND state <> 'MERGED' AND project_id IS NOT NULL GROUP BY project_id ORDER BY n DESC LIMIT 8", []);
+    await q('JUDGED_RECENT', "SELECT substr(title,1,40) AS t, priority, state, created_at, updated_at FROM russell_candidates WHERE priority IS NOT NULL AND updated_at > '2026-11-19T10:00' ORDER BY updated_at DESC LIMIT 12", []);
+    await q('LOOP_EVENTS', "SELECT event_type, COUNT(*) AS n, MAX(created_at) AS last FROM project_events WHERE created_at > '2026-11-19T10:00' AND event_type LIKE 'RUSSELL%' GROUP BY event_type ORDER BY n DESC LIMIT 15", []);
     for (const [g, p] of PAIRS) {
       console.log(`=== ${g} ${p}`);
       await step('KNOWLEDGE', async () => {
@@ -82,6 +86,8 @@ async function main(): Promise<void> {
       await q('LIB_ORIGIN', "SELECT construction_origin AS o, last_evaluation_picked AS picked, COUNT(*) AS n FROM monetization_paths WHERE project_id = ? AND design_signature IS NOT NULL GROUP BY o, picked", [p]);
       await q('CAUSAL', "SELECT state, substr(title,1,60) AS t, COUNT(*) AS n, MIN(created_at) AS first FROM russell_candidates WHERE project_id = ? AND title LIKE 'Causal unknown:%' GROUP BY state, t ORDER BY n DESC LIMIT 12", [p]);
       await q('READ_DETAIL', "SELECT substr(detail,1,3000) AS d FROM workstream_events WHERE workstream_id = ? AND kind = 'GOAL_PLAN_READ' ORDER BY created_at DESC LIMIT 1", [g]);
+      await q('CAUSAL_NEEDS', "SELECT n.state, n.opportunity_id, n.blocker_key, c.state AS cs, c.priority, substr(c.statement,1,200) AS st FROM cash_needs n JOIN russell_candidates c ON c.id = n.candidate_id WHERE n.project_id = ? AND c.title LIKE 'Causal unknown: the price%' LIMIT 3", [p]);
+      await q('POPS', "SELECT COUNT(DISTINCT json_extract(design_json, '$.arrangement.demand.ref')) AS pops FROM monetization_paths WHERE project_id = ? AND design_signature IS NOT NULL AND last_composed_at > '2026-11-19T10:00'", [p]);
       await q('LIB', "SELECT COUNT(*) AS n, SUM(CASE WHEN last_asked_at IS NOT NULL THEN 1 ELSE 0 END) AS asked, MAX(last_asked_at) AS last FROM monetization_paths WHERE project_id = ? AND design_signature IS NOT NULL", [p]);
     }
   } finally {
