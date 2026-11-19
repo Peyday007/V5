@@ -105,6 +105,8 @@ import { loadLibrary, loadStancePrior, recordExploration } from './reasoning/lea
 import { implementedFormats } from '../puzzle/formats/index.ts';
 import { readTimelines, type TimelineReading } from './timelines.ts';
 import { changeTitle } from './stepTitle.ts';
+import { internalKeyIn, planIntegrity, type ArrangementStage, type PlanIntegrityViolation, type StepCostSource, type UnscheduledReason } from '../../domain/planIntegrity.ts';
+import { integrityInput, leadOf, type PlanLead } from './planIntegrityInput.ts';
 import { goalObjective, readOutcome, tradeOffs, type EnforceableCommitment, type GoalObjective, type OutcomeReading, type PlanTradeOff } from './objective.ts';
 import { buildPlanSet, calibrationFor, candidateFromArrangement, candidateFromPathway, candidateFromStrategy, rebuildAfter, type AcceptanceCondition, type Calibration, type PlanCandidate, type PlanChange, type PlanSet, type Rebuild } from './planSet.ts';
 
@@ -365,6 +367,17 @@ export interface PlanReading {
    */
   unpriced?: UnpricedPopulation[];
   /**
+   * The constructed arrangement the plan leads with (`leadingArrangement`):
+   * its key, its buyers and how its price was read. Null when it leads with none.
+   */
+  lead?: PlanLead | null;
+  /**
+   * The plan's integrity violations (`planIntegrity`): each general rule a
+   * confirmed planning failure broke, where this reading proves it broken.
+   * A reading with any is never ACCEPTED. Empty when none.
+   */
+  integrity?: PlanIntegrityViolation[];
+  /**
    * Why the goal's research is not yet producing openings this plan can use,
    * read from the openings it judged and the goal's recent rounds
    * (`researchYield.ts`). The next goal round is asked differently for each.
@@ -552,6 +565,13 @@ export interface PlanStep {
   requires?: number[];
   /** Whether its cost and timing are known to fit the goal's limits; null when what decides it is unknown. */
   withinLimits?: boolean | null;
+  /**
+   * Set on a step built from a constructed arrangement (`arrangementSteps`):
+   * which arrangement, which stage of the transaction, where its cost comes
+   * from, and — when it has no day — why it cannot be scheduled. What the
+   * integrity check (`planIntegrity`) reads instead of the step's prose.
+   */
+  arrangement?: { key: string; stage: ArrangementStage; costSource: StepCostSource; unscheduled?: UnscheduledReason };
 }
 
 export interface InfeasibleConclusion {
@@ -1641,10 +1661,10 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     const permissions = target.achieved ? [] : await missingPermissions(target.projectId);
     const qualify: NextTest = { link: 'OFFER_AND_PRICE', test: 'Qualify at least one opening: establish who pays, an offer and a price, so there is a plan to judge.', by: 'BRAIN', blocker: null };
     const refusedModels = arrangementModels(arrangements, model.estimates ?? [], target, undefined, model.arrangementConversions ?? null);
-    const refusedLead = leadingArrangement(arrangements, { portfolio: model.portfolio, candidateIds: refusedAcceptance.candidate?.opportunityIds ?? [] });
+    const refusedLead = leadingArrangement(inGoalScope(arrangements, model), { portfolio: model.portfolio, candidateIds: refusedAcceptance.candidate?.opportunityIds ?? [] });
     const refusedSteps = target.achieved || refusedInfeasible
       ? []
-      : planSteps({ adoption: refusedPlan.adoption, reconstruction: refusedReconstruction, sales: [], nextTest: qualify, permissionsMissing: permissions, arrangement: refusedLead ? { arrangement: refusedLead, context: { ...arrangementStepContext(target, refusedModels.get(refusedLead.key) ?? null, { key: refusedLead.key, portfolio: model.portfolio }), unestimated: unestimatedLead(refusedLead, arrangements.length, refusedModels) } } : null, capital: capitalOf(target), measuredReply: measuredReplyOf(model.portfolio) });
+      : planSteps({ adoption: refusedPlan.adoption, reconstruction: refusedReconstruction, sales: [], nextTest: qualify, permissionsMissing: permissions, arrangement: refusedLead ? { arrangement: refusedLead, context: { ...arrangementStepContext(target, refusedModels.get(refusedLead.key) ?? null, { key: refusedLead.key, portfolio: model.portfolio }), unestimated: unestimatedLead(refusedLead, arrangements.length, refusedModels) } } : null, capital: capitalOf(target), measuredReply: measuredReplyOf(model.portfolio), titles: titlesOf(model) });
     const refusedReadings = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways: null, arrangements, reconstruction: refusedReconstruction, acceptance: refusedAcceptance, arrangementModels: refusedModels });
     const refusedContinuation = continuationOf({
       achieved: target.achieved,
@@ -1655,7 +1675,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       instantOnly: refusedInfeasible?.instantOnly,
       surplus: refusedReadings.objective.outcome?.surplusForSuccessors ?? Math.max(0, (target.achievedCents - target.targetCents) / 100),
     });
-    const reading: PlanReading = {
+    const built: PlanReading = {
       ...base,
       verdict: target.achieved ? 'RECOMMENDABLE' : refusedInfeasible ? 'NOT_VIABLE' : 'NEEDS_EVIDENCE',
       summary: refusedInfeasible ? refusedAcceptance.sentence : refusedPlan.adoption.hypothetical ? `${model.refusal} The reconstruction is hypothetical: ${refusedPlan.adoption.reason}.` : model.refusal,
@@ -1692,6 +1712,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       sales: [],
       portfolio: model.portfolio,
       ...unpricedForPlan(model.arrangementSelection?.unpriced, refusedLead),
+      lead: leadOf(refusedLead, refusedLead ? (refusedModels.get(refusedLead.key) ?? null) : null, model.arrangementsInScope ?? null),
       researchDiagnosis: [
         ...reconstructionDiagnosis(refusedReconstruction, { remaining: target.remainingCents / 100, daysLeft: target.daysLeft }),
         ...diagnoseGoalResearch({
@@ -1710,6 +1731,11 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       ...refusedReadings,
       continuation: refusedContinuation,
     };
+    // The plan's integrity (`planIntegrity`): a reading that breaks a rule is never ACCEPTED.
+    const reading = gateIntegrity(built, (acceptance) => ({
+      ...composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways: null, arrangements, reconstruction: refusedReconstruction, acceptance, arrangementModels: refusedModels }),
+      continuation: continuationOf({ achieved: target.achieved, daysLeft: target.daysLeft, outcomeRecorded, policy: goalExecutionPolicy(target), acceptance: acceptance.status, instantOnly: refusedInfeasible?.instantOnly, surplus: refusedContinuation.surplusForSuccessors }),
+    }));
     if (input.persist) {
       await recordDegraded(goal.id, target.projectId, degraded);
       await persistReading(goal, reading, null);
@@ -2010,10 +2036,10 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     currency: target.currency,
   });
   const models = arrangementModels(arrangements, model.estimates ?? [], target, undefined, model.arrangementConversions ?? null);
-  const lead = leadingArrangement(arrangements, { portfolio: model.portfolio, candidateIds: acceptance.candidate?.opportunityIds ?? [] });
+  const lead = leadingArrangement(inGoalScope(arrangements, model), { portfolio: model.portfolio, candidateIds: acceptance.candidate?.opportunityIds ?? [] });
   const steps = infeasible || target.achieved
     ? []
-    : planSteps({ adoption: plan.adoption, reconstruction, sales, nextTest: legacyNext, permissionsMissing, arrangement: lead ? { arrangement: lead, context: { ...arrangementStepContext(target, models.get(lead.key) ?? null, { key: lead.key, portfolio: model.portfolio }), unestimated: unestimatedLead(lead, arrangements.length, models) } } : null, capital: capitalOf(target), measuredReply: measuredReplyOf(model.portfolio), ...(adopted ? { adoptedIds: adopted } : {}) });
+    : planSteps({ adoption: plan.adoption, reconstruction, sales, nextTest: legacyNext, permissionsMissing, arrangement: lead ? { arrangement: lead, context: { ...arrangementStepContext(target, models.get(lead.key) ?? null, { key: lead.key, portfolio: model.portfolio }), unestimated: unestimatedLead(lead, arrangements.length, models) } } : null, capital: capitalOf(target), measuredReply: measuredReplyOf(model.portfolio), titles: titlesOf(model), ...(adopted ? { adoptedIds: adopted } : {}) });
   const openingsVerdict: PlanVerdict =
     acceptance.status === 'ACCEPTED' ? 'RECOMMENDABLE' : infeasible ? 'NOT_VIABLE' : plan.adoption.source === 'RECONSTRUCTED' ? 'NEEDS_EVIDENCE' : (chosen?.verdict ?? 'NEEDS_EVIDENCE');
   // One reading, one picture (P5): the candidate the acceptance adopted is a strategy of the reading, and a
@@ -2071,7 +2097,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     instantOnly: infeasible?.instantOnly,
     surplus: readings.objective.outcome?.surplusForSuccessors ?? Math.max(0, (target.achievedCents - target.targetCents) / 100),
   });
-  const reading: PlanReading = {
+  const built: PlanReading = {
     ...base,
     verdict,
     summary,
@@ -2114,6 +2140,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     sales,
     portfolio: model.portfolio,
     ...unpricedForPlan(model.arrangementSelection?.unpriced, lead),
+    lead: leadOf(lead, lead ? (models.get(lead.key) ?? null) : null, model.arrangementsInScope ?? null),
     // The method's own failures first: they change how Brain searches, not one opening (§93).
     researchDiagnosis: mergeDiagnosis(
       [...reconstructionDiagnosis(reconstruction, { remaining: target.remainingCents / 100, daysLeft: target.daysLeft }), ...pathways.failures],
@@ -2133,6 +2160,11 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     ...readings,
     continuation,
   };
+  // The plan's integrity (`planIntegrity`), checked on the steps, the lead and every text a person reads: a reading that breaks a rule is never ACCEPTED.
+  const reading = gateIntegrity(built, (refused) => {
+    const again = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways, arrangements, reconstruction, acceptance: refused, ledger, arrangementModels: models });
+    return { ...again, continuation: continuationOf({ achieved: target.achieved, daysLeft: target.daysLeft, outcomeRecorded, policy, acceptance: refused.status, instantOnly: infeasible?.instantOnly, surplus: continuation.surplusForSuccessors }) };
+  });
   if (input.persist) {
     await recordDegraded(goal.id, target.projectId, degraded);
     await persistReading(goal, reading, chosen);
@@ -2259,6 +2291,11 @@ async function goalOutcomeRecorded(goalId: string): Promise<boolean> {
 }
 
 /** Every opening the plan's model holds, for naming a reconstruction's members. */
+/** Each opening's and estimate's title by its id, as the plan names them to a person. */
+function titlesOf(model: Parameters<typeof planOpenings>[0]): Map<string, string> {
+  return new Map(planOpenings(model).map((o) => [o.opportunity.id, o.opportunity.title] as const));
+}
+
 function planOpenings(model: { considered: ModelledOpportunity[]; estimates?: ModelledOpportunity[]; portfolioInput?: { openings: ModelledOpportunity[] } | null }): ModelledOpportunity[] {
   return [...(model.portfolioInput?.openings ?? []), ...model.considered, ...(model.estimates ?? [])];
 }
@@ -2359,12 +2396,16 @@ export function adoptReconstruction(input: {
   const beats = r.best.reach >= baseReach + MATERIAL_REACH || (r.best.reach >= baseReach - 1e-9 && r.best.settledP50 > baseP50 * (1 + MATERIAL_P50) + 1e-9);
   if (!beats) return hypothetical(`the reconstruction (${pctOf(r.best.reach)}, p50 ${moneyOf(r.best.settledP50)}) does not beat the plan as held (${pctOf(baseReach)}, p50 ${moneyOf(baseP50)}) materially`);
   const ids: string[] = [];
+  const names: string[] = [];
   for (const member of r.best.members) {
     const hit =
       input.openings.find((o) => o.opportunity.id === member) ??
       input.openings.find((o) => o.opportunity.title.slice(0, 50) === member) ??
       input.openings.find((o) => member.length >= 20 && o.opportunity.title.startsWith(member));
-    if (hit && !ids.includes(hit.opportunity.id)) ids.push(hit.opportunity.id);
+    if (hit && !ids.includes(hit.opportunity.id)) {
+      ids.push(hit.opportunity.id);
+      names.push(hit.opportunity.title.slice(0, 60));
+    }
   }
   if (ids.length === 0) return hypothetical('the reconstruction\'s strongest plan names no opening Brain holds');
   const evidenced = r.best.basis === 'PROBABILITY' && real.every((c) => c.basis === 'MEASURED');
@@ -2372,10 +2413,12 @@ export function adoptReconstruction(input: {
     adoption: {
       source: 'RECONSTRUCTED',
       hypothetical: false,
-      reason: `the reconstruction reaches ${pctOf(r.best.reach)} (p50 ${moneyOf(r.best.settledP50)}) against ${pctOf(baseReach)} (p50 ${moneyOf(baseP50)}) as held, by ${real.map((c) => c.label).slice(0, 4).join(', ')}`,
+      // A person reads each change by its title, never its reconstruction key ("focus:4", "price×2.50@…": NO_INTERNAL_KEYS).
+      reason: `the reconstruction reaches ${pctOf(r.best.reach)} (p50 ${moneyOf(r.best.settledP50)}) against ${pctOf(baseReach)} (p50 ${moneyOf(baseP50)}) as held, by ${real.map((c) => changeTitle(c)).slice(0, 4).join(', ')}`,
     },
     candidate: {
-      label: `${real.map((c) => c.label).slice(0, 4).join(' + ')} on ${r.best.members.slice(0, 4).join(' + ')}`.slice(0, 300),
+      // The members by their titles: an opening's id is the plan's identity for it (`opportunityIds`), never its name.
+      label: `${real.map((c) => changeTitle(c)).slice(0, 4).join(' + ')} on ${names.slice(0, 4).join(' + ')}`.slice(0, 300),
       opportunityIds: ids,
       source: 'RECONSTRUCTED',
       settledP50: r.best.settledP50,
@@ -2602,6 +2645,8 @@ export function planSteps(input: {
   capital?: { allowed: number | null; currency: string } | null;
   /** The outreach reply rate measured over the sends recorded: what a reply kill criterion compares against. */
   measuredReply?: MeasuredReply | null;
+  /** Each opening's title by its id: how a reconstruction's members are named to a person (NO_INTERNAL_KEYS). */
+  titles?: ReadonlyMap<string, string>;
 }): PlanStep[] {
   const measured = input.measuredReply ?? null;
   const send = input.permissionsMissing.filter((one) => /CONTACT_BUYER|messag/i.test(one));
@@ -2634,7 +2679,7 @@ export function planSteps(input: {
     steps.push({
       order: steps.length + 1,
       label: 'Sell and collect',
-      detail: `Offer the plan's openings (${r.best.members.slice(0, 4).join(', ')}) to their buyers for an actual sale or deposit, and record every reply, sale and payment as the plan's measurements.`,
+      detail: `Offer the plan's openings${namedMembers(r.best.members, input.titles)} to their buyers for an actual sale or deposit, and record every reply, sale and payment as the plan's measurements.`,
       startDay: { low: after, high: after },
       cost: 0,
       basis: 'ESTIMATE',
@@ -2729,6 +2774,16 @@ export function planSteps(input: {
     step.dependsOn = before.length > 0 ? before[before.length - 1]!.order : null;
   }
   return steps;
+}
+
+/**
+ * A reconstruction's members as a person reads them: each by its title, an id
+ * with no title held left out (production, 2026-11-19: "Sell and collect" read
+ * "Offer the plan's openings (cop_…, arr_…)"). Empty when none can be named. Pure.
+ */
+export function namedMembers(members: readonly string[], titles: ReadonlyMap<string, string> | undefined): string {
+  const named = [...new Set(members.map((m) => titles?.get(m) ?? (internalKeyIn(m) ? null : m)).filter((t): t is string => !!t && !internalKeyIn(t)).map((t) => t.slice(0, 80)))];
+  return named.length > 0 ? ` (${named.slice(0, 4).join('; ')}${named.length > 4 ? `; ${named.length - 4} more` : ''})` : '';
 }
 
 /** The adopted plan's first step as the reading's next step. */
@@ -3308,6 +3363,53 @@ export function forecastCarriesAcceptance(forecast: string | null): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * An acceptance refused for the plan's integrity violations (`planIntegrity`):
+ * a candidate at most, each violation a shortfall, and neither a probability
+ * nor an accepted plan (`storableAcceptance`). Pure.
+ */
+export function refuseForIntegrity(acceptance: PlanAcceptance, violations: readonly PlanIntegrityViolation[]): PlanAcceptance {
+  if (violations.length === 0 || acceptance.status !== 'ACCEPTED') return acceptance;
+  const reasons = violations.map((v) => `${v.rule}: ${v.detail}`);
+  const refused: PlanAcceptance = {
+    ...acceptance,
+    status: acceptance.candidate ? 'CANDIDATE_ONLY' : 'NO_CANDIDATE',
+    probability: null,
+    accepted: null,
+    shortfalls: [...reasons, ...acceptance.shortfalls],
+    sentence: `Not accepted: the plan breaks ${violations.length} integrity rule(s) — ${reasons.slice(0, 3).join('; ').slice(0, 400)}.`,
+  };
+  return { ...storableAcceptance(refused), verdict: verdictOf(refused) };
+}
+
+/**
+ * The reading with its integrity checked (`reading.integrity`). A reading
+ * ACCEPTED with any violation is refused (`refuseForIntegrity`): its verdict
+ * is no longer RECOMMENDABLE (RECOMMENDABLE iff ACCEPTED), its summary says
+ * why, and what is read from the acceptance — the horizons, the objective, the
+ * plan set and the continuation — is read again from the refused one
+ * (`recompose`). Pure but for `recompose`.
+ */
+export function gateIntegrity(
+  reading: PlanReading,
+  recompose: (refused: PlanAcceptance) => Pick<PlanReading, 'timelines' | 'objective' | 'planSet' | 'continuation'>,
+): PlanReading {
+  const { violations } = planIntegrity(integrityInput(reading));
+  if (reading.acceptance.status !== 'ACCEPTED' || violations.length === 0) return { ...reading, integrity: violations };
+  const acceptance = refuseForIntegrity(reading.acceptance, violations);
+  const again = recompose(acceptance);
+  return {
+    ...reading,
+    ...again,
+    integrity: violations,
+    acceptance,
+    verdict: reading.verdict === 'RECOMMENDABLE' ? 'NEEDS_EVIDENCE' : reading.verdict,
+    // An accepted reading's summary is its acceptance's sentence: the refusal replaces it, never stands beside "Accepted".
+    summary: reading.verdict === 'RECOMMENDABLE' || reading.summary === reading.acceptance.sentence ? acceptance.sentence : `${acceptance.sentence} ${reading.summary}`,
+    needsMoreOpenings: again.continuation?.continues ?? reading.needsMoreOpenings,
+  };
 }
 
 /**
@@ -4020,6 +4122,20 @@ export function leadingArrangement(
     }
   }
   return best ?? leaders[0]!;
+}
+
+/**
+ * The constructed arrangements a plan may lead with: those inside the goal's
+ * own scope, as the model read it (`arrangementsInScope`). Transfer test,
+ * 2026-11-19: a goal naming one industry ("developer tools") whose every
+ * arrangement was out of scope named no lead, and `leadingArrangement` fell
+ * back to construction's first rank — so its steps read "Reach Dental
+ * practices". All of them when the model did not read a scope. Pure.
+ */
+export function inGoalScope(arrangements: readonly ConstructedArrangement[], model: { arrangementsInScope?: readonly string[] }): ConstructedArrangement[] {
+  if (!model.arrangementsInScope) return [...arrangements];
+  const keys = new Set(model.arrangementsInScope);
+  return arrangements.filter((one) => keys.has(one.key));
 }
 
 /**

@@ -78,6 +78,8 @@ export interface PlanReadyFacts {
   acceptedSince: string | null;
   /** The goal's own capital ceiling, major units, or null when it has none. */
   capitalCeiling: number | null;
+  /** The plan's integrity violations (`planIntegrity`); a plan with any is never ready. Absent reads as none recorded. */
+  integrity?: { rule: string; detail: string }[];
 }
 
 /** The owner's starting-capital limit for the plan, major units (owner, 2026-11-13). */
@@ -103,6 +105,7 @@ export const PLAN_READY_CONDITIONS = [
   'DEFENSIBLE_UNCERTAINTY',
   'CHALLENGED_BY_HERMES',
   'PASSED_PLANNING_AND_EVIDENCE_REQUIREMENTS',
+  'PLAN_INTEGRITY',
 ] as const;
 export type PlanReadyCondition = (typeof PLAN_READY_CONDITIONS)[number];
 
@@ -180,6 +183,10 @@ export function planReady(f: PlanReadyFacts): { ready: boolean; conditions: Reco
         : f.achieved
           ? 'the target is already collected: there is no plan left to report'
           : null,
+    PLAN_INTEGRITY:
+      f.integrity && f.integrity.length > 0
+        ? `the plan breaks ${f.integrity.length} integrity rule(s): ${f.integrity.map((v) => `${v.rule}: ${v.detail}`).join('; ').slice(0, 300)}`
+        : null,
   };
   return { ready: Object.values(conditions).every((c) => c === null), conditions };
 }
