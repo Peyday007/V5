@@ -54,8 +54,14 @@ import {
   recordBinEvent,
   workReadySql,
 } from '../../repos/bins.ts';
-import type { Bin } from '../../domain/types.ts';
-import type { RoutingRefusal } from './router.ts';
+import type { Bin, FleetPolicy } from '../../domain/types.ts';
+import {
+  routeBin,
+  type RoutingCandidate,
+  type RoutingDecision,
+  type RoutingRefusal,
+  type RoutingResult,
+} from './router.ts';
 
 /** A routing refusal this recent is a named wait, not idle capacity (the watchdog's window). */
 export const RECENTLY_UNROUTED_MS = 15 * 60_000;
@@ -234,16 +240,61 @@ export function describeHolds(held: readonly DispatchHold[]): string {
   return [...byKind.entries()].map(([key, n]) => `${n} ${key}`).join('; ');
 }
 
+/** The capacity a routing decision is asked against: the tick's fleet snapshot. */
+export interface CapacityView {
+  candidates: RoutingCandidate[];
+  fleetPolicy: FleetPolicy | null;
+  fleetInFlight: number;
+  factoryInFlight: number;
+}
+
+/**
+ * `routeBin` against a private copy of the tick's snapshot that counts every
+ * intent this pass has already made due as in flight.
+ *
+ * The snapshot is read once, before anything is pulled. Asked of it unchanged,
+ * one free slot answered "routes" for every capacity-deferred bin, so a single
+ * freed surface made every such intent due at once and the fire then re-routed
+ * and re-deferred all but one of them. Reserving the chosen surface, its
+ * account and the fleet (and the Factory share, for a repository surface) after
+ * each pull makes the Nth decision see the N-1 before it, exactly as the fire
+ * loop would. The caller's snapshot is not touched.
+ */
+export function reservingRouter(view: CapacityView, now: () => string = () => new Date().toISOString()): {
+  route: (bin: Bin) => RoutingResult;
+  reserve: (decision: RoutingDecision) => void;
+} {
+  const candidates = view.candidates.map((candidate) => ({ ...candidate }));
+  let fleetInFlight = view.fleetInFlight;
+  let factoryInFlight = view.factoryInFlight;
+  return {
+    route: (bin) =>
+      routeBin({ bin, candidates, fleetPolicy: view.fleetPolicy, fleetInFlight, factoryInFlight, now: now() }),
+    reserve: (decision) => {
+      fleetInFlight += 1;
+      if (decision.routine.capabilities.includes('repository')) factoryInFlight += 1;
+      for (const candidate of candidates) {
+        if (candidate.routine.id === decision.routine.id) candidate.routineInFlight += 1;
+        if (candidate.account.id === decision.account.id) candidate.accountInFlight += 1;
+      }
+    },
+  };
+}
+
 /**
  * Make due now every intent deferred only because capacity was full, whose bin
  * the router would now route.
  *
  * `routesNow` is the fire's own predicate (`routeBin` against this tick's
- * snapshot), passed in so this module does not read the fleet a second way.
+ * snapshot), passed in so this module does not read the fleet a second way. A
+ * routing decision it returns is handed to `reserve` once the intent is actually
+ * pulled, so the next bin is routed against the capacity that pull consumed
+ * (`reservingRouter`) — one free slot ends one capacity wait, not all of them.
  * Returns the bins pulled forward.
  */
 export async function pullForwardCapacityDeferred(input: {
-  routesNow: (bin: Bin) => boolean | Promise<boolean>;
+  routesNow: (bin: Bin) => boolean | RoutingResult | Promise<boolean | RoutingResult>;
+  reserve?: (decision: RoutingDecision) => void;
   limit?: number;
   projectIds?: string[];
 }): Promise<string[]> {
@@ -268,7 +319,8 @@ export async function pullForwardCapacityDeferred(input: {
     const bin = await getBin(row.id);
     if (!bin) continue;
     if (input.projectIds && !input.projectIds.includes(bin.projectId)) continue;
-    if (!(await input.routesNow(bin))) continue;
+    const answer = await input.routesNow(bin);
+    if (answer === false || (typeof answer === 'object' && !answer.ok)) continue;
     const at = binNow();
     const result = await getDb().run(
       `UPDATE bin_dispatch SET next_attempt_at = ?, updated_at = ?
@@ -277,6 +329,7 @@ export async function pullForwardCapacityDeferred(input: {
       [at, at, bin.id, bin.leaseGeneration, at, ...CAPACITY_ENDED_REFUSALS],
     );
     if (result.changes !== 1) continue;
+    if (typeof answer === 'object' && answer.ok) input.reserve?.(answer);
     await recordBinEvent({
       eventType: 'DISPATCH_CONSERVED',
       binId: bin.id,
