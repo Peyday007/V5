@@ -190,6 +190,7 @@ import { advanceSources } from '../capability/extraction.ts';
 import { runDesignKernel } from '../design/kernel.ts';
 import { advanceCapabilityPackets } from '../realize/advance.ts';
 import { advanceGoals, type GoalTickReport } from '../goals/tick.ts';
+import { activateGoalSprints } from './goalSprint.ts';
 import { advanceGoalPlans } from '../goals/plan.ts';
 import { advanceObjectivePlans } from '../goals/objectivePlan.ts';
 import { advanceResearchGoals, type GoalContinuationReport } from '../research/goalContinuation.ts';
@@ -1617,6 +1618,15 @@ async function tickOnce(owner: string): Promise<TickReport> {
      * completes. Swallowed for `advanceSources`' reason: a goal that could not
      * be read must never stop Russell writing back a mission.
      */
+    /*
+     * A cash goal a person set is the decision to research it: its project
+     * gets the sprint that research runs under (`goalSprint.ts`), ahead of the
+     * goal pass so the goal plans against it this same tick. Research only.
+     */
+    await runPass(report, 'goal-sprints', async () => {
+      await activateGoalSprints();
+    });
+
     await runPass(report, 'goals', async () => {
       report.goals = await advanceGoals();
     });
