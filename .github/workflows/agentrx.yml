@@ -148,9 +148,11 @@ jobs:
           for md in rx/traj/*.md; do
             id=$(basename "$md" .md)
             echo "::group::AgentRx on $id"
-            # Every stage; one-shot dynamic invariants keep the model calls per trajectory bounded.
+            # Every stage, step-by-step dynamic invariants: at the pinned commit the one-shot mode has no
+            # IR entry point (OneShotDynamicInvariantGenerator.run_from_ir_data, run 44476654177). The
+            # exporter caps a trajectory at 24 steps, which bounds the per-step calls.
             (cd agentrx && ../rx/venv/bin/python run.py "../$md" --domain flash --endpoint copilot \
-                --dynamic-mode oneshot --run-dir "../rx/runs/$id") || echo "::warning::AgentRx did not finish every stage on $id"
+                --run-dir "../rx/runs/$id") || echo "::warning::AgentRx did not finish every stage on $id"
             python3 scripts/agentrx/to_finding.py --run-dir "rx/runs/$id" --meta "rx/traj/$id.json" \
               --bridge scripts/agentrx/llm_bridge.py --run-url "$RUN_URL" > "rx/runs/$id.finding.json"
             python3 - "$id" <<'PY'
