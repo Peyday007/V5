@@ -762,6 +762,41 @@ async function admitResume(reservationId: string | null): Promise<boolean> {
 }
 
 /**
+ * The last word before an answer that puts research back to work has an
+ * effect: whether it can still apply, and then whether it has a slot.
+ *
+ * The order is the point. Both answers are applied through a transition
+ * guarded on `NEEDS_HUMAN`, so a mission that has already left Needs You is
+ * decided first, by the operator's one predicate (`mootByState`), and fails
+ * with the one sentence `reopenAnswered` withdraws on. Only an answer that can
+ * still apply is admitted: readmitting a lapsed `HELD` hold for a moot answer
+ * would take a research slot for nothing, and deferring one would wait for a
+ * slot that cannot make it apply. With no free slot a live answer waits,
+ * recorded, rather than pushing research over the ceiling a person set.
+ *
+ * `null` means go ahead.
+ */
+async function admitApplicable(
+  mission: RussellMission,
+  request: RussellHumanRequest,
+  needsSlot: boolean,
+): Promise<ResumeResult | null> {
+  if (await mootByState(request, mission)) {
+    return { ok: false, reason: MOVED_OUT_OF_NEEDS_YOU, missionId: mission.id, settled: false };
+  }
+  if (needsSlot && !(await admitResume(mission.reservationId))) {
+    return {
+      ok: false,
+      reason: 'answered; waiting for a free research slot under this project\'s concurrency limit',
+      missionId: mission.id,
+      settled: false,
+      deferred: true,
+    };
+  }
+  return null;
+}
+
+/**
  * Ask the envelope again about a plan it refused, and nothing else.
  *
  * A packet whose plan the envelope refused has no work items yet, so nothing
@@ -1143,24 +1178,12 @@ export async function resumeAnsweredRequest(
 
   /*
    * Both answers below put research back to work, so resuming is an admission
-   * and meets the grant's `maxConcurrent` like any launch. With no free slot
-   * the answer waits, recorded, rather than pushing live research over the
-   * ceiling a person set.
+   * and meets the grant's `maxConcurrent` like any launch. The admission is
+   * made inside each of them by `admitApplicable`, after the packet's own
+   * refusals and after the moot decision: a mission that has left Needs You
+   * never has its hold readmitted, nor its answer deferred for a slot, for an
+   * answer no slot can make apply.
    */
-  if (
-    (choice === NEEDS_HUMAN_CHOICES.RECORD_GAPS.key || choice === NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key) &&
-    !(choice === NEEDS_HUMAN_CHOICES.RECORD_GAPS.key && (await filingOnly(mission.orchestrationId))) &&
-    !(await admitResume(mission.reservationId))
-  ) {
-    return {
-      ok: false,
-      reason: 'answered; waiting for a free research slot under this project\'s concurrency limit',
-      missionId: mission.id,
-      settled: false,
-      deferred: true,
-    };
-  }
-
   if (choice === NEEDS_HUMAN_CHOICES.RECORD_GAPS.key) {
     return recordGaps(mission, request);
   }
@@ -1428,6 +1451,12 @@ async function authorizePlan(
     };
   }
 
+  /*
+   * Moot first, then a slot, then the transition: see `admitApplicable`.
+   */
+  const refused = await admitApplicable(mission, request, true);
+  if (refused) return refused;
+
   const moved = await transitionMission({
     missionId: mission.id,
     from: 'NEEDS_HUMAN',
@@ -1536,17 +1565,15 @@ async function recordGaps(
   /*
    * The authorization below is an effect, recorded in the answerer's name,
    * and it happens *before* the transition guarded on `NEEDS_HUMAN`. So a
-   * mission that has already left Needs You is decided here, by the
-   * operator's one predicate (`mootByState`), before anything is written: the
+   * mission that has already left Needs You is decided here, before anything
+   * is written and before any research slot is taken (`admitApplicable`): the
    * answer can never apply, and authorizing the packet's gaps for a decision
    * nobody is waiting on any more would record a person's choice that had no
-   * effect. It fails with the one sentence `reopenAnswered` withdraws on, so
-   * the card is withdrawn through the module's one guarded withdrawal and
-   * never put back in front of the person.
+   * effect. Filing what was already researched puts nothing back to work, so
+   * it needs no slot (`filingOnly`).
    */
-  if (await mootByState(request, mission)) {
-    return { ok: false, reason: MOVED_OUT_OF_NEEDS_YOU, missionId: mission.id, settled: false };
-  }
+  const refused = await admitApplicable(mission, request, !(await filingOnly(mission.orchestrationId)));
+  if (refused) return refused;
 
   await authorizeUnresolvedGaps({
     orchestrationId: mission.orchestrationId,
