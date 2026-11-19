@@ -10,7 +10,7 @@
  * needsHuman.ts's guarded withdrawal without the resume being tried — so a
  * "record the gaps" answer no longer writes the person's authorization onto
  * the packet before the guard refuses it (the outcome the baseline gets
- * wrong) — a STOP
+ * wrong), and the packet's own refusal is kept as its reason (F3) — a STOP
  * answer is still resumed, and a missionless card or one whose mission still
  * waits behaves as before.
  */
@@ -200,6 +200,47 @@ describe("the loop's answered-requests pass and a mission that left Needs You", 
       expect((await getMission(missionId))!.state).toBe(to);
     });
   }
+
+  it("F3: a moot card keeps the packet's own refusal on the withdrawal and its event, not a generic sentence", async () => {
+    // APPROVE_PLAN on a packet with nothing awaiting approval, and RECORD_GAPS on a packet with nothing accepted.
+    const cases = [
+      { choice: NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key, status: 'ACCEPTED', refusal: /nothing in this packet is waiting to be approved/i },
+      { choice: NEEDS_HUMAN_CHOICES.RECORD_GAPS.key, status: 'BLOCKED', refusal: /no report to file/i },
+    ];
+    const cards: { requestId: string; refusal: RegExp }[] = [];
+    for (const entry of cases) {
+      const missionId = await parkedMission();
+      const answered = await answeredRequest(missionId, NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key);
+      // A card written when the packet had a different shape still carries the choice on its row.
+      await getDb().run(`UPDATE russell_human_requests SET answered_choice = ? WHERE id = ?`, [entry.choice, answered.id]);
+      const request = (await getHumanRequest(answered.id))!;
+      await getDb().run(
+        `UPDATE research_fragments SET status = ?
+          WHERE orchestration_id = (SELECT orchestration_id FROM russell_missions WHERE id = ?)`,
+        [entry.status, missionId],
+      );
+      expect(await transitionMission({ missionId, from: 'NEEDS_HUMAN', to: 'RUNNING' })).toBe(true);
+      cards.push({ requestId: request.id, refusal: entry.refusal });
+    }
+
+    const report = await tick('skip-moot-refusal');
+    for (const card of cards) {
+      const after = (await getHumanRequest(card.requestId))!;
+      expect(after.state).toBe('WITHDRAWN');
+      expect(after.whyNotRussell).toMatch(card.refusal);
+      expect(after.whyNotRussell).not.toContain(MOVED_OUT);
+      const entry = report.withdrawnMootAnswers.find((e) => e.requestId === card.requestId);
+      expect(entry?.reason).toMatch(card.refusal);
+      const decisions = (await listEventsByEntity('RUSSELL_HUMAN_REQUEST', card.requestId)).filter(
+        (e) => e.eventType === 'RUSSELL_ROUTINE_DECISION',
+      );
+      expect(decisions).toHaveLength(1);
+      expect(String((decisions[0]!.payload as { reason?: unknown }).reason)).toMatch(card.refusal);
+      // Still recognised as moot before anything was tried on the mission.
+      expect(resumed).not.toContain(card.requestId);
+      expect(await operatorWithdrawals(card.requestId)).toEqual([]);
+    }
+  });
 
   it('A03: a STOP answer on a mission that moved is resumed, not withdrawn', async () => {
     const missionId = await parkedMission();

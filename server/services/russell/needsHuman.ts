@@ -962,15 +962,74 @@ async function mootByState(request: RussellHumanRequest, mission: RussellMission
 }
 
 /**
- * Whether an answered card can no longer apply, read now: the same reading
- * `reopenAnswered` withdraws by (`mootByState`), for a caller that has only
- * the request. A card not about a mission, or whose mission is gone, is not
- * moot here — `resumeAnsweredRequest` settles those on its own terms.
+ * Why an answered card can no longer apply, read now — or null when it still
+ * can. The same reading `reopenAnswered` withdraws by (`mootByState`), for a
+ * caller that has only the request. A card not about a mission, or whose
+ * mission is gone, is not moot here: `resumeAnsweredRequest` settles those on
+ * its own terms.
+ *
+ * The reason is the resume's own refusal, never a generic one. A moot answer
+ * is not tried (the loop settles it before any resume, so no slot is admitted
+ * for it and no transition is attempted), but the sentence a person and the
+ * withdrawal record read is still the packet's: `packetRefusal`, the very
+ * guard `authorizePlan` and `recordGaps` refuse by — "nothing in this packet
+ * is waiting to be approved", "no fragments", "no report to file", "does not
+ * implement the answer". Only when the packet would have taken the answer is
+ * the reason that the mission moved out of Needs You underneath it, which is
+ * what the resume itself would have said at the guarded transition.
  */
-export async function answeredRequestIsMoot(request: RussellHumanRequest): Promise<boolean> {
-  if (!request.missionId) return false;
+export async function mootAnswerReason(request: RussellHumanRequest): Promise<string | null> {
+  if (!request.missionId) return null;
   const mission = await getMission(request.missionId);
-  return mission ? mootByState(request, mission) : false;
+  if (!mission || !(await mootByState(request, mission))) return null;
+  return (await packetRefusal(mission, request.answeredChoice)) ?? MOVED_OUT_OF_NEEDS_YOU;
+}
+
+const NO_PACKET = 'this mission has no packet to authorize';
+
+/**
+ * What the packet itself says against carrying out `choice`, read without
+ * changing anything: the refusals `authorizePlan` and `recordGaps` make before
+ * any slot, person or transition is touched, and the refusal for an answer this
+ * version does not implement. Null when the packet would take the answer (and
+ * for STOP, which applies to any mission). One function, so the resume and a
+ * moot withdrawal cannot disagree about the words.
+ */
+async function packetRefusal(mission: RussellMission, choice: string | null): Promise<string | null> {
+  if (choice === NEEDS_HUMAN_CHOICES.STOP.key) return null;
+  const known = choice === NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key || choice === NEEDS_HUMAN_CHOICES.RECORD_GAPS.key;
+  if (!known) return `this Brain does not implement the answer "${choice ?? 'none'}"`;
+  if (!mission.orchestrationId) return NO_PACKET;
+  if (choice === NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key) {
+    const shape = await packetShape(mission.orchestrationId);
+    return shape.awaitingApproval === 0
+      ? 'nothing in this packet is waiting to be approved any more, so there is no plan to ' +
+          'authorize — the honest answers here are to stop it or to record what is unresolved'
+      : null;
+  }
+  /*
+   * RECORD_GAPS. There has to be something to record: authorizing unresolved
+   * gaps on a packet that holds no research would record a person's name
+   * against a decision about nothing. And something has to have survived its
+   * gate: `advancePacket` refuses to synthesize a packet with no accepted
+   * fragment and parks it again at NEEDS_HUMAN, so the decision would be
+   * recorded and then have no effect.
+   */
+  const fragments = await currentFragments(mission.orchestrationId);
+  if (fragments.length === 0) {
+    return (
+      'this packet holds no fragments, so there are no unresolved questions to record — ' +
+      'the honest answers here are to stop it or to ask again'
+    );
+  }
+  if (!fragments.some((fragment) => fragment.status === 'ACCEPTED')) {
+    return (
+      'nothing in this packet cleared its evidence gate, so there is no report to file with ' +
+      'the unresolved questions named in it — the honest answers here are to stop it or to ' +
+      'ask a narrower question'
+    );
+  }
+  return null;
 }
 
 export interface ResumeResult {
@@ -1379,31 +1438,15 @@ async function authorizePlan(
   mission: RussellMission,
   request: RussellHumanRequest,
 ): Promise<ResumeResult> {
-  if (!mission.orchestrationId) {
-    return {
-      ok: false,
-      reason: 'this mission has no packet to authorize',
-      missionId: mission.id,
-      settled: false,
-    };
-  }
-
   /*
-   * There has to be a plan. The offer is derived from the same numbers, but a
-   * request written when the packet had a different shape still carries its old
-   * choices, and the offer is what a person sees — so the guard is at the
-   * transition as well.
+   * There has to be a packet, and a plan in it. The offer is derived from the
+   * same numbers, but a request written when the packet had a different shape
+   * still carries its old choices, and the offer is what a person sees — so the
+   * guard is at the transition as well (`packetRefusal`).
    */
-  const shape = await packetShape(mission.orchestrationId);
-  if (shape.awaitingApproval === 0) {
-    return {
-      ok: false,
-      reason:
-        'nothing in this packet is waiting to be approved any more, so there is no plan to ' +
-        'authorize — the honest answers here are to stop it or to record what is unresolved',
-      missionId: mission.id,
-      settled: false,
-    };
+  const refusal = await packetRefusal(mission, NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key);
+  if (refusal || !mission.orchestrationId) {
+    return { ok: false, reason: refusal ?? NO_PACKET, missionId: mission.id, settled: false };
   }
 
   /*
@@ -1454,62 +1497,16 @@ async function recordGaps(
   mission: RussellMission,
   request: RussellHumanRequest,
 ): Promise<ResumeResult> {
-  if (!mission.orchestrationId) {
-    return {
-      ok: false,
-      reason: 'this mission has no packet to authorize',
-      missionId: mission.id,
-      settled: false,
-    };
-  }
   /*
-   * There has to be something to record.
-   *
-   * The choice set above no longer offers `RECORD_GAPS` to a packet with no
-   * fragments — but a request opened before that was true still carries both
-   * choices on its row, and the offer is what a person sees. So the guard is
-   * here too, at the transition rather than only at the offer: authorizing
-   * unresolved gaps on a packet that holds no research would record a person's
-   * name against a decision about nothing, and then advance a packet with
-   * nothing to advance.
-   *
-   * Left OPEN rather than settled, and the reason is said plainly, so the
-   * decision stays visible instead of being marked answered and dropped.
+   * There has to be something to record, and something that survived its gate
+   * (`packetRefusal` says why each matters). A request opened before the offer
+   * stopped including RECORD_GAPS still carries it on its row, and the row is
+   * what a person sees — so the guard is at the transition as well as the
+   * offer. Left OPEN rather than settled, and the reason is said plainly.
    */
-  const fragments = await currentFragments(mission.orchestrationId);
-  if (fragments.length === 0) {
-    return {
-      ok: false,
-      reason:
-        'this packet holds no fragments, so there are no unresolved questions to record — ' +
-        'the honest answers here are to stop it or to ask again',
-      missionId: mission.id,
-      settled: false,
-    };
-  }
-  /*
-   * And something has to have survived its gate.
-   *
-   * The same guard one status along, and the same reasoning. `advancePacket`
-   * refuses to synthesize a packet with no accepted fragment and parks it again
-   * at `NEEDS_HUMAN` — so authorizing unresolved gaps here would record a
-   * person's decision, move the mission back to `RUNNING`, and have the next
-   * tick park it on the identical reason. A decision that is recorded and then
-   * has no effect is worse than one that was never offered, which is why the
-   * offer no longer includes it and why the transition refuses it too: a
-   * request opened before this was true still carries both choices on its row,
-   * and the row is what a person sees.
-   */
-  if (!fragments.some((fragment) => fragment.status === 'ACCEPTED')) {
-    return {
-      ok: false,
-      reason:
-        'nothing in this packet cleared its evidence gate, so there is no report to file with ' +
-        'the unresolved questions named in it — the honest answers here are to stop it or to ' +
-        'ask a narrower question',
-      missionId: mission.id,
-      settled: false,
-    };
+  const refusal = await packetRefusal(mission, NEEDS_HUMAN_CHOICES.RECORD_GAPS.key);
+  if (refusal || !mission.orchestrationId) {
+    return { ok: false, reason: refusal ?? NO_PACKET, missionId: mission.id, settled: false };
   }
 
   /*

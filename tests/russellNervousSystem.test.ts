@@ -177,7 +177,7 @@ async function expectWithdrawnAsMoot(requestId: string, missionState: string, re
   expect(card.whyNotRussell).toMatch(reason);
   const decisions = (await listEventsByEntity('RUSSELL_HUMAN_REQUEST', requestId)).filter((e) => e.eventType === 'RUSSELL_ROUTINE_DECISION');
   expect(decisions).toHaveLength(1);
-  expect(decisions[0]!.payload).toMatchObject({ choice: 'WITHDRAW_MOOT_ANSWER', missionState });
+  expect(decisions[0]!.payload).toMatchObject({ choice: 'WITHDRAW_MOOT_ANSWER', missionState, reason: expect.stringMatching(reason) });
 }
 
 describe('routing considers only what the asker may see', () => {
@@ -2334,7 +2334,8 @@ describe('the loop keeps going without anybody watching', () => {
      * The guard at the transition, read while the mission still waits on the
      * card: the resume refuses with the packet's own reason and changes
      * nothing. (By the time the loop reaches the card below the mission has
-     * left NEEDS_HUMAN, so the loop settles it as moot before any resume.)
+     * left NEEDS_HUMAN, so the loop settles it as moot before any resume,
+     * keeping this same refusal on the withdrawal.)
      */
     expect((await getMission(mission.id))!.state).toBe('NEEDS_HUMAN');
     const refused = await resumeAnsweredRequest((await getHumanRequest(request.id))!);
@@ -2346,10 +2347,10 @@ describe('the loop keeps going without anybody watching', () => {
     expect(after.resumed).not.toContain(request.id);
     expect(after.unresolvedAnswers.map((entry) => entry.requestId)).toContain(request.id);
     // Not marked acted-on. Its mission is no longer waiting on it, so no
-    // answer can apply: withdrawn as moot, never re-asked.
+    // answer can apply: withdrawn as moot, with the refusal kept.
     const missionNow = (await getMission(mission.id))!.state;
     expect(missionNow).not.toBe('NEEDS_HUMAN');
-    await expectWithdrawnAsMoot(request.id, missionNow, /the mission moved out of Needs You before the answer could be applied/);
+    await expectWithdrawnAsMoot(request.id, missionNow, /nothing in this packet is waiting to be approved/i);
   });
 
   it('refuses to record gaps on an empty packet even when the request offers it', async () => {
@@ -2399,7 +2400,8 @@ describe('the loop keeps going without anybody watching', () => {
      * The guard at the transition, read while the mission still waits on the
      * card: the resume refuses with the packet's own reason and changes
      * nothing. (By the time the loop reaches the card below the mission has
-     * left NEEDS_HUMAN, so the loop settles it as moot before any resume.)
+     * left NEEDS_HUMAN, so the loop settles it as moot before any resume,
+     * keeping this same refusal on the withdrawal.)
      */
     expect((await getMission(mission.id))!.state).toBe('NEEDS_HUMAN');
     const refused = await resumeAnsweredRequest((await getHumanRequest(request.id))!);
@@ -2434,9 +2436,10 @@ describe('the loop keeps going without anybody watching', () => {
      * answer but STOP is applied through a transition guarded on NEEDS_HUMAN
      * and cannot apply, and the STOP that would be left to offer would only
      * cancel a mission that has already ended — not a decision anybody needs
-     * to make. It is withdrawn as moot, saying why no answer can apply.
+     * to make. It is withdrawn as moot, with Brain's own sentence about the
+     * refusal kept on it.
      */
-    await expectWithdrawnAsMoot(request.id, 'FAILED', /the mission moved out of Needs You before the answer could be applied/);
+    await expectWithdrawnAsMoot(request.id, 'FAILED', /no fragments/i);
     expect((await listOpenRequests(projectId)).map((entry) => entry.id)).not.toContain(request.id);
     expect((await getMission(mission.id))!.state).toBe('FAILED');
   });
@@ -2513,7 +2516,8 @@ describe('the loop keeps going without anybody watching', () => {
      * The guard at the transition, read while the mission still waits on the
      * card: the resume refuses with the packet's own reason and changes
      * nothing. (By the time the loop reaches the card below the mission has
-     * left NEEDS_HUMAN, so the loop settles it as moot before any resume.)
+     * left NEEDS_HUMAN, so the loop settles it as moot before any resume,
+     * keeping this same refusal on the withdrawal.)
      */
     expect((await getMission(mission.id))!.state).toBe('NEEDS_HUMAN');
     const refused = await resumeAnsweredRequest((await getHumanRequest(request.id))!);
@@ -2530,10 +2534,11 @@ describe('the loop keeps going without anybody watching', () => {
     expect(orchestration!.unresolvedGapAuthorizedBy).toBeNull();
 
     // And the decision is not left answered: its mission no longer waits on
-    // it, so it is withdrawn as moot, never re-asked.
+    // it, so it is withdrawn as moot with this packet's own refusal kept —
+    // "no report to file", not the other stop's words.
     const missionNow = (await getMission(mission.id))!.state;
     expect(missionNow).not.toBe('NEEDS_HUMAN');
-    await expectWithdrawnAsMoot(request.id, missionNow, /the mission moved out of Needs You before the answer could be applied/);
+    await expectWithdrawnAsMoot(request.id, missionNow, /no report to file/i);
   });
 
   it('leaves an answer it cannot carry out visible, rather than marking it resumed', async () => {
@@ -2612,10 +2617,10 @@ describe('the loop keeps going without anybody watching', () => {
      * is never silently lost and never marked resumed. This mission is
      * RUNNING — it is not waiting on the card — so only a STOP could still
      * apply, and that would cancel work that is running on its own: it is
-     * withdrawn as moot, saying why no answer can apply, with one routine
-     * decision recorded, rather than re-asked.
+     * withdrawn as moot, with the refusal on the card and one routine decision
+     * recorded, rather than re-asked.
      */
-    await expectWithdrawnAsMoot(request.id, 'RUNNING', /the mission moved out of Needs You before the answer could be applied/);
+    await expectWithdrawnAsMoot(request.id, 'RUNNING', /does not implement the answer/i);
     expect((await getHumanRequest(request.id))!.state).not.toBe('RESUMED');
   });
 
