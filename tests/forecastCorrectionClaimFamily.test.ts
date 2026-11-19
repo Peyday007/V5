@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { claimFamily, correctionsByFamily, learnFromCashLedger } from '../server/services/quant/knowledge.ts';
+import { claimFamily, correctionsByFamily, learnFromCashLedger, openCorrectionWork } from '../server/services/quant/knowledge.ts';
 import { assessModelLearning } from '../server/services/quant/learning.ts';
 import { MIN_CALIBRATION_SAMPLE, type OutcomeRow, type PredictionRow } from '../server/services/quant/forecast.ts';
 
@@ -68,25 +68,32 @@ function ledger(opts: { operator: boolean; cash: boolean }) {
 
 type Candidate = { weaknessKey: string; title: string; ownerComponent: string; problem: string; evidence: Record<string, unknown> };
 
-async function register(rows: ReturnType<typeof ledger>) {
+/** A goal in the ledger's currency: its plan rests on the project's USD cash claims (`cashDependencyGraph`). */
+const GOAL = { id: 'ws_goal', currency: 'USD' };
+
+async function register(rows: ReturnType<typeof ledger>, goals: { id: string; currency: string | null }[] = []) {
   const out: Candidate[] = [];
   const needs: unknown[] = [];
+  const notes: unknown[] = [];
   await learnFromCashLedger('p', ['USD'], {
     read: async () => rows,
-    goals: async () => [],
-    note: async () => {
-      throw new Error('no goal rests on these claims');
-    },
+    goals: async () => goals,
+    routed: async () => false,
+    replan: async () => {},
+    openings: async () => [],
+    note: (async (n: unknown) => {
+      notes.push(n);
+    }) as never,
     raise: (async (n: unknown) => {
       needs.push(n);
-      return { ok: true, value: { id: 'need' } };
+      return { ok: true, value: { id: `need_${needs.length}` } };
     }) as never,
     toFactory: (async (c: Candidate) => {
       out.push(c);
       return { candidate: {}, created: true };
     }) as never,
   });
-  return { candidates: out, needs };
+  return { candidates: out, needs, notes };
 }
 
 describe('a systematic miss is corrected under the claim family it was made on', () => {
@@ -98,7 +105,12 @@ describe('a systematic miss is corrected under the claim family it was made on',
   });
 
   it('operator misses are never registered as a cash-forecast defect', async () => {
-    const { candidates, needs } = await register(ledger({ operator: true, cash: false }));
+    // A goal whose plan rests on the cash forecast is present, so a need or a note could be opened here:
+    // the positive control below shows the same harness does open both for the cash forecast's own misses.
+    const { candidates, needs, notes } = await register(ledger({ operator: true, cash: false }), [GOAL]);
+    // Operator claims are not under any goal's cash plan, so nothing is routed to that goal for them.
+    expect(needs).toEqual([]);
+    expect(notes).toEqual([]);
     expect(candidates.map((c) => c.weaknessKey)).toEqual(['FORECAST:operator:MISSING_MECHANISM']);
     const [c] = candidates;
     expect(c!.ownerComponent).toBe('server/services/operator/decisions.ts');
@@ -108,6 +120,32 @@ describe('a systematic miss is corrected under the claim family it was made on',
     expect(c!.evidence['correctionOwner']).toBe('RESEARCH');
     // No cash-forecast need is opened for claims the cash forecast never made.
     expect(JSON.stringify(needs)).not.toMatch(/cash forecast/i);
+  });
+
+  it('positive control: the same harness opens a need and notes the goal for the cash forecast\'s own misses', async () => {
+    const { candidates, needs, notes } = await register(ledger({ operator: false, cash: true }), [GOAL]);
+    expect(needs.length).toBeGreaterThan(0);
+    expect(JSON.stringify(needs)).toMatch(/cash forecast/i);
+    expect(notes.length).toBeGreaterThan(0);
+    // A goal carries it, so it is not also sent to the register.
+    expect(candidates).toEqual([]);
+  });
+
+  it('a need opened for an operator correction names the operator\'s forecasts, never the cash forecast', async () => {
+    const reading = assessModelLearning(ledger({ operator: true, cash: false }));
+    const [correction] = correctionsByFamily(reading.corrections, reading.diagnoses);
+    const needs: Record<string, unknown>[] = [];
+    const ids = await openCorrectionWork('p', correction!, 'why', {
+      openings: async () => [],
+      raise: (async (n: Record<string, unknown>) => {
+        needs.push(n);
+        return { ok: true, value: { id: 'need_op' } };
+      }) as never,
+    });
+    expect(ids).toEqual(['need_op']);
+    expect(needs).toHaveLength(1);
+    expect(JSON.stringify(needs)).not.toMatch(/cash forecast/i);
+    expect(String(needs[0]!['blockedAction'])).toMatch(/operator's decision forecasts/);
   });
 
   it('the cash forecast keeps its own routing unchanged', async () => {

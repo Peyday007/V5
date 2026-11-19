@@ -696,12 +696,15 @@ export async function openCorrectionWork(
   }
 
   // Commercial operations, or a research cause with no opening left to research: one need on the
-  // operation's own review, naming the correction, so the miss is never left at a reading.
+  // operation's own review, naming the correction, so the miss is never left at a reading. It names the
+  // forecast the claims belong to: an operator decision corrected here is never called the cash forecast.
+  const families = [...new Set(correction.claimIds.map(claimFamily))].sort();
+  const subject = families.map((f) => familyOwner(f).subject).join(' and ');
   const raised = await raise({
     projectId,
     actorRef: 'BRAIN',
-    blockedAction: `Correct the cash forecast's ${cause} (${words(correction.owner)})`,
-    whyItMatters: `${correction.misses} systematic miss(es) on ${correction.claimIds.join(', ')} trace to ${cause}, and the plans built on this forecast stay wrong until it is corrected. ${why}`.slice(0, 1000),
+    blockedAction: `Correct the ${cause} in ${subject.charAt(0).toLowerCase()}${subject.slice(1)} (${words(correction.owner)})`,
+    whyItMatters: `${correction.misses} systematic miss(es) on ${correction.claimIds.join(', ')} trace to ${cause}, and what is built on ${subject.charAt(0).toLowerCase()}${subject.slice(1)} stays wrong until it is corrected. ${why}`.slice(0, 1000),
     recommendedPath:
       correction.owner === 'COMMERCIAL_OPERATIONS'
         ? `Change how the work is run where ${cause} caused the miss — the capacity committed, the timing promised or the way the work was executed — and record the change on the opportunities it touches.`
