@@ -1,9 +1,10 @@
-/** Throwaway read-only probe (claude/probe-d5): rounds, missions, plan freshness, learning records. SELECT only. Not for merge. */
+/** Throwaway read-only probe (claude/probe-d5-live): why 2821 got no price re-ask after #1117. SELECT / pure reads only. Not for merge. */
 import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
-import { constructedShare, MAX_LIVE_GOAL_ROUNDS, roundsStillResearching } from '../server/services/cash/discovery.ts';
+import { constructedShare, MAX_LIVE_GOAL_ROUNDS, roundsStillResearching, staleUnlaunchedRounds, liveConstructedResearch, nextGoalRoundFor, priceReaskRound } from '../server/services/cash/discovery.ts';
 import { cashSpareSurfaces, constructedCapFor } from '../server/services/cash/researchRoom.ts';
+import { knowledgeResearchAllowed } from '../server/services/cash/lifecycle.ts';
 import { listRounds } from '../server/repos/cashDiscovery.ts';
-import { arrangementForLegacyKey } from '../server/repos/monetization.ts';
+import { missionsForRounds } from '../server/services/russell/roundMissions.ts';
 const G = 'wst_7b4fcbb5f2384f31b6c3';
 const P = 'prj_22fb4fec295f403a8a22';
 const out = (tag: string, v: unknown) => console.log(tag, typeof v === 'string' ? v : JSON.stringify(v));
@@ -11,36 +12,48 @@ async function q(tag: string, sql: string, args: unknown[] = []): Promise<any[]>
   try { const rows = await getDb().all(sql, args as any); for (const r of rows) out(tag, r); if (!rows.length) out(tag, 'NONE'); return rows; }
   catch (e) { out('ERR', `${tag} :: ${e instanceof Error ? e.message : e}`); return []; }
 }
+const step = async (tag: string, f: () => Promise<unknown>) => { try { out(tag, await f()); } catch (e) { out('ERR', `${tag} :: ${e instanceof Error ? e.stack?.slice(0, 400) : e}`); } };
 async function main() {
   await initDatabase();
-  const since24 = new Date(Date.now() - 24 * 3600e3).toISOString();
-  
   try {
-    out('NOW', new Date().toISOString());
-    const SINCE = '2026-11-19T01:07:00.000Z';
-    await q('R2821', `SELECT r.id, r.state, r.round, r.found, r.created_at, r.opened_at, r.harvested_at, c.state AS cand, c.statement AS question FROM cash_discovery_rounds r LEFT JOIN russell_candidates c ON c.id = r.candidate_id WHERE r.project_id = ? AND r.bucket_id LIKE '%-mx-2821cce3c372' ORDER BY r.created_at`, [P]);
-    await q('MX_OPENED_SINCE', `SELECT r.id, r.bucket_id, r.state, r.created_at FROM cash_discovery_rounds r WHERE r.project_id = ? AND r.bucket_id LIKE 'goal-wst_7b4fcbb5f2384f31b6c3-%' AND r.created_at >= ? ORDER BY r.created_at`, [P, SINCE]);
-    try {
-      const rounds = await listRounds(P);
-      const mine = rounds.filter((r) => r.bucketId.startsWith(`goal-${G}`));
-      const mx = mine.filter((r) => r.bucketId.startsWith(`goal-${G}-mx-`));
-      const spare = await cashSpareSurfaces(P);
-      const liveCap = MAX_LIVE_GOAL_ROUNDS + Math.max(0, spare);
-      const openMx = mx.filter((r) => r.state === 'OPEN');
-      const researchingMx = await roundsStillResearching(openMx);
-      out('ROOM', { spare, liveCap, constructedShare: constructedShare(liveCap), openMx: openMx.length, researchingMx, room: constructedShare(liveCap) - researchingMx, openAll: mine.filter((r) => r.state === 'OPEN').length, researchingAll: await roundsStillResearching(mine), focusCap: await constructedCapFor(P) });
-      out('OPEN_MX', openMx.map((r) => ({ id: r.id, b: r.bucketId.slice(-16), openedAt: r.openedAt })));
-    } catch (e) { out('ROOM_ERR', String(e)); }
-    try {
-      const rec: any = await arrangementForLegacyKey(P, '2821cce3c372');
-      const a = rec?.design?.arrangement;
-      out('LIB2821', rec ? { updatedAt: rec.updatedAt, askedCount: rec.askedCount, verdict: rec.verdict, value: a?.value ? { tier: a.value.tier, p50: a.value.p50, observations: a.value.observations } : null, fixedCost: a?.fixedCost ?? null, exposure: a?.stress?.exposure } : null);
-    } catch (e) { out('LIB_ERR', String(e)); }
-    await q('PLAN_LAST', `SELECT id, verdict, created_at FROM goal_plan_readings WHERE workstream_id = ? ORDER BY created_at DESC LIMIT 4`, [G]);
-    await q('WS_EVENTS', `SELECT kind, created_at, substr(summary,1,200) AS s FROM workstream_events WHERE workstream_id = ? AND created_at >= ? ORDER BY created_at DESC LIMIT 15`, [G, SINCE]);
-    await q('CASH_OPENED', `SELECT kind, created_at, substr(summary,1,220) AS s FROM cash_events WHERE project_id = ? AND kind IN ('CASH_DISCOVERY_OPENED','CASH_DISCOVERY_ROUND_STOPPED') AND created_at >= ? ORDER BY created_at DESC LIMIT 10`, [P, SINCE]);
-    await q('DEGRADED', `SELECT created_at, substr(payload,1,300) AS p FROM project_events WHERE entity_id = ? AND event_type = 'GOAL_PLAN_DEGRADED' AND created_at >= ? ORDER BY created_at DESC LIMIT 5`, [G, SINCE]);
-    await q('CYCLE', `SELECT last_ran_at, substr(COALESCE(last_error,''),1,800) AS err FROM russell_cycle`);
+    const now = new Date().toISOString();
+    out('NOW', now);
+    const prefix = `goal-${G}`;
+    const all = await listRounds(P);
+    const mine = all.filter((one) => one.bucketId === prefix || one.bucketId.startsWith(`${prefix}-`));
+    const mx = mine.filter((one) => one.bucketId.startsWith(`${prefix}-mx-`));
+    const openMx = mx.filter((r) => r.state === 'OPEN');
+    const spare = await cashSpareSurfaces(P);
+    const liveCap = MAX_LIVE_GOAL_ROUNDS + Math.max(0, spare);
+    await step('GATE_RESEARCH_ALLOWED', async () => { const g = await knowledgeResearchAllowed(P); return { allowed: g.allowed, basis: g.basis, mode: !!g.mode, reason: (g as any).reason ?? null }; });
+    await step('PLAN_ROOM', async () => {
+      const researching = await roundsStillResearching(openMx);
+      const stale = await staleUnlaunchedRounds(openMx, now);
+      const share = constructedShare(liveCap);
+      return { spare, liveCap, share, researching, stale, room: share - researching, priceOnlyRoom: share - (researching - stale) };
+    });
+    await step('OPEN_GATE_CAPS', async () => {
+      const stMx = await staleUnlaunchedRounds(mx, now), stMine = await staleUnlaunchedRounds(mine, now);
+      const rMx = await roundsStillResearching(mx), rMine = await roundsStillResearching(mine);
+      const focusCap = await constructedCapFor(P); const live = await liveConstructedResearch(mx);
+      return { rMx, stMx, share: constructedShare(liveCap), rMine, stMine, liveCap, liveCapBlocks: rMx - stMx >= constructedShare(liveCap) && rMine - stMine >= liveCap, focusCap, liveConstructed: live, focusBlocks: focusCap !== null && live - stMx >= focusCap };
+    });
+    await step('MX_ROUNDS', async () => {
+      const ms = await missionsForRounds(mx.map((r) => r.candidateId));
+      return mx.filter((r) => r.state === 'OPEN' || ms.get(r.candidateId)?.latest && !['DONE','FAILED','CANCELLED'].includes((ms.get(r.candidateId) as any).latest.state)).map((r) => ({ id: r.id, key: r.bucketId.slice(-12), state: r.state, openedAt: r.openedAt, mission: (ms.get(r.candidateId) as any)?.latest ? { id: (ms.get(r.candidateId) as any).latest.id, state: (ms.get(r.candidateId) as any).latest.state } : null }));
+    });
+    await step('H2821', async () => {
+      const lens = 'mx-2821cce3c372';
+      const own = mine.filter((one) => one.bucketId === `${prefix}-${lens}`);
+      const every = all.filter((one) => one.bucketId.startsWith('goal-') && one.bucketId.endsWith(`-${lens}`));
+      const asOne = [...every].sort((a, b) => a.openedAt.localeCompare(b.openedAt) || a.id.localeCompare(b.id)).map((one, i) => ({ ...one, round: i + 1 }));
+      const nf = (h: any[]) => nextGoalRoundFor(h, now) ?? priceReaskRound(h, now, 3);
+      return { own: own.map((r) => ({ id: r.id, state: r.state, round: r.round, found: r.found, harvestedAt: r.harvestedAt })), every: every.length, nextOwn: nf(own), nextEvery: nf(asOne), plainNext: nextGoalRoundFor(own, now) };
+    });
+    await q('MISSIONS_RUNNING', `SELECT m.id, m.state, m.candidate_id, m.created_at FROM russell_missions m WHERE m.state NOT IN ('DONE','FAILED','CANCELLED') ORDER BY m.created_at DESC LIMIT 20`);
+    await q('LIB_ROW', `SELECT legacy_key, asked_count, last_asked_at, updated_at FROM constructed_arrangements WHERE project_id = ? AND legacy_key = '2821cce3c372'`, [P]);
+    await q('WS_EVENTS', `SELECT kind, created_at, substr(summary,1,260) AS s FROM workstream_events WHERE workstream_id = ? AND created_at >= ? AND kind NOT IN ('GOAL_DECISION_RECORDED') ORDER BY created_at DESC LIMIT 20`, [G, '2026-11-19T01:07:00.000Z']);
+    await q('PLAN_JSON', `SELECT id, created_at, substr(COALESCE(next_step, ''),1,400) AS next FROM goal_plan_readings WHERE workstream_id = ? ORDER BY created_at DESC LIMIT 1`, [G]);
   } finally {
     await closeDatabase();
     console.log('GOALS: OK');
