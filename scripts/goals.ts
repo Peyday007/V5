@@ -27,6 +27,7 @@
  *   npm run goals -- create --reason "Collect 10000 dollars in 30 days" --project prj_… --due 2026-11-27 SETTLED_CASH-1000000-USD-50000-120 --admin a@b
  *   npm run goals -- target <wst_…> SETTLED_CASH-1000000-USD-50000-120 --project prj_… --admin a@b
  *   npm run goals -- plan <wst_…>            (reads and prints; writes nothing)
+ *   npm run goals -- check [wst_…]           (release check: each plan's integrity, reads only; GOALS: OK or GOALS: INTEGRITY FAILED)
  *   npm run goals -- industry [wst_…] [--reason "the operator's ambition"]   (§92: reads and prints; writes nothing)
  *
  * A target spec is METRIC-AMOUNT_CENTS-CURRENCY[-CAPITAL_CENTS[-HOURS]], dashes
@@ -62,6 +63,7 @@ import { sharedFleetSnapshot } from '../server/services/dispatch/candidates.ts';
 import { researchGoalPaths } from '../server/services/goals/pathResearch.ts';
 import { setTarget, setTargetLimits } from '../server/services/goals/target.ts';
 import { methodYield, recentExplorations } from '../server/services/goals/reasoning/learning.ts';
+import { integrityLines } from '../server/services/goals/planIntegrityInput.ts';
 import { askConstructedArrangements, askPathwayConstructions, CHAIN_LABEL, goalArrangements, goalLimits, readGoalPlan, listReadings, type PlanReading } from '../server/services/goals/plan.ts';
 import { constructArrangements } from '../server/services/cash/construct.ts';
 import { renderPathways } from '../server/services/goals/pathways.ts';
@@ -531,6 +533,7 @@ async function printPlan(reading: PlanReading): Promise<void> {
   if (acc.probability) console.log(`    basis     ${acc.probability.basis} ${Math.round(acc.probability.value * 1000) / 10}% (lower bound ${Math.round(acc.probability.lowerBound * 1000) / 10}%, n=${acc.probability.sample}) · ${acc.probability.note}`);
   if (acc.candidate) console.log(`    candidate ${acc.candidate.source} ${acc.candidate.opportunityIds.join(' + ')} · settled p50 ${acc.candidate.settledP50 === null ? '—' : Math.round(acc.candidate.settledP50)} · ${acc.candidate.reach === null ? 'reach not computed' : `reach ${Math.round(acc.candidate.reach * 1000) / 10}% (${acc.candidate.reachBasis === 'PROBABILITY' ? 'probability' : 'coverage, not a probability'})`}`);
   for (const why of acc.shortfalls) console.log(`    short     ${why}`);
+  for (const v of reading.integrity ?? []) console.log(`  integrity   ${v.rule}: ${v.detail}`);
   // One plan (C-6): which plan this is, and whether the reconstruction below is only hypothetical.
   if (reading.adoption) console.log(`  plan        ${reading.adoption.source}${reading.adoption.hypothetical ? ' (the reconstruction is hypothetical)' : ''} · ${reading.adoption.reason}`);
   if (reading.infeasible) {
@@ -671,6 +674,48 @@ async function plan(): Promise<void> {
   console.log('GOALS: OK');
 }
 
+/**
+ * The release check (`sh /app/scripts/goals.sh check [goalIds…]`): each goal's
+ * plan read without persisting, and its integrity (`planIntegrity`) printed,
+ * one line per goal or per violation. With no ids, every active goal with a
+ * cash target. Reads only, so it needs no administrator. A plan read that
+ * throws is an ERROR line and fails the check, exactly as a violation does.
+ */
+async function check(): Promise<void> {
+  const [, ...ids] = words();
+  const goalIds = ids.length > 0
+    ? ids
+    : (
+        await getDb().all<{ id: string }>(
+          `SELECT id FROM workstreams WHERE target_metric IS NOT NULL AND archived_at IS NULL AND cancelled_at IS NULL AND paused_at IS NULL ORDER BY id ASC`,
+          [],
+        )
+      ).map((one) => one.id);
+  let failed = 0;
+  for (const goalId of goalIds) {
+    try {
+      const reading = await readGoalPlan({ goalId, persist: false });
+      if (!reading) {
+        failed += 1;
+        console.log(`INTEGRITY ${goalId} ERROR no targeted goal with this id`);
+        continue;
+      }
+      const report = integrityLines(goalId, reading);
+      if (!report.ok) failed += 1;
+      for (const line of report.lines) console.log(line);
+    } catch (error) {
+      failed += 1;
+      console.log(`INTEGRITY ${goalId} ERROR ${String((error as Error)?.message ?? error).replace(/\s+/g, ' ').slice(0, 300)}`);
+    }
+  }
+  if (failed > 0) {
+    process.exitCode = 1;
+    console.log('GOALS: INTEGRITY FAILED');
+    return;
+  }
+  console.log('GOALS: OK');
+}
+
 /** Open this pass's constructed rounds now, exactly as the tick would (§81). */
 async function construct(): Promise<void> {
   const [, goalId] = words();
@@ -806,12 +851,14 @@ async function main(): Promise<void> {
       return await targetCommand(command);
     case 'plan':
       return await plan();
+    case 'check':
+      return await check();
     case 'construct':
       return await construct();
     case 'industry':
       return await industry();
     default:
-      console.error('commands: show, file, pause, resume, cancel, reinstate, terms, depends, objective, undepend, create, target, plan, construct, industry');
+      console.error('commands: show, file, pause, resume, cancel, reinstate, terms, depends, objective, undepend, create, target, plan, check, construct, industry');
       process.exitCode = 1;
       console.log('GOALS: FAIL');
   }
