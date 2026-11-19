@@ -151,9 +151,11 @@ import {
   parkStoppedMissions,
   unparkResolvedMissions,
   reaskRefusedPlans,
+  NEEDS_HUMAN_CHOICES,
   reopenAnswered,
   resumeAnsweredRequest,
 } from './needsHuman.ts';
+import { moot } from '../../domain/operator.ts';
 import type { RussellHumanRequest } from '../../domain/types.ts';
 import { parseJson } from '../../repos/util.ts';
 import { cashNow, getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
@@ -688,6 +690,26 @@ const MISSION_LEFT_NEEDS_YOU = 'the mission moved out of Needs You before the an
  * waiting on it) or puts back in front of the person. Read back which, so a
  * withdrawn card is also reported as moot: finished, not re-asked.
  */
+/**
+ * Whether an answered card can no longer apply because its mission has left
+ * NEEDS_HUMAN, read through the operator's one `moot` predicate — the same
+ * reading `needsHuman.ts` withdraws by — never from a failure's words. A card
+ * not about a mission, or whose mission is gone or unreadable, is not moot
+ * here and keeps its existing path.
+ */
+async function answerIsMoot(request: RussellHumanRequest): Promise<boolean> {
+  if (!request.missionId) return false;
+  const mission = await getMission(request.missionId);
+  if (!mission) return false;
+  const packet = mission.orchestrationId ? await getOrchestration(mission.orchestrationId) : null;
+  return moot({
+    resumeKey: request.resumeKey,
+    missionId: request.missionId,
+    missionState: mission.state,
+    packetStatus: packet?.status ?? null,
+  }).moot;
+}
+
 async function settleUnresolvedAnswer(
   report: Pick<TickReport, 'unresolvedAnswers' | 'withdrawnMootAnswers'>,
   request: RussellHumanRequest,
@@ -2656,6 +2678,20 @@ async function tickOnce(owner: string): Promise<TickReport> {
       // research slot keeps its place, and a window that size would hide a
       // newer answer behind it for ever.
       for (const request of await listAnsweredRequests(500)) {
+        /*
+         * An answer whose mission already left NEEDS_HUMAN can never apply:
+         * every answer but STOP is carried out through a transition guarded on
+         * NEEDS_HUMAN. Trying it anyway only produced a failure that was then
+         * handled as "re-ask the person" — 43 moot cards the operator withdrew
+         * by hand in a week. So it is recognised before any resume is tried and
+         * settled as moot through `needsHuman.ts`'s guarded withdrawal, never
+         * reopened in front of the person. STOP is still resumed: `stop()`
+         * applies from any mission state.
+         */
+        if (request.answeredChoice !== NEEDS_HUMAN_CHOICES.STOP.key && (await answerIsMoot(request))) {
+          await settleUnresolvedAnswer(report, request, MISSION_LEFT_NEEDS_YOU);
+          continue;
+        }
         const outcome = await resumeAnsweredRequest(request);
         if (outcome.deferred) {
           /*
@@ -2668,8 +2704,7 @@ async function tickOnce(owner: string): Promise<TickReport> {
            * Settled as moot instead, through `reopenAnswered`'s guarded
            * withdrawal and the operator's one `moot` predicate.
            */
-          const mission = request.missionId ? await getMission(request.missionId) : null;
-          if (mission && mission.state !== 'NEEDS_HUMAN') {
+          if (await answerIsMoot(request)) {
             await settleUnresolvedAnswer(report, request, MISSION_LEFT_NEEDS_YOU);
             continue;
           }
@@ -2677,7 +2712,9 @@ async function tickOnce(owner: string): Promise<TickReport> {
           continue;
         }
         if (!outcome.settled) {
-          await settleUnresolvedAnswer(report, request, outcome.reason);
+          // The resume may itself have moved the mission (or raced a writer that did): a moot answer is
+          // withdrawn as moot, never re-asked with the resume's own failure words.
+          await settleUnresolvedAnswer(report, request, (await answerIsMoot(request)) ? MISSION_LEFT_NEEDS_YOU : outcome.reason);
           continue;
         }
         if (await markResumed(request.id)) report.resumed.push(request.id);
