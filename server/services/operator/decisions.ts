@@ -154,10 +154,49 @@ export const MECHANISM_ASSUMPTION = /^\s*mechanism\s*:\s*\S/i;
  * it is available, so a forecast never again rests on capacity nobody measured.
  */
 export const CAPACITY_ASSUMPTION_INSTRUCTION =
-  'Add an assumption beginning "capacity:" naming the capacity the predicted outcome needs and the measured row showing it is available within the horizon';
+  'Add an assumption beginning "capacity:" naming the pool the predicted outcome needs, exactly as brain_operator_capacity reports it (ROUTINES, FREE_LANE, RESEARCH_SLOTS or FACTORY), and what it needs from that pool within the horizon';
 
 /** An assumption that names the capacity, written as CAPACITY_ASSUMPTION_INSTRUCTION tells the operator to write it. */
 export const CAPACITY_ASSUMPTION = /^\s*capacity\s*:\s*\S/i;
+
+/** The pools Brain measures capacity in (`engineering/watchdog.ts` PoolReading). */
+const CAPACITY_POOLS = ['ROUTINES', 'FREE_LANE', 'RESEARCH_SLOTS', 'FACTORY'] as const;
+type CapacityPool = (typeof CAPACITY_POOLS)[number];
+
+/** The measured reading of one pool, as `brain_operator_capacity` serves it. */
+export interface CapacityPoolRow {
+  pool: CapacityPool;
+  running: number;
+  capacity: number;
+}
+
+/** The pools as `utilizationWithin` served them: null pools when Brain holds no reading. */
+export interface CapacityRows {
+  pools: readonly CapacityPoolRow[] | null;
+  source: string;
+  readAt: string | null;
+}
+
+/**
+ * Hold a "capacity:" assumption to the measured rows (review F1): text alone
+ * does not show capacity is there. Every pool the assumptions name must be in
+ * the reading and hold less than it may; naming no pool, or a pool with no
+ * headroom, or having no reading at all, is a problem. Null when it holds.
+ */
+export function capacityAssumptionProblem(assumptions: readonly string[], rows: CapacityRows): string | null {
+  const stated = assumptions.filter((a) => CAPACITY_ASSUMPTION.test(a));
+  const named = new Set<CapacityPool>();
+  for (const a of stated) for (const pool of CAPACITY_POOLS) if (new RegExp(`\\b${pool}\\b`, 'i').test(a)) named.add(pool);
+  if (named.size === 0) return `the "capacity:" assumption names none of Brain's measured pools (${CAPACITY_POOLS.join(', ')}), so nothing shows the capacity is there`;
+  if (!rows.pools) return `Brain holds no capacity reading (${rows.source}) to show ${[...named].join(', ')} has room`;
+  const short: string[] = [];
+  for (const pool of named) {
+    const row = rows.pools.find((r) => r.pool === pool);
+    if (!row) short.push(`${pool} is not in the capacity reading`);
+    else if (row.running >= row.capacity) short.push(`${pool} holds ${row.running} of ${row.capacity}, no room`);
+  }
+  return short.length > 0 ? `the capacity the decision names is not available on the reading taken ${rows.readAt ?? 'now'} (${rows.source}): ${short.join('; ')}` : null;
+}
 
 /**
  * Read the bucket's own record off the ledger (§108): forecast.ts's calibration
@@ -275,7 +314,7 @@ async function projectFor(goalId: string | null, fallback: string): Promise<stri
  */
 export async function decide(
   input: DecisionInput & { answeredChallenge?: string | null },
-  ctx: { runId: string | null; projectIds: string[]; models: OperatorModel[]; fetchImpl?: typeof fetch },
+  ctx: { runId: string | null; projectIds: string[]; models: OperatorModel[]; fetchImpl?: typeof fetch; readCapacity?: () => Promise<CapacityRows> },
 ): Promise<DecideResult> {
   const review = reviewDecision(input);
   if (!review.ok) return { committed: false, decisionId: null, verdict: 'REFUSED', problems: review.problems, review, challenge: null, next: 'Fix the problems and call again.' };
@@ -306,14 +345,19 @@ export async function decide(
       next: `${MECHANISM_ASSUMPTION_INSTRUCTION}, then call again.`,
     };
   }
-  if (correction && correction.capacityShortfallClaims.length > 0 && !input.assumptions.some((a) => CAPACITY_ASSUMPTION.test(a))) {
+  if (correction && correction.capacityShortfallClaims.length > 0) {
     const claims = correction.capacityShortfallClaims;
-    return {
+    const stated = input.assumptions.some((a) => CAPACITY_ASSUMPTION.test(a));
+    // A stated assumption is held to the measured pools; the read is bounded like brain_operator_capacity's own.
+    const readCapacity = ctx.readCapacity ?? (async () => (await import('../engineering/watchdog.ts')).utilizationWithin());
+    const unmet = stated ? capacityAssumptionProblem(input.assumptions, await readCapacity()) : null;
+    if (!stated || unmet) return {
       committed: false,
       decisionId: null,
       verdict: 'REVISE',
       problems: [
         `${comparableKey} is miscalibrated (${correction.rationale}) and ${claims.length} of its systematic misses were CAPACITY (${claims.slice(0, 12).join(', ')}${claims.length > 12 ? ', …' : ''}): the outcome needed capacity the decision assumed and did not have`,
+        ...(unmet ? [unmet] : []),
       ],
       review,
       challenge: null,
