@@ -28,14 +28,42 @@ import { seedSubject } from '../server/services/industry/seed.ts';
 import { namesOnlyAPlace } from '../server/domain/jurisdiction.ts';
 import { parseHnFreelance } from '../server/services/feeds/sources.ts';
 import { factsFromItem } from '../server/services/industry/eventGraph.ts';
-import { addGraphParts, brainComparablePrices, type Primitive } from '../server/services/cash/construct.ts';
-import { comparablePricesFor, type ComparablePrice } from '../server/services/cash/goalScenario.ts';
+import { addGraphParts, BRAIN_MAP_SENTENCE, brainComparablePrices, clearConstructionMemo, constructArrangements, type Primitive } from '../server/services/cash/construct.ts';
+import { comparablePricesFor, selectEstimatedArrangements, type ComparablePrice } from '../server/services/cash/goalScenario.ts';
 import { createGoal } from '../server/services/goals/decide.ts';
 import { readTarget } from '../server/services/goals/target.ts';
 
 const WORDS_100K = 'Turn 10,000 dollars of starting capital into 100,000 dollars within 90 days';
 const WORDS_MRR =
   'Earn 5,000 dollars a month in recurring revenue within 60 days, with no more than 10 hours a week of owner time and at most 1,500 dollars of starting capital';
+
+async function validatedClaim(originProjectId: string, suffix: string, promote: boolean): Promise<string> {
+  const layerId = (await listLayers(originProjectId))[0]!.id;
+  const run = await createRun({ projectId: originProjectId, layerId, runType: 'FOUNDATION', status: 'PLANNED', provider: 'WORKER', prompt: 'price' });
+  const orchestration = await createOrchestration({ projectId: originProjectId, layerId, runId: run.id, title: 'price', assignment: 'price', provider: 'WORKER', autoApprove: false });
+  await createFragments([
+    {
+      orchestrationId: orchestration.id, projectId: originProjectId, layerId, fragmentIndex: 0, fragmentKey: `price-${suffix}`, question: 'What dental practices pay',
+      requiredEvidence: [{ id: 'figure', description: 'a published price', necessity: 'REQUIRED' }], acceptableSourceTypes: ['price list'], excludedSourceTypes: [],
+      completionCriteria: ['a price'], dependsOn: [], minIndependentSources: 1,
+    },
+  ] as unknown as Parameters<typeof createFragments>[0]);
+  const [fragment] = await currentFragments(orchestration.id);
+  const [claim] = await insertClaims([
+    {
+      orchestrationId: orchestration.id, fragmentId: fragment!.id, passId: null, passKey: 'BROAD_SCAN' as const,
+      claim: `A dental practice pays $200 per compliance report ${suffix}`, sourceUrl: `https://example.org/price/${suffix}`, sourceTitle: 'Price list', sourcePublisher: 'example.org',
+      sourceDate: '2026-10-01', evidenceExcerpt: '$200 per report', evidenceLocator: 'table 1', evidenceLane: 'figure', retrievedAt: '2026-11-01', confidence: 0.9,
+      validationState: 'SOURCED' as const, validationDetail: null, sourced: true, claimType: 'SOURCED_FACT' as const, contentHash: `h-${suffix}`,
+    },
+  ]);
+  await decideClaim(claim!.id, { accepted: true });
+  if (promote) {
+    await updateFragment(fragment!.id, { status: 'ACCEPTED', completedAt: new Date().toISOString() });
+    await promoteEligibleClaims();
+  }
+  return claim!.id;
+}
 
 describe('D1: a handle and a place are not an arrangement', () => {
   it('a place alone is only where; a place beside work is not', () => {
@@ -101,34 +129,6 @@ describe('D2: a fresh project reads the Brain’s validated prices, labelled so'
       projectId = (await freshProject()).project.id;
     });
 
-    async function validatedClaim(originProjectId: string, suffix: string, promote: boolean): Promise<string> {
-      const layerId = (await listLayers(originProjectId))[0]!.id;
-      const run = await createRun({ projectId: originProjectId, layerId, runType: 'FOUNDATION', status: 'PLANNED', provider: 'WORKER', prompt: 'price' });
-      const orchestration = await createOrchestration({ projectId: originProjectId, layerId, runId: run.id, title: 'price', assignment: 'price', provider: 'WORKER', autoApprove: false });
-      await createFragments([
-        {
-          orchestrationId: orchestration.id, projectId: originProjectId, layerId, fragmentIndex: 0, fragmentKey: `price-${suffix}`, question: 'What dental practices pay',
-          requiredEvidence: [{ id: 'figure', description: 'a published price', necessity: 'REQUIRED' }], acceptableSourceTypes: ['price list'], excludedSourceTypes: [],
-          completionCriteria: ['a price'], dependsOn: [], minIndependentSources: 1,
-        },
-      ] as unknown as Parameters<typeof createFragments>[0]);
-      const [fragment] = await currentFragments(orchestration.id);
-      const [claim] = await insertClaims([
-        {
-          orchestrationId: orchestration.id, fragmentId: fragment!.id, passId: null, passKey: 'BROAD_SCAN' as const,
-          claim: `A dental practice pays $200 per compliance report ${suffix}`, sourceUrl: `https://example.org/price/${suffix}`, sourceTitle: 'Price list', sourcePublisher: 'example.org',
-          sourceDate: '2026-10-01', evidenceExcerpt: '$200 per report', evidenceLocator: 'table 1', evidenceLane: 'figure', retrievedAt: '2026-11-01', confidence: 0.9,
-          validationState: 'SOURCED' as const, validationDetail: null, sourced: true, claimType: 'SOURCED_FACT' as const, contentHash: `h-${suffix}`,
-        },
-      ]);
-      await decideClaim(claim!.id, { accepted: true });
-      if (promote) {
-        await updateFragment(fragment!.id, { status: 'ACCEPTED', completedAt: new Date().toISOString() });
-        await promoteEligibleClaims();
-      }
-      return claim!.id;
-    }
-
     it("another project's price fact is read only when its claim is a validated finding", async () => {
       // The origin is the seeded project (it has layers to file research under); the asking project is new and empty.
       const origin = projectId;
@@ -152,6 +152,80 @@ describe('D2: a fresh project reads the Brain’s validated prices, labelled so'
       expect(await brainComparablePrices({ projectId: fresh, currency: 'EUR' })).toEqual([]);
     });
   });
+});
+
+/*
+ * Production, 2026-11-19 (revision a5a0adf9): after D2 both fresh-project
+ * goals constructed 4 arrangements — the reverse designs, nothing else — and
+ * cut all 4 ("published prices for other buyers among the Brain's validated
+ * findings span $N–$N"), while the Brain held a map another goal constructed
+ * 16,262 candidates from. A goal in a project whose own map names too few
+ * buyers constructs from the Brain's shared map (§31, §34), and its sector and
+ * buyer line up with the borrowed prices, so the comparable narrowing finds a
+ * tight set.
+ */
+describe("D4: a fresh project's goal constructs from the Brain's map", () => {
+  it("borrows another project's validated subjects, estimates from a tight comparable set, and leaves a mapped project's construction alone", async () => {
+    const a = (await freshProject()).project.id;
+    const fresh = (await createProject({ name: 'Cash Mode 3', slug: `cash-mode-3-${Math.random().toString(36).slice(2, 8)}` })).id;
+    const other = (await createProject({ name: 'Cash Mode 2', slug: `cash-mode-2-${Math.random().toString(36).slice(2, 8)}` })).id;
+    const owner = (await createUser({ email: `fg-${Math.random().toString(36).slice(2, 10)}@example.test`, displayName: 'Owner', password: 'a-long-enough-password' })).id;
+    // Project A: a map of its own with three buyer types — enough that it never reads the Brain's.
+    const dentistry = await seedSubject({ projectId: a, name: 'Dentistry', actorRef: owner });
+    const practices = await seedSubject({ projectId: a, name: 'Dental practices', kind: 'BUYER_TYPE', parentId: dentistry.node.id, actorRef: owner });
+    await seedSubject({ projectId: a, name: 'Orthodontic clinics', kind: 'BUYER_TYPE', parentId: dentistry.node.id, actorRef: owner });
+    await seedSubject({ projectId: a, name: 'Dental laboratories', kind: 'BUYER_TYPE', parentId: dentistry.node.id, actorRef: owner });
+    const priceFact = async (projectId: string, nodeId: string, claimId: string, low: number, high: number) =>
+      recordClaimFact({
+        projectId, nodeId, claimId, key: 'price_per_unit', segment: `map_${nodeId}`, low, high, status: 'OBSERVED',
+        measures: 'a buyer pays per compliance report', sourceTitle: 'Price list', sourceUrl: `https://example.org/${claimId}`, sourceKind: 'PRIMARY', observedAt: '2026-11-01T00:00:00.000Z',
+      });
+    await priceFact(a, practices.node.id, await validatedClaim(a, 'p1', true), 150, 250);
+    await priceFact(a, practices.node.id, await validatedClaim(a, 'p2', true), 200, 300);
+
+    const inputOf = (projectId: string) => ({ projectId, currency: 'USD', delivers: ['compliance report'], capitalCeilingCents: 1_000_000, daysLeft: 90 });
+    clearConstructionMemo();
+    const aBefore = await constructArrangements(inputOf(a));
+
+    // Another project's validated subject in a far dearer sector: every Brain price together spans $200–$50,000.
+    const building = await seedSubject({ projectId: other, name: 'Construction', actorRef: owner });
+    const contractors = await seedSubject({ projectId: other, name: 'General contractors', kind: 'BUYER_TYPE', parentId: building.node.id, actorRef: owner });
+    await seedSubject({ projectId: other, name: 'Unvalidated buyers', kind: 'BUYER_TYPE', parentId: building.node.id, actorRef: owner });
+    await priceFact(other, contractors.node.id, await validatedClaim(a, 'c1', true), 50_000, 50_000);
+    await priceFact(other, contractors.node.id, await validatedClaim(a, 'c2', true), 40_000, 60_000);
+
+    // A's construction is untouched: no borrowed part, the same arrangements as before the Brain grew.
+    clearConstructionMemo();
+    const aAfter = await constructArrangements(inputOf(a));
+    expect(aAfter.map((one) => one.key)).toEqual(aBefore.map((one) => one.key));
+    expect(aAfter.flatMap((one) => [one.demand, one.need, one.supply]).some((p) => p?.from === 'BRAIN_MAP')).toBe(false);
+
+    // The fresh project constructs from the Brain's subjects, labelled, with no other project's row id.
+    clearConstructionMemo();
+    const built = await constructArrangements(inputOf(fresh));
+    const borrowed = built.filter((one) => one.demand.from === 'BRAIN_MAP');
+    expect(borrowed.length).toBeGreaterThan(0);
+    // A's three seeded buyers are not evidenced by a finding; its priced one and the other project's priced one are.
+    expect(new Set(borrowed.map((one) => one.demand.name))).toEqual(new Set(['Dental practices', 'General contractors']));
+    expect(borrowed.every((one) => !one.demand.ref.includes(practices.node.id) && !one.demand.ref.includes(contractors.node.id))).toBe(true);
+    expect(borrowed.every((one) => one.question.includes(BRAIN_MAP_SENTENCE))).toBe(true);
+    const dental = borrowed.find((one) => one.demand.name === 'Dental practices')!;
+    expect(dental.sector).toBe('Dentistry');
+    // A seeded subject with no claim of its own establishes no payer in the asking project.
+    expect(dental.demand.claimId).toBeNull();
+
+    // Every Brain price together is no comparable set; the sector narrows it to a tight one.
+    const otherPrices = await brainComparablePrices({ projectId: fresh, currency: 'USD' });
+    expect(comparablePricesFor({ sector: null }, otherPrices)).toMatchObject({ refused: expect.stringContaining("among the Brain's validated findings span") });
+    const narrowed = comparablePricesFor(dental, otherPrices);
+    expect('prices' in narrowed && { prices: [...narrowed.prices].sort((x, y) => x - y), scope: narrowed.scope }).toEqual({ prices: [Math.sqrt(150 * 250), Math.sqrt(200 * 300)], scope: "in the same sector (Dentistry) among the Brain's validated findings" });
+
+    const selected = selectEstimatedArrangements(built, { projectId: fresh, currency: 'USD', beforeProofCents: null, remaining: 90_000, exclusions: [], daysLeft: 90, otherPrices });
+    const estimated = selected.openings.filter((one) => one.price.provenance === 'UNKNOWN' && /among the Brain's validated findings/.test(one.price.note ?? ''));
+    expect(estimated.length).toBeGreaterThan(0);
+    // Borrowed knowledge bounds; it never certifies.
+    expect(estimated.every((one) => one.price.inferred?.tier === 'MECHANISM' && one.price.inferred?.justified === false)).toBe(true);
+  }, 60_000);
 });
 
 describe('D3: a monthly recurring target is read and labelled as a run-rate', () => {

@@ -41,7 +41,7 @@
  */
 import { breaksOperatingModel, operatingFit } from '../../domain/operatingModel.ts';
 import { createHash } from 'node:crypto';
-import { listNodes } from '../../repos/industry.ts';
+import { listNodes, listOtherProjectsLiveNodes } from '../../repos/industry.ts';
 import { listOtherProjectsClaimFacts, listProjectConstructionFacts } from '../../repos/construction.ts';
 import { eligibleClaimIds } from '../../repos/sharedFindings.ts';
 import type { FactKey, FactStatus } from '../../domain/construction.ts';
@@ -106,7 +106,13 @@ export interface Primitive {
   name: string;
   /** A gated claim behind it, or null for a proved capability, an opening's own words, or a part reverse construction asks the world for. */
   claimId: string | null;
-  from: 'INDUSTRY_MAP' | 'OPENING' | 'CAPABILITY' | 'REVERSE' | 'EVENT_GRAPH';
+  /**
+   * `BRAIN_MAP`: a subject of the Brain's shared industry map (`brainMapNodes`)
+   * that a project whose own map names too few buyers constructs from — the
+   * shared root's discovery or a subject a validated finding evidences (§31,
+   * §34). Its `ref` is its path, never another project's row id.
+   */
+  from: 'INDUSTRY_MAP' | 'BRAIN_MAP' | 'OPENING' | 'CAPABILITY' | 'REVERSE' | 'EVENT_GRAPH';
   ref: string;
   /**
    * What this part *is*, independent of any row id (K-7): a map node's kind and
@@ -618,22 +624,38 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
     if (!sectors.has(key)) sectors.set(key, { name, demand: [], needs: [], supply: [] });
     return sectors.get(key)!;
   };
+  /*
+   * A project whose own map names too few buyers to construct from — a goal
+   * created in a fresh project — also reads the Brain's shared map (§31, §34):
+   * production, 2026-11-19, two such goals constructed 4 reverse designs and
+   * nothing else while the Brain held a map another goal built 16,262
+   * candidates from. Decided from the nodes already read, so a project with a
+   * map of its own pays nothing and constructs exactly as before.
+   */
+  const brain = nodes.filter((one) => one.kind === 'BUYER_TYPE').length < BRAIN_MAP_BELOW ? await brainMapNodes(input.projectId) : null;
   // The claims the map's nodes were filed from: what they state about how these buyers pay (an RFP, a deposit, net terms).
-  const nodeClaims = new Map((await claimsByIds(nodes.map((one) => one.sourceClaimId).filter((one): one is string => !!one))).map((one) => [one.id, one]));
-  for (const node of nodes) {
-    if (!safeName(node.name) || !allowed(node.name)) continue;
-    const root = rootOf(node, byId);
-    if (!allowed(root.name)) continue;
-    const claim = node.sourceClaimId ? nodeClaims.get(node.sourceClaimId) : undefined;
+  const nodeClaims = new Map(
+    (await claimsByIds([...nodes.map((one) => one.sourceClaimId), ...(brain?.nodes ?? []).map((one) => brain!.claimOf(one))].filter((one): one is string => !!one))).map((one) => [one.id, one]),
+  );
+  const addNode = (node: IndustryNode, tree: Map<string, IndustryNode>, from: 'INDUSTRY_MAP' | 'BRAIN_MAP', claimId: string | null): void => {
+    if (!safeName(node.name) || !allowed(node.name)) return;
+    const root = rootOf(node, tree);
+    if (!allowed(root.name)) return;
+    const list = node.kind === 'BUYER_TYPE' ? 'demand' : node.kind === 'BOTTLENECK' ? 'needs' : node.kind === 'FULFILMENT_SOURCE' ? 'supply' : null;
+    if (!list) return;
+    const path = nodePath(node, tree);
+    const parts = sector(root.name)[list];
+    // The same subject in two projects' maps is one part, and a project's own row is the one kept.
+    if (from === 'BRAIN_MAP' && parts.some((one) => one.path === path)) return;
+    const claim = claimId ? nodeClaims.get(claimId) : undefined;
     const terms = combineTimings([
       timingOfText(node.description, `map node "${node.name.slice(0, 60)}"`),
       timingOfText(claim ? [claim.claim, claim.evidenceExcerpt].filter(Boolean).join(' ') : null, `claim ${claim?.id ?? ''}`.trim()),
     ]);
-    const p: Primitive = { name: clean(node.name), claimId: node.sourceClaimId, from: 'INDUSTRY_MAP', ref: node.id, path: nodePath(node, byId), ...(terms.timing !== 'UNKNOWN' ? { terms } : {}) };
-    if (node.kind === 'BUYER_TYPE') sector(root.name).demand.push(p);
-    else if (node.kind === 'BOTTLENECK') sector(root.name).needs.push(p);
-    else if (node.kind === 'FULFILMENT_SOURCE') sector(root.name).supply.push(p);
-  }
+    parts.push({ name: clean(node.name), claimId, from, ref: from === 'BRAIN_MAP' ? `BRAIN:${path}` : node.id, path, ...(terms.timing !== 'UNKNOWN' ? { terms } : {}) });
+  };
+  for (const node of nodes) addNode(node, byId, 'INDUSTRY_MAP', node.sourceClaimId);
+  for (const node of brain?.nodes ?? []) addNode(node, brain!.byId, 'BRAIN_MAP', brain!.claimOf(node));
   // A payer research established is a buyer population too, with what it pays for as its need.
   const byPayer = new Map<string, CashOpportunity[]>();
   for (const o of opportunities) {
@@ -958,6 +980,62 @@ export async function brainComparablePrices(
     out.push({ value: low === high ? low : Math.sqrt(low * high), industry: root.name, payer: node.name, brain: true });
   }
   return out;
+}
+
+/** Below this many live buyer types of its own, a project's construction also reads the Brain's map (`brainMapNodes`). */
+export const BRAIN_MAP_BELOW = 3;
+
+/** What an arrangement composed from the Brain's map says about where its parts came from. */
+export const BRAIN_MAP_SENTENCE =
+  "Its parts come from the Brain's shared industry map (the shared frontier's discovery and other projects' validated findings), not from this project's own research.";
+
+/** The construction fact keys whose rows evidence a map subject (what `constructionObservations` reads). */
+const FACT_EVIDENCE_KEYS: readonly FactKey[] = [...FACT_PRICE_KEYS, ...FACT_COST_KEYS, ...FACT_RUN_COST_KEYS, ...FACT_VOLUME_KEYS, ...FACT_CONVERSION_KEYS, ...FACT_BUYERS_KEYS];
+
+/**
+ * The Brain's shared industry map, as a project other than its holders reads
+ * it: the buyer types, bottlenecks and fulfilment sources of
+ *
+ *   - the shared frontier's root (`findCashRoot`) — discovery is one shared
+ *     frontier, filed under the root, and private only once an opening becomes
+ *     an execution job (§34, `root.ts`); and
+ *   - any other project, where a validated finding evidences the subject: the
+ *     node was filed from a claim that is an eligible shared finding right now,
+ *     or an OBSERVED/VERIFIED construction fact segmented to it was (§31,
+ *     `eligibleClaimIds`, the rule `brainComparablePrices` reads).
+ *
+ * A subject is a population, a need or a source of supply — evidence about the
+ * world. Nothing an operation decided is read: no opening, quote, price it
+ * would charge, ledger or grant (§34's private commercial terms). `byId` holds
+ * every other live node so a subject's sector is named by its own map's root;
+ * an ancestor is only a name and never a part. `claimOf` gives a subject's
+ * claim only while it is an eligible finding, so an unvalidated or contested
+ * claim establishes nothing in the asking project. Read only when the asking
+ * project's own map names fewer than `BRAIN_MAP_BELOW` buyers; its figures
+ * reach a plan only as comparable prices (`brainComparablePrices`), MECHANISM
+ * bounds that never certify.
+ */
+export async function brainMapNodes(projectId: string): Promise<{ nodes: IndustryNode[]; byId: Map<string, IndustryNode>; claimOf: (node: IndustryNode) => string | null }> {
+  const none = { nodes: [], byId: new Map<string, IndustryNode>(), claimOf: () => null };
+  const others = await listOtherProjectsLiveNodes(projectId);
+  if (others.length === 0) return none;
+  const { findCashRoot } = await import('./root.ts');
+  const root = await findCashRoot().catch(() => null);
+  const rootId = root && root.id !== projectId ? root.id : null;
+  const facts = (await listOtherProjectsClaimFacts(projectId, FACT_EVIDENCE_KEYS)).filter((one) => FACT_EVIDENCE_STATUSES.includes(one.status) && one.segment?.startsWith('map_') && one.projectId);
+  const eligible = await eligibleClaimIds([...others.map((one) => one.sourceClaimId), ...facts.map((one) => one.sourceClaimId)].filter((one): one is string => !!one));
+  const byId = new Map(others.map((one) => [one.id, one]));
+  const evidenced = new Set(
+    facts
+      .filter((one) => eligible.has(one.sourceClaimId!) && byId.get(one.segment!.slice('map_'.length))?.projectId === one.projectId)
+      .map((one) => one.segment!.slice('map_'.length)),
+  );
+  const nodes = others.filter(
+    (one) =>
+      (one.kind === 'BUYER_TYPE' || one.kind === 'BOTTLENECK' || one.kind === 'FULFILMENT_SOURCE') &&
+      (one.projectId === rootId || evidenced.has(one.id) || (!!one.sourceClaimId && eligible.has(one.sourceClaimId))),
+  );
+  return { nodes, byId, claimOf: (node) => (node.sourceClaimId && eligible.has(node.sourceClaimId) ? node.sourceClaimId : null) };
 }
 
 /**
@@ -2051,6 +2129,7 @@ function compose(args: {
       : `Brain composed an arrangement nobody has published as an opening, and needs the world to confirm or refute it: ` +
         `buyers described as "${demand.name}" pay ${need ? `to deal with "${need.name}"` : 'for what they need most'}, fulfilled by ${supply ? (supply.from === 'CAPABILITY' ? `Brain producing it (${supply.name})` : `"${supply.name}"`) : 'a supplier'}, and the operation is designed as: ${shape}. ` +
         `Establish whether such buyers actually pay for this and whether ${def.needsSupply ? 'such suppliers would take the work on these terms' : 'the deliverable is what they buy'}.${why} ` +
+        ([demand, need, supply].some((one) => one?.from === 'BRAIN_MAP') ? `${BRAIN_MAP_SENTENCE} ` : '') +
         `For each part, find a published source: ${asks}.${established}${reliesText}${failureText}${exclusionSentence(args.exclusions)} ` +
         OPENING_SENTENCE +
         unitEconomicSentence(demand.name) +
