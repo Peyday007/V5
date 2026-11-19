@@ -161,6 +161,67 @@ export function bucketCorrectionFrom(
   return { comparableKey, shift: reading.correction.amount, rationale: reading.correction.rationale, missingMechanismClaims: [...missing] };
 }
 
+/** Rows fetched per round trip of `readComparableLedger`: a page size, never a cap. */
+const BUCKET_PAGE_ROWS = 5000;
+/** `s` as a LIKE literal: backslash, `%` and `_` each escaped with a backslash, for `LIKE ? ESCAPE '\\'` in both dialects. */
+/** `s` as a LIKE literal: `\\`, `%` and `_` escaped with `\\`, for `LIKE ? ESCAPE '\\'` in both dialects. */
+function likeLiteral(s: string): string {
+  return s.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
+/**
+ * The forecast ledger as one operator comparable bucket sees it: the predictions
+ * made under `comparableKey`, and the exposures and outcomes recorded on the
+ * operator's own claims (`operator:opd_*`) — read in the statement, never by
+ * paging through every PREDICTION/EXPOSURE/OUTCOME row of every project and
+ * filtering in memory. The LIKE patterns only narrow the read; the rows are
+ * still parsed and matched exactly (`ledgerFromRows`, then the comparable key
+ * and the prediction ids), so a pattern can never admit a row that does not
+ * belong. Paged on `(at, id)` like `readLedger`, so nothing past a page is
+ * dropped. Every project's decisions of this kind are one bucket, as before.
+ */
+export async function readComparableLedger(
+  comparableKey: string,
+  pageRows = BUCKET_PAGE_ROWS,
+): Promise<{ predictions: PredictionRow[]; exposures: ExposureRow[]; outcomes: OutcomeRow[] }> {
+  const { LEDGER_EVENTS, ledgerFromRows } = await import('../quant/ledger.ts');
+  const size = Math.max(1, Math.floor(pageRows));
+  const rows: { measures: string | null }[] = [];
+  let after: { at: string; id: string } | null = null;
+  for (;;) {
+    const params: (string | number)[] = [
+      LEDGER_EVENTS.PREDICTION,
+      `%"comparableKey":${likeLiteral(JSON.stringify(comparableKey))}%`,
+      LEDGER_EVENTS.EXPOSURE,
+      LEDGER_EVENTS.OUTCOME,
+      `%"predictionId":"${likeLiteral('operator:')}%`,
+    ];
+    let where =
+      `((event_type = ? AND measures LIKE ? ESCAPE '\\') OR (event_type IN (?, ?) AND measures LIKE ? ESCAPE '\\'))`;
+    if (after) {
+      where += ' AND (at > ? OR (at = ? AND id > ?))';
+      params.push(after.at, after.at, after.id);
+    }
+    params.push(size);
+    const page = await getDb().all<{ id: string; at: string; measures: string | null }>(
+      `SELECT id, at, measures FROM bin_events WHERE ${where} ORDER BY at ASC, id ASC LIMIT ?`,
+      params,
+    );
+    rows.push(...page);
+    const last = page[page.length - 1];
+    if (page.length < size || !last) break;
+    after = { at: last.at, id: last.id };
+  }
+  const ledger = ledgerFromRows(rows);
+  const predictions = ledger.predictions.filter((p) => p.comparableKey === comparableKey);
+  const ids = new Set(predictions.map((p) => p.id));
+  return {
+    predictions,
+    exposures: ledger.exposures.filter((e) => ids.has(e.predictionId)),
+    outcomes: ledger.outcomes.filter((o) => ids.has(o.predictionId)),
+  };
+}
+
 /** The stated probability moved by the bucket's measured gap, kept strictly inside (0, 1). */
 export function correctedProbability(stated: number, correction: BucketCorrection | null): number {
   if (!correction) return stated;
@@ -192,8 +253,10 @@ export async function decide(
   }
   // The bucket's own record decides how far the stated probability can be taken at its word (FORECAST:operator:*).
   const comparableKey = `operator:${input.kind}`;
-  const { readLedger, recordPrediction } = await import('../quant/ledger.ts');
-  const correction = bucketCorrectionFrom(await readLedger(null), comparableKey);
+  const { recordPrediction } = await import('../quant/ledger.ts');
+  // One read, scoped to this bucket, serves both the correction and the version `recordPrediction` assigns.
+  const bucket = await readComparableLedger(comparableKey);
+  const correction = bucketCorrectionFrom(bucket, comparableKey);
   if (correction && correction.missingMechanismClaims.length > 0 && !input.assumptions.some((a) => MECHANISM_ASSUMPTION.test(a))) {
     const claims = correction.missingMechanismClaims;
     return {
@@ -241,7 +304,7 @@ export async function decide(
       probability,
       comparableKey,
     },
-    { projectId, caller: 'operator-decision' },
+    { projectId, caller: 'operator-decision', read: async () => bucket },
   );
   const committedAt = new Date().toISOString();
   await recordEvent({
