@@ -594,6 +594,18 @@ function familyOwner(family: string): { component: string; subject: string } {
 }
 
 /**
+ * What a correction's text calls the forecast it corrects: its family's subject when every claim is one
+ * family (always, after `correctionsByFamily`), so a need or a goal record never names the cash forecast
+ * for a correction made on another family's claims.
+ */
+export function forecastSubject(claimIds: readonly string[]): { subject: string; noun: string; cash: boolean } {
+  const families = [...new Set(claimIds.map(claimFamily))];
+  const only = families.length === 1 ? families[0]! : null;
+  const subject = only ? familyOwner(only).subject : 'The forecasts on the ledger';
+  return { subject, noun: subject.charAt(0).toLowerCase() + subject.slice(1), cash: only === 'cash' };
+}
+
+/**
  * One correction per claim family. `smallestReusableCauses` groups by cause across the whole ledger, so one
  * correction can span the cash forecast and the operator's decisions; each family is corrected by its own
  * owner, so each is routed as its own correction, its misses counted from its own systematic diagnoses.
@@ -697,10 +709,13 @@ export async function openCorrectionWork(
 
   // Commercial operations, or a research cause with no opening left to research: one need on the
   // operation's own review, naming the correction, so the miss is never left at a reading.
+  const forecast = forecastSubject(correction.claimIds);
   const raised = await raise({
     projectId,
     actorRef: 'BRAIN',
-    blockedAction: `Correct the cash forecast's ${cause} (${words(correction.owner)})`,
+    blockedAction: forecast.cash
+      ? `Correct the cash forecast's ${cause} (${words(correction.owner)})`
+      : `Correct the ${cause} in ${forecast.noun} (${words(correction.owner)})`,
     whyItMatters: `${correction.misses} systematic miss(es) on ${correction.claimIds.join(', ')} trace to ${cause}, and the plans built on this forecast stay wrong until it is corrected. ${why}`.slice(0, 1000),
     recommendedPath:
       correction.owner === 'COMMERCIAL_OPERATIONS'
@@ -791,7 +806,7 @@ export async function learnFromCashLedger(projectId: string, currencies: readonl
       await note({
         workstreamId: goal.id,
         kind: CORRECTION_EVENT,
-        summary: `The cash forecast missed systematically: ${correction.cause} on ${correction.claimIds.length} claim(s), ${failed.length ? 'an earlier correction did not improve the next observations, corrected again' : 'corrected'} by ${correction.owner}${needs.length ? ` through ${needs.length} opened need(s)` : ''}.`.slice(0, 400),
+        summary: `${forecastSubject(correction.claimIds).subject} missed systematically: ${correction.cause} on ${correction.claimIds.length} claim(s), ${failed.length ? 'an earlier correction did not improve the next observations, corrected again' : 'corrected'} by ${correction.owner}${needs.length ? ` through ${needs.length} opened need(s)` : ''}.`.slice(0, 400),
         detail: {
           key,
           cause: correction.cause,
@@ -820,7 +835,7 @@ export async function learnFromCashLedger(projectId: string, currencies: readonl
         await note({
           workstreamId: goal.id,
           kind: COMPARISON_EVENT,
-          summary: `The ${correction.cause} correction to the cash forecast, compared with the ${c.nAfter} observation(s) after it on ${verdict.comparableKey}: ${c.verdict}${c.verdict === 'TOO_FEW' ? ` (${c.nBefore} before, ${c.nAfter} after)` : c.verdict === 'NOT_IMPROVED' ? ', routed again' : ''}.`.slice(0, 400),
+          summary: `The ${correction.cause} correction to ${forecastSubject(correction.claimIds).noun}, compared with the ${c.nAfter} observation(s) after it on ${verdict.comparableKey}: ${c.verdict}${c.verdict === 'TOO_FEW' ? ` (${c.nBefore} before, ${c.nAfter} after)` : c.verdict === 'NOT_IMPROVED' ? ', routed again' : ''}.`.slice(0, 400),
           detail: { key: ckey, correctionKey: key, cause: correction.cause, owner: correction.owner, claimIds: correction.claimIds, comparableKey: verdict.comparableKey, correctedAt: verdict.correctedAt, ...c },
           actorRef: 'BRAIN',
         });

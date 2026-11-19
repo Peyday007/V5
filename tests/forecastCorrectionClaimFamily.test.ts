@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { claimFamily, correctionsByFamily, learnFromCashLedger } from '../server/services/quant/knowledge.ts';
+import { claimFamily, correctionsByFamily, forecastSubject, learnFromCashLedger, openCorrectionWork } from '../server/services/quant/knowledge.ts';
 import { assessModelLearning } from '../server/services/quant/learning.ts';
-import { MIN_CALIBRATION_SAMPLE, type OutcomeRow, type PredictionRow } from '../server/services/quant/forecast.ts';
+import { MIN_CALIBRATION_SAMPLE, type Correction, type OutcomeRow, type PredictionRow } from '../server/services/quant/forecast.ts';
 
 /*
  * FORECAST:MISSING_MECHANISM, production 2026-11-19: the project ledger holds
@@ -136,5 +136,30 @@ describe('a systematic miss is corrected under the claim family it was made on',
     expect(claimFamily('cash:prj_1:USD:revenue')).toBe('cash');
     expect(claimFamily('operator:opd_abc')).toBe('operator');
     expect(claimFamily('x7')).toBe('x7');
+  });
+
+  it("a correction's own text names the forecast it was made on, never the cash forecast for another family", async () => {
+    const opened = async (correction: Correction) => {
+      const needs: { blockedAction: string }[] = [];
+      await openCorrectionWork('p', correction, '', {
+        openings: async () => [],
+        raise: (async (n: { blockedAction: string }) => {
+          needs.push(n);
+          return { ok: true, value: { id: 'need' } };
+        }) as never,
+      });
+      return needs.map((n) => n.blockedAction);
+    };
+    const operator = await opened({ cause: 'MISSING_MECHANISM', owner: 'RESEARCH', claimIds: ['operator:opd_1', 'operator:opd_2'], misses: 12 });
+    expect(operator).toEqual(["Correct the missing mechanism in the operator's decision forecasts (research)"]);
+    // The cash forecast's own need reads exactly as it did.
+    const cash = await opened({ cause: 'MISSING_MECHANISM', owner: 'COMMERCIAL_OPERATIONS', claimIds: ['cash:p:USD:revenue'], misses: 3 });
+    expect(cash).toEqual(["Correct the cash forecast's missing mechanism (commercial operations)"]);
+
+    // The goal-record summaries take their subject from the same place.
+    expect(forecastSubject(['operator:opd_1'])).toEqual({ subject: "The operator's decision forecasts", noun: "the operator's decision forecasts", cash: false });
+    expect(forecastSubject(['cash:p:USD:revenue'])).toEqual({ subject: 'The cash forecast', noun: 'the cash forecast', cash: true });
+    expect(forecastSubject(['x7:a']).subject).toBe('The x7 forecasts on the ledger');
+    expect(forecastSubject(['cash:p:USD:revenue', 'operator:opd_1']).subject).not.toMatch(/cash/);
   });
 });
