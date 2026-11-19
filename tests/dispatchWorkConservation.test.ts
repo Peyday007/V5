@@ -17,7 +17,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { createWorker, grantMembership } from '../server/repos/identity.ts';
-import { createAccount, createRoutine, bindRoutineWorker } from '../server/repos/fleet.ts';
+import { createAccount, createRoutine, bindRoutineWorker, setPolicy } from '../server/repos/fleet.ts';
 import {
   createBin,
   ensureDispatchIntent,
@@ -37,6 +37,7 @@ import { getDb } from '../server/db/database.ts';
 import type { BinManifest } from '../server/domain/types.ts';
 
 let projectId = '';
+let accountId = '';
 let fires = 0;
 const realFetch = globalThis.fetch;
 
@@ -45,6 +46,7 @@ beforeEach(async () => {
   projectId = fixture.project.id;
   const suffix = Math.random().toString(36).slice(2, 8);
   const account = await createAccount({ provider: 'anthropic', name: `conserve-${suffix}` });
+  accountId = account.id;
   const worker = await createWorker({ name: `conserve-worker-${suffix}`, createdByType: 'SYSTEM', createdById: 'test' });
   await grantMembership({
     projectId,
@@ -185,6 +187,30 @@ describe('the recorded idle class', () => {
     for (const binId of Object.keys(held)) {
       expect(readiness.held.find((one) => one.binId === binId)?.kind).toBe('DEFERRED');
     }
+  });
+
+  it('ends only as many capacity waits as there is free capacity', async () => {
+    // One free slot (the account's target is 1, nothing in flight) and three
+    // intents deferred because the account was at its target. Asked against the
+    // snapshot unchanged, every one of them routed and all three were made due.
+    await setPolicy({ scope: 'ACCOUNT', scopeId: accountId, target: 1, actor: 'test', reason: 'one slot' });
+    const intents: string[] = [];
+    for (let i = 0; i < 3; i += 1) intents.push(await deferOn(await readyBin(), 'ACCOUNT_TARGETS_REACHED'));
+
+    const tick = await dispatchTick({ burst: 4, projectIds: [projectId], conserve: true });
+    expect(tick.conserved).toBe(1);
+    expect(fires).toBeLessThanOrEqual(1);
+    const stillDeferred = [];
+    for (const intentId of intents) {
+      const row = await getDb().get<{ next_attempt_at: string | null; state: string }>(
+        'SELECT next_attempt_at, state FROM bin_dispatch WHERE id = ?',
+        [intentId],
+      );
+      if (row?.state === 'PENDING' && row.next_attempt_at && Date.parse(row.next_attempt_at) > Date.now()) {
+        stillDeferred.push(intentId);
+      }
+    }
+    expect(stillDeferred).toHaveLength(2);
   });
 
   it('does not pull forward a capacity deferral the router still refuses', async () => {

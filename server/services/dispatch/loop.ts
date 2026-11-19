@@ -90,7 +90,7 @@ import { fleetSnapshot, NO_SHOW_WINDOW_MS } from './candidates.ts';
 import { shouldQuarantine } from './scaler.ts';
 import { routeBin } from './router.ts';
 import { rearmStrandedIntents } from './rearm.ts';
-import { pullForwardCapacityDeferred } from './conservation.ts';
+import { pullForwardCapacityDeferred, reservingRouter } from './conservation.ts';
 import { OPERATOR_RESOLVED_ROUTING_REFUSALS, refusalEndsBurst, waitsForOperator, type RoutingRefusal } from './router.ts';
 import { binNeedsWeb, markDispatchRoutine } from '../../repos/bins.ts';
 import {
@@ -452,17 +452,18 @@ export async function dispatchTick(
    * capacity waits and are left exactly where they are (`ENDED_BY_FREE_CAPACITY`).
    */
   if (options.conserve) {
+    // Each pull is counted against the snapshot before the next is asked, so one
+    // free surface ends one capacity wait rather than every one of them.
+    const router = reservingRouter({
+      candidates: snapshot.candidates,
+      fleetPolicy: snapshot.fleetPolicy,
+      fleetInFlight: snapshot.fleetInFlight,
+      factoryInFlight: snapshot.factoryInFlight,
+    });
     const pulled = await pullForwardCapacityDeferred({
       projectIds: options.projectIds,
-      routesNow: (bin) =>
-        routeBin({
-          bin,
-          candidates: snapshot.candidates,
-          fleetPolicy: snapshot.fleetPolicy,
-          fleetInFlight: snapshot.fleetInFlight,
-          factoryInFlight: snapshot.factoryInFlight,
-          now: new Date().toISOString(),
-        }).ok,
+      routesNow: router.route,
+      reserve: router.reserve,
     });
     result.conserved = pulled.length;
   }
