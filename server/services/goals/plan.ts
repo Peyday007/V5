@@ -104,6 +104,7 @@ import type { ExploreContext } from './reasoning/directions.ts';
 import { loadLibrary, loadStancePrior, recordExploration } from './reasoning/learning.ts';
 import { implementedFormats } from '../puzzle/formats/index.ts';
 import { readTimelines, type TimelineReading } from './timelines.ts';
+import { changeTitle } from './stepTitle.ts';
 import { goalObjective, readOutcome, tradeOffs, type EnforceableCommitment, type GoalObjective, type OutcomeReading, type PlanTradeOff } from './objective.ts';
 import { buildPlanSet, calibrationFor, candidateFromArrangement, candidateFromPathway, candidateFromStrategy, rebuildAfter, type AcceptanceCondition, type Calibration, type PlanCandidate, type PlanChange, type PlanSet, type Rebuild } from './planSet.ts';
 
@@ -2603,7 +2604,7 @@ export function planSteps(input: {
       const who = ownerOf(c);
       steps.push({
         order: steps.length + 1,
-        label: c.label,
+        label: changeTitle(c),
         detail: c.detail,
         startDay: c.startDay ?? null,
         cost: c.cost,
@@ -2716,7 +2717,7 @@ export function planSteps(input: {
 
 /** The adopted plan's first step as the reading's next step. */
 export function stepAsNextTest(step: PlanStep, reconstruction: Reconstruction | null): NextTest {
-  const change = reconstruction?.best.changes.find((c) => c.label === step.label);
+  const change = reconstruction?.best.changes.find((c) => changeTitle(c) === step.label || c.label === step.label);
   const link = change ? (CHANGE_LINK[change.dimension] ?? 'OFFER_AND_PRICE') : 'CONVERSION';
   return {
     link,

@@ -216,7 +216,8 @@ describe('C-8: the adopted plan is a sequence of steps', () => {
   const steps = planSteps({ adoption, reconstruction: r, sales: [], nextTest: null, permissionsMissing });
 
   it('orders the changes by start day, ends with the sale, and names each step\'s basis, cost and dependency', () => {
-    expect(steps.map((s) => s.label)).toEqual(['marketplace leads', 'bundle ×9', 'deposit at signing', 'Sell and collect']);
+    // A step is titled by what the change does, never by the reconstruction's key (stepTitle.ts).
+    expect(steps.map((s) => s.label)).toEqual(['Buy qualified marketplace leads', 'Sell nine units as one bundle', 'Take 50% at signing', 'Sell and collect']);
     expect(steps[0]).toMatchObject({ order: 1, cost: 300, basis: 'ESTIMATE', dependsOn: null });
     expect(steps[1]).toMatchObject({ basis: 'ASSUMPTION', dependsOn: 1 });
     expect(steps[2]).toMatchObject({ dependsOn: 2 });
