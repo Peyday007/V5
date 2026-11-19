@@ -551,8 +551,39 @@ function capable(routine: FleetRoutine, required: string[]): boolean {
  * to read. All four are wired now and this is an ordinary field access.
  */
 function requiredCapabilities(bin: Bin): string[] {
-  return bin.requiredCapabilities;
+  const implied = bin.workloadClass ? (CAPABILITIES_IMPLIED_BY_CLASS[bin.workloadClass] ?? []) : [];
+  if (implied.length === 0) return bin.requiredCapabilities;
+  return [...new Set([...bin.requiredCapabilities, ...implied])];
 }
+
+/**
+ * Capabilities a workload class needs whether or not the bin that carries it
+ * declared them.
+ *
+ * Production, 2026-11-12 to 11-19: 7 of 11 DESIGN_RENDER bins ended NEEDS_HUMAN
+ * with "The bin used all 3 attempts without satisfying DESIGN_RENDER_V1 v1.
+ * Outstanding: No render was submitted" — the same reason across workers
+ * (ORIGINATED:FAILURE_PATTERN:design-render). A render is `npm run design --
+ * render` run in a checkout of this repository with the browser at
+ * PLAYWRIGHT_BROWSERS_PATH, and `openDesignRender` declares no capability, so
+ * every fire could land on a research or general surface with no checkout at
+ * all. That session can submit nothing; the attempt is spent; three of them
+ * make a person's decision out of a routing mistake.
+ *
+ * `repository` is the capability a surface declares when its sessions start in
+ * a checkout (`candidates.ts` counts the Factory's in-flight work by it), and it
+ * is declared by real surfaces, so this is not §27's capability that nothing
+ * declares and that therefore refuses every surface. With no such surface the
+ * bin is refused here as NO_CAPABLE_SURFACE — a routing wait that charges no
+ * attempt — instead of being fired at a surface that cannot do it.
+ *
+ * Keyed by the class string rather than importing it from
+ * `services/design/render.ts`, which reaches the repositories and would make
+ * the router depend on a lane it only routes; the test pins the two together.
+ */
+export const CAPABILITIES_IMPLIED_BY_CLASS: Readonly<Record<string, readonly string[]>> = {
+  GENERAL_DESIGN_RENDER: ['repository'],
+};
 
 /**
  * Choose a Routine, or say precisely why none was chosen.
