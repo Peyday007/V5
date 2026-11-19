@@ -15,6 +15,7 @@ import {
   RECENTLY_UNROUTED_MS,
   describeHolds,
   dispatchReadiness,
+  type DispatchHold,
 } from '../dispatch/conservation.ts';
 import { recordIntervention } from '../../repos/engineering.ts';
 import { idleCheck } from '../../domain/engineering.ts';
@@ -36,6 +37,35 @@ export interface IdleReading {
   fired: number;
   /** Dispatchable bins the dispatcher is deliberately holding, by named hold; '' when none. */
   held: string;
+}
+
+/**
+ * The dispatcher's readiness, split the one way every idle reading splits it.
+ *
+ * `executable` is what the dispatch pass would fire now; `unexplained` is held
+ * work that is still idle capacity (an abandoned or superseded intent, a fire
+ * SENT past the in-flight window, a deferral that only free capacity ends);
+ * `explained` is a named wait with its own end. Every pool that calls work
+ * "executable" — the ROUTINES reading below and the Factory line
+ * (`readLine`) — reads this, so no reader holds a second predicate the
+ * conserving pass disagrees with (ORIGINATED:IDLE_CAPACITY:engineering-watchdog,
+ * attempt 2, repair F1).
+ */
+export async function idleReadiness(now = new Date()): Promise<{
+  executable: Array<{ binId: string; projectId: string }>;
+  unexplained: DispatchHold[];
+  explained: DispatchHold[];
+}> {
+  const readiness = await dispatchReadiness(now);
+  const unexplained = readiness.held.filter(
+    (hold) =>
+      hold.kind === 'ABANDONED' ||
+      hold.kind === 'SUPERSEDED' ||
+      hold.kind === 'SENT_UNANSWERED' ||
+      (hold.kind === 'DEFERRED' && hold.cause !== null && (CAPACITY_ENDED_REFUSALS as readonly string[]).includes(hold.cause)),
+  );
+  const explained = readiness.held.filter((hold) => !unexplained.includes(hold));
+  return { executable: readiness.executable, unexplained, explained };
 }
 
 export async function idleCounts(now = new Date()): Promise<Omit<IdleReading, 'idle' | 'reason' | 'intervened' | 'fired'>> {
@@ -71,15 +101,7 @@ export async function idleCounts(now = new Date()): Promise<Omit<IdleReading, 'i
    * (`SENT_UNANSWERED`): the no-show pass should have reopened it long since,
    * and a hold with no age limit would hide that path stalling.
    */
-  const readiness = await dispatchReadiness(now);
-  const unexplained = readiness.held.filter(
-    (hold) =>
-      hold.kind === 'ABANDONED' ||
-      hold.kind === 'SUPERSEDED' ||
-      hold.kind === 'SENT_UNANSWERED' ||
-      (hold.kind === 'DEFERRED' && hold.cause !== null && (CAPACITY_ENDED_REFUSALS as readonly string[]).includes(hold.cause)),
-  );
-  const explained = readiness.held.filter((hold) => !unexplained.includes(hold));
+  const { executable, unexplained, explained } = await idleReadiness(now);
   const active = await getDb().get<{ n: number | string }>(
     "SELECT COUNT(*) AS n FROM bins WHERE state = 'LEASED' AND lease_expires_at > ?",
     [iso],
@@ -87,7 +109,7 @@ export async function idleCounts(now = new Date()): Promise<Omit<IdleReading, 'i
   const capacity = await capacityReading();
   const eligible = capacity.eligibleNow;
   return {
-    executableWork: readiness.executable.length + unexplained.length,
+    executableWork: executable.length + unexplained.length,
     eligibleCapacity: eligible,
     activeWork: Number(active?.n ?? 0),
     safeTarget: capacity.target ?? eligible,

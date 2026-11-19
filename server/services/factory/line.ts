@@ -639,7 +639,28 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
   // Only what admission would actually start counts as executable: an entry
   // waiting on an overlapping campaign is a wait with a reason, not idle work.
   const admissibleQueued = queued.filter((row) => row.executableNow).length;
-  const executableTotal = readyBins + admissibleQueued;
+  /*
+   * A READY stage bin is executable only when the dispatcher says so
+   * (`dispatchReadiness`, split by the watchdog's `idleReadiness`), never by
+   * its state alone. Counting every READY bin read "FACTORY: 1 piece(s) of
+   * executable work and 1 free surface(s) … That is a fault, not a wait"
+   * beside a bin held by a rate-limit or operator-wait deferral, pinned to an
+   * unavailable surface, refused by routing moments ago, or not fireable or
+   * work-ready — while the conserving pass the watchdog then asked for
+   * correctly had nothing to fire (ORIGINATED:IDLE_CAPACITY:engineering-watchdog,
+   * attempt 2, repair F1). A hold that is still idle capacity (abandoned,
+   * superseded, sent and unanswered, deferred only on capacity) still counts,
+   * so no bar is lowered; a named wait is shown as one.
+   */
+  const factoryBinIds = new Set(lineBins.filter((bin) => bin.state !== 'LEASED').map((bin) => bin.binId));
+  const { idleReadiness } = await import('../engineering/watchdog.ts');
+  const readiness = await idleReadiness(now);
+  const dispatchableBins =
+    readiness.executable.filter((one) => factoryBinIds.has(one.binId)).length +
+    readiness.unexplained.filter((hold) => factoryBinIds.has(hold.binId)).length;
+  const { describeHolds } = await import('../dispatch/conservation.ts');
+  const heldBins = describeHolds(readiness.explained.filter((hold) => factoryBinIds.has(hold.binId)));
+  const executableTotal = dispatchableBins + admissibleQueued;
   const unexplainedIdle =
     executableTotal > 0 && freeSurfaces > 0 && leasedBins === 0 && arriving === 0;
 
@@ -653,6 +674,8 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
     because = `${leasedBins} stage(s) running and ${arriving} worker(s) arriving.`;
   else if (executableTotal > 0)
     because = `${executableTotal} piece(s) of executable work, but no Factory surface is free to take it.`;
+  else if (heldBins)
+    because = `${readyBins} stage bin(s) ready, each held by the dispatcher for a named wait, not idle: ${heldBins}.`;
   else if (queue.length > 0)
     because = `${queue.length} objective(s) queued behind ${workingCampaigns} working campaign(s), the limit being ${policy.maxActive}.`;
   else because = 'Nothing is queued and no campaign has a stage waiting.';
@@ -661,7 +684,7 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
     at: nowIso,
     policy,
     auto: policy.maxActive > 0,
-    executable: { queued: admissibleQueued, readyBins, total: executableTotal },
+    executable: { queued: admissibleQueued, readyBins: dispatchableBins, total: executableTotal },
     active: { leasedBins, arriving, workingCampaigns },
     capacity: { freeSurfaces, surfaces },
     unexplainedIdle,
