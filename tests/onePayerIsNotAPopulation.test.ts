@@ -25,8 +25,8 @@ describe('one payer is not a buyer population', () => {
       'Dutch cleaning company De Poetsfee',
       'Dutch cleaning company De Po…',
       'the software firm Acme',
-      'Production committee investors',
-      'Production committee investo…',
+      "the production committee's investors",
+      "the production committee's investo…",
       'the production committee',
       'the Smith family foundation board',
       "Toei's investors",
@@ -48,6 +48,8 @@ describe('one payer is not a buyer population', () => {
       'school districts',
       'Homeowner',
       'investors in anime production committees',
+      'Production committee investors',
+      'Production committee investor companies',
     ]) {
       expect(namesABuyerPopulation(name), name).toBe(true);
       expect(namesOneOrganisation(name), name).toBe(false);

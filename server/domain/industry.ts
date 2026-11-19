@@ -533,8 +533,13 @@ const ONE_BRAND_WORD = /^(?:[A-Za-z0-9]*[a-z][A-Z][A-Za-z0-9]*|[A-Za-z0-9-]+\.(?
 const DESCRIBED_COMPANY = /\b(?:company|firm|agency|business|corporation|startup|start-up|brand|publisher|platform|retailer|manufacturer|provider|vendor|studio|consultancy|organi[sz]ation|bank|school|hospital|clinic|charity|foundation|nonprofit|non-profit|website|marketplace|newspaper|magazine|newsletter)\s+(?:called\s+|named\s+)?[A-Z0-9]/;
 /** One governing or investing body as the head of the name ("the production committee", "a school board"). */
 const ONE_BODY = /\b(?:committee|commission|consortium|syndicate|board|council|panel|jury|tribunal|cabinet|senate|parliament)$/i;
-/** The members of one body ("Production committee investors"); the investor noun may be cut short by a display. */
-const ONE_BODYS_MEMBERS = /\b(?:committee|commission|consortium|syndicate|panel|jury|tribunal)\s+(?:members?|investo\w*|backers?|shareholders?|funders?|donors?|partners?|chairs?|officers?)\b/i;
+/**
+ * The members of one body named with a determiner ("the production committee
+ * investors", "a school board's members"); the investor noun may be cut short
+ * by a display. Without a determiner the phrase is a kind ("Production
+ * committee investors" are the investors in every such committee).
+ */
+const ONE_BODYS_MEMBERS = /\b(?:the|a|an|one)\s+(?:[\w-]+\s+){0,3}?(?:committee|commission|consortium|syndicate|panel|jury|tribunal)\s+(?:members?|investo\w*|backers?|shareholders?|funders?|donors?|partners?|chairs?|officers?)\b/i;
 /** The people belonging to one named party ("Toei's investors", "the committee's members"). */
 const ONES_PEOPLE = /['’]s\s+(?:investo\w*|shareholders?|backers?|funders?|donors?|members?|board|founders?|owners?|employees?|staff|team|partners?|stakeholders?|executives?|management)\b/i;
 

@@ -264,12 +264,12 @@ describe('O-2: an observation of a moment expires', () => {
 describe('O-3: one buyer population is one market', () => {
   it('labels two needs of one buyer apart and enters the population once', async () => {
     const s = await createNode({ projectId, parentId: null, kind: 'SECTOR', name: 'Anime', origin: 'SEED' });
-    await createNode({ projectId, parentId: s.node.id, kind: 'BUYER_TYPE', name: 'Anime licensing companies', origin: 'SEED' });
+    await createNode({ projectId, parentId: s.node.id, kind: 'BUYER_TYPE', name: 'Production committee investor companies', origin: 'SEED' });
     await createNode({ projectId, parentId: s.node.id, kind: 'BOTTLENECK', name: 'Overseas licensing', origin: 'SEED' });
     await createNode({ projectId, parentId: s.node.id, kind: 'BOTTLENECK', name: 'Subtitle localisation', origin: 'SEED' });
     await createNode({ projectId, parentId: s.node.id, kind: 'FULFILMENT_SOURCE', name: 'Licensing agents', origin: 'SEED' });
     const all = await constructArrangements({ projectId, currency: 'USD', delivers: ['spreadsheets'], capitalCeilingCents: null, daysLeft: 30, now: new Date() } as Parameters<typeof constructArrangements>[0]);
-    const buyer = all.filter((one) => one.demand.name === 'Anime licensing companies' && one.need);
+    const buyer = all.filter((one) => one.demand.name === 'Production committee investor companies' && one.need);
     expect(buyer.length).toBeGreaterThan(1);
     // Verification: one label per (need, design, supply), where before every need of this buyer shared its labels.
     const labels = new Map<string, Set<string>>();
