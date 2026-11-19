@@ -8,7 +8,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { assessModelLearning } from '../server/services/quant/export.ts';
 import type { MissCause, OutcomeRow, PredictionRow } from '../server/services/quant/forecast.ts';
-import { claimFamily, claimPathway, watchForecastPath } from '../server/services/quant/fallbackWatch.ts';
+import { claimFamily, claimPathway, forecastDependencies, forecastPathways, watchForecastPath } from '../server/services/quant/fallbackWatch.ts';
+import { readReliability } from '../server/services/quant/fallbackSwitch.ts';
 import type { upsertCandidate } from '../server/repos/improvement.ts';
 import { freshProject } from './helpers.ts';
 
@@ -100,5 +101,39 @@ describe('the fallback watch keeps a claim family on its own path and hands Fact
     expect(cash.length).toBeGreaterThan(0);
     expect(cash.every((f) => f.pathway === `cash-forecast:${project.id}`)).toBe(true);
     expect(watch.failures.filter((f) => f.claimId === 'operator:opd_1').every((f) => f.pathway === `operator:${project.id}`)).toBe(true);
+  });
+
+  it("reads each family's reliability on its own pathway: operator misses are not pooled into the cash forecast's", async () => {
+    const { project } = await freshProject();
+    const cashClaim = `cash:${project.id}:USD:revenue`;
+    const cashOnly = reading(claimHistory(cashClaim, 'cash', ['PARAMETER_ESTIMATE']));
+    const mixed = reading(
+      claimHistory(cashClaim, 'cash', ['PARAMETER_ESTIMATE']),
+      claimHistory('operator:opd_586fc8e2bb8cb60c', 'operator:EVIDENCE', ['MISSING_MECHANISM']),
+    );
+    const watch = await watchForecastPath(project.id, mixed, { ...quiet, toFactory: factorySpy() });
+
+    // Two pathways, each carrying only its own family's dependencies.
+    const byKey = new Map(watch.reliability.pathways.map((p) => [p.pathway, p]));
+    expect([...byKey.keys()].sort()).toEqual([`cash-forecast:${project.id}`, `operator:${project.id}`]);
+    expect(byKey.get(`cash-forecast:${project.id}`)!.dependencies.map((d) => d.key)).toEqual([cashClaim]);
+    expect(byKey.get(`operator:${project.id}`)!.dependencies.map((d) => d.key)).toEqual(['operator:opd_586fc8e2bb8cb60c']);
+
+    // The cash forecast's reliability is what its own claims say, whatever the operator's decisions did.
+    const alone = readReliability({ pathways: forecastPathways(project.id, forecastDependencies(cashOnly)), sampleSize: 30 });
+    expect(byKey.get(`cash-forecast:${project.id}`)!.reliability).toBe(alone.pathways[0]!.reliability);
+
+    // Every safeguard is judged against its own family's pathway: the cash correction's before/after match
+    // the cash forecast read alone.
+    const cashSafeguards = watch.safeguards.filter((s) => s.safeguard.includes('PARAMETER_ESTIMATE') || /parameter estimate/.test(s.safeguard));
+    const aloneWatch = await watchForecastPath(project.id, cashOnly, { ...quiet, toFactory: factorySpy() });
+    expect(cashSafeguards.length).toBeGreaterThan(0);
+    expect(cashSafeguards.map((s) => s.successBefore)).toEqual(aloneWatch.safeguards.map((s) => s.successBefore));
+  });
+
+  it('a ledger of one family is one pathway, and an empty ledger is still the cash forecast path', () => {
+    expect(forecastPathways('prj_1', []).map((p) => p.key)).toEqual(['cash-forecast:prj_1']);
+    const r = reading(claimHistory('operator:opd_1', 'operator:BUILD', ['MISSING_MECHANISM']));
+    expect(forecastPathways('prj_1', forecastDependencies(r)).map((p) => p.key)).toEqual(['operator:prj_1']);
   });
 });

@@ -377,6 +377,36 @@ export function claimPathway(projectId: string, claimId: string): string {
   return family === 'cash' ? `cash-forecast:${projectId}` : `${family}:${projectId}`;
 }
 
+/**
+ * The watched dependencies grouped by the pathway of their claim family, the cash forecast's first. With no
+ * dependency at all it is still the cash forecast's one pathway, empty, as the watch always stated it.
+ */
+export function forecastPathways(projectId: string, dependencies: readonly Dependency[]): { key: string; dependencies: Dependency[] }[] {
+  const cash = `cash-forecast:${projectId}`;
+  const by = new Map<string, Dependency[]>([[cash, []]]);
+  for (const d of dependencies) {
+    const key = claimPathway(projectId, d.key);
+    by.set(key, [...(by.get(key) ?? []), d]);
+  }
+  return [...by]
+    .filter(([key, deps]) => deps.length > 0 || (key === cash && by.size === 1))
+    .map(([key, deps]) => ({ key, dependencies: deps }));
+}
+
+/**
+ * Outcomes behind the reliability reading. One number is stated for every pathway, and the reading is the
+ * weakest pathway's, so it is the smallest pathway's own count: one family's outcomes never support another's.
+ */
+function pathwaySampleSize(projectId: string, reading: Pick<ModelLearningReading, 'ledger'>, pathways: readonly { key: string }[]): number {
+  const counts = new Map<string, number>(pathways.map((p) => [p.key, 0]));
+  for (const e of reading.ledger) {
+    if (!e.outcome) continue;
+    const key = claimPathway(projectId, e.prediction.claimId);
+    if (counts.has(key)) counts.set(key, counts.get(key)! + 1);
+  }
+  return Math.min(...counts.values());
+}
+
 /** A method `forecastFailures` names is owned by Factory when its owner suffix says so (`forecast.ts CAUSE_OWNER`). */
 function factoryOwned(method: string): boolean {
   return method.endsWith('(FACTORY)');
@@ -420,12 +450,14 @@ export async function watchForecastPath(projectId: string, reading: ModelLearnin
   // 4. Reliability on the outcomes on record.
   // Every level the pathway holds up: the pathway itself, and the portfolios of the goals resting on it,
   // read from their own plan readings — the goal-portfolio reliability and the correlated downside.
-  const sampleSize = reading.ledger.filter((e) => e.outcome).length;
-  const pathway = `cash-forecast:${projectId}`;
+  // Each claim family is its own pathway (`claimPathway`): an operator decision's misses are not the cash
+  // forecast's, so they are neither pooled into its reliability nor counted as its safeguards.
+  const pathways = forecastPathways(projectId, dependencies);
+  const sampleSize = pathwaySampleSize(projectId, reading, pathways);
   const goalIds = [...new Set([...(deps.dependents?.values() ?? [])].flat())];
   const goalPortfolios = await (deps.goalPortfolios ?? readGoalPortfolioReach)(goalIds).catch(() => [] as GoalPortfolioReach[]);
-  const reliability = readReliability({ pathways: [{ key: pathway, dependencies }], goalPortfolios, sampleSize });
-  const safeguards = correctionSafeguards(pathway, dependencies);
+  const reliability = readReliability({ pathways, goalPortfolios, sampleSize });
+  const safeguards = pathways.flatMap((p) => correctionSafeguards(p.key, p.dependencies));
 
   // 5. A recurring failure class with a method to improve becomes a Factory improvement objective — when a
   // repository change can remove it. That is the cash forecast path this module owns (Brain's own forecast
