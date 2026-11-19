@@ -14,6 +14,7 @@ import { newId, nowIso } from '../server/repos/util.ts';
 import { createRun } from '../server/repos/runs.ts';
 import { createFragments, createOrchestration, getOrchestration } from '../server/repos/research.ts';
 import { createUser } from '../server/repos/identity.ts';
+import { createGoal } from '../server/repos/russellAuthority.ts';
 import {
   answerHumanRequest,
   askHuman,
@@ -169,5 +170,53 @@ describe('an answer whose mission already left Needs You is withdrawn, never re-
     await tick('skip-reopen-authority');
     expect((await getHumanRequest(authority.id))!.state).not.toBe('WITHDRAWN');
     expect((await getHumanRequest(missionless.id))!.state).not.toBe('WITHDRAWN');
+  });
+  it('F2: a moot answer touches no research slot — neither readmitted nor deferred before it is classed moot', async () => {
+    const goal = await createGoal({
+      projectId: fixture.project.id, ownerUserId: userId, createdByUserId: userId, name: 'Slots',
+      allowedWork: ['RESEARCH'], maxMissions: 5, maxFragments: 20, maxConcurrent: 1, maxProbes: 5,
+    });
+    const past = new Date(Date.now() - 3_600_000).toISOString();
+    async function hold(expires: string): Promise<string> {
+      const id = newId('rsv');
+      await getDb().run(
+        `INSERT INTO russell_budget_reservations (id, goal_id, kind, amount, idempotency_key, state, expires_at, created_at)
+         VALUES (?, ?, 'MISSION', 1, ?, 'HELD', ?, ?)`,
+        [id, goal.id, `skip-reopen-slot-${id}`, expires, nowIso()],
+      );
+      return id;
+    }
+    const expiresAt = async (id: string) =>
+      (await getDb().all<{ expires_at: string }>('SELECT expires_at FROM russell_budget_reservations WHERE id = ?', [id]))[0]!
+        .expires_at;
+
+    // A free slot: the lapsed hold would be readmitted (its expiry pushed forward) for an answer that cannot apply.
+    for (const choice of [NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key, NEEDS_HUMAN_CHOICES.RECORD_GAPS.key]) {
+      const missionId = await parkedMission();
+      const request = await answered(missionId, choice);
+      const lapsed = await hold(past);
+      await getDb().run(`UPDATE russell_missions SET reservation_id = ? WHERE id = ?`, [lapsed, missionId]);
+      await moveMission(missionId, 'RUNNING');
+      const outcome = await resumeAnsweredRequest(request);
+      expect(outcome.deferred ?? false, choice).toBe(false);
+      expect(await expiresAt(lapsed), choice).toBe(past);
+      // Whatever refused it, its mission no longer waits, so the card is withdrawn rather than re-asked.
+      expect(await reopenAnswered(request, outcome.reason), choice).toBe(true);
+      expect((await getHumanRequest(request.id))!.state, choice).toBe('WITHDRAWN');
+      await getDb().run(`UPDATE russell_budget_reservations SET state = 'RELEASED' WHERE id = ?`, [lapsed]);
+    }
+
+    // No free slot: one live hold fills the goal's only slot, so the old order deferred the answer instead.
+    await hold(new Date(Date.now() + 3_600_000).toISOString());
+    const missionId = await parkedMission();
+    const request = await answered(missionId, NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key);
+    const lapsed = await hold(past);
+    await getDb().run(`UPDATE russell_missions SET reservation_id = ? WHERE id = ?`, [lapsed, missionId]);
+    await moveMission(missionId, 'RUNNING');
+    const outcome = await resumeAnsweredRequest(request);
+    expect(outcome.deferred ?? false).toBe(false);
+    expect(outcome.reason).toBe(MOVED_OUT);
+    expect(await reopenAnswered(request, outcome.reason)).toBe(true);
+    expect((await getHumanRequest(request.id))!.state).toBe('WITHDRAWN');
   });
 });
