@@ -285,16 +285,18 @@ export const MOVABLE_UNRANKED = 24;
 export function partitionOpenings(openings: ModelledOpportunity[], baseline: GoalPortfolio): { movable: ModelledOpportunity[]; held: ModelledOpportunity[] } {
   const ranked = new Set([...(baseline.best?.members ?? []), ...baseline.alternatives.flatMap((a) => a.members)].map((m) => m.opportunityId));
   const refused = new Set(baseline.demand.filter((d) => d.refused).map((d) => d.opportunityId));
+  // An opening held out on a limit its estimate breaks stays movable: a change that carries it (the buyer funding the supplier) is the way back in.
+  const heldOut = new Set(baseline.demand.filter((d) => d.heldOut && !d.refused).map((d) => d.opportunityId));
   const demand = new Map(baseline.demand.map((d) => [d.opportunityId, d.revenue]));
   const order = new Map(openings.map((o, i) => [o.opportunity.id, i]));
   const contenders = openings
-    .filter((o) => !ranked.has(o.opportunity.id) && o.repeatable && o.agreedValue === 0 && !refused.has(o.opportunity.id))
+    .filter((o) => !ranked.has(o.opportunity.id) && o.repeatable && o.agreedValue === 0 && !refused.has(o.opportunity.id) && !heldOut.has(o.opportunity.id))
     .sort((a, b) => {
       const x = demand.get(a.opportunity.id);
       const y = demand.get(b.opportunity.id);
       return (y?.p50 ?? 0) - (x?.p50 ?? 0) || (y?.p90 ?? 0) - (x?.p90 ?? 0) || order.get(a.opportunity.id)! - order.get(b.opportunity.id)!;
     });
-  const kept = new Set([...ranked, ...contenders.slice(0, MOVABLE_UNRANKED).map((o) => o.opportunity.id)]);
+  const kept = new Set([...ranked, ...heldOut, ...contenders.slice(0, MOVABLE_UNRANKED).map((o) => o.opportunity.id)]);
   return { movable: openings.filter((o) => kept.has(o.opportunity.id)), held: contenders.slice(MOVABLE_UNRANKED) };
 }
 

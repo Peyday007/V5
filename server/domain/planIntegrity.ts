@@ -40,6 +40,21 @@
  *   UNKNOWN_BECOMES_RESEARCH A goal with no portfolio raised no price research.
  *                            An unpriced lead population is in `unpriced`, the
  *                            list the goal tick sends as price research.
+ *   WITHIN_LIMITS            Goal wst_7b4fcbb5 ($3,000 capital, $375 before any
+ *                            money comes in) led at 6.2% reach with a $15,000
+ *                            grant service the model held at "capital E 14985".
+ *                            Every member of the lead fits the goal's capital
+ *                            ceiling and pre-revenue limit as modelled, or
+ *                            carries the cash structure (an assumption the
+ *                            reading states) that brings it under them.
+ *   NO_FAVOURABLE_UNKNOWN    The same grant was entered at 187.5 of capital —
+ *                            the middle of what the $375 limit allows — while
+ *                            the model held 14985. A member is entered at no
+ *                            figure more favourable than the one the model
+ *                            holds: its capital at no less than the estimate's
+ *                            low bound, and an unestablished cost of one deal
+ *                            not over the spending ceiling, unless a cash
+ *                            structure the reading states carries it.
  *
  * Only what the reading proves is flagged. An unknown the plan states as an
  * unknown and sends to research is the honest state, never a violation; a
@@ -56,6 +71,8 @@ export const PLAN_INTEGRITY_RULES = [
   'PRICE_GROUNDED',
   'UNKNOWN_BECOMES_RESEARCH',
   'NO_DUPLICATE_STEPS',
+  'WITHIN_LIMITS',
+  'NO_FAVOURABLE_UNKNOWN',
 ] as const;
 export type PlanIntegrityRule = (typeof PLAN_INTEGRITY_RULES)[number];
 
@@ -126,6 +143,24 @@ export interface PlanIntegrityInput {
   texts: readonly { where: string; text: string }[];
   /** The widest p90/p10 a comparable price may span (`COMPARABLE_SPREAD_MAX`). */
   spreadMax: number;
+  /** The goal's own capital limits, as the reading's portfolio holds them (major units); absent when the reading holds none. */
+  limits?: { capitalCeiling: number | null; beforeProof: number | null; spendCeiling?: number | null } | null;
+  /**
+   * Each member of the lead the plan names: the lowest the model holds it
+   * ties up at its start (null when it holds no figure), and the cash
+   * structure that carries it over a limit, when the reading holds one.
+   */
+  members?: readonly IntegrityMember[];
+}
+
+export interface IntegrityMember {
+  title: string;
+  capitalLow: number | null;
+  cashStructure: string | null;
+  /** The capital the plan's model entered it at (`DemandEstimate.capitalAtStart`), when the reading holds it. */
+  capitalEntered?: number | null;
+  /** The lowest the model holds one deal costs directly, when that cost is not established; null when established or not held. */
+  unestablishedCostLow?: number | null;
 }
 
 /**
@@ -234,6 +269,29 @@ export function planIntegrity(input: PlanIntegrityInput): { violations: PlanInte
     }
     if (p.basis === 'UNPRICED' && !input.unpriced.some((u) => u.population === input.lead!.population)) {
       add('UNKNOWN_BECOMES_RESEARCH', `nothing prices "${clip(input.lead.buyers)}", and no price research is raised for that population`);
+    }
+  }
+  // WITHIN_LIMITS: every member of the lead fits the goal's capital as modelled, or carries a cash structure that does.
+  const limits = input.limits ?? null;
+  const caps: Array<[number, string]> = [];
+  if (limits?.capitalCeiling != null) caps.push([limits.capitalCeiling, 'capital ceiling']);
+  if (limits?.beforeProof != null) caps.push([limits.beforeProof, 'limit before any money comes in']);
+  for (const m of input.members ?? []) {
+    if (m.capitalLow === null || m.cashStructure) continue;
+    const broken = caps.filter(([limit]) => m.capitalLow! > limit + 1e-9);
+    if (broken.length > 0) {
+      add('WITHIN_LIMITS', `"${clip(m.title, 60)}" ties up at least ${Math.round(m.capitalLow)} at its start as modelled, more than the goal's ${broken.map(([limit, what]) => `${what} of ${Math.round(limit)}`).join(' and ')}, and carries no cash structure that brings it under them`);
+    }
+  }
+  // NO_FAVOURABLE_UNKNOWN: a member entered at a figure more favourable than the one the model holds.
+  for (const m of input.members ?? []) {
+    if (m.cashStructure) continue;
+    if (m.capitalLow !== null && m.capitalEntered != null && m.capitalEntered < m.capitalLow - 1e-6) {
+      add('NO_FAVOURABLE_UNKNOWN', `"${clip(m.title, 60)}" is entered at ${Math.round(m.capitalEntered)} of capital while the model holds at least ${Math.round(m.capitalLow)}: an unknown read in the plan's favour`);
+    }
+    const spend = limits?.spendCeiling ?? null;
+    if (spend !== null && m.unestablishedCostLow != null && m.unestablishedCostLow > spend + 1e-9) {
+      add('NO_FAVOURABLE_UNKNOWN', `"${clip(m.title, 60)}" costs at least ${Math.round(m.unestablishedCostLow)} a deal as modelled, not established, more than the ${Math.round(spend)} the goal may spend in all`);
     }
   }
   return { violations };

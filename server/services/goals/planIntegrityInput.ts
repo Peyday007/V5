@@ -6,10 +6,11 @@
  * are written where the steps and the lead are built (`arrangementSteps`,
  * `readGoalPlan`), so what the check reads is what the planner did.
  */
-import type { IntegrityLeadPrice, PlanIntegrityInput } from '../../domain/planIntegrity.ts';
+import type { IntegrityLeadPrice, IntegrityMember, PlanIntegrityInput } from '../../domain/planIntegrity.ts';
 import type { ConstructedArrangement } from '../cash/construct.ts';
 import { ARRANGEMENT_ID_PREFIX, COMPARABLE_SPREAD_MAX, type ModelledOpportunity } from '../cash/goalScenario.ts';
 import type { PlanReading } from './plan.ts';
+import { BUYER_FUNDED, type GoalPortfolio } from './portfolio.ts';
 
 /** The constructed arrangement a plan leads with, as its reading carries it. */
 export interface PlanLead {
@@ -47,7 +48,34 @@ export function leadOf(lead: ConstructedArrangement | null, modelled: ModelledOp
   return { arrangementKey: lead.key, buyers: lead.demand.name, population: lead.demand.ref, price: leadPrice(lead, modelled), inScope: inScope === null || inScope.includes(lead.key) };
 }
 
-type IntegrityReading = Pick<PlanReading, 'acceptance' | 'steps' | 'summary' | 'nextTest' | 'unpriced' | 'lead'> & { portfolio: { best: { members: { opportunityId: string }[] } | null } | null };
+type IntegrityReading = Pick<PlanReading, 'acceptance' | 'steps' | 'summary' | 'nextTest' | 'unpriced' | 'lead'> & {
+  portfolio: ({ best: { members: { opportunityId: string }[] } | null } & Partial<Pick<GoalPortfolio, 'demand' | 'limits'>>) | null;
+  reconstruction?: PlanReading['reconstruction'];
+};
+
+/**
+ * The lead's members as the reading's portfolio modelled them: the lowest
+ * figure the model holds each ties up at its start (`DemandEstimate.capitalHeld`),
+ * and the cash structure that carries it — the portfolio's own, or, for a
+ * reconstructed candidate, the buyer-funded change its reconstruction made
+ * (an assumption it states). A member the portfolio did not read holds no figure.
+ */
+export function leadMembersOf(reading: Pick<IntegrityReading, 'acceptance' | 'portfolio' | 'reconstruction'>, ids: readonly string[]): IntegrityMember[] {
+  const demand = new Map((reading.portfolio?.demand ?? []).map((d) => [d.opportunityId, d]));
+  const reconstructed = reading.acceptance.candidate?.source === 'RECONSTRUCTED';
+  const buyerFunded = reconstructed && (reading.reconstruction?.best?.changes ?? []).some((c) => c.op === 'capital:prepaid-fulfilment');
+  return ids.map((id) => {
+    const d = demand.get(id);
+    return {
+      title: d?.title ?? 'an opening',
+      capitalLow: d?.capitalHeld?.low ?? null,
+      cashStructure: d?.cashStructure ?? (buyerFunded ? BUYER_FUNDED : null),
+      // The baseline's entered figure speaks for its own members; a reconstruction read them in its own evaluation.
+      capitalEntered: reconstructed ? null : (d?.capitalAtStart ?? null),
+      unestablishedCostLow: d?.costHeld && !d.costHeld.own ? d.costHeld.low : null,
+    };
+  });
+}
 
 /** The ids the plan names as its lead: its candidate, else its accepted plan, else its best combination (as `leadingArrangement` reads them). */
 export function leadIdsOf(reading: Pick<IntegrityReading, 'acceptance' | 'portfolio'>): string[] {
@@ -68,8 +96,10 @@ export function integrityInput(reading: IntegrityReading): PlanIntegrityInput {
     ...(a.accepted ? [{ where: "the accepted plan's label", text: a.accepted.label }] : []),
     ...(reading.nextTest ? [{ where: 'the next test', text: reading.nextTest.test }] : []),
   ];
+  const leadIds = leadIdsOf(reading);
+  const limits = reading.portfolio?.limits;
   return {
-    leadIds: leadIdsOf(reading),
+    leadIds,
     arrangementIdPrefix: ARRANGEMENT_ID_PREFIX,
     steps: reading.steps.map((s) => ({
       order: s.order,
@@ -89,6 +119,8 @@ export function integrityInput(reading: IntegrityReading): PlanIntegrityInput {
     unpriced: reading.unpriced ?? [],
     texts,
     spreadMax: COMPARABLE_SPREAD_MAX,
+    limits: limits ? { capitalCeiling: limits.capitalCeiling ?? null, beforeProof: limits.perArrangement, spendCeiling: limits.spendCeiling } : null,
+    members: leadMembersOf(reading, leadIds),
   };
 }
 

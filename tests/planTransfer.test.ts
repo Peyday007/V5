@@ -8,7 +8,8 @@
  * is a single named company ("GitHub", developer tools) — through a matrix of
  * goals that vary what a plan is built from:
  *
- *   capital       none / small ($1,000) / large ($10,000)
+ *   capital       none / small ($1,000; $3,000 with $375 before the first sale
+ *                 beside a $15,000 opening that ties up $12,000) / large ($10,000)
  *   revenue unit  one-time settled cash / monthly recurring
  *   deadline      short (7 days) / long (90 days)
  *   industry      each named sector, the one-company sector included
@@ -110,6 +111,12 @@ const WORLD: Held[] = [
     volume: '80 general contractors are listed in the state licensing board; each needs cleanup per project.', recurring: false,
   },
   {
+    // An expensive opening (production, 2026-11-19: a $15,000 grant service held at "capital E 14985"): it ties up more than a small goal may.
+    title: 'Farm grant planning service for Pennsylvania farm operators', mechanism: 'PRODUCTIZED_SERVICE', industry: 'farm grant planning',
+    payer: 'Pennsylvania farm operators', capture: 'Prepare the grant application plan for each farm and invoice on submission.', priceCents: 1_500_000, costCents: 300_000, capitalCents: 1_200_000, days: 6, hours: 3,
+    volume: '120 Pennsylvania farm operators apply for the Farm Vitality Planning Grant each round, per the state agriculture department.', recurring: false,
+  },
+  {
     // The one-company sector: production's "GitHub" as a buyer (2026-11-19).
     title: 'Sponsored maintenance reports for GitHub', mechanism: 'PRODUCTIZED_SERVICE', industry: 'developer tools',
     payer: 'GitHub', capture: 'Sell a maintenance report to GitHub.', priceCents: 300_000, costCents: 5_000, capitalCents: 0, days: 14, hours: 2,
@@ -138,6 +145,8 @@ const VARIANTS: Array<Variant & { world?: 'openings' | 'map' }> = [
   { id: 'industry-dental', words: 'Generate $15,000 within 60 days in a single industry the owner names: dental practices.', capital: 'none', unit: 'one-time', deadline: 'long', industry: 'dental practices', autonomy: 'unlimited' },
   { id: 'industry-property', words: 'Generate $8,000 within 30 days in a single industry the owner names: property management, with no more than 5 hours a week of owner time.', capital: 'none', unit: 'one-time', deadline: 'long', industry: 'property management', autonomy: 'owner-hours-limited' },
   { id: 'industry-one-company', words: 'Generate $9,000 within 30 days in a single industry the owner names: developer tools.', capital: 'none', unit: 'one-time', deadline: 'long', industry: 'developer tools (one company)', autonomy: 'unlimited' },
+  // A small capital limit beside the expensive opening above: no member over the limit may reach the candidate.
+  { id: 'small-capital-expensive-opening', words: 'Collect $10,000 of settled cash within 20 days with at most $3,000 of capital, at most $375 before the first sale and at most $750 of capital per week.', capital: 'small', unit: 'one-time', deadline: 'short', industry: 'any', autonomy: 'unlimited' },
   // The map world: no openings to sell, so the steps are the leading arrangement's own.
   { id: 'map-none-once-long', world: 'map', words: 'Collect $10,000 of settled cash within 60 days using no up-front capital.', capital: 'none', unit: 'one-time', deadline: 'long', industry: 'any (map)', autonomy: 'unlimited' },
   { id: 'map-large-once-long', world: 'map', words: 'Turn $10,000 into $100,000 within 90 days.', capital: 'large', unit: 'one-time', deadline: 'long', industry: 'any (map)', autonomy: 'unlimited' },
@@ -273,6 +282,23 @@ describe('plan integrity holds across varied goals', () => {
       if (p.lead) expect(p.lead.buyers).not.toBe('GitHub');
       if (p.lead) expect(p.lead.inScope).toBe(true);
       if (v.id === 'map-industry-one-company') expect(p.steps.some((s) => s.arrangement)).toBe(false);
+      // No member of the candidate ties up more than the goal's capital limits as modelled, unless a cash structure carries it.
+      const limits = p.portfolio?.limits;
+      const demand = new Map((p.portfolio?.demand ?? []).map((d) => [d.opportunityId, d]));
+      const capLimit = Math.min(...[limits?.capitalCeiling ?? null, limits?.perArrangement ?? null].filter((x): x is number => x !== null), Infinity);
+      for (const id of p.acceptance.candidate?.opportunityIds ?? []) {
+        const d = demand.get(id);
+        expect(d?.heldOut ?? null, `${v.id}: a member held out on a limit`).toBeNull();
+        if (!d?.capitalHeld || d.cashStructure) continue;
+        expect(d.capitalHeld.low, `${v.id}: ${d.title}`).toBeLessThanOrEqual(capLimit + 1e-9);
+      }
+      if (v.id === 'small-capital-expensive-opening') {
+        const farm = p.portfolio?.demand.find((d) => d.title.startsWith('Farm grant planning service'));
+        expect(farm, 'the expensive opening is read').toBeDefined();
+        expect(farm!.refused, 'the expensive opening is refused as a member').toMatch(/more than the (?:3000|375)/);
+        expect(p.acceptance.candidate?.opportunityIds ?? []).not.toContain(farm!.opportunityId);
+        expect(p.portfolio?.best?.members.map((m) => m.opportunityId) ?? []).not.toContain(farm!.opportunityId);
+      }
     });
   }
 
