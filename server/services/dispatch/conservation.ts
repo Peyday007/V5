@@ -45,7 +45,7 @@
  * routing and the fire-slot compare-and-swap — and the change is one
  * conditional UPDATE, so two dispatchers pull it once.
  */
-import { getDb } from '../../db/database.ts';
+import { getDb, type SqlParam } from '../../db/database.ts';
 import {
   DISPATCHABLE_SQL,
   FIREABLE_SQL,
@@ -120,6 +120,8 @@ interface ReadyBinRow {
   project_id: string;
   lease_generation: number | string;
   pinned_routine_id: string | null;
+  priority: number | string;
+  created_at: string;
 }
 
 interface IntentRow {
@@ -130,27 +132,57 @@ interface IntentRow {
   last_error_kind: string | null;
 }
 
+/** How many bins one read of `dispatchReadiness` asks about at a time (and binds as parameters). */
+export const READINESS_PAGE_SIZE = 500;
+
 /**
  * The dispatcher's own answer, for every bin it may fire: would it fire it now,
  * or what is it waiting on. Read only; nothing is changed.
  *
- * Bounded at the page the tick itself reads, so the two never disagree about
- * which bins are being asked.
+ * Every dispatchable, fireable, work-ready bin is answered — the read walks the
+ * queue a page at a time until it is exhausted, never stopping at the first
+ * page. The watchdog's executable count is this read's size, and the count it
+ * replaced (`COUNT(*)`) had no bound: stopping at one page under-counted a queue
+ * larger than it, and when the first page was all held while lower-ranked bins
+ * were fireable it read "nothing executable" beside work the dispatcher would
+ * fire. `pageSize` bounds each read, and the `IN (…)` lists bound to it, not
+ * the answer.
  */
-export async function dispatchReadiness(now = new Date(), limit = 500): Promise<DispatchReadiness> {
+export async function dispatchReadiness(now = new Date(), pageSize = READINESS_PAGE_SIZE): Promise<DispatchReadiness> {
   const iso = now.toISOString();
-  const bins = await getDb().all<ReadyBinRow>(
-    `SELECT bins.id AS id, bins.project_id AS project_id, bins.lease_generation AS lease_generation,
-            bins.pinned_routine_id AS pinned_routine_id
-       FROM bins
-      WHERE ${DISPATCHABLE_SQL} AND ${FIREABLE_SQL} AND ${workReadySql('bins.')}
-      ORDER BY bins.priority DESC, bins.created_at, bins.id
-      LIMIT ?`,
-    [iso, iso, iso, iso, Math.min(500, Math.max(1, limit))],
-  );
+  const page = Math.min(READINESS_PAGE_SIZE, Math.max(1, Math.floor(pageSize)));
   const out: DispatchReadiness = { executable: [], held: [] };
-  if (bins.length === 0) return out;
+  // Keyset pagination over the tick's own order, so a page boundary never skips
+  // or repeats a bin (an id is unique, so the tuple is a total order).
+  let after: { priority: number; createdAt: string; id: string } | null = null;
+  for (;;) {
+    const keyset: string = after
+      ? ` AND (bins.priority < ? OR (bins.priority = ? AND (bins.created_at > ? OR (bins.created_at = ? AND bins.id > ?))))`
+      : '';
+    const keyParams: SqlParam[] = after
+      ? [after.priority, after.priority, after.createdAt, after.createdAt, after.id]
+      : [];
+    const bins: ReadyBinRow[] = await getDb().all<ReadyBinRow>(
+      `SELECT bins.id AS id, bins.project_id AS project_id, bins.lease_generation AS lease_generation,
+              bins.pinned_routine_id AS pinned_routine_id, bins.priority AS priority, bins.created_at AS created_at
+         FROM bins
+        WHERE ${DISPATCHABLE_SQL} AND ${FIREABLE_SQL} AND ${workReadySql('bins.')}${keyset}
+        ORDER BY bins.priority DESC, bins.created_at, bins.id
+        LIMIT ?`,
+      [iso, iso, iso, iso, ...keyParams, page],
+    );
+    if (bins.length === 0) break;
+    await classifyPage(bins, now, out);
+    if (bins.length < page) break;
+    const last: ReadyBinRow = bins[bins.length - 1]!;
+    after = { priority: Number(last.priority), createdAt: last.created_at, id: last.id };
+  }
+  return out;
+}
 
+/** Answer one page of ready bins into `out`. */
+async function classifyPage(bins: readonly ReadyBinRow[], now: Date, out: DispatchReadiness): Promise<void> {
+  const iso = now.toISOString();
   const ids = bins.map((bin) => bin.id);
   const marks = ids.map(() => '?').join(', ');
   const intents = new Map<string, IntentRow>();
@@ -220,7 +252,6 @@ export async function dispatchReadiness(now = new Date(), limit = 500): Promise<
         out.held.push({ ...base, kind: 'SUPERSEDED', cause: intent.last_error_kind, until: null });
     }
   }
-  return out;
 }
 
 /** One line per kind of hold, for a reading that must say why capacity waits. */
