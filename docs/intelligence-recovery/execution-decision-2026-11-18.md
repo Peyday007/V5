@@ -344,3 +344,11 @@ Agent round 2 is on these, on branch claude/plan-exec-round2. The release owner 
 
   C read within its 6-minute bound; its earlier 30-minute hangs did not recur.
 - **What remains to an accepted plan is evidence, not plan defects.** The price research raised at 13:36Z must return before any goal can clear the defensible 90%.
+
+## 2026-11-19 23:50Z — capital fit live, release check exits cleanly
+
+- #1157 (7ad65296) live. The $10K goal's lead opening, a PA farm-grant service that ties up about $14,961–14,994 against a $3,000 ceiling, is now held out of every combination and named as the blocker, with the fix (buyer prepayment, or establish the real start-up cost). Reach went from 6.2% to an honest 0%.
+- #1158 (7eb1ab07) live. The release check printed GOALS: OK, then hung until the 30-minute timeout (background work kept the process alive), so a pass was reported as a failure. It now exits 0 after its verdict. Regression test: tests/planIntegrityRelease.test.ts, which fails before the change and passes after.
+- Release check 44640203825 on 7eb1ab07 succeeded: integrity OK on all six goals, all CANDIDATE_ONLY. Reaches: C 8%, $100K 0%, $10K 0%, $5K/mo 44.1%, A 0%, B 4.9%.
+- Deploy 44631730496 first failed one unrelated challenger test. The same shard passed on d88196a8, so it was treated as a flake; the re-run passed.
+- Still open: no goal has an accepted, executable plan. Acceptance needs real price and response evidence, and research for that is running.
