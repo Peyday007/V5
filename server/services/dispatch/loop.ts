@@ -90,6 +90,7 @@ import { fleetSnapshot, NO_SHOW_WINDOW_MS } from './candidates.ts';
 import { shouldQuarantine } from './scaler.ts';
 import { routeBin } from './router.ts';
 import { rearmStrandedIntents } from './rearm.ts';
+import { pullForwardCapacityDeferred, reservingRouter } from './conservation.ts';
 import { OPERATOR_RESOLVED_ROUTING_REFUSALS, refusalEndsBurst, waitsForOperator, type RoutingRefusal } from './router.ts';
 import { binNeedsWeb, markDispatchRoutine } from '../../repos/bins.ts';
 import {
@@ -221,6 +222,11 @@ export interface TickResult {
   unrouted: Record<string, number>;
   /** Registered Routines whose secret this deployment does not hold. */
   missingSecrets: number;
+  /**
+   * Intents deferred only because capacity was full, made due now because a
+   * surface is free and the router routes their bin (`conserve`, `conservation.ts`).
+   */
+  conserved: number;
 }
 
 /**
@@ -255,7 +261,16 @@ const MODEL_OUTPUT_PASS_MS = 5 * 60_000;
 let lastModelOutputPass = 0;
 
 export async function dispatchTick(
-  options: { burst?: number; projectIds?: string[] } = {},
+  options: {
+    burst?: number;
+    projectIds?: string[];
+    /**
+     * Asked by a reading that found capacity idle beside executable work: end
+     * every capacity deferral the router would now route, rather than leave the
+     * free surface waiting out the deferral's timestamp (work conservation).
+     */
+    conserve?: boolean;
+  } = {},
 ): Promise<TickResult> {
   // Factory fires this tick, so the burst's research count is not charged for them.
   let firedFactory = 0;
@@ -279,6 +294,7 @@ export async function dispatchTick(
     deferred: 0,
     unrouted: {},
     missingSecrets: 0,
+    conserved: 0,
   };
 
   /*
@@ -421,6 +437,36 @@ export async function dispatchTick(
       return decision.ok || !waitsForOperator(decision.refusal);
     },
   });
+
+  /*
+   * And, when a reading asked for this pass because capacity sat idle beside
+   * executable work, end every wait that was only about capacity.
+   *
+   * An intent deferred because every surface was at its target waits out a
+   * timestamp, and the fleet draining does not shorten it: the watchdog then read
+   * "1 executable item(s), 13 eligible surface(s), 0 active" in 181 of 144
+   * windows while the pass it asked for had nothing due to send. Free capacity is
+   * the event that ends a capacity wait, so the router is asked again and an
+   * intent it would now route is made due in this same pass. Deliberate holds —
+   * a rate limit's own retry time, a paused fleet, an operator wait — are not
+   * capacity waits and are left exactly where they are (`ENDED_BY_FREE_CAPACITY`).
+   */
+  if (options.conserve) {
+    // Each pull is counted against the snapshot before the next is asked, so one
+    // free surface ends one capacity wait rather than every one of them.
+    const router = reservingRouter({
+      candidates: snapshot.candidates,
+      fleetPolicy: snapshot.fleetPolicy,
+      fleetInFlight: snapshot.fleetInFlight,
+      factoryInFlight: snapshot.factoryInFlight,
+    });
+    const pulled = await pullForwardCapacityDeferred({
+      projectIds: options.projectIds,
+      routesNow: router.route,
+      reserve: router.reserve,
+    });
+    result.conserved = pulled.length;
+  }
 
   /*
    * Put back a fire nobody answered.
