@@ -105,12 +105,13 @@ describe('one fact is never both an arrangement’s price and its cost (GH2)', (
 
   it('reproduces production: the Puzzle Society $500 per accepted puzzle prices a pooled presale design only as an assumption', async () => {
     const puzzles = await seedSubject({ projectId, name: 'Puzzles', actorRef: ownerId });
-    const society = await seedSubject({ projectId, name: 'The Puzzle Society', kind: 'BUYER_TYPE', parentId: puzzles.node.id, actorRef: ownerId });
+    // A buyer population, not one organisation: since #1133 a single organisation is a payer, never a pooled population (namesOneOrganisation).
+    const society = await seedSubject({ projectId, name: 'puzzle newsletters', kind: 'BUYER_TYPE', parentId: puzzles.node.id, actorRef: ownerId });
     const nodeId = society.node.id;
     const claimId = 'clm_51df38793dfe46f6b16e';
     await recordClaimFact({
       projectId, nodeId, claimId, key: 'price_per_unit', segment: `map_${nodeId}`, low: 500, high: 500, status: 'OBSERVED',
-      measures: 'The Puzzle Society makes a payment of $500 for each accepted puzzle', sourceTitle: 'The Puzzle Society submissions',
+      measures: 'Puzzle newsletters make a payment of $500 for each accepted puzzle', sourceTitle: 'The Puzzle Society submissions',
       sourceUrl: 'https://example.org/puzzle-society', sourceKind: 'PRIMARY', observedAt: '2026-10-13T00:00:00.000Z',
     });
     const arrangements = await constructArrangements({ projectId, currency: 'USD', delivers: ['puzzles'], capitalCeilingCents: null, daysLeft: 30 });

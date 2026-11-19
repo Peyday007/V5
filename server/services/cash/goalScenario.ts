@@ -489,7 +489,20 @@ export function inheritedTerms(one: Pick<ConstructedArrangement, 'buyerTerms'>):
  * links nobody has established swept exactly as for an opening with nothing on
  * its card. Shared by the estimated and the invented conversions. Pure.
  */
-function arrangementOpening(one: ConstructedArrangement, input: ArrangementInput, price: ModelInput, high: number, transfer: ReturnType<typeof transferOf>, invented = false): ModelledOpportunity {
+function arrangementOpening(
+  one: ConstructedArrangement,
+  input: ArrangementInput,
+  price: ModelInput,
+  high: number,
+  transfer: ReturnType<typeof transferOf>,
+  invented = false,
+  /**
+   * The price a blind direct cost is a share of, and what the note calls it.
+   * Defaults to the top of the price's range; a price swept over other buyers'
+   * prices passes its own geometric middle instead (`sweptOverOtherPrices`).
+   */
+  costScale: { value: number; what: string } = { value: high, what: 'the top price' },
+): ModelledOpportunity {
   const ref: SourceRef = price.source ?? { kind: 'OTHER', ref: `arrangement:${one.key}` };
   const worst = one.stress.worstCaseCents === null ? null : one.stress.worstCaseCents / 100;
   /*
@@ -548,7 +561,9 @@ function arrangementOpening(one: ConstructedArrangement, input: ArrangementInput
     daysToCash: infer('daysToCash', unknown(3, 60, 'nobody has established when the money would settle; swept from 3 to 60 days')),
     close: arrangementClose(one, ref) ?? infer('close', unknown(0.02, 0.5, 'no buyer has been asked yet; swept from 2% to 50% of buyers agreeing')),
     respond: infer('respond', unknown(0.002, 0.15, 'nobody has established how many prospects of this kind reply; swept from 0.2% to 15%')),
-    directCost: pooledRunCostPerDeal(one) ?? infer('costShare', unknown(0, Math.max(0.01, high * 0.6), 'nobody has established the direct cost; swept from nothing to 60% of the top price'), high, ' as a share of the top price'),
+    directCost:
+      pooledRunCostPerDeal(one) ??
+      infer('costShare', unknown(0, Math.max(0.01, costScale.value * 0.6), `nobody has established the direct cost; swept from nothing to 60% of ${costScale.what}`), costScale.value, ` as a share of ${costScale.what}`),
     // A repeating design's deals in the window, from these buyers' own stated volume only (a market's size never transfers).
     volume: repeatable
       ? infer(
@@ -718,7 +733,19 @@ function sweptOverOtherPrices(
     distribution: { kind: 'EMPIRICAL', values },
     inferred: { tier: 'MECHANISM', justified: false, p10: low, p50, p90: high, observations: prices.length },
   };
-  return { ...arrangementOpening(one, input, price, high, null, invented), marketKey: populationMarket(one.demand.ref) };
+  /*
+   * Production 2026-11-19: the blind direct cost was "nothing to 60% of the
+   * top price", and the top of a swept price is the p90 of other buyers'
+   * prices. The engine draws price and cost independently, so a world at a
+   * low price paid a cost scaled to the pool's top: $42–$156,737 swept gave a
+   * price p50 of $2,569 against a cost p50 of $47,021. The cost is a share of
+   * this arrangement's own price, so its scale is the price's geometric middle
+   * — the sweep's median — and at the median the cost reads at the same
+   * nothing-to-60% share as any opening's (PRICE-POOL: a cost swept from a
+   * pool's top is borrowed). Capital keeps the top: it bounds exposure.
+   */
+  const costScale = { value: p50, what: "the swept price's geometric middle" };
+  return { ...arrangementOpening(one, input, price, high, null, invented, costScale), marketKey: populationMarket(one.demand.ref) };
 }
 
 /** The `q` quantile of sorted positive values, interpolated on the log scale. Pure. */
@@ -756,8 +783,8 @@ export const COMPARABLE_SPREAD_MAX = 10;
  * across, or why there are none (Surge B, F4). Comparable means comparable:
  * the same sector; else the same structure (openings of a mechanism the
  * arrangement's structure is already held as); else the same kind of buyer;
- * else the project's prices — and outside the sector, only a set within one
- * order of magnitude (`COMPARABLE_SPREAD_MAX`). A wider pool is no comparable
+ * else the project's prices — and in every scope, the sector included, only a
+ * set within one order of magnitude (`COMPARABLE_SPREAD_MAX`). A wider pool is no comparable
  * price, and the arrangement stays out with that reason. With no published
  * price at all the set is empty, and the sweep refuses. Never a price for
  * these buyers — a bound. Pure.
@@ -798,9 +825,25 @@ export function comparablePricesFor(
     const sorted = [...xs].sort((a, b) => a - b);
     return logQuantile(sorted, 0.9) / logQuantile(sorted, 0.1) <= COMPARABLE_SPREAD_MAX;
   };
+  const money = (x: number) => `${currency === 'USD' ? '$' : `${currency} `}${Math.round(x).toLocaleString('en-US')}`;
+  const span = (xs: readonly number[]) => {
+    const sorted = [...xs].sort((a, b) => a - b);
+    return `${money(sorted[0]!)}–${money(sorted[sorted.length - 1]!)}`;
+  };
+  /*
+   * The same sector is held to the same order of magnitude as every other
+   * scope. Production 2026-11-19: one sector's published prices ran $42 to
+   * $156,737 (p10–p90), and every unpriced arrangement in it was swept across
+   * them — a price p50 of $2,569 that belongs to no buyer, and a plan reading
+   * p50 $185,840 at 0.4% reach for a $100K goal. A sector label names an
+   * industry, not a deal: a $40 consumable and a $150K contract share one. A
+   * wider set is no comparable price; the narrower scopes below are tried, and
+   * with none the price stays the research question.
+   */
   const sector = normSector(one.sector);
   const same = sector ? valid.filter((p) => normSector(p.industry) === sector).map((p) => p.value) : [];
-  if (same.length >= SECTOR_PRICES_MIN) return { prices: same, scope: `in the same sector (${one.sector})${where}` };
+  if (same.length >= SECTOR_PRICES_MIN && tight(same)) return { prices: same, scope: `in the same sector (${one.sector})${where}` };
+  const wideSector = same.length >= SECTOR_PRICES_MIN ? `; in the same sector (${one.sector}) they span ${span(same)}` : '';
   const held: readonly string[] = one.structure ? (STRUCTURES[one.structure]?.alreadyHeldAs ?? []) : [];
   const structure = held.length ? valid.filter((p) => p.mechanism && held.includes(p.mechanism)).map((p) => p.value) : [];
   if (structure.length >= SECTOR_PRICES_MIN && tight(structure)) return { prices: structure, scope: `with the same structure (${one.structure})${where}` };
@@ -812,9 +855,7 @@ export function comparablePricesFor(
   if (buyers.length >= SECTOR_PRICES_MIN && tight(buyers)) return { prices: buyers, scope: `paid by the same kind of buyer (${one.demand!.name})${where}` };
   const all = valid.map((p) => p.value);
   if (all.length === 0 || tight(all)) return { prices: all, scope: fromBrain ? "in the Brain's validated findings (other projects' sourced claims)" : 'in this project' };
-  const sorted = [...all].sort((a, b) => a - b);
-  const money = (x: number) => `${currency === 'USD' ? '$' : `${currency} `}${Math.round(x).toLocaleString('en-US')}`;
-  return { refused: `no comparable price: published prices for other buyers${where} span ${money(sorted[0]!)}–${money(sorted[sorted.length - 1]!)}` };
+  return { refused: `no comparable price: published prices for other buyers${where} span ${span(all)}${wideSector}` };
 }
 
 /**
@@ -901,6 +942,84 @@ export interface ArrangementScreen {
   upside: number;
   /** In one line, how the figure was read. */
   basis: string;
+  /**
+   * Why the goal's own terms leave it out, or null when it can fit them: its
+   * money cannot settle before the deadline, it ties up more than the goal
+   * allows, one deal needs more hours than the goal has, or every deal loses
+   * money at the middle readings. Read from the stated bounds only: an unknown
+   * is never a reason to cut, only a reason to read lower.
+   */
+  misfit: string | null;
+  /**
+   * Set when a deal loses money at the middle readings only because its direct
+   * cost is the blind sweep (nothing to 60% of the top price, nobody having
+   * established it): not cut, since nothing shows the loss, but read as
+   * keeping nothing at the middle, so it can enter only as an upside bet.
+   */
+  flag: string | null;
+  /** The share of its swept up-front money the goal's capital covers (1 when the goal states no limit). */
+  capitalFit: number;
+  /** True when it ties money up before buyers commit and the goal's stated capital covers all of it. */
+  usesCapital: boolean;
+}
+
+/**
+ * The goal's own terms a screen reads (§102 on one arrangement): days left,
+ * what is still needed, the outreach capacity, and — when the goal states
+ * them — the money it allows up front and the hours it has. Null is "not
+ * stated", which constrains nothing; zero is a stated limit.
+ */
+export interface GoalFit {
+  remaining: number;
+  daysLeft: number;
+  contactsPerDay: number;
+  /** Money the goal allows tied up before proof (major units), or null when nobody stated it. */
+  capital?: number | null;
+  /** Working hours the goal has, or null when nobody stated them. */
+  hours?: number | null;
+}
+
+/** P(x ≤ limit) for x uniform over the input's range; 1 when no limit is stated. */
+function shareWithin(x: ModelInput, limit: number | null | undefined, slack = 0.01): number {
+  if (limit === null || limit === undefined) return 1;
+  const a = x.low ?? x.value ?? 0;
+  const b = Math.max(a, x.high ?? x.value ?? a);
+  if (b <= limit + slack) return 1;
+  if (a > limit) return 0;
+  return Math.max(0, Math.min(1, (limit - a) / (b - a)));
+}
+
+/** The middle of an input: its stated value, its inferred p50, else the middle of its range. */
+function middle(x: ModelInput): number | null {
+  if (x.value !== null) return x.value;
+  if (x.inferred) return x.inferred.p50;
+  if (x.low !== null && x.high !== null) return (x.low + x.high) / 2;
+  return x.low ?? x.high ?? null;
+}
+
+/**
+ * Why one deal of this opening loses money at the middle of both readings, or
+ * null. Production transfer test, release ca2efe4d: a constructed homeowner
+ * deal priced at a $2,569 p50 carried a direct cost swept from nothing to 60%
+ * of the top of its price range — p50 $47,021 — so every deal it adds loses
+ * about $44K, and it still took a model slot. The cost is not lowered (nothing
+ * established it): the estimate is left out with this reason, and stays a
+ * research question. Pure.
+ */
+export function losesMoneyPerDeal(one: Pick<ModelledOpportunity, 'price' | 'directCost' | 'agreedValue'>): string | null {
+  if (one.agreedValue > 0) return null;
+  const price = middle(one.price);
+  const cost = middle(one.directCost);
+  if (price === null || cost === null || !(cost > 0) || cost < price) return null;
+  return `every deal loses money at the middle readings: direct cost p50 ${Math.round(cost)} against price p50 ${Math.round(price)}`;
+}
+
+/** An input at the unfavourable end of its range for a cost-like quantity (hours, money out). */
+function unfavourableHigh(x: ModelInput): number {
+  const lo = x.low ?? x.value ?? 0;
+  const hi = x.high ?? x.value ?? lo;
+  if (x.value !== null && x.provenance !== 'UNKNOWN') return x.value;
+  return hi - SCREEN_QUANTILE * (hi - lo);
 }
 
 /** An input at the unfavourable quantile of its range when nobody established it; a stated figure as stated. */
@@ -924,7 +1043,7 @@ function sellingDays(daysToCash: ModelInput, daysLeft: number): { selling: numbe
 export function screenArrangement(
   one: ModelledOpportunity,
   arrangement: Pick<ConstructedArrangement, 'value' | 'stress'>,
-  input: { remaining: number; daysLeft: number; contactsPerDay: number },
+  input: GoalFit,
 ): ArrangementScreen {
   const { p10, p50, p90 } = arrangement.value;
   const position = TIER_PRICE_POSITION[arrangement.value.tier] ?? 0;
@@ -934,13 +1053,55 @@ export function screenArrangement(
   const close = conservative(one.close);
   const respond = conservative(one.respond);
   const { selling, inTime } = sellingDays(one.daysToCash, input.daysLeft);
-  const deals = one.repeatable ? Math.min(conservative(one.volume), input.contactsPerDay * selling * respond * close) : close * inTime;
-  const weight = EXPOSURE_WEIGHT[arrangement.stress.exposure] ?? 0;
+  /*
+   * The goal's own shape (production transfer test, release ca2efe4d: six
+   * goals from $2K in 14 days to $50K with $25K capital all admitted the same
+   * 12 arrangements). Hours: a goal that states its hours sells at most the
+   * deals those hours cover at an unfavourable reading of hours per deal.
+   * Capital: the share of the swept up-front money the goal's stated capital
+   * covers scales the reading (P(capital ≤ allowed), as `sellingDays` reads
+   * the deadline), and a design whose worst case the goal's capital covers
+   * whole is not discounted for exposure — the owner allowed that money.
+   */
+  const hoursPerDeal = unfavourableHigh(one.hours);
+  const byHours = input.hours === null || input.hours === undefined ? Infinity : hoursPerDeal > 0 ? input.hours / hoursPerDeal : Infinity;
+  const deals = Math.min(byHours, one.repeatable ? Math.min(conservative(one.volume), input.contactsPerDay * selling * respond * close) : close * inTime);
+  const capitalFit = shareWithin(one.capital, input.capital);
+  const usesCapital = arrangement.stress.exposure !== 'SAFE' && input.capital !== null && input.capital !== undefined && input.capital > 0 && capitalFit >= 1;
+  const covered = usesCapital && arrangement.stress.exposure === 'BOUNDED';
+  const weight = (covered ? 1 : (EXPOSURE_WEIGHT[arrangement.stress.exposure] ?? 0)) * capitalFit;
   const read = (unit: number) => Math.min(input.remaining, Math.max(0, deals * unit * weight));
+  const money = (x: number) => Math.round(x).toLocaleString('en-US');
+  const daysLow = one.daysToCash.low ?? one.daysToCash.value;
+  const capitalLow = one.capital.low ?? one.capital.value;
+  const hoursLow = one.hours.low ?? one.hours.value;
+  const misfit =
+    daysLow !== null && daysLow > input.daysLeft
+      ? `its money settles no sooner than ${Math.round(daysLow)} days, after the ${input.daysLeft} this goal has left`
+      : input.capital !== null && input.capital !== undefined && capitalFit <= 0
+        ? `it ties up ${capitalLow !== null && capitalLow > 0 ? `at least ${money(capitalLow)}` : `money (swept ${money(capitalLow ?? 0)}–${money(one.capital.high ?? one.capital.value ?? 0)})`} before money comes in, and this goal allows ${money(input.capital)}`
+        : input.hours !== null && input.hours !== undefined && hoursLow !== null && hoursLow > input.hours
+          ? `one deal needs at least ${Math.round(hoursLow)} hours, more than the ${Math.round(input.hours)} this goal has`
+          : null;
+  // A deal losing money at the middle readings: cut when something established its cost; read at the
+  // margin when the cost is only the blind sweep anchored on the top price (production arr_0a5793917577).
+  const loss = misfit ? null : losesMoneyPerDeal(one);
+  const blindCost = one.directCost.provenance === 'UNKNOWN' && !one.directCost.inferred;
+  const lossMisfit = loss && !blindCost ? loss : null;
+  const flag = loss && blindCost ? `${loss} (the cost is a blind sweep nobody established), so it is read as keeping nothing at the middle and enters only on its upside` : null;
+  const costMid = middle(one.directCost) ?? 0;
+  const fitNote = [
+    input.capital !== null && input.capital !== undefined ? `capital: ${Math.round(capitalFit * 100)}% of its swept up-front money within the ${money(input.capital)} allowed${covered ? ', worst case covered' : ''}` : null,
+    Number.isFinite(byHours) ? `hours: at most ${byHours.toFixed(1)} deal(s) in ${Math.round(input.hours!)} h at ${hoursPerDeal.toFixed(1)} h/deal` : null,
+  ].filter(Boolean);
   return {
-    value: read(price),
-    upside: read(Math.max(price, p90)),
-    basis: `${deals.toFixed(2)} deal(s) × ${Math.round(price)} (${arrangement.value.tier}: ${Math.round(position * 100)}% of the way from p10 to p50) × ${weight} for ${arrangement.stress.exposure.toLowerCase()} exposure; unknown links at their ${Math.round(SCREEN_QUANTILE * 100)}th percentile`,
+    value: misfit || lossMisfit || flag ? 0 : read(price),
+    upside: misfit || lossMisfit ? 0 : read(flag ? Math.max(0, Math.max(price, p90) - costMid) : Math.max(price, p90)),
+    basis: `${deals.toFixed(2)} deal(s) in ${input.daysLeft} days × ${Math.round(price)} (${arrangement.value.tier}: ${Math.round(position * 100)}% of the way from p10 to p50) × ${weight.toFixed(2)} for ${arrangement.stress.exposure.toLowerCase()} exposure; unknown links at their ${Math.round(SCREEN_QUANTILE * 100)}th percentile${fitNote.length ? `; ${fitNote.join('; ')}` : ''}`,
+    misfit: misfit ?? lossMisfit,
+    flag,
+    capitalFit,
+    usesCapital,
   };
 }
 
@@ -960,7 +1121,7 @@ export interface ArrangementPick {
   population: string;
   screen: number;
   upside: number;
-  /** `LEADER` (held from the goal's last readings), `STRUCTURE:<base>` or `PAID:<funding>/<repeat>` (the strongest of its kind), `PRICE_VARIABLE`, `UPSIDE`, or `SCREEN`. */
+  /** `LEADER` (held from the goal's last readings), `STRUCTURE:<base>` or `PAID:<funding>/<repeat>` (the strongest of its kind), `PRICE_VARIABLE`, `CAPITAL` (the strongest design using the goal's stated up-front money), `UPSIDE`, or `SCREEN`. */
   slot: string;
   basis: string;
 }
@@ -987,9 +1148,15 @@ export const populationMarket = (population: string) => `${ARRANGEMENT_ID_PREFIX
  * flip, and a strong DIRECT design the engine preferred was routinely cut,
  * after which no later stage could bring it back. Now:
  *
- *   1. every candidate is screened quantitatively (`screenArrangement`) and
- *      ordered by that reading, then evidence tier, observations, exposure and
- *      the constructor's own order — never by id;
+ *   1. every candidate is screened quantitatively (`screenArrangement`) on
+ *      the goal's own terms — its days, what it still needs, and the capital
+ *      and hours it states — and one that cannot fit them (money settling
+ *      only after the deadline, capital beyond what it allows, a deal needing
+ *      more hours than it has, or every deal losing money) is cut with that
+ *      reason, leader or not; the rest are ordered by that reading, then
+ *      evidence tier, observations, exposure and the constructor's own order
+ *      — never by id; when the goal states capital, the strongest design that
+ *      puts it to work takes a `CAPITAL` slot;
  *   2. each base structure, then each way of being paid (funding × repeat),
  *      keeps its strongest design, so genuinely different strategies are not
  *      crowded out by many variants of one;
@@ -1011,6 +1178,10 @@ export function selectEstimatedArrangements(
     limit?: number;
     daysLeft?: number | null;
     contactsPerDay?: number;
+    /** Money the goal allows tied up before proof (major units); null or absent when nobody stated it. */
+    capitalAvailable?: number | null;
+    /** Working hours the goal has; null or absent when nobody stated them. */
+    hoursAvailable?: number | null;
     /**
      * Prices other buyers in the project are published as paying. An
      * arrangement nothing prices for its own buyers is swept across them
@@ -1077,7 +1248,10 @@ export function selectEstimatedArrangements(
     }
     // One buyer population is one market however many designs reach it: the engine caps their deals together.
     const planned: PlannedOpening = { ...one, marketKey: populationMarket(population) };
-    rows.push({ arrangement, one: planned, screen: screenArrangement(one, { value: screenValue ?? value, stress: arrangement.stress }, { remaining: input.remaining, daysLeft, contactsPerDay }), order, population, value });
+    const screen = screenArrangement(one, { value: screenValue ?? value, stress: arrangement.stress }, { remaining: input.remaining, daysLeft, contactsPerDay, capital: input.capitalAvailable ?? null, hours: input.hoursAvailable ?? null });
+    // The goal's own terms leave it out, whatever it led with before: recorded with the reason, never a slot.
+    if (screen.misfit) return void cut.push({ arrangementKey: arrangement.key, label: arrangement.label, population, screen: 0, upside: 0, reason: `it does not fit this goal: ${screen.misfit}` });
+    rows.push({ arrangement, one: planned, screen, order, population, value });
   });
   const byScreen = (a: Row, b: Row) =>
     b.screen.value - a.screen.value ||
@@ -1120,6 +1294,11 @@ export function selectEstimatedArrangements(
   // only kind holding an observed number about itself, so its break-even is always read by the engine.
   const variable = candidates.find((r) => r.one.priceVariable);
   if (variable) take(variable, 'PRICE_VARIABLE');
+  // 1c. When the goal states money it allows up front, the strongest design that puts it to work — one
+  // that ties money up before buyers commit, all of it within what the goal allows — so the engine
+  // compares using the capital with leaving it idle ($50K goal with $25K capital, transfer test: none did).
+  const capitalUser = candidates.find((r) => r.screen.usesCapital && r.screen.value > 0 && !taken.has(r));
+  if (capitalUser) take(capitalUser, 'CAPITAL');
   // 2. One design per kind first, leaving the upside slots free.
   const diversityRoom = Math.max(0, limit - UPSIDE_SLOTS);
   const kinds: Array<[string, (a: ConstructedArrangement) => string]> = [
@@ -1159,7 +1338,9 @@ export function selectEstimatedArrangements(
       reason:
         (perPopulation.get(r.population) ?? 0) >= DESIGNS_PER_POPULATION
           ? `its buyers already have ${DESIGNS_PER_POPULATION} designs in the model`
-          : r.screen.value <= 0
+          : r.screen.flag && r.screen.value <= 0
+            ? r.screen.flag
+            : r.screen.value <= 0
             ? 'it settles nothing by the deadline at the conservative reading'
             : `below the cut: screens ${Math.round(r.screen.value)} against ${Math.round(weakest)} for the weakest of the ${picked.length} kept`,
     });
@@ -1170,7 +1351,7 @@ export function selectEstimatedArrangements(
     conversions,
     selection: {
       considered: arrangements.length,
-      picked: picked.map((r) => ({ arrangementKey: r.arrangement.key, label: r.arrangement.label, population: r.population, screen: r.screen.value, upside: r.screen.upside, slot: taken.get(r)!, basis: r.one.priceVariable ? `${r.screen.basis}. ${r.one.priceVariable.sentence}` : r.screen.basis })),
+      picked: picked.map((r) => ({ arrangementKey: r.arrangement.key, label: r.arrangement.label, population: r.population, screen: r.screen.value, upside: r.screen.upside, slot: taken.get(r)!, basis: [r.screen.basis, r.screen.flag, r.one.priceVariable?.sentence].filter(Boolean).join('. ') })),
       cut: cut.slice(0, CUT_RECORDED),
       cutCount: cut.length,
     },
@@ -1800,6 +1981,9 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       remaining: target.remainingCents / 100,
       exclusions,
       daysLeft: target.daysLeft,
+      // The goal's own money and hours shape which arrangements fit it (transfer test, release ca2efe4d).
+      capitalAvailable: upFrontLimit,
+      hoursAvailable: target.hoursCeiling,
       // The evidence the found openings were just inferred from: an arrangement's links read it the same way (F2).
       knowledge,
       now: input.now ?? new Date(),

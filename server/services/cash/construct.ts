@@ -61,6 +61,7 @@ import { claimSources, claimsByIds } from '../../repos/research.ts';
 import type { CashCardFact, CashOpportunity, IndustryNode } from '../../domain/types.ts';
 import type { Estimate, Observation } from '../../domain/quant.ts';
 import { repeatBusinessObservations } from './deliverables/realization.ts';
+import { brainProduces } from '../goals/pathways.ts';
 import { readMoneyFigures } from './figures.ts';
 import { combineTimings, openingTiming, timingOfText, type PaymentTimingReading } from './paymentTiming.ts';
 
@@ -500,6 +501,32 @@ export const BRAIN_CAPABILITY_PATH = 'CAPABILITY:BRAIN';
 /** The capability part every design Brain produces is composed with, or null when no deliverable is proved. */
 export function capabilityPart(delivers: readonly string[]): Primitive | null {
   return delivers.length > 0 ? { name: delivers.join(', '), claimId: null, from: 'CAPABILITY', ref: 'deliverables', path: BRAIN_CAPABILITY_PATH } : null;
+}
+
+/**
+ * What Brain produces for these buyers: the one proved deliverable their need
+ * or their name calls for, as the capability part's words — never the whole
+ * list. Production transfer test (release ca2efe4d): every arrangement Brain
+ * produces read "Brain produces it (spreadsheet, business document,
+ * presentation, …)" whatever the buyer paid for, because the part's name was
+ * the project's deliverables list. The identity stays the one capability
+ * (`BRAIN_CAPABILITY_PATH`), so signatures, leaders and verdicts are
+ * untouched; only the words change. When nothing these buyers are said to
+ * need matches a deliverable Brain has proved, the deliverable is unknown and
+ * says so: research names it, and nothing here picks one. Pure.
+ */
+export function fittedDeliverable(capability: Primitive, delivers: readonly string[], demand: Primitive, need: Primitive | null): Primitive {
+  if (capability.from !== 'CAPABILITY') return capability;
+  const named = (text: string | null | undefined) => (text ? brainProduces(text, { delivers: [...delivers], puzzleFormats: [] }) : null);
+  const kind = named(need?.name) ?? named(demand.name);
+  const name = kind
+    ? need
+      ? `${kind} for "${need.name}"`
+      : `${kind} for ${demand.name}`
+    : need
+      ? `the deliverable "${need.name}" calls for (not yet matched to one Brain has proved)`
+      : `what ${demand.name} pay for (not yet specified)`;
+  return { ...capability, name };
 }
 
 /** The capability's path as it was spelt from the whole list, before 2026-11-19: only to recognise what was stored under it. */
@@ -1972,9 +1999,11 @@ export function constraintsFor(base: LeverageConstraints, limits: ContractLimits
 /**
  * The composer's version, in every composition digest. 2: a FEE design's value
  * is reconstructed from its own buyers' prices (it was left UNKNOWN), and own
- * buyers are matched by `payerKey`.
+ * buyers are matched by `payerKey`. 3: the capability part Brain produces is
+ * named by the deliverable these buyers pay for (`fittedDeliverable`), so a
+ * stored arrangement still carrying the whole list is recomposed.
  */
-export const COMPOSITION_VERSION = 2;
+export const COMPOSITION_VERSION = 3;
 
 /** One selected candidate, the digest of everything its composition reads, and the library's arrangement composed under it. */
 export interface CompositionStep {
@@ -2236,7 +2265,9 @@ function compose(args: {
   exclusions: readonly ExclusionClass[];
   now: Date;
 }): { arrangement: ConstructedArrangement; levered: Arrangement } {
-  const { design, demand, need, supply, input } = args;
+  const { design, demand, need, input } = args;
+  // Brain's capability is named by what these buyers pay for, never the deliverables list (identity unchanged).
+  const supply = args.supply ? fittedDeliverable(args.supply, input.delivers, demand, need) : null;
   const structure = design.base;
   const def = STRUCTURES[structure];
   // The original arrangements keep their keys, and with them their round history.
