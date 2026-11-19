@@ -291,35 +291,38 @@ export async function decide(
   // One read, scoped to this bucket, serves both the correction and the version `recordPrediction` assigns.
   const bucket = await readComparableLedger(comparableKey);
   const correction = bucketCorrectionFrom(bucket, comparableKey);
-  if (correction && correction.missingMechanismClaims.length > 0 && !input.assumptions.some((a) => MECHANISM_ASSUMPTION.test(a))) {
-    const claims = correction.missingMechanismClaims;
-    return {
-      committed: false,
-      decisionId: null,
-      verdict: 'REVISE',
-      problems: [
-        `${comparableKey} is miscalibrated (${correction.rationale}) and ${claims.length} of its systematic misses were MISSING_MECHANISM (${claims.slice(0, 12).join(', ')}${claims.length > 12 ? ', …' : ''}): the step from this decision to its outcome was not in the claim`,
-      ],
-      review,
-      challenge: null,
-      correction,
-      next: `${MECHANISM_ASSUMPTION_INSTRUCTION}, then call again.`,
-    };
-  }
-  if (correction && correction.capacityShortfallClaims.length > 0 && !input.assumptions.some((a) => CAPACITY_ASSUMPTION.test(a))) {
-    const claims = correction.capacityShortfallClaims;
-    return {
-      committed: false,
-      decisionId: null,
-      verdict: 'REVISE',
-      problems: [
-        `${comparableKey} is miscalibrated (${correction.rationale}) and ${claims.length} of its systematic misses were CAPACITY (${claims.slice(0, 12).join(', ')}${claims.length > 12 ? ', …' : ''}): the outcome needed capacity the decision assumed and did not have`,
-      ],
-      review,
-      challenge: null,
-      correction,
-      next: `${CAPACITY_ASSUMPTION_INSTRUCTION}, then call again.`,
-    };
+  // Every gap the bucket names is returned in one REVISE: a decision missing both a
+  // mechanism and a capacity assumption is told both at once, not one per round-trip.
+  if (correction) {
+    const problems: string[] = [];
+    const instructions: string[] = [];
+    const listed = (claims: string[]): string => `${claims.slice(0, 12).join(', ')}${claims.length > 12 ? ', …' : ''}`;
+    if (correction.missingMechanismClaims.length > 0 && !input.assumptions.some((a) => MECHANISM_ASSUMPTION.test(a))) {
+      const claims = correction.missingMechanismClaims;
+      problems.push(
+        `${comparableKey} is miscalibrated (${correction.rationale}) and ${claims.length} of its systematic misses were MISSING_MECHANISM (${listed(claims)}): the step from this decision to its outcome was not in the claim`,
+      );
+      instructions.push(MECHANISM_ASSUMPTION_INSTRUCTION);
+    }
+    if (correction.capacityShortfallClaims.length > 0 && !input.assumptions.some((a) => CAPACITY_ASSUMPTION.test(a))) {
+      const claims = correction.capacityShortfallClaims;
+      problems.push(
+        `${comparableKey} is miscalibrated (${correction.rationale}) and ${claims.length} of its systematic misses were CAPACITY (${listed(claims)}): the outcome needed capacity the decision assumed and did not have`,
+      );
+      instructions.push(CAPACITY_ASSUMPTION_INSTRUCTION);
+    }
+    if (problems.length > 0) {
+      return {
+        committed: false,
+        decisionId: null,
+        verdict: 'REVISE',
+        problems,
+        review,
+        challenge: null,
+        correction,
+        next: `${instructions.join('; and ')}, then call again.`,
+      };
+    }
   }
   let challenge: Challenge | null = null;
   if (review.highImpact) {

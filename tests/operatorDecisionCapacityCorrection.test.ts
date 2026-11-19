@@ -12,6 +12,7 @@ import { freshProject } from './helpers.ts';
 import type { DecisionInput } from '../server/domain/decision.ts';
 import {
   CAPACITY_ASSUMPTION,
+  MECHANISM_ASSUMPTION_INSTRUCTION,
   CAPACITY_ASSUMPTION_INSTRUCTION,
   bucketCorrectionFrom,
   correctedProbability,
@@ -38,7 +39,11 @@ const base: DecisionInput = {
 };
 
 /** The recorded failure class: operator decisions forecast at 0.9 that mostly missed for a capacity shortfall. */
-async function seedCapacityBucket(projectId: string, kind: string, opts: { n: number; occurred: number; capacityShortfall: boolean }): Promise<string[]> {
+async function seedCapacityBucket(
+  projectId: string,
+  kind: string,
+  opts: { n: number; occurred: number; capacityShortfall: boolean; mechanismMissingEvery?: number },
+): Promise<string[]> {
   const claims: string[] = [];
   for (let i = 0; i < opts.n; i += 1) {
     const claimId = `operator:opd_cap${kind}${i}`;
@@ -47,7 +52,9 @@ async function seedCapacityBucket(projectId: string, kind: string, opts: { n: nu
       { projectId, caller: 'test' },
     );
     const occurred = i < opts.occurred;
-    await recordOutcome(p.id, occurred, occurred ? {} : { capacityShortfall: opts.capacityShortfall }, { projectId, evidence: `seed ${i}`, caller: 'test' });
+    const mechanismMissing = opts.mechanismMissingEvery ? i % opts.mechanismMissingEvery === 0 : false;
+    const signals = occurred ? {} : mechanismMissing ? { mechanismMissing: true } : { capacityShortfall: opts.capacityShortfall };
+    await recordOutcome(p.id, occurred, signals, { projectId, evidence: `seed ${i}`, caller: 'test' });
     if (!occurred) claims.push(claimId);
   }
   return claims;
@@ -100,6 +107,33 @@ describe('an operator decision on a bucket whose misses were CAPACITY', () => {
     expect(bucketCorrectionFrom(await readLedger(null), 'operator:SUBMIT_FIX')).toBeNull();
     await seedCapacityBucket(projectId, 'PAUSE_GOAL', { n: 24, occurred: 2, capacityShortfall: true });
     expect(bucketCorrectionFrom(await readLedger(null), 'operator:SUBMIT_FIX')).toBeNull();
+  });
+
+  it('names both a missing mechanism and a missing capacity in one REVISE, not two in sequence', async () => {
+    await seedCapacityBucket(projectId, 'RESEARCH', { n: 24, occurred: 4, capacityShortfall: true, mechanismMissingEvery: 2 });
+    const correction = bucketCorrectionFrom(await readLedger(null), 'operator:RESEARCH');
+    expect(correction!.missingMechanismClaims.length).toBeGreaterThan(0);
+    expect(correction!.capacityShortfallClaims.length).toBeGreaterThan(0);
+    const bare = { ...base, assumptions: ['owners answer cold email at 1%'] };
+    const first = await decide(bare, ctx());
+    expect(first).toMatchObject({ committed: false, verdict: 'REVISE' });
+    expect(first.problems).toHaveLength(2);
+    expect(first.problems.join(' ')).toMatch(/MISSING_MECHANISM/);
+    expect(first.problems.join(' ')).toMatch(/CAPACITY/);
+    expect(first.next).toContain(MECHANISM_ASSUMPTION_INSTRUCTION);
+    expect(first.next).toContain(CAPACITY_ASSUMPTION_INSTRUCTION);
+    // One revision that answers both commits; there is no second REVISE waiting behind the first.
+    const answered = await decide(
+      { ...bare, assumptions: [...bare.assumptions, 'mechanism: the supplier is reached through its listed sales inbox', 'capacity: one free research worker shown idle on the fleet row'] },
+      ctx(),
+    );
+    expect(answered.verdict).toBe('COMMITTED');
+    // Answering only one still names the other alone.
+    const half = await decide({ ...bare, assumptions: [...bare.assumptions, 'mechanism: the supplier is reached through its listed sales inbox'] }, ctx());
+    expect(half.verdict).toBe('REVISE');
+    expect(half.problems).toHaveLength(1);
+    expect(half.next).toContain(CAPACITY_ASSUMPTION_INSTRUCTION);
+    expect(half.next).not.toContain(MECHANISM_ASSUMPTION_INSTRUCTION);
   });
 
   it('tells the operator the "capacity:" convention when a CAPACITY miss is verified', async () => {
