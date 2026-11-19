@@ -87,6 +87,50 @@ export const DESIGN_RENDER_KIND = 'DESIGN_RENDER';
  */
 export const DESIGN_RENDER_WORKLOAD_CLASS = 'GENERAL_DESIGN_RENDER';
 
+/**
+ * The capabilities a render bin declares: none, and that is a decision with a
+ * date on it and one earlier reversal it answers.
+ *
+ * This bin genuinely needs a surface with a checkout and a browser, and the fire
+ * router honours a declared capability. But a declared capability is only
+ * satisfiable by a surface that is *also in scope* for the bin, and scope starts
+ * with the family (`servesFamily` in `services/dispatch/router.ts`). A render is
+ * GENERAL by `familyOf`. Every surface that has a checkout today is a Factory
+ * surface, and Factory onboarding (`services/factory/onboard.ts`,
+ * `setWorkerRouting`) writes it an explicit, exhaustive `['FACTORY']` routing
+ * row. So in the fleet production builds, requiring `repository` (or `browser`)
+ * of a render refuses the surfaces that have a checkout by FAMILY and the
+ * GENERAL surfaces by CAPABILITY: every surface, every fire. That is §27's
+ * failure exactly — the factory added a capability nothing in scope declared,
+ * watched it refuse the only surface that could do the work, twice, and took it
+ * out — and §27's rule decides it: **fail closed where the unknown could record
+ * something false, fail open where it could only waste a fire.** Nothing here
+ * can record anything false: a worker with no browser reports BLOCKED naming
+ * what it lacked, which the stage handles and the attempt budget bounds.
+ *
+ * The same effect was once brought back without touching this record, by a
+ * class-implied `repository` requirement in the router for this workload class
+ * (ORIGINATED:FAILURE_PATTERN:design-render, attempt 1). The argument was that
+ * `repository` *is* declared, by Factory surfaces, so §27 did not apply. It
+ * does: declared by a surface the family check has already refused is the same
+ * as declared by nobody. It was withdrawn before release, and the router now
+ * routes renders on this list like every other class. A capability for renders
+ * belongs here, in this one list, and nowhere implied.
+ *
+ * What would make the router's routing the cause is now read from rows rather
+ * than argued: `evaluateDesignRender` (`services/bins/contracts.ts`) records,
+ * for every render bin that ends with no render, which surface each attempt was
+ * fired at and whether it declared `repository`.
+ *
+ * So this stays empty until a surface that serves the GENERAL family (or an
+ * explicit routing row that includes it) has a checkout and declares the
+ * capability. The operator step is, in this order: give such a surface that
+ * family and declare `browser` on it, then add `browser` here. Adding it here
+ * first refuses every surface; `tests/designRenderRouting.test.ts` pins the
+ * fleet shape that makes it so.
+ */
+export const DESIGN_RENDER_REQUIRED_CAPABILITIES: readonly string[] = [];
+
 /** The one unit a render bin asks for. */
 export const RENDER_UNIT_KEY = 'design_render';
 
@@ -220,24 +264,7 @@ export async function openDesignRender(input: OpenRenderInput): Promise<string> 
     },
     completionContract: DESIGN_RENDER_CONTRACT,
     createdByType: 'SYSTEM',
-    /*
-     * No `requiredCapabilities`, and that is a decision with a date on it.
-     *
-     * This bin genuinely needs a surface with a checkout and a browser, and the
-     * fire router would honour a declared capability — `repository` is exactly
-     * that mechanism for the factory. But a capability nothing declares refuses
-     * every surface, and §27 records the factory adding one, watching it refuse
-     * the only surface that could do the work, twice, and taking it out: **fail
-     * closed where the unknown could record something false, fail open where it
-     * could only waste a fire.** Nothing here can record anything false — a
-     * worker with no browser reports BLOCKED naming what it lacked, which the
-     * stage handles and the attempt budget bounds.
-     *
-     * So this is open until a surface declares one. The operator step is two
-     * things in either order: declare `browser` on a Routine whose worker has a
-     * checkout, and add it here. One line, and until it happens the cost is a
-     * fire spent learning what the fleet has not been told.
-     */
+    requiredCapabilities: [...DESIGN_RENDER_REQUIRED_CAPABILITIES],
     createdById: renderCreator(input.cycle, input.pass),
     ready: false,
     priority: 5,
