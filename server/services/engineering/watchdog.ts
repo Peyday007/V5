@@ -10,7 +10,12 @@
  * intervention rather than a row every ten seconds.
  */
 import { getDb } from '../../db/database.ts';
-import { DISPATCHABLE_SQL, FIREABLE_SQL, workReadySql } from '../../repos/bins.ts';
+import {
+  CAPACITY_ENDED_REFUSALS,
+  RECENTLY_UNROUTED_MS,
+  describeHolds,
+  dispatchReadiness,
+} from '../dispatch/conservation.ts';
 import { recordIntervention } from '../../repos/engineering.ts';
 import { idleCheck } from '../../domain/engineering.ts';
 import { capacityReading } from '../fleet/capacity.ts';
@@ -18,7 +23,7 @@ import { dispatchTick } from '../dispatch/loop.ts';
 
 export const IDLE_RECORD_WINDOW_MS = 10 * 60_000;
 /** A bin the router refused this recently waits on that refusal's named limit, not on idle capacity. */
-export const UNROUTED_WINDOW_MS = 15 * 60_000;
+export const UNROUTED_WINDOW_MS = RECENTLY_UNROUTED_MS;
 
 export interface IdleReading {
   executableWork: number;
@@ -29,35 +34,48 @@ export interface IdleReading {
   reason: string;
   intervened: boolean;
   fired: number;
+  /** Dispatchable bins the dispatcher is deliberately holding, by named hold; '' when none. */
+  held: string;
 }
 
 export async function idleCounts(now = new Date()): Promise<Omit<IdleReading, 'idle' | 'reason' | 'intervened' | 'fired'>> {
   const iso = now.toISOString();
-  // The dispatcher's own predicate, all three parts: a research packet bin with
-  // no claimable work is not executable, and counting it read as idle capacity
-  // for hours while the dispatcher correctly had nothing to fire (§98).
-  //
-  // And a bin the router just refused — no surface serves its family or its
-  // project, every eligible surface is at its account's target — is waiting on
-  // a named limit, not on idle capacity. Production, 2026-11-09: "3 executable,
-  // 13 eligible" for hours, the 3 being Factory bins only a repository surface
-  // can take and the 13 research surfaces.
-  //
-  // And a bin pinned to one surface can run only on that surface: while it (or its
-  // account) is not ENABLED the bin waits on the surface's repair, not on idle
-  // capacity. Production, 2026-11-16: two FACTORY_SURFACE_PROBE bins pinned to
-  // quarantined surfaces were refused 34 times each, and between refusals (outside
-  // the unrouted window) they read as "executable work beside a free surface — a
-  // fault", which Hermes then cited as a Factory fault and stopped commissioning.
-  const unroutedSince = new Date(now.getTime() - UNROUTED_WINDOW_MS).toISOString();
-  const executable = await getDb().get<{ n: number | string }>(
-    `SELECT COUNT(*) AS n FROM bins WHERE ${DISPATCHABLE_SQL} AND ${FIREABLE_SQL} AND ${workReadySql('bins.')}
-        AND NOT EXISTS (SELECT 1 FROM bin_events e WHERE e.bin_id = bins.id AND e.event_type = 'DISPATCH_UNROUTED' AND e.at > ?)
-        AND (bins.pinned_routine_id IS NULL OR EXISTS (
-          SELECT 1 FROM fleet_routines r JOIN fleet_accounts a ON a.id = r.account_id
-           WHERE r.id = bins.pinned_routine_id AND r.state = 'ENABLED' AND a.state = 'ENABLED'))`,
-    [iso, iso, iso, iso, unroutedSince],
+  /*
+   * Executable work is the dispatcher's own answer (`dispatchReadiness`), never
+   * a second predicate beside it.
+   *
+   * This used to be hand-written SQL — dispatchable, fireable, work-ready, not
+   * refused by routing in the last fifteen minutes, not pinned to an unavailable
+   * surface — and it disagreed with the dispatcher about one thing that decided
+   * everything: the dispatcher fires a bin only through its one intent per
+   * (bin, generation), so a bin whose intent was deferred into the future or sent
+   * and awaiting its session counted as executable here while the pass this
+   * watchdog asked for had nothing due to send. Production, 2026-11-18: "1
+   * executable item(s), 13 eligible surface(s), 0 active against a target of 12"
+   * in 181 of 144 windows (ORIGINATED:IDLE_CAPACITY:engineering-watchdog).
+   *
+   * Earlier exclusions are kept, now as named holds the readiness read returns:
+   * a research packet with no claimable work (§98, `workReadySql`), a bin the
+   * router refused moments ago (2026-11-09), a bin pinned to a surface that is
+   * not ENABLED (2026-11-16).
+   *
+   * Which holds are explained is decided here and stated. A wait with its own
+   * end — a deferral on a rate limit's retry time, a paused fleet, an operator
+   * write, an audit session or the refire guard; a fire sent and awaiting its
+   * session; a pinned surface under repair; a fresh routing refusal — is not
+   * idle capacity. Everything else still counts, so no bar is lowered: a
+   * deferral only because every surface was at its target is idle the moment a
+   * surface is free (and the conserving pass ends it), and an abandoned or
+   * superseded intent beside a READY bin is a stall, exactly as before.
+   */
+  const readiness = await dispatchReadiness(now);
+  const unexplained = readiness.held.filter(
+    (hold) =>
+      hold.kind === 'ABANDONED' ||
+      hold.kind === 'SUPERSEDED' ||
+      (hold.kind === 'DEFERRED' && hold.cause !== null && (CAPACITY_ENDED_REFUSALS as readonly string[]).includes(hold.cause)),
   );
+  const explained = readiness.held.filter((hold) => !unexplained.includes(hold));
   const active = await getDb().get<{ n: number | string }>(
     "SELECT COUNT(*) AS n FROM bins WHERE state = 'LEASED' AND lease_expires_at > ?",
     [iso],
@@ -65,17 +83,24 @@ export async function idleCounts(now = new Date()): Promise<Omit<IdleReading, 'i
   const capacity = await capacityReading();
   const eligible = capacity.eligibleNow;
   return {
-    executableWork: Number(executable?.n ?? 0),
+    executableWork: readiness.executable.length + unexplained.length,
     eligibleCapacity: eligible,
     activeWork: Number(active?.n ?? 0),
     safeTarget: capacity.target ?? eligible,
+    held: describeHolds(explained),
   };
+}
+
+/** The reading's sentence, with the waits that are not idle named beside it. */
+function withHolds(reason: string, held: string): string {
+  return held ? `${reason} Held, not idle: ${held}.` : reason;
 }
 
 export async function watchIdle(options: { continueWork?: boolean; now?: Date } = {}): Promise<IdleReading> {
   const now = options.now ?? new Date();
   const counts = await idleCounts(now);
-  const check = idleCheck(counts);
+  const verdict = idleCheck(counts);
+  const check = { idle: verdict.idle, reason: withHolds(verdict.reason, counts.held) };
   let intervened = false;
   let fired = 0;
   if (check.idle) {
@@ -89,14 +114,16 @@ export async function watchIdle(options: { continueWork?: boolean; now?: Date } 
         kind: 'IDLE_WITH_EXECUTABLE_WORK',
         rule: 'RULE_9_KEEP_CAPACITY_FED',
         attemptedAction: check.reason,
-        replacementAction: 'one dispatch tick through the existing continuation path',
+        replacementAction: 'one conserving dispatch tick through the existing continuation path',
         actorType: 'BRAIN',
         actorId: 'engineering:watchdog',
       });
       intervened = true;
     }
     if (options.continueWork !== false) {
-      const tick = await dispatchTick();
+      // A conserving pass: a deferral that was only about capacity ends now
+      // that capacity reads free, rather than at its timestamp (`conservation.ts`).
+      const tick = await dispatchTick({ conserve: true });
       fired = tick.fired;
     }
   }
@@ -291,7 +318,7 @@ export async function brainUtilization(now = new Date()): Promise<PoolReading[]>
       running: counts.activeWork,
       capacity: counts.safeTarget,
       idle: routines.idle,
-      because: routines.reason,
+      because: withHolds(routines.reason, counts.held),
     },
   ];
   const free = await freeLanePool(now).catch(() => null);
@@ -444,7 +471,7 @@ export async function watchUtilization(options: { continueWork?: boolean; now?: 
     if (one.pool === 'ROUTINES' || one.pool === 'FACTORY') {
       if (dispatched === null) {
         const { dispatchTickIfIdle } = await import('../dispatch/loop.ts');
-        dispatched = await dispatchTickIfIdle({});
+        dispatched = await dispatchTickIfIdle({ conserve: true });
       }
       if (dispatched) continued.push(one.pool);
     } else if (one.pool === 'FREE_LANE') {
