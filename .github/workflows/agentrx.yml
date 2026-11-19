@@ -1,0 +1,222 @@
+# Failed executions, diagnosed by Microsoft AgentRx, filed for Hermes.
+#
+# AgentRx (github.com/microsoft/AgentRx, MIT) localizes the critical failure
+# step in an agent trajectory and classifies it. This workflow is the isolated
+# environment it runs in — a runner of its own, not the Brain's machine — and
+# the bridge between it and the diagnosis loop Brain already has (§109):
+#
+#   1. export   scripts/agentrx/export.ts runs inside the Brain, read-only,
+#               and writes each failed work item as a trajectory from rows Brain
+#               already keeps (work_items, work_leases, bin_events,
+#               project_events). No new trace store.
+#   2. diagnose AgentRx, pinned to one commit, runs every stage (IR, invariants,
+#               checker, judge) with its model calls sent through
+#               scripts/agentrx/llm_bridge.py to the free-provider switchboard
+#               the free lane and Hermes already use — no new provider or key.
+#   3. convert  scripts/agentrx/to_finding.py states the result in the
+#               inventory's fields: CONFIRMED only when AgentRx's judge and a
+#               code-evaluated invariant agree on one step, otherwise SUSPECTED.
+#   4. file     scripts/agentrx/file.ts writes it through upsertInventory, the
+#               owner of Hermes' findings register. Hermes reads unclaimed
+#               findings every run (inventoryDeficiencies) and the director
+#               decides: engineering only on an established cause.
+#
+# Scheduled, so a new failure is diagnosed without anybody asking; a class
+# diagnosed in the last day is skipped (export.ts), so the schedule spends its
+# model calls on failures nobody has looked at. Dispatch it for one item, one
+# packet or a window, with `file: false` to look without writing.
+#
+# Nothing here starts work, deploys, restarts the Brain or spends money: the
+# switchboard's providers are free, and the only write is the inventory row.
+name: AgentRx
+
+on:
+  schedule:
+    - cron: '41 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'wki_... (one work item), orc_... (a packet''s failed items) or recent:HOURS'
+        required: true
+        default: 'recent:24'
+      limit:
+        description: 'At most this many trajectories (1-5)'
+        required: true
+        default: '2'
+      file:
+        description: 'File the findings into the operator inventory (true) or only report them (false)'
+        required: true
+        default: 'true'
+      model:
+        description: 'Switchboard route for AgentRx''s model calls'
+        required: true
+        default: 'auto/best-coding'
+
+concurrency:
+  group: brain-diagnose-agentrx
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  # One commit of AgentRx, so a diagnosis is reproducible and an upstream change is a reviewed edit here.
+  AGENTRX_REPO: https://github.com/microsoft/AgentRx.git
+  AGENTRX_SHA: 7a18c79708e7671be15124460f4f7296107c2a55
+  # The switchboard (cheap-lane.yml `cheap=northline-cheap`): the free lane's and Hermes' endpoint.
+  AGENTRX_LLM_URL: https://northline-cheap.fly.dev/v1
+
+jobs:
+  diagnose:
+    name: Diagnose failed executions
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - uses: ./.github/actions/await-release
+
+      - name: Export failed executions (read-only)
+        timeout-minutes: 15
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          RX_TARGET: ${{ inputs.target || 'recent:24' }}
+          RX_LIMIT: ${{ inputs.limit || '2' }}
+        run: |
+          set -eu
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          case "$RX_LIMIT" in [1-5]) ;; *) echo "::error::limit is 1-5"; exit 1 ;; esac
+          case "$RX_TARGET" in
+            wki_*) args="--work-item $RX_TARGET" ;;
+            orc_*) args="--packet $RX_TARGET" ;;
+            recent:*) args="--recent ${RX_TARGET#recent:}" ;;
+            *) echo "::error::target is wki_..., orc_... or recent:HOURS"; exit 1 ;;
+          esac
+          # Letters, digits, underscore, dash and the flag words only: a value a shell could act on is refused.
+          case "$args" in *[!A-Za-z0-9_\ -]*) echo "::error::Refusing the target."; exit 1 ;; esac
+          args="$args --limit $RX_LIMIT"
+          ex=$(base64 -w0 scripts/agentrx/export.ts)
+          fi=$(base64 -w0 scripts/agentrx/filing.ts)
+          set +e
+          flyctl ssh console --app "$app" \
+            -C "env BRAIN_DATABASE_POOL_SIZE=1 sh -c 'cd /app && mkdir -p scripts/agentrx-run && echo $ex | base64 -d > scripts/agentrx-run/export.ts && echo $fi | base64 -d > scripts/agentrx-run/filing.ts && nice -n 19 node --import tsx scripts/agentrx-run/export.ts $args; rm -rf scripts/agentrx-run'" \
+            2>&1 | tee export.txt
+          set -e
+          grep -q '^AGENTRX: OK' export.txt
+          python3 - <<'PY'
+          import base64, json, os
+          line = next((l for l in open('export.txt', encoding='utf-8', errors='replace') if l.startswith('AGENTRX_EXPORT ')), None)
+          items = json.loads(base64.b64decode(line.split(' ', 1)[1].strip())) if line else []
+          os.makedirs('rx/traj', exist_ok=True)
+          for t in items:
+              open(f"rx/traj/{t['workItemId']}.md", 'w', encoding='utf-8').write(t['markdown'])
+              json.dump(t, open(f"rx/traj/{t['workItemId']}.json", 'w', encoding='utf-8'))
+          print(f"{len(items)} trajectory(ies) to diagnose")
+          PY
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install AgentRx (isolated, pinned)
+        run: |
+          set -eu
+          [ -n "$(ls rx/traj/*.md 2>/dev/null)" ] || { echo "Nothing failed that needs a diagnosis."; exit 0; }
+          git init -q agentrx && cd agentrx
+          git fetch -q --depth 1 "$AGENTRX_REPO" "$AGENTRX_SHA" && git checkout -q FETCH_HEAD
+          python -m venv ../rx/venv
+          ../rx/venv/bin/pip install -q -e .
+          ../rx/venv/bin/python -c 'import agentrx; print("agentrx", "'"$AGENTRX_SHA"'")'
+
+      - name: Diagnose with AgentRx
+        timeout-minutes: 90
+        env:
+          AGENT_VERIFY_COPILOT_BIN: ${{ github.workspace }}/scripts/agentrx/llm_bridge.py
+          AGENTRX_LLM_KEY: ${{ secrets.OMNIROUTE_API_KEY }}
+          AGENTRX_LLM_MODEL: ${{ inputs.model || 'auto/best-coding' }}
+          AGENTRX_USAGE_LOG: ${{ github.workspace }}/rx/usage.jsonl
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -eu
+          [ -n "$(ls rx/traj/*.md 2>/dev/null)" ] || exit 0
+          [ -n "$AGENTRX_LLM_KEY" ] || { echo "::error::OMNIROUTE_API_KEY is not set: AgentRx has no model to call."; exit 1; }
+          chmod +x scripts/agentrx/llm_bridge.py
+          : > rx/usage.jsonl
+          echo '[]' > rx/findings.json
+          for md in rx/traj/*.md; do
+            id=$(basename "$md" .md)
+            echo "::group::AgentRx on $id"
+            # Every stage, step-by-step dynamic invariants: at the pinned commit the one-shot mode has no
+            # IR entry point (OneShotDynamicInvariantGenerator.run_from_ir_data, run 44476654177). The
+            # exporter caps a trajectory at 24 steps, which bounds the per-step calls.
+            (cd agentrx && ../rx/venv/bin/python run.py "../$md" --domain flash --endpoint copilot \
+                --run-dir "../rx/runs/$id") || echo "::warning::AgentRx did not finish every stage on $id"
+            python3 scripts/agentrx/to_finding.py --run-dir "rx/runs/$id" --meta "rx/traj/$id.json" \
+              --bridge scripts/agentrx/llm_bridge.py --run-url "$RUN_URL" > "rx/runs/$id.finding.json"
+            python3 - "$id" <<'PY'
+          import json, sys
+          one = json.load(open(f"rx/runs/{sys.argv[1]}.finding.json"))
+          all_ = json.load(open('rx/findings.json')); all_.append(one)
+          json.dump(all_, open('rx/findings.json', 'w'), indent=2)
+          print(f"{one['id']}: {one['confidence']} — {one.get('root_cause') or 'no cause named'}")
+          PY
+            echo "::endgroup::"
+          done
+
+      - name: File into the operator inventory
+        if: ${{ github.event_name == 'schedule' || inputs.file == 'true' }}
+        timeout-minutes: 15
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -eu
+          [ -s rx/findings.json ] || exit 0
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          fi=$(base64 -w0 scripts/agentrx/filing.ts)
+          fl=$(base64 -w0 scripts/agentrx/file.ts)
+          python3 -c 'import json; [print(i) for i in range(len(json.load(open("rx/findings.json"))))]' | while read -r i; do
+            one=$(python3 -c 'import base64, json, sys; print(base64.b64encode(json.dumps([json.load(open("rx/findings.json"))[int(sys.argv[1])]]).encode()).decode())' "$i")
+            set +e
+            flyctl ssh console --app "$app" \
+              -C "env BRAIN_DATABASE_POOL_SIZE=1 sh -c 'cd /app && mkdir -p scripts/agentrx-run && echo $fi | base64 -d > scripts/agentrx-run/filing.ts && echo $fl | base64 -d > scripts/agentrx-run/file.ts && nice -n 19 node --import tsx scripts/agentrx-run/file.ts --findings $one; rm -rf scripts/agentrx-run'" \
+              2>&1 | tee -a file.txt
+            set -e
+          done
+          grep -q '^AGENTRX: OK' file.txt
+          grep '^AGENTRX_FILED' file.txt || true
+
+      - name: Report
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json, os
+          usage = [json.loads(l) for l in open('rx/usage.jsonl')] if os.path.exists('rx/usage.jsonl') else []
+          ok = [u for u in usage if u.get('status') == 200]
+          tokens = sum((u.get('prompt_tokens') or 0) + (u.get('completion_tokens') or 0) for u in ok)
+          findings = json.load(open('rx/findings.json')) if os.path.exists('rx/findings.json') else []
+          lines = [f"## AgentRx", f"Model calls: {len(usage)} ({len(ok)} answered), {tokens} tokens on the free switchboard — $0.",
+                   f"Findings: {len(findings)}"]
+          for f in findings:
+              v = (f.get('agentrx') or {}).get('verdict') or {}
+              lines.append(f"- **{f['id']}** {f['confidence']} — step {v.get('step')} {v.get('category','')}: {(f.get('root_cause') or 'no cause named')[:400]}")
+          text = '\n'.join(lines)
+          print(text)
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as s: s.write(text + '\n')
+          enc = lambda s: s.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          print(f"::notice title=AgentRx::{enc(text[:3500])}")
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: agentrx
+          path: |
+            export.txt
+            file.txt
+            rx/traj
+            rx/runs
+            rx/findings.json
+            rx/usage.jsonl
+          if-no-files-found: ignore
