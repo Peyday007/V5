@@ -69,6 +69,7 @@ import {
   retireBin,
 } from '../../repos/bins.ts';
 import { openBinRequest, recordCapture } from '../../repos/design.ts';
+import { BRAIN_REPOSITORY_ID } from '../../domain/binPurpose.ts';
 import type { CaptureReadings, DesignCapture, DesignCycle, DesignSurface } from '../../domain/design.ts';
 import { coerceReadings } from './observe.ts';
 import { measurePass } from './operate.ts';
@@ -81,55 +82,49 @@ export const DESIGN_RENDER_KIND = 'DESIGN_RENDER';
  * Its own workload class, and that is the point rather than a label.
  *
  * `GENERAL_DESIGN_REVIEW` is answerable by any worker that can read; this needs
- * one that can start the product and drive a browser. Two classes is what lets
- * `services/bins/routing.ts` send each to a surface that can actually do it,
- * instead of spending a fire discovering that a reviewer has no Chromium.
+ * one that can start the product and drive a browser, and that means a checkout
+ * of Brain's own repository. So it is a FACTORY class: the assigner scopes a
+ * worker's candidates by class prefix (`classesForFamilies`), and a Factory
+ * surface — the only kind with a checkout — is offered `FACTORY%` and nothing
+ * else. As `GENERAL_DESIGN_RENDER` it was offered only to general surfaces, which
+ * have no checkout, so every render bin was fired where `npm run design -- render`
+ * could not run and ended NEEDS_HUMAN with "No render was submitted"
+ * (ORIGINATED:FAILURE_PATTERN:design-render, 7 of 11 in a week).
  */
-export const DESIGN_RENDER_WORKLOAD_CLASS = 'GENERAL_DESIGN_RENDER';
+export const DESIGN_RENDER_WORKLOAD_CLASS = 'FACTORY_DESIGN_RENDER';
 
 /**
- * The capabilities a render bin declares: none, and that is a decision with a
- * date on it and one earlier reversal it answers.
+ * The repository a render is taken from: Brain's own, at its canonical branch.
  *
- * This bin genuinely needs a surface with a checkout and a browser, and the fire
- * router honours a declared capability. But a declared capability is only
- * satisfiable by a surface that is *also in scope* for the bin, and scope starts
- * with the family (`servesFamily` in `services/dispatch/router.ts`). A render is
- * GENERAL by `familyOf`. Every surface that has a checkout today is a Factory
- * surface, and Factory onboarding (`services/factory/onboard.ts`,
- * `setWorkerRouting`) writes it an explicit, exhaustive `['FACTORY']` routing
- * row. So in the fleet production builds, requiring `repository` (or `browser`)
- * of a render refuses the surfaces that have a checkout by FAMILY and the
- * GENERAL surfaces by CAPABILITY: every surface, every fire. That is §27's
- * failure exactly — the factory added a capability nothing in scope declared,
- * watched it refuse the only surface that could do the work, twice, and took it
- * out — and §27's rule decides it: **fail closed where the unknown could record
- * something false, fail open where it could only waste a fire.** Nothing here
- * can record anything false: a worker with no browser reports BLOCKED naming
- * what it lacked, which the stage handles and the attempt budget bounds.
- *
- * The same effect was once brought back without touching this record, by a
- * class-implied `repository` requirement in the router for this workload class
- * (ORIGINATED:FAILURE_PATTERN:design-render, attempt 1). The argument was that
- * `repository` *is* declared, by Factory surfaces, so §27 did not apply. It
- * does: declared by a surface the family check has already refused is the same
- * as declared by nobody. It was withdrawn before release, and the router now
- * routes renders on this list like every other class. A capability for renders
- * belongs here, in this one list, and nowhere implied.
- *
- * What would make the router's routing the cause is now read from rows rather
- * than argued: `evaluateDesignRender` (`services/bins/contracts.ts`) records,
- * for every render bin that ends with no render, which surface each attempt was
- * fired at and whether it declared `repository`.
- *
- * So this stays empty until a surface that serves the GENERAL family (or an
- * explicit routing row that includes it) has a checkout and declares the
- * capability. The operator step is, in this order: give such a surface that
- * family and declare `browser` on it, then add `browser` here. Adding it here
- * first refuses every surface; `tests/designRenderRouting.test.ts` pins the
- * fleet shape that makes it so.
+ * Naming it is what makes a render repository work rather than general work —
+ * `familyOf` reads the manifest's repository before any label, and the router
+ * and the assigner then send the bin only to a surface whose explicit routing
+ * row serves this repository. The command the unit runs lives in this tree, so
+ * no other checkout could answer it.
  */
-export const DESIGN_RENDER_REQUIRED_CAPABILITIES: readonly string[] = [];
+export const DESIGN_RENDER_REPOSITORY = {
+  remote: `https://github.com/${BRAIN_REPOSITORY_ID}`,
+  ref: 'production',
+} as const;
+
+/**
+ * The capabilities a render bin declares: a checkout.
+ *
+ * §27's rule — fail closed where the unknown could record something false,
+ * fail open where it could only waste a fire — is about a capability nothing
+ * *in scope* declares. While a render was GENERAL that was `repository`: every
+ * surface with a checkout is a Factory surface whose explicit routing row serves
+ * FACTORY only, so the family check refused it before its capabilities were
+ * read, and requiring `repository` would have refused every surface. A render is
+ * now a FACTORY bin naming Brain's repository (`DESIGN_RENDER_WORKLOAD_CLASS`,
+ * `DESIGN_RENDER_REPOSITORY`), so the surfaces in scope are exactly the ones that
+ * declare `repository`, and requiring it is satisfiable rather than a refusal of
+ * everything. It also keeps a render off a surface whose snapshot cannot say
+ * which families it serves (`servesFamily` waves those through) and that has no
+ * checkout. `browser` is not required: no surface declares it, and a checkout
+ * worker without one reports BLOCKED naming it, which the attempt budget bounds.
+ */
+export const DESIGN_RENDER_REQUIRED_CAPABILITIES: readonly string[] = ['repository'];
 
 /** The one unit a render bin asks for. */
 export const RENDER_UNIT_KEY = 'design_render';
@@ -189,6 +184,18 @@ export async function openDesignRender(input: OpenRenderInput): Promise<string> 
       'finding has to be about a render rather than about code.',
     manifest: {
       objective: 'Render the registered surfaces below and report what was measured in the page.',
+      /*
+       * The repository the command lives in. Not a change to it — the prohibited
+       * actions forbid touching a file or pushing — but the checkout the work
+       * needs, which is what routes it to a surface that has one.
+       */
+      repository: {
+        remote: DESIGN_RENDER_REPOSITORY.remote,
+        ref: DESIGN_RENDER_REPOSITORY.ref,
+        baseSha: '',
+        integrationBranch: '',
+        pullRequest: null,
+      },
       why:
         'The deployed Brain cannot open a browser. Without a render taken somewhere that can, ' +
         'every statement about this interface would be a statement about its source.',

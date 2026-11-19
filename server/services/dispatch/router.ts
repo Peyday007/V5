@@ -554,22 +554,6 @@ function requiredCapabilities(bin: Bin): string[] {
   return bin.requiredCapabilities;
 }
 
-/*
- * A design render routes on what its bin declares, like every other class.
- * A class-implied `repository` requirement was added here for the render
- * failure pattern (ORIGINATED:FAILURE_PATTERN:design-render) and withdrawn
- * before release: no production row showed those bins had been fired at a
- * surface without a checkout. `evaluateDesignRender` in
- * `services/bins/contracts.ts` now records, for every bin that ends with no
- * render, which surface each attempt was fired at and whether it declared
- * `repository` — the evidence that decides between routing and a missing
- * browser on capable surfaces. If it shows routing, a capability alone is not
- * the fix: a render bin is GENERAL by `familyOf`, and every surface with a
- * checkout serves FACTORY only through an explicit routing row, so declaring
- * `repository` would refuse every surface until a GENERAL-serving surface
- * declares one (tests/designRenderRouting.test.ts pins that fleet shape).
- */
-
 /**
  * Choose a Routine, or say precisely why none was chosen.
  *
