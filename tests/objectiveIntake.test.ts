@@ -23,6 +23,25 @@ describe('readObjective', () => {
     expect(r.unread).toEqual([]);
   });
 
+  it('places "<number> dollars" after a third-person verb and before "customer payments" (production, 2026-11-19)', () => {
+    // Verbatim from `goals create` on production, which read it as OTHER with "50000 dollars" unplaced.
+    const prod = readObjective('Build a business that collects 50000 dollars of customer payments within 6 months using up to 25000 dollars of capital', NOW);
+    expect(prod).toMatchObject({ kind: 'CASH', metric: 'SETTLED_CASH', amount: 50_000, currency: 'USD', capitalCeiling: 25_000 });
+    expect(prod.deadline).toBe('2027-05-14T12:00:00.000Z');
+    expect(prod.unread).toEqual([]);
+    for (const text of [
+      'Earn 50000 dollars in customer payments within six months with up to 25000 dollars of capital',
+      'Earn $50,000 in customer payments within six months with up to $25,000 of capital',
+      'Earn 50k USD of collected cash within six months using 25000 dollars of capital',
+      'A business that earns 50000 dollars of client payments within 6 months, with 25000 dollars of capital',
+    ]) {
+      const r = readObjective(text, NOW);
+      expect(r, text).toMatchObject({ kind: 'CASH', amount: 50_000, currency: 'USD', capitalCeiling: 25_000 });
+      expect(r.unread, text).toEqual([]);
+      expect(interpretIntent(text).capital, text).toEqual({ low: 25_000, high: 25_000 });
+    }
+  });
+
   it('tells the amount from the capital in "Generate $10,000 within 30 days using at most $3,000 in starting capital."', () => {
     const r = readObjective('Generate $10,000 within 30 days using at most $3,000 in starting capital.', NOW);
     expect(r).toMatchObject({ kind: 'CASH', amount: 10_000, currency: 'USD', deadlineHours: 30 * 24, capitalCeiling: 3_000 });
