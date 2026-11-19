@@ -101,4 +101,34 @@ describe('the fallback watch keeps a claim family on its own path and hands Fact
     expect(cash.every((f) => f.pathway === `cash-forecast:${project.id}`)).toBe(true);
     expect(watch.failures.filter((f) => f.claimId === 'operator:opd_1').every((f) => f.pathway === `operator:${project.id}`)).toBe(true);
   });
+
+  it('a candidate titled for the cash forecast path counts only the cash forecast path', async () => {
+    const { project } = await freshProject();
+    const cashClaim = `cash:${project.id}:USD:revenue`;
+    const r = reading(
+      claimHistory(cashClaim, 'cash', ['PARAMETER_ESTIMATE']),
+      claimHistory('operator:opd_586fc8e2bb8cb60c', 'operator:EVIDENCE', ['PARAMETER_ESTIMATE']),
+    );
+    const toFactory = factorySpy();
+    const watch = await watchForecastPath(project.id, r, { ...quiet, toFactory });
+
+    const cls = 'FORECAST_MISS:SYSTEMATIC:PARAMETER_ESTIMATE';
+    const all = watch.recurring.find((c) => c.failureClass === cls)!;
+    const onCash = watch.failures.filter((f) => f.failureClass === cls && f.claimId === cashClaim);
+    const onOperator = watch.failures.filter((f) => f.failureClass === cls && f.claimId.startsWith('operator:'));
+    // Both families recorded the class, so the whole-ledger reading counts both...
+    expect(onCash.length).toBeGreaterThanOrEqual(2);
+    expect(onOperator.length).toBeGreaterThan(0);
+    expect(all.occurrences).toBe(onCash.length + onOperator.length);
+
+    // ...but the candidate titled for the cash forecast path states the cash forecast path's counts only.
+    const [candidate] = toFactory.mock.calls.map(([c]) => c).filter((c) => c.weaknessKey === `FALLBACK:${cls}`);
+    expect(candidate!.title).toMatch(/cash forecast path/);
+    expect(candidate!.frequency).toBe(onCash.length);
+    expect(candidate!.problem).toMatch(new RegExp(`^${onCash.length} recorded failure\\(s\\)`));
+    const samples = (candidate!.evidence as { samples: string[] }).samples;
+    expect(samples.length).toBe(Math.min(onCash.length, 20));
+    expect(samples.every((o) => onCash.some((f) => f.occurrence === o))).toBe(true);
+    expect(candidate!.denominator).toBe(watch.failures.filter((f) => f.claimId === cashClaim).length);
+  });
 });

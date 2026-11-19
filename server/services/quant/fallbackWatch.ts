@@ -436,27 +436,36 @@ export async function watchForecastPath(projectId: string, reading: ModelLearnin
   const recurring = recurringFailureClasses(held);
   const improvements: FallbackWatch['improvements'] = [];
   const toFactory = deps.toFactory ?? upsertCandidate;
-  for (const cls of recurring) {
-    if (cls.methodsToImprove.length === 0) continue;
-    const families = [...new Set(held.filter((r) => r.failureClass === cls.failureClass).map((r) => claimFamily(r.dependency)))].sort();
+  for (const all of recurring) {
+    if (all.methodsToImprove.length === 0) continue;
+    const ofClass = held.filter((r) => r.failureClass === all.failureClass);
+    const families = [...new Set(ofClass.map((r) => claimFamily(r.dependency)))].sort();
     const onForecastPath = families.includes('cash');
-    if (!onForecastPath && !cls.methodsToImprove.some(factoryOwned)) continue;
-    const path = onForecastPath ? 'the cash forecast path' : `the ${families.join(', ')} claim path`;
+    if (!onForecastPath && !all.methodsToImprove.some(factoryOwned)) continue;
+    // The candidate states the counts of the path it names. A class that recurs on the cash forecast's own
+    // claims is that path's, counted from them alone; otherwise it names every family it was recorded on and
+    // counts them all — never a title for one path over another path's occurrences.
+    const cashOnly = ofClass.filter((r) => claimFamily(r.dependency) === 'cash');
+    const onCash = recurringFailureClasses(cashOnly).find((c) => c.failureClass === all.failureClass && c.methodsToImprove.length > 0);
+    const cls = onCash ?? all;
+    const scope = onCash ? cashOnly : ofClass;
+    const pathFamilies = onCash ? ['cash'] : families;
+    const path = onCash ? 'the cash forecast path' : `the ${families.join(', ')} claim path${families.length > 1 ? 's' : ''}`;
     const weaknessKey = `FALLBACK:${cls.failureClass}`.slice(0, 200);
     const { created } = await toFactory({
       weaknessKey,
       kind: 'RECURRING_FAILURE_CLASS',
       title: `A failure recurs on ${path}: ${cls.failureClass.toLowerCase().replace(/_/g, ' ')}`,
-      problem: `${cls.occurrences} recorded failure(s) of class ${cls.failureClass}: ${cls.recovered} recovered, ${cls.notRecovered} did not, ${cls.untimelyDetections} detected late. Methods named for improvement: ${cls.methodsToImprove.join('; ')}.`.slice(0, 1000),
+      problem: `${cls.occurrences} recorded failure(s) of class ${cls.failureClass} on ${path}: ${cls.recovered} recovered, ${cls.notRecovered} did not, ${cls.untimelyDetections} detected late. Methods named for improvement: ${cls.methodsToImprove.join('; ')}.`.slice(0, 1000),
       metric: 'READY_OPPORTUNITIES_PER_DAY',
       downstreamMetric: null,
       ownerComponent: 'server/services/quant/fallbackWatch.ts',
       frequency: cls.occurrences,
-      denominator: held.length,
+      denominator: held.filter((r) => pathFamilies.includes(claimFamily(r.dependency))).length,
       scope: 'LOCAL',
       severity: cls.notRecovered > 0 || cls.untimelyDetections > 0 ? 'HIGH' : 'MEDIUM',
       evidence: {
-        samples: held.filter((r) => r.failureClass === cls.failureClass).map((r) => r.occurrence).slice(0, 20),
+        samples: scope.map((r) => r.occurrence).slice(0, 20),
         mutationScope: ['server/services/quant/**', 'server/services/cash/forecast.ts', 'tests/**'],
         knownCause: cls.methodsToImprove.join('; '),
         observedAt: new Date().toISOString(),
