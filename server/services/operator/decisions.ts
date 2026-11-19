@@ -22,6 +22,8 @@ import { getWorkstream } from '../../repos/register.ts';
 import { challengePrompt, parseChallenge, reviewDecision, type Challenge, type DecisionInput, type DecisionReview } from '../../domain/decision.ts';
 import { chatFor, firstJson } from '../cheap/modelBench.ts';
 import type { OperatorModel } from '../../domain/operator.ts';
+import { buildLedger, calibrate, diagnose, type ExposureRow, type OutcomeRow, type PredictionRow } from '../quant/forecast.ts';
+import { forecastBias } from '../quant/mathToolkit.ts';
 
 export interface DecisionRecord {
   id: string;
@@ -35,6 +37,8 @@ export interface DecisionRecord {
 
 export interface DecideResult {
   committed: boolean;
+  /** The measured correction applied to the stated probability, when the comparable bucket is miscalibrated. */
+  correction?: BucketCorrection | null;
   decisionId: string | null;
   verdict: 'COMMITTED' | 'REVISE' | 'REFUSED';
   problems: string[];
@@ -117,6 +121,123 @@ export async function challengeDecision(
   return null;
 }
 
+/** What the ledger has measured about one comparable bucket of operator decisions. */
+export interface BucketCorrection {
+  comparableKey: string;
+  /** Observed rate minus mean forecast over the bucket's resolved decisions (negative: overconfident). */
+  shift: number;
+  rationale: string;
+  /** Claims whose systematic miss named MISSING_MECHANISM: the step from decision to outcome was not in the claim. */
+  missingMechanismClaims: string[];
+}
+
+/**
+ * How the operator is told to name the mechanism step: one sentence, used
+ * wherever it reaches the operator. It reaches it the moment a verified miss
+ * names MISSING_MECHANISM — `operatorCalibration`, which brain_operator_verify
+ * returns — so the next decision of that kind is written right the first time,
+ * and again in decide()'s REVISE should one still arrive without it.
+ */
+export const MECHANISM_ASSUMPTION_INSTRUCTION =
+  'Add an assumption beginning "mechanism:" that names the step from this decision to the predicted outcome the earlier misses lacked (who acts, how they are reached, what makes them say yes)';
+
+/** An assumption that names the mechanism step, written as MECHANISM_ASSUMPTION_INSTRUCTION tells the operator to write it. */
+export const MECHANISM_ASSUMPTION = /^\s*mechanism\s*:\s*\S/i;
+
+/**
+ * Read the bucket's own record off the ledger (§108): forecast.ts's calibration
+ * and miss diagnosis, applied to the operator's comparable key. Null when the
+ * bucket is calibrated or has too few outcomes to be judged — then a decision
+ * commits exactly as stated. Pure over the rows it is given.
+ */
+export function bucketCorrectionFrom(
+  ledger: { predictions: readonly PredictionRow[]; exposures: readonly ExposureRow[]; outcomes: readonly OutcomeRow[] },
+  comparableKey: string,
+): BucketCorrection | null {
+  const predictions = ledger.predictions.filter((p) => p.comparableKey === comparableKey);
+  if (predictions.length === 0) return null;
+  const ids = new Set(predictions.map((p) => p.id));
+  const exposures = ledger.exposures.filter((e) => ids.has(e.predictionId));
+  const outcomes = ledger.outcomes.filter((o) => ids.has(o.predictionId));
+  const reading = forecastBias(predictions, exposures, outcomes).find((b) => b.comparableKey === comparableKey && b.basis === 'PROBABILITY');
+  if (!reading || reading.verdict !== 'SYSTEMATIC' || reading.correction?.kind !== 'SHIFT_PROBABILITY') return null;
+  const entries = buildLedger(predictions, exposures, outcomes);
+  const buckets = calibrate(entries);
+  const missing = new Set<string>();
+  for (const entry of entries) {
+    const d = diagnose(entry, buckets, entries);
+    if (d.kind === 'SYSTEMATIC' && d.causes.includes('MISSING_MECHANISM')) missing.add(d.claimId);
+  }
+  return { comparableKey, shift: reading.correction.amount, rationale: reading.correction.rationale, missingMechanismClaims: [...missing] };
+}
+
+/** Rows fetched per round trip of `readComparableLedger`: a page size, never a cap. */
+const BUCKET_PAGE_ROWS = 5000;
+/** `s` as a LIKE literal: backslash, `%` and `_` each escaped with a backslash, for `LIKE ? ESCAPE '\\'` in both dialects. */
+/** `s` as a LIKE literal: `\\`, `%` and `_` escaped with `\\`, for `LIKE ? ESCAPE '\\'` in both dialects. */
+function likeLiteral(s: string): string {
+  return s.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
+/**
+ * The forecast ledger as one operator comparable bucket sees it: the predictions
+ * made under `comparableKey`, and the exposures and outcomes recorded on the
+ * operator's own claims (`operator:opd_*`) — read in the statement, never by
+ * paging through every PREDICTION/EXPOSURE/OUTCOME row of every project and
+ * filtering in memory. The LIKE patterns only narrow the read; the rows are
+ * still parsed and matched exactly (`ledgerFromRows`, then the comparable key
+ * and the prediction ids), so a pattern can never admit a row that does not
+ * belong. Paged on `(at, id)` like `readLedger`, so nothing past a page is
+ * dropped. Every project's decisions of this kind are one bucket, as before.
+ */
+export async function readComparableLedger(
+  comparableKey: string,
+  pageRows = BUCKET_PAGE_ROWS,
+): Promise<{ predictions: PredictionRow[]; exposures: ExposureRow[]; outcomes: OutcomeRow[] }> {
+  const { LEDGER_EVENTS, ledgerFromRows } = await import('../quant/ledger.ts');
+  const size = Math.max(1, Math.floor(pageRows));
+  const rows: { measures: string | null }[] = [];
+  let after: { at: string; id: string } | null = null;
+  for (;;) {
+    const params: (string | number)[] = [
+      LEDGER_EVENTS.PREDICTION,
+      `%"comparableKey":${likeLiteral(JSON.stringify(comparableKey))}%`,
+      LEDGER_EVENTS.EXPOSURE,
+      LEDGER_EVENTS.OUTCOME,
+      `%"predictionId":"${likeLiteral('operator:')}%`,
+    ];
+    let where =
+      `((event_type = ? AND measures LIKE ? ESCAPE '\\') OR (event_type IN (?, ?) AND measures LIKE ? ESCAPE '\\'))`;
+    if (after) {
+      where += ' AND (at > ? OR (at = ? AND id > ?))';
+      params.push(after.at, after.at, after.id);
+    }
+    params.push(size);
+    const page = await getDb().all<{ id: string; at: string; measures: string | null }>(
+      `SELECT id, at, measures FROM bin_events WHERE ${where} ORDER BY at ASC, id ASC LIMIT ?`,
+      params,
+    );
+    rows.push(...page);
+    const last = page[page.length - 1];
+    if (page.length < size || !last) break;
+    after = { at: last.at, id: last.id };
+  }
+  const ledger = ledgerFromRows(rows);
+  const predictions = ledger.predictions.filter((p) => p.comparableKey === comparableKey);
+  const ids = new Set(predictions.map((p) => p.id));
+  return {
+    predictions,
+    exposures: ledger.exposures.filter((e) => ids.has(e.predictionId)),
+    outcomes: ledger.outcomes.filter((o) => ids.has(o.predictionId)),
+  };
+}
+
+/** The stated probability moved by the bucket's measured gap, kept strictly inside (0, 1). */
+export function correctedProbability(stated: number, correction: BucketCorrection | null): number {
+  if (!correction) return stated;
+  return Math.round(Math.min(0.99, Math.max(0.01, stated + correction.shift)) * 1000) / 1000;
+}
+
 async function projectFor(goalId: string | null, fallback: string): Promise<string> {
   if (!goalId) return fallback;
   const goal = await getWorkstream(goalId);
@@ -140,6 +261,27 @@ export async function decide(
       return { committed: false, decisionId: null, verdict: 'REFUSED', problems: ['no such goal in a project the operator directs'], review, challenge: null, next: 'Use a goal id from brain_operator_goals.' };
     }
   }
+  // The bucket's own record decides how far the stated probability can be taken at its word (FORECAST:operator:*).
+  const comparableKey = `operator:${input.kind}`;
+  const { recordPrediction } = await import('../quant/ledger.ts');
+  // One read, scoped to this bucket, serves both the correction and the version `recordPrediction` assigns.
+  const bucket = await readComparableLedger(comparableKey);
+  const correction = bucketCorrectionFrom(bucket, comparableKey);
+  if (correction && correction.missingMechanismClaims.length > 0 && !input.assumptions.some((a) => MECHANISM_ASSUMPTION.test(a))) {
+    const claims = correction.missingMechanismClaims;
+    return {
+      committed: false,
+      decisionId: null,
+      verdict: 'REVISE',
+      problems: [
+        `${comparableKey} is miscalibrated (${correction.rationale}) and ${claims.length} of its systematic misses were MISSING_MECHANISM (${claims.slice(0, 12).join(', ')}${claims.length > 12 ? ', …' : ''}): the step from this decision to its outcome was not in the claim`,
+      ],
+      review,
+      challenge: null,
+      correction,
+      next: `${MECHANISM_ASSUMPTION_INSTRUCTION}, then call again.`,
+    };
+  }
   let challenge: Challenge | null = null;
   if (review.highImpact) {
     challenge = await challengeDecision(input, review, ctx.models, ctx.fetchImpl);
@@ -157,7 +299,10 @@ export async function decide(
   }
   const id = `opd_${randomBytes(8).toString('hex')}`;
   const projectId = await projectFor(input.goalId, ctx.projectIds[0] ?? '');
-  const { recordPrediction } = await import('../quant/ledger.ts');
+  const probability = correctedProbability(input.prediction.probability, correction);
+  const correctionNote = correction
+    ? `forecast correction: ${comparableKey} is miscalibrated (${correction.rationale}); stated ${input.prediction.probability} shifted by ${correction.shift.toFixed(3)} to ${probability}`
+    : null;
   const prediction = await recordPrediction(
     {
       claimId: `operator:${id}`,
@@ -165,11 +310,11 @@ export async function decide(
       horizonDays: input.prediction.horizonDays,
       population: `operator decisions of kind ${input.kind}`,
       data: (review.options[input.chosen]?.evidence ?? []).slice(0, 10),
-      assumptions: input.assumptions.slice(0, 10),
-      probability: input.prediction.probability,
-      comparableKey: `operator:${input.kind}`,
+      assumptions: correctionNote ? [...input.assumptions.slice(0, 9), correctionNote] : input.assumptions.slice(0, 10),
+      probability,
+      comparableKey,
     },
-    { projectId, caller: 'operator-decision' },
+    { projectId, caller: 'operator-decision', read: async () => bucket },
   );
   const committedAt = new Date().toISOString();
   await recordEvent({
@@ -177,7 +322,7 @@ export async function decide(
     entityType: 'PROJECT',
     entityId: id,
     eventType: 'OPERATOR_DECISION',
-    payload: { id, runId: ctx.runId, input, review, challenge: challenge ?? (review.highImpact ? 'no challenger model answered' : 'not high impact'), predictionId: prediction.id, committedAt },
+    payload: { id, runId: ctx.runId, input, review, challenge: challenge ?? (review.highImpact ? 'no challenger model answered' : 'not high impact'), predictionId: prediction.id, correction: correction ? { ...correction, statedProbability: input.prediction.probability, recordedProbability: probability } : null, committedAt },
   });
   return {
     committed: true,
@@ -186,6 +331,7 @@ export async function decide(
     problems: [],
     review,
     challenge,
+    correction,
     next: `Act on it now, then verify it with brain_operator_verify {decision_id: "${id}"} once ${input.prediction.horizonDays} day(s) have passed or the outcome is observable.`,
   };
 }
@@ -283,6 +429,7 @@ export function operatorCalibration(
   const causes = new Map<string, number>();
   for (const x of judged) if (!x.o.occurred) for (const c of x.o.observedCauses ?? []) causes.set(c, (causes.get(c) ?? 0) + 1);
   const enough = n >= 10;
+  const mechanismMisses = causes.get('MISSING_MECHANISM') ?? 0;
   return {
     comparableKey,
     judged: n,
@@ -290,6 +437,10 @@ export function operatorCalibration(
     hitRate,
     brier,
     missCauses: Object.fromEntries(causes),
+    // Told here, where the miss is recorded, rather than first in a REVISE that costs the next decision a round-trip.
+    ...(mechanismMisses > 0
+      ? { nextDecisionOfThisKind: `${mechanismMisses} miss(es) of ${comparableKey} lacked the step from decision to outcome (MISSING_MECHANISM). In every further ${comparableKey.replace(/^operator:/, '')} decision: ${MECHANISM_ASSUMPTION_INSTRUCTION}.` }
+      : {}),
     reading: !enough
       ? `${n} judged decision(s) of this kind — too few to call the operator's probabilities calibrated or not; investigate each miss by its cause instead`
       : Math.abs((meanForecast ?? 0) - (hitRate ?? 0)) > 0.15
