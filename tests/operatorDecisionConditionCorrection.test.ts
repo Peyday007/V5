@@ -16,6 +16,7 @@ import {
   CONDITION_ASSUMPTION_INSTRUCTION,
   MECHANISM_ASSUMPTION_INSTRUCTION,
   bucketCorrectionFrom,
+  conditionAssumptionProblem,
   correctedProbability,
   decide,
   operatorCalibration,
@@ -23,6 +24,9 @@ import {
   verify,
 } from '../server/services/operator/decisions.ts';
 import { readLedger, recordOutcome, recordPrediction } from '../server/services/quant/ledger.ts';
+
+/** A UTC calendar date `daysAgo` days before now, as the operator writes it. */
+const dayOf = (daysAgo: number): string => new Date(Date.now() - daysAgo * 86_400_000).toISOString().slice(0, 10);
 
 const base: DecisionInput = {
   kind: 'RESEARCH',
@@ -91,7 +95,7 @@ describe('an operator decision on a bucket whose misses were CHANGED_CONDITIONS'
   it('commits one that names its condition, at the corrected probability', async () => {
     await seedConditionBucket(projectId, 'RESEARCH', { n: 24, occurred: 4 });
     const quoted = /beginning "([^"]+)"/.exec(CONDITION_ASSUMPTION_INSTRUCTION)![1]!;
-    const written = `${quoted} the supplier still lists wholesale pricing, seen on its price page 2026-11-19`;
+    const written = `${quoted} the supplier still lists wholesale pricing, seen on https://supplier.example/pricing ${dayOf(1)}`;
     expect(CONDITION_ASSUMPTION.test(written)).toBe(true);
     const d = await decide({ ...base, assumptions: [...base.assumptions, written] }, ctx());
     expect(d.verdict).toBe('COMMITTED');
@@ -113,7 +117,7 @@ describe('an operator decision on a bucket whose misses were CHANGED_CONDITIONS'
     expect(first.next).toContain(MECHANISM_ASSUMPTION_INSTRUCTION);
     expect(first.next).toContain(CONDITION_ASSUMPTION_INSTRUCTION);
     const answered = await decide(
-      { ...bare, assumptions: [...bare.assumptions, 'mechanism: the supplier is reached through its listed sales inbox', 'condition: wholesale pricing still listed, price page read 2026-11-19'] },
+      { ...bare, assumptions: [...bare.assumptions, 'mechanism: the supplier is reached through its listed sales inbox', `condition: wholesale pricing still listed on arr_2d0bae0f1074, price page read ${dayOf(0)}`] },
       ctx(),
     );
     expect(answered.verdict).toBe('COMMITTED');
@@ -133,6 +137,37 @@ describe('an operator decision on a bucket whose misses were CHANGED_CONDITIONS'
     const d = await decide(base, ctx());
     expect(d.verdict).toBe('REVISE');
     expect(d.problems.join(' ')).toContain('"the supplier sells wholesale to resellers"');
+  });
+
+  it('refuses a "condition:" label that shows no re-check: no source, no date, stale or future', async () => {
+    await seedConditionBucket(projectId, 'RESEARCH', { n: 24, occurred: 4 });
+    const cases: Array<[string, RegExp]> = [
+      ['condition: the supplier still sells wholesale', /cites no row id or URL/],
+      ['condition: the supplier still sells wholesale, per arr_2d0bae0f1074', /no YYYY-MM-DD date/],
+      [`condition: wholesale pricing on arr_2d0bae0f1074, read ${dayOf(30)}`, /30 days ago, outside the 2-day horizon/],
+      [`condition: wholesale pricing on https://supplier.example/pricing, read ${dayOf(-3)}`, /after today/],
+    ];
+    for (const [assumption, reason] of cases) {
+      const d = await decide({ ...base, assumptions: [...base.assumptions, assumption] }, ctx());
+      expect(d).toMatchObject({ committed: false, verdict: 'REVISE', decisionId: null });
+      expect(d.problems.join(' ')).toMatch(/CHANGED_CONDITIONS/);
+      expect(d.problems.join(' ')).toMatch(reason);
+      expect(d.next).toContain(CONDITION_ASSUMPTION_INSTRUCTION);
+    }
+    // One fresh, sourced condition among stale ones is a re-check.
+    const fresh = await decide(
+      { ...base, assumptions: [...base.assumptions, `condition: old reading arr_2d0bae0f1074 ${dayOf(40)}`, `condition: wholesale pricing still listed, arr_2d0bae0f1074 read ${dayOf(2)}`] },
+      ctx(),
+    );
+    expect(fresh.verdict).toBe('COMMITTED');
+  });
+
+  it('holds the observation to the decision horizon, on real calendar dates', () => {
+    const now = new Date('2026-11-20T12:00:00Z');
+    expect(conditionAssumptionProblem(['condition: price on arr_2d0bae0f1074 seen 2026-11-10'], 14, now)).toBeNull();
+    expect(conditionAssumptionProblem(['condition: price on arr_2d0bae0f1074 seen 2026-11-10'], 2, now)).toMatch(/10 days ago/);
+    expect(conditionAssumptionProblem(['condition: price on arr_2d0bae0f1074 seen 2026-02-30'], 365, now)).toMatch(/no YYYY-MM-DD date/);
+    expect(conditionAssumptionProblem(['mechanism: not a condition'], 2, now)).toBeNull();
   });
 
   it('a calibrated bucket or another kind of miss does not ask for a condition', async () => {
