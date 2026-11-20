@@ -134,6 +134,13 @@ export interface ModelledOpportunity {
    * reconstructed strategy (§99) and always as an assumption.
    */
   fundedByBuyer?: boolean;
+  /**
+   * The fulfilment route a reconstructed strategy re-costed this opening to
+   * (§99 FULFILMENT): the supplier route it engages and whether the cost it
+   * now carries is this deliverable's own evidence or an assumption. Set only
+   * by the reconstruction, never by a card.
+   */
+  fulfilment?: { route: string; basis: 'ESTIMATE' | 'ASSUMPTION' };
   opportunity: CashOpportunity;
   index: number;
   tier: string;

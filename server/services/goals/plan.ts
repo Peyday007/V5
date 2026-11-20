@@ -2749,9 +2749,10 @@ const CHANGE_LINK: Record<string, ChainLink> = {
   PORTFOLIO: 'OFFER_AND_PRICE',
   CASH_TIMING: 'SETTLES_IN_TIME',
   CAPITAL: 'ECONOMICS',
+  FULFILMENT: 'ECONOMICS',
   EVIDENCE: 'CONVERSION',
 };
-const SENDS = new Set(['CAPACITY', 'ACQUISITION', 'PARTNER', 'MARKET', 'EVIDENCE', 'PORTFOLIO']);
+const SENDS = new Set(['CAPACITY', 'ACQUISITION', 'PARTNER', 'MARKET', 'EVIDENCE', 'PORTFOLIO', 'FULFILMENT']);
 const CREDENTIAL = /\b(credentials?|api key|password|log ?in|sign[- ]?in|oauth|account access)\b/i;
 const LEGAL = /\b(contracts?|legal|licen[cs]es?|agreements?|terms of service|compliance|signature|signed)\b/i;
 
@@ -2806,7 +2807,7 @@ export function replyKill(r: Reconstruction | null, measured: MeasuredReply | nu
   return `no interested reply in the first 200 sends → stop and re-plan (an assumption: ${record})`;
 }
 
-function killFor(change: { dimension: string; label: string; detail: string; cost: number; startDay?: { low: number; high: number } }, r: Reconstruction | null, measured: MeasuredReply | null): string {
+function killFor(change: { dimension: string; label: string; detail: string; cost: number; startDay?: { low: number; high: number }; supplier?: string }, r: Reconstruction | null, measured: MeasuredReply | null): string {
   switch (change.dimension) {
     case 'PARTNER':
       return `no signed partner by day ${(change.startDay?.high ?? 0) + 14}, or no referred buyer within 30 days of signing → drop the partner and re-plan`;
@@ -2817,6 +2818,8 @@ function killFor(change: { dimension: string; label: string; detail: string; cos
       return 'fewer than half of signing buyers pay the deposit at signing → re-plan cash timing';
     case 'CAPITAL':
       return `the supplier will not ship against the buyer's payment, or the money committed passes ${moneyOf(change.cost)} → stop and re-plan`;
+    case 'FULFILMENT':
+      return `no written quote from ${change.supplier ?? 'the supplier'} at or under the re-routed cost by day ${(change.startDay?.high ?? 0) + 7} → fulfil at the cost the plan held before and re-plan`;
     default:
       return replyKill(r, measured);
   }
@@ -2908,6 +2911,8 @@ const CHANGE_STAGE: Record<string, ArrangementStage> = {
   CASH_TIMING: 'OFFER',
   PORTFOLIO: 'OFFER',
   CAPITAL: 'ORDER',
+  // A cheaper supplier route is agreed in writing before any buyer is offered it, as an arrangement's supply is.
+  FULFILMENT: 'SUPPLY_TERMS',
   EVIDENCE: 'RESEARCH',
 };
 
@@ -2987,7 +2992,7 @@ export function planSteps(input: {
         dependsOn: null,
         kill: killFor(first, r, measured),
         execution: SENDS.has(first.dimension) ? send : collect,
-        executor: exec(changeOperation(first.dimension, cost, SENDS.has(first.dimension) ? send : collect)),
+        executor: exec(changeOperation(first.dimension, cost, SENDS.has(first.dimension) ? send : collect, first.supplier)),
         // Its cost is the reconstruction's own figure for the move: what it commits before any opening pays.
         stage: { stage: CHANGE_STAGE[first.dimension] ?? 'OFFER', costSource: 'MODEL' },
         ...(acts.length > 0 ? { openings: acts } : {}),
@@ -3193,7 +3198,7 @@ function saleStep(order: number, sale: MarketTest, detail: string, kill: string,
  * an acquisition; buying leads needs an ad or marketplace account; a partner is
  * recruited by Brain's outreach and its agreement is the owner's signature.
  */
-function changeOperation(dimension: string, cost: number, execution: string[]): OperationRequest {
+function changeOperation(dimension: string, cost: number, execution: string[], supplier?: string): OperationRequest {
   const byDimension: Record<string, StepOperation> = {
     CAPACITY: 'BUY_SENDING_CAPACITY',
     ACQUISITION: 'BUY_PAID_LEADS',
@@ -3203,6 +3208,8 @@ function changeOperation(dimension: string, cost: number, execution: string[]): 
     TRANSACTION: 'SET_OFFER',
     CASH_TIMING: 'SET_PAYMENT_TERMS',
     CAPITAL: 'SET_PAYMENT_TERMS',
+    // Engaging a cheaper supplier is asking it for a written quote: Brain's messages, the supplier's work.
+    FULFILMENT: 'NEGOTIATE_TERMS',
     PORTFOLIO: 'PLAN_DECISION',
     EVIDENCE: 'RESEARCH',
   };
@@ -3212,6 +3219,7 @@ function changeOperation(dimension: string, cost: number, execution: string[]): 
     cost,
     execution,
     ...(operation === 'RECRUIT_PARTNER' ? { provider: 'a partner who already serves the buyers, who refers them', signs: "the referral agreement is signed in the owner's name" } : {}),
+    ...(dimension === 'FULFILMENT' ? { provider: supplier ?? 'a cheaper supplier of the same deliverable' } : {}),
   };
 }
 
@@ -3355,6 +3363,8 @@ export function planSearchBrief(r: Reconstruction, remaining: number, daysLeft: 
     CASH_TIMING: `Cash timing binds: find buyers who pay up front — at checkout, by deposit at signing, prepaid — for work deliverable within ${days} days, with the published payment terms.`,
     MARKET_SIZE: `Market size binds: find larger buyer populations with a count and a source — a register, association list or marketplace category — buying at ${moneyOf(ticket)} or more within ${days} days.`,
     CAPITAL: `Money tied up binds: find arrangements the buyer funds — prepaid fulfilment, drop-shipping, deposits that pay the supplier — at ${moneyOf(ticket)} or more within ${days} days.`,
+    // The reconstruction names the openings whose route is unknown (`fulfilmentQuestions`); they ride on the brief after it.
+    COST: `Direct cost binds: find who fulfils the plan's deliverables for these same buyers at a lower published cost per deal — a subcontractor, a wholesale supplier, a marketplace provider — with a dated quote or price list each.${r.searchBrief.includes(' Fulfilment: ') ? ` ${r.searchBrief.slice(r.searchBrief.indexOf(' Fulfilment: ') + 13)}` : ''}`,
   };
   const body = factor && by[factor] ? by[factor]! : r.searchBrief;
   const asks = r.exploration?.asks?.length ? ` Directions Brain explored need answers to: ${r.exploration.asks.slice(0, 3).join(' ')}` : '';
