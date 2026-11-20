@@ -133,6 +133,8 @@ export interface BucketCorrection {
   capacityShortfallClaims: string[];
   /** Claims whose systematic miss named CHANGED_CONDITIONS: a condition the decision assumed no longer held when the outcome arrived. */
   changedConditionClaims: string[];
+  /** Claims whose systematic miss named EVIDENCE_QUALITY: the prediction rested on no named data (the chosen option cited no evidence). */
+  evidenceQualityClaims: string[];
 }
 
 /**
@@ -176,6 +178,35 @@ export const CONDITION_ASSUMPTION_INSTRUCTION =
 
 /** An assumption that names the condition, written as CONDITION_ASSUMPTION_INSTRUCTION tells the operator to write it. */
 export const CONDITION_ASSUMPTION = /^\s*condition\s*:\s*\S/i;
+
+/**
+ * The same correction for a bucket whose systematic misses named
+ * EVIDENCE_QUALITY (FORECAST:operator:EVIDENCE_QUALITY, production 5 of 5): the
+ * prediction decide() records takes its data from the chosen option's evidence,
+ * so a chosen option that cites none records a forecast resting on no named
+ * data — the cause `claimCausesOf` and the ledger's observed causes both read.
+ * Shifting the probability leaves the next decision on the same empty evidence,
+ * so the bucket stays miscalibrated. The next decision of that kind cites the
+ * rows or sources its chosen option rests on (`goals/calibration.ts`: a claim
+ * resting on no named data is not used to rank or accept a plan).
+ */
+export const EVIDENCE_QUALITY_INSTRUCTION =
+  'List in the chosen option\'s evidence the Brain row ids or source URLs the predicted outcome rests on; a prediction resting on no named data is what the earlier misses had';
+
+/** The chosen option's evidence entries that name something, trimmed. */
+function namedEvidence(input: { options: readonly { evidence?: readonly unknown[] }[]; chosen: number }): string[] {
+  return (input.options[input.chosen]?.evidence ?? []).map((e) => (typeof e === 'string' ? e.trim() : '')).filter((e) => e.length > 0);
+}
+
+/**
+ * The chosen option's evidence entries that cite something the outcome can be
+ * re-read from — a source URL or a Brain row id (CONDITION_SOURCE), as
+ * EVIDENCE_QUALITY_INSTRUCTION asks. 'none', 'n/a' or prose names no data, so
+ * it does not answer an EVIDENCE_QUALITY correction.
+ */
+function citedEvidence(input: { options: readonly { evidence?: readonly unknown[] }[]; chosen: number }): string[] {
+  return namedEvidence(input).filter((e) => CONDITION_SOURCE.test(e));
+}
 
 /** A source a condition can be re-read from: a URL, or a Brain row id (`arr_2d0bae0f1074`, `opd_…`). */
 const CONDITION_SOURCE = /\bhttps?:\/\/\S+|\b[a-z]{2,8}_[0-9a-z]{6,}\b/i;
@@ -286,12 +317,14 @@ export function bucketCorrectionFrom(
   const missing = new Set<string>();
   const capacity = new Set<string>();
   const changed = new Set<string>();
+  const evidence = new Set<string>();
   for (const entry of entries) {
     const d = diagnose(entry, buckets, entries);
     if (d.kind !== 'SYSTEMATIC') continue;
     if (d.causes.includes('MISSING_MECHANISM')) missing.add(d.claimId);
     if (d.causes.includes('CAPACITY')) capacity.add(d.claimId);
     if (d.causes.includes('CHANGED_CONDITIONS')) changed.add(d.claimId);
+    if (d.causes.includes('EVIDENCE_QUALITY')) evidence.add(d.claimId);
   }
   return {
     comparableKey,
@@ -300,6 +333,7 @@ export function bucketCorrectionFrom(
     missingMechanismClaims: [...missing],
     capacityShortfallClaims: [...capacity],
     changedConditionClaims: [...changed],
+    evidenceQualityClaims: [...evidence],
   };
 }
 
@@ -477,6 +511,13 @@ export async function decide(
         instructions.push(CONDITION_ASSUMPTION_INSTRUCTION);
       }
     }
+    if (correction.evidenceQualityClaims.length > 0 && citedEvidence(input).length === 0) {
+      const claims = correction.evidenceQualityClaims;
+      problems.push(
+        `${comparableKey} is miscalibrated (${correction.rationale}) and ${claims.length} of its systematic misses were EVIDENCE_QUALITY (${listed(claims)}): the prediction rested on no named data, and the chosen option again cites no source URL or Brain row id`,
+      );
+      instructions.push(EVIDENCE_QUALITY_INSTRUCTION);
+    }
     if (problems.length > 0) {
       return {
         committed: false,
@@ -517,7 +558,7 @@ export async function decide(
       outcome: input.prediction.outcome.slice(0, 400),
       horizonDays: input.prediction.horizonDays,
       population: `operator decisions of kind ${input.kind}`,
-      data: (review.options[input.chosen]?.evidence ?? []).slice(0, 10),
+      data: namedEvidence({ options: review.options, chosen: input.chosen }).slice(0, 10),
       assumptions: correctionNote ? [...input.assumptions.slice(0, 9), correctionNote] : input.assumptions.slice(0, 10),
       probability,
       comparableKey,
@@ -640,11 +681,13 @@ export function operatorCalibration(
   const mechanismMisses = causes.get('MISSING_MECHANISM') ?? 0;
   const capacityMisses = causes.get('CAPACITY') ?? 0;
   const conditionMisses = causes.get('CHANGED_CONDITIONS') ?? 0;
+  const evidenceMisses = causes.get('EVIDENCE_QUALITY') ?? 0;
   const kindName = comparableKey.replace(/^operator:/, '');
   const instructions = [
     ...(mechanismMisses > 0 ? [`${mechanismMisses} miss(es) of ${comparableKey} lacked the step from decision to outcome (MISSING_MECHANISM). In every further ${kindName} decision: ${MECHANISM_ASSUMPTION_INSTRUCTION}.`] : []),
     ...(capacityMisses > 0 ? [`${capacityMisses} miss(es) of ${comparableKey} assumed capacity that was not there (CAPACITY). In every further ${kindName} decision: ${CAPACITY_ASSUMPTION_INSTRUCTION}.`] : []),
     ...(conditionMisses > 0 ? [`${conditionMisses} miss(es) of ${comparableKey} rested on a condition that had changed by the outcome (CHANGED_CONDITIONS). In every further ${kindName} decision: ${CONDITION_ASSUMPTION_INSTRUCTION}.`] : []),
+    ...(evidenceMisses > 0 ? [`${evidenceMisses} miss(es) of ${comparableKey} rested on no named data (EVIDENCE_QUALITY). In every further ${kindName} decision: ${EVIDENCE_QUALITY_INSTRUCTION}.`] : []),
   ];
   return {
     comparableKey,
