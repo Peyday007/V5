@@ -980,7 +980,9 @@ export function transferOf(one: Pick<ConstructedArrangement, 'origin' | 'precede
  *     leaves, up to what its market takes. Nothing saturates at the remaining
  *     amount before the final cap, so a $9,000 one-off and a $300 repeatable
  *     design are compared on what each settles (lens S, S-1/S-14: the old
- *     score read both as "the whole goal").
+ *     score read both as "the whole goal"). One deal is credited at most what
+ *     the goal still needs, before its chance is applied: a price above the
+ *     goal is never read through an unknown close.
  *   * A worst case nobody has bounded keeps `EXPOSURE_WEIGHT` of the reading.
  *
  * `upside` is the same reading at the reconstruction's p90 price, the unknown
@@ -1139,7 +1141,17 @@ export function screenArrangement(
   const usesCapital = arrangement.stress.exposure !== 'SAFE' && input.capital !== null && input.capital !== undefined && input.capital > 0 && capitalFit >= 1;
   const covered = usesCapital && arrangement.stress.exposure === 'BOUNDED';
   const weight = (covered ? 1 : (EXPOSURE_WEIGHT[arrangement.stress.exposure] ?? 0)) * capitalFit;
-  const read = (unit: number) => Math.min(input.remaining, Math.max(0, deals * unit * weight));
+  /*
+   * One deal puts at most what the goal still needs toward it, and that cap is
+   * taken on the deal before its chance, never on the expectation after it
+   * (production 2026-11-20, goal wst_7b4fcbb5f2384f31b6c3: one-offs priced
+   * $54K–$104K against $10K still needed read close × in-time × the whole
+   * price, so a nominal price the goal cannot use outranked designs it could;
+   * a $3M one-off at close 0.26 read as the whole goal). Expected contribution
+   * is P(deal) × min(price, remaining): the part of a price above the goal is
+   * never credited to an unknown close (invariant 39).
+   */
+  const read = (unit: number) => Math.min(input.remaining, Math.max(0, deals * Math.min(unit, input.remaining) * weight));
   const money = (x: number) => Math.round(x).toLocaleString('en-US');
   const daysLow = one.daysToCash.low ?? one.daysToCash.value;
   const capitalLow = one.capital.low ?? one.capital.value;
@@ -1211,8 +1223,33 @@ export interface ArrangementSelection {
   /** The strongest cut ones first, at most `CUT_RECORDED`. */
   cut: ArrangementCut[];
   cutCount: number;
+  /**
+   * Every cut, counted by its reason (`cutReasonClass`), most first: the
+   * counts sum to `cutCount`, so no cut is discarded unseen when only the
+   * strongest `CUT_RECORDED` are named (invariant 47).
+   */
+  reasons: Array<{ reason: string; count: number }>;
   /** The buyer populations of the designs refused for want of a price, most designs first (`UnpricedPopulation`). */
   unpriced: UnpricedPopulation[];
+}
+
+/**
+ * A cut's reason as a class: the arrangement keys, quoted names and figures
+ * that make each reason specific are taken out, and a modelled twin's long
+ * account of how it differs is left on the cut itself. Pure.
+ *
+ * Production 2026-11-20 (goal wst_7b4fcbb5f2384f31b6c3, run 44826035355):
+ * "9 of 404 … (395 cut)" was traced with the reasons of only the 40 cuts
+ * `CUT_RECORDED` names — 28 for owner hours, 11 modelled twins — so about 355
+ * cuts carried no reason anyone could read, and the trace's own digit
+ * normalisation turned the twins' keys into "NbNdfcbN".
+ */
+export function cutReasonClass(reason: string): string {
+  return reason
+    .replace(/, so it is that strategy run another way: .*$/, ', so it is that strategy run another way')
+    .replace(/\b(?:arr_)?[0-9a-f]{12}\b/g, 'another design')
+    .replace(/"[^"]*"/g, '"…"')
+    .replace(/\d[\d,.]*/g, 'N');
 }
 
 const designKey = (a: ConstructedArrangement) => `${a.design.base}/${a.design.funding}/${a.design.aggregation}/${a.design.repeat}`;
@@ -1550,6 +1587,11 @@ export function selectEstimatedArrangements(
             : `below the cut: screens ${Math.round(r.screen.value)} against ${Math.round(weakest)} for the weakest of the ${picked.length} kept`,
     });
   cut.sort((a, b) => (b.screen ?? -1) - (a.screen ?? -1) || a.arrangementKey.localeCompare(b.arrangementKey));
+  const reasons = new Map<string, number>();
+  for (const c of cut) {
+    const reason = cutReasonClass(c.reason);
+    reasons.set(reason, (reasons.get(reason) ?? 0) + 1);
+  }
   return {
     openings: picked.map((r) => r.one),
     reserve: left.filter((r) => r.screen.value > 0).slice(0, RESERVE_ARRANGEMENTS).map((r) => r.one),
@@ -1559,6 +1601,8 @@ export function selectEstimatedArrangements(
       picked: picked.map((r) => ({ arrangementKey: r.arrangement.key, label: r.arrangement.label, population: r.population, screen: r.screen.value, upside: r.screen.upside, slot: taken.get(r)!, basis: [r.screen.basis, r.screen.flag, r.one.priceVariable?.sentence].filter(Boolean).join('. '), ...(alternativesOf.has(r) ? { alternatives: alternativesOf.get(r)! } : {}) })),
       cut: cut.slice(0, CUT_RECORDED),
       cutCount: cut.length,
+      // Stable: most first, then the order the strongest cut of each class was met in.
+      reasons: [...reasons].map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count),
       // Stable: most designs first, then the constructor's order (a Map keeps insertion order and sort is stable).
       unpriced: [...unpriced.values()].sort((a, b) => b.designs - a.designs).slice(0, CUT_RECORDED),
     },
@@ -2209,14 +2253,11 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     arrangementSelection = selected.selection;
     arrangementConversions = selected.conversions;
     reserve = selected.reserve;
-    const why = new Map<string, number>();
-    for (const c of selected.selection.cut) {
-      const reason = c.reason.replace(/\d[\d,.]*/g, 'N');
-      why.set(reason, (why.get(reason) ?? 0) + 1);
-    }
+    // Every cut by its reason, not only the `CUT_RECORDED` named on the model: the counts sum to the cut count.
+    const why = selected.selection.reasons;
     trace(
       `estimated arrangements: ${selected.openings.length} of ${inScope.length} in the goal's scope (of ${input.arrangements?.length ?? 0}) (${selected.selection.cutCount} cut, ${reserve.length} in reserve)` +
-        (why.size ? `; recorded cuts: ${[...why].map(([r, n]) => `${n}× ${r}`).join(' · ')}` : ''),
+        (why.length ? `; cuts: ${why.map(({ reason, count }) => `${count}× ${reason}`).join(' · ')}` : ''),
     );
   }
   /*
