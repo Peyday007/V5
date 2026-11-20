@@ -20,7 +20,15 @@ import {
   readDecision,
   timingAssumptionProblem,
 } from '../server/services/operator/decisions.ts';
-import { readLedger, recordOutcome, recordPrediction } from '../server/services/quant/ledger.ts';
+import type { CashOutcome } from '../server/domain/cashJourney.ts';
+import {
+  dealSignals,
+  readLedger,
+  recordCashOutcomes,
+  recordExposure,
+  recordOutcome,
+  recordPrediction,
+} from '../server/services/quant/ledger.ts';
 
 const base: DecisionInput = {
   kind: 'RESEARCH',
@@ -37,8 +45,35 @@ const base: DecisionInput = {
   irreversible: false,
 };
 
+/** One `cash_outcomes` row, as the cash journey writes it. */
+function cashRow(projectId: string, opportunityId: string, kind: CashOutcome['kind'], fields: Partial<CashOutcome> & { requestKey: string; createdAt: string }): CashOutcome {
+  return {
+    id: `co_${opportunityId}_${kind}_${fields.requestKey.split(':').at(-1)}`,
+    projectId,
+    opportunityId,
+    kind,
+    mechanism: null,
+    channel: null,
+    valueCents: null,
+    valueMs: null,
+    valueText: null,
+    currency: null,
+    basis: 'test',
+    ...fields,
+  };
+}
+
+/**
+ * How a miss's lateness reaches the ledger. Production has three producers, and
+ * every one of them must land in the same TIMING reading:
+ * - `signals`: a caller states the measured lateness on `recordOutcome` directly;
+ * - `reason`: a deal closed with the PAID_TOO_LATE failure reason, read through
+ *   `dealSignals` (`REASON_SIGNAL`) from its own `cash_outcomes` rows.
+ */
+type LatenessVia = 'signals' | 'reason';
+
 /** The recorded failure class: operator decisions forecast at 0.9 that mostly missed because the outcome arrived late. */
-async function seedTimingBucket(projectId: string, kind: string, opts: { n: number; occurred: number }): Promise<string[]> {
+async function seedTimingBucket(projectId: string, kind: string, opts: { n: number; occurred: number; via?: LatenessVia }): Promise<string[]> {
   const claims: string[] = [];
   for (let i = 0; i < opts.n; i += 1) {
     const claimId = `operator:opd_tim${kind}${i}`;
@@ -47,7 +82,16 @@ async function seedTimingBucket(projectId: string, kind: string, opts: { n: numb
       { projectId, caller: 'test' },
     );
     const occurred = i < opts.occurred;
-    const signals = occurred ? {} : i % 2 === 0 ? { lateByDays: 3 } : { arrivedLate: true };
+    const opp = `opp_tim${kind}${i}`;
+    const signals = occurred
+      ? {}
+      : opts.via === 'reason'
+        ? dealSignals(opp, [
+            cashRow(projectId, opp, 'FAILURE_REASON', { valueText: 'PAID_TOO_LATE', requestKey: `cash:${opp}:FAILURE_REASON:end`, createdAt: '2026-11-01T00:00:00.000Z' }),
+          ])
+        : i % 2 === 0
+          ? { lateByDays: 3 }
+          : { arrivedLate: true };
     await recordOutcome(p.id, occurred, signals, { projectId, evidence: `seed ${i}`, caller: 'test' });
     if (!occurred) claims.push(claimId);
   }
@@ -126,4 +170,59 @@ describe('an operator decision on a bucket whose misses were TIMING', () => {
     await seedTimingBucket(projectId, 'SUBMIT_FIX', { n: 30, occurred: 27 });
     expect(bucketCorrectionFrom(await readLedger(null), 'operator:SUBMIT_FIX')).toBeNull();
   });
+
+  it('reads a PAID_TOO_LATE failure reason as the same TIMING miss, and sends the decision back', async () => {
+    const missed = await seedTimingBucket(projectId, 'RESEARCH', { n: 24, occurred: 4, via: 'reason' });
+    const correction = bucketCorrectionFrom(await readLedger(null), 'operator:RESEARCH');
+    expect(correction).not.toBeNull();
+    expect(new Set(correction!.timingLateClaims)).toEqual(new Set(missed));
+    const d = await decide(base, ctx());
+    expect(d).toMatchObject({ committed: false, verdict: 'REVISE', decisionId: null });
+    expect(d.problems.join(' ')).toMatch(/TIMING/);
+    expect(d.next).toContain(TIMING_ASSUMPTION_INSTRUCTION);
+  });
+
+  /**
+   * The cash journey's own producer (`recordCashOutcomes`): deals that missed the
+   * claim's range either ended past its stated horizon (lateness derived from the
+   * deal's end) or ended inside it with the PAID_TOO_LATE reason recorded. Both
+   * must reach the bucket reading as TIMING, exactly as a stated signal does.
+   */
+  for (const via of ['deal-late', 'reason'] as const) {
+    it(`names the TIMING misses a cash claim's ended deals measured (${via})`, async () => {
+      const madeAt = '2026-10-01T00:00:00.000Z';
+      const currency = 'USD';
+      const comparableKey = `cash:${currency}:contribution:${via}`;
+      const p = await recordPrediction(
+        {
+          claimId: `cash:${projectId}:${currency}:contribution`,
+          outcome: 'per-deal contribution (range 100..200)',
+          horizonDays: 2,
+          population: 'deals of this project',
+          data: ['cash_outcomes'],
+          assumptions: ['a'],
+          probability: 0.9,
+          comparableKey,
+        },
+        { projectId, caller: 'test', now: () => madeAt },
+      );
+      await recordExposure(p.id, 1000, { projectId, caller: 'test', now: () => madeAt });
+      const rows: CashOutcome[] = [];
+      for (let i = 0; i < 24; i += 1) {
+        const opp = `opp_cash${i}`;
+        const hit = i < 4;
+        const endedAt = new Date(Date.parse(madeAt) + (via === 'deal-late' && !hit ? 6 : 1) * 86_400_000 + i * 60_000).toISOString();
+        rows.push(cashRow(projectId, opp, 'REALIZED_CONTRIBUTION', { valueCents: hit ? 150 : 0, currency, requestKey: `cash:${opp}:REALIZED_CONTRIBUTION:end`, createdAt: endedAt }));
+        if (via === 'reason' && !hit) {
+          rows.push(cashRow(projectId, opp, 'FAILURE_REASON', { valueText: 'PAID_TOO_LATE', requestKey: `cash:${opp}:FAILURE_REASON:end`, createdAt: endedAt }));
+        }
+      }
+      const written = await recordCashOutcomes(projectId, rows, { caller: 'test' });
+      expect(written).toHaveLength(24);
+      expect(written.filter((o) => !o.occurred).every((o) => o.observedCauses?.includes('TIMING'))).toBe(true);
+      const correction = bucketCorrectionFrom(await readLedger(projectId), comparableKey);
+      expect(correction).not.toBeNull();
+      expect(correction!.timingLateClaims).toEqual([p.claimId]);
+    });
+  }
 });
