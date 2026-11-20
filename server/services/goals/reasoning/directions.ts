@@ -553,7 +553,9 @@ export function applyProgram(
     }
     if (t.op === 'INCLUDE') {
       const one = ctx.reserve?.find((o) => o.opportunity.id === t.key);
-      if (!one || s.openings.some((o) => o.opportunity.id === t.key)) {
+      // An opening already held under another id with the same title is the same opening: bringing it in again is no move.
+      const title = one?.opportunity.title.trim().toLowerCase();
+      if (!one || s.openings.some((o) => o.opportunity.id === t.key || o.opportunity.title.trim().toLowerCase() === title)) {
         skipped++;
         continue;
       }
@@ -577,7 +579,12 @@ export function applyProgram(
        * opening this program included is outside every DROP it makes.
        */
       const included = new Set(s.changes.filter((c) => c.label.startsWith('include:')).map((c) => c.label.slice('include:'.length)));
-      const ids = new Set([...inScope(s.openings, t.scope, ctx.remaining)].filter((id) => !included.has(id)));
+      // Matched by title too: one opening may be held under an opening id and a constructed design's id (planTransfer, 2026-11-20).
+      const includedTitles = new Set(s.openings.filter((o) => included.has(o.opportunity.id)).map((o) => o.opportunity.title.trim().toLowerCase()));
+      const ids = new Set([...inScope(s.openings, t.scope, ctx.remaining)].filter((id) => {
+        const o = s.openings.find((x) => x.opportunity.id === id);
+        return !included.has(id) && !(o && includedTitles.has(o.opportunity.title.trim().toLowerCase()));
+      }));
       if (ids.size === 0 || ids.size >= s.openings.filter((o) => o.agreedValue === 0).length) {
         skipped++;
         continue;
