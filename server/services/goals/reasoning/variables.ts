@@ -101,6 +101,7 @@ export type Family =
   | 'DEAL_SIZE'
   | 'FINANCING'
   | 'CASH_TIMING'
+  | 'FULFILMENT'
   | 'PRICE'
   | 'COMBINATION'
   | 'DEMAND'
@@ -566,6 +567,7 @@ const family = (key: string): Family => {
   if (key.startsWith('transaction:')) return 'DEAL_SIZE';
   if (key.startsWith('capital:')) return 'FINANCING';
   if (key.startsWith('timing:')) return 'CASH_TIMING';
+  if (key.startsWith('fulfilment:')) return 'FULFILMENT';
   return 'OTHER';
 };
 
@@ -600,8 +602,9 @@ export function discoverVariables(ctx: Pick<SweepContext, 'base' | 'operators' |
   for (const [f, ops] of byFamily) {
     const levels: Level[] = [none];
     // Financing and cash timing are switches; capacity is a budget; channels and partners are also pointed at an opening.
-    if (f === 'FINANCING' || f === 'CASH_TIMING' || f === 'DEAL_SIZE' || f === 'MONEY_CAPACITY') {
-      for (const op of ops) levels.push({ label: op.key, transforms: [{ op: 'OPERATOR', key: op.key }], assumed: assumedOp(op, ctx.base) });
+    if (f === 'FINANCING' || f === 'CASH_TIMING' || f === 'DEAL_SIZE' || f === 'MONEY_CAPACITY' || f === 'FULFILMENT') {
+      // A fulfilment route exists only where an opening's cost evidence names one: an operator with nothing to re-route is no level.
+      for (const op of ops) if (f !== 'FULFILMENT' || op.apply(ctx.base)) levels.push({ label: op.key, transforms: [{ op: 'OPERATOR', key: op.key }], assumed: assumedOp(op, ctx.base) });
     } else {
       for (const op of ops)
         for (const t of tgt.length ? tgt : [undefined]) {
@@ -676,9 +679,9 @@ const APPROACHES = ['FORWARD', 'BACKWARD', 'MIDDLE_OUT', 'BOTTLENECK', 'CHALLENG
 const RELIEVES: Record<FastReading['binding'], Family[]> = {
   CAPACITY: ['MONEY_CAPACITY', 'CHANNEL', 'PARTNER'],
   MARKET: ['CHANNEL', 'PARTNER', 'DEAL_SIZE', 'PRICE'],
-  CAPITAL: ['FINANCING', 'COMBINATION'],
+  CAPITAL: ['FINANCING', 'FULFILMENT', 'COMBINATION'],
   TIME: ['CASH_TIMING', 'COMBINATION'],
-  CONVERSION: ['PARTNER', 'CHANNEL', 'PRICE'],
+  CONVERSION: ['PARTNER', 'CHANNEL', 'PRICE', 'FULFILMENT'],
   NONE: [],
 };
 
@@ -1129,7 +1132,10 @@ export async function sweepVariables(ctx: SweepContext): Promise<VariableSweep> 
       if (c.field === 'days') return 1;
       const xs = ctx.base.openings.filter((o) => o.agreedValue === 0 && rows.some((r) => r.id === o.opportunity.id) && (c.scope === 'ALL' || o.opportunity.id === c.scope));
       const key = c.field as keyof ModelledOpportunity;
-      const ratios = xs.map((o) => evidenceMultiple(o[key] as ModelInput, inverse(c)));
+      // Only a range somebody established reaches anywhere: an UNKNOWN sweep "from nothing" is not evidence of a $0 supplier
+      // (production 2026-11-20, goal $5K/mo: "supplier-cost ×5.03 · evidence reaches ×20 · SUPPORTED" on a cost nobody had
+      // evidenced, swept from 0; invariant 39).
+      const ratios = xs.map((o) => (isEstablished(o[key] as ModelInput) ? evidenceMultiple(o[key] as ModelInput, inverse(c)) : 1));
       return ratios.length ? Math.min(...ratios) : 1;
     };
     for (const c of globalConds) {

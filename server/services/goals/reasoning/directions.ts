@@ -48,6 +48,7 @@ import { AGGREGATION, coherent, FUNDING, REPEAT, STRUCTURE_KEYS, STRUCTURES, typ
 import type { PlannedOpening } from '../portfolio.ts';
 import type { Dimension, StrategyChange, StrategyOperator, StrategyState, VariantReading } from '../reconstruction.ts';
 import { renderSweep, type VariableSweep } from './variables.ts';
+import { fulfilmentRoute } from '../fulfilment.ts';
 import { rankValue, valuePerInterested, isEstablished } from './rank.ts';
 
 export const MAX_DIRECTIONS = 120;
@@ -671,7 +672,7 @@ export function seedDirections(ctx: Pick<ExploreContext, 'base' | 'greedy' | 'op
   }
 
   // CONSTRAINT: each binding factor, attacked by every operator that moves it.
-  const dimsFor: Record<string, string[]> = { VOLUME: ['CAPACITY', 'ACQUISITION', 'PARTNER'], REPLY: ['ACQUISITION', 'PARTNER'], CLOSE: ['PARTNER'], PRICE: ['TRANSACTION'], CASH_TIMING: ['CASH_TIMING', 'CAPITAL'], CAPITAL: ['CAPITAL'], MARKET_SIZE: ['ACQUISITION', 'PARTNER', 'TRANSACTION'] };
+  const dimsFor: Record<string, string[]> = { VOLUME: ['CAPACITY', 'ACQUISITION', 'PARTNER'], REPLY: ['ACQUISITION', 'PARTNER'], CLOSE: ['PARTNER'], PRICE: ['TRANSACTION'], CASH_TIMING: ['CASH_TIMING', 'CAPITAL'], CAPITAL: ['CAPITAL', 'FULFILMENT'], MARKET_SIZE: ['ACQUISITION', 'PARTNER', 'TRANSACTION'], COST: ['FULFILMENT'] };
   for (const b of ctx.binding.filter((x) => x.liftReach > 0).slice(0, 4)) {
     for (const op of (dimsFor[b.factor] ?? []).flatMap(byDim).slice(0, 5)) add({ name: `Constraint: relieve ${b.factor} with ${op.key}`, stance: 'CONSTRAINT', thinking: `${b.factor} binds (lift ${pct(b.liftReach)}); change what moves it instead of hoping the estimate is wrong.`, from: 'GREEDY', program: [{ op: 'OPERATOR', key: op.key }] });
     if (b.factor === 'PRICE' || b.factor === 'MARKET_SIZE') for (const k of [1.5, 2.5]) add({ name: `Constraint: price ×${k} where tickets are small`, stance: 'CONSTRAINT', thinking: 'Fewer deals at a higher price need less market and less capacity; the close rate pays for it.', from: 'GREEDY', program: [{ op: 'PRICE', factor: k, scope: 'SMALL_TICKET' }] });
@@ -695,6 +696,20 @@ export function seedDirections(ctx: Pick<ExploreContext, 'base' | 'greedy' | 'op
   // TRANSACTION: change what is sold, not to whom.
   for (const op of byDim('TRANSACTION')) add({ name: `Transaction: ${op.key} on the strongest plan`, stance: 'TRANSACTION', thinking: 'Sell more per buyer instead of more buyers.', from: 'GREEDY', program: [{ op: 'OPERATOR', key: op.key }] });
   add({ name: 'Transaction: premium on the top openings', stance: 'TRANSACTION', thinking: 'The openings that settle most per buyer may bear a higher price.', from: 'GREEDY', program: [{ op: 'PRICE', factor: 1.5, scope: 'TOP' }] });
+
+  // FULFILMENT: change who fulfils, not who buys — on the plan as a whole and on each opening a route applies to.
+  for (const op of byDim('FULFILMENT')) {
+    const evidenced = op.key === 'fulfilment:cheaper-supplier';
+    const thinking = evidenced
+      ? 'The evidence for this deliverable shows suppliers who fulfil it for less; engage one of them instead of paying the cost the plan holds.'
+      : 'Another population fulfils this for less; that is a hypothesis about these buyers, so ask who fulfils it for them and at what cost.';
+    add({ name: `Fulfilment: ${op.key} on the strongest plan`, stance: 'FULFILMENT', thinking, from: 'GREEDY', program: [{ op: 'OPERATOR', key: op.key }] });
+    for (const o of ranked.slice(0, 6)) {
+      const f = fulfilmentRoute(o);
+      if (!f?.cost || f.evidenced !== evidenced) continue;
+      add({ name: `Fulfilment: "${title(o)}" through a cheaper supplier`, stance: 'FULFILMENT', thinking, from: 'BASELINE', program: [{ op: 'OPERATOR', key: op.key, target: o.opportunity.id }], ...(evidenced ? {} : { ask: f.question }) });
+    }
+  }
 
   // PORTFOLIO: concentrate or spread.
   for (const n of [2, 3, 5]) if (openings.length > n) add({ name: `Portfolio: concentrate on ${n}`, stance: 'PORTFOLIO', thinking: 'Shared capacity spread thin may reach nothing; concentrate it.', from: 'GREEDY', program: [{ op: 'FOCUS', count: n }] });
@@ -1228,7 +1243,7 @@ export function inventBrief(ctx: ExploreContext): InventBrief {
     operators: ctx.operators.map((o) => ({ key: o.key, dimension: o.dimension })),
     ...(ctx.reserve?.length ? { reserve: ctx.reserve.slice(0, BRIEF_RESERVE).map((o) => ({ id: o.opportunity.id, title: o.opportunity.title.slice(0, 80), price: n(rankValue(o.price)), repeatable: o.repeatable })) } : {}),
     ...(ctx.design ? { designs: { structures: STRUCTURE_KEYS.map((key) => ({ key, label: STRUCTURES[key].label })), funding: FUNDING, aggregation: AGGREGATION, repeat: REPEAT } } : {}),
-    stancesTried: ['BACKWARD', 'FORWARD', 'MIDDLE_OUT', 'CONSTRAINT', 'RESOURCE', 'RELATIONSHIP', 'INVERSION', 'OPPORTUNITY', 'TRANSACTION', 'PORTFOLIO', 'INCLUSION', ...new Set((ctx.library ?? []).map((d) => d.stance))],
+    stancesTried: ['BACKWARD', 'FORWARD', 'MIDDLE_OUT', 'CONSTRAINT', 'RESOURCE', 'RELATIONSHIP', 'INVERSION', 'OPPORTUNITY', 'TRANSACTION', 'FULFILMENT', 'PORTFOLIO', 'INCLUSION', ...new Set((ctx.library ?? []).map((d) => d.stance))],
     bestKnown: (ctx.library ?? []).slice(0, 6).map((d) => ({ name: d.name, stance: d.stance, thinking: d.thinking })),
   };
 }

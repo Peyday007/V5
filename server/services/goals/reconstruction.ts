@@ -39,6 +39,7 @@
  * input stays assumed however good the number it produces.
  */
 import { losesMoneyPerDeal, priceSupported, type ModelInput, type ModelledOpportunity } from '../cash/goalScenario.ts';
+import { FULFILMENT_COST_SHARE, fulfilmentRoute, type FulfilmentReading } from './fulfilment.ts';
 import { modelledTiming, type PaymentTimingReading } from '../cash/paymentTiming.ts';
 import { evaluateGoalPortfolio, type GateInput, type GoalPortfolio, type PlannedOpening } from './portfolio.ts';
 import { ACQUISITION_LEVERS, DAYS_TO_FIRST_PROOF, PARTNER_TERMS, budgetsAllowed, purchaseCapacity, buyInbound, dailyVolumePlan, type AcquisitionLever, type VolumePlan } from './acquisitionLevers.ts';
@@ -91,8 +92,10 @@ export const HEADROOM_SLACK = 0.02;
 const HEADROOM_EXEMPT: ReadonlySet<string> = new Set(['ACQUISITION', 'PARTNER', 'CAPACITY', 'TRANSACTION', 'CAPITAL']);
 /** A deposit at signing collects this share of the price: an assumption until a buyer agrees to it. */
 export const DEPOSIT_SHARE = { low: 0.3, high: 0.5 } as const;
+/** Days to ask a supplier for a written quote and have it back: a convention, as a partner's setup is. */
+export const SUPPLIER_QUOTE_DAYS = 3;
 
-export type Dimension = 'EVIDENCE' | 'CAPACITY' | 'ACQUISITION' | 'PARTNER' | 'TRANSACTION' | 'CASH_TIMING' | 'CAPITAL' | 'MARKET' | 'PRICE' | 'PORTFOLIO';
+export type Dimension = 'EVIDENCE' | 'CAPACITY' | 'ACQUISITION' | 'PARTNER' | 'TRANSACTION' | 'CASH_TIMING' | 'CAPITAL' | 'FULFILMENT' | 'MARKET' | 'PRICE' | 'PORTFOLIO';
 export type Basis = 'MEASURED' | 'ESTIMATE' | 'ASSUMPTION';
 
 export interface StrategyChange {
@@ -116,6 +119,10 @@ export interface StrategyChange {
   clone?: string;
   /** Outreach a day it adds, averaged over the window. */
   contacts?: { low: number; high: number };
+  /** The supplier route it engages (FULFILMENT): who performs the work the step negotiates. */
+  supplier?: string;
+  /** A question only the world can answer that would turn this move into evidence (FULFILMENT on a comparable). */
+  ask?: string;
 }
 
 /** One plausibility finding on a reading (C-4). */
@@ -685,6 +692,7 @@ async function reconstructPlanOn(input: ReconstructionInput, evaluator: Evaluato
       finding: `deposits at signing: ${pct(bestOf('CASH_TIMING')?.reach ?? baseline.reach)}; cash-timing factor lift ${pct(lift('CASH_TIMING')?.liftReach ?? 0)}`,
     },
     prepaymentChallenge(input.openings, bestOf('CAPITAL')),
+    fulfilmentChallenge(input.openings, bestOf('FULFILMENT')),
     {
       assumption: 'The openings held are the market',
       status: structural ? 'ASSUMPTION' : 'ESTIMATE',
@@ -756,7 +764,11 @@ async function reconstructPlanOn(input: ReconstructionInput, evaluator: Evaluato
     volumePlans,
     limitation,
     confidence: { basis: best.basis, measured, assumed: [...assumed, ...unestablished], statement: statement0 + confidenceStatement.value },
-    searchBrief: exploration?.asks.length ? `${searchBrief} Directions Brain explored need answers to: ${exploration.asks.slice(0, 3).join(' ')}`.trim() : searchBrief,
+    searchBrief: [
+      exploration?.asks.length ? `${searchBrief} Directions Brain explored need answers to: ${exploration.asks.slice(0, 3).join(' ')}`.trim() : searchBrief,
+      // Where cost binds and no evidence shows a cheaper route, the route is a question for the world, never an assumption kept (invariant 39).
+      searchBrief && (lift('COST')?.liftReach ?? 0) >= MATERIAL_REACH ? fulfilmentQuestions(input.openings).slice(0, 2).join(' ') : '',
+    ].filter(Boolean).join(' Fulfilment: '),
     evaluations,
     exploration,
     flags: flagged(seen.values(), exploration),
@@ -1087,6 +1099,48 @@ export function buildOperators(ctx: { input: ReconstructionInput; levers?: reado
       };
     },
   });
+  // Fulfilment: engage a cheaper supplier route for the same deliverable, where the opening's own evidence shows one
+  // (ESTIMATE); a route known only from other populations is an assumption and asks who fulfils it for these buyers.
+  for (const [key, evidenced] of [['fulfilment:cheaper-supplier', true], ['fulfilment:comparable-supplier', false]] as const) {
+    operators.push({
+      dimension: 'FULFILMENT',
+      key,
+      apply: (s) => {
+        const touched: Array<{ o: PlannedOpening; f: FulfilmentReading & { cost: ModelInput; to: { low: number; high: number } } }> = [];
+        for (const o of s.openings) {
+          if (ctx.target && o.opportunity.id !== ctx.target) continue;
+          const f = fulfilmentRoute(o);
+          if (f?.cost && f.to && f.evidenced === evidenced) touched.push({ o, f: { ...f, cost: f.cost, to: f.to } });
+        }
+        if (touched.length === 0) return null;
+        const basis: Basis = evidenced ? 'ESTIMATE' : 'ASSUMPTION';
+        const byId = new Map(touched.map((x) => [x.o.opportunity.id, x.f]));
+        const changes: StrategyChange[] = touched.map(({ o, f }) => ({
+          dimension: 'FULFILMENT',
+          op: key,
+          label: `${key}@id:${o.opportunity.id}`,
+          detail:
+            `fulfil "${o.opportunity.title.slice(0, 80)}" through ${f.route}, at ${money(f.to.low)}–${money(f.to.high)} a deal instead of about ${money(f.from)}; ` +
+            (evidenced
+              ? `the cost is ${f.evidence}, and a written quote from that supplier confirms it before any buyer is offered it`
+              : `assumed: ${f.evidence} is not evidence about these buyers, so research asks: ${f.question}`),
+          cost: 0,
+          basis,
+          startDay: { low: 0, high: SUPPLIER_QUOTE_DAYS },
+          supplier: f.route,
+          ...(evidenced ? {} : { ask: f.question }),
+        }));
+        return {
+          ...s,
+          openings: s.openings.map((o) => {
+            const f = byId.get(o.opportunity.id);
+            return f ? { ...o, directCost: f.cost, fulfilment: { route: f.route, basis } } : o;
+          }),
+          changes: [...s.changes, ...changes],
+        };
+      },
+    });
+  }
   // Cash timing: a deposit at signing. A share of the price arrives early; the balance keeps the opening's own timing (Q-4).
   operators.push({
     dimension: 'CASH_TIMING',
@@ -1136,6 +1190,33 @@ function prepaymentChallenge(openings: readonly ModelledOpportunity[], best: Var
       `of ${costly.length} opening(s) with a direct cost: ${count('PREPAID')} shown paying before delivery (prepaid fulfilment tried${best ? `: ${pct(best.reach)}` : ''}), ` +
       `${count('ARREARS')} paying in arrears, not tried${arrears.length ? ` (${arrears.slice(0, 2).join('; ')})` : ''}, ` +
       `${count('UNKNOWN')} with terms nobody stated, not tried — research asks how these buyers pay`,
+  };
+}
+
+/** The fulfilment questions research should answer: openings whose cost matters and that no evidence re-routes, costliest share first. */
+export function fulfilmentQuestions(openings: readonly ModelledOpportunity[]): string[] {
+  return openings
+    .map((o) => ({ o, f: fulfilmentRoute(o) }))
+    .filter((x): x is { o: ModelledOpportunity; f: FulfilmentReading } => !!x.f && !x.f.evidenced)
+    .sort((a, b) => b.f.from / (knownMid(b.o.price) ?? 1) - a.f.from / (knownMid(a.o.price) ?? 1) || (a.o.opportunity.id < b.o.opportunity.id ? -1 : 1))
+    .map((x) => x.f.question);
+}
+
+/** What the fulfilment levers could and could not be tried on, and why: the FULFILMENT challenge. */
+function fulfilmentChallenge(openings: readonly ModelledOpportunity[], best: VariantReading | undefined): AssumptionChallenge {
+  const read = openings.map(fulfilmentRoute).filter((f): f is FulfilmentReading => !!f);
+  const evidenced = read.filter((f) => f.evidenced).length;
+  const comparable = read.filter((f) => !f.evidenced && f.cost).length;
+  const open = read.length - evidenced - comparable;
+  return {
+    assumption: 'Each opening is fulfilled at the direct cost the plan holds',
+    status: evidenced > 0 ? 'ESTIMATE' : comparable > 0 ? 'ASSUMPTION' : 'UNTESTED',
+    testedBy: 'FULFILMENT',
+    finding:
+      `of ${read.length} opening(s) whose direct cost is at least ${Math.round(FULFILMENT_COST_SHARE * 100)}% of the price: ` +
+      `${evidenced} with their own evidence of a cheaper supplier (re-routed${best ? `: ${pct(best.reach)}` : ''}), ` +
+      `${comparable} with only another population's figure (an assumption, asked as research), ` +
+      `${open} with no evidence of another route — research asks who fulfils them and at what cost`,
   };
 }
 

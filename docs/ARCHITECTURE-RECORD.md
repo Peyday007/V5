@@ -15349,6 +15349,16 @@ including the refusal path:
    - **Financing:** prepaid fulfilment (`fundedByBuyer`). The buyer's payment,
      not the owner's limit, funds the supplier.
    - **Cash timing:** a deposit at signing.
+   - **Fulfilment** (`goals/fulfilment.ts`, 2026-11-20): engage a cheaper
+     supplier of the same deliverable. Only the opening's own DIRECT,
+     justified cost evidence re-routes it (the cheaper half of the same
+     observations, an ESTIMATE that counts toward the assumption-free
+     reading); a comparable from other populations is an ASSUMPTION that
+     asks "who fulfils it for these buyers, at what cost"; an unevidenced
+     sweep is no route, only that question. Its step is SUPPLY_TERMS,
+     `NEGOTIATE_TERMS` with the route as provider. The requirement analysis
+     counts only an established range as evidence: production read a cost
+     swept from $0 as "supplier-cost … evidence reaches ×20 · SUPPORTED".
 
    No operator names a business. A lever is a row of sourced unit costs.
 4. **Evaluate and combine.** Each variant is screened at 1,000 worlds and
