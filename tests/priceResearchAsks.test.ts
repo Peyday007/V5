@@ -150,6 +150,29 @@ describe('the goal tick sends the populations nothing prices to research, as the
     expect((await listNeeds({ projectId })).filter((n) => n.requestKey?.startsWith(`${GOAL_PRICE_KEY_PREFIX}-`))).toHaveLength(4);
   });
 
+  it('launches an open price question ahead of the goal’s own search rounds, and a closed one behind them', async () => {
+    // Production 2026-11-20: 91 price questions QUEUED for eleven hours while every
+    // freed slot went to the goal's rounds, which only add more unpriced openings.
+    const { goalFirstSql } = await import('../server/services/goals/goalWork.ts');
+    const { createCandidate } = await import('../server/repos/russellCandidates.ts');
+    const { openRound } = await import('../server/repos/cashDiscovery.ts');
+    const portfolio = { best: null, causal: null, marketHistory: [], unpriced: [population(1)] } as unknown as GoalPortfolio;
+    await sendPortfolioNeeds({ goalId: 'wst_price_goal', projectId, portfolio });
+    const [need] = (await listNeeds({ projectId })).filter((n) => n.requestKey?.startsWith(`${GOAL_PRICE_KEY_PREFIX}-`));
+    const round = await createCandidate({ title: 'Round', statement: 'Which shops share postcard costs?', projectId });
+    await openRound({ projectId, cashModeId: 'cm_test', bucketId: 'goal-wst_price_goal-c1', mechanism: 'CONSTRUCTED', round: 1, candidateId: round.id });
+    const older = await createCandidate({ title: 'Older', statement: 'An unrelated question.', projectId });
+    const order = async () =>
+      (await getDb().all<{ id: string }>(
+        `SELECT c.id FROM russell_candidates c WHERE c.id IN (?, ?, ?) ORDER BY ${goalFirstSql('c')}, c.created_at, c.rowid`,
+        [older.id, round.id, need!.candidateId!],
+      )).map((one) => one.id);
+    expect(await order()).toEqual([need!.candidateId, round.id, older.id]);
+    // Once the price question is answered or withdrawn it is nobody's goal work.
+    await getDb().run("UPDATE cash_needs SET state = 'RESOLVED' WHERE id = ?", [need!.id]);
+    expect(await order()).toEqual([round.id, need!.candidateId, older.id]);
+  });
+
   it('a context-free causal unknown is still not the goal’s idea', async () => {
     const portfolio = {
       best: null,

@@ -75,9 +75,27 @@ export function goalRoundSql(c: string): string {
  * and often ranked higher — took each slot, and the rounds that find new
  * openings (the search the goal is waiting on) never launched and expired.
  * A round is the goal's search itself, so it goes first inside the tier.
+ *
+ * **A goal's open price question goes before its rounds** (production
+ * 2026-11-20 00:5xZ, read-only probe on `claude/probe-price-answers`). Every
+ * goal plan stopped at "no price anywhere", and the 91 price questions
+ * `sendPortfolioNeeds` raised from 13:36Z were all QUEUED, judged WORTH_DOING,
+ * with a compiled mission and no mission launched in eleven hours: each grant
+ * sat at its ceiling (13 of 13, 8 of 8, 7 of 7) and every freed slot went to
+ * the goal's rounds first. A round finds more openings, and each one arrives
+ * as unpriced as the last, so the search widened while nothing the plans
+ * already hold was ever priced. A price question unblocks a plan that exists;
+ * a round only adds to the set waiting on prices. The questions are bounded
+ * (three per plan read, deduplicated by request key), so they cannot hold
+ * the slots forever.
  */
+export function goalPriceSql(c: string): string {
+  return `${c}.id IN (SELECT gp.candidate_id FROM cash_needs gp
+                    WHERE gp.request_key LIKE '${GOAL_PRICE_KEY_PREFIX}-%' AND gp.state = 'OPEN' AND gp.candidate_id IS NOT NULL)`;
+}
+
 export function goalFirstSql(c: string): string {
-  return `CASE WHEN ${goalRoundSql(c)} THEN 0 WHEN ${goalIdeaSql(c)} THEN 1 ELSE 2 END`;
+  return `CASE WHEN ${goalPriceSql(c)} THEN 0 WHEN ${goalRoundSql(c)} THEN 1 WHEN ${goalIdeaSql(c)} THEN 2 ELSE 3 END`;
 }
 
 /**
