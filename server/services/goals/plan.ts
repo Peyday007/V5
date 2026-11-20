@@ -2895,8 +2895,10 @@ export function planSteps(input: {
      * reached 74.5% read "Collect payment" as after the deadline, because
      * every sale was dated from a partner's 10-day setup).
      */
-    // Nor does a purchase made only after proof (§99 Q-7) hold the first sale: it is bought because sales have already come in.
-    const direct = Math.max(0, ...changes.filter((c) => c.dimension !== 'PARTNER' && !(c as { afterProof?: boolean }).afterProof).map((c) => c.startDay?.high ?? 0));
+    // Nor does reach bought beside the outreach the plan already has (capacity, a channel, a partner: the REACH stage) —
+    // the engine sells on the held outreach from day 0 and adds the bought contacts from their own day — nor a purchase
+    // made only after proof (§99 Q-7), bought because sales have already come in. Only an offer's own terms gate the sale.
+    const direct = Math.max(0, ...changes.filter((c) => CHANGE_STAGE[c.dimension] !== 'REACH' && !(c as { afterProof?: boolean }).afterProof).map((c) => c.startDay?.high ?? 0));
     const sellDay: Span = { low: Math.min(direct, after), high: after };
     const named = namedMembers(r.best.members, input.titles);
     const sellOrder = steps.length + 1;
