@@ -74,9 +74,12 @@ function reconstruction(over: Partial<Reconstruction> = {}): Reconstruction {
       change({ dimension: 'TRANSACTION', label: 'bundle ×9', detail: 'sell nine units as one bundle', startDay: { low: 1, high: 2 } }),
     ],
   });
+  // The same plan with its assumed moves (deposit, bundle) taken away: the marketplace leads alone (invariant 39).
+  const established = variant({ key: 'ACQUISITION:marketplace leads @no-assumptions', reach: 0.4, settledP50: 6_000, members: ['Opening o1', 'Opening o2'], changes: best.changes.filter((c) => c.basis !== 'ASSUMPTION') });
   return {
     required: 0.9,
     baseline: variant(),
+    established,
     diagnosis: [
       { factor: 'REPLY', moved: 'reply ×3', reach: 0.3, settledP50: 4000, liftReach: 0.29, liftP50: 3350 },
       { factor: 'CAPITAL', moved: 'limits ×2', reach: 0.02, settledP50: 700, liftReach: 0.009, liftP50: 50 },
@@ -133,7 +136,8 @@ describe('C-6: one plan', () => {
   it('adopts the reconstruction when it beats the plan as held: the candidate is its members, and its reach stays coverage', () => {
     const { adoption, candidate } = adoptReconstruction({ reconstruction: reconstruction(), baseline: portfolio({ reach: 0.011, basis: 'COVERAGE' }), openings });
     expect(adoption).toMatchObject({ source: 'RECONSTRUCTED', hypothetical: false });
-    expect(candidate).toMatchObject({ source: 'RECONSTRUCTED', opportunityIds: ['o1', 'o2'], reach: 0.979, reachBasis: 'COVERAGE' });
+    // Was 0.979, the reach with its deposit and bundle assumed accepted: the candidate now carries what holds without them (invariant 39).
+    expect(candidate).toMatchObject({ source: 'RECONSTRUCTED', opportunityIds: ['o1', 'o2'], reach: 0.4, reachBasis: 'COVERAGE', assumedUpside: { reach: 0.979 } });
   });
 
   it('keeps the plan as held and says the reconstruction is hypothetical when it is flagged implausible', () => {

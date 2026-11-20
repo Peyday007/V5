@@ -182,6 +182,8 @@ function productionReconstruction(): Reconstruction {
     required: 0.9,
     baseline: v({}),
     best: v({ key: 'best', reach: 0.6, settledP50: 14_000, changes: PRODUCTION_CHANGES, members: ['cop_8015', 'arr_53ae6fed770b'] }),
+    // The same plan with its assumed moves (price, partner, bundle) taken away: what it is adopted on (invariant 39).
+    established: v({ key: 'best @no-assumptions', reach: 0.2, settledP50: 5000, changes: PRODUCTION_CHANGES.slice(0, 1), members: ['cop_8015', 'arr_53ae6fed770b'] }),
     diagnosis: [],
     headroom: { reach: 0.6, settledP50: 9000 },
     structural: true,
@@ -379,6 +381,22 @@ describe('8. a reconstructed plan: its scope in words, its sale and collection c
     expect(rules(checked([bad[0]!, step(2, 'Leave out 1 opening(s) ("Coachella 2026 resale tickets")', { cost: 0, stage: 'OFFER', costSource: 'MODEL' })]))).toEqual([]);
   });
 
+  it('a program never leaves out the partner clone of an opening it brought in, and names what it does leave out', () => {
+    const reserve = [{ ...GOAL_10K_OPENINGS[0]!, opportunity: { id: 'arr_r2', title: 'Constructed: Property managers — Vendor-compliance spreadsheet' } }] as ModelledOpportunity[];
+    const changes = moves([{ op: 'INCLUDE', key: 'arr_r2' }, { op: 'OPERATOR', key: 'partner:', target: 'arr_r2' }, { op: 'DROP', scope: 'id:arr_r2' }], reserve);
+    expect(changes.some((c) => c.label === 'include:arr_r2')).toBe(true);
+    expect(changes.some((c) => c.label.startsWith('drop@'))).toBe(false);
+  });
+
+  it('a program never leaves out an opening it brought in under another id with the same title', () => {
+    const held = GOAL_10K_OPENINGS[0]!;
+    // A constructed design carrying the very title of an opening already held: the same opening, two ids.
+    const reserve = [{ ...GOAL_10K_OPENINGS[1]!, opportunity: { id: 'arr_twin', title: held.opportunity.title } }] as ModelledOpportunity[];
+    const changes = moves([{ op: 'INCLUDE', key: 'arr_twin' }, { op: 'DROP', scope: `id:${held.opportunity.id}` }], reserve);
+    // Bringing in a second copy is no move, so nothing is brought in, and nothing is contradicted.
+    expect(changes.some((c) => c.label === 'include:arr_twin')).toBe(false);
+  });
+
   it('a program never leaves out an opening it brought in (transfer test 2026-11-20: "Bring in X" then "Leave out 1 opening(s) (X)")', () => {
     const reserve = [{ ...GOAL_10K_OPENINGS[0]!, opportunity: { id: 'arr_r1', title: 'Constructed: Property managers — Vendor-compliance spreadsheet' } }] as ModelledOpportunity[];
     const changes = moves([{ op: 'INCLUDE', key: 'arr_r1' }, { op: 'DROP', scope: 'id:arr_r1' }], reserve);
@@ -421,6 +439,16 @@ describe('8. a reconstructed plan: its scope in words, its sale and collection c
     // The same step first, or naming the step it follows, is in order.
     expect(rules(checked([{ ...old[4]!, order: 0 }, ...old.slice(0, 4)]))).toEqual([]);
     expect(rules(checked([...old.slice(0, 4), { ...old[4]!, dependsOn: 10 }]))).toEqual([]);
+  });
+
+  it('a purchase made only after proof never holds the first sale (planTransfer small-capital-expensive-opening, 2026-11-20)', () => {
+    const buy = { dimension: 'CAPACITY', op: 'acquisition:paid-social', label: 'paid-social', detail: '$2,650 of paid social lead forms, bought only in worlds where cash has come back by day 14', cost: 2650, basis: 'ESTIMATE', startDay: { low: 14, high: 19 }, afterProof: true } as unknown as StrategyChange;
+    const steps = planSteps({ adoption, reconstruction: recon([buy], ['arr_ai_reception', 'arr_gifts']), sales: [], nextTest: null, permissionsMissing: [], titles, cashDays, daysLeft: 20 });
+    const sell = steps.find((s) => s.label === "Sell the plan's openings")!;
+    const collect = steps.find((s) => s.label === 'Collect payment')!;
+    // Selling starts now; the after-proof purchase only scales it later.
+    expect(sell.startDay!.low).toBe(0);
+    expect(collect.stage?.unscheduled ?? null).not.toBe('AFTER_DEADLINE');
   });
 
   it('the pipeline, goal $5K: the price move\'s scope in words, the partner titled by its opening, the sale and collection costed null and dated from days to usable cash', () => {

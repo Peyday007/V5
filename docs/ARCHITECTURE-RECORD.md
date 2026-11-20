@@ -16802,10 +16802,41 @@ it builds the steps and the lead — never read back out of the prose.
 | `UNKNOWN_BECOMES_RESEARCH` | no portfolio, no price research | an unpriced lead population is in `reading.unpriced`, which the goal tick sends as `goal-price-` research |
 | `NO_DUPLICATE_STEPS` | goal B: `Bring in "Constructed` six times | no two steps carry the same label: one move made on several openings is one step naming each (`movesOfChanges`) |
 | `WITHIN_LIMITS` | wst_7b4fcbb5 ($3,000 capital, $375 before any money comes in) led at 6.2% with a $15,000 grant service held at "capital E 14985" | every member of the lead ties up no more than the goal's capital ceiling and pre-revenue limit as the model holds it (`DemandEstimate.capitalHeld`), or carries a cash structure the reading states as an assumption (`cashStructure`: the buyer funds the supplier, set only by a reconstruction's `fundedByBuyer`) |
+| `EXECUTABLE_BY_BRAIN` | "[PERSON] Collect payment", "[PERSON] 20 pre-warmed cold-email accounts … for $350" (2026-11-20) | a plan that would be ACCEPTED has no routine step the owner performs, and no step no registered capability performs unless it acquires one (`PlanStep.executor`, below); approvals are listed, not refused |
 | `NO_FAVOURABLE_UNKNOWN` | the same grant entered at 187.5 — the middle of what the $375 limit allows — while the model held 14,985 | no member is entered at a better figure than the model holds (`capitalAtStart` ≥ the estimate's low bound), and no member's unestablished cost of one deal is over the spending ceiling, unless a cash structure carries it. The portfolio holds such an opening out of every combination (`DemandEstimate.heldOut`, named in `missing`) rather than refusing it: F6 stands (an outlay inferred from other openings refuses nothing, and the opening is still read at the in-limit midpoint for exploration), but an estimate is never favourable to the plan (invariant 39). Its pathway's "Restructure the cash" research is the way back in |
 
 Only what the reading proves is flagged: an unknown the plan states and sends
 to research is the honest state, not a violation.
+
+**Who performs a step is not who approves it** (owner, 2026-11-20: "Do not
+construct plans that quietly assign substantial recurring work to the owner …
+Do not represent approval authority as routine labor. Do not assume Brain can
+perform an action merely because it can describe that action."). Production
+plans read `[PERSON] Sell "…" through a partner`, `[PERSON] 20 pre-warmed
+cold-email accounts … for $350` and `[PERSON] Collect payment`: one word for a
+signature, a payment and Brain's own collection. Every step now carries
+`PlanStep.executor` (`server/services/goals/stepExecutor.ts`): the operation it
+is, from a closed vocabulary chosen by the builder from the step's structure
+(an arrangement's stage, a reconstruction change's dimension), never its words;
+who performs it — `BRAIN` through which registered capability, a `PROVIDER`
+(a supplier delivering, a partner referring) with Brain's own part named, the
+`OWNER`, or `CAPABILITY_MISSING` with what to acquire — read from the
+integration registry (§103) and the capability vocabulary's live readers
+(`cash/capabilities.ts`); and, apart, the approvals it needs: a payment, a
+legal commitment, a credential only the owner holds (a declared integration
+not connected), a standing grant, or the owner's decision a next test waits on
+(`by: 'PERSON'` there means a grant, a connection or a capital limit, so the
+step stays Brain's sending or planning with that decision as its approval).
+An unconnected integration is a permission and a one-time approval, never the
+owner doing the work. `EXECUTABLE_BY_BRAIN`
+refuses a plan that would be ACCEPTED when it holds a routine step the owner
+performs, or a step no registered capability performs that is not itself a
+capability acquisition (buying sending inboxes is one). Read on 2026-11-20,
+nothing registered pays a supplier or buys ads, so an ORDER step and a paid
+lead purchase read CAPABILITY_MISSING until an integration declares
+`PAY_A_SUPPLIER` or `BUY_PAID_LEADS`. `goals.sh plan` prints, per step,
+"performed by X; approval needed: yes/no (why)", and the plan's execution in
+the owner's six parts (`planExecution`).
 
 **A reconstructed plan is read the same way** (production, 18:00Z on
 62214360). Its steps come from the reconstruction's changes rather than an

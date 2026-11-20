@@ -35,6 +35,15 @@ import { modelChallengeFor } from './modelChallenge.ts';
 
 export interface Activity {
   key: string;
+  /**
+   * What its world resample is seeded by, when not its key. A key may carry a
+   * database identifier, and the same activity under another identifier must
+   * read the same worlds (an identifier is not economic content): a caller
+   * whose key holds one names here the stable position its samples were drawn
+   * at (goals: the opening's index and share, the same seed its demand worlds
+   * were drawn from). Absent, the key.
+   */
+  stream?: string;
   label: string;
   /** Cash it settles, per world (major units). Paired with `days`. */
   cash: number[];
@@ -232,7 +241,7 @@ export interface PortfolioReading {
   settledP90: number;
   /** Share of worlds in which some member could not start for want of capital. */
   capitalShort: number;
-  /** Share of worlds whose combined spending broke the spending ceiling (0 when there is none). */
+  /** Share of worlds in which the spending ceiling bound: some member's sales were cut to what it still funds (`ceilingShare`; 0 when there is none). */
   overSpend: number;
   /** Median cash kept (settled less paid out) across worlds. */
   keptP50?: number;
@@ -469,13 +478,14 @@ function drawPicks(problem: PortfolioProblem, worlds: number): number[][] {
       if (xs && xs.length !== n) throw new Error(`Activity "${activity.key}" needs ${name} samples paired with its cash samples.`);
     }
     const rho = activity.riskGroup ? Math.min(0.95, Math.max(0, problem.riskCorrelation?.[activity.riskGroup] ?? 0.5)) : 0;
-    const memoKey = `${seed}|${worlds}|${activity.key}|${activity.riskGroup ?? ''}|${rho}`;
+    const stream = activity.stream ?? activity.key;
+    const memoKey = `${seed}|${worlds}|${stream}|${activity.riskGroup ?? ''}|${rho}`;
     let held = pickCache.get(activity.cash);
     const hit = held?.get(memoKey);
     if (hit) return hit;
     // Rank worlds by cash so a bad shared shock means low cash for every member.
     const order = Array.from({ length: n }, (_, i) => i).sort((a, b) => activity.cash[a]! - activity.cash[b]!);
-    const rng = makeRng(seed, seedOf(`activity:${activity.key}`));
+    const rng = makeRng(seed, seedOf(`activity:${stream}`));
     const g = activity.riskGroup ? factor(activity.riskGroup) : null;
     const out = new Array<number>(worlds);
     for (let i = 0; i < worlds; i++) {
@@ -510,6 +520,23 @@ function refuse(problem: PortfolioProblem, members: number[]): string | null {
 
 function round(x: number): number {
   return Math.round(x * 100) / 100;
+}
+
+/**
+ * The share of a member's sales the spending ceiling still funds in one world
+ * (E1a, 2026-11-20). A ceiling is a limit on the money committed, so a plan
+ * that respects it sells only what the ceiling funds: once the ceiling is
+ * spent, a member's remaining deals are not made (its cash, spend and deals
+ * cut in proportion), rather than the whole world being counted as a miss.
+ * Failing a world that passed the ceiling made anything that capped a
+ * member's deals (more capital tied up per deal, `stakeCycles`) raise reach:
+ * needing more money helped the plan. Read this way, the ceiling can only
+ * take sales away, so a plan is never helped by needing more money.
+ * 1 when the ceiling does not bind; `spend` is what counts against it.
+ */
+function ceilingShare(ceiling: number | undefined, spend: number, used: number): number {
+  if (ceiling === undefined || !(spend > 0) || used + spend <= ceiling + 1e-9) return 1;
+  return Math.max(0, (ceiling - used) / spend);
 }
 
 function evaluate(problem: PortfolioProblem, members: number[], drawn: Worlds, worlds: number): PortfolioReading {
@@ -576,6 +603,7 @@ function evaluateWorlds(problem: PortfolioProblem, members: number[], drawn: Wor
     return { day, cash, early, inTime, spend, ceiling: act.ceilingExempt ? 0 : spend, deals: (a.deals?.[s] ?? 0) * f };
   };
   const undecided: Array<{ act: Activity; s: number; start: number; f: number; gate: string }> = [];
+  const ceiling = problem.spendCeiling;
   for (let i = 0; i < worlds; i++) {
     let capital = problem.startingCapital ?? Infinity;
     let total = 0;
@@ -586,6 +614,7 @@ function evaluateWorlds(problem: PortfolioProblem, members: number[], drawn: Wor
     let held = 0;
     let lastDay = 0;
     let proof = 0;
+    let bound = false;
     pending.length = 0;
     undecided.length = 0;
     gateOpen.clear();
@@ -611,7 +640,8 @@ function evaluateWorlds(problem: PortfolioProblem, members: number[], drawn: Wor
       if (entry.gate) {
         // A purchase after proof: some cash has come back, and what is left covers its first tranche.
         const g = entry.gate;
-        const open = proof >= 1 && g.tranche <= capital + 1e-9;
+        // A purchase the spending ceiling cannot fund is not made (`ceilingShare`).
+        const open = proof >= 1 && g.tranche <= capital + 1e-9 && (ceiling === undefined || ceilingSpent + g.cost <= ceiling + 1e-9);
         gateOpen.set(g.id, open);
         if (open) {
           capital -= g.tranche;
@@ -633,11 +663,14 @@ function evaluateWorlds(problem: PortfolioProblem, members: number[], drawn: Wor
       held += need;
       // A needed resource is down in this world: nothing settles, and the capital tied up is not recovered.
       if ((act.needs ?? []).some((id) => down.get(id)![i] === 1)) continue;
-      const f = scale[m]!;
       const gate = act.gated?.gate;
-      if (gate !== undefined && !gateOpen.has(gate)) undecided.push({ act, s, start, f, gate });
       // The hot path reads the samples in place: one combination is read over every world, hundreds of times a plan.
       const a = arraysOf(act, gate !== undefined && gateOpen.get(gate) === true);
+      // Sold only as far as the spending ceiling still funds it (`ceilingShare`).
+      const t = act.ceilingExempt || !a.spend ? 1 : ceilingShare(ceiling, a.spend[s]! * scale[m]!, ceilingSpent);
+      if (t < 1) bound = true;
+      const f = scale[m]! * t;
+      if (gate !== undefined && !gateOpen.has(gate)) undecided.push({ act, s, start, f, gate });
       const day = start + a.days[s]!;
       const cash = a.cash[s]! * f;
       if (day > lastDay) lastDay = day;
@@ -659,7 +692,11 @@ function evaluateWorlds(problem: PortfolioProblem, members: number[], drawn: Wor
     for (const u of undecided) {
       if (!gateOpen.get(u.gate)) continue;
       const before = contribution(u.act, arraysOf(u.act, false), u.s, u.start, u.f);
-      const after = contribution(u.act, arraysOf(u.act, true), u.s, u.start, u.f);
+      const full = contribution(u.act, arraysOf(u.act, true), u.s, u.start, u.f);
+      // What it sells on the bought capacity is held to what the ceiling still funds, beside what it already spent.
+      const t = ceilingShare(ceiling, full.ceiling, ceilingSpent - before.ceiling);
+      if (t < 1) bound = true;
+      const after = t < 1 ? contribution(u.act, arraysOf(u.act, true), u.s, u.start, u.f * t) : full;
       total += after.inTime - before.inTime;
       spent += after.spend - before.spend;
       ceilingSpent += after.ceiling - before.ceiling;
@@ -673,8 +710,9 @@ function evaluateWorlds(problem: PortfolioProblem, members: number[], drawn: Wor
     contributed += keep;
     tied += held;
     cycled += lastDay;
-    const overCeiling = problem.spendCeiling !== undefined && ceilingSpent > problem.spendCeiling + 1e-9;
-    if (overCeiling) over += 1;
+    const overCeiling = ceiling !== undefined && ceilingSpent > ceiling + 1e-9;
+    // `overSpend`: the worlds the spending ceiling bound (sales cut to what it funds).
+    if (overCeiling || bound) over += 1;
     if ((onKept ? keep : total) >= problem.target && !overCeiling) reached += 1;
     if (wasShort) short += 1;
   }
@@ -753,6 +791,8 @@ interface Prefix {
   lastDay: Float64Array;
   proof: Float64Array;
   short: Uint8Array;
+  /** Worlds in which the spending ceiling cut some member's sales (`ceilingShare`). */
+  bound: Uint8Array;
   up: Uint8Array;
   pending: Int32Array;
   width: number;
@@ -775,6 +815,7 @@ function emptyPrefix(problem: PortfolioProblem, worlds: number): Prefix {
     lastDay: new Float64Array(worlds),
     proof: new Float64Array(worlds),
     short: new Uint8Array(worlds),
+    bound: new Uint8Array(worlds),
     up: new Uint8Array(worlds).fill(1),
     pending: new Int32Array(worlds),
     width: 0,
@@ -816,7 +857,7 @@ function turn(problem: PortfolioProblem, prefix: Prefix, plan: Plan, m: number, 
   }
   const { act, start, need } = plan;
   const a = act;
-  const f = 1;
+  const f0 = 1;
   const w = prefix.width;
   const deadline = problem.deadlineDays;
   for (let i = 0; i < worlds; i++) {
@@ -857,6 +898,9 @@ function turn(problem: PortfolioProblem, prefix: Prefix, plan: Plan, m: number, 
     prefix.held[i] = prefix.held[i]! + need;
     if (plan.downs.length > 0 && anyDown(plan, i)) continue;
     const s = plan.pick[i]!;
+    const t = act.ceilingExempt || !a.spend ? 1 : ceilingShare(problem.spendCeiling, a.spend[s]! * f0, prefix.ceilingSpent[i]!);
+    if (t < 1) prefix.bound[i] = 1;
+    const f = f0 * t;
     const day = start + a.days[s]!;
     const cash = a.cash[s]! * f;
     if (day > prefix.lastDay[i]!) prefix.lastDay[i] = day;
@@ -916,7 +960,7 @@ function readAfter(problem: PortfolioProblem, members: number[], prefix: Prefix,
   const deadline = problem.deadlineDays;
   const { act, start, need } = last;
   const a = act;
-  const f = 1;
+  const f0 = 1;
   const w = prefix.width;
   const settled = new Float64Array(worlds);
   const keptAt = new Float64Array(worlds);
@@ -936,6 +980,7 @@ function readAfter(problem: PortfolioProblem, members: number[], prefix: Prefix,
     let held = prefix.held[i]!;
     let lastDay = prefix.lastDay[i]!;
     let wasShort = prefix.short[i] === 1;
+    let bound = prefix.bound[i] === 1;
     const failed = last.downs.length > 0 && anyDown(last, i);
     if (prefix.up[i] === 1 && !failed) allUp += 1;
     let capital = prefix.capital[i]!;
@@ -954,6 +999,9 @@ function readAfter(problem: PortfolioProblem, members: number[], prefix: Prefix,
         held += need;
         if (!failed) {
           const s = last.pick[i]!;
+          const t = act.ceilingExempt || !a.spend ? 1 : ceilingShare(problem.spendCeiling, a.spend[s]! * f0, ceilingSpent);
+          if (t < 1) bound = true;
+          const f = f0 * t;
           const day = start + a.days[s]!;
           const cash = a.cash[s]! * f;
           if (day > lastDay) lastDay = day;
@@ -978,7 +1026,7 @@ function readAfter(problem: PortfolioProblem, members: number[], prefix: Prefix,
     tied += held;
     cycled += lastDay;
     const overCeiling = problem.spendCeiling !== undefined && ceilingSpent > problem.spendCeiling + 1e-9;
-    if (overCeiling) over += 1;
+    if (overCeiling || bound) over += 1;
     if ((onKept ? keep : total) >= problem.target && !overCeiling) reached += 1;
     if (wasShort) short += 1;
   }

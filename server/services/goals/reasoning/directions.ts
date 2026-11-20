@@ -553,7 +553,9 @@ export function applyProgram(
     }
     if (t.op === 'INCLUDE') {
       const one = ctx.reserve?.find((o) => o.opportunity.id === t.key);
-      if (!one || s.openings.some((o) => o.opportunity.id === t.key)) {
+      // An opening already held under another id with the same title is the same opening: bringing it in again is no move.
+      const title = one?.opportunity.title.trim().toLowerCase();
+      if (!one || s.openings.some((o) => o.opportunity.id === t.key || o.opportunity.title.trim().toLowerCase() === title)) {
         skipped++;
         continue;
       }
@@ -577,7 +579,13 @@ export function applyProgram(
        * opening this program included is outside every DROP it makes.
        */
       const included = new Set(s.changes.filter((c) => c.label.startsWith('include:')).map((c) => c.label.slice('include:'.length)));
-      const ids = new Set([...inScope(s.openings, t.scope, ctx.remaining)].filter((id) => !included.has(id)));
+      // Matched by title too: one opening may be held under an opening id and a constructed design's id (planTransfer, 2026-11-20).
+      const includedTitles = new Set(s.openings.filter((o) => included.has(o.opportunity.id)).map((o) => o.opportunity.title.trim().toLowerCase()));
+      const ids = new Set([...inScope(s.openings, t.scope, ctx.remaining)].filter((id) => {
+        const o = s.openings.find((x) => x.opportunity.id === id);
+        // A partner's clone (`<id>~…`) of an opening brought in is the same opening sold another way.
+        return !included.has(id) && !included.has(id.split('~')[0]!) && !(o && includedTitles.has(o.opportunity.title.trim().toLowerCase()));
+      }));
       if (ids.size === 0 || ids.size >= s.openings.filter((o) => o.agreedValue === 0).length) {
         skipped++;
         continue;
@@ -586,7 +594,7 @@ export function applyProgram(
         {
           ...s,
           openings: s.openings.filter((o) => !ids.has(o.opportunity.id)),
-          changes: [...s.changes, change('PORTFOLIO', `drop@${t.scope}`, `leave out ${ids.size} opening(s) (${scopeWords(t.scope, s.openings)}), freeing the capacity and money they held`, 'ESTIMATE')],
+          changes: [...s.changes, change('PORTFOLIO', `drop@${t.scope}`, `leave out ${ids.size} opening(s) (${t.scope.startsWith('id:') ? s.openings.filter((o) => ids.has(o.opportunity.id)).map((o) => `"${o.opportunity.title.slice(0, 80)}"`).join(', ') : scopeWords(t.scope, s.openings)}), freeing the capacity and money they held`, 'ESTIMATE')],
         },
         t,
       );
@@ -844,12 +852,33 @@ export function mutate(d: Direction, ctx: Pick<ExploreContext, 'base' | 'operato
 
 const MATERIAL = 0.02;
 
-export function scoreOf(reading: VariantReading, challenged: VariantReading | null): number {
+/**
+ * The moves of a plan that rest on an assumption nobody has measured (a
+ * deposit assumed accepted, a bundle's close assumed ×0.5, a partner's
+ * referrals a day, a price's demand response). A challenge or a diagnostic
+ * test is not a move. A lever a measurement establishes carries another basis
+ * and is not counted.
+ */
+export function assumedMovesOf(changes: readonly StrategyChange[]): StrategyChange[] {
+  return changes.filter((c) => c.basis === 'ASSUMPTION' && c.dimension !== 'EVIDENCE' && !c.label.startsWith('test:'));
+}
+
+/**
+ * A direction's ranking score (invariant 39, owner 2026-11-20: "uncertainty
+ * never silently becomes favorable evidence"). Its reach counts only as far as
+ * it holds with every assumed move taken away (`bare`): the reach its
+ * assumptions add is a hypothesis to test, never what ranks it above a
+ * direction resting on fewer. Until the bare reading is made, a direction that
+ * rests on an assumption is credited with none of its reach. Then the
+ * challenged reach weighs equally; between equals, fewer assumptions win, then
+ * median cash.
+ */
+export function scoreOf(reading: VariantReading, challenged: VariantReading | null, bare: VariantReading | null = null): number {
   if (!reading.feasible) return -1;
   const held = challenged?.feasible ? challenged.reach : 0;
-  // Reach and challenged reach weigh equally; between equals, fewer assumptions win, then median cash.
-  const assumed = reading.changes.filter((c) => c.basis === 'ASSUMPTION' && c.dimension !== 'EVIDENCE').length;
-  return 0.5 * reading.reach + 0.5 * held - 0.002 * assumed + 1e-9 * reading.settledP50;
+  const assumed = assumedMovesOf(reading.changes).length;
+  const established = assumed === 0 ? reading.reach : bare?.feasible ? Math.min(reading.reach, bare.reach) : 0;
+  return 0.5 * established + 0.5 * held - 0.002 * assumed + 1e-9 * reading.settledP50;
 }
 
 export async function exploreDirections(ctx: ExploreContext): Promise<Exploration> {
@@ -922,7 +951,7 @@ export async function exploreDirections(ctx: ExploreContext): Promise<Exploratio
         const c = await challengeOf(full(r.direction));
         r.challenged = c.weaker;
         r.bare = c.bare;
-        r.score = scoreOf(r.reading, r.challenged);
+        r.score = scoreOf(r.reading, r.challenged, r.bare);
       },
     );
   };
@@ -956,7 +985,7 @@ export async function exploreDirections(ctx: ExploreContext): Promise<Exploratio
   const greedyChallenge = await challengeOf(greedyProgram);
   greedyRow.challenged = greedyChallenge.weaker;
   greedyRow.bare = greedyChallenge.bare;
-  greedyRow.score = scoreOf(ctx.greedyReading, greedyRow.challenged);
+  greedyRow.score = scoreOf(ctx.greedyReading, greedyRow.challenged, greedyRow.bare);
   const budget = explorationBudget({ openings: ctx.base.openings.length + (ctx.heldOpenings ?? 0), operators: ctx.operators.length, binding: ctx.binding.filter((b) => b.liftReach > 0).length, reach: Math.min(ctx.greedyReading.reach, greedyRow.challenged?.reach ?? 0), required: ctx.required, structural: ctx.structural });
   evaluationCap = Math.min(MAX_EVALUATIONS, evaluations + EVALUATIONS_PER_DIRECTION * budget);
 

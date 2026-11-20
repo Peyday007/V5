@@ -65,6 +65,7 @@ import { researchGoalPaths } from '../server/services/goals/pathResearch.ts';
 import { setTarget, setTargetLimits } from '../server/services/goals/target.ts';
 import { methodYield, recentExplorations } from '../server/services/goals/reasoning/learning.ts';
 import { integrityLines } from '../server/services/goals/planIntegrityInput.ts';
+import { executorLine, planExecution } from '../server/services/goals/stepExecutor.ts';
 import { askConstructedArrangements, askPathwayConstructions, CHAIN_LABEL, goalArrangements, goalLimits, readGoalPlan, listReadings, type PlanReading } from '../server/services/goals/plan.ts';
 import { constructArrangements } from '../server/services/cash/construct.ts';
 import { renderPathways } from '../server/services/goals/pathways.ts';
@@ -543,12 +544,31 @@ async function printPlan(reading: PlanReading): Promise<void> {
   }
   // The adopted plan as an execution sequence (C-8).
   for (const s of reading.steps ?? []) {
-    console.log(`  step ${String(s.order).padStart(2)}     [${s.owner}] ${s.label}${s.startDay ? ` · day ${s.startDay.low}${s.startDay.high !== s.startDay.low ? `–${s.startDay.high}` : ''}` : ''} · cost ${s.cost === null ? 'not established' : Math.round(s.cost)} · ${s.basis}${s.dependsOn ? ` · after step ${s.dependsOn}` : ''}`);
+    // Who performs it, never who waits: a payment or a signature is an approval, and is said as one.
+    const by = s.executor ? (s.executor.performedBy === 'CAPABILITY_MISSING' ? 'MISSING' : s.executor.performedBy) : s.owner;
+    console.log(`  step ${String(s.order).padStart(2)}     [${by}] ${s.label}${s.startDay ? ` · day ${s.startDay.low}${s.startDay.high !== s.startDay.low ? `–${s.startDay.high}` : ''}` : ''} · cost ${s.cost === null ? 'not established' : Math.round(s.cost)} · ${s.basis}${s.dependsOn ? ` · after step ${s.dependsOn}` : ''}`);
     console.log(`    what      ${s.detail.slice(0, 240)}`);
     if (s.when) console.log(`    when      ${s.when}`);
-    if (s.ownerReason) console.log(`    owner     ${s.ownerReason}`);
+    if (s.executor) console.log(`    by        ${executorLine(s.executor)}`);
+    else if (s.ownerReason) console.log(`    owner     ${s.ownerReason}`);
     console.log(`    kill      ${s.kill}`);
     if (s.execution.length) console.log(`    execution ${s.execution.join('; ')} (needed to execute, never to plan)`);
+  }
+  // The plan's execution in the owner's six parts (2026-11-20), read from the steps' executor records.
+  if ((reading.steps ?? []).some((s) => s.executor)) {
+    const x = planExecution(reading.steps);
+    const part = (name: string, list: string[], none: string) => {
+      if (list.length === 0) console.log(`  ${name.padEnd(11)} ${none}`);
+      for (const [at, one] of list.entries()) console.log(`  ${(at === 0 ? name : '').padEnd(11)} ${one}`);
+    };
+    part('brain does', x.brain, 'nothing');
+    part('providers', x.providers, 'none');
+    part('acquire', x.acquire, 'nothing');
+    part('permission', x.permissions, 'none missing');
+    part('costs', x.costs, 'no step commits money the model prices');
+    part('depends on', x.dependencies, 'nothing outside Brain');
+    part('approvals', x.approvals, 'none');
+    part('owner work', x.ownerWork, 'none');
   }
   for (const d of reading.degraded ?? []) console.log(`  DEGRADED    ${d}`);
   console.log(`  pool        ${reading.pool.conclusion}: ${reading.pool.sentence}`);

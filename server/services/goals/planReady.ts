@@ -18,6 +18,7 @@ import { getDb } from '../../db/database.ts';
 import { getWorkstream, recordWorkstreamEvent } from '../../repos/register.ts';
 import { planReady, planReadyNotice, type PlanReadyFacts, type PlanReadyCondition } from '../../domain/planReady.ts';
 import type { PlanReading } from './plan.ts';
+import { executorLine } from './stepExecutor.ts';
 
 
 export interface PlanReadyResult {
@@ -118,7 +119,7 @@ export async function planReadyFacts(goalId: string, reading: PlanReading): Prom
     // The adopted plan's execution sequence first (C-8): what, when, who, and what stops it.
     ...(reading.steps ?? []).map((s) => ({
       title: `${s.order}. ${s.label}`,
-      step: `${s.detail}${s.startDay ? ` Day ${s.startDay.low}${s.startDay.high !== s.startDay.low ? `–${s.startDay.high}` : ''}.` : ''}${s.cost === null ? ' Cost not yet established.' : s.cost > 0 ? ` Cost ${Math.round(s.cost)}.` : ''} Basis ${s.basis.toLowerCase()}.${s.dependsOn ? ` After step ${s.dependsOn}.` : ''} Stop if ${s.kill}.${s.execution.length ? ` To execute: ${s.execution.join(', ')}.` : ''}`,
+      step: `${s.detail}${s.startDay ? ` Day ${s.startDay.low}${s.startDay.high !== s.startDay.low ? `–${s.startDay.high}` : ''}.` : ''}${s.cost === null ? ' Cost not yet established.' : s.cost > 0 ? ` Cost ${Math.round(s.cost)}.` : ''} Basis ${s.basis.toLowerCase()}.${s.dependsOn ? ` After step ${s.dependsOn}.` : ''} Stop if ${s.kill}.${s.execution.length ? ` To execute: ${s.execution.join(', ')}.` : ''}${s.executor ? ` ${executorLine(s.executor).replace(/^p/, 'P')}.` : ''}`,
       by: s.owner,
       blocker: s.owner === 'PERSON' ? s.ownerReason : null,
     })),

@@ -45,7 +45,7 @@ import { ACQUISITION_LEVERS, DAYS_TO_FIRST_PROOF, PARTNER_TERMS, budgetsAllowed,
 import { CONVERSION_BOUNDS, MATERIAL_SHARE, SHAPE_MULTIPLES } from './pathways.ts';
 import { createHash } from 'node:crypto';
 import { sharedEvaluator, type Evaluator } from './reasoning/evaluatorPool.ts';
-import { applyProgram, exploreDirections, programOf, renderExploration, repriceOpening, PRICE_ELASTICITY, type ExploreContext, type Exploration, type Transform } from './reasoning/directions.ts';
+import { applyProgram, assumedMovesOf, exploreDirections, programOf, renderExploration, repriceOpening, PRICE_ELASTICITY, type ExploreContext, type Exploration, type Transform } from './reasoning/directions.ts';
 import { sweepVariables, type VariableSweep } from './reasoning/variables.ts';
 import { valuePerInterested } from './reasoning/rank.ts';
 
@@ -176,6 +176,15 @@ export interface Reconstruction {
   /** Every variant evaluated, in the order it was evaluated, round by round. */
   rounds: Array<{ round: number; tried: VariantReading[]; kept: string | null }>;
   best: VariantReading;
+  /**
+   * The strongest plan with every move that rests on an assumption taken away
+   * (`assumedMovesOf`), read at the same worlds: what it reaches on evidence
+   * and estimates alone (invariant 39). `best` itself when it rests on no
+   * assumed move. This, never `best`, is the reach that adopts the plan and is
+   * reported as the candidate's; `best.reach` is the upside if the
+   * assumptions hold. Absent on a reconstruction read before it existed.
+   */
+  established?: VariantReading | null;
   /** The strongest plan if the new implementation performs no better than the measured record (§99 as-is floor). */
   floor: VariantReading | null;
   /** The reply rate every outreach opening must reach for the strongest plan to meet the requirement; null if none does. */
@@ -608,6 +617,8 @@ async function reconstructPlanOn(input: ReconstructionInput, evaluator: Evaluato
   // assumed move taken away, then read on the measured record (Q-5).
   const bare = applyProgram(base, programOf(current, operators), { operators, operatorsFor, remaining: limits.remaining, reserve }, true).state;
   const floor = limits.measuredRates ? await evaluate(bare, worlds, true, ' @as-is-record') : null;
+  // What the strongest plan holds on no assumed move (invariant 39): the reach it is adopted and reported on.
+  const established = assumedMovesOf(best.changes).length === 0 ? best : await evaluate(bare, fullWorlds, false, ' @no-assumptions');
   // The conversion it needs: the lowest reply rate (shared by every outreach opening) at which it reaches the requirement.
   const replyAt = (rate: number) =>
     evaluate({ ...current, openings: current.openings.map((o) => (sellsThroughOutreach(o) ? { ...o, respond: { ...o.respond, value: rate, low: rate, high: rate, distribution: undefined, inferred: undefined } } : o)) }, worlds, false, ` @reply=${rate.toFixed(4)}`);
@@ -694,6 +705,10 @@ async function reconstructPlanOn(input: ReconstructionInput, evaluator: Evaluato
     best.basis === 'PROBABILITY' && assumed.length === 0
       ? `The strongest plan reaches the target in ${pct(best.reach)} of worlds, a probability (Wilson lower bound ${pct(wilsonLow)}) because every input is evidence.`
       : `The strongest plan reaches the target in ${pct(best.reach)} of the worlds tested. That is coverage of stated ranges and assumptions, not a probability: ${[...assumed.slice(0, 3), ...unestablished.slice(0, 3)].join('; ') || 'inputs are not all evidence'}.`;
+  // The reach its unmeasured assumptions add is a hypothesis, said as one beside what holds without them (invariant 39).
+  const assumedMoves = assumedMovesOf(best.changes);
+  const withoutAssumptions = established !== best ? ` Without its ${assumedMoves.length} assumed move(s) it reaches ${pct(established.reach)} (p50 ${money(established.settledP50)}); the rest holds only if those assumptions do, and each is a test to run, not evidence.` : '';
+  confidenceStatement.value += withoutAssumptions;
   const robustness =
     (floor ? ` If the new campaign does no better than the measured record, it reaches ${pct(floor.reach)} (p50 ${money(floor.settledP50)}).` : '') +
     (requiredReply !== null ? ` It needs a reply rate of about ${pct(requiredReply)} to reach ${pct(input.required)}; the first sends measure that.` : ' No reply rate up to 15% reaches the requirement on its own.');
@@ -726,6 +741,7 @@ async function reconstructPlanOn(input: ReconstructionInput, evaluator: Evaluato
     challenges,
     rounds,
     best,
+    established,
     floor,
     requiredReply,
     volumePlans,
@@ -1141,6 +1157,7 @@ export function renderReconstruction(r: Reconstruction, limit = 8): string[] {
   }
   for (const p of r.volumePlans) lines.push(`    volume    ${p.sentence}`);
   lines.push(`    best      ${r.best.key} · ${v(r.best)}`);
+  if (r.established && r.established.key !== r.best.key) lines.push(`    no-assume the same plan with every assumed move taken away · ${v(r.established)}`);
   if (r.floor) lines.push(`    as-is     the same plan on the old campaigns' measured rates · ${v(r.floor)}`);
   lines.push(`    needs     ${r.requiredReply !== null ? `a reply rate of ${pct(r.requiredReply)} on every outreach opening for ${pct(r.required)}` : `no reply rate up to 15% reaches ${pct(r.required)}`}`);
   for (const c of [...r.best.changes].sort((a, b) => (a.startDay?.low ?? 0) - (b.startDay?.low ?? 0))) lines.push(`      day ${c.startDay ? `${c.startDay.low}–${c.startDay.high}` : '0'}`.padEnd(16) + `[${c.basis}] ${c.dimension}: ${c.detail}`);

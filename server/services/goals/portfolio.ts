@@ -37,6 +37,7 @@
 import { evaluateCombination, MIN_EVIDENCE_SAMPLE, optimizePortfolio, type Activity, type Assurance, type LimitingInput, type ParameterReach, type PortfolioProblem, type PortfolioReading, type Safeguard, type SafeguardEffect } from '../quant/portfolio.ts';
 import { createHash } from 'node:crypto';
 import { inverseNormal, makeRng } from '../scenario/random.ts';
+import { isEstablished } from './reasoning/rank.ts';
 import { cachedCashKnowledge, type CashKnowledge } from '../quant/knowledge.ts';
 import { acquireMarketHistory, historyEvidence, type MarketHistory } from '../quant/history.ts';
 import type { ModelInput, ModelledOpportunity } from '../cash/goalScenario.ts';
@@ -516,8 +517,62 @@ export function established(input: ModelInput): boolean {
   return input.value !== null || (input.distribution !== undefined && input.distribution.kind !== 'RANGE');
 }
 
-/** One draw of an input, from its own distribution or its swept range. */
-export function sampler(input: ModelInput, rng: () => number): () => number {
+/**
+ * Invariant 39 in valuation (E4a, 2026-11-20): an input nobody has
+ * established (`isEstablished`: no figure, no EVIDENCE or HISTORICAL
+ * provenance, no justified inference) is never read more favourably than the
+ * same input known at its range's centre. Each world reads it at the less
+ * favourable of its swept draw and that centre (a draw on the favourable side
+ * of the centre is held at the centre), so in every world the unknown reads at
+ * or below both what knowing the centre would and what the plain sweep did:
+ * no outcome the engine computes (each monotone in the input) can be raised by
+ * not knowing it, and none is raised against the sweep it replaces. It is the
+ * least pessimistic reading with both guarantees (the pointwise minimum of the
+ * two). Sampling the whole range uniformly let an unknown pay wherever reach
+ * is convex in it (a one-off whose price clears the target only at its top).
+ * One draw a world is kept, so the random streams of everything else are
+ * untouched, and the spread below the centre is still read as sensitivity.
+ * Which end is unfavourable is the field's: LOW for price, close, reply rate
+ * and volume; HIGH for direct cost and days to cash (capital is never drawn:
+ * `capitalAtStart` already reads an unknown at its top). The outreach a day is
+ * not a fact about the market but the owner's own sending, bounded by the
+ * accounts they hold (§94): it is swept, and a plan that needs its top says so
+ * (`unestablished`: "outreach a day").
+ * Established inputs — EVIDENCE or HISTORICAL distributions, ranges included —
+ * are drawn from their own distribution, unfolded.
+ */
+export type Unfavourable = 'LOW' | 'HIGH';
+
+function centreOf(input: ModelInput): number | null {
+  const d = input.distribution;
+  if (d) {
+    if (d.kind === 'RANGE' || d.kind === 'TRIANGULAR' || d.kind === 'NORMAL') return (d.min + d.max) / 2;
+    if (d.kind === 'EMPIRICAL' && d.values.length > 0) return (Math.min(...d.values) + Math.max(...d.values)) / 2;
+    if (d.kind === 'FIXED') return null;
+  }
+  const low = input.low ?? input.high;
+  const high = input.high ?? input.low;
+  return low === null || low === undefined || high === null || high === undefined ? null : (low + high) / 2;
+}
+
+/** One draw of an input, from its own distribution or its swept range; an unestablished one held no better than its range's centre (see `Unfavourable`). */
+export function sampler(input: ModelInput, rng: () => number, unfavourable?: Unfavourable): () => number {
+  const draw = drawOf(input, rng);
+  if (!unfavourable || isEstablished(input)) return draw;
+  const c = centreOf(input);
+  if (c === null) return draw;
+  return unfavourable === 'LOW'
+    ? () => {
+        const x = draw();
+        return x > c ? c : x;
+      }
+    : () => {
+        const x = draw();
+        return x < c ? c : x;
+      };
+}
+
+function drawOf(input: ModelInput, rng: () => number): () => number {
   if (input.value !== null) {
     const v = input.value;
     return () => v;
@@ -778,12 +833,12 @@ export function demandWorlds(one: PlannedOpening, share: number, daysLeft: numbe
 function drawDemandWorlds(one: PlannedOpening, share: number, daysLeft: number, contactsPerDay: ModelInput, worlds: number, seed: number): Worlds {
   const rng = makeRng(seed, one.index * 97 + Math.round(share * 100));
   const draw = {
-    price: sampler(one.price, rng),
-    days: sampler(one.daysToCash, rng),
-    respond: sampler(one.respond, rng),
-    close: sampler(one.close, rng),
-    cost: sampler(one.directCost, rng),
-    volume: sampler(one.volume, rng),
+    price: sampler(one.price, rng, 'LOW'),
+    days: sampler(one.daysToCash, rng, 'HIGH'),
+    respond: sampler(one.respond, rng, 'LOW'),
+    close: sampler(one.close, rng, 'LOW'),
+    cost: sampler(one.directCost, rng, 'HIGH'),
+    volume: sampler(one.volume, rng, 'LOW'),
     perDay: sampler(contactsPerDay, rng),
   };
   // A deposit's share is its own draw, so an opening without one reads exactly as it did.
@@ -791,6 +846,8 @@ function drawDemandWorlds(one: PlannedOpening, share: number, daysLeft: number, 
   // A single sale (agreed money or a one-off) paid in stated tranches: what is due before the balance arrives early.
   const schedule = !deposit && (one.agreedValue > 0 || !one.repeatable) ? paymentSchedule(one.opportunity.paymentTerms ?? null, one.deposit?.days ?? 0) : null;
   const depositRng = deposit ? makeRng(seed, one.index * 97 + Math.round(share * 100) + 7919) : null;
+  // The first of this opening-and-share's per-world count streams (see the repeatable branch).
+  const countBase = (one.index * 97 + Math.round(share * 100)) * 1_048_576;
   const out: Worlds = { cash: [], days: [], spend: [], contacted: [], interested: [], deals: [], price: [], respond: [], close: [], volume: [], ...(deposit || schedule ? { early: { cash: [], days: [] } } : {}) };
   for (let i = 0; i < worlds; i++) {
     const price = Math.max(0, draw.price());
@@ -824,10 +881,20 @@ function drawDemandWorlds(one: PlannedOpening, share: number, daysLeft: number, 
       earlyDays = deposit ? Math.min(days, deposit.days) : 0;
       const depositDays = deposit ? Math.max(0, daysLeft - earlyDays) : sellingDays;
       contacted = Math.floor(Math.max(0, draw.perDay()) * share * depositDays);
-      interested = poisson(contacted * respond, rng);
-      // The order of draws is the engine's own, so an opening without a deposit reads exactly as it did.
-      const won = binomial(interested, close, rng);
       volume = Math.max(0, Math.floor(draw.volume()));
+      /*
+       * Who replies and who buys are counted on the world's own streams (common
+       * random numbers, 2026-11-20): how many uniforms a count consumes depends
+       * on the inputs (one per trial), and on the opening's shared stream a
+       * slower days to cash shifted every later world's draws, so two readings
+       * of one opening that differ in one input read different worlds. Each
+       * world's inputs are drawn from the opening's stream a fixed number of
+       * times, and its counts from streams of its own, so a world with fewer
+       * contacts counts fewer replies from the same uniforms.
+       */
+      const stream = (lane: number) => makeRng((seed ^ 0x5bd1e995) >>> 0, ((countBase + i) * 2 + lane) >>> 0);
+      interested = poisson(contacted * respond, stream(0));
+      const won = binomial(interested, close, stream(1));
       deals = Math.min(won, volume, one.stakeDeals ?? Number.POSITIVE_INFINITY);
       balanceDeals = deposit ? (depositDays > 0 ? (deals * sellingDays) / depositDays : 0) : deals;
       if (deposit) {
@@ -897,20 +964,36 @@ export function capitalOwnEvidence(one: ModelledOpportunity): boolean {
  * never the gross cost of goods recycled through it (the same reason a cost a
  * buyer's prepayment funds is exempt from the spending ceiling, §99). Null
  * when the stake cannot hold one lot, nothing about the line is established, or
- * its deal does not consume what it ties up. Pure.
+ * its deal is not the lot it ties up.
+ *
+ * E1a (2026-11-20): recycling is a way of financing the line, and it may
+ * never sell less than the line's other financing would. Two consequences:
+ *  - the line is recycled only where its deal *is* the lot (the cost at its
+ *    lowest is at least the outlay, and at its highest no more than it): a
+ *    line whose cost exceeds its lot still spends the excess each deal
+ *    (charged to the ceiling, not recycled), and a cap without the recycling
+ *    was only a restriction that vanished when the outlay rose past the cost
+ *    — more money per deal, more deals;
+ *  - its deals are never capped below what the spending ceiling (`spend`, when
+ *    given) funds at one lot a deal: fresh money buys lots too.
+ * Pure.
  */
-export function stakeCycles(one: ModelledOpportunity, capital: { amount: number; established: boolean }, ceiling: number | null, daysLeft: number): { lots: number; cycles: number; deals: number; tiedUp: number } | null {
+export function stakeCycles(one: ModelledOpportunity, capital: { amount: number; established: boolean }, ceiling: number | null, daysLeft: number, spend: number | null = null): { lots: number; cycles: number; deals: number; tiedUp: number } | null {
   if (ceiling === null || !one.repeatable || one.agreedValue > 0 || !capital.established || !capitalOwnEvidence(one) || !(capital.amount > 0)) return null;
   // Only a line whose deal consumes its outlay (a lot bought and sold: the direct cost is at least what it ties up)
   // turns its stake over; money tied up beside a cheaper deal (a deposit, a tool) is not spent by selling.
   const cost = one.directCost.value ?? one.directCost.low;
   if (cost === null || cost < capital.amount - 1e-9) return null;
+  // ...and only the lot is recycled: a cost beyond it is spent afresh each deal, so the line is not a stake line.
+  const lot = one.directCost.value ?? one.directCost.high;
+  if (lot === null || lot > capital.amount + 1e-9) return null;
   const lots = Math.floor((ceiling + 1e-9) / capital.amount);
   if (lots < 1) return null;
   // The slowest the line's own figures say a turn takes: a lot is not reused before it has come back.
   const turn = Math.max(1, one.daysToCash.value ?? one.daysToCash.high ?? daysLeft);
   const cycles = Math.max(1, Math.floor(daysLeft / turn));
-  return { lots, cycles, deals: lots * cycles, tiedUp: lots * capital.amount };
+  const fresh = spend === null ? 0 : Math.floor((spend + 1e-9) / capital.amount);
+  return { lots, cycles, deals: Math.max(lots * cycles, fresh), tiedUp: lots * capital.amount };
 }
 
 /**
@@ -1174,7 +1257,16 @@ export function evaluateGoalPortfolio(input: {
    * the before-proof limit ("about $375 initial individual outlay").
    */
   const committed = input.committed ?? null;
-  const baseCapital = input.perWeek ?? input.beforeProof ?? input.capitalCeiling;
+  /*
+   * E6b (coordinator, 2026-11-20): "at most $X before the first sale" is the
+   * TOTAL exposure before any sale proves the plan, so every stated limit that
+   * applies before proof bounds the starting capital, and the tightest binds:
+   * min(perWeek, beforeProof, capitalCeiling), of those stated. A fallback
+   * chain let stating a weekly limit above the before-proof one loosen the
+   * plan (adding a limit raised reach).
+   */
+  const beforeProofLimits = [input.perWeek, input.beforeProof, input.capitalCeiling].filter((x): x is number => x !== null);
+  const baseCapital = beforeProofLimits.length > 0 ? Math.min(...beforeProofLimits) : null;
   const startingCapital = baseCapital === null ? null : Math.max(0, baseCapital - (committed?.capital ?? 0));
   const spendCeiling = input.capitalCeiling === null ? null : Math.max(0, input.capitalCeiling - (committed?.spend ?? 0));
   const knowledgeFor = (projectId: string): CashKnowledge | null =>
@@ -1202,15 +1294,15 @@ export function evaluateGoalPortfolio(input: {
      */
     // The stake a line may hold at once: no more than the ceiling, the week's pace or one arrangement's before-proof limit allow.
     const holdable = [input.capitalCeiling, input.perWeek, input.beforeProof].filter((x): x is number => x !== null);
-    const stake = stakeCycles(held, capital, input.capitalCeiling === null ? null : Math.min(...holdable), input.daysLeft);
+    const stake = stakeCycles(held, capital, input.capitalCeiling === null ? null : Math.min(...holdable), input.daysLeft, spendCeiling);
     let one: PlannedOpening = stake ? { ...held, stakeDeals: stake.deals } : held;
     /*
      * Only a cost that is the lot itself is recycled stake: when one deal's direct cost is no more than
      * what it ties up (an equipment lot bought and resold), its later turns are paid from the turn before.
      * A cost beyond the lot (a crew, a service) is still spent each deal and still counts.
      */
-    const lotCost = held.directCost.value ?? held.directCost.high;
-    const stakeFunded = !!stake && lotCost !== null && lotCost <= capital.amount + 1e-9;
+    // `stakeCycles` recycles only a line whose deal is its lot (E1a), so every stake line is stake-funded.
+    const stakeFunded = !!stake;
     if (stake) capital.amount = stake.tiedUp;
     const unestablished = INPUT_NAMES.filter(([key]) => !established(one[key] as ModelInput)).map(([, name]) => name);
     if (!capital.established) unestablished.push('money tied up');
@@ -1586,6 +1678,8 @@ function activityOf(r: Recipe, w: Worlds, withReach: (reach: ModelInput) => Worl
   const base = ownGate ? { cash: zero, days: w.days, spend: zero, deals: zero } : samples(w);
   return {
     key,
+    // The resample follows what the opening is (the index its demand worlds are seeded by), never its database id (E2b).
+    stream: `${one.index}@${share}`,
     label: one.opportunity.title.slice(0, 80),
     ...base,
     // A cost the buyer's prepayment funds still leaves the cash kept; it is exempt only from the owner's spending ceiling (§99).

@@ -54,7 +54,8 @@ describe('§102 on the $10K goal', () => {
     const judged = x.all.filter((d) => d.direction.stance.startsWith('VARIABLE:'));
     expect(judged.length).toBeGreaterThanOrEqual(5);
     // It changes the plan's size and structure: the strongest strategy reads materially more cash than the plan as held.
-    expect(Math.max(...judged.map((d) => d.reading.settledP50))).toBeGreaterThan(2 * x.baseline.settledP50);
+    // 2× until 2026-11-20: the larger strategies' settled cash counted sales the spending ceiling could not fund, and unknowns past their centre (planMetamorphic E1a/E4a).
+    expect(Math.max(...judged.map((d) => d.reading.settledP50))).toBeGreaterThan(x.baseline.settledP50);
   });
 
   it('separates what is commercially supported from what is only mathematically possible, and never invents demand', () => {
