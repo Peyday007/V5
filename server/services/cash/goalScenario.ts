@@ -48,7 +48,7 @@ import { CONTACTS_PER_DAY_BOUNDS, evaluateGoalPortfolio, heldEvaluation, measure
 import { SPREAD_FLOOR } from '../quant/pool.ts';
 import type { Estimate, EvidenceTier } from '../../domain/quant.ts';
 import type { VariableSpec } from '../../domain/scenario.ts';
-import { brainComparablePrices, composeInvented, inventionContext, nextInputQuestion, payerKey, TRANSFER_MATERIAL, type ConstructedArrangement, type InventedDesign } from './construct.ts';
+import { brainComparablePrices, composeInvented, provedDeliverable, inventionContext, nextInputQuestion, payerKey, TRANSFER_MATERIAL, type ConstructedArrangement, type InventedDesign } from './construct.ts';
 import { buyerPopulationName, namesABuyerPopulation } from '../../domain/industry.ts';
 export { TRANSFER_MATERIAL };
 
@@ -148,6 +148,11 @@ export interface ModelledOpportunity {
   /** Major units of the goal's currency. */
   price: ModelInput;
   capital: ModelInput;
+  /**
+   * Hours of work the owner performs on one deal — never the work the deal
+   * needs from whoever performs it. The goal's hours are the owner's
+   * (`target.hoursCeiling`), and this is what they bound.
+   */
   hours: ModelInput;
   daysToCash: ModelInput;
   close: ModelInput;
@@ -581,7 +586,7 @@ function arrangementOpening(
     repeatable,
     price,
     capital,
-    hours: infer('hours', unknown(1, 40, 'nobody has established the hours; swept from 1 to 40 per deal')),
+    hours: ownerHoursOf(one, ref) ?? infer('hours', unknown(1, 40, 'nobody has established who performs the work or the owner hours it takes; swept from 1 to 40 owner hours per deal')),
     daysToCash: infer('daysToCash', unknown(3, 60, 'nobody has established when the money would settle; swept from 3 to 60 days')),
     close: arrangementClose(one, ref) ?? infer('close', unknown(0.02, 0.5, 'no buyer has been asked yet; swept from 2% to 50% of buyers agreeing')),
     respond: infer('respond', unknown(0.002, 0.15, 'nobody has established how many prospects of this kind reply; swept from 0.2% to 15%')),
@@ -604,6 +609,46 @@ function arrangementOpening(
     competitiveAward: false,
     estimated: { arrangementKey: one.key, tier: price.inferred?.tier ?? one.value.tier, observations: price.inferred?.observations ?? one.value.observations, ...(transfer ? { transfer } : {}), ...(invented ? { invented: true } : {}) },
   };
+}
+
+/**
+ * The owner hours one deal of a constructed design takes, where the design
+ * itself establishes who performs the work; null where it does not.
+ *
+ * Production 2026-11-20 (goal wst_7b4fcbb5f2384f31b6c3, "capital 3000 ·
+ * hours 0"): every constructed arrangement read its hours as "nobody has
+ * established the hours; swept from 1 to 40 per deal", and the screen set that
+ * against the goal's hours — the owner's. An unknown amount of work was read
+ * as the owner's labour, so all 404 designs were cut "one deal needs at least
+ * 1 hours, more than the 0 this goal has", including those Brain produces and
+ * those a supplier fulfils. The owner does no physical work (§91) and Brain
+ * is the default producer (§41); approving a send or a quote is not hours.
+ *
+ *   - PRODUCE over a deliverable Brain has proved for these buyers
+ *     (`provedDeliverable`): Brain performs it — 0 owner hours.
+ *   - A supply design (BROKER, REFERRAL, SUBCONTRACT, POOL) whose supply part
+ *     names a supplier from the project's map or event graph: that supplier
+ *     fulfils, and Brain only messages, invoices and records — 0 owner hours.
+ *   - Anything else — a capability no proved deliverable matched, a supplier
+ *     nobody named (reverse construction's "asked of the world"), no supply
+ *     part at all — establishes no performer: null, and the caller keeps the
+ *     conservative sweep (invariant 39), so a goal with no owner hours still
+ *     cuts it and it stays a research or acquisition question.
+ *
+ * Whether Brain can actually execute each step is decided elsewhere
+ * (planIntegrity's EXECUTABLE_BY_BRAIN, goals/stepExecutor.ts) and is not
+ * read or changed here. Pure.
+ */
+export function ownerHoursOf(one: Pick<ConstructedArrangement, 'design' | 'supply'>, source: SourceRef | null = null): ModelInput | null {
+  const def = STRUCTURES[one.design.base];
+  if (!def) return null;
+  const supply = one.supply;
+  if (!def.needsSupply) {
+    if (!provedDeliverable(supply)) return null;
+    return known(0, 'ASSUMPTION', source, `Brain performs the work (${supply!.name}), a deliverable it has proved; the owner's approvals are not hours: 0 owner hours per deal`);
+  }
+  if (!supply || supply.from === 'CAPABILITY' || supply.from === 'REVERSE' || !supply.name.trim()) return null;
+  return known(0, 'ASSUMPTION', source, `the supplier "${supply.name}" fulfils, and Brain only messages, invoices and records; the owner's approvals are not hours: 0 owner hours per deal`);
 }
 
 /**
@@ -999,7 +1044,7 @@ export interface GoalFit {
   contactsPerDay: number;
   /** Money the goal allows tied up before proof (major units), or null when nobody stated it. */
   capital?: number | null;
-  /** Working hours the goal has, or null when nobody stated them. */
+  /** The owner's hours the goal has, or null when nobody stated them: what a deal's owner hours (`hours`) are read against. */
   hours?: number | null;
 }
 
@@ -1105,7 +1150,7 @@ export function screenArrangement(
       : input.capital !== null && input.capital !== undefined && capitalFit <= 0
         ? `it ties up ${capitalLow !== null && capitalLow > 0 ? `at least ${money(capitalLow)}` : `money (swept ${money(capitalLow ?? 0)}–${money(one.capital.high ?? one.capital.value ?? 0)})`} before money comes in, and this goal allows ${money(input.capital)}`
         : input.hours !== null && input.hours !== undefined && hoursLow !== null && hoursLow > input.hours
-          ? `one deal needs at least ${Math.round(hoursLow)} hours, more than the ${Math.round(input.hours)} this goal has`
+          ? `one deal needs at least ${Math.round(hoursLow)} owner hours, more than the ${Math.round(input.hours)} owner hours this goal has`
           : null;
   // A deal losing money at the middle readings: cut when something established its cost; read at the
   // margin when the cost is only the blind sweep anchored on the top price (production arr_0a5793917577).
@@ -1116,7 +1161,7 @@ export function screenArrangement(
   const costMid = middle(one.directCost) ?? 0;
   const fitNote = [
     input.capital !== null && input.capital !== undefined ? `capital: ${Math.round(capitalFit * 100)}% of its swept up-front money within the ${money(input.capital)} allowed${covered ? ', worst case covered' : ''}` : null,
-    Number.isFinite(byHours) ? `hours: at most ${byHours.toFixed(1)} deal(s) in ${Math.round(input.hours!)} h at ${hoursPerDeal.toFixed(1)} h/deal` : null,
+    Number.isFinite(byHours) ? `owner hours: at most ${byHours.toFixed(1)} deal(s) in ${Math.round(input.hours!)} h at ${hoursPerDeal.toFixed(1)} h/deal` : null,
   ].filter(Boolean);
   return {
     value: misfit || lossMisfit || flag ? 0 : read(price),
@@ -1272,7 +1317,7 @@ export function selectEstimatedArrangements(
     contactsPerDay?: number;
     /** Money the goal allows tied up before proof (major units); null or absent when nobody stated it. */
     capitalAvailable?: number | null;
-    /** Working hours the goal has; null or absent when nobody stated them. */
+    /** The owner's hours the goal has (`target.hoursCeiling`); null or absent when nobody stated them. */
     hoursAvailable?: number | null;
     /**
      * Prices other buyers in the project are published as paying. An
@@ -2290,7 +2335,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     variable('days_left', 'Days until the goal is due', 'days', known(target.daysLeft, 'EVIDENCE', { kind: 'OTHER', ref: `workstream:${goal.id}` }, 'the goal row')),
     variable(
       'hours_available',
-      'Working hours available before the deadline',
+      'Owner hours available before the deadline',
       'hours',
       target.hoursCeiling !== null
         ? known(target.hoursCeiling, 'EVIDENCE', { kind: 'PERSON', ref: `workstream:${goal.id}` }, 'the hours a person set')
@@ -2322,7 +2367,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     variables.push(
       variable(`${o}_price`, `${name}: price`, target.currency, one.price),
       variable(`${o}_capital`, `${name}: money tied up per deal`, target.currency, one.capital),
-      variable(`${o}_hours`, `${name}: hours per deal`, 'hours', one.hours),
+      variable(`${o}_hours`, `${name}: owner hours per deal`, 'hours', one.hours),
       variable(`${o}_days`, `${name}: days to usable cash`, 'days', one.daysToCash),
       variable(`${o}_close`, `${name}: share of buyers who agree`, 'share', one.close),
       variable(`${o}_cost`, `${name}: direct cost per deal`, target.currency, one.directCost),
@@ -2358,11 +2403,11 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     { key: 'goal_met', label: 'Reaches the target in time', unit: 'flag', expr: `if(settled_in_window - (${included.map((one) => `o${one.index}_won * o${one.index}_cost`).join(' + ') || '0'}) >= remaining, 1, 0)`, better: 'HIGHER' },
     { key: 'settled', label: 'Settled before the deadline', unit: target.currency, expr: 'settled_in_window', better: 'HIGHER' },
     { key: 'exposure', label: 'Money tied up', unit: target.currency, expr: exposure.join(' + '), better: 'LOWER', role: 'CAPITAL_EXPOSURE' },
-    { key: 'labour', label: 'Hours of work', unit: 'hours', expr: labour.join(' + '), better: 'LOWER', role: 'LABOR_HOURS' },
+    { key: 'labour', label: 'Owner hours of work', unit: 'hours', expr: labour.join(' + '), better: 'LOWER', role: 'LABOR_HOURS' },
     { key: 'days', label: 'Slowest money to settle', unit: 'days', expr: slowest.length > 1 ? `max(${slowest.join(', ')})` : slowest[0]!, better: 'LOWER', role: 'DAYS_TO_CASH' },
   ];
   const constraints: NonNullable<ScenarioModelDefinition['constraints']> = [
-    { key: 'hours', label: 'Within the hours available', expr: `${labour.join(' + ')} - hours_available`, op: '<=', value: 0 },
+    { key: 'hours', label: 'Within the owner hours available', expr: `${labour.join(' + ')} - hours_available`, op: '<=', value: 0 },
   ];
   // A ceiling is compared against a variable, so it is written as a difference.
   if (target.capitalCeilingCents !== null) {

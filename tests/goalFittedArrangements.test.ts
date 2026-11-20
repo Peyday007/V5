@@ -145,7 +145,7 @@ describe('the screen reads the deadline, the hours and the margin', () => {
     const bounded = screenArrangement(opening('h', { close: fixed(0.3), respond: fixed(0.1), volume: fixed(200) }), { value, stress }, { ...wide, hours: 80 });
     expect(bounded.value).toBeLessThan(unlimited.value);
     expect(bounded.basis).toMatch(/hours: at most 2\.6 deal\(s\) in 80 h at 30\.3 h\/deal/);
-    expect(screenArrangement(opening('big', { hours: swept(120, 200) }), { value, stress }, { ...terms, hours: 80 }).misfit).toMatch(/needs at least 120 hours, more than the 80/);
+    expect(screenArrangement(opening('big', { hours: swept(120, 200) }), { value, stress }, { ...terms, hours: 80 }).misfit).toMatch(/needs at least 120 owner hours, more than the 80 owner hours/);
   });
 
   it('a deal whose direct cost outruns its price is left out, the cost not lowered', () => {
