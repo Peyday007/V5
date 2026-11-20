@@ -26,7 +26,7 @@
 import { getOpportunity } from '../../repos/cashPortfolio.ts';
 import { sendNeeds, type Need } from '../quant/needs.ts';
 import { requestMarketHistory } from '../quant/history.ts';
-import type { DecisionUnknown, GoalPortfolio, UnpricedPopulation } from './portfolio.ts';
+import type { DecisionUnknown, DemandEstimate, GoalPortfolio, UnpricedPopulation } from './portfolio.ts';
 import { GOAL_PRICE_KEY_PREFIX } from './goalWork.ts';
 import { namesABuyerPopulation } from '../../domain/industry.ts';
 
@@ -97,6 +97,7 @@ export async function sendPortfolioNeeds(
    */
   await sendPriceNeeds(input.unpriced ?? portfolio?.unpriced ?? [], input.projectId, actorRef, send, out);
   if (!portfolio) return out;
+  await sendRestructureNeeds(portfolio, input.goalId, input.projectId, actorRef, send, out);
 
   const byOpening = new Map<string, DecisionUnknown[]>();
   for (const one of portfolio.causal?.decisionUnknowns ?? []) {
@@ -193,6 +194,61 @@ async function sendPriceNeeds(
       } else out.refused.push(`${d.subject}: ${d.reason}`);
     }
   }
+}
+
+/** At most this many new restructuring questions are sent per plan read; the rest wait for the next read. */
+export const RESTRUCTURE_ASKS_PER_READ = 3;
+
+/**
+ * A held-out opening's restructuring as research needs (owner, 2026-11-20:
+ * an infeasible structure is reconsidered through "customer prepayment,
+ * deposits, alternative fulfillment, supplier terms, staged delivery …
+ * different transaction roles", each with "a defensible mechanism"). One need
+ * per mechanism `restructuringOf` judged open and decision-relevant, each
+ * naming the exposure it must fall below. Keyed by the goal's view of the
+ * opening and the mechanism, never the figures, so a re-read raises nothing
+ * new and a moved estimate raises no second question. Openings that could
+ * bring in most go first; an opening too small to change the plan carries no
+ * mechanisms and is asked nothing. At most `RESTRUCTURE_ASKS_PER_READ` new
+ * ones a read, walking past those already open.
+ */
+async function sendRestructureNeeds(
+  portfolio: GoalPortfolio,
+  goalId: string,
+  projectId: string,
+  actorRef: string,
+  send: NonNullable<PortfolioNeedsDeps['sendNeeds']>,
+  out: PortfolioNeedsSent,
+): Promise<void> {
+  const held = (portfolio.demand ?? [])
+    .filter((d) => d.heldOut && !d.refused && d.restructure?.material && d.restructure.mechanisms.length > 0)
+    .sort((a, b) => b.restructure!.potential - a.restructure!.potential || (a.opportunityId < b.opportunityId ? -1 : 1));
+  let asked = 0;
+  for (const d of held) {
+    for (const m of restructureNeedsOf(d)) {
+      if (asked >= RESTRUCTURE_ASKS_PER_READ) return;
+      const delivered = await send({ projectId, actorRef, graphScope: goalGraphScope(goalId, d.opportunityId), needs: [m] });
+      for (const one of delivered) {
+        if (one.sent) {
+          out.sent += 1;
+          if (one.created) {
+            out.created += 1;
+            asked += 1;
+          }
+        } else out.refused.push(`${one.subject}: ${one.reason}`);
+      }
+    }
+  }
+}
+
+/** A held-out opening's restructuring mechanisms in the shape the needs owner takes: the subject names the mechanism, never a figure. */
+export function restructureNeedsOf(d: Pick<DemandEstimate, 'title' | 'restructure'>): Need[] {
+  return (d.restructure?.mechanisms ?? []).map((m) => ({
+    subject: `whether "${d.title.slice(0, 120)}" can be restructured within the goal's limit: ${m.mechanism.toLowerCase().replace(/_/g, ' ')}`,
+    question: m.question.slice(0, 900),
+    route: 'RESEARCH',
+    permissions: [],
+  }));
 }
 
 /** At most this many new price questions are sent per plan read; the rest wait for the next read. */

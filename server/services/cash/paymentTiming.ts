@@ -43,7 +43,39 @@ export interface PaymentTimingReading {
   timing: PaymentTiming;
   /** What stated it, or why nothing did. */
   basis: string;
+  /**
+   * For PREPAID: the share of the price stated to arrive before delivery — 1
+   * for the whole price, a stated deposit's share, or null when a deposit or
+   * retainer is stated with no share (a question, never read as the whole
+   * price: invariant 39). Absent on a reading that is not PREPAID.
+   */
+  share?: number | null;
 }
+
+/** A stated share of the price paid before delivery: "50% deposit", "a deposit of 30%", "25% up front", "40% paid before delivery". */
+const SHARE_BEFORE_DELIVERY =
+  /(\d{1,3}(?:\.\d+)?)\s*(?:%|percent)\s*(?:of the (?:price|total|fee|order|contract)\s*)?(?:is\s*)?(?:paid\s*)?(?:as an?\s*)?(?:deposits?|retainers?|up-?front|in advance|pre-?paid|prepayment|before (?:work|delivery|fulfil+ment)|(?:at|on) (?:order|booking|checkout|signing))|(?:deposits?|retainers?|prepayments?|up-?front payments?)\s+(?:of\s+)?(\d{1,3}(?:\.\d+)?)\s*(?:%|percent)/i;
+
+/**
+ * How much of the price a stated text says arrives before delivery: a stated
+ * percentage, the whole price when only full prepayment is stated (no
+ * deposit, no balance on delivery), or null when a part is stated without its
+ * share, or a payment at signing or order nobody says is the whole price.
+ * Read only for a text already read as PREPAID. Pure.
+ */
+export function statedPrepaidShare(text: string): number | null {
+  const m = SHARE_BEFORE_DELIVERY.exec(text);
+  if (m) {
+    const pct = Number(m[1] ?? m[2]);
+    if (Number.isFinite(pct) && pct > 0 && pct <= 100) return pct / 100;
+  }
+  // The whole price: full prepayment stated, and no deposit, retainer or balance after delivery beside it.
+  if (PREPAID_TERMS.test(text) && !PART_ONLY.test(text) && !AFTER_DELIVERY_TERMS.test(text)) return 1;
+  return null;
+}
+
+/** Words that name only a part of the price paid ahead: a deposit or a retainer ("paid at checkout" is the whole price). */
+const PART_ONLY = /\b(deposits?|retainers?|balance)\b/i;
 
 const UNKNOWN_READING: PaymentTimingReading = { timing: 'UNKNOWN', basis: 'no payment terms are stated' };
 
@@ -61,7 +93,7 @@ export function timingOfText(text: string | null | undefined, basis: string, awa
   // A text naming an award is paid on the award's completion whatever else it says. Otherwise any money stated
   // before delivery — in full, or a deposit with the balance on delivery — shows these buyers pay ahead of the work.
   if (awarded) return { timing: 'ARREARS', basis: `${basis} names a competitive award ("${awarded[0]}"): paid after it is won and the work delivered` };
-  if (before) return { timing: 'PREPAID', basis: `${basis} states payment before delivery ("${before[0]}")` };
+  if (before) return { timing: 'PREPAID', basis: `${basis} states payment before delivery ("${before[0]}")`, share: statedPrepaidShare(t) };
   if (after) return { timing: 'ARREARS', basis: `${basis} states payment after delivery ("${after[0]}")` };
   return UNKNOWN_READING;
 }
