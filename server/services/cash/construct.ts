@@ -537,9 +537,29 @@ export function fittedDeliverable(capability: Primitive, delivers: readonly stri
       ? `${kind} for "${need.name}"`
       : `${kind} for ${demand.name}`
     : need
-      ? `the deliverable "${need.name}" calls for (not yet matched to one Brain has proved)`
-      : `what ${demand.name} pay for (not yet specified)`;
+      ? `the deliverable "${need.name}" calls for ${UNMATCHED_DELIVERABLE}`
+      : `what ${demand.name} pay for ${UNSPECIFIED_DELIVERABLE}`;
   return { ...capability, name };
+}
+
+/** The words `fittedDeliverable` gives a capability part no proved deliverable matched. */
+const UNMATCHED_DELIVERABLE = '(not yet matched to one Brain has proved)';
+const UNSPECIFIED_DELIVERABLE = '(not yet specified)';
+
+/**
+ * Whether a supply part is a deliverable Brain has proved for these buyers:
+ * Brain's capability, fitted by `fittedDeliverable` to one named proved
+ * deliverable ("<deliverable> for <need or buyers>"). A capability part no
+ * proved deliverable matched, or one still spelt as the whole deliverables
+ * list (stored before fitting), is not — nobody has said which deliverable
+ * Brain makes for them, so who performs the work stays unknown (invariant
+ * 39). Read from the part as stored, so an arrangement the library reuses
+ * answers the same as one composed now. Pure.
+ */
+export function provedDeliverable(part: Pick<Primitive, 'from' | 'name'> | null | undefined): boolean {
+  if (!part || part.from !== 'CAPABILITY') return false;
+  if (part.name.includes(UNMATCHED_DELIVERABLE) || part.name.includes(UNSPECIFIED_DELIVERABLE)) return false;
+  return / for \S/.test(part.name);
 }
 
 /** The capability's path as it was spelt from the whole list, before 2026-11-19: only to recognise what was stored under it. */
