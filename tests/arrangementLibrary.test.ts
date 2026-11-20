@@ -188,7 +188,8 @@ describe('a constructed arrangement is a library row', () => {
     const report = lastConstructionReport(projectId)!;
     expect(report.reused).toBeGreaterThan(0);
     expect(await constructedRows()).toBe(stored.length);
-  });
+    // Two or more full plan reads (500 evaluations each) with restarts: measured 12–18s on SQLite, past 30s on a loaded CI runner (2026-11-20, Deploys 44652162440 and 44656762368).
+  }, 120_000);
 
   it('holds one row per structure across two goals, a re-created node and two projects', async () => {
     await sector('Veterinary care', VET);
@@ -230,7 +231,8 @@ describe('a constructed arrangement is a library row', () => {
     expect(shared).toBeDefined();
     const across = await arrangementsBySignature(shared.signature);
     expect(new Set(across.map((one) => one.projectId))).toEqual(new Set([projectId, elsewhere.id]));
-  });
+    // Two or more full plan reads (500 evaluations each) with restarts: measured 12–18s on SQLite, past 30s on a loaded CI runner (2026-11-20, Deploys 44652162440 and 44656762368).
+  }, 120_000);
 });
 
 describe('research written to the arrangement', () => {
@@ -301,7 +303,8 @@ describe('research written to the arrangement', () => {
     expect(changed.verdict?.verdict).toBe('REFUTED');
     expect(await ask()).not.toBeNull();
     expect((await arrangementForLegacyKey(projectId, key))!.askedCount).toBe(2);
-  });
+    // Two or more full plan reads (500 evaluations each) with restarts: measured 12–18s on SQLite, past 30s on a loaded CI runner (2026-11-20, Deploys 44652162440 and 44656762368).
+  }, 120_000);
 });
 
 describe('a goal model weighs arrangements, it does not pursue them as openings', () => {
