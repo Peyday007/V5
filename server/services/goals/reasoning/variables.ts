@@ -46,7 +46,7 @@ import type { ModelInput, ModelledOpportunity } from '../../cash/goalScenario.ts
 import type { StrategyOperator, StrategyState } from '../reconstruction.ts';
 import type { PlannedOpening } from '../portfolio.ts';
 import { clampPrice, inScope, makeDirection, PRICE_ELASTICITY, type Direction, type Scope, type Transform } from './directions.ts';
-import { valuePerContact } from './rank.ts';
+import { isEstablished, valuePerContact } from './rank.ts';
 
 /** No sweep evaluates more combinations than this. */
 export const MAX_VARIATIONS = 250_000;
@@ -356,6 +356,8 @@ interface Compiled {
   market: string;
   /** Unit price as a multiple of the card's, across every move so far (held within ×0.25–×4). */
   priceFactor: number;
+  /** Somebody established its price: only then may a price level move it (invariant 39). */
+  priceKnown: boolean;
   /** A deposit's middle share and the day it arrives, when one is asked. */
   deposit: { share: number; days: number } | null;
   /** Sells only once a purchase after proof is made: read at PROOF_SHARE in the fast reading. */
@@ -406,6 +408,7 @@ export function compile(state: StrategyState, beforeProof: number | null): Compi
       funded: !!o.fundedByBuyer,
       market: o.marketKey ?? o.opportunity.id,
       priceFactor: o.terms?.priceFactor ?? 1,
+      priceKnown: isEstablished(o.price),
       deposit: o.deposit && o.repeatable && o.agreedValue === 0 ? { share: (o.deposit.low + o.deposit.high) / 2, days: o.deposit.days } : null,
       gated: !!o.gate,
       cvDeals: cv2(o.respond) + cv2(o.close) + (o.channel ? cv2(o.channel.perDay) : 0),
@@ -777,8 +780,10 @@ export async function sweepVariables(ctx: SweepContext): Promise<VariableSweep> 
           // The same running clamp as the engine's programs: unit price within ×0.25–×4 of the card's, with a bundle's discount
           // counted, and the demand curve moving close rate and market volume together (Q-1, Q-2).
           const asked = clampPrice(t.factor);
+          // An unestablished price is researched, never scaled (see repriceOpening): with none established in scope there is nothing to move.
+          if (!rows.some((r) => ids.has(r.id) && r.priceKnown)) return null;
           rows = rows.map((r) => {
-            if (!ids.has(r.id)) return r;
+            if (!ids.has(r.id) || !r.priceKnown) return r;
             const target = clampPrice(r.priceFactor * asked);
             const k = target / r.priceFactor;
             const ck = Math.pow(k, -PRICE_ELASTICITY);

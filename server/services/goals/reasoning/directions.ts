@@ -48,7 +48,7 @@ import { AGGREGATION, coherent, FUNDING, REPEAT, STRUCTURE_KEYS, STRUCTURES, typ
 import type { PlannedOpening } from '../portfolio.ts';
 import type { Dimension, StrategyChange, StrategyOperator, StrategyState, VariantReading } from '../reconstruction.ts';
 import { renderSweep, type VariableSweep } from './variables.ts';
-import { rankValue, valuePerInterested } from './rank.ts';
+import { rankValue, valuePerInterested, isEstablished } from './rank.ts';
 
 export const MAX_DIRECTIONS = 120;
 export const MIN_DIRECTIONS = 12;
@@ -352,7 +352,16 @@ export const clampPrice = (k: number) => Math.min(4, Math.max(0.25, k));
  * k^-elasticity (assumed until selling measures it). Returns the factor
  * actually applied (1 when the opening is already at the clamp).
  */
-export function repriceOpening(o: PlannedOpening, k: number, why = 'price'): { opening: PlannedOpening; applied: number } {
+export function repriceOpening(o: PlannedOpening, k: number, why = 'price', anyPrice = false): { opening: PlannedOpening; applied: number } {
+  /*
+   * A price move multiplies a price somebody established. A price nobody has
+   * established is a question for research, never a number to scale: goal C
+   * (production 2026-11-20) led at 25.3% by raising a constructed postcard
+   * arrangement's unestablished $349 ×3.75 on an assumed elasticity, against
+   * 8.3% as held — an unknown read in the plan's favour (invariant 39).
+   */
+  // A transaction shape's discount (part of the deal it reshapes) and the binding-factor probe (a sensitivity, never a plan) move any price.
+  if (!anyPrice && !isEstablished(o.price)) return { opening: o, applied: 1 };
   const terms = o.terms ?? { priceFactor: 1, shape: null, units: 1 };
   const target = clampPrice(terms.priceFactor * k);
   const applied = target / terms.priceFactor;

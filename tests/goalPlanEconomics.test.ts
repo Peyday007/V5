@@ -56,7 +56,9 @@ describe('Q-1: moves of one family never stack', () => {
 
 describe('Q-2: a higher price shrinks the market as well as the close', () => {
   it('moves volume by the demand curve', () => {
-    const { state } = applyProgram(base, [{ op: 'PRICE', factor: 4, scope: 'id:cop_lists' }], ctx);
+    // A price move scales an established price only (invariant 39, 2026-11-20): the card's price is evidenced here.
+    const evidenced: StrategyState = { ...base, openings: base.openings.map((o) => (o.opportunity.id === 'cop_lists' ? { ...o, price: { ...o.price, provenance: 'EVIDENCE' } } : o)) };
+    const { state } = applyProgram(evidenced, [{ op: 'PRICE', factor: 4, scope: 'id:cop_lists' }], ctx);
     const lists = state.openings.find((o) => o.opportunity.id === 'cop_lists')!;
     expect(lists.volume.high!).toBeCloseTo(300 * Math.pow(4, -1.2), 6);
   });

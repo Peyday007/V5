@@ -447,7 +447,7 @@ async function reconstructPlanOn(input: ReconstructionInput, evaluator: Evaluato
   factorStates.push({ factor: 'REPLY', moved: 'reply rate at the top of its range (×3 if fixed)', state: { ...base, openings: allOpen((o) => (sellsThroughOutreach(o) && earns(o) ? { ...o, respond: favourable(o.respond, 'HIGH', 3, 1) } : o)) } });
   factorStates.push({ factor: 'CLOSE', moved: 'close rate at the top of its range (×2 if fixed)', state: { ...base, openings: allOpen((o) => (earns(o) ? { ...o, close: favourable(o.close, 'HIGH', 2, 1) } : o)) } });
   // A price is never moved alone: the demand curve takes close rate and the deals the market takes down with it (Q-2).
-  factorStates.push({ factor: 'PRICE', moved: `price ×2, close rate and market volume ×${Math.pow(2, -PRICE_ELASTICITY).toFixed(2)} (elasticity ${PRICE_ELASTICITY}, assumed)`, state: { ...base, openings: allOpen((o) => repriceOpening(o, 2).opening) } });
+  factorStates.push({ factor: 'PRICE', moved: `price ×2, close rate and market volume ×${Math.pow(2, -PRICE_ELASTICITY).toFixed(2)} (elasticity ${PRICE_ELASTICITY}, assumed)`, state: { ...base, openings: allOpen((o) => repriceOpening(o, 2, 'price', true).opening) } });
   factorStates.push({ factor: 'CASH_TIMING', moved: 'days to cash at the bottom of its range (÷2 if fixed)', state: { ...base, openings: allOpen((o) => ({ ...o, daysToCash: favourable(o.daysToCash, 'LOW', 2) })) } });
   factorStates.push({ factor: 'CAPITAL', moved: 'money limits ×2 (starting capital and spending ceiling)', state: { ...base, committed: -Math.max(allowedFor(limits).ceiling, 0) } });
   factorStates.push({ factor: 'MARKET_SIZE', moved: 'deals the market can take ×3', state: { ...base, openings: allOpen((o) => (earns(o) ? { ...o, volume: scale(o.volume, 3) } : o)) } });
@@ -1030,7 +1030,7 @@ export function buildOperators(ctx: { input: ReconstructionInput; levers?: reado
           openings: s.openings.map((o) => {
             if (!touched.includes(o)) return o;
             // The discount is a unit-price move, held inside the opening's running ×0.25–×4 with every price move.
-            const unit = repriceOpening(o, 1 - discount, shape).opening;
+            const unit = repriceOpening(o, 1 - discount, shape, true).opening;
             const terms = { ...(unit.terms ?? { priceFactor: 1, shape: null, units: 1 }), shape, units };
             return {
               ...unit,
