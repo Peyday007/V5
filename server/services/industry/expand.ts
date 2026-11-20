@@ -1147,6 +1147,8 @@ function judgeUnitEconomic(claim: ResearchClaim, nodes: readonly IndustryNode[],
     if (!Number.isFinite(amount)) return refuse('declared amount is not a number');
     if (FACT_KEYS[key].kind === 'RATE' && amount > 1) return refuse('rate is more than the whole');
     if (FACT_KEYS[key].kind === 'POSITIVE' && amount <= 0) return refuse('a figure that must be positive is zero or less: a free tier or an unstated amount is not what a paying buyer pays');
+    // A price is money these buyers pay: a figure the claim says is paid to them runs the other way (invariant 39).
+    if (key === 'price_per_unit' && claimPaysPopulation(claim.claim, asked.name)) return refuse(`the claim states money paid to "${asked.name}", not a price they pay`);
     const buyer = planBuyerType(asked.name, nodes);
     if (!buyer && !namesABuyerPopulation(asked.name)) return refuse('the population the price question asked about is not a buyer population, so none is mapped', asked.name);
     return {
@@ -1168,6 +1170,7 @@ function judgeUnitEconomic(claim: ResearchClaim, nodes: readonly IndustryNode[],
   if (!claim.structuralQualifier) return refuse('claim names no buyer qualifier');
   const buyer = matchBuyerType(claim.structuralQualifier, nodes);
   if (!buyer) return refuse('buyer qualifier matches no mapped buyer type', claim.structuralQualifier);
+  if (key === 'price_per_unit' && claimPaysPopulation(claim.claim, buyer.name)) return refuse(`the claim states money paid to "${buyer.name}", not a price they pay`);
   const amount = (claim.structuralAmountCents ?? NaN) / 100;
   if (!Number.isFinite(amount)) return refuse('declared amount is not a number');
   if (FACT_KEYS[key].kind === 'RATE' && amount > 1) return refuse('rate is more than the whole');
@@ -1390,6 +1393,39 @@ export function claimPricesSupply(claimText: string, sides: ArrangementSides | u
   if (supplyOnly.length === 0) return false;
   const claim = sideTerms(claimText);
   return supplyOnly.some((one) => claim.has(one));
+}
+
+/**
+ * Whether a claim names `population` as the side money is paid TO (production
+ * 2026-11-20, prj_22fb4fec: GitHub's $10,000 bug-bounty rewards, money GitHub
+ * pays security researchers, were filed as `price_per_unit` — what the asked
+ * population pays — on three buyer nodes). A price fact is what these buyers
+ * pay; a reward, bounty, wage or payout they receive runs the other way.
+ *
+ * Read from the claim's own words only, by three shapes: a paying verb whose
+ * object is the population ("GitHub pays security researchers"), the
+ * population as the subject of a receiving verb ("researchers earn up to"),
+ * and a payment made "to" it ("rewards of up to $10,000 to researchers"). A
+ * claim that names no recipient is not judged: its direction is unknown, and
+ * the fact is filed as before. Pure.
+ */
+export function claimPaysPopulation(claimText: string, population: string): boolean {
+  // The population's head noun ("researchers" in "Security researchers", "programs" in "Companies running bug bounty programs"):
+  // a modifier word ("bounty") names something else, and matching it would read "pays researchers bounties" as paying the programs.
+  const head = [...sideTerms(population)].pop();
+  if (!head) return false;
+  const text = claimText.toLowerCase().replace(/\s+/g, ' ');
+  const esc = (one: string) => one.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const forms = [...new Set([head, `${head}s`, `${head}es`, ...(head.endsWith('y') ? [`${head.slice(0, -1)}ies`] : [])])];
+  const term = `(?:${forms.map(esc).join('|')})\\b`;
+  // Words between a verb and its object that are not a preposition (a preposition starts an adjunct, not the recipient).
+  const filler = '(?:(?!(?:for|of|per|up|to|in|on|at|from|with|by|as|than)\\b)[a-z0-9\'-]+ ){0,3}';
+  const shapes = [
+    new RegExp(`\\b(?:pays?|paid|paying|awards?|awarded|awarding|rewards?|rewarded|rewarding|compensates?|compensated|remunerates?|remunerated|tips?|tipped) ${filler}${term}`),
+    new RegExp(`\\b${term} (?:[a-z0-9'-]+ ){0,2}?(?:earns?|earned|earning|(?:are|is|were|was|get|gets|got) (?:paid|awarded|rewarded|compensated)\\b|(?:receives?|received|receiving) (?:up to |as much as |an? |their )?(?:\\$|usd\\b|payments?\\b|payouts?\\b|rewards?\\b|bount|awards?\\b|wages?\\b|stipends?\\b|grants?\\b|commissions?\\b|compensation\\b))`),
+    new RegExp(`\\b(?:paid|awarded|payable|payouts?|bount(?:y|ies)|rewards?|wages?|stipends?|prizes?)\\b[^.;]{0,80}?\\bto (?:[a-z0-9'-]+ ){0,3}?${term}`),
+  ];
+  return shapes.some((one) => one.test(text));
 }
 
 /**
