@@ -381,6 +381,15 @@ describe('8. a reconstructed plan: its scope in words, its sale and collection c
     expect(rules(checked([bad[0]!, step(2, 'Leave out 1 opening(s) ("Coachella 2026 resale tickets")', { cost: 0, stage: 'OFFER', costSource: 'MODEL' })]))).toEqual([]);
   });
 
+  it('a program never leaves out an opening it brought in under another id with the same title', () => {
+    const held = GOAL_10K_OPENINGS[0]!;
+    // A constructed design carrying the very title of an opening already held: the same opening, two ids.
+    const reserve = [{ ...GOAL_10K_OPENINGS[1]!, opportunity: { id: 'arr_twin', title: held.opportunity.title } }] as ModelledOpportunity[];
+    const changes = moves([{ op: 'INCLUDE', key: 'arr_twin' }, { op: 'DROP', scope: `id:${held.opportunity.id}` }], reserve);
+    // Bringing in a second copy is no move, so nothing is brought in, and nothing is contradicted.
+    expect(changes.some((c) => c.label === 'include:arr_twin')).toBe(false);
+  });
+
   it('a program never leaves out an opening it brought in (transfer test 2026-11-20: "Bring in X" then "Leave out 1 opening(s) (X)")', () => {
     const reserve = [{ ...GOAL_10K_OPENINGS[0]!, opportunity: { id: 'arr_r1', title: 'Constructed: Property managers — Vendor-compliance spreadsheet' } }] as ModelledOpportunity[];
     const changes = moves([{ op: 'INCLUDE', key: 'arr_r1' }, { op: 'DROP', scope: 'id:arr_r1' }], reserve);
