@@ -26,12 +26,16 @@ import type { TargetReading } from '../server/services/goals/target.ts';
 const KEY = '2821cce3c372';
 const REMAINING = 10_000;
 
-/** The postcard broker as production composed it: pooled slots, threshold presale, price UNKNOWN, run cost observed. */
+/**
+ * The postcard arrangement as production composed it: pooled slots, threshold presale, price UNKNOWN, run cost
+ * observed — read as the design that buys the run and sells its slots (POOL). Production held it as a BROKER, which
+ * keeps only a commission and is never charged the printer's run (`commissionRevenue`, tests/brokerCommissionRevenue.test.ts).
+ */
 function postcard(over: Partial<ConstructedArrangement> = {}): ConstructedArrangement {
   return {
     key: KEY,
-    structure: 'BROKER',
-    design: { base: 'BROKER', funding: 'THRESHOLD_PRESALE', aggregation: 'POOLED_BUYERS', repeat: 'SUBSCRIPTION' },
+    structure: 'POOL',
+    design: { base: 'POOL', funding: 'THRESHOLD_PRESALE', aggregation: 'POOLED_BUYERS', repeat: 'SUBSCRIPTION' },
     origin: 'FORWARD',
     precedent: null,
     sector: 'Local marketing',
@@ -59,7 +63,7 @@ function priced(key: string, p50: number): ConstructedArrangement {
     key,
     label: `Arrangement ${key}`,
     demand: { name: `buyers of ${key}`, claimId: null, from: 'INDUSTRY_MAP', ref: `ind_${key}` },
-    design: { base: 'BROKER', funding: 'THRESHOLD_PRESALE', aggregation: 'POOLED_BUYERS', repeat: 'RECURRING_COHORT' },
+    design: { base: 'POOL', funding: 'THRESHOLD_PRESALE', aggregation: 'POOLED_BUYERS', repeat: 'RECURRING_COHORT' },
     value: { tier: 'COMPONENT', p10: p50 / 4, p50, p90: p50 * 3, observations: 12 },
     fixedCost: undefined,
   });

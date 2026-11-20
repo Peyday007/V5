@@ -135,8 +135,9 @@ describe('an arrangement’s plan candidate reads its evidenced inputs (W2b)', (
     const with_ = candidateFromArrangement(a, modelled);
     expect(with_.model.costs.status).not.toBe('UNKNOWN');
     expect(with_.model.costs.basis).toMatch(/direct cost/);
-    expect(with_.model.capital.status).not.toBe('UNKNOWN');
-    expect(with_.capitalRequired).not.toBeNull();
+    // A broker advances nothing: the landlord pays the contractor, so money other deals tied up is not this design's capital
+    // (`commissionRevenue`); it stays an unestablished assumption of nothing, never a figure read off other deals.
+    expect(modelled.capital).toMatchObject({ low: 0, high: 0.01, provenance: 'ASSUMPTION' });
     expect(with_.model.timing.status).not.toBe('UNKNOWN');
     expect(with_.daysToCash).not.toBeNull();
 
