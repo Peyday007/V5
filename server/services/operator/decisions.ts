@@ -594,7 +594,7 @@ export async function decide(
             : '';
         problems.push(
           `${comparableKey} is miscalibrated (${correction.rationale}) and ${claims.length} of its systematic misses were PARAMETER_ESTIMATE (${listed(claims)}): no observation named a cause, and the stated probability was not drawn from the bucket's own record${measured}`,
-          ...(unmet ? [unmet] : []),
+          unmet,
         );
         instructions.push(ESTIMATE_ASSUMPTION_INSTRUCTION);
       }

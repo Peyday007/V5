@@ -86,6 +86,10 @@ describe('an operator decision on a bucket whose misses were PARAMETER_ESTIMATE'
       expect(d.problems.join(' ')).toMatch(/PARAMETER_ESTIMATE/);
       expect(d.problems.join(' ')).toMatch(/happened 0% of the time against a stated 65%/);
       expect(d.next).toContain(ESTIMATE_ASSUMPTION_INSTRUCTION);
+      // The unanchored estimate is named once, as its own problem, beside the bucket's miscalibration.
+      const named = estimateAssumptionProblem(input.assumptions)!;
+      expect(named).toMatch(/states the observed rate/);
+      expect(d.problems.filter((p) => p === named)).toHaveLength(1);
     }
     expect((await readLedger(null)).predictions.length).toBe(before);
   });
