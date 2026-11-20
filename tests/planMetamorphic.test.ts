@@ -611,7 +611,7 @@ describe('plan: metamorphic properties of readGoalPlan over seeded goals', () =>
    * capital → a before-proof limit of 0, with the direct costs a buyer's
    * payment funds still allowed), outside this suite's files: reported.
    */
-  it.fails('P6b tightening a goal\'s capital to none never raises the reach it reports ($1,000 → none)', async () => {
+  it('P6b tightening a goal\'s capital to none never raises the reach it reports ($1,000 → none)', async () => {
     await capitalStep('$1,000', 'none');
   }, 120_000);
 

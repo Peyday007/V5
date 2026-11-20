@@ -527,7 +527,17 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
 export const LITTLE_CAPITAL_SHARE = 0.1;
 const LITTLE_CAPITAL = /\b(?:very\s+)?(?:little|minimal|minimum|low|small|modest|limited|not much|hardly any)\s+(?:amounts?\s+of\s+)?(?:(?:up-?front|upfront|starting|initial|start-?up|seed|own|working)\s+)*(?:capital|money|cash|investment|funding|budget|outlay)\b/i;
 
+/**
+ * "No up-front capital", "zero starting money", "without any investment": a
+ * limit of nothing before money comes in, never no limit (metamorphic P6b,
+ * 2026-11-20: such a goal was planned as if money were unlimited and read
+ * 0.898 against 0.434 for the same goal with $1,000).
+ */
+const NO_CAPITAL = /\b(?:no|zero|without(?:\s+any)?|nothing\s+in)\s+(?:(?:up-?front|upfront|starting|initial|start-?up|seed|own|working)\s+)*(?:capital|money|cash|investment|funding|outlay)\b/i;
+
 function assumedLittleCapital(text: string, amount: number): ObjectiveReading['capitalAssumed'] {
+  const none = NO_CAPITAL.exec(text);
+  if (none && amount > 0) return { amount: 0, phrase: none[0], basis: `"${none[0]}": nothing may be tied up before money comes in` };
   const m = LITTLE_CAPITAL.exec(text);
   if (!m || !(amount > 0)) return null;
   const figure = Math.max(1, Math.round(amount * LITTLE_CAPITAL_SHARE));

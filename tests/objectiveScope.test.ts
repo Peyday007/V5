@@ -51,6 +51,10 @@ describe('reading the objective', () => {
     expect(r.capitalAssumed).toMatchObject({ amount: 10_000 * LITTLE_CAPITAL_SHARE, phrase: 'little up-front capital' });
     // A stated figure wins, and nothing is assumed beside it.
     expect(readObjective('Make $10,000 in 30 days with at most $3,000 of capital and little up-front capital', NOW).capitalAssumed).toBeNull();
+    // "No up-front capital" is a limit of nothing before money comes in, never no limit (metamorphic P6b, 2026-11-20).
+    for (const words of ['Collect $15,000 within 30 days using no up-front capital.', 'Make $5,000 in 60 days with zero starting money', 'Make $5,000 within 30 days without any investment']) {
+      expect(readObjective(words, NOW).capitalAssumed, words).toMatchObject({ amount: 0 });
+    }
   });
 });
 
@@ -60,6 +64,7 @@ describe('the goal scope reaches the plan', () => {
 
   it('derives the scope from the goal words, and a set figure overrides the assumption', () => {
     expect(goalScope(goal('Collect $10,000 of settled cash within 30 days using little up-front capital.'), NOW).capitalAssumed?.cents).toBe(100_000);
+    expect(goalScope(goal('Collect $15,000 of settled cash within 30 days using no up-front capital.'), NOW).capitalAssumed?.cents).toBe(0);
     expect(goalScope(goal('Collect $10,000 of settled cash within 30 days using little up-front capital.', { capitalBeforeProofCents: 50_000 }), NOW).capitalAssumed).toBeNull();
     expect(goalScope(goal('Earn $5,000 a month in recurring revenue within 60 days.'), NOW)).toMatchObject({ recurring: 'MONTHLY', industry: null });
     expect(goalScope(goal('Generate $20,000 within 45 days in a single industry the owner names: commercial cleaning.'), NOW).industry).toBe('commercial cleaning');
