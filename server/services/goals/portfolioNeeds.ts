@@ -26,7 +26,10 @@
 import { getOpportunity } from '../../repos/cashPortfolio.ts';
 import { sendNeeds, type Need } from '../quant/needs.ts';
 import { requestMarketHistory } from '../quant/history.ts';
-import type { DecisionUnknown, DemandEstimate, GoalPortfolio, UnpricedPopulation } from './portfolio.ts';
+import type { DecisionUnknown, DemandEstimate, GoalPortfolio, RestructureEvidence, RestructureMechanism, UnpricedPopulation } from './portfolio.ts';
+import { claimsAnsweringScope } from '../../repos/research.ts';
+import type { ResearchClaim } from '../../domain/types.ts';
+import { timingOfText } from '../cash/paymentTiming.ts';
 import { GOAL_PRICE_KEY_PREFIX, GOAL_PRICE_SCOPE_PREFIX, goalPriceSubject } from './goalWork.ts';
 import { namesABuyerPopulation } from '../../domain/industry.ts';
 
@@ -241,14 +244,118 @@ async function sendRestructureNeeds(
   }
 }
 
+/** A mechanism as a restructuring question's subject names it: `supplier terms` for SUPPLIER_TERMS. */
+const mechanismWords = (m: RestructureMechanism): string => m.toLowerCase().replace(/_/g, ' ');
+
 /** A held-out opening's restructuring mechanisms in the shape the needs owner takes: the subject names the mechanism, never a figure. */
 export function restructureNeedsOf(d: Pick<DemandEstimate, 'title' | 'restructure'>): Need[] {
   return (d.restructure?.mechanisms ?? []).map((m) => ({
-    subject: `whether "${d.title.slice(0, 120)}" can be restructured within the goal's limit: ${m.mechanism.toLowerCase().replace(/_/g, ' ')}`,
+    subject: `whether "${d.title.slice(0, 120)}" can be restructured within the goal's limit: ${mechanismWords(m.mechanism)}`,
     question: m.question.slice(0, 900),
     route: 'RESEARCH',
     permissions: [],
   }));
+}
+
+/**
+ * The opening and mechanism a goal's restructuring question asked about, read
+ * back from the idea `sendNeeds` opened for it: its statement starts `For
+ * causal graph goal:<goal>:opening:<opening>,` (`goalGraphScope`) and its
+ * question is one `restructuringOf` wrote. The mechanism is read from the
+ * title's last words (`restructureNeedsOf`), or — where a long title cut them
+ * off — from the question's own opening words. Null when the idea is not that
+ * question: then nothing is read from its answers.
+ */
+export function restructureQuestionOf(goalId: string, idea: { title: string; statement: string }): { opportunityId: string; mechanism: RestructureMechanism } | null {
+  const scope = `For causal graph ${goalGraphScope(goalId, '')}`;
+  if (!idea.statement.startsWith(scope) || !idea.title.startsWith('Causal unknown: whether "')) return null;
+  const rest = idea.statement.slice(scope.length);
+  const marker = ', establish from sourced evidence: ';
+  const at = rest.indexOf(marker);
+  const opportunityId = at > 0 ? rest.slice(0, at).trim() : '';
+  if (!opportunityId) return null;
+  const question = rest.slice(at + marker.length);
+  const named = /can be restructured within the goal's limit: ([a-z ]+)$/.exec(idea.title)?.[1];
+  const byTitle = RESTRUCTURE_MECHANISMS.find((m) => mechanismWords(m) === named);
+  const byQuestion = RESTRUCTURE_MECHANISMS.find((m) => RESTRUCTURE_QUESTION_START[m].test(question));
+  const mechanism = byTitle ?? byQuestion;
+  return mechanism ? { opportunityId, mechanism } : null;
+}
+
+const RESTRUCTURE_MECHANISMS: readonly RestructureMechanism[] = ['PREPAYMENT', 'SUPPLIER_TERMS', 'STAGED_DELIVERY', 'BROKER_ROLE', 'CHEAPER_FULFILMENT'];
+
+/** How each of `restructuringOf`'s questions begins. */
+const RESTRUCTURE_QUESTION_START: Record<RestructureMechanism, RegExp> = {
+  PREPAYMENT: /^Do buyers of ".*" pay a deposit or prepay before it is delivered/s,
+  SUPPLIER_TERMS: /^Do suppliers of what ".*" delivers extend payment terms/s,
+  STAGED_DELIVERY: /^Is ".*" bought and billed in stages/s,
+  BROKER_ROLE: /^Would whoever fulfils ".*" pay a referral or broker commission/s,
+  CHEAPER_FULFILMENT: /^Is there a published way to fulfil ".*" for less/s,
+};
+
+/** Words that say a mechanism is not open to a new account, or is open only conditionally: such an answer establishes nothing. */
+const NOT_OPEN = /\b(not|no|never|none|don't|doesn't|won't|cannot|can't|rarely|seldom|unlikely|only (?:after|once|for|to|with)|established (?:accounts?|customers?|credit)|after \d+ (?:months?|years?|orders?)|credit (?:check|history|application) (?:is )?required)\b/i;
+
+/** Supplier payment terms a text states, in days: "net 30", "net-60", "30-day terms", "terms of 45 days". */
+const SUPPLIER_TERM_DAYS = /\bnet[\s-]*(\d{1,3})\b|\b(\d{1,3})[\s-]*days?\s+(?:payment\s+|credit\s+|trade\s+|invoice\s+)?terms\b|\bterms\s+of\s+(\d{1,3})\s+days\b/i;
+
+/**
+ * What one claim answering a restructuring question establishes for its
+ * mechanism, or why it establishes nothing. Every gate holds (invariant 39):
+ * the claim is accepted, carries a source URL, states the figure the
+ * mechanism needs as a finite positive number, and says nothing that closes
+ * the mechanism to a new account. PREPAYMENT reads the claim as payment
+ * timing (`timingOfText`): a stated share before delivery, never arrears and
+ * never a deposit with no share. SUPPLIER_TERMS reads stated net days. The
+ * other mechanisms establish nothing yet. Pure.
+ */
+export function restructureAnswerOf(claim: Pick<ResearchClaim, 'id' | 'claim' | 'accepted' | 'sourceUrl'>, mechanism: RestructureMechanism): RestructureEvidence | { refused: string } {
+  if (!claim.accepted) return { refused: 'claim is not gated (accepted)' };
+  if (!claim.sourceUrl) return { refused: 'claim has no source URL' };
+  const text = claim.claim.trim();
+  if (NOT_OPEN.test(text)) return { refused: 'the claim states the mechanism is closed, or open only on a condition' };
+  const base = { mechanism, claimId: claim.id, sourceUrl: claim.sourceUrl, basis: text };
+  if (mechanism === 'PREPAYMENT') {
+    const timing = timingOfText(text, `claim ${claim.id}`);
+    if (timing.timing !== 'PREPAID') return { refused: `the claim does not state payment before delivery (${timing.timing})` };
+    const share = timing.share ?? null;
+    if (share === null || !Number.isFinite(share) || share <= 0 || share > 1) return { refused: 'the claim states no share of the price paid before delivery' };
+    return { ...base, share };
+  }
+  if (mechanism === 'SUPPLIER_TERMS') {
+    const m = SUPPLIER_TERM_DAYS.exec(text);
+    const days = m ? Number(m[1] ?? m[2] ?? m[3]) : NaN;
+    if (!Number.isFinite(days) || days <= 0) return { refused: 'the claim states no supplier payment terms in days' };
+    return { ...base, termDays: days };
+  }
+  return { refused: `an answer about ${mechanismWords(mechanism)} is not yet read as a figure the plan can use` };
+}
+
+/**
+ * The accepted, sourced answers to this goal's restructuring questions, by
+ * the opening each question named (§93): claim → orchestration → mission →
+ * the idea the question opened (`claimsAnsweringScope`), and the opening and
+ * mechanism are the question's own (`restructureQuestionOf`), never the
+ * researcher's. The plan reads them on its next portfolio read
+ * (`PlannedOpening.restructureEvidence`, `evidencedRestructuring`).
+ */
+export async function restructureEvidenceOf(
+  projectId: string,
+  goalId: string,
+  deps: { claimsAnsweringScope?: typeof claimsAnsweringScope } = {},
+): Promise<Map<string, RestructureEvidence[]>> {
+  const read = deps.claimsAnsweringScope ?? claimsAnsweringScope;
+  const out = new Map<string, RestructureEvidence[]>();
+  for (const { claim, idea } of await read(projectId, goalGraphScope(goalId, ''))) {
+    const asked = restructureQuestionOf(goalId, idea);
+    if (!asked) continue;
+    const answer = restructureAnswerOf(claim, asked.mechanism);
+    if ('refused' in answer) continue;
+    const list = out.get(asked.opportunityId) ?? [];
+    list.push(answer);
+    out.set(asked.opportunityId, list);
+  }
+  return out;
 }
 
 /** At most this many new price questions are sent per plan read; the rest wait for the next read. */

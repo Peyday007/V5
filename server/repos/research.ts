@@ -1228,6 +1228,38 @@ export async function goalPriceIdeasOfClaims(projectId: string, claimIds: readon
 }
 
 /**
+ * Gated (accepted), sourced claims that answer a research idea Brain opened
+ * in one causal graph scope (`sendNeeds` writes `For causal graph <scope>,
+ * establish from sourced evidence: …` as the idea's statement): claim → its
+ * orchestration → the mission run on it → that idea. Each claim once, with
+ * the oldest idea it answered, so a replay reads the same one. The caller
+ * reads which question the idea asked from the idea's own wording
+ * (`restructureQuestionOf`), never from the researcher's labelling.
+ * `scopePrefix` is matched literally (LIKE narrows, `startsWith` decides).
+ */
+export async function claimsAnsweringScope(projectId: string, scopePrefix: string): Promise<Array<{ claim: ResearchClaim; idea: { candidateId: string; title: string; statement: string } }>> {
+  const prefix = `For causal graph ${scopePrefix}`;
+  const rows = await getDb().all<ResearchClaimRow & { idea_id: string; idea_title: string; idea_statement: string }>(
+    `SELECT c.*, k.id AS idea_id, k.title AS idea_title, k.statement AS idea_statement
+       FROM russell_candidates k
+       JOIN russell_missions m ON m.candidate_id = k.id
+       JOIN research_claims c ON c.orchestration_id = m.orchestration_id
+      WHERE k.project_id = ? AND k.statement LIKE ?
+        AND c.accepted = 1 AND c.source_url IS NOT NULL
+      ORDER BY k.created_at, k.id, c.created_at, c.id`,
+    [projectId, `${prefix}%`],
+  );
+  const out: Array<{ claim: ResearchClaim; idea: { candidateId: string; title: string; statement: string } }> = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    if (seen.has(row.id) || !row.idea_statement.startsWith(prefix)) continue;
+    seen.add(row.id);
+    out.push({ claim: mapClaim(row), idea: { candidateId: row.idea_id, title: row.idea_title, statement: row.idea_statement } });
+  }
+  return out;
+}
+
+/**
  * Gated, sourced claims a goal's constructed-arrangement round produced
  * (`goal-<goal>-mx-<key>`, in any state) that declare no structural finding
  * and that no construction fact names yet, with the round's bucket, by claim

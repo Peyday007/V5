@@ -113,6 +113,13 @@ export type PlannedOpening = ModelledOpportunity & {
   gate?: string;
   /** What reconstruction did to its terms: the unit price as a multiple of the card's, and its one transaction shape. */
   terms?: { priceFactor: number; shape: string | null; units: number };
+  /**
+   * Accepted, sourced answers to the restructuring questions this goal asked
+   * about this opening (`restructureEvidenceOf`, portfolioNeeds.ts): what a
+   * held-out opening is re-read on (§93). Never a guess: absent, nothing is
+   * restructured (invariant 39).
+   */
+  restructureEvidence?: readonly RestructureEvidence[];
 };
 
 /** A purchase made after proof (§99 Q-7): bought in a world only once cash has come back and the first weekly tranche fits. */
@@ -1031,6 +1038,71 @@ const overSpend = (held: { low: number; high: number }, limit: number): string =
 export type RestructureMechanism = 'PREPAYMENT' | 'SUPPLIER_TERMS' | 'STAGED_DELIVERY' | 'BROKER_ROLE' | 'CHEAPER_FULFILMENT';
 
 /**
+ * One accepted, sourced answer to a restructuring question about one opening,
+ * with the figure it establishes for its mechanism: the share of the price a
+ * buyer pays before delivery (PREPAYMENT), or the days after the bill the
+ * supplier is paid (SUPPLIER_TERMS). Read from the claim that answered the
+ * question Brain asked, never from a researcher's own labelling.
+ */
+export interface RestructureEvidence {
+  mechanism: RestructureMechanism;
+  /** PREPAYMENT: the share of the price stated to arrive before delivery, in (0, 1]. */
+  share?: number;
+  /** SUPPLIER_TERMS: the stated days after its bill the supplier is paid. */
+  termDays?: number;
+  claimId: string;
+  sourceUrl: string;
+  /** The claim's words, for the plan's line. */
+  basis: string;
+}
+
+/**
+ * What the accepted answers to an opening's restructuring questions take off
+ * the money it ties up and the cost it puts on us first (§93), each part with
+ * its basis. Null when no answer establishes anything for it. Pure.
+ *
+ *   PREPAYMENT      the least share any answer states, at the lowest price
+ *                   held — only where the opening's own terms state no
+ *                   timing of their own (its own terms decide first, and
+ *                   stated arrears are never overridden);
+ *   SUPPLIER_TERMS  the shortest terms any answer states, and only when the
+ *                   supplier falls due no earlier than the slowest the model
+ *                   holds the buyer's money arrives: then the lowest direct
+ *                   cost held is paid from the buyer's money, not ours.
+ *
+ * Every other mechanism establishes nothing here yet: its answer stays a
+ * question (`restructuringOf`), never a favourable assumption (invariant 39).
+ */
+export function evidencedRestructuring(one: PlannedOpening): { offset: number; share: number | null; termDays: number | null; basis: string } | null {
+  const answers = one.restructureEvidence ?? [];
+  if (answers.length === 0) return null;
+  const parts: string[] = [];
+  let offset = 0;
+  let share: number | null = null;
+  let termDays: number | null = null;
+  const prepaid = answers.filter((a) => a.mechanism === 'PREPAYMENT' && a.share !== undefined && Number.isFinite(a.share) && a.share > 0 && a.share <= 1);
+  const price = one.price.low ?? one.price.value;
+  if (prepaid.length > 0 && modelledTiming(one).timing === 'UNKNOWN' && price !== null && price > 0) {
+    const least = prepaid.reduce((a, b) => (b.share! < a.share! ? b : a));
+    share = least.share!;
+    offset += share * price;
+    parts.push(`the accepted answer "${least.basis.slice(0, 160)}" (${least.sourceUrl}): ${percentOf(share)} of the price (at least ${whole(share * price)}) arrives before delivery`);
+  }
+  const terms = answers.filter((a) => a.mechanism === 'SUPPLIER_TERMS' && a.termDays !== undefined && Number.isFinite(a.termDays) && a.termDays > 0);
+  const slowest = one.daysToCash.high ?? one.daysToCash.value;
+  const cost = costHeldOf(one);
+  if (terms.length > 0 && slowest !== null && cost && cost.low > 0) {
+    const shortest = terms.reduce((a, b) => (b.termDays! < a.termDays! ? b : a));
+    if (shortest.termDays! + 1e-9 >= slowest) {
+      termDays = shortest.termDays!;
+      offset += cost.low;
+      parts.push(`the accepted answer "${shortest.basis.slice(0, 160)}" (${shortest.sourceUrl}): the supplier is paid ${whole(termDays)} days after its bill, no sooner than the buyer's money arrives (at most ${whole(slowest)} days), so at least ${whole(cost.low)} of its cost is paid from the buyer's money`);
+    }
+  }
+  return parts.length > 0 ? { offset, share, termDays, basis: parts.join('; ') } : null;
+}
+
+/**
  * What would bring a held-out opening within the limit it breaks (owner,
  * 2026-11-20: "An opportunity requires $4,000 of upfront capital. The user's
  * available limit is $3,000 … consider whether the structure can be changed:
@@ -1094,7 +1166,7 @@ export function statedPrepayment(one: ModelledOpportunity): { share: number; off
  * could change the plan, so the search stops there.
  */
 export function restructuringOf(
-  one: ModelledOpportunity,
+  one: PlannedOpening,
   input: { kind: Restructuring['kind']; exposure: { low: number; high: number }; limit: number; potential: number; remaining: number },
 ): Restructuring {
   const floor = Math.max(0, input.remaining) * MIN_SHARE_WORTH_RESEARCHING;
@@ -1113,7 +1185,9 @@ export function restructuringOf(
   const timing = modelledTiming(one);
   const price = one.price.low ?? one.price.value;
   const needed = price !== null && price > 0 ? gap / price : null;
-  if (timing.timing !== 'ARREARS' && !(timing.timing === 'PREPAID' && timing.share) && (needed === null || needed <= 1 + 1e-9)) {
+  // A mechanism an accepted, sourced answer already settled is not asked again: its answer was read (`evidencedRestructuring`).
+  const answered = new Set((one.restructureEvidence ?? []).filter((a) => a.share !== undefined || a.termDays !== undefined).map((a) => a.mechanism));
+  if (timing.timing !== 'ARREARS' && !(timing.timing === 'PREPAID' && timing.share) && !answered.has('PREPAYMENT') && (needed === null || needed <= 1 + 1e-9)) {
     mechanisms.push({
       mechanism: 'PREPAYMENT',
       label: `the buyer's prepayment or deposit${needed !== null ? ` (at least ${percentOf(needed)} of the price before delivery)` : ''}`,
@@ -1124,7 +1198,7 @@ export function restructuringOf(
     });
   }
   const costly = (one.directCost.high ?? one.directCost.value ?? 0) > 0;
-  if (costly) {
+  if (costly && !answered.has('SUPPLIER_TERMS')) {
     mechanisms.push({
       mechanism: 'SUPPLIER_TERMS',
       label: 'supplier terms (net terms, pay on collection, consignment)',
@@ -1363,18 +1437,31 @@ export function evaluateGoalPortfolio(input: {
          * mechanism is a question (`restructuringOf`), sent by the goal tick.
          */
         const prepaid = statedPrepayment(one);
-        const less = (h: Held): Held => (h && prepaid ? { low: Math.max(0, h.low - prepaid.offset), high: Math.max(0, h.high - prepaid.offset), own: h.own } : h);
+        /*
+         * An accepted, sourced answer to one of this goal's restructuring
+         * questions about this opening (`restructureEvidenceOf`): a deposit
+         * share or supplier terms the research established, re-read here on
+         * every plan read. Its own stated terms decide prepayment first.
+         */
+        const answered = evidencedRestructuring(one);
+        const offset = (prepaid?.offset ?? 0) + (answered?.offset ?? 0);
+        const less = (h: Held): Held => (h && offset > 0 ? { low: Math.max(0, h.low - offset), high: Math.max(0, h.high - offset), own: h.own } : h);
         const capitalAfter = less(heldCapital);
         const costAfter = less(heldCost);
-        if (prepaid && limitsBroken(capitalAfter).length === 0 && !costBroken(costAfter)) {
+        if ((prepaid || answered) && limitsBroken(capitalAfter).length === 0 && !costBroken(costAfter)) {
           const after = capitalLimits.length > 0 && capitalAfter ? `it ties up ${whole(capitalAfter.low)}–${whole(capitalAfter.high)} at its start` : `one deal costs us ${whole(costAfter!.low)}–${whole(costAfter!.high)} before the buyer's money arrives`;
-          cashStructure = `EVIDENCE: ${prepaid.basis}: ${percentOf(prepaid.share)} of the price (at least ${whole(prepaid.offset)}) arrives before delivery, so ${after}`;
+          const because = [
+            ...(prepaid ? [`${prepaid.basis}: ${percentOf(prepaid.share)} of the price (at least ${whole(prepaid.offset)}) arrives before delivery`] : []),
+            ...(answered ? [answered.basis] : []),
+          ];
+          cashStructure = `EVIDENCE: ${because.join('; ')}, so ${after}`;
           if (capitalLimits.length > 0) {
-            capital.amount = Math.max(0, capital.amount - prepaid.offset);
+            capital.amount = Math.max(0, capital.amount - offset);
             floorHeld = capitalAfter;
           }
           // Paid in full first and covering the whole cost: its cost is the buyer's money, outside the ceiling, as for `fundedByBuyer`.
-          if (prepaid.share >= 1 && (costAfter?.high ?? 0) <= 1e-9) one = { ...one, fundedByBuyer: true };
+          const share = prepaid?.share ?? answered?.share ?? 0;
+          if (share >= 1 && (costAfter?.high ?? 0) <= 1e-9) one = { ...one, fundedByBuyer: true };
         } else {
           heldOut = capitalLimits.length > 0 ? overLimit(heldCapital!, capitalLimits[0]![0], capitalLimits[0]![1]) : overSpend(heldCost!, spendCeiling!);
           restructureFor = capitalLimits.length > 0

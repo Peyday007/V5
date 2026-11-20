@@ -44,7 +44,7 @@ import type { Workstream } from '../../domain/register.ts';
 import type { TargetReading } from '../goals/target.ts';
 import { inferCashQuantity, loadCashKnowledge, type CashKnowledge, type CashQuantity, type InferenceTarget } from '../quant/knowledge.ts';
 import { inputSample, toScenarioInput, toScenarioInputScaled, type InputSample } from '../quant/export.ts';
-import { CONTACTS_PER_DAY_BOUNDS, evaluateGoalPortfolio, heldEvaluation, measuredRateInput, type GoalPortfolio, type PlannedOpening, type UnpricedPopulation } from '../goals/portfolio.ts';
+import { CONTACTS_PER_DAY_BOUNDS, evaluateGoalPortfolio, heldEvaluation, measuredRateInput, type GoalPortfolio, type PlannedOpening, type RestructureEvidence, type UnpricedPopulation } from '../goals/portfolio.ts';
 import { SPREAD_FLOOR } from '../quant/pool.ts';
 import type { Estimate, EvidenceTier } from '../../domain/quant.ts';
 import type { VariableSpec } from '../../domain/scenario.ts';
@@ -2192,8 +2192,20 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
   let portfolio: GoalPortfolio | null = null;
   let portfolioInput: Parameters<typeof evaluateGoalPortfolio>[0] | null = null;
   if (candidates.length + estimates.length > 0) {
+    /*
+     * The accepted, sourced answers to this goal's restructuring questions
+     * (§93), filed against the opening and mechanism each question named: a
+     * held-out opening is re-read on them (`evidencedRestructuring`). An
+     * unanswered mechanism carries nothing, so it restructures nothing.
+     */
+    const { restructureEvidenceOf } = await import('../goals/portfolioNeeds.ts');
+    const answered = await restructureEvidenceOf(target.projectId, goal.id).catch(() => new Map<string, RestructureEvidence[]>());
+    const withAnswers = (one: PlannedOpening): PlannedOpening => {
+      const evidence = answered.get(one.opportunity.id);
+      return evidence?.length ? { ...one, restructureEvidence: evidence } : one;
+    };
     portfolioInput = {
-      openings: [...candidates, ...estimates],
+      openings: [...candidates, ...estimates].map(withAnswers),
       remaining: remainingMajor,
       daysLeft: target.daysLeft,
       capitalCeiling: target.capitalCeilingCents === null ? null : target.capitalCeilingCents / 100,
