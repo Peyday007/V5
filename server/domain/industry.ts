@@ -480,8 +480,22 @@ function namesABuyer(text: string): boolean {
   const acronym = /^[A-Z]{2,}\b/.test(text);
   if ((!acronym && FRAGMENT_START.test(text)) || FRAGMENT_END.test(text) || BARE_VERB.test(text)) return false;
   if (UNKNOWN_PARTY.test(text) && !NAMED_ANONYMOUS.test(text)) return false;
+  if (RECORD_OR_CLAUSE.test(text) || CAMEL_FIELD.test(text)) return false;
   return true;
 }
+
+/**
+ * A data record's field or a sentence's verb phrase is not a name (production,
+ * 2026-11-20: goal A's price questions asked what "owner id is null and owner
+ * info is empty" and "GitHub Bug Bounty Program Overhaul does not specify"
+ * pay). Refused: an empty-value predicate ("is null", "are empty", "is
+ * missing"), a negated report ("does not specify", "did not say"), a
+ * placeholder value (null, undefined, NaN, N/A) and a field-shaped token
+ * ("owner_id", "ownerId", "owner id").
+ */
+const RECORD_OR_CLAUSE = /\b(?:is|are|was|were)\s+(?:null|empty|blank|missing|undefined|none|absent|unset|not\s+(?:given|provided|available|stated|listed))\b|\b(?:does|do|did|doesn['’]t|don['’]t|didn['’]t)\s+(?:not\s+)?(?:specify|say|state|mention|name|identify|disclose|list|give|provide)\b|\b(?:null|undefined|nan)\b|\bn\/a\b|\b[a-z]+_[a-z_]+\b|\b(?:id|ids|info)\s+(?:is|are|field)\b|\bnot\s+specif\w*/i;
+/** A camel-cased field name ("ownerId", "ownerInfo"), read case-sensitively so "Medicaid" stays a word. */
+const CAMEL_FIELD = /\b[a-z]+(?:Id|ID|Info)\b/;
 
 /**
  * Whether a buyer name names a kind of buyer someone could build a list of
@@ -548,10 +562,12 @@ function isOneOrganisation(text: string): boolean {
   if (!/\s/.test(text) && (ONE_BRAND_WORD.test(text) || KNOWN_COMPANY.has(text.toLowerCase()))) return true;
   const words = text.split(' ').filter((w) => !NAME_PARTICLE.test(w));
   if (words.length === 0 || !words.every((w) => /^[A-Z0-9]/.test(w))) return false;
-  // In "<X> of <Y>" the head is X ("Society of Actuaries" is a society).
-  const before = text.split(/\s+of\s+/i)[0]!.split(' ').filter((w) => !NAME_PARTICLE.test(w));
+  // In "<X> of <Y>" the head is X ("Society of Actuaries" is a society), and a place after "in"/"at" is where, not who ("Homeowners in Mechanicsburg, PA").
+  const lead = text.split(/\s+(?:of|in|at|near|across|around|throughout)\s+/i)[0]!;
+  const before = lead.split(' ').filter((w) => !NAME_PARTICLE.test(w));
   const headOf = before.length > 0 ? before : words;
   const head = headOf[headOf.length - 1]!;
+  if (lead !== text && before.length === 1 && /[^s]s$/i.test(head)) return false;
   // An all-capitals head is an acronym ("VA", "PA DEP"), never a plural, unless it names a kind ("SMB").
   if (/^[A-Z0-9&.-]{2,}$/.test(head)) return !KIND_ACRONYM.has(head.replace(/[.&-]/g, '').toUpperCase());
   // One capitalised word is as often a sentence's first common noun ("Homeowner") as a name: not read as one organisation.
