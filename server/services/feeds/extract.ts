@@ -604,11 +604,17 @@ export function extractItem(item: ExtractableItem): ExtractedFact[] {
  * Whether the parser could read an item: its kind is known and it yielded at
  * least one fact beyond who sent it and what it is called. Anything else goes
  * to model assistance — nothing readable ever does.
+ *
+ * An occasion does not count. It is stored as an observation, but nothing
+ * downstream (event detection, the funnel) turns an occasion into an
+ * opportunity, so letting one stand in for a reading would take an item away
+ * from the model while giving the opportunity pipeline nothing it can use.
+ * When a consumer reads `occasion`, it may be admitted here.
  */
 export function readable(item: ExtractableItem, facts: readonly ExtractedFact[]): boolean {
   if (recordKindOf(item) === 'UNKNOWN') return false;
   return facts.some(
-    (f) => f.field === 'price' || f.field === 'quantity' || f.field === 'location' || f.field === 'occasion' || (f.field === 'date' && f.evidence.field !== 'publishedAt'),
+    (f) => f.field === 'price' || f.field === 'quantity' || f.field === 'location' || (f.field === 'date' && f.evidence.field !== 'publishedAt'),
   );
 }
 

@@ -44,9 +44,18 @@ const raw = (item: ExtractableItem, field: ItemField): string =>
   field === 'title' ? item.title : field === 'body' ? item.body ?? '' : field === 'organization' ? item.organization ?? '' : item.publishedAt ?? '';
 
 describe('tokenised news titles and unmapped feed sources are read by code', () => {
-  it('reads the recorded failures that state a count, period or occasion', () => {
-    for (const item of [RECORDED.fold, RECORDED.travel, RECORDED.bellmead, RECORDED.tocaya, EDGAR]) {
+  it('reads the recorded failures that state a count or a place', () => {
+    for (const item of [RECORDED.bellmead, EDGAR]) {
       expect(readable(item, extractItem(item)), item.title).toBe(true);
+    }
+  });
+
+  it('does not let an occasion alone stand in for a reading, because nothing consumes it', () => {
+    // Fold (Q3 2026), the holidays and Holiday Tamales name only an occasion: the fact is kept, but the item still goes to the model.
+    for (const item of [RECORDED.fold, RECORDED.travel, RECORDED.tocaya]) {
+      const facts = extractItem(item);
+      expect(facts.some((f) => f.field === 'occasion'), item.title).toBe(true);
+      expect(readable(item, facts), item.title).toBe(false);
     }
   });
 
@@ -93,7 +102,7 @@ describe('tokenised news titles and unmapped feed sources are read by code', () 
   it('still sends a headline that states nothing it can read to the model, rather than guessing', () => {
     expect(readable(RECORDED.mall, extractItem(RECORDED.mall))).toBe(false);
     const run = extractItems(Object.values(RECORDED), new Date('2026-11-12T12:00:00.000Z'));
-    expect(run.needsModel.flat().map((i) => i.id)).toEqual(['n2']);
+    expect(run.needsModel.flat().map((i) => i.id).sort()).toEqual(['n1', 'n2', 'n3', 'n5']);
   });
 
   it('leaves a job posting or an advert NOT_DEMAND, and does not read occasions out of them', () => {
