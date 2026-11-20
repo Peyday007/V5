@@ -118,6 +118,8 @@ export function integrityInput(reading: IntegrityReading): PlanIntegrityInput {
       executor: s.executor
         ? { performedBy: s.executor.performedBy, operation: s.executor.operation, routine: s.executor.routine, acquisition: s.executor.acquisition, acquire: s.executor.acquire }
         : null,
+      // The openings a reconstruction's move acts on, as its builder named them (`changeOpenings`).
+      openings: s.openings ?? null,
     })),
     lead: reading.lead ?? null,
     unpriced: reading.unpriced ?? [],

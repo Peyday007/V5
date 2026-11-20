@@ -135,7 +135,15 @@ export interface VariantReading {
   committed: number;
   feasible: boolean;
   why: string | null;
+  /** The strongest combination's members, each by its title cut at 50: how a person reads them. */
   members: string[];
+  /**
+   * The same members by id, in the same order: a clone's own (`<openingId>~<lever>`),
+   * so a plan can tell the opening sold directly from the same opening sold
+   * through a channel or a partner, whose titles cut at 50 can be identical.
+   * Absent on a reading made before it was kept.
+   */
+  memberIds?: string[];
   /** Worlds it was read over: the sample its reach's interval is read from. */
   worlds?: number;
   /** Median cash kept (settled less direct costs and what was committed). */
@@ -394,7 +402,7 @@ async function reconstructPlanOn(input: ReconstructionInput, evaluator: Evaluato
     const fits = state.committed <= allowed.ceiling + 1e-9;
     let reading: VariantReading;
     if (!fits) {
-      reading = { key, changes: state.changes, reach: 0, settledP10: 0, settledP50: 0, settledP90: 0, basis: 'COVERAGE', committed: state.committed, feasible: false, why: `commits ${money(state.committed)}, more than the ${money(allowed.ceiling)} the goal allows in all`, members: [], worlds: w, implausible: [] };
+      reading = { key, changes: state.changes, reach: 0, settledP10: 0, settledP50: 0, settledP90: 0, basis: 'COVERAGE', committed: state.committed, feasible: false, why: `commits ${money(state.committed)}, more than the ${money(allowed.ceiling)} the goal allows in all`, members: [], memberIds: [], worlds: w, implausible: [] };
     } else {
       evaluations++;
       // What is bought after proof is paid only in the worlds where proof arrives (Q-7); the rest is committed in every world.
@@ -426,6 +434,7 @@ async function reconstructPlanOn(input: ReconstructionInput, evaluator: Evaluato
         feasible: !!b,
         why: b ? null : 'no combination runs inside the limits',
         members: b?.members.map((m) => m.title.slice(0, 50)) ?? [],
+        memberIds: b?.members.map((m) => m.opportunityId) ?? [],
         worlds: w,
         ...(b?.keptP50 !== undefined ? { keptP50: b.keptP50 } : {}),
         ...(b?.dealsP50 !== undefined ? { dealsP50: b.dealsP50 } : {}),
