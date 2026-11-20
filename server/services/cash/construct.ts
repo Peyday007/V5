@@ -1038,6 +1038,8 @@ export async function constructionObservations(
     if (!(high > 0)) continue;
     // A share above the whole is no share (the filer refuses one; a person's attestation is held to the same).
     if (kind === 'conversion' && high > 1) continue;
+    // A rate per word or per hour is not what one purchase costs: read beside a plan's price it would widen one range across units.
+    if (kind === 'priced' && statesMeasuredRate(fact.sourceClaimId ? priceClaims.get(fact.sourceClaimId) : undefined, low, high)) continue;
     out[kind].push({
       id: `fact:${fact.id}`,
       value: low === high ? { kind: 'POINT', value: low } : { kind: 'RANGE', low, high },
@@ -1079,6 +1081,7 @@ export async function brainComparablePrices(
   const facts = (await listOtherProjectsClaimFacts(input.projectId, FACT_PRICE_KEYS)).filter((one) => FACT_EVIDENCE_STATUSES.includes(one.status) && one.segment?.startsWith('map_') && one.projectId);
   if (facts.length === 0) return [];
   const eligible = await eligibleClaimIds(facts.map((one) => one.sourceClaimId!));
+  const claimText = new Map((await claimsByIds([...new Set(facts.filter((one) => eligible.has(one.sourceClaimId!)).map((one) => one.sourceClaimId!))])).map((one) => [one.id, one.claim]));
   const out: { value: number; industry: string | null; payer: string; brain: true }[] = [];
   const nodesOf = new Map<string, Map<string, IndustryNode>>();
   for (const fact of facts) {
@@ -1095,6 +1098,8 @@ export async function brainComparablePrices(
     const low = Math.min(fact.low, fact.high);
     const high = Math.max(fact.low, fact.high);
     if (!(low > 0)) continue;
+    // A rate per word or per hour bounds no purchase's price (`statesMeasuredRate`).
+    if (statesMeasuredRate(claimText.get(fact.sourceClaimId!), low, high)) continue;
     out.push({ value: low === high ? low : Math.sqrt(low * high), industry: root.name, payer: node.name, brain: true });
   }
   return out;
@@ -1165,6 +1170,28 @@ export async function brainMapNodes(projectId: string): Promise<{ nodes: Industr
 export function statesParticipantShare(claim: string | null | undefined, low: number, high: number): boolean {
   if (!claim) return false;
   return readMoneyFigures(claim, 'USD').some((one) => one.perParticipant === true && one.cents / 100 >= low - 0.005 && one.cents / 100 <= high + 0.005);
+}
+
+/**
+ * Whether a price fact's own source claim states that very figure as a rate
+ * per a measured quantity of the work — per word, page, hour, minute
+ * (`readMoneyFigures`' `perMeasure`). Every price the plan reads is what one
+ * payer pays for one purchase (`a_value`), and one purchase is such a rate
+ * times a quantity nobody stated, so the figure is no evidence of it and is
+ * not read as one (invariant 39: the quantity is never assumed). Production,
+ * 2026-11-20 (prj_22fb4fec, map_ind_42887b66ff1e476990b4): WriterAccess's
+ * "$0.04 per word", "$0.05 per word" and "$449 per month" answered one
+ * population's price question and the plan read one price of
+ * $0.00007–$9,576 per deal. The fact row stays; only this reading of it is
+ * refused, and a price that only a rate answered stays a question. Only a
+ * figure inside the fact's range is judged, and only when every such figure
+ * is a measured rate: a claim stating the total for one purchase beside its
+ * rate is that total. Pure.
+ */
+export function statesMeasuredRate(claim: string | null | undefined, low: number, high: number): boolean {
+  if (!claim) return false;
+  const inRange = readMoneyFigures(claim, 'USD').filter((one) => one.cents / 100 >= low - 0.005 && one.cents / 100 <= high + 0.005);
+  return inRange.length > 0 && inRange.every((one) => one.perMeasure === true);
 }
 
 // ---------------------------------------------------------------- designs a model invents (lens S, S-11)
@@ -2782,6 +2809,15 @@ const FILED_KEY: Record<FiledInput, FactKey> = {
 };
 
 /**
+ * The direction a price question's answer must run (production 2026-11-20,
+ * prj_22fb4fec: GitHub's $10,000 bug-bounty rewards, paid TO researchers, were
+ * filed as what the asked buyers pay). The back-fill refuses a claim that says
+ * otherwise (`claimPaysPopulation`, industry/expand.ts).
+ */
+const PAID_BY_BUYER =
+  'Only money these buyers pay out is this figure, and the claim must say they are the ones paying: a reward, bounty, wage, fee or payout paid to them runs the other way — leave it out.';
+
+/**
  * The one plan input a constructed arrangement's next round asks for, and the
  * question that asks it (P2, production 2026-11-18, goal wst_7b4fcbb5f2384f31b6c3).
  *
@@ -2831,11 +2867,14 @@ export function nextInputQuestion(
       ? `What does one buyer described as "${buyer}" pay, in ${currency}, for one slot — that one buyer's own place in a shared run, not the whole run? ` +
         'Look for published rate cards and price lists of sellers who already sell such slots to these buyers. ' +
         `Quote each price as one of these buyers pays it, in the form ‘${sym}N per slot’, one price per claim, with its source and date. ` +
-        'What producing or delivering the run costs whoever organises it is a different question: leave it out.'
+        'What producing or delivering the run costs whoever organises it is a different question: leave it out. ' +
+        PAID_BY_BUYER
       : `What does one buyer described as "${buyer}" pay, in ${currency}, for one purchase of ${what}? ` +
         'Look for published price lists, rate cards and quoted prices of sellers who already sell this to these buyers. ' +
-        `Quote each price as one of these buyers pays it — ‘${sym}N per <unit>’ for a rate, or the total for one purchase — one price per claim, with its source and date. ` +
-        'What supplying it costs the seller is a different question: leave it out.',
+        `Quote the total one of these buyers pays for one purchase, in the form ‘${sym}N for <what one purchase delivers>’, one price per claim, with its source and date. ` +
+        'A rate per word, page, hour or minute is not this figure: where a source states only such a rate, quote the total it states for one stated purchase, or say that no total is published. ' +
+        'What supplying it costs the seller is a different question: leave it out. ' +
+        PAID_BY_BUYER,
     conversion:
       `What share of buyers described as "${buyer}" who were approached or offered ${what} bought it? ` +
       'Look for published case studies, campaign reports and surveys. ' +

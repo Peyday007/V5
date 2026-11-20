@@ -133,13 +133,24 @@ describe('an accepted answer to a goal price question is filed against the popul
     const sector = await seedSubject({ projectId, name: 'Software', actorRef: 'BRAIN' });
     const buyer = await seedSubject({ projectId, name: 'Open-source maintainers', kind: 'BUYER_TYPE', parentId: sector.node.id, actorRef: 'BRAIN' });
     const { orchestrationId, fragmentId } = await askAndResearch(unpriced(buyer.node.id, 'Open-source maintainers'));
-    const priced = await declaredPrice(orchestrationId, fragmentId, { text: 'Sponsors pay maintainers $25 per month on GitHub Sponsors.', qualifier: 'GitHub Inc is the payer for the Sponsors program', cents: 2_500 });
+    // Money these buyers pay: "Sponsors pay maintainers $25" runs the other way and is refused (`claimPaysPopulation`).
+    const priced = await declaredPrice(orchestrationId, fragmentId, { text: 'Open-source maintainers pay $25 per month for a GitHub Team plan.', qualifier: 'GitHub Inc is the payer for the Sponsors program', cents: 2_500 });
     const nodesBefore = (await listNodes(projectId)).length;
     const filed = await backfillClaimFacts(projectId);
     expect(filed.filed.map((one) => [one.sourceClaimId, one.segment])).toEqual([[priced, `map_${buyer.node.id}`]]);
     expect((await listNodes(projectId)).length).toBe(nodesBefore);
     const read = await constructionObservations({ projectId, currency: 'USD', daysLeft: 22 });
     expect(read.priced.map((one) => one.lineage)).toEqual([[`claim:${priced}`]]);
+  });
+
+  // Production 2026-11-20 (prj_22fb4fec): GitHub's $10,000 bug bounties, paid TO researchers, were filed as what the asked population pays.
+  it('refuses an answer that states money paid to the population the question asked about', async () => {
+    const sector = await seedSubject({ projectId, name: 'Software', actorRef: 'BRAIN' });
+    const buyer = await seedSubject({ projectId, name: 'Open-source maintainers', kind: 'BUYER_TYPE', parentId: sector.node.id, actorRef: 'BRAIN' });
+    const { orchestrationId, fragmentId } = await askAndResearch(unpriced(buyer.node.id, 'Open-source maintainers'));
+    const paidTo = await declaredPrice(orchestrationId, fragmentId, { text: 'Sponsors pay maintainers $25 per month on GitHub Sponsors.', qualifier: 'Open-source maintainers', cents: 2_500 });
+    expect((await backfillCandidates(projectId)).decisions.find((one) => one.claimId === paidTo)?.reason).toMatch(/money paid to "Open-source maintainers"/);
+    expect((await backfillClaimFacts(projectId)).filed).toEqual([]);
   });
 
   it('keeps the gates: an unsourced answer files nothing and maps nothing; a claim nobody asked about still needs its qualifier', async () => {

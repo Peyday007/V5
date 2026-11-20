@@ -53,6 +53,13 @@ export interface MoneyFigure {
    * stated for a whole run, a campaign or a total.
    */
   perParticipant?: boolean;
+  /**
+   * The figure is a rate per a measured quantity of the work — a word, a page,
+   * a character, a line, an hour, a minute (`$0.04 per word`, `$95/hr`). One
+   * purchase is that rate times a quantity the figure itself does not state,
+   * so it is never what one purchase costs. Always also `perUnit`.
+   */
+  perMeasure?: boolean;
 }
 
 /** A scale word after a figure, which this module refuses rather than applies. */
@@ -70,6 +77,14 @@ const PER_UNIT = /^\s*(?:\/\s*[a-z]|per\b|an?\s+(?:hour|day|week|month|year|minu
  * never a participant's unit, so a whole-run total never matches.
  */
 const PER_PARTICIPANT = /^\s*(?:per|for\s+(?:a|an|one|each)|an?|each)\s+(?:(?:ad|advert|advertis(?:ing|ement)|advertiser|listing|postcard|mailer|shared)\s+)?(?:slot|spot|seat|participant|placement|ad|advertiser)s?\b(?!\s+(?:click|impression|view|lead|call|run|campaign|mailing))/i;
+
+/**
+ * A figure stated per a measured quantity of the work (production 2026-11-20,
+ * WriterAccess: "$0.04 per word" and "$449 per month" answered one population's
+ * price question and were read as one per-purchase price range). A billing
+ * period (`a month`) or a purchased item (`per piece`) is not a measure.
+ */
+const PER_MEASURE = /^\s*(?:\/\s*|per\s+|an?\s+|each\s+|for\s+(?:each|every|one|a|an)\s+)(?:(?:\d[\d,]*|one|a|hundred|thousand)\s+)?(?:words?|characters?|chars?|pages?|lines?|hours?|hrs?|minutes?|mins?)\b|^\s*hourly\b/i;
 
 function escape(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -158,7 +173,8 @@ export function readMoneyFigures(text: string, currency: string): MoneyFigure[] 
       if (cents === null || seen.has(cents)) continue;
       seen.add(cents);
       const perParticipant = PER_PARTICIPANT.test(rest);
-      found.push({ cents, currency: code, text: match[0].trim(), perUnit: perParticipant || PER_UNIT.test(rest), ...(perParticipant ? { perParticipant } : {}) });
+      const perMeasure = PER_MEASURE.test(rest);
+      found.push({ cents, currency: code, text: match[0].trim(), perUnit: perParticipant || perMeasure || PER_UNIT.test(rest), ...(perParticipant ? { perParticipant } : {}), ...(perMeasure ? { perMeasure } : {}) });
     }
   }
   return found.sort((a, b) => a.cents - b.cents);
