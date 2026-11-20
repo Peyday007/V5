@@ -23,14 +23,18 @@ async function step(label: string, fn: () => Promise<unknown>): Promise<void> {
 async function main(): Promise<void> {
   await initDatabase();
   try {
-    const PRICE = "SELECT candidate_id FROM cash_needs WHERE request_key LIKE 'goal-price-%' AND state = 'OPEN' AND candidate_id IS NOT NULL";
-    await q('PRICE_CANDS', `SELECT c.project_id, c.state, COUNT(*) AS n FROM russell_candidates c WHERE c.id IN (${PRICE}) GROUP BY c.project_id, c.state`);
-    await q('PRICE_MISSIONS', `SELECT m.project_id, m.state, COUNT(*) AS n, MIN(m.created_at) AS first, MAX(m.updated_at) AS last FROM russell_missions m WHERE m.candidate_id IN (${PRICE}) AND m.created_at > '2026-11-20T03:00' GROUP BY m.project_id, m.state`);
-    await q('PRICE_PACKETS', `SELECT o.status, COUNT(*) AS n, MAX(substr(o.failure_reason,1,200)) AS why FROM russell_missions m JOIN research_orchestrations o ON o.id = m.orchestration_id WHERE m.candidate_id IN (${PRICE}) AND m.created_at > '2026-11-20T03:00' GROUP BY o.status`);
-    await q('PRICE_FRAGS', `SELECT f.status, COUNT(*) AS n FROM russell_missions m JOIN research_fragments f ON f.orchestration_id = m.orchestration_id WHERE m.candidate_id IN (${PRICE}) AND m.created_at > '2026-11-20T03:00' GROUP BY f.status`);
-    await q('PRICE_DECISIONS', `SELECT substr(e.payload, 1, 260) AS p, e.created_at FROM project_events e WHERE e.event_type = 'RUSSELL_ROUTINE_DECISION' AND e.created_at > '2026-11-20T03:00' AND e.entity_id IN (SELECT m.id FROM russell_missions m WHERE m.candidate_id IN (${PRICE})) LIMIT 5`);
-    const loop = await import('../server/services/russell/loop.ts');
-    console.log(`SLOTS ${JSON.stringify((await loop.launchableByProject()).map((s) => ({ p: s.projectId.slice(0, 12), w: s.waiting, cap: s.slots?.cap, live: s.slots?.live })))}`);
+    const { ownActionMatches } = await import('../server/services/research/actorScope.ts');
+    const { APPROVAL_ENVELOPES } = await import('../server/services/research/approvalEnvelope.ts');
+    const rows = await getDb().all<Record<string, unknown>>("SELECT f.*, o.created_at AS orc_at, o.failure_reason FROM research_fragments f JOIN research_orchestrations o ON o.id = f.orchestration_id WHERE f.orchestration_id IN ('orc_84201256765147ee99d1','orc_dfc07997624240d898b3','orc_9734dd122b3048d792fb','orc_35442e9601f2463aaf39')");
+    for (const r of rows) {
+      const crit = (() => { try { return (JSON.parse(String(r.completion_criteria ?? '[]')) as string[]).join(' '); } catch { return String(r.completion_criteria ?? ''); } })();
+      const prose = [r.question, r.definitions, r.population, crit].filter(Boolean).join(' \n');
+      for (const [name, env] of Object.entries(APPROVAL_ENVELOPES)) {
+        const m = ownActionMatches(prose, (env as { forbiddenActions: RegExp }).forbiddenActions);
+        if (m.length) console.log(`MATCH ${r.orchestration_id} ${r.orc_at} ${name} ${JSON.stringify(m).slice(0, 700)}`);
+      }
+      console.log(`WHY ${r.orchestration_id} ${r.orc_at} ${String(r.failure_reason ?? '').slice(0, 300)}`);
+    }
   } finally {
     await closeDatabase();
     console.log('CENSUS: OK');
