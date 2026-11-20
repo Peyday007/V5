@@ -208,8 +208,10 @@ export interface OwnActionMatch {
 export function ownActionMatches(prose: string, pattern: RegExp): OwnActionMatch[] {
   const scanner = new RegExp(pattern.source, scanFlags(pattern.flags));
   const out: OwnActionMatch[] = [];
+  const quoted = quotedSpans(prose);
   for (const match of prose.matchAll(scanner)) {
     const at = match.index ?? 0;
+    if (insideQuotation(quoted, at, match[0].length)) continue;
     if (insideCompound(prose, at, match[0].length)) continue;
     if (namesAThing(prose, at + match[0].length)) continue;
     const clauseStart = clauseStartBefore(prose, at);
@@ -221,6 +223,72 @@ export function ownActionMatches(prose: string, pattern: RegExp): OwnActionMatch
     });
   }
   return out;
+}
+
+/**
+ * A quoted passage is the source's words, not an instruction to Brain.
+ *
+ * Cash validation compiles its screen question around the opening's own
+ * buying signal, verbatim and in quotation marks: *For this specific opening —
+ * "KashKick is one of the fastest ways to start earning money online. Sign up
+ * for free, and within minutes you can begin completing paid surveys…" —
+ * establish…*. The full stop after "online" is a clause boundary, so "Sign up
+ * for" read as a bare imperative, Brain's own envelope refused Brain's own
+ * compiled plan, and the packet parked as *"Authorizing research Brain was not
+ * preauthorized to start"* (production, seven days to 2026-11-19: 17 of 152
+ * Needs-You requests). A listing's marketing copy quoted in a question is what
+ * is being researched, never what the researcher is told to do.
+ *
+ * Narrow on purpose: a span is a balanced pair (straight `"…"` or curly `“…”`),
+ * an unmatched quote exempts nothing, and when quotation is all the prose has —
+ * no unquoted words outside it — nothing is exempt, so an instruction cannot be
+ * laundered by wrapping the whole question in quotes. And a span is exempt only
+ * when the words immediately before it name it as somebody else's text — *this
+ * specific opening — "…"*, *the listing says: "…"* — so *Do this: "Sign up for
+ * the trial"* is still Brain's own instruction: quotation marks alone never
+ * turn an imperative into a described thing. Text outside the quotes, before
+ * or after them, is screened exactly as before. This is a planning-time
+ * screen and not the enforcement (see the header): what stops an effect is the
+ * grant's `max_external_spend = 0` and the absence of any effectful tool.
+ */
+function quotedSpans(prose: string): Array<[number, number]> {
+  const spans: Array<[number, number]> = [];
+  let index = 0;
+  while (index < prose.length) {
+    const char = prose[index]!;
+    const close = char === '"' ? '"' : char === '“' ? '”' : null;
+    if (close === null) {
+      index += 1;
+      continue;
+    }
+    const end = prose.indexOf(close, index + 1);
+    if (end === -1) break;
+    if (ATTRIBUTED_QUOTE.test(prose.slice(0, index))) spans.push([index + 1, end]);
+    index = end + 1;
+  }
+  let outside = '';
+  let from = 0;
+  for (const [start, end] of spans) {
+    outside += prose.slice(from, start - 1);
+    from = end + 1;
+  }
+  outside += prose.slice(from);
+  return /[a-z]/i.test(outside) ? spans : [];
+}
+
+/**
+ * The words that, immediately before an opening quote, say the quotation is a
+ * source's text rather than Brain's: the thing being researched (*opening*,
+ * *arrangement*, *listing*, *signal*…) or a verb of saying (*says*, *states*,
+ * *reads*…), followed by at most a dash, colon or comma. Anchored to the end of
+ * the text before the quote, so it is the *adjacent* words that decide, not a
+ * noun somewhere earlier in the sentence.
+ */
+const ATTRIBUTED_QUOTE =
+  /\b(?:opening|arrangement|listing|posting|signal|source|page|advert|ad|description|offer|passage|says|said|states|stated|reads|writes|wrote|quotes|quoted|claims|claimed)\s*[—–:,-]?\s*$/i;
+
+function insideQuotation(spans: ReadonlyArray<[number, number]>, at: number, length: number): boolean {
+  return spans.some(([start, end]) => at >= start && at + length <= end);
 }
 
 /**

@@ -1881,11 +1881,24 @@ export async function pendingLoopQuestions(projectId: string, now: Date = new Da
   return questions.filter((q) => !taken.has(q.key)).slice(0, Math.max(0, limit));
 }
 
+/**
+ * Untrusted words are screened with their quotation marks removed. The screen
+ * exempts a quoted span when the words before it attribute it to a source
+ * (`actorScope.ts`), which is right for the opening's own buying signal Brain
+ * quotes, but text from a record or a post is not Brain's attributed quotation:
+ * it can carry its own lead-in (*the listing says: "purchase the list"*) and
+ * would launder an instruction through the exemption. Without the marks the
+ * quoted words are read exactly as the unquoted ones are.
+ */
+function unquoted(text: string): string {
+  return text.replace(/["“”]/g, ' ');
+}
+
 /** Records whose words would narrow a round or read as Brain's own action are kept out of a question. */
 function safeQuestion(q: MissingLinkQuestion): boolean {
   const rendered = `- verify: ${q.question} Start from: ${q.evidenceUrls.join(', ')}.`;
   if (statesNamedIn(rendered).length > 0) return false;
-  return Object.values(APPROVAL_ENVELOPES).every((envelope) => !describesOwnAction(rendered, envelope.forbiddenActions));
+  return Object.values(APPROVAL_ENVELOPES).every((envelope) => !describesOwnAction(unquoted(rendered), envelope.forbiddenActions));
 }
 
 /**
@@ -2652,7 +2665,7 @@ async function leadScreens(items: readonly StoredFeedItem[], window: SubjectWind
 export function safeLeadLine(line: string): boolean {
   const rendered = `- lead: ${line}`;
   if (statesNamedIn(rendered).length > 0) return false;
-  return Object.values(APPROVAL_ENVELOPES).every((envelope) => !describesOwnAction(rendered, envelope.forbiddenActions));
+  return Object.values(APPROVAL_ENVELOPES).every((envelope) => !describesOwnAction(unquoted(rendered), envelope.forbiddenActions));
 }
 
 /** One line of the shortlist question, or null when it cannot be said safely. */

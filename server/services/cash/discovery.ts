@@ -1874,11 +1874,24 @@ export async function heldExclusions(input: {
   return { lines, omitted };
 }
 
+/**
+ * Untrusted words are screened with their quotation marks removed. The screen
+ * exempts a quoted span when the words before it attribute it to a source
+ * (`actorScope.ts`), which is right for the opening's own buying signal Brain
+ * quotes, but text from a record or a post is not Brain's attributed quotation:
+ * it can carry its own lead-in (*the listing says: "purchase the list"*) and
+ * would launder an instruction through the exemption. Without the marks the
+ * quoted words are read exactly as the unquoted ones are.
+ */
+function unquoted(text: string): string {
+  return text.replace(/["“”]/g, ' ');
+}
+
 /** Neither a jurisdiction the compiler would read nor an action an envelope would refuse. */
 export function safeExclusion(text: string): boolean {
   if (statesNamedIn(text).length > 0) return false;
   if (/\b(?:and also|as well as|in addition to)\b/i.test(text)) return false;
-  const line = `already listed: ${text}`;
+  const line = `already listed: ${unquoted(text)}`;
   return Object.values(APPROVAL_ENVELOPES).every(
     (envelope) => !describesOwnAction(line, envelope.forbiddenActions),
   );
