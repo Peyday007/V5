@@ -169,6 +169,21 @@ describe('an accepted answer to a goal price question is filed against the popul
     expect(decision.reason).toMatch(/qualifier matches no mapped buyer type/);
   });
 
+  /*
+   * Production 2026-11-20 (census 44780189914, prj_f1d8f9d6): an accepted
+   * answer declared price_per_unit 0 for "small business operators" — a free
+   * tier — and the back-fill was about to file it as what they pay. A figure
+   * that must be positive is refused at zero, on both paths.
+   */
+  it('refuses a zero price, whether or not a question asked about the population', async () => {
+    const { orchestrationId, fragmentId } = await askAndResearch(unpriced('invented:small business operators', 'Small business operators'));
+    const free = await declaredPrice(orchestrationId, fragmentId, { text: 'The basic plan is free.', qualifier: 'small business operators', cents: 0 });
+    const pool = await backfillCandidates(projectId);
+    expect(pool.decisions.find((one) => one.claimId === free)?.reason).toMatch(/zero or less/);
+    expect((await backfillClaimFacts(projectId)).filed).toEqual([]);
+    expect((await listNodes(projectId)).filter((one) => one.kind === 'BUYER_TYPE')).toEqual([]);
+  });
+
   it('pins the qualifier in the question to the buyers’ exact name', () => {
     const need = priceNeedOf(unpriced('cop_x', 'Content marketing agencies'));
     expect(need.question).toContain('Set structural_qualifier to exactly "Content marketing agencies"');
