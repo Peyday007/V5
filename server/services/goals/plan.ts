@@ -2895,7 +2895,8 @@ export function planSteps(input: {
      * reached 74.5% read "Collect payment" as after the deadline, because
      * every sale was dated from a partner's 10-day setup).
      */
-    const direct = Math.max(0, ...changes.filter((c) => c.dimension !== 'PARTNER').map((c) => c.startDay?.high ?? 0));
+    // Nor does a purchase made only after proof (§99 Q-7) hold the first sale: it is bought because sales have already come in.
+    const direct = Math.max(0, ...changes.filter((c) => c.dimension !== 'PARTNER' && !(c as { afterProof?: boolean }).afterProof).map((c) => c.startDay?.high ?? 0));
     const sellDay: Span = { low: Math.min(direct, after), high: after };
     const named = namedMembers(r.best.members, input.titles);
     const sellOrder = steps.length + 1;

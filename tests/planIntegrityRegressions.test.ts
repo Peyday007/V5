@@ -425,6 +425,16 @@ describe('8. a reconstructed plan: its scope in words, its sale and collection c
     expect(rules(checked([...old.slice(0, 4), { ...old[4]!, dependsOn: 10 }]))).toEqual([]);
   });
 
+  it('a purchase made only after proof never holds the first sale (planTransfer small-capital-expensive-opening, 2026-11-20)', () => {
+    const buy = { dimension: 'CAPACITY', op: 'acquisition:paid-social', label: 'paid-social', detail: '$2,650 of paid social lead forms, bought only in worlds where cash has come back by day 14', cost: 2650, basis: 'ESTIMATE', startDay: { low: 14, high: 19 }, afterProof: true } as unknown as StrategyChange;
+    const steps = planSteps({ adoption, reconstruction: recon([buy], ['arr_ai_reception', 'arr_gifts']), sales: [], nextTest: null, permissionsMissing: [], titles, cashDays, daysLeft: 20 });
+    const sell = steps.find((s) => s.label === "Sell the plan's openings")!;
+    const collect = steps.find((s) => s.label === 'Collect payment')!;
+    // Selling starts now; the after-proof purchase only scales it later.
+    expect(sell.startDay!.low).toBe(0);
+    expect(collect.stage?.unscheduled ?? null).not.toBe('AFTER_DEADLINE');
+  });
+
   it('the pipeline, goal $5K: the price move\'s scope in words, the partner titled by its opening, the sale and collection costed null and dated from days to usable cash', () => {
     const changes = moves([{ op: 'PRICE', factor: 4, scope: 'ALL' }, { op: 'OPERATOR', key: 'partner:', target: 'arr_ai_reception' }]);
     expect(changes.map((c) => c.dimension)).toEqual(['PRICE', 'PARTNER']);
