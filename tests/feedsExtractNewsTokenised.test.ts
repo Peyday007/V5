@@ -113,4 +113,18 @@ describe('tokenised news titles and unmapped feed sources are read by code', () 
     for (let i = 0; i < text.length; i++) expect(rawTitle[toRaw[i]!]).toBe(text[i]);
     expect(untokenise('Plain prose, already readable.').text).toBe('Plain prose, already readable.');
   });
+
+  it('leaves ordinary prose from an untokenised source exactly as written', () => {
+    const prose = 'Rents rose 5 % in Austin (TX), to $ 1,200 a month; is it worth it? Yes.';
+    const { text, toRaw } = untokenise(prose);
+    expect(text).toBe(prose);
+    expect(toRaw).toEqual(Array.from(prose, (_, i) => i));
+    const item: ExtractableItem = { ...EDGAR, id: 'p1', source: 'news-new-location', title: 'Austin rents', body: prose };
+    for (const fact of extractItem(item)) {
+      const span = fact.provenance.span;
+      if (fact.evidence.field !== 'body' || !span) continue;
+      expect(prose.slice(span.start, span.end)).toBe(fact.evidence.text);
+    }
+    expect(untokenise('Holidays ? $ 90 / hour').text).toBe('Holidays? $90 / hour');
+  });
 });

@@ -368,15 +368,26 @@ export function scopeOf(item: Pick<ExtractableItem, 'title' | 'body'>): FactScop
 }
 
 /**
+ * The tokeniser's mark: a space before a comma, `?`, `!`, `;`, `)` or `]` that is
+ * itself followed by a space or the end (`Tamales , Including`, `holidays ? Here`,
+ * `FLD )`), or a space after an opening bracket (`( FLD`). Prose writes none of these.
+ */
+const TOKENISED = / [,?!;)\]](?= |$)|[([] (?=\S)/;
+
+/**
  * Undo word tokenisation in a stored field, keeping where every character came
  * from. Some publishers' indexes (GDELT's article titles) store a headline as
  * space-separated tokens — `Fold ( FLD ) Q3 2026`, `feed 1 , 000 families`,
  * `holidays ? Here` — and the readers below, written for ordinary prose, read
  * nothing out of `1 , 000`. Only spaces are ever dropped, never a character
  * added or changed, so `toRaw[i]` is the index in `raw` of `text[i]` and every
- * span read from `text` maps back to the exact raw characters.
+ * span read from `text` maps back to the exact raw characters. A field without
+ * the tokeniser's mark is returned unchanged.
  */
 export function untokenise(raw: string): { text: string; toRaw: number[] } {
+  // Ordinary prose is left exactly as written: only a field that shows the tokeniser's
+  // own mark — a space before closing punctuation or after an opening bracket — is rejoined.
+  if (!TOKENISED.test(raw)) return { text: raw, toRaw: Array.from(raw, (_, i) => i) };
   const drop = new Set<number>();
   const mark = (pattern: RegExp): void => {
     for (const m of raw.matchAll(pattern)) for (let i = 0; i < m[0].length; i++) drop.add(m.index + i);
