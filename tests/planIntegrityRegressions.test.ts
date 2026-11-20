@@ -381,6 +381,13 @@ describe('8. a reconstructed plan: its scope in words, its sale and collection c
     expect(rules(checked([bad[0]!, step(2, 'Leave out 1 opening(s) ("Coachella 2026 resale tickets")', { cost: 0, stage: 'OFFER', costSource: 'MODEL' })]))).toEqual([]);
   });
 
+  it('a program never leaves out the partner clone of an opening it brought in, and names what it does leave out', () => {
+    const reserve = [{ ...GOAL_10K_OPENINGS[0]!, opportunity: { id: 'arr_r2', title: 'Constructed: Property managers — Vendor-compliance spreadsheet' } }] as ModelledOpportunity[];
+    const changes = moves([{ op: 'INCLUDE', key: 'arr_r2' }, { op: 'OPERATOR', key: 'partner:', target: 'arr_r2' }, { op: 'DROP', scope: 'id:arr_r2' }], reserve);
+    expect(changes.some((c) => c.label === 'include:arr_r2')).toBe(true);
+    expect(changes.some((c) => c.label.startsWith('drop@'))).toBe(false);
+  });
+
   it('a program never leaves out an opening it brought in under another id with the same title', () => {
     const held = GOAL_10K_OPENINGS[0]!;
     // A constructed design carrying the very title of an opening already held: the same opening, two ids.
