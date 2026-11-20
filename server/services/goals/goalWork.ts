@@ -42,6 +42,31 @@ import { getDb } from '../../db/database.ts';
  */
 export const GOAL_PRICE_KEY_PREFIX = 'goal-price';
 
+/** The graph scope a population's price question is keyed in (`priceScope`): `price:<population ref>`. */
+export const GOAL_PRICE_SCOPE_PREFIX = 'price:';
+
+/** A population's price question's subject (`priceNeedOf`), which names the buyers exactly as the construction does. */
+export function goalPriceSubject(buyer: string): string {
+  return `what buyers described as "${buyer}" pay`.slice(0, 300);
+}
+
+/**
+ * The population a goal's price question asked about, read back from the idea
+ * `sendNeeds` opened for it: its statement starts `For causal graph
+ * price:<ref>,` (the scope) and its title is `Causal unknown: <subject>`
+ * (`goalPriceSubject`, which names the buyers). Null when either is not that
+ * question's wording — then the idea is not a price question and nothing is
+ * read from it. The buyers are the construction's demand name (`clean`ed, so
+ * it carries no quote mark), never a researcher's words.
+ */
+export function goalPriceQuestionOf(idea: { title: string; statement: string }): { ref: string; buyer: string } | null {
+  const scope = /^For causal graph price:(.+?), establish from sourced evidence:/s.exec(idea.statement);
+  const subject = /what buyers described as "([^"]+)" pay/.exec(idea.title);
+  const ref = scope?.[1]?.trim();
+  const buyer = subject?.[1]?.replace(/\s+/g, ' ').trim();
+  return ref && buyer ? { ref, buyer } : null;
+}
+
 /** A boolean SQL expression over a `russell_candidates` row aliased `c`; true for the goal's own ideas. No parameters. */
 export function goalIdeaSql(c: string): string {
   return `(${c}.id IN (SELECT gr.candidate_id FROM cash_discovery_rounds gr

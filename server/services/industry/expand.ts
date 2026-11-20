@@ -53,7 +53,8 @@ import { getDb } from '../../db/database.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { createCandidate } from '../../repos/russellCandidates.ts';
 import { byClaimTime, everyPage, missionsForRounds } from '../russell/roundMissions.ts';
-import { claimsByIds, constructedRoundBuckets, structuralClaims, unfiledConstructedRoundClaims, unfiledUnitEconomicClaims } from '../../repos/research.ts';
+import { claimsByIds, constructedRoundBuckets, goalPriceIdeasOfClaims, structuralClaims, unfiledConstructedRoundClaims, unfiledUnitEconomicClaims } from '../../repos/research.ts';
+import { goalPriceQuestionOf } from '../goals/goalWork.ts';
 import { arrangementForLegacyKey } from '../../repos/monetization.ts';
 import { ARRANGEMENT_BUCKET_MARK, arrangementKeyOfBucket } from '../cash/arrangementLibrary.ts';
 import { planBuyerType } from '../cash/construct.ts';
@@ -1031,6 +1032,13 @@ export interface BackfillCandidate {
    * opening's gated payer claim), then files against it.
    */
   newBuyer?: { population: string; opening: PricedOpening; payerClaimId: string };
+  /**
+   * The population a goal's price question asked about, when the map holds no
+   * buyer type the plan reads for it: the back-fill puts it on the map
+   * (`mapAskedPopulation`), established by this accepted, sourced answer, then
+   * files against it.
+   */
+  askedPopulation?: AskedPopulation;
   key: FactKey;
   amount: number;
   /** The top of a stated range; absent, the fact is the point `amount`. */
@@ -1061,8 +1069,65 @@ export interface BackfillDecision {
   countsAsSkipped: boolean;
 }
 
-/** Source 1's verdict on one declared UNIT_ECONOMIC claim, by the kernel's own rules. */
-function judgeUnitEconomic(claim: ResearchClaim, nodes: readonly IndustryNode[]): BackfillDecision {
+/**
+ * The buyer population a goal's price question (`goal-price-` need,
+ * `sendPortfolioNeeds`) asked about, read from the question Brain wrote —
+ * its scope `price:<ref>` and the buyers it names — never from the answer.
+ */
+export interface AskedPopulation {
+  /** The population's ref (`ConstructedArrangement.demand.ref`), the question's own scope. */
+  ref: string;
+  /** The buyers as the construction names them, resolved through the ref when it is a map node. */
+  name: string;
+  /** The industry of the opening the ref names, when it names one: the sector a new buyer type is put under. */
+  industry: string | null;
+  opportunityId: string | null;
+}
+
+/**
+ * For each claim that answers a goal's price question, the population that
+ * question asked about (production 2026-11-20, runs 44749620314 and
+ * 44750150850: ten goal-price fragments ACCEPTED, 16 accepted `price_per_unit`
+ * claims with an amount, no construction fact names any of them). The link is
+ * claim → orchestration → mission → idea → the `goal-price-` need
+ * (`goalPriceIdeasOfClaims`), and the population is the need's scope. A ref
+ * that is a map node (a map-derived arrangement's demand) is resolved to the
+ * node's name, and one that is an opening (an opening-derived demand) lends
+ * the opening's industry; otherwise the name the question states is the
+ * construction's demand name verbatim.
+ */
+async function askedPopulations(projectId: string, claims: readonly ResearchClaim[], nodes: readonly IndustryNode[]): Promise<Map<string, AskedPopulation>> {
+  const out = new Map<string, AskedPopulation>();
+  if (claims.length === 0) return out;
+  const ideas = await goalPriceIdeasOfClaims(projectId, claims.map((one) => one.id));
+  const openings = new Map<string, { industry: string | null; id: string } | null>();
+  for (const [claimId, idea] of ideas) {
+    const asked = goalPriceQuestionOf(idea);
+    if (!asked) continue;
+    const mapped = nodes.find((one) => one.id === asked.ref && one.kind === 'BUYER_TYPE');
+    if (!openings.has(asked.ref)) {
+      const opening = mapped ? null : await getOpportunity(asked.ref);
+      openings.set(asked.ref, opening && opening.projectId === projectId ? { id: opening.id, industry: opening.industry } : null);
+    }
+    const opening = openings.get(asked.ref) ?? null;
+    out.set(claimId, { ref: asked.ref, name: mapped ? mapped.name : asked.buyer, industry: opening?.industry ?? null, opportunityId: opening?.id ?? null });
+  }
+  return out;
+}
+
+/**
+ * Source 1's verdict on one declared UNIT_ECONOMIC claim, by the kernel's own rules.
+ *
+ * An answer to a question Brain asked about a named population is filed
+ * against that population (`asked`): the buyer is the question's own, through
+ * `planBuyerType` — the node the plan reads a `map_<node>` fact from for that
+ * demand — and never the researcher's free-text qualifier, which in
+ * production held sentences ("GitHub Inc is the payer …") that matched no
+ * buyer type. When the map holds no such node, the candidate carries the
+ * population to put on it (guarded by `namesABuyerPopulation`). Every claim
+ * Brain did not ask about a population is matched by its qualifier, as before.
+ */
+function judgeUnitEconomic(claim: ResearchClaim, nodes: readonly IndustryNode[], asked?: AskedPopulation): BackfillDecision {
   const refuse = (reason: string, unmatchedBuyer?: string): BackfillDecision => ({
     source: 'UNIT_ECONOMIC',
     claimId: claim.id,
@@ -1074,6 +1139,31 @@ function judgeUnitEconomic(claim: ResearchClaim, nodes: readonly IndustryNode[])
   const key = claim.structuralSubject;
   if (!isFactKey(key)) return refuse('subject is not a construction fact key');
   if (!FACT_KEYS[key].segment) return refuse('fact key is not per buyer segment');
+  if (asked) {
+    // Invariant 39: only an accepted, sourced claim with a figure is filed, and only for a population a question named.
+    if (!claim.accepted) return refuse('claim is not gated (accepted)');
+    if (!claim.sourceUrl) return refuse('claim has no source URL');
+    const amount = (claim.structuralAmountCents ?? NaN) / 100;
+    if (!Number.isFinite(amount)) return refuse('declared amount is not a number');
+    if (FACT_KEYS[key].kind === 'RATE' && amount > 1) return refuse('rate is more than the whole');
+    const buyer = planBuyerType(asked.name, nodes);
+    if (!buyer && !namesABuyerPopulation(asked.name)) return refuse('the population the price question asked about is not a buyer population, so none is mapped', asked.name);
+    return {
+      source: 'UNIT_ECONOMIC',
+      claimId: claim.id,
+      candidate: {
+        source: 'UNIT_ECONOMIC',
+        claim,
+        buyer,
+        ...(buyer ? {} : { askedPopulation: asked }),
+        key,
+        amount,
+        measures: `answering Brain's price question about "${asked.name}": ${claim.claim}`,
+      },
+      reason: null,
+      countsAsSkipped: true,
+    };
+  }
   if (!claim.structuralQualifier) return refuse('claim names no buyer qualifier');
   const buyer = matchBuyerType(claim.structuralQualifier, nodes);
   if (!buyer) return refuse('buyer qualifier matches no mapped buyer type', claim.structuralQualifier);
@@ -1611,15 +1701,21 @@ export interface BackfillPool {
  */
 export async function backfillCandidates(projectId: string, cursors: BackfillCursors = {}): Promise<BackfillPool> {
   const nodes = await listNodes(projectId);
-  if (!nodes.some((one) => one.kind === 'BUYER_TYPE' && !one.retiredAt)) return { hasBuyerTypes: false, unitEconomicRead: 0, decisions: [] };
+  const hasBuyerTypes = nodes.some((one) => one.kind === 'BUYER_TYPE' && !one.retiredAt);
   // Each source from its own cursor, as the writer reads it: source 3's is never source 1's (B1g).
   const declared = await unfiledUnitEconomicClaims(projectId, cursors.unitEconomic ?? unitEconomicCursor.get(projectId) ?? '', BACKFILL_SCAN);
+  const population = await askedPopulations(projectId, declared, nodes);
+  // With no buyer type on the map, only an answer to a population's price question can file (it maps its population).
+  if (!hasBuyerTypes) {
+    const answers = declared.filter((claim) => population.has(claim.id));
+    return { hasBuyerTypes: false, unitEconomicRead: declared.length, decisions: answers.map((claim) => judgeUnitEconomic(claim, nodes, population.get(claim.id))) };
+  }
   const asked = await unfiledConstructedRoundClaims(projectId, cursors.constructed ?? constructedCursor.get(projectId) ?? '', BACKFILL_SCAN);
   return {
     hasBuyerTypes: true,
     unitEconomicRead: declared.length,
     decisions: [
-      ...declared.map((claim) => judgeUnitEconomic(claim, nodes)),
+      ...declared.map((claim) => judgeUnitEconomic(claim, nodes, population.get(claim.id))),
       ...(await cardEvidenceDecisions(projectId, nodes)),
       ...(await constructedRoundDecisions(projectId, nodes, asked)),
     ],
@@ -1672,10 +1768,11 @@ export async function backfillClaimFacts(projectId: string, batch = BACKFILL_BAT
   let limit = batch - reserved;
   const room = () => limit - out.filed.length;
   const nodes = await listNodes(projectId);
-  if (!nodes.some((one) => one.kind === 'BUYER_TYPE' && !one.retiredAt)) return out;
+  // With no buyer type on the map only source 1's answers to a population's price question can file: they map their population.
+  const hasBuyerTypes = nodes.some((one) => one.kind === 'BUYER_TYPE' && !one.retiredAt);
 
   // 0. Facts filed under an older figure rule, re-derived first: a pass that files nothing new still corrects them.
-  out.refiled.push(...(await rederiveClaimFacts(projectId)));
+  if (hasBuyerTypes) out.refiled.push(...(await rederiveClaimFacts(projectId)));
 
   const fileOne = async (input: BackfillCandidate): Promise<void> => {
     const { claim } = input;
@@ -1683,6 +1780,10 @@ export async function backfillClaimFacts(projectId: string, batch = BACKFILL_BAT
     if (!buyer && input.newBuyer) {
       // An earlier candidate this pass may already have mapped this population.
       buyer = payerBuyerType(input.newBuyer.opening.payer, nodes) ?? (await mapPayerPopulation(projectId, input.newBuyer.opening, input.newBuyer.population, input.newBuyer.payerClaimId, claim.id, nodes)).node;
+    }
+    if (!buyer && input.askedPopulation) {
+      // An earlier answer this pass may already have mapped this population.
+      buyer = planBuyerType(input.askedPopulation.name, nodes) ?? (await mapAskedPopulation(projectId, input.askedPopulation, claim.id, nodes));
     }
     if (!buyer) return;
     const recorded = await recordClaimFact({
@@ -1717,14 +1818,18 @@ export async function backfillClaimFacts(projectId: string, batch = BACKFILL_BAT
 
   // 1. Declared unit economics outside any open round, from where the last pass stopped.
   const declared = await unfiledUnitEconomicClaims(projectId, unitEconomicCursor.get(projectId) ?? '', BACKFILL_SCAN);
+  const population = await askedPopulations(projectId, declared, nodes);
   let reached = '';
   for (const claim of declared) {
     if (room() <= 0) break;
     reached = claim.id;
-    await consume(judgeUnitEconomic(claim, nodes));
+    const asked = population.get(claim.id);
+    if (!hasBuyerTypes && !asked) continue;
+    await consume(judgeUnitEconomic(claim, nodes, asked));
   }
   // Everything read: start over next pass (a buyer added since may now match). Otherwise resume after the last one read.
   unitEconomicCursor.set(projectId, reached === declared[declared.length - 1]?.id && declared.length < BACKFILL_SCAN ? '' : reached);
+  if (!hasBuyerTypes) return out;
 
   // 2. Prices and costs cards hold as evidence, for payers the map names.
   if (room() > 0) {
@@ -1874,6 +1979,48 @@ async function mapPayerPopulation(
     });
   }
   return { node: made.node, created: made.created };
+}
+
+/**
+ * Put the population a goal's price question asked about on the map, from an
+ * accepted, sourced answer to that question (`judgeUnitEconomic` holds the
+ * gates): a DISCOVERED `BUYER_TYPE` named exactly as the construction named
+ * the buyers, under the sector its opening's industry names (else
+ * `UNCLASSIFIED_SECTOR`), established by that claim — the `mapPayerPopulation`
+ * precedent, with the question's population in place of an opening's payer.
+ * Only a name `namesABuyerPopulation` accepts is mapped, so no population is
+ * invented from a record field or a sentence. Unique by parent and name;
+ * `nodes` is extended in place.
+ */
+async function mapAskedPopulation(projectId: string, asked: AskedPopulation, claimId: string, nodes: IndustryNode[]): Promise<IndustryNode | null> {
+  const name = asked.name.replace(/\s+/g, ' ').trim().slice(0, 120);
+  if (!namesABuyerPopulation(name)) return null;
+  // Mapped only when the plan would read a fact filed against it for these buyers: a node nothing reads is not created.
+  const probe = { id: '', parentId: null, kind: 'BUYER_TYPE', name, retiredAt: null, createdAt: '' } as unknown as IndustryNode;
+  if (!planBuyerType(asked.name, [probe])) return null;
+  const parent = await sectorFor(projectId, asked.industry, nodes, claimId);
+  const made = await createNode({
+    projectId,
+    parentId: parent.id,
+    kind: 'BUYER_TYPE',
+    name,
+    description: `Buyers Brain asked the price of (graph price:${asked.ref.slice(0, 120)}), established by the accepted answer ${claimId}.`,
+    origin: 'DISCOVERED',
+    sourceClaimId: claimId,
+  });
+  if (!nodes.some((one) => one.id === made.node.id)) nodes.push(made.node);
+  if (made.created) {
+    await recordCashEvent({
+      projectId,
+      opportunityId: asked.opportunityId,
+      kind: 'INDUSTRY_BUYER_MAPPED',
+      actorRef: 'BRAIN',
+      summary: `Buyer population "${made.node.name}" added to the map under "${parent.name}" from an accepted answer to Brain's price question about it.`,
+      detail: { nodeId: made.node.id, parentId: parent.id, population: asked.ref, priceClaimId: claimId, opportunityId: asked.opportunityId },
+    });
+  }
+  // The plan reads a `map_<node>` fact only from a node it would match to these buyers; anything else is not filed.
+  return planBuyerType(asked.name, nodes);
 }
 
 /** The live sector node an opening's industry names, else a root SECTOR of that name (or `UNCLASSIFIED_SECTOR`), created once. */
