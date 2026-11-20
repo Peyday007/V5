@@ -416,19 +416,20 @@ describe('8. a reconstructed plan: its scope in words, its sale and collection c
       expect(steps.map((s) => s.label)).toEqual([
         // One of the eight has an established price; a price move scales no other (invariant 39, 2026-11-20).
         'Raise price ×4.00 on 1 opening(s) (all of them)',
-        'Sell "Constructed: AI receptionist setups for home-service firms" through a partner who already serves its buyers (a…',
+        // The members are sold directly from day 0; only the partner's clone waits for the partner (2026-11-20).
         "Sell the plan's openings",
+        'Sell "Constructed: AI receptionist setups for home-service firms" through a partner who already serves its buyers (a…',
         'Collect payment',
       ]);
-      const [price, partner, sell, collect] = steps;
+      const [price, sell, partner, collect] = steps;
       // A move that commits nothing carries the reconstruction's own 0; selling and collecting, which the model prices nothing for, carry null.
       expect(price).toMatchObject({ cost: 0, startDay: { low: 0, high: 0 }, stage: { stage: 'OFFER', costSource: 'MODEL' } });
       // The partner's setup, 3–10 days, as production read it.
       expect(partner).toMatchObject({ cost: 0, startDay: { low: 3, high: 10 } });
-      expect(sell).toMatchObject({ cost: null, startDay: { low: 10, high: 10 }, dependsOn: 2, stage: { stage: 'OFFER', costSource: 'NONE_HELD' } });
-      // The sale's day plus the members' swept days to usable cash (5–15 and 10–20), as an arrangement's Collect reads them.
-      expect(collect).toMatchObject({ cost: null, startDay: { low: 15, high: 30 }, dependsOn: 3, withinLimits: true, stage: { stage: 'COLLECT', costSource: 'NONE_HELD' } });
-      expect(collect!.when).toMatch(/^day 15–30: the sale's day plus 5–20 days to usable cash \(the range the model swept: an assumption, not established\)/);
+      expect(sell).toMatchObject({ cost: null, startDay: { low: 0, high: 10 }, stage: { stage: 'OFFER', costSource: 'NONE_HELD' } });
+      // The sale's days plus the members' swept days to usable cash (5–15 and 10–20), as an arrangement's Collect reads them.
+      expect(collect).toMatchObject({ cost: null, startDay: { low: 5, high: 30 }, dependsOn: sell!.order, withinLimits: true, stage: { stage: 'COLLECT', costSource: 'NONE_HELD' } });
+      expect(collect!.when).toMatch(/^day 5–30: the sale's day plus 5–20 days to usable cash \(the range the model swept: an assumption, not established\)/);
       expect(planIntegrity(fromSteps(steps)).violations).toEqual([]);
     }
   });
