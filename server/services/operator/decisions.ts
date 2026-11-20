@@ -198,6 +198,16 @@ function namedEvidence(input: { options: readonly { evidence?: readonly unknown[
   return (input.options[input.chosen]?.evidence ?? []).map((e) => (typeof e === 'string' ? e.trim() : '')).filter((e) => e.length > 0);
 }
 
+/**
+ * The chosen option's evidence entries that cite something the outcome can be
+ * re-read from — a source URL or a Brain row id (CONDITION_SOURCE), as
+ * EVIDENCE_QUALITY_INSTRUCTION asks. 'none', 'n/a' or prose names no data, so
+ * it does not answer an EVIDENCE_QUALITY correction.
+ */
+function citedEvidence(input: { options: readonly { evidence?: readonly unknown[] }[]; chosen: number }): string[] {
+  return namedEvidence(input).filter((e) => CONDITION_SOURCE.test(e));
+}
+
 /** A source a condition can be re-read from: a URL, or a Brain row id (`arr_2d0bae0f1074`, `opd_…`). */
 const CONDITION_SOURCE = /\bhttps?:\/\/\S+|\b[a-z]{2,8}_[0-9a-z]{6,}\b/i;
 const CONDITION_DATE = /\b(\d{4})-(\d{2})-(\d{2})\b/g;
@@ -501,10 +511,10 @@ export async function decide(
         instructions.push(CONDITION_ASSUMPTION_INSTRUCTION);
       }
     }
-    if (correction.evidenceQualityClaims.length > 0 && namedEvidence(input).length === 0) {
+    if (correction.evidenceQualityClaims.length > 0 && citedEvidence(input).length === 0) {
       const claims = correction.evidenceQualityClaims;
       problems.push(
-        `${comparableKey} is miscalibrated (${correction.rationale}) and ${claims.length} of its systematic misses were EVIDENCE_QUALITY (${listed(claims)}): the prediction rested on no named data, and the chosen option again cites none`,
+        `${comparableKey} is miscalibrated (${correction.rationale}) and ${claims.length} of its systematic misses were EVIDENCE_QUALITY (${listed(claims)}): the prediction rested on no named data, and the chosen option again cites no source URL or Brain row id`,
       );
       instructions.push(EVIDENCE_QUALITY_INSTRUCTION);
     }

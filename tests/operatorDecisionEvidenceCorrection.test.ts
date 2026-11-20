@@ -77,7 +77,7 @@ describe('an operator decision on a bucket whose misses were EVIDENCE_QUALITY', 
   it('sends a decision whose chosen option cites no evidence back to be revised, uncommitted', async () => {
     await seedEvidenceBucket(projectId, 'RESEARCH', { n: 24, occurred: 4, data: [] });
     const before = (await readLedger(null)).predictions.length;
-    for (const input of [bare, cited(['   ', ''])]) {
+    for (const input of [bare, cited(['   ', '']), cited(['none', 'n/a', 'owner said so'])]) {
       const d = await decide(input, ctx());
       expect(d).toMatchObject({ committed: false, verdict: 'REVISE', decisionId: null });
       expect(d.problems.join(' ')).toMatch(/EVIDENCE_QUALITY/);
