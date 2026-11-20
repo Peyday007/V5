@@ -352,3 +352,14 @@ Agent round 2 is on these, on branch claude/plan-exec-round2. The release owner 
 - Release check 44640203825 on 7eb1ab07 succeeded: integrity OK on all six goals, all CANDIDATE_ONLY. Reaches: C 8%, $100K 0%, $10K 0%, $5K/mo 44.1%, A 0%, B 4.9%.
 - Deploy 44631730496 first failed one unrelated challenger test. The same shard passed on d88196a8, so it was treated as a flake; the re-run passed.
 - Still open: no goal has an accepted, executable plan. Acceptance needs real price and response evidence, and research for that is running.
+
+## 2026-11-20 03:30Z — price research unblocked, junk buyers refused
+
+- Live on 41da97ea (Deploy 44660548368; release check 44667280303 GOALS: OK on all six goals):
+  - #1160 (release owner): goal-price research is ranked ahead of the goals' other research rounds. All 91 price questions had sat OPEN since 13:36Z because every slot went to those rounds first.
+  - #1162 (release owner): "(per purchase, …)" is read as a unit, not an instruction to buy. All 11 of goal A's price packets had been refused for that reason.
+  - #1163: a record field, a placeholder or a clause is not a buyer population, and no price question is spent on one. "Homeowners in Mechanicsburg, PA" is no longer read as one organisation. Regression test: tests/recordFieldIsNotABuyer.test.ts.
+  - #1164: the arrangement library's plan-read tests get a 120s bound. They took 12–18s locally and timed out under CI load twice in a row.
+- Reaches: C 25.3%, $100K 0%, $10K 0%, $5K/mo 12%, A 0%, B 5.2%; all CANDIDATE_ONLY.
+- Under review: goal C's 25.3% is a reconstruction resting on three assumptions (bundle of 10, price ×3.75, a referral partner) applied to a constructed postcard arrangement whose $349 base price is itself not established. As held it reaches 8.3%; on measured campaign rates, 1.5%. The challenge figure is 12%. The question is whether a price lever extrapolating an unestablished price is an unknown read in the plan's favour (invariant 39).
+- $5K/mo went from 44.1% to 12%: its price ×4 reconstruction (about 50%) no longer beats the plan as held once challenged (13.5%), so the plan as held leads.
