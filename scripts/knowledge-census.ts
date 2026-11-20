@@ -23,18 +23,12 @@ async function step(label: string, fn: () => Promise<unknown>): Promise<void> {
 async function main(): Promise<void> {
   await initDatabase();
   try {
-    const { ownActionMatches } = await import('../server/services/research/actorScope.ts');
-    const { APPROVAL_ENVELOPES } = await import('../server/services/research/approvalEnvelope.ts');
-    const rows = await getDb().all<Record<string, unknown>>("SELECT f.*, o.created_at AS orc_at, o.failure_reason FROM research_fragments f JOIN research_orchestrations o ON o.id = f.orchestration_id WHERE f.orchestration_id IN ('orc_84201256765147ee99d1','orc_dfc07997624240d898b3','orc_9734dd122b3048d792fb','orc_35442e9601f2463aaf39')");
-    for (const r of rows) {
-      const crit = (() => { try { return (JSON.parse(String(r.completion_criteria ?? '[]')) as string[]).join(' '); } catch { return String(r.completion_criteria ?? ''); } })();
-      const prose = [r.question, r.definitions, r.population, crit].filter(Boolean).join(' \n');
-      for (const [name, env] of Object.entries(APPROVAL_ENVELOPES)) {
-        const m = ownActionMatches(prose, (env as { forbiddenActions: RegExp }).forbiddenActions);
-        if (m.length) console.log(`MATCH ${r.orchestration_id} ${r.orc_at} ${name} ${JSON.stringify(m).slice(0, 700)}`);
-      }
-      console.log(`WHY ${r.orchestration_id} ${r.orc_at} ${String(r.failure_reason ?? '').slice(0, 300)}`);
-    }
+    const PRICE_ALL = "SELECT candidate_id FROM cash_needs WHERE request_key LIKE 'goal-price-%' AND state = 'OPEN' AND candidate_id IS NOT NULL";
+    await q('NEED_IDEA_STATES', `SELECT c.project_id, c.state, COUNT(*) AS n FROM russell_candidates c WHERE c.id IN (${PRICE_ALL}) GROUP BY c.project_id, c.state`);
+    await q('REASKED', "SELECT project_id, COUNT(*) AS n, MIN(created_at) AS first FROM russell_candidates WHERE title LIKE 'Causal unknown:%' AND created_at > '2026-11-20T04:10' GROUP BY project_id");
+    await q('PRICE_MISSIONS_SINCE', `SELECT m.project_id, m.state, COUNT(*) AS n FROM russell_missions m WHERE m.candidate_id IN (${PRICE_ALL}) AND m.created_at > '2026-11-20T03:22:30' GROUP BY m.project_id, m.state`);
+    await q('PRICE_PACKETS_SINCE', `SELECT o.status, COUNT(*) AS n, MAX(substr(o.failure_reason,1,160)) AS why FROM russell_missions m JOIN research_orchestrations o ON o.id = m.orchestration_id WHERE m.candidate_id IN (${PRICE_ALL}) AND m.created_at > '2026-11-20T03:22:30' GROUP BY o.status`);
+    await q('PRICE_CLAIMS', `SELECT COUNT(c.id) AS claims FROM russell_missions m JOIN research_fragments f ON f.orchestration_id = m.orchestration_id JOIN research_claims c ON c.fragment_id = f.id WHERE m.candidate_id IN (SELECT candidate_id FROM cash_needs WHERE request_key LIKE 'goal-price-%')`);
   } finally {
     await closeDatabase();
     console.log('CENSUS: OK');
