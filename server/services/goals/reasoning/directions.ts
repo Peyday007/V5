@@ -844,12 +844,33 @@ export function mutate(d: Direction, ctx: Pick<ExploreContext, 'base' | 'operato
 
 const MATERIAL = 0.02;
 
-export function scoreOf(reading: VariantReading, challenged: VariantReading | null): number {
+/**
+ * The moves of a plan that rest on an assumption nobody has measured (a
+ * deposit assumed accepted, a bundle's close assumed ×0.5, a partner's
+ * referrals a day, a price's demand response). A challenge or a diagnostic
+ * test is not a move. A lever a measurement establishes carries another basis
+ * and is not counted.
+ */
+export function assumedMovesOf(changes: readonly StrategyChange[]): StrategyChange[] {
+  return changes.filter((c) => c.basis === 'ASSUMPTION' && c.dimension !== 'EVIDENCE' && !c.label.startsWith('test:'));
+}
+
+/**
+ * A direction's ranking score (invariant 39, owner 2026-11-20: "uncertainty
+ * never silently becomes favorable evidence"). Its reach counts only as far as
+ * it holds with every assumed move taken away (`bare`): the reach its
+ * assumptions add is a hypothesis to test, never what ranks it above a
+ * direction resting on fewer. Until the bare reading is made, a direction that
+ * rests on an assumption is credited with none of its reach. Then the
+ * challenged reach weighs equally; between equals, fewer assumptions win, then
+ * median cash.
+ */
+export function scoreOf(reading: VariantReading, challenged: VariantReading | null, bare: VariantReading | null = null): number {
   if (!reading.feasible) return -1;
   const held = challenged?.feasible ? challenged.reach : 0;
-  // Reach and challenged reach weigh equally; between equals, fewer assumptions win, then median cash.
-  const assumed = reading.changes.filter((c) => c.basis === 'ASSUMPTION' && c.dimension !== 'EVIDENCE').length;
-  return 0.5 * reading.reach + 0.5 * held - 0.002 * assumed + 1e-9 * reading.settledP50;
+  const assumed = assumedMovesOf(reading.changes).length;
+  const established = assumed === 0 ? reading.reach : bare?.feasible ? Math.min(reading.reach, bare.reach) : 0;
+  return 0.5 * established + 0.5 * held - 0.002 * assumed + 1e-9 * reading.settledP50;
 }
 
 export async function exploreDirections(ctx: ExploreContext): Promise<Exploration> {
@@ -922,7 +943,7 @@ export async function exploreDirections(ctx: ExploreContext): Promise<Exploratio
         const c = await challengeOf(full(r.direction));
         r.challenged = c.weaker;
         r.bare = c.bare;
-        r.score = scoreOf(r.reading, r.challenged);
+        r.score = scoreOf(r.reading, r.challenged, r.bare);
       },
     );
   };
@@ -956,7 +977,7 @@ export async function exploreDirections(ctx: ExploreContext): Promise<Exploratio
   const greedyChallenge = await challengeOf(greedyProgram);
   greedyRow.challenged = greedyChallenge.weaker;
   greedyRow.bare = greedyChallenge.bare;
-  greedyRow.score = scoreOf(ctx.greedyReading, greedyRow.challenged);
+  greedyRow.score = scoreOf(ctx.greedyReading, greedyRow.challenged, greedyRow.bare);
   const budget = explorationBudget({ openings: ctx.base.openings.length + (ctx.heldOpenings ?? 0), operators: ctx.operators.length, binding: ctx.binding.filter((b) => b.liftReach > 0).length, reach: Math.min(ctx.greedyReading.reach, greedyRow.challenged?.reach ?? 0), required: ctx.required, structural: ctx.structural });
   evaluationCap = Math.min(MAX_EVALUATIONS, evaluations + EVALUATIONS_PER_DIRECTION * budget);
 

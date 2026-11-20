@@ -264,7 +264,16 @@ describe('plan integrity holds across varied goals', () => {
         }).slice(0, 14),
         unpriced: (p.unpriced ?? []).map((u) => u.buyer).slice(0, 4),
         integrity: p.integrity,
+        // What the reconstruction would reach only if its unmeasured assumptions held: reported, never the headline (invariant 39).
+        upside: p.adoption?.upside ? Math.round(p.adoption.upside.reach * 1000) / 10 : null,
       });
+      // A reconstructed candidate is reported at what it holds without its assumed moves; their upside is said beside it (invariant 39).
+      if (p.acceptance.candidate?.source === 'RECONSTRUCTED') {
+        const r = p.reconstruction!;
+        const assumed = r.best.changes.some((c) => c.basis === 'ASSUMPTION' && c.dimension !== 'EVIDENCE' && !c.label.startsWith('test:'));
+        expect(p.acceptance.candidate.reach, v.id).toBe(assumed ? r.established!.reach : r.best.reach);
+        if (assumed) expect(p.acceptance.sentence, v.id).toContain(p.acceptance.candidate.assumedUpside!.sentence);
+      }
       // The reading carries its integrity, and the checker agrees with it.
       expect(p.integrity).toBeDefined();
       expect(planIntegrity(integrityInput(p)).violations).toEqual(p.integrity);
