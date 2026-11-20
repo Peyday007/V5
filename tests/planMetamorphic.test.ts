@@ -642,12 +642,15 @@ describe('plan steps: a reconstruction\'s moves belong to its members', () => {
   const B = { id: 'cop_kitchen', title: 'Resale of liquidated restaurant kitchen equipment' };
   const partnerOn = (o: { id: string; title: string }): StrategyChange => ({
     dimension: 'PARTNER', op: 'partner:referral-partner', clone: `${o.id}~partner`, label: 'referral-partner',
-    detail: `sell "${o.title.slice(0, 80)}" through a partner who already serves its buyers (a supplier or complementary vendor), paying 10–20%`, cost: 0, basis: 'ASSUMPTION', startDay: { low: 5, high: 10 },
+    detail: `sell "${o.title.slice(0, 80)}" through a partner who already serves its buyers (a supplier or complementary vendor), paying 10–20%`,
+    // An ESTIMATE here: these tests read how members resolve, and a reconstruction resting only on assumptions is never adopted (invariant 39).
+    cost: 0, basis: 'ESTIMATE', startDay: { low: 5, high: 10 },
   });
-  const reconstructionOf = (changes: StrategyChange[], members: string[]): Reconstruction => ({
-    required: 0.9, requiredReply: null, flags: [], baseline: { reach: 0.3, settledP50: 1_000 },
-    best: { key: 'best', changes, members, reach: 0.8, settledP10: 0, settledP50: 9_000, settledP90: 20_000, basis: 'COVERAGE', committed: 0, feasible: true, why: null, worlds: 400, implausible: [] },
-  }) as unknown as Reconstruction;
+  const reconstructionOf = (changes: StrategyChange[], members: string[]): Reconstruction => {
+    const best = { key: 'best', changes, members, reach: 0.8, settledP10: 0, settledP50: 9_000, settledP90: 20_000, basis: 'COVERAGE', committed: 0, feasible: true, why: null, worlds: 400, implausible: [] };
+    // No assumed move, so the plan without assumptions is the plan itself.
+    return { required: 0.9, requiredReply: null, flags: [], baseline: { reach: 0.3, settledP50: 1_000 }, best, established: best } as unknown as Reconstruction;
+  };
   const titles = new Map([[A.id, A.title], [B.id, B.title]]);
 
   /*

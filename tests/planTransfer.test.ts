@@ -325,7 +325,9 @@ describe('plan integrity holds across varied goals', () => {
    */
   it('at least two variants read as reconstructed plans, each with empty integrity', () => {
     const reconstructed = [...readings.entries()].filter(([, p]) => p.adoption?.source === 'RECONSTRUCTED' && p.acceptance.candidate?.source === 'RECONSTRUCTED');
-    expect(reconstructed.map(([id]) => id).length, [...readings.keys()].join(', ')).toBeGreaterThanOrEqual(2);
+    // At least one (two until 2026-11-20): a reconstruction resting only on assumed levers is no longer adopted (invariant 39),
+    // and planIntegrityRegressions holds the reconstructed step structure directly.
+    expect(reconstructed.map(([id]) => id).length, [...readings.keys()].join(', ')).toBeGreaterThanOrEqual(1);
     for (const [id, p] of reconstructed) {
       expect(p.integrity, id).toEqual([]);
       expect(planIntegrity(integrityInput(p)).violations, id).toEqual([]);
