@@ -42,6 +42,7 @@ export type CompilerProfileId =
   | 'PUBLIC_RECORDS'
   | 'MARKET_DISCOVERY'
   | 'GOAL_MECHANISM'
+  | 'GOAL_PRICE'
   | 'COMMERCIAL_VALIDATION'
   | 'COMMERCIAL_VALIDATION_SCREEN'
   | 'MONETIZATION_ATTRIBUTE'
@@ -694,6 +695,50 @@ const GOAL_MECHANISM: CompilerProfile = {
     ...MARKET_DISCOVERY.failureConditions.slice(1),
   ],
 };
+
+/**
+ * A goal's own price question: what a kind of buyer pays, not who is asking.
+ *
+ * Production, 2026-11-20 (read-only probe, claude/probe-price-answers): the
+ * goal price questions (`goal-price-` needs) compiled as plain
+ * `MARKET_DISCOVERY`, whose one REQUIRED lane is `demand_signal` — a specific
+ * open request. A price is not a request, so 49 claims were submitted and the
+ * fragments ended BLOCKED, "1 required evidence lane(s) have no accepted claim:
+ * demand_signal"; packets were cancelled ("No fragment cleared its evidence
+ * gate") or parked for a person, and no plan ever got a price. §14: a claim is
+ * judged by the standard of what it claims.
+ *
+ * Here `economics` — a published price, rate, fee schedule or stated figure,
+ * at its own evidence kind and floor — is the REQUIRED lane, and a request is
+ * optional evidence beside it. Same envelope, sources, gate and roles.
+ */
+const GOAL_PRICE: CompilerProfile = {
+  ...MARKET_DISCOVERY,
+  id: 'GOAL_PRICE',
+  // A price a plan already waits on goes ahead of the goal's own new search (`goalFirstSql`).
+  launchOrdinal: 140,
+  lanes: MARKET_DISCOVERY.lanes.map((lane) =>
+    lane.id === 'demand_signal'
+      ? { ...lane, necessity: 'CONDITIONAL' as const }
+      : lane.id === 'economics'
+        ? { ...lane, necessity: 'REQUIRED' as const }
+        : lane,
+  ),
+  failureConditions: [
+    'No published price, rate, fee schedule or stated figure for these buyers can be located — ' +
+      'only general statements that they pay something.',
+    ...MARKET_DISCOVERY.failureConditions.slice(1),
+  ],
+};
+
+/**
+ * The goal-price profile, for the compiler to use in place of
+ * `MARKET_DISCOVERY` when the idea answers a goal's own price question. Null
+ * for any envelope whose profile is not market discovery.
+ */
+export function goalPriceProfile(envelopeId: string): CompilerProfile | null {
+  return profileFor(envelopeId)?.id === 'MARKET_DISCOVERY' ? GOAL_PRICE : null;
+}
 
 /**
  * The goal-search profile, for the compiler to use in place of

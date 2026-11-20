@@ -75,7 +75,18 @@ import { cardFact } from '../../repos/cashCardFacts.ts';
 import { getClaim } from '../../repos/research.ts';
 import { getCashMode } from '../../repos/cashMode.ts';
 import { isSelectableCashEnvelope } from '../cash/lifecycle.ts';
-import { goalMechanismProfile, profileFor, validationScreenProfile, type CompilerProfile } from './compilerProfiles.ts';
+import { goalMechanismProfile, goalPriceProfile, profileFor, validationScreenProfile, type CompilerProfile } from './compilerProfiles.ts';
+import { GOAL_PRICE_KEY_PREFIX } from '../goals/goalWork.ts';
+import { getDb } from '../../db/database.ts';
+
+/** Whether a goal's own price question (`goal-price-` need) points at this idea. Read from the need row, never inferred. */
+async function answersGoalPrice(candidateId: string): Promise<boolean> {
+  const row = await getDb().get<{ n: number | string }>(
+    `SELECT COUNT(*) AS n FROM cash_needs WHERE candidate_id = ? AND request_key LIKE '${GOAL_PRICE_KEY_PREFIX}-%'`,
+    [candidateId],
+  );
+  return Number(row?.n ?? 0) > 0;
+}
 import { diveStageForCandidate } from '../cash/diveStage.ts';
 import { manufacturingRoundForCandidate } from '../../repos/manufacturing.ts';
 import { dealRoundForCandidate } from '../../repos/dealflow.ts';
@@ -663,6 +674,9 @@ export async function compileMission(input: {
     const round = await roundForCandidate(candidate.id);
     if (round && round.bucketId.startsWith(GOAL_BUCKET_PREFIX)) {
       profile = goalMechanismProfile(envelopeId) ?? profile;
+    } else if (await answersGoalPrice(candidate.id)) {
+      // A goal's price question is answered by a price, not by an open request (§14).
+      profile = goalPriceProfile(envelopeId) ?? profile;
     }
   }
   if (!profile) {

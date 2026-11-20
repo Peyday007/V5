@@ -201,6 +201,32 @@ describe('the goal tick sends the populations nothing prices to research, as the
     expect((await listNeeds({ projectId })).find((n) => n.requestKey?.startsWith(`${GOAL_PRICE_KEY_PREFIX}-`))!.candidateId).toBe(before);
   });
 
+  it('compiles a price question to require a price, not an open request (§14)', async () => {
+    // Production 2026-11-20: compiled as plain market discovery, every price fragment was BLOCKED
+    // for "1 required evidence lane(s) have no accepted claim: demand_signal".
+    const portfolio = { best: null, causal: null, marketHistory: [], unpriced: [population(1)] } as unknown as GoalPortfolio;
+    await sendPortfolioNeeds({ goalId: 'wst_price_goal', projectId, portfolio });
+    const need = (await listNeeds({ projectId })).find((n) => n.requestKey?.startsWith(`${GOAL_PRICE_KEY_PREFIX}-`))!;
+    // A sprint gives the project its discovery envelope; off the in-code slug map, so that is the one it compiles under.
+    const { createUser } = await import('../server/repos/identity.ts');
+    const { activate } = await import('../server/services/cash/lifecycle.ts');
+    const userId = (await createUser({ email: `price-${Math.random().toString(36).slice(2, 10)}@example.test`, displayName: 'Owner', password: 'correct horse battery staple' })).id;
+    expect((await activate({ projectId, ownerUserId: userId, actorUserId: userId, objective: 'Maximize usable cash over the next few weeks.' })).ok).toBe(true);
+    await getDb().run('UPDATE projects SET slug = ? WHERE id = ?', [`goalprice-${projectId.slice(-6)}`, projectId]);
+    const { compileMission } = await import('../server/services/russell/compiler.ts');
+    const { getProject } = await import('../server/repos/projects.ts');
+    const compiled = await compileMission({
+      candidate: (await getCandidate(need.candidateId!))!,
+      project: (await getProject(projectId))!,
+      archive: { claimsConsidered: 0, contradicting: [] },
+    });
+    expect(compiled.ok, compiled.ok ? '' : compiled.reason).toBe(true);
+    if (!compiled.ok) return;
+    const lanes = compiled.mission.fragments[0]!.requiredEvidence;
+    expect(lanes.find((lane) => lane.id === 'economics')!.necessity).toBe('REQUIRED');
+    expect(lanes.find((lane) => lane.id === 'demand_signal')!.necessity).toBe('CONDITIONAL');
+  });
+
   it('a context-free causal unknown is still not the goal’s idea', async () => {
     const portfolio = {
       best: null,
