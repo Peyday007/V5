@@ -392,12 +392,25 @@ export const MAX_REVERSE = 4;
 /** Longest stretch construction holds the event loop before handing it back (2026-11-05 11.6 s stalls). */
 export const YIELD_EVERY_MS = 25;
 
+/**
+ * Untrusted words are screened with their quotation marks removed. The screen
+ * exempts a quoted span when the words before it attribute it to a source
+ * (`actorScope.ts`), which is right for the opening's own buying signal Brain
+ * quotes, but text from a record or a post is not Brain's attributed quotation:
+ * it can carry its own lead-in (*the listing says: "purchase the list"*) and
+ * would launder an instruction through the exemption. Without the marks the
+ * quoted words are read exactly as the unquoted ones are.
+ */
+function unquoted(text: string): string {
+  return text.replace(/["“”]/g, ' ');
+}
+
 function safeName(text: string): boolean {
   if (!text || text.length > 240) return false;
   if (statesNamedIn(text).length > 0) return false;
   // A place alone ("germany") is where, never a population of buyers or what they buy (production, 2026-11-18).
   if (namesOnlyAPlace(text)) return false;
-  return Object.values(APPROVAL_ENVELOPES).every((envelope) => !describesOwnAction(`a buyer population: ${text}`, envelope.forbiddenActions));
+  return Object.values(APPROVAL_ENVELOPES).every((envelope) => !describesOwnAction(`a buyer population: ${unquoted(text)}`, envelope.forbiddenActions));
 }
 
 /**
