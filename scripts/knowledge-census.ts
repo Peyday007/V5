@@ -27,6 +27,7 @@ async function main(): Promise<void> {
     const FRAGS = `SELECT f.id FROM russell_missions m JOIN research_fragments f ON f.orchestration_id = m.orchestration_id WHERE m.candidate_id IN (${PN})`;
     const tagged = await getDb().all<{ id: string; project_id: string; q: string | null; amt: number | null }>(`SELECT c.id, f.project_id, c.structural_qualifier AS q, c.structural_amount_cents AS amt FROM research_claims c JOIN research_fragments f ON f.id = c.fragment_id WHERE c.fragment_id IN (${FRAGS}) AND c.accepted = 1 AND c.structural_subject = 'price_per_unit'`);
     console.log(`TAGGED ${JSON.stringify(tagged.map((t) => ({ p: t.project_id.slice(0, 12), q: t.q, amt: t.amt })))}`);
+    await q('FACTS_FROM_PRICE_CLAIMS', `SELECT cf.fact_key, cf.status, cf.segment, cf.low, cf.high, substr(cf.project_id,1,12) AS p, cf.created_at FROM construction_facts cf WHERE cf.source_claim_id IN (SELECT c.id FROM research_claims c WHERE c.fragment_id IN (${FRAGS}) AND c.accepted = 1)`);
     const { backfillCandidates } = await import('../server/services/industry/expand.ts');
     const ids = new Set(tagged.map((t) => t.id));
     for (const project of [...new Set(tagged.map((t) => t.project_id))]) {
