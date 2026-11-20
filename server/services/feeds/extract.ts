@@ -367,6 +367,13 @@ export function scopeOf(item: Pick<ExtractableItem, 'title' | 'body'>): FactScop
   return { jurisdiction: regions.join('|'), basis: `stated in record: ${places.map((p) => `"${p.text}"`).slice(0, 3).join(', ')}` };
 }
 
+const TOKENISED_MARK = /(?:^| )(?:[,?!;)\]]|[(\[])(?: |$)/;
+
+/** Whether a field carries the tokeniser's mark: punctuation standing as its own space-separated token. */
+export function isTokenised(raw: string): boolean {
+  return TOKENISED_MARK.test(raw);
+}
+
 /**
  * Undo word tokenisation in a stored field, keeping where every character came
  * from. Some publishers' indexes (GDELT's article titles) store a headline as
@@ -375,8 +382,16 @@ export function scopeOf(item: Pick<ExtractableItem, 'title' | 'body'>): FactScop
  * nothing out of `1 , 000`. Only spaces are ever dropped, never a character
  * added or changed, so `toRaw[i]` is the index in `raw` of `text[i]` and every
  * span read from `text` maps back to the exact raw characters.
+ *
+ * Only a field that carries the tokeniser's own mark is rejoined: a comma,
+ * question mark, bracket or other punctuation standing as a token of its own,
+ * with a space on both sides (`Tamales , Including`, `( FLD )`). Ordinary
+ * prose never writes that, so a field from a source that does not tokenise
+ * (`rose 5 % today`, `$ 1,200`, `Why now?`) is read exactly as written and
+ * its evidence spans are unchanged.
  */
 export function untokenise(raw: string): { text: string; toRaw: number[] } {
+  if (!isTokenised(raw)) return { text: raw, toRaw: Array.from({ length: raw.length }, (_v, i) => i) };
   const drop = new Set<number>();
   const mark = (pattern: RegExp): void => {
     for (const m of raw.matchAll(pattern)) for (let i = 0; i < m[0].length; i++) drop.add(m.index + i);

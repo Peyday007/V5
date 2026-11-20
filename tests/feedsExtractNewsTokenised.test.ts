@@ -6,7 +6,7 @@
  * below are the recorded failures, verbatim.
  */
 import { describe, expect, it } from 'vitest';
-import { extractItem, extractItems, readable, untokenise, type ExtractableItem, type ItemField } from '../server/services/feeds/extract.ts';
+import { extractItem, extractItems, isTokenised, readable, untokenise, type ExtractableItem, type ItemField } from '../server/services/feeds/extract.ts';
 
 function news(id: string, title: string, url: string, source = 'news-event-rush'): ExtractableItem {
   return {
@@ -121,5 +121,33 @@ describe('tokenised news titles and unmapped feed sources are read by code', () 
     expect(text).toBe('Fold (FLD) Q3 2026 Earnings Call Transcript');
     for (let i = 0; i < text.length; i++) expect(rawTitle[toRaw[i]!]).toBe(text[i]);
     expect(untokenise('Plain prose, already readable.').text).toBe('Plain prose, already readable.');
+  });
+
+  it('rejoins only fields that carry the tokeniser\'s mark, and reads every other field exactly as written', () => {
+    for (const item of [RECORDED.fold, RECORDED.travel, RECORDED.bellmead, RECORDED.tocaya]) expect(isTokenised(item.title), item.title).toBe(true);
+    // Ordinary prose from a source that never tokenises: spaces around '%', '$', '?', ',' and brackets are the writer's own.
+    for (const prose of [
+      'Prices fall 5 % as the chain pays $ 40 per hour to 1,200 staff. Why now?',
+      'Opening hours: 9 am to 5 pm (weekdays), closed Sundays.',
+      'Plain prose, already readable.',
+      RECORDED.mall.title,
+      EDGAR.body!,
+    ]) {
+      expect(isTokenised(prose), prose).toBe(false);
+      const { text, toRaw } = untokenise(prose);
+      expect(text).toBe(prose);
+      expect(toRaw).toEqual([...prose].map((_c, i) => i));
+    }
+    // One item, two fields: the tokenised title is rejoined for reading; the prose body is not touched.
+    const mixed: ExtractableItem = { ...RECORDED.bellmead, id: 'm1', body: 'Volunteers expect 5 % more ( maybe ) than last year , organisers said.' };
+    expect(isTokenised(mixed.body!)).toBe(true);
+    const prose: ExtractableItem = { ...RECORDED.bellmead, id: 'm2', body: 'Volunteers expect 5 % more than last year, organisers said.' };
+    expect(untokenise(prose.body!).text).toBe(prose.body);
+    for (const item of [mixed, prose]) {
+      for (const fact of extractItem(item)) {
+        const span = fact.provenance.span!;
+        expect(raw(item, fact.evidence.field).slice(span.start, span.end)).toBe(span.text);
+      }
+    }
   });
 });
