@@ -27,10 +27,9 @@ async function main(): Promise<void> {
     const FRAGS = `SELECT f.id FROM russell_missions m JOIN research_fragments f ON f.orchestration_id = m.orchestration_id WHERE m.candidate_id IN (${PN})`;
     await q('PACKETS', `SELECT o.status, COUNT(*) AS n FROM russell_missions m JOIN research_orchestrations o ON o.id = m.orchestration_id WHERE m.candidate_id IN (${PN}) GROUP BY o.status`);
     await q('FRAGS', `SELECT f.status, (f.required_evidence LIKE '%"id":"economics"%"necessity":"REQUIRED"%') AS econ, COUNT(*) AS n FROM research_fragments f WHERE f.id IN (${FRAGS}) GROUP BY f.status, econ`);
-    await q('CLAIM_COLS', `SELECT * FROM research_claims WHERE fragment_id IN (${FRAGS}) LIMIT 1`);
-    await q('FACT_COLS', 'SELECT * FROM construction_facts LIMIT 1');
-    await q('ACCEPTED_FRAG_CLAIMS', `SELECT f.id AS frag, f.status, c.id AS claim, substr(c.statement,1,160) AS st, c.evidence_lane FROM research_fragments f JOIN research_claims c ON c.fragment_id = f.id WHERE f.id IN (${FRAGS}) AND f.status = 'ACCEPTED' LIMIT 12`);
-    await q('FACTS_FROM_PRICE_CLAIMS', `SELECT cf.key, cf.status, cf.segment, cf.low, cf.high, cf.project_id, cf.created_at FROM construction_facts cf WHERE cf.source_claim_id IN (SELECT c.id FROM research_claims c WHERE c.fragment_id IN (${FRAGS})) LIMIT 20`);
+    await q('ACCEPTED_FRAG_CLAIMS', `SELECT c.evidence_lane, c.accepted, c.structural_finding, c.structural_subject, (c.structural_amount_cents IS NOT NULL) AS has_amount, COUNT(*) AS n FROM research_claims c WHERE c.fragment_id IN (${FRAGS}) GROUP BY c.evidence_lane, c.accepted, c.structural_finding, c.structural_subject, has_amount`);
+    await q('FACTS_FROM_PRICE_CLAIMS', `SELECT cf.fact_key, cf.status, cf.segment, cf.low, cf.high, cf.project_id, cf.created_at FROM construction_facts cf WHERE cf.source_claim_id IN (SELECT c.id FROM research_claims c WHERE c.fragment_id IN (${FRAGS})) LIMIT 20`);
+    await q('ECON_SAMPLE', `SELECT substr(c.claim,1,220) AS claim, substr(c.evidence_excerpt,1,160) AS ex FROM research_claims c WHERE c.fragment_id IN (${FRAGS}) AND c.accepted = 1 AND c.evidence_lane = 'economics' LIMIT 5`);
   } finally {
     await closeDatabase();
     console.log('CENSUS: OK');
