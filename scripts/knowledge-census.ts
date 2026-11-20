@@ -23,20 +23,14 @@ async function step(label: string, fn: () => Promise<unknown>): Promise<void> {
 async function main(): Promise<void> {
   await initDatabase();
   try {
-    const PRICE_ALL = "SELECT candidate_id FROM cash_needs WHERE request_key LIKE 'goal-price-%' AND state = 'OPEN' AND candidate_id IS NOT NULL";
-    await q('NEED_IDEA_STATES', `SELECT c.project_id, c.state, COUNT(*) AS n FROM russell_candidates c WHERE c.id IN (${PRICE_ALL}) GROUP BY c.project_id, c.state`);
-    await q('REASKED', "SELECT project_id, COUNT(*) AS n, MIN(created_at) AS first FROM russell_candidates WHERE title LIKE 'Causal unknown:%' AND created_at > '2026-11-20T04:10' GROUP BY project_id");
-    await q('PRICE_MISSIONS_SINCE', `SELECT m.project_id, m.state, COUNT(*) AS n FROM russell_missions m WHERE m.candidate_id IN (${PRICE_ALL}) AND m.created_at > '2026-11-20T03:22:30' GROUP BY m.project_id, m.state`);
-    await q('PRICE_PACKETS_SINCE', `SELECT o.status, COUNT(*) AS n, MAX(substr(o.failure_reason,1,160)) AS why FROM russell_missions m JOIN research_orchestrations o ON o.id = m.orchestration_id WHERE m.candidate_id IN (${PRICE_ALL}) AND m.created_at > '2026-11-20T03:22:30' GROUP BY o.status`);
-    await q('PRICE_PACKETS_ALL', `SELECT o.status, o.verdict, COUNT(*) AS n FROM russell_missions m JOIN research_orchestrations o ON o.id = m.orchestration_id WHERE m.candidate_id IN (SELECT candidate_id FROM cash_needs WHERE request_key LIKE 'goal-price-%') AND m.created_at > '2026-11-20T03:22:30' GROUP BY o.status, o.verdict`);
-    await q('PRICE_CLAIM_STATES', `SELECT c.status, COUNT(*) AS n FROM russell_missions m JOIN research_fragments f ON f.orchestration_id = m.orchestration_id JOIN research_claims c ON c.fragment_id = f.id WHERE m.candidate_id IN (SELECT candidate_id FROM cash_needs WHERE request_key LIKE 'goal-price-%') GROUP BY c.status`);
-    await q('PRICE_CLAIM_SAMPLE', `SELECT substr(c.claim_text,1,200) AS t, c.status, c.created_at FROM russell_missions m JOIN research_fragments f ON f.orchestration_id = m.orchestration_id JOIN research_claims c ON c.fragment_id = f.id WHERE m.candidate_id IN (SELECT candidate_id FROM cash_needs WHERE request_key LIKE 'goal-price-%') ORDER BY c.created_at DESC LIMIT 6`);
-    await q('PRICE_FRAG_STATES', `SELECT f.status, substr(f.blocked_reason,1,120) AS why, COUNT(*) AS n FROM russell_missions m JOIN research_fragments f ON f.orchestration_id = m.orchestration_id WHERE m.candidate_id IN (SELECT candidate_id FROM cash_needs WHERE request_key LIKE 'goal-price-%') AND m.created_at > '2026-11-20T03:22:30' GROUP BY f.status, why`);
     const PN = "SELECT candidate_id FROM cash_needs WHERE request_key LIKE 'goal-price-%' AND candidate_id IS NOT NULL";
-    await q('NEW_PROFILE_FRAGS', `SELECT f.status, (f.required_evidence LIKE '%"id":"economics"%"necessity":"REQUIRED"%') AS econ_required, COUNT(*) AS n FROM russell_missions m JOIN research_fragments f ON f.orchestration_id = m.orchestration_id WHERE m.candidate_id IN (${PN}) AND m.created_at > '2026-11-20T09:30' GROUP BY f.status, econ_required`);
-    await q('ACCEPTED_FRAGS_ALL', `SELECT f.status, COUNT(*) AS n FROM russell_missions m JOIN research_fragments f ON f.orchestration_id = m.orchestration_id WHERE m.candidate_id IN (${PN}) GROUP BY f.status`);
-    await q('NEED_STATES_ALL', "SELECT state, COUNT(*) AS n FROM cash_needs WHERE request_key LIKE 'goal-price-%' GROUP BY state");
-    await q('PRICE_CLAIMS', `SELECT COUNT(c.id) AS claims FROM russell_missions m JOIN research_fragments f ON f.orchestration_id = m.orchestration_id JOIN research_claims c ON c.fragment_id = f.id WHERE m.candidate_id IN (SELECT candidate_id FROM cash_needs WHERE request_key LIKE 'goal-price-%')`);
+    const FRAGS = `SELECT f.id FROM russell_missions m JOIN research_fragments f ON f.orchestration_id = m.orchestration_id WHERE m.candidate_id IN (${PN})`;
+    await q('PACKETS', `SELECT o.status, COUNT(*) AS n FROM russell_missions m JOIN research_orchestrations o ON o.id = m.orchestration_id WHERE m.candidate_id IN (${PN}) GROUP BY o.status`);
+    await q('FRAGS', `SELECT f.status, (f.required_evidence LIKE '%"id":"economics"%"necessity":"REQUIRED"%') AS econ, COUNT(*) AS n FROM research_fragments f WHERE f.id IN (${FRAGS}) GROUP BY f.status, econ`);
+    await q('CLAIM_COLS', `SELECT * FROM research_claims WHERE fragment_id IN (${FRAGS}) LIMIT 1`);
+    await q('FACT_COLS', 'SELECT * FROM construction_facts LIMIT 1');
+    await q('ACCEPTED_FRAG_CLAIMS', `SELECT f.id AS frag, f.status, c.id AS claim, substr(c.statement,1,160) AS st, c.evidence_lane FROM research_fragments f JOIN research_claims c ON c.fragment_id = f.id WHERE f.id IN (${FRAGS}) AND f.status = 'ACCEPTED' LIMIT 12`);
+    await q('FACTS_FROM_PRICE_CLAIMS', `SELECT cf.key, cf.status, cf.segment, cf.low, cf.high, cf.project_id, cf.created_at FROM construction_facts cf WHERE cf.source_claim_id IN (SELECT c.id FROM research_claims c WHERE c.fragment_id IN (${FRAGS})) LIMIT 20`);
   } finally {
     await closeDatabase();
     console.log('CENSUS: OK');
