@@ -62,7 +62,7 @@ export interface ExtractableItem {
 }
 
 /** The version of this extractor's code, recorded on every fact so a change in reading is visible in the rows. */
-export const EXTRACTOR_VERSION = 'feeds-extract/3';
+export const EXTRACTOR_VERSION = 'feeds-extract/4';
 
 /**
  * What a fact is epistemically. Extraction emits only OBSERVED and DERIVED;
@@ -110,7 +110,7 @@ export type RecordKind = 'JOB_POSTING' | 'SUPPLIER_AD' | 'PLATFORM_PRICE' | 'STA
  * record itself states a request, `provider` for a seller's advert or listing,
  * `employer` for a job posting (hiring, not buying), `organization` otherwise.
  */
-export type FactField = 'price' | 'quantity' | 'date' | 'location' | 'deliverable' | 'buyer' | 'provider' | 'employer' | 'organization';
+export type FactField = 'price' | 'quantity' | 'date' | 'location' | 'occasion' | 'deliverable' | 'buyer' | 'provider' | 'employer' | 'organization';
 
 /** The item field a value was read from. */
 export type ItemField = 'title' | 'body' | 'organization' | 'publishedAt';
@@ -143,7 +143,7 @@ export interface FactScope {
 
 /** Why the fact is believed: the reading rule that produced it and what it rests on. */
 export interface ConfidenceBasis {
-  rule: 'ROLE_FROM_RECORD_KIND' | 'TITLE' | 'MONEY_FIGURE' | 'QUANTITY' | 'STATED_DATE' | 'PUBLISHED_DATE' | 'STATED_PLACE';
+  rule: 'ROLE_FROM_RECORD_KIND' | 'TITLE' | 'MONEY_FIGURE' | 'QUANTITY' | 'STATED_DATE' | 'PUBLISHED_DATE' | 'STATED_PLACE' | 'STATED_OCCASION';
   /** Whether the evidence text was found verbatim in the record (a located span) or not. */
   evidence: 'VERBATIM_SPAN' | 'SPAN_NOT_LOCATED';
   /** One line a person can check against the record. */
@@ -211,6 +211,8 @@ const SOURCE_KINDS: Record<string, RecordKind> = {
   remoteok: 'JOB_POSTING',
   remotive: 'JOB_POSTING',
   'federal-register-rules': 'PUBLIC_RECORD',
+  // An 8-K is a company's own filing about its activity: a public record, never a request to buy.
+  'sec-edgar-8k': 'PUBLIC_RECORD',
   'code-signal': 'PUBLIC_RECORD',
   // Each side of the HN freelance thread states what it is: a request to buy outside work, or a provider's offer.
   'hn-seeking-freelancer': 'STATED_REQUEST',
@@ -365,6 +367,82 @@ export function scopeOf(item: Pick<ExtractableItem, 'title' | 'body'>): FactScop
   return { jurisdiction: regions.join('|'), basis: `stated in record: ${places.map((p) => `"${p.text}"`).slice(0, 3).join(', ')}` };
 }
 
+/**
+ * Undo word tokenisation in a stored field, keeping where every character came
+ * from. Some publishers' indexes (GDELT's article titles) store a headline as
+ * space-separated tokens — `Fold ( FLD ) Q3 2026`, `feed 1 , 000 families`,
+ * `holidays ? Here` — and the readers below, written for ordinary prose, read
+ * nothing out of `1 , 000`. Only spaces are ever dropped, never a character
+ * added or changed, so `toRaw[i]` is the index in `raw` of `text[i]` and every
+ * span read from `text` maps back to the exact raw characters.
+ */
+export function untokenise(raw: string): { text: string; toRaw: number[] } {
+  const drop = new Set<number>();
+  const mark = (pattern: RegExp): void => {
+    for (const m of raw.matchAll(pattern)) for (let i = 0; i < m[0].length; i++) drop.add(m.index + i);
+  };
+  // A space before closing punctuation: `Tamales , Including`, `holidays ?`, `FLD )`, `50 %`.
+  mark(/ +(?=[,?!;:)\]%]|\.(?:\s|$))/g);
+  // A space after opening punctuation or a currency symbol: `( FLD`, `$ 100`.
+  mark(/(?<=[([$£€]) +/g);
+  // A thousands group split around its comma: `1 , 000` (the space before the comma is dropped above).
+  mark(/(?<=\d ?,) +(?=\d{3}(?!\d))/g);
+  let text = '';
+  const toRaw: number[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    if (drop.has(i)) continue;
+    text += raw[i];
+    toRaw.push(i);
+  }
+  return { text, toRaw };
+}
+
+/**
+ * A period or occasion a news or public record names: a fiscal quarter
+ * (`Q3 2026`), a season or holiday buyers prepare for, or the business event
+ * the record reports (an opening, a shutdown). It is what the record says it
+ * is about, read verbatim — not a date, so it never enters a date window.
+ */
+const QUARTER = /\b(?:Q([1-4])|(first|second|third|fourth) quarter(?: of)?)\s+(?:FY\s?)?((?:19|20)\d{2})\b/gi;
+const OCCASION =
+  /\b(thanksgiving|christmas|hanukkah|black friday|cyber monday|small business saturday|holiday season|holidays|holiday|new year'?s(?: eve| day)?|tax season|tax day|open enrollment|back[- ]to[- ]school|halloween|valentine'?s day|mother'?s day|father'?s day|memorial day|labor day|fourth of july|independence day|easter|super bowl|graduation season|wedding season|festival|grand opening|opening soon|now open|shutting down|will be discontinued|end of support|sunsetting|closes its doors|going out of business|closing all)\b/gi;
+const QUARTER_WORDS = ['first', 'second', 'third', 'fourth'];
+
+/** Every period or occasion a text names, normalized, with where it sits. */
+export function readOccasions(text: string): { occasion: string; text: string; index: number }[] {
+  const out: { occasion: string; text: string; index: number }[] = [];
+  for (const m of text.matchAll(QUARTER)) {
+    const q = m[1] ? Number(m[1]) : QUARTER_WORDS.indexOf(m[2]!.toLowerCase()) + 1;
+    out.push({ occasion: `${m[3]}-Q${q}`, text: m[0], index: m.index });
+  }
+  for (const m of text.matchAll(OCCASION)) {
+    out.push({ occasion: m[0].toLowerCase().replace(/[\s-]+/g, ' ').replace(/'/g, ''), text: m[0], index: m.index });
+  }
+  return out.sort((a, b) => a.index - b.index);
+}
+
+/**
+ * A count of things a news headline states (`1,000 families`). News states
+ * how many people or places something reaches without a unit `readQuantities`
+ * knows, so it is read here, for news only: a number of two or more digits (or
+ * a grouped one) followed by a plural word. A year, a percentage, a price and a
+ * span of time are not counts.
+ */
+const NEWS_COUNT = /(?<![$£€¥\d.,])(\d{1,3}(?:,\d{3})+|\d{2,})\s+([A-Za-z]{3,}s)\b(?!\s*%)/g;
+const NOT_COUNTED = /^(?:seconds|minutes|hours|days|weeks|months|years|decades|percent|cents|dollars|euros|pounds)$/i;
+
+function newsCounts(text: string): { value: number; unit: string; text: string; index: number }[] {
+  const out: { value: number; unit: string; text: string; index: number }[] = [];
+  for (const m of text.matchAll(NEWS_COUNT)) {
+    const digits = m[1]!;
+    if (/^(?:19|20)\d{2}$/.test(digits) || NOT_COUNTED.test(m[2]!)) continue;
+    const word = m[2]!.toLowerCase();
+    const unit = word.endsWith('ies') ? `${word.slice(0, -3)}y` : word.slice(0, -1);
+    out.push({ value: Number(digits.replace(/,/g, '')), unit, text: m[0], index: m.index });
+  }
+  return out;
+}
+
 /** The deliverable a record is about, as a comparable key. Job titles lose seniority and work-mode words. */
 function deliverableOf(item: ExtractableItem, kind: RecordKind): string | null {
   const key = kind === 'JOB_POSTING' || ROLE_TITLE_SOURCES.has(item.source) ? titleKey(item.title) : item.title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -444,12 +522,25 @@ export function extractItem(item: ExtractableItem): ExtractedFact[] {
   if (deliverable) push({ key: `deliverable:${item.id}`, field: 'deliverable', value: deliverable, unit: null, currency: null, evidence: ev('title', item.title) }, 'TITLE');
 
   for (const field of ['title', 'body'] as const) {
-    const text = field === 'title' ? item.title : item.body ?? '';
-    if (!text) continue;
+    const raw = field === 'title' ? item.title : item.body ?? '';
+    if (!raw) continue;
+    // Readers see the untokenised text; every span and evidence text is mapped back to the raw field.
+    const { text, toRaw } = untokenise(raw);
+    const at = new Map<string, number>();
+    const rawSpan = (found: string, index?: number): EvidenceSpan | undefined => {
+      let start = index ?? text.indexOf(found, at.get(found) ?? 0);
+      if (start < 0) start = text.indexOf(found);
+      if (start < 0 || !found) return undefined;
+      if (index === undefined) at.set(found, start + 1);
+      const from = toRaw[start]!;
+      const to = toRaw[start + found.length - 1]! + 1;
+      return { start: from, end: to, text: raw.slice(from, to) };
+    };
     for (const currency of CURRENCIES) {
       for (const figure of readMoneyFigures(text, currency)) {
         // A different measure is a different fact: an advertised price never reconciles with a paid one.
         const measure = priceMeasure(kind, around(text, figure.text));
+        const span = rawSpan(figure.text);
         push(
           {
             key: `price:${subject}:${currency}:${figure.perUnit ? 'rate' : 'total'}:${measure}`,
@@ -457,26 +548,50 @@ export function extractItem(item: ExtractableItem): ExtractedFact[] {
             value: figure.cents,
             unit: figure.perUnit ? 'per-unit' : null,
             currency,
-            evidence: ev(field, figure.text),
+            evidence: ev(field, span?.text ?? figure.text),
           },
           'MONEY_FIGURE',
           measure,
+          span,
         );
       }
     }
     for (const q of readQuantities(text)) {
       const measure = quantityMeasure(kind, around(text, q.text));
+      const span = rawSpan(q.text);
       push(
-        { key: `quantity:${subject}:${q.normalizedUnit}${measure ? `:${measure}` : ''}`, field: 'quantity', value: q.normalizedValue, unit: q.normalizedUnit, currency: null, evidence: ev(field, q.text) },
+        { key: `quantity:${subject}:${q.normalizedUnit}${measure ? `:${measure}` : ''}`, field: 'quantity', value: q.normalizedValue, unit: q.normalizedUnit, currency: null, evidence: ev(field, span?.text ?? q.text) },
         'QUANTITY',
         measure,
+        span,
       );
     }
-    for (const d of locatedDays(text)) {
-      const span = { start: d.index, end: d.index + d.text.length, text: d.text };
-      push({ key: `date:${subject}:${d.day}`, field: 'date', value: d.day, unit: null, currency: null, evidence: ev(field, d.text) }, 'STATED_DATE', null, span);
+    if (kind === 'NEWS') {
+      for (const c of newsCounts(text)) {
+        const measure = quantityMeasure(kind, around(text, c.text));
+        const span = rawSpan(c.text, c.index)!;
+        push(
+          { key: `quantity:${subject}:${c.unit}${measure ? `:${measure}` : ''}`, field: 'quantity', value: c.value, unit: c.unit, currency: null, evidence: ev(field, span.text) },
+          'QUANTITY',
+          measure,
+          span,
+        );
+      }
     }
-    for (const p of locatedPlaces(text)) push({ key: `location:${subject}`, field: 'location', value: p.place, unit: null, currency: null, evidence: ev(field, p.text) }, 'STATED_PLACE', null, p.span);
+    for (const d of locatedDays(text)) {
+      const span = rawSpan(d.text, d.index)!;
+      push({ key: `date:${subject}:${d.day}`, field: 'date', value: d.day, unit: null, currency: null, evidence: ev(field, span.text) }, 'STATED_DATE', null, span);
+    }
+    for (const p of locatedPlaces(text)) {
+      const span = rawSpan(p.span.text, p.span.start)!;
+      push({ key: `location:${subject}`, field: 'location', value: p.place, unit: null, currency: null, evidence: ev(field, text === raw ? p.text : span.text) }, 'STATED_PLACE', null, span);
+    }
+    if (kind === 'NEWS' || kind === 'PUBLIC_RECORD') {
+      for (const o of readOccasions(text)) {
+        const span = rawSpan(o.text, o.index)!;
+        push({ key: `occasion:${subject}:${o.occasion}`, field: 'occasion', value: o.occasion, unit: null, currency: null, evidence: ev(field, span.text) }, 'STATED_OCCASION', null, span);
+      }
+    }
   }
   if (item.publishedAt) {
     const day = item.publishedAt.slice(0, 10);
@@ -489,10 +604,18 @@ export function extractItem(item: ExtractableItem): ExtractedFact[] {
  * Whether the parser could read an item: its kind is known and it yielded at
  * least one fact beyond who sent it and what it is called. Anything else goes
  * to model assistance — nothing readable ever does.
+ *
+ * An occasion does not count. It is stored as an observation, but nothing
+ * downstream (event detection, the funnel) turns an occasion into an
+ * opportunity, so letting one stand in for a reading would take an item away
+ * from the model while giving the opportunity pipeline nothing it can use.
+ * When a consumer reads `occasion`, it may be admitted here.
  */
 export function readable(item: ExtractableItem, facts: readonly ExtractedFact[]): boolean {
   if (recordKindOf(item) === 'UNKNOWN') return false;
-  return facts.some((f) => f.field === 'price' || f.field === 'quantity' || f.field === 'location' || (f.field === 'date' && f.evidence.field !== 'publishedAt'));
+  return facts.some(
+    (f) => f.field === 'price' || f.field === 'quantity' || f.field === 'location' || (f.field === 'date' && f.evidence.field !== 'publishedAt'),
+  );
 }
 
 /** Reconcile observations by fact key: agreeing OBSERVED, disagreeing CONTESTED, old STALE. Never "established". */

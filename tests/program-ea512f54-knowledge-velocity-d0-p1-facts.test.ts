@@ -68,7 +68,7 @@ describe('every fact is decision-ready', () => {
   });
 
   it('bumps the extractor version so a change in reading is visible in the rows', () => {
-    expect(EXTRACTOR_VERSION).toBe('feeds-extract/3');
+    expect(EXTRACTOR_VERSION).toBe('feeds-extract/4');
   });
 });
 
