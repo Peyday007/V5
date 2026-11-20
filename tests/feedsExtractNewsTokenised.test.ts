@@ -59,6 +59,23 @@ describe('tokenised news titles and unmapped feed sources are read by code', () 
     }
   });
 
+  it('routes a news or public record whose only reading is an occasion keyword to the model screen', () => {
+    // The review finding: a keyword match (holidays, festival, now open, Q3 2026) is not a reading of the record,
+    // so such items must stay in needsModel, the only route to the model in the feed run.
+    const titles = ['Traveling for the holidays ? Here how to save', 'Riverfront festival returns', 'Bakery now open downtown', 'Acme Q3 2026 results call', 'Shop closes its doors'];
+    const items: ExtractableItem[] = titles.flatMap((title, i) => [
+      news(`k${i}`, title, `https://example.com/news/${i}`),
+      { ...EDGAR, id: `p${i}`, title, body: null, url: `https://www.sec.gov/x/${i}` },
+    ]);
+    for (const item of items) {
+      const facts = extractItem(item);
+      expect(facts.some((f) => f.field === 'occasion'), `${item.id} ${item.title}`).toBe(true);
+      expect(readable(item, facts), `${item.id} ${item.title}`).toBe(false);
+    }
+    const run = extractItems(items, new Date('2026-11-12T12:00:00.000Z'));
+    expect(run.needsModel.flat().map((i) => i.id).sort()).toEqual(items.map((i) => i.id).sort());
+  });
+
   it('reads `1 , 000 families` as a count of 1000 whose span is the raw tokenised text', () => {
     const count = extractItem(RECORDED.bellmead).find((f) => f.field === 'quantity');
     expect(count).toMatchObject({ value: 1000, unit: 'family', demand: 'NOT_DEMAND', epistemicClass: 'OBSERVED' });
