@@ -131,6 +131,8 @@ export interface BucketCorrection {
   missingMechanismClaims: string[];
   /** Claims whose systematic miss named CAPACITY: the outcome needed capacity the decision assumed and did not have. */
   capacityShortfallClaims: string[];
+  /** Claims whose systematic miss named CHANGED_CONDITIONS: a condition the decision assumed no longer held when the outcome arrived. */
+  changedConditionClaims: string[];
 }
 
 /**
@@ -158,6 +160,22 @@ export const CAPACITY_ASSUMPTION_INSTRUCTION =
 
 /** An assumption that names the capacity, written as CAPACITY_ASSUMPTION_INSTRUCTION tells the operator to write it. */
 export const CAPACITY_ASSUMPTION = /^\s*capacity\s*:\s*\S/i;
+
+/**
+ * The same correction for a bucket whose systematic misses named
+ * CHANGED_CONDITIONS (FORECAST:operator:CHANGED_CONDITIONS, production 9 of 9):
+ * the decision rested on a market condition that no longer held by the time the
+ * outcome arrived. Shifting the probability alone leaves the next decision on
+ * the same unchecked condition, so the bucket stays miscalibrated. The next
+ * decision of that kind names the condition it relies on and where and when it
+ * was last observed — re-checked now, not the figure the broken misses assumed
+ * (`goals/calibration.ts`: re-research it before the next plan relies on it).
+ */
+export const CONDITION_ASSUMPTION_INSTRUCTION =
+  'Add an assumption beginning "condition:" naming the market condition the predicted outcome relies on and the row or source and date it was last observed, re-checked within the horizon rather than carried over from the earlier misses whose assumed condition had changed';
+
+/** An assumption that names the condition, written as CONDITION_ASSUMPTION_INSTRUCTION tells the operator to write it. */
+export const CONDITION_ASSUMPTION = /^\s*condition\s*:\s*\S/i;
 
 /** The pools Brain measures capacity in (`engineering/watchdog.ts` PoolReading). */
 const CAPACITY_POOLS = ['ROUTINES', 'FREE_LANE', 'RESEARCH_SLOTS', 'FACTORY'] as const;
@@ -219,11 +237,13 @@ export function bucketCorrectionFrom(
   const buckets = calibrate(entries);
   const missing = new Set<string>();
   const capacity = new Set<string>();
+  const changed = new Set<string>();
   for (const entry of entries) {
     const d = diagnose(entry, buckets, entries);
     if (d.kind !== 'SYSTEMATIC') continue;
     if (d.causes.includes('MISSING_MECHANISM')) missing.add(d.claimId);
     if (d.causes.includes('CAPACITY')) capacity.add(d.claimId);
+    if (d.causes.includes('CHANGED_CONDITIONS')) changed.add(d.claimId);
   }
   return {
     comparableKey,
@@ -231,7 +251,32 @@ export function bucketCorrectionFrom(
     rationale: reading.correction.rationale,
     missingMechanismClaims: [...missing],
     capacityShortfallClaims: [...capacity],
+    changedConditionClaims: [...changed],
   };
+}
+
+/**
+ * The assumptions a verifier recorded as broken on these claims
+ * (`OPERATOR_DECISION_VERIFIED.brokenAssumption`), distinct, so a REVISE can say
+ * which condition changed. Read-only; a claim with none recorded adds nothing.
+ */
+async function brokenAssumptionsOf(claims: readonly string[]): Promise<string[]> {
+  const ids = claims.slice(0, 12).map((c) => c.replace(/^operator:/, ''));
+  if (ids.length === 0) return [];
+  const rows = await getDb().all<{ payload: string | null }>(
+    `SELECT payload FROM project_events WHERE event_type = 'OPERATOR_DECISION_VERIFIED' AND entity_id IN (${ids.map(() => '?').join(', ')})`,
+    ids,
+  );
+  const out = new Set<string>();
+  for (const row of rows) {
+    try {
+      const text = (JSON.parse(row.payload ?? '{}') as { brokenAssumption?: unknown }).brokenAssumption;
+      if (typeof text === 'string' && text.trim()) out.add(text.trim().slice(0, 160));
+    } catch {
+      // An unreadable row names nothing.
+    }
+  }
+  return [...out].slice(0, 5);
 }
 
 /** Rows fetched per round trip of `readComparableLedger`: a page size, never a cap. */
@@ -356,6 +401,14 @@ export async function decide(
         );
         instructions.push(CAPACITY_ASSUMPTION_INSTRUCTION);
       }
+    }
+    if (correction.changedConditionClaims.length > 0 && !input.assumptions.some((a) => CONDITION_ASSUMPTION.test(a))) {
+      const claims = correction.changedConditionClaims;
+      const broken = await brokenAssumptionsOf(claims);
+      problems.push(
+        `${comparableKey} is miscalibrated (${correction.rationale}) and ${claims.length} of its systematic misses were CHANGED_CONDITIONS (${listed(claims)}): a condition the decision assumed no longer held when the outcome arrived${broken.length > 0 ? ` — recorded as broken: ${broken.map((b) => `"${b}"`).join('; ')}` : ''}`,
+      );
+      instructions.push(CONDITION_ASSUMPTION_INSTRUCTION);
     }
     if (problems.length > 0) {
       return {
@@ -519,10 +572,12 @@ export function operatorCalibration(
   const enough = n >= 10;
   const mechanismMisses = causes.get('MISSING_MECHANISM') ?? 0;
   const capacityMisses = causes.get('CAPACITY') ?? 0;
+  const conditionMisses = causes.get('CHANGED_CONDITIONS') ?? 0;
   const kindName = comparableKey.replace(/^operator:/, '');
   const instructions = [
     ...(mechanismMisses > 0 ? [`${mechanismMisses} miss(es) of ${comparableKey} lacked the step from decision to outcome (MISSING_MECHANISM). In every further ${kindName} decision: ${MECHANISM_ASSUMPTION_INSTRUCTION}.`] : []),
     ...(capacityMisses > 0 ? [`${capacityMisses} miss(es) of ${comparableKey} assumed capacity that was not there (CAPACITY). In every further ${kindName} decision: ${CAPACITY_ASSUMPTION_INSTRUCTION}.`] : []),
+    ...(conditionMisses > 0 ? [`${conditionMisses} miss(es) of ${comparableKey} rested on a condition that had changed by the outcome (CHANGED_CONDITIONS). In every further ${kindName} decision: ${CONDITION_ASSUMPTION_INSTRUCTION}.`] : []),
   ];
   return {
     comparableKey,
