@@ -443,6 +443,62 @@ function newsCounts(text: string): { value: number; unit: string; text: string; 
   return out;
 }
 
+/**
+ * A salary a job posting states in thousands shorthand (EXTRACTION_UNREADABLE:
+ * remoteok). RemoteOK descriptions state pay as `$120k - $160k`,
+ * `$120K-$150K`, `80k-100k USD`, and `readMoneyFigures` deliberately refuses
+ * shorthand because on a price card `m` and `b` are ambiguous — so a posting
+ * whose only figure was its salary read as nothing and went to a model. Read
+ * here for JOB_POSTING records only, where `k` after a marked figure has one
+ * meaning: thousands. A currency marker (symbol, or the code before or after)
+ * must be present on the figure or its range — an unmarked `120k` is not read,
+ * and a symbol glued to a letter (`C$`, `HK$`) is not the plain one. Both ends
+ * of a range are read, each with the whole range as its verbatim evidence.
+ */
+const WAGE_SYMBOLS: Record<string, string[]> = { USD: ['US$', '$'], EUR: ['€'], GBP: ['£'], CAD: ['CA$', 'C$'], AUD: ['AU$', 'A$'], NZD: ['NZ$'], JPY: ['¥'] };
+const PER_PERIOD = /^\s*(?:\/\s*(?:hour|hr|day|week|wk|month|mo|year|yr)\b|per\s+(?:hour|day|week|month|year|annum)\b|an?\s+(?:hour|day|week|month|year)\b|hourly\b|monthly\b|weekly\b|daily\b|annually\b|yearly\b)/i;
+
+function shorthandWages(text: string, currency: string): { cents: number; perPeriod: boolean; text: string; index: number }[] {
+  const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const symbols = (WAGE_SYMBOLS[currency] ?? []).map(escapeRe).join('|');
+  const prefix = `(?:(${symbols ? `${symbols}|` : ''}${currency}\\b)\\s?)`;
+  const figure = '(\\d{1,3}(?:\\.\\d)?)\\s?[kK](?![A-Za-z0-9])';
+  const pattern = new RegExp(`${prefix}?${figure}(?:\\s?(?:-|–|to)\\s?(?:${symbols ? `(?:${symbols})|` : ''}${currency}\\s?)?${figure})?(?:\\s?(${currency})\\b)?`, 'g');
+  const out: { cents: number; perPeriod: boolean; text: string; index: number }[] = [];
+  for (const m of text.matchAll(pattern)) {
+    if (!m[1] && !m[4]) continue;
+    // `C$120k` is Canadian; `$` glued to a letter belongs to another currency.
+    if (m[1] && m[1] !== currency && /\p{L}$/u.test(text.slice(Math.max(0, m.index - 1), m.index))) continue;
+    if (/[\d.,]$/.test(text.slice(Math.max(0, m.index - 1), m.index))) continue;
+    const perPeriod = PER_PERIOD.test(text.slice(m.index + m[0].length));
+    for (const value of [m[2], m[3]]) {
+      if (value === undefined) continue;
+      const cents = Math.round(Number(value) * 1000 * 100);
+      if (cents > 0) out.push({ cents, perPeriod, text: m[0], index: m.index });
+    }
+  }
+  return out;
+}
+
+/**
+ * A place a record states under an explicit label — `Location: United States`,
+ * `Job location: Berlin` — read verbatim up to the first lowercase word or
+ * punctuation. Only the labelled value is read; nothing is inferred from the
+ * source (a remote board's posting is not thereby remote), and a "City, ST"
+ * the PLACE reader already reads is left to it.
+ */
+const LABELLED_PLACE = /\b(?:[Jj]ob [Ll]ocation|[Oo]ffice [Ll]ocation|[Ll]ocations?)\s*:\s*([A-Z][A-Za-z'-]*(?: [A-Z][A-Za-z'-]*){0,4})(?![A-Za-z'-]|\s[A-Z]|,\s*[A-Z]{2}\b)/g;
+
+function labelledPlaces(text: string): { place: string; index: number; text: string }[] {
+  const out: { place: string; index: number; text: string }[] = [];
+  for (const m of text.matchAll(LABELLED_PLACE)) {
+    const value = m[1]!;
+    if (REMOTE.test(value)) continue;
+    out.push({ place: value.toLowerCase(), index: m.index + m[0].length - m[1]!.length, text: value });
+  }
+  return out;
+}
+
 /** The deliverable a record is about, as a comparable key. Job titles lose seniority and work-mode words. */
 function deliverableOf(item: ExtractableItem, kind: RecordKind): string | null {
   const key = kind === 'JOB_POSTING' || ROLE_TITLE_SOURCES.has(item.source) ? titleKey(item.title) : item.title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -556,6 +612,26 @@ export function extractItem(item: ExtractableItem): ExtractedFact[] {
         );
       }
     }
+    if (kind === 'JOB_POSTING') {
+      for (const currency of CURRENCIES) {
+        for (const w of shorthandWages(text, currency)) {
+          const span = rawSpan(w.text, w.index)!;
+          push(
+            {
+              key: `price:${subject}:${currency}:${w.perPeriod ? 'rate' : 'total'}:OFFERED_WAGE`,
+              field: 'price',
+              value: w.cents,
+              unit: w.perPeriod ? 'per-unit' : null,
+              currency,
+              evidence: ev(field, span.text),
+            },
+            'MONEY_FIGURE',
+            'OFFERED_WAGE',
+            span,
+          );
+        }
+      }
+    }
     for (const q of readQuantities(text)) {
       const measure = quantityMeasure(kind, around(text, q.text));
       const span = rawSpan(q.text);
@@ -585,6 +661,10 @@ export function extractItem(item: ExtractableItem): ExtractedFact[] {
     for (const p of locatedPlaces(text)) {
       const span = rawSpan(p.span.text, p.span.start)!;
       push({ key: `location:${subject}`, field: 'location', value: p.place, unit: null, currency: null, evidence: ev(field, text === raw ? p.text : span.text) }, 'STATED_PLACE', null, span);
+    }
+    for (const p of labelledPlaces(text)) {
+      const span = rawSpan(p.text, p.index)!;
+      push({ key: `location:${subject}`, field: 'location', value: p.place, unit: null, currency: null, evidence: ev(field, span.text) }, 'STATED_PLACE', null, span);
     }
     if (kind === 'NEWS' || kind === 'PUBLIC_RECORD') {
       for (const o of readOccasions(text)) {

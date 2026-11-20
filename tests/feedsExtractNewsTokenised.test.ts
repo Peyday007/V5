@@ -7,6 +7,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { extractItem, extractItems, readable, untokenise, type ExtractableItem, type ItemField } from '../server/services/feeds/extract.ts';
+import { parseRemoteOk } from '../server/services/feeds/sources.ts';
 
 function news(id: string, title: string, url: string, source = 'news-event-rush'): ExtractableItem {
   return {
@@ -112,5 +113,113 @@ describe('tokenised news titles and unmapped feed sources are read by code', () 
     expect(text).toBe('Fold (FLD) Q3 2026 Earnings Call Transcript');
     for (let i = 0; i < text.length; i++) expect(rawTitle[toRaw[i]!]).toBe(text[i]);
     expect(untokenise('Plain prose, already readable.').text).toBe('Plain prose, already readable.');
+  });
+});
+
+/**
+ * EXTRACTION_UNREADABLE:remoteok. RemoteOK states pay in thousands shorthand
+ * (`$120k - $160k`) inside an HTML description, and `readMoneyFigures` refuses
+ * shorthand, so a posting whose only figures were its salary and a labelled
+ * country read as nothing and went to a model. The rows below are in the
+ * public API's shape (a legal notice first) and go through the feed's own
+ * parser, so the test reads exactly what the feed loop stores.
+ */
+const REMOTEOK_API = [
+  { legal: 'API Terms of Service: Please link back to the URL on Remote OK and mention Remote OK as a source.' },
+  {
+    id: '1130001',
+    epoch: 1794470400,
+    company: 'Acme Payments',
+    position: 'Senior Backend Engineer',
+    description: '<p><strong>About Acme</strong></p><p>We build payments infrastructure.</p><ul><li>Own our Go services</li></ul><p><b>Benefits</b>: $120k - $160k base, equity, health insurance.</p>',
+    url: 'https://remoteok.com/remote-jobs/1130001',
+  },
+  {
+    id: '1130002',
+    epoch: 1794470400,
+    company: 'Northwind',
+    position: 'Staff Data Engineer',
+    description: '<p>Location: United States. You will lead our data platform.</p><p>Salary: $140K-$175K/year</p>',
+    url: 'https://remoteok.com/remote-jobs/1130002',
+  },
+  {
+    id: '1130003',
+    epoch: 1794470400,
+    company: 'Globex',
+    position: 'Product Designer',
+    description: '<p>Compensation 80k-100k EUR. Location: Germany or Portugal time zones.</p>',
+    url: 'https://remoteok.com/remote-jobs/1130003',
+  },
+  {
+    id: '1130004',
+    epoch: 1794470400,
+    company: 'Initech',
+    position: 'Support Engineer',
+    description: '<p>Join a small team that ships often and talks to customers every week.</p>',
+    url: 'https://remoteok.com/remote-jobs/1130004',
+  },
+];
+
+function remoteOk(): ExtractableItem[] {
+  return parseRemoteOk(REMOTEOK_API).map((row) => ({
+    id: `remoteok:${row.externalId}`,
+    source: 'remoteok',
+    url: row.url,
+    title: row.title,
+    body: row.body,
+    organization: row.organization,
+    publishedAt: row.publishedAt,
+    fetchedAt: '2026-11-12T10:05:00.000Z',
+  }));
+}
+
+describe('RemoteOK postings are read by code', () => {
+  it('reads shorthand salaries and labelled places, as offered wages that stay NOT_DEMAND', () => {
+    const [acme, northwind, globex] = remoteOk();
+    const wages = (item: ExtractableItem) => extractItem(item).filter((f) => f.field === 'price');
+
+    expect(wages(acme!).map((f) => [f.value, f.currency, f.evidence.text])).toEqual([
+      [12_000_000, 'USD', '$120k - $160k'],
+      [16_000_000, 'USD', '$120k - $160k'],
+    ]);
+    expect(wages(northwind!).map((f) => [f.value, f.unit])).toEqual([
+      [14_000_000, 'per-unit'],
+      [17_500_000, 'per-unit'],
+    ]);
+    expect(wages(globex!).map((f) => [f.value, f.currency])).toEqual([
+      [8_000_000, 'EUR'],
+      [10_000_000, 'EUR'],
+    ]);
+    expect(extractItem(northwind!).find((f) => f.field === 'location')).toMatchObject({ value: 'united states', evidence: { text: 'United States' } });
+    expect(extractItem(globex!).filter((f) => f.field === 'location').map((f) => f.value)).toEqual(['germany']);
+
+    for (const item of [acme!, northwind!, globex!]) {
+      const facts = extractItem(item);
+      expect(readable(item, facts), item.title).toBe(true);
+      for (const fact of facts) {
+        expect(fact.recordKind).toBe('JOB_POSTING');
+        expect(fact.demand).toBe('NOT_DEMAND');
+        expect(fact.field).not.toBe('occasion');
+        expect(fact.provenance.extractor.model).toBeNull();
+        if (fact.field === 'price') expect(fact.measureKind).toBe('OFFERED_WAGE');
+        const span = fact.provenance.span!;
+        expect(raw(item, fact.evidence.field).slice(span.start, span.end)).toBe(span.text);
+      }
+    }
+  });
+
+  it('still sends a posting that states no pay or place to the model', () => {
+    const items = remoteOk();
+    const run = extractItems(items, new Date('2026-11-12T12:00:00.000Z'));
+    expect(run.needsModel.flat().map((i) => i.id)).toEqual(['remoteok:1130004']);
+    for (const r of run.reconciled) expect(['OBSERVED', 'CONTESTED', 'STALE']).toContain(r.status);
+  });
+
+  it('reads shorthand only in a posting, only with a currency marker, and never a glued foreign dollar as USD', () => {
+    const base = remoteOk()[3]!;
+    const priced = (body: string, source = 'remoteok') => extractItem({ ...base, source, body }).filter((f) => f.field === 'price').map((f) => [f.value, f.currency]);
+    expect(priced('Pay 120k plus a 401k match')).toEqual([]);
+    expect(priced('Pay C$120k')).toEqual([[12_000_000, 'CAD']]);
+    expect(priced('Startup raised $120k', 'news-event-rush')).toEqual([]);
   });
 });
