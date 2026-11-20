@@ -571,7 +571,13 @@ export function applyProgram(
       continue;
     }
     if (t.op === 'DROP') {
-      const ids = inScope(s.openings, t.scope, ctx.remaining);
+      /*
+       * A program never leaves out what it brought in: the plan would read
+       * "Bring in X" then "Leave out X" (transfer test, 2026-11-20). An
+       * opening this program included is outside every DROP it makes.
+       */
+      const included = new Set(s.changes.filter((c) => c.label.startsWith('include:')).map((c) => c.label.slice('include:'.length)));
+      const ids = new Set([...inScope(s.openings, t.scope, ctx.remaining)].filter((id) => !included.has(id)));
       if (ids.size === 0 || ids.size >= s.openings.filter((o) => o.agreedValue === 0).length) {
         skipped++;
         continue;

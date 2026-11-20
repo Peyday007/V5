@@ -31,6 +31,10 @@
  *                            · day 12–56", depending on nothing. A step placed
  *                            after a later-dated step either names the step it
  *                            follows or is out of order.
+ *   NO_CONTRADICTORY_STEPS   A transfer variant (2026-11-20) read "Bring in
+ *                            "Constructed: Property managers …"" and then
+ *                            "Leave out 1 opening(s) ("Constructed: Property
+ *                            managers …")": one plan doing and undoing a move.
  *   NO_DUPLICATE_STEPS       Goal B's steps read `Bring in "Constructed` six
  *                            times. One move is one step: no two steps of a
  *                            plan carry the same label.
@@ -73,6 +77,7 @@ export const PLAN_INTEGRITY_RULES = [
   'NO_DUPLICATE_STEPS',
   'WITHIN_LIMITS',
   'NO_FAVOURABLE_UNKNOWN',
+  'NO_CONTRADICTORY_STEPS',
 ] as const;
 export type PlanIntegrityRule = (typeof PLAN_INTEGRITY_RULES)[number];
 
@@ -259,6 +264,16 @@ export function planIntegrity(input: PlanIntegrityInput): { violations: PlanInte
     const first = seen.get(label);
     if (first !== undefined) add('NO_DUPLICATE_STEPS', `step ${s.order} repeats the label of step ${first} ("${clip(s.label, 60)}")`);
     else seen.set(label, s.order);
+  }
+
+  // NO_CONTRADICTORY_STEPS: a plan never brings in an opening and leaves the same opening out.
+  const quotedIn = (text: string): string[] => [...text.matchAll(/["“]([^"”]{8,})["”]/g)].map((m) => m[1]!.trim().toLowerCase());
+  const broughtIn = new Map<string, number>();
+  for (const s of ordered) if (/^bring in\b/i.test(s.label)) for (const q of quotedIn(`${s.label} ${s.detail ?? ''}`)) if (!broughtIn.has(q)) broughtIn.set(q, s.order);
+  for (const s of ordered) {
+    if (!/^leave out\b/i.test(s.label)) continue;
+    const hit = quotedIn(`${s.label} ${s.detail ?? ''}`).find((q) => broughtIn.has(q));
+    if (hit) add('NO_CONTRADICTORY_STEPS', `step ${s.order} ("${clip(s.label, 60)}") leaves out "${clip(hit, 60)}", which step ${broughtIn.get(hit)} brings in`);
   }
 
   // PRICE_GROUNDED and UNKNOWN_BECOMES_RESEARCH: the price of the arrangement the steps sell.

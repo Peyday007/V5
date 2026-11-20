@@ -801,10 +801,13 @@ export async function sweepVariables(ctx: SweepContext): Promise<VariableSweep> 
           sig.push(`f${[...keep].sort().join('/')}`);
         } else if (t.op === 'DROP') {
           const ids = scopeIds(opKey, os.state, t.scope);
+          // Never leave out what this combination brought in (as applyProgram's DROP).
+          const included = new Set(os.state.changes.filter((c) => c.label.startsWith('include:')).map((c) => c.label.slice('include:'.length)));
           const open = rows.filter((r) => r.kind !== 'AGREED');
-          const dropped = open.filter((r) => ids.has(r.id));
+          const dropped = open.filter((r) => ids.has(r.id) && !included.has(r.id));
           if (dropped.length === 0 || dropped.length >= open.length) return null;
-          rows = rows.filter((r) => !ids.has(r.id));
+          const gone = new Set(dropped.map((r) => r.id));
+          rows = rows.filter((r) => !gone.has(r.id));
           sig.push(`d${dropped.map((r) => r.id).sort().join('/')}`);
         }
       }
