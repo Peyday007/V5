@@ -159,9 +159,10 @@ describe('S-1/S-2: different strategies are preserved, and one population is one
     const designs = [
       arrangement({ key: 'presale', p50: 500, population: pop }),
       arrangement({ key: 'presale-again', p50: 500, population: pop }),
-      arrangement({ key: 'prepaid', p50: 500, funding: 'PREPAID', population: pop }),
-      arrangement({ key: 'subscription', p50: 500, repeat: 'SUBSCRIPTION', population: pop }),
-      arrangement({ key: 'on-delivery', p50: 500, funding: 'ON_DELIVERY', population: pop }),
+      // Priced apart, so the model tells the designs apart (identical readings are one strategy: portfolioModelledTwins).
+      arrangement({ key: 'prepaid', p50: 600, funding: 'PREPAID', population: pop }),
+      arrangement({ key: 'subscription', p50: 700, repeat: 'SUBSCRIPTION', population: pop }),
+      arrangement({ key: 'on-delivery', p50: 800, funding: 'ON_DELIVERY', population: pop }),
     ];
     const selected = selectEstimatedArrangements(designs, base);
     expect(selected.openings).toHaveLength(DESIGNS_PER_POPULATION);

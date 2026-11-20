@@ -39,7 +39,7 @@ import {
   type LineReading,
 } from '../server/services/factory/line.ts';
 import { listFactoryEvents } from '../server/repos/factoryFleet.ts';
-import { createBin } from '../server/repos/bins.ts';
+import { ADMISSION_REFUSED_WINDOW_MS, admissionRefusedBinIds, createBin, recordBinEvent } from '../server/repos/bins.ts';
 import { getDb } from '../server/db/database.ts';
 import { createProject } from '../server/repos/projects.ts';
 
@@ -424,5 +424,39 @@ describe('two objectives that would edit the same files are not run at once', ()
     await queueObjective({ changeRequestId: clash.id, userId: adminId, priority: 2 });
     await patchCampaign(started.campaignId, { state: 'BLOCKED', blockerKind: 'STALE_BASE', blockerDetail: 'rebasing' });
     expect((await admitQueued()).admitted).toHaveLength(0);
+  });
+});
+
+/*
+ * Production, 2026-11-20: Factory review bin_53bf8c50… was refused twelve times
+ * by admission ("a review from a surface on a different Claude connector"),
+ * and the ROUTINES and FACTORY pools read "unexplainedly idle — a fault" over
+ * it for hours while the watchdog fired dispatch passes at it. A bin admission
+ * refused is waiting on a named limit, not on the line.
+ */
+describe('a bin admission refused waits on a named limit, not on idle capacity', () => {
+  it('leaves a recently refused bin out of the executable count, and counts it again once the window passes', async () => {
+    const request = await objective('refused-review');
+    await queueObjective({ changeRequestId: request.id, userId: adminId, priority: 1 });
+    const campaignId = (await admitQueued()).admitted[0]!.campaignId;
+    await patchCampaign(campaignId, { state: 'EXECUTING' });
+    const binId = await stageBin(campaignId, 'READY');
+    expect((await readLine()).executable.readyBins).toBe(1);
+
+    // A stage bin a session was refused for may be stranded with another surface able to take it: still executable.
+    await recordBinEvent({ eventType: 'BIN_ASSIGNMENT_REFUSED', binId, outcome: 'REFUSED_BY_ADMISSION', reason: 'admission refused this session' });
+    expect((await readLine()).executable.readyBins).toBe(1);
+
+    // A review refused by admission waits for an independent reviewer.
+    await getDb().run(`UPDATE bins SET kind = 'FACTORY_REVIEW' WHERE id = ?`, [binId]);
+    await recordBinEvent({ eventType: 'BIN_ASSIGNMENT_REFUSED', binId, outcome: 'REFUSED_BY_ADMISSION', reason: 'a review from a surface on a different Claude connector' });
+    const refused = await readLine();
+    expect(refused.executable.readyBins).toBe(0);
+    expect(refused.unexplainedIdle).toBe(false);
+    expect((await admissionRefusedBinIds([binId])).has(binId)).toBe(true);
+
+    const later = new Date(Date.now() + ADMISSION_REFUSED_WINDOW_MS + 60_000);
+    expect((await admissionRefusedBinIds([binId], later)).has(binId)).toBe(false);
+    expect((await readLine(later)).executable.readyBins).toBe(1);
   });
 });

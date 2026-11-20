@@ -11,7 +11,7 @@
  * explicitly: instead of a dead port, a minimal app answers every `/api` request
  * with the reason it could not start.
  */
-import { startFreeLaneLoop } from './services/freeLane/worker.ts';
+import { drainFreeLane, startFreeLaneLoop } from './services/freeLane/worker.ts';
 import { activityPath, beginActivity } from './db/infra.ts';
 import { registerCommercialProviders } from './services/cash/providers/register.ts';
 import fs from 'node:fs';
@@ -452,8 +452,18 @@ function installShutdown(server: Server): void {
        * reconnect asked of a person because a restart dropped a write.
        * Bounded, so a database that cannot answer does not hold the exit.
        */
+      /*
+       * Beside them, the free lane hands back the leases it holds on items it
+       * has not yet submitted (`drainFreeLane`). Production, 2026-11-20: with a
+       * restart about every 22 minutes, 25% of free-lane items ended with their
+       * lease EXPIRED — unowned for up to 20 minutes and charged an attempt.
+       * Its own bound is inside this one, so neither holds the exit.
+       */
       await Promise.race([
-        settleTokenTouches().catch(() => undefined),
+        Promise.all([
+          settleTokenTouches().catch(() => undefined),
+          drainFreeLane({ timeoutMs: 2500 }).catch(() => undefined),
+        ]),
         new Promise((resolve) => setTimeout(resolve, 3000).unref()),
       ]);
       try {

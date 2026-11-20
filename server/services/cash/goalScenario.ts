@@ -1137,6 +1137,14 @@ export interface ArrangementCut {
   screen: number | null;
   upside: number | null;
   reason: string;
+  /** The kept arrangement the model reads it exactly as (`modelledTwinKey`): one strategy, this design an alternative way to run it. */
+  sameModelAs?: string;
+}
+/** A design of the same buyers the model reads exactly as a kept one: how it would be run differently, which the plan's numbers do not price. */
+export interface ArrangementAlternative {
+  arrangementKey: string;
+  label: string;
+  differs: string;
 }
 /** A constructed arrangement that did, and which slot it took. */
 export interface ArrangementPick {
@@ -1148,6 +1156,8 @@ export interface ArrangementPick {
   /** `LEADER` (held from the goal's last readings), `STRUCTURE:<base>` or `PAID:<funding>/<repeat>` (the strongest of its kind), `PRICE_VARIABLE`, `CAPITAL` (the strongest design using the goal's stated up-front money), `UPSIDE`, or `SCREEN`. */
   slot: string;
   basis: string;
+  /** Designs of the same buyers the model reads identically, recorded here rather than entered as members of their own. */
+  alternatives?: ArrangementAlternative[];
 }
 export interface ArrangementSelection {
   /** Constructed arrangements read. */
@@ -1164,6 +1174,62 @@ const designKey = (a: ConstructedArrangement) => `${a.design.base}/${a.design.fu
 const paidKey = (a: ConstructedArrangement) => `${a.design.funding}/${a.design.repeat}`;
 /** The market every design over one buyer population shares in the engine. */
 export const populationMarket = (population: string) => `${ARRANGEMENT_ID_PREFIX}market:${population}`;
+
+/**
+ * Everything the goal model reads of a modelled opening, with its identity
+ * (id, title, key, the notes and source refs that name it) left out: two
+ * openings with one twin key are one line to the engine. Pure.
+ *
+ * Production 2026-11-20 (wst_db2e2e0e5204477692d5): three designs over
+ * "Local businesses buying a slot on a shared direct-mail postcard" — PRODUCE
+ * prepaid, BROKER threshold presale, POOL threshold presale, all recurring —
+ * entered the model as three members. `arrangementOpening` reads a design only
+ * through its exposure, whether it repeats and a pooled run's observed cost;
+ * with all three SAFE, recurring and unpriced (one MECHANISM sweep over the
+ * same comparables), every input was the same draw. The engine split outreach
+ * 50/25/25 across indistinguishable offers, read them as partly independent
+ * risk, and the three took every design slot their buyers had.
+ */
+export function modelledTwinKey(one: PlannedOpening): string {
+  const input = (x: ModelInput | undefined) => (x ? { value: x.value, low: x.low, high: x.high, provenance: x.provenance, distribution: x.distribution ?? null, inferred: x.inferred ?? null } : null);
+  const o = one.opportunity;
+  const { arrangementKey: _key, ...estimated } = one.estimated ?? ({ arrangementKey: '' } as NonNullable<ModelledOpportunity['estimated']>);
+  const pv = one.priceVariable;
+  return JSON.stringify([
+    one.marketKey ?? o.id,
+    one.tier,
+    one.repeatable,
+    ...(['price', 'capital', 'hours', 'daysToCash', 'close', 'respond', 'directCost', 'volume'] as const).map((k) => input(one[k])),
+    one.agreed,
+    one.agreedValue,
+    one.agreedDeals,
+    one.fulfilledBy ? [one.fulfilledBy.value, one.fulfilledBy.provenance] : null,
+    one.competitiveAward,
+    one.channel ? { ...one.channel, perDay: input(one.channel.perDay) } : null,
+    one.fundedByBuyer ?? false,
+    one.fulfilment ?? null,
+    one.stakeDeals ?? null,
+    one.gate ?? null,
+    one.deposit ?? null,
+    one.terms ?? null,
+    estimated,
+    pv ? [pv.runCost, pv.prices, pv.swept, pv.remaining] : null,
+    [o.mechanism, o.industry, o.currency, o.paymentTerms ?? null, o.fulfillmentOwner ?? null, o.peakFundingCents ?? null, o.projectId],
+  ]);
+}
+
+/** How a design differs from the kept one it is modelled exactly as, in a reader's words. Pure. */
+function designDifference(kept: ConstructedArrangement, twin: ConstructedArrangement): string {
+  const parts: string[] = [];
+  const who = (a: ConstructedArrangement) => (STRUCTURES[a.design.base].needsSupply ? 'a supplier fulfils' : 'Brain fulfils');
+  if (kept.design.base !== twin.design.base) parts.push(`${STRUCTURES[twin.design.base].label} (${who(twin)}) rather than ${STRUCTURES[kept.design.base].label} (${who(kept)})`);
+  if (kept.design.funding !== twin.design.funding) parts.push(`money moves ${twin.design.funding} rather than ${kept.design.funding}`);
+  if (kept.design.aggregation !== twin.design.aggregation) parts.push(`buyers ${twin.design.aggregation} rather than ${kept.design.aggregation}`);
+  if (kept.design.repeat !== twin.design.repeat) parts.push(`repeats ${twin.design.repeat} rather than ${kept.design.repeat}`);
+  if ((kept.need?.ref ?? null) !== (twin.need?.ref ?? null)) parts.push(`the need "${twin.need?.name ?? 'unspecified'}"`);
+  if ((kept.supply?.ref ?? null) !== (twin.supply?.ref ?? null)) parts.push(`the supply "${twin.supply?.name ?? 'unspecified'}"`);
+  return parts.length ? parts.join('; ') : 'nothing but its construction key';
+}
 
 /**
  * Which constructed arrangements enter the model, and why the rest do not.
@@ -1331,6 +1397,42 @@ export function selectEstimatedArrangements(
     cut.push({ arrangementKey: r.arrangement.key, label: r.arrangement.label, population: r.population, screen: r.screen.value, upside: r.screen.upside, reason: 'the same design over the same buyers is already read' });
     return false;
   });
+  /*
+   * A different design over the same buyers that the model reads exactly as
+   * one already in is the same strategy to the plan (`modelledTwinKey`): the
+   * engine could only split outreach across identical draws and read them as
+   * partly independent risk. The first-ranked (a leader first) enters; each
+   * twin is recorded on it as an alternative way to run it, with what differs,
+   * and cut with that reason, so its slot goes to other buyers and it is never
+   * discarded unseen (invariant 47). A design the model does tell apart — a
+   * different exposure, repeat, run cost or price — still enters on its own.
+   */
+  const twinOf = new Map<Row, Row>();
+  const firstByTwin = new Map<string, Row>();
+  for (const r of [...candidates.filter((x) => x.arrangement.leader), ...candidates.filter((x) => !x.arrangement.leader)]) {
+    const key = modelledTwinKey(r.one);
+    const kept = firstByTwin.get(key);
+    if (kept) twinOf.set(r, kept);
+    else firstByTwin.set(key, r);
+  }
+  const alternativesOf = new Map<Row, ArrangementAlternative[]>();
+  for (let i = candidates.length - 1; i >= 0; i--) {
+    const r = candidates[i]!;
+    const kept = twinOf.get(r);
+    if (!kept) continue;
+    candidates.splice(i, 1);
+    const differs = designDifference(kept.arrangement, r.arrangement);
+    alternativesOf.set(kept, [{ arrangementKey: r.arrangement.key, label: r.arrangement.label, differs }, ...(alternativesOf.get(kept) ?? [])]);
+    cut.push({
+      arrangementKey: r.arrangement.key,
+      label: r.arrangement.label,
+      population: r.population,
+      screen: r.screen.value,
+      upside: r.screen.upside,
+      reason: `the model reads it exactly as ${kept.arrangement.key} over the same buyers (same price, cost, close, capital and market), so it is that strategy run another way: ${differs}`,
+      sameModelAs: kept.arrangement.key,
+    });
+  }
   const taken = new Map<Row, string>();
   const perPopulation = new Map<string, number>();
   const take = (r: Row, slot: string): boolean => {
@@ -1409,7 +1511,7 @@ export function selectEstimatedArrangements(
     conversions,
     selection: {
       considered: arrangements.length,
-      picked: picked.map((r) => ({ arrangementKey: r.arrangement.key, label: r.arrangement.label, population: r.population, screen: r.screen.value, upside: r.screen.upside, slot: taken.get(r)!, basis: [r.screen.basis, r.screen.flag, r.one.priceVariable?.sentence].filter(Boolean).join('. ') })),
+      picked: picked.map((r) => ({ arrangementKey: r.arrangement.key, label: r.arrangement.label, population: r.population, screen: r.screen.value, upside: r.screen.upside, slot: taken.get(r)!, basis: [r.screen.basis, r.screen.flag, r.one.priceVariable?.sentence].filter(Boolean).join('. '), ...(alternativesOf.has(r) ? { alternatives: alternativesOf.get(r)! } : {}) })),
       cut: cut.slice(0, CUT_RECORDED),
       cutCount: cut.length,
       // Stable: most designs first, then the constructor's order (a Map keeps insertion order and sort is stable).
