@@ -34,8 +34,9 @@ import { createHash } from 'node:crypto';
 import { getOrchestration } from '../../repos/research.ts';
 import { openUncertainty } from '../../repos/researchIntelligence.ts';
 import { raiseNeed } from '../cash/needs.ts';
-import { getNeed, setNeedCandidate } from '../../repos/cashPortfolio.ts';
-import { createCandidate } from '../../repos/russellCandidates.ts';
+import { getNeed, replaceNeedCandidate, setNeedCandidate } from '../../repos/cashPortfolio.ts';
+import { createCandidate, getCandidate } from '../../repos/russellCandidates.ts';
+import { getDb } from '../../db/database.ts';
 
 export interface Need {
   /** What is missing, in the graph's own words. */
@@ -86,6 +87,23 @@ export interface SendNeedsDeps {
   raiseNeed?: typeof raiseNeed;
   createCandidate?: typeof createCandidate;
   setNeedCandidate?: typeof setNeedCandidate;
+  replaceNeedCandidate?: typeof replaceNeedCandidate;
+  getCandidate?: typeof getCandidate;
+}
+
+/** An idea in one of these states will not answer its need: parked or refused, it never launches again. */
+const ENDED_UNANSWERED = new Set(['PARKED', 'REJECTED']);
+
+/** How many ideas one need may be asked through before it is left for a person to read. */
+const MAX_ASKS = 3;
+
+/** How many ideas this project has opened under this need's title: the asks so far. */
+async function askedTimes(projectId: string, title: string): Promise<number> {
+  const row = await getDb().get<{ n: number | string }>(
+    'SELECT COUNT(*) AS n FROM russell_candidates WHERE project_id = ? AND title = ?',
+    [projectId, title],
+  );
+  return Number(row?.n ?? 0);
 }
 
 /** Thrown when a named orchestration is absent or another project's: the two are one refusal (invariant 23). */
@@ -136,6 +154,8 @@ export async function sendNeeds(input: SendNeedsInput, deps: SendNeedsDeps = {})
   const raise = deps.raiseNeed ?? raiseNeed;
   const propose = deps.createCandidate ?? createCandidate;
   const attach = deps.setNeedCandidate ?? setNeedCandidate;
+  const replace = deps.replaceNeedCandidate ?? replaceNeedCandidate;
+  const readCandidate = deps.getCandidate ?? getCandidate;
 
   let orchestrationId: string | null = null;
   if (input.orchestrationId) {
@@ -206,14 +226,32 @@ export async function sendNeeds(input: SendNeedsInput, deps: SendNeedsDeps = {})
     // Research is opened, not left for a person to open: the need is pointed at an idea the research path runs.
     let candidateId = result.value.candidateId ?? null;
     let opened = false;
+    const title = `Causal unknown: ${need.subject}`.slice(0, 200);
+    // Room for a construction's own price question (`nextInputQuestion`, ~1,800 characters with its filing
+    // instructions) and its scope: cut at 2,000, the instructions that make its answer file were lost.
+    const statement = `For causal graph ${input.graphScope}, establish from sourced evidence: ${need.question}`.slice(0, STATEMENT_MAX);
+    /*
+     * An OPEN need whose idea ended without an answer is asked again, a bounded number of times.
+     *
+     * Production 2026-11-20 03:10-03:27Z: goal price questions planned before #1162 were refused
+     * by the envelope screen ("instructs the researcher to purchase"), parked for a person and
+     * CANCELLED, and their ideas PARKED - 11 of goal A's and 7 of goal B's. The need stayed OPEN
+     * pointing at a parked idea, `setNeedCandidate` will never re-point it, and the next read only
+     * read it back: the price that plan was waiting on could never be asked again. The old idea
+     * keeps its row and missions (`replaceNeedCandidate`), so what was asked first stays readable.
+     */
+    if (candidateId) {
+      const current = await readCandidate(candidateId);
+      if (current && ENDED_UNANSWERED.has(current.state) && (await askedTimes(input.projectId, title)) < MAX_ASKS) {
+        const fresh = await propose({ projectId: input.projectId, title, statement });
+        if (await replace(result.value.id, candidateId, fresh.id)) {
+          candidateId = fresh.id;
+          opened = true;
+        }
+      }
+    }
     if (!candidateId) {
-      const candidate = await propose({
-        projectId: input.projectId,
-        title: `Causal unknown: ${need.subject}`.slice(0, 200),
-        // Room for a construction's own price question (`nextInputQuestion`, ~1,800 characters with its filing
-        // instructions) and its scope: cut at 2,000, the instructions that make its answer file were lost.
-        statement: `For causal graph ${input.graphScope}, establish from sourced evidence: ${need.question}`.slice(0, STATEMENT_MAX),
-      });
+      const candidate = await propose({ projectId: input.projectId, title, statement });
       if (await attach(result.value.id, candidate.id)) {
         candidateId = candidate.id;
         opened = true;
