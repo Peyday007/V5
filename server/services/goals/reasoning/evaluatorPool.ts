@@ -10,9 +10,31 @@
  *
  * Capacity is read, not configured: `availableParallelism() - 1` threads,
  * at least one and at most `MAX_THREADS`; `BRAIN_REASONING_THREADS=0` (or a
- * pool that cannot start) evaluates inline, yielding between evaluations
- * (§63). A pool is opened for one exploration and closed after it, so no
- * idle thread is kept.
+ * pool none of whose threads can start) evaluates inline, one evaluation per
+ * turn of the loop (§63). A pool is opened for one exploration and closed
+ * after it, so no idle thread is kept.
+ *
+ * The loop is never held for more than one evaluation (release check run
+ * 44718014146, 2026-11-20: goal wst_db2e2e0e5204477692d5's plan read printed
+ * `composed`, then neither a trace nor its 30 s heartbeat for 27 minutes, and
+ * its own 6-minute timeout never fired). Two things put the engine on the
+ * loop for that long, and neither is allowed any more:
+ *
+ *  - an evaluation that timed out on its thread was re-run inline — the one
+ *    input known to be too heavy for a thread, on the loop, with no budget —
+ *    and every timeout also spent the pool's replacement budget, which is
+ *    there for threads that cannot boot. On a machine whose cores the server
+ *    holds (the check runs at nice 19 beside the freshly deployed server),
+ *    healthy threads time out, three timeouts leave the pool threadless, and
+ *    every later evaluation of the read ran inline. Now a slow thread is
+ *    replaced without counting against that budget, its evaluation is retried
+ *    once on a thread, and a second fault is the evaluation's error: the read
+ *    degrades (`reconstructionFor` records it), it does not stall;
+ *  - inline evaluations "yielded first" with one `setImmediate` each, but an
+ *    exploration asks for a chunk of them at once (`exploreDirections`'
+ *    `inChunks`), so every one of them resumed in the same check phase and
+ *    the chunk ran as one block, timers starved for all of it. Inline
+ *    evaluations are now queued: each waits for its own turn of the loop.
  */
 import { availableParallelism } from 'node:os';
 import { Worker } from 'node:worker_threads';
@@ -22,9 +44,17 @@ import type { ConstructedArrangement, ConstructionJob } from '../../cash/constru
 import { DEFAULT_SWEEP_MS, type VariableSweep } from './variables.ts';
 
 export const MAX_THREADS = 4;
-/** An evaluation that takes longer than this on a thread is abandoned: its thread is replaced, and that one evaluation runs inline. */
+/**
+ * An evaluation that takes longer than this on a thread is abandoned: its thread is replaced and the evaluation is
+ * retried once on a thread; never on the server's loop.
+ */
 export const EVALUATION_TIMEOUT_MS = 60_000;
-/** At most this many threads are replaced in REPLACEMENT_WINDOW_MS; past it the pool runs short instead of respawning for ever. */
+/** How many times one evaluation is tried on a thread before its fault is the evaluation's error. */
+export const EVALUATION_ATTEMPTS = 2;
+/**
+ * At most this many threads that failed (crashed, or could not boot) are replaced in REPLACEMENT_WINDOW_MS; past it
+ * the pool runs short instead of respawning for ever. A thread replaced because it was slow does not count: it booted.
+ */
 export const REPLACEMENTS_PER_WINDOW = 3;
 export const REPLACEMENT_WINDOW_MS = 10 * 60_000;
 /** The errors that mean the thread itself is unusable, not that one evaluation failed. */
@@ -65,13 +95,25 @@ export function threadsAvailable(env: NodeJS.ProcessEnv = process.env): number {
   return Math.max(1, Math.min(MAX_THREADS, cores - 1));
 }
 
-/** Inline: the engine on this loop, yielding between evaluations. */
+/**
+ * Inline evaluations, one per turn of the loop, across every inline evaluator in the process. Each waits for the one
+ * before it and then for a `setImmediate` of its own, scheduled only once its predecessor has finished: an immediate
+ * queued while the check phase runs is deferred to the next iteration, so timers, sockets and heartbeats run between
+ * any two evaluations however many were asked for at once.
+ */
+let inlineTurn: Promise<unknown> = Promise.resolve();
+function onItsOwnTurn<T>(work: () => T): Promise<T> {
+  const run = inlineTurn.then(() => new Promise<void>((resolve) => setImmediate(resolve))).then(work);
+  inlineTurn = run.catch(() => undefined);
+  return run;
+}
+
+/** Inline: the engine on this loop, one evaluation per turn of it. */
 export function inlineEvaluator(): Evaluator {
   return {
     threads: 1,
-    async evaluate(input) {
-      await new Promise<void>((resolve) => setImmediate(resolve));
-      return evaluateGoalPortfolio(input);
+    evaluate(input) {
+      return onItsOwnTurn(() => evaluateGoalPortfolio(input));
     },
     async sweep(job) {
       const { sweepFor } = await import('../reconstruction.ts');
@@ -85,9 +127,12 @@ export function inlineEvaluator(): Evaluator {
   };
 }
 
+const NO_THREAD = 'no evaluation thread is running';
+
 /** A pool of `threads` workers; inline when threads is 0 or the pool cannot start. */
-export function openEvaluator(threads = threadsAvailable()): Evaluator {
+export function openEvaluator(threads = threadsAvailable(), options: { evaluationTimeoutMs?: number } = {}): Evaluator {
   if (threads <= 0) return inlineEvaluator();
+  const evaluationTimeoutMs = options.evaluationTimeoutMs ?? EVALUATION_TIMEOUT_MS;
   const inline = inlineEvaluator();
   const workers: Worker[] = [];
   const idle: Worker[] = [];
@@ -109,16 +154,18 @@ export function openEvaluator(threads = threadsAvailable()): Evaluator {
       if (message.ok) job.resolve(message.result!);
       else job.reject(new Error(message.message ?? 'evaluation failed'));
     });
-    worker.on('error', () => retire(worker));
+    worker.on('error', () => retire(worker, true));
     worker.unref();
     workers.push(worker);
     return worker;
   };
   /**
    * C-12: a thread that failed or timed out is terminated and replaced, so one slow evaluation never sends every later
-   * one — a minute-long sweep included — onto the server's own loop.
+   * one — a minute-long sweep included — onto the server's own loop. Only a thread that `failed` (crashed, or could
+   * not boot) counts against REPLACEMENTS_PER_WINDOW: a thread that was merely slow had booted, and counting it let
+   * three timeouts on a contended machine leave the pool with no thread at all (2026-11-20).
    */
-  const retire = (worker: Worker): void => {
+  const retire = (worker: Worker, failed: boolean): void => {
     if (dead.has(worker)) return;
     dead.add(worker);
     for (const [id, job] of pending) {
@@ -134,19 +181,22 @@ export function openEvaluator(threads = threadsAvailable()): Evaluator {
     void worker.terminate().catch(() => 0);
     if (closed) return;
     // A thread that cannot boot would otherwise fail, be replaced and fail again for ever (review F6):
-    // at most REPLACEMENTS_PER_WINDOW replacements in a window, then the pool runs a thread short.
-    const now = Date.now();
-    while (replaced.length && now - replaced[0]! > REPLACEMENT_WINDOW_MS) replaced.shift();
-    if (replaced.length >= REPLACEMENTS_PER_WINDOW) {
-      if (workers.length === 0) for (const wake of waiting.splice(0)) wake();
-      return;
+    // at most REPLACEMENTS_PER_WINDOW replacements of failed threads in a window, then the pool runs a thread short.
+    if (failed) {
+      const now = Date.now();
+      while (replaced.length && now - replaced[0]! > REPLACEMENT_WINDOW_MS) replaced.shift();
+      if (replaced.length >= REPLACEMENTS_PER_WINDOW) {
+        if (workers.length === 0) for (const wake of waiting.splice(0)) wake();
+        return;
+      }
+      replaced.push(now);
     }
-    replaced.push(now);
     try {
       idle.push(spawn());
       waiting.shift()?.();
     } catch {
-      // No replacement could start: the pool is one thread smaller.
+      // No replacement could start: the pool is one thread smaller, and with none left a waiting caller is told so.
+      if (workers.length === 0) for (const wake of waiting.splice(0)) wake();
     }
   };
   try {
@@ -170,7 +220,7 @@ export function openEvaluator(threads = threadsAvailable()): Evaluator {
   /** One job on one thread. On a failure or timeout the thread is replaced, and `fallback` decides what the caller gets. */
   const onThread = async <T>(message: Record<string, unknown>, timeoutMs: number, fallback: (error: Error) => Promise<T>): Promise<T> => {
     const worker = await take();
-    if (!worker) return fallback(new Error('no evaluation thread is running'));
+    if (!worker) return fallback(new Error(NO_THREAD));
     try {
       return await new Promise<T>((resolve, reject) => {
         const id = next++;
@@ -183,8 +233,8 @@ export function openEvaluator(threads = threadsAvailable()): Evaluator {
       });
     } catch (error) {
       // Only a thread that timed out or died is replaced; an evaluation that answered with an error leaves a
-      // healthy thread in the pool (review F6).
-      if (THREAD_FAULT.test((error as Error).message)) retire(worker);
+      // healthy thread in the pool (review F6). A thread that died was retired, as failed, by its 'error' event.
+      if (THREAD_FAULT.test((error as Error).message)) retire(worker, false);
       return fallback(error as Error);
     } finally {
       give(worker);
@@ -192,8 +242,23 @@ export function openEvaluator(threads = threadsAvailable()): Evaluator {
   };
   return {
     threads,
-    // One failed evaluation (about a second) is rerun inline; the next goes to the replacement thread.
-    evaluate: (input) => onThread<GoalPortfolio>({ kind: 'evaluate', input }, EVALUATION_TIMEOUT_MS, () => inline.evaluate(input)),
+    /*
+     * A thread fault (a timeout, a crash) is retried on a thread, and after EVALUATION_ATTEMPTS it is the
+     * evaluation's error — never a rerun on this loop of the very input a thread could not finish. Only a pool none of
+     * whose threads can run evaluates inline, one evaluation per turn of the loop.
+     */
+    evaluate: async (input) => {
+      for (let attempt = 1; ; attempt++) {
+        try {
+          return await onThread<GoalPortfolio>({ kind: 'evaluate', input }, evaluationTimeoutMs, (error) => Promise.reject(error));
+        } catch (error) {
+          const message = (error as Error).message;
+          if (message === NO_THREAD) return inline.evaluate(input);
+          if (!THREAD_FAULT.test(message)) throw error;
+          if (attempt >= EVALUATION_ATTEMPTS) throw new Error(`evaluation abandoned after ${attempt} attempts on a thread: ${message}`);
+        }
+      }
+    },
     // A sweep is never run inline: it holds a loop for up to a minute. A failed one is no sweep, and the plan reads without it.
     sweep: (job) => onThread<VariableSweep>({ kind: 'sweep', job }, (job.maxMs ?? DEFAULT_SWEEP_MS) + 120_000, (error) => Promise.reject(new Error(`variable sweep abandoned: ${error.message}`))),
     // A failed construction is composed inline, handing the loop back every 25 ms (§109): its result is the plan's arrangements.
