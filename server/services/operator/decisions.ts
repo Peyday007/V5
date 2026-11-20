@@ -135,6 +135,15 @@ export interface BucketCorrection {
   changedConditionClaims: string[];
   /** Claims whose systematic miss named EVIDENCE_QUALITY: the prediction rested on no named data (the chosen option cited no evidence). */
   evidenceQualityClaims: string[];
+  /**
+   * Claims whose systematic miss the ledger read as PARAMETER_ESTIMATE: no
+   * observation named a cause, and the bucket's outcomes landed at a rate its
+   * stated probabilities did not imply — the estimate itself was wrong.
+   */
+  parameterEstimateClaims: string[];
+  /** The bucket's observed rate and mean forecast, when the calibration measured them. */
+  observedRate: number | null;
+  meanForecast: number | null;
 }
 
 /**
@@ -192,6 +201,55 @@ export const CONDITION_ASSUMPTION = /^\s*condition\s*:\s*\S/i;
  */
 export const EVIDENCE_QUALITY_INSTRUCTION =
   'List in the chosen option\'s evidence the Brain row ids or source URLs the predicted outcome rests on; a prediction resting on no named data is what the earlier misses had';
+
+/**
+ * The same correction for a bucket whose systematic misses the ledger read as
+ * PARAMETER_ESTIMATE (FORECAST:operator:PARAMETER_ESTIMATE, production 4 of 4:
+ * "landed as claimed 0% of the time against an implied 65%: the estimate drawn
+ * from its rows is too narrow"). No observation named a cause, so neither a
+ * mechanism, a capacity, a condition nor evidence assumption answers it: the
+ * stated probability was simply not drawn from the bucket's own record. The
+ * probability shift is applied as before, and the recorded claim now carries
+ * the figure its estimate starts from — the bucket's observed rate — so it no
+ * longer repeats the same unanchored figure: Brain writes that anchor itself
+ * when the operator states none (it already read the rate), and an "estimate:"
+ * the operator does state must give its base rate as a figure or the decision
+ * is sent back.
+ */
+export const ESTIMATE_ASSUMPTION_INSTRUCTION =
+  'Add an assumption beginning "estimate:" stating the observed rate of earlier decisions of this kind (as a percentage or a 0..1 figure) that the predicted probability starts from, and what about this decision justifies departing from it; the earlier misses stated probabilities their own record did not support';
+
+/** An assumption that anchors the estimate, written as ESTIMATE_ASSUMPTION_INSTRUCTION tells the operator to write it. */
+export const ESTIMATE_ASSUMPTION = /^\s*estimate\s*:\s*\S/i;
+
+/** A figure an "estimate:" assumption can anchor on: a percentage, or a decimal rate in 0..1. */
+const ESTIMATE_FIGURE = /\b\d{1,3}(?:\.\d+)?\s*%|(?<![\d.])(?:0?\.\d+|[01](?:\.0+)?)(?![\d.%])/;
+
+/**
+ * Why the stated "estimate:" assumptions do not anchor the probability, or
+ * null when one does. A label alone is not an anchor: at least one must state
+ * the base rate it starts from as a figure.
+ */
+export function estimateAssumptionProblem(assumptions: readonly string[]): string | null {
+  const stated = assumptions.filter((a) => ESTIMATE_ASSUMPTION.test(a));
+  if (stated.length === 0) return null;
+  if (stated.some((a) => ESTIMATE_FIGURE.test(a.replace(ESTIMATE_ASSUMPTION, '').replace(/\b\d{4}-\d{2}-\d{2}\b/g, '')))) return null;
+  return `no estimate assumption states the observed rate it starts from as a figure: ${stated.map((a) => `"${a.slice(0, 120)}"`).join('; ')}`;
+}
+
+/**
+ * The "estimate:" assumption Brain records itself on a PARAMETER_ESTIMATE
+ * bucket when the operator stated none: the bucket's measured rate, which the
+ * operator would otherwise be sent back to copy from the ledger Brain already
+ * read. Null when the bucket has no such misses, the rate was not measured, or
+ * the operator anchored the estimate itself.
+ */
+export function measuredEstimateAssumption(assumptions: readonly string[], correction: BucketCorrection | null): string | null {
+  if (!correction || correction.parameterEstimateClaims.length === 0) return null;
+  if (correction.observedRate === null || correction.meanForecast === null) return null;
+  if (assumptions.some((a) => ESTIMATE_ASSUMPTION.test(a))) return null;
+  return `estimate: decisions of ${correction.comparableKey} happened ${(correction.observedRate * 100).toFixed(0)}% of the time against a stated ${(correction.meanForecast * 100).toFixed(0)}% (PARAMETER_ESTIMATE on ${correction.parameterEstimateClaims.length} systematic miss(es)); the recorded probability starts from that base rate`;
+}
 
 /** The chosen option's evidence entries that name something, trimmed. */
 function namedEvidence(input: { options: readonly { evidence?: readonly unknown[] }[]; chosen: number }): string[] {
@@ -318,6 +376,7 @@ export function bucketCorrectionFrom(
   const capacity = new Set<string>();
   const changed = new Set<string>();
   const evidence = new Set<string>();
+  const estimate = new Set<string>();
   for (const entry of entries) {
     const d = diagnose(entry, buckets, entries);
     if (d.kind !== 'SYSTEMATIC') continue;
@@ -325,7 +384,9 @@ export function bucketCorrectionFrom(
     if (d.causes.includes('CAPACITY')) capacity.add(d.claimId);
     if (d.causes.includes('CHANGED_CONDITIONS')) changed.add(d.claimId);
     if (d.causes.includes('EVIDENCE_QUALITY')) evidence.add(d.claimId);
+    if (d.causes.includes('PARAMETER_ESTIMATE')) estimate.add(d.claimId);
   }
+  const measured = buckets.find((b) => b.comparableKey === comparableKey && b.verdict === 'MISCALIBRATED');
   return {
     comparableKey,
     shift: reading.correction.amount,
@@ -334,6 +395,9 @@ export function bucketCorrectionFrom(
     capacityShortfallClaims: [...capacity],
     changedConditionClaims: [...changed],
     evidenceQualityClaims: [...evidence],
+    parameterEstimateClaims: [...estimate],
+    observedRate: measured?.observedRate ?? null,
+    meanForecast: measured?.meanForecast ?? null,
   };
 }
 
@@ -518,6 +582,23 @@ export async function decide(
       );
       instructions.push(EVIDENCE_QUALITY_INSTRUCTION);
     }
+    if (correction.parameterEstimateClaims.length > 0) {
+      // A stated estimate is held to a figure: the base rate it starts from. With none stated,
+      // Brain already holds the base rate and records it itself (`measuredEstimateAssumption`).
+      const unmet = estimateAssumptionProblem(input.assumptions);
+      if (unmet) {
+        const claims = correction.parameterEstimateClaims;
+        const measured =
+          correction.observedRate !== null && correction.meanForecast !== null
+            ? `; decisions of this kind happened ${(correction.observedRate * 100).toFixed(0)}% of the time against a stated ${(correction.meanForecast * 100).toFixed(0)}%`
+            : '';
+        problems.push(
+          `${comparableKey} is miscalibrated (${correction.rationale}) and ${claims.length} of its systematic misses were PARAMETER_ESTIMATE (${listed(claims)}): no observation named a cause, and the stated probability was not drawn from the bucket's own record${measured}`,
+          ...(unmet ? [unmet] : []),
+        );
+        instructions.push(ESTIMATE_ASSUMPTION_INSTRUCTION);
+      }
+    }
     if (problems.length > 0) {
       return {
         committed: false,
@@ -549,6 +630,7 @@ export async function decide(
   const id = `opd_${randomBytes(8).toString('hex')}`;
   const projectId = await projectFor(input.goalId, ctx.projectIds[0] ?? '');
   const probability = correctedProbability(input.prediction.probability, correction);
+  const anchor = measuredEstimateAssumption(input.assumptions, correction);
   const correctionNote = correction
     ? `forecast correction: ${comparableKey} is miscalibrated (${correction.rationale}); stated ${input.prediction.probability} shifted by ${correction.shift.toFixed(3)} to ${probability}`
     : null;
@@ -559,7 +641,7 @@ export async function decide(
       horizonDays: input.prediction.horizonDays,
       population: `operator decisions of kind ${input.kind}`,
       data: namedEvidence({ options: review.options, chosen: input.chosen }).slice(0, 10),
-      assumptions: correctionNote ? [...input.assumptions.slice(0, 9), correctionNote] : input.assumptions.slice(0, 10),
+      assumptions: [...input.assumptions.slice(0, 10 - (correctionNote ? 1 : 0) - (anchor ? 1 : 0)), ...(anchor ? [anchor] : []), ...(correctionNote ? [correctionNote] : [])],
       probability,
       comparableKey,
     },
@@ -682,12 +764,14 @@ export function operatorCalibration(
   const capacityMisses = causes.get('CAPACITY') ?? 0;
   const conditionMisses = causes.get('CHANGED_CONDITIONS') ?? 0;
   const evidenceMisses = causes.get('EVIDENCE_QUALITY') ?? 0;
+  const estimateMisses = causes.get('PARAMETER_ESTIMATE') ?? 0;
   const kindName = comparableKey.replace(/^operator:/, '');
   const instructions = [
     ...(mechanismMisses > 0 ? [`${mechanismMisses} miss(es) of ${comparableKey} lacked the step from decision to outcome (MISSING_MECHANISM). In every further ${kindName} decision: ${MECHANISM_ASSUMPTION_INSTRUCTION}.`] : []),
     ...(capacityMisses > 0 ? [`${capacityMisses} miss(es) of ${comparableKey} assumed capacity that was not there (CAPACITY). In every further ${kindName} decision: ${CAPACITY_ASSUMPTION_INSTRUCTION}.`] : []),
     ...(conditionMisses > 0 ? [`${conditionMisses} miss(es) of ${comparableKey} rested on a condition that had changed by the outcome (CHANGED_CONDITIONS). In every further ${kindName} decision: ${CONDITION_ASSUMPTION_INSTRUCTION}.`] : []),
     ...(evidenceMisses > 0 ? [`${evidenceMisses} miss(es) of ${comparableKey} rested on no named data (EVIDENCE_QUALITY). In every further ${kindName} decision: ${EVIDENCE_QUALITY_INSTRUCTION}.`] : []),
+    ...(estimateMisses > 0 ? [`${estimateMisses} miss(es) of ${comparableKey} stated a probability the bucket's record did not support (PARAMETER_ESTIMATE). In every further ${kindName} decision: ${ESTIMATE_ASSUMPTION_INSTRUCTION}.`] : []),
   ];
   return {
     comparableKey,
