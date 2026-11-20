@@ -1194,6 +1194,40 @@ export async function unfiledUnitEconomicClaims(projectId: string, afterId: stri
 }
 
 /**
+ * The research idea each claim answered, when that idea is a question Brain
+ * asked about one buyer population's price (a goal's `goal-price-` need,
+ * `sendPortfolioNeeds`): claim → its orchestration → the mission run on it →
+ * the mission's idea, which a `goal-price-` need points at, or pointed at
+ * before it was asked again (`replaceNeedCandidate` moves the need to a fresh
+ * idea; the old one keeps its title and statement, and its claims are still
+ * answers to the same question). The idea's title and statement are returned
+ * as the need wrote them; the population is read from them by the owner of
+ * that wording (`goalPriceQuestionOf`, goals/goalWork.ts). One idea per claim,
+ * the oldest, so a replay reads the same one.
+ */
+export async function goalPriceIdeasOfClaims(projectId: string, claimIds: readonly string[]): Promise<Map<string, { candidateId: string; title: string; statement: string }>> {
+  const out = new Map<string, { candidateId: string; title: string; statement: string }>();
+  for (let at = 0; at < claimIds.length; at += 200) {
+    const chunk = claimIds.slice(at, at + 200);
+    if (chunk.length === 0) continue;
+    const rows = await getDb().all<{ claim_id: string; candidate_id: string; title: string; statement: string; created_at: string }>(
+      `SELECT c.id AS claim_id, k.id AS candidate_id, k.title, k.statement, k.created_at
+         FROM research_claims c
+         JOIN russell_missions m ON m.orchestration_id = c.orchestration_id
+         JOIN russell_candidates k ON k.id = m.candidate_id
+        WHERE c.id IN (${chunk.map(() => '?').join(', ')})
+          AND k.project_id = ?
+          AND (k.id IN (SELECT n.candidate_id FROM cash_needs n WHERE n.project_id = ? AND n.request_key LIKE ? AND n.candidate_id IS NOT NULL)
+               OR k.statement LIKE ?)
+        ORDER BY k.created_at, k.id`,
+      [...chunk, projectId, projectId, 'goal-price-%', 'For causal graph price:%'],
+    );
+    for (const row of rows) if (!out.has(row.claim_id)) out.set(row.claim_id, { candidateId: row.candidate_id, title: row.title, statement: row.statement });
+  }
+  return out;
+}
+
+/**
  * Gated, sourced claims a goal's constructed-arrangement round produced
  * (`goal-<goal>-mx-<key>`, in any state) that declare no structural finding
  * and that no construction fact names yet, with the round's bucket, by claim

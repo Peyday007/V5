@@ -27,7 +27,7 @@ import { getOpportunity } from '../../repos/cashPortfolio.ts';
 import { sendNeeds, type Need } from '../quant/needs.ts';
 import { requestMarketHistory } from '../quant/history.ts';
 import type { DecisionUnknown, DemandEstimate, GoalPortfolio, UnpricedPopulation } from './portfolio.ts';
-import { GOAL_PRICE_KEY_PREFIX } from './goalWork.ts';
+import { GOAL_PRICE_KEY_PREFIX, GOAL_PRICE_SCOPE_PREFIX, goalPriceSubject } from './goalWork.ts';
 import { namesABuyerPopulation } from '../../domain/industry.ts';
 
 /**
@@ -256,19 +256,27 @@ export const PRICE_ASKS_PER_READ = 3;
 
 /** The scope a population's price question is keyed in: the project's buyers, not one goal's graph. */
 export function priceScope(population: string): string {
-  return `price:${population}`;
+  return `${GOAL_PRICE_SCOPE_PREFIX}${population}`;
 }
 
 /**
  * A refused population's price as a research need: the construction's own
  * one-figure question (`nextInputQuestion`), which names the buyers, the
  * deliverable and the fact its answer files, and asks how they pay it.
+ *
+ * The qualifier is pinned to the buyers' exact name (production 2026-11-20:
+ * ten accepted goal-price fragments, 16 declared `price_per_unit` claims, no
+ * fact — researchers wrote sentences such as "GitHub Inc is the payer" into
+ * `structural_qualifier`). The back-fill files an answer to this question
+ * against the population the question names whatever the qualifier says
+ * (`judgeUnitEconomic`); the pinned name keeps the claim legible on its own.
  */
 export function priceNeedOf(one: UnpricedPopulation): Need {
   return {
-    subject: `what buyers described as "${one.buyer}" pay`.slice(0, 300),
+    subject: goalPriceSubject(one.buyer),
     question:
       `${one.question} For each price, also say by what payment mechanism these buyers pay it (per purchase, subscription, retainer, deposit or prepayment, commission or revenue share) and when the money moves. ` +
+      `Set structural_qualifier to exactly "${one.buyer}" — the buyers' name and nothing else: no sentence, no seller, no plan name, no source. ` +
       `${one.designs} design(s) Brain constructed for these buyers wait on this one figure.`,
     route: 'RESEARCH',
     permissions: [],
