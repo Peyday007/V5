@@ -166,6 +166,9 @@ const THIRD_PARTY_MODAL_SUBJECT =
 const NOUN_POSITION =
   /\b(?:an?|the|any|each|every|their|its|no|one)\s+(?:(?!(?:and|or|then|to|but|so|also)\b)[\w-]+\s+){0,2}$/i;
 
+/** The unit a price is counted in: *"per purchase"*, *"per call"*. Only `per` itself, immediately before the phrase. */
+const PER_UNIT = /\bper\s+$/i;
+
 /** A light verb makes the noun the act itself: *"make a purchase"* is still an instruction. */
 const LIGHT_VERB = /\b(?:make|made|making|place|placing|complete|completing|arrange|arranging|execute|executing|do|doing|go\s+ahead\s+with)\s+(?:an?|the|any|each|every|their|its|no|one)\s+(?:[\w-]+\s+){0,2}$/i;
 
@@ -288,6 +291,14 @@ function clauseEndAfter(prose: string, at: number): number {
  */
 function isOwnAction(before: string, phrase = ''): boolean {
   const head = before.replace(LEADING_FILLER, '');
+  /*
+   * *"per purchase"*, *"pay per call"*, *"a fee per hire"*: after `per` the word is the unit a
+   * price is counted in, a noun, never an instruction. Production 2026-11-19 20:50Z: every goal
+   * price question names its payment mechanisms "(per purchase, subscription, retainer, …)",
+   * and all eleven of goal A's were refused for "instructs the researcher to purchase", parked
+   * for a person and cancelled, so no plan's price was ever researched.
+   */
+  if (PER_UNIT.test(head)) return false;
   if (RESEARCHER_SUBJECT.test(head)) return true;
   if (THIRD_PARTY_RELATIVE.test(head)) return false;
   // A named third party is the one acting, unless a causative before it makes the act Brain's

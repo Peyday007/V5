@@ -10,6 +10,9 @@ describe('own-action screen: third parties and nouns are subject matter', () => 
     'In states restricted to Public Buyers, bidders may not purchase directly',
     'Is there a published price for a new ARFF vehicle, or a Canadian purchase of one',
     'whether they can purchase without a licence',
+    // The unit a price is counted in (production 2026-11-19: every goal price question was refused for this).
+    'For each price, also say by what payment mechanism these buyers pay it (per purchase, subscription, retainer, deposit or prepayment, commission or revenue share) and when the money moves',
+    'Is it billed per call or per hire?',
   ])('admits: %s', (text) => {
     expect(ownActionMatches(text, pattern)).toEqual([]);
   });
@@ -29,6 +32,8 @@ describe('own-action screen: third parties and nouns are subject matter', () => 
     'make buyers purchase the report',
     'have customers purchase the plan',
     'get bidders to purchase it, then make users subscribe',
+    // `per` only names a unit; a verb elsewhere in the clause is still Brain's.
+    'pay per click, then purchase the list',
   ])('still refuses: %s', (text) => {
     expect(ownActionMatches(text, pattern).length).toBeGreaterThan(0);
   });
