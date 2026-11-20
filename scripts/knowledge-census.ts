@@ -23,14 +23,14 @@ async function step(label: string, fn: () => Promise<unknown>): Promise<void> {
 async function main(): Promise<void> {
   await initDatabase();
   try {
-    await q('FRAG_TEXT', "SELECT * FROM research_fragments WHERE orchestration_id IN ('orc_13a10aa965934ebdad5e','orc_9a2e71abe44d4df684a3') LIMIT 2");
-    const { ownActionMatches } = await import('../server/services/research/actorScope.ts');
-    const rows = await getDb().all<Record<string, unknown>>("SELECT * FROM research_fragments WHERE orchestration_id IN ('orc_13a10aa965934ebdad5e','orc_9a2e71abe44d4df684a3','orc_d5715b032b064be6b34e')");
-    for (const r of rows) {
-      const prose = Object.entries(r).filter(([k, v]) => typeof v === 'string' && /question|definition|population|criteria|completion/.test(k)).map(([, v]) => v as string).join(' \n');
-      const m = ownActionMatches(prose, /\b(?:purchase|buy|pay|contact|email|call|sign|commit|publish|hire|subscribe)\b/i);
-      console.log(`MATCH ${r.id} ${JSON.stringify(m)}`);
-    }
+    const PRICE = "SELECT candidate_id FROM cash_needs WHERE request_key LIKE 'goal-price-%' AND state = 'OPEN' AND candidate_id IS NOT NULL";
+    await q('PRICE_CANDS', `SELECT c.project_id, c.state, COUNT(*) AS n FROM russell_candidates c WHERE c.id IN (${PRICE}) GROUP BY c.project_id, c.state`);
+    await q('PRICE_MISSIONS', `SELECT m.project_id, m.state, COUNT(*) AS n, MIN(m.created_at) AS first, MAX(m.updated_at) AS last FROM russell_missions m WHERE m.candidate_id IN (${PRICE}) AND m.created_at > '2026-11-20T03:00' GROUP BY m.project_id, m.state`);
+    await q('PRICE_PACKETS', `SELECT o.status, COUNT(*) AS n, MAX(substr(o.failure_reason,1,200)) AS why FROM russell_missions m JOIN research_orchestrations o ON o.id = m.orchestration_id WHERE m.candidate_id IN (${PRICE}) AND m.created_at > '2026-11-20T03:00' GROUP BY o.status`);
+    await q('PRICE_FRAGS', `SELECT f.status, COUNT(*) AS n FROM russell_missions m JOIN research_fragments f ON f.orchestration_id = m.orchestration_id WHERE m.candidate_id IN (${PRICE}) AND m.created_at > '2026-11-20T03:00' GROUP BY f.status`);
+    await q('PRICE_DECISIONS', `SELECT substr(e.payload, 1, 260) AS p, e.created_at FROM project_events e WHERE e.event_type = 'RUSSELL_ROUTINE_DECISION' AND e.created_at > '2026-11-20T03:00' AND e.entity_id IN (SELECT m.id FROM russell_missions m WHERE m.candidate_id IN (${PRICE})) LIMIT 5`);
+    const loop = await import('../server/services/russell/loop.ts');
+    console.log(`SLOTS ${JSON.stringify((await loop.launchableByProject()).map((s) => ({ p: s.projectId.slice(0, 12), w: s.waiting, cap: s.slots?.cap, live: s.slots?.live })))}`);
   } finally {
     await closeDatabase();
     console.log('CENSUS: OK');
