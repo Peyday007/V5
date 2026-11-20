@@ -35,6 +35,7 @@
  * currency, and optionally the money and hours a plan may use.
  */
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
+import { registerCommercialProviders } from '../server/services/cash/providers/register.ts';
 import { lastPlanTrace } from '../server/services/cash/goalScenario.ts';
 import { describePoolerRefusal } from '../server/db/adapters/postgres.ts';
 import { getUserByEmail } from '../server/repos/identity.ts';
@@ -971,6 +972,11 @@ async function industry(): Promise<void> {
 
 async function main(): Promise<void> {
   await initDatabase();
+  // Registered exactly as the server registers them at boot (server/index.ts),
+  // so a plan read here judges Instantly and Stripe as the running Brain does:
+  // without it every outreach step read "Instantly is not connected" and asked
+  // the owner for a credential the deployment already holds (2026-11-20).
+  registerCommercialProviders();
   const [command] = words();
   switch (command) {
     case 'show':
