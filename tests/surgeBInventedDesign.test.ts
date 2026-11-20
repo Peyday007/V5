@@ -49,7 +49,8 @@ const designer = (spec: InventedDesign): PlannedOpening | { refused: string } =>
   const made = composeInvented(spec, context);
   return 'refused' in made ? made : inventedFromArrangement(made, { projectId: 'prj_invent', currency: 'USD', beforeProofCents: 37_500, otherPrices });
 };
-const newBuyers: InventedDesign = { design: { base: 'BROKER', funding: 'ON_DELIVERY', aggregation: 'SINGLE', repeat: 'RECURRING_COHORT' }, population: 'independent veterinary clinics', need: 'after-hours phone coverage' };
+// Paid the buyer's price: a BROKER keeps only its commission on it (`commissionRevenue`).
+const newBuyers: InventedDesign = { design: { base: 'SUBCONTRACT', funding: 'ON_DELIVERY', aggregation: 'SINGLE', repeat: 'RECURRING_COHORT' }, population: 'independent veterinary clinics', need: 'after-hours phone coverage' };
 
 describe('S-11: an invented design is composed by construction, on honest inputs', () => {
   it('composes a new buyer population into an estimated arrangement whose inputs are unknown, never certified', () => {
@@ -115,7 +116,7 @@ describe('S-11: the invented design reaches the plan’s candidate set through I
     prompt = p;
     return JSON.stringify({
       methods: [
-        { name: 'Vet clinics as a new buyer', stance: 'NEW_BUYER', thinking: 'A population nobody holds, brokered to answering services.', from: 'BASELINE', program: [], design: { structure: 'BROKER', funding: 'ON_DELIVERY', aggregation: 'SINGLE', repeat: 'RECURRING_COHORT', population: 'independent veterinary clinics', need: 'after-hours phone coverage', price: 999999 } },
+        { name: 'Vet clinics as a new buyer', stance: 'NEW_BUYER', thinking: 'A population nobody holds, brokered to answering services.', from: 'BASELINE', program: [], design: { structure: 'SUBCONTRACT', funding: 'ON_DELIVERY', aggregation: 'SINGLE', repeat: 'RECURRING_COHORT', population: 'independent veterinary clinics', need: 'after-hours phone coverage', price: 999999 } },
         { name: 'Incoherent referral', stance: 'BROKEN_DESIGN', thinking: 'a referral the buyer prepays', program: [], design: { structure: 'REFERRAL', funding: 'PREPAID', population: 'dentists' } },
         { name: 'Unproved production', stance: 'MAKE_IT', thinking: 'Brain produces what it never proved', program: [], design: { structure: 'PRODUCE', population: 'independent bookshops' } },
       ],

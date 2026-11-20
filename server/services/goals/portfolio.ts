@@ -356,6 +356,21 @@ export function inputEvidence(input: ModelInput, field: keyof ModelledOpportunit
   const rate = BEHAVIOURAL_RATES.has(field);
   const none = { events: null, populations: 0, sizedPopulations: 0, drawable: false } as const;
   const evidenced = input.provenance === 'EVIDENCE' || input.provenance === 'HISTORICAL';
+  /*
+   * A broker's or referrer's price is the commission it keeps (`commissionRevenue`).
+   * When nothing filed states that share, the commission is the unknown the plan
+   * must ask for — not the buyer's price, which a sourced figure may already state.
+   */
+  if (input.takeShare && !input.takeShare.established) {
+    const pct = (x: number) => `${Math.round(x * 1000) / 10}%`;
+    return {
+      tier: 'ASSUMED',
+      ...none,
+      establishes: false,
+      unverifiable: `${label} is a commission nobody has established (swept ${pct(input.takeShare.low)}–${pct(input.takeShare.high)} of the buyer's price)`,
+      need: `commission rate: nobody has established what share of the buyer's price a broker or referrer keeps here — find the commission or referral fee suppliers of this work publish, pay or accept, with its source`,
+    };
+  }
   if (input.value !== null) {
     if (!evidenced) return { tier: 'ASSUMED', ...none, establishes: false, unverifiable: `${label} is assumed (${input.provenance.toLowerCase()})`, need: `${label}: nobody has measured it — find a sized published figure or measure it` };
     // Agreements per contact already include replying: an identity, not a rate.

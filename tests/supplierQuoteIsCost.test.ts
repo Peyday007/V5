@@ -265,7 +265,8 @@ describe('B1j: an accepted per-run supply quote is the pooled arrangement’s fi
 describe('D4: a pooled arrangement’s researched run cost reaches the goal model once its price does', () => {
   const SLOT = 'Local businesses pay $395 per slot on a shared direct-mail postcard mailed to 10,000 homes.';
   const input = { projectId: '', currency: 'USD', delivers: [], capitalCeilingCents: 300_000, daysLeft: 22, now: new Date('2026-11-18T12:00:00.000Z') };
-  const spec = { design: { base: 'BROKER', funding: 'THRESHOLD_PRESALE', aggregation: 'POOLED_BUYERS', repeat: 'SUBSCRIPTION' } as const, population: 'Local service businesses', need: null };
+  // The design that buys the shared run and sells its slots (POOL): a BROKER over the same buyers keeps only a commission (`commissionRevenue`).
+  const spec = { design: { base: 'POOL', funding: 'THRESHOLD_PRESALE', aggregation: 'POOLED_BUYERS', repeat: 'SUBSCRIPTION' } as const, population: 'Local service businesses', need: null };
   const composeIt = async () => {
     const made = composeInvented(spec, await inventionContext({ ...input, projectId }));
     if ('refused' in made) throw new Error(made.refused);
@@ -320,6 +321,15 @@ describe('D4: a pooled arrangement’s researched run cost reaches the goal mode
     expect(values.length).toBeGreaterThan(10);
     expect(values.filter((v) => v > 395).length).toBeGreaterThan(0);
     expect(values.filter((v) => v < 395).length).toBeGreaterThan(0);
+
+    // The same buyers brokered: the printer sells the run and is paid from the slot buyers' money, so the broker keeps a
+    // commission on the $395 slot — swept 5%–20% while nothing files it — and is never charged the run out of it.
+    const brokered = composeInvented({ ...spec, design: { ...spec.design, base: 'BROKER' } }, await inventionContext({ ...input, projectId }));
+    if ('refused' in brokered) throw new Error(brokered.refused);
+    const broker = estimatedFromArrangement(brokered, { projectId, currency: 'USD', daysLeft: 22, beforeProofCents: null })!;
+    expect(broker.commission).toMatchObject({ basis: 'ASSUMPTION', established: false });
+    expect(broker.price.high!).toBeLessThanOrEqual(modelled.price.high! * 0.2 + 0.01);
+    expect(broker.directCost.source?.note ?? '').not.toContain(`claim:${oppizi}`);
   });
 
   it('leaves a design that is not pooled, or a pooled one with no researched run cost, exactly as before', async () => {
@@ -343,7 +353,8 @@ describe('D4: a pooled arrangement’s researched run cost reaches the goal mode
 describe('F4/F5: a slot price these buyers’ sources state is a pooled design’s own price', () => {
   const SLOT = 'Local businesses pay $395 for a slot on a shared direct-mail postcard mailed to 10,000 homes.';
   const input = { projectId: '', currency: 'USD', delivers: [], capitalCeilingCents: 300_000, daysLeft: 22, now: new Date('2026-11-18T12:00:00.000Z') };
-  const spec = { design: { base: 'BROKER', funding: 'THRESHOLD_PRESALE', aggregation: 'POOLED_BUYERS', repeat: 'SUBSCRIPTION' } as const, population: 'Local service businesses', need: null };
+  // The design that buys the shared run and sells its slots (POOL): a BROKER over the same buyers keeps only a commission (`commissionRevenue`).
+  const spec = { design: { base: 'POOL', funding: 'THRESHOLD_PRESALE', aggregation: 'POOLED_BUYERS', repeat: 'SUBSCRIPTION' } as const, population: 'Local service businesses', need: null };
 
   it('reads a participant’s unit, and nothing else, as a per-participant figure', () => {
     for (const text of [SLOT, 'Advertisers pay $250 per spot on the shared mailer.', 'Each business pays $199 for an ad slot.', 'A seat costs $95 per participant.', 'Valpak charges $395 per ad on a shared envelope.']) {

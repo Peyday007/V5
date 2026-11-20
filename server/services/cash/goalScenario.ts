@@ -114,6 +114,13 @@ export interface ModelInput {
   distribution?: VariableSpec;
   /** `observations` counts studies; the evidence in events and populations is `InputSample` (Q2-2). */
   inferred?: { tier: EvidenceTier; justified: boolean; p10: number; p50: number; p90: number; observations: number } & Partial<InputSample>;
+  /**
+   * A price that is a broker's or referrer's take of the buyer's price
+   * (`commissionRevenue`): the share's range and whether anything filed
+   * establishes it. Unestablished, the plan names the commission — not the
+   * buyer's price — as the research it needs (`inputEvidence`).
+   */
+  takeShare?: { low: number; high: number; basis: CommissionReading['basis']; established: boolean };
 }
 
 /** The card's text columns a transaction pathway shows, and the card fact each is answered by. */
@@ -216,6 +223,13 @@ export interface ModelledOpportunity {
    * swept between them as an assumption. Absent on everything else.
    */
   priceVariable?: PriceVariable;
+  /**
+   * A BROKER or REFERRAL design keeps only a commission or fee on a sale its
+   * supplier makes (`commissionRevenue`): `price` is that take per deal, and
+   * this records the share, how it is known and the buyer's price it is a
+   * share of. Absent on every design Brain is paid the buyer's price for.
+   */
+  commission?: CommissionReading;
 }
 
 /** The id an estimated arrangement takes in a goal model. Never a row. */
@@ -509,9 +523,178 @@ export function inheritedTerms(one: Pick<ConstructedArrangement, 'buyerTerms'>):
 }
 
 /**
+ * The share of the buyer's price a broker or referrer is swept over when
+ * nothing filed for these buyers establishes it. A stated convention, not
+ * evidence: low, so an unknown commission is never read as the whole price
+ * (invariant 39), and an assumption the plan cannot certify anything on.
+ */
+export const COMMISSION_SWEEP = { low: 0.05, high: 0.2 } as const;
+
+/** What a broker's or referrer's revenue per deal is a share of, and how that share is known. */
+export interface CommissionReading {
+  /** The share of the buyer's price Brain keeps: its range and middle. */
+  low: number;
+  p50: number;
+  high: number;
+  /**
+   * EVIDENCE: a distribution the take rates filed for these buyers justify.
+   * FILED: take rates filed for these buyers, with no stated sample, swept
+   * over their range. ASSUMPTION: nothing filed; swept `COMMISSION_SWEEP`.
+   */
+  basis: 'EVIDENCE' | 'FILED' | 'ASSUMPTION';
+  /** Something filed for these buyers states the share; an ASSUMPTION never does. */
+  established: boolean;
+  /** The claims or facts the share rests on (`claim:…`, `fact:…`). */
+  sources: string[];
+  /** The buyer's price per deal it is a share of — what the supplier is paid, not Brain. */
+  buyerPrice: { low: number | null; high: number | null; provenance: VariableProvenance };
+  sentence: string;
+}
+
+/** True for a design paid a commission or fee on a sale its supplier makes: the buyer's price is not its revenue. */
+export function takesCommission(one: Pick<ConstructedArrangement, 'design'>): boolean {
+  return one.design.base === 'BROKER' || one.design.base === 'REFERRAL';
+}
+
+/** An even grid over [low, high]: on the log scale when both are positive (a share and a price are magnitudes). */
+function gridOver(low: number, high: number, n = LOG_GRID_POINTS): number[] {
+  if (!(high > low)) return [low];
+  if (low > 0) {
+    const a = Math.log(low);
+    const b = Math.log(high);
+    return Array.from({ length: n }, (_, i) => Math.exp(a + ((i + 0.5) / n) * (b - a)));
+  }
+  return Array.from({ length: n }, (_, i) => low + ((i + 0.5) / n) * (high - low));
+}
+
+/** At most `n` evenly spaced quantiles of `xs`. */
+function thinned(xs: readonly number[], n: number): number[] {
+  const sorted = [...xs].sort((a, b) => a - b);
+  if (sorted.length <= n) return sorted;
+  return Array.from({ length: n }, (_, i) => sorted[Math.min(sorted.length - 1, Math.floor(((i + 0.5) / n) * sorted.length))]!);
+}
+
+/** The product of two independent draws, as `LOG_GRID_POINTS` quantiles of every pairing. */
+function productQuantiles(a: readonly number[], b: readonly number[]): number[] {
+  const xs = thinned(a, 64);
+  const ys = thinned(b, 64);
+  const all = xs.flatMap((x) => ys.map((y) => x * y)).sort((p, q) => p - q);
+  return thinned(all, LOG_GRID_POINTS);
+}
+
+/** A spec with every money figure multiplied by one share; a categorical spec has none, so none. */
+function scaledSpec(spec: VariableSpec, f: number): VariableSpec | undefined {
+  switch (spec.kind) {
+    case 'FIXED':
+      return { kind: 'FIXED', value: spec.value * f };
+    case 'RANGE':
+      return { kind: 'RANGE', min: spec.min * f, max: spec.max * f };
+    case 'TRIANGULAR':
+      return { kind: 'TRIANGULAR', min: spec.min * f, mode: spec.mode * f, max: spec.max * f };
+    case 'NORMAL':
+      return { kind: 'NORMAL', mean: spec.mean * f, sd: spec.sd * f, min: spec.min * f, max: spec.max * f };
+    case 'EMPIRICAL':
+      return { kind: 'EMPIRICAL', values: spec.values.map((v) => v * f) };
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * A BROKER or REFERRAL design's revenue per deal: the commission or fee Brain
+ * keeps, never the buyer's whole price. The supplier fulfils and is paid the
+ * rest, so counting the buyer's price as Brain's revenue overstated these
+ * designs many times over and ranked them above designs Brain produces itself
+ * on money Brain would never collect (invariant 39: the commission, an
+ * unknown, read as 100%).
+ *
+ *   * Take rates filed for these buyers (`ConstructedArrangement.commission`)
+ *     are the share: as evidence where the reconstruction justifies a
+ *     distribution, else swept over their filed range, with those claims as
+ *     its provenance.
+ *   * Nothing filed: the share is swept `COMMISSION_SWEEP` (5%–20%) as an
+ *     assumption, marked unestablished, so the plan asks for the commission
+ *     (`takeShare`, read by `inputEvidence`) and certifies nothing on it.
+ *
+ * The take is the share times the buyer's price, drawn independently. It is
+ * evidence only when both the price and the share are. Pure.
+ */
+export function commissionRevenue(one: Pick<ConstructedArrangement, 'commission' | 'design'>, price: ModelInput, currency = 'USD'): { revenue: ModelInput; commission: CommissionReading } {
+  const c = one.commission;
+  const pct = (x: number) => `${Math.round(x * 1000) / 10}%`;
+  const money = (x: number | null) => (x === null ? 'unknown' : `${currency === 'USD' ? '$' : `${currency} `}${Math.round(x).toLocaleString('en-US')}`);
+  const who = one.design.base === 'REFERRAL' ? 'a referrer' : 'a broker';
+  let reading: Omit<CommissionReading, 'buyerPrice' | 'sentence'>;
+  let rates: number[];
+  if (c && c.tier !== 'UNKNOWN' && c.p90 > 0) {
+    if (c.evidence) {
+      const low = Math.max(0, Math.min(1, c.evidence.low));
+      const high = Math.min(1, Math.max(low, c.evidence.high));
+      reading = { low, p50: Math.min(high, Math.max(low, c.p50)), high, basis: 'EVIDENCE', established: true, sources: [...c.sources] };
+      rates = c.evidence.values.filter((v) => Number.isFinite(v)).map((v) => Math.min(1, Math.max(0, v)));
+    } else {
+      const low = Math.max(0, Math.min(1, c.p10));
+      const high = Math.min(1, Math.max(low, c.p90));
+      reading = { low, p50: Math.min(high, Math.max(low, c.p50)), high, basis: 'FILED', established: true, sources: [...c.sources] };
+      rates = gridOver(low, high);
+    }
+  } else {
+    const { low, high } = COMMISSION_SWEEP;
+    reading = { low, p50: Math.sqrt(low * high), high, basis: 'ASSUMPTION', established: false, sources: [] };
+    rates = gridOver(low, high);
+  }
+  if (rates.length === 0) rates = [reading.p50];
+  const priceLow = price.low ?? price.value;
+  const priceHigh = price.high ?? price.value;
+  const from = reading.sources.length ? ` (${reading.sources.slice(0, 6).join(', ')})` : '';
+  const sentence =
+    reading.basis === 'ASSUMPTION'
+      ? `Brain keeps only ${who}'s commission, never the buyer's ${money(priceLow)}–${money(priceHigh)}: nothing filed establishes what share ${who} keeps here, so it is swept ${pct(reading.low)}–${pct(reading.high)} of the buyer's price as an assumption until research finds the commission suppliers of this work pay`
+      : `Brain keeps only ${who}'s commission: ${pct(reading.low)}–${pct(reading.high)} of the buyer's ${money(priceLow)}–${money(priceHigh)}, the take rate filed for these buyers (${c!.tier}, ${c!.observations} obs.${from})${reading.basis === 'FILED' ? ', published without a sample, so swept over that range' : ''}`;
+  const point = rates.length === 1 || reading.low === reading.high;
+  let distribution: VariableSpec | undefined;
+  if (point) distribution = price.distribution ? scaledSpec(price.distribution, reading.p50) : undefined;
+  else {
+    const priceValues = price.distribution?.kind === 'EMPIRICAL' ? price.distribution.values : priceLow !== null && priceHigh !== null ? gridOver(priceLow, priceHigh) : [];
+    distribution = priceValues.length > 0 ? { kind: 'EMPIRICAL', values: productQuantiles(priceValues, rates) } : undefined;
+  }
+  const evidenced = price.provenance === 'EVIDENCE' && reading.basis === 'EVIDENCE';
+  const provenance: VariableProvenance = evidenced ? 'EVIDENCE' : price.provenance === 'UNKNOWN' ? 'UNKNOWN' : 'ASSUMPTION';
+  const at = (x: number | null, share: number) => (x === null ? null : x * share);
+  const values = distribution?.kind === 'EMPIRICAL' ? [...distribution.values].sort((a, b) => a - b) : null;
+  const q = (p: number, fallback: number) => (values && values.length ? values[Math.min(values.length - 1, Math.floor(p * values.length))]! : fallback);
+  const inferred = price.inferred
+    ? {
+        ...price.inferred,
+        tier: reading.basis === 'ASSUMPTION' ? ('ASSUMED' as EvidenceTier) : price.inferred.tier,
+        justified: price.inferred.justified && evidenced,
+        p10: q(0.1, price.inferred.p10 * reading.low),
+        p50: q(0.5, price.inferred.p50 * reading.p50),
+        p90: q(0.9, price.inferred.p90 * reading.high),
+      }
+    : undefined;
+  const revenue: ModelInput = {
+    value: price.value === null || !point ? null : price.value * reading.p50,
+    low: at(priceLow, reading.low),
+    high: at(priceHigh, reading.high),
+    provenance,
+    source: price.source,
+    note: `${sentence}; the buyer's price: ${price.note}`,
+    ...(distribution ? { distribution } : {}),
+    ...(inferred ? { inferred } : {}),
+    takeShare: { low: reading.low, high: reading.high, basis: reading.basis, established: reading.established },
+  };
+  return { revenue, commission: { ...reading, buyerPrice: { low: priceLow, high: priceHigh, provenance: price.provenance }, sentence } };
+}
+
+/**
  * A constructed arrangement as a model candidate on a price already read: the
  * links nobody has established swept exactly as for an opening with nothing on
- * its card. Shared by the estimated and the invented conversions. Pure.
+ * its card. Shared by the estimated and the invented conversions. A broker's
+ * or referrer's price is read as the commission it keeps (`commissionRevenue`),
+ * and its direct cost and capital as an intermediary's: the supplier fulfils
+ * from the buyer's money, so neither the supplier's cost nor its run is
+ * subtracted from the commission a second time. Pure.
  */
 function arrangementOpening(
   one: ConstructedArrangement,
@@ -529,6 +712,9 @@ function arrangementOpening(
 ): ModelledOpportunity {
   const ref: SourceRef = price.source ?? { kind: 'OTHER', ref: `arrangement:${one.key}` };
   const worst = one.stress.worstCaseCents === null ? null : one.stress.worstCaseCents / 100;
+  // A broker or referrer keeps a share of the buyer's price; the supplier fulfils and keeps the rest.
+  const take = takesCommission(one) ? commissionRevenue(one, price, input.currency) : null;
+  const costBasis = take ? { value: costScale.value * take.commission.high, what: `the top commission at ${costScale.what}` } : costScale;
   /*
    * F2 (2026-11-17): every link below was a hard-coded sweep, so accepted
    * research about these buyers could never move a plan built from
@@ -541,8 +727,9 @@ function arrangementOpening(
   const now = input.now ?? new Date();
   const target = knowledge ? arrangementTarget(one, knowledge, price, input.currency) : null;
   const infer = (quantity: CashQuantity, fallback: ModelInput, scale = 1, what = ''): ModelInput => (target ? inferOr(knowledge, quantity, target, now, fallback, scale, what) : fallback);
-  const capital: ModelInput =
-    one.stress.exposure === 'SAFE'
+  const capital: ModelInput = take
+    ? { value: null, low: 0, high: 0.01, provenance: 'ASSUMPTION', source: ref, note: 'a broker or referrer advances nothing: the buyer pays the supplier, who fulfils from that money; not yet established in practice' }
+    : one.stress.exposure === 'SAFE'
       ? { value: null, low: 0, high: 0.01, provenance: 'ASSUMPTION', source: ref, note: 'the design spends nothing of ours before buyers commit; not yet established in practice' }
       : worst !== null
         ? unknown(0, Math.max(0.01, worst), `the design's known worst case is ${worst}; swept from nothing to it`)
@@ -579,15 +766,16 @@ function arrangementOpening(
     index: 0,
     tier: 'ESTIMATE',
     repeatable,
-    price,
+    price: take ? take.revenue : price,
     capital,
     hours: infer('hours', unknown(1, 40, 'nobody has established the hours; swept from 1 to 40 per deal')),
     daysToCash: infer('daysToCash', unknown(3, 60, 'nobody has established when the money would settle; swept from 3 to 60 days')),
     close: arrangementClose(one, ref) ?? infer('close', unknown(0.02, 0.5, 'no buyer has been asked yet; swept from 2% to 50% of buyers agreeing')),
     respond: infer('respond', unknown(0.002, 0.15, 'nobody has established how many prospects of this kind reply; swept from 0.2% to 15%')),
+    // The supplier pays a shared run out of the buyer's money; only a design that buys the run itself bears its cost.
     directCost:
-      pooledRunCostPerDeal(one) ??
-      infer('costShare', unknown(0, Math.max(0.01, costScale.value * 0.6), `nobody has established the direct cost; swept from nothing to 60% of ${costScale.what}`), costScale.value, ` as a share of ${costScale.what}`),
+      (take ? null : pooledRunCostPerDeal(one)) ??
+      infer('costShare', unknown(0, Math.max(0.01, costBasis.value * 0.6), `nobody has established the direct cost; swept from nothing to 60% of ${costBasis.what}`), costBasis.value, ` as a share of ${costBasis.what}`),
     // A repeating design's deals in the window, from these buyers' own stated volume only (a market's size never transfers).
     volume: repeatable
       ? infer(
@@ -603,6 +791,7 @@ function arrangementOpening(
     fulfilledBy: null,
     competitiveAward: false,
     estimated: { arrangementKey: one.key, tier: price.inferred?.tier ?? one.value.tier, observations: price.inferred?.observations ?? one.value.observations, ...(transfer ? { transfer } : {}), ...(invented ? { invented: true } : {}) },
+    ...(take ? { commission: take.commission } : {}),
   };
 }
 
@@ -1072,8 +1261,12 @@ export function screenArrangement(
   const { p10, p50, p90 } = arrangement.value;
   const position = TIER_PRICE_POSITION[arrangement.value.tier] ?? 0;
   // A transfer's widened range (S-12) is the price it is read on.
-  const low = Math.min(p10, one.price.low ?? p10);
-  const price = low + position * (p50 - low);
+  // A broker or referrer keeps only its commission: the buyer's price is read at the share's conservative reading.
+  const c = one.commission;
+  const share = !c ? 1 : c.basis === 'EVIDENCE' ? c.p50 : c.low + SCREEN_QUANTILE * (c.high - c.low);
+  const low = Math.min(p10, c ? (c.buyerPrice.low ?? p10) : (one.price.low ?? p10));
+  const price = (low + position * (p50 - low)) * share;
+  const top = p90 * share;
   const close = conservative(one.close);
   const respond = conservative(one.respond);
   const { selling, inTime } = sellingDays(one.daysToCash, input.daysLeft);
@@ -1120,8 +1313,8 @@ export function screenArrangement(
   ].filter(Boolean);
   return {
     value: misfit || lossMisfit || flag ? 0 : read(price),
-    upside: misfit || lossMisfit ? 0 : read(flag ? Math.max(0, Math.max(price, p90) - costMid) : Math.max(price, p90)),
-    basis: `${deals.toFixed(2)} deal(s) in ${input.daysLeft} days × ${Math.round(price)} (${arrangement.value.tier}: ${Math.round(position * 100)}% of the way from p10 to p50) × ${weight.toFixed(2)} for ${arrangement.stress.exposure.toLowerCase()} exposure; unknown links at their ${Math.round(SCREEN_QUANTILE * 100)}th percentile${fitNote.length ? `; ${fitNote.join('; ')}` : ''}`,
+    upside: misfit || lossMisfit ? 0 : read(flag ? Math.max(0, Math.max(price, top) - costMid) : Math.max(price, top)),
+    basis: `${deals.toFixed(2)} deal(s) in ${input.daysLeft} days × ${Math.round(price)} (${arrangement.value.tier}: ${Math.round(position * 100)}% of the way from p10 to p50${c ? `, × a ${Math.round(share * 1000) / 10}% commission (${c.basis.toLowerCase()})` : ''}) × ${weight.toFixed(2)} for ${arrangement.stress.exposure.toLowerCase()} exposure; unknown links at their ${Math.round(SCREEN_QUANTILE * 100)}th percentile${fitNote.length ? `; ${fitNote.join('; ')}` : ''}`,
     misfit: misfit ?? lossMisfit,
     flag,
     capitalFit,
@@ -1191,7 +1384,7 @@ export const populationMarket = (population: string) => `${ARRANGEMENT_ID_PREFIX
  * risk, and the three took every design slot their buyers had.
  */
 export function modelledTwinKey(one: PlannedOpening): string {
-  const input = (x: ModelInput | undefined) => (x ? { value: x.value, low: x.low, high: x.high, provenance: x.provenance, distribution: x.distribution ?? null, inferred: x.inferred ?? null } : null);
+  const input = (x: ModelInput | undefined) => (x ? { value: x.value, low: x.low, high: x.high, provenance: x.provenance, distribution: x.distribution ?? null, inferred: x.inferred ?? null, takeShare: x.takeShare ?? null } : null);
   const o = one.opportunity;
   const { arrangementKey: _key, ...estimated } = one.estimated ?? ({ arrangementKey: '' } as NonNullable<ModelledOpportunity['estimated']>);
   const pv = one.priceVariable;
@@ -1214,6 +1407,7 @@ export function modelledTwinKey(one: PlannedOpening): string {
     one.terms ?? null,
     estimated,
     pv ? [pv.runCost, pv.prices, pv.swept, pv.remaining] : null,
+    one.commission ? [one.commission.basis, one.commission.low, one.commission.high, one.commission.buyerPrice] : null,
     [o.mechanism, o.industry, o.currency, o.paymentTerms ?? null, o.fulfillmentOwner ?? null, o.peakFundingCents ?? null, o.projectId],
   ]);
 }

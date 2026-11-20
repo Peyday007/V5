@@ -125,7 +125,9 @@ describe('an arrangement reads accepted evidence (F2)', () => {
     const est = reconstruct({ nodes: [node] }, 'a_value', now).estimates['a_value']!;
     const evidence = valueEvidence(est).evidence;
     expect(evidence).toBeDefined();
-    const priced = estimatedFromArrangement(arrangement({ value: { tier: est.tier, p10: est.p10, p50: est.p50, p90: est.p90, observations: 4, evidence } }), input)!;
+    // Paid the buyer's price: a broker's price is its commission, evidence only when the commission is too (`commissionRevenue`).
+    const paid = { structure: 'SUBCONTRACT', design: { base: 'SUBCONTRACT', funding: 'ON_DELIVERY', aggregation: 'SINGLE', repeat: 'ONE_OFF' } } as const;
+    const priced = estimatedFromArrangement(arrangement({ ...paid, value: { tier: est.tier, p10: est.p10, p50: est.p50, p90: est.p90, observations: 4, evidence } }), input)!;
     expect(priced.price.provenance).toBe('EVIDENCE');
     expect(priced.price.inferred?.justified).toBe(true);
     expect(priced.price.distribution?.kind).toBe('EMPIRICAL');

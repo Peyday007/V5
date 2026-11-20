@@ -21,8 +21,10 @@ import { capitalAtStart, evaluateGoalPortfolio } from '../server/services/goals/
 function arrangement(over: Partial<ConstructedArrangement> & { key: string; p50: number; repeat?: 'ONE_OFF' | 'RECURRING_COHORT' | 'SUBSCRIPTION' }): ConstructedArrangement {
   const { p50, repeat = 'ONE_OFF', ...rest } = over;
   return {
-    structure: 'BROKER',
-    design: { base: 'BROKER', funding: 'THRESHOLD_PRESALE', aggregation: 'POOLED_BUYERS', repeat },
+    // A design paid the buyer's price (POOL keeps the margin on the run it buys): a broker's or referrer's
+    // price is only its commission (`commissionRevenue`, tests/brokerCommissionRevenue.test.ts).
+    structure: 'POOL',
+    design: { base: 'POOL', funding: 'THRESHOLD_PRESALE', aggregation: 'POOLED_BUYERS', repeat },
     origin: 'FORWARD',
     precedent: null,
     sector: 'property services',
@@ -30,7 +32,7 @@ function arrangement(over: Partial<ConstructedArrangement> & { key: string; p50:
     demand: { name: 'landlords', claimId: null, from: 'INDUSTRY_MAP', ref: `ind_${over.key}` },
     need: null,
     supply: null,
-    label: `Broker work for ${over.key}`,
+    label: `Pooled work for ${over.key}`,
     properties: [],
     targetsMet: [],
     emergent: [],

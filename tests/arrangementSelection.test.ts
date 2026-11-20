@@ -47,8 +47,9 @@ type Over = Partial<ConstructedArrangement> & {
   population?: string;
 };
 
+/** A pooled design paid the buyer's price unless a case says otherwise: a broker keeps only its commission (`commissionRevenue`). */
 function arrangement(over: Over): ConstructedArrangement {
-  const { key, p50, p10 = p50 / 4, p90 = p50 * 3, tier = 'COMPONENT', observations = 12, repeat = 'RECURRING_COHORT', base = 'BROKER', funding = 'THRESHOLD_PRESALE', population, ...rest } = over;
+  const { key, p50, p10 = p50 / 4, p90 = p50 * 3, tier = 'COMPONENT', observations = 12, repeat = 'RECURRING_COHORT', base = 'POOL', funding = 'THRESHOLD_PRESALE', population, ...rest } = over;
   return {
     key,
     structure: base,
