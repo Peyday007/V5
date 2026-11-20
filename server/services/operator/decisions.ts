@@ -141,6 +141,8 @@ export interface BucketCorrection {
    * stated probabilities did not imply — the estimate itself was wrong.
    */
   parameterEstimateClaims: string[];
+  /** Claims whose systematic miss named EXECUTION_BEHAVIOR: the work was not done the way the decision assumed it would be. */
+  executionBehaviorClaims: string[];
   /** The bucket's observed rate and mean forecast, when the calibration measured them. */
   observedRate: number | null;
   meanForecast: number | null;
@@ -187,6 +189,23 @@ export const CONDITION_ASSUMPTION_INSTRUCTION =
 
 /** An assumption that names the condition, written as CONDITION_ASSUMPTION_INSTRUCTION tells the operator to write it. */
 export const CONDITION_ASSUMPTION = /^\s*condition\s*:\s*\S/i;
+
+/**
+ * The same correction for a bucket whose systematic misses named
+ * EXECUTION_BEHAVIOR (FORECAST:operator:EXECUTION_BEHAVIOR, production 2 of 2):
+ * the outcome was missed because the work the decision assumed was not done as
+ * planned. `goals/calibration.ts` reads that cause as an execution failure —
+ * correct the execution procedure rather than the forecast — so shifting the
+ * probability alone leaves the next decision on the same unplanned execution
+ * and the bucket stays miscalibrated. The next decision of that kind names the
+ * Brain operation that will carry it out, who or what runs it, and the row it
+ * will be checked by within the horizon.
+ */
+export const EXECUTION_ASSUMPTION_INSTRUCTION =
+  'Add an assumption beginning "execution:" naming the Brain operation (tool, bin, routine or workflow) that will carry out the chosen action, who or what runs it, and the row the work will be checked by within the horizon; the earlier misses assumed work that was not done as planned';
+
+/** An assumption that names the execution, written as EXECUTION_ASSUMPTION_INSTRUCTION tells the operator to write it. */
+export const EXECUTION_ASSUMPTION = /^\s*execution\s*:\s*\S/i;
 
 /**
  * The same correction for a bucket whose systematic misses named
@@ -381,6 +400,7 @@ export function bucketCorrectionFrom(
   const changed = new Set<string>();
   const evidence = new Set<string>();
   const estimate = new Set<string>();
+  const execution = new Set<string>();
   for (const entry of entries) {
     const d = diagnose(entry, buckets, entries);
     if (d.kind !== 'SYSTEMATIC') continue;
@@ -389,6 +409,7 @@ export function bucketCorrectionFrom(
     if (d.causes.includes('CHANGED_CONDITIONS')) changed.add(d.claimId);
     if (d.causes.includes('EVIDENCE_QUALITY')) evidence.add(d.claimId);
     if (d.causes.includes('PARAMETER_ESTIMATE')) estimate.add(d.claimId);
+    if (d.causes.includes('EXECUTION_BEHAVIOR')) execution.add(d.claimId);
   }
   const measured = buckets.find((b) => b.comparableKey === comparableKey && b.verdict === 'MISCALIBRATED');
   return {
@@ -400,6 +421,7 @@ export function bucketCorrectionFrom(
     changedConditionClaims: [...changed],
     evidenceQualityClaims: [...evidence],
     parameterEstimateClaims: [...estimate],
+    executionBehaviorClaims: [...execution],
     observedRate: measured?.observedRate ?? null,
     meanForecast: measured?.meanForecast ?? null,
   };
@@ -586,6 +608,13 @@ export async function decide(
       );
       instructions.push(EVIDENCE_QUALITY_INSTRUCTION);
     }
+    if (correction.executionBehaviorClaims.length > 0 && !input.assumptions.some((a) => EXECUTION_ASSUMPTION.test(a))) {
+      const claims = correction.executionBehaviorClaims;
+      problems.push(
+        `${comparableKey} is miscalibrated (${correction.rationale}) and ${claims.length} of its systematic misses were EXECUTION_BEHAVIOR (${listed(claims)}): the work the decision assumed was not done as planned, and this decision again names no operation that will carry it out`,
+      );
+      instructions.push(EXECUTION_ASSUMPTION_INSTRUCTION);
+    }
     if (correction.parameterEstimateClaims.length > 0) {
       // A stated estimate is held to a figure: the base rate it starts from. With none stated,
       // Brain already holds the base rate and records it itself (`measuredEstimateAssumption`).
@@ -769,12 +798,14 @@ export function operatorCalibration(
   const conditionMisses = causes.get('CHANGED_CONDITIONS') ?? 0;
   const evidenceMisses = causes.get('EVIDENCE_QUALITY') ?? 0;
   const estimateMisses = causes.get('PARAMETER_ESTIMATE') ?? 0;
+  const executionMisses = causes.get('EXECUTION_BEHAVIOR') ?? 0;
   const kindName = comparableKey.replace(/^operator:/, '');
   const instructions = [
     ...(mechanismMisses > 0 ? [`${mechanismMisses} miss(es) of ${comparableKey} lacked the step from decision to outcome (MISSING_MECHANISM). In every further ${kindName} decision: ${MECHANISM_ASSUMPTION_INSTRUCTION}.`] : []),
     ...(capacityMisses > 0 ? [`${capacityMisses} miss(es) of ${comparableKey} assumed capacity that was not there (CAPACITY). In every further ${kindName} decision: ${CAPACITY_ASSUMPTION_INSTRUCTION}.`] : []),
     ...(conditionMisses > 0 ? [`${conditionMisses} miss(es) of ${comparableKey} rested on a condition that had changed by the outcome (CHANGED_CONDITIONS). In every further ${kindName} decision: ${CONDITION_ASSUMPTION_INSTRUCTION}.`] : []),
     ...(evidenceMisses > 0 ? [`${evidenceMisses} miss(es) of ${comparableKey} rested on no named data (EVIDENCE_QUALITY). In every further ${kindName} decision: ${EVIDENCE_QUALITY_INSTRUCTION}.`] : []),
+    ...(executionMisses > 0 ? [`${executionMisses} miss(es) of ${comparableKey} assumed work that was not done as planned (EXECUTION_BEHAVIOR). In every further ${kindName} decision: ${EXECUTION_ASSUMPTION_INSTRUCTION}.`] : []),
     ...(estimateMisses > 0 ? [`${estimateMisses} miss(es) of ${comparableKey} stated a probability the bucket's record did not support (PARAMETER_ESTIMATE). In every further ${kindName} decision: ${ESTIMATE_ASSUMPTION_INSTRUCTION}.`] : []),
   ];
   return {
