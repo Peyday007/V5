@@ -1146,6 +1146,7 @@ function judgeUnitEconomic(claim: ResearchClaim, nodes: readonly IndustryNode[],
     const amount = (claim.structuralAmountCents ?? NaN) / 100;
     if (!Number.isFinite(amount)) return refuse('declared amount is not a number');
     if (FACT_KEYS[key].kind === 'RATE' && amount > 1) return refuse('rate is more than the whole');
+    if (FACT_KEYS[key].kind === 'POSITIVE' && amount <= 0) return refuse('a figure that must be positive is zero or less: a free tier or an unstated amount is not what a paying buyer pays');
     const buyer = planBuyerType(asked.name, nodes);
     if (!buyer && !namesABuyerPopulation(asked.name)) return refuse('the population the price question asked about is not a buyer population, so none is mapped', asked.name);
     return {
@@ -1170,6 +1171,7 @@ function judgeUnitEconomic(claim: ResearchClaim, nodes: readonly IndustryNode[],
   const amount = (claim.structuralAmountCents ?? NaN) / 100;
   if (!Number.isFinite(amount)) return refuse('declared amount is not a number');
   if (FACT_KEYS[key].kind === 'RATE' && amount > 1) return refuse('rate is more than the whole');
+  if (FACT_KEYS[key].kind === 'POSITIVE' && amount <= 0) return refuse('a figure that must be positive is zero or less: a free tier or an unstated amount is not what a paying buyer pays');
   return {
     source: 'UNIT_ECONOMIC',
     claimId: claim.id,
