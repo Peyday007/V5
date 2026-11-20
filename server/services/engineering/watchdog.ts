@@ -10,7 +10,7 @@
  * intervention rather than a row every ten seconds.
  */
 import { getDb } from '../../db/database.ts';
-import { DISPATCHABLE_SQL, FIREABLE_SQL, workReadySql } from '../../repos/bins.ts';
+import { ADMISSION_REFUSED_WINDOW_MS, DISPATCHABLE_SQL, FIREABLE_SQL, notAdmissionRefusedSql, workReadySql } from '../../repos/bins.ts';
 import { recordIntervention } from '../../repos/engineering.ts';
 import { idleCheck } from '../../domain/engineering.ts';
 import { capacityReading } from '../fleet/capacity.ts';
@@ -53,10 +53,11 @@ export async function idleCounts(now = new Date()): Promise<Omit<IdleReading, 'i
   const executable = await getDb().get<{ n: number | string }>(
     `SELECT COUNT(*) AS n FROM bins WHERE ${DISPATCHABLE_SQL} AND ${FIREABLE_SQL} AND ${workReadySql('bins.')}
         AND NOT EXISTS (SELECT 1 FROM bin_events e WHERE e.bin_id = bins.id AND e.event_type = 'DISPATCH_UNROUTED' AND e.at > ?)
+        AND ${notAdmissionRefusedSql('bins.')}
         AND (bins.pinned_routine_id IS NULL OR EXISTS (
           SELECT 1 FROM fleet_routines r JOIN fleet_accounts a ON a.id = r.account_id
            WHERE r.id = bins.pinned_routine_id AND r.state = 'ENABLED' AND a.state = 'ENABLED'))`,
-    [iso, iso, iso, iso, unroutedSince],
+    [iso, iso, iso, iso, unroutedSince, new Date(now.getTime() - ADMISSION_REFUSED_WINDOW_MS).toISOString()],
   );
   const active = await getDb().get<{ n: number | string }>(
     "SELECT COUNT(*) AS n FROM bins WHERE state = 'LEASED' AND lease_expires_at > ?",

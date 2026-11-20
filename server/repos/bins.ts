@@ -1650,6 +1650,44 @@ export const DISPATCHABLE_SQL = `(${claimableStateSql('')} AND attempt_count < m
  */
 export const FIREABLE_SQL = '(dispatch_not_before IS NULL OR dispatch_not_before <= ?)';
 
+/** How long an admission refusal holds a bin out of the idle reading before it counts as executable again. */
+export const ADMISSION_REFUSED_WINDOW_MS = 6 * 60 * 60_000;
+
+/**
+ * A bin whose last arrival was refused by admission — a review that no free
+ * surface can give independently (`reviewLineage`), an audit role one lineage
+ * already holds — is waiting on a named limit, not on idle capacity: firing
+ * the surfaces Brain has again only brings back a session admission refuses.
+ * Production, 2026-11-20: Factory review bin_53bf8c50… was refused twelve
+ * times (REFUSED_BY_ADMISSION: "a review from a surface on a different Claude
+ * connector") because the one enabled repository surface was its
+ * implementer's connector; from 15:19Z the ROUTINES and FACTORY pools both
+ * read "unexplainedly idle — a fault" over it, and the watchdog fired a
+ * dispatch pass at it every interval. Counted again once the window passes,
+ * so a surface added meanwhile is tried.
+ *
+ * One `?`: the window's start.
+ */
+export function notAdmissionRefusedSql(prefix: string): string {
+  return (
+    `NOT EXISTS (SELECT 1 FROM bin_events re WHERE re.bin_id = ${prefix}id` +
+    ` AND re.event_type = 'BIN_ASSIGNMENT_REFUSED' AND re.outcome = 'REFUSED_BY_ADMISSION' AND re.at > ?` +
+    ` AND NOT EXISTS (SELECT 1 FROM bin_events le WHERE le.bin_id = ${prefix}id AND le.at > re.at` +
+    ` AND le.event_type IN ('BIN_ASSIGNED', 'BIN_TAKEOVER')))`
+  );
+}
+
+/** Of these bins, those admission refused within the window: waiting on a named limit (`notAdmissionRefusedSql`). */
+export async function admissionRefusedBinIds(ids: readonly string[], now: Date = new Date()): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+  const since = new Date(now.getTime() - ADMISSION_REFUSED_WINDOW_MS).toISOString();
+  const rows = await getDb().all<{ id: string }>(
+    `SELECT b.id FROM bins b WHERE b.id IN (${ids.map(() => '?').join(', ')}) AND NOT (${notAdmissionRefusedSql('b.')})`,
+    [...ids, since],
+  );
+  return new Set(rows.map((one) => one.id));
+}
+
 /**
  * Whether a bin has work a fired session could actually start, right now.
  *

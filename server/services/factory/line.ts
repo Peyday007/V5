@@ -46,7 +46,7 @@ import {
   type AdmissionPolicy,
   type FactoryQueueEntry,
 } from '../../repos/factoryLine.ts';
-import { listBins, listDispatchesForBin } from '../../repos/bins.ts';
+import { admissionRefusedBinIds, listBins, listDispatchesForBin } from '../../repos/bins.ts';
 import { approveObjective } from './contract.ts';
 import { campaignSpecFor } from './remote.ts';
 import { INITIAL_LANE_TARGET } from './scheduler.ts';
@@ -510,11 +510,13 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
   let readyBins = 0;
   let leasedBins = 0;
   let arriving = 0;
+  // A bin admission refused is waiting on a named limit (a surface it may take), not on this line (`notAdmissionRefusedSql`).
+  const refused = await admissionRefusedBinIds(factoryBins.filter((bin) => bin.state === 'READY').map((bin) => bin.id), now);
   for (const bin of factoryBins) {
     const sent = newestSent(await listDispatchesForBin(bin.id));
     const leaseLive = bin.state === 'LEASED' && bin.leaseExpiresAt !== null && bin.leaseExpiresAt > nowIso;
     if (leaseLive) leasedBins += 1;
-    else {
+    else if (!refused.has(bin.id)) {
       readyBins += 1;
       if (sent && now.getTime() - new Date(sent.sentAt).getTime() < ARRIVAL_GRACE_MS) arriving += 1;
     }
