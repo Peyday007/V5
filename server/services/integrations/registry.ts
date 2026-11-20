@@ -210,6 +210,32 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
     ownerAction: 'Nothing: the bridge key is generated and pinned in V2 by Brain sessions.',
   },
   {
+    id: 'google-search',
+    name: 'Google Programmable Search',
+    purpose:
+      "Brain's own web search for research fragments (Custom Search JSON API), in front of the DuckDuckGo scraper " +
+      'that refused 650 times on 2026-11-20; inert until both settings are present.',
+    heldBy: 'BRAIN',
+    credentials: [
+      fly('BRAIN_SEARCH_API_KEY', ['GITHUB_SECRET', 'OWNER'], { shape: /^\S{20,}$/ }),
+      fly('BRAIN_SEARCH_ENGINE_ID', ['GITHUB_SECRET', 'OWNER'], { shape: /^[A-Za-z0-9:_-]{8,}$/ }),
+    ],
+    consumers: [
+      { component: 'Sources: keyed web search', path: 'server/services/sources/keyedSearch.ts' },
+      { component: 'Sources: fragment search, falling back to DuckDuckGo', path: 'server/services/sources/discover.ts' },
+    ],
+    capabilities: ['SEARCH_THE_WEB'],
+    // Every query bills against Google's quota, so there is no probe that sends nothing.
+    probe: null,
+    // Google's free tier; past it a query costs $5 per 1,000. The owner raises
+    // BRAIN_SEARCH_DAILY_CEILING himself before anything is spent (invariant 18).
+    dailyCeiling: 100,
+    ownerAction:
+      'In Google Cloud Console enable the Custom Search API on the project that holds the key, then save the API key ' +
+      'and the Programmable Search engine id (cx, set to search the entire web) as the GitHub repository secrets ' +
+      'BRAIN_SEARCH_API_KEY and BRAIN_SEARCH_ENGINE_ID; the next Integrations run puts them on Brain.',
+  },
+  {
     id: 'credential-seal',
     name: 'Credential seal',
     purpose: 'The deployment\'s own key: a session holding an authorized connector seals a credential to it, and only this machine can open it.',
