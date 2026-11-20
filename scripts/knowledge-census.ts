@@ -23,19 +23,13 @@ async function step(label: string, fn: () => Promise<unknown>): Promise<void> {
 async function main(): Promise<void> {
   await initDatabase();
   try {
-    const PARKED = "SELECT c.id FROM russell_candidates c WHERE c.state = 'PARKED' AND c.id IN (SELECT candidate_id FROM cash_needs WHERE request_key LIKE 'goal-price-%' AND candidate_id IS NOT NULL)";
-    const ms = await q('A_MISSIONS', `SELECT * FROM russell_missions WHERE candidate_id IN (${PARKED}) ORDER BY created_at DESC LIMIT 3`);
-    await q('A_MISSION_STATES', `SELECT state, COUNT(*) AS n FROM russell_missions WHERE candidate_id IN (${PARKED}) GROUP BY state`);
-    const ids = ms.map((m) => m.id as string);
-    if (ids.length) {
-      const ph = ids.map(() => '?').join(',');
-      await q('A_MISSION_EVENTS', `SELECT entity_id, event_type, substr(payload,1,500) AS p, created_at FROM project_events WHERE entity_id IN (${ph}) ORDER BY created_at LIMIT 20`, ids);
-      const orcs = ms.map((m) => m.orchestration_id as string).filter(Boolean);
-      if (orcs.length) {
-        const ph2 = orcs.map(() => '?').join(',');
-        await q('A_PACKETS', `SELECT id, status, verdict, substr(failure_reason,1,300) AS why, created_at, completed_at FROM research_orchestrations WHERE id IN (${ph2})`, orcs);
-        await q('A_FRAGS', `SELECT orchestration_id, status, substr(blocked_reason,1,200) AS why, COUNT(*) AS n FROM research_fragments WHERE orchestration_id IN (${ph2}) GROUP BY orchestration_id, status, why`, orcs);
-      }
+    await q('FRAG_TEXT', "SELECT * FROM research_fragments WHERE orchestration_id IN ('orc_13a10aa965934ebdad5e','orc_9a2e71abe44d4df684a3') LIMIT 2");
+    const { ownActionMatches } = await import('../server/services/research/actorScope.ts');
+    const rows = await getDb().all<Record<string, unknown>>("SELECT * FROM research_fragments WHERE orchestration_id IN ('orc_13a10aa965934ebdad5e','orc_9a2e71abe44d4df684a3','orc_d5715b032b064be6b34e')");
+    for (const r of rows) {
+      const prose = Object.entries(r).filter(([k, v]) => typeof v === 'string' && /question|definition|population|criteria|completion/.test(k)).map(([, v]) => v as string).join(' \n');
+      const m = ownActionMatches(prose, /\b(?:purchase|buy|pay|contact|email|call|sign|commit|publish|hire|subscribe)\b/i);
+      console.log(`MATCH ${r.id} ${JSON.stringify(m)}`);
     }
   } finally {
     await closeDatabase();
