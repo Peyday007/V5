@@ -583,7 +583,8 @@ export function applyProgram(
       const includedTitles = new Set(s.openings.filter((o) => included.has(o.opportunity.id)).map((o) => o.opportunity.title.trim().toLowerCase()));
       const ids = new Set([...inScope(s.openings, t.scope, ctx.remaining)].filter((id) => {
         const o = s.openings.find((x) => x.opportunity.id === id);
-        return !included.has(id) && !(o && includedTitles.has(o.opportunity.title.trim().toLowerCase()));
+        // A partner's clone (`<id>~…`) of an opening brought in is the same opening sold another way.
+        return !included.has(id) && !included.has(id.split('~')[0]!) && !(o && includedTitles.has(o.opportunity.title.trim().toLowerCase()));
       }));
       if (ids.size === 0 || ids.size >= s.openings.filter((o) => o.agreedValue === 0).length) {
         skipped++;
@@ -593,7 +594,7 @@ export function applyProgram(
         {
           ...s,
           openings: s.openings.filter((o) => !ids.has(o.opportunity.id)),
-          changes: [...s.changes, change('PORTFOLIO', `drop@${t.scope}`, `leave out ${ids.size} opening(s) (${scopeWords(t.scope, s.openings)}), freeing the capacity and money they held`, 'ESTIMATE')],
+          changes: [...s.changes, change('PORTFOLIO', `drop@${t.scope}`, `leave out ${ids.size} opening(s) (${t.scope.startsWith('id:') ? s.openings.filter((o) => ids.has(o.opportunity.id)).map((o) => `"${o.opportunity.title.slice(0, 80)}"`).join(', ') : scopeWords(t.scope, s.openings)}), freeing the capacity and money they held`, 'ESTIMATE')],
         },
         t,
       );

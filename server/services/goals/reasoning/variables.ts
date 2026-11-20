@@ -806,7 +806,7 @@ export async function sweepVariables(ctx: SweepContext): Promise<VariableSweep> 
           const titleOf = (id: string) => os.state.openings.find((o) => o.opportunity.id === id)?.opportunity.title.trim().toLowerCase() ?? null;
           const includedTitles = new Set([...included].map(titleOf).filter((x): x is string => x !== null));
           const open = rows.filter((r) => r.kind !== 'AGREED');
-          const dropped = open.filter((r) => ids.has(r.id) && !included.has(r.id) && !includedTitles.has(titleOf(r.id) ?? ''));
+          const dropped = open.filter((r) => ids.has(r.id) && !included.has(r.id) && !included.has(r.id.split('~')[0]!) && !includedTitles.has(titleOf(r.id) ?? ''));
           if (dropped.length === 0 || dropped.length >= open.length) return null;
           const gone = new Set(dropped.map((r) => r.id));
           rows = rows.filter((r) => !gone.has(r.id));
