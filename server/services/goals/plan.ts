@@ -96,7 +96,7 @@ import { diagnoseGoalResearch, diagnosisInstructions, recentGoalRounds, type Res
 import type { EvidenceTier } from '../../domain/quant.ts';
 import { namesABuyerPopulation } from '../../domain/industry.ts';
 import { readPathways, requiredStructures, type BrainCapabilities, type GoalStructures, type PathwayReading } from './pathways.ts';
-import { MATERIAL_P50, MATERIAL_REACH, reconstructPlan, type Reconstruction, type StrategyChange } from './reconstruction.ts';
+import { MATERIAL_P50, MATERIAL_REACH, reconstructPlan, type Reconstruction, type StrategyChange, type VariantReading } from './reconstruction.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { sharedEvaluator } from './reasoning/evaluatorPool.ts';
 import { inventDirections, inventEnabled } from './reasoning/invent.ts';
@@ -586,6 +586,13 @@ export interface PlanStep {
    * Read from Brain's registered capabilities, never from the step's words.
    */
   executor?: StepExecutor;
+  /**
+   * The openings a reconstruction's move acts on, by id (`changeOpenings`): a
+   * channel's or partner's clone, the opening it brings in, the one its scope
+   * names. Absent on a step on the plan as a whole. What the integrity check
+   * reads to hold every step to the adopted members (STEPS_BELONG_TO_PLAN).
+   */
+  openings?: string[];
   /**
    * RESEARCH: establishes a part nobody has yet, by `question`. VALIDATE: an
    * action whose first results answer `question` (a first batch of offers
@@ -2416,6 +2423,101 @@ function implausibility(r: Reconstruction): string | null {
 }
 
 /**
+ * The opening a member or a change sells: a channel's or a partner's clone is
+ * `<openingId>~<lever>` (reconstruction.ts), any other id is its own. Pure.
+ */
+export function openingOfMember(id: string): string {
+  const at = id.indexOf('~');
+  return at > 0 ? id.slice(0, at) : id;
+}
+
+/**
+ * One member of a reconstruction's strongest combination, resolved to the
+ * opening it sells among the openings held (id → title), or null. Pure.
+ *
+ * By its id where the reading kept one (`VariantReading.memberIds`): a clone
+ * resolves to the opening it clones. Else by the member's name, the title cut
+ * at 50: an id; an opening's own 50-character title; a longer opening's title
+ * the name begins; or — a channel's or partner's clone of an opening titled
+ * under 50 characters, named `${title} via …` and cut at 50 — the longest
+ * held title the name begins with, followed by nothing but the start of
+ * " via ". Production plans dropped that last kind from the candidate (the
+ * third rule compared the wrong way round) and sold, through a partner, an
+ * opening the candidate did not list.
+ */
+export function resolveMember(member: string, id: string | undefined, titles: ReadonlyMap<string, string>): string | null {
+  for (const one of id ? [openingOfMember(id), id] : []) if (titles.has(one)) return one;
+  for (const one of [openingOfMember(member), member]) if (titles.has(one)) return one;
+  const held = [...titles.entries()];
+  const exact = held.find(([, t]) => t.slice(0, 50) === member);
+  if (exact) return exact[0];
+  const longer = held.find(([, t]) => member.length >= 20 && t.startsWith(member));
+  if (longer) return longer[0];
+  const via = ' via ';
+  const cloned = held
+    .filter(([, t]) => t.length >= 12 && member.startsWith(t))
+    .filter(([, t]) => {
+      const rest = member.slice(t.length);
+      return rest === '' || via.startsWith(rest) || rest.startsWith(via);
+    })
+    .sort((a, b) => b[1].length - a[1].length)[0];
+  return cloned?.[0] ?? null;
+}
+
+/** A reconstruction's members: the openings they sell, and, where the reading kept them, their own ids (a clone's included). */
+export interface ReconstructionMembers {
+  /** The members' own ids, clones as clones; null on a reading that kept only titles. */
+  exact: ReadonlySet<string> | null;
+  /** Every opening a member sells, by id. */
+  openings: ReadonlySet<string>;
+  /** The members resolved to the openings held, in the reading's order, each once. */
+  resolved: string[];
+}
+
+/** The members of a reconstruction's reading, resolved against the openings held (`resolveMember`). Pure. */
+export function membersOf(reading: Pick<VariantReading, 'members' | 'memberIds'>, titles: ReadonlyMap<string, string>): ReconstructionMembers {
+  const ids = reading.memberIds && reading.memberIds.length === reading.members.length ? reading.memberIds : null;
+  const resolved: string[] = [];
+  for (const [at, member] of reading.members.entries()) {
+    const hit = resolveMember(member, ids?.[at], titles);
+    if (hit && !resolved.includes(hit)) resolved.push(hit);
+  }
+  return { exact: ids ? new Set(ids) : null, openings: new Set([...resolved, ...(ids ?? []).map(openingOfMember)]), resolved };
+}
+
+/**
+ * The openings a reconstruction's change acts on, by id: the clone it adds (a
+ * channel or a partner), the opening it brings in, or the one opening its
+ * scope names (`@id:…`). Empty for a move that leaves openings out (it names
+ * a non-member by design); null for a move on the plan as a whole or on a
+ * group. Pure.
+ */
+export function changeOpenings(c: Pick<StrategyChange, 'label' | 'clone'>): string[] | null {
+  if (c.clone) return [c.clone];
+  if (/^drop@/.test(c.label)) return [];
+  const included = /^include:(.+)$/.exec(c.label);
+  if (included) return [included[1]!];
+  const scoped = /@id:([^\s)]+)$/.exec(c.label);
+  return scoped ? [scoped[1]!] : null;
+}
+
+/**
+ * Whether a change belongs to the strategy its reading selected (owner,
+ * 2026-11-20: "Every execution step must belong to the strategy actually
+ * selected"). A change acting on named openings belongs when one of them is a
+ * member — a clone only when the clone itself is, where the reading kept its
+ * members' ids. A partner clone the optimiser left out of the strongest
+ * combination sells nothing in the plan: the change is kept in the search's
+ * state, but it is no step of the plan, no part of its label and no
+ * assumption its reach rests on. Pure.
+ */
+export function changeBelongs(c: Pick<StrategyChange, 'label' | 'clone'>, members: ReconstructionMembers): boolean {
+  const acts = changeOpenings(c);
+  if (!acts || acts.length === 0) return true;
+  return acts.some((id) => (id.includes('~') && members.exact ? members.exact.has(id) : members.openings.has(openingOfMember(id))));
+}
+
+/**
  * Whether the reconstruction's strongest plan becomes THE plan (C-6). Pure.
  *
  * Production read three plans at once: the verdict and next step from a
@@ -2444,7 +2546,9 @@ export function adoptReconstruction(input: {
   if (!r) return { adoption: { source: 'BASELINE', hypothetical: false, reason: 'no reconstruction ran: the plan is accepted, or nothing could be reconstructed' }, candidate: null };
   const flagged = implausibility(r);
   const titled = new Map(input.openings.map((o) => [o.opportunity.id, o.opportunity.title]));
-  const real = r.best.changes.filter((c) => !c.label.startsWith('test:'));
+  const members = membersOf(r.best, titled);
+  // Only a change on the strongest combination's members is part of the plan (`changeBelongs`).
+  const real = r.best.changes.filter((c) => !c.label.startsWith('test:') && changeBelongs(c, members));
   /*
    * Invariant 39 (owner, 2026-11-20: "uncertainty never silently becomes
    * favorable evidence"). The reach a move resting on an unmeasured assumption
@@ -2485,18 +2589,8 @@ export function adoptReconstruction(input: {
         : `the reconstruction (${pctOf(r.best.reach)}, p50 ${moneyOf(r.best.settledP50)}) does not beat the plan as held (${pctOf(baseReach)}, p50 ${moneyOf(baseP50)}) materially`,
     );
   }
-  const ids: string[] = [];
-  const names: string[] = [];
-  for (const member of r.best.members) {
-    const hit =
-      input.openings.find((o) => o.opportunity.id === member) ??
-      input.openings.find((o) => o.opportunity.title.slice(0, 50) === member) ??
-      input.openings.find((o) => member.length >= 20 && o.opportunity.title.startsWith(member));
-    if (hit && !ids.includes(hit.opportunity.id)) {
-      ids.push(hit.opportunity.id);
-      names.push(hit.opportunity.title.slice(0, 60));
-    }
-  }
+  const ids = members.resolved;
+  const names = ids.map((id) => (titled.get(id) ?? '').slice(0, 60));
   if (ids.length === 0) return hypothetical('the reconstruction\'s strongest plan names no opening Brain holds');
   const evidenced = held.basis === 'PROBABILITY' && establishedMoves.every((c) => c.basis === 'MEASURED');
   return {
@@ -2866,8 +2960,10 @@ export function planSteps(input: {
   const r = input.reconstruction;
   const steps: PlanStep[] = [];
   if (input.adoption.source === 'RECONSTRUCTED' && r) {
+    const members = membersOf(r.best, input.titles ?? new Map<string, string>());
+    // A change on an opening outside the strongest combination is no step: the plan says nothing it will not do (`changeBelongs`).
     const changes = r.best.changes
-      .filter((c) => !c.label.startsWith('test:'))
+      .filter((c) => !c.label.startsWith('test:') && changeBelongs(c, members))
       .map((c, at) => ({ c, at }))
       .sort((a, b) => (a.c.startDay?.low ?? 0) - (b.c.startDay?.low ?? 0) || a.at - b.at)
       .map(({ c }) => c);
@@ -2878,6 +2974,7 @@ export function planSteps(input: {
       const cost = move.changes.reduce((sum, c) => sum + c.cost, 0);
       const basis = move.changes.map((c) => c.basis).sort((a, b) => (BASIS_RANK[b] ?? 2) - (BASIS_RANK[a] ?? 2))[0]!;
       const who = ownerOf({ label: move.label, detail: move.detail, cost }, input.titles?.values() ?? []);
+      const acts = [...new Set(move.changes.flatMap((c) => changeOpenings(c) ?? []))];
       steps.push({
         order: steps.length + 1,
         label: move.label,
@@ -2893,6 +2990,7 @@ export function planSteps(input: {
         executor: exec(changeOperation(first.dimension, cost, SENDS.has(first.dimension) ? send : collect)),
         // Its cost is the reconstruction's own figure for the move: what it commits before any opening pays.
         stage: { stage: CHANGE_STAGE[first.dimension] ?? 'OFFER', costSource: 'MODEL' },
+        ...(acts.length > 0 ? { openings: acts } : {}),
       });
     }
     /*
@@ -2936,8 +3034,12 @@ export function planSteps(input: {
       stage: { stage: 'OFFER', costSource: 'NONE_HELD' },
     });
     // A member is named by its id, or by its title cut at 50 (the reconstruction's own reading): resolved as `adoptReconstruction` resolves it.
-    const titled = [...(input.titles ?? new Map<string, string>()).entries()];
-    const idOf = (m: string): string => (input.cashDays?.has(m) || input.titles?.has(m) ? m : (titled.find(([, t]) => t.slice(0, 50) === m)?.[0] ?? titled.find(([, t]) => m.length >= 20 && t.startsWith(m))?.[0] ?? m));
+    const keptIds = r.best.memberIds && r.best.memberIds.length === r.best.members.length ? r.best.memberIds : null;
+    const idOf = (m: string, at: number): string => {
+      const kept = keptIds?.[at];
+      if (kept) return openingOfMember(kept);
+      return input.cashDays?.has(m) ? m : (resolveMember(m, undefined, input.titles ?? new Map<string, string>()) ?? m);
+    };
     const memberIds = [...new Set(r.best.members.map(idOf))];
     const held = memberIds.map((id) => input.cashDays?.get(id) ?? null).filter((d): d is { span: Span; standing: string } => d !== null);
     const cash: Span | null = held.length > 0 ? { low: Math.min(...held.map((d) => d.span.low)), high: Math.max(...held.map((d) => d.span.high)) } : null;

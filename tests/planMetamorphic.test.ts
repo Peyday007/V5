@@ -46,7 +46,8 @@ import { getCashMode } from '../server/repos/cashMode.ts';
 import { createOpportunity, updateOpportunity } from '../server/repos/cashPortfolio.ts';
 import { recordCardFact } from '../server/repos/cashCardFacts.ts';
 import { createGoal } from '../server/services/goals/decide.ts';
-import { adoptReconstruction, forgetGoalReadings, planSteps, readGoalPlan, type PlanReading } from '../server/services/goals/plan.ts';
+import { adoptReconstruction, forgetGoalReadings, planSteps, readGoalPlan, resolveMember, type PlanReading } from '../server/services/goals/plan.ts';
+import { planIntegrity } from '../server/domain/planIntegrity.ts';
 import { forgetKnowledge } from '../server/services/quant/knowledge.ts';
 import { clearConstructionMemo } from '../server/services/cash/construct.ts';
 import { CAPTURE_KEY } from '../server/services/cash/tier.ts';
@@ -654,18 +655,15 @@ describe('plan steps: a reconstruction\'s moves belong to its members', () => {
   const titles = new Map([[A.id, A.title], [B.id, B.title]]);
 
   /*
-   * FAILS (defect, server/services/goals/plan.ts `planSteps` ~2795, fed by
-   * reconstruction.ts's kept state). An adopted reconstruction lists every
-   * change it kept as a step, whether or not the opening the change acts on
-   * (or its clone) is in its strongest combination: the partner clone is added
-   * to the state (reconstruction.ts ~1008, `partner:referral-partner`) and the
-   * change kept, the optimizer never puts the clone in the best combination,
-   * and the plan tells a person to sign a partner for an opening it does not
-   * sell. Either the reconstruction drops a change whose opening is not a
-   * member, or `planSteps` does not list it; both files belong to other
-   * workers: reported.
+   * Was a defect (plan.ts `planSteps`, fed by reconstruction.ts's kept state):
+   * an adopted reconstruction listed every change it kept as a step, whether
+   * or not the opening the change acts on (or its clone) was in its strongest
+   * combination. The partner clone is added to the state and the change kept,
+   * the optimiser never puts the clone in the best combination, and the plan
+   * told a person to sign a partner for an opening it does not sell. Now a
+   * change belongs to the plan only when it acts on a member (`changeBelongs`).
    */
-  it.fails('P5b no step of an adopted reconstruction acts on an opening outside its strongest combination', () => {
+  it('P5b no step of an adopted reconstruction acts on an opening outside its strongest combination', () => {
     const r = reconstructionOf([partnerOn(B)], [A.title.slice(0, 50)]);
     const steps = planSteps({ adoption: { source: 'RECONSTRUCTED', hypothetical: false, reason: 'test' }, reconstruction: r, sales: [], nextTest: null, permissionsMissing: [], titles, adoptedIds: new Set([A.id]) });
     const named = steps.filter((s) => !/^Leave out/i.test(s.label)).flatMap((s) => namedIn(`${s.label} ${s.detail}`, titles).map((id) => `${s.label}: ${id}`));
@@ -673,20 +671,18 @@ describe('plan steps: a reconstruction\'s moves belong to its members', () => {
   });
 
   /*
-   * FAILS (defect, server/services/goals/plan.ts `adoptReconstruction`
-   * ~2418). A reconstruction names its members by title cut at 50
-   * characters, and a partner clone is titled
+   * Was a defect (plan.ts `adoptReconstruction`). A reconstruction names its
+   * members by title cut at 50 characters, and a partner clone is titled
    * `${original.slice(0, 50)} via a referral partner`. For an original under
    * 50 characters the clone's member name is the whole original title plus
-   * " via a referral partn…", which none of the three resolution rules match
-   * (not its id; not an original's 50-character prefix; and the third rule
-   * asks whether the *original* starts with the *member*, the wrong way
-   * round): the member is dropped from `candidate.opportunityIds`. The plan
-   * then sells, through the partner, an opening its candidate does not list.
-   * "Resale of liquidated restaurant kitchen equipment" is 49 characters.
-   * Reported (plan.ts belongs to another worker).
+   * " via a referral partn…", which none of the three resolution rules matched
+   * (the third asked whether the *original* starts with the *member*, the
+   * wrong way round): the member was dropped from `candidate.opportunityIds`.
+   * "Resale of liquidated restaurant kitchen equipment" is 49 characters. Now
+   * a member resolves by its id where the reading kept one, and a clone's
+   * name to the longest held title it begins (`resolveMember`).
    */
-  it.fails('P5c a partner clone among a reconstruction\'s members resolves to the opening it sells', () => {
+  it('P5c a partner clone among a reconstruction\'s members resolves to the opening it sells', () => {
     const clone = `${B.title.slice(0, 50)} via a referral partner`.slice(0, 50);
     const r = reconstructionOf([partnerOn(B)], [A.title.slice(0, 50), clone]);
     const adopted = adoptReconstruction({ reconstruction: r, baseline: null, openings: [{ opportunity: A }, { opportunity: B }] });
@@ -700,6 +696,62 @@ describe('plan steps: a reconstruction\'s moves belong to its members', () => {
     const r = reconstructionOf([partnerOn(long)], [clone]);
     const adopted = adoptReconstruction({ reconstruction: r, baseline: null, openings: [{ opportunity: long }] });
     expect(adopted.candidate?.opportunityIds ?? []).toContain(long.id);
+  });
+
+  /*
+   * Over 50 characters an opening and its partner clone carry the same
+   * 50-character member name, so a title cannot say which of the two the
+   * strongest combination sells. The reading's member ids can: a partner move
+   * belongs to the plan only when the clone itself is a member.
+   */
+  const LONG = { id: 'cop_long', title: 'Post-construction cleanup for general contractors in three counties' };
+  const longTitles = new Map([[LONG.id, LONG.title], [A.id, A.title]]);
+  const stepsOf = (r: Reconstruction) =>
+    planSteps({ adoption: { source: 'RECONSTRUCTED', hypothetical: false, reason: 'test' }, reconstruction: r, sales: [], nextTest: null, permissionsMissing: [], titles: longTitles });
+  const withIds = (r: Reconstruction, ids: string[]): Reconstruction => ({ ...r, best: { ...r.best, memberIds: ids } });
+
+  it('P5b (ids) a partner move on an opening sold only directly is no step; one whose clone is a member is', () => {
+    const name = LONG.title.slice(0, 50);
+    const direct = withIds(reconstructionOf([partnerOn(LONG)], [name]), [LONG.id]);
+    expect(stepsOf(direct).map((s) => s.label).filter((l) => /partner/i.test(l))).toEqual([]);
+    const throughPartner = withIds(reconstructionOf([partnerOn(LONG)], [name]), [`${LONG.id}~partner`]);
+    const partnerSteps = stepsOf(throughPartner).filter((s) => /partner/i.test(s.label));
+    expect(partnerSteps).toHaveLength(1);
+    expect(partnerSteps[0]!.openings).toEqual([`${LONG.id}~partner`]);
+    // And the clone resolves, by its id, to the opening it sells.
+    const adopted = adoptReconstruction({ reconstruction: throughPartner, baseline: null, openings: [{ opportunity: LONG }, { opportunity: A }] });
+    expect(adopted.candidate?.opportunityIds).toEqual([LONG.id]);
+  });
+
+  it('P5b (label) the adopted candidate names no move on a non-member', () => {
+    // A measured move on the member, so the reconstruction is adopted; the partner move on the non-member is not its.
+    const measured: StrategyChange = { dimension: 'PRICE', op: 'price', label: `price×1.20@id:${A.id}`, detail: 'raise price ×1.20 on 1 opening(s) (id:cop_sheet)', cost: 0, basis: 'MEASURED', startDay: { low: 0, high: 0 } };
+    const r = withIds(reconstructionOf([measured, partnerOn(B)], [A.title.slice(0, 50)]), [A.id]);
+    const adopted = adoptReconstruction({ reconstruction: r, baseline: null, openings: [{ opportunity: A }, { opportunity: B }] });
+    expect(adopted.adoption.source).toBe('RECONSTRUCTED');
+    expect(adopted.candidate?.opportunityIds).toEqual([A.id]);
+    expect(`${adopted.candidate?.label} ${adopted.adoption.reason}`).not.toMatch(/partner|kitchen/i);
+    // Its one assumption was on the non-member: there is no upside resting on it.
+    expect(adopted.adoption.upside).toBeUndefined();
+  });
+
+  it('P5c (resolution) a member resolves by its id, a clone to the opening it sells, and a name to the longest title it begins', () => {
+    expect(resolveMember('anything', `${B.id}~partner`, titles)).toBe(B.id);
+    expect(resolveMember(`${B.title} via paid`, undefined, titles)).toBe(B.id);
+    expect(resolveMember(`${B.title} `, undefined, titles)).toBe(B.id);
+    // A title followed by anything other than " via " is another opening, not a clone of it.
+    expect(resolveMember(`${B.title}s for bakeries`, undefined, titles)).toBeNull();
+    const nested = new Map([['cop_short', 'Resale of liquidated restaurant'], [B.id, B.title]]);
+    expect(resolveMember(`${B.title} via a referral partn`, undefined, nested)).toBe(B.id);
+  });
+
+  it('STEPS_BELONG_TO_PLAN refuses a step on an opening outside the lead, and reads a clone by the opening it sells', () => {
+    const step = (openings: string[]) => ({ order: 1, label: 'Sell through a referral partner', detail: 'x', cost: 0, startDay: { low: 0, high: 0 }, dependsOn: null, kind: 'EXECUTE' as const, openings });
+    const rule = (leadIds: string[], openings: string[]) =>
+      planIntegrity({ leadIds, arrangementIdPrefix: ARRANGEMENT_ID_PREFIX, steps: [step(openings)], lead: null, unpriced: [], texts: [], spreadMax: 10 }).violations.filter((v) => v.rule === 'STEPS_BELONG_TO_PLAN');
+    expect(rule([A.id], [`${B.id}~partner`])).toHaveLength(1);
+    expect(rule([A.id, B.id], [`${B.id}~partner`])).toEqual([]);
+    expect(rule([A.id], [])).toEqual([]);
   });
 });
 

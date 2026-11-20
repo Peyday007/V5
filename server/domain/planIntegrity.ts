@@ -72,6 +72,15 @@
  *                            registered capability performs, unless that step
  *                            is itself the acquisition of a capability.
  *                            Approvals are listed, never refused.
+ *   STEPS_BELONG_TO_PLAN     Owner, 2026-11-20: "Every execution step must
+ *                            belong to the strategy actually selected." A
+ *                            production plan read "Sell X through a partner"
+ *                            while X was not among the members of the
+ *                            combination it adopted. A step that acts on named
+ *                            openings (`IntegrityStep.openings`) acts on one
+ *                            the plan names as its lead; a channel's or
+ *                            partner's clone (`<id>~<lever>`) by the opening it
+ *                            sells.
  *
  * Only what the reading proves is flagged. An unknown the plan states as an
  * unknown and sends to research is the honest state, never a violation; a
@@ -92,6 +101,7 @@ export const PLAN_INTEGRITY_RULES = [
   'NO_FAVOURABLE_UNKNOWN',
   'NO_CONTRADICTORY_STEPS',
   'EXECUTABLE_BY_BRAIN',
+  'STEPS_BELONG_TO_PLAN',
 ] as const;
 export type PlanIntegrityRule = (typeof PLAN_INTEGRITY_RULES)[number];
 
@@ -158,6 +168,13 @@ export interface IntegrityStep {
   unscheduled?: UnscheduledReason | null;
   /** Who performs it (`PlanStep.executor`); absent on a step whose builder recorded none, which proves nothing. */
   executor?: IntegrityExecutor | null;
+  /**
+   * The openings the step acts on, by id, where its builder named them (a
+   * reconstruction's move on one opening: its clone, the opening it brings in,
+   * the opening its scope names). Absent or empty: a step on the plan as a
+   * whole, which proves nothing about its members.
+   */
+  openings?: readonly string[] | null;
 }
 
 /** How the price of the arrangement a plan's steps sell was read. */
@@ -360,6 +377,16 @@ export function planIntegrity(input: PlanIntegrityInput): { violations: PlanInte
       } else if (e.performedBy === 'CAPABILITY_MISSING') {
         add('EXECUTABLE_BY_BRAIN', `step ${s.order} ("${clip(s.label, 60)}") needs what no registered capability performs (${e.acquire.join('; ') || e.operation}), and is not a step that acquires it`);
       }
+    }
+  }
+  // STEPS_BELONG_TO_PLAN: a step on named openings acts on one of the lead's (a clone by the opening it sells).
+  if (input.leadIds.length > 0) {
+    const sold = (id: string) => (id.indexOf('~') > 0 ? id.slice(0, id.indexOf('~')) : id);
+    const lead = new Set(input.leadIds.map(sold));
+    for (const s of ordered) {
+      const acts = s.openings ?? [];
+      if (acts.length === 0 || acts.some((id) => lead.has(sold(id)))) continue;
+      add('STEPS_BELONG_TO_PLAN', `step ${s.order} ("${clip(s.label, 60)}") acts on ${acts.map(sold).slice(0, 3).join(', ')}, outside the openings the plan names as its lead (${[...lead].slice(0, 4).join(', ')})`);
     }
   }
   return { violations };
