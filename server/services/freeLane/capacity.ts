@@ -35,7 +35,8 @@ import { RECIPES, recipeFor, type PodRecipe } from '../cheap/runpodRestore.ts';
 import type { SourceFetch } from '../sources/fetchForWorker.ts';
 import type { RecordedStageCapacity } from './stageCapacity.ts';
 import { readSource } from '../sources/access.ts';
-import { setSearchRefusalRecorder } from '../sources/discover.ts';
+import { setSearchEventRecorder } from '../sources/discover.ts';
+import { KEYED_SEARCH_PROVIDERS, seedKeyedSearchUsage } from '../sources/keyedSearch.ts';
 import {
   closeFiledFreeLaneBins,
   coolingForEveryModel,
@@ -680,22 +681,44 @@ export function adaptivePoolRunning(): boolean {
   return controlTimer !== null;
 }
 
+/**
+ * The keyed search queries already sent today, read back from the recorded
+ * search events, so a restart does not hand the daily ceiling out a second time
+ * (invariant 18). Every recorded outcome but CEILING was a sent query.
+ */
+async function seedKeyedSearchCeilings(): Promise<void> {
+  const now = Date.now();
+  const since = `${new Date(now).toISOString().slice(0, 10)}T00:00:00.000Z`;
+  for (const provider of KEYED_SEARCH_PROVIDERS) {
+    const row = await getDb().get<{ n: number | string }>(
+      `SELECT COUNT(*) AS n FROM bin_events
+        WHERE event_type = 'SOURCE_SEARCH' AND at >= ? AND provider = ? AND outcome <> 'CEILING'`,
+      [since, provider.id],
+    );
+    seedKeyedSearchUsage(provider.id, Number(row?.n ?? 0), now);
+  }
+}
+
 /** Start the adaptive pool. Off when no free model is configured. */
 export function startAdaptivePool(options: PoolOptions = {}, intervalMs = CONTROL_MS): void {
   if (controlTimer) return;
   poolOptions = options;
   stopped = false;
   poolStartedAt = options.pressure ? 0 : Date.now();
-  // A search endpoint that refuses is a row, not a silence (§88, DISCOVERY.SEARCH).
-  setSearchRefusalRecorder((endpoint, status) => {
+  // Every sent search is a row naming the provider that answered or refused it
+  // (§88, DISCOVERY.SEARCH): a refusal is not a silence, and production can
+  // measure the keyed provider against DuckDuckGo.
+  setSearchEventRecorder((event) => {
     void recordBinEvent({
       eventType: 'SOURCE_SEARCH',
-      provider: endpoint,
-      outcome: 'REFUSED',
-      reason: `search endpoint ${endpoint} answered ${status}; it rests before its next query`,
+      provider: event.provider,
+      outcome: event.outcome,
+      reason: event.detail,
+      measures: { status: event.status, results: event.results },
       evidenceClass: 'MEASURED',
     }).catch(() => undefined);
   });
+  void seedKeyedSearchCeilings().catch(() => undefined);
   const tick = (): void => {
     void controlStep().catch((error) => console.warn('[free-lane] control step failed:', (error as Error).message));
   };

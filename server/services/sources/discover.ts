@@ -18,7 +18,19 @@
  * It is a shared public service, so it is used politely: one query at a time,
  * spaced, a bounded queue, and a pause after the endpoint answers with an
  * anomaly page instead of results.
+ *
+ * In front of it sits a keyed provider (`keyedSearch.ts`, Google Programmable
+ * Search), inert until its secret is set: while it is configured, under its
+ * daily ceiling and not resting after a refusal, a fragment's search is
+ * answered by it, and anything else falls back to this path unchanged.
+ * Production, 2026-11-20: DuckDuckGo refused 650 times in 24 hours.
  */
+import {
+  availableKeyedProvider,
+  keyedSearch,
+  resetKeyedSearchState,
+  type KeyedSearchEvent,
+} from './keyedSearch.ts';
 
 export interface SearchDeps {
   fetchImpl?: typeof fetch;
@@ -30,6 +42,8 @@ export interface SearchDeps {
   priority?: 'NORMAL' | 'LOW';
   /** Test seam: how a search waits for a paused endpoint to reopen. */
   sleepMs?: (ms: number) => Promise<void>;
+  /** Where the keyed provider's secret is read; the deployment's environment by default. */
+  env?: NodeJS.ProcessEnv;
 }
 
 /**
@@ -111,7 +125,7 @@ const refusalStreak = new Map<string, number>();
 const remembered = new Map<string, { at: number; urls: string[] }>();
 
 /** What the last searches did, for tests and the capability map. */
-export const searchStats = { queries: 0, withResults: 0, empty: 0, refused: 0, skipped: 0, cached: 0 };
+export const searchStats = { queries: 0, withResults: 0, empty: 0, refused: 0, skipped: 0, cached: 0, keyed: 0 };
 
 /** Called once per refusal, so a blocked endpoint is a row and not a silence. */
 let onRefusal: ((endpoint: string, status: number) => void) | null = null;
@@ -120,13 +134,31 @@ export function setSearchRefusalRecorder(fn: ((endpoint: string, status: number)
 }
 
 /**
+ * What one sent search did and which provider did it — `google-cse`, or the
+ * DuckDuckGo endpoint (`html`, `lite`) — so production measures who answers.
+ * A cached answer and a search never sent are not events. Never carries a secret.
+ */
+export type SearchEvent = KeyedSearchEvent;
+let onSearch: ((event: SearchEvent) => void) | null = null;
+export function setSearchEventRecorder(fn: ((event: SearchEvent) => void) | null): void {
+  onSearch = fn;
+}
+function emit(event: SearchEvent): void {
+  try {
+    onSearch?.(event);
+  } catch {
+    // A recorder that fails never fails the search.
+  }
+}
+
+/**
  * Whether web search is refusing now: every endpoint's last answer was a
  * refusal. A fragment that found no readable source in that time says nothing
  * about its question (production 0ba2eb30, 2026-11-18 01:00–01:45Z), and the
  * free lane hands it back with its attempt refunded instead of spending it.
  */
-export function webSearchRefusing(): boolean {
-  return ENDPOINTS.every((one) => (refusalStreak.get(one.name) ?? 0) > 0);
+export function webSearchRefusing(env: NodeJS.ProcessEnv = process.env, now = Date.now()): boolean {
+  return ENDPOINTS.every((one) => (refusalStreak.get(one.name) ?? 0) > 0) && availableKeyedProvider(env, now) === null;
 }
 
 /** The current spacing between searches, for tests and `sources search`. */
@@ -145,6 +177,7 @@ export function resetSearchState(): void {
   refusalStreak.clear();
   remembered.clear();
   readWithoutAnswer.clear();
+  resetKeyedSearchState();
   for (const key of Object.keys(searchStats) as (keyof typeof searchStats)[]) searchStats[key] = 0;
 }
 
@@ -200,6 +233,18 @@ export async function webSearch(query: string, deps: SearchDeps = {}): Promise<s
     searchStats.cached += 1;
     return known.urls;
   }
+  // The keyed provider answers a fragment's search while it can; dead-link
+  // recovery (LOW) keeps to DuckDuckGo so it never spends the daily ceiling.
+  if (deps.priority !== 'LOW') {
+    const keyed = await keyedSearch(q, { fetchImpl, nowMs: now, env: deps.env ?? process.env, emit });
+    if (keyed) {
+      searchStats.keyed += 1;
+      searchStats.withResults += 1;
+      remembered.set(q, { at: now(), urls: keyed });
+      if (remembered.size > 2000) remembered.clear();
+      return keyed;
+    }
+  }
   const open = (): (typeof ENDPOINTS)[number] | null => {
     for (let i = 0; i < ENDPOINTS.length; i += 1) {
       const one = ENDPOINTS[(turn + i) % ENDPOINTS.length]!;
@@ -250,6 +295,10 @@ export async function webSearch(query: string, deps: SearchDeps = {}): Promise<s
           spacingMs = Math.min(MAX_SPACING_MS, spacingMs * 2);
           answeredSinceRefusal = 0;
           onRefusal?.(endpoint.name, response.status);
+          emit({
+            provider: endpoint.name, outcome: 'REFUSED', status: response.status, results: 0,
+            detail: `search endpoint ${endpoint.name} answered ${response.status}; it rests before its next query`,
+          });
           continue;
         }
         refusalStreak.delete(endpoint.name);
@@ -258,11 +307,19 @@ export async function webSearch(query: string, deps: SearchDeps = {}): Promise<s
         const urls = parseDuckDuckGo(html).slice(0, MAX_RESULTS);
         if (urls.length > 0) searchStats.withResults += 1;
         else searchStats.empty += 1;
+        emit({
+          provider: endpoint.name, outcome: urls.length > 0 ? 'ANSWERED' : 'EMPTY', status: response.status, results: urls.length,
+          detail: `search endpoint ${endpoint.name} answered ${urls.length} page(s)`,
+        });
         remembered.set(q, { at: now(), urls });
         if (remembered.size > 2000) remembered.clear();
         return urls;
-      } catch {
+      } catch (error) {
         searchStats.empty += 1;
+        emit({
+          provider: endpoint.name, outcome: 'ERROR', status: null, results: 0,
+          detail: `search endpoint ${endpoint.name} request failed (${error instanceof Error ? error.name : 'Error'})`,
+        });
         return [];
       }
     }
