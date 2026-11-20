@@ -131,6 +131,8 @@ export interface BucketCorrection {
   missingMechanismClaims: string[];
   /** Claims whose systematic miss named CAPACITY: the outcome needed capacity the decision assumed and did not have. */
   capacityShortfallClaims: string[];
+  /** Claims whose systematic miss named CHANGED_CONDITIONS: a condition the decision assumed no longer held when the outcome arrived. */
+  changedConditionClaims: string[];
 }
 
 /**
@@ -158,6 +160,70 @@ export const CAPACITY_ASSUMPTION_INSTRUCTION =
 
 /** An assumption that names the capacity, written as CAPACITY_ASSUMPTION_INSTRUCTION tells the operator to write it. */
 export const CAPACITY_ASSUMPTION = /^\s*capacity\s*:\s*\S/i;
+
+/**
+ * The same correction for a bucket whose systematic misses named
+ * CHANGED_CONDITIONS (FORECAST:operator:CHANGED_CONDITIONS, production 9 of 9):
+ * the decision rested on a market condition that no longer held by the time the
+ * outcome arrived. Shifting the probability alone leaves the next decision on
+ * the same unchecked condition, so the bucket stays miscalibrated. The next
+ * decision of that kind names the condition it relies on and where and when it
+ * was last observed — re-checked now, not the figure the broken misses assumed
+ * (`goals/calibration.ts`: re-research it before the next plan relies on it).
+ */
+export const CONDITION_ASSUMPTION_INSTRUCTION =
+  'Add an assumption beginning "condition:" naming the market condition the predicted outcome relies on, the row id or source URL it was last observed in, and the date it was observed as YYYY-MM-DD, re-checked within the horizon rather than carried over from the earlier misses whose assumed condition had changed';
+
+/** An assumption that names the condition, written as CONDITION_ASSUMPTION_INSTRUCTION tells the operator to write it. */
+export const CONDITION_ASSUMPTION = /^\s*condition\s*:\s*\S/i;
+
+/** A source a condition can be re-read from: a URL, or a Brain row id (`arr_2d0bae0f1074`, `opd_…`). */
+const CONDITION_SOURCE = /\bhttps?:\/\/\S+|\b[a-z]{2,8}_[0-9a-z]{6,}\b/i;
+const CONDITION_DATE = /\b(\d{4})-(\d{2})-(\d{2})\b/g;
+const DAY_MS = 86_400_000;
+
+/**
+ * Why the stated "condition:" assumptions do not show a re-check, or null when
+ * one does. A label alone is not a re-check: at least one condition assumption
+ * must cite where the condition can be re-read (a URL or a row id) and the date
+ * it was observed, and that date must lie within the decision's horizon before
+ * `now` and not after it — an observation older than the horizon is the very
+ * carried-over figure the CHANGED_CONDITIONS misses rested on.
+ */
+export function conditionAssumptionProblem(assumptions: readonly string[], horizonDays: number, now: Date = new Date()): string | null {
+  const stated = assumptions.filter((a) => CONDITION_ASSUMPTION.test(a));
+  if (stated.length === 0) return null;
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const windowDays = Math.max(1, Math.ceil(Number.isFinite(horizonDays) ? horizonDays : 1));
+  const reasons: string[] = [];
+  for (const a of stated) {
+    if (!CONDITION_SOURCE.test(a)) {
+      reasons.push(`"${a.slice(0, 120)}" cites no row id or URL the condition was observed in`);
+      continue;
+    }
+    // A real calendar date only: 2026-02-30 does not round-trip and is not an observation.
+    const dates = [...a.matchAll(CONDITION_DATE)]
+      .map((m) => ({ text: m[0], t: Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) }))
+      .filter((d) => Number.isFinite(d.t) && new Date(d.t).toISOString().slice(0, 10) === d.text)
+      .map((d) => d.t);
+    if (dates.length === 0) {
+      reasons.push(`"${a.slice(0, 120)}" gives no YYYY-MM-DD date the condition was observed`);
+      continue;
+    }
+    const observed = Math.max(...dates);
+    if (observed > today) {
+      reasons.push(`"${a.slice(0, 120)}" dates its observation after today`);
+      continue;
+    }
+    const age = Math.round((today - observed) / DAY_MS);
+    if (age > windowDays) {
+      reasons.push(`"${a.slice(0, 120)}" was observed ${age} days ago, outside the ${windowDays}-day horizon: re-check it now`);
+      continue;
+    }
+    return null;
+  }
+  return `no condition assumption shows a re-check within the horizon: ${reasons.join('; ')}`;
+}
 
 /** The pools Brain measures capacity in (`engineering/watchdog.ts` PoolReading). */
 const CAPACITY_POOLS = ['ROUTINES', 'FREE_LANE', 'RESEARCH_SLOTS', 'FACTORY'] as const;
@@ -219,11 +285,13 @@ export function bucketCorrectionFrom(
   const buckets = calibrate(entries);
   const missing = new Set<string>();
   const capacity = new Set<string>();
+  const changed = new Set<string>();
   for (const entry of entries) {
     const d = diagnose(entry, buckets, entries);
     if (d.kind !== 'SYSTEMATIC') continue;
     if (d.causes.includes('MISSING_MECHANISM')) missing.add(d.claimId);
     if (d.causes.includes('CAPACITY')) capacity.add(d.claimId);
+    if (d.causes.includes('CHANGED_CONDITIONS')) changed.add(d.claimId);
   }
   return {
     comparableKey,
@@ -231,7 +299,45 @@ export function bucketCorrectionFrom(
     rationale: reading.correction.rationale,
     missingMechanismClaims: [...missing],
     capacityShortfallClaims: [...capacity],
+    changedConditionClaims: [...changed],
   };
+}
+
+/** Claim ids per `IN (...)` of `brokenAssumptionsOf`: a page size under every driver's parameter limit, never a cap. */
+const BROKEN_ASSUMPTION_PAGE_IDS = 500;
+
+/**
+ * The assumptions a verifier recorded as broken on these claims
+ * (`OPERATOR_DECISION_VERIFIED.brokenAssumption`), distinct, most recent first,
+ * so a REVISE can say which condition changed. Every claim is read — paged so a
+ * long bucket never exceeds a statement's parameter limit — and every distinct
+ * text is returned: an older broken assumption is still a condition the next
+ * decision must re-check. Read-only; a claim with none recorded adds nothing.
+ */
+export async function brokenAssumptionsOf(claims: readonly string[]): Promise<string[]> {
+  const ids = [...new Set(claims.map((c) => c.replace(/^operator:/, '')))];
+  if (ids.length === 0) return [];
+  const rows: { payload: string | null; created_at: string; id: string }[] = [];
+  for (let i = 0; i < ids.length; i += BROKEN_ASSUMPTION_PAGE_IDS) {
+    const page = ids.slice(i, i + BROKEN_ASSUMPTION_PAGE_IDS);
+    rows.push(
+      ...(await getDb().all<{ payload: string | null; created_at: string; id: string }>(
+        `SELECT payload, created_at, id FROM project_events WHERE event_type = 'OPERATOR_DECISION_VERIFIED' AND entity_id IN (${page.map(() => '?').join(', ')})`,
+        page,
+      )),
+    );
+  }
+  rows.sort((a, b) => (a.created_at === b.created_at ? b.id.localeCompare(a.id) : b.created_at.localeCompare(a.created_at)));
+  const out = new Set<string>();
+  for (const row of rows) {
+    try {
+      const text = (JSON.parse(row.payload ?? '{}') as { brokenAssumption?: unknown }).brokenAssumption;
+      if (typeof text === 'string' && text.trim()) out.add(text.trim().slice(0, 160));
+    } catch {
+      // An unreadable row names nothing.
+    }
+  }
+  return [...out];
 }
 
 /** Rows fetched per round trip of `readComparableLedger`: a page size, never a cap. */
@@ -355,6 +461,20 @@ export async function decide(
           ...(unmet ? [unmet] : []),
         );
         instructions.push(CAPACITY_ASSUMPTION_INSTRUCTION);
+      }
+    }
+    if (correction.changedConditionClaims.length > 0) {
+      const stated = input.assumptions.some((a) => CONDITION_ASSUMPTION.test(a));
+      // A stated condition is held to a cited source and an observation date inside the horizon.
+      const unmet = stated ? conditionAssumptionProblem(input.assumptions, input.prediction.horizonDays) : null;
+      if (!stated || unmet) {
+        const claims = correction.changedConditionClaims;
+        const broken = await brokenAssumptionsOf(claims);
+        problems.push(
+          `${comparableKey} is miscalibrated (${correction.rationale}) and ${claims.length} of its systematic misses were CHANGED_CONDITIONS (${listed(claims)}): a condition the decision assumed no longer held when the outcome arrived${broken.length > 0 ? ` — recorded as broken: ${broken.map((b) => `"${b}"`).join('; ')}` : ''}`,
+          ...(unmet ? [unmet] : []),
+        );
+        instructions.push(CONDITION_ASSUMPTION_INSTRUCTION);
       }
     }
     if (problems.length > 0) {
@@ -519,10 +639,12 @@ export function operatorCalibration(
   const enough = n >= 10;
   const mechanismMisses = causes.get('MISSING_MECHANISM') ?? 0;
   const capacityMisses = causes.get('CAPACITY') ?? 0;
+  const conditionMisses = causes.get('CHANGED_CONDITIONS') ?? 0;
   const kindName = comparableKey.replace(/^operator:/, '');
   const instructions = [
     ...(mechanismMisses > 0 ? [`${mechanismMisses} miss(es) of ${comparableKey} lacked the step from decision to outcome (MISSING_MECHANISM). In every further ${kindName} decision: ${MECHANISM_ASSUMPTION_INSTRUCTION}.`] : []),
     ...(capacityMisses > 0 ? [`${capacityMisses} miss(es) of ${comparableKey} assumed capacity that was not there (CAPACITY). In every further ${kindName} decision: ${CAPACITY_ASSUMPTION_INSTRUCTION}.`] : []),
+    ...(conditionMisses > 0 ? [`${conditionMisses} miss(es) of ${comparableKey} rested on a condition that had changed by the outcome (CHANGED_CONDITIONS). In every further ${kindName} decision: ${CONDITION_ASSUMPTION_INSTRUCTION}.`] : []),
   ];
   return {
     comparableKey,
