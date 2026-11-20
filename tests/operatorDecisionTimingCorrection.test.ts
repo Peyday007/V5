@@ -163,6 +163,24 @@ describe('an operator decision on a bucket whose misses were TIMING', () => {
     expect(timingAssumptionProblem(['timing: soon', 'timing: 1 day from rsr_7f3a91c2d4'], 2)).toBeNull();
   });
 
+  it('reads the lead time, not another span the assumption names beside it', async () => {
+    // A window, lookback or age the lead time was measured over is not the lead time.
+    const beside = [
+      'timing: observable in 1 day, measured over a 30 day window in rsr_7f3a91c2d4',
+      'timing: observable in 1 day; 30-day retention window, per rsr_7f3a91c2d4',
+      'timing: replies land within 20 hours over the last 90 days of research_runs rsr_7f3a91c2d4',
+      'timing: 1 day lead, from rsr_7f3a91c2d4 recorded 3 weeks ago',
+    ];
+    for (const written of beside) expect(timingAssumptionProblem([written], 2)).toBeNull();
+    await seedTimingBucket(projectId, 'RESEARCH', { n: 24, occurred: 4 });
+    const d = await decide({ ...base, assumptions: [...base.assumptions, beside[0]!] }, ctx());
+    expect(d.verdict).toBe('COMMITTED');
+    // Every figure not marked as another span still counts, and the largest is held to the horizon.
+    expect(timingAssumptionProblem(['timing: observable in 1 day, sometimes 5 days, from rsr_7f3a91c2d4'], 2)).not.toBeNull();
+    expect(timingAssumptionProblem(['timing: a 3-day turnaround, from rsr_7f3a91c2d4'], 2)).not.toBeNull();
+    expect(timingAssumptionProblem(['timing: observable in 30 days over a 30 day window, from rsr_7f3a91c2d4'], 2)).not.toBeNull();
+  });
+
   it('leaves a thin or calibrated bucket alone, and another kind does not leak', async () => {
     await seedTimingBucket(projectId, 'RESEARCH', { n: 5, occurred: 0 });
     const thin = await decide(base, ctx());
