@@ -604,12 +604,15 @@ export function extractItem(item: ExtractableItem): ExtractedFact[] {
  * Whether the parser could read an item: its kind is known and it yielded at
  * least one fact beyond who sent it and what it is called. Anything else goes
  * to model assistance — nothing readable ever does.
+ *
+ * An occasion is deliberately not enough on its own: it is a keyword the
+ * record mentions (`holidays`, `Q3 2026`), not a reading of what the record
+ * says, and no consumer turns it into an opportunity. A headline whose only
+ * fact is an occasion still goes to the model, carrying the occasion with it.
  */
 export function readable(item: ExtractableItem, facts: readonly ExtractedFact[]): boolean {
   if (recordKindOf(item) === 'UNKNOWN') return false;
-  return facts.some(
-    (f) => f.field === 'price' || f.field === 'quantity' || f.field === 'location' || f.field === 'occasion' || (f.field === 'date' && f.evidence.field !== 'publishedAt'),
-  );
+  return facts.some((f) => f.field === 'price' || f.field === 'quantity' || f.field === 'location' || (f.field === 'date' && f.evidence.field !== 'publishedAt'));
 }
 
 /** Reconcile observations by fact key: agreeing OBSERVED, disagreeing CONTESTED, old STALE. Never "established". */
