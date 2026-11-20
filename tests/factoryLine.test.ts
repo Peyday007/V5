@@ -443,6 +443,12 @@ describe('a bin admission refused waits on a named limit, not on idle capacity',
     const binId = await stageBin(campaignId, 'READY');
     expect((await readLine()).executable.readyBins).toBe(1);
 
+    // A stage bin a session was refused for may be stranded with another surface able to take it: still executable.
+    await recordBinEvent({ eventType: 'BIN_ASSIGNMENT_REFUSED', binId, outcome: 'REFUSED_BY_ADMISSION', reason: 'admission refused this session' });
+    expect((await readLine()).executable.readyBins).toBe(1);
+
+    // A review refused by admission waits for an independent reviewer.
+    await getDb().run(`UPDATE bins SET kind = 'FACTORY_REVIEW' WHERE id = ?`, [binId]);
     await recordBinEvent({ eventType: 'BIN_ASSIGNMENT_REFUSED', binId, outcome: 'REFUSED_BY_ADMISSION', reason: 'a review from a surface on a different Claude connector' });
     const refused = await readLine();
     expect(refused.executable.readyBins).toBe(0);
