@@ -739,6 +739,35 @@ async function check(): Promise<void> {
       ).map((one) => one.id);
   let failed = 0;
   /*
+   * Each goal is read in its own child process, killed at the bound (release
+   * check 44718014146, 2026-11-20: one goal's plan read held the event loop for
+   * twenty minutes, so neither the in-process timer below nor the heartbeat
+   * could fire, and the check ran into the workflow's 30-minute timeout with
+   * three goals unread). A child that is killed is that goal's ERROR; the
+   * others are still read. The child itself runs the in-process read below.
+   */
+  if (process.env['BRAIN_CHECK_CHILD'] !== '1') {
+    const deadline = Date.now() + CHECK_TOTAL_MS;
+    for (const goalId of goalIds) {
+      const left = deadline - Date.now();
+      if (left < 60_000) {
+        failed += 1;
+        console.log(`INTEGRITY ${goalId} ERROR not reached: the check's ${Math.round(CHECK_TOTAL_MS / 60000)}-minute budget was spent on the goals before it`);
+        continue;
+      }
+      const ok = await checkInChild(goalId, Math.min(CHECK_PER_GOAL_MS, left));
+      if (!ok) failed += 1;
+    }
+    if (failed > 0) {
+      console.log('GOALS: INTEGRITY FAILED');
+      await closeDatabase().catch(() => undefined);
+      process.exit(1);
+    }
+    console.log('GOALS: OK');
+    await closeDatabase().catch(() => undefined);
+    process.exit(0);
+  }
+  /*
    * Bounded, so one goal whose plan cannot be read in time is reported as that
    * goal's ERROR rather than taking the whole release check past the
    * workflow's own timeout with nothing printed (goal C on 2026-11-19 ran a
@@ -794,6 +823,38 @@ async function check(): Promise<void> {
    */
   await closeDatabase().catch(() => undefined);
   process.exit(0);
+}
+
+/**
+ * One goal's release check in a child process: its INTEGRITY lines are passed
+ * through, and a child still running at `ms` is killed and reported as that
+ * goal's ERROR. True when the child printed GOALS: OK.
+ */
+async function checkInChild(goalId: string, ms: number): Promise<boolean> {
+  const { spawn } = await import('node:child_process');
+  return await new Promise<boolean>((resolve) => {
+    const child = spawn(process.execPath, [...process.execArgv, process.argv[1]!, 'check', goalId], {
+      env: { ...process.env, BRAIN_CHECK_CHILD: '1' },
+      stdio: ['ignore', 'pipe', 'inherit'],
+    });
+    let out = '';
+    let killed = false;
+    child.stdout.on('data', (chunk: Buffer) => {
+      const text = chunk.toString('utf8');
+      out += text;
+      // The child's own verdict line is the parent's to print, once, for the whole check.
+      process.stdout.write(text.split('\n').filter((line) => !/^GOALS: /.test(line)).join('\n'));
+    });
+    const timer = setTimeout(() => {
+      killed = true;
+      child.kill('SIGKILL');
+    }, ms);
+    child.on('exit', () => {
+      clearTimeout(timer);
+      if (killed) console.log(`INTEGRITY ${goalId} ERROR the plan read did not finish within ${Math.round(ms / 1000)}s and was stopped`);
+      resolve(!killed && /^GOALS: OK/m.test(out));
+    });
+  });
 }
 
 /** Open this pass's constructed rounds now, exactly as the tick would (§81). */

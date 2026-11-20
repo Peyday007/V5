@@ -48,4 +48,14 @@ describe('the release checks the plans it released', () => {
     expect(ok).toBeGreaterThan(0);
     expect(body.slice(ok)).toMatch(/process\.exit\(0\)/);
   });
+
+  it('reads each goal in its own child process, killed at its bound, so one blocked read cannot time the whole check out', () => {
+    // 2026-11-20 (check 44718014146): one goal's read held the event loop for twenty minutes; no in-process timer could fire.
+    const script = read('scripts/goals.ts');
+    const body = script.slice(script.indexOf('async function check()'), script.indexOf('async function construct()'));
+    expect(body).toMatch(/BRAIN_CHECK_CHILD/);
+    expect(body).toMatch(/checkInChild\(goalId/);
+    expect(body).toMatch(/child\.kill\('SIGKILL'\)/);
+    expect(body).toMatch(/ERROR the plan read did not finish within/);
+  });
 });
