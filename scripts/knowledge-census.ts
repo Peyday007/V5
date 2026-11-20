@@ -25,11 +25,15 @@ async function main(): Promise<void> {
   try {
     const PN = "SELECT candidate_id FROM cash_needs WHERE request_key LIKE 'goal-price-%' AND candidate_id IS NOT NULL";
     const FRAGS = `SELECT f.id FROM russell_missions m JOIN research_fragments f ON f.orchestration_id = m.orchestration_id WHERE m.candidate_id IN (${PN})`;
-    await q('PACKETS', `SELECT o.status, COUNT(*) AS n FROM russell_missions m JOIN research_orchestrations o ON o.id = m.orchestration_id WHERE m.candidate_id IN (${PN}) GROUP BY o.status`);
-    await q('FRAGS', `SELECT f.status, (f.required_evidence LIKE '%"id":"economics"%"necessity":"REQUIRED"%') AS econ, COUNT(*) AS n FROM research_fragments f WHERE f.id IN (${FRAGS}) GROUP BY f.status, econ`);
-    await q('ACCEPTED_FRAG_CLAIMS', `SELECT c.evidence_lane, c.accepted, c.structural_finding, c.structural_subject, (c.structural_amount_cents IS NOT NULL) AS has_amount, COUNT(*) AS n FROM research_claims c WHERE c.fragment_id IN (${FRAGS}) GROUP BY c.evidence_lane, c.accepted, c.structural_finding, c.structural_subject, has_amount`);
-    await q('FACTS_FROM_PRICE_CLAIMS', `SELECT cf.fact_key, cf.status, cf.segment, cf.low, cf.high, cf.project_id, cf.created_at FROM construction_facts cf WHERE cf.source_claim_id IN (SELECT c.id FROM research_claims c WHERE c.fragment_id IN (${FRAGS})) LIMIT 20`);
-    await q('ECON_SAMPLE', `SELECT substr(c.claim,1,220) AS claim, substr(c.evidence_excerpt,1,160) AS ex FROM research_claims c WHERE c.fragment_id IN (${FRAGS}) AND c.accepted = 1 AND c.evidence_lane = 'economics' LIMIT 5`);
+    const tagged = await getDb().all<{ id: string; project_id: string; q: string | null; amt: number | null }>(`SELECT c.id, f.project_id, c.structural_qualifier AS q, c.structural_amount_cents AS amt FROM research_claims c JOIN research_fragments f ON f.id = c.fragment_id WHERE c.fragment_id IN (${FRAGS}) AND c.accepted = 1 AND c.structural_subject = 'price_per_unit'`);
+    console.log(`TAGGED ${JSON.stringify(tagged.map((t) => ({ p: t.project_id.slice(0, 12), q: t.q, amt: t.amt })))}`);
+    const { backfillCandidates } = await import('../server/services/industry/expand.ts');
+    const ids = new Set(tagged.map((t) => t.id));
+    for (const project of [...new Set(tagged.map((t) => t.project_id))]) {
+      const pool = await backfillCandidates(project, { unitEconomic: '', constructed: '' });
+      const mine = pool.decisions.filter((d) => d.claimId && ids.has(d.claimId));
+      console.log(`DRYRUN ${project.slice(0, 12)} buyerTypes=${pool.hasBuyerTypes} read=${pool.unitEconomicRead} decisions=${pool.decisions.length} mine=${JSON.stringify(mine.map((d) => ({ s: d.source, r: d.reason, c: d.candidate ? { k: d.candidate.key, a: d.candidate.amount, b: d.candidate.buyer?.name ?? null } : null })))}`);
+    }
   } finally {
     await closeDatabase();
     console.log('CENSUS: OK');
