@@ -143,6 +143,8 @@ export interface BucketCorrection {
   parameterEstimateClaims: string[];
   /** Claims whose systematic miss named EXECUTION_BEHAVIOR: the work was not done the way the decision assumed it would be. */
   executionBehaviorClaims: string[];
+  /** Claims whose systematic miss named TIMING: the outcome arrived after the horizon the decision stated (or was measured late). */
+  timingLateClaims: string[];
   /** The bucket's observed rate and mean forecast, when the calibration measured them. */
   observedRate: number | null;
   meanForecast: number | null;
@@ -366,6 +368,67 @@ export function conditionAssumptionProblem(assumptions: readonly string[], horiz
   return `no condition assumption shows a re-check within the horizon: ${reasons.join('; ')}`;
 }
 
+/**
+ * The same correction for a bucket whose systematic misses named TIMING
+ * (FORECAST:operator:TIMING, production 1 of 1 on operator:opd_b7fc34fecd867b48):
+ * the outcome arrived after the horizon the decision stated, or was measured
+ * late (`quant/ledger.ts observedCausesOf`: lateByDays or arrivedLate). Shifting
+ * the probability alone leaves the next decision on the same unmeasured lead
+ * time, so the bucket stays miscalibrated. The next decision of that kind states
+ * how long the outcome takes to become observable, where that lead time was
+ * measured, and that it fits inside the horizon it predicts over.
+ */
+export const TIMING_ASSUMPTION_INSTRUCTION =
+  'Add an assumption beginning "timing:" stating the lead time from this decision to the outcome being observable (in hours, days or weeks), the row id or source URL that lead time was measured from, and keep it within the prediction\'s horizon_days; the earlier misses arrived after the horizon they stated';
+
+/** An assumption that names the lead time, written as TIMING_ASSUMPTION_INSTRUCTION tells the operator to write it. */
+export const TIMING_ASSUMPTION = /^\s*timing\s*:\s*\S/i;
+
+/** A lead time a "timing:" assumption states: a figure and its unit. A date or a row id is not one. */
+const TIMING_LEAD = /(?<![\w.])(\d+(?:\.\d+)?)\s*(hours?|hrs?|h|days?|d|weeks?|wks?|w)\b/gi;
+
+function leadDays(figure: string, unit: string): number {
+  const n = Number(figure);
+  const u = unit.toLowerCase();
+  if (u.startsWith('h')) return n / 24;
+  if (u.startsWith('w')) return n * 7;
+  return n;
+}
+
+/**
+ * Why no stated "timing:" assumption shows a measured lead time that fits the
+ * horizon, or null when one does (or none was stated: that is a separate
+ * problem). A label alone is not a lead time: at least one timing assumption
+ * must cite the row id or URL its lead time was measured in and state a lead
+ * time greater than zero and no longer than the decision's horizon — a lead
+ * time beyond the horizon is the very late arrival the TIMING misses had.
+ */
+export function timingAssumptionProblem(assumptions: readonly string[], horizonDays: number): string | null {
+  const stated = assumptions.filter((a) => TIMING_ASSUMPTION.test(a));
+  if (stated.length === 0) return null;
+  const horizon = Number.isFinite(horizonDays) ? horizonDays : 0;
+  const reasons: string[] = [];
+  for (const a of stated) {
+    if (!CONDITION_SOURCE.test(a)) {
+      reasons.push(`"${a.slice(0, 120)}" cites no row id or URL the lead time was measured from`);
+      continue;
+    }
+    const text = a.replace(/\bhttps?:\/\/\S+/gi, ' ').replace(/\b\d{4}-\d{2}-\d{2}\b/g, ' ');
+    const leads = [...text.matchAll(TIMING_LEAD)].map((m) => leadDays(m[1]!, m[2]!)).filter((d) => Number.isFinite(d) && d > 0);
+    if (leads.length === 0) {
+      reasons.push(`"${a.slice(0, 120)}" states no lead time in hours, days or weeks`);
+      continue;
+    }
+    const lead = Math.max(...leads);
+    if (lead > horizon) {
+      reasons.push(`"${a.slice(0, 120)}" states a lead time of ${Number(lead.toFixed(2))} day(s), longer than the ${horizon}-day horizon: lengthen the horizon or choose an outcome observable sooner`);
+      continue;
+    }
+    return null;
+  }
+  return `no timing assumption states a measured lead time within the horizon: ${reasons.join('; ')}`;
+}
+
 /** The pools Brain measures capacity in (`engineering/watchdog.ts` PoolReading). */
 const CAPACITY_POOLS = ['ROUTINES', 'FREE_LANE', 'RESEARCH_SLOTS', 'FACTORY'] as const;
 type CapacityPool = (typeof CAPACITY_POOLS)[number];
@@ -430,6 +493,7 @@ export function bucketCorrectionFrom(
   const evidence = new Set<string>();
   const estimate = new Set<string>();
   const execution = new Set<string>();
+  const timing = new Set<string>();
   for (const entry of entries) {
     const d = diagnose(entry, buckets, entries);
     if (d.kind !== 'SYSTEMATIC') continue;
@@ -439,6 +503,7 @@ export function bucketCorrectionFrom(
     if (d.causes.includes('EVIDENCE_QUALITY')) evidence.add(d.claimId);
     if (d.causes.includes('PARAMETER_ESTIMATE')) estimate.add(d.claimId);
     if (d.causes.includes('EXECUTION_BEHAVIOR')) execution.add(d.claimId);
+    if (d.causes.includes('TIMING')) timing.add(d.claimId);
   }
   const measured = buckets.find((b) => b.comparableKey === comparableKey && b.verdict === 'MISCALIBRATED');
   return {
@@ -451,6 +516,7 @@ export function bucketCorrectionFrom(
     evidenceQualityClaims: [...evidence],
     parameterEstimateClaims: [...estimate],
     executionBehaviorClaims: [...execution],
+    timingLateClaims: [...timing],
     observedRate: measured?.observedRate ?? null,
     meanForecast: measured?.meanForecast ?? null,
   };
@@ -648,6 +714,19 @@ export async function decide(
           ...(unmet ? [unmet] : []),
         );
         instructions.push(EXECUTION_ASSUMPTION_INSTRUCTION);
+      }
+    }
+    if (correction.timingLateClaims.length > 0) {
+      const stated = input.assumptions.some((a) => TIMING_ASSUMPTION.test(a));
+      // A stated timing is held to a cited, measured lead time inside the horizon.
+      const unmet = stated ? timingAssumptionProblem(input.assumptions, input.prediction.horizonDays) : null;
+      if (!stated || unmet) {
+        const claims = correction.timingLateClaims;
+        problems.push(
+          `${comparableKey} is miscalibrated (${correction.rationale}) and ${claims.length} of its systematic misses were TIMING (${listed(claims)}): the outcome arrived after the horizon the decision stated, and this decision again states no measured lead time within its ${input.prediction.horizonDays}-day horizon`,
+          ...(unmet ? [unmet] : []),
+        );
+        instructions.push(TIMING_ASSUMPTION_INSTRUCTION);
       }
     }
     if (correction.parameterEstimateClaims.length > 0) {
