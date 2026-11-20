@@ -28,6 +28,7 @@ import { sendNeeds, type Need } from '../quant/needs.ts';
 import { requestMarketHistory } from '../quant/history.ts';
 import type { DecisionUnknown, GoalPortfolio, UnpricedPopulation } from './portfolio.ts';
 import { GOAL_PRICE_KEY_PREFIX } from './goalWork.ts';
+import { namesABuyerPopulation } from '../../domain/industry.ts';
 
 /**
  * Asking a counterparty is contacting the buyer: the commercial authority an
@@ -176,6 +177,11 @@ async function sendPriceNeeds(
   let priceAsked = 0;
   for (const one of unpriced) {
     if (priceAsked >= PRICE_ASKS_PER_READ) break;
+    // A price slot is spent only on buyers a list could be built of; a record field or a sentence's leftovers names nobody to price.
+    if (!namesABuyerPopulation(one.buyer)) {
+      out.refused.push(`${one.buyer}: not a buyer population, so nobody to price`);
+      continue;
+    }
     const delivered = await send({ projectId, actorRef, graphScope: priceScope(one.population), keyPrefix: GOAL_PRICE_KEY_PREFIX, needs: [priceNeedOf(one)] });
     for (const d of delivered) {
       if (d.sent) {
