@@ -255,18 +255,31 @@ export function bucketCorrectionFrom(
   };
 }
 
+/** Claim ids per `IN (...)` of `brokenAssumptionsOf`: a page size under every driver's parameter limit, never a cap. */
+const BROKEN_ASSUMPTION_PAGE_IDS = 500;
+
 /**
  * The assumptions a verifier recorded as broken on these claims
- * (`OPERATOR_DECISION_VERIFIED.brokenAssumption`), distinct, so a REVISE can say
- * which condition changed. Read-only; a claim with none recorded adds nothing.
+ * (`OPERATOR_DECISION_VERIFIED.brokenAssumption`), distinct, most recent first,
+ * so a REVISE can say which condition changed. Every claim is read — paged so a
+ * long bucket never exceeds a statement's parameter limit — and every distinct
+ * text is returned: an older broken assumption is still a condition the next
+ * decision must re-check. Read-only; a claim with none recorded adds nothing.
  */
-async function brokenAssumptionsOf(claims: readonly string[]): Promise<string[]> {
-  const ids = claims.slice(0, 12).map((c) => c.replace(/^operator:/, ''));
+export async function brokenAssumptionsOf(claims: readonly string[]): Promise<string[]> {
+  const ids = [...new Set(claims.map((c) => c.replace(/^operator:/, '')))];
   if (ids.length === 0) return [];
-  const rows = await getDb().all<{ payload: string | null }>(
-    `SELECT payload FROM project_events WHERE event_type = 'OPERATOR_DECISION_VERIFIED' AND entity_id IN (${ids.map(() => '?').join(', ')})`,
-    ids,
-  );
+  const rows: { payload: string | null; created_at: string; id: string }[] = [];
+  for (let i = 0; i < ids.length; i += BROKEN_ASSUMPTION_PAGE_IDS) {
+    const page = ids.slice(i, i + BROKEN_ASSUMPTION_PAGE_IDS);
+    rows.push(
+      ...(await getDb().all<{ payload: string | null; created_at: string; id: string }>(
+        `SELECT payload, created_at, id FROM project_events WHERE event_type = 'OPERATOR_DECISION_VERIFIED' AND entity_id IN (${page.map(() => '?').join(', ')})`,
+        page,
+      )),
+    );
+  }
+  rows.sort((a, b) => (a.created_at === b.created_at ? b.id.localeCompare(a.id) : b.created_at.localeCompare(a.created_at)));
   const out = new Set<string>();
   for (const row of rows) {
     try {
@@ -276,7 +289,7 @@ async function brokenAssumptionsOf(claims: readonly string[]): Promise<string[]>
       // An unreadable row names nothing.
     }
   }
-  return [...out].slice(0, 5);
+  return [...out];
 }
 
 /** Rows fetched per round trip of `readComparableLedger`: a page size, never a cap. */

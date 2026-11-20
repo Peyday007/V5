@@ -15,6 +15,7 @@ import {
   CONDITION_ASSUMPTION,
   CONDITION_ASSUMPTION_INSTRUCTION,
   MECHANISM_ASSUMPTION_INSTRUCTION,
+  brokenAssumptionsOf,
   bucketCorrectionFrom,
   correctedProbability,
   decide,
@@ -23,6 +24,7 @@ import {
   verify,
 } from '../server/services/operator/decisions.ts';
 import { readLedger, recordOutcome, recordPrediction } from '../server/services/quant/ledger.ts';
+import { recordEvent } from '../server/repos/events.ts';
 
 const base: DecisionInput = {
   kind: 'RESEARCH',
@@ -143,5 +145,30 @@ describe('an operator decision on a bucket whose misses were CHANGED_CONDITIONS'
     expect(
       String(operatorCalibration({ predictions: preds, outcomes: [{ predictionId: 'p1', occurred: false, observedCauses: ['CHANGED_CONDITIONS'] }] }, 'operator:RESEARCH')['nextDecisionOfThisKind']),
     ).toContain('CHANGED_CONDITIONS');
+  });
+
+  it('quotes every broken assumption a long bucket recorded, not only those on its first 12 claims', async () => {
+    // Twenty verified misses carrying eight distinct broken assumptions; the
+    // old read stopped at the first 12 claims and at 5 texts.
+    const claims: string[] = [];
+    for (let i = 0; i < 20; i += 1) {
+      const decisionId = `opd_long${String(i).padStart(2, '0')}`;
+      claims.push(`operator:${decisionId}`);
+      await recordEvent({
+        projectId,
+        entityType: 'PROJECT',
+        entityId: decisionId,
+        eventType: 'OPERATOR_DECISION_VERIFIED',
+        payload: { decisionId, occurred: false, brokenAssumption: `condition ${i % 8} no longer held` },
+      });
+    }
+    const late = 'the late condition recorded only on claim 19';
+    await recordEvent({ projectId, entityType: 'PROJECT', entityId: 'opd_long19', eventType: 'OPERATOR_DECISION_VERIFIED', payload: { brokenAssumption: late } });
+    const broken = await brokenAssumptionsOf(claims);
+    expect(new Set(broken)).toEqual(new Set([...Array.from({ length: 8 }, (_, k) => `condition ${k} no longer held`), late]));
+    expect(broken).toHaveLength(9);
+    // A claim list longer than one page of parameters is still read whole.
+    const padded = [...Array.from({ length: 1200 }, (_, k) => `operator:opd_none${k}`), ...claims];
+    expect(new Set(await brokenAssumptionsOf(padded))).toEqual(new Set(broken));
   });
 });
