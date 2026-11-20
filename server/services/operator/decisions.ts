@@ -172,10 +172,58 @@ export const CAPACITY_ASSUMPTION = /^\s*capacity\s*:\s*\S/i;
  * (`goals/calibration.ts`: re-research it before the next plan relies on it).
  */
 export const CONDITION_ASSUMPTION_INSTRUCTION =
-  'Add an assumption beginning "condition:" naming the market condition the predicted outcome relies on and the row or source and date it was last observed, re-checked within the horizon rather than carried over from the earlier misses whose assumed condition had changed';
+  'Add an assumption beginning "condition:" naming the market condition the predicted outcome relies on, the row id or source URL it was last observed in, and the date it was observed as YYYY-MM-DD, re-checked within the horizon rather than carried over from the earlier misses whose assumed condition had changed';
 
 /** An assumption that names the condition, written as CONDITION_ASSUMPTION_INSTRUCTION tells the operator to write it. */
 export const CONDITION_ASSUMPTION = /^\s*condition\s*:\s*\S/i;
+
+/** A source a condition can be re-read from: a URL, or a Brain row id (`arr_2d0bae0f1074`, `opd_…`). */
+const CONDITION_SOURCE = /\bhttps?:\/\/\S+|\b[a-z]{2,8}_[0-9a-z]{6,}\b/i;
+const CONDITION_DATE = /\b(\d{4})-(\d{2})-(\d{2})\b/g;
+const DAY_MS = 86_400_000;
+
+/**
+ * Why the stated "condition:" assumptions do not show a re-check, or null when
+ * one does. A label alone is not a re-check: at least one condition assumption
+ * must cite where the condition can be re-read (a URL or a row id) and the date
+ * it was observed, and that date must lie within the decision's horizon before
+ * `now` and not after it — an observation older than the horizon is the very
+ * carried-over figure the CHANGED_CONDITIONS misses rested on.
+ */
+export function conditionAssumptionProblem(assumptions: readonly string[], horizonDays: number, now: Date = new Date()): string | null {
+  const stated = assumptions.filter((a) => CONDITION_ASSUMPTION.test(a));
+  if (stated.length === 0) return null;
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const windowDays = Math.max(1, Math.ceil(Number.isFinite(horizonDays) ? horizonDays : 1));
+  const reasons: string[] = [];
+  for (const a of stated) {
+    if (!CONDITION_SOURCE.test(a)) {
+      reasons.push(`"${a.slice(0, 120)}" cites no row id or URL the condition was observed in`);
+      continue;
+    }
+    // A real calendar date only: 2026-02-30 does not round-trip and is not an observation.
+    const dates = [...a.matchAll(CONDITION_DATE)]
+      .map((m) => ({ text: m[0], t: Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) }))
+      .filter((d) => Number.isFinite(d.t) && new Date(d.t).toISOString().slice(0, 10) === d.text)
+      .map((d) => d.t);
+    if (dates.length === 0) {
+      reasons.push(`"${a.slice(0, 120)}" gives no YYYY-MM-DD date the condition was observed`);
+      continue;
+    }
+    const observed = Math.max(...dates);
+    if (observed > today) {
+      reasons.push(`"${a.slice(0, 120)}" dates its observation after today`);
+      continue;
+    }
+    const age = Math.round((today - observed) / DAY_MS);
+    if (age > windowDays) {
+      reasons.push(`"${a.slice(0, 120)}" was observed ${age} days ago, outside the ${windowDays}-day horizon: re-check it now`);
+      continue;
+    }
+    return null;
+  }
+  return `no condition assumption shows a re-check within the horizon: ${reasons.join('; ')}`;
+}
 
 /** The pools Brain measures capacity in (`engineering/watchdog.ts` PoolReading). */
 const CAPACITY_POOLS = ['ROUTINES', 'FREE_LANE', 'RESEARCH_SLOTS', 'FACTORY'] as const;
@@ -415,13 +463,19 @@ export async function decide(
         instructions.push(CAPACITY_ASSUMPTION_INSTRUCTION);
       }
     }
-    if (correction.changedConditionClaims.length > 0 && !input.assumptions.some((a) => CONDITION_ASSUMPTION.test(a))) {
-      const claims = correction.changedConditionClaims;
-      const broken = await brokenAssumptionsOf(claims);
-      problems.push(
-        `${comparableKey} is miscalibrated (${correction.rationale}) and ${claims.length} of its systematic misses were CHANGED_CONDITIONS (${listed(claims)}): a condition the decision assumed no longer held when the outcome arrived${broken.length > 0 ? ` — recorded as broken: ${broken.map((b) => `"${b}"`).join('; ')}` : ''}`,
-      );
-      instructions.push(CONDITION_ASSUMPTION_INSTRUCTION);
+    if (correction.changedConditionClaims.length > 0) {
+      const stated = input.assumptions.some((a) => CONDITION_ASSUMPTION.test(a));
+      // A stated condition is held to a cited source and an observation date inside the horizon.
+      const unmet = stated ? conditionAssumptionProblem(input.assumptions, input.prediction.horizonDays) : null;
+      if (!stated || unmet) {
+        const claims = correction.changedConditionClaims;
+        const broken = await brokenAssumptionsOf(claims);
+        problems.push(
+          `${comparableKey} is miscalibrated (${correction.rationale}) and ${claims.length} of its systematic misses were CHANGED_CONDITIONS (${listed(claims)}): a condition the decision assumed no longer held when the outcome arrived${broken.length > 0 ? ` — recorded as broken: ${broken.map((b) => `"${b}"`).join('; ')}` : ''}`,
+          ...(unmet ? [unmet] : []),
+        );
+        instructions.push(CONDITION_ASSUMPTION_INSTRUCTION);
+      }
     }
     if (problems.length > 0) {
       return {
