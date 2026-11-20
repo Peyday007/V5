@@ -28,7 +28,7 @@ import { getDb } from '../../db/database.ts';
 import { recordBinEvent } from '../../repos/bins.ts';
 import { databasePoolReadings } from '../../db/database.ts';
 import { recentInfraFailures } from '../../db/infra.ts';
-import { httpCompleter, laneConfig, type Completer, type LaneConfig } from '../cheap/lane.ts';
+import { httpCompleter, laneConfig, routeLabel, type Completer, type LaneConfig } from '../cheap/lane.ts';
 import { isRunpodSlot, runpodCallWindow, RUNPOD_PREFIX } from '../cheap/runpod.ts';
 import { superviseRunpodPod } from '../cheap/runpodPod.ts';
 import { RECIPES, recipeFor, type PodRecipe } from '../cheap/runpodRestore.ts';
@@ -501,7 +501,11 @@ function fill(pool: ModelPool, config: LaneConfig): void {
 export interface ControlReading {
   waiting: number;
   pressure: Pressure;
-  models: Array<{ model: string; target: number; running: number; busy: number; stableHigh: number; window: Window; reason: string }>;
+  /**
+   * `route` is the slot as the model that answers it now: the slot alone, or
+   * `slot → fallback (why)` while a GPU slot is answered by its fallback (`routeLabel`).
+   */
+  models: Array<{ model: string; route: string; target: number; running: number; busy: number; stableHigh: number; window: Window; reason: string }>;
 }
 
 /** Slots per connection the lane may hold across all its models. */
@@ -634,6 +638,7 @@ export async function controlStep(): Promise<ControlReading | null> {
     fill(pool, config);
     reading.models.push({
       model: pool.worker.model,
+      route: routeLabel(config, pool.worker.model),
       target: pool.target,
       running: pool.running,
       busy: peak,

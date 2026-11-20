@@ -383,7 +383,11 @@ describe('the free research lane', () => {
   it('gives a mostly failing model\u2019s role to the other model, not only a model that failed everything (production, 2026-11-07)', async () => {
     const { orchestration, fragment } = await packet(play.project.id);
     await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);
-    await freeLaneTick({ config: CONFIG, completer: model().completer, fetchSource, search: async () => [] });
+    // brain-b found the claim (it took the fragment as spillover), so brain-a may check it.
+    const { takeOne } = await import('../server/services/freeLane/worker.ts');
+    const workers = await ensureFreeWorkers(CONFIG);
+    const found = await takeOne({ workers, worker: workers[1]!, index: 1, spillover: true, completer: model().completer, fetchSource, search: async () => [], config: CONFIG });
+    expect(found.ok).toBe(true);
     const verifyId = (await getDb().get<{ id: string }>("SELECT id FROM work_items WHERE orchestration_id = ? AND work_type = 'RESEARCH_VERIFY'", [orchestration.id]))!.id;
     // brain-b holds the verify role, but answered 1 of its last 10 items: the role goes to brain-a.
     await recordBinEvent({ eventType: 'FREE_LANE_ITEM', workloadClass: 'RESEARCH_AUDIT', outcome: 'SUBMITTED', reason: 'model brain-b: ok' });
@@ -1296,5 +1300,154 @@ describe('gpt-oss-120b refusals (production, 2026-11-16)', () => {
     expect(kept.slice(0, 3)).toEqual(inline);
     expect(new Set(kept).size).toBe(kept.length);
     expect(citedWithinLimit('r', ['a', 'b', 'a'])).toEqual(['a', 'b']);
+  });
+});
+
+describe('a check is answered by a different model than produced it, whatever the slot is called (production, 2026-11-20)', () => {
+  /*
+   * The pod behind `runpod/openai/gpt-oss-120b` was stopped (budget window ended),
+   * so every call on that slot was answered by its fallback `auto/best-coding` —
+   * slot B's own model. Fragments found by `auto/best-coding` were then verified
+   * by `auto/best-coding`, and the capacity reading still said gpt-oss-120b.
+   */
+  const GPU = 'runpod/openai/gpt-oss-120b';
+  const FREE = 'auto/best-coding';
+  const GPU_CONFIG: LaneConfig = {
+    url: 'http://lane.test/v1',
+    key: null,
+    models: [GPU, FREE],
+    dailyBudget: 100,
+    timeoutMs: 1000,
+    runpod: { url: 'https://pod.test/v1', key: null, model: 'openai/gpt-oss-120b', label: GPU },
+    fallbackModel: FREE,
+  };
+
+  /** The lane's route, as `httpCompleter` routes it: a paused GPU slot is answered by the fallback, which says so. */
+  async function routed(): Promise<{ completer: Completer; answeredBy: string[] }> {
+    const { runpodPaused } = await import('../server/services/cheap/runpod.ts');
+    const inner = model().completer;
+    const answeredBy: string[] = [];
+    const completer: Completer = async (config, name, system, prompt, options) => {
+      const served = name === GPU && runpodPaused() ? FREE : name;
+      answeredBy.push(served);
+      const text = await inner(config, served, system, prompt, options);
+      options?.onServed?.(served);
+      return text;
+    };
+    return { completer, answeredBy };
+  }
+
+  async function fragmentFoundWhilePaused(): Promise<{ verifyId: string; fragmentId: string }> {
+    const { orchestration, fragment } = await packet(play.project.id);
+    await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);
+    const { completer } = await routed();
+    const tick = await freeLaneTick({ config: GPU_CONFIG, completer, fetchSource, search: async () => [] });
+    expect(tick.byType['RESEARCH_FRAGMENT']).toBe(1);
+    const verify = await getDb().get<{ id: string }>("SELECT id FROM work_items WHERE orchestration_id = ? AND work_type = 'RESEARCH_VERIFY'", [orchestration.id]);
+    return { verifyId: verify!.id, fragmentId: fragment.id };
+  }
+
+  beforeEach(async () => {
+    const { resetRunpod, setRunpodPaused } = await import('../server/services/cheap/runpod.ts');
+    resetRunpod();
+    setRunpodPaused('pod stopped: budget window ended');
+  });
+
+  it('records the model that actually answered the GPU slot, and does not verify with it', async () => {
+    const { verifyId } = await fragmentFoundWhilePaused();
+    // The fragment's row names the model that answered, not only the slot.
+    const row = await getDb().get<{ reason: string; measures: string }>(
+      "SELECT e.reason, e.measures FROM bin_events e JOIN work_items w ON w.id = e.work_item_id WHERE e.event_type = 'FREE_LANE_ITEM' AND w.work_type = 'RESEARCH_FRAGMENT' AND e.outcome = 'SUBMITTED' ORDER BY e.at DESC LIMIT 1",
+    );
+    expect(row!.reason).toBe(`model ${GPU}`);
+    expect(JSON.parse(row!.measures)['servedBy']).toEqual([FREE]);
+
+    // Slot B is the same model: the verification is not taken by it, nor by the GPU slot's spillover.
+    const second = await routed();
+    const tick = await freeLaneTick({ config: GPU_CONFIG, completer: second.completer, fetchSource, search: async () => [] });
+    expect(tick.byType['RESEARCH_VERIFY']).toBeUndefined();
+    const { takeOne } = await import('../server/services/freeLane/worker.ts');
+    const workers = await ensureFreeWorkers(GPU_CONFIG);
+    for (const index of [0, 1]) {
+      const spill = await takeOne({ workers, worker: workers[index]!, index, spillover: true, completer: second.completer, fetchSource, search: async () => [], config: GPU_CONFIG });
+      expect(spill.claimed).toBeNull();
+    }
+    expect(second.answeredBy).toEqual([]);
+    expect((await getWorkItem(verifyId))?.state).toBe('QUEUED');
+  });
+
+  it('checks it with the GPU once the GPU itself answers', async () => {
+    const { verifyId } = await fragmentFoundWhilePaused();
+    const { setRunpodPaused } = await import('../server/services/cheap/runpod.ts');
+    setRunpodPaused(null);
+    const { takeOne } = await import('../server/services/freeLane/worker.ts');
+    const workers = await ensureFreeWorkers(GPU_CONFIG);
+    const gpu = await routed();
+    const taken = await takeOne({ workers, worker: workers[0]!, index: 0, spillover: true, completer: gpu.completer, fetchSource, search: async () => [], config: GPU_CONFIG });
+    expect(taken.claimed?.workItemId).toBe(verifyId);
+    expect(taken.ok).toBe(true);
+    expect(new Set(gpu.answeredBy)).toEqual(new Set([GPU]));
+  });
+
+  it('routes the check to a configured alternate free model that did not produce it', async () => {
+    const { verifyId } = await fragmentFoundWhilePaused();
+    const withAlternate: LaneConfig = { ...GPU_CONFIG, alternateModel: 'auto' };
+    const second = await routed();
+    const tick = await freeLaneTick({ config: withAlternate, completer: second.completer, fetchSource, search: async () => [] });
+    expect(tick.byType['RESEARCH_VERIFY']).toBe(1);
+    expect(tick.submitted).toBe(1);
+    expect(second.answeredBy.length).toBeGreaterThan(0);
+    expect(second.answeredBy.every((name) => name === 'auto')).toBe(true);
+    expect((await getWorkItem(verifyId))?.state).toBe('SUCCEEDED');
+    const row = await getDb().get<{ reason: string; measures: string }>(
+      "SELECT reason, measures FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND work_item_id = ? ORDER BY at DESC LIMIT 1",
+      [verifyId],
+    );
+    expect(row!.reason).toBe('model auto');
+    expect(JSON.parse(row!.measures)['servedBy']).toEqual(['auto']);
+  });
+
+  it('holds a check whose own model is the one that found the claim, when the other model is failing', async () => {
+    const { orchestration, fragment } = await packet(play.project.id);
+    await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);
+    await freeLaneTick({ config: CONFIG, completer: model().completer, fetchSource, search: async () => [] });
+    const verifyId = (await getDb().get<{ id: string }>("SELECT id FROM work_items WHERE orchestration_id = ? AND work_type = 'RESEARCH_VERIFY'", [orchestration.id]))!.id;
+    // brain-a found it; brain-b, which would check it, is failing.
+    await recordBinEvent({ eventType: 'FREE_LANE_ITEM', workloadClass: 'RESEARCH_AUDIT', outcome: 'SUBMITTED', reason: 'model brain-b: ok' });
+    for (let i = 0; i < 9; i += 1) {
+      await recordBinEvent({ eventType: 'FREE_LANE_ITEM', workloadClass: 'RESEARCH_AUDIT', outcome: 'RELEASED_TRANSIENT', reason: 'model brain-b: model call failed: cheap lane HTTP 503' });
+    }
+    const tick = await freeLaneTick({ config: CONFIG, completer: model().completer, fetchSource, search: async () => [] });
+    expect(tick.byType['RESEARCH_VERIFY']).toBeUndefined();
+    expect((await getWorkItem(verifyId))?.state).toBe('QUEUED');
+  });
+
+  it('voids an answer a producer gave after all (the GPU failing over mid-check)', async () => {
+    await fragmentFoundWhilePaused();
+    const { setRunpodPaused } = await import('../server/services/cheap/runpod.ts');
+    setRunpodPaused(null);
+    const { takeOne } = await import('../server/services/freeLane/worker.ts');
+    const workers = await ensureFreeWorkers(GPU_CONFIG);
+    const inner = model().completer;
+    // Admitted while the GPU answered; the call itself was answered by the fallback.
+    const failedOver: Completer = async (config, name, system, prompt, options) => {
+      const text = await inner(config, FREE, system, prompt, options);
+      options?.onServed?.(FREE);
+      return text;
+    };
+    const taken = await takeOne({ workers, worker: workers[0]!, index: 0, spillover: true, completer: failedOver, fetchSource, search: async () => [], config: GPU_CONFIG });
+    expect(taken.claimed).not.toBeNull();
+    expect(taken.ok).toBe(false);
+    expect((await getWorkItem(taken.claimed!.workItemId))?.state).toBe('QUEUED');
+  });
+
+  it('names the model that actually answers a slot in the lane reading', async () => {
+    const { routeLabel, servedRoute } = await import('../server/services/cheap/lane.ts');
+    expect(servedRoute(GPU_CONFIG, GPU)).toEqual({ model: FREE, why: 'pod paused' });
+    expect(routeLabel(GPU_CONFIG, GPU)).toBe(`${GPU} → ${FREE} (pod paused)`);
+    expect(routeLabel(GPU_CONFIG, FREE)).toBe(FREE);
+    const { setRunpodPaused } = await import('../server/services/cheap/runpod.ts');
+    setRunpodPaused(null);
+    expect(routeLabel(GPU_CONFIG, GPU)).toBe(GPU);
   });
 });

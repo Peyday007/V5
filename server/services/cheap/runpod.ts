@@ -122,6 +122,31 @@ export function runpodBreakerOpen(now = Date.now()): boolean {
   return breaker.openUntil > now;
 }
 
+/** How far back the GPU's own calls are read to say whether it is answering now. */
+export const GPU_SERVING_WINDOW_MS = 15 * 60_000;
+
+/**
+ * Why a call on the GPU slot is answered by its free fallback right now, or
+ * null while the GPU itself answers.
+ *
+ * The slot keeps its label whoever answers, so the label is not the model.
+ * Production, 2026-11-20 18:45Z: the pod had been stopped since 11-19 19:49Z,
+ * every call on `runpod/openai/gpt-oss-120b` was answered by `auto/best-coding`
+ * (quietly, because a paused pod is not a failure), and slot B was that same
+ * `auto/best-coding` — so the lane's two models were one, and a claim could be
+ * "verified by a different model" by the model that found it. A GPU whose
+ * recent calls all failed is not answering either: each call tries it and is
+ * then answered by the fallback, and which one answers is not known in advance.
+ */
+export function runpodNotServing(runpod: RunpodConfig | null | undefined, now = Date.now()): string | null {
+  if (!runpod) return 'GPU not configured';
+  if (paused) return 'pod paused';
+  if (runpodBreakerOpen(now)) return 'GPU breaker open';
+  const window = runpodCallWindow(GPU_SERVING_WINDOW_MS, now);
+  if (window.failed > 0 && window.ok === 0) return 'GPU calls failing';
+  return null;
+}
+
 function recordFailure(now: number): void {
   breaker.failures += 1;
   if (breaker.failures >= BREAKER_FAILURES) {
@@ -204,12 +229,13 @@ export async function runpodChat(
 /**
  * Answer one call on the RunPod slot: the GPU first, the free model it displaced
  * second. `fallback` is the lane's ordinary HTTP call to OmniRoute.
+ * `onServed` is told the model that actually answered when it was the GPU.
  */
 export async function routeRunpod(
   config: LaneConfig,
   system: string,
   prompt: string,
-  options: { maxTokens: number },
+  options: { maxTokens: number; onServed?: (model: string) => void },
   fallback: (model: string) => Promise<string>,
   deps: { fetchImpl?: Fetch; now?: () => number } = {},
 ): Promise<string> {
@@ -244,6 +270,8 @@ export async function routeRunpod(
     recordSuccess();
     counts.served += 1;
     noteCall(true, now());
+    // The GPU answered: the slot's own model. A fallback reports itself (`httpCompleter`).
+    options.onServed?.(runpod.label);
     return text;
   } catch (error) {
     recordFailure(now());

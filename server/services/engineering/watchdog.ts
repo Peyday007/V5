@@ -140,7 +140,8 @@ async function freeLanePool(now: Date): Promise<PoolReading | null> {
     waiting = reading.waiting;
     running = reading.models.reduce((sum, one) => sum + one.busy, 0);
     capacity = reading.models.reduce((sum, one) => sum + one.target, 0);
-    detail = reading.models.map((one) => `${one.model}: ${one.busy}/${one.target} (${one.reason})`).join('; ');
+    // The model that answers each slot, not only its label: a GPU slot served by its fallback says so.
+    detail = reading.models.map((one) => `${one.route ?? one.model}: ${one.busy}/${one.target} (${one.reason})`).join('; ');
   } else {
     const targets = await readCapacity();
     if (targets.length === 0) return null;
