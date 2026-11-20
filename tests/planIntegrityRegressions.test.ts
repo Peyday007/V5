@@ -414,7 +414,8 @@ describe('8. a reconstructed plan: its scope in words, its sale and collection c
     for (const c of [changes, [held, changes[1]!]]) {
       const steps = planSteps({ adoption, reconstruction: recon(c, ['arr_ai_reception', 'arr_gifts']), sales: [], nextTest: null, permissionsMissing: [], titles, cashDays, daysLeft: 30 });
       expect(steps.map((s) => s.label)).toEqual([
-        'Raise price ×4.00 on 8 opening(s) (all of them)',
+        // One of the eight has an established price; a price move scales no other (invariant 39, 2026-11-20).
+        'Raise price ×4.00 on 1 opening(s) (all of them)',
         'Sell "Constructed: AI receptionist setups for home-service firms" through a partner who already serves its buyers (a…',
         "Sell the plan's openings",
         'Collect payment',

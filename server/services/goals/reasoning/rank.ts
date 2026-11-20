@@ -17,9 +17,14 @@
  */
 import type { ModelInput, ModelledOpportunity } from '../../cash/goalScenario.ts';
 
+/** Whether somebody established the figure: a stated value, an EVIDENCE or HISTORICAL range, or a justified inference. */
+export function isEstablished(x: ModelInput): boolean {
+  return x.value !== null || x.provenance === 'EVIDENCE' || x.provenance === 'HISTORICAL' || !!x.inferred?.justified;
+}
+
 export function rankValue(x: ModelInput): number | null {
   if (x.value !== null) return x.value;
-  const established = x.provenance === 'EVIDENCE' || x.provenance === 'HISTORICAL' || !!x.inferred?.justified;
+  const established = isEstablished(x);
   if (established) {
     if (x.inferred) return x.inferred.p50;
     if (x.low !== null && x.high !== null) return (x.low + x.high) / 2;
