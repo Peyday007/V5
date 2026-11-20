@@ -40,7 +40,8 @@ import { inverseNormal, makeRng } from '../scenario/random.ts';
 import { cachedCashKnowledge, type CashKnowledge } from '../quant/knowledge.ts';
 import { acquireMarketHistory, historyEvidence, type MarketHistory } from '../quant/history.ts';
 import type { ModelInput, ModelledOpportunity } from '../cash/goalScenario.ts';
-import { AFTER_DELIVERY_TERMS, PREPAID_TERMS } from '../cash/paymentTiming.ts';
+import { AFTER_DELIVERY_TERMS, modelledTiming, PREPAID_TERMS } from '../cash/paymentTiming.ts';
+import { MIN_SHARE_WORTH_RESEARCHING } from './materiality.ts';
 import { assessOutreachRecord, type EvidenceAssessment, type OutreachCampaignRecord } from './evidenceAuthority.ts';
 import {
   addAction,
@@ -160,6 +161,13 @@ export interface DemandEstimate {
    * (NO_FAVOURABLE_UNKNOWN). It is read, and researched, but is never a member.
    */
   heldOut?: string | null;
+  /**
+   * For a held-out opening: the restructurings that could bring it within the
+   * limit it breaks, each as the question that would establish it, or why none
+   * is asked (`restructuringOf`, §93). The goal tick sends them
+   * (`sendPortfolioNeeds`).
+   */
+  restructure?: Restructuring | null;
   /** Every input rests on evidence or on this Brain's own measurements. */
   justified: boolean;
   /** Each input that does not, by name. */
@@ -932,9 +940,144 @@ export function costHeldOf(one: ModelledOpportunity): { low: number; high: numbe
 export const BUYER_FUNDED = 'ASSUMPTION: the buyer pays before the supplier is paid, so nothing of ours is tied up first';
 
 const overLimit = (held: { low: number; high: number }, limit: number, what: string): string =>
-  `held out of every combination: the model estimates it ties up ${Math.round(held.low)}–${Math.round(held.high)} at its start (not established), more than the ${Math.round(limit)} ${what} — restructure the cash (the buyer's prepayment or deposit before the supplier is paid) or establish what it ties up`;
+  `held out of every combination: the model estimates it ties up ${Math.round(held.low)}–${Math.round(held.high)} at its start (not established), more than the ${Math.round(limit)} ${what} — restructure the cash or establish what it ties up`;
 const overSpend = (held: { low: number; high: number }, limit: number): string =>
   `held out of every combination: the model estimates one deal costs ${Math.round(held.low)}–${Math.round(held.high)} directly (not established), more than the ${Math.round(limit)} this goal may spend in all — have the buyer fund the supplier or establish the cost`;
+
+/** A way the cash of an arrangement can be restructured, each with a mechanism a source can establish (§93). */
+export type RestructureMechanism = 'PREPAYMENT' | 'SUPPLIER_TERMS' | 'STAGED_DELIVERY' | 'BROKER_ROLE' | 'CHEAPER_FULFILMENT';
+
+/**
+ * What would bring a held-out opening within the limit it breaks (owner,
+ * 2026-11-20: "An opportunity requires $4,000 of upfront capital. The user's
+ * available limit is $3,000 … consider whether the structure can be changed:
+ * customer prepayment, deposits, alternative fulfillment, supplier terms,
+ * staged delivery … different transaction roles"). Each mechanism is a
+ * question, never a change: the opening re-enters only when evidence
+ * establishes one (a stated prepayment share, `statedPrepayment`) —
+ * invariant 39.
+ */
+export interface Restructuring {
+  /** The limit it breaks: what it ties up at its start, or what one deal costs against the spending ceiling. */
+  kind: 'CAPITAL' | 'COST';
+  /** What the model holds it ties up (or costs), before any restructuring. */
+  exposure: { low: number; high: number };
+  /** The figure the restructured exposure must fall to. */
+  limit: number;
+  /** The most it could bring in inside the window (its revenue's 90th percentile). */
+  potential: number;
+  /** The least an opening must be able to bring in to be worth researching (`MIN_SHARE_WORTH_RESEARCHING` of what remains). */
+  floor: number;
+  /** Whether an answer could change the plan: below the floor nothing is asked (invariant 43). */
+  material: boolean;
+  mechanisms: Array<{ mechanism: RestructureMechanism; label: string; question: string }>;
+}
+
+const whole = (n: number): string => String(Math.round(n));
+const percentOf = (x: number): string => `${Math.min(100, Math.ceil(x * 100 - 1e-9))}%`;
+
+/**
+ * The money a buyer is stated to pay before delivery, for an opening whose
+ * own terms (or, for a constructed arrangement, its buyers' evidence) say so
+ * with a share: the whole price, or a stated deposit's share of it, counted at
+ * the lowest price the model holds. Null when nothing states one, when they
+ * are stated to pay in arrears or by award, when a deposit is stated without
+ * its share, or when no price is held — never assumed (invariant 39). Pure.
+ */
+export function statedPrepayment(one: ModelledOpportunity): { share: number; offset: number; basis: string } | null {
+  const timing = modelledTiming(one);
+  if (timing.timing !== 'PREPAID' || !timing.share) return null;
+  const price = one.price.low ?? one.price.value;
+  if (price === null || price <= 0) return null;
+  return { share: timing.share, offset: timing.share * price, basis: timing.basis };
+}
+
+/**
+ * The restructurings worth asking about for an opening held out on a limit:
+ * one question per mechanism that is defensible for it and whose answer could
+ * still change the decision, each naming the figure the restructured exposure
+ * must fall to. Pure.
+ *
+ *   PREPAYMENT          unless its buyers are stated to pay in arrears (or by
+ *                       award), a stated share already decided it, or no share
+ *                       of its price could bring it within the limit;
+ *   SUPPLIER_TERMS      where a deal carries a direct cost (a supplier to pay);
+ *   STAGED_DELIVERY     for a one-off deliverable, billed by stage;
+ *   BROKER_ROLE         a referral or broker role instead of principal, so the
+ *                       buyer pays whoever fulfils it;
+ *   CHEAPER_FULFILMENT  where a deal carries a direct cost.
+ *
+ * Nothing is asked of an opening too small to matter to the goal: no answer
+ * could change the plan, so the search stops there.
+ */
+export function restructuringOf(
+  one: ModelledOpportunity,
+  input: { kind: Restructuring['kind']; exposure: { low: number; high: number }; limit: number; potential: number; remaining: number },
+): Restructuring {
+  const floor = Math.max(0, input.remaining) * MIN_SHARE_WORTH_RESEARCHING;
+  const material = input.potential >= floor;
+  const base = { kind: input.kind, exposure: { low: input.exposure.low, high: input.exposure.high }, limit: input.limit, potential: input.potential, floor, material };
+  if (!material) return { ...base, mechanisms: [] };
+  const title = `"${one.opportunity.title.slice(0, 80)}"`;
+  const range = `${whole(input.exposure.low)}–${whole(input.exposure.high)}`;
+  const limit = whole(input.limit);
+  const decides =
+    input.kind === 'CAPITAL'
+      ? `Brain's estimate is that it ties up ${range} before any money comes in, more than the ${limit} it may; the answer decides whether it can be part of the plan at all.`
+      : `Brain's estimate is that one deal costs ${range} directly, more than the ${limit} this goal may spend in all; the answer decides whether it can be part of the plan at all.`;
+  const gap = Math.max(0, input.exposure.low - input.limit);
+  const mechanisms: Restructuring['mechanisms'] = [];
+  const timing = modelledTiming(one);
+  const price = one.price.low ?? one.price.value;
+  const needed = price !== null && price > 0 ? gap / price : null;
+  if (timing.timing !== 'ARREARS' && !(timing.timing === 'PREPAID' && timing.share) && (needed === null || needed <= 1 + 1e-9)) {
+    mechanisms.push({
+      mechanism: 'PREPAYMENT',
+      label: `the buyer's prepayment or deposit${needed !== null ? ` (at least ${percentOf(needed)} of the price before delivery)` : ''}`,
+      question:
+        `Do buyers of ${title} pay a deposit or prepay before it is delivered, and what share of the price? ${decides} ` +
+        (needed !== null ? `At least ${percentOf(needed)} of its lowest price (${whole(price!)}) paid before delivery would bring it within ${limit}. ` : '') +
+        'Cite the terms these buyers are shown paying on, with the stated percentage: "a deposit" without its share settles nothing.',
+    });
+  }
+  const costly = (one.directCost.high ?? one.directCost.value ?? 0) > 0;
+  if (costly) {
+    mechanisms.push({
+      mechanism: 'SUPPLIER_TERMS',
+      label: 'supplier terms (net terms, pay on collection, consignment)',
+      question:
+        `Do suppliers of what ${title} delivers extend payment terms to a new account (net 30 or 60, pay on collection, consignment, or drop-shipping paid after the buyer pays), and on what conditions? ${decides} ` +
+        `Terms that defer at least ${whole(gap)} of the supplier's bill until the buyer has paid would bring it within ${limit}.`,
+    });
+  }
+  if (!one.repeatable) {
+    mechanisms.push({
+      mechanism: 'STAGED_DELIVERY',
+      label: 'staged delivery, each stage paid before the next',
+      question: `Is ${title} bought and billed in stages or milestones, each paid before the next is delivered, and what does delivering the first stage cost? ${decides} A first stage that ties up no more than ${limit} before it is paid would bring it within.`,
+    });
+  }
+  mechanisms.push({
+    mechanism: 'BROKER_ROLE',
+    label: 'a broker or referral role instead of principal',
+    question: `Would whoever fulfils ${title} pay a referral or broker commission for introducing the buyer, with the buyer paying them directly so nothing of ours is tied up first, and what commission is published or quoted? ${decides}`,
+  });
+  if (costly) {
+    mechanisms.push({
+      mechanism: 'CHEAPER_FULFILMENT',
+      label: 'cheaper fulfilment (a smaller first order, another supplier, renting rather than buying)',
+      question: `Is there a published way to fulfil ${title} for less (a smaller first order, a lower-cost supplier, renting rather than buying, or a narrower first deliverable), and what does it cost? ${decides} It would need to come to no more than ${limit}.`,
+    });
+  }
+  return { ...base, mechanisms };
+}
+
+/** The plan's words for what is being done about a held-out opening (§93). */
+function restructureTail(r: Restructuring): string {
+  if (!r.material) return `; not investigated: at most ${whole(r.potential)} of the ${whole(r.floor / MIN_SHARE_WORTH_RESEARCHING)} still needed, too little for any restructuring to change the plan`;
+  if (r.mechanisms.length === 0) return '; no defensible restructuring is open to it';
+  return `; investigating ${r.mechanisms.map((m) => m.label).join('; ')}`;
+}
 
 /** The money an opening ties up when it starts: established, or the top of its range (invariant 39). */
 export function capitalAtStart(one: ModelledOpportunity): { amount: number; established: boolean } {
@@ -1060,7 +1203,7 @@ export function evaluateGoalPortfolio(input: {
     // The stake a line may hold at once: no more than the ceiling, the week's pace or one arrangement's before-proof limit allow.
     const holdable = [input.capitalCeiling, input.perWeek, input.beforeProof].filter((x): x is number => x !== null);
     const stake = stakeCycles(held, capital, input.capitalCeiling === null ? null : Math.min(...holdable), input.daysLeft);
-    const one: PlannedOpening = stake ? { ...held, stakeDeals: stake.deals } : held;
+    let one: PlannedOpening = stake ? { ...held, stakeDeals: stake.deals } : held;
     /*
      * Only a cost that is the lot itself is recycled stake: when one deal's direct cost is no more than
      * what it ties up (an equipment lot bought and resold), its later turns are paid from the turn before.
@@ -1098,18 +1241,54 @@ export function evaluateGoalPortfolio(input: {
      */
     const heldCapital = capitalHeldOf(one);
     const heldCost = costHeldOf(one);
-    const capitalLimits = ([[input.capitalCeiling, 'this goal may tie up in all'], [input.beforeProof, 'one arrangement may before it proves itself']] as Array<[number | null, string]>)
-      .filter((l): l is [number, string] => l[0] !== null && !!heldCapital && !heldCapital.own && heldCapital.low > l[0] + 1e-9);
-    const costOver = spendCeiling !== null && !stakeFunded && !!heldCost && !heldCost.own && heldCost.low > spendCeiling + 1e-9;
+    type Held = { low: number; high: number; own: boolean } | null;
+    const limitsBroken = (h: Held) =>
+      ([[input.capitalCeiling, 'this goal may tie up in all'], [input.beforeProof, 'one arrangement may before it proves itself']] as Array<[number | null, string]>)
+        .filter((l): l is [number, string] => l[0] !== null && !!h && !h.own && h.low > l[0] + 1e-9);
+    const costBroken = (h: Held) => spendCeiling !== null && !stakeFunded && !!h && !h.own && h.low > spendCeiling + 1e-9;
+    const capitalLimits = limitsBroken(heldCapital);
+    const costOver = costBroken(heldCost);
     let heldOut: string | null = null;
     let cashStructure: string | null = null;
+    // The capital estimate the before-proof floor reads: the held one, or what a stated prepayment leaves of it.
+    let floorHeld: Held = heldCapital;
+    let restructureFor: { kind: Restructuring['kind']; exposure: { low: number; high: number }; limit: number } | null = null;
     if (!refused && (capitalLimits.length > 0 || costOver)) {
       if (one.fundedByBuyer) {
         // Carried by the buyer's money: nothing of ours tied up first, and its cost outside the ceiling (`ceilingExempt`).
         cashStructure = BUYER_FUNDED;
         if (capitalLimits.length > 0) capital.amount = 0;
       } else {
-        heldOut = capitalLimits.length > 0 ? overLimit(heldCapital!, capitalLimits[0]![0], capitalLimits[0]![1]) : overSpend(heldCost!, spendCeiling!);
+        /*
+         * Restructured on evidence (owner, 2026-11-20: "If a verified
+         * restructuring reduces required exposure to $1,000, Brain can
+         * reconsider the opportunity"): where the buyers are stated to pay a
+         * share of the price before delivery, that money, at the lowest price
+         * the model holds, comes off what it ties up and what one deal costs
+         * us first. It is re-admitted only if the restructured estimate breaks
+         * no limit; a deposit with no stated share, arrears, an award or
+         * nothing stated restructures nothing (invariant 39). Every other
+         * mechanism is a question (`restructuringOf`), sent by the goal tick.
+         */
+        const prepaid = statedPrepayment(one);
+        const less = (h: Held): Held => (h && prepaid ? { low: Math.max(0, h.low - prepaid.offset), high: Math.max(0, h.high - prepaid.offset), own: h.own } : h);
+        const capitalAfter = less(heldCapital);
+        const costAfter = less(heldCost);
+        if (prepaid && limitsBroken(capitalAfter).length === 0 && !costBroken(costAfter)) {
+          const after = capitalLimits.length > 0 && capitalAfter ? `it ties up ${whole(capitalAfter.low)}–${whole(capitalAfter.high)} at its start` : `one deal costs us ${whole(costAfter!.low)}–${whole(costAfter!.high)} before the buyer's money arrives`;
+          cashStructure = `EVIDENCE: ${prepaid.basis}: ${percentOf(prepaid.share)} of the price (at least ${whole(prepaid.offset)}) arrives before delivery, so ${after}`;
+          if (capitalLimits.length > 0) {
+            capital.amount = Math.max(0, capital.amount - prepaid.offset);
+            floorHeld = capitalAfter;
+          }
+          // Paid in full first and covering the whole cost: its cost is the buyer's money, outside the ceiling, as for `fundedByBuyer`.
+          if (prepaid.share >= 1 && (costAfter?.high ?? 0) <= 1e-9) one = { ...one, fundedByBuyer: true };
+        } else {
+          heldOut = capitalLimits.length > 0 ? overLimit(heldCapital!, capitalLimits[0]![0], capitalLimits[0]![1]) : overSpend(heldCost!, spendCeiling!);
+          restructureFor = capitalLimits.length > 0
+            ? { kind: 'CAPITAL', exposure: heldCapital!, limit: Math.min(...capitalLimits.map((l) => l[0])) }
+            : { kind: 'COST', exposure: heldCost!, limit: spendCeiling! };
+        }
       }
       if (capitalLimits.length > 0 && !unestablished.includes('money tied up')) unestablished.push('money tied up');
     }
@@ -1150,7 +1329,7 @@ export function evaluateGoalPortfolio(input: {
        */
       const own = capitalOwnEvidence(one);
       // An estimate the model holds inside the limit is its floor all the same: entering below it would read the unknown in the plan's favour.
-      const inside = heldCapital && !heldCapital.own && heldCapital.low <= input.beforeProof + 1e-9 ? heldCapital.low : 0;
+      const inside = floorHeld && !floorHeld.own && floorHeld.low <= input.beforeProof + 1e-9 ? floorHeld.low : 0;
       const floor = one.capital.inferred && !own ? inside : (one.capital.low ?? one.capital.inferred?.p10 ?? 0);
       if (capital.established && !own && !unestablished.includes('money tied up')) unestablished.push('money tied up');
       if (capital.established && own) {
@@ -1164,6 +1343,8 @@ export function evaluateGoalPortfolio(input: {
     const reach = one.channel?.perDay ?? contactsPerDay;
     const full = demandWorlds(one, 1, input.daysLeft, reach, worlds, seed);
     const revenue = full.early ? full.cash.map((c, i) => c + full.early!.cash[i]!) : full.cash;
+    const restructure = restructureFor ? restructuringOf(one, { ...restructureFor, potential: spread(revenue).p90, remaining: input.remaining }) : null;
+    if (heldOut && restructure) heldOut += restructureTail(restructure);
     demand.push({
       opportunityId: id,
       title: one.opportunity.title,
@@ -1182,6 +1363,7 @@ export function evaluateGoalPortfolio(input: {
       costHeld: heldCost,
       cashStructure,
       heldOut,
+      restructure,
       justified: unestablished.length === 0,
       unestablished,
       inputs: INPUT_NAMES.map(([key, name]) => ({ name, ...inputEvidence(one[key] as ModelInput, key) })),

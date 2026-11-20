@@ -490,7 +490,15 @@ export function inheritedTerms(one: Pick<ConstructedArrangement, 'buyerTerms'>):
   if (!t || t.timing === 'UNKNOWN') return null;
   // The basis is carried on the arrangement; the sentence holds only the words the readers parse, so a basis
   // quoting other terms can never flip it.
-  return t.timing === 'ARREARS' ? 'paid in arrears, after delivery, as these buyers\' evidence states' : 'paid in advance, as these buyers\' evidence states';
+  if (t.timing === 'ARREARS') return 'paid in arrears, after delivery, as these buyers\' evidence states';
+  /*
+   * The share that arrives before delivery is carried, never widened: a deposit
+   * read as "paid in advance" would let the financing and restructuring readers
+   * take the whole price as the buyer's money (invariant 39).
+   */
+  if (t.share === undefined || t.share === 1) return 'paid in advance, as these buyers\' evidence states';
+  if (t.share === null) return 'a deposit before delivery, its share not stated, as these buyers\' evidence states';
+  return `${Math.round(t.share * 1000) / 10}% paid before delivery as a deposit, the balance on delivery, as these buyers' evidence states`;
 }
 
 /**
