@@ -182,6 +182,8 @@ function productionReconstruction(): Reconstruction {
     required: 0.9,
     baseline: v({}),
     best: v({ key: 'best', reach: 0.6, settledP50: 14_000, changes: PRODUCTION_CHANGES, members: ['cop_8015', 'arr_53ae6fed770b'] }),
+    // The same plan with its assumed moves (price, partner, bundle) taken away: what it is adopted on (invariant 39).
+    established: v({ key: 'best @no-assumptions', reach: 0.2, settledP50: 5000, changes: PRODUCTION_CHANGES.slice(0, 1), members: ['cop_8015', 'arr_53ae6fed770b'] }),
     diagnosis: [],
     headroom: { reach: 0.6, settledP50: 9000 },
     structural: true,

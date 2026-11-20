@@ -100,7 +100,7 @@ import { MATERIAL_P50, MATERIAL_REACH, reconstructPlan, type Reconstruction, typ
 import { recordEvent } from '../../repos/events.ts';
 import { sharedEvaluator } from './reasoning/evaluatorPool.ts';
 import { inventDirections, inventEnabled } from './reasoning/invent.ts';
-import { scopeWords, type ExploreContext, type Scope } from './reasoning/directions.ts';
+import { assumedMovesOf, scopeWords, type ExploreContext, type Scope } from './reasoning/directions.ts';
 import { loadLibrary, loadStancePrior, recordExploration } from './reasoning/learning.ts';
 import { implementedFormats } from '../puzzle/formats/index.ts';
 import { readTimelines, type TimelineReading } from './timelines.ts';
@@ -224,6 +224,12 @@ export interface PlanAcceptance {
     /** Share of worlds reaching the target, and whether it is a probability or only coverage. */
     reach: number | null;
     reachBasis: 'PROBABILITY' | 'COVERAGE' | null;
+    /**
+     * What the candidate would reach if the unmeasured assumptions its plan
+     * tests held (invariant 39): reported beside `reach`, never as it. Absent
+     * when the candidate rests on no assumed move.
+     */
+    assumedUpside?: AssumedUpside;
   } | null;
   /** Why the candidate is not accepted, each a thing work can change. */
   shortfalls: string[];
@@ -512,11 +518,26 @@ export interface Continuation {
   surplusForSuccessors: number;
 }
 
+/**
+ * What a plan reaches only if the unmeasured assumptions it rests on hold
+ * (invariant 39): a hypothesis to test by executing each assumed move's kill
+ * criterion, reported beside the reach that holds without them and never as it.
+ */
+export interface AssumedUpside {
+  reach: number;
+  settledP50: number;
+  /** Each assumed move, by its title. */
+  assumptions: string[];
+  sentence: string;
+}
+
 export interface PlanAdoption {
   source: 'RECONSTRUCTED' | 'BASELINE';
   /** True when a reconstruction ran and is not the plan: its figures describe changes nobody has adopted. */
   hypothetical: boolean;
   reason: string;
+  /** The reconstruction's reach if its assumed moves held, kept for investigation whether or not it is the plan. */
+  upside?: AssumedUpside;
 }
 
 export type StepBasis = 'EVIDENCE' | 'ESTIMATE' | 'ASSUMPTION';
@@ -1214,6 +1235,7 @@ export function candidateSentence(candidate: PlanAcceptance['candidate'], requir
     `NOT ACCEPTED: no plan has a defensible ${pct(required)} probability of collecting the target before the deadline. ` +
     `The strongest candidate is ${candidate.source === 'RECONSTRUCTED' ? 'the reconstructed plan ' : ''}"${candidate.label.slice(0, 160)}"` +
     (candidate.reach !== null ? ` (reaches the target in ${pct(candidate.reach)} of worlds, ${candidate.reachBasis === 'PROBABILITY' ? 'a probability' : 'coverage, not a probability'})` : '') +
+    (candidate.assumedUpside ? `; ${candidate.assumedUpside.sentence}` : '') +
     '; Brain keeps constructing, combining and comparing strategies.'
   );
 }
@@ -2356,7 +2378,7 @@ export function reconstructionDiagnosis(r: Reconstruction | null, ctx?: { remain
   return [
     {
       cause: 'STRATEGY_RECONSTRUCTION',
-      evidence: `the plan reaches ${(r.baseline.reach * 100).toFixed(1)}% as built and ${(r.best.reach * 100).toFixed(1)}% reconstructed (${r.best.basis.toLowerCase()})${top ? `; ${top.factor} binds` : ''}${r.structural ? '; the openings held cannot reach the requirement at their best' : ''}${r.exploration ? `; explored: ${r.exploration.sentence}` : ''}`,
+      evidence: `the plan reaches ${(r.baseline.reach * 100).toFixed(1)}% as built and ${(r.best.reach * 100).toFixed(1)}% reconstructed (${r.best.basis.toLowerCase()}${r.established && r.established.key !== r.best.key ? `; ${(r.established.reach * 100).toFixed(1)}% without its assumed moves` : ''})${top ? `; ${top.factor} binds` : ''}${r.structural ? '; the openings held cannot reach the requirement at their best' : ''}${r.exploration ? `; explored: ${r.exploration.sentence}` : ''}`,
       instruction: ctx ? planSearchBrief(r, ctx.remaining, ctx.daysLeft) : r.searchBrief,
     },
   ];
@@ -2395,6 +2417,11 @@ function implausibility(r: Reconstruction): string | null {
  * An adopted reconstruction is still a candidate. Its reach keeps the basis
  * the engine gave it, and a reach resting on any change not measured is
  * coverage, never a probability.
+ *
+ * Whether it beats the plan as held, and the reach it is reported at, are read
+ * from the reconstruction without its assumed moves (`Reconstruction.established`,
+ * invariant 39). What those moves would add is `upside`: kept, said, and
+ * tested by the plan's steps, never the number that adopts it.
  */
 export function adoptReconstruction(input: {
   reconstruction: Reconstruction | null;
@@ -2403,16 +2430,49 @@ export function adoptReconstruction(input: {
 }): { adoption: PlanAdoption; candidate: PlanAcceptance['candidate'] } {
   const r = input.reconstruction;
   if (!r) return { adoption: { source: 'BASELINE', hypothetical: false, reason: 'no reconstruction ran: the plan is accepted, or nothing could be reconstructed' }, candidate: null };
-  const hypothetical = (reason: string) => ({ adoption: { source: 'BASELINE' as const, hypothetical: true, reason }, candidate: null });
   const flagged = implausibility(r);
+  const titled = new Map(input.openings.map((o) => [o.opportunity.id, o.opportunity.title]));
+  const real = r.best.changes.filter((c) => !c.label.startsWith('test:'));
+  /*
+   * Invariant 39 (owner, 2026-11-20: "uncertainty never silently becomes
+   * favorable evidence"). The reach a move resting on an unmeasured assumption
+   * adds — a deposit assumed accepted, a bundle's close assumed, a partner's
+   * referrals, a price's demand response — is a hypothesis to test by running
+   * that move's kill criterion. It is reported beside the plan's reach as its
+   * upside, and never adopts the plan or becomes the candidate's reach:
+   * production goal C read 25.3% reconstructed against 8.3% as held and 1.5%
+   * on measured campaign rates. A move a measurement establishes carries
+   * another basis and is not assumed.
+   */
+  const assumedMoves = assumedMovesOf(real);
+  const upside: AssumedUpside | null = assumedMoves.length === 0
+    ? null
+    : {
+        reach: r.best.reach,
+        settledP50: r.best.settledP50,
+        assumptions: movesOf(assumedMoves, titled),
+        sentence: `if its ${assumedMoves.length} unmeasured assumption(s) hold (${movesOf(assumedMoves, titled).slice(0, 4).join('; ')}) it would reach ${pctOf(r.best.reach)} (p50 ${moneyOf(r.best.settledP50)}): a hypothesis to test by running each one's kill criterion, not evidence`,
+      };
+  const hypothetical = (reason: string) => ({ adoption: { source: 'BASELINE' as const, hypothetical: true, reason, ...(upside ? { upside } : {}) }, candidate: null });
   if (flagged) return hypothetical(`the reconstruction is flagged implausible (${flagged.slice(0, 300)}), so its ${pctOf(r.best.reach)} is not adopted`);
   if (!r.best.feasible) return hypothetical(`the reconstruction's strongest plan does not run inside the limits${r.best.why ? ` (${r.best.why})` : ''}`);
-  const real = r.best.changes.filter((c) => !c.label.startsWith('test:'));
   if (real.length === 0) return { adoption: { source: 'BASELINE', hypothetical: false, reason: 'no change the reconstruction tried improves the plan as held materially' }, candidate: null };
   const baseReach = input.baseline?.best?.reach ?? r.baseline.reach;
   const baseP50 = input.baseline?.best?.settledP50 ?? r.baseline.settledP50;
-  const beats = r.best.reach >= baseReach + MATERIAL_REACH || (r.best.reach >= baseReach - 1e-9 && r.best.settledP50 > baseP50 * (1 + MATERIAL_P50) + 1e-9);
-  if (!beats) return hypothetical(`the reconstruction (${pctOf(r.best.reach)}, p50 ${moneyOf(r.best.settledP50)}) does not beat the plan as held (${pctOf(baseReach)}, p50 ${moneyOf(baseP50)}) materially`);
+  const establishedMoves = real.filter((c) => !assumedMoves.includes(c));
+  if (upside && establishedMoves.length === 0) return hypothetical(`every change the reconstruction makes rests on an unmeasured assumption, so it is not the plan: ${upside.sentence}`);
+  // What the plan holds on no assumed move: the reconstruction's own reading of it, or nothing — an unread figure is never the favourable one.
+  const held = upside ? (r.established ?? null) : r.best;
+  if (!held) return hypothetical(`no reading of the reconstruction without its assumed moves was made, so it is not the plan: ${upside!.sentence}`);
+  if (!held.feasible) return hypothetical(`without its assumed moves the reconstruction does not run inside the limits${held.why ? ` (${held.why})` : ''}; ${upside!.sentence}`);
+  const beats = held.reach >= baseReach + MATERIAL_REACH || (held.reach >= baseReach - 1e-9 && held.settledP50 > baseP50 * (1 + MATERIAL_P50) + 1e-9);
+  if (!beats) {
+    return hypothetical(
+      upside
+        ? `without its ${assumedMoves.length} assumed move(s) the reconstruction (${pctOf(held.reach)}, p50 ${moneyOf(held.settledP50)}) does not beat the plan as held (${pctOf(baseReach)}, p50 ${moneyOf(baseP50)}) materially; ${upside.sentence}`
+        : `the reconstruction (${pctOf(r.best.reach)}, p50 ${moneyOf(r.best.settledP50)}) does not beat the plan as held (${pctOf(baseReach)}, p50 ${moneyOf(baseP50)}) materially`,
+    );
+  }
   const ids: string[] = [];
   const names: string[] = [];
   for (const member of r.best.members) {
@@ -2426,24 +2486,27 @@ export function adoptReconstruction(input: {
     }
   }
   if (ids.length === 0) return hypothetical('the reconstruction\'s strongest plan names no opening Brain holds');
-  const titled = new Map(input.openings.map((o) => [o.opportunity.id, o.opportunity.title]));
-  const evidenced = r.best.basis === 'PROBABILITY' && real.every((c) => c.basis === 'MEASURED');
+  const evidenced = held.basis === 'PROBABILITY' && establishedMoves.every((c) => c.basis === 'MEASURED');
   return {
     adoption: {
       source: 'RECONSTRUCTED',
       hypothetical: false,
       // A person reads each change by its title, never its reconstruction key ("focus:4", "price×2.50@…": NO_INTERNAL_KEYS).
-      reason: `the reconstruction reaches ${pctOf(r.best.reach)} (p50 ${moneyOf(r.best.settledP50)}) against ${pctOf(baseReach)} (p50 ${moneyOf(baseP50)}) as held, by ${movesOf(real, titled).slice(0, 4).join(', ')}`,
+      reason:
+        `the reconstruction reaches ${pctOf(held.reach)} (p50 ${moneyOf(held.settledP50)}) against ${pctOf(baseReach)} (p50 ${moneyOf(baseP50)}) as held, by ${movesOf(establishedMoves, titled).slice(0, 4).join(', ')}` +
+        (upside ? `; ${upside.sentence}` : ''),
+      ...(upside ? { upside } : {}),
     },
     candidate: {
       // The members by their titles: an opening's id is the plan's identity for it (`opportunityIds`), never its name.
       label: `${movesOf(real, titled).slice(0, 4).join(' + ')} on ${names.slice(0, 4).join(' + ')}`.slice(0, 300),
       opportunityIds: ids,
       source: 'RECONSTRUCTED',
-      settledP50: r.best.settledP50,
-      reach: r.best.reach,
+      settledP50: held.settledP50,
+      reach: held.reach,
       // A reach resting on a change nobody has measured is coverage, whatever the engine's basis.
       reachBasis: evidenced ? 'PROBABILITY' : 'COVERAGE',
+      ...(upside ? { assumedUpside: upside } : {}),
     },
   };
 }
@@ -3517,6 +3580,8 @@ export function reconstructionSummary(r: Reconstruction | null): Record<string, 
     baseline: round3(r.baseline.reach),
     best: { key: r.best.key, reach: round3(r.best.reach), basis: r.best.basis, settledP50: Math.round(r.best.settledP50), committed: r.best.committed },
     floor: r.floor ? round3(r.floor.reach) : null,
+    // What the strongest plan holds on no assumed move (invariant 39): the reach it is adopted on.
+    established: r.established ? round3(r.established.reach) : null,
     requiredReply: r.requiredReply === null ? null : round3(r.requiredReply * 100) / 100,
     binding: r.diagnosis[0]?.factor ?? null,
     structural: r.structural,
