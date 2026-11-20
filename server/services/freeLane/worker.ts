@@ -44,7 +44,7 @@ import { MAX_LIST_ITEMS } from '../../mcp/researchTools.ts';
 import { workerIdentity } from '../identity/authenticate.ts';
 import { auditAdmission } from '../research/auditAdmission.ts';
 import { isEncyclopediaPage, readWithoutAnswerFor, rememberReadWithoutAnswer, webSearch, webSearchRefusing } from '../sources/discover.ts';
-import { httpCompleter, laneConfig, type Completer, type LaneConfig } from '../cheap/lane.ts';
+import { httpCompleter, laneConfig, servedRoute, type Completer, type LaneConfig } from '../cheap/lane.ts';
 import { isRunpodSlot, runpodBreakerOpen, runpodCallWindow, runpodPaused } from '../cheap/runpod.ts';
 import type { SourceFetch } from '../sources/fetchForWorker.ts';
 import { readSource } from '../sources/access.ts';
@@ -411,22 +411,164 @@ async function brainProjectItem(projectId: string | null): Promise<boolean> {
   return brain;
 }
 
+function auditRole(item: Pick<WorkItemRow, 'payload'>): string {
+  try {
+    return String((JSON.parse(item.payload) as Record<string, unknown>)['role'] ?? '');
+  } catch {
+    return '';
+  }
+}
+
 /** Which worker takes which role, so verification is not done by the model that found the claim. */
 function workerFor(workers: FreeWorker[], item: Pick<WorkItemRow, 'work_type' | 'payload'>): number {
   if (workers.length < 2) return 0;
   if (item.work_type === 'RESEARCH_VERIFY') return 1;
-  if (item.work_type === 'RESEARCH_AUDIT') {
-    const role = (() => {
-      try {
-        return String((JSON.parse(item.payload) as Record<string, unknown>)['role'] ?? '');
-      } catch {
-        return '';
-      }
-    })();
-    return role === 'ADVERSARIAL' ? 0 : 1;
-  }
+  if (item.work_type === 'RESEARCH_AUDIT') return auditRole(item) === 'ADVERSARIAL' ? 0 : 1;
   return 0;
 }
+
+/* ------------------------------------------------------------------------- */
+/* Independence, on the model that actually answers                           */
+/* ------------------------------------------------------------------------- */
+
+/*
+ * `workerFor` gives the checking roles to the other slot so that a claim is
+ * checked by a different model than found it (§85). A slot is a label, though,
+ * and the label is not always the model: production, 2026-11-20 18:45Z, the
+ * RunPod pod had been stopped for a day, every call on the GPU slot was answered
+ * by its fallback `auto/best-coding`, and slot B was `auto/best-coding` too — so
+ * fragments found by `auto/best-coding` were verified by `auto/best-coding`, and
+ * recorded exactly as an independent check. Spillover and a failing model's role
+ * moving to the other slot did the same with the GPU answering.
+ *
+ * So independence is decided on models, not slots: the model that will answer
+ * the checker (`servedRoute`) against the models recorded as having answered
+ * the item that produced what it checks (`servedBy` on that item's
+ * FREE_LANE_ITEM row). When they are the same, the check goes to the lane's
+ * alternate free model if one is configured and not itself a producer, and
+ * otherwise waits, named, for a model that is different. A producer recorded
+ * before the lane said who answered is the slot or its fallback — unknown, and
+ * an unknown independence is not independence. And a call that is answered by a
+ * producer anyway (the GPU failing over mid-item) is not the item's answer.
+ * A one-model lane never claimed two models, and is untouched.
+ */
+
+/** The roles that exist to check another model's work: a verification, and the primary and judge audits. */
+export function checkingRole(item: Pick<WorkItemRow, 'work_type' | 'payload'>): boolean {
+  if (item.work_type === 'RESEARCH_VERIFY') return true;
+  return item.work_type === 'RESEARCH_AUDIT' && auditRole(item) !== 'ADVERSARIAL';
+}
+
+/** What a check reads was produced by: a verification its fragment, an audit its packet's synthesis. */
+function producedKey(workType: string, fragmentId: string | null, orchestrationId: string | null): string | null {
+  if (workType === 'RESEARCH_FRAGMENT' || workType === 'RESEARCH_VERIFY') return fragmentId ? `f:${fragmentId}` : null;
+  if (workType === 'RESEARCH_SYNTHESIZE' || workType === 'RESEARCH_AUDIT') return orchestrationId ? `o:${orchestrationId}` : null;
+  return null;
+}
+
+/**
+ * The models a producing item's FREE_LANE_ITEM row says answered it. Pure.
+ * A row from before `servedBy` was recorded names only its slot; on the GPU
+ * slot that was the GPU or its fallback, and both are counted.
+ */
+export function producersOfRow(reason: string | null, measures: unknown, fallbackModel: string | null): Set<string> | null {
+  const served = (measures && typeof measures === 'object' ? (measures as Record<string, unknown>)['servedBy'] : null) as unknown;
+  if (Array.isArray(served)) {
+    const models = served.filter((one): one is string => typeof one === 'string' && one.length > 0);
+    if (models.length > 0) return new Set(models);
+  }
+  const slot = /^model ([^:]+)/.exec(reason ?? '')?.[1]?.trim();
+  if (!slot) return null;
+  return isRunpodSlot(slot) && fallbackModel ? new Set([slot, fallbackModel]) : new Set([slot]);
+}
+
+/** How far back producing items' rows are read; a check of something older reads no free-lane producer. */
+export const PROVENANCE_WINDOW_MS = 7 * 86_400_000;
+const PROVENANCE_TTL_MS = 5 * 60_000;
+let provenance: { at: number; byKey: Map<string, Set<string>> } | null = null;
+/** Producing items this process submitted since the last read, so a fresh fragment's check sees it at once. */
+const producedHere = new Map<string, Set<string>>();
+
+/** Tests: forget what was read about producers. */
+export function resetProvenance(): void {
+  provenance = null;
+  producedHere.clear();
+}
+
+function addTo(map: Map<string, Set<string>>, key: string, models: Iterable<string>): void {
+  const set = map.get(key) ?? new Set<string>();
+  for (const model of models) set.add(model);
+  map.set(key, set);
+}
+
+/** The models that produced what this check reads, or null when no free-lane producer is recorded. */
+export async function producerModels(
+  item: Pick<WorkItemRow, 'work_type' | 'fragment_id' | 'orchestration_id'>,
+  config: LaneConfig,
+  now = Date.now(),
+): Promise<Set<string> | null> {
+  const key = producedKey(item.work_type, item.fragment_id ?? null, item.orchestration_id ?? null);
+  if (!key) return null;
+  if (!provenance || now - provenance.at >= PROVENANCE_TTL_MS) {
+    const rows = await getDb().all<{ work_type: string; fragment_id: string | null; orchestration_id: string | null; reason: string | null; measures: string | null }>(
+      `SELECT w.work_type, w.fragment_id, w.orchestration_id, e.reason, e.measures FROM bin_events e
+         JOIN work_items w ON w.id = e.work_item_id
+        WHERE e.event_type = 'FREE_LANE_ITEM' AND e.outcome = 'SUBMITTED' AND e.at >= ?
+          AND w.work_type IN ('RESEARCH_FRAGMENT', 'RESEARCH_SYNTHESIZE')`,
+      [new Date(now - PROVENANCE_WINDOW_MS).toISOString()],
+    );
+    const byKey = new Map<string, Set<string>>();
+    for (const row of rows) {
+      const rowKey = producedKey(row.work_type, row.fragment_id, row.orchestration_id);
+      if (!rowKey) continue;
+      let measures: unknown = null;
+      try {
+        measures = row.measures ? JSON.parse(row.measures) : null;
+      } catch {
+        measures = null;
+      }
+      const models = producersOfRow(row.reason, measures, config.fallbackModel ?? null);
+      if (models) addTo(byKey, rowKey, models);
+    }
+    provenance = { at: now, byKey };
+    producedHere.clear();
+  }
+  const read = provenance.byKey.get(key);
+  const here = producedHere.get(key);
+  if (!read && !here) return null;
+  return new Set([...(read ?? []), ...(here ?? [])]);
+}
+
+/** A producing item this process just submitted: its check sees who answered it without waiting for a read. */
+function rememberProduced(item: { workType: string; fragmentId?: string | null; orchestrationId?: string | null }, servedBy: Iterable<string>): void {
+  const key = producedKey(item.workType, item.fragmentId ?? null, item.orchestrationId ?? null);
+  if (!key || (item.workType !== 'RESEARCH_FRAGMENT' && item.workType !== 'RESEARCH_SYNTHESIZE')) return;
+  if (producedHere.size > 5000) producedHere.clear();
+  addTo(producedHere, key, servedBy);
+}
+
+export type CheckRoute = { route: string } | { held: string };
+
+/**
+ * Where a check taken on `slot` is asked, or why it waits. Pure.
+ * `served` is the model that answers the slot now; `producers` the models that
+ * produced what it checks (null: none recorded in the lane).
+ */
+export function checkingRoute(input: {
+  slot: string;
+  served: string;
+  producers: ReadonlySet<string> | null;
+  alternate: string | null;
+  alternateHeld: boolean;
+}): CheckRoute {
+  if (!input.producers || !input.producers.has(input.served)) return { route: input.slot };
+  if (input.alternate && !input.producers.has(input.alternate) && !input.alternateHeld) return { route: input.alternate };
+  const via = input.served === input.slot ? input.slot : `${input.slot} (answered by ${input.served})`;
+  return { held: `not independent: ${via} produced what this checks; it waits for a different model` };
+}
+
+/** The reason an item's answer was discarded because a producer answered it. */
+export const INDEPENDENCE_LOST = /independence lost: answered by /;
 
 /* ------------------------------------------------------------------------- */
 /* The model                                                                  */
@@ -1286,6 +1428,11 @@ interface Ctx {
   searchStarved?: boolean;
   /** What the item used while it ran (itemMeter.ts); recorded on its `FREE_LANE_ITEM` row. */
   usage?: ItemUsage;
+  /**
+   * The model this item's calls are asked of, when it is not the worker's own
+   * slot: a check rerouted to the lane's alternate model (`checkingRoute`).
+   */
+  route?: string;
   /** This lease's entry in the process's in-flight set, while the item is worked (`returnInFlightLeases`). */
   held?: HeldLease;
 }
@@ -1437,13 +1584,27 @@ export async function drainFreeLane(options: { timeoutMs?: number } = {}): Promi
 export function meteredIo(
   usage: ItemUsage,
   io: { completer: Completer; fetchSource: (url: string) => Promise<SourceFetch>; search: (query: string) => Promise<string[]> },
+  /**
+   * Told the model that actually answered each call — the route's own report, or
+   * the model asked when a completer does not report. It may throw, and the
+   * answer is then not the item's (`servedGuard`).
+   */
+  onServed?: (model: string) => void,
 ): { completer: Completer; fetchSource: (url: string) => Promise<SourceFetch>; search: (query: string) => Promise<string[]> } {
   return {
     completer: (async (config, model, system, prompt, options) => {
       usage.modelCalls += 1;
       usage.networkBytesOut += utf8Bytes(system) + utf8Bytes(prompt);
-      const text = await io.completer(config, model, system, prompt, options);
+      let served: string | null = null;
+      const text = await io.completer(config, model, system, prompt, {
+        ...options,
+        onServed: (one) => {
+          served = one;
+          options?.onServed?.(one);
+        },
+      });
       usage.networkBytesIn += utf8Bytes(text);
+      onServed?.(served ?? model);
       return text;
     }) as Completer,
     fetchSource: async (url) => {
@@ -1466,7 +1627,7 @@ async function askFor(ctx: Ctx, prompt: string, options: { json?: boolean } = {}
   return ask(
     ctx.completer,
     ctx.config,
-    ctx.worker.model,
+    ctx.route ?? ctx.worker.model,
     prompt,
     (why) => {
       ctx.why = why;
@@ -1720,7 +1881,7 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
   const plan = await ask(
     ctx.completer,
     ctx.config,
-    ctx.worker.model,
+    ctx.route ?? ctx.worker.model,
     `Research brief:\n${JSON.stringify(brief, null, 1)}\n\nName up to ${MAX_SOURCES} specific public web pages ` +
       'most likely to contain primary evidence for this question: pages about the buyers, product or industry the ' +
       'question names (their own pricing, rates or terms pages, published price lists, trade bodies, regulators), and an ' +
@@ -2384,6 +2545,7 @@ export function resetFreeLaneFitness(): void {
   fitness = null;
   pairProbes.clear();
   resetRouteHealth();
+  resetProvenance();
 }
 export async function unfitNow(models: readonly string[], now = Date.now(), fallbackModel: string | null = null): Promise<Set<string>> {
   if (fitness && now - fitness.at < 5 * 60_000) return fitness.unfit;
@@ -3010,6 +3172,10 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
   let one: ClaimedWork | undefined;
   // The bin each admitted item belongs to, so its FREE_LANE_ITEM row names it.
   const owners = new Map<string, string>();
+  // Per admitted item: what produced it (fragment, packet), where a check is asked, and its producers' models.
+  const lineage = new Map<string, { fragmentId: string | null; orchestrationId: string | null }>();
+  const routes = new Map<string, string>();
+  const producersOf = new Map<string, ReadonlySet<string>>();
   const unfit = await unfitNow(workers.map((w) => w.model), Date.now(), config.fallbackModel ?? null);
   const scopes = projectIds.map((projectId) => ({ projectId, scopes: [...CONNECTOR_SCOPES] }));
   const admit = async (item: WorkItemRow) => {
@@ -3033,6 +3199,23 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
       return { ok: false, reason: 'this model’s answers for this kind of work are rejected; another model takes it' };
     }
     if (!(await freeLaneAdmits(item))) return { ok: false, reason: 'not free-lane work' };
+    // A check is answered by a model that did not produce what it checks — the model that answers, not the slot's label.
+    if (config.models.length >= 2 && checkingRole(item)) {
+      const producers = await producerModels(item, config);
+      const alternate = config.alternateModel ?? null;
+      const decided = checkingRoute({
+        slot: worker.model,
+        served: servedRoute(config, worker.model).model,
+        producers,
+        alternate,
+        alternateHeld: alternate !== null && routeHold(alternate) !== null,
+      });
+      if ('held' in decided) return { ok: false, reason: decided.held };
+      if (decided.route !== worker.model) routes.set(item.id, decided.route);
+      else routes.delete(item.id);
+      if (producers) producersOf.set(item.id, producers);
+    }
+    lineage.set(item.id, { fragmentId: item.fragment_id ?? null, orchestrationId: item.orchestration_id ?? null });
     const owner = await owningBin(item);
     if (owner) owners.set(item.id, owner.binId);
     session = sessionFor(worker, item);
@@ -3094,7 +3277,14 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
   const started = Date.now();
   const meterKey = `${one.workItemId}:${one.leaseId}`;
   const usage = itemMeters.open(meterKey);
-  const io = meteredIo(usage, { completer: input.completer, fetchSource: input.fetchSource, search: input.search });
+  const route = routes.get(one.workItemId) ?? worker.model;
+  const producers = producersOf.get(one.workItemId) ?? null;
+  // Who actually answered each call, for the item's row; a producer answering a check voids that answer.
+  const servedBy = new Set<string>();
+  const io = meteredIo(usage, { completer: input.completer, fetchSource: input.fetchSource, search: input.search }, (model) => {
+    servedBy.add(model);
+    if (producers?.has(model)) throw new Error(`independence lost: answered by ${model}, a model that produced what this checks`);
+  });
   const ctx: Ctx = {
     worker,
     principal: principalFor(worker, projectIds, session),
@@ -3105,6 +3295,7 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
     config,
     why: 'the model returned no usable JSON',
     usage,
+    ...(route !== worker.model ? { route } : {}),
   };
   const held: HeldLease = { ctx, touched: false, state: 'working' };
   ctx.held = held;
@@ -3201,10 +3392,13 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
   const refund = (transient || brainUnavailable || searchOutage) && (strikes < 3 || providerFailure || searchOutage);
   // Recorded before the cooldowns are touched: one answer from a route whose recent calls still
   // mostly failed is its re-probe, and does not reopen it to every cooled item (CAP-16-3).
-  const routeOpen = recordRouteOutcome(worker.model, { ok, why: ctx.why });
+  // A check voided because a producer answered it says nothing about the route's health.
+  const routeOpen = INDEPENDENCE_LOST.test(ctx.why) ? routeHold(route) === null : recordRouteOutcome(route, { ok, why: ctx.why });
   if (ok) {
     transientStrikes.delete(one.workItemId);
-    if (routeOpen) clearRouteCooldowns(worker.model);
+    if (routeOpen) clearRouteCooldowns(route);
+    const produced = lineage.get(one.workItemId);
+    if (servedBy.size > 0) rememberProduced({ workType: one.workType, ...(produced ?? {}) }, servedBy);
   } else if (refund) {
     /*
      * The model or its provider failed, not the work: hand the item back with
@@ -3249,10 +3443,11 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
     sessionRef: session,
     workloadClass: one.workType,
     outcome: ok ? 'SUBMITTED' : refund ? 'RELEASED_TRANSIENT' : 'FAILED_RETRYABLE',
-    reason: ok ? `model ${worker.model}` : `model ${worker.model}: ${ctx.why}`.slice(0, 480),
+    // The route asked, and in `servedBy` the models that actually answered (a GPU slot's fallback included).
+    reason: ok ? `model ${route}` : `model ${route}: ${ctx.why}`.slice(0, 480),
     durationMs: ms,
     evidenceClass: 'MEASURED',
-    measures: { usage: used, ...(ctx.discovery ? { discovery: ctx.discovery } : {}) },
+    measures: { usage: used, ...(servedBy.size > 0 ? { servedBy: [...servedBy] } : {}), ...(ctx.discovery ? { discovery: ctx.discovery } : {}) },
   });
   return { claimed: one, ok, ms };
 }

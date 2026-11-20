@@ -24,7 +24,7 @@ import { createHash } from 'node:crypto';
 import { getDb } from '../../db/database.ts';
 import { newId, nowIso } from '../../repos/util.ts';
 import { DELIVERABLE_KINDS, type DeliverableKind } from '../cash/deliverables/spec.ts';
-import { isRunpodSlot, routeRunpod, runpodConfig, type RunpodConfig } from './runpod.ts';
+import { isRunpodSlot, routeRunpod, runpodConfig, runpodNotServing, type RunpodConfig } from './runpod.ts';
 
 export interface LaneConfig {
   url: string;
@@ -37,6 +37,13 @@ export interface LaneConfig {
   runpod?: RunpodConfig | null;
   /** The free model a failed RunPod call is answered by; null when OmniRoute is not set. */
   fallbackModel?: string | null;
+  /**
+   * A second configured free model (`BRAIN_CHEAP_LLM_MODELS`'s second entry) that
+   * is neither slot's model nor the GPU's fallback, or null. With the GPU in
+   * primary mode it holds no slot; it checks a claim when both slots are answered
+   * by the model that produced it (`checkingRoute` in the free lane).
+   */
+  alternateModel?: string | null;
 }
 
 /**
@@ -67,7 +74,34 @@ export function laneConfig(env: NodeJS.ProcessEnv = process.env): LaneConfig | n
     timeoutMs: 30_000,
     runpod,
     fallbackModel: runpod && url ? free[0]! : null,
+    alternateModel: runpod && url && free[1] && free[1] !== free[0] && !isRunpodSlot(free[1]) ? free[1] : null,
   };
+}
+
+/**
+ * The model that answers a call on `slot` now, and why it is not the slot's own.
+ *
+ * A free slot is its own model. The GPU slot is its own model only while the
+ * GPU answers (`runpodNotServing`); otherwise every call on it is answered by
+ * `fallbackModel` — which is slot B's model, so the lane's two models are then
+ * one. Read per call, like the pause and the breaker it reads.
+ */
+export function servedRoute(config: LaneConfig, slot: string, now = Date.now()): { model: string; why: string | null } {
+  if (!isRunpodSlot(slot)) return { model: slot, why: null };
+  const why = runpodNotServing(config.runpod, now);
+  if (!why) return { model: slot, why: null };
+  return { model: config.fallbackModel ?? slot, why };
+}
+
+/**
+ * A slot as a reading names it: the slot alone while it answers itself, else
+ * `slot → served (why)`, so a lane served by its fallback is never read as GPU work.
+ */
+export function routeLabel(config: LaneConfig, slot: string, now = Date.now()): string {
+  const served = servedRoute(config, slot, now);
+  if (!served.why) return slot;
+  if (served.model === slot) return `${slot} (${served.why}; no fallback)`;
+  return `${slot} → ${served.model} (${served.why})`;
 }
 
 export const SCREEN_VERDICTS = ['KEEP', 'DROP', 'UNSURE'] as const;
@@ -273,13 +307,16 @@ export type Completer = (
   model: string,
   system: string,
   prompt: string,
-  /** `json`: ask for a JSON object (`response_format`); a provider that refuses the field is asked once without it. */
-  options?: { maxTokens?: number; json?: boolean },
+  /**
+   * `json`: ask for a JSON object (`response_format`); a provider that refuses the field is asked once without it.
+   * `onServed`: told the model that actually answered — on the GPU slot, the GPU or its fallback.
+   */
+  options?: { maxTokens?: number; json?: boolean; onServed?: (model: string) => void },
 ) => Promise<string>;
 
 export const httpCompleter: Completer = async (config, model, system, prompt, options) => {
   if (config.runpod && isRunpodSlot(model)) {
-    return routeRunpod(config, system, prompt, { maxTokens: options?.maxTokens ?? 2000 }, (backup) =>
+    return routeRunpod(config, system, prompt, { maxTokens: options?.maxTokens ?? 2000, ...(options?.onServed ? { onServed: options.onServed } : {}) }, (backup) =>
       openAiCompleter({ ...config, runpod: null }, backup, system, prompt, options),
     );
   }
@@ -349,6 +386,7 @@ const openAiCompleter: Completer = async (config, model, system, prompt, options
   }
   if (!response.ok) throw new Error(`cheap lane HTTP ${response.status}`);
   const body = (await response.json()) as { choices?: { message?: { content?: string } }[] };
+  options?.onServed?.(model);
   return body.choices?.[0]?.message?.content ?? '';
 };
 
