@@ -202,10 +202,39 @@ export const CONDITION_ASSUMPTION = /^\s*condition\s*:\s*\S/i;
  * will be checked by within the horizon.
  */
 export const EXECUTION_ASSUMPTION_INSTRUCTION =
-  'Add an assumption beginning "execution:" naming the Brain operation (tool, bin, routine or workflow) that will carry out the chosen action, who or what runs it, and the row the work will be checked by within the horizon; the earlier misses assumed work that was not done as planned';
+  'Add an assumption beginning "execution:" naming the Brain operation (tool, bin, routine or workflow) that will carry out the chosen action, who or what runs it ("run by …"), and the row the work will be checked by within the horizon ("checked by …"); the earlier misses assumed work that was not done as planned';
 
 /** An assumption that names the execution, written as EXECUTION_ASSUMPTION_INSTRUCTION tells the operator to write it. */
 export const EXECUTION_ASSUMPTION = /^\s*execution\s*:\s*\S/i;
+
+/** The three parts EXECUTION_ASSUMPTION_INSTRUCTION asks for; a prefix alone names none of them. */
+const EXECUTION_OPERATION = /\b(?:tool|bin|routine|workflow|brain_[a-z0-9_]+)s?\b/i;
+const EXECUTION_RUNNER = /\b(?:run|runs|executed|performed|carried out)\s+by\s+\S/i;
+const EXECUTION_CHECK = /\bchecked\s+by\b(.*)$/i;
+const EXECUTION_CHECK_ROW = /\brows?\b|\b[a-z]+_[a-z0-9_]+\b/i;
+
+/**
+ * Why no stated "execution:" assumption carries what the instruction asks for —
+ * the operation that will do the work, who or what runs it, and the row it will
+ * be checked by — or null when one does (or none was stated: that is a separate
+ * problem). One complete assumption is enough.
+ */
+export function executionAssumptionProblem(assumptions: readonly string[]): string | null {
+  const stated = assumptions.filter((a) => EXECUTION_ASSUMPTION.test(a));
+  if (stated.length === 0) return null;
+  const reasons: string[] = [];
+  for (const a of stated) {
+    const body = a.replace(EXECUTION_ASSUMPTION, (m) => m.slice(-1));
+    const missing: string[] = [];
+    if (!EXECUTION_OPERATION.test(body)) missing.push('the Brain operation (tool, bin, routine or workflow) that will carry it out');
+    if (!EXECUTION_RUNNER.test(body)) missing.push('who or what runs it ("run by …")');
+    const check = EXECUTION_CHECK.exec(body);
+    if (!check || !EXECUTION_CHECK_ROW.test(check[1] ?? '')) missing.push('the row the work will be checked by ("checked by …")');
+    if (missing.length === 0) return null;
+    reasons.push(`"${a.slice(0, 120)}" names no ${missing.join(', no ')}`);
+  }
+  return `no execution assumption names the operation, its runner and the row it is checked by: ${reasons.join('; ')}`;
+}
 
 /**
  * The same correction for a bucket whose systematic misses named
@@ -608,12 +637,18 @@ export async function decide(
       );
       instructions.push(EVIDENCE_QUALITY_INSTRUCTION);
     }
-    if (correction.executionBehaviorClaims.length > 0 && !input.assumptions.some((a) => EXECUTION_ASSUMPTION.test(a))) {
-      const claims = correction.executionBehaviorClaims;
-      problems.push(
-        `${comparableKey} is miscalibrated (${correction.rationale}) and ${claims.length} of its systematic misses were EXECUTION_BEHAVIOR (${listed(claims)}): the work the decision assumed was not done as planned, and this decision again names no operation that will carry it out`,
-      );
-      instructions.push(EXECUTION_ASSUMPTION_INSTRUCTION);
+    if (correction.executionBehaviorClaims.length > 0) {
+      const stated = input.assumptions.some((a) => EXECUTION_ASSUMPTION.test(a));
+      // A stated execution is held to its three parts, not to the prefix alone.
+      const unmet = stated ? executionAssumptionProblem(input.assumptions) : null;
+      if (!stated || unmet) {
+        const claims = correction.executionBehaviorClaims;
+        problems.push(
+          `${comparableKey} is miscalibrated (${correction.rationale}) and ${claims.length} of its systematic misses were EXECUTION_BEHAVIOR (${listed(claims)}): the work the decision assumed was not done as planned, and this decision again names no operation that will carry it out`,
+          ...(unmet ? [unmet] : []),
+        );
+        instructions.push(EXECUTION_ASSUMPTION_INSTRUCTION);
+      }
     }
     if (correction.parameterEstimateClaims.length > 0) {
       // A stated estimate is held to a figure: the base rate it starts from. With none stated,

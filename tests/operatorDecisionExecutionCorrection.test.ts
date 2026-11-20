@@ -15,6 +15,7 @@ import {
   EXECUTION_ASSUMPTION,
   EXECUTION_ASSUMPTION_INSTRUCTION,
   bucketCorrectionFrom,
+  executionAssumptionProblem,
   correctedProbability,
   decide,
   operatorCalibration,
@@ -91,6 +92,30 @@ describe('an operator decision on a bucket whose misses were EXECUTION_BEHAVIOR'
     const recorded = (await readLedger(null)).predictions.find((p) => p.id === decision!.predictionId)!;
     expect(recorded.probability).toBe(correctedProbability(0.8, d.correction!));
     expect(recorded.probability!).toBeLessThan(0.3);
+  });
+
+  it('does not accept the "execution:" prefix alone: the operation, its runner and its checking row must each be named', async () => {
+    await seedExecutionBucket(projectId, 'RESEARCH', { n: 24, occurred: 4 });
+    const before = (await readLedger(null)).predictions.length;
+    const incomplete = [
+      'execution: we will get it done',
+      'execution: run by the free lane, checked by its research_runs row',
+      'execution: a research bin, checked by its research_runs row',
+      'execution: a research bin run by the free lane',
+      'execution: a research bin run by the free lane, checked by Peyton',
+    ];
+    for (const written of incomplete) {
+      expect(EXECUTION_ASSUMPTION.test(written)).toBe(true);
+      expect(executionAssumptionProblem([written])).not.toBeNull();
+      const d = await decide({ ...base, assumptions: [...base.assumptions, written] }, ctx());
+      expect(d).toMatchObject({ committed: false, verdict: 'REVISE', decisionId: null });
+      expect(d.problems.join(' ')).toMatch(/no execution assumption names the operation, its runner and the row/);
+      expect(d.next).toContain(EXECUTION_ASSUMPTION_INSTRUCTION);
+    }
+    expect((await readLedger(null)).predictions.length).toBe(before);
+    expect(executionAssumptionProblem(['execution: brain_bin_complete run by the factory session, checked by the bins row within 2 days'])).toBeNull();
+    expect(executionAssumptionProblem(['owners answer cold email at 1%'])).toBeNull();
+    expect(executionAssumptionProblem(['execution: soon', 'execution: a research bin run by the free lane, checked by its research_runs row'])).toBeNull();
   });
 
   it('leaves a thin or calibrated bucket alone, and another kind does not leak', async () => {
