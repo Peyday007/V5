@@ -125,31 +125,14 @@ describe('engine: metamorphic properties of evaluateGoalPortfolio', () => {
   }
 
   /*
-   * FAILS (defect). On the $10K fixture (ceiling 3 000, 375 before proof),
-   * "AI receptionist setups" reads 0.465 reach at capital 0 (not a member),
-   * 0.487 at 25 (now a member), 0.575 at 50, and 0.465 again at 100. Two
-   * mechanisms compound:
-   *
-   *   1. quant/portfolio.ts:676-678 (`evaluateCombination`): a world whose
-   *      direct costs pass the spending ceiling fails outright
-   *      (`reached` requires `!overCeiling`), even when it reached the target —
-   *      instead of selling only what the ceiling funds. Anything that caps an
-   *      opening's deals therefore raises its reach.
-   *   2. goals/portfolio.ts:894-906 (`stakeCycles`, applied at 1062): an
-   *      established capital at or under one deal's direct cost caps the line
-   *      at `lots × cycles` deals, where lots = ceiling ÷ capital — so a
-   *      larger capital is a tighter cap (25 → 15 deals, 50 → 7), while a
-   *      capital of 0, or one above the cost (here the *low* end, 75, of an
-   *      unknown cost swept 75–300), caps nothing.
-   *
-   * Together: more money tied up per deal → fewer deals allowed → fewer
-   * worlds over the spending ceiling → more worlds counted as reaching the
-   * target. With no spending ceiling (E1b) the property holds, which pins
-   * the cause on (1). The fix is a throttle in the shared Monte Carlo (stop
-   * a member's sales at what the ceiling still funds), in quant/portfolio.ts,
-   * which reads every plan: reported rather than changed here.
+   * Fixed 2026-11-20. It failed because a world whose direct costs passed the
+   * spending ceiling failed outright, so anything that capped an opening's
+   * deals (a larger capital → fewer lots, `stakeCycles`) raised reach. Now the
+   * ceiling funds only the sales it can (`ceilingShare`, quant/portfolio.ts),
+   * and a stake line is recycled only where its deal is its lot, never capped
+   * below what fresh money funds (`stakeCycles`, goals/portfolio.ts).
    */
-  it.fails('E1a raising an opening\'s established capital never raises reach, and never makes it a member', () => {
+  it('E1a raising an opening\'s established capital never raises reach, and never makes it a member', () => {
     expect(capitalLadder({})).toEqual([]);
   }, 120_000);
 
@@ -177,40 +160,23 @@ describe('engine: metamorphic properties of evaluateGoalPortfolio', () => {
   }, 60_000);
 
   /*
-   * FAILS (defect, server/services/quant/portfolio.ts:472/478 `drawPicks`):
-   * the world order an activity is resampled in is seeded by
-   * `seedOf(\`activity:${activity.key}\`)`, and the key is
-   * `${opportunity.id}@${share}` (goals/portfolio.ts:1196). The opening's own
-   * demand worlds are seeded by its `index` (`drawDemandWorlds`), so the same
-   * opening under another id reads a different resample: on the $10K fixture
-   * at seed 7 and 600 worlds, `cop_lists@1` alone reads 0.465 as `cop_lists`,
-   * 0.455 as `zz_4` and 0.473 as `a4_cop_lists` — ±1 standard error, enough to
-   * flip a near-tie between combinations. The stream should follow what the
-   * opening is (its index, or a digest of its inputs), never its database
-   * identifier. Outside the files this suite may change: reported.
+   * Fixed 2026-11-20: an activity's resample stream was seeded by its key
+   * (`${opportunity.id}@${share}`); it is now seeded by `stream`, the
+   * opening's index and share — what its demand worlds are seeded by.
    */
-  it.fails('E2b renaming an opening\'s id changes no reach (the resample stream is keyed by the id)', () => {
+  it('E2b renaming an opening\'s id changes no reach', () => {
     sameReading((o, i) => ({ ...o.opportunity, id: `zz_renamed_${i}` }));
   }, 60_000);
 
   /*
-   * FAILS (defect, small and persistent; invariant 39). With common random
-   * numbers (see `drawnEvidence`) and a control that relabels the same figure
-   * UNKNOWN at zero width (which reads identically — so nothing but the width
-   * moves), widening an established input to an UNKNOWN range a quarter either
-   * side of it raises the best combination's reach: at seed 7 / 600 worlds
-   * `cop_lists` days to cash 0.6717 → 0.6733; across seeds 7–9 and 600/2 000
-   * worlds, `cop_coachella`'s price and `cop_lists`' price and days by
-   * 0.05–0.35 points. Root cause: `sampler` (goals/portfolio.ts:542-544) reads
-   * an UNKNOWN range as a uniform distribution over its bounds, and the
-   * headline reach is the share of those worlds that reach the target, so
-   * wherever reach is locally convex in the input (a one-off whose price only
-   * clears the target at its upper end) not knowing it pays. Invariant 39
-   * says an unknown may never rank anything higher; a COVERAGE reach that an
-   * unknown can raise is that. The fix is a decision about what a COVERAGE
-   * reach is (read each unknown at its unfavourable end for the headline, and
-   * keep the sweep as sensitivity), which every plan reads: reported.
-   * The ranking half (never made a member by being less known) holds: E4b.
+   * Invariant 39. With common random numbers (see `drawnEvidence`) and a
+   * control that relabels the same figure UNKNOWN at zero width (which reads
+   * identically — so nothing but the width moves), widening an established
+   * input to an UNKNOWN range a quarter either side of it must not raise
+   * reach. It once did (`cop_lists` days to cash 0.6717 → 0.6733 at seed 7):
+   * an UNKNOWN range was sampled uniformly, so wherever reach is convex in it
+   * not knowing paid. Fixed 2026-11-20: `sampler` folds an unestablished
+   * input's draw onto the unfavourable half of its range (goals/portfolio.ts).
    */
   let widening: { reach: string[]; member: string[]; control: string[] } | null = null;
   /** Each established input of each opening, widened to UNKNOWN a quarter either side, against the established reading. */
@@ -237,7 +203,7 @@ describe('engine: metamorphic properties of evaluateGoalPortfolio', () => {
     return widening;
   }
 
-  it.fails('E4a making an established input less known never raises reach (invariant 39)', () => {
+  it('E4a making an established input less known never raises reach (invariant 39)', () => {
     expect(widen().reach).toEqual([]);
   }, 120_000);
 
@@ -266,20 +232,13 @@ describe('engine: metamorphic properties of evaluateGoalPortfolio', () => {
   }, 120_000);
 
   /*
-   * FAILS (defect, goals/portfolio.ts:1034). The portfolio's starting capital
-   * is `perWeek ?? beforeProof ?? capitalCeiling`: with no weekly limit stated
-   * it falls back to the *per-arrangement* before-proof limit (375 on the $10K
-   * goal), so stating a weekly limit above it (3 000) loosens the plan — on
-   * the established fixture reach 0.6667 → 0.6717. Adding a limit raised
-   * reach. Not fixed here because the fix is a reading of the owner's words,
-   * not arithmetic: under the engine's own reading of `beforeProof` (one
-   * arrangement's outlay, owner 2026-11-03) the fallback should be the
-   * ceiling (`perWeek ?? capitalCeiling ?? beforeProof`); under the plain
-   * reading of "at most $375 before the first sale" (all of it) the starting
-   * capital should be `min(perWeek, beforeProof)`. Either is monotone; which
-   * one is the goal's meaning is the owner's call to record. Reported.
+   * Fixed 2026-11-20. The starting capital was `perWeek ?? beforeProof ??
+   * capitalCeiling`, so stating a weekly limit above the before-proof one
+   * loosened the plan. Decision (coordinator): "at most $X before the first
+   * sale" is total exposure before proof, so the starting capital is the
+   * minimum of the stated pre-proof limits.
    */
-  it.fails('E6b stating a weekly capital limit never raises reach (the starting capital falls back to the per-arrangement limit)', () => {
+  it('E6b stating a weekly capital limit never raises reach', () => {
     expect(tightening('perWeek', [null, 3_000, 750, 375, 200, 100, 50, 0])).toEqual([]);
   }, 120_000);
 
@@ -317,8 +276,12 @@ describe('engine: metamorphic properties of evaluateGoalPortfolio', () => {
    * move first, and the family rule (`family`: a smaller purchase of a lever
    * already made is never re-tried) leaves it at a weaker local optimum.
    * Owned by another worker: reported.
+   * 2026-11-20: holds on these figures since the engine fixes of E1a/E4a/E6b
+   * (a ceiling that funds only what it can, unknowns folded to their
+   * unfavourable half, starting capital the tightest pre-proof limit) moved
+   * both readings; the greedy path dependence above is not itself fixed.
    */
-  it.fails('R6 loosening the capital ceiling never lowers the reconstructed plan\'s reach (exploration off, deterministic)', async () => {
+  it('R6 loosening the capital ceiling never lowers the reconstructed plan\'s reach (exploration off, deterministic)', async () => {
     const at = async (ceiling: number) => {
       const limits = { ...GOAL_10K_LIMITS, measuredRates: GOAL_10K_RECORD, worlds: 400, seed: 3, capitalCeiling: ceiling };
       const baseline = evaluateGoalPortfolio({ ...limits, openings: GOAL_10K_OPENINGS });

@@ -124,7 +124,8 @@ describe('production case: the prepaid lever never zeroes an arrears or unknown 
 
   it('the critic flags one deal keeping more than the bound times the money behind the plan', async () => {
     // Before the fix the lever made exactly this reading; force it in by funding the deal outright.
-    const gov = { ...bureaus(null), fundedByBuyer: true };
+    // Days to cash swept 3–30, 3–60 until 2026-11-20: at 3–60 the deal settles in the 30 days only on its unknown fast tail, which invariant 39 no longer counts, so no reading rested on it.
+    const gov = { ...bureaus(null, { daysToCash: swept(3, 30) }), fundedByBuyer: true };
     const r = await reconstruct([...held, gov]);
     const withGov = [r.baseline, ...tried(r)].filter((t) => t.members.includes(BUREAU));
     expect(withGov.length).toBeGreaterThan(0);

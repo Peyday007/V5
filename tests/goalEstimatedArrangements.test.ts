@@ -147,11 +147,12 @@ describe('the portfolio compares them with what was found', () => {
   it('chooses members by contribution to the whole goal, and calls the result coverage while estimates are in it', () => {
     const tiny = found('sudoku-50', 50, 50);
     const recurring = estimatedFromArrangement(arrangement({ key: 'recurring', p50: 400, repeat: 'SUBSCRIPTION' }), base)!;
-    const portfolio = evaluateGoalPortfolio({ openings: [tiny, recurring], remaining: 10_000, daysLeft: 21, capitalCeiling: 3_000, beforeProof: 375, perWeek: 750, resources: null, worlds: 400 });
+    // 60 days, 21 until 2026-11-20: these estimates' days to cash are swept to ~63, so in 21 days only their unknown fast tail settled, which invariant 39 no longer counts.
+    const portfolio = evaluateGoalPortfolio({ openings: [tiny, recurring], remaining: 10_000, daysLeft: 60, capitalCeiling: 3_000, beforeProof: 375, perWeek: 750, resources: null, worlds: 400 });
     const best = portfolio.best!.members.map((one) => one.opportunityId);
     expect(best.some(isArrangementId)).toBe(true);
     const settledP90 = portfolio.best!.settledP90;
-    const tinyOnly = evaluateGoalPortfolio({ openings: [tiny], remaining: 10_000, daysLeft: 21, capitalCeiling: 3_000, beforeProof: 375, perWeek: 750, resources: null, worlds: 400 });
+    const tinyOnly = evaluateGoalPortfolio({ openings: [tiny], remaining: 10_000, daysLeft: 60, capitalCeiling: 3_000, beforeProof: 375, perWeek: 750, resources: null, worlds: 400 });
     expect(settledP90).toBeGreaterThan(tinyOnly.best?.settledP90 ?? 0);
     // An estimate is never a probability.
     expect(portfolio.basis).toBe('COVERAGE');

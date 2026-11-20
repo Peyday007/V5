@@ -119,7 +119,7 @@ describe('S-1: the strongest arrangement is kept whatever its key string', () =>
     expect(keys(pickEstimatedArrangements([...twins, evidenced], base))[0]).toBe('zz-direct');
   });
 
-  it('the engine’s best combination improves on the old pick', () => {
+  it('the engine’s best combination is never weaker than the old pick', () => {
     const all = [...ordinary, strong('zz-strong')];
     // Lens S's setting: the fixture's openings, no measured sending capacity (outreach swept 10–60 a day), 2,000 worlds.
     const limits = { ...GOAL_10K_LIMITS, measuredCapacity: null, worlds: 2_000, seed: 7 };
@@ -127,8 +127,10 @@ describe('S-1: the strongest arrangement is kept whatever its key string', () =>
     const after = evaluateGoalPortfolio({ ...limits, openings: [...GOAL_10K_OPENINGS, ...pickEstimatedArrangements(all, base)] });
     const reach = (p: typeof before) => p.best?.reach ?? 0;
     console.log(`lens S experiment: best reach ${(reach(before) * 100).toFixed(2)}% (old pick, p50 ${Math.round(before.best?.settledP50 ?? 0)}) -> ${(reach(after) * 100).toFixed(2)}% (new, p50 ${Math.round(after.best?.settledP50 ?? 0)}); members ${after.best?.members.map((m) => m.opportunityId).join(', ')}`);
-    expect(reach(after)).toBeGreaterThan(reach(before));
-    expect(after.best!.members.map((m) => m.opportunityId)).toContain(`${ARRANGEMENT_ID_PREFIX}zz-strong`);
+    // Until 2026-11-20 strictly greater, with zz-strong in the best combination: 1.75% → 5.65% at a settled p50 of 50, all of it
+    // from the estimates' unknown favourable tails, which invariant 39 no longer counts (`sampler`). The pick is never weaker, and it keeps the strong design.
+    expect(reach(after)).toBeGreaterThanOrEqual(reach(before));
+    expect(after.demand.some((d) => d.opportunityId === `${ARRANGEMENT_ID_PREFIX}zz-strong` && !d.refused && !d.heldOut)).toBe(true);
   }, 120_000);
 });
 

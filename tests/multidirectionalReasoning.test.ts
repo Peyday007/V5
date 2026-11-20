@@ -95,7 +95,8 @@ describe('§101 regression: the $10K plan, before and after', () => {
     const beforeLabels = new Set(before.best.changes.map((c) => c.label));
     expect(after.best.changes.some((c) => c.basis === 'ESTIMATE' && !beforeLabels.has(c.label))).toBe(true);
     // 0.9 until 2026-11-20, part of it from price moves scaling prices nobody had established; those no longer move (invariant 39).
-    expect(after.best.reach).toBeGreaterThan(0.85);
+    // 0.85 until the engine fixes of 2026-11-20 (planMetamorphic E1a/E4a/E6b): the starting capital is the tightest pre-proof limit (375, not 750), and unknowns no longer read past their centre.
+    expect(after.best.reach).toBeGreaterThan(0.8);
     // Honesty: still coverage of assumptions, never relabelled a probability.
     expect(after.confidence.basis).toBe('COVERAGE');
     expect(renderReconstruction(after).join('\n')).toMatch(/explore .*distinct direction/);
