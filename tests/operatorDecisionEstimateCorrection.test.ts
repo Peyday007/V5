@@ -145,6 +145,11 @@ describe('an operator decision on a bucket whose misses were PARAMETER_ESTIMATE'
     expect(estimateAssumptionProblem(['estimate: 12% of earlier decisions landed'])).toBeNull();
     expect(estimateAssumptionProblem(['estimate: rate 0.1 over the bucket'])).toBeNull();
     expect(estimateAssumptionProblem(['estimate: confident'])).toMatch(/states the observed rate/);
+    // A count is not a rate: a bare 0 or 1 does not anchor the estimate.
+    expect(estimateAssumptionProblem(['estimate: 1 named buyer signed'])).toMatch(/states the observed rate/);
+    expect(estimateAssumptionProblem(['estimate: 0 objections so far, 1 call booked'])).toMatch(/states the observed rate/);
+    expect(estimateAssumptionProblem(['estimate: base rate 1.0 for this buyer'])).toBeNull();
+    expect(estimateAssumptionProblem(['estimate: base rate .05 across the bucket'])).toBeNull();
     const preds = [{ id: 'p1', comparableKey: 'operator:RESEARCH', probability: 0.65 }];
     const told = operatorCalibration({ predictions: preds, outcomes: [{ predictionId: 'p1', occurred: false, observedCauses: ['PARAMETER_ESTIMATE'] }] }, 'operator:RESEARCH');
     expect(String(told['nextDecisionOfThisKind'] ?? '')).toContain(ESTIMATE_ASSUMPTION_INSTRUCTION);

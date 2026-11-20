@@ -222,8 +222,12 @@ export const ESTIMATE_ASSUMPTION_INSTRUCTION =
 /** An assumption that anchors the estimate, written as ESTIMATE_ASSUMPTION_INSTRUCTION tells the operator to write it. */
 export const ESTIMATE_ASSUMPTION = /^\s*estimate\s*:\s*\S/i;
 
-/** A figure an "estimate:" assumption can anchor on: a percentage, or a decimal rate in 0..1. */
-const ESTIMATE_FIGURE = /\b\d{1,3}(?:\.\d+)?\s*%|(?<![\d.])(?:0?\.\d+|[01](?:\.0+)?)(?![\d.%])/;
+/**
+ * A figure an "estimate:" assumption can anchor on: a percentage, or a decimal
+ * rate in 0..1 written with its decimal point. A bare integer 0 or 1 is a
+ * count ("1 named buyer"), not a rate, so it anchors nothing.
+ */
+const ESTIMATE_FIGURE = /\b\d{1,3}(?:\.\d+)?\s*%|(?<![\d.])(?:0?\.\d+|1\.0+)(?![\d.%])/;
 
 /**
  * Why the stated "estimate:" assumptions do not anchor the probability, or
