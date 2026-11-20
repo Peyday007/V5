@@ -6,7 +6,8 @@
  * below are the recorded failures, verbatim.
  */
 import { describe, expect, it } from 'vitest';
-import { extractItem, extractItems, readable, untokenise, type ExtractableItem, type ItemField } from '../server/services/feeds/extract.ts';
+import { EXTRACTOR_VERSION, extractItem, extractItems, readable, untokenise, type ExtractableItem, type ItemField } from '../server/services/feeds/extract.ts';
+import { commitReadings, emptyDeltaIndex, planDelta, recordIdentity, recordsReadByOtherParser } from '../server/services/knowledge/delta.ts';
 
 function news(id: string, title: string, url: string, source = 'news-event-rush'): ExtractableItem {
   return {
@@ -138,5 +139,25 @@ describe('tokenised news titles and unmapped feed sources are read by code', () 
     expect(text).toBe('Fold (FLD) Q3 2026 Earnings Call Transcript');
     for (let i = 0; i < text.length; i++) expect(rawTitle[toRaw[i]!]).toBe(text[i]);
     expect(untokenise('Plain prose, already readable.').text).toBe('Plain prose, already readable.');
+  });
+});
+
+describe('records the previous reading left unreadable are re-read by this one', () => {
+  it('a stored news record read under feeds-extract/3 is planned for re-reading, not skipped as unchanged', () => {
+    // The tokenised titles were read (and left unreadable) by feeds-extract/3. Unless the version moves,
+    // the delta index calls them UNCHANGED and the new reading never reaches them.
+    expect(EXTRACTOR_VERSION).not.toBe('feeds-extract/3');
+    const t1 = '2026-11-12T10:05:00.000Z';
+    const t2 = '2026-11-12T12:00:00.000Z';
+    const record = { source: 'news-event-rush', recordId: RECORDED.bellmead.id, content: { title: RECORDED.bellmead.title, url: RECORDED.bellmead.url } };
+    const identity = recordIdentity(record.source, record.recordId);
+    const first = planDelta({ index: emptyDeltaIndex(), batch: [record], parserVersion: 'feeds-extract/3', now: t1 });
+    const index = commitReadings(first.index, [{ identity, parserVersion: 'feeds-extract/3', factKeys: [] }], t1);
+    expect(recordsReadByOtherParser(index, EXTRACTOR_VERSION)).toEqual([identity]);
+    const again = planDelta({ index, batch: [record], parserVersion: EXTRACTOR_VERSION, now: t2 });
+    expect(again.counts).toMatchObject({ REPARSE: 1, UNCHANGED: 0 });
+    expect(again.toRead).toEqual([identity]);
+    // And the current reading of that record is one code can read.
+    expect(readable(RECORDED.bellmead, extractItem(RECORDED.bellmead))).toBe(true);
   });
 });

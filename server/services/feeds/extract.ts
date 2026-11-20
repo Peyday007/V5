@@ -62,7 +62,7 @@ export interface ExtractableItem {
 }
 
 /** The version of this extractor's code, recorded on every fact so a change in reading is visible in the rows. */
-export const EXTRACTOR_VERSION = 'feeds-extract/3';
+export const EXTRACTOR_VERSION = 'feeds-extract/4';
 
 /**
  * What a fact is epistemically. Extraction emits only OBSERVED and DERIVED;
