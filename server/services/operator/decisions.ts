@@ -384,8 +384,30 @@ export const TIMING_ASSUMPTION_INSTRUCTION =
 /** An assumption that names the lead time, written as TIMING_ASSUMPTION_INSTRUCTION tells the operator to write it. */
 export const TIMING_ASSUMPTION = /^\s*timing\s*:\s*\S/i;
 
-/** A lead time a "timing:" assumption states: a figure and its unit. A date or a row id is not one. */
-const TIMING_LEAD = /(?<![\w.])(\d+(?:\.\d+)?)\s*(hours?|hrs?|h|days?|d|weeks?|wks?|w)\b/gi;
+/** A lead time a "timing:" assumption states: a figure and its unit ("36 hours", "3-day"). A date or a row id is not one. */
+const TIMING_LEAD = /(?<![\w.])(\d+(?:\.\d+)?)[\s-]*(hours?|hrs?|h|days?|d|weeks?|wks?|w)\b/gi;
+
+/**
+ * A figure the assumption itself marks as some other span — the window the lead
+ * time was measured over, a lookback, a retention period, how long ago — is not
+ * the lead time. Only an explicit marker excludes a figure; every other figure
+ * still counts, and the largest of them is held to the horizon.
+ */
+const OTHER_SPAN_BEFORE = /\b(?:last|past|previous|prior|trailing|every|each|per)\s+(?:the\s+)?$/i;
+const OTHER_SPAN_AFTER = /^[\s-]*(?:of\s+(?:data|history|records?)\b|(?:rolling\s+|trailing\s+|measurement\s+|observation\s+|sample\s+)?(?:window|retention|look-?back|history|sample|ago|old|period|cadence|cycle)\b)/i;
+
+/** The lead times a "timing:" assumption states, in days, leaving out figures it marks as another span. */
+function statedLeadDays(text: string): number[] {
+  const leads: number[] = [];
+  for (const m of text.matchAll(TIMING_LEAD)) {
+    const at = m.index ?? 0;
+    if (OTHER_SPAN_BEFORE.test(text.slice(Math.max(0, at - 24), at))) continue;
+    if (OTHER_SPAN_AFTER.test(text.slice(at + m[0].length, at + m[0].length + 32))) continue;
+    const d = leadDays(m[1]!, m[2]!);
+    if (Number.isFinite(d) && d > 0) leads.push(d);
+  }
+  return leads;
+}
 
 function leadDays(figure: string, unit: string): number {
   const n = Number(figure);
@@ -414,7 +436,7 @@ export function timingAssumptionProblem(assumptions: readonly string[], horizonD
       continue;
     }
     const text = a.replace(/\bhttps?:\/\/\S+/gi, ' ').replace(/\b\d{4}-\d{2}-\d{2}\b/g, ' ');
-    const leads = [...text.matchAll(TIMING_LEAD)].map((m) => leadDays(m[1]!, m[2]!)).filter((d) => Number.isFinite(d) && d > 0);
+    const leads = statedLeadDays(text);
     if (leads.length === 0) {
       reasons.push(`"${a.slice(0, 120)}" states no lead time in hours, days or weeks`);
       continue;
