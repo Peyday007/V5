@@ -1433,6 +1433,148 @@ interface Ctx {
    * slot: a check rerouted to the lane's alternate model (`checkingRoute`).
    */
   route?: string;
+  /** This lease's entry in the process's in-flight set, while the item is worked (`returnInFlightLeases`). */
+  held?: HeldLease;
+}
+
+/* ------------------------------------------------------------------------- */
+/* Shutdown: the leases this process holds are handed back, not left to expire */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * One lease this process is working, from claim until the item's answer path
+ * ends. `touched` is the line invariant 26 draws: it turns true the moment any
+ * call that can change Brain's state (a submission, a completion — anything
+ * not in `LEASE_READS`) starts, and stays true unless that call ended in a
+ * definite refusal, which committed nothing. An untouched lease has done only
+ * model calls, page reads and searches, which change nothing, so handing it
+ * back loses no effect and repeats none.
+ */
+interface HeldLease {
+  ctx: Ctx;
+  touched: boolean;
+  /** `working` → `returning` (the shutdown's release is in flight) → `returned` (it matched). */
+  state: 'working' | 'returning' | 'returned';
+}
+
+/** The calls an item's answer makes that change nothing: reading its brief, and renewing its own lease. */
+const LEASE_READS: ReadonlySet<string> = new Set(['brain_get_assignment', 'brain_get_audit_brief', 'brain_heartbeat_work']);
+
+/** Tool refusals that are decided before anything commits (`ToolError`); every other ending is an unknown outcome. */
+const DEFINITE_REFUSALS: ReadonlySet<string> = new Set(['NOT_FOUND', 'NOT_PERMITTED', 'INVALID_INPUT', 'CONFLICT', 'FENCE_LOST', 'LIMIT_EXCEEDED']);
+
+/** The leases this process is working now, by `work item id:lease id`. */
+const heldLeases = new Map<string, HeldLease>();
+/** Set when the process begins shutting down: nothing new is claimed. */
+let draining = false;
+
+/** The refusal a state-changing call meets once its lease is being handed back; `LEASE_LOST` reads it. */
+const HANDED_BACK = 'This lease is no longer current: Brain is shutting down and handed it back.';
+
+/** Tests: forget a drain, so the next test's lane claims again. */
+export function resetFreeLaneDrain(): void {
+  draining = false;
+  heldLeases.clear();
+}
+
+/** The leases this process is working now, for tests and the shutdown log. */
+export function heldFreeLaneLeases(): { workItemId: string; leaseGeneration: number; touched: boolean }[] {
+  return [...heldLeases.values()].map((held) => ({
+    workItemId: held.ctx.claimed.workItemId,
+    leaseGeneration: held.ctx.claimed.leaseGeneration,
+    touched: held.touched,
+  }));
+}
+
+/**
+ * Whether a lease may be handed back at shutdown: only one whose work so far
+ * changed nothing (invariant 26 — a submission whose outcome is unknown is
+ * never released as not-done; its lease expires as before). Pure. Exported for tests.
+ */
+export function releasableAtShutdown(held: { touched: boolean; state: HeldLease['state'] }): boolean {
+  return held.state === 'working' && !held.touched;
+}
+
+/** Release one held lease through the queue's own path, as the worker that holds it. */
+async function handBack(held: HeldLease, detail: string): Promise<boolean> {
+  held.state = 'returning';
+  try {
+    await call(held.ctx, 'brain_release_work', { ...proof(held.ctx), detail });
+    held.state = 'returned';
+    return true;
+  } catch (error) {
+    console.warn(`[free-lane] lease on ${held.ctx.claimed.workItemId} not handed back at shutdown:`, String((error as Error)?.message ?? error).slice(0, 200));
+    return false;
+  }
+}
+
+/**
+ * Hand back every lease this process holds on free-lane work that has changed
+ * nothing yet, before the process exits.
+ *
+ * Production, 2026-11-20 (read-only probe, 18:45Z): the process restarted about
+ * every 22 minutes, and 457 of 1,850 free-lane items in 24 h (25%, 42% of them
+ * audits) ended with their lease EXPIRED — each leased by a slot in a process
+ * that then exited, unowned for up to the 20-minute lease, and charged an
+ * attempt by the expiry. A release is the queue's existing path
+ * (`brain_release_work` → `releaseWork`): one guarded UPDATE proving item,
+ * lease id, generation, the worker id from the authenticated principal, LEASED
+ * and unexpired (§19, invariant 24), which returns the item to QUEUED and hands
+ * the attempt back. An item another worker holds, or one reclaimed since,
+ * matches nothing.
+ *
+ * Every free-lane type (plan, fragment, verify, synthesize, audit) is model
+ * calls and reads followed by one Brain submission. A lease whose submission,
+ * completion or failure has started — in flight, committed, or ended unknown —
+ * is left alone (`releasableAtShutdown`): its outcome is the queue's to settle
+ * and an unknown is never read as "not done" (invariant 26, §20).
+ *
+ * Bounded by `timeoutMs` whatever the database does: shutdown never waits on it.
+ */
+export async function returnInFlightLeases(options: { timeoutMs?: number } = {}): Promise<{ returned: number; kept: number; unanswered: number }> {
+  // Set first: from here no slot claims. Each releasable lease turns `returning`
+  // synchronously inside the `map` below (before its first await), so between
+  // this read of `touched` and the release no submission on it can start (`call`).
+  draining = true;
+  const all = [...heldLeases.values()];
+  const releasable = all.filter((held) => releasableAtShutdown(held));
+  const kept = all.length - releasable.length;
+  if (releasable.length === 0) return { returned: 0, kept, unanswered: 0 };
+  let returned = 0;
+  const releases = Promise.all(
+    releasable.map(async (held) => {
+      if (await handBack(held, 'free lane: Brain shut down before this item was answered; handed back unworked')) returned += 1;
+    }),
+  );
+  let timer: NodeJS.Timeout | undefined;
+  const bound = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, Math.max(0, options.timeoutMs ?? 2_500));
+    timer.unref?.();
+  });
+  await Promise.race([releases, bound]);
+  if (timer) clearTimeout(timer);
+  const unanswered = releasable.filter((held) => held.state === 'returning').length;
+  console.log(`[free-lane] shutdown: ${returned} lease(s) handed back, ${kept} left to the queue (a submission had started), ${unanswered} unanswered in time.`);
+  return { returned, kept, unanswered };
+}
+
+/**
+ * Stop the lane and hand back what it holds (`returnInFlightLeases`). The
+ * server's SIGTERM/SIGINT path calls this; bounded, and never throws.
+ */
+export async function drainFreeLane(options: { timeoutMs?: number } = {}): Promise<{ returned: number; kept: number; unanswered: number }> {
+  draining = true;
+  stopFreeLaneLoop();
+  // A dynamic import, as `startFreeLaneLoop` does; not awaited, so it spends none
+  // of the releases' bound. The pool's slots already stop claiming on `draining`.
+  void import('./capacity.ts')
+    .then(({ stopAdaptivePool }) => stopAdaptivePool())
+    .catch(() => undefined);
+  try {
+    return await returnInFlightLeases(options);
+  } catch {
+    return { returned: 0, kept: 0, unanswered: 0 };
+  }
 }
 
 /**
@@ -1521,11 +1663,25 @@ export const NOT_REACHED_BACKOFF_MS = [1_000, 3_000, 9_000];
 async function call(ctx: Ctx, tool: string, args: Record<string, unknown>): Promise<Record<string, unknown>> {
   const found = findTool(tool);
   if (!found) throw new Error(`no tool ${tool}`);
+  // A call that can change state is an effect on this lease (`HeldLease.touched`).
+  // Once the shutdown is handing this lease back none starts but that release
+  // itself; the refusal happens here, before anything reaches Brain. A lease the
+  // shutdown left to the queue (touched) keeps working to its own end.
+  const held = ctx.held;
+  const effect = held !== undefined && !LEASE_READS.has(tool);
+  if (effect && held.state !== 'working' && !(held.state === 'returning' && tool === 'brain_release_work')) throw new Error(HANDED_BACK);
+  const before = held?.touched ?? false;
+  if (effect && held.state === 'working') held.touched = true;
   const started = Date.now();
   if (ctx.usage) ctx.usage.dbCalls += 1;
   try {
     const outcome = await retryNotReached(() => found.run(args, { principal: ctx.principal, requestId: `req_${Math.random().toString(36).slice(2)}` }));
     return outcome.value;
+  } catch (error) {
+    // A refusal decided before anything committed leaves the lease as untouched as it was.
+    const category = (error as { category?: unknown } | null)?.category;
+    if (effect && held.state === 'working' && typeof category === 'string' && DEFINITE_REFUSALS.has(category)) held.touched = before;
+    throw error;
   } finally {
     if (ctx.usage) ctx.usage.dbMs += Date.now() - started;
   }
@@ -3008,6 +3164,8 @@ export function heldBackFor(
 
 export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork | null; ok: boolean; ms: number }> {
   const { workers, worker, index, config } = input;
+  // Shutting down: a lease taken now would only be stranded (`returnInFlightLeases`).
+  if (draining) return { claimed: null, ok: false, ms: 0 };
   const projectIds = await projectsFor(worker);
   if (projectIds.length === 0) return { claimed: null, ok: false, ms: 0 };
   let session = '';
@@ -3139,6 +3297,16 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
     usage,
     ...(route !== worker.model ? { route } : {}),
   };
+  const held: HeldLease = { ctx, touched: false, state: 'working' };
+  ctx.held = held;
+  heldLeases.set(meterKey, held);
+  // Claimed while the shutdown was handing leases back: hand this one back too.
+  if (draining) {
+    await handBack(held, 'free lane: claimed as Brain shut down; handed back unworked');
+    heldLeases.delete(meterKey);
+    itemMeters.close(meterKey);
+    return { claimed: one, ok: false, ms: 0 };
+  }
   let ok = false;
   // The lease is renewed for as long as the item is worked, not sized to a guess
   // at how long a model takes (see `keepLeaseAlive`).
@@ -3156,7 +3324,19 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
     ctx.why = `threw: ${message}`;
   } finally {
     stopHeartbeat();
+    // From here the item's own path settles its lease; the shutdown no longer may.
+    heldLeases.delete(meterKey);
   }
+  /*
+   * The shutdown handed this lease back (`returnInFlightLeases`): the queue has
+   * the item again with its attempt refunded. Nothing below applies — a fail
+   * would match no lease, and the model did not fail: the process stopped.
+   */
+  if (held.state === 'returned' || held.state === 'returning') {
+    itemMeters.close(meterKey);
+    return { claimed: one, ok: false, ms: Date.now() - started };
+  }
+  ctx.held = undefined;
   /*
    * A verification the model answered in words, and answered again in words when
    * told what was wrong, is that model's answer to this item: asking it again

@@ -638,6 +638,96 @@ describe('the free research lane', () => {
     expect(lease?.outcome).toBe('SUCCEEDED');
   });
 
+  it('hands back, at shutdown, the lease on an item still being worked \u2014 QUEUED again, its attempt not charged \u2014 and touches no lease another worker holds (production 2026-11-20: 25% of free-lane items expired across ~22-minute restarts)', async () => {
+    const lane = await import('../server/services/freeLane/worker.ts');
+    const { claimWork } = await import('../server/repos/workQueue.ts');
+    const { CONNECTOR_SCOPES } = await import('../server/domain/types.ts');
+    const first = await packet(play.project.id);
+    const mine = await enqueue(play.project.id, 'RESEARCH_FRAGMENT', first.orchestration, first.fragment);
+    const workers = await ensureFreeWorkers(CONFIG);
+    const working = model().completer;
+    // The model is mid-call when the process is told to stop: it answers only when the gate opens.
+    let open!: () => void;
+    const gate = new Promise<void>((resolve) => (open = resolve));
+    let asked!: () => void;
+    const midCall = new Promise<void>((resolve) => (asked = resolve));
+    const held: Completer = async (...args) => {
+      asked();
+      await gate;
+      return working(...args);
+    };
+    try {
+      const taking = lane.takeOne({ workers, worker: workers[0]!, index: 0, completer: held, fetchSource, search: async () => [], config: CONFIG });
+      await midCall;
+      const leased = await getDb().get<{ state: string; attempt_count: number; worker_id: string; lease_generation: number }>(
+        'SELECT state, attempt_count, worker_id, lease_generation FROM work_items WHERE id = ?',
+        [mine],
+      );
+      expect(leased?.state).toBe('LEASED');
+      expect(Number(leased?.attempt_count)).toBe(1);
+
+      // Another worker holds another item: not this process's slot, and not the shutdown's to return.
+      const second = await packet(play.project.id, 'AI receptionist pricing, second packet');
+      const theirs = await enqueue(play.project.id, 'RESEARCH_FRAGMENT', second.orchestration, second.fragment);
+      const [other] = await claimWork({
+        workerId: workers[1]!.workerId,
+        scopes: [{ projectId: play.project.id, scopes: [...CONNECTOR_SCOPES] }],
+        workTypes: ['RESEARCH_FRAGMENT'],
+        orchestrationId: second.orchestration.id,
+        limit: 1,
+      });
+      expect(other?.workItemId).toBe(theirs);
+
+      // SIGTERM's path (server/index.ts installShutdown).
+      await lane.drainFreeLane?.({ timeoutMs: 5_000 });
+
+      const returned = await getDb().get<{ state: string; attempt_count: number; worker_id: string | null; lease_id: string | null }>(
+        'SELECT state, attempt_count, worker_id, lease_id FROM work_items WHERE id = ?',
+        [mine],
+      );
+      expect(returned?.state).toBe('QUEUED');
+      expect(Number(returned?.attempt_count)).toBe(0);
+      expect(returned?.worker_id ?? null).toBeNull();
+      // Released by the lease that held it: the same worker and generation, ended RELEASED (not EXPIRED, not FAILED).
+      const lease = await getDb().get<{ worker_id: string; outcome: string | null }>(
+        'SELECT worker_id, outcome FROM work_leases WHERE work_item_id = ? AND lease_generation = ?',
+        [mine, leased!.lease_generation],
+      );
+      expect(lease?.worker_id).toBe(leased!.worker_id);
+      expect(lease?.outcome).toBe('RELEASED');
+
+      const untouched = await getDb().get<{ state: string; worker_id: string; lease_generation: number; attempt_count: number }>(
+        'SELECT state, worker_id, lease_generation, attempt_count FROM work_items WHERE id = ?',
+        [theirs],
+      );
+      expect(untouched?.state).toBe('LEASED');
+      expect(untouched?.worker_id).toBe(workers[1]!.workerId);
+      expect(Number(untouched?.lease_generation)).toBe(other!.leaseGeneration);
+      expect(Number(untouched?.attempt_count)).toBe(1);
+
+      // The model answers after the hand-back: nothing is submitted, failed or charged.
+      open();
+      const taken = await taking;
+      expect(taken.ok).toBe(false);
+      const after = await getDb().get<{ state: string; attempt_count: number }>('SELECT state, attempt_count FROM work_items WHERE id = ?', [mine]);
+      expect(after?.state).toBe('QUEUED');
+      expect(Number(after?.attempt_count)).toBe(0);
+      expect(await listClaimsForFragment(first.fragment.id)).toHaveLength(0);
+      // While draining, the lane claims nothing new.
+      expect((await lane.takeOne({ workers, worker: workers[0]!, index: 0, completer: working, fetchSource, search: async () => [], config: CONFIG })).claimed).toBeNull();
+    } finally {
+      open?.();
+      lane.resetFreeLaneDrain?.();
+    }
+  });
+
+  it('never hands back at shutdown a lease whose submission has started: an unknown outcome is not "not done" (invariant 26)', async () => {
+    const { releasableAtShutdown } = await import('../server/services/freeLane/worker.ts');
+    expect(releasableAtShutdown({ touched: false, state: 'working' })).toBe(true);
+    expect(releasableAtShutdown({ touched: true, state: 'working' })).toBe(false);
+    expect(releasableAtShutdown({ touched: false, state: 'returned' })).toBe(false);
+  });
+
   it('stops renewing at the first refusal, and never renews after it is stopped (\u00a724: a heartbeat proves ownership, it does not take it)', async () => {
     const { keepLeaseAlive } = await import('../server/services/freeLane/worker.ts');
     const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
