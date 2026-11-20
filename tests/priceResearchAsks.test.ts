@@ -173,6 +173,34 @@ describe('the goal tick sends the populations nothing prices to research, as the
     expect(await order()).toEqual([round.id, need!.candidateId, older.id]);
   });
 
+  it('asks an open price question again when its idea was parked without an answer, up to the bound', async () => {
+    // Production 2026-11-20: refused at planning before #1162, parked, and the need pointed at the dead idea for good.
+    const portfolio = { best: null, causal: null, marketHistory: [], unpriced: [population(1)] } as unknown as GoalPortfolio;
+    await sendPortfolioNeeds({ goalId: 'wst_price_goal', projectId, portfolio });
+    const needOf = async () => (await listNeeds({ projectId })).find((n) => n.requestKey?.startsWith(`${GOAL_PRICE_KEY_PREFIX}-`))!;
+    const first = (await needOf()).candidateId!;
+    const ids = [first];
+    for (let ask = 2; ask <= 4; ask += 1) {
+      await getDb().run("UPDATE russell_candidates SET state = 'PARKED' WHERE id = ?", [ids[ids.length - 1]]);
+      await sendPortfolioNeeds({ goalId: 'wst_price_goal', projectId, portfolio });
+      ids.push((await needOf()).candidateId!);
+    }
+    // Asked a second and third time through fresh ideas; the fourth read leaves the need on its third, parked idea.
+    expect(new Set(ids.slice(0, 3)).size).toBe(3);
+    expect(ids[3]).toBe(ids[2]);
+    // The earlier ideas keep their rows: what was asked first is still readable.
+    expect((await getCandidate(first))?.state).toBe('PARKED');
+    expect((await needOf()).state).toBe('OPEN');
+  });
+
+  it('does not re-ask a need whose idea is still live', async () => {
+    const portfolio = { best: null, causal: null, marketHistory: [], unpriced: [population(1)] } as unknown as GoalPortfolio;
+    await sendPortfolioNeeds({ goalId: 'wst_price_goal', projectId, portfolio });
+    const before = (await listNeeds({ projectId })).find((n) => n.requestKey?.startsWith(`${GOAL_PRICE_KEY_PREFIX}-`))!.candidateId;
+    await sendPortfolioNeeds({ goalId: 'wst_price_goal', projectId, portfolio });
+    expect((await listNeeds({ projectId })).find((n) => n.requestKey?.startsWith(`${GOAL_PRICE_KEY_PREFIX}-`))!.candidateId).toBe(before);
+  });
+
   it('a context-free causal unknown is still not the goal’s idea', async () => {
     const portfolio = {
       best: null,
