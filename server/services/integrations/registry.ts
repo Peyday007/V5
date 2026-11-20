@@ -125,8 +125,10 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
       { component: 'Launch: Neighbor Card replies', path: 'scripts/launch/mailerReplies.ts' },
       { component: 'Cash: CONTACT_BUYER effect and reply sync', path: 'server/services/cash/providers/instantly.ts' },
       { component: 'Goals: measured outreach capacity', path: 'server/services/cash/providers/instantlySync.ts' },
+      // Pre-warmed inboxes, and new ones until InboxKit is connected, are ordered from Instantly DFY (§110).
+      { component: 'Inbox procurement: Instantly DFY orders', path: 'server/services/inboxes/providers.ts' },
     ],
-    capabilities: ['SEND_A_MESSAGE', 'READ_REPLIES', 'MEASURE_OUTREACH_CAPACITY'],
+    capabilities: ['SEND_A_MESSAGE', 'READ_REPLIES', 'MEASURE_OUTREACH_CAPACITY', 'BUY_SENDING_INBOXES'],
     probe: 'instantly',
     dailyCeiling: null,
     ownerAction:

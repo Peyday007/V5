@@ -36,6 +36,7 @@ import { designFacts, STRUCTURES } from '../cash/properties.ts';
 import { fieldFromInput, type ModelField } from './planSet.ts';
 import { RESEARCH_TURNAROUND_DAYS, type PlanStep } from './plan.ts';
 import type { ArrangementStage, StepCostSource, UnscheduledReason } from '../../domain/planIntegrity.ts';
+import { stepExecutor, type CapabilityInventory, type OperationRequest } from './stepExecutor.ts';
 
 /** Which part of the transaction an unknown part belongs to: the research step that asks it. */
 type Link = 'BUYERS' | 'PRICE' | 'SUPPLY' | 'SETTLEMENT' | 'COST' | 'REPEAT';
@@ -92,6 +93,8 @@ export interface ArrangementStepContext {
   /** Permissions a send needs and a collection needs: execution dependencies, never blocks on the plan. */
   send: string[];
   collect: string[];
+  /** What Brain has registered and connected: who performs each step is read from it (`stepExecutor`). */
+  capabilities?: CapabilityInventory;
 }
 
 const money = (n: number, currency: string) => `${currency} ${Math.round(n).toLocaleString('en-US')}`;
@@ -120,6 +123,8 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
   const meta = (stage: ArrangementStage, costSource: StepCostSource, day: Day | null, unscheduled?: UnscheduledReason): Pick<PlanStep, 'arrangement'> => ({
     arrangement: { key: a.key, stage, costSource, ...(day === null && unscheduled ? { unscheduled } : {}) },
   });
+  /** Who performs a step, read from Brain's registered capabilities by the operation it is (never its words). */
+  const exec = (req: OperationRequest) => stepExecutor(req, ctx.capabilities);
   const push = (step: Omit<PlanStep, 'order'>): number => {
     const order = startAt + steps.length;
     steps.push({ order, ...step });
@@ -161,6 +166,7 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
         dependsOn: null,
         kill: 'no published source answers it after two research rounds → the part stays unknown; re-plan on the next arrangement rather than assume it',
         execution: [],
+        executor: exec({ operation: 'RESEARCH' }),
         kind: 'RESEARCH',
         question,
         requires: [],
@@ -243,6 +249,7 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
     ownerReason: null,
     kill: one ? `"${buyers}" cannot be reached at any published address, or does not answer the first three attempts → re-plan on the next arrangement` : `the list holds too few reachable "${buyers}" for the deals the goal needs → re-plan on the next arrangement`,
     execution: ctx.send,
+    executor: exec({ operation: 'REACH_BUYERS', execution: ctx.send }),
     kind: 'EXECUTE',
     requires: reachNeeds,
     withinLimits: null,
@@ -275,6 +282,12 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
       ownerReason: signs ? `a ${a.design.base === 'BROKER' ? 'commission' : 'referral'} agreement signed in the owner's name` : null,
       kill: `no ${supplier ? `"${supplier}"` : 'supplier'} quotes terms that leave a margin under what buyers pay → drop this supply and re-plan`,
       execution: ctx.send,
+      executor: exec({
+        operation: 'NEGOTIATE_TERMS',
+        execution: ctx.send,
+        provider: supplier ? `"${supplier}"` : 'a supplier',
+        signs: signs ? `a ${a.design.base === 'BROKER' ? 'commission' : 'referral'} agreement signed in the owner's name` : null,
+      }),
       kind: 'EXECUTE',
       requires: supplyNeeds,
       withinLimits: null,
@@ -313,6 +326,7 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
     ownerReason: null,
     kill: offerKill,
     execution: ctx.send,
+    executor: exec({ operation: 'SEND_OFFER', execution: ctx.send }),
     kind: conversionKnown && !conflict ? 'EXECUTE' : 'VALIDATE',
     ...(conflict
       ? { question: `For "${buyers}": will they pay before delivery, against their stated terms (${a.buyerTerms!.basis})?${conversionKnown ? '' : ` And ${conversionQuestion}.`}` }
@@ -358,6 +372,7 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
       ownerReason: account.length > 0 ? `a payment account in the owner's name (${account.join(', ')}), which only the owner can open; Brain collects once it is connected` : null,
       kill: `cash would not be usable by day ${ctx.daysLeft ?? 'the deadline'} → re-plan this arrangement's payment terms (a deposit or a presale) or drop it`,
       execution: ctx.collect,
+      executor: exec({ operation: 'COLLECT_PAYMENT', execution: ctx.collect, provider: fromSupplier ? `${supplier ? `"${supplier}"` : 'the supplier'}, who pays the ${a.design.base === 'BROKER' ? 'commission' : 'fee'}` : null }),
       kind: 'EXECUTE',
       requires: needs('SETTLEMENT'),
       withinLimits: inTime,
@@ -389,6 +404,13 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
       ownerReason: prepaid ? 'a payment to the supplier, from the money buyers paid in' : `a payment${committed !== null && committed > 0 ? ` of ${money(committed, cur)}` : ''} from the owner's account, inside the goal's limits`,
       kill: `the order would tie up more than ${ctx.capitalBeforeProof !== null ? money(ctx.capitalBeforeProof, cur) : 'the goal allows'} before buyers pay, or the supplier's price leaves no margin → refund buyers and re-plan`,
       execution: [],
+      // Paying a supplier is a payment (the owner's approval) and an operation: who makes it is read like any other.
+      executor: exec({
+        operation: 'PAY_SUPPLIER',
+        cost: committed,
+        pays: prepaid ? 'a payment to the supplier from the money buyers paid in' : 'a payment to the supplier from the owner\'s account, inside the goal\'s limits',
+        provider: supplier ? `"${supplier}"` : 'the supplier',
+      }),
       kind: 'EXECUTE',
       requires: needs('SUPPLY', 'COST'),
       withinLimits: within,
@@ -428,6 +450,12 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
       ownerReason: paid ? `a payment of up to ${money(cost ?? 0, cur)} per deal from the owner's account before the buyer pays, inside the goal's limits` : null,
       kill: 'a buyer reports non-delivery or a defect → hold collection for that buyer, refund under the stated terms, and re-plan the supply',
       execution: [],
+      executor: exec({
+        operation: facts.fulfiller === 'BRAIN' ? 'BRAIN_PRODUCES' : 'SUPPLIER_DELIVERS',
+        ...(facts.fulfiller === 'BRAIN' ? {} : { provider: supplier ? `"${supplier}"` : 'the supplier' }),
+        cost,
+        pays: paysFirst ? 'the direct cost of each deal, paid before the buyer pays' : null,
+      }),
       kind: 'EXECUTE',
       requires: paysFirst ? needs('COST') : [],
       ...meta('DELIVER', !paysFirst ? 'NOT_OWNERS' : cost === null ? 'NONE_HELD' : 'MODEL', day, unscheduled),
@@ -477,6 +505,7 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
       ownerReason: null,
       kill: 'fewer buyers return or join than the first run needed → stop repeating and re-plan',
       execution: [...ctx.send, ...ctx.collect],
+      executor: exec({ operation: 'SEND_OFFER', execution: [...ctx.send, ...ctx.collect] }),
       kind: 'EXECUTE',
       requires: needs('REPEAT'),
       withinLimits: day && ctx.daysLeft !== null ? day.high <= ctx.daysLeft : null,

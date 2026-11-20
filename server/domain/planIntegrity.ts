@@ -59,6 +59,19 @@
  *                            low bound, and an unestablished cost of one deal
  *                            not over the spending ceiling, unless a cash
  *                            structure the reading states carries it.
+ *   EXECUTABLE_BY_BRAIN      Owner, 2026-11-20: production plans read
+ *                            "[PERSON] Sell … through a partner", "[PERSON]
+ *                            20 pre-warmed cold-email accounts … for $350"
+ *                            and "[PERSON] Collect payment" — approvals and
+ *                            routine labor in one word. Every step names who
+ *                            performs it (`StepPerformer`, read from Brain's
+ *                            registered capabilities, never from its wording)
+ *                            and, apart, whether it needs the owner's
+ *                            approval. A plan that would be ACCEPTED holds no
+ *                            routine step the owner performs and no step no
+ *                            registered capability performs, unless that step
+ *                            is itself the acquisition of a capability.
+ *                            Approvals are listed, never refused.
  *
  * Only what the reading proves is flagged. An unknown the plan states as an
  * unknown and sends to research is the honest state, never a violation; a
@@ -78,6 +91,7 @@ export const PLAN_INTEGRITY_RULES = [
   'WITHIN_LIMITS',
   'NO_FAVOURABLE_UNKNOWN',
   'NO_CONTRADICTORY_STEPS',
+  'EXECUTABLE_BY_BRAIN',
 ] as const;
 export type PlanIntegrityRule = (typeof PLAN_INTEGRITY_RULES)[number];
 
@@ -102,6 +116,29 @@ export type StepCostSource = 'MODEL' | 'NOT_OWNERS' | 'NOT_SPENT' | 'NONE_HELD';
 /** Why a step has no day, when its builder could not schedule it. */
 export type UnscheduledReason = 'NO_MODEL_DAYS' | 'AFTER_DEADLINE' | 'TERMS_CONFLICT';
 
+/**
+ * Who performs a step (the owner's order, 2026-11-20). BRAIN — one of Brain's
+ * own operations through a capability the registry declares; PROVIDER — a
+ * supplier or partner does the work, Brain doing its own part through a
+ * declared capability; OWNER — the plan gives the work to the owner;
+ * CAPABILITY_MISSING — no registered capability performs it, so it is
+ * something to acquire, never something Brain is assumed to do.
+ */
+export type StepPerformer = 'BRAIN' | 'PROVIDER' | 'OWNER' | 'CAPABILITY_MISSING';
+
+/** What the integrity check reads of a step's executor record. */
+export interface IntegrityExecutor {
+  performedBy: StepPerformer;
+  /** The operation it is, in the closed vocabulary (`STEP_OPERATIONS`). */
+  operation: string;
+  /** Recurring or operational work (each buyer, each deal, each period), not a one-off decision or setup. */
+  routine: boolean;
+  /** Set when the step is itself the acquisition of a capability (sending capacity, an integration). */
+  acquisition: boolean;
+  /** What must be acquired before it can be performed: empty unless CAPABILITY_MISSING. */
+  acquire: readonly string[];
+}
+
 /** The stages that commit money or effort the model could price: a written 0 there is a figure, and needs a source. */
 const MONEY_STAGES: ReadonlySet<ArrangementStage> = new Set(['REACH', 'OFFER', 'COLLECT', 'ORDER', 'DELIVER', 'REPEAT']);
 
@@ -119,6 +156,8 @@ export interface IntegrityStep {
   stage?: ArrangementStage | null;
   costSource?: StepCostSource | null;
   unscheduled?: UnscheduledReason | null;
+  /** Who performs it (`PlanStep.executor`); absent on a step whose builder recorded none, which proves nothing. */
+  executor?: IntegrityExecutor | null;
 }
 
 /** How the price of the arrangement a plan's steps sell was read. */
@@ -156,6 +195,8 @@ export interface PlanIntegrityInput {
    * structure that carries it over a limit, when the reading holds one.
    */
   members?: readonly IntegrityMember[];
+  /** The acceptance's status: EXECUTABLE_BY_BRAIN binds a plan that would be ACCEPTED. */
+  status?: string | null;
 }
 
 export interface IntegrityMember {
@@ -307,6 +348,18 @@ export function planIntegrity(input: PlanIntegrityInput): { violations: PlanInte
     const spend = limits?.spendCeiling ?? null;
     if (spend !== null && m.unestablishedCostLow != null && m.unestablishedCostLow > spend + 1e-9) {
       add('NO_FAVOURABLE_UNKNOWN', `"${clip(m.title, 60)}" costs at least ${Math.round(m.unestablishedCostLow)} a deal as modelled, not established, more than the ${Math.round(spend)} the goal may spend in all`);
+    }
+  }
+  // EXECUTABLE_BY_BRAIN: a plan that would be accepted gives the owner no routine work, and assumes no capability nobody registered.
+  if (input.status === 'ACCEPTED') {
+    for (const s of ordered) {
+      const e = s.executor;
+      if (!e || e.acquisition) continue;
+      if (e.performedBy === 'OWNER' && e.routine) {
+        add('EXECUTABLE_BY_BRAIN', `step ${s.order} ("${clip(s.label, 60)}") gives the owner routine work (${e.operation.toLowerCase().replace(/_/g, ' ')}): name the Brain operation or provider that performs it, or acquire one`);
+      } else if (e.performedBy === 'CAPABILITY_MISSING') {
+        add('EXECUTABLE_BY_BRAIN', `step ${s.order} ("${clip(s.label, 60)}") needs what no registered capability performs (${e.acquire.join('; ') || e.operation}), and is not a step that acquires it`);
+      }
     }
   }
   return { violations };

@@ -114,6 +114,10 @@ export function integrityInput(reading: IntegrityReading): PlanIntegrityInput {
       stage: s.arrangement?.stage ?? s.stage?.stage ?? null,
       costSource: s.arrangement?.costSource ?? s.stage?.costSource ?? null,
       unscheduled: s.arrangement?.unscheduled ?? s.stage?.unscheduled ?? null,
+      // Who performs it, as its builder read it from Brain's registered capabilities (`stepExecutor`).
+      executor: s.executor
+        ? { performedBy: s.executor.performedBy, operation: s.executor.operation, routine: s.executor.routine, acquisition: s.executor.acquisition, acquire: s.executor.acquire }
+        : null,
     })),
     lead: reading.lead ?? null,
     unpriced: reading.unpriced ?? [],
@@ -121,6 +125,7 @@ export function integrityInput(reading: IntegrityReading): PlanIntegrityInput {
     spreadMax: COMPARABLE_SPREAD_MAX,
     limits: limits ? { capitalCeiling: limits.capitalCeiling ?? null, beforeProof: limits.perArrangement, spendCeiling: limits.spendCeiling } : null,
     members: leadMembersOf(reading, leadIds),
+    status: a.status,
   };
 }
 

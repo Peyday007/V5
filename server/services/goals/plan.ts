@@ -107,6 +107,7 @@ import { readTimelines, type TimelineReading } from './timelines.ts';
 import { changeTitle } from './stepTitle.ts';
 import { internalKeyIn, planIntegrity, type ArrangementStage, type PlanIntegrityViolation, type StepCostSource, type UnscheduledReason } from '../../domain/planIntegrity.ts';
 import { integrityInput, leadOf, type PlanLead } from './planIntegrityInput.ts';
+import { readCapabilityInventory, stepExecutor, type CapabilityInventory, type OperationRequest, type StepExecutor, type StepOperation } from './stepExecutor.ts';
 import { goalObjective, readOutcome, tradeOffs, type EnforceableCommitment, type GoalObjective, type OutcomeReading, type PlanTradeOff } from './objective.ts';
 import { buildPlanSet, calibrationFor, candidateFromArrangement, candidateFromPathway, candidateFromStrategy, rebuildAfter, type AcceptanceCondition, type Calibration, type PlanCandidate, type PlanChange, type PlanSet, type Rebuild } from './planSet.ts';
 
@@ -561,7 +562,11 @@ export interface PlanStep {
    */
   cost: number | null;
   basis: StepBasis;
-  /** PERSON only for a rule-11 kind: a payment, a credential, a legal commitment. */
+  /**
+   * Who the step waits on before it proceeds: PERSON only for a rule-11 kind
+   * (a payment, a credential, a legal commitment). Who performs it, and the
+   * approval it needs, are `executor` — approval is never labor.
+   */
   owner: 'BRAIN' | 'PERSON';
   ownerReason: string | null;
   /** The earlier step this one needs, by `order`, or null. */
@@ -574,6 +579,13 @@ export interface PlanStep {
    * constructing or evaluating the plan.
    */
   execution: string[];
+  /**
+   * Who performs it — Brain through which registered capability, a provider,
+   * the owner, or nobody yet (CAPABILITY_MISSING) — and, separately, whether it
+   * needs the owner's approval and why (`stepExecutor`; owner, 2026-11-20).
+   * Read from Brain's registered capabilities, never from the step's words.
+   */
+  executor?: StepExecutor;
   /**
    * RESEARCH: establishes a part nobody has yet, by `question`. VALIDATE: an
    * action whose first results answer `question` (a first batch of offers
@@ -1694,7 +1706,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     const refusedLead = leadingArrangement(inGoalScope(arrangements, model), { portfolio: model.portfolio, candidateIds: refusedAcceptance.candidate?.opportunityIds ?? [] });
     const refusedSteps = target.achieved || refusedInfeasible
       ? []
-      : planSteps({ adoption: refusedPlan.adoption, reconstruction: refusedReconstruction, sales: [], nextTest: qualify, permissionsMissing: permissions, arrangement: refusedLead ? { arrangement: refusedLead, context: { ...arrangementStepContext(target, refusedModels.get(refusedLead.key) ?? null, { key: refusedLead.key, portfolio: model.portfolio }), unestimated: unestimatedLead(refusedLead, arrangements.length, refusedModels) } } : null, capital: capitalOf(target), measuredReply: measuredReplyOf(model.portfolio), titles: titlesOf(model), cashDays: cashDaysOf(model), daysLeft: target.daysLeft });
+      : planSteps({ adoption: refusedPlan.adoption, reconstruction: refusedReconstruction, sales: [], nextTest: qualify, permissionsMissing: permissions, arrangement: refusedLead ? { arrangement: refusedLead, context: { ...arrangementStepContext(target, refusedModels.get(refusedLead.key) ?? null, { key: refusedLead.key, portfolio: model.portfolio }), unestimated: unestimatedLead(refusedLead, arrangements.length, refusedModels) } } : null, capital: capitalOf(target), measuredReply: measuredReplyOf(model.portfolio), titles: titlesOf(model), cashDays: cashDaysOf(model), daysLeft: target.daysLeft, capabilities: await readCapabilityInventory() });
     const refusedReadings = composeGoalReadings({ objective, target, portfolio: model.portfolio, pathways: null, arrangements, reconstruction: refusedReconstruction, acceptance: refusedAcceptance, arrangementModels: refusedModels });
     const refusedContinuation = continuationOf({
       achieved: target.achieved,
@@ -2069,7 +2081,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   const lead = leadingArrangement(inGoalScope(arrangements, model), { portfolio: model.portfolio, candidateIds: acceptance.candidate?.opportunityIds ?? [] });
   const steps = infeasible || target.achieved
     ? []
-    : planSteps({ adoption: plan.adoption, reconstruction, sales, nextTest: legacyNext, permissionsMissing, arrangement: lead ? { arrangement: lead, context: { ...arrangementStepContext(target, models.get(lead.key) ?? null, { key: lead.key, portfolio: model.portfolio }), unestimated: unestimatedLead(lead, arrangements.length, models) } } : null, capital: capitalOf(target), measuredReply: measuredReplyOf(model.portfolio), titles: titlesOf(model), cashDays: cashDaysOf(model), daysLeft: target.daysLeft, ...(adopted ? { adoptedIds: adopted } : {}) });
+    : planSteps({ adoption: plan.adoption, reconstruction, sales, nextTest: legacyNext, permissionsMissing, arrangement: lead ? { arrangement: lead, context: { ...arrangementStepContext(target, models.get(lead.key) ?? null, { key: lead.key, portfolio: model.portfolio }), unestimated: unestimatedLead(lead, arrangements.length, models) } } : null, capital: capitalOf(target), measuredReply: measuredReplyOf(model.portfolio), titles: titlesOf(model), cashDays: cashDaysOf(model), daysLeft: target.daysLeft, capabilities: await readCapabilityInventory(), ...(adopted ? { adoptedIds: adopted } : {}) });
   const openingsVerdict: PlanVerdict =
     acceptance.status === 'ACCEPTED' ? 'RECOMMENDABLE' : infeasible ? 'NOT_VIABLE' : plan.adoption.source === 'RECONSTRUCTED' ? 'NEEDS_EVIDENCE' : (chosen?.verdict ?? 'NEEDS_EVIDENCE');
   // One reading, one picture (P5): the candidate the acceptance adopted is a strategy of the reading, and a
@@ -2843,8 +2855,12 @@ export function planSteps(input: {
   cashDays?: ReadonlyMap<string, { span: Span; standing: string }>;
   /** Days left before the goal's deadline: cash usable only after it is not scheduled as if it settled. */
   daysLeft?: number | null;
+  /** What Brain has registered and connected (`readCapabilityInventory`): who performs each step is read from it. */
+  capabilities?: CapabilityInventory | null;
 }): PlanStep[] {
   const measured = input.measuredReply ?? null;
+  const inventory = input.capabilities ?? undefined;
+  const exec = (req: OperationRequest) => stepExecutor(req, inventory);
   const send = input.permissionsMissing.filter((one) => /CONTACT_BUYER|messag/i.test(one));
   const collect = input.permissionsMissing.filter((one) => /QUOTE_AND_INVOICE|ACCEPT_PAYMENT|billing/i.test(one));
   const r = input.reconstruction;
@@ -2874,6 +2890,7 @@ export function planSteps(input: {
         dependsOn: null,
         kill: killFor(first, r, measured),
         execution: SENDS.has(first.dimension) ? send : collect,
+        executor: exec(changeOperation(first.dimension, cost, SENDS.has(first.dimension) ? send : collect)),
         // Its cost is the reconstruction's own figure for the move: what it commits before any opening pays.
         stage: { stage: CHANGE_STAGE[first.dimension] ?? 'OFFER', costSource: 'MODEL' },
       });
@@ -2915,6 +2932,7 @@ export function planSteps(input: {
       dependsOn: null,
       kill: replyKill(r, measured),
       execution: send,
+      executor: exec({ operation: 'SEND_OFFER', execution: send }),
       stage: { stage: 'OFFER', costSource: 'NONE_HELD' },
     });
     // A member is named by its id, or by its title cut at 50 (the reconstruction's own reading): resolved as `adoptReconstruction` resolves it.
@@ -2945,6 +2963,7 @@ export function planSteps(input: {
       dependsOn: sellOrder,
       kill: `cash would not be usable by day ${daysLeft ?? 'the deadline'} → re-plan the plan's payment terms (a deposit or a presale) or drop the opening`,
       execution: collect,
+      executor: exec({ operation: 'COLLECT_PAYMENT', execution: collect }),
       ...(daysLeft !== null && lands ? { withinLimits: lands.high <= daysLeft } : {}),
       stage: { stage: 'COLLECT', costSource: 'NONE_HELD', ...(late ? { unscheduled: 'AFTER_DEADLINE' as const } : lands ? {} : { unscheduled: 'NO_MODEL_DAYS' as const }) },
     });
@@ -2956,13 +2975,13 @@ export function planSteps(input: {
      */
     const adopted = input.adoptedIds ?? new Set<string>();
     for (const sale of input.sales.filter((one) => !adopted.has(one.opportunityId))) {
-      steps.push(saleStep(steps.length + 1, sale, `Beside the reconstructed plan, inside the goal's limits: ${sale.test.test}`, replyKill(r, measured), [...send, ...collect]));
+      steps.push(saleStep(steps.length + 1, sale, `Beside the reconstructed plan, inside the goal's limits: ${sale.test.test}`, replyKill(r, measured), [...send, ...collect], inventory));
     }
     // Read in order (STEPS_SCHEDULED): a sale that starts now is not listed after a step that starts later.
     inDayOrder(steps);
   } else {
-    for (const sale of input.sales) steps.push(saleStep(steps.length + 1, sale, sale.test.test, replyKill(r, measured), [...send, ...collect]));
-    const arrangementOf = (startAt: number) => (input.arrangement ? arrangementSteps(input.arrangement.arrangement, { ...input.arrangement.context, send, collect }, startAt) : []);
+    for (const sale of input.sales) steps.push(saleStep(steps.length + 1, sale, sale.test.test, replyKill(r, measured), [...send, ...collect], inventory));
+    const arrangementOf = (startAt: number) => (input.arrangement ? arrangementSteps(input.arrangement.arrangement, { ...input.arrangement.context, send, collect, ...(inventory ? { capabilities: inventory } : {}) }, startAt) : []);
     let built = steps.length === 0 ? arrangementOf(1) : [];
     const t = input.nextTest;
     /*
@@ -2994,6 +3013,18 @@ export function planSteps(input: {
         dependsOn: null,
         kill: sells ? replyKill(r, measured) : 'the research returns no sourced answer twice → ask a different way, then re-plan without this opening',
         execution: sells ? [...send, ...collect] : [],
+        /*
+         * The goal's own step is Brain's work by its link: selling measures
+         * conversion, anything else is established by research — or, when the
+         * next test waits on the owner (a grant, a connection, how much may be
+         * committed), applied by the planner once the owner decides. What the
+         * owner holds is an approval, never the step's labor (owner, 2026-11-20).
+         */
+        executor: exec({
+          operation: sells ? 'SEND_OFFER' : t.by === 'PERSON' ? 'PLAN_DECISION' : 'RESEARCH',
+          execution: sells ? [...send, ...collect] : [],
+          authority: t.by === 'PERSON' ? (t.blocker ?? 'a decision only the owner can take') : null,
+        }),
         // Beside a leading arrangement's steps, the goal's own search keeps running in parallel.
         ...(beside ? { kind: sells ? ('VALIDATE' as const) : ('RESEARCH' as const), question: t.test, requires: [], withinLimits: null } : {}),
         stage: sells ? { stage: 'OFFER', costSource: 'NONE_HELD' } : { stage: 'RESEARCH', costSource: 'NOT_SPENT' },
@@ -3036,7 +3067,7 @@ const LINK_STAGES: Partial<Record<ChainLink, ArrangementStage[]>> = {
 };
 
 /** A sale the reading holds, as a step: it starts now, and the model prices no cost for sending it (unestablished, never 0). */
-function saleStep(order: number, sale: MarketTest, detail: string, kill: string, execution: string[]): PlanStep {
+function saleStep(order: number, sale: MarketTest, detail: string, kill: string, execution: string[], inventory?: CapabilityInventory): PlanStep {
   return {
     order,
     label: `Sell "${sale.title.slice(0, 80)}"`,
@@ -3049,7 +3080,36 @@ function saleStep(order: number, sale: MarketTest, detail: string, kill: string,
     dependsOn: null,
     kill,
     execution,
+    executor: stepExecutor({ operation: 'SEND_OFFER', execution }, inventory),
     stage: { stage: 'OFFER', costSource: 'NONE_HELD' },
+  };
+}
+
+/**
+ * The operation a reconstruction's change is, by its dimension — what the
+ * change does, never the words it is described in. Buying sending capacity is
+ * an acquisition; buying leads needs an ad or marketplace account; a partner is
+ * recruited by Brain's outreach and its agreement is the owner's signature.
+ */
+function changeOperation(dimension: string, cost: number, execution: string[]): OperationRequest {
+  const byDimension: Record<string, StepOperation> = {
+    CAPACITY: 'BUY_SENDING_CAPACITY',
+    ACQUISITION: 'BUY_PAID_LEADS',
+    PARTNER: 'RECRUIT_PARTNER',
+    MARKET: 'REACH_BUYERS',
+    PRICE: 'SET_OFFER',
+    TRANSACTION: 'SET_OFFER',
+    CASH_TIMING: 'SET_PAYMENT_TERMS',
+    CAPITAL: 'SET_PAYMENT_TERMS',
+    PORTFOLIO: 'PLAN_DECISION',
+    EVIDENCE: 'RESEARCH',
+  };
+  const operation = byDimension[dimension] ?? 'PLAN_DECISION';
+  return {
+    operation,
+    cost,
+    execution,
+    ...(operation === 'RECRUIT_PARTNER' ? { provider: 'a partner who already serves the buyers, who refers them', signs: "the referral agreement is signed in the owner's name" } : {}),
   };
 }
 
