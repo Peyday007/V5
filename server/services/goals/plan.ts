@@ -2709,7 +2709,7 @@ export function movesOfChanges(changes: readonly StrategyChange[], titles?: Read
     const at = title.search(QUOTED);
     const joined = names.join('; ');
     const quoted = at < 0 ? '' : title.slice(at).match(QUOTED)![0];
-    const label = at < 0 ? title : `${title.slice(0, at)}${joined.length <= 60 ? joined : `${names.length} openings`}${title.slice(at + quoted.length)}`;
+    const label = at < 0 ? title : `${title.slice(0, at)}${joined.length <= 60 ? joined : `${names.length} opening${names.length === 1 ? '' : 's'}`}${title.slice(at + quoted.length)}`;
     // The description, said once with every opening named, when the changes differ only in the opening; else each in turn.
     const rest = new Set(group.map((c) => spokenScope(c.detail, titles).replace(QUOTED, '"…"')));
     const d = detail.search(QUOTED);
@@ -2824,7 +2824,16 @@ export function planSteps(input: {
      * prices no cost of selling or collecting, so neither is written as 0.
      */
     const after = Math.max(0, ...changes.map((c) => c.startDay?.high ?? 0));
-    const sellDay: Span = { low: after, high: after };
+    /*
+     * A partner sells a clone of an opening, never the opening itself, so the
+     * members the owner sells directly start once every other change is in
+     * place; only the partner's clone waits for the partner (transfer test
+     * small-capital-expensive-opening, 2026-11-20: a 20-day plan the model
+     * reached 74.5% read "Collect payment" as after the deadline, because
+     * every sale was dated from a partner's 10-day setup).
+     */
+    const direct = Math.max(0, ...changes.filter((c) => c.dimension !== 'PARTNER').map((c) => c.startDay?.high ?? 0));
+    const sellDay: Span = { low: Math.min(direct, after), high: after };
     const named = namedMembers(r.best.members, input.titles);
     const sellOrder = steps.length + 1;
     steps.push({

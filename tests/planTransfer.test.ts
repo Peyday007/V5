@@ -276,6 +276,11 @@ describe('plan integrity holds across varied goals', () => {
       if (p.lead?.price.basis === 'UNPRICED' && p.steps.some((s) => s.arrangement?.key === p.lead!.arrangementKey)) {
         expect((p.unpriced ?? []).map((u) => u.population)).toContain(p.lead.population);
       }
+      // A plan the model reaches in most worlds collects inside the deadline: its own schedule never says the cash lands after it
+      // (2026-11-20, small-capital-expensive-opening: 74.5% reach beside a "Collect payment" dated after the 20 days).
+      if ((reach ?? 0) >= 0.5) {
+        for (const s of p.steps.filter((one) => one.label === 'Collect payment')) expect(s.stage?.unscheduled ?? null, `${v.id}: ${s.when}`).not.toBe('AFTER_DEADLINE');
+      }
       // No text a person reads carries an internal key.
       for (const t of texts(p)) expect(internalKeyIn(t), t.slice(0, 200)).toBeNull();
       // The one-company sector never leads as a population, and no lead is outside the goal's own scope.
