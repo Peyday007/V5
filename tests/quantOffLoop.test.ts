@@ -58,7 +58,7 @@ function referenceWorlds(problem: PortfolioProblem, worlds: number) {
   const picks = problem.activities.map((activity) => {
     const n = activity.cash.length;
     const order = Array.from({ length: n }, (_, i) => i).sort((a, b) => activity.cash[a]! - activity.cash[b]!);
-    const rng = makeRng(seed, seedOf(`activity:${activity.key}`));
+    const rng = makeRng(seed, seedOf(`activity:${activity.stream ?? activity.key}`));
     const rho = activity.riskGroup ? Math.min(0.95, Math.max(0, problem.riskCorrelation?.[activity.riskGroup] ?? 0.5)) : 0;
     const g = activity.riskGroup ? factor(activity.riskGroup) : null;
     const out = new Array<number>(worlds);
@@ -87,7 +87,15 @@ function referenceRefuse(problem: PortfolioProblem, members: number[]): string |
   }
   return null;
 }
-/* The integration branch's evaluator (86be921: KEPT, fixedCost, ceilingExempt, market volume, gates), verbatim. */
+/*
+ * The integration branch's evaluator (86be921: KEPT, fixedCost, ceilingExempt, market volume, gates), verbatim,
+ * with the spending ceiling funding only what it can (2026-11-20, `ceilingShare`): the semantics changed, and the
+ * reference changed with it, so the fast path is still held equal to the full loop.
+ */
+function referenceCeilingShare(ceiling: number | undefined, spend: number, used: number): number {
+  if (ceiling === undefined || !(spend > 0) || used + spend <= ceiling + 1e-9) return 1;
+  return Math.max(0, (ceiling - used) / spend);
+}
 function referenceEvaluateWorlds(problem: PortfolioProblem, members: number[], drawn: ReturnType<typeof referenceWorlds>, worlds: number): { reading: PortfolioReading; settled: number[]; allNeedsUp: number } {
   const { picks, down } = drawn;
   const keys = members.map((m) => problem.activities[m]!.key);
@@ -140,6 +148,7 @@ function referenceEvaluateWorlds(problem: PortfolioProblem, members: number[], d
     return { day, cash, early, inTime, spend, ceiling: act.ceilingExempt ? 0 : spend, deals: (a.deals?.[s] ?? 0) * f };
   };
   const undecided: Array<{ act: Activity; s: number; start: number; f: number; gate: string }> = [];
+  const ceiling = problem.spendCeiling;
   for (let i = 0; i < worlds; i++) {
     let capital = problem.startingCapital ?? Infinity;
     let total = 0;
@@ -150,6 +159,7 @@ function referenceEvaluateWorlds(problem: PortfolioProblem, members: number[], d
     let held = 0;
     let lastDay = 0;
     let proof = 0;
+    let bound = false;
     pending.length = 0;
     undecided.length = 0;
     gateOpen.clear();
@@ -175,7 +185,7 @@ function referenceEvaluateWorlds(problem: PortfolioProblem, members: number[], d
       if (entry.gate) {
         // A purchase after proof: some cash has come back, and what is left covers its first tranche.
         const g = entry.gate;
-        const open = proof >= 1 && g.tranche <= capital + 1e-9;
+        const open = proof >= 1 && g.tranche <= capital + 1e-9 && (ceiling === undefined || ceilingSpent + g.cost <= ceiling + 1e-9);
         gateOpen.set(g.id, open);
         if (open) {
           capital -= g.tranche;
@@ -197,11 +207,12 @@ function referenceEvaluateWorlds(problem: PortfolioProblem, members: number[], d
       held += need;
       // A needed resource is down in this world: nothing settles, and the capital tied up is not recovered.
       if ((act.needs ?? []).some((id) => down.get(id)![i] === 1)) continue;
-      const f = scale[m]!;
       const gate = act.gated?.gate;
-      if (gate !== undefined && !gateOpen.has(gate)) undecided.push({ act, s, start, f, gate });
-      // The hot path reads the samples in place: one combination is read over every world, hundreds of times a plan.
       const a = arraysOf(act, gate !== undefined && gateOpen.get(gate) === true);
+      const t = act.ceilingExempt || !a.spend ? 1 : referenceCeilingShare(ceiling, a.spend[s]! * scale[m]!, ceilingSpent);
+      if (t < 1) bound = true;
+      const f = scale[m]! * t;
+      if (gate !== undefined && !gateOpen.has(gate)) undecided.push({ act, s, start, f, gate });
       const day = start + a.days[s]!;
       const cash = a.cash[s]! * f;
       if (day > lastDay) lastDay = day;
@@ -223,7 +234,10 @@ function referenceEvaluateWorlds(problem: PortfolioProblem, members: number[], d
     for (const u of undecided) {
       if (!gateOpen.get(u.gate)) continue;
       const before = contribution(u.act, arraysOf(u.act, false), u.s, u.start, u.f);
-      const after = contribution(u.act, arraysOf(u.act, true), u.s, u.start, u.f);
+      const full = contribution(u.act, arraysOf(u.act, true), u.s, u.start, u.f);
+      const t = referenceCeilingShare(ceiling, full.ceiling, ceilingSpent - before.ceiling);
+      if (t < 1) bound = true;
+      const after = t < 1 ? contribution(u.act, arraysOf(u.act, true), u.s, u.start, u.f * t) : full;
       total += after.inTime - before.inTime;
       spent += after.spend - before.spend;
       ceilingSpent += after.ceiling - before.ceiling;
@@ -238,7 +252,7 @@ function referenceEvaluateWorlds(problem: PortfolioProblem, members: number[], d
     tied += held;
     cycled += lastDay;
     const overCeiling = problem.spendCeiling !== undefined && ceilingSpent > problem.spendCeiling + 1e-9;
-    if (overCeiling) over += 1;
+    if (overCeiling || bound) over += 1;
     if ((onKept ? keep : total) >= problem.target && !overCeiling) reached += 1;
     if (wasShort) short += 1;
   }

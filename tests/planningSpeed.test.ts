@@ -95,7 +95,8 @@ describe('the reconstruction moves a bounded set of openings', () => {
     const ms = performance.now() - t;
     expect(ms).toBeLessThan(20_000);
     expect(r.best.reach).toBeGreaterThanOrEqual(r.baseline.reach);
-    expect(r.best.changes.map((c) => c.label)).toContain('bundle');
+    // 'bundle' until 2026-11-20: its advantage was sales the spending ceiling could not fund; the ceiling now funds only what it can (`ceilingShare`), and the strongest move is another.
+    expect(r.best.changes.length).toBeGreaterThan(0);
   }, 120_000);
 });
 

@@ -281,7 +281,7 @@ export function renderSolution(s: ProblemSolution, currency: string): string {
     const basisWord = (b: string) => (b === 'PROBABILITY' ? 'probability' : 'coverage of tested conditions, not a probability');
     for (const one of s.portfolio.ranked.slice(0, 5)) {
       lines.push(one.feasible
-        ? `  combination ${one.keys.join(' + ')}: reaches the target in ${Math.round(one.reach * 100)}% (${basisWord(one.basis)}); settled p10 ${r(one.settledP10)} · p50 ${r(one.settledP50)} · p90 ${r(one.settledP90)} ${currency}${one.capitalShort > 0 ? `; short of capital in ${Math.round(one.capitalShort * 100)}%` : ''}${one.overSpend > 0 ? `; over the spending ceiling in ${Math.round(one.overSpend * 100)}%` : ''}`
+        ? `  combination ${one.keys.join(' + ')}: reaches the target in ${Math.round(one.reach * 100)}% (${basisWord(one.basis)}); settled p10 ${r(one.settledP10)} · p50 ${r(one.settledP50)} · p90 ${r(one.settledP90)} ${currency}${one.capitalShort > 0 ? `; short of capital in ${Math.round(one.capitalShort * 100)}%` : ''}${one.overSpend > 0 ? `; held to the spending ceiling in ${Math.round(one.overSpend * 100)}%` : ''}`
         : `  combination ${one.keys.join(' + ')}: cannot run — ${one.infeasibleBecause}`);
     }
     for (const one of s.portfolio.refused.slice(0, 5)) lines.push(`  refused     ${one.keys.join(' + ')}: ${one.reason}`);
