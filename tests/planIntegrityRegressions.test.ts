@@ -369,6 +369,23 @@ describe('8. a reconstructed plan: its scope in words, its sale and collection c
     applyProgram(base, program, { operators: buildOperators({ input, base }), operatorsFor: (t: string) => buildOperators({ input, base, target: t }), remaining: 10_000, reserve: reserve as never }).state.changes;
   const days = (l: number, h = l) => ({ startDay: { low: l, high: h } });
 
+  it('the checker flags a plan that brings in an opening and leaves the same one out', () => {
+    const bad = [
+      step(1, 'Bring in "Constructed: Property managers — Vendor-compliance spreadsheet for property mana"', { cost: 0, stage: 'OFFER', costSource: 'MODEL' }),
+      step(2, 'Leave out 1 opening(s) ("Constructed: Property managers — Vendor-compliance spreadsheet for property mana")', { cost: 0, stage: 'OFFER', costSource: 'MODEL' }),
+    ];
+    expect(rules(checked(bad))).toEqual(['NO_CONTRADICTORY_STEPS']);
+    // Leaving out a different opening is no contradiction.
+    expect(rules(checked([bad[0]!, step(2, 'Leave out 1 opening(s) ("Coachella 2026 resale tickets")', { cost: 0, stage: 'OFFER', costSource: 'MODEL' })]))).toEqual([]);
+  });
+
+  it('a program never leaves out an opening it brought in (transfer test 2026-11-20: "Bring in X" then "Leave out 1 opening(s) (X)")', () => {
+    const reserve = [{ ...GOAL_10K_OPENINGS[0]!, opportunity: { id: 'arr_r1', title: 'Constructed: Property managers — Vendor-compliance spreadsheet' } }] as ModelledOpportunity[];
+    const changes = moves([{ op: 'INCLUDE', key: 'arr_r1' }, { op: 'DROP', scope: 'id:arr_r1' }], reserve);
+    expect(changes.some((c) => c.label === 'include:arr_r1')).toBe(true);
+    expect(changes.some((c) => c.label.startsWith('drop@'))).toBe(false);
+  });
+
   it('the checker flags goal $5K\'s steps: the scope key, and "Sell and collect" costed 0 with nothing holding it', () => {
     const old = [
       step(1, 'Raise price ×4.00 on 4 opening(s) (ALL)', { cost: 0, stage: 'OFFER', costSource: 'MODEL' }),
