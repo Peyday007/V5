@@ -2562,6 +2562,8 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       beforeProof: target.capitalBeforeProofCents === null ? null : target.capitalBeforeProofCents / 100,
       perWeek: target.capitalPerWeekCents === null ? null : target.capitalPerWeekCents / 100,
       resources: target.resources,
+      // The owner's hours, which the gate's model and the arrangement screen read too: one reading of the goal's hours.
+      hours: target.hoursCeiling,
       measuredCapacity: (await instantly)[0],
       measuredRates: (await instantly)[1],
       /*

@@ -1025,6 +1025,50 @@ function sweepOf(result: ScenarioResult | null, key: string): StrategyReading['s
   };
 }
 
+/**
+ * Why a strategy breaks a limit in every tested case, named from the limit the
+ * engine counted rather than guessed as "the money or hours".
+ *
+ * Production 2026-11-21 (goal wst_7b4fcbb5f2384f31b6c3, "capital 3000 · hours
+ * 0"): every strategy, down to one $15 opening tying up $15, read "breaks the
+ * money or hours limit in every tested case". Money was never the cause. No
+ * found opening had anybody established to do its work, so its owner hours
+ * were swept 1 to 40 a deal (invariant 39: an unknown performer is read as
+ * the owner), and any chance of a deal put the plan over the owner's 0 hours
+ * in every world. The failure is correct; its reason was not: what is missing
+ * is a performer, a research or supply question, not a budget.
+ *
+ * Returns the reasons for the limits broken in every evaluated case, or the
+ * generic sentence when the run does not say which (a run recorded before the
+ * per-limit count, or limits broken in turns). Pure.
+ */
+export function everyCaseInfeasible(
+  violations: Record<string, number> | undefined,
+  evaluated: number,
+  members: Array<{ one: Pick<ModelledOpportunity, 'hours' | 'opportunity'>; deals: number }>,
+  target: { hoursCeiling: number | null; capitalCeilingCents: number | null; currency: string },
+): string[] {
+  const every = (key: string) => evaluated > 0 && (violations?.[key] ?? 0) >= evaluated;
+  const reasons: string[] = [];
+  if (every('hours')) {
+    const available = target.hoursCeiling === null ? 'the owner hours available, which nobody has stated' : `the ${target.hoursCeiling} owner hours this goal has`;
+    const unperformed = members.filter(({ one, deals }) => deals > 0 && (one.hours.value === null || one.hours.provenance === 'UNKNOWN'));
+    if (unperformed.length > 0) {
+      const named = unperformed.map(({ one }) => `"${one.opportunity.title.slice(0, 60)}"`).join(', ');
+      const ranges = [...new Set(unperformed.map(({ one }) => `${Math.round(one.hours.low ?? 0)}–${Math.round(one.hours.high ?? one.hours.low ?? 0)}`))].join(', ');
+      reasons.push(
+        `no performer is established for ${named}: nobody has established who does the work, so it is read as the owner's, ${ranges} owner hours a deal, against ${available} in every tested case — establish who performs it (Brain, a named supplier) or the hours it takes`,
+      );
+    } else {
+      reasons.push(`needs more owner hours than ${available} in every tested case`);
+    }
+  }
+  if (every('capital') && target.capitalCeilingCents !== null) {
+    reasons.push(`ties up more than the ${target.capitalCeilingCents / 100} ${target.currency} the owner said this goal may commit in every tested case`);
+  }
+  return reasons.length > 0 ? reasons : ['breaks the money or hours limit in every tested case'];
+}
+
 /** This Brain's record of earlier recommended goal plans: achieved in time, out of all that ended. */
 export async function measuredPlanChance(): Promise<PlanReading['measuredChance']> {
   /*
@@ -1913,7 +1957,10 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
         constraintsFailed.push(`no step can start with ${test} ${target.currency} or less tied up, which is all the owner allows before money comes in`);
       }
     }
-    if (sweep.infeasibleShare === 1) constraintsFailed.push('breaks the money or hours limit in every tested case');
+    if (sweep.infeasibleShare === 1) {
+      const run = result?.strategies.find((one) => one.key === spec.key);
+      constraintsFailed.push(...everyCaseInfeasible(run?.violations, run?.evaluated ?? 0, members, target));
+    }
     const cons = conservative(members, target);
     // Spread over the goal's life: the owner's weekly pace, over the weeks left.
     if (target.capitalPerWeekCents !== null && cons.exposure !== null && target.daysLeft !== null) {
