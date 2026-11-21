@@ -546,7 +546,7 @@ async function printPlan(reading: PlanReading): Promise<void> {
   // The adopted plan as an execution sequence (C-8).
   for (const s of reading.steps ?? []) {
     // Who performs it, never who waits: a payment or a signature is an approval, and is said as one.
-    const by = s.executor ? (s.executor.performedBy === 'CAPABILITY_MISSING' ? 'MISSING' : s.executor.performedBy) : s.owner;
+    const by = s.executor ? (s.executor.performedBy === 'CAPABILITY_MISSING' ? 'MISSING' : s.executor.performedBy === 'NOT_ESTABLISHED' ? 'UNSPECIFIED' : s.executor.performedBy) : s.owner;
     console.log(`  step ${String(s.order).padStart(2)}     [${by}] ${s.label}${s.startDay ? ` · day ${s.startDay.low}${s.startDay.high !== s.startDay.low ? `–${s.startDay.high}` : ''}` : ''} · cost ${s.cost === null ? 'not established' : Math.round(s.cost)} · ${s.basis}${s.dependsOn ? ` · after step ${s.dependsOn}` : ''}`);
     console.log(`    what      ${s.detail.slice(0, 240)}`);
     if (s.when) console.log(`    when      ${s.when}`);
@@ -570,6 +570,7 @@ async function printPlan(reading: PlanReading): Promise<void> {
     part('depends on', x.dependencies, 'nothing outside Brain');
     part('approvals', x.approvals, 'none');
     part('owner work', x.ownerWork, 'none');
+    part('unspecified', x.unestablished, 'nothing');
   }
   for (const d of reading.degraded ?? []) console.log(`  DEGRADED    ${d}`);
   console.log(`  pool        ${reading.pool.conclusion}: ${reading.pool.sentence}`);

@@ -132,9 +132,14 @@ export type UnscheduledReason = 'NO_MODEL_DAYS' | 'AFTER_DEADLINE' | 'TERMS_CONF
  * supplier or partner does the work, Brain doing its own part through a
  * declared capability; OWNER — the plan gives the work to the owner;
  * CAPABILITY_MISSING — no registered capability performs it, so it is
- * something to acquire, never something Brain is assumed to do.
+ * something to acquire, never something Brain is assumed to do;
+ * NOT_ESTABLISHED — the work itself is not specified (what the buyers pay for
+ * has not been named), so nobody can be said to perform it and nothing is
+ * read from the registry for it (production 2026-11-21, plan read
+ * 44874080198: "what homeowner pay for (not yet specified)" read as performed
+ * by Brain's deliverable renderers).
  */
-export type StepPerformer = 'BRAIN' | 'PROVIDER' | 'OWNER' | 'CAPABILITY_MISSING';
+export type StepPerformer = 'BRAIN' | 'PROVIDER' | 'OWNER' | 'CAPABILITY_MISSING' | 'NOT_ESTABLISHED';
 
 /** What the integrity check reads of a step's executor record. */
 export interface IntegrityExecutor {
@@ -376,6 +381,8 @@ export function planIntegrity(input: PlanIntegrityInput): { violations: PlanInte
         add('EXECUTABLE_BY_BRAIN', `step ${s.order} ("${clip(s.label, 60)}") gives the owner routine work (${e.operation.toLowerCase().replace(/_/g, ' ')}): name the Brain operation or provider that performs it, or acquire one`);
       } else if (e.performedBy === 'CAPABILITY_MISSING') {
         add('EXECUTABLE_BY_BRAIN', `step ${s.order} ("${clip(s.label, 60)}") needs what no registered capability performs (${e.acquire.join('; ') || e.operation}), and is not a step that acquires it`);
+      } else if (e.performedBy === 'NOT_ESTABLISHED') {
+        add('EXECUTABLE_BY_BRAIN', `step ${s.order} ("${clip(s.label, 60)}") is work nobody has specified, so no performer is established: specify it before the plan is accepted`);
       }
     }
   }
