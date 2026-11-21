@@ -51,6 +51,7 @@ import type { Estimate, EvidenceTier } from '../../domain/quant.ts';
 import type { VariableSpec } from '../../domain/scenario.ts';
 import { brainComparablePrices, capabilityPart, composeInvented, fittedDeliverable, provedDeliverable, inventionContext, nextInputQuestion, payerKey, TRANSFER_MATERIAL, type ConstructedArrangement, type InventedDesign } from './construct.ts';
 import { buyerPopulationName, namesABuyerPopulation } from '../../domain/industry.ts';
+import { unmodelledVerdict } from './unmodelledVerdict.ts';
 export { TRANSFER_MATERIAL };
 
 /**
@@ -2660,11 +2661,8 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
   if (included.length === 0) {
     // Nothing found can be modelled; the portfolio of estimates still says where research would move the goal.
     return {
-      ...refuse(
-        live.length === 0
-          ? 'There is no live opportunity in this project to build a plan from.'
-          : 'No live opportunity is far enough along to model: each one is evidence only or has no price anywhere.',
-      ),
+      // What was modelled instead, when constructed estimates were: the found openings are not the whole reading.
+      ...refuse(unmodelledVerdict(live.length, portfolio, target.currency)),
       portfolio,
       portfolioInput,
       estimates,
