@@ -2035,6 +2035,28 @@ export function readInboundCommitments(text: string): { paid: number; visitors: 
   return { paid, visitors, unit: match[2]!.toLowerCase() };
 }
 
+/**
+ * A measured win rate on priced offers, read from the card's `conversionRates`
+ * field: "6 wins from 40 quotes", "3 signed out of 18 proposals", "9 contracts
+ * awarded of 52 bids". Each trial is a priced offer an identified buyer
+ * received, and each success a buyer who accepted it — the same trial and the
+ * same outcome as an agreement per contact in Brain's own outreach record, so
+ * it is read as the opening's measured close on the same floor
+ * (LESSON_MIN_SAMPLE offers), its sample size carried in the measured
+ * interval rather than discarded. A visitor, a click or a group's members are
+ * not priced offers: those stay with `readInboundCommitments` and its visitor
+ * floor. Null when the text states no such count.
+ */
+export function readOfferWins(text: string): { won: number; offers: number; unit: string } | null {
+  const num = (raw: string) => Number(raw.replace(/,/g, ''));
+  const match = /(\d[\d,]*)\s+(?:[a-z-]+\s+){0,2}?(wins?|won|signed|accepted|awarded|contracts?|deals?|jobs?|orders?|sales?|bookings?|clients?|customers?)\b[^.;]*?\b(?:from|of|out of|among|on|across)\s+(\d[\d,]*)\s+(?:[a-z-]+\s+){0,2}?(quotes?|quotations?|proposals?|bids?|estimates?|tenders?|priced offers?|offers? sent|pitches)\b/i.exec(text);
+  if (!match) return null;
+  const won = num(match[1]!);
+  const offers = num(match[3]!);
+  if (!Number.isFinite(won) || !Number.isFinite(offers) || offers <= 0 || won > offers) return null;
+  return { won, offers, unit: match[4]!.toLowerCase() };
+}
+
 function kindToProvenance(fact: CashCardFact | null): { provenance: VariableProvenance; source: SourceRef | null } {
   if (!fact) return { provenance: 'UNKNOWN', source: null };
   if (fact.kind === 'EVIDENCE') return { provenance: 'EVIDENCE', source: fact.claimId ? { kind: 'CLAIM', ref: fact.claimId } : { kind: 'CARD_FACT', ref: fact.id } };
@@ -2099,6 +2121,29 @@ export function estimateInput(est: Estimate, scale = 1, what = ''): ModelInput {
   };
 }
 
+/**
+ * How far from every figure a price fact states the card's price may sit
+ * before the fact contradicts it rather than restating it.
+ */
+export const PRICE_CONTRADICTION_RATIO = 1.5;
+
+/**
+ * Whether the price fact contradicts the card's price: it states one or more
+ * whole-deal figures and the card's figure is more than
+ * PRICE_CONTRADICTION_RATIO away from all of them (planningReliability fam-07,
+ * ho-13: a card at $600 read as evidence while its source said $60). A fact
+ * that states no whole-deal figure, or one the card's figure agrees with,
+ * contradicts nothing. Returns the stated figure nearest the card.
+ */
+export function priceContradiction(cardMajor: number, factText: string, currency: string): { stated: number; text: string } | null {
+  const figures = readMoneyFigures(factText, currency).filter((one) => !one.perUnit).map((one) => one.cents / 100).filter((one) => one > 0);
+  if (figures.length === 0 || !(cardMajor > 0)) return null;
+  const agrees = figures.some((one) => cardMajor <= one * PRICE_CONTRADICTION_RATIO && cardMajor * PRICE_CONTRADICTION_RATIO >= one);
+  if (agrees) return null;
+  const nearest = figures.reduce((best, one) => (Math.abs(Math.log(one / cardMajor)) < Math.abs(Math.log(best / cardMajor)) ? one : best));
+  return { stated: nearest, text: `"${factText.slice(0, 120)}"` };
+}
+
 /** Wilson score interval for a rate measured as successes out of trials. */
 export function wilson(successes: number, trials: number, z = 1.96): { low: number; high: number } {
   if (trials <= 0) return { low: 0, high: 1 };
@@ -2132,8 +2177,22 @@ export async function modelOpportunity(
   // Price: the column, else the low end of a published revenue range.
   let price: ModelInput | null = null;
   if (opportunity.priceCents !== null && opportunity.priceCents > 0) {
-    const p = kindToProvenance(fact('price'));
-    price = known(opportunity.priceCents / 100, p.provenance === 'UNKNOWN' ? 'ASSUMPTION' : p.provenance, p.source ?? ref, 'the price on the card');
+    const priceFact = fact('price');
+    const p = kindToProvenance(priceFact);
+    const card = opportunity.priceCents / 100;
+    const contradiction = priceFact ? priceContradiction(card, priceFact.value, currency) : null;
+    price = contradiction
+      ? {
+          // The card's figure is not evidence when the price fact's own figure contradicts it: the
+          // price is contested, and the plan reads it at its lower end until somebody settles it.
+          value: null,
+          low: Math.min(card, contradiction.stated),
+          high: Math.max(card, contradiction.stated),
+          provenance: 'ASSUMPTION',
+          source: p.source ?? ref,
+          note: `contested: the card says ${card}, but the price fact states ${contradiction.text}; settle the price before planning on it`,
+        }
+      : known(card, p.provenance === 'UNKNOWN' ? 'ASSUMPTION' : p.provenance, p.source ?? ref, 'the price on the card');
   } else {
     const range = fact('revenueRange');
     const figures = range ? readMoneyFigures(range.value, currency).filter((one) => !one.perUnit) : [];
@@ -2188,8 +2247,18 @@ export async function modelOpportunity(
   // Below the directional floor the inbound count is an anecdote: it never becomes a measured rate, and the
   // close falls back to Brain's own record or stays unknown (invariant 39), never a favourable reading.
   const inboundMeasured = inbound !== null && inbound.visitors >= INBOUND_MIN_VISITORS;
+  // A win rate on priced offers is a per-offer measurement, read on the floor Brain's own record uses.
+  const offerWins = !inboundMeasured && inboundFact && inboundFact.kind !== 'RECOMMENDATION' ? readOfferWins(inboundFact.value) : null;
+  const offersMeasured = offerWins !== null && offerWins.offers >= LESSON_MIN_SAMPLE;
   let close: ModelInput;
-  if (inbound && inboundMeasured) {
+  if (offerWins && offersMeasured) {
+    close = {
+      ...measuredRateInput({ trials: offerWins.offers, low: offerWins.won, high: offerWins.won }),
+      provenance: 'HISTORICAL',
+      source: kindToProvenance(inboundFact).source,
+      note: `measured on this offer's own sales: ${offerWins.won} accepted of ${offerWins.offers} ${offerWins.unit}`,
+    };
+  } else if (inbound && inboundMeasured) {
     // Paid commitments per unique visitor are this opening's own measured close: no outreach, no reply step.
     close = {
       ...measuredRateInput({ trials: inbound.visitors, low: inbound.paid, high: inbound.paid }),
@@ -2210,7 +2279,9 @@ export async function modelOpportunity(
     close = inferOr(knowledge, 'close', opportunity, now, unknown(0.02, 0.5, 'no buyer has been asked yet; swept from 2% to 50% of buyers agreeing'));
   }
   // Agreements per contact (or paid commitments per visitor) already include whether the person replied.
-  const respond: ModelInput = inbound && inboundMeasured
+  const respond: ModelInput = offerWins && offersMeasured
+    ? known(1, 'HISTORICAL', close.source, 'the measured rate is accepted offers per priced offer, which includes replying')
+    : inbound && inboundMeasured
     ? known(1, 'HISTORICAL', close.source, 'the measured rate is paid commitments per unique visitor, which includes showing interest')
     : lesson
     ? known(1, 'HISTORICAL', close.source, 'the measured rate is agreements per contact, which includes replying')
@@ -2811,13 +2882,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
   // one-off needs its one buyer; a repeatable play offers to OUTREACH_MULTIPLE
   // times as many buyers as the deals still needed — a choice the strategy
   // makes and states, not an assumption about how many will say yes.
-  const dealsFor = (one: ModelledOpportunity) => {
-    const gap = Math.max(0, target.remainingCents / 100 - one.agreedValue);
-    if (gap === 0) return 0;
-    if (!one.repeatable) return one.agreedValue > 0 ? 0 : 1;
-    const price = one.price.value ?? one.price.low ?? 1;
-    return Math.min(MAX_BUYERS_OFFERED, Math.ceil(gap / Math.max(1, price)) * OUTREACH_MULTIPLE);
-  };
+  const dealsFor = (one: ModelledOpportunity) => dealsForGoal(one, target.remainingCents / 100);
   const none = () => Object.fromEntries(included.map((one) => [`o${one.index}_n`, 0]));
   const add = (spec: StrategySpec) => {
     // Two strategies that ask the same thing of every opening are one strategy.
@@ -2849,7 +2914,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
         set[`o${one.index}_n`] = 1;
         gap -= price;
       } else {
-        set[`o${one.index}_n`] = Math.min(MAX_BUYERS_OFFERED, Math.ceil(gap / Math.max(1, price)) * OUTREACH_MULTIPLE);
+        set[`o${one.index}_n`] = buyersToOffer(one, gap);
         gap = 0;
       }
       used.push(one);
@@ -2912,6 +2977,69 @@ export function dealsForGoal(one: ModelledOpportunity, remainingMajor: number): 
   const gap = Math.max(0, remainingMajor - one.agreedValue);
   if (gap === 0) return 0;
   if (!one.repeatable) return one.agreedValue > 0 ? 0 : 1;
+  return buyersToOffer(one, gap);
+}
+
+/**
+ * How many buyers a repeatable play offers to for `gap` of money still needed.
+ *
+ * With a measured close rate the number follows from it: the deals needed
+ * divided by the cautious end of the measured rate (the same end the plan's
+ * conservative figure reads), and never fewer than the fixed multiple below, so a plan whose evidence covers the target is
+ * never refused because it asked a fixed multiple of the buyers it needs
+ * (planningReliability fam-01, ho-01, ho-06, ho-11: a measured 10% against a
+ * fixed 4× never reached the target with 400 buyers evidenced). It is capped
+ * where the volume research established is exhausted — volume ÷ the cautious
+ * close, past which another buyer asked wins nothing more (a cap of the volume
+ * itself confused buyers asked with deals won: 85 deliveries a month at 7%
+ * would be offered to 85 buyers and win 6) — or, with no established volume,
+ * by the most a strategy ever offers. It never falls below the fixed multiple,
+ * so a market too small for the deals needed still reads as too small. With no measured
+ * rate the strategy offers OUTREACH_MULTIPLE times the deals needed: a choice
+ * it makes and states, never an assumption about how many will say yes.
+ */
+export function buyersToOffer(one: Pick<ModelledOpportunity, 'price' | 'close' | 'volume' | 'repeatable'>, gap: number): number {
+  if (gap <= 0) return 0;
   const price = one.price.value ?? one.price.low ?? 1;
-  return Math.min(MAX_BUYERS_OFFERED, Math.ceil(gap / Math.max(1, price)) * OUTREACH_MULTIPLE);
+  const needed = Math.ceil(gap / Math.max(1, price));
+  const fixed = Math.min(MAX_BUYERS_OFFERED, needed * OUTREACH_MULTIPLE);
+  const close = measuredClose(one);
+  if (close === null) return fixed;
+  const want = Math.ceil(needed / Math.min(1, close) - 1e-9);
+  // The market's deals bound what offering more can win: past volume ÷ close, another buyer asked adds nothing.
+  const volume = volumeEstablished(one) && one.volume.value !== null ? Math.floor(one.volume.value) : null;
+  const cap = volume === null ? MAX_BUYERS_OFFERED : Math.ceil(volume / Math.min(1, close) - 1e-9);
+  // Never fewer than the fixed multiple: the volume link reads the deals a strategy needs back from what it offers.
+  return Math.max(fixed, Math.min(cap, want));
+}
+
+/**
+ * The cautious end of a measured (HISTORICAL) close rate, or null when the
+ * close is not measured or not positive. The one reading both directions of
+ * the offers rule use: `buyersToOffer` sizes offers from it and
+ * `dealsFromOffers` reads the deals back from it, so the two cannot drift.
+ */
+export function measuredClose(one: Pick<ModelledOpportunity, 'close'>): number | null {
+  if (one.close.provenance !== 'HISTORICAL') return null;
+  const close = one.close.value !== null ? Math.min(one.close.value, one.close.low ?? one.close.value) : one.close.low;
+  return close !== null && close > 0 ? close : null;
+}
+
+/**
+ * The deals a repeatable play needs, read back from the buyers it offers to —
+ * the inverse of `buyersToOffer` (planningReliability, 2026-11-21). Offers
+ * follow the measured close when it is under 1 / OUTREACH_MULTIPLE, so the
+ * deals read back are buyers × that close; otherwise the fixed multiple
+ * governed and they are buyers ÷ OUTREACH_MULTIPLE. With no measured close,
+ * buyers ÷ OUTREACH_MULTIPLE. Before this the plan read buyers ÷ 4 whatever
+ * the close, so offers sized to a measured 10% read as 2.5× the deals they
+ * win. Where offers were capped at the volume, the deals read back are the
+ * most the market holds, and the conservative figure says the target is
+ * short. Pure.
+ */
+export function dealsFromOffers(one: Pick<ModelledOpportunity, 'close'>, buyers: number): number {
+  if (!(buyers > 0)) return 0;
+  const close = measuredClose(one);
+  const rate = close !== null ? Math.min(1 / OUTREACH_MULTIPLE, close) : 1 / OUTREACH_MULTIPLE;
+  return Math.ceil(buyers * rate - 1e-9);
 }

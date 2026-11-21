@@ -17,6 +17,14 @@
  *     the smallest such count is taken;
  *   * an order rate is a number of orders, sales or jobs stated per week,
  *     month or year;
+ *   * a rate multiplies by a count only when the text says each counted unit
+ *     does that rate: the units are the subject of the rate ("35 pharmacies
+ *     ship 20 deliveries a week"), or it is distributed over them ("20 a week
+ *     from each of 35 pharmacies", "20 a week per pharmacy across 35
+ *     pharmacies"). A rate stated over a population ("700 a week across 35
+ *     pharmacies"), a collective subject ("together", "combined", "in
+ *     total") or a rate belonging to someone else ("35 pharmacies use a
+ *     courier making 20 a week") is a total and is never multiplied;
  *   * a frequency word (weekly, monthly, quarterly, yearly) or "N times a
  *     month" says how often one buyer buys, and with none stated each buyer is
  *     credited one purchase in the window — never more.
@@ -30,7 +38,48 @@ const BUYER_WORDS =
 
 const COUNT = '(\\d{1,3}(?:,\\d{3})+|\\d+)';
 const BUYER_COUNT = new RegExp(`(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z-]+\\s+){0,4}?(?:${BUYER_WORDS})\\b`, 'gi');
-const ORDER_RATE = new RegExp(`(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z-]+\\s+){0,2}?(?:orders|sales|purchases|transactions|jobs|deliveries|bookings|projects|contracts)\\s+(?:a|per|each|every)\\s+(day|week|month|year)\\b`, 'gi');
+const RATE_NOUNS = 'orders|sales|purchases|transactions|jobs|deliveries|bookings|projects|contracts';
+const PER = '(?:a|per|each|every)';
+const PERIODS = '(day|week|month|year)';
+/** "<count> [≤2 words] <orders> a/per <period>": a stated rate; group 1 the count, 2 the period. */
+const RATE_PHRASE = `(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z-]+\\s+){0,2}?(?:${RATE_NOUNS})\\s+${PER}\\s+${PERIODS}\\b`;
+const ORDER_RATE = new RegExp(RATE_PHRASE, 'gi');
+
+/*
+ * The forms in which a rate is stated per counted unit. Each is narrow on
+ * purpose: a phrasing none of them recognizes keeps the conservative reading
+ * (the rate as a total), because a multiplier the text does not state would
+ * invent volume.
+ */
+const ADVERBS = 'each|typically|usually|currently|regularly|routinely|already|now|also|normally|generally|collectively|together|jointly|combined|between them';
+const APPROX = '(?:about|around|roughly|approximately|nearly|some|an average of|on average)';
+/**
+ * Units as the subject of the rate: "35 independent pharmacies [in the
+ * county] [each] ship [about] 20 deliveries a week [each]". Groups: 1 the
+ * unit count, 2 an adverb, 3 the verb, 4 the rate count, 5 the period, 6 a
+ * trailing qualifier.
+ */
+const SUBJECT_RATE = new RegExp(
+  `(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z-]+\\s+){0,4}?(?:${BUYER_WORDS})` +
+    `(?:\\s+(?:in|within|on|of|around|near|throughout|listed|registered|licensed)\\s+(?:[A-Za-z-]+\\s+){0,1}?[A-Za-z-]+)?` +
+    `\\s+(?:(${ADVERBS})\\s+)?([A-Za-z-]+)\\s+(?:${APPROX}\\s+)?${COUNT}\\s+(?:[A-Za-z-]+\\s+){0,2}?(?:${RATE_NOUNS})\\s+${PER}\\s+${PERIODS}\\b` +
+    `(\\s+(?:each|apiece|between them|in total|combined|together|altogether|in all|overall))?`,
+  'gi',
+);
+/** Words that, standing where the verb is, make the subject's rate ambiguous or someone else's. */
+const NOT_A_VERB = /^(?:and|or|but|plus|with|without|of|to|for|from|in|at|on|by|across|among|between|over|under|than|that|which|who|whose|where|while|whereas|are|is|were|was|be|been|use|using|hire|hiring|share|sharing|need|want|via|through|per|up|vs|versus|like|including)$/i;
+const COLLECTIVE = /^(?:collectively|together|jointly|combined|between them|in total|altogether|in all|overall)$/i;
+/** A rate distributed over named units: "20 deliveries a week from each of (the) 35 pharmacies". */
+const EACH_OF_RATE = new RegExp(
+  `${RATE_PHRASE}\\s+(?:(?:at|from|for|in|by|to|with)\\s+)?each\\s+of\\s+(?:the\\s+|their\\s+|its\\s+|our\\s+|these\\s+|those\\s+)?${COUNT}\\s+(?:[A-Za-z-]+\\s+){0,4}?(?:${BUYER_WORDS})\\b`,
+  'gi',
+);
+/** A rate per unit, with the period after or before the unit: "20 deliveries a week per pharmacy", "20 deliveries per pharmacy a week". */
+const PER_UNIT_AFTER = new RegExp(`${RATE_PHRASE}\\s+(?:per|from each|at each|for each|in each)\\s+([A-Za-z-]+)`, 'gi');
+const PER_UNIT_BEFORE = new RegExp(
+  `(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z-]+\\s+){0,2}?(?:${RATE_NOUNS})\\s+(?:per|from each|at each|for each|in each)\\s+([A-Za-z-]+)\\s+${PER}\\s+${PERIODS}\\b`,
+  'gi',
+);
 const TIMES = /(\d+)\s*(?:times|x)\s+(?:a|per|each|every)\s+(week|month|quarter|year)\b/i;
 const PERIOD_DAYS: Record<string, number> = { day: 1, week: 7, month: 30, quarter: 91, year: 365 };
 const WORD_DAYS: Array<[RegExp, number]> = [
@@ -56,17 +105,89 @@ export interface VolumeReading {
   basis: string;
 }
 
+interface StatedRate {
+  /** Orders a day across everything the rate covers. */
+  perDay: number;
+  /** The counted units the rate was multiplied by, or null for a rate stated as a total. */
+  units: number | null;
+  /** The rate one unit does, and its period, for the basis. */
+  each: number;
+  period: string;
+}
+
+/** The sentence around a position: the text between the nearest sentence breaks. */
+function sentenceAt(text: string, at: number): { start: number; text: string } {
+  const before = text.slice(0, at);
+  const start = Math.max(before.lastIndexOf('. '), before.lastIndexOf('; '), before.lastIndexOf('! '), before.lastIndexOf('? '), before.lastIndexOf('\n')) + 1;
+  const rest = text.slice(at).search(/[.;!?](?:\s|$)|\n/);
+  return { start, text: text.slice(start, rest < 0 ? text.length : at + rest) };
+}
+
+/** Every rate the text states, multiplied by a count only where each counted unit is said to do it. */
+function readRates(text: string): StatedRate[] {
+  // Keyed by where the rate's own count stands, so a rate read per unit replaces its plain reading.
+  const byPosition = new Map<number, StatedRate>();
+  const put = (at: number, rate: StatedRate) => {
+    if (rate.each > 0 && rate.perDay > 0) byPosition.set(at, rate);
+  };
+  const plain = (n: number, period: string, units: number | null): StatedRate => ({
+    perDay: (n * (units ?? 1)) / PERIOD_DAYS[period]!,
+    units,
+    each: n,
+    period,
+  });
+
+  for (const m of text.matchAll(ORDER_RATE)) put(m.index ?? 0, plain(toInt(m[1]!), m[2]!.toLowerCase(), null));
+
+  // A rate per unit, with no count of units stated in its sentence, is one unit's rate: never a total over guessed units.
+  const perUnit = (m: RegExpMatchArray, n: number, period: string, unitWord: string) => {
+    if (/^(?:day|week|month|quarter|year)s?$/i.test(unitWord)) return;
+    const at = m.index ?? 0;
+    const sentence = sentenceAt(text, at);
+    const counts = [...sentence.text.matchAll(BUYER_COUNT)]
+      .filter((c) => sentence.start + (c.index ?? 0) !== at)
+      .map((c) => toInt(c[1]!))
+      .filter((c) => c > 0 && c < 50_000_000);
+    put(at, plain(n, period, counts.length > 0 ? Math.min(...counts) : null));
+  };
+  for (const m of text.matchAll(PER_UNIT_AFTER)) perUnit(m, toInt(m[1]!), m[2]!.toLowerCase(), m[3]!);
+  for (const m of text.matchAll(PER_UNIT_BEFORE)) perUnit(m, toInt(m[1]!), m[3]!.toLowerCase(), m[2]!);
+
+  for (const m of text.matchAll(EACH_OF_RATE)) put(m.index ?? 0, plain(toInt(m[1]!), m[2]!.toLowerCase(), toInt(m[3]!)));
+
+  for (const m of text.matchAll(SUBJECT_RATE)) {
+    const [, unitText, adverb, verb, rateText, period, trailing] = m;
+    if (NOT_A_VERB.test(verb!) || (adverb && COLLECTIVE.test(adverb)) || (trailing && COLLECTIVE.test(trailing.trim()))) continue;
+    const units = toInt(unitText!);
+    if (!(units > 0 && units < 50_000_000)) continue;
+    // Nothing after the rate's count holds a digit, so its last occurrence is the rate's own position.
+    const rateAt = (m.index ?? 0) + m[0]!.lastIndexOf(rateText!);
+    put(rateAt, plain(toInt(rateText!), period!.toLowerCase(), units));
+  }
+  return [...byPosition.values()];
+}
+
 /** Read the deals a market can take inside `windowDays`, or null when no number is stated. */
 export function readVolume(text: string, windowDays: number): VolumeReading | null {
   if (!text || !(windowDays > 0)) return null;
   const window = Math.max(1, Math.floor(windowDays));
 
-  // An order rate states the volume directly.
-  const rates = [...text.matchAll(ORDER_RATE)].map((m) => ({ n: toInt(m[1]!), per: PERIOD_DAYS[m[2]!.toLowerCase()]! })).filter((one) => one.n > 0);
+  // An order rate states the volume directly; the slowest one stated is taken.
+  const rates = readRates(text);
   if (rates.length > 0) {
-    const slowest = rates.map((one) => one.n / one.per).sort((a, b) => a - b)[0]!;
-    const deals = Math.floor(slowest * window);
-    if (deals >= 1) return { deals, buyers: null, everyDays: null, basis: `about ${Math.round(slowest * 30)} orders a month are stated, so ${deals} in ${window} days` };
+    const slowest = rates.sort((a, b) => a.perDay - b.perDay)[0]!;
+    const deals = Math.floor(slowest.perDay * window);
+    if (deals >= 1) {
+      const monthly = Math.round(slowest.perDay * 30);
+      return slowest.units === null
+        ? { deals, buyers: null, everyDays: null, basis: `about ${monthly} orders a month are stated, so ${deals} in ${window} days` }
+        : {
+            deals,
+            buyers: slowest.units,
+            everyDays: null,
+            basis: `${slowest.units} units each doing ${slowest.each} a ${slowest.period} are stated, about ${monthly} orders a month, so ${deals} in ${window} days`,
+          };
+    }
   }
 
   const counts = [...text.matchAll(BUYER_COUNT)]
