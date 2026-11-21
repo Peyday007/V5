@@ -13064,6 +13064,29 @@ The rules it introduced:
   SUPPLIER, COST, CUSTOMER and REGULATION read `NOT_DETECTED` until a row
   records a market-wide change. They are covered per opportunity as `FIELD:`
   keys. Nothing pretends to detect them.
+- **A watched page makes one named key detectable, and its change is never a
+  fact (World Watch, 2026-11-21).** The owner asked for changedetection.io.
+  Brain does not run it: every part it would add already exists here. The
+  conditional re-fetch is `feeds/access.ts`'s `conditionalFetcher` (ETag,
+  Last-Modified, content hash → NOT_MODIFIED). The destination guard is
+  `checkDestination`. The per-key change ledger and its fan-out is this
+  section's own. A second service would add a Fly app, a webhook, a shared
+  secret and a second record of what changed, all to say what one table says
+  (rule 6). A `watched_sources` row (`feeds/watch.ts`, `npx tsx
+  server/services/feeds/watchCli.ts add …`) names its URL, why it is watched,
+  an optional blocker key and its validators. The cash tick reads each due
+  page at most hourly. A change is measured on the normalised text, never the
+  markup. A changed text is one append-only `source_changes` row: URL, both
+  hashes, both read times and a short excerpt. The same transaction holds one
+  re-read idea for the research pipeline, which passes through the claim
+  gate, and one `WATCHED_SOURCE_CHANGED` event. The read is applied only if it
+  is newer than the source's position and started from the hash it read, in
+  the statement that applies it. A late or replayed read therefore lands
+  nothing (invariant 32). Where the watch names a key,
+  `detectWatchedSources` hands the row to the fan-out as that key's change
+  (`<key>@<change id>`). That key alone reads MARKER
+  (`blockerDetectionForKey`). The kind stays NOT_DETECTED, and nothing
+  writes a claim, a card fact or a construction fact.
 - **There is no lifetime limit on reconsideration.** A change ref can trigger
   a given opportunity once (`cash_reconsideration_triggers`). A second,
   distinct change triggers it again. Real changes bound it; no count does.

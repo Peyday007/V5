@@ -546,6 +546,8 @@ export const EVENT_TYPES = [
   'GOAL_PLAN_DEGRADED',
   // A goal with no cash target was planned: strategies, critique, revision, verdict (goals/objectivePlan.ts).
   'GOAL_OBJECTIVE_PLAN_READ',
+  // A watched page's text changed: a change row and a re-read were recorded, never a fact (feeds/watch.ts, §65).
+  'WATCHED_SOURCE_CHANGED',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
@@ -8243,6 +8245,30 @@ export const BLOCKER_DETECTION: Readonly<Record<BlockerKind, BlockerDefinition>>
   },
 });
 
+/**
+ * How one *key* is noticed, where that differs from its kind.
+ *
+ * SUPPLIER, COST, CUSTOMER and REGULATION stay `NOT_DETECTED` as kinds: no row
+ * records a market-wide change for them in general. A key a watched source
+ * names (`watched_sources.blocker_key`) is the exception, and only that key:
+ * Brain re-reads the page with a conditional fetch and a changed text is a
+ * `source_changes` row the reconsideration pass consumes. The change is a
+ * reason to look again, never the fact itself, so `automatic` stays false.
+ */
+export const WATCHED_SOURCE_DETECTION: BlockerDefinition = Object.freeze({
+  detection: 'MARKER',
+  argument: 'as the kind',
+  satisfiedWhen: 'a watched page that names this key changed; the change is re-read through the claim gate',
+  source: 'source_changes rows from a watched source naming this key (services/feeds/watch.ts)',
+  automatic: false,
+});
+
+/** The definition that applies to one key, given the keys watched sources name. Pure. */
+export function blockerDetectionForKey(key: BlockerKey, watchedKeys: ReadonlySet<string>): BlockerDefinition {
+  const definition = BLOCKER_DETECTION[blockerKindOf(key)];
+  return definition.detection === 'NOT_DETECTED' && watchedKeys.has(key) ? WATCHED_SOURCE_DETECTION : definition;
+}
+
 /** The argument after the colon: printable, bounded, and with no whitespace. */
 const BLOCKER_ARGUMENT = /^[A-Za-z0-9_.:@/+\-]{1,200}$/;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}(T[0-9:.]+(Z|[+-]\d{2}:\d{2})?)?$/;
@@ -8376,6 +8402,87 @@ export interface CashChangeWatermark {
   /** A content marker where position alone cannot say whether anything moved. */
   marker: string | null;
   updatedAt: string;
+}
+
+/* --------------------------------------------------------------------------
+ * Watched sources (§65): a page re-read on a schedule because something waits
+ * on it, and the append-only changes seen on it. A change is never a fact.
+ * ------------------------------------------------------------------------ */
+
+export interface WatchedSourceRow {
+  id: string;
+  project_id: string;
+  url: string;
+  reason: string;
+  blocker_key: string | null;
+  check_interval_minutes: number;
+  etag: string | null;
+  last_modified: string | null;
+  body_hash: string | null;
+  text_hash: string | null;
+  last_text: string | null;
+  fetched_at: string | null;
+  next_check_at: string;
+  last_error: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WatchedSource {
+  id: string;
+  projectId: string;
+  url: string;
+  /** Why it is watched, in words. */
+  reason: string;
+  /** The shared fact a change on it may reconsider, when the watch names one. */
+  blockerKey: BlockerKey | null;
+  checkIntervalMinutes: number;
+  etag: string | null;
+  lastModified: string | null;
+  /** The raw body's hash, for the conditional fetch's own short-circuit. */
+  bodyHash: string | null;
+  /** The normalised text's hash: what a change is measured on. */
+  textHash: string | null;
+  lastText: string | null;
+  /** The source's position: the newest read applied. Null before the first. */
+  fetchedAt: string | null;
+  nextCheckAt: string;
+  lastError: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SourceChangeRow {
+  id: string;
+  project_id: string;
+  watched_source_id: string;
+  url: string;
+  blocker_key: string | null;
+  old_hash: string;
+  new_hash: string;
+  previous_fetched_at: string;
+  fetched_at: string;
+  diff_excerpt: string;
+  reread_candidate_id: string | null;
+  created_at: string;
+}
+
+export interface SourceChange {
+  id: string;
+  projectId: string;
+  watchedSourceId: string;
+  url: string;
+  blockerKey: BlockerKey | null;
+  oldHash: string;
+  newHash: string;
+  previousFetchedAt: string;
+  fetchedAt: string;
+  diffExcerpt: string;
+  /** The idea that re-reads the source through the research pipeline and the claim gate. */
+  rereadCandidateId: string | null;
+  createdAt: string;
 }
 
 /* --------------------------------------------------------------------------

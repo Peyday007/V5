@@ -19,10 +19,12 @@ import { getDb } from '../../db/database.ts';
 import { cashNow } from '../../repos/cashMode.ts';
 import { listOpportunities, RECONSIDERABLE_FROM } from '../../repos/cashPortfolio.ts';
 import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
+import { watchedBlockerKeys } from '../../repos/watchedSources.ts';
 import { parseJson } from '../../repos/util.ts';
 import {
   BLOCKER_DETECTION,
   STANDING_KINDS,
+  blockerDetectionForKey,
   blockerKindOf,
   isBlockerKind,
   parseBlockerKey,
@@ -142,7 +144,10 @@ const DETECTION_WORDS: Record<string, string> = {
   NOT_DETECTED: 'Nothing notices a change to this yet; a person has to say so.',
 };
 
-function describeKey(key: string): Pick<BlockerGroup, 'kind' | 'noticed' | 'satisfiedWhen' | 'automatic'> {
+function describeKey(
+  key: string,
+  watchedKeys: ReadonlySet<string>,
+): Pick<BlockerGroup, 'kind' | 'noticed' | 'satisfiedWhen' | 'automatic'> {
   if (key === 'SLOT') {
     return {
       kind: 'SLOT',
@@ -164,7 +169,8 @@ function describeKey(key: string): Pick<BlockerGroup, 'kind' | 'noticed' | 'sati
   if (!isBlockerKind(kind)) {
     return { kind, noticed: 'An unrecognised key: nothing notices it.', satisfiedWhen: 'unknown', automatic: null };
   }
-  const definition = BLOCKER_DETECTION[kind];
+  // A key a watched source names is noticed even where its kind is not (§65).
+  const definition = parsed ? blockerDetectionForKey(parsed, watchedKeys) : BLOCKER_DETECTION[kind];
   return {
     kind,
     noticed: DETECTION_WORDS[definition.detection] ?? definition.detection,
@@ -176,6 +182,7 @@ function describeKey(key: string): Pick<BlockerGroup, 'kind' | 'noticed' | 'sati
 function group(
   entries: readonly { opportunityId: string; keys: readonly string[] }[],
   verb: (count: number, key: string) => string,
+  watchedKeys: ReadonlySet<string>,
 ): BlockerGroup[] {
   const byKey = new Map<string, string[]>();
   for (const entry of entries) {
@@ -189,7 +196,7 @@ function group(
       count: ids.length,
       opportunityIds: [...ids].sort(),
       sentence: verb(ids.length, key),
-      ...describeKey(key),
+      ...describeKey(key, watchedKeys),
     }))
     .sort((a, b) => b.count - a.count || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 }
@@ -201,16 +208,19 @@ function group(
  */
 export function blockerGroups(
   entries: readonly { opportunityId: string; kind: StandingKind | null; keys: readonly string[] }[],
+  watchedKeys: ReadonlySet<string> = new Set(),
 ): { waitingOn: BlockerGroup[]; reopenOn: BlockerGroup[] } {
   return {
     waitingOn: group(
       entries.filter((one) => one.kind === 'WAITING'),
       (count, key) => `${count} ${count === 1 ? 'opening waits' : 'openings wait'} on ${key}.`,
+      watchedKeys,
     ),
     reopenOn: group(
       entries.filter((one) => one.kind === 'DORMANT'),
       (count, key) =>
         `${count} stopped ${count === 1 ? 'opening reopens' : 'openings reopen'} for consideration when ${key} changes.`,
+      watchedKeys,
     ),
   };
 }
@@ -893,7 +903,7 @@ export async function sharedStandingSurface(input: {
   return {
     byKind,
     withheld,
-    ...blockerGroups(visible),
+    ...blockerGroups(visible, await watchedBlockerKeys(input.projectId)),
     reconsidered: await recentReconsiderations({
       projectId: input.projectId,
       opportunities: input.opportunities,
@@ -955,7 +965,7 @@ export async function ownerStandingSurface(input: {
     }
   }
   return {
-    ...blockerGroups(entries),
+    ...blockerGroups(entries, await watchedBlockerKeys(input.projectId)),
     reconsidered: await recentReconsiderations({
       projectId: input.projectId,
       opportunities: input.opportunities,
