@@ -69,3 +69,26 @@ Live in production at a0ee88f1: #1158 #1163 #1164 #1166 #1167 #1169 #1170 #1171 
 **Forecast:** an accepted 90% plan by 19:06Z is unlikely without measured buyer facts. Engineering will deliver honest, executable candidates with their gaps named.
 
 **Staffing:** 2 workers, both on the critical path. No idle workers, and no paid compute is warranted (the binding factor is evidence).
+
+### 2026-11-21 13:07Z — hour-18 checkpoint (deadline 19:06Z)
+
+**Completed and verified on production:**
+- #1204–#1207 are live at 5618afb0 (Deploy 44885799952; release check 44889775679 reads GOALS: OK).
+- #1206: the plan now reads the quant engine's reconstructed supply cost as its direct cost. It used to be read only by construct.ts's stress risk. It enters as an ASSUMPTION ("reconstructed, not established") unless the evidence is DIRECT and sufficient. Demonstration (hood-vent cleaning): direct cost moved from a 0–769.27 sweep to COMPARABLE p10 174.94 / p50 301.99 / p90 539.47.
+- #1207: construction takes evidenced deliverables. Where no evidence names one, it asks research what the buyers pay for, and an unspecified design ranks after a specified one.
+- Plan reads on 5618afb0:
+
+  | Goal | Run | Reach | p50 | Change |
+  |---|---|---|---|---|
+  | $10K | 44891151218 | 9.9% (from 0%) | $4,029 | Reconstructed plan: a year-end client-mailing design plus 21 pre-warmed accounts ($370). |
+  | C | 44890873692 | 0% | $41,099 (from $40,338) | |
+  | $100K | 44891419181 | 0% | $29,232 | |
+  | $5K/mo | 44891695324 | 0% | $2,475 | |
+  | A | 44892068783 | 0% | $0 | Flagged implausible. |
+  | B | 44892353756 | 0% | $0 | Flagged implausible. |
+
+  On C, $100K and $5K/mo the COST lever still binds: their leading designs have no filed supplier rates, or Brain would produce them, so the sweep is correct for them.
+
+**Critical path for the last 6 hours:** no new engineering that cannot be released and verified before 19:06Z. The remaining binding inputs are unmeasured buyer facts: cost, close rate and settlement timing. No code change honestly closes that gap; owner grants (CONTACT_BUYER, QUOTE_AND_INVOICE, ACCEPT_PAYMENT) would. The time is reserved for the acceptance run across unfamiliar objectives and the deadline delivery.
+
+**Forecast:** no ACCEPTED (defensible 90%) plan by 19:06Z. Spend is $0.
