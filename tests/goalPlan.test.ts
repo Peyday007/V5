@@ -909,7 +909,11 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
     const atForty = await count();
     // A bounded total. The money route read (one statement per currency, #758) and the
     // forecast ledger kept on each refresh (LEARN-15-1, a fixed cost per project) are in it.
-    expect(atForty).toBeLessThan(140);
+    // Measured 139–142 at forty openings on one commit (Postgres suite run 44850129351, shard 5,
+    // read 142; the same commit read 139 locally): the fixed cost varies by a few statements
+    // between runs, so the ceiling sits clear of that spread. What the bound is for, a cost per
+    // opening, is the delta below; 841 statements at 150 openings is what it refuses.
+    expect(atForty).toBeLessThan(160);
     // And what the bound is for: twenty more openings cost a few statements, not several each.
     for (let i = 40; i < 60; i += 1) await oneOff({ title: `Opening ${i}`, priceCents: 20_000 + i });
     const atSixty = await count();
