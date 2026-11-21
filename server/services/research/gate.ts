@@ -161,19 +161,7 @@ export interface GateResult {
    * was not checked. Neither accepted nor rejected: the gate has no verdict on
    * evidence nobody could open.
    */
-  unresolvedRetrieval: {
-    claimId: string;
-    claim: string;
-    sourceUrl: string | null;
-    state: string;
-    /**
-     * Why it was not accepted, from `NOT_ACCEPTED_REASON_CODES`. Stored as the
-     * claim's `rejection_reason` so no unaccepted claim is left unexplained; it
-     * is not a rejection and is counted as none. Optional because a verdict
-     * stored before it existed has none.
-     */
-    reason?: string;
-  }[];
+  unresolvedRetrieval: { claimId: string; claim: string; sourceUrl: string | null; state: string }[];
   claims: ClaimJudgement[];
   acceptedClaims: number;
   rejectedClaims: number;
@@ -378,12 +366,7 @@ export function applyGate(input: {
     });
   };
   const reject = (claim: ResearchClaim, condition: GateCondition, reason: string): void => {
-    judgements.set(claim.id, {
-      claimId: claim.id,
-      accepted: false,
-      failedCondition: condition,
-      reason: reasonForCondition(condition, reason),
-    });
+    judgements.set(claim.id, { claimId: claim.id, accepted: false, failedCondition: condition, reason });
   };
 
   const direct = claims.filter((claim) => !claim.derived);
@@ -873,7 +856,6 @@ export function applyGate(input: {
       claim: claim.claim,
       sourceUrl: claim.sourceUrl,
       state: claim.retrievalState,
-      reason: unresolvedRetrievalReason(claim.retrievalState),
     })),
     claims: results,
     acceptedClaims: acceptedList.length,
