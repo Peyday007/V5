@@ -557,6 +557,11 @@ export function fittedDeliverable(capability: Primitive, delivers: readonly stri
 const UNMATCHED_DELIVERABLE = '(not yet matched to one Brain has proved)';
 const UNSPECIFIED_DELIVERABLE = '(not yet specified)';
 
+/** Whether an arrangement Brain produces leaves what it produces unspecified: nothing named what these buyers pay for. Pure. */
+export function unspecifiedDeliverable(one: Pick<ConstructedArrangement, 'supply'>): boolean {
+  return one.supply?.from === 'CAPABILITY' && one.supply.name.includes(UNSPECIFIED_DELIVERABLE);
+}
+
 /**
  * Whether a supply part is a deliverable Brain has proved for these buyers:
  * Brain's capability, fitted by `fittedDeliverable` to one named proved
@@ -817,7 +822,9 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
    */
   const precedentByBase = heldPrecedents(opportunities.filter((o) => allowed(o.title)), shown);
 
-  const { priced, tiedUp, facts: factObs, capability } = await heldEvidence(input, opportunities, allowed);
+  const { priced, tiedUp, facts: factObs, capability, paysFor } = await heldEvidence(input, opportunities, allowed);
+  // What each buyer population is shown paying for, wherever it was filed: a design whose own sector names no need takes it (`forEachCandidate`).
+  const paidFor = paidForParts(opportunities, paysFor, allowed);
   /*
    * The same inputs construct the same arrangements, so a plan re-read whose map, openings,
    * facts and limits did not move reuses the last construction instead of composing up to
@@ -856,11 +863,11 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
   const { leverEvidence, contractLimits } = await leverInputs(input, opportunities, facts, allowed);
   const constraints = await leverageConstraints(input, limits);
   const memoKey = createHash('sha256')
-    .update(JSON.stringify({ day: now.toISOString().slice(0, 10), input: { ...input, now: undefined, limits: undefined }, limits, targets, exclusions, sectors: [...sectors.values()], precedent: [...precedentByBase.entries()].map(([k, o]) => [k, o.id]), priced, tiedUp, factObs, leverEvidence, contractLimits, constraints, openings: opportunities.map((o) => [o.id, o.payer, o.mechanism, o.state, o.updatedAt]), known, leaders, rotation }))
+    .update(JSON.stringify({ day: now.toISOString().slice(0, 10), input: { ...input, now: undefined, limits: undefined }, limits, targets, exclusions, sectors: [...sectors.values()], precedent: [...precedentByBase.entries()].map(([k, o]) => [k, o.id]), priced, tiedUp, factObs, paidFor, leverEvidence, contractLimits, constraints, openings: opportunities.map((o) => [o.id, o.payer, o.mechanism, o.state, o.updatedAt]), known, leaders, rotation }))
     .digest('hex');
   const held = constructionMemo.get(memoKey);
   if (held && Date.now() - held.at < CONSTRUCTION_MEMO_MS) return structuredClone(held.result);
-  const job: ConstructionJob = { sectors: [...sectors.values()], opportunities, precedent: [...precedentByBase.entries()], capability, priced, tiedUp, facts: factObs, leverEvidence, contractLimits, input, limits, targets, exclusions, now, constraints, known, reuse, held: leaders, rotation };
+  const job: ConstructionJob = { sectors: [...sectors.values()], opportunities, precedent: [...precedentByBase.entries()], capability, paidFor, priced, tiedUp, facts: factObs, leverEvidence, contractLimits, input, limits, targets, exclusions, now, constraints, known, reuse, held: leaders, rotation };
   // How many candidates the parts support, against how many are composed, and why each composed one was: the cut is reported, never silent (K-2).
   const selection = selectCandidates(job);
   const { considered } = selection;
@@ -913,7 +920,7 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
 }
 
 /** The published prices, money tied up and proved capability every composition reads. */
-async function heldEvidence(input: ConstructionInput, opportunities: CashOpportunity[], allowed: (text: string | null | undefined) => boolean): Promise<{ priced: Observation[]; tiedUp: Observation[]; facts: FactObservations; capability: Primitive | null }> {
+async function heldEvidence(input: ConstructionInput, opportunities: CashOpportunity[], allowed: (text: string | null | undefined) => boolean): Promise<{ priced: Observation[]; tiedUp: Observation[]; facts: FactObservations; capability: Primitive | null; paysFor: PaidFor[] }> {
   // Published prices the project holds, as observations about the buyers who paid them.
   const priced = opportunities
     .filter((one) => one.payer && one.priceCents && one.priceCents > 0 && one.currency === input.currency && allowed(one.title))
@@ -943,7 +950,7 @@ async function heldEvidence(input: ConstructionInput, opportunities: CashOpportu
       measures: `money tied up on "${one.title.slice(0, 60)}"`,
     }));
   const capability = capabilityPart(input.delivers);
-  return { priced, tiedUp, facts: { unitCost: facts.unitCost, volume: facts.volume, conversion: facts.conversion, buyers: facts.buyers, ...(facts.runCost.length > 0 ? { runCost: facts.runCost } : {}), ...(facts.commission.length > 0 ? { commission: facts.commission } : {}) }, capability };
+  return { paysFor: facts.paysFor, priced, tiedUp, facts: { unitCost: facts.unitCost, volume: facts.volume, conversion: facts.conversion, buyers: facts.buyers, ...(facts.runCost.length > 0 ? { runCost: facts.runCost } : {}), ...(facts.commission.length > 0 ? { commission: facts.commission } : {}) }, capability };
 }
 
 /**
@@ -1041,8 +1048,8 @@ const FACT_EVIDENCE_STATUSES: readonly FactStatus[] = ['OBSERVED', 'VERIFIED'];
 export async function constructionObservations(
   input: Pick<ConstructionInput, 'projectId' | 'currency' | 'daysLeft'>,
   allowed: (text: string | null | undefined) => boolean = () => true,
-): Promise<{ priced: Observation[]; unitCost: Observation[]; runCost: Observation[]; volume: Observation[]; conversion: Observation[]; buyers: Observation[]; commission: Observation[] }> {
-  const out = { priced: [] as Observation[], unitCost: [] as Observation[], runCost: [] as Observation[], volume: [] as Observation[], conversion: [] as Observation[], buyers: [] as Observation[], commission: [] as Observation[] };
+): Promise<{ priced: Observation[]; unitCost: Observation[]; runCost: Observation[]; volume: Observation[]; conversion: Observation[]; buyers: Observation[]; commission: Observation[]; paysFor: PaidFor[] }> {
+  const out = { priced: [] as Observation[], unitCost: [] as Observation[], runCost: [] as Observation[], volume: [] as Observation[], conversion: [] as Observation[], buyers: [] as Observation[], commission: [] as Observation[], paysFor: [] as PaidFor[] };
   // The buyer-type node a fact is about: its segment, or — for a take rate filed unsegmented — the node its round was about.
   const nodeOf = (one: { key: FactKey; segment?: string | null; nodeId?: string | null }): string | null =>
     one.segment?.startsWith('map_') ? one.segment.slice('map_'.length) : !one.segment && FACT_COMMISSION_KEYS.includes(one.key) ? (one.nodeId ?? null) : null;
@@ -1088,6 +1095,8 @@ export async function constructionObservations(
     if ((kind === 'conversion' || kind === 'commission') && high > 1) continue;
     // A rate per word or per hour is not what one purchase costs: read beside a plan's price it would widen one range across units.
     if (kind === 'priced' && statesMeasuredRate(fact.sourceClaimId ? priceClaims.get(fact.sourceClaimId) : undefined, low, high)) continue;
+    // What the figure is a price of, in its source's words: what these buyers are shown paying for (`paidForParts`).
+    if (kind === 'priced' && fact.measures?.trim()) out.paysFor.push({ payer: node.name, name: fact.measures, claimId: fact.sourceClaimId ?? null, ref: `fact:${fact.id}` });
     out[kind].push({
       id: `fact:${fact.id}`,
       value: low === high ? { kind: 'POINT', value: low } : { kind: 'RANGE', low, high },
@@ -1484,6 +1493,12 @@ export interface ConstructionJob {
   /** Per base structure, the held opening that shows it working. */
   precedent: Array<[Structure, CashOpportunity]>;
   capability: Primitive | null;
+  /**
+   * Per buyer population (`payerKey`), what it is shown paying for wherever
+   * that was filed (`paidForParts`): the need a candidate takes when its own
+   * sector names none. Absent reads as nothing filed.
+   */
+  paidFor?: Array<[string, Primitive[]]>;
   priced: Observation[];
   tiedUp: Observation[];
   /** Construction facts about map buyers beyond their price (F2). */
@@ -1507,6 +1522,63 @@ export interface ConstructionJob {
   reuse?: Array<[string, ConstructedArrangement]>;
   /** The real limits leverage is judged against, read from the ledger and the live authority; absent is unknown. */
   constraints?: LeverageConstraints;
+}
+
+/** One price fact's statement of what a buyer population paid for (`constructionObservations`). */
+export interface PaidFor {
+  /** The map buyer type the fact is filed against. */
+  payer: string;
+  /** What the figure measures, in its source's words. */
+  name: string;
+  claimId: string | null;
+  ref: string;
+}
+
+/**
+ * What each buyer population is shown paying for, keyed by `payerKey`: every
+ * live opening's need (its offer, else its title — the need construction
+ * already reads from an opening) under the payer it names, and every price
+ * fact's described unit under the map buyer it is filed against. Each part
+ * carries its source (the opening's claim, the fact's claim) and the opening
+ * need's own path, so the same need read here or from its sector is one part.
+ *
+ * Production, 2026-11-21 (plan reads on 91bf9ef8, goals wst_4f0c…,
+ * wst_db2e…, wst_6631…): the leading designs read "what homeowner pay for
+ * (not yet specified)" while a published homeowner price was the very
+ * figure that priced them, because a need was looked for only in the
+ * buyer's own map sector, and an opening's need is filed under its industry.
+ * Nothing here decides whether Brain can produce it: `fittedDeliverable`
+ * matches it against the proved deliverables, and an unmatched one says so.
+ * Bounded per population. Pure.
+ */
+export function paidForParts(
+  opportunities: readonly Pick<CashOpportunity, 'id' | 'payer' | 'offerScope' | 'title' | 'industry' | 'sourceClaimId' | 'updatedAt'>[],
+  facts: readonly PaidFor[],
+  allowed: (text: string | null | undefined) => boolean = () => true,
+): Array<[string, Primitive[]]> {
+  const out = new Map<string, Primitive[]>();
+  const add = (payer: string, part: Primitive): void => {
+    const key = payerKey(payer);
+    if (!key) return;
+    const list = out.get(key) ?? [];
+    if (list.length >= SIGNAL_PARTS_PER_SECTOR || list.some((one) => one.path === part.path)) return;
+    list.push(part);
+    out.set(key, list);
+  };
+  const recent = [...opportunities].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : a.id < b.id ? -1 : 1));
+  for (const o of recent) {
+    const payer = o.payer?.trim();
+    const need = o.offerScope ?? o.title;
+    if (!payer || !safeBuyer(payer) || !allowed(payer) || !allowed(o.title) || !allowed(o.industry) || !safeName(need)) continue;
+    add(payer, { name: clean(need), claimId: o.sourceClaimId, from: 'OPENING', ref: o.id, path: `OPENING_NEED:${norm(o.industry)}>${norm(need)}` });
+  }
+  for (const f of facts) {
+    // The unit without its figure: two prices of one compliance report are one thing these buyers pay for, not two.
+    const unit = clean(f.name.replace(/(?:USD|US\$|\$|€|£)\s?\d[\d,.]*(?:\s?(?:k|m|thousand|million))?|\b\d[\d,.]*\s?(?:USD|dollars?)\b/gi, ' '));
+    if (!unit || !safeBuyer(f.payer) || !allowed(f.payer) || !safeName(unit) || !allowed(unit)) continue;
+    add(f.payer, { name: unit, claimId: f.claimId, from: 'INDUSTRY_MAP', ref: f.ref, path: `FACT_NEED:${payerKey(f.payer)}>${norm(unit)}` });
+  }
+  return [...out.entries()];
 }
 
 /** One forward or transfer arrangement the parts support, before it is composed. */
@@ -1533,6 +1605,7 @@ export const MAX_CANDIDATES = 50_000;
 export function forEachCandidate(job: ConstructionJob, visit: (one: Candidate) => void): number {
   const { opportunities, capability } = job;
   const precedentByBase = new Map(job.precedent);
+  const paidFor = new Map(job.paidFor ?? []);
   const relatedByPayer = new Map<string, CashOpportunity[]>();
   const relatedTo = (name: string): CashOpportunity[] => {
     const k = norm(name);
@@ -1557,7 +1630,15 @@ export function forEachCandidate(job: ConstructionJob, visit: (one: Candidate) =
         if (isDefaultDesign(design) && def.alreadyHeldAs.some((one) => heldStructures.has(one))) continue;
         const precedent = precedentByBase.get(design.base);
         const transfer = precedent && norm(precedent.payer) !== norm(demand.name) ? precedent : null;
-        const needs = s.needs.length > 0 ? s.needs : [null];
+        /*
+         * A sector that names no need still has evidence of what these buyers
+         * pay for when it was filed elsewhere — an opening in another
+         * industry, a price fact against their map node — and the design
+         * takes it, with its source, rather than "(not yet specified)". Only
+         * when nothing names it does the need stay unknown (null), and then
+         * it is asked (`compose`'s question) and ranks after a named one.
+         */
+        const needs = s.needs.length > 0 ? s.needs : (paidFor.get(payerKey(demand.name)) ?? [null]);
         for (const need of needs) {
           const supplies = def.needsSupply ? s.supply : [capability];
           // Brain produces only what it can make online; a physical need is brokered or subcontracted, never produced by the owner.
@@ -2211,6 +2292,9 @@ function rank(out: ConstructedArrangement[], limits: GoalLimits, targets: Econom
       b.evidenced - a.evidenced ||
       // These buyers already came back for more (aftercare evidence).
       (b.repeatBusiness?.observations ?? 0) - (a.repeatBusiness?.observations ?? 0) ||
+      // What Brain would produce is named. An unspecified deliverable's value is read from whatever else
+      // these buyers paid for, so it never outranks a named one on that value (invariant 39).
+      Number(unspecifiedDeliverable(a)) - Number(unspecifiedDeliverable(b)) ||
       // Its value is better established.
       TIER_ORDER.indexOf(a.value.tier) - TIER_ORDER.indexOf(b.value.tier) ||
       // Fewer parts left to establish.
@@ -2537,7 +2621,7 @@ function compose(args: {
         OPENING_SENTENCE +
         'Where no source shows any buyers pay for this, say so plainly — that refutes the arrangement and is a useful answer.'
       : `Brain composed an arrangement nobody has published as an opening, and needs the world to confirm or refute it: ` +
-        `buyers described as "${demand.name}" pay ${need ? `to deal with "${need.name}"` : 'for what they need most'}, fulfilled by ${supply ? (supply.from === 'CAPABILITY' ? `Brain producing it (${supply.name})` : `"${supply.name}"`) : 'a supplier'}, and the operation is designed as: ${shape}. ` +
+        `buyers described as "${demand.name}" pay ${need ? `to deal with "${need.name}"` : 'for what they need most — first name what these buyers are published as paying for, each with its price, page and date, since nothing held names it yet'}, fulfilled by ${supply ? (supply.from === 'CAPABILITY' ? `Brain producing it (${supply.name})` : `"${supply.name}"`) : 'a supplier'}, and the operation is designed as: ${shape}. ` +
         `Establish whether such buyers actually pay for this and whether ${def.needsSupply ? 'such suppliers would take the work on these terms' : 'the deliverable is what they buy'}.${why} ` +
         ([demand, need, supply].some((one) => one?.from === 'BRAIN_MAP') ? `${BRAIN_MAP_SENTENCE} ` : '') +
         `For each part, find a published source: ${asks}.${established}${reliesText}${failureText}${exclusionSentence(args.exclusions)} ` +
