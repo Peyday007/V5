@@ -383,6 +383,67 @@ export async function itemLeasesClaimedUnder(binId: string, binLeaseId: string):
   return out;
 }
 
+/**
+ * The most recent reason a worker gave when it handed this bin back.
+ *
+ * A worker that cannot finish says why through `brain_bin_release`, and that
+ * reason is kept on the `BIN_RELEASED` event and nowhere else. A contract that
+ * refuses a bin for having no result reads it from here, so the refusal — and
+ * the escalation built from it — carries what each attempt actually ran into
+ * (no browser, a product that would not start) instead of only "nothing came
+ * back". Null when no worker said anything.
+ */
+export async function latestWorkerReleaseReason(
+  binId: string,
+): Promise<{ reason: string; at: string; leaseGeneration: number | null } | null> {
+  const row = await getDb().get<{ reason: string; at: string; lease_generation: number | null }>(
+    `SELECT reason, at, lease_generation FROM bin_events
+      WHERE bin_id = ? AND event_type = 'BIN_RELEASED' AND reason IS NOT NULL AND reason <> ''
+      ORDER BY at DESC, id DESC LIMIT 1`,
+    [binId],
+  );
+  if (!row || !row.reason.trim()) return null;
+  return { reason: row.reason.trim(), at: row.at, leaseGeneration: row.lease_generation ?? null };
+}
+
+/**
+ * Where Brain fired each attempt of this bin, and whether that surface has a
+ * checkout.
+ *
+ * One entry per `bin_dispatch` intent the provider accepted (`SENT`), oldest
+ * first, with the capabilities its routine declared *now* — `hasCheckout` is
+ * whether they include `repository`, and null when the intent names no routine
+ * row (a scheduled arrival, or a routine since deleted), because then nobody
+ * can say. A contract that refuses a bin for having no result reads this so the
+ * escalation says whether the attempts were aimed at surfaces able to do the
+ * work at all — the evidence that separates a routing fault from a capability
+ * the capable surfaces lack.
+ */
+export async function dispatchSurfacesForBin(
+  binId: string,
+): Promise<{ leaseGeneration: number; routineId: string | null; hasCheckout: boolean | null }[]> {
+  const rows = await getDb().all<{
+    lease_generation: number;
+    routine_id: string | null;
+    capabilities: string | null;
+  }>(
+    `SELECT d.lease_generation, d.routine_id, r.capabilities
+       FROM bin_dispatch d
+       LEFT JOIN fleet_routines r ON r.id = d.routine_id
+      WHERE d.bin_id = ? AND d.state = 'SENT'
+      ORDER BY d.lease_generation ASC, d.id ASC`,
+    [binId],
+  );
+  return rows.map((row) => ({
+    leaseGeneration: Number(row.lease_generation),
+    routineId: row.routine_id ?? null,
+    hasCheckout:
+      row.routine_id && row.capabilities !== null
+        ? parseJson<string[]>(row.capabilities, []).includes('repository')
+        : null,
+  }));
+}
+
 export async function countBinEvents(binId: string, eventType: string): Promise<number> {
   const row = await getDb().get<{ n: number }>(
     `SELECT COUNT(*) AS n FROM bin_events WHERE bin_id = ? AND event_type = ?`,

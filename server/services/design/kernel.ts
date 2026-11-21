@@ -52,7 +52,9 @@ import {
 } from '../../repos/design.ts';
 import type { DesignCycle } from '../../domain/design.ts';
 import { ingestDesignReview, openDesignReview, reviewCreator, type ReviewLineage } from './judge.ts';
-import { ingestDesignRender, openDesignRender, renderCreator } from './render.ts';
+import { ingestDesignRender, openDesignRender, renderCreator, renderRunnability } from './render.ts';
+import { fleetSnapshot } from '../dispatch/candidates.ts';
+import type { RoutingCandidate } from '../dispatch/router.ts';
 import { resolveSurfaces } from './surfaces.ts';
 import { settleCycleNow } from './operate.ts';
 import { designProject, NO_DESIGN_PROJECT } from './scope.ts';
@@ -237,6 +239,7 @@ export async function designKernelIdle(): Promise<DesignKernelPass> {
  */
 async function askForRenders(pass: DesignKernelPass): Promise<void> {
   const projectId = await designProject();
+  let fleet: RoutingCandidate[] | null | undefined;
 
   for (const cycle of await listCycles({ state: 'OPEN', limit: 50 })) {
     // A pass that already has pictures does not need to be rendered again, and a
@@ -255,6 +258,26 @@ async function askForRenders(pass: DesignKernelPass): Promise<void> {
     }
     if (!projectId) {
       pass.problems.push(`${cycle.id} is waiting for a render and ${NO_DESIGN_PROJECT}`);
+      continue;
+    }
+
+    // A render nobody in the fleet can take is not asked for: the bin would spend
+    // every attempt where no render can be made and end NEEDS_HUMAN (the recorded
+    // failure class). An unreadable fleet is an unknown, never a yes (invariant 39).
+    if (fleet === undefined) {
+      fleet = await fleetSnapshot()
+        .then((snapshot) => snapshot.candidates)
+        .catch((error: unknown) => {
+          pass.problems.push(
+            `the fleet could not be read, so no render was asked for: ${error instanceof Error ? error.message : String(error)}`,
+          );
+          return null;
+        });
+    }
+    if (fleet === null) continue;
+    const runnable = renderRunnability(fleet, projectId);
+    if (!runnable.runnable) {
+      pass.problems.push(`${cycle.id} is waiting for a render and ${runnable.reason}`);
       continue;
     }
 
