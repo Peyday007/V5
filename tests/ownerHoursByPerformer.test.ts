@@ -102,7 +102,11 @@ describe('owner hours per deal are read from who the design says performs the wo
   it('on a goal with ample owner hours, nothing is cut for hours and the unknown performers still sweep', () => {
     const ample = selectEstimatedArrangements(all, { ...goal, hoursAvailable: 10_000 });
     for (const one of all) expect(cutReason(ample, one.key) ?? '').not.toMatch(/hours/);
-    expect(pickedKeys(ample).sort()).toEqual(all.map((one) => one.key).sort());
+    // Since #1195 a broker or referral design earns its commission, not the buyer's price, so an unpriced one
+    // can lose money at the middle readings against a blind cost and enter only on its upside: that is an
+    // economic cut, never an hours one. Every design is either picked or cut for a reason other than hours.
+    for (const one of all) expect(pickedKeys(ample).includes(one.key) || cutReason(ample, one.key) !== null).toBe(true);
+    expect(pickedKeys(ample)).toEqual(expect.arrayContaining(['produce', 'broker', 'physical']));
     expect(ample.conversions.get('nosupplier')!.hours.provenance).toBe('UNKNOWN');
   });
 });
