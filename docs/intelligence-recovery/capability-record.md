@@ -47,3 +47,10 @@ Live in production at a0ee88f1: #1158 #1163 #1164 #1166 #1167 #1169 #1170 #1171 
 **Critical path:** accepted evidence (prices, days to cash, close and reply rates), and structural misreadings that hide feasible designs. #1193, #1199 and #1195 each removed one of those misreadings. Search quality (#1194) needs the owner's Google key.
 
 **Forecast:** an ACCEPTED (defensible 90%) plan by 19:06Z remains unlikely, as escalated at 19:20Z. All six goals read 0% coverage at the latest check. Spend: $0 an hour; the GPU stays off.
+
+### 2026-11-21 ~03:10Z — batch #1198/#1199/#1200 live
+
+- Deploy 44850160451 was refused by the Postgres suite (44850129351): two flaky tests. goalPlan's statement ceiling read 142 against <140 when the same SHA reads 139. machinesBrowserToDatabase had a findBy timeout. #1200 widens the ceiling to 160 and keeps the per-opening guard.
+- Deploy 44856874965 succeeded; release check 44859370446 GOALS: OK; serving 5d5df434.
+- $10K plan (44860552332), after #1199: 8 constructed estimates admitted (was 7), reach still 0%, CANDIDATE_ONLY. Every strategy, including a $15/3-day one-off, fails "breaks the money or hours limit in every tested case" (hours limit 0). The repeatable constructed design arr_6b722dfcb622 reads contacted 0, with outreach a day not established. Both are under diagnosis on claude/plan-infeasible-everywhere.
+- Unfamiliar-objective acceptance on production HEAD: planTransfer, planMetamorphic, priceMechanismTransfer, surgeBMechanismTransfer and cashDiveEvidenceTransfer pass 70/70.
