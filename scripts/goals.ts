@@ -1048,7 +1048,7 @@ function printPortfolio(portfolio: import('../server/services/goals/portfolio.ts
   const shown = [...portfolio.demand].sort((x, y) => y.revenue.p50 - x.revenue.p50 || y.revenue.p90 - x.revenue.p90).slice(0, 16);
   for (const d of shown) {
     console.log(
-      `    demand    ${d.opportunityId} ${d.repeatable ? 'repeatable' : 'one-off'} · contacted p50 ${r(d.contacted.p50)} · interested ${r(d.interested.p10)}/${r(d.interested.p50)}/${r(d.interested.p90)} · deals ${r(d.deals.p10)}/${r(d.deals.p50)}/${r(d.deals.p90)} · revenue ${r(d.revenue.p10)}/${r(d.revenue.p50)}/${r(d.revenue.p90)} · reply ${r(d.respond.p50)} close ${r(d.close.p50)} price ${r(d.price.p50)} days ${r(d.days.p50)} · ${d.refused ? `REFUSED ${d.refused}` : d.justified ? 'evidenced' : `not established: ${d.unestablished.join(', ')}`} · ${d.title.slice(0, 50)}`,
+      `    demand    ${d.opportunityId} ${d.repeatable ? 'repeatable' : 'one-off'} · contacted p50 ${r(d.contacted.p50)} · interested ${r(d.interested.p10)}/${r(d.interested.p50)}/${r(d.interested.p90)} · deals ${r(d.deals.p10)}/${r(d.deals.p50)}/${r(d.deals.p90)} · revenue ${r(d.revenue.p10)}/${r(d.revenue.p50)}/${r(d.revenue.p90)} · reply ${r(d.respond.p50)} close ${r(d.close.p50)} price ${r(d.price.p50)} days ${r(d.days.p50)} · ${d.noContactBecause ? `${d.noContactBecause} · ` : ''}${d.refused ? `REFUSED ${d.refused}` : d.justified ? 'evidenced' : `not established: ${d.unestablished.join(', ')}`} · ${d.title.slice(0, 50)}`,
     );
   }
   for (const m of portfolio.missing.slice(0, 8)) console.log(`    missing   ${m}`);

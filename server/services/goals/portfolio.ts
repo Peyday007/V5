@@ -145,8 +145,19 @@ export interface DemandEstimate {
   opportunityId: string;
   title: string;
   repeatable: boolean;
-  /** Prospects contacted inside the window, with all of the shared outreach. */
+  /**
+   * Prospects contacted inside the window, with all of the shared outreach —
+   * counting only contacts whose cash can settle before the deadline, so a
+   * repeatable play whose money settles too late contacts nobody.
+   */
   contacted: Spread;
+  /**
+   * Why a repeatable play counts no contact in any world, when that is because
+   * its money settles too late rather than because outreach is missing
+   * (production 2026-11-21, arr_6b722dfcb622: "contacted p50 0" read as no
+   * outreach a day). Absent otherwise.
+   */
+  noContactBecause?: string;
   interested: Spread;
   deals: Spread;
   revenue: Spread;
@@ -1276,6 +1287,12 @@ export function evaluateGoalPortfolio(input: {
   perWeek: number | null;
   resources: string | null;
   /**
+   * The owner's hours the goal has (`target.hoursCeiling`); null or absent
+   * when nobody stated them, which bounds nothing. An opening whose owner
+   * hours a deal, at their lowest, exceed it is refused.
+   */
+  hours?: number | null;
+  /**
    * The outreach a day the owner's healthy sending accounts can carry, read
    * from the messaging provider (§94). Shared with the owner's other
    * campaigns, so it widens the swept range's top and is never Brain's own
@@ -1497,6 +1514,24 @@ export function evaluateGoalPortfolio(input: {
       refused = `one deal costs ${Math.round(oneDeal)} directly, more than the ${Math.round(spendCeiling)} this goal may spend in all`;
     }
     /*
+     * The owner's hours, read as the goal model and the arrangement screen
+     * read them (production 2026-11-21, goal wst_7b4fcbb5f2384f31b6c3, "hours
+     * 0"). The engine's gate swept a found opening's unestablished owner hours
+     * from 1 to 40 a deal and failed every strategy in every case, while this
+     * engine never read hours at all: the same opening counted toward reach
+     * here as if somebody did its work for free, and the reconstruction's
+     * sensitivity ("days to cash ÷2 → reach 96.7%") rested on it. A deal
+     * whose owner hours at their lowest exceed what the goal has can never
+     * be done inside it, so it is refused here too, naming what is missing.
+     * Agreed money asks no new deal; a goal that states no hours bounds none.
+     */
+    const hoursLow = one.hours.low ?? one.hours.value;
+    if (!refused && input.hours !== null && input.hours !== undefined && one.agreedValue === 0 && hoursLow !== null && hoursLow > input.hours + 1e-9) {
+      refused = established(one.hours)
+        ? `one deal needs ${Math.round(hoursLow)} owner hours, more than the ${Math.round(input.hours)} owner hours this goal has`
+        : `no performer is established: nobody has established who does the work, so it is read as the owner's, at least ${Math.round(hoursLow)} owner hours a deal, more than the ${Math.round(input.hours)} owner hours this goal has — establish who performs it (Brain, a named supplier) or the hours it takes`;
+    }
+    /*
      * An established outlay over the per-arrangement limit is refused. An
      * unestablished one is not: production, 2026-11-06, refused every opening
      * priced above 375 because its unknown capital was swept up to the whole
@@ -1539,11 +1574,24 @@ export function evaluateGoalPortfolio(input: {
     const revenue = full.early ? full.cash.map((c, i) => c + full.early!.cash[i]!) : full.cash;
     const restructure = restructureFor ? restructuringOf(one, { ...restructureFor, potential: spread(revenue).p90, remaining: input.remaining }) : null;
     if (heldOut && restructure) heldOut += restructureTail(restructure);
+    /*
+     * A repeatable play counts only the contacts whose cash can settle in time
+     * (`drawDemandWorlds`): with days to cash unestablished, read at the slow
+     * half of its range (invariant 39), no contact made now settles before the
+     * deadline, and it contacts nobody. That is a cash-timing fact, said so,
+     * never left to read as an outreach volume of zero.
+     */
+    const soonest = full.days.length ? Math.min(...full.days) : null;
+    const noContactBecause =
+      one.repeatable && one.agreedValue === 0 && !full.early && full.contacted.every((c) => c === 0) && soonest !== null && soonest >= input.daysLeft
+        ? `no contact made now settles in time: days to usable cash reads at least ${Math.round(soonest)}${established(one.daysToCash) ? '' : ' (not established, read at the slow half of its range)'} against the ${input.daysLeft} days left`
+        : undefined;
     demand.push({
       opportunityId: id,
       title: one.opportunity.title,
       repeatable: one.repeatable,
       contacted: spread(full.contacted),
+      ...(noContactBecause ? { noContactBecause } : {}),
       interested: spread(full.interested),
       deals: spread(full.deals),
       revenue: spread(revenue),

@@ -150,6 +150,7 @@ export function strategyResults(
   return model.strategies.map((strategy, s) => {
     const feasible: number[] = [];
     let invalid = 0, infeasible = 0, losses = 0, acceptable = 0, wins = 0;
+    const violations: Record<string, number> = {};
     const regret: number[] = [];
     for (let i = 0; i < scenarios; i++) {
       const at = s * scenarios + i;
@@ -158,7 +159,11 @@ export function strategyResults(
       const c = raw.contribution[at]!;
       if (c < 0) losses++;
       if (Number.isFinite(bestAny[i]!)) regret.push(bestAny[i]! - c);
-      if (status === 2) { infeasible++; continue; }
+      if (status === 2) {
+        infeasible++;
+        for (const [c, constraint] of model.constraints.entries()) if (raw.violated[at]! & (1 << c)) violations[constraint.key] = (violations[constraint.key] ?? 0) + 1;
+        continue;
+      }
       feasible.push(at);
       if (c >= minContributionCents) acceptable++;
       if (bestStrategy[i] === s) wins++;
@@ -207,6 +212,7 @@ export function strategyResults(
       evaluated: scenarios,
       invalid,
       infeasible,
+      violations,
       contribution: distribution(contributionValues, 'HIGHER'),
       lines,
       metrics,

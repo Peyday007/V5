@@ -309,6 +309,13 @@ export interface StrategyResult {
   evaluated: number;
   invalid: number;
   infeasible: number;
+  /**
+   * Per constraint key, how many scenarios broke it (one scenario can break
+   * several). The infeasible count says that a strategy broke a limit; this
+   * says which, so a reader names the limit instead of guessing it. Absent on
+   * runs recorded before it was counted.
+   */
+  violations?: Record<string, number>;
   /** Over feasible, valid scenarios, in cents. Null when none was feasible. */
   contribution: Distribution | null;
   lines: Record<string, { meanCents: number; p50Cents: number }>;
