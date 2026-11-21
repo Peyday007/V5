@@ -28,6 +28,8 @@ async function main(): Promise<void> {
     const tagged = await getDb().all<{ id: string; project_id: string; q: string | null; amt: number | null }>(`SELECT c.id, f.project_id, c.structural_qualifier AS q, c.structural_amount_cents AS amt FROM research_claims c JOIN research_fragments f ON f.id = c.fragment_id WHERE c.fragment_id IN (${FRAGS}) AND c.accepted = 1 AND c.structural_subject = 'price_per_unit'`);
     console.log(`TAGGED ${JSON.stringify(tagged.map((t) => ({ p: t.project_id.slice(0, 12), q: t.q, amt: t.amt })))}`);
     await q('FACTS_FROM_PRICE_CLAIMS', `SELECT cf.fact_key, cf.status, cf.segment, cf.low, cf.high, substr(cf.project_id,1,12) AS p, cf.created_at FROM construction_facts cf WHERE cf.source_claim_id IN (SELECT c.id FROM research_claims c WHERE c.fragment_id IN (${FRAGS}) AND c.accepted = 1)`);
+    await q('C_FACTS', "SELECT cf.fact_key, cf.status, cf.segment, cf.low, cf.high, cf.source_claim_id, cf.created_at, n.name AS node, n.kind FROM construction_facts cf LEFT JOIN industry_nodes n ON n.id = cf.node_id WHERE cf.project_id = 'prj_f1d8f9d6a9854c65939a' AND cf.fact_key = 'price_per_unit' ORDER BY cf.created_at DESC LIMIT 10");
+    await q('C_BUYERS', "SELECT id, name, kind, retired_at, created_at FROM industry_nodes WHERE project_id = 'prj_f1d8f9d6a9854c65939a' AND kind = 'BUYER_TYPE' ORDER BY created_at DESC LIMIT 10");
     const { backfillCandidates } = await import('../server/services/industry/expand.ts');
     const ids = new Set(tagged.map((t) => t.id));
     for (const project of [...new Set(tagged.map((t) => t.project_id))]) {
