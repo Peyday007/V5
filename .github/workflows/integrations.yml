@@ -80,6 +80,7 @@ jobs:
           SYNC_INBOXKIT_CONTACT_JSON: ${{ secrets.INBOXKIT_CONTACT_JSON }}
           SYNC_BRAIN_SEARCH_API_KEY: ${{ secrets.BRAIN_SEARCH_API_KEY }}
           SYNC_BRAIN_SEARCH_ENGINE_ID: ${{ secrets.BRAIN_SEARCH_ENGINE_ID }}
+          SYNC_FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
           SEALED_NAME: ${{ github.event.inputs.sealed_name }}
           SEALED_VALUE: ${{ github.event.inputs.sealed_value }}
         run: |
@@ -118,7 +119,7 @@ jobs:
           secrets = {k[len('SYNC_'):]: v for k, v in os.environ.items() if k.startswith('SYNC_')}
           held = dict(line.split()[:2] for line in os.environ.get('HELD', '').splitlines() if line.strip())
           names = os.environ['SYNCABLE'].split()
-          owners = {'INSTANTLY_API_KEY': 'instantly', 'STRIPE_SECRET_KEY': 'stripe', 'RESEND_API_KEY': 'resend', 'INBOXKIT_API_KEY': 'inboxkit', 'INBOXKIT_WORKSPACE_ID': 'inboxkit', 'INBOXKIT_CONTACT_JSON': 'inboxkit', 'BRAIN_SEARCH_API_KEY': 'google-search', 'BRAIN_SEARCH_ENGINE_ID': 'google-search'}
+          owners = {'INSTANTLY_API_KEY': 'instantly', 'STRIPE_SECRET_KEY': 'stripe', 'RESEND_API_KEY': 'resend', 'INBOXKIT_API_KEY': 'inboxkit', 'INBOXKIT_WORKSPACE_ID': 'inboxkit', 'INBOXKIT_CONTACT_JSON': 'inboxkit', 'BRAIN_SEARCH_API_KEY': 'google-search', 'BRAIN_SEARCH_ENGINE_ID': 'google-search', 'FIRECRAWL_API_KEY': 'firecrawl'}
           print('GitHub secrets the registry can use: ' + (', '.join(n for n in names if (secrets.get(n) or '').strip()) or 'none set'))
           for name in names:
               value = (secrets.get(name) or '').strip()
@@ -202,6 +203,7 @@ jobs:
           GH_INBOXKIT_CONTACT_JSON: ${{ secrets.INBOXKIT_CONTACT_JSON != '' }}
           GH_BRAIN_SEARCH_API_KEY: ${{ secrets.BRAIN_SEARCH_API_KEY != '' }}
           GH_BRAIN_SEARCH_ENGINE_ID: ${{ secrets.BRAIN_SEARCH_ENGINE_ID != '' }}
+          GH_FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY != '' }}
         run: |
           set -euo pipefail
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)

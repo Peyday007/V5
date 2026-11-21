@@ -236,6 +236,29 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
       'BRAIN_SEARCH_API_KEY and BRAIN_SEARCH_ENGINE_ID; the next Integrations run puts them on Brain.',
   },
   {
+    id: 'firecrawl',
+    name: 'Firecrawl',
+    purpose:
+      'A keyed fallback for research reads: the second web-search provider after Google, and a scrape route ' +
+      '(FIRECRAWL) for pages DIRECT and the browser could not read; inert until the key is set.',
+    heldBy: 'BRAIN',
+    credentials: [fly('FIRECRAWL_API_KEY', ['GITHUB_SECRET', 'OWNER'], { shape: /^fc-[A-Za-z0-9]{16,}$/ })],
+    consumers: [
+      { component: 'Sources: keyed web search (second provider)', path: 'server/services/sources/keyedSearch.ts' },
+      { component: 'Sources: FIRECRAWL scrape route', path: 'server/services/sources/firecrawl.ts' },
+      { component: 'Sources: readSource routes', path: 'server/services/sources/access.ts' },
+    ],
+    capabilities: ['SEARCH_THE_WEB', 'READ_A_PUBLIC_PAGE'],
+    // Every call bills credits, so there is no probe that sends nothing.
+    probe: null,
+    // Credits a day (a scrape is 1, a search is counted as 2): safe inside Firecrawl's
+    // free tier. The owner raises BRAIN_FIRECRAWL_DAILY_CEILING himself (invariant 18).
+    dailyCeiling: 15,
+    ownerAction:
+      'Create an API key at firecrawl.dev and save it as the GitHub repository secret FIRECRAWL_API_KEY; ' +
+      'the next Integrations run puts it on Brain.',
+  },
+  {
     id: 'credential-seal',
     name: 'Credential seal',
     purpose: 'The deployment\'s own key: a session holding an authorized connector seals a credential to it, and only this machine can open it.',

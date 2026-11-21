@@ -36,7 +36,8 @@ import type { SourceFetch } from '../sources/fetchForWorker.ts';
 import type { RecordedStageCapacity } from './stageCapacity.ts';
 import { readSource } from '../sources/access.ts';
 import { setSearchEventRecorder } from '../sources/discover.ts';
-import { KEYED_SEARCH_PROVIDERS, seedKeyedSearchUsage } from '../sources/keyedSearch.ts';
+import { firecrawlSearch, FIRECRAWL_PROVIDER_ID, KEYED_SEARCH_PROVIDERS, seedKeyedSearchUsage } from '../sources/keyedSearch.ts';
+import { FIRECRAWL_SCRAPE_COST, FIRECRAWL_SCRAPE_EVENT } from '../sources/firecrawl.ts';
 import {
   closeFiledFreeLaneBins,
   coolingForEveryModel,
@@ -695,8 +696,20 @@ async function seedKeyedSearchCeilings(): Promise<void> {
         WHERE event_type = 'SOURCE_SEARCH' AND at >= ? AND provider = ? AND outcome <> 'CEILING'`,
       [since, provider.id],
     );
-    seedKeyedSearchUsage(provider.id, Number(row?.n ?? 0), now);
+    seedKeyedSearchUsage(provider.id, Number(row?.n ?? 0) * provider.cost, now);
   }
+  // Firecrawl's scrape route spends from the same daily credit count as its search.
+  const scrapes = await getDb().get<{ n: number | string }>(
+    `SELECT COUNT(*) AS n FROM bin_events
+      WHERE event_type = '${FIRECRAWL_SCRAPE_EVENT}' AND at >= ? AND outcome <> 'CEILING'`,
+    [since],
+  );
+  const searches = await getDb().get<{ n: number | string }>(
+    `SELECT COUNT(*) AS n FROM bin_events
+      WHERE event_type = 'SOURCE_SEARCH' AND at >= ? AND provider = ? AND outcome <> 'CEILING'`,
+    [since, FIRECRAWL_PROVIDER_ID],
+  );
+  seedKeyedSearchUsage(FIRECRAWL_PROVIDER_ID, Number(searches?.n ?? 0) * firecrawlSearch.cost + Number(scrapes?.n ?? 0) * FIRECRAWL_SCRAPE_COST, now);
 }
 
 /** Start the adaptive pool. Off when no free model is configured. */
