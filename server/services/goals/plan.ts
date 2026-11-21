@@ -1249,18 +1249,35 @@ export function judgeAcceptance(input: {
    * the quant engine draws an unestablished price no better than its range's
    * centre, but the combination still counts that member's money toward the
    * target, and the plan then read as executable on it. An unknown price is
-   * never favourable evidence (invariant 39), so the candidate falls to the
-   * strategy judged on its chain, and the combination is said to rest on it.
+   * never favourable evidence (invariant 39), so the candidate is the best
+   * combination whose members all have a price, or the strategy judged on its
+   * chain when there is none, and the shortfall names the unpriced member.
    */
-  const unpriced = bestIds.filter((id) => (input.portfolio?.demand ?? []).find((d) => d.opportunityId === id)?.unestablished.includes('price'));
+  const unpricedIn = (ids: string[]) => ids.filter((id) => (input.portfolio?.demand ?? []).find((d) => d.opportunityId === id)?.unestablished.includes('price'));
+  const unpriced = unpricedIn(bestIds);
+  /*
+   * The held combination: the best one, or — when it counts an unpriced member —
+   * the best-ranked alternative whose members all have a price, so the
+   * candidate keeps the portfolio's own measure of reach. Swapping to another
+   * measure (a strategy's sweep share) made tightening a limit able to raise
+   * the reach the plan reports (planMetamorphic P6).
+   */
+  const pricedAlternative =
+    best && unpriced.length > 0
+      ? ([...(input.portfolio?.alternatives ?? [])].sort((a, b) => b.reach - a.reach).find((alt) => alt.members.length > 0 && unpricedIn([...new Set(alt.members.map((m) => m.opportunityId))]).length === 0) ?? null)
+      : null;
+  const held = unpriced.length === 0 ? best : pricedAlternative;
+  const heldIds = held ? [...new Set(held.members.map((m) => m.opportunityId))] : [];
   const candidate: PlanAcceptance['candidate'] =
-    best && bestIds.length > 0 && unpriced.length === 0
-      ? { label: best.members.map((m) => m.title.slice(0, 60)).join(' + '), opportunityIds: bestIds, source: 'QUANT_PORTFOLIO', settledP50: best.settledP50, reach: best.reach, reachBasis: input.portfolio!.basis }
+    held && heldIds.length > 0
+      ? { label: held.members.map((m) => m.title.slice(0, 60)).join(' + '), opportunityIds: heldIds, source: 'QUANT_PORTFOLIO', settledP50: held.settledP50, reach: held.reach, reachBasis: input.portfolio!.basis }
       : input.chosen && input.chosen.verdict !== 'NOT_VIABLE'
         ? { label: input.chosen.label, opportunityIds: input.chosen.opportunityIds, source: 'STRATEGY', settledP50: input.chosen.conservativeSettled ?? input.chosen.sweep.settledP50, reach: input.chosen.sweep.goalMetShare, reachBasis: input.chosen.sweep.goalMetShare === null ? null : input.chosen.sweep.probabilistic ? 'PROBABILITY' : 'COVERAGE' }
         : input.pathways?.portfolio.leading
           ? { label: input.pathways.portfolio.leading.members.join(' + '), opportunityIds: input.pathways.portfolio.leading.members, source: 'PATHWAYS', settledP50: input.pathways.portfolio.leading.net.p50, reach: null, reachBasis: null }
           : null;
+  // An alternative's construction is not the best combination's: the engine's assurance and interval are the best one's.
+  const constructionPortfolio = pricedAlternative ? null : (input.portfolio ?? null);
   if (input.achieved) {
     return {
       status: 'ACCEPTED',
@@ -1271,10 +1288,10 @@ export function judgeAcceptance(input: {
       shortfalls: [],
       sentence: 'The target is collected: the ledger holds it.',
       verdict: 'CONFIDENCE_VERIFIED',
-      construction: constructionOf(candidate, input.portfolio ?? null, bestIds),
+      construction: constructionOf(candidate, constructionPortfolio, heldIds),
     };
   }
-  const construction = constructionOf(candidate, input.portfolio ?? null, bestIds);
+  const construction = constructionOf(candidate, constructionPortfolio, heldIds);
   const shortfalls: string[] = [];
   // 2. The evidenced portfolio.
   if (best && input.portfolio) {
