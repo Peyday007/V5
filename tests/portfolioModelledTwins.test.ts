@@ -61,10 +61,18 @@ function design(key: string, base: Base, funding: Funding, aggregation: 'SINGLE'
   } as unknown as ConstructedArrangement;
 }
 
+/*
+ * Production's POOL sibling was a threshold presale. Days to cash is now read
+ * from each design's own payment structure (`structuralDaysToCash`): a presale
+ * settles once it fills, a prepaid sale at agreement, so the model tells those
+ * two apart (asserted below). The twin case keeps the POOL sibling paid the
+ * way PRODUCE is — prepaid — where nothing the engine reads differs.
+ */
+const productionPoolPresale = design('387d4be79ce1', 'POOL', 'THRESHOLD_PRESALE', 'POOLED_BUYERS');
 const siblings = [
   design('dd8c03dc647c', 'PRODUCE', 'PREPAID', 'SINGLE'),
   design('b1eb99139fbd', 'BROKER', 'THRESHOLD_PRESALE', 'POOLED_BUYERS'),
-  design('387d4be79ce1', 'POOL', 'THRESHOLD_PRESALE', 'POOLED_BUYERS'),
+  design('387d4be79ce1', 'POOL', 'PREPAID', 'POOLED_BUYERS'),
 ];
 const input = {
   projectId: 'prj_postcard',
@@ -87,6 +95,10 @@ describe('designs the model reads identically are one strategy', () => {
     expect(alone.map(arrangementKey)).toEqual(siblings.map((s) => s.key));
     const [produce, broker, pool] = alone as [PlannedOpening, PlannedOpening, PlannedOpening];
     expect(modelledTwinKey(pool)).toBe(modelledTwinKey(produce));
+    // A presale over the same buyers settles on another schedule: its days to cash differ, so it is a strategy of its own.
+    const presale = selectEstimatedArrangements([productionPoolPresale], input).openings[0]!;
+    expect(presale.daysToCash.high!).toBeGreaterThan(produce.daysToCash.high!);
+    expect(modelledTwinKey(presale)).not.toBe(modelledTwinKey(produce));
     // The broker keeps only a commission on the same buyers' price: a different reading, a different strategy.
     expect(modelledTwinKey(broker)).not.toBe(modelledTwinKey(produce));
     expect(broker.commission).toMatchObject({ basis: 'ASSUMPTION', established: false });

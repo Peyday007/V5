@@ -32,6 +32,16 @@ import { heldCentsForProject, heldCurrenciesForProject } from '../../repos/cashA
 import { currenciesInLedger, listMoneyEntries, totalsByKind } from '../../repos/cashLedger.ts';
 import type { CashMoneyEntry, CashMoneyKind } from '../../domain/types.ts';
 
+/**
+ * Days from a buyer's payment to usable funds through the payment provider:
+ * the payout delay cited above (Stripe's documentation: a first live payout is
+ * typically scheduled to complete within 7–14 days; later payouts follow the
+ * account's schedule, which Brain holds no figure for). The plan reads a
+ * prepaid design's settlement as this whole range — the first payout's,
+ * never a faster schedule nobody recorded (invariant 39).
+ */
+export const PROVIDER_PAYOUT_DAYS = { low: 7, high: 14, source: "Stripe's documented first live payout, 7–14 days (cash/money.ts, docs/CASH.md)" } as const;
+
 export interface CashPosition {
   currency: string;
   /** Proposed or agreed work with no cash received. Never added to anything. */

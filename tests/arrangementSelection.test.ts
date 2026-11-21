@@ -139,7 +139,10 @@ describe('S-1/S-2: different strategies are preserved, and one population is one
   it('keeps the strongest design of every structure and way of being paid, and protects the largest upside', () => {
     const brokers = Array.from({ length: 20 }, (_, i) => arrangement({ key: `b${i}`, p50: 600 }));
     const produce = arrangement({ key: 'produce', p50: 400, base: 'PRODUCE' });
-    const prepaid = arrangement({ key: 'prepaid', p50: 400, funding: 'PREPAID' });
+    // Priced below the pooled presales it competes with: a prepaid design's days to cash is read from its own
+    // structure (`structuralDaysToCash`), sooner than a presale's, so at 400 it out-screens them for the POOL slot
+    // itself. Here it must lose that slot and still be kept as the strongest design paid this way.
+    const prepaid = arrangement({ key: 'prepaid', p50: 200, funding: 'PREPAID' });
     const longShot = arrangement({ key: 'long-shot', p50: 200, p10: 50, p90: 20_000 });
     const selected = selectEstimatedArrangements([...brokers, produce, prepaid, longShot], base);
     const slot = (k: string) => selected.selection.picked.find((p) => p.arrangementKey === k)?.slot;
