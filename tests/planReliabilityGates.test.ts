@@ -195,6 +195,18 @@ describe('5. an unestablished price never makes a candidate', () => {
     expect(a.shortfalls.join(' ')).toMatch(/arr_constructed, whose price nobody has established/);
   });
 
+  it('holds the best priced alternative on the portfolio’s own measure, before falling to the strategy', () => {
+    const p = portfolio(['price']);
+    p.alternatives = [
+      { members: [{ opportunityId: 'arr_constructed', title: 'A constructed arrangement', share: 1 }], reach: 0.9, settledP10: 0, settledP50: 7000, settledP90: 9000, capitalShort: 0, overSpend: 0 },
+      { members: [{ opportunityId: 'cleaning', title: 'Post-construction cleanup', share: 1 }], reach: 0.6, settledP10: 3000, settledP50: 6000, settledP90: 6000, capitalShort: 0, overSpend: 0 },
+    ] as GoalPortfolio['alternatives'];
+    const a = judgeAcceptance({ achieved: false, chosen: strategy, portfolio: p, measuredChance: null, considered });
+    expect(a.candidate?.source).toBe('QUANT_PORTFOLIO');
+    expect(a.candidate?.opportunityIds).toEqual(['cleaning']);
+    expect(a.candidate?.reach).toBe(0.6);
+  });
+
   it('keeps the combination as the candidate when every member’s price is established', () => {
     const a = judgeAcceptance({ achieved: false, chosen: strategy, portfolio: portfolio(['close rate']), measuredChance: null, considered });
     expect(a.candidate?.source).toBe('QUANT_PORTFOLIO');
