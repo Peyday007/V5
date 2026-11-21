@@ -63,6 +63,7 @@ import { cardFactsFor } from '../../repos/cashCardFacts.ts';
 import { liveAuthority } from '../../repos/cashAuthority.ts';
 import { askHuman } from '../../repos/russellMissions.ts';
 import { hostReachability } from '../../repos/research.ts';
+import { keyedSourceChangesSince } from '../../repos/watchedSources.ts';
 import {
   blockerArgumentOf,
   blockerKindOf,
@@ -100,6 +101,7 @@ export const RECONSIDER_SOURCES = Object.freeze({
   manufacturing: 'reconsider:manufacturing',
   evidence: 'reconsider:evidence',
   sourceHosts: 'reconsider:source-hosts',
+  watchedSources: 'reconsider:watched-sources',
 });
 
 /** The prefix of every Needs-You request this module raises. */
@@ -142,6 +144,15 @@ const LIVE_FLAG_KINDS: ReadonlySet<BlockerKind> = new Set([
   'SOURCE_HOST',
   'DEPENDENCY',
   'DATE',
+  /*
+   * Market-wide kinds. They only ever change through a watched source that
+   * names the exact key (`detectWatchedSources`), so a live piece waiting on
+   * one is flagged exactly when a page someone chose to watch changed.
+   */
+  'SUPPLIER',
+  'COST',
+  'CUSTOMER',
+  'REGULATION',
 ]);
 
 /** States a person put a piece in; a trigger on one asks them rather than moving it. */
@@ -679,6 +690,60 @@ async function detectSourceHosts(
 }
 
 /**
+ * The watched-source reading (§65): every `source_changes` row whose watch
+ * names a blocker key, since a little behind the watermark. This is what moves
+ * a SUPPLIER, COST, CUSTOMER or REGULATION key from NOT_DETECTED to MARKER —
+ * that key only, because only it is watched.
+ *
+ * The change ref is the change row's id, so a re-read row is the same change
+ * and `consumeChange` lands it once per piece; a second, distinct change on
+ * the same page reconsiders again. The change is a reason to evaluate again,
+ * never the fact: the page's re-read goes through the claim gate.
+ */
+async function detectWatchedSources(
+  projectId: string,
+): Promise<{ changes: Change[]; commit: PendingCommit | null }> {
+  const watermark = await getWatermark(projectId, RECONSIDER_SOURCES.watchedSources);
+  const since = watermark
+    ? new Date(Date.parse(watermark.through) - 5 * 60_000).toISOString()
+    : null;
+  const rows = await keyedSourceChangesSince(projectId, since);
+  const changes: Change[] = [];
+  for (const row of rows) {
+    if (!row.blockerKey) continue;
+    changes.push({
+      key: row.blockerKey,
+      changeRef: `${row.blockerKey}@${row.id}`,
+      at: row.createdAt,
+      detail: {
+        watchedSourceId: row.watchedSourceId,
+        sourceChangeId: row.id,
+        url: row.url,
+        oldHash: row.oldHash,
+        newHash: row.newHash,
+        rereadCandidateId: row.rereadCandidateId,
+      },
+    });
+  }
+  // The window only moves to the newest row read, so a bounded read resumes
+  // where it stopped rather than skipping what it did not reach.
+  const newest = rows[rows.length - 1];
+  if (!newest || (watermark && newest.createdAt <= watermark.through)) return { changes, commit: null };
+  const through = newest.createdAt;
+  return {
+    changes,
+    commit: {
+      source: RECONSIDER_SOURCES.watchedSources,
+      from: watermark?.through ?? null,
+      fromMarker: watermark?.marker ?? null,
+      through,
+      marker: watermark?.marker ?? '',
+      events: [],
+    },
+  };
+}
+
+/**
  * Every change since the last pass, per source. Reads only; writes nothing.
  *
  * `readings` may be passed in by a caller that already read the vocabulary;
@@ -702,6 +767,7 @@ export async function detectChanges(
     await detectManufacturing(projectId, position),
     await detectEvidence(projectId, position),
     await detectSourceHosts(projectId, position),
+    await detectWatchedSources(projectId),
   ]) {
     changes.push(...source.changes);
     if (source.commit) commits.push(source.commit);

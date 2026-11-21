@@ -68,6 +68,7 @@ import {
   setNeedBlockerKeyIfUnset,
 } from '../../repos/cashPortfolio.ts';
 import { advanceWatermark, getWatermark } from '../../repos/cashReconsideration.ts';
+import { checkDueWatchedSources, type WatchOutcome } from '../feeds/watch.ts';
 import { parseBlockerKey } from '../../domain/types.ts';
 import {
   recordDerivedReopenConditions,
@@ -1782,6 +1783,8 @@ export async function operate(
   factory?: FactoryHandoffPass;
   /** Qualified openings made execution jobs, and live jobs kept in step (`jobPipeline.ts`). */
   jobs?: JobReconciliation | { error: string };
+  /** Each due watched page's read (`feeds/watch.ts`); absent when Cash Mode is not active. */
+  watchedSources?: WatchOutcome[] | { error: string };
   /** What changed and who it reconsidered (`reconsider.ts`); absent when Cash Mode is not active. */
   reconsideration?:
     | Omit<ReconsiderPass, 'readings'>
@@ -1841,6 +1844,18 @@ export async function operate(
    * then reads nothing itself. A failure here is its own failure domain: the
    * capability path reads the vocabulary for itself and the rest still runs.
    */
+  /*
+   * The watched pages first (`feeds/watch.ts`): a changed page is a
+   * `source_changes` row and a re-read idea, which the reconsideration pass
+   * right below consumes as its key's change. Its own failure domain: a page
+   * that cannot be read is recorded on its watch and stops nothing.
+   */
+  let watched: WatchOutcome[] | { error: string };
+  try {
+    watched = await withActivity('cash:checkDueWatchedSources', () => checkDueWatchedSources(projectId));
+  } catch (error) {
+    watched = { error: error instanceof Error ? error.message.slice(0, 300) : 'failed' };
+  }
   let reconsidered: ReconsiderPass | { error: string } | null = null;
   try {
     reconsidered = await withActivity('cash:reconsiderAffected', () => reconsiderAffected(projectId, { now }));
@@ -2020,6 +2035,7 @@ export async function operate(
     standing = { error: error instanceof Error ? error.message.slice(0, 300) : 'failed' };
   }
   return {
+    watchedSources: watched,
     reconsideration: reconsidered && 'readings' in reconsidered
       ? {
           changes: reconsidered.changes,
