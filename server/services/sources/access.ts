@@ -18,6 +18,10 @@
  *               routes cannot read (`connectors.ts`).
  *   BROWSER     a JavaScript render in Playwright MCP, run as a separate app
  *               (`browserMcp.ts`) — only where robots.txt allows the path.
+ *   FIRECRAWL   Firecrawl's scrape API (`firecrawl.ts`), a keyed, credit-billed
+ *               fallback run only after DIRECT and BROWSER failed or came back
+ *               thin, only where robots.txt allows the path, and only while
+ *               `FIRECRAWL_API_KEY` is set. The page is cited at its own address.
  *   SITEMAP     the same site's sitemap or feed, for a deep link that 404s: the
  *               page the site now lists for the closest path. What is returned
  *               is that page, under its own address, never the address asked for.
@@ -57,9 +61,10 @@ import {
 } from './acquisition.ts';
 import { activeRoutine, routinesFrom, type Routine, type RoutineUse } from './routines.ts';
 import { boundaryOfRead, classOfRoute, selectAccessMethod, type AccessEvidence } from './accessMethods.ts';
+import { firecrawlConfigured, firecrawlScrape } from './firecrawl.ts';
 import { checkDestination, fetchForWorker, systemResolver, type Resolver, type SourceFetch } from './fetchForWorker.ts';
 
-export const ACCESS_METHODS = ['DIRECT', 'CONNECTOR', 'BROWSER', 'SITEMAP', 'ARCHIVE', 'SEARCH'] as const;
+export const ACCESS_METHODS = ['DIRECT', 'CONNECTOR', 'BROWSER', 'FIRECRAWL', 'SITEMAP', 'ARCHIVE', 'SEARCH'] as const;
 export type AccessMethod = (typeof ACCESS_METHODS)[number];
 
 export interface AccessAttempt {
@@ -89,6 +94,12 @@ export type SourceRead = SourceFetch & {
 export interface AccessDeps {
   direct?: (url: string) => Promise<SourceFetch>;
   browser?: ((url: string) => Promise<SourceFetch>) | null;
+  /**
+   * Firecrawl's scrape (`firecrawl.ts`), null when it cannot run. Defaults on only
+   * when the key is set and no reader was injected, so an injected read never
+   * reaches the real, billed API.
+   */
+  firecrawl?: ((url: string) => Promise<SourceFetch | null>) | null;
   resolve?: Resolver;
   /** Whether robots.txt lets a general reader fetch this URL. */
   robotsAllow?: (url: string) => Promise<boolean>;
@@ -854,6 +865,8 @@ export async function readSource(url: string, deps: AccessDeps = {}): Promise<So
   const direct = deps.direct ?? ((u: string) => fetchForWorker(u));
   const browser = deps.browser === undefined ? (browserMcpUrl() ? (u: string) => renderInBrowser(u) : null) : deps.browser;
   const robotsAllow = deps.robotsAllow ?? defaultRobotsAllow;
+  const firecrawl =
+    deps.firecrawl !== undefined ? deps.firecrawl : !deps.direct && firecrawlConfigured() ? (u: string) => firecrawlScrape(u) : null;
   const archive = deps.archive ?? ((u: string) => archivedCopy(u, direct));
   const sitemap = deps.sitemap ?? ((u: string) => sitemapSuccessor(u, direct));
   const connector = deps.connector ?? ((u: string) => connectorFor(u)?.(u, direct) ?? Promise.resolve(null));
@@ -869,10 +882,11 @@ export async function readSource(url: string, deps: AccessDeps = {}): Promise<So
   let routineUsed: RoutineUse | undefined;
   const terms: ReadTerms = {};
   /** Whether the site's robots.txt allows the browser route; a refusal is recorded as a term of this read. */
+  let robotsVerdict: boolean | null = null;
   const browserAllowed = async (): Promise<boolean> => {
-    const allowed = await robotsAllow(url).catch(() => false);
-    if (!allowed) terms.robotsDisallows = true;
-    return allowed;
+    robotsVerdict ??= await robotsAllow(url).catch(() => false);
+    if (!robotsVerdict) terms.robotsDisallows = true;
+    return robotsVerdict;
   };
 
   const attempt = async (method: AccessMethod, run: () => Promise<SourceFetch | null>): Promise<SourceFetch | null> => {
@@ -962,6 +976,18 @@ export async function readSource(url: string, deps: AccessDeps = {}): Promise<So
     if (rendered && better(rendered, bestRead)) {
       bestRead = rendered;
       bestMethod = 'BROWSER';
+    }
+    if (bestRead.readable && !wantsBrowser(bestRead)) return done(bestRead, bestMethod);
+  }
+
+  // Firecrawl, only after DIRECT (and BROWSER, where it runs) failed or came back
+  // thin, under the same robots rule as the browser. It spends a credit, so it is
+  // never asked for a page that is gone (that is SITEMAP's and ARCHIVE's question).
+  if (firecrawl && wantsBrowser(first) && (!bestRead.readable || wantsBrowser(bestRead)) && (await browserAllowed())) {
+    const scraped = await attempt('FIRECRAWL', () => firecrawl(url));
+    if (scraped && better(scraped, bestRead)) {
+      bestRead = { ...scraped, requestedUrl: url };
+      bestMethod = 'FIRECRAWL';
     }
     if (bestRead.readable && !wantsBrowser(bestRead)) return done(bestRead, bestMethod);
   }

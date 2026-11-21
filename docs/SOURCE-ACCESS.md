@@ -12,6 +12,7 @@ always did, plus the route that produced it.
 | DIRECT (`fetchForWorker`) | always first, unless the host's own record says it never works there | the page (HTML, text, JSON, XML, and now PDF text) |
 | CONNECTOR (`connectors.ts`) | a site with its own public API, added only from measured failures | the page, or the API address when the content differs |
 | BROWSER (`browserMcp.ts`) | 403/429/503, empty or thin page, JS shell; only where robots.txt allows the path | the page |
+| FIRECRAWL (`firecrawl.ts`) | DIRECT and BROWSER failed or came back thin, `FIRECRAWL_API_KEY` is set, under the daily credit ceiling; only where robots.txt allows the path | the page's own address (Firecrawl is the route, recorded on the read, never the citation) |
 | SITEMAP | 404/410: the page the same site's sitemap or feed now lists for the closest path | the successor page's own address |
 | ARCHIVE | gone, blocked or unreadable and the Internet Archive has a 200 snapshot | the `web.archive.org/web/<ts>/<url>` snapshot address |
 
@@ -27,6 +28,30 @@ login-wall or "not found" page is reported unreadable whichever route fetched
 it: the first production comparison showed most browser "reads" of 403 pages
 were Cloudflare/PerimeterX block pages, and none of them is a source.
 
+## Firecrawl, an optional keyed fallback (2026-11-21)
+
+Brain calls Firecrawl's API v1 in two places, both inert until the deployment
+holds `FIRECRAWL_API_KEY` (registry entry `firecrawl`, §103):
+
+- **search** — the second entry of `KEYED_SEARCH_PROVIDERS` (`keyedSearch.ts`),
+  after Google Programmable Search. A provider that is unconfigured, resting,
+  over its ceiling, refused (400/401/402/403/429), failing (5xx, timeout) or
+  empty passes the query to the next, and after the last DuckDuckGo answers
+  (`discover.ts`), so a search is never stranded.
+- **scrape** — the FIRECRAWL route above, asked for markdown only after DIRECT
+  and BROWSER failed or came back thin. It is never asked for a 401/402/451, a
+  refused address, a path robots.txt disallows, or a page that is gone; a block
+  or "not found" page it returns is still reported unreadable, and a site
+  status it reports as an error is returned as that error.
+
+Both spend from one daily credit count, `BRAIN_FIRECRAWL_DAILY_CEILING`
+(default 15, inside the free tier): a scrape is 1 credit, a search is counted
+as 2. Credits are counted before the request is sent, a timeout included;
+reaching the ceiling is recorded once a UTC day and the work falls through. The
+key travels only in the `Authorization` header, and every recorded detail is
+redacted against it. Extracted text enters the same verification and gate as
+every other read: it is never a fact by itself.
+
 ## Why Playwright MCP (2026-11-04)
 
 The owner remembered a starred browser/crawler project named something like
@@ -41,7 +66,7 @@ not guessed at here.
 | what runs | one container (Node + Chromium), official image `mcr.microsoft.com/playwright/mcp` | one container (Python + Playwright + Chromium + Redis), REST `/md` and an MCP SSE endpoint | API + workers + Playwright service + Redis to self-host |
 | protocol | MCP streamable HTTP, first-party | REST, MCP secondary | MCP over a paid API |
 | footprint | runs in 1 GB | 2-4 GB recommended | several services |
-| fit | renders a page and returns its visible text through `browser_evaluate`; Brain does its own extraction, verification and citation | better markdown and deep crawling — features Brain's gate does not need | no free self-hosted path that is lighter than the other two |
+| fit | renders a page and returns its visible text through `browser_evaluate`; Brain does its own extraction, verification and citation | better markdown and deep crawling — features Brain's gate does not need | no free self-hosted path that is lighter than the other two; since 2026-11-21 Brain calls its hosted API directly (not the MCP) as an optional keyed fallback, inside a free-tier credit ceiling |
 
 Selected: **Playwright MCP**, as its own Fly app (`.github/workflows/browser.yml`,
 `northline-browser`, Flycast-only private address, auto-stop when idle). It is
