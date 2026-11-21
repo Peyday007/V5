@@ -85,6 +85,35 @@ jobs:
 
       - uses: ./.github/actions/await-release
 
+      - name: Wait for the Brain's boot rebuild
+        # The release check reads plans in child processes on the app's own
+        # machine. Run beside the app's post-boot derived-state rebuild, they
+        # put three full processes on the 4096 MB box and the kernel OOM-killed
+        # the app (2026-11-21, 21:08:22Z). So the check waits for /healthz and
+        # for the app's own mark that the rebuild finished (`goals.sh ready`),
+        # up to 20 minutes, and then runs anyway: a stuck rebuild must not
+        # disable the check, and the children's heap cap still bounds it.
+        if: ${{ (inputs.command || 'check') == 'check' }}
+        timeout-minutes: 22
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -u
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          end=$(( $(date +%s) + 20 * 60 ))
+          while [ "$(date +%s)" -lt "$end" ]; do
+            code=$(curl -s -m 20 -o /dev/null -w '%{http_code}' "https://$app.fly.dev/healthz" || true)
+            if [ "$code" = 200 ]; then
+              state=$(timeout 90 flyctl ssh console --app "$app" -C "sh /app/scripts/goals.sh ready" 2>/dev/null | tr -d '\r' | grep -m1 '^DERIVED_STATE' || true)
+              echo "healthz $code; ${state:-DERIVED_STATE unknown}"
+              case "$state" in "DERIVED_STATE READY"*) exit 0 ;; esac
+            else
+              echo "healthz $code"
+            fi
+            sleep 30
+          done
+          echo "::warning::The app did not mark its boot rebuild finished within 20 minutes; running the check anyway."
+
       - name: Run
         # An SSH session a deploy restarts under hangs until GitHub's six-hour job
         # limit and holds every later read behind it (2026-11-02, twice). admin.yml

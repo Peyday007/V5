@@ -42,33 +42,50 @@ describe('the release checks the plans it released', () => {
 
   it('ends the check process once its verdict is printed, so a pass is never reported as a timeout', () => {
     // 2026-11-19 22:22: GOALS: OK printed, then background work held the process to the 30-minute step timeout.
-    const script = read('scripts/goals.ts');
+    const script = read('scripts/goalsCli.ts');
     const body = script.slice(script.indexOf('async function check()'), script.indexOf('async function construct()'));
     const ok = body.lastIndexOf("console.log('GOALS: OK')");
     expect(ok).toBeGreaterThan(0);
     expect(body.slice(ok)).toMatch(/process\.exit\(0\)/);
+    // The parent that spawned the reads prints the verdict and ends too.
+    expect(read('scripts/goals.ts')).toMatch(/command === 'check'\) process\.exit\(/);
   });
 
   it('reads each goal in its own child process, killed at its bound, so one blocked read cannot time the whole check out', () => {
     // 2026-11-20 (check 44718014146): one goal's read held the event loop for twenty minutes; no in-process timer could fire.
     const script = read('scripts/goals.ts');
-    const body = script.slice(script.indexOf('async function check()'), script.indexOf('async function construct()'));
+    const body = script.slice(script.indexOf('async function checkGoals('), script.indexOf('async function main()'));
     expect(body).toMatch(/BRAIN_CHECK_CHILD/);
     expect(body).toMatch(/checkInChild\(goalId/);
     // The kill is scripts/boundedChild.ts's, shared with `plan` (tests/boundedChild.test.ts runs it against real children).
     expect(body).toMatch(/runBoundedChild\(/);
     expect(read('scripts/boundedChild.ts')).toMatch(/child\.kill\('SIGKILL'\)/);
-    expect(body).toMatch(/ERROR the plan read did not finish within/);
+    expect(read('scripts/boundedChild.ts')).toMatch(/the plan read did not finish within/);
   });
 
   it('reads `goals plan` in a bounded child too, and ends it once its verdict is printed', () => {
     // 2026-11-21 (run 44935606985): goal C's read printed GOALS: OK at 18:29:39 and held the step to its 30-minute timeout.
-    const script = read('scripts/goals.ts');
+    const entry = read('scripts/goals.ts');
+    const parent = entry.slice(entry.indexOf('async function planGoal('), entry.indexOf('async function checkGoals('));
+    expect(parent).toMatch(/BRAIN_PLAN_CHILD/);
+    expect(parent).toMatch(/runBoundedChild\(/);
+    const script = read('scripts/goalsCli.ts');
     const body = script.slice(script.indexOf('async function plan()'), script.indexOf('async function check()'));
-    expect(body).toMatch(/BRAIN_PLAN_CHILD/);
-    expect(body).toMatch(/runBoundedChild\(/);
     const ok = body.lastIndexOf("console.log('GOALS: OK')");
     expect(ok).toBeGreaterThan(0);
     expect(body.slice(ok)).toMatch(/process\.exit\(0\)/);
+  });
+
+  it('waits for the app to mark its boot derived-state rebuild finished before reading plans beside it', () => {
+    // 2026-11-21 21:08:22Z: the app was OOM-killed while a check's reads ran beside its post-boot rebuild.
+    const goals = read('.github/workflows/goals.yml');
+    const wait = goals.slice(goals.indexOf("name: Wait for the Brain's boot rebuild"), goals.indexOf('- name: Run'));
+    expect(wait).toContain("if: ${{ (inputs.command || 'check') == 'check' }}");
+    expect(wait).toContain('/healthz');
+    expect(wait).toContain('sh /app/scripts/goals.sh ready');
+    expect(read('scripts/goals.sh')).toContain('brain-derived-state-rebuilt');
+    const rebuild = read('server/index.ts');
+    const step = rebuild.slice(rebuild.indexOf("afterListenStep('rebuild derived state'"));
+    expect(step.slice(0, step.indexOf('BOOT_GRACE_STAGGER_MS')).trimEnd()).toMatch(/markDerivedStateRebuilt\(\);\s*\}\);\s*\},$/);
   });
 });

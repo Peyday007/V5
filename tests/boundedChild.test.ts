@@ -11,7 +11,11 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { runBoundedChild } from '../scripts/boundedChild.ts';
+import { childArgs, failureReason, goalsChildHeapMb, runBoundedChild } from '../scripts/boundedChild.ts';
+import { checkGoals, planGoal, type ReadChildren } from '../scripts/goals.ts';
+
+/** Holds everything it allocates, so it can only end at its heap cap. */
+const GROWS = "const held = [];\nfor (;;) held.push(new Array(1e5).fill({ x: Math.random() }));\n";
 
 const dir = mkdtempSync(join(tmpdir(), 'bounded-child-'));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -50,10 +54,89 @@ describe('a read run in a bounded child', () => {
     expect(run.elapsedMs).toBeLessThan(5_000);
   });
 
+  it('runs a child under the heap cap, replacing any cap it would have inherited', async () => {
+    const path = child('argv', "console.log('ARGV ' + JSON.stringify(process.execArgv));\nconsole.log('GOALS: OK');\n");
+    const run = await runBoundedChild({ args: ['--max-old-space-size=4096', path], ms: 60_000, heapMb: 700 });
+    expect(run.verdict).toBe('GOALS: OK');
+    const argv = JSON.parse(/^ARGV (.*)$/m.exec(run.out)![1]!) as string[];
+    expect(argv).toContain('--max-old-space-size=700');
+    expect(argv.filter((one) => one.startsWith('--max-old-space-size'))).toEqual(['--max-old-space-size=700']);
+    expect(childArgs(['--max-old-space-size', '2048', '--import', 'tsx', 's.ts'], 700)).toEqual(['--max-old-space-size=700', '--import', 'tsx', 's.ts']);
+  });
+
+  it('defaults a goals child to 700 MB, overridable by BRAIN_GOALS_CHILD_HEAP_MB', () => {
+    expect(goalsChildHeapMb({})).toBe(700);
+    expect(goalsChildHeapMb({ BRAIN_GOALS_CHILD_HEAP_MB: '512' })).toBe(512);
+    expect(goalsChildHeapMb({ BRAIN_GOALS_CHILD_HEAP_MB: 'lots' })).toBe(700);
+  });
+
+  it('reports a child that outgrows its heap cap as out of memory, promptly, rather than waiting for its bound', async () => {
+    const run = await runBoundedChild({ args: [child('grows', GROWS)], ms: 60_000, heapMb: 48 });
+    expect(run.verdict).toBeNull();
+    expect(run.killed).toBeNull();
+    expect(run.outOfMemory).toBe(true);
+    expect(failureReason(run, 60_000, 48)).toMatch(/48 MB heap cap.*\(out of memory\)$/);
+    expect(run.elapsedMs).toBeLessThan(30_000);
+  });
+
   it('leaves a child that exits after its verdict alone, and reads a failing verdict as one', async () => {
     const clean = await runBoundedChild({ args: [child('clean', "console.log('GOALS: OK');\n")], ms: 60_000 });
     expect(clean).toMatchObject({ verdict: 'GOALS: OK', killed: null });
     const failed = await runBoundedChild({ args: [child('fails', "console.log('GOALS: FAIL');\nprocess.exitCode = 1;\n")], ms: 60_000 });
     expect(failed).toMatchObject({ verdict: 'GOALS: FAIL', killed: null });
+  });
+});
+
+/**
+ * Production OOM, 2026-11-21 21:08:22Z: during a release check the app, the
+ * goals parent and an uncapped child shared the 4096 MB machine, and the kernel
+ * killed the app. The parent (scripts/goals.ts) now spawns each read under a
+ * heap cap; a read that outgrows it is that goal's ERROR, and the check goes on.
+ */
+describe('the goals release check and plan, against children that stand in for the reads', () => {
+  // A stand-in for `goals.ts check <goal>` / `plan <goal>`: argv[2] is the command, argv[3] the goal.
+  const fake = child(
+    'goal-read',
+    [
+      'const [, , command, goalId] = process.argv;',
+      "if (process.env.BRAIN_CHECK_CHILD === 'list') { console.log('GOAL g-ok'); console.log('GOAL g-oom'); console.log('GOAL g-after'); console.log('GOALS: OK'); process.exit(0); }",
+      `if (goalId === 'g-oom') { ${GROWS} }`,
+      "console.log(`INTEGRITY ${goalId} OK ${command} ${JSON.stringify(process.execArgv)}`);",
+      "console.log('GOALS: OK');",
+    ].join('\n'),
+  );
+  function io(): ReadChildren & { text: () => string } {
+    let text = '';
+    return { script: fake, execArgv: [], env: process.env, heapMb: 48, write: (t) => void (text += t), text: () => text };
+  }
+
+  it('reads every listed goal under the cap, reports the one that ran out of memory as its ERROR, and does not hang', async () => {
+    const out = io();
+    const started = Date.now();
+    const ok = await checkGoals([], out);
+    expect(ok).toBe(false);
+    const text = out.text();
+    expect(text).toContain('INTEGRITY g-ok OK check ["--max-old-space-size=48"]');
+    expect(text).toMatch(/^INTEGRITY g-oom ERROR .*\(out of memory\)$/m);
+    // The goal after it is still read.
+    expect(text).toContain('INTEGRITY g-after OK check');
+    expect(text.trimEnd().split('\n').at(-1)).toBe('GOALS: INTEGRITY FAILED');
+    expect(text.match(/^GOALS: /gm)).toHaveLength(1);
+    expect(Date.now() - started).toBeLessThan(60_000);
+  });
+
+  it('passes a check whose reads all pass', async () => {
+    const out = io();
+    expect(await checkGoals(['g-ok'], out)).toBe(true);
+    expect(out.text().trimEnd().split('\n').at(-1)).toBe('GOALS: OK');
+  });
+
+  it('fails a plan read that outgrew its heap, saying so', async () => {
+    const out = io();
+    expect(await planGoal('g-oom', out)).toBe(false);
+    expect(out.text()).toMatch(/error {7}.*\(out of memory\)\nGOALS: FAILED\n$/);
+    const good = io();
+    expect(await planGoal('g-ok', good)).toBe(true);
+    expect(good.text()).toContain('["--max-old-space-size=48"]');
   });
 });
