@@ -153,6 +153,7 @@ import {
   reaskRefusedPlans,
   reopenAnswered,
   resumeAnsweredRequest,
+  NEEDS_HUMAN_CHOICES,
 } from './needsHuman.ts';
 import type { RussellHumanRequest } from '../../domain/types.ts';
 import { parseJson } from '../../repos/util.ts';
@@ -681,6 +682,18 @@ export interface TickReport {
 
 /** The resume's own sentence for an answer whose mission left NEEDS_HUMAN. */
 const MISSION_LEFT_NEEDS_YOU = 'the mission moved out of Needs You before the answer could be applied';
+
+/**
+ * The reason for an answer whose resume ran, failed, and found the mission
+ * gone from NEEDS_HUMAN afterwards. The move is what makes it moot, and the
+ * resume's own refusal is what actually happened to the answer — both are
+ * kept, so the card never loses the sentence saying why nothing was done.
+ * (An answer filtered before any resume ran has no refusal to keep.)
+ */
+export function movedOutAfterResume(refusal: string): string {
+  const said = refusal.trim();
+  return said ? `${MISSION_LEFT_NEEDS_YOU}; the resume itself refused: ${said}` : MISSION_LEFT_NEEDS_YOU;
+}
 
 /**
  * An answer that was not carried out — always an unresolved answer of this
@@ -2656,6 +2669,25 @@ async function tickOnce(owner: string): Promise<TickReport> {
       // research slot keeps its place, and a window that size would hide a
       // newer answer behind it for ever.
       for (const request of await listAnsweredRequests(500)) {
+        /*
+         * Read the mission before resuming. Every answer but STOP is applied
+         * through a transition guarded on NEEDS_HUMAN, so once the mission has
+         * left it no resume can apply — and resuming anyway is not harmless:
+         * RECORD_GAPS authorizes the packet's unresolved gaps in the answerer's
+         * name before it discovers the mission has moved on. Such an answer is
+         * settled as moot straight away, through `reopenAnswered`'s guarded
+         * ANSWERED -> OPEN -> WITHDRAWN path, and never resumed. STOP still
+         * goes to the resume, because `stop()` applies from any state. A
+         * request with no mission, or whose mission still waits, is resumed as
+         * before.
+         */
+        if (request.missionId && request.answeredChoice !== NEEDS_HUMAN_CHOICES.STOP.key) {
+          const before = await getMission(request.missionId);
+          if (before && before.state !== 'NEEDS_HUMAN') {
+            await settleUnresolvedAnswer(report, request, MISSION_LEFT_NEEDS_YOU);
+            continue;
+          }
+        }
         const outcome = await resumeAnsweredRequest(request);
         if (outcome.deferred) {
           /*
@@ -2677,7 +2709,14 @@ async function tickOnce(owner: string): Promise<TickReport> {
           continue;
         }
         if (!outcome.settled) {
-          await settleUnresolvedAnswer(report, request, outcome.reason);
+          /*
+           * Re-read after the failed resume: a mission that left NEEDS_HUMAN
+           * while it ran is just as moot, so it is settled as such (and
+           * `reopenAnswered` withdraws it by the mission's state) — with the
+           * resume's own refusal kept beside the move, never replaced by it.
+           */
+          const after = request.missionId ? await getMission(request.missionId) : null;
+          await settleUnresolvedAnswer(report, request, after && after.state !== 'NEEDS_HUMAN' ? movedOutAfterResume(outcome.reason) : outcome.reason);
           continue;
         }
         if (await markResumed(request.id)) report.resumed.push(request.id);

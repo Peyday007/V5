@@ -166,10 +166,18 @@ function membership(id: string, role: ProjectMembership['role'] = 'MEMBER'): Pro
  * operator's own predicate (`moot`, domain/operator.ts): no answer but STOP
  * can apply (the rest are guarded on NEEDS_HUMAN), and a STOP would only cancel
  * a mission that already ended or is running on its own, so Brain withdraws the
- * card itself — the reason kept, one routine decision
- * recorded — rather than putting it back in front of a person (production,
+ * card itself — the reason it can no longer apply on the card, one routine
+ * decision recorded — rather than putting it back in front of a person (production,
  * 2026-11-12: 31 such cards held a goal on "PERSON"). Never marked resumed.
  */
+/**
+ * The reason an answer whose mission already left Needs You is withdrawn with.
+ * The loop reads the mission before resuming (filter-at-loop), so such an
+ * answer is never resumed — no resume can apply to it — and the withdrawal
+ * names the mission's move rather than whatever the resume would have refused.
+ */
+const MOVED_OUT_REASON = /the mission moved out of Needs You before the answer could be applied/;
+
 async function expectWithdrawnAsMoot(requestId: string, missionState: string, reason: RegExp): Promise<void> {
   const card = (await getHumanRequest(requestId))!;
   expect(card.state).toBe('WITHDRAWN');
@@ -2333,11 +2341,13 @@ describe('the loop keeps going without anybody watching', () => {
     const after = await tick('instance-a');
     expect(after.resumed).not.toContain(request.id);
     expect(after.unresolvedAnswers.map((entry) => entry.requestId)).toContain(request.id);
-    // Not marked acted-on. Its mission is no longer waiting on it, so no
-    // answer can apply: withdrawn as moot, with the refusal kept.
+    // Not marked acted-on. Its mission had already left NEEDS_HUMAN when the
+    // loop read it, so no answer can apply and none is resumed: withdrawn as
+    // moot, naming the mission's move (filter-at-loop) rather than a refusal.
     const missionNow = (await getMission(mission.id))!.state;
     expect(missionNow).not.toBe('NEEDS_HUMAN');
-    await expectWithdrawnAsMoot(request.id, missionNow, /nothing in this packet is waiting to be approved/i);
+    await expectWithdrawnAsMoot(request.id, missionNow, MOVED_OUT_REASON);
+    expect((await getHumanRequest(request.id))!.whyNotRussell).not.toMatch(/nothing in this packet is waiting to be approved/i);
   });
 
   it('refuses to record gaps on an empty packet even when the request offers it', async () => {
@@ -2411,10 +2421,12 @@ describe('the loop keeps going without anybody watching', () => {
      * answer but STOP is applied through a transition guarded on NEEDS_HUMAN
      * and cannot apply, and the STOP that would be left to offer would only
      * cancel a mission that has already ended — not a decision anybody needs
-     * to make. It is withdrawn as moot, with Brain's own sentence about the
-     * refusal kept on it.
+     * to make. The loop reads the mission before resuming, finds it FAILED,
+     * and withdraws the card as moot naming that move — no resume runs, so
+     * there is no refusal sentence to keep.
      */
-    await expectWithdrawnAsMoot(request.id, 'FAILED', /no fragments/i);
+    await expectWithdrawnAsMoot(request.id, 'FAILED', MOVED_OUT_REASON);
+    expect((await getHumanRequest(request.id))!.whyNotRussell).not.toMatch(/no fragments/i);
     expect((await listOpenRequests(projectId)).map((entry) => entry.id)).not.toContain(request.id);
     expect((await getMission(mission.id))!.state).toBe('FAILED');
   });
@@ -2497,11 +2509,12 @@ describe('the loop keeps going without anybody watching', () => {
     expect(orchestration!.unresolvedGapAuthorizedBy).toBeNull();
 
     // And the decision is not left answered: its mission no longer waits on
-    // it, so it is withdrawn as moot with this packet's own refusal kept —
-    // "no report to file", not the other stop's words.
+    // it, so the loop withdraws it as moot before any resume, naming the
+    // mission's move out of Needs You rather than any packet's refusal.
     const missionNow = (await getMission(mission.id))!.state;
     expect(missionNow).not.toBe('NEEDS_HUMAN');
-    await expectWithdrawnAsMoot(request.id, missionNow, /no report to file/i);
+    await expectWithdrawnAsMoot(request.id, missionNow, MOVED_OUT_REASON);
+    expect((await getHumanRequest(request.id))!.whyNotRussell).not.toMatch(/no report to file/i);
   });
 
   it('leaves an answer it cannot carry out visible, rather than marking it resumed', async () => {
@@ -2574,11 +2587,13 @@ describe('the loop keeps going without anybody watching', () => {
      * nothing recorded why. The property is that an answer nothing carried out
      * is never silently lost and never marked resumed. This mission is
      * RUNNING — it is not waiting on the card — so only a STOP could still
-     * apply, and that would cancel work that is running on its own: it is
-     * withdrawn as moot, with the refusal on the card and one routine decision
-     * recorded, rather than re-asked.
+     * apply, and that would cancel work that is running on its own: the loop
+     * reads that state before resuming and withdraws it as moot, naming the
+     * move out of Needs You, with one routine decision recorded, rather than
+     * re-asked.
      */
-    await expectWithdrawnAsMoot(request.id, 'RUNNING', /does not implement the answer/i);
+    await expectWithdrawnAsMoot(request.id, 'RUNNING', MOVED_OUT_REASON);
+    expect((await getHumanRequest(request.id))!.whyNotRussell).not.toMatch(/does not implement the answer/i);
     expect((await getHumanRequest(request.id))!.state).not.toBe('RESUMED');
   });
 
