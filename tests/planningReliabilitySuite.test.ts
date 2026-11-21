@@ -11,7 +11,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { findSuite } from '../server/domain/evolutionSuites.ts';
-import { caseProblem, LINKS, type PlanningCase } from '../bench/planningReliability/case.ts';
+import { caseProblem, CONVERSION_UNITS, conversionSentence, LINKS, type ConversionUnit, type PlanningCase } from '../bench/planningReliability/case.ts';
+import { readInboundCommitments } from '../server/services/cash/goalScenario.ts';
 import { PUBLIC_CASES } from '../bench/planningReliability/cases.ts';
 import { constraintsNamed, CRITICAL, grade, observe, ownerHours, type ObservedPlan } from '../bench/planningReliability/grade.ts';
 import type { PlanReading } from '../server/services/goals/plan.ts';
@@ -161,6 +162,47 @@ describe('the public cases', () => {
     expect(caseProblem({ id: 'x' })).toBe('no objective');
     expect(caseProblem({ ...byId('fam-03-cleaning-no-fulfiller'), expect: { verdict: 'NO_PLAN' } })).toBe('a NO_PLAN rubric names no blocker');
     expect(caseProblem({ ...byId('fam-01-property-executable'), expect: { verdict: 'EXECUTABLE_PLAN', mustNotUse: ['nothing'] } })).toMatch(/does not hold/);
+  });
+});
+
+describe('a conversion is written in its own unit', () => {
+  // The world once wrote every conversion as "paid pre-orders from N unique visitors", so
+  // "6 wins from 40 quotes" reached the planner as 40 visitors, under the landing-page floor.
+  const SENTENCES: Record<ConversionUnit, [number, number, string]> = {
+    VISITORS: [40, 400, '40 paid pre-orders from 400 unique visitors'],
+    QUOTES: [6, 40, '6 wins from 40 quotes'],
+    PROPOSALS: [3, 18, '3 bookings from 18 proposals'],
+    BIDS: [2, 15, '2 contracts won from 15 bids'],
+    CLICKS: [11, 138, '11 bookings from 138 clicks'],
+    CONTACTS: [5, 60, '5 agreements from 60 contacts'],
+    MEMBERS: [18, 14000, '18 orders from 14,000 members'],
+  };
+
+  it.each(CONVERSION_UNITS)('writes %s in its natural wording', (unit) => {
+    const [paid, of, sentence] = SENTENCES[unit];
+    expect(conversionSentence({ paid, of, unit })).toBe(sentence);
+    // Only a visitor count is a landing page's measure; no other unit is ever read as visitors.
+    expect(readInboundCommitments(sentence) !== null).toBe(unit === 'VISITORS');
+  });
+
+  it('defaults a conversion without a unit, in either spelling, to the sentence every case wrote before', () => {
+    expect(conversionSentence({ paid: 40, of: 400 })).toBe('40 paid pre-orders from 400 unique visitors');
+    expect(conversionSentence({ paid: 40, visitors: 400 })).toBe('40 paid pre-orders from 400 unique visitors');
+    for (const c of PUBLIC_CASES) for (const o of c.openings) {
+      if (!o.conversion) continue;
+      expect('unit' in o.conversion, `${c.id}/${o.key}`).toBe(false);
+      expect(readInboundCommitments(conversionSentence(o.conversion)), `${c.id}/${o.key}`).toMatchObject({ paid: o.conversion.paid });
+    }
+  });
+
+  it('refuses a case whose conversion unit or counts are not a conversion', () => {
+    const base = byId('fam-01-property-executable');
+    const withConversion = (conversion: unknown) => ({ ...base, openings: [{ ...base.openings[0]!, conversion }] });
+    expect(caseProblem(withConversion({ paid: 6, of: 40, unit: 'QUOTES' }))).toBeNull();
+    expect(caseProblem(withConversion({ paid: 6, visitors: 40 }))).toBeNull();
+    expect(caseProblem(withConversion({ paid: 6, of: 40, unit: 'LEADS' }))).toMatch(/unknown conversion unit/);
+    expect(caseProblem(withConversion({ paid: 6, visitors: 40, unit: 'QUOTES' }))).toMatch(/without "of"/);
+    expect(caseProblem(withConversion({ paid: 50, of: 40 }))).toMatch(/paid ≤ of/);
   });
 });
 

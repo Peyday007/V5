@@ -30,6 +30,50 @@ export type Constraint = (typeof CONSTRAINTS)[number];
 export const PERFORMERS = ['BRAIN', 'SUBCONTRACTOR', 'OWNER', 'NOBODY'] as const;
 export type Performer = (typeof PERFORMERS)[number];
 
+/**
+ * What a measured conversion counts against: the denominator the evidence was taken
+ * on. A landing page's paid pre-orders are counted against VISITORS; a service
+ * business's wins against the QUOTES it sent, its bookings against PROPOSALS or ad
+ * CLICKS, a tender's awards against BIDS, an outreach play's agreements against the
+ * CONTACTS asked, and a marketplace's or association's orders against its MEMBERS.
+ */
+export const CONVERSION_UNITS = ['VISITORS', 'QUOTES', 'PROPOSALS', 'BIDS', 'CLICKS', 'CONTACTS', 'MEMBERS'] as const;
+export type ConversionUnit = (typeof CONVERSION_UNITS)[number];
+
+/**
+ * An opening's measured conversion: `paid` commitments out of `of`, counted in `unit`
+ * (VISITORS when absent). `{ paid, visitors }` is the format's first spelling and
+ * still reads, as VISITORS.
+ */
+export type Conversion =
+  | { paid: number; of: number; unit?: ConversionUnit }
+  | { paid: number; visitors: number };
+
+/** The conversion's count, denominator and unit, whichever spelling the case used. */
+export function conversionCounts(c: Conversion): { paid: number; of: number; unit: ConversionUnit } {
+  if ('of' in c) return { paid: c.paid, of: c.of, unit: c.unit ?? 'VISITORS' };
+  return { paid: c.paid, of: c.visitors, unit: 'VISITORS' };
+}
+
+/**
+ * The sentence the world records on the card's `conversionRates` field, in the unit's
+ * own words — the evidence as research would file it, never restated as visitors. A
+ * VISITORS conversion reads exactly as every case did before units existed.
+ */
+export function conversionSentence(c: Conversion): string {
+  const { paid, of, unit } = conversionCounts(c);
+  const n = (x: number) => x.toLocaleString('en-US');
+  switch (unit) {
+    case 'VISITORS': return `${paid} paid pre-orders from ${of} unique visitors`;
+    case 'QUOTES': return `${n(paid)} wins from ${n(of)} quotes`;
+    case 'PROPOSALS': return `${n(paid)} bookings from ${n(of)} proposals`;
+    case 'BIDS': return `${n(paid)} contracts won from ${n(of)} bids`;
+    case 'CLICKS': return `${n(paid)} bookings from ${n(of)} clicks`;
+    case 'CONTACTS': return `${n(paid)} agreements from ${n(of)} contacts`;
+    case 'MEMBERS': return `${n(paid)} orders from ${n(of)} members`;
+  }
+}
+
 /** The coverage dimensions every case is tagged with (spec §4). */
 export interface CaseDimensions {
   capital: 'none' | 'small' | 'large';
@@ -85,8 +129,8 @@ export interface OpeningFixture {
   volume?: string | null;
   /** EVIDENCE (default): a source states it. ESTIMATE: Brain's own estimate, which establishes nothing. */
   volumeBasis?: 'EVIDENCE' | 'ESTIMATE';
-  /** This offer's own measured inbound commitments. */
-  conversion?: { paid: number; visitors: number } | null;
+  /** This offer's own measured commitments, counted in their real unit (VISITORS when absent). */
+  conversion?: Conversion | null;
   /** Written buyer acceptances already held, USD each. */
   agreements?: number[];
 }
@@ -141,6 +185,18 @@ const VERDICTS = new Set<string>(EXPECTED_VERDICTS);
 const LINK_SET = new Set<string>(LINKS);
 const CONSTRAINT_SET = new Set<string>(CONSTRAINTS);
 const PERFORMER_SET = new Set<string>(PERFORMERS);
+const UNIT_SET = new Set<string>(CONVERSION_UNITS);
+
+function conversionProblem(key: string, c: unknown): string | null {
+  if (c === undefined || c === null) return null;
+  if (typeof c !== 'object') return `opening ${key} has a conversion that is not an object`;
+  const v = c as { paid?: unknown; of?: unknown; visitors?: unknown; unit?: unknown };
+  const of = v.of ?? v.visitors;
+  if (typeof v.paid !== 'number' || !(v.paid >= 0) || typeof of !== 'number' || !(of > 0) || v.paid > of) return `opening ${key} has a conversion without paid ≤ of`;
+  if (v.unit !== undefined && (typeof v.unit !== 'string' || !UNIT_SET.has(v.unit))) return `opening ${key} has an unknown conversion unit`;
+  if (v.unit !== undefined && v.of === undefined) return `opening ${key} states a conversion unit without "of"`;
+  return null;
+}
 
 /** Why a value is not a case, or null when it is. A malformed hidden case fails; it is never skipped. */
 export function caseProblem(value: unknown): string | null {
@@ -158,6 +214,8 @@ export function caseProblem(value: unknown): string | null {
     if (typeof o.price !== 'number' || !(o.price > 0)) return `opening ${o.key} has no price`;
     if (!PERFORMER_SET.has(o.performer)) return `opening ${o.key} has an unknown performer`;
     if (typeof o.mechanism !== 'string' || typeof o.industry !== 'string') return `opening ${o.key} has no mechanism or industry`;
+    const conversion = conversionProblem(o.key, o.conversion);
+    if (conversion) return conversion;
   }
   const e = c.expect;
   if (!e || !VERDICTS.has(e.verdict)) return 'expect.verdict is neither EXECUTABLE_PLAN nor NO_PLAN';

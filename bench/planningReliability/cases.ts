@@ -29,7 +29,7 @@ const dims = (over: Partial<CaseDimensions> & Pick<CaseDimensions, 'industry' | 
 const PROPERTY: OpeningFixture = {
   key: 'property', title: 'Vendor-compliance spreadsheet for property managers', mechanism: 'PRODUCTIZED_SERVICE', industry: 'property management',
   payer: 'Property managers', price: 600, cost: 10, capital: 0, daysToCash: 5, hours: 1, performer: 'BRAIN',
-  volume: '400 property managers are listed in the state directory; each needs one.', conversion: { paid: 40, visitors: 400 },
+  volume: '400 property managers are listed in the state directory; each needs one.', conversion: { paid: 40, of: 400 },
 };
 
 /** Post-construction cleanup: a crew subcontracted at half the price, two contractors signed. */
@@ -54,7 +54,7 @@ const RESTAURANT: OpeningFixture = {
 const FARM_GRANT: OpeningFixture = {
   key: 'farm', title: 'Farm grant planning service for Pennsylvania farm operators', mechanism: 'PRODUCTIZED_SERVICE', industry: 'farm grant planning',
   payer: 'Pennsylvania farm operators', price: 5000, cost: 300, capital: 0, daysToCash: 6, hours: 3, performer: 'NOBODY',
-  volume: '120 Pennsylvania farm operators apply for the Farm Vitality Planning Grant each round, per the state agriculture department.', conversion: { paid: 12, visitors: 240 },
+  volume: '120 Pennsylvania farm operators apply for the Farm Vitality Planning Grant each round, per the state agriculture department.', conversion: { paid: 12, of: 240 },
 };
 
 const CREDIT_UNION: OpeningFixture = {
@@ -65,13 +65,13 @@ const CREDIT_UNION: OpeningFixture = {
 const ROOFING: OpeningFixture = {
   key: 'roofing', title: 'Weekly permit lead lists for regional roofing contractors', mechanism: 'INFORMATION_ASYMMETRY', industry: 'roofing contractors',
   payer: 'Regional roofing contractors', price: 199, cost: 0, capital: 0, daysToCash: 5, hours: 1, performer: 'BRAIN',
-  volume: 'Contractors in the region buy permit lead lists weekly.', volumeBasis: 'ESTIMATE', conversion: { paid: 20, visitors: 250 },
+  volume: 'Contractors in the region buy permit lead lists weekly.', volumeBasis: 'ESTIMATE', conversion: { paid: 20, of: 250 },
 };
 
 const GIFTS: OpeningFixture = {
   key: 'gifts', title: 'Corporate year-end gifts, supplier drop-ships', mechanism: 'RESALE_OR_ASSET', industry: 'corporate gifting',
   payer: 'HR departments of mid-size firms', price: 1200, cost: null, capital: 0, daysToCash: 10, hours: 1, performer: 'SUBCONTRACTOR', subcontractor: 'GiftLine Wholesale (drop-ship supplier)',
-  volume: '300 mid-size firms in the metro area order year-end gifts each December.', conversion: { paid: 25, visitors: 300 },
+  volume: '300 mid-size firms in the metro area order year-end gifts each December.', conversion: { paid: 25, of: 300 },
 };
 
 const RECORDS_RFP: OpeningFixture = {
@@ -96,7 +96,7 @@ const OWNER_CONSULTING: OpeningFixture = {
 const VET: OpeningFixture = {
   key: 'vet', title: 'Controlled-substance log reconciliation workbook for veterinary clinics', mechanism: 'PAIN_TRIGGERED_IMPLEMENTATION', industry: 'veterinary clinics',
   payer: 'Veterinary clinic managers', price: 450, cost: 5, capital: 0, daysToCash: 4, hours: 1, performer: 'BRAIN',
-  volume: '1,200 veterinary clinics are licensed by the state board; each must reconcile its controlled-substance log quarterly.', conversion: { paid: 36, visitors: 300 },
+  volume: '1,200 veterinary clinics are licensed by the state board; each must reconcile its controlled-substance log quarterly.', conversion: { paid: 36, of: 300 },
 };
 
 const BREWERY: OpeningFixture = {
@@ -108,13 +108,13 @@ const BREWERY: OpeningFixture = {
 const MARITIME: OpeningFixture = {
   key: 'maritime', title: 'Ballast-water management record packs for coastal ship operators', mechanism: 'DIAGNOSTIC_OPPORTUNITY', industry: 'coastal shipping',
   payer: 'Coastal ship operators', channel: null, price: 2500, cost: 50, capital: 0, daysToCash: 14, hours: 2, performer: 'BRAIN',
-  volume: '90 coastal operators are registered with the port authority; each needs a pack per vessel each year.', conversion: { paid: 9, visitors: 120 },
+  volume: '90 coastal operators are registered with the port authority; each needs a pack per vessel each year.', conversion: { paid: 9, of: 120 },
 };
 
 const SOLAR: OpeningFixture = {
   key: 'solar', title: 'Interconnection permit packages for residential solar installers', mechanism: 'PRODUCTIZED_SERVICE', industry: 'residential solar installation',
   payer: 'Residential solar installers', price: 400, cost: 20, capital: 0, daysToCash: null, hours: 1, performer: 'BRAIN',
-  volume: '150 solar installers hold state contractor licences; each files 10 interconnection applications a month.', conversion: { paid: 30, visitors: 300 },
+  volume: '150 solar installers hold state contractor licences; each files 10 interconnection applications a month.', conversion: { paid: 30, of: 300 },
 };
 
 const COURT: OpeningFixture = {
@@ -126,7 +126,7 @@ const COURT: OpeningFixture = {
 const WEDDING: OpeningFixture = {
   key: 'wedding', title: 'Seating chart and vendor run-sheet workbooks for wedding venues', mechanism: 'PRODUCTIZED_SERVICE', industry: 'wedding venues',
   payer: 'Wedding venue coordinators', price: 350, cost: 5, capital: 0, daysToCash: 3, hours: 1, performer: 'BRAIN',
-  volume: '500 wedding venues are listed in the regional venue directory; each hosts weddings every weekend in season.', conversion: { paid: 30, visitors: 250 },
+  volume: '500 wedding venues are listed in the regional venue directory; each hosts weddings every weekend in season.', conversion: { paid: 30, of: 250 },
 };
 
 const TRANSLATION: OpeningFixture = {
@@ -155,19 +155,19 @@ const LOCALISATION: OpeningFixture = {
 const PHARMACY: OpeningFixture = {
   key: 'pharmacy', title: 'Cold-chain prescription delivery for independent pharmacies', mechanism: 'SUBCONTRACTED_FULFILMENT', industry: 'independent pharmacies',
   payer: 'Independent pharmacy owners', price: 180, cost: 95, capital: 0, daysToCash: 7, hours: 0.5, performer: 'SUBCONTRACTOR', subcontractor: 'MedCourier LLC (quoted)',
-  volume: '35 independent pharmacies in the county ship 20 temperature-controlled deliveries a week.', conversion: { paid: 22, visitors: 200 },
+  volume: '35 independent pharmacies in the county ship 20 temperature-controlled deliveries a week.', conversion: { paid: 22, of: 200 },
 };
 
 const BEEKEEPING: OpeningFixture = {
   key: 'beekeeping', title: 'Brokered almond-pollination hive contracts for beekeepers', mechanism: 'SUPPLY_DEMAND_MISMATCH', industry: 'commercial beekeeping',
   payer: 'Almond growers', price: 150, priceBasis: 'PERSON', cost: 110, capital: 0, daysToCash: 14, hours: 0.2, performer: 'SUBCONTRACTOR', subcontractor: 'Valley Apiaries (quoted)',
-  volume: '400 almond growers in the valley rent hives every February.', conversion: { paid: 20, visitors: 200 },
+  volume: '400 almond growers in the valley rent hives every February.', conversion: { paid: 20, of: 200 },
 };
 
 const EQUESTRIAN: OpeningFixture = {
   key: 'equestrian', title: 'Liability waiver and boarding-agreement management for horse boarding stables', mechanism: 'PRODUCTIZED_SERVICE', industry: 'horse boarding',
   payer: 'Boarding stable owners', price: 900, priceContradiction: 90, cost: 5, capital: 0, daysToCash: 5, hours: 1, performer: 'BRAIN',
-  volume: '260 boarding stables are registered with the state equine council.', conversion: { paid: 26, visitors: 260 },
+  volume: '260 boarding stables are registered with the state equine council.', conversion: { paid: 26, of: 260 },
 };
 
 const GROOMING: OpeningFixture = {

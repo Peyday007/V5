@@ -189,7 +189,8 @@ passes them to the runner with `--cases`.
       "performer": "OWNER",                   // BRAIN | SUBCONTRACTOR | OWNER | NOBODY
       "subcontractor": "…",                   // the named fulfiller, with SUBCONTRACTOR
       "volume": "…", "volumeBasis": "EVIDENCE", // or "ESTIMATE": Brain's own, establishes nothing
-      "conversion": { "paid": 40, "visitors": 400 }, // the offer's own measured commitments
+      // The offer's own measured commitments, in the unit they were counted against (below).
+      "conversion": { "paid": 40, "of": 400, "unit": "VISITORS" },
       "agreements": [400, 400]                // written buyer acceptances held, USD each
     }
   ],
@@ -208,6 +209,29 @@ passes them to the runner with `--cases`.
   }
 }
 ```
+
+A conversion carries its real unit, and the world writes it on the card's
+`conversionRates` field in that unit's own words (`conversionSentence`,
+`bench/planningReliability/case.ts`), never restated as visitors:
+
+| `unit` | written as |
+|---|---|
+| `VISITORS` (the default) | "40 paid pre-orders from 400 unique visitors" |
+| `QUOTES` | "6 wins from 40 quotes" |
+| `PROPOSALS` | "3 bookings from 18 proposals" |
+| `BIDS` | "2 contracts won from 15 bids" |
+| `CLICKS` | "11 bookings from 138 clicks" |
+| `CONTACTS` | "5 agreements from 60 contacts" |
+| `MEMBERS` | "18 orders from 14,000 members" |
+
+A conversion without a `unit` is VISITORS, and the format's first spelling,
+`{ "paid": 40, "visitors": 400 }`, still reads as VISITORS, so every case written
+before units existed reads exactly as it did. Before this, every conversion was
+written as pre-orders from unique visitors: "6 wins from 40 quotes" reached the
+planner as 40 visitors, fell under the landing-page visitor floor
+(`INBOUND_MIN_VISITORS`, pinned by `tests/inboundBuyerValidationA10K.test.ts`) and
+was graded as a refusal the evidence would not cause. The floor is the planner's and
+stays; the bench was misstating the evidence.
 
 The rubric is written from the arithmetic and the evidence the case files, never from
 what the planner answers today. A case the planner fails is a measurement, recorded
