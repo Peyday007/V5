@@ -8,10 +8,11 @@ import './env.ts';
 import { execFileSync } from 'node:child_process';
 import { feasibility } from './feasibility/index.ts';
 import { mootRequests } from './mootRequests/index.ts';
+import { planningReliability } from './planningReliability/index.ts';
 import { planSpeed } from './planSpeed/index.ts';
 import type { BenchResult, Suite, SuiteOptions } from './types.ts';
 
-export const SUITES: Record<string, Suite> = { feasibility, planSpeed, mootRequests };
+export const SUITES: Record<string, Suite> = { feasibility, planSpeed, mootRequests, planningReliability };
 
 function git(args: string[]): string | null {
   try {

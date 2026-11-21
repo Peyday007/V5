@@ -183,8 +183,8 @@ describe('the shared result shape and the registered suites', () => {
     expect(parseBenchResult({ suite: 'feasibility', sha: 'abc', metrics: {}, ranAt: 'yesterday' }).ok).toBe(false);
   });
 
-  it('declares feasibility, planSpeed and mootRequests with their targets and guards', () => {
-    expect(EVOLUTION_SUITES.map((s) => s.name)).toEqual(['feasibility', 'planSpeed', 'mootRequests']);
+  it('declares feasibility, planSpeed, mootRequests and planningReliability with their targets and guards', () => {
+    expect(EVOLUTION_SUITES.map((s) => s.name)).toEqual(['feasibility', 'planSpeed', 'mootRequests', 'planningReliability']);
     const f = findSuite('feasibility')!;
     expect(meetsTarget(f, 0.96, null)).toBe(true);
     expect(meetsTarget(f, 0.9, null)).toBe(false);
@@ -197,6 +197,10 @@ describe('the shared result shape and the registered suites', () => {
     expect(meetsTarget(m, 1, null)).toBe(true);
     expect(meetsTarget(m, 0.95, null)).toBe(false);
     expect(m.guards.map((g) => g.metric)).toEqual(['falseWithdraw', 'historyLost']);
+    const r = findSuite('planningReliability')!;
+    expect(meetsTarget(r, 0.9, null)).toBe(true);
+    expect(meetsTarget(r, 0.89, null)).toBe(false);
+    expect(r.guards).toEqual([{ metric: 'criticalFailures', direction: 'LOWER', tolerance: 0 }]);
   });
 });
 

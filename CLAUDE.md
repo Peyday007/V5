@@ -110,6 +110,9 @@ compaction. These rules answer each of those.
 9. **Keep this file small.** It is loaded into every session's context. Detail
    goes in `docs/ARCHITECTURE-RECORD.md`; `tests/claudeMdBudget.test.ts` refuses
    a CLAUDE.md over budget.
+10. **What "done" means for commercial planning is `docs/COMPLETION-SPEC.md`**
+    (§114): ≥ 90% planning reliability on unfamiliar objectives (suite
+    `planningReliability`), never a goal's 90% financial-reach ACCEPTED verdict.
 
 ---
 
@@ -301,7 +304,7 @@ There must be no workflow where the user has to remember "now go update the data
     time to revenue and whether it can be done, and a goal's constraint binds
     that goal, only while it runs.
 
-## 8–113. The architecture record
+## 8–114. The architecture record
 
 Sections 8 onward — why each subsystem is shaped as it is, and the production
 defects that shaped it — are in **`docs/ARCHITECTURE-RECORD.md`**, verbatim and
@@ -416,6 +419,7 @@ resolves. Read the section for the area you are changing before you change it
 - §111. Brain improves itself by comparing alternatives, and an evaluator it cannot see decides.
 - §112. A deadline is a delivery commitment: an independent scheduler enforces it, and the session cannot move it.
 - §113. A deadline is estimated from measured history, staffed from the work, and every deadline teaches the next.
+- §114. Done is planning reliability across unfamiliar objectives, never one goal's financial reach.
 
 ## Conventions
 
