@@ -16887,3 +16887,38 @@ checker flags the old output, the pipeline no longer produces it) and
 `tests/planTransfer.test.ts` (a matrix of goals across capital, revenue unit,
 deadline, industry — one of them a sector whose only buyer is one company — and
 owner time, each reading free of violations).
+
+## 114. Done is planning reliability across unfamiliar objectives, never one goal's financial reach.
+
+**Owner's critical correction, 2026-11-21.** The completion standard is: Brain
+reliably produces economically credible, research-backed, AI-executable
+commercial plans across unfamiliar financial objectives, industries, capital
+levels, deadlines and constraints — at least 90% planning reliability across a
+representative, independently evaluated set of unfamiliar objectives. It does
+not mean every business has a 90% chance of making money, that every target is
+achievable, or that a test project needs buyer-contact permission.
+
+**What was wrong.** "90%" had been read as one goal's financial reach: a plan was
+"done" when `judgeAcceptance` reached ACCEPTED at a 90% lower bound. That is a
+financial-outcome reading of one plan. It could not say whether Brain plans
+correctly, it rewarded a planner for refusing nothing, and it treated "no plan"
+as failure even when "no plan, because X is missing" is the correct answer.
+
+**The shape.** `docs/COMPLETION-SPEC.md` (version 1) is the one authoritative
+standard: a correct result is (A) a defensible executable plan supported by
+adequate evidence, or (B) a justified conclusion that no executable plan is yet
+established, naming the decisive missing evidence or infeasible condition — (B)
+only when its reasoning is validated. The metric is passed cases ÷ cases run,
+with its denominator and a Wilson 95% interval: arithmetic, never an invented
+confidence. It is measured by one more registered suite, not a second
+evaluation system: `planningReliability` (`server/domain/evolutionSuites.ts`,
+target 0.90, guard `criticalFailures` at 0), whose runner
+(`bench/planningReliability/`) drives the real `readGoalPlan` on a database per
+case and grades the reading in code — the planner's own verdicts (chain
+complete, constructed, NOT_SUPPORTED, the links it names missing), never reach
+against 90%. Hidden cases go through `brain_operator_add_hidden_case` like every
+other suite's.
+
+The ACCEPTED verdict stays what it is — a financial-outcome reading a person may
+want — and is never the completion standard. A failing case is a measurement
+(`bench/planningReliability/BASELINE.md`), never a case to edit.

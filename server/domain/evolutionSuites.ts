@@ -70,6 +70,25 @@ export const EVOLUTION_SUITES: readonly BenchSuite[] = [
       paths: ['server/services/russell/', 'server/repos/russellMissions.ts', 'server/domain/operator.ts'],
     },
   },
+  {
+    // The completion standard (docs/COMPLETION-SPEC.md, §114): planning reliability, never a financial-outcome reading.
+    name: 'planningReliability',
+    capabilityClass: 'REASONING',
+    description:
+      'Unfamiliar objectives (capital, target, deadline, industry, mechanism, owner hours, missing, contradictory or ' +
+      'changed evidence) driven through the real planner (readGoalPlan) on a database of their own, graded in code: ' +
+      'a correct result is a defensible executable plan, or a no-plan conclusion naming the decisive blocker. ' +
+      'Passed cases ÷ cases run, reported with its Wilson 95% interval.',
+    primaryMetric: 'accuracy',
+    direction: 'HIGHER',
+    target: 0.9,
+    noise: { absolute: 0.03 },
+    guards: [{ metric: 'criticalFailures', direction: 'LOWER', tolerance: 0 }],
+    measures: {
+      deficiencies: ['PLANNING_ASSUMPTION', 'ECONOMIC_REASONING', 'REPEATED_STRATEGIC_MISTAKE', 'CAPABILITY_BELOW_TARGET'],
+      paths: ['server/services/goals/', 'server/services/cash/goalScenario.ts', 'server/services/quant/'],
+    },
+  },
 ];
 
 export function findSuite(name: string): BenchSuite | null {
