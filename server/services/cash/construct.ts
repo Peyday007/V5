@@ -282,6 +282,17 @@ export interface ConstructedArrangement {
    * lowers the contribution and raises nothing.
    */
   fixedCost?: Pick<Estimate, 'tier' | 'p10' | 'p50' | 'p90'> & { observations: number; sources: string[] };
+  /**
+   * A BROKER or REFERRAL design's take: the share of these buyers' price an
+   * intermediary keeps, reconstructed from the take rates filed for these
+   * buyers (`broker_take_rate`), with the claims it rests on. The supplier
+   * fulfils and keeps the rest, so this share — never the buyer's whole price —
+   * is the design's revenue per deal (`commissionRevenue`, goalScenario.ts).
+   * `evidence` only where the reconstruction justifies a distribution. Absent,
+   * nothing filed bears on it, and the plan sweeps it conservatively as an
+   * assumption (invariant 39: an unknown commission is never read as 100%).
+   */
+  commission?: Pick<Estimate, 'tier' | 'p10' | 'p50' | 'p90'> & { observations: number; sources: string[]; evidence?: NonNullable<ConstructedArrangement['value']['evidence']> };
   /** Parts nothing establishes yet: what the research round asks. */
   unknownParts: string[];
   /** Openings sharing this buyer, for the novelty check and the value evidence. */
@@ -932,7 +943,7 @@ async function heldEvidence(input: ConstructionInput, opportunities: CashOpportu
       measures: `money tied up on "${one.title.slice(0, 60)}"`,
     }));
   const capability = capabilityPart(input.delivers);
-  return { priced, tiedUp, facts: { unitCost: facts.unitCost, volume: facts.volume, conversion: facts.conversion, buyers: facts.buyers, ...(facts.runCost.length > 0 ? { runCost: facts.runCost } : {}) }, capability };
+  return { priced, tiedUp, facts: { unitCost: facts.unitCost, volume: facts.volume, conversion: facts.conversion, buyers: facts.buyers, ...(facts.runCost.length > 0 ? { runCost: facts.runCost } : {}), ...(facts.commission.length > 0 ? { commission: facts.commission } : {}) }, capability };
 }
 
 /**
@@ -987,6 +998,12 @@ export interface FactObservations {
    * deal. Absent reads as none filed.
    */
   runCost?: Observation[];
+  /**
+   * The share of these buyers' price an intermediary keeps
+   * (`broker_take_rate`): a BROKER or REFERRAL design's commission. Absent
+   * reads as none filed, and the commission stays an unknown swept low.
+   */
+  commission?: Observation[];
 }
 
 /** Fact keys read as a price these buyers pay, a unit cost of serving them, a volume they buy, a share who agree and how many there are. */
@@ -996,6 +1013,12 @@ const FACT_RUN_COST_KEYS: readonly FactKey[] = ['fixed_cost_per_run'];
 const FACT_VOLUME_KEYS: readonly FactKey[] = ['account_units_per_month'];
 const FACT_CONVERSION_KEYS: readonly FactKey[] = ['account_win_rate'];
 const FACT_BUYERS_KEYS: readonly FactKey[] = ['accounts_reachable'];
+/*
+ * A take rate is filed per role, not per buyer segment (`FACT_KEYS`), so it is
+ * read for these buyers when it is segmented to them or, unsegmented, was filed
+ * by a round about their buyer-type node — never handed to any other buyers.
+ */
+const FACT_COMMISSION_KEYS: readonly FactKey[] = ['broker_take_rate'];
 /** Only what was seen: a sourced claim that reports its source (OBSERVED) or a person's attestation (VERIFIED). */
 const FACT_EVIDENCE_STATUSES: readonly FactStatus[] = ['OBSERVED', 'VERIFIED'];
 
@@ -1018,9 +1041,12 @@ const FACT_EVIDENCE_STATUSES: readonly FactStatus[] = ['OBSERVED', 'VERIFIED'];
 export async function constructionObservations(
   input: Pick<ConstructionInput, 'projectId' | 'currency' | 'daysLeft'>,
   allowed: (text: string | null | undefined) => boolean = () => true,
-): Promise<{ priced: Observation[]; unitCost: Observation[]; runCost: Observation[]; volume: Observation[]; conversion: Observation[]; buyers: Observation[] }> {
-  const out = { priced: [] as Observation[], unitCost: [] as Observation[], runCost: [] as Observation[], volume: [] as Observation[], conversion: [] as Observation[], buyers: [] as Observation[] };
-  const facts = (await listProjectConstructionFacts(input.projectId)).filter((one) => FACT_EVIDENCE_STATUSES.includes(one.status) && one.segment?.startsWith('map_'));
+): Promise<{ priced: Observation[]; unitCost: Observation[]; runCost: Observation[]; volume: Observation[]; conversion: Observation[]; buyers: Observation[]; commission: Observation[] }> {
+  const out = { priced: [] as Observation[], unitCost: [] as Observation[], runCost: [] as Observation[], volume: [] as Observation[], conversion: [] as Observation[], buyers: [] as Observation[], commission: [] as Observation[] };
+  // The buyer-type node a fact is about: its segment, or — for a take rate filed unsegmented — the node its round was about.
+  const nodeOf = (one: { key: FactKey; segment?: string | null; nodeId?: string | null }): string | null =>
+    one.segment?.startsWith('map_') ? one.segment.slice('map_'.length) : !one.segment && FACT_COMMISSION_KEYS.includes(one.key) ? (one.nodeId ?? null) : null;
+  const facts = (await listProjectConstructionFacts(input.projectId)).filter((one) => FACT_EVIDENCE_STATUSES.includes(one.status) && nodeOf(one) !== null);
   if (facts.length === 0) return out;
   const all = await listNodes(input.projectId);
   const byId = new Map(all.map((one) => [one.id, one]));
@@ -1031,7 +1057,7 @@ export async function constructionObservations(
     (await claimsByIds([...new Set(facts.filter((one) => FACT_PRICE_KEYS.includes(one.key) && one.sourceClaimId).map((one) => one.sourceClaimId!))])).map((one) => [one.id, one.claim]),
   );
   for (const fact of facts) {
-    const node = byId.get(fact.segment!.slice('map_'.length));
+    const node = byId.get(nodeOf(fact)!);
     if (!node || node.retiredAt || node.kind !== 'BUYER_TYPE' || !safeBuyer(node.name) || !allowed(node.name)) continue;
     const root = rootOf(node, byId);
     if (!allowed(root.name)) continue;
@@ -1047,7 +1073,9 @@ export async function constructionObservations(
             ? 'conversion'
             : FACT_BUYERS_KEYS.includes(fact.key)
               ? 'buyers'
-              : null;
+              : FACT_COMMISSION_KEYS.includes(fact.key)
+                ? 'commission'
+                : null;
     if (!kind) continue;
     // Only money is in USD; a share and a count mean the same in any goal's currency.
     if ((kind === 'priced' || kind === 'unitCost' || kind === 'runCost') && !usd) continue;
@@ -1057,7 +1085,7 @@ export async function constructionObservations(
     const high = Math.max(fact.low, fact.high) * scale;
     if (!(high > 0)) continue;
     // A share above the whole is no share (the filer refuses one; a person's attestation is held to the same).
-    if (kind === 'conversion' && high > 1) continue;
+    if ((kind === 'conversion' || kind === 'commission') && high > 1) continue;
     // A rate per word or per hour is not what one purchase costs: read beside a plan's price it would widen one range across units.
     if (kind === 'priced' && statesMeasuredRate(fact.sourceClaimId ? priceClaims.get(fact.sourceClaimId) : undefined, low, high)) continue;
     out[kind].push({
@@ -1636,7 +1664,7 @@ export function selectCandidates(job: ConstructionJob): CandidateSelection {
   // Every buyer population an observation is about: research's construction facts and the openings' own prices and money tied up.
   const evidencedPayers = new Set<string>();
   const facts = job.facts;
-  for (const one of [...job.priced, ...job.tiedUp, ...(facts ? [...facts.unitCost, ...facts.volume, ...(facts.conversion ?? []), ...(facts.buyers ?? []), ...(facts.runCost ?? [])] : [])]) {
+  for (const one of [...job.priced, ...job.tiedUp, ...(facts ? [...facts.unitCost, ...facts.volume, ...(facts.conversion ?? []), ...(facts.buyers ?? []), ...(facts.runCost ?? []), ...(facts.commission ?? [])] : [])]) {
     const payer = payerKey(String(one.context['payer'] ?? ''));
     if (payer) evidencedPayers.add(payer);
   }
@@ -2078,7 +2106,7 @@ export function compositionPlan(job: ConstructionJob, selection: CandidateSelect
   const reuse = new Map(job.reuse ?? []);
   // Everything a composition reads besides its own parts, once per pass. Fact observations only when
   // there are any, so a digest stored before they existed is still the same composition's.
-  const facts = job.facts && (job.facts.unitCost.length > 0 || job.facts.volume.length > 0 || (job.facts.conversion?.length ?? 0) > 0 || (job.facts.buyers?.length ?? 0) > 0 || (job.facts.runCost?.length ?? 0) > 0) ? job.facts : undefined;
+  const facts = job.facts && (job.facts.unitCost.length > 0 || job.facts.volume.length > 0 || (job.facts.conversion?.length ?? 0) > 0 || (job.facts.buyers?.length ?? 0) > 0 || (job.facts.runCost?.length ?? 0) > 0 || (job.facts.commission?.length ?? 0) > 0) ? job.facts : undefined;
   // The lever evidence and contract limits a composition reads (S-0103), likewise only when the rows state any.
   const leverEvidence = job.leverEvidence && Object.values(job.leverEvidence).some((one) => one.length > 0) ? job.leverEvidence : undefined;
   const contractLimits = job.contractLimits && job.contractLimits.length > 0 ? job.contractLimits : undefined;
@@ -2371,10 +2399,13 @@ function compose(args: {
   // What share of these buyers approached bought, and how many of them a stated market holds (R3): the demand side's conversion and buyers.
   const conversionObs = (args.facts?.conversion ?? []).filter(ownBuyer).map((one) => ({ ...one, broad: false }));
   const buyersObs = (args.facts?.buyers ?? []).filter(ownBuyer).map((one) => ({ ...one, broad: false }));
+  // The share of these buyers' price an intermediary keeps: a BROKER's commission, a REFERRAL's fee as a share.
+  const takes = design.base === 'BROKER' || design.base === 'REFERRAL';
+  const commissionObs = takes ? (args.facts?.commission ?? []).filter(ownBuyer).map((one) => ({ ...one, broad: false })) : [];
   const context = { payer: norm(demand.name), industry: norm(args.sector), arrangement: key };
   const captureFor = (): Parameters<typeof composeArrangement>[0]['capture'] =>
     def.capture === 'COMMISSION'
-      ? { kind: 'COMMISSION', rate: unknownShare }
+      ? { kind: 'COMMISSION', rate: commissionObs.length > 0 ? { min: 0, max: 1, context, material: [], observations: commissionObs } : unknownShare }
       : def.capture === 'FEE'
         ? { kind: 'FEE', fee: { min: 0, max: 100_000 } }
         : { kind: 'MARGIN', supplyCost: { min: 0, max: 100_000, context, material: [], observations: pooled ? [] : [...riskObs, ...unitCostObs, ...runCostObs] } };
@@ -2441,6 +2472,19 @@ function compose(args: {
   const value = estimates['a_value'];
   const conversion = estimates['a_conversion'];
   const fixedCost = pooled ? estimates['a_fixed_cost'] : undefined;
+  /*
+   * A REFERRAL's graph captures a fee, so the share its supplier pays is read
+   * on its own node, from the same take rates a BROKER's commission reads.
+   */
+  let commission: Estimate | undefined = def.capture === 'COMMISSION' ? estimates['a_commission'] : undefined;
+  if (!commission && takes && commissionObs.length > 0) {
+    try {
+      const node = 'a_take_share';
+      commission = reconstruct({ nodes: [{ key: node, label: 'Share of the price an intermediary keeps', unit: 'share', kind: 'RATE', min: 0, max: 1, context, material: [], observations: commissionObs }] }, node, args.now).estimates[node];
+    } catch {
+      commission = undefined;
+    }
+  }
   const core = ['buyers', 'need_rate', 'conversion', 'value', def.capture === 'COMMISSION' ? 'commission' : def.capture === 'FEE' ? 'fee' : 'supply_cost', ...(def.needsSupply ? ['supply_units'] : []), 'cost'];
   const leaves = [...core, ...designParts(design).filter((part) => !core.includes(part))];
   const unknownParts = leaves.filter((leaf) => {
@@ -2520,7 +2564,7 @@ function compose(args: {
       [demand, need, supply].map((one) => (one ? [one.ref, one.claimId] : null)),
       args.precedent?.id ?? null,
       // A filed close rate or buyer count is new evidence too, and reopens a refutation (R3); none filed adds nothing.
-      [...valueObs, ...riskObs, ...conversionObs, ...buyersObs, ...(pooled ? runCostObs : [])].filter((one) => !one.broad).map((one) => one.id).sort(),
+      [...valueObs, ...riskObs, ...conversionObs, ...buyersObs, ...(pooled ? runCostObs : []), ...commissionObs].filter((one) => !one.broad).map((one) => one.id).sort(),
     ]);
   // The signature this arrangement had while Brain's capability was spelt from the whole deliverables list, so a verdict reached under it carries over.
   const legacySignature =
@@ -2552,6 +2596,9 @@ function compose(args: {
       : {}),
     ...(fixedCost && fixedCost.used.length > 0 && runCostObs.length > 0 && fixedCost.tier !== 'UNKNOWN'
       ? { fixedCost: { tier: fixedCost.tier, p10: fixedCost.p10, p50: fixedCost.p50, p90: fixedCost.p90, observations: fixedCost.used.length, sources: valueSources(fixedCost, [...riskObs, ...runCostObs]) } }
+      : {}),
+    ...(commission && commission.used.length > 0 && commissionObs.length > 0 && commission.tier !== 'UNKNOWN'
+      ? { commission: { tier: commission.tier, p10: commission.p10, p50: commission.p50, p90: commission.p90, observations: commission.used.length, sources: valueSources(commission, commissionObs), ...valueEvidence(commission) } }
       : {}),
     unknownParts,
     relatedOpenings: args.related.map((one) => one.id),

@@ -20,6 +20,11 @@
  * strategy. The first-ranked enters; the others are recorded on it as
  * alternatives, with what differs, and cut with that reason — never
  * discarded unseen (invariant 47). A design the model tells apart still enters.
+ *
+ * The BROKER sibling was a twin only because the model read its price as the
+ * buyer's whole price. A broker keeps a commission (`commissionRevenue`), so
+ * its economics differ and it is now told apart; PRODUCE and POOL, both paid
+ * the buyer's price, stay one strategy.
  */
 import { describe, expect, it } from 'vitest';
 import type { ConstructedArrangement } from '../server/services/cash/construct.ts';
@@ -74,39 +79,46 @@ const limits = { remaining: 5_000, daysLeft: 58, capitalCeiling: 1_500, beforePr
 const arrangementKey = (o: PlannedOpening) => o.estimated!.arrangementKey;
 
 describe('designs the model reads identically are one strategy', () => {
-  it('the three production siblings are different designs with one modelled reading', () => {
+  it('the production siblings paid the buyer\'s price are different designs with one modelled reading; the broker is told apart', () => {
     // Different construction keys and designs …
     expect(new Set(siblings.map((s) => `${s.design.base}/${s.design.funding}/${s.design.aggregation}`)).size).toBe(3);
-    // … and, each read alone, nothing the engine reads tells them apart: only the identity differs.
+    // … and, each read alone, nothing the engine reads tells PRODUCE and POOL apart: only the identity differs.
     const alone = siblings.map((s) => selectEstimatedArrangements([s], input).openings[0]!);
     expect(alone.map(arrangementKey)).toEqual(siblings.map((s) => s.key));
-    expect(new Set(alone.map(modelledTwinKey)).size).toBe(1);
+    const [produce, broker, pool] = alone as [PlannedOpening, PlannedOpening, PlannedOpening];
+    expect(modelledTwinKey(pool)).toBe(modelledTwinKey(produce));
+    // The broker keeps only a commission on the same buyers' price: a different reading, a different strategy.
+    expect(modelledTwinKey(broker)).not.toBe(modelledTwinKey(produce));
+    expect(broker.commission).toMatchObject({ basis: 'ASSUMPTION', established: false });
+    expect(broker.price.high!).toBeLessThan(produce.price.high!);
     // A design with different exposure is read differently.
     const atRisk = design('subcontract01', 'SUBCONTRACT', 'ON_DELIVERY', 'SINGLE', POSTCARD, { exposure: 'BOUNDED', worstCaseCents: 40_000, failures: [] });
     expect(modelledTwinKey(selectEstimatedArrangements([atRisk], input).openings[0]!)).not.toBe(modelledTwinKey(alone[0]!));
   });
 
-  it('enters one member, not three splitting outreach, and records the others as alternatives with what differs', () => {
+  it('enters one member for the twins, not copies splitting outreach, and records the copy as an alternative with what differs', () => {
     const picked = selectEstimatedArrangements(siblings, input);
     const postcard = picked.openings.filter((o) => (o as PlannedOpening).marketKey === populationMarket(POSTCARD));
-    expect(postcard.map(arrangementKey)).toEqual(['dd8c03dc647c']);
+    // PRODUCE enters; POOL is its copy; the broker, read on its commission, is a strategy of its own.
+    expect(postcard.map(arrangementKey)).toContain('dd8c03dc647c');
+    expect(postcard.map(arrangementKey)).not.toContain('387d4be79ce1');
 
     const pick = picked.selection.picked.find((p) => p.arrangementKey === 'dd8c03dc647c')!;
-    expect(pick.alternatives!.map((a) => a.arrangementKey)).toEqual(['b1eb99139fbd', '387d4be79ce1']);
-    expect(pick.alternatives![0]!.differs).toMatch(/connect the buyer with a supplier for a commission \(a supplier fulfils\) rather than Brain produces it/);
-    for (const key of ['b1eb99139fbd', '387d4be79ce1']) {
+    expect(pick.alternatives!.map((a) => a.arrangementKey)).toEqual(['387d4be79ce1']);
+    expect(pick.alternatives![0]!.differs).toMatch(/pool several buyers’ purchases with one supplier and keep part of the volume discount \(a supplier fulfils\) rather than Brain produces it/);
+    // The broker is not a copy of it: it is never recorded as one.
+    expect(picked.selection.cut.find((c) => c.arrangementKey === 'b1eb99139fbd')?.sameModelAs).toBeUndefined();
+    for (const key of ['387d4be79ce1']) {
       const cut = picked.selection.cut.find((c) => c.arrangementKey === key)!;
       expect(cut.sameModelAs).toBe('dd8c03dc647c');
       expect(cut.reason).toMatch(/reads it exactly as dd8c03dc647c/);
     }
     // Never held as a reserve to be brought back as a second copy of itself.
-    expect(picked.reserve.map(arrangementKey)).not.toContain('b1eb99139fbd');
+    expect(picked.reserve.map(arrangementKey)).not.toContain('387d4be79ce1');
 
     const portfolio = evaluateGoalPortfolio({ ...limits, openings: picked.openings });
     const members = portfolio.best!.members.map((m) => m.opportunityId);
     expect(members.filter((id) => id.startsWith('arr_'))).toHaveLength(new Set(members).size);
-    expect(new Set(members).size).toBeLessThanOrEqual(1);
-    expect(members).not.toContain('arr_b1eb99139fbd');
     expect(members).not.toContain('arr_387d4be79ce1');
   });
 

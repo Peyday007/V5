@@ -132,7 +132,8 @@ describe('Surge B: constructed arrangements with no price of their own are admit
   });
 
   it('keeps a priced arrangement ahead of a swept one (weaker evidence never ranks higher)', () => {
-    const priced = arrangement(999, 'BROKER', { key: 'priced', value: { tier: 'COMPARABLE', p10: 400, p50: 900, p90: 1_600, observations: 4 }, demand: { name: 'priced buyers', claimId: null, from: 'INDUSTRY_MAP', ref: 'pop_priced' } });
+    // Paid the buyer's price (a broker keeps only its commission: `commissionRevenue`).
+    const priced = arrangement(999, 'POOL', { key: 'priced', value: { tier: 'COMPARABLE', p10: 400, p50: 900, p90: 1_600, observations: 4 }, demand: { name: 'priced buyers', claimId: null, from: 'INDUSTRY_MAP', ref: 'pop_priced' } });
     const got = selectEstimatedArrangements([...production.slice(0, 40), priced], { ...input, otherPrices: held });
     const p = got.openings.find((o) => o.estimated?.arrangementKey === 'priced');
     expect(p?.estimated?.tier).toBe('COMPARABLE');
