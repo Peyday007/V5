@@ -873,6 +873,55 @@ async function evaluateFactoryDelivery(bin: Bin): Promise<ContractVerdict> {
   return satisfied(observed);
 }
 
+/* ------------------------------------------------------------------------- */
+/* What a contract can only be satisfied by                                   */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * The capabilities a surface declaring them is **preferred** for, owned here
+ * beside the evaluator that judges the contract.
+ *
+ * A routing preference and never a requirement. The router ranks a surface
+ * that declares every capability its contract names ahead of one that does
+ * not (`routeBin`), and nothing — not the router, not admission — refuses a
+ * surface for lacking one. A bin that truly cannot run without a capability
+ * says so in its own `requiredCapabilities`, which fail closed as always.
+ *
+ * It was first a requirement, applied fleet-wide once any one Routine declared
+ * it. That stranded every other Routine: once one surface declared `browser`,
+ * the router excluded and admission skipped every undeclared one for render
+ * bins, so none of them could ever be shown to render, and render throughput
+ * collapsed onto whichever surfaces a person happened to tag — while an
+ * ordinary cloud worker session renders fine with the manifest's command.
+ *
+ * Nor was it what emptied the six `DESIGN_RENDER_V1` bins that ended
+ * NEEDS_HUMAN in the 7 days to 2026-11-12 with "No render was submitted". The
+ * cause was the render manifest withholding the authority its own command
+ * needs — installing dependencies, building the client — from workers told
+ * that the authorized list is the whole of their authority. That is corrected
+ * where the manifest is written, `designRenderManifest` in
+ * `services/design/render.ts`.
+ */
+const CONTRACT_CAPABILITIES: Readonly<Record<string, readonly string[]>> = {
+  DESIGN_RENDER_V1: ['browser'],
+};
+
+export function contractCapabilities(completionContract: string): readonly string[] {
+  return CONTRACT_CAPABILITIES[completionContract] ?? [];
+}
+
+/**
+ * Whether a surface declaring `capabilities` is one this bin's contract
+ * prefers. True when the contract names nothing, so every surface is equally
+ * preferred for every other contract.
+ */
+export function prefersSurface(
+  bin: Pick<Bin, 'completionContract'>,
+  capabilities: readonly string[],
+): boolean {
+  return contractCapabilities(bin.completionContract).every((cap) => capabilities.includes(cap));
+}
+
 const EVALUATORS: Record<string, Evaluator> = {
   DETERMINISTIC_UNITS_V1: evaluateDeterministicUnits,
   BLUEPRINT_EXTRACTION_V1: evaluateBlueprintExtraction,
