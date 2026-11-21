@@ -235,10 +235,33 @@ export interface SourceYield {
   accepted: number;
   /** Stored items a shortlist round took: commercially usable leads. */
   usable: number;
+  /**
+   * Pulls whose body reached the source's parser: every successful pull, and
+   * every failed pull whose recorded error is a body the parser could not read
+   * (`failureKind` UNREADABLE_BODY). An outage, a refusal or a missing endpoint
+   * never reached the parser and is not counted. Absent on a yield that was not
+   * read from `feed_pulls`.
+   */
+  parseAttempts?: number;
+  /** Of those, the pulls the parser read. */
+  parsed?: number;
+  /**
+   * Parse success: `parsed / parseAttempts`, or null when no body reached the
+   * parser. This is parsing, never the screen's KEEP share (`acceptedShare`):
+   * a screen that correctly drops most records says nothing about the parser.
+   */
+  parseCoverage?: number | null;
   acceptedShare: number | null;
   usableShare: number | null;
   /** Marginal decision value per acquired item; null when nothing was acquired (unknown, never favourable). */
   value: number | null;
+}
+
+/** Parse success from a yield's pull counts: parsed / attempts, or null when no body reached the parser. Pure. */
+export function sourceParseCoverage(y: Pick<SourceYield, 'parseAttempts' | 'parsed'>): number | null {
+  const attempts = y.parseAttempts ?? 0;
+  if (attempts <= 0) return null;
+  return Math.round(((y.parsed ?? 0) / attempts) * 10_000) / 10_000;
 }
 
 /** Marginal decision value: a usable lead is worth twice an accepted record, and volume alone is worth nothing. Pure. */
@@ -270,6 +293,12 @@ export async function readSourceYields(since: string, until: string): Promise<So
     `SELECT source, SUM(fetched) AS fetched FROM feed_pulls WHERE ok = 1 AND created_at >= ? AND created_at < ? GROUP BY source`,
     [since, until],
   );
+  // Parse success per source: which pulls delivered a body to the parser, and which of those it read.
+  const pullOutcomes = await db.all<{ source: string; ok: number | string; error: string | null }>(
+    `SELECT source, ok, error FROM feed_pulls WHERE created_at >= ? AND created_at < ?`,
+    [since, until],
+  );
+  const { failureKind } = await import('./health.ts');
   const items = await db.all<{ id: string; source: string; shortlisted_round_id: string | null }>(
     `SELECT id, source, shortlisted_round_id FROM feed_items WHERE fetched_at >= ? AND fetched_at < ? AND source <> ? AND source <> ?`,
     [since, until, CODE_SIGNAL_SOURCE, SITE_SOURCE],
@@ -289,18 +318,28 @@ export async function readSourceYields(since: string, until: string): Promise<So
   const at = (source: string): SourceYield => {
     let y = by.get(source);
     if (!y) {
-      y = { source, acquired: 0, accepted: 0, usable: 0, acceptedShare: null, usableShare: null, value: null };
+      y = { source, acquired: 0, accepted: 0, usable: 0, parseAttempts: 0, parsed: 0, parseCoverage: null, acceptedShare: null, usableShare: null, value: null };
       by.set(source, y);
     }
     return y;
   };
   for (const row of pulls) at(row.source).acquired += Number(row.fetched ?? 0);
+  for (const row of pullOutcomes) {
+    const y = at(row.source);
+    if (Number(row.ok) === 1) {
+      y.parseAttempts = (y.parseAttempts ?? 0) + 1;
+      y.parsed = (y.parsed ?? 0) + 1;
+    } else if (failureKind(row.error).kind === 'UNREADABLE_BODY') {
+      y.parseAttempts = (y.parseAttempts ?? 0) + 1;
+    }
+  }
   for (const item of items) {
     const y = at(item.source);
     if (kept.has(item.id) || item.shortlisted_round_id) y.accepted += 1;
     if (item.shortlisted_round_id) y.usable += 1;
   }
   for (const y of by.values()) {
+    y.parseCoverage = sourceParseCoverage(y);
     y.acceptedShare = y.acquired > 0 ? Math.round((y.accepted / y.acquired) * 10_000) / 10_000 : null;
     y.usableShare = y.acquired > 0 ? Math.round((y.usable / y.acquired) * 10_000) / 10_000 : null;
     y.value = sourceYieldValue(y);

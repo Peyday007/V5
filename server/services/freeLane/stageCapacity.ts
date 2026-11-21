@@ -150,6 +150,14 @@ export function attributeJob(facts: AttributionFacts): { category: AttributionCa
 export interface CategoryAttribution {
   category: AttributionCategory;
   productiveJobs: number;
+  /**
+   * Every job the lane spent on the category in the window — accepted
+   * (`SUBMITTED`) or answered and not accepted (`FAILED_RETRYABLE`). A
+   * `RELEASED_TRANSIENT` hand-back is not a job spent: its attempt is refunded.
+   * Absent on a reading recorded before it was measured, which then says
+   * nothing about a category's yield per job.
+   */
+  jobs?: number;
   /** How many of those jobs each rule decided. */
   bases: Record<string, number>;
 }
@@ -652,18 +660,19 @@ async function readPurposes(since: string): Promise<PurposeAttribution[]> {
 const DISCOVERY_DEAL_ROUNDS = "('SEED_EQUIPMENT', 'ADJACENT')";
 
 /**
- * Each productive (SUBMITTED) job, with the row facts `attributeJob` decides
- * on. The job's orchestration is the one its event row names, else its bin's,
+ * Each job the lane spent (SUBMITTED or FAILED_RETRYABLE), with the row facts
+ * `attributeJob` decides on; a category's `productiveJobs` counts only the
+ * SUBMITTED ones and its `jobs` counts both, so its yield per job is measured. The job's orchestration is the one its event row names, else its bin's,
  * else its work item's; every fact is
  * an EXISTS over the rows that consume that orchestration, so a job is one row
  * here however many consumers match, and is attributed once.
  */
 async function readCategories(since: string): Promise<CategoryAttribution[]> {
   const rows = await getDb().all<{
-    bin_purpose: string | null; brain_project: number | string | null; validates_opening: number | string;
+    outcome: string | null; bin_purpose: string | null; brain_project: number | string | null; validates_opening: number | string;
     deal_round: number | string; future_goal: number | string; commercial: number | string;
   }>(
-    `SELECT j.bin_purpose,
+    `SELECT j.outcome, j.bin_purpose,
             CASE WHEN p.slug = 'brain-architecture' OR p.purpose = 'TECHNICAL' THEN 1 ELSE 0 END AS brain_project,
             CASE WHEN j.orch IS NOT NULL AND EXISTS (
               SELECT 1 FROM cash_opportunities o WHERE o.validation_orchestration_id = j.orch) THEN 1 ELSE 0 END AS validates_opening,
@@ -684,18 +693,18 @@ async function readCategories(since: string): Promise<CategoryAttribution[]> {
                      OR EXISTS (SELECT 1 FROM russell_missions m JOIN deal_rounds d ON d.candidate_id = m.candidate_id
                                  WHERE m.orchestration_id = j.orch AND d.purpose IN ${DISCOVERY_DEAL_ROUNDS})))
                  THEN 1 ELSE 0 END AS commercial
-       FROM (SELECT e.id, e.at, b.purpose AS bin_purpose,
+       FROM (SELECT e.id, e.at, e.outcome, b.purpose AS bin_purpose,
                     COALESCE(e.project_id, b.project_id, w.project_id) AS project_id,
                     COALESCE(e.orchestration_id, b.orchestration_id, w.orchestration_id) AS orch
                FROM bin_events e
                LEFT JOIN bins b ON b.id = e.bin_id
                LEFT JOIN work_items w ON w.id = e.work_item_id
-              WHERE e.event_type = 'FREE_LANE_ITEM' AND e.outcome = 'SUBMITTED' AND e.at >= ?) j
+              WHERE e.event_type = 'FREE_LANE_ITEM' AND e.outcome IN ('SUBMITTED', 'FAILED_RETRYABLE') AND e.at >= ?) j
        LEFT JOIN projects p ON p.id = j.project_id`,
     [since],
   );
   const byCategory = new Map<AttributionCategory, CategoryAttribution>(
-    ATTRIBUTION_CATEGORIES.map((category) => [category, { category, productiveJobs: 0, bases: {} }]),
+    ATTRIBUTION_CATEGORIES.map((category) => [category, { category, productiveJobs: 0, jobs: 0, bases: {} }]),
   );
   for (const row of rows) {
     const { category, basis } = attributeJob({
@@ -707,6 +716,9 @@ async function readCategories(since: string): Promise<CategoryAttribution[]> {
       commercialDiscovery: n(row.commercial) === 1,
     });
     const entry = byCategory.get(category)!;
+    entry.jobs = (entry.jobs ?? 0) + 1;
+    // Only an accepted job is productive; the attribution of productive jobs sums to the window's total.
+    if (row.outcome !== 'SUBMITTED') continue;
     entry.productiveJobs += 1;
     entry.bases[basis] = (entry.bases[basis] ?? 0) + 1;
   }
@@ -1135,7 +1147,78 @@ export const STAGE_CAPACITY_EVENT = 'FREE_LANE_STAGE_CAPACITY';
  * a web request. A measurement that fails is recorded as failed, with its reason,
  * rather than skipped silently.
  */
-export async function recordStageCapacity(options: { hours?: number; now?: number } = {}): Promise<StageCapacityReport | null> {
+export async function recordStageCapacity(
+  options: { hours?: number; now?: number; followers?: readonly CapacityFollower[] } = {},
+): Promise<StageCapacityReport | null> {
+  const report = await recordStageCapacityOnly(options);
+  // The readings that build on this one run after it is written, so they read it.
+  await runCapacityFollowers(new Date(options.now ?? Date.now()), options.followers ?? defaultCapacityFollowers());
+  return report;
+}
+
+/**
+ * The bin events the hourly stage-capacity tick also records (CAP-19-5,
+ * CAP-21-7, CAP-25-2). Literal names, so this module does not import the
+ * readers that import it; the wiring test holds them equal to each owner's
+ * own constant.
+ */
+export const CAPACITY_FOLLOWER_EVENTS = ['CAPACITY_CONTRIBUTION', 'ACQUISITION_MEASURES', 'STAGE_LIMIT'] as const;
+
+/** One reading recorded on the stage-capacity tick: its event and how to record it. */
+export interface CapacityFollower {
+  event: string;
+  run: (now: Date) => Promise<unknown>;
+}
+
+/**
+ * The three readings, each loaded on first use: their modules read this one,
+ * so a static import would be a cycle. No new timer — they ride the free
+ * lane's existing hourly tick (`worker.ts`).
+ */
+export function defaultCapacityFollowers(): CapacityFollower[] {
+  return [
+    { event: 'CAPACITY_CONTRIBUTION', run: async (now) => (await import('./contribution.ts')).recordContribution(now) },
+    { event: 'ACQUISITION_MEASURES', run: async (now) => (await import('../feeds/acquisitionMeasures.ts')).recordAcquisitionMeasures(now) },
+    { event: 'STAGE_LIMIT', run: async (now) => (await import('./stageLimit.ts')).recordStageLimit(now) },
+  ];
+}
+
+export interface FollowerOutcome {
+  event: string;
+  ok: boolean;
+  error: string | null;
+}
+
+/**
+ * Record every follower reading, each isolated: one that throws is logged and
+ * recorded as `NOT_MEASURED` under its own event with the reason, and the
+ * others still run. Never throws.
+ */
+export async function runCapacityFollowers(now: Date, followers: readonly CapacityFollower[] = defaultCapacityFollowers()): Promise<FollowerOutcome[]> {
+  const out: FollowerOutcome[] = [];
+  for (const follower of followers) {
+    const started = Date.now();
+    try {
+      await follower.run(now);
+      out.push({ event: follower.event, ok: true, error: null });
+    } catch (error) {
+      const message = String((error as Error)?.message ?? error).slice(0, 400);
+      console.warn(`[free-lane] ${follower.event} reading failed: ${message}`);
+      out.push({ event: follower.event, ok: false, error: message });
+      await recordBinEvent({
+        eventType: follower.event,
+        workloadClass: 'capacity',
+        outcome: 'NOT_MEASURED',
+        reason: `${follower.event} reading failed: ${message}`.slice(0, 480),
+        durationMs: Date.now() - started,
+        evidenceClass: 'MEASURED',
+      });
+    }
+  }
+  return out;
+}
+
+async function recordStageCapacityOnly(options: { hours?: number; now?: number }): Promise<StageCapacityReport | null> {
   const started = Date.now();
   try {
     const report = await stageCapacity(options);
@@ -1188,6 +1271,120 @@ export interface RecordedStageCapacity {
   report: StageCapacityReport | null;
   queuedNow: number | null;
   queueAdvance: QueueAdvance | null;
+  /**
+   * The latest decisions the readings recorded on the same tick reached
+   * (CAP-19-5 CAPACITY_CONTRIBUTION, CAP-25-2 STAGE_LIMIT, CAP-21-7
+   * ACQUISITION_MEASURES), each only while current. `gateGrowth` acts on them.
+   */
+  decisions?: CapacityDecisions;
+}
+
+/** The parts of the follower readings the growth gate acts on; each is null when absent or stale. */
+export interface CapacityDecisions {
+  contribution: {
+    at: string;
+    decisions: { kind: string; id: string; verdict: string; basis: string; recommendation: string }[];
+  } | null;
+  stageLimit: { at: string; kind: string; basis: string; remedy: string; gate: string; gateReason: string } | null;
+  acquisition: { at: string; recommendations: { resource: string; action: string; reason: string }[] } | null;
+}
+
+/** ACQUISITION_MEASURES is a daily reading; it is current for one window plus the hourly staleness bound. */
+export const ACQUISITION_DECISION_STALE_MS = 24 * 3_600_000 + STAGE_CAPACITY_STALE_MS;
+
+/** Bottleneck kinds whose remedy is not more model slots (CAP-25-2's remedies). */
+const NOT_RELIEVED_BY_MODEL_SLOTS = new Set(['SOURCE_ACCESS', 'PARSING', 'RECONCILIATION', 'DATABASE', 'APP_CPU', 'COMMERCIAL_RELEVANCE']);
+
+/**
+ * Why the recorded follower decisions refuse one model's growth past proven
+ * capacity, or null when none does. Pure; read by `gateGrowth`.
+ *
+ *  - CAPACITY_CONTRIBUTION: the model's own WORKER or MODEL_ROUTE component
+ *    judged REPAIR, RETIRE, or provisioned-but-not-productive is not grown —
+ *    a failing provider is repaired, not out-scaled, and provisioned
+ *    concurrency is not throughput.
+ *  - STAGE_LIMIT: a limiting stage whose remedy is not model capacity (access,
+ *    parsing, reconciliation, database, CPU, commercial relevance) is not
+ *    relieved by more slots; and a GPU — hardware spend — is not grown while
+ *    the pre-spend gate refuses or a measured increase earned nothing.
+ *  - ACQUISITION_MEASURES: a REPAIR on the resource class these slots are
+ *    (LLM_WORKERS, or GPU) is a fault capacity cannot fix.
+ */
+export function decisionHold(input: { model: string; gpu: boolean; decisions: CapacityDecisions | null | undefined }): string | null {
+  const d = input.decisions;
+  if (!d) return null;
+  const own = d.contribution?.decisions.filter((one) => one.id === input.model && (one.kind === 'WORKER' || one.kind === 'MODEL_ROUTE')) ?? [];
+  const repair = own.find((one) => one.verdict === 'REPAIR');
+  if (repair) return `contribution reading (${d.contribution!.at}) says repair ${repair.kind.toLowerCase()} ${input.model} first: ${repair.basis}`;
+  const retire = own.find((one) => one.verdict === 'RETIRE');
+  if (retire) return `contribution reading (${d.contribution!.at}) says ${input.model} produced no accepted output: ${retire.basis}`;
+  const idle = own.find((one) => one.verdict === 'HOLD' && one.basis === 'PROVISIONED_NOT_PRODUCTIVE');
+  if (idle) return `contribution reading (${d.contribution!.at}): ${input.model}'s provisioned slots accepted nothing; provisioned concurrency is not throughput`;
+  if (d.stageLimit && NOT_RELIEVED_BY_MODEL_SLOTS.has(d.stageLimit.kind)) {
+    return `stage-limit reading (${d.stageLimit.at}) names ${d.stageLimit.kind} the limit (${d.stageLimit.basis}): ${d.stageLimit.remedy}`;
+  }
+  if (input.gpu && d.stageLimit && (d.stageLimit.gate.startsWith('REFUSE') || d.stageLimit.gate === 'NO_GAIN_REVERT')) {
+    return `pre-spend gate (${d.stageLimit.at}) ${d.stageLimit.gate}: ${d.stageLimit.gateReason}`;
+  }
+  const resource = input.gpu ? 'GPU' : 'LLM_WORKERS';
+  const fault = d.acquisition?.recommendations.find((one) => one.resource === resource && one.action === 'REPAIR');
+  if (fault) return `acquisition reading (${d.acquisition!.at}) says repair ${resource}: ${fault.reason}`;
+  return null;
+}
+
+const asRecord = (value: unknown): Record<string, unknown> | null =>
+  value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+const str = (value: unknown): string => (typeof value === 'string' ? value : '');
+
+/** The latest current row of one follower event, parsed; null when none, stale, or unreadable. */
+async function latestFollower(eventType: string, now: number, staleMs: number): Promise<{ at: string; measures: Record<string, unknown> } | null> {
+  const row = await getDb().get<{ at: string; measures: string | null }>(
+    'SELECT at, measures FROM bin_events WHERE event_type = ? ORDER BY at DESC, id DESC LIMIT 1',
+    [eventType],
+  );
+  if (!row || now - Date.parse(row.at) > staleMs) return null;
+  try {
+    const measures = asRecord(JSON.parse(row.measures ?? 'null'));
+    return measures ? { at: row.at, measures } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The follower decisions `gateGrowth` acts on, read from their latest current rows. Never throws. */
+export async function readCapacityDecisions(now = Date.now()): Promise<CapacityDecisions> {
+  const safe = async <T>(read: () => Promise<T | null>): Promise<T | null> => {
+    try {
+      return await read();
+    } catch {
+      return null;
+    }
+  };
+  const contribution = await safe(async () => {
+    const row = await latestFollower('CAPACITY_CONTRIBUTION', now, STAGE_CAPACITY_STALE_MS);
+    if (!row || !Array.isArray(row.measures['decisions'])) return null;
+    const decisions = (row.measures['decisions'] as unknown[]).map(asRecord).filter((one): one is Record<string, unknown> => !!one).map((one) => ({
+      kind: str(one['kind']), id: str(one['id']), verdict: str(one['verdict']), basis: str(one['basis']), recommendation: str(one['recommendation']),
+    }));
+    return { at: row.at, decisions };
+  });
+  const stageLimit = await safe(async () => {
+    const row = await latestFollower('STAGE_LIMIT', now, STAGE_CAPACITY_STALE_MS);
+    const limit = asRecord(row?.measures['limit']);
+    if (!row || !limit) return null;
+    const gate = asRecord(row.measures['gate']);
+    return { at: row.at, kind: str(limit['kind']), basis: str(limit['basis']), remedy: str(limit['remedy']), gate: str(gate?.['decision']), gateReason: str(gate?.['reason']) };
+  });
+  const acquisition = await safe(async () => {
+    const row = await latestFollower('ACQUISITION_MEASURES', now, ACQUISITION_DECISION_STALE_MS);
+    const constraint = asRecord(row?.measures['constraint']);
+    if (!row || !constraint || !Array.isArray(constraint['recommendations'])) return null;
+    const recommendations = (constraint['recommendations'] as unknown[]).map(asRecord).filter((one): one is Record<string, unknown> => !!one).map((one) => ({
+      resource: str(one['resource']), action: str(one['action']), reason: str(one['reason']),
+    }));
+    return { at: row.at, recommendations };
+  });
+  return { contribution, stageLimit, acquisition };
 }
 
 /**
@@ -1221,6 +1418,7 @@ export async function readStageCapacity(now = Date.now()): Promise<RecordedStage
     report,
     queuedNow: measures && typeof measures['queuedNow'] === 'number' ? measures['queuedNow'] : null,
     queueAdvance: (measures?.['queueAdvance'] as QueueAdvance | undefined) ?? null,
+    decisions: await readCapacityDecisions(now),
   };
 }
 
@@ -1357,6 +1555,9 @@ export function gateGrowth(input: {
   if (failing && failing.route === input.model && !input.answering) {
     return hold(`restore model route ${failing.route} first (${failing.cause}, ${failing.failures} failure(s))`);
   }
+  // What the contribution, stage-limit and acquisition readings decided (CAP-19-5, CAP-25-2, CAP-21-7).
+  const decided = decisionHold({ model: input.model, gpu: input.gpu, decisions: recorded.decisions });
+  if (decided && !(input.answering && /^contribution reading .* says repair/.test(decided))) return hold(decided);
   const constrained = report.constrained;
   const laneIds = LANE_STAGES().map((s) => s.id);
   if (!constrained.stage) return hold('no measured stage has work waiting');
@@ -1384,4 +1585,60 @@ function freeGain(stage: StageReading | undefined, windowHours: number): Measure
 
 function round2(x: number): number {
   return Math.round(x * 100) / 100;
+}
+
+/* ------------------------------------------------------------------------- */
+/* Bounding what an hourly reading stores                                      */
+/* ------------------------------------------------------------------------- */
+
+/** Entries any one list keeps in a stored reading; the rest are counted, not stored. */
+export const STORED_LIST_LIMIT = 40;
+/** The most bytes of JSON one hourly reading writes to `bin_events.measures`. */
+export const STORED_MEASURES_MAX_BYTES = 64 * 1024;
+
+/** What a bounded reading dropped: per list path, how many it kept of how many. */
+export type MeasuresTruncation = Record<string, { kept: number; total: number }>;
+
+function capLists(value: unknown, limit: number, path: string, dropped: MeasuresTruncation, own: number = limit): unknown {
+  if (Array.isArray(value)) {
+    if (value.length > own) dropped[path || '.'] = { kept: own, total: value.length };
+    return value.slice(0, own).map((v, i) => capLists(v, limit, `${path}[${i}]`, dropped));
+  }
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) out[k] = capLists(v, limit, path ? `${path}.${k}` : k, dropped);
+    return out;
+  }
+  return value;
+}
+
+/**
+ * The reading as stored: every list cut to `limit` entries, or a top-level
+ * list to its own entry in `limits` (callers order the lists so the entries
+ * that matter come first), halving the limits until the
+ * JSON fits `maxBytes`, and as a last resort only the top-level scalars. What
+ * was cut is recorded under `truncated`, so a stored count is never mistaken
+ * for the whole (inv. 33). Pure. A reading already inside both bounds is
+ * returned unchanged in content.
+ */
+export function boundMeasures(
+  reading: Record<string, unknown>,
+  options: { limit?: number; maxBytes?: number; limits?: Readonly<Record<string, number>> } = {},
+): Record<string, unknown> {
+  const maxBytes = options.maxBytes ?? STORED_MEASURES_MAX_BYTES;
+  const first = options.limit ?? STORED_LIST_LIMIT;
+  for (let limit = first; limit >= 1; limit = Math.floor(limit / 2)) {
+    const dropped: MeasuresTruncation = {};
+    const capped: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(reading)) {
+      // A top-level list the caller gave its own limit shrinks in the same proportion.
+      const own = options.limits?.[k] !== undefined ? Math.max(1, Math.floor((options.limits[k]! * limit) / first)) : limit;
+      capped[k] = capLists(v, limit, k, dropped, own);
+    }
+    const out = Object.keys(dropped).length > 0 ? { ...capped, truncated: dropped } : capped;
+    if (JSON.stringify(out).length <= maxBytes) return out;
+  }
+  const scalars: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(reading)) if (v === null || typeof v !== 'object') scalars[k] = v;
+  return { ...scalars, truncated: { '*': { kept: 0, total: Object.keys(reading).length } } };
 }
