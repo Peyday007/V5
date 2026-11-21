@@ -434,6 +434,20 @@ describe('the decisions that are a person’s, from the screen to the row', () =
       );
     });
     await waitFor(async () => expect((await getProgram(projectId))!.state).toBe('PAUSED'));
+    /*
+     * The row changing is not the screen being ready for the next press.
+     *
+     * The route commits the row before its response reaches the client, and
+     * until that response lands `Lifecycle` is still `busy`: Archive is
+     * disabled, so a press is dropped — and if it were not, the in-flight
+     * `move` would end with `setConfirming(null)` and clear the confirmation
+     * the press opened. Under a loaded CI runner that window was wide enough
+     * to lose the press (Postgres suite run 44850129351, shard 4: the screen
+     * still read "Running" when the confirmation was looked for). `Resume` is
+     * rendered only once the PATCH has returned and the re-read shows PAUSED,
+     * which is exactly the state the Archive press depends on.
+     */
+    await waitFor(() => expect(screen.getByText('Resume')).toBeTruthy(), { timeout: 10000 });
 
     // Archiving withdraws an authorization, so it asks first. One press arms it.
     await act(async () => {
