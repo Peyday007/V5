@@ -46,6 +46,7 @@ import {
 import { enqueueWork } from '../server/repos/workQueue.ts';
 import { launchMission, linkMission } from '../server/repos/russellMissions.ts';
 import { createWorker } from '../server/repos/identity.ts';
+import { createProject } from '../server/repos/projects.ts';
 import {
   advanceIdlePackets,
   concludeUnworkablePackets,
@@ -185,6 +186,157 @@ describe('advanceIdlePackets', () => {
     // the second pass skips it and reaches the packet behind it.
     expect((await advanceIdlePackets(1)).map((e) => e.orchestrationId)).toEqual([movable]);
     expect((await getOrchestration(stuck))!.updatedAt).toBe(stuckBefore.updatedAt);
+  });
+});
+
+/**
+ * RECOVERY.STALLS attempt 3 — the '+work' class. A packet whose fragment is
+ * being worked under a live, heartbeated lease never had its own `updated_at`
+ * touched, so `PACKETS_MOVING` (updated within six hours) read it as idle.
+ */
+describe('a packet whose work is being done under a live lease', () => {
+  const SIX_HOURS = 6 * 60 * 60 * 1000;
+
+  async function leasedItem(
+    orchestrationId: string,
+    lease: { heartbeatAgoMs: number | null; expiresInMs: number; claimedAgoMs?: number },
+  ): Promise<string> {
+    const item = await enqueueWork({
+      projectId,
+      workType: 'RESEARCH_FRAGMENT',
+      payload: {},
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId,
+    });
+    const worker = await createWorker({ name: `w-${item.id}`, createdByType: 'SYSTEM', createdById: 'test' });
+    const heartbeat = lease.heartbeatAgoMs === null ? null : new Date(Date.now() - lease.heartbeatAgoMs).toISOString();
+    const claimed = lease.claimedAgoMs === undefined ? heartbeat : new Date(Date.now() - lease.claimedAgoMs).toISOString();
+    await getDb().run(
+      `UPDATE work_items SET state = 'LEASED', lease_id = ?, worker_id = ?, lease_generation = 1,
+              leased_at = ?, heartbeat_at = ?, lease_expires_at = ? WHERE id = ?`,
+      [
+        `lse_${item.id}`,
+        worker.id,
+        claimed,
+        heartbeat,
+        new Date(Date.now() + lease.expiresInMs).toISOString(),
+        item.id,
+      ],
+    );
+    return item.id;
+  }
+
+  async function itemRow(id: string): Promise<Record<string, unknown>> {
+    return (await getDb().get<Record<string, unknown>>(
+      'SELECT state, lease_generation, lease_id, worker_id, leased_at, heartbeat_at, lease_expires_at FROM work_items WHERE id = ?',
+      [id],
+    ))!;
+  }
+
+  it('reproduces the failure class and is stamped so PACKETS_MOVING reads it as moving', async () => {
+    // Past six hours by its own row, while a worker heartbeated a minute ago.
+    const id = await packet('RESEARCHING', SIX_HOURS + 60_000);
+    const item = await leasedItem(id, { heartbeatAgoMs: 60_000, expiresInMs: 600_000 });
+    const itemBefore = await itemRow(item);
+
+    const swept = await advanceIdlePackets(10);
+    expect(swept).toContainEqual({ orchestrationId: id, from: 'RESEARCHING', to: 'RESEARCHING' });
+
+    const after = (await getOrchestration(id))!;
+    expect(after.status).toBe('RESEARCHING');
+    // The probe's own predicate: updated within six hours.
+    expect(Date.parse(after.updatedAt)).toBeGreaterThan(Date.now() - SIX_HOURS);
+    // The worker's item is untouched: the queue still owns it.
+    expect(await itemRow(item)).toEqual(itemBefore);
+
+    // Stamped, so it drops out of the selection.
+    expect((await advanceIdlePackets(10)).map((e) => e.orchestrationId)).not.toContain(id);
+  });
+
+  it('leaves work that shows no progress exactly as it is: no stamp, no conclusion, no item change', async () => {
+    const queued = await packet('RESEARCHING', PACKET_PROGRESS_DEADLINE_MS + 60_000);
+    const queuedItem = (await enqueueWork({
+      projectId,
+      workType: 'RESEARCH_FRAGMENT',
+      payload: {},
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId: queued,
+    })).id;
+    const staleHeartbeat = await packet('RESEARCHING', PACKET_PROGRESS_DEADLINE_MS + 60_000);
+    const staleItem = await leasedItem(staleHeartbeat, {
+      heartbeatAgoMs: PACKET_STALL_WINDOW_MS + 60_000,
+      expiresInMs: 600_000,
+    });
+    const expired = await packet('RESEARCHING', PACKET_PROGRESS_DEADLINE_MS + 60_000);
+    const expiredItem = await leasedItem(expired, { heartbeatAgoMs: 60_000, expiresInMs: -60_000 });
+    const ids = [queued, staleHeartbeat, expired];
+    const items = [queuedItem, staleItem, expiredItem];
+    const before = await Promise.all(ids.map(async (id) => (await getOrchestration(id))!));
+    const itemsBefore = await Promise.all(items.map(itemRow));
+
+    const swept = (await advanceIdlePackets(10)).map((e) => e.orchestrationId);
+    for (const id of ids) expect(swept).not.toContain(id);
+    expect(await Promise.all(ids.map(async (id) => (await getOrchestration(id))!))).toEqual(before);
+    expect(await Promise.all(items.map(itemRow))).toEqual(itemsBefore);
+  });
+
+  it('reads a heartbeat as liveness, not progress: one claim moves the packet once, however long it is heartbeated', async () => {
+    // Review finding: a worker that heartbeats an item for ever without
+    // completing it kept its packet reading as moving indefinitely, and every
+    // stamp pushed back the updated_at the progress deadline reads.
+    const claimedAgo = 5 * 60 * 60 * 1000;
+    const id = await packet('RESEARCHING', SIX_HOURS + 60_000);
+    const item = await leasedItem(id, { claimedAgoMs: claimedAgo, heartbeatAgoMs: 60_000, expiresInMs: 600_000 });
+    const claimedAt = (await itemRow(item)).leased_at as string;
+
+    // The claim is real progress newer than the packet's row: stamped to it, not to now.
+    expect((await advanceIdlePackets(10)).map((e) => e.orchestrationId)).toContain(id);
+    expect((await getOrchestration(id))!.updatedAt).toBe(claimedAt);
+
+    // The worker keeps heartbeating; nothing it does moves the packet again.
+    for (let beatNo = 0; beatNo < 3; beatNo += 1) {
+      await getDb().run('UPDATE work_items SET heartbeat_at = ?, lease_expires_at = ? WHERE id = ?', [
+        new Date().toISOString(),
+        new Date(Date.now() + 600_000).toISOString(),
+        item,
+      ]);
+      expect((await advanceIdlePackets(10)).map((e) => e.orchestrationId)).not.toContain(id);
+      expect((await getOrchestration(id))!.updatedAt).toBe(claimedAt);
+    }
+
+    // So once six hours pass from the claim it reads idle, and when the lease
+    // ends the deadline is measured from the claim, never from the last heartbeat.
+    expect(Date.now() - Date.parse((await getOrchestration(id))!.updatedAt)).toBeGreaterThanOrEqual(claimedAgo);
+  });
+
+  it('a reclaim is a new progress event and moves the packet to that claim', async () => {
+    const id = await packet('RESEARCHING', SIX_HOURS + 60_000);
+    const item = await leasedItem(id, { claimedAgoMs: 5 * 60 * 60 * 1000, heartbeatAgoMs: 60_000, expiresInMs: 600_000 });
+    await advanceIdlePackets(10);
+    const reclaimed = new Date(Date.now() - 30_000).toISOString();
+    await getDb().run('UPDATE work_items SET leased_at = ?, heartbeat_at = ?, lease_generation = 2 WHERE id = ?', [
+      reclaimed,
+      reclaimed,
+      item,
+    ]);
+    // Within the stall window now, so it is out of the selection — and was moved by a real claim.
+    expect((await getOrchestration(id))!.updatedAt < reclaimed).toBe(true);
+    await getDb().run('UPDATE research_orchestrations SET updated_at = ? WHERE id = ?', [
+      new Date(Date.now() - SIX_HOURS).toISOString(),
+      id,
+    ]);
+    expect((await advanceIdlePackets(10)).map((e) => e.orchestrationId)).toContain(id);
+    expect((await getOrchestration(id))!.updatedAt).toBe(reclaimed);
+  });
+
+  it('leaves a recently updated packet under a live lease alone', async () => {
+    const id = await packet('RESEARCHING', 60_000);
+    await leasedItem(id, { heartbeatAgoMs: 1_000, expiresInMs: 600_000 });
+    const before = (await getOrchestration(id))!;
+    expect((await advanceIdlePackets(10)).map((e) => e.orchestrationId)).not.toContain(id);
+    expect((await getOrchestration(id))!.updatedAt).toBe(before.updatedAt);
   });
 });
 
@@ -485,5 +637,244 @@ describe('a repair whose retry time has passed is due, not a wait', () => {
     const after = (await getOrchestration(id))!;
     expect(after.status).toBe('AWAITING_REPAIR');
     expect(after.updatedAt).toBe(before.updatedAt);
+  });
+});
+
+/**
+ * The review finding this repairs: the probe's '+work' bucket counts packets
+ * with QUEUED or LEASED items, and only the LEASED-under-a-live-heartbeat subset
+ * was moved. A packet whose QUEUED work was claimable for the whole progress
+ * deadline and never claimed stayed live and idle for ever. It now takes the
+ * deadline's existing bound action, with the deadline's own guards.
+ */
+describe('a packet whose queued work nobody claims', () => {
+  const OVERDUE = PACKET_PROGRESS_DEADLINE_MS + 60_000;
+
+  async function overdueWithQueued(
+    opts: { availableAgoMs?: number; leasedAgoMs?: number; targetWorkerId?: string } = {},
+  ): Promise<{ id: string; itemId: string }> {
+    const id = await packet('RESEARCHING', OVERDUE);
+    const item = await enqueueWork({
+      projectId,
+      workType: 'RESEARCH_FRAGMENT',
+      payload: {},
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId: id,
+      targetWorkerId: opts.targetWorkerId ?? null,
+    });
+    const created = new Date(Date.now() - OVERDUE).toISOString();
+    const available = new Date(Date.now() - (opts.availableAgoMs ?? OVERDUE)).toISOString();
+    const leased = opts.leasedAgoMs === undefined ? null : new Date(Date.now() - opts.leasedAgoMs).toISOString();
+    await getDb().run('UPDATE work_items SET created_at = ?, available_at = ?, leased_at = ? WHERE id = ?', [
+      created,
+      available,
+      leased,
+      item.id,
+    ]);
+    await getDb().run('UPDATE research_orchestrations SET updated_at = ? WHERE id = ?', [created, id]);
+    return { id, itemId: item.id };
+  }
+
+  async function itemState(itemId: string): Promise<string> {
+    return (await getDb().get<{ state: string }>('SELECT state FROM work_items WHERE id = ?', [itemId]))!.state;
+  }
+
+  /**
+   * The lane was serving: some worker claimed another item of `workType`
+   * `claimedAgoMs` ago, and finished it. That is the evidence that this
+   * packet's item was passed over rather than that nobody was taking the work.
+   */
+  async function laneServed(
+    workType: string,
+    claimedAgoMs: number,
+    opts: { projectId?: string; priority?: number; workerId?: string; orchestrationId?: string } = {},
+  ): Promise<void> {
+    const inProject = opts.projectId ?? projectId;
+    const other = await enqueueWork({
+      projectId: inProject,
+      workType,
+      payload: {},
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      ...(opts.priority === undefined ? {} : { priority: opts.priority }),
+      ...(opts.orchestrationId === undefined ? {} : { orchestrationId: opts.orchestrationId }),
+    });
+    const worker = opts.workerId
+      ? { id: opts.workerId }
+      : await createWorker({ name: `lane-${other.id}`, createdByType: 'SYSTEM', createdById: 'test' });
+    const claimed = new Date(Date.now() - claimedAgoMs).toISOString();
+    await getDb().run(
+      `UPDATE work_items SET state = 'SUCCEEDED', attempt_count = 1, lease_generation = 1,
+              leased_at = ?, completed_at = ? WHERE id = ?`,
+      [claimed, claimed, other.id],
+    );
+    await getDb().run(
+      `INSERT INTO work_leases (id, work_item_id, project_id, attempt_number, lease_generation, worker_id,
+                                claimed_at, expires_at, ended_at, outcome)
+       VALUES (?, ?, ?, 1, 1, ?, ?, ?, ?, 'SUCCEEDED')`,
+      [`wls_${other.id}`, other.id, inProject, worker.id, claimed, claimed, claimed],
+    );
+  }
+
+  it('reproduces the failure class: claimable, never claimed past the deadline, and the tick concludes it', async () => {
+    const { id, itemId } = await overdueWithQueued();
+    await laneServed('RESEARCH_FRAGMENT', 60 * 60_000);
+    vi.mocked(recomputeProject).mockClear();
+
+    const swept = await advanceIdlePackets(10);
+
+    expect(swept).toContainEqual({ orchestrationId: id, from: 'RESEARCHING', to: 'FAILED' });
+    const after = (await getOrchestration(id))!;
+    expect(after.status).toBe('FAILED');
+    expect(after.failureReason).toContain('no worker claimed');
+    expect(await itemState(itemId)).toBe('CANCELLED');
+    const event = await getDb().get<{ payload: string }>(
+      `SELECT payload FROM project_events WHERE event_type = 'RESEARCH_FAILED' AND payload LIKE ?`,
+      [`%${id}%`],
+    );
+    expect(JSON.parse(event!.payload)).toMatchObject({ orchestrationId: id, unclaimedWithdrawn: 1 });
+    expect(recomputeProject).toHaveBeenCalledWith(projectId);
+
+    // Idempotent by the state it produced.
+    expect((await advanceIdlePackets(10)).map((e) => e.orchestrationId)).not.toContain(id);
+  });
+
+  it('is reached through the existing tick sweep', async () => {
+    const { id } = await overdueWithQueued();
+    await laneServed('RESEARCH_FRAGMENT', 60 * 60_000);
+    await concludeUnworkablePackets(10);
+    expect((await getOrchestration(id))!.status).toBe('FAILED');
+  });
+
+  /*
+   * The recorded review finding: with no worker taking this work type at all in
+   * the window (a lane outage, a quota, the §86 controller holding, contention
+   * ahead of it), "nobody claimed it" is Brain's missing capacity, not the
+   * packet's failure (§53). The packet stays live and its work stays queued.
+   */
+  it('never concludes a packet when no worker took that work type in the window: that is missing capacity', async () => {
+    const { id, itemId } = await overdueWithQueued();
+    const before = (await getOrchestration(id))!;
+
+    expect((await advanceIdlePackets(10)).map((e) => e.orchestrationId)).not.toContain(id);
+    await concludeUnworkablePackets(10);
+
+    expect((await getOrchestration(id))!).toEqual(before);
+    expect(await itemState(itemId)).toBe('QUEUED');
+  });
+
+  it('does not read claims of a different work type as the lane serving this one', async () => {
+    const { id, itemId } = await overdueWithQueued();
+    await laneServed('RESEARCH_PLAN', 60 * 60_000);
+    expect((await advanceIdlePackets(10)).map((e) => e.orchestrationId)).not.toContain(id);
+    expect(await itemState(itemId)).toBe('QUEUED');
+    expect((await getOrchestration(id))!.status).toBe('RESEARCHING');
+  });
+
+  it('does not read a claim from before the window as the lane serving it now', async () => {
+    const { id, itemId } = await overdueWithQueued();
+    await laneServed('RESEARCH_FRAGMENT', OVERDUE + 60 * 60_000);
+    expect((await advanceIdlePackets(10)).map((e) => e.orchestrationId)).not.toContain(id);
+    expect(await itemState(itemId)).toBe('QUEUED');
+  });
+
+  /*
+   * The recorded review finding (lane-served guard ignores claim eligibility):
+   * a same-type claim proves this item was passed over only when `claimWork`
+   * would have offered that worker this item first. Otherwise the item was
+   * starved or never offered, and that is missing capacity, not failure.
+   */
+  async function leftLive(id: string, itemId: string): Promise<void> {
+    expect((await advanceIdlePackets(10)).map((e) => e.orchestrationId)).not.toContain(id);
+    await concludeUnworkablePackets(10);
+    expect(await itemState(itemId)).toBe('QUEUED');
+    expect((await getOrchestration(id))!.status).toBe('RESEARCHING');
+  }
+
+  it('does not read a higher-priority claim ahead of it as the lane passing it over: that is starvation', async () => {
+    const { id, itemId } = await overdueWithQueued();
+    const own = (await getDb().get<{ priority: number }>('SELECT priority FROM work_items WHERE id = ?', [itemId]))!;
+    await laneServed('RESEARCH_FRAGMENT', 60 * 60_000, { priority: own.priority + 2 });
+    await leftLive(id, itemId);
+  });
+
+  it('does not read a claim in another project as the lane serving this one', async () => {
+    const { id, itemId } = await overdueWithQueued();
+    const elsewhere = (await createProject({ name: 'Elsewhere', slug: 'elsewhere-lane' })).id;
+    await laneServed('RESEARCH_FRAGMENT', 60 * 60_000, { projectId: elsewhere });
+    await leftLive(id, itemId);
+  });
+
+  it('does not read another worker\'s claim as passing over an item pinned to a worker that is not claiming', async () => {
+    const pinned = await createWorker({ name: 'pinned-offline', createdByType: 'SYSTEM', createdById: 'test' });
+    const { id, itemId } = await overdueWithQueued({ targetWorkerId: pinned.id });
+    await laneServed('RESEARCH_FRAGMENT', 60 * 60_000);
+    await leftLive(id, itemId);
+  });
+
+  it('does read the pinned worker\'s own claim as passing over its pinned item', async () => {
+    const pinned = await createWorker({ name: 'pinned-online', createdByType: 'SYSTEM', createdById: 'test' });
+    const { id, itemId } = await overdueWithQueued({ targetWorkerId: pinned.id });
+    await laneServed('RESEARCH_FRAGMENT', 60 * 60_000, { workerId: pinned.id });
+    expect(await advanceIdlePackets(10)).toContainEqual({ orchestrationId: id, from: 'RESEARCHING', to: 'FAILED' });
+    expect(await itemState(itemId)).toBe('CANCELLED');
+  });
+
+  it('does not read a claim confined to another packet as the lane serving this one', async () => {
+    const { id, itemId } = await overdueWithQueued();
+    const sibling = await packet('RESEARCHING', 0);
+    await laneServed('RESEARCH_FRAGMENT', 60 * 60_000, { orchestrationId: sibling });
+    await leftLive(id, itemId);
+  });
+
+  it('leaves an item in backoff alone: available only recently is not unclaimed', async () => {
+    const { id, itemId } = await overdueWithQueued({ availableAgoMs: 60_000 });
+    const before = (await getOrchestration(id))!;
+    expect((await advanceIdlePackets(10)).map((e) => e.orchestrationId)).not.toContain(id);
+    expect((await getOrchestration(id))!).toEqual(before);
+    expect(await itemState(itemId)).toBe('QUEUED');
+  });
+
+  it('leaves an item a worker took inside the window alone', async () => {
+    const { id, itemId } = await overdueWithQueued({ leasedAgoMs: 60_000 });
+    expect((await advanceIdlePackets(10)).map((e) => e.orchestrationId)).not.toContain(id);
+    expect(await itemState(itemId)).toBe('QUEUED');
+  });
+
+  it('never touches a packet under the deadline', async () => {
+    const { id, itemId } = await overdueWithQueued();
+    await getDb().run('UPDATE research_orchestrations SET updated_at = ? WHERE id = ?', [
+      new Date(Date.now() - (PACKET_PROGRESS_DEADLINE_MS - 60_000)).toISOString(),
+      id,
+    ]);
+    expect((await advanceIdlePackets(10)).map((e) => e.orchestrationId)).not.toContain(id);
+    expect(await itemState(itemId)).toBe('QUEUED');
+  });
+
+  it('never withdraws work from a plan waiting for a person to approve it (§16)', async () => {
+    const { id, itemId } = await overdueWithQueued();
+    const [fragment] = await createFragments([{
+      orchestrationId: id,
+      projectId,
+      layerId,
+      fragmentIndex: 0,
+      fragmentKey: 'f0',
+      question: 'q',
+      requiredEvidence: [],
+      acceptableSourceTypes: [],
+      excludedSourceTypes: [],
+      completionCriteria: [],
+      dependsOn: [],
+      minIndependentSources: 1,
+    }]);
+    await updateFragment(fragment!.id, { status: 'PLANNED' });
+    await getDb().run('UPDATE research_orchestrations SET updated_at = ? WHERE id = ?', [
+      new Date(Date.now() - OVERDUE).toISOString(),
+      id,
+    ]);
+    expect((await advanceIdlePackets(10)).map((e) => e.orchestrationId)).not.toContain(id);
+    expect(await itemState(itemId)).toBe('QUEUED');
+    expect((await getOrchestration(id))!.status).toBe('RESEARCHING');
   });
 });

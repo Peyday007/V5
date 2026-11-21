@@ -2911,7 +2911,9 @@ export function resetIdlePacketAttempts(): void {
  * would not create itself, so no gate, approval or budget check is touched.
  * When the advance changed nothing the packet is left as it was — an honest
  * idle reading — and when it moved the packet is stamped, so it drops out of
- * the selection and a second call advances zero.
+ * the selection and a second call advances zero. A packet *with* outstanding
+ * work whose worker is demonstrably moving it is stamped by
+ * `stampPacketsWorkedUnderLease` below, so the probe stops reading it as idle.
  */
 export async function advanceIdlePackets(
   limit: number,
@@ -2976,7 +2978,213 @@ export async function advanceIdlePackets(
     if (after.updatedAt === before.updatedAt) await beat(row.id);
     out.push({ orchestrationId: row.id, from: before.status, to: result.status });
   }
+  out.push(...(await stampPacketsWorkedUnderLease(live, nowMs, cutoff, limit)));
+  out.push(...(await concludeUnclaimedPackets(live, nowMs, limit)));
   return out;
+}
+
+/**
+ * The '+work' half of "packet idle holding a slot" (RECOVERY.STALLS, attempt 3).
+ *
+ * The selection above deliberately skips a packet with outstanding work: the
+ * queue or a worker owns its movement. But a worker's movement is recorded on
+ * the work item — `heartbeat_at` and `lease_expires_at` — and never on the
+ * packet, so a fragment that takes longer than the stall window to research
+ * left its packet's `updated_at` ageing past the six hours `PACKETS_MOVING`
+ * reads, and the probe counted a packet being worked as idle ("+work").
+ *
+ * A packet is stamped here only when its rows prove it is moving: an item of it
+ * is LEASED under a lease that has not expired, and that lease was taken or
+ * heartbeated inside the stall window. That heartbeat *is* the packet's
+ * progress (the Temporal heartbeat-timeout reading), so recording it on the
+ * packet reports movement that happened rather than inventing any. A packet
+ * whose work shows no such progress — a QUEUED item nobody claimed, a lease
+ * nobody renewed — is left exactly as it is: it stays idle by its rows, and
+ * lease expiry and reclaim keep owning the item (invariants 24-26). Nothing is
+ * advanced, cancelled, failed, re-leased or concluded here. Its own `limit`,
+ * oldest first, so it never competes with the advances above for a slot.
+ *
+ * A heartbeat is liveness, not progress (review finding, attempt 3). Stamping
+ * the packet *now* on every fresh heartbeat let a worker that heartbeats an
+ * item for ever without completing it keep its packet reading as moving
+ * indefinitely, and pushed back the `updated_at` the progress deadline reads
+ * once the lease ends. So the heartbeat only proves the lease is alive; the
+ * packet is stamped with the time of the progress event its rows record — the
+ * claim, `leased_at`, which a heartbeat never changes — and only when that
+ * claim is newer than the packet's own `updated_at`. One claim therefore moves
+ * the packet once: it reads as moving for six hours from the claim and no
+ * longer, however long the worker keeps heartbeating, and the deadline is
+ * measured from that claim, never from the last heartbeat. A new claim (a
+ * reclaim after expiry) is a new progress event, bounded by the item's own
+ * attempt ceiling. The write is guarded on `updated_at` being older, so it can
+ * only move the reading forward to a moment that really happened, and a second
+ * call stamps zero.
+ */
+async function stampPacketsWorkedUnderLease(
+  live: string[],
+  nowMs: number,
+  cutoff: string,
+  limit: number,
+): Promise<{ orchestrationId: string; from: string; to: string }[]> {
+  const now = new Date(nowMs).toISOString();
+  const rows = await getDb().all<{ id: string; status: string; claimedAt: string | null }>(
+    `SELECT o.id AS id, o.status AS status,
+            (SELECT MAX(w.leased_at) FROM work_items w
+              WHERE w.orchestration_id = o.id AND w.state = 'LEASED'
+                AND w.lease_expires_at > ?
+                AND (w.heartbeat_at >= ? OR w.leased_at >= ?)
+                AND w.leased_at > o.updated_at) AS claimedAt
+       FROM research_orchestrations o
+      WHERE (o.status IN (${live.map(() => '?').join(', ')}) OR (o.status = 'QUEUED' AND o.provider = ?))
+        AND o.updated_at < ?
+        AND EXISTS (SELECT 1 FROM work_items w
+                     WHERE w.orchestration_id = o.id AND w.state = 'LEASED'
+                       AND w.lease_expires_at > ?
+                       AND (w.heartbeat_at >= ? OR w.leased_at >= ?)
+                       AND w.leased_at > o.updated_at)
+      ORDER BY o.updated_at, o.id
+      LIMIT ?`,
+    [now, cutoff, cutoff, ...live, 'WORKER', cutoff, now, cutoff, cutoff, Math.max(1, limit)],
+  );
+  const out: { orchestrationId: string; from: string; to: string }[] = [];
+  for (const row of rows) {
+    if (!row.claimedAt) continue;
+    const stamped = await getDb().run(
+      'UPDATE research_orchestrations SET updated_at = ? WHERE id = ? AND updated_at < ?',
+      [row.claimedAt, row.id, row.claimedAt],
+    );
+    if (stamped.changes === 1) out.push({ orchestrationId: row.id, from: row.status, to: row.status });
+  }
+  return out;
+}
+
+/**
+ * The other '+work' half of "packet idle holding a slot": work queued and never
+ * claimed (RECOVERY.STALLS, attempt 3 review finding).
+ *
+ * `stampPacketsWorkedUnderLease` moves a packet whose worker is demonstrably
+ * moving it. A packet whose outstanding work is only QUEUED items that have been
+ * claimable for the whole progress deadline and that no worker took in that
+ * time is not being moved by anybody, and nothing else concludes it: the
+ * selection above skips it because it has outstanding work, the deadline
+ * refuses it for the same reason, and `concludeUnworkablePackets` reaches only
+ * items past their attempt ceilings. So it stayed live and idle for ever — the
+ * probe's '+work' reading — which is a progress deadline with no bound action.
+ *
+ * The bound action is the existing one. Its never-claimed items are withdrawn
+ * through `cancelWork` (the queue's own cancellation, which wins against any
+ * claim that races it, invariant 24) and the packet is concluded through
+ * `concludeStalledPacket`, which keeps every one of its guards: a plan awaiting
+ * a person's approval or a repair scheduled to return is left alone before any
+ * item is touched; a packet whose fragment asks for a person, or that stands
+ * behind a mission, parks at NEEDS_HUMAN; everything else ends FAILED with its
+ * reason and an event, and re-derives state (§6).
+ *
+ * Fail-closed, every condition load-bearing, all read from rows:
+ *   - the packet itself has not moved for `PACKET_PROGRESS_DEADLINE_MS`;
+ *   - it has no LEASED item at all, live or lapsed — a lease is a worker's, and
+ *     a lapsed one is reclaimed by the queue;
+ *   - every QUEUED item was created, and became available, before the deadline
+ *     window began, so a backoff or a fresh enqueue is never read as unclaimed;
+ *   - no QUEUED item was leased inside the window (a reclaimed item that a
+ *     worker took recently is being worked, if slowly);
+ *   - every QUEUED item still has attempts left — one past its ceiling belongs
+ *     to `concludeUnworkablePackets`, which runs first in the same tick;
+ *   - the lane was serving every QUEUED item's work type and passed it over:
+ *     some worker claimed another item of that same work type inside the
+ *     window (a `work_leases` row). Without that, nobody was taking that kind
+ *     of work at all — a free-lane outage, a provider quota, the §86
+ *     controller holding, or contention ahead of it — and that is Brain's
+ *     missing capacity, not the packet's failure (§53). The packet stays live
+ *     with its work queued; the unclaimed age is the idle-capacity signal the
+ *     §98 watchdog reads from the same rows.
+ *     A claim counts only when `claimWork` would have offered that same
+ *     worker this item first, so it proves this item was reached and passed
+ *     over rather than never offered: the same project (a worker sees only its
+ *     connected projects), the item's own target worker if it has one, the
+ *     same required scopes, a confinement (orchestration, bundle, bin) that
+ *     reached this item too, and a place behind this item in the claim order
+ *     (`priority DESC, available_at`). A higher-priority stream ahead of it, a
+ *     claim in another project, or an item pinned to a worker that is not
+ *     claiming is starvation or missing capacity, and concludes nothing
+ *     (RECOVERY.STALLS review finding: lane-served guard ignored claim
+ *     eligibility).
+ * Nothing is synthesized, no gate or approval is consulted or skipped, and
+ * every fragment, claim, attempt and cancelled item keeps its row.
+ */
+async function concludeUnclaimedPackets(
+  live: string[],
+  nowMs: number,
+  limit: number,
+): Promise<{ orchestrationId: string; from: string; to: string }[]> {
+  const deadlineCutoff = new Date(nowMs - PACKET_PROGRESS_DEADLINE_MS).toISOString();
+  const rows = await getDb().all<{ id: string }>(
+    `SELECT o.id AS id
+       FROM research_orchestrations o
+      WHERE (o.status IN (${live.map(() => '?').join(', ')}) OR (o.status = 'QUEUED' AND o.provider = ?))
+        AND o.updated_at < ?
+        AND EXISTS (SELECT 1 FROM work_items w WHERE w.orchestration_id = o.id AND w.state = 'QUEUED')
+        AND NOT EXISTS (SELECT 1 FROM work_items w WHERE w.orchestration_id = o.id AND w.state = 'LEASED')
+        AND NOT EXISTS (SELECT 1 FROM work_items w
+                         WHERE w.orchestration_id = o.id AND w.state = 'QUEUED'
+                           AND (w.created_at >= ? OR w.available_at >= ?
+                                OR (w.leased_at IS NOT NULL AND w.leased_at >= ?)
+                                OR w.attempt_count >= w.max_attempts))
+        AND NOT EXISTS (SELECT 1 FROM work_items w
+                         WHERE w.orchestration_id = o.id AND w.state = 'QUEUED'
+                           AND NOT EXISTS (SELECT 1 FROM work_leases l
+                                             JOIN work_items s ON s.id = l.work_item_id
+                                            WHERE s.work_type = w.work_type
+                                              AND s.id <> w.id
+                                              AND l.claimed_at >= ?
+                                              AND s.project_id = w.project_id
+                                              AND (w.target_worker_id IS NULL OR l.worker_id = w.target_worker_id)
+                                              AND s.required_scopes = w.required_scopes
+                                              AND (s.orchestration_id IS NULL OR s.orchestration_id = w.orchestration_id)
+                                              AND (s.bundle_key IS NULL OR s.bundle_key = w.bundle_key)
+                                              AND ((s.bin_id IS NULL AND w.bin_id IS NULL) OR s.bin_id = w.bin_id)
+                                              AND (s.priority < w.priority
+                                                   OR (s.priority = w.priority AND s.available_at >= w.available_at))))
+      ORDER BY o.updated_at, o.id
+      LIMIT ?`,
+    [...live, 'WORKER', deadlineCutoff, deadlineCutoff, deadlineCutoff, deadlineCutoff, deadlineCutoff, Math.max(1, limit)],
+  );
+  const out: { orchestrationId: string; from: string; to: string }[] = [];
+  for (const row of rows) {
+    const before = await getOrchestration(row.id);
+    if (!before) continue;
+    if (await waitingByDesign(before.id, nowMs)) continue;
+    const outstanding = (await listWorkItemsForOrchestration(before.id)).filter((item) => LIVE_ITEM.has(item.state));
+    // Re-read: a worker that claimed one since the selection owns this packet's movement now.
+    if (outstanding.length === 0 || outstanding.some((item) => item.state !== 'QUEUED')) continue;
+    for (const item of outstanding) {
+      await cancelWork(
+        item.id,
+        `This ${item.workType} item was claimable for the whole ${PACKET_PROGRESS_DEADLINE_MS / 3_600_000}-hour ` +
+          'progress deadline and no worker claimed it, while its packet did not move, so the packet ' +
+          'is concluded rather than left holding a slot. Its attempts and history are kept.',
+      );
+    }
+    const concluded = await concludeStalledPacket(before, nowMs, null, outstanding.length);
+    if (concluded) {
+      out.push({ orchestrationId: before.id, from: before.status, to: concluded });
+    } else {
+      // The packet moved under us; let its own advance say what it now is.
+      await advancePacket(before.id).catch(() => undefined);
+    }
+  }
+  return out;
+}
+
+/**
+ * A packet waiting by design, not stalled: a plan awaiting a person's approval
+ * (the §16 gate) or a repair scheduled to return. Read by both deadline paths.
+ */
+async function waitingByDesign(orchestrationId: string, nowMs: number): Promise<boolean> {
+  const fragments = await currentFragments(orchestrationId);
+  if (fragments.some((fragment) => fragment.status === 'PLANNED')) return true;
+  const now = new Date(nowMs).toISOString();
+  return fragments.some((fragment) => fragment.nextRetryAt !== null && fragment.nextRetryAt > now);
 }
 
 /**
@@ -3024,21 +3232,25 @@ async function concludeStalledPacket(
   packet: ResearchOrchestration,
   nowMs: number,
   failure: string | null,
+  unclaimedWithdrawn = 0,
 ): Promise<'FAILED' | 'NEEDS_HUMAN' | null> {
   const idleMs = nowMs - Date.parse(packet.updatedAt);
   if (!(idleMs >= PACKET_PROGRESS_DEADLINE_MS)) return null;
+  if (await waitingByDesign(packet.id, nowMs)) return null;
   const fragments = await currentFragments(packet.id);
-  if (fragments.some((fragment) => fragment.status === 'PLANNED')) return null;
   const now = new Date(nowMs).toISOString();
-  if (fragments.some((fragment) => fragment.nextRetryAt !== null && fragment.nextRetryAt > now)) return null;
 
   const fragmentAsks = fragments.some((fragment) => fragment.status === 'NEEDS_HUMAN');
   const mission = fragmentAsks ? null : await getMissionByOrchestration(packet.id);
   const needsPerson = fragmentAsks || mission !== null;
   const hours = Math.floor(idleMs / 3_600_000);
   const reason =
-    `This packet sat ${packet.status} for ${hours} hour${hours === 1 ? '' : 's'} with no work queued ` +
-    `or leased, and advancing it ${failure ? `failed (${failure.slice(0, 300)})` : 'changed nothing'}. ` +
+    (unclaimedWithdrawn > 0
+      ? `This packet sat ${packet.status} for ${hours} hour${hours === 1 ? '' : 's'} with ` +
+        `${unclaimedWithdrawn} work item${unclaimedWithdrawn === 1 ? '' : 's'} queued and claimable ` +
+        'that no worker claimed, so those items were withdrawn. '
+      : `This packet sat ${packet.status} for ${hours} hour${hours === 1 ? '' : 's'} with no work queued ` +
+        `or leased, and advancing it ${failure ? `failed (${failure.slice(0, 300)})` : 'changed nothing'}. `) +
     `That is past the ${PACKET_PROGRESS_DEADLINE_MS / 3_600_000}-hour progress deadline, so it is ` +
     (fragmentAsks
       ? 'parked for the person one of its fragments already asks for, and it no longer holds a ' +
@@ -3072,6 +3284,7 @@ async function concludeStalledPacket(
       stuckStatus: packet.status,
       idleMs,
       progressDeadlineMs: PACKET_PROGRESS_DEADLINE_MS,
+      ...(unclaimedWithdrawn > 0 ? { unclaimedWithdrawn } : {}),
       ...(failure ? { advanceError: failure.slice(0, 300) } : {}),
     },
   });
