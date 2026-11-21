@@ -23,20 +23,9 @@ async function step(label: string, fn: () => Promise<unknown>): Promise<void> {
 async function main(): Promise<void> {
   await initDatabase();
   try {
-    const PN = "SELECT candidate_id FROM cash_needs WHERE request_key LIKE 'goal-price-%' AND candidate_id IS NOT NULL";
-    const FRAGS = `SELECT f.id FROM russell_missions m JOIN research_fragments f ON f.orchestration_id = m.orchestration_id WHERE m.candidate_id IN (${PN})`;
-    const tagged = await getDb().all<{ id: string; project_id: string; q: string | null; amt: number | null }>(`SELECT c.id, f.project_id, c.structural_qualifier AS q, c.structural_amount_cents AS amt FROM research_claims c JOIN research_fragments f ON f.id = c.fragment_id WHERE c.fragment_id IN (${FRAGS}) AND c.accepted = 1 AND c.structural_subject = 'price_per_unit'`);
-    console.log(`TAGGED ${JSON.stringify(tagged.map((t) => ({ p: t.project_id.slice(0, 12), q: t.q, amt: t.amt })))}`);
-    await q('FACTS_FROM_PRICE_CLAIMS', `SELECT cf.fact_key, cf.status, cf.segment, cf.low, cf.high, substr(cf.project_id,1,12) AS p, cf.created_at FROM construction_facts cf WHERE cf.source_claim_id IN (SELECT c.id FROM research_claims c WHERE c.fragment_id IN (${FRAGS}) AND c.accepted = 1)`);
-    await q('C_FACTS', "SELECT cf.fact_key, cf.status, cf.segment, cf.low, cf.high, cf.source_claim_id, cf.created_at, n.name AS node, n.kind FROM construction_facts cf LEFT JOIN industry_nodes n ON n.id = cf.node_id WHERE cf.project_id = 'prj_f1d8f9d6a9854c65939a' AND cf.fact_key = 'price_per_unit' ORDER BY cf.created_at DESC LIMIT 10");
-    await q('C_BUYERS', "SELECT id, name, kind, retired_at, created_at FROM industry_nodes WHERE project_id = 'prj_f1d8f9d6a9854c65939a' AND kind = 'BUYER_TYPE' ORDER BY created_at DESC LIMIT 10");
-    const { backfillCandidates } = await import('../server/services/industry/expand.ts');
-    const ids = new Set(tagged.map((t) => t.id));
-    for (const project of [...new Set(tagged.map((t) => t.project_id))]) {
-      const pool = await backfillCandidates(project, { unitEconomic: '', constructed: '' });
-      const mine = pool.decisions.filter((d) => d.claimId && ids.has(d.claimId));
-      console.log(`DRYRUN ${project.slice(0, 12)} buyerTypes=${pool.hasBuyerTypes} read=${pool.unitEconomicRead} decisions=${pool.decisions.length} mine=${JSON.stringify(mine.map((d) => ({ s: d.source, r: d.reason, c: d.candidate ? { k: d.candidate.key, a: d.candidate.amount, b: d.candidate.buyer?.name ?? null } : null })))}`);
-    }
+    await q('PLAN_QS', "SELECT n.state, substr(n.request_key,1,60) AS k, substr(n.blocked_action,1,160) AS what, n.candidate_id, n.created_at FROM cash_needs n WHERE n.request_key LIKE 'goal-plan-%' OR n.blocked_action LIKE '%goal:wst_7b4fcbb5f2384f31b6c3:plan%' ORDER BY n.created_at DESC LIMIT 12");
+    await q('PLAN_Q_IDEAS', "SELECT c.state, COUNT(*) AS n FROM russell_candidates c WHERE c.id IN (SELECT candidate_id FROM cash_needs WHERE blocked_action LIKE '%goal:wst_7b4fcbb5f2384f31b6c3:plan%' AND candidate_id IS NOT NULL) GROUP BY c.state");
+    await q('TIMING_QS', "SELECT n.state, substr(n.request_key,1,50) AS k, substr(n.blocked_action,1,200) AS what, n.created_at FROM cash_needs n WHERE (n.blocked_action LIKE '%days to usable cash%' OR n.blocked_action LIKE '%days_to_cash%' OR n.blocked_action LIKE '%deposit%') AND n.project_id = 'prj_22fb4fec295f403a8a22' ORDER BY n.created_at DESC LIMIT 8");
   } finally {
     await closeDatabase();
     console.log('CENSUS: OK');
