@@ -66,6 +66,13 @@ export type CreateGoalResult =
 
 const toCents = (major: number | null): number | null => (major === null ? null : Math.round(major * 100));
 
+/** The outcome sentence a target states: a monthly run-rate for a recurring objective, a total otherwise. */
+function targetOutcome(target: { metric: string; amountCents: number; currency: string }, recurring: boolean): string {
+  return recurring
+    ? `a monthly recurring run-rate of at least ${target.amountCents / 100} ${target.currency}: ${target.metric} over the trailing month, verified on the ledger`
+    : `${target.metric} of at least ${target.amountCents / 100} ${target.currency}, verified on the ledger`;
+}
+
 /**
  * The one writer of a new goal from a person's objective (G-2). The HTTP route,
  * the operator's `brain_operator_create_goal` and `npm run goals -- create`
@@ -154,11 +161,7 @@ export async function createGoal(input: {
    * goal's intent, so nothing new is stored to remember it (§43).
    */
   const recurring = !input.target && reading.recurring === 'MONTHLY';
-  const outcome = target
-    ? recurring
-      ? `a monthly recurring run-rate of at least ${target.amountCents / 100} ${target.currency}: ${target.metric} over the trailing month, verified on the ledger`
-      : `${target.metric} of at least ${target.amountCents / 100} ${target.currency}, verified on the ledger`
-    : undefined;
+  const outcome = target ? targetOutcome(target, recurring) : undefined;
   if (dueAt || outcome || input.userId) {
     await setTerms(goal.id, { outcome, dueAt: dueAt ? new Date(dueAt).toISOString() : undefined, ownerUserId: input.userId ?? undefined }, input.actorRef);
   }
@@ -340,16 +343,69 @@ export async function changeObjective(
   if (input.intent === undefined && input.outcome === undefined) {
     return { ok: false, reason: 'Nothing to change.', consequence: 'Nothing changed.' };
   }
+  /*
+   * The new words are the objective, and a cash objective's words state its
+   * target: the amount, the figure counted, its cadence (a monthly run-rate or a
+   * total), its deadline and its limits. Rewriting the words while the stored
+   * target keeps the old figure would plan the new objective against the old
+   * number (planningReliability ho-14), so the target moves with the words,
+   * through the one writer of a target (`setTarget`, which records what it
+   * replaced). Words that state no amount leave the stored target as it was.
+   * Everything is checked before anything is written.
+   */
+  const now = new Date();
+  const reading = input.intent !== undefined ? readObjective(input.intent.replace(/\s+/g, ' ').trim(), now) : null;
+  const targetProject = before.target?.projectId ?? before.projectId;
+  const restated =
+    targetProject && reading && reading.kind === 'CASH' && reading.amount !== null && reading.amount > 0 && reading.currency
+      ? {
+          metric: reading.metric ?? 'SETTLED_CASH',
+          amountCents: toCents(reading.amount)!,
+          currency: reading.currency,
+          capitalCeilingCents: toCents(reading.capitalCeiling),
+          hoursCeiling: reading.hoursCeiling === null ? null : Math.round(reading.hoursCeiling),
+          capitalBeforeProofCents: toCents(reading.beforeProof),
+          capitalPerWeekCents: toCents(reading.capitalPerWeek),
+        }
+      : null;
+  if (restated && reading) {
+    const unplacedMoney = reading.unread.filter((one) => UNPLACED_MONEY.test(one));
+    if (unplacedMoney.length) {
+      return { ok: false, reason: `These money figures could not be read as the amount or a limit: ${unplacedMoney.join('; ')}. Restate them (for example "with at most $3,000 of capital", "$375 a week").`, consequence: 'Nothing changed.' };
+    }
+    if (!reading.deadline && !before.dueAt) {
+      return { ok: false, reason: 'A cash objective needs a deadline ("within 30 days", "by 2026-12-31"): with none there is no window to count money in.', consequence: 'Nothing changed.' };
+    }
+    const other = await liveTargetOn(targetProject!, restated.currency, goalId, restated.metric);
+    if (other) return { ok: false, reason: sharedLedgerReason(other, restated.currency), consequence: 'Nothing changed.' };
+  }
   if (input.intent !== undefined) await updateWorkstream(goalId, { intent: input.intent });
-  if (input.outcome !== undefined) await setGoalTerms(goalId, { outcome: input.outcome });
+  const terms: { outcome?: string | null; dueAt?: string } = {};
+  if (input.outcome !== undefined) terms.outcome = input.outcome;
+  else if (restated) terms.outcome = targetOutcome(restated, reading!.recurring === 'MONTHLY');
+  if (restated && reading!.deadline) terms.dueAt = new Date(reading!.deadline).toISOString();
+  if (terms.outcome !== undefined || terms.dueAt !== undefined) await setGoalTerms(goalId, terms);
+  let target: GoalTarget | null = null;
+  if (restated) {
+    const set = await setTarget({
+      goal: (await getWorkstream(goalId))!,
+      ...restated,
+      projectId: targetProject!,
+      resources: before.target?.resources ?? null,
+      now,
+      actorRef,
+    });
+    if (!set.ok) return { ok: false, reason: `The words changed, but the target was refused: ${set.reason}`, consequence: 'The new words are stored; the target is as it was.' };
+    target = set.target;
+  }
   const pursuing = (await listLinks(goalId)).filter((one) => one.relation === 'PURSUES');
   await recordWorkstreamEvent({
     workstreamId: goalId,
     kind: 'GOAL_OBJECTIVE_CHANGED',
     summary: 'The objective changed. What it replaced is kept here.',
     detail: {
-      before: { intent: before.intent, outcome: before.outcome },
-      after: input,
+      before: { intent: before.intent, outcome: before.outcome, dueAt: before.dueAt, target: before.target },
+      after: { ...input, ...(terms.dueAt ? { dueAt: terms.dueAt } : {}), ...(target ? { target, recurring: reading!.recurring } : {}) },
       stillPursuing: pursuing.map((one) => `${one.kind}:${one.ref}`),
     },
     actorRef,
