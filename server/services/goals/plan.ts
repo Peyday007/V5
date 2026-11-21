@@ -866,13 +866,21 @@ const fmtRate = (x: number | undefined) => (x === undefined ? '?' : `${Math.roun
  * reconstruction judged at its cautious end — direct cost at p90 under the
  * price, money tied up at p90 inside the per-arrangement limit — exactly as a
  * reconstruction is used to refuse.
+ *
+ * An evidenced cost is not sound economics by itself (planningReliability
+ * ho-10, 2026-11-21): a $2,300 cost against a $2,000 price passed this link
+ * because only the cost's evidence was read. A stated cost at or over the
+ * price is a negative unit margin, and the link fails on it.
  */
-function economicsState(one: ModelledOpportunity, target: TargetReading): { ok: boolean; basis: string } {
+export function economicsState(one: ModelledOpportunity, target: Pick<TargetReading, 'capitalBeforeProofCents'>): { ok: boolean; basis: string } {
   const evidenced = (input: ModelInput) => input.provenance === 'EVIDENCE' || input.provenance === 'HISTORICAL';
   const cost = one.directCost;
   const capital = one.capital;
-  if (cost.value !== null && capital.value !== null) return { ok: evidenced(cost), basis: `cost ${cost.value}, tied up ${capital.value}` };
   const price = one.price.value ?? one.price.low;
+  if (cost.value !== null && price !== null && cost.value >= price) {
+    return { ok: false, basis: `each deal loses money: a cost of ${cost.value} against a price of ${price}` };
+  }
+  if (cost.value !== null && capital.value !== null) return { ok: evidenced(cost), basis: `cost ${cost.value}, tied up ${capital.value}` };
   const costEv = inputEvidence(cost, 'directCost');
   const capitalEv = inputEvidence(capital, 'capital');
   const costHigh = cost.value ?? (costEv.establishes ? cost.inferred?.p90 ?? null : null);
@@ -930,7 +938,7 @@ function fulfilmentCheck(one: ModelledOpportunity, caps: string[], allPresent: b
  * number of buyers the strategy would like to ask.
  */
 function volumeCheck(one: ModelledOpportunity, deals: number): LinkCheck {
-  const needed = one.repeatable ? Math.ceil(deals / OUTREACH_MULTIPLE) : Math.min(deals, 1);
+  const needed = one.repeatable ? dealsFromOffers(one, deals) : Math.min(deals, 1);
   if (!one.repeatable || needed === 0) return { link: 'MARKET_VOLUME', ok: true, basis: one.repeatable ? 'no new deals needed' : 'a one-off needs its one buyer' };
   if (!volumeEstablished(one)) {
     // An evidenced reconstruction of the volume establishes it at its cautious end (Q2-1).
@@ -951,7 +959,29 @@ function volumeCheck(one: ModelledOpportunity, deals: number): LinkCheck {
 
 /** The deals a strategy actually needs taken, as opposed to the buyers it asks. */
 function dealsTaken(one: ModelledOpportunity, deals: number): number {
-  return one.agreedDeals + (one.repeatable ? Math.ceil(deals / OUTREACH_MULTIPLE) : deals);
+  return one.agreedDeals + (one.repeatable ? dealsFromOffers(one, deals) : deals);
+}
+
+/**
+ * The deals a repeatable play needs, read back from the buyers it offers to
+ * (planningReliability, 2026-11-21). The engine's offers follow the measured
+ * close (goalScenario `buyersToOffer`): the deals needed ÷ the cautious end of
+ * a HISTORICAL close rate, never fewer than OUTREACH_MULTIPLE × the deals
+ * needed, and capped where established volume is exhausted. Read back: buyers
+ * × that close when it is under 1 / OUTREACH_MULTIPLE (offers followed the
+ * rate), else buyers ÷ OUTREACH_MULTIPLE (the fixed multiple governed). With
+ * no measured close, buyers ÷ OUTREACH_MULTIPLE, as before. Before this,
+ * buyers ÷ 4 was read whatever the close, so offers sized to a measured 10%
+ * read as 2.5× the deals they win, and the volume link asked the market for
+ * deals the plan never needs. Where the offers were capped at the volume, the
+ * deals read back are the most the market holds, and the conservative figure
+ * — not this link — says the target is short. Pure.
+ */
+export function dealsFromOffers(one: Pick<ModelledOpportunity, 'close'>, buyers: number): number {
+  if (!(buyers > 0)) return 0;
+  const close = one.close.provenance === 'HISTORICAL' ? (one.close.value !== null ? Math.min(one.close.value, one.close.low ?? one.close.value) : one.close.low) : null;
+  const rate = close !== null && close > 0 ? Math.min(1 / OUTREACH_MULTIPLE, close) : 1 / OUTREACH_MULTIPLE;
+  return Math.ceil(buyers * rate - 1e-9);
 }
 
 async function nextTestFor(link: ChainLink, one: ModelledOpportunity, projectId: string): Promise<NextTest> {
@@ -987,11 +1017,85 @@ async function nextTestFor(link: ChainLink, one: ModelledOpportunity, projectId:
   }
 }
 
-/** The conservative settled figure for a strategy, or null when an input it needs is unknown. */
-function conservative(members: { one: ModelledOpportunity; deals: number }[], target: TargetReading): { settled: number | null; exposure: number | null; labour: number | null } {
+/**
+ * How many of an opening's lots hold money at once (planningReliability fam-16,
+ * 2026-11-21). A lot ties its capital up from the day it is bought until its
+ * cash settles `daysToCash` later, and then that money is free for the next
+ * lot. Run back to back inside the days left, `floor(daysLeft / daysToCash)`
+ * lots fit one after another in each slot, so the fewest that must overlap is
+ * `ceil(lots / thatMany)` — and every lot still settles inside the window.
+ * Two $8,000 lots paid in 21 days hold $8,000 at a time over 60 days, never
+ * $16,000. When the timing is unknown, or a lot cannot settle in time at all,
+ * every lot is read as held at once: the cautious end. Pure.
+ */
+export function peakConcurrentLots(lots: number, daysToCash: number | null, daysLeft: number | null): number {
+  if (!(lots > 0)) return 0;
+  if (daysToCash === null || daysLeft === null || !(daysToCash > 0)) return lots;
+  const inSequence = Math.floor(daysLeft / daysToCash);
+  if (inSequence < 1) return lots;
+  // A fractional cautious count (deals × a close rate) is never rounded up past itself.
+  return Math.min(lots, Math.ceil(Math.ceil(lots - 1e-9) / inSequence));
+}
+
+/**
+ * The lots an opening's agreements need bought (planningReliability held-out,
+ * 2026-11-21). Money is tied up per lot — a truckload, a sublicence — and a
+ * lot is priced at `price`; agreements smaller than one lot share it. Four
+ * stores agreeing to $4,940 each are $19,760 of one $26,000 truckload: one
+ * lot of capital, never four. Read as the fewer of the agreements and the lots
+ * their value fills; with no price, one lot an agreement. Pure.
+ */
+export function agreedLots(one: Pick<ModelledOpportunity, 'agreedDeals' | 'agreedValue' | 'price'>): number {
+  if (one.agreedDeals <= 0) return 0;
+  const price = one.price.value ?? one.price.low;
+  if (price === null || !(price > 0) || !(one.agreedValue > 0)) return one.agreedDeals;
+  return Math.min(one.agreedDeals, Math.ceil(one.agreedValue / price - 1e-9));
+}
+
+/**
+ * A strategy's members, without agreed work the owner would have to perform
+ * that the plan does not need (planningReliability fam-09, 2026-11-21).
+ *
+ * Every agreement is counted in every strategy, so once agreed owner-performed
+ * work counts as owner hours, a strategy that reaches the target without it
+ * — four signed 10-hour consultations beside a Brain-produced spreadsheet that
+ * collects the $4,000 alone — would break the owner's limit on work it never
+ * needed. When the owner's hours are over their limit, agreed-only members
+ * that cost owner hours are left out if the rest still reach the target at
+ * their cautious numbers; otherwise every member stays, and the limit breaks.
+ * Pure.
+ */
+export function withoutSpareOwnerWork<M extends { one: ModelledOpportunity; deals: number }>(
+  members: M[],
+  target: Pick<TargetReading, 'daysLeft' | 'hoursCeiling' | 'remainingCents'>,
+): M[] {
+  if (target.hoursCeiling === null) return members;
+  const all = conservative(members, target);
+  const committed = members.reduce((sum, { one }) => sum + (one.hours.value !== null && one.hours.provenance !== 'UNKNOWN' ? one.agreedDeals * one.hours.value : 0), 0);
+  if (committed <= target.hoursCeiling + 1e-9 && (all.labour === null || all.labour <= target.hoursCeiling + 1e-9)) return members;
+  const spare = (m: M) => m.deals === 0 && m.one.agreedDeals > 0 && m.one.hours.value !== null && m.one.hours.provenance !== 'UNKNOWN' && m.one.hours.value > 0;
+  const rest = members.filter((m) => !spare(m));
+  if (rest.length === 0 || rest.length === members.length) return members;
+  const cons = conservative(rest, target);
+  return cons.settled !== null && cons.settled >= target.remainingCents / 100 ? rest : members;
+}
+
+/**
+ * The conservative settled figure for a strategy, or null when an input it needs is unknown.
+ *
+ * Read against the deals the strategy takes (planningReliability, 2026-11-21):
+ *   * agreed deals are established volume — an input only new deals need (the
+ *     close, the price, the market's volume) is not needed when no new deal
+ *     is taken, and a one-off whose buyer has already signed takes no other;
+ *   * money tied up is the peak held at once, lots run one after another as
+ *     their cash settles (`peakConcurrentLots`), never their sum;
+ *   * owner hours count every deal the owner performs, agreed ones included.
+ */
+export function conservative(members: { one: ModelledOpportunity; deals: number }[], target: Pick<TargetReading, 'daysLeft'>): { settled: number | null; exposure: number | null; labour: number | null } {
   let settled = 0;
   let exposure = 0;
   let labour = 0;
+  const none = { settled: null, exposure: null, labour: null };
   for (const { one, deals } of members) {
     const conversion = conversionState(one);
     // The cautious end of each input: a measured low, or an evidenced reconstruction's p10 (p90 for what costs).
@@ -1002,13 +1106,16 @@ function conservative(members: { one: ModelledOpportunity; deals: number }[], ta
     const cost = cautious(one.directCost, 'directCost');
     const capital = cautious(one.capital, 'capital');
     const hours = one.hours.value;
-    const volume = volumeEstablished(one) ? one.volume.value : inputEvidence(one.volume, 'volume').establishes ? Math.floor(one.volume.inferred?.p10 ?? 0) : null;
-    if (volume === null ||
-      close === null || price === null || days === null || cost === null || capital === null || hours === null) return { settled: null, exposure: null, labour: null };
-    const won = Math.min(deals * close, volume);
-    settled += days <= (target.daysLeft ?? 0) ? one.agreedValue + won * price : 0;
-    exposure += (won + one.agreedDeals) * capital;
-    labour += won * hours;
+    let volume = volumeEstablished(one) ? one.volume.value : inputEvidence(one.volume, 'volume').establishes ? Math.floor(one.volume.inferred?.p10 ?? 0) : null;
+    // No new deal taken, or a one-off whose one buyer has already agreed: the agreements are the volume.
+    if (volume === null && (deals === 0 || (!one.repeatable && one.agreed))) volume = 0;
+    if (volume === null || days === null || cost === null || capital === null || hours === null) return none;
+    const taking = deals > 0 && volume > 0;
+    if (taking && (close === null || price === null)) return none;
+    const won = taking ? Math.min(deals * close!, volume) : 0;
+    settled += days <= (target.daysLeft ?? 0) ? one.agreedValue + won * price! : 0;
+    exposure += peakConcurrentLots(won + agreedLots(one), days, target.daysLeft) * capital;
+    labour += (won + one.agreedDeals) * hours;
   }
   return { settled, exposure, labour };
 }
@@ -1047,9 +1154,20 @@ export function everyCaseInfeasible(
   evaluated: number,
   members: Array<{ one: Pick<ModelledOpportunity, 'hours' | 'opportunity'>; deals: number }>,
   target: { hoursCeiling: number | null; capitalCeilingCents: number | null; currency: string },
+  /**
+   * The plan's own cautious reading of the money held at once (`conservative`),
+   * lots run one after another as their cash settles. The engine sums every
+   * lot's capital as if all were tied up together (planningReliability fam-16:
+   * two sequential $8,000 lots read as $16,000 against $10,000), so a capital
+   * count that the peak held at once fits is not a broken limit.
+   */
+  plan?: { exposure: number | null },
 ): string[] {
   const every = (key: string) => evaluated > 0 && (violations?.[key] ?? 0) >= evaluated;
   const reasons: string[] = [];
+  const capitalFits = plan?.exposure !== null && plan?.exposure !== undefined && target.capitalCeilingCents !== null && plan.exposure <= target.capitalCeilingCents / 100;
+  // Only capital broken, and the peak held at once fits: nothing is broken.
+  if (capitalFits && every('capital') && !every('hours') && Object.entries(violations ?? {}).every(([key, n]) => key === 'capital' || n < evaluated)) return [];
   if (every('hours')) {
     const available = target.hoursCeiling === null ? 'the owner hours available, which nobody has stated' : `the ${target.hoursCeiling} owner hours this goal has`;
     const unperformed = members.filter(({ one, deals }) => deals > 0 && (one.hours.value === null || one.hours.provenance === 'UNKNOWN'));
@@ -1063,7 +1181,7 @@ export function everyCaseInfeasible(
       reasons.push(`needs more owner hours than ${available} in every tested case`);
     }
   }
-  if (every('capital') && target.capitalCeilingCents !== null) {
+  if (every('capital') && target.capitalCeilingCents !== null && !capitalFits) {
     reasons.push(`ties up more than the ${target.capitalCeilingCents / 100} ${target.currency} the owner said this goal may commit in every tested case`);
   }
   return reasons.length > 0 ? reasons : ['breaks the money or hours limit in every tested case'];
@@ -1125,8 +1243,18 @@ export function judgeAcceptance(input: {
   const pct = (x: number) => `${Math.round(x * 1000) / 10}%`;
   const best = input.portfolio?.best ?? null;
   const bestIds = best ? [...new Set(best.members.map((m) => m.opportunityId))] : [];
+  /*
+   * A combination that counts a member whose price nobody established is not a
+   * candidate (planningReliability fam-08, fam-14, ho-02, ho-07, 2026-11-21):
+   * the quant engine draws an unestablished price no better than its range's
+   * centre, but the combination still counts that member's money toward the
+   * target, and the plan then read as executable on it. An unknown price is
+   * never favourable evidence (invariant 39), so the candidate falls to the
+   * strategy judged on its chain, and the combination is said to rest on it.
+   */
+  const unpriced = bestIds.filter((id) => (input.portfolio?.demand ?? []).find((d) => d.opportunityId === id)?.unestablished.includes('price'));
   const candidate: PlanAcceptance['candidate'] =
-    best && bestIds.length > 0
+    best && bestIds.length > 0 && unpriced.length === 0
       ? { label: best.members.map((m) => m.title.slice(0, 60)).join(' + '), opportunityIds: bestIds, source: 'QUANT_PORTFOLIO', settledP50: best.settledP50, reach: best.reach, reachBasis: input.portfolio!.basis }
       : input.chosen && input.chosen.verdict !== 'NOT_VIABLE'
         ? { label: input.chosen.label, opportunityIds: input.chosen.opportunityIds, source: 'STRATEGY', settledP50: input.chosen.conservativeSettled ?? input.chosen.sweep.settledP50, reach: input.chosen.sweep.goalMetShare, reachBasis: input.chosen.sweep.goalMetShare === null ? null : input.chosen.sweep.probabilistic ? 'PROBABILITY' : 'COVERAGE' }
@@ -1165,7 +1293,9 @@ export function judgeAcceptance(input: {
       const c = input.considered.find((one) => one.opportunityId === id);
       return c ? c.missing.map((link) => `${id}: ${CHAIN_LABEL[link]}`) : [`${id}: not judged on its chain`];
     });
-    if (input.portfolio.basis !== 'PROBABILITY') {
+    if (unpriced.length > 0) {
+      shortfalls.push(`the best combination counts money from ${unpriced.slice(0, 4).join(', ')}, whose price nobody has established; an unknown price is not evidence of reach`);
+    } else if (input.portfolio.basis !== 'PROBABILITY') {
       shortfalls.push(
         `the best combination reaches the target in ${pct(best.reach)} of worlds, which is coverage of assumed inputs, not a probability: ${input.portfolio.missing.filter((one) => !/of worlds; more openings/.test(one)).slice(0, 4).join('; ') || 'inputs are not established'}`,
       );
@@ -1898,9 +2028,10 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   trace('considered openings judged');
   const strategies: StrategyReading[] = [];
   for (const spec of model.definition.strategies) {
-    const members = model.included
-      .map((one) => ({ one, deals: Number(spec.set[`o${one.index}_n`] ?? 0) }))
-      .filter((member) => member.deals > 0 || member.one.agreedValue > 0);
+    const members = withoutSpareOwnerWork(
+      model.included.map((one) => ({ one, deals: Number(spec.set[`o${one.index}_n`] ?? 0) })).filter((member) => member.deals > 0 || member.one.agreedValue > 0),
+      target,
+    );
     const links = CHAIN_LINKS.map((link) => {
       const checks = members.map(({ one, deals }) => linkChecks(one, deals, target, capabilities, now).find((check) => check.link === link)!);
       return { link, ok: checks.every((check) => check.ok), basis: checks.map((check) => check.basis).join(' | ') };
@@ -1909,8 +2040,10 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     for (const { one, deals } of members) {
       if (one.capital.value !== null && one.capital.provenance !== 'UNKNOWN') {
         const ceiling = target.capitalCeilingCents;
-        const tied = dealsTaken(one, deals) * one.capital.value;
-        if (ceiling !== null && tied > ceiling / 100) constraintsFailed.push(`"${one.opportunity.title.slice(0, 60)}" ties up ${tied} ${target.currency}, more than the ${ceiling / 100} the owner said this goal may commit`);
+        // Lots run one after another as their cash settles: the money held at once, never the sum of every lot.
+        const settles = one.daysToCash.value !== null && one.daysToCash.provenance !== 'UNKNOWN' ? one.daysToCash.value : null;
+        const tied = peakConcurrentLots(dealsTaken(one, deals) - one.agreedDeals + agreedLots(one), settles, target.daysLeft) * one.capital.value;
+        if (ceiling !== null && tied > ceiling / 100) constraintsFailed.push(`"${one.opportunity.title.slice(0, 60)}" ties up ${Math.round(tied)} ${target.currency}, more than the ${ceiling / 100} the owner said this goal may commit, held at once`);
       }
       if (one.daysToCash.value !== null && one.daysToCash.provenance !== 'UNKNOWN' && target.daysLeft !== null && one.daysToCash.value > target.daysLeft) {
         constraintsFailed.push(`"${one.opportunity.title.slice(0, 60)}" settles in ${one.daysToCash.value} days, after the ${target.daysLeft} left`);
@@ -1959,11 +2092,23 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
         constraintsFailed.push(`no step can start with ${test} ${target.currency} or less tied up, which is all the owner allows before money comes in`);
       }
     }
+    const cons = conservative(members, target);
+    /*
+     * Agreed work the owner performs is owner hours (planningReliability ho-07,
+     * 2026-11-21): ten signed translations at 6 owner hours each are 60 hours
+     * against 13, yet only new deals were ever counted, so the agreements read
+     * as free money. What is already signed is committed, so it breaks the limit.
+     */
+    if (target.hoursCeiling !== null) {
+      const agreedHours = members.reduce((sum, { one }) => sum + (one.hours.value !== null && one.hours.provenance !== 'UNKNOWN' ? one.agreedDeals * one.hours.value : 0), 0);
+      if (agreedHours > target.hoursCeiling + 1e-9) {
+        constraintsFailed.push(`the agreed deals need ${Math.round(agreedHours * 10) / 10} owner hours, more than the ${Math.round(target.hoursCeiling * 10) / 10} owner hours this goal has`);
+      }
+    }
     if (sweep.infeasibleShare === 1) {
       const run = result?.strategies.find((one) => one.key === spec.key);
-      constraintsFailed.push(...everyCaseInfeasible(run?.violations, run?.evaluated ?? 0, members, target));
+      constraintsFailed.push(...everyCaseInfeasible(run?.violations, run?.evaluated ?? 0, members, target, { exposure: cons.exposure }));
     }
-    const cons = conservative(members, target);
     // Spread over the goal's life: the owner's weekly pace, over the weeks left.
     if (target.capitalPerWeekCents !== null && cons.exposure !== null && target.daysLeft !== null) {
       const room = (target.capitalPerWeekCents / 100) * Math.max(1, Math.ceil(target.daysLeft / 7));
