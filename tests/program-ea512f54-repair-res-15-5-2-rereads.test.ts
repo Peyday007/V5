@@ -7,7 +7,7 @@
  * (the goals briefing), so what it costs has a reader.
  */
 import { describe, expect, it } from 'vitest';
-import { carriedRereads, priorWindowsToReread, reallocateResearch, type ResearchAllocationPorts } from '../server/services/goals/tick.ts';
+import { RECORDED_AFTER_FAILURE, carriedRereads, priorWindowsToReread, reallocateResearch, type ResearchAllocationPorts } from '../server/services/goals/tick.ts';
 import { RESEARCH_PURPOSES, type ResearchPurpose } from '../server/services/goals/researchAllocation.ts';
 import type { JobTimeInputs, ResearchYieldReading, YieldBucket } from '../server/services/goals/researchYield.ts';
 import type { GoalView } from '../server/services/goals/model.ts';
@@ -92,15 +92,27 @@ describe('the counted-once audit costs a read only when a row is written, and a 
     expect(Object.keys(audit1.reread)).toEqual([LEGACY_KEY]);
     expect(audit1.earliest.shownByJobs).toBe('ALL_JOBS_UNMEASURED');
 
-    // Same window, nothing changed: no row, so no history read and no past window re-read — only its own window.
-    for (const h of [2, 3, 4]) {
-      const quiet = await pass(T0 + h * HOUR);
+    // Same window, nothing changed, and within the hour of the newest row: no row, so no history read and no
+    // past window re-read — only its own window. (Whether to follow up on the legacy failure is decided from the
+    // newest row's carried audit, never from a history read: RES-15-5 episode 3, F1.)
+    for (const m of [10, 20, 40]) {
+      const quiet = await pass(T0 + HOUR + m * 60_000);
       expect(quiet.report.recorded).toBe(false);
       expect(quiet.historyRead).toBe(false);
       expect(quiet.windowsRead).toHaveLength(1);
       expect(quiet.windowsRead).not.toContain(LEGACY_KEY);
     }
     expect(rows).toHaveLength(2);
+
+    // An hour on, the legacy failure is still in the probe's window, so the holding pass is recorded and says why;
+    // it reads history because it writes a row, and the legacy window's inputs are carried, never re-read.
+    const followUp = await pass(T0 + 2 * HOUR);
+    expect(followUp.report.recorded).toBe(true);
+    expect(followUp.report.changed).toBe(false);
+    expect(rows[0]!.detail.recordedBecause).toBe(RECORDED_AFTER_FAILURE);
+    expect(followUp.historyRead).toBe(true);
+    expect(followUp.windowsRead).not.toContain(LEGACY_KEY);
+    expect(rows).toHaveLength(3);
 
     // The next window records again: the legacy window's inputs are carried from the newest row, never re-read.
     const next = await pass(T0 + 25 * HOUR);

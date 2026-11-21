@@ -64,6 +64,13 @@ export interface ResearchBriefing {
    * one's cause as the row's own audit diagnosed it (`priorCostFailures`).
    */
   costCountedOnce: { holds: boolean | null; earlierFailures: number; earliestCause: string | null; earliestAt: string | null };
+  /**
+   * Where those earlier failures stand in the rows the probe reads (`priorCostFailures.standing`):
+   * how many an older recorder wrote (fingerprint without `held`), how many the current one did,
+   * and how many more decision rows before every failing row leaves the probe's window. Null fields
+   * when the row carries no standing.
+   */
+  costStanding: { legacyFailures: number | null; currentFailures: number | null; rowsUntilClear: number | null };
 }
 
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
@@ -93,6 +100,7 @@ export function researchBriefingFrom(detail: Record<string, unknown> | null, dec
   const onceIn = obj(detail.costCountedOnce);
   const audit = obj(detail.priorCostFailures);
   const earliest = obj(audit.earliest);
+  const standing = obj(audit.standing);
   // The cause a person reads is what the job rows showed, when they showed one; otherwise what the row's own numbers did.
   const earliestCause =
     typeof earliest.shownByJobs === 'string' && earliest.shownByJobs !== 'NOT_SHOWN' ? earliest.shownByJobs : typeof earliest.cause === 'string' ? earliest.cause : null;
@@ -101,6 +109,11 @@ export function researchBriefingFrom(detail: Record<string, unknown> | null, dec
     earlierFailures: num(audit.failing) ?? 0,
     earliestCause,
     earliestAt: typeof earliest.at === 'string' ? earliest.at : null,
+  };
+  const costStanding = {
+    legacyFailures: num(obj(standing.failingByRecorder).BEFORE_HELD_IN_FINGERPRINT),
+    currentFailures: num(standing.currentRecorderFailing),
+    rowsUntilClear: num(standing.rowsUntilClear),
   };
 
   const parts: string[] = [];
@@ -122,10 +135,16 @@ export function researchBriefingFrom(detail: Record<string, unknown> | null, dec
   if (costCountedOnce.earlierFailures > 0) {
     parts.push(
       `${costCountedOnce.earlierFailures} earlier decision(s) did not show cost counted once` +
-        (costCountedOnce.earliestCause ? ` (earliest: ${costCountedOnce.earliestCause.toLowerCase().replace(/_/g, ' ')})` : ''),
+        (costCountedOnce.earliestCause ? ` (earliest: ${costCountedOnce.earliestCause.toLowerCase().replace(/_/g, ' ')})` : '') +
+        (costStanding.currentFailures === 0 && costStanding.legacyFailures !== null && costStanding.legacyFailures > 0
+          ? `; all ${costStanding.legacyFailures} written by an earlier recorder, none by the current one`
+          : costStanding.currentFailures !== null && costStanding.currentFailures > 0
+          ? `; ${costStanding.currentFailures} written by the current recorder`
+          : '') +
+        (costStanding.rowsUntilClear !== null && costStanding.rowsUntilClear > 0 ? `; they leave the checked window after ${costStanding.rowsUntilClear} more decision(s)` : ''),
     );
   }
-  return { line: `${parts.join('; ')}.`, decidedAt, window, held, shares, floors, deadlineGoals, laneCapacity, capacity, laneActions, costCountedOnce };
+  return { line: `${parts.join('; ')}.`, decidedAt, window, held, shares, floors, deadlineGoals, laneCapacity, capacity, laneActions, costCountedOnce, costStanding };
 }
 
 export function briefFrom(goals: GoalView[], generatedAt: string, research: ResearchBriefing | null = null): GoalBriefing {

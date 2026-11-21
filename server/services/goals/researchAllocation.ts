@@ -334,6 +334,16 @@ export function decideResearchAllocation(input: AllocationInput): AllocationDeci
   const byPurpose = new Map(input.purposes.map((m) => [m.purpose, m]));
   const notes: string[] = [];
   const reasons = new Map<ResearchPurpose, string[]>(RESEARCH_PURPOSES.map((p) => [p, []]));
+  // What actually drove each purpose's score: the measured kinds, recorded as
+  // they are applied, so a purpose moved only by renormalization can name the
+  // real drivers of the others rather than assume they were yield.
+  const drivers = new Map<ResearchPurpose, Set<MoveDriver>>(RESEARCH_PURPOSES.map((p) => [p, new Set<MoveDriver>()]));
+  const because = (p: ResearchPurpose, driver: MoveDriver, text: string): void => {
+    reasons.get(p)!.push(text);
+    drivers.get(p)!.add(driver);
+  };
+  // A measured yield within 5% of the average is not itself a reason to move, but it is the measurement.
+  const nearAverage = new Map<ResearchPurpose, number>();
 
   const capacity = decideCapacity(input.bottlenecks ?? [], input.lanes ?? [], input.remedyLevers);
   const laneActions = decideLaneActions(input.lanes ?? [], input.remedyLevers);
@@ -365,28 +375,28 @@ export function decideResearchAllocation(input: AllocationInput): AllocationDeci
     if (y !== undefined && meanYield > 0) {
       const rel = y / meanYield;
       s *= rel;
-      if (rel > 1.05) reasons.get(p)!.push(`useful results per unit cost ${rel.toFixed(2)}× the measured average`);
-      else if (rel < 0.95) reasons.get(p)!.push(`useful results per unit cost ${rel.toFixed(2)}× the measured average`);
+      if (rel > 1.05 || rel < 0.95) because(p, 'yield', `useful results per unit cost ${rel.toFixed(2)}× the measured average`);
+      else nearAverage.set(p, rel);
     } else if (y !== undefined && meanYield === 0) {
-      reasons.get(p)!.push('no measured purpose produced a useful result this window');
+      because(p, 'yield', 'no measured purpose produced a useful result this window');
     } else {
-      reasons.get(p)!.push('yield not measured this window, so its share is not raised for yield');
+      because(p, 'yield', 'yield not measured this window, so its share is not raised for yield');
     }
     const d = m?.nearestDeadlineDays;
     if (known(d) && d <= DEADLINE_HORIZON_DAYS) {
       const pull = 1 + (DEADLINE_WEIGHT * (DEADLINE_HORIZON_DAYS - Math.max(0, d))) / DEADLINE_HORIZON_DAYS;
       s *= pull;
-      reasons.get(p)!.push(`a deadline in ${Math.max(0, Math.round(d))} day(s)`);
+      because(p, 'deadline', `a deadline in ${Math.max(0, Math.round(d))} day(s)`);
     }
     const v = m?.decisionValue;
     if (known(v) && maxValue > 0 && v > 0) {
       s *= 1 + (DECISION_VALUE_WEIGHT * v) / maxValue;
-      reasons.get(p)!.push(`expected decision value ${(v / maxValue).toFixed(2)} of the highest`);
+      because(p, 'decision value', `expected decision value ${(v / maxValue).toFixed(2)} of the highest`);
     }
     const why = blocked.get(p);
     if (why) {
       s *= BOTTLENECK_PENALTY;
-      reasons.get(p)!.push(why);
+      because(p, 'bottleneck', why);
     }
     score.set(p, Math.max(0, s));
   }
@@ -407,12 +417,28 @@ export function decideResearchAllocation(input: AllocationInput): AllocationDeci
   const shares = enforceFloors(stepped, input.urgentCommercialGoal);
   const f = floorsFor(stepped, input.urgentCommercialGoal);
   for (const p of RESEARCH_PURPOSES) {
-    if (Math.abs(shares[p] - f[p]) < 1e-9) reasons.get(p)!.push('held at its protected floor');
+    if (Math.abs(shares[p] - f[p]) < 1e-9) because(p, 'floor', 'held at its protected floor');
+  }
+  // A purpose nothing above touched still moves when the others' shares move
+  // and the whole is renormalized. Its reason is measured too: its own yield,
+  // and the purposes whose recorded drivers actually moved — whatever those
+  // drivers were (yield, deadline, decision value, bottleneck or floor).
+  for (const p of RESEARCH_PURPOSES) {
+    if (reasons.get(p)!.length > 0 || Math.abs(shares[p] - current[p]) < CHANGE_EPSILON) continue;
+    const rel = nearAverage.get(p);
+    const own = rel !== undefined ? `useful results per unit cost ${rel.toFixed(2)}× the measured average, within 5% so not itself a reason to move` : 'nothing measured moved its own score';
+    const movers = RESEARCH_PURPOSES.filter((q) => q !== p && drivers.get(q)!.size > 0 && Math.abs(shares[q] - current[q]) >= CHANGE_EPSILON).map(
+      (q) => `${q} (${[...drivers.get(q)!].join(', ')})`,
+    );
+    because(p, 'renormalized', `${own}; renormalized as ${movers.length > 0 ? movers.join('; ') : 'the other purposes'} moved`);
   }
   if (input.urgentCommercialGoal) notes.push(`The urgent commercial goal keeps at least ${pct(COMMERCIAL_FLOOR)} for transaction routes.`);
   notes.push(`Exploration keeps at least ${pct(EXPLORATION_FLOOR)} and system health at least ${pct(SYSTEM_HEALTH_FLOOR)}.`);
   return { held: false, shares, changes: diff(current, shares, reasons), laneActions, capacity, notes };
 }
+
+/** What moved a purpose's share; recorded with the reason it is applied. */
+type MoveDriver = 'yield' | 'deadline' | 'decision value' | 'bottleneck' | 'floor' | 'renormalized';
 
 function diff(from: Record<ResearchPurpose, number>, to: Record<ResearchPurpose, number>, reasons: Map<ResearchPurpose, string[]>): ShareChange[] {
   const out: ShareChange[] = [];
