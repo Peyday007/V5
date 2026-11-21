@@ -215,8 +215,12 @@ export interface StepExecutor {
   acquire: string[];
   /** One-time permissions and connections it needs that are not in place. */
   permissions: string[];
-  /** Whether the owner's approval is needed, and why. Never labor. */
-  approval: { needed: boolean; reasons: ApprovalReason[] };
+  /**
+   * Whether the owner's approval is needed, and why. Never labor. Null when the
+   * work is not specified (NOT_ESTABLISHED): nobody can say what it needs
+   * approved, so "no" would be a claim.
+   */
+  approval: { needed: boolean | null; reasons: ApprovalReason[] };
 }
 
 export interface OperationRequest {
@@ -241,6 +245,14 @@ export interface OperationRequest {
   execution?: readonly string[];
   /** Overrides whether it is routine (an operation used once in this plan). */
   routine?: boolean;
+  /**
+   * Set when the work itself is not specified — what the step would perform
+   * has not been named (a deliverable `provedDeliverable` refuses): what is
+   * unspecified, and the action that specifies it. No capability is read for
+   * it, so no performer, renderer or "approval needed: no" is claimed
+   * (invariant 39, §37).
+   */
+  unspecified?: string | null;
 }
 
 const money = (n: number) => `${Math.round(n).toLocaleString('en-US')}`;
@@ -251,6 +263,7 @@ const money = (n: number) => `${Math.round(n).toLocaleString('en-US')}`;
  */
 export function stepExecutor(req: OperationRequest, inventory: CapabilityInventory = declaredInventory()): StepExecutor {
   const spec: OperationSpec = STEP_OPERATIONS[req.operation];
+  if (req.unspecified) return unestablishedExecutor(req, spec);
   const capabilities: StepExecutor['capabilities'] = [];
   const via: string[] = [];
   const acquire: string[] = [];
@@ -305,6 +318,30 @@ export function stepExecutor(req: OperationRequest, inventory: CapabilityInvento
   };
 }
 
+/**
+ * The executor of a step whose work nobody has specified: no capability is
+ * read, so nothing performs it; a payment the step already names is still an
+ * approval, and otherwise whether one is needed is unknown (null). Pure.
+ */
+function unestablishedExecutor(req: OperationRequest, spec: OperationSpec): StepExecutor {
+  const reasons: ApprovalReason[] = [];
+  if (req.cost !== null && req.cost !== undefined && req.cost > 0) reasons.push({ kind: 'PAYMENT', why: `${money(req.cost)} from the owner's money, inside the goal's limits`, once: false });
+  else if (req.pays) reasons.push({ kind: 'PAYMENT', why: req.pays, once: false });
+  return {
+    performedBy: 'NOT_ESTABLISHED',
+    operation: req.operation,
+    does: req.unspecified!,
+    via: [],
+    provider: null,
+    capabilities: [],
+    routine: req.routine ?? spec.routine,
+    acquisition: false,
+    acquire: [],
+    permissions: [],
+    approval: { needed: reasons.length > 0 ? true : null, reasons },
+  };
+}
+
 /* ------------------------------------------------------------------ */
 /* How a person reads it                                                */
 /* ------------------------------------------------------------------ */
@@ -329,11 +366,14 @@ export function performedBySentence(e: StepExecutor): string {
       return `the owner (${e.does})${e.routine ? ' — ROUTINE work' : ''}`;
     case 'CAPABILITY_MISSING':
       return `nobody yet — CAPABILITY MISSING: acquire ${e.acquire.join('; ')}`;
+    case 'NOT_ESTABLISHED':
+      return `nobody yet — NOT ESTABLISHED: ${e.does}`;
   }
 }
 
 /** "approval needed: yes (…)" or "approval needed: no". Pure. */
 export function approvalSentence(e: StepExecutor): string {
+  if (e.approval.needed === null) return 'approval needed: not established until the work is specified';
   if (!e.approval.needed) return 'approval needed: no';
   return `approval needed: yes (${e.approval.reasons.map((r) => `${KIND_WORDS[r.kind]}${r.once ? ', once' : ''}: ${r.why}`).join('; ')})`;
 }
@@ -359,6 +399,8 @@ export interface PlanExecution {
   approvals: string[];
   /** Work the plan gives the owner (the design objective is none that is routine). */
   ownerWork: string[];
+  /** Steps whose work nobody has specified, so nobody performs them yet. */
+  unestablished: string[];
 }
 
 /**
@@ -366,7 +408,7 @@ export interface PlanExecution {
  * from its steps' executor records. Pure.
  */
 export function planExecution(steps: readonly { order: number; label: string; cost: number | null; executor?: StepExecutor }[]): PlanExecution {
-  const out: PlanExecution = { brain: [], providers: [], acquire: [], permissions: [], costs: [], dependencies: [], approvals: [], ownerWork: [] };
+  const out: PlanExecution = { brain: [], providers: [], acquire: [], permissions: [], costs: [], dependencies: [], approvals: [], ownerWork: [], unestablished: [] };
   const uniq = (list: string[], one: string) => {
     if (!list.includes(one)) list.push(one);
   };
@@ -376,6 +418,7 @@ export function planExecution(steps: readonly { order: number; label: string; co
     const name = `step ${s.order} (${s.label.slice(0, 60)})`;
     if (e.performedBy === 'BRAIN') out.brain.push(`${name}: ${e.does}${e.via.length ? ` — ${e.via.join(', ')}` : ''}`);
     if (e.performedBy === 'PROVIDER' || e.provider) out.providers.push(`${name}: ${e.provider ?? 'a provider'}`);
+    if (e.performedBy === 'NOT_ESTABLISHED') out.unestablished.push(`${name}: ${e.does}`);
     if (e.performedBy === 'OWNER') out.ownerWork.push(`${name}: ${e.does}${e.routine ? ' (routine)' : ' (one-off)'}`);
     if (e.acquisition) uniq(out.acquire, `${name} acquires it: ${e.does}`);
     for (const a of e.acquire) uniq(out.acquire, a);

@@ -30,7 +30,7 @@
  */
 import { namesOneOrganisation } from '../../domain/industry.ts';
 import type { ConstructedArrangement } from '../cash/construct.ts';
-import { PART_ASK } from '../cash/construct.ts';
+import { PART_ASK, provedDeliverable } from '../cash/construct.ts';
 import type { ModelInput, ModelledOpportunity } from '../cash/goalScenario.ts';
 import { designFacts, STRUCTURES } from '../cash/properties.ts';
 import { fieldFromInput, type ModelField } from './planSet.ts';
@@ -444,9 +444,20 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
     // Paid by the order above, the supplier or the buyer's own money: nothing of the owner's. Paid first by the owner: the model's direct cost, or unestablished.
     const cost = paysFirst ? (directSpan ? directSpan.high : null) : 0;
     const paid = cost !== null && cost > 0;
+    /*
+     * Production 2026-11-21 (release 91bf9ef8, plan read 44874080198): Brain
+     * "produces" a deliverable only when one it has proved is named for these
+     * buyers (`provedDeliverable`). "what homeowner pay for (not yet
+     * specified)" is not one, yet this step read "performed by Brain through
+     * Brain's deliverable renderers (PRODUCE_SPREADSHEET); approval needed:
+     * no" — a performer for work nobody specified (invariant 39, §37). It now
+     * says the deliverable is unspecified and that specifying it is next.
+     */
+    const unspecified = facts.fulfiller === 'BRAIN' && !provedDeliverable(a.supply);
+    const specify = `specify what "${buyers}" pay for (a deliverable Brain has proved for them)`;
     next({
       label: 'Deliver and confirm',
-      detail: `${facts.fulfiller === 'BRAIN' ? `Brain produces ${supplier ? `"${supplier}"` : 'the deliverable'} for each buyer and records delivery.` : `${supplier ? `"${supplier}"` : 'The supplier'} delivers to each buyer; Brain confirms delivery with each buyer and records it.`}${costLine}`,
+      detail: `${unspecified ? `What "${buyers}" receive is not yet specified, so no performer is established. Next: ${specify}.` : facts.fulfiller === 'BRAIN' ? `Brain produces ${supplier ? `"${supplier}"` : 'the deliverable'} for each buyer and records delivery.` : `${supplier ? `"${supplier}"` : 'The supplier'} delivers to each buyer; Brain confirms delivery with each buyer and records it.`}${costLine}`,
       startDay: day,
       when: deliverWhen,
       cost,
@@ -460,6 +471,7 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
         ...(facts.fulfiller === 'BRAIN' ? {} : { provider: supplier ? `"${supplier}"` : 'the supplier' }),
         cost,
         pays: paysFirst ? 'the direct cost of each deal, paid before the buyer pays' : null,
+        ...(unspecified ? { unspecified: `the deliverable is not yet specified, so no performer is established; next: ${specify}` } : {}),
       }),
       kind: 'EXECUTE',
       requires: paysFirst ? needs('COST') : [],
