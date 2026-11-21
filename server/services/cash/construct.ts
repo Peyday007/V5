@@ -283,6 +283,18 @@ export interface ConstructedArrangement {
    */
   fixedCost?: Pick<Estimate, 'tier' | 'p10' | 'p50' | 'p90'> & { observations: number; sources: string[] };
   /**
+   * What one deal pays its supplier, for a design that is not pooled and pays
+   * supply per deal (a MARGIN design: SUBCONTRACT, POOL with a single buyer),
+   * reconstructed from the per-unit and per-run rates research filed for these
+   * buyers (`contractor_rate_per_unit`, `fixed_cost_per_run`) and what their
+   * openings tie up (§79). Present only where a filed rate was used and the
+   * tier is not UNKNOWN; `evidence` only where the reconstruction justifies a
+   * distribution. A cost, never value; and an estimate, never a verified
+   * market fact unless DIRECT and justified (invariant 39). Absent, the plan
+   * keeps its blind sweep.
+   */
+  supplyCost?: Pick<Estimate, 'tier' | 'p10' | 'p50' | 'p90'> & { observations: number; sources: string[]; evidence?: NonNullable<ConstructedArrangement['value']['evidence']> };
+  /**
    * A BROKER or REFERRAL design's take: the share of these buyers' price an
    * intermediary keeps, reconstructed from the take rates filed for these
    * buyers (`broker_take_rate`), with the claims it rests on. The supplier
@@ -2473,6 +2485,24 @@ function compose(args: {
   const conversion = estimates['a_conversion'];
   const fixedCost = pooled ? estimates['a_fixed_cost'] : undefined;
   /*
+   * A design that pays its supplier per deal reads that cost on the graph's
+   * own `a_supply_cost` node, from the same observations the node carries
+   * (riskObs, unitCostObs, runCostObs). Before this it reached only the stress
+   * check, and the plan swept the cost blind from 0 to 60% of the price
+   * (fresh plan reads, 2026-11-21: COST the dominant lever on three goals).
+   */
+  const supplyCostObs = [...riskObs, ...unitCostObs, ...runCostObs];
+  const paysSupplyPerDeal = !pooled && !takes && def.capture === 'MARGIN';
+  let supplyCost: Estimate | undefined = paysSupplyPerDeal ? estimates['a_supply_cost'] : undefined;
+  if (!supplyCost && paysSupplyPerDeal && unitCostObs.length + runCostObs.length > 0) {
+    try {
+      const node = 'a_supply_cost';
+      supplyCost = reconstruct({ nodes: [{ key: node, label: 'What supply is paid per transaction', unit: input.currency, kind: 'POSITIVE', min: 0, max: 100_000, context, material: [], observations: supplyCostObs }] }, node, args.now).estimates[node];
+    } catch {
+      supplyCost = undefined;
+    }
+  }
+  /*
    * A REFERRAL's graph captures a fee, so the share its supplier pays is read
    * on its own node, from the same take rates a BROKER's commission reads.
    */
@@ -2596,6 +2626,9 @@ function compose(args: {
       : {}),
     ...(fixedCost && fixedCost.used.length > 0 && runCostObs.length > 0 && fixedCost.tier !== 'UNKNOWN'
       ? { fixedCost: { tier: fixedCost.tier, p10: fixedCost.p10, p50: fixedCost.p50, p90: fixedCost.p90, observations: fixedCost.used.length, sources: valueSources(fixedCost, [...riskObs, ...runCostObs]) } }
+      : {}),
+    ...(supplyCost && supplyCost.used.length > 0 && unitCostObs.length + runCostObs.length > 0 && supplyCost.tier !== 'UNKNOWN'
+      ? { supplyCost: { tier: supplyCost.tier, p10: supplyCost.p10, p50: supplyCost.p50, p90: supplyCost.p90, observations: supplyCost.used.length, sources: valueSources(supplyCost, supplyCostObs), ...valueEvidence(supplyCost) } }
       : {}),
     ...(commission && commission.used.length > 0 && commissionObs.length > 0 && commission.tier !== 'UNKNOWN'
       ? { commission: { tier: commission.tier, p10: commission.p10, p50: commission.p50, p90: commission.p90, observations: commission.used.length, sources: valueSources(commission, commissionObs), ...valueEvidence(commission) } }

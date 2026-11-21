@@ -782,7 +782,7 @@ function arrangementOpening(
     respond: infer('respond', unknown(0.002, 0.15, 'nobody has established how many prospects of this kind reply; swept from 0.2% to 15%')),
     // The supplier pays a shared run out of the buyer's money; only a design that buys the run itself bears its cost.
     directCost:
-      (take ? null : pooledRunCostPerDeal(one)) ??
+      (take ? null : (pooledRunCostPerDeal(one) ?? reconstructedSupplyCostPerDeal(one))) ??
       infer('costShare', unknown(0, Math.max(0.01, costBasis.value * 0.6), `nobody has established the direct cost; swept from nothing to 60% of ${costBasis.what}`), costBasis.value, ` as a share of ${costBasis.what}`),
     // A repeating design's deals in the window, from these buyers' own stated volume only (a market's size never transfers).
     volume: repeatable
@@ -918,6 +918,56 @@ export function pooledRunCostPerDeal(one: Pick<ConstructedArrangement, 'key' | '
       `a participant pays a share of it, and nobody has established how many share one run, so swept log-uniformly ${Math.round(low * 100) / 100}–${Math.round(high)} per deal`,
     distribution: { kind: 'EMPIRICAL', values },
     inferred: { tier: 'ASSUMED', justified: false, p10: low, p50: Math.sqrt(low * high), p90: high, observations: run.observations },
+  };
+}
+
+/**
+ * What one deal of a design that pays its supplier per deal costs, read from
+ * the supply cost construction reconstructed from the rates research filed
+ * for these buyers (`arrangement.supplyCost`), or null.
+ *
+ * Production fresh plan reads, 2026-11-21 (goals C, $100K and $5K/mo): COST
+ * was the dominant lever on every one, because a MARGIN design whose supply
+ * cost the quant engine had reconstructed from filed subcontractor rates
+ * still entered the model as the blind "nothing to 60% of the top price"
+ * sweep — the reconstruction reached only the stress check.
+ *
+ * A number nobody published is reconstructed from the mechanism and says how
+ * far it travelled (§79). EVIDENCE only where the reconstruction is DIRECT and
+ * justifies a distribution, entered as the price evidence is. Anything else —
+ * COMPARABLE, COMPONENT, MECHANISM, or bounds alone — is an ASSUMPTION swept
+ * over the reconstruction's own p10–p90 (never narrower), naming its tier,
+ * its observation count and its sources: reconstructed, not established, so
+ * it certifies nothing (invariant 39). Pure.
+ */
+export function reconstructedSupplyCostPerDeal(one: Pick<ConstructedArrangement, 'key' | 'design' | 'supplyCost'>): ModelInput | null {
+  const c = one.supplyCost;
+  if (one.design.aggregation === 'POOLED_BUYERS' || !c || !(c.p90 > 0) || !(c.p90 >= c.p10)) return null;
+  const from = c.sources.length ? `: ${c.sources.slice(0, 6).join(', ')}${c.sources.length > 6 ? ', …' : ''}` : '';
+  const source: SourceRef = { kind: 'OTHER', ref: `arrangement:${one.key}`, note: `supply cost per deal reconstructed (${c.tier}, ${c.observations} obs.${from})` };
+  const stated = `what one deal pays its supplier, reconstructed from rates filed for these buyers (${c.tier}, ${c.observations} obs.${from}): p10 ${Math.round(c.p10 * 100) / 100} p50 ${Math.round(c.p50 * 100) / 100} p90 ${Math.round(c.p90 * 100) / 100}`;
+  if (c.tier === 'DIRECT' && c.evidence) {
+    const { values, low, high, ...sample } = c.evidence;
+    return {
+      value: null,
+      low: Math.max(0, Math.min(low, c.p10)),
+      high: Math.max(low + 0.01, high, c.p90),
+      provenance: 'EVIDENCE',
+      source,
+      note: `evidenced ${stated}`,
+      distribution: { kind: 'EMPIRICAL', values },
+      inferred: { tier: 'DIRECT', justified: true, p10: c.p10, p50: c.p50, p90: c.p90, observations: c.observations, ...sample },
+    };
+  }
+  const low = Math.max(0, c.p10);
+  return {
+    value: null,
+    low,
+    high: Math.max(low + 0.01, c.p90),
+    provenance: 'ASSUMPTION',
+    source,
+    note: `${stated}; reconstructed, not established (${c.tier.toLowerCase()} evidence), so swept over that range`,
+    inferred: { tier: c.tier as EvidenceTier, justified: false, p10: c.p10, p50: c.p50, p90: c.p90, observations: c.observations },
   };
 }
 
