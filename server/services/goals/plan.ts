@@ -1723,7 +1723,9 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       `construction cap: ${constructionCut.composed} of ${constructionCut.considered} candidate arrangements composed this pass — ${constructionCut.held} held as the plan's leaders, ${constructionCut.evidenced} on observed or verified evidence${constructionCut.evidencedCut > 0 ? ` (${constructionCut.evidencedCut} more evidenced beyond the cap)` : ''}, ${constructionCut.rotated} in rotation; ${constructionCut.cut} ranked below the cap were not, ${constructionCut.neverComposed} never composed yet (${constructionCut.reused} reused from the library)`,
     );
   }
-  const model = await composeGoalModel({ goal, target, now, arrangements });
+  // The deliverables Brain has proved: a found opening asking for one is Brain's to perform, as a constructed design over it is.
+  const delivers = (await executionFrame(target.projectId, target.currency))?.delivers ?? [];
+  const model = await composeGoalModel({ goal, target, now, arrangements, delivers });
   trace('composed');
   const measuredChance = await measuredPlanChance();
   // The goal's configured objective (GOAL-18-4): its own required confidence, or the recorded default, governs acceptance.

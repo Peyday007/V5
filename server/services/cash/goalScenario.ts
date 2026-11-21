@@ -49,7 +49,7 @@ import { CONTACTS_PER_DAY_BOUNDS, evaluateGoalPortfolio, heldEvaluation, measure
 import { SPREAD_FLOOR } from '../quant/pool.ts';
 import type { Estimate, EvidenceTier } from '../../domain/quant.ts';
 import type { VariableSpec } from '../../domain/scenario.ts';
-import { brainComparablePrices, composeInvented, provedDeliverable, inventionContext, nextInputQuestion, payerKey, TRANSFER_MATERIAL, type ConstructedArrangement, type InventedDesign } from './construct.ts';
+import { brainComparablePrices, capabilityPart, composeInvented, fittedDeliverable, provedDeliverable, inventionContext, nextInputQuestion, payerKey, TRANSFER_MATERIAL, type ConstructedArrangement, type InventedDesign } from './construct.ts';
 import { buyerPopulationName, namesABuyerPopulation } from '../../domain/industry.ts';
 export { TRANSFER_MATERIAL };
 
@@ -840,6 +840,41 @@ export function ownerHoursOf(one: Pick<ConstructedArrangement, 'design' | 'suppl
   }
   if (!supply || supply.from === 'CAPABILITY' || supply.from === 'REVERSE' || !supply.name.trim()) return null;
   return known(0, 'ASSUMPTION', source, `the supplier "${supply.name}" fulfils, and Brain only messages, invoices and records; the owner's approvals are not hours: 0 owner hours per deal`);
+}
+
+/**
+ * The owner hours one deal of a found opening takes when Brain performs it,
+ * or null where nothing establishes that.
+ *
+ * Production 2026-11-21 (plan read 44860552332, goal wst_7b4fcbb5f2384f31b6c3,
+ * "hours 0"): cop_c46683c4a7ba4d6b80ad's pathway read "fulfilled by Brain
+ * produces it: website", yet its model hours were the blind 1–40 owner-hour
+ * sweep, so the portfolio and every gate strategy refused it as "no performer
+ * is established". A constructed design over the same proved deliverable
+ * already reads 0 owner hours (`ownerHoursOf`); a found opening was denied it.
+ *
+ * The evidence is exactly `provedDeliverable`'s: Brain's capability fitted by
+ * `fittedDeliverable` to the opening's need (its offer, else its title — the
+ * need construction reads from an opening) or its payer, over the deliverables
+ * the capability frame proves (`delivers`). Only when the card names nobody
+ * else to do the work and states no hours of its own; anything else — no
+ * proved match, an empty frame, a named fulfiller — is null, and the caller
+ * keeps the conservative sweep (invariant 39). Pure.
+ */
+export function foundOwnerHours(
+  o: Pick<CashOpportunity, 'id' | 'offerScope' | 'title' | 'payer' | 'fulfillmentOwner' | 'humanHours'>,
+  delivers: readonly string[],
+  source: SourceRef | null = null,
+): ModelInput | null {
+  if (o.humanHours !== null || o.fulfillmentOwner?.trim()) return null;
+  const capability = capabilityPart(delivers);
+  if (!capability) return null;
+  const needName = (o.offerScope ?? o.title ?? '').trim();
+  const need = needName ? { name: needName, claimId: null, from: 'OPENING' as const, ref: o.id, path: '' } : null;
+  const demand = { name: (o.payer ?? '').trim(), claimId: null, from: 'OPENING' as const, ref: o.id, path: '' };
+  const fitted = fittedDeliverable(capability, delivers, demand, need);
+  if (!provedDeliverable(fitted)) return null;
+  return known(0, 'ASSUMPTION', source, `Brain performs the work (${fitted.name.slice(0, 160)}), a deliverable it has proved; the owner's approvals are not hours: 0 owner hours per deal`);
 }
 
 /**
@@ -2037,6 +2072,8 @@ export async function modelOpportunity(
   knowledge: CashKnowledge | null = null,
   now: Date = new Date(),
   windowDays = 30,
+  /** The deliverables Brain's capability frame proves (`executionFrame`): a found opening asking for one is Brain's to perform. */
+  delivers: readonly string[] = [],
 ): Promise<ModelledOpportunity | { reason: string }> {
   const fact = await cardFactMap(opportunity.id, opportunity.projectId ?? undefined);
   const ref: SourceRef = { kind: 'CASH_OPPORTUNITY', ref: opportunity.id };
@@ -2073,7 +2110,7 @@ export async function modelOpportunity(
   const hours =
     opportunity.humanHours !== null
       ? known(opportunity.humanHours, hoursFact ? kindToProvenance(hoursFact).provenance : 'ASSUMPTION', ref, 'hours of work per deal')
-      : unknown(1, 40, 'nobody has established the hours; swept from 1 to 40 per deal');
+      : foundOwnerHours(opportunity, delivers, ref) ?? unknown(1, 40, 'nobody has established the hours; swept from 1 to 40 per deal');
 
   const ttc = fact('timeToFirstCash');
   const ttcDays = ttc ? readDays(ttc.value) : null;
@@ -2350,7 +2387,7 @@ export function arrangementOutOfScope(
   return null;
 }
 
-export async function composeGoalModel(input: { goal: Workstream; target: TargetReading; now?: Date; arrangements?: readonly ConstructedArrangement[] }): Promise<GoalModel> {
+export async function composeGoalModel(input: { goal: Workstream; target: TargetReading; now?: Date; arrangements?: readonly ConstructedArrangement[]; delivers?: readonly string[] }): Promise<GoalModel> {
   const { goal, target } = input;
   const excluded: GoalModel['excluded'] = [];
   const candidates: ModelledOpportunity[] = [];
@@ -2448,7 +2485,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: `closed on ${opportunity.expiresAt.slice(0, 10)}` });
       continue;
     }
-    const modelled = await modelOpportunity(opportunity, 0, tier, target.currency, lessons, knowledge, input.now ?? new Date(), target.daysLeft);
+    const modelled = await modelOpportunity(opportunity, 0, tier, target.currency, lessons, knowledge, input.now ?? new Date(), target.daysLeft, input.delivers ?? []);
     trace(`modelled ${opportunity.id}`);
     if ('reason' in modelled) {
       excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: modelled.reason });
