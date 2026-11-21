@@ -2920,6 +2920,30 @@ export function positionDecomposition(questions: readonly PositionResearchQuesti
 }
 
 /**
+ * A repeating-buyer pattern says who pays, in its own sentence
+ * (CAPABILITY:GOAL_PLAN.CONSTRUCTION.ROUNDS_FILE, 2026-11-17).
+ *
+ * Production read 0 of 15 settled constructed rounds filing an opening,
+ * recorded as "pattern claims with no payer" and "round abandoned". The
+ * harvest reads a constructed round's untagged demand_pattern claim only when
+ * the claim itself says buyers pay (`patternStatesBuying`, research.ts), and
+ * nothing in the constructed question asked for that: workers reported the two
+ * dated examples ("Two regional dental groups posted appointment-reminder
+ * projects in March and May 2026") and the payer lived only in the examples, so
+ * every gated pattern stayed evidence and the round settled found 0 — the
+ * worker did not tag it, and the round's rows could not say a buyer pays.
+ * The question now asks for the payer and what is paid in the pattern's own
+ * words, which is what an opening that "says a buyer pays" is. It lowers no
+ * bar: the gate, its two-example floor, the buying-words rule and every
+ * exclusion are unchanged, and a pattern that names no payer still files
+ * nothing.
+ */
+export const PATTERN_PAYER_SENTENCE =
+  'A claim that buyers repeatedly pay for this must itself say who pays, what they pay for and what they pay ' +
+  '(for example "Independent dental clinics pay outside firms USD 300 per month for appointment reminders"), ' +
+  'not only list the examples; a pattern that names no payer is context, not an opening. ';
+
+/**
  * How a constructed round's answer becomes an opening, said in the question.
  *
  * The harvest files only a claim whose reader set `opportunity_signal`
@@ -2940,7 +2964,8 @@ export const OPENING_SENTENCE =
   'RECURRING_OUTSOURCED_WORK where such buyers repeatedly commission the same brief, ' +
   'ACTIVE_BUYER_DEMAND where a named buyer is published as paying for it now, or ' +
   'SUPPLY_DEMAND_MISMATCH where published demand and a published supply are not yet connected. ' +
-  'A claim with no opportunity_signal is kept as evidence and never becomes an opening. ';
+  'A claim with no opportunity_signal is kept as evidence and never becomes an opening. ' +
+  PATTERN_PAYER_SENTENCE;
 
 /**
  * How a confirm-or-refute round's price and cost answers reach the plan.
