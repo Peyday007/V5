@@ -54,3 +54,18 @@ Live in production at a0ee88f1: #1158 #1163 #1164 #1166 #1167 #1169 #1170 #1171 
 - Deploy 44856874965 succeeded; release check 44859370446 GOALS: OK; serving 5d5df434.
 - $10K plan (44860552332), after #1199: 8 constructed estimates admitted (was 7), reach still 0%, CANDIDATE_ONLY. Every strategy, including a $15/3-day one-off, fails "breaks the money or hours limit in every tested case" (hours limit 0). The repeatable constructed design arr_6b722dfcb622 reads contacted 0, with outreach a day not established. Both are under diagnosis on claude/plan-infeasible-everywhere.
 - Unfamiliar-objective acceptance on production HEAD: planTransfer, planMetamorphic, priceMechanismTransfer, surgeBMechanismTransfer and cashDiveEvidenceTransfer pass 70/70.
+
+### 2026-11-21 07:07Z — hour-12 checkpoint (deadline 19:06Z)
+
+**Completed and verified on production:**
+- #1200–#1203 live at 91bf9ef8 (Deploy 44870095177, GOALS: OK). #1204 (the verdict describes the modelled constructed estimates) is merged and awaits the next Deploy.
+- $10K plan (44873654201): a constructed design (arr_6b722dfcb622) leads for the first time, with 1 estimate in the best combination. The verdict names the real cause: no performer is established.
+- Fresh reads of the other five goals (44874080198, 44874300029, 44874456775, 44874552077, 44874773179). Constructed designs lead all of them. C settles p50 $40,338, $100K p50 $29,232, $5K/mo p50 $2,475. All are at 0% reach.
+- Unfamiliar-objective suites pass 70/70 on production HEAD.
+- Investigated and correctly left alone: the 77 unpriced designs (their prices span about 5 orders of magnitude); Brain's production cost (no measured rows, so nothing to substitute without breaking invariant 33).
+
+**Critical path to an accepted plan:** the leading designs deliver "(not yet specified)". So no performer is established, the direct cost is the blind sweep, and the plan cannot become executable. Specifying the deliverable from evidence (worker on claude/specify-deliverable), and removing false "performed by Brain" claims on unspecified steps (worker on claude/unspecified-deliverable-step), are the two engineering links. Beyond them, reach rests on unmeasured close rate, cost and timing, which need buyer contact (owner grants CONTACT_BUYER, QUOTE_AND_INVOICE, ACCEPT_PAYMENT).
+
+**Forecast:** an accepted 90% plan by 19:06Z is unlikely without measured buyer facts. Engineering will deliver honest, executable candidates with their gaps named.
+
+**Staffing:** 2 workers, both on the critical path. No idle workers, and no paid compute is warranted (the binding factor is evidence).
