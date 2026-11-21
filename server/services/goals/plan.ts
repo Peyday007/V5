@@ -64,7 +64,7 @@ function planAuthority(projectId: string, action: string): ReturnType<typeof che
 }
 import { composeBuyerMessage } from '../cash/outreach.ts';
 import { evidenceCard } from '../cash/card.ts';
-import { ARRANGEMENT_ID_PREFIX, isArrangementId, bestCaseReach, composeGoalModel, estimatedFromArrangement, inventedDesigner, planTrace, dealsForGoal, OUTREACH_MULTIPLE, priceSupported, volumeEstablished, wilson, type ModelInput, type ModelledOpportunity, type PriceVariable } from '../cash/goalScenario.ts';
+import { ARRANGEMENT_ID_PREFIX, isArrangementId, bestCaseReach, composeGoalModel, estimatedFromArrangement, inventedDesigner, planTrace, dealsForGoal, dealsFromOffers, priceSupported, volumeEstablished, wilson, type ModelInput, type ModelledOpportunity, type PriceVariable } from '../cash/goalScenario.ts';
 import { cachedCashKnowledge } from '../quant/knowledge.ts';
 import { achievedFrom, readTarget, type TargetReading } from './target.ts';
 import { constructedShare, executionFrame, MAX_LIVE_GOAL_ROUNDS, openConstructedRound, openGoalDiscovery, roundsStillResearching, staleUnlaunchedRounds } from '../cash/discovery.ts';
@@ -962,27 +962,8 @@ function dealsTaken(one: ModelledOpportunity, deals: number): number {
   return one.agreedDeals + (one.repeatable ? dealsFromOffers(one, deals) : deals);
 }
 
-/**
- * The deals a repeatable play needs, read back from the buyers it offers to
- * (planningReliability, 2026-11-21). The engine's offers follow the measured
- * close (goalScenario `buyersToOffer`): the deals needed ÷ the cautious end of
- * a HISTORICAL close rate, never fewer than OUTREACH_MULTIPLE × the deals
- * needed, and capped where established volume is exhausted. Read back: buyers
- * × that close when it is under 1 / OUTREACH_MULTIPLE (offers followed the
- * rate), else buyers ÷ OUTREACH_MULTIPLE (the fixed multiple governed). With
- * no measured close, buyers ÷ OUTREACH_MULTIPLE, as before. Before this,
- * buyers ÷ 4 was read whatever the close, so offers sized to a measured 10%
- * read as 2.5× the deals they win, and the volume link asked the market for
- * deals the plan never needs. Where the offers were capped at the volume, the
- * deals read back are the most the market holds, and the conservative figure
- * — not this link — says the target is short. Pure.
- */
-export function dealsFromOffers(one: Pick<ModelledOpportunity, 'close'>, buyers: number): number {
-  if (!(buyers > 0)) return 0;
-  const close = one.close.provenance === 'HISTORICAL' ? (one.close.value !== null ? Math.min(one.close.value, one.close.low ?? one.close.value) : one.close.low) : null;
-  const rate = close !== null && close > 0 ? Math.min(1 / OUTREACH_MULTIPLE, close) : 1 / OUTREACH_MULTIPLE;
-  return Math.ceil(buyers * rate - 1e-9);
-}
+/** The deals a repeatable play needs, read back from its offers: goalScenario's one rule, re-exported for the plan's readers. */
+export { dealsFromOffers };
 
 async function nextTestFor(link: ChainLink, one: ModelledOpportunity, projectId: string): Promise<NextTest> {
   const title = one.opportunity.title.slice(0, 80);

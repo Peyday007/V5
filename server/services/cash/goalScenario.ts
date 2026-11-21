@@ -3003,12 +3003,43 @@ export function buyersToOffer(one: Pick<ModelledOpportunity, 'price' | 'close' |
   const price = one.price.value ?? one.price.low ?? 1;
   const needed = Math.ceil(gap / Math.max(1, price));
   const fixed = Math.min(MAX_BUYERS_OFFERED, needed * OUTREACH_MULTIPLE);
-  const close = one.close.provenance === 'HISTORICAL' ? (one.close.value !== null ? Math.min(one.close.value, one.close.low ?? one.close.value) : one.close.low) : null;
-  if (close === null || !(close > 0)) return fixed;
+  const close = measuredClose(one);
+  if (close === null) return fixed;
   const want = Math.ceil(needed / Math.min(1, close) - 1e-9);
   // The market's deals bound what offering more can win: past volume ÷ close, another buyer asked adds nothing.
   const volume = volumeEstablished(one) && one.volume.value !== null ? Math.floor(one.volume.value) : null;
   const cap = volume === null ? MAX_BUYERS_OFFERED : Math.ceil(volume / Math.min(1, close) - 1e-9);
   // Never fewer than the fixed multiple: the volume link reads the deals a strategy needs back from what it offers.
   return Math.max(fixed, Math.min(cap, want));
+}
+
+/**
+ * The cautious end of a measured (HISTORICAL) close rate, or null when the
+ * close is not measured or not positive. The one reading both directions of
+ * the offers rule use: `buyersToOffer` sizes offers from it and
+ * `dealsFromOffers` reads the deals back from it, so the two cannot drift.
+ */
+export function measuredClose(one: Pick<ModelledOpportunity, 'close'>): number | null {
+  if (one.close.provenance !== 'HISTORICAL') return null;
+  const close = one.close.value !== null ? Math.min(one.close.value, one.close.low ?? one.close.value) : one.close.low;
+  return close !== null && close > 0 ? close : null;
+}
+
+/**
+ * The deals a repeatable play needs, read back from the buyers it offers to —
+ * the inverse of `buyersToOffer` (planningReliability, 2026-11-21). Offers
+ * follow the measured close when it is under 1 / OUTREACH_MULTIPLE, so the
+ * deals read back are buyers × that close; otherwise the fixed multiple
+ * governed and they are buyers ÷ OUTREACH_MULTIPLE. With no measured close,
+ * buyers ÷ OUTREACH_MULTIPLE. Before this the plan read buyers ÷ 4 whatever
+ * the close, so offers sized to a measured 10% read as 2.5× the deals they
+ * win. Where offers were capped at the volume, the deals read back are the
+ * most the market holds, and the conservative figure says the target is
+ * short. Pure.
+ */
+export function dealsFromOffers(one: Pick<ModelledOpportunity, 'close'>, buyers: number): number {
+  if (!(buyers > 0)) return 0;
+  const close = measuredClose(one);
+  const rate = close !== null ? Math.min(1 / OUTREACH_MULTIPLE, close) : 1 / OUTREACH_MULTIPLE;
+  return Math.ceil(buyers * rate - 1e-9);
 }
