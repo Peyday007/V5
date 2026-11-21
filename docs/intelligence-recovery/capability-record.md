@@ -33,3 +33,17 @@ The measure is `goals.sh check`, run on every release over the six live goals: p
 Live in production at a0ee88f1: #1158 #1163 #1164 #1166 #1167 #1169 #1170 #1171 #1172 #1175 #1177 #1178 #1180 #1181. Release check 44738453008 passed with GOALS: OK: integrity OK on all six goals and CANDIDATE_ONLY everywhere. Reach is 0% on all six. That figure is honest, not a regression: before W2, every non-zero reach depended on assumed levers. The binding constraints are an unknown direct cost ($5K/mo, at the $1,500 ceiling) and market size (C, p90 $35K against a $50K target). Price research is the critical path: the first ACCEPTED goal-price fragments have arrived since #1174.
 
 **Not yet demonstrated:** an accepted, executable plan on any live goal; learning measured on a corrected failure class.
+
+## 24-hour mission — checkpoint hour 6 (2026-11-21 01:06Z; deadline 19:06Z)
+
+**Verified on production since 19:06Z:**
+- **Released in three batches:** #1188–#1192 (ca770ed5, check 44817141174 OK), #1193 (a770e1d3, check 44824077746 OK), #1194 (30ad4f43, check 44833635162 OK) and #1195–#1197 (Deploy 44842165280 reached Fly).
+- **Recovered failure:** Deploy 44837932895 failed when #1193 and #1195 interacted in a test. #1197 fixed it, and the failed deploy did not touch the machine.
+- **What landed:** dispatch reads a refused review as waiting (#1188); leases are returned on shutdown (#1189); designs that read identically are one plan member (#1190); a check is made by a different model than the producer (#1191); restructuring answers readmit an opening on evidence (#1192); owner hours follow the performer (#1193, $10K goal: 0 → 9 constructed estimates admitted); a keyed search provider (#1194, waiting on the owner's key); broker revenue is its commission (#1195); every cut is counted by reason, and the screen never credits price above the goal (#1196).
+- **Research to plan, end to end:** accepted claim clm_d0422544 → construction fact $6,000 → goal C's homeowner design read at COMPARABLE p50 6000 (release owner, plan read 44842405254).
+
+**In flight:** #1198 (a step names the price it holds) and #1199 (days to cash from the payment structure; the $10K midpoint was 880.7 days and is now 14.5). Both release at 01:25Z, followed by a $10K plan re-read.
+
+**Critical path:** accepted evidence (prices, days to cash, close and reply rates), and structural misreadings that hide feasible designs. #1193, #1199 and #1195 each removed one of those misreadings. Search quality (#1194) needs the owner's Google key.
+
+**Forecast:** an ACCEPTED (defensible 90%) plan by 19:06Z remains unlikely, as escalated at 19:20Z. All six goals read 0% coverage at the latest check. Spend: $0 an hour; the GPU stays off.
