@@ -62,7 +62,7 @@ describe('setDependency', () => {
 });
 
 describe('the two doors share the writer', () => {
-  const cli = readFileSync('scripts/goals.ts', 'utf8');
+  const cli = readFileSync('scripts/goalsCli.ts', 'utf8');
   const route = readFileSync('server/routes/goals.ts', 'utf8');
 
   it('both call setDependency and neither links DEPENDS_ON directly', () => {

@@ -15,6 +15,7 @@ import { drainFreeLane, startFreeLaneLoop } from './services/freeLane/worker.ts'
 import { activityPath, beginActivity } from './db/infra.ts';
 import { registerCommercialProviders } from './services/cash/providers/register.ts';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import type { Server } from 'node:http';
 import { retryBoot } from './bootRetry.ts';
@@ -622,6 +623,23 @@ async function afterListenStep<T>(name: string, run: () => Promise<T>): Promise<
   }
 }
 
+/**
+ * The boot's derived-state rebuild has finished in this process: a file on the
+ * machine naming this process. The release check (goals.yml, via `goals.sh
+ * ready`) waits for it, because a check's plan reads beside the rebuild put
+ * three processes on the box and the kernel OOM-killed the app (2026-11-21,
+ * 21:08:22Z). Machine-local and derived: it says nothing the rows do not.
+ */
+const DERIVED_STATE_MARKER = process.env['BRAIN_DERIVED_STATE_MARKER'] ?? path.join(os.tmpdir(), 'brain-derived-state-rebuilt');
+
+function markDerivedStateRebuilt(): void {
+  try {
+    fs.writeFileSync(DERIVED_STATE_MARKER, `${process.pid} ${new Date().toISOString()}\n`);
+  } catch (error) {
+    console.warn(`[brain] could not mark the derived-state rebuild at ${DERIVED_STATE_MARKER}:`, error);
+  }
+}
+
 async function continueBoot(migrations: MigrationReport): Promise<void> {
   const bootStarted = Date.now();
   // The gate, decided the moment cloud persistence is a proven fact and before
@@ -959,6 +977,7 @@ async function continueBoot(migrations: MigrationReport): Promise<void> {
         // One runtime file, so it describes the project the app opens on.
         const primary = await getDefaultProject();
         if (primary && writesRuntimeSnapshot()) await writeProjectState(primary.id);
+        markDerivedStateRebuilt();
       });
     }, BOOT_GRACE_STAGGER_MS);
   })().catch((error: unknown) => {

@@ -12,7 +12,8 @@
 import fs from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-const ENTRY_POINTS = ['scripts/goals.ts', 'scripts/cash-report.ts', 'server/index.ts'];
+// scripts/goals.ts is only the entry point; the commands run in scripts/goalsCli.ts.
+const ENTRY_POINTS = ['scripts/goalsCli.ts', 'scripts/cash-report.ts', 'server/index.ts'];
 
 describe('an entry point that reads plans registers the commercial providers', () => {
   for (const file of ENTRY_POINTS) {
@@ -23,7 +24,7 @@ describe('an entry point that reads plans registers the commercial providers', (
   }
 
   it('the goals script registers them in main, before any command runs', () => {
-    const text = fs.readFileSync('scripts/goals.ts', 'utf8');
+    const text = fs.readFileSync('scripts/goalsCli.ts', 'utf8');
     const main = text.slice(text.indexOf('async function main()'));
     const register = main.indexOf('registerCommercialProviders()');
     const dispatch = main.indexOf('switch (command)');
