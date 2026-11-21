@@ -55,7 +55,20 @@ describe('the release checks the plans it released', () => {
     const body = script.slice(script.indexOf('async function check()'), script.indexOf('async function construct()'));
     expect(body).toMatch(/BRAIN_CHECK_CHILD/);
     expect(body).toMatch(/checkInChild\(goalId/);
-    expect(body).toMatch(/child\.kill\('SIGKILL'\)/);
+    // The kill is scripts/boundedChild.ts's, shared with `plan` (tests/boundedChild.test.ts runs it against real children).
+    expect(body).toMatch(/runBoundedChild\(/);
+    expect(read('scripts/boundedChild.ts')).toMatch(/child\.kill\('SIGKILL'\)/);
     expect(body).toMatch(/ERROR the plan read did not finish within/);
+  });
+
+  it('reads `goals plan` in a bounded child too, and ends it once its verdict is printed', () => {
+    // 2026-11-21 (run 44935606985): goal C's read printed GOALS: OK at 18:29:39 and held the step to its 30-minute timeout.
+    const script = read('scripts/goals.ts');
+    const body = script.slice(script.indexOf('async function plan()'), script.indexOf('async function check()'));
+    expect(body).toMatch(/BRAIN_PLAN_CHILD/);
+    expect(body).toMatch(/runBoundedChild\(/);
+    const ok = body.lastIndexOf("console.log('GOALS: OK')");
+    expect(ok).toBeGreaterThan(0);
+    expect(body.slice(ok)).toMatch(/process\.exit\(0\)/);
   });
 });
