@@ -15,7 +15,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { PlanReading } from '../../server/services/goals/plan.ts';
-import type { OpeningFixture, PlanningCase } from './case.ts';
+import { conversionSentence, type OpeningFixture, type PlanningCase } from './case.ts';
 
 export interface Template {
   file: string;
@@ -98,7 +98,8 @@ async function fileOpening(f: OpeningFixture, t: Template, cashModeId: string, n
   if (f.performer === 'BRAIN') await fact('delivery', 'A spreadsheet Brain produces.');
   if (f.performer === 'SUBCONTRACTOR') await fact('fulfillment', `${f.subcontractor ?? 'A named subcontractor'} quoted to do the work.`);
   if (f.performer === 'OWNER') await fact('fulfillment', 'The owner does the work personally.', 'PERSON');
-  if (f.conversion) await fact('conversionRates', `${f.conversion.paid} paid pre-orders from ${f.conversion.visitors} unique visitors`);
+  // The evidence in its own unit: "6 wins from 40 quotes" is never restated as visitors.
+  if (f.conversion) await fact('conversionRates', conversionSentence(f.conversion));
   for (const [i, amount] of (f.agreements ?? []).entries()) {
     await insertAgreement({
       projectId: t.projectId, opportunityId: id, amountCents: Math.round(amount * 100), currency: 'USD', deliverable: f.offer ?? f.title,
