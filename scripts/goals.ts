@@ -35,6 +35,7 @@
  * currency, and optionally the money and hours a plan may use.
  */
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
+import { AFTER_VERDICT_GRACE_MS, runBoundedChild, VERDICT_LINE } from './boundedChild.ts';
 import { registerCommercialProviders } from '../server/services/cash/providers/register.ts';
 import { lastPlanTrace } from '../server/services/cash/goalScenario.ts';
 import { describePoolerRefusal } from '../server/db/adapters/postgres.ts';
@@ -700,9 +701,42 @@ function heartbeat(label: string): () => void {
   return () => clearInterval(timer);
 }
 
+/** `goals plan` inside goals.yml's 30-minute step: the read, and the listing after it, are killed at this bound. */
+const PLAN_TOTAL_MS = 26 * 60_000;
+
 async function plan(): Promise<void> {
   const [, goalId] = words();
   if (!goalId) fail('plan needs a goal id.');
+  /*
+   * The read runs in a child process (the same script, BRAIN_PLAN_CHILD=1),
+   * bounded from outside it exactly as the release check's reads are (#1180).
+   * Goal C's read in run 44935606985 (2026-11-21) printed its plan and
+   * `GOALS: OK` at 18:29:39 and then never exited: work it had started in the
+   * background held the process until the step's 30-minute timeout, and a
+   * finished read was reported as a failed run. The child's verdict now ends
+   * it; a child with no verdict at the bound is killed, and that is the failure.
+   */
+  if (process.env['BRAIN_PLAN_CHILD'] !== '1') {
+    const run = await runBoundedChild({
+      args: [...process.execArgv, process.argv[1]!, 'plan', goalId],
+      env: { ...process.env, BRAIN_PLAN_CHILD: '1' },
+      ms: PLAN_TOTAL_MS,
+      // The child's verdict line is the parent's to print, once.
+      onStdout: (text) => process.stdout.write(text.split('\n').filter((line) => !VERDICT_LINE.test(line)).join('\n')),
+    });
+    if (run.killed === 'AFTER_VERDICT') console.log(`  exit        the read printed its verdict and did not exit; stopped ${Math.round(AFTER_VERDICT_GRACE_MS / 1000)}s after it`);
+    const ok = run.verdict !== null && /^GOALS: OK/.test(run.verdict);
+    if (!ok) {
+      console.log(
+        run.killed === 'TIMEOUT'
+          ? `  error       the plan read did not finish within ${Math.round(PLAN_TOTAL_MS / 60_000)} minutes and was stopped`
+          : `  error       the plan read ended without a passing verdict (${run.verdict ?? 'none printed'})`,
+      );
+    }
+    console.log(ok ? 'GOALS: OK' : 'GOALS: FAILED');
+    await closeDatabase().catch(() => undefined);
+    process.exit(ok ? 0 : 1);
+  }
   const started = Date.now();
   process.env['BRAIN_PLAN_TRACE'] ??= '1';
   const stopBeat = heartbeat(goalId);
@@ -716,6 +750,9 @@ async function plan(): Promise<void> {
   const history = await listReadings(goalId);
   for (const row of history.slice(-10)) console.log(`  history     ${row.created_at} ${row.verdict} chosen=${row.chosen_strategy ?? '—'}${row.scenario_run_id ? ` run=${row.scenario_run_id}` : ''}`);
   console.log('GOALS: OK');
+  // The verdict is printed; end the process rather than wait on background work the read started (as check does, #1158).
+  await closeDatabase().catch(() => undefined);
+  process.exit(0);
 }
 
 /**
@@ -833,30 +870,15 @@ async function check(): Promise<void> {
  * goal's ERROR. True when the child printed GOALS: OK.
  */
 async function checkInChild(goalId: string, ms: number): Promise<boolean> {
-  const { spawn } = await import('node:child_process');
-  return await new Promise<boolean>((resolve) => {
-    const child = spawn(process.execPath, [...process.execArgv, process.argv[1]!, 'check', goalId], {
-      env: { ...process.env, BRAIN_CHECK_CHILD: '1' },
-      stdio: ['ignore', 'pipe', 'inherit'],
-    });
-    let out = '';
-    let killed = false;
-    child.stdout.on('data', (chunk: Buffer) => {
-      const text = chunk.toString('utf8');
-      out += text;
-      // The child's own verdict line is the parent's to print, once, for the whole check.
-      process.stdout.write(text.split('\n').filter((line) => !/^GOALS: /.test(line)).join('\n'));
-    });
-    const timer = setTimeout(() => {
-      killed = true;
-      child.kill('SIGKILL');
-    }, ms);
-    child.on('exit', () => {
-      clearTimeout(timer);
-      if (killed) console.log(`INTEGRITY ${goalId} ERROR the plan read did not finish within ${Math.round(ms / 1000)}s and was stopped`);
-      resolve(!killed && /^GOALS: OK/m.test(out));
-    });
+  const run = await runBoundedChild({
+    args: [...process.execArgv, process.argv[1]!, 'check', goalId],
+    env: { ...process.env, BRAIN_CHECK_CHILD: '1' },
+    ms,
+    // The child's own verdict line is the parent's to print, once, for the whole check.
+    onStdout: (text) => process.stdout.write(text.split('\n').filter((line) => !VERDICT_LINE.test(line)).join('\n')),
   });
+  if (run.killed === 'TIMEOUT') console.log(`INTEGRITY ${goalId} ERROR the plan read did not finish within ${Math.round(ms / 1000)}s and was stopped`);
+  return run.verdict !== null && /^GOALS: OK/.test(run.verdict);
 }
 
 /** Open this pass's constructed rounds now, exactly as the tick would (§81). */
