@@ -29,6 +29,8 @@
  */
 import { listOpportunities } from '../../repos/cashPortfolio.ts';
 import { evidenceCard, type CardFieldKey } from './card.ts';
+import { isWorkableIn } from './portfolio.ts';
+import type { TierReading } from './tier.ts';
 import type { CashOpportunity } from '../../domain/types.ts';
 
 /** How sure Brain is, expressed as what it counted rather than as a percentage. */
@@ -70,8 +72,9 @@ export interface DurationEstimate {
 
 export interface CashForecast {
   currency: string;
-  /** How many opportunities are qualified enough to forecast from, and of how many. */
+  /** How many opportunities are qualified enough to forecast from (workable, live, in this currency). */
   qualified: number;
+  /** Of how many: every opportunity in the project, whatever its state or currency. Unchanged by the §47 filter. */
   considered: number;
   upfrontCash: Estimate;
   ongoingCosts: Estimate;
@@ -196,6 +199,15 @@ function sumField(input: {
 export async function cashForecast(input: {
   projectId: string;
   currency: string;
+  /**
+   * The tier of each opportunity, as `cashTier` composed it. Only a piece
+   * `isWorkable` counts as qualified (§47): evidence is not work, and other
+   * people's published prices are not this operation's revenue. A piece with
+   * no tier reads as the weakest tier, exactly as the portfolio reads it
+   * (`tierOf`): deny by default for evidence, while a piece a person already
+   * took stays work on both screens.
+   */
+  tiers?: Record<string, TierReading>;
 }): Promise<CashForecast> {
   const all = await listOpportunities({ projectId: input.projectId });
   const live = all.filter((one) => LIVE.includes(one.state));
@@ -205,7 +217,12 @@ export async function cashForecast(input: {
    * conversion at a rate nobody chose, and a forecast that silently added two
    * currencies would be doing exactly that one layer up.
    */
-  const opportunities = live.filter((one) => one.currency === input.currency);
+  const inCurrency = live.filter((one) => one.currency === input.currency);
+  const tiers = input.tiers ?? {};
+  // A piece with no composed tier reads as the portfolio reads it (`UNREAD_TIER`,
+  // the weakest tier): an untaken piece is not work, and a piece a person already
+  // took — READY or later — is work whatever its card says, on both screens.
+  const opportunities = inCurrency.filter((one) => isWorkableIn(tiers, one));
 
   const revenue = sumField({
     opportunities,

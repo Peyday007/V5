@@ -19,6 +19,7 @@
  * because a blank read as zero is the error that makes an uncosted piece look
  * like the cheap one (§30).
  */
+import type { TierReading } from '../server/services/cash/tier.ts';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
@@ -129,6 +130,17 @@ async function activated(): Promise<string> {
  * that handed it counts directly would pass against a projection that read a
  * constant.
  */
+/**
+ * The tiers the view would have composed, marking these openings workable
+ * (§47): the forecast counts only work, so a test about how it treats blanks
+ * on work has to say the pieces are work.
+ */
+function workable(...ids: string[]): Record<string, TierReading> {
+  return Object.fromEntries(
+    ids.map((id) => [id, { tier: 'QUALIFIED', establishes: '', doesNotEstablish: '', toAdvance: [], answered: 0, required: 0, summary: '' } satisfies TierReading]),
+  );
+}
+
 async function planFor(candidateId: string, statuses: FragmentStatus[]): Promise<void> {
   const run = await createRun({
     projectId,
@@ -322,7 +334,9 @@ describe('the Cash dashboard', () => {
     });
     await transitionOpportunity({ id: opportunity.id, from: ['DISCOVERED'], to: 'EVIDENCE_CARD' });
 
-    const forecast = await cashForecast({ projectId, currency: 'USD' });
+    // Evidence alone is not work: with no tier composed, nothing is counted (§47).
+    expect((await cashForecast({ projectId, currency: 'USD' })).qualified).toBe(0);
+    const forecast = await cashForecast({ projectId, currency: 'USD', tiers: workable(opportunity.id) });
     expect(forecast.qualified).toBe(1);
 
     for (const estimate of [forecast.revenue, forecast.upfrontCash, forecast.contribution]) {
@@ -362,7 +376,8 @@ describe('the Cash dashboard', () => {
 
     // A price and no exposure is not a margin. The blank row must not be read
     // as costing nothing, which would make it the attractive one.
-    const half = await cashForecast({ projectId, currency: 'USD' });
+    const tiers = workable(priced.id, blank.id);
+    const half = await cashForecast({ projectId, currency: 'USD', tiers });
     expect(half.revenue.valueCents).toBe(90_000);
     expect(half.revenue.fromRows).toBe(1);
     expect(half.revenue.unknown).toContain('Price');
@@ -370,7 +385,7 @@ describe('the Cash dashboard', () => {
     expect(half.contribution.valueCents).toBeNull();
 
     await updateOpportunity(priced.id, { peak_funding_cents: 20_000 });
-    const whole = await cashForecast({ projectId, currency: 'USD' });
+    const whole = await cashForecast({ projectId, currency: 'USD', tiers });
     expect(whole.contribution.valueCents).toBe(70_000);
     expect(whole.contribution.fromRows).toBe(1);
     expect(whole.contribution.confidence).toBe('SINGLE_ROW');
