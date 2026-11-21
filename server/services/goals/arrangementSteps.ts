@@ -137,7 +137,12 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
     if (part === 'conversion') continue; // only a sale measures it: the offer below validates it
     const link = LINK_OF_PART[part] ?? 'COST';
     // One organisation is not counted or listed: what is unknown is who there buys, and how to reach them.
-    const ask = part === 'buyers' && one ? `who at "${buyers}" decides this purchase, and the published address, contact or submission page it is reached at` : (PART_ASK[part] ?? part);
+    const ask =
+      part === 'buyers' && one
+        ? `who at "${buyers}" decides this purchase, and the published address, contact or submission page it is reached at`
+        : part === 'value' && a.value.observations > 0
+          ? heldPriceAsk(a.value, cur)
+          : (PART_ASK[part] ?? part);
     byLink.set(link, [...(byLink.get(link) ?? []), ask]);
   }
   const access = (a.positionQuestions ?? []).filter((q) => q.kind === 'BUYER_ACCESS').map((q) => q.ask ?? q.question);
@@ -556,3 +561,17 @@ function spanOf(field: ModelField | null): Day | null {
 }
 
 const dayText = (d: Day) => (Math.round(d.low) === Math.round(d.high) ? `day ${Math.round(d.low)}` : `day ${Math.round(d.low)}–${Math.round(d.high)}`);
+
+/**
+ * A price the model already holds observations of, asked as what would
+ * establish it rather than as if none existed (production 2026-11-21, goal C:
+ * the step read "what buyers of this kind are published as paying" while the
+ * plan carried one published $6,000 observation, COMPARABLE p50 6000). It is
+ * still unestablished: one observation is a comparable, never evidence.
+ */
+export function heldPriceAsk(value: { observations: number; p50: number }, currency: string): string {
+  const n = value.observations;
+  const figure = `${currency} ${Math.round(value.p50).toLocaleString('en-US')}`;
+  const held = n === 1 ? `one published price (${figure})` : `${n} published prices (middle ${figure})`;
+  return `${held} is held, not yet established: a further independent published price for these buyers, with its figure and date, establishes it`;
+}
