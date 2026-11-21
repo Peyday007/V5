@@ -39,6 +39,7 @@ import { frontierTiers } from './shared.ts';
 import type { CashMechanism, CashOpportunity, CashCardFact } from '../../domain/types.ts';
 import { STRUCTURES } from './properties.ts';
 import { COMPETITIVE_AWARD } from './paymentTiming.ts';
+import { PROVIDER_PAYOUT_DAYS } from './money.ts';
 import { SCENARIO_LIMITS, type ScenarioModelDefinition, type ScenarioVariable, type SourceRef, type StrategySpec, type VariableProvenance } from '../../domain/scenario.ts';
 import type { Workstream } from '../../domain/register.ts';
 import type { TargetReading } from '../goals/target.ts';
@@ -774,7 +775,8 @@ function arrangementOpening(
     price: take ? take.revenue : price,
     capital,
     hours: ownerHoursOf(one, ref) ?? infer('hours', unknown(1, 40, 'nobody has established who performs the work or the owner hours it takes; swept from 1 to 40 owner hours per deal')),
-    daysToCash: infer('daysToCash', unknown(3, 60, 'nobody has established when the money would settle; swept from 3 to 60 days')),
+    // The design's own payment structure first; other openings' time to cash only where it does not settle when money moves.
+    daysToCash: structuralDaysToCash(one, ref, input.daysLeft) ?? infer('daysToCash', unknown(3, 60, 'nobody has established when the money would settle; swept from 3 to 60 days')),
     close: arrangementClose(one, ref) ?? infer('close', unknown(0.02, 0.5, 'no buyer has been asked yet; swept from 2% to 50% of buyers agreeing')),
     respond: infer('respond', unknown(0.002, 0.15, 'nobody has established how many prospects of this kind reply; swept from 0.2% to 15%')),
     // The supplier pays a shared run out of the buyer's money; only a design that buys the run itself bears its cost.
@@ -892,6 +894,74 @@ export function pooledRunCostPerDeal(one: Pick<ConstructedArrangement, 'key' | '
  * an assumption, never as a probability. Null when none is filed: the close
  * rate is then inferred or swept as before. Pure.
  */
+/**
+ * Days from a buyer's interest to a signed agreement paid by invoice, for a
+ * design sold by Brain's own offer (the selling path: reply, quote, agree).
+ * No row measures it yet; a stated sweep, never evidence.
+ */
+export const AGREE_DAYS = { low: 1, high: 7 } as const;
+
+/**
+ * Days to usable cash read from when the design itself says money moves, or
+ * null where the structure does not settle it and the caller keeps the
+ * comparable inference.
+ *
+ * Production plan run 44826035355 (goal wst_7b4f, "Collect $10K within 30
+ * days", 19 days left): every constructed design's days to cash was inferred
+ * from the project's own time-to-first-cash records — government award cycles
+ * among them — so the range was long-tailed (middle ~9 days, top ~400). The
+ * engine reads an unestablished input no better than its range's centre
+ * (portfolio.ts `sampler`, E4a), so every design read ~200 days and none could
+ * settle inside 19, while the plan's own sensitivity named days to cash at the
+ * bottom of its range as the binding lever. For a design whose buyer pays at
+ * agreement, an award's wait is not a comparable: it describes another
+ * payment structure.
+ *
+ *   - PREPAID: cash = time to agree (`AGREE_DAYS`) + the payment provider's
+ *     payout (`PROVIDER_PAYOUT_DAYS`, Stripe's documented first payout).
+ *   - THRESHOLD_PRESALE: money is held until enough buyers have joined, which
+ *     the design's own kill rule bounds by the window (refund otherwise): cash
+ *     from the soonest agreement to the window's end, plus the payout.
+ *   - ON_DELIVERY (paid on delivery, in arrears or on net terms): the
+ *     structure does not say how long — null, the comparables decide.
+ *   - A funding nobody stated, or buyers whose own evidence says they pay in
+ *     arrears or only a deposit (a presale over them contradicts itself:
+ *     arrangementSteps' TERMS_CONFLICT): null. A structure is never read more
+ *     favourably than what is stated about who pays.
+ *
+ * Always an ASSUMPTION derived from the stated structure, its assumptions
+ * named, never EVIDENCE: the first sale measures it. Pure.
+ */
+export function structuralDaysToCash(one: Pick<ConstructedArrangement, 'design' | 'buyerTerms'>, ref: SourceRef | null, daysLeft?: number | null): ModelInput | null {
+  const funding = one.design?.funding;
+  if (funding !== 'PREPAID' && funding !== 'THRESHOLD_PRESALE') return null;
+  const terms = one.buyerTerms;
+  if (terms?.timing === 'ARREARS') return null;
+  if (terms?.timing === 'PREPAID' && terms.share !== undefined && terms.share !== 1) return null;
+  const pay = PROVIDER_PAYOUT_DAYS;
+  const agree = `${AGREE_DAYS.low}–${AGREE_DAYS.high} days from interest to a signed, invoiced agreement (assumed: no sale has measured it)`;
+  const payout = `${pay.low}–${pay.high} days for the payment to become usable funds (${pay.source})`;
+  if (funding === 'PREPAID') {
+    return {
+      value: null,
+      low: AGREE_DAYS.low + pay.low,
+      high: AGREE_DAYS.high + pay.high,
+      provenance: 'ASSUMPTION',
+      source: ref,
+      note: `derived from the design's stated structure: each buyer pays the whole price at agreement, so cash is ${agree} plus ${payout}; not established until the first sale measures it`,
+    };
+  }
+  const window = Math.max(AGREE_DAYS.high, Math.round(daysLeft ?? 30));
+  return {
+    value: null,
+    low: AGREE_DAYS.low + pay.low,
+    high: window + pay.high,
+    provenance: 'ASSUMPTION',
+    source: ref,
+    note: `derived from the design's stated structure: buyers prepay into a presale that is bought only once enough have joined, inside the ${window}-day selling window or refunded, so cash is ${agree} at the soonest and the window's end at the latest, plus ${payout}; how fast it fills is not established`,
+  };
+}
+
 function arrangementClose(one: ConstructedArrangement, ref: SourceRef): ModelInput | null {
   const c = one.conversion;
   if (!c) return null;
