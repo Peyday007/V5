@@ -248,6 +248,42 @@ export function forgetUnansweredRead(): void {
 }
 
 /** How often the brain-only pass runs inside the tick. */
+/**
+ * §85 / rule 9: displaced research stranded on the free lane is continued, not
+ * only recorded. `watchDisplacedWork` writes the free-lane:coverage
+ * IDLE_WITH_EXECUTABLE_WORK intervention, whose replacement is the free lane's
+ * own step; until this, nothing performed it. The engineering watchdog steps the
+ * lane only when its pool reads zero busy slots, so "submitted 0" or "failed
+ * every item" beside a leased slot (production: 11 of 144 ten-minute windows in a day)
+ * was recorded and left alone. The continuation is the controller's step — the
+ * same call the watchdog makes, never a second scheduler — and neither half
+ * ever stops the tick. Dependencies are injectable for tests.
+ */
+export async function continueDisplacedWork(deps: {
+  watch?: () => Promise<{ stranded: boolean; reason: string }>;
+  step?: () => Promise<unknown>;
+} = {}): Promise<{ stranded: boolean; continued: boolean }> {
+  let stranded = false;
+  let reason = '';
+  try {
+    const watch = deps.watch ?? (await import('../freeLane/coverage.ts')).watchDisplacedWork;
+    ({ stranded, reason } = await watch());
+  } catch (error) {
+    console.warn('[dispatch] displaced-work watch failed:', (error as Error).message);
+    return { stranded: false, continued: false };
+  }
+  if (!stranded) return { stranded, continued: false };
+  try {
+    const step = deps.step ?? (await import('../freeLane/capacity.ts')).controlStep;
+    await step();
+    console.log(`[dispatch] displaced research stranded; free lane stepped: ${reason}`);
+    return { stranded, continued: true };
+  } catch (error) {
+    console.warn('[dispatch] free-lane continuation failed:', (error as Error).message);
+    return { stranded, continued: false };
+  }
+}
+
 const BRAIN_ONLY_PASS_MS = 60_000;
 let lastBrainOnlyPass = 0;
 /** How often the free lane's model-output incidents are read (a day of answers per read). */
@@ -292,12 +328,11 @@ export async function dispatchTick(
     try {
       const { enforceBrainOnly } = await import('../bins/brainOnly.ts');
       await enforceBrainOnly();
-      // §85: displaced research must be progressing on its replacement.
-      const { watchDisplacedWork } = await import('../freeLane/coverage.ts');
-      await watchDisplacedWork();
     } catch (error) {
       console.warn('[dispatch] brain-only pass failed:', (error as Error).message);
     }
+    // §85: displaced research must be progressing on its replacement — and when it is not, continued.
+    await continueDisplacedWork();
     // A model whose answers stopped being usable is an incident, opened and closed from rows.
     if (Date.now() - lastModelOutputPass >= MODEL_OUTPUT_PASS_MS) {
       lastModelOutputPass = Date.now();
