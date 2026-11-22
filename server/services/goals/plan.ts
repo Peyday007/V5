@@ -3528,7 +3528,7 @@ export function planSteps(input: {
    * the goal's generic next step alone (`arrangementSteps`).
    */
   arrangement?: { arrangement: ConstructedArrangement; context: Omit<ArrangementStepContext, 'send' | 'collect'> } | null;
-  /** The reconstruction's own members, whose sale its "Sell and collect" step already is. */
+  /** The reconstruction's own members (the candidate's ids). Kept for callers; the steps read the members from the reconstruction and `lead`. */
   adoptedIds?: ReadonlySet<string>;
   /** What the goal allows to be spent, major units: the steps say how much of it the plan deploys. */
   capital?: { allowed: number | null; currency: string } | null;
@@ -3554,10 +3554,10 @@ export function planSteps(input: {
    */
   members?: ReadonlyMap<string, OpeningChainMember> | null;
   /**
-   * The openings the plan names as its lead (`leadIdsOf`). A sale of one of
-   * them is its whole transaction, each step acting on it; a sale beside the
-   * lead stays one step on the plan as a whole, costed and evidenced, since a
-   * step acting on an opening outside the lead breaks STEPS_BELONG_TO_PLAN.
+   * The openings the plan names as its lead (`leadIdsOf`): the members of the
+   * selected strategy. A sale of one of them is its whole transaction, each
+   * step acting on it; a sale beside the lead is no step of the plan
+   * (STEPS_BELONG_TO_PLAN) — the reading's sales still hold it.
    */
   lead?: readonly string[] | null;
 }): PlanStep[] {
@@ -3575,10 +3575,6 @@ export function planSteps(input: {
     const offer = saleStep(steps.length + 1, sale, detail, kill, execution, inventory);
     const member = input.members?.get(sale.opportunityId);
     if (!member) return [offer];
-    const lead = new Set((input.lead ?? []).map(openingOfMember));
-    if (lead.size > 0 && !lead.has(sale.opportunityId)) {
-      return [{ ...offer, cost: member.reachCost ? member.reachCost.amount : null, evidence: member.evidence.offer, stage: { stage: 'OFFER', costSource: member.reachCost ? 'MODEL' : 'NONE_HELD' } }];
-    }
     chained = true;
     const { order: _order, dependsOn: _dependsOn, ...rest } = offer;
     return openingSteps(member, { currency, daysLeft: input.daysLeft ?? null, send, collect, ...(inventory ? { capabilities: inventory } : {}) }, rest, steps.length + 1);
@@ -3640,23 +3636,6 @@ export function planSteps(input: {
     const direct = Math.max(0, ...changes.filter((c) => CHANGE_STAGE[c.dimension] !== 'REACH' && !(c as { afterProof?: boolean }).afterProof).map((c) => c.startDay?.high ?? 0));
     const sellDay: Span = { low: Math.min(direct, after), high: after };
     const named = namedMembers(r.best.members, input.titles);
-    const sellOrder = steps.length + 1;
-    steps.push({
-      order: sellOrder,
-      label: 'Sell the plan\'s openings',
-      detail: `Offer the plan's openings${named} to their buyers for an actual sale or deposit, and record every reply and sale as the plan's measurements. The model prices no cost for selling.`,
-      startDay: sellDay,
-      when: changes.length > 0 ? `${spanText(sellDay)}: once the plan's changes above are in place` : `${spanText(sellDay)}: nothing it needs is outstanding`,
-      cost: null,
-      basis: 'ESTIMATE',
-      owner: 'BRAIN',
-      ownerReason: null,
-      dependsOn: null,
-      kill: replyKill(r, measured),
-      execution: send,
-      executor: exec({ operation: 'SEND_OFFER', execution: send }),
-      stage: { stage: 'OFFER', costSource: 'NONE_HELD' },
-    });
     // A member is named by its id, or by its title cut at 50 (the reconstruction's own reading): resolved as `adoptReconstruction` resolves it.
     const keptIds = r.best.memberIds && r.best.memberIds.length === r.best.members.length ? r.best.memberIds : null;
     const idOf = (m: string, at: number): string => {
@@ -3665,84 +3644,126 @@ export function planSteps(input: {
       return input.cashDays?.has(m) ? m : (resolveMember(m, undefined, input.titles ?? new Map<string, string>()) ?? m);
     };
     const memberIds = [...new Set(r.best.members.map(idOf))];
-    const held = memberIds.map((id) => input.cashDays?.get(id) ?? null).filter((d): d is { span: Span; standing: string } => d !== null);
-    const cash: Span | null = held.length > 0 ? { low: Math.min(...held.map((d) => d.span.low)), high: Math.max(...held.map((d) => d.span.high)) } : null;
-    const lands: Span | null = cash ? { low: Math.round(sellDay.low + cash.low), high: Math.round(sellDay.high + cash.high) } : null;
-    const daysLeft = input.daysLeft ?? null;
-    const late = lands !== null && daysLeft !== null && lands.low > daysLeft;
-    const standing = [...new Set(held.map((d) => d.standing))].join('; ');
-    const partial = held.length > 0 && held.length < memberIds.length ? ` for the ${held.length} of ${memberIds.length} openings whose days the model holds` : '';
+    const sellWhen = changes.length > 0 ? `${spanText(sellDay)}: once the plan's changes above are in place` : `${spanText(sellDay)}: nothing it needs is outstanding`;
     /*
-     * The members' own transaction (§3a): what selling them costs as their
-     * pathways hold it, the price a lone member was judged at, and each one's
-     * fulfilment by whoever its evidence names — the reconstruction prices no
-     * cost of selling, but the plan's pathways do. A member the plan holds no
-     * facts for keeps the sale as it was.
+     * The members' own transactions (§3a), when the plan holds every member's
+     * facts (`openingMembers`): each member is sold at the price it was judged
+     * at, delivered by whoever its evidence names, and collected on its own
+     * days to usable cash (`openingSteps`). Planning reliability, 2026-11-22:
+     * one "Sell the plan's openings" step for several members carried no
+     * price, since no single price is the plan's; a step per opening carries
+     * its own price, cost and evidence, and acts only on a member of the
+     * selected strategy (STEPS_BELONG_TO_PLAN).
      */
     const chain = memberIds.map((id) => input.members?.get(id) ?? null);
     const known = chain.filter((m): m is OpeningChainMember => m !== null);
     if (known.length === memberIds.length && known.length > 0) {
-      const sell = steps[sellOrder - 1]!;
-      const reach = known.every((m) => m.reachCost !== null) ? known.reduce((sum, m) => sum + m.reachCost!.amount, 0) : null;
-      const prices = [...new Set(known.map((m) => m.price))];
-      steps[sellOrder - 1] = {
-        ...sell,
-        detail: reach !== null ? sell.detail.replace('The model prices no cost for selling.', `Reaching buyers costs ${currency} ${Math.round(reach)} in cash as the plan's pathways hold it (${known[0]!.reachCost!.basis}).`) : sell.detail,
-        cost: reach,
-        evidence: [...new Set(known.flatMap((m) => m.evidence.offer))],
-        ...(prices.length === 1 && prices[0] !== null && prices[0] !== undefined ? { price: prices[0] } : {}),
-        stage: { stage: 'OFFER', costSource: reach !== null ? 'MODEL' : 'NONE_HELD' },
-      };
-      const deliverDay: Span | null = lands && !(lands !== null && daysLeft !== null && lands.low > daysLeft) ? { low: sellDay.low, high: lands.high } : null;
+      const saleOf = new Map(input.sales.map((one) => [one.opportunityId, one]));
       const labels = new Set(steps.map((one) => one.label));
-      for (const m of known) {
-        const step = fulfilmentStep(m, { currency, ...(inventory ? { capabilities: inventory } : {}) }, deliverDay, sellOrder, steps.length + 1, lands && daysLeft !== null && lands.low > daysLeft ? 'AFTER_DEADLINE' : 'NO_MODEL_DAYS');
-        // Two members titled alike are two steps, never one label twice (NO_DUPLICATE_STEPS).
-        let label = step.label;
-        for (let n = 2; labels.has(label); n += 1) label = `${step.label} (opening ${n})`;
-        labels.add(label);
-        steps.push({ ...step, label });
+      const unique = (label: string, n: number) => (labels.has(label) ? `${label} (opening ${n})` : label);
+      for (const [at, m] of known.entries()) {
+        const sale = saleOf.get(m.id);
+        const title = m.title.slice(0, 80);
+        const of = known.length > 1 ? `, one of the plan's ${known.length} openings${named},` : '';
+        const chainSteps = openingSteps(
+          m,
+          { currency, daysLeft: input.daysLeft ?? null, send, collect, sellDay, ...(inventory ? { capabilities: inventory } : {}) },
+          {
+            label: `Sell "${title}"`,
+            detail: `Offer "${title}"${of} to its buyers for an actual sale or deposit, and record every reply and sale as the plan's measurements.${sale ? ` ${sale.test.test}` : ''}`,
+            startDay: sellDay,
+            when: sellWhen,
+            cost: null,
+            basis: 'ESTIMATE',
+            owner: 'BRAIN',
+            ownerReason: null,
+            kill: replyKill(r, measured),
+            execution: send,
+            executor: exec({ operation: 'SEND_OFFER', execution: send }),
+            stage: { stage: 'OFFER', costSource: 'NONE_HELD' },
+          },
+          steps.length + 1,
+        );
+        // Two members titled alike are two transactions, never one label twice (NO_DUPLICATE_STEPS).
+        for (const one of chainSteps) {
+          const label = unique(one.label, at + 1);
+          labels.add(label);
+          steps.push({ ...one, label });
+        }
       }
+    } else {
+      const sellOrder = steps.length + 1;
+      steps.push({
+        order: sellOrder,
+        label: 'Sell the plan\'s openings',
+        detail: `Offer the plan's openings${named} to their buyers for an actual sale or deposit, and record every reply and sale as the plan's measurements. The model prices no cost for selling.`,
+        startDay: sellDay,
+        when: sellWhen,
+        cost: null,
+        basis: 'ESTIMATE',
+        owner: 'BRAIN',
+        ownerReason: null,
+        dependsOn: null,
+        kill: replyKill(r, measured),
+        execution: send,
+        executor: exec({ operation: 'SEND_OFFER', execution: send }),
+        stage: { stage: 'OFFER', costSource: 'NONE_HELD' },
+      });
+      const held = memberIds.map((id) => input.cashDays?.get(id) ?? null).filter((d): d is { span: Span; standing: string } => d !== null);
+      const cash: Span | null = held.length > 0 ? { low: Math.min(...held.map((d) => d.span.low)), high: Math.max(...held.map((d) => d.span.high)) } : null;
+      const lands: Span | null = cash ? { low: Math.round(sellDay.low + cash.low), high: Math.round(sellDay.high + cash.high) } : null;
+      const daysLeft = input.daysLeft ?? null;
+      const late = lands !== null && daysLeft !== null && lands.low > daysLeft;
+      const standing = [...new Set(held.map((d) => d.standing))].join('; ');
+      const partial = held.length > 0 && held.length < memberIds.length ? ` for the ${held.length} of ${memberIds.length} openings whose days the model holds` : '';
+      steps.push({
+        order: steps.length + 1,
+        label: 'Collect payment',
+        detail: `Collect each buyer's payment or deposit and record it against the goal.${cash ? ` Cash is usable about ${Math.round(cash.low)}–${Math.round(cash.high)} days after a sale${partial} (${standing})${daysLeft !== null && lands ? `, ${lands.high <= daysLeft ? 'inside' : late ? 'OUTSIDE' : 'partly outside'} the ${daysLeft} days left` : ''}.` : ' When cash is usable is not yet established: the first sale measures it.'} ${COLLECTION_COST}`,
+        startDay: late ? null : lands,
+        when: late
+          ? `not scheduled: cash would be usable on ${spanText(lands!)} (${standing}), after the ${daysLeft} days left`
+          : lands
+            ? `${spanText(lands)}: the sale's day plus ${Math.round(cash!.low)}–${Math.round(cash!.high)} days to usable cash${partial} (${standing})`
+            : 'not yet scheduled: set by days to usable cash, which the first sale measures',
+        cost: 0,
+        basis: held.length > 0 && held.every((d) => d.standing === 'proven') ? 'EVIDENCE' : 'ASSUMPTION',
+        owner: 'BRAIN',
+        ownerReason: null,
+        dependsOn: sellOrder,
+        kill: `cash would not be usable by day ${daysLeft ?? 'the deadline'} → re-plan the plan's payment terms (a deposit or a presale) or drop the opening`,
+        execution: collect,
+        executor: exec({ operation: 'COLLECT_PAYMENT', execution: collect }),
+        ...(daysLeft !== null && lands ? { withinLimits: lands.high <= daysLeft } : {}),
+        ...(known.length > 0 ? { evidence: [...new Set(known.flatMap((m) => m.evidence.collect))] } : {}),
+        stage: { stage: 'COLLECT', costSource: 'NOT_OWNERS', ...(late ? { unscheduled: 'AFTER_DEADLINE' as const } : lands ? {} : { unscheduled: 'NO_MODEL_DAYS' as const }) },
+      });
     }
-    const delivered = steps.length > sellOrder && steps[steps.length - 1]!.stage?.stage === 'DELIVER' ? steps[steps.length - 1]!.order : sellOrder;
-    steps.push({
-      order: steps.length + 1,
-      label: 'Collect payment',
-      detail: `Collect each buyer's payment or deposit and record it against the goal.${cash ? ` Cash is usable about ${Math.round(cash.low)}–${Math.round(cash.high)} days after a sale${partial} (${standing})${daysLeft !== null && lands ? `, ${lands.high <= daysLeft ? 'inside' : late ? 'OUTSIDE' : 'partly outside'} the ${daysLeft} days left` : ''}.` : ' When cash is usable is not yet established: the first sale measures it.'} ${COLLECTION_COST}`,
-      startDay: late ? null : lands,
-      when: late
-        ? `not scheduled: cash would be usable on ${spanText(lands!)} (${standing}), after the ${daysLeft} days left`
-        : lands
-          ? `${spanText(lands)}: the sale's day plus ${Math.round(cash!.low)}–${Math.round(cash!.high)} days to usable cash${partial} (${standing})`
-          : 'not yet scheduled: set by days to usable cash, which the first sale measures',
-      cost: 0,
-      basis: held.length > 0 && held.every((d) => d.standing === 'proven') ? 'EVIDENCE' : 'ASSUMPTION',
-      owner: 'BRAIN',
-      ownerReason: null,
-      dependsOn: delivered,
-      kill: `cash would not be usable by day ${daysLeft ?? 'the deadline'} → re-plan the plan's payment terms (a deposit or a presale) or drop the opening`,
-      execution: collect,
-      executor: exec({ operation: 'COLLECT_PAYMENT', execution: collect }),
-      ...(daysLeft !== null && lands ? { withinLimits: lands.high <= daysLeft } : {}),
-      ...(known.length > 0 ? { evidence: [...new Set(known.flatMap((m) => m.evidence.collect))] } : {}),
-      stage: { stage: 'COLLECT', costSource: 'NOT_OWNERS', ...(late ? { unscheduled: 'AFTER_DEADLINE' as const } : lands ? {} : { unscheduled: 'NO_MODEL_DAYS' as const }) },
-    });
     /*
-     * What the goal sells beside the reconstruction is part of the plan: every
-     * sale the reading holds is pursued (`pursueSales`) whichever plan is
-     * adopted, so the execution sequence names it (rehearsal, 2026-11-18: the
-     * steps of a 7-day and a 30-day goal read the same while their sales differed).
+     * A sale beside the reconstruction is no step of it: every execution step
+     * belongs to the strategy actually selected (STEPS_BELONG_TO_PLAN, owner,
+     * 2026-11-20). The reading still holds that sale (`sales`, `pursueSales`);
+     * the sequence is the adopted members' own transactions above. Planning
+     * reliability, 2026-11-22: such a sale stood as one step, with no opening
+     * named so the rule could not see it, no price and no delivery or collection.
      */
-    const adopted = input.adoptedIds ?? new Set<string>();
-    for (const sale of input.sales.filter((one) => !adopted.has(one.opportunityId))) {
-      steps.push(...sellSteps(sale, `Beside the reconstructed plan, inside the goal's limits: ${sale.test.test}`, replyKill(r, measured), [...send, ...collect]));
-    }
     // Read in order (STEPS_SCHEDULED): a sale that starts now is not listed after a step that starts later.
     inDayOrder(steps);
   } else {
-    for (const sale of input.sales) steps.push(...sellSteps(sale, sale.test.test, replyKill(r, measured), [...send, ...collect]));
+    // Only a sale of a member of the selected strategy is a step of it (STEPS_BELONG_TO_PLAN); with no lead named, every sale is the plan.
+    const lead = new Set((input.lead ?? []).map(openingOfMember));
+    for (const sale of input.sales.filter((one) => lead.size === 0 || lead.has(one.opportunityId))) steps.push(...sellSteps(sale, sale.test.test, replyKill(r, measured), [...send, ...collect]));
     const arrangementOf = (startAt: number) => (input.arrangement ? arrangementSteps(input.arrangement.arrangement, { ...input.arrangement.context, send, collect, ...(inventory ? { capabilities: inventory } : {}) }, startAt) : []);
-    let built = steps.length === 0 ? arrangementOf(1) : [];
+    /*
+     * The leading arrangement is sequenced when nothing else is, and beside
+     * the sales when it is itself a member of the selected strategy: a member
+     * is given its whole chain, never left to a generic goal step (planning
+     * reliability, 2026-11-22: a candidate of an opening and an arrangement
+     * read the opening's sale and "Establish buyers who have actually agreed",
+     * the arrangement a member with no step).
+     */
+    const arrangementLeads = !!input.arrangement && lead.has(`${ARRANGEMENT_ID_PREFIX}${input.arrangement.arrangement.key}`);
+    let built = steps.length === 0 || arrangementLeads ? arrangementOf(steps.length + 1) : [];
     const t = input.nextTest;
     /*
      * The goal's own next step is the plan's honest first step when nothing
