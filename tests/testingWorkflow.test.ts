@@ -125,7 +125,8 @@ describe('the CI bench is developmental evidence on public cases, and nothing el
   const shard = read('.github/workflows/bench-shard.sh');
 
   it('runs no test suite, so its feature-branch push trigger is not the full gate', () => {
-    expect(pushBranches(bench)).toEqual(['claude/**']);
+    // Feature branches, narrowed to the planner's paths; never the full suite's trigger.
+    expect(bench).toMatch(/^ {2}push:\n {4}branches:\n {6}- 'claude\/\*\*'\n {4}paths:\n/m);
     expect(bench).not.toMatch(/\bvitest\b|\bnpm (run )?test\b/);
     expect(shard).not.toMatch(/\bvitest\b|\bnpm (run )?test\b/);
   });

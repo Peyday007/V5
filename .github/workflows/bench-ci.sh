@@ -2,7 +2,7 @@
 # Run the planning bench on GitHub runners (.github/workflows/bench.yml) instead of
 # this machine, and wait for its verdict.
 #
-#   scripts/bench-ci.sh REF [BASE] [--no-wait]
+#   .github/workflows/bench-ci.sh REF [BASE] [--no-wait]
 #
 # REF is the branch, tag or commit to bench; BASE what to diff it against (default:
 # the canonical branch). The workflow runs from REF when REF is a branch that has
@@ -10,7 +10,7 @@
 # --no-wait — its conclusion and wall time; exits 0 only on a passing verdict.
 # Level A/B developmental evidence: it never gates or stands in for Deploy.
 set -euo pipefail
-ref="${1:?usage: scripts/bench-ci.sh REF [BASE] [--no-wait]}"
+ref="${1:?usage: .github/workflows/bench-ci.sh REF [BASE] [--no-wait]}"
 base="${2:-}"
 [ "$base" = --no-wait ] && base=""
 wait=1

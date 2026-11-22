@@ -19,7 +19,8 @@
  *
  * `--shard i/N` (planningReliability) runs the i-th of N deterministic shares of the
  * selection — position modulo N — so N CI runners partition the public cases exactly
- * (`.github/workflows/bench.yml`). It refuses `--cases`: hidden cases never go to CI.
+ * (`.github/workflows/bench.yml`; dispatch it with `.github/workflows/bench-ci.sh`).
+ * It refuses `--cases`: hidden cases never go to CI.
  *
  * `--baseline prior.json` compares this run with a prior result case by case
  * (`bench/diff.ts`): IMPROVED, REGRESSED and UNCHANGED, each with its verdict and

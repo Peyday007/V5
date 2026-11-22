@@ -28,7 +28,8 @@
 # checkout's, copied over both trees, so the baseline and the head are scored
 # by the same code on the same cases (on a push the two are the same commit).
 #
-# Dispatch from a terminal: `scripts/bench-ci.sh <ref> [base]`.
+# Dispatch from a terminal: `.github/workflows/bench-ci.sh <ref> [base]` (beside the
+# workflow, not in scripts/, which holds the wrappers that run on the machine).
 name: Bench
 
 on:
