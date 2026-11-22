@@ -40,7 +40,7 @@ const BUYER_WORDS =
 
 const COUNT = '(\\d{1,3}(?:,\\d{3})+|\\d+)';
 const BUYER_COUNT = new RegExp(`(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z-]+\\s+){0,4}?(?:${BUYER_WORDS})\\b`, 'gi');
-const RATE_NOUNS = 'orders|sales|purchases|transactions|jobs|deliveries|bookings|projects|contracts';
+const RATE_NOUNS = 'orders|sales|purchases|transactions|jobs|deliveries|bookings|projects|contracts|renewals';
 const PER = '(?:a|per|each|every)';
 const PERIODS = '(day|week|month|year)';
 /** "<count> [≤2 words] <orders> a/per <period>": a stated rate; group 1 the count, 2 the period. */
@@ -82,7 +82,12 @@ const PER_UNIT_BEFORE = new RegExp(
   `(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z-]+\\s+){0,2}?(?:${RATE_NOUNS})\\s+(?:per|from each|at each|for each|in each)\\s+([A-Za-z-]+)\\s+${PER}\\s+${PERIODS}\\b`,
   'gi',
 );
-const TIMES = /(\d+)\s*(?:times|x)\s+(?:a|per|each|every)\s+(week|month|quarter|year)\b/i;
+const TIMES = /(?:(\d+)\s*(?:times|x)|\b(once|twice))\s+(?:a|per|each|every)\s+(week|month|quarter|year)\b/i;
+/** Words saying a cycle's purchases fall due spread through it rather than together. */
+const SPREAD = /\b(?:evenly|spread|staggered|uniformly|rolling|throughout the (?:year|month|quarter)|through the (?:year|month|quarter)|across the (?:year|month|quarter)|year-round)\b/i;
+/** A frequency stated as a floor: "at least once a year", "no less than twice a year", "once a year or more". */
+const MINIMUM_FREQUENCY =
+  /\b(?:at least|no less than|not less than|(?:a )?minimum of)\s+(?:(?:\d+\s*(?:times|x)|once|twice)\s+(?:a|per|each|every)\s+(?:week|month|quarter|year)|daily|weekly|monthly|quarterly|yearly|annually)\b|\b(?:(?:\d+\s*(?:times|x)|once|twice)\s+(?:a|per|each|every)\s+(?:week|month|quarter|year)|daily|weekly|monthly|quarterly|yearly|annually)\s+or\s+more\b/i;
 const PERIOD_DAYS: Record<string, number> = { day: 1, week: 7, month: 30, quarter: 91, year: 365 };
 const WORD_DAYS: Array<[RegExp, number]> = [
   [/\b(daily|every day|each day)\b/i, 1],
@@ -115,23 +120,33 @@ export interface VolumeReading {
 }
 
 /** Words that name a buyer by what they own or run: "boat owners" own boats, "fleet operators" run fleets. */
-const HOLDER_WORDS = /\b([a-z]{3,})\s+(?:owners?|operators?|managers?|proprietors?|holders?|keepers?)\b/gi;
+const HOLDER_WORDS = /\b((?:[a-z-]{3,}\s+){0,2}[a-z]{3,})\s+(?:owners?|operators?|managers?|proprietors?|holders?|keepers?)\b/gi;
 
 /**
  * The things a payer is named for holding, as count words: a payer of "Recreational
  * boat owners" is one buyer per boat, so "3,400 boats are registered" counts buyers
- * exactly as "3,400 boat owners" would. Only the noun directly before the holder
- * word is taken (never an adjective further out), singular and plural. Pure.
+ * exactly as "3,400 boat owners" would. The nouns of the compound before the
+ * holder word are each taken (planningReliability round 9): a payer of "Ski area
+ * revenue managers" is one buyer per ski area, and "Warehouse facility
+ * managers" one per warehouse, so "470 ski areas" and "220 warehouses" count
+ * them; before, only "revenue" and "facility" (pluralized "facilitys") were
+ * read, and a market research had sized stayed unsized. Never more than the
+ * three words before the holder word, never a stop word or a size adjective,
+ * singular and plural. Pure.
  */
 export function payerHeldWords(payer: string | null | undefined): string[] {
   if (!payer) return [];
   const out = new Set<string>();
   for (const m of payer.matchAll(HOLDER_WORDS)) {
-    const w = m[1]!.toLowerCase();
-    if (/^(?:the|and|for|with|small|large|local|independent|business|property|home)$/.test(w)) continue;
-    const one = w.endsWith('s') ? w.slice(0, -1) : w;
-    out.add(one);
-    out.add(/(?:s|x|ch|sh)$/.test(one) ? `${one}es` : `${one}s`);
+    const words = m[1]!.toLowerCase().split(/\s+/);
+    for (const [i, w] of words.entries()) {
+      if (/^(?:the|and|or|of|at|in|to|for|with|who|that|small|large|local|independent|business|property|home)$/.test(w)) continue;
+      // Further out than the head, an adjective ("recreational", "licensed") describes the buyer and never counts it.
+      if (i < words.length - 1 && /(?:al|ive|ous|ful|ent|ed|ing|ary)$/.test(w)) continue;
+      const one = w.endsWith('s') ? w.slice(0, -1) : w;
+      out.add(one);
+      out.add(/(?:s|x|ch|sh)$/.test(one) ? `${one}es` : /[^aeiou]y$/.test(one) ? `${one.slice(0, -1)}ies` : `${one}s`);
+    }
   }
   return [...out];
 }
@@ -293,8 +308,37 @@ export function readVolume(text: string, windowDays: number, payer: string | nul
 
   let everyDays: number | null = null;
   const times = TIMES.exec(text);
-  if (times) everyDays = PERIOD_DAYS[times[2]!.toLowerCase()]! / Math.max(1, toInt(times[1]!));
-  else for (const [pattern, days] of WORD_DAYS) if (pattern.test(text)) { everyDays = days; break; }
+  if (times) {
+    const n = times[1] ? toInt(times[1]) : /^twice$/i.test(times[2]!) ? 2 : 1;
+    everyDays = PERIOD_DAYS[times[3]!.toLowerCase()]! / Math.max(1, n);
+  } else for (const [pattern, days] of WORD_DAYS) if (pattern.test(text)) { everyDays = days; break; }
+  /*
+   * A buyer whose purchases research says fall due spread through its cycle
+   * buys inside a shorter window only when its own date falls there
+   * (planningReliability round 9): 480 buyers renewing once a year "evenly
+   * through the year" make about 480 × 30 / 365 = 39 purchases in a 30-day
+   * window, never 480. Before, every buyer was credited one purchase whatever
+   * its cycle, so a market whose due dates were stated as spread read as twelve
+   * times what a month holds. A cycle stated without its timing ("each renews
+   * yearly") keeps one purchase each: whether a buyer can be sold to before its
+   * date is not something the text says, and the share is never guessed.
+   *
+   * A frequency stated as a floor ("at least once a year", "once a year or
+   * more") makes the cycle the longest a buyer goes between purchases, so
+   * buyers × window ÷ cycle is the fewest purchases that fall due, never the
+   * most (planningReliability round 10). A floor cannot cap the market; the
+   * cycle then counts as one stated without its timing.
+   */
+  if (everyDays !== null && everyDays > window && SPREAD.test(text) && !MINIMUM_FREQUENCY.test(text)) {
+    const due = Math.max(1, Math.floor((buyers * window) / everyDays));
+    return {
+      deals: due,
+      buyers,
+      everyDays,
+      counted: 'BUYERS',
+      basis: `${buyers} reachable buyers${of}, each buying about every ${Math.round(everyDays)} days, so about ${due} purchase(s) fall due in ${window} days`,
+    };
+  }
   const purchases = everyDays === null ? 1 : Math.max(1, Math.floor(window / everyDays));
   return {
     deals: buyers * purchases,

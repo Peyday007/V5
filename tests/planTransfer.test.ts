@@ -323,11 +323,16 @@ describe('plan integrity holds across varied goals', () => {
    * reconstruction; each reads clean, one step per move, its sale and
    * collection costed by the model or null, in the order they start.
    */
-  it('at least two variants read as reconstructed plans, each with empty integrity', () => {
+  it('every variant read as a reconstructed plan has empty integrity, and none counts an unpriced member', () => {
     const reconstructed = [...readings.entries()].filter(([, p]) => p.adoption?.source === 'RECONSTRUCTED' && p.acceptance.candidate?.source === 'RECONSTRUCTED');
-    // At least one (two until 2026-11-20): a reconstruction resting only on assumed levers is no longer adopted (invariant 39),
-    // and planIntegrityRegressions holds the reconstructed step structure directly.
-    expect(reconstructed.map(([id]) => id).length, [...readings.keys()].join(', ')).toBeGreaterThanOrEqual(1);
+    // Two until 2026-11-20, one until round 9: a reconstruction resting only on assumed levers (invariant 39), and then one
+    // counting money from a member whose price nobody established, is no longer adopted — every reconstruction this
+    // matrix makes leans on a constructed arrangement at an assumed price. planIntegrityRegressions holds the
+    // reconstructed step structure directly; here, whatever is adopted must read clean and be priced.
+    for (const [id, p] of reconstructed) {
+      const demand = new Map((p.portfolio?.demand ?? []).map((d) => [d.opportunityId, d]));
+      for (const member of p.acceptance.candidate?.opportunityIds ?? []) expect(demand.get(member)?.unestablished ?? [], `${id}: ${member}`).not.toContain('price');
+    }
     for (const [id, p] of reconstructed) {
       expect(p.integrity, id).toEqual([]);
       expect(planIntegrity(integrityInput(p)).violations, id).toEqual([]);
