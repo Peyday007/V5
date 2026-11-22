@@ -197,3 +197,30 @@ describe('a member is read from what the plan judged', () => {
     expect([...map.keys()]).toEqual(['cop_m']);
   });
 });
+
+describe('a sale beside the plan\'s lead', () => {
+  it('stays one step on the plan as a whole — costed and evidenced — so no step acts outside the lead', () => {
+    const lead = member({ id: 'opp_lead', title: 'Lead workbook', fulfils: { by: 'BRAIN', capability: 'PRODUCE_SPREADSHEET' } });
+    const beside = member({ id: 'opp_beside', title: 'Beside retainer', fulfils: { by: 'PROVIDER', name: 'A bookkeeper' } });
+    const s = planSteps({
+      adoption,
+      reconstruction: null,
+      sales: [sale(lead.id, lead.title), sale(beside.id, beside.title)],
+      nextTest: null,
+      permissionsMissing: [],
+      capabilities: connected(),
+      daysLeft: 30,
+      members: new Map([lead, beside].map((m) => [m.id, m])),
+      lead: ['opp_lead'],
+    });
+    const other = s.find((x) => x.label === 'Sell "Beside retainer"')!;
+    expect(other.openings).toBeUndefined();
+    expect(other).toMatchObject({ cost: 0, stage: { stage: 'OFFER', costSource: 'MODEL' } });
+    expect(other.evidence).toContain('opp_beside');
+    expect(s.filter((x) => x.openings?.includes('opp_lead')).map((x) => x.stage?.stage)).toEqual(['OFFER', 'DELIVER', 'COLLECT']);
+    const violations = planIntegrity(
+      integrityInput({ goalId: 'wst_chain', verdict: 'NEEDS_EVIDENCE', summary: 's', acceptance: { status: 'CANDIDATE_ONLY', candidate: { label: 'Lead workbook', opportunityIds: ['opp_lead'] }, shortfalls: [] }, steps: s, nextTest: null, portfolio: null } as unknown as PlanReading),
+    ).violations;
+    expect(violations).toEqual([]);
+  });
+});

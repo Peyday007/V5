@@ -115,7 +115,7 @@ import { implementedFormats } from '../puzzle/formats/index.ts';
 import { readTimelines, type TimelineReading } from './timelines.ts';
 import { changeTitle } from './stepTitle.ts';
 import { internalKeyIn, planIntegrity, type ArrangementStage, type PlanIntegrityViolation, type StepCostSource, type UnscheduledReason } from '../../domain/planIntegrity.ts';
-import { integrityInput, leadOf, type PlanLead } from './planIntegrityInput.ts';
+import { integrityInput, leadIdsOf, leadOf, type PlanLead } from './planIntegrityInput.ts';
 import { readCapabilityInventory, stepExecutor, type CapabilityInventory, type OperationRequest, type StepExecutor, type StepOperation } from './stepExecutor.ts';
 import { goalObjective, readOutcome, tradeOffs, type EnforceableCommitment, type GoalObjective, type OutcomeReading, type PlanTradeOff } from './objective.ts';
 import { buildPlanSet, calibrationFor, candidateFromArrangement, candidateFromPathway, candidateFromStrategy, rebuildAfter, type AcceptanceCondition, type Calibration, type PlanCandidate, type PlanChange, type PlanSet, type Rebuild } from './planSet.ts';
@@ -2569,7 +2569,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   const lead = leadingArrangement(inGoalScope(arrangements, model), { portfolio: model.portfolio, candidateIds: acceptance.candidate?.opportunityIds ?? [] });
   const steps = infeasible || target.achieved
     ? []
-    : planSteps({ adoption: plan.adoption, reconstruction, sales, nextTest: legacyNext, permissionsMissing, arrangement: lead ? { arrangement: lead, context: { ...arrangementStepContext(target, models.get(lead.key) ?? null, { key: lead.key, portfolio: model.portfolio }), unestimated: unestimatedLead(lead, arrangements.length, models), reachCost: arrangementReachCost(models.get(lead.key), pathways.pathways) } } : null, capital: capitalOf(target), measuredReply: measuredReplyOf(model.portfolio), titles: titlesOf(model), cashDays: cashDaysOf(model), daysLeft: target.daysLeft, capabilities: await readCapabilityInventory(), members: openingMembers(planOpenings(model), pathways.pathways, model.portfolio?.demand ?? []), ...(adopted ? { adoptedIds: adopted } : {}) });
+    : planSteps({ adoption: plan.adoption, reconstruction, sales, nextTest: legacyNext, permissionsMissing, arrangement: lead ? { arrangement: lead, context: { ...arrangementStepContext(target, models.get(lead.key) ?? null, { key: lead.key, portfolio: model.portfolio }), unestimated: unestimatedLead(lead, arrangements.length, models), reachCost: arrangementReachCost(models.get(lead.key), pathways.pathways) } } : null, capital: capitalOf(target), measuredReply: measuredReplyOf(model.portfolio), titles: titlesOf(model), cashDays: cashDaysOf(model), daysLeft: target.daysLeft, capabilities: await readCapabilityInventory(), members: openingMembers(planOpenings(model), pathways.pathways, model.portfolio?.demand ?? []), lead: leadIdsOf({ acceptance, portfolio: model.portfolio }), ...(adopted ? { adoptedIds: adopted } : {}) });
   const openingsVerdict: PlanVerdict =
     acceptance.status === 'ACCEPTED' ? 'RECOMMENDABLE' : infeasible ? 'NOT_VIABLE' : plan.adoption.source === 'RECONSTRUCTED' ? 'NEEDS_EVIDENCE' : (chosen?.verdict ?? 'NEEDS_EVIDENCE');
   // One reading, one picture (P5): the candidate the acceptance adopted is a strategy of the reading, and a
@@ -3444,6 +3444,13 @@ export function planSteps(input: {
    * and collection from it (`openingSteps`); an opening it lacks keeps its sale alone.
    */
   members?: ReadonlyMap<string, OpeningChainMember> | null;
+  /**
+   * The openings the plan names as its lead (`leadIdsOf`). A sale of one of
+   * them is its whole transaction, each step acting on it; a sale beside the
+   * lead stays one step on the plan as a whole, costed and evidenced, since a
+   * step acting on an opening outside the lead breaks STEPS_BELONG_TO_PLAN.
+   */
+  lead?: readonly string[] | null;
 }): PlanStep[] {
   const measured = input.measuredReply ?? null;
   const inventory = input.capabilities ?? undefined;
@@ -3459,6 +3466,10 @@ export function planSteps(input: {
     const offer = saleStep(steps.length + 1, sale, detail, kill, execution, inventory);
     const member = input.members?.get(sale.opportunityId);
     if (!member) return [offer];
+    const lead = new Set((input.lead ?? []).map(openingOfMember));
+    if (lead.size > 0 && !lead.has(sale.opportunityId)) {
+      return [{ ...offer, cost: member.reachCost ? member.reachCost.amount : null, evidence: member.evidence.offer, stage: { stage: 'OFFER', costSource: member.reachCost ? 'MODEL' : 'NONE_HELD' } }];
+    }
     chained = true;
     const { order: _order, dependsOn: _dependsOn, ...rest } = offer;
     return openingSteps(member, { currency, daysLeft: input.daysLeft ?? null, send, collect, ...(inventory ? { capabilities: inventory } : {}) }, rest, steps.length + 1);
@@ -3574,7 +3585,15 @@ export function planSteps(input: {
         stage: { stage: 'OFFER', costSource: reach !== null ? 'MODEL' : 'NONE_HELD' },
       };
       const deliverDay: Span | null = lands && !(lands !== null && daysLeft !== null && lands.low > daysLeft) ? { low: sellDay.low, high: lands.high } : null;
-      for (const m of known) steps.push(fulfilmentStep(m, { currency, ...(inventory ? { capabilities: inventory } : {}) }, deliverDay, sellOrder, steps.length + 1, lands && daysLeft !== null && lands.low > daysLeft ? 'AFTER_DEADLINE' : 'NO_MODEL_DAYS'));
+      const labels = new Set(steps.map((one) => one.label));
+      for (const m of known) {
+        const step = fulfilmentStep(m, { currency, ...(inventory ? { capabilities: inventory } : {}) }, deliverDay, sellOrder, steps.length + 1, lands && daysLeft !== null && lands.low > daysLeft ? 'AFTER_DEADLINE' : 'NO_MODEL_DAYS');
+        // Two members titled alike are two steps, never one label twice (NO_DUPLICATE_STEPS).
+        let label = step.label;
+        for (let n = 2; labels.has(label); n += 1) label = `${step.label} (opening ${n})`;
+        labels.add(label);
+        steps.push({ ...step, label });
+      }
     }
     const delivered = steps.length > sellOrder && steps[steps.length - 1]!.stage?.stage === 'DELIVER' ? steps[steps.length - 1]!.order : sellOrder;
     steps.push({
