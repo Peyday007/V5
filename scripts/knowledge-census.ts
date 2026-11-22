@@ -43,6 +43,9 @@ async function main(): Promise<void> {
     await q('PLAN_Q_MISSION_DETAIL', "SELECT m.id, m.state, m.waiting_on, m.orchestration_id, m.writeback_at, m.created_at, m.updated_at FROM russell_missions m WHERE m.candidate_id IN (SELECT candidate_id FROM cash_needs WHERE blocked_action LIKE '%goal:wst_7b4fcbb5f2384f31b6c3:plan%' AND candidate_id IS NOT NULL)");
     await q('PLAN_Q_FRAGS', "SELECT f.orchestration_id, f.status, f.attempt, COUNT(*) AS n FROM research_fragments f WHERE f.orchestration_id IN ('orc_694532fd32904450968a','orc_345b17a00c904f55957e') GROUP BY 1, 2, 3");
     await q('PLAN_Q_ORCH', "SELECT o.id, o.status, o.updated_at FROM research_orchestrations o WHERE o.id IN ('orc_694532fd32904450968a','orc_345b17a00c904f55957e')");
+    await q('FRAG_QUEUE', "SELECT f.status, COUNT(*) AS n, MIN(f.created_at) AS oldest FROM research_fragments f WHERE f.created_at > '2026-11-15' GROUP BY f.status");
+    await q('FRAG_DONE_BY_HOUR', "SELECT substr(f.updated_at,1,13) AS hour, f.status, COUNT(*) AS n FROM research_fragments f WHERE f.updated_at > '2026-11-22T00:00:00' AND f.status NOT IN ('QUEUED','PENDING') GROUP BY 1, 2 ORDER BY 1");
+    await q('FRAG_QUEUE_PROJ', "SELECT f.project_id, COUNT(*) AS n FROM research_fragments f WHERE f.status = 'QUEUED' GROUP BY 1");
   } finally {
     await closeDatabase();
     console.log('CENSUS: OK');
