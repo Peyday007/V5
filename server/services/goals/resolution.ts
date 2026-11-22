@@ -71,7 +71,7 @@ export function blockerResolutions(input: ResolutionInput): Resolution[] {
       { daysLeft: input.daysLeft ?? 365, executionDaysP90: 0 },
     );
     out.set(key, {
-      priority: { variable, opportunityId: null, field, value: Math.max(0.01, input.value), changesDecision: true, decision: verdict.decision, reason: `${reason}; ${verdict.reason}` },
+      priority: { variable, opportunityId: null, field, value: Math.max(0.01, input.value), changesDecision: true, decision: verdict.decision, reason: `${reason}${relax ? `; or change the terms — ${relax.suggestion}` : ''}; ${verdict.reason}` },
       relax,
     });
   };
