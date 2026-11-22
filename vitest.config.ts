@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitest/config';
+import DurationSequencer from './tests/helpers/shardSequencer.ts';
 
 export default defineConfig({
   test: {
@@ -12,5 +13,8 @@ export default defineConfig({
     // database singleton and env-derived paths rely on.
     pool: 'forks',
     poolOptions: { forks: { singleFork: false } },
+    // `--shard` splits by recorded duration rather than by file count, and a
+    // shard runs its longest files first (tests/helpers/shardSequencer.ts).
+    sequence: { sequencer: DurationSequencer },
   },
 });

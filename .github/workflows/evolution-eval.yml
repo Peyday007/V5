@@ -27,6 +27,19 @@
 name: Evolution eval
 
 on:
+  # A release is the event that changes what there is to score: a fresh
+  # revision has no baseline, and an experiment waits on production. The
+  # schedule alone did not deliver that — measured 2026-11-16 → 11-21, the
+  # half-hour cron fired 31 times in 5.7 days (median gap 298 min, max 515;
+  # no skipped or cancelled runs, so GitHub never created the rest). So a
+  # Deploy ending wakes the evaluator, the way it wakes goals.yml and
+  # factory-release.yml (FAC-4): a person's Deploy raises `workflow_run`
+  # (only a successful one evaluates, see `evaluate.if`), and a bot's Deploy
+  # raises none, so its hand-off job dispatches this workflow instead. The
+  # schedule stays as the backstop.
+  workflow_run:
+    workflows: [Deploy]
+    types: [completed]
   # Every 30 minutes, off the hour and off the other workflows' minutes.
   schedule:
     - cron: '13,43 * * * *'
@@ -58,6 +71,7 @@ permissions:
 jobs:
   evaluate:
     name: Evaluate pending experiments
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 150
     steps:
