@@ -14,9 +14,11 @@
  *      the plan's candidate (fam-08, fam-14, ho-02).
  */
 import { describe, expect, it } from 'vitest';
-import { agreedLots, conservative, dealsFromOffers, economicsState, everyCaseInfeasible, judgeAcceptance, peakConcurrentLots, withoutSpareOwnerWork, type StrategyReading } from '../server/services/goals/plan.ts';
+import { agreedLots, candidateSentence, conservative, dealsFromOffers, economicsState, everyCaseInfeasible, judgeAcceptance, peakConcurrentLots, withoutSpareOwnerWork, type StrategyReading } from '../server/services/goals/plan.ts';
 import type { GoalPortfolio } from '../server/services/goals/portfolio.ts';
 import type { ModelInput, ModelledOpportunity } from '../server/services/cash/goalScenario.ts';
+import { internalKeyIn } from '../server/domain/planIntegrity.ts';
+import { buyerTermsOf } from '../server/services/cash/construct.ts';
 
 const fixed = (value: number, provenance: ModelInput['provenance'] = 'EVIDENCE'): ModelInput => ({ value, low: value, high: value, provenance, source: null, note: '' });
 const unknown = (low: number, high: number, provenance: ModelInput['provenance'] = 'UNKNOWN'): ModelInput => ({ value: null, low, high, provenance, source: null, note: '' });
@@ -233,5 +235,43 @@ describe('5. an unestablished price never makes a candidate', () => {
     const a = judgeAcceptance({ achieved: false, chosen: strategy, portfolio: portfolio(['close rate']), measuredChance: null, considered });
     expect(a.candidate?.source).toBe('QUANT_PORTFOLIO');
     expect(a.candidate?.opportunityIds).toEqual(['cleaning', 'arr_constructed']);
+  });
+});
+
+/*
+ * NO_INTERNAL_KEYS (production goal wst_7b4fcbb5f2384f31b6c3, release check
+ * 44986740566). With no priced combination and every strategy NOT_VIABLE, the
+ * candidate is the pathways' leading combination, whose members are ids: its
+ * label and sentence read "arr_6f3b7a404ca5 + …". And an arrangement inheriting
+ * its buyers' arrears from an awarded opening carried "opening cop_…" into
+ * three of its steps. A person reads titles.
+ */
+describe('a candidate and an arrangement\'s terms name openings by title, never by id', () => {
+  const viable = (id: string, title: string) => ({ opportunityId: id, title });
+  it('labels a pathways candidate by its members\' titles', () => {
+    const a = judgeAcceptance({
+      achieved: false,
+      chosen: null,
+      portfolio: null,
+      measuredChance: null,
+      considered: [],
+      pathways: {
+        portfolio: { leading: { members: ['arr_6f3b7a404ca5', 'cop_0a51c2259f2f4a04b5fe', 'arr_unknown00000'], net: { p10: 0, p50: 10_000, p90: 20_000 } } },
+        pathways: [viable('arr_6f3b7a404ca5', 'Constructed: GitHub bug bounty triage'), viable('cop_0a51c2259f2f4a04b5fe', 'Market: GitHub public bug bounty program')],
+      } as never,
+    });
+    expect(a.candidate?.source).toBe('PATHWAYS');
+    expect(a.candidate?.opportunityIds).toEqual(['arr_6f3b7a404ca5', 'cop_0a51c2259f2f4a04b5fe', 'arr_unknown00000']);
+    expect(a.candidate?.label).toBe('Constructed: GitHub bug bounty triage + Market: GitHub public bug bounty program + a constructed arrangement');
+    expect(candidateSentence(a.candidate, 0.9)).toContain('Constructed: GitHub bug bounty triage');
+    for (const text of [a.candidate!.label, a.sentence, candidateSentence(a.candidate, 0.9)]) expect(internalKeyIn(text), text).toBeNull();
+  });
+
+  it('reads an awarded opening\'s arrears into an arrangement\'s terms by its title', () => {
+    const awarded = { id: 'cop_0a51c2259f2f4a04b5fe', title: 'GitHub public bug bounty program solicitation', source: null, buyingSignal: null, paymentTerms: null } as never;
+    const { buyerTerms } = buyerTermsOf({} as never, [awarded]);
+    expect(buyerTerms?.timing).toBe('ARREARS');
+    expect(buyerTerms!.basis).toContain('GitHub public bug bounty program solicitation');
+    expect(internalKeyIn(buyerTerms!.basis), buyerTerms!.basis).toBeNull();
   });
 });
