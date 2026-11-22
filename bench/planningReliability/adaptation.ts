@@ -11,7 +11,7 @@
  */
 import type { PlanReading } from '../../server/services/goals/plan.ts';
 import { caseAtStep, changeSteps, type PlanningCase } from './case.ts';
-import { grade, observe, type FailureClass, type Grade, type ObservedPlan } from './grade.ts';
+import { grade, observe, type E2EGrade, type FailureClass, type Grade, type ObservedPlan } from './grade.ts';
 
 export interface StepGrade {
   /** 0: before any change; k: after change k. */
@@ -41,12 +41,23 @@ export function gradeAdaptation(c: PlanningCase, readings: readonly PlanReading[
   const final = graded[graded.length - 1]!;
   const failed = graded.filter((g) => !g.grade.pass);
   const label = (g: StepGrade) => (steps.length ? `${g.step === 0 ? 'before any change' : `after change ${g.step} (${g.change})`}: ` : '');
-  if (!failed.length) return { pass: true, outcome: final.grade.outcome, failures: [], detail: graded.map((g) => `${label(g)}${g.grade.detail}`).join(' | '), steps: graded, final: final.observed };
+  // The end-to-end level holds across every graded reading too: a complete plan after one change does not excuse an incomplete one after another.
+  const e2eFailed = graded.filter((g) => !g.grade.e2e.pass);
+  const e2e: E2EGrade = e2eFailed.length
+    ? {
+        pass: false,
+        failures: [...new Set(e2eFailed.flatMap((g) => g.grade.e2e.failures))],
+        gaps: [...new Set(e2eFailed.flatMap((g) => g.grade.e2e.gaps))],
+        detail: e2eFailed.map((g) => `${label(g)}${g.grade.e2e.detail}`).join(' | '),
+      }
+    : { ...final.grade.e2e, detail: graded.map((g) => `${label(g)}${g.grade.e2e.detail}`).join(' | ') };
+  if (!failed.length) return { pass: true, outcome: final.grade.outcome, failures: [], detail: graded.map((g) => `${label(g)}${g.grade.detail}`).join(' | '), e2e, steps: graded, final: final.observed };
   return {
     pass: false,
     outcome: null,
     failures: [...new Set<FailureClass>(failed.flatMap((g) => g.grade.failures))],
     detail: failed.map((g) => `${label(g)}${g.grade.detail}`).join(' | '),
+    e2e,
     steps: graded,
     final: final.observed,
   };

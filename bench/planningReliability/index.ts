@@ -36,6 +36,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { wilson } from '../../server/services/cash/goalScenario.ts';
 import { HIDDEN_PREFIX, type CaseResult, type Suite, type SuiteOptions, type SuiteOutcome } from '../types.ts';
+import { gradeAdaptation } from './adaptation.ts';
 import { caseProblem, type PlanningCase } from './case.ts';
 import { PUBLIC_CASES } from './cases.ts';
 import { CRITICAL, E2E_FAILURE_CLASSES, FAILURE_CLASSES, grade, observe, type E2EFailureClass, type FailureClass } from './grade.ts';
@@ -92,9 +93,9 @@ export async function runCase(job: CaseJob, template: Template | null, templateE
   } else {
     try {
       const world = await runWorld(c, template, dir, index);
-      const observed = observe(world.reading, world.keyOf);
-      const g = grade(c, observed);
-      row = { id, hidden, heldOut: hidden || c.heldOut, expect: c.expect.verdict, observed: observed.stance, pass: g.pass, outcome: g.outcome, failures: g.failures, ms: 0, detail: g.detail, e2e: g.e2e };
+      // Every graded reading of the world: before and after each change (adaptation.ts); a case with no changes grades its one reading.
+      const g = gradeAdaptation(c, world.readings, world.keyOf);
+      row = { id, hidden, heldOut: hidden || c.heldOut, expect: c.expect.verdict, observed: g.final.stance, pass: g.pass, outcome: g.outcome, failures: g.failures, ms: 0, detail: g.detail, e2e: g.e2e };
     } catch (error) {
       row = { id, hidden, heldOut: hidden || c.heldOut, expect: c.expect.verdict, observed: null, pass: false, outcome: null, failures: [], ms: 0, detail: `error: ${String((error as Error)?.message ?? error).slice(0, 300)}` };
     }
