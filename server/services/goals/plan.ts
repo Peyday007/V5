@@ -3055,6 +3055,19 @@ export function adoptReconstruction(input: {
   const ids = members.resolved;
   const names = ids.map((id) => (titled.get(id) ?? '').slice(0, 60));
   if (ids.length === 0) return hypothetical('the reconstruction\'s strongest plan names no opening Brain holds');
+  /*
+   * A member whose price nobody has established counts money nobody has
+   * evidenced (invariant 39, planningReliability round 9): the reconstruction
+   * that rests on one is not the plan, exactly as the held combination is
+   * not when it counts one (`unpricedIn`). Before, a reconstruction over
+   * constructed arrangements at an assumed price could replace a held plan
+   * whose every link was established, depending only on which arrangements a
+   * run happened to construct.
+   */
+  const unpricedMembers = ids.filter((id) => (input.baseline?.demand ?? []).find((d) => d.opportunityId === id)?.unestablished.includes('price'));
+  if (unpricedMembers.length > 0) {
+    return hypothetical(`the reconstruction's strongest plan counts money from ${unpricedMembers.slice(0, 4).map((id) => (titled.get(id) ?? id).slice(0, 60)).join(', ')}, whose price nobody has established; an unknown price is not evidence of reach`);
+  }
   const evidenced = held.basis === 'PROBABILITY' && establishedMoves.every((c) => c.basis === 'MEASURED');
   return {
     adoption: {
