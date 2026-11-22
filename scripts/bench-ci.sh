@@ -18,9 +18,15 @@ for a in "$@"; do [ "$a" = --no-wait ] && wait=0; done
 repo="${BENCH_REPO:-$(git remote get-url origin | sed -E 's#^(https://github.com/|git@github.com:)##; s#\.git$##; s#^.*/git/##')}"
 canonical=$(cat "$(git rev-parse --show-toplevel)/.github/CANONICAL_BRANCH")
 # The workflow file must exist on the ref it is dispatched on.
-on="$canonical"
-if gh api "repos/$repo/contents/.github/workflows/bench.yml?ref=$ref" --silent 2>/dev/null \
-  && gh api "repos/$repo/branches/$ref" --silent 2>/dev/null; then on="$ref"; fi
+has_bench() { gh api "repos/$repo/contents/.github/workflows/bench.yml?ref=$1" --silent 2>/dev/null && gh api "repos/$repo/branches/$1" --silent 2>/dev/null; }
+# REF itself, else the canonical branch, else this checkout's branch (before bench.yml is merged).
+on="${BENCH_WORKFLOW_REF:-}"
+if [ -z "$on" ]; then
+  for candidate in "$ref" "$canonical" "$(git rev-parse --abbrev-ref HEAD)"; do
+    if has_bench "$candidate"; then on="$candidate"; break; fi
+  done
+fi
+[ -n "$on" ] || { echo "no branch with bench.yml to dispatch from; set BENCH_WORKFLOW_REF" >&2; exit 1; }
 since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 gh api -X POST "repos/$repo/actions/workflows/bench.yml/dispatches" -f ref="$on" -f "inputs[ref]=$ref" -f "inputs[base]=$base"
 run=""
