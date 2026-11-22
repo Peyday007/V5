@@ -23,7 +23,7 @@ import { laneConfig } from '../cheap/lane.ts';
 import { recordBinEvent } from '../../repos/bins.ts';
 import { redactCredentials } from '../effects/failureDetail.ts';
 import { failureClass } from '../goals/researchYield.ts';
-import { FREE_LANE_WORK_TYPES, answerRows, answerTally, hostClass, isFailing, routeHold } from './worker.ts';
+import { FREE_LANE_WORK_TYPES, answerRows, answerTally, hostClass, isFailing, routeAdmits } from './worker.ts';
 import { readStageCapacity, recordedCause, stageCapacityLines, type RecordedStageCapacity } from './stageCapacity.ts';
 
 export interface LaneCoverage {
@@ -274,7 +274,7 @@ export async function readModelOutput(options: { now?: Date; models?: readonly s
   );
   const waiting: Record<string, number> = {};
   for (const row of queued) if ((FREE_LANE_WORK_TYPES as readonly string[]).includes(row.work_type)) waiting[row.work_type] = Number(row.n);
-  return modelOutputIncidents({ rows, models, waiting, hold: (m) => routeHold(m, now.getTime()) });
+  return modelOutputIncidents({ rows, models, waiting, hold: (m) => routeAdmits(m) });
 }
 
 export const MODEL_OUTPUT_DROP = 'FREE_LANE_MODEL_OUTPUT_DROP';

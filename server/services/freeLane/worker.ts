@@ -49,6 +49,7 @@ import { isRunpodSlot, runpodBreakerOpen, runpodCallWindow, runpodPaused } from 
 import type { SourceFetch } from '../sources/fetchForWorker.ts';
 import { readSource } from '../sources/access.ts';
 import { redactCredentials } from '../effects/failureDetail.ts';
+import { nextReprobeDelay, probeRoute, REPROBE_MAX_MS, ROUTE_PROBE_EVENT } from './routeProbe.ts';
 
 /** The research work types the free lane answers, and the tool that answers each. */
 export const FREE_LANE_WORK_TYPES = [
@@ -2391,6 +2392,10 @@ export function clearRouteCooldowns(model: string): number {
     routeCooled.delete(key);
     if (cooldown.delete(key)) cleared += 1;
   }
+  // The route-level hold a provider outage set ends with it (CAP-16-3 structural).
+  routePause.delete(model);
+  failedProbes.delete(model);
+  routeStreak.delete(model);
   return cleared;
 }
 
@@ -3000,11 +3005,161 @@ const routeWindow = new Map<string, { at: number; ok: boolean; cause: RouteFailu
 /** Routes whose window this process has already rebuilt from the lane's rows. */
 const routeRestored = new Set<string>();
 
+/*
+ * CAP-16-3, structural review (episode 4). Three repairs tuned the breaker and r01.cap-16-3 still
+ * read 57–67% of six hours' lane outcomes as provider failures. The shared cause was not the
+ * breaker's rule but how a route's outage was discovered: a held route was re-probed by admitting
+ * a real work item onto it, and a provider failure on an open route cooled only that one
+ * (model, item) pair, so every other queued item was tried on the failing provider in turn. One
+ * outage was written as one `FREE_LANE_ITEM` "model call failed" row per re-probe and per queued
+ * item. Now a held route admits nothing at all; it is asked by the tick with one minimal call
+ * (`routeProbe.ts`, a `FREE_LANE_ROUTE_PROBE` row), and the work items stay queued, unleased and
+ * unrecorded, until a probe says the route answers.
+ */
+
+/**
+ * Consecutive provider-availability failures (no answer between) after which an open route is
+ * held as a whole rather than item by item. Two, not one: a single 503 among answers is the
+ * 2026-11-15 07:46Z case, a healthy route that must keep every slot.
+ */
+export const ROUTE_PAUSE_STREAK = 2;
+/** Routes held by a provider outage (not by the breaker's window): when each is next probed, and why. */
+const routePause = new Map<string, { nextProbeAt: number; cause: RouteFailureCause }>();
+/** Provider-availability failures in a row per route, ended by any answer. */
+const routeStreak = new Map<string, number>();
+/** Probes in a row a held route has failed: the backoff's exponent (`nextReprobeDelay`). */
+const failedProbes = new Map<string, number>();
+/** Routes whose probe is in flight, so one route is never asked twice at once. */
+const probing = new Set<string>();
+
 /** Tests: forget every route's health. */
 export function resetRouteHealth(): void {
   routeHealth.clear();
   routeWindow.clear();
   routeRestored.clear();
+  routePause.clear();
+  routeStreak.clear();
+  failedProbes.clear();
+  probing.clear();
+}
+
+/**
+ * Whether a route may be given a work item now: null when it may. A route held by the breaker or
+ * paused by a provider outage admits nothing — including when its re-probe is due, because the
+ * re-probe is a route probe (`probeHeldRoutes`), never a work item. Reads only.
+ */
+export function routeAdmits(model: string): string | null {
+  const state = routeHealth.get(model);
+  if (state && state.failures >= ROUTE_FAILURE_LIMIT) {
+    return `model route failing (${state.cause}); held until a route probe answers`;
+  }
+  const paused = routePause.get(model);
+  if (paused) return `model route failing (${paused.cause}); held until a route probe answers`;
+  return null;
+}
+
+/** When a held route is next due its probe; null for a route that is not held. */
+export function routeProbeDueAt(model: string): number | null {
+  const state = routeHealth.get(model);
+  const held = state && state.failures >= ROUTE_FAILURE_LIMIT ? state.nextProbeAt : null;
+  const paused = routePause.get(model)?.nextProbeAt ?? null;
+  if (held === null) return paused;
+  if (paused === null) return held;
+  return Math.max(held, paused);
+}
+
+/**
+ * A provider-availability failure on a route, from a work item: counted in a row, and at
+ * ROUTE_PAUSE_STREAK the whole route is held until a probe answers. Returns whether it is held.
+ */
+export function noteRouteProviderFailure(model: string, cause: RouteFailureCause, now = Date.now()): boolean {
+  if (cause === 'database') return routeAdmits(model) !== null;
+  const streak = (routeStreak.get(model) ?? 0) + 1;
+  routeStreak.set(model, streak);
+  if (streak >= ROUTE_PAUSE_STREAK && !routePause.has(model)) {
+    routePause.set(model, { nextProbeAt: now + nextReprobeDelay(failedProbes.get(model) ?? 0), cause });
+  }
+  return routeAdmits(model) !== null;
+}
+
+/** A route answered a work item: its run of provider failures is over. */
+export function noteRouteAnswer(model: string): void {
+  routeStreak.delete(model);
+}
+
+function scheduleProbe(model: string, at: number): void {
+  const state = routeHealth.get(model);
+  if (state && state.failures >= ROUTE_FAILURE_LIMIT) state.nextProbeAt = at;
+  const paused = routePause.get(model);
+  if (paused) paused.nextProbeAt = at;
+}
+
+/**
+ * The tick's route probes: every held route whose probe is due is asked once (`probeRoute`), the
+ * answer is fed to the breaker (`recordRouteOutcome`), and the next probe is set from
+ * `nextReprobeDelay`. A probe that answers on a route whose window is no longer failing reopens it
+ * — and ends its outage cooldowns, so the queued items advance. No work item is touched. Returns
+ * the routes probed and whether each reopened.
+ */
+export async function probeHeldRoutes(input: {
+  workers: readonly FreeWorker[];
+  completer: Completer;
+  config: LaneConfig;
+  now?: () => number;
+}): Promise<{ model: string; ok: boolean; open: boolean }[]> {
+  const clock = input.now ?? Date.now;
+  const results: { model: string; ok: boolean; open: boolean }[] = [];
+  const seen = new Set<string>();
+  for (const worker of input.workers) {
+    const model = worker.model;
+    if (seen.has(model)) continue;
+    seen.add(model);
+    if (probing.has(model)) continue;
+    const due = routeProbeDueAt(model);
+    if (due === null || clock() < due) continue;
+    probing.add(model);
+    try {
+      const probe = await probeRoute({
+        completer: input.completer,
+        config: input.config,
+        model,
+        classify: (message) => classifyRouteFailure(message, { gpuDown: gpuDown(model) }),
+        redact: redactSecrets,
+        workerId: worker.workerId,
+        now: clock,
+      });
+      const at = clock();
+      const why = probe.ok ? undefined : probe.reason.slice(`model ${model}: `.length);
+      let open = recordRouteOutcome(model, probe.ok ? { ok: true } : { ok: false, ...(why ? { why } : {}) }, at);
+      if (probe.ok) {
+        failedProbes.delete(model);
+        if (open) {
+          routePause.delete(model);
+          clearRouteCooldowns(model);
+        } else {
+          // Answered, but the window still mostly failed: held, probed again at the first interval.
+          routeStreak.delete(model);
+          if (!routeHealth.get(model) && routePause.has(model)) routePause.delete(model);
+          scheduleProbe(model, at + nextReprobeDelay(0));
+        }
+      } else {
+        const failed = (failedProbes.get(model) ?? 0) + 1;
+        failedProbes.set(model, failed);
+        // A probe failing on Brain's own database leaves the route as it stood; it is still due again.
+        if (!routePause.has(model) && !(routeHealth.get(model)?.failures ?? 0)) {
+          routePause.set(model, { nextProbeAt: at, cause: (probe.cause as RouteFailureCause | null) ?? 'unclassified' });
+        }
+        scheduleProbe(model, at + nextReprobeDelay(failed));
+        open = false;
+      }
+      results.push({ model, ok: probe.ok, open: routeAdmits(model) === null && open });
+    } catch (error) {
+      console.warn(`[free-lane] route probe of ${model} failed to run:`, (error as Error).message);
+    } finally {
+      probing.delete(model);
+    }
+  }
+  return results;
 }
 
 /**
@@ -3025,13 +3180,25 @@ export function resetRouteHealth(): void {
 export async function restoreRouteHealth(models: readonly string[], now = Date.now()): Promise<number> {
   const pending = [...new Set(models)].filter((model) => !routeRestored.has(model));
   if (pending.length === 0) return 0;
-  let rows: { at: string; outcome: string | null; reason: string | null }[];
+  let rows: { at: string; event_type: string; outcome: string | null; reason: string | null }[];
+  let probes: { at: string; outcome: string | null; reason: string | null }[];
   try {
-    rows = await getDb().all<{ at: string; outcome: string | null; reason: string | null }>(
-      `SELECT at, outcome, reason FROM bin_events
-        WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND at <= ?
+    rows = await getDb().all<{ at: string; event_type: string; outcome: string | null; reason: string | null }>(
+      `SELECT at, event_type, outcome, reason FROM bin_events
+        WHERE event_type IN ('FREE_LANE_ITEM', ?) AND at >= ? AND at <= ?
         ORDER BY at ASC, id ASC`,
-      [new Date(now - ROUTE_WINDOW_MS).toISOString(), new Date(now).toISOString()],
+      [ROUTE_PROBE_EVENT, new Date(now - ROUTE_WINDOW_MS).toISOString(), new Date(now).toISOString()],
+    );
+    /*
+     * A held route is probed at most hourly, so its recent probes can be fewer than the window's
+     * bar while every one of them failed. Its standing is read from its own probe run, over the
+     * longest backoff twice over, so a restart keeps a held route held (CAP-16-3 structural).
+     */
+    probes = await getDb().all<{ at: string; outcome: string | null; reason: string | null }>(
+      `SELECT at, outcome, reason FROM bin_events
+        WHERE event_type = ? AND at >= ? AND at <= ?
+        ORDER BY at ASC, id ASC`,
+      [ROUTE_PROBE_EVENT, new Date(now - 2 * REPROBE_MAX_MS).toISOString(), new Date(now).toISOString()],
     );
   } catch {
     return 0;
@@ -3040,17 +3207,45 @@ export async function restoreRouteHealth(models: readonly string[], now = Date.n
   for (const model of pending) {
     routeRestored.add(model);
     // Already judged live in this process: its window is current.
-    if ((routeWindow.get(model)?.length ?? 0) > 0 || routeHealth.has(model)) continue;
+    if ((routeWindow.get(model)?.length ?? 0) > 0 || routeHealth.has(model) || routePause.has(model)) continue;
     const ok = `model ${model}`;
     const failed = `model ${model}: `;
     for (const row of rows) {
       const reason = row.reason ?? '';
       const at = Date.parse(row.at);
       if (!Number.isFinite(at)) continue;
-      if (row.outcome === 'SUBMITTED' && reason === ok) recordRouteOutcome(model, { ok: true }, at);
-      else if (row.outcome !== 'SUBMITTED' && reason.startsWith(failed)) recordRouteOutcome(model, { ok: false, why: reason.slice(failed.length) }, at);
+      const answered = row.event_type === ROUTE_PROBE_EVENT ? row.outcome === 'OK' : row.outcome === 'SUBMITTED';
+      if (answered && reason === ok) recordRouteOutcome(model, { ok: true }, at);
+      else if (!answered && reason.startsWith(failed)) recordRouteOutcome(model, { ok: false, why: reason.slice(failed.length) }, at);
       else continue;
       replayed += 1;
+    }
+    // The route's trailing run of failed probes, unbroken by an answer from a probe or an item.
+    let run = 0;
+    let last = 0;
+    let cause: RouteFailureCause = 'unclassified';
+    const lastAnswer = Math.max(
+      ...rows.filter((row) => row.event_type === 'FREE_LANE_ITEM' && row.outcome === 'SUBMITTED' && row.reason === ok).map((row) => Date.parse(row.at)),
+      -Infinity,
+    );
+    for (const probe of probes) {
+      const reason = probe.reason ?? '';
+      if (reason !== ok && !reason.startsWith(failed)) continue;
+      const at = Date.parse(probe.at);
+      if (!Number.isFinite(at)) continue;
+      if (probe.outcome === 'OK') {
+        run = 0;
+        continue;
+      }
+      run += 1;
+      last = at;
+      cause = causeOfReason(reason.slice(failed.length)) ?? cause;
+    }
+    if (run > 0 && last > lastAnswer && cause !== 'database') {
+      failedProbes.set(model, run);
+      const nextProbeAt = last + nextReprobeDelay(run);
+      routePause.set(model, { nextProbeAt, cause });
+      scheduleProbe(model, nextProbeAt);
     }
   }
   return replayed;
@@ -3082,6 +3277,10 @@ function noteRouteCall(model: string, entry: { at: number; ok: boolean; cause: R
 }
 
 /**
+ * The breaker's own standing for a route, by its window and count: null when it is healthy or its
+ * re-probe is due. Admission does not read this — a route whose re-probe is due still admits no
+ * item (`routeAdmits`); the re-probe is a route probe the tick sends (`probeHeldRoutes`).
+ *
  * A failing route's standing: null when it is healthy or due its single re-probe item.
  * It only reads: asking does not spend the re-probe slot, because the item being
  * asked about may still be declined by a later filter (unfit, not free-lane work,
@@ -3166,6 +3365,17 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
   const { workers, worker, index, config } = input;
   // Shutting down: a lease taken now would only be stranded (`returnInFlightLeases`).
   if (draining) return { claimed: null, ok: false, ms: 0 };
+  /*
+   * A held route takes nothing: the queue is not even scanned for it, so no item is leased,
+   * released or recorded, and a lane whose every route is held costs the web process nothing.
+   * The tick's route probe (`probeHeldRoutes`) is what reopens it.
+   */
+  const routeHeld = routeAdmits(worker.model);
+  if (routeHeld) {
+    const key = `${worker.model}: ${routeHeld.slice(0, 80)}`;
+    skipTally.set(key, (skipTally.get(key) ?? 0) + 1);
+    return { claimed: null, ok: false, ms: 0 };
+  }
   const projectIds = await projectsFor(worker);
   if (projectIds.length === 0) return { claimed: null, ok: false, ms: 0 };
   let session = '';
@@ -3183,7 +3393,8 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
       return { ok: false, reason: 'the other free worker takes this role' };
     }
     if ((cooldown.get(cooldownKey(worker.model, item.id)) ?? 0) > Date.now()) return { ok: false, reason: 'cooling down after a provider failure' };
-    const held = routeHold(worker.model);
+    // A held route admits nothing, its re-probe included: that is a route probe, never an item.
+    const held = routeAdmits(worker.model);
     if (held) return { ok: false, reason: held };
     /*
      * Another model takes this item only if it could take it now: its route not
@@ -3193,7 +3404,7 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
      * and the GPU stayed held back with 35 fragments waiting and nothing running.
      */
     const otherHold = (model: string): string | null =>
-      routeHold(model) ?? ((cooldown.get(cooldownKey(model, item.id)) ?? 0) > Date.now() ? 'cooling down after a provider failure' : null);
+      routeAdmits(model) ?? ((cooldown.get(cooldownKey(model, item.id)) ?? 0) > Date.now() ? 'cooling down after a provider failure' : null);
     const pairProbe = heldBackFor(worker.model, item.work_type, workers.map((w) => w.model), unfit, otherHold);
     if (pairProbe && !pairProbeDue(worker.model, item.work_type)) {
       return { ok: false, reason: 'this model’s answers for this kind of work are rejected; another model takes it' };
@@ -3208,7 +3419,7 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
         served: servedRoute(config, worker.model).model,
         producers,
         alternate,
-        alternateHeld: alternate !== null && routeHold(alternate) !== null,
+        alternateHeld: alternate !== null && routeAdmits(alternate) !== null,
       });
       if ('held' in decided) return { ok: false, reason: decided.held };
       if (decided.route !== worker.model) routes.set(item.id, decided.route);
@@ -3220,11 +3431,7 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
     if (owner) owners.set(item.id, owner.binId);
     session = sessionFor(worker, item);
     const admitted = await auditAdmission({ workerId: worker.workerId, routineId: null, accountId: null, sessionRef: session })(item);
-    // Only an item that passed every filter spends a held route's re-probe slot.
-    if (admitted.ok) {
-      takeRouteProbe(worker.model);
-      if (pairProbe) takePairProbe(worker.model, item.work_type);
-    }
+    if (admitted.ok && pairProbe) takePairProbe(worker.model, item.work_type);
     return admitted;
   };
   const ask = async (types: FreeLaneWorkType[], orchestrationId: string | null): Promise<ClaimedWork | undefined> => {
@@ -3396,6 +3603,7 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
   const routeOpen = INDEPENDENCE_LOST.test(ctx.why) ? routeHold(route) === null : recordRouteOutcome(route, { ok, why: ctx.why });
   if (ok) {
     transientStrikes.delete(one.workItemId);
+    noteRouteAnswer(route);
     if (routeOpen) clearRouteCooldowns(route);
     const produced = lineage.get(one.workItemId);
     if (servedBy.size > 0) rememberProduced({ workType: one.workType, ...(produced ?? {}) }, servedBy);
@@ -3414,6 +3622,12 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
     // A route outage, not the item's own answer: ended by the route's next success.
     if (providerFailure) routeCooled.add(key);
     else routeCooled.delete(key);
+    /*
+     * A provider outage is the route's, not this item's: past ROUTE_PAUSE_STREAK in a row the whole
+     * route is held until a probe answers, so the rest of the queue is not tried on it one item at a
+     * time (CAP-16-3 structural). Brain's own database being busy is not the route's.
+     */
+    if (providerFailure && !brainUnavailable) noteRouteProviderFailure(route, causeOfReason(ctx.why) ?? 'provider availability');
     try {
       await call(ctx, 'brain_release_work', { ...proof(ctx), detail: `free lane: ${ctx.why}`.slice(0, 300) });
     } catch {
@@ -3461,6 +3675,9 @@ export async function freeLaneTick(options: FreeLaneOptions = {}): Promise<FreeL
     const all = await ensureFreeWorkers(config);
     // After a restart, each route's breaker resumes from the lane's recorded outcomes (CAP-16-3).
     await restoreRouteHealth(all.map((w) => w.model));
+    const completer = options.completer ?? httpCompleter;
+    // A held route is asked with one minimal call; its queued items stay untouched (CAP-16-3).
+    await probeHeldRoutes({ workers: all, completer, config });
     /*
      * Reroute: a model whose free-lane items in the last half hour mostly failed
      * (on enough of them) is skipped, and its roles go to the other model.
@@ -3469,7 +3686,6 @@ export async function freeLaneTick(options: FreeLaneOptions = {}): Promise<FreeL
     const healthy = all.filter((w) => !down.has(w.model));
     const workers = healthy.length > 0 ? healthy : all;
     tick.workers = workers.length;
-    const completer = options.completer ?? httpCompleter;
     const fetchSource = options.fetchSource ?? ((url: string) => readSource(url, { caller: 'free-lane' }));
     const perWorker = Math.max(1, options.perWorker ?? 2);
 
