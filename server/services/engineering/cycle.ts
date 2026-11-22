@@ -155,6 +155,33 @@ export function loadCycleSources(dir: string, repository: string, canonicalBranc
   };
 }
 
+/** Who a scheduled reading is recorded by: Brain's own schedule, not a person (engineering-cycle.yml). */
+export const SCHEDULED_RECORDER = 'engineering:cycle-schedule';
+
+/**
+ * One CycleSources JSON on a stream — what engineering-cycle.yml collects with `gh api`
+ * and sends to the machine. The repository and canonical branch are the caller's, not
+ * the payload's; every list is held to its shape so a short payload measures nothing
+ * rather than throwing half way.
+ */
+export async function readCycleSources(stream: AsyncIterable<Buffer | string>, repository: string, canonicalBranch: string): Promise<CycleSources> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+  const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as Partial<CycleSources>;
+  const record = <T>(value: unknown): Record<string, T[]> =>
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? Object.fromEntries(Object.entries(value as Record<string, unknown>).filter(([, v]) => Array.isArray(v))) as Record<string, T[]>
+      : {};
+  return {
+    repository,
+    canonicalBranch,
+    runs: Array.isArray(body.runs) ? body.runs : [],
+    pulls: Array.isArray(body.pulls) ? body.pulls : [],
+    jobs: record<ForgeJob>(body.jobs),
+    commits: record<ForgeCommit>(body.commits),
+  };
+}
+
 /**
  * Measure a window, compare it with the newest stored reading, and — when `record` —
  * store it. The comparison is what the deficiency detector reads.
@@ -162,7 +189,7 @@ export function loadCycleSources(dir: string, repository: string, canonicalBranc
 export async function measureAndRecord(
   sources: CycleSources,
   window: { from: string; to: string },
-  options: { record: boolean; recordedById?: string },
+  options: { record: boolean; recordedById?: string; recordedByType?: 'OPERATOR' | 'BRAIN' },
 ): Promise<{ reading: CycleReading; change: BottleneckChange; recorded: string | null }> {
   const reading = measureThroughput(sources, window, await verifiedImprovements());
   const previous = (await storedCycles({ repository: sources.repository, limit: 1 }))[0]?.reading ?? null;
@@ -175,7 +202,7 @@ export async function measureAndRecord(
       status: 'PROVEN',
       source: 'CI',
       evidenceRef: `forge workflow runs ${window.from}..${window.to}: ${reading.verified} verified cycle(s), ${reading.releases.dispatched} Deploy run(s)`,
-      recordedByType: 'OPERATOR',
+      recordedByType: options.recordedByType ?? 'OPERATOR',
       recordedById: options.recordedById ?? 'shell',
       metadata: { reading, change },
     });

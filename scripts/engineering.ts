@@ -18,12 +18,14 @@
  *   duplicate  --proposal "…"
  *   idle       [--continue]
  *   report     interventions and the metrics they add up to, and the newest cycle reading
- *   cycle      [--repo owner/name] [--hours 72] [--to ISO] [--input DIR] [--cycles]
- *              [--record --admin <email>]
+ *   cycle      [--repo owner/name] [--hours 72] [--to ISO] [--input DIR | --stdin] [--cycles]
+ *              [--record (--admin <email> | --scheduled)]
  *              the engineering cycle (§115): per-stage durations, the limiting stage,
  *              releases, concurrency, verified improvements, competing corrections.
  *              Reads the forge (BRAIN_FORGE_TOKEN), or `gh api` JSON in DIR; --record
  *              stores it as ENGINEERING_CYCLE evidence the operator's detector reads.
+ *              --stdin reads one CycleSources JSON (engineering-cycle.yml collects it
+ *              with `gh api`); --scheduled attributes the record to Brain's schedule.
  *
  * Prints `ENGINEERING: OK` last, and only when nothing set a failing code.
  */
@@ -50,7 +52,14 @@ import {
 } from '../server/repos/engineering.ts';
 import { lookupEvidence } from '../server/services/engineering/evidence.ts';
 import { watchIdle } from '../server/services/engineering/watchdog.ts';
-import { fetchCycleSources, loadCycleSources, measureAndRecord, storedCycles } from '../server/services/engineering/cycle.ts';
+import {
+  fetchCycleSources,
+  loadCycleSources,
+  measureAndRecord,
+  readCycleSources,
+  SCHEDULED_RECORDER,
+  storedCycles,
+} from '../server/services/engineering/cycle.ts';
 import { parseRemote } from '../server/services/factory/forge.ts';
 import type { CycleReading } from '../server/domain/engineeringCycle.ts';
 import { readFileSync } from 'node:fs';
@@ -252,14 +261,21 @@ async function main(): Promise<void> {
       const branch = readFileSync(new URL('../.github/CANONICAL_BRANCH', import.meta.url), 'utf8').trim();
       const input = flag(argv, 'input');
       let sources;
-      if (input) sources = loadCycleSources(input, repository, branch);
+      if (has(argv, 'stdin')) sources = await readCycleSources(process.stdin, repository, branch);
+      else if (input) sources = loadCycleSources(input, repository, branch);
       else {
         const forge = parseRemote(`https://github.com/${repository}`);
         if (!forge) fail(`"${repository}" is not owner/name`);
         sources = await fetchCycleSources(forge, branch, { from, to });
       }
-      const recordedById = has(argv, 'record') ? await resolveAdmin(argv) : undefined;
-      const result = await measureAndRecord(sources, { from, to }, { record: has(argv, 'record'), recordedById });
+      // A person's reading carries their attribution; the schedule's is Brain's own (engineering-cycle.yml).
+      const scheduled = has(argv, 'scheduled');
+      const recordedById = has(argv, 'record') ? (scheduled ? SCHEDULED_RECORDER : await resolveAdmin(argv)) : undefined;
+      const result = await measureAndRecord(sources, { from, to }, {
+        record: has(argv, 'record'),
+        recordedById,
+        recordedByType: scheduled ? 'BRAIN' : 'OPERATOR',
+      });
       out({
         recorded: result.recorded,
         change: result.change,

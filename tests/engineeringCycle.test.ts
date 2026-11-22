@@ -16,7 +16,9 @@ import {
   type ForgeJob,
   type ForgeRun,
 } from '../server/domain/engineeringCycle.ts';
-import { measureAndRecord, storedCycles } from '../server/services/engineering/cycle.ts';
+import { measureAndRecord, readCycleSources, SCHEDULED_RECORDER, storedCycles } from '../server/services/engineering/cycle.ts';
+import { readFileSync } from 'node:fs';
+import { Readable } from 'node:stream';
 import { throughputDeficiencies } from '../server/services/operator/director.ts';
 import { readMetric } from '../server/services/improvement/scoreboard.ts';
 
@@ -167,5 +169,41 @@ describe('feeding the existing loop', () => {
     expect(after.value).toBeCloseTo(115 / 60, 2);
     const { compare } = await import('../server/domain/improvement.ts');
     expect(compare(before, after).verdict).toBe('REGRESSED');
+  });
+});
+
+describe('the scheduled reading (engineering-cycle.yml)', () => {
+  beforeEach(async () => {
+    await freshProject();
+  });
+
+  it('measures what the workflow sends on stdin, and records it as Brain\'s schedule', async () => {
+    const sources = synthetic(T0, 10, testBound);
+    // The payload's own repository is ignored: the caller names it.
+    const payload = JSON.stringify({ ...sources, repository: 'someone/else', jobs: { ...sources.jobs, junk: 'x' } });
+    const read = await readCycleSources(Readable.from([Buffer.from(payload)]), sources.repository, sources.canonicalBranch);
+    expect(read.repository).toBe(sources.repository);
+    expect(read.runs).toEqual(sources.runs);
+    expect(read.jobs).toEqual(sources.jobs);
+    const direct = await measureAndRecord(sources, window(T0, 10), { record: false });
+    const recorded = await measureAndRecord(read, window(T0, 10), { record: true, recordedById: SCHEDULED_RECORDER, recordedByType: 'BRAIN' });
+    expect(recorded.reading).toEqual(direct.reading);
+    expect(recorded.recorded).toMatch(/^eev_/);
+    // A short payload measures nothing rather than throwing half way.
+    const empty = await readCycleSources(Readable.from(['{}']), 'a/b', 'production');
+    expect(empty).toMatchObject({ runs: [], pulls: [], jobs: {}, commits: {} });
+  });
+
+  it('runs every six hours and after Deploy, records over ssh, and names no person', () => {
+    const wf = readFileSync('.github/workflows/engineering-cycle.yml', 'utf8');
+    expect(wf).toMatch(/cron: '\d+ \*\/6 \* \* \*'/);
+    expect(wf).toMatch(/workflow_run:\n\s+workflows: \[Deploy\]/);
+    expect(wf).toContain('cycle --stdin');
+    expect(wf).toContain('--record --scheduled');
+    expect(wf).toContain("grep -q '^ENGINEERING: OK'");
+    expect(wf).toContain('uses: ./.github/actions/await-release');
+    // No identity in the file and none taken from an input.
+    expect(wf).not.toMatch(/[\w.+-]+@[\w-]+\.[\w.]+/);
+    expect(wf).not.toMatch(/--admin|inputs\.admin/);
   });
 });

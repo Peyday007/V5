@@ -1,0 +1,100 @@
+# The engineering cycle (§115), read on a schedule, so Brain sees its own bottleneck move.
+#
+# `npm run engineering -- cycle` measures first commit → verified release from the
+# forge's record and stores the reading as ENGINEERING_CYCLE evidence, which the
+# operator's deficiency detector compares with the previous one. Production reads
+# the forge without a token, so the reading is collected here instead, with this
+# workflow's own GITHUB_TOKEN (`engineering-cycle-sources.sh`, the same reads
+# `fetchCycleSources` makes), and recorded the way evolution-eval.yml records a
+# result: over `flyctl ssh console`, in base64 chunks to a file on the machine,
+# then on the CLI's stdin. No character of the payload is parsed by a shell.
+#
+# The record is attributed to Brain's schedule (`--scheduled`), not to a person:
+# no identity is configured here, and none is needed for a reading taken by code.
+#
+# Every six hours, and after every successful release of the canonical branch.
+# Reads the forge and writes one evidence row; it deploys, restarts and spends
+# nothing.
+name: Engineering cycle
+
+on:
+  schedule:
+    # Every six hours, off the hour and off evolution-eval's minutes.
+    - cron: '41 */6 * * *'
+  workflow_run:
+    workflows: [Deploy]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      hours:
+        description: 'The window, in hours, ending now (default 72).'
+        required: false
+        default: '72'
+
+concurrency:
+  group: brain-engineering-cycle
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+
+jobs:
+  cycle:
+    name: Measure and record the cycle
+    # After a Deploy: only a successful release of the canonical branch is a new cycle end.
+    if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == github.event.repository.default_branch) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Collect the window from the forge
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HOURS: ${{ inputs.hours || '72' }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$HOURS" | grep -Eq '^[1-9][0-9]{0,3}$' || { echo "::error::hours must be a whole number of hours"; exit 1; }
+          to=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          from=$(date -u -d "@$(( $(date -u -d "$to" +%s) - HOURS * 3600 ))" +%Y-%m-%dT%H:%M:%SZ)
+          { echo "CYCLE_TO=$to"; echo "CYCLE_HOURS=$HOURS"; } >> "$GITHUB_ENV"
+          .github/workflows/engineering-cycle-sources.sh "$GITHUB_REPOSITORY" "$(cat .github/CANONICAL_BRANCH)" "$from" "$to" > "$RUNNER_TEMP/sources.json"
+          echo "window $from .. $to: $(wc -c < "$RUNNER_TEMP/sources.json") bytes"
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - uses: ./.github/actions/await-release
+
+      - name: Record it on the Brain
+        # An ssh session a restart cuts off hangs until the job limit; bound it.
+        timeout-minutes: 20
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          brain=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          tmp="/tmp/cycle-$(date +%s%N).b64"
+          gzip -c "$RUNNER_TEMP/sources.json" | base64 -w0 | fold -w 6000 > "$RUNNER_TEMP/chunks.txt"
+          echo "$(wc -l < "$RUNNER_TEMP/chunks.txt") chunk(s)"
+          # Every flyctl reads /dev/null: inside the loop it would otherwise swallow the chunk file.
+          flyctl ssh console --app "$brain" -C "sh -c ': > $tmp'" < /dev/null >/dev/null
+          while IFS= read -r chunk || [ -n "$chunk" ]; do
+            flyctl ssh console --app "$brain" -C "sh -c 'printf %s $chunk >> $tmp'" < /dev/null >/dev/null
+          done < "$RUNNER_TEMP/chunks.txt"
+          set +e
+          flyctl ssh console --app "$brain" -C "sh -c 'cd /app && base64 -d $tmp | gunzip | env BRAIN_DATABASE_POOL_SIZE=1 node --import tsx scripts/engineering.ts cycle --stdin --repo $GITHUB_REPOSITORY --hours $CYCLE_HOURS --to $CYCLE_TO --record --scheduled; rc=\$?; rm -f $tmp; exit \$rc'" \
+            < /dev/null > "$RUNNER_TEMP/cycle.txt" 2>&1
+          rc=$?
+          set -e
+          # The reading without its per-cycle rows: stages, limiting stage, change.
+          tr -d '\r' < "$RUNNER_TEMP/cycle.txt" | cut -c1-400 | tail -80
+          # ssh exits 0 whether the CLI finished or a restart cut it off; the marker is the judge.
+          if [ "$rc" != 0 ] || ! grep -q '^ENGINEERING: OK' <(tr -d '\r' < "$RUNNER_TEMP/cycle.txt"); then
+            echo "::error::the cycle reading was not recorded (exit $rc)"; exit 1
+          fi
+          limiting=$(tr -d '\r' < "$RUNNER_TEMP/cycle.txt" | grep -m1 '"limitingStage"' | cut -c1-200 || true)
+          echo "::notice title=Engineering cycle::recorded ${CYCLE_HOURS} h to ${CYCLE_TO}; ${limiting:-limiting stage not printed}"
