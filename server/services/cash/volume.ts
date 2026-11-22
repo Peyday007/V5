@@ -370,6 +370,36 @@ export function readTrialVolume(text: string, windowDays: number, unit: string):
     if (prospects < 1) continue;
     if (!best || prospects < best.deals) best = { deals: prospects, buyers: prospects, everyDays: null, counted: 'BUYERS', basis };
   }
+  return best ?? (/^(?:bids?|tenders?)$/i.test(unit) ? readSolicitorVolume(text, window, unit) : null);
+}
+
+/** A verb by which a buyer puts its own work out to bid: it tenders it, bids it out, issues an RFQ for it. */
+const SOLICITS = '(?:re-?)?tenders?|(?:re-?)?bids?\\s+(?:[a-z-]+\\s+){0,4}?out|puts?\\s+(?:[a-z-]+\\s+){0,4}?(?:out\\s+)?(?:to|for)\\s+(?:bid|bids|tender)|issues?\\s+(?:an?\\s+)?(?:RFQ|RFP|RFT|tender|invitation\\s+to\\s+bid)s?|solicits?\\s+bids';
+const SOLICITOR_RATE = new RegExp(`(?<![$£€\\d.,])${COUNT}\\s+((?:[A-Za-z-]+\\s+){1,6}?)(?:${SOLICITS})\\b[^.;\\d]*?\\b${PER}\\s+(week|month|quarter|year)\\b`, 'gi');
+
+/**
+ * Tenders counted by who issues them (planningReliability round 8): "140
+ * communities tender their contract each year" states 140 solicitations a
+ * year exactly as "140 tenders a year" does — each counted buyer puts its own
+ * work out to bid once a period, and every one of those is a trial of a win
+ * rate per bid. Read only for a rate measured per bid or tender, only when the
+ * count is the subject of a soliciting verb with a stated period, and only as
+ * a rate over the window: a once-a-year tender inside a 120-day window is a
+ * third of the buyers, never all of them. Null otherwise. Pure.
+ */
+function readSolicitorVolume(text: string, window: number, unit: string): VolumeReading | null {
+  let best: VolumeReading | null = null;
+  for (const m of text.matchAll(SOLICITOR_RATE)) {
+    const count = toInt(m[1]!);
+    if (!(count > 0 && count < 50_000_000)) continue;
+    // A count of tenders is the plain reading's; here the subject is who issues them.
+    if (/\b(?:bids?|tenders?|RFQs?|RFPs?|solicitations?)\s*$/i.test(m[2]!)) continue;
+    const period = m[3]!.toLowerCase();
+    const prospects = Math.floor((count * window) / PERIOD_DAYS[period]!);
+    if (prospects < 1) continue;
+    const basis = `${count} buyers each putting the work out to bid once a ${period} are stated, so ${prospects} ${unit} opportunities in ${window} days, each one trial of the measured rate`;
+    if (!best || prospects < best.deals) best = { deals: prospects, buyers: prospects, everyDays: null, counted: 'BUYERS', basis };
+  }
   return best;
 }
 

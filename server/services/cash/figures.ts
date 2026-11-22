@@ -60,10 +60,21 @@ export interface MoneyFigure {
    * so it is never what one purchase costs. Always also `perUnit`.
    */
   perMeasure?: boolean;
+  /**
+   * The figure is the price of one billing period (`$200 a month`, `$90/mo`,
+   * `$1,200 annually`) and of nothing smaller: a whole deal's price for one
+   * period, which is what a recurring card's price is (planningReliability
+   * round 8). Always also `perUnit`; never set when a further unit follows
+   * (`$200 a month per site`).
+   */
+  perPeriod?: boolean;
 }
 
 /** A scale word after a figure, which this module refuses rather than applies. */
 const SCALE_WORD = /^\s*(?:thousand|million|billion|trillion|bn|mn|mm|m|k)\b/i;
+
+/** A figure stated as one billing period's price: `a month`, `/mo`, `annually` (and no further unit after it). */
+const PER_PERIOD = /^\s*(?:\/\s*(?:mo|mth|month|yr|year|wk|week|qtr|quarter)\b|(?:a|per|each|every)\s+(?:month|year|quarter|week)\b|monthly\b|weekly\b|quarterly\b|annually\b|yearly\b)(?!\s*(?:\/|per\b|each\b|for\s+(?:each|every)\b))/i;
 
 /** A figure stated per something: `per hour`, `an hour`, `/hr`, `a month`. */
 const PER_UNIT = /^\s*(?:\/\s*[a-z]|per\b|an?\s+(?:hour|day|week|month|year|minute|word|page|unit|item|piece|seat|user|head)\b|each\b|hourly\b|monthly\b|weekly\b|daily\b|annually\b|yearly\b)/i;
@@ -182,7 +193,8 @@ export function readMoneyFigures(text: string, currency: string): MoneyFigure[] 
       seen.add(cents);
       const perParticipant = PER_PARTICIPANT.test(rest);
       const perMeasure = PER_MEASURE.test(rest);
-      found.push({ cents, currency: code, text: match[0].trim(), perUnit: perParticipant || perMeasure || PER_UNIT.test(rest), ...(perParticipant ? { perParticipant } : {}), ...(perMeasure ? { perMeasure } : {}) });
+      const perPeriod = !perParticipant && !perMeasure && PER_PERIOD.test(rest);
+      found.push({ cents, currency: code, text: match[0].trim(), perUnit: perParticipant || perMeasure || perPeriod || PER_UNIT.test(rest), ...(perParticipant ? { perParticipant } : {}), ...(perMeasure ? { perMeasure } : {}), ...(perPeriod ? { perPeriod } : {}) });
     }
   }
   return found.sort((a, b) => a.cents - b.cents);
