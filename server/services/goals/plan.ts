@@ -1267,13 +1267,25 @@ export async function measuredPlanChance(): Promise<PlanReading['measuredChance'
  * leaves the plan a candidate. The strongest candidate is still named, so it
  * is pursued and improved while nothing is accepted.
  */
+/**
+ * A pathway combination's label, its members by title. The combination holds
+ * ids; joined as they were they read "arr_6f3b7a404ca5 + arr_7c86…" in the
+ * candidate and its sentence (NO_INTERNAL_KEYS, production goal
+ * wst_7b4fcbb5f2384f31b6c3, release check 44986740566). A member no pathway or
+ * portfolio entry titles is named generically, never by its id.
+ */
+export function pathwayLabel(members: readonly string[], pathways: ReadonlyArray<{ opportunityId: string; title: string }>, portfolio: Pick<GoalPortfolio, 'demand'> | null): string {
+  const titles = new Map<string, string>([...(portfolio?.demand ?? []).map((d) => [d.opportunityId, d.title] as const), ...pathways.map((p) => [p.opportunityId, p.title] as const)]);
+  return members.map((id) => (titles.get(id) ?? (isArrangementId(id) ? 'a constructed arrangement' : 'a held opening')).slice(0, 60)).join(' + ');
+}
+
 export function judgeAcceptance(input: {
   achieved: boolean;
   chosen: StrategyReading | null;
   portfolio: GoalPortfolio | null;
   measuredChance: PlanReading['measuredChance'];
   considered: Pick<ConsideredOpening, 'opportunityId' | 'missing'>[];
-  pathways?: Pick<PathwayReading, 'portfolio'> | null;
+  pathways?: (Pick<PathwayReading, 'portfolio'> & Partial<Pick<PathwayReading, 'pathways'>>) | null;
   required?: number;
   /** The goal's configured objective (GOAL-18-4): its required confidence governs, stated or recorded default. */
   objective?: Pick<GoalObjective, 'requiredConfidence'> | null;
@@ -1324,7 +1336,7 @@ export function judgeAcceptance(input: {
       : input.chosen && input.chosen.verdict !== 'NOT_VIABLE'
         ? { label: input.chosen.label, opportunityIds: input.chosen.opportunityIds, source: 'STRATEGY', settledP50: input.chosen.conservativeSettled ?? input.chosen.sweep.settledP50, reach: input.chosen.sweep.goalMetShare, reachBasis: input.chosen.sweep.goalMetShare === null ? null : input.chosen.sweep.probabilistic ? 'PROBABILITY' : 'COVERAGE' }
         : input.pathways?.portfolio.leading
-          ? { label: input.pathways.portfolio.leading.members.join(' + '), opportunityIds: input.pathways.portfolio.leading.members, source: 'PATHWAYS', settledP50: input.pathways.portfolio.leading.net.p50, reach: null, reachBasis: null }
+          ? { label: pathwayLabel(input.pathways.portfolio.leading.members, input.pathways.pathways ?? [], input.portfolio ?? null), opportunityIds: input.pathways.portfolio.leading.members, source: 'PATHWAYS', settledP50: input.pathways.portfolio.leading.net.p50, reach: null, reachBasis: null }
           : null;
   // An alternative's construction is not the best combination's: the engine's assurance and interval are the best one's.
   const constructionPortfolio = pricedAlternative ? null : (input.portfolio ?? null);

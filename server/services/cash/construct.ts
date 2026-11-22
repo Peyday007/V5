@@ -2405,13 +2405,25 @@ function valueSources(value: Estimate, observations: readonly Observation[]): st
   return [...new Set(value.used.flatMap((id) => byId.get(id)?.lineage ?? [id]))].sort();
 }
 
+/**
+ * How a timing's basis names the opening it was read from: by its title, never
+ * its id. The basis reaches a person verbatim in an arrangement's steps
+ * ("stated to pay in arrears (opening … is won by competitive award)"), and an
+ * id there is NO_INTERNAL_KEYS (production goal wst_7b4fcbb5f2384f31b6c3,
+ * release check 44986740566).
+ */
+function openingBasis(o: Pick<CashOpportunity, 'title'>): string {
+  const title = o.title.trim();
+  return `opening "${title.length > 60 ? `${title.slice(0, 59)}…` : title}"`;
+}
+
 /** An opening's stated timing as a part's `terms`, or nothing when it states none. */
 function termsOfOpening(o: CashOpportunity): { terms?: PaymentTimingReading } {
-  const terms = openingTiming(o, `opening ${o.id}`);
+  const terms = openingTiming(o, openingBasis(o));
   return terms.timing === 'UNKNOWN' ? {} : { terms };
 }
 function termsOfGroup(group: readonly CashOpportunity[]): { terms?: PaymentTimingReading } {
-  const terms = combineTimings(group.map((o) => openingTiming(o, `opening ${o.id}`)));
+  const terms = combineTimings(group.map((o) => openingTiming(o, openingBasis(o))));
   return terms.timing === 'UNKNOWN' ? {} : { terms };
 }
 
@@ -2423,7 +2435,7 @@ function termsOfGroup(group: readonly CashOpportunity[]): { terms?: PaymentTimin
  * only if one does and none says otherwise; nothing when none states it. Pure.
  */
 export function buyerTermsOf(demand: Primitive, related: readonly CashOpportunity[]): { buyerTerms?: PaymentTimingReading } {
-  const readings = [demand.terms, ...related.map((o) => openingTiming(o, `opening ${o.id}`))].filter((one): one is PaymentTimingReading => !!one);
+  const readings = [demand.terms, ...related.map((o) => openingTiming(o, openingBasis(o)))].filter((one): one is PaymentTimingReading => !!one);
   const terms = combineTimings(readings);
   return terms.timing === 'UNKNOWN' ? {} : { buyerTerms: terms };
 }
