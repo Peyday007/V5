@@ -1066,6 +1066,38 @@ export function peakConcurrentLots(lots: number, daysToCash: number | null, days
 }
 
 /**
+ * The lots an opening runs under the owner's capital ceiling, recycled
+ * (planningReliability round 7): how many hold money at once, and how many
+ * settle inside the window. `peakConcurrentLots` runs every lot inside the
+ * window with as few overlapping as the timing allows; when even that holds
+ * more than the ceiling, the ceiling decides instead — `floor(ceiling ÷
+ * capital)` lots at a time, each slot reused as its lot's cash settles, so
+ * `slots × floor(daysLeft ÷ daysToCash)` lots settle in time and the rest run
+ * after the window and count nothing toward it. Three signed $2,000 lots paid
+ * in 12 days under a $2,500 ceiling over 30 days run one at a time: two settle
+ * by day 24, $2,000 is held at once, and the third settles after the window.
+ * With no ceiling, no lot fitting under it, unknown timing or a lot that
+ * cannot settle in time, the reading is `peakConcurrentLots`' and every lot
+ * counts: the limit then breaks where it is checked, never silently. Pure.
+ */
+export function lotsUnderCeiling(
+  lots: number,
+  daysToCash: number | null,
+  daysLeft: number | null,
+  capital: number,
+  ceilingMajor: number | null,
+): { atOnce: number; inWindow: number } {
+  const atOnce = peakConcurrentLots(lots, daysToCash, daysLeft);
+  const all = { atOnce, inWindow: lots };
+  if (ceilingMajor === null || !(capital > 0) || atOnce * capital <= ceilingMajor + 1e-9) return all;
+  if (daysToCash === null || daysLeft === null || !(daysToCash > 0)) return all;
+  const slots = Math.floor(ceilingMajor / capital + 1e-9);
+  const inSequence = Math.floor(daysLeft / daysToCash);
+  if (slots < 1 || inSequence < 1) return all;
+  return { atOnce: Math.min(atOnce, slots), inWindow: Math.min(lots, slots * inSequence) };
+}
+
+/**
  * The lots an opening's agreements need bought (planningReliability held-out,
  * 2026-11-21). Money is tied up per lot — a truckload, a sublicence — and a
  * lot is priced at `price`; agreements smaller than one lot share it. Four
@@ -1187,6 +1219,34 @@ export function withoutSpareCapitalLots<M extends { one: ModelledOpportunity; de
 }
 
 /**
+ * A strategy's members, without agreed lots whose own evidence is incomplete
+ * that the plan does not need (planningReliability round 7) — the evidence
+ * counterpart of `withoutSpareCapitalLots` and `withoutLossMakingLots`.
+ *
+ * Every agreement is counted in every strategy, so an agreed opening whose
+ * direct cost nobody established put "costs not established" on every
+ * strategy — including one whose other, fully evidenced agreements already
+ * collect the target — and a strategy without it could not be stated: the
+ * plan was refused on an unknown it never needed (§39 forbids reading the
+ * unknown favourably; it does not make an unneeded unknown decisive). An
+ * agreed-only member that `broken` says fails a link of its own chain, or
+ * whose cautious reading cannot be computed, is left out if the rest still
+ * reach the target at their cautious numbers; otherwise every member stays,
+ * and the gap stays named. Pure.
+ */
+export function withoutUnestablishedLots<M extends { one: ModelledOpportunity; deals: number }>(
+  members: M[],
+  target: Pick<TargetReading, 'daysLeft' | 'remainingCents'> & Partial<Pick<TargetReading, 'metric'>>,
+  broken: (member: M) => boolean,
+): M[] {
+  const unestablished = (m: M) => m.deals === 0 && m.one.agreedDeals > 0 && (broken(m) || conservative([m], target).settled === null);
+  const rest = members.filter((m) => !unestablished(m));
+  if (rest.length === 0 || rest.length === members.length) return members;
+  const cons = conservative(rest, target);
+  return cons.settled !== null && cons.settled >= target.remainingCents / 100 ? rest : members;
+}
+
+/**
  * The conservative settled figure for a strategy, or null when an input it needs is unknown.
  *
  * Read against the deals the strategy takes (planningReliability, 2026-11-21):
@@ -1202,7 +1262,10 @@ export function withoutSpareCapitalLots<M extends { one: ModelledOpportunity; de
  *     as the engine's `goal_met`, so the gate can never pass a plan on revenue
  *     that does not cover its costs (planningReliability round 3).
  */
-export function conservative(members: { one: ModelledOpportunity; deals: number }[], target: Pick<TargetReading, 'daysLeft'> & Partial<Pick<TargetReading, 'metric'>>): { settled: number | null; exposure: number | null; labour: number | null } {
+export function conservative(
+  members: { one: ModelledOpportunity; deals: number }[],
+  target: Pick<TargetReading, 'daysLeft'> & Partial<Pick<TargetReading, 'metric' | 'capitalCeilingCents'>>,
+): { settled: number | null; exposure: number | null; labour: number | null } {
   const net = countsNet(target.metric);
   let settled = 0;
   let exposure = 0;
@@ -1227,10 +1290,16 @@ export function conservative(members: { one: ModelledOpportunity; deals: number 
     // A measured rate wins at most its share of the prospects the market holds (`prospectsAsked`).
     const reachable = one.prospects !== null && one.prospects !== undefined && conversion.state === 'HISTORICAL' ? Math.min(deals, one.prospects) : deals;
     const won = taking ? Math.min(reachable * close!, volume) : 0;
-    settled += days <= (target.daysLeft ?? 0) ? one.agreedValue + won * price! : 0;
+    // Under the owner's ceiling the lots are recycled, and only those that settle in time count (`lotsUnderCeiling`); agreed lots run first.
+    const ceiling = target.capitalCeilingCents === null || target.capitalCeilingCents === undefined ? null : target.capitalCeilingCents / 100;
+    const lots = agreedLots(one);
+    const run = lotsUnderCeiling(won + lots, days, target.daysLeft, capital, ceiling);
+    const agreedIn = lots > 0 && run.inWindow < won + lots ? (one.agreedValue * Math.min(lots, run.inWindow)) / lots : one.agreedValue;
+    const wonIn = run.inWindow < won + lots ? Math.max(0, Math.min(won, run.inWindow - lots)) : won;
+    settled += days <= (target.daysLeft ?? 0) ? agreedIn + wonIn * price! : 0;
     // A cost is paid whether or not its money settles in time.
     if (net) settled -= costedDeals(won, one) * cost;
-    exposure += peakConcurrentLots(won + agreedLots(one), days, target.daysLeft) * capital;
+    exposure += run.atOnce * capital;
     labour += (won + one.agreedDeals) * hours;
   }
   return { settled, exposure, labour };
@@ -1405,7 +1474,21 @@ export function judgeAcceptance(input: {
         ? (input.portfolio.pricedBest && input.portfolio.pricedBest.members.length > 0 && unpricedIn([...new Set(input.portfolio.pricedBest.members.map((m) => m.opportunityId))]).length === 0 ? input.portfolio.pricedBest : null)
         : ([...(input.portfolio?.alternatives ?? [])].sort((a, b) => b.reach - a.reach).find((alt) => alt.members.length > 0 && unpricedIn([...new Set(alt.members.map((m) => m.opportunityId))]).length === 0) ?? null)
       : null;
-  const held = unpriced.length === 0 ? best : pricedAlternative;
+  const pricedHeld = unpriced.length === 0 ? best : pricedAlternative;
+  /*
+   * A combination resting on a member whose own chain is incomplete is not
+   * held over a strategy whose every link is established (planningReliability
+   * round 7): an agreed opening whose direct cost nobody established beside
+   * fully evidenced agreements that collect the target alone. The gate judged
+   * the strategy without the unestablished lot (`withoutUnestablishedLots`)
+   * and qualified it, while the candidate the plan reported still counted the
+   * lot — a plan resting on the unknown it was judged without (§39). With a
+   * qualified strategy in hand, the candidate is that strategy.
+   */
+  const brokenIn = (ids: string[]) => ids.filter((id) => (input.considered.find((one) => one.opportunityId === id)?.missing.length ?? 0) > 0);
+  const qualifiedOver = (ids: string[]) =>
+    !!input.chosen?.chainComplete && input.chosen.verdict !== 'NOT_VIABLE' && input.chosen.opportunityIds.length > 0 && brokenIn(ids).some((id) => !input.chosen!.opportunityIds.includes(id));
+  const held = pricedHeld && qualifiedOver([...new Set(pricedHeld.members.map((m) => m.opportunityId))]) ? null : pricedHeld;
   const heldIds = held ? [...new Set(held.members.map((m) => m.opportunityId))] : [];
   const candidate: PlanAcceptance['candidate'] =
     held && heldIds.length > 0
@@ -1416,7 +1499,7 @@ export function judgeAcceptance(input: {
           ? { label: pathwayLabel(input.pathways.portfolio.leading.members, input.pathways.pathways ?? [], input.portfolio ?? null), opportunityIds: input.pathways.portfolio.leading.members, source: 'PATHWAYS', settledP50: input.pathways.portfolio.leading.net.p50, reach: null, reachBasis: null }
           : null;
   // An alternative's construction is not the best combination's: the engine's assurance and interval are the best one's.
-  const constructionPortfolio = pricedAlternative ? null : (input.portfolio ?? null);
+  const constructionPortfolio = pricedAlternative || !held ? null : (input.portfolio ?? null);
   if (input.achieved) {
     return {
       status: 'ACCEPTED',
@@ -2189,7 +2272,11 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     const members = withoutSpareCapitalLots(
       withoutSpareOwnerWork(
         withoutLossMakingLots(
-          model.included.map((one) => ({ one, deals: Number(spec.set[`o${one.index}_n`] ?? 0) })).filter((member) => member.deals > 0 || member.one.agreedValue > 0),
+          withoutUnestablishedLots(
+            model.included.map((one) => ({ one, deals: Number(spec.set[`o${one.index}_n`] ?? 0) })).filter((member) => member.deals > 0 || member.one.agreedValue > 0),
+            target,
+            ({ one, deals }) => linkChecks(one, deals, target, capabilities, now).some((check) => !check.ok),
+          ),
           target,
         ),
         target,
@@ -2206,7 +2293,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
         const ceiling = target.capitalCeilingCents;
         // Lots run one after another as their cash settles: the money held at once, never the sum of every lot.
         const settles = one.daysToCash.value !== null && one.daysToCash.provenance !== 'UNKNOWN' ? one.daysToCash.value : null;
-        const tied = peakConcurrentLots(dealsTaken(one, deals) - one.agreedDeals + agreedLots(one), settles, target.daysLeft) * one.capital.value;
+        const tied = lotsUnderCeiling(dealsTaken(one, deals) - one.agreedDeals + agreedLots(one), settles, target.daysLeft, one.capital.value, ceiling === null ? null : ceiling / 100).atOnce * one.capital.value;
         if (ceiling !== null && tied > ceiling / 100) constraintsFailed.push(`"${one.opportunity.title.slice(0, 60)}" ties up ${Math.round(tied)} ${target.currency}, more than the ${ceiling / 100} the owner said this goal may commit, held at once`);
       }
       if (one.daysToCash.value !== null && one.daysToCash.provenance !== 'UNKNOWN' && target.daysLeft !== null && one.daysToCash.value > target.daysLeft) {
@@ -2260,6 +2347,20 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       }
     }
     const cons = conservative(members, target);
+    /*
+     * Recycled lots that cannot all settle in time (`lotsUnderCeiling`): the
+     * ceiling holds fewer lots at once than the timing needs, so some settle
+     * after the deadline, and without them the plan falls short. Both limits
+     * bind together, and the conclusion names both — never a bare shortfall.
+     */
+    if (target.capitalCeilingCents !== null && cons.settled !== null && cons.settled < target.remainingCents / 100) {
+      const unconstrained = conservative(members, { ...target, capitalCeilingCents: null });
+      if (unconstrained.settled !== null && unconstrained.settled >= target.remainingCents / 100) {
+        constraintsFailed.push(
+          `run one after another inside the ${target.capitalCeilingCents / 100} ${target.currency} the owner said this goal may commit, the lots that settle before the deadline bring ${Math.round(cons.settled)} of the ${target.remainingCents / 100} still needed; the rest settle after the deadline`,
+        );
+      }
+    }
     /*
      * Agreed work the owner performs is owner hours (planningReliability ho-07,
      * 2026-11-21): ten signed translations at 6 owner hours each are 60 hours
