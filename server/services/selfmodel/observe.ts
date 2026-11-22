@@ -184,15 +184,61 @@ function readTextIndex(): TextIndex {
   return { suites, docs };
 }
 
-function mentioning(
+/*
+ * Which entries name a source file, answered from one pass over the text.
+ *
+ * `observeModules` asks this for every module under services/ and repos/
+ * (about a thousand) against every suite in tests/ (about three thousand), and
+ * answered each by `includes` over every suite's whole text: 8.9 s of a 14 s
+ * pass, so a test that observes twice ran past its 30 s bound on a loaded
+ * Postgres runner (Deploy 45046907261). A needle that is a path ending in
+ * `.ts` can only occur ending at some `.ts` in the text, inside the run of path
+ * characters before it, so every suffix of every such run is indexed once and
+ * each answer is a lookup. It is the same answer as `includes`, not an
+ * approximation; any other needle still reads the text.
+ */
+const PATH_CHAR = /[\w./-]/;
+const pathIndexes = new WeakMap<Array<{ name: string; text: string }>, Map<string, Set<number>>>();
+
+function pathIndex(entries: Array<{ name: string; text: string }>): Map<string, Set<number>> {
+  const held = pathIndexes.get(entries);
+  if (held) return held;
+  const index = new Map<string, Set<number>>();
+  entries.forEach((entry, i) => {
+    const text = entry.text;
+    for (let at = text.indexOf('.ts'); at !== -1; at = text.indexOf('.ts', at + 1)) {
+      const end = at + 3;
+      let start = at;
+      while (start > 0 && PATH_CHAR.test(text[start - 1]!)) start -= 1;
+      for (let from = start; from <= at; from += 1) {
+        const suffix = text.slice(from, end);
+        let holders = index.get(suffix);
+        if (!holders) index.set(suffix, (holders = new Set()));
+        holders.add(i);
+      }
+    }
+  });
+  pathIndexes.set(entries, index);
+  return index;
+}
+
+const INDEXED_NEEDLE = /^[\w./-]*\.ts$/;
+
+export function mentioning(
   entries: Array<{ name: string; text: string }>,
   needles: string[],
 ): string[] {
-  const hits: string[] = [];
-  for (const entry of entries) {
-    if (needles.some((needle) => entry.text.includes(needle))) hits.push(entry.name);
+  const hits = new Set<number>();
+  for (const needle of needles) {
+    if (INDEXED_NEEDLE.test(needle)) {
+      for (const i of pathIndex(entries).get(needle) ?? []) hits.add(i);
+    } else {
+      entries.forEach((entry, i) => {
+        if (entry.text.includes(needle)) hits.add(i);
+      });
+    }
   }
-  return hits.sort();
+  return [...hits].map((i) => entries[i]!.name).sort();
 }
 
 function documentedReading(index: TextIndex, needles: string[]): Reading {
