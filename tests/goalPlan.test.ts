@@ -7,7 +7,7 @@
  * not settled do not complete a settled-cash goal; and a plan with every link
  * established and cautious numbers that reach the target is recommendable.
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { createUser } from '../server/repos/identity.ts';
@@ -918,6 +918,20 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
     for (let i = 40; i < 60; i += 1) await oneOff({ title: `Opening ${i}`, priceCents: 20_000 + i });
     const atSixty = await count();
     expect(atSixty - atForty).toBeLessThan(10);
+    // And a slow read costs what a fast one does. Deploy 45037618129 read 171 here on a
+    // loaded runner (139 calm): a wall-clock memo expired part way through the read and
+    // re-read the authority rows. The clock now jumps a minute per call, so any memo
+    // timed by the clock rather than scoped to the read shows up as extra statements.
+    const realNow = Date.now.bind(Date);
+    let skew = 0;
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => realNow() + (skew += 60_000));
+    let slow: number;
+    try {
+      slow = await count();
+    } finally {
+      clock.mockRestore();
+    }
+    expect(slow).toBe(await count());
   }, 120_000);
 
   it('never builds a plan on the owner doing physical work, and still plans the same service brokered', async () => {
