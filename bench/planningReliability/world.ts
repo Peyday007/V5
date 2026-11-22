@@ -5,8 +5,11 @@
  * and tests/goalPlan.test.ts): each opening is a `cash_opportunities` row with its card
  * facts, each fact EVIDENCE with a claim, or PERSON when somebody only said so; written
  * buyer acceptances are `cash_agreements` rows. The goal is created from the owner's
- * words by `createGoal`, an objective change goes through `changeObjective`, and the plan
- * is `readGoalPlan` — nothing here re-implements a judgement of the planner.
+ * words by `createGoal`, and the plan is `readGoalPlan` — nothing here re-implements a
+ * judgement of the planner. A case's changes (an objective restated, a target, deadline or
+ * limit moved, a buyer gone, a cost, payment time or contradicting figure newly evidenced)
+ * are applied after the first reading, one at a time, each through the write path
+ * production uses for it (`applyChange`), and the plan is read again after each.
  *
  * Every case opens a copy of one migrated template (a project with Cash Mode on, the
  * owner, Brain's deliverables proved as the server proves them at boot), so cases cannot
@@ -15,7 +18,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { PlanReading } from '../../server/services/goals/plan.ts';
-import { conversionSentence, type OpeningFixture, type PlanningCase } from './case.ts';
+import { changeSteps, conversionSentence, type OpeningFixture, type PlanningCase, type WorldChange } from './case.ts';
 
 export interface Template {
   file: string;
@@ -110,10 +113,99 @@ async function fileOpening(f: OpeningFixture, t: Template, cashModeId: string, n
 }
 
 export interface WorldReading {
+  /** The final reading: after the last change, or the only one. */
   reading: PlanReading;
-  /** The reading before the objective changed, when it did. */
+  /** The reading before the first change, when anything changed. */
   before: PlanReading | null;
+  /** Every reading in order: [0] before any change, [k] after change k (`caseAtStep(c, k)` is its case). */
+  readings: PlanReading[];
   keyOf: (opportunityId: string) => string;
+}
+
+/** What one change needs of the world it is applied to. */
+export interface ChangeContext {
+  goalId: string;
+  projectId: string;
+  userId: string;
+  /** Fixture key → opportunity id. */
+  idOf: (key: string) => string;
+  /** The change's position (1-based), which names the new evidence's claim. */
+  step: number;
+  now: Date;
+}
+
+/**
+ * Apply one change to a live world through the path production uses for it: the owner's
+ * restated words through `changeObjective`; a target through `setTarget`, the one writer of
+ * a target; a deadline through `setTerms`; capital and hours limits through
+ * `setTargetLimits`, recorded as the terminal's `goals target` records them; a buyer gone
+ * through `archiveOpportunity`; newly evidenced figures as the card's evidence facts, the
+ * way research files them (and `fileOpening` seeded them). No SQL is written here.
+ */
+export async function applyChange(change: WorldChange, ctx: ChangeContext): Promise<void> {
+  const actorRef = `person:${ctx.userId}`;
+  const goal = async () => {
+    const { getWorkstream } = await import('../../server/repos/register.ts');
+    const g = await getWorkstream(ctx.goalId);
+    if (!g?.target) throw new Error('the goal has no target to change');
+    return { goal: g, target: g.target };
+  };
+  const limits = async (over: { capitalCeilingCents?: number | null; hoursCeiling?: number | null }, summary: string) => {
+    const { setTargetLimits } = await import('../../server/services/goals/target.ts');
+    const { recordWorkstreamEvent } = await import('../../server/repos/register.ts');
+    const { goal: g, target } = await goal();
+    const set = await setTargetLimits({ goal: g, ...over, now: ctx.now });
+    if (!set.ok) throw new Error(`the limits did not change: ${set.reason}`);
+    await recordWorkstreamEvent({ workstreamId: ctx.goalId, kind: 'GOAL_TARGET_LIMITS_SET', summary, detail: { before: target }, actorRef });
+  };
+  const evidence = async (key: string, field: string, value: string) => {
+    const { recordCardFact } = await import('../../server/repos/cashCardFacts.ts');
+    const id = ctx.idOf(key);
+    await recordCardFact({ projectId: ctx.projectId, opportunityId: id, field, kind: 'EVIDENCE', value, claimId: `clm_${field}_${id}_change${ctx.step}`, decidedBy: 'BRAIN' });
+  };
+  switch (change.kind) {
+    case 'OBJECTIVE': {
+      const { changeObjective } = await import('../../server/services/goals/decide.ts');
+      const changed = await changeObjective(ctx.goalId, { intent: change.objective }, actorRef);
+      if (!changed.ok) throw new Error(`the objective did not change: ${changed.reason}`);
+      return;
+    }
+    case 'TARGET': {
+      const { setTarget } = await import('../../server/services/goals/target.ts');
+      const { goal: g, target } = await goal();
+      const set = await setTarget({ ...target, goal: g, amountCents: Math.round(change.amount * 100), now: ctx.now, actorRef });
+      if (!set.ok) throw new Error(`the target did not change: ${set.reason}`);
+      return;
+    }
+    case 'DEADLINE': {
+      const { setTerms } = await import('../../server/services/goals/decide.ts');
+      const moved = await setTerms(ctx.goalId, { dueAt: new Date(ctx.now.getTime() + change.days * 86_400_000).toISOString() }, actorRef);
+      if (!moved.ok) throw new Error(`the deadline did not change: ${moved.reason}`);
+      return;
+    }
+    case 'CAPITAL':
+      return limits({ capitalCeilingCents: Math.round(change.capital * 100) }, `Limits: the owner's starting capital is now ${change.capital} USD, the most this goal may tie up.`);
+    case 'CONSTRAINT':
+      return change.constraint === 'CAPITAL'
+        ? limits({ capitalCeilingCents: change.limit === null ? null : Math.round(change.limit * 100) }, change.limit === null ? 'Limits: the capital limit is removed.' : `Limits: at most ${change.limit} USD tied up.`)
+        : limits({ hoursCeiling: change.limit === null ? null : Math.round(change.limit) }, change.limit === null ? 'Limits: the owner-hours limit is removed.' : `Limits: at most ${Math.round(change.limit)} owner hours.`);
+    case 'BUYER_UNAVAILABLE': {
+      const { archiveOpportunity } = await import('../../server/services/cash/opportunities.ts');
+      const archived = await archiveOpportunity({ opportunityId: ctx.idOf(change.opening), actorRef, reason: change.reason ?? 'The buyer is no longer available.' });
+      if (!archived.ok) throw new Error(`the opening was not archived: ${archived.reason}`);
+      return;
+    }
+    case 'SUPPLIER_COST':
+      return evidence(change.opening, 'directCosts', `$${change.cost}`);
+    case 'DAYS_TO_CASH':
+      return evidence(change.opening, 'timeToFirstCash', `${change.days} days`);
+    case 'CONTRADICTING_EVIDENCE': {
+      // The price as `priceContradiction` files it: the card keeps its figure, the evidenced price fact states another.
+      const { cardFact } = await import('../../server/repos/cashCardFacts.ts');
+      const monthly = /a month/.test((await cardFact(ctx.idOf(change.opening), 'price'))?.value ?? '');
+      return evidence(change.opening, 'price', `$${change.value}${monthly ? ' a month' : ''}`);
+    }
+  }
 }
 
 export async function runWorld(c: PlanningCase, t: Template, dir: string, index: number): Promise<WorldReading> {
@@ -122,7 +214,7 @@ export async function runWorld(c: PlanningCase, t: Template, dir: string, index:
   for (const suffix of ['-wal', '-shm']) fs.rmSync(`${file}${suffix}`, { force: true });
   await openDatabase(file);
   const { getCashMode } = await import('../../server/repos/cashMode.ts');
-  const { createGoal, changeObjective } = await import('../../server/services/goals/decide.ts');
+  const { createGoal } = await import('../../server/services/goals/decide.ts');
   const { forgetGoalReadings, readGoalPlan } = await import('../../server/services/goals/plan.ts');
   const { forgetKnowledge } = await import('../../server/services/quant/knowledge.ts');
   const { clearConstructionMemo } = await import('../../server/services/cash/construct.ts');
@@ -135,19 +227,28 @@ export async function runWorld(c: PlanningCase, t: Template, dir: string, index:
   const now = new Date();
   const cashModeId = (await getCashMode(t.projectId))!.id;
   const keys = new Map<string, string>();
-  for (const f of c.openings) keys.set(await fileOpening(f, t, cashModeId, now), f.key);
+  const ids = new Map<string, string>();
+  for (const f of c.openings) {
+    const id = await fileOpening(f, t, cashModeId, now);
+    keys.set(id, f.key);
+    ids.set(f.key, id);
+  }
   const created = await createGoal({ projectId: t.projectId, objective: c.objective, actorRef: `person:${t.userId}`, userId: t.userId, now: new Date(now.getTime() - 60_000) });
   if (!created.ok) throw new Error(`the objective did not make a goal: ${created.reason}`);
   const goalId = created.goal.id;
-  let before: PlanReading | null = null;
-  if (c.changedObjective) {
-    before = await readGoalPlan({ goalId, evaluations: EVALUATIONS, persist: true });
-    const changed = await changeObjective(goalId, { intent: c.changedObjective }, `person:${t.userId}`);
-    if (!changed.ok) throw new Error(`the objective did not change: ${changed.reason}`);
+  const steps = changeSteps(c);
+  const read = async (persist: boolean) => {
+    const reading = await readGoalPlan({ goalId, evaluations: EVALUATIONS, persist });
+    if (!reading) throw new Error('the planner returned no reading');
+    return reading;
+  };
+  // The world is never reset between steps: each change lands on the goal and openings the previous reading planned.
+  const readings: PlanReading[] = [await read(steps.length > 0)];
+  for (const [i, step] of steps.entries()) {
+    await applyChange(step.change, { goalId, projectId: t.projectId, userId: t.userId, idOf: (key) => ids.get(key)!, step: i + 1, now: new Date() });
+    readings.push(await read(true));
   }
-  const reading = await readGoalPlan({ goalId, evaluations: EVALUATIONS, persist: !!c.changedObjective });
-  if (!reading) throw new Error('the planner returned no reading');
-  return { reading, before, keyOf: (id) => keys.get(id) ?? id };
+  return { reading: readings[readings.length - 1]!, before: steps.length ? readings[0]! : null, readings, keyOf: (id) => keys.get(id) ?? id };
 }
 
 /** Brain's deliverables, proved as the server proves them at boot (server/index.ts). */
