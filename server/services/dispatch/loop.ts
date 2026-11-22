@@ -53,6 +53,7 @@
  */
 import { withActivity } from '../../db/infra.ts';
 import type { Bin } from '../../domain/types.ts';
+import type { PoolOptions } from '../freeLane/capacity.ts';
 import { getDb } from '../../db/database.ts';
 import { reconcileConnectorBindings, recoverReauthorizedSurfaces } from '../fleet/connectorBinding.ts';
 import {
@@ -247,7 +248,6 @@ export function forgetUnansweredRead(): void {
   unansweredMark = null;
 }
 
-/** How often the brain-only pass runs inside the tick. */
 /**
  * §85 / rule 9: displaced research stranded on the free lane is continued, not
  * only recorded. `watchDisplacedWork` writes the free-lane:coverage
@@ -255,13 +255,21 @@ export function forgetUnansweredRead(): void {
  * own step; until this, nothing performed it. The engineering watchdog steps the
  * lane only when its pool reads zero busy slots, so "submitted 0" or "failed
  * every item" beside a leased slot (production: 11 of 144 ten-minute windows in a day)
- * was recorded and left alone. The continuation is the controller's step — the
- * same call the watchdog makes, never a second scheduler — and neither half
- * ever stops the tick. Dependencies are injectable for tests.
+ * was recorded and left alone. The continuation is the controller's own — the
+ * same calls the watchdog and the activation recovery make, never a second
+ * scheduler — and neither half ever stops the tick.
+ *
+ * A step alone is not a continuation: on a pool that is not running (never
+ * started in this process, or stopped) `controlStep` sizes the pools and its
+ * slots exit at once, so a stranded item stays QUEUED while the pass reports
+ * it continued. So the pool is started when it is not running (its start takes
+ * the first step), and only a running pool is stepped. Dependencies are
+ * injectable for tests; `pool` is the pool's own test seam (`PoolOptions`).
  */
 export async function continueDisplacedWork(deps: {
   watch?: () => Promise<{ stranded: boolean; reason: string }>;
   step?: () => Promise<unknown>;
+  pool?: PoolOptions;
 } = {}): Promise<{ stranded: boolean; continued: boolean }> {
   let stranded = false;
   let reason = '';
@@ -274,9 +282,17 @@ export async function continueDisplacedWork(deps: {
   }
   if (!stranded) return { stranded, continued: false };
   try {
-    const step = deps.step ?? (await import('../freeLane/capacity.ts')).controlStep;
-    await step();
-    console.log(`[dispatch] displaced research stranded; free lane stepped: ${reason}`);
+    let how = 'stepped';
+    if (deps.step) await deps.step();
+    else {
+      const { adaptivePoolRunning, startAdaptivePool, controlStep } = await import('../freeLane/capacity.ts');
+      if (adaptivePoolRunning()) await controlStep();
+      else {
+        startAdaptivePool(deps.pool);
+        how = 'started';
+      }
+    }
+    console.log(`[dispatch] displaced research stranded; free lane ${how}: ${reason}`);
     return { stranded, continued: true };
   } catch (error) {
     console.warn('[dispatch] free-lane continuation failed:', (error as Error).message);
@@ -284,6 +300,7 @@ export async function continueDisplacedWork(deps: {
   }
 }
 
+/** How often the brain-only pass runs inside the tick. */
 const BRAIN_ONLY_PASS_MS = 60_000;
 let lastBrainOnlyPass = 0;
 /** How often the free lane's model-output incidents are read (a day of answers per read). */
