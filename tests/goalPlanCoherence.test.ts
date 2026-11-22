@@ -33,7 +33,8 @@ import {
   type PlanReading,
 } from '../server/services/goals/plan.ts';
 import { planFieldsFor } from '../server/services/goals/pathResearch.ts';
-import { goalPlanScope, sendPlanQuestions } from '../server/services/goals/portfolioNeeds.ts';
+import { GOAL_PLAN_KEY_PREFIX, goalPlanScope, sendPlanQuestions } from '../server/services/goals/portfolioNeeds.ts';
+import { needKeyOf, type Need } from '../server/services/quant/needs.ts';
 import { requiredStructures } from '../server/services/goals/pathways.ts';
 import type { Reconstruction, StrategyChange, VariantReading } from '../server/services/goals/reconstruction.ts';
 import type { GoalPortfolio } from '../server/services/goals/portfolio.ts';
@@ -308,6 +309,59 @@ describe('C-9: research follows the adopted plan', () => {
     expect(reply).toMatch(/reply at ×2\.40/);
     expect(price).toMatch(/Revenue per deal binds/);
     expect(reply).not.toBe(price);
+  });
+
+  describe('the binding lever is always asked (production 2026-11-21: CASH_TIMING +90.5%, no question on it)', () => {
+    const diagnosis: Reconstruction['diagnosis'] = [
+      { factor: 'CASH_TIMING', moved: 'days to cash at the bottom of its range (÷2 if fixed)', reach: 0.967, settledP50: 12_000, liftReach: 0.905, liftP50: 9_000 },
+      { factor: 'REPLY', moved: 'reply rate at the top of its range (×3 if fixed)', reach: 0.14, settledP50: 3_000, liftReach: 0.08, liftP50: 500 },
+      { factor: 'CLOSE', moved: 'close rate at the top of its range (×2 if fixed)', reach: 0.1, settledP50: 2_800, liftReach: 0.04, liftP50: 300 },
+    ];
+    const replyPriority = [{ variable: 'plan:reply', opportunityId: null, decision: 'RESEARCH_FIRST', value: 0.5, reason: 'the plan needs a reply rate of 4%' }];
+    const recorder = () => {
+      const calls: Array<{ graphScope: string; keyPrefix: string | undefined; needs: Array<{ subject: string; question: string }> }> = [];
+      const fake = (async (input: { graphScope: string; keyPrefix?: string; needs: readonly { subject: string; question: string }[] }) => {
+        calls.push({ graphScope: input.graphScope, keyPrefix: input.keyPrefix, needs: [...input.needs] });
+        return input.needs.map((n) => ({ subject: n.subject, sent: true as const, to: 'RESEARCH_CANDIDATE' as const, ref: 'c', created: true }));
+      }) as unknown as NonNullable<Parameters<typeof sendPlanQuestions>[1]>['sendNeeds'];
+      return { calls, fake };
+    };
+    const openKeys = (keys: string[]) => (async (_projectId: string, key: string) => (keys.includes(key) ? ({ id: 'need_open' } as never) : null)) as NonNullable<NonNullable<Parameters<typeof sendPlanQuestions>[1]>['openNeedForKey']>;
+
+    it('files exactly one question on the top lever even when the per-read cap is 0, keyed goal-plan- and saying what to measure', async () => {
+      const { calls, fake } = recorder();
+      const sent = await sendPlanQuestions({ goalId: 'wst_g', projectId: 'prj', priority: replyPriority, diagnosis, max: 0 }, { sendNeeds: fake, openNeedForKey: openKeys([]) });
+      expect(sent).toMatchObject({ sent: 1, created: 1 });
+      const needs = calls.flatMap((c) => c.needs);
+      expect(needs).toHaveLength(1);
+      expect(needs[0]!.subject).toBe('the goal plan\'s binding lever "CASH_TIMING"');
+      expect(needs[0]!.question).toMatch(/days from the buyer's agreement .* to money the seller can use/);
+      expect(needs[0]!.question).toMatch(/deposit practice for this buyer and offer/);
+      expect(calls[0]!.graphScope).toBe(goalPlanScope('wst_g'));
+      expect(calls[0]!.keyPrefix).toBe(GOAL_PLAN_KEY_PREFIX);
+      // The key #1215's planQuestionSql puts on tier 0 (request_key LIKE 'goal-plan-%').
+      expect(needKeyOf(goalPlanScope('wst_g'), needs[0] as Need, calls[0]!.keyPrefix)).toMatch(/^goal-plan-/);
+    });
+
+    it('asks only the top lever; the cap still bounds every other question', async () => {
+      const { calls, fake } = recorder();
+      await sendPlanQuestions({ goalId: 'wst_g', projectId: 'prj', priority: replyPriority, diagnosis, max: 1 }, { sendNeeds: fake, openNeedForKey: openKeys([]) });
+      const subjects = calls.flatMap((c) => c.needs.map((n) => n.subject));
+      expect(subjects).toEqual(['the goal plan\'s binding lever "CASH_TIMING"', 'the goal plan\'s condition "reply"']);
+      expect(subjects.some((s) => s.includes('"REPLY"') || s.includes('"CLOSE"'))).toBe(false);
+    });
+
+    it('files none on the lever when an open question on it already exists for the goal', async () => {
+      const scope = goalPlanScope('wst_g');
+      const bindingKey = needKeyOf(scope, { subject: 'the goal plan\'s binding lever "CASH_TIMING"', question: '', route: 'RESEARCH', permissions: [] }, GOAL_PLAN_KEY_PREFIX);
+      const conditionKey = needKeyOf(scope, { subject: 'the goal plan\'s condition "cash-speed"', question: '', route: 'RESEARCH', permissions: [] });
+      for (const open of [bindingKey, conditionKey]) {
+        const { calls, fake } = recorder();
+        const sent = await sendPlanQuestions({ goalId: 'wst_g', projectId: 'prj', priority: replyPriority, diagnosis, max: 0 }, { sendNeeds: fake, openNeedForKey: openKeys([open]) });
+        expect(sent.sent).toBe(0);
+        expect(calls).toHaveLength(0);
+      }
+    });
   });
 });
 

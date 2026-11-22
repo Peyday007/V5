@@ -5106,10 +5106,11 @@ export async function advanceGoalPlans(
         await recordDegraded(id, reading.target.projectId, [`portfolio needs: ${errorText(error)}`]);
       }
     }
-    // The adopted plan's own questions (C-9): the conditions it needs and rests on, keyed per goal and condition.
-    if (reading?.needsMoreOpenings && reading.researchPriority.length > 0) {
+    // The adopted plan's own questions (C-9): the conditions it needs and rests on, keyed per goal and condition,
+    // and always its single binding lever (the reconstruction's largest reach lift).
+    if (reading?.needsMoreOpenings && (reading.researchPriority.length > 0 || (reading.reconstruction?.diagnosis.length ?? 0) > 0)) {
       try {
-        await sendPlanQuestions({ goalId: id, projectId: reading.target.projectId, priority: reading.researchPriority });
+        await sendPlanQuestions({ goalId: id, projectId: reading.target.projectId, priority: reading.researchPriority, diagnosis: reading.reconstruction?.diagnosis ?? null });
       } catch (error) {
         await recordDegraded(id, reading.target.projectId, [`plan questions: ${errorText(error)}`]);
       }

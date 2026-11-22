@@ -23,8 +23,9 @@
  * once. An owner's refusal is counted and returned, never dropped and never
  * counted as sent.
  */
-import { getOpportunity } from '../../repos/cashPortfolio.ts';
-import { sendNeeds, type Need } from '../quant/needs.ts';
+import { getOpportunity, openNeedForKey } from '../../repos/cashPortfolio.ts';
+import { needKeyOf, sendNeeds, type Need, type NeedDelivery } from '../quant/needs.ts';
+import type { Factor, FactorTest } from './reconstruction.ts';
 import { requestMarketHistory } from '../quant/history.ts';
 import type { DecisionUnknown, DemandEstimate, GoalPortfolio, RestructureEvidence, RestructureMechanism, UnpricedPopulation } from './portfolio.ts';
 import { claimsAnsweringScope } from '../../repos/research.ts';
@@ -398,6 +399,66 @@ export function goalPlanScope(goalId: string): string {
   return `goal:${goalId}:plan`;
 }
 
+/** The request-key prefix of a plan's binding-lever question, which `planQuestionSql` (goalWork.ts, #1215) recognises. */
+export const GOAL_PLAN_KEY_PREFIX = 'goal-plan';
+
+/** The plan's sweep condition (`plan:<condition>`, `discoverConditions`) each diagnosed factor moves; CAPITAL is a limit, not a condition. */
+const FACTOR_CONDITION: Record<Factor, string | null> = {
+  VOLUME: 'outreach-capacity',
+  REPLY: 'reply',
+  CLOSE: 'close',
+  PRICE: 'ticket',
+  CASH_TIMING: 'cash-speed',
+  MARKET_SIZE: 'market',
+  COST: 'supplier-cost',
+  CAPITAL: null,
+};
+
+/** What a binding factor's question measures: the exact figures, never "evidence about" the factor. */
+const FACTOR_MEASURE: Record<Factor, string> = {
+  CASH_TIMING:
+    "Measure (1) the days from the buyer's agreement (signed order, accepted quote or checkout) to money the seller can use — paid out, cleared and not held in reserve — as a low and a high; and (2) the typical deposit practice for this buyer and offer: whether a deposit or prepayment is asked at signing, what share of the price it is, and when the balance is paid.",
+  REPLY: 'Measure the share of these buyers contacted cold for this offer who reply, as a low and a high, from a published campaign or benchmark that names the buyer and the channel.',
+  CLOSE: 'Measure the share of interested buyers of this offer who pay, as a low and a high, from a published conversion figure that names the buyer and the offer.',
+  PRICE: 'Measure what these buyers pay per transaction for this offer, as a low and a high, from published prices or dated quotes, and how the close rate changes at the higher price.',
+  VOLUME: 'Measure how many of these buyers can be reached a day through a named channel, as a low and a high, and what each contact costs.',
+  MARKET_SIZE: "Measure how many of these buyers exist and buy this offer within the goal's window, as a count with its source (a register, association list or marketplace category).",
+  COST: 'Measure the direct cost per deal of fulfilling this offer for these buyers, as a low and a high, from a published price list or dated quote, and who fulfils it.',
+  CAPITAL: 'Measure the money tied up per deal before the buyer pays — supplier payments, deposits, spend — as a low and a high, and whether the buyer or a supplier funds it (prepayment share, supplier terms in days).',
+};
+
+/** A plan's single binding lever: the diagnosed factor with the largest reach lift, or null when none lifts reach. */
+export function topBindingFactor(diagnosis: readonly FactorTest[] | null | undefined): FactorTest | null {
+  let best: FactorTest | null = null;
+  for (const one of diagnosis ?? []) if (one.liftReach > 0 && (!best || one.liftReach > best.liftReach)) best = one;
+  return best;
+}
+
+const pctText = (x: number) => `${(x * 100).toFixed(1)}%`;
+
+/** The binding lever as a need. The subject names the factor, never its figure, so a re-read keys the same question. */
+export function bindingNeedOf(binding: FactorTest): Need {
+  return {
+    subject: `the goal plan's binding lever "${binding.factor}"`,
+    question: (
+      `${FACTOR_MEASURE[binding.factor]} For buyers and offers like this plan's. ` +
+      `Why: this lever binds the plan — ${binding.moved} lifts its reach to ${pctText(binding.reach)} (+${pctText(binding.liftReach)}), more than any other lever.`
+    ).slice(0, 900),
+    route: 'RESEARCH',
+    permissions: [],
+  };
+}
+
+/** One of the plan's conditions as a need, keyed by the condition alone. */
+function planConditionNeed(condition: string, reason: string): Need {
+  return {
+    subject: `the goal plan's condition "${condition}"`,
+    question: `What published evidence shows how ${condition} behaves for buyers and offers like this plan's? The plan's reading: ${reason}`.slice(0, 900),
+    route: 'RESEARCH',
+    permissions: [],
+  };
+}
+
 /**
  * Send the adopted plan's own questions (C-9): the conditions the plan needs
  * outside today's evidence, the ones that swing it most, and the reply rate it
@@ -406,29 +467,59 @@ export function goalPlanScope(goalId: string): string {
  * largest value first. Through `sendNeeds`, keyed by the goal's plan scope and
  * the condition, never its number, so a re-read raises nothing new and a
  * figure that moves does not raise a second question.
+ *
+ * The plan's single binding lever (`topBindingFactor` of the reconstruction's
+ * diagnosis) is asked whatever the per-read cap, unless an open question on it
+ * already exists for the goal — under its own `goal-plan-` key, or as the
+ * plan's question on the condition that lever moves. Production 2026-11-21:
+ * the $10K plan's CASH_TIMING lifted reach to 96.7% (+90.5%) while no other
+ * lever moved it more than 8 points, and no question on days to cash or
+ * deposit practice existed. Only that one lever: the cap bounds every other.
  */
 export async function sendPlanQuestions(
-  input: { goalId: string; projectId: string; priority: ReadonlyArray<{ variable: string; opportunityId: string | null; decision: string; value: number; reason: string }>; actorRef?: string; max?: number },
-  deps: Pick<PortfolioNeedsDeps, 'sendNeeds'> = {},
+  input: {
+    goalId: string;
+    projectId: string;
+    priority: ReadonlyArray<{ variable: string; opportunityId: string | null; decision: string; value: number; reason: string }>;
+    /** The reconstruction's factor diagnosis: its top lever is always asked. */
+    diagnosis?: readonly FactorTest[] | null;
+    actorRef?: string;
+    max?: number;
+  },
+  deps: Pick<PortfolioNeedsDeps, 'sendNeeds'> & { openNeedForKey?: typeof openNeedForKey } = {},
 ): Promise<PortfolioNeedsSent> {
   const send = deps.sendNeeds ?? sendNeeds;
+  const openFor = deps.openNeedForKey ?? openNeedForKey;
   const out: PortfolioNeedsSent = { sent: 0, created: 0, historyRequested: 0, refused: [] };
+  const scope = goalPlanScope(input.goalId);
+  const actorRef = input.actorRef ?? 'BRAIN';
+
+  // The binding lever, outside the cap: asked unless a question on it is already open for this goal.
+  const binding = topBindingFactor(input.diagnosis);
+  const boundCondition = binding ? FACTOR_CONDITION[binding.factor] : null;
+  let bindingNeed: Need | null = null;
+  if (binding) {
+    const need = bindingNeedOf(binding);
+    const keys = [needKeyOf(scope, need, GOAL_PLAN_KEY_PREFIX)];
+    if (boundCondition) keys.push(needKeyOf(scope, planConditionNeed(boundCondition, '')));
+    let open = false;
+    for (const key of keys) if (await openFor(input.projectId, key)) open = true;
+    if (!open) bindingNeed = need;
+  }
+
   const top = input.priority
     // An assumed change is measured by executing its step (its kill criterion), not by research.
     .filter((one) => one.variable.startsWith('plan:') && !one.variable.startsWith('plan:change:') && one.opportunityId === null && one.decision === 'RESEARCH_FIRST')
+    // The binding question asks what this condition's own question would, more exactly: not twice.
+    .filter((one) => !(bindingNeed && boundCondition && one.variable === `plan:${boundCondition}`))
     .sort((a, b) => b.value - a.value)
     .slice(0, input.max ?? PLAN_QUESTIONS_PER_READ);
-  if (top.length === 0) return out;
-  const needs: Need[] = top.map((one) => {
-    const condition = one.variable.slice('plan:'.length);
-    return {
-      subject: `the goal plan's condition "${condition}"`,
-      question: `What published evidence shows how ${condition} behaves for buyers and offers like this plan's? The plan's reading: ${one.reason}`.slice(0, 900),
-      route: 'RESEARCH',
-      permissions: [],
-    };
-  });
-  const delivered = await send({ projectId: input.projectId, actorRef: input.actorRef ?? 'BRAIN', graphScope: goalPlanScope(input.goalId), needs });
+  const delivered: NeedDelivery[] = [];
+  if (bindingNeed) delivered.push(...(await send({ projectId: input.projectId, actorRef, graphScope: scope, needs: [bindingNeed], keyPrefix: GOAL_PLAN_KEY_PREFIX })));
+  if (top.length > 0) {
+    const needs = top.map((one) => planConditionNeed(one.variable.slice('plan:'.length), one.reason));
+    delivered.push(...(await send({ projectId: input.projectId, actorRef, graphScope: scope, needs })));
+  }
   for (const one of delivered) {
     if (one.sent) {
       out.sent += 1;
