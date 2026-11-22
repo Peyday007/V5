@@ -195,6 +195,9 @@ describe('reading the planner\'s output', () => {
     const x = observeExecution(reading, (id) => keys[id] ?? id);
     expect(x.steps[0]).toMatchObject({ stage: 'OFFER', costSource: 'NONE_HELD', cost: null, performer: 'BRAIN', operation: 'SEND_OFFER', members: ['w'], absent: ['evidence', 'price'], kind: 'EXECUTE' });
     expect(x.steps[1]).toMatchObject({ stage: 'ORDER', unscheduled: 'NO_MODEL_DAYS', pays: true, members: ['w'], absent: ['evidence'] });
+    // An arrangement's step with no openings of its own acts on the arrangement.
+    const arranged = { ...reading, steps: [{ ...reading.steps[1]!, openings: undefined }] } as unknown as PlanReading;
+    expect(observeExecution(arranged, (id) => keys[id] ?? id).steps[0]!.members).toEqual(['arr_1']);
     // An empty test names nothing; an ignored research priority resolves nothing.
     expect(x.resolves.sort()).toEqual(['CONVERSION', 'FULFILMENT', 'SETTLES_IN_TIME']);
     expect(x).toMatchObject({ daysLeft: 20, strategies: 1, considered: ['w'], excluded: ['v'], researchFirst: 1, economics: { w: { price: { low: 500, high: 700 }, cost: { low: 40, high: 60 } } } });

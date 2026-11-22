@@ -168,7 +168,7 @@ export interface ObservedStep {
   capabilities: { id: string; state: string }[];
   /** The executor names a payment it makes (an approval of kind PAYMENT). */
   pays: boolean;
-  /** The members (fixture keys, or the planner's ids) the step acts on: its own `openings`, else the plan's only member. */
+  /** The members (fixture keys, or the planner's ids) the step acts on: its own `openings`, else its arrangement, else the plan's only member. */
   members: string[];
   /** Fields the rubric needs that the step does not carry (`evidence`, `price` on an offer, `hours` on owner work). */
   absent: string[];
@@ -265,7 +265,8 @@ export function observeExecution(p: PlanReading, keyOf: (opportunityId: string) 
       routine: e ? e.routine : null,
       capabilities: e ? e.capabilities.map((c) => ({ id: c.id, state: c.state })) : [],
       pays: !!e?.approval.reasons.some((r) => r.kind === 'PAYMENT'),
-      members: s.openings?.length ? s.openings.map(keyOf) : only,
+      // An arrangement's step acts on that arrangement, never on whichever opening the candidate holds.
+      members: s.openings?.length ? s.openings.map(keyOf) : s.arrangement ? [keyOf(s.arrangement.key)] : only,
       absent,
       price: typeof raw['price'] === 'number' ? (raw['price'] as number) : null,
     };
