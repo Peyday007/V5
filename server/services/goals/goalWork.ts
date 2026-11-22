@@ -79,7 +79,8 @@ export function goalIdeaSql(c: string): string {
                      JOIN cash_discovery_rounds gr3 ON gr3.id = gop3.discovery_round_id
                     WHERE gr3.bucket_id LIKE 'goal-%' AND gn.state = 'OPEN' AND gn.candidate_id IS NOT NULL)
     OR ${c}.id IN (SELECT gp.candidate_id FROM cash_needs gp
-                    WHERE gp.request_key LIKE '${GOAL_PRICE_KEY_PREFIX}-%' AND gp.state = 'OPEN' AND gp.candidate_id IS NOT NULL))`;
+                    WHERE gp.state = 'OPEN' AND gp.candidate_id IS NOT NULL
+                      AND (gp.request_key LIKE '${GOAL_PRICE_KEY_PREFIX}-%' OR ${planQuestionSql('gp')})))`;
 }
 
 /** A boolean SQL expression: this idea is one of a goal's own search rounds (`goal-…` bucket). No parameters. */
@@ -116,7 +117,22 @@ export function goalRoundSql(c: string): string {
  */
 export function goalPriceSql(c: string): string {
   return `${c}.id IN (SELECT gp.candidate_id FROM cash_needs gp
-                    WHERE gp.request_key LIKE '${GOAL_PRICE_KEY_PREFIX}-%' AND gp.state = 'OPEN' AND gp.candidate_id IS NOT NULL)`;
+                    WHERE gp.state = 'OPEN' AND gp.candidate_id IS NOT NULL
+                      AND (gp.request_key LIKE '${GOAL_PRICE_KEY_PREFIX}-%' OR ${planQuestionSql('gp')}))`;
+}
+
+/**
+ * A goal plan's own question (`sendPlanQuestions`): a condition the adopted plan rests on and swings on.
+ *
+ * Production 2026-11-21 23:45Z (read-only probe, claude/probe-price-answers): the $10K plan's own
+ * questions ("ticket", "market", "close", "reply") had been OPEN since 11-14 with their ideas QUEUED a
+ * week, never launched. They carry the generic `causal-` key, so no goal tier recognised them, and they
+ * waited among 1,600 ordinary ideas behind grants that never freed. Recognised by the graph scope
+ * `goalPlanScope` writes into the need (`goal:<id>:plan`), and by a `goal-plan-` key should the sender
+ * adopt one. They share the price questions' tier: each is a figure an existing plan waits on.
+ */
+export function planQuestionSql(n: string): string {
+  return `(${n}.request_key LIKE 'goal-plan-%' OR (${n}.request_key LIKE 'causal-%' AND ${n}.blocked_action LIKE 'Every answer in causal graph goal:%:plan %'))`;
 }
 
 export function goalFirstSql(c: string): string {
