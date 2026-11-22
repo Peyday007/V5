@@ -39,6 +39,11 @@ export interface ObservedMember {
   capitalLow: number | null;
   cashStructure: boolean;
   deals: number | null;
+  /**
+   * The deals the planner's own strategy counts on this member, agreed ones included
+   * (`StrategyReading.dealsTaken`), when that strategy is the candidate or its complete chain makes the plan executable; null otherwise.
+   */
+  dealsCounted?: number | null;
 }
 
 /** What the grader reads of one plan reading: only structured fields, never prose. */
@@ -90,9 +95,13 @@ export function observe(p: PlanReading, keyOf: (opportunityId: string) => string
   // A strategy's own failed links name what is missing too (its links, evaluated at the deals it needs).
   if (chosen) for (const l of chosen.links) if (!l.ok) named.add(l.link as Link);
   const demand = new Map((p.portfolio?.demand ?? []).map((d) => [d.opportunityId, d]));
+  // The deals the plan counts are the gate's own when its chosen strategy is what makes it executable
+  // (a complete chain) or is the candidate; otherwise the portfolio's median new deals stand for them.
+  const counted = new Map(candidate?.source === 'STRATEGY' || chosen?.chainComplete ? (chosen?.dealsTaken ?? []).map((t) => [t.opportunityId, t.deals]) : []);
   const members: ObservedMember[] = ids.map((id) => {
     const d = demand.get(id);
     return {
+      dealsCounted: counted.get(id) ?? null,
       key: keyOf(id),
       unestablished: d?.unestablished ?? [],
       capitalLow: d?.capitalHeld ? d.capitalHeld.low : null,
@@ -133,6 +142,11 @@ export function constraintsNamed(sentence: string): Constraint[] {
   // "cannot reach the N still needed … even if every buyer it offers to agreed": the target is out of reach.
   if (/cannot reach the .* still needed/i.test(sentence)) out.push('TARGET');
   return out;
+}
+
+/** Whether the objective's words count money kept — net, profit, contribution — rather than revenue. */
+export function netObjective(words: string): boolean {
+  return /\b(?:net|netting|nets|profit|profits|contribution)\b/i.test(words);
 }
 
 function fixtureOf(c: PlanningCase, key: string): OpeningFixture | null {
@@ -242,6 +256,42 @@ function memberFailures(c: PlanningCase, o: ObservedPlan): { failures: FailureCl
     if (f && f.cost !== undefined && f.cost !== null && f.cost > (e.maxCostShare ?? 1) * f.price - 1e-9) {
       failures.push('UNSOUND_ECONOMICS');
       why.push(`${m.key} costs ${f.cost} against a price of ${f.price}`);
+    }
+  }
+  /*
+   * A net target is met by money kept (docs/COMPLETION-SPEC.md §2 "sound economics";
+   * planningReliability round 3). The deals the plan counts — its own strategy's count
+   * when it is the candidate, else the portfolio's median new deals beside the
+   * agreements — are priced from the case's own fixtures: each new deal at its price
+   * less its direct cost, and the agreements less the cost of the larger of the lots
+   * their value fills (agreements smaller than one lot share it, the lot is bought
+   * whole) and their value in deals. A plan whose deals keep less than the target
+   * passed on gross revenue. A member whose deal count the reading does not carry
+   * cannot be judged, and the check is not made on guesses.
+   */
+  const net = netObjective(changed ? c.changedObjective! : c.objective);
+  const counts: ({ all: number } | { fresh: number } | null)[] = o.members.map((m) => (m.dealsCounted !== undefined && m.dealsCounted !== null ? { all: m.dealsCounted } : m.deals !== null ? { fresh: m.deals } : null));
+  if (net && o.members.length && counts.every((x) => x !== null)) {
+    const target = o.targetCents / 100;
+    let kept = 0;
+    let gross = 0;
+    for (const [i, m] of o.members.entries()) {
+      const f = fixtureOf(c, m.key);
+      if (!f) continue;
+      const cost = f.cost ?? 0;
+      const agreed = f.agreements ?? [];
+      const n = counts[i]!;
+      const fresh = Math.max(0, 'all' in n ? n.all - agreed.length : n.fresh);
+      const agreedValue = agreed.reduce((a, b) => a + b, 0);
+      const share = agreedValue / f.price;
+      const agreedUnits = agreed.length ? Math.max(Math.min(agreed.length, Math.ceil(share - 1e-9)), share) : 0;
+      const value = agreedValue + fresh * f.price;
+      gross += value;
+      kept += value - (agreedUnits + fresh) * cost;
+    }
+    if (kept < target - 0.5) {
+      failures.push('UNSOUND_ECONOMICS');
+      why.push(`the deals it counts keep ${Math.round(kept)} net of direct cost (${Math.round(gross)} gross) against a net target of ${Math.round(target)}`);
     }
   }
   if (o.collectAfterDeadline) {

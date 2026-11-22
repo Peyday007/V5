@@ -64,6 +64,7 @@ function planAuthority(projectId: string, action: string): ReturnType<typeof che
 }
 import { composeBuyerMessage } from '../cash/outreach.ts';
 import { evidenceCard } from '../cash/card.ts';
+import { agreedToward, costedDeals, costPerDeal, countsNet } from '../cash/towardTarget.ts';
 import { ARRANGEMENT_ID_PREFIX, isArrangementId, bestCaseReach, composeGoalModel, estimatedFromArrangement, inventedDesigner, planTrace, dealsForGoal, dealsFromOffers, measuredClose, priceSupported, volumeEstablished, wilson, type ModelInput, type ModelledOpportunity, type PriceVariable } from '../cash/goalScenario.ts';
 import { cachedCashKnowledge } from '../quant/knowledge.ts';
 import { achievedFrom, readTarget, type TargetReading } from './target.ts';
@@ -191,6 +192,11 @@ export interface StrategyReading {
   basis?: string;
   /** The constructed arrangements among its members (`arr_…`): estimates, never openings, so never in `opportunityIds`. */
   arrangementIds?: string[];
+  /**
+   * The deals the strategy counts on each member, agreed ones included (`dealsTaken`) — the
+   * planner's own needed-deal count, so a reader can check it against the target's metric.
+   */
+  dealsTaken?: { opportunityId: string; deals: number }[];
 }
 
 /**
@@ -1072,7 +1078,7 @@ export function agreedLots(one: Pick<ModelledOpportunity, 'agreedDeals' | 'agree
  */
 export function withoutSpareOwnerWork<M extends { one: ModelledOpportunity; deals: number }>(
   members: M[],
-  target: Pick<TargetReading, 'daysLeft' | 'hoursCeiling' | 'remainingCents'>,
+  target: Pick<TargetReading, 'daysLeft' | 'hoursCeiling' | 'remainingCents'> & Partial<Pick<TargetReading, 'metric'>>,
 ): M[] {
   if (target.hoursCeiling === null) return members;
   const all = conservative(members, target);
@@ -1121,7 +1127,7 @@ export function withoutSpareOwnerWork<M extends { one: ModelledOpportunity; deal
  */
 export function withoutLossMakingLots<M extends { one: ModelledOpportunity; deals: number }>(
   members: M[],
-  target: Pick<TargetReading, 'daysLeft' | 'remainingCents'>,
+  target: Pick<TargetReading, 'daysLeft' | 'remainingCents'> & Partial<Pick<TargetReading, 'metric'>>,
 ): M[] {
   const losing = (m: M) =>
     m.deals === 0 && m.one.agreedDeals > 0 && m.one.price.value !== null && m.one.directCost.value !== null && m.one.directCost.provenance !== 'UNKNOWN' && m.one.directCost.value >= m.one.price.value;
@@ -1148,7 +1154,7 @@ export function withoutLossMakingLots<M extends { one: ModelledOpportunity; deal
  */
 export function withoutSpareCapitalLots<M extends { one: ModelledOpportunity; deals: number }>(
   members: M[],
-  target: Pick<TargetReading, 'daysLeft' | 'remainingCents'> & { capitalCeilingCents?: number | null; capitalBeforeProofCents?: number | null },
+  target: Pick<TargetReading, 'daysLeft' | 'remainingCents'> & Partial<Pick<TargetReading, 'metric'>> & { capitalCeilingCents?: number | null; capitalBeforeProofCents?: number | null },
 ): M[] {
   // The tighter of what the goal may commit and what may be tied up before money comes in ("no up-front capital").
   const limits = [target.capitalCeilingCents, target.capitalBeforeProofCents].filter((x): x is number => x !== null && x !== undefined);
@@ -1172,9 +1178,15 @@ export function withoutSpareCapitalLots<M extends { one: ModelledOpportunity; de
  *     is taken, and a one-off whose buyer has already signed takes no other;
  *   * money tied up is the peak held at once, lots run one after another as
  *     their cash settles (`peakConcurrentLots`), never their sum;
- *   * owner hours count every deal the owner performs, agreed ones included.
+ *   * owner hours count every deal the owner performs, agreed ones included;
+ *   * on a net target (`countsNet`: "net settled cash", profit, contribution)
+ *     `settled` is money kept: what settles in time less the direct cost of
+ *     every deal taken, agreed ones included (`costedDeals`) — the same rule
+ *     as the engine's `goal_met`, so the gate can never pass a plan on revenue
+ *     that does not cover its costs (planningReliability round 3).
  */
-export function conservative(members: { one: ModelledOpportunity; deals: number }[], target: Pick<TargetReading, 'daysLeft'>): { settled: number | null; exposure: number | null; labour: number | null } {
+export function conservative(members: { one: ModelledOpportunity; deals: number }[], target: Pick<TargetReading, 'daysLeft'> & Partial<Pick<TargetReading, 'metric'>>): { settled: number | null; exposure: number | null; labour: number | null } {
+  const net = countsNet(target.metric);
   let settled = 0;
   let exposure = 0;
   let labour = 0;
@@ -1199,6 +1211,8 @@ export function conservative(members: { one: ModelledOpportunity; deals: number 
     const reachable = one.prospects !== null && one.prospects !== undefined && conversion.state === 'HISTORICAL' ? Math.min(deals, one.prospects) : deals;
     const won = taking ? Math.min(reachable * close!, volume) : 0;
     settled += days <= (target.daysLeft ?? 0) ? one.agreedValue + won * price! : 0;
+    // A cost is paid whether or not its money settles in time.
+    if (net) settled -= costedDeals(won, one) * cost;
     exposure += peakConcurrentLots(won + agreedLots(one), days, target.daysLeft) * capital;
     labour += (won + one.agreedDeals) * hours;
   }
@@ -2130,7 +2144,9 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       .filter((entry) => entry.opportunityId && (entry.kind === 'CUSTOMER_PAYMENT' || entry.kind === 'SETTLEMENT'))
       .map((entry) => entry.opportunityId!),
   );
-  const checksOf = new Map(model.considered.map((one) => [one.opportunity.id, linkChecks(one, dealsForGoal(one, target.remainingCents / 100), target, capabilities, now)]));
+  // A net target is read net everywhere the plan compares progress with it (`countsNet`).
+  const net = countsNet(target.metric);
+  const checksOf = new Map(model.considered.map((one) => [one.opportunity.id, linkChecks(one, dealsForGoal(one, target.remainingCents / 100, net), target, capabilities, now)]));
   const considered: ConsideredOpening[] = model.considered.map((one) => ({
     opportunityId: one.opportunity.id,
     title: one.opportunity.title,
@@ -2139,10 +2155,10 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       .filter((check) => !check.ok)
       .map((check) => check.link),
     stage: validationStage(one, checksOf.get(one.opportunity.id)!, target, collected.has(one.opportunity.id)),
-    supportedReach: one.agreed || priceSupported(one) ? bestCaseReach(one, target.remainingCents / 100, target.daysLeft ?? 0, true) : 0,
+    supportedReach: one.agreed || priceSupported(one) ? bestCaseReach(one, target.remainingCents / 100, target.daysLeft ?? 0, true, net) : 0,
     potentialReach:
       one.agreed || one.price.value !== null || one.price.high !== null
-        ? bestCaseReach(one, target.remainingCents / 100, target.daysLeft ?? 0)
+        ? bestCaseReach(one, target.remainingCents / 100, target.daysLeft ?? 0, false, net)
         : null,
     competitiveAward: one.competitiveAward,
     volumeEstablished: one.repeatable ? volumeEstablished(one) : one.volume.provenance === 'EVIDENCE',
@@ -2200,10 +2216,13 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       // shown to pay — never at a guessed or listed one.
       // A repeatable play takes no more deals than research shows the market holds.
       const taken = volumeEstablished(one) && one.repeatable ? Math.min(deals, one.volume.value ?? deals) : deals;
-      return sum + one.agreedValue + (unproven || !priceSupported(one) ? 0 : taken * (one.price.high ?? one.price.value ?? 0));
+      const fresh = unproven || !priceSupported(one) ? 0 : taken;
+      // On a net target the best case is net too: the top price less the lowest cost of each deal, agreed ones included.
+      const kept = net ? agreedToward(one, true, 'LOW') - fresh * costPerDeal(one, 'LOW') : one.agreedValue;
+      return sum + kept + fresh * (one.price.high ?? one.price.value ?? 0);
     }, 0);
     if (best < target.remainingCents / 100) {
-      constraintsFailed.push(`cannot reach the ${target.remainingCents / 100} ${target.currency} still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most ${Math.round(best)})`);
+      constraintsFailed.push(`cannot reach the ${target.remainingCents / 100} ${target.currency} still needed${net ? ' (net of direct costs)' : ''} at prices buyers are shown to pay, even if every buyer it offers to agreed (at most ${Math.round(best)})`);
     }
     bestReach = Math.max(bestReach, best);
     /*
@@ -2300,6 +2319,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       constraintsFailed,
       sweep,
       conservativeSettled: cons.settled,
+      dealsTaken: members.map(({ one, deals }) => ({ opportunityId: one.opportunity.id, deals: dealsTaken(one, deals) })),
       chainComplete: verdict === 'RECOMMENDABLE',
       nextTest,
       basis: 'the openings found, judged at prices buyers are shown to pay',

@@ -7,7 +7,7 @@
  * multiplier the text does not state is never invented.
  */
 import { describe, expect, it } from 'vitest';
-import { readVolume } from '../server/services/cash/volume.ts';
+import { payerNounWords, readVolume } from '../server/services/cash/volume.ts';
 
 describe('readVolume: a count of units each doing a rate multiplies', () => {
   it.each([
@@ -63,5 +63,34 @@ describe('readVolume: an ambiguous rate is never multiplied', () => {
     expect(readVolume('12 businesses', 30)).toMatchObject({ deals: 12, everyDays: null });
     expect(readVolume('$5,000 per engagement', 30)).toBeNull();
     expect(readVolume('Thousands of buyers need this', 30)).toBeNull();
+  });
+});
+
+/*
+ * A count of the payer's own noun counts buyers, and a stated share of them who
+ * buy narrows it (planningReliability round 3, 2026-11-22). Synthetic texts: a
+ * venue's listed caterers, not any case's own words.
+ */
+describe('readVolume: the payer names its own buyers, and a stated share narrows them', () => {
+  it('reads a count of the payer’s head noun as buyers', () => {
+    expect(payerNounWords('Wedding caterers')).toEqual(['caterers', 'caterer']);
+    expect(payerNounWords('Contractors renting mini-excavators')).toEqual(['contractors', 'contractor']);
+    expect(payerNounWords('Independent garden centres')).toEqual(['centres', 'centre']);
+    expect(payerNounWords(null)).toEqual([]);
+    expect(readVolume('The venue lists 300 approved caterers.', 30)).toBeNull();
+    expect(readVolume('The venue lists 300 approved caterers.', 30, 'Wedding caterers')).toMatchObject({ deals: 300, buyers: 300 });
+  });
+
+  it('narrows the count to the share stated to buy, never past it', () => {
+    const text = 'The venue lists 300 approved caterers; the venue reports 40% hire their linen rather than own it.';
+    expect(readVolume(text, 30, 'Wedding caterers')).toMatchObject({ deals: 120, buyers: 120 });
+    // Two stated shares: the smaller.
+    expect(readVolume('300 caterers; 40% hire linen and 25% hire glassware.', 30, 'Wedding caterers')).toMatchObject({ buyers: 75 });
+  });
+
+  it('is not narrowed by a share of something else', () => {
+    for (const text of ['300 caterers, at 15% off list', '300 caterers; 30% margin on each order', '300 caterers at a 28% impression share', '300 caterers, 10% of revenue']) {
+      expect(readVolume(text, 30, 'Wedding caterers')).toMatchObject({ buyers: 300 });
+    }
   });
 });
