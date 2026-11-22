@@ -178,6 +178,11 @@ export function forgetKnowledge(): void {
   cache.clear();
 }
 
+/** How many projects' knowledge is held, for a test of the bound. */
+export function heldKnowledge(): number {
+  return cache.size;
+}
+
 /**
  * The knowledge a project already loaded, while it is still fresh, without a
  * read. A synchronous consumer in the same goal tick (the portfolio engine
@@ -216,6 +221,9 @@ export async function loadCashKnowledge(projectId: string, now = Date.now()): Pr
   const fallbacks = learning ? await watchFallbacks(projectId, currencies, learning).catch(() => null) : null;
   const { routeMoney, routeScores, routeMoneyError } = await loadRouteMoney(projectId, opportunities);
   const value: CashKnowledge = { projectId, opportunities: new Map(opportunities.map((one) => [one.id, one])), facts: evidence, lessons, sources, watermark, routeMoney, routeScores, routeMoneyError, estimates: new Map(), learning, fallbacks };
+  // A stale entry is never served (both readers check its age), so another project's is let go here
+  // rather than held, with every opening and fact it read, for as long as the process lives.
+  for (const [key, one] of cache) if (now - one.at >= KNOWLEDGE_TTL_MS) cache.delete(key);
   cache.set(projectId, { at: now, value });
   // The same refresh plans the fallbacks of the project's real acquisition dependency — failure
   // modes, substitutes, the alternatives it needs and each switch's re-derived funnel (FALL-37-1/2) —

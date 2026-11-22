@@ -57,6 +57,9 @@ export const EVENT_GRAPH_RULES_VERSION = 1;
 /** Distinct buyers' requests in one place before demand there reads as repeated. */
 export const REPEATED_DEMAND_MIN_BUYERS = 3;
 
+/** Recomputations the graph's log keeps (`EventGraph.recomputations`); older ones are dropped. */
+export const EVENT_GRAPH_RECOMPUTATIONS_KEPT = 1_000;
+
 /** What a fact says about its actor and subject. */
 export type FactKind = 'WANT' | 'CAPACITY' | 'OFFER' | 'PRICE' | 'RENEWAL';
 
@@ -390,7 +393,12 @@ export class EventGraph {
   private readonly facts = new Map<string, GraphFact>();
   private readonly members = new Map<string, Set<string>>();
   private readonly detected = new Map<string, GraphHypothesis[]>();
-  /** Every neighborhood recomputation, in order — what an event actually cost. */
+  /**
+   * The most recent neighborhood recomputations, in order — what an event
+   * actually cost. Only the last `EVENT_GRAPH_RECOMPUTATIONS_KEPT` are kept: the
+   * process graph lives as long as the process, and an unbounded log of every
+   * recomputation it ever made was a heap that grew with each feed item read.
+   */
   readonly recomputations: string[] = [];
 
   /** Add (or re-read) one fact. A duplicate recomputes nothing; a moved fact recomputes both sides. */
@@ -409,6 +417,22 @@ export class EventGraph {
     if (!this.members.has(hood)) this.members.set(hood, new Set());
     this.members.get(hood)!.add(fact.id);
     affected.add(hood);
+    const keys = [...affected].sort();
+    for (const key of keys) this.recompute(key);
+    return { affected: keys, hypotheses: keys.flatMap((key) => this.detected.get(key) ?? []) };
+  }
+
+  /** Take several facts out at once, recomputing each neighborhood they leave once. */
+  removeMany(factIds: Iterable<string>): AddResult {
+    const affected = new Set<string>();
+    for (const factId of factIds) {
+      const previous = this.facts.get(factId);
+      if (!previous) continue;
+      this.facts.delete(factId);
+      const hood = neighborhoodOf(previous.subject);
+      this.members.get(hood)?.delete(factId);
+      affected.add(hood);
+    }
     const keys = [...affected].sort();
     for (const key of keys) this.recompute(key);
     return { affected: keys, hypotheses: keys.flatMap((key) => this.detected.get(key) ?? []) };
@@ -435,6 +459,7 @@ export class EventGraph {
 
   private recompute(neighborhood: string): void {
     this.recomputations.push(neighborhood);
+    if (this.recomputations.length > 2 * EVENT_GRAPH_RECOMPUTATIONS_KEPT) this.recomputations.splice(0, this.recomputations.length - EVENT_GRAPH_RECOMPUTATIONS_KEPT);
     const facts = [...(this.members.get(neighborhood) ?? [])].map((id) => this.facts.get(id)!);
     if (facts.length === 0) {
       this.members.delete(neighborhood);
@@ -744,7 +769,7 @@ export interface EventGraphSync {
   read: number;
   /** Facts added or re-read with a change. */
   added: number;
-  /** Facts taken out: rolled back to SHADOW, or naming no entity any more. */
+  /** Facts taken out: rolled back to SHADOW, naming no entity any more, or from an item fetched before the window. */
   removed: number;
   /** Rows that changed in a way the graph does not read (a duplicate): nothing recomputed. */
   unchanged: number;
@@ -766,6 +791,12 @@ interface ProcessGraph {
   graph: EventGraph;
   cursor: { updatedAt: string; id: string } | null;
   itemCursor: { fetchedAt: string; id: string } | null;
+  /**
+   * When each stored item the graph holds facts from was fetched, so a
+   * long-lived process lets an item go once it falls out of
+   * `EVENT_GRAPH_ITEM_WINDOW_MS`, exactly as a fresh process would never read it.
+   */
+  items: Map<string, string>;
   last: EventGraphSync | null;
   running: Promise<EventGraphSync> | null;
 }
@@ -778,7 +809,37 @@ interface ProcessGraph {
 export const EVENT_GRAPH_ITEM_WINDOW_MS = 120 * 86_400_000;
 
 function emptyGraph(): ProcessGraph {
-  return { graph: new EventGraph(), cursor: null, itemCursor: null, last: null, running: null };
+  return { graph: new EventGraph(), cursor: null, itemCursor: null, items: new Map(), last: null, running: null };
+}
+
+/** Remember when a stored item that gave the process graph facts was fetched. */
+function holdItem(held: ProcessGraph, itemId: string, fetchedAt: string, facts: readonly GraphFact[]): void {
+  if (facts.length === 0) return;
+  const prior = held.items.get(itemId);
+  if (prior === undefined || fetchedAt > prior) held.items.set(itemId, fetchedAt);
+}
+
+/** Every id `factsFromItem` can give one stored item's facts. */
+export function itemFactIds(itemId: string): string[] {
+  return [`item:${itemId}`, `item:${itemId}:price`];
+}
+
+/**
+ * Let go of every item fetched before the window's floor: the same facts a
+ * fresh process, reading from `EVENT_GRAPH_ITEM_WINDOW_MS` back, would never
+ * have read. Without it the process graph held every item it ever read for as
+ * long as the process lived. Returns the facts removed and the neighborhoods
+ * recomputed.
+ */
+function expireItems(held: ProcessGraph, floor: string): { removed: number; affected: string[] } {
+  const gone: string[] = [];
+  for (const [itemId, fetchedAt] of held.items) {
+    if (fetchedAt >= floor) continue;
+    held.items.delete(itemId);
+    for (const id of itemFactIds(itemId)) if (held.graph.has(id)) gone.push(id);
+  }
+  if (gone.length === 0) return { removed: 0, affected: [] };
+  return { removed: gone.length, affected: held.graph.removeMany(gone).affected };
 }
 
 let processGraph: ProcessGraph = emptyGraph();
@@ -851,7 +912,9 @@ export function addExtractedItems(items: readonly ExtractableItem[]): ExtractedI
   let added = 0;
   for (const item of items) {
     if (item.source === CODE_SIGNAL_SOURCE) continue;
-    for (const fact of factsFromItem(item)) {
+    const itemFacts = factsFromItem(item);
+    holdItem(processGraph, item.id, item.fetchedAt, itemFacts);
+    for (const fact of itemFacts) {
       facts += 1;
       const result = graph.add(fact);
       if (result.affected.length > 0) added += 1;
@@ -970,6 +1033,7 @@ export function syncEventGraph(now: Date = new Date()): Promise<EventGraphSync> 
           unchanged += 1;
           continue;
         }
+        holdItem(held, row.id, row.fetched_at, facts);
         let moved = false;
         for (const fact of facts) {
           const result = held.graph.add(fact);
@@ -983,6 +1047,9 @@ export function syncEventGraph(now: Date = new Date()): Promise<EventGraphSync> 
       held.itemCursor = { fetchedAt: last.fetched_at, id: last.id };
       if (rows.length < EVENT_GRAPH_SYNC_PAGE) break;
     }
+    const expired = expireItems(held, new Date(now.getTime() - EVENT_GRAPH_ITEM_WINDOW_MS).toISOString());
+    removed += expired.removed;
+    for (const hood of expired.affected) recomputed.add(hood);
     const sync: EventGraphSync = {
       read,
       added,
