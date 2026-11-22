@@ -102,7 +102,36 @@ export interface VolumeReading {
   buyers: number | null;
   /** Days between purchases by one buyer, when stated. */
   everyDays: number | null;
+  /**
+   * What the deals were read from: BUYERS — a count of buyers (times how often
+   * each buys), so the deals are also every prospect the market holds; ORDERS —
+   * an order rate, which says how many deals are made, not how many prospects
+   * could be asked.
+   */
+  counted: 'BUYERS' | 'ORDERS';
   basis: string;
+}
+
+/** Words that name a buyer by what they own or run: "boat owners" own boats, "fleet operators" run fleets. */
+const HOLDER_WORDS = /\b([a-z]{3,})\s+(?:owners?|operators?|managers?|proprietors?|holders?|keepers?)\b/gi;
+
+/**
+ * The things a payer is named for holding, as count words: a payer of "Recreational
+ * boat owners" is one buyer per boat, so "3,400 boats are registered" counts buyers
+ * exactly as "3,400 boat owners" would. Only the noun directly before the holder
+ * word is taken (never an adjective further out), singular and plural. Pure.
+ */
+export function payerHeldWords(payer: string | null | undefined): string[] {
+  if (!payer) return [];
+  const out = new Set<string>();
+  for (const m of payer.matchAll(HOLDER_WORDS)) {
+    const w = m[1]!.toLowerCase();
+    if (/^(?:the|and|for|with|small|large|local|independent|business|property|home)$/.test(w)) continue;
+    const one = w.endsWith('s') ? w.slice(0, -1) : w;
+    out.add(one);
+    out.add(/(?:s|x|ch|sh)$/.test(one) ? `${one}es` : `${one}s`);
+  }
+  return [...out];
 }
 
 interface StatedRate {
@@ -168,8 +197,10 @@ function readRates(text: string): StatedRate[] {
 }
 
 /** Read the deals a market can take inside `windowDays`, or null when no number is stated. */
-export function readVolume(text: string, windowDays: number): VolumeReading | null {
+export function readVolume(text: string, windowDays: number, payer: string | null = null): VolumeReading | null {
   if (!text || !(windowDays > 0)) return null;
+  const held = payerHeldWords(payer).filter((w) => !new RegExp(`(?:^|\\|)${w}(?:\\||$)`).test(BUYER_WORDS));
+  const buyerCount = held.length === 0 ? BUYER_COUNT : new RegExp(`(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z-]+\\s+){0,4}?(?:${BUYER_WORDS}|${held.join('|')})\\b`, 'gi');
   const window = Math.max(1, Math.floor(windowDays));
 
   // An order rate states the volume directly; the slowest one stated is taken.
@@ -180,17 +211,18 @@ export function readVolume(text: string, windowDays: number): VolumeReading | nu
     if (deals >= 1) {
       const monthly = Math.round(slowest.perDay * 30);
       return slowest.units === null
-        ? { deals, buyers: null, everyDays: null, basis: `about ${monthly} orders a month are stated, so ${deals} in ${window} days` }
+        ? { deals, buyers: null, everyDays: null, counted: 'ORDERS', basis: `about ${monthly} orders a month are stated, so ${deals} in ${window} days` }
         : {
             deals,
             buyers: slowest.units,
             everyDays: null,
+            counted: 'ORDERS',
             basis: `${slowest.units} units each doing ${slowest.each} a ${slowest.period} are stated, about ${monthly} orders a month, so ${deals} in ${window} days`,
           };
     }
   }
 
-  const counts = [...text.matchAll(BUYER_COUNT)]
+  const counts = [...text.matchAll(buyerCount)]
     .filter((m) => !/^\s*%/.test(text.slice((m.index ?? 0) + m[1]!.length)))
     .map((m) => toInt(m[1]!))
     .filter((n) => n > 0 && n < 50_000_000);
@@ -206,6 +238,7 @@ export function readVolume(text: string, windowDays: number): VolumeReading | nu
     deals: buyers * purchases,
     buyers,
     everyDays,
+    counted: 'BUYERS',
     basis:
       everyDays === null
         ? `${buyers} reachable buyers are stated and no repeat purchase is, so one purchase each`

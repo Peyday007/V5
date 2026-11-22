@@ -180,6 +180,15 @@ export interface ModelledOpportunity {
    * range here and a missing link in the plan — never a number a plan assumes.
    */
   volume: ModelInput;
+  /**
+   * Every prospect the market holds inside the window, when research counted the
+   * buyers themselves (`VolumeReading.counted` BUYERS): the buyers times how often
+   * each buys. A measured rate is a share of prospects asked, so it can win at
+   * most this many times that rate — 320 gift shops at 0.25% are under one order,
+   * however many more offers a plan would like to send. Null when the volume is
+   * an order rate (which counts deals made, not prospects) or is not established.
+   */
+  prospects?: number | null;
   /** A live agreement already recorded for this opportunity. */
   agreed: boolean;
   /** What those agreements are worth, in major units: money a buyer has already agreed to. */
@@ -2046,10 +2055,18 @@ export function readInboundCommitments(text: string): { paid: number; visitors: 
  * interval rather than discarded. A visitor, a click or a group's members are
  * not priced offers: those stay with `readInboundCommitments` and its visitor
  * floor. Null when the text states no such count.
+ *
+ * Agreements per buyer contacted ("6 agreements from 40 contacts", "9 orders
+ * of 30 stores asked") are the same measurement (planningReliability round 4):
+ * each contact is an identified buyer asked for this offer and each agreement
+ * one who said yes — exactly the trial and outcome of `cash_outcomes`, which
+ * Brain's own record already reads as a measured close. Before, only a quote,
+ * proposal or bid was a trial, so an outreach play's own measured rate was
+ * dropped and its conversion read as unknown.
  */
 export function readOfferWins(text: string): { won: number; offers: number; unit: string } | null {
   const num = (raw: string) => Number(raw.replace(/,/g, ''));
-  const match = /(\d[\d,]*)\s+(?:[a-z-]+\s+){0,2}?(wins?|won|signed|accepted|awarded|contracts?|deals?|jobs?|orders?|sales?|bookings?|clients?|customers?)\b[^.;]*?\b(?:from|of|out of|among|on|across)\s+(\d[\d,]*)\s+(?:[a-z-]+\s+){0,2}?(quotes?|quotations?|proposals?|bids?|estimates?|tenders?|priced offers?|offers? sent|pitches)\b/i.exec(text);
+  const match = /(\d[\d,]*)\s+(?:[a-z-]+\s+){0,2}?(wins?|won|signed|accepted|awarded|agreements?|agreed|contracts?|deals?|jobs?|orders?|sales?|bookings?|clients?|customers?)\b[^.;]*?\b(?:from|of|out of|among|on|across)\s+(\d[\d,]*)\s+(?:[a-z-]+\s+){0,2}?(quotes?|quotations?|proposals?|bids?|estimates?|tenders?|priced offers?|offers? sent|pitches|contacts?|contacted|asked|approached)\b/i.exec(text);
   if (!match) return null;
   const won = num(match[1]!);
   const offers = num(match[3]!);
@@ -2288,7 +2305,20 @@ export async function modelOpportunity(
     : inferOr(knowledge, 'respond', opportunity, now, unknown(0.002, 0.15, 'nobody has established how many prospects of this kind reply; swept from 0.2% to 15%'));
 
   const volumeFact = fact('buyerVolume');
-  const volumeRead = volumeFact ? readVolume(volumeFact.value, windowDays) : null;
+  // A count of what the payer holds ("3,400 boats" for boat owners) counts buyers too.
+  const counted = volumeFact ? readVolume(volumeFact.value, windowDays, opportunity.payer) : null;
+  /*
+   * A price per period already contains how often the buyer is served
+   * (planningReliability round 4): a shop paying $180 a month for weekly
+   * sharpening is one subscription, not four purchases a month. Read from a
+   * count of buyers, a recurring price's deals are the buyers, each holding one
+   * subscription — never the buyers times the service's own frequency.
+   */
+  const perPeriodPrice = recurringRevenue(fact('price')?.value ?? null, opportunity.title);
+  const volumeRead =
+    counted && perPeriodPrice && counted.counted === 'BUYERS' && counted.buyers !== null && counted.everyDays !== null && counted.deals > counted.buyers
+      ? { ...counted, deals: counted.buyers, basis: `${counted.buyers} reachable buyers, each holding one subscription at the price per period (its own service frequency is inside that price)` }
+      : counted;
   /*
    * Repeatable is a fact about the market, not a category: a test-first play
    * is one by construction, and any other opening becomes one when research
@@ -2304,7 +2334,18 @@ export async function modelOpportunity(
    * plan was a heap of single small deals however much repeat business existed.
    */
   const estimatedRepeat = volumeRead !== null && volumeRead.deals > 1 && volumeFact!.kind === 'RECOMMENDATION';
-  const repeatable = isTestFirstPlay(opportunity) || (volumeRead !== null && volumeRead.deals > 1 && volumeFact!.kind === 'EVIDENCE') || estimatedRepeat;
+  /*
+   * A volume statement that states no count (planningReliability round 4: "leagues
+   * probably re-line fields every few weekends") says research looked at a market
+   * of buyers and did not size it. That is an unknown volume — a repeatable play
+   * whose MARKET_VOLUME link is missing — never one deal: reading it as a one-off
+   * passed the volume link ("a one-off needs its one buyer") on a question
+   * nobody answered, and then called the target unreachable at one sale
+   * (invariant 39). It still counts no second sale: the volume is swept and the
+   * link stays open until research sizes it.
+   */
+  const unsizedMarket = !!volumeFact && volumeRead === null;
+  const repeatable = isTestFirstPlay(opportunity) || (volumeRead !== null && volumeRead.deals > 1 && volumeFact!.kind === 'EVIDENCE') || estimatedRepeat || unsizedMarket;
   const volume: ModelInput = !repeatable
     ? known(1, 'ASSUMPTION', ref, 'a one-off opening is one deal')
     : estimatedRepeat
@@ -2334,6 +2375,7 @@ export async function modelOpportunity(
     respond,
     directCost,
     volume,
+    prospects: repeatable && !estimatedRepeat && volumeRead?.counted === 'BUYERS' && volume.value !== null && (volume.provenance === 'EVIDENCE' || volume.provenance === 'HISTORICAL') ? volume.value : null,
     agreed: agreements.length > 0,
     agreedValue: agreements.reduce((sum, one) => sum + one.amountCents, 0) / 100,
     agreedDeals: agreements.length,
