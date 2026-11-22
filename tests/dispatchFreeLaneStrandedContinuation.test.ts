@@ -212,3 +212,72 @@ describe('the dispatch tick continues displaced research the free lane left stra
     ).resolves.toEqual({ stranded: true, continued: false });
   });
 });
+
+/*
+ * The other half of the recorded failure: "42 / 30 / 16 displaced item(s) are
+ * waiting and the free lane failed every item it took in the last hour",
+ * beside a stage-capacity reading naming a failing model route. The pool was
+ * running, so the continuation rightly left it to its controller — and the
+ * controller's slots spent each item's attempt on a route that never reached a
+ * model: only a busy provider (429/5xx) was refunded, so a refused credential,
+ * an unrouted model or a broken GPU failed the work on its third strike.
+ */
+describe('a running pool whose model route fails does not fail the displaced work', () => {
+  const ROUTE_FAILURES = [
+    'cheap lane HTTP 401 Unauthorized',
+    'cheap lane HTTP 404: model brain-a not found',
+    'runpod unavailable: the pod is stopped',
+  ];
+  for (const failure of ROUTE_FAILURES) {
+    it(`hands the item back with its attempt refunded every time (${failure}), so the other model finishes it`, async () => {
+      await setBrainOnlyMode(true, 'test', 'route failure');
+      const id = await displacedFragment(45 * 60_000);
+      const { ensureFreeWorkers, takeOne, endFreeLaneCooldowns, resetRouteHealth } = await import('../server/services/freeLane/worker.ts');
+      const workers = await ensureFreeWorkers(CONFIG);
+      const routed: Completer = async (config, name, system, prompt, options) => {
+        if (name === 'brain-a') throw new Error(failure);
+        return completer(config, name, system, prompt, options);
+      };
+      const base = { workers, completer: routed, fetchSource, search: async () => [], config: CONFIG };
+      // Past the three strikes a broken route used to be allowed before the work was failed.
+      for (let strike = 0; strike < 4; strike += 1) {
+        endFreeLaneCooldowns();
+        resetRouteHealth();
+        const taken = await takeOne({ ...base, worker: workers[0]!, index: 0 });
+        expect(taken.claimed?.workItemId).toBe(id);
+        expect(taken.ok).toBe(false);
+        const row = await getDb().get<{ state: string; attempt_count: number | string }>('SELECT state, attempt_count FROM work_items WHERE id = ?', [id]);
+        expect(row?.state).toBe('QUEUED');
+        expect(Number(row?.attempt_count)).toBe(0);
+      }
+      const outcomes = await getDb().all<{ outcome: string }>(
+        "SELECT outcome FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND work_item_id = ?",
+        [id],
+      );
+      expect(outcomes.map((o) => o.outcome)).not.toContain('FAILED_RETRYABLE');
+      // The route's outage says nothing about the work: the other model takes it at once and finishes it.
+      const other = await takeOne({ ...base, worker: workers[1]!, index: 1, spillover: true });
+      expect(other.claimed?.workItemId).toBe(id);
+      expect(other.ok).toBe(true);
+      expect(await stateOf(id)).toBe('SUCCEEDED');
+    }, 30_000);
+  }
+
+  it('still fails an item on its third strike when the failure is not a classified route failure', async () => {
+    await setBrainOnlyMode(true, 'test', 'unclassified failure');
+    const id = await displacedFragment(45 * 60_000);
+    const { ensureFreeWorkers, takeOne, endFreeLaneCooldowns, resetRouteHealth } = await import('../server/services/freeLane/worker.ts');
+    const workers = await ensureFreeWorkers(CONFIG);
+    const bad: Completer = async () => {
+      throw new Error('cheap lane HTTP 400: this prompt is not accepted');
+    };
+    const base = { workers, completer: bad, fetchSource, search: async () => [], config: CONFIG };
+    for (let strike = 0; strike < 3; strike += 1) {
+      endFreeLaneCooldowns();
+      resetRouteHealth();
+      await takeOne({ ...base, worker: workers[0]!, index: 0 });
+    }
+    const row = await getDb().get<{ attempt_count: number | string }>('SELECT attempt_count FROM work_items WHERE id = ?', [id]);
+    expect(Number(row?.attempt_count)).toBe(1);
+  }, 30_000);
+});
