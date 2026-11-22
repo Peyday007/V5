@@ -1242,10 +1242,21 @@ export function judgeAcceptance(input: {
    * candidate keeps the portfolio's own measure of reach. Swapping to another
    * measure (a strategy's sweep share) made tightening a limit able to raise
    * the reach the plan reports (planMetamorphic P6).
+   *
+   * The priced combination is the engine's own search over priced members
+   * (`pricedBest`), never the first priced entry of the four alternatives the
+   * reading keeps: whether one survived that cut depended on how many
+   * combinations with the unpriced member ranked above it, so a looser
+   * capital limit — more such combinations — pushed every priced one out and
+   * the plan fell back to a strategy's sweep share (0.06 → 0.50 for
+   * $10,000 → $1,000, Postgres suite 2026-11-22). A portfolio read before
+   * `pricedBest` existed still reads the alternatives.
    */
   const pricedAlternative =
     best && unpriced.length > 0
-      ? ([...(input.portfolio?.alternatives ?? [])].sort((a, b) => b.reach - a.reach).find((alt) => alt.members.length > 0 && unpricedIn([...new Set(alt.members.map((m) => m.opportunityId))]).length === 0) ?? null)
+      ? input.portfolio && input.portfolio.pricedBest !== undefined
+        ? (input.portfolio.pricedBest && input.portfolio.pricedBest.members.length > 0 && unpricedIn([...new Set(input.portfolio.pricedBest.members.map((m) => m.opportunityId))]).length === 0 ? input.portfolio.pricedBest : null)
+        : ([...(input.portfolio?.alternatives ?? [])].sort((a, b) => b.reach - a.reach).find((alt) => alt.members.length > 0 && unpricedIn([...new Set(alt.members.map((m) => m.opportunityId))]).length === 0) ?? null)
       : null;
   const held = unpriced.length === 0 ? best : pricedAlternative;
   const heldIds = held ? [...new Set(held.members.map((m) => m.opportunityId))] : [];

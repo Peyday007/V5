@@ -207,6 +207,28 @@ describe('5. an unestablished price never makes a candidate', () => {
     expect(a.candidate?.reach).toBe(0.6);
   });
 
+  /*
+   * planMetamorphic P6 (Postgres suite, 2026-11-22): the reading keeps four
+   * alternatives, and a looser capital limit fills them with combinations that
+   * still count the unpriced member, so no priced one survived the cut and the
+   * candidate fell to the strategy's sweep share (0.06 → 0.50 for $10,000 →
+   * $1,000). The engine's own search over priced members decides.
+   */
+  it('holds the engine’s priced combination even when no priced one is among the kept alternatives', () => {
+    const p = portfolio(['price']);
+    p.alternatives = [
+      { members: [{ opportunityId: 'arr_constructed', title: 'A constructed arrangement', share: 1 }], reach: 0.9, settledP10: 0, settledP50: 7000, settledP90: 9000, capitalShort: 0, overSpend: 0 },
+    ] as GoalPortfolio['alternatives'];
+    p.pricedBest = { members: [{ opportunityId: 'cleaning', title: 'Post-construction cleanup', share: 1 }], reach: 0.06, settledP10: 0, settledP50: 3000, settledP90: 6000, capitalShort: 0, overSpend: 0 };
+    const a = judgeAcceptance({ achieved: false, chosen: strategy, portfolio: p, measuredChance: null, considered });
+    expect(a.candidate?.source).toBe('QUANT_PORTFOLIO');
+    expect(a.candidate?.opportunityIds).toEqual(['cleaning']);
+    expect(a.candidate?.reach).toBe(0.06);
+    // No priced combination runs at all: the strategy judged on its chain, as before.
+    p.pricedBest = null;
+    expect(judgeAcceptance({ achieved: false, chosen: strategy, portfolio: p, measuredChance: null, considered }).candidate?.source).toBe('STRATEGY');
+  });
+
   it('keeps the combination as the candidate when every member’s price is established', () => {
     const a = judgeAcceptance({ achieved: false, chosen: strategy, portfolio: portfolio(['close rate']), measuredChance: null, considered });
     expect(a.candidate?.source).toBe('QUANT_PORTFOLIO');
