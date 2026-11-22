@@ -286,4 +286,9 @@ reason; a hidden case shows its id and verdict only.
   verdict on hidden cases (§111) and never production verification.
 
 On a shared 4-core machine, under `flock` and beside another worker's runs, the
-public suite took 433 s serially and 196 s on 3 workers.
+public suite took 433 s serially and 196 s on 3 workers. With the base result cached,
+a no-op change's loop took 195 s and a two-branch `--merge` 206 s; with it uncomputed,
+343 s. On PR #1214's diff against its parent (with 21 held-out cases) the bench
+verdict — 25 IMPROVED, 0 REGRESSED, critical 6 → 0 — took 409 s after a 613 s base;
+its impacted selection was 107 planner test files, which is the slow stage of a wide
+change and is why a selection over 12 files runs after the bench, not beside it.
