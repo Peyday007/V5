@@ -33,6 +33,7 @@ export const METRIC_KEYS = [
   'OBJECTIVE_HOURS_MEDIAN',
   'OWNER_INTERVENTIONS_PER_DAY',
   'AUTO_RECOVERY_RATE',
+  'ENGINEERING_CYCLE_HOURS_MEDIAN',
 ] as const;
 export type MetricKey = (typeof METRIC_KEYS)[number];
 
@@ -131,6 +132,15 @@ export const METRICS: Record<MetricKey, MetricDefinition> = {
     numerator: 'work items that failed at least once and then completed, settled in the window',
     denominator: 'work items that failed at least once and settled (completed, failed or dead-lettered) in the window',
     minSample: 20,
+  },
+  ENGINEERING_CYCLE_HOURS_MEDIAN: {
+    key: 'ENGINEERING_CYCLE_HOURS_MEDIAN',
+    label: "Hours from a change's first commit to its verified release (§115)",
+    shape: 'HOURS',
+    higherIsBetter: false,
+    numerator: 'median totalHours of engineering cycles (ENGINEERING_CYCLE readings) verified in the window',
+    denominator: 'pull requests merged into the canonical branch and verified by a Deploy in the window',
+    minSample: 8,
   },
 };
 

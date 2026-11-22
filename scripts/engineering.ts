@@ -17,7 +17,13 @@
  *   next       --outcome LEVEL [--reached LEVEL] [--watch MINUTES] [--wait MINUTES] [--stop]
  *   duplicate  --proposal "…"
  *   idle       [--continue]
- *   report     interventions and the metrics they add up to
+ *   report     interventions and the metrics they add up to, and the newest cycle reading
+ *   cycle      [--repo owner/name] [--hours 72] [--to ISO] [--input DIR] [--cycles]
+ *              [--record --admin <email>]
+ *              the engineering cycle (§115): per-stage durations, the limiting stage,
+ *              releases, concurrency, verified improvements, competing corrections.
+ *              Reads the forge (BRAIN_FORGE_TOKEN), or `gh api` JSON in DIR; --record
+ *              stores it as ENGINEERING_CYCLE evidence the operator's detector reads.
  *
  * Prints `ENGINEERING: OK` last, and only when nothing set a failing code.
  */
@@ -44,6 +50,16 @@ import {
 } from '../server/repos/engineering.ts';
 import { lookupEvidence } from '../server/services/engineering/evidence.ts';
 import { watchIdle } from '../server/services/engineering/watchdog.ts';
+import { fetchCycleSources, loadCycleSources, measureAndRecord, storedCycles } from '../server/services/engineering/cycle.ts';
+import { parseRemote } from '../server/services/factory/forge.ts';
+import type { CycleReading } from '../server/domain/engineeringCycle.ts';
+import { readFileSync } from 'node:fs';
+
+/** A reading without its per-cycle rows, which `--cycles` prints. */
+function summarizeCycle(reading: CycleReading): Omit<CycleReading, 'cycles'> {
+  const { cycles: _cycles, ...rest } = reading;
+  return rest;
+}
 
 function flag(argv: string[], name: string): string | null {
   const at = argv.indexOf(`--${name}`);
@@ -82,7 +98,7 @@ async function resolveAdmin(argv: string[]): Promise<string> {
 async function main(): Promise<void> {
   const [command, ...argv] = process.argv.slice(2);
   if (!command || command === 'help') {
-    out('commands: policy, preflight, lookup, record, invalidate, next, duplicate, idle, report');
+    out('commands: policy, preflight, lookup, record, invalidate, next, duplicate, idle, report, cycle');
     return;
   }
   await initDatabase();
@@ -218,9 +234,40 @@ async function main(): Promise<void> {
     case 'idle':
       out(await watchIdle({ continueWork: has(argv, 'continue') }));
       break;
-    case 'report':
-      out({ metrics: await interventionMetrics(), recent: await listInterventions(20) });
+    case 'report': {
+      const [cycle] = await storedCycles({ limit: 1 });
+      out({
+        metrics: await interventionMetrics(),
+        recent: await listInterventions(20),
+        cycle: cycle ? { recordedAt: cycle.createdAt, change: cycle.change, ...summarizeCycle(cycle.reading) } : null,
+      });
       break;
+    }
+    case 'cycle': {
+      const repository = flag(argv, 'repo') ?? 'peyday007/v5';
+      const hours = Number(flag(argv, 'hours') ?? '72');
+      if (!Number.isFinite(hours) || hours <= 0) fail('--hours must be a positive number');
+      const to = flag(argv, 'to') || new Date().toISOString();
+      const from = new Date(Date.parse(to) - hours * 3_600_000).toISOString();
+      const branch = readFileSync(new URL('../.github/CANONICAL_BRANCH', import.meta.url), 'utf8').trim();
+      const input = flag(argv, 'input');
+      let sources;
+      if (input) sources = loadCycleSources(input, repository, branch);
+      else {
+        const forge = parseRemote(`https://github.com/${repository}`);
+        if (!forge) fail(`"${repository}" is not owner/name`);
+        sources = await fetchCycleSources(forge, branch, { from, to });
+      }
+      const recordedById = has(argv, 'record') ? await resolveAdmin(argv) : undefined;
+      const result = await measureAndRecord(sources, { from, to }, { record: has(argv, 'record'), recordedById });
+      out({
+        recorded: result.recorded,
+        change: result.change,
+        ...summarizeCycle(result.reading),
+        ...(has(argv, 'cycles') ? { cycles: result.reading.cycles } : {}),
+      });
+      break;
+    }
     default:
       process.exitCode = 2;
       process.stderr.write(`ENGINEERING REFUSED: "${command}" is not a command.\n`);
