@@ -106,6 +106,9 @@ describe('the release checks the plans it released', () => {
     expect(wait).toContain('/healthz');
     expect(wait).toContain('sh /app/scripts/goals.sh ready');
     expect(read('scripts/goals.sh')).toContain('brain-derived-state-rebuilt');
+    // One sequential client waits only on its own query: a planner evaluation
+    // holding the loop must not turn that into a pool refusal (check 45034423897).
+    expect(read('scripts/goals.sh')).toContain('export BRAIN_DATABASE_CONNECT_TIMEOUT_MS="${BRAIN_DATABASE_CONNECT_TIMEOUT_MS:-120000}"');
     const rebuild = read('server/index.ts');
     const step = rebuild.slice(rebuild.indexOf("afterListenStep('rebuild derived state'"));
     expect(step.slice(0, step.indexOf('BOOT_GRACE_STAGGER_MS')).trimEnd()).toMatch(/markDerivedStateRebuilt\(\);\s*\}\);\s*\},$/);

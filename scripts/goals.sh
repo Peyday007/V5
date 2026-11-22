@@ -12,6 +12,13 @@
 set -e
 cd "$(dirname "$0")/.."
 export BRAIN_DATABASE_POOL_SIZE="${BRAIN_DATABASE_POOL_SIZE:-1}"
+# With one client, the only thing a query here can wait behind is this
+# process's own query in flight. The planner's synchronous evaluation holds the
+# loop for seconds at a time, and an expired timer runs before the I/O that
+# would release the client, so the pool's 10 s default refused a goal's read on
+# its own query (release check 45034423897, wst_7b4f…: "1/1 in use, 0 caller(s)
+# waiting"). The read stays bounded by the check's 6-minute per-goal budget.
+export BRAIN_DATABASE_CONNECT_TIMEOUT_MS="${BRAIN_DATABASE_CONNECT_TIMEOUT_MS:-120000}"
 
 echo "SERVING_REVISION ${BRAIN_REVISION:-<unstamped>}"
 
