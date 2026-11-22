@@ -878,16 +878,53 @@ export function foundOwnerHours(
   o: Pick<CashOpportunity, 'id' | 'offerScope' | 'title' | 'payer' | 'fulfillmentOwner' | 'humanHours'>,
   delivers: readonly string[],
   source: SourceRef | null = null,
+  /** The card's established delivery statement ("A spreadsheet Brain produces."), read when the offer names no proved deliverable. */
+  delivery: string | null = null,
 ): ModelInput | null {
   if (o.humanHours !== null || o.fulfillmentOwner?.trim()) return null;
   const capability = capabilityPart(delivers);
   if (!capability) return null;
-  const needName = (o.offerScope ?? o.title ?? '').trim();
-  const need = needName ? { name: needName, claimId: null, from: 'OPENING' as const, ref: o.id, path: '' } : null;
   const demand = { name: (o.payer ?? '').trim(), claimId: null, from: 'OPENING' as const, ref: o.id, path: '' };
-  const fitted = fittedDeliverable(capability, delivers, demand, need);
+  const fit = (needName: string) => fittedDeliverable(capability, delivers, demand, needName ? { name: needName, claimId: null, from: 'OPENING' as const, ref: o.id, path: '' } : null);
+  let fitted = fit((o.offerScope ?? o.title ?? '').trim());
+  // A delivery statement counts only when it says Brain is who produces it (round 8).
+  if (!provedDeliverable(fitted) && delivery && /\bBrain\b/.test(delivery)) fitted = fit(delivery.trim());
   if (!provedDeliverable(fitted)) return null;
   return known(0, 'ASSUMPTION', source, `Brain performs the work (${fitted.name.slice(0, 160)}), a deliverable it has proved; the owner's approvals are not hours: 0 owner hours per deal`);
+}
+
+/** A fulfiller's name that is the owner doing the work themself. */
+const OWNER_FULFILS = /\b(?:the\s+)?owner(?:'s)?\b|\bmyself\b|\bpersonally\b|\bme\b|\bfounder\b/i;
+
+/**
+ * Whose hours a card's stated hours are (planningReliability round 8). A
+ * card's `humanHours` is the work one deal takes; the goal's hours limit is
+ * the owner's. When somebody else performs that work the stated hours are
+ * theirs, never the owner's: Brain producing a deliverable it has proved for
+ * these buyers (`foundOwnerHours`' own evidence), or a fulfiller the card
+ * names who is not the owner and whom a fact — not Brain's recommendation —
+ * establishes. The owner does no physical work (§91), and approving a send
+ * is not hours — exactly how `ownerHoursOf` reads a constructed design.
+ * Reading a Brain-made report's hour of production as the owner's refused
+ * the only zero-labour plan under a one-hour-a-week limit. Anything else —
+ * the owner named, nobody named and no proved deliverable, a fulfiller only
+ * recommended — is null, and the stated hours stay the owner's. Pure.
+ */
+export function statedHoursNotOwners(
+  o: Pick<CashOpportunity, 'id' | 'offerScope' | 'title' | 'payer' | 'fulfillmentOwner' | 'humanHours'>,
+  delivers: readonly string[],
+  fulfilmentEstablished: boolean,
+  source: SourceRef | null = null,
+  delivery: string | null = null,
+): ModelInput | null {
+  if (o.humanHours === null) return null;
+  const named = o.fulfillmentOwner?.trim() ?? '';
+  if (named) {
+    if (OWNER_FULFILS.test(named) || !fulfilmentEstablished) return null;
+    return known(0, 'ASSUMPTION', source, `the card's ${o.humanHours} hours a deal are "${named.slice(0, 120)}"'s, who fulfils; Brain only messages, invoices and records: 0 owner hours per deal`);
+  }
+  const brain = foundOwnerHours({ ...o, humanHours: null }, delivers, source, delivery);
+  return brain ? { ...brain, note: `the card's ${o.humanHours} hours a deal are Brain's production, not the owner's: ${brain.note}` } : null;
 }
 
 /**
@@ -2196,7 +2233,14 @@ export const PRICE_CONTRADICTION_RATIO = 1.2;
  */
 export function priceContradiction(cardMajor: number, factText: string, currency: string): { stated: number; text: string } | null {
   const stated = readMoneyFigures(factText, currency);
-  const figures = stated.filter((one) => !one.perUnit).map((one) => one.cents / 100).filter((one) => one > 0);
+  /*
+   * One billing period's price is a whole-deal figure here (round 8): a
+   * recurring card's price is the price of one period, so "$200 a month"
+   * against a card at $800 is the same question at a quarter of the figure,
+   * not a rate the card might be a multiple of. Only a price per something
+   * smaller than the deal (an hour, a word, a seat) is left out.
+   */
+  const figures = stated.filter((one) => !one.perUnit || one.perPeriod).map((one) => one.cents / 100).filter((one) => one > 0);
   if (figures.length === 0 || !(cardMajor > 0)) return null;
   // A range is read across every figure that spans it ("$500 to $700 per engagement").
   const span = stated.map((one) => one.cents / 100).filter((one) => one > 0);
@@ -2280,10 +2324,14 @@ export async function modelOpportunity(
         : ownMechanismCapital(inferOr(knowledge, 'capitalShare', opportunity, now, unknown(0, top, 'nobody has established the money tied up; swept from nothing to the whole price'), top, ' as a share of the top price'), top);
 
   const hoursFact = fact('hours');
+  const fulfilmentStated = fact('fulfillment');
+  const deliveryFact = fact('delivery');
+  const delivery = deliveryFact && deliveryFact.kind !== 'RECOMMENDATION' ? deliveryFact.value : null;
   const hours =
     opportunity.humanHours !== null
-      ? known(opportunity.humanHours, hoursFact ? kindToProvenance(hoursFact).provenance : 'ASSUMPTION', ref, 'hours of work per deal')
-      : foundOwnerHours(opportunity, delivers, ref) ?? unknown(1, 40, 'nobody has established the hours; swept from 1 to 40 per deal');
+      ? statedHoursNotOwners(opportunity, delivers, !!fulfilmentStated && fulfilmentStated.kind !== 'RECOMMENDATION', ref, delivery) ??
+        known(opportunity.humanHours, hoursFact ? kindToProvenance(hoursFact).provenance : 'ASSUMPTION', ref, 'hours of work per deal')
+      : foundOwnerHours(opportunity, delivers, ref, delivery) ?? unknown(1, 40, 'nobody has established the hours; swept from 1 to 40 per deal');
 
   const ttc = fact('timeToFirstCash');
   const ttcDays = ttc ? readDays(ttc.value) : null;
@@ -2425,7 +2473,7 @@ export async function modelOpportunity(
         ? 'the volume on the card states no count of buyers or orders; swept from 1 deal to the most a strategy offers'
         : 'nobody has established how many buyers exist or how often they buy; swept from 1 deal to the most a strategy offers');
 
-  const fulfilmentFact = fact('fulfillment');
+  const fulfilmentFact = fulfilmentStated;
   const fulfilledBy =
     fulfilmentFact && fulfilmentFact.kind !== 'RECOMMENDATION' && opportunity.fulfillmentOwner
       ? { value: opportunity.fulfillmentOwner, ...kindToProvenance(fulfilmentFact) }
