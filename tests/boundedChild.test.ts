@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { spawn } from 'node:child_process';
-import { childArgs, failureReason, finishesWithin, goalsChildHeapMb, runBoundedChild } from '../scripts/boundedChild.ts';
+import { childArgs, failureReason, finishesWithin, goalsChildHeapMb, memoryDeferral, procAvailableMb, runBoundedChild, type MemoryGuard } from '../scripts/boundedChild.ts';
 import { checkGoals, planGoal, type ReadChildren } from '../scripts/goals.ts';
 
 /** Holds everything it allocates, so it can only end at its heap cap. */
@@ -186,5 +186,40 @@ describe('`goals plan` through the real entry point and its real child', () => {
     expect(await finishesWithin(200, () => new Promise(() => undefined))).toBe(false);
     expect(Date.now() - started).toBeLessThan(2_000);
     expect(await finishesWithin(5_000, async () => undefined)).toBe(true);
+  });
+});
+
+describe('a read child beside the app on a machine short of memory', () => {
+  // Production, 2026-11-22: a 700 MB read beside a 3.3 GB app on the 4 GB machine stalled the app itself
+  // (428 s, 112 s, 36 min), each stall starting and ending with a release-check read (45057935518, 45060366506).
+  const guard = (available: Array<number | null>, sacrificed: number[] = []): MemoryGuard => ({
+    availableMb: () => (available.length > 1 ? available.shift()! : available[0]!),
+    headroomMb: 300,
+    waitMs: 0,
+    sacrifice: (pid) => void sacrificed.push(pid),
+  });
+
+  it('is not started when the machine cannot fit its heap and headroom, and says why', async () => {
+    const path = child('never', "console.log('GOALS: OK');\n");
+    const run = await runBoundedChild({ args: [path], ms: 60_000, heapMb: 700, memoryGuard: guard([600]) });
+    expect(run.verdict).toBeNull();
+    expect(run.deferred).toMatch(/600 MB available and the read needs 1000 MB/);
+    expect(failureReason(run, 60_000, 700)).toBe(run.deferred);
+  });
+
+  it('starts once memory frees within the wait, and marks the child as the kernel\'s first choice', async () => {
+    const path = child('fits', "console.log('GOALS: OK');\n");
+    const sacrificed: number[] = [];
+    const deferral = await memoryDeferral({ ...guard([400, 400, 2000]), waitMs: 60_000 }, 700, async () => undefined);
+    expect(deferral).toBeNull();
+    const run = await runBoundedChild({ args: [path], ms: 60_000, heapMb: 700, memoryGuard: guard([2000], sacrificed) });
+    expect(run.verdict).toBe('GOALS: OK');
+    expect(sacrificed).toHaveLength(1);
+  });
+
+  it('starts where the platform cannot say, and reads MemAvailable from /proc/meminfo', async () => {
+    expect(await memoryDeferral(guard([null]), 700)).toBeNull();
+    expect(procAvailableMb(() => 'MemTotal:  4026532 kB\nMemAvailable:  512000 kB\n')).toBe(500);
+    expect(procAvailableMb(() => { throw new Error('no /proc'); })).toBeNull();
   });
 });
