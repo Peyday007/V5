@@ -76,8 +76,24 @@ on:
 # commit it releases. The branch name is spelled out because an expression
 # cannot read `.github/CANONICAL_BRANCH`; `tests/releaseMachinery.test.ts`
 # holds the two equal.
+#
+# **On the canonical branch the group is the commit, not the ref.** One group
+# per ref made every canonical run queue behind the one before it: measured
+# 2026-11-16 → 11-21, 9 of 28 production runs waited 4–27 minutes for their
+# first job (six of them 22–27), and every Deploy over 43 minutes was that
+# wait — the tip, the only commit that can be released, standing behind a
+# commit that no longer could be. Keyed by SHA the tip starts at once. A run
+# for the same commit (Deploy's evidence dispatch) still shares a group.
+#
+# And a run whose commit has been superseded stops itself (`The suite` below
+# cancels its own run once the tip has moved): canonical-guard refuses to
+# release any commit but the tip, so its evidence can never be read, and its
+# eight runners are the account's — twenty concurrent jobs, and one release
+# uses seventeen. Cancelled is not success, so it is never evidence; and if
+# the branch ever came back to that commit, postgres-evidence.sh finds no
+# completed run and dispatches one.
 concurrency:
-  group: postgres-suite-${{ github.ref }}
+  group: postgres-suite-${{ github.ref == 'refs/heads/production' && github.sha || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/production' }}
 
 jobs:
@@ -132,6 +148,10 @@ jobs:
     # The whole suite once needed 120 (it outgrew sixty on 2026-10-06); a
     # quarter of it gets the same ceiling, as a bound on a hung shard.
     timeout-minutes: 120
+    # `actions: write` only so a superseded canonical run can cancel itself.
+    permissions:
+      contents: read
+      actions: write
     steps:
       - uses: actions/checkout@v4
 
@@ -242,13 +262,45 @@ jobs:
       # `sslmode=disable` is required rather than tidy: a unix socket cannot do
       # TLS, and the Postgres adapter asks for it by default whenever the URL
       # does not say otherwise.
+      #
+      # The split is by recorded duration (vitest.config.ts → the
+      # DurationSequencer), not vitest's equal file counts; the verdict below
+      # still proves from these reports that every file ran exactly once.
+      #
+      # On the canonical branch the suite is watched like Deploy's (FAC-6):
+      # once the branch names a newer commit, this one can never be released,
+      # so the run cancels itself — a cancelled run is not evidence, and the
+      # runners go to the commit that can be. Anywhere else it simply runs.
       - name: The suite
         env:
           BRAIN_TEST_DATABASE_URL: postgresql:///brain_test?host=/var/run/postgresql&sslmode=disable
-        run: >-
-          npx vitest run --shard=${{ matrix.shard }}/8
-          --reporter=default --reporter=json --reporter=github-actions
-          --outputFile.json=postgres-shard-report.json
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          interval="${SUPERSEDED_POLL_SECONDS:-60}"
+          setsid npx vitest run --shard=${{ matrix.shard }}/8 \
+            --reporter=default --reporter=json --reporter=github-actions \
+            --outputFile.json=postgres-shard-report.json &
+          pid=$!
+          if [ "$GITHUB_REF_NAME" = "$(tr -d '[:space:]' < .github/CANONICAL_BRANCH)" ]; then
+            since=0
+            while kill -0 "$pid" 2>/dev/null; do
+              sleep 5
+              since=$((since + 5))
+              [ "$since" -lt "$interval" ] && continue
+              since=0
+              .github/workflows/canonical-guard.sh "$GITHUB_REF_NAME" "$GITHUB_SHA" "while the Postgres suite runs" > "$RUNNER_TEMP/guard.txt" 2>&1
+              if [ $? = 3 ]; then
+                cat "$RUNNER_TEMP/guard.txt"
+                echo "::notice::SUPERSEDED — the canonical branch moved past ${GITHUB_SHA}; it can no longer be released, so this run cancels itself. Cancelled is not evidence."
+                gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/cancel" >/dev/null \
+                  || echo "::warning::Could not cancel the superseded run; the suite finishes instead."
+                wait "$pid"
+                exit $?
+              fi
+            done
+          fi
+          wait "$pid"
 
       # What this shard actually ran, read from its own report, for `verdict`
       # to hold against the whole suite. Uploaded whatever the suite said, so a
@@ -261,7 +313,12 @@ jobs:
         if: always()
         with:
           name: postgres-shard-${{ matrix.shard }}
-          path: postgres-shard-${{ matrix.shard }}.txt
+          # The report rides along so the shard balance can be refreshed from
+          # real durations (scripts/test-durations.mjs). The verdict reads only
+          # the .txt.
+          path: |
+            postgres-shard-${{ matrix.shard }}.txt
+            postgres-shard-report.json
           if-no-files-found: ignore
 
       # Useful on a failure, and quiet about the ordinary case.
