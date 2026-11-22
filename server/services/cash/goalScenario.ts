@@ -2052,9 +2052,9 @@ export function readInboundCommitments(text: string): { paid: number; visitors: 
  * same outcome as an agreement per contact in Brain's own outreach record, so
  * it is read as the opening's measured close on the same floor
  * (LESSON_MIN_SAMPLE offers), its sample size carried in the measured
- * interval rather than discarded. A visitor, a click or a group's members are
- * not priced offers: those stay with `readInboundCommitments` and its visitor
- * floor. Null when the text states no such count.
+ * interval rather than discarded. A visitor or a click is not a priced
+ * offer: those stay with `readInboundCommitments` and its visitor floor. Null
+ * when the text states no such count.
  *
  * Agreements per buyer contacted ("6 agreements from 40 contacts", "9 orders
  * of 30 stores asked") are the same measurement (planningReliability round 4):
@@ -2063,10 +2063,20 @@ export function readInboundCommitments(text: string): { paid: number; visitors: 
  * Brain's own record already reads as a measured close. Before, only a quote,
  * proposal or bid was a trial, so an outreach play's own measured rate was
  * dropped and its conversion read as unknown.
+ *
+ * Orders per member offered ("14 orders from 520 members") are the same
+ * measurement again (planningReliability round 5): each member is an identified
+ * buyer on a list the offer went to, and each order one who bought — a share
+ * of a counted list, never of anonymous traffic. Dropping it read a measured
+ * play's conversion as unknown. A membership the offer has already saturated
+ * is not thereby passed: the rate is a share of prospects, so
+ * `prospectsAsked` bounds what it can still win by the members that exist. The
+ * size of a group ("18 orders from a 14,000-member group") is still not a
+ * count of members offered, and is not read.
  */
 export function readOfferWins(text: string): { won: number; offers: number; unit: string } | null {
   const num = (raw: string) => Number(raw.replace(/,/g, ''));
-  const match = /(\d[\d,]*)\s+(?:[a-z-]+\s+){0,2}?(wins?|won|signed|accepted|awarded|agreements?|agreed|contracts?|deals?|jobs?|orders?|sales?|bookings?|clients?|customers?)\b[^.;]*?\b(?:from|of|out of|among|on|across)\s+(\d[\d,]*)\s+(?:[a-z-]+\s+){0,2}?(quotes?|quotations?|proposals?|bids?|estimates?|tenders?|priced offers?|offers? sent|pitches|contacts?|contacted|asked|approached)\b/i.exec(text);
+  const match = /(\d[\d,]*)\s+(?:[a-z-]+\s+){0,2}?(wins?|won|signed|accepted|awarded|agreements?|agreed|contracts?|deals?|jobs?|orders?|sales?|bookings?|clients?|customers?)\b[^.;]*?\b(?:from|of|out of|among|on|across)\s+(\d[\d,]*)\s+(?:[a-z-]+\s+){0,2}?(quotes?|quotations?|proposals?|bids?|estimates?|tenders?|priced offers?|offers? sent|pitches|contacts?|contacted|asked|approached|members?)\b/i.exec(text);
   if (!match) return null;
   const won = num(match[1]!);
   const offers = num(match[3]!);
@@ -2306,7 +2316,7 @@ export async function modelOpportunity(
 
   const volumeFact = fact('buyerVolume');
   // A count of what the payer holds ("3,400 boats" for boat owners) counts buyers too.
-  const counted = volumeFact ? readVolume(volumeFact.value, windowDays, opportunity.payer) : null;
+  const counted = volumeFact ? readVolume(volumeFact.value, windowDays, opportunity.payer, opportunity.industry ?? null) : null;
   /*
    * A price per period already contains how often the buyer is served
    * (planningReliability round 4): a shop paying $180 a month for weekly

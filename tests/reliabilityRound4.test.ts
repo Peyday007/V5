@@ -37,7 +37,7 @@ describe('rule 1: agreements per contact are a measured close', () => {
     expect(readOfferWins('6 agreements from 40 contacts')).toEqual({ won: 6, offers: 40, unit: 'contacts' });
     expect(readOfferWins('9 orders of 30 stores asked')).toEqual({ won: 9, offers: 30, unit: 'asked' });
     expect(readOfferWins('2 signed of 25 firms approached')).toEqual({ won: 2, offers: 25, unit: 'approached' });
-    for (const other of ['22 orders from 1,900 members', '4 paid pre-orders from 1600 unique visitors', '40 contacts made', '50 agreements from 40 contacts']) {
+    for (const other of ['18 orders from a 14,000-member group', '4 paid pre-orders from 1600 unique visitors', '40 contacts made', '50 agreements from 40 contacts']) {
       expect(readOfferWins(other), other).toBeNull();
     }
   });

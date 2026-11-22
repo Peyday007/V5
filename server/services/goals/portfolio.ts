@@ -1425,7 +1425,21 @@ export function evaluateGoalPortfolio(input: {
       if (!established(one.channel.perDay)) unestablished.push(`${one.channel.label} a day`);
     } else if (one.repeatable && stated === null && !(input.contactsPerDay && established(input.contactsPerDay))) unestablished.push('outreach a day');
     let refused: string | null = null;
-    if (input.capitalCeiling !== null && capital.established && capitalOwnEvidence(one) && capital.amount > input.capitalCeiling + 1e-9) {
+    /*
+     * Every deal loses money (planningReliability round 5): an established
+     * direct cost at or above an established price — signed or not — only
+     * lowers what the owner keeps, however many buyers agreed. Its agreed
+     * money still counted as cash toward the target, so the best combination
+     * carried six signed $900 rentals that each cost $950, and the plan read
+     * them as the way to the target. It is refused from every combination;
+     * the plan's own economics link still names it.
+     */
+    const lossPrice = one.price.value;
+    const lossCost = one.directCost.value;
+    if (lossPrice !== null && lossCost !== null && established(one.price) && established(one.directCost) && lossCost >= lossPrice) {
+      refused = `each deal loses money: a direct cost of ${Math.round(lossCost)} against a price of ${Math.round(lossPrice)}`;
+    }
+    if (!refused && input.capitalCeiling !== null && capital.established && capitalOwnEvidence(one) && capital.amount > input.capitalCeiling + 1e-9) {
       refused = `ties up ${Math.round(capital.amount)} at its start, more than the ${Math.round(input.capitalCeiling)} this goal may tie up in all`;
     }
     /*
@@ -1539,6 +1553,20 @@ export function evaluateGoalPortfolio(input: {
       refused = established(one.hours)
         ? `one deal needs ${Math.round(hoursLow)} owner hours, more than the ${Math.round(input.hours)} owner hours this goal has`
         : `no performer is established: nobody has established who does the work, so it is read as the owner's, at least ${Math.round(hoursLow)} owner hours a deal, more than the ${Math.round(input.hours)} owner hours this goal has — establish who performs it (Brain, a named supplier) or the hours it takes`;
+    }
+    /*
+     * Agreed work is committed hours too (planningReliability round 5): three
+     * signed owner-hosted events at eight hours each are 24 hours against 9,
+     * yet agreed money was exempt here, so the best combination carried them
+     * beside nine signed reports that collect the target in 4.5 hours. Agreed
+     * work that alone, at its hours' lowest bound (the card's own figure, or the
+     * bottom of an unknown's sweep), exceeds the goal's hours cannot be done
+     * inside them, so it is refused from every combination as a new deal
+     * would be; the plan's own strategy still names the broken limit when
+     * nothing else reaches the target.
+     */
+    if (!refused && input.hours !== null && input.hours !== undefined && one.agreedDeals > 0 && hoursLow !== null && one.agreedDeals * hoursLow > input.hours + 1e-9) {
+      refused = `its ${one.agreedDeals} agreed deal(s) need ${Math.round(one.agreedDeals * hoursLow * 10) / 10} owner hours, more than the ${Math.round(input.hours)} owner hours this goal has`;
     }
     /*
      * An established outlay over the per-arrangement limit is refused. An
