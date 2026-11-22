@@ -119,6 +119,7 @@ import { integrityInput, leadIdsOf, leadOf, type PlanLead } from './planIntegrit
 import { readCapabilityInventory, stepExecutor, type CapabilityInventory, type OperationRequest, type StepExecutor, type StepOperation } from './stepExecutor.ts';
 import { goalObjective, readOutcome, tradeOffs, type EnforceableCommitment, type GoalObjective, type OutcomeReading, type PlanTradeOff } from './objective.ts';
 import { buildPlanSet, calibrationFor, candidateFromArrangement, candidateFromPathway, candidateFromStrategy, rebuildAfter, type AcceptanceCondition, type Calibration, type PlanCandidate, type PlanChange, type PlanSet, type Rebuild } from './planSet.ts';
+import { blockerResolutions, type Resolution } from './resolution.ts';
 
 export const PLAN_VERDICTS = ['RECOMMENDABLE', 'NEEDS_EVIDENCE', 'NOT_VIABLE'] as const;
 export type PlanVerdict = (typeof PLAN_VERDICTS)[number];
@@ -650,7 +651,7 @@ export interface InfeasibleConclusion {
   /** Why, in arithmetic. */
   reason: string;
   /** The constraints to relax, the one the diagnosis names first. */
-  relax: Array<{ constraint: 'DEADLINE' | 'CAPITAL' | 'TARGET'; suggestion: string }>;
+  relax: Array<{ constraint: 'DEADLINE' | 'CAPITAL' | 'TARGET' | 'OWNER_HOURS'; suggestion: string }>;
   headroomReach: number;
   required: number;
   /**
@@ -2570,6 +2571,9 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   }
   // The goal as stated, judged on arithmetic rather than on the openings found (C-10, §65).
   const infeasible = acceptance.status === 'ACCEPTED' ? null : judgeFeasibility(feasibilityInput(reconstruction, pathways.structures, model.portfolio, target, acceptance.required));
+  // What would resolve the no-plan conclusion's blocker (§3a): advice beside the verdict, never a change of it.
+  const resolutions = acceptance.status === 'ACCEPTED' ? [] : resolutionsOf(strategies, model.included, target, acceptance);
+  if (infeasible) relaxAlso(infeasible, resolutions);
   if (infeasible) acceptance = notSupported(acceptance, infeasible);
   // The verdict follows the plan adopted: a reconstructed candidate is constructed from its own reading, not the baseline's.
   acceptance = {
@@ -2679,14 +2683,14 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     needsMoreOpenings: continuation.continues,
     inferred: inferredInputs(model.considered),
     // The questions the plan Brain holds needs answered, then the run's own (C-9).
-    researchPriority: planResearchPriority({
+    researchPriority: [...resolutions.map((one) => one.priority), ...planResearchPriority({
       reconstruction,
       adoption: plan.adoption,
       adoptedIds: acceptance.candidate?.opportunityIds ?? [],
       daysLeft: target.daysLeft,
       remaining: target.remainingCents / 100,
       legacy: researchPriority(result, model.included, target, chosen?.key ?? null),
-    }),
+    })],
     // The pool, the ladder and the diagnosis are about openings found; an estimate is none of them.
     pool: infeasible ? { ...pool, sentence: `${pool.sentence} The goal as stated is not supported by arithmetic, so the search stops until its terms or inputs change.` } : pool,
     ladder: ladderOf(considered.filter((one) => !isArrangementId(one.opportunityId))),
@@ -3247,6 +3251,32 @@ export function judgeFeasibility(input: {
     : `no structure direct outreach can sell closes ${moneyOf(input.remaining)} in ${input.daysLeft ?? 0} day(s)${firstImpossible ? ` (${firstImpossible.reason})` : ''}, only buyers already at a checkout could pay in time, and the openings held reach ${pctOf(r.headroom.reach)} of the required ${pctOf(input.required)} even with every estimate at its favourable end`;
   const instantOnly = !allImpossible && s.structures.some((one) => one.kind === 'INSTANT' && one.verdict !== 'IMPOSSIBLE');
   return { reason, relax, headroomReach: r.headroom.reach, required: input.required, instantOnly };
+}
+
+/** The resolutions of the blockers the gate's NOT_VIABLE strategies show (`blockerResolutions`), from the planner's own numbers. */
+function resolutionsOf(strategies: StrategyReading[], included: ModelledOpportunity[], target: TargetReading, acceptance: PlanAcceptance): Resolution[] {
+  const byId = new Map(included.map((one) => [one.opportunity.id, one]));
+  return blockerResolutions({
+    strategies: strategies
+      .filter((one) => one.verdict === 'NOT_VIABLE')
+      .map((one) => (one.dealsTaken ?? []).flatMap(({ opportunityId, deals }) => (byId.has(opportunityId) ? [{ one: byId.get(opportunityId)!, deals }] : []))),
+    remaining: target.remainingCents / 100,
+    currency: target.currency,
+    daysLeft: target.daysLeft,
+    hoursCeiling: target.hoursCeiling,
+    capitalCeiling: target.capitalCeilingCents === null ? null : target.capitalCeilingCents / 100,
+    capitalBeforeProof: target.capitalBeforeProofCents === null || target.proven ? null : target.capitalBeforeProofCents / 100,
+    net: countsNet(target.metric),
+    researchDays: RESEARCH_TURNAROUND_DAYS,
+    value: acceptance.required - (acceptance.candidate?.reach ?? 0),
+  });
+}
+
+/** A relaxation the arithmetic's own diagnosis cannot see (owner hours above all), added to a NOT_SUPPORTED conclusion once per constraint. */
+export function relaxAlso(infeasible: InfeasibleConclusion, resolutions: Resolution[]): void {
+  for (const { relax } of resolutions) {
+    if (relax && !infeasible.relax.some((one) => one.constraint === relax.constraint)) infeasible.relax.push(relax);
+  }
 }
 
 /** The acceptance a NOT_SUPPORTED goal reads: no plan, the arithmetic, and which constraint to relax. */
