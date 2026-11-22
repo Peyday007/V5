@@ -309,6 +309,71 @@ export function readVolume(text: string, windowDays: number, payer: string | nul
 }
 
 /**
+ * The words a volume can count a measured rate's own trials in, by the unit the
+ * rate was measured on. A bid answers a solicitation, so a tender's win rate
+ * per bid applies to the RFQs, RFPs and tenders posted; a quote answers a quote
+ * request; a booking rate per click applies to clicks, and a paid rate per
+ * visitor to visitors. A unit not listed here (contacts, members) is already a
+ * buyer word, or is not a count a volume states.
+ */
+const TRIAL_WORDS: Array<[RegExp, string]> = [
+  [/^(?:bids?|tenders?)$/, 'bids|tenders|RFQs|RFPs|RFTs|solicitations|requests for quotes|requests for proposals|requests for tender|invitations to bid|bid opportunities'],
+  [/^(?:quotes?|quotations?|estimates?)$/, 'quote requests|requests for quotes|RFQs|estimate requests'],
+  [/^proposals?$/, 'RFPs|requests for proposals|proposal requests'],
+  [/^clicks?$/, 'clicks'],
+  [/^visitors?$/, 'visitors|visits'],
+];
+const SPAN_DAYS: Record<string, number> = { day: 1, week: 7, fortnight: 14, month: 30, quarter: 91, year: 365 };
+const MONTHS = 'january|february|march|april|may|june|july|august|september|october|november|december';
+const SPAN = new RegExp(`\\b(?:this|next|in|during|over|for)\\s+(?:the\\s+)?(?:(day|week|fortnight|month|quarter|year)|(${MONTHS}))\\b`, 'i');
+const SENTENCE_RATE = new RegExp(`^[^.;]*?\\b${PER}\\s+(day|week|month|quarter|year)\\b`, 'i');
+
+/**
+ * The prospects a measured rate applies to, when research stated the volume in
+ * the rate's own trial unit (planningReliability round 6): "60 inspection RFQs
+ * a month" for a win rate per bid, "9,000 forecast clicks this November" for a
+ * booking rate per click. Each trial is one chance at a deal, so the count is
+ * read as prospects (BUYERS), never as deals — the measured rate still decides
+ * how many of them pay, and `prospectsAsked` still bounds it. A count stated
+ * per period is a rate over the window; a count stated for a named span (a
+ * month, "this week") longer than the window is cut to the window's share of
+ * it, never stretched; a count with no span is the window's. Null when the
+ * unit has no trial words or the text states no such count. Pure.
+ */
+export function readTrialVolume(text: string, windowDays: number, unit: string): VolumeReading | null {
+  if (!text || !(windowDays > 0)) return null;
+  const words = TRIAL_WORDS.find(([pattern]) => pattern.test(unit.toLowerCase()))?.[1];
+  if (!words) return null;
+  const window = Math.max(1, Math.floor(windowDays));
+  const pattern = new RegExp(`(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z-]+\\s+){0,5}?(?:${words})\\b(?!\\s*%)(?:\\s+${PER}\\s+(day|week|month|quarter|year)\\b)?`, 'gi');
+  let best: VolumeReading | null = null;
+  for (const m of text.matchAll(pattern)) {
+    const count = toInt(m[1]!);
+    if (!(count > 0 && count < 50_000_000)) continue;
+    let prospects: number;
+    let basis: string;
+    // A period stated after the count in its own sentence ("12 tenders are posted each week") is a rate too.
+    const rate = m[2] ?? SENTENCE_RATE.exec(text.slice((m.index ?? 0) + m[0]!.length))?.[1];
+    if (rate) {
+      const period = rate.toLowerCase();
+      prospects = Math.floor((count * window) / PERIOD_DAYS[period]!);
+      basis = `${count} ${unit} opportunities a ${period} are stated, so ${prospects} in ${window} days, each one trial of the measured rate`;
+    } else {
+      const named = SPAN.exec(sentenceAt(text, m.index ?? 0).text);
+      const days = named ? (named[1] ? SPAN_DAYS[named[1].toLowerCase()]! : 30) : null;
+      const cut = days !== null && window < days;
+      prospects = cut ? Math.floor((count * window) / days) : count;
+      basis = cut
+        ? `${count} ${unit} are stated over about ${days} days, so ${prospects} in ${window} days, each one trial of the measured rate`
+        : `${count} ${unit} are stated for the window, each one trial of the measured rate`;
+    }
+    if (prospects < 1) continue;
+    if (!best || prospects < best.deals) best = { deals: prospects, buyers: prospects, everyDays: null, counted: 'BUYERS', basis };
+  }
+  return best;
+}
+
+/**
  * A physical or counted quantity a record states, with its unit normalized —
  * the numeric extraction ALGO-16-1 item 2 names, kept beside `readVolume`
  * because both read numbers out of prose and share its rule: a quantity counts
