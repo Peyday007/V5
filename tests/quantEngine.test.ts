@@ -152,6 +152,32 @@ describe('G. plausible economics, but the money arrives after the deadline (muni
   });
 });
 
+describe('G2. the strongest combination of eligible activities only (planMetamorphic P6)', () => {
+  // One ineligible activity (an unpriced opening) that reaches the target alone, beside small eligible ones.
+  const problem = (eligibleCount: number) => ({
+    target: 5_000,
+    deadlineDays: 30,
+    worlds: 200,
+    activities: [{ key: 'u', label: 'u', justified: true, ...fixed(200, 9_000, 5) }, ...Array.from({ length: eligibleCount }, (_, i) => ({ key: `e${i}`, label: `e${i}`, justified: true, ...fixed(200, 1_000, 5) }))],
+    eligible: (key: string) => key !== 'u',
+  });
+  for (const [mode, count] of [['exhaustive', 9], ['greedy', 14]] as const) {
+    it(`is searched for itself, not read from the truncated ranking (${mode})`, () => {
+      const r = optimizePortfolio(problem(count));
+      expect(r.best!.keys).toContain('u');
+      expect(r.bestEligible).toBeTruthy();
+      expect(r.bestEligible!.keys.every((k) => k !== 'u')).toBe(true);
+      expect(r.bestEligible!.reach).toBe(1);
+    });
+  }
+  it('is absent without `eligible`, and best itself when best is eligible', () => {
+    const { eligible: _drop, ...plain } = problem(3);
+    expect(optimizePortfolio(plain).bestEligible).toBeUndefined();
+    const all = optimizePortfolio({ ...problem(3), eligible: () => true });
+    expect(all.bestEligible).toBe(all.best);
+  });
+});
+
 describe('H. individually viable activities that compete for one resource (event staffing)', () => {
   it('refuses the combination that needs more hours than exist, and names why', () => {
     const activities: Activity[] = [
