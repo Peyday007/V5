@@ -11,7 +11,8 @@ import { describe, expect, it } from 'vitest';
 import { planIntegrity } from '../server/domain/planIntegrity.ts';
 import type { ModelInput, ModelledOpportunity } from '../server/services/cash/goalScenario.ts';
 import { COLLECTION_COST, openingMember, openingMembers, type OpeningChainMember } from '../server/services/goals/arrangementSteps.ts';
-import { planSteps, type MarketTest, type PlanReading, type PlanStep } from '../server/services/goals/plan.ts';
+import { planSteps, stepAsNextTest, type MarketTest, type PlanReading, type PlanStep } from '../server/services/goals/plan.ts';
+import type { Reconstruction } from '../server/services/goals/reconstruction.ts';
 import { integrityInput } from '../server/services/goals/planIntegrityInput.ts';
 import { declaredInventory, type CapabilityInventory } from '../server/services/goals/stepExecutor.ts';
 
@@ -199,7 +200,7 @@ describe('a member is read from what the plan judged', () => {
 });
 
 describe('a sale beside the plan\'s lead', () => {
-  it('stays one step on the plan as a whole — costed and evidenced — so no step acts outside the lead', () => {
+  it('is no step of the plan — every step belongs to the selected strategy — while the lead keeps its whole transaction', () => {
     const lead = member({ id: 'opp_lead', title: 'Lead workbook', fulfils: { by: 'BRAIN', capability: 'PRODUCE_SPREADSHEET' } });
     const beside = member({ id: 'opp_beside', title: 'Beside retainer', fulfils: { by: 'PROVIDER', name: 'A bookkeeper' } });
     const s = planSteps({
@@ -213,14 +214,61 @@ describe('a sale beside the plan\'s lead', () => {
       members: new Map([lead, beside].map((m) => [m.id, m])),
       lead: ['opp_lead'],
     });
-    const other = s.find((x) => x.label === 'Sell "Beside retainer"')!;
-    expect(other.openings).toBeUndefined();
-    expect(other).toMatchObject({ cost: 0, stage: { stage: 'OFFER', costSource: 'MODEL' } });
-    expect(other.evidence).toContain('opp_beside');
+    expect(s.map((x) => x.label)).not.toContain('Sell "Beside retainer"');
+    expect(s.every((x) => x.openings?.includes('opp_lead'))).toBe(true);
     expect(s.filter((x) => x.openings?.includes('opp_lead')).map((x) => x.stage?.stage)).toEqual(['OFFER', 'DELIVER', 'COLLECT']);
     const violations = planIntegrity(
       integrityInput({ goalId: 'wst_chain', verdict: 'NEEDS_EVIDENCE', summary: 's', acceptance: { status: 'CANDIDATE_ONLY', candidate: { label: 'Lead workbook', opportunityIds: ['opp_lead'] }, shortfalls: [] }, steps: s, nextTest: null, portfolio: null } as unknown as PlanReading),
     ).violations;
     expect(violations).toEqual([]);
+  });
+});
+
+describe('a reconstruction that sells several openings', () => {
+  const a = member({ id: 'opp_a', title: 'Audit workbook', price: 900, fulfils: { by: 'BRAIN', capability: 'PRODUCE_SPREADSHEET' } });
+  const b = member({ id: 'opp_b', title: 'Monthly retainer', price: 350, cash: { span: { low: 10, high: 14 }, standing: 'proven' }, fulfils: { by: 'PROVIDER', name: 'A bookkeeper' } });
+  const reconstruction = { required: 0.9, requiredReply: null, best: { key: 'best', changes: [], members: ['opp_a', 'opp_b'], memberIds: ['opp_a', 'opp_b~PARTNER'] } } as unknown as Reconstruction;
+  const build = (members: OpeningChainMember[], sales: MarketTest[] = []) =>
+    planSteps({
+      adoption: { source: 'RECONSTRUCTED', hypothetical: false, reason: 'beats the plan as held' },
+      reconstruction,
+      sales,
+      nextTest: null,
+      permissionsMissing: [],
+      capabilities: connected(),
+      daysLeft: 30,
+      members: new Map(members.map((m) => [m.id, m])),
+      lead: ['opp_a', 'opp_b~PARTNER'],
+      adoptedIds: new Set(['opp_a', 'opp_b~PARTNER']),
+    });
+
+  it('sells each opening as its own transaction, at the price each was judged at', () => {
+    const s = build([a, b]);
+    const offers = s.filter((x) => x.stage?.stage === 'OFFER');
+    expect(offers.map((x) => [x.label, x.price, x.openings])).toEqual([
+      ['Sell "Audit workbook"', 900, ['opp_a']],
+      ['Sell "Monthly retainer"', 350, ['opp_b']],
+    ]);
+    for (const m of ['opp_a', 'opp_b']) expect(s.filter((x) => x.openings?.includes(m)).map((x) => x.stage?.stage)).toEqual(['OFFER', 'DELIVER', 'COLLECT']);
+    for (const x of s) {
+      expect(x.cost, x.label).not.toBeNull();
+      expect(x.evidence?.length, x.label).toBeGreaterThan(0);
+    }
+    expect(s.map((x) => x.label)).not.toContain("Sell the plan's openings");
+    // The first step, which the reading's next test is built from, still says it sells one of the plan's openings.
+    expect(stepAsNextTest(s[0]!, reconstruction)).toMatchObject({ link: 'CONVERSION', by: 'BRAIN' });
+    expect(s[0]!.detail).toMatch(/one of the plan's 2 openings/);
+    const violations = planIntegrity(
+      integrityInput({ goalId: 'wst_chain', verdict: 'NEEDS_EVIDENCE', summary: 's', acceptance: { status: 'CANDIDATE_ONLY', candidate: { label: 'r', opportunityIds: ['opp_a', 'opp_b~PARTNER'] }, shortfalls: [] }, steps: s, nextTest: null, portfolio: null } as unknown as PlanReading),
+    ).violations;
+    expect(violations).toEqual([]);
+  });
+
+  it('a sale beside the reconstruction is no step of it', () => {
+    expect(build([a, b], [sale('opp_c', 'Beside offer')]).map((x) => x.label)).not.toContain('Sell "Beside offer"');
+  });
+
+  it('a member the plan holds no facts for keeps the plan\'s one sale and one collection', () => {
+    expect(build([a]).map((x) => x.label)).toEqual(["Sell the plan's openings", 'Collect payment']);
   });
 });

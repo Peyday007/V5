@@ -283,7 +283,9 @@ function planLines(p: PlanReading, byId: Map<string, Held>): { candidate: Held[]
     const h = byTitle(m);
     if (h && !candidate.includes(h)) candidate.push(h);
   }
-  const sold = p.steps.map((s) => /^Sell "(.*)"$/.exec(s.label)?.[1]).filter((t): t is string => !!t).map(byTitle).filter((h): h is Held => !!h);
+  // What the goal sells is the reading's sales order (`pursueSales` works every one), read from the sales themselves: a sale
+  // beside the selected strategy is pursued but is no step of the plan (STEPS_BELONG_TO_PLAN, 2026-11-22).
+  const sold = (p.sales ?? []).map((s) => byId.get(s.opportunityId) ?? byTitle(s.title)).filter((h): h is Held => !!h);
   return { candidate: [...new Set(candidate)], sold, unnamed };
 }
 

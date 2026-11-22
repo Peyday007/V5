@@ -402,3 +402,30 @@ describe('an arrangement\'s steps name what they rest on and the economics they 
     }
   });
 });
+
+describe('an arrangement that is a member of the selected strategy, beside a sale', () => {
+  const sale = { opportunityId: 'cop_sold', title: 'A sold opening', potentialReach: 1000, test: { link: 'CONVERSION' as const, test: 'Sell it.', by: 'BRAIN' as const, blocker: null } };
+  const conversion: NextTest = { link: 'CONVERSION', test: 'Establish buyers who agree.', by: 'BRAIN', blocker: null };
+  const build = (lead: string[]) =>
+    planSteps({
+      adoption: { source: 'BASELINE', hypothetical: true, reason: 'r' },
+      reconstruction: null,
+      sales: [sale],
+      nextTest: conversion,
+      permissionsMissing: [],
+      arrangement: { arrangement: postcard, context: { currency: 'USD', daysLeft: 30, capitalBeforeProof: 375 } },
+      lead,
+    });
+
+  it('is sequenced as its own chain, and the goal step it already covers is not repeated', () => {
+    const steps = build(['cop_sold', 'arr_postcard-pool']);
+    expect(steps.some((s) => s.arrangement?.key === 'postcard-pool' && s.arrangement.stage === 'COLLECT')).toBe(true);
+    expect(steps.map((s) => s.label)).not.toContain('Establish buyers who have actually agreed to it, or a sized measure of how many agree');
+    expect(steps.filter((s) => s.label.startsWith('Establish'))).toEqual([]);
+    expect(new Set(steps.map((s) => s.order)).size).toBe(steps.length);
+  });
+
+  it('is no step when it is not a member', () => {
+    expect(build(['cop_sold']).some((s) => s.arrangement)).toBe(false);
+  });
+});
