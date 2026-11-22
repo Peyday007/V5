@@ -247,7 +247,6 @@ export function forgetUnansweredRead(): void {
   unansweredMark = null;
 }
 
-/** How often the brain-only pass runs inside the tick. */
 /**
  * §85 / rule 9: displaced research stranded on the free lane is continued, not
  * only recorded. `watchDisplacedWork` writes the free-lane:coverage
@@ -284,6 +283,7 @@ export async function continueDisplacedWork(deps: {
   }
 }
 
+/** How often the brain-only pass runs inside the tick. */
 const BRAIN_ONLY_PASS_MS = 60_000;
 let lastBrainOnlyPass = 0;
 /** How often the free lane's model-output incidents are read (a day of answers per read). */
