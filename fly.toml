@@ -117,4 +117,13 @@ primary_region = "iad"        # pick the region nearest your Supabase project
   # the health check while the database itself sat idle. The heap ceiling is
   # raised with it (Dockerfile CMD) and the threads keep their own 384 MB caps.
   # About $9 a month more.
-  memory = "4gb"
+  #
+  # 8 GB since 2026-11-22, approved by the owner (about $20 a month more). On
+  # 4 GB the app held 3.3-3.5 GB, and a release-check read child (700 MB heap
+  # cap, scripts/boundedChild.ts) beside it stalled the app itself for 428 s,
+  # 112 s and 36 min (runs 45057935518, 45060366506). The check's memory guard
+  # (#1240) then refused to start a read with 515 MB free (run after Deploy
+  # 45067490122), so no release could be verified. The app's own heap ceiling
+  # (Dockerfile CMD) is unchanged; the extra memory is for the check's readers
+  # and the threads beside it.
+  memory = "8gb"
