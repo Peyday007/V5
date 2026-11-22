@@ -16,8 +16,32 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterAll } from 'vitest';
+import { afterAll, beforeEach } from 'vitest';
 import { releaseTestSchemas } from './pgSchemas.ts';
+
+/*
+ * Every test starts on a fresh turn of the event loop.
+ *
+ * vitest runs a file's tests as one promise chain and never yields between
+ * them, and on SQLite the repository layer is synchronous — `freshProject`
+ * alone migrates a new database in about a second without a single await on
+ * I/O. So a file whose tests do no real I/O is one uninterrupted macrotask:
+ * `packet.test.ts` went 73 s without one (2026-11-22). The worker's IPC to
+ * vitest's main process is serviced only between macrotasks, so the reply to
+ * an `onTaskUpdate` sent before such a stretch is read after its 60 s RPC
+ * timer has already fired. The update rejects, every later update chains on
+ * that rejection, and the file never reports, although all its tests pass —
+ * Deploy run 45016674213, shard 1, twice. How long the stretch runs depends
+ * on the runner's speed, so it surfaced as a shard that "hangs".
+ *
+ * A timer and then an immediate make one full revolution (timers, poll,
+ * check), so whatever arrived during the previous test is read before the next
+ * one starts. tests/eventLoopTurnBetweenTests.test.ts holds it.
+ */
+beforeEach(async () => {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setImmediate(resolve));
+});
 
 const PREFIX = 'brain-test-';
 
