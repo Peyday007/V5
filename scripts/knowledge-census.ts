@@ -41,6 +41,8 @@ async function main(): Promise<void> {
     await q('MAIN_RUNNING_AGE', "SELECT m.state, COUNT(*) AS n, MIN(m.created_at) AS oldest, MAX(m.created_at) AS newest FROM russell_missions m JOIN russell_candidates c ON c.id = m.candidate_id WHERE c.project_id = 'prj_22fb4fec295f403a8a22' AND m.state IN ('RUNNING','LAUNCHING','PLANNED','QUEUED') GROUP BY m.state");
     await q('MAIN_LAUNCHED_TODAY', "SELECT substr(m.created_at,1,13) AS hour, COUNT(*) AS n FROM russell_missions m JOIN russell_candidates c ON c.id = m.candidate_id WHERE c.project_id = 'prj_22fb4fec295f403a8a22' AND m.created_at > '2026-11-21T18:00:00' GROUP BY 1 ORDER BY 1");
     await q('PLAN_Q_MISSION_DETAIL', "SELECT m.id, m.state, m.waiting_on, m.orchestration_id, m.writeback_at, m.created_at, m.updated_at FROM russell_missions m WHERE m.candidate_id IN (SELECT candidate_id FROM cash_needs WHERE blocked_action LIKE '%goal:wst_7b4fcbb5f2384f31b6c3:plan%' AND candidate_id IS NOT NULL)");
+    await q('PLAN_Q_FRAGS', "SELECT f.orchestration_id, f.status, f.attempt, COUNT(*) AS n FROM research_fragments f WHERE f.orchestration_id IN ('orc_694532fd32904450968a','orc_345b17a00c904f55957e') GROUP BY 1, 2, 3");
+    await q('PLAN_Q_ORCH', "SELECT o.id, o.status, o.updated_at FROM research_orchestrations o WHERE o.id IN ('orc_694532fd32904450968a','orc_345b17a00c904f55957e')");
   } finally {
     await closeDatabase();
     console.log('CENSUS: OK');
