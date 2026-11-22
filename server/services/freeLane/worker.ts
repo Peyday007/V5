@@ -2399,6 +2399,7 @@ export function clearRouteCooldowns(model: string): number {
 export function endFreeLaneCooldowns(): void {
   cooldown.clear();
   routeCooled.clear();
+  routeCooling.clear();
 }
 const transientStrikes = new Map<string, number>();
 
@@ -3168,6 +3169,14 @@ export function routeHeld(model: string, now = Date.now()): string | null {
   return null;
 }
 
+/** How many of the route's most recent recorded calls failed in a row. */
+export function routeFailingRun(model: string): number {
+  const recent = routeWindow.get(model) ?? [];
+  let n = 0;
+  for (let i = recent.length - 1; i >= 0 && !recent[i]!.ok; i -= 1) n += 1;
+  return n;
+}
+
 /** Whether a held route's next probe is due and none is in flight. */
 export function routeProbeDue(model: string, now = Date.now()): boolean {
   const state = routeHealth.get(model);
@@ -3175,7 +3184,7 @@ export function routeProbeDue(model: string, now = Date.now()): boolean {
 }
 
 /**
- * A provider-availability failure on a route: the route cools, not only the item. Doubles with
+ * Consecutive provider-availability failures on a route: the route cools, not only the item. Doubles with
  * consecutive failures, capped; ended by the route's next answer (`recordRouteOutcome`).
  */
 export function coolRoute(model: string, cause: RouteFailureCause, now = Date.now()): number {
@@ -3568,16 +3577,13 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
      * Brain's own database being busy and a search outage stay per item: neither is the route.
      */
     const routeOutage = providerFailure && /^model call failed/.test(ctx.why) && !BRAIN_UNAVAILABLE.test(ctx.why);
-    if (routeOutage) {
-      if (routeHeld(route) === null) coolRoute(route, causeOfReason(ctx.why) ?? 'provider availability');
-      cooldown.delete(key);
-      routeCooled.delete(key);
-    } else {
-      cooldown.set(key, Date.now() + coolMs);
-      // A route outage, not the item's own answer: ended by the route's next success.
-      if (providerFailure) routeCooled.add(key);
-      else routeCooled.delete(key);
-    }
+    // A second provider failure in a row on the route: the outage is the route's, so the route cools.
+    // One failure between answers (the 2026-11-15 case) leaves the route open; only that item waits.
+    if (routeOutage && routeHeld(route) === null && routeFailingRun(route) >= 2) coolRoute(route, causeOfReason(ctx.why) ?? 'provider availability');
+    cooldown.set(key, Date.now() + coolMs);
+    // A route outage, not the item's own answer: ended by the route's next success.
+    if (providerFailure) routeCooled.add(key);
+    else routeCooled.delete(key);
     try {
       await call(ctx, 'brain_release_work', { ...proof(ctx), detail: `free lane: ${ctx.why}`.slice(0, 300) });
     } catch {

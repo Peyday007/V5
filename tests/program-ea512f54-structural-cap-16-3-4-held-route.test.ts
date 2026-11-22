@@ -275,9 +275,11 @@ describe('a held route admits nothing and is asked with its own probe (CAP-16-3 
       return answering(...args);
     };
     const base = { workers, completer: lane, fetchSource, search: async () => [], config: CONFIG, worker: workers[0]!, index: 0 };
-    const first = await takeOne(base);
-    expect(first.ok).toBe(false);
-    // Every queued item waits the route's short cooldown, not only the one that failed.
+    // One failure between answers leaves the route open (only that item waits); a second in a row cools it.
+    expect((await takeOne(base)).ok).toBe(false);
+    expect(routeHeld('brain-a')).toBeNull();
+    expect((await takeOne(base)).ok).toBe(false);
+    // Every queued item waits the route's short cooldown, not only the ones that failed.
     expect(routeHeld('brain-a')).toMatch(/cooling down after a provider failure/);
     expect((await takeOne(base)).claimed).toBeNull();
     expect(routeHold('brain-a')).toBeNull(); // never held by the breaker for it

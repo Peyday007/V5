@@ -360,9 +360,8 @@ describe('takeOne end to end: a probe answer reopens the route only when its win
     const lane: Completer = (...args) => completer(...args);
     const base = { workers, completer: lane, fetchSource, search: async () => [], config: CONFIG, worker: workers[0]!, index: 0 };
 
-    // One real item fails on brain-a's provider: the route cools, not only that item.
-    const failed = await takeOne(base);
-    expect(failed.ok).toBe(false);
+    // Two real items fail in a row on brain-a's provider: the route cools, not only those items.
+    for (let i = 0; i < 2; i += 1) expect((await takeOne(base)).ok).toBe(false);
     expect(routeHeld('brain-a')).toMatch(/cooling down after a provider failure/);
     expect((await takeOne(base)).claimed).toBeNull();
 
@@ -394,14 +393,12 @@ describe('takeOne end to end: a probe answer reopens the route only when its win
 
     const failed = await takeOne(base);
     expect(failed.ok).toBe(false);
-    // The outage cooled the route rather than the one item, so no item is cooling for brain-a alone.
-    expect(coolingForEveryModel(['brain-a'])).toBe(0);
-    expect(routeHeld('brain-a')).not.toBeNull();
-
-    // brain-b's answers say nothing of brain-a's route; brain-a's own next answer does.
-    completer = answering;
-    expect(recordRouteOutcome('brain-a', { ok: true })).toBe(true);
+    // One failure between answers leaves the route open; only that item waits for brain-a.
+    expect(coolingForEveryModel(['brain-a'])).toBe(1);
     expect(routeHeld('brain-a')).toBeNull();
+
+    // The route answers and is open: its outage cooldown ends, so brain-a may take that item again.
+    completer = answering;
     const seen = new Set<string>();
     for (let i = 0; i < 10 && !seen.has(failed.claimed!.workItemId); i += 1) {
       const next = await takeOne(base);
