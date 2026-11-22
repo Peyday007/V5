@@ -1080,6 +1080,52 @@ export function withoutSpareOwnerWork<M extends { one: ModelledOpportunity; deal
   if (committed <= target.hoursCeiling + 1e-9 && (all.labour === null || all.labour <= target.hoursCeiling + 1e-9)) return members;
   const spare = (m: M) => m.deals === 0 && m.one.agreedDeals > 0 && m.one.hours.value !== null && m.one.hours.provenance !== 'UNKNOWN' && m.one.hours.value > 0;
   const rest = members.filter((m) => !spare(m));
+  if (rest.length === members.length) return members;
+  const reaches = (set: M[]) => {
+    const cons = conservative(set, target);
+    return cons.settled !== null && cons.settled >= target.remainingCents / 100;
+  };
+  if (rest.length > 0) return reaches(rest) ? rest : members;
+  /*
+   * Every member is agreed work that costs hours (planningReliability round 5):
+   * nine signed Brain-produced reports at half an hour each beside three signed
+   * owner-hosted events at eight hours each. Leaving every spare member out
+   * left nothing, so all of them stayed and the limit broke, although the
+   * reports alone collect the target in 4.5 hours. The agreements that cost
+   * the most hours for each unit of money go first, one at a time, while what
+   * stays still reaches the target, until the hours fit.
+   */
+  const hoursOf = (m: M) => m.one.agreedDeals * (m.one.hours.value ?? 0);
+  const order = [...members].sort((a, b) => hoursOf(b) / Math.max(1e-9, b.one.agreedValue) - hoursOf(a) / Math.max(1e-9, a.one.agreedValue));
+  let kept = members;
+  for (const m of order) {
+    if (kept.reduce((sum, k) => sum + hoursOf(k), 0) <= target.hoursCeiling + 1e-9) break;
+    const next = kept.filter((k) => k !== m);
+    if (next.length > 0 && reaches(next)) kept = next;
+  }
+  return kept;
+}
+
+/**
+ * A strategy's members, without agreed lots on which every deal loses money
+ * that the plan does not need (planningReliability round 5) — the economics
+ * counterpart of `withoutSpareOwnerWork`.
+ *
+ * Every agreement is counted in every strategy, so six signed rentals that each
+ * cost more than they pay put "costs at least what it pays" on every strategy,
+ * including one whose other opening reaches the target at a margin; and a
+ * strategy without them could not be stated. Agreed-only members whose
+ * established direct cost is at least their price are left out if the rest
+ * still reach the target at their cautious numbers; otherwise every member
+ * stays, and the economics break. Pure.
+ */
+export function withoutLossMakingLots<M extends { one: ModelledOpportunity; deals: number }>(
+  members: M[],
+  target: Pick<TargetReading, 'daysLeft' | 'remainingCents'>,
+): M[] {
+  const losing = (m: M) =>
+    m.deals === 0 && m.one.agreedDeals > 0 && m.one.price.value !== null && m.one.directCost.value !== null && m.one.directCost.provenance !== 'UNKNOWN' && m.one.directCost.value >= m.one.price.value;
+  const rest = members.filter((m) => !losing(m));
   if (rest.length === 0 || rest.length === members.length) return members;
   const cons = conservative(rest, target);
   return cons.settled !== null && cons.settled >= target.remainingCents / 100 ? rest : members;
@@ -2097,7 +2143,10 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   for (const spec of model.definition.strategies) {
     const members = withoutSpareCapitalLots(
       withoutSpareOwnerWork(
-        model.included.map((one) => ({ one, deals: Number(spec.set[`o${one.index}_n`] ?? 0) })).filter((member) => member.deals > 0 || member.one.agreedValue > 0),
+        withoutLossMakingLots(
+          model.included.map((one) => ({ one, deals: Number(spec.set[`o${one.index}_n`] ?? 0) })).filter((member) => member.deals > 0 || member.one.agreedValue > 0),
+          target,
+        ),
         target,
       ),
       target,
