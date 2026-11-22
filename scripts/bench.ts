@@ -2,7 +2,7 @@
  * Brain's capability benchmarks (docs/evolution/DESIGN.md, workstream B).
  *
  *   npm run bench -- --suite <name> [--cases file.json] [--out result.json] [--ref label]
- *                    [--worlds N] [--runs N] [--workers N] [--only id,id] [--baseline prior.json] [--quiet]
+ *                    [--worlds N] [--runs N] [--workers N] [--only id,id] [--shard i/N] [--baseline prior.json] [--quiet]
  *
  * Runs one suite offline — no database, no network — and deterministically
  * (seeded engines, fixed worlds, a fixed clock). Prints a summary and writes
@@ -16,6 +16,10 @@
  * `--workers N` runs a suite that can (planningReliability) on N case processes;
  * the default is `defaultWorkers()` (cores − 1, bounded by available memory), and
  * `--workers 1` is the serial run. `--only` narrows the run to the listed case ids.
+ *
+ * `--shard i/N` (planningReliability) runs the i-th of N deterministic shares of the
+ * selection — position modulo N — so N CI runners partition the public cases exactly
+ * (`.github/workflows/bench.yml`). It refuses `--cases`: hidden cases never go to CI.
  *
  * `--baseline prior.json` compares this run with a prior result case by case
  * (`bench/diff.ts`): IMPROVED, REGRESSED and UNCHANGED, each with its verdict and
@@ -45,7 +49,7 @@ async function main(): Promise<void> {
   const suite = arg('--suite');
   if (!suite || !SUITES[suite]) {
     console.error(
-      `usage: npm run bench -- --suite <${Object.keys(SUITES).join('|')}> [--cases file.json] [--out result.json] [--ref label] [--worlds N] [--runs N] [--workers N] [--only id,id] [--baseline prior.json]`,
+      `usage: npm run bench -- --suite <${Object.keys(SUITES).join('|')}> [--cases file.json] [--out result.json] [--ref label] [--worlds N] [--runs N] [--workers N] [--only id,id] [--shard i/N] [--baseline prior.json]`,
     );
     process.exit(2);
   }
@@ -54,6 +58,15 @@ async function main(): Promise<void> {
     const parsed: unknown = JSON.parse(fs.readFileSync(casesFile, 'utf8'));
     if (!Array.isArray(parsed)) throw new Error('--cases must hold a JSON array of cases');
     extraCases.push(...parsed);
+  }
+  const shardRaw = arg('--shard');
+  let shard: { index: number; of: number } | undefined;
+  if (shardRaw !== undefined) {
+    if (suite !== 'planningReliability') throw new Error('--shard is for planningReliability, the suite that selects cases');
+    // Sharding exists for CI runners, and hidden cases never leave the evaluator.
+    if (args('--cases').length) throw new Error('--shard takes public cases only; it refuses --cases');
+    const { parseShard } = await import('../bench/planningReliability/index.ts');
+    shard = parseShard(shardRaw);
   }
   const baselineFile = arg('--baseline');
   const baseline = baselineFile ? JSON.parse(fs.readFileSync(baselineFile, 'utf8')) : null;
@@ -73,6 +86,7 @@ async function main(): Promise<void> {
     extraCases,
     workers,
     ...(only?.length ? { only } : {}),
+    ...(shard ? { shard } : {}),
     ...(worlds !== undefined ? { worlds } : {}),
     ...(runs !== undefined ? { runs } : {}),
     ...(ref !== undefined ? { ref } : {}),

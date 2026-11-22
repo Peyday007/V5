@@ -94,13 +94,28 @@ export async function runCase(job: CaseJob, template: Template | null, templateE
   return row;
 }
 
-/** The selection a run makes: public cases, then the extra (hidden) ones; `only` narrows it by reported id. */
+/** The selection a run makes: public cases, then the extra (hidden) ones; `only` narrows it by reported id, then `shard` takes its share. */
 export function selectJobs(options: SuiteOptions): CaseJob[] {
   const all: CaseJob[] = [
     ...PUBLIC_CASES.map((value) => ({ value: value as unknown, hidden: false })),
     ...(options.extraCases ?? []).map((value) => ({ value, hidden: true })),
   ].map((j, index) => ({ ...j, index }));
-  return options.only ? all.filter((j) => options.only!.includes(caseId(j))) : all;
+  const selected = options.only ? all.filter((j) => options.only!.includes(caseId(j))) : all;
+  const shard = options.shard;
+  if (!shard) return selected;
+  if (selected.some((j) => j.hidden)) throw new Error('a sharded run takes public cases only');
+  return selected.filter((_, k) => k % shard.of === shard.index - 1);
+}
+
+/** `i/N` → a shard, refusing anything that is not 1 ≤ i ≤ N. */
+export function parseShard(raw: string): { index: number; of: number } {
+  const m = /^(\d+)\/(\d+)$/.exec(raw.trim());
+  const index = Number(m?.[1]);
+  const of = Number(m?.[2]);
+  if (!m || !Number.isInteger(index) || !Number.isInteger(of) || of < 1 || index < 1 || index > of) {
+    throw new Error(`--shard must be i/N with 1 ≤ i ≤ N, not "${raw}"`);
+  }
+  return { index, of };
 }
 
 export async function runPlanningReliability(options: SuiteOptions = {}): Promise<PlanningOutcome> {

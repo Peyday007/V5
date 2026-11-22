@@ -119,3 +119,46 @@ describe('ordinary development has a focused runner', () => {
     expect(read('scripts/test-impacted.mjs')).toMatch(/if \(!match\[2\]\) add\(match\[3\]\)/);
   });
 });
+
+describe('the CI bench is developmental evidence on public cases, and nothing else', () => {
+  const bench = read('.github/workflows/bench.yml');
+  const shard = read('.github/workflows/bench-shard.sh');
+
+  it('runs no test suite, so its feature-branch push trigger is not the full gate', () => {
+    expect(pushBranches(bench)).toEqual(['claude/**']);
+    expect(bench).not.toMatch(/\bvitest\b|\bnpm (run )?test\b/);
+    expect(shard).not.toMatch(/\bvitest\b|\bnpm (run )?test\b/);
+  });
+
+  it('never reaches a hidden case, a deployment secret or production', () => {
+    // What runs, not what the comments explain.
+    const code = (text: string) => text.split('\n').filter((line) => !/^\s*#/.test(line)).join('\n');
+    for (const text of [bench, shard].map(code)) {
+      expect(text).toMatch(/\S/);
+      expect(text).not.toContain('--cases');
+      expect(text).not.toMatch(/secrets\./);
+      expect(text).not.toMatch(/\bflyctl\b|ssh console/);
+      expect(text).not.toMatch(/evolution\.ts|hidden/);
+    }
+    expect(code(shard)).toContain('--shard');
+    expect(read('scripts/bench.ts')).toContain("refuses --cases");
+  });
+
+  it('is never read by Deploy, so it cannot gate or stand in for a release', () => {
+    expect(read('.github/workflows/deploy.yml')).not.toMatch(/bench\.yml|bench-verdict/);
+    expect(bench).toMatch(/Level A\/B developmental evidence/);
+    expect(read('scripts/bench-verdict.ts')).toMatch(/does not gate or substitute for Deploy/);
+  });
+
+  it('runs every shard of one count, and a verdict that fails unless all of them ran', () => {
+    const n = Number(/SHARDS: '(\d+)'/.exec(bench)?.[1]);
+    expect(n).toBeGreaterThan(1);
+    const matrices = [...bench.matchAll(/shard: \[([\d, ]+)\]/g)].map((m) => m[1]!.split(',').map((x) => Number(x.trim())));
+    expect(matrices).toEqual([Array.from({ length: n }, (_, i) => i + 1), Array.from({ length: n }, (_, i) => i + 1)]);
+    expect(bench).toContain('needs: [resolve, baseline, head]');
+    expect(bench).toMatch(/\[ "\$BASELINE" != success \] \|\| \[ "\$HEAD_SHARDS" != success \]/);
+    expect(bench).toContain('scripts/bench-verdict.ts');
+    // The baseline is cached by the commit it scored and the harness that scored it.
+    expect(bench).toMatch(/key: bench-.*needs\.resolve\.outputs\.base.*needs\.resolve\.outputs\.harness/);
+  });
+});

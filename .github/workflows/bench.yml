@@ -1,0 +1,218 @@
+# The planning bench on GitHub runners: developmental evidence, off the shared machine.
+#
+# The local 4-core machine is the measured bottleneck of the fast loop — every
+# worker queues on one lock to run `npm run bench`. This runs the same bench
+# (`scripts/bench.ts`, planningReliability) on GitHub's runners instead: the
+# public cases split across SHARDS runners (`--shard i/N`, position modulo N,
+# so the shards partition the cases exactly), the head of a branch diffed case
+# by case against the production baseline, and one verdict that prints
+# IMPROVED, REGRESSED and UNCHANGED and fails on a regression, a new critical
+# failure or a baseline case that did not run (`scripts/bench-verdict.ts`).
+#
+# What it is and is not:
+#   * Level A/B developmental evidence. It never gates Deploy and never stands in
+#     for it: Deploy does not read this workflow, and this workflow deploys,
+#     opens an ssh session and holds a deployment secret never.
+#   * Public cases only. Hidden cases live in the evaluator (evolution-eval.yml)
+#     and never reach CI: nothing here fetches them, no step passes `--cases`, and
+#     `--shard` refuses `--cases` in the bench itself.
+#   * Not the full suite. It runs no test file, so testingWorkflow's rule — the
+#     full gate only on the released SHA — is untouched by its push trigger.
+#
+# The baseline is computed once per production SHA and harness and cached
+# (actions/cache, keyed by both): a branch's later pushes reuse it, and a run on
+# the default branch after every Deploy primes it for every branch, because a
+# cache saved on the default branch is the one any branch may restore.
+#
+# The harness — `bench/` and `scripts/bench.ts` — is this workflow's own
+# checkout's, copied over both trees, so the baseline and the head are scored
+# by the same code on the same cases (on a push the two are the same commit).
+#
+# Dispatch from a terminal: `scripts/bench-ci.sh <ref> [base]`.
+name: Bench
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch, tag or commit to bench (default: the ref this is dispatched on).'
+        required: false
+        default: ''
+      base:
+        description: 'What to diff against (default: the canonical branch, i.e. production).'
+        required: false
+        default: ''
+  push:
+    branches:
+      - 'claude/**'
+    paths:
+      - 'server/services/goals/**'
+      - 'server/services/cash/**'
+      - 'server/services/quant/**'
+      - 'bench/**'
+      - 'scripts/bench.ts'
+      - 'scripts/bench-verdict.ts'
+      - '.github/workflows/bench.yml'
+  # After every release, on the default branch: compute the new production baseline
+  # once, where every branch can restore it. Runs the baseline shards only.
+  workflow_run:
+    workflows: [Deploy]
+    types: [completed]
+
+# One bench per ref and target; a newer push to the same branch supersedes the older.
+concurrency:
+  group: ci-bench-${{ github.ref }}-${{ inputs.ref || 'head' }}-${{ inputs.base || 'production' }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  SHARDS: '4'
+  SUITE: planningReliability
+
+jobs:
+  resolve:
+    name: Resolve commits
+    # After a Deploy: only a successful release of the default branch moved the baseline.
+    if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == github.event.repository.default_branch) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      head: ${{ steps.r.outputs.head }}
+      base: ${{ steps.r.outputs.base }}
+      harness: ${{ steps.r.outputs.harness }}
+      prime: ${{ steps.r.outputs.prime }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - id: r
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IN_REF: ${{ inputs.ref }}
+          IN_BASE: ${{ inputs.base }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          canonical=$(cat .github/CANONICAL_BRANCH)
+          # A ref is refused rather than escaped: it reaches a URL and git.
+          sha_of() {
+            printf '%s' "$1" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$' && ! printf '%s' "$1" | grep -q '\.\.' \
+              || { echo "::error::'$1' is not a branch, tag or commit name"; exit 1; }
+            gh api "repos/${GITHUB_REPOSITORY}/commits/$1" --jq .sha
+          }
+          head=$(sha_of "${IN_REF:-$GITHUB_SHA}")
+          base=$(sha_of "${IN_BASE:-$canonical}")
+          # The harness this run scores both trees with: the tree ids of bench/ and scripts/bench.ts.
+          harness=$(printf '%s %s' "$(git rev-parse HEAD:bench)" "$(git rev-parse HEAD:scripts/bench.ts)" | sha256sum | cut -c1-16)
+          prime=false
+          [ "$EVENT" = workflow_run ] && prime=true
+          { echo "head=$head"; echo "base=$base"; echo "harness=$harness"; echo "prime=$prime"; } >> "$GITHUB_OUTPUT"
+          echo "head $head · base $base · harness $harness · prime $prime"
+
+  baseline:
+    name: Baseline shard ${{ matrix.shard }}
+    needs: resolve
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - id: cache
+        uses: actions/cache@v4
+        with:
+          path: bench-out/base-${{ matrix.shard }}.json
+          key: bench-${{ env.SUITE }}-${{ needs.resolve.outputs.base }}-${{ needs.resolve.outputs.harness }}-${{ matrix.shard }}of${{ env.SHARDS }}
+      - if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Bench the baseline (public cases only)
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          SHA: ${{ needs.resolve.outputs.base }}
+          SHARD: ${{ matrix.shard }}
+        run: .github/workflows/bench-shard.sh "$SHA" "$SHARD" "$PWD/bench-out/base-$SHARD.json" base
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bench-base-${{ matrix.shard }}
+          path: bench-out/base-${{ matrix.shard }}.json
+          retention-days: 7
+
+  head:
+    name: Head shard ${{ matrix.shard }}
+    needs: resolve
+    if: ${{ needs.resolve.outputs.prime != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Bench the head (public cases only)
+        env:
+          SHA: ${{ needs.resolve.outputs.head }}
+          SHARD: ${{ matrix.shard }}
+        run: .github/workflows/bench-shard.sh "$SHA" "$SHARD" "$PWD/bench-out/head-$SHARD.json" head
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bench-head-${{ matrix.shard }}
+          path: bench-out/head-${{ matrix.shard }}.json
+          retention-days: 7
+
+  verdict:
+    name: Verdict
+    needs: [resolve, baseline, head]
+    # Runs, and fails, when a shard failed or was cancelled; not on a priming run.
+    if: ${{ always() && needs.resolve.result == 'success' && needs.resolve.outputs.prime != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Every shard ran
+        env:
+          RESOLVE: ${{ needs.resolve.result }}
+          BASELINE: ${{ needs.baseline.result }}
+          HEAD_SHARDS: ${{ needs.head.result }}
+        run: |
+          if [ "$RESOLVE" != success ] || [ "$BASELINE" != success ] || [ "$HEAD_SHARDS" != success ]; then
+            echo "::error::resolve $RESOLVE, baseline $BASELINE, head $HEAD_SHARDS: no verdict without every shard"
+            exit 1
+          fi
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: bench-base-*
+          path: bench-out/base
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: bench-head-*
+          path: bench-out/head
+          merge-multiple: true
+      - name: IMPROVED, REGRESSED, UNCHANGED
+        run: |
+          set -euo pipefail
+          for side in base head; do
+            n=$(ls bench-out/$side/*.json | wc -l)
+            [ "$n" = "$SHARDS" ] || { echo "::error::$side has $n of $SHARDS shard results"; exit 1; }
+          done
+          # Pure diff code with type-only imports: no npm ci.
+          node --experimental-strip-types scripts/bench-verdict.ts --base bench-out/base --head bench-out/head --summary "$GITHUB_STEP_SUMMARY"

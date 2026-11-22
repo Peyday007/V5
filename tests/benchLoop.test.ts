@@ -9,9 +9,9 @@
  *    cases between processes, each still on its own copy of the one template database.
  */
 import { describe, expect, it } from 'vitest';
-import { diffResults, formatDiff, LEVEL_A } from '../bench/diff.ts';
+import { diffResults, formatDiff, LEVEL_A, mergeResults } from '../bench/diff.ts';
 import { CRITICAL } from '../bench/planningReliability/grade.ts';
-import { runPlanningReliability, selectJobs, summarise, type PlanningRow } from '../bench/planningReliability/index.ts';
+import { parseShard, runPlanningReliability, selectJobs, summarise, type PlanningRow } from '../bench/planningReliability/index.ts';
 import { defaultWorkers } from '../bench/planningReliability/pool.ts';
 import type { BenchResult, CaseResult } from '../bench/types.ts';
 
@@ -97,5 +97,37 @@ describe('the parallel runner', () => {
     expect(parallel.metrics).toEqual(serial.metrics);
     expect(parallel.timing).toMatchObject({ workers: 2 });
     expect(serial.rows.every((r) => r.observed !== null)).toBe(true);
+  });
+});
+
+describe('the CI shards (.github/workflows/bench.yml)', () => {
+  it('partition the public cases exactly, deterministically, by position', () => {
+    const all = selectJobs({}).map((j) => j.index);
+    const shards = [1, 2, 3, 4].map((index) => selectJobs({ shard: { index, of: 4 } }).map((j) => j.index));
+    expect(shards.flat().sort((a, b) => a - b)).toEqual(all);
+    expect(new Set(shards.flat()).size).toBe(all.length);
+    expect(shards[1]).toEqual(all.filter((i) => i % 4 === 1));
+    // The same call gives the same share.
+    expect(selectJobs({ shard: { index: 3, of: 4 } }).map((j) => j.index)).toEqual(shards[2]);
+  });
+
+  it('take public cases only: a shard refuses a hidden case', () => {
+    expect(() => selectJobs({ shard: { index: 1, of: 2 }, extraCases: [{ id: 'h' }] })).toThrow(/public cases only/);
+  });
+
+  it('parse i/N and refuse anything else', () => {
+    expect(parseShard('2/4')).toEqual({ index: 2, of: 4 });
+    for (const bad of ['0/4', '5/4', '1/0', '1', 'a/b', '1/4/2']) expect(() => parseShard(bad)).toThrow(/--shard/);
+  });
+
+  it('merge into one result that diffs as the unsharded run would', () => {
+    const s1 = result([ok('a'), bad('c', ['FALSE_EXECUTABLE'])], 'h');
+    const s2 = result([ok('b')], 'h');
+    const merged = mergeResults([s1, s2]);
+    expect(merged.cases.map((c) => c.id)).toEqual(['a', 'c', 'b']);
+    expect(merged.metrics).toMatchObject({ passed: 2, cases: 3, criticalFailures: 1 });
+    expect(diffResults(result([ok('a'), ok('b'), bad('c', ['FALSE_EXECUTABLE'])]), merged, CRITICAL).verdict).toBe('PASS');
+    expect(() => mergeResults([s1, s1])).toThrow(/two shards/);
+    expect(() => mergeResults([s1, result([ok('b')], 'other')])).toThrow(/different commits/);
   });
 });

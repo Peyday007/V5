@@ -77,7 +77,37 @@ export function diffResults(before: BenchResult, after: BenchResult, critical: R
   return { suite: after.suite, baselineSha: before.sha, sha: after.sha, cases, metrics, verdict: reasons.length ? 'REJECT' : 'PASS', reasons };
 }
 
-const ORDER: CaseChange[] = ['REGRESSED', 'IMPROVED', 'NEW', 'REMOVED', 'UNCHANGED'];
+/**
+ * Shard results of one run, as one result: their cases in shard order, and the counting
+ * metrics recomputed over all of them (a shard's ratio cannot be averaged into a run's).
+ * Refuses shards of different suites or commits, and a case id two shards both ran.
+ */
+export function mergeResults(shards: BenchResult[]): BenchResult {
+  if (shards.length === 0) throw new Error('no shard results to merge');
+  const first = shards[0]!;
+  for (const s of shards) {
+    if (s.suite !== first.suite) throw new Error(`shards of different suites: ${first.suite}, ${s.suite}`);
+    if (s.sha !== first.sha) throw new Error(`shards of different commits: ${first.sha.slice(0, 12)}, ${s.sha.slice(0, 12)}`);
+  }
+  const cases = shards.flatMap((s) => s.cases);
+  const ids = new Set<string>();
+  for (const c of cases) {
+    if (ids.has(c.id)) throw new Error(`case ${c.id} ran in two shards`);
+    ids.add(c.id);
+  }
+  const passed = cases.filter((c) => c.pass).length;
+  const metrics: Record<string, number> = {
+    accuracy: cases.length ? passed / cases.length : 0,
+    passed,
+    cases: cases.length,
+    criticalFailures: cases.filter((c) => c.critical).length,
+    errors: cases.filter((c) => c.verdict === 'ERROR').length,
+  };
+  const ranAt = shards.map((s) => s.ranAt).sort().at(-1) ?? first.ranAt;
+  return { suite: first.suite, sha: first.sha, ref: first.ref, cases, metrics, ranAt };
+}
+
+const ORDER: CaseChange[] =['REGRESSED', 'IMPROVED', 'NEW', 'REMOVED', 'UNCHANGED'];
 
 /** One line for a case: its change, id, verdict before → after, and (public cases only) the grader's reason. */
 function caseLine(c: CaseDiff): string {

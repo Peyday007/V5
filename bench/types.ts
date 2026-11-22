@@ -44,6 +44,13 @@ export interface SuiteOptions {
   workers?: number;
   /** Only these reported case ids (hidden ones with their prefix), for a suite that can select. */
   only?: string[];
+  /**
+   * Shard `index` of `of` (1-based), for a suite that can select: the selected cases
+   * whose position in the selection is `index - 1` modulo `of`. Deterministic, so the
+   * shards of one count partition the selection exactly. Public cases only — the CLI
+   * refuses a shard beside `--cases`, because sharding exists for CI runners.
+   */
+  shard?: { index: number; of: number };
   /** Progress lines; never given a hidden case's content. */
   log?: (line: string) => void;
 }
