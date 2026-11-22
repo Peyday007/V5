@@ -2348,6 +2348,20 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     }
     const cons = conservative(members, target);
     /*
+     * Recycled lots that cannot all settle in time (`lotsUnderCeiling`): the
+     * ceiling holds fewer lots at once than the timing needs, so some settle
+     * after the deadline, and without them the plan falls short. Both limits
+     * bind together, and the conclusion names both — never a bare shortfall.
+     */
+    if (target.capitalCeilingCents !== null && cons.settled !== null && cons.settled < target.remainingCents / 100) {
+      const unconstrained = conservative(members, { ...target, capitalCeilingCents: null });
+      if (unconstrained.settled !== null && unconstrained.settled >= target.remainingCents / 100) {
+        constraintsFailed.push(
+          `run one after another inside the ${target.capitalCeilingCents / 100} ${target.currency} the owner said this goal may commit, the lots that settle before the deadline bring ${Math.round(cons.settled)} of the ${target.remainingCents / 100} still needed; the rest settle after the deadline`,
+        );
+      }
+    }
+    /*
      * Agreed work the owner performs is owner hours (planningReliability ho-07,
      * 2026-11-21): ten signed translations at 6 owner hours each are 60 hours
      * against 13, yet only new deals were ever counted, so the agreements read
