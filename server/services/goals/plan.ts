@@ -54,6 +54,14 @@ const PLAN_AUTHORITY_MEMO_MS = 10_000;
 const planAuthorityMemo = new Map<string, { at: number; decision: ReturnType<typeof checkCommercialAuthority> }>();
 function planAuthority(projectId: string, action: string): ReturnType<typeof checkCommercialAuthority> {
   const key = `${projectId}\u0000${action}`;
+  /*
+   * Inside a plan read the answer is the read's own, for the whole read: a
+   * wall-clock memo expired part way through any read slower than ten seconds
+   * and re-read the authority rows, so the statement count of one read moved
+   * with machine load (goalPlan.test.ts read 139 calm and 171 on a loaded
+   * runner, failing Deploy 45037618129; production reads take minutes).
+   */
+  if (inReadScope()) return scopedRead(`planAuthority\u0000${key}`, () => checkCommercialAuthority({ projectId, action }, { record: false }));
   const now = Date.now();
   const held = planAuthorityMemo.get(key);
   if (held && now - held.at < PLAN_AUTHORITY_MEMO_MS) return held.decision;
@@ -78,7 +86,7 @@ import { OPENING_SENTENCE } from '../cash/construct.ts';
 import { listRounds } from '../../repos/cashDiscovery.ts';
 import { listMoneyEntries } from '../../repos/cashLedger.ts';
 import { exemptSales, recordMateriality } from './materiality.ts';
-import { withReadScope } from '../../repos/readScope.ts';
+import { inReadScope, scopedRead, withReadScope } from '../../repos/readScope.ts';
 import { cashSpareSurfaces } from '../cash/researchRoom.ts';
 import { researchGoalPaths } from './pathResearch.ts';
 import { remediesInForce, remedyInstructions } from './researchAllocation.ts';
