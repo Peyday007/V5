@@ -61,7 +61,7 @@ export interface ObservedPlan {
   members: ObservedMember[];
   /** Per opening (fixture key): the chain links the planner judged missing. */
   missing: Record<string, Link[]>;
-  /** The links the conclusion names: the candidate members' missing links, or every considered opening's when there is no candidate. */
+  /** The links the conclusion names: the candidate members' missing links, or every considered opening's when there is no candidate, or the next test's when nothing was considered. */
   named: Link[];
   /** The plan's own schedule collects after the deadline. */
   collectAfterDeadline: boolean;
@@ -94,6 +94,9 @@ export function observe(p: PlanReading, keyOf: (opportunityId: string) => string
   for (const id of ids.length ? ids : p.considered.map((c) => c.opportunityId)) for (const l of missing[keyOf(id)] ?? []) named.add(l);
   // A strategy's own failed links name what is missing too (its links, evaluated at the deals it needs).
   if (chosen) for (const l of chosen.links) if (!l.ok) named.add(l.link as Link);
+  // With no candidate and nothing considered — every opening held was left out (by the goal's own terms, its
+  // tier, its age) — the conclusion's only statement of what is missing is the next test it sets.
+  if (!ids.length && !p.considered.length && !chosen && p.nextTest?.link) named.add(p.nextTest.link as Link);
   const demand = new Map((p.portfolio?.demand ?? []).map((d) => [d.opportunityId, d]));
   // The deals the plan counts are the gate's own when its chosen strategy is what makes it executable
   // (a complete chain) or is the candidate; otherwise the portfolio's median new deals stand for them.

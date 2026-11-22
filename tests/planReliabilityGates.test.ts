@@ -12,9 +12,13 @@
  *   4. A stated cost at or over the price is unsound economics (ho-10).
  *   5. A combination counting a member whose price nobody established is not
  *      the plan's candidate (fam-08, fam-14, ho-02).
+ *   6. Under a capital ceiling, lots are recycled: as many run at once as the
+ *      ceiling holds, and only those that settle in time count (round 7).
+ *   7. An agreed lot whose own evidence is incomplete, that the plan does not
+ *      need, is left out of the strategy and of the candidate (round 7).
  */
 import { describe, expect, it } from 'vitest';
-import { agreedLots, candidateSentence, conservative, dealsFromOffers, economicsState, everyCaseInfeasible, judgeAcceptance, peakConcurrentLots, withoutSpareOwnerWork, type StrategyReading } from '../server/services/goals/plan.ts';
+import { agreedLots, candidateSentence, conservative, dealsFromOffers, economicsState, everyCaseInfeasible, judgeAcceptance, lotsUnderCeiling, peakConcurrentLots, withoutSpareOwnerWork, withoutUnestablishedLots, type StrategyReading } from '../server/services/goals/plan.ts';
 import type { GoalPortfolio } from '../server/services/goals/portfolio.ts';
 import type { ModelInput, ModelledOpportunity } from '../server/services/cash/goalScenario.ts';
 import { internalKeyIn } from '../server/domain/planIntegrity.ts';
@@ -273,5 +277,67 @@ describe('a candidate and an arrangement\'s terms name openings by title, never 
     expect(buyerTerms?.timing).toBe('ARREARS');
     expect(buyerTerms!.basis).toContain('GitHub public bug bounty program solicitation');
     expect(internalKeyIn(buyerTerms!.basis), buyerTerms!.basis).toBeNull();
+  });
+});
+
+describe('6. under a capital ceiling, lots are recycled', () => {
+  it('runs as many lots at once as the ceiling holds, and counts only those that settle in time', () => {
+    // Three $2,000 lots paid in 12 days, $2,500 ceiling, 30 days: one at a time, two settle in the window.
+    expect(lotsUnderCeiling(3, 12, 30, 2000, 2500)).toEqual({ atOnce: 1, inWindow: 2 });
+    // Everything fits as the timing allows: the ceiling changes nothing.
+    expect(lotsUnderCeiling(2, 12, 30, 2000, 2500)).toEqual({ atOnce: 1, inWindow: 2 });
+    expect(lotsUnderCeiling(3, 12, 30, 2000, null)).toEqual({ atOnce: 2, inWindow: 3 });
+    // No lot fits under the ceiling, or the timing is unknown: every lot counts, and the limit breaks where it is checked.
+    expect(lotsUnderCeiling(3, 12, 30, 3000, 2500)).toEqual({ atOnce: 2, inWindow: 3 });
+    expect(lotsUnderCeiling(3, null, 30, 2000, 2500)).toEqual({ atOnce: 3, inWindow: 3 });
+  });
+
+  it('reads agreed lots that cannot all run inside the ceiling at the money the ones that settle bring', () => {
+    const one = opening('lots', { price: fixed(1000), directCost: fixed(600), capital: fixed(600), daysToCash: fixed(10), agreedValue: 4000, agreedDeals: 4 });
+    // $1,000 ceiling, 20 days: one lot at a time, two settle in the window.
+    const read = conservative([{ one, deals: 0 }], { daysLeft: 20, capitalCeilingCents: 100_000 });
+    expect(read.exposure).toBe(600);
+    expect(read.settled).toBe(2000);
+    // Without the ceiling every lot is read as settling, two at a time.
+    expect(conservative([{ one, deals: 0 }], { daysLeft: 20 })).toMatchObject({ exposure: 1200, settled: 4000 });
+  });
+});
+
+describe('7. an unneeded agreed lot with incomplete evidence is left out', () => {
+  const clean = opening('clean', { price: fixed(1500), agreedValue: 6000, agreedDeals: 4, directCost: fixed(900) });
+  const uncosted = opening('uncosted', { price: fixed(2000), agreedValue: 4000, agreedDeals: 2, directCost: unknown(0, 2000) });
+  const target = { daysLeft: 30, remainingCents: 500_000 };
+
+  it('drops it when the rest reach the target at their cautious numbers', () => {
+    const kept = withoutUnestablishedLots([{ one: clean, deals: 0 }, { one: uncosted, deals: 0 }], target, () => false);
+    expect(kept.map(({ one }) => one.opportunity.id)).toEqual(['clean']);
+    // A failing link the caller reads is reason enough, though every number is known.
+    const flagged = withoutUnestablishedLots([{ one: clean, deals: 0 }, { one: opening('noFulfiller', { agreedValue: 2000 }), deals: 0 }], target, ({ one }) => one.opportunity.id === 'noFulfiller');
+    expect(flagged.map(({ one }) => one.opportunity.id)).toEqual(['clean']);
+  });
+
+  it('keeps every member when the rest do not reach the target, so the gap stays named', () => {
+    const kept = withoutUnestablishedLots([{ one: clean, deals: 0 }, { one: uncosted, deals: 0 }], { daysLeft: 30, remainingCents: 800_000 }, () => false);
+    expect(kept).toHaveLength(2);
+  });
+
+  it('holds the qualified strategy, not a combination that counts the lot it was judged without', () => {
+    const chosen: StrategyReading = {
+      key: 'combine_fast', label: 'Clean agreements', verdict: 'RECOMMENDABLE', opportunityIds: ['clean'], links: [], constraintsFailed: [],
+      sweep: { goalMetShare: 0, settledP50: 6000, settledP90: 6000, infeasibleShare: 0, probabilistic: false }, conservativeSettled: 6000, chainComplete: true, nextTest: null,
+    };
+    const portfolio = {
+      basis: 'COVERAGE', worlds: 400,
+      best: { members: [{ opportunityId: 'clean', title: 'Clean', share: 1 }, { opportunityId: 'uncosted', title: 'Uncosted', share: 1 }], reach: 0, settledP10: 0, settledP50: 10_000, settledP90: 10_000, capitalShort: 0, overSpend: 0 },
+      alternatives: [], demand: [{ opportunityId: 'clean', title: 'Clean', unestablished: [] }, { opportunityId: 'uncosted', title: 'Uncosted', unestablished: ['direct cost'] }],
+      limits: { target: 5000, deadlineDays: 30, startingCapital: 0, perArrangement: null, spendCeiling: null, contactsPerDay: { value: null, low: 10, high: 60, source: 'swept' }, correlation: 0.5 },
+      missing: [], searched: 2,
+    } as unknown as GoalPortfolio;
+    const considered = [{ opportunityId: 'clean', missing: [] }, { opportunityId: 'uncosted', missing: ['ECONOMICS' as const] }];
+    const a = judgeAcceptance({ achieved: false, chosen, portfolio, measuredChance: null, considered });
+    expect(a.candidate?.source).toBe('STRATEGY');
+    expect(a.candidate?.opportunityIds).toEqual(['clean']);
+    // Without a qualified strategy the combination is still the candidate, its gap named.
+    expect(judgeAcceptance({ achieved: false, chosen: { ...chosen, chainComplete: false, verdict: 'NEEDS_EVIDENCE' }, portfolio, measuredChance: null, considered }).candidate?.source).toBe('QUANT_PORTFOLIO');
   });
 });

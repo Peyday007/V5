@@ -2176,23 +2176,32 @@ export function estimateInput(est: Estimate, scale = 1, what = ''): ModelInput {
 }
 
 /**
- * How far from every figure a price fact states the card's price may sit
- * before the fact contradicts it rather than restating it.
+ * How far from a figure a price fact states the card's price may sit and still
+ * be the same price restated (rounding, "about $1,000" for $950). Anything
+ * further is a second figure, and a second figure contests the first: the
+ * benefit of the doubt is never given to whichever figure is favourable (§39).
  */
-export const PRICE_CONTRADICTION_RATIO = 1.5;
+export const PRICE_CONTRADICTION_RATIO = 1.2;
 
 /**
  * Whether the price fact contradicts the card's price: it states one or more
- * whole-deal figures and the card's figure is more than
- * PRICE_CONTRADICTION_RATIO away from all of them (planningReliability fam-07,
- * ho-13: a card at $600 read as evidence while its source said $60). A fact
- * that states no whole-deal figure, or one the card's figure agrees with,
- * contradicts nothing. Returns the stated figure nearest the card.
+ * whole-deal figures, the card's figure lies outside the range the fact spans,
+ * and it is more than PRICE_CONTRADICTION_RATIO away from every one of them
+ * (planningReliability fam-07, ho-13: a card at $600 read as evidence while its
+ * source said $60). The test is symmetric, so a source stating a higher figure
+ * contests the card exactly as a lower one does — a 50% disagreement is a
+ * contradiction whichever way it points. A fact that states no whole-deal
+ * figure, or one the card's figure agrees with, contradicts nothing. Returns
+ * the stated figure nearest the card.
  */
 export function priceContradiction(cardMajor: number, factText: string, currency: string): { stated: number; text: string } | null {
-  const figures = readMoneyFigures(factText, currency).filter((one) => !one.perUnit).map((one) => one.cents / 100).filter((one) => one > 0);
+  const stated = readMoneyFigures(factText, currency);
+  const figures = stated.filter((one) => !one.perUnit).map((one) => one.cents / 100).filter((one) => one > 0);
   if (figures.length === 0 || !(cardMajor > 0)) return null;
-  const agrees = figures.some((one) => cardMajor <= one * PRICE_CONTRADICTION_RATIO && cardMajor * PRICE_CONTRADICTION_RATIO >= one);
+  // A range is read across every figure that spans it ("$500 to $700 per engagement").
+  const span = stated.map((one) => one.cents / 100).filter((one) => one > 0);
+  const within = span.length > 1 && cardMajor >= Math.min(...span) && cardMajor <= Math.max(...span);
+  const agrees = within || figures.some((one) => cardMajor <= one * PRICE_CONTRADICTION_RATIO && cardMajor * PRICE_CONTRADICTION_RATIO >= one);
   if (agrees) return null;
   const nearest = figures.reduce((best, one) => (Math.abs(Math.log(one / cardMajor)) < Math.abs(Math.log(best / cardMajor)) ? one : best));
   return { stated: nearest, text: `"${factText.slice(0, 120)}"` };

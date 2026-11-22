@@ -79,6 +79,16 @@ describe('rule 2: a sourced price that contradicts the card makes the price cont
     expect(priceContradiction(600, 'buyers pay what the card says', 'USD')).toBeNull();
   });
 
+  it('contests the card symmetrically: a higher stated figure is a contradiction exactly as a lower one is', () => {
+    // A 50% disagreement either way is two prices, never one price restated.
+    expect(priceContradiction(400, '$600', 'USD')?.stated).toBe(600);
+    expect(priceContradiction(600, '$400', 'USD')?.stated).toBe(400);
+    expect(priceContradiction(1000, 'the published rate is $1,500', 'USD')?.stated).toBe(1500);
+    // A restatement within rounding, and a card inside the range the fact spans, still agree.
+    expect(priceContradiction(950, 'about $1,000', 'USD')).toBeNull();
+    expect(priceContradiction(1000, 'between $400 and $1,800', 'USD')).toBeNull();
+  });
+
   describe('through the real card read', () => {
     let projectId = '';
     let userId = '';
