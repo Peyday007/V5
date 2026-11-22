@@ -125,7 +125,7 @@ export function blockerResolutions(input: ResolutionInput): Resolution[] {
           `resolve:capital:${one.opportunity.id}`,
           'requiredCapital',
           false,
-          `one deal of ${titleOf(one)} ties up ${fmt(capital)} ${cur} before it pays, more than the ${fmt(allowed)} the goal may commit: what a deal ties up must fall to ${fmt(allowed)} ${cur} or less — secure a buyer's deposit or prepayment, supplier credit terms, or a smaller first lot`,
+          `one deal of ${titleOf(one)} ties up ${fmt(capital)} ${cur} before it pays, more than the ${fmt(allowed)} the goal may commit: ${allowed > 0 ? `what a deal ties up must fall to ${fmt(allowed)} ${cur} or less — secure a buyer's deposit or prepayment, supplier credit terms, or a smaller first lot` : `a deal must tie up nothing before it pays — a buyer's prepayment or deposit covering the ${fmt(capital)}, or supplier credit terms that fall due after the buyer pays`}`,
           { constraint: 'CAPITAL', suggestion: `allow the goal to commit at least ${fmt(capital)} ${cur}, what one deal of ${titleOf(one)} ties up` },
         );
       } else if (capital !== null && capital > 0 && input.capitalCeiling !== null && days !== null && days > 0 && input.daysLeft !== null && !late) {
