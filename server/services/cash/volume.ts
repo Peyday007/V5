@@ -14,7 +14,9 @@
  *
  *   * a count is a whole number stated beside a word for a buyer ("3,400
  *     property management firms"), never a money figure or a percentage, and
- *     the smallest such count is taken;
+ *     the smallest such count is taken; the payer's own head noun is such a
+ *     word ("260 exhibitors" for a payer of "Expo exhibitors"), and a stated
+ *     share of the counted who buy ("60% rent their booth") narrows it;
  *   * an order rate is a number of orders, sales or jobs stated per week,
  *     month or year;
  *   * a rate multiplies by a count only when the text says each counted unit
@@ -134,6 +136,38 @@ export function payerHeldWords(payer: string | null | undefined): string[] {
   return [...out];
 }
 
+/**
+ * The payer's own head noun, as count words (planningReliability hv3-20,
+ * 2026-11-22): a payer of "Expo exhibitors" is counted by "260 confirmed
+ * exhibitors" exactly as a payer of "stores" is by "100 stores". The head is
+ * the last word before the payer's first qualifier ("Contractors renting
+ * mini-excavators" is contractors, never mini-excavators), singular and
+ * plural. Pure.
+ */
+export function payerNounWords(payer: string | null | undefined): string[] {
+  if (!payer) return [];
+  const head = payer.split(/\s+(?:and|or|who|that|which|with|without|in|of|for|on|at|across|from|by|to|renting|running|using|buying|selling|needing|seeking|looking|operating|owning|managing)\b/i)[0]!.trim();
+  const word = head.split(/\s+/).pop()?.toLowerCase().replace(/[^a-z-]/g, '') ?? '';
+  if (word.length < 4 || !/^[a-z][a-z-]*s$/.test(word)) return [];
+  const one = word.replace(/(?:ies)$/, 'y').replace(/(?<=(?:s|x|ch|sh))es$/, '').replace(/s$/, '');
+  return [...new Set([word, one])];
+}
+
+/**
+ * A stated share of the counted buyers who buy this ("the organiser reports 60%
+ * rent their booth rather than own one"): the smallest such share narrows the
+ * count, because a count of a population is not a count of its buyers. A share
+ * of something else — a discount, a margin, a fee, an impression share, growth —
+ * is not one, and a share the text does not state is never assumed. Reading
+ * fewer buyers than exist is this reader's failure mode; reading more is not.
+ */
+const BUYING_SHARE = /(?<![\d.])(\d{1,2}(?:\.\d+)?)\s*%\s+(?:of\s+(?:them|these|those)\s+)?(?!(?:off|discount|margin|markup|commission|fees?|tax|vat|impression|share|growth|more|less|fewer|higher|lower|increase|decrease|of|in|on|at|to|for|per|a|an|the|and|or)\b)([a-z]+)/gi;
+
+function buyingShare(text: string): number | null {
+  const shares = [...text.matchAll(BUYING_SHARE)].map((m) => Number(m[1]) / 100).filter((s) => s > 0 && s < 1);
+  return shares.length ? Math.min(...shares) : null;
+}
+
 interface StatedRate {
   /** Orders a day across everything the rate covers. */
   perDay: number;
@@ -199,7 +233,7 @@ function readRates(text: string): StatedRate[] {
 /** Read the deals a market can take inside `windowDays`, or null when no number is stated. */
 export function readVolume(text: string, windowDays: number, payer: string | null = null): VolumeReading | null {
   if (!text || !(windowDays > 0)) return null;
-  const held = payerHeldWords(payer).filter((w) => !new RegExp(`(?:^|\\|)${w}(?:\\||$)`).test(BUYER_WORDS));
+  const held = [...new Set([...payerHeldWords(payer), ...payerNounWords(payer)])].filter((w) => !new RegExp(`(?:^|\\|)${w}(?:\\||$)`).test(BUYER_WORDS));
   const buyerCount = held.length === 0 ? BUYER_COUNT : new RegExp(`(?<![$£€\\d.,])${COUNT}\\s+(?:[A-Za-z-]+\\s+){0,4}?(?:${BUYER_WORDS}|${held.join('|')})\\b`, 'gi');
   const window = Math.max(1, Math.floor(windowDays));
 
@@ -227,7 +261,11 @@ export function readVolume(text: string, windowDays: number, payer: string | nul
     .map((m) => toInt(m[1]!))
     .filter((n) => n > 0 && n < 50_000_000);
   if (counts.length === 0) return null;
-  const buyers = Math.min(...counts);
+  const counted = Math.min(...counts);
+  const share = buyingShare(text);
+  const buyers = share === null ? counted : Math.floor(counted * share);
+  if (buyers < 1) return null;
+  const of = share === null ? '' : ` (${Math.round(share * 100)}% of ${counted} stated to buy)`;
 
   let everyDays: number | null = null;
   const times = TIMES.exec(text);
@@ -241,8 +279,8 @@ export function readVolume(text: string, windowDays: number, payer: string | nul
     counted: 'BUYERS',
     basis:
       everyDays === null
-        ? `${buyers} reachable buyers are stated and no repeat purchase is, so one purchase each`
-        : `${buyers} reachable buyers, each buying about every ${Math.round(everyDays)} days, so ${purchases} purchase(s) each in ${window} days`,
+        ? `${buyers} reachable buyers${of} are stated and no repeat purchase is, so one purchase each`
+        : `${buyers} reachable buyers${of}, each buying about every ${Math.round(everyDays)} days, so ${purchases} purchase(s) each in ${window} days`,
   };
 }
 
