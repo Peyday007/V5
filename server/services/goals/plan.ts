@@ -96,7 +96,7 @@ import { diagnoseGoalResearch, diagnosisInstructions, recentGoalRounds, type Res
 import type { EvidenceTier } from '../../domain/quant.ts';
 import { namesABuyerPopulation } from '../../domain/industry.ts';
 import { readPathways, requiredStructures, type BrainCapabilities, type GoalStructures, type PathwayReading } from './pathways.ts';
-import { MATERIAL_P50, MATERIAL_REACH, reconstructPlan, type Reconstruction, type StrategyChange, type VariantReading } from './reconstruction.ts';
+import { MATERIAL_P50, MATERIAL_REACH, reconstructPlan, type Factor, type Reconstruction, type StrategyChange, type VariantReading } from './reconstruction.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { sharedEvaluator } from './reasoning/evaluatorPool.ts';
 import { inventDirections, inventEnabled } from './reasoning/invent.ts';
@@ -3470,6 +3470,16 @@ const CONDITION_FIELD: Record<string, string> = {
 /** Conditions only selling measures. */
 const LEARNED_BY_SELLING = /^(reply|close|respond|outreach-capacity)/;
 
+/** The researchable condition a binding factor names; VOLUME and CAPITAL are not research questions. */
+const BINDING_CONDITION: Partial<Record<Factor, string>> = {
+  CASH_TIMING: 'days to cash',
+  PRICE: 'ticket',
+  MARKET_SIZE: 'market',
+  COST: 'direct cost',
+  REPLY: 'reply',
+  CLOSE: 'close',
+};
+
 /**
  * The research the adopted plan needs (C-9). Pure. The questions come from
  * the plan Brain actually holds: the reply rate it needs, each condition the
@@ -3503,6 +3513,18 @@ export function planResearchPriority(input: {
     out.set(variable, { variable, opportunityId, field, value, changesDecision: true, decision: verdict.decision, reason: `${why}; ${verdict.reason}` });
   };
   if (r.requiredReply !== null) add('plan:reply', null, null, gap, true, `the plan needs a reply rate of about ${pctOf(r.requiredReply)} to reach ${pctOf(r.required)}`);
+  /*
+   * The factor that binds the plan is always asked (production 2026-11-21 23:40Z, goal
+   * wst_7b4fcbb5f2384f31b6c3): "binding CASH_TIMING … reach 96.7% (+90.5%)" from 9.9%, and no
+   * question about days to cash existed — the questions above come from the sweep, which never named
+   * it. Only the top one, valued by what moving it alone lifts, so it ranks first within the per-read
+   * cap; outreach volume is measured by sending and capital is a person's decision, never research.
+   */
+  const binding = r.diagnosis.find((d) => d.liftReach > 0 && BINDING_CONDITION[d.factor] !== undefined);
+  if (binding && r.diagnosis[0] === binding) {
+    const condition = BINDING_CONDITION[binding.factor]!;
+    add(`plan:${condition}`, null, null, Math.max(gap, binding.liftReach), LEARNED_BY_SELLING.test(condition), `it binds the plan: ${binding.moved} lifts reach by ${pctOf(binding.liftReach)}`);
+  }
   const sweep = r.exploration?.sweep ?? null;
   const split = (condition: string) => {
     const at = condition.indexOf(':');
