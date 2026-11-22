@@ -20,8 +20,13 @@ import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { AFTER_VERDICT_GRACE_MS, failureReason, goalsChildHeapMb, runBoundedChild, VERDICT_LINE } from './boundedChild.ts';
 
-/** `goals plan` inside goals.yml's 30-minute step: the read, and the listing after it, are killed at this bound. */
-const PLAN_TOTAL_MS = 26 * 60_000;
+/**
+ * `goals plan` inside goals.yml's 30-minute step: the read, and the listing
+ * after it, are killed at this bound. 20 minutes, not 26: run 44960240885
+ * (2026-11-21) left a 26-minute bound four minutes of a step that also opens
+ * the SSH session, and goals.yml bounds that session on the runner at 27.
+ */
+export const PLAN_TOTAL_MS = 20 * 60_000;
 /** One goal's plan read inside the release check, and the whole check, kept inside goals.yml's 30-minute step. */
 const CHECK_PER_GOAL_MS = 6 * 60_000;
 const CHECK_TOTAL_MS = 26 * 60_000;
@@ -71,17 +76,17 @@ function words(): string[] {
  * 18:29:39 and then never exited; the child's verdict now ends it, and a child
  * with no verdict at the bound, or one that outgrew its heap, is the failure.
  */
-export async function planGoal(goalId: string, io: ReadChildren = spawnedHere()): Promise<boolean> {
+export async function planGoal(goalId: string, io: ReadChildren = spawnedHere(), ms: number = PLAN_TOTAL_MS): Promise<boolean> {
   const run = await runBoundedChild({
     args: [...io.execArgv, io.script, 'plan', goalId],
     env: { ...io.env, BRAIN_PLAN_CHILD: '1' },
-    ms: PLAN_TOTAL_MS,
+    ms,
     heapMb: io.heapMb,
     onStdout: passThrough(io),
   });
   if (run.killed === 'AFTER_VERDICT') io.write(`  exit        the read printed its verdict and did not exit; stopped ${Math.round(AFTER_VERDICT_GRACE_MS / 1000)}s after it\n`);
   const ok = run.verdict !== null && /^GOALS: OK/.test(run.verdict);
-  if (!ok) io.write(`  error       ${failureReason(run, PLAN_TOTAL_MS, io.heapMb) ?? `the plan read ended without a passing verdict (${run.verdict})`}\n`);
+  if (!ok) io.write(`  error       ${failureReason(run, ms, io.heapMb) ?? `the plan read ended without a passing verdict (${run.verdict})`}\n`);
   io.write(ok ? 'GOALS: OK\n' : 'GOALS: FAILED\n');
   return ok;
 }
@@ -144,6 +149,18 @@ async function checkInChild(goalId: string, ms: number, io: ReadChildren): Promi
   return run.verdict !== null && /^GOALS: OK/.test(run.verdict);
 }
 
+/**
+ * Ends this process once everything written to stdout has left it. A pipe's
+ * writes are queued in this process, and `process.exit` does not wait for
+ * them, so the verdict line, the last thing written, could be lost behind a
+ * slow SSH session. Bounded, so a reader that never drains cannot hold it.
+ */
+function exitAfterFlush(code: number): void {
+  process.exitCode = code;
+  setTimeout(() => process.exit(code), 5_000).unref();
+  process.stdout.write('', () => process.exit(code));
+}
+
 async function main(): Promise<void> {
   const [command, ...rest] = words();
   const inChild = process.env['BRAIN_PLAN_CHILD'] === '1' || Boolean(process.env['BRAIN_CHECK_CHILD']);
@@ -155,9 +172,9 @@ async function main(): Promise<void> {
       process.exit(1);
     }
     // The verdict is printed; end the process (as the children do, #1158).
-    process.exit((await planGoal(goalId)) ? 0 : 1);
+    return exitAfterFlush((await planGoal(goalId)) ? 0 : 1);
   }
-  if (!inChild && command === 'check') process.exit((await checkGoals(rest)) ? 0 : 1);
+  if (!inChild && command === 'check') return exitAfterFlush((await checkGoals(rest)) ? 0 : 1);
   const { run } = await import('./goalsCli.ts');
   await run();
 }

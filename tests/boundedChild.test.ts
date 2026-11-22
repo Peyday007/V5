@@ -11,7 +11,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { childArgs, failureReason, goalsChildHeapMb, runBoundedChild } from '../scripts/boundedChild.ts';
+import { spawn } from 'node:child_process';
+import { childArgs, failureReason, finishesWithin, goalsChildHeapMb, runBoundedChild } from '../scripts/boundedChild.ts';
 import { checkGoals, planGoal, type ReadChildren } from '../scripts/goals.ts';
 
 /** Holds everything it allocates, so it can only end at its heap cap. */
@@ -138,5 +139,52 @@ describe('the goals release check and plan, against children that stand in for t
     const good = io();
     expect(await planGoal('g-ok', good)).toBe(true);
     expect(good.text()).toContain('["--max-old-space-size=48"]');
+  });
+});
+
+/**
+ * Run 44960240885 (2026-11-21, production 3afa4261): goal C's `goals plan`
+ * printed its plan and `timing plan read in 129551 ms`, then sat in the search
+ * listing after it and printed no `GOALS:` line before the step's 30-minute
+ * timeout. Here the real entry point, scripts/goals.ts, runs `plan` through its
+ * real child (scripts/goalsCli.ts) against a fresh database.
+ */
+describe('`goals plan` through the real entry point and its real child', () => {
+  const data = mkdtempSync(join(tmpdir(), 'goals-plan-'));
+  afterAll(() => rmSync(data, { recursive: true, force: true }));
+  // The test's own database, never the developer's, and never Postgres.
+  const env: NodeJS.ProcessEnv = { ...process.env, BRAIN_DATA_DIR: data, BRAIN_DB_PATH: join(data, 'brain.db'), BRAIN_DATABASE_URL: '' };
+  const real = (): ReadChildren & { text: () => string } => {
+    let text = '';
+    return { script: 'scripts/goals.ts', execArgv: ['--import', 'tsx'], env, heapMb: 700, write: (t) => void (text += t), text: () => text };
+  };
+
+  it('prints exactly one GOALS verdict, last, and the process exits', async () => {
+    const started = Date.now();
+    const child = spawn(process.execPath, ['--import', 'tsx', 'scripts/goals.ts', 'plan', 'wst_no_such_goal'], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+    let out = '';
+    child.stdout.on('data', (chunk: Buffer) => void (out += chunk.toString('utf8')));
+    child.stderr.resume();
+    const code = await new Promise<number | null>((resolve) => child.on('close', (exit) => resolve(exit)));
+    expect(out.match(/^GOALS: .*$/gm)).toEqual(['GOALS: FAILED']);
+    expect(out.trimEnd().split('\n').at(-1)).toBe('GOALS: FAILED');
+    expect(code).toBe(1);
+    expect(Date.now() - started).toBeLessThan(90_000);
+  }, 120_000);
+
+  it('stops a read still running at its bound, and still prints the one verdict', async () => {
+    const out = real();
+    const started = Date.now();
+    expect(await planGoal('wst_no_such_goal', out, 1_000)).toBe(false);
+    expect(out.text()).toMatch(/error {7}the plan read did not finish within 1s and was stopped\nGOALS: FAILED\n$/);
+    expect(out.text().match(/^GOALS: /gm)).toHaveLength(1);
+    expect(Date.now() - started).toBeLessThan(15_000);
+  }, 60_000);
+
+  it('gives up waiting on a listing that never finishes, so the verdict is still printed', async () => {
+    const started = Date.now();
+    expect(await finishesWithin(200, () => new Promise(() => undefined))).toBe(false);
+    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(await finishesWithin(5_000, async () => undefined)).toBe(true);
   });
 });

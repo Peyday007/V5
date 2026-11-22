@@ -182,6 +182,12 @@ jobs:
           [ -n "$G_RESOURCES" ] && args="$args --resources \"$G_RESOURCES\""
 
           echo "goals $args"
+          # Run 44960240885 (2026-11-21): goal C's plan printed its plan, then
+          # nothing more reached this runner from 23:10 until the step's
+          # 30-minute timeout, not even the bound the parent inside the machine
+          # applies. A session that stops delivering can only be ended from
+          # here, so it is bounded here, inside the step's 30 minutes.
+          session=27m
           set +e
           if [ "$G_COMMAND" = census ]; then
             # The economic knowledge census (Surge B): read-only counts of what
@@ -189,15 +195,21 @@ jobs:
             # The script is sent with the command, so a census measures the
             # running Brain before the script itself has been released.
             census_b64=$(base64 -w0 scripts/knowledge-census.ts)
-            flyctl ssh console --app "$app" \
+            timeout -k 20s "$session" flyctl ssh console --app "$app" \
               -C "env BRAIN_DATABASE_POOL_SIZE=1 sh -c 'cd /app && echo $census_b64 | base64 -d > scripts/.knowledge-census-run.ts && nice -n 19 node --import tsx scripts/.knowledge-census-run.ts --json; rm -f scripts/.knowledge-census-run.ts'" \
               2>&1 | tee goals.txt
           else
-            flyctl ssh console --app "$app" \
+            timeout -k 20s "$session" flyctl ssh console --app "$app" \
               -C "env BRAIN_DATABASE_POOL_SIZE=1 sh /app/scripts/goals.sh $args" \
               2>&1 | tee goals.txt
           fi
+          ended=${PIPESTATUS[0]}
           set -e
+          # A session that is still open at its bound is ended here, on the
+          # runner, and says so in the one verdict line the run prints.
+          if [ "$ended" = 124 ] || [ "$ended" = 137 ]; then
+            grep -q '^GOALS: ' goals.txt || echo "GOALS: FAILED the SSH session did not end within $session; the read inside it is bounded at 20 minutes (plan) or 26 (check)" | tee -a goals.txt
+          fi
           # The verdict is a line the script printed, never an exit code that
           # had to survive an SSH session, a shell and a CLI.
           grep -q '^GOALS: OK' goals.txt

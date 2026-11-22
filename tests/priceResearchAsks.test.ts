@@ -227,6 +227,29 @@ describe('the goal tick sends the populations nothing prices to research, as the
     expect(lanes.find((lane) => lane.id === 'demand_signal')!.necessity).toBe('CONDITIONAL');
   });
 
+  it('treats a goal plan’s own question as the goal’s work and launches it with the price questions', async () => {
+    // Production 2026-11-21: the $10K plan's questions sat QUEUED a week as ordinary ideas.
+    const { goalFirstSql } = await import('../server/services/goals/goalWork.ts');
+    const { sendPlanQuestions } = await import('../server/services/goals/portfolioNeeds.ts');
+    const { createCandidate } = await import('../server/repos/russellCandidates.ts');
+    const { openRound } = await import('../server/repos/cashDiscovery.ts');
+    await sendPlanQuestions({
+      goalId: 'wst_plan_goal',
+      projectId,
+      priority: [{ variable: 'plan:days to usable cash', opportunityId: null, decision: 'RESEARCH_FIRST', value: 900, reason: 'reach 9.9% → 96.7% at the bottom of its range' }],
+    });
+    const need = (await listNeeds({ projectId })).find((n) => (n.blockedAction ?? '').includes('goal:wst_plan_goal:plan'));
+    expect(need?.candidateId).toBeTruthy();
+    expect(await isGoalIdea(need!.candidateId!)).toBe(true);
+    const round = await createCandidate({ title: 'Round', statement: 'Which shops share postcard costs?', projectId });
+    await openRound({ projectId, cashModeId: 'cm_test', bucketId: 'goal-wst_plan_goal-c1', mechanism: 'CONSTRUCTED', round: 1, candidateId: round.id });
+    const order = (await getDb().all<{ id: string }>(
+      `SELECT c.id FROM russell_candidates c WHERE c.id IN (?, ?) ORDER BY ${goalFirstSql('c')}, c.created_at, c.rowid`,
+      [round.id, need!.candidateId!],
+    )).map((one) => one.id);
+    expect(order).toEqual([need!.candidateId, round.id]);
+  });
+
   it('a context-free causal unknown is still not the goal’s idea', async () => {
     const portfolio = {
       best: null,

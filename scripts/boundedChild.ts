@@ -91,6 +91,28 @@ export function failureReason(run: BoundedChildResult, ms: number, heapMb?: numb
   return `the plan read exited without a verdict (${run.signal ? `signal ${run.signal}` : `exit code ${run.exitCode ?? 'unknown'}`})`;
 }
 
+/**
+ * Waits for `work`, but only up to `ms`. Returns true if it finished in time
+ * and false if this stopped waiting. The work is not cancelled, so the caller
+ * prints what it has and ends the process. This bounds a wait on I/O inside a
+ * read child: goal C's `plan` (run 44960240885, 2026-11-21) printed its plan
+ * and then sat in the search listing after it, one query at a time over the
+ * single pooled connection, until the step timed out. A loop that holds the
+ * event loop cannot be bounded this way; the parent's bound is for that.
+ */
+export async function finishesWithin(ms: number, work: () => Promise<unknown>): Promise<boolean> {
+  let timer: NodeJS.Timeout | undefined;
+  const late = new Promise<false>((resolve) => {
+    timer = setTimeout(() => resolve(false), ms);
+    timer.unref();
+  });
+  try {
+    return await Promise.race([work().then(() => true as const), late]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export function runBoundedChild(options: BoundedChildOptions): Promise<BoundedChildResult> {
   const started = Date.now();
   const graceMs = options.graceMs ?? AFTER_VERDICT_GRACE_MS;

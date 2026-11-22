@@ -41,6 +41,7 @@
  * 2026-11-21).
  */
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
+import { finishesWithin } from './boundedChild.ts';
 import { registerCommercialProviders } from '../server/services/cash/providers/register.ts';
 import { lastPlanTrace } from '../server/services/cash/goalScenario.ts';
 import { describePoolerRefusal } from '../server/db/adapters/postgres.ts';
@@ -722,16 +723,31 @@ async function plan(): Promise<void> {
   if (!reading) fail(`No targeted goal ${goalId}.`);
   await printPlan(reading);
   console.log(`  timing      plan read in ${Date.now() - started} ms; ${reading.inferred.length} inferred input(s), ${reading.researchPriority.length} ranked question(s)`);
+  // The plan is read and printed. What follows only describes it, so it may not
+  // hold back the verdict: run 44960240885 (2026-11-21) sat in this listing
+  // after round 26 of 38 until the step's 30-minute timeout, with no verdict.
   const searching = Date.now();
-  await printSearching(reading);
-  console.log(`  timing      search and digging listed in ${Date.now() - searching} ms`);
-  const history = await listReadings(goalId);
-  for (const row of history.slice(-10)) console.log(`  history     ${row.created_at} ${row.verdict} chosen=${row.chosen_strategy ?? '—'}${row.scenario_run_id ? ` run=${row.scenario_run_id}` : ''}`);
+  let listing = true;
+  const listed = await finishesWithin(PLAN_LISTING_MS, async () => {
+    await printSearching(reading);
+    if (!listing) return;
+    console.log(`  timing      search and digging listed in ${Date.now() - searching} ms`);
+    const history = await listReadings(goalId);
+    if (!listing) return;
+    for (const row of history.slice(-10)) console.log(`  history     ${row.created_at} ${row.verdict} chosen=${row.chosen_strategy ?? '—'}${row.scenario_run_id ? ` run=${row.scenario_run_id}` : ''}`);
+  });
+  listing = false;
+  if (!listed) console.log(`  timing      the search listing did not finish within ${PLAN_LISTING_MS / 1000}s and was left; the plan above is the read`);
   console.log('GOALS: OK');
-  // The verdict is printed; end the process rather than wait on background work the read started (as check does, #1158).
-  await closeDatabase().catch(() => undefined);
+  // The verdict is printed; end the process rather than wait on background work
+  // the read started (as check does, #1158). Closing the pool waits for a client
+  // that background work may hold, so that wait is bounded too.
+  await finishesWithin(2_000, () => closeDatabase().catch(() => undefined));
   process.exit(0);
 }
+
+/** `plan`'s search listing after the plan: it describes the read, so it gives up rather than hold back the verdict. */
+const PLAN_LISTING_MS = 3 * 60_000;
 
 /**
  * The release check's read of one goal, in the child process scripts/goals.ts
