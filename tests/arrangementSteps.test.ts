@@ -235,7 +235,9 @@ describe('a leading arrangement\'s steps can be followed on a schedule', () => {
     expect(by('Deliver and confirm').detail).toMatch(/Direct cost per deal is not yet established: Research the cost per deal \(step \d\)/);
     // No cost is pretended either: a stage the model holds no cost for is unestablished (null), never 0 (production, 2026-11-19).
     expect(steps.every((s) => s.cost === null || s.cost === 0)).toBe(true);
-    for (const label of ['Reach', 'Validate the offer', 'Collect payment', 'Run the next group']) expect(by(label).cost, label).toBeNull();
+    for (const label of ['Reach', 'Validate the offer', 'Run the next group']) expect(by(label).cost, label).toBeNull();
+    // Collecting commits nothing before the buyer pays (the provider's fee comes out of the payment), and says so.
+    expect(by('Collect payment')).toMatchObject({ cost: 0, arrangement: { costSource: 'NOT_OWNERS' } });
   });
 
   it('(a)(b) with the model holding days to usable cash and direct cost, every step has a day and a cost from those same values', () => {
@@ -377,5 +379,26 @@ describe('steps agree with the settlement terms, the window, the capital and the
     expect(leadingArrangement([one, postcard], { portfolio: null, candidateIds: ['arr_one'] })).toBeNull();
     expect(leadingArrangement([one, postcard], { portfolio: null })!.key).toBe('postcard-pool');
     expect(leadingArrangement([one], { portfolio: null })).toBeNull();
+  });
+});
+
+describe('an arrangement\'s steps name what they rest on and the economics they were judged on', () => {
+  it('every step carries the arrangement and its claims; the offer carries the judged price', () => {
+    const steps = arrangementSteps(subcontract, ctx);
+    for (const s of steps) expect(s.evidence, s.label).toEqual(expect.arrayContaining(['bookkeeping-sub', 'clm_3', 'clm_4', 'claim:c9']));
+    expect(steps.find((s) => s.arrangement?.stage === 'OFFER')!.price).toBe(600);
+    // An unpriced arrangement states no price.
+    expect(arrangementSteps(arrangement({ key: 'unpriced' }), ctx).find((s) => s.arrangement?.stage === 'OFFER')!.price).toBeUndefined();
+  });
+
+  it('outreach is costed only from what the plan\'s pathway holds, and otherwise stays unestablished', () => {
+    const held = arrangementSteps(subcontract, { ...ctx, reachCost: { amount: 0, basis: 'reached through an owned channel' } });
+    for (const stage of ['REACH', 'OFFER', 'REPEAT'] as const) {
+      expect(held.find((s) => s.arrangement?.stage === stage)!).toMatchObject({ cost: 0, arrangement: { costSource: 'MODEL' } });
+    }
+    const unheld = arrangementSteps(subcontract, ctx);
+    for (const stage of ['REACH', 'OFFER', 'REPEAT'] as const) {
+      expect(unheld.find((s) => s.arrangement?.stage === stage)!).toMatchObject({ cost: null, arrangement: { costSource: 'NONE_HELD' } });
+    }
   });
 });

@@ -63,7 +63,10 @@ describe('steps carry the model\'s own figures', () => {
     const by = (l: string) => steps.find((s) => s.label.startsWith(l))!;
     expect(by('Deliver and confirm')).toMatchObject({ cost: 90, owner: 'PERSON', basis: 'ASSUMPTION', withinLimits: true });
     expect(by('Deliver and confirm').detail).toMatch(/Direct cost per deal about USD 40–90 \(the range the model swept/);
-    for (const label of ['Reach', 'Offer it', 'Collect payment', 'Renew']) expect(by(label).cost, label).toBeNull();
+    for (const label of ['Reach', 'Offer it', 'Renew']) expect(by(label).cost, label).toBeNull();
+    // Collecting commits nothing before the buyer pays, and says why: the provider's fee comes out of the payment.
+    expect(by('Collect payment')).toMatchObject({ cost: 0, arrangement: { costSource: 'NOT_OWNERS' } });
+    expect(by('Collect payment').detail).toMatch(/fee, which the plan's net does not model, is taken out of each payment/);
   });
 
   it('with no model at all, nothing is invented: no day after the offer and no delivery cost', () => {

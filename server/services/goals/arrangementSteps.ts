@@ -31,7 +31,10 @@
 import { namesOneOrganisation } from '../../domain/industry.ts';
 import type { ConstructedArrangement } from '../cash/construct.ts';
 import { PART_ASK, provedDeliverable } from '../cash/construct.ts';
-import type { ModelInput, ModelledOpportunity } from '../cash/goalScenario.ts';
+import { OWNER_FULFILS, type ModelInput, type ModelledOpportunity } from '../cash/goalScenario.ts';
+import { DELIVERABLE_CAPABILITIES } from '../cash/capabilities.ts';
+import type { TransactionPathway } from './pathways.ts';
+import type { DemandEstimate } from './portfolio.ts';
 import { designFacts, STRUCTURES } from '../cash/properties.ts';
 import { fieldFromInput, type ModelField } from './planSet.ts';
 import { RESEARCH_TURNAROUND_DAYS, type PlanStep } from './plan.ts';
@@ -95,6 +98,12 @@ export interface ArrangementStepContext {
   collect: string[];
   /** What Brain has registered and connected: who performs each step is read from it (`stepExecutor`). */
   capabilities?: CapabilityInventory;
+  /**
+   * What reaching a buyer costs in cash as the plan's pathway for this
+   * arrangement holds it (`arrangementReachCost`), or null when nothing holds
+   * it: the outreach steps' cost then stays unestablished, never 0.
+   */
+  reachCost?: { amount: number; basis: string } | null;
 }
 
 const money = (n: number, currency: string) => `${currency} ${Math.round(n).toLocaleString('en-US')}`;
@@ -125,9 +134,11 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
   });
   /** Who performs a step, read from Brain's registered capabilities by the operation it is (never its words). */
   const exec = (req: OperationRequest) => stepExecutor(req, ctx.capabilities);
+  // What every step of the arrangement rests on: the arrangement itself and the claims and observations it was constructed from.
+  const evidence = arrangementEvidence(a);
   const push = (step: Omit<PlanStep, 'order'>): number => {
     const order = startAt + steps.length;
-    steps.push({ order, ...step });
+    steps.push({ order, ...step, evidence: step.evidence ?? evidence });
     return order;
   };
 
@@ -234,6 +245,11 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
   const tiedUpSpan = spanOf(tiedUp) ?? sweptSpan(ctx.modelled?.capital);
   const tiedUpStanding = tiedUp ? tiedUp.status.toLowerCase() : 'the range the model swept: an assumption, not established';
 
+  // What sending costs, as the plan's pathway holds it; nothing held stays unestablished.
+  const outreachCost = ctx.reachCost ? ctx.reachCost.amount : null;
+  const outreachSource: StepCostSource = ctx.reachCost ? 'MODEL' : 'NONE_HELD';
+  const outreachCostLine = ctx.reachCost ? ` Reaching a buyer costs ${money(ctx.reachCost.amount, cur)} in cash as the plan holds it (${ctx.reachCost.basis}).` : ' The model prices no outreach cost for these sends.';
+
   // 2. Who to reach, and how.
   const reachNeeds = needs('BUYERS');
   const reachDay = startOf(reachNeeds);
@@ -245,10 +261,10 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
         : `Build the list of "${buyers}" from a published directory, register or list` +
           `${unknown.has('buyers') ? ' (how many exist is not yet established)' : ''}` +
           ` and contact them directly through Brain's outreach campaign${a.need ? `, about "${a.need.name}"` : ''}.`) +
-      ' The model prices no outreach cost for these sends.',
+      outreachCostLine,
     startDay: reachDay,
     when: startWhen(reachNeeds, reachDay),
-    cost: null,
+    cost: outreachCost,
     basis: basisOf('BUYERS'),
     owner: 'BRAIN',
     ownerReason: null,
@@ -258,7 +274,7 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
     kind: 'EXECUTE',
     requires: reachNeeds,
     withinLimits: null,
-    ...meta('REACH', 'NONE_HELD', reachDay, 'NO_MODEL_DAYS'),
+    ...meta('REACH', outreachSource, reachDay, 'NO_MODEL_DAYS'),
   });
 
   // 3. Supply, lined up before anything is sold.
@@ -322,10 +338,10 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
   const agreeDay = startOf(offerNeeds);
   const agreeOrder = next({
     label: conversionKnown && !conflict ? `Offer it to ${buyers}` : `Validate the offer with ${buyers}`,
-    detail: `Offer ${a.need ? `"${a.need.name}" ` : ''}${def.needsSupply ? `fulfilled by ${supplier ? `"${supplier}"` : 'the supplier'} ` : ''}${price}, ${funding}.${conversionKnown ? '' : ` The first batch measures what share agree: ${conversionQuestion}.`}${conflict ? ` This contradicts their terms:${arrears}, so the first batch first measures whether they will pay in advance at all.` : ''} The model prices no cost for sending the offer.`,
+    detail: `Offer ${a.need ? `"${a.need.name}" ` : ''}${def.needsSupply ? `fulfilled by ${supplier ? `"${supplier}"` : 'the supplier'} ` : ''}${price}, ${funding}.${conversionKnown ? '' : ` The first batch measures what share agree: ${conversionQuestion}.`}${conflict ? ` This contradicts their terms:${arrears}, so the first batch first measures whether they will pay in advance at all.` : ''}${ctx.reachCost ? outreachCostLine : ' The model prices no cost for sending the offer.'}`,
     startDay: agreeDay,
     when: startWhen(offerNeeds, agreeDay),
-    cost: null,
+    cost: outreachCost,
     basis: priced && conversionKnown ? 'ESTIMATE' : 'ASSUMPTION',
     owner: 'BRAIN',
     ownerReason: null,
@@ -333,6 +349,8 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
     execution: ctx.send,
     executor: exec({ operation: 'SEND_OFFER', execution: ctx.send }),
     kind: conversionKnown && !conflict ? 'EXECUTE' : 'VALIDATE',
+    // The price the plan judged the arrangement on: its value's middle, when the value is established at all.
+    ...(priced ? { price: a.value.p50 } : {}),
     ...(conflict
       ? { question: `For "${buyers}": will they pay before delivery, against their stated terms (${a.buyerTerms!.basis})?${conversionKnown ? '' : ` And ${conversionQuestion}.`}` }
       : conversionKnown
@@ -340,7 +358,7 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
         : { question: `For "${buyers}": ${conversionQuestion}.` }),
     requires: offerNeeds,
     withinLimits: null,
-    ...meta('OFFER', 'NONE_HELD', agreeDay, 'NO_MODEL_DAYS'),
+    ...meta('OFFER', outreachSource, agreeDay, 'NO_MODEL_DAYS'),
   });
 
   // 5. Settlement, and when cash lands against the deadline: the offer's day plus the model's days to usable cash.
@@ -367,11 +385,11 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
   const settle = (detail: string) =>
     next({
       label: fromSupplier ? `Collect the ${a.design.base === 'BROKER' ? 'commission' : 'referral fee'} from ${supplier ?? 'the supplier'}` : 'Collect payment',
-      detail: `${detail}${terms}${when}`,
+      detail: `${detail}${terms}${when} ${COLLECTION_COST}`,
       startDay: cashDay,
       when: cashWhen,
-      // The model holds no cost of collecting (a payment provider's fee): unestablished, not free.
-      cost: null,
+      // Collecting commits nothing before the buyer pays: a payment provider's fee comes out of each payment (`COLLECTION_COST`).
+      cost: 0,
       basis: simulated || sweptDays || conflict ? 'ASSUMPTION' : basisOf('SETTLEMENT'),
       owner: account.length > 0 ? 'PERSON' : 'BRAIN',
       ownerReason: account.length > 0 ? `a payment account in the owner's name (${account.join(', ')}), which only the owner can open; Brain collects once it is connected` : null,
@@ -381,7 +399,7 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
       kind: 'EXECUTE',
       requires: needs('SETTLEMENT'),
       withinLimits: inTime,
-      ...meta('COLLECT', 'NONE_HELD', cashDay, unscheduled),
+      ...meta('COLLECT', 'NOT_OWNERS', cashDay, unscheduled),
     });
 
   // 6. Ordering supply: money paid out, so the owner's; funded by buyers when the design presells.
@@ -515,8 +533,8 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
         : cashDay
           ? `${dayText(cashDay)}: one cycle after the offer, the first group's days to usable cash`
           : `one cycle after the offer: ${pending}`,
-      // Asking again is outreach, which the model prices nothing for: unestablished.
-      cost: null,
+      // Asking again is outreach: what the pathway holds it costs, or unestablished.
+      cost: outreachCost,
       basis: subscription ? 'ASSUMPTION' : basisOf('REPEAT'),
       owner: 'BRAIN',
       ownerReason: null,
@@ -526,7 +544,7 @@ export function arrangementSteps(a: ConstructedArrangement, ctx: ArrangementStep
       kind: 'EXECUTE',
       requires: needs('REPEAT'),
       withinLimits: day && ctx.daysLeft !== null ? day.high <= ctx.daysLeft : null,
-      ...meta('REPEAT', 'NONE_HELD', day, unscheduled),
+      ...meta('REPEAT', outreachSource, day, unscheduled),
     });
   }
   const notice = conflict
@@ -586,4 +604,264 @@ export function heldPriceAsk(value: { observations: number; p50: number }, curre
   const figure = `${currency} ${Math.round(value.p50).toLocaleString('en-US')}`;
   const held = n === 1 ? `one published price (${figure})` : `${n} published prices (middle ${figure})`;
   return `${held} is held, not yet established: a further independent published price for these buyers, with its figure and date, establishes it`;
+}
+
+/**
+ * Why collecting a payment is costed at 0: the step's cost is money committed
+ * before any opening pays, and a payment provider's fee is taken out of the
+ * payment it collects. The fee is not modelled in the plan's net, and is said so.
+ */
+export const COLLECTION_COST = "Collecting commits nothing before the buyer pays: the payment provider's fee, which the plan's net does not model, is taken out of each payment.";
+
+/** The ids an arrangement's steps rest on: the arrangement and every claim or observation it was constructed from. Pure. */
+export function arrangementEvidence(a: Pick<ConstructedArrangement, 'key' | 'demand' | 'supply' | 'need' | 'value' | 'conversion' | 'fixedCost' | 'supplyCost'>): string[] {
+  const out = [
+    a.key,
+    a.demand.claimId,
+    a.supply?.claimId ?? null,
+    a.need?.claimId ?? null,
+    ...(a.value.sources ?? []),
+    ...(a.conversion?.sources ?? []),
+    ...(a.fixedCost?.sources ?? []),
+    ...(a.supplyCost?.sources ?? []),
+  ];
+  return [...new Set(out.filter((x): x is string => typeof x === 'string' && x.length > 0))].slice(0, 24);
+}
+
+/* ------------------------------------------------------------------ */
+/* A found opening's transaction, as steps                              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Who fulfils one opening, as the evidence names it. BRAIN only where Brain
+ * produces a deliverable it has proved (the pathway's `producedBy`) or the card
+ * requires one of Brain's deliverable capabilities; OWNER where the card names
+ * the owner; PROVIDER where it names anybody else; NOBODY otherwise — never
+ * Brain by default (§39, §42).
+ */
+export type OpeningFulfiller =
+  | { by: 'BRAIN'; capability: string }
+  | { by: 'PROVIDER'; name: string }
+  | { by: 'OWNER'; hours: number | null }
+  | { by: 'NOBODY'; why: string };
+
+/**
+ * One opening's facts as the plan judged them, for its steps (`openingSteps`):
+ * read from the modelled opening, its transaction pathway and its demand row —
+ * exactly the economics the strategy was judged on, never re-estimated.
+ */
+export interface OpeningChainMember {
+  id: string;
+  title: string;
+  fulfils: OpeningFulfiller;
+  /** The price a deal was judged at (the demand row's middle, else the card's established price); null when none. */
+  price: number | null;
+  /** What one deal costs directly as the model holds it (`costHeld`); null when it holds no figure. */
+  directCost: { low: number; high: number; standing: string } | null;
+  /** What reaching a buyer costs as the plan's pathway holds it (`acquisitionCost`); null when nothing holds it. */
+  reachCost: { amount: number; basis: string } | null;
+  /** Days to usable cash as the model holds them (`modelledCashSpan`). */
+  cash: { span: Day; standing: string } | null;
+  /** The rows, claims and card facts each part of the transaction rests on. */
+  evidence: { offer: string[]; deliver: string[]; collect: string[] };
+}
+
+const DELIVERABLE_IDS: ReadonlySet<string> = new Set(DELIVERABLE_CAPABILITIES.map((one) => one.id));
+
+const refOf = (input: { source: { ref: string } | null } | null | undefined): string | null => input?.source?.ref ?? null;
+const ids = (...xs: (string | null | undefined)[]) => [...new Set(xs.filter((x): x is string => typeof x === 'string' && x.length > 0))];
+const valueOf = (m: ModelInput | null | undefined): number | null => (m ? (m.value ?? m.high ?? m.low ?? null) : null);
+
+/** One modelled opening as a chain member, from what the plan already read of it. Pure. */
+export function openingMember(
+  one: ModelledOpportunity,
+  pathway: Pick<TransactionPathway, 'producedBy' | 'fulfiller' | 'acquisitionCost'> | null,
+  demand: Pick<DemandEstimate, 'price' | 'costHeld'> | null,
+): OpeningChainMember {
+  const o = one.opportunity;
+  const named = (one.fulfilledBy?.value ?? o.fulfillmentOwner ?? '').trim();
+  const capability = pathway?.producedBy ?? o.requiredCapabilities.find((c) => DELIVERABLE_IDS.has(c)) ?? null;
+  const fulfils: OpeningFulfiller =
+    named && OWNER_FULFILS.test(named)
+      ? { by: 'OWNER', hours: valueOf(one.hours) }
+      : pathway?.producedBy
+        ? { by: 'BRAIN', capability: pathway.producedBy }
+        : named && pathway?.fulfiller.status !== 'UNKNOWN'
+          ? { by: 'PROVIDER', name: named.slice(0, 120) }
+          : !named && capability
+            ? { by: 'BRAIN', capability }
+            : { by: 'NOBODY', why: pathway?.fulfiller.basis ?? 'nobody is named to fulfil it' };
+  const held = demand?.costHeld ?? (one.directCost.value !== null ? { low: one.directCost.value, high: one.directCost.value, own: one.directCost.provenance === 'EVIDENCE' } : null);
+  const reach = pathway && typeof pathway.acquisitionCost.value === 'number' ? { amount: pathway.acquisitionCost.value, basis: pathway.acquisitionCost.basis } : null;
+  const agreed = one.agreedDeals > 0 ? `${o.id}:agreements` : null;
+  return {
+    id: o.id,
+    title: o.title,
+    fulfils,
+    price: demand?.price ? demand.price.p50 : one.price.value,
+    directCost: held ? { low: held.low, high: held.high, standing: held.own ? 'established' : 'estimated, not established' } : null,
+    reachCost: reach,
+    cash: modelledCashSpan(one),
+    evidence: {
+      offer: ids(o.id, o.sourceClaimId, refOf(one.price), refOf(one.close), refOf(one.respond), agreed),
+      deliver: ids(o.id, refOf(one.fulfilledBy), refOf(one.directCost), refOf(one.hours)),
+      collect: ids(o.id, refOf(one.daysToCash), agreed),
+    },
+  };
+}
+
+/** Every modelled opening as a chain member, by id. Pure. */
+export function openingMembers(
+  openings: readonly ModelledOpportunity[],
+  pathways: readonly Pick<TransactionPathway, 'opportunityId' | 'producedBy' | 'fulfiller' | 'acquisitionCost'>[],
+  demand: readonly Pick<DemandEstimate, 'opportunityId' | 'price' | 'costHeld'>[],
+): Map<string, OpeningChainMember> {
+  const pathOf = new Map(pathways.map((p) => [p.opportunityId, p]));
+  const demandOf = new Map(demand.map((d) => [d.opportunityId, d]));
+  const out = new Map<string, OpeningChainMember>();
+  for (const one of openings) {
+    const id = one.opportunity.id;
+    if (!out.has(id)) out.set(id, openingMember(one, pathOf.get(id) ?? null, demandOf.get(id) ?? null));
+  }
+  return out;
+}
+
+export interface OpeningStepContext {
+  currency: string;
+  daysLeft: number | null;
+  send: string[];
+  collect: string[];
+  capabilities?: CapabilityInventory;
+  /** The day selling starts (day 0 for a sale made now). */
+  sellDay?: Day;
+}
+
+/**
+ * What the opening's fulfilment step is: who performs it, through which
+ * operation, what it pays and to whom. Shared by a sale's chain and a
+ * reconstruction's members. Pure.
+ */
+export function fulfilmentStep(
+  m: OpeningChainMember,
+  ctx: Pick<OpeningStepContext, 'currency' | 'capabilities'>,
+  day: Day | null,
+  dependsOn: number | null,
+  order: number,
+  unscheduled: UnscheduledReason,
+): PlanStep {
+  const cur = ctx.currency;
+  const title = m.title.slice(0, 80);
+  const cost = m.directCost ? m.directCost.high : null;
+  const paid = cost !== null && cost > 0;
+  const costLine = m.directCost
+    ? ` Direct cost per deal ${range(m.directCost.low, m.directCost.high, cur)} (${m.directCost.standing}), the figure the plan was judged on${paid ? ', paid from the owner\'s account before the buyer pays' : ''}.`
+    : ' Direct cost per deal is not established: the plan holds no figure for it, and the first delivery measures it.';
+  const f = m.fulfils;
+  const who =
+    f.by === 'BRAIN'
+      ? `Brain produces the deliverable (${f.capability}) for each buyer and records delivery.`
+      : f.by === 'PROVIDER'
+        ? `"${f.name}" delivers to each buyer${paid ? ' and is paid for each deal' : ''}; Brain confirms delivery with each buyer and records it.`
+        : f.by === 'OWNER'
+          ? `The owner delivers the work to each buyer personally, as the card states${f.hours !== null ? `: about ${Math.round(f.hours * 10) / 10} hours a deal` : ''}.`
+          : `Nobody is named to fulfil it (${f.why}), so no performer is established. Next: name who delivers it.`;
+  const executor =
+    f.by === 'BRAIN'
+      ? stepExecutor({ operation: 'BRAIN_PRODUCES', cost, pays: paid ? 'the direct cost of each deal, paid before the buyer pays' : null }, ctx.capabilities)
+      : f.by === 'PROVIDER'
+        ? stepExecutor({ operation: 'SUPPLIER_DELIVERS', provider: `"${f.name}"`, cost, pays: paid ? `"${f.name}"'s charge for each deal, paid before the buyer pays` : null }, ctx.capabilities)
+        : f.by === 'OWNER'
+          ? stepExecutor({ operation: 'OWNER_TASK', cost, ownerTask: { why: 'deliver the work to each buyer personally, as the card states', routine: true } }, ctx.capabilities)
+          : stepExecutor({ operation: 'SUPPLIER_DELIVERS', cost, unspecified: `nobody is named to fulfil "${title}", so no performer is established; next: name who delivers it` }, ctx.capabilities);
+  return {
+    order,
+    label: `Deliver "${title}"`,
+    detail: `${who}${costLine}`,
+    startDay: day,
+    when: day ? `${dayText(day)}: between the first agreement and usable cash (the model holds no separate delivery time)` : `after the first agreement: not yet scheduled, set by days to usable cash`,
+    cost,
+    basis: m.directCost?.standing === 'established' ? 'EVIDENCE' : 'ESTIMATE',
+    owner: paid || f.by === 'OWNER' ? 'PERSON' : 'BRAIN',
+    ownerReason: f.by === 'OWNER' ? 'the card names the owner as who does the work' : paid ? `a payment of up to ${money(cost ?? 0, cur)} per deal from the owner's account before the buyer pays, inside the goal's limits` : null,
+    dependsOn,
+    kill: 'a buyer reports non-delivery or a defect → hold collection for that buyer, refund under the stated terms, and re-plan the fulfilment',
+    execution: [],
+    executor,
+    openings: [m.id],
+    evidence: m.evidence.deliver,
+    ...(f.by === 'OWNER' && f.hours !== null ? { hours: f.hours } : {}),
+    stage: { stage: 'DELIVER', costSource: cost === null ? 'NONE_HELD' : 'MODEL', ...(day === null ? { unscheduled } : {}) },
+  };
+}
+
+/**
+ * A sale of one found opening as its whole transaction (§93, §3a of the
+ * completion spec): the offer (the sale itself, at the price the plan judged
+ * it on), fulfilment by whoever the evidence names — paying the supplier where
+ * a direct cost is held — and collecting payment on the model's days to usable
+ * cash. Production planning-reliability baseline (2026-11-22): every
+ * executable plan led by a sale read one step, `Sell "…"`, with no fulfilment,
+ * no collection and no supplier payment. `offer` is the sale step its caller
+ * built (its words, kill and execution); this fills in the rest. Pure.
+ */
+export function openingSteps(m: OpeningChainMember, ctx: OpeningStepContext, offer: Omit<PlanStep, 'order' | 'dependsOn'>, startAt = 1): PlanStep[] {
+  const sell = ctx.sellDay ?? { low: 0, high: 0 };
+  const offerOrder = startAt;
+  const reach = m.reachCost;
+  const steps: PlanStep[] = [
+    {
+      ...offer,
+      order: offerOrder,
+      detail: `${offer.detail}${reach ? ` Reaching a buyer costs ${money(reach.amount, ctx.currency)} in cash as the plan holds it (${reach.basis}).` : ''}`,
+      dependsOn: null,
+      cost: reach ? reach.amount : null,
+      openings: [m.id],
+      evidence: m.evidence.offer,
+      ...(m.price !== null ? { price: m.price } : {}),
+      stage: { stage: 'OFFER', costSource: reach ? 'MODEL' : 'NONE_HELD' },
+    },
+  ];
+  const cash = m.cash;
+  const lands: Day | null = cash ? { low: Math.round(sell.low + cash.span.low), high: Math.round(sell.high + cash.span.high) } : null;
+  const late = lands !== null && ctx.daysLeft !== null && lands.low > ctx.daysLeft;
+  const cashDay = late ? null : lands;
+  const unscheduled: UnscheduledReason = late ? 'AFTER_DEADLINE' : 'NO_MODEL_DAYS';
+  const deliverDay: Day | null = cashDay ? { low: sell.low, high: cashDay.high } : null;
+  const deliver = fulfilmentStep(m, ctx, deliverDay, offerOrder, startAt + 1, unscheduled);
+  steps.push(deliver);
+  const inTime = lands !== null && ctx.daysLeft !== null ? lands.high <= ctx.daysLeft : null;
+  steps.push({
+    order: startAt + 2,
+    label: `Collect payment for "${m.title.slice(0, 80)}"`,
+    detail: `Invoice each buyer on delivery and record the payment against the goal.${cash ? ` Cash is usable about ${Math.round(cash.span.low)}–${Math.round(cash.span.high)} days after a sale (${cash.standing})${ctx.daysLeft !== null && lands ? `, ${inTime ? 'inside' : late ? 'OUTSIDE' : 'partly outside'} the ${ctx.daysLeft} days left` : ''}.` : ' When cash is usable is not yet established: the first sale measures it.'} ${COLLECTION_COST}`,
+    startDay: cashDay,
+    when: late
+      ? `not scheduled: cash would be usable on ${dayText(lands!)} (${cash!.standing}), after the ${ctx.daysLeft} days left`
+      : lands
+        ? `${dayText(lands)}: the sale's day plus ${Math.round(cash!.span.low)}–${Math.round(cash!.span.high)} days to usable cash (${cash!.standing})`
+        : 'not yet scheduled: set by days to usable cash, which the first sale measures',
+    cost: 0,
+    basis: cash?.standing === 'proven' ? 'EVIDENCE' : 'ASSUMPTION',
+    owner: 'BRAIN',
+    ownerReason: null,
+    dependsOn: deliver.order,
+    kill: `cash would not be usable by day ${ctx.daysLeft ?? 'the deadline'} → re-plan the payment terms (a deposit or a presale) or drop the opening`,
+    execution: ctx.collect,
+    executor: stepExecutor({ operation: 'COLLECT_PAYMENT', execution: ctx.collect }, ctx.capabilities),
+    ...(inTime !== null ? { withinLimits: inTime } : {}),
+    openings: [m.id],
+    evidence: m.evidence.collect,
+    stage: { stage: 'COLLECT', costSource: 'NOT_OWNERS', ...(cashDay === null ? { unscheduled } : {}) },
+  });
+  return steps;
+}
+
+/** What reaching a buyer costs an arrangement, as the plan's pathway for its modelled opening holds it; null when none does. Pure. */
+export function arrangementReachCost(
+  modelled: Pick<ModelledOpportunity, 'opportunity'> | null | undefined,
+  pathways: readonly Pick<TransactionPathway, 'opportunityId' | 'acquisitionCost'>[],
+): { amount: number; basis: string } | null {
+  if (!modelled) return null;
+  const p = pathways.find((one) => one.opportunityId === modelled.opportunity.id);
+  return p && typeof p.acquisitionCost.value === 'number' ? { amount: p.acquisitionCost.value, basis: p.acquisitionCost.basis } : null;
 }
