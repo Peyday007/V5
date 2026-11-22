@@ -250,16 +250,54 @@ export function forgetUnansweredRead(): void {
 /**
  * §85 / rule 9: displaced research stranded on the free lane is continued, not
  * only recorded. `watchDisplacedWork` writes the free-lane:coverage
- * IDLE_WITH_EXECUTABLE_WORK intervention, whose replacement is the free lane's
- * own step; until this, nothing performed it. The engineering watchdog steps the
- * lane only when its pool reads zero busy slots, so "submitted 0" or "failed
- * every item" beside a leased slot (production: 11 of 144 ten-minute windows in a day)
- * was recorded and left alone. The continuation is the controller's step — the
- * same call the watchdog makes, never a second scheduler — and neither half
- * ever stops the tick. Dependencies are injectable for tests.
+ * IDLE_WITH_EXECUTABLE_WORK intervention; until this, nothing acted on it.
+ *
+ * The continuation is not the controller's step. That step already runs every
+ * 30 s from the pool's own timer while the pool runs, so repeating it changed
+ * nothing (attempt 1's finding). And while the pool is *not* running in this
+ * process — its delayed start threw, or it never began — the step is worse than
+ * useless: `fill` spawns slots that exit at once because the pool reads
+ * stopped, so "submitted 0" was recorded every window beside a lane that could
+ * not take anything, and only improvement research had a recovery that
+ * restarts it (`improvement/activation.ts`). This is that recovery for
+ * displaced research: the lane's memberships are re-read and a pool that is not
+ * running is started through its own `startAdaptivePool` (whose first act is a
+ * control step), never a second scheduler. A running pool is left to its own
+ * controller and the result says so, so the intervention keeps being recorded
+ * rather than reading as answered. Inside the boot delay the lane's deliberate
+ * late start is respected. Neither half ever stops the tick. Dependencies are
+ * injectable for tests.
  */
+/** The free lane starts minutes after boot on purpose (`startFreeLaneLoop`); a restart waits past that. */
+export const FREE_LANE_RESTART_AFTER_UPTIME_MS = 10 * 60_000;
+
+export type DisplacedContinuation = 'POOL_RESTARTED' | 'POOL_RUNNING' | 'NOT_CONFIGURED' | 'BOOT_DELAY';
+
+/** Bring the free lane back for stranded displaced work. Never steps a running pool a second time. */
+export async function restartStrandedFreeLane(deps: {
+  running?: () => boolean;
+  start?: () => void;
+  resetMemberships?: () => void;
+  configured?: () => boolean;
+  uptimeMs?: () => number;
+} = {}): Promise<DisplacedContinuation> {
+  const capacity = deps.running && deps.start ? null : await import('../freeLane/capacity.ts');
+  const configured = deps.configured ?? (await import('../cheap/lane.ts')).laneConfig;
+  if (!configured()) return 'NOT_CONFIGURED';
+  const resetMemberships = deps.resetMemberships ?? (await import('../freeLane/worker.ts')).resetFreeLaneMemberships;
+  resetMemberships();
+  const running = deps.running ?? capacity!.adaptivePoolRunning;
+  if (running()) return 'POOL_RUNNING';
+  const uptime = deps.uptimeMs ?? (() => process.uptime() * 1000);
+  if (uptime() < FREE_LANE_RESTART_AFTER_UPTIME_MS) return 'BOOT_DELAY';
+  const start = deps.start ?? (() => capacity!.startAdaptivePool());
+  start();
+  return 'POOL_RESTARTED';
+}
+
 export async function continueDisplacedWork(deps: {
   watch?: () => Promise<{ stranded: boolean; reason: string }>;
+  /** What is done for stranded work; `continued` is true only when it changed something. */
   step?: () => Promise<unknown>;
 } = {}): Promise<{ stranded: boolean; continued: boolean }> {
   let stranded = false;
@@ -273,10 +311,11 @@ export async function continueDisplacedWork(deps: {
   }
   if (!stranded) return { stranded, continued: false };
   try {
-    const step = deps.step ?? (await import('../freeLane/capacity.ts')).controlStep;
-    await step();
-    console.log(`[dispatch] displaced research stranded; free lane stepped: ${reason}`);
-    return { stranded, continued: true };
+    const step = deps.step ?? (() => restartStrandedFreeLane());
+    const outcome = await step();
+    const continued = outcome !== 'POOL_RUNNING' && outcome !== 'NOT_CONFIGURED' && outcome !== 'BOOT_DELAY' && outcome !== false;
+    console.log(`[dispatch] displaced research stranded (${String(outcome)}): ${reason}`);
+    return { stranded, continued };
   } catch (error) {
     console.warn('[dispatch] free-lane continuation failed:', (error as Error).message);
     return { stranded, continued: false };
