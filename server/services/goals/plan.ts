@@ -64,7 +64,7 @@ function planAuthority(projectId: string, action: string): ReturnType<typeof che
 }
 import { composeBuyerMessage } from '../cash/outreach.ts';
 import { evidenceCard } from '../cash/card.ts';
-import { ARRANGEMENT_ID_PREFIX, isArrangementId, bestCaseReach, composeGoalModel, estimatedFromArrangement, inventedDesigner, planTrace, dealsForGoal, dealsFromOffers, priceSupported, volumeEstablished, wilson, type ModelInput, type ModelledOpportunity, type PriceVariable } from '../cash/goalScenario.ts';
+import { ARRANGEMENT_ID_PREFIX, isArrangementId, bestCaseReach, composeGoalModel, estimatedFromArrangement, inventedDesigner, planTrace, dealsForGoal, dealsFromOffers, measuredClose, priceSupported, volumeEstablished, wilson, type ModelInput, type ModelledOpportunity, type PriceVariable } from '../cash/goalScenario.ts';
 import { cachedCashKnowledge } from '../quant/knowledge.ts';
 import { achievedFrom, readTarget, type TargetReading } from './target.ts';
 import { constructedShare, executionFrame, MAX_LIVE_GOAL_ROUNDS, openConstructedRound, openGoalDiscovery, roundsStillResearching, staleUnlaunchedRounds } from '../cash/discovery.ts';
@@ -950,11 +950,35 @@ function volumeCheck(one: ModelledOpportunity, deals: number): LinkCheck {
     return { link: 'MARKET_VOLUME', ok: false, basis: `${needed} deal(s) needed and nobody has established how many buyers exist or how often they buy` };
   }
   const available = one.volume.value ?? 0;
+  const asked = prospectsAsked(one, needed);
+  if (available >= needed && asked !== null && asked > one.prospects!) {
+    return {
+      link: 'MARKET_VOLUME',
+      ok: false,
+      basis: `${needed} deal(s) needed at the measured rate means asking ${asked} prospects, but the market holds only ${one.prospects} (${one.volume.note}): at that rate it yields about ${Math.floor(one.prospects! * measuredClose(one)! * 10) / 10}`,
+    };
+  }
   return {
     link: 'MARKET_VOLUME',
     ok: available >= needed,
     basis: available >= needed ? `${needed} deal(s) needed, ${available} available in the window (${one.volume.note})` : `${needed} deal(s) needed but only ${available} in the window (${one.volume.note})`,
   };
+}
+
+/**
+ * The prospects a measured rate needs asked for `deals` new deals, when the
+ * market's prospects are counted (`ModelledOpportunity.prospects`), or null
+ * (planningReliability round 4). A measured rate — agreements per contact,
+ * pre-orders per visitor, wins per quote — is a share of prospects, so the
+ * deals it wins are bounded by the prospects that exist: 10 orders at a
+ * cautious 0.1% need 10,000 asked, and 320 gift shops are not 10,000
+ * prospects, however the rate was measured. Read at the rate's cautious end,
+ * the same one the plan's conservative figure reads. Pure.
+ */
+export function prospectsAsked(one: Pick<ModelledOpportunity, 'close' | 'prospects'>, deals: number): number | null {
+  if (one.prospects === null || one.prospects === undefined || !(deals > 0)) return null;
+  const close = measuredClose(one);
+  return close === null ? null : Math.ceil(deals / Math.min(1, close) - 1e-9);
 }
 
 /** The deals a strategy actually needs taken, as opposed to the buyers it asks. */
@@ -1062,6 +1086,38 @@ export function withoutSpareOwnerWork<M extends { one: ModelledOpportunity; deal
 }
 
 /**
+ * A strategy's members, without agreed lots that tie up money the plan does not
+ * need (planningReliability round 4) — the capital counterpart of
+ * `withoutSpareOwnerWork`.
+ *
+ * Every agreement is counted in every strategy, so once the owner allows less
+ * money up front than an agreed lot ties up — an objective changed to "no
+ * up-front capital" beside a signed $9,000 resale that ties up $6,000 — every
+ * strategy, including one whose other openings reach the target with nothing
+ * tied up, carried the lot and broke the limit; and a strategy offering only
+ * the other openings was the same set of offers, so it could not even be
+ * stated. When the money held at once is over the ceiling, agreed-only members
+ * that tie money up are left out if the rest still reach the target at their
+ * cautious numbers; otherwise every member stays, and the limit breaks. Pure.
+ */
+export function withoutSpareCapitalLots<M extends { one: ModelledOpportunity; deals: number }>(
+  members: M[],
+  target: Pick<TargetReading, 'daysLeft' | 'remainingCents'> & { capitalCeilingCents?: number | null; capitalBeforeProofCents?: number | null },
+): M[] {
+  // The tighter of what the goal may commit and what may be tied up before money comes in ("no up-front capital").
+  const limits = [target.capitalCeilingCents, target.capitalBeforeProofCents].filter((x): x is number => x !== null && x !== undefined);
+  const ceiling = limits.length ? Math.min(...limits) : null;
+  if (ceiling === null) return members;
+  const all = conservative(members, target);
+  if (all.exposure === null || all.exposure <= ceiling / 100 + 1e-9) return members;
+  const spare = (m: M) => m.deals === 0 && m.one.agreedDeals > 0 && m.one.capital.value !== null && m.one.capital.provenance !== 'UNKNOWN' && m.one.capital.value > 0;
+  const rest = members.filter((m) => !spare(m));
+  if (rest.length === 0 || rest.length === members.length) return members;
+  const cons = conservative(rest, target);
+  return cons.settled !== null && cons.settled >= target.remainingCents / 100 && cons.exposure !== null && cons.exposure <= ceiling / 100 + 1e-9 ? rest : members;
+}
+
+/**
  * The conservative settled figure for a strategy, or null when an input it needs is unknown.
  *
  * Read against the deals the strategy takes (planningReliability, 2026-11-21):
@@ -1093,7 +1149,9 @@ export function conservative(members: { one: ModelledOpportunity; deals: number 
     if (volume === null || days === null || cost === null || capital === null || hours === null) return none;
     const taking = deals > 0 && volume > 0;
     if (taking && (close === null || price === null)) return none;
-    const won = taking ? Math.min(deals * close!, volume) : 0;
+    // A measured rate wins at most its share of the prospects the market holds (`prospectsAsked`).
+    const reachable = one.prospects !== null && one.prospects !== undefined && conversion.state === 'HISTORICAL' ? Math.min(deals, one.prospects) : deals;
+    const won = taking ? Math.min(reachable * close!, volume) : 0;
     settled += days <= (target.daysLeft ?? 0) ? one.agreedValue + won * price! : 0;
     exposure += peakConcurrentLots(won + agreedLots(one), days, target.daysLeft) * capital;
     labour += (won + one.agreedDeals) * hours;
@@ -2026,8 +2084,11 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   trace('considered openings judged');
   const strategies: StrategyReading[] = [];
   for (const spec of model.definition.strategies) {
-    const members = withoutSpareOwnerWork(
-      model.included.map((one) => ({ one, deals: Number(spec.set[`o${one.index}_n`] ?? 0) })).filter((member) => member.deals > 0 || member.one.agreedValue > 0),
+    const members = withoutSpareCapitalLots(
+      withoutSpareOwnerWork(
+        model.included.map((one) => ({ one, deals: Number(spec.set[`o${one.index}_n`] ?? 0) })).filter((member) => member.deals > 0 || member.one.agreedValue > 0),
+        target,
+      ),
       target,
     );
     const links = CHAIN_LINKS.map((link) => {
