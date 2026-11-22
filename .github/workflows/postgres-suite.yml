@@ -181,6 +181,10 @@ jobs:
           done
           [ "$ok" = 1 ] || { echo '::error::Could not install the OCR tooling in three bounded attempts.'; exit 1; }
           tesseract --version | head -1
+          # Which hardware this shard drew. Standard runners are not one speed:
+          # on run 44968385809 half the shards ran ~1.25x and half ~0.8x their
+          # predicted load. The shard balance cannot fix that, but it should be legible.
+          echo "runner cpu: $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2 | xargs) x$(nproc)"
 
       - name: Start the cluster already on this runner, and make a database for it
         run: |
