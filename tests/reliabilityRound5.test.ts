@@ -96,7 +96,7 @@ describe('rule 3: a deal that loses money is no way to the target', () => {
 
 describe('rule 4: agreed work is committed owner hours', () => {
   const reports = { one: opening('reports', { price: known(200), directCost: known(5), hours: known(0.5), agreedValue: 1800, agreedDeals: 9 }), deals: 0 };
-  const events = { one: opening('events', { price: known(600), directCost: known(50), hours: known(8), agreedValue: 1800, agreedDeals: 3 }), deals: 0 };
+  const events = { one: opening('events', { price: known(600), directCost: known(50), hours: known(8, 'ASSUMPTION'), agreedValue: 1800, agreedDeals: 3 }), deals: 0 };
 
   it('keeps the agreements that fit the hours when every member is agreed work', () => {
     const target = { daysLeft: 30, remainingCents: 150_000, hoursCeiling: 9 };

@@ -1559,12 +1559,13 @@ export function evaluateGoalPortfolio(input: {
      * signed owner-hosted events at eight hours each are 24 hours against 9,
      * yet agreed money was exempt here, so the best combination carried them
      * beside nine signed reports that collect the target in 4.5 hours. Agreed
-     * work that alone, at established hours, exceeds the goal's hours cannot be
-     * done inside them, so it is refused from every combination as a new deal
+     * work that alone, at its hours' lowest bound (the card's own figure, or the
+     * bottom of an unknown's sweep), exceeds the goal's hours cannot be done
+     * inside them, so it is refused from every combination as a new deal
      * would be; the plan's own strategy still names the broken limit when
      * nothing else reaches the target.
      */
-    if (!refused && input.hours !== null && input.hours !== undefined && one.agreedDeals > 0 && established(one.hours) && hoursLow !== null && one.agreedDeals * hoursLow > input.hours + 1e-9) {
+    if (!refused && input.hours !== null && input.hours !== undefined && one.agreedDeals > 0 && hoursLow !== null && one.agreedDeals * hoursLow > input.hours + 1e-9) {
       refused = `its ${one.agreedDeals} agreed deal(s) need ${Math.round(one.agreedDeals * hoursLow * 10) / 10} owner hours, more than the ${Math.round(input.hours)} owner hours this goal has`;
     }
     /*
