@@ -2,10 +2,11 @@
  * The fast intelligence-development loop: a reasoning change gets an actionable
  * verdict in minutes, without a deploy.
  *
- *   npm run loop [-- --base <ref>] [--cases held-out.json]... [--workers N]
+ *   npm run loop [-- --base <ref>] [--cases held-out.json]... [--workers N] [--skip typecheck,impacted,bench]
  *   npm run loop -- --merge branchA,branchB,...   (integration mode)
  *
- * Runs, concurrently where memory allows:
+ * Runs, concurrently where memory and cores allow (a wide impacted selection follows the
+ * bench, whose verdict line is printed as soon as it is known):
  *   typecheck   `tsc --noEmit`
  *   impacted    `scripts/test-impacted.mjs --base <base>`: the tests the change reaches
  *   bench       planningReliability on this tree (public cases plus any `--cases`),
@@ -55,6 +56,8 @@ const GB = 1024 ** 3;
 /** Measured peaks: tsc ≈2.9 GB resident; the impacted vitest run of a planner change ≈3 GB across its forks. */
 const TYPECHECK_BYTES = 3.5 * GB;
 const IMPACTED_BYTES = 3 * GB;
+/** An impacted selection up to this many test files runs beside the bench; a wider one after it. */
+const NARROW_IMPACTED = 12;
 
 const ROOT = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
 
@@ -215,8 +218,9 @@ interface LoopReport {
 
 /**
  * The loop over one tree: typecheck, impacted tests, and the bench diff against the base.
- * Typecheck and the impacted tests start at once; the bench joins them when the memory
- * the machine still has holds all three, and otherwise follows them.
+ * Typecheck and the bench start at once when the memory the machine still has holds both
+ * (else the bench follows); a narrow impacted selection runs beside them and a wide one
+ * after the bench, whose verdict is printed the moment it is known.
  */
 async function loopOn(dir: string, baseSha: string, caseFiles: string[], logDir: string, opts: { workers?: number; skip: Set<string> }): Promise<LoopReport> {
   const started = performance.now();
@@ -228,12 +232,18 @@ async function loopOn(dir: string, baseSha: string, caseFiles: string[], logDir:
 
   const typecheck = opts.skip.has('typecheck')
     ? null
-    : run('typecheck', path.join(npmBin, 'tsc'), ['--noEmit'], dir, logDir).then((r) => {
-        stages.push({ name: 'typecheck', ok: r.code === 0, ms: r.ms, note: r.code === 0 ? '' : tail(r.log, 8).join('\n'), log: r.log });
-      });
+    : () =>
+        run('typecheck', path.join(npmBin, 'tsc'), ['--noEmit'], dir, logDir).then((r) => {
+          stages.push({ name: 'typecheck', ok: r.code === 0, ms: r.ms, note: r.code === 0 ? '' : tail(r.log, 8).join('\n'), log: r.log });
+        });
+  let impactedCount: number | null = null;
+  if (!opts.skip.has('impacted')) {
+    const listed = await run('impacted-list', process.execPath, ['scripts/test-impacted.mjs', '--base', baseSha, '--list'], dir, logDir);
+    impactedCount = tail(listed.log, 10_000).filter((l) => l.startsWith('tests/')).length;
+  }
   const impacted = opts.skip.has('impacted')
     ? null
-    : run('impacted', process.execPath, ['scripts/test-impacted.mjs', '--base', baseSha], dir, logDir).then((r) => {
+    : () => run('impacted', process.execPath, ['scripts/test-impacted.mjs', '--base', baseSha], dir, logDir).then((r) => {
         const head = tail(r.log, 400).find((l) => l.startsWith('  tests covering them directly')) ?? '';
         const summary = tail(r.log, 400).filter((l) => /^\s*(Test Files|Tests)\s/.test(l)).join(' · ');
         stages.push({ name: 'impacted', ok: r.code === 0, ms: r.ms, note: `${head.trim()}${summary ? ` · ${summary.trim()}` : ''}${r.code === 0 ? '' : `\n${tail(r.log, 12).join('\n')}`}`, log: r.log });
@@ -268,15 +278,25 @@ async function loopOn(dir: string, baseSha: string, caseFiles: string[], logDir:
     reasons.push(...d.reasons);
   };
 
-  const room = availableBytes() - (typecheck ? TYPECHECK_BYTES : 0) - (impacted ? IMPACTED_BYTES : 0);
+  // A wide impacted selection (a planner change reaches ~100 planner-heavy test files) beside
+  // the bench's workers oversubscribes the cores and its tests time out (measured on #1214:
+  // 11 timeouts, no assertion failure), so it runs after the bench; a narrow one runs beside.
+  const wideImpacted = impactedCount !== null && impactedCount > NARROW_IMPACTED;
+  const room = availableBytes() - (typecheck ? TYPECHECK_BYTES : 0) - (impacted && !wideImpacted ? IMPACTED_BYTES : 0);
   const concurrentWorkers = Math.min(cores - 1, Math.floor((room * 0.8) / WORKER_BYTES));
-  if (opts.workers || concurrentWorkers >= 2) {
-    // Enough memory for all three at once.
-    if (!opts.workers) opts = { ...opts, workers: concurrentWorkers };
-    await Promise.all([typecheck, impacted, bench()]);
-  } else {
-    await Promise.all([typecheck, impacted]);
+  const benchThenReport = async () => {
     await bench();
+    const b = stages.find((s) => s.name === 'bench');
+    if (b) console.log(`loop: bench ${b.ok ? 'PASS' : 'REJECT'} after ${secs(performance.now() - started)} — ${b.note}${wideImpacted && impacted ? ' (impacted tests follow)' : ''}`);
+  };
+  if (opts.workers || concurrentWorkers >= 2) {
+    if (!opts.workers) opts = { ...opts, workers: concurrentWorkers };
+    await Promise.all([typecheck?.(), wideImpacted ? null : impacted?.(), benchThenReport()]);
+    if (wideImpacted) await impacted?.();
+  } else {
+    // Not enough memory for the bench beside the others: they first, then it.
+    await Promise.all([typecheck?.(), impacted?.()]);
+    await benchThenReport();
   }
   for (const s of stages) if (!s.ok && (s.name === 'typecheck' || s.name === 'impacted')) reasons.unshift(`${s.name} failed (log ${s.log})`);
   const order = ['typecheck', 'impacted', 'baseline', 'bench'];
