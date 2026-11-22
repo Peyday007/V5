@@ -30,7 +30,9 @@ import {
   restoreRouteHealth,
   ROUTE_FAILURE_LIMIT,
   ROUTE_WINDOW_MS,
+  probeHeldRoutes,
   routeHold,
+  routeHeld,
   routeWindowFailing,
   takeRouteProbe,
 } from '../server/services/freeLane/worker.ts';
@@ -332,7 +334,13 @@ async function enqueueFragment(play: TestProject, layerId: string, title: string
   return item.id;
 }
 
-describe('takeOne end to end: a re-probe answer reopens cooled items only when the route is open (review F2)', () => {
+/*
+ * Structural review (episode 4) replaced the item re-probe this block used to drive: a held route
+ * admits no item at all, and is asked with its own probe (`probeHeldRoutes`). The F2 gate is the same
+ * — an answer on a still-failing window keeps the route held and its queued items waiting; an answer
+ * that leaves it open lets them advance — driven end to end through `takeOne` and the probe.
+ */
+describe('takeOne end to end: a probe answer reopens the route only when its window is no longer failing (review F2)', () => {
   let play: TestProject;
   let layerId = '';
 
@@ -345,47 +353,38 @@ describe('takeOne end to end: a re-probe answer reopens cooled items only when t
     await setBrainOnlyMode(true, 'test', 'route breaker suite');
   });
 
-  it('keeps the route-outage cooldowns when a re-probe succeeds on a route whose window is still failing', async () => {
+  it('keeps a held route closed to every item when its probe answers on a window that is still failing', async () => {
     for (let i = 0; i < 4; i += 1) await enqueueFragment(play, layerId, `mostly failing ${i}`);
     const workers = await ensureFreeWorkers(CONFIG);
     let completer = busy;
     const lane: Completer = (...args) => completer(...args);
     const base = { workers, completer: lane, fetchSource, search: async () => [], config: CONFIG, worker: workers[0]!, index: 0 };
 
-    // Two real items fail on brain-a's provider: handed back and cooled for brain-a as a route outage.
-    const cooled = new Set<string>();
-    for (let i = 0; i < 2; i += 1) {
-      const failed = await takeOne(base);
-      expect(failed.ok).toBe(false);
-      cooled.add(failed.claimed!.workItemId);
-    }
-    expect(cooled.size).toBe(2);
-    expect(coolingForEveryModel(['brain-a'])).toBe(2);
-
-    // Earlier in the window the same route failed six more calls; its re-probe is due now.
-    const earlier = Date.now() - 5 * 60_000 - 1000;
-    for (let i = 0; i < 6; i += 1) recordRouteOutcome('brain-a', { ok: false, why: BUSY }, earlier + i);
-    expect(routeHold('brain-a')).toBeNull();
-    expect(routeWindowFailing('brain-a')).toBe(true);
-
-    // The re-probe: takeOne admits one item the cooldowns do not cover, and the provider answers it.
-    completer = answering;
-    const probe = await takeOne(base);
-    expect(probe.claimed).not.toBeNull();
-    expect(cooled.has(probe.claimed!.workItemId)).toBe(false);
-    expect(probe.ok).toBe(true);
-
-    // 1 answered of 9: the route stays held, and the answer did not end the outage cooldowns.
-    expect(routeHold('brain-a')).toMatch(/model route failing \(provider availability\)/);
-    expect(coolingForEveryModel(['brain-a'])).toBe(2);
-    // brain-a's next ask takes nothing — neither the cooled items nor anything else on the held route.
+    // Two real items fail in a row on brain-a's provider: the route cools, not only those items.
+    for (let i = 0; i < 2; i += 1) expect((await takeOne(base)).ok).toBe(false);
+    expect(routeHeld('brain-a')).toMatch(/cooling down after a provider failure/);
     expect((await takeOne(base)).claimed).toBeNull();
-    // Another model still takes a cooled item at once: the hold is brain-a's alone.
+
+    // Earlier in the window the same route failed more calls; it is held and its probe is due.
+    const earlier = Date.now() - 5 * 60_000 - 1000;
+    for (let i = 0; i < 7; i += 1) recordRouteOutcome('brain-a', { ok: false, why: BUSY }, earlier + i);
+    expect(routeHold('brain-a')).toBeNull(); // the breaker's due-ness, read alone
+    expect(routeHeld('brain-a')).not.toBeNull(); // admission: no item is its re-probe
+    expect((await takeOne(base)).claimed).toBeNull();
+
+    // The probe is the route's own call, and it answers: 1 of 10 is still failing, so it stays held.
+    completer = answering;
+    const [probe] = await probeHeldRoutes({ models: ['brain-a'], completer: lane, config: CONFIG });
+    expect(probe?.ok).toBe(true);
+    expect(probe?.open).toBe(false);
+    expect(routeHold('brain-a')).toMatch(/model route failing \(provider availability\)/);
+    expect((await takeOne(base)).claimed).toBeNull();
+    // Another model still takes an item at once: the hold is brain-a's alone.
     const other = await takeOne({ ...base, worker: workers[1]!, index: 1, spillover: true });
     expect(other.claimed).not.toBeNull();
   });
 
-  it('ends the route-outage cooldowns when the answer leaves the route open', async () => {
+  it('lets the queued items advance once the route answers and is open', async () => {
     for (let i = 0; i < 3; i += 1) await enqueueFragment(play, layerId, `mostly answering ${i}`);
     const workers = await ensureFreeWorkers(CONFIG);
     let completer = busy;
@@ -394,19 +393,17 @@ describe('takeOne end to end: a re-probe answer reopens cooled items only when t
 
     const failed = await takeOne(base);
     expect(failed.ok).toBe(false);
+    // One failure between answers leaves the route open; only that item waits for brain-a.
     expect(coolingForEveryModel(['brain-a'])).toBe(1);
+    expect(routeHeld('brain-a')).toBeNull();
 
+    // The route answers and is open: its outage cooldown ends, so brain-a may take that item again.
     completer = answering;
-    const answered = await takeOne(base);
-    expect(answered.ok).toBe(true);
-    expect(answered.claimed!.workItemId).not.toBe(failed.claimed!.workItemId);
-    expect(routeHold('brain-a')).toBeNull();
-    // The route answered and is open: its outage cooldown ended, so brain-a may take that item again.
-    expect(coolingForEveryModel(['brain-a'])).toBe(0);
     const seen = new Set<string>();
     for (let i = 0; i < 10 && !seen.has(failed.claimed!.workItemId); i += 1) {
       const next = await takeOne(base);
       if (!next.claimed) break;
+      expect(next.ok).toBe(true);
       seen.add(next.claimed.workItemId);
     }
     expect(seen.has(failed.claimed!.workItemId)).toBe(true);
