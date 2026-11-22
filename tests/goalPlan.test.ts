@@ -892,12 +892,12 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
     for (let i = 0; i < 40; i += 1) await oneOff({ title: `Opening ${i}`, priceCents: 20_000 + i });
     const id = await goal(1_000_000);
     const db = getDb() as unknown as Record<'all' | 'get' | 'run', (...args: unknown[]) => unknown>;
-    const count = async (): Promise<number> => {
+    const count = async (at = Infinity, then: () => void = () => undefined): Promise<number> => {
       const originals = { all: db.all, get: db.get, run: db.run };
       let statements = 0;
       for (const m of ['all', 'get', 'run'] as const) {
         const orig = originals[m].bind(db);
-        db[m] = (...args: unknown[]) => { statements += 1; return orig(...args); };
+        db[m] = (...args: unknown[]) => { statements += 1; if (statements === at) then(); return orig(...args); };
       }
       try {
         expect(await readGoalPlan({ goalId: id, evaluations: 2_000 })).not.toBeNull();
@@ -919,19 +919,21 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
     const atSixty = await count();
     expect(atSixty - atForty).toBeLessThan(10);
     // And a slow read costs what a fast one does. Deploy 45037618129 read 171 here on a
-    // loaded runner (139 calm): a wall-clock memo expired part way through the read and
-    // re-read the authority rows. The clock now jumps a minute per call, so any memo
-    // timed by the clock rather than scoped to the read shows up as extra statements.
+    // loaded runner (139 calm): a ten-second wall-clock memo expired part way through the
+    // read and re-read the authority rows. Halfway through this read the clock moves on
+    // twenty seconds, longer than that memo and shorter than the minute-scale caches that
+    // legitimately outlive a read, so a memo that should belong to the read shows up here.
+    const warm = await count();
     const realNow = Date.now.bind(Date);
     let skew = 0;
-    const clock = vi.spyOn(Date, 'now').mockImplementation(() => realNow() + (skew += 60_000));
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => realNow() + skew);
     let slow: number;
     try {
-      slow = await count();
+      slow = await count(Math.ceil(warm / 2), () => { skew = 20_000; });
     } finally {
       clock.mockRestore();
     }
-    expect(slow).toBe(await count());
+    expect(slow).toBe(warm);
   }, 120_000);
 
   it('never builds a plan on the owner doing physical work, and still plans the same service brokered', async () => {
