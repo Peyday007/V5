@@ -126,6 +126,8 @@ export interface ModelInput {
    * buyer's price — as the research it needs (`inputEvidence`).
    */
   takeShare?: { low: number; high: number; basis: CommissionReading['basis']; established: boolean };
+  /** A price the card states and a filed price fact contradicts (`priceContradiction`): both figures, until somebody settles it. */
+  contested?: { card: number; stated: number };
 }
 
 /** The card's text columns a transaction pathway shows, and the card fact each is answered by. */
@@ -2050,6 +2052,13 @@ export interface GoalModel {
   /** Why nothing could be modelled, when nothing could. */
   refusal: string | null;
   /**
+   * How many live openings the goal's project holds in its currency, when
+   * nothing could be modelled: none means nobody who pays is known at all, so
+   * the first missing link is a reachable buyer, never a price
+   * (planningReliability round 10, adaptation). Absent when something was modelled.
+   */
+  liveOpenings?: number;
+  /**
    * The quant engine's combined reading over every modelled opening: demand
    * estimated world by world and the combination most likely to reach the
    * target (`goals/portfolio.ts`). It decides which openings take the
@@ -2298,6 +2307,7 @@ export async function modelOpportunity(
           provenance: 'ASSUMPTION',
           source: p.source ?? ref,
           note: `contested: the card says ${card}, but the price fact states ${contradiction.text}; settle the price before planning on it`,
+          contested: { card, stated: contradiction.stated },
         }
       : known(card, p.provenance === 'UNKNOWN' ? 'ASSUMPTION' : p.provenance, p.source ?? ref, 'the price on the card');
   } else {
@@ -2946,6 +2956,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     return {
       // What was modelled instead, when constructed estimates were: the found openings are not the whole reading.
       ...refuse(unmodelledVerdict(live.length, portfolio, target.currency)),
+      liveOpenings: live.length,
       portfolio,
       portfolioInput,
       estimates,

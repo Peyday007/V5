@@ -89,6 +89,14 @@ export interface GoalScope {
   industry: string | null;
   hoursPerWeek: number | null;
   capitalAssumed: { cents: number; phrase: string; basis: string } | null;
+  /**
+   * The capital ceiling the objective's own words state as a figure ("using at
+   * most $10,000 of capital"), whatever the target holds. When the target has
+   * no ceiling the words still answer how much may be committed, so a plan
+   * within them is not sent back to the owner as an open question
+   * (planningReliability round 10). Absent on a scope built by hand.
+   */
+  capitalStatedCents?: number | null;
 }
 
 export function goalScope(goal: Pick<Workstream, 'intent' | 'title' | 'target'>, now: Date = new Date()): GoalScope {
@@ -100,6 +108,7 @@ export function goalScope(goal: Pick<Workstream, 'intent' | 'title' | 'target'>,
     industry: read.industry,
     hoursPerWeek: read.hoursPerWeek,
     capitalAssumed: assumed ? { cents: Math.round(assumed.amount * 100), phrase: assumed.phrase, basis: assumed.basis } : null,
+    capitalStatedCents: read.capitalCeiling === null ? null : Math.round(read.capitalCeiling * 100),
   };
 }
 

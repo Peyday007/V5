@@ -798,6 +798,23 @@ export function validationStage(one: ModelledOpportunity, checks: LinkCheck[], t
 
 const DAY = 86_400_000;
 
+/**
+ * Agreed money that rests on a contested price (planningReliability round 10,
+ * adaptation): the card's price is contradicted by a filed price fact
+ * (`priceContradiction`), and the agreements were read at more a deal than the
+ * lower of the two figures. Which figure the buyers agreed to is exactly what
+ * the contradiction leaves open, so the agreements do not establish the offer
+ * and price until somebody settles it — the same rule that keeps a contested
+ * price from establishing new deals. Agreements at or below the lower figure
+ * hold whichever way it is settled. Pure.
+ */
+export function agreedAtContestedPrice(one: Pick<ModelledOpportunity, 'agreed' | 'agreedDeals' | 'agreedValue' | 'price'>): boolean {
+  const contested = one.price.contested;
+  if (!contested || !one.agreed || one.agreedValue <= 0) return false;
+  const each = one.agreedValue / Math.max(1, one.agreedDeals);
+  return each > Math.min(contested.card, contested.stated) + 1e-9;
+}
+
 function linkChecks(one: ModelledOpportunity, deals: number, target: TargetReading, capabilities: Map<string, string>, now: Date): LinkCheck[] {
   const o = one.opportunity;
   const fresh = o.signalObservedAt && now.getTime() - Date.parse(o.signalObservedAt) <= RECOMMENDATION_POLICY.demandFreshDays * DAY;
@@ -815,8 +832,10 @@ function linkChecks(one: ModelledOpportunity, deals: number, target: TargetReadi
       // A price counts only when buyers are shown to pay it: a source, this
       // Brain's own sales, or a buyer's agreement. Brain's proposal, a person's
       // hope or somebody else's asking price is a guess about revenue.
-      ok: !!o.offerScope && (one.agreed || (one.price.value !== null && priceSupported(one))),
-      basis: one.agreed
+      ok: !!o.offerScope && !agreedAtContestedPrice(one) && (one.agreed || (one.price.value !== null && priceSupported(one))),
+      basis: agreedAtContestedPrice(one)
+        ? `buyers agreed to ${one.agreedValue} ${target.currency}, but a filed price fact states ${one.price.contested!.stated}, below the ${one.price.contested!.card} the agreements were read at: settle the price before planning on it`
+        : one.agreed
         ? `a buyer agreed to ${one.agreedValue} ${target.currency}`
         : one.price.value === null
           ? 'no single price on the card'
@@ -2131,7 +2150,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       construction: refusedAcceptance.candidate?.source === 'RECONSTRUCTED' ? constructionOf(refusedAcceptance.candidate, null, []) : (refusedAcceptance.construction ?? constructionOf(refusedAcceptance.candidate, null, [])),
     };
     const permissions = target.achieved ? [] : await missingPermissions(target.projectId);
-    const qualify: NextTest = { link: 'OFFER_AND_PRICE', test: 'Qualify at least one opening: establish who pays, an offer and a price, so there is a plan to judge.', by: 'BRAIN', blocker: null };
+    const qualify = qualifyTest(model.liveOpenings);
     const refusedModels = arrangementModels(arrangements, model.estimates ?? [], target, undefined, model.arrangementConversions ?? null);
     const refusedLead = leadingArrangement(inGoalScope(arrangements, model), { portfolio: model.portfolio, candidateIds: refusedAcceptance.candidate?.opportunityIds ?? [] });
     const refusedSteps = target.achieved || refusedInfeasible
@@ -2415,8 +2434,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
      * decides that.
      */
     // An assumed ceiling ("little up-front capital", no figure) is still a question for the owner, never their answer.
-    const askCapital =
-      verdict === 'RECOMMENDABLE' && (target.capitalCeilingCents === null || !!target.scope?.capitalAssumed) && (cons.exposure ?? 0) > 0;
+    const askCapital = verdict === 'RECOMMENDABLE' && capitalQuestionOpen(target, cons.exposure ?? 0);
     if (askCapital) verdict = 'NEEDS_EVIDENCE';
     let nextTest: NextTest | null = null;
     if (askCapital) {
@@ -2993,6 +3011,36 @@ export function changeBelongs(c: Pick<StrategyChange, 'label' | 'clone'>, member
   const acts = changeOpenings(c);
   if (!acts || acts.length === 0) return true;
   return acts.some((id) => (id.includes('~') && members.exact ? members.exact.has(id) : members.openings.has(openingOfMember(id))));
+}
+
+/**
+ * The next test when nothing could be modelled. With live openings, one must
+ * be qualified — who pays, an offer and a price. With none (every buyer gone,
+ * or none ever found), nobody who pays is known at all, so the decisive
+ * missing link is a reachable buyer, not a price (planningReliability round
+ * 10, adaptation). Pure.
+ */
+export function qualifyTest(liveOpenings: number | undefined): NextTest {
+  return liveOpenings === 0
+    ? { link: 'REACHABLE_BUYER', test: 'No live opening remains: find a buyer who pays and a way to reach them, then establish an offer and a price, so there is a plan to judge.', by: 'BRAIN', blocker: null }
+    : { link: 'OFFER_AND_PRICE', test: 'Qualify at least one opening: establish who pays, an offer and a price, so there is a plan to judge.', by: 'BRAIN', blocker: null };
+}
+
+/**
+ * Whether a plan tying up `exposure` must ask the owner how much this goal may
+ * commit: nobody set a ceiling, or the only one is assumed from figureless
+ * words. A ceiling the objective's own words state as a figure answers the
+ * question for a plan inside it, even when the target holds none — removing a
+ * stored limit loosens the goal, and a looser goal never turns a plan that was
+ * recommendable under the limit into an open question (planningReliability
+ * round 10, adaptation).
+ */
+export function capitalQuestionOpen(target: Pick<TargetReading, 'capitalCeilingCents' | 'scope'>, exposure: number): boolean {
+  if (!(exposure > 0)) return false;
+  if (target.scope?.capitalAssumed) return true;
+  if (target.capitalCeilingCents !== null) return false;
+  const stated = target.scope?.capitalStatedCents ?? null;
+  return stated === null || exposure > stated / 100 + 1e-9;
 }
 
 /**
