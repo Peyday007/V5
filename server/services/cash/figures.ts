@@ -109,6 +109,14 @@ function amountOf(raw: string): number | null {
     if (tail.length === 2) {
       whole = cleaned.slice(0, last);
       minor = tail;
+    } else if (tail.length === 1 && !cleaned.slice(0, last).includes(cleaned[last]!)) {
+      // One decimal is tenths: `$963.6` is $963.60, written as a number prints
+      // it (planningReliability round 2, 2026-11-21). It was refused as a stray
+      // decimal, so a card's direct cost of `$963.6` read as nobody having
+      // established the cost, and a priced, costed opening failed ECONOMICS. A
+      // separator of the same kind earlier (`1.2.3`) is still a version number.
+      whole = cleaned.slice(0, last);
+      minor = `${tail}0`;
     } else if (tail.length === 3 && /^0+$/.test(cleaned.slice(0, cleaned.search(/[.,]/)))) {
       // `$0.259` is a fraction of a cent, never 259 thousands-grouped: no
       // grouped number starts with a zero group. Production filed USPS's
