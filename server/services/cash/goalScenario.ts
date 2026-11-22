@@ -52,6 +52,9 @@ import type { VariableSpec } from '../../domain/scenario.ts';
 import { brainComparablePrices, capabilityPart, composeInvented, fittedDeliverable, provedDeliverable, inventionContext, nextInputQuestion, payerKey, TRANSFER_MATERIAL, type ConstructedArrangement, type InventedDesign } from './construct.ts';
 import { buyerPopulationName, namesABuyerPopulation } from '../../domain/industry.ts';
 import { unmodelledVerdict } from './unmodelledVerdict.ts';
+import { agreedCostUnits, agreedToward, costedDeals, costPerDeal, countsNet, directCostTerm, perDealToward } from './towardTarget.ts';
+
+export { agreedCostUnits, agreedToward, costedDeals, costPerDeal, countsNet, directCostTerm, perDealToward };
 export { TRANSFER_MATERIAL };
 
 /**
@@ -2372,16 +2375,19 @@ export function volumeEstablished(one: Pick<ModelledOpportunity, 'volume' | 'rep
  * buyers nobody has shown exist. Without it the reach is the most the opening
  * could be worth if research confirms the volume.
  */
-export function bestCaseReach(one: ModelledOpportunity, remaining: number, daysLeft: number, established = false): number {
+export function bestCaseReach(one: ModelledOpportunity, remaining: number, daysLeft: number, established = false, net = false): number {
   const late = one.daysToCash.value !== null && one.daysToCash.provenance !== 'UNKNOWN' && one.daysToCash.value > daysLeft;
   if (late) return 0;
   // An award nobody has shown pays inside the window does not count as reach:
   // first it must be won, then delivered, then paid on the buyer's terms.
   if (one.competitiveAward && !(one.daysToCash.provenance === 'EVIDENCE' || one.daysToCash.provenance === 'HISTORICAL')) return 0;
   const price = one.price.high ?? one.price.value ?? 0;
-  let deals = one.repeatable ? Math.min(MAX_BUYERS_OFFERED, Math.ceil(remaining / Math.max(1, price))) : one.agreedValue > 0 ? 0 : 1;
+  // The best case on a net target is still net: each deal at its top price less its lowest cost.
+  const each = perDealToward(one, price, net, 'LOW');
+  const held = agreedToward(one, net, 'LOW');
+  let deals = one.repeatable ? Math.min(MAX_BUYERS_OFFERED, Math.ceil(Math.max(0, remaining - held) / Math.max(1, each))) : one.agreedValue > 0 ? 0 : 1;
   if (established && one.repeatable) deals = Math.min(deals, volumeEstablished(one) ? one.volume.value ?? 1 : 1);
-  return Math.min(remaining, one.agreedValue + deals * price);
+  return Math.max(0, Math.min(remaining, held + deals * each));
 }
 
 function variable(key: string, label: string, unit: string, input: ModelInput): ScenarioVariable {
@@ -2852,7 +2858,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     );
     lines.push(
       { key: `${o}_cash`, label: `${name}: settled inside the window`, kind: 'REVENUE', expr: `(${o}_agreed + ${o}_won * ${o}_price) * ${o}_in` },
-      { key: `${o}_spend`, label: `${name}: direct costs`, kind: 'COST', expr: `${o}_won * ${o}_cost` },
+      { key: `${o}_spend`, label: `${name}: direct costs`, kind: 'COST', expr: directCostTerm(o, one) },
     );
     // Money is tied up per deal taken, not per buyer asked.
     exposure.push(`(${o}_won + ${one.agreedDeals}) * ${o}_capital`);
@@ -2862,8 +2868,8 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
   }
   derived.push({ key: 'settled_in_window', label: 'Cash settled before the deadline', unit: target.currency, expr: cashIn.join(' + ') });
   const metrics: NonNullable<ScenarioModelDefinition['metrics']> = [
-    // The target is cash kept: what settles in time less the direct costs of the deals that earned it (§99 Q-3).
-    { key: 'goal_met', label: 'Reaches the target in time', unit: 'flag', expr: `if(settled_in_window - (${included.map((one) => `o${one.index}_won * o${one.index}_cost`).join(' + ') || '0'}) >= remaining, 1, 0)`, better: 'HIGHER' },
+    // The target is cash kept: what settles in time less the direct costs of the deals that earned it, agreed ones included (§99 Q-3; `costedDeals`).
+    { key: 'goal_met', label: 'Reaches the target in time', unit: 'flag', expr: `if(settled_in_window - (${included.map((one) => directCostTerm(`o${one.index}`, one)).join(' + ') || '0'}) >= remaining, 1, 0)`, better: 'HIGHER' },
     { key: 'settled', label: 'Settled before the deadline', unit: target.currency, expr: 'settled_in_window', better: 'HIGHER' },
     { key: 'exposure', label: 'Money tied up', unit: target.currency, expr: exposure.join(' + '), better: 'LOWER', role: 'CAPITAL_EXPOSURE' },
     { key: 'labour', label: 'Owner hours of work', unit: 'hours', expr: labour.join(' + '), better: 'LOWER', role: 'LABOR_HOURS' },
@@ -2882,7 +2888,9 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
   // one-off needs its one buyer; a repeatable play offers to OUTREACH_MULTIPLE
   // times as many buyers as the deals still needed — a choice the strategy
   // makes and states, not an assumption about how many will say yes.
-  const dealsFor = (one: ModelledOpportunity) => dealsForGoal(one, target.remainingCents / 100);
+  // A net target sizes every strategy on money kept a deal, never on its price (`perDealToward`).
+  const net = countsNet(target.metric);
+  const dealsFor = (one: ModelledOpportunity) => dealsForGoal(one, target.remainingCents / 100, net);
   const none = () => Object.fromEntries(included.map((one) => [`o${one.index}_n`, 0]));
   const add = (spec: StrategySpec) => {
     // Two strategies that ask the same thing of every opening are one strategy.
@@ -2908,13 +2916,13 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       if (gap <= 0) break;
       const price = one.price.value ?? one.price.low ?? 0;
       if (one.agreedValue > 0) {
-        gap -= one.agreedValue;
+        gap -= agreedToward(one, net);
       } else if (!one.repeatable) {
         if (price <= 0) continue;
         set[`o${one.index}_n`] = 1;
-        gap -= price;
+        gap -= perDealToward(one, price, net);
       } else {
-        set[`o${one.index}_n`] = buyersToOffer(one, gap);
+        set[`o${one.index}_n`] = buyersToOffer(one, gap, net);
         gap = 0;
       }
       used.push(one);
@@ -2922,7 +2930,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     if (used.length > 1) add({ key, label: `${label}: ${used.map((one) => one.opportunity.title.slice(0, 30)).join(' + ')}`.slice(0, 160), set });
   };
   if (included.length > 1) {
-    const reach = (one: ModelledOpportunity) => bestCaseReach(one, target.remainingCents / 100, target.daysLeft!);
+    const reach = (one: ModelledOpportunity) => bestCaseReach(one, target.remainingCents / 100, target.daysLeft!, false, net);
     combine('combine_reach', 'Combined, largest reach first', [...included].sort((a, b) => Number(b.agreed) - Number(a.agreed) || reach(b) - reach(a)));
     const days = (one: ModelledOpportunity) => (one.daysToCash.value !== null ? one.daysToCash.value : Number.POSITIVE_INFINITY);
     combine('combine_fast', 'Combined, fastest money first', [...included].sort((a, b) => Number(b.agreed) - Number(a.agreed) || days(a) - days(b) || reach(b) - reach(a)));
@@ -2972,12 +2980,12 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
   };
 }
 
-/** The buyers a single-opening plan asks, for a judgement made outside the engine. */
-export function dealsForGoal(one: ModelledOpportunity, remainingMajor: number): number {
-  const gap = Math.max(0, remainingMajor - one.agreedValue);
+/** The buyers a single-opening plan asks, for a judgement made outside the engine. `net`: the target counts money kept. */
+export function dealsForGoal(one: ModelledOpportunity, remainingMajor: number, net = false): number {
+  const gap = Math.max(0, remainingMajor - agreedToward(one, net));
   if (gap === 0) return 0;
   if (!one.repeatable) return one.agreedValue > 0 ? 0 : 1;
-  return buyersToOffer(one, gap);
+  return buyersToOffer(one, gap, net);
 }
 
 /**
@@ -2998,10 +3006,12 @@ export function dealsForGoal(one: ModelledOpportunity, remainingMajor: number): 
  * rate the strategy offers OUTREACH_MULTIPLE times the deals needed: a choice
  * it makes and states, never an assumption about how many will say yes.
  */
-export function buyersToOffer(one: Pick<ModelledOpportunity, 'price' | 'close' | 'volume' | 'repeatable'>, gap: number): number {
+export function buyersToOffer(one: Pick<ModelledOpportunity, 'price' | 'close' | 'volume' | 'repeatable'> & Partial<Pick<ModelledOpportunity, 'directCost'>>, gap: number, net = false): number {
   if (gap <= 0) return 0;
   const price = one.price.value ?? one.price.low ?? 1;
-  const needed = Math.ceil(gap / Math.max(1, price));
+  // On a net target a deal adds its price less its cost: the deals needed are the gap ÷ that, never ÷ the price.
+  const each = net && one.directCost ? perDealToward({ directCost: one.directCost }, price, true) : price;
+  const needed = Math.ceil(gap / Math.max(1, each));
   const fixed = Math.min(MAX_BUYERS_OFFERED, needed * OUTREACH_MULTIPLE);
   const close = measuredClose(one);
   if (close === null) return fixed;

@@ -41,6 +41,7 @@ import { isEstablished } from './reasoning/rank.ts';
 import { cachedCashKnowledge, type CashKnowledge } from '../quant/knowledge.ts';
 import { acquireMarketHistory, historyEvidence, type MarketHistory } from '../quant/history.ts';
 import type { ModelInput, ModelledOpportunity } from '../cash/goalScenario.ts';
+import { costedDeals } from '../cash/towardTarget.ts';
 import { AFTER_DELIVERY_TERMS, modelledTiming, PREPAID_TERMS } from '../cash/paymentTiming.ts';
 import { MIN_SHARE_WORTH_RESEARCHING } from './materiality.ts';
 import { assessOutreachRecord, type EvidenceAssessment, type OutreachCampaignRecord } from './evidenceAuthority.ts';
@@ -948,7 +949,8 @@ function drawDemandWorlds(one: PlannedOpening, share: number, daysLeft: number, 
       out.early.days.push(earlyDays);
     }
     out.days.push(days);
-    out.spend.push(deals * cost);
+    // Agreed deals are work still to deliver: their direct cost is spent too (`costedDeals`, the engine's and the gate's one rule).
+    out.spend.push((one.agreedValue > 0 ? costedDeals(deals, one) : deals) * cost);
     out.contacted.push(contacted);
     out.interested.push(interested);
     out.deals.push(deals);

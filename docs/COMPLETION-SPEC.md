@@ -51,7 +51,10 @@ Every executable plan must also:
 
 - respect the objective's constraints — capital, deadline, named industry,
   recurring-revenue unit, owner hours;
-- use sound economics — no member whose direct cost meets or exceeds its price;
+- use sound economics — no member whose direct cost meets or exceeds its price, and,
+  when the objective counts money kept (net settled cash, profit, contribution), the
+  deals the plan counts must keep the target after their direct costs, agreed deals
+  included — a plan that reaches a net target only on gross revenue is unsound;
 - need minimal routine owner labour — inside the hours the objective allows;
 - rest on no assumption counted as evidence (invariant 39).
 
@@ -66,7 +69,7 @@ Every case run ends in exactly one correct outcome or one or more failure classe
 | `FALSE_EXECUTABLE` | the planner called a plan executable where none is established | yes |
 | `UNJUSTIFIED_REFUSAL` | the planner concluded no plan where one exists, or its no-plan conclusion names the wrong blocker or none | no |
 | `CONSTRAINT_VIOLATED` | an executable plan breaks a constraint: an out-of-scope opening, capital over the limit, cash collected after the deadline | yes |
-| `UNSOUND_ECONOMICS` | an executable plan uses a member whose cost is at or over the case's economics bound | yes |
+| `UNSOUND_ECONOMICS` | an executable plan uses a member whose cost is at or over the case's economics bound, or, under a net objective, the deals it counts keep less than the target after their direct costs | yes |
 | `UNCERTAINTY_AS_FAVOURABLE` | an executable plan rests on an unestablished price, cost, capital or settlement, or on a price that is only a person's word or is contradicted by other evidence | yes |
 | `OWNER_LABOR_EXCEEDED` | an executable plan needs more owner hours than the objective allows | yes |
 | `OBJECTIVE_CHANGE_IGNORED` | after the objective changed, the plan still follows the old one (its scope or its target) | yes |
