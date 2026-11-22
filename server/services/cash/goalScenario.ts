@@ -894,7 +894,7 @@ export function foundOwnerHours(
 }
 
 /** A fulfiller's name that is the owner doing the work themself. */
-const OWNER_FULFILS = /\b(?:the\s+)?owner(?:'s)?\b|\bmyself\b|\bpersonally\b|\bme\b|\bfounder\b/i;
+export const OWNER_FULFILS = /\b(?:the\s+)?owner(?:'s)?\b|\bmyself\b|\bpersonally\b|\bme\b|\bfounder\b/i;
 
 /**
  * Whose hours a card's stated hours are (planningReliability round 8). A

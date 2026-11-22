@@ -78,7 +78,7 @@ import { cachedCashKnowledge } from '../quant/knowledge.ts';
 import { achievedFrom, readTarget, type TargetReading } from './target.ts';
 import { constructedShare, executionFrame, MAX_LIVE_GOAL_ROUNDS, openConstructedRound, openGoalDiscovery, roundsStillResearching, staleUnlaunchedRounds } from '../cash/discovery.ts';
 import { constructArrangements, lastConstructionReport, nextInputQuestion, type ConstructedArrangement } from '../cash/construct.ts';
-import { arrangementSteps, modelledCashSpan, type ArrangementStepContext } from './arrangementSteps.ts';
+import { arrangementReachCost, arrangementSteps, COLLECTION_COST, fulfilmentStep, modelledCashSpan, openingMembers, openingSteps, type ArrangementStepContext, type OpeningChainMember } from './arrangementSteps.ts';
 import { arrangementKeyOfBucket, recordReadingEvaluations, refutedUnderSameInputs, rememberArrangements } from '../cash/arrangementLibrary.ts';
 import { arrangementVerdicts } from '../../repos/monetization.ts';
 import { exclusionSentence, goalExclusions } from '../cash/exclusions.ts';
@@ -634,6 +634,16 @@ export interface PlanStep {
    * read cost 0 with nothing saying where the 0 came from.
    */
   stage?: { stage: ArrangementStage; costSource: StepCostSource; unscheduled?: UnscheduledReason };
+  /**
+   * The ids of the rows, claims and card facts the step rests on (the
+   * opening, its card facts' claims, its agreements, an arrangement's
+   * sources): what an executor reads to check the step, never prose.
+   */
+  evidence?: string[];
+  /** On the step that sells: the price a deal was judged at, major units — the strategy's own economics. */
+  price?: number;
+  /** On a step the owner performs: the owner's hours it takes a deal, as the model holds them. */
+  hours?: number;
 }
 
 export interface InfeasibleConclusion {
@@ -2559,7 +2569,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
   const lead = leadingArrangement(inGoalScope(arrangements, model), { portfolio: model.portfolio, candidateIds: acceptance.candidate?.opportunityIds ?? [] });
   const steps = infeasible || target.achieved
     ? []
-    : planSteps({ adoption: plan.adoption, reconstruction, sales, nextTest: legacyNext, permissionsMissing, arrangement: lead ? { arrangement: lead, context: { ...arrangementStepContext(target, models.get(lead.key) ?? null, { key: lead.key, portfolio: model.portfolio }), unestimated: unestimatedLead(lead, arrangements.length, models) } } : null, capital: capitalOf(target), measuredReply: measuredReplyOf(model.portfolio), titles: titlesOf(model), cashDays: cashDaysOf(model), daysLeft: target.daysLeft, capabilities: await readCapabilityInventory(), ...(adopted ? { adoptedIds: adopted } : {}) });
+    : planSteps({ adoption: plan.adoption, reconstruction, sales, nextTest: legacyNext, permissionsMissing, arrangement: lead ? { arrangement: lead, context: { ...arrangementStepContext(target, models.get(lead.key) ?? null, { key: lead.key, portfolio: model.portfolio }), unestimated: unestimatedLead(lead, arrangements.length, models), reachCost: arrangementReachCost(models.get(lead.key), pathways.pathways) } } : null, capital: capitalOf(target), measuredReply: measuredReplyOf(model.portfolio), titles: titlesOf(model), cashDays: cashDaysOf(model), daysLeft: target.daysLeft, capabilities: await readCapabilityInventory(), members: openingMembers(planOpenings(model), pathways.pathways, model.portfolio?.demand ?? []), ...(adopted ? { adoptedIds: adopted } : {}) });
   const openingsVerdict: PlanVerdict =
     acceptance.status === 'ACCEPTED' ? 'RECOMMENDABLE' : infeasible ? 'NOT_VIABLE' : plan.adoption.source === 'RECONSTRUCTED' ? 'NEEDS_EVIDENCE' : (chosen?.verdict ?? 'NEEDS_EVIDENCE');
   // One reading, one picture (P5): the candidate the acceptance adopted is a strategy of the reading, and a
@@ -3427,6 +3437,13 @@ export function planSteps(input: {
   daysLeft?: number | null;
   /** What Brain has registered and connected (`readCapabilityInventory`): who performs each step is read from it. */
   capabilities?: CapabilityInventory | null;
+  /**
+   * Each modelled opening as its transaction's members read it (`openingMembers`):
+   * who fulfils it, the price, direct cost and days to cash it was judged on.
+   * A sale, and a reconstruction's members, are sequenced through to fulfilment
+   * and collection from it (`openingSteps`); an opening it lacks keeps its sale alone.
+   */
+  members?: ReadonlyMap<string, OpeningChainMember> | null;
 }): PlanStep[] {
   const measured = input.measuredReply ?? null;
   const inventory = input.capabilities ?? undefined;
@@ -3435,6 +3452,17 @@ export function planSteps(input: {
   const collect = input.permissionsMissing.filter((one) => /QUOTE_AND_INVOICE|ACCEPT_PAYMENT|billing/i.test(one));
   const r = input.reconstruction;
   const steps: PlanStep[] = [];
+  const currency = input.capital?.currency ?? 'USD';
+  /** A sale as its whole transaction when its opening is a known member: offer, fulfilment, collection (`openingSteps`). */
+  let chained = false;
+  const sellSteps = (sale: MarketTest, detail: string, kill: string, execution: string[]): PlanStep[] => {
+    const offer = saleStep(steps.length + 1, sale, detail, kill, execution, inventory);
+    const member = input.members?.get(sale.opportunityId);
+    if (!member) return [offer];
+    chained = true;
+    const { order: _order, dependsOn: _dependsOn, ...rest } = offer;
+    return openingSteps(member, { currency, daysLeft: input.daysLeft ?? null, send, collect, ...(inventory ? { capabilities: inventory } : {}) }, rest, steps.length + 1);
+  };
   if (input.adoption.source === 'RECONSTRUCTED' && r) {
     const members = membersOf(r.best, input.titles ?? new Map<string, string>());
     // A change on an opening outside the strongest combination is no step: the plan says nothing it will not do (`changeBelongs`).
@@ -3466,7 +3494,7 @@ export function planSteps(input: {
         executor: exec(changeOperation(first.dimension, cost, SENDS.has(first.dimension) ? send : collect, first.supplier)),
         // Its cost is the reconstruction's own figure for the move: what it commits before any opening pays.
         stage: { stage: CHANGE_STAGE[first.dimension] ?? 'OFFER', costSource: 'MODEL' },
-        ...(acts.length > 0 ? { openings: acts } : {}),
+        ...(acts.length > 0 ? { openings: acts, evidence: acts } : {}),
       });
     }
     /*
@@ -3524,26 +3552,52 @@ export function planSteps(input: {
     const late = lands !== null && daysLeft !== null && lands.low > daysLeft;
     const standing = [...new Set(held.map((d) => d.standing))].join('; ');
     const partial = held.length > 0 && held.length < memberIds.length ? ` for the ${held.length} of ${memberIds.length} openings whose days the model holds` : '';
+    /*
+     * The members' own transaction (§3a): what selling them costs as their
+     * pathways hold it, the price a lone member was judged at, and each one's
+     * fulfilment by whoever its evidence names — the reconstruction prices no
+     * cost of selling, but the plan's pathways do. A member the plan holds no
+     * facts for keeps the sale as it was.
+     */
+    const chain = memberIds.map((id) => input.members?.get(id) ?? null);
+    const known = chain.filter((m): m is OpeningChainMember => m !== null);
+    if (known.length === memberIds.length && known.length > 0) {
+      const sell = steps[sellOrder - 1]!;
+      const reach = known.every((m) => m.reachCost !== null) ? known.reduce((sum, m) => sum + m.reachCost!.amount, 0) : null;
+      const prices = [...new Set(known.map((m) => m.price))];
+      steps[sellOrder - 1] = {
+        ...sell,
+        detail: reach !== null ? sell.detail.replace('The model prices no cost for selling.', `Reaching buyers costs ${currency} ${Math.round(reach)} in cash as the plan's pathways hold it (${known[0]!.reachCost!.basis}).`) : sell.detail,
+        cost: reach,
+        evidence: [...new Set(known.flatMap((m) => m.evidence.offer))],
+        ...(prices.length === 1 && prices[0] !== null && prices[0] !== undefined ? { price: prices[0] } : {}),
+        stage: { stage: 'OFFER', costSource: reach !== null ? 'MODEL' : 'NONE_HELD' },
+      };
+      const deliverDay: Span | null = lands && !(lands !== null && daysLeft !== null && lands.low > daysLeft) ? { low: sellDay.low, high: lands.high } : null;
+      for (const m of known) steps.push(fulfilmentStep(m, { currency, ...(inventory ? { capabilities: inventory } : {}) }, deliverDay, sellOrder, steps.length + 1, lands && daysLeft !== null && lands.low > daysLeft ? 'AFTER_DEADLINE' : 'NO_MODEL_DAYS'));
+    }
+    const delivered = steps.length > sellOrder && steps[steps.length - 1]!.stage?.stage === 'DELIVER' ? steps[steps.length - 1]!.order : sellOrder;
     steps.push({
       order: steps.length + 1,
       label: 'Collect payment',
-      detail: `Collect each buyer's payment or deposit and record it against the goal.${cash ? ` Cash is usable about ${Math.round(cash.low)}–${Math.round(cash.high)} days after a sale${partial} (${standing})${daysLeft !== null && lands ? `, ${lands.high <= daysLeft ? 'inside' : late ? 'OUTSIDE' : 'partly outside'} the ${daysLeft} days left` : ''}.` : ' When cash is usable is not yet established: the first sale measures it.'} The model prices no cost of collecting.`,
+      detail: `Collect each buyer's payment or deposit and record it against the goal.${cash ? ` Cash is usable about ${Math.round(cash.low)}–${Math.round(cash.high)} days after a sale${partial} (${standing})${daysLeft !== null && lands ? `, ${lands.high <= daysLeft ? 'inside' : late ? 'OUTSIDE' : 'partly outside'} the ${daysLeft} days left` : ''}.` : ' When cash is usable is not yet established: the first sale measures it.'} ${COLLECTION_COST}`,
       startDay: late ? null : lands,
       when: late
         ? `not scheduled: cash would be usable on ${spanText(lands!)} (${standing}), after the ${daysLeft} days left`
         : lands
           ? `${spanText(lands)}: the sale's day plus ${Math.round(cash!.low)}–${Math.round(cash!.high)} days to usable cash${partial} (${standing})`
           : 'not yet scheduled: set by days to usable cash, which the first sale measures',
-      cost: null,
+      cost: 0,
       basis: held.length > 0 && held.every((d) => d.standing === 'proven') ? 'EVIDENCE' : 'ASSUMPTION',
       owner: 'BRAIN',
       ownerReason: null,
-      dependsOn: sellOrder,
+      dependsOn: delivered,
       kill: `cash would not be usable by day ${daysLeft ?? 'the deadline'} → re-plan the plan's payment terms (a deposit or a presale) or drop the opening`,
       execution: collect,
       executor: exec({ operation: 'COLLECT_PAYMENT', execution: collect }),
       ...(daysLeft !== null && lands ? { withinLimits: lands.high <= daysLeft } : {}),
-      stage: { stage: 'COLLECT', costSource: 'NONE_HELD', ...(late ? { unscheduled: 'AFTER_DEADLINE' as const } : lands ? {} : { unscheduled: 'NO_MODEL_DAYS' as const }) },
+      ...(known.length > 0 ? { evidence: [...new Set(known.flatMap((m) => m.evidence.collect))] } : {}),
+      stage: { stage: 'COLLECT', costSource: 'NOT_OWNERS', ...(late ? { unscheduled: 'AFTER_DEADLINE' as const } : lands ? {} : { unscheduled: 'NO_MODEL_DAYS' as const }) },
     });
     /*
      * What the goal sells beside the reconstruction is part of the plan: every
@@ -3553,12 +3607,12 @@ export function planSteps(input: {
      */
     const adopted = input.adoptedIds ?? new Set<string>();
     for (const sale of input.sales.filter((one) => !adopted.has(one.opportunityId))) {
-      steps.push(saleStep(steps.length + 1, sale, `Beside the reconstructed plan, inside the goal's limits: ${sale.test.test}`, replyKill(r, measured), [...send, ...collect], inventory));
+      steps.push(...sellSteps(sale, `Beside the reconstructed plan, inside the goal's limits: ${sale.test.test}`, replyKill(r, measured), [...send, ...collect]));
     }
     // Read in order (STEPS_SCHEDULED): a sale that starts now is not listed after a step that starts later.
     inDayOrder(steps);
   } else {
-    for (const sale of input.sales) steps.push(saleStep(steps.length + 1, sale, sale.test.test, replyKill(r, measured), [...send, ...collect], inventory));
+    for (const sale of input.sales) steps.push(...sellSteps(sale, sale.test.test, replyKill(r, measured), [...send, ...collect]));
     const arrangementOf = (startAt: number) => (input.arrangement ? arrangementSteps(input.arrangement.arrangement, { ...input.arrangement.context, send, collect, ...(inventory ? { capabilities: inventory } : {}) }, startAt) : []);
     let built = steps.length === 0 ? arrangementOf(1) : [];
     const t = input.nextTest;
@@ -3609,6 +3663,8 @@ export function planSteps(input: {
       });
     }
     steps.push(...built);
+    // A sale's chain runs from day 0 to its collection: read in day order, each step still naming the one it follows (STEPS_SCHEDULED).
+    if (chained) inDayOrder(steps);
   }
   /*
    * The capital the plan deploys, against what the goal allows (transfer test,
