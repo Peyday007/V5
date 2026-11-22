@@ -85,6 +85,9 @@ const PER_UNIT_BEFORE = new RegExp(
 const TIMES = /(?:(\d+)\s*(?:times|x)|\b(once|twice))\s+(?:a|per|each|every)\s+(week|month|quarter|year)\b/i;
 /** Words saying a cycle's purchases fall due spread through it rather than together. */
 const SPREAD = /\b(?:evenly|spread|staggered|uniformly|rolling|throughout the (?:year|month|quarter)|through the (?:year|month|quarter)|across the (?:year|month|quarter)|year-round)\b/i;
+/** A frequency stated as a floor: "at least once a year", "no less than twice a year", "once a year or more". */
+const MINIMUM_FREQUENCY =
+  /\b(?:at least|no less than|not less than|(?:a )?minimum of)\s+(?:(?:\d+\s*(?:times|x)|once|twice)\s+(?:a|per|each|every)\s+(?:week|month|quarter|year)|daily|weekly|monthly|quarterly|yearly|annually)\b|\b(?:(?:\d+\s*(?:times|x)|once|twice)\s+(?:a|per|each|every)\s+(?:week|month|quarter|year)|daily|weekly|monthly|quarterly|yearly|annually)\s+or\s+more\b/i;
 const PERIOD_DAYS: Record<string, number> = { day: 1, week: 7, month: 30, quarter: 91, year: 365 };
 const WORD_DAYS: Array<[RegExp, number]> = [
   [/\b(daily|every day|each day)\b/i, 1],
@@ -319,8 +322,14 @@ export function readVolume(text: string, windowDays: number, payer: string | nul
    * times what a month holds. A cycle stated without its timing ("each renews
    * yearly") keeps one purchase each: whether a buyer can be sold to before its
    * date is not something the text says, and the share is never guessed.
+   *
+   * A frequency stated as a floor ("at least once a year", "once a year or
+   * more") makes the cycle the longest a buyer goes between purchases, so
+   * buyers × window ÷ cycle is the fewest purchases that fall due, never the
+   * most (planningReliability round 10). A floor cannot cap the market; the
+   * cycle then counts as one stated without its timing.
    */
-  if (everyDays !== null && everyDays > window && SPREAD.test(text)) {
+  if (everyDays !== null && everyDays > window && SPREAD.test(text) && !MINIMUM_FREQUENCY.test(text)) {
     const due = Math.max(1, Math.floor((buyers * window) / everyDays));
     return {
       deals: due,

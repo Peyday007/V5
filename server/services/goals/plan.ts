@@ -2342,8 +2342,15 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
      * spread over time. A plan has to be able to start that way — some step
      * that can pay with no more tied up than the test allows — and an award
      * that pays one lump at the end, after somebody else decides, cannot.
+     *
+     * Pacing is something the owner set: a before-proof figure or a weekly
+     * one. A ceiling only assumed from words like "no up-front capital"
+     * (`scope.capitalAssumed`) limits what is tied up and is enforced as such;
+     * it says nothing about money arriving in steps (planningReliability
+     * round 10), so an award that ties nothing up is not refused for paying
+     * in one lump.
      */
-    const paced = target.capitalBeforeProofCents !== null || target.capitalPerWeekCents !== null;
+    const paced = pacedByOwner(target);
     if (paced && members.length > 0 && members.every(({ one }) => one.competitiveAward)) {
       constraintsFailed.push('pays only after winning an award and then waiting on the buyer\'s payment, in one lump at the end — not little by little, as the owner wants');
     }
@@ -2986,6 +2993,17 @@ export function changeBelongs(c: Pick<StrategyChange, 'label' | 'clone'>, member
   const acts = changeOpenings(c);
   if (!acts || acts.length === 0) return true;
   return acts.some((id) => (id.includes('~') && members.exact ? members.exact.has(id) : members.openings.has(openingOfMember(id))));
+}
+
+/**
+ * Whether the owner set how money goes out and comes back in steps: a figure
+ * for what may be tied up before the first payment, or a weekly one. A
+ * before-proof ceiling only assumed from the objective's words ("no up-front
+ * capital", `scope.capitalAssumed`) is a limit on capital, enforced as one, and
+ * never a pacing preference (planningReliability round 10).
+ */
+export function pacedByOwner(target: Pick<TargetReading, 'capitalBeforeProofCents' | 'capitalPerWeekCents' | 'scope'>): boolean {
+  return (target.capitalBeforeProofCents !== null && !target.scope?.capitalAssumed) || target.capitalPerWeekCents !== null;
 }
 
 /**
