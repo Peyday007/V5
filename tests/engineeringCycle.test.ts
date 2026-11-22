@@ -206,4 +206,17 @@ describe('the scheduled reading (engineering-cycle.yml)', () => {
     expect(wf).not.toMatch(/[\w.+-]+@[\w-]+\.[\w.]+/);
     expect(wf).not.toMatch(/--admin|inputs\.admin/);
   });
+
+  it('names the canonical branch itself, because the production image has no .github/', () => {
+    // Every scheduled reading from 04:49Z to 13:36Z on 2026-11-22 died on the
+    // machine with ENOENT '/app/.github/CANONICAL_BRANCH': the CLI read the file
+    // the Dockerfile never copies, so nothing was ever recorded.
+    const dockerfile = readFileSync('Dockerfile', 'utf8');
+    expect(dockerfile).not.toMatch(/^COPY\s+\.github/m);
+    const wf = readFileSync('.github/workflows/engineering-cycle.yml', 'utf8');
+    expect(wf).toContain("branch=$(tr -cd 'A-Za-z0-9._/-' < .github/CANONICAL_BRANCH)");
+    expect(wf).toMatch(/cycle --stdin --repo \$GITHUB_REPOSITORY --branch \$branch /);
+    const cli = readFileSync('scripts/engineering.ts', 'utf8');
+    expect(cli).toContain("flag(argv, 'branch') || readFileSync(");
+  });
 });

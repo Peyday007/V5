@@ -77,6 +77,7 @@ jobs:
         run: |
           set -euo pipefail
           brain=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          branch=$(tr -cd 'A-Za-z0-9._/-' < .github/CANONICAL_BRANCH)
           tmp="/tmp/cycle-$(date +%s%N).b64"
           gzip -c "$RUNNER_TEMP/sources.json" | base64 -w0 | fold -w 6000 > "$RUNNER_TEMP/chunks.txt"
           echo "$(wc -l < "$RUNNER_TEMP/chunks.txt") chunk(s)"
@@ -86,7 +87,7 @@ jobs:
             flyctl ssh console --app "$brain" -C "sh -c 'printf %s $chunk >> $tmp'" < /dev/null >/dev/null
           done < "$RUNNER_TEMP/chunks.txt"
           set +e
-          flyctl ssh console --app "$brain" -C "sh -c 'cd /app && base64 -d $tmp | gunzip | env BRAIN_DATABASE_POOL_SIZE=1 node --import tsx scripts/engineering.ts cycle --stdin --repo $GITHUB_REPOSITORY --hours $CYCLE_HOURS --to $CYCLE_TO --record --scheduled; rc=\$?; rm -f $tmp; exit \$rc'" \
+          flyctl ssh console --app "$brain" -C "sh -c 'cd /app && base64 -d $tmp | gunzip | env BRAIN_DATABASE_POOL_SIZE=1 node --import tsx scripts/engineering.ts cycle --stdin --repo $GITHUB_REPOSITORY --branch $branch --hours $CYCLE_HOURS --to $CYCLE_TO --record --scheduled; rc=\$?; rm -f $tmp; exit \$rc'" \
             < /dev/null > "$RUNNER_TEMP/cycle.txt" 2>&1
           rc=$?
           set -e

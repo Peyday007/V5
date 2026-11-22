@@ -258,7 +258,10 @@ async function main(): Promise<void> {
       if (!Number.isFinite(hours) || hours <= 0) fail('--hours must be a positive number');
       const to = flag(argv, 'to') || new Date().toISOString();
       const from = new Date(Date.parse(to) - hours * 3_600_000).toISOString();
-      const branch = readFileSync(new URL('../.github/CANONICAL_BRANCH', import.meta.url), 'utf8').trim();
+      // The production image carries no `.github/` (Dockerfile), so the scheduled
+      // reading on the machine names the branch its runner read from the checkout;
+      // only a terminal inside the repository falls back to the file.
+      const branch = flag(argv, 'branch') || readFileSync(new URL('../.github/CANONICAL_BRANCH', import.meta.url), 'utf8').trim();
       const input = flag(argv, 'input');
       let sources;
       if (has(argv, 'stdin')) sources = await readCycleSources(process.stdin, repository, branch);
