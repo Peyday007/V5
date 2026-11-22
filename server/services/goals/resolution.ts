@@ -36,6 +36,8 @@ export interface ResolutionInput {
   daysLeft: number | null;
   hoursCeiling: number | null;
   capitalCeiling: number | null;
+  /** What the owner allows tied up before money first comes in (`capitalBeforeProofCents`), while the goal is unproven. */
+  capitalBeforeProof?: number | null;
   /** The target counts money kept (net of direct costs). */
   net: boolean;
   /** How long a research question takes to come back (`RESEARCH_TURNAROUND_DAYS`). */
@@ -114,16 +116,34 @@ export function blockerResolutions(input: ResolutionInput): Resolution[] {
         );
       }
 
-      // CAPITAL: one lot ties up more than the goal may commit.
-      if (capital !== null && capital > 0 && input.capitalCeiling !== null && capital > input.capitalCeiling) {
+      // CAPITAL: one lot ties up more than the goal may commit, or more than the owner allows before money comes in.
+      const limit = [input.capitalCeiling, input.capitalBeforeProof].filter((x): x is number => x !== null && x !== undefined);
+      const allowed = limit.length ? Math.min(...limit) : null;
+      if (capital !== null && capital > 0 && allowed !== null && capital > allowed) {
         add(
           `capital:${one.opportunity.id}`,
           `resolve:capital:${one.opportunity.id}`,
           'requiredCapital',
           false,
-          `one deal of ${titleOf(one)} ties up ${fmt(capital)} ${cur} before it pays, more than the ${fmt(input.capitalCeiling)} the goal may commit: what a deal ties up must fall to ${fmt(input.capitalCeiling)} ${cur} or less — secure a buyer's deposit, supplier credit or a smaller first lot`,
+          `one deal of ${titleOf(one)} ties up ${fmt(capital)} ${cur} before it pays, more than the ${fmt(allowed)} the goal may commit: what a deal ties up must fall to ${fmt(allowed)} ${cur} or less — secure a buyer's deposit or prepayment, supplier credit terms, or a smaller first lot`,
           { constraint: 'CAPITAL', suggestion: `allow the goal to commit at least ${fmt(capital)} ${cur}, what one deal of ${titleOf(one)} ties up` },
         );
+      } else if (capital !== null && capital > 0 && input.capitalCeiling !== null && days !== null && days > 0 && input.daysLeft !== null && !late) {
+        // Lots run one after another as their cash settles: the ceiling holds so many at once, the window so many turns.
+        const atOnce = Math.max(1, Math.floor(input.capitalCeiling / capital + 1e-9));
+        const turns = Math.max(1, Math.floor(input.daysLeft / days + 1e-9));
+        if (atOnce * turns < n) {
+          const capitalNeeded = Math.ceil(n / turns - 1e-9) * capital;
+          const daysNeeded = Math.floor(input.daysLeft / Math.ceil(n / atOnce - 1e-9));
+          add(
+            `capital:${one.opportunity.id}`,
+            `resolve:capital:${one.opportunity.id}`,
+            'requiredCapital',
+            false,
+            `the ${fmt(input.capitalCeiling)} ${cur} the goal may commit holds ${fmt(atOnce)} lot(s) of ${titleOf(one)} at a time, and at ${fmt(days)} days to cash the ${fmt(input.daysLeft)} days left turn them ${fmt(turns)} time(s): ${fmt(atOnce * turns)} of the ${fmt(n)} deals needed. ${daysNeeded >= 1 ? `A lot must settle within ${fmt(daysNeeded)} days — obtain the buyer's payment terms and secure a deposit or payment on delivery — or` : 'No faster settlement alone closes it, so'} the goal must commit ${fmt(capitalNeeded)} ${cur}, or each lot must tie up less (supplier credit, smaller lots)`,
+            { constraint: 'CAPITAL', suggestion: `allow the goal to commit at least ${fmt(capitalNeeded)} ${cur}, what the lots that settle in time need at once` },
+          );
+        }
       }
     }
 

@@ -3176,6 +3176,7 @@ function resolutionsOf(strategies: StrategyReading[], included: ModelledOpportun
     daysLeft: target.daysLeft,
     hoursCeiling: target.hoursCeiling,
     capitalCeiling: target.capitalCeilingCents === null ? null : target.capitalCeilingCents / 100,
+    capitalBeforeProof: target.capitalBeforeProofCents === null || target.proven ? null : target.capitalBeforeProofCents / 100,
     net: countsNet(target.metric),
     researchDays: RESEARCH_TURNAROUND_DAYS,
     value: acceptance.required - (acceptance.candidate?.reach ?? 0),

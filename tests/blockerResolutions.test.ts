@@ -88,6 +88,21 @@ describe('blockerResolutions: a no-plan conclusion names what would resolve its 
     expect(r!.relax?.constraint).toBe('CAPITAL');
   });
 
+  it('more than the owner allows before money comes in: the same threshold, from the test-stage limit', () => {
+    const [r] = blockerResolutions({ ...base, capitalBeforeProof: 300, strategies: [[{ one: opening('a', { price: 3000, capital: 800 }), deals: 3 }]] });
+    expect(r!.priority.reason).toMatch(/fall to 300 USD or less/);
+  });
+
+  it('lots that recycle too slowly inside the ceiling: how fast a lot must settle, or how much the goal must commit', () => {
+    // 1,000 holds 2 lots of 500; 20 days to cash turns them once in 30; 6 deals need 3,000 at once, or a lot settling in 10 days.
+    const [r] = blockerResolutions({ ...base, remaining: 3000, capitalCeiling: 1000, strategies: [[{ one: opening('a', { price: 600, capital: 500, days: 20 }), deals: 6 }]] });
+    expect(priorityLink(r!.priority)).toBe('ECONOMICS');
+    expect(r!.priority.reason).toMatch(/2 of the 6 deals needed/);
+    expect(r!.priority.reason).toMatch(/settle within 10 days/);
+    expect(r!.priority.reason).toMatch(/commit 3,000 USD/);
+    expect(r!.relax?.constraint).toBe('CAPITAL');
+  });
+
   it('a market too small for the target: how many more deals, or what price, would close the gap', () => {
     const [r] = blockerResolutions({ ...base, remaining: 10000, strategies: [[{ one: opening('a', { price: 500, repeatable: true }), deals: 8 }]] });
     // 8 × 500 = 4,000 of 10,000: 12 more deals at 500, or 500 + 6,000 / 8 = 1,250 a deal.
