@@ -34,7 +34,7 @@ import { readMoneyFigures } from './figures.ts';
 import { readDays } from './monetization/commissionPass.ts';
 import { cashOutcomeLessons, INBOUND_MIN_VISITORS, LESSON_MIN_SAMPLE } from './journey/learning.ts';
 import { isTestFirstPlay } from './tier.ts';
-import { readVolume } from './volume.ts';
+import { readTrialVolume, readVolume } from './volume.ts';
 import { frontierTiers } from './shared.ts';
 import type { CashMechanism, CashOpportunity, CashCardFact } from '../../domain/types.ts';
 import { STRUCTURES } from './properties.ts';
@@ -2087,6 +2087,30 @@ export function readOfferWins(text: string): { won: number; offers: number; unit
   return { won, offers, unit: match[4]!.toLowerCase() };
 }
 
+/**
+ * Paid deals per ad click, read from the card's `conversionRates` field: "46
+ * bookings from 520 clicks", "12 paid orders out of 900 ad clicks"
+ * (planningReliability round 6). A click is the traffic a paid booking was
+ * measured on — the denominator, exactly as a unique visitor is a landing
+ * page's — so the outcome is a deal that was paid for and the click is never
+ * the outcome: "60 clicks on buy now" stays interest, not purchase. It is read
+ * on the visitor floor (INBOUND_MIN_VISITORS), because a click is anonymous
+ * traffic, not a priced offer an identified buyer received; below the floor it
+ * is an anecdote and the conversion stays unknown. Before, a booking per click
+ * matched neither reader, so a play whose own ads had measured hundreds of
+ * clicks read its conversion as never asked. Null when the text states no
+ * such count.
+ */
+export function readClickConversions(text: string): { paid: number; clicks: number; unit: string } | null {
+  const num = (raw: string) => Number(raw.replace(/,/g, ''));
+  const match = /(\d[\d,]*)\s+(?:paid\s+)?(bookings?|orders?|sales|purchases?|jobs?|pre-?orders?|deposits?)\b[^.;]*?\b(?:from|of|out of|among|per)\s+(\d[\d,]*)\s+(?:[a-z-]+\s+){0,2}?clicks?\b/i.exec(text);
+  if (!match) return null;
+  const paid = num(match[1]!);
+  const clicks = num(match[3]!);
+  if (!Number.isFinite(paid) || !Number.isFinite(clicks) || clicks <= 0 || paid > clicks) return null;
+  return { paid, clicks, unit: match[2]!.toLowerCase() };
+}
+
 function kindToProvenance(fact: CashCardFact | null): { provenance: VariableProvenance; source: SourceRef | null } {
   if (!fact) return { provenance: 'UNKNOWN', source: null };
   if (fact.kind === 'EVIDENCE') return { provenance: 'EVIDENCE', source: fact.claimId ? { kind: 'CLAIM', ref: fact.claimId } : { kind: 'CARD_FACT', ref: fact.id } };
@@ -2280,8 +2304,18 @@ export async function modelOpportunity(
   // A win rate on priced offers is a per-offer measurement, read on the floor Brain's own record uses.
   const offerWins = !inboundMeasured && inboundFact && inboundFact.kind !== 'RECOMMENDATION' ? readOfferWins(inboundFact.value) : null;
   const offersMeasured = offerWins !== null && offerWins.offers >= LESSON_MIN_SAMPLE;
+  // Paid deals per ad click: traffic, like a visitor, so read on the visitor floor.
+  const clickWins = !inboundMeasured && !offersMeasured && inboundFact && inboundFact.kind !== 'RECOMMENDATION' ? readClickConversions(inboundFact.value) : null;
+  const clicksMeasured = clickWins !== null && clickWins.clicks >= INBOUND_MIN_VISITORS;
   let close: ModelInput;
-  if (offerWins && offersMeasured) {
+  if (clickWins && clicksMeasured) {
+    close = {
+      ...measuredRateInput({ trials: clickWins.clicks, low: clickWins.paid, high: clickWins.paid }),
+      provenance: 'HISTORICAL',
+      source: kindToProvenance(inboundFact).source,
+      note: `measured on this offer's own ads: ${clickWins.paid} paid ${clickWins.unit} from ${clickWins.clicks} clicks`,
+    };
+  } else if (offerWins && offersMeasured) {
     close = {
       ...measuredRateInput({ trials: offerWins.offers, low: offerWins.won, high: offerWins.won }),
       provenance: 'HISTORICAL',
@@ -2309,7 +2343,9 @@ export async function modelOpportunity(
     close = inferOr(knowledge, 'close', opportunity, now, unknown(0.02, 0.5, 'no buyer has been asked yet; swept from 2% to 50% of buyers agreeing'));
   }
   // Agreements per contact (or paid commitments per visitor) already include whether the person replied.
-  const respond: ModelInput = offerWins && offersMeasured
+  const respond: ModelInput = clickWins && clicksMeasured
+    ? known(1, 'HISTORICAL', close.source, 'the measured rate is paid deals per ad click, which includes showing interest')
+    : offerWins && offersMeasured
     ? known(1, 'HISTORICAL', close.source, 'the measured rate is accepted offers per priced offer, which includes replying')
     : inbound && inboundMeasured
     ? known(1, 'HISTORICAL', close.source, 'the measured rate is paid commitments per unique visitor, which includes showing interest')
@@ -2319,7 +2355,18 @@ export async function modelOpportunity(
 
   const volumeFact = fact('buyerVolume');
   // A count of what the payer holds ("3,400 boats" for boat owners) counts buyers too.
-  const counted = volumeFact ? readVolume(volumeFact.value, windowDays, opportunity.payer, opportunity.industry ?? null) : null;
+  /*
+   * The unit the measured rate was taken on (planningReliability round 6): a
+   * win rate per bid is a share of the solicitations bid on, and a booking
+   * rate per click a share of the clicks, so a volume research stated in that
+   * same unit ("60 RFQs a month", "9,000 forecast clicks") counts the
+   * prospects that rate applies to — read only when the volume states no
+   * buyer or order count of its own.
+   */
+  const trialUnit = clickWins && clicksMeasured ? 'clicks' : offerWins && offersMeasured ? offerWins.unit : inbound && inboundMeasured ? 'visitors' : null;
+  const counted = volumeFact
+    ? readVolume(volumeFact.value, windowDays, opportunity.payer, opportunity.industry ?? null) ?? (trialUnit ? readTrialVolume(volumeFact.value, windowDays, trialUnit) : null)
+    : null;
   /*
    * A price per period already contains how often the buyer is served
    * (planningReliability round 4): a shop paying $180 a month for weekly

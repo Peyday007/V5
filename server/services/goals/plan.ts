@@ -943,7 +943,7 @@ function fulfilmentCheck(one: ModelledOpportunity, caps: string[], allPresent: b
  * enough buyers exist, buying often enough, inside the window — never the
  * number of buyers the strategy would like to ask.
  */
-function volumeCheck(one: ModelledOpportunity, deals: number): LinkCheck {
+export function volumeCheck(one: ModelledOpportunity, deals: number): LinkCheck {
   const needed = one.repeatable ? dealsFromOffers(one, deals) : Math.min(deals, 1);
   if (!one.repeatable || needed === 0) return { link: 'MARKET_VOLUME', ok: true, basis: one.repeatable ? 'no new deals needed' : 'a one-off needs its one buyer' };
   if (!volumeEstablished(one)) {
@@ -955,9 +955,26 @@ function volumeCheck(one: ModelledOpportunity, deals: number): LinkCheck {
     }
     return { link: 'MARKET_VOLUME', ok: false, basis: `${needed} deal(s) needed and nobody has established how many buyers exist or how often they buy` };
   }
-  const available = one.volume.value ?? 0;
+  /*
+   * A counted market already holds the buyers who agreed (planningReliability
+   * round 6): 4 of 6 firms signed leaves 2 to ask, not 6. When research counted
+   * the buyers themselves, every live agreement is one of them and takes one of
+   * the window's deals, so the new deals are checked against what is left —
+   * never against the whole market a second time. An order rate counts deals
+   * made, not buyers, and is read as before.
+   */
+  const counted = one.prospects !== null && one.prospects !== undefined;
+  const taken = counted ? Math.min(one.agreedDeals, one.volume.value ?? 0) : 0;
+  const available = (one.volume.value ?? 0) - taken;
+  if (counted && taken > 0 && available < needed) {
+    return {
+      link: 'MARKET_VOLUME',
+      ok: false,
+      basis: `${needed} new deal(s) needed but the market holds ${one.volume.value} and ${taken} already agreed, so only ${available} are left to ask (${one.volume.note})`,
+    };
+  }
   const asked = prospectsAsked(one, needed);
-  if (available >= needed && asked !== null && asked > one.prospects!) {
+  if (available >= needed && asked !== null && asked > one.prospects! - taken) {
     return {
       link: 'MARKET_VOLUME',
       ok: false,
